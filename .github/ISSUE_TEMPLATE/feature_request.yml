@@ -1,0 +1,44 @@
+name: Feature request
+description: Suggest a product improvement, workflow enhancement, or new capability
+title: "[Feature] "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for sharing an idea.
+        The best requests explain the problem first, then the proposed solution.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or opportunity
+      description: What pain point are you trying to solve?
+      placeholder: Tell us what is hard, missing, or frustrating today.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: What would you like to see?
+      placeholder: Describe the ideal behavior, UI, or workflow.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      placeholder: Share any workarounds or alternative ideas you considered.
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      placeholder: Add screenshots, references, or related issues if helpful.
+  - type: checkboxes
+    id: terms
+    attributes:
+      label: Checklist
+      options:
+        - label: I searched existing issues before opening this request.
+          required: true

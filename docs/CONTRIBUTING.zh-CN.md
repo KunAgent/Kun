@@ -27,20 +27,21 @@
 
 建议采用以下分支流转方式：
 
-- `master`：当前默认协作与发布分支
-- 功能分支：可选，从 `master` 拉出的短期分支
+- `develop`：当前默认协作与日常集成分支
+- `master`：稳定发布分支，由维护者从 `develop` 合入
+- 功能分支：可选，从 `develop` 拉出的短期分支
 
 规则如下：
 
 - 不要直接在 `master` 上开发
-- 日常开发优先从最新 `master` 开始
-- 如果要建立功能分支，应从 `master` 拉出
-- 除非维护者明确指定，否则 PR 默认提到 `master`
+- 日常开发优先从最新 `develop` 开始
+- 如果要建立功能分支，应从 `develop` 拉出
+- 除非维护者明确指定，否则 PR 默认提到 `develop`
 
 ## 开始之前
 
 1. 先确保本地仓库已同步到最新状态。
-2. 切换到 `master` 分支。
+2. 切换到 `develop` 分支。
 3. 运行 `npm install` 安装依赖。
 4. 在修改前先确认项目可以正常启动或构建。
 
@@ -52,7 +53,7 @@
 - 范围限定在单个功能、修复或文档更新
 - 如果界面有变化，附带视频或 GIF
 - 如果项目逻辑有变化，附带单元测试
-- 通过 `npm run typecheck` 和 `npm run build`
+- 通过 `npm run typecheck`、`npm run build` 和 `npm run test`
 
 如果在开发过程中发现其他需要处理的问题，请单独开 issue，不要扩大当前 PR 的范围。
 
@@ -63,6 +64,7 @@
 - 应用可通过 `npm run dev` 正常开发运行
 - `npm run typecheck` 通过
 - `npm run build` 通过
+- `npm run test` 通过
 - UI 改动已附带展示变更流程的视频或 GIF
 - 逻辑改动已为变更行为补充单元测试
 - 如果改动影响使用方式、安装方式或流程，已同步更新文档
@@ -76,6 +78,9 @@ npm run typecheck
 
 # 生产构建
 npm run build
+
+# 单元测试
+npm run test
 
 # 完整开发冒烟测试
 npm run dev
@@ -132,7 +137,7 @@ npm run dev
 如果项目逻辑有变化，列出新增或更新的单元测试。
 ```
 
-对于大多数贡献，建议从短期功能分支发起 PR，而不是直接向 `master` 推送提交。
+对于大多数贡献，建议从短期功能分支发起 PR，而不是直接向 `develop` 或 `master` 推送提交。
 
 ## 评审标准
 

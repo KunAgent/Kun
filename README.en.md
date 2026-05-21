@@ -188,11 +188,11 @@ Contributions are welcome for bug fixes, UI/UX improvements, documentation, loca
 
 Project conventions:
 
-- The current default collaboration branch is `master`.
-- Start features and fixes from the latest `master`, preferably on a short-lived feature branch.
-- Open pull requests into `master` by default.
+- The current default collaboration branch is `develop`.
+- Start features and fixes from the latest `develop`, preferably on a short-lived feature branch.
+- Open pull requests into `develop` by default; maintainers merge reviewed changes into `master`.
 - Align on scope first for larger or riskier changes.
-- Run `npm run typecheck` and `npm run build` before opening a PR.
+- Run `npm run typecheck`, `npm run build`, and `npm run test` before opening a PR.
 - Include a video or GIF when the UI changes.
 - Include unit tests when project logic changes.
 - Update both `README.md` and `README.en.md` when usage changes.

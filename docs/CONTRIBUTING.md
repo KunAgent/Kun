@@ -27,20 +27,21 @@ Contributions are welcome for:
 
 The expected branch flow is:
 
-- `master`: current default branch for active collaboration and releases
-- feature branches: optional short-lived branches created from `master`
+- `develop`: current default branch for active collaboration and daily integration
+- `master`: stable release branch, updated by maintainers from `develop`
+- feature branches: optional short-lived branches created from `develop`
 
 Rules:
 
 - Do not develop directly on `master`
-- Prefer starting work from the latest `master`
-- If you create a feature branch, branch off from `master`
-- Open pull requests into `master` unless maintainers explicitly request another base branch
+- Prefer starting work from the latest `develop`
+- If you create a feature branch, branch off from `develop`
+- Open pull requests into `develop` unless maintainers explicitly request another base branch
 
 ## Before You Start
 
 1. Make sure your local repository is up to date.
-2. Switch to `master`.
+2. Switch to `develop`.
 3. Install dependencies with `npm install`.
 4. Confirm the project starts or builds successfully before making changes.
 
@@ -52,7 +53,7 @@ A well-structured PR for DeepSeek GUI is focused and self-contained. It typicall
 - Scopes to a single feature, fix, or documentation update
 - Includes a video or GIF if the UI changed
 - Includes unit tests if project logic changed
-- Passes `npm run typecheck` and `npm run build`
+- Passes `npm run typecheck`, `npm run build`, and `npm run test`
 
 If you discover related work that needs doing, open a separate issue rather than expanding the PR scope.
 
@@ -63,6 +64,7 @@ Before opening a PR, contributors should verify:
 - the app still runs in development with `npm run dev`
 - type checking passes with `npm run typecheck`
 - production build passes with `npm run build`
+- unit tests pass with `npm run test`
 - UI changes include a video or GIF that shows the changed flow
 - logic changes include unit tests for the changed behavior
 - documentation is updated if behavior, setup, or workflow changed
@@ -76,6 +78,9 @@ npm run typecheck
 
 # Production build
 npm run build
+
+# Unit tests
+npm run test
 
 # Full development smoke test
 npm run dev
@@ -132,7 +137,7 @@ Attach a video or GIF if UI changed. Screenshots are welcome as extra context.
 List unit tests added or updated if project logic changed.
 ```
 
-For most contributions, opening the PR from a short-lived feature branch is preferred over pushing directly to `master`.
+For most contributions, opening the PR from a short-lived feature branch is preferred over pushing directly to `develop` or `master`.
 
 ## Review Standards
 

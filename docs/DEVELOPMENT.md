@@ -6,34 +6,35 @@ This document defines how developers should work in this repository, especially 
 
 ## Development Baseline
 
-- `master` is the current default branch for active development and releases
-- Routine feature and fix work should start from the latest `master`
+- `develop` is the current default branch for active collaboration and daily integration
+- `master` is the stable release branch, updated by maintainers from `develop`
+- Routine feature and fix work should start from the latest `develop`
 - Short-lived feature branches are encouraged for non-trivial changes
 
 ## Recommended Workflow
 
 1. Update your local repository.
-2. Switch to `master`.
-3. Pull the latest changes from `master`.
-4. Create an optional feature branch from `master` for your work.
+2. Switch to `develop`.
+3. Pull the latest changes from `develop`.
+4. Create an optional feature branch from `develop` for your work.
 5. Implement and validate your changes locally.
-6. Open a PR back into `master`.
+6. Open a PR back into `develop`.
 7. Merge after review and passing checks.
 
 ## Example Commands
 
-### Work directly on `master`
+### Sync `develop`
 
 ```bash
-git checkout master
-git pull origin master
+git checkout develop
+git pull origin develop
 ```
 
-### Create a feature branch from `master`
+### Create a feature branch from `develop`
 
 ```bash
-git checkout master
-git pull origin master
+git checkout develop
+git pull origin develop
 git checkout -b feat/short-description
 ```
 
@@ -47,13 +48,13 @@ git push origin feat/short-description
 
 Default target branch:
 
-- `master`
+- `develop`
 
 Typical PR path:
 
-1. Develop on `master` or a branch created from `master`
+1. Develop on a short-lived feature branch created from `develop`
 2. Push the branch to the remote
-3. Open a PR into `master`
+3. Open a PR into `develop`
 4. Address review feedback
 5. Merge after approval and passing checks
 
@@ -64,6 +65,7 @@ At minimum, run:
 ```bash
 npm run typecheck
 npm run build
+npm run test
 ```
 
 If your change affects runtime behavior or UI, also run:
@@ -127,11 +129,13 @@ Update documentation when changes affect:
 
 ## Merge Guidance
 
-Merge into `master` only after:
+Merge contribution changes into `develop` only after:
 
 - review feedback is addressed
 - checks pass
-- the change is considered stable enough for the default branch
+- the change is considered stable enough for the daily integration branch
+
+`master` is reserved for stable releases. After maintainers decide the current `develop` state is ready to publish, they merge `develop` into `master`.
 
 ## Suggested Branch Naming
 
@@ -144,4 +148,4 @@ Examples:
 
 ## Maintainer Notes
 
-If maintainers later introduce a `develop` branch, protected branches, required reviewers, or stricter automated gates, this document should be updated to match the repository rules.
+If maintainers later adjust protected branches, required reviewers, or stricter automated gates, this document should be updated to match the repository rules.

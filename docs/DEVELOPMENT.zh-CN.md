@@ -6,34 +6,35 @@
 
 ## 开发基线
 
-- `master` 是当前默认开发与发布分支
-- 日常功能开发和缺陷修复都应从最新 `master` 开始
+- `develop` 是当前默认开发协作与日常集成分支
+- `master` 是稳定发布分支，由维护者从 `develop` 合入
+- 日常功能开发和缺陷修复都应从最新 `develop` 开始
 - 对于稍大一些的改动，建议使用短期功能分支
 
 ## 推荐流程
 
 1. 先同步本地仓库。
-2. 切换到 `master`。
-3. 拉取 `master` 最新代码。
-4. 如有需要，从 `master` 拉出功能分支开展开发。
+2. 切换到 `develop`。
+3. 拉取 `develop` 最新代码。
+4. 如有需要，从 `develop` 拉出功能分支开展开发。
 5. 在本地完成实现并做好校验。
-6. 提交 PR 回到 `master`。
+6. 提交 PR 回到 `develop`。
 7. 在通过评审和检查后合并。
 
 ## 示例命令
 
-### 直接在 `master` 上工作
+### 同步 `develop`
 
 ```bash
-git checkout master
-git pull origin master
+git checkout develop
+git pull origin develop
 ```
 
-### 从 `master` 拉功能分支
+### 从 `develop` 拉功能分支
 
 ```bash
-git checkout master
-git pull origin master
+git checkout develop
+git pull origin develop
 git checkout -b feat/short-description
 ```
 
@@ -47,13 +48,13 @@ git push origin feat/short-description
 
 默认目标分支：
 
-- `master`
+- `develop`
 
 典型流程如下：
 
-1. 在 `master` 或从 `master` 拉出的分支上开发
+1. 在从 `develop` 拉出的短期功能分支上开发
 2. 将分支推送到远端
-3. 发起指向 `master` 的 PR
+3. 发起指向 `develop` 的 PR
 4. 根据 Review 意见继续修改
 5. 在通过校验并获得认可后合并
 
@@ -64,6 +65,7 @@ git push origin feat/short-description
 ```bash
 npm run typecheck
 npm run build
+npm run test
 ```
 
 如果改动影响运行时行为或 UI，额外建议执行：
@@ -127,11 +129,13 @@ PR 描述建议至少包含：
 
 ## 合并建议
 
-只有在满足以下条件后，改动才应该合入 `master`：
+贡献改动只有在满足以下条件后，才应该合入 `develop`：
 
 - Review 意见已处理
 - 检查项通过
-- 改动已经达到适合进入默认分支的稳定程度
+- 改动已经达到适合进入日常集成分支的稳定程度
+
+`master` 仅用于稳定发布。维护者确认 `develop` 中的改动适合发布后，再将 `develop` 合入 `master`。
 
 ## 分支命名建议
 
@@ -144,4 +148,4 @@ PR 描述建议至少包含：
 
 ## 维护者说明
 
-如果后续仓库增加 `develop` 分支、受保护分支、强制 Reviewer、自动化测试门禁等规则，应同步更新本文件，保持与真实仓库规则一致。
+如果后续仓库调整受保护分支、强制 Reviewer、自动化测试门禁等规则，应同步更新本文件，保持与真实仓库规则一致。

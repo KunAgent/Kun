@@ -20,6 +20,7 @@
 
 ## Validation
 
+- [ ] `npm run test`
 - [ ] `npm run typecheck`
 - [ ] `npm run build`
 - [ ] `npm run dev` (if runtime or UI behavior changed)
