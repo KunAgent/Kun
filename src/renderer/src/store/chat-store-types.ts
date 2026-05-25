@@ -24,15 +24,18 @@ export type QueuedUserMessage = {
 
 export type SendMessageOverrides = {
   queued?: QueuedUserMessage
+  model?: string
+  modelLabel?: string
 }
 
 export type InitialSetupMode = 'required' | 'preview'
-export type SettingsRouteSection = 'general' | 'agents' | 'skill' | 'mcp' | 'claw'
-export type AppRoute = 'chat' | 'settings' | 'plugins' | 'claw'
+export type SettingsRouteSection = 'general' | 'write' | 'agents' | 'skill' | 'mcp' | 'claw'
+export type AppRoute = 'chat' | 'write' | 'settings' | 'plugins' | 'claw'
 export type PluginHostRoute = 'chat' | 'claw'
 
 export type ChatState = {
   route: AppRoute
+  settingsReturnRoute: Exclude<AppRoute, 'settings'>
   pluginHostRoute: PluginHostRoute
   settingsSection: SettingsRouteSection
   initialSetupOpen: boolean
@@ -42,6 +45,8 @@ export type ChatState = {
   workspaceLabel: string
   runtimeConnection: RuntimeConnectionStatus
   threads: NormalizedThread[]
+  threadSearch: string
+  showArchivedThreads: boolean
   activeThreadId: string | null
   blocks: ChatBlock[]
   liveReasoning: string
@@ -69,7 +74,11 @@ export type ChatState = {
   setComposerModel: (modelId: string) => void
   loadComposerModels: () => Promise<void>
   setRoute: (r: AppRoute) => void
+  openWrite: () => Promise<void>
   openCode: () => Promise<void>
+  ensureWriteThreadForWorkspace: (workspaceRoot?: string) => Promise<string | null>
+  createWriteThread: (workspaceRoot?: string) => Promise<string | null>
+  selectWriteThread: (threadId: string, workspaceRoot?: string) => Promise<void>
   openSettings: (section?: SettingsRouteSection) => void
   openPlugins: (host?: PluginHostRoute) => void
   openClaw: () => void
@@ -99,6 +108,8 @@ export type ChatState = {
   clearWorkspace: () => Promise<void>
   deleteWorkspace: (workspacePath: string) => Promise<void>
   refreshThreads: () => Promise<void>
+  setThreadSearch: (query: string) => void
+  setShowArchivedThreads: (show: boolean) => void
   createThread: (options?: { workspaceRoot?: string }) => Promise<void>
   selectThread: (id: string) => Promise<void>
   recoverActiveTurn: () => Promise<boolean>
@@ -108,6 +119,13 @@ export type ChatState = {
   rewindAndResend: (userBlockId: string, newText: string) => Promise<void>
   interrupt: () => Promise<void>
   renameActiveThread: (title: string) => Promise<void>
+  archiveThread: (threadId: string, archived: boolean) => Promise<void>
+  compactActiveThread: (reason?: string) => Promise<void>
+  forkActiveThread: () => Promise<void>
+  resumeSessionIntoThread: (
+    sessionId: string,
+    options?: { model?: string; mode?: string }
+  ) => Promise<string | null>
   deleteThread: (threadId: string) => Promise<void>
   resolveApproval: (blockId: string, decision: 'allow' | 'deny') => Promise<void>
   resolveUserInput: (

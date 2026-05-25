@@ -1,4 +1,6 @@
-import { dialog, ipcMain, shell, type BrowserWindow } from 'electron'
+import { dialog, ipcMain, shell, type BrowserWindow, type WebContents } from 'electron'
+import { watch, type FSWatcher } from 'node:fs'
+import { randomUUID } from 'node:crypto'
 import { dirname, join } from 'node:path'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { z } from 'zod'
@@ -36,7 +38,15 @@ import {
   terminalInputPayloadSchema,
   terminalLifecyclePayloadSchema,
   terminalResizePayloadSchema,
+  workspaceDirectoryCreatePayloadSchema,
+  workspaceDirectoryTargetPayloadSchema,
+  workspaceEntryDeletePayloadSchema,
+  workspaceEntryRenamePayloadSchema,
+  workspaceFileCreatePayloadSchema,
   workspaceFileTargetPayloadSchema,
+  workspaceFileWatchPayloadSchema,
+  workspaceFileWritePayloadSchema,
+  writeInlineCompletionPayloadSchema,
   workspaceRootSchema
 } from './app-ipc-schemas'
 import type { JsonSettingsStore } from '../settings-store'
@@ -45,18 +55,33 @@ import type { ClawRuntime } from '../claw-runtime'
 import { findListeningProcessOnPort } from '../deepseek-process'
 import { createAndSwitchGitBranch, getGitBranches, switchGitBranch } from '../services/git-service'
 import {
+  createWorkspaceDirectory,
+  createWorkspaceFile,
+  deleteWorkspaceEntry,
   expandHomePath,
   listEditorsResult,
+  listWorkspaceDirectory,
   normalizeSkillFolderName,
   openEditorPath,
   openPathWithShell,
   readWorkspaceFile,
-  resolveWorkspaceFile
+  renameWorkspaceEntry,
+  resolveWorkspaceFile,
+  writeWorkspaceFile
 } from '../services/workspace-service'
 import type { createTerminalService } from '../services/terminal-service'
+import { requestWriteInlineCompletion } from '../services/write-inline-completion-service'
 
 type GuiUpdaterModule = typeof import('../gui-updater')
 type TerminalService = ReturnType<typeof createTerminalService>
+
+type WorkspaceFileWatchRecord = {
+  watcher: FSWatcher
+  sender: WebContents
+  path: string
+  workspaceRoot: string
+  timer: ReturnType<typeof setTimeout> | null
+}
 
 type RegisterAppIpcHandlersOptions = {
   store: JsonSettingsStore
@@ -285,6 +310,89 @@ export function registerAppIpcHandlers(options: RegisterAppIpcHandlersOptions): 
     resolveLogDirectory,
     logError
   } = options
+  const workspaceFileWatchers = new Map<string, WorkspaceFileWatchRecord>()
+
+  const disposeWorkspaceFileWatch = (watchId: string): boolean => {
+    const record = workspaceFileWatchers.get(watchId)
+    if (!record) return false
+    if (record.timer) clearTimeout(record.timer)
+    try {
+      record.watcher.close()
+    } catch (error) {
+      logError('workspace-watch', 'Failed to close workspace file watcher', {
+        watchId,
+        message: error instanceof Error ? error.message : String(error)
+      })
+    }
+    workspaceFileWatchers.delete(watchId)
+    return true
+  }
+
+  const disposeWorkspaceFileWatchesForSender = (sender: WebContents): void => {
+    for (const [watchId, record] of workspaceFileWatchers) {
+      if (record.sender.id === sender.id) {
+        disposeWorkspaceFileWatch(watchId)
+      }
+    }
+  }
+
+  const emitWorkspaceFileChange = async (watchId: string): Promise<void> => {
+    const record = workspaceFileWatchers.get(watchId)
+    if (!record) return
+    const changedAt = new Date().toISOString()
+    try {
+      const result = await readWorkspaceFile({
+        path: record.path,
+        workspaceRoot: record.workspaceRoot
+      })
+      const latest = workspaceFileWatchers.get(watchId)
+      if (!latest || latest.sender.isDestroyed()) return
+      if (result.ok) {
+        latest.sender.send('file:workspace-changed', {
+          ok: true,
+          watchId,
+          workspaceRoot: latest.workspaceRoot,
+          path: result.path,
+          content: result.content,
+          size: result.size,
+          truncated: result.truncated,
+          changedAt
+        })
+        return
+      }
+      latest.sender.send('file:workspace-changed', {
+        ok: false,
+        watchId,
+        workspaceRoot: latest.workspaceRoot,
+        path: latest.path,
+        message: result.message,
+        changedAt
+      })
+    } catch (error) {
+      const latest = workspaceFileWatchers.get(watchId)
+      if (!latest || latest.sender.isDestroyed()) return
+      latest.sender.send('file:workspace-changed', {
+        ok: false,
+        watchId,
+        workspaceRoot: latest.workspaceRoot,
+        path: latest.path,
+        message: error instanceof Error ? error.message : String(error),
+        changedAt
+      })
+    }
+  }
+
+  const scheduleWorkspaceFileChange = (watchId: string): void => {
+    const record = workspaceFileWatchers.get(watchId)
+    if (!record) return
+    if (record.timer) clearTimeout(record.timer)
+    record.timer = setTimeout(() => {
+      const latest = workspaceFileWatchers.get(watchId)
+      if (!latest) return
+      latest.timer = null
+      void emitWorkspaceFileChange(watchId)
+    }, 90)
+  }
 
   ipcMain.handle('settings:get', async () => store.load())
   ipcMain.handle('settings:set', async (_, partial: unknown) =>
@@ -530,9 +638,82 @@ export function registerAppIpcHandlers(options: RegisterAppIpcHandlersOptions): 
       parseIpcPayload('file:resolve-workspace', workspaceFileTargetPayloadSchema, payload)
     )
   )
+  ipcMain.handle('file:list-workspace-directory', async (_, payload: unknown) =>
+    listWorkspaceDirectory(
+      parseIpcPayload('file:list-workspace-directory', workspaceDirectoryTargetPayloadSchema, payload)
+    )
+  )
   ipcMain.handle('file:read-workspace', async (_, payload: unknown) =>
     readWorkspaceFile(
       parseIpcPayload('file:read-workspace', workspaceFileTargetPayloadSchema, payload)
+    )
+  )
+  ipcMain.handle('file:write-workspace', async (_, payload: unknown) =>
+    writeWorkspaceFile(
+      parseIpcPayload('file:write-workspace', workspaceFileWritePayloadSchema, payload)
+    )
+  )
+  ipcMain.handle('file:create-workspace', async (_, payload: unknown) =>
+    createWorkspaceFile(
+      parseIpcPayload('file:create-workspace', workspaceFileCreatePayloadSchema, payload)
+    )
+  )
+  ipcMain.handle('file:create-workspace-directory', async (_, payload: unknown) =>
+    createWorkspaceDirectory(
+      parseIpcPayload('file:create-workspace-directory', workspaceDirectoryCreatePayloadSchema, payload)
+    )
+  )
+  ipcMain.handle('file:rename-workspace-entry', async (_, payload: unknown) =>
+    renameWorkspaceEntry(
+      parseIpcPayload('file:rename-workspace-entry', workspaceEntryRenamePayloadSchema, payload)
+    )
+  )
+  ipcMain.handle('file:delete-workspace-entry', async (_, payload: unknown) =>
+    deleteWorkspaceEntry(
+      parseIpcPayload('file:delete-workspace-entry', workspaceEntryDeletePayloadSchema, payload)
+    )
+  )
+  ipcMain.handle('file:watch-workspace', async (event, payload: unknown) => {
+    const request = parseIpcPayload('file:watch-workspace', workspaceFileWatchPayloadSchema, payload)
+    const initial = await readWorkspaceFile(request)
+    if (!initial.ok) return initial
+
+    const watchId = randomUUID()
+    try {
+      const watcher = watch(initial.path, { persistent: false }, () => {
+        scheduleWorkspaceFileChange(watchId)
+      })
+      workspaceFileWatchers.set(watchId, {
+        watcher,
+        sender: event.sender,
+        path: initial.path,
+        workspaceRoot: request.workspaceRoot,
+        timer: null
+      })
+      event.sender.once('destroyed', () => disposeWorkspaceFileWatchesForSender(event.sender))
+      return {
+        ok: true as const,
+        watchId,
+        path: initial.path,
+        content: initial.content,
+        size: initial.size,
+        truncated: initial.truncated,
+        startedAt: new Date().toISOString()
+      }
+    } catch (error) {
+      return {
+        ok: false as const,
+        message: error instanceof Error ? error.message : String(error)
+      }
+    }
+  })
+  ipcMain.handle('file:unwatch-workspace', async (_, watchId: unknown) =>
+    disposeWorkspaceFileWatch(parseIpcPayload('file:unwatch-workspace', streamIdSchema, watchId))
+  )
+  ipcMain.handle('write:inline-completion', async (_, payload: unknown) =>
+    requestWriteInlineCompletion(
+      await store.load(),
+      parseIpcPayload('write:inline-completion', writeInlineCompletionPayloadSchema, payload)
     )
   )
 

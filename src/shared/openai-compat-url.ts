@@ -32,3 +32,25 @@ export function upstreamOpenAiModelsUrl(baseUrl: string): string {
   }
   return `${versioned.replace(/\/+$/, '')}/${path}`
 }
+
+export function upstreamOpenAiChatCompletionsUrl(baseUrl: string): string {
+  const path = 'chat/completions'
+  let versioned = versionedBaseUrl(baseUrl.trim())
+  if (versioned.toLowerCase().endsWith('/beta')) {
+    versioned = `${unversionedBaseUrl(baseUrl.trim())}/v1`
+  }
+  return `${versioned.replace(/\/+$/, '')}/${path}`
+}
+
+export function upstreamDeepSeekFimCompletionsUrl(baseUrl: string): string {
+  const path = 'completions'
+  const trimmed = baseUrl.trim().replace(/\/+$/, '')
+  const base = trimmed || 'https://api.deepseek.com/beta'
+  const segment = base.split('/').pop()?.toLowerCase() ?? ''
+  const betaBase = segment === 'beta'
+    ? base
+    : isVersionSegment(segment)
+      ? `${unversionedBaseUrl(base)}/beta`
+      : `${base}/beta`
+  return `${betaBase.replace(/\/+$/, '')}/${path}`
+}

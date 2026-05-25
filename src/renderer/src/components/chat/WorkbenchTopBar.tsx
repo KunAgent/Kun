@@ -5,6 +5,7 @@ import {
   Check,
   ChevronDown,
   Code2,
+  Gauge,
   FileEdit,
   FolderOpen,
   Globe2,
@@ -13,7 +14,7 @@ import {
 import { useTranslation } from 'react-i18next'
 import { readPreferredEditorId, writePreferredEditorId } from '../../lib/editor-preferences'
 
-export type RightPanelMode = 'changes' | 'browser' | 'file' | null
+export type RightPanelMode = 'changes' | 'browser' | 'runtime' | 'file' | null
 
 type Props = {
   rightPanelMode: RightPanelMode
@@ -38,7 +39,8 @@ export function WorkbenchTopBar({
   const editorMenuRef = useRef<HTMLDivElement>(null)
   const items = [
     { mode: 'changes' as const, label: t('rightPanelChanges'), icon: FileEdit },
-    { mode: 'browser' as const, label: t('rightPanelBrowser'), icon: Globe2 }
+    { mode: 'browser' as const, label: t('rightPanelBrowser'), icon: Globe2 },
+    { mode: 'runtime' as const, label: t('rightPanelRuntime'), icon: Gauge }
   ]
   const selectedEditor = useMemo(
     () => editors.find((editor) => editor.id === selectedEditorId) ?? editors[0],
@@ -113,7 +115,7 @@ export function WorkbenchTopBar({
   }
 
   return (
-    <div className="ds-no-drag flex shrink-0 items-center justify-end gap-1">
+    <div className="chat-workbench-topbar ds-no-drag flex min-w-0 shrink-0 flex-wrap items-center justify-end gap-1">
       <div ref={editorMenuRef} className="relative">
         <button
           type="button"

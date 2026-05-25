@@ -1,7 +1,19 @@
 import { app, shell } from 'electron'
 import { execFile } from 'node:child_process'
 import { existsSync, type Dirent } from 'node:fs'
-import { access, open as openFile, readFile, readdir, realpath, stat, unlink } from 'node:fs/promises'
+import {
+  access,
+  mkdir,
+  open as openFile,
+  readFile,
+  readdir,
+  realpath,
+  rename,
+  rm,
+  stat,
+  unlink,
+  writeFile
+} from 'node:fs/promises'
 import { homedir, tmpdir } from 'node:os'
 import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path'
 import { randomUUID } from 'node:crypto'
@@ -13,9 +25,21 @@ import type {
   EditorOpenResult
 } from '../../shared/editor'
 import type {
+  WorkspaceDirectoryCreatePayload,
+  WorkspaceDirectoryCreateResult,
+  WorkspaceDirectoryListResult,
+  WorkspaceDirectoryTarget,
+  WorkspaceEntryDeletePayload,
+  WorkspaceEntryDeleteResult,
+  WorkspaceEntryRenamePayload,
+  WorkspaceEntryRenameResult,
+  WorkspaceFileCreatePayload,
+  WorkspaceFileCreateResult,
   WorkspaceFileReadResult,
   WorkspaceFileResolveResult,
-  WorkspaceFileTarget
+  WorkspaceFileTarget,
+  WorkspaceFileWritePayload,
+  WorkspaceFileWriteResult
 } from '../../shared/workspace-file'
 
 const execFileAsync = promisify(execFile)
@@ -474,6 +498,22 @@ function hasPathSeparator(value: string): boolean {
   return /[\\/]/.test(value)
 }
 
+function extensionFromName(name: string): string {
+  const dot = name.lastIndexOf('.')
+  return dot > 0 ? name.slice(dot).toLowerCase() : ''
+}
+
+function validateEntryName(name: string): string {
+  const trimmed = name.trim()
+  if (!trimmed || trimmed === '.' || trimmed === '..') {
+    throw new Error('Name is required.')
+  }
+  if (hasPathSeparator(trimmed) || basename(trimmed) !== trimmed) {
+    throw new Error('Name must not contain path separators.')
+  }
+  return trimmed
+}
+
 function namesEqual(a: string, b: string): boolean {
   return process.platform === 'linux' ? a === b : a.toLowerCase() === b.toLowerCase()
 }
@@ -535,6 +575,38 @@ async function enforceWorkspaceBoundary(targetPath: string, workspaceRoot?: stri
   return canonicalTarget
 }
 
+async function resolveTargetPathWithinWorkspace(rawPath: string, workspaceRoot?: string): Promise<string> {
+  const value = normalizeUserPath(rawPath)
+  if (!value) throw new Error('File path is required.')
+
+  const expanded = expandHomePath(value)
+  const rawWorkspace = workspaceRoot?.trim()
+  if (!rawWorkspace) {
+    return isAbsolute(expanded) ? resolve(expanded) : resolve(expanded)
+  }
+
+  const workspacePath = await canonicalPath(resolve(expandHomePath(rawWorkspace)))
+  if (!isAbsolute(expanded)) {
+    const direct = resolve(workspacePath, expanded)
+    if (!isWithinWorkspace(workspacePath, direct)) {
+      throw new Error('Path must stay within the selected workspace.')
+    }
+    return direct
+  }
+
+  const direct = resolve(expanded)
+  if (isWithinWorkspace(workspacePath, direct)) {
+    return direct
+  }
+  if (await pathExists(direct)) {
+    const canonicalTarget = await canonicalPath(direct)
+    if (isWithinWorkspace(workspacePath, canonicalTarget)) {
+      return canonicalTarget
+    }
+  }
+  throw new Error('Path must stay within the selected workspace.')
+}
+
 async function resolveOpenTargetPath(
   rawPath: string,
   workspaceRoot?: string,
@@ -564,6 +636,29 @@ async function resolveOpenTargetPath(
   }
 
   throw new Error(`File not found: ${rawPath}`)
+}
+
+async function resolveWorkspaceDirectory(
+  payload: WorkspaceDirectoryTarget
+): Promise<string> {
+  const workspaceRoot = payload.workspaceRoot.trim()
+  if (!workspaceRoot) {
+    throw new Error('Workspace root is required.')
+  }
+
+  const targetPath = payload.path?.trim()
+    ? await resolveOpenTargetPath(payload.path, workspaceRoot, { allowBasenameFallback: false })
+    : await canonicalPath(resolve(expandHomePath(workspaceRoot)))
+  const info = await stat(targetPath)
+  if (!info.isDirectory()) {
+    throw new Error('Target path is not a directory.')
+  }
+  return targetPath
+}
+
+function compareWorkspaceEntries(a: { type: 'file' | 'directory'; name: string }, b: { type: 'file' | 'directory'; name: string }): number {
+  if (a.type !== b.type) return a.type === 'directory' ? -1 : 1
+  return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' })
 }
 
 function formatPathForEditor(targetPath: string, line?: number, column?: number): string {
@@ -659,6 +754,31 @@ export async function openEditorPath(payload: OpenEditorPathOptions): Promise<Ed
   }
 }
 
+export async function listWorkspaceDirectory(
+  payload: WorkspaceDirectoryTarget
+): Promise<WorkspaceDirectoryListResult> {
+  try {
+    const root = await resolveWorkspaceDirectory(payload)
+    const entries = await readdir(root, { withFileTypes: true })
+    const normalized = entries
+      .filter((entry) => entry.name !== '.DS_Store')
+      .map((entry) => ({
+        name: entry.name,
+        path: join(root, entry.name),
+        type: entry.isDirectory() ? ('directory' as const) : ('file' as const),
+        ext: entry.isDirectory() ? '' : extensionFromName(entry.name)
+      }))
+      .sort(compareWorkspaceEntries)
+
+    return { ok: true, root, entries: normalized }
+  } catch (error) {
+    return {
+      ok: false,
+      message: error instanceof Error ? error.message : String(error)
+    }
+  }
+}
+
 export async function readWorkspaceFile(payload: WorkspaceFileTarget): Promise<WorkspaceFileReadResult> {
   try {
     const targetPath = await resolveOpenTargetPath(payload.path, payload.workspaceRoot)
@@ -688,6 +808,138 @@ export async function readWorkspaceFile(payload: WorkspaceFileTarget): Promise<W
       }
     } finally {
       await handle.close()
+    }
+  } catch (error) {
+    return {
+      ok: false,
+      message: error instanceof Error ? error.message : String(error)
+    }
+  }
+}
+
+export async function writeWorkspaceFile(
+  payload: WorkspaceFileWritePayload
+): Promise<WorkspaceFileWriteResult> {
+  try {
+    const targetPath = await resolveTargetPathWithinWorkspace(payload.path, payload.workspaceRoot)
+    await mkdir(dirname(targetPath), { recursive: true })
+    await writeFile(targetPath, payload.content, 'utf8')
+    return {
+      ok: true,
+      path: targetPath,
+      savedAt: new Date().toISOString()
+    }
+  } catch (error) {
+    return {
+      ok: false,
+      message: error instanceof Error ? error.message : String(error)
+    }
+  }
+}
+
+export async function createWorkspaceFile(
+  payload: WorkspaceFileCreatePayload
+): Promise<WorkspaceFileCreateResult> {
+  try {
+    const targetPath = await resolveTargetPathWithinWorkspace(payload.path, payload.workspaceRoot)
+    await mkdir(dirname(targetPath), { recursive: true })
+    if (await pathExists(targetPath)) {
+      return { ok: false, message: 'File already exists.' }
+    }
+    await writeFile(targetPath, payload.content ?? '', { encoding: 'utf8', flag: 'wx' })
+    return {
+      ok: true,
+      path: targetPath,
+      createdAt: new Date().toISOString()
+    }
+  } catch (error) {
+    return {
+      ok: false,
+      message: error instanceof Error ? error.message : String(error)
+    }
+  }
+}
+
+export async function createWorkspaceDirectory(
+  payload: WorkspaceDirectoryCreatePayload
+): Promise<WorkspaceDirectoryCreateResult> {
+  try {
+    const targetPath = await resolveTargetPathWithinWorkspace(payload.path, payload.workspaceRoot)
+    if (await pathExists(targetPath)) {
+      return { ok: false, message: 'Directory already exists.' }
+    }
+    await mkdir(targetPath)
+    return {
+      ok: true,
+      path: targetPath,
+      createdAt: new Date().toISOString()
+    }
+  } catch (error) {
+    return {
+      ok: false,
+      message: error instanceof Error ? error.message : String(error)
+    }
+  }
+}
+
+export async function renameWorkspaceEntry(
+  payload: WorkspaceEntryRenamePayload
+): Promise<WorkspaceEntryRenameResult> {
+  try {
+    const sourcePath = await resolveTargetPathWithinWorkspace(payload.path, payload.workspaceRoot)
+    await stat(sourcePath)
+    const nextName = validateEntryName(payload.newName)
+    const targetPath = await resolveTargetPathWithinWorkspace(
+      join(dirname(sourcePath), nextName),
+      payload.workspaceRoot
+    )
+    if (sourcePath === targetPath) {
+      return {
+        ok: true,
+        path: targetPath,
+        previousPath: sourcePath,
+        renamedAt: new Date().toISOString()
+      }
+    }
+    if (await pathExists(targetPath)) {
+      return { ok: false, message: 'A file or directory with that name already exists.' }
+    }
+    await rename(sourcePath, targetPath)
+    return {
+      ok: true,
+      path: targetPath,
+      previousPath: sourcePath,
+      renamedAt: new Date().toISOString()
+    }
+  } catch (error) {
+    return {
+      ok: false,
+      message: error instanceof Error ? error.message : String(error)
+    }
+  }
+}
+
+export async function deleteWorkspaceEntry(
+  payload: WorkspaceEntryDeletePayload
+): Promise<WorkspaceEntryDeleteResult> {
+  try {
+    const targetPath = await resolveTargetPathWithinWorkspace(payload.path, payload.workspaceRoot)
+    const info = await stat(targetPath)
+    if (payload.workspaceRoot?.trim()) {
+      const workspacePath = await canonicalPath(resolve(expandHomePath(payload.workspaceRoot)))
+      if (targetPath === workspacePath) {
+        return { ok: false, message: 'Deleting the workspace root is not supported.' }
+      }
+    }
+    if (info.isDirectory()) {
+      await rm(targetPath, { recursive: true })
+    } else {
+      await unlink(targetPath)
+    }
+    return {
+      ok: true,
+      path: targetPath,
+      deletedAt: new Date().toISOString()
     }
   } catch (error) {
     return {

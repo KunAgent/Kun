@@ -49,7 +49,7 @@ const r2PublicBaseUrl = (process.env.R2_PUBLIC_BASE_URL || 'https://deepseek-gui
 const r2ReleasePrefix = (process.env.R2_RELEASE_PREFIX || 'deepseek-gui')
   .trim()
   .replace(/^\/+|\/+$/g, '')
-const updateChannel = normalizeUpdateChannel(process.env.DEEPSEEK_GUI_UPDATE_CHANNEL || 'frontier')
+const updateChannel = normalizeUpdateChannel(process.env.DEEPSEEK_GUI_UPDATE_CHANNEL || 'stable')
 const genericUpdateUrl = `${r2PublicBaseUrl}/${r2ReleasePrefix}/channels/${updateChannel}/latest/`
 const releaseAppVersion = (process.env.DEEPSEEK_GUI_APP_VERSION || '').trim()
 const artifactVersion = releaseAppVersion || '${version}'
@@ -71,7 +71,11 @@ module.exports = {
   productName: 'DeepSeek GUI',
   // node-pty runs spawn-helper; binaries must live outside asar to be executable.
   asar: true,
-  asarUnpack: ['**/node_modules/node-pty/**/*'],
+  asarUnpack: [
+    '**/node_modules/node-pty/**/*',
+    '**/node_modules/codewhale/**/*',
+    '**/node_modules/deepseek-tui/**/*'
+  ],
   npmRebuild: false,
   directories: {
     output: process.env.DEEPSEEK_GUI_DIST_DIR || 'dist'

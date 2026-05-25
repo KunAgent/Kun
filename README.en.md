@@ -6,7 +6,7 @@
 
 [简体中文](./README.md) | English
 
-> Bring the local DeepSeek TUI agent into a desktop workbench: chat, workspaces, change review, Skill/MCP management, and updates in one graphical app.
+> Bring the local DeepSeek TUI agent into a desktop workbench: **Code** for development, **Write** for documents, **Claw** for IM automation—chat, change review, Skill/MCP management, and updates in one graphical app.
 
 [Website](https://deepseek-gui.com)
 
@@ -28,6 +28,7 @@ The goal is not to ship another chat wrapper. The goal is to make DeepSeek feel 
 - First-run onboarding, settings, language/theme/font controls, notifications, local logs, and update entry points.
 - Graphical Skill and MCP management so users can extend the agent without hand-editing every config file.
 - Claw background automation with Feishu / Lark integration, dedicated IM agents, local webhook / relay support, and scheduled tasks.
+- A dedicated Write workbench with writing spaces, a Markdown file tree, live editing/preview, inline completion, and selection-based inline agent actions.
 - Pre-built macOS and Windows installers; Linux/Unix users can build from source.
 
 ## Highlights
@@ -39,6 +40,7 @@ The goal is not to ship another chat wrapper. The goal is to make DeepSeek feel 
 - **Managed runtime**: use the bundled DeepSeek TUI by default, or point the app at your own `deepseek` executable.
 - **Skill and MCP support**: create Skills, edit MCP config, add common tools, and open the related folders from the UI.
 - **Claw background automation**: run a background agent alongside normal chat, with current support for Feishu / Lark, IM webhook / relay flows, and scheduled tasks.
+- **Write mode**: manage `~/.deepseekgui/write_workspace` and custom writing spaces, browse Markdown files, use live Markdown editing, preview relative images, get DeepSeek FIM short completion / inspiration completion with optional cross-document BM25 + keyword retrieval, and invoke the writing assistant directly from selected text.
 - **Friendly first launch**: choose language, add your DeepSeek API key, and optionally set a compatible Base URL.
 - **Local-first**: preferences, sessions, logs, and runtime config stay on your machine; model calls use your own DeepSeek API key.
 - **English and Chinese UI**: switch languages from Settings at any time.
@@ -50,6 +52,48 @@ The goal is not to ship another chat wrapper. The goal is to make DeepSeek feel 
 - Teams that need to see what the agent did, which files changed, and which operations required approval.
 - Users who maintain multiple projects or long-running conversations and want reusable Skill/MCP setup.
 - Anyone who wants a local desktop workbench connected to the official DeepSeek API or a compatible endpoint.
+
+---
+
+## Three Workbench Modes
+
+DeepSeek GUI exposes three modes in the top-left sidebar: **Code**, **Write**, and **Claw**. They share the same DeepSeek runtime and settings, but keep sessions, workspaces, and layouts separate so you can switch by task.
+
+### Code Mode
+
+The development workbench for real codebases: bind a local project directory, read and edit files, run commands, and review changes.
+
+<p align="center">
+  <img src="src/asset/img/codemode.png" alt="DeepSeek GUI Code mode" width="860">
+</p>
+
+- Organize multiple agent sessions by workspace, with streamed reasoning, tool calls, and file changes in one view.
+- Inline diffs, a change-review panel, and permission modes from read-only to full access.
+- Quick-start cards for common tasks such as project mapping, bug fixing, implementation planning, and UI polish.
+
+### Write Mode
+
+A dedicated Markdown writing workbench that keeps writing files, save state, and AI assistance separate from Code sessions.
+
+<p align="center">
+  <img src="src/asset/img/writemode.png" alt="DeepSeek GUI Write mode" width="860">
+</p>
+
+- Manage `~/.deepseekgui/write_workspace` plus custom writing spaces from the left file tree.
+- Switch between **Live / Source / Split / Preview**; Live keeps Markdown source on the active line and renders the rest.
+- DeepSeek FIM short and inspiration completion, plus selection-based inline agent actions and a right-side writing assistant for summaries, outlines, and polish.
+
+### Claw Mode
+
+Background automation and IM integration, so agents can keep handling messages and scheduled jobs outside normal chat.
+
+<p align="center">
+  <img src="src/asset/img/clawmode.png" alt="DeepSeek GUI Claw mode" width="860">
+</p>
+
+- Configure dedicated agents for Feishu / Lark and other channels, each with its own profile, default model, and workspace.
+- Every IM agent gets its own thread, so you can debug replies and tool calls directly in the GUI.
+- Local webhook / relay support and scheduled tasks for team workflows and automation.
 
 ---
 
@@ -101,7 +145,7 @@ npm install --registry=https://registry.npmmirror.com
 4. Choose a default workspace, or use the default directory created by the app.
 5. Start a new session and describe the task you want the agent to handle.
 
-Typical flow:
+Typical flow (**Code mode**):
 
 - Pick or switch a workspace from the sidebar.
 - Describe the task in the composer.
@@ -109,11 +153,10 @@ Typical flow:
 - Allow or deny actions that require approval.
 - Inspect changes in the review panel before deciding what to do next.
 
-If you want to use Claw automation:
+See [Three Workbench Modes](#three-workbench-modes) above for Claw and Write details. Quick start:
 
-- Open `Claw` in Settings and enable background automation.
-- Add a Feishu / Lark connection, then configure the agent name, profile, default model, and workspace for that channel.
-- Enable the local webhook / relay path if needed, and create scheduled tasks so Claw can keep handling inbound messages or periodic jobs in the background.
+- **Claw**: enable background automation in Settings → add a Feishu / Lark connection → configure agent profile, model, and workspace → optionally enable webhook / relay or scheduled tasks.
+- **Write**: switch to Write mode → use the default writing space or add a new one → write in the Live editor with completion, selection inline agent, and the right-side writing assistant.
 
 ## Usage and Settings
 
@@ -135,6 +178,16 @@ Keyboard shortcuts:
 | `Shift+Enter` | Newline in composer |
 | `Ctrl+Enter` | Send message |
 | `Esc` | Close a panel or dismiss the current overlay |
+
+## Write Mode Design Notes
+
+Write mode extends DeepSeek GUI from a code/chat workbench into a long-form writing workspace. Its implementation borrows several ideas from the local `textide` and `openhanako` reference projects:
+
+- Workspaces and file tree: textide inspired the writing-space model, keeping writing files, active file state, save status, and AI context separate from code sessions.
+- Markdown live editing: openhanako inspired the CodeMirror decorations approach where the active line stays editable as Markdown source while inactive lines render headings, tasks, images, dividers, and tables through widgets.
+- Selection inline agent: openhanako inspired the selection-capture and floating-input interaction, so selected text can be sent with file path, line numbers, and bounded original text as structured context.
+- AI session isolation: Write still reuses normal DeepSeek TUI agent threads, but the GUI keeps a local write thread registry per writing space so write conversations do not pollute code/claw sidebars.
+- Text completion: writing completion bypasses the local TUI serve runtime and calls the DeepSeek FIM Completion API directly for low-latency ghost text. Short completion uses a short debounce, small token budget, and strict local filtering; inspiration completion uses a longer pause, larger token budget, and only runs at line ends or paragraph boundaries. Before completion, the app builds a short-TTL lightweight index over Markdown / text files in the writing space, retrieves cross-document snippets with BM25 + keyword matching, and injects them as a hidden Markdown comment so terminology, facts, and style stay consistent.
 
 ---
 
@@ -229,6 +282,7 @@ For the underlying runtime, see [DeepSeek TUI](https://github.com/Hmbown/DeepSee
 
 - [DeepSeek TUI](https://github.com/Hmbown/DeepSeek-TUI): the local agent runtime behind the app.
 - [LobsterAI](https://github.com/netease-youdao/LobsterAI): its IM management, QR binding, agent binding, and customizable agent-profile flows inspired the Claw IM integration in this project.
+- OpenHanako and textide: their Markdown live editing, writing-space, and selection inline-agent patterns heavily informed Write mode.
 - [DeepSeek](https://github.com/deepseek-ai): for the models and API.
 - Everyone who contributes issues, ideas, code, and documentation to DeepSeek GUI.
 

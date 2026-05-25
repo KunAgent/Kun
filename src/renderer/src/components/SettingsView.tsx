@@ -3,14 +3,27 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   CLAW_MODEL_IDS,
+  DEFAULT_WRITE_INLINE_COMPLETION_BASE_URL,
+  DEFAULT_WRITE_INLINE_COMPLETION_MAX_TOKENS,
+  DEFAULT_WRITE_INLINE_COMPLETION_MODEL,
+  DEFAULT_WRITE_INLINE_LONG_COMPLETION_DEBOUNCE_MS,
+  DEFAULT_WRITE_INLINE_LONG_COMPLETION_MAX_TOKENS,
+  WRITE_INLINE_COMPLETION_MODEL_IDS,
+  DEFAULT_GUI_UPDATE_CHANNEL,
+  DEFAULT_WRITE_WORKSPACE_ROOT,
   DEFAULT_CLAW_MODEL,
   mergeClawSettings,
+  mergeWriteSettings,
+  normalizeClawSettings,
+  normalizeGuiUpdateChannel,
+  normalizeWriteSettings,
   type ApprovalPolicy,
   type AppSettingsV1,
   type ClawRunMode,
   type ClawScheduleKind,
   type ClawSettingsPatchV1,
   type ClawTaskV1,
+  type WriteSettingsPatchV1,
   type SandboxMode
 } from '@shared/app-settings'
 import type { DeepseekUpdateInfo, DeepseekUpdateInstallResult } from '@shared/deepseek-update'
@@ -31,6 +44,7 @@ import {
   FolderOpen,
   Globe,
   Loader2,
+  PencilLine,
   Plus,
   RadioTower,
   RefreshCw,
@@ -48,12 +62,13 @@ import {
 import { normalizeWorkspaceRoot } from '../lib/workspace-path'
 import { useChatStore, type SettingsRouteSection } from '../store/chat-store'
 
-type SettingsCategory = 'general' | 'agents' | 'claw'
+type SettingsCategory = 'general' | 'write' | 'agents' | 'claw'
 type SaveStatus = 'idle' | 'saving' | 'saved' | 'error'
-type SettingsPatch = Partial<Omit<AppSettingsV1, 'deepseek' | 'log' | 'notifications' | 'claw' | 'guiUpdate'>> & {
+type SettingsPatch = Partial<Omit<AppSettingsV1, 'deepseek' | 'log' | 'notifications' | 'write' | 'claw' | 'guiUpdate'>> & {
   deepseek?: Partial<AppSettingsV1['deepseek']>
   log?: Partial<AppSettingsV1['log']>
   notifications?: Partial<AppSettingsV1['notifications']>
+  write?: WriteSettingsPatchV1
   claw?: ClawSettingsPatchV1
   guiUpdate?: Partial<AppSettingsV1['guiUpdate']>
 }
@@ -66,6 +81,14 @@ type SkillRootOption = {
 type InlineNotice = {
   tone: 'success' | 'error' | 'info'
   message: string
+}
+type RendererSettingsShape = Partial<Omit<AppSettingsV1, 'deepseek' | 'log' | 'notifications' | 'write' | 'claw' | 'guiUpdate'>> & {
+  deepseek?: Partial<AppSettingsV1['deepseek']>
+  log?: Partial<AppSettingsV1['log']>
+  notifications?: Partial<AppSettingsV1['notifications']>
+  write?: WriteSettingsPatchV1
+  claw?: ClawSettingsPatchV1
+  guiUpdate?: Partial<AppSettingsV1['guiUpdate']>
 }
 
 const DEFAULT_WORKSPACE_ROOT = '~/.deepseekgui/default_workspace'
@@ -171,25 +194,46 @@ function isoFromDateTimeLocalValue(value: string): string {
 }
 
 function mergeSettings(current: AppSettingsV1, patch: SettingsPatch): AppSettingsV1 {
+  const safeCurrent = coerceRendererSettings(current)
   return {
-    ...current,
+    ...safeCurrent,
     ...patch,
     deepseek: {
-      ...current.deepseek,
+      ...safeCurrent.deepseek,
       ...(patch.deepseek ?? {})
     },
     log: {
-      ...current.log,
+      ...safeCurrent.log,
       ...(patch.log ?? {})
     },
     notifications: {
-      ...current.notifications,
+      ...safeCurrent.notifications,
       ...(patch.notifications ?? {})
     },
-    claw: mergeClawSettings(current.claw, patch.claw),
+    write: mergeWriteSettings(safeCurrent.write, patch.write),
+    claw: mergeClawSettings(safeCurrent.claw, patch.claw),
     guiUpdate: {
-      ...current.guiUpdate,
+      ...safeCurrent.guiUpdate,
       ...(patch.guiUpdate ?? {})
+    }
+  }
+}
+
+function coerceRendererSettings(settings: AppSettingsV1): AppSettingsV1 {
+  const raw = settings as RendererSettingsShape
+  return {
+    ...settings,
+    log: {
+      enabled: raw.log?.enabled !== false,
+      retentionDays: typeof raw.log?.retentionDays === 'number' ? raw.log.retentionDays : 2
+    },
+    notifications: {
+      turnComplete: raw.notifications?.turnComplete !== false
+    },
+    write: normalizeWriteSettings(raw.write),
+    claw: normalizeClawSettings(raw.claw),
+    guiUpdate: {
+      channel: normalizeGuiUpdateChannel(raw.guiUpdate?.channel ?? DEFAULT_GUI_UPDATE_CHANNEL)
     }
   }
 }
@@ -224,7 +268,11 @@ export function SettingsView(): ReactElement {
   const { t } = useTranslation('settings')
   const { t: tCommon } = useTranslation('common')
   const setRoute = useChatStore((s) => s.setRoute)
+  const settingsReturnRoute = useChatStore((s) => s.settingsReturnRoute)
   const settingsSection = useChatStore((s) => s.settingsSection)
+  const openCode = useChatStore((s) => s.openCode)
+  const openWrite = useChatStore((s) => s.openWrite)
+  const openClaw = useChatStore((s) => s.openClaw)
   const openInitialSetup = useChatStore((s) => s.openInitialSetup)
   const openPlugins = useChatStore((s) => s.openPlugins)
   const applyI18n = useChatStore((s) => s.applyI18nFromSettings)
@@ -234,6 +282,7 @@ export function SettingsView(): ReactElement {
   const [form, setForm] = useState<AppSettingsV1 | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [workspacePickerError, setWorkspacePickerError] = useState<string | null>(null)
+  const [writeWorkspacePickerError, setWriteWorkspacePickerError] = useState<string | null>(null)
   const [clawWorkspacePickerError, setClawWorkspacePickerError] = useState<string | null>(null)
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle')
   const [saveError, setSaveError] = useState<string | null>(null)
@@ -275,9 +324,9 @@ export function SettingsView(): ReactElement {
   const formTheme = form?.theme
   const formUiFontScale = form?.uiFontScale
   const formWorkspaceRoot = form?.workspaceRoot
-  const formPort = form?.deepseek.port
-  const formDeepseekBinaryPath = form?.deepseek.binaryPath ?? ''
-  const formGuiUpdateChannel = form?.guiUpdate.channel
+  const formPort = form?.deepseek?.port
+  const formDeepseekBinaryPath = form?.deepseek?.binaryPath ?? ''
+  const formGuiUpdateChannel = form?.guiUpdate?.channel
 
   useEffect(() => {
     let cancelled = false
@@ -288,7 +337,7 @@ export function SettingsView(): ReactElement {
     void window.dsGui
       .getSettings()
       .then((s) => {
-        if (!cancelled) setForm(s)
+        if (!cancelled) setForm(coerceRendererSettings(s))
       })
       .catch((e: unknown) => {
         if (!cancelled) setLoadError(e instanceof Error ? e.message : String(e))
@@ -322,6 +371,10 @@ export function SettingsView(): ReactElement {
       setCategory('general')
       return
     }
+    if (settingsSection === 'write') {
+      setCategory('write')
+      return
+    }
     if (settingsSection === 'claw') {
       setCategory('claw')
       return
@@ -333,12 +386,13 @@ export function SettingsView(): ReactElement {
     if (!form) return
     if (
       settingsSection === 'general' ||
+      settingsSection === 'write' ||
       settingsSection === 'claw' ||
       category !== 'agents'
     ) {
       return
     }
-    const refs: Record<Exclude<SettingsRouteSection, 'general' | 'claw'>, HTMLDivElement | null> = {
+    const refs: Record<Exclude<SettingsRouteSection, 'general' | 'write' | 'claw'>, HTMLDivElement | null> = {
       agents: agentsSectionRef.current,
       skill: skillSectionRef.current,
       mcp: mcpSectionRef.current
@@ -494,7 +548,7 @@ export function SettingsView(): ReactElement {
     setSaveError(null)
 
     try {
-      const next = await window.dsGui.setSettings(snapshot)
+      const next = coerceRendererSettings(await window.dsGui.setSettings(snapshot))
       if (version !== draftVersion.current) return
 
       setForm(next)
@@ -558,7 +612,19 @@ export function SettingsView(): ReactElement {
     void (async () => {
       await flushPendingSave()
       await reloadUiSettings()
-      setRoute('chat')
+      if (settingsReturnRoute === 'write') {
+        await openWrite()
+        return
+      }
+      if (settingsReturnRoute === 'claw') {
+        openClaw()
+        return
+      }
+      if (settingsReturnRoute === 'plugins') {
+        setRoute('plugins')
+        return
+      }
+      await openCode()
     })()
   }
 
@@ -672,7 +738,7 @@ export function SettingsView(): ReactElement {
 
   const downloadGuiUpdate = async (): Promise<void> => {
     if (typeof window.dsGui?.downloadGuiUpdate !== 'function') return
-    const channel = form?.guiUpdate.channel
+    const channel = form?.guiUpdate?.channel
     setDownloadingGuiUpdate(true)
     setGuiUpdateProgress(null)
     setGuiUpdateError(null)
@@ -791,6 +857,45 @@ export function SettingsView(): ReactElement {
     update({ workspaceRoot: DEFAULT_WORKSPACE_ROOT })
   }
 
+  const pickWriteWorkspace = async (): Promise<void> => {
+    try {
+      setWriteWorkspacePickerError(null)
+      if (typeof window.dsGui?.pickWorkspaceDirectory !== 'function') {
+        throw new Error('workspace:pick-directory unavailable')
+      }
+      const picked = await window.dsGui.pickWorkspaceDirectory(
+        form.write.defaultWorkspaceRoot || DEFAULT_WRITE_WORKSPACE_ROOT
+      )
+      if (!picked.canceled && picked.path) {
+        const workspaces = [
+          picked.path,
+          form.write.activeWorkspaceRoot,
+          ...form.write.workspaces
+        ].filter((value, index, list) => value.trim() && list.indexOf(value) === index)
+        update({
+          write: {
+            defaultWorkspaceRoot: picked.path,
+            activeWorkspaceRoot: picked.path,
+            workspaces
+          }
+        })
+      }
+    } catch (e) {
+      setWriteWorkspacePickerError(formatWorkspacePickerError(e))
+    }
+  }
+
+  const resetWriteWorkspaceToDefault = (): void => {
+    setWriteWorkspacePickerError(null)
+    update({
+      write: {
+        defaultWorkspaceRoot: DEFAULT_WRITE_WORKSPACE_ROOT,
+        activeWorkspaceRoot: DEFAULT_WRITE_WORKSPACE_ROOT,
+        workspaces: [DEFAULT_WRITE_WORKSPACE_ROOT, ...form.write.workspaces]
+      }
+    })
+  }
+
   const pickClawWorkspace = async (): Promise<void> => {
     try {
       setClawWorkspacePickerError(null)
@@ -890,6 +995,10 @@ export function SettingsView(): ReactElement {
           <button type="button" className={catCls('general')} onClick={() => setCategory('general')}>
             <Globe className="h-4 w-4 shrink-0 opacity-70" strokeWidth={1.75} />
             {t('general')}
+          </button>
+          <button type="button" className={catCls('write')} onClick={() => setCategory('write')}>
+            <PencilLine className="h-4 w-4 shrink-0 opacity-70" strokeWidth={1.75} />
+            {t('write')}
           </button>
           <button type="button" className={catCls('agents')} onClick={() => setCategory('agents')}>
             <Bot className="h-4 w-4 shrink-0 opacity-70" strokeWidth={1.75} />
@@ -1173,6 +1282,242 @@ export function SettingsView(): ReactElement {
                     </div>
                   }
                 />
+              </SettingsCard>
+            </>
+          )}
+
+          {category === 'write' && (
+            <>
+              <SettingsCard title={t('sectionWrite')}>
+                <SettingRow
+                  title={t('writeWorkspaceRoot')}
+                  description={t('writeWorkspaceRootDesc')}
+                  control={
+                    <div className="w-full min-w-[200px] md:max-w-xl">
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                        <input
+                          className="w-full rounded-xl border border-ds-border bg-ds-card px-3 py-2 text-[14px] text-ds-ink shadow-sm focus:border-accent/40 focus:outline-none focus:ring-1 focus:ring-accent/30"
+                          value={form.write.defaultWorkspaceRoot}
+                          onChange={(e) =>
+                            update({
+                              write: {
+                                defaultWorkspaceRoot: e.target.value,
+                                activeWorkspaceRoot: e.target.value,
+                                workspaces: [e.target.value, ...form.write.workspaces]
+                              }
+                            })
+                          }
+                          placeholder={t('writeWorkspaceRootPlaceholder')}
+                        />
+                        <button
+                          type="button"
+                          onClick={resetWriteWorkspaceToDefault}
+                          className="shrink-0 rounded-xl border border-ds-border bg-ds-card px-3 py-2 text-[13px] font-medium text-ds-ink shadow-sm transition hover:bg-ds-hover"
+                        >
+                          {t('restoreWorkspaceDefault')}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void pickWriteWorkspace()}
+                          className="shrink-0 rounded-xl border border-ds-border bg-ds-card px-3 py-2 text-[13px] font-medium text-ds-ink shadow-sm transition hover:bg-ds-hover"
+                        >
+                          {t('browse')}
+                        </button>
+                      </div>
+                      {writeWorkspacePickerError ? (
+                        <p className="mt-2 text-[13px] leading-5 text-amber-700 dark:text-amber-300">
+                          {writeWorkspacePickerError}
+                        </p>
+                      ) : null}
+                    </div>
+                  }
+                />
+                <SettingRow
+                  title={t('writeApiKey')}
+                  description={t('writeApiKeyDesc')}
+                  control={
+                    <SecretInput
+                      value={form.deepseek.apiKey}
+                      onChange={(value) => update({ deepseek: { apiKey: value } })}
+                      visible={showApiKey}
+                      onToggleVisibility={() => setShowApiKey((value) => !value)}
+                      placeholder="sk-…"
+                      autoComplete="off"
+                      invalid={!form.deepseek.apiKey.trim()}
+                      showLabel={t('showSecret')}
+                      hideLabel={t('hideSecret')}
+                      className="md:max-w-md"
+                    />
+                  }
+                />
+              </SettingsCard>
+
+              <SettingsCard title={t('writeInlineCompletion')} className="mt-5">
+                <SettingRow
+                  title={t('writeInlineCompletionEnabled')}
+                  description={t('writeInlineCompletionEnabledDesc')}
+                  control={
+                    <Toggle
+                      checked={form.write.inlineCompletion.enabled}
+                      onChange={(enabled) => update({ write: { inlineCompletion: { enabled } } })}
+                    />
+                  }
+                />
+                <SettingRow
+                  title={t('writeInlineCompletionRetrieval')}
+                  description={t('writeInlineCompletionRetrievalDesc')}
+                  control={
+                    <Toggle
+                      checked={form.write.inlineCompletion.retrievalEnabled}
+                      onChange={(retrievalEnabled) => update({ write: { inlineCompletion: { retrievalEnabled } } })}
+                    />
+                  }
+                />
+                <SettingRow
+                  title={t('writeInlineCompletionBaseUrl')}
+                  description={t('writeInlineCompletionBaseUrlDesc')}
+                  control={
+                    <input
+                      className="w-full min-w-0 rounded-xl border border-ds-border bg-ds-card px-3 py-2 text-[14px] text-ds-ink shadow-sm focus:border-accent/40 focus:outline-none focus:ring-1 focus:ring-accent/30 md:max-w-md"
+                      value={form.write.inlineCompletion.baseUrl}
+                      placeholder={DEFAULT_WRITE_INLINE_COMPLETION_BASE_URL}
+                      onChange={(e) => update({ write: { inlineCompletion: { baseUrl: e.target.value } } })}
+                    />
+                  }
+                />
+                <SettingRow
+                  title={t('writeInlineCompletionModel')}
+                  description={t('writeInlineCompletionModelDesc')}
+                  control={
+                    <div className="w-full min-w-0 md:max-w-md">
+                    <input
+                      list="write-inline-completion-model-options"
+                      className="w-full min-w-0 rounded-xl border border-ds-border bg-ds-card px-3 py-2 text-[14px] text-ds-ink shadow-sm focus:border-accent/40 focus:outline-none focus:ring-1 focus:ring-accent/30"
+                      value={form.write.inlineCompletion.model || DEFAULT_WRITE_INLINE_COMPLETION_MODEL}
+                      placeholder={DEFAULT_WRITE_INLINE_COMPLETION_MODEL}
+                      onChange={(e) => update({ write: { inlineCompletion: { model: e.target.value } } })}
+                    />
+                    <datalist id="write-inline-completion-model-options">
+                      {WRITE_INLINE_COMPLETION_MODEL_IDS.map((model) => (
+                        <option
+                          key={model}
+                          value={model}
+                          label={t(
+                            model === DEFAULT_WRITE_INLINE_COMPLETION_MODEL
+                              ? 'writeInlineCompletionModelFlash'
+                              : 'writeInlineCompletionModelPro'
+                          )}
+                        />
+                      ))}
+                    </datalist>
+                    </div>
+                  }
+                />
+                <SettingRow
+                  title={t('writeInlineCompletionDebounce')}
+                  description={t('writeInlineCompletionDebounceDesc')}
+                  control={
+                    <select
+                      className={selectControlClass}
+                      value={form.write.inlineCompletion.debounceMs}
+                      onChange={(e) => update({
+                        write: { inlineCompletion: { debounceMs: Number(e.target.value) } }
+                      })}
+                    >
+                      <option value={300}>{t('writeInlineCompletionDelayFast')}</option>
+                      <option value={650}>{t('writeInlineCompletionDelayBalanced')}</option>
+                      <option value={1000}>{t('writeInlineCompletionDelayCalm')}</option>
+                      <option value={1500}>{t('writeInlineCompletionDelaySlow')}</option>
+                    </select>
+                  }
+                />
+                <SettingRow
+                  title={t('writeInlineCompletionThreshold')}
+                  description={t('writeInlineCompletionThresholdDesc')}
+                  control={
+                    <select
+                      className={selectControlClass}
+                      value={form.write.inlineCompletion.minAcceptScore}
+                      onChange={(e) => update({
+                        write: { inlineCompletion: { minAcceptScore: Number(e.target.value) } }
+                      })}
+                    >
+                      <option value={0.38}>{t('writeInlineCompletionThresholdCreative')}</option>
+                      <option value={0.52}>{t('writeInlineCompletionThresholdBalanced')}</option>
+                      <option value={0.68}>{t('writeInlineCompletionThresholdStrict')}</option>
+                      <option value={0.82}>{t('writeInlineCompletionThresholdVeryStrict')}</option>
+                    </select>
+                  }
+                />
+                <SettingRow
+                  title={t('writeInlineCompletionMaxTokens')}
+                  description={t('writeInlineCompletionMaxTokensDesc')}
+                  control={
+                    <input
+                      type="number"
+                      min={16}
+                      max={512}
+                      step={8}
+                      className="w-32 rounded-xl border border-ds-border bg-ds-card px-3 py-2 text-[14px] text-ds-ink shadow-sm focus:border-accent/40 focus:outline-none focus:ring-1 focus:ring-accent/30"
+                      value={form.write.inlineCompletion.maxTokens}
+                      placeholder={String(DEFAULT_WRITE_INLINE_COMPLETION_MAX_TOKENS)}
+                      onChange={(e) => update({
+                        write: { inlineCompletion: { maxTokens: Number(e.target.value) } }
+                      })}
+                    />
+                  }
+                />
+                <SettingRow
+                  title={t('writeInlineLongCompletion')}
+                  description={t('writeInlineLongCompletionDesc')}
+                  control={
+                    <Toggle
+                      checked={form.write.inlineCompletion.longCompletionEnabled}
+                      onChange={(longCompletionEnabled) => update({
+                        write: { inlineCompletion: { longCompletionEnabled } }
+                      })}
+                    />
+                  }
+                />
+                <SettingRow
+                  title={t('writeInlineLongCompletionDebounce')}
+                  description={t('writeInlineLongCompletionDebounceDesc')}
+                  control={
+                    <select
+                      className={selectControlClass}
+                      value={form.write.inlineCompletion.longDebounceMs}
+                      onChange={(e) => update({
+                        write: { inlineCompletion: { longDebounceMs: Number(e.target.value) } }
+                      })}
+                    >
+                      <option value={1800}>{t('writeInlineLongCompletionDelaySoon')}</option>
+                      <option value={DEFAULT_WRITE_INLINE_LONG_COMPLETION_DEBOUNCE_MS}>{t('writeInlineLongCompletionDelayBalanced')}</option>
+                      <option value={4200}>{t('writeInlineLongCompletionDelayPatient')}</option>
+                      <option value={6500}>{t('writeInlineLongCompletionDelayDeep')}</option>
+                    </select>
+                  }
+                />
+                <SettingRow
+                  title={t('writeInlineLongCompletionMaxTokens')}
+                  description={t('writeInlineLongCompletionMaxTokensDesc')}
+                  control={
+                    <input
+                      type="number"
+                      min={64}
+                      max={1024}
+                      step={16}
+                      className="w-32 rounded-xl border border-ds-border bg-ds-card px-3 py-2 text-[14px] text-ds-ink shadow-sm focus:border-accent/40 focus:outline-none focus:ring-1 focus:ring-accent/30"
+                      value={form.write.inlineCompletion.longMaxTokens}
+                      placeholder={String(DEFAULT_WRITE_INLINE_LONG_COMPLETION_MAX_TOKENS)}
+                      onChange={(e) => update({
+                        write: { inlineCompletion: { longMaxTokens: Number(e.target.value) } }
+                      })}
+                    />
+                  }
+                />
+                <div className="px-3 py-3 text-[12.5px] leading-5 text-ds-muted">
+                  {t('writeInlineCompletionApiNote')}
+                </div>
               </SettingsCard>
             </>
           )}

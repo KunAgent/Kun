@@ -9,7 +9,7 @@ import {
   syncClawScheduleMcpConfig,
   type ClawScheduleMcpLaunchConfig
 } from './claw-schedule-mcp-config'
-import { defaultClawSettings, type AppSettingsV1 } from '../shared/app-settings'
+import { defaultClawSettings, defaultWriteSettings, type AppSettingsV1 } from '../shared/app-settings'
 
 function createSettings(patch: Partial<AppSettingsV1['claw']['im']> = {}): AppSettingsV1 {
   const claw = defaultClawSettings()
@@ -38,6 +38,7 @@ function createSettings(patch: Partial<AppSettingsV1['claw']['im']> = {}): AppSe
     notifications: {
       turnComplete: true
     },
+    write: defaultWriteSettings(),
     guiUpdate: {
       channel: 'stable'
     },

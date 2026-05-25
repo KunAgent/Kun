@@ -47,7 +47,7 @@ export function ConnectionStatusBar({ compact = false }: Props): ReactElement {
   if (compact) {
     return (
       <div
-        className={`ds-no-drag inline-flex max-w-[min(190px,30vw)] shrink-0 items-center gap-1.5 ${barTone}`}
+        className={`chat-connection-status ds-no-drag inline-flex max-w-[min(190px,30vw)] shrink-0 items-center gap-1.5 ${barTone}`}
       >
         <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${dotClass}`} aria-hidden />
         <span className="truncate text-[11.5px] font-medium tabular-nums">{label}</span>

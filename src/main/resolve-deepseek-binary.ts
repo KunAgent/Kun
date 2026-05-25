@@ -1,5 +1,5 @@
 import { createRequire } from 'node:module'
-import { dirname, join } from 'node:path'
+import { basename, dirname, join } from 'node:path'
 import {
   chmodSync,
   copyFileSync,
@@ -18,11 +18,19 @@ type InstallModule = {
   getBinaryPath: (name: string) => Promise<string>
 }
 
+type ManagedPackageName = 'deepseek-tui' | 'codewhale'
+
+type ManagedPackageJson = {
+  name?: unknown
+  version?: unknown
+}
+
 type UpdateManifest = {
   version: string
 }
 
 export type ManagedDeepseekPackage = {
+  packageName: ManagedPackageName
   source: DeepseekPackageSource
   resolverPackageJsonPath: string
   packageJsonPath: string
@@ -31,16 +39,73 @@ export type ManagedDeepseekPackage = {
 }
 
 const UPDATE_ROOT_DIR = 'deepseek-tui-updates'
+const LEGACY_MANAGED_PACKAGE_NAME: ManagedPackageName = 'deepseek-tui'
+const UPDATED_MANAGED_PACKAGE_NAME: ManagedPackageName = 'codewhale'
+const MANAGED_PACKAGE_NAMES: ManagedPackageName[] = [
+  UPDATED_MANAGED_PACKAGE_NAME,
+  LEGACY_MANAGED_PACKAGE_NAME
+]
 
-function bundledDeepseekPackageRoots(): string[] {
+function isManagedPackageName(value: unknown): value is ManagedPackageName {
+  return value === LEGACY_MANAGED_PACKAGE_NAME || value === UPDATED_MANAGED_PACKAGE_NAME
+}
+
+function managedPackageMetadata(packageJsonPath: string): {
+  packageName: ManagedPackageName | null
+  version: string | null
+} {
+  try {
+    const parsed = JSON.parse(readFileSync(packageJsonPath, 'utf8')) as ManagedPackageJson
+    return {
+      packageName: isManagedPackageName(parsed.name) ? parsed.name : null,
+      version:
+        typeof parsed.version === 'string' && parsed.version.trim() ? parsed.version.trim() : null
+    }
+  } catch {
+    return { packageName: null, version: null }
+  }
+}
+
+export function managedPackageInstallModuleRequest(
+  resolverPackageJsonPath: string,
+  packageName: ManagedPackageName
+): string {
+  const packageRoot = dirname(resolverPackageJsonPath)
+  return isManagedPackageName(basename(packageRoot))
+    ? './scripts/install.js'
+    : `${packageName}/scripts/install.js`
+}
+
+export function managedPackageBinaryName(packageName: ManagedPackageName): string {
+  return packageName === UPDATED_MANAGED_PACKAGE_NAME ? 'codewhale' : 'deepseek'
+}
+
+function managedPackageExecutableCandidates(packageName: ManagedPackageName): string[] {
+  const suffix = process.platform === 'win32' ? '.exe' : ''
+  const primary = managedPackageBinaryName(packageName)
+  const fallback = primary === 'deepseek' ? 'codewhale' : 'deepseek'
+  return [`${primary}${suffix}`, `${fallback}${suffix}`]
+}
+
+function bundledManagedPackageRoots(packageName: ManagedPackageName): string[] {
   const appRoot = app.getAppPath()
-  const roots = [join(appRoot, 'node_modules', 'deepseek-tui')]
+  const roots = [join(appRoot, 'node_modules', packageName)]
   if (appRoot.endsWith('app.asar')) {
     roots.push(
-      join(appRoot.replace(/app\.asar$/, 'app.asar.unpacked'), 'node_modules', 'deepseek-tui')
+      join(appRoot.replace(/app\.asar$/, 'app.asar.unpacked'), 'node_modules', packageName)
     )
   }
   return roots
+}
+
+function bundledManagedPackage(): { packageName: ManagedPackageName; sourceRoots: string[] } {
+  for (const packageName of MANAGED_PACKAGE_NAMES) {
+    const sourceRoots = bundledManagedPackageRoots(packageName)
+    if (sourceRoots.some((sourceRoot) => existsSync(join(sourceRoot, 'package.json')))) {
+      return { packageName, sourceRoots }
+    }
+  }
+  throw new Error('Cannot find bundled managed runtime package.')
 }
 
 function managedUserBinaryPath(userBinaryPath: string): boolean {
@@ -48,14 +113,20 @@ function managedUserBinaryPath(userBinaryPath: string): boolean {
   return !u || u === 'deepseek'
 }
 
-function readPackageVersion(packageJsonPath: string): string | null {
-  try {
-    const parsed = JSON.parse(readFileSync(packageJsonPath, 'utf8')) as { version?: unknown }
-    return typeof parsed.version === 'string' && parsed.version.trim()
-      ? parsed.version.trim()
-      : null
-  } catch {
-    return null
+function packageInfoFromManagedPackageJson(
+  packageJsonPath: string,
+  resolverPackageJsonPath: string,
+  source: DeepseekPackageSource
+): ManagedDeepseekPackage | null {
+  const metadata = managedPackageMetadata(packageJsonPath)
+  if (!metadata.packageName) return null
+  return {
+    packageName: metadata.packageName,
+    source,
+    resolverPackageJsonPath,
+    packageJsonPath,
+    packageRoot: dirname(packageJsonPath),
+    version: metadata.version
   }
 }
 
@@ -63,31 +134,44 @@ function packageInfoForResolver(
   resolverPackageJsonPath: string,
   source: DeepseekPackageSource
 ): ManagedDeepseekPackage {
-  const req = createRequire(resolverPackageJsonPath)
-  const packageJsonPath = req.resolve('deepseek-tui/package.json')
-  return {
-    source,
+  const direct = packageInfoFromManagedPackageJson(
     resolverPackageJsonPath,
-    packageJsonPath,
-    packageRoot: dirname(packageJsonPath),
-    version: readPackageVersion(packageJsonPath)
+    resolverPackageJsonPath,
+    source
+  )
+  if (direct) return direct
+
+  const req = createRequire(resolverPackageJsonPath)
+  for (const packageName of MANAGED_PACKAGE_NAMES) {
+    try {
+      const packageJsonPath = req.resolve(`${packageName}/package.json`)
+      const resolved = packageInfoFromManagedPackageJson(
+        packageJsonPath,
+        resolverPackageJsonPath,
+        source
+      )
+      if (resolved) return resolved
+    } catch {
+      /* try the next managed package name */
+    }
   }
+
+  throw new Error(`Cannot resolve managed runtime package from ${resolverPackageJsonPath}`)
 }
 
-function managedDeepseekCliName(): string {
-  return process.platform === 'win32' ? 'deepseek.exe' : 'deepseek'
-}
-
-function resolveBundledDeepseekCliPath(resolverPackageJsonPath: string): string | null {
-  try {
-    const req = createRequire(resolverPackageJsonPath)
-    const packageJsonPath = req.resolve('deepseek-tui/package.json')
-    const candidate = join(dirname(packageJsonPath), 'bin', 'downloads', managedDeepseekCliName())
-    if (!existsSync(candidate)) return null
-    return statSync(candidate).isFile() ? candidate : null
-  } catch {
-    return null
+function resolveBundledDeepseekCliPath(managedPackage: ManagedDeepseekPackage): string | null {
+  for (const executableName of managedPackageExecutableCandidates(managedPackage.packageName)) {
+    const candidate = join(managedPackage.packageRoot, 'bin', 'downloads', executableName)
+    if (!existsSync(candidate)) continue
+    try {
+      if (statSync(candidate).isFile()) {
+        return candidate
+      }
+    } catch {
+      /* ignore unreadable candidates and keep searching */
+    }
   }
+  return null
 }
 
 type CopyMirrorOptions = {
@@ -156,12 +240,16 @@ function mirrorRequiredInstallerFile(
       return
     }
   }
-  throw new Error(`Cannot find deepseek-tui installer file: ${relativePath}`)
+  throw new Error(`Cannot find managed runtime installer file: ${relativePath}`)
 }
 
-function mirrorBundledDownloads(sourceRoots: string[], packageRoot: string): void {
+function mirrorBundledDownloads(
+  sourceRoots: string[],
+  packageRoot: string,
+  packageName: ManagedPackageName
+): void {
   const copied = new Set<string>()
-  const cliName = managedDeepseekCliName()
+  const cliName = managedPackageExecutableCandidates(packageName)[0]
   const requiredNames = new Set([cliName, `${cliName}.version`])
   for (const sourceRoot of sourceRoots) {
     const sourceDownloads = join(sourceRoot, 'bin', 'downloads')
@@ -185,10 +273,10 @@ function mirrorBundledDownloads(sourceRoots: string[], packageRoot: string): voi
 }
 
 function ensureBundledInstallerMirror(): string {
+  const bundled = bundledManagedPackage()
   const cacheRoot = join(app.getPath('userData'), 'deepseek-tui-installer')
-  const packageRoot = join(cacheRoot, 'node_modules', 'deepseek-tui')
+  const packageRoot = join(cacheRoot, 'node_modules', bundled.packageName)
   const destPackageJson = join(packageRoot, 'package.json')
-  const sourceRoots = bundledDeepseekPackageRoots()
   const filesToMirror = [
     'package.json',
     'scripts/install.js',
@@ -198,24 +286,31 @@ function ensureBundledInstallerMirror(): string {
 
   mkdirSync(packageRoot, { recursive: true })
 
-  // Mirror only the installer files we need into userData so the deepseek-tui
+  // Mirror only the installer files we need into userData so the bundled
   // package writes its downloaded binaries to a writable location outside app.asar.
   for (const relativePath of filesToMirror) {
-    mirrorRequiredInstallerFile(sourceRoots, packageRoot, relativePath)
+    mirrorRequiredInstallerFile(bundled.sourceRoots, packageRoot, relativePath)
   }
   // Packaged builds often already contain the platform binary downloaded at
   // build time. Copy it into the writable mirror first so first launch does
   // not depend on a fresh GitHub download, especially on Windows.
-  mirrorBundledDownloads(sourceRoots, packageRoot)
+  mirrorBundledDownloads(bundled.sourceRoots, packageRoot, bundled.packageName)
 
   return destPackageJson
 }
 
 export function getDeepseekTuiUpdatePackageRoot(version: string): string {
   if (!/^[0-9A-Za-z.+_-]+$/.test(version)) {
-    throw new Error(`Invalid deepseek-tui version: ${version}`)
+    throw new Error(`Invalid managed runtime version: ${version}`)
   }
-  return join(app.getPath('userData'), UPDATE_ROOT_DIR, 'versions', version, 'node_modules', 'deepseek-tui')
+  return join(
+    app.getPath('userData'),
+    UPDATE_ROOT_DIR,
+    'versions',
+    version,
+    'node_modules',
+    UPDATED_MANAGED_PACKAGE_NAME
+  )
 }
 
 export function getDeepseekTuiUpdateTempRoot(): string {
@@ -241,7 +336,7 @@ function readActiveDeepseekTuiUpdate(): UpdateManifest | null {
 export function setActiveDeepseekTuiUpdate(version: string): void {
   const packageJsonPath = join(getDeepseekTuiUpdatePackageRoot(version), 'package.json')
   if (!existsSync(packageJsonPath)) {
-    throw new Error(`Cannot activate missing deepseek-tui package: ${packageJsonPath}`)
+    throw new Error(`Cannot activate missing managed runtime package: ${packageJsonPath}`)
   }
   const manifestPath = getDeepseekTuiUpdateManifestPath()
   mkdirSync(dirname(manifestPath), { recursive: true })
@@ -272,7 +367,7 @@ export function getManagedDeepseekPackage(userBinaryPath: string): ManagedDeepse
 
   if (!existsSync(resolverPackageJsonPath)) {
     throw new Error(
-      `Cannot find package.json at ${resolverPackageJsonPath}; cannot load deepseek-tui installer.`
+      `Cannot find package.json at ${resolverPackageJsonPath}; cannot load the managed runtime installer.`
     )
   }
 
@@ -282,33 +377,42 @@ export function getManagedDeepseekPackage(userBinaryPath: string): ManagedDeepse
 export async function resolveDeepseekExecutableFromPackageJson(
   resolverPackageJsonPath: string
 ): Promise<string> {
+  const managedPackage = packageInfoForResolver(resolverPackageJsonPath, 'updated')
+
   // The GUI only launches the `deepseek` CLI (`config` / `serve`) and never
-  // invokes `deepseek-tui`. Reuse an already bundled or mirrored CLI binary
+  // invokes the package entrypoint. Reuse an already bundled or mirrored CLI binary
   // directly so Windows first-run setup does not block on downloading the
   // unrelated TUI executable.
-  const bundledCli = resolveBundledDeepseekCliPath(resolverPackageJsonPath)
+  const bundledCli = resolveBundledDeepseekCliPath(managedPackage)
   if (bundledCli) {
     return bundledCli
   }
 
-  const req = createRequire(resolverPackageJsonPath)
+  const req = createRequire(managedPackage.resolverPackageJsonPath)
   let install: InstallModule
   try {
-    install = req('deepseek-tui/scripts/install.js') as InstallModule
+    install = req(
+      managedPackageInstallModuleRequest(
+        managedPackage.resolverPackageJsonPath,
+        managedPackage.packageName
+      )
+    ) as InstallModule
   } catch (e) {
     throw new Error(
-      `deepseek-tui npm package missing. Run \`npm install\` in the DeepSeek-GUI folder. ${e instanceof Error ? e.message : ''}`
+      `${managedPackage.packageName} npm package missing. Run \`npm install\` in the DeepSeek-GUI folder. ${
+        e instanceof Error ? e.message : ''
+      }`
     )
   }
 
-  return install.getBinaryPath('deepseek')
+  return install.getBinaryPath(managedPackageBinaryName(managedPackage.packageName))
 }
 
 /**
  * Resolve the native `deepseek` executable:
  * - If the user set an explicit path (not the placeholder `deepseek`), use it.
- * - Otherwise use the `deepseek-tui` npm package installer, which downloads the
- *   matching GitHub release binary on first use (same as `npm i -g deepseek-tui`).
+ * - Otherwise use the managed npm package installer, which downloads the
+ *   matching GitHub release binary on first use.
  */
 export async function resolveDeepseekExecutable(userBinaryPath: string): Promise<string> {
   const u = userBinaryPath?.trim() ?? ''

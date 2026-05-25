@@ -3,8 +3,12 @@ import { homedir } from 'node:os'
 import { basename, dirname, join } from 'node:path'
 import {
   DEFAULT_DEEPSEEK_BASE_URL,
+  DEFAULT_GUI_UPDATE_CHANNEL,
+  DEFAULT_WRITE_WORKSPACE_ROOT,
   defaultClawSettings,
+  defaultWriteSettings,
   mergeClawSettings,
+  mergeWriteSettings,
   normalizeAppSettings,
   type AppSettingsPatch,
   type AppSettingsV1,
@@ -16,6 +20,15 @@ export type { AppSettingsV1 }
 
 const DEFAULT_WORKSPACE_ROOT = join(homedir(), '.deepseekgui', 'default_workspace')
 const DEFAULT_CLAW_CHANNELS_ROOT = join(homedir(), '.deepseekgui', 'claw')
+const DEFAULT_WRITE_WORKSPACE_ROOT_ABSOLUTE = expandHomePath(DEFAULT_WRITE_WORKSPACE_ROOT)
+const WELCOME_MARKDOWN = `# Welcome to Write
+
+This is your default writing workspace.
+
+- Create Markdown drafts from the sidebar.
+- Select text in the editor and ask the writing assistant about it.
+- Switch between source, live, split, and preview modes from the top bar.
+`
 
 function expandHomePath(raw: string | null | undefined): string {
   const value = typeof raw === 'string' ? raw.trim() : ''
@@ -29,6 +42,10 @@ function expandHomePath(raw: string | null | undefined): string {
 
 function normalizeWorkspaceRoot(raw: string | null | undefined): string {
   return expandHomePath(raw) || DEFAULT_WORKSPACE_ROOT
+}
+
+function normalizeWriteWorkspaceRoot(raw: string | null | undefined): string {
+  return expandHomePath(raw) || DEFAULT_WRITE_WORKSPACE_ROOT_ABSOLUTE
 }
 
 function sanitizePathSegment(raw: string | null | undefined, fallback: string): string {
@@ -73,9 +90,21 @@ function normalizeClawConversationWorkspaceRoot(
 
 function normalizeStoredSettings(settings: AppSettingsV1): AppSettingsV1 {
   const normalized = normalizeAppSettings(settings)
+  const writeDefaultRoot = normalizeWriteWorkspaceRoot(normalized.write.defaultWorkspaceRoot)
+  const writeActiveRoot = normalizeWriteWorkspaceRoot(normalized.write.activeWorkspaceRoot || writeDefaultRoot)
+  const writeWorkspaces = [...new Set(
+    [writeDefaultRoot, writeActiveRoot, ...normalized.write.workspaces.map(normalizeWriteWorkspaceRoot)]
+      .filter(Boolean)
+  )]
   return {
     ...normalized,
     workspaceRoot: normalizeWorkspaceRoot(normalized.workspaceRoot),
+    write: {
+      defaultWorkspaceRoot: writeDefaultRoot,
+      activeWorkspaceRoot: writeWorkspaces.includes(writeActiveRoot) ? writeActiveRoot : writeDefaultRoot,
+      workspaces: writeWorkspaces.length > 0 ? writeWorkspaces : [writeDefaultRoot],
+      inlineCompletion: normalized.write.inlineCompletion
+    },
     claw: {
       ...normalized.claw,
       channels: normalized.claw.channels.map((channel) => ({
@@ -93,6 +122,20 @@ function normalizeStoredSettings(settings: AppSettingsV1): AppSettingsV1 {
 async function ensureWorkspaceRootExists(workspaceRoot: string): Promise<void> {
   if (workspaceRoot !== DEFAULT_WORKSPACE_ROOT) return
   await mkdir(workspaceRoot, { recursive: true })
+}
+
+async function ensureWriteWorkspaceRootsExist(settings: AppSettingsV1): Promise<void> {
+  for (const workspaceRoot of settings.write.workspaces) {
+    if (!workspaceRoot) continue
+    await mkdir(workspaceRoot, { recursive: true })
+  }
+
+  const welcomePath = join(settings.write.defaultWorkspaceRoot, 'welcome.md')
+  try {
+    await writeFile(welcomePath, WELCOME_MARKDOWN, { encoding: 'utf8', flag: 'wx' })
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error
+  }
 }
 
 async function ensureClawChannelWorkspaceRootsExist(settings: AppSettingsV1): Promise<void> {
@@ -137,8 +180,9 @@ const defaultSettings = (): AppSettingsV1 => ({
     turnComplete: true
   },
   guiUpdate: {
-    channel: 'frontier'
+    channel: DEFAULT_GUI_UPDATE_CHANNEL
   },
+  write: defaultWriteSettings(),
   claw: defaultClawSettings()
 })
 
@@ -150,6 +194,7 @@ function buildMergedSettings(parsed: Partial<AppSettingsV1>): AppSettingsV1 {
     deepseek: { ...defaults.deepseek, ...parsed.deepseek },
     log: { ...defaults.log, ...parsed.log },
     notifications: { ...defaults.notifications, ...parsed.notifications },
+    write: mergeWriteSettings(defaults.write, parsed.write),
     claw: mergeClawSettings(defaults.claw, parsed.claw),
     guiUpdate: { ...defaults.guiUpdate, ...parsed.guiUpdate },
     agentProvider: 'deepseek-runtime'
@@ -163,6 +208,7 @@ function isErrnoException(error: unknown): error is NodeJS.ErrnoException {
 async function loadDefaultSettings(): Promise<AppSettingsV1> {
   const defaults = normalizeStoredSettings(defaultSettings())
   await ensureWorkspaceRootExists(defaults.workspaceRoot)
+  await ensureWriteWorkspaceRootsExist(defaults)
   await ensureClawChannelWorkspaceRootsExist(defaults)
   return defaults
 }
@@ -229,6 +275,7 @@ export class JsonSettingsStore {
 
     const normalized = normalizeStoredSettings(buildMergedSettings(parsed))
     await ensureWorkspaceRootExists(normalized.workspaceRoot)
+    await ensureWriteWorkspaceRootsExist(normalized)
     await ensureClawChannelWorkspaceRootsExist(normalized)
     this.cache = normalized
     return this.cache
@@ -237,6 +284,7 @@ export class JsonSettingsStore {
   async save(data: AppSettingsV1): Promise<void> {
     const normalized = normalizeStoredSettings(data)
     await ensureWorkspaceRootExists(normalized.workspaceRoot)
+    await ensureWriteWorkspaceRootsExist(normalized)
     await ensureClawChannelWorkspaceRootsExist(normalized)
     this.cache = normalized
     await mkdir(dirname(this.path), { recursive: true })
@@ -251,6 +299,7 @@ export class JsonSettingsStore {
       deepseek: { ...cur.deepseek, ...(partial.deepseek ?? {}) },
       log: { ...cur.log, ...(partial.log ?? {}) },
       notifications: { ...cur.notifications, ...(partial.notifications ?? {}) },
+      write: mergeWriteSettings(cur.write, partial.write),
       claw: mergeClawSettings(cur.claw, partial.claw),
       guiUpdate: { ...cur.guiUpdate, ...(partial.guiUpdate ?? {}) },
       agentProvider: 'deepseek-runtime'

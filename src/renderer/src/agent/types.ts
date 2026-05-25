@@ -28,9 +28,26 @@ export type NormalizedThread = {
   mode: string
   workspace?: string
   status?: string
+  archived?: boolean
+  preview?: string
+  latestTurnId?: string
+  latestTurnStatus?: string
+  forkedFromThreadId?: string
+  forkedFromTitle?: string
+  forkedAt?: string
+  forkedFromMessageCount?: number
+  forkedFromTurnCount?: number
 }
 
 export type RuntimeConnectionStatus = 'idle' | 'checking' | 'ready' | 'offline'
+
+export type ThreadListOptions = {
+  limit?: number
+  search?: string
+  includeArchived?: boolean
+  archivedOnly?: boolean
+  summary?: boolean
+}
 
 export type ToolBlock = {
   kind: 'tool'
@@ -47,11 +64,24 @@ export type ToolBlock = {
   meta?: Record<string, unknown>
 }
 
+export type CompactionBlock = {
+  kind: 'compaction'
+  id: string
+  createdAt?: string
+  summary: string
+  status: 'running' | 'success' | 'error'
+  detail?: string
+  auto?: boolean
+  messagesBefore?: number
+  messagesAfter?: number
+}
+
 export type ChatBlock =
   | { kind: 'user'; id: string; createdAt?: string; text: string; modelLabel?: string }
   | { kind: 'assistant'; id: string; createdAt?: string; text: string }
   | { kind: 'reasoning'; id: string; createdAt?: string; text: string }
   | ToolBlock
+  | CompactionBlock
   | { kind: 'system'; id: string; createdAt?: string; text: string }
   | {
       kind: 'approval'
@@ -90,6 +120,17 @@ export type ToolEventPayload = {
   meta?: Record<string, unknown>
 }
 
+export type CompactionEventPayload = {
+  itemId: string
+  summary: string
+  status: 'running' | 'success' | 'error'
+  detail?: string
+  auto?: boolean
+  messagesBefore?: number
+  messagesAfter?: number
+  createdAt?: string
+}
+
 export type UserInputRequestPayload = {
   itemId: string
   requestId: string
@@ -122,6 +163,7 @@ export type ThreadEventSink = {
   onDeltas(deltas: ThreadDeltaEvent[]): void
   onUserMessage(ev: UserMessageEventPayload): void
   onTool(ev: ToolEventPayload): void
+  onCompaction(ev: CompactionEventPayload): void
   onApproval(req: ApprovalRequestPayload): void
   onUserInput(req: UserInputRequestPayload): void
   onUserInputStatus(ev: UserInputStatusPayload): void
@@ -139,7 +181,7 @@ export interface AgentProvider {
     attachFiles: boolean
   }
   connect(): Promise<void>
-  listThreads(): Promise<NormalizedThread[]>
+  listThreads(options?: ThreadListOptions): Promise<NormalizedThread[]>
   createThread(input: { workspace?: string; title?: string; mode?: string }): Promise<NormalizedThread>
   getThreadDetail(threadId: string): Promise<{
     blocks: ChatBlock[]
@@ -147,6 +189,7 @@ export interface AgentProvider {
     threadStatus?: string
     latestTurnId?: string
     latestUserMessageId?: string
+    turnDurationByUserId?: Record<string, number>
   }>
   sendUserMessage(
     threadId: string,
@@ -156,7 +199,14 @@ export interface AgentProvider {
   steerUserMessage?(threadId: string, turnId: string, text: string): Promise<void>
   interruptTurn(threadId: string, turnId: string): Promise<void>
   renameThread(threadId: string, title: string): Promise<void>
+  archiveThread?(threadId: string, archived: boolean): Promise<void>
   deleteThread(threadId: string): Promise<void>
+  compactThread?(threadId: string, reason?: string): Promise<void>
+  forkThread?(threadId: string): Promise<NormalizedThread>
+  resumeSession?(
+    sessionId: string,
+    options?: { model?: string; mode?: string }
+  ): Promise<{ threadId: string; sessionId: string }>
   subscribeThreadEvents(
     threadId: string,
     sinceSeq: number,

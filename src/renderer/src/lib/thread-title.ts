@@ -2,6 +2,7 @@ import type { NormalizedThread } from '../agent/types'
 import i18n from '../i18n'
 
 const LEGACY_PLACEHOLDER_TITLES = new Set(['New Thread', '新会话'])
+const INTERNAL_PLACEHOLDER_TITLE_PATTERN = /^__codex_[a-z0-9_]+__$/i
 const MAX_THREAD_TITLE_LENGTH = 48
 
 function normalizeTitleLine(line: string): string {
@@ -49,6 +50,19 @@ export function deriveThreadTitleFromPrompt(prompt: string): string {
   return trimmed || fallback
 }
 
+export function isInternalPlaceholderThreadTitle(title: string | null | undefined): boolean {
+  const raw = title?.trim() ?? ''
+  return INTERNAL_PLACEHOLDER_TITLE_PATTERN.test(raw)
+}
+
+export function hasThreadIdFallbackTitle(
+  thread: Pick<NormalizedThread, 'id' | 'title'> | null | undefined
+): boolean {
+  const raw = thread?.title?.trim() ?? ''
+  if (!thread || !raw) return false
+  return raw === thread.id.slice(0, 8)
+}
+
 export function shouldAutoTitleThread(
   thread: Pick<NormalizedThread, 'id' | 'title'> | null | undefined
 ): boolean {
@@ -56,6 +70,6 @@ export function shouldAutoTitleThread(
   if (!raw) return true
   if (raw === getDefaultThreadTitle()) return true
   if (LEGACY_PLACEHOLDER_TITLES.has(raw)) return true
-  if (thread && raw === thread.id.slice(0, 8)) return true
+  if (hasThreadIdFallbackTitle(thread)) return true
   return false
 }

@@ -4,8 +4,26 @@ const { existsSync } = require('node:fs')
 const { chmod, copyFile, mkdir, readFile, rename, unlink, writeFile } = require('node:fs/promises')
 const { join, dirname } = require('node:path')
 
-const deepseekTuiPkg = require('../node_modules/deepseek-tui/package.json')
-const artifacts = require('../node_modules/deepseek-tui/scripts/artifacts.js')
+const MANAGED_PACKAGE_NAMES = ['codewhale', 'deepseek-tui']
+
+function loadManagedRuntimePackage() {
+  for (const packageName of MANAGED_PACKAGE_NAMES) {
+    try {
+      return {
+        packageName,
+        pkg: require(`../node_modules/${packageName}/package.json`),
+        artifacts: require(`../node_modules/${packageName}/scripts/artifacts.js`)
+      }
+    } catch {
+      // Try the legacy package name when the rebranded package is not installed.
+    }
+  }
+  throw new Error('[after-pack] Missing managed runtime package: install codewhale or deepseek-tui.')
+}
+
+const managedRuntime = loadManagedRuntimePackage()
+const managedRuntimePkg = managedRuntime.pkg
+const artifacts = managedRuntime.artifacts
 
 const ARCH_BY_VALUE = new Map([
   [0, 'ia32'],
@@ -18,33 +36,48 @@ const ARCH_BY_VALUE = new Map([
 const TARGET_MATRIX = {
   darwin: {
     x64: {
-      deepseekAsset: 'deepseek-macos-x64',
-      tuiAsset: 'deepseek-tui-macos-x64',
-      deepseekLocal: 'deepseek',
-      tuiLocal: 'deepseek-tui'
+      cliAssetSuffix: 'macos-x64',
+      tuiAssetSuffix: 'macos-x64',
+      cliLocalSuffix: '',
+      tuiLocalSuffix: ''
     },
     arm64: {
-      deepseekAsset: 'deepseek-macos-arm64',
-      tuiAsset: 'deepseek-tui-macos-arm64',
-      deepseekLocal: 'deepseek',
-      tuiLocal: 'deepseek-tui'
+      cliAssetSuffix: 'macos-arm64',
+      tuiAssetSuffix: 'macos-arm64',
+      cliLocalSuffix: '',
+      tuiLocalSuffix: ''
     }
   },
   linux: {
     x64: {
-      deepseekAsset: 'deepseek-linux-x64',
-      tuiAsset: 'deepseek-tui-linux-x64',
-      deepseekLocal: 'deepseek',
-      tuiLocal: 'deepseek-tui'
+      cliAssetSuffix: 'linux-x64',
+      tuiAssetSuffix: 'linux-x64',
+      cliLocalSuffix: '',
+      tuiLocalSuffix: ''
     }
   },
   win32: {
     x64: {
-      deepseekAsset: 'deepseek-windows-x64.exe',
-      tuiAsset: 'deepseek-tui-windows-x64.exe',
-      deepseekLocal: 'deepseek.exe',
-      tuiLocal: 'deepseek-tui.exe'
+      cliAssetSuffix: 'windows-x64.exe',
+      tuiAssetSuffix: 'windows-x64.exe',
+      cliLocalSuffix: '.exe',
+      tuiLocalSuffix: '.exe'
     }
+  }
+}
+
+function runtimeNames() {
+  if (managedRuntime.packageName === 'codewhale') {
+    return {
+      cliBase: 'codewhale',
+      tuiBase: 'codewhale-tui',
+      repo: 'Hmbown/CodeWhale'
+    }
+  }
+  return {
+    cliBase: 'deepseek',
+    tuiBase: 'deepseek-tui',
+    repo: 'Hmbown/DeepSeek-TUI'
   }
 }
 
@@ -75,7 +108,16 @@ function resolveTarget(context) {
       `[after-pack] Unsupported packaged runtime target ${platform}/${arch}. Add it to TARGET_MATRIX first.`
     )
   }
-  return { platform, arch, ...entry }
+  const names = runtimeNames()
+  return {
+    platform,
+    arch,
+    cliAsset: `${names.cliBase}-${entry.cliAssetSuffix}`,
+    tuiAsset: `${names.tuiBase}-${entry.tuiAssetSuffix}`,
+    cliLocal: `${names.cliBase}${entry.cliLocalSuffix}`,
+    tuiLocal: `${names.tuiBase}${entry.tuiLocalSuffix}`,
+    ...entry
+  }
 }
 
 function resolveResourcesRoot(context) {
@@ -91,11 +133,19 @@ function resolveResourcesRoot(context) {
 }
 
 function releaseVersion() {
-  return String(deepseekTuiPkg.deepseekBinaryVersion || deepseekTuiPkg.version).trim()
+  return String(
+    managedRuntimePkg.codewhaleBinaryVersion ||
+      managedRuntimePkg.deepseekBinaryVersion ||
+      managedRuntimePkg.version
+  ).trim()
 }
 
 function releaseRepo() {
-  return process.env.DEEPSEEK_TUI_GITHUB_REPO || process.env.DEEPSEEK_GITHUB_REPO || 'Hmbown/DeepSeek-TUI'
+  return (
+    process.env.DEEPSEEK_TUI_GITHUB_REPO ||
+    process.env.DEEPSEEK_GITHUB_REPO ||
+    runtimeNames().repo
+  )
 }
 
 function runtimeCacheEnabled() {
@@ -243,10 +293,11 @@ async function replaceBundledBinary(
 }
 
 function assertBundledPackageShape(packageRoot) {
+  const names = runtimeNames()
   const required = [
     'package.json',
-    'bin/deepseek.js',
-    'bin/deepseek-tui.js',
+    `bin/${names.cliBase}.js`,
+    `bin/${names.tuiBase}.js`,
     'scripts/install.js',
     'scripts/artifacts.js',
     'scripts/preflight-glibc.js'
@@ -254,7 +305,7 @@ function assertBundledPackageShape(packageRoot) {
   for (const relativePath of required) {
     const fullPath = join(packageRoot, relativePath)
     if (!existsSync(fullPath)) {
-      throw new Error(`[after-pack] Packaged deepseek-tui file missing: ${fullPath}`)
+      throw new Error(`[after-pack] Packaged ${managedRuntime.packageName} file missing: ${fullPath}`)
     }
   }
 }
@@ -262,7 +313,12 @@ function assertBundledPackageShape(packageRoot) {
 async function ensureBundledRuntime(context) {
   const target = resolveTarget(context)
   const resourcesRoot = resolveResourcesRoot(context)
-  const packageRoot = join(resourcesRoot, 'app.asar.unpacked', 'node_modules', 'deepseek-tui')
+  const packageRoot = join(
+    resourcesRoot,
+    'app.asar.unpacked',
+    'node_modules',
+    managedRuntime.packageName
+  )
   const downloadsDir = join(packageRoot, 'bin', 'downloads')
 
   assertBundledPackageShape(packageRoot)
@@ -282,9 +338,9 @@ async function ensureBundledRuntime(context) {
 
   const binaries = [
     {
-      assetName: target.deepseekAsset,
-      filePath: join(downloadsDir, target.deepseekLocal),
-      markerPath: join(downloadsDir, `${target.deepseekLocal}.version`)
+      assetName: target.cliAsset,
+      filePath: join(downloadsDir, target.cliLocal),
+      markerPath: join(downloadsDir, `${target.cliLocal}.version`)
     }
   ]
 

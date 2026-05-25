@@ -70,6 +70,8 @@ export function formatRuntimeError(error: unknown): string {
   }
 
   if (
+    lowered.includes('managed runtime npm package missing') ||
+    lowered.includes('codewhale npm package missing') ||
     lowered.includes('deepseek-tui npm package missing') ||
     lowered.includes('cannot find package.json')
   ) {

@@ -70,10 +70,36 @@ const api = {
     ipcRenderer.on('terminal:exit', wrapped)
     return () => ipcRenderer.removeListener('terminal:exit', wrapped)
   },
+  listWorkspaceDirectory: (options) =>
+    ipcRenderer.invoke('file:list-workspace-directory', options),
   resolveWorkspaceFile: (options) =>
     ipcRenderer.invoke('file:resolve-workspace', options),
   readWorkspaceFile: (options) =>
     ipcRenderer.invoke('file:read-workspace', options),
+  writeWorkspaceFile: (payload) =>
+    ipcRenderer.invoke('file:write-workspace', payload),
+  createWorkspaceFile: (payload) =>
+    ipcRenderer.invoke('file:create-workspace', payload),
+  createWorkspaceDirectory: (payload) =>
+    ipcRenderer.invoke('file:create-workspace-directory', payload),
+  renameWorkspaceEntry: (payload) =>
+    ipcRenderer.invoke('file:rename-workspace-entry', payload),
+  deleteWorkspaceEntry: (payload) =>
+    ipcRenderer.invoke('file:delete-workspace-entry', payload),
+  watchWorkspaceFile: (payload) =>
+    ipcRenderer.invoke('file:watch-workspace', payload),
+  unwatchWorkspaceFile: (watchId) =>
+    ipcRenderer.invoke('file:unwatch-workspace', watchId),
+  onWorkspaceFileChanged: (handler) => {
+    const wrapped = (
+      _: Electron.IpcRendererEvent,
+      payload: Parameters<typeof handler>[0]
+    ) => handler(payload)
+    ipcRenderer.on('file:workspace-changed', wrapped)
+    return () => ipcRenderer.removeListener('file:workspace-changed', wrapped)
+  },
+  requestWriteInlineCompletion: (payload) =>
+    ipcRenderer.invoke('write:inline-completion', payload),
   startSse: (threadId, sinceSeq, streamId) =>
     ipcRenderer.invoke('runtime:sse:start', { threadId, sinceSeq, streamId }),
   stopSse: (streamId) => ipcRenderer.invoke('runtime:sse:stop', streamId),

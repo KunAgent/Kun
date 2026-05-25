@@ -29,16 +29,23 @@ const DEFAULT_REGISTRIES = [
   'https://registry.npmjs.org',
   'https://registry.npmmirror.com'
 ]
+const UPDATE_NPM_PACKAGE_NAME = 'codewhale'
+const REQUIRED_UPDATE_PACKAGE_FILES = [
+  'package.json',
+  'scripts/install.js',
+  'scripts/artifacts.js',
+  'scripts/preflight-glibc.js'
+]
 
 function registryBaseUrls(): string[] {
   const urls: string[] = []
   const custom = process.env.DEEPSEEK_GUI_NPM_REGISTRY?.trim()
   if (custom) {
     const trimmed = custom.replace(/\/+$/, '')
-    if (/\/deepseek-tui\/latest$/.test(trimmed)) {
-      urls.push(trimmed.replace(/\/deepseek-tui\/latest$/, ''))
-    } else if (/\/deepseek-tui$/.test(trimmed)) {
-      urls.push(trimmed.replace(/\/deepseek-tui$/, ''))
+    if (/\/(?:deepseek-tui|codewhale)\/latest$/.test(trimmed)) {
+      urls.push(trimmed.replace(/\/(?:deepseek-tui|codewhale)\/latest$/, ''))
+    } else if (/\/(?:deepseek-tui|codewhale)$/.test(trimmed)) {
+      urls.push(trimmed.replace(/\/(?:deepseek-tui|codewhale)$/, ''))
     } else {
       urls.push(trimmed)
     }
@@ -50,13 +57,15 @@ function registryBaseUrls(): string[] {
 }
 
 function registryLatestUrls(): string[] {
-  return registryBaseUrls().map((registry) => `${registry}/deepseek-tui/latest`)
+  return registryBaseUrls().map((registry) => `${registry}/${UPDATE_NPM_PACKAGE_NAME}/latest`)
 }
 
 function tarballUrls(version: string, primaryUrl: string): string[] {
   return [
     primaryUrl,
-    ...registryBaseUrls().map((registry) => `${registry}/deepseek-tui/-/deepseek-tui-${version}.tgz`)
+    ...registryBaseUrls().map(
+      (registry) => `${registry}/${UPDATE_NPM_PACKAGE_NAME}/-/${UPDATE_NPM_PACKAGE_NAME}-${version}.tgz`
+    )
   ].filter((url, index, urls) => urls.indexOf(url) === index)
 }
 
@@ -195,7 +204,7 @@ async function downloadTarball(version: string, primaryUrl: string): Promise<Buf
       errors.push(`${url}: ${e instanceof Error ? e.message : String(e)}`)
     }
   }
-  throw new Error(errors.join('; ') || 'Could not download deepseek-tui package.')
+  throw new Error(errors.join('; ') || 'Could not download managed runtime package.')
 }
 
 function verifyIntegrity(buffer: Buffer, integrity: string | null): void {
@@ -296,6 +305,16 @@ async function readExtractedVersion(packageJsonPath: string): Promise<string> {
   return parsed.version.trim()
 }
 
+async function assertExtractedUpdatePackageShape(packageRoot: string): Promise<void> {
+  for (const relativePath of REQUIRED_UPDATE_PACKAGE_FILES) {
+    try {
+      await readFile(join(packageRoot, relativePath))
+    } catch {
+      throw new Error(`Downloaded runtime package is missing required file: ${relativePath}`)
+    }
+  }
+}
+
 export async function installDeepseekTuiUpdatePackage(
   userBinaryPath: string
 ): Promise<InstallPackageResult> {
@@ -307,19 +326,19 @@ export async function installDeepseekTuiUpdatePackage(
     return {
       ok: false,
       reason: 'custom_binary',
-      message: 'Automatic updates are only available for the managed deepseek-tui runtime.'
+      message: 'Automatic updates are only available for the managed runtime.'
     }
   }
   if (!info.updateAvailable) {
     return {
       ok: false,
       reason: 'up_to_date',
-      message: `deepseek-tui ${info.currentVersion ?? info.latestVersion} is already up to date.`
+      message: `Runtime ${info.currentVersion ?? info.latestVersion} is already up to date.`
     }
   }
 
   const tempVersionRoot = join(getDeepseekTuiUpdateTempRoot(), `${info.latestVersion}-${randomUUID()}`)
-  const tempPackageRoot = join(tempVersionRoot, 'node_modules', 'deepseek-tui')
+  const tempPackageRoot = join(tempVersionRoot, 'node_modules', UPDATE_NPM_PACKAGE_NAME)
   const targetPackageRoot = getDeepseekTuiUpdatePackageRoot(info.latestVersion)
   const targetPackageJson = join(targetPackageRoot, 'package.json')
   let stage: 'download' | 'install' = 'download'
@@ -332,6 +351,7 @@ export async function installDeepseekTuiUpdatePackage(
     verifyIntegrity(tarball, info.integrity)
     stage = 'install'
     await extractNpmTarball(tarball, tempPackageRoot)
+    await assertExtractedUpdatePackageShape(tempPackageRoot)
 
     const extractedVersion = await readExtractedVersion(join(tempPackageRoot, 'package.json'))
     if (extractedVersion !== info.latestVersion) {

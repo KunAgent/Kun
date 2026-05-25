@@ -19,20 +19,27 @@ import {
 import type { ClawImDialogMode } from './SidebarClawDialogHelpers'
 import { ClawAddImDialog } from './SidebarClawDialog'
 import { SidebarProjectsSection } from './SidebarProjectsSection'
+import { WorkspaceModeTabs } from './WorkspaceModeTabs'
 
 type Props = {
   threads: NormalizedThread[]
   activeThreadId: string | null
-  activeView: 'chat' | 'claw'
+  activeView: 'chat' | 'write' | 'claw'
   pluginsActive: boolean
   runtimeReady: boolean
+  threadSearch: string
+  showArchivedThreads: boolean
+  onThreadSearchChange: (query: string) => void
+  onShowArchivedThreadsChange: (show: boolean) => void
   onSelectThread: (id: string) => void
   onDeleteThread: (id: string) => Promise<void>
+  onRestoreThread: (id: string) => Promise<void>
   onNewChat: () => void
   onNewChatInWorkspace: (workspaceRoot: string) => void
   onOpenSettings: (section?: SettingsRouteSection) => void
   onOpenPlugins: () => void
   onCodeOpen: () => void
+  onWriteOpen: () => void
   onClawOpen: () => void
 }
 
@@ -42,13 +49,19 @@ export function Sidebar({
   activeView,
   pluginsActive,
   runtimeReady,
+  threadSearch,
+  showArchivedThreads,
+  onThreadSearchChange,
+  onShowArchivedThreadsChange,
   onSelectThread,
   onDeleteThread,
+  onRestoreThread,
   onNewChat,
   onNewChatInWorkspace,
   onOpenSettings,
   onOpenPlugins,
   onCodeOpen,
+  onWriteOpen,
   onClawOpen
 }: Props): ReactElement {
   const { t, i18n } = useTranslation('common')
@@ -100,32 +113,12 @@ export function Sidebar({
       </div>
 
       <div className="ds-no-drag flex flex-col px-1">
-        <div className="mb-4 rounded-[22px] border border-ds-border-muted/40 bg-ds-elevated/72 p-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.48)] backdrop-blur">
-          <div className="grid grid-cols-2 gap-1">
-            <button
-              type="button"
-              onClick={onCodeOpen}
-              className={`rounded-[18px] px-3 py-2.5 text-center text-[14px] font-semibold transition ${
-                activeView === 'chat'
-                  ? 'bg-white text-accent shadow-[0_10px_24px_rgba(15,23,42,0.08)] ring-1 ring-[rgba(0,136,255,0.10)]'
-                  : 'text-ds-muted hover:bg-white/55 hover:text-ds-ink'
-              }`}
-            >
-              {t('code')}
-            </button>
-            <button
-              type="button"
-              onClick={onClawOpen}
-              className={`rounded-[18px] px-3 py-2.5 text-center text-[14px] font-semibold transition ${
-                activeView === 'claw'
-                  ? 'bg-white text-accent shadow-[0_10px_24px_rgba(15,23,42,0.08)] ring-1 ring-[rgba(0,136,255,0.10)]'
-                  : 'text-ds-muted hover:bg-white/55 hover:text-ds-ink'
-              }`}
-            >
-              {t('claw')}
-            </button>
-          </div>
-        </div>
+        <WorkspaceModeTabs
+          activeView={activeView}
+          onCodeOpen={onCodeOpen}
+          onWriteOpen={onWriteOpen}
+          onClawOpen={onClawOpen}
+        />
 
         {activeView !== 'claw' ? (
         <SidebarLink
@@ -166,6 +159,8 @@ export function Sidebar({
         activeView={activeView}
         activeThreadId={activeThreadId}
         runtimeReady={runtimeReady}
+        searchQuery={threadSearch}
+        showArchived={showArchivedThreads}
         workspaceRoot={workspaceRoot}
         busy={busy}
         watchTurnCompletion={watchTurnCompletion}
@@ -176,6 +171,9 @@ export function Sidebar({
         onCreateThreadInWorkspace={onNewChatInWorkspace}
         onSelectThread={onSelectThread}
         onDeleteThread={onDeleteThread}
+        onRestoreThread={onRestoreThread}
+        onSearchQueryChange={onThreadSearchChange}
+        onShowArchivedChange={onShowArchivedThreadsChange}
         t={t}
       />
       )}

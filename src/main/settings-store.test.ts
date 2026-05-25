@@ -2,9 +2,58 @@ import { mkdir, mkdtemp, readFile, readdir, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { DEFAULT_GUI_UPDATE_CHANNEL } from '../shared/gui-update'
 import { JsonSettingsStore } from './settings-store'
 
 describe('JsonSettingsStore', () => {
+  it('defaults GUI updates to the stable channel for new settings', async () => {
+    const userDataDir = await mkdtemp(join(tmpdir(), 'ds-gui-settings-'))
+
+    const store = new JsonSettingsStore(userDataDir)
+    const loaded = await store.load()
+
+    expect(loaded.guiUpdate.channel).toBe(DEFAULT_GUI_UPDATE_CHANNEL)
+  })
+
+  it('creates a default write workspace with welcome.md', async () => {
+    const userDataDir = await mkdtemp(join(tmpdir(), 'ds-gui-settings-'))
+
+    const store = new JsonSettingsStore(userDataDir)
+    const loaded = await store.load()
+
+    expect(loaded.write.defaultWorkspaceRoot).toContain('.deepseekgui')
+    expect(loaded.write.workspaces).toContain(loaded.write.defaultWorkspaceRoot)
+    expect(loaded.write.inlineCompletion.enabled).toBe(true)
+    expect(loaded.write.inlineCompletion.retrievalEnabled).toBe(true)
+    expect(loaded.write.inlineCompletion.longCompletionEnabled).toBe(true)
+    expect(loaded.write.inlineCompletion.baseUrl).toBe('https://api.deepseek.com/beta')
+    expect(loaded.write.inlineCompletion.model).toBe('deepseek-v4-flash')
+    expect(loaded.write.inlineCompletion.longMaxTokens).toBe(256)
+    expect(await readFile(join(loaded.write.defaultWorkspaceRoot, 'welcome.md'), 'utf8')).toContain('Welcome to Write')
+  })
+
+  it('preserves the pro write completion model', async () => {
+    const userDataDir = await mkdtemp(join(tmpdir(), 'ds-gui-settings-'))
+
+    await writeFile(
+      join(userDataDir, 'deepseek-gui-settings.json'),
+      JSON.stringify({
+        version: 1,
+        write: {
+          inlineCompletion: {
+            model: 'deepseek-v4-pro'
+          }
+        }
+      }),
+      'utf8'
+    )
+
+    const store = new JsonSettingsStore(userDataDir)
+    const loaded = await store.load()
+
+    expect(loaded.write.inlineCompletion.model).toBe('deepseek-v4-pro')
+  })
+
   it('preserves deepseek.autoStart=false when loading saved settings', async () => {
     const userDataDir = await mkdtemp(join(tmpdir(), 'ds-gui-settings-'))
     const workspaceRoot = join(userDataDir, 'workspace')

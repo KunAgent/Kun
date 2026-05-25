@@ -2,7 +2,10 @@ import type {
   AgentProvider,
   AgentProviderId,
   ChatBlock,
+  CompactionBlock,
+  CompactionEventPayload,
   NormalizedThread,
+  ThreadListOptions,
   ThreadDeltaEvent,
   ThreadEventSink,
   ToolBlock,
@@ -14,10 +17,11 @@ import type {
 import type { AppSettingsV1 } from '@shared/app-settings'
 import { unwrapClawRuntimePromptForDisplay, unwrapClawUserPromptForDisplay } from '@shared/app-settings'
 import { extractDiffFilePath } from '../lib/diff-stats'
+import { buildTurnDurationByUserId } from './thread-timing'
 
 type ThreadRecordJson = {
   id: string
-  created_at: string
+  created_at?: string
   updated_at: string
   model: string
   workspace: string
@@ -25,6 +29,45 @@ type ThreadRecordJson = {
   status?: string
   archived?: boolean
   title?: string | null
+  source_thread_id?: string | null
+  parent_thread_id?: string | null
+  forked_from_thread_id?: string | null
+  source_thread_title?: string | null
+  parent_thread_title?: string | null
+  forked_from_title?: string | null
+  forked_at?: string | null
+  forked_from_message_count?: number | null
+}
+
+type ThreadSummaryJson = {
+  id: string
+  title: string
+  preview?: string
+  model: string
+  mode: string
+  archived?: boolean
+  updated_at: string
+  latest_turn_id?: string | null
+  latest_turn_status?: string | null
+  source_thread_id?: string | null
+  parent_thread_id?: string | null
+  forked_from_thread_id?: string | null
+  source_thread_title?: string | null
+  parent_thread_title?: string | null
+  forked_from_title?: string | null
+  forked_at?: string | null
+  forked_from_message_count?: number | null
+}
+
+type ThreadForkJsonFields = {
+  source_thread_id?: string | null
+  parent_thread_id?: string | null
+  forked_from_thread_id?: string | null
+  source_thread_title?: string | null
+  parent_thread_title?: string | null
+  forked_from_title?: string | null
+  forked_at?: string | null
+  forked_from_message_count?: number | null
 }
 
 type TurnItemJson = {
@@ -62,6 +105,21 @@ type StartTurnResponseJson = {
   turn: { id: string; item_ids?: string[] }
 }
 
+type ForkThreadResponseJson =
+  | ThreadRecordJson
+  | {
+      thread?: ThreadRecordJson
+      id?: string
+      thread_id?: string
+    }
+
+type ResumeSessionResponseJson = {
+  thread_id: string
+  session_id: string
+  message_count?: number
+  summary?: string
+}
+
 type RuntimeErrorJson = {
   error?: string | { message?: string; status?: number }
   message?: string
@@ -79,6 +137,81 @@ function titleFromThread(t: ThreadRecordJson): string {
   const raw = t.title?.trim()
   if (raw) return raw
   return t.id.slice(0, 8)
+}
+
+function stringField(...values: unknown[]): string | undefined {
+  for (const value of values) {
+    if (typeof value === 'string' && value.trim()) return value.trim()
+  }
+  return undefined
+}
+
+function finiteNumberField(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined
+}
+
+function threadForkFields(t: ThreadForkJsonFields): Partial<NormalizedThread> {
+  const sourceThreadId = stringField(
+    t.source_thread_id,
+    t.parent_thread_id,
+    t.forked_from_thread_id
+  )
+  const forkedFromMessageCount = finiteNumberField(t.forked_from_message_count)
+  if (!sourceThreadId && forkedFromMessageCount === undefined) return {}
+  const parentTitle = stringField(
+    t.source_thread_title,
+    t.parent_thread_title,
+    t.forked_from_title
+  )
+  const forkedAt = stringField(t.forked_at)
+  return {
+    ...(sourceThreadId ? { forkedFromThreadId: sourceThreadId } : {}),
+    ...(parentTitle ? { forkedFromTitle: parentTitle } : {}),
+    ...(forkedAt ? { forkedAt } : {}),
+    ...(forkedFromMessageCount !== undefined ? { forkedFromMessageCount } : {})
+  }
+}
+
+function threadFromRecord(t: ThreadRecordJson): NormalizedThread {
+  return {
+    id: t.id,
+    title: titleFromThread(t),
+    updatedAt: t.updated_at,
+    model: t.model,
+    mode: t.mode,
+    workspace: t.workspace,
+    status: t.status,
+    archived: t.archived === true,
+    ...threadForkFields(t)
+  }
+}
+
+function threadFromSummary(t: ThreadSummaryJson): NormalizedThread {
+  return {
+    id: t.id,
+    title: t.title?.trim() || t.id.slice(0, 8),
+    updatedAt: t.updated_at,
+    model: t.model,
+    mode: t.mode,
+    archived: t.archived === true,
+    preview: typeof t.preview === 'string' ? t.preview : undefined,
+    latestTurnId: typeof t.latest_turn_id === 'string' ? t.latest_turn_id : undefined,
+    latestTurnStatus:
+      typeof t.latest_turn_status === 'string' ? t.latest_turn_status : undefined,
+    status: typeof t.latest_turn_status === 'string' ? t.latest_turn_status : undefined,
+    ...threadForkFields(t)
+  }
+}
+
+function buildQuery(options: Record<string, string | number | boolean | undefined>): string {
+  const params = new URLSearchParams()
+  for (const [key, value] of Object.entries(options)) {
+    if (value == null) continue
+    if (typeof value === 'string' && !value.trim()) continue
+    params.set(key, String(value))
+  }
+  const query = params.toString()
+  return query ? `?${query}` : ''
 }
 
 function toToolKind(kind: string): ToolItemKind | undefined {
@@ -312,6 +445,50 @@ function toolBlockFromItem(item: TurnItemJson): ToolBlock {
   }
 }
 
+function numberPayload(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined
+}
+
+function compactionBlockFromItem(
+  item: TurnItemJson,
+  extra?: Pick<CompactionBlock, 'auto' | 'messagesBefore' | 'messagesAfter'>
+): CompactionBlock {
+  const detail = typeof item.detail === 'string' && item.detail.trim() ? item.detail : undefined
+  return {
+    kind: 'compaction',
+    id: item.id,
+    createdAt: itemCreatedAt(item),
+    summary: item.summary || item.kind,
+    status: statusFromString(item.status),
+    detail,
+    ...(extra?.auto !== undefined ? { auto: extra.auto } : {}),
+    ...(extra?.messagesBefore !== undefined ? { messagesBefore: extra.messagesBefore } : {}),
+    ...(extra?.messagesAfter !== undefined ? { messagesAfter: extra.messagesAfter } : {})
+  }
+}
+
+function compactionEventFromItem(
+  item: TurnItemJson,
+  payload: Record<string, unknown>,
+  status: 'running' | 'success' | 'error'
+): CompactionEventPayload {
+  const detail = typeof item.detail === 'string' && item.detail.trim() ? item.detail : undefined
+  return {
+    itemId: item.id,
+    summary: item.summary || item.kind,
+    status,
+    detail,
+    createdAt: itemCreatedAt(item),
+    ...(typeof payload.auto === 'boolean' ? { auto: payload.auto } : {}),
+    ...(numberPayload(payload.messages_before) !== undefined
+      ? { messagesBefore: numberPayload(payload.messages_before) }
+      : {}),
+    ...(numberPayload(payload.messages_after) !== undefined
+      ? { messagesAfter: numberPayload(payload.messages_after) }
+      : {})
+  }
+}
+
 function itemCreatedAt(item: TurnItemJson): string | undefined {
   return item.started_at ?? item.ended_at ?? undefined
 }
@@ -341,6 +518,13 @@ function createSseStreamId(): string {
 export class DeepseekRuntimeProvider implements AgentProvider {
   readonly id: AgentProviderId = 'deepseek-runtime'
   readonly displayName = 'DeepSeek TUI'
+
+  private async getThreadRecord(threadId: string): Promise<NormalizedThread> {
+    const r = await window.dsGui.runtimeRequest(`/v1/threads/${encodeURIComponent(threadId)}`, 'GET')
+    if (!r.ok) throw toRuntimeError(readRuntimeError(r.body, 'failed to load thread'))
+    const detail = JSON.parse(r.body) as ThreadDetailJson
+    return threadFromRecord(detail.thread)
+  }
 
   getCapabilities(): {
     interrupt: boolean
@@ -383,21 +567,24 @@ export class DeepseekRuntimeProvider implements AgentProvider {
     if (!r.ok) throw toRuntimeError(readRuntimeError(r.body, `approval decision failed: ${r.status}`))
   }
 
-  async listThreads(): Promise<NormalizedThread[]> {
-    const r = await window.dsGui.runtimeRequest('/v1/threads?limit=50', 'GET')
+  async listThreads(options: ThreadListOptions = {}): Promise<NormalizedThread[]> {
+    const limit = options.limit ?? 50
+    const useSummary = options.summary === true || Boolean(options.search?.trim())
+    const query = buildQuery({
+      limit,
+      search: useSummary ? options.search : undefined,
+      include_archived: options.includeArchived,
+      archived_only: options.archivedOnly
+    })
+    const path = useSummary ? `/v1/threads/summary${query}` : `/v1/threads${query}`
+    const r = await window.dsGui.runtimeRequest(path, 'GET')
     if (!r.ok) throw toRuntimeError(readRuntimeError(r.body, 'failed to list threads'))
+    if (useSummary) {
+      const rows = JSON.parse(r.body) as ThreadSummaryJson[]
+      return rows.map(threadFromSummary)
+    }
     const rows = JSON.parse(r.body) as ThreadRecordJson[]
-    return rows
-      .filter((t) => t.archived !== true)
-      .map((t) => ({
-        id: t.id,
-        title: titleFromThread(t),
-        updatedAt: t.updated_at,
-        model: t.model,
-        mode: t.mode,
-        workspace: t.workspace,
-        status: t.status
-      }))
+    return rows.map(threadFromRecord)
   }
 
   async createThread(input: {
@@ -423,13 +610,8 @@ export class DeepseekRuntimeProvider implements AgentProvider {
       )
     }
     return {
-      id: t.id,
-      title: input.title || titleFromThread(t),
-      updatedAt: t.updated_at,
-      model: t.model,
-      mode: t.mode,
-      workspace: t.workspace,
-      status: t.status
+      ...threadFromRecord(t),
+      title: input.title || titleFromThread(t)
     }
   }
 
@@ -439,6 +621,7 @@ export class DeepseekRuntimeProvider implements AgentProvider {
     threadStatus?: string
     latestTurnId?: string
     latestUserMessageId?: string
+    turnDurationByUserId?: Record<string, number>
   }> {
     const r = await window.dsGui.runtimeRequest(`/v1/threads/${encodeURIComponent(threadId)}`, 'GET')
     if (!r.ok) throw toRuntimeError(readRuntimeError(r.body, 'failed to load thread'))
@@ -497,7 +680,9 @@ export class DeepseekRuntimeProvider implements AgentProvider {
         blocks.push(toolBlockFromItem(it))
       } else if (it.kind === 'error') {
         blocks.push({ kind: 'system', id: it.id, createdAt: itemCreatedAt(it), text: `⚠ ${it.detail ?? it.summary}` })
-      } else if (it.kind === 'status' || it.kind === 'context_compaction') {
+      } else if (it.kind === 'context_compaction') {
+        blocks.push(compactionBlockFromItem(it))
+      } else if (it.kind === 'status') {
         const text = it.summary || it.kind
         blocks.push({ kind: 'system', id: it.id, createdAt: itemCreatedAt(it), text })
       }
@@ -507,7 +692,8 @@ export class DeepseekRuntimeProvider implements AgentProvider {
       latestSeq: detail.latest_seq ?? 0,
       threadStatus: detail.thread.status ?? latestTurnStatus,
       latestTurnId,
-      latestUserMessageId
+      latestUserMessageId,
+      turnDurationByUserId: buildTurnDurationByUserId(detail.turns, detail.items)
     }
   }
 
@@ -607,7 +793,25 @@ export class DeepseekRuntimeProvider implements AgentProvider {
     if (!r.ok) throw toRuntimeError(readRuntimeError(r.body, 'rename thread failed'))
   }
 
+  async archiveThread(threadId: string, archived: boolean): Promise<void> {
+    const r = await window.dsGui.runtimeRequest(
+      `/v1/threads/${encodeURIComponent(threadId)}`,
+      'PATCH',
+      JSON.stringify({ archived })
+    )
+    if (!r.ok) {
+      const action = archived ? 'archive thread failed' : 'restore thread failed'
+      throw toRuntimeError(readRuntimeError(r.body, action))
+    }
+  }
+
   async deleteThread(threadId: string): Promise<void> {
+    try {
+      await this.archiveThread(threadId, true)
+      return
+    } catch {
+      // Older compatibility layers used delete-like routes.
+    }
     const encoded = encodeURIComponent(threadId)
     const attempts: Array<{ path: string; method: string; body?: string; stopOnFailure?: boolean }> = [
       // Newer runtimes expose archive semantics via PATCH instead of DELETE.
@@ -629,6 +833,55 @@ export class DeepseekRuntimeProvider implements AgentProvider {
     }
 
     throw toRuntimeError(last ?? { message: 'delete thread failed' })
+  }
+
+  async compactThread(threadId: string, reason?: string): Promise<void> {
+    const body = JSON.stringify({ reason: reason?.trim() || undefined })
+    const r = await window.dsGui.runtimeRequest(
+      `/v1/threads/${encodeURIComponent(threadId)}/compact`,
+      'POST',
+      body
+    )
+    if (!r.ok) throw toRuntimeError(readRuntimeError(r.body, 'compact thread failed'))
+  }
+
+  async forkThread(threadId: string): Promise<NormalizedThread> {
+    const r = await window.dsGui.runtimeRequest(
+      `/v1/threads/${encodeURIComponent(threadId)}/fork`,
+      'POST'
+    )
+    if (!r.ok) throw toRuntimeError(readRuntimeError(r.body, 'fork thread failed'))
+    const body = JSON.parse(r.body) as ForkThreadResponseJson
+    if ('thread' in body && body.thread) return threadFromRecord(body.thread)
+    if ('thread_id' in body && typeof body.thread_id === 'string') {
+      return this.getThreadRecord(body.thread_id)
+    }
+    if ('id' in body && typeof body.id === 'string') {
+      const maybeRecord = body as ThreadRecordJson
+      if (typeof maybeRecord.updated_at === 'string') return threadFromRecord(maybeRecord)
+      return this.getThreadRecord(body.id)
+    }
+    throw toRuntimeError({ message: 'fork thread returned an invalid response' })
+  }
+
+  async resumeSession(
+    sessionId: string,
+    options?: { model?: string; mode?: string }
+  ): Promise<{ threadId: string; sessionId: string }> {
+    const r = await window.dsGui.runtimeRequest(
+      `/v1/sessions/${encodeURIComponent(sessionId)}/resume-thread`,
+      'POST',
+      JSON.stringify({
+        model: options?.model?.trim() || undefined,
+        mode: options?.mode?.trim() || undefined
+      })
+    )
+    if (!r.ok) throw toRuntimeError(readRuntimeError(r.body, 'resume session failed'))
+    const body = JSON.parse(r.body) as ResumeSessionResponseJson
+    if (!body.thread_id) {
+      throw toRuntimeError({ message: 'resume session returned an invalid response' })
+    }
+    return { threadId: body.thread_id, sessionId: body.session_id || sessionId }
   }
 
   async subscribeThreadEvents(
@@ -748,6 +1001,10 @@ export class DeepseekRuntimeProvider implements AgentProvider {
                   if (userMessage) sink.onUserMessage(userMessage)
                   return
                 }
+                if (it?.kind === 'context_compaction') {
+                  sink.onCompaction(compactionEventFromItem(it, payload, 'running'))
+                  return
+                }
                 if (it && TOOL_ITEM_KINDS.has(it.kind)) {
                   const tool = readPayloadTool(payload)
                   if (tool?.name === REQUEST_USER_INPUT_TOOL) {
@@ -779,6 +1036,18 @@ export class DeepseekRuntimeProvider implements AgentProvider {
                 if (it?.kind === 'user_message') {
                   const userMessage = userMessageEventFromItem(it)
                   if (userMessage) sink.onUserMessage(userMessage)
+                  return
+                }
+                if (it?.kind === 'context_compaction') {
+                  sink.onCompaction(
+                    compactionEventFromItem(
+                      it,
+                      payload,
+                      ev === 'item.failed' || statusFromString(it.status) === 'error'
+                        ? 'error'
+                        : 'success'
+                    )
+                  )
                   return
                 }
                 if (it && TOOL_ITEM_KINDS.has(it.kind)) {

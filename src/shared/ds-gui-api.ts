@@ -26,9 +26,28 @@ import type {
 } from './terminal-session'
 import type {
   WorkspaceFileReadResult,
+  WorkspaceDirectoryCreatePayload,
+  WorkspaceDirectoryCreateResult,
+  WorkspaceDirectoryListResult,
+  WorkspaceDirectoryTarget,
+  WorkspaceEntryRenamePayload,
+  WorkspaceEntryRenameResult,
+  WorkspaceEntryDeletePayload,
+  WorkspaceEntryDeleteResult,
+  WorkspaceFileChangePayload,
+  WorkspaceFileCreatePayload,
+  WorkspaceFileCreateResult,
   WorkspaceFileResolveResult,
-  WorkspaceFileTarget
+  WorkspaceFileTarget,
+  WorkspaceFileWatchPayload,
+  WorkspaceFileWatchResult,
+  WorkspaceFileWritePayload,
+  WorkspaceFileWriteResult
 } from './workspace-file'
+import type {
+  WriteInlineCompletionRequest,
+  WriteInlineCompletionResult
+} from './write-inline-completion'
 
 export type RuntimeRequestResult = { ok: boolean; status: number; body: string }
 export type WorkspacePickResult = { canceled: boolean; path: string | null }
@@ -149,8 +168,26 @@ export type DsGuiApi = {
   closeTerminalSession: (payload: TerminalLifecyclePayload) => Promise<boolean>
   onTerminalData: (handler: (payload: TerminalDataPayload) => void) => () => void
   onTerminalExit: (handler: (payload: TerminalExitPayload) => void) => () => void
+  listWorkspaceDirectory: (options: WorkspaceDirectoryTarget) => Promise<WorkspaceDirectoryListResult>
   resolveWorkspaceFile: (options: WorkspaceFileTarget) => Promise<WorkspaceFileResolveResult>
   readWorkspaceFile: (options: WorkspaceFileTarget) => Promise<WorkspaceFileReadResult>
+  writeWorkspaceFile: (payload: WorkspaceFileWritePayload) => Promise<WorkspaceFileWriteResult>
+  createWorkspaceFile: (payload: WorkspaceFileCreatePayload) => Promise<WorkspaceFileCreateResult>
+  createWorkspaceDirectory: (
+    payload: WorkspaceDirectoryCreatePayload
+  ) => Promise<WorkspaceDirectoryCreateResult>
+  renameWorkspaceEntry: (
+    payload: WorkspaceEntryRenamePayload
+  ) => Promise<WorkspaceEntryRenameResult>
+  deleteWorkspaceEntry: (
+    payload: WorkspaceEntryDeletePayload
+  ) => Promise<WorkspaceEntryDeleteResult>
+  watchWorkspaceFile: (payload: WorkspaceFileWatchPayload) => Promise<WorkspaceFileWatchResult>
+  unwatchWorkspaceFile: (watchId: string) => Promise<boolean>
+  onWorkspaceFileChanged: (handler: (payload: WorkspaceFileChangePayload) => void) => () => void
+  requestWriteInlineCompletion: (
+    payload: WriteInlineCompletionRequest
+  ) => Promise<WriteInlineCompletionResult>
   startSse: (threadId: string, sinceSeq: number, streamId?: string) => Promise<{ streamId: string }>
   stopSse: (streamId: string) => Promise<boolean>
   onSseEvent: (handler: (payload: SseEventPayload) => void) => () => void

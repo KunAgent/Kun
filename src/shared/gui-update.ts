@@ -2,7 +2,7 @@ export const GUI_UPDATE_CHANNELS = ['frontier', 'stable'] as const
 
 export type GuiUpdateChannel = (typeof GUI_UPDATE_CHANNELS)[number]
 
-export const DEFAULT_GUI_UPDATE_CHANNEL: GuiUpdateChannel = 'frontier'
+export const DEFAULT_GUI_UPDATE_CHANNEL: GuiUpdateChannel = 'stable'
 
 export function normalizeGuiUpdateChannel(value: unknown): GuiUpdateChannel {
   return value === 'stable' || value === 'frontier' ? value : DEFAULT_GUI_UPDATE_CHANNEL

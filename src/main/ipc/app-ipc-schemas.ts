@@ -13,6 +13,7 @@ const MAX_CHANNEL_TEXT_LENGTH = 100_000
 const MAX_SKILL_FILE_BYTES = 1_000_000
 const MAX_CONFIG_FILE_BYTES = 2_000_000
 const MAX_DEVICE_CODE_LENGTH = 8_192
+const MAX_EDITOR_COMPLETION_TEXT = 200_000
 
 const SAFE_OPEN_EXTERNAL_PROTOCOLS = new Set(['http:', 'https:', 'mailto:'])
 
@@ -109,6 +110,113 @@ export const workspaceFileTargetPayloadSchema = z
     workspaceRoot: optionalTrimmedString(MAX_PATH_LENGTH),
     line: z.number().int().positive().max(1_000_000).optional(),
     column: z.number().int().positive().max(1_000_000).optional()
+  })
+  .strict()
+
+export const workspaceDirectoryTargetPayloadSchema = z
+  .object({
+    path: optionalTrimmedString(MAX_PATH_LENGTH),
+    workspaceRoot: trimmedString(MAX_PATH_LENGTH)
+  })
+  .strict()
+
+export const workspaceFileWritePayloadSchema = z
+  .object({
+    path: trimmedString(MAX_PATH_LENGTH),
+    workspaceRoot: optionalTrimmedString(MAX_PATH_LENGTH),
+    content: z.string().max(MAX_BODY_BYTES)
+  })
+  .strict()
+
+export const workspaceFileCreatePayloadSchema = z
+  .object({
+    path: trimmedString(MAX_PATH_LENGTH),
+    workspaceRoot: trimmedString(MAX_PATH_LENGTH),
+    content: z.string().max(MAX_BODY_BYTES).optional()
+  })
+  .strict()
+
+export const workspaceDirectoryCreatePayloadSchema = z
+  .object({
+    path: trimmedString(MAX_PATH_LENGTH),
+    workspaceRoot: trimmedString(MAX_PATH_LENGTH)
+  })
+  .strict()
+
+export const workspaceEntryRenamePayloadSchema = z
+  .object({
+    path: trimmedString(MAX_PATH_LENGTH),
+    workspaceRoot: trimmedString(MAX_PATH_LENGTH),
+    newName: trimmedString(255)
+  })
+  .strict()
+
+export const workspaceEntryDeletePayloadSchema = z
+  .object({
+    path: trimmedString(MAX_PATH_LENGTH),
+    workspaceRoot: trimmedString(MAX_PATH_LENGTH)
+  })
+  .strict()
+
+export const workspaceFileWatchPayloadSchema = z
+  .object({
+    path: trimmedString(MAX_PATH_LENGTH),
+    workspaceRoot: trimmedString(MAX_PATH_LENGTH)
+  })
+  .strict()
+
+export const writeInlineCompletionPayloadSchema = z
+  .object({
+    prefix: z.string().max(MAX_EDITOR_COMPLETION_TEXT),
+    suffix: z.string().max(MAX_EDITOR_COMPLETION_TEXT),
+    mode: z.enum(['short', 'long']).optional(),
+    workspaceRoot: optionalTrimmedString(MAX_PATH_LENGTH),
+    currentFilePath: optionalTrimmedString(MAX_PATH_LENGTH),
+    cursor: z
+      .object({
+        line: z.number().int().positive().max(1_000_000),
+        column: z.number().int().min(0).max(1_000_000)
+      })
+      .strict(),
+    context: z
+      .object({
+        language: trimmedString(64),
+        currentLinePrefix: z.string().max(20_000),
+        currentLineSuffix: z.string().max(20_000),
+        previousLine: z.string().max(20_000),
+        previousNonEmptyLine: z.string().max(20_000),
+        nextLine: z.string().max(20_000),
+        indentation: z.string().max(2_000),
+        signals: z
+          .object({
+            list: z.boolean(),
+            quote: z.boolean(),
+            heading: z.boolean(),
+            table: z.boolean(),
+            atLineEnd: z.boolean(),
+            endsWithSentencePunctuation: z.boolean(),
+            previousLineEndsWithSentencePunctuation: z.boolean(),
+            prefersNewLineCompletion: z.boolean(),
+            paragraphBreakOpportunity: z.boolean()
+          })
+          .strict()
+      })
+      .strict(),
+    policy: z
+      .object({
+        name: trimmedString(128),
+        instruction: z.string().max(50_000),
+        acceptanceCriteria: z.array(z.string().max(5_000)).max(12),
+        rejectionCriteria: z.array(z.string().max(5_000)).max(12)
+      })
+      .strict(),
+    preview: z
+      .object({
+        local: z.string().max(5_000),
+        documentTail: z.string().max(20_000)
+      })
+      .strict(),
+    model: optionalTrimmedString(128)
   })
   .strict()
 

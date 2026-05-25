@@ -1,5 +1,5 @@
 import type { ReactElement, RefObject } from 'react'
-import { lazy, memo, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, lazy, memo, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { useTranslation } from 'react-i18next'
@@ -12,8 +12,11 @@ import {
   Copy,
   FileEdit,
   FolderOpen,
+  GitFork,
   Lightbulb,
   Loader2,
+  MessageSquareQuote,
+  Minimize2,
   Palette,
   PencilLine,
   Terminal,
@@ -36,6 +39,11 @@ import {
 } from '../../lib/diff-stats'
 import { useDeferredRender } from '../../hooks/use-deferred-render'
 import { useChatStore } from '../../store/chat-store'
+import {
+  parseWritePromptForDisplay,
+  type WritePromptDisplay,
+  type WritePromptDisplayQuote
+} from '../../write/quoted-selection'
 import { DiffView } from '../DiffView'
 
 const LazyStreamdownAssistant = lazy(() =>
@@ -89,6 +97,48 @@ function AssistantMarkdown({
   )
 }
 
+function ThreadForkBanner({ parentTitle }: { parentTitle: string }): ReactElement {
+  const { t } = useTranslation('common')
+  return (
+    <div className="rounded-[18px] border border-accent/16 bg-accent/7 px-4 py-3 text-ds-muted shadow-[0_14px_36px_rgba(0,136,255,0.05)]">
+      <div className="flex min-w-0 items-start gap-3">
+        <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-[12px] bg-accent/12 text-accent">
+          <GitFork className="h-4 w-4" strokeWidth={1.85} />
+        </span>
+        <span className="min-w-0">
+          <span className="block text-[13.5px] font-semibold text-ds-ink">
+            {t('threadForkBannerTitle')}
+          </span>
+          <span className="mt-1 block text-[12.5px] leading-5 text-ds-muted">
+            {parentTitle
+              ? t('threadForkBannerSub', { title: parentTitle })
+              : t('threadForkBannerSubUnknown')}
+          </span>
+        </span>
+      </div>
+    </div>
+  )
+}
+
+function ThreadForkPoint({ parentTitle }: { parentTitle: string }): ReactElement {
+  const { t } = useTranslation('common')
+  return (
+    <div className="flex items-center gap-3 py-1 text-[12px] font-medium text-ds-faint">
+      <span className="h-px min-w-6 flex-1 bg-ds-border-muted" />
+      <span
+        className="inline-flex max-w-[min(100%,420px)] items-center gap-1.5 rounded-full border border-accent/16 bg-ds-card/78 px-3 py-1.5 text-accent shadow-sm"
+        title={parentTitle ? t('threadForkPointFrom', { title: parentTitle }) : t('threadForkPoint')}
+      >
+        <GitFork className="h-3.5 w-3.5 shrink-0" strokeWidth={1.8} />
+        <span className="truncate">
+          {parentTitle ? t('threadForkPointFrom', { title: parentTitle }) : t('threadForkPoint')}
+        </span>
+      </span>
+      <span className="h-px min-w-6 flex-1 bg-ds-border-muted" />
+    </div>
+  )
+}
+
 export function MessageTimeline({
   blocks,
   liveReasoning,
@@ -113,6 +163,9 @@ export function MessageTimeline({
   const turnDurationByUserId = useChatStore((s) => s.turnDurationByUserId)
   const turnReasoningFirstAtByUserId = useChatStore((s) => s.turnReasoningFirstAtByUserId)
   const turnReasoningLastAtByUserId = useChatStore((s) => s.turnReasoningLastAtByUserId)
+  const activeThread = useChatStore((s) =>
+    activeThreadId ? s.threads.find((thread) => thread.id === activeThreadId) ?? null : null
+  )
   const activeClawChannel = useMemo(
     () => clawChannels.find((channel) => channel.id === activeClawChannelId) ?? null,
     [activeClawChannelId, clawChannels]
@@ -122,6 +175,7 @@ export function MessageTimeline({
   const endRef = useRef<HTMLDivElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const stickToBottomRef = useRef(true)
+  const historyExpansionRequestedRef = useRef(false)
   const pendingPrependRef = useRef<{ scrollHeight: number; scrollTop: number } | null>(null)
   const prependInFlightRef = useRef(false)
   const scrollFrameRef = useRef<number | null>(null)
@@ -135,9 +189,17 @@ export function MessageTimeline({
     () => (hiddenTurnCount > 0 ? turns.slice(hiddenTurnCount) : turns),
     [hiddenTurnCount, turns]
   )
+  const forkedFromTitle = activeThread?.forkedFromTitle?.trim() ?? ''
+  const forkBoundaryTurnCount =
+    typeof activeThread?.forkedFromTurnCount === 'number'
+      ? Math.max(0, activeThread.forkedFromTurnCount)
+      : undefined
 
-  const loadEarlierTurns = useCallback((): void => {
+  const loadEarlierTurns = useCallback((options?: { userInitiated?: boolean }): void => {
     if (hiddenTurnCount === 0 || prependInFlightRef.current) return
+    if (options?.userInitiated) {
+      historyExpansionRequestedRef.current = true
+    }
     const el = containerRef.current
     if (el) {
       pendingPrependRef.current = {
@@ -165,7 +227,7 @@ export function MessageTimeline({
       const distanceToBottom = el.scrollHeight - el.scrollTop - el.clientHeight
       stickToBottomRef.current = distanceToBottom < 96
       if (hiddenTurnCount > 0 && el.scrollTop <= TOP_LOAD_TRIGGER_PX) {
-        loadEarlierTurns()
+        loadEarlierTurns({ userInitiated: true })
       }
     }
     el.addEventListener('scroll', onScroll, { passive: true })
@@ -188,6 +250,7 @@ export function MessageTimeline({
 
   useEffect(() => {
     stickToBottomRef.current = true
+    historyExpansionRequestedRef.current = false
     pendingPrependRef.current = null
     prependInFlightRef.current = false
     if (scrollFrameRef.current !== null) {
@@ -232,6 +295,7 @@ export function MessageTimeline({
   useEffect(() => {
     const el = containerRef.current
     if (!el || hiddenTurnCount === 0 || prependInFlightRef.current) return
+    if (!historyExpansionRequestedRef.current) return
     if (el.scrollHeight <= el.clientHeight + TOP_LOAD_TRIGGER_PX) {
       loadEarlierTurns()
     }
@@ -239,7 +303,7 @@ export function MessageTimeline({
 
   return (
     <div ref={containerRef} className="ds-no-drag flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden">
-      <div className="mx-auto flex w-full min-w-0 max-w-4xl flex-col gap-8 px-4 pb-10 pt-8 sm:px-6 md:px-8">
+      <div className="ds-chat-column-inset mx-auto flex w-full min-w-0 max-w-4xl flex-col gap-8 pb-10 pt-8">
         {!activeThreadId && (
           <EmptyHero
             route={heroRoute}
@@ -268,11 +332,15 @@ export function MessageTimeline({
           />
         )}
 
+        {activeThread?.forkedFromThreadId ? (
+          <ThreadForkBanner parentTitle={forkedFromTitle} />
+        ) : null}
+
         {hiddenTurnCount > 0 ? (
           <div className="flex items-center justify-center">
             <button
               type="button"
-              onClick={loadEarlierTurns}
+              onClick={() => loadEarlierTurns({ userInitiated: true })}
               className="ds-chip rounded-full px-4 py-2 text-[13px] font-medium text-ds-muted transition hover:text-ds-ink"
             >
               {t('timelineShowEarlierTurns', { count: Math.min(hiddenTurnCount, TURN_PAGE_SIZE) })}
@@ -281,6 +349,7 @@ export function MessageTimeline({
         ) : null}
 
         {visibleTurns.map((turn, index) => {
+          const absoluteTurnIndex = hiddenTurnCount + index
           const userId = turn.user?.id
           const isLive = !!(userId && currentTurnUserId === userId)
           const startedAt = userId ? turnStartedAtByUserId[userId] : undefined
@@ -299,26 +368,39 @@ export function MessageTimeline({
           const turnPending = turnHasPendingRuntimeWork(turn)
           const isLatestTurn = index === visibleTurns.length - 1
           const hasLiveStream = isLatestTurn && !!(liveReasoning.trim() || live.trim())
+          const showForkPoint =
+            forkBoundaryTurnCount !== undefined && absoluteTurnIndex === forkBoundaryTurnCount
           return (
-            <MemoMessageTurn
-              key={userId ?? `turn-${index}`}
-              turn={turn}
-              isProcessing={(busy && isLatestTurn) || turnPending || hasLiveStream}
-              liveReasoning={isLatestTurn ? liveReasoning : ''}
-              live={isLatestTurn ? live : ''}
-              durationMs={durationMs}
-              reasoningDurationMs={reasoningDurationMs}
-              devPreviewCard={isLatestTurn ? devPreviewCard : null}
-              viewportRef={containerRef}
-            />
+            <Fragment key={userId ?? `turn-${index}`}>
+              {showForkPoint ? <ThreadForkPoint parentTitle={forkedFromTitle} /> : null}
+              <MemoMessageTurn
+                turn={turn}
+                isProcessing={(busy && isLatestTurn) || turnPending || hasLiveStream}
+                liveReasoning={isLatestTurn ? liveReasoning : ''}
+                live={isLatestTurn ? live : ''}
+                durationMs={durationMs}
+                reasoningDurationMs={reasoningDurationMs}
+                devPreviewCard={isLatestTurn ? devPreviewCard : null}
+                viewportRef={containerRef}
+              />
+            </Fragment>
           )
         })}
+
+        {forkBoundaryTurnCount !== undefined &&
+        forkBoundaryTurnCount === turns.length &&
+        hasContent ? (
+          <ThreadForkPoint parentTitle={forkedFromTitle} />
+        ) : null}
 
         {hiddenTurnCount === 0 && shouldCollapseHistory && turns.length > TURN_PAGE_SIZE && !busy ? (
           <div className="flex items-center justify-center">
             <button
               type="button"
-              onClick={() => setVisibleTurnCount(TURN_PAGE_SIZE)}
+              onClick={() => {
+                historyExpansionRequestedRef.current = false
+                setVisibleTurnCount(TURN_PAGE_SIZE)
+              }}
               className="rounded-full px-3 py-1.5 text-[12.5px] font-medium text-ds-faint transition hover:bg-ds-hover hover:text-ds-ink"
             >
               {t('timelineCollapseEarlierTurns')}
@@ -493,32 +575,32 @@ function EmptyHero({
   ]
 
   return (
-    <div className="ds-no-drag flex flex-col items-center justify-center px-4 pb-4 pt-20 text-center md:pt-28">
-      <h1 className="text-[40px] font-semibold tracking-[-0.045em] text-ds-ink md:text-[56px]">
+    <div className="ds-empty-hero ds-no-drag flex flex-col items-center justify-center px-4 pb-4 pt-20 text-center">
+      <h1 className="ds-empty-hero-title text-[40px] font-semibold tracking-[-0.045em] text-ds-ink">
         {t('emptyHeroTitle')}
       </h1>
-      <p className="mt-5 text-[17px] leading-8 text-ds-muted md:text-[18px]">
+      <p className="ds-empty-hero-sub mt-5 text-[17px] leading-8 text-ds-muted">
         {t('emptyHeroSub')}
       </p>
 
-      <div className="mt-12 grid w-full max-w-[980px] grid-cols-1 gap-5 sm:grid-cols-2">
+      <div className="ds-empty-hero-grid mt-12 grid w-full max-w-[980px] gap-5">
         {suggestions.map((s) => (
           <button
             key={s.titleKey}
             type="button"
             onClick={() => onSelectSuggestion?.(t(s.promptKey))}
-            className="group flex min-h-[118px] items-center gap-4 rounded-[24px] border border-[rgba(15,23,42,0.1)] bg-[rgba(255,255,255,0.92)] px-6 py-5 text-left shadow-[0_18px_48px_rgba(86,103,136,0.08)] transition duration-200 hover:-translate-y-0.5 hover:border-[rgba(0,136,255,0.18)] hover:shadow-[0_24px_56px_rgba(86,103,136,0.14)] dark:border-white/10 dark:bg-[rgba(24,24,24,0.9)] dark:shadow-[0_20px_52px_rgba(0,0,0,0.24)]"
+            className="ds-empty-hero-card group flex min-h-[118px] items-center gap-4 rounded-[24px] border border-[rgba(15,23,42,0.1)] bg-[rgba(255,255,255,0.92)] px-6 py-5 text-left shadow-[0_18px_48px_rgba(86,103,136,0.08)] transition duration-200 hover:-translate-y-0.5 hover:border-[rgba(0,136,255,0.18)] hover:shadow-[0_24px_56px_rgba(86,103,136,0.14)] dark:border-white/10 dark:bg-[rgba(24,24,24,0.9)] dark:shadow-[0_20px_52px_rgba(0,0,0,0.24)]"
           >
             <span
-              className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-[18px] ${SUGGESTION_TONE[s.tone]}`}
+              className={`ds-empty-hero-card-icon flex h-14 w-14 shrink-0 items-center justify-center rounded-[18px] ${SUGGESTION_TONE[s.tone]}`}
             >
               {s.icon}
             </span>
             <span className="min-w-0 flex-1">
-              <span className="block truncate text-[18px] font-semibold tracking-[-0.02em] text-ds-ink md:text-[20px]">
+              <span className="ds-empty-hero-card-title block truncate text-[18px] font-semibold tracking-[-0.02em] text-ds-ink">
                 {t(s.titleKey)}
               </span>
-              <span className="mt-1 block text-[15px] leading-6 text-ds-faint md:text-[16px]">
+              <span className="ds-empty-hero-card-sub mt-1 block text-[15px] leading-6 text-ds-faint">
                 {t(s.subKey)}
               </span>
             </span>
@@ -626,6 +708,7 @@ function splitThink(text: string): { think: string; content: string } {
 
 function blockHasPendingRuntimeWork(block: ChatBlock): boolean {
   if (block.kind === 'tool') return block.status === 'running'
+  if (block.kind === 'compaction') return block.status === 'running'
   if (block.kind === 'approval') return block.status === 'pending'
   if (block.kind === 'user_input') return block.status === 'pending'
   return false
@@ -635,6 +718,7 @@ function isProcessBlock(block: ChatBlock): boolean {
   return (
     block.kind === 'reasoning' ||
     block.kind === 'tool' ||
+    block.kind === 'compaction' ||
     block.kind === 'approval' ||
     block.kind === 'user_input' ||
     block.kind === 'system'
@@ -1250,11 +1334,13 @@ function ProcessEntryRow({
   const isRunningToolOrPending =
     processing &&
     ((block.kind === 'tool' && block.status === 'running') ||
+      (block.kind === 'compaction' && block.status === 'running') ||
       (block.kind === 'approval' && block.status === 'pending') ||
       (block.kind === 'user_input' && block.status === 'pending'))
   const isStreamingAssistant = processing && block.kind === 'assistant' && block.id === 'live-assistant'
   const isError =
     (block.kind === 'tool' && block.status === 'error') ||
+    (block.kind === 'compaction' && block.status === 'error') ||
     (block.kind === 'approval' && block.status === 'error') ||
     (block.kind === 'user_input' && block.status === 'error')
   const open =
@@ -1282,6 +1368,8 @@ function ProcessEntryRow({
       >
         {isRunningToolOrPending ? (
           <Loader2 className="mt-1 h-3 w-3 shrink-0 animate-spin opacity-75" strokeWidth={2} />
+        ) : block.kind === 'compaction' ? (
+          <Minimize2 className="mt-1 h-3 w-3 shrink-0 opacity-70" strokeWidth={2} />
         ) : null}
         <span
           className={`min-w-0 flex-1 ${wrapSummary ? 'whitespace-pre-wrap break-words' : 'truncate'}`}
@@ -1528,6 +1616,14 @@ function getProcessDetail(block: ChatBlock, summaryText?: string): ProcessDetail
       filePath: block.filePath
     }
   }
+  if (block.kind === 'compaction') {
+    const detailText = block.detail?.trim() ?? ''
+    if (!detailText) return { kind: 'none' }
+    if (summaryText && normalizeProcessText(detailText) === normalizeProcessText(summaryText)) {
+      return { kind: 'none' }
+    }
+    return { kind: 'text', text: detailText }
+  }
   if (block.kind === 'approval') return { kind: 'approval' }
   if (block.kind === 'user_input') return { kind: 'user_input' }
   if (block.kind === 'system' && block.text.trim()) {
@@ -1615,6 +1711,17 @@ function describeProcessBlock(
   if (block.kind === 'tool') {
     return summarizeToolBlock(block, t)
   }
+  if (block.kind === 'compaction') {
+    if (block.status === 'running') return t('compactionRunning')
+    if (block.status === 'error') return block.summary || t('compactionFailed')
+    if (typeof block.messagesBefore === 'number' && typeof block.messagesAfter === 'number') {
+      return t('compactionCompletedWithCounts', {
+        before: block.messagesBefore,
+        after: block.messagesAfter
+      })
+    }
+    return block.auto === true ? t('compactionAutoCompleted') : t('compactionManualCompleted')
+  }
   if (block.kind === 'approval') {
     return block.summary || t('approvalTitle')
   }
@@ -1653,6 +1760,113 @@ function ModelMetaTag({
   )
 }
 
+function writePromptMetaSummary(
+  display: WritePromptDisplay,
+  t: (key: string, opts?: Record<string, unknown>) => string
+): string {
+  const parts: string[] = []
+  if (display.quotes.length > 0) {
+    parts.push(t('writePromptReferencesCount', { count: display.quotes.length }))
+  }
+  if (display.context) {
+    parts.push(t('writePromptContextShort'))
+  }
+  return parts.join(' · ')
+}
+
+function WritePromptMetaDisclosure({
+  display,
+  expanded,
+  onToggle
+}: {
+  display: WritePromptDisplay
+  expanded: boolean
+  onToggle: () => void
+}): ReactElement | null {
+  const { t } = useTranslation('common')
+  const summary = writePromptMetaSummary(display, t)
+  if (!summary) return null
+
+  return (
+    <div className="mt-2 border-t border-black/5 pt-2 dark:border-white/10">
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={expanded}
+        className="group flex w-full min-w-0 items-center gap-1.5 rounded-lg py-0.5 text-left text-[12px] font-medium text-ds-muted transition hover:text-ds-ink"
+      >
+        <MessageSquareQuote className="h-3.5 w-3.5 shrink-0 text-accent" strokeWidth={1.85} />
+        <span className="min-w-0 flex-1 truncate">{summary}</span>
+        {expanded ? (
+          <ChevronDown className="h-3.5 w-3.5 shrink-0 opacity-55" strokeWidth={1.85} />
+        ) : (
+          <ChevronRight className="h-3.5 w-3.5 shrink-0 opacity-45 transition group-hover:opacity-70" strokeWidth={1.85} />
+        )}
+      </button>
+
+      {expanded ? (
+        <div className="mt-2 flex flex-col gap-2">
+          {display.context ? (
+            <div className="rounded-xl border border-black/5 bg-white/55 px-3 py-2 text-[12px] font-normal leading-5 text-ds-muted shadow-sm dark:border-white/10 dark:bg-white/6">
+              <div className="font-medium text-ds-ink">{t('writePromptContextLabel')}</div>
+              {display.context.activeFile ? (
+                <div className="mt-1 truncate">
+                  <span className="text-ds-faint">{t('writePromptActiveFile')} </span>
+                  <span className="font-mono text-ds-muted">{display.context.activeFile}</span>
+                </div>
+              ) : null}
+              {display.context.workspaceRoot ? (
+                <div className="mt-0.5 truncate" title={display.context.workspaceRoot}>
+                  <span className="text-ds-faint">{t('writePromptWorkspace')} </span>
+                  <span className="font-mono text-ds-muted">{display.context.workspaceRoot}</span>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+
+          {display.quotes.map((quote, index) => (
+            <WritePromptQuoteCard key={`${quote.sourceTitle}-${index}`} quote={quote} />
+          ))}
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
+function WritePromptQuoteCard({ quote }: { quote: WritePromptDisplayQuote }): ReactElement {
+  const { t } = useTranslation('common')
+  const lineLabel =
+    quote.lineStart != null && quote.lineEnd != null
+      ? t('writePromptReferenceLines', { start: quote.lineStart, end: quote.lineEnd })
+      : null
+
+  return (
+    <figure className="rounded-xl border border-accent/15 bg-accent/[0.055] px-3 py-2.5 text-left shadow-sm">
+      <figcaption className="flex min-w-0 items-center gap-2 text-[12px] leading-5">
+        <MessageSquareQuote className="h-3.5 w-3.5 shrink-0 text-accent" strokeWidth={1.9} />
+        <span className="min-w-0 flex-1 truncate font-medium text-ds-ink">
+          {quote.sourceTitle || t('writePromptReference')}
+        </span>
+        {lineLabel ? (
+          <span className="shrink-0 rounded-full bg-white/65 px-2 py-0.5 font-mono text-[11px] text-ds-faint dark:bg-white/8">
+            {lineLabel}
+          </span>
+        ) : null}
+      </figcaption>
+      <blockquote className="mt-2 max-h-36 overflow-auto border-l-2 border-accent/35 pl-3 text-[12.5px] font-normal leading-6 text-ds-muted">
+        <div className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
+          {quote.text}
+        </div>
+      </blockquote>
+      {quote.sourceFilePath ? (
+        <div className="mt-2 truncate font-mono text-[11px] font-normal text-ds-faint" title={quote.sourceFilePath}>
+          {quote.sourceFilePath}
+        </div>
+      ) : null}
+    </figure>
+  )
+}
+
 /**
  * User message bubble with hover affordance to rewind/edit. Click the rewind
  * pill, the bubble flips into a textarea, and Resend submits an edited
@@ -1666,10 +1880,18 @@ function UserMessageBubble({
 }): ReactElement {
   const { t } = useTranslation('common')
   const busy = useChatStore((s) => s.busy)
+  const route = useChatStore((s) => s.route)
   const rewindAndResend = useChatStore((s) => s.rewindAndResend)
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(block.text)
+  const [writeMetaOpen, setWriteMetaOpen] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const parsedWritePrompt = useMemo(() => {
+    if (route !== 'write') return null
+    const parsed = parseWritePromptForDisplay(block.text)
+    return parsed?.userInput.trim() ? parsed : null
+  }, [block.text, route])
+  const displayText = parsedWritePrompt?.userInput ?? block.text
 
   useEffect(() => {
     if (!editing) return
@@ -1682,6 +1904,10 @@ function UserMessageBubble({
     el.style.height = 'auto'
     el.style.height = `${Math.min(el.scrollHeight, 360)}px`
   }, [editing])
+
+  useEffect(() => {
+    setWriteMetaOpen(false)
+  }, [block.id])
 
   const startEdit = (): void => {
     if (busy) return
@@ -1758,13 +1984,20 @@ function UserMessageBubble({
     <div className="ds-user-message group relative">
       <div className="ds-user-message-bubble min-w-0">
         <div className="whitespace-pre-wrap break-words [overflow-wrap:anywhere] text-left">
-          {block.text}
+          {displayText}
         </div>
+        {parsedWritePrompt ? (
+          <WritePromptMetaDisclosure
+            display={parsedWritePrompt}
+            expanded={writeMetaOpen}
+            onToggle={() => setWriteMetaOpen((value) => !value)}
+          />
+        ) : null}
       </div>
       <div className="mt-2 flex min-w-0 items-center justify-between gap-3 text-ds-faint opacity-90 transition group-hover:opacity-100">
         <ModelMetaTag label={block.modelLabel} className="flex-1 justify-start text-left" />
         <div className="flex items-center justify-end gap-3">
-          <CopyFeedbackButton text={block.text} iconOnly />
+          <CopyFeedbackButton text={displayText} iconOnly />
           <button
             type="button"
             onClick={startEdit}
@@ -2149,6 +2382,13 @@ function MessageBubble({ block, nested = false }: { block: ChatBlock; nested?: b
       </div>
     )
   }
+  if (block.kind === 'compaction') {
+    return (
+      <div className="ds-card-soft rounded-[18px] px-3 py-2 text-[13.5px] text-ds-muted">
+        {block.detail || block.summary}
+      </div>
+    )
+  }
   return (
     <div className="ds-card-soft rounded-[18px] px-3 py-2 text-[13.5px] text-ds-muted">
       {block.text}
@@ -2275,7 +2515,20 @@ function formatToolTitle(block: ToolBlock, t: (key: string) => string): string {
 function formatDuration(ms: number): string {
   if (ms < 1000) return `${Math.max(1, Math.round(ms))}ms`
   if (ms < 60_000) return `${(ms / 1000).toFixed(ms < 10_000 ? 1 : 0)}s`
-  const m = Math.floor(ms / 60_000)
-  const s = Math.round((ms % 60_000) / 1000)
-  return `${m}m ${s}s`
+  if (ms < 3_600_000) {
+    const totalSeconds = Math.round(ms / 1000)
+    const m = Math.floor(totalSeconds / 60)
+    const s = totalSeconds % 60
+    return `${m}m ${s}s`
+  }
+  if (ms < 86_400_000) {
+    const totalMinutes = Math.round(ms / 60_000)
+    const h = Math.floor(totalMinutes / 60)
+    const m = totalMinutes % 60
+    return `${h}h ${m}m`
+  }
+  const totalHours = Math.round(ms / 3_600_000)
+  const d = Math.floor(totalHours / 24)
+  const h = totalHours % 24
+  return `${d}d ${h}h`
 }

@@ -4,13 +4,18 @@ import { useTranslation } from 'react-i18next'
 import {
   ChevronDown,
   ChevronRight,
+  Archive,
   Folder,
   FolderOpen,
+  GitFork,
   LayoutGrid,
   Loader2,
   MessageSquare,
   Plus,
-  Trash2
+  RotateCcw,
+  Search,
+  Trash2,
+  X
 } from 'lucide-react'
 import type { NormalizedThread } from '../../agent/types'
 import { formatRelativeTime } from '../../lib/format-relative-time'
@@ -19,9 +24,11 @@ import { isClawWorkspacePath, isInternalTemporaryWorkspace, normalizeWorkspaceRo
 
 type SidebarProjectsSectionProps = {
   threads: NormalizedThread[]
-  activeView: 'chat' | 'claw'
+  activeView: 'chat' | 'write' | 'claw'
   activeThreadId: string | null
   runtimeReady: boolean
+  searchQuery: string
+  showArchived: boolean
   workspaceRoot: string
   busy: boolean
   watchTurnCompletion: Record<string, boolean>
@@ -32,6 +39,9 @@ type SidebarProjectsSectionProps = {
   onCreateThreadInWorkspace: (workspacePath: string) => void
   onSelectThread: (threadId: string) => void
   onDeleteThread: (threadId: string) => Promise<void>
+  onRestoreThread: (threadId: string) => Promise<void>
+  onSearchQueryChange: (query: string) => void
+  onShowArchivedChange: (show: boolean) => void
   t: (k: string, opts?: Record<string, unknown>) => string
 }
 
@@ -40,6 +50,8 @@ export function SidebarProjectsSection({
   activeView,
   activeThreadId,
   runtimeReady,
+  searchQuery,
+  showArchived,
   workspaceRoot,
   busy,
   watchTurnCompletion,
@@ -50,6 +62,9 @@ export function SidebarProjectsSection({
   onCreateThreadInWorkspace,
   onSelectThread,
   onDeleteThread,
+  onRestoreThread,
+  onSearchQueryChange,
+  onShowArchivedChange,
   t
 }: SidebarProjectsSectionProps): ReactElement {
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
@@ -59,12 +74,21 @@ export function SidebarProjectsSection({
   const groups = useMemo(() => {
     const map = new Map<string, NormalizedThread[]>()
     const selectedWorkspace = normalizeWorkspaceRoot(workspaceRoot)
+    const query = searchQuery.trim().toLowerCase()
 
     for (const th of threads) {
       if (isInternalTemporaryWorkspace(th.workspace)) continue
       if (isClawWorkspacePath(th.workspace)) continue
+      if ((th.archived === true) !== showArchived) continue
       const key = normalizeWorkspaceRoot(th.workspace)
       if (!key) continue
+      if (query) {
+        const haystack = [th.title, th.preview, key, workspaceLabelFromPath(key)]
+          .filter(Boolean)
+          .join('\n')
+          .toLowerCase()
+        if (!haystack.includes(query)) continue
+      }
       const arr = map.get(key) ?? []
       arr.push(th)
       map.set(key, arr)
@@ -79,16 +103,31 @@ export function SidebarProjectsSection({
       if (b === selectedWorkspace && a !== selectedWorkspace) return 1
       return a.localeCompare(b)
     })
-  }, [threads, workspaceRoot])
+  }, [searchQuery, showArchived, threads, workspaceRoot])
 
   const handleDeleteThread = async (thread: NormalizedThread): Promise<void> => {
     const threadId = thread.id.trim()
     if (!threadId || deletingThreadIds[threadId]) return
-    const confirmMessage = t('sidebarThreadDeleteConfirm', { title: thread.title })
+    const confirmMessage = t('sidebarThreadArchiveConfirm', { title: thread.title })
     if (!window.confirm(confirmMessage)) return
     setDeletingThreadIds((prev) => ({ ...prev, [threadId]: true }))
     try {
       await onDeleteThread(threadId)
+    } finally {
+      setDeletingThreadIds((prev) => {
+        const next = { ...prev }
+        delete next[threadId]
+        return next
+      })
+    }
+  }
+
+  const handleRestoreThread = async (thread: NormalizedThread): Promise<void> => {
+    const threadId = thread.id.trim()
+    if (!threadId || deletingThreadIds[threadId]) return
+    setDeletingThreadIds((prev) => ({ ...prev, [threadId]: true }))
+    try {
+      await onRestoreThread(threadId)
     } finally {
       setDeletingThreadIds((prev) => {
         const next = { ...prev }
@@ -120,6 +159,46 @@ export function SidebarProjectsSection({
             <Plus className="h-3.5 w-3.5" strokeWidth={1.75} />
           </button>
         </div>
+      </div>
+
+      <div className="mb-2 flex items-center gap-1 px-1">
+        <label className="relative min-w-0 flex-1">
+          <Search
+            className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ds-faint"
+            strokeWidth={1.8}
+          />
+          <input
+            value={searchQuery}
+            onChange={(event) => onSearchQueryChange(event.target.value)}
+            placeholder={t('sidebarSearchThreads')}
+            className="h-8 w-full rounded-lg border border-transparent bg-white/35 pl-7 pr-7 text-[13px] text-ds-ink outline-none transition placeholder:text-ds-faint focus:border-accent/30 focus:bg-white/60 dark:bg-white/5 dark:focus:bg-white/8"
+          />
+          {searchQuery.trim() ? (
+            <button
+              type="button"
+              onClick={() => onSearchQueryChange('')}
+              className="absolute right-1 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-md text-ds-faint transition hover:bg-ds-hover hover:text-ds-ink"
+              title={t('clear')}
+              aria-label={t('clear')}
+            >
+              <X className="h-3.5 w-3.5" strokeWidth={1.9} />
+            </button>
+          ) : null}
+        </label>
+        <button
+          type="button"
+          onClick={() => onShowArchivedChange(!showArchived)}
+          className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border transition ${
+            showArchived
+              ? 'border-accent/30 bg-accent-soft text-accent'
+              : 'border-transparent bg-white/35 text-ds-faint hover:border-ds-border-muted hover:bg-white/60 hover:text-ds-ink dark:bg-white/5 dark:hover:bg-white/8'
+          }`}
+          title={showArchived ? t('sidebarShowActiveThreads') : t('sidebarShowArchivedThreads')}
+          aria-label={showArchived ? t('sidebarShowActiveThreads') : t('sidebarShowArchivedThreads')}
+          aria-pressed={showArchived}
+        >
+          <Archive className="h-3.5 w-3.5" strokeWidth={1.9} />
+        </button>
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-0.5 pb-1">
@@ -199,22 +278,28 @@ export function SidebarProjectsSection({
                   {sortedThreads.length === 0 ? (
                     <div className="flex items-center justify-between gap-2 px-2 py-1">
                       <div className="text-[12.5px] leading-5 text-ds-faint">
-                        {t('sidebarWorkspaceEmpty')}
+                        {searchQuery.trim()
+                          ? t('sidebarSearchEmpty')
+                          : showArchived
+                            ? t('sidebarArchiveEmpty')
+                            : t('sidebarWorkspaceEmpty')}
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => onCreateThreadInWorkspace(workspacePath)}
-                        className="shrink-0 rounded-md px-2 py-1 text-[12px] font-medium text-ds-faint transition hover:bg-ds-hover hover:text-ds-ink"
-                      >
-                        {t('sidebarWorkspaceNewThread')}
-                      </button>
+                      {!showArchived && !searchQuery.trim() ? (
+                        <button
+                          type="button"
+                          onClick={() => onCreateThreadInWorkspace(workspacePath)}
+                          className="shrink-0 rounded-md px-2 py-1 text-[12px] font-medium text-ds-faint transition hover:bg-ds-hover hover:text-ds-ink"
+                        >
+                          {t('sidebarWorkspaceNewThread')}
+                        </button>
+                      ) : null}
                     </div>
                   ) : (
                     visibleThreads.map((thread) => (
                       <ThreadRow
                         key={thread.id}
                         thread={thread}
-                        active={activeView === 'chat' && activeThreadId === thread.id}
+                        active={(activeView === 'chat' || activeView === 'write') && activeThreadId === thread.id}
                         deleting={deletingThreadIds[thread.id] === true}
                         locale={locale}
                         showRunning={
@@ -227,6 +312,7 @@ export function SidebarProjectsSection({
                         }
                         onSelect={() => onSelectThread(thread.id)}
                         onDelete={() => void handleDeleteThread(thread)}
+                        onRestore={() => void handleRestoreThread(thread)}
                       />
                     ))
                   )}
@@ -267,6 +353,7 @@ type ThreadRowProps = {
   showUnread: boolean
   onSelect: () => void
   onDelete: () => void
+  onRestore: () => void
 }
 
 function ThreadRow({
@@ -277,10 +364,25 @@ function ThreadRow({
   showRunning,
   showUnread,
   onSelect,
-  onDelete
+  onDelete,
+  onRestore
 }: ThreadRowProps): ReactElement {
   const { t } = useTranslation('common')
   const showUnreadDot = showUnread && !showRunning
+  const archived = thread.archived === true
+  const forkedFromTitle = thread.forkedFromTitle?.trim() ?? ''
+  const forked = Boolean(thread.forkedFromThreadId)
+  const forkLabel = forked
+    ? forkedFromTitle
+      ? t('sidebarThreadForkedFrom', { title: forkedFromTitle })
+      : t('sidebarThreadForked')
+    : ''
+  const ariaLabel = [
+    thread.title,
+    showRunning ? t('sidebarThreadRunning') : '',
+    showUnreadDot ? t('sidebarThreadUnread') : '',
+    forkLabel
+  ].filter(Boolean).join(' — ')
 
   return (
     <div
@@ -299,18 +401,13 @@ function ThreadRow({
       <button
         type="button"
         onClick={onSelect}
-        className="flex w-full items-center gap-1.5 px-3 py-2 pr-8 text-left"
+        className="flex w-full items-start gap-1.5 px-3 py-2 pr-8 text-left"
         disabled={deleting}
-        aria-label={
-          showRunning
-            ? `${thread.title} — ${t('sidebarThreadRunning')}`
-            : showUnreadDot
-              ? `${thread.title} — ${t('sidebarThreadUnread')}`
-              : thread.title
-        }
+        aria-label={ariaLabel}
+        title={forkLabel ? `${thread.title}\n${forkLabel}` : thread.title}
       >
         <span
-          className="flex w-4 shrink-0 flex-col items-center justify-center self-center"
+          className="flex w-4 shrink-0 flex-col items-center justify-center self-start pt-0.5"
           aria-hidden={!showRunning && !showUnreadDot}
         >
           {showRunning ? (
@@ -322,37 +419,67 @@ function ThreadRow({
             />
           ) : null}
         </span>
-        <MessageSquare
-          className={`h-3.5 w-3.5 shrink-0 ${active ? 'text-accent' : 'text-ds-faint/90'}`}
-          strokeWidth={1.8}
-        />
-        <span
-          className={`min-w-0 flex-1 truncate text-[14px] leading-[1.35] ${
-            showUnreadDot && !active ? 'font-semibold text-ds-ink' : 'text-ds-ink'
-          }`}
-          title={thread.title}
-        >
-          {thread.title}
-        </span>
-        <span className="shrink-0 text-[12px] tabular-nums text-ds-faint transition group-hover:opacity-0">
-          {formatRelativeTime(thread.updatedAt, locale)}
+        {forked ? (
+          <GitFork
+            className={`mt-0.5 h-3.5 w-3.5 shrink-0 ${active ? 'text-accent' : 'text-ds-faint/90'}`}
+            strokeWidth={1.8}
+          />
+        ) : (
+          <MessageSquare
+            className={`mt-0.5 h-3.5 w-3.5 shrink-0 ${active ? 'text-accent' : 'text-ds-faint/90'}`}
+            strokeWidth={1.8}
+          />
+        )}
+        <span className="min-w-0 flex-1">
+          <span className="flex min-w-0 items-center gap-1.5">
+            <span
+              className={`min-w-0 flex-1 truncate text-[14px] leading-[1.35] ${
+                showUnreadDot && !active ? 'font-semibold text-ds-ink' : 'text-ds-ink'
+              }`}
+            >
+              {thread.title}
+            </span>
+            {forked ? (
+              <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-accent/15 bg-accent/8 px-1.5 py-0.5 text-[10.5px] font-semibold leading-none text-accent">
+                <GitFork className="h-2.5 w-2.5" strokeWidth={1.8} />
+                {t('sidebarThreadForkBadge')}
+              </span>
+            ) : null}
+          </span>
+          <span className="mt-0.5 flex min-w-0 items-center gap-1.5 text-[11.5px] leading-4 text-ds-faint">
+            <span className="shrink-0 tabular-nums">{formatRelativeTime(thread.updatedAt, locale)}</span>
+            {forkLabel ? (
+              <>
+                <span className="opacity-70">·</span>
+                <span className="truncate">{forkLabel}</span>
+              </>
+            ) : null}
+          </span>
         </span>
       </button>
       <button
         type="button"
         onClick={(event) => {
           event.stopPropagation()
-          onDelete()
+          if (archived) {
+            onRestore()
+          } else {
+            onDelete()
+          }
         }}
         disabled={deleting}
-        className="absolute right-1 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-md text-ds-faint opacity-0 transition hover:bg-ds-hover hover:text-red-600 focus-visible:opacity-100 group-hover:opacity-100 disabled:cursor-not-allowed disabled:opacity-100"
-        title={t('sidebarThreadDelete')}
-        aria-label={t('sidebarThreadDelete')}
+        className={`absolute right-1 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-md text-ds-faint opacity-0 transition hover:bg-ds-hover focus-visible:opacity-100 group-hover:opacity-100 disabled:cursor-not-allowed disabled:opacity-100 ${
+          archived ? 'hover:text-accent' : 'hover:text-red-600'
+        }`}
+        title={archived ? t('sidebarThreadRestore') : t('sidebarThreadArchive')}
+        aria-label={archived ? t('sidebarThreadRestore') : t('sidebarThreadArchive')}
       >
         {deleting ? (
           <Loader2 className="h-3.5 w-3.5 animate-spin" strokeWidth={2} />
+        ) : archived ? (
+          <RotateCcw className="h-3.5 w-3.5" strokeWidth={1.9} />
         ) : (
-          <Trash2 className="h-3.5 w-3.5" strokeWidth={1.9} />
+          <Archive className="h-3.5 w-3.5" strokeWidth={1.9} />
         )}
       </button>
     </div>

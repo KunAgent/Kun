@@ -1,13 +1,15 @@
 import type { PointerEvent as ReactPointerEvent, ReactElement } from 'react'
-import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
+import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Globe2, PanelLeftClose, PanelLeftOpen } from 'lucide-react'
 import { useShallow } from 'zustand/react/shallow'
 import type { WorkspaceFileTarget } from '@shared/workspace-file'
 import { parseClawCommand } from '@shared/claw-commands'
+import { DEFAULT_COMPOSER_MODEL_IDS } from '@shared/default-composer-models'
 import type { ChatBlock } from '../agent/types'
 import { CLAW_COMPOSER_MODEL_IDS, useChatStore } from '../store/chat-store'
 import {
+  extractLatestTurnAutoOpenDevPreviewUrls,
   extractLatestTurnDevPreviewUrls,
   formatDevPreviewUrlLabel
 } from '../lib/dev-preview-detection'
@@ -22,12 +24,21 @@ import { FloatingComposer } from './chat/FloatingComposer'
 import { ConnectionStatusBar } from './ConnectionStatusBar'
 import { SessionHeader } from './SessionHeader'
 import { RuntimeDiagnosticsDialog } from './RuntimeDiagnosticsDialog'
+import { WriteWorkspaceView } from './write/WriteWorkspaceView'
+import { WriteAssistantPanel } from './write/WriteAssistantPanel'
+import { WriteSidebar } from './write/WriteSidebar'
+import { composeWritePrompt } from '../write/quoted-selection'
+import { useWriteWorkspaceStore } from '../write/write-workspace-store'
+import { isWriteThreadId } from '../write/write-thread-registry'
 
 const ChangeInspector = lazy(() =>
   import('./ChangeInspector').then((module) => ({ default: module.ChangeInspector }))
 )
 const DevBrowserPanel = lazy(() =>
   import('./DevBrowserPanel').then((module) => ({ default: module.DevBrowserPanel }))
+)
+const RuntimeInsightsPanel = lazy(() =>
+  import('./RuntimeInsightsPanel').then((module) => ({ default: module.RuntimeInsightsPanel }))
 )
 const PluginMarketplaceView = lazy(() =>
   import('./PluginMarketplaceView').then((module) => ({ default: module.PluginMarketplaceView }))
@@ -48,6 +59,7 @@ const RIGHT_PANEL_MODE_KEY = 'deepseekgui.layout.rightPanelMode'
 const BOTTOM_PANEL_HEIGHT_KEY = 'deepseekgui.layout.bottomTerminalHeight'
 const LEFT_PANEL_DEFAULT = 288
 const RIGHT_PANEL_DEFAULT = 360
+const CODE_PANEL_PREFERRED = 560
 const BOTTOM_PANEL_DEFAULT = 260
 const LEFT_PANEL_MIN = 236
 const LEFT_PANEL_MAX = 500
@@ -58,6 +70,7 @@ const BOTTOM_PANEL_MAX = 520
 const SIDEBAR_HARD_MIN = 180
 const MAIN_MIN_WIDTH = 560
 const MAIN_MIN_HEIGHT = 240
+const PANEL_RESIZE_HANDLE_WIDTH = 8
 
 function clampWidth(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value))
@@ -105,7 +118,7 @@ function persistBoolean(key: string, value: boolean): void {
 function readStoredRightPanelMode(): RightPanelMode {
   try {
     const raw = window.localStorage.getItem(RIGHT_PANEL_MODE_KEY)
-    return raw === 'changes' ? raw : null
+    return raw === 'changes' || raw === 'browser' || raw === 'runtime' ? raw : null
   } catch {
     return null
   }
@@ -113,7 +126,7 @@ function readStoredRightPanelMode(): RightPanelMode {
 
 function persistRightPanelMode(mode: RightPanelMode): void {
   try {
-    if (mode === 'changes') {
+    if (mode === 'changes' || mode === 'browser' || mode === 'runtime') {
       window.localStorage.setItem(RIGHT_PANEL_MODE_KEY, mode)
     } else {
       window.localStorage.removeItem(RIGHT_PANEL_MODE_KEY)
@@ -137,6 +150,11 @@ function fitWorkbenchWidths(
   rightWidth: number,
   panels: { leftPanelVisible: boolean; rightPanelVisible: boolean }
 ): { left: number; right: number } {
+  const handleWidth =
+    (panels.leftPanelVisible ? PANEL_RESIZE_HANDLE_WIDTH : 0) +
+    (panels.rightPanelVisible ? PANEL_RESIZE_HANDLE_WIDTH : 0)
+  const usableWidth = Math.max(0, containerWidth - handleWidth)
+
   if (!panels.leftPanelVisible) {
     if (!panels.rightPanelVisible) {
       return {
@@ -144,7 +162,7 @@ function fitWorkbenchWidths(
         right: clampWidth(rightWidth, RIGHT_PANEL_MIN, RIGHT_PANEL_MAX)
       }
     }
-    const safeContainer = Math.max(containerWidth, MAIN_MIN_WIDTH + SIDEBAR_HARD_MIN)
+    const safeContainer = Math.max(usableWidth, MAIN_MIN_WIDTH + SIDEBAR_HARD_MIN)
     const rightFloor =
       safeContainer - MAIN_MIN_WIDTH >= RIGHT_PANEL_MIN ? RIGHT_PANEL_MIN : SIDEBAR_HARD_MIN
     const rightCeil = Math.min(
@@ -158,7 +176,7 @@ function fitWorkbenchWidths(
   }
 
   const safeContainer = Math.max(
-    containerWidth,
+    usableWidth,
     MAIN_MIN_WIDTH + SIDEBAR_HARD_MIN + (panels.rightPanelVisible ? SIDEBAR_HARD_MIN : 0)
   )
   if (!panels.rightPanelVisible) {
@@ -208,6 +226,8 @@ export function Workbench(): ReactElement {
   const { t } = useTranslation('common')
   const {
     threads,
+    threadSearch,
+    showArchivedThreads,
     activeThreadId,
     selectThread,
     createThread,
@@ -223,6 +243,9 @@ export function Workbench(): ReactElement {
     runtimeConnection,
     setRoute,
     openCode,
+    openWrite,
+    ensureWriteThreadForWorkspace,
+    createWriteThread,
     openSettings,
     openPlugins,
     openClaw,
@@ -241,10 +264,15 @@ export function Workbench(): ReactElement {
     composerModel,
     composerPickList,
     setComposerModel,
+    setThreadSearch,
+    setShowArchivedThreads,
+    archiveThread,
     deleteThread
   } = useChatStore(
     useShallow((s) => ({
       threads: s.threads,
+      threadSearch: s.threadSearch,
+      showArchivedThreads: s.showArchivedThreads,
       activeThreadId: s.activeThreadId,
       selectThread: s.selectThread,
       createThread: s.createThread,
@@ -260,6 +288,9 @@ export function Workbench(): ReactElement {
       runtimeConnection: s.runtimeConnection,
       setRoute: s.setRoute,
       openCode: s.openCode,
+      openWrite: s.openWrite,
+      ensureWriteThreadForWorkspace: s.ensureWriteThreadForWorkspace,
+      createWriteThread: s.createWriteThread,
       openSettings: s.openSettings,
       openPlugins: s.openPlugins,
       openClaw: s.openClaw,
@@ -278,6 +309,9 @@ export function Workbench(): ReactElement {
       composerModel: s.composerModel,
       composerPickList: s.composerPickList,
       setComposerModel: s.setComposerModel,
+      setThreadSearch: s.setThreadSearch,
+      setShowArchivedThreads: s.setShowArchivedThreads,
+      archiveThread: s.archiveThread,
       deleteThread: s.deleteThread
     }))
   )
@@ -300,7 +334,26 @@ export function Workbench(): ReactElement {
     readStoredWidth(BOTTOM_PANEL_HEIGHT_KEY, BOTTOM_PANEL_DEFAULT)
   )
   const [runtimeDiagnosticsOpen, setRuntimeDiagnosticsOpen] = useState(false)
-  const stageInsetClass = 'px-5 md:px-10 lg:px-16 xl:px-24'
+  const writeAssistantOpen = useWriteWorkspaceStore((s) => s.assistantOpen)
+  const setWriteAssistantOpen = useWriteWorkspaceStore((s) => s.setAssistantOpen)
+  const writeAssistantModel = useWriteWorkspaceStore((s) => s.assistantModel)
+  const setWriteAssistantModel = useWriteWorkspaceStore((s) => s.setAssistantModel)
+  const writeAssistantPickList = useMemo(() => {
+    const ordered = new Set<string>()
+    for (const id of DEFAULT_COMPOSER_MODEL_IDS) {
+      const normalized = id.trim()
+      if (normalized) ordered.add(normalized)
+    }
+    for (const id of composerPickList) {
+      const normalized = id.trim()
+      if (normalized) ordered.add(normalized)
+    }
+    const current = writeAssistantModel.trim()
+    if (current) ordered.add(current)
+    return [...ordered]
+  }, [composerPickList, writeAssistantModel])
+  const rightPanelVisible = route === 'write' ? writeAssistantOpen : rightPanelMode !== null
+  const stageInsetClass = 'ds-stage-inset'
 
   const shellRef = useRef<HTMLDivElement | null>(null)
   const draftByThread = useRef<Record<string, string>>({})
@@ -325,14 +378,23 @@ export function Workbench(): ReactElement {
     () => extractLatestTurnDevPreviewUrls(devPreviewBlocks),
     [devPreviewBlocks]
   )
+  const autoOpenDevPreviewUrls = useMemo(
+    () => extractLatestTurnAutoOpenDevPreviewUrls(devPreviewBlocks),
+    [devPreviewBlocks]
+  )
   const activeClawChannel = useMemo(
     () => clawChannels.find((channel) => channel.id === activeClawChannelId) ?? null,
     [activeClawChannelId, clawChannels]
   )
   const latestDevPreviewUrl = detectedDevPreviewUrls[0] ?? null
+  const latestAutoOpenDevPreviewUrl = autoOpenDevPreviewUrls[0] ?? null
   const showDevPreviewCard =
     route === 'chat' &&
     latestDevPreviewUrl !== null
+  const codeThreads = useMemo(
+    () => threads.filter((thread) => !isWriteThreadId(thread.id)),
+    [threads]
+  )
 
   const mirrorClawCommand = async (userText: string, replyText: string): Promise<void> => {
     if (!activeThreadId || typeof window.dsGui?.mirrorClawChannelMessageToFeishu !== 'function') return
@@ -393,6 +455,7 @@ export function Workbench(): ReactElement {
         ...detail,
         workspaceRoot: detail.workspaceRoot ?? workspaceRoot
       })
+      setRightSidebarWidth((width) => Math.max(width, CODE_PANEL_PREFERRED))
       setRightPanelMode('file')
     }
 
@@ -412,17 +475,23 @@ export function Workbench(): ReactElement {
   }, [activeThreadId, rightPanelMode])
 
   useEffect(() => {
-    if (!latestDevPreviewUrl || route !== 'chat') return
-    if (autoOpenedPreviewUrlRef.current === latestDevPreviewUrl) return
-    autoOpenedPreviewUrlRef.current = latestDevPreviewUrl
+    if (!latestAutoOpenDevPreviewUrl || route !== 'chat') return
+    if (autoOpenedPreviewUrlRef.current === latestAutoOpenDevPreviewUrl) return
+    autoOpenedPreviewUrlRef.current = latestAutoOpenDevPreviewUrl
     setRightPanelMode('browser')
-  }, [latestDevPreviewUrl, route])
+  }, [latestAutoOpenDevPreviewUrl, route])
 
   useEffect(() => {
     if (workspaceRoot.trim()) return
     setTerminalPanelVisible(false)
     setTerminalPanelMounted(false)
   }, [workspaceRoot])
+
+  useEffect(() => {
+    if (route !== 'write') return
+    if (rightPanelMode !== null) setRightPanelMode(null)
+    if (terminalPanelVisible) setTerminalPanelVisible(false)
+  }, [route, rightPanelMode, terminalPanelVisible])
 
   useEffect(() => {
     const prev = prevThreadId.current
@@ -481,14 +550,18 @@ export function Workbench(): ReactElement {
     const onKey = (e: KeyboardEvent): void => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'n') {
         e.preventDefault()
+        if (useChatStore.getState().route === 'write') {
+          void createWriteThread()
+          return
+        }
         void createThread()
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [createThread])
+  }, [createThread, createWriteThread])
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const sync = (): void => {
       const containerWidth = shellRef.current?.clientWidth ?? window.innerWidth
       const next = fitWorkbenchWidths(
@@ -497,7 +570,7 @@ export function Workbench(): ReactElement {
         rightSidebarWidth,
         {
           leftPanelVisible: !leftSidebarCollapsed,
-          rightPanelVisible: rightPanelMode !== null
+          rightPanelVisible
         }
       )
       if (next.left !== leftSidebarWidth) setLeftSidebarWidth(next.left)
@@ -511,11 +584,43 @@ export function Workbench(): ReactElement {
     sync()
     window.addEventListener('resize', sync)
     return () => window.removeEventListener('resize', sync)
-  }, [leftSidebarCollapsed, leftSidebarWidth, rightSidebarWidth, rightPanelMode, terminalPanelHeight])
+  }, [leftSidebarCollapsed, leftSidebarWidth, rightPanelVisible, rightSidebarWidth, terminalPanelHeight])
+
+  const sendWritePrompt = (value: string): void => {
+    const v = value.trim()
+    if (!v) return
+    const writeState = useWriteWorkspaceStore.getState()
+    const writeWorkspaceRoot = writeState.workspaceRoot || workspaceRoot
+    const prompt = composeWritePrompt(v, writeState.quotedSelections, {
+      workspaceRoot: writeWorkspaceRoot,
+      activeFilePath: writeState.activeFilePath
+    })
+    setInput('')
+    void (async () => {
+      const threadId = await ensureWriteThreadForWorkspace(writeWorkspaceRoot)
+      if (!threadId) {
+        setInput(v)
+        return
+      }
+      const model = writeState.assistantModel.trim()
+      const sent = await sendMessage(
+        prompt,
+        mode === 'plan' ? 'plan' : 'agent',
+        model ? { model } : undefined
+      )
+      if (sent) {
+        useWriteWorkspaceStore.getState().clearQuotedSelections()
+      }
+    })()
+  }
 
   const handleSend = (): void => {
     const v = input.trim()
     if (!v) return
+    if (route === 'write') {
+      sendWritePrompt(v)
+      return
+    }
     if (route === 'claw') {
       const command = parseClawCommand(v)
       if (command?.kind === 'clear') {
@@ -620,16 +725,36 @@ export function Workbench(): ReactElement {
     void createThread({ workspaceRoot })
   }
 
-  const sidebarView: 'chat' | 'claw' =
-    route === 'claw' || (route === 'plugins' && pluginHostRoute === 'claw') ? 'claw' : 'chat'
+  const sidebarView: 'chat' | 'write' | 'claw' =
+    route === 'claw' || (route === 'plugins' && pluginHostRoute === 'claw')
+      ? 'claw'
+      : route === 'write'
+        ? 'write'
+        : 'chat'
 
   const toggleRightPanelMode = (nextMode: Exclude<RightPanelMode, null>): void => {
     setRightPanelMode((current) => (current === nextMode ? null : nextMode))
   }
 
+  const openRuntimePanel = (): void => {
+    setRightPanelMode('runtime')
+  }
+
   const closeRightPanel = (): void => {
+    if (route === 'write') {
+      setWriteAssistantOpen(false)
+      return
+    }
     setRightPanelMode(null)
     setFilePreviewTarget(null)
+  }
+
+  const startNewWriteAssistantConversation = (): void => {
+    const writeState = useWriteWorkspaceStore.getState()
+    const writeWorkspaceRoot = writeState.workspaceRoot || workspaceRoot
+    setInput('')
+    writeState.clearQuotedSelections()
+    void createWriteThread(writeWorkspaceRoot)
   }
 
   const toggleLeftSidebar = (): void => {
@@ -673,7 +798,7 @@ export function Workbench(): ReactElement {
         startRight,
         {
           leftPanelVisible: true,
-          rightPanelVisible: rightPanelMode !== null
+          rightPanelVisible
         }
       )
       setLeftSidebarWidth(next.left)
@@ -692,7 +817,7 @@ export function Workbench(): ReactElement {
   }
 
   const beginRightResize = (event: ReactPointerEvent<HTMLDivElement>): void => {
-    if (event.button !== 0 || rightPanelMode === null) return
+    if (event.button !== 0 || !rightPanelVisible) return
     event.preventDefault()
     const startX = event.clientX
     const startLeft = leftSidebarWidth
@@ -756,6 +881,78 @@ export function Workbench(): ReactElement {
     window.addEventListener('pointerup', onUp)
   }
 
+  const renderRightPanel = (): ReactElement | null => {
+    if (!rightPanelVisible) return null
+    return (
+      <>
+        <div
+          role="separator"
+          aria-orientation="vertical"
+          className="ds-no-drag group relative z-20 w-2 shrink-0 cursor-col-resize"
+          onPointerDown={beginRightResize}
+        >
+          <div className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-ds-border-muted/70 transition group-hover:bg-ds-border-strong" />
+        </div>
+        <div className="h-full min-h-0 shrink-0" style={{ width: rightSidebarWidth }}>
+          <Suspense fallback={<div className="h-full w-full bg-ds-sidebar" />}>
+            {route === 'write' && writeAssistantOpen ? (
+              <WriteAssistantPanel
+                input={input}
+                setInput={setInput}
+                mode={mode}
+                setMode={setMode}
+                busy={busy}
+                runtimeConnection={runtimeConnection}
+                activeThreadId={activeThreadId}
+                blocks={blocks}
+                liveReasoning={liveReasoning}
+                liveAssistant={liveAssistant}
+                composerModel={writeAssistantModel}
+                composerPickList={writeAssistantPickList}
+                setComposerModel={setWriteAssistantModel}
+                queuedMessages={queuedMessages}
+                removeQueuedMessage={removeQueuedMessage}
+                onSend={handleSend}
+                onInterrupt={() => void interrupt()}
+                onRetryConnection={() => void probeRuntime('user')}
+                onOpenSettings={() => openSettings('agents')}
+                onOpenDiagnostics={() => setRuntimeDiagnosticsOpen(true)}
+                onNewConversation={startNewWriteAssistantConversation}
+                onCollapse={closeRightPanel}
+                className="h-full max-h-full w-full"
+              />
+            ) : rightPanelMode === 'changes' ? (
+              <ChangeInspector
+                blocks={blocks}
+                className="h-full max-h-full w-full flex-col"
+                onCollapse={closeRightPanel}
+              />
+            ) : rightPanelMode === 'browser' ? (
+              <DevBrowserPanel
+                blocks={devPreviewBlocks}
+                preferredUrl={latestDevPreviewUrl}
+                className="h-full max-h-full w-full flex-col"
+                onCollapse={closeRightPanel}
+              />
+            ) : rightPanelMode === 'runtime' ? (
+              <RuntimeInsightsPanel
+                className="h-full max-h-full w-full"
+                onCollapse={closeRightPanel}
+              />
+            ) : (
+              <WorkspaceFilePreviewPanel
+                target={filePreviewTarget}
+                workspaceRoot={workspaceRoot}
+                className="h-full max-h-full w-full"
+                onClose={closeRightPanel}
+              />
+            )}
+          </Suspense>
+        </div>
+      </>
+    )
+  }
+
   return (
     <div
       ref={shellRef}
@@ -764,21 +961,37 @@ export function Workbench(): ReactElement {
       {!leftSidebarCollapsed ? (
         <>
           <div className="min-h-0 shrink-0" style={{ width: leftSidebarWidth }}>
+            {route === 'write' ? (
+              <WriteSidebar
+                activeView={sidebarView}
+                onCodeOpen={() => void openCode()}
+                onWriteOpen={() => void openWrite()}
+                onClawOpen={() => openClaw()}
+                onOpenSettings={(section) => openSettings(section)}
+              />
+            ) : (
             <Sidebar
-              threads={threads}
+              threads={codeThreads}
               activeThreadId={activeThreadId}
               activeView={sidebarView}
               pluginsActive={route === 'plugins'}
               runtimeReady={runtimeConnection === 'ready'}
+              threadSearch={threadSearch}
+              showArchivedThreads={showArchivedThreads}
+              onThreadSearchChange={setThreadSearch}
+              onShowArchivedThreadsChange={setShowArchivedThreads}
               onSelectThread={openThread}
               onDeleteThread={deleteThread}
+              onRestoreThread={(id) => archiveThread(id, false)}
               onNewChat={startNewChat}
               onNewChatInWorkspace={startNewChatInWorkspace}
               onOpenSettings={(section) => openSettings(section)}
-              onOpenPlugins={() => openPlugins(sidebarView)}
+              onOpenPlugins={() => openPlugins(sidebarView === 'claw' ? 'claw' : 'chat')}
               onCodeOpen={() => void openCode()}
+              onWriteOpen={() => void openWrite()}
               onClawOpen={() => openClaw()}
             />
+            )}
           </div>
           <div
             role="separator"
@@ -817,6 +1030,17 @@ export function Workbench(): ReactElement {
               <PluginMarketplaceView />
             </Suspense>
           </>
+        ) : route === 'write' ? (
+          <div className="flex min-h-0 flex-1">
+            <WriteWorkspaceView
+              leftSidebarCollapsed={leftSidebarCollapsed}
+              onToggleLeftSidebar={toggleLeftSidebar}
+              input={input}
+              setInput={setInput}
+              onSubmitPrompt={sendWritePrompt}
+            />
+            {renderRightPanel()}
+          </div>
         ) : (
           <>
         {error && !(runtimeConnection !== 'ready' && !activeThreadId) && (
@@ -858,10 +1082,10 @@ export function Workbench(): ReactElement {
 
         <div className="flex min-h-0 flex-1">
           <div className={`flex min-h-0 min-w-0 flex-1 ${stageInsetClass}`}>
-          <section className="ds-drag flex min-h-0 min-w-0 flex-1 flex-col">
-            <header className="ds-topbar-surface relative z-10 mt-3 flex min-h-[46px] w-full shrink-0 items-stretch overflow-visible rounded-[24px]">
-              <div className="flex w-full min-w-0 items-center justify-between gap-3 px-3 py-2 sm:px-4 md:pl-5 md:pr-2">
-                <div className="flex min-w-0 flex-1 items-center gap-2.5">
+          <section className="ds-chat-stage ds-drag flex min-h-0 min-w-0 flex-1 flex-col">
+            <header className="chat-topbar ds-topbar-surface relative z-10 mt-3 flex min-h-[46px] w-full shrink-0 items-stretch overflow-visible rounded-[24px]">
+              <div className="chat-topbar-grid grid w-full min-w-0 items-center gap-2.5 px-3 py-2 sm:px-4 md:pl-5 md:pr-2">
+                <div className="chat-topbar-session flex min-w-0 items-center gap-2.5">
                   <button
                     type="button"
                     onClick={toggleLeftSidebar}
@@ -877,7 +1101,7 @@ export function Workbench(): ReactElement {
                   </button>
                   <SessionHeader compact className="min-w-0 flex-1" />
                 </div>
-                <div className="flex shrink-0 items-center gap-2">
+                <div className="chat-topbar-actions flex min-w-0 flex-wrap items-center justify-end gap-2">
                   <ConnectionStatusBar compact />
                   {busy ? (
                     <span className="inline-flex shrink-0 rounded-full bg-amber-500/16 px-2.5 py-1 text-[11.5px] font-semibold text-amber-950 dark:text-amber-100">
@@ -939,48 +1163,13 @@ export function Workbench(): ReactElement {
                 queuedMessages={queuedMessages}
                 onRemoveQueuedMessage={removeQueuedMessage}
                 onInterrupt={() => void interrupt()}
+                onOpenRuntimePanel={openRuntimePanel}
               />
             </div>
           </section>
           </div>
 
-          {rightPanelMode ? (
-            <>
-              <div
-                role="separator"
-                aria-orientation="vertical"
-                className="ds-no-drag group relative z-20 w-2 shrink-0 cursor-col-resize"
-                onPointerDown={beginRightResize}
-              >
-                <div className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-ds-border-muted/70 transition group-hover:bg-ds-border-strong" />
-              </div>
-              <div className="h-full min-h-0 shrink-0" style={{ width: rightSidebarWidth }}>
-                <Suspense fallback={<div className="h-full w-full bg-ds-sidebar" />}>
-                  {rightPanelMode === 'changes' ? (
-                    <ChangeInspector
-                      blocks={blocks}
-                      className="h-full max-h-full w-full flex-col"
-                      onCollapse={closeRightPanel}
-                    />
-                  ) : rightPanelMode === 'browser' ? (
-                    <DevBrowserPanel
-                      blocks={devPreviewBlocks}
-                      preferredUrl={latestDevPreviewUrl}
-                      className="h-full max-h-full w-full flex-col"
-                      onCollapse={closeRightPanel}
-                    />
-                  ) : (
-                    <WorkspaceFilePreviewPanel
-                      target={filePreviewTarget}
-                      workspaceRoot={workspaceRoot}
-                      className="h-full max-h-full w-full"
-                      onClose={closeRightPanel}
-                    />
-                  )}
-                </Suspense>
-              </div>
-            </>
-          ) : null}
+          {renderRightPanel()}
         </div>
 
         {terminalPanelMounted ? (

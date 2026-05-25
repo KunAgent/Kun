@@ -122,10 +122,10 @@ export function GitBranchPicker({ workspaceRoot }: Props): ReactElement | null {
   if (!root) return null
 
   return (
-    <div ref={wrapRef} className="ds-no-drag relative">
+    <div ref={wrapRef} className="ds-git-branch-picker ds-no-drag relative min-w-0">
       <button
         type="button"
-        className="flex h-8 max-w-[320px] items-center gap-2 rounded-lg px-2 text-[14px] font-medium text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink"
+        className="flex h-8 max-w-[320px] min-w-0 items-center gap-2 rounded-lg px-2 text-[14px] font-medium text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink"
         onClick={() => setOpen((v) => !v)}
         title={t('gitBranch')}
       >
