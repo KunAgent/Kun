@@ -1,13 +1,9 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
 import { randomUUID } from 'node:crypto'
 import { URL } from 'node:url'
-import {
-  createLarkChannel,
-  Domain,
-  LoggerLevel,
-  type LarkChannel,
-  type NormalizedMessage
-} from '@larksuiteoapi/node-sdk'
+import pkg from '@larksuiteoapi/node-sdk'
+const { createLarkChannel, Domain, LoggerLevel } = pkg
+import type { LarkChannel, NormalizedMessage } from '@larksuiteoapi/node-sdk'
 import type {
   AppSettingsV1,
   ClawImChannelV1,
