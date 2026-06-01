@@ -881,7 +881,8 @@ function createWindow(): void {
     icon: appIcon.isEmpty() ? undefined : appIcon,
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
     trafficLightPosition: process.platform === 'darwin' ? { x: 16, y: 14 } : undefined,
-    show: false,
+    show: true,
+    backgroundColor: '#ecedef',
     webPreferences: {
       preload: preloadPath,
       contextIsolation: true,
@@ -894,10 +895,6 @@ function createWindow(): void {
     console.error(`[deepseek-gui] failed to load preload ${preloadPath}:`, error)
     logError('preload', 'Failed to load preload script', { preloadPath, message })
   })
-  const showWindow = (): void => {
-    if (!mainWindow || mainWindow.isDestroyed() || mainWindow.isVisible()) return
-    mainWindow.show()
-  }
   mainWindow.on('closed', () => {
     terminalService.disposeTerminalSessionsForWindow(mainWindow?.id ?? -1)
     mainWindow = null
@@ -916,16 +913,13 @@ function createWindow(): void {
   }
   mainWindow.once('ready-to-show', () => {
     traceStartup('window:ready-to-show')
-    showWindow()
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.focus()
+    }
   })
   mainWindow.webContents.once('did-finish-load', () => {
     traceStartup('window:did-finish-load')
-    showWindow()
   })
-  setTimeout(() => {
-    traceStartup('window:fallback-show-timeout')
-    showWindow()
-  }, 1500)
 }
 
 function deepseekLaunchConfigChanged(prev: AppSettingsV1, next: AppSettingsV1): boolean {
