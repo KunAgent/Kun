@@ -7,6 +7,8 @@ function run(command, args) {
   })
 }
 
+require('./ensure-kun-install.cjs')
+
 const buildKun = run('npm', ['--prefix', 'kun', 'run', 'build'])
 if (buildKun.status !== 0) {
   process.exit(buildKun.status || 1)

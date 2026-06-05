@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "npm run build:kun && electron-vite dev",
     "build": "npm run build:kun && electron-vite build",
-    "build:kun": "npm --prefix kun run build",
+    "build:kun": "node ./scripts/ensure-kun-install.cjs && npm --prefix kun run build",
     "lint": "eslint .",
     "test": "vitest run",
     "test:watch": "vitest",

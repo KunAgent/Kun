@@ -44,6 +44,7 @@ let lastResolvedBinary: string | null = null
 const KUN_READY_PREFIX = 'KUN_READY '
 const KUN_STARTUP_TIMEOUT_MS = 15_000
 const STDERR_TAIL_MAX_CHARS = 4_000
+const GUI_SCHEDULE_MCP_TIMEOUT_MS = 5_000
 const DEFAULT_KUN_MODEL_PROFILES: Record<string, Record<string, unknown>> = {
   'deepseek-v4-pro': {
     contextWindowTokens: 1_000_000,
@@ -362,7 +363,7 @@ function buildGuiScheduleKunMcpServer(
     args: buildClawScheduleMcpArgs(settings, launch),
     env: {},
     trustScope: 'user',
-    timeoutMs: 30_000
+    timeoutMs: GUI_SCHEDULE_MCP_TIMEOUT_MS
   }
 }
 
