@@ -322,7 +322,7 @@ export function FloatingComposerModelPicker({
             <ChevronDown className="h-3.5 w-3.5" strokeWidth={1.8} />
           </span>
         </button>
-        {renderMenu('fixed z-[1000] overflow-x-hidden overflow-y-auto rounded-xl border border-ds-border bg-white p-1.5 text-[12.5px] shadow-[0_18px_50px_rgba(15,23,42,0.16)] dark:bg-ds-card')}
+        {renderMenu('fixed z-[1000] overflow-x-hidden overflow-y-auto rounded-xl border border-ds-border bg-white p-2 text-[12.5px] shadow-[0_18px_50px_rgba(15,23,42,0.16)] dark:bg-ds-card min-w-[200px]')}
       </div>
     )
   }
@@ -360,7 +360,7 @@ export function FloatingComposerModelPicker({
       </button>
 
       {menuOpen && canChangeModel ? (
-        renderMenu('fixed z-[1000] overflow-x-hidden overflow-y-auto rounded-xl border border-ds-border bg-white p-1.5 text-[13px] text-ds-muted shadow-[0_22px_64px_rgba(15,23,42,0.18)] dark:bg-ds-card')
+        renderMenu('fixed z-[1000] overflow-x-hidden overflow-y-auto rounded-xl border border-ds-border bg-white p-2 text-[13px] text-ds-muted shadow-[0_22px_64px_rgba(15,23,42,0.18)] dark:bg-ds-card min-w-[200px]')
       ) : null}
     </div>
   )
@@ -484,7 +484,7 @@ function MenuSectionTitle({
   icon: ReactElement
 }): ReactElement {
   return (
-    <div className="flex h-8 items-center gap-2 px-2 text-[12px] font-bold uppercase tracking-[0.08em] text-ds-faint">
+    <div className="flex h-8 items-center gap-2 px-2.5 text-[12px] font-bold uppercase tracking-[0.08em] text-ds-faint">
       {icon}
       <span>{children}</span>
     </div>
