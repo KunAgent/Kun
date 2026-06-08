@@ -1,7 +1,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { z } from 'zod'
-import { createWorker, type Worker, type RecognizeResult } from 'tesseract.js'
+import { recognize, type RecognizeResult } from 'tesseract.js'
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { PNG } from 'pngjs'
 import { PDFDocument } from 'pdf-lib'
@@ -24,28 +24,21 @@ const SUPPORTED_IMAGE_EXTENSIONS = new Set([
 ])
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Tesseract worker pool (per-language cache — v6 has no loadLanguage)
+// Tesseract OCR — use the high-level recognize() API which handles worker
+// lifecycle and serialization correctly across all environments.
 // ═══════════════════════════════════════════════════════════════════════════
 
-const _workerCache = new Map<string, Worker>()
-
-async function getWorkerForLanguage(language: string): Promise<Worker> {
-  const cached = _workerCache.get(language)
-  if (cached) return cached
-
-  const worker = await createWorker(language, 1, {
+async function ocrFile(
+  filePath: string,
+  language: string,
+  options?: { pdfRenderDPI?: number }
+): Promise<RecognizeResult> {
+  return recognize(filePath, language, {
+    ...options,
     errorHandler: (err) => {
-      console.error('[ocr-mcp] tesseract worker error:', err.message)
+      console.error('[ocr-mcp] tesseract error:', err.message)
     }
   })
-  _workerCache.set(language, worker)
-  return worker
-}
-
-async function terminateAllWorkers(): Promise<void> {
-  const workers = [..._workerCache.values()]
-  _workerCache.clear()
-  await Promise.all(workers.map((w) => w.terminate().catch(() => undefined)))
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -260,8 +253,7 @@ const pdfCanvasFactory = {
 // ═══════════════════════════════════════════════════════════════════════════
 
 async function runOcrOnImage(inputPath: string, language: string): Promise<RecognizeResult> {
-  const worker = await getWorkerForLanguage(language)
-  return worker.recognize(inputPath, { pdfRenderDPI: PDF_RENDER_DPI })
+  return ocrFile(inputPath, language)
 }
 
 /**
@@ -315,7 +307,6 @@ async function countPdfPages(pdfData: Uint8Array): Promise<number> {
 }
 
 async function runOcrOnPdf(pdfPath: string, language: string): Promise<RecognizeResult> {
-  const worker = await getWorkerForLanguage(language)
   const pdfData = new Uint8Array(await readFile(pdfPath))
   const pageCount = await countPdfPages(pdfData)
 
@@ -332,9 +323,8 @@ async function runOcrOnPdf(pdfPath: string, language: string): Promise<Recognize
       if (!tmpFile) break
       tmpFiles.push(tmpFile)
 
-      // Pass file PATH (not Buffer) — tesseract.js worker can't
-      // deserialize Buffer across the thread boundary
-      const result = await worker.recognize(tmpFile, { pdfRenderDPI: PDF_RENDER_DPI })
+      // Use high-level recognize() — avoids worker thread serialization issues
+      const result = await ocrFile(tmpFile, language, { pdfRenderDPI: PDF_RENDER_DPI })
 
       for (const word of result.data.words) {
         ;(word as { page?: number }).page = i + 1
