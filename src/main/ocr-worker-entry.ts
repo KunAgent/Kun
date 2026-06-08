@@ -1,15 +1,15 @@
 /**
- * Standalone OCR worker process entry point.
+ * One-shot OCR worker process.
  *
- * Spawned via child_process.fork() from the main OCR MCP server.
- * Communicates via IPC (process.send / process.on('message')).
+ * Spawned via child_process.fork() for EACH OCR request.
+ * Reads the request from argv (JSON), runs tesseract.js, writes the
+ * result to stdout, and exits. This avoids long-lived worker_threads
+ * instability in Electron's ASAR environment.
  *
- * This completely bypasses tesseract.js's worker_threads mechanism,
- * which fails inside Electron's ASAR environment because
- * `new Worker(asarPath)` cannot resolve virtual filesystem paths.
+ * Usage:
+ *   ELECTRON_RUN_AS_NODE=1 node ocr-worker-entry.js '<json-request>'
  */
 
-// eslint-disable-next-line @typescript-eslint/no-var-requires
 const Tesseract = require('tesseract.js')
 const { recognize } = Tesseract
 const { readFile } = require('node:fs/promises')
@@ -24,14 +24,22 @@ type WorkerRequest = {
   langPath?: string
 }
 
-type WorkerResponse = {
-  id: string
-  ok: boolean
-  data?: unknown
-  error?: string
-}
+async function main(): Promise<void> {
+  // Read request from command-line arg (avoids IPC structuredClone issues)
+  const arg = process.argv[2]
+  if (!arg) {
+    process.stderr.write('ocr-worker-entry: no request argument provided\n')
+    process.exit(1)
+  }
 
-async function handleRequest(req: WorkerRequest): Promise<WorkerResponse> {
+  let req: WorkerRequest
+  try {
+    req = JSON.parse(arg)
+  } catch (err) {
+    process.stderr.write(`ocr-worker-entry: invalid JSON: ${err}\n`)
+    process.exit(1)
+  }
+
   try {
     const buf = await readFile(req.filePath)
     const ext = extname(req.filePath).toLowerCase()
@@ -56,25 +64,22 @@ async function handleRequest(req: WorkerRequest): Promise<WorkerResponse> {
       tsv: false
     })
 
-    return { id: req.id, ok: true, data: result.data }
+    // Write result to stdout as JSON, then exit cleanly
+    const response = { id: req.id, ok: true, data: result.data }
+    process.stdout.write(JSON.stringify(response))
+    process.exit(0)
   } catch (err) {
-    return {
+    const response = {
       id: req.id,
       ok: false,
       error: err instanceof Error ? err.message : String(err)
     }
+    process.stdout.write(JSON.stringify(response))
+    process.exit(0)
   }
 }
 
-// Listen for OCR requests from the parent process
-process.on('message', async (msg: WorkerRequest) => {
-  const resp = await handleRequest(msg)
-  try {
-    process.send!(resp)
-  } catch {
-    // Parent exited; nothing to do.
-  }
+main().catch((err) => {
+  process.stderr.write(`ocr-worker-entry: unhandled: ${err}\n`)
+  process.exit(1)
 })
-
-// Signal readiness
-try { process.send!({ ready: true } as unknown as WorkerResponse) } catch { /* noop */ }

@@ -16,7 +16,7 @@ import { readFile, writeFile, mkdir, unlink, rmdir } from 'node:fs/promises'
 import { basename, dirname, extname, join, sep } from 'node:path'
 import { tmpdir } from 'node:os'
 import { randomUUID } from 'node:crypto'
-import { fork, type ChildProcess } from 'node:child_process'
+import { fork } from 'node:child_process'
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Types
@@ -87,155 +87,39 @@ type OcrResponse = {
   error?: string
 }
 
-let workerProcess: ChildProcess | null = null
-let workerReady = false
-const pendingRequests = new Map<string, { resolve: (data: unknown) => void; reject: (err: Error) => void }>()
+// ═══════════════════════════════════════════════════════════════════════════
+// Worker entry path resolution
+// ═══════════════════════════════════════════════════════════════════════════
 
 function getWorkerEntryPath(): string {
-  // In the packaged Electron app, __filename resolves to:
-  //   app.asar/out/main/chunks/ocr-mcp-server-*.js
-  // The worker entry is unpacked to:
-  //   app.asar.unpacked/out/main/ocr-worker-entry.js
-  // (no chunks/ subdirectory — it's a separate rollup entry point)
-  //
-  // In development, both files are in out/main/ or out/main/chunks/.
-
   const entryName = 'ocr-worker-entry.js'
-
-  // Strategy: resolve from __dirname, going up to out/main/ level.
-  // __dirname = .../out/main/chunks/ → parent = .../out/main/
   const mainDir = dirname(__dirname)
 
-  // 1. Try unpacked path (packaged app): replace app.asar → app.asar.unpacked
+  // Packaged app: app.asar.unpacked/out/main/ocr-worker-entry.js
   if (__dirname.includes(`${sep}app.asar${sep}`)) {
     const unpackedMain = mainDir.replace(
       `${sep}app.asar${sep}`,
       `${sep}app.asar.unpacked${sep}`
     )
     const unpackedPath = join(unpackedMain, entryName)
-    if (existsSync(unpackedPath)) {
-      dlog('getWorkerEntryPath: unpacked', { unpackedPath })
-      return unpackedPath
-    }
-    // Also try same directory (in case chunks/ layout changes)
+    if (existsSync(unpackedPath)) return unpackedPath
     const unpackedSame = join(
       __dirname.replace(`${sep}app.asar${sep}`, `${sep}app.asar.unpacked${sep}`),
       entryName
     )
-    if (existsSync(unpackedSame)) {
-      dlog('getWorkerEntryPath: unpacked-same', { unpackedSame })
-      return unpackedSame
-    }
+    if (existsSync(unpackedSame)) return unpackedSame
   }
 
-  // 2. Development: try parent (out/main/) then same dir (out/main/chunks/)
+  // Development: try parent (out/main/) then same dir (out/main/chunks/)
   const parentPath = join(mainDir, entryName)
-  if (existsSync(parentPath)) {
-    dlog('getWorkerEntryPath: parent', { parentPath })
-    return parentPath
-  }
+  if (existsSync(parentPath)) return parentPath
   const samePath = join(__dirname, entryName)
-  if (existsSync(samePath)) {
-    dlog('getWorkerEntryPath: same', { samePath })
-    return samePath
-  }
-
-  // 3. Fallback: try the parent path anyway (will fail at fork with clear error)
-  dlog('getWorkerEntryPath: fallback', { parentPath })
+  if (existsSync(samePath)) return samePath
   return parentPath
 }
 
-function ensureWorker(): ChildProcess {
-  if (workerProcess && workerReady) return workerProcess
-
-  const entryPath = getWorkerEntryPath()
-  dlog('ensureWorker: forking', { entryPath, exists: existsSync(entryPath) })
-
-  workerProcess = fork(entryPath, [], {
-    stdio: ['pipe', 'pipe', 'pipe', 'ipc'],
-    env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' }
-  })
-
-  workerProcess.on('message', (msg: OcrResponse | { ready: boolean }) => {
-    if ('ready' in msg && (msg as { ready: boolean }).ready) {
-      workerReady = true
-      dlog('ensureWorker: worker ready')
-      return
-    }
-    const resp = msg as OcrResponse
-    const pending = pendingRequests.get(resp.id)
-    if (pending) {
-      pendingRequests.delete(resp.id)
-      if (resp.ok) {
-        pending.resolve(resp.data)
-      } else {
-        pending.reject(new Error(resp.error || 'OCR worker error'))
-      }
-    }
-  })
-
-  workerProcess.on('error', (err) => {
-    dlog('ensureWorker: worker error', err)
-    workerReady = false
-    workerProcess = null
-    // Reject all pending requests
-    for (const [id, pending] of pendingRequests) {
-      pending.reject(new Error(`Worker process error: ${err.message}`))
-      pendingRequests.delete(id)
-    }
-  })
-
-  workerProcess.on('exit', (code) => {
-    dlog('ensureWorker: worker exited', { code })
-    workerReady = false
-    workerProcess = null
-    for (const [id, pending] of pendingRequests) {
-      pending.reject(new Error(`Worker process exited with code ${code}`))
-      pendingRequests.delete(id)
-    }
-  })
-
-  return workerProcess
-}
-
-function sendToWorker(req: OcrRequest): Promise<unknown> {
-  return new Promise((resolve, reject) => {
-    const worker = ensureWorker()
-    pendingRequests.set(req.id, { resolve, reject })
-
-    // Set a timeout for individual requests
-    const timer = setTimeout(() => {
-      pendingRequests.delete(req.id)
-      reject(new Error(`OCR worker timeout for request ${req.id}`))
-    }, 300_000)
-
-    const originalResolve = resolve
-    const originalReject = reject
-    pendingRequests.set(req.id, {
-      resolve: (data) => { clearTimeout(timer); originalResolve(data) },
-      reject: (err) => { clearTimeout(timer); originalReject(err) }
-    })
-
-    try {
-      worker.send!(req)
-    } catch (err) {
-      clearTimeout(timer)
-      pendingRequests.delete(req.id)
-      reject(err)
-    }
-  })
-}
-
-function terminateWorker(): void {
-  if (workerProcess) {
-    workerProcess.kill()
-    workerProcess = null
-    workerReady = false
-  }
-}
-
 // ═══════════════════════════════════════════════════════════════════════════
-// Tesseract path resolution (for the forked worker)
+// Tesseract path resolution (passed to the worker process)
 // ═══════════════════════════════════════════════════════════════════════════
 
 function resolveAsarUnpackedPath(asarPath: string): string {
@@ -250,12 +134,74 @@ function buildTesseractOptions(): { workerPath: string; corePath: string; langPa
     join(dirname(tesseractEntry), 'worker-script', 'node', 'index.js')
   )
   const realCorePath = resolveAsarUnpackedPath(dirname(coreEntry))
-  dlog('buildTesseractOptions', { tesseractEntry, coreEntry, realWorkerPath, realCorePath })
   return {
     workerPath: realWorkerPath,
     corePath: realCorePath,
     langPath: 'https://tessdata.projectnaptha.com/4.0.0'
   }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// One-shot OCR via child_process.spawn
+//
+// Forks a FRESH process for each OCR request. The worker runs tesseract.js
+// (which internally uses worker_threads + WASM), writes the result to
+// stdout, and exits. This avoids long-lived worker instability.
+// ═══════════════════════════════════════════════════════════════════════════
+
+function ocrViaChildProcess(filePath: string, language: string): Promise<unknown> {
+  return new Promise((resolve, reject) => {
+    const entryPath = getWorkerEntryPath()
+    const opts = buildTesseractOptions()
+    const reqId = randomUUID()
+
+    const request = JSON.stringify({ id: reqId, filePath, language, ...opts })
+    dlog('ocrViaChildProcess: spawning', { entryPath, filePath, language, exists: existsSync(entryPath) })
+
+    const child = fork(entryPath, [request], {
+      stdio: ['pipe', 'pipe', 'pipe', 'ipc'],
+      env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' }
+    })
+
+    let stdout = ''
+    let stderr = ''
+
+    child.stdout?.on('data', (chunk: Buffer) => { stdout += chunk.toString() })
+    child.stderr?.on('data', (chunk: Buffer) => { stderr += chunk.toString() })
+
+    const timer = setTimeout(() => {
+      child.kill()
+      reject(new Error('OCR worker timeout (300s)'))
+    }, 300_000)
+
+    child.on('exit', (code) => {
+      clearTimeout(timer)
+      dlog('ocrViaChildProcess: exited', { code, stdoutLen: stdout.length, stderrLen: stderr.length })
+      if (stderr) dlog('ocrViaChildProcess: stderr', { stderr: stderr.slice(0, 2000) })
+
+      if (code !== 0 && !stdout) {
+        reject(new Error(`OCR worker exited with code ${code}${stderr ? ': ' + stderr.slice(0, 500) : ''}`))
+        return
+      }
+
+      try {
+        const resp: OcrResponse = JSON.parse(stdout)
+        if (resp.ok) {
+          resolve(resp.data)
+        } else {
+          reject(new Error(resp.error || 'OCR worker error'))
+        }
+      } catch (err) {
+        reject(new Error(`OCR worker returned invalid JSON: ${stdout.slice(0, 200)}`))
+      }
+    })
+
+    child.on('error', (err) => {
+      clearTimeout(timer)
+      dlog('ocrViaChildProcess: spawn error', err)
+      reject(new Error(`Failed to spawn OCR worker: ${err.message}`))
+    })
+  })
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -544,17 +490,8 @@ class PdfCanvasFactory {
  * Returns the raw tesseract.js recognition data.
  */
 async function ocrFileViaWorker(filePath: string, language: string): Promise<unknown> {
-  const opts = buildTesseractOptions()
-  const reqId = randomUUID()
-  dlog('ocrFileViaWorker', { filePath, language, reqId })
-
-  const result = await sendToWorker({
-    id: reqId,
-    filePath,
-    language,
-    ...opts
-  })
-  return result
+  dlog('ocrFileViaWorker', { filePath, language })
+  return ocrViaChildProcess(filePath, language)
 }
 
 async function runOcrOnImage(inputPath: string, language: string): Promise<unknown> {
@@ -830,9 +767,6 @@ export async function runOcrMcpServerFromArgv(argv: string[]): Promise<boolean> 
     { name: 'deepseek-gui-ocr', version: '0.4.0' },
     { capabilities: { logging: {} } }
   )
-
-  // Pre-warm the worker process
-  ensureWorker()
 
   // ── gui_ocr_check ──────────────────────────────────────────────────
 
