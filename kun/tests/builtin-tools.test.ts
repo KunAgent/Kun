@@ -383,6 +383,51 @@ describe('Kun built-in tools', () => {
     expect(String(polled.output)).toContain('done')
   })
 
+  it('waits for the running bash session during poll until yield_seconds elapses', async () => {
+    const output = await executeTool(host, workspace, 'bash', {
+      command: 'echo ready; sleep 5; echo done',
+      yield_seconds: 1,
+      timeout: 10
+    })
+    expect(output.status).toBe('running')
+
+    const startedAt = Date.now()
+    const polled = await executeTool(host, workspace, 'bash', {
+      action: 'poll',
+      session_id: String(output.session_id),
+      yield_seconds: 2
+    })
+    const elapsed = Date.now() - startedAt
+    expect(elapsed).toBeGreaterThanOrEqual(1800)
+    expect(polled.status).toBe('running')
+
+    await executeTool(host, workspace, 'bash', {
+      action: 'stop',
+      session_id: String(output.session_id)
+    })
+  })
+
+  it('returns early from poll when the session exits before yield_seconds', async () => {
+    const output = await executeTool(host, workspace, 'bash', {
+      command: 'echo ready; sleep 1; echo done',
+      yield_seconds: 1,
+      timeout: 10
+    })
+    expect(output.status).toBe('running')
+
+    const startedAt = Date.now()
+    const polled = await executeTool(host, workspace, 'bash', {
+      action: 'poll',
+      session_id: String(output.session_id),
+      yield_seconds: 10
+    })
+    const elapsed = Date.now() - startedAt
+    expect(elapsed).toBeLessThan(3000)
+    expect(polled.status).toBe('completed')
+    expect(polled.exit_code).toBe(0)
+    expect(String(polled.output)).toContain('done')
+  })
+
   it('includes the active shell in bash partial updates', async () => {
     const updates: TurnItem[] = []
     const result = await host.execute(

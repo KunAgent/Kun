@@ -501,7 +501,7 @@ export function createBashLocalTool(options: BashLocalToolOptions = {}): LocalTo
   const shellRuntime = shellRuntimeInfo()
   return LocalToolHost.defineTool({
     name: 'bash',
-    description: `Execute a shell command in the workspace using the host platform shell. Current shell: ${shellRuntime.name}. Use ${shellRuntime.syntax} syntax. Return combined stdout and stderr. Long-running commands return a session_id; use action="poll" to read more output, action="write" with input to send stdin, or action="stop" to terminate the session.`,
+    description: `Execute a shell command in the workspace using the host platform shell. Current shell: ${shellRuntime.name}. Use ${shellRuntime.syntax} syntax. Return combined stdout and stderr. Long-running commands return a session_id; use action="poll" to wait up to yield_seconds (default ${DEFAULT_BASH_YIELD_SECONDS}s, max ${MAX_BASH_YIELD_SECONDS}s) for more output or process exit, action="write" with input to send stdin, or action="stop" to terminate the session.`,
     inputSchema: {
       type: 'object',
       properties: {
@@ -546,6 +546,7 @@ export function createBashLocalTool(options: BashLocalToolOptions = {}): LocalTo
           const payload = await sessionPayload(session, { stopSent: true })
           return { output: payload, isError: session.status === 'running' || session.status === 'failed' }
         }
+        await waitForSessionExitOrDelay(session, normalizeYieldSeconds(args.yield_seconds) * 1000)
         return { output: await sessionPayload(session), isError: session.status === 'failed' }
       }
 
