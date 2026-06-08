@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { InMemoryEventBus } from '../src/adapters/in-memory-event-bus.js'
 import { InMemoryApprovalGate } from '../src/adapters/in-memory-approval-gate.js'
 import { InMemoryThreadStore } from '../src/adapters/in-memory-thread-store.js'
@@ -60,6 +60,60 @@ describe('InMemoryApprovalGate', () => {
       createApprovalRequest({ id: 'b', threadId: 'th2', turnId: 't', toolName: 'x', summary: 's' })
     )
     expect(gate.pending('th1')).toHaveLength(1)
+  })
+
+  it('removes the entry after decide so resolved approvals do not leak', async () => {
+    const gate = new InMemoryApprovalGate()
+    const approval = createApprovalRequest({
+      id: 'clean',
+      threadId: 't',
+      turnId: 'tu',
+      toolName: 'echo',
+      summary: 's'
+    })
+    const pending = gate.request(approval)
+    gate.decide('clean', 'deny')
+    await expect(pending).resolves.toBe('deny')
+    // Entry must be gone — no lingering state after resolution.
+    expect(gate.get('clean')).toBeUndefined()
+    expect(gate.pending()).toHaveLength(0)
+  })
+
+  it('auto-expires pending approvals after the timeout and rejects the promise', async () => {
+    vi.useFakeTimers()
+    try {
+      const gate = new InMemoryApprovalGate({ pendingTimeoutMs: 1000 })
+      const approval = createApprovalRequest({
+        id: 'exp',
+        threadId: 't',
+        turnId: 'tu',
+        toolName: 'echo',
+        summary: 's'
+      })
+      const pending = gate.request(approval)
+      expect(gate.pending()).toHaveLength(1)
+      vi.advanceTimersByTime(1001)
+      await expect(pending).rejects.toThrow('expired')
+      expect(gate.pending()).toHaveLength(0)
+      expect(gate.get('exp')).toBeUndefined()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('drainAllPending rejects every pending request and clears state', async () => {
+    const gate = new InMemoryApprovalGate()
+    const a = gate.request(
+      createApprovalRequest({ id: 'd1', threadId: 't', turnId: 'tu', toolName: 'x', summary: 's' })
+    )
+    const b = gate.request(
+      createApprovalRequest({ id: 'd2', threadId: 't', turnId: 'tu', toolName: 'y', summary: 's' })
+    )
+    expect(gate.pending()).toHaveLength(2)
+    gate.drainAllPending('shutdown')
+    await expect(a).rejects.toThrow('shutdown')
+    await expect(b).rejects.toThrow('shutdown')
+    expect(gate.pending()).toHaveLength(0)
   })
 })
 

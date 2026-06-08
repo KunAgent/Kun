@@ -32,6 +32,7 @@ import {
   type PrefixVolatilityFinding
 } from '../cache/prefix-volatility.js'
 import { buildToolCatalogFingerprint } from '../cache/tool-catalog-fingerprint.js'
+import { TtlLruCache } from '../cache/ttl-lru-cache.js'
 import {
   makeUserItem,
   makeAssistantTextItem,
@@ -285,9 +286,15 @@ export type AgentLoopOptions = {
 export class AgentLoop {
   private readonly opts: AgentLoopOptions
   private readonly autoModelRoutes = new Map<string, AutoModelRouteSelection>()
-  private readonly promptTokenPressure = new Map<string, { model: string; promptTokens: number }>()
+  private readonly promptTokenPressure = new TtlLruCache<string, { model: string; promptTokens: number }>({
+    limit: 128,
+    ttlMs: 10 * 60 * 1000
+  })
   private readonly toolStormBreakers = new Map<string, ToolStormBreaker>()
-  private readonly toolCatalogSnapshots = new Map<string, ToolCatalogSnapshot>()
+  private readonly toolCatalogSnapshots = new TtlLruCache<string, ToolCatalogSnapshot>({
+    limit: 64,
+    ttlMs: 30 * 60 * 1000
+  })
 
   constructor(opts: AgentLoopOptions) {
     this.opts = opts

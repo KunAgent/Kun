@@ -150,7 +150,11 @@ export function buildRouter(runtime: ServerRuntime): Router {
   })
   router.add('DELETE', '/v1/threads/:id', async (request, ctx) => {
     if (!authorize(request, runtime)) return ERRORS.unauthorized()
-    return deleteThread(runtime.threadService, ctx.params.id)
+    const response = await deleteThread(runtime.threadService, ctx.params.id)
+    if (response.status === 200) {
+      runtime.usageService.reset(ctx.params.id)
+    }
+    return response
   })
   router.add('POST', '/v1/threads/:id/fork', async (request, ctx) => {
     if (!authorize(request, runtime)) return ERRORS.unauthorized()
