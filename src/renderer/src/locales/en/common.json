@@ -490,6 +490,8 @@
   "pluginMcpFilesystemDesc": "Let the agent read and write files in the selected workspace.",
   "pluginMcpGuiScheduleTitle": "DeepSeek GUI Schedule",
   "pluginMcpGuiScheduleDesc": "Built-in MCP tools for listing, creating, updating, and deleting scheduled tasks.",
+  "pluginMcpGuiOcrTitle": "Smart OCR Engine",
+  "pluginMcpGuiOcrDesc": "Built-in OCR engine with 100+ language support. Extract text from scanned PDFs and images, produce searchable PDFs. Zero system dependencies.",
   "pluginMcpPlaywrightTitle": "Playwright",
   "pluginMcpPlaywrightDesc": "Automate real browsers and inspect page state.",
   "pluginMcpGithubTitle": "GitHub",

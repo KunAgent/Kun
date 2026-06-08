@@ -23,32 +23,28 @@ const SUPPORTED_IMAGE_EXTENSIONS = new Set([
 ])
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Tesseract worker pool (lazy singleton — created once per server lifetime)
+// Tesseract worker pool (per-language cache — v6 has no loadLanguage)
 // ═══════════════════════════════════════════════════════════════════════════
 
-let _workerPromise: Promise<Worker> | null = null
+const _workerCache = new Map<string, Worker>()
 
-function getWorker(): Promise<Worker> {
-  if (!_workerPromise) {
-    _workerPromise = createWorker('eng', 1, {
-      errorHandler: (err) => {
-        // Surface worker errors without crashing the server
-        console.error('[ocr-mcp] tesseract worker error:', err.message)
-      }
-    })
-  }
-  return _workerPromise
+async function getWorkerForLanguage(language: string): Promise<Worker> {
+  const cached = _workerCache.get(language)
+  if (cached) return cached
+
+  const worker = await createWorker(language, 1, {
+    errorHandler: (err) => {
+      console.error('[ocr-mcp] tesseract worker error:', err.message)
+    }
+  })
+  _workerCache.set(language, worker)
+  return worker
 }
 
-async function terminateWorker(): Promise<void> {
-  if (!_workerPromise) return
-  try {
-    const worker = await _workerPromise
-    await worker.terminate()
-  } catch {
-    /* best-effort */
-  }
-  _workerPromise = null
+async function terminateAllWorkers(): Promise<void> {
+  const workers = [..._workerCache.values()]
+  _workerCache.clear()
+  await Promise.all(workers.map((w) => w.terminate().catch(() => undefined)))
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -93,9 +89,8 @@ async function readImageBuffer(inputPath: string): Promise<Buffer> {
 }
 
 async function runOcrOnImage(imageBuffer: Buffer, language: string): Promise<RecognizeResult> {
-  const worker = await getWorker()
-  await worker.loadLanguage(language)
-  await worker.reinitialize(language)
+  // tesseract.js v6: worker is created per-language (no loadLanguage API)
+  const worker = await getWorkerForLanguage(language)
   const result = await worker.recognize(imageBuffer, { pdfRenderDPI: PDF_RENDER_DPI })
   return result
 }
@@ -103,9 +98,7 @@ async function runOcrOnImage(imageBuffer: Buffer, language: string): Promise<Rec
 async function runOcrOnPdf(pdfPath: string, language: string): Promise<RecognizeResult> {
   // tesseract.js v6 can ingest PDFs directly — it renders pages internally
   // at pdfRenderDPI and OCRs each page.
-  const worker = await getWorker()
-  await worker.loadLanguage(language)
-  await worker.reinitialize(language)
+  const worker = await getWorkerForLanguage(language)
   const pdfBuffer = await readFile(pdfPath)
   const result = await worker.recognize(pdfBuffer, { pdfRenderDPI: PDF_RENDER_DPI })
   return result
@@ -271,10 +264,8 @@ const ALL_TESSERACT_LANGUAGES = [
 // ones are available now vs. which will trigger a one-time download.
 async function detectCachedLanguages(): Promise<string[]> {
   try {
-    const worker = await getWorker()
-    const langs = await worker.loadLanguage('eng')
-    // loadLanguage doesn't return the list — just use the known set
-    return ['eng'] // eng is bundled with the worker
+    // tesseract.js v6 bundles eng data with the worker
+    return ['eng']
   } catch {
     return []
   }
