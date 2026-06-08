@@ -2,8 +2,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { z } from 'zod'
 import { createWorker, type Worker, type RecognizeResult } from 'tesseract.js'
-import { PDFDocument, type PDFPage } from 'pdf-lib'
-import sharp from 'sharp'
+import { PDFDocument } from 'pdf-lib'
 import { existsSync } from 'node:fs'
 import { readFile, writeFile, mkdir } from 'node:fs/promises'
 import { basename, dirname, extname, join } from 'node:path'
@@ -85,34 +84,12 @@ type OcrOutcome =
 // ═══════════════════════════════════════════════════════════════════════════
 
 /**
- * Preprocess an image with sharp to improve OCR accuracy:
- * - Convert to grayscale
- * - Increase contrast
- * - Sharpen
- * - Resize if too large (keeps memory usage reasonable)
+ * Read an image file as a Buffer. tesseract.js handles internal
+ * preprocessing (binarization, noise removal) automatically —
+ * no external image library is needed.
  */
-async function preprocessImage(inputPath: string): Promise<Buffer> {
-  const MAX_DIMENSION = 4096
-  const image = sharp(inputPath)
-
-  const metadata = await image.metadata()
-  const width = metadata.width ?? 0
-  const height = metadata.height ?? 0
-
-  let pipeline = image
-    .grayscale()
-    .normalize()
-    .sharpen({ sigma: 0.8 })
-
-  // Only resize if the image exceeds max dimension
-  if (Math.max(width, height) > MAX_DIMENSION) {
-    pipeline = pipeline.resize(MAX_DIMENSION, MAX_DIMENSION, {
-      fit: 'inside',
-      withoutEnlargement: true
-    })
-  }
-
-  return pipeline.toBuffer()
+async function readImageBuffer(inputPath: string): Promise<Buffer> {
+  return readFile(inputPath)
 }
 
 async function runOcrOnImage(imageBuffer: Buffer, language: string): Promise<RecognizeResult> {
@@ -496,17 +473,13 @@ export async function runOcrMcpServerFromArgv(argv: string[]): Promise<boolean> 
   server.registerTool('gui_ocr_image', {
     description:
       'Run OCR on an image file (PNG, JPEG, TIFF, BMP, WebP) using the built-in ' +
-      'tesseract.js engine. Images are automatically preprocessed (grayscale, ' +
-      'contrast enhancement, sharpen) for better accuracy. Supports 100+ languages.',
+      'tesseract.js engine. The engine handles preprocessing (binarization, ' +
+      'noise removal) internally. Supports 100+ languages.',
     inputSchema: {
       input_path: z.string().min(1).describe('Absolute path to the input image file'),
       language: z.string().optional().describe(
         'OCR language(s) as 3-letter Tesseract codes. Combine multiple with "+", ' +
         'e.g. "eng", "chi_sim", "eng+chi_sim". Default: "eng".'
-      ),
-      preprocess: z.boolean().optional().describe(
-        'Enable automatic image preprocessing (grayscale + contrast + sharpen). ' +
-        'Default: true. Disable if the image is already clean black-and-white text.'
       )
     }
   }, async (args) => {
@@ -526,17 +499,14 @@ export async function runOcrMcpServerFromArgv(argv: string[]): Promise<boolean> 
       }
 
       const language = args.language || 'eng'
-      const shouldPreprocess = args.preprocess !== false
 
-      // Preprocess or read raw
-      const imageBuffer = shouldPreprocess
-        ? await preprocessImage(inputPath)
-        : await readFile(inputPath)
+      // Read raw image; tesseract.js does its own internal preprocessing
+      const imageBuffer = await readFile(inputPath)
 
       // Run OCR
       const recognizeResult = await withTimeout(
         runOcrOnImage(imageBuffer, language),
-        (args.timeout_seconds ?? 300) * 1000,
+        300_000,
         'OCR timed out'
       )
 
@@ -552,7 +522,6 @@ export async function runOcrMcpServerFromArgv(argv: string[]): Promise<boolean> 
           `OCR completed in ${(durationMs / 1000).toFixed(1)}s.`,
           `Confidence: ${avgConfidence}%`,
           `Language: ${language}`,
-          shouldPreprocess ? 'Preprocessing: enabled' : 'Preprocessing: disabled',
           '',
           '--- Recognized text ---',
           fullText || '(no text recognized)'
@@ -561,8 +530,7 @@ export async function runOcrMcpServerFromArgv(argv: string[]): Promise<boolean> 
           durationMs,
           confidence: avgConfidence,
           language,
-          text: fullText,
-          preprocessed: shouldPreprocess
+          text: fullText
         }
       )
     } catch (err) {
