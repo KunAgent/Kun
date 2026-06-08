@@ -77,6 +77,70 @@ describe('DeepseekCompatModelClient', () => {
     expect(sentBodies[0]?.model).toBe('deepseek-v4-pro')
   })
 
+  it('does not inject body.thinking on non-DeepSeek host (issue #26)', async () => {
+    const response = {
+      id: 'r3',
+      model: 'deepseek-chat',
+      choices: [{ index: 0, finish_reason: 'stop', message: { role: 'assistant', content: 'ok' } }],
+      usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 }
+    }
+    const sentBodies: Array<Record<string, unknown>> = []
+    const fetchImpl: typeof fetch = async (_url, init) => {
+      sentBodies.push(JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>)
+      return new Response(JSON.stringify(response), {
+        status: 200,
+        headers: { 'content-type': 'application/json' }
+      })
+    }
+    const client = new DeepseekCompatModelClient({
+      baseUrl: 'https://openrouter.ai/api/v1',   // NOT api.deepseek.com
+      apiKey: 'k',
+      model: 'deepseek-v4-pro',
+      fetchImpl,
+      nonStreaming: true
+    })
+    const request = buildRequest(new AbortController().signal)
+    request.model = 'deepseek-v4-pro'
+    for await (const _chunk of client.stream(request)) {
+      // drain
+    }
+    // The DeepSeek-specific `thinking` protocol extension must not be sent
+    // to third-party OpenAI-compat providers — they may reject it. See issue #26.
+    expect(sentBodies[0]).not.toHaveProperty('thinking')
+  })
+
+  it('injects body.thinking on the official DeepSeek host (issue #26 regression guard)', async () => {
+    const response = {
+      id: 'r4',
+      model: 'deepseek-chat',
+      choices: [{ index: 0, finish_reason: 'stop', message: { role: 'assistant', content: 'ok' } }],
+      usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 }
+    }
+    const sentBodies: Array<Record<string, unknown>> = []
+    const fetchImpl: typeof fetch = async (_url, init) => {
+      sentBodies.push(JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>)
+      return new Response(JSON.stringify(response), {
+        status: 200,
+        headers: { 'content-type': 'application/json' }
+      })
+    }
+    const client = new DeepseekCompatModelClient({
+      baseUrl: 'https://api.deepseek.com',
+      apiKey: 'k',
+      model: 'deepseek-v4-pro',
+      fetchImpl,
+      nonStreaming: true
+    })
+    const request = buildRequest(new AbortController().signal)
+    request.model = 'deepseek-v4-pro'
+    for await (const _chunk of client.stream(request)) {
+      // drain
+    }
+    // On the official host, the `thinking` field must still be set for v4 models.
+    expect(sentBodies[0]).toHaveProperty('thinking')
+    expect((sentBodies[0] as { thinking: { type: string } }).thinking).toMatchObject({ type: 'enabled' })
+  })
+
   it('sends per-request router controls when requested', async () => {
     const response = {
       id: 'router',

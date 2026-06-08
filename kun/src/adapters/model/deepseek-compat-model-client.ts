@@ -224,6 +224,7 @@ export class DeepseekCompatModelClient implements ModelClient {
     applyReasoningEffort(body, request.reasoningEffort, { includeThinking })
     if (
       includeThinking &&
+      isDeepSeekHost(this.config.baseUrl) &&
       !Object.prototype.hasOwnProperty.call(body, 'thinking') &&
       isThinkingProducerModel(model)
     ) {
@@ -258,7 +259,7 @@ export class DeepseekCompatModelClient implements ModelClient {
     const history = windowSize
       ? limitHistoryPreservingCompaction(request.history, windowSize)
       : request.history
-    const thinkingMode = requiresReasoningRoundTrip(request.reasoningEffort, model)
+    const thinkingMode = requiresReasoningRoundTrip(request.reasoningEffort, model, this.config.baseUrl)
     out.push(...this.itemsToMessages(
       repairModelHistoryItems([...request.prefix, ...history]),
       thinkingMode
@@ -664,12 +665,14 @@ export class DeepseekCompatModelClient implements ModelClient {
     const cacheHitRate = cacheTotal === 0 ? null : cacheHit / cacheTotal
     const estimatedCost = estimateDeepseekCost({
       model: this.config.model,
+      providerHost: this.config.baseUrl,
       cacheHitTokens: cacheHit,
       cacheMissTokens: cacheMiss,
       outputTokens: completionTokens
     })
     const estimatedSavings = estimateDeepseekCacheSavings({
       model: this.config.model,
+      providerHost: this.config.baseUrl,
       cacheHitTokens: cacheHit
     })
     const reportedCostUsd = Number(usage.cost_usd ?? usage.costUsd)
@@ -754,8 +757,17 @@ function isThinkingMode(effort: string | undefined): boolean {
   return !['off', 'disabled', 'none', 'false'].includes(normalized)
 }
 
-function requiresReasoningRoundTrip(effort: string | undefined, model: string | undefined): boolean {
-  return isThinkingMode(effort) || isThinkingProducerModel(model)
+function requiresReasoningRoundTrip(
+  effort: string | undefined,
+  model: string | undefined,
+  baseUrl: string
+): boolean {
+  // Thinking-mode round trip is a DeepSeek-specific protocol extension.
+  // OpenAI-compat providers (OpenRouter, llama.cpp, etc.) may reject
+  // or misinterpret the `thinking` field, so we only auto-enable it
+  // on the official DeepSeek host. User-selected reasoningEffort still
+  // forces the path (opt-in). See issue #26.
+  return isThinkingMode(effort) || (isDeepSeekHost(baseUrl) && isThinkingProducerModel(model))
 }
 
 function isThinkingProducerModel(model: string | undefined): boolean {

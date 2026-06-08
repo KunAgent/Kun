@@ -1,3 +1,5 @@
+import { isDeepSeekHost } from './model-error-probe.js'
+
 export type DeepseekCurrencyCosts = {
   costUsd: number
   costCny: number
@@ -80,7 +82,18 @@ export function estimateDeepseekCost(input: {
   cacheHitTokens: number
   cacheMissTokens: number
   outputTokens: number
+  /**
+   * Optional upstream base URL. When provided, the function returns
+   * null for non-DeepSeek hosts (OpenRouter, llama.cpp, etc.) because
+   * we don't have authoritative prices for third-party providers.
+   * Callers that omit it keep the legacy behavior: trust the model
+   * name. See issue #26.
+   */
+  providerHost?: string
 }): DeepseekCurrencyCosts | null {
+  if (input.providerHost !== undefined && !isDeepSeekHost(input.providerHost)) {
+    return null
+  }
   const tier = pricingTierForModel(input.model)
   if (!tier) return null
   const prices = DEEPSEEK_V4_PRICES[tier]
@@ -93,19 +106,25 @@ export function estimateDeepseekCost(input: {
 export function estimateDeepseekInputTokenCost(input: {
   model: string
   inputTokens: number
+  providerHost?: string
 }): DeepseekCurrencyCosts | null {
   return estimateDeepseekCost({
     model: input.model,
     cacheHitTokens: 0,
     cacheMissTokens: input.inputTokens,
-    outputTokens: 0
+    outputTokens: 0,
+    providerHost: input.providerHost
   })
 }
 
 export function estimateDeepseekCacheSavings(input: {
   model: string
   cacheHitTokens: number
+  providerHost?: string
 }): DeepseekCurrencyCosts | null {
+  if (input.providerHost !== undefined && !isDeepSeekHost(input.providerHost)) {
+    return null
+  }
   const tier = pricingTierForModel(input.model)
   if (!tier) return null
   const prices = DEEPSEEK_V4_PRICES[tier]

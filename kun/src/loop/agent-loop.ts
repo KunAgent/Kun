@@ -322,7 +322,26 @@ export class AgentLoop {
       await this.opts.turns.finishTurn({ threadId, turnId, status })
       return status
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
+      const raw = error instanceof Error ? error.message : String(error)
+      // Best-effort enrichment so the renderer can show "what failed where"
+      // instead of the bare "Kun turn failed" string. See issue #26.
+      const modelInfo = this.opts.model && 'config' in this.opts.model
+        ? (this.opts.model as { config: { model?: string; baseUrl?: string } }).config
+        : undefined
+      const modelName = modelInfo?.model ?? 'unknown'
+      const provider = modelInfo?.baseUrl ?? 'unknown'
+      const stack = error instanceof Error
+        ? (error.stack?.split('\n').slice(0, 3).join(' | ') ?? '')
+        : ''
+      const message = [
+        '[Kun turn failed]',
+        `turn=${turnId}`,
+        `thread=${threadId}`,
+        `model=${modelName}`,
+        `provider=${provider}`,
+        `error=${raw}`,
+        stack ? `stack=${stack}` : ''
+      ].filter(Boolean).join(' ')
       await this.failTurn(threadId, turnId, message)
       return 'failed'
     } finally {

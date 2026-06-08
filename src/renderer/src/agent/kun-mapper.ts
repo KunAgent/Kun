@@ -973,7 +973,13 @@ export async function dispatchKunRuntimeEvent(
         if (status) sink.onRuntimeStatus?.(status)
         return
       }
-      sink.onError(new Error(event.message ?? 'Kun turn failed'))
+      sink.onError(
+        new Error(
+          event.message
+            ? (event.message.startsWith('[Kun') ? event.message : `[Kun] ${event.message}`)
+            : 'Kun turn failed (no error message from runtime — check kun-*.log)'
+        )
+      )
       return
     default:
       return

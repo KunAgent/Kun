@@ -195,7 +195,55 @@ describe('create_plan tool mapping', () => {
       message: 'model stream exploded'
     }, sink, async () => undefined)
 
-    expect(captured).toBe('model stream exploded')
+    // Issue #26: turn_failed messages from the runtime get the [Kun] prefix
+    // so the renderer can distinguish "Kun turn failed" (runtime crash) from
+    // a plain chat error and point users at kun-*.log.
+    expect(captured).toBe('[Kun] model stream exploded')
+  })
+
+  it('passes through enriched Kun turn failure messages unchanged', async () => {
+    let captured: string | null = null
+    const sink: ThreadEventSink = {
+      ...makeSink(),
+      onError: (error) => {
+        captured = error.message
+      }
+    }
+
+    const enriched = '[Kun turn failed] turn=t1 thread=thr_1 model=deepseek-v4-pro provider=https://openrouter.ai/api/v1 error=stream timeout'
+
+    await dispatchKunRuntimeEvent({
+      kind: 'turn_failed',
+      seq: 9,
+      timestamp: '2024-01-01T00:00:00.000Z',
+      threadId: 'thr_1',
+      turnId: 'turn_1',
+      message: enriched
+    }, sink, async () => undefined)
+
+    // Already-prefixed messages from the runtime must NOT be re-wrapped.
+    expect(captured).toBe(enriched)
+  })
+
+  it('falls back to a log-hint message when runtime sends no error message', async () => {
+    let captured: string | null = null
+    const sink: ThreadEventSink = {
+      ...makeSink(),
+      onError: (error) => {
+        captured = error.message
+      }
+    }
+
+    await dispatchKunRuntimeEvent({
+      kind: 'turn_failed',
+      seq: 10,
+      timestamp: '2024-01-01T00:00:00.000Z',
+      threadId: 'thr_1',
+      turnId: 'turn_1'
+    }, sink, async () => undefined)
+
+    // No message → hint the user to check the runtime log file
+    expect(captured).toBe('Kun turn failed (no error message from runtime — check kun-*.log)')
   })
 
   it('maps a successful create_plan result to a tool block with plan metadata', () => {
