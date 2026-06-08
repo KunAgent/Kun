@@ -19,6 +19,15 @@ import { randomUUID } from 'node:crypto'
 import { fork, type ChildProcess } from 'node:child_process'
 
 // ═══════════════════════════════════════════════════════════════════════════
+// Types
+// ═══════════════════════════════════════════════════════════════════════════
+
+type DOMMatrixLike = {
+  a: number; b: number; c: number; d: number; e: number; f: number
+  invertSelf(): DOMMatrixLike
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // Debug logging — writes to /tmp/ocr-debug.log so failures in the packaged
 // Electron app (where stdout is not visible) can be inspected post-mortem.
 // Each call is best-effort: any I/O error swallowed.
@@ -327,9 +336,25 @@ class NodeContext {
   setTransform(a: number, b: number, c: number, d: number, e: number, f: number): void {
     this._transform = [a, b, c, d, e, f]
   }
-  getTransform(): { a: number; b: number; c: number; d: number; e: number; f: number } {
+  getTransform(): DOMMatrixLike {
     const m = this._transform
-    return { a: m[0], b: m[1], c: m[2], d: m[3], e: m[4], f: m[5] }
+    // Return a DOMMatrix-compatible object. pdfjs-dist calls
+    // ctx.getTransform().invertSelf() so we need to provide that method.
+    return {
+      a: m[0], b: m[1], c: m[2], d: m[3], e: m[4], f: m[5],
+      invertSelf(): DOMMatrixLike {
+        const det = m[0] * m[3] - m[1] * m[2]
+        if (Math.abs(det) < 1e-10) return this // singular
+        const invDet = 1 / det
+        return {
+          a: m[3] * invDet, b: -m[1] * invDet,
+          c: -m[2] * invDet, d: m[0] * invDet,
+          e: (m[2] * m[5] - m[3] * m[4]) * invDet,
+          f: (m[1] * m[4] - m[0] * m[5]) * invDet,
+          invertSelf: this.invertSelf
+        }
+      }
+    }
   }
   resetTransform(): void { this._transform = [1, 0, 0, 1, 0, 0] }
 
