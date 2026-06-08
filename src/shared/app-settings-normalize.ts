@@ -84,6 +84,9 @@ export function normalizeAppSettings(settings: AppSettingsV1): AppSettingsV1 {
       blur: typeof maybeSettings.backgroundImage?.blur === 'number'
         ? maybeSettings.backgroundImage.blur
         : DEFAULT_BACKGROUND_IMAGE_SETTINGS.blur
+    },
+    ssh: {
+      profiles: Array.isArray(maybeSettings.ssh?.profiles) ? maybeSettings.ssh.profiles : []
     }
   }
 }

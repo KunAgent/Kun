@@ -84,6 +84,12 @@ const TodoPanel = lazy(() =>
 const ScheduleTasksView = lazy(() =>
   import('./schedule/ScheduleTasksView').then((module) => ({ default: module.ScheduleTasksView }))
 )
+const TerminalPanel = lazy(() =>
+  import('./TerminalPanel').then((module) => ({ default: module.TerminalPanel }))
+)
+const KunOutputPanel = lazy(() =>
+  import('./KunOutputPanel').then((module) => ({ default: module.KunOutputPanel }))
+)
 
 type PendingSddPlanTarget = {
   planId: string
@@ -1367,6 +1373,17 @@ export function Workbench(): ReactElement {
                 className="h-full max-h-full w-full"
                 onCollapse={closeRightPanel}
                 onBuildPlan={() => void buildGuiPlan()}
+              />
+            ) : rightPanelMode === 'terminal' ? (
+              <TerminalPanel
+                workspaceRoot={workspaceRoot}
+                className="h-full max-h-full w-full"
+                onCollapse={closeRightPanel}
+              />
+            ) : rightPanelMode === 'output' ? (
+              <KunOutputPanel
+                className="h-full max-h-full w-full"
+                onCollapse={closeRightPanel}
               />
             ) : (
               <WorkspaceFilePreviewPanel

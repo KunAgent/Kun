@@ -33,6 +33,9 @@ export const DEFAULT_BACKGROUND_IMAGE_SETTINGS: BackgroundImageSettingsV1 = {
   blur: 0
 }
 
+export const DEFAULT_SSH_PORT = 22
+export const DEFAULT_SSH_SETTINGS: SshSettingsV1 = { profiles: [] }
+
 export const DEFAULT_WRITE_WORKSPACE_ROOT = '~/.deepseekgui/write_workspace'
 export const DEFAULT_KUN_DATA_DIR = '~/.deepseekgui/kun'
 export const DEFAULT_KUN_MODEL = 'deepseek-v4-pro'
@@ -455,12 +458,28 @@ export type BackgroundImageSettingsV1 = {
   blur: number
 }
 
+export type SshProfileV1 = {
+  id: string
+  name: string
+  host: string
+  port: number
+  user: string
+  /** Path to SSH private key file, empty = use default ssh agent/config */
+  keyPath: string
+  createdAt: string
+}
+
+export type SshSettingsV1 = {
+  profiles: SshProfileV1[]
+}
+
 export type AppSettingsV1 = {
   version: 1
   locale: 'en' | 'zh'
   theme: 'system' | 'light' | 'dark'
   uiFontScale: UiFontScale
   backgroundImage?: BackgroundImageSettingsV1
+  ssh?: SshSettingsV1
   provider: ModelProviderSettingsV1
   agents: KunSettingsEnvelopeV1
   workspaceRoot: string

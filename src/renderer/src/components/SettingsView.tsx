@@ -846,7 +846,32 @@ export function SettingsView(): ReactElement {
     handleBackgroundImageSelect,
     handleBackgroundImageClear,
     handleBackgroundImageOpacityChange,
-    handleBackgroundImageBlurChange
+    handleBackgroundImageBlurChange,
+    sshProfiles: form?.ssh?.profiles ?? [],
+    addSshProfile: () => {
+      const profiles = [...(form?.ssh?.profiles ?? [])]
+      const id = crypto.randomUUID()
+      profiles.push({
+        id,
+        name: `Server ${profiles.length + 1}`,
+        host: '',
+        port: 22,
+        user: '',
+        keyPath: '',
+        createdAt: new Date().toISOString()
+      })
+      update({ ssh: { profiles } })
+    },
+    updateSshProfile: (id: string, patch: Partial<{ name: string; host: string; port: number; user: string; keyPath: string }>) => {
+      const profiles = (form?.ssh?.profiles ?? []).map((p) =>
+        p.id === id ? { ...p, ...patch } : p
+      )
+      update({ ssh: { profiles } })
+    },
+    deleteSshProfile: (id: string) => {
+      const profiles = (form?.ssh?.profiles ?? []).filter((p) => p.id !== id)
+      update({ ssh: { profiles } })
+    }
   }
 
   return (

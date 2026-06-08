@@ -44,13 +44,16 @@ export function hasValidPort(settings: AppSettingsV1): boolean {
 
 export function mergeSettings(current: AppSettingsV1, patch: SettingsPatch): AppSettingsV1 {
   const safeCurrent = coerceRendererSettings(current)
-  const { agents: agentsPatch, provider: providerPatch, backgroundImage: bgPatch, ...restPatch } = patch
+  const { agents: agentsPatch, provider: providerPatch, backgroundImage: bgPatch, ssh: sshPatch, ...restPatch } = patch
   return {
     ...applyKunRuntimePatch(safeCurrent, agentsPatch?.kun),
     ...restPatch,
     backgroundImage: bgPatch
       ? { ...safeCurrent.backgroundImage, ...bgPatch }
       : safeCurrent.backgroundImage,
+    ssh: sshPatch
+      ? { ...safeCurrent.ssh, ...sshPatch }
+      : safeCurrent.ssh,
     provider: mergeModelProviderSettings(safeCurrent.provider, providerPatch),
     log: {
       ...safeCurrent.log,
@@ -93,6 +96,9 @@ export function coerceRendererSettings(settings: AppSettingsV1): AppSettingsV1 {
       dataUrl: typeof raw.backgroundImage?.dataUrl === 'string' ? raw.backgroundImage.dataUrl : DEFAULT_BACKGROUND_IMAGE_SETTINGS.dataUrl,
       opacity: typeof raw.backgroundImage?.opacity === 'number' ? raw.backgroundImage.opacity : DEFAULT_BACKGROUND_IMAGE_SETTINGS.opacity,
       blur: typeof raw.backgroundImage?.blur === 'number' ? raw.backgroundImage.blur : DEFAULT_BACKGROUND_IMAGE_SETTINGS.blur
+    },
+    ssh: {
+      profiles: Array.isArray(raw.ssh?.profiles) ? raw.ssh.profiles : []
     },
     provider: normalizeModelProviderSettings(raw.provider),
     agents: kunSettingsEnvelope(mergeKunRuntimeSettings(defaultKunRuntimeSettings(), getKunRuntimeSettings(settings))),
