@@ -59,6 +59,7 @@
     "react-markdown": "^10.1.0",
     "rehype-harden": "^1.1.8",
     "remark-gfm": "^4.0.1",
+    "sharp": "^0.34.5",
     "shiki": "^3.23.0",
     "streamdown": "^2.5.0",
     "tesseract.js": "^6.0.1",
@@ -98,6 +99,7 @@
       "electron",
       "esbuild",
       "protobufjs",
+      "sharp",
       "tesseract.js"
     ]
   }

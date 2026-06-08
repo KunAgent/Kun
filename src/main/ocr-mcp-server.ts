@@ -3,6 +3,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { z } from 'zod'
 import { createWorker, type Worker, type RecognizeResult } from 'tesseract.js'
 import { PDFDocument } from 'pdf-lib'
+import sharp from 'sharp'
 import { existsSync } from 'node:fs'
 import { readFile, writeFile, mkdir } from 'node:fs/promises'
 import { basename, dirname, extname, join } from 'node:path'
@@ -79,29 +80,76 @@ type OcrOutcome =
 // Core OCR engine (tesseract.js)
 // ═══════════════════════════════════════════════════════════════════════════
 
-/**
- * Read an image file as a Buffer. tesseract.js handles internal
- * preprocessing (binarization, noise removal) automatically —
- * no external image library is needed.
- */
-async function readImageBuffer(inputPath: string): Promise<Buffer> {
-  return readFile(inputPath)
+async function runOcrOnImage(inputPath: string, language: string): Promise<RecognizeResult> {
+  // tesseract.js v6 recognizes file paths directly in Node.js
+  const worker = await getWorkerForLanguage(language)
+  const result = await worker.recognize(inputPath, { pdfRenderDPI: PDF_RENDER_DPI })
+  return result
 }
 
-async function runOcrOnImage(imageBuffer: Buffer, language: string): Promise<RecognizeResult> {
-  // tesseract.js v6: worker is created per-language (no loadLanguage API)
-  const worker = await getWorkerForLanguage(language)
-  const result = await worker.recognize(imageBuffer, { pdfRenderDPI: PDF_RENDER_DPI })
-  return result
+/**
+ * Render a PDF page to a PNG buffer using sharp (libvips).
+ * Returns null when the page index is out of range.
+ */
+async function renderPdfPage(pdfPath: string, pageIndex: number): Promise<Buffer | null> {
+  try {
+    return await sharp(pdfPath, { page: pageIndex, density: PDF_RENDER_DPI })
+      .png()
+      .toBuffer()
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error)
+    // Page out of range or unsupported — signal end of pages
+    if (msg.includes('page') || msg.includes('Page') || msg.includes('range') || msg.includes('input')) {
+      return null
+    }
+    throw error
+  }
 }
 
 async function runOcrOnPdf(pdfPath: string, language: string): Promise<RecognizeResult> {
-  // tesseract.js v6 can ingest PDFs directly — it renders pages internally
-  // at pdfRenderDPI and OCRs each page.
+  // tesseract.js v6 does NOT support PDF natively in Node.js.
+  // We use sharp (libvips) to render each PDF page to PNG,
+  // then OCR each page image with tesseract.js.
   const worker = await getWorkerForLanguage(language)
-  const pdfBuffer = await readFile(pdfPath)
-  const result = await worker.recognize(pdfBuffer, { pdfRenderDPI: PDF_RENDER_DPI })
-  return result
+
+  const pageRecognizeResults: RecognizeResult[] = []
+  for (let pageIndex = 0; ; pageIndex++) {
+    const pagePng = await renderPdfPage(pdfPath, pageIndex)
+    if (!pagePng) break // no more pages
+
+    const pageResult = await worker.recognize(pagePng, { pdfRenderDPI: PDF_RENDER_DPI })
+
+    // Tag each word with the correct page number
+    for (const word of pageResult.data.words) {
+      ;(word as { page?: number }).page = pageIndex + 1
+    }
+    for (const line of pageResult.data.lines) {
+      ;(line as { page?: number }).page = pageIndex + 1
+    }
+    for (const block of pageResult.data.blocks) {
+      ;(block as { page?: number }).page = pageIndex + 1
+    }
+    pageRecognizeResults.push(pageResult)
+  }
+
+  if (pageRecognizeResults.length === 0) {
+    throw new Error('Could not render any pages from the PDF. The file may be corrupted or encrypted.')
+  }
+
+  // Merge all page results into a single RecognizeResult
+  const merged: RecognizeResult = {
+    data: {
+      text: pageRecognizeResults.map((r) => r.data.text).join('\n\n'),
+      words: pageRecognizeResults.flatMap((r) => r.data.words),
+      lines: pageRecognizeResults.flatMap((r) => r.data.lines),
+      blocks: pageRecognizeResults.flatMap((r) => r.data.blocks),
+      paragraphs: pageRecognizeResults.flatMap((r) => r.data.paragraphs),
+      confidence: Math.round(
+        pageRecognizeResults.reduce((s, r) => s + r.data.confidence, 0) / pageRecognizeResults.length
+      )
+    }
+  }
+  return merged
 }
 
 function buildPageData(result: RecognizeResult): OcrPage[] {
@@ -491,12 +539,9 @@ export async function runOcrMcpServerFromArgv(argv: string[]): Promise<boolean> 
 
       const language = args.language || 'eng'
 
-      // Read raw image; tesseract.js does its own internal preprocessing
-      const imageBuffer = await readFile(inputPath)
-
-      // Run OCR
+      // tesseract.js accepts file paths directly; handles internal preprocessing
       const recognizeResult = await withTimeout(
-        runOcrOnImage(imageBuffer, language),
+        runOcrOnImage(inputPath, language),
         300_000,
         'OCR timed out'
       )
