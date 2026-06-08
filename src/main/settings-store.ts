@@ -12,10 +12,12 @@ import {
   defaultModelProviderSettings,
   defaultScheduleSettings,
   getKunRuntimeSettings,
+  defaultConnectionsSettings,
   mergeKunRuntimeSettings,
   mergeModelProviderSettings,
   defaultWriteSettings,
   mergeClawSettings,
+  mergeConnectionsSettings,
   mergeScheduleSettings,
   mergeWriteSettings,
   normalizeAppBehaviorSettings,
@@ -199,6 +201,7 @@ const defaultSettings = (): AppSettingsV1 => ({
   },
   appBehavior: normalizeAppBehaviorSettings(),
   keyboardShortcuts: normalizeKeyboardShortcuts(),
+  connections: defaultConnectionsSettings(),
   guiUpdate: {
     channel: DEFAULT_GUI_UPDATE_CHANNEL
   },
@@ -225,6 +228,7 @@ function buildMergedSettings(parsed: Partial<AppSettingsV1>): AppSettingsV1 {
       ...migrated.appBehavior
     }),
     keyboardShortcuts: normalizeKeyboardShortcuts(migrated.keyboardShortcuts),
+    connections: mergeConnectionsSettings(defaults.connections, migrated.connections),
     write: mergeWriteSettings(defaults.write, migrated.write),
     claw: mergeClawSettings(defaults.claw, migrated.claw),
     schedule: mergeScheduleSettings(defaults.schedule, migrated.schedule),
@@ -384,6 +388,7 @@ export class JsonSettingsStore {
           ...(partial.keyboardShortcuts?.bindings ?? {})
         }
       }),
+      connections: mergeConnectionsSettings(cur.connections, partial.connections),
       write: mergeWriteSettings(cur.write, partial.write),
       claw: mergeClawSettings(cur.claw, partial.claw),
       schedule: mergeScheduleSettings(cur.schedule, partial.schedule),

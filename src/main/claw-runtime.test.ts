@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import {
   defaultClawSettings,
+  defaultConnectionsSettings,
   defaultKeyboardShortcuts,
   defaultKunRuntimeSettings,
   defaultModelProviderSettings,
@@ -30,6 +31,7 @@ function buildSettings(): AppSettingsV1 {
     notifications: { turnComplete: true },
     appBehavior: { openAtLogin: false, startMinimized: false, closeToTray: false },
     keyboardShortcuts: defaultKeyboardShortcuts(),
+    connections: defaultConnectionsSettings(),
     write: defaultWriteSettings(),
     schedule: defaultScheduleSettings(),
     claw: {

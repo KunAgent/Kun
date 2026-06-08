@@ -9,6 +9,8 @@ const api = {
   runtimeRequest: (path, method, body) =>
     ipcRenderer.invoke('runtime:request', { path, method, body }),
   fetchUpstreamModels: () => ipcRenderer.invoke('upstream:models'),
+  testSshConnection: (payload) =>
+    ipcRenderer.invoke('ssh:test-connection', payload),
   getClawStatus: () => ipcRenderer.invoke('claw:status'),
   runClawTask: (taskId) =>
     ipcRenderer.invoke('claw:task:run', taskId),

@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import {
   mergeScheduleSettings,
   defaultClawSettings,
+  defaultConnectionsSettings,
   defaultKeyboardShortcuts,
   defaultKunRuntimeSettings,
   defaultModelProviderSettings,
@@ -44,6 +45,7 @@ function settings(): AppSettingsV1 {
     notifications: { turnComplete: true },
     appBehavior: { openAtLogin: false, startMinimized: false, closeToTray: false },
     keyboardShortcuts: defaultKeyboardShortcuts(),
+    connections: defaultConnectionsSettings(),
     write: defaultWriteSettings(),
     claw: defaultClawSettings(),
     schedule: defaultScheduleSettings(),

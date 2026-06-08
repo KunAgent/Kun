@@ -17,6 +17,7 @@ import {
   getKunRuntimeSettings,
   mergeKunRuntimeSettings,
   mergeClawSettings,
+  mergeConnectionsSettings,
   mergeModelProviderSettings,
   mergeScheduleSettings,
   mergeWriteSettings,
@@ -889,6 +890,7 @@ app.whenReady().then(async () => {
           ...(partial.keyboardShortcuts?.bindings ?? {})
         }
       }),
+      connections: mergeConnectionsSettings(prev.connections, partial.connections),
       write: mergeWriteSettings(prev.write, partial.write),
       claw: mergeClawSettings(prev.claw, partial.claw),
       schedule: mergeScheduleSettings(prev.schedule, partial.schedule),

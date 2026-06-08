@@ -6,6 +6,7 @@ import {
   kunSettingsEnvelope,
   mergeKunRuntimeSettings,
   mergeClawSettings,
+  mergeConnectionsSettings,
   mergeModelProviderSettings,
   mergeScheduleSettings,
   mergeWriteSettings,
@@ -67,6 +68,7 @@ export function mergeSettings(current: AppSettingsV1, patch: SettingsPatch): App
         ...(patch.keyboardShortcuts?.bindings ?? {})
       }
     }),
+    connections: mergeConnectionsSettings(safeCurrent.connections, patch.connections),
     write: mergeWriteSettings(safeCurrent.write, patch.write),
     claw: mergeClawSettings(safeCurrent.claw, patch.claw),
     schedule: mergeScheduleSettings(safeCurrent.schedule, patch.schedule),
@@ -104,6 +106,7 @@ export function coerceRendererSettings(settings: AppSettingsV1): AppSettingsV1 {
     },
     appBehavior: normalizeAppBehaviorSettings(raw.appBehavior),
     keyboardShortcuts: normalizeKeyboardShortcuts(raw.keyboardShortcuts),
+    connections: mergeConnectionsSettings({ ssh: [] }, raw.connections),
     write: normalizeWriteSettings(raw.write),
     claw: normalizeClawSettings(raw.claw),
     schedule: normalizeScheduleSettings(raw.schedule),

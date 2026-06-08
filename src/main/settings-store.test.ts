@@ -15,6 +15,7 @@ describe('JsonSettingsStore', () => {
 
     expect(loaded.guiUpdate.channel).toBe(DEFAULT_GUI_UPDATE_CHANNEL)
     expect(loaded.agents.kun.approvalPolicy).toBe(DEFAULT_APPROVAL_POLICY)
+    expect(loaded.connections).toEqual({ ssh: [] })
     expect(loaded.appBehavior).toEqual({
       openAtLogin: false,
       startMinimized: false,

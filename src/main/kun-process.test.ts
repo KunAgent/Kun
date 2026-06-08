@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { configureLogger } from './logger'
 import {
   defaultClawSettings,
+  defaultConnectionsSettings,
   defaultKeyboardShortcuts,
   defaultKunRuntimeSettings,
   defaultModelProviderSettings,
@@ -44,6 +45,7 @@ function createSettings(binaryPath: string): AppSettingsV1 {
     notifications: { turnComplete: true },
     appBehavior: { openAtLogin: false, startMinimized: false, closeToTray: false },
     keyboardShortcuts: defaultKeyboardShortcuts(),
+    connections: defaultConnectionsSettings(),
     write: defaultWriteSettings(),
     claw: defaultClawSettings(),
     schedule: defaultScheduleSettings(),

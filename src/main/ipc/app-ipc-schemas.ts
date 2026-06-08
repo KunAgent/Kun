@@ -457,6 +457,22 @@ const scheduleSettingsPatchSchema = z.object({
   tasks: z.array(scheduledTaskPatchSchema).max(512).optional()
 }).strict()
 
+const sshConnectionPatchSchema = z.object({
+  id: z.string().trim().min(1).max(MAX_ID_LENGTH).optional(),
+  name: z.string().trim().max(120).optional(),
+  host: z.string().trim().max(512).optional(),
+  user: z.string().trim().max(512).optional(),
+  port: z.number().int().min(1).max(65_535).optional(),
+  remotePath: defaultPathSchema,
+  enabled: z.boolean().optional(),
+  createdAt: z.string().max(128).optional(),
+  updatedAt: z.string().max(128).optional()
+}).strict()
+
+const connectionsSettingsPatchSchema = z.object({
+  ssh: z.array(sshConnectionPatchSchema).max(64).optional()
+}).strict()
+
 function stripLegacySettingsPatchKeys(payload: unknown): unknown {
   if (typeof payload !== 'object' || payload === null || Array.isArray(payload)) return payload
   const source = payload as Record<string, unknown>
@@ -492,6 +508,7 @@ const settingsPatchObjectSchema = z.object({
   notifications: notificationsPatchSchema.optional(),
   appBehavior: appBehaviorPatchSchema.optional(),
   keyboardShortcuts: keyboardShortcutsPatchSchema.optional(),
+  connections: connectionsSettingsPatchSchema.optional(),
   write: writeSettingsPatchSchema.optional(),
   claw: clawSettingsPatchSchema.optional(),
   schedule: scheduleSettingsPatchSchema.optional(),
@@ -502,6 +519,13 @@ const settingsPatchObjectSchema = z.object({
 }).strict()
 
 export const settingsPatchSchema = z.preprocess(stripLegacySettingsPatchKeys, settingsPatchObjectSchema)
+
+export const sshConnectionTestPayloadSchema = z.object({
+  host: z.string().trim().min(1).max(512),
+  user: z.string().trim().max(512).optional(),
+  port: z.number().int().min(1).max(65_535).optional(),
+  remotePath: defaultPathSchema
+}).strict()
 
 export const skillSaveFilePayloadSchema = z
   .object({

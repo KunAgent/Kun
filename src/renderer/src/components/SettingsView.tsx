@@ -49,12 +49,13 @@ import { emitRendererSettingsChanged } from '../lib/keyboard-shortcut-settings'
 import {
   AgentsSettingsSection,
   ClawSettingsSection,
+  ConnectionsSettingsSection,
   GeneralSettingsSection,
   KeyboardShortcutsSettingsSection,
   WriteSettingsSection
 } from './settings-sections'
 
-type SettingsCategory = 'general' | 'write' | 'agents' | 'shortcuts' | 'claw'
+type SettingsCategory = 'general' | 'write' | 'agents' | 'connections' | 'shortcuts' | 'claw'
 type SaveStatus = 'idle' | 'saving' | 'saved' | 'error'
 type SettingsPatch = AppSettingsPatch
 type SkillRootOption = {
@@ -222,6 +223,10 @@ export function SettingsView(): ReactElement {
       setCategory('claw')
       return
     }
+    if (settingsSection === 'connections') {
+      setCategory('connections')
+      return
+    }
     if (settingsSection === 'shortcuts') {
       setCategory('shortcuts')
       return
@@ -235,12 +240,13 @@ export function SettingsView(): ReactElement {
       settingsSection === 'general' ||
       settingsSection === 'write' ||
       settingsSection === 'claw' ||
+      settingsSection === 'connections' ||
       settingsSection === 'shortcuts' ||
       category !== 'agents'
     ) {
       return
     }
-    const refs: Record<Exclude<SettingsRouteSection, 'general' | 'write' | 'claw' | 'shortcuts'>, HTMLDivElement | null> = {
+    const refs: Record<Exclude<SettingsRouteSection, 'general' | 'write' | 'claw' | 'connections' | 'shortcuts'>, HTMLDivElement | null> = {
       agents: agentsSectionRef.current,
       skill: skillSectionRef.current,
       mcp: mcpSectionRef.current
@@ -835,6 +841,7 @@ export function SettingsView(): ReactElement {
           {category === 'general' ? <GeneralSettingsSection ctx={settingsSectionContext} /> : null}
           {category === 'write' ? <WriteSettingsSection ctx={settingsSectionContext} /> : null}
           {category === 'agents' ? <AgentsSettingsSection ctx={settingsSectionContext} /> : null}
+          {category === 'connections' ? <ConnectionsSettingsSection ctx={settingsSectionContext} /> : null}
           {category === 'shortcuts' ? <KeyboardShortcutsSettingsSection ctx={settingsSectionContext} /> : null}
           {category === 'claw' ? <ClawSettingsSection ctx={settingsSectionContext} /> : null}
         </div>

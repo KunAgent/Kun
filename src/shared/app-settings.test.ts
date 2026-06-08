@@ -10,6 +10,7 @@ import {
   DEFAULT_SCHEDULE_INTERNAL_PORT,
   buildClawRuntimePrompt,
   defaultClawSettings,
+  defaultConnectionsSettings,
   defaultModelProviderSettings,
   mergeKunRuntimeSettings,
   mergeScheduleSettings,
@@ -45,6 +46,7 @@ function settings(): AppSettingsV1 {
     notifications: { turnComplete: true },
     appBehavior: { openAtLogin: false, startMinimized: false, closeToTray: false },
     keyboardShortcuts: defaultKeyboardShortcuts(),
+    connections: defaultConnectionsSettings(),
     write: defaultWriteSettings(),
     claw: defaultClawSettings(),
     schedule: defaultScheduleSettings(),
@@ -188,6 +190,19 @@ describe('keyboard shortcut settings', () => {
 
     expect(normalizeAppSettings(raw).keyboardShortcuts).toEqual({
       bindings: {}
+    })
+  })
+})
+
+describe('connection settings', () => {
+  it('defaults SSH connections to an empty list', () => {
+    const raw = {
+      ...settings(),
+      connections: undefined
+    } as unknown as AppSettingsV1
+
+    expect(normalizeAppSettings(raw).connections).toEqual({
+      ssh: []
     })
   })
 })

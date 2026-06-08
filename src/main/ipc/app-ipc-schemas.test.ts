@@ -7,6 +7,7 @@ import {
   settingsPatchSchema,
   shellOpenExternalUrlSchema,
   skillListPayloadSchema,
+  sshConnectionTestPayloadSchema,
   sseStartPayloadSchema,
   workspaceDirectoryCreatePayloadSchema,
   workspaceDirectoryTargetPayloadSchema,
@@ -261,6 +262,31 @@ describe('app-ipc-schemas', () => {
     })
 
     expect(payload.keyboardShortcuts?.bindings?.settings).toEqual(['Ctrl+,'])
+  })
+
+  it('accepts connection settings and SSH test payloads', () => {
+    const payload = settingsPatchSchema.parse({
+      connections: {
+        ssh: [{
+          id: 'ssh-1',
+          name: 'VPS',
+          host: 'vps.example.com',
+          user: 'deploy',
+          port: 2222,
+          remotePath: '/srv/app',
+          enabled: true
+        }]
+      }
+    })
+
+    expect(payload.connections?.ssh?.[0]?.host).toBe('vps.example.com')
+    expect(sshConnectionTestPayloadSchema.parse({
+      host: ' vps.example.com ',
+      port: 2222
+    })).toEqual({
+      host: 'vps.example.com',
+      port: 2222
+    })
   })
 
   it('rejects unknown settings patch fields', () => {

@@ -6,7 +6,8 @@ import type {
   ClawRuntimeStatus,
   ScheduleRunResult,
   ScheduleRuntimeStatus,
-  ScheduleTaskFromTextResult
+  ScheduleTaskFromTextResult,
+  SshConnectionV1
 } from './app-settings'
 import type { EditorListResult, EditorOpenResult, OpenEditorPathOptions } from './editor'
 import type { GitBranchesResult } from './git-branches'
@@ -107,6 +108,12 @@ export type ClawChannelMirrorResult =
 export type UpstreamModelsResult =
   | { ok: true; modelIds: string[]; modelGroups?: ModelProviderModelGroup[] }
   | { ok: false; message: string }
+export type SshConnectionTestPayload =
+  Pick<SshConnectionV1, 'host'> &
+  Partial<Pick<SshConnectionV1, 'user' | 'port' | 'remotePath'>>
+export type SshConnectionTestResult =
+  | { ok: true; message: string }
+  | { ok: false; message: string }
 export type ModelProviderModelGroup = {
   providerId: string
   label: string
@@ -129,6 +136,7 @@ export type DsGuiApi = {
   setSettings: (partial: AppSettingsPatch) => Promise<AppSettingsV1>
   runtimeRequest: (path: string, method?: string, body?: string) => Promise<RuntimeRequestResult>
   fetchUpstreamModels: () => Promise<UpstreamModelsResult>
+  testSshConnection: (payload: SshConnectionTestPayload) => Promise<SshConnectionTestResult>
   getClawStatus: () => Promise<ClawRuntimeStatus>
   runClawTask: (taskId: string) => Promise<ClawRunResult>
   getScheduleStatus: () => Promise<ScheduleRuntimeStatus>

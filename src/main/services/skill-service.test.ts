@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   defaultClawSettings,
+  defaultConnectionsSettings,
   defaultKeyboardShortcuts,
   defaultKunRuntimeSettings,
   defaultModelProviderSettings,
@@ -111,6 +112,7 @@ describe('skill-service', () => {
       notifications: { turnComplete: true },
       appBehavior: { openAtLogin: false, startMinimized: false, closeToTray: false },
       keyboardShortcuts: defaultKeyboardShortcuts(),
+      connections: defaultConnectionsSettings(),
       write: defaultWriteSettings(),
       claw: defaultClawSettings(),
       schedule: defaultScheduleSettings(),

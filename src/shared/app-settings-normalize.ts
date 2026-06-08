@@ -4,6 +4,7 @@ import {
   type AppBehaviorConfigV1,
   type AppSettingsV1,
   type ClawSettingsPatchV1,
+  type ConnectionsSettingsPatchV1,
   type GuiUpdateConfigV1,
   type NotificationConfigV1,
   type ScheduleSettingsPatchV1,
@@ -20,6 +21,7 @@ import {
 import { normalizeModelProviderSettings } from './app-settings-provider'
 import { normalizeDeepseekBaseUrl } from './app-settings-normalizers'
 import { normalizeClawSettings } from './app-settings-claw'
+import { normalizeConnectionsSettings } from './app-settings-connections'
 import { normalizeScheduleSettings } from './app-settings-schedule'
 import { normalizeWriteSettings } from './app-settings-write'
 
@@ -32,6 +34,7 @@ export function normalizeAppSettings(settings: AppSettingsV1): AppSettingsV1 {
     keyboardShortcuts?: Partial<KeyboardShortcutsConfigV1>
     notifications?: Partial<NotificationConfigV1>
     provider?: Parameters<typeof normalizeModelProviderSettings>[0]
+    connections?: ConnectionsSettingsPatchV1
     write?: WriteSettingsPatchV1
     claw?: ClawSettingsPatchV1
     schedule?: ScheduleSettingsPatchV1
@@ -67,6 +70,7 @@ export function normalizeAppSettings(settings: AppSettingsV1): AppSettingsV1 {
     },
     appBehavior: normalizeAppBehaviorSettings(maybeSettings.appBehavior),
     keyboardShortcuts: normalizeKeyboardShortcuts(maybeSettings.keyboardShortcuts),
+    connections: normalizeConnectionsSettings(maybeSettings.connections),
     write: normalizeWriteSettings(maybeSettings.write),
     claw: normalizeClawSettings(maybeSettings.claw),
     schedule: normalizeScheduleSettings(maybeSettings.schedule),
