@@ -138,6 +138,14 @@ export function useTimelineScroll({
   }, [contentKey, endRef, streaming])
 
   // Hard reset on thread switch.
+  //
+  // Streamdown markdown is lazy-loaded, so the timeline keeps growing
+  // for a few frames after the new turns mount. A single scrollIntoView
+  // at this point lands on the pre-settle height and the viewport ends
+  // up above the latest message. Pin the scroll to the bottom while the
+  // inner content grows, then let go as soon as either the height
+  // settles or a short grace window elapses — so we never fight the
+  // user the moment they start scrolling.
   useEffect(() => {
     stickToBottomRef.current = true
     historyExpansionRequestedRef.current = false
@@ -147,8 +155,25 @@ export function useTimelineScroll({
       window.cancelAnimationFrame(scrollFrameRef.current)
       scrollFrameRef.current = null
     }
-    endRef.current?.scrollIntoView({ behavior: 'auto', block: 'end' })
-  }, [activeThreadId, endRef])
+    const el = containerRef.current
+    if (!el) return
+    el.scrollTop = el.scrollHeight
+    const inner = el.firstElementChild as HTMLElement | null
+    if (!inner) return
+    const SETTLE_WINDOW_MS = 1200
+    const observer = new ResizeObserver(() => {
+      if (!stickToBottomRef.current) return
+      const node = containerRef.current
+      if (!node) return
+      node.scrollTop = node.scrollHeight
+    })
+    observer.observe(inner)
+    const timer = window.setTimeout(() => observer.disconnect(), SETTLE_WINDOW_MS)
+    return () => {
+      observer.disconnect()
+      window.clearTimeout(timer)
+    }
+  }, [activeThreadId, containerRef])
 
   // Cleanup any pending rAF on unmount.
   useEffect(
