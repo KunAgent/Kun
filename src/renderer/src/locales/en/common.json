@@ -823,6 +823,11 @@
   "runtimeIdle": "Runtime not checked yet",
   "untitledThread": "New Thread",
   "retryConnection": "Retry",
+  "runtimeErrorDetails": "Details",
+  "runtimeErrorTechnicalDetails": "Technical details",
+  "runtimeErrorLogPath": "Log path",
+  "runtimeErrorOpenLogsFailed": "Failed to open logs folder.",
+  "copyDetails": "Copy details",
   "renameThreadHint": "Click to rename thread",
   "noSessionSelected": "No thread selected",
   "sessionHeaderHint": "Start a thread from the left, or reconnect the runtime to continue working.",
@@ -1246,5 +1251,7 @@
   "toolBuiltinFind": "Find",
   "toolBuiltinLs": "List",
   "toolBuiltinBash": "Bash",
-  "sidebarFooterHint": "Connect the local runtime to create threads and chat with the agent."
+  "sidebarFooterHint": "Connect the local runtime to create threads and chat with the agent.",
+  "appErrorTitle": "Something went wrong",
+  "appErrorReload": "Reload"
 }

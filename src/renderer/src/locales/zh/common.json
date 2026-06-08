@@ -823,6 +823,11 @@
   "runtimeIdle": "尚未检查运行时",
   "untitledThread": "新会话",
   "retryConnection": "重试连接",
+  "runtimeErrorDetails": "详情",
+  "runtimeErrorTechnicalDetails": "技术详情",
+  "runtimeErrorLogPath": "日志路径",
+  "runtimeErrorOpenLogsFailed": "打开日志目录失败。",
+  "copyDetails": "复制详情",
   "renameThreadHint": "点击重命名会话",
   "noSessionSelected": "未选择会话",
   "sessionHeaderHint": "从左侧进入一个会话，或先恢复运行时连接再继续工作。",
@@ -1246,5 +1251,7 @@
   "toolBuiltinFind": "查找",
   "toolBuiltinLs": "列出",
   "toolBuiltinBash": "命令",
-  "sidebarFooterHint": "连接本地运行后即可创建会话并与代理对话。"
+  "sidebarFooterHint": "连接本地运行后即可创建会话并与代理对话。",
+  "appErrorTitle": "应用出了点问题",
+  "appErrorReload": "重新加载"
 }

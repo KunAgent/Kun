@@ -6,7 +6,10 @@ import {
   JsonSettingsStore,
   devServerHintUrl
 } from './settings-store'
-import deepseekLogoPng from '../asset/img/deepseek.png'
+import deepseekLogoPng from '../asset/img/deepseek.png?url'
+import deepseekTrayPng from '../asset/img/deepseek_gui_tray.png?url'
+import { createAppIcon, pickTrayIcon } from './app-icon'
+import { configureAppIdentity } from './app-identity'
 import {
   applyKunRuntimePatch,
   kunSettingsEnvelope,
@@ -19,6 +22,7 @@ import {
   mergeWriteSettings,
   normalizeAppSettings,
   normalizeAppBehaviorSettings,
+  normalizeKeyboardShortcuts,
   resolveKunRuntimeSettings,
   type AppBehaviorConfigV1,
   type AppSettingsPatch,
@@ -124,11 +128,11 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
-function runtimeFailure(code: string, message: string, status = 0) {
+function runtimeFailure(code: string, message: string, status = 0, details?: unknown) {
   return {
     ok: false as const,
     status,
-    body: JSON.stringify({ code, message })
+    body: JSON.stringify({ code, message, ...(details !== undefined ? { details } : {}) })
   }
 }
 
@@ -147,6 +151,13 @@ traceStartup('main module evaluated')
 if ((runningClawScheduleMcpServer || runningOcrMcpServer) && process.platform === 'darwin') {
   app.dock.hide()
 }
+
+// 在最早的阶段把 app 名称、AppUserModelId 都设好。
+// Windows 任务栏 / 系统托盘 / 通知中心看到的应用名都来自这里;
+// 设得太晚的话 BrowserWindow title、托盘、IPC 启动时拿到的还是旧的。
+// 抽到 app-identity.ts 是为了让测试可以直接 import,不被 main 的
+// whenReady 副作用污染。
+configureAppIdentity()
 
 if (!runningClawScheduleMcpServer && process.platform === 'win32') {
   app.setAppUserModelId(APP_USER_MODEL_ID)
@@ -261,14 +272,8 @@ function installDevPreviewWebviewGuards(): void {
 }
 
 
-function createAppIcon(source: string): Electron.NativeImage {
-  return source.startsWith('data:')
-    ? nativeImage.createFromDataURL(source)
-    : nativeImage.createFromPath(source)
-}
-
-
 const appIcon = createAppIcon(deepseekLogoPng)
+const trayIcon = createAppIcon(deepseekTrayPng)
 traceStartup('app icon loaded', { source: deepseekLogoPng.startsWith('data:') ? 'data-url' : 'path' })
 const gotSingleInstanceLock = runningClawScheduleMcpServer || app.requestSingleInstanceLock()
 traceStartup('single instance lock checked', {
@@ -339,7 +344,10 @@ function syncTray(settings: AppSettingsV1): void {
   }
 
   if (!tray) {
-    tray = new Tray(appIcon.isEmpty() ? nativeImage.createEmpty() : appIcon)
+    // Tray 优先用专门的托盘图(在 16x16/24x24 任务栏尺寸下更清晰的剪影);
+    // 托盘图加载失败时回退到主应用图,这样不会看到 electron 默认占位。
+    const traySource = pickTrayIcon(trayIcon, appIcon)
+    tray = new Tray(traySource.isEmpty() ? nativeImage.createEmpty() : traySource)
     tray.on('click', revealMainWindow)
     tray.on('double-click', revealMainWindow)
   }
@@ -506,6 +514,30 @@ function queueRuntimeSettingsApply(prev: AppSettingsV1, next: AppSettingsV1): vo
     })
     .catch((error: unknown) => {
       logWarn('settings-apply', 'Failed to apply Kun runtime settings in background', {
+        message: error instanceof Error ? error.message : String(error)
+      })
+    })
+    .finally(() => {
+      if (runtimeSettingsApplyPromise === task) {
+        runtimeSettingsApplyPromise = null
+      }
+    })
+
+  runtimeSettingsApplyPromise = task
+}
+
+function queueRuntimeMcpConfigApply(settings: AppSettingsV1): void {
+  lastAppliedSettings = settings
+
+  const previousTask = runtimeSettingsApplyPromise ?? Promise.resolve()
+  const task = previousTask
+    .catch(() => undefined)
+    .then(async () => {
+      const current = lastAppliedSettings ?? settings
+      await restartManagedRuntimeForMcpConfigChange(current)
+    })
+    .catch((error: unknown) => {
+      logWarn('mcp-config', 'Failed to apply Kun MCP config change in background', {
         message: error instanceof Error ? error.message : String(error)
       })
     })
@@ -745,6 +777,26 @@ async function restartManagedRuntimeForSettingsChange(
   }
 }
 
+async function restartManagedRuntimeForMcpConfigChange(settings: AppSettingsV1): Promise<void> {
+  const runtime = resolveKunRuntimeSettings(settings)
+  const adapter = kunRuntimeAdapter
+  const wasRunning = adapter.isChildRunning()
+
+  if (!wasRunning) return
+  await adapter.stopAndWait()
+  if (!resolveConfiguredApiKey(settings) || !runtime.autoStart) return
+
+  try {
+    await adapter.ensureRunning(settings)
+    const healthy = await waitForKunHealth(settings, 20_000)
+    if (!healthy) {
+      console.warn('[deepseek-gui] Kun restart did not become healthy after MCP config change')
+    }
+  } catch (e) {
+    console.warn('[deepseek-gui] Kun restart failed after MCP config change:', e)
+  }
+}
+
 async function runtimeRequest(
   settings: AppSettingsV1,
   pathAndQuery: string,
@@ -757,7 +809,7 @@ async function runtimeRequest(
     logError('runtime-request', `HTTP request to ${pathAndQuery} failed`, { message })
     const parsed = parseRuntimeErrorBody(message, message)
     if (parsed.code !== 'unknown' || parsed.message !== message) {
-      return runtimeFailure(parsed.code, parsed.message)
+      return runtimeFailure(parsed.code, parsed.message, 0, parsed.details)
     }
     return runtimeFailure('fetch_failed', message)
   }
@@ -845,6 +897,12 @@ app.whenReady().then(async () => {
         ...prev.appBehavior,
         ...(partial.appBehavior ?? {})
       }),
+      keyboardShortcuts: normalizeKeyboardShortcuts({
+        bindings: {
+          ...prev.keyboardShortcuts.bindings,
+          ...(partial.keyboardShortcuts?.bindings ?? {})
+        }
+      }),
       write: mergeWriteSettings(prev.write, partial.write),
       claw: mergeClawSettings(prev.claw, partial.claw),
       schedule: mergeScheduleSettings(prev.schedule, partial.schedule),
@@ -894,6 +952,10 @@ app.whenReady().then(async () => {
     startWeixinInstallQrcode,
     pollWeixinInstall,
     resolveKunConfigPath: resolveKunMcpJsonPath,
+    onKunMcpConfigWritten: async () => {
+      const settings = await store.load()
+      queueRuntimeMcpConfigApply(settings)
+    },
     showTurnCompleteNotification,
     getAppVersion: () => app.getVersion(),
     readGuiUpdateState,
