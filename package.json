@@ -68,6 +68,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@lezer/highlight": "^1.2.3",
     "@types/better-sqlite3": "^7.6.13",
     "@types/html-to-docx": "^1.8.1",
     "@types/react": "^19.0.10",
