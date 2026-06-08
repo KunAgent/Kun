@@ -204,6 +204,33 @@ function ocrViaChildProcess(filePath: string, language: string): Promise<unknown
   })
 }
 
+/**
+ * Pre-download Tesseract language data by running a tiny OCR.
+ * This runs in the background — failures are silently ignored.
+ */
+function preloadLanguages(languages: string[]): void {
+  const entryPath = getWorkerEntryPath()
+  const opts = buildTesseractOptions()
+  const reqId = randomUUID()
+  const request = JSON.stringify({ id: reqId, preload: languages, ...opts })
+  dlog('preloadLanguages: starting', { languages })
+
+  const child = fork(entryPath, [request], {
+    stdio: ['pipe', 'pipe', 'pipe', 'ipc'],
+    env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' }
+  })
+
+  let stderr = ''
+  child.stderr?.on('data', (chunk: Buffer) => { stderr += chunk.toString() })
+
+  child.on('exit', (code) => {
+    dlog('preloadLanguages: done', { code, languages, stderr: stderr.slice(0, 500) })
+  })
+  child.on('error', (err) => {
+    dlog('preloadLanguages: error', err)
+  })
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // Types
 // ═══════════════════════════════════════════════════════════════════════════
@@ -764,9 +791,12 @@ export async function runOcrMcpServerFromArgv(argv: string[]): Promise<boolean> 
   if (!argv.includes('--gui-ocr-mcp-server')) return false
 
   const server = new McpServer(
-    { name: 'deepseek-gui-ocr', version: '0.4.0' },
+    { name: 'deepseek-gui-ocr', version: '0.5.0' },
     { capabilities: { logging: {} } }
   )
+
+  // Pre-download English and Chinese language data in the background
+  preloadLanguages(['eng', 'chi_sim'])
 
   // ── gui_ocr_check ──────────────────────────────────────────────────
 
@@ -820,6 +850,34 @@ export async function runOcrMcpServerFromArgv(argv: string[]): Promise<boolean> 
         'Combine with "+", e.g. "eng+chi_sim+fra".'
       ].join('\n'),
       { languages: ALL_TESSERACT_LANGUAGES, cachedLanguages: cached, combineWith: '+' }
+    )
+  })
+
+  // ── gui_ocr_preload ─────────────────────────────────────────────────
+
+  server.registerTool('gui_ocr_preload', {
+    description:
+      'Pre-download Tesseract OCR language data for faster subsequent OCR. ' +
+      'Languages are cached permanently after download. Common codes: ' +
+      '"eng" (English), "chi_sim" (Chinese Simplified), "chi_tra" (Chinese Traditional), ' +
+      '"jpn" (Japanese), "kor" (Korean). Combine multiple with "+".',
+    inputSchema: {
+      language: z.string().min(1).describe(
+        'Language code(s) to pre-download. Combine with "+", e.g. "eng+chi_sim+jpn".'
+      )
+    }
+  }, async (args) => {
+    const languages = args.language.split('+').map((l: string) => l.trim()).filter(Boolean)
+    const invalid = languages.filter((l: string) => !(ALL_TESSERACT_LANGUAGES as readonly string[]).includes(l))
+    if (invalid.length > 0) {
+      return errorResult(`Unknown language code(s): ${invalid.join(', ')}. Use gui_ocr_languages for the full list.`)
+    }
+
+    preloadLanguages(languages)
+    return textResult(
+      `Pre-downloading language data for: ${languages.join(', ')}.\n` +
+      'This runs in the background. Language data will be cached permanently.',
+      { languages, status: 'downloading' }
     )
   })
 

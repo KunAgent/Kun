@@ -8,6 +8,9 @@
  *
  * Usage:
  *   ELECTRON_RUN_AS_NODE=1 node ocr-worker-entry.js '<json-request>'
+ *
+ * Preload mode (download language data without OCR):
+ *   ELECTRON_RUN_AS_NODE=1 node ocr-worker-entry.js '{"preload":["eng","chi_sim"],...}'
  */
 
 const Tesseract = require('tesseract.js')
@@ -17,15 +20,20 @@ const { extname } = require('node:path')
 
 type WorkerRequest = {
   id: string
-  filePath: string
-  language: string
+  filePath?: string
+  language?: string
+  preload?: string[]
   workerPath?: string
   corePath?: string
   langPath?: string
 }
 
+// 1x1 white PNG (67 bytes) — used for preload and testing
+const BLANK_PNG_BASE64 =
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVQI12NgAAIABQAB' +
+  'Nl7BcQAAAABJRU5ErkJggg=='
+
 async function main(): Promise<void> {
-  // Read request from command-line arg (avoids IPC structuredClone issues)
   const arg = process.argv[2]
   if (!arg) {
     process.stderr.write('ocr-worker-entry: no request argument provided\n')
@@ -40,7 +48,33 @@ async function main(): Promise<void> {
     process.exit(1)
   }
 
+  const opts: Record<string, unknown> = {}
+  if (req.workerPath) opts.workerPath = req.workerPath
+  if (req.corePath) opts.corePath = req.corePath
+  if (req.langPath) opts.langPath = req.langPath
+
   try {
+    // Preload mode: download language data for the specified languages
+    if (req.preload && req.preload.length > 0) {
+      const dataUrl = `data:image/png;base64,${BLANK_PNG_BASE64}`
+      for (const lang of req.preload) {
+        try {
+          await recognize(dataUrl, lang, opts, { text: true, blocks: false, hocr: false, tsv: false })
+        } catch {
+          // Individual language preload failure is non-fatal
+        }
+      }
+      process.stdout.write(JSON.stringify({ id: req.id, ok: true, data: { preloaded: req.preload } }))
+      process.exit(0)
+      return
+    }
+
+    // OCR mode
+    if (!req.filePath) {
+      process.stderr.write('ocr-worker-entry: filePath is required for OCR mode\n')
+      process.exit(1)
+    }
+
     const buf = await readFile(req.filePath)
     const ext = extname(req.filePath).toLowerCase()
     const mime = ext === '.png' ? 'image/png'
@@ -51,30 +85,23 @@ async function main(): Promise<void> {
       : 'image/png'
 
     const dataUrl = `data:${mime};base64,${buf.toString('base64')}`
+    const language = req.language || 'eng'
 
-    const opts: Record<string, unknown> = {}
-    if (req.workerPath) opts.workerPath = req.workerPath
-    if (req.corePath) opts.corePath = req.corePath
-    if (req.langPath) opts.langPath = req.langPath
-
-    const result = await recognize(dataUrl, req.language, opts, {
+    const result = await recognize(dataUrl, language, opts, {
       text: true,
       blocks: true,
       hocr: false,
       tsv: false
     })
 
-    // Write result to stdout as JSON, then exit cleanly
-    const response = { id: req.id, ok: true, data: result.data }
-    process.stdout.write(JSON.stringify(response))
+    process.stdout.write(JSON.stringify({ id: req.id, ok: true, data: result.data }))
     process.exit(0)
   } catch (err) {
-    const response = {
+    process.stdout.write(JSON.stringify({
       id: req.id,
       ok: false,
       error: err instanceof Error ? err.message : String(err)
-    }
-    process.stdout.write(JSON.stringify(response))
+    }))
     process.exit(0)
   }
 }
