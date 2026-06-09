@@ -223,4 +223,10 @@ export type DsGuiApi = {
   getLogPath: () => Promise<string>
   openLogDir: () => Promise<{ ok: boolean; message?: string }>
   getPathForFile: (file: File) => string
+  /** Call AI model directly and return the response text (for prompt enhancement etc.) */
+  callAiModel: (payload: {
+    prompt: string
+    system?: string
+    model?: string
+  }) => Promise<{ ok: true; content: string } | { ok: false; message: string }>
 }

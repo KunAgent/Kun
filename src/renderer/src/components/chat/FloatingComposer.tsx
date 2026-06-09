@@ -138,8 +138,8 @@ type Props = {
    * Hide the `/btw` slash entry (e.g. inside a side conversation).
    */
   hideBtwCommand?: boolean
-  /** Enhance prompt: rephrases the current input for better AI results. */
-  onEnhancePrompt?: (text: string) => void
+  /** Enhance prompt: rephrases the current input for better AI results. Returns enhanced text or null if cancelled. */
+  onEnhancePrompt?: (text: string, signal: AbortSignal) => Promise<string | null>
 }
 
 type SkillCommand = NonNullable<Props['skillCommands']>[number]
@@ -494,6 +494,19 @@ export function FloatingComposer({
   onEnhancePrompt
 }: Props): ReactElement {
   const { t, i18n } = useTranslation('common')
+  const [enhancing, setEnhancing] = useState(false)
+  const [enhancedText, setEnhancedText] = useState<string | null>(null)
+  const [originalText, setOriginalText] = useState<string>('')
+  const enhanceAbortRef = useRef<AbortController | null>(null)
+  // 输入框内容变化（非增强操作引起）时重置增强状态
+  const enhanceInFlightRef = useRef(false)
+  useEffect(() => {
+    if (enhanceInFlightRef.current) return // 增强操作中不重置
+    if (enhancedText && input !== enhancedText) {
+      setEnhancedText(null)
+      setOriginalText('')
+    }
+  }, [input, enhancedText])
   const route = useChatStore((s) => s.route)
   const workspaceRoot = useChatStore((s) => s.workspaceRoot)
   const activeThreadId = useChatStore((s) => s.activeThreadId)
@@ -1595,12 +1608,14 @@ export function FloatingComposer({
           <textarea
             ref={draft.textareaRef}
             rows={1}
-            className={`ds-no-drag block min-w-0 resize-none break-words bg-transparent px-1 py-2.5 text-[15px] leading-[1.45] text-ds-ink placeholder:text-ds-faint focus:outline-none [overflow-wrap:anywhere] ${
+            className={`ds-no-drag block min-w-0 resize-none break-words bg-transparent px-1 py-2.5 text-[15px] leading-[1.45] placeholder:text-ds-faint focus:outline-none [overflow-wrap:anywhere] ${
+              enhancing ? 'text-ds-faint' : 'text-ds-ink'
+            } ${
               canCompose ? '' : 'opacity-80'
             } ${compact ? 'text-[14px] py-2' : 'min-h-[40px]'}`}
             placeholder={placeholder}
             value={input}
-            disabled={!canCompose}
+            disabled={!canCompose || enhancing}
             onChange={(e) => {
               setInput(e.target.value)
               setComposerCursor(e.target.selectionStart ?? e.target.value.length)
@@ -1770,29 +1785,79 @@ export function FloatingComposer({
                 <button
                   type="button"
                   onClick={() => onInterrupt()}
-                  className="ds-no-drag flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-zinc-950 text-white shadow-[0_10px_22px_rgba(15,23,42,0.22)] transition hover:bg-zinc-800 dark:bg-white dark:text-zinc-950 dark:hover:bg-zinc-200"
+                  className="ds-no-drag flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-full bg-accent text-accent-foreground shadow-sm transition duration-150 hover:brightness-110 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
                   aria-label={t('interrupt')}
                   title={t('interrupt')}
                 >
                   <Square className="h-3.5 w-3.5 fill-current" strokeWidth={2.4} />
                 </button>
               ) : null}
-              {!busy && onEnhancePrompt && input.trim().length > 0 ? (
+              {onEnhancePrompt && (enhancedText ? (
                 <button
                   type="button"
-                  onClick={() => onEnhancePrompt(input)}
-                  className="ds-no-drag flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-zinc-950 text-white shadow-[0_10px_22px_rgba(15,23,42,0.22)] transition hover:bg-zinc-800 dark:bg-white dark:text-zinc-950 dark:hover:bg-zinc-200"
-                  aria-label={t('enhancePrompt')}
-                  title={t('enhancePrompt')}
+                  onClick={() => {
+                    setInput(originalText)
+                    setEnhancedText(null)
+                    setOriginalText('')
+                  }}
+                  className="ds-no-drag flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-full border border-ds-border bg-ds-card text-ds-muted shadow-sm transition duration-150 hover:bg-ds-hover hover:text-ds-ink active:scale-95"
+                  aria-label={t('undo')}
+                  title={t('undo')}
                 >
-                  <Sparkles className="h-4 w-4" strokeWidth={2.2} />
+                  <RotateCcw className="h-4 w-4" strokeWidth={2.2} />
                 </button>
-              ) : null}
+              ) : input.trim().length > 0 ? (
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (enhancing) {
+                      enhanceAbortRef.current?.abort()
+                      enhanceAbortRef.current = null
+                      enhanceInFlightRef.current = false
+                      setInput(originalText)
+                      setEnhancing(false)
+                      setEnhancedText(null)
+                      setOriginalText('')
+                      return
+                    }
+                    setOriginalText(input)
+                    setEnhancing(true)
+                    enhanceInFlightRef.current = true
+                    const ac = new AbortController()
+                    enhanceAbortRef.current = ac
+                    try {
+                      const result = await onEnhancePrompt(input, ac.signal)
+                      if (ac.signal.aborted) return
+                      if (result !== null) {
+                        setInput(result)
+                        setEnhancedText(result)
+                      }
+                    } catch {
+                      // keep current input
+                    } finally {
+                      enhanceInFlightRef.current = false
+                      if (!ac.signal.aborted) {
+                        setEnhancing(false)
+                        enhanceAbortRef.current = null
+                      }
+                    }
+                  }}
+                  className={`ds-no-drag flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-full shadow-sm transition duration-150 active:scale-95 ${
+                    enhancing
+                      ? 'bg-ds-danger text-white hover:brightness-110'
+                      : 'bg-accent text-accent-foreground hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2'
+                  }`}
+                  aria-label={enhancing ? t('cancelEnhance') : t('enhancePrompt')}
+                  title={enhancing ? t('cancelEnhance') : t('enhancePrompt')}
+                >
+                  {enhancing ? <Loader2 className="h-4 w-4 animate-spin" strokeWidth={2.2} /> : <Sparkles className="h-4 w-4" strokeWidth={2.2} />}
+                </button>
+              ) : null)}
               <button
                 type="button"
                 disabled={primaryActionDisabled}
                 onClick={handlePrimaryAction}
-                className="ds-no-drag flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-zinc-950 text-white shadow-[0_10px_22px_rgba(15,23,42,0.22)] transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:bg-ds-card disabled:text-ds-faint disabled:shadow-none dark:bg-white dark:text-zinc-950 dark:hover:bg-zinc-200 dark:disabled:bg-ds-card dark:disabled:text-ds-faint"
+                className="ds-no-drag flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-full bg-accent text-accent-foreground shadow-sm transition duration-150 hover:brightness-110 active:scale-95 disabled:cursor-not-allowed disabled:bg-ds-card disabled:text-ds-faint disabled:shadow-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
                 aria-label={primaryActionLabel}
                 title={primaryActionLabel}
               >

@@ -236,7 +236,16 @@ function sortComposerModelIds(ids: readonly string[]): string[] {
     const trimmed = id.trim()
     if (trimmed) ordered.add(trimmed)
   }
-  const tail = [...ordered].filter((id) => id !== 'auto').sort((a, b) => a.localeCompare(b))
+  const tail = [...ordered]
+    .filter((id) => id !== 'auto')
+    .sort((a, b) => {
+      // -free 模型总是靠前显示
+      const aFree = a.includes('-free')
+      const bFree = b.includes('-free')
+      if (aFree && !bFree) return -1
+      if (!aFree && bFree) return 1
+      return a.localeCompare(b)
+    })
   return ordered.has('auto') ? ['auto', ...tail] : tail
 }
 

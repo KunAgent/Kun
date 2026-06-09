@@ -37,6 +37,8 @@
   "schedule": "定时任务",
   "loading": "加载中",
   "cancel": "取消",
+  "cancelEnhance": "取消增强",
+  "undo": "恢复原文",
   "confirm": "确认",
   "scheduleSubtitle": "按计划运行任务，或在需要时随时启动。",
   "scheduleNewTask": "新建任务",

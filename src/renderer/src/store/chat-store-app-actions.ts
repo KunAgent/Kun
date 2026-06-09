@@ -70,8 +70,10 @@ export function createAppActions(options: CreateAppActionsOptions): Pick<
         const allowed = new Set(pick)
         set((state) => {
           let model = state.composerModel
-          if (model !== '' && !allowed.has(model)) {
-            model = readStoredComposerModel(pick)
+          // 首次加载或无此模型时尝试从 localStorage 恢复
+          if (model === '' || !allowed.has(model)) {
+            const restored = readStoredComposerModel(pick)
+            if (restored && allowed.has(restored)) model = restored
           }
           if (model !== '' && !allowed.has(model)) model = ''
           if (model !== state.composerModel) persistComposerModel(model)

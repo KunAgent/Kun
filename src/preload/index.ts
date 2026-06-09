@@ -162,7 +162,8 @@ const api = {
     ipcRenderer.invoke('log:error', { category, message, detail }),
   getLogPath: () => ipcRenderer.invoke('log:get-path'),
   openLogDir: () => ipcRenderer.invoke('log:open-dir'),
-  getPathForFile: (file: File) => webUtils.getPathForFile(file)
+  getPathForFile: (file: File) => webUtils.getPathForFile(file),
+  callAiModel: (payload) => ipcRenderer.invoke('ai:call-model', payload)
 } satisfies DsGuiApi
 
 contextBridge.exposeInMainWorld('dsGui', api)

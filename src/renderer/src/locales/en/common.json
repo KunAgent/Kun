@@ -37,6 +37,8 @@
   "schedule": "Scheduled tasks",
   "loading": "Loading",
   "cancel": "Cancel",
+  "cancelEnhance": "Cancel enhancement",
+  "undo": "Restore original",
   "confirm": "Confirm",
   "scheduleSubtitle": "Design scheduled tasks, or start them whenever you need.",
   "scheduleNewTask": "New task",

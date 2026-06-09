@@ -1744,8 +1744,18 @@ export function Workbench(): ReactElement {
                   }
                   openSideConversationDraft()
                 }}
-                onEnhancePrompt={(text) => {
-                  void spawnSideConversation(`请优化以下提示词，使其更清晰、具体、易于 AI 理解，直接输出优化后的结果：\n\n${text}`)
+                onEnhancePrompt={async (text, signal) => {
+                  const activeModel = route === 'claw'
+                    ? clawChannels.find((channel) => channel.id === activeClawChannelId)?.model ?? ''
+                    : composerModel
+                  const res = await window.dsGui.callAiModel({
+                    prompt: text,
+                    model: activeModel || undefined,
+                    system: '你是一个专业的提示词优化助手。请优化用户的提示词，使其更清晰、具体、易于 AI 理解。直接输出优化后的结果，不要附加任何解释、前缀或说明。'
+                  })
+                  if (signal.aborted) return null
+                  if (res.ok) return res.content
+                  return `增强失败：${res.message}\n\n${text}`
                 }}
               />
             </div>

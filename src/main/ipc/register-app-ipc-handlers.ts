@@ -5,6 +5,9 @@ import { dirname, join } from 'node:path'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { z } from 'zod'
 import {
+  getActiveAgentApiKey,
+  getModelProviderSettings,
+  resolveKunRuntimeSettings,
   type AppSettingsPatch,
   type AppSettingsV1,
   type ClawRunResult,
@@ -788,5 +791,44 @@ export function registerAppIpcHandlers(options: RegisterAppIpcHandlersOptions): 
     const error = await shell.openPath(dir)
     if (error) return { ok: false, message: error }
     return { ok: true }
+  })
+  ipcMain.handle('ai:call-model', async (_, payload: unknown) => {
+    const { prompt, system, model } = payload as { prompt: string; system?: string; model?: string }
+    if (!prompt?.trim()) return { ok: false as const, message: 'Prompt is required.' }
+    try {
+      const settings = await store.load()
+      const runtime = resolveKunRuntimeSettings(settings)
+      const selectedModel = model?.trim() || runtime.model || 'deepseek-chat'
+      const baseUrl = (runtime.baseUrl?.trim() || 'https://api.deepseek.com').replace(/\/+$/, '')
+      const apiKey = getActiveAgentApiKey(settings) || process.env.DEEPSEEK_API_KEY?.trim() || ''
+      if (!apiKey) return { ok: false as const, message: 'API key is not configured.' }
+      const messages: Array<{ role: string; content: string }> = []
+      if (system?.trim()) {
+        messages.push({ role: 'system', content: system.trim() })
+      } else {
+        messages.push({ role: 'system', content: 'You are a helpful assistant. Return only the enhanced version of the user input, no explanations.' })
+      }
+      messages.push({ role: 'user', content: prompt })
+      const res = await fetch(`${baseUrl}/v1/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${apiKey}`
+        },
+        body: JSON.stringify({ model: selectedModel, messages, max_tokens: 4096 }),
+        signal: AbortSignal.timeout(30_000)
+      })
+      const body = await res.json() as Record<string, unknown>
+      if (!res.ok) {
+        const errMsg = (body as { error?: { message?: string } }).error?.message ?? `HTTP ${res.status}`
+        return { ok: false as const, message: errMsg }
+      }
+      const content = ((body as { choices?: Array<{ message?: { content?: string } }> }).choices?.[0]?.message?.content ?? '').trim()
+      if (!content) return { ok: false as const, message: 'AI returned empty response.' }
+      return { ok: true as const, content }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      return { ok: false as const, message }
+    }
   })
 }
