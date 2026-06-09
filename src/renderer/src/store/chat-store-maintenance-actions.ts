@@ -773,20 +773,17 @@ export function createMaintenanceActions(
     const { activeThreadId, currentTurnId } = get()
     if (!activeThreadId || !currentTurnId) return
     const p = getProvider()
+    // 先乐观更新 UI，立即停止，不等 HTTP 返回
+    settleInterruptedTurn(set, get)
     try {
       await p.interruptTurn(activeThreadId, currentTurnId, { discard: options?.discard === true })
-      settleInterruptedTurn(set, get)
       void get().refreshThreads()
       void get().drainQueuedMessages()
     } catch (e) {
       const msg = formatRuntimeError(e)
       void window.dsGui.logError('interrupt', 'Failed to interrupt turn', { message: msg }).catch(() => undefined)
-      set({
-        error: msg,
-        ...(shouldOpenSettingsForError(e)
-          ? { route: 'settings' as const, settingsSection: 'agents' as const }
-          : {})
-      })
+      // 只有恢复失败时才显示错误，UI 已提前停止
+      set({ error: msg })
     }
   }
   }
