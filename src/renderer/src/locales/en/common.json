@@ -689,6 +689,7 @@
   "copyMessage": "Copy message",
   "copySuccess": "Copied",
   "copyFailed": "Copy failed",
+  "enhancePrompt": "Enhance prompt",
   "interrupt": "Stop",
   "connecting": "Connecting…",
   "runtimeOffline": "Kun is unavailable. Check settings or start `kun serve`.",

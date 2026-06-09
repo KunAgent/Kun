@@ -138,6 +138,8 @@ type Props = {
    * Hide the `/btw` slash entry (e.g. inside a side conversation).
    */
   hideBtwCommand?: boolean
+  /** Enhance prompt: rephrases the current input for better AI results. */
+  onEnhancePrompt?: (text: string) => void
 }
 
 type SkillCommand = NonNullable<Props['skillCommands']>[number]
@@ -488,7 +490,8 @@ export function FloatingComposer({
   onPlanCommand,
   onReviewCommand,
   onBtwCommand,
-  hideBtwCommand = false
+  hideBtwCommand = false,
+  onEnhancePrompt
 }: Props): ReactElement {
   const { t, i18n } = useTranslation('common')
   const route = useChatStore((s) => s.route)
@@ -1772,6 +1775,17 @@ export function FloatingComposer({
                   title={t('interrupt')}
                 >
                   <Square className="h-3.5 w-3.5 fill-current" strokeWidth={2.4} />
+                </button>
+              ) : null}
+              {!busy && onEnhancePrompt && input.trim().length > 0 ? (
+                <button
+                  type="button"
+                  onClick={() => onEnhancePrompt(input)}
+                  className="ds-no-drag flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-zinc-950 text-white shadow-[0_10px_22px_rgba(15,23,42,0.22)] transition hover:bg-zinc-800 dark:bg-white dark:text-zinc-950 dark:hover:bg-zinc-200"
+                  aria-label={t('enhancePrompt')}
+                  title={t('enhancePrompt')}
+                >
+                  <Sparkles className="h-4 w-4" strokeWidth={2.2} />
                 </button>
               ) : null}
               <button

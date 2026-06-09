@@ -689,6 +689,7 @@
   "copyMessage": "复制消息",
   "copySuccess": "已复制",
   "copyFailed": "复制失败",
+  "enhancePrompt": "增强提示词",
   "interrupt": "停止",
   "connecting": "连接中…",
   "runtimeOffline": "Kun 不可用。请在设置中检查或先启动 `kun serve`。",

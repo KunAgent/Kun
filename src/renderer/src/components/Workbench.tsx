@@ -1744,6 +1744,9 @@ export function Workbench(): ReactElement {
                   }
                   openSideConversationDraft()
                 }}
+                onEnhancePrompt={(text) => {
+                  void spawnSideConversation(`请优化以下提示词，使其更清晰、具体、易于 AI 理解，直接输出优化后的结果：\n\n${text}`)
+                }}
               />
             </div>
           </section>
