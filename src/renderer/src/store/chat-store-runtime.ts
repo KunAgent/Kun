@@ -1031,6 +1031,7 @@ export function buildThreadEventSink(
       const message = formatRuntimeError(err)
       const detail = runtimeErrorDetail(err)
       const interrupted = isInterruptSettledError(err, message)
+      const isTurnFailed = message?.toLowerCase().includes('kun turn failed') || message?.toLowerCase().includes('轮次失败')
       takePendingClawFeishuMirror(state.currentTurnId)
       set((s) => {
         const wasBusy = s.busy
@@ -1039,11 +1040,13 @@ export function buildThreadEventSink(
           error: interrupted ? null : message,
           runtimeErrorDetail: interrupted ? null : detail || null
         })
-        // Keep the busy flag if the turn was active — the interrupt button
-        // should stay visible so the user can interrupt a stuck turn. The
-        // watchdog (re-armed below) will eventually time out if the turn
-        // never recovers.
-        if (!wasBusy || interrupted) {
+        // Clear busy on turn failure (turn already failed, no need to wait)
+        if (isTurnFailed) {
+          out.busy = false
+          out.currentTurnId = null
+          out.currentTurnUserId = null
+          out.blocks = settlePendingRuntimeWorkAfterInterrupt(out.blocks ?? s.blocks)
+        } else if (!wasBusy || interrupted) {
           out.busy = false
           out.currentTurnId = null
           out.currentTurnUserId = null

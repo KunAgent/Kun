@@ -120,6 +120,10 @@ function localizedRuntimeSummary(code: string | null, text: string): string | nu
     return i18n.t('common:preloadBridgeMissing')
   }
 
+  if (code === 'turn_failed' || lowered.includes('kun turn failed')) {
+    return i18n.t('common:runtimeTurnFailed')
+  }
+
   return null
 }
 
@@ -141,8 +145,15 @@ export function describeRuntimeError(error: unknown): RuntimeErrorView {
     redactedText ||
     i18n.t('common:runtimeRequestFailed')
   const details: string[] = []
-  if (errorCode) details.push(`Code: ${errorCode}`)
-  if (payload?.severity) details.push(`Severity: ${payload.severity}`)
+  if (errorCode) details.push(`${i18n.t('common:errorCode')}: ${errorCode}`)
+  if (payload?.severity) {
+    const severityLabel = payload.severity === 'error'
+      ? i18n.t('common:severityError')
+      : payload.severity === 'warning'
+        ? i18n.t('common:severityWarning')
+        : i18n.t('common:severityInfo')
+    details.push(`${i18n.t('common:severity')}: ${severityLabel}`)
+  }
   if (redactedText && redactedText !== summary) {
     details.push(`Message:\n${redactedText}`)
   }
