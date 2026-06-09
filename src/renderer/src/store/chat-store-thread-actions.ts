@@ -422,6 +422,10 @@ export function createThreadActions(
     }
     const now = Date.now()
     const queued = overrides?.queued
+    // 队列中的消息如果已被清空（线程切换导致），则不发送
+    if (queued && !get().queuedMessages.some((m) => m.id === queued.id)) {
+      return false
+    }
     const userBlockId = queued?.id ?? `u-${now}`
     const attachmentIds =
       queued?.attachmentIds ??
