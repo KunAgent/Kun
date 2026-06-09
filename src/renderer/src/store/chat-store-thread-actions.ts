@@ -329,9 +329,15 @@ export function createThreadActions(
   drainQueuedMessages: async () => {
     if (drainingQueuedMessages) return
     drainingQueuedMessages = true
+    const drainThreadId = get().activeThreadId
     try {
       while (true) {
         const state = get()
+        // 线程切换时清空队列，防止发到新对话
+        if (state.activeThreadId !== drainThreadId) {
+          set({ queuedMessages: [] })
+          return
+        }
         const queuedMessages = state.queuedMessages.filter((message) => !message.guiPlan)
         if (queuedMessages.length !== state.queuedMessages.length) {
           set({ queuedMessages })
@@ -340,6 +346,11 @@ export function createThreadActions(
         if (!next || state.busy) return
         const started = await get().sendMessage(next.text, next.mode, { queued: next })
         if (!started) return
+        // 发送后再次检查线程是否变化
+        if (get().activeThreadId !== drainThreadId) {
+          set({ queuedMessages: [] })
+          return
+        }
       }
     } finally {
       drainingQueuedMessages = false
