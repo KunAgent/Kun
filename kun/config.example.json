@@ -85,6 +85,7 @@
       "enabled": false,
       "fetchEnabled": false,
       "searchEnabled": false,
+      "maxFetchBytes": 1000000,
       "allowDomains": [],
       "denyDomains": []
     },

@@ -208,6 +208,7 @@ Shape:
       "fetchEnabled": false,
       "searchEnabled": false,
       "provider": "fetch",
+      "maxFetchBytes": 1000000,
       "allowDomains": [],
       "denyDomains": ["localhost", "127.0.0.1"]
     },
@@ -262,7 +263,7 @@ Feature flags are intentionally explicit:
 - `serve.tokenEconomy` / `tokenEconomyMode` compresses tool descriptions, tool results, and history context while preserving code, paths, commands, URLs, errors, and other high-value signals.
 - `contextCompaction` controls fallback long-thread compaction thresholds and summary behavior. Per-model thresholds live in `models.profiles`. Compaction preserves goals, constraints, decisions, touched files, tool outcomes, and unresolved next steps.
 - `serve.runtimeTuning.toolStorm` suppresses repeated identical tool calls within a turn so useless tool loops do not keep spending tokens.
-- `capabilities.web` exposes `web_fetch` and/or `web_search`. The built-in provider can fetch HTTP(S) pages; search requires a provider implementation and may report unavailable.
+- `capabilities.web` exposes `web_fetch` and/or `web_search`. The built-in provider can fetch HTTP(S) pages; search requires a provider implementation and may report unavailable. `maxFetchBytes` controls the `web_fetch` body cap; oversized pages truncate at that byte limit.
 - `capabilities.skills` scans configured roots for `skill.json` manifests and, when `legacySkillMd` is true, older `SKILL.md` directories.
 - `capabilities.attachments` stores image bytes outside thread logs and allows turns to reference `attachmentIds`. Vision-capable models receive image parts; text-only models receive a bounded compressed base64 text fallback.
 - `capabilities.memory` stores long-term records under the data dir, retrieves scoped matches before turns, and exposes `memory_create`, `memory_update`, and `memory_delete` tools.
@@ -394,6 +395,9 @@ stay local to one thread, leave it as a pinned constraint.
   at least one of `fetchEnabled` / `searchEnabled` must be true.
   Built-in fetch handles HTTP(S) pages; search may still be
   unavailable when no provider implementation is configured.
+- Web fetch results are truncated too early: raise
+  `capabilities.web.maxFetchBytes` in `config.json`, then restart Kun.
+  Per-call `max_bytes` values still cannot exceed the configured cap.
 - Image upload succeeds but the turn fails: check `maxImageBytes`,
   `maxImageDimension`, `allowedMimeTypes`, and the text fallback limits.
   Text-only models need a compressed fallback small enough to fit
