@@ -64,7 +64,7 @@ function normalizeText(value: unknown): string {
   return typeof value === 'string' ? value.trim() : ''
 }
 
-function draftId(workspaceRoot: string, relativePath: string): string {
+export function buildSddDraftId(workspaceRoot: string, relativePath: string): string {
   return `${normalizeWorkspaceRoot(workspaceRoot)}:${normalizeSddRelativePath(relativePath)}`
 }
 
@@ -163,7 +163,7 @@ export function createSddDraft(options: {
   const workspaceRoot = normalizeWorkspaceRoot(options.workspaceRoot)
   const relativePath = buildSddDraftRelativePath(options.id)
   return {
-    id: draftId(workspaceRoot, relativePath),
+    id: buildSddDraftId(workspaceRoot, relativePath),
     workspaceRoot,
     relativePath,
     ...(options.absolutePath ? { absolutePath: options.absolutePath } : {}),
@@ -206,6 +206,14 @@ export function readRememberedSddDraft(workspaceRoot: string): SddDraft | null {
   const id = registry.activeByWorkspace[workspace]
   const draft = registry.drafts[id ?? ''] ?? null
   return draft && normalizeWorkspaceRoot(draft.workspaceRoot) === workspace ? draft : null
+}
+
+export function readRememberedSddDrafts(workspaceRoot?: string): SddDraft[] {
+  const registry = readRegistry()
+  const workspace = workspaceRoot ? normalizeWorkspaceRoot(workspaceRoot) : ''
+  return Object.values(registry.drafts)
+    .filter((draft) => !workspace || normalizeWorkspaceRoot(draft.workspaceRoot) === workspace)
+    .sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt))
 }
 
 export function readRememberedSddDraftContent(

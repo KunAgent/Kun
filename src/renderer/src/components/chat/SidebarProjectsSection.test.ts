@@ -2,7 +2,7 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
 import type { NormalizedThread } from '../../agent/types'
-import { buildSidebarWorkspaceGroups, ThreadRenameDialog } from './SidebarProjectsSection'
+import { buildSidebarWorkspaceGroups, SddDraftHistoryRows, ThreadRenameDialog } from './SidebarProjectsSection'
 
 function thread(overrides: Partial<NormalizedThread> & Pick<NormalizedThread, 'id' | 'workspace'>): NormalizedThread {
   return {
@@ -133,5 +133,32 @@ describe('ThreadRenameDialog', () => {
     expect(html).toContain('sidebarThreadRename')
     expect(html).toContain('value="Build rename dialog"')
     expect(html).toContain('type="submit" disabled=""')
+  })
+})
+
+describe('SddDraftHistoryRows', () => {
+  it('renders requirement draft history rows', () => {
+    const html = renderToStaticMarkup(
+      createElement(SddDraftHistoryRows, {
+        items: [{
+          id: '/tmp/app:.kunsdd/draft/123e4567-e89b-12d3-a456-426614174000/requirement.md',
+          workspaceRoot: '/tmp/app',
+          relativePath: '.kunsdd/draft/123e4567-e89b-12d3-a456-426614174000/requirement.md',
+          createdAt: '2026-01-01T00:00:00.000Z',
+          updatedAt: '2026-01-02T00:00:00.000Z',
+          title: 'Export requirement',
+          source: 'remembered'
+        }],
+        activeDraftId: '',
+        onOpen: vi.fn(),
+        t: (key: string, opts?: Record<string, unknown>) =>
+          key === 'sddDraftHistoryOpen' ? `Open ${String(opts?.title)}` : key
+      })
+    )
+
+    expect(html).toContain('sddDraftHistoryTitle')
+    expect(html).toContain('Export requirement')
+    expect(html).toContain('.kunsdd/draft/123e4567-e89b-12d3-a456-426614174000/requirement.md')
+    expect(html).toContain('Open Export requirement')
   })
 })

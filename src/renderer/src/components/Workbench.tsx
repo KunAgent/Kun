@@ -53,7 +53,7 @@ import { isWriteThreadId } from '../write/write-thread-registry'
 import { createSddDraft, forgetRememberedSddDraft, useSddDraftStore } from '../sdd/sdd-draft-store'
 import type { SddDraft, SddDraftSaveStatus } from '../sdd/sdd-draft-store'
 import { saveActiveSddDraftToDisk } from '../sdd/sdd-draft-actions'
-import { restoreRememberedSddDraft } from '../sdd/sdd-draft-restore'
+import { restoreRememberedSddDraft, restoreSddDraft } from '../sdd/sdd-draft-restore'
 import { composeSddAssistantPrompt } from '../sdd/sdd-assistant-prompt'
 import { collectSddDraftImages, withAttachmentIds, type SddDraftImageReference } from '../sdd/sdd-draft-images'
 import { buildSddDraftToPlanPrompt } from '../sdd/sdd-plan-prompt'
@@ -1023,6 +1023,25 @@ export function Workbench(): ReactElement {
     await openSddRequirementDraft(activeDraft, initialContent)
   }
 
+  const openSddRequirementDraftFromHistory = async (draft: SddDraft): Promise<void> => {
+    const current = useSddDraftStore.getState().activeDraft
+    if (current && current.id !== draft.id) {
+      await saveActiveSddDraftToDisk()
+    }
+    const restored = await restoreSddDraft({
+      draft,
+      readWorkspaceFile: window.dsGui.readWorkspaceFile
+    })
+    if (restored.kind !== 'restored') {
+      setError(restored.kind === 'unreadable' ? restored.message : t('sddDraftHistoryOpenFailed'))
+      return
+    }
+    await openSddRequirementDraft(restored.draft, restored.content, {
+      lastSavedContent: restored.lastSavedContent,
+      saveStatus: restored.saveStatus
+    })
+  }
+
   useEffect(() => {
     if (activeSddDraft) return
     const activeCodeWorkspace = activeThreadId
@@ -1695,6 +1714,7 @@ export function Workbench(): ReactElement {
               onNewChat={startNewChat}
               onNewChatInWorkspace={startNewChatInWorkspace}
               onNewRequirement={() => void startNewSddRequirement()}
+              onOpenRequirementDraft={(draft) => void openSddRequirementDraftFromHistory(draft)}
               onOpenSettings={(section) => openSettings(section)}
               onOpenPlugins={openPluginsView}
               onToggleConnectPhone={toggleConnectPhone}

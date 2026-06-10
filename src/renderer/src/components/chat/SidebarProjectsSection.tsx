@@ -5,6 +5,7 @@ import {
   Archive,
   ChevronDown,
   ChevronRight,
+  FileQuestion,
   Folder,
   FolderPlus,
   FolderOpen,
@@ -20,6 +21,8 @@ import type { NormalizedThread } from '../../agent/types'
 import { confirmDialog } from '../../lib/confirm-dialog'
 import { formatRelativeTime } from '../../lib/format-relative-time'
 import { workspaceLabelFromPath } from '../../lib/workspace-label'
+import { listSddDraftHistory, type SddDraftHistoryItem } from '../../sdd/sdd-draft-history'
+import { useSddDraftStore, type SddDraft } from '../../sdd/sdd-draft-store'
 import {
   isClawWorkspacePath,
   isInternalDeepSeekGuiWorkspace,
@@ -49,6 +52,7 @@ type SidebarProjectsSectionProps = {
   onPickWorkspace: () => void
   onRemoveWorkspace: (workspacePath: string) => Promise<void>
   onCreateThreadInWorkspace: (workspacePath: string) => void
+  onOpenRequirementDraft: (draft: SddDraft) => void
   onSelectThread: (threadId: string) => void
   onRenameThread: (threadId: string, title: string) => Promise<void>
   onArchiveThread: (threadId: string) => Promise<void>
@@ -156,6 +160,7 @@ export function SidebarProjectsSection({
   onPickWorkspace,
   onRemoveWorkspace,
   onCreateThreadInWorkspace,
+  onOpenRequirementDraft,
   onSelectThread,
   onRenameThread,
   onArchiveThread,
@@ -171,6 +176,8 @@ export function SidebarProjectsSection({
   const [searchOpen, setSearchOpen] = useState(false)
   const [threadContextMenu, setThreadContextMenu] = useState<ThreadContextMenuState | null>(null)
   const [renameThreadDialog, setRenameThreadDialog] = useState<RenameThreadDialogState | null>(null)
+  const [draftHistoryByWorkspace, setDraftHistoryByWorkspace] = useState<Record<string, SddDraftHistoryItem[]>>({})
+  const activeSddDraftId = useSddDraftStore((s) => s.activeDraft?.id ?? '')
 
   const groups = useMemo(() => {
     return buildSidebarWorkspaceGroups({
@@ -184,6 +191,41 @@ export function SidebarProjectsSection({
 
   const searchVisible = searchOpen || searchQuery.trim().length > 0
   const allGroupsCollapsed = groups.length > 0 && groups.every(([workspacePath]) => collapsed[workspacePath] === true)
+  const workspaceHistoryKey = groups.map(([workspacePath]) => workspacePath).join('\n')
+
+  useEffect(() => {
+    if (
+      typeof window === 'undefined' ||
+      typeof window.dsGui?.listWorkspaceDirectory !== 'function' ||
+      typeof window.dsGui?.readWorkspaceFile !== 'function'
+    ) {
+      setDraftHistoryByWorkspace({})
+      return
+    }
+    const workspacePaths = workspaceHistoryKey.split('\n').filter(Boolean)
+    if (workspacePaths.length === 0) {
+      setDraftHistoryByWorkspace({})
+      return
+    }
+    let cancelled = false
+    void Promise.all(
+      workspacePaths.map(async (path) => {
+        const history = await listSddDraftHistory({
+          workspaceRoot: path,
+          listWorkspaceDirectory: window.dsGui.listWorkspaceDirectory,
+          readWorkspaceFile: window.dsGui.readWorkspaceFile,
+          limit: 5
+        }).catch(() => [])
+        return [path, history] as const
+      })
+    ).then((entries) => {
+      if (cancelled) return
+      setDraftHistoryByWorkspace(Object.fromEntries(entries.filter(([, history]) => history.length > 0)))
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [workspaceHistoryKey])
 
   useEffect(() => {
     if (!threadContextMenu) return
@@ -404,6 +446,7 @@ export function SidebarProjectsSection({
           const visibleThreads = workspaceExpanded
             ? sortedThreads
             : sortedThreads.slice(0, 5)
+          const draftHistory = draftHistoryByWorkspace[workspacePath] ?? []
           return (
             <div key={workspacePath} className="mb-2">
               <SidebarTreeRow
@@ -454,6 +497,12 @@ export function SidebarProjectsSection({
 
               {!isCollapsed ? (
                 <div className="mt-1 space-y-[3px] pl-4">
+                  <SddDraftHistoryRows
+                    items={draftHistory}
+                    activeDraftId={activeSddDraftId}
+                    onOpen={onOpenRequirementDraft}
+                    t={t}
+                  />
                   {sortedThreads.length === 0 ? (
                     <div className="flex items-center justify-between gap-2 px-2.5 py-1.5">
                       <div className="text-[12.5px] leading-5 text-ds-faint">
@@ -564,6 +613,54 @@ type ThreadRowProps = {
   onArchive: () => void
   onDelete: () => void
   onRestore: () => void
+}
+
+export function SddDraftHistoryRows({
+  items,
+  activeDraftId,
+  onOpen,
+  t
+}: {
+  items: SddDraftHistoryItem[]
+  activeDraftId: string
+  onOpen: (draft: SddDraft) => void
+  t: (k: string, opts?: Record<string, unknown>) => string
+}): ReactElement | null {
+  if (items.length === 0) return null
+
+  return (
+    <div className="mb-1.5 rounded-lg border border-transparent bg-[var(--ds-sidebar-row-hover)]/35 px-1 py-1">
+      <div className="px-2 pb-1 pt-0.5 text-[11.5px] font-medium text-ds-faint">
+        {t('sddDraftHistoryTitle')}
+      </div>
+      <div className="space-y-[2px]">
+        {items.map((item) => (
+          <SidebarTreeRow
+            key={item.id}
+            active={activeDraftId === item.id}
+            activeVariant="outline"
+            className="min-h-[32px]"
+            buttonClassName="items-center gap-2 px-2 py-1.5"
+            title={item.relativePath}
+            ariaLabel={t('sddDraftHistoryOpen', { title: item.title })}
+            onClick={() => onOpen(item)}
+          >
+            <FileQuestion
+              className={`h-3.5 w-3.5 shrink-0 ${activeDraftId === item.id ? 'text-accent' : 'text-ds-faint'}`}
+              strokeWidth={1.8}
+            />
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-[13px] leading-4 text-ds-ink">{item.title}</span>
+              <span className="block truncate text-[11.5px] leading-4 text-ds-faint">{item.relativePath}</span>
+            </span>
+            <span className="shrink-0 rounded-md bg-ds-card/70 px-1.5 py-0.5 text-[10.5px] text-ds-faint">
+              {item.source === 'remembered' ? t('sddDraftHistoryRemembered') : t('sddDraftHistoryDisk')}
+            </span>
+          </SidebarTreeRow>
+        ))}
+      </div>
+    </div>
+  )
 }
 
 function ThreadRow({
