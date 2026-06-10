@@ -41,6 +41,7 @@ import {
   type ClawScheduleMcpLaunchConfig
 } from './claw-schedule-mcp-config'
 import { defaultKunDataDir } from './runtime/kun-adapter'
+import { isKunHealthResponseBody } from './kun-health'
 import { appendManagedLogLine } from './logger'
 import { guiSkillRootsForRuntime, normalizeSkillRootPath } from './services/skill-service'
 
@@ -48,7 +49,12 @@ let child: ChildProcess | null = null
 let childLogCapture: KunChildLogCapture | null = null
 let lastResolvedBinary: string | null = null
 const KUN_READY_PREFIX = 'KUN_READY '
-const KUN_STARTUP_TIMEOUT_MS = 15_000
+// Cold starts on slow disks (Windows + antivirus scans, sqlite rebuilds,
+// MCP server connects) routinely exceed 15s; killing kun that early left
+// fresh installs permanently "unable to connect" (#188).
+const KUN_STARTUP_TIMEOUT_MS = 45_000
+const KUN_STARTUP_HEALTH_POLL_MS = 500
+const KUN_STARTUP_HEALTH_REQUEST_TIMEOUT_MS = 1_000
 const KUN_STOP_GRACE_MS = 5_000
 const KUN_STOP_FORCE_MS = 1_000
 const STDERR_TAIL_MAX_CHARS = 4_000
@@ -268,7 +274,7 @@ export async function startKunChild(settings: AppSettingsV1): Promise<void> {
     )
   })
   try {
-    await waitForKunStartup(startedChild)
+    await waitForKunStartup(startedChild, runtime.port)
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     startedLogCapture.logLifecycle(`startup failed before ready: ${message}`)
@@ -800,7 +806,7 @@ function canBindTcpPort(port: number, host: string): Promise<boolean> {
   })
 }
 
-async function waitForKunStartup(startedChild: ChildProcess): Promise<void> {
+async function waitForKunStartup(startedChild: ChildProcess, port?: number): Promise<void> {
   if (startedChild.exitCode !== null) {
     throw new Error(describeKunExit(startedChild.exitCode, null))
   }
@@ -808,14 +814,32 @@ async function waitForKunStartup(startedChild: ChildProcess): Promise<void> {
     let settled = false
     let stdoutBuffer = ''
     let stderrTail = ''
+    let healthProbeInFlight = false
     const timer = setTimeout(() => {
       if (settled) return
       settled = true
       cleanup()
       reject(new Error(describeKunStartupTimeout(stderrTail)))
     }, KUN_STARTUP_TIMEOUT_MS)
+    // The stdout ready marker can lag behind the actual server (pipe
+    // buffering) or get lost in unusual spawn environments; the HTTP
+    // health endpoint is the ground truth, so poll it in parallel.
+    const healthTimer = port
+      ? setInterval(() => {
+          if (settled || healthProbeInFlight) return
+          healthProbeInFlight = true
+          void probeKunHealth(port)
+            .then((healthy) => {
+              if (healthy) settleReady()
+            })
+            .finally(() => {
+              healthProbeInFlight = false
+            })
+        }, KUN_STARTUP_HEALTH_POLL_MS)
+      : null
     const cleanup = (): void => {
       clearTimeout(timer)
+      if (healthTimer) clearInterval(healthTimer)
       startedChild.removeListener('exit', onExit)
       startedChild.removeListener('error', onError)
       startedChild.stdout?.removeListener('data', onStdout)
@@ -882,4 +906,16 @@ function describeKunExit(
 function describeKunStartupTimeout(stderrTail: string): string {
   const suffix = stderrTail.trim() ? `\n${stderrTail.trim()}` : ''
   return `Kun did not report ready within ${KUN_STARTUP_TIMEOUT_MS}ms${suffix}`
+}
+
+async function probeKunHealth(port: number): Promise<boolean> {
+  try {
+    const response = await fetch(`http://127.0.0.1:${port}/health`, {
+      signal: AbortSignal.timeout(KUN_STARTUP_HEALTH_REQUEST_TIMEOUT_MS)
+    })
+    if (!response.ok) return false
+    return isKunHealthResponseBody(await response.text())
+  } catch {
+    return false
+  }
 }
