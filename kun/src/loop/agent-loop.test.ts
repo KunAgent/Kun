@@ -8,7 +8,7 @@ function spec(name: string): ModelToolSpec {
     description: `Tool: ${name}`,
     toolKind: name === 'create_plan' || name === 'write' || name === 'edit'
       ? 'file_change'
-      : 'discovery',
+      : 'tool_call',
     inputSchema: { type: 'object', properties: {} }
   }
 }

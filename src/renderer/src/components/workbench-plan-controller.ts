@@ -176,14 +176,6 @@ export function useWorkbenchPlanController({
     }
   }
 
-  const planTurnOverrides = (
-    targetWorkspaceRoot: string,
-    targetThreadId: string | null
-  ): { guiPlan?: GuiPlanMessageContext } | undefined => {
-    const plan = useGuiPlanStore.getState().activePlan
-    return buildGuiPlanTurnOverrides(plan, targetWorkspaceRoot, targetThreadId)
-  }
-
   const readExistingPlanRelativePaths = async (
     targetWorkspaceRoot: string
   ): Promise<string[]> => {

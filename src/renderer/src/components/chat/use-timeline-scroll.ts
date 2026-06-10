@@ -83,14 +83,6 @@ export function useTimelineScroll({
   const prependInFlightRef = useRef(false)
   const scrollFrameRef = useRef<number | null>(null)
 
-  // When the user sends a new message (userTurnKey changes to a new value),
-  // force stick-to-bottom so the timeline auto-scrolls to the new turn even
-  // if the user had previously scrolled up to read history.
-  if (userTurnKey && lastUserTurnKeyRef.current !== userTurnKey) {
-    lastUserTurnKeyRef.current = userTurnKey
-    stickToBottomRef.current = true
-  }
-
   const loadEarlierTurns = useCallback(
     (options?: { userInitiated?: boolean }): void => {
       if (hiddenTurnCount === 0 || prependInFlightRef.current) return
