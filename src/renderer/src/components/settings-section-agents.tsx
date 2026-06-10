@@ -19,7 +19,8 @@ import {
   WRITE_INLINE_COMPLETION_MODEL_IDS,
   defaultModelProviderSettings,
   isKunRuntimeInsecure,
-  normalizeModelProviderId
+  normalizeModelProviderId,
+  PROVIDER_PRESETS
 } from '@shared/app-settings'
 import type { GuiUpdateChannel } from '@shared/gui-update'
 import type { SkillRootId } from '../lib/skill-root-preference'
@@ -303,6 +304,44 @@ export function AgentsSettingsSection({ ctx }: { ctx: Record<string, any> }): Re
       ...(kun.tokenEconomy?.historyHygiene ?? {})
     }
   }
+  const [fetchingModels, setFetchingModels] = useState(false)
+  const [fetchModelsError, setFetchModelsError] = useState('')
+
+  const fetchProviderModels = async (provider: ModelProviderProfileV1): Promise<void> => {
+    if (!provider.baseUrl.trim()) return
+    setFetchingModels(true)
+    setFetchModelsError('')
+    try {
+      const base = provider.baseUrl.replace(/\/+$/, '')
+      const segment = base.split('/').pop()?.toLowerCase() ?? ''
+      const versioned = /^v\d+$/i.test(segment) ? base : `${base}/v1`
+      const url = `${versioned}/models`
+      const headers: Record<string, string> = { Accept: 'application/json' }
+      if (provider.apiKey.trim()) {
+        headers.Authorization = `Bearer ${provider.apiKey.trim()}`
+      }
+      const res = await fetch(url, { headers, signal: AbortSignal.timeout(8000) })
+      if (!res.ok) {
+        setFetchModelsError(`HTTP ${res.status}`)
+        return
+      }
+      const json = await res.json() as { data?: Array<{ id?: string }> }
+      const ids = (json.data ?? [])
+        .map((m) => typeof m.id === 'string' ? m.id.trim() : '')
+        .filter(Boolean)
+        .sort()
+      if (ids.length === 0) {
+        setFetchModelsError(t('modelProviderFetchEmpty'))
+        return
+      }
+      updateModelProvider(provider.id, { models: ids })
+    } catch (e) {
+      setFetchModelsError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setFetchingModels(false)
+    }
+  }
+
   const [tokenEconomySavingsState, setTokenEconomySavingsState] =
     useState<TokenEconomySavingsState>(EMPTY_TOKEN_ECONOMY_SAVINGS_STATE)
   useEffect(() => {
@@ -446,6 +485,18 @@ export function AgentsSettingsSection({ ctx }: { ctx: Record<string, any> }): Re
       activeProviderId === id ? { providerId: nextId } : undefined
     )
   }
+  const addModelProviderFromPreset = (preset: typeof PROVIDER_PRESETS[number]): void => {
+    if (modelProviders.some((item) => item.id === preset.id)) return
+    const nextProvider: ModelProviderProfileV1 = {
+      id: preset.id,
+      name: preset.name,
+      apiKey: '',
+      baseUrl: preset.baseUrl,
+      endpointFormat: preset.endpointFormat,
+      models: []
+    }
+    updateModelProviders([...modelProviders, nextProvider], { providerId: preset.id })
+  }
   const addModelProvider = (): void => {
     const baseId = 'custom-provider'
     let index = modelProviders.length + 1
@@ -542,6 +593,17 @@ export function AgentsSettingsSection({ ctx }: { ctx: Record<string, any> }): Re
                             <Plus className="h-3.5 w-3.5" strokeWidth={1.9} />
                             {t('modelProviderAdd')}
                           </button>
+                          {PROVIDER_PRESETS.filter((preset) => !modelProviders.some((p) => p.id === preset.id)).map((preset) => (
+                            <button
+                              key={preset.id}
+                              type="button"
+                              onClick={() => addModelProviderFromPreset(preset)}
+                              className="inline-flex h-9 items-center gap-2 rounded-full border border-ds-border bg-ds-card px-3 text-[12.5px] font-medium text-ds-muted shadow-sm transition hover:bg-ds-hover hover:text-ds-ink"
+                            >
+                              <Plus className="h-3.5 w-3.5" strokeWidth={1.9} />
+                              {preset.name}
+                            </button>
+                          ))}
                         </div>
                         {activeProvider ? (
                           <div className="grid gap-3 rounded-xl border border-ds-border-muted bg-ds-main/35 p-3">
@@ -618,6 +680,24 @@ export function AgentsSettingsSection({ ctx }: { ctx: Record<string, any> }): Re
                                 })}
                               />
                             </label>
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => void fetchProviderModels(activeProvider)}
+                                disabled={fetchingModels}
+                                className="inline-flex h-8 items-center gap-1.5 rounded-full border border-ds-border bg-ds-card px-3 text-[12px] font-medium text-ds-muted shadow-sm transition hover:bg-ds-hover hover:text-ds-ink disabled:cursor-not-allowed disabled:opacity-55"
+                              >
+                                {fetchingModels ? (
+                                  <Loader2 className="h-3 w-3 animate-spin" strokeWidth={2} />
+                                ) : (
+                                  <RefreshCw className="h-3 w-3" strokeWidth={1.9} />
+                                )}
+                                {t('modelProviderFetchModels')}
+                              </button>
+                              {fetchModelsError ? (
+                                <span className="text-[12px] text-red-600 dark:text-red-300">{fetchModelsError}</span>
+                              ) : null}
+                            </div>
                             {activeProvider.id !== DEFAULT_MODEL_PROVIDER_ID ? (
                               <button
                                 type="button"

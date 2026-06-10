@@ -4,6 +4,7 @@ import {
   DEFAULT_MODEL_PROVIDER_ID,
   type AppSettingsV1,
   type KunRuntimeSettingsV1,
+  type ModelEndpointFormat,
   type ModelProviderProfilePatchV1,
   type ModelProviderProfileV1,
   type ModelProviderSettingsPatchV1,
@@ -15,6 +16,20 @@ import { normalizeDeepseekBaseUrl } from './app-settings-normalizers'
 import { DEFAULT_COMPOSER_MODEL_IDS } from './default-composer-models'
 
 const DEFAULT_MODEL_PROVIDER_NAME = 'DeepSeek'
+
+export const PROVIDER_PRESETS: ReadonlyArray<{
+  id: string
+  name: string
+  baseUrl: string
+  endpointFormat: ModelEndpointFormat
+}> = [
+  {
+    id: 'litellm',
+    name: 'LiteLLM',
+    baseUrl: 'http://localhost:4000',
+    endpointFormat: 'chat_completions' as ModelEndpointFormat
+  }
+]
 
 export function defaultModelProviderSettings(): ModelProviderSettingsV1 {
   const defaultProvider = defaultModelProviderProfile('', DEFAULT_DEEPSEEK_BASE_URL)

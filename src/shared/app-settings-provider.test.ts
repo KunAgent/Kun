@@ -7,6 +7,7 @@ import {
   defaultScheduleSettings,
   defaultWriteSettings,
   resolveKunRuntimeSettings,
+  PROVIDER_PRESETS,
   type AppSettingsV1
 } from './app-settings'
 
@@ -57,5 +58,14 @@ describe('model provider settings', () => {
     expect(runtime.apiKey).toBe('sk-custom')
     expect(runtime.baseUrl).toBe('https://custom.example/v1')
     expect(runtime.endpointFormat).toBe('messages')
+  })
+})
+
+describe('provider presets', () => {
+  it('includes a LiteLLM preset', () => {
+    const litellm = PROVIDER_PRESETS.find((p) => p.id === 'litellm')
+    expect(litellm).toBeTruthy()
+    expect(litellm?.baseUrl).toBe('http://localhost:4000')
+    expect(litellm?.endpointFormat).toBe('chat_completions')
   })
 })

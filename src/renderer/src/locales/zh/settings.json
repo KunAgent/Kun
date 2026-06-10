@@ -165,6 +165,8 @@
   "modelEndpointResponses": "/v1/responses",
   "modelEndpointMessages": "/v1/messages",
   "modelProviderModels": "模型列表（每行一个模型 ID）",
+  "modelProviderFetchModels": "Fetch models",
+  "modelProviderFetchEmpty": "No models found",
   "kunApiKey": "助手专用 API Key",
   "kunApiKeyDesc": "可选。留空则沿用通用 API Key；只有聊天/代码助手需要使用不同 Key 时才填写。",
   "kunApiKeyPlaceholder": "留空则沿用通用设置",

@@ -18,6 +18,8 @@ const labels: Record<string, string> = {
   kunProvider: 'Provider',
   kunProviderDesc: 'Provider description',
   modelProviderEndpointFormat: 'Endpoint format',
+  modelProviderFetchModels: 'Fetch models',
+  modelProviderFetchEmpty: 'No models found',
   modelEndpointChatCompletions: '/v1/chat/completions',
   modelEndpointResponses: '/v1/responses',
   modelEndpointMessages: '/v1/messages',
@@ -474,5 +476,10 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
     expect(html).not.toContain('DeepSeek auth')
     expect(html).not.toContain('Base URL are stored in this file')
     expect(html).not.toContain('config.toml')
+  })
+
+  it('renders LiteLLM preset button when preset not yet added', () => {
+    const html = renderToStaticMarkup(createElement(AgentsSettingsSection, { ctx: baseCtx() }))
+    expect(html).toContain('LiteLLM')
   })
 })
