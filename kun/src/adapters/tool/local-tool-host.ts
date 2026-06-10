@@ -192,21 +192,34 @@ export class LocalToolHost implements ToolHost {
     if (context.abortSignal.aborted) {
       throw new Error('tool call aborted while waiting for approval')
     }
-    const result = await tool.execute(activeCall.arguments, context, async (update) => {
-      if (!onUpdate) return
-      const partialItem = makeToolResultItem({
-        id: `item_${activeCall.callId}`,
-        turnId: context.turnId,
-        threadId: context.threadId,
-        callId: activeCall.callId,
-        toolName: activeCall.toolName,
-        toolKind: activeCall.toolKind ?? tool.toolKind,
-        output: update.output,
-        isError: update.isError,
-        status: 'running'
+    let result: Awaited<ReturnType<LocalTool['execute']>>
+    try {
+      result = await tool.execute(activeCall.arguments, context, async (update) => {
+        if (!onUpdate) return
+        const partialItem = makeToolResultItem({
+          id: `item_${activeCall.callId}`,
+          turnId: context.turnId,
+          threadId: context.threadId,
+          callId: activeCall.callId,
+          toolName: activeCall.toolName,
+          toolKind: activeCall.toolKind ?? tool.toolKind,
+          output: update.output,
+          isError: update.isError,
+          status: 'running'
+        })
+        await onUpdate(partialItem)
       })
-      await onUpdate(partialItem)
-    })
+    } catch (error) {
+      // A tool blowing up (an MCP server returning a protocol error, a
+      // provider bug) is feedback for the model, not a reason to kill the
+      // whole turn. Only abort keeps propagating.
+      if (context.abortSignal.aborted) throw error
+      const message = error instanceof Error ? error.message : String(error)
+      return {
+        item: this.errorToolResult(context, activeCall, tool, message, 'tool_execution_failed'),
+        approved: true
+      }
+    }
     let postHookResults
     try {
       postHookResults = await runToolHooks({

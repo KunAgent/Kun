@@ -109,6 +109,54 @@ describe('Kun built-in tools', () => {
     expect([...allBuiltinToolNames].every((name) => toolNames.has(name))).toBe(true)
   })
 
+  it('converts a throwing tool execute into an error tool result instead of failing the turn', async () => {
+    const explosive = LocalToolHost.defineTool({
+      name: 'explode',
+      description: 'always throws',
+      inputSchema: { type: 'object', properties: {} },
+      policy: 'auto',
+      execute: async () => {
+        throw new Error('MCP error -32603: Validation Error: Validation Failed')
+      }
+    })
+    const throwingHost = new LocalToolHost({ tools: [explosive] })
+
+    const result = await throwingHost.execute(
+      { callId: 'call_explode', toolName: 'explode', arguments: {} },
+      buildContext(workspace)
+    )
+
+    expect(result.item.kind).toBe('tool_result')
+    if (result.item.kind !== 'tool_result') throw new Error('expected tool_result')
+    expect(result.item.isError).toBe(true)
+    expect(result.item.output).toMatchObject({
+      code: 'tool_execution_failed',
+      error: expect.stringContaining('-32603')
+    })
+  })
+
+  it('still propagates aborts raised while a tool executes', async () => {
+    const abortController = new AbortController()
+    const abortingTool = LocalToolHost.defineTool({
+      name: 'abort_self',
+      description: 'aborts mid-flight',
+      inputSchema: { type: 'object', properties: {} },
+      policy: 'auto',
+      execute: async () => {
+        abortController.abort()
+        throw new Error('aborted mid tool')
+      }
+    })
+    const abortHost = new LocalToolHost({ tools: [abortingTool] })
+
+    await expect(
+      abortHost.execute(
+        { callId: 'call_abort', toolName: 'abort_self', arguments: {} },
+        buildContext(workspace, { abortSignal: abortController.signal })
+      )
+    ).rejects.toThrow('aborted mid tool')
+  })
+
   it('hides mutating and shell tools in read-only sandbox mode', async () => {
     const tools = await host.listTools(buildContext(workspace, { sandboxMode: 'read-only' }))
     const names = tools.map((tool) => tool.name)

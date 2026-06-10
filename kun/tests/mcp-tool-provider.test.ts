@@ -401,6 +401,60 @@ describe('MCP tool provider', () => {
     })
   })
 
+  it('surfaces deterministic MCP protocol errors as tool results without reconnecting', async () => {
+    let factories = 0
+    const config = KunCapabilitiesConfig.parse({
+      mcp: {
+        enabled: true,
+        servers: {
+          github: {
+            transport: 'stdio',
+            command: 'node',
+            trustScope: 'workspace',
+            trustedWorkspaceRoots: ['/tmp/project']
+          }
+        }
+      }
+    })
+    const built = await buildMcpToolProviders(config.mcp, {
+      clientFactory: async () => {
+        factories += 1
+        return {
+          async listTools() {
+            return {
+              tools: [
+                {
+                  name: 'search',
+                  inputSchema: { type: 'object' },
+                  annotations: { readOnlyHint: true }
+                }
+              ]
+            }
+          },
+          async callTool() {
+            throw new Error('MCP error -32603: Validation Error: Validation Failed')
+          },
+          async close() {}
+        }
+      }
+    })
+    const host = new LocalToolHost({ registry: new CapabilityRegistry(built.providers) })
+    const result = await host.execute({
+      callId: 'call_1',
+      toolName: 'mcp_github_search',
+      arguments: {}
+    }, buildContext('/tmp/project'))
+
+    expect(factories).toBe(1)
+    expect(result.item.kind).toBe('tool_result')
+    if (result.item.kind !== 'tool_result') throw new Error('expected tool_result')
+    expect(result.item.isError).toBe(true)
+    expect(result.item.output).toMatchObject({
+      code: 'tool_execution_failed',
+      error: expect.stringContaining('-32603')
+    })
+  })
+
   it('reports catalog drift after refreshing MCP search records', async () => {
     let expanded = false
     const config = KunCapabilitiesConfig.parse({

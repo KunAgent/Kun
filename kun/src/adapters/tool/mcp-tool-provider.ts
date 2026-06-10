@@ -398,9 +398,31 @@ async function callMcpToolWithReconnect(
   } catch (error) {
     state.lastError = redactSecretText(errorMessage(error))
     if (signal?.aborted) throw error
+    // Deterministic server-side failures (validation errors, bad
+    // arguments) come back identically on a fresh connection; tearing
+    // down a healthy session for them just loses server state. Only
+    // transport-looking failures earn a reconnect + retry.
+    if (!looksLikeMcpTransportError(error)) throw error
     const client = await reconnectMcpConnection(state)
     return client.callTool(input, { signal, timeout })
   }
+}
+
+function looksLikeMcpTransportError(error: unknown): boolean {
+  const message = errorMessage(error).toLowerCase()
+  return (
+    message.includes('connect') ||
+    message.includes('connection') ||
+    message.includes('transport') ||
+    message.includes('timed out') ||
+    message.includes('timeout') ||
+    message.includes('epipe') ||
+    message.includes('broken pipe') ||
+    message.includes('socket') ||
+    message.includes('stream closed') ||
+    message.includes('fetch failed') ||
+    message.includes('network')
+  )
 }
 
 async function raceStartupTimeout<T extends { state: McpConnectionState }>(
