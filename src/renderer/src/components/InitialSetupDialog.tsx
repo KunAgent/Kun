@@ -1,4 +1,4 @@
-import { type CSSProperties, type ReactElement, useEffect, useState } from 'react'
+import { type ReactElement, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   getActiveAgentApiKey,
@@ -14,7 +14,6 @@ import { Eye, EyeOff, ExternalLink, Sparkles, Sun, Moon, Monitor, X } from 'luci
 
 type ThemePref = AppSettingsV1['theme']
 type SetupFormPatch = AppSettingsPatch
-type MaskedInputStyle = CSSProperties & { WebkitTextSecurity?: 'disc' }
 
 const themeOptions: { value: ThemePref; icon: typeof Sun; labelKey: string }[] = [
   { value: 'system', icon: Monitor, labelKey: 'themeSystem' },
@@ -128,8 +127,6 @@ export function InitialSetupDialog(): ReactElement {
   const fieldClass =
     'w-full rounded-xl border border-slate-300/75 bg-white/88 px-4 py-3 text-[15px] text-slate-800 shadow-[inset_0_1px_0_rgba(255,255,255,0.72)] outline-none transition focus:border-[#1388ff]/70 focus:ring-2 focus:ring-[#1388ff]/15 dark:border-white/10 dark:bg-white/[0.04] dark:text-slate-100 dark:shadow-none dark:focus:border-[#3aa0ff]/70 dark:focus:ring-[#3aa0ff]/15 dark:placeholder:text-slate-500'
   const labelClass = 'text-sm font-semibold text-slate-700 dark:text-slate-200'
-  const apiKeyMaskStyle: MaskedInputStyle | undefined =
-    !showApiKey && provider?.apiKey ? { WebkitTextSecurity: 'disc' } : undefined
 
   return (
     <div className="ds-no-drag fixed inset-0 z-50 overflow-y-auto bg-[#eef2fb]/45 p-3 backdrop-blur-[18px] dark:bg-black/62 dark:backdrop-blur-[22px] sm:p-6">
@@ -217,7 +214,7 @@ export function InitialSetupDialog(): ReactElement {
             </label>
             <div className="relative">
               <input
-                type="text"
+                type={showApiKey ? 'text' : 'password'}
                 value={provider?.apiKey ?? ''}
                 onChange={(e) => updateProvider({ apiKey: e.target.value })}
                 placeholder="sk-..."
@@ -225,7 +222,6 @@ export function InitialSetupDialog(): ReactElement {
                 autoCorrect="off"
                 autoCapitalize="off"
                 spellCheck={false}
-                style={apiKeyMaskStyle}
                 className={`${fieldClass} pr-12 font-mono placeholder:font-sans`}
               />
               <button
