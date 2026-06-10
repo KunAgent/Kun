@@ -28,6 +28,7 @@ import {
 } from '../../shared/kun-endpoints'
 import {
   CLAW_MODEL_IDS,
+  MODEL_ENDPOINT_FORMATS,
   SCHEDULE_MODEL_IDS,
   SCHEDULE_REASONING_EFFORT_IDS,
   WRITE_INLINE_COMPLETION_MODEL_IDS
@@ -169,6 +170,7 @@ const writeInlineCompletionModelSchema = z.union([
   z.enum(WRITE_INLINE_COMPLETION_MODEL_IDS),
   trimmedString(128)
 ])
+const modelEndpointFormatSchema = z.enum(MODEL_ENDPOINT_FORMATS)
 
 const modelProviderPatchSchema = z.object({
   apiKey: z.string().max(MAX_BODY_BYTES).optional(),
@@ -178,6 +180,7 @@ const modelProviderPatchSchema = z.object({
     name: z.string().trim().min(1).max(80).optional(),
     apiKey: z.string().max(MAX_BODY_BYTES).optional(),
     baseUrl: z.string().trim().max(MAX_URL_LENGTH).optional(),
+    endpointFormat: modelEndpointFormatSchema.optional(),
     models: z.array(z.string().trim().min(1).max(128)).max(200).optional()
   }).strict()).max(50).optional()
 }).strict()
@@ -189,6 +192,7 @@ const kunRuntimePatchSchema = z.object({
   apiKey: z.string().max(MAX_BODY_BYTES).optional(),
   baseUrl: z.string().trim().max(MAX_URL_LENGTH).optional(),
   providerId: z.string().trim().max(64).optional(),
+  endpointFormat: modelEndpointFormatSchema.optional(),
   runtimeToken: z.string().max(MAX_BODY_BYTES).optional(),
   dataDir: defaultPathSchema,
   model: z.string().trim().min(1).max(128).optional(),

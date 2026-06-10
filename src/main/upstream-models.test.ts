@@ -30,6 +30,7 @@ function settings(dataDir: string, model = 'settings-model'): AppSettingsV1 {
           name: 'Custom Provider',
           apiKey: 'sk-custom',
           baseUrl: 'https://custom.example/v1',
+          endpointFormat: 'responses',
           models: ['custom-provider-model']
         }
       ]

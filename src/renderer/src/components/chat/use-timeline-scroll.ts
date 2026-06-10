@@ -16,7 +16,7 @@ type UseTimelineScrollOptions = {
   totalTurns: number
   busy: boolean
   /** Triggers stick-to-bottom snap scroll. */
-  scrollDeps: { contentKey: string; streaming: boolean }
+  scrollDeps: { contentKey: string; streaming: boolean; userTurnKey: string }
 }
 
 export type UseTimelineScrollResult = {
@@ -63,7 +63,7 @@ export function useTimelineScroll({
   busy,
   scrollDeps
 }: UseTimelineScrollOptions): UseTimelineScrollResult {
-  const { contentKey, streaming } = scrollDeps
+  const { contentKey, streaming, userTurnKey } = scrollDeps
   const shouldCollapseHistory = totalTurns > autoCollapseThreshold
   const [visibleTurnCount, setVisibleTurnCount] = useState(() =>
     deriveTimelineVisibleTurnCount({
@@ -77,6 +77,7 @@ export function useTimelineScroll({
   const hiddenTurnCount = Math.max(0, totalTurns - visibleTurnCount)
 
   const stickToBottomRef = useRef(true)
+  const lastUserTurnKeyRef = useRef(userTurnKey)
   const historyExpansionRequestedRef = useRef(false)
   const pendingPrependRef = useRef<{ scrollHeight: number; scrollTop: number } | null>(null)
   const prependInFlightRef = useRef(false)
@@ -105,6 +106,14 @@ export function useTimelineScroll({
     historyExpansionRequestedRef.current = false
     setVisibleTurnCount(pageSize)
   }, [pageSize])
+
+  // A freshly submitted user turn should become visible even if the user was
+  // reading older history before pressing Enter.
+  useEffect(() => {
+    if (!userTurnKey || lastUserTurnKeyRef.current === userTurnKey) return
+    lastUserTurnKeyRef.current = userTurnKey
+    stickToBottomRef.current = true
+  }, [userTurnKey])
 
   // Scroll listener: tracks stick-to-bottom + triggers lazy load.
   useEffect(() => {

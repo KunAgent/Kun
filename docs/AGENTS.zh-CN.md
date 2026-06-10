@@ -1,3 +1,4 @@
+需要拉取上游最新代码只需：git pull upstream master
 # 代理运行时说明
 
 DeepSeek GUI 当前只有一个可运行的本地 Agent 运行时：**Kun**。

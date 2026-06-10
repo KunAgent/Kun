@@ -1092,15 +1092,59 @@ export class AgentLoop {
         turnId: input.turnId,
         callId: input.call.callId
       },
-      () => this.opts.toolHost.execute(input.call, input.context, async (item) => {
-        const existing = await this.opts.turns.updateItem(input.threadId, item.id, {
-          output: item.kind === 'tool_result' ? item.output : undefined,
-          isError: item.kind === 'tool_result' ? item.isError : undefined,
-          status: 'running'
-        } as Partial<TurnItem>)
-        if (existing) return
-        await this.opts.turns.applyItem(input.threadId, item)
-      })
+      async () => {
+        try {
+          return await this.opts.toolHost.execute(input.call, input.context, async (item) => {
+            const existing = await this.opts.turns.updateItem(input.threadId, item.id, {
+              output: item.kind === 'tool_result' ? item.output : undefined,
+              isError: item.kind === 'tool_result' ? item.isError : undefined,
+              status: 'running'
+            } as Partial<TurnItem>)
+            if (existing) return
+            await this.opts.turns.applyItem(input.threadId, item)
+          })
+        } catch (error) {
+          if (input.context.abortSignal.aborted || !this.isRecoverableToolDispatchError(error)) {
+            throw error
+          }
+          const message = error instanceof Error ? error.message : String(error)
+          await this.opts.events.record({
+            kind: 'error',
+            threadId: input.threadId,
+            turnId: input.turnId,
+            message: `Tool call ${input.call.toolName} was rejected: ${message}`,
+            code: 'tool_dispatch_rejected',
+            severity: 'warning'
+          })
+          return {
+            item: makeToolResultItem({
+              id: `item_${input.call.callId}`,
+              turnId: input.turnId,
+              threadId: input.threadId,
+              callId: input.call.callId,
+              toolName: input.call.toolName,
+              toolKind: input.call.toolKind ?? 'tool_call',
+              output: {
+                code: 'tool_dispatch_rejected',
+                error: message,
+                guidance: 'Use only tools advertised in the current turn context.'
+              },
+              isError: true
+            }),
+            approved: false
+          }
+        }
+      }
+    )
+  }
+
+  private isRecoverableToolDispatchError(error: unknown): boolean {
+    const message = error instanceof Error ? error.message : String(error)
+    return (
+      message.startsWith('unknown tool:') ||
+      message.includes(' is not provided by ') ||
+      message.includes(' is not advertised') ||
+      message.includes(' is disabled by policy')
     )
   }
 

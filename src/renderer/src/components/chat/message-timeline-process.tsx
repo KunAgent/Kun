@@ -86,6 +86,18 @@ function isProcessSectionActive(section: ProcessSection, processing: boolean): b
   )
 }
 
+function isRequestUserInputTool(block: ChatBlock): boolean {
+  if (block.kind === 'user_input' && block.status === 'pending') return true
+  if (block.kind !== 'tool' || block.status !== 'running') return false
+  const toolName = typeof block.meta?.toolName === 'string' ? block.meta.toolName.trim() : ''
+  if (toolName === 'request_user_input' || toolName === 'user_input') return true
+  return /^request_user_input\s*:/i.test(block.summary.trim())
+}
+
+function sectionHasRequestUserInput(section: ProcessSection): boolean {
+  return section.blocks.some(isRequestUserInputTool)
+}
+
 export function ProcessSectionRow({
   section,
   processing,
@@ -116,7 +128,10 @@ export function ProcessSectionRow({
       (block.kind === 'user_input' && block.status === 'error') ||
       (block.kind === 'system' && block.severity === 'error')
   )
-  const defaultExpanded = hasError || (active && section.kind === 'reasoning')
+  const defaultExpanded =
+    hasError ||
+    (active && section.kind === 'reasoning') ||
+    (processing && section.kind === 'execution' && sectionHasRequestUserInput(section))
   const expanded = hasDetails && (userExpanded ?? defaultExpanded)
   const title = describeProcessSection(section, t, {
     processing,
@@ -264,10 +279,11 @@ function ProcessStackRows({
         const detail = getProcessDetail(block, summary)
         const isRunningTool = processBlockIsRunningTool(block, processing)
         const canExpand = detail.kind !== 'none'
-        const open = canExpand && (processBlockHasError(block) || openBlockId === block.id)
+        const autoOpenRequestInput = processing && isRequestUserInputTool(block)
+        const open = canExpand && (processBlockHasError(block) || autoOpenRequestInput || openBlockId === block.id)
         const rowActive = processBlockIsActive(block, processing)
         const isError = processBlockHasError(block)
-        const canToggle = canExpand
+        const canToggle = canExpand && !autoOpenRequestInput
         const handleToggle = (): void => {
           if (!canToggle) return
           setOpenBlockId((id) => (id === block.id ? null : block.id))

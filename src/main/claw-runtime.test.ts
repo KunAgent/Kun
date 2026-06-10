@@ -572,14 +572,14 @@ describe('ClawRuntime', () => {
       sendFeishuMessage: (
         bridge: { send: typeof send },
         to: string,
-        input: { text: string },
+        input: { markdown: string },
         options: { replyTo?: string; replyInThread?: boolean },
         context: Record<string, unknown>
       ) => Promise<{ messageId: string }>
     }).sendFeishuMessage(
       { send },
       'oc_chat_a',
-      { text: 'agent reply' },
+      { markdown: 'agent reply' },
       { replyTo: 'om_inbound', replyInThread: true },
       { purpose: 'agent-reply', channelId: 'channel_1' }
     )
@@ -588,13 +588,13 @@ describe('ClawRuntime', () => {
     expect(send).toHaveBeenNthCalledWith(
       1,
       'oc_chat_a',
-      { text: 'agent reply' },
+      { markdown: 'agent reply' },
       { replyTo: 'om_inbound', replyInThread: true }
     )
     expect(send).toHaveBeenNthCalledWith(
       2,
       'oc_chat_a',
-      { text: 'agent reply' },
+      { markdown: 'agent reply' },
       { replyTo: undefined, replyInThread: undefined }
     )
     expect(logError).toHaveBeenCalledWith(
@@ -657,7 +657,7 @@ describe('ClawRuntime', () => {
     expect(runtimeRequest).not.toHaveBeenCalled()
     expect(send).toHaveBeenCalledWith(
       'oc_chat_a',
-      { text: 'Started a new topic. The next message will create a fresh local conversation.' },
+      { markdown: 'Started a new topic. The next message will create a fresh local conversation.' },
       { replyTo: 'om_inbound', replyInThread: false }
     )
     expect(current().claw.channels[0].threadId).toBe('')
@@ -711,7 +711,7 @@ describe('ClawRuntime', () => {
     expect(current().claw.channels[0].model).toBe('deepseek-v4-flash')
     expect(send).toHaveBeenCalledWith(
       'oc_chat_a',
-      { text: 'Claw IM model switched to `deepseek-v4-flash`.' },
+      { markdown: 'Claw IM model switched to `deepseek-v4-flash`.' },
       { replyTo: 'om_inbound', replyInThread: false }
     )
   })
@@ -1286,14 +1286,15 @@ describe('ClawRuntime', () => {
         throw new Error(`unexpected path ${path}`)
       })
       const send = vi.fn(async () => ({ messageId: 'om_sent' }))
+      const addReaction = vi.fn(async () => 'rc_file_1')
       const runtime = createClawRuntime({
         store: store as never,
         runtimeRequest,
         logError: () => undefined
       })
-      ;(runtime as unknown as { feishuChannels: Map<string, { send: typeof send }> })
+      ;(runtime as unknown as { feishuChannels: Map<string, { send: typeof send, addReaction: typeof addReaction }> })
         .feishuChannels
-        .set('channel_1', { send })
+        .set('channel_1', { send, addReaction })
 
       await (runtime as unknown as {
         handleFeishuMessage: (channelId: string, message: {
@@ -1325,7 +1326,7 @@ describe('ClawRuntime', () => {
       expect(send).toHaveBeenNthCalledWith(
         1,
         'oc_chat_a',
-        { text: '可以，我把 hello.md 作为附件发给你。' },
+        { markdown: '可以，我把 hello.md 作为附件发给你。' },
         { replyTo: 'om_inbound', replyInThread: false }
       )
       expect(send).toHaveBeenNthCalledWith(
@@ -1334,8 +1335,282 @@ describe('ClawRuntime', () => {
         { file: { source: realFilePath, fileName: 'hello.md' } },
         { replyTo: 'om_inbound', replyInThread: false }
       )
+      // The direct-file path is fast (synchronous file lookup + upload) and
+      // The direct-file path is fast (synchronous file lookup + upload) and
+      // must NOT add a pending reaction — that would be visually noisy.
+      const addReactionSpy = (runtime as unknown as { feishuChannels: Map<string, { addReaction: ReturnType<typeof vi.fn> }> })
+        .feishuChannels.get('channel_1')?.addReaction
+      expect(addReactionSpy).not.toHaveBeenCalled()
     } finally {
       await rm(workspaceRoot, { recursive: true, force: true })
     }
+  })
+
+  it('sends agent reply containing markdown as Feishu / Lark markdown', async () => {
+    const settings = buildSettings()
+    settings.claw.im.enabled = true
+    settings.claw.im.responseTimeoutMs = 2_000
+    settings.claw.channels = [buildChannel({ threadId: 'thr_1', conversations: [buildConversation({ localThreadId: 'thr_1' })] })]
+    const store = {
+      load: vi.fn(async () => settings),
+      patch: vi.fn(async () => settings)
+    }
+    const markdownReply = '**bold** `code`\n- item 1\n- item 2'
+    const runtimeRequest = vi.fn(async (_settings, path, init) => {
+      if (path === '/v1/threads/thr_1/turns') {
+        return { ok: true, status: 202, body: JSON.stringify({ threadId: 'thr_1', turnId: 'turn_md' }) }
+      }
+      if (path === '/v1/threads/thr_1' && init?.method === 'GET') {
+        return {
+          ok: true,
+          status: 200,
+          body: JSON.stringify({
+            id: 'thr_1',
+            status: 'idle',
+            turns: [
+              {
+                id: 'turn_md',
+                status: 'completed',
+                items: [{ kind: 'assistant_text', text: markdownReply }]
+              }
+            ]
+          })
+        }
+      }
+      throw new Error(`unexpected path ${path}`)
+    })
+    const send = vi.fn(async () => ({ messageId: 'om_md' }))
+    const addReaction = vi.fn(async () => 'rc_test_1')
+    const runtime = createClawRuntime({
+      store: store as never,
+      runtimeRequest,
+      logError: () => undefined
+    })
+    ;(runtime as unknown as { feishuChannels: Map<string, { send: typeof send, addReaction: typeof addReaction }> })
+      .feishuChannels
+      .set('channel_1', { send, addReaction })
+
+    await (runtime as unknown as {
+      handleFeishuMessage: (channelId: string, message: {
+        chatId: string
+        messageId: string
+        threadId?: string
+        senderId: string
+        senderName?: string
+        chatType: 'p2p' | 'group'
+        mentionedBot: boolean
+        mentionAll: boolean
+        content: string
+        rawContentType: string
+        mentions: unknown[]
+      }) => Promise<void>
+    }).handleFeishuMessage('channel_1', {
+      chatId: 'oc_chat_a',
+      messageId: 'om_inbound',
+      senderId: 'ou_1',
+      senderName: 'Alice',
+      chatType: 'p2p',
+      mentionedBot: false,
+      mentionAll: false,
+      content: 'tell me a story',
+      rawContentType: 'text',
+      mentions: []
+    })
+
+    // The pending reaction is added on the user's inbound message BEFORE
+    // the agent reply is sent.
+    expect(addReaction).toHaveBeenCalledWith('om_inbound', 'OnIt')
+    expect(send).toHaveBeenCalledWith(
+      'oc_chat_a',
+      { markdown: markdownReply },
+      { replyTo: 'om_inbound', replyInThread: false }
+    )
+    const textFormCall = (send.mock.calls as unknown as Array<[string, Record<string, unknown>]>)
+      .find(([, input]) => typeof input?.text === 'string')
+    expect(textFormCall).toBeUndefined()
+  })
+
+  it('falls back to markdown form when retrying without replyTo', async () => {
+    const settings = buildSettings()
+    const logError = vi.fn()
+    const send = vi.fn()
+      .mockRejectedValueOnce(new Error('reply permission denied'))
+      .mockResolvedValueOnce({ messageId: 'om_fallback' })
+    const runtime = createClawRuntime({
+      store: { load: vi.fn(async () => settings), patch: vi.fn(async () => settings) } as never,
+      runtimeRequest: vi.fn() as never,
+      logError
+    })
+
+    const result = await (runtime as unknown as {
+      sendFeishuMessage: (
+        bridge: { send: typeof send },
+        to: string,
+        input: { markdown: string },
+        options: { replyTo?: string; replyInThread?: boolean },
+        context: Record<string, unknown>
+      ) => Promise<{ messageId: string }>
+    }).sendFeishuMessage(
+      { send },
+      'oc_chat_a',
+      { markdown: '**hello**' },
+      { replyTo: 'om_inbound', replyInThread: true },
+      { purpose: 'agent-reply', channelId: 'channel_1' }
+    )
+
+    expect(result).toEqual({ messageId: 'om_fallback' })
+    expect(send).toHaveBeenNthCalledWith(
+      1,
+      'oc_chat_a',
+      { markdown: '**hello**' },
+      { replyTo: 'om_inbound', replyInThread: true }
+    )
+    expect(send).toHaveBeenNthCalledWith(
+      2,
+      'oc_chat_a',
+      { markdown: '**hello**' },
+      { replyTo: undefined, replyInThread: undefined }
+    )
+  })
+
+  it('continues agent flow when pending reaction add fails', async () => {
+    const settings = buildSettings()
+    settings.claw.im.enabled = true
+    settings.claw.im.responseTimeoutMs = 2_000
+    settings.claw.channels = [buildChannel({ threadId: 'thr_1', conversations: [buildConversation({ localThreadId: 'thr_1' })] })]
+    const store = {
+      load: vi.fn(async () => settings),
+      patch: vi.fn(async () => settings)
+    }
+    const logError = vi.fn()
+    const agentReply = 'all good'
+    const runtimeRequest = vi.fn(async (_settings, path, init) => {
+      if (path === '/v1/threads/thr_1/turns') {
+        return { ok: true, status: 202, body: JSON.stringify({ threadId: 'thr_1', turnId: 'turn_react_fail' }) }
+      }
+      if (path === '/v1/threads/thr_1' && init?.method === 'GET') {
+        return {
+          ok: true,
+          status: 200,
+          body: JSON.stringify({
+            id: 'thr_1',
+            status: 'idle',
+            turns: [
+              {
+                id: 'turn_react_fail',
+                status: 'completed',
+                items: [{ kind: 'assistant_text', text: agentReply }]
+              }
+            ]
+          })
+        }
+      }
+      throw new Error(`unexpected path ${path}`)
+    })
+    const addReaction = vi.fn().mockRejectedValue(new Error('addReaction API error'))
+    const send = vi.fn(async () => ({ messageId: 'om_agent_after_react_fail' }))
+    const runtime = createClawRuntime({
+      store: store as never,
+      runtimeRequest,
+      logError
+    })
+    ;(runtime as unknown as { feishuChannels: Map<string, { send: typeof send, addReaction: typeof addReaction }> })
+      .feishuChannels
+      .set('channel_1', { send, addReaction })
+
+    await (runtime as unknown as {
+      handleFeishuMessage: (channelId: string, message: {
+        chatId: string
+        messageId: string
+        threadId?: string
+        senderId: string
+        senderName?: string
+        chatType: 'p2p' | 'group'
+        mentionedBot: boolean
+        mentionAll: boolean
+        content: string
+        rawContentType: string
+        mentions: unknown[]
+      }) => Promise<void>
+    }).handleFeishuMessage('channel_1', {
+      chatId: 'oc_chat_a',
+      messageId: 'om_inbound_react_fail',
+      senderId: 'ou_1',
+      senderName: 'Alice',
+      chatType: 'p2p',
+      mentionedBot: false,
+      mentionAll: false,
+      content: 'do something',
+      rawContentType: 'text',
+      mentions: []
+    })
+
+    // The pending reaction failure must be logged and swallowed.
+    expect(logError).toHaveBeenCalledWith(
+      'claw-feishu',
+      expect.stringContaining('pending reaction'),
+      expect.objectContaining({
+        message: 'addReaction API error',
+        chatId: 'oc_chat_a',
+        messageId: 'om_inbound_react_fail'
+      })
+    )
+    // The agent reply is still dispatched despite the reaction failure.
+    expect(send).toHaveBeenCalledWith(
+      'oc_chat_a',
+      { markdown: agentReply },
+      { replyTo: 'om_inbound_react_fail', replyInThread: false }
+    )
+  })
+
+  it('does not add a pending reaction for IM commands', async () => {
+    const settings = buildSettings()
+    settings.claw.im.enabled = true
+    settings.claw.channels = [buildChannel()]
+    const store = {
+      load: vi.fn(async () => settings),
+      patch: vi.fn(async () => settings)
+    }
+    const send = vi.fn(async () => ({ messageId: 'om_cmd' }))
+    const addReaction = vi.fn(async () => 'rc_cmd_1')
+    const runtime = createClawRuntime({
+      store: store as never,
+      runtimeRequest: vi.fn() as never,
+      logError: () => undefined
+    })
+    ;(runtime as unknown as { feishuChannels: Map<string, { send: typeof send, addReaction: typeof addReaction }> })
+      .feishuChannels
+      .set('channel_1', { send, addReaction })
+
+    await (runtime as unknown as {
+      handleFeishuMessage: (channelId: string, message: {
+        chatId: string
+        messageId: string
+        threadId?: string
+        senderId: string
+        senderName?: string
+        chatType: 'p2p' | 'group'
+        mentionedBot: boolean
+        mentionAll: boolean
+        content: string
+        rawContentType: string
+        mentions: unknown[]
+      }) => Promise<void>
+    }).handleFeishuMessage('channel_1', {
+      chatId: 'oc_chat_a',
+      messageId: 'om_inbound_cmd',
+      senderId: 'ou_1',
+      senderName: 'Alice',
+      chatType: 'p2p',
+      mentionedBot: false,
+      mentionAll: false,
+      content: '/help',
+      rawContentType: 'text',
+      mentions: []
+    })
+
+    // /help produces a single IM command reply; no pending reaction.
+    expect(send).toHaveBeenCalledTimes(1)
+    expect(addReaction).not.toHaveBeenCalled()
   })
 })

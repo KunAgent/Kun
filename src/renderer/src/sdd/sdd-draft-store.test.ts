@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   createSddDraft,
   forgetRememberedSddDraft,
+  readRememberedSddDraftContent,
   readRememberedSddDraft,
   useSddDraftStore
 } from './sdd-draft-store'
@@ -147,6 +148,49 @@ describe('sdd-draft-store', () => {
     expect(state.saveStatus).toBe('saved')
     expect(state.error).toBe('image missing')
     expect(readRememberedSddDraft('/tmp/app')?.updatedAt).toBe('2026-01-02T03:04:05.000Z')
+  })
+
+  it('persists unsaved draft content for restart recovery', () => {
+    const draft = createSddDraft({
+      id: '123e4567-e89b-12d3-a456-426614174000',
+      workspaceRoot: '/tmp/app',
+      now: 1
+    })
+    useSddDraftStore.getState().setActiveDraft(draft, '# Draft')
+
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-01-02T03:04:05.000Z'))
+    useSddDraftStore.getState().setContent('# Draft\n\nUnsaved line')
+
+    expect(readRememberedSddDraftContent(draft)).toEqual({
+      draftId: draft.id,
+      content: '# Draft\n\nUnsaved line',
+      lastSavedContent: '# Draft',
+      updatedAt: '2026-01-02T03:04:05.000Z'
+    })
+  })
+
+  it('opens a restored dirty draft with separate saved baseline', () => {
+    const draft = createSddDraft({
+      id: '123e4567-e89b-12d3-a456-426614174000',
+      workspaceRoot: '/tmp/app',
+      now: 1
+    })
+
+    useSddDraftStore.getState().setActiveDraft(draft, '# Local unsaved draft', {
+      lastSavedContent: '# Disk draft',
+      saveStatus: 'dirty'
+    })
+
+    expect(useSddDraftStore.getState()).toMatchObject({
+      content: '# Local unsaved draft',
+      lastSavedContent: '# Disk draft',
+      saveStatus: 'dirty'
+    })
+    expect(readRememberedSddDraftContent(draft)).toMatchObject({
+      content: '# Local unsaved draft',
+      lastSavedContent: '# Disk draft'
+    })
   })
 
   it('saves the active draft to disk and updates clean state', async () => {

@@ -18,6 +18,14 @@ type PersistedSddDraftRegistry = {
   version: 1
   activeByWorkspace: Record<string, string>
   drafts: Record<string, SddDraft>
+  contentByDraft: Record<string, SddDraftContentSnapshot>
+}
+
+export type SddDraftContentSnapshot = {
+  draftId: string
+  content: string
+  lastSavedContent: string
+  updatedAt: string
 }
 
 export type SddDraftState = {
@@ -27,7 +35,14 @@ export type SddDraftState = {
   saveStatus: SddDraftSaveStatus
   operationStatus: SddDraftOperationStatus
   error: string | null
-  setActiveDraft: (draft: SddDraft, content: string) => void
+  setActiveDraft: (
+    draft: SddDraft,
+    content: string,
+    options?: {
+      lastSavedContent?: string
+      saveStatus?: SddDraftSaveStatus
+    }
+  ) => void
   setContent: (content: string) => void
   setSaveStatus: (status: SddDraftSaveStatus, error?: string | null) => void
   markSaved: (content: string) => void
@@ -53,6 +68,19 @@ function draftId(workspaceRoot: string, relativePath: string): string {
   return `${normalizeWorkspaceRoot(workspaceRoot)}:${normalizeSddRelativePath(relativePath)}`
 }
 
+function normalizeContentSnapshot(raw: unknown, fallbackDraftId = ''): SddDraftContentSnapshot | null {
+  if (!isRecord(raw)) return null
+  const draftId = normalizeText(raw.draftId) || normalizeText(fallbackDraftId)
+  if (!draftId || typeof raw.content !== 'string') return null
+  const lastSavedContent = typeof raw.lastSavedContent === 'string' ? raw.lastSavedContent : raw.content
+  return {
+    draftId,
+    content: raw.content,
+    lastSavedContent,
+    updatedAt: normalizeText(raw.updatedAt) || new Date(0).toISOString()
+  }
+}
+
 function normalizeDraft(raw: unknown, fallbackId = ''): SddDraft | null {
   if (!isRecord(raw)) return null
   const id = normalizeText(raw.id) || normalizeText(fallbackId)
@@ -73,7 +101,7 @@ function normalizeDraft(raw: unknown, fallbackId = ''): SddDraft | null {
 }
 
 function emptyRegistry(): PersistedSddDraftRegistry {
-  return { version: 1, activeByWorkspace: {}, drafts: {} }
+  return { version: 1, activeByWorkspace: {}, drafts: {}, contentByDraft: {} }
 }
 
 function readRegistry(storage = browserStorage()): PersistedSddDraftRegistry {
@@ -101,7 +129,16 @@ function readRegistry(storage = browserStorage()): PersistedSddDraftRegistry {
         }
       }
     }
-    return { version: 1, activeByWorkspace, drafts }
+    const contentByDraft: Record<string, SddDraftContentSnapshot> = {}
+    if (isRecord(parsed.contentByDraft)) {
+      for (const [id, value] of Object.entries(parsed.contentByDraft)) {
+        const snapshot = normalizeContentSnapshot(value, id)
+        if (snapshot && drafts[snapshot.draftId]) {
+          contentByDraft[snapshot.draftId] = snapshot
+        }
+      }
+    }
+    return { version: 1, activeByWorkspace, drafts, contentByDraft }
   } catch {
     return emptyRegistry()
   }
@@ -145,6 +182,24 @@ export function rememberSddDraft(draft: SddDraft): void {
   writeRegistry(registry)
 }
 
+export function rememberSddDraftContent(
+  draft: Pick<SddDraft, 'id'>,
+  content: string,
+  lastSavedContent = content
+): void {
+  const draftId = normalizeText(draft.id)
+  if (!draftId) return
+  const registry = readRegistry()
+  if (!registry.drafts[draftId]) return
+  registry.contentByDraft[draftId] = {
+    draftId,
+    content,
+    lastSavedContent,
+    updatedAt: new Date().toISOString()
+  }
+  writeRegistry(registry)
+}
+
 export function readRememberedSddDraft(workspaceRoot: string): SddDraft | null {
   const registry = readRegistry()
   const workspace = normalizeWorkspaceRoot(workspaceRoot)
@@ -153,11 +208,21 @@ export function readRememberedSddDraft(workspaceRoot: string): SddDraft | null {
   return draft && normalizeWorkspaceRoot(draft.workspaceRoot) === workspace ? draft : null
 }
 
+export function readRememberedSddDraftContent(
+  draft: Pick<SddDraft, 'id'>
+): SddDraftContentSnapshot | null {
+  const draftId = normalizeText(draft.id)
+  if (!draftId) return null
+  const registry = readRegistry()
+  return registry.contentByDraft[draftId] ?? null
+}
+
 export function forgetRememberedSddDraft(draft: Pick<SddDraft, 'id' | 'workspaceRoot'>): void {
   const normalizedId = normalizeText(draft.id)
   if (!normalizedId) return
   const registry = readRegistry()
   delete registry.drafts[normalizedId]
+  delete registry.contentByDraft[normalizedId]
   for (const [key, activeId] of Object.entries(registry.activeByWorkspace)) {
     if (activeId === normalizedId) {
       delete registry.activeByWorkspace[key]
@@ -174,24 +239,32 @@ export const useSddDraftStore = create<SddDraftState>((set) => ({
   operationStatus: 'idle',
   error: null,
 
-  setActiveDraft: (draft, content) => {
+  setActiveDraft: (draft, content, options = {}) => {
+    const lastSavedContent = options.lastSavedContent ?? content
+    const saveStatus = options.saveStatus ?? (content === lastSavedContent ? 'saved' : 'dirty')
     rememberSddDraft(draft)
+    rememberSddDraftContent(draft, content, lastSavedContent)
     set({
       activeDraft: draft,
       content,
-      lastSavedContent: content,
-      saveStatus: 'saved',
+      lastSavedContent,
+      saveStatus,
       operationStatus: 'idle',
       error: null
     })
   },
 
   setContent: (content) =>
-    set((state) => ({
-      content,
-      saveStatus: content === state.lastSavedContent ? 'saved' : 'dirty',
-      error: state.saveStatus === 'error' ? null : state.error
-    })),
+    set((state) => {
+      if (state.activeDraft) {
+        rememberSddDraftContent(state.activeDraft, content, state.lastSavedContent)
+      }
+      return {
+        content,
+        saveStatus: content === state.lastSavedContent ? 'saved' : 'dirty',
+        error: state.saveStatus === 'error' ? null : state.error
+      }
+    }),
 
   setSaveStatus: (status, error = null) => set({ saveStatus: status, error }),
 
@@ -201,6 +274,7 @@ export const useSddDraftStore = create<SddDraftState>((set) => ({
         ? { ...state.activeDraft, updatedAt: new Date().toISOString() }
         : state.activeDraft
       if (activeDraft) rememberSddDraft(activeDraft)
+      if (activeDraft) rememberSddDraftContent(activeDraft, content, content)
       return {
         activeDraft,
         content,

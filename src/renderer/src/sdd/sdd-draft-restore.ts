@@ -1,14 +1,18 @@
 import type { WorkspaceFileReadResult, WorkspaceFileTarget } from '@shared/workspace-file'
 import {
   forgetRememberedSddDraft,
+  readRememberedSddDraftContent,
   readRememberedSddDraft,
-  type SddDraft
+  type SddDraft,
+  type SddDraftSaveStatus
 } from './sdd-draft-store'
 
 export type RestoredSddDraft = {
   kind: 'restored'
   draft: SddDraft
   content: string
+  lastSavedContent: string
+  saveStatus: SddDraftSaveStatus
 }
 
 export type UnrestorableSddDraft =
@@ -20,6 +24,11 @@ export type RestoreRememberedSddDraftResult = RestoredSddDraft | UnrestorableSdd
 type RestoreRememberedSddDraftOptions = {
   workspaceRoot: string
   readWorkspaceFile: (options: WorkspaceFileTarget) => Promise<WorkspaceFileReadResult>
+}
+
+function timestampMs(value: string): number {
+  const parsed = Date.parse(value)
+  return Number.isFinite(parsed) ? parsed : 0
 }
 
 export async function restoreRememberedSddDraft({
@@ -38,9 +47,19 @@ export async function restoreRememberedSddDraft({
     return { kind: 'unreadable', draft: remembered, message: result.message }
   }
 
+  const contentSnapshot = readRememberedSddDraftContent(remembered)
+  const snapshotLooksNewer =
+    contentSnapshot &&
+    contentSnapshot.content !== contentSnapshot.lastSavedContent &&
+    contentSnapshot.content !== result.content &&
+    timestampMs(contentSnapshot.updatedAt) > timestampMs(remembered.updatedAt)
+  const content = snapshotLooksNewer ? contentSnapshot.content : result.content
+
   return {
     kind: 'restored',
     draft: { ...remembered, absolutePath: result.path },
-    content: result.content
+    content,
+    lastSavedContent: result.content,
+    saveStatus: content === result.content ? 'saved' : 'dirty'
   }
 }

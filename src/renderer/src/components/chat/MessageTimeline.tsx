@@ -128,7 +128,8 @@ export function MessageTimeline({
     busy,
     scrollDeps: {
       contentKey: scrollContentKey,
-      streaming: Boolean(live.trim() || liveReasoning.trim())
+      streaming: Boolean(live.trim() || liveReasoning.trim()),
+      userTurnKey: currentTurnUserId ?? ''
     }
   })
   const visibleTurns = useMemo(

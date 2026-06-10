@@ -6,6 +6,7 @@ import {
   DEFAULT_KUN_DATA_DIR,
   DEFAULT_KUN_MODEL,
   DEFAULT_APPROVAL_POLICY,
+  DEFAULT_SANDBOX_MODE,
   DEFAULT_WEIXIN_BRIDGE_RPC_URL,
   DEFAULT_SCHEDULE_INTERNAL_PORT,
   buildClawRuntimePrompt,
@@ -22,6 +23,7 @@ import {
   normalizeAppSettings,
   parseClawUserPromptForDisplay,
   normalizeScheduleSettings,
+  resolveKunRuntimeSettings,
   resolveWriteInlineCompletionApiKey,
   resolveWriteInlineCompletionBaseUrl,
   resolveWriteInlineCompletionModel,
@@ -89,6 +91,11 @@ describe('kun defaults', () => {
   it('defaults approval policy to auto', () => {
     expect(defaultKunRuntimeSettings().approvalPolicy).toBe(DEFAULT_APPROVAL_POLICY)
     expect(defaultKunRuntimeSettings().approvalPolicy).toBe('auto')
+  })
+
+  it('defaults sandbox mode to full access', () => {
+    expect(defaultKunRuntimeSettings().sandboxMode).toBe(DEFAULT_SANDBOX_MODE)
+    expect(defaultKunRuntimeSettings().sandboxMode).toBe('danger-full-access')
   })
 
   it('defaults token economy mode to off', () => {
@@ -472,6 +479,56 @@ describe('legacy Kun defaults migration', () => {
       dataDir: '/tmp/custom-kun',
       model: 'deepseek-v4-flash'
     }))
+  })
+
+  it('preserves custom model providers while migrating legacy settings', () => {
+    const migrated = normalizeAppSettings({
+      ...settings(),
+      agentProvider: 'deepseek-runtime',
+      provider: {
+        apiKey: 'sk-default',
+        baseUrl: 'https://api.deepseek.com',
+        providers: [
+          ...defaultModelProviderSettings().providers,
+          {
+            id: 'custom-provider-2',
+            name: 'Custom Provider',
+            apiKey: 'sk-custom',
+            baseUrl: 'https://custom.example/v1',
+            endpointFormat: 'responses',
+            models: ['custom-model']
+          }
+        ]
+      },
+      agents: {
+        kun: {
+          ...defaultKunRuntimeSettings(),
+          providerId: 'custom-provider-2',
+          model: 'custom-model'
+        }
+      }
+    } as unknown as AppSettingsV1)
+
+    expect(migrated.provider.providers).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'custom-provider-2',
+          name: 'Custom Provider',
+          apiKey: 'sk-custom',
+          baseUrl: 'https://custom.example/v1',
+          endpointFormat: 'responses',
+          models: ['custom-model']
+        })
+      ])
+    )
+    expect(migrated.agents.kun.providerId).toBe('custom-provider-2')
+    expect(resolveKunRuntimeSettings(migrated)).toEqual(
+      expect.objectContaining({
+        apiKey: 'sk-custom',
+        baseUrl: 'https://custom.example/v1',
+        endpointFormat: 'responses'
+      })
+    )
   })
 })
 

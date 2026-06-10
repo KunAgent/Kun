@@ -239,7 +239,8 @@ describe('app-ipc-schemas', () => {
         apiKey: 'sk-updated',
         providers: [{
           id: 'deepseek',
-          apiKey: 'sk-updated'
+          apiKey: 'sk-updated',
+          endpointFormat: 'responses'
         }]
       }
     })
@@ -247,7 +248,8 @@ describe('app-ipc-schemas', () => {
     expect(payload.provider?.apiKey).toBe('sk-updated')
     expect(payload.provider?.providers?.[0]).toEqual({
       id: 'deepseek',
-      apiKey: 'sk-updated'
+      apiKey: 'sk-updated',
+      endpointFormat: 'responses'
     })
   })
 

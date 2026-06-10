@@ -25,6 +25,7 @@ function settings(): AppSettingsV1 {
           name: 'Custom Provider',
           apiKey: 'sk-custom',
           baseUrl: 'https://custom.example/v1',
+          endpointFormat: 'messages',
           models: ['custom-model']
         }
       ]
@@ -55,5 +56,6 @@ describe('model provider settings', () => {
 
     expect(runtime.apiKey).toBe('sk-custom')
     expect(runtime.baseUrl).toBe('https://custom.example/v1')
+    expect(runtime.endpointFormat).toBe('messages')
   })
 })

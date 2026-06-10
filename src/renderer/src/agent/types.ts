@@ -453,6 +453,7 @@ export interface AgentProvider {
   steerUserMessage?(threadId: string, turnId: string, text: string): Promise<void>
   interruptTurn(threadId: string, turnId: string, options?: { discard?: boolean }): Promise<void>
   renameThread(threadId: string, title: string): Promise<void>
+  updateThreadWorkspace?(threadId: string, workspace: string): Promise<void>
   archiveThread?(threadId: string, archived: boolean): Promise<void>
   deleteThread(threadId: string): Promise<void>
   compactThread?(threadId: string, reason?: string): Promise<void>

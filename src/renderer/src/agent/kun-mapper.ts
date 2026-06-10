@@ -423,7 +423,7 @@ function questionsFromCore(
       header: 'Input',
       id: fallbackId,
       question: prompt?.trim() || 'Input requested',
-      options: [{ label: 'Submit', description: 'Send the typed response.' }]
+      options: []
     }
   ]
 }

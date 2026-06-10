@@ -225,6 +225,7 @@ function ClawInboundMessageCard({
 }
 
 const USER_INPUT_OTHER_LABEL = 'Other'
+const USER_INPUT_FREEFORM_LABEL = 'Answer'
 
 function metaStringArray(meta: Record<string, unknown> | undefined, key: string): string[] {
   const value = meta?.[key]
@@ -528,9 +529,11 @@ function CopyFeedbackButton({
 }
 
 function UserInputBubble({
-  block
+  block,
+  nested = false
 }: {
   block: Extract<ChatBlock, { kind: 'user_input' }>
+  nested?: boolean
 }): ReactElement {
   const { t } = useTranslation('common')
   const resolveUserInput = useChatStore((s) => s.resolveUserInput)
@@ -554,7 +557,9 @@ function UserInputBubble({
   const canSubmit = block.questions.every((question) => {
     const answer = answers[question.id]
     if (!answer) return false
-    if (answer.label === USER_INPUT_OTHER_LABEL) return answer.value.trim().length > 0
+    if (question.options.length === 0 || answer.label === USER_INPUT_OTHER_LABEL) {
+      return answer.value.trim().length > 0
+    }
     return true
   })
 
@@ -577,94 +582,253 @@ function UserInputBubble({
         : block.status === 'error'
           ? t('userInputFailed')
           : t('userInputPending')
+  const tone =
+    block.status === 'error'
+      ? 'error'
+      : block.status === 'submitted'
+        ? 'success'
+        : block.status === 'cancelled'
+          ? 'muted'
+          : 'active'
+  const questionCount = block.questions.length
+  const containerClass = nested
+    ? `overflow-hidden rounded-[14px] border px-3.5 py-3 text-[13px] leading-5 shadow-[0_8px_22px_rgba(15,23,42,0.035)] ${
+        tone === 'error'
+          ? 'border-red-300/65 bg-ds-card/88 dark:border-red-800/55 dark:bg-red-950/20'
+          : tone === 'success'
+            ? 'border-emerald-500/22 bg-ds-card/88 dark:border-emerald-600/30 dark:bg-ds-card/82'
+            : tone === 'muted'
+              ? 'border-ds-border-muted bg-ds-card/78'
+              : 'border-accent/22 bg-ds-card/90'
+      }`
+    : `overflow-hidden rounded-[16px] border px-4 py-4 text-[13px] leading-6 shadow-[0_14px_36px_rgba(15,23,42,0.055)] ${
+        tone === 'error'
+          ? 'border-red-300/70 bg-ds-card/90 dark:border-red-800/60 dark:bg-red-950/20'
+          : tone === 'success'
+            ? 'border-emerald-500/24 bg-ds-card/90 dark:border-emerald-600/32 dark:bg-ds-card/84'
+            : tone === 'muted'
+              ? 'border-ds-border bg-ds-card/82'
+              : 'border-accent/24 bg-ds-card/95 text-ds-ink'
+      }`
+  const iconFrameClass =
+    tone === 'error'
+      ? 'border-red-300/60 bg-red-500/10 text-red-700 dark:border-red-800/45 dark:text-red-300'
+      : tone === 'success'
+        ? 'border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
+        : tone === 'active'
+          ? 'border-accent/20 bg-accent/10 text-accent'
+          : 'border-ds-border-muted bg-ds-subtle text-ds-muted'
+  const statusClass =
+    tone === 'error'
+      ? 'text-red-700 dark:text-red-300'
+      : tone === 'success'
+        ? 'text-emerald-700 dark:text-emerald-300'
+        : tone === 'active'
+          ? 'text-accent'
+          : 'text-ds-muted'
+  const statusIcon =
+    tone === 'active' ? (
+      <Loader2 className="h-3.5 w-3.5 animate-spin" strokeWidth={2} />
+    ) : tone === 'success' ? (
+      <Check className="h-3.5 w-3.5" strokeWidth={2} />
+    ) : tone === 'error' ? (
+      <span className="flex h-3.5 w-3.5 items-center justify-center rounded-full border border-current text-[10px] font-bold leading-none">
+        !
+      </span>
+    ) : (
+      <span className="h-1.5 w-1.5 rounded-full bg-current opacity-70" />
+    )
 
   return (
-    <div
-      className={`rounded-[22px] border px-4 py-4 text-[13px] leading-6 shadow-[0_12px_30px_rgba(86,103,136,0.04)] ${
-        block.status === 'error'
-          ? 'border-red-300/80 bg-red-500/10 dark:border-red-800/60 dark:bg-red-950/35'
-          : 'border-accent/35 bg-[linear-gradient(180deg,rgba(79,124,255,0.07),rgba(79,124,255,0.11))] text-ds-ink'
-      }`}
-    >
-      <div className="font-semibold text-accent">{t('userInputTitle')}</div>
-      <p className="mt-1 text-[12px] text-ds-muted">{statusLabel}</p>
+    <div className={containerClass}>
+      <div className="flex min-w-0 items-start justify-between gap-3">
+        <div className="flex min-w-0 items-start gap-2.5">
+          <span
+            className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] border ${iconFrameClass}`}
+          >
+            {statusIcon}
+          </span>
+          <div className="min-w-0 pt-0.5">
+            <div className="font-semibold text-ds-ink">{t('userInputTitle')}</div>
+            <div className={`mt-0.5 text-[12px] font-medium ${statusClass}`}>{statusLabel}</div>
+          </div>
+        </div>
+        {questionCount > 1 ? (
+          <span className="shrink-0 rounded-full border border-ds-border-muted bg-ds-subtle px-2 py-0.5 text-[11.5px] font-medium text-ds-muted">
+            {questionCount}
+          </span>
+        ) : null}
+      </div>
 
-      <div className="mt-3 flex flex-col gap-4">
+      <div className={nested ? 'mt-3 flex flex-col gap-2.5' : 'mt-3.5 flex flex-col gap-3'}>
         {block.questions.map((question, index) => {
           const answer = answers[question.id]
+          const hasOptions = question.options.length > 0
           const otherSelected = answer?.label === USER_INPUT_OTHER_LABEL
+          const submittedAnswer = done ? (answer?.value || answer?.label || '') : ''
+          const showProgress = questionCount > 1
+          const showHeader =
+            typeof question.header === 'string' &&
+            question.header.trim().length > 0 &&
+            !(questionCount === 1 && question.header.trim().toLowerCase() === 'input')
           return (
-            <div key={question.id} className="rounded-xl border border-ds-border bg-ds-card/60 p-3">
-              <div className="flex flex-wrap items-baseline justify-between gap-2">
-                <div className="text-[12px] font-semibold uppercase tracking-[0.12em] text-ds-muted">
-                  {question.header}
+            <div
+              key={question.id}
+              className={`min-w-0 rounded-[12px] border px-3 py-3 ${
+                submittedAnswer
+                  ? 'border-ds-border-muted bg-ds-main/35'
+                  : 'border-ds-border-muted bg-ds-main/45'
+              }`}
+            >
+              {showHeader || showProgress ? (
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="min-w-0">
+                    {showHeader ? (
+                      <div className="min-w-0 text-[12px] font-semibold text-ds-muted">
+                        {question.header}
+                      </div>
+                    ) : null}
+                  </div>
+                  {showProgress ? (
+                    <div className="rounded-full bg-ds-card/70 px-2 py-0.5 text-[11.5px] font-medium text-ds-faint">
+                      {t('userInputQuestionProgress', {
+                        current: index + 1,
+                        total: block.questions.length
+                      })}
+                    </div>
+                  ) : null}
                 </div>
-                <div className="text-[12px] text-ds-faint">
-                  {t('userInputQuestionProgress', {
-                    current: index + 1,
-                    total: block.questions.length
-                  })}
-                </div>
-              </div>
-              <p className="mt-1.5 whitespace-pre-wrap text-[14px] font-medium text-ds-ink">
+              ) : null}
+              <p
+                className={`whitespace-pre-wrap break-words text-[14px] font-semibold leading-6 text-ds-ink [overflow-wrap:anywhere] ${
+                  showHeader || showProgress ? 'mt-2' : ''
+                }`}
+              >
                 {question.question}
               </p>
-              <div className="mt-3 grid gap-2">
-                {question.options.map((option) => {
-                  const selected = answer?.label === option.label && answer.value === option.label
-                  return (
-                    <button
-                      key={option.label}
-                      type="button"
-                      disabled={done}
-                      onClick={() => chooseOption(question, option.label)}
-                      className={`rounded-lg border px-3 py-2 text-left transition disabled:cursor-default ${
-                        selected
-                          ? 'border-accent/60 bg-accent/10 text-ds-ink'
-                          : 'border-ds-border bg-ds-card text-ds-muted hover:bg-ds-hover hover:text-ds-ink'
+
+              {submittedAnswer ? (
+                <div className="mt-3 flex min-w-0 items-start gap-2 rounded-[10px] border border-emerald-500/14 bg-ds-card/78 px-3 py-2.5">
+                  <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-500/12 text-emerald-700 dark:text-emerald-300">
+                    <Check className="h-3.5 w-3.5" strokeWidth={2.1} />
+                  </span>
+                  <span className="min-w-0 flex-1 break-words text-[13.5px] font-medium leading-5 text-ds-ink [overflow-wrap:anywhere]">
+                    {submittedAnswer}
+                  </span>
+                </div>
+              ) : done ? (
+                <div className="mt-3 rounded-[10px] border border-ds-border-muted bg-ds-card/70 px-3 py-2 text-[12.5px] font-medium text-ds-muted">
+                  {statusLabel}
+                </div>
+              ) : hasOptions ? (
+                <div className="mt-3 grid gap-2">
+                  {question.options.map((option) => {
+                    const selected = answer?.label === option.label && answer.value === option.label
+                    return (
+                      <button
+                        key={option.label}
+                        type="button"
+                        disabled={done}
+                        onClick={() => chooseOption(question, option.label)}
+                        className={`group flex min-w-0 gap-2.5 rounded-[10px] border px-3 py-2.5 text-left transition disabled:cursor-default ${
+                          selected
+                            ? 'border-accent/35 bg-accent/10 text-ds-ink ring-1 ring-accent/10'
+                            : 'border-ds-border-muted bg-ds-card/78 text-ds-muted hover:border-ds-border hover:bg-ds-card hover:text-ds-ink'
+                        }`}
+                      >
+                        <span
+                          className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border transition ${
+                            selected
+                              ? 'border-accent bg-accent/10'
+                              : 'border-ds-border bg-transparent group-hover:border-ds-muted'
+                          }`}
+                        >
+                          {selected ? <span className="h-2 w-2 rounded-full bg-accent" /> : null}
+                        </span>
+                        <span className="min-w-0">
+                          <span className="block break-words text-[13px] font-semibold [overflow-wrap:anywhere]">
+                            {option.label}
+                          </span>
+                          {option.description ? (
+                            <span className="mt-0.5 block break-words text-[12px] leading-5 text-ds-faint [overflow-wrap:anywhere]">
+                              {option.description}
+                            </span>
+                          ) : null}
+                        </span>
+                      </button>
+                    )
+                  })}
+                  <button
+                    type="button"
+                    disabled={done}
+                    onClick={() =>
+                      chooseOption(
+                        question,
+                        USER_INPUT_OTHER_LABEL,
+                        answer?.label === USER_INPUT_OTHER_LABEL ? answer.value : ''
+                      )
+                    }
+                    className={`group flex min-w-0 gap-2.5 rounded-[10px] border px-3 py-2.5 text-left transition disabled:cursor-default ${
+                      otherSelected
+                        ? 'border-accent/35 bg-accent/10 text-ds-ink ring-1 ring-accent/10'
+                        : 'border-ds-border-muted bg-ds-card/78 text-ds-muted hover:border-ds-border hover:bg-ds-card hover:text-ds-ink'
+                    }`}
+                  >
+                    <span
+                      className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border transition ${
+                        otherSelected
+                          ? 'border-accent bg-accent/10'
+                          : 'border-ds-border bg-transparent group-hover:border-ds-muted'
                       }`}
                     >
-                      <span className="block text-[13px] font-semibold">{option.label}</span>
+                      {otherSelected ? <span className="h-2 w-2 rounded-full bg-accent" /> : null}
+                    </span>
+                    <span className="min-w-0">
+                      <span className="block text-[13px] font-semibold">{t('userInputOther')}</span>
                       <span className="mt-0.5 block text-[12px] leading-5 text-ds-faint">
-                        {option.description}
+                        {t('userInputOtherDescription')}
                       </span>
-                    </button>
-                  )
-                })}
-                <button
-                  type="button"
-                  disabled={done}
-                  onClick={() =>
-                    chooseOption(
-                      question,
-                      USER_INPUT_OTHER_LABEL,
-                      answer?.label === USER_INPUT_OTHER_LABEL ? answer.value : ''
-                    )
-                  }
-                  className={`rounded-lg border px-3 py-2 text-left transition disabled:cursor-default ${
-                    otherSelected
-                      ? 'border-accent/60 bg-accent/10 text-ds-ink'
-                      : 'border-ds-border bg-ds-card text-ds-muted hover:bg-ds-hover hover:text-ds-ink'
-                  }`}
-                >
-                  <span className="block text-[13px] font-semibold">{t('userInputOther')}</span>
-                  <span className="mt-0.5 block text-[12px] leading-5 text-ds-faint">
-                    {t('userInputOtherDescription')}
-                  </span>
-                </button>
-                {otherSelected ? (
+                    </span>
+                  </button>
+                  {otherSelected ? (
+                    <textarea
+                      rows={2}
+                      disabled={done}
+                      value={answer?.value ?? ''}
+                      onChange={(e) =>
+                        chooseOption(question, USER_INPUT_OTHER_LABEL, e.target.value)
+                      }
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                          e.preventDefault()
+                          submit()
+                        }
+                      }}
+                      placeholder={t('userInputCustomPlaceholder')}
+                      className="min-h-20 resize-y rounded-[10px] border border-ds-border-muted bg-ds-card/90 px-3 py-2 text-[13px] leading-5 text-ds-ink outline-none transition placeholder:text-ds-faint focus:border-accent/45 focus:ring-2 focus:ring-accent/10 disabled:cursor-default disabled:opacity-80"
+                    />
+                  ) : null}
+                </div>
+              ) : (
+                <div className="mt-3">
                   <textarea
-                    rows={2}
+                    rows={3}
                     disabled={done}
                     value={answer?.value ?? ''}
                     onChange={(e) =>
-                      chooseOption(question, USER_INPUT_OTHER_LABEL, e.target.value)
+                      chooseOption(question, USER_INPUT_FREEFORM_LABEL, e.target.value)
                     }
-                    placeholder={t('userInputCustomPlaceholder')}
-                    className="min-h-20 resize-y rounded-lg border border-ds-border bg-ds-card px-3 py-2 text-[13px] leading-5 text-ds-ink outline-none transition placeholder:text-ds-faint focus:border-accent/60 disabled:cursor-default disabled:opacity-80"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                        e.preventDefault()
+                        submit()
+                      }
+                      }}
+                      placeholder={t('userInputCustomPlaceholder')}
+                    className="min-h-24 w-full resize-y rounded-[10px] border border-ds-border-muted bg-ds-card/90 px-3 py-2.5 text-[13px] leading-5 text-ds-ink outline-none transition placeholder:text-ds-faint focus:border-accent/45 focus:ring-2 focus:ring-accent/10 disabled:cursor-default disabled:opacity-80"
                   />
-                ) : null}
-              </div>
+                </div>
+              )}
             </div>
           )
         })}
@@ -674,30 +838,20 @@ function UserInputBubble({
         <p className="mt-3 text-[12px] text-red-700 dark:text-red-300">{block.errorMessage}</p>
       ) : null}
 
-      {block.answers && block.answers.length > 0 && block.status === 'submitted' ? (
-        <div className="mt-3 rounded-lg bg-ds-card px-3 py-2 text-[12px] text-ds-muted">
-          {block.answers.map((answer) => (
-            <div key={answer.id} className="flex gap-2">
-              <span className="font-mono text-ds-faint">{answer.id}</span>
-              <span className="min-w-0 flex-1 break-words">{answer.value || answer.label}</span>
-            </div>
-          ))}
-        </div>
-      ) : null}
-
       {pending ? (
-        <div className="mt-3 flex flex-wrap gap-2">
+        <div className="mt-3 flex flex-wrap gap-2 border-t border-ds-border-muted pt-3">
           <button
             type="button"
             disabled={!canSubmit}
-            className="rounded-lg bg-accent px-3 py-1.5 text-[13px] font-medium text-white hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
+            className="inline-flex min-h-8 items-center gap-1.5 rounded-[9px] bg-ds-ink px-3 py-1.5 text-[13px] font-semibold text-white shadow-sm transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-45 dark:text-black"
             onClick={submit}
           >
+            <Check className="h-3.5 w-3.5" strokeWidth={2} />
             {t('userInputSubmit')}
           </button>
           <button
             type="button"
-            className="rounded-lg border border-ds-border bg-ds-card px-3 py-1.5 text-[13px] font-medium text-ds-ink hover:bg-ds-hover"
+            className="min-h-8 rounded-[9px] border border-ds-border-muted bg-ds-card/80 px-3 py-1.5 text-[13px] font-medium text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink"
             onClick={cancel}
           >
             {t('userInputCancel')}
@@ -770,7 +924,7 @@ export function MessageBubble({ block, nested = false }: { block: ChatBlock; nes
     return <ToolEntry block={block} nested={nested} />
   }
   if (block.kind === 'user_input') {
-    return <UserInputBubble block={block} />
+    return <UserInputBubble block={block} nested={nested} />
   }
   if (block.kind === 'approval') {
     const done = block.status !== 'pending'

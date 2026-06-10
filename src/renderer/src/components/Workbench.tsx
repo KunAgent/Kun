@@ -2,6 +2,7 @@ import type { ReactElement } from 'react'
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useShallow } from 'zustand/react/shallow'
+import type { ApprovalPolicy, SandboxMode } from '@shared/app-settings'
 import { parseClawCommand } from '@shared/claw-commands'
 import { DEFAULT_COMPOSER_MODEL_IDS } from '@shared/default-composer-models'
 import { buildGuiPlanId, buildPlanRelativePath } from '@shared/gui-plan'
@@ -16,6 +17,7 @@ import type { ClipboardImageReadResult } from '@shared/workspace-file'
 import type { AttachmentReference, ChatBlock } from '../agent/types'
 import type { CoreRuntimeInfoJson, CoreRuntimeSkillJson } from '../agent/kun-contract'
 import { getProvider } from '../agent/registry'
+import { rendererRuntimeClient } from '../agent/runtime-client'
 import { useChatStore } from '../store/chat-store'
 import { isClawThread } from '../store/chat-store-helpers'
 import { hasPendingRuntimeWork } from '../store/chat-store-runtime-helpers'
@@ -26,7 +28,11 @@ import {
 import { Sidebar } from './chat/Sidebar'
 import { WorkbenchTopBar, type RightPanelMode } from './chat/WorkbenchTopBar'
 import { MessageTimeline } from './chat/MessageTimeline'
-import { FloatingComposer, type ComposerFileReference } from './chat/FloatingComposer'
+import {
+  FloatingComposer,
+  type ComposerExecutionSettings,
+  type ComposerFileReference
+} from './chat/FloatingComposer'
 import {
   composerReasoningEffortRequestValue,
   type ComposerReasoningEffort
@@ -43,7 +49,7 @@ import { composeWritePrompt } from '../write/quoted-selection'
 import { useWriteWorkspaceStore } from '../write/write-workspace-store'
 import { isWriteThreadId } from '../write/write-thread-registry'
 import { createSddDraft, forgetRememberedSddDraft, useSddDraftStore } from '../sdd/sdd-draft-store'
-import type { SddDraft } from '../sdd/sdd-draft-store'
+import type { SddDraft, SddDraftSaveStatus } from '../sdd/sdd-draft-store'
 import { saveActiveSddDraftToDisk } from '../sdd/sdd-draft-actions'
 import { restoreRememberedSddDraft } from '../sdd/sdd-draft-restore'
 import { composeSddAssistantPrompt } from '../sdd/sdd-assistant-prompt'
@@ -64,6 +70,7 @@ import { prepareImageAttachmentUpload } from '../lib/image-attachment-upload'
 import { isChatAttachmentUploadEnabled } from '../lib/attachment-upload-availability'
 import { normalizeWorkspaceRoot } from '../lib/workspace-path'
 import { useKeyboardShortcutSettings } from '../lib/keyboard-shortcut-settings'
+import { collectComposerChangeSummary } from '../lib/composer-change-summary'
 import {
   buildComposerFileContextPrompt,
   mergeComposerFileReferences,
@@ -340,6 +347,9 @@ export function Workbench(): ReactElement {
   const [runtimeSkills, setRuntimeSkills] = useState<CoreRuntimeSkillJson[]>([])
   const [composerAttachments, setComposerAttachments] = useState<AttachmentReference[]>([])
   const [composerFileReferences, setComposerFileReferences] = useState<ComposerFileReference[]>([])
+  const [composerExecutionSettings, setComposerExecutionSettings] =
+    useState<ComposerExecutionSettings | null>(null)
+  const [composerExecutionApplying, setComposerExecutionApplying] = useState(false)
   const [attachmentUploadBusy, setAttachmentUploadBusy] = useState(false)
   const [attachmentUploadError, setAttachmentUploadError] = useState<string | null>(null)
   const [connectPhoneSidebarOpen, setConnectPhoneSidebarOpen] = useState(false)
@@ -374,6 +384,8 @@ export function Workbench(): ReactElement {
   const draftByThread = useRef<Record<string, string>>({})
   const prevThreadId = useRef<string | null>(null)
   const inputRef = useRef('')
+  const dismissedSddDraftWorkspacesRef = useRef<Set<string>>(new Set())
+  const restoredSddDraftWorkspaceRef = useRef('')
   const sddUpgradeInFlightRef = useRef(false)
   const sddUpgradeTargetRef = useRef<PendingSddPlanTarget | null>(null)
   const timelineBlocks = blocks
@@ -406,6 +418,10 @@ export function Workbench(): ReactElement {
   const activeSkillWorkspace = useMemo(
     () => threads.find((thread) => thread.id === activeThreadId)?.workspace || workspaceRoot || '',
     [activeThreadId, threads, workspaceRoot]
+  )
+  const composerChangeSummary = useMemo(
+    () => collectComposerChangeSummary(timelineBlocks, activeSkillWorkspace),
+    [activeSkillWorkspace, timelineBlocks]
   )
   const latestDevPreviewUrl = detectedDevPreviewUrls[0] ?? null
   const latestAutoOpenDevPreviewUrl = autoOpenDevPreviewUrls[0] ?? null
@@ -554,6 +570,47 @@ export function Workbench(): ReactElement {
       return
     }
     openSideConversationDraft()
+  }
+
+  useEffect(() => {
+    let cancelled = false
+    void rendererRuntimeClient.getSettings()
+      .then((settings) => {
+        if (cancelled) return
+        setComposerExecutionSettings({
+          approvalPolicy: settings.agents.kun.approvalPolicy,
+          sandboxMode: settings.agents.kun.sandboxMode
+        })
+      })
+      .catch(() => undefined)
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const updateComposerExecutionSettings = (patch: Partial<ComposerExecutionSettings>): void => {
+    if (!composerExecutionSettings || composerExecutionApplying) return
+    const previous = composerExecutionSettings
+    const next = { ...previous, ...patch }
+    setComposerExecutionSettings(next)
+    setComposerExecutionApplying(true)
+    void rendererRuntimeClient.setSettings({
+      agents: {
+        kun: {
+          ...(patch.approvalPolicy ? { approvalPolicy: patch.approvalPolicy as ApprovalPolicy } : {}),
+          ...(patch.sandboxMode ? { sandboxMode: patch.sandboxMode as SandboxMode } : {})
+        }
+      }
+    }).then((settings) => {
+      setComposerExecutionSettings({
+        approvalPolicy: settings.agents.kun.approvalPolicy,
+        sandboxMode: settings.agents.kun.sandboxMode
+      })
+      void probeRuntime('background')
+    }).catch((error: unknown) => {
+      setComposerExecutionSettings(previous)
+      setError(error instanceof Error ? error.message : String(error))
+    }).finally(() => setComposerExecutionApplying(false))
   }
 
   const codeThreads = useMemo(
@@ -858,16 +915,58 @@ export function Workbench(): ReactElement {
     return createSddAssistantThreadForDraft(draft)
   }
 
-  const openSddRequirementDraft = async (draft: SddDraft, content: string): Promise<boolean> => {
-    useSddDraftStore.getState().setActiveDraft(draft, content)
+  const openSddRequirementDraft = async (
+    draft: SddDraft,
+    content: string,
+    options: {
+      lastSavedContent?: string
+      saveStatus?: SddDraftSaveStatus
+      openAssistant?: boolean
+    } = {}
+  ): Promise<boolean> => {
+    useSddDraftStore.getState().setActiveDraft(draft, content, {
+      lastSavedContent: options.lastSavedContent,
+      saveStatus: options.saveStatus
+    })
+    dismissedSddDraftWorkspacesRef.current.delete(normalizeWorkspaceRoot(draft.workspaceRoot))
     setInput('')
     setMode('agent')
     setRoute('chat')
-    setRightSidebarWidth((width) => Math.max(width, 420))
-    const sddThreadId = await ensureSddAssistantThreadForDraft(draft)
-    if (!sddThreadId) return false
-    setRightPanelMode('sdd-ai')
+    if (options.openAssistant ?? runtimeConnection === 'ready') {
+      setRightSidebarWidth((width) => Math.max(width, 420))
+      const sddThreadId = await ensureSddAssistantThreadForDraft(draft)
+      if (sddThreadId) {
+        setRightPanelMode('sdd-ai')
+      } else {
+        setRightPanelMode(null)
+      }
+    } else {
+      setRightPanelMode(null)
+    }
     return true
+  }
+
+  const dismissActiveSddDraft = (options: { closeAssistant?: boolean } = {}): void => {
+    const draft = useSddDraftStore.getState().activeDraft
+    if (draft) {
+      dismissedSddDraftWorkspacesRef.current.add(normalizeWorkspaceRoot(draft.workspaceRoot))
+      void saveActiveSddDraftToDisk()
+      useSddDraftStore.getState().clearActiveDraft()
+    }
+    if (options.closeAssistant && rightPanelMode === 'sdd-ai') setRightPanelMode(null)
+  }
+
+  const toggleSddAssistantPanel = async (): Promise<void> => {
+    if (rightPanelMode === 'sdd-ai') {
+      setRightPanelMode(null)
+      return
+    }
+    const draft = useSddDraftStore.getState().activeDraft
+    if (!draft) return
+    setRightSidebarWidth((width) => Math.max(width, 420))
+    const threadId = await ensureSddAssistantThreadForDraft(draft)
+    if (!threadId) return
+    setRightPanelMode('sdd-ai')
   }
 
   const startNewSddRequirement = async (): Promise<void> => {
@@ -888,7 +987,10 @@ export function Workbench(): ReactElement {
       readWorkspaceFile: window.dsGui.readWorkspaceFile
     })
     if (restored.kind === 'restored') {
-      await openSddRequirementDraft(restored.draft, restored.content)
+      await openSddRequirementDraft(restored.draft, restored.content, {
+        lastSavedContent: restored.lastSavedContent,
+        saveStatus: restored.saveStatus
+      })
       return
     }
 
@@ -916,6 +1018,39 @@ export function Workbench(): ReactElement {
     const activeDraft = { ...draft, absolutePath: result.path }
     await openSddRequirementDraft(activeDraft, initialContent)
   }
+
+  useEffect(() => {
+    if (activeSddDraft) return
+    const activeCodeWorkspace = activeThreadId
+      ? normalizeWorkspaceRoot(codeThreads.find((thread) => thread.id === activeThreadId)?.workspace ?? '')
+      : ''
+    const targetWorkspace = activeCodeWorkspace || normalizeWorkspaceRoot(workspaceRoot)
+    if (!targetWorkspace || dismissedSddDraftWorkspacesRef.current.has(targetWorkspace)) return
+    if (restoredSddDraftWorkspaceRef.current === targetWorkspace) return
+
+    let cancelled = false
+    restoredSddDraftWorkspaceRef.current = targetWorkspace
+    void restoreRememberedSddDraft({
+      workspaceRoot: targetWorkspace,
+      readWorkspaceFile: window.dsGui.readWorkspaceFile
+    }).then((restored) => {
+      if (cancelled || restored.kind !== 'restored') return
+      if (useSddDraftStore.getState().activeDraft) return
+      useSddDraftStore.getState().setActiveDraft(restored.draft, restored.content, {
+        lastSavedContent: restored.lastSavedContent,
+        saveStatus: restored.saveStatus
+      })
+      dismissedSddDraftWorkspacesRef.current.delete(targetWorkspace)
+      setInput('')
+      setMode('agent')
+      setRoute('chat')
+      setRightPanelMode(null)
+    })
+
+    return () => {
+      cancelled = true
+    }
+  }, [activeSddDraft, activeThreadId, codeThreads, setRightPanelMode, setRoute, workspaceRoot])
 
   const sendSddAssistantPrompt = async (value: string): Promise<void> => {
     const v = value.trim()
@@ -1290,30 +1425,21 @@ export function Workbench(): ReactElement {
   }
 
   const openThread = (id: string): void => {
-    if (activeSddDraft) {
-      void saveActiveSddDraftToDisk()
-      useSddDraftStore.getState().clearActiveDraft()
-    }
+    if (activeSddDraft) dismissActiveSddDraft({ closeAssistant: true })
     setConnectPhoneSidebarOpen(false)
     setRoute('chat')
     void selectThread(id)
   }
 
   const startNewChat = (): void => {
-    if (activeSddDraft) {
-      void saveActiveSddDraftToDisk()
-      useSddDraftStore.getState().clearActiveDraft()
-    }
+    if (activeSddDraft) dismissActiveSddDraft({ closeAssistant: true })
     setConnectPhoneSidebarOpen(false)
     setRoute('chat')
     void createThread()
   }
 
   const startNewChatInWorkspace = (workspaceRoot: string): void => {
-    if (activeSddDraft) {
-      void saveActiveSddDraftToDisk()
-      useSddDraftStore.getState().clearActiveDraft()
-    }
+    if (activeSddDraft) dismissActiveSddDraft({ closeAssistant: true })
     setConnectPhoneSidebarOpen(false)
     setRoute('chat')
     void createThread({ workspaceRoot })
@@ -1340,11 +1466,7 @@ export function Workbench(): ReactElement {
   }
 
   const toggleConnectPhone = (): void => {
-    if (activeSddDraft) {
-      void saveActiveSddDraftToDisk()
-      useSddDraftStore.getState().clearActiveDraft()
-      if (rightPanelMode === 'sdd-ai') setRightPanelMode(null)
-    }
+    if (activeSddDraft) dismissActiveSddDraft({ closeAssistant: true })
     openClaw()
     setConnectPhoneSidebarOpen((open) => !open)
   }
@@ -1620,19 +1742,15 @@ export function Workbench(): ReactElement {
               leftSidebarCollapsed={leftSidebarCollapsed}
               assistantOpen={rightPanelMode === 'sdd-ai'}
               onToggleLeftSidebar={toggleLeftSidebar}
-              onToggleAssistant={() => toggleRightPanelMode('sdd-ai')}
+              onToggleAssistant={() => void toggleSddAssistantPanel()}
               onNext={() => void handleSddNextStep()}
-              onClose={() => {
-                void saveActiveSddDraftToDisk()
-                useSddDraftStore.getState().clearActiveDraft()
-                if (rightPanelMode === 'sdd-ai') setRightPanelMode(null)
-              }}
+              onClose={() => dismissActiveSddDraft({ closeAssistant: true })}
               nextDisabled={busy || runtimeConnection !== 'ready' || sddDraftOperationStatus === 'upgrading'}
             />
           ) : (
             <section className="ds-chat-stage ds-drag flex min-h-0 min-w-0 flex-1 flex-col">
             <header className="chat-topbar ds-topbar-surface relative z-10 mt-3 flex min-h-[46px] w-full shrink-0 items-stretch overflow-visible rounded-[24px]">
-              <div className="chat-topbar-grid grid w-full min-w-0 items-center gap-2.5 px-3 py-2 sm:px-4 md:pl-5 md:pr-2">
+              <div className="chat-topbar-grid grid w-full min-w-0 items-start gap-2.5 px-3 py-2 sm:px-4 md:pl-5 md:pr-2">
                 <div
                   className={`chat-topbar-session flex min-w-0 items-center gap-2.5 ${
                     leftSidebarCollapsed ? 'ds-window-controls-safe-inset' : ''
@@ -1647,7 +1765,7 @@ export function Workbench(): ReactElement {
                   ) : null}
                   <SessionHeader compact className="min-w-0 flex-1" />
                 </div>
-                <div className="chat-topbar-actions flex min-w-0 flex-wrap items-center justify-end gap-2">
+                <div className="chat-topbar-actions flex min-w-0 flex-wrap items-center justify-end gap-2 self-start">
                   {busy ? (
                     <span className="inline-flex shrink-0 rounded-full bg-amber-500/16 px-2.5 py-1 text-[11.5px] font-semibold text-amber-950 dark:text-amber-100">
                       {t('running')}
@@ -1689,7 +1807,7 @@ export function Workbench(): ReactElement {
                 ) : null
               }
             />
-            <div className="flex shrink-0 justify-center px-2 pb-3 pt-0 sm:px-4 md:px-6 lg:px-8">
+            <div className="ds-no-drag flex shrink-0 justify-center px-2 pb-3 pt-0 sm:px-4 md:px-6 lg:px-8">
               <FloatingComposer
                 input={input}
                 setInput={setInput}
@@ -1726,6 +1844,10 @@ export function Workbench(): ReactElement {
                 fileReferenceEnabled={route === 'chat' && !activeSddDraft}
                 fileReferences={composerFileReferences}
                 webAccessAvailable={webAccessAvailable}
+                executionSettings={composerExecutionSettings}
+                executionSettingsApplying={composerExecutionApplying}
+                changedFiles={composerChangeSummary?.files}
+                changedFileStats={composerChangeSummary}
                 skillCommands={runtimeSkills}
                 onPickAttachments={(files) => void handlePickAttachments(files)}
                 onPasteClipboardImage={(options) => void handlePasteClipboardImage(options)}
@@ -1737,6 +1859,10 @@ export function Workbench(): ReactElement {
                 onInterrupt={(options) => void interrupt(options)}
                 onPlanCommand={() => void handleGuiPlanCommand()}
                 onReviewCommand={(target) => void reviewActiveThread(target)}
+                onExecutionSettingsChange={updateComposerExecutionSettings}
+                onOpenChanges={() => setRightPanelMode('changes')}
+                onReviewChanges={() => void reviewActiveThread({ kind: 'uncommittedChanges' })}
+                reviewChangesDisabled={busy || runtimeConnection !== 'ready'}
                 onBtwCommand={(seedText) => {
                   if (seedText?.trim()) {
                     void spawnSideConversation(seedText)

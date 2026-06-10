@@ -22,12 +22,14 @@ function createMemoryStorage(): Storage {
 
 describe('sdd-draft-restore', () => {
   beforeEach(() => {
+    vi.useRealTimers()
     vi.stubGlobal('localStorage', createMemoryStorage())
     vi.stubGlobal('window', { localStorage })
     useSddDraftStore.getState().clearActiveDraft()
   })
 
   afterEach(() => {
+    vi.useRealTimers()
     vi.unstubAllGlobals()
     useSddDraftStore.getState().clearActiveDraft()
   })
@@ -64,6 +66,67 @@ describe('sdd-draft-restore', () => {
         workspaceRoot: '/tmp/app',
         absolutePath: '/tmp/app/.kunsdd/draft/123e4567-e89b-12d3-a456-426614174000/requirement.md'
       }
+    })
+  })
+
+  it('restores newer unsaved local content when disk autosave did not finish before restart', async () => {
+    const draft = createSddDraft({
+      id: '123e4567-e89b-12d3-a456-426614174000',
+      workspaceRoot: '/tmp/app/',
+      now: 1
+    })
+    useSddDraftStore.getState().setActiveDraft(draft, '# Disk draft')
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-01-02T03:04:05.000Z'))
+    useSddDraftStore.getState().setContent('# Disk draft\n\nUnsaved local line')
+    useSddDraftStore.getState().clearActiveDraft()
+    const readWorkspaceFile = vi.fn().mockResolvedValue({
+      ok: true,
+      path: '/tmp/app/.kunsdd/draft/123e4567-e89b-12d3-a456-426614174000/requirement.md',
+      content: '# Disk draft',
+      size: 12,
+      truncated: false
+    })
+
+    const result = await restoreRememberedSddDraft({
+      workspaceRoot: '/tmp/app',
+      readWorkspaceFile
+    })
+
+    expect(result).toMatchObject({
+      kind: 'restored',
+      content: '# Disk draft\n\nUnsaved local line',
+      lastSavedContent: '# Disk draft',
+      saveStatus: 'dirty'
+    })
+  })
+
+  it('does not let a clean local snapshot override newer disk content', async () => {
+    const draft = createSddDraft({
+      id: '123e4567-e89b-12d3-a456-426614174000',
+      workspaceRoot: '/tmp/app/',
+      now: 1
+    })
+    useSddDraftStore.getState().setActiveDraft(draft, '# Previous')
+    useSddDraftStore.getState().clearActiveDraft()
+    const readWorkspaceFile = vi.fn().mockResolvedValue({
+      ok: true,
+      path: '/tmp/app/.kunsdd/draft/123e4567-e89b-12d3-a456-426614174000/requirement.md',
+      content: '# Updated on disk',
+      size: 17,
+      truncated: false
+    })
+
+    const result = await restoreRememberedSddDraft({
+      workspaceRoot: '/tmp/app',
+      readWorkspaceFile
+    })
+
+    expect(result).toMatchObject({
+      kind: 'restored',
+      content: '# Updated on disk',
+      lastSavedContent: '# Updated on disk',
+      saveStatus: 'saved'
     })
   })
 

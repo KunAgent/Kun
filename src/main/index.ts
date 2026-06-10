@@ -9,6 +9,7 @@ import {
 import deepseekLogoPng from '../asset/img/deepseek.png?url'
 import deepseekTrayPng from '../asset/img/deepseek_gui_tray.png?url'
 import { createAppIcon, pickTrayIcon } from './app-icon'
+import { configureLinuxWaylandImeSwitches } from './app-command-line'
 import { configureAppIdentity } from './app-identity'
 import {
   applyKunRuntimePatch,
@@ -38,6 +39,7 @@ import {
   runtimeAuthHeaders,
   runtimeRequestViaHost
 } from './runtime/kun-adapter'
+import { waitForRuntimeTurnsIdle } from './runtime/managed-runtime-idle'
 import { configureLogger, logError, logWarn, pruneOnStartup } from './logger'
 import { createClawRuntime, type ClawRuntime } from './claw-runtime'
 import { createScheduleRuntime, type ScheduleRuntime } from './schedule-runtime'
@@ -152,6 +154,7 @@ if (runningClawScheduleMcpServer && process.platform === 'darwin') {
 // 抽到 app-identity.ts 是为了让测试可以直接 import,不被 main 的
 // whenReady 副作用污染。
 configureAppIdentity()
+configureLinuxWaylandImeSwitches()
 
 if (!runningClawScheduleMcpServer && process.platform === 'win32') {
   app.setAppUserModelId(APP_USER_MODEL_ID)
@@ -756,6 +759,7 @@ async function restartManagedRuntimeForSettingsChange(
 
   if (!wasRunning) return
   if (wasRunning) {
+    await waitForManagedRuntimeReadyBeforeStop(prev, 'settings-apply')
     await adapter.stopAndWait()
   }
   if (!resolveConfiguredApiKey(next) || !runtime.autoStart) return
@@ -777,6 +781,7 @@ async function restartManagedRuntimeForMcpConfigChange(settings: AppSettingsV1):
   const wasRunning = adapter.isChildRunning()
 
   if (!wasRunning) return
+  await waitForManagedRuntimeReadyBeforeStop(settings, 'mcp-config')
   await adapter.stopAndWait()
   if (!resolveConfiguredApiKey(settings) || !runtime.autoStart) return
 
@@ -788,6 +793,23 @@ async function restartManagedRuntimeForMcpConfigChange(settings: AppSettingsV1):
     }
   } catch (e) {
     console.warn('[deepseek-gui] Kun restart failed after MCP config change:', e)
+  }
+}
+
+async function waitForManagedRuntimeReadyBeforeStop(
+  settings: AppSettingsV1,
+  source: string
+): Promise<void> {
+  const healthy = await waitForKunHealth(settings, 20_000)
+  if (!healthy) {
+    logWarn(source, 'Kun did not become healthy before a managed restart; stopping it anyway')
+    return
+  }
+  const idle = await waitForRuntimeTurnsIdle({ settings })
+  if (idle === 'timeout') {
+    logWarn(source, 'Kun still has running turns after waiting; stopping it anyway')
+  } else if (idle === 'unavailable') {
+    logWarn(source, 'Could not verify Kun turn idleness before a managed restart; stopping it anyway')
   }
 }
 

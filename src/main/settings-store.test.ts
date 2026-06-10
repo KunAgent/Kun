@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_APPROVAL_POLICY } from '../shared/app-settings'
+import { DEFAULT_APPROVAL_POLICY, defaultKunRuntimeSettings, defaultModelProviderSettings } from '../shared/app-settings'
 import { DEFAULT_GUI_UPDATE_CHANNEL } from '../shared/gui-update'
 import { JsonSettingsStore } from './settings-store'
 
@@ -135,6 +135,76 @@ describe('JsonSettingsStore', () => {
     expect(loaded.provider.baseUrl).toBe('https://runtime.example/v1')
     expect(loaded.agents.kun.apiKey).toBe('')
     expect(loaded.agents.kun.baseUrl).toBe('')
+  })
+
+  it('keeps custom model providers when migrated settings are reloaded', async () => {
+    const userDataDir = await mkdtemp(join(tmpdir(), 'ds-gui-settings-'))
+    const settingsPath = join(userDataDir, 'deepseek-gui-settings.json')
+    const provider = defaultModelProviderSettings()
+
+    await writeFile(
+      settingsPath,
+      JSON.stringify({
+        version: 1,
+        agentProvider: 'deepseek-runtime',
+        provider: {
+          apiKey: 'sk-default',
+          baseUrl: 'https://api.deepseek.com',
+          providers: [
+            ...provider.providers,
+            {
+              id: 'custom-provider-2',
+              name: 'Custom Provider',
+              apiKey: 'sk-custom',
+              baseUrl: 'https://custom.example/v1',
+              endpointFormat: 'messages',
+              models: ['custom-model']
+            }
+          ]
+        },
+        agents: {
+          kun: {
+            ...defaultKunRuntimeSettings(),
+            providerId: 'custom-provider-2',
+            model: 'custom-model'
+          }
+        }
+      }),
+      'utf8'
+    )
+
+    const firstStore = new JsonSettingsStore(userDataDir)
+    const firstLoaded = await firstStore.load()
+
+    expect(firstLoaded.provider.providers).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'custom-provider-2',
+          apiKey: 'sk-custom',
+          baseUrl: 'https://custom.example/v1',
+          endpointFormat: 'messages',
+          models: ['custom-model']
+        })
+      ])
+    )
+    expect(firstLoaded.agents.kun.providerId).toBe('custom-provider-2')
+    await firstStore.save(firstLoaded)
+
+    const secondStore = new JsonSettingsStore(userDataDir)
+    const secondLoaded = await secondStore.load()
+
+    expect(secondLoaded.provider.providers).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'custom-provider-2',
+          apiKey: 'sk-custom',
+          baseUrl: 'https://custom.example/v1',
+          endpointFormat: 'messages',
+          models: ['custom-model']
+        })
+      ])
+    )
+    expect(secondLoaded.agents.kun.providerId).toBe('custom-provider-2')
   })
 
   it('loads settings from the legacy lowercase userData directory and writes them into the current path', async () => {

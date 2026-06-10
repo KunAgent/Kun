@@ -8,7 +8,7 @@ import {
   makeToolResultItem,
   makeUserItem
 } from '../src/domain/item.js'
-import type { ModelRequest } from '../src/ports/model-client.js'
+import type { ModelRequest, ModelStreamChunk } from '../src/ports/model-client.js'
 
 function buildRequest(abortSignal: AbortSignal): ModelRequest {
   return {
@@ -31,6 +31,22 @@ function buildRequest(abortSignal: AbortSignal): ModelRequest {
     ],
     abortSignal
   }
+}
+
+function collectKinds(chunks: ModelStreamChunk[]): string[] {
+  return chunks.map((chunk) => chunk.kind)
+}
+
+function sseStream(payloads: Array<Record<string, unknown> | '[DONE]'>): ReadableStream<Uint8Array> {
+  const encoder = new TextEncoder()
+  return new ReadableStream({
+    start(controller) {
+      for (const payload of payloads) {
+        controller.enqueue(encoder.encode(`data: ${payload === '[DONE]' ? payload : JSON.stringify(payload)}\n\n`))
+      }
+      controller.close()
+    }
+  })
 }
 
 describe('DeepseekCompatModelClient', () => {
@@ -75,6 +91,267 @@ describe('DeepseekCompatModelClient', () => {
       // drain
     }
     expect(sentBodies[0]?.model).toBe('deepseek-v4-pro')
+  })
+
+  it('builds chat completions URLs for base URLs with and without version segments', async () => {
+    const cases = [
+      ['https://zenmux.ai/api', 'https://zenmux.ai/api/v1/chat/completions'],
+      ['https://zenmux.ai/api/v1', 'https://zenmux.ai/api/v1/chat/completions'],
+      ['https://zenmux.ai/api/v1/', 'https://zenmux.ai/api/v1/chat/completions'],
+      ['https://zenmux.ai/api/v2', 'https://zenmux.ai/api/v2/chat/completions'],
+      ['https://zenmux.ai/api/v1/chat/completions', 'https://zenmux.ai/api/v1/chat/completions'],
+      ['https://api.deepseek.com/beta', 'https://api.deepseek.com/v1/chat/completions'],
+      ['https://api.deepseek.com', 'https://api.deepseek.com/v1/chat/completions']
+    ]
+
+    for (const [baseUrl, expectedUrl] of cases) {
+      const sentUrls: string[] = []
+      const fetchImpl: typeof fetch = async (url) => {
+        sentUrls.push(String(url))
+        return new Response(JSON.stringify({
+          id: 'url',
+          model: 'deepseek-chat',
+          choices: [{ index: 0, finish_reason: 'stop', message: { role: 'assistant', content: 'done' } }]
+        }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' }
+        })
+      }
+      const client = new DeepseekCompatModelClient({
+        baseUrl,
+        apiKey: 'k',
+        model: 'deepseek-chat',
+        fetchImpl,
+        nonStreaming: true
+      })
+
+      for await (const _chunk of client.stream(buildRequest(new AbortController().signal))) {
+        // drain
+      }
+
+      expect(sentUrls[0]).toBe(expectedUrl)
+    }
+  })
+
+  it('uses the Responses API format when selected', async () => {
+    const sentUrls: string[] = []
+    const sentBodies: Array<Record<string, unknown>> = []
+    const fetchImpl: typeof fetch = async (url, init) => {
+      sentUrls.push(String(url))
+      sentBodies.push(JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>)
+      return new Response(JSON.stringify({
+        id: 'resp_1',
+        status: 'completed',
+        output_text: 'done',
+        usage: { input_tokens: 2, output_tokens: 3, total_tokens: 5 }
+      }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' }
+      })
+    }
+    const client = new DeepseekCompatModelClient({
+      baseUrl: 'https://example.com/api/v1/chat/completions',
+      apiKey: 'k',
+      model: 'gpt-5-mini',
+      endpointFormat: 'responses',
+      fetchImpl,
+      nonStreaming: true
+    })
+    const request = buildRequest(new AbortController().signal)
+    request.maxTokens = 128
+    request.responseFormat = 'json_object'
+    const chunks: ModelStreamChunk[] = []
+    for await (const chunk of client.stream(request)) {
+      chunks.push(chunk)
+    }
+
+    expect(sentUrls[0]).toBe('https://example.com/api/v1/responses')
+    expect(sentBodies[0]).toMatchObject({
+      model: 'deepseek-chat',
+      max_output_tokens: 128,
+      text: { format: { type: 'json_object' } }
+    })
+    expect(sentBodies[0]?.input).toEqual(expect.arrayContaining([
+      expect.objectContaining({ role: 'system', content: 'You are a helpful assistant.' })
+    ]))
+    expect(sentBodies[0]?.tools).toEqual([
+      expect.objectContaining({
+        type: 'function',
+        name: 'echo',
+        parameters: expect.objectContaining({ type: 'object' })
+      })
+    ])
+    expect(chunks).toEqual([
+      { kind: 'assistant_text_delta', text: 'done' },
+      expect.objectContaining({ kind: 'usage', usage: expect.objectContaining({ promptTokens: 2, completionTokens: 3 }) }),
+      { kind: 'completed', stopReason: 'stop' }
+    ])
+  })
+
+  it('uses the Anthropic Messages API format when selected', async () => {
+    const sentUrls: string[] = []
+    const sentBodies: Array<Record<string, unknown>> = []
+    const sentHeaders: Array<Record<string, string>> = []
+    const fetchImpl: typeof fetch = async (url, init) => {
+      sentUrls.push(String(url))
+      sentBodies.push(JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>)
+      sentHeaders.push(init?.headers as Record<string, string>)
+      return new Response(JSON.stringify({
+        id: 'msg_1',
+        type: 'message',
+        role: 'assistant',
+        content: [{ type: 'text', text: 'hello' }],
+        stop_reason: 'end_turn',
+        usage: { input_tokens: 4, output_tokens: 2 }
+      }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' }
+      })
+    }
+    const client = new DeepseekCompatModelClient({
+      baseUrl: 'https://claude.example',
+      apiKey: 'anthropic-key',
+      model: 'claude-sonnet-4-5',
+      endpointFormat: 'messages',
+      fetchImpl,
+      nonStreaming: true
+    })
+    const chunks: ModelStreamChunk[] = []
+    for await (const chunk of client.stream(buildRequest(new AbortController().signal))) {
+      chunks.push(chunk)
+    }
+
+    expect(sentUrls[0]).toBe('https://claude.example/v1/messages')
+    expect(sentHeaders[0]).toMatchObject({
+      Authorization: 'Bearer anthropic-key',
+      'x-api-key': 'anthropic-key',
+      'anthropic-version': '2023-06-01'
+    })
+    expect(sentBodies[0]).toMatchObject({
+      model: 'deepseek-chat',
+      max_tokens: 4096,
+      system: 'You are a helpful assistant.',
+      messages: [],
+      tools: [{
+        name: 'echo',
+        description: 'Echo a string back to the model.',
+        input_schema: expect.objectContaining({ type: 'object' })
+      }]
+    })
+    expect(chunks).toEqual([
+      { kind: 'assistant_text_delta', text: 'hello' },
+      expect.objectContaining({ kind: 'usage', usage: expect.objectContaining({ promptTokens: 4, completionTokens: 2 }) }),
+      { kind: 'completed', stopReason: 'stop' }
+    ])
+  })
+
+  it('streams Responses API text and function calls', async () => {
+    const fetchImpl: typeof fetch = async () => new Response(sseStream([
+      { type: 'response.output_text.delta', delta: 'hi' },
+      {
+        type: 'response.output_item.added',
+        output_index: 1,
+        item: { type: 'function_call', call_id: 'call_echo', name: 'echo', arguments: '' }
+      },
+      { type: 'response.function_call_arguments.delta', output_index: 1, delta: '{"text":"ok"}' },
+      {
+        type: 'response.output_item.done',
+        output_index: 1,
+        item: { type: 'function_call', call_id: 'call_echo', name: 'echo', arguments: '{"text":"ok"}' }
+      },
+      {
+        type: 'response.completed',
+        response: {
+          status: 'completed',
+          output: [{ type: 'function_call', call_id: 'call_echo', name: 'echo', arguments: '{"text":"ok"}' }],
+          usage: { input_tokens: 3, output_tokens: 4 }
+        }
+      }
+    ]), {
+      status: 200,
+      headers: { 'content-type': 'text/event-stream' }
+    })
+    const client = new DeepseekCompatModelClient({
+      baseUrl: 'https://example.com',
+      apiKey: 'k',
+      model: 'gpt-5-mini',
+      endpointFormat: 'responses',
+      fetchImpl
+    })
+    const chunks: ModelStreamChunk[] = []
+    for await (const chunk of client.stream(buildRequest(new AbortController().signal))) {
+      chunks.push(chunk)
+    }
+
+    expect(collectKinds(chunks)).toEqual([
+      'assistant_text_delta',
+      'tool_call_delta',
+      'tool_call_complete',
+      'usage',
+      'completed'
+    ])
+    expect(chunks.find((chunk) => chunk.kind === 'tool_call_complete')).toMatchObject({
+      callId: 'call_echo',
+      toolName: 'echo',
+      arguments: { text: 'ok' }
+    })
+  })
+
+  it('streams Anthropic Messages API text and tool calls', async () => {
+    const fetchImpl: typeof fetch = async () => new Response(sseStream([
+      {
+        type: 'message_start',
+        message: { usage: { input_tokens: 5, output_tokens: 1 } }
+      },
+      {
+        type: 'content_block_delta',
+        index: 0,
+        delta: { type: 'text_delta', text: 'hi' }
+      },
+      {
+        type: 'content_block_start',
+        index: 1,
+        content_block: { type: 'tool_use', id: 'toolu_1', name: 'echo', input: {} }
+      },
+      {
+        type: 'content_block_delta',
+        index: 1,
+        delta: { type: 'input_json_delta', partial_json: '{"text":"ok"}' }
+      },
+      { type: 'content_block_stop', index: 1 },
+      { type: 'message_delta', delta: { stop_reason: 'tool_use' }, usage: { output_tokens: 8 } },
+      { type: 'message_stop' }
+    ]), {
+      status: 200,
+      headers: { 'content-type': 'text/event-stream' }
+    })
+    const client = new DeepseekCompatModelClient({
+      baseUrl: 'https://claude.example',
+      apiKey: 'k',
+      model: 'claude-sonnet-4-5',
+      endpointFormat: 'messages',
+      fetchImpl
+    })
+    const chunks: ModelStreamChunk[] = []
+    for await (const chunk of client.stream(buildRequest(new AbortController().signal))) {
+      chunks.push(chunk)
+    }
+
+    expect(collectKinds(chunks)).toEqual([
+      'assistant_text_delta',
+      'tool_call_delta',
+      'tool_call_complete',
+      'usage',
+      'completed'
+    ])
+    expect(chunks.find((chunk) => chunk.kind === 'tool_call_complete')).toMatchObject({
+      callId: 'toolu_1',
+      toolName: 'echo',
+      arguments: { text: 'ok' }
+    })
+    expect(chunks.find((chunk) => chunk.kind === 'usage')).toMatchObject({
+      usage: expect.objectContaining({ promptTokens: 5, completionTokens: 8, totalTokens: 13 })
+    })
   })
 
   it('does not inject body.thinking on non-DeepSeek host (issue #26)', async () => {
@@ -191,6 +468,37 @@ describe('DeepseekCompatModelClient', () => {
       temperature: 0,
       response_format: { type: 'json_object' },
       thinking: { type: 'disabled' }
+    })
+  })
+
+  it('requests usage in streaming responses', async () => {
+    const sentBodies: Array<Record<string, unknown>> = []
+    const encoder = new TextEncoder()
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(encoder.encode('data: {"choices":[{"delta":{"content":"ok"},"finish_reason":"stop"}]}\n\n'))
+        controller.enqueue(encoder.encode('data: [DONE]\n\n'))
+        controller.close()
+      }
+    })
+    const fetchImpl: typeof fetch = async (_url, init) => {
+      sentBodies.push(JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>)
+      return new Response(body, { status: 200, headers: { 'content-type': 'text/event-stream' } })
+    }
+    const client = new DeepseekCompatModelClient({
+      baseUrl: 'https://example.com/beta',
+      apiKey: 'k',
+      model: 'deepseek-chat',
+      fetchImpl
+    })
+
+    for await (const _chunk of client.stream(buildRequest(new AbortController().signal))) {
+      // drain
+    }
+
+    expect(sentBodies[0]).toMatchObject({
+      stream: true,
+      stream_options: { include_usage: true }
     })
   })
 
@@ -1169,6 +1477,84 @@ describe('DeepseekCompatModelClient', () => {
     expect(complete && complete.kind === 'tool_call_complete' ? complete.callId : '').toBe('call_1')
     expect(complete && complete.kind === 'tool_call_complete' ? complete.arguments : {}).toEqual({ text: 'hi' })
     expect(chunks.find((c) => c.kind === 'usage')).toBeDefined()
+  })
+
+  it('keeps reading streamed usage sent after finish_reason', async () => {
+    const frames = [
+      'data: {"choices":[{"delta":{"content":"done"}}]}\n\n',
+      'data: {"choices":[{"delta":{},"finish_reason":"stop"}]}\n\n',
+      'data: {"choices":[],"usage":{"prompt_tokens":7,"completion_tokens":3,"total_tokens":10}}\n\n',
+      'data: [DONE]\n\n'
+    ]
+    const encoder = new TextEncoder()
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        for (const frame of frames) controller.enqueue(encoder.encode(frame))
+        controller.close()
+      }
+    })
+    const fetchImpl: typeof fetch = async () =>
+      new Response(body, { status: 200, headers: { 'content-type': 'text/event-stream' } })
+    const client = new DeepseekCompatModelClient({
+      baseUrl: 'https://example.com/beta',
+      apiKey: 'k',
+      model: 'deepseek-chat',
+      fetchImpl
+    })
+    const chunks = []
+    for await (const chunk of client.stream(buildRequest(new AbortController().signal))) {
+      chunks.push(chunk)
+    }
+
+    const usage = chunks.find((c) => c.kind === 'usage')
+    const completed = chunks.find((c) => c.kind === 'completed')
+    expect(usage && usage.kind === 'usage' ? usage.usage.totalTokens : 0).toBe(10)
+    expect(completed && completed.kind === 'completed' ? completed.stopReason : '').toBe('stop')
+  })
+
+  it('retries without stream usage options when a provider rejects them', async () => {
+    const sentBodies: Array<Record<string, unknown>> = []
+    const encoder = new TextEncoder()
+    const retryBody = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(encoder.encode('data: {"choices":[{"delta":{"content":"retried"}}]}\n\n'))
+        controller.enqueue(
+          encoder.encode(
+            'data: {"choices":[{"delta":{},"finish_reason":"stop"}],"usage":{"prompt_tokens":5,"completion_tokens":2,"total_tokens":7}}\n\n'
+          )
+        )
+        controller.enqueue(encoder.encode('data: [DONE]\n\n'))
+        controller.close()
+      }
+    })
+    const fetchImpl: typeof fetch = async (_url, init) => {
+      sentBodies.push(JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>)
+      if (sentBodies.length === 1) {
+        return new Response('unknown field stream_options.include_usage', { status: 400 })
+      }
+      return new Response(retryBody, { status: 200, headers: { 'content-type': 'text/event-stream' } })
+    }
+    const client = new DeepseekCompatModelClient({
+      baseUrl: 'https://example.com/beta',
+      apiKey: 'k',
+      model: 'deepseek-chat',
+      fetchImpl
+    })
+    const chunks = []
+    for await (const chunk of client.stream(buildRequest(new AbortController().signal))) {
+      chunks.push(chunk)
+    }
+
+    const text = chunks
+      .filter((c) => c.kind === 'assistant_text_delta')
+      .map((c) => (c as { text: string }).text)
+      .join('')
+    const usage = chunks.find((c) => c.kind === 'usage')
+    expect(sentBodies).toHaveLength(2)
+    expect(sentBodies[0]).toHaveProperty('stream_options')
+    expect(sentBodies[1]).not.toHaveProperty('stream_options')
+    expect(text).toBe('retried')
+    expect(usage && usage.kind === 'usage' ? usage.usage.totalTokens : 0).toBe(7)
   })
 
   it('merges streamed tool-call deltas by index when the provider id arrives later', async () => {

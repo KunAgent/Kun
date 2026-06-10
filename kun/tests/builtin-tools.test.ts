@@ -108,6 +108,50 @@ describe('Kun built-in tools', () => {
     expect([...allBuiltinToolNames].every((name) => toolNames.has(name))).toBe(true)
   })
 
+  it('advertises structured GUI input choices and normalizes single-question options', async () => {
+    const tools = await host.listTools(buildContext(workspace))
+    const requestInputTool = tools.find((tool) => tool.name === 'request_user_input')
+    expect(requestInputTool?.inputSchema).toMatchObject({
+      properties: {
+        options: { type: 'array' },
+        questions: { type: 'array' }
+      }
+    })
+
+    let seenInput: { questions: Array<{ options: Array<{ label: string; description: string }> }> } | null = null
+    const result = await host.execute(
+      {
+        callId: 'call_input',
+        toolName: 'request_user_input',
+        arguments: {
+          prompt: 'Pick a direction',
+          question: 'North or south?',
+          options: ['South', { label: 'North', description: 'Cooler weather' }]
+        }
+      },
+      {
+        ...buildContext(workspace),
+        awaitUserInput: async (input) => {
+          seenInput = input
+          return {
+            status: 'submitted',
+            answers: [{ id: input.questions[0]?.id ?? 'choice', label: 'South', value: 'South' }]
+          }
+        }
+      }
+    )
+
+    expect(seenInput?.questions[0]?.options).toEqual([
+      { label: 'South', description: '' },
+      { label: 'North', description: 'Cooler weather' }
+    ])
+    expect(result.item).toMatchObject({
+      kind: 'tool_result',
+      toolName: 'request_user_input',
+      isError: false
+    })
+  })
+
   it('exposes pi-style coding and read-only tool groups', () => {
     expect(buildCodingBuiltinLocalTools().map((tool) => tool.name)).toEqual(['read', 'bash', 'edit', 'write'])
     expect(buildReadOnlyBuiltinLocalTools().map((tool) => tool.name)).toEqual(['read', 'grep', 'find', 'ls'])

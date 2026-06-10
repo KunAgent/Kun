@@ -468,7 +468,7 @@ export function armBusyWatchdog(
     maxAttempts: MAX_BUSY_RECOVERY_ATTEMPTS,
     finalizeBusyState: finalizeTurnTiming,
     flushLiveBlocks,
-    busyTimeoutMessage: () => i18n.t('common:busyTimeout')
+    busyTimeoutMessage: () => i18n.t('common:busyTimeout', { minutes: Math.round((BUSY_WATCHDOG_MS * MAX_BUSY_RECOVERY_ATTEMPTS) / 60_000) })
   })
 }
 

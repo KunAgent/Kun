@@ -5,17 +5,24 @@ import { estimateDeepseekCacheSavings, estimateDeepseekCost } from './deepseek-p
 import { isToolResultBridgeItem, repairModelHistoryItems } from '../../domain/model-history-repair.js'
 import { repairToolArguments } from './tool-argument-repair.js'
 import { isDeepSeekHost, probeDeepSeekReachable } from './model-error-probe.js'
+import {
+  DEFAULT_MODEL_ENDPOINT_FORMAT,
+  modelEndpointPath,
+  normalizeModelEndpointFormat,
+  type ModelEndpointFormat
+} from '../../contracts/model-endpoint-format.js'
 
 /**
- * Configuration for the DeepSeek-compatible HTTP model client. The
- * client intentionally mirrors the DeepSeek-TUI transport shape:
- * `POST {baseUrl}/v1/chat/completions` with `stream: true`, parsed
- * line-by-line (`data: {json}\n\n`).
+ * Configuration for the compatible HTTP model client. Chat
+ * completions remains the default, while custom providers can opt into
+ * OpenAI Responses or Anthropic Messages request/response shapes.
  */
 export type DeepseekCompatConfig = {
   baseUrl: string
   apiKey: string
   model: string
+  /** Compatible request/response protocol to use for custom providers. */
+  endpointFormat?: ModelEndpointFormat
   /** Optional extra headers, e.g. project or session ids. */
   headers?: Record<string, string>
   /** HTTP fetch implementation. Defaults to global `fetch`. */
@@ -45,6 +52,19 @@ type ChatMessageContentPart =
   | { type: 'text'; text: string }
   | { type: 'image_url'; image_url: { url: string } }
 
+type AnthropicContentBlock =
+  | { type: 'text'; text: string }
+  | { type: 'image'; source: { type: 'base64'; media_type: string; data: string } | { type: 'url'; url: string } }
+  | { type: 'tool_use'; id: string; name: string; input: Record<string, unknown> }
+  | { type: 'tool_result'; tool_use_id: string; content: string }
+
+type AnthropicImageSource = Extract<AnthropicContentBlock, { type: 'image' }>['source']
+
+type AnthropicMessage = {
+  role: 'user' | 'assistant'
+  content: string | AnthropicContentBlock[]
+}
+
 type ChatCompletionResponse = {
   id: string
   model: string
@@ -73,6 +93,25 @@ type ChatCompletionResponse = {
   }
 }
 
+type ResponsesApiResponse = {
+  id?: string
+  status?: string
+  output_text?: string
+  output?: Array<Record<string, unknown>>
+  usage?: Record<string, unknown>
+  error?: { message?: string; type?: string } | null
+  incomplete_details?: { reason?: string } | null
+}
+
+type AnthropicMessageResponse = {
+  id?: string
+  type?: string
+  role?: string
+  content?: Array<Record<string, unknown>>
+  stop_reason?: string | null
+  usage?: Record<string, unknown>
+}
+
 type ModelStopReason = Extract<ModelStreamChunk, { kind: 'completed' }>['stopReason']
 type PendingToolCall = {
   index?: number
@@ -86,6 +125,7 @@ type StreamReadResult =
   | { kind: 'error'; message: string }
 
 const DEFAULT_STREAM_IDLE_TIMEOUT_MS = 45_000
+const DEFAULT_MESSAGES_MAX_TOKENS = 4096
 
 /**
  * DeepSeek-compatible model client.
@@ -119,26 +159,49 @@ export class DeepseekCompatModelClient implements ModelClient {
       yield { kind: 'error', message: 'request was aborted before start' }
       return
     }
-    const url = this.buildUrl('/v1/chat/completions')
+    const endpointFormat = this.endpointFormat()
+    const url = buildModelEndpointUrl(this.config.baseUrl, endpointFormat)
     const stream = request.stream ?? !this.config.nonStreaming
     const body = this.buildRequestBody(request, stream)
-    const headers = this.buildHeaders(stream)
-    const init: RequestInit = {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(body),
-      signal: request.abortSignal
-    }
-    let response: Response
-    try {
-      response = await this.fetchImpl(url, init)
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
-      yield { kind: 'error', message: `model request failed: ${message}` }
+    const headers = this.buildHeaders(stream, endpointFormat)
+    const result = await this.postChatCompletion(url, headers, body, request.abortSignal)
+    if (result.kind === 'error') {
+      yield { kind: 'error', message: result.message }
       return
     }
+    let response = result.response
     if (!response.ok) {
       const text = await response.text()
+      if (endpointFormat === 'chat_completions' && shouldRetryWithoutStreamUsage(response.status, text, body)) {
+        const retryBody = this.buildRequestBody(request, stream, { includeStreamUsage: false })
+        const retry = await this.postChatCompletion(url, headers, retryBody, request.abortSignal)
+        if (retry.kind === 'error') {
+          yield { kind: 'error', message: retry.message }
+          return
+        }
+        response = retry.response
+        if (response.ok) {
+          if (this.config.nonStreaming || response.headers.get('content-type')?.includes('application/json')) {
+            const json = (await response.json()) as ChatCompletionResponse
+            yield* this.materializeNonStreaming(json, endpointFormat)
+            return
+          }
+          if (!response.body) {
+            yield { kind: 'error', message: 'model response had no body' }
+            return
+          }
+          yield* this.streamSse(response.body, request.abortSignal, endpointFormat)
+          return
+        }
+        const retryText = await response.text()
+        const retryClassified = await this.classifyHttpError(response.status, retryText)
+        yield {
+          kind: 'error',
+          message: retryClassified.message,
+          code: retryClassified.code
+        }
+        return
+      }
       const classified = await this.classifyHttpError(response.status, text)
       yield {
         kind: 'error',
@@ -149,28 +212,53 @@ export class DeepseekCompatModelClient implements ModelClient {
     }
     if (this.config.nonStreaming || response.headers.get('content-type')?.includes('application/json')) {
       const json = (await response.json()) as ChatCompletionResponse
-      yield* this.materializeNonStreaming(json)
+      yield* this.materializeNonStreaming(json, endpointFormat)
       return
     }
     if (!response.body) {
       yield { kind: 'error', message: 'model response had no body' }
       return
     }
-    yield* this.streamSse(response.body, request.abortSignal)
+    yield* this.streamSse(response.body, request.abortSignal, endpointFormat)
   }
 
-  private buildUrl(path: string): string {
-    const base = this.config.baseUrl.replace(/\/+$/, '')
-    return `${base}${path}`
+  private endpointFormat(): ModelEndpointFormat {
+    return normalizeModelEndpointFormat(this.config.endpointFormat ?? DEFAULT_MODEL_ENDPOINT_FORMAT)
   }
 
-  private buildHeaders(stream: boolean): Record<string, string> {
+  private async postChatCompletion(
+    url: string,
+    headers: Record<string, string>,
+    body: Record<string, unknown>,
+    signal: AbortSignal
+  ): Promise<{ kind: 'response'; response: Response } | { kind: 'error'; message: string }> {
+    try {
+      const response = await this.fetchImpl(url, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(body),
+        signal
+      })
+      return { kind: 'response', response }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      return { kind: 'error', message: `model request failed: ${message}` }
+    }
+  }
+
+  private buildHeaders(stream: boolean, endpointFormat: ModelEndpointFormat): Record<string, string> {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
       Accept: stream ? 'text/event-stream' : 'application/json'
     }
     if (this.config.apiKey) {
-      headers.Authorization = `Bearer ${this.config.apiKey}`
+      if (endpointFormat === 'messages') {
+        headers.Authorization = `Bearer ${this.config.apiKey}`
+        headers['x-api-key'] = this.config.apiKey
+        headers['anthropic-version'] = '2023-06-01'
+      } else {
+        headers.Authorization = `Bearer ${this.config.apiKey}`
+      }
     }
     return { ...headers, ...(this.config.headers ?? {}) }
   }
@@ -199,10 +287,21 @@ export class DeepseekCompatModelClient implements ModelClient {
     }
   }
 
-  private buildRequestBody(request: ModelRequest, stream: boolean): Record<string, unknown> {
+  private buildRequestBody(
+    request: ModelRequest,
+    stream: boolean,
+    options: { includeStreamUsage?: boolean } = {}
+  ): Record<string, unknown> {
     const requestModel = request.model?.trim()
     const model = requestModel || this.config.model
     const messages = this.collectMessages(request, model)
+    const endpointFormat = this.endpointFormat()
+    if (endpointFormat === 'responses') {
+      return this.buildResponsesRequestBody(request, model, messages, stream)
+    }
+    if (endpointFormat === 'messages') {
+      return this.buildAnthropicMessagesRequestBody(request, model, messages, stream)
+    }
     const body: Record<string, unknown> = {
       model,
       stream,
@@ -219,6 +318,9 @@ export class DeepseekCompatModelClient implements ModelClient {
     }
     if (request.responseFormat === 'json_object') {
       body.response_format = { type: 'json_object' }
+    }
+    if (stream && options.includeStreamUsage !== false) {
+      body.stream_options = { include_usage: true }
     }
     const includeThinking = !isAzureOpenAiEndpoint(this.config.baseUrl)
     applyReasoningEffort(body, request.reasoningEffort, { includeThinking })
@@ -239,6 +341,79 @@ export class DeepseekCompatModelClient implements ModelClient {
           description: tool.description,
           parameters: tool.inputSchema
         }
+      }))
+    }
+    return body
+  }
+
+  private buildResponsesRequestBody(
+    request: ModelRequest,
+    model: string,
+    messages: ChatMessage[],
+    stream: boolean
+  ): Record<string, unknown> {
+    const body: Record<string, unknown> = {
+      model,
+      stream,
+      input: messagesToResponsesInput(messages)
+    }
+    if (request.maxTokens !== undefined) {
+      body.max_output_tokens = request.maxTokens
+    }
+    if (request.temperature !== undefined) {
+      body.temperature = request.temperature
+    }
+    if (request.topP !== undefined) {
+      body.top_p = request.topP
+    }
+    if (request.responseFormat === 'json_object') {
+      body.text = { format: { type: 'json_object' } }
+    }
+    const reasoning = responsesReasoningForEffort(request.reasoningEffort)
+    if (reasoning) body.reasoning = reasoning
+    const tools = normalizeToolSpecs(request.tools)
+    if (tools.length > 0) {
+      body.tools = tools.map((tool) => ({
+        type: 'function',
+        name: tool.name,
+        description: tool.description,
+        parameters: tool.inputSchema
+      }))
+    }
+    return body
+  }
+
+  private buildAnthropicMessagesRequestBody(
+    request: ModelRequest,
+    model: string,
+    messages: ChatMessage[],
+    stream: boolean
+  ): Record<string, unknown> {
+    const converted = messagesToAnthropic(messages)
+    const body: Record<string, unknown> = {
+      model,
+      stream,
+      max_tokens: request.maxTokens ?? DEFAULT_MESSAGES_MAX_TOKENS,
+      messages: converted.messages
+    }
+    if (converted.system) body.system = converted.system
+    if (request.temperature !== undefined) {
+      body.temperature = request.temperature
+    }
+    if (request.topP !== undefined) {
+      body.top_p = request.topP
+    }
+    if (request.responseFormat === 'json_object') {
+      body.system = [converted.system, 'Return a valid JSON object only.']
+        .filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+        .join('\n\n')
+    }
+    const tools = normalizeToolSpecs(request.tools)
+    if (tools.length > 0) {
+      body.tools = tools.map((tool) => ({
+        name: tool.name,
+        description: tool.description,
+        input_schema: tool.inputSchema
       }))
     }
     return body
@@ -435,17 +610,21 @@ export class DeepseekCompatModelClient implements ModelClient {
 
   private async *streamSse(
     body: ReadableStream<Uint8Array>,
-    signal: AbortSignal
+    signal: AbortSignal,
+    endpointFormat: ModelEndpointFormat
   ): AsyncIterable<ModelStreamChunk> {
     const decoder = new TextDecoder('utf-8')
     const reader = body.getReader()
     let buffer = ''
     const pendingArguments = new Map<string, PendingToolCall>()
+    const pendingByIndex = new Map<number, string>()
+    const completedToolCalls = new Set<string>()
     let usage: UsageSnapshot | null = null
     let textAccumulator = ''
     let reasoningAccumulator = ''
     let stopReason: ModelStopReason = 'stop'
     let finishReason: string | null = null
+    let sawDone = false
     const idleTimeoutMs = normalizeStreamIdleTimeoutMs(this.config.streamIdleTimeoutMs)
     try {
       while (!signal.aborted) {
@@ -478,6 +657,7 @@ export class DeepseekCompatModelClient implements ModelClient {
           if (!dataLines) continue
           if (dataLines === '[DONE]') {
             finishReason = finishReason ?? 'stop'
+            sawDone = true
             break
           }
           let payload: unknown
@@ -489,16 +669,19 @@ export class DeepseekCompatModelClient implements ModelClient {
           const result = this.consumeStreamPayload(
             payload as Record<string, unknown>,
             pendingArguments,
+            pendingByIndex,
+            completedToolCalls,
             textAccumulator,
-            reasoningAccumulator
+            reasoningAccumulator,
+            endpointFormat
           )
           textAccumulator = result.text
           reasoningAccumulator = result.reasoning
-          if (result.usage) usage = result.usage
+          if (result.usage) usage = mergeUsageSnapshots(usage, result.usage)
           if (result.finishReason) finishReason = result.finishReason
           for (const chunk of result.chunks) yield chunk
         }
-        if (finishReason === 'stop' || finishReason === 'tool_calls' || finishReason === 'length') break
+        if (sawDone) break
       }
     } finally {
       try {
@@ -530,8 +713,11 @@ export class DeepseekCompatModelClient implements ModelClient {
   private consumeStreamPayload(
     payload: Record<string, unknown>,
     pendingArguments: Map<string, PendingToolCall>,
+    pendingByIndex: Map<number, string>,
+    completedToolCalls: Set<string>,
     textAccumulator: string,
-    reasoningAccumulator: string
+    reasoningAccumulator: string,
+    endpointFormat: ModelEndpointFormat
   ): {
     chunks: ModelStreamChunk[]
     text: string
@@ -539,6 +725,26 @@ export class DeepseekCompatModelClient implements ModelClient {
     finishReason: string | null
     usage: UsageSnapshot | null
   } {
+    if (endpointFormat === 'responses') {
+      return this.consumeResponsesStreamPayload(
+        payload,
+        pendingArguments,
+        pendingByIndex,
+        completedToolCalls,
+        textAccumulator,
+        reasoningAccumulator
+      )
+    }
+    if (endpointFormat === 'messages') {
+      return this.consumeAnthropicMessagesStreamPayload(
+        payload,
+        pendingArguments,
+        pendingByIndex,
+        completedToolCalls,
+        textAccumulator,
+        reasoningAccumulator
+      )
+    }
     const chunks: ModelStreamChunk[] = []
     let text = textAccumulator
     let reasoning = reasoningAccumulator
@@ -609,9 +815,235 @@ export class DeepseekCompatModelClient implements ModelClient {
     return { chunks, text, reasoning, finishReason, usage }
   }
 
+  private consumeResponsesStreamPayload(
+    payload: Record<string, unknown>,
+    pendingArguments: Map<string, PendingToolCall>,
+    pendingByIndex: Map<number, string>,
+    completedToolCalls: Set<string>,
+    textAccumulator: string,
+    reasoningAccumulator: string
+  ): {
+    chunks: ModelStreamChunk[]
+    text: string
+    reasoning: string
+    finishReason: string | null
+    usage: UsageSnapshot | null
+  } {
+    const chunks: ModelStreamChunk[] = []
+    let text = textAccumulator
+    let reasoning = reasoningAccumulator
+    let finishReason: string | null = null
+    let usage: UsageSnapshot | null = null
+    const type = recordString(payload, 'type')
+
+    const outputIndex = numericIndex(payload.output_index)
+    const item = recordValue(payload, 'item') ?? recordValue(payload, 'output_item')
+    if (item) {
+      const itemType = recordString(item, 'type')
+      if (itemType === 'function_call' || itemType === 'custom_tool_call') {
+        const callId = recordString(item, 'call_id') || recordString(item, 'id') || indexFallbackCallId(outputIndex, pendingArguments)
+        const existing = pendingArguments.get(callId) ?? { index: outputIndex, name: undefined, arguments: '' }
+        if (outputIndex !== undefined) {
+          existing.index = outputIndex
+          pendingByIndex.set(outputIndex, callId)
+        }
+        const name = recordString(item, 'name')
+        if (name) existing.name = name
+        const initialArguments = recordString(item, 'arguments') || recordString(item, 'input')
+        if (initialArguments && !existing.arguments) existing.arguments = initialArguments
+        pendingArguments.set(callId, existing)
+        if (type === 'response.output_item.done' && existing.name) {
+          chunks.push({
+            kind: 'tool_call_complete',
+            callId,
+            toolName: existing.name,
+            arguments: this.parseToolArguments(existing.arguments || '{}')
+          })
+          completedToolCalls.add(callId)
+          pendingArguments.delete(callId)
+        }
+      }
+    }
+
+    if (type === 'response.output_text.delta') {
+      const delta = recordString(payload, 'delta')
+      if (delta) {
+        text += delta
+        chunks.push({ kind: 'assistant_text_delta', text: delta })
+      }
+    } else if (
+      type === 'response.reasoning_text.delta' ||
+      type === 'response.reasoning_summary_text.delta' ||
+      type === 'response.reasoning.delta'
+    ) {
+      const delta = recordString(payload, 'delta')
+      if (delta) {
+        reasoning += delta
+        chunks.push({ kind: 'assistant_reasoning_delta', text: delta })
+      }
+    } else if (type === 'response.function_call_arguments.delta') {
+      const callId = responseStreamCallId(payload, pendingArguments, pendingByIndex)
+      const existing = pendingArguments.get(callId) ?? { index: outputIndex, name: undefined, arguments: '' }
+      const delta = recordString(payload, 'delta')
+      if (outputIndex !== undefined) {
+        existing.index = outputIndex
+        pendingByIndex.set(outputIndex, callId)
+      }
+      if (delta) {
+        existing.arguments += delta
+        chunks.push({
+          kind: 'tool_call_delta',
+          callId,
+          toolName: existing.name,
+          argumentsDelta: delta
+        })
+      }
+      pendingArguments.set(callId, existing)
+    } else if (type === 'response.function_call_arguments.done') {
+      const callId = responseStreamCallId(payload, pendingArguments, pendingByIndex)
+      const existing = pendingArguments.get(callId) ?? { index: outputIndex, name: undefined, arguments: '' }
+      const args = recordString(payload, 'arguments')
+      if (args) existing.arguments = args
+      if (existing.name) {
+        pendingArguments.set(callId, existing)
+      } else {
+        pendingArguments.set(callId, existing)
+      }
+    } else if (type === 'response.completed') {
+      const response = recordValue(payload, 'response') as ResponsesApiResponse | null
+      const materialized = this.materializeResponsesOutput(response ?? (payload as ResponsesApiResponse), {
+        skipText: Boolean(text),
+        pendingArguments,
+        completedToolCalls
+      })
+      chunks.push(...materialized.chunks)
+      if (materialized.usage) usage = materialized.usage
+      finishReason = materialized.finishReason
+    } else if (type === 'response.failed' || type === 'error') {
+      const message = responseErrorMessage(payload)
+      chunks.push({ kind: 'error', message, code: 'response_stream_error' })
+      finishReason = 'error'
+    }
+    return { chunks, text, reasoning, finishReason, usage }
+  }
+
+  private consumeAnthropicMessagesStreamPayload(
+    payload: Record<string, unknown>,
+    pendingArguments: Map<string, PendingToolCall>,
+    pendingByIndex: Map<number, string>,
+    completedToolCalls: Set<string>,
+    textAccumulator: string,
+    reasoningAccumulator: string
+  ): {
+    chunks: ModelStreamChunk[]
+    text: string
+    reasoning: string
+    finishReason: string | null
+    usage: UsageSnapshot | null
+  } {
+    const chunks: ModelStreamChunk[] = []
+    let text = textAccumulator
+    let reasoning = reasoningAccumulator
+    let finishReason: string | null = null
+    let usage: UsageSnapshot | null = null
+    const type = recordString(payload, 'type')
+    const index = numericIndex(payload.index)
+
+    if (type === 'message_start') {
+      const message = recordValue(payload, 'message')
+      const usagePayload = message ? recordValue(message, 'usage') : null
+      if (usagePayload) usage = this.mapUsage(usagePayload)
+    } else if (type === 'content_block_start') {
+      const block = recordValue(payload, 'content_block')
+      if (block && recordString(block, 'type') === 'tool_use') {
+        const callId = recordString(block, 'id') || indexFallbackCallId(index, pendingArguments)
+        const existing = pendingArguments.get(callId) ?? { index, name: undefined, arguments: '' }
+        if (index !== undefined) {
+          existing.index = index
+          pendingByIndex.set(index, callId)
+        }
+        const name = recordString(block, 'name')
+        if (name) existing.name = name
+        const input = recordValue(block, 'input')
+        if (input && Object.keys(input).length > 0) existing.arguments = JSON.stringify(input)
+        pendingArguments.set(callId, existing)
+      }
+    } else if (type === 'content_block_delta') {
+      const delta = recordValue(payload, 'delta')
+      const deltaType = delta ? recordString(delta, 'type') : ''
+      if (deltaType === 'text_delta') {
+        const value = recordString(delta, 'text')
+        if (value) {
+          text += value
+          chunks.push({ kind: 'assistant_text_delta', text: value })
+        }
+      } else if (deltaType === 'thinking_delta') {
+        const value = recordString(delta, 'thinking')
+        if (value) {
+          reasoning += value
+          chunks.push({ kind: 'assistant_reasoning_delta', text: value })
+        }
+      } else if (deltaType === 'input_json_delta') {
+        const callId = anthropicStreamCallId(index, pendingArguments, pendingByIndex)
+        const existing = pendingArguments.get(callId) ?? { index, name: undefined, arguments: '' }
+        const value = recordString(delta, 'partial_json')
+        if (index !== undefined) {
+          existing.index = index
+          pendingByIndex.set(index, callId)
+        }
+        if (value) {
+          existing.arguments += value
+          chunks.push({
+            kind: 'tool_call_delta',
+            callId,
+            toolName: existing.name,
+            argumentsDelta: value
+          })
+        }
+        pendingArguments.set(callId, existing)
+      }
+    } else if (type === 'content_block_stop') {
+      const callId = index === undefined ? undefined : pendingByIndex.get(index)
+      const pending = callId ? pendingArguments.get(callId) : undefined
+      if (callId && pending?.name) {
+        chunks.push({
+          kind: 'tool_call_complete',
+          callId,
+          toolName: pending.name,
+          arguments: this.parseToolArguments(pending.arguments || '{}')
+        })
+        completedToolCalls.add(callId)
+        pendingArguments.delete(callId)
+        if (index !== undefined) pendingByIndex.delete(index)
+      }
+    } else if (type === 'message_delta') {
+      const delta = recordValue(payload, 'delta')
+      const stopReason = delta ? recordString(delta, 'stop_reason') : ''
+      const mappedStopReason = anthropicStopReason(stopReason)
+      if (mappedStopReason) finishReason = mappedStopReason
+      const usagePayload = recordValue(payload, 'usage')
+      if (usagePayload) usage = this.mapUsage(usagePayload)
+    } else if (type === 'message_stop') {
+      finishReason = finishReason ?? 'stop'
+    } else if (type === 'error') {
+      chunks.push({ kind: 'error', message: responseErrorMessage(payload), code: 'messages_stream_error' })
+      finishReason = 'error'
+    }
+    return { chunks, text, reasoning, finishReason, usage }
+  }
+
   private *materializeNonStreaming(
-    payload: ChatCompletionResponse
+    payload: ChatCompletionResponse,
+    endpointFormat: ModelEndpointFormat
   ): Generator<ModelStreamChunk> {
+    if (endpointFormat === 'responses') {
+      yield* this.materializeResponsesNonStreaming(payload as unknown as ResponsesApiResponse)
+      return
+    }
+    if (endpointFormat === 'messages') {
+      yield* this.materializeAnthropicMessagesNonStreaming(payload as unknown as AnthropicMessageResponse)
+      return
+    }
     const choice = payload.choices?.[0]
     if (!choice) {
       yield { kind: 'error', message: 'model response contained no choices' }
@@ -646,9 +1078,108 @@ export class DeepseekCompatModelClient implements ModelClient {
     yield { kind: 'completed', stopReason }
   }
 
+  private *materializeResponsesNonStreaming(
+    payload: ResponsesApiResponse
+  ): Generator<ModelStreamChunk> {
+    if (payload.error?.message) {
+      yield { kind: 'error', message: payload.error.message, code: payload.error.type }
+      return
+    }
+    const materialized = this.materializeResponsesOutput(payload)
+    yield* materialized.chunks
+    if (materialized.usage) {
+      yield { kind: 'usage', usage: materialized.usage }
+    }
+    yield { kind: 'completed', stopReason: materialized.finishReason }
+  }
+
+  private materializeResponsesOutput(
+    payload: ResponsesApiResponse,
+    options: {
+      skipText?: boolean
+      pendingArguments?: Map<string, PendingToolCall>
+      completedToolCalls?: Set<string>
+    } = {}
+  ): {
+    chunks: ModelStreamChunk[]
+    finishReason: ModelStopReason
+    usage: UsageSnapshot | null
+  } {
+    const chunks: ModelStreamChunk[] = []
+    let sawToolCall = (options.completedToolCalls?.size ?? 0) > 0
+    if (!options.skipText) {
+      const outputText = typeof payload.output_text === 'string'
+        ? payload.output_text
+        : responsesOutputText(payload.output)
+      if (outputText) {
+        chunks.push({ kind: 'assistant_text_delta', text: outputText })
+      }
+    }
+    for (const item of payload.output ?? []) {
+      const itemType = recordString(item, 'type')
+      if (itemType !== 'function_call' && itemType !== 'custom_tool_call') continue
+      const callId = recordString(item, 'call_id') || recordString(item, 'id')
+      const toolName = recordString(item, 'name')
+      if (!callId || !toolName) continue
+      if (options.completedToolCalls?.has(callId)) continue
+      sawToolCall = true
+      const argsRaw = recordString(item, 'arguments') || recordString(item, 'input') || '{}'
+      if (options.pendingArguments?.has(callId)) {
+        options.pendingArguments.delete(callId)
+      }
+      chunks.push({
+        kind: 'tool_call_complete',
+        callId,
+        toolName,
+        arguments: this.parseToolArguments(argsRaw)
+      })
+    }
+    const usage = payload.usage ? this.mapUsage(payload.usage) : null
+    let finishReason: ModelStopReason = sawToolCall ? 'tool_calls' : 'stop'
+    if (payload.status === 'incomplete') {
+      finishReason = payload.incomplete_details?.reason === 'max_output_tokens' ? 'length' : 'error'
+    } else if (payload.status === 'failed') {
+      finishReason = 'error'
+    }
+    return { chunks, finishReason, usage }
+  }
+
+  private *materializeAnthropicMessagesNonStreaming(
+    payload: AnthropicMessageResponse
+  ): Generator<ModelStreamChunk> {
+    let sawToolCall = false
+    for (const block of payload.content ?? []) {
+      const type = recordString(block, 'type')
+      if (type === 'text') {
+        const text = recordString(block, 'text')
+        if (text) yield { kind: 'assistant_text_delta', text }
+      } else if (type === 'thinking') {
+        const thinking = recordString(block, 'thinking')
+        if (thinking) yield { kind: 'assistant_reasoning_delta', text: thinking }
+      } else if (type === 'tool_use') {
+        const callId = recordString(block, 'id')
+        const toolName = recordString(block, 'name')
+        const input = recordValue(block, 'input') ?? {}
+        if (callId && toolName) {
+          sawToolCall = true
+          yield {
+            kind: 'tool_call_complete',
+            callId,
+            toolName,
+            arguments: input
+          }
+        }
+      }
+    }
+    if (payload.usage) {
+      yield { kind: 'usage', usage: this.mapUsage(payload.usage) }
+    }
+    yield { kind: 'completed', stopReason: anthropicStopReason(payload.stop_reason) ?? (sawToolCall ? 'tool_calls' : 'stop') }
+  }
+
   private mapUsage(usage: Record<string, unknown>): UsageSnapshot {
-    const promptTokens = Number(usage.prompt_tokens ?? usage.prompt_eval_count ?? 0) || 0
-    const completionTokens = Number(usage.completion_tokens ?? usage.eval_count ?? 0) || 0
+    const promptTokens = Number(usage.prompt_tokens ?? usage.prompt_eval_count ?? usage.input_tokens ?? 0) || 0
+    const completionTokens = Number(usage.completion_tokens ?? usage.eval_count ?? usage.output_tokens ?? 0) || 0
     const totalTokens = Number(usage.total_tokens ?? promptTokens + completionTokens) || 0
     const promptDetails = usage.prompt_tokens_details as
       | { cached_tokens?: number }
@@ -709,6 +1240,307 @@ function normalizeToolSpecs(tools: ModelToolSpec[]): ModelToolSpec[] {
     .sort((a, b) => a.name.localeCompare(b.name))
 }
 
+function messagesToResponsesInput(messages: ChatMessage[]): Array<Record<string, unknown>> {
+  const input: Array<Record<string, unknown>> = []
+  for (const message of messages) {
+    if (message.role === 'tool') {
+      if (message.tool_call_id) {
+        input.push({
+          type: 'function_call_output',
+          call_id: message.tool_call_id,
+          output: chatContentToPlainText(message.content)
+        })
+      }
+      continue
+    }
+    const content = chatContentToResponsesContent(message.content)
+    if (content !== undefined && !(Array.isArray(content) && content.length === 0)) {
+      input.push({
+        role: message.role,
+        content
+      })
+    }
+    for (const call of message.tool_calls ?? []) {
+      input.push({
+        type: 'function_call',
+        call_id: call.id,
+        name: call.function.name,
+        arguments: call.function.arguments,
+        status: 'completed'
+      })
+    }
+  }
+  return input
+}
+
+function messagesToAnthropic(messages: ChatMessage[]): { system: string; messages: AnthropicMessage[] } {
+  const system: string[] = []
+  const out: AnthropicMessage[] = []
+  for (const message of messages) {
+    if (message.role === 'system') {
+      const text = chatContentToPlainText(message.content).trim()
+      if (text) system.push(text)
+      continue
+    }
+    if (message.role === 'tool') {
+      if (!message.tool_call_id) continue
+      out.push({
+        role: 'user',
+        content: [{
+          type: 'tool_result',
+          tool_use_id: message.tool_call_id,
+          content: chatContentToPlainText(message.content)
+        }]
+      })
+      continue
+    }
+    const content = chatContentToAnthropicContent(message.content)
+    const blocks = Array.isArray(content)
+      ? [...content]
+      : content.trim()
+        ? [{ type: 'text' as const, text: content }]
+        : []
+    for (const call of message.tool_calls ?? []) {
+      blocks.push({
+        type: 'tool_use',
+        id: call.id,
+        name: call.function.name,
+        input: repairToolArguments(call.function.arguments).arguments
+      })
+    }
+    if (blocks.length > 0) {
+      out.push({ role: message.role, content: blocks })
+      continue
+    }
+  }
+  return { system: system.join('\n\n'), messages: out }
+}
+
+function chatContentToResponsesContent(
+  content: ChatMessage['content']
+): string | Array<Record<string, unknown>> | undefined {
+  if (content === null || content === undefined) return undefined
+  if (typeof content === 'string') return content
+  const parts: Array<Record<string, unknown>> = []
+  for (const part of content) {
+    if (part.type === 'text') {
+      parts.push({ type: 'input_text', text: part.text })
+    } else if (part.type === 'image_url') {
+      parts.push({ type: 'input_image', image_url: part.image_url.url })
+    }
+  }
+  return parts
+}
+
+function chatContentToAnthropicContent(content: ChatMessage['content']): string | AnthropicContentBlock[] {
+  if (content === null || content === undefined) return ''
+  if (typeof content === 'string') return content
+  const parts: AnthropicContentBlock[] = []
+  for (const part of content) {
+    if (part.type === 'text') {
+      if (part.text) parts.push({ type: 'text', text: part.text })
+      continue
+    }
+    const image = anthropicImageSource(part.image_url.url)
+    if (image) parts.push({ type: 'image', source: image })
+  }
+  return parts
+}
+
+function anthropicImageSource(value: string): AnthropicImageSource | null {
+  const data = parseDataUri(value)
+  if (data) {
+    return {
+      type: 'base64',
+      media_type: data.mimeType,
+      data: data.base64
+    }
+  }
+  if (/^https?:\/\//i.test(value)) {
+    return { type: 'url', url: value }
+  }
+  return null
+}
+
+function parseDataUri(value: string): { mimeType: string; base64: string } | null {
+  const match = /^data:([^;,]+);base64,(.*)$/is.exec(value)
+  if (!match) return null
+  return { mimeType: match[1], base64: match[2] }
+}
+
+function chatContentToPlainText(content: ChatMessage['content']): string {
+  if (content === null || content === undefined) return ''
+  if (typeof content === 'string') return content
+  return content.map((part) => {
+    if (part.type === 'text') return part.text
+    return `[image: ${part.image_url.url}]`
+  }).join('\n')
+}
+
+function responsesReasoningForEffort(effort: string | undefined): Record<string, unknown> | null {
+  const normalized = effort?.trim().toLowerCase()
+  switch (normalized) {
+    case 'low':
+    case 'minimal':
+      return { effort: 'low' }
+    case 'medium':
+    case 'mid':
+      return { effort: 'medium' }
+    case 'high':
+    case 'max':
+    case 'maximum':
+    case 'xhigh':
+      return { effort: 'high' }
+    default:
+      return null
+  }
+}
+
+function buildModelEndpointUrl(baseUrl: string, endpointFormat: ModelEndpointFormat): string {
+  const path = modelEndpointPath(endpointFormat)
+  const normalized = baseUrl.trim().replace(/\/+$/, '')
+  if (!normalized) return `/v1/${path}`
+  if (normalized.toLowerCase().endsWith(`/${path}`)) return normalized
+  const withoutEndpoint = stripKnownEndpointPath(normalized)
+  const lastSegment = withoutEndpoint.split('/').pop()?.toLowerCase() ?? ''
+  if (lastSegment === 'beta') {
+    return `${withoutEndpoint.slice(0, -'/beta'.length)}/v1/${path}`
+  }
+  if (/^v\d+$/.test(lastSegment)) {
+    return `${withoutEndpoint}/${path}`
+  }
+  return `${withoutEndpoint}/v1/${path}`
+}
+
+function stripKnownEndpointPath(baseUrl: string): string {
+  const lower = baseUrl.toLowerCase()
+  for (const path of ['chat/completions', 'responses', 'messages']) {
+    if (lower.endsWith(`/${path}`)) {
+      return baseUrl.slice(0, -path.length).replace(/\/+$/, '')
+    }
+  }
+  return baseUrl
+}
+
+function buildChatCompletionsUrl(baseUrl: string): string {
+  return buildModelEndpointUrl(baseUrl, 'chat_completions')
+}
+
+function responsesOutputText(output: ResponsesApiResponse['output']): string {
+  const parts: string[] = []
+  for (const item of output ?? []) {
+    if (recordString(item, 'type') !== 'message') continue
+    const content = item.content
+    if (!Array.isArray(content)) continue
+    for (const block of content) {
+      if (!block || typeof block !== 'object') continue
+      const record = block as Record<string, unknown>
+      const type = recordString(record, 'type')
+      if (type === 'output_text' || type === 'text') {
+        const text = recordString(record, 'text')
+        if (text) parts.push(text)
+      }
+    }
+  }
+  return parts.join('')
+}
+
+function responseStreamCallId(
+  payload: Record<string, unknown>,
+  pendingArguments: Map<string, PendingToolCall>,
+  pendingByIndex: Map<number, string>
+): string {
+  const explicit = recordString(payload, 'call_id')
+  if (explicit) return explicit
+  const itemId = recordString(payload, 'item_id')
+  if (itemId && pendingArguments.has(itemId)) return itemId
+  const index = numericIndex(payload.output_index)
+  if (index !== undefined) {
+    return pendingByIndex.get(index) ?? indexFallbackCallId(index, pendingArguments)
+  }
+  if (pendingArguments.size === 1) return [...pendingArguments.keys()][0]
+  return indexFallbackCallId(undefined, pendingArguments)
+}
+
+function anthropicStreamCallId(
+  index: number | undefined,
+  pendingArguments: Map<string, PendingToolCall>,
+  pendingByIndex: Map<number, string>
+): string {
+  if (index !== undefined) {
+    return pendingByIndex.get(index) ?? indexFallbackCallId(index, pendingArguments)
+  }
+  if (pendingArguments.size === 1) return [...pendingArguments.keys()][0]
+  return indexFallbackCallId(undefined, pendingArguments)
+}
+
+function indexFallbackCallId(index: number | undefined, pendingArguments: Map<string, PendingToolCall>): string {
+  return index === undefined ? `call_${pendingArguments.size + 1}` : `call_${index + 1}`
+}
+
+function responseErrorMessage(payload: Record<string, unknown>): string {
+  const error = recordValue(payload, 'error') ?? recordValue(recordValue(payload, 'response'), 'error')
+  const message = error ? recordString(error, 'message') : ''
+  return message || recordString(payload, 'message') || 'model stream reported an error'
+}
+
+function anthropicStopReason(value: unknown): ModelStopReason | undefined {
+  if (typeof value !== 'string') return undefined
+  switch (value) {
+    case 'tool_use':
+      return 'tool_calls'
+    case 'max_tokens':
+      return 'length'
+    case 'end_turn':
+    case 'stop_sequence':
+      return 'stop'
+    default:
+      return undefined
+  }
+}
+
+function recordValue(value: unknown, key?: string): Record<string, unknown> | null {
+  const target = key === undefined
+    ? value
+    : value && typeof value === 'object'
+      ? (value as Record<string, unknown>)[key]
+      : null
+  return target && typeof target === 'object' && !Array.isArray(target)
+    ? target as Record<string, unknown>
+    : null
+}
+
+function recordString(value: unknown, key: string): string {
+  const target = value && typeof value === 'object'
+    ? (value as Record<string, unknown>)[key]
+    : undefined
+  return typeof target === 'string' ? target : ''
+}
+
+function mergeUsageSnapshots(current: UsageSnapshot | null, next: UsageSnapshot): UsageSnapshot {
+  if (!current) return next
+  const promptTokens = next.promptTokens || current.promptTokens
+  const completionTokens = Math.max(next.completionTokens, current.completionTokens)
+  const totalTokens = next.totalTokens > 0 && next.promptTokens > 0
+    ? next.totalTokens
+    : promptTokens + completionTokens
+  return {
+    ...current,
+    ...next,
+    promptTokens,
+    completionTokens,
+    totalTokens,
+    cachedTokens: Math.max(current.cachedTokens ?? 0, next.cachedTokens ?? 0),
+    cacheHitTokens: Math.max(current.cacheHitTokens ?? 0, next.cacheHitTokens ?? 0),
+    cacheMissTokens: Math.max(current.cacheMissTokens ?? 0, next.cacheMissTokens ?? 0),
+    cacheHitRate: next.cacheHitRate ?? current.cacheHitRate,
+    costUsd: next.costUsd ?? current.costUsd,
+    costCny: next.costCny ?? current.costCny,
+    cacheSavingsUsd: next.cacheSavingsUsd ?? current.cacheSavingsUsd,
+    cacheSavingsCny: next.cacheSavingsCny ?? current.cacheSavingsCny
+  }
+}
+
 function applyReasoningEffort(
   body: Record<string, unknown>,
   effort: string | undefined,
@@ -739,6 +1571,16 @@ function applyReasoningEffort(
       if (includeThinking) body.thinking = { type: 'enabled' }
       break
   }
+}
+
+function shouldRetryWithoutStreamUsage(
+  status: number,
+  text: string,
+  body: Record<string, unknown>
+): boolean {
+  if (status !== 400 && status !== 422) return false
+  if (!Object.prototype.hasOwnProperty.call(body, 'stream_options')) return false
+  return /\b(stream_options|include_usage)\b/i.test(text)
 }
 
 function isAzureOpenAiEndpoint(baseUrl: string): boolean {
