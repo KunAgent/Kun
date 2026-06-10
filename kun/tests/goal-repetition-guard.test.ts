@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { LocalToolHost, buildDefaultLocalTools } from '../src/adapters/tool/local-tool-host.js'
 import { GET_GOAL_TOOL_NAME, UPDATE_GOAL_TOOL_NAME } from '../src/adapters/tool/goal-tools.js'
-import type { ModelStreamChunk } from '../src/ports/model-client.js'
+import type { ModelRequest, ModelStreamChunk } from '../src/ports/model-client.js'
 import { bootstrapThread, makeHarness, type Harness } from './loop-test-harness.js'
 
 function makeGoalTools(getHarness: () => Harness) {
@@ -50,14 +50,16 @@ async function loadRepetitionStops(h: Harness) {
 }
 
 describe('goal continuation repetition guard', () => {
-  it('stops after two no-tool replies that differ only in punctuation and casing', async () => {
+  it('tries recovery prompts before stopping repeated no-tool replies', async () => {
     let h: Harness
     let calls = 0
+    const requests: ModelRequest[] = []
     h = makeHarness(
       {
         provider: 'goal-repeat',
         model: 'goal-repeat',
-        async *stream(): AsyncIterable<ModelStreamChunk> {
+        async *stream(request): AsyncIterable<ModelStreamChunk> {
+          requests.push(request)
           calls += 1
           yield {
             kind: 'assistant_text_delta',
@@ -74,14 +76,17 @@ describe('goal continuation repetition guard', () => {
     const status = await h.loop.runTurn(h.threadId, h.turnId)
 
     expect(status).toBe('completed')
-    expect(calls).toBe(2)
+    expect(calls).toBe(5)
     expect((await h.threads.getGoal(h.threadId))?.status).toBe('active')
+    expect(requests.some((request) =>
+      request.contextInstructions?.some((line) => line.includes('Goal continuation recovery:'))
+    )).toBe(true)
     const stops = await loadRepetitionStops(h)
     expect(stops).toHaveLength(1)
     expect(stops[0]?.kind === 'error' ? stops[0].severity : undefined).toBe('warning')
   })
 
-  it('stops when consecutive no-tool replies are reordered but near-identical', async () => {
+  it('stops only after near-identical reordered replies exhaust recovery', async () => {
     let h: Harness
     let calls = 0
     h = makeHarness(
@@ -107,8 +112,52 @@ describe('goal continuation repetition guard', () => {
     const status = await h.loop.runTurn(h.threadId, h.turnId)
 
     expect(status).toBe('completed')
-    expect(calls).toBe(2)
+    expect(calls).toBe(5)
     expect(await loadRepetitionStops(h)).toHaveLength(1)
+  })
+
+  it('lets a repeated no-tool reply recover by calling update_goal', async () => {
+    let h: Harness
+    let calls = 0
+    const requests: ModelRequest[] = []
+    h = makeHarness(
+      {
+        provider: 'goal-recover',
+        model: 'goal-recover',
+        async *stream(request): AsyncIterable<ModelStreamChunk> {
+          requests.push(request)
+          calls += 1
+          if (calls <= 2) {
+            yield { kind: 'assistant_text_delta', text: 'I will run the build command now.' }
+            yield { kind: 'completed', stopReason: 'stop' }
+            return
+          }
+          if (calls === 3) {
+            yield {
+              kind: 'tool_call_complete',
+              callId: 'call_complete_goal',
+              toolName: UPDATE_GOAL_TOOL_NAME,
+              arguments: { status: 'complete' }
+            }
+            yield { kind: 'completed', stopReason: 'tool_calls' }
+            return
+          }
+          yield { kind: 'assistant_text_delta', text: 'Goal complete.' }
+          yield { kind: 'completed', stopReason: 'stop' }
+        }
+      },
+      { tools: [...buildDefaultLocalTools(), ...makeGoalTools(() => h)] }
+    )
+    await bootstrapThread(h, { request: { prompt: 'run the build' } })
+    await h.threads.setGoal(h.threadId, { objective: 'run the build', status: 'active' })
+
+    const status = await h.loop.runTurn(h.threadId, h.turnId)
+
+    expect(status).toBe('completed')
+    expect(calls).toBe(4)
+    expect((await h.threads.getGoal(h.threadId))?.status).toBe('complete')
+    expect(requests[2]?.contextInstructions?.join('\n')).toContain('Goal continuation recovery:')
+    expect(await loadRepetitionStops(h)).toHaveLength(0)
   })
 
   it('keeps continuing while no-tool replies make distinct progress', async () => {
@@ -188,9 +237,10 @@ describe('goal continuation repetition guard', () => {
     const status = await h.loop.runTurn(h.threadId, h.turnId)
 
     // Step 1 stores the text, step 2's tool call resets the window, step 3
-    // stores it again, step 4 repeats it and trips the guard.
+    // stores it again, and the guard gives three recovery prompts before
+    // stopping the repeated no-tool replies.
     expect(status).toBe('completed')
-    expect(calls).toBe(4)
+    expect(calls).toBe(7)
     expect(await loadRepetitionStops(h)).toHaveLength(1)
   })
 })

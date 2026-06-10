@@ -205,6 +205,18 @@ function goalContinuationInstruction(goal: ThreadGoal | undefined): string | nul
 
 const GOAL_NO_TOOL_REPEAT_SIMILARITY = 0.85
 const GOAL_NO_TOOL_REPEAT_MIN_LENGTH = 12
+const GOAL_NO_TOOL_REPEAT_MAX_RECOVERY_STEPS = 3
+
+function goalNoToolRecoveryInstruction(recoveryStep: number): string {
+  return [
+    'Goal continuation recovery:',
+    `- The active goal continuation has produced near-identical no-tool replies ${recoveryStep} time(s).`,
+    '- Do not repeat the same status update, promise, or summary again.',
+    `- If the objective is actually achieved, call ${UPDATE_GOAL_TOOL_NAME} with status "complete" after verifying the current state.`,
+    `- If the strict blocked audit is satisfied, call ${UPDATE_GOAL_TOOL_NAME} with status "blocked".`,
+    '- Otherwise, continue with new substantive work or call an available tool to make concrete progress.'
+  ].join('\n')
+}
 
 /**
  * Goal continuation re-prompts the model whenever it stops without tool
@@ -388,6 +400,7 @@ export class AgentLoop {
   private readonly toolStormBreakers = new Map<string, ToolStormBreaker>()
   private readonly toolCatalogSnapshots = new Map<string, ToolCatalogSnapshot>()
   private readonly lastNoToolTextByTurn = new Map<string, string>()
+  private readonly goalNoToolRecoveryStepsByTurn = new Map<string, number>()
 
   constructor(opts: AgentLoopOptions) {
     this.opts = opts
@@ -449,6 +462,7 @@ export class AgentLoop {
       this.autoModelRoutes.delete(autoModelRouteKey(threadId, turnId))
       this.toolStormBreakers.delete(turnId)
       this.lastNoToolTextByTurn.delete(turnId)
+      this.goalNoToolRecoveryStepsByTurn.delete(turnId)
     }
   }
 
@@ -624,6 +638,9 @@ export class AgentLoop {
     const activeGoalInstruction = planTurnActive
       ? null
       : goalContinuationInstruction(thread?.goal)
+    const goalRecoveryInstruction = activeGoalInstruction
+      ? goalNoToolRecoveryInstruction(this.goalNoToolRecoveryStepsByTurn.get(turnId) ?? 0)
+      : null
     const activeTodoInstruction = planTurnActive
       ? null
       : todoContinuationInstruction(thread?.todos)
@@ -719,6 +736,9 @@ export class AgentLoop {
     })
     const contextInstructions = [
       ...(activeGoalInstruction ? [activeGoalInstruction] : []),
+      ...(goalRecoveryInstruction && (this.goalNoToolRecoveryStepsByTurn.get(turnId) ?? 0) > 0
+        ? [goalRecoveryInstruction]
+        : []),
       ...(activeTodoInstruction ? [activeTodoInstruction] : []),
       ...memoryInstructions(memories),
       ...skillResolution.instructions,
@@ -1024,8 +1044,14 @@ export class AgentLoop {
       if (stopReason === 'stop' && activeGoalInstruction) {
         const previousText = this.lastNoToolTextByTurn.get(turnId)
         if (isRepeatedNoToolAssistantText(previousText, textAccumulator.value)) {
+          const recoverySteps = (this.goalNoToolRecoveryStepsByTurn.get(turnId) ?? 0) + 1
+          if (recoverySteps <= GOAL_NO_TOOL_REPEAT_MAX_RECOVERY_STEPS) {
+            this.goalNoToolRecoveryStepsByTurn.set(turnId, recoverySteps)
+            this.lastNoToolTextByTurn.set(turnId, textAccumulator.value)
+            return 'continue'
+          }
           const message =
-            'Goal continuation stopped: the model repeated a near-identical reply twice in a row without calling any tool.'
+            'Goal continuation stopped: the model kept repeating near-identical replies without calling tools or updating the goal.'
           await this.opts.turns.applyItem(
             threadId,
             makeErrorItem({
@@ -1046,8 +1072,10 @@ export class AgentLoop {
             severity: 'warning'
           })
           this.lastNoToolTextByTurn.delete(turnId)
+          this.goalNoToolRecoveryStepsByTurn.delete(turnId)
           return 'stop'
         }
+        this.goalNoToolRecoveryStepsByTurn.delete(turnId)
         this.lastNoToolTextByTurn.set(turnId, textAccumulator.value)
         return 'continue'
       }
@@ -1056,6 +1084,7 @@ export class AgentLoop {
     // Tool calls mean the turn is making progress again; reset the no-tool
     // repetition window so unrelated later status texts are not compared.
     this.lastNoToolTextByTurn.delete(turnId)
+    this.goalNoToolRecoveryStepsByTurn.delete(turnId)
     const dispatched = await this.dispatchToolCalls({
       calls: completedToolCalls,
       threadId,
