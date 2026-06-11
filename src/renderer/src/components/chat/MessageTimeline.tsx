@@ -41,6 +41,7 @@ type Props = {
   onBuildPlan?: () => void
   /** Opens/focuses the Plan panel (Open button on the inline card). */
   onOpenPlan?: () => void
+  compactCards?: boolean
 }
 
 const TURN_PAGE_SIZE = 18
@@ -80,7 +81,8 @@ export function MessageTimeline({
   devPreviewCard,
   planActionsBusy,
   onBuildPlan,
-  onOpenPlan
+  onOpenPlan,
+  compactCards = false
 }: Props): ReactElement {
   const { t } = useTranslation('common')
   const {
@@ -220,6 +222,7 @@ export function MessageTimeline({
                 onBuildPlan={onBuildPlan}
                 onOpenPlan={onOpenPlan}
                 viewportRef={containerRef}
+                compactCards={compactCards}
               />
             </Fragment>
           )
@@ -253,6 +256,7 @@ export function MessageTimeline({
             live={live}
             devPreviewCard={devPreviewCard}
             viewportRef={containerRef}
+            compactCards={compactCards}
             durationMs={
               currentTurnUserId && typeof turnStartedAtByUserId[currentTurnUserId] === 'number'
                 ? Math.max(0, tickNow - turnStartedAtByUserId[currentTurnUserId])
@@ -284,7 +288,8 @@ function MessageTurn({
   planActionsBusy,
   onBuildPlan,
   onOpenPlan,
-  viewportRef
+  viewportRef,
+  compactCards = false
 }: {
   turn: Turn
   isProcessing: boolean
@@ -297,6 +302,7 @@ function MessageTurn({
   onBuildPlan?: () => void
   onOpenPlan?: () => void
   viewportRef: RefObject<HTMLDivElement | null>
+  compactCards?: boolean
 }): ReactElement {
   const workspaceRoot = useChatStore((s) => s.workspaceRoot)
   // Inline Review Plan card: surfaced under a turn that produced a
@@ -406,7 +412,7 @@ function MessageTurn({
       ) : null}
 
       {!isProcessing && turnFileChanges.length > 0 ? (
-        <TurnChangeSummary changes={turnFileChanges} viewportRef={viewportRef} />
+        <TurnChangeSummary changes={turnFileChanges} viewportRef={viewportRef} compact={compactCards} />
       ) : null}
     </div>
   )
@@ -436,5 +442,6 @@ const MemoMessageTurn = memo(MessageTurn, (prev, next) => (
   prev.planActionsBusy === next.planActionsBusy &&
   prev.onBuildPlan === next.onBuildPlan &&
   prev.onOpenPlan === next.onOpenPlan &&
+  prev.compactCards === next.compactCards &&
   prev.viewportRef === next.viewportRef
 ))
