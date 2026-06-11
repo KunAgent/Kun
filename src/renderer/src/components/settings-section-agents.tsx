@@ -113,12 +113,19 @@ function normalizeModelId(model: string | undefined): string {
   return normalized === 'auto' ? '' : normalized
 }
 
+const FRIENDLY_MODEL_NAMES: Record<string, string> = {
+  'deepseek-v4-pro': 'V4 Pro',
+  'deepseek-v4-flash': 'V4 Flash',
+  'deepseek-chat': 'DeepSeek Chat',
+  'deepseek-reasoner': 'DeepSeek Reasoner'
+}
+
 function knownModelContextProfile(input: string | undefined): { modelLabel: string } | null {
   const normalized = normalizeModelId(input)
   if (!normalized) return null
   const match = ['deepseek-v4-pro', 'deepseek-v4-flash', 'deepseek-chat', 'deepseek-reasoner']
     .find((modelId) => normalized === modelId || normalized.endsWith(`/${modelId}`))
-  return match ? { modelLabel: match } : null
+  return match ? { modelLabel: FRIENDLY_MODEL_NAMES[match] ?? match } : null
 }
 
 function modelContextProfileSummary(input: {
@@ -136,7 +143,7 @@ function modelContextProfileSummary(input: {
       sourceLabelKey: 'kunModelContextSourceBuiltIn'
     }
   }
-  const model = input.model?.trim() || 'auto'
+  const model = input.model?.trim() || 'deepseek-v4-pro'
   return {
     modelLabel: model,
     contextWindowLabel: 'models.profiles',
