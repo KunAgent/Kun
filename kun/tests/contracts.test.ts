@@ -541,13 +541,16 @@ describe('cli', () => {
     expect(legacy?.hardThreshold).toBe(56_000)
   })
 
-  it('uses 980k as the built-in DeepSeek v4 soft compaction threshold', () => {
+  it('uses 75%/85% of the window as the built-in DeepSeek v4 compaction thresholds', () => {
+    // Compaction must trigger with headroom to spare. Triggering at
+    // 98%/99% left no room for a large turn to land before the window was
+    // exceeded, so the built-in ratios are 0.75 / 0.85 of the 1M window.
     const profile = modelContextProfilesFromConfig()
       .find((candidate) => candidate.canonicalModel === 'deepseek-v4-pro')
 
     expect(profile?.contextWindowTokens).toBe(1_000_000)
-    expect(profile?.softThreshold).toBe(980_000)
-    expect(profile?.hardThreshold).toBe(990_000)
+    expect(profile?.softThreshold).toBe(750_000)
+    expect(profile?.hardThreshold).toBe(850_000)
   })
 
   it('keeps built-in DeepSeek v4 models text-only', () => {

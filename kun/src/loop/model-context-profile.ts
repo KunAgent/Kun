@@ -68,6 +68,10 @@ export type ModelProfileConfigSource = {
 }
 
 export const DEFAULT_CONTEXT_THRESHOLDS: ModelContextThresholds = {
+  // Fallback for models without a registered profile. These assume a
+  // reasonably large window (>=128k). A custom endpoint with a small
+  // window (e.g. 32k) should register a profile with explicit thresholds,
+  // otherwise it may exceed its window before the first compaction.
   softThreshold: 96_000,
   hardThreshold: 120_000
 }
