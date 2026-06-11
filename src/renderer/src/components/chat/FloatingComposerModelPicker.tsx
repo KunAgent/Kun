@@ -621,9 +621,9 @@ function friendlyModelName(model: string): string | null {
     case 'auto':
       return 'Auto'
     case 'deepseek-v4-pro':
-      return 'V4 Pro'
+      return 'V4-Pro'
     case 'deepseek-v4-flash':
-      return 'V4 Flash'
+      return 'V4-Flash'
     default:
       return null
   }
