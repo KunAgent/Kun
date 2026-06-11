@@ -31,6 +31,7 @@ type Props = {
   activeFileLabel: string
   activeFileName: string
   activeFilePath: string
+  documentStatsLabel: string | null
   assistantOpen: boolean
   exportInFlight: boolean
   exportMenuOpen: boolean
@@ -61,6 +62,7 @@ export function WriteWorkspaceToolbar({
   activeFileLabel,
   activeFileName,
   activeFilePath,
+  documentStatsLabel,
   assistantOpen,
   exportInFlight,
   exportMenuOpen,
@@ -161,8 +163,13 @@ export function WriteWorkspaceToolbar({
               <div className="truncate text-[15px] font-semibold tracking-[-0.01em] text-ds-ink">
                 {activeFileName}
               </div>
-              <div className="mt-1.5 truncate text-[12px] text-ds-faint">
-                {activeFileLabel}
+              <div className="mt-1.5 flex min-w-0 items-center gap-2 text-[12px] text-ds-faint">
+                <span className="truncate">{activeFileLabel}</span>
+                {documentStatsLabel ? (
+                  <span className="shrink-0 rounded-full bg-ds-hover px-2 py-0.5 text-[11px] font-medium text-ds-muted">
+                    {documentStatsLabel}
+                  </span>
+                ) : null}
               </div>
             </div>
           </div>

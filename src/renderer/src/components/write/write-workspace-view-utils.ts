@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactElement } from 'react'
 import type { WriteExportFormat } from '@shared/write-export'
 import type { WritePreviewMode, WriteSaveStatus } from '../../write/write-workspace-store'
+import { parseWriteMarkdown } from '../../write/tiptap/markdown-manager'
 
 export const WRITE_AUTOSAVE_MS = 900
 export const WRITE_PREVIEW_DEBOUNCE_MS = 60
@@ -29,6 +30,10 @@ export type WriteNotice = {
   message: string
 }
 
+export type WriteDocumentStats = {
+  characterCount: number
+}
+
 export type WriteModeMenuItem = {
   mode: WritePreviewMode
   label: string
@@ -55,6 +60,33 @@ export function formatSaveLabel(status: WriteSaveStatus, t: (key: string) => str
   if (status === 'dirty') return t('writeUnsaved')
   if (status === 'error') return t('writeSaveError')
   return t('writeSaved')
+}
+
+function collectVisibleText(node: { type?: string; text?: string; content?: unknown[] } | undefined, acc: string[]): string[] {
+  if (!node) return acc
+  if (node.type === 'text' && typeof node.text === 'string') acc.push(node.text)
+  if (Array.isArray(node.content)) {
+    for (const child of node.content) {
+      if (child && typeof child === 'object') {
+        collectVisibleText(child as { type?: string; text?: string; content?: unknown[] }, acc)
+      }
+    }
+  }
+  return acc
+}
+
+function visibleTextFromMarkdown(markdown: string): string {
+  try {
+    return collectVisibleText(parseWriteMarkdown(markdown), []).join('')
+  } catch {
+    return markdown
+  }
+}
+
+export function computeWriteDocumentStats(content: string, isMarkdown: boolean): WriteDocumentStats {
+  const visibleText = isMarkdown ? visibleTextFromMarkdown(content) : content
+  const characterCount = Array.from(visibleText.replace(/\s+/g, '')).length
+  return { characterCount }
 }
 
 export function clamp(value: number, min: number, max: number): number {

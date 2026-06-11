@@ -54,6 +54,7 @@ import {
   formatSaveLabel,
   inlineAgentPosition,
   isMarkdownFile,
+  computeWriteDocumentStats,
   useDebouncedValue,
   type WriteNotice
 } from './write-workspace-view-utils'
@@ -196,6 +197,8 @@ export function WriteWorkspaceView({
     ? writeRelativeToWorkspace(workspaceRoot, activeFilePath)
     : t('writeNoFileOpen')
   const activeFileName = activeFilePath ? writeBasenameFromPath(activeFilePath) : t('writeStudio')
+  const documentStats = activeFileIsText ? computeWriteDocumentStats(fileContent, isMarkdown) : null
+  const documentStatsLabel = documentStats ? t('writeCharacterCount', { count: documentStats.characterCount }) : null
   const workspacePathLabel = rootDirectory || workspaceRoot
   const workspaceName = workspacePathLabel ? writeBasenameFromPath(workspacePathLabel) : t('writeWorkspace')
   const exportInFlight = exportingFormat !== null
@@ -877,6 +880,7 @@ export function WriteWorkspaceView({
         activeFileLabel={activeFileLabel}
         activeFileName={activeFileName}
         activeFilePath={activeFilePath ?? ''}
+        documentStatsLabel={documentStatsLabel}
         assistantOpen={assistantOpen}
         exportInFlight={exportInFlight}
         exportMenuOpen={exportMenuOpen}

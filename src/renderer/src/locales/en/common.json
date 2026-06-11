@@ -1155,6 +1155,7 @@
   "writeModeEdit": "Editor only",
   "writeModeSplit": "Split preview",
   "writeModePreview": "Preview only",
+  "writeCharacterCount": "{{count}} chars",
   "writePreviewErrorFallback": "Markdown preview failed, showing source text instead.",
   "writeUnsupportedFileType": "Write currently opens only Markdown, TXT, PDF, and common image files.",
   "writeImagePreview": "Image preview",

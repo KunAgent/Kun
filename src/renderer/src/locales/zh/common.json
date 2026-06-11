@@ -1155,6 +1155,7 @@
   "writeModeEdit": "仅编辑",
   "writeModeSplit": "分栏预览",
   "writeModePreview": "仅预览",
+  "writeCharacterCount": "字数 {{count}}",
   "writePreviewErrorFallback": "Markdown 预览渲染失败，已临时显示源码文本。",
   "writeUnsupportedFileType": "Write 模式目前只打开 Markdown、TXT、PDF 和常见图片文件。",
   "writeImagePreview": "图片预览",
