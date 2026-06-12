@@ -14,6 +14,7 @@ import {
   type ClawImConversationV1
 } from '../shared/app-settings'
 import { createClawRuntime } from './claw-runtime'
+import type { RuntimeSseEvent } from './claw-runtime-helpers'
 
 // `subscribeRuntimeThreadEvents` opens a real SSE fetch against a runtime
 // base URL. In tests the runtime is mocked at the `runtimeRequest` layer,
@@ -26,7 +27,7 @@ vi.mock('./claw-runtime-helpers', async () => {
   const actual = await vi.importActual<typeof import('./claw-runtime-helpers')>('./claw-runtime-helpers')
   return {
     ...actual,
-    subscribeRuntimeThreadEvents: vi.fn(async (input: { onEvent: (event: { kind: string; turnId: string; seq: number; timestamp: string; threadId: string }) => void }) => {
+    subscribeRuntimeThreadEvents: vi.fn(async (input: { onEvent: (event: RuntimeSseEvent) => void; threadId: string }) => {
       // Push a turn_completed event on the next microtask so the streamer
       // resolves cleanly without ever calling bridge.stream controller APIs
       // (no deltas were sent, so the accumulated text stays empty).
@@ -1973,28 +1974,33 @@ describe('ClawRuntime', () => {
 })
 
 describe('ClawRuntime Feishu routing', () => {
-  function makeFakeLarkChannel(): {
-    bridge: {
-      botIdentity: { openId: string }
-      on: ReturnType<typeof vi.fn>
-      connect: ReturnType<typeof vi.fn>
-      disconnect: ReturnType<typeof vi.fn>
-      send: ReturnType<typeof vi.fn>
-      stream: ReturnType<typeof vi.fn>
-      addReaction: ReturnType<typeof vi.fn>
-    }
-    sent: Array<{ to: string; input: unknown }>
-    streamed: Array<{ to: string; input: unknown }>
-  } {
-    const sent: Array<{ to: string; input: unknown }> = []
-    const streamed: Array<{ to: string; input: unknown }> = []
+  // Structural type matching the Lark SDK's NormalizedMessage (the runtime
+  // casts via `as unknown as` because the test fixture doesn't go through
+  // the full normalize path; this captures the fields the runtime reads).
+  type FakeFeishuMessage = {
+    messageId: string
+    chatId: string
+    chatType: 'p2p' | 'group' | string
+    senderId: string
+    senderName: string
+    content: string
+    rawContentType: string
+    threadId: string
+    mentionedBot: boolean
+    mentionAll: boolean
+    mentions: unknown[]
+  }
+
+  function makeFakeLarkChannelForRuntime(runtime: unknown, channelId: string): { sent: unknown[]; streamed: unknown[]; bridge: unknown } {
+    const sent: unknown[] = []
+    const streamed: unknown[] = []
     const bridge = {
       botIdentity: { openId: 'bot_open_id' },
       on: vi.fn(),
       connect: vi.fn(async () => undefined),
       disconnect: vi.fn(async () => undefined),
-      send: vi.fn(async (to: string, input: unknown) => {
-        sent.push({ to, input })
+      send: vi.fn(async (_to: string, _input: any) => {
+        sent.push({ to: _to, input: _input })
         return { messageId: 'om_fake_send' }
       }),
       // The real Lark SDK stream method calls `input.markdown(controller)`
@@ -2005,24 +2011,21 @@ describe('ClawRuntime Feishu routing', () => {
       // turn_completed event (from the subscribeRuntimeThreadEvents stub at
       // the top of this file) closes the loop, the producer calls
       // setContent and resolves, and we return a message id.
-      stream: vi.fn(async (to: string, input: { markdown: (controller: {
-        append: (chunk: string) => Promise<void>
-        setContent: (text: string) => Promise<void>
-        readonly messageId: string
-      }) => Promise<void> }, _opts?: unknown) => {
-        streamed.push({ to, input })
+      stream: vi.fn(async (_to: string, _input: any) => {
+        streamed.push({ to: _to, input: _input })
         const messageId = 'om_fake_stream'
         const controller = {
           append: async (_chunk: string) => undefined,
           setContent: async (_text: string) => undefined,
           get messageId() { return messageId }
         }
-        await input.markdown(controller)
+        await _input.markdown(controller)
         return { messageId }
       }),
       addReaction: vi.fn(async () => undefined)
     }
-    return { bridge, sent, streamed }
+    ;(runtime as any).feishuChannels.set(channelId, bridge)
+    return { sent, streamed, bridge }
   }
 
   it('routes feishuStream=false inbound through bridge.send (non-streaming path)', async () => {
@@ -2058,35 +2061,21 @@ describe('ClawRuntime Feishu routing', () => {
       return { ok: true, status: 200, body: '{}' }
     })
     const runtime = createClawRuntime({ store: store as never, runtimeRequest, logError: vi.fn() })
-    const { bridge, sent, streamed } = makeFakeLarkChannel()
-    ;(runtime as unknown as {
-      feishuChannels: Map<string, typeof bridge>
-    }).feishuChannels.set('ch_route_off', bridge)
+    const { sent, streamed } = makeFakeLarkChannelForRuntime(runtime, 'ch_route_off')
 
     await (runtime as unknown as {
-      handleFeishuMessage: (channelId: string, message: {
-        chatId: string
-        messageId: string
-        threadId?: string
-        senderId: string
-        senderName?: string
-        chatType: 'p2p' | 'group'
-        mentionedBot: boolean
-        mentionAll: boolean
-        content: string
-        rawContentType: string
-        mentions: unknown[]
-      }) => Promise<void>
+      handleFeishuMessage: (channelId: string, message: FakeFeishuMessage) => Promise<void>
     }).handleFeishuMessage('ch_route_off', {
-      chatId: 'oc_chat_route',
       messageId: 'om_route_1',
+      chatId: 'oc_chat_route',
+      chatType: 'p2p',
       senderId: 'ou_user_route',
       senderName: 'Routed',
-      chatType: 'p2p',
-      mentionedBot: false,
-      mentionAll: false,
       content: 'hello',
       rawContentType: 'text',
+      threadId: '',
+      mentionedBot: false,
+      mentionAll: false,
       mentions: []
     })
 
@@ -2115,35 +2104,21 @@ describe('ClawRuntime Feishu routing', () => {
       return { ok: true, status: 200, body: '{}' }
     })
     const runtime = createClawRuntime({ store: store as never, runtimeRequest, logError: vi.fn() })
-    const { bridge, streamed } = makeFakeLarkChannel()
-    ;(runtime as unknown as {
-      feishuChannels: Map<string, typeof bridge>
-    }).feishuChannels.set('ch_route_on', bridge)
+    const { streamed } = makeFakeLarkChannelForRuntime(runtime, 'ch_route_on')
 
     await (runtime as unknown as {
-      handleFeishuMessage: (channelId: string, message: {
-        chatId: string
-        messageId: string
-        threadId?: string
-        senderId: string
-        senderName?: string
-        chatType: 'p2p' | 'group'
-        mentionedBot: boolean
-        mentionAll: boolean
-        content: string
-        rawContentType: string
-        mentions: unknown[]
-      }) => Promise<void>
+      handleFeishuMessage: (channelId: string, message: FakeFeishuMessage) => Promise<void>
     }).handleFeishuMessage('ch_route_on', {
-      chatId: 'oc_chat_stream',
       messageId: 'om_stream_1',
+      chatId: 'oc_chat_stream',
+      chatType: 'p2p',
       senderId: 'ou_user_stream',
       senderName: 'Streamed',
-      chatType: 'p2p',
-      mentionedBot: false,
-      mentionAll: false,
       content: 'stream please',
       rawContentType: 'text',
+      threadId: '',
+      mentionedBot: false,
+      mentionAll: false,
       mentions: []
     })
 
