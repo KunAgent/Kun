@@ -486,6 +486,38 @@ export type SseSubscriber = (signal: AbortSignal) => { close: () => void }
 export type RuntimeSseEvent = { kind: string; turnId?: string; item?: { delta?: unknown }; [key: string]: unknown }
 
 /**
+ * Upper bound on the SSE byte buffer before we declare the server misbehaving
+ * and clear it. Without this guard a server that never sends a block delimiter
+ * (or a corrupted stream) would let `buffer` grow without bound and exhaust
+ * memory. 1 MiB is comfortably above the size of any single legitimate event.
+ */
+const SSE_BUFFER_CAP_BYTES = 1 * 1024 * 1024
+
+/**
+ * Find the next complete SSE block in `buffer`. Handles both LF (`\n\n`) and
+ * CRLF (`\r\n\r\n`) delimiters; returns the earlier one. Returns `null` when
+ * the buffer has no complete block yet.
+ *
+ * Inlined from `runtime-sse-ipc.ts`; promote to a shared module if a second
+ * caller needs it.
+ */
+function takeSseBlock(buffer: string): { block: string; rest: string } | null {
+  const lf = buffer.indexOf('\n\n')
+  const crlf = buffer.indexOf('\r\n\r\n')
+  if (lf === -1 && crlf === -1) return null
+  if (crlf !== -1 && (lf === -1 || crlf < lf)) {
+    return {
+      block: buffer.slice(0, crlf),
+      rest: buffer.slice(crlf + 4)
+    }
+  }
+  return {
+    block: buffer.slice(0, lf),
+    rest: buffer.slice(lf + 2)
+  }
+}
+
+/**
  * Subscribe to `/v1/threads/{threadId}/events` and dispatch each
  * `RuntimeSseEvent` to `onEvent`. Reconnects with exponential backoff
  * (750ms → 5s) on network failure; does NOT reconnect on 4xx/5xx with
@@ -534,15 +566,46 @@ export async function subscribeRuntimeThreadEvents(input: {
         const reader = res.body.getReader()
         const dec = new TextDecoder()
         let buffer = ''
+        const flushTrailing = (): void => {
+          const trailing = buffer.trim()
+          buffer = ''
+          if (!trailing) return
+          const dataLine = trailing
+            .split('\n')
+            .map((l) => (l.endsWith('\r') ? l.slice(0, -1) : l))
+            .find((l) => l.startsWith('data:'))
+          if (!dataLine) return
+          const json = dataLine.slice(5).trimStart()
+          try {
+            const parsed = JSON.parse(json) as { seq?: number } & RuntimeSseEvent
+            if (typeof parsed.seq === 'number') nextSinceSeq = Math.max(nextSinceSeq, parsed.seq)
+            onEvent(parsed)
+          } catch {
+            /* malformed SSE data line — ignore */
+          }
+        }
         while (!closed && !ac.signal.aborted) {
           const { done, value } = await reader.read()
-          if (done) break
+          if (done) {
+            flushTrailing()
+            break
+          }
           buffer += dec.decode(value, { stream: true })
-          let split: number
-          while ((split = buffer.indexOf('\n\n')) !== -1) {
-            const block = buffer.slice(0, split)
-            buffer = buffer.slice(split + 2)
-            const dataLine = block.split('\n').find((l) => l.startsWith('data:'))
+          if (buffer.length > SSE_BUFFER_CAP_BYTES) {
+            logError?.('sse', `SSE buffer overflow (>${SSE_BUFFER_CAP_BYTES} bytes) for thread ${threadId}; clearing`, {
+              bufferBytes: buffer.length
+            })
+            buffer = ''
+            continue
+          }
+          let next: { block: string; rest: string } | null
+          while ((next = takeSseBlock(buffer)) !== null) {
+            const block = next.block
+            buffer = next.rest
+            const dataLine = block
+              .split('\n')
+              .map((l) => (l.endsWith('\r') ? l.slice(0, -1) : l))
+              .find((l) => l.startsWith('data:'))
             if (!dataLine) continue
             const json = dataLine.slice(5).trimStart()
             try {
