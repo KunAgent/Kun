@@ -203,3 +203,16 @@ If requirements are unclear, ask for clarification before making broad architect
 ## License
 
 By contributing to Kun, you agree that your contributions will be licensed under the [MIT License](../LICENSE).
+
+## Feishu / Lark 流式回复 smoke 测试
+
+发版前在真实飞书机器人跑一遍:
+
+1. **单条对话**:发"你好" → 看到 bot 出现一个 streaming 卡片(只有一条消息),1-2 秒内开始出现字符。
+2. **长回答**:发"帮我写一个快排",验证超过 30k 字符的内容能跨过第二张卡继续写,中间不卡。
+3. **故意触发限流**:临时把 `outbound.retry.maxAttempts = 1` 写进 `src/main/claw-runtime.ts:1663` 的 `policy` 段,跑"长回答"用例 → 验证 fallback:出现一条单发消息,内容是已经积累的 partial text。
+4. **故意制造 `turn_failed`**:用一个故意抛错的 MCP 工具跑通 → 验证 partial 文本已写入 streaming 卡,没有"双发"。
+5. **群聊(@bot)**:在群里 @bot 发消息 → 验证 streaming 卡出现在 thread 里,`replyInThread: true` 仍生效。
+6. **DM**:私聊发消息 → 验证 `replyInThread: false` 默认。
+
+跑完把 `outbound.retry.maxAttempts` 还原为不设(默认),然后才能 commit。
