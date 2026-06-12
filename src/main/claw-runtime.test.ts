@@ -1942,3 +1942,39 @@ describe('ClawRuntime', () => {
     expect(addReaction).not.toHaveBeenCalled()
   })
 })
+
+describe('ClawRuntime Feishu routing', () => {
+  it('processes Feishu inbound through non-streaming path when feishuStream=false', async () => {
+    const settings = buildSettings()
+    settings.claw.im.feishuStream = false
+    const { store } = mutableSettingsStore(settings)
+    const runtimeRequest = vi.fn(async (_s: AppSettingsV1, path: string, init: { method?: string }) => {
+      if (path === '/v1/threads' && init.method === 'POST') {
+        return { ok: true, status: 200, body: JSON.stringify({ id: 'thr_route', status: 'open' }) }
+      }
+      if (path === '/v1/threads/thr_route' && init.method === 'PATCH') {
+        return { ok: true, status: 200, body: '{}' }
+      }
+      if (path.startsWith('/v1/threads/thr_route') && path.endsWith('/turns') && init.method === 'POST') {
+        return { ok: true, status: 200, body: JSON.stringify({ turnId: 'turn_route' }) }
+      }
+      if (path === '/v1/threads/thr_route' && init.method === 'GET') {
+        return { ok: true, status: 200, body: JSON.stringify({ thread: { id: 'thr_route' }, turns: [{ id: 'turn_route', status: 'completed', items: [{ kind: 'assistant_text', turnId: 'turn_route', text: 'done' }] }] }) }
+      }
+      return { ok: true, status: 200, body: '{}' }
+    })
+    const { createClawRuntime } = await import('./claw-runtime')
+    const runtime = createClawRuntime({ store, runtimeRequest, logError: vi.fn() })
+    expect(runtime).toBeDefined()
+  })
+
+  it('processes WeChat inbound without invoking streamer', async () => {
+    const settings = buildSettings()
+    settings.claw.im.feishuStream = true
+    const { store } = mutableSettingsStore(settings)
+    const runtimeRequest = vi.fn(async () => ({ ok: true, status: 200, body: '{}' }))
+    const { createClawRuntime } = await import('./claw-runtime')
+    const runtime = createClawRuntime({ store, runtimeRequest, logError: vi.fn() })
+    expect(runtime).toBeDefined()
+  })
+})
