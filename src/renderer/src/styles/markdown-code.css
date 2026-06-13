@@ -382,10 +382,26 @@ html[data-theme='dark'] .ds-code-sidebar {
   padding: 0 0.75rem;
 }
 
+.ds-code-sidebar-tabs {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 0.35rem;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+}
+
+.ds-code-sidebar-tabs::-webkit-scrollbar {
+  display: none;
+}
+
 .ds-code-sidebar-tab {
   display: inline-flex;
   min-width: 0;
-  max-width: min(280px, 62%);
+  max-width: 240px;
+  flex: 0 0 auto;
   height: 30px;
   align-items: center;
   gap: 0.55rem;
@@ -394,14 +410,45 @@ html[data-theme='dark'] .ds-code-sidebar {
   background: var(--ds-card-muted);
   padding: 0 0.75rem 0 0.45rem;
   color: var(--ds-text);
+  cursor: pointer;
   font-size: 12px;
   font-weight: 600;
   box-shadow: var(--ds-shadow-chip);
 }
 
+.ds-code-sidebar-tab.is-active {
+  border-color: var(--ds-border-strong);
+  background: var(--ds-card-strong);
+}
+
 .ds-code-sidebar-tab:disabled {
   cursor: default;
   opacity: 0.68;
+}
+
+.ds-code-sidebar-tab-close {
+  display: inline-flex;
+  height: 18px;
+  width: 18px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--ds-text-faint);
+  cursor: pointer;
+  opacity: 0.82;
+  transition:
+    background 140ms ease,
+    color 140ms ease,
+    opacity 140ms ease;
+}
+
+.ds-code-sidebar-tab-close:hover {
+  background: var(--ds-surface-hover);
+  color: var(--ds-text);
+  opacity: 1;
 }
 
 .ds-code-sidebar-file-badge {
@@ -468,6 +515,10 @@ html[data-theme='dark'] .ds-code-sidebar {
 .ds-file-preview-scroll {
   --ds-file-preview-row-height: 22px;
   background: var(--ds-code-sidebar-editor-bg);
+}
+
+.ds-file-preview-markdown {
+  background: var(--ds-bg-canvas);
 }
 
 .ds-file-preview-code-surface {

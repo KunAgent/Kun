@@ -783,6 +783,12 @@ describe('Kun extension metadata mapping', () => {
       text: 'look at this',
       displayText: 'Inspect attached image',
       attachmentIds: ['att_1'],
+      fileReferences: [{
+        path: '/workspace/deepseek-gui/src/App.tsx',
+        relativePath: 'src/App.tsx',
+        name: 'App.tsx',
+        kind: 'file'
+      }],
       activeSkillIds: ['skill_review'],
       injectedMemoryIds: ['mem_1'],
       skillInjectionBytes: 128
@@ -792,6 +798,12 @@ describe('Kun extension metadata mapping', () => {
       meta: {
         displayText: 'Inspect attached image',
         attachmentIds: ['att_1'],
+        fileReferences: [{
+          path: '/workspace/deepseek-gui/src/App.tsx',
+          relativePath: 'src/App.tsx',
+          name: 'App.tsx',
+          kind: 'file'
+        }],
         activeSkillIds: ['skill_review'],
         injectedMemoryIds: ['mem_1'],
         skillInjectionBytes: 128

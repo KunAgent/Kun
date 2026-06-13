@@ -4,7 +4,7 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { useTranslation } from 'react-i18next'
 import { Check, ChevronDown, ChevronRight, Copy, Download, File, FileEdit, ImageIcon, Loader2, MessageSquareQuote, PencilLine, Terminal, Video, Wrench } from 'lucide-react'
-import type { AttachmentReference, ChatBlock, GeneratedFileReference, RuntimeDisclosureMetadata, ToolBlock, UserInputAnswer, UserInputQuestion } from '../../agent/types'
+import type { AttachmentReference, ChatBlock, GeneratedFileReference, RuntimeDisclosureMetadata, ToolBlock, UserFileReference, UserInputAnswer, UserInputQuestion } from '../../agent/types'
 import { extractUnifiedDiffText } from '../../lib/diff-stats'
 import { useChatStore } from '../../store/chat-store'
 import { getProvider } from '../../agent/registry'
@@ -161,6 +161,7 @@ function UserMessageBubble({
               onToggle={() => setWriteMetaOpen((value) => !value)}
             />
           ) : null}
+          <UserFileReferenceChips meta={block.meta} />
           <RuntimeMetaChips meta={block.meta} align="right" hideAttachments />
         </div>
       )}
@@ -266,6 +267,60 @@ function metaAttachmentReferences(meta: RuntimeDisclosureMetadata | undefined): 
       }
     })
     .filter((entry): entry is AttachmentReference => entry !== null)
+}
+
+function metaUserFileReferences(meta: RuntimeDisclosureMetadata | undefined): UserFileReference[] {
+  const value = meta?.fileReferences
+  if (!Array.isArray(value)) return []
+  return value
+    .map((entry): UserFileReference | null => {
+      if (!entry || typeof entry !== 'object') return null
+      const raw = entry as Record<string, unknown>
+      const path = typeof raw.path === 'string' && raw.path.trim() ? raw.path.trim() : ''
+      const relativePath =
+        typeof raw.relativePath === 'string' && raw.relativePath.trim() ? raw.relativePath.trim() : ''
+      const name = typeof raw.name === 'string' && raw.name.trim() ? raw.name.trim() : ''
+      const kind = raw.kind === 'directory' ? 'directory' : 'file'
+      if (!path || !relativePath || !name) return null
+      return { path, relativePath, name, kind }
+    })
+    .filter((entry): entry is UserFileReference => entry !== null)
+}
+
+function UserFileReferenceChips({
+  meta
+}: {
+  meta?: RuntimeDisclosureMetadata
+}): ReactElement | null {
+  const { t } = useTranslation('common')
+  const references = useMemo(() => metaUserFileReferences(meta), [meta])
+  if (references.length === 0) return null
+
+  return (
+    <div className="mt-3 flex min-w-0 flex-col items-end gap-1.5 border-t border-white/10 pt-2">
+      <div className="text-[11px] font-medium text-ds-faint">
+        {t('messageFileReferences', { count: references.length })}
+      </div>
+      <div className="flex max-w-full flex-wrap justify-end gap-1.5">
+        {references.map((reference) => {
+          const isDirectory = reference.kind === 'directory'
+          const label = isDirectory
+            ? `${reference.relativePath.replace(/\/+$/g, '')}/`
+            : reference.relativePath
+          return (
+            <span
+              key={`${reference.kind ?? 'file'}:${reference.path}`}
+              title={reference.path}
+              className="inline-flex max-w-[260px] items-center gap-1.5 rounded-md border border-white/10 bg-white/8 px-2 py-1 text-[11.5px] font-medium text-ds-muted"
+            >
+              <File className="h-3.5 w-3.5 shrink-0" strokeWidth={1.8} />
+              <span className="truncate">{label}</span>
+            </span>
+          )
+        })}
+      </div>
+    </div>
+  )
 }
 
 type TimelineMediaReference = GeneratedFileReference & {

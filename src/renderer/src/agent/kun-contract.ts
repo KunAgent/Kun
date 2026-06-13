@@ -65,6 +65,13 @@ export type CoreAttachmentTextFallbackJson = {
   wasCompressed?: boolean
 }
 
+export type CoreUserFileReferenceJson = {
+  path: string
+  relativePath: string
+  name: string
+  kind?: 'file' | 'directory'
+}
+
 export type CoreAttachmentDiagnosticsJson = {
   enabled: boolean
   rootDir: string
@@ -383,6 +390,7 @@ export type CoreTurnItemJson = {
   details?: unknown
   severity?: 'info' | 'warning' | 'error'
   attachmentIds?: string[]
+  fileReferences?: CoreUserFileReferenceJson[]
   activeSkillIds?: string[]
   injectedMemoryIds?: string[]
   skillInjectionBytes?: number

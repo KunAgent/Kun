@@ -43,11 +43,20 @@ const UserInputQuestionSchema = z.object({
   options: z.array(UserInputOptionSchema)
 })
 
+export const UserFileReferenceSchema = z.object({
+  path: z.string().min(1),
+  relativePath: z.string().min(1),
+  name: z.string().min(1),
+  kind: z.enum(['file', 'directory']).optional()
+})
+export type UserFileReference = z.infer<typeof UserFileReferenceSchema>
+
 export const UserTurnItem = TurnItemBase.extend({
   kind: z.literal('user_message'),
   text: z.string(),
   displayText: z.string().optional(),
-  attachmentIds: z.array(z.string().min(1)).optional()
+  attachmentIds: z.array(z.string().min(1)).optional(),
+  fileReferences: z.array(UserFileReferenceSchema).optional()
 })
 export type UserTurnItem = z.infer<typeof UserTurnItem>
 

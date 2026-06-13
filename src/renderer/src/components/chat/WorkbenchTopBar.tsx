@@ -11,6 +11,7 @@ import {
   Download,
   ExternalLink,
   FileEdit,
+  Files,
   FolderOpen,
   Globe2,
   ListTodo,
@@ -41,6 +42,9 @@ type Props = {
   sideChatRunningCount?: number
   sideChatOpen?: boolean
   sideChatEnabled?: boolean
+  fileTreeOpen?: boolean
+  fileTreeEnabled?: boolean
+  onToggleFileTree?: () => void
   onOpenSideChat?: () => void
 }
 
@@ -54,6 +58,9 @@ export function WorkbenchTopBar({
   sideChatRunningCount = 0,
   sideChatOpen = false,
   sideChatEnabled = true,
+  fileTreeOpen = false,
+  fileTreeEnabled = true,
+  onToggleFileTree,
   onOpenSideChat
 }: Props): ReactElement {
   const { t } = useTranslation(['common', 'settings'])
@@ -388,6 +395,24 @@ export function WorkbenchTopBar({
           </Fragment>
         )
       })}
+
+      {onToggleFileTree ? (
+        <button
+          type="button"
+          onClick={onToggleFileTree}
+          disabled={!fileTreeEnabled}
+          className={`rounded-full border px-2.5 py-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.45)] transition disabled:cursor-not-allowed disabled:opacity-45 dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] ${
+            fileTreeOpen
+              ? 'border-ds-border-strong bg-white/70 text-ds-ink dark:bg-white/10'
+              : 'border-transparent bg-white/38 text-ds-faint opacity-90 hover:border-ds-border-muted hover:bg-white/55 hover:text-ds-ink hover:opacity-100 dark:bg-white/4 dark:hover:bg-white/8'
+          }`}
+          aria-label={t('rightPanelFiles')}
+          aria-pressed={fileTreeOpen}
+          title={t('rightPanelFiles')}
+        >
+          <Files className="h-4 w-4" strokeWidth={1.75} />
+        </button>
+      ) : null}
     </div>
   )
 }

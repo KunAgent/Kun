@@ -253,6 +253,57 @@ describe('KunRuntimeProvider', () => {
     )
   })
 
+  it('posts file references with Kun turn requests when provided', async () => {
+    const runtimeRequest = vi.fn(async () => ({
+      ok: true,
+      status: 202,
+      body: JSON.stringify({ threadId: 'thr_1', turnId: 'turn_files', userMessageItemId: 'item_user_files' })
+    }))
+    installDsGui({ runtimeRequest })
+    const provider = new KunRuntimeProvider()
+
+    await provider.sendUserMessage('thr_1', 'explain these files', {
+      fileReferences: [
+        {
+          path: '/workspace/deepseek-gui/src/App.tsx',
+          relativePath: 'src/App.tsx',
+          name: 'App.tsx',
+          kind: 'file'
+        },
+        {
+          path: '/workspace/deepseek-gui/src',
+          relativePath: 'src',
+          name: 'src',
+          kind: 'directory'
+        }
+      ]
+    })
+
+    expect(runtimeRequest).toHaveBeenCalledWith(
+      '/v1/threads/thr_1/turns',
+      'POST',
+      JSON.stringify({
+        prompt: 'explain these files',
+        approvalPolicy: 'auto',
+        sandboxMode: 'danger-full-access',
+        fileReferences: [
+          {
+            path: '/workspace/deepseek-gui/src/App.tsx',
+            relativePath: 'src/App.tsx',
+            name: 'App.tsx',
+            kind: 'file'
+          },
+          {
+            path: '/workspace/deepseek-gui/src',
+            relativePath: 'src',
+            name: 'src',
+            kind: 'directory'
+          }
+        ]
+      })
+    )
+  })
+
   it('posts explicit reasoning effort with Kun turn requests', async () => {
     const runtimeRequest = vi.fn(async () => ({
       ok: true,

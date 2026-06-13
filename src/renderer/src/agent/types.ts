@@ -36,6 +36,13 @@ export type GeneratedFileReference = {
   absolutePath?: string
 }
 
+export type UserFileReference = {
+  path: string
+  relativePath: string
+  name: string
+  kind?: 'file' | 'directory'
+}
+
 export type RuntimeChildMetadata = {
   parentThreadId: string
   parentTurnId: string
@@ -56,6 +63,7 @@ export type RuntimeDisclosureMetadata = {
   displayText?: string
   attachmentIds?: string[]
   attachments?: AttachmentReference[]
+  fileReferences?: UserFileReference[]
   generatedFiles?: GeneratedFileReference[]
   activeSkillIds?: string[]
   injectedMemoryIds?: string[]
@@ -441,6 +449,7 @@ export interface AgentProvider {
         title?: string
       }
       attachmentIds?: string[]
+      fileReferences?: UserFileReference[]
     }
   ): Promise<{ turnId: string; threadId: string; userMessageItemId?: string }>
   reviewThread?(

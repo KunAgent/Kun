@@ -165,6 +165,37 @@ describe('MessageTimeline Kun runtime metadata smoke', () => {
     expect(html).not.toContain('ds-media-printer-reveal')
   })
 
+  it('renders user file references under the sent prompt', () => {
+    const block: ChatBlock = {
+      kind: 'user',
+      id: 'user_files',
+      text: '看一下这些文件',
+      meta: {
+        fileReferences: [
+          {
+            path: '/workspace/deepseek-gui/src/App.tsx',
+            relativePath: 'src/App.tsx',
+            name: 'App.tsx',
+            kind: 'file'
+          },
+          {
+            path: '/workspace/deepseek-gui/src',
+            relativePath: 'src',
+            name: 'src',
+            kind: 'directory'
+          }
+        ]
+      }
+    }
+
+    const html = renderToStaticMarkup(createElement(MessageBubble, { block }))
+
+    expect(html).toContain('看一下这些文件')
+    expect(html).toContain('Referenced files 2')
+    expect(html).toContain('src/App.tsx')
+    expect(html).toContain('src/')
+  })
+
   it('renders generated image previews with the printer reveal effect', () => {
     const block: ToolBlock = toolBlock({
       id: 'tool_img',

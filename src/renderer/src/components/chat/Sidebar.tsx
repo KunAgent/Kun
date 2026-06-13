@@ -101,7 +101,6 @@ export function Sidebar({
   const addClawChannel = useChatStore((s) => s.addClawChannel)
   const deleteClawChannel = useChatStore((s) => s.deleteClawChannel)
   const resetClawChannelSession = useChatStore((s) => s.resetClawChannelSession)
-
   const [imDialogMode, setImDialogMode] = useState<ClawImDialogMode | null>(null)
 
   const activeClawChannel = useMemo(

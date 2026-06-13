@@ -21,8 +21,8 @@ import {
 } from '@shared/keyboard-shortcuts'
 import type { DesktopCommand, ModelProviderModelGroup, SkillListItem } from '@shared/kun-gui-api'
 import type { WriteRetrievalContext } from '@shared/write-retrieval'
-import type { ClipboardImageReadResult } from '@shared/workspace-file'
-import type { AttachmentReference, ChatBlock, NormalizedThread } from '../agent/types'
+import type { ClipboardImageReadResult, WorkspaceFileTarget } from '@shared/workspace-file'
+import type { AttachmentReference, ChatBlock, NormalizedThread, UserFileReference } from '../agent/types'
 import type { CoreRuntimeInfoJson, CoreRuntimeSkillJson } from '../agent/kun-contract'
 import { getProvider } from '../agent/registry'
 import { rendererRuntimeClient } from '../agent/runtime-client'
@@ -42,6 +42,7 @@ import {
   type ComposerExecutionSettings,
   type ComposerFileReference
 } from './chat/FloatingComposer'
+import { ChatFileTreePanel, type ChatFileTreeReference } from './chat/ChatFileTreePanel'
 import {
   composerReasoningEffortRequestValue,
   type ComposerReasoningEffort
@@ -84,7 +85,7 @@ import { parseGuiPlanCommand } from '../plan/plan-command'
 import { confirmDialog } from '../lib/confirm-dialog'
 import { DevPreviewLaunchCard } from './DevPreviewLaunchCard'
 import { RuntimeBanner } from './RuntimeBanner'
-import { useWorkbenchLayout } from './workbench-layout'
+import { CODE_PANEL_PREFERRED, useWorkbenchLayout } from './workbench-layout'
 import { useWorkbenchPlanController } from './workbench-plan-controller'
 import { prepareImageAttachmentUpload } from '../lib/image-attachment-upload'
 import { isChatAttachmentUploadEnabled } from '../lib/attachment-upload-availability'
@@ -98,6 +99,7 @@ import {
   buildComposerFileContextPrompt,
   isComposerDirectoryReference,
   mergeComposerFileReferences,
+  relativeWorkspacePath,
   type ComposerFileContextEntry
 } from '../lib/composer-file-references'
 import { filesUnderDirectory, loadWorkspaceFileIndex } from '../lib/workspace-file-index'
@@ -141,7 +143,13 @@ const COMPOSER_FILE_CONTEXT_MAX_TOTAL_CHARS = 180_000
 // Upper bound on how many files a single `@directory` mention expands into, so a
 // large folder cannot flood the prompt (the char budget above is the hard cap).
 const COMPOSER_DIRECTORY_CONTEXT_MAX_FILES = 60
+const FILE_TREE_SIDEBAR_WIDTH = 320
 const SDD_ASSISTANT_TITLE_SYNC_DELAY_MS = 900
+
+function workspaceFileTargetKey(target: WorkspaceFileTarget | null | undefined): string {
+  if (!target?.path) return ''
+  return `${target.workspaceRoot ?? ''}\n${target.path}`.replaceAll('\\', '/').toLowerCase()
+}
 const DESKTOP_SHORTCUT_COMMANDS: Partial<Record<KeyboardShortcutCommandId, DesktopCommand>> = {
   quit: 'quit',
   undo: 'undo',
@@ -214,6 +222,17 @@ function clipComposerFileContext(
     truncated: sourceTruncated || clipped.length < content.length,
     consumed: clipped.length
   }
+}
+
+function composerReferencesToUserFileReferences(
+  references: ComposerFileReference[]
+): UserFileReference[] {
+  return references.map((reference) => ({
+    path: reference.path,
+    relativePath: reference.relativePath,
+    name: reference.name,
+    kind: isComposerDirectoryReference(reference) ? 'directory' : 'file'
+  }))
 }
 
 function sddDraftPlanRelativePath(draft: SddDraft): string {
@@ -430,6 +449,8 @@ export function Workbench(): ReactElement {
   const [attachmentUploadBusy, setAttachmentUploadBusy] = useState(false)
   const [attachmentUploadError, setAttachmentUploadError] = useState<string | null>(null)
   const [connectPhoneSidebarOpen, setConnectPhoneSidebarOpen] = useState(false)
+  const [fileTreeSidePanelOpen, setFileTreeSidePanelOpen] = useState(false)
+  const [openFilePreviewTargets, setOpenFilePreviewTargets] = useState<WorkspaceFileTarget[]>([])
   const initUiPlugins = useUiPluginStore((s) => s.initUiPlugins)
   const uiModeCameosEnabled = useUiModeCameosEnabled()
   const [focusModeEnabled, setFocusModeEnabled] = useState(readFocusModePreference)
@@ -953,6 +974,11 @@ export function Workbench(): ReactElement {
     return threads.find((thread) => thread.id === activeThreadId)?.workspace || workspaceRoot || undefined
   }
 
+  const fileTreeWorkspaceRoot = useMemo(
+    () => normalizeWorkspaceRoot(threads.find((thread) => thread.id === activeThreadId)?.workspace || workspaceRoot),
+    [activeThreadId, threads, workspaceRoot]
+  )
+
   const clearComposerFileReferences = (): void => {
     setComposerFileReferences([])
   }
@@ -969,6 +995,60 @@ export function Workbench(): ReactElement {
       )
     )
   }
+
+  const openWorkspaceFilePreviewTarget = (target: WorkspaceFileTarget): void => {
+    const nextTarget = {
+      ...target,
+      workspaceRoot: target.workspaceRoot ?? fileTreeWorkspaceRoot
+    }
+    if (!nextTarget.workspaceRoot) return
+    setOpenFilePreviewTargets((current) => {
+      const key = workspaceFileTargetKey(nextTarget)
+      if (current.some((item) => workspaceFileTargetKey(item) === key)) return current
+      return [...current, nextTarget]
+    })
+    setFilePreviewTarget(nextTarget)
+    setRightSidebarWidth((width) => Math.max(width, CODE_PANEL_PREFERRED))
+    setRightPanelMode('file')
+  }
+
+  const previewWorkspaceFileFromSidebar = (path: string): void => {
+    const workspace = fileTreeWorkspaceRoot
+    if (!workspace) return
+    openWorkspaceFilePreviewTarget({ path, workspaceRoot: workspace })
+  }
+
+  const closeWorkspaceFilePreviewTarget = (target: WorkspaceFileTarget): void => {
+    const closingKey = workspaceFileTargetKey(target)
+    setOpenFilePreviewTargets((current) => {
+      const index = current.findIndex((item) => workspaceFileTargetKey(item) === closingKey)
+      if (index < 0) return current
+      const next = current.filter((_, itemIndex) => itemIndex !== index)
+      if (workspaceFileTargetKey(filePreviewTarget) === closingKey) {
+        const fallback = next[Math.max(0, index - 1)] ?? next[0] ?? null
+        setFilePreviewTarget(fallback)
+        if (!fallback) setRightPanelMode(null)
+      }
+      return next
+    })
+  }
+
+  const addWorkspaceReferenceFromSidebar = (reference: ChatFileTreeReference): void => {
+    addComposerFileReference(reference)
+  }
+
+  const toggleFileTreeSidePanel = (): void => {
+    setFileTreeSidePanelOpen((open) => !open)
+  }
+
+  useEffect(() => {
+    if (rightPanelMode !== 'file' || !filePreviewTarget) return
+    setOpenFilePreviewTargets((current) => {
+      const key = workspaceFileTargetKey(filePreviewTarget)
+      if (current.some((item) => workspaceFileTargetKey(item) === key)) return current
+      return [...current, filePreviewTarget]
+    })
+  }, [filePreviewTarget, rightPanelMode])
 
   useEffect(() => {
     if (route !== 'chat') setComposerFileReferences([])
@@ -1783,6 +1863,7 @@ export function Workbench(): ReactElement {
     const attachments = route === 'chat' || route === 'write' ? composerAttachments : []
     const attachmentIds = attachments.map((attachment) => attachment.id)
     const fileReferences = route === 'chat' ? composerFileReferences : []
+    const userFileReferences = composerReferencesToUserFileReferences(fileReferences)
     const reasoningEffort = composerReasoningEffortRequestValue(composerReasoningEffort)
     if (!v && attachmentIds.length === 0 && fileReferences.length === 0) return
     if (attachmentIds.length > 0 && !attachmentUploadEnabled) {
@@ -1849,7 +1930,8 @@ export function Workbench(): ReactElement {
       void sendPlanTurn(prepared.text, {
         ...(prepared.displayText ? { displayText: prepared.displayText } : {}),
         ...(reasoningEffort ? { reasoningEffort } : {}),
-        ...(attachmentIds.length ? { attachmentIds, attachments } : {})
+        ...(attachmentIds.length ? { attachmentIds, attachments } : {}),
+        ...(userFileReferences.length ? { fileReferences: userFileReferences } : {})
       })
       return
     }
@@ -1955,7 +2037,8 @@ export function Workbench(): ReactElement {
     void sendMessage(prepared.text, mode === 'plan' ? 'plan' : 'agent', {
       ...(prepared.displayText ? { displayText: prepared.displayText } : {}),
       ...(reasoningEffort ? { reasoningEffort } : {}),
-      ...(attachmentIds.length ? { attachmentIds, attachments } : {})
+      ...(attachmentIds.length ? { attachmentIds, attachments } : {}),
+      ...(userFileReferences.length ? { fileReferences: userFileReferences } : {})
     })
   }
 
@@ -2030,6 +2113,7 @@ export function Workbench(): ReactElement {
       setWriteAssistantOpen(false)
       return
     }
+    if (rightPanelMode === 'file') setOpenFilePreviewTargets([])
     setRightPanelMode(null)
     setFilePreviewTarget(null)
   }
@@ -2085,6 +2169,7 @@ export function Workbench(): ReactElement {
     runtimeActionNeedsConnection: t('runtimeActionNeedsConnection')
   })
   const rightPanelDockedVisible = rightPanelVisible && !planPanelInOverlay
+  const fileTreeSidePanelOffset = fileTreeSidePanelOpen ? FILE_TREE_SIDEBAR_WIDTH + 24 : 0
 
   const renderPlanPanel = (className: string): ReactElement => (
     <PlanPanel
@@ -2218,13 +2303,48 @@ export function Workbench(): ReactElement {
             ) : (
               <WorkspaceFilePreviewPanel
                 target={filePreviewTarget}
+                openTargets={openFilePreviewTargets}
                 workspaceRoot={workspaceRoot}
                 className="h-full max-h-full w-full"
+                onSelectTarget={openWorkspaceFilePreviewTarget}
+                onCloseTarget={closeWorkspaceFilePreviewTarget}
                 onClose={closeRightPanel}
               />
             )}
           </Suspense>
         </div>
+      </>
+    )
+  }
+
+  const renderFileTreeSidePanel = (): ReactElement | null => {
+    if (!fileTreeSidePanelOpen) return null
+    return (
+      <>
+        <div
+          role="separator"
+          aria-orientation="vertical"
+          className="ds-workbench-divider ds-no-drag relative z-20 shrink-0"
+        />
+        <aside
+          className="ds-no-drag h-full min-h-0 shrink-0 border-l border-ds-border-muted bg-ds-sidebar"
+          style={{ width: FILE_TREE_SIDEBAR_WIDTH }}
+        >
+          {fileTreeWorkspaceRoot ? (
+            <ChatFileTreePanel
+              workspaceRoot={fileTreeWorkspaceRoot}
+              selectedPath={filePreviewTarget?.path}
+              onPreviewFile={previewWorkspaceFileFromSidebar}
+              onAddReference={addWorkspaceReferenceFromSidebar}
+              t={t}
+              fill
+            />
+          ) : (
+            <div className="px-4 py-3 text-[12px] leading-5 text-ds-muted">
+              {t('workspaceRequiredToCreateThread')}
+            </div>
+          )}
+        </aside>
       </>
     )
   }
@@ -2263,7 +2383,7 @@ export function Workbench(): ReactElement {
           <div className="min-h-0 shrink-0" style={{ width: leftSidebarWidth }}>
             {route === 'write' ? (
               <WriteSidebar
-                activeView={sidebarView}
+                activeView="write"
                 connectPhoneSidebarOpen={connectPhoneSidebarOpen}
                 onCodeOpen={openCodeMode}
                 onWriteOpen={openWriteMode}
@@ -2402,6 +2522,9 @@ export function Workbench(): ReactElement {
                     sideChatRunningCount={currentSideRunningCount}
                     sideChatOpen={sidePanel.open}
                     sideChatEnabled={runtimeConnection === 'ready' && Boolean(activeThreadId)}
+                    fileTreeOpen={fileTreeSidePanelOpen}
+                    fileTreeEnabled={Boolean(fileTreeWorkspaceRoot)}
+                    onToggleFileTree={toggleFileTreeSidePanel}
                     onOpenSideChat={openSideChat}
                   />
                 </div>
@@ -2537,10 +2660,13 @@ export function Workbench(): ReactElement {
           </div>
 
           {route === 'chat' && !activeSddDraft ? (
-            <SideConversationPanel rightOffset={rightPanelDockedVisible ? rightSidebarWidth + 24 : 24} />
+            <SideConversationPanel
+              rightOffset={(rightPanelDockedVisible ? rightSidebarWidth + 24 : 24) + fileTreeSidePanelOffset}
+            />
           ) : null}
 
           {renderRightPanel()}
+          {renderFileTreeSidePanel()}
         </div>
 
           </>

@@ -63,7 +63,8 @@ export class TurnService {
       threadId: input.threadId,
       text: input.request.prompt,
       displayText: input.request.displayText,
-      attachmentIds: input.request.attachmentIds ?? []
+      attachmentIds: input.request.attachmentIds ?? [],
+      fileReferences: input.request.fileReferences ?? []
     })
     const controller = new AbortController()
     await this.upsertThread(input.threadId, (current) => ({
