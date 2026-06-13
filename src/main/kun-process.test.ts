@@ -69,6 +69,24 @@ async function readKunLog(): Promise<string> {
   throw new Error('Expected a kun log file to be created')
 }
 
+function canBindTestPort(port: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    const server = createServer()
+    let settled = false
+    const settle = (available: boolean): void => {
+      if (settled) return
+      settled = true
+      server.removeAllListeners('error')
+      resolve(available)
+    }
+    server.unref()
+    server.once('error', () => settle(false))
+    server.listen(port, '127.0.0.1', () => {
+      server.close(() => settle(true))
+    })
+  })
+}
+
 beforeEach(() => {
   tempRoot = mkdtempSync(join(tmpdir(), 'kun-process-'))
   configureLogger({ dir: tempRoot, enabled: true, retentionDays: 7 })
@@ -190,21 +208,36 @@ describe('reclaimKunPort', () => {
     await expect(module.reclaimKunPort(0)).resolves.toEqual({ ok: true })
   })
 
-  it('resolves an available fallback port when the preferred port is unavailable', async () => {
-    const server = createServer()
-    await new Promise<void>((resolve, reject) => {
-      server.once('error', reject)
-      server.listen(0, '127.0.0.1', () => resolve())
-    })
+  it('resolves the next available fallback port when the preferred port is unavailable', async () => {
+    let server: ReturnType<typeof createServer> | null = null
+    let preferredPort = 0
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      const candidate = createServer()
+      await new Promise<void>((resolve, reject) => {
+        candidate.once('error', reject)
+        candidate.listen(0, '127.0.0.1', () => resolve())
+      })
+      const address = candidate.address() as AddressInfo
+      if (address.port < 65_535 && await canBindTestPort(address.port + 1)) {
+        server = candidate
+        preferredPort = address.port
+        break
+      }
+      await new Promise<void>((resolve) => candidate.close(() => resolve()))
+    }
+    if (!server || preferredPort <= 0) {
+      throw new Error('Could not find consecutive test ports')
+    }
     try {
-      const address = server.address() as AddressInfo
       const module = await import('./kun-process')
 
-      const resolved = await module.resolveAvailableKunPort(address.port)
+      const resolved = await module.resolveAvailableKunPort(preferredPort)
 
-      expect(resolved.changed).toBe(true)
-      expect(resolved.message).toBe(`port ${address.port} is in use`)
-      expect(resolved.port).not.toBe(address.port)
+      expect(resolved).toEqual({
+        port: preferredPort + 1,
+        changed: true,
+        message: `port ${preferredPort} is in use`
+      })
       await expect(module.reclaimKunPort(resolved.port)).resolves.toEqual({ ok: true })
     } finally {
       await new Promise<void>((resolve) => server.close(() => resolve()))

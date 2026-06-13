@@ -91,6 +91,7 @@ const KUN_STOP_GRACE_MS = 5_000
 const KUN_STOP_FORCE_MS = 1_000
 const STDERR_TAIL_MAX_CHARS = 32_768
 const GUI_SCHEDULE_MCP_TIMEOUT_MS = 5_000
+const MAX_TCP_PORT = 65_535
 const DEFAULT_KUN_MODEL_PROFILES: Record<string, Record<string, unknown>> = {
   'deepseek-v4-pro': {
     contextWindowTokens: 1_000_000,
@@ -989,6 +990,15 @@ export async function resolveAvailableKunPort(
       await canBindTcpPort(preferredPort, '127.0.0.1')
     ) {
       return { port: preferredPort, changed: false }
+    }
+    for (let port = preferredPort + 1; port <= MAX_TCP_PORT; port += 1) {
+      if (await canBindTcpPort(port, '127.0.0.1')) {
+        return {
+          port,
+          changed: true,
+          message: `port ${preferredPort} is in use`
+        }
+      }
     }
   }
   const port = await allocateTcpPort('127.0.0.1')
