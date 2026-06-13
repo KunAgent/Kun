@@ -149,16 +149,21 @@ export function SidebarCommandRow({
 
 type SidebarSectionHeaderProps = {
   label: string
+  title?: string
   actions?: ReactNode
 }
 
 export function SidebarSectionHeader({
   label,
+  title,
   actions
 }: SidebarSectionHeaderProps): ReactElement {
   return (
     <div className="flex items-center justify-between px-2.5 pb-2 pt-5">
-      <span className="min-w-0 truncate text-[12px] font-normal text-[#9aa5b5] dark:text-white/35">
+      <span
+        className="min-w-0 truncate text-[12px] font-normal text-[#9aa5b5] dark:text-white/35"
+        title={title}
+      >
         {label}
       </span>
       {actions ? <div className="flex shrink-0 items-center gap-0.5">{actions}</div> : null}

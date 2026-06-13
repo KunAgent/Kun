@@ -241,6 +241,7 @@ export class KunRuntimeProvider implements AgentProvider {
         title?: string
       }
       attachmentIds?: string[]
+      fileReferences?: Array<{ path: string; relativePath: string; name: string; kind?: 'file' | 'directory' }>
     }
   ): Promise<{ turnId: string; threadId: string; userMessageItemId?: string }> {
     const settings = await rendererRuntimeClient.getSettings()
@@ -273,6 +274,9 @@ export class KunRuntimeProvider implements AgentProvider {
     }
     if (options?.attachmentIds?.length) {
       body.attachmentIds = options.attachmentIds
+    }
+    if (options?.fileReferences?.length) {
+      body.fileReferences = options.fileReferences
     }
     const response = await rendererRuntimeClient.runtimeRequest(
       kunThreadTurnsPath(threadId),
