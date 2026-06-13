@@ -28,6 +28,7 @@ export const PROVIDER_MODEL_REASONING_EFFORT_CHOICES: ModelReasoningEffort[] =
 
 export const PROVIDER_MODEL_REASONING_PROTOCOLS: ModelReasoningRequestProtocol[] = [
   'deepseek-chat-completions',
+  'glm-chat-completions',
   'mimo-chat-completions',
   'openai-responses',
   'anthropic-thinking',
@@ -73,6 +74,9 @@ export function defaultReasoningProtocolForProvider(
   if (provider.endpointFormat === 'messages') return 'anthropic-thinking'
   if (provider.endpointFormat === 'responses') return 'openai-responses'
   const host = provider.baseUrl.toLowerCase()
+  if (provider.id.startsWith('bigmodel') || provider.id.startsWith('zai') || host.includes('bigmodel.cn') || host.includes('z.ai')) {
+    return 'glm-chat-completions'
+  }
   if (provider.id.startsWith('xiaomi') || host.includes('xiaomimimo')) return 'mimo-chat-completions'
   return 'deepseek-chat-completions'
 }

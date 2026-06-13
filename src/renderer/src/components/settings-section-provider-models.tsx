@@ -46,6 +46,7 @@ const textInputClass =
 
 const REASONING_PROTOCOL_LABEL_KEYS: Record<ModelReasoningRequestProtocol, string> = {
   'deepseek-chat-completions': 'providerModelReasoningProtocolDeepseek',
+  'glm-chat-completions': 'providerModelReasoningProtocolGlm',
   'mimo-chat-completions': 'providerModelReasoningProtocolMimo',
   'openai-responses': 'providerModelReasoningProtocolResponses',
   'anthropic-thinking': 'providerModelReasoningProtocolAnthropic',

@@ -86,6 +86,7 @@ export type ModelReasoningEffort = (typeof MODEL_REASONING_EFFORTS)[number]
 export const MODEL_REASONING_REQUEST_PROTOCOLS = [
   'none',
   'deepseek-chat-completions',
+  'glm-chat-completions',
   'mimo-chat-completions',
   'openai-responses',
   'anthropic-thinking'

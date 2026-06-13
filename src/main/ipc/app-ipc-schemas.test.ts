@@ -304,6 +304,7 @@ describe('app-ipc-schemas', () => {
   it('strips legacy settings keys before validating settings patches', () => {
     const payload = settingsPatchSchema.parse({
       locale: 'zh',
+      disabledSkillIds: ['legacy-skill'],
       reasonix: { model: 'legacy-reasoner' },
       quickChat: { enabled: true },
       agents: {
@@ -321,6 +322,7 @@ describe('app-ipc-schemas', () => {
 
     expect(payload.locale).toBe('zh')
     expect(payload.agents?.kun?.port).toBe(9001)
+    expect('disabledSkillIds' in payload).toBe(false)
     expect('reasonix' in payload).toBe(false)
     expect('quickChat' in payload).toBe(false)
     expect('reasonix' in (payload.agents ?? {})).toBe(false)
@@ -374,6 +376,55 @@ describe('app-ipc-schemas', () => {
       id: 'deepseek',
       apiKey: 'sk-updated',
       endpointFormat: 'responses'
+    })
+  })
+
+  it('accepts legacy provider imageRecognition fields so settings can be re-saved', () => {
+    const payload = settingsPatchSchema.parse({
+      provider: {
+        providers: [{
+          id: 'legacy-vision-provider',
+          name: 'Legacy Vision Provider',
+          imageRecognition: {
+            enabled: true,
+            models: ['old-vision-model']
+          },
+          models: ['old-vision-model'],
+          modelProfiles: {
+            'old-vision-model': {
+              inputModalities: ['text', 'image'],
+              outputModalities: ['text'],
+              supportsToolCalling: true,
+              messageParts: ['text', 'image_url']
+            }
+          }
+        }]
+      }
+    })
+
+    expect(payload.provider?.providers?.[0]?.id).toBe('legacy-vision-provider')
+  })
+
+  it('accepts legacy Kun imageRecognition settings so settings can be re-saved', () => {
+    const payload = settingsPatchSchema.parse({
+      agents: {
+        kun: {
+          imageRecognition: {
+            enabled: true,
+            protocol: 'openai-chat-completions',
+            baseUrl: 'https://token-plan-cn.xiaomimimo.com/v1',
+            apiKey: 'tp-legacy',
+            model: 'mimo-v2.5',
+            prompt: 'Extract text from this image.',
+            timeoutMs: 120000
+          }
+        }
+      }
+    })
+
+    expect(payload.agents?.kun?.imageRecognition).toMatchObject({
+      enabled: true,
+      model: 'mimo-v2.5'
     })
   })
 

@@ -15,7 +15,7 @@ import type {
   VideoGenerationProtocol
 } from './app-settings-types'
 
-export type ModelProviderPresetId = 'litellm' | 'xiaomi' | 'minimax'
+export type ModelProviderPresetId = 'litellm' | 'bigmodel' | 'zai' | 'xiaomi' | 'minimax'
 
 export const TOKEN_PLAN_PROVIDER_ID_SUFFIX = '-token-plan'
 
@@ -126,6 +126,12 @@ const MINIMAX_BUILT_IN_REASONING: ModelProviderReasoningCapabilityV1 = {
   requestProtocol: 'none'
 }
 
+const GLM_REASONING: ModelProviderReasoningCapabilityV1 = {
+  supportedEfforts: ['off', 'high', 'max'],
+  defaultEffort: 'max',
+  requestProtocol: 'glm-chat-completions'
+}
+
 export const MODEL_PROVIDER_PRESETS: ModelProviderPreset[] = [
   {
     id: 'litellm',
@@ -135,6 +141,136 @@ export const MODEL_PROVIDER_PRESETS: ModelProviderPreset[] = [
     models: [],
     docsUrl: 'https://docs.litellm.ai/docs/',
     apiKeyUrl: 'https://docs.litellm.ai/docs/proxy/quick_start'
+  },
+  {
+    id: 'bigmodel',
+    name: 'BigModel',
+    baseUrl: 'https://open.bigmodel.cn/api/paas/v4/chat/completions',
+    endpointFormat: 'custom_endpoint',
+    models: [
+      'glm-5.1',
+      'glm-5',
+      'glm-5-turbo',
+      'glm-4.7',
+      'glm-4.6',
+      'glm-4.5',
+      'glm-4.5-air',
+      'glm-5v-turbo',
+      'glm-4.6v',
+      'glm-4.6v-flash',
+      'glm-4.5v'
+    ],
+    modelProfiles: {
+      'glm-5.1': glmTextChatProfile(200_000),
+      'glm-5': glmTextChatProfile(200_000),
+      'glm-5-turbo': glmTextChatProfile(200_000),
+      'glm-4.7': glmTextChatProfile(200_000),
+      'glm-4.6': glmTextChatProfile(200_000),
+      'glm-4.5': glmTextChatProfile(128_000),
+      'glm-4.5-air': glmTextChatProfile(128_000),
+      'glm-5v-turbo': glmVisionChatProfile(200_000),
+      'glm-4.6v': glmVisionChatProfile(128_000),
+      'glm-4.6v-flash': glmVisionChatProfile(128_000),
+      'glm-4.5v': glmVisionChatProfile(64_000)
+    },
+    tokenPlan: {
+      baseUrl: 'https://open.bigmodel.cn/api/coding/paas/v4/chat/completions',
+      endpointFormat: 'custom_endpoint',
+      models: [
+        'glm-5.2',
+        'glm-5.1',
+        'glm-5-turbo',
+        'glm-5',
+        'glm-4.7',
+        'glm-4.6',
+        'glm-4.6v',
+        'glm-4.6v-flash',
+        'glm-4.5',
+        'glm-4.5-air'
+      ],
+      modelProfiles: {
+        'glm-5.2': glmTextChatProfile(1_000_000),
+        'glm-5.1': glmTextChatProfile(200_000),
+        'glm-5-turbo': glmTextChatProfile(200_000),
+        'glm-5': glmTextChatProfile(200_000),
+        'glm-4.7': glmTextChatProfile(200_000),
+        'glm-4.6': glmTextChatProfile(200_000),
+        'glm-4.6v': glmVisionChatProfile(128_000),
+        'glm-4.6v-flash': glmVisionChatProfile(128_000),
+        'glm-4.5': glmTextChatProfile(200_000),
+        'glm-4.5-air': glmTextChatProfile(200_000)
+      },
+      apiKeyUrl: 'https://docs.bigmodel.cn/cn/coding-plan/tool/others'
+    },
+    docsUrl: 'https://docs.bigmodel.cn/api-reference/%E6%A8%A1%E5%9E%8B-api/%E5%AF%B9%E8%AF%9D%E8%A1%A5%E5%85%A8',
+    apiKeyUrl: 'https://bigmodel.cn/usercenter/proj-mgmt/apikeys'
+  },
+  {
+    id: 'zai',
+    name: 'Z.ai',
+    baseUrl: 'https://api.z.ai/api/paas/v4/chat/completions',
+    endpointFormat: 'custom_endpoint',
+    models: [
+      'glm-5.1',
+      'glm-5',
+      'glm-5-turbo',
+      'glm-4.7',
+      'glm-4.6',
+      'glm-4.5',
+      'glm-4.5-air',
+      'glm-5v-turbo',
+      'glm-4.6v',
+      'glm-4.6v-flashx',
+      'glm-4.6v-flash',
+      'glm-4.5v'
+    ],
+    modelProfiles: {
+      'glm-5.1': glmTextChatProfile(200_000),
+      'glm-5': glmTextChatProfile(200_000),
+      'glm-5-turbo': glmTextChatProfile(200_000),
+      'glm-4.7': glmTextChatProfile(200_000),
+      'glm-4.6': glmTextChatProfile(200_000),
+      'glm-4.5': glmTextChatProfile(128_000),
+      'glm-4.5-air': glmTextChatProfile(128_000),
+      'glm-5v-turbo': glmVisionChatProfile(200_000),
+      'glm-4.6v': glmVisionChatProfile(128_000),
+      'glm-4.6v-flashx': glmVisionChatProfile(128_000),
+      'glm-4.6v-flash': glmVisionChatProfile(128_000),
+      'glm-4.5v': glmVisionChatProfile(64_000)
+    },
+    tokenPlan: {
+      baseUrl: 'https://api.z.ai/api/coding/paas/v4/chat/completions',
+      endpointFormat: 'custom_endpoint',
+      models: [
+        'glm-5.2',
+        'glm-5.1',
+        'glm-5-turbo',
+        'glm-5',
+        'glm-4.7',
+        'glm-4.6',
+        'glm-4.6v',
+        'glm-4.6v-flashx',
+        'glm-4.6v-flash',
+        'glm-4.5',
+        'glm-4.5-air'
+      ],
+      modelProfiles: {
+        'glm-5.2': glmTextChatProfile(1_000_000),
+        'glm-5.1': glmTextChatProfile(200_000),
+        'glm-5-turbo': glmTextChatProfile(200_000),
+        'glm-5': glmTextChatProfile(200_000),
+        'glm-4.7': glmTextChatProfile(200_000),
+        'glm-4.6': glmTextChatProfile(200_000),
+        'glm-4.6v': glmVisionChatProfile(128_000),
+        'glm-4.6v-flashx': glmVisionChatProfile(128_000),
+        'glm-4.6v-flash': glmVisionChatProfile(128_000),
+        'glm-4.5': glmTextChatProfile(200_000),
+        'glm-4.5-air': glmTextChatProfile(200_000)
+      },
+      apiKeyUrl: 'https://docs.z.ai/devpack/tool/others'
+    },
+    docsUrl: 'https://docs.z.ai/guides/develop/openai/python',
+    apiKeyUrl: 'https://z.ai/manage-apikey/apikey-list'
   },
   {
     id: 'xiaomi',
@@ -449,6 +585,14 @@ function minimaxM3ChatProfile(): ModelProviderModelProfileV1 {
 
 function minimaxM2ChatProfile(): ModelProviderModelProfileV1 {
   return textChatProfile(204_800, MINIMAX_BUILT_IN_REASONING)
+}
+
+function glmTextChatProfile(contextWindowTokens: number): ModelProviderModelProfileV1 {
+  return textChatProfile(contextWindowTokens, GLM_REASONING)
+}
+
+function glmVisionChatProfile(contextWindowTokens: number): ModelProviderModelProfileV1 {
+  return visionChatProfile(contextWindowTokens, GLM_REASONING)
 }
 
 function textChatProfile(

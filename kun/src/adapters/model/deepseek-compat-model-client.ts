@@ -1878,6 +1878,9 @@ function applyProfileReasoningEffort(
     case 'deepseek-chat-completions':
       applyDeepSeekChatReasoningEffort(body, effort, includeThinking)
       return
+    case 'glm-chat-completions':
+      applyGlmChatReasoningEffort(body, effort, includeThinking)
+      return
     case 'mimo-chat-completions':
       applyMimoChatReasoningEffort(body, effort, includeThinking)
       return
@@ -1899,6 +1902,18 @@ function applyDeepSeekChatReasoningEffort(
     body.reasoning_effort = 'high'
   }
   if (includeThinking && effort !== 'auto') body.thinking = { type: 'enabled' }
+}
+
+function applyGlmChatReasoningEffort(
+  body: Record<string, unknown>,
+  effort: NormalizedReasoningEffort,
+  includeThinking: boolean
+): void {
+  if (!includeThinking || effort === 'auto') return
+  body.thinking = {
+    type: effort === 'off' ? 'disabled' : 'enabled',
+    clear_thinking: true
+  }
 }
 
 function applyMimoChatReasoningEffort(

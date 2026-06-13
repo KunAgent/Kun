@@ -882,4 +882,85 @@ describe('provider presets', () => {
       models: []
     })
   })
+
+  it('includes BigModel and Z.ai GLM presets with coding endpoints', () => {
+    const bigmodel = getModelProviderPreset('bigmodel')
+    const zai = getModelProviderPreset('zai')
+
+    expect(bigmodel && modelProviderPresetProfile(bigmodel)).toMatchObject({
+      id: 'bigmodel',
+      name: 'BigModel',
+      baseUrl: 'https://open.bigmodel.cn/api/paas/v4/chat/completions',
+      endpointFormat: 'custom_endpoint',
+      models: expect.arrayContaining(['glm-5.1', 'glm-4.7', 'glm-5v-turbo'])
+    })
+    expect(bigmodel && modelProviderTokenPlanProfile(bigmodel)).toMatchObject({
+      id: 'bigmodel-token-plan',
+      baseUrl: 'https://open.bigmodel.cn/api/coding/paas/v4/chat/completions',
+      endpointFormat: 'custom_endpoint',
+      models: expect.arrayContaining(['glm-5.2', 'glm-5.1', 'glm-4.6v', 'glm-4.6v-flash'])
+    })
+    expect(zai && modelProviderPresetProfile(zai)).toMatchObject({
+      id: 'zai',
+      name: 'Z.ai',
+      baseUrl: 'https://api.z.ai/api/paas/v4/chat/completions',
+      endpointFormat: 'custom_endpoint',
+      models: expect.arrayContaining(['glm-5.1', 'glm-4.7'])
+    })
+    expect(zai && modelProviderTokenPlanProfile(zai)).toMatchObject({
+      id: 'zai-token-plan',
+      baseUrl: 'https://api.z.ai/api/coding/paas/v4/chat/completions',
+      endpointFormat: 'custom_endpoint',
+      models: expect.arrayContaining(['glm-5.2', 'glm-5.1', 'glm-4.6v', 'glm-4.6v-flashx'])
+    })
+  })
+
+  it('marks GLM text and vision model capabilities from provider docs', () => {
+    const bigmodel = getModelProviderPreset('bigmodel')
+    const zai = getModelProviderPreset('zai')
+    const bigmodelProfile = bigmodel && modelProviderPresetProfile(bigmodel)
+    const bigmodelPlan = bigmodel && modelProviderTokenPlanProfile(bigmodel)
+    const zaiProfile = zai && modelProviderPresetProfile(zai)
+
+    expect(bigmodelProfile?.modelProfiles['glm-5.1']).toMatchObject({
+      contextWindowTokens: 200_000,
+      inputModalities: ['text'],
+      messageParts: ['text']
+    })
+    expect(bigmodelProfile?.modelProfiles['glm-4.5-air']).toMatchObject({
+      contextWindowTokens: 128_000,
+      inputModalities: ['text']
+    })
+    expect(bigmodelProfile?.modelProfiles['glm-5v-turbo']).toMatchObject({
+      contextWindowTokens: 200_000,
+      inputModalities: ['text', 'image'],
+      messageParts: ['text', 'image_url']
+    })
+    expect(bigmodelProfile?.modelProfiles['glm-4.6v']).toMatchObject({
+      contextWindowTokens: 128_000,
+      inputModalities: ['text', 'image']
+    })
+    expect(bigmodelProfile?.modelProfiles['glm-4.5v']).toMatchObject({
+      contextWindowTokens: 64_000,
+      inputModalities: ['text', 'image']
+    })
+    expect(bigmodelPlan?.modelProfiles['glm-5.2']).toMatchObject({
+      contextWindowTokens: 1_000_000,
+      inputModalities: ['text'],
+      messageParts: ['text']
+    })
+    expect(bigmodelPlan?.modelProfiles['glm-5.1']).toMatchObject({
+      contextWindowTokens: 200_000,
+      inputModalities: ['text']
+    })
+    expect(bigmodelPlan?.modelProfiles['glm-4.6v']).toMatchObject({
+      contextWindowTokens: 128_000,
+      inputModalities: ['text', 'image'],
+      messageParts: ['text', 'image_url']
+    })
+    expect(zaiProfile?.modelProfiles['glm-4.6v-flashx']).toMatchObject({
+      contextWindowTokens: 128_000,
+      inputModalities: ['text', 'image']
+    })
+  })
 })

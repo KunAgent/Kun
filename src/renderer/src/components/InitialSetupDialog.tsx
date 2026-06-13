@@ -70,16 +70,42 @@ const PROVIDER_CARDS: SetupProviderCard[] = [
   ...INITIAL_SETUP_PROVIDER_PRESETS.map((preset) => ({
     presetId: preset.id,
     name: preset.name,
-    descKey: preset.id === 'xiaomi' ? 'firstRunProviderXiaomiDesc' : 'firstRunProviderMinimaxDesc',
+    descKey: providerDescKey(preset.id),
     capability: preset.speech ? ('speech' as const) : preset.image ? ('image' as const) : null,
     preset
   }))
 ]
 
+function providerDescKey(presetId: string): string {
+  switch (presetId) {
+    case 'bigmodel':
+      return 'firstRunProviderBigModelDesc'
+    case 'zai':
+      return 'firstRunProviderZaiDesc'
+    case 'xiaomi':
+      return 'firstRunProviderXiaomiDesc'
+    case 'minimax':
+      return 'firstRunProviderMinimaxDesc'
+    default:
+      return 'firstRunProviderGenericDesc'
+  }
+}
+
 function keyHintKey(card: SetupProviderCard, mode: InitialSetupSelection['mode']): string {
   if (card.presetId === DEFAULT_MODEL_PROVIDER_ID) return 'firstRunBuyApiHint'
   const suffix = mode === 'token-plan' ? 'TokenPlan' : 'Api'
-  return card.presetId === 'xiaomi' ? `firstRunKeyHintXiaomi${suffix}` : `firstRunKeyHintMinimax${suffix}`
+  switch (card.presetId) {
+    case 'bigmodel':
+      return `firstRunKeyHintBigModel${suffix}`
+    case 'zai':
+      return `firstRunKeyHintZai${suffix}`
+    case 'xiaomi':
+      return `firstRunKeyHintXiaomi${suffix}`
+    case 'minimax':
+      return `firstRunKeyHintMinimax${suffix}`
+    default:
+      return `firstRunKeyHintGeneric${suffix}`
+  }
 }
 
 function keyPageUrl(card: SetupProviderCard, mode: InitialSetupSelection['mode']): string {

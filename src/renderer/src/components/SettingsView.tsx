@@ -918,6 +918,27 @@ export function SettingsView(): ReactElement {
           {category === 'updates' ? <UpdatesSettingsSection ctx={settingsSectionContext} /> : null}
         </div>
       </div>
+      {saveStatus === 'error' && saveError ? (
+        <div
+          role="alert"
+          className="ds-no-drag fixed bottom-6 right-8 z-30 flex max-w-[min(560px,calc(100vw-3rem))] items-center gap-3 rounded-2xl border border-red-300/70 bg-red-50/95 px-4 py-3 text-red-900 shadow-2xl shadow-red-950/10 backdrop-blur dark:border-red-500/30 dark:bg-red-950/90 dark:text-red-100"
+        >
+          <div className="min-w-0">
+            <div className="text-[13px] font-semibold">{t('applyFailed')}</div>
+            <div className="mt-0.5 truncate text-[12px] text-red-800/85 dark:text-red-100/80">
+              {saveError}
+            </div>
+          </div>
+          <button
+            type="button"
+            className="shrink-0 rounded-xl bg-red-600 px-3 py-2 text-[12px] font-semibold text-white shadow-sm transition hover:bg-red-500 disabled:cursor-not-allowed disabled:opacity-60"
+            disabled={Boolean(portError)}
+            onClick={() => void flushPendingSave()}
+          >
+            {t('retrySave')}
+          </button>
+        </div>
+      ) : null}
       {writeDebugModalOpen ? (
         <WriteDebugLogModal
           completionEntries={writeCompletionDebugEntries}

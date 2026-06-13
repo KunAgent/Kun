@@ -27,6 +27,7 @@ export type ModelReasoningEffort = z.infer<typeof ModelReasoningEffort>
 export const ModelReasoningRequestProtocol = z.enum([
   'none',
   'deepseek-chat-completions',
+  'glm-chat-completions',
   'mimo-chat-completions',
   'openai-responses',
   'anthropic-thinking'
