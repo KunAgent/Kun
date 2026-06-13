@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import {
   getModelProviderProfile,
   getModelProviderSettings,
+  isCustomModelEndpointFormat,
   isComposerChatModelId,
   listModelProviderModelIds,
   listNonTextModelIds,
@@ -37,6 +38,14 @@ export async function fetchUpstreamModelIds(
   const runtime = resolveKunRuntimeSettings(settings)
   const runtimeModel = runtime.model.trim()
   const defaultModelId = isComposerChatModelId(runtimeModel, nonTextModelIds) ? runtimeModel : ''
+  if (isCustomModelEndpointFormat(runtime.endpointFormat)) {
+    return modelListOrError(
+      configuredModelIds,
+      configuredGroups,
+      defaultModelId,
+      'Custom full endpoint mode does not support querying upstream /models.'
+    )
+  }
   const key = apiKey.trim()
   if (!key) {
     return modelListOrError(

@@ -4,9 +4,13 @@ import type { ApprovalPolicy, SandboxMode } from '../../kun/src/contracts/policy
 import type { ModelEndpointFormat } from '../../kun/src/contracts/model-endpoint-format.js'
 export {
   DEFAULT_MODEL_ENDPOINT_FORMAT,
+  inferModelEndpointFormatFromUrl,
+  isCustomModelEndpointFormat,
   MODEL_ENDPOINT_FORMATS,
   modelEndpointPath,
-  normalizeModelEndpointFormat
+  normalizeModelEndpointFormat,
+  resolveModelEndpointFormat,
+  usesChatCompletionsShape
 } from '../../kun/src/contracts/model-endpoint-format.js'
 export { DEFAULT_GUI_UPDATE_CHANNEL, normalizeGuiUpdateChannel, type GuiUpdateChannel } from './gui-update'
 export {

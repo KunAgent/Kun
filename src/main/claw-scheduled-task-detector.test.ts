@@ -109,4 +109,37 @@ describe('detectClawScheduledTaskRequest endpoint formats', () => {
       'anthropic-version': '2023-06-01'
     })
   })
+
+  it('uses the configured full endpoint URL in custom endpoint mode', async () => {
+    const calls: Array<{ url: string; body: Record<string, unknown> }> = []
+    vi.stubGlobal('fetch', async (url: string, init: RequestInit) => {
+      calls.push({ url: String(url), body: JSON.parse(String(init.body ?? '{}')) })
+      return new Response(JSON.stringify({
+        output_text: '{"shouldCreateTask":false}'
+      }), { status: 200 })
+    })
+    const appSettings = settings('custom_endpoint')
+    appSettings.provider.baseUrl = 'https://gateway.example/custom-path/responses'
+    appSettings.provider.providers[0] = {
+      ...appSettings.provider.providers[0],
+      baseUrl: 'https://gateway.example/custom-path/responses',
+      endpointFormat: 'custom_endpoint'
+    }
+
+    await detectClawScheduledTaskRequest(
+      appSettings,
+      'remind me tomorrow to stretch',
+      'custom-model',
+      new Date('2026-06-09T12:00:00+08:00')
+    )
+
+    expect(calls[0]).toMatchObject({
+      url: 'https://gateway.example/custom-path/responses',
+      body: {
+        model: 'custom-model',
+        input: 'remind me tomorrow to stretch',
+        max_output_tokens: 300
+      }
+    })
+  })
 })

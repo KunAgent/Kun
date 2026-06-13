@@ -170,6 +170,32 @@ describe('upstream model picker list', () => {
     }
   })
 
+  it('uses configured model ids without fetching models for custom full endpoint providers', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'deepseek-gui-models-'))
+    await mkdir(dataDir, { recursive: true })
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    const customSettings = settings(dataDir, 'custom-provider-model')
+    customSettings.provider.providers = customSettings.provider.providers.map((provider) =>
+      provider.id === 'custom-provider'
+        ? { ...provider, baseUrl: 'https://gateway.example/custom-path', endpointFormat: 'custom_endpoint' }
+        : provider
+    )
+
+    try {
+      const result = await fetchUpstreamModelIds(customSettings, 'sk-custom')
+
+      expect(result).toMatchObject({ ok: true })
+      if (result.ok) {
+        expect(result.modelIds).toContain('custom-provider-model')
+        expect(result.defaultModelId).toBe('custom-provider-model')
+      }
+      expect(fetchMock).not.toHaveBeenCalled()
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
   it('filters image-generation and other non-text models out of the composer picker', async () => {
     const dataDir = mkdtempSync(join(tmpdir(), 'deepseek-gui-models-'))
     await mkdir(dataDir, { recursive: true })

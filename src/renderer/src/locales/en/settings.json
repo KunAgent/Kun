@@ -175,6 +175,8 @@
   "modelEndpointChatCompletions": "/v1/chat/completions",
   "modelEndpointResponses": "/v1/responses",
   "modelEndpointMessages": "/v1/messages",
+  "modelEndpointCustomEndpoint": "Custom full endpoint",
+  "modelEndpointCustomEndpointDesc": "Uses this URL as the final endpoint. Only paths ending in /chat/completions, /completions, /responses, or /messages can be recognized; other endings are not supported.",
   "modelProviderModels": "Models",
   "modelProviderModelsPlaceholder": "Type a model ID and press Enter",
   "modelProviderModelRemove": "Remove {{model}}",

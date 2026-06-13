@@ -100,4 +100,19 @@ describe('probeModelProvider', () => {
 
     expect(result).toEqual({ ok: false, message: 'socket hang up' })
   })
+
+  it('does not probe /models for custom full endpoint providers', async () => {
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+
+    const result = await probeModelProvider({
+      baseUrl: 'https://api.example.com/custom-path',
+      apiKey: 'sk-x',
+      endpointFormat: 'custom_endpoint'
+    })
+
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.message).toContain('does not support /models probing')
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
 })

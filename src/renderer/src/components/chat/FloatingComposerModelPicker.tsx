@@ -517,16 +517,18 @@ export function buildComposerModelMenuGroups({
   modelOptions: readonly string[]
   ungroupedLabel: string
 }): ComposerModelMenuGroup[] {
-  const seen = new Set<string>()
+  const configuredModelKeys = new Set<string>()
   const groups = composerModelGroups
     .map((group) => {
+      const seenInProvider = new Set<string>()
       const ids = group.modelIds
         .map((id) => id.trim())
         .filter((id) => {
           const key = normalizeModelCapabilityKey(id)
-          if (!key || seen.has(key)) return false
+          if (!key || seenInProvider.has(key)) return false
           if (!composerMenuSupportsModel(group, id)) return false
-          markModelSeen(seen, group, id)
+          markModelSeen(seenInProvider, group, id)
+          markModelSeen(configuredModelKeys, group, id)
           return true
         })
       return {
@@ -539,11 +541,12 @@ export function buildComposerModelMenuGroups({
     .filter((group) => group.modelIds.length > 0)
 
   const ungrouped: string[] = []
+  const seenUngrouped = new Set<string>()
   for (const rawId of modelOptions) {
     const id = rawId.trim()
     const key = normalizeModelCapabilityKey(id)
-    if (!key || seen.has(key) || !isComposerChatModelId(id)) continue
-    seen.add(key)
+    if (!key || configuredModelKeys.has(key) || seenUngrouped.has(key) || !isComposerChatModelId(id)) continue
+    seenUngrouped.add(key)
     ungrouped.push(id)
   }
 

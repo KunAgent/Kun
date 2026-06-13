@@ -8,8 +8,10 @@ import type {
 import {
   DEFAULT_SCHEDULE_MODEL,
   DEFAULT_SCHEDULE_REASONING_EFFORT,
+  isCustomModelEndpointFormat,
   modelEndpointPath,
-  resolveKunRuntimeSettings
+  resolveKunRuntimeSettings,
+  resolveModelEndpointFormat
 } from '../shared/app-settings'
 
 const SCHEDULED_TASK_CANDIDATE_RE =
@@ -29,6 +31,7 @@ type DetectionRequestPayload = {
   url: string
   headers: Record<string, string>
   body: Record<string, unknown>
+  endpointFormat: ModelEndpointFormat
 }
 
 export type ParsedClawScheduledTaskRequest = {
@@ -147,26 +150,22 @@ function normalizeDetectedRequest(
 }
 
 function buildModelEndpointUrl(baseUrl: string, endpointFormat: ModelEndpointFormat): string {
+  if (isCustomModelEndpointFormat(endpointFormat)) return exactModelEndpointUrl(baseUrl)
   const path = modelEndpointPath(endpointFormat)
   const normalized = baseUrl.replace(/\/+$/, '')
   if (!normalized) return `/v1/${path}`
-  if (normalized.endsWith(`/${path}`)) return normalized
-  const base = stripKnownEndpointPath(normalized)
-  if (base.endsWith('/v1')) return `${base}/${path}`
-  if (base.endsWith('/beta')) {
-    return `${base.slice(0, -5)}/v1/${path}`
+  if (normalized.endsWith('/v1')) return `${normalized}/${path}`
+  if (normalized.endsWith('/beta')) {
+    return `${normalized.slice(0, -5)}/v1/${path}`
   }
-  return `${base}/v1/${path}`
+  return `${normalized}/v1/${path}`
 }
 
-function stripKnownEndpointPath(baseUrl: string): string {
-  const lower = baseUrl.toLowerCase()
-  for (const path of ['chat/completions', 'responses', 'messages']) {
-    if (lower.endsWith(`/${path}`)) {
-      return baseUrl.slice(0, -path.length).replace(/\/+$/, '')
-    }
-  }
-  return baseUrl
+function exactModelEndpointUrl(baseUrl: string): string {
+  const trimmed = baseUrl.trim()
+  const query = trimmed.search(/[?#]/)
+  if (query < 0) return trimmed.replace(/\/+$/, '')
+  return `${trimmed.slice(0, query).replace(/\/+$/, '')}${trimmed.slice(query)}`
 }
 
 function buildDetectionPrompt(now: Date): string {
@@ -197,19 +196,22 @@ function buildDetectionRequest(input: {
   model: string
   systemPrompt: string
   sourceText: string
-}): DetectionRequestPayload {
+}): DetectionRequestPayload | null {
+  const endpointFormat = resolveModelEndpointFormat(input.endpointFormat, input.baseUrl)
+  if (!endpointFormat) return null
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     Authorization: `Bearer ${input.apiKey}`
   }
-  if (input.endpointFormat === 'messages') {
+  if (endpointFormat === 'messages') {
     headers['x-api-key'] = input.apiKey
     headers['anthropic-version'] = '2023-06-01'
   }
-  if (input.endpointFormat === 'responses') {
+  if (endpointFormat === 'responses') {
     return {
       url: buildModelEndpointUrl(input.baseUrl, input.endpointFormat),
       headers,
+      endpointFormat,
       body: {
         model: input.model,
         instructions: input.systemPrompt,
@@ -219,10 +221,11 @@ function buildDetectionRequest(input: {
       }
     }
   }
-  if (input.endpointFormat === 'messages') {
+  if (endpointFormat === 'messages') {
     return {
       url: buildModelEndpointUrl(input.baseUrl, input.endpointFormat),
       headers,
+      endpointFormat,
       body: {
         model: input.model,
         system: input.systemPrompt,
@@ -234,6 +237,7 @@ function buildDetectionRequest(input: {
   return {
     url: buildModelEndpointUrl(input.baseUrl, input.endpointFormat),
     headers,
+    endpointFormat,
     body: {
       model: input.model,
       messages: [
@@ -302,6 +306,7 @@ export async function detectClawScheduledTaskRequest(
     systemPrompt: buildDetectionPrompt(now),
     sourceText
   })
+  if (!detectionRequest) return null
   const response = await fetch(detectionRequest.url, {
     method: 'POST',
     headers: detectionRequest.headers,
@@ -312,7 +317,7 @@ export async function detectClawScheduledTaskRequest(
   if (!response.ok) return null
   let content = ''
   try {
-    content = extractDetectionContent(text, runtime.endpointFormat)
+    content = extractDetectionContent(text, detectionRequest.endpointFormat)
   } catch {
     return null
   }

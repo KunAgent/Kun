@@ -49,6 +49,7 @@ const labels: Record<string, string> = {
   modelEndpointChatCompletions: '/v1/chat/completions',
   modelEndpointResponses: '/v1/responses',
   modelEndpointMessages: '/v1/messages',
+  modelEndpointCustomEndpoint: 'Custom full endpoint',
   modelProviderModels: 'Provider models',
   modelProviderImageCapability: 'Image capability',
   modelProviderImageCapabilityDesc: 'Image capability description',
@@ -493,6 +494,7 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
     expect(providerIdInput).not.toContain('readonly')
     expect(html).toContain('Endpoint format')
     expect(html).toContain('<option value="messages" selected="">/v1/messages</option>')
+    expect(html).toContain('<option value="custom_endpoint">Custom full endpoint</option>')
     expect(html).toContain('Add provider')
     expect(html).toContain('Test connection')
     expect(html).toContain('Fetch from API')

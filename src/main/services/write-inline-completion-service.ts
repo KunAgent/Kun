@@ -1,16 +1,19 @@
 import { randomUUID } from 'node:crypto'
 import {
   DEFAULT_WRITE_INLINE_COMPLETION_MAX_TOKENS,
+  isCustomModelEndpointFormat,
   modelEndpointPath,
   resolveWriteInlineCompletionEndpointFormat,
   resolveWriteInlineCompletionApiKey,
   resolveWriteInlineCompletionBaseUrl,
   resolveWriteInlineCompletionModel,
+  resolveModelEndpointFormat,
   type ModelEndpointFormat,
   type AppSettingsV1
 } from '../../shared/app-settings'
 import {
   upstreamDeepSeekFimCompletionsUrl,
+  upstreamOpenAiCustomEndpointUrl,
   upstreamOpenAiChatCompletionsUrl
 } from '../../shared/openai-compat-url'
 import type {
@@ -402,30 +405,19 @@ function debugPromptFromMessages(messages: ChatCompletionMessage[]): string {
 }
 
 function compatibleModelEndpointUrl(baseUrl: string, endpointFormat: ModelEndpointFormat): string {
+  if (isCustomModelEndpointFormat(endpointFormat)) return upstreamOpenAiCustomEndpointUrl(baseUrl)
   if (endpointFormat === 'chat_completions') return upstreamOpenAiChatCompletionsUrl(baseUrl)
   const path = modelEndpointPath(endpointFormat)
   const normalized = baseUrl.trim().replace(/\/+$/, '')
   if (!normalized) return `/v1/${path}`
-  if (normalized.toLowerCase().endsWith(`/${path}`)) return normalized
-  const withoutEndpoint = stripKnownModelEndpointPath(normalized)
-  const lastSegment = withoutEndpoint.split('/').pop()?.toLowerCase() ?? ''
+  const lastSegment = normalized.split('/').pop()?.toLowerCase() ?? ''
   if (lastSegment === 'beta') {
-    return `${withoutEndpoint.slice(0, -'/beta'.length)}/v1/${path}`
+    return `${normalized.slice(0, -'/beta'.length)}/v1/${path}`
   }
   if (/^v\d+$/.test(lastSegment)) {
-    return `${withoutEndpoint}/${path}`
+    return `${normalized}/${path}`
   }
-  return `${withoutEndpoint}/v1/${path}`
-}
-
-function stripKnownModelEndpointPath(baseUrl: string): string {
-  const lower = baseUrl.toLowerCase()
-  for (const path of ['chat/completions', 'responses', 'messages']) {
-    if (lower.endsWith(`/${path}`)) {
-      return baseUrl.slice(0, -path.length).replace(/\/+$/, '')
-    }
-  }
-  return baseUrl
+  return `${normalized}/v1/${path}`
 }
 
 function isDeepSeekInlineCompletionBaseUrl(baseUrl: string): boolean {
@@ -725,17 +717,24 @@ export async function requestWriteInlineCompletion(
   const actionMayEdit = Boolean(request.editCandidate && request.recentEdits?.length)
   const useChatCompletions = mode === 'edit' || actionMayEdit
   const baseUrl = resolveWriteInlineCompletionBaseUrl(settings)
-  const endpointFormat = resolveWriteInlineCompletionEndpointFormat(settings)
+  const configuredEndpointFormat = resolveWriteInlineCompletionEndpointFormat(settings)
+  const endpointFormat = resolveModelEndpointFormat(configuredEndpointFormat, baseUrl)
+  if (!endpointFormat) {
+    return {
+      ok: false,
+      message: 'Custom full endpoint URL must end with /chat/completions, /completions, /responses, or /messages.'
+    }
+  }
   const useFimCompletions =
     !useChatCompletions &&
-    endpointFormat === 'chat_completions' &&
+    configuredEndpointFormat === 'chat_completions' &&
     isDeepSeekInlineCompletionBaseUrl(baseUrl)
   const responseFormat: WriteInlineProviderResponseFormat = useFimCompletions
     ? 'fim_completions'
     : endpointFormat
   const url = useFimCompletions
     ? upstreamDeepSeekFimCompletionsUrl(baseUrl)
-    : compatibleModelEndpointUrl(baseUrl, endpointFormat)
+    : compatibleModelEndpointUrl(baseUrl, configuredEndpointFormat)
   const maxTokens = mode === 'long' || mode === 'edit' || actionMayEdit
     ? settings.write.inlineCompletion.longMaxTokens || settings.write.inlineCompletion.maxTokens || DEFAULT_WRITE_INLINE_COMPLETION_MAX_TOKENS
     : settings.write.inlineCompletion.maxTokens || DEFAULT_WRITE_INLINE_COMPLETION_MAX_TOKENS

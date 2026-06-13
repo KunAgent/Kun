@@ -1,4 +1,8 @@
-import { normalizeModelEndpointFormat, type ModelEndpointFormat } from '../shared/app-settings'
+import {
+  isCustomModelEndpointFormat,
+  normalizeModelEndpointFormat,
+  type ModelEndpointFormat
+} from '../shared/app-settings'
 import type { ModelProviderProbeRequest, ModelProviderProbeResult } from '../shared/kun-gui-api'
 import { upstreamOpenAiModelsUrl } from '../shared/openai-compat-url'
 
@@ -31,8 +35,14 @@ export async function probeModelProvider(
   if (!/^https?:\/\//i.test(baseUrl)) {
     return { ok: false, message: 'Base URL must start with http:// or https://.' }
   }
-  const url = upstreamOpenAiModelsUrl(baseUrl)
   const endpointFormat = normalizeModelEndpointFormat(request.endpointFormat)
+  if (isCustomModelEndpointFormat(endpointFormat)) {
+    return {
+      ok: false,
+      message: 'Custom full endpoint mode does not support /models probing. Add model IDs manually.'
+    }
+  }
+  const url = upstreamOpenAiModelsUrl(baseUrl)
   const startedAt = Date.now()
   let res: Response
   let text: string

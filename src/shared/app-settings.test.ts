@@ -27,6 +27,7 @@ import {
   migrateLegacyAppSettings,
   normalizeAppSettings,
   parseClawUserPromptForDisplay,
+  inferModelEndpointFormatFromUrl,
   normalizeScheduleSettings,
   resolveKunRuntimeSettings,
   resolveWriteInlineCompletionApiKey,
@@ -59,6 +60,15 @@ function settings(): AppSettingsV1 {
     codePromptPrefix: ''
   }
 }
+
+describe('model endpoint format inference', () => {
+  it('treats /completions custom endpoints as Chat Completions-shaped', () => {
+    expect(inferModelEndpointFormatFromUrl('https://api.example.com/custom/completions')).toBe('chat_completions')
+    expect(inferModelEndpointFormatFromUrl('https://api.example.com/custom/completions?api-version=2026-01-01')).toBe(
+      'chat_completions'
+    )
+  })
+})
 
 function clawChannel(provider: ClawImProvider, label: string, name = label): ClawImChannelV1 {
   const now = '2026-06-01T00:00:00.000Z'
