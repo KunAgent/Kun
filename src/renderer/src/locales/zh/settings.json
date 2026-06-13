@@ -175,6 +175,8 @@
   "modelEndpointChatCompletions": "/v1/chat/completions",
   "modelEndpointResponses": "/v1/responses",
   "modelEndpointMessages": "/v1/messages",
+  "modelEndpointCustomEndpoint": "自定义完整路径",
+  "modelEndpointCustomEndpointDesc": "自定义完整路径会把当前 URL 当作最终请求端点。只识别以 /chat/completions、/completions、/responses 或 /messages 结尾的路径；其他结尾暂不支持。",
   "modelProviderModels": "模型列表",
   "modelProviderModelsPlaceholder": "输入模型 ID，回车添加",
   "modelProviderModelRemove": "移除 {{model}}",

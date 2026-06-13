@@ -69,7 +69,8 @@ import { ProviderModelsManager } from './settings-section-provider-models'
 const MODEL_ENDPOINT_FORMAT_LABEL_KEYS: Record<ModelEndpointFormat, string> = {
   chat_completions: 'modelEndpointChatCompletions',
   responses: 'modelEndpointResponses',
-  messages: 'modelEndpointMessages'
+  messages: 'modelEndpointMessages',
+  custom_endpoint: 'modelEndpointCustomEndpoint'
 }
 
 const IMAGE_GENERATION_PROTOCOL_LABEL_KEYS: Record<ImageGenerationProtocol, string> = {
@@ -1165,6 +1166,11 @@ export function ProvidersSettingsSection({ ctx }: { ctx: Record<string, any> }):
                       ))}
                     </select>
                   </label>
+                  {activeProvider.endpointFormat === 'custom_endpoint' ? (
+                    <p className="text-[12px] leading-5 text-ds-muted">
+                      {t('modelEndpointCustomEndpointDesc')}
+                    </p>
+                  ) : null}
                 </DetailSection>
                 <DetailSection
                   title={`${t('modelProviderModels')} · ${providerModelCount(activeProvider)}`}

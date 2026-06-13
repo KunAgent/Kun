@@ -259,6 +259,65 @@ describe('requestWriteInlineCompletion', () => {
     })
   })
 
+  it('uses /completions as a Chat Completions-shaped custom endpoint', async () => {
+    const fetchMock = vi.fn(async () =>
+      new Response(JSON.stringify({ choices: [{ message: { content: ' custom text' } }] }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' }
+      })
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    const settings = createSettings()
+    settings.provider.apiKey = 'sk-custom'
+    settings.provider.baseUrl = 'https://gateway.example/custom-path/completions'
+    settings.provider.providers[0] = {
+      ...settings.provider.providers[0],
+      apiKey: 'sk-custom',
+      baseUrl: 'https://gateway.example/custom-path/completions',
+      endpointFormat: 'custom_endpoint'
+    }
+
+    const result = await requestWriteInlineCompletion(settings, {
+      ...createRequest(),
+      model: 'custom-model'
+    })
+
+    expect(result).toMatchObject({
+      ok: true,
+      model: 'custom-model'
+    })
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit]
+    expect(url).toBe('https://gateway.example/custom-path/completions')
+    expect(JSON.parse(String(init.body))).toMatchObject({
+      model: 'custom-model',
+      messages: expect.any(Array)
+    })
+  })
+
+  it('rejects custom full endpoint URLs that do not end with a known endpoint path', async () => {
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+
+    const settings = createSettings()
+    settings.provider.apiKey = 'sk-custom'
+    settings.provider.baseUrl = 'https://gateway.example/custom-path'
+    settings.provider.providers[0] = {
+      ...settings.provider.providers[0],
+      apiKey: 'sk-custom',
+      baseUrl: 'https://gateway.example/custom-path',
+      endpointFormat: 'custom_endpoint'
+    }
+
+    const result = await requestWriteInlineCompletion(settings, createRequest())
+
+    expect(result).toMatchObject({
+      ok: false,
+      message: 'Custom full endpoint URL must end with /chat/completions, /completions, /responses, or /messages.'
+    })
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
   it('uses an explicit flash override when write disables model inheritance', async () => {
     const fetchMock = vi.fn(async () =>
       new Response(JSON.stringify({ choices: [{ text: ' explicit flash' }] }), {

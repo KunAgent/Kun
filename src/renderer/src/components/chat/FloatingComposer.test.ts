@@ -324,6 +324,38 @@ describe('FloatingComposer model controls', () => {
     })
   })
 
+  it('deduplicates models within a provider but keeps the same model id across providers', () => {
+    const groups = buildComposerModelMenuGroups({
+      composerModelGroups: [
+        {
+          providerId: 'deepseek',
+          label: 'DeepSeek',
+          modelIds: ['deepseek-v4-pro', 'deepseek-v4-pro'],
+          modelProfiles: {}
+        },
+        {
+          providerId: 'custom-provider-3',
+          label: 'test',
+          modelIds: ['deepseek-v4-pro'],
+          modelProfiles: {}
+        }
+      ],
+      modelOptions: ['deepseek-v4-pro'],
+      ungroupedLabel: 'Other models'
+    })
+
+    expect(groups).toEqual([
+      expect.objectContaining({
+        providerId: 'deepseek',
+        modelIds: ['deepseek-v4-pro']
+      }),
+      expect.objectContaining({
+        providerId: 'custom-provider-3',
+        modelIds: ['deepseek-v4-pro']
+      })
+    ])
+  })
+
   it('keeps the reasoning strength visible in the model control', () => {
     const html = renderToStaticMarkup(
       createElement(FloatingComposerModelPicker, {
