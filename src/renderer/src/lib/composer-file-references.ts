@@ -2,6 +2,7 @@ export type ComposerFileReference = {
   path: string
   relativePath: string
   name: string
+  kind?: 'file' | 'directory'
 }
 
 export type ComposerFileMention = {

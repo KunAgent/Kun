@@ -122,7 +122,13 @@ describe('chat-store-thread-actions queued messages', () => {
       {
         id: 'q-user',
         text: 'normal follow-up',
-        mode: 'agent'
+        mode: 'agent',
+        fileReferences: [{
+          path: '/workspace/deepseek-gui/src/App.tsx',
+          relativePath: 'src/App.tsx',
+          name: 'App.tsx',
+          kind: 'file'
+        }]
       }
     ]
 
@@ -130,7 +136,15 @@ describe('chat-store-thread-actions queued messages', () => {
 
     expect(state.queuedMessages).toEqual([])
     expect(sendMessage).toHaveBeenCalledWith('normal follow-up', 'agent', {
-      queued: expect.objectContaining({ id: 'q-user' })
+      queued: expect.objectContaining({
+        id: 'q-user',
+        fileReferences: [{
+          path: '/workspace/deepseek-gui/src/App.tsx',
+          relativePath: 'src/App.tsx',
+          name: 'App.tsx',
+          kind: 'file'
+        }]
+      })
     })
   })
 

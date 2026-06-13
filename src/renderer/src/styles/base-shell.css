@@ -2631,7 +2631,8 @@ pre {
 }
 
 .ds-stage-inset {
-  padding-inline: clamp(0.75rem, calc((100% - 56rem) / 2 + 1.25rem), 4rem);
+  --ds-stage-inset-inline: 0px;
+  padding-inline: 0;
 }
 
 .ds-chat-column-inset {
@@ -2822,7 +2823,8 @@ pre {
 
 @media (max-height: 820px) {
   .ds-stage-inset {
-    padding-inline: clamp(0.5rem, calc((100% - 54rem) / 2 + 0.75rem), 2.5rem);
+    --ds-stage-inset-inline: 0px;
+    padding-inline: 0;
   }
 
   .ds-chat-column-inset {

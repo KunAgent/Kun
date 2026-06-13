@@ -8,6 +8,7 @@ import type {
   ThreadGoalStatus,
   ThreadTodoList,
   ThreadTodoStatus,
+  UserFileReference,
   UserInputAnswer
 } from '../agent/types'
 import type { KunRuntimeStatusPayload } from '@shared/kun-gui-api'
@@ -32,6 +33,7 @@ export type QueuedUserMessage = {
   reasoningEffort?: string
   attachmentIds?: string[]
   attachments?: AttachmentReference[]
+  fileReferences?: UserFileReference[]
   /**
    * Optional GUI plan context forwarded to Kun. The renderer
    * attaches it for plan/refine turns so the runtime can advertise
@@ -72,6 +74,7 @@ export type SendMessageOverrides = {
   guiPlan?: GuiPlanMessageContext
   attachmentIds?: string[]
   attachments?: AttachmentReference[]
+  fileReferences?: UserFileReference[]
 }
 
 export type InitialSetupMode = 'required' | 'preview'

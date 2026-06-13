@@ -15,6 +15,7 @@ import {
   BarChart3,
   FileEdit,
   FileText,
+  Folder,
   GitFork,
   ImagePlus,
   ListTodo,
@@ -1907,7 +1908,11 @@ export function FloatingComposer({
                   className="ds-no-drag inline-flex h-7 max-w-full items-center gap-1.5 rounded-lg border border-ds-border-muted bg-ds-card/80 px-2 text-[12px] font-medium text-ds-muted"
                   title={reference.relativePath}
                 >
-                  <FileText className="h-3.5 w-3.5 shrink-0 text-ds-faint" strokeWidth={1.8} />
+                  {reference.kind === 'directory' ? (
+                    <Folder className="h-3.5 w-3.5 shrink-0 text-ds-faint" strokeWidth={1.8} />
+                  ) : (
+                    <FileText className="h-3.5 w-3.5 shrink-0 text-ds-faint" strokeWidth={1.8} />
+                  )}
                   <span className="max-w-52 truncate">{reference.relativePath}</span>
                   {onRemoveFileReference ? (
                     <button

@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { TurnItem } from './items.js'
+import { TurnItem, UserFileReferenceSchema } from './items.js'
 import { isGuiPlanRelativePath } from '../shared/gui-plan.js'
 import { ApprovalPolicySchema, SandboxModeSchema } from './policy.js'
 
@@ -109,6 +109,7 @@ export const StartTurnRequest = z.object({
     )
     .optional(),
   attachmentIds: z.array(z.string().min(1)).default([]),
+  fileReferences: z.array(UserFileReferenceSchema).default([]),
   /**
    * Optional GUI plan context. When set, Kun advertises the
    * `create_plan` tool for the turn and writes only to the reserved

@@ -21,7 +21,7 @@ import {
 } from '@shared/keyboard-shortcuts'
 import type { DesktopCommand, ModelProviderModelGroup, SkillListItem } from '@shared/kun-gui-api'
 import type { WriteRetrievalContext } from '@shared/write-retrieval'
-import type { ClipboardImageReadResult } from '@shared/workspace-file'
+import type { ClipboardImageReadResult, WorkspaceFileTarget } from '@shared/workspace-file'
 import type { AttachmentReference, ChatBlock, NormalizedThread } from '../agent/types'
 import type { CoreRuntimeInfoJson, CoreRuntimeSkillJson } from '../agent/kun-contract'
 import { getProvider } from '../agent/registry'
@@ -42,6 +42,7 @@ import {
   type ComposerExecutionSettings,
   type ComposerFileReference
 } from './chat/FloatingComposer'
+import { ChatFileTreePanel, type ChatFileTreeReference } from './chat/ChatFileTreePanel'
 import {
   composerReasoningEffortRequestValue,
   type ComposerReasoningEffort
@@ -82,11 +83,12 @@ import { parseGuiPlanCommand } from '../plan/plan-command'
 import { confirmDialog } from '../lib/confirm-dialog'
 import { DevPreviewLaunchCard } from './DevPreviewLaunchCard'
 import { RuntimeBanner } from './RuntimeBanner'
-import { useWorkbenchLayout } from './workbench-layout'
+import { CODE_PANEL_PREFERRED, useWorkbenchLayout } from './workbench-layout'
 import { useWorkbenchPlanController } from './workbench-plan-controller'
 import { prepareImageAttachmentUpload } from '../lib/image-attachment-upload'
 import { isChatAttachmentUploadEnabled } from '../lib/attachment-upload-availability'
 import { normalizeWorkspaceRoot } from '../lib/workspace-path'
+import { isWorkspaceTextPreviewPath } from '../lib/workspace-text-preview'
 import { useKeyboardShortcutSettings } from '../lib/keyboard-shortcut-settings'
 import { collectComposerChangeSummary } from '../lib/composer-change-summary'
 import { formatWorkspacePickerError } from '../lib/format-workspace-picker-error'
@@ -95,6 +97,7 @@ import { readFocusModePreference, writeFocusModePreference } from '../lib/focus-
 import {
   buildComposerFileContextPrompt,
   mergeComposerFileReferences,
+  relativeWorkspacePath,
   type ComposerFileContextEntry
 } from '../lib/composer-file-references'
 import { resolveWriteRuntimeBannerMessage } from '../lib/write-runtime-banner'
@@ -131,7 +134,15 @@ type PendingSddPlanTarget = {
 
 const COMPOSER_FILE_CONTEXT_MAX_CHARS_PER_FILE = 60_000
 const COMPOSER_FILE_CONTEXT_MAX_TOTAL_CHARS = 180_000
+const COMPOSER_DIRECTORY_CONTEXT_MAX_DEPTH = 4
+const COMPOSER_DIRECTORY_CONTEXT_MAX_FILES = 80
+const FILE_TREE_SIDEBAR_WIDTH = 320
 const SDD_ASSISTANT_TITLE_SYNC_DELAY_MS = 900
+
+function workspaceFileTargetKey(target: WorkspaceFileTarget | null | undefined): string {
+  if (!target?.path) return ''
+  return `${target.workspaceRoot ?? ''}\n${target.path}`.replaceAll('\\', '/').toLowerCase()
+}
 const DESKTOP_SHORTCUT_COMMANDS: Partial<Record<KeyboardShortcutCommandId, DesktopCommand>> = {
   quit: 'quit',
   undo: 'undo',
@@ -270,6 +281,10 @@ function sddAssistantContextFromBlocks(blocks: ChatBlock[], maxMessages = 10): s
     messages.push(`${block.kind === 'user' ? 'User' : 'Requirement AI'}:\n${text}`)
   }
   return messages.slice(-maxMessages).join('\n\n').slice(0, 12_000)
+}
+
+function compareComposerFileReferences(left: ComposerFileReference, right: ComposerFileReference): number {
+  return left.relativePath.localeCompare(right.relativePath)
 }
 
 function base64ImageToFile(image: SddDraftImageReference): File {
@@ -422,6 +437,8 @@ export function Workbench(): ReactElement {
   const [attachmentUploadBusy, setAttachmentUploadBusy] = useState(false)
   const [attachmentUploadError, setAttachmentUploadError] = useState<string | null>(null)
   const [connectPhoneSidebarOpen, setConnectPhoneSidebarOpen] = useState(false)
+  const [fileTreeSidePanelOpen, setFileTreeSidePanelOpen] = useState(false)
+  const [openFilePreviewTargets, setOpenFilePreviewTargets] = useState<WorkspaceFileTarget[]>([])
   const initUiPlugins = useUiPluginStore((s) => s.initUiPlugins)
   const uiModeCameosEnabled = useUiModeCameosEnabled()
   const [focusModeEnabled, setFocusModeEnabled] = useState(readFocusModePreference)
@@ -935,6 +952,11 @@ export function Workbench(): ReactElement {
     return threads.find((thread) => thread.id === activeThreadId)?.workspace || workspaceRoot || undefined
   }
 
+  const fileTreeWorkspaceRoot = useMemo(
+    () => normalizeWorkspaceRoot(threads.find((thread) => thread.id === activeThreadId)?.workspace || workspaceRoot),
+    [activeThreadId, threads, workspaceRoot]
+  )
+
   const clearComposerFileReferences = (): void => {
     setComposerFileReferences([])
   }
@@ -951,6 +973,60 @@ export function Workbench(): ReactElement {
       )
     )
   }
+
+  const openWorkspaceFilePreviewTarget = (target: WorkspaceFileTarget): void => {
+    const nextTarget = {
+      ...target,
+      workspaceRoot: target.workspaceRoot ?? fileTreeWorkspaceRoot
+    }
+    if (!nextTarget.workspaceRoot) return
+    setOpenFilePreviewTargets((current) => {
+      const key = workspaceFileTargetKey(nextTarget)
+      if (current.some((item) => workspaceFileTargetKey(item) === key)) return current
+      return [...current, nextTarget]
+    })
+    setFilePreviewTarget(nextTarget)
+    setRightSidebarWidth((width) => Math.max(width, CODE_PANEL_PREFERRED))
+    setRightPanelMode('file')
+  }
+
+  const previewWorkspaceFileFromSidebar = (path: string): void => {
+    const workspace = fileTreeWorkspaceRoot
+    if (!workspace) return
+    openWorkspaceFilePreviewTarget({ path, workspaceRoot: workspace })
+  }
+
+  const closeWorkspaceFilePreviewTarget = (target: WorkspaceFileTarget): void => {
+    const closingKey = workspaceFileTargetKey(target)
+    setOpenFilePreviewTargets((current) => {
+      const index = current.findIndex((item) => workspaceFileTargetKey(item) === closingKey)
+      if (index < 0) return current
+      const next = current.filter((_, itemIndex) => itemIndex !== index)
+      if (workspaceFileTargetKey(filePreviewTarget) === closingKey) {
+        const fallback = next[Math.max(0, index - 1)] ?? next[0] ?? null
+        setFilePreviewTarget(fallback)
+        if (!fallback) setRightPanelMode(null)
+      }
+      return next
+    })
+  }
+
+  const addWorkspaceReferenceFromSidebar = (reference: ChatFileTreeReference): void => {
+    addComposerFileReference(reference)
+  }
+
+  const toggleFileTreeSidePanel = (): void => {
+    setFileTreeSidePanelOpen((open) => !open)
+  }
+
+  useEffect(() => {
+    if (rightPanelMode !== 'file' || !filePreviewTarget) return
+    setOpenFilePreviewTargets((current) => {
+      const key = workspaceFileTargetKey(filePreviewTarget)
+      if (current.some((item) => workspaceFileTargetKey(item) === key)) return current
+      return [...current, filePreviewTarget]
+    })
+  }, [filePreviewTarget, rightPanelMode])
 
   useEffect(() => {
     if (route !== 'chat') setComposerFileReferences([])
@@ -1670,8 +1746,19 @@ export function Workbench(): ReactElement {
   ): Promise<ComposerFileContextEntry[]> => {
     const entries: ComposerFileContextEntry[] = []
     let remainingChars = COMPOSER_FILE_CONTEXT_MAX_TOTAL_CHARS
-    for (const reference of references) {
-      if (remainingChars <= 0) break
+
+    const appendFileReference = async (reference: ComposerFileReference): Promise<void> => {
+      if (remainingChars <= 0) return
+      if (!isWorkspaceTextPreviewPath(reference.relativePath || reference.path)) {
+        const clipped = clipComposerFileContext(t('filePreviewUnsupported'), remainingChars, false)
+        remainingChars -= clipped.consumed
+        entries.push({
+          relativePath: reference.relativePath || reference.path,
+          content: clipped.content,
+          ...(clipped.truncated ? { truncated: true } : {})
+        })
+        return
+      }
       const result = await window.kunGui.readWorkspaceFile({
         workspaceRoot: workspace,
         path: reference.relativePath || reference.path
@@ -1689,6 +1776,74 @@ export function Workbench(): ReactElement {
         content: clipped.content,
         ...(clipped.truncated ? { truncated: true } : {})
       })
+    }
+
+    const collectDirectoryFileReferences = async (
+      reference: ComposerFileReference
+    ): Promise<{ files: ComposerFileReference[]; skipped: number }> => {
+      const files: ComposerFileReference[] = []
+      let skipped = 0
+      const queue: Array<{ path: string; depth: number }> = [
+        { path: reference.path || reference.relativePath, depth: 0 }
+      ]
+      while (queue.length > 0 && files.length < COMPOSER_DIRECTORY_CONTEXT_MAX_FILES) {
+        const current = queue.shift()
+        if (!current) break
+        const result = await window.kunGui.listWorkspaceDirectory({
+          workspaceRoot: workspace,
+          path: current.path
+        })
+        if (!result.ok) {
+          skipped += 1
+          continue
+        }
+        for (const entry of result.entries) {
+          if (entry.type === 'directory') {
+            if (current.depth < COMPOSER_DIRECTORY_CONTEXT_MAX_DEPTH) {
+              queue.push({ path: entry.path, depth: current.depth + 1 })
+            }
+            continue
+          }
+          if (!isWorkspaceTextPreviewPath(entry.path)) {
+            skipped += 1
+            continue
+          }
+          files.push({
+            path: entry.path,
+            relativePath: relativeWorkspacePath(entry.path, workspace),
+            name: entry.name,
+            kind: 'file'
+          })
+          if (files.length >= COMPOSER_DIRECTORY_CONTEXT_MAX_FILES) break
+        }
+      }
+      skipped += queue.length
+      return { files: files.sort(compareComposerFileReferences), skipped }
+    }
+
+    for (const reference of references) {
+      if (remainingChars <= 0) break
+      if (reference.kind === 'directory') {
+        const collected = await collectDirectoryFileReferences(reference)
+        const manifest = [
+          `Directory reference: ${reference.relativePath || reference.path}`,
+          `Included text files: ${collected.files.length}`,
+          collected.skipped > 0 ? `Skipped unsupported or unreadable entries: ${collected.skipped}` : ''
+        ].filter(Boolean).join('\n')
+        const clipped = clipComposerFileContext(manifest, remainingChars, false)
+        remainingChars -= clipped.consumed
+        entries.push({
+          relativePath: `${reference.relativePath.replace(/\/+$/g, '')}/`,
+          content: clipped.content,
+          ...(clipped.truncated ? { truncated: true } : {})
+        })
+        for (const file of collected.files) {
+          if (remainingChars <= 0) break
+          await appendFileReference(file)
+        }
+        continue
+      }
+      await appendFileReference(reference)
     }
     return entries
   }
@@ -1768,7 +1923,8 @@ export function Workbench(): ReactElement {
       void sendPlanTurn(prepared.text, {
         ...(prepared.displayText ? { displayText: prepared.displayText } : {}),
         ...(reasoningEffort ? { reasoningEffort } : {}),
-        ...(attachmentIds.length ? { attachmentIds, attachments } : {})
+        ...(attachmentIds.length ? { attachmentIds, attachments } : {}),
+        ...(fileReferences.length ? { fileReferences } : {})
       })
       return
     }
@@ -1874,7 +2030,8 @@ export function Workbench(): ReactElement {
     void sendMessage(prepared.text, mode === 'plan' ? 'plan' : 'agent', {
       ...(prepared.displayText ? { displayText: prepared.displayText } : {}),
       ...(reasoningEffort ? { reasoningEffort } : {}),
-      ...(attachmentIds.length ? { attachmentIds, attachments } : {})
+      ...(attachmentIds.length ? { attachmentIds, attachments } : {}),
+      ...(fileReferences.length ? { fileReferences } : {})
     })
   }
 
@@ -1949,6 +2106,7 @@ export function Workbench(): ReactElement {
       setWriteAssistantOpen(false)
       return
     }
+    if (rightPanelMode === 'file') setOpenFilePreviewTargets([])
     setRightPanelMode(null)
     setFilePreviewTarget(null)
   }
@@ -2004,6 +2162,7 @@ export function Workbench(): ReactElement {
     runtimeActionNeedsConnection: t('runtimeActionNeedsConnection')
   })
   const rightPanelDockedVisible = rightPanelVisible && !planPanelInOverlay
+  const fileTreeSidePanelOffset = fileTreeSidePanelOpen ? FILE_TREE_SIDEBAR_WIDTH + 24 : 0
 
   const renderPlanPanel = (className: string): ReactElement => (
     <PlanPanel
@@ -2134,13 +2293,48 @@ export function Workbench(): ReactElement {
             ) : (
               <WorkspaceFilePreviewPanel
                 target={filePreviewTarget}
+                openTargets={openFilePreviewTargets}
                 workspaceRoot={workspaceRoot}
                 className="h-full max-h-full w-full"
+                onSelectTarget={openWorkspaceFilePreviewTarget}
+                onCloseTarget={closeWorkspaceFilePreviewTarget}
                 onClose={closeRightPanel}
               />
             )}
           </Suspense>
         </div>
+      </>
+    )
+  }
+
+  const renderFileTreeSidePanel = (): ReactElement | null => {
+    if (!fileTreeSidePanelOpen) return null
+    return (
+      <>
+        <div
+          role="separator"
+          aria-orientation="vertical"
+          className="ds-workbench-divider ds-no-drag relative z-20 shrink-0"
+        />
+        <aside
+          className="ds-no-drag h-full min-h-0 shrink-0 border-l border-ds-border-muted bg-ds-sidebar"
+          style={{ width: FILE_TREE_SIDEBAR_WIDTH }}
+        >
+          {fileTreeWorkspaceRoot ? (
+            <ChatFileTreePanel
+              workspaceRoot={fileTreeWorkspaceRoot}
+              selectedPath={filePreviewTarget?.path}
+              onPreviewFile={previewWorkspaceFileFromSidebar}
+              onAddReference={addWorkspaceReferenceFromSidebar}
+              t={t}
+              fill
+            />
+          ) : (
+            <div className="px-4 py-3 text-[12px] leading-5 text-ds-muted">
+              {t('workspaceRequiredToCreateThread')}
+            </div>
+          )}
+        </aside>
       </>
     )
   }
@@ -2179,7 +2373,7 @@ export function Workbench(): ReactElement {
           <div className="min-h-0 shrink-0" style={{ width: leftSidebarWidth }}>
             {route === 'write' ? (
               <WriteSidebar
-                activeView={sidebarView}
+                activeView="write"
                 connectPhoneSidebarOpen={connectPhoneSidebarOpen}
                 onCodeOpen={openCodeMode}
                 onWriteOpen={openWriteMode}
@@ -2319,6 +2513,9 @@ export function Workbench(): ReactElement {
                     sideChatRunningCount={currentSideRunningCount}
                     sideChatOpen={sidePanel.open}
                     sideChatEnabled={runtimeConnection === 'ready' && Boolean(activeThreadId)}
+                    fileTreeOpen={fileTreeSidePanelOpen}
+                    fileTreeEnabled={Boolean(fileTreeWorkspaceRoot)}
+                    onToggleFileTree={toggleFileTreeSidePanel}
                     onOpenSideChat={openSideChat}
                   />
                 </div>
@@ -2426,10 +2623,13 @@ export function Workbench(): ReactElement {
           </div>
 
           {route === 'chat' && !activeSddDraft ? (
-            <SideConversationPanel rightOffset={rightPanelDockedVisible ? rightSidebarWidth + 24 : 24} />
+            <SideConversationPanel
+              rightOffset={(rightPanelDockedVisible ? rightSidebarWidth + 24 : 24) + fileTreeSidePanelOffset}
+            />
           ) : null}
 
           {renderRightPanel()}
+          {renderFileTreeSidePanel()}
         </div>
 
           </>
