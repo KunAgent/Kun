@@ -1124,6 +1124,14 @@ export class ClawRuntime {
       channel?: ClawImChannelV1
       conversation?: ClawImConversationV1
       remoteSession?: Pick<ClawImRemoteSessionV1, 'chatId' | 'messageId' | 'threadId' | 'senderId' | 'senderName'>
+      /**
+       * When `false`, the turn is started (and the conversation
+       * persisted) but `waitForAssistantResult` is skipped — the caller
+       * is responsible for observing the turn's outcome (e.g. via
+       * `runStreamingReply`). Defaults to `true` for the legacy
+       * `processIncomingImPrompt` polling path.
+       */
+      waitForResult?: boolean
     }
   ): Promise<ClawRunResult> {
     const { channel, conversation, prompt, provider, remoteSession, sender } = input
@@ -1138,7 +1146,7 @@ export class ClawRuntime {
       model: channel?.model ?? settings.claw.im.model,
       providerId: channel?.providerId ?? settings.claw.im.providerId,
       mode: settings.claw.im.mode,
-      waitForResult: true,
+      waitForResult: input.waitForResult !== false,
       responseTimeoutMs: settings.claw.im.responseTimeoutMs,
       source: 'im',
       threadId: initialThreadId || undefined,
@@ -1806,14 +1814,68 @@ export class ClawRuntime {
 
     let result: ClawRunResult
     try {
-      result = await this.processIncomingImPrompt(settings, {
-        prompt: buildFeishuPrompt(message),
-        sender,
-        provider: 'feishu',
-        channel,
-        conversation,
-        remoteSession
-      })
+      if (settings.claw.im.feishuStream !== false) {
+        // Streaming path: start the turn (this also persists the
+        // conversation via the onTurnStarted callback) and then stream
+        // the assistant's reply into a Feishu / Lark markdown card.
+        // The original `processIncomingImPrompt` polling path is kept
+        // for users who explicitly disable streaming and for WeChat
+        // (which has no markdown-stream card concept).
+        const started = await this.processIncomingImPrompt(settings, {
+          prompt: buildFeishuPrompt(message),
+          sender,
+          provider: 'feishu',
+          channel,
+          conversation,
+          remoteSession,
+          waitForResult: false
+        })
+        if (!started.ok || !started.threadId || !started.turnId) {
+          result = { ok: false, message: started.message || 'Failed to start Feishu streaming turn.' }
+        } else {
+          const streamResult = await this.runStreamingReply({
+            bridge,
+            chatId: message.chatId,
+            threadId: started.threadId,
+            turnId: started.turnId,
+            replyOptions: { replyTo: message.messageId, replyInThread: Boolean(message.threadId) },
+            responseTimeoutMs: 60_000,
+            context: {
+              purpose: 'feishu-stream',
+              channelId,
+              chatId: message.chatId,
+              inboundMessageId: message.messageId,
+              threadId: started.threadId,
+              turnId: started.turnId
+            }
+          })
+          if (streamResult.ok) {
+            const streamedText = streamResult.finalText.trim() || 'Completed.'
+            result = {
+              ok: true,
+              threadId: started.threadId,
+              turnId: started.turnId,
+              text: streamedText,
+              message: streamResult.fellBack ? 'streamed (fell back to one-shot send)' : 'streamed'
+            }
+          } else {
+            result = {
+              ok: false,
+              message: streamResult.message.trim() || 'Sorry, something went wrong while handling your message.'
+            }
+          }
+        }
+      } else {
+        // Original polling path — unchanged.
+        result = await this.processIncomingImPrompt(settings, {
+          prompt: buildFeishuPrompt(message),
+          sender,
+          provider: 'feishu',
+          channel,
+          conversation,
+          remoteSession
+        })
+      }
     } catch (error) {
       this.deps.logError('claw-feishu', 'Failed to handle Feishu inbound message', {
         message: errorMessage(error),
