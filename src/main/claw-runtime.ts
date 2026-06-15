@@ -71,8 +71,12 @@ import {
   type ClawRuntimeDeps,
   type RunPromptOptions,
   type ThreadDetailJson,
-  type ThreadRecordJson
+  type ThreadRecordJson,
+  type SseSubscriber,
+  subscribeRuntimeThreadEvents
 } from './claw-runtime-helpers'
+import { getRuntimeBaseUrlForSettings, runtimeAuthHeaders } from './runtime/kun-adapter'
+import { FeishuStreamer } from './feishu-streamer'
 
 const MAX_IM_FILE_UPLOAD_BYTES = 50 * 1024 * 1024
 const CLAW_IM_APPROVAL_POLICY = 'auto'
@@ -648,6 +652,57 @@ export class ClawRuntime {
       message: outcome.text || IM_COMPLETED_NO_TEXT_REPLY,
       files: outcome.files,
       completed: true
+    }
+  }
+
+  private async subscribeSse(
+    settings: AppSettingsV1,
+    threadId: string,
+    streamer: FeishuStreamer,
+    signal: AbortSignal
+  ): Promise<{ close: () => void }> {
+    const baseUrl = getRuntimeBaseUrlForSettings(settings)
+    if (!baseUrl) throw new Error('runtime_base_url_unavailable')
+    const headers: Record<string, string> = { Accept: 'text/event-stream' }
+    const auth = runtimeAuthHeaders(settings).get('Authorization')
+    if (auth) headers.Authorization = auth
+    const onEvent = (event: { kind?: string; [k: string]: unknown }): void => {
+      streamer.onSseEvent(event as Record<string, unknown>)
+    }
+    return subscribeRuntimeThreadEvents({
+      baseUrl,
+      threadId,
+      headers,
+      onEvent,
+      signal,
+      logError: (category, message, detail) => this.deps.logError(category, message, detail)
+    })
+  }
+
+  private subscribeSseForStreamer(
+    settings: AppSettingsV1,
+    threadId: string,
+    streamer: FeishuStreamer
+  ): SseSubscriber {
+    return (signal) => {
+      // subscribeRuntimeThreadEvents is async, but SseSubscriber contract is
+      // synchronous (returns a { close } handle). Kick off the async
+      // subscription and surface its close synchronously by racing the
+      // setup; if the setup itself throws (e.g. no base URL) we log via
+      // deps.logError and continue with a no-op close. The streamer will
+      // still rely on its own responseTimeoutMs abort as a backstop.
+      const setup = this.subscribeSse(settings, threadId, streamer, signal)
+      let close = (): void => undefined
+      void setup.then(
+        (handle) => { close = handle.close },
+        (error) => {
+          this.deps.logError('claw-feishu-stream', 'SSE subscription setup failed', {
+            message: error instanceof Error ? error.message : String(error),
+            threadId
+          })
+        }
+      )
+      return { close: () => close() }
     }
   }
 
