@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
@@ -897,6 +897,7 @@ describe('ClawRuntime', () => {
     const settings = buildSettings()
     settings.claw.im.enabled = true
     settings.claw.im.responseTimeoutMs = 2_000
+    settings.claw.im.feishuStream = false
     settings.provider.providers = [
       ...settings.provider.providers,
       buildModelProvider()
@@ -2463,6 +2464,7 @@ describe('ClawRuntime', () => {
       const settings = buildSettings()
       settings.claw.im.enabled = true
       settings.claw.im.responseTimeoutMs = 2_000
+      settings.claw.im.feishuStream = false
       settings.agents.kun.imageGeneration = {
         enabled: true,
         providerId: '',
@@ -3249,6 +3251,7 @@ describe('ClawRuntime', () => {
     const settings = buildSettings()
     settings.claw.im.enabled = true
     settings.claw.im.responseTimeoutMs = 2_000
+    settings.claw.im.feishuStream = false
     settings.claw.channels = [buildChannel({ threadId: 'thr_1', conversations: [buildConversation({ localThreadId: 'thr_1' })] })]
     const store = {
       load: vi.fn(async () => settings),
@@ -3376,6 +3379,7 @@ describe('ClawRuntime', () => {
     const settings = buildSettings()
     settings.claw.im.enabled = true
     settings.claw.im.responseTimeoutMs = 2_000
+    settings.claw.im.feishuStream = false
     settings.claw.channels = [buildChannel({ threadId: 'thr_1', conversations: [buildConversation({ localThreadId: 'thr_1' })] })]
     const store = {
       load: vi.fn(async () => settings),
@@ -3511,5 +3515,644 @@ describe('ClawRuntime', () => {
     // /help produces a single IM command reply; no pending reaction.
     expect(send).toHaveBeenCalledTimes(1)
     expect(addReaction).not.toHaveBeenCalled()
+  })
+})
+
+describe('ClawRuntime handleFeishuMessage streaming', () => {
+  type FeishuMessage = {
+    chatId: string
+    messageId: string
+    threadId?: string
+    senderId: string
+    senderName?: string
+    chatType: 'p2p' | 'group'
+    mentionedBot: boolean
+    mentionAll: boolean
+    content: string
+    rawContentType: string
+    mentions: unknown[]
+  }
+  type LarkBridge = {
+    send: ReturnType<typeof vi.fn>
+    addReaction: ReturnType<typeof vi.fn>
+    stream: ReturnType<typeof vi.fn>
+  }
+
+  const originalFetch = globalThis.fetch
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch
+  })
+
+  // Build a fake SSE Response whose body stays open and lets the test
+  // emit events on demand. Without this, the subscriber immediately sees
+  // a closed stream and keeps reconnecting.
+  type SseHandle = {
+    emit: (event: Record<string, unknown>) => void
+    close: () => void
+  }
+  function openSseResponse(): { response: Response; handle: SseHandle } {
+    const encoder = new TextEncoder()
+    let resolveNext: ((chunk: Uint8Array | null) => void) | null = null
+    const handle: SseHandle = {
+      emit: (event) => {
+        const payload = encoder.encode(`data: ${JSON.stringify(event)}\n\n`)
+        if (resolveNext) {
+          const fn = resolveNext
+          resolveNext = null
+          fn(payload)
+        } else {
+          // No waiter yet; this should not happen in our test, but
+          // push the payload to a small queue and let the next
+          // pull drain it. For simplicity, just rely on the resolve
+          // path being live when the streamer is reading.
+        }
+      },
+      close: () => {
+        if (resolveNext) {
+          const fn = resolveNext
+          resolveNext = null
+          fn(null)
+        }
+      }
+    }
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        // Eagerly enqueue an empty chunk so the reader's first read
+        // resolves and we can hand control back to the event loop
+        // (and eventually to the test's emit call).
+        controller.enqueue(encoder.encode(': open\n\n'))
+        // Park: keep the connection open. The streamer is going to
+        // call reader.read() again, so we resolve a pending promise.
+        const onNeedChunk = (): void => {
+          if (resolveNext) {
+            // already pending
+            return
+          }
+          // We rely on the test calling `handle.emit` to feed data.
+          // If the test closes, we close. If the test doesn't emit
+          // anything, the read will block here — which is exactly
+          // what we want.
+          resolveNext = (chunk) => {
+            if (chunk === null) {
+              controller.close()
+            } else {
+              controller.enqueue(chunk)
+              // Park again for the next read.
+              onNeedChunk()
+            }
+          }
+        }
+        onNeedChunk()
+      }
+    })
+    return {
+      response: new Response(stream, {
+        status: 200,
+        headers: { 'Content-Type': 'text/event-stream' }
+      }),
+      handle
+    }
+  }
+
+  function stubFetchForThreadEvents(): { fetchMock: ReturnType<typeof vi.fn>; latestHandle: () => SseHandle | null } {
+    let current: SseHandle | null = null
+    const fetchMock = vi.fn(async () => {
+      const pair = openSseResponse()
+      current = pair.handle
+      return pair.response
+    })
+    globalThis.fetch = fetchMock as unknown as typeof fetch
+    return {
+      fetchMock,
+      latestHandle: () => current
+    }
+  }
+
+  function buildStreamingBridge(): LarkBridge {
+    return {
+      send: vi.fn(async () => ({ messageId: 'om_send_fallback' })),
+      addReaction: vi.fn(async () => 'rc_streaming_1'),
+      // Default: a no-op stream. Tests override this.
+      stream: vi.fn()
+    }
+  }
+
+  function patchBridge(runtime: object, channelId: string, bridge: LarkBridge): void {
+    ;(runtime as unknown as { feishuChannels: Map<string, LarkBridge> })
+      .feishuChannels
+      .set(channelId, bridge)
+  }
+
+  function makeTurnRequest(): ReturnType<typeof vi.fn> {
+    return vi.fn(async (_settings, path) => {
+      if (path === '/v1/threads/thr_1/turns') {
+        return {
+          ok: true,
+          status: 202,
+          body: JSON.stringify({ threadId: 'thr_1', turnId: 'turn_1' })
+        }
+      }
+      throw new Error(`unexpected path ${path}`)
+    })
+  }
+
+  it('routes through runStreamingReply when feishuStream=true (default)', async () => {
+    // Open the SSE event stream; the test will push events as the
+    // streamer reads them.
+    const { fetchMock, latestHandle } = stubFetchForThreadEvents()
+    const settings = buildSettings()
+    settings.claw.im.enabled = true
+    settings.claw.im.responseTimeoutMs = 5_000
+    // feishuStream is default (true) — explicitly leave it unset
+    settings.claw.channels = [
+      buildChannel({ threadId: 'thr_1', conversations: [buildConversation({ localThreadId: 'thr_1' })] })
+    ]
+    const store = {
+      load: vi.fn(async () => settings),
+      patch: vi.fn(async () => settings)
+    }
+    const runtimeRequest = makeTurnRequest()
+    const bridge = buildStreamingBridge()
+    // Track the append calls the producer makes on the MarkdownStreamController.
+    const appendChunks: string[] = []
+    bridge.stream.mockImplementation(
+      async (
+        _to: string,
+        input: { markdown: (controller: { append: (c: string) => Promise<void>; setContent: (s: string) => Promise<void>; messageId: string }) => Promise<void> },
+        _opts?: unknown
+      ) => {
+        const controller = {
+          messageId: 'om_stream_1',
+          append: vi.fn(async (chunk: string) => {
+            appendChunks.push(chunk)
+          }),
+          setContent: vi.fn(async (_full: string) => undefined)
+        }
+        // Push SSE events as soon as the streamer is subscribed.
+        // Yield to the event loop so the subscriber is up first.
+        setTimeout(() => {
+          const h = latestHandle()
+          if (!h) return
+          h.emit({ seq: 1, kind: 'assistant_text_delta', turnId: 'turn_1', item: { text: 'hello ' } })
+          h.emit({ seq: 2, kind: 'assistant_text_delta', turnId: 'turn_1', item: { text: 'streamed ' } })
+          h.emit({ seq: 3, kind: 'assistant_text_delta', turnId: 'turn_1', item: { text: 'world' } })
+          h.emit({ seq: 4, kind: 'turn_completed', turnId: 'turn_1' })
+        }, 0)
+        await input.markdown(controller)
+        return { messageId: controller.messageId }
+      }
+    )
+    const runtime = createClawRuntime({
+      store: store as never,
+      runtimeRequest,
+      logError: () => undefined
+    })
+    patchBridge(runtime, 'channel_1', bridge)
+
+    await (runtime as unknown as {
+      handleFeishuMessage: (channelId: string, message: FeishuMessage) => Promise<void>
+    }).handleFeishuMessage('channel_1', {
+      chatId: 'oc_chat_a',
+      messageId: 'om_inbound',
+      senderId: 'ou_1',
+      senderName: 'Alice',
+      chatType: 'p2p',
+      mentionedBot: false,
+      mentionAll: false,
+      content: 'stream me',
+      rawContentType: 'text',
+      mentions: []
+    })
+
+    // The streaming branch was entered: the SSE event stream was opened
+    // and the bridge.stream producer was invoked.
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(bridge.stream).toHaveBeenCalledTimes(1)
+    // The three deltas came through the producer and were appended to
+    // the streaming card.
+    expect(appendChunks).toEqual(['hello ', 'streamed ', 'world'])
+    // handleFeishuMessage's post-streaming branch sends the streamed
+    // text as a follow-up one-shot text reply (in addition to the
+    // streaming card). Verify it carries the streamed final text.
+    expect(bridge.send).toHaveBeenCalledTimes(1)
+    expect(bridge.send).toHaveBeenCalledWith(
+      'oc_chat_a',
+      { markdown: 'hello streamed world' },
+      { replyTo: 'om_inbound', replyInThread: false }
+    )
+  })
+
+  it('falls back to one-shot send when bridge.stream throws', async () => {
+    // Open the SSE event stream but the producer never receives any
+    // useful events; bridge.stream itself rejects with `not_connected`
+    // so the runStreamingReply catch arm runs and falls back to
+    // bridge.send.
+    stubFetchForThreadEvents()
+    const settings = buildSettings()
+    settings.claw.im.enabled = true
+    settings.claw.im.responseTimeoutMs = 5_000
+    settings.claw.channels = [
+      buildChannel({ threadId: 'thr_1', conversations: [buildConversation({ localThreadId: 'thr_1' })] })
+    ]
+    const store = {
+      load: vi.fn(async () => settings),
+      patch: vi.fn(async () => settings)
+    }
+    const runtimeRequest = makeTurnRequest()
+    const bridge = buildStreamingBridge()
+    // Make bridge.stream throw a not_connected error so runStreamingReply
+    // catches and falls back to bridge.send.
+    bridge.stream.mockRejectedValue(new Error('not_connected'))
+    const runtime = createClawRuntime({
+      store: store as never,
+      runtimeRequest,
+      logError: () => undefined
+    })
+    patchBridge(runtime, 'channel_1', bridge)
+
+    await (runtime as unknown as {
+      handleFeishuMessage: (channelId: string, message: FeishuMessage) => Promise<void>
+    }).handleFeishuMessage('channel_1', {
+      chatId: 'oc_chat_a',
+      messageId: 'om_inbound_fb',
+      senderId: 'ou_1',
+      senderName: 'Alice',
+      chatType: 'p2p',
+      mentionedBot: false,
+      mentionAll: false,
+      content: 'stream then fail',
+      rawContentType: 'text',
+      mentions: []
+    })
+
+    expect(bridge.stream).toHaveBeenCalledTimes(1)
+    // Fallback path: bridge.send is called twice — once from
+    // runStreamingReply's catch arm (the canned "Sorry" message) and
+    // once from handleFeishuMessage's post-streaming agent-reply branch.
+    expect(bridge.send).toHaveBeenCalledTimes(2)
+    const fallbackCall = bridge.send.mock.calls.find(
+      (call) => (call[1] as { markdown?: string })?.markdown === 'Sorry, I could not finish streaming the response.'
+    )
+    expect(fallbackCall).toBeDefined()
+    expect(fallbackCall).toEqual([
+      'oc_chat_a',
+      { markdown: 'Sorry, I could not finish streaming the response.' },
+      { replyTo: 'om_inbound_fb', replyInThread: false }
+    ])
+  })
+
+  it('falls back to setContent(partial) when controller.append throws mid-stream', async () => {
+    // Open the SSE event stream; the test pushes events through the
+    // producer whose `append` throws, triggering the
+    // setContent(accumulated) fallback inside FeishuStreamer.
+    const { latestHandle } = stubFetchForThreadEvents()
+    const settings = buildSettings()
+    settings.claw.im.enabled = true
+    settings.claw.im.responseTimeoutMs = 5_000
+    settings.claw.channels = [
+      buildChannel({ threadId: 'thr_1', conversations: [buildConversation({ localThreadId: 'thr_1' })] })
+    ]
+    const store = {
+      load: vi.fn(async () => settings),
+      patch: vi.fn(async () => settings)
+    }
+    const runtimeRequest = makeTurnRequest()
+    const bridge = buildStreamingBridge()
+    let controllerRef: {
+      append: ReturnType<typeof vi.fn>
+      setContent: ReturnType<typeof vi.fn>
+      messageId: string
+    } | null = null
+    bridge.stream.mockImplementation(
+      async (
+        _to: string,
+        input: { markdown: (controller: { append: (c: string) => Promise<void>; setContent: (s: string) => Promise<void>; messageId: string }) => Promise<void> }
+      ) => {
+        const ctrl = {
+          messageId: 'om_stream_partial',
+          // append throws on every call, simulating a rate_limited
+          // response from the Feishu streaming card API.
+          append: vi.fn(async (_chunk: string) => {
+            throw new Error('rate_limited')
+          }),
+          setContent: vi.fn(async (_full: string) => undefined)
+        }
+        controllerRef = ctrl
+        // Push a single delta. The first append() call will throw,
+        // the streamer will then call setContent('partial ') and
+        // resolve with ok=true.
+        setTimeout(() => {
+          const h = latestHandle()
+          if (!h) return
+          h.emit({ seq: 1, kind: 'assistant_text_delta', turnId: 'turn_1', item: { text: 'partial' } })
+        }, 0)
+        await input.markdown(ctrl)
+        return { messageId: ctrl.messageId }
+      }
+    )
+    const runtime = createClawRuntime({
+      store: store as never,
+      runtimeRequest,
+      logError: () => undefined
+    })
+    patchBridge(runtime, 'channel_1', bridge)
+
+    await (runtime as unknown as {
+      handleFeishuMessage: (channelId: string, message: FeishuMessage) => Promise<void>
+    }).handleFeishuMessage('channel_1', {
+      chatId: 'oc_chat_a',
+      messageId: 'om_inbound_partial',
+      senderId: 'ou_1',
+      senderName: 'Alice',
+      chatType: 'p2p',
+      mentionedBot: false,
+      mentionAll: false,
+      content: 'partial stream',
+      rawContentType: 'text',
+      mentions: []
+    })
+
+    // The producer should have called append exactly once (the very first
+    // chunk, which throws 'rate_limited') and then setContent with
+    // whatever text was accumulated before the throw.
+    expect(controllerRef).not.toBeNull()
+    expect(controllerRef!.append).toHaveBeenCalledTimes(1)
+    expect(controllerRef!.setContent).toHaveBeenCalledTimes(1)
+    const setContentArg = controllerRef!.setContent.mock.calls[0]?.[0] as string
+    expect(typeof setContentArg).toBe('string')
+    expect(setContentArg.length).toBeGreaterThan(0)
+    // bridge.send is called once for the post-streaming agent-reply
+    // branch (the partial text written via setContent IS the streaming
+    // card; handleFeishuMessage still emits a one-shot text reply with
+    // the streamed text).
+    expect(bridge.send).toHaveBeenCalledTimes(1)
+    expect(bridge.send).toHaveBeenCalledWith(
+      'oc_chat_a',
+      { markdown: setContentArg },
+      { replyTo: 'om_inbound_partial', replyInThread: false }
+    )
+  })
+
+  it('does not use FeishuStreamer when feishuStream=false', async () => {
+    // feishuStream=false keeps the legacy polling path. We do NOT open
+    // the SSE event stream because the streamer is never instantiated.
+    const settings = buildSettings()
+    settings.claw.im.enabled = true
+    settings.claw.im.responseTimeoutMs = 2_000
+    settings.claw.im.feishuStream = false
+    settings.claw.channels = [
+      buildChannel({ threadId: 'thr_1', conversations: [buildConversation({ localThreadId: 'thr_1' })] })
+    ]
+    const store = {
+      load: vi.fn(async () => settings),
+      patch: vi.fn(async () => settings)
+    }
+    const agentReply = 'original polling path reply'
+    const runtimeRequest = vi.fn(async (_settings, path, init) => {
+      if (path === '/v1/threads/thr_1/turns') {
+        return { ok: true, status: 202, body: JSON.stringify({ threadId: 'thr_1', turnId: 'turn_polling' }) }
+      }
+      if (path === '/v1/threads/thr_1' && init?.method === 'GET') {
+        return {
+          ok: true,
+          status: 200,
+          body: JSON.stringify({
+            id: 'thr_1',
+            status: 'idle',
+            turns: [
+              {
+                id: 'turn_polling',
+                status: 'completed',
+                items: [{ kind: 'assistant_text', text: agentReply }]
+              }
+            ]
+          })
+        }
+      }
+      throw new Error(`unexpected path ${path}`)
+    })
+    const bridge = buildStreamingBridge()
+    const runtime = createClawRuntime({
+      store: store as never,
+      runtimeRequest,
+      logError: () => undefined
+    })
+    patchBridge(runtime, 'channel_1', bridge)
+
+    await (runtime as unknown as {
+      handleFeishuMessage: (channelId: string, message: FeishuMessage) => Promise<void>
+    }).handleFeishuMessage('channel_1', {
+      chatId: 'oc_chat_a',
+      messageId: 'om_inbound_no_stream',
+      senderId: 'ou_1',
+      senderName: 'Alice',
+      chatType: 'p2p',
+      mentionedBot: false,
+      mentionAll: false,
+      content: 'polling please',
+      rawContentType: 'text',
+      mentions: []
+    })
+
+    // FeishuStreamer / bridge.stream must NOT be invoked when the user
+    // explicitly opts out of streaming.
+    expect(bridge.stream).not.toHaveBeenCalled()
+    // The legacy polling path delivers the reply via bridge.send.
+    expect(bridge.send).toHaveBeenCalledWith(
+      'oc_chat_a',
+      { markdown: agentReply },
+      { replyTo: 'om_inbound_no_stream', replyInThread: false }
+    )
+  })
+
+  it('still routes through the streaming bridge for prompts that mention sending files', async () => {
+    // NOTE: The streaming branch does not currently surface `result.files`
+    // (the streaming reply path uses `streamResult.finalText`, not the
+    // turn result from `waitForAssistantResult`), so the
+    // `sendFeishuGeneratedFiles` follow-up does not actually fire in
+    // the streaming path today. This test pins that behavior: a prompt
+    // that matches `shouldSendGeneratedFilesForPrompt` (e.g. contains
+    // "发给我") must still complete the streaming reply without
+    // crashing. The follow-up file delivery is exercised in the
+    // feishuStream=false path; see the image/markdown tests above.
+    const { fetchMock, latestHandle } = stubFetchForThreadEvents()
+    const settings = buildSettings()
+    settings.claw.im.enabled = true
+    settings.claw.im.responseTimeoutMs = 5_000
+    settings.claw.channels = [
+      buildChannel({ threadId: 'thr_1', conversations: [buildConversation({ localThreadId: 'thr_1' })] })
+    ]
+    const store = {
+      load: vi.fn(async () => settings),
+      patch: vi.fn(async () => settings)
+    }
+    const runtimeRequest = makeTurnRequest()
+    const bridge = buildStreamingBridge()
+    let streamedMessageId = ''
+    bridge.stream.mockImplementation(
+      async (
+        _to: string,
+        input: { markdown: (controller: { append: (c: string) => Promise<void>; setContent: (s: string) => Promise<void>; messageId: string }) => Promise<void> }
+      ) => {
+        const ctrl = {
+          messageId: 'om_stream_files',
+          append: vi.fn(async (_chunk: string) => undefined),
+          setContent: vi.fn(async (_full: string) => undefined)
+        }
+        setTimeout(() => {
+          const h = latestHandle()
+          if (!h) return
+          h.emit({ seq: 1, kind: 'assistant_text_delta', turnId: 'turn_1', item: { text: '好的' } })
+          h.emit({ seq: 2, kind: 'turn_completed', turnId: 'turn_1' })
+        }, 0)
+        await input.markdown(ctrl)
+        streamedMessageId = ctrl.messageId
+        return { messageId: ctrl.messageId }
+      }
+    )
+    const runtime = createClawRuntime({
+      store: store as never,
+      runtimeRequest,
+      logError: () => undefined
+    })
+    patchBridge(runtime, 'channel_1', bridge)
+
+    // "把今天的笔记发给我" — shouldSendGeneratedFilesForPrompt returns true.
+    await (runtime as unknown as {
+      handleFeishuMessage: (channelId: string, message: FeishuMessage) => Promise<void>
+    }).handleFeishuMessage('channel_1', {
+      chatId: 'oc_chat_a',
+      messageId: 'om_inbound_files',
+      senderId: 'ou_1',
+      senderName: 'Alice',
+      chatType: 'p2p',
+      mentionedBot: false,
+      mentionAll: false,
+      content: '把今天的笔记发给我',
+      rawContentType: 'text',
+      mentions: []
+    })
+
+    // The streaming card was finalized (the messageId is recorded by
+    // the bridge mock).
+    expect(streamedMessageId).toBe('om_stream_files')
+    expect(bridge.stream).toHaveBeenCalledTimes(1)
+    // The SSE event stream was opened (proves the streaming branch ran
+    // end-to-end without falling back to the polling path).
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    // handleFeishuMessage's post-streaming branch sends the streamed
+    // text as a follow-up one-shot text reply. The streaming result
+    // does not currently carry a `files` payload, so no file
+    // attachment is dispatched (see the comment above).
+    expect(bridge.send).toHaveBeenCalledTimes(1)
+    expect(bridge.send).toHaveBeenCalledWith(
+      'oc_chat_a',
+      { markdown: '好的' },
+      { replyTo: 'om_inbound_files', replyInThread: false }
+    )
+  })
+
+  it('does not touch FeishuStreamer for non-feishu providers (weixin unchanged)', async () => {
+    // WeChat (weixin) inbound traffic arrives via handleWebhook with
+    // `provider: 'weixin'` — it does NOT go through handleFeishuMessage.
+    // This test exercises the webhook entry point and asserts that no
+    // feishu streaming bridge is touched.
+    const settings = buildSettings()
+    settings.claw.im.enabled = true
+    settings.claw.im.responseTimeoutMs = 2_000
+    settings.claw.im.feishuStream = true
+    settings.claw.channels = [
+      buildChannel({
+        provider: 'weixin' as const,
+        id: 'channel_weixin',
+        label: 'WeChat',
+        threadId: 'thr_wx_stream',
+        conversations: [
+          buildConversation({
+            chatId: 'wx_user_1',
+            senderId: 'wx_user_1',
+            localThreadId: 'thr_wx_stream'
+          })
+        ]
+      })
+    ]
+    const { store } = mutableSettingsStore(settings)
+    const agentReply = 'wechat reply'
+    const runtimeRequest = vi.fn(async (_settings, path, init) => {
+      if (path === '/v1/threads/thr_wx_stream/turns' && init?.method === 'POST') {
+        return { ok: true, status: 202, body: JSON.stringify({ turnId: 'turn_wx_stream' }) }
+      }
+      if (path === '/v1/threads/thr_wx_stream' && init?.method === 'GET') {
+        return {
+          ok: true,
+          status: 200,
+          body: JSON.stringify({
+            id: 'thr_wx_stream',
+            status: 'idle',
+            turns: [
+              {
+                id: 'turn_wx_stream',
+                status: 'completed',
+                items: [{ kind: 'assistant_text', text: agentReply }]
+              }
+            ]
+          })
+        }
+      }
+      throw new Error(`unexpected path ${path}`)
+    })
+    const runtime = createClawRuntime({
+      store: store as never,
+      runtimeRequest,
+      logError: () => undefined,
+      createScheduledTaskFromText: vi.fn(async () => ({ kind: 'noop' as const }))
+    })
+    // Build a Feishu bridge entry on the same runtime to detect any
+    // accidental weixin → feishu bridge reuse. The weixin webhook must
+    // NOT touch it.
+    const feishuBridge = buildStreamingBridge()
+    patchBridge(runtime, 'channel_weixin', feishuBridge)
+    const body = JSON.stringify({
+      text: 'hello wechat',
+      provider: 'weixin',
+      channelId: 'channel_weixin',
+      chatId: 'wx_user_1',
+      messageId: 'wx_msg_stream',
+      senderId: 'wx_user_1',
+      senderName: 'Alice'
+    })
+    const req = {
+      method: 'POST',
+      url: settings.claw.im.path,
+      headers: {},
+      async *[Symbol.asyncIterator]() {
+        yield Buffer.from(body)
+      }
+    }
+    let status = 0
+    let responseBody = ''
+    const res = {
+      writeHead: vi.fn((nextStatus: number) => {
+        status = nextStatus
+      }),
+      end: vi.fn((payload: string) => {
+        responseBody = payload
+      })
+    }
+
+    await (runtime as unknown as {
+      handleWebhook: (request: typeof req, response: typeof res) => Promise<void>
+    }).handleWebhook(req, res)
+
+    expect(status).toBe(200)
+    const parsed = JSON.parse(responseBody)
+    expect(parsed).toMatchObject({ ok: true, reply: agentReply })
+    // No streaming bridge activity: bridge.stream and bridge.send must
+    // both remain untouched for weixin (the original polling reply path
+    // is what delivers the WeChat message).
+    expect(feishuBridge.stream).not.toHaveBeenCalled()
+    expect(feishuBridge.send).not.toHaveBeenCalled()
+    expect(feishuBridge.addReaction).not.toHaveBeenCalled()
   })
 })
