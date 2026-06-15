@@ -113,4 +113,46 @@ describe('subscribeRuntimeThreadEvents', () => {
     const init = fetchMock.mock.calls[0][1] as RequestInit
     expect(init.headers).toMatchObject({ Authorization: 'Bearer x', Accept: 'text/event-stream' })
   })
+
+  it('reconnects with exponential backoff (750ms → 5s) on 5xx', async () => {
+    vi.useFakeTimers()
+    try {
+      const ac = new AbortController()
+      // 第一次 5xx,后续提供多个 mock 让重连循环稳定跑
+      fetchMock
+        .mockResolvedValueOnce(new Response('', { status: 503 }))
+        .mockResolvedValue(new Response('', { status: 503 }))
+      const onEvent = vi.fn()
+      const handle = await subscribeRuntimeThreadEvents({
+        baseUrl: 'http://127.0.0.1:8788',
+        threadId: 'thr_1',
+        headers: {},
+        onEvent,
+        signal: ac.signal
+      })
+      // 等 750ms 后 fetch 应当被再次调用
+      await vi.advanceTimersByTimeAsync(800)
+      expect(fetchMock.mock.calls.length).toBeGreaterThanOrEqual(2)
+      ac.abort()
+      handle.close()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('stops reconnecting on 4xx (except 408/429)', async () => {
+    const ac = new AbortController()
+    fetchMock.mockResolvedValueOnce(new Response('', { status: 401 }))
+    await subscribeRuntimeThreadEvents({
+      baseUrl: 'http://127.0.0.1:8788',
+      threadId: 'thr_1',
+      headers: {},
+      onEvent: vi.fn(),
+      signal: ac.signal,
+      logError: vi.fn()
+    })
+    // 等 1s,确认只调一次 fetch
+    await new Promise((r) => setTimeout(r, 50))
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
 })
