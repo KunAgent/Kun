@@ -408,7 +408,11 @@ export function createNavigationActions(
               void get().refreshThreads()
               if (state.route === 'claw' && state.activeClawChannelId === channelId) {
                 if (state.activeThreadId !== threadId) {
-                  await get().selectThread(threadId)
+                  // Live-only SSE: skip the HTTP getThreadDetail fetch so the
+                  // chat view sees the Feishu bot's deltas as they arrive.
+                  // The first explicit click on this thread will fall through
+                  // to selectThread and pull the persisted blocks.
+                  await get().subscribeThreadEventsLive(threadId)
                 } else {
                   await get().recoverActiveTurn()
                 }

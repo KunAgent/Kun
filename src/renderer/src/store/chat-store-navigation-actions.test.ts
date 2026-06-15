@@ -11,6 +11,14 @@ vi.mock('../agent/registry', () => ({
   getProvider: registryMock.getProvider
 }))
 
+const applyThemeLibMock = vi.hoisted(() => ({
+  applyTheme: vi.fn(),
+  applyUiFontScale: vi.fn(),
+  applyDocumentLocale: vi.fn()
+}))
+
+vi.mock('../lib/apply-theme', () => applyThemeLibMock)
+
 import { createNavigationActions } from './chat-store-navigation-actions'
 
 function thread(overrides: Partial<NormalizedThread> & Pick<NormalizedThread, 'id' | 'workspace'>): NormalizedThread {
@@ -26,30 +34,49 @@ function thread(overrides: Partial<NormalizedThread> & Pick<NormalizedThread, 'i
   }
 }
 
-function buildHarness(): {
+function buildHarness(overrides?: {
+  subscribeThreadEventsLive?: ReturnType<typeof vi.fn>
+  recoverActiveTurn?: ReturnType<typeof vi.fn>
+  applyI18nFromSettings?: ReturnType<typeof vi.fn>
+  probeRuntime?: ReturnType<typeof vi.fn>
+  loadComposerModels?: ReturnType<typeof vi.fn>
+}): {
   actions: ReturnType<typeof createNavigationActions>
   state: ChatState
   createThread: ReturnType<typeof vi.fn>
   refreshThreads: ReturnType<typeof vi.fn>
   selectThread: ReturnType<typeof vi.fn>
+  subscribeThreadEventsLive: ReturnType<typeof vi.fn>
+  recoverActiveTurn: ReturnType<typeof vi.fn>
 } {
   const createThread = vi.fn(async () => undefined)
   const refreshThreads = vi.fn(async () => undefined)
   const selectThread = vi.fn(async () => undefined)
+  const subscribeThreadEventsLive = overrides?.subscribeThreadEventsLive ?? vi.fn(async () => undefined)
+  const recoverActiveTurn = overrides?.recoverActiveTurn ?? vi.fn(async () => true)
+  const applyI18nFromSettings = overrides?.applyI18nFromSettings ?? vi.fn(async () => undefined)
+  const probeRuntime = overrides?.probeRuntime ?? vi.fn(async () => undefined)
+  const loadComposerModels = overrides?.loadComposerModels ?? vi.fn(async () => undefined)
   let state = {
     activeThreadId: 'thr_default',
+    applyI18nFromSettings,
     busy: false,
     clawChannels: [],
     codeWorkspaceRoots: ['~/.kun/default_workspace'],
+    composerPickList: [],
     createThread,
     currentTurnId: null,
     currentTurnUserId: null,
     error: null,
+    loadComposerModels,
     openWrite: vi.fn(async () => undefined),
+    probeRuntime,
     refreshThreads,
     route: 'chat',
     runtimeConnection: 'ready',
     selectThread,
+    subscribeThreadEventsLive,
+    recoverActiveTurn,
     threads: [
       thread({
         id: 'thr_default',
@@ -79,7 +106,9 @@ function buildHarness(): {
     },
     createThread,
     refreshThreads,
-    selectThread
+    selectThread,
+    subscribeThreadEventsLive,
+    recoverActiveTurn
   }
 }
 
@@ -154,5 +183,77 @@ describe('chat-store navigation workspace selection', () => {
     await expect(harness.actions.selectWorkspaceRoot('   ')).resolves.toBeNull()
     expect(setSettings).not.toHaveBeenCalled()
     expect(harness.state.activeThreadId).toBe('thr_default')
+  })
+})
+
+describe('onClawChannelActivity routes through subscribeThreadEventsLive (not selectThread)', () => {
+  beforeEach(() => {
+    rendererRuntimeClient.invalidateSettings()
+    registryMock.getProvider.mockReset()
+  })
+
+  afterEach(() => {
+    rendererRuntimeClient.invalidateSettings()
+    vi.unstubAllGlobals()
+  })
+
+  it('calls subscribeThreadEventsLive when activeThreadId differs from the bot thread', async () => {
+    const subscribeThreadEventsLive = vi.fn(async () => undefined)
+    const selectThread = vi.fn(async () => undefined)
+    const recoverActiveTurn = vi.fn(async () => true)
+
+    // Capture the callback registered via window.kunGui.onClawChannelActivity
+    let capturedClawActivityCallback: ((payload: { channelId: string; threadId: string }) => void) | null = null
+    const onClawChannelActivity = vi.fn((cb: (payload: { channelId: string; threadId: string }) => void) => {
+      capturedClawActivityCallback = cb
+      return () => {}
+    })
+    const onRuntimeStatus = vi.fn(() => () => {})
+    const getSettings = vi.fn(async () => ({
+      workspaceRoot: '~/.kun/default_workspace',
+      write: {
+        defaultWorkspaceRoot: '~/.kun/default_workspace',
+        activeWorkspaceRoot: '~/.kun/default_workspace',
+        workspaces: []
+      },
+      claw: {
+        channels: [
+          { id: 'ch_1', enabled: true, label: 'Feishu Agent01', provider: 'feishu' }
+        ]
+      },
+      theme: 'dark',
+      uiFontScale: 1,
+      locale: 'en',
+      agents: { kun: { apiKey: 'test-key', model: 'deepseek-v4-pro', baseUrl: '' } },
+      disabledSkillIds: []
+    }))
+    vi.stubGlobal('window', {
+      kunGui: {
+        getSettings,
+        onClawChannelActivity,
+        onRuntimeStatus
+      }
+    })
+
+    const harness = buildHarness({ subscribeThreadEventsLive, recoverActiveTurn })
+    await harness.actions.boot()
+    expect(typeof capturedClawActivityCallback).toBe('function')
+    expect(onClawChannelActivity).toHaveBeenCalledTimes(1)
+
+    // Set state conditions AFTER boot so they survive the boot's set() calls:
+    // route is claw, activeClawChannelId matches incoming channelId,
+    // activeThreadId differs from incoming threadId — so we should auto-switch.
+    harness.state.route = 'claw'
+    harness.state.activeClawChannelId = 'ch_1'
+    harness.state.activeThreadId = 'thr_default'
+
+    // Trigger the captured callback with a Feishu bot event.
+    await capturedClawActivityCallback!({ channelId: 'ch_1', threadId: 'thr_bot' })
+    // Allow the void(async()) microtask inside the callback to flush.
+    await new Promise((resolve) => setTimeout(resolve, 10))
+    await new Promise((resolve) => setTimeout(resolve, 10))
+
+    expect(subscribeThreadEventsLive).toHaveBeenCalledWith('thr_bot')
+    expect(selectThread).not.toHaveBeenCalled()
   })
 })
