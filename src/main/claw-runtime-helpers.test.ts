@@ -1,15 +1,26 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   finalAssistantReplyText,
   imCompletionReplyForPush,
   IM_COMPLETED_NO_TEXT_REPLY,
+  subscribeRuntimeThreadEvents,
+  type RuntimeSseEvent,
   type ThreadDetailJson,
   type TurnItemJson
 } from './claw-runtime-helpers'
 
-function singleTurnDetail(items: TurnItemJson[]): ThreadDetailJson {
-  return { turns: [{ id: 'turn_1', status: 'completed', items }] }
-}
+// Global fetch mock for subscribeRuntimeThreadEvents
+const originalFetch = globalThis.fetch
+let fetchMock: ReturnType<typeof vi.fn>
+
+beforeEach(() => {
+  fetchMock = vi.fn()
+  globalThis.fetch = fetchMock as unknown as typeof fetch
+})
+
+afterEach(() => {
+  globalThis.fetch = originalFetch
+})
 
 describe('finalAssistantReplyText', () => {
   it('returns the concluding text that follows the last tool activity', () => {
@@ -77,5 +88,29 @@ describe('imCompletionReplyForPush', () => {
     ])
     expect(reply).toContain('a.md')
     expect(reply).toContain('b.png')
+  })
+})
+
+function singleTurnDetail(items: TurnItemJson[]): ThreadDetailJson {
+  return { turns: [{ id: 'turn_1', status: 'completed', items }] }
+}
+
+describe('subscribeRuntimeThreadEvents', () => {
+  it('opens /v1/threads/{id}/events?since_seq=0 with auth headers on first connect', async () => {
+    const ac = new AbortController()
+    fetchMock.mockResolvedValueOnce(new Response('', { status: 404 }))
+    await subscribeRuntimeThreadEvents({
+      baseUrl: 'http://127.0.0.1:8788',
+      threadId: 'thr_1',
+      headers: { Authorization: 'Bearer x' },
+      onEvent: vi.fn(),
+      signal: ac.signal
+    })
+    // First fetch should include since_seq=0
+    const url = fetchMock.mock.calls[0][0] as URL
+    expect(url.toString()).toContain('/v1/threads/thr_1/events')
+    expect(url.searchParams.get('since_seq')).toBe('0')
+    const init = fetchMock.mock.calls[0][1] as RequestInit
+    expect(init.headers).toMatchObject({ Authorization: 'Bearer x', Accept: 'text/event-stream' })
   })
 })
