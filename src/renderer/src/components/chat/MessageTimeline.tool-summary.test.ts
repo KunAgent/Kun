@@ -589,4 +589,44 @@ describe('MessageTimeline Kun runtime metadata smoke', () => {
     expect(liveTurnProgressClass(true)).toContain('mb-16 md:mb-20')
     expect(liveTurnProgressClass(false)).not.toContain('mb-16 md:mb-20')
   })
+
+  it('renders the live assistant bubble while busy is true (streaming period)', () => {
+    // Streaming period: the user has just sent a turn, the agent is
+    // running, and the SSE has streamed some `live` text into the chat
+    // store. The chat view must surface the streamed text immediately
+    // (e.g. for the Feishu bot case), not wait until turn_completed.
+    //
+    // We assert against the `ds-chat-answer` class which is only emitted
+    // by the live assistant `MessageBubble`. The process-section fold
+    // in `deriveTurnSections` would render the same text via
+    // `ProcessSectionRow`, so a plain text assertion is not specific
+    // enough — we want the actual `live-assistant` bubble here.
+    const blocks: ChatBlock[] = [
+      {
+        kind: 'user',
+        id: 'user_1',
+        text: 'say hi'
+      }
+    ]
+    useChatStore.setState({
+      busy: true,
+      currentTurnUserId: 'user_1',
+      turnStartedAtByUserId: { user_1: Date.now() }
+    })
+
+    const html = renderToStaticMarkup(
+      createElement(MessageTimeline, {
+        blocks,
+        liveReasoning: '',
+        live: 'hello',
+        activeThreadId: 'thr_1',
+        runtimeConnection: 'ready',
+        onRetryConnection: () => undefined,
+        onOpenSettings: () => undefined
+      })
+    )
+
+    expect(html).toContain('ds-chat-answer')
+    expect(html).toContain('hello')
+  })
 })

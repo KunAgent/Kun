@@ -451,7 +451,13 @@ function MessageTurn({
     () => processSections.filter((section) => section.kind === 'reasoning').length,
     [processSections]
   )
-  const showLiveAssistant = !isProcessing && !!liveContent.trim()
+  // Show the live assistant bubble whenever the SSE has streamed any text
+  // into `live`. We deliberately do NOT gate on `isProcessing`: the
+  // processing indicator (WorkMetaRow above) already covers "the agent is
+  // working", and hiding the streaming text here causes real-time updates
+  // (Feishu bot streaming) to appear only after turn_completed, which the
+  // user perceives as a long delay.
+  const showLiveAssistant = !!liveContent.trim()
 
   // Keep completed reasoning/tool work tucked away, but make the active turn's
   // work visible unless the user explicitly collapses it.
