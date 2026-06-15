@@ -706,6 +706,65 @@ export class ClawRuntime {
     }
   }
 
+  private async runStreamingReply(input: {
+    bridge: LarkChannel
+    chatId: string
+    threadId: string
+    turnId: string
+    replyOptions: { replyTo?: string; replyInThread?: boolean }
+    responseTimeoutMs: number
+    context: Record<string, unknown>
+  }): Promise<{ ok: boolean; messageId: string; finalText: string; fellBack: boolean; message: string }> {
+    const cancel = new AbortController()
+    const timeout = setTimeout(() => cancel.abort(), input.responseTimeoutMs)
+    const streamer = new FeishuStreamer({
+      bridge: input.bridge,
+      chatId: input.chatId,
+      turnId: input.turnId,
+      threadId: input.threadId,
+      replyOptions: input.replyOptions,
+      logger: (category, message, detail) => this.deps.logError(category, message, detail)
+    })
+    try {
+      const settings = await this.deps.store.load()
+      const result = await streamer.start({
+        subscribe: this.subscribeSseForStreamer(settings, input.threadId, streamer)
+      })
+      return {
+        ok: result.ok,
+        messageId: result.messageId,
+        finalText: result.finalText,
+        fellBack: result.fellBack,
+        message: result.ok ? 'streamed' : 'stream_failed'
+      }
+    } catch (error) {
+      this.deps.logError('claw-feishu-stream', 'Streaming reply failed; falling back to one-shot send.', {
+        message: error instanceof Error ? error.message : String(error),
+        ...input.context
+      })
+      const finalText = streamer.getAccumulatedText() || ''
+      try {
+        const fb = await input.bridge.send(
+          input.chatId,
+          { markdown: finalText || 'Sorry, I could not finish streaming the response.' },
+          input.replyOptions
+        )
+        return { ok: true, messageId: fb.messageId, finalText, fellBack: true, message: 'fell_back' }
+      } catch (fbError) {
+        return {
+          ok: false,
+          messageId: '',
+          finalText,
+          fellBack: true,
+          message: fbError instanceof Error ? fbError.message : String(fbError)
+        }
+      }
+    } finally {
+      clearTimeout(timeout)
+      streamer.dispose()
+    }
+  }
+
   private startRuntimeTurn(
     settings: AppSettingsV1,
     threadId: string,
