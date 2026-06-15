@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -119,6 +119,43 @@ describe('skill-service', () => {
       skillCount: 1
     })
     expect(comparable(claude?.path ?? '')).toBe(comparable(join(workspaceRoot, '.claude', 'skills')))
+  })
+
+  it('discovers and counts skills symlinked into .claude/skills (e.g. cc switch)', async (ctx) => {
+    const workspaceRoot = join(tempRoot, 'ws-symlink')
+    // cc switch stores the real skill files in its own config dir...
+    const realSkill = join(tempRoot, 'cc-config', 'skills', 'linked-skill')
+    await mkdir(realSkill, { recursive: true })
+    await writeFile(join(realSkill, 'SKILL.md'), [
+      '---', 'name: linked-skill', 'description: Linked via symlink.', '---', '', 'Body.'
+    ].join('\n'), 'utf8')
+    // ...and symlinks the per-skill directory into .claude/skills.
+    const claudeSkills = join(workspaceRoot, '.claude', 'skills')
+    await mkdir(claudeSkills, { recursive: true })
+    try {
+      await symlink(realSkill, join(claudeSkills, 'linked-skill'), 'dir')
+    } catch {
+      // Symlink creation can be unprivileged (e.g. Windows) — skip there.
+      ctx.skip()
+      return
+    }
+
+    const settings = createSettings(workspaceRoot)
+    const result = await listGuiSkills(settings, workspaceRoot)
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.skills).toContainEqual(expect.objectContaining({
+      id: 'linked-skill',
+      name: 'Linked Skill',
+      description: 'Linked via symlink.',
+      scope: 'project'
+    }))
+
+    const roots = await listGuiSkillRoots(settings, workspaceRoot)
+    expect(roots.ok).toBe(true)
+    if (!roots.ok) return
+    const claude = roots.roots.find((root) => root.labelKey === 'pluginSkillRootWorkspaceClaude')
+    expect(claude?.skillCount).toBe(1)
   })
 
   it('omits a directory disabled via disabledDirs from runtime roots but still lists it', async () => {

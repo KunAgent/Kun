@@ -1,5 +1,5 @@
-import { existsSync, readdirSync } from 'node:fs'
-import { readdir, readFile } from 'node:fs/promises'
+import { existsSync, readdirSync, statSync, type Dirent } from 'node:fs'
+import { readdir, readFile, stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { basename, join, resolve } from 'node:path'
 import type { AppSettingsV1 } from '../../shared/app-settings'
@@ -316,7 +316,7 @@ function skillRootHasPackages(root: string): boolean {
   if (existsSync(join(root, 'SKILL.md')) || existsSync(join(root, 'skill.json'))) return true
   try {
     return readdirSync(root, { withFileTypes: true }).some((entry) =>
-      entry.isDirectory() &&
+      entryIsDirectorySync(entry, join(root, entry.name)) &&
       (existsSync(join(root, entry.name, 'SKILL.md')) || existsSync(join(root, entry.name, 'skill.json')))
     )
   } catch {
@@ -331,13 +331,41 @@ async function packageCandidates(root: string): Promise<string[]> {
   }
   const entries = await readdir(root, { withFileTypes: true })
   for (const entry of entries) {
-    if (!entry.isDirectory()) continue
     const dir = join(root, entry.name)
+    if (!(await entryIsDirectory(entry, dir))) continue
     if (existsSync(join(dir, 'skill.json')) || existsSync(join(dir, 'SKILL.md'))) {
       candidates.add(dir)
     }
   }
   return [...candidates]
+}
+
+/**
+ * Whether a directory entry is — or resolves to — a directory. `readdir`/
+ * `readdirSync` with `withFileTypes` describe the link itself, so a symlinked
+ * skill package (e.g. the per-skill links `cc switch` drops into
+ * `.claude/skills`) reports `isDirectory() === false` and would be skipped.
+ * Follow such links via `stat` so those packages are still discovered. Also
+ * covers filesystems that report an unknown `d_type`. (#320)
+ */
+async function entryIsDirectory(entry: Dirent, path: string): Promise<boolean> {
+  if (entry.isDirectory()) return true
+  if (entry.isFile()) return false
+  try {
+    return (await stat(path)).isDirectory()
+  } catch {
+    return false
+  }
+}
+
+function entryIsDirectorySync(entry: Dirent, path: string): boolean {
+  if (entry.isDirectory()) return true
+  if (entry.isFile()) return false
+  try {
+    return statSync(path).isDirectory()
+  } catch {
+    return false
+  }
 }
 
 async function loadSkillSummary(root: string, scope: GuiSkillScope): Promise<GuiSkillSummary | null> {
