@@ -1,3 +1,4 @@
+import { isAbsolute, relative, resolve } from 'node:path'
 import type { ModelClient, ModelRequest, ModelStreamChunk, ModelToolSpec } from '../ports/model-client.js'
 import type {
   ToolHost,
@@ -977,6 +978,12 @@ export class AgentLoop {
         ? [goalRecoveryInstruction]
         : []),
       ...(activeTodoInstruction ? [activeTodoInstruction] : []),
+      ...buildImageGenerationReferenceInstructions({
+        imageAttachments: attachments.imageAttachments,
+        textFallbacks: attachments.textFallbacks,
+        workspace: thread?.workspace ?? '',
+        tools: effectiveToolSpecs
+      }),
       ...memoryInstructions(memories),
       ...skillResolution.instructions,
       ...(userInputDisabled ? [userInputUnavailableInstruction()] : []),
@@ -2340,7 +2347,8 @@ export class AgentLoop {
           mimeType: attachment.mimeType,
           dataBase64: attachment.data.toString('base64'),
           ...(attachment.width ? { width: attachment.width } : {}),
-          ...(attachment.height ? { height: attachment.height } : {})
+          ...(attachment.height ? { height: attachment.height } : {}),
+          ...(attachment.localFilePath ? { localFilePath: attachment.localFilePath } : {})
         })
         continue
       }
@@ -2646,6 +2654,53 @@ function sanitizeProviderBaseUrl(baseUrl: string): string {
 
 function autoModelRouteKey(threadId: string, turnId: string): string {
   return `${threadId}:${turnId}`
+}
+
+type ImageReferenceAttachment = {
+  name: string
+  mimeType: string
+  localFilePath?: string
+}
+
+export function buildImageGenerationReferenceInstructions(input: {
+  imageAttachments: readonly ImageReferenceAttachment[]
+  textFallbacks: readonly ImageReferenceAttachment[]
+  workspace: string
+  tools: readonly Pick<ModelToolSpec, 'name'>[]
+}): string[] {
+  if (!input.tools.some((tool) => tool.name === 'generate_image')) return []
+  const references = [
+    ...input.imageAttachments,
+    ...input.textFallbacks
+  ]
+    .map((attachment) => ({
+      name: attachment.name,
+      path: imageReferencePath(attachment.localFilePath, input.workspace),
+      mimeType: attachment.mimeType
+    }))
+    .filter((attachment): attachment is { name: string; path: string; mimeType: string } =>
+      Boolean(attachment.path) && attachment.mimeType.startsWith('image/')
+    )
+  if (references.length === 0) return []
+
+  return [
+    [
+      'Image-to-image reference images are available for this turn:',
+      ...references.map((reference) => `- ${reference.name}: ${reference.path}`),
+      'When the user asks to edit, restyle, transform, redraw, or use an attached image as the source image, call `generate_image` with `reference_image_paths` set to the matching workspace-relative path(s). Do not describe the attachment first and then call text-to-image unless the user explicitly asks for a description instead of an image edit.'
+    ].join('\n')
+  ]
+}
+
+function imageReferencePath(localFilePath: string | undefined, workspace: string): string | null {
+  const workspaceRoot = workspace.trim()
+  const rawPath = localFilePath?.trim()
+  if (!workspaceRoot || !rawPath) return null
+  const workspaceAbsolute = resolve(workspaceRoot)
+  const fileAbsolute = isAbsolute(rawPath) ? resolve(rawPath) : resolve(workspaceAbsolute, rawPath)
+  const relativePath = relative(workspaceAbsolute, fileAbsolute)
+  if (!relativePath || relativePath.startsWith('..') || isAbsolute(relativePath)) return null
+  return relativePath.replace(/\\/g, '/')
 }
 
 function memoryInstructions(memories: Array<{ id: string; content: string; scope: string }>): string[] {
