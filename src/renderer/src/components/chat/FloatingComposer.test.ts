@@ -3,6 +3,7 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import {
   FloatingComposer,
+  buildResearchPrompt,
   formatGoalElapsedSeconds,
   handleComposerImagePaste,
   imageFilesFromTransfer,
@@ -10,6 +11,7 @@ import {
   parseCompactCommand,
   parseGoalCommand,
   parseNewCommand,
+  parseResearchCommand,
   parseReviewCommand,
   shouldShowGoalFloater
 } from './FloatingComposer'
@@ -95,6 +97,15 @@ describe('FloatingComposer slash commands', () => {
       instructions: 'focus on auth regressions'
     })
     expect(parseReviewCommand('/reviewer')).toBe(false)
+  })
+
+  it('parses research starter command topics', () => {
+    expect(parseResearchCommand('/research')).toBeNull()
+    expect(parseResearchCommand('/deepresearch cache economics')).toBe('cache economics')
+    expect(parseResearchCommand('/deep-research web + papers')).toBe('web + papers')
+    expect(parseResearchCommand('/researcher')).toBe(false)
+    expect(buildResearchPrompt('Topic: {{topic}}', 'provider cache')).toBe('Topic: provider cache')
+    expect(buildResearchPrompt('Topic: {{topic}}', null)).toBe('Topic: {{topic}}')
   })
 
   it('uses ordinary composer text as a goal draft only when the goal panel is open', () => {
