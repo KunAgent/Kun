@@ -184,10 +184,17 @@ export function ClawSettingsSection({ ctx }: { ctx: ClawSettingsContext }): Reac
                     title={t('clawFeishuStream')}
                     description={t('clawFeishuStreamDesc')}
                     control={
-                      <Toggle
-                        checked={channel.feishuStream === true}
-                        onChange={(value) => updateChannel(form, update, channel.id, { feishuStream: value })}
-                      />
+                      <div className="flex items-center gap-2">
+                        <span className="text-[12px] font-medium text-ds-muted">
+                          {channel.feishuStream === true
+                            ? t('clawManageAgentEnabled')
+                            : t('clawManageAgentDisabled')}
+                        </span>
+                        <Toggle
+                          checked={channel.feishuStream === true}
+                          onChange={(value) => updateChannel(form, update, channel.id, { feishuStream: value })}
+                        />
+                      </div>
                     }
                   />
                 )}

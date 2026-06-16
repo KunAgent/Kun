@@ -64,7 +64,7 @@
   "clawRunMode": "Run mode",
   "clawRunModeDesc": "Default handling mode for phone messages and scheduled tasks.",
   "clawFeishuStream": "Enable streaming output",
-  "clawFeishuStreamDesc": "Send the agent reply character-by-character in a live Feishu / Lark card instead of as one full message. Off by default.",
+  "clawFeishuStreamDesc": "Enable streaming output",
   "clawModeAgent": "Act directly",
   "clawModePlan": "Plan",
   "clawModel": "Model",
