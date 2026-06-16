@@ -34,7 +34,21 @@ export function createReadLocalTool(options: ReadLocalToolOptions = {}): LocalTo
     policy: 'auto',
     execute: async (args, context) => withToolBoundary(async () => {
       const rawPath = typeof args.path === 'string' ? args.path : ''
-      if (!rawPath.trim()) return { output: { error: 'path is required' }, isError: true }
+      if (!rawPath.trim()) {
+        return {
+          output: {
+            code: 'missing_path',
+            error: 'path is required',
+            hint: 'Pass a workspace-relative file path to read. If the target file is unknown, use ls, find, or grep first.',
+            expected_argument: { path: 'relative/path/from/workspace' },
+            examples: [
+              { path: 'README.md' },
+              { path: 'src/main.ts' }
+            ]
+          },
+          isError: true
+        }
+      }
       const { absolutePath, relativePath } = resolveWorkspacePath(rawPath, context)
       await statOp(absolutePath)
       const fileBuffer = await readFileOp(absolutePath)

@@ -226,6 +226,32 @@ describe('Kun built-in tools', () => {
     expect(String((editResult.item as { output?: { error?: string } }).output?.error)).toContain('truncated')
   })
 
+  it('gives recovery guidance when read is called without a path', async () => {
+    const result = await host.execute(
+      {
+        callId: 'call_read_missing_path',
+        toolName: 'read',
+        arguments: {}
+      },
+      buildContext(workspace)
+    )
+
+    expect(result.item).toMatchObject({
+      kind: 'tool_result',
+      toolName: 'read',
+      isError: true,
+      output: {
+        code: 'missing_path',
+        error: 'path is required',
+        expected_argument: { path: 'relative/path/from/workspace' }
+      }
+    })
+    const output = result.item.kind === 'tool_result'
+      ? result.item.output as { hint?: string }
+      : {}
+    expect(String(output.hint)).toContain('ls, find, or grep')
+  })
+
   it('blocks host shell execution in workspace-write sandbox mode', async () => {
     const result = await host.execute(
       {
