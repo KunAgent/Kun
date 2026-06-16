@@ -14,6 +14,8 @@ const LEFT_PANEL_WIDTH_KEY = 'kun.layout.leftSidebarWidth'
 const LEFT_PANEL_COLLAPSED_KEY = 'kun.layout.leftSidebarCollapsed'
 const RIGHT_PANEL_WIDTH_KEY = 'kun.layout.rightInspectorWidth'
 const RIGHT_PANEL_MODE_KEY = 'kun.layout.rightPanelMode'
+const TERMINAL_OPEN_KEY = 'kun.layout.terminalOpen'
+const TERMINAL_HEIGHT_KEY = 'kun.layout.terminalHeight'
 const LEFT_PANEL_DEFAULT = 304
 const RIGHT_PANEL_DEFAULT = 360
 export const CODE_PANEL_PREFERRED = 560
@@ -24,6 +26,11 @@ const RIGHT_PANEL_MAX = 760
 const SIDEBAR_HARD_MIN = 180
 const MAIN_MIN_WIDTH = 560
 const PANEL_RESIZE_HANDLE_WIDTH = 5
+// Bottom terminal drawer sizing. The drawer lives below the chat stage and
+// resizes vertically, so it has its own clamps instead of the column widths.
+const TERMINAL_HEIGHT_DEFAULT = 360
+const TERMINAL_HEIGHT_MIN = 220
+const TERMINAL_HEIGHT_MAX = 760
 
 function clampWidth(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value))
@@ -169,6 +176,10 @@ export function useWorkbenchLayout({
   const [rightSidebarWidth, setRightSidebarWidth] = useState(() =>
     readStoredWidth(RIGHT_PANEL_WIDTH_KEY, RIGHT_PANEL_DEFAULT)
   )
+  const [terminalOpen, setTerminalOpen] = useState(false)
+  const [terminalHeight, setTerminalHeight] = useState(() =>
+    readStoredWidth(TERMINAL_HEIGHT_KEY, TERMINAL_HEIGHT_DEFAULT)
+  )
   const shellRef = useRef<HTMLDivElement | null>(null)
   const previewThreadId = useRef<string | null>(activeThreadId)
   const autoOpenedPreviewUrlRef = useRef<string | null>(null)
@@ -189,6 +200,14 @@ export function useWorkbenchLayout({
   useEffect(() => {
     persistRightPanelMode(rightPanelMode)
   }, [rightPanelMode])
+
+  useEffect(() => {
+    removeBrowserStorageItem(TERMINAL_OPEN_KEY)
+  }, [])
+
+  useEffect(() => {
+    persistWidth(TERMINAL_HEIGHT_KEY, terminalHeight)
+  }, [terminalHeight])
 
   useEffect(() => {
     const onPreview = (event: Event): void => {
@@ -340,9 +359,45 @@ export function useWorkbenchLayout({
     window.addEventListener('pointerup', onUp)
   }
 
+  // Bottom terminal drawer: dragging the top edge up grows the panel. The
+  // clamps keep enough chat stage visible above it.
+  const beginTerminalResize = (event: ReactPointerEvent<HTMLDivElement>): void => {
+    if (event.button !== 0 || !terminalOpen) return
+    event.preventDefault()
+    const startY = event.clientY
+    const startHeight = terminalHeight
+    const prevCursor = document.body.style.cursor
+    const prevUserSelect = document.body.style.userSelect
+    document.body.style.cursor = 'row-resize'
+    document.body.style.userSelect = 'none'
+
+    const onMove = (moveEvent: PointerEvent): void => {
+      const containerHeight = shellRef.current?.clientHeight ?? window.innerHeight
+      const delta = startY - moveEvent.clientY
+      const maxHeight = Math.max(TERMINAL_HEIGHT_MIN, Math.min(TERMINAL_HEIGHT_MAX, containerHeight - 260))
+      const nextHeight = Math.min(Math.max(startHeight + delta, TERMINAL_HEIGHT_MIN), maxHeight)
+      setTerminalHeight(nextHeight)
+    }
+
+    const onUp = (): void => {
+      document.body.style.cursor = prevCursor
+      document.body.style.userSelect = prevUserSelect
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+    }
+
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onUp)
+  }
+
+  const toggleTerminal = (): void => {
+    setTerminalOpen((current) => !current)
+  }
+
   return {
     beginLeftResize,
     beginRightResize,
+    beginTerminalResize,
     filePreviewTarget,
     leftSidebarCollapsed,
     leftSidebarWidth,
@@ -354,7 +409,10 @@ export function useWorkbenchLayout({
     setRightPanelMode,
     setRightSidebarWidth,
     shellRef,
+    terminalHeight,
+    terminalOpen,
     toggleLeftSidebar,
-    toggleRightPanelMode
+    toggleRightPanelMode,
+    toggleTerminal
   }
 }

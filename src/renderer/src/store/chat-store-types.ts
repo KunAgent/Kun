@@ -8,6 +8,7 @@ import type {
   ThreadGoalStatus,
   ThreadTodoList,
   ThreadTodoStatus,
+  ThreadUsageSnapshot,
   UserInputAnswer
 } from '../agent/types'
 import type { KunRuntimeStatusPayload } from '@shared/kun-gui-api'
@@ -150,6 +151,12 @@ export type ChatState = {
   liveAssistant: string
   lastSeq: number
   usageRefreshKey: number
+  /**
+   * Latest turn's usage snapshot, tagged with the thread it belongs to. Used by
+   * the context-capacity gauge: the last turn's prompt tokens ≈ what currently
+   * occupies the window. Null until a live turn reports usage.
+   */
+  lastTurnUsage: { threadId: string; snapshot: ThreadUsageSnapshot } | null
   busy: boolean
   error: string | null
   runtimeErrorDetail: string | null

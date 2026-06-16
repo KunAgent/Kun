@@ -37,36 +37,53 @@ describe('claw platform install', () => {
     configureManagedWeixinBridgeUrlResolver(null)
   })
 
-  it('returns the official user code and polls the matching Feishu/Lark target', async () => {
+  it('always begins on Feishu and switches to Lark only when tenant_brand says so', async () => {
+    const seenActions: Array<string | null> = []
+    const beginHosts: string[] = []
+    let beginCount = 0
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const hostname = requestHostname(input)
       const body = new URLSearchParams(String(init?.body ?? ''))
       const action = body.get('action')
-
-      if (action === 'init') {
-        return jsonResponse({ nonce: 'nonce' })
-      }
+      seenActions.push(action)
 
       if (action === 'begin') {
-        const isLark = hostname === 'accounts.larksuite.com'
+        beginHosts.push(hostname)
+        beginCount += 1
+        // First start() stands in for a Feishu tenant, the second for Lark.
+        const deviceCode = beginCount === 1 ? 'feishu-device' : 'lark-device'
         return jsonResponse({
-          device_code: isLark ? 'lark-device' : 'feishu-device',
-          user_code: isLark ? 'LARK-CODE' : 'FEI-CODE',
-          verification_uri_complete: isLark
-            ? 'https://open.larksuite.com/page/launcher?user_code=LARK-CODE'
-            : 'https://open.feishu.cn/page/launcher?user_code=FEI-CODE',
+          device_code: deviceCode,
+          user_code: `CODE-${beginCount}`,
+          verification_uri_complete: `https://open.feishu.cn/page/launcher?user_code=CODE-${beginCount}`,
           expires_in: 3600,
           interval: 5
         })
       }
 
       if (action === 'poll') {
-        const isLark = hostname === 'accounts.larksuite.com'
-        return jsonResponse({
-          client_id: isLark ? 'cli_lark' : 'cli_feishu',
-          client_secret: 'secret',
-          user_info: { tenant_brand: isLark ? 'lark' : 'feishu' }
-        })
+        const deviceCode = body.get('device_code')
+        if (deviceCode === 'feishu-device') {
+          // Feishu tenant: credentials are issued directly by accounts.feishu.cn.
+          return jsonResponse({
+            client_id: 'cli_feishu',
+            client_secret: 'secret',
+            user_info: { tenant_brand: 'feishu' }
+          })
+        }
+        if (deviceCode === 'lark-device') {
+          if (hostname === 'accounts.feishu.cn') {
+            // Lark tenant detected, but the secret lives on larksuite.com.
+            return jsonResponse({ user_info: { tenant_brand: 'lark' } })
+          }
+          if (hostname === 'accounts.larksuite.com') {
+            return jsonResponse({
+              client_id: 'cli_lark',
+              client_secret: 'secret',
+              user_info: { tenant_brand: 'lark' }
+            })
+          }
+        }
       }
 
       return jsonResponse({ message: 'unexpected request' }, 400)
@@ -75,10 +92,20 @@ describe('claw platform install', () => {
 
     const feishuStart = await startFeishuInstallQrcode(false)
     const larkStart = await startFeishuInstallQrcode(true)
+    expect(feishuStart).toMatchObject({ ok: true })
+    expect(larkStart).toMatchObject({ ok: true })
 
-    expect(feishuStart).toMatchObject({ ok: true, userCode: 'FEI-CODE' })
-    expect(larkStart).toMatchObject({ ok: true, userCode: 'LARK-CODE' })
+    // #316: the QR is always minted on Feishu — even for the Lark selection the
+    // scannable link points at open.feishu.cn, never open.larksuite.com (the
+    // latter is what the Lark app rejected as "Link expired").
+    if (!larkStart.ok) throw new Error(larkStart.message)
+    expect(larkStart.url).toContain('https://open.feishu.cn/')
+    expect(larkStart.url).not.toContain('larksuite.com')
+    expect(beginHosts).toEqual(['accounts.feishu.cn', 'accounts.feishu.cn'])
+    // ...and the flow goes straight to `begin`, with no `action: 'init'` step.
+    expect(seenActions).not.toContain('init')
 
+    // Feishu tenant: secret comes straight from accounts.feishu.cn.
     await expect(pollFeishuInstall('feishu-device')).resolves.toEqual({
       done: true,
       kind: 'feishu',
@@ -88,6 +115,8 @@ describe('claw platform install', () => {
     })
     expect(String(fetchMock.mock.calls.at(-1)?.[0])).toContain('accounts.feishu.cn')
 
+    // Lark tenant: the Feishu poll reveals tenant_brand=lark, so a single
+    // pollFeishuInstall call switches to accounts.larksuite.com for the secret.
     await expect(pollFeishuInstall('lark-device')).resolves.toEqual({
       done: true,
       kind: 'feishu',

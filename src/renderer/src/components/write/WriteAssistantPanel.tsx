@@ -196,6 +196,7 @@ export function WriteAssistantPanel({
             onRetryConnection={onRetryConnection}
             onOpenSettings={onOpenSettings}
             onSelectSuggestion={(text) => setInput(text)}
+            compactCards
           />
         ) : (
           <div className="flex min-h-full flex-col justify-end px-5 py-5">

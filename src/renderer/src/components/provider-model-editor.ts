@@ -11,6 +11,7 @@ import {
   isSpeechToTextModelId,
   isTextToSpeechModelId,
   isVideoGenerationModelId,
+  type ModelEndpointFormat,
   type ModelProviderModelProfileV1,
   type ModelProviderProfileV1,
   type ModelProviderReasoningCapabilityV1,
@@ -50,6 +51,8 @@ export type ProviderModelForm = {
   reasoningEfforts: ModelReasoningEffort[]
   reasoningDefaultEffort: ModelReasoningEffort
   reasoningProtocol: ModelReasoningRequestProtocol
+  /** Per-model wire-format override; null means "inherit the provider's format". */
+  endpointFormat: ModelEndpointFormat | null
   aliases: string[]
 }
 
@@ -100,6 +103,7 @@ export function newProviderModelForm(
     reasoningEfforts: [...PROVIDER_MODEL_REASONING_EFFORT_CHOICES],
     reasoningDefaultEffort: 'medium',
     reasoningProtocol: defaultReasoningProtocolForProvider(provider),
+    endpointFormat: null,
     aliases: []
   }
 }
@@ -128,6 +132,7 @@ export function providerModelFormForExisting(
       : base.reasoningEfforts,
     reasoningDefaultEffort: profile.reasoning?.defaultEffort ?? base.reasoningDefaultEffort,
     reasoningProtocol: profile.reasoning?.requestProtocol ?? base.reasoningProtocol,
+    endpointFormat: profile.endpointFormat ?? null,
     aliases: [...(profile.aliases ?? [])]
   }
 }
@@ -408,7 +413,8 @@ function chatProfileFromForm(form: ProviderModelForm): ModelProviderModelProfile
     messageParts: form.visionInput ? ['text', 'image_url'] : ['text'],
     ...(form.reasoningEnabled && form.reasoningEfforts.length > 0
       ? { reasoning: reasoningCapabilityFromForm(form) }
-      : {})
+      : {}),
+    ...(form.endpointFormat ? { endpointFormat: form.endpointFormat } : {})
   }
 }
 

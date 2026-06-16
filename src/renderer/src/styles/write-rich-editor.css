@@ -13,10 +13,10 @@
   outline: none;
   color: var(--ds-text);
   caret-color: var(--ds-text);
-  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', 'PingFang SC',
-    'Hiragino Sans GB', 'Noto Sans SC', 'Microsoft YaHei', sans-serif;
-  font-size: 16px;
-  line-height: 1.75;
+  font-family: var(--write-editor-font-family, -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', 'PingFang SC',
+    'Hiragino Sans GB', 'Noto Sans SC', 'Microsoft YaHei', sans-serif);
+  font-size: var(--write-editor-font-size, 16px);
+  line-height: var(--write-editor-line-height, 1.75);
   word-break: break-word;
 }
 

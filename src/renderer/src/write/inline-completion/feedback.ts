@@ -20,6 +20,15 @@ function sanitizeText(text = ''): string {
   return String(text || '').replace(/\r\n?/g, '\n').replaceAll(String.fromCharCode(0), '')
 }
 
+// Defense-in-depth: the backend strips protocol markers, but if a malformed
+// SHORT/LONG/EDIT/PREFIX/SUFFIX skeleton ever reaches here it must be suppressed
+// rather than rendered as ghost text.
+const MARKER_ARTIFACT_PATTERN = /<<<[ \t]*(?:SHORT|LONG|EDIT|PREFIX|SUFFIX|EDIT_SCOPE)\b/i
+
+function containsMarkerArtifact(text = ''): boolean {
+  return MARKER_ARTIFACT_PATTERN.test(text)
+}
+
 function compactText(text = ''): string {
   return sanitizeText(text).replace(/\s+/g, ' ').trim()
 }
@@ -197,6 +206,9 @@ export function evaluateInlineCompletionCandidate(
   if (!text) return reject('empty-candidate', context, text, 0, mode)
   if (!compactText(text) && !usefulSingleToken(text, context)) {
     return reject('blank-candidate', context, text, 0, mode)
+  }
+  if (containsMarkerArtifact(text)) {
+    return reject('marker-artifact', context, text, 0, mode)
   }
 
   if (isEditAction) {

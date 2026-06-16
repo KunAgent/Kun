@@ -105,6 +105,8 @@ export type ModelProviderModelProfileV1 = {
   supportsToolCalling: boolean
   messageParts: ModelProviderMessagePartSupport[]
   reasoning?: ModelProviderReasoningCapabilityV1
+  /** Per-model wire-format override. Omitted means "inherit the provider's endpointFormat". */
+  endpointFormat?: ModelEndpointFormat
 }
 export type ModelProviderImageCapabilityV1 = {
   protocol: ImageGenerationProtocol
@@ -354,6 +356,12 @@ export type KunToolArgumentRepairSettingsV1 = {
 }
 
 export type KunRuntimeTuningSettingsV1 = {
+  /**
+   * Max idle gap (ms) between streaming chunks before a turn fails with
+   * `stream_idle_timeout`. `0` disables the guard — useful for local LLM
+   * servers that stay silent while prefilling a very large prompt.
+   */
+  streamIdleTimeoutMs: number
   toolStorm: KunToolStormSettingsV1
   toolArgumentRepair: KunToolArgumentRepairSettingsV1
 }
@@ -371,6 +379,7 @@ export type KunSettingsEnvelopeV1 = {
 export type AgentRuntimeSettingsMapV1 = KunSettingsEnvelopeV1
 
 export type KunRuntimeTuningSettingsPatchV1 = {
+  streamIdleTimeoutMs?: number
   toolStorm?: Partial<KunToolStormSettingsV1>
   toolArgumentRepair?: Partial<KunToolArgumentRepairSettingsV1>
 }
@@ -638,12 +647,78 @@ export type WriteSelectionAssistSettingsV1 = {
   quickActions: WriteQuickActionV1[]
 }
 
+export type WriteFontPreset =
+  | 'system'
+  | 'sourceHanSans'
+  | 'yahei'
+  | 'pingfang'
+  | 'simhei'
+  | 'simsun'
+  | 'kaiti'
+  | 'custom'
+
+export const WRITE_FONT_PRESETS: readonly WriteFontPreset[] = [
+  'system',
+  'sourceHanSans',
+  'yahei',
+  'pingfang',
+  'simhei',
+  'simsun',
+  'kaiti',
+  'custom'
+] as const
+
+export const WRITE_EDITOR_FONT_SIZE_MIN = 12
+export const WRITE_EDITOR_FONT_SIZE_MAX = 28
+export const DEFAULT_WRITE_EDITOR_FONT_SIZE_PX = 16
+export const WRITE_EDITOR_LINE_HEIGHT_MIN = 1.4
+export const WRITE_EDITOR_LINE_HEIGHT_MAX = 2.2
+export const DEFAULT_WRITE_EDITOR_LINE_HEIGHT = 1.75
+
+/**
+ * Typography for the Write editor prose surfaces (rich editor, CodeMirror live
+ * appearance, and the markdown preview). The raw source appearance keeps its
+ * monospace family but still honors the configured size.
+ */
+export type WriteTypographySettingsV1 = {
+  /** Named font preset; 'custom' uses `customFontFamily`. */
+  fontPreset: WriteFontPreset
+  /** CSS font-family stack used when `fontPreset === 'custom'`. */
+  customFontFamily: string
+  /** Base font size in px, clamped to [WRITE_EDITOR_FONT_SIZE_MIN, WRITE_EDITOR_FONT_SIZE_MAX]. */
+  fontSizePx: number
+  /** Unitless line-height, clamped to [WRITE_EDITOR_LINE_HEIGHT_MIN, WRITE_EDITOR_LINE_HEIGHT_MAX]. */
+  lineHeight: number
+}
+
+export const WRITE_AGENT_PRESET_MAX_COUNT = 12
+export const WRITE_AGENT_PRESET_NAME_MAX_CHARS = 40
+export const WRITE_AGENT_PERSONA_MAX_CHARS = 4000
+
+/**
+ * A named, reusable writing-assistant persona (plot coordinator, line editor,
+ * foreshadowing tracker, continuity checker…). The persona text frames the
+ * assistant for a specific creative role and can be switched per conversation.
+ */
+export type WriteAgentPresetV1 = {
+  /** Stable id; built-in ids ('coordinator' | 'editor' | 'foreshadowing' | 'continuity') get localized name/persona fallbacks. */
+  id: string
+  /** Display name; empty = localized default for built-in ids. */
+  name: string
+  /** Short emoji/glyph badge shown in the switcher. */
+  emoji: string
+  /** Persona + behavior rules used to frame the assistant. Empty = localized default for built-in ids. */
+  persona: string
+}
+
 export type WriteSettingsV1 = {
   defaultWorkspaceRoot: string
   activeWorkspaceRoot: string
   workspaces: string[]
   inlineCompletion: WriteInlineCompletionSettingsV1
   selectionAssist: WriteSelectionAssistSettingsV1
+  typography: WriteTypographySettingsV1
+  agentPresets: WriteAgentPresetV1[]
 }
 
 export type ClawSettingsPatchV1 = Partial<Omit<ClawSettingsV1, 'skills' | 'im' | 'channels' | 'tasks'>> & {
@@ -661,12 +736,15 @@ export type ScheduleSettingsPatchV1 = Partial<
   tasks?: Array<Partial<ScheduledTaskV1>>
 }
 
-export type WriteSettingsPatchV1 = Partial<Omit<WriteSettingsV1, 'inlineCompletion' | 'selectionAssist'>> & {
+export type WriteSettingsPatchV1 = Partial<Omit<WriteSettingsV1, 'inlineCompletion' | 'selectionAssist' | 'typography' | 'agentPresets'>> & {
   inlineCompletion?: Partial<WriteInlineCompletionSettingsV1>
   selectionAssist?: Partial<Omit<WriteSelectionAssistSettingsV1, 'quickActions'>> & {
     /** Replaced wholesale when present. */
     quickActions?: Array<Partial<WriteQuickActionV1>>
   }
+  typography?: Partial<WriteTypographySettingsV1>
+  /** Replaced wholesale when present. */
+  agentPresets?: Array<Partial<WriteAgentPresetV1>>
 }
 
 export type ClawGeneratedFileV1 = {
@@ -676,7 +754,21 @@ export type ClawGeneratedFileV1 = {
 }
 
 export type ClawRunResult =
-  | { ok: true; threadId: string; turnId?: string; text?: string; message?: string; files?: ClawGeneratedFileV1[] }
+  | {
+      ok: true
+      threadId: string
+      turnId?: string
+      text?: string
+      message?: string
+      files?: ClawGeneratedFileV1[]
+      /**
+       * Whether the watched turn finished within the response window.
+       * `false` means it outran the IM timeout and is still running —
+       * the caller should ack now and push the result when it finishes.
+       * Absent on the fire-and-forget (no `waitForResult`) path.
+       */
+      completed?: boolean
+    }
   | { ok: false; message: string }
 
 export type ScheduleRunResult = ClawRunResult

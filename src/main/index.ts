@@ -65,6 +65,7 @@ import {
   startWeixinInstallQrcode
 } from './claw-platform-install'
 import { registerRuntimeSseIpc } from './runtime-sse-ipc'
+import { registerTerminalPtyIpc } from './terminal/terminal-pty-ipc'
 import {
   configureWeixinBridgeRuntimeContextProvider,
   ensureWeixinBridgeRpcUrl,
@@ -1394,6 +1395,7 @@ app.whenReady().then(async () => {
   })
 
   registerRuntimeSseIpc({ ipcMain, store, ensureRuntime, logError })
+  registerTerminalPtyIpc({ ipcMain, getMainWindow: () => mainWindow, logError })
   traceStartup('ipc registration:done')
 
   createWindow({ suppressInitialShow: shouldStartHidden(initial) })

@@ -1,5 +1,5 @@
 import type { ReactElement } from 'react'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import type { EditorInfo } from '@shared/editor'
 import type { GuiUpdateState } from '@shared/gui-update'
 import {
@@ -22,12 +22,21 @@ import {
 import { useTranslation } from 'react-i18next'
 import { readPreferredEditorId, writePreferredEditorId } from '../../lib/editor-preferences'
 
-export type RightPanelMode = 'todo' | 'changes' | 'browser' | 'file' | 'plan' | 'sdd-ai' | null
+export type RightPanelMode =
+  | 'todo'
+  | 'changes'
+  | 'browser'
+  | 'file'
+  | 'plan'
+  | 'sdd-ai'
+  | null
 
 type Props = {
   rightPanelMode: RightPanelMode
   onToggleRightPanelMode: (mode: Exclude<RightPanelMode, null>) => void
   planPanelEnabled?: boolean
+  terminalOpen?: boolean
+  onToggleTerminal?: () => void
   sideChatCount?: number
   sideChatRunningCount?: number
   sideChatOpen?: boolean
@@ -39,6 +48,8 @@ export function WorkbenchTopBar({
   rightPanelMode,
   onToggleRightPanelMode,
   planPanelEnabled = false,
+  terminalOpen = false,
+  onToggleTerminal,
   sideChatCount = 0,
   sideChatRunningCount = 0,
   sideChatOpen = false,
@@ -341,22 +352,40 @@ export function WorkbenchTopBar({
       {items.map((item) => {
         const active = rightPanelMode === item.mode
         const Icon = item.icon
+        const isChanges = item.mode === 'changes'
         return (
-          <button
-            key={item.mode}
-            type="button"
-            onClick={() => onToggleRightPanelMode(item.mode)}
-            className={`rounded-full border px-2.5 py-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.45)] transition dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] ${
-              active
-                ? 'border-ds-border-strong bg-white/70 text-ds-ink dark:bg-white/10'
-                : 'border-transparent bg-white/38 text-ds-faint opacity-90 hover:border-ds-border-muted hover:bg-white/55 hover:text-ds-ink hover:opacity-100 dark:bg-white/4 dark:hover:bg-white/8'
-            }`}
-            aria-label={item.label}
-            aria-pressed={active}
-            title={item.label}
-          >
-            <Icon className="h-4 w-4" strokeWidth={1.75} />
-          </button>
+          <Fragment key={item.mode}>
+            <button
+              type="button"
+              onClick={() => onToggleRightPanelMode(item.mode)}
+              className={`rounded-full border px-2.5 py-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.45)] transition dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] ${
+                active
+                  ? 'border-ds-border-strong bg-white/70 text-ds-ink dark:bg-white/10'
+                  : 'border-transparent bg-white/38 text-ds-faint opacity-90 hover:border-ds-border-muted hover:bg-white/55 hover:text-ds-ink hover:opacity-100 dark:bg-white/4 dark:hover:bg-white/8'
+              }`}
+              aria-label={item.label}
+              aria-pressed={active}
+              title={item.label}
+            >
+              <Icon className="h-4 w-4" strokeWidth={1.75} />
+            </button>
+            {isChanges && onToggleTerminal ? (
+              <button
+                type="button"
+                onClick={onToggleTerminal}
+                className={`rounded-full border px-2.5 py-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.45)] transition dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] ${
+                  terminalOpen
+                    ? 'border-ds-border-strong bg-white/70 text-ds-ink dark:bg-white/10'
+                    : 'border-transparent bg-white/38 text-ds-faint opacity-90 hover:border-ds-border-muted hover:bg-white/55 hover:text-ds-ink hover:opacity-100 dark:bg-white/4 dark:hover:bg-white/8'
+                }`}
+                aria-label={t('rightPanelTerminal')}
+                aria-pressed={terminalOpen}
+                title={t('rightPanelTerminal')}
+              >
+                <Terminal className="h-4 w-4" strokeWidth={1.75} />
+              </button>
+            ) : null}
+          </Fragment>
         )
       })}
     </div>

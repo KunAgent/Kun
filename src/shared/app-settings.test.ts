@@ -23,6 +23,7 @@ import {
   modelProviderPresetProfile,
   mergeWriteSettings,
   normalizeWriteSettings,
+  normalizeWriteAgentPresets,
   isKunRuntimeInsecure,
   migrateLegacyAppSettings,
   normalizeAppSettings,
@@ -206,6 +207,7 @@ describe('kun defaults', () => {
         summaryInputMaxBytes: 98304
       },
       runtimeTuning: {
+        streamIdleTimeoutMs: 45000,
         toolStorm: {
           enabled: true,
           windowSize: 8,
@@ -443,6 +445,35 @@ describe('mergeKunRuntimeSettings', () => {
     expect(next.runtimeTuning.toolStorm.windowSize).toBe(current.runtimeTuning.toolStorm.windowSize)
     expect(next.runtimeTuning.toolStorm.threshold).toBe(5)
     expect(next.runtimeTuning.toolArgumentRepair).toEqual(current.runtimeTuning.toolArgumentRepair)
+    expect(next.runtimeTuning.streamIdleTimeoutMs).toBe(current.runtimeTuning.streamIdleTimeoutMs)
+  })
+
+  it('normalizes the stream idle timeout (0 disables, out-of-range clamps)', () => {
+    const current = defaultKunRuntimeSettings()
+    expect(current.runtimeTuning.streamIdleTimeoutMs).toBe(45000)
+
+    const set = mergeKunRuntimeSettings(current, {
+      runtimeTuning: { streamIdleTimeoutMs: 300000 }
+    })
+    expect(set.runtimeTuning.streamIdleTimeoutMs).toBe(300000)
+    // Other knobs are untouched by a timeout-only patch.
+    expect(set.runtimeTuning.toolStorm).toEqual(current.runtimeTuning.toolStorm)
+
+    // 0 means "disabled" and is preserved rather than coerced to the default.
+    expect(
+      mergeKunRuntimeSettings(current, { runtimeTuning: { streamIdleTimeoutMs: 0 } })
+        .runtimeTuning.streamIdleTimeoutMs
+    ).toBe(0)
+
+    // Negative falls back to the default; absurdly large clamps to the cap.
+    expect(
+      mergeKunRuntimeSettings(current, { runtimeTuning: { streamIdleTimeoutMs: -5 } })
+        .runtimeTuning.streamIdleTimeoutMs
+    ).toBe(45000)
+    expect(
+      mergeKunRuntimeSettings(current, { runtimeTuning: { streamIdleTimeoutMs: 999_999_999 } })
+        .runtimeTuning.streamIdleTimeoutMs
+    ).toBe(3_600_000)
   })
 
   it('deep-merges image generation settings and normalizes invalid values', () => {
@@ -1071,13 +1102,13 @@ describe('write selection assist settings', () => {
     const write = normalizeWriteSettings({
       selectionAssist: {
         quickActions: [
-          { id: 'polish', label: '', prompt: '', mode: 'chat' },
+          { id: 'polish', label: '保留', prompt: '保留', mode: 'chat' },
           { id: 'custom-1', label: 'x', prompt: 'y' }
         ]
       }
     })
     expect(write.selectionAssist.quickActions).toEqual([
-      { id: 'polish', label: '', prompt: '', mode: 'chat' },
+      { id: 'polish', label: '保留', prompt: '保留', mode: 'chat' },
       { id: 'custom-1', label: 'x', prompt: 'y', mode: 'chat' }
     ])
   })
@@ -1174,6 +1205,33 @@ describe('write selection assist settings', () => {
     expect(write.selectionAssist.quickActions).toEqual([
       { id: 'proofread', label: '校对', prompt: '修正错别字', mode: 'edit' },
       { id: 'polish', label: '', prompt: '自定义润色提示', mode: 'edit' }
+    ])
+  })
+})
+
+describe('write agent presets', () => {
+  it('defaults to no agents (opt-in, ships no preset templates)', () => {
+    expect(defaultWriteSettings().agentPresets).toEqual([])
+  })
+
+  it('drops pristine built-in templates left over from older builds', () => {
+    expect(
+      normalizeWriteAgentPresets([
+        { id: 'coordinator', name: '', emoji: '🧭', persona: '' },
+        { id: 'editor', name: '', emoji: '✒️', persona: '' }
+      ])
+    ).toEqual([])
+  })
+
+  it('keeps customized built-ins and user-defined agents', () => {
+    expect(
+      normalizeWriteAgentPresets([
+        { id: 'coordinator', name: '我的统筹', emoji: '🧭', persona: '' },
+        { id: 'custom-1', name: '', emoji: '🤖', persona: '专属人设' }
+      ])
+    ).toEqual([
+      { id: 'coordinator', name: '我的统筹', emoji: '🧭', persona: '' },
+      { id: 'custom-1', name: '', emoji: '🤖', persona: '专属人设' }
     ])
   })
 })

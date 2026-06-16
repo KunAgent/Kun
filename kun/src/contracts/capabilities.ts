@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { MODEL_ENDPOINT_FORMATS } from './model-endpoint-format.js'
 
 export const RUNTIME_CAPABILITY_CONTRACT_VERSION = 1
 
@@ -51,7 +52,11 @@ export const ModelCapabilityMetadata = z
     supportsToolCalling: z.boolean(),
     contextWindowTokens: z.number().int().positive().optional(),
     messageParts: z.array(ModelMessagePartSupport).min(1),
-    reasoning: ModelReasoningCapabilityMetadata.optional()
+    reasoning: ModelReasoningCapabilityMetadata.optional(),
+    // Per-model wire-format override. Lets one provider route some models to
+    // chat completions and others to Anthropic Messages / OpenAI Responses
+    // (e.g. OpenCode Go). Absent means "inherit the provider/runtime format".
+    endpointFormat: z.enum(MODEL_ENDPOINT_FORMATS).optional()
   })
   .strict()
 export type ModelCapabilityMetadata = z.infer<typeof ModelCapabilityMetadata>

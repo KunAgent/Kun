@@ -49,10 +49,13 @@ import {
   extractIncomingRemoteSession,
   extractSenderLabel,
   feishuSenderLabel,
+  finalAssistantReplyText,
   formatFeishuMirrorText,
+  imCompletionReplyForPush,
   isRunningStatus,
+  IM_COMPLETED_NO_TEXT_REPLY,
+  IM_PROCESSING_ACK,
   latestGeneratedFiles,
-  latestAssistantText,
   nestedRecord,
   normalizeTaskModel,
   parseJsonObject,
@@ -401,6 +404,13 @@ export function imWelcomeText(settings: AppSettingsV1, channel?: ClawImChannelV1
   ].join('\n\n')
 }
 
+/**
+ * How long the background push keeps polling a turn that outran the IM
+ * response window before giving up (30 min). Generous enough for long
+ * agentic runs, bounded so a stuck turn never leaks a forever-poll.
+ */
+const RESULT_PUSH_MAX_WAIT_MS = 30 * 60 * 1_000
+
 export class ClawRuntime {
   private readonly deps: ClawRuntimeDeps
   private server: Server | null = null
@@ -412,6 +422,8 @@ export class ClawRuntime {
   private readonly welcomeInFlight = new Set<string>()
   /** WeChat channels already greeted (or attempted) at connect time this run. */
   private readonly weixinConnectWelcomeAttempted = new Set<string>()
+  /** `${threadId}:${turnId}` of turns with an in-flight delayed-result push. */
+  private readonly pendingResultPushes = new Set<string>()
 
   constructor(deps: ClawRuntimeDeps) {
     this.deps = deps
@@ -603,14 +615,39 @@ export class ClawRuntime {
       return { ok: true, threadId: thread.id, turnId, message: 'Started' }
     }
 
-    const result = await this.waitForAssistantResult(runtimeSettings, thread.id, turnId, options.responseTimeoutMs, workspace)
+    const outcome = await this.waitForAssistantResult(
+      runtimeSettings,
+      thread.id,
+      turnId,
+      options.responseTimeoutMs,
+      workspace
+    )
+    if (outcome.status === 'failed' || outcome.status === 'aborted') {
+      return { ok: false, message: outcome.error || `Agent turn ${outcome.status}.` }
+    }
+    if (outcome.status === 'timeout') {
+      // The turn outran the response window but keeps running in the
+      // runtime. Ack now; the caller pushes the real result back when
+      // the turn finishes (see `scheduleImResultPush`). Returning the
+      // last-seen text here is what used to leak an intermediate plan.
+      return {
+        ok: true,
+        threadId: thread.id,
+        turnId,
+        text: '',
+        message: IM_PROCESSING_ACK,
+        files: [],
+        completed: false
+      }
+    }
     return {
       ok: true,
       threadId: thread.id,
       turnId,
-      text: result.text,
-      message: result.text || 'Completed',
-      files: result.files
+      text: outcome.text,
+      message: outcome.text || IM_COMPLETED_NO_TEXT_REPLY,
+      files: outcome.files,
+      completed: true
     }
   }
 
@@ -626,16 +663,26 @@ export class ClawRuntime {
     )
   }
 
+  /**
+   * Polls a turn to completion. Resolves with the turn's *concluding*
+   * text (never an intermediate plan — see {@link finalAssistantReplyText})
+   * and any generated files. Non-throwing on a failed/aborted/timed-out
+   * turn so both the synchronous reply and the asynchronous push can
+   * decide what to send; still throws when the thread read itself fails.
+   */
   private async waitForAssistantResult(
     settings: AppSettingsV1,
     threadId: string,
     turnId: string,
     timeoutMs: number,
     workspaceRoot?: string
-  ): Promise<{ text: string; files: ClawGeneratedFileV1[] }> {
+  ): Promise<{
+    status: 'completed' | 'failed' | 'aborted' | 'timeout'
+    text: string
+    files: ClawGeneratedFileV1[]
+    error?: string
+  }> {
     const deadline = Date.now() + timeoutMs
-    let lastText = ''
-    let lastDetail: ThreadDetailJson | null = null
     while (Date.now() < deadline) {
       await sleep(1_500)
       const detailRes = await this.deps.runtimeRequest(
@@ -647,31 +694,122 @@ export class ClawRuntime {
         throw new Error(runtimeErrorMessage(detailRes, 'Failed to read thread result.'))
       }
       const detail = JSON.parse(detailRes.body) as ThreadDetailJson
-      lastDetail = detail
-      lastText = latestAssistantText(detail, { turnId }) || lastText
       const targetTurn = Array.isArray(detail.turns)
         ? detail.turns.find((turn) => turn.id === turnId)
         : undefined
       if (!targetTurn) continue
       if (isRunningStatus(targetTurn.status)) continue
       if (targetTurn.status === 'failed' || targetTurn.status === 'aborted') {
-        const error = targetTurn.error?.trim()
-        throw new Error(error || `Agent turn ${targetTurn.status}.`)
-      }
-      if (targetTurn.status === 'completed' && lastText) {
         return {
-          text: lastText,
+          status: targetTurn.status,
+          text: '',
+          files: [],
+          error: targetTurn.error?.trim() || `Agent turn ${targetTurn.status}.`
+        }
+      }
+      if (targetTurn.status === 'completed') {
+        return {
+          status: 'completed',
+          text: finalAssistantReplyText(detail, { turnId }),
           files: latestGeneratedFiles(detail, { turnId, workspaceRoot })
         }
       }
     }
-    if (lastText && lastDetail) {
-      return {
-        text: lastText,
-        files: latestGeneratedFiles(lastDetail, { turnId, workspaceRoot })
-      }
+    return { status: 'timeout', text: '', files: [] }
+  }
+
+  /**
+   * Fire-and-forget delivery of a turn's result that outran the IM
+   * response window. Keeps polling in the background and pushes the
+   * concluding text (or a completion note) back over the bridge when the
+   * turn finishes. No-op for providers/recipients we cannot push to, and
+   * deduped per turn so a retried inbound never double-pushes.
+   */
+  private scheduleImResultPush(
+    settings: AppSettingsV1,
+    input: {
+      channel?: ClawImChannelV1
+      remoteSession?: Pick<ClawImRemoteSessionV1, 'chatId' | 'messageId' | 'threadId' | 'senderId' | 'senderName'>
+      threadId: string
+      turnId?: string
+      workspaceRoot: string
     }
-    throw new Error('Timed out waiting for agent response.')
+  ): void {
+    const { channel, turnId } = input
+    if (!channel || !turnId) return
+    const canPush =
+      (channel.provider === 'weixin' && Boolean(this.deps.sendWeixinBridgeMessage)) ||
+      (channel.provider === 'feishu' && this.feishuChannels.has(channel.id))
+    if (!canPush) return
+    const key = `${input.threadId}:${turnId}`
+    if (this.pendingResultPushes.has(key)) return
+    this.pendingResultPushes.add(key)
+    void (async () => {
+      try {
+        const outcome = await this.waitForAssistantResult(
+          settings,
+          input.threadId,
+          turnId,
+          RESULT_PUSH_MAX_WAIT_MS,
+          input.workspaceRoot
+        )
+        if (outcome.status === 'timeout') {
+          this.deps.logError(
+            'claw-im',
+            'Gave up pushing a delayed agent result: turn still running after the maximum wait.',
+            { threadId: input.threadId, turnId }
+          )
+          return
+        }
+        const body =
+          outcome.status === 'completed'
+            ? outcome.text.trim() || imCompletionReplyForPush(outcome.files)
+            : `❌ 任务未完成：${outcome.error || outcome.status}`
+        await this.pushImMessage(channel, input.remoteSession, body)
+      } catch (error) {
+        this.deps.logError('claw-im', 'Failed to push a delayed agent result.', {
+          message: errorMessage(error),
+          threadId: input.threadId,
+          turnId
+        })
+      } finally {
+        this.pendingResultPushes.delete(key)
+      }
+    })()
+  }
+
+  /** Pushes a standalone bridge message to the sender of an inbound IM. */
+  private async pushImMessage(
+    channel: ClawImChannelV1,
+    remoteSession: Pick<ClawImRemoteSessionV1, 'chatId' | 'messageId' | 'threadId' | 'senderId' | 'senderName'> | undefined,
+    text: string
+  ): Promise<void> {
+    if (channel.provider === 'weixin') {
+      const credential = channel.platformCredential
+      if (credential?.kind !== 'weixin' || !credential.accountId.trim() || !this.deps.sendWeixinBridgeMessage) return
+      const to = remoteSession?.chatId.trim() || channel.remoteSession?.chatId.trim() || ''
+      if (!to) return
+      const result = await this.deps.sendWeixinBridgeMessage({ accountId: credential.accountId, to, text })
+      if (!result.ok) {
+        this.deps.logError('claw-weixin', 'Failed to push delayed result over the WeChat bridge.', {
+          channelId: channel.id,
+          message: result.message
+        })
+      }
+      return
+    }
+    if (channel.provider === 'feishu') {
+      const bridge = this.feishuChannels.get(channel.id)
+      const to = remoteSession?.chatId.trim() || channel.remoteSession?.chatId.trim() || ''
+      if (!bridge || !to) return
+      await this.sendFeishuMessage(
+        bridge,
+        to,
+        { markdown: text },
+        {},
+        { purpose: 'agent-reply-delayed', channelId: channel.id, chatId: to }
+      )
+    }
   }
 
   private resolveChannelWorkspaceRoot(settings: AppSettingsV1, channel?: ClawImChannelV1): string {
@@ -1587,6 +1725,18 @@ export class ClawRuntime {
       return
     }
 
+    if (result.ok && result.completed === false) {
+      // The turn outran the response window; the reply below is the ack
+      // (carried on `result.message`). Deliver the real result when the
+      // turn finishes.
+      this.scheduleImResultPush(settings, {
+        channel,
+        remoteSession,
+        threadId: result.threadId,
+        turnId: result.turnId,
+        workspaceRoot
+      })
+    }
     const generatedFiles = result.ok ? result.files ?? [] : []
     const filesToSend = result.ok && (generatedFiles.length > 0 || shouldSendGeneratedFilesForPrompt(message.content))
       ? await this.resolveImGeneratedFiles(generatedFiles, workspaceRoot, {
@@ -1955,6 +2105,25 @@ export class ClawRuntime {
         writeJson(res, 500, result)
         return
       }
+      if (result.completed === false) {
+        // The turn outran the response window. Ack now and push the real
+        // result back when it finishes, instead of replying with whatever
+        // intermediate text happened to exist at the timeout.
+        this.scheduleImResultPush(settings, {
+          channel,
+          remoteSession: remoteSession ?? undefined,
+          threadId: result.threadId,
+          turnId: result.turnId,
+          workspaceRoot: this.resolveIncomingWorkspaceRoot(settings, channel, conversation, remoteSession ?? undefined)
+        })
+        writeJson(res, 200, {
+          ok: true,
+          threadId: result.threadId,
+          turnId: result.turnId,
+          reply: `${welcomePrefix}${IM_PROCESSING_ACK}`
+        })
+        return
+      }
       // Current-turn deliverable media files ride along in the response so
       // push-capable bridges (WeChat) can upload them after the text reply.
       // The prompt heuristic remains as a fallback for explicit file-send
@@ -1973,7 +2142,8 @@ export class ClawRuntime {
             }
           )
         : []
-      writeJson(res, 200, { ...result, files, reply: `${welcomePrefix}${result.text ?? ''}` })
+      const replyBody = result.text?.trim() || result.message?.trim() || IM_COMPLETED_NO_TEXT_REPLY
+      writeJson(res, 200, { ...result, files, reply: `${welcomePrefix}${replyBody}` })
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       this.deps.logError('claw-webhook', 'Claw IM webhook request failed', { message })

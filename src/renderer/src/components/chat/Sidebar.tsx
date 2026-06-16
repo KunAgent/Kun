@@ -58,7 +58,6 @@ type Props = {
   onCodeOpen: () => void
   onWriteOpen: () => void
   onScheduleOpen: () => void
-  onToggleSidebar: () => void
 }
 
 export function Sidebar({
@@ -88,8 +87,7 @@ export function Sidebar({
   onToggleConnectPhone,
   onCodeOpen,
   onWriteOpen,
-  onScheduleOpen,
-  onToggleSidebar
+  onScheduleOpen
 }: Props): ReactElement {
   const { t, i18n } = useTranslation('common')
   const workspaceRoot = useChatStore((s) => s.workspaceRoot)
@@ -117,7 +115,6 @@ export function Sidebar({
     <>
     <SidebarFrame
       title={t('appName')}
-      onCollapse={onToggleSidebar}
       footer={
         <div className="space-y-1">
           <div className="flex min-h-[42px] items-center justify-center gap-2.5 pb-1">

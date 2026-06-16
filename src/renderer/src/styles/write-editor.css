@@ -111,6 +111,110 @@ summary,
   color: color-mix(in srgb, var(--ds-accent) 82%, var(--ds-text));
 }
 
+/* Inline diff review (AI rewrite accept/reject) — top panel inside the editor */
+.cm-write-diff-panel {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  background: color-mix(in srgb, var(--ds-accent) 9%, var(--ds-bg-canvas));
+  border-bottom: 1px solid var(--ds-border-muted);
+  font-size: 12.5px;
+}
+
+.cm-write-diff-panel-label {
+  margin-right: auto;
+  font-weight: 600;
+  color: var(--ds-text-muted);
+}
+
+.cm-write-diff-accept-all,
+.cm-write-diff-reject-all {
+  cursor: pointer;
+  border-radius: 8px;
+  padding: 3px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  border: 1px solid transparent;
+  transition: background 0.15s ease;
+}
+
+.cm-write-diff-accept-all {
+  background: #16a34a;
+  color: #fff;
+}
+
+.cm-write-diff-accept-all:hover {
+  background: #15803d;
+}
+
+.cm-write-diff-reject-all {
+  background: transparent;
+  color: var(--ds-text-muted);
+  border-color: var(--ds-border);
+}
+
+.cm-write-diff-reject-all:hover {
+  background: var(--ds-hover);
+}
+
+/* @codemirror/merge unified diff: red deletions / green insertions + per-chunk
+   accept/reject buttons. Scoped under the host so they override the package
+   base theme regardless of stylesheet order. */
+.write-codemirror-host .cm-deletedChunk,
+.write-codemirror-host .cm-deletedLine,
+.write-codemirror-host .cm-deletedText {
+  background-color: color-mix(in srgb, #dc2626 15%, transparent);
+}
+
+.write-codemirror-host .cm-deletedText {
+  text-decoration: line-through;
+  text-decoration-color: color-mix(in srgb, #dc2626 58%, transparent);
+}
+
+.write-codemirror-host .cm-changedLine,
+.write-codemirror-host .cm-changedText,
+.write-codemirror-host .cm-insertedLine {
+  background-color: color-mix(in srgb, #16a34a 15%, transparent);
+}
+
+.write-codemirror-host .cm-chunkButtons {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.write-codemirror-host .cm-chunkButtons button {
+  cursor: pointer;
+  border: 1px solid var(--ds-border);
+  border-radius: 6px;
+  background: var(--ds-card);
+  color: var(--ds-text);
+  font-size: 11px;
+  line-height: 1.6;
+  padding: 0 7px;
+}
+
+.write-codemirror-host .cm-chunkButtons button[name='accept'] {
+  border-color: color-mix(in srgb, #16a34a 45%, transparent);
+  color: #15803d;
+}
+
+.write-codemirror-host .cm-chunkButtons button:hover {
+  background: var(--ds-hover);
+}
+
+[data-theme='dark'] .write-codemirror-host .cm-deletedChunk,
+[data-theme='dark'] .write-codemirror-host .cm-deletedLine,
+[data-theme='dark'] .write-codemirror-host .cm-deletedText {
+  background-color: color-mix(in srgb, #f87171 22%, transparent);
+}
+
+[data-theme='dark'] .write-codemirror-host .cm-changedLine,
+[data-theme='dark'] .write-codemirror-host .cm-changedText,
+[data-theme='dark'] .write-codemirror-host .cm-insertedLine {
+  background-color: color-mix(in srgb, #4ade80 20%, transparent);
+}
+
 .write-codemirror-host > .cm-editor {
   --write-selection-bg: var(--ds-selection);
   --write-selection-text: inherit;
@@ -142,8 +246,9 @@ summary,
   width: min(100%, 864px);
   margin: 0 auto;
   padding: clamp(40px, 7vh, 72px) clamp(24px, 5vw, 72px) 120px;
-  font-size: 16px;
-  line-height: 1.75;
+  font-family: var(--write-editor-font-family, inherit);
+  font-size: var(--write-editor-font-size, 16px);
+  line-height: var(--write-editor-line-height, 1.75);
   color: color-mix(in srgb, var(--ds-text) 94%, var(--ds-text-muted));
 }
 

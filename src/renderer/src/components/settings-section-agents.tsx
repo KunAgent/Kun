@@ -284,6 +284,7 @@ export function AgentsSettingsSection({ ctx }: { ctx: Record<string, any> }): Re
     fallbackHardThreshold: contextCompaction.defaultHardThreshold
   })
   const runtimeTuning = kun.runtimeTuning ?? {
+    streamIdleTimeoutMs: 45000,
     toolStorm: {
       enabled: true,
       windowSize: 8,
@@ -1179,6 +1180,23 @@ export function AgentsSettingsSection({ ctx }: { ctx: Record<string, any> }): Re
                           />
                         </label>
                       </div>
+                    }
+                  />
+                  <SettingRow
+                    title={t('kunStreamIdleTimeout')}
+                    description={t('kunStreamIdleTimeoutDesc')}
+                    control={
+                      <input
+                        type="number"
+                        min={0}
+                        max={3600000}
+                        step={1000}
+                        className="w-40 rounded-xl border border-ds-border bg-ds-card px-3 py-2 text-[14px] text-ds-ink shadow-sm focus:border-accent/40 focus:outline-none focus:ring-1 focus:ring-accent/30"
+                        value={runtimeTuning.streamIdleTimeoutMs}
+                        onChange={(e) =>
+                          updateRuntimeTuning({ streamIdleTimeoutMs: Number(e.target.value) })
+                        }
+                      />
                     }
                   />
                   <SettingRow

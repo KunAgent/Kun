@@ -232,7 +232,11 @@ export class CompatModelClient implements ModelClient {
       yield { kind: 'error', message: 'request was aborted before start' }
       return
     }
-    const configuredEndpointFormat = this.endpointFormat()
+    const requestModel = request.model?.trim() || this.config.model
+    // Resolve the wire format per request model: a single provider (e.g.
+    // OpenCode Go) can route some models to chat completions and others to
+    // Anthropic Messages. Falls back to the provider/runtime format.
+    const configuredEndpointFormat = this.endpointFormatForModel(requestModel)
     const endpointFormat = resolveModelEndpointFormat(configuredEndpointFormat, this.config.baseUrl)
     if (!endpointFormat) {
       yield {
@@ -243,7 +247,6 @@ export class CompatModelClient implements ModelClient {
     }
     const url = buildModelEndpointUrl(this.config.baseUrl, configuredEndpointFormat)
     const stream = request.stream ?? !this.config.nonStreaming
-    const requestModel = request.model?.trim() || this.config.model
     const body = this.buildRequestBody(request, stream, { endpointFormat })
     if (round) {
       round.requestBody = body
@@ -327,6 +330,17 @@ export class CompatModelClient implements ModelClient {
 
   private endpointFormat(): ModelEndpointFormat {
     return normalizeModelEndpointFormat(this.config.endpointFormat ?? DEFAULT_MODEL_ENDPOINT_FORMAT)
+  }
+
+  /**
+   * The wire format for a specific model: a per-model override (carried on
+   * the model's capability metadata) takes precedence over the
+   * provider/runtime format. Lets one provider mix chat completions and
+   * Anthropic Messages models (e.g. OpenCode Go's minimax/qwen entries).
+   */
+  private endpointFormatForModel(model: string): ModelEndpointFormat {
+    const perModel = this.config.modelCapabilities?.(model).endpointFormat
+    return normalizeModelEndpointFormat(perModel ?? this.config.endpointFormat ?? DEFAULT_MODEL_ENDPOINT_FORMAT)
   }
 
   private modelReasoningFor(model: string): ModelCapabilityMetadata['reasoning'] | undefined {
@@ -1382,18 +1396,23 @@ export class CompatModelClient implements ModelClient {
     const promptDetails = usage.prompt_tokens_details as
       | { cached_tokens?: number }
       | undefined
+    const inputDetails = usage.input_tokens_details as
+      | { cached_tokens?: number }
+      | undefined
     const nativeHit = Number(usage.prompt_cache_hit_tokens ?? 0) || 0
     const nativeMiss = Number(usage.prompt_cache_miss_tokens ?? 0) || 0
     const hasNativeCache = nativeHit > 0 || nativeMiss > 0
-    const cachedTokens = Number(promptDetails?.cached_tokens ?? 0) || 0
+    const cachedTokens = Number(promptDetails?.cached_tokens ?? inputDetails?.cached_tokens ?? 0) || 0
     const cacheRead = Number(usage.cache_read_input_tokens ?? 0) || 0
     const cacheCreation = Number(usage.cache_creation_input_tokens ?? 0) || 0
     // Anthropic-protocol usage (MiniMax et al.) reports input_tokens
     // EXCLUDING cache reads/writes; OpenAI-style prompt_tokens includes
-    // everything and marks the cached subset in prompt_tokens_details.
+    // everything and marks the cached subset in prompt_tokens_details or
+    // Responses API input_tokens_details.
     const anthropicUsage = usage.prompt_tokens === undefined &&
       usage.prompt_eval_count === undefined &&
-      usage.input_tokens !== undefined
+      usage.input_tokens !== undefined &&
+      inputDetails?.cached_tokens === undefined
     const reportedPromptTokens = Number(usage.prompt_tokens ?? usage.prompt_eval_count ?? usage.input_tokens ?? 0) || 0
     const promptTokens = anthropicUsage
       ? reportedPromptTokens + cacheRead + cacheCreation
@@ -1923,7 +1942,7 @@ function applyReasoningEffort(
   }
   switch (normalized) {
     case 'off':
-      if (nativeDeepSeek) body.thinking = { type: 'disabled' }
+      if (includeThinking) body.thinking = { type: 'disabled' }
       break
     case 'low':
     case 'medium':

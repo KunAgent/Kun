@@ -20,10 +20,14 @@ export type ModelProviderPresetId =
   | 'zhipu-coding-plan'
   | 'zai-coding-plan'
   | 'kimi-code'
+  | 'volcengine-coding-plan'
+  | 'opencode-go'
   | 'moonshot-cn'
   | 'moonshot-global'
   | 'xiaomi'
   | 'minimax'
+  | 'aliyun'
+  | 'tencentcloud'
 
 export const TOKEN_PLAN_PROVIDER_ID_SUFFIX = '-token-plan'
 
@@ -80,6 +84,11 @@ export type ModelProviderTokenPlanPreset = {
 export type ModelProviderPreset = {
   id: ModelProviderPresetId
   name: string
+  /**
+   * 计费/接入大类。'subscription' = 固定费用套餐(Coding Plan、Token Plan 这类),
+   * 'api'(默认) = 按量付费。仅用于设置页把套餐类供应商收拢成一组,不写入存储的 profile。
+   */
+  category?: 'api' | 'subscription'
   baseUrl: string
   endpointFormat: ModelEndpointFormat
   models: string[]
@@ -140,6 +149,26 @@ const GLM_REASONING: ModelProviderReasoningCapabilityV1 = {
   requestProtocol: 'glm-chat-completions'
 }
 
+// 通义千问 / 混元 / 豆包的「思考」开关各家用私有 body 字段,无法用现有 requestProtocol 精确映射,
+// 这里统一按「内置推理」建模(requestProtocol: 'none'):只展示 effort 开关、不向上游发送特定协议字段,避免请求被拒。
+const QWEN_REASONING: ModelProviderReasoningCapabilityV1 = {
+  supportedEfforts: ['auto', 'off'],
+  defaultEffort: 'auto',
+  requestProtocol: 'none'
+}
+
+const HUNYUAN_REASONING: ModelProviderReasoningCapabilityV1 = {
+  supportedEfforts: ['auto', 'off'],
+  defaultEffort: 'auto',
+  requestProtocol: 'none'
+}
+
+const DOUBAO_REASONING: ModelProviderReasoningCapabilityV1 = {
+  supportedEfforts: ['auto', 'off'],
+  defaultEffort: 'auto',
+  requestProtocol: 'none'
+}
+
 const ZHIPU_CODING_PLAN_MODELS = [
   'glm-5.2',
   'glm-5.1',
@@ -178,6 +207,7 @@ export const MODEL_PROVIDER_PRESETS: ModelProviderPreset[] = [
   {
     id: 'zhipu-coding-plan',
     name: 'Zhipu Coding Plan',
+    category: 'subscription',
     baseUrl: 'https://open.bigmodel.cn/api/coding/paas/v4',
     endpointFormat: 'chat_completions',
     models: [...ZHIPU_CODING_PLAN_MODELS],
@@ -194,6 +224,7 @@ export const MODEL_PROVIDER_PRESETS: ModelProviderPreset[] = [
   {
     id: 'zai-coding-plan',
     name: 'Z.ai Coding Plan',
+    category: 'subscription',
     baseUrl: 'https://api.z.ai/api/coding/paas/v4',
     endpointFormat: 'chat_completions',
     models: [...ZAI_CODING_PLAN_MODELS],
@@ -210,6 +241,7 @@ export const MODEL_PROVIDER_PRESETS: ModelProviderPreset[] = [
   {
     id: 'kimi-code',
     name: 'Kimi Code',
+    category: 'subscription',
     baseUrl: 'https://api.kimi.com/coding/v1',
     endpointFormat: 'chat_completions',
     models: ['kimi-for-coding'],
@@ -218,6 +250,74 @@ export const MODEL_PROVIDER_PRESETS: ModelProviderPreset[] = [
     },
     docsUrl: 'https://www.kimi.com/code/docs/en/',
     apiKeyUrl: 'https://www.kimi.com/code'
+  },
+  {
+    id: 'volcengine-coding-plan',
+    name: 'Volcano Ark Coding Plan',
+    category: 'subscription',
+    // 火山方舟 Coding Plan 与按量付费共用同一个 API Key,但套餐额度只在 /api/coding 网关上消费;
+    // 用按量 base(/api/v3)调用会按量计费。官方注明套餐额度仅限编程工具(Claude Code / Cursor 等)使用。
+    baseUrl: 'https://ark.cn-beijing.volces.com/api/coding/v3',
+    endpointFormat: 'chat_completions',
+    models: ['doubao-seed-1-6-250615', 'doubao-seed-1-6-flash-250828'],
+    modelProfiles: {
+      'doubao-seed-1-6-250615': visionChatProfile(256_000, DOUBAO_REASONING),
+      'doubao-seed-1-6-flash-250828': textChatProfile(256_000, DOUBAO_REASONING)
+    },
+    docsUrl: 'https://www.volcengine.com/docs/82379/1928262',
+    apiKeyUrl: 'https://console.volcengine.com/ark/region:ark+cn-beijing/apiKey'
+  },
+  {
+    id: 'opencode-go',
+    name: 'OpenCode Go',
+    category: 'subscription',
+    // 网关默认走 chat_completions;MiniMax / Qwen 系列在 OpenCode Go 上以
+    // Anthropic Messages 格式提供,故按模型用 endpointFormat:'messages' 覆盖
+    // (请求改打 …/zen/go/v1/messages)。
+    baseUrl: 'https://opencode.ai/zen/go/v1',
+    endpointFormat: 'chat_completions',
+    models: [
+      'glm-5.1',
+      'glm-5',
+      'kimi-k2.7',
+      'kimi-k2.7-code',
+      'kimi-k2.6',
+      'deepseek-v4-pro',
+      'deepseek-v4-flash',
+      'mimo-v2.5',
+      'mimo-v2.5-pro',
+      'mimo-v2-pro',
+      'mimo-v2-omni',
+      'minimax-m3',
+      'minimax-m2.7',
+      'minimax-m2.5',
+      'qwen3.7-max',
+      'qwen3.7-plus',
+      'qwen3.6-plus',
+      'qwen3.5-plus'
+    ],
+    modelProfiles: {
+      'glm-5.1': visionChatProfile(131_072),
+      'glm-5': visionChatProfile(131_072),
+      'kimi-k2.7': textChatProfile(131_072),
+      'kimi-k2.7-code': textChatProfile(131_072),
+      'kimi-k2.6': textChatProfile(131_072),
+      'deepseek-v4-pro': textChatProfile(131_072),
+      'deepseek-v4-flash': textChatProfile(131_072),
+      'mimo-v2.5': textChatProfile(131_072),
+      'mimo-v2.5-pro': textChatProfile(131_072),
+      'mimo-v2-pro': textChatProfile(131_072),
+      'mimo-v2-omni': visionChatProfile(131_072),
+      'minimax-m3': textChatProfile(256_000, undefined, 'messages'),
+      'minimax-m2.7': textChatProfile(256_000, undefined, 'messages'),
+      'minimax-m2.5': textChatProfile(256_000, undefined, 'messages'),
+      'qwen3.7-max': textChatProfile(262_144, undefined, 'messages'),
+      'qwen3.7-plus': textChatProfile(262_144, undefined, 'messages'),
+      'qwen3.6-plus': textChatProfile(262_144, undefined, 'messages'),
+      'qwen3.5-plus': textChatProfile(262_144, undefined, 'messages')
+    },
+    docsUrl: 'https://opencode.ai/docs/go/',
+    apiKeyUrl: 'https://opencode.ai/auth'
   },
   {
     id: 'moonshot-cn',
@@ -418,6 +518,87 @@ export const MODEL_PROVIDER_PRESETS: ModelProviderPreset[] = [
     },
     docsUrl: 'https://platform.minimax.io/docs/api-reference/text-anthropic-api',
     apiKeyUrl: 'https://platform.minimaxi.com/user-center/basic-information/interface-key'
+  },
+  {
+    id: 'aliyun',
+    name: 'Aliyun',
+    baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+    endpointFormat: 'chat_completions',
+    models: [
+      'qwen-max',
+      'qwen-plus',
+      'qwen-flash',
+      'qwen3-coder-plus',
+      'qwq-plus',
+      'qwen-vl-max',
+      'qwen3-vl-plus'
+    ],
+    modelProfiles: {
+      'qwen-max': textChatProfile(262_144),
+      'qwen-plus': textChatProfile(1_000_000),
+      'qwen-flash': textChatProfile(1_000_000),
+      'qwen3-coder-plus': textChatProfile(1_000_000),
+      'qwq-plus': textChatProfile(131_072, QWEN_REASONING),
+      'qwen-vl-max': visionChatProfile(131_072),
+      'qwen3-vl-plus': visionChatProfile(262_144, QWEN_REASONING)
+    },
+    tokenPlan: {
+      // 通义千问 Token Plan(团队版):独立 Key + 独立 base URL,与按量 sk- Key 不互通。
+      baseUrl: 'https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1',
+      regions: [
+        { id: 'cn', baseUrl: 'https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1' },
+        { id: 'sgp', baseUrl: 'https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1' }
+      ],
+      endpointFormat: 'chat_completions',
+      models: [
+        'qwen-max',
+        'qwen-plus',
+        'qwen-flash',
+        'qwen3-coder-plus',
+        'qwq-plus',
+        'qwen-vl-max',
+        'qwen3-vl-plus'
+      ],
+      modelProfiles: {
+        'qwen-max': textChatProfile(262_144),
+        'qwen-plus': textChatProfile(1_000_000),
+        'qwen-flash': textChatProfile(1_000_000),
+        'qwen3-coder-plus': textChatProfile(1_000_000),
+        'qwq-plus': textChatProfile(131_072, QWEN_REASONING),
+        'qwen-vl-max': visionChatProfile(131_072),
+        'qwen3-vl-plus': visionChatProfile(262_144, QWEN_REASONING)
+      },
+      apiKeyUrl: 'https://bailian.console.aliyun.com/cn-beijing?tab=model#/api-key'
+    },
+    docsUrl: 'https://help.aliyun.com/zh/model-studio/',
+    apiKeyUrl: 'https://bailian.console.aliyun.com/cn-beijing?tab=model#/api-key'
+  },
+  {
+    id: 'tencentcloud',
+    name: 'Tencent Cloud',
+    baseUrl: 'https://api.hunyuan.cloud.tencent.com/v1',
+    endpointFormat: 'chat_completions',
+    models: ['hunyuan-turbos-latest', 'hunyuan-t1-latest', 'hunyuan-lite'],
+    modelProfiles: {
+      'hunyuan-turbos-latest': textChatProfile(32_768),
+      'hunyuan-t1-latest': textChatProfile(32_768, HUNYUAN_REASONING),
+      'hunyuan-lite': textChatProfile(256_000)
+    },
+    tokenPlan: {
+      // 腾讯混元 Token Plan(TokenHub):独立 sk-tp- Key + 独立 base URL,与按量 sk- Key 不互通。
+      baseUrl: 'https://api.lkeap.cloud.tencent.com/plan/v3',
+      endpointFormat: 'chat_completions',
+      models: ['hunyuan-turbos-latest', 'hunyuan-t1-latest', 'hunyuan-lite'],
+      modelProfiles: {
+        'hunyuan-turbos-latest': textChatProfile(32_768),
+        'hunyuan-t1-latest': textChatProfile(32_768, HUNYUAN_REASONING),
+        'hunyuan-lite': textChatProfile(256_000)
+      },
+      keyPrefix: 'sk-tp-',
+      apiKeyUrl: 'https://console.cloud.tencent.com/tokenhub/tokenplan'
+    },
+    docsUrl: 'https://cloud.tencent.com/document/product/1729/111006',
+    apiKeyUrl: 'https://console.cloud.tencent.com/hunyuan/start'
   }
 ]
 
@@ -570,7 +751,8 @@ function minimaxM2ChatProfile(): ModelProviderModelProfileV1 {
 
 function textChatProfile(
   contextWindowTokens?: number,
-  reasoning?: ModelProviderReasoningCapabilityV1
+  reasoning?: ModelProviderReasoningCapabilityV1,
+  endpointFormat?: ModelEndpointFormat
 ): ModelProviderModelProfileV1 {
   return {
     ...(contextWindowTokens ? { contextWindowTokens } : {}),
@@ -578,13 +760,15 @@ function textChatProfile(
     outputModalities: ['text'],
     supportsToolCalling: true,
     messageParts: ['text'],
-    ...(reasoning ? { reasoning } : {})
+    ...(reasoning ? { reasoning } : {}),
+    ...(endpointFormat ? { endpointFormat } : {})
   }
 }
 
 function visionChatProfile(
   contextWindowTokens?: number,
-  reasoning?: ModelProviderReasoningCapabilityV1
+  reasoning?: ModelProviderReasoningCapabilityV1,
+  endpointFormat?: ModelEndpointFormat
 ): ModelProviderModelProfileV1 {
   return {
     ...(contextWindowTokens ? { contextWindowTokens } : {}),
@@ -592,7 +776,8 @@ function visionChatProfile(
     outputModalities: ['text'],
     supportsToolCalling: true,
     messageParts: ['text', 'image_url'],
-    ...(reasoning ? { reasoning } : {})
+    ...(reasoning ? { reasoning } : {}),
+    ...(endpointFormat ? { endpointFormat } : {})
   }
 }
 

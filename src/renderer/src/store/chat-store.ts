@@ -3,7 +3,7 @@ import type { NormalizedThread } from '../agent/types'
 import { getProvider } from '../agent/registry'
 import { rendererRuntimeClient } from '../agent/runtime-client'
 import i18n from '../i18n'
-import { applyDocumentLocale, applyTheme, applyUiFontScale } from '../lib/apply-theme'
+import { applyDocumentLocale, applyTheme, applyUiFontScale, applyWriteTypography } from '../lib/apply-theme'
 import { formatWorkspacePickerError } from '../lib/format-workspace-picker-error'
 import { formatRuntimeError, getRuntimeErrorCode } from '../lib/format-runtime-error'
 import {
@@ -140,6 +140,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   liveAssistant: '',
   lastSeq: 0,
   usageRefreshKey: 0,
+  lastTurnUsage: null,
   busy: false,
   error: null,
   runtimeErrorDetail: null,
@@ -193,6 +194,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     },
     applyTheme,
     applyUiFontScale,
+    applyWriteTypography,
     applyDocumentLocale,
     workspaceLabelFromPath,
     normalizeWorkspaceRoot: (workspaceRoot) => normalizeWorkspaceRoot(workspaceRoot ?? undefined)

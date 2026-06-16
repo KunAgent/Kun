@@ -202,7 +202,9 @@ jobs:
       - name: Install Linux packaging dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends libarchive-tools rpm
+          # build-essential + python3: node-pty ships no Linux prebuild, so it
+          # must be compiled from source against Electron's ABI during dist.
+          sudo apt-get install -y --no-install-recommends libarchive-tools rpm build-essential python3
 
       - name: Install dependencies
         run: npm ci

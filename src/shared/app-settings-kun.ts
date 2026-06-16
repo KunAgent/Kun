@@ -13,6 +13,7 @@ import {
   DEFAULT_VIDEO_GENERATION_PROTOCOL,
   MODEL_REASONING_EFFORTS,
   MODEL_REASONING_REQUEST_PROTOCOLS,
+  normalizeModelEndpointFormat,
   type AppSettingsV1,
   type KunContextCompactionSettingsV1,
   type KunHistoryHygieneSettingsV1,
@@ -261,6 +262,7 @@ export function defaultKunContextCompactionSettings(): KunContextCompactionSetti
 
 export function defaultKunRuntimeTuningSettings(): KunRuntimeTuningSettingsV1 {
   return {
+    streamIdleTimeoutMs: 45_000,
     toolStorm: {
       enabled: true,
       windowSize: 8,
@@ -361,6 +363,9 @@ export function mergeKunRuntimeSettings(
     ...currentRuntimeTuning,
     ...(patch?.runtimeTuning
       ? {
+          ...(patch.runtimeTuning.streamIdleTimeoutMs !== undefined
+            ? { streamIdleTimeoutMs: patch.runtimeTuning.streamIdleTimeoutMs }
+            : {}),
           toolStorm: {
             ...currentRuntimeTuning.toolStorm,
             ...(patch.runtimeTuning.toolStorm ?? {})
@@ -576,6 +581,12 @@ function boundedPositiveInt(value: unknown, fallback: number, max = Number.MAX_S
   return Math.min(Math.floor(value), max)
 }
 
+/** Like {@link boundedPositiveInt} but accepts `0` (e.g. "disabled"). */
+function boundedNonNegativeInt(value: unknown, fallback: number, max = Number.MAX_SAFE_INTEGER): number {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) return fallback
+  return Math.min(Math.floor(value), max)
+}
+
 function normalizeKunStorageSettings(
   input: Partial<KunStorageSettingsV1> | undefined
 ): KunStorageSettingsV1 {
@@ -611,6 +622,11 @@ function normalizeKunRuntimeTuningSettings(
 ): KunRuntimeTuningSettingsV1 {
   const defaults = defaultKunRuntimeTuningSettings()
   return {
+    streamIdleTimeoutMs: boundedNonNegativeInt(
+      input?.streamIdleTimeoutMs,
+      defaults.streamIdleTimeoutMs,
+      3_600_000
+    ),
     toolStorm: {
       enabled: input?.toolStorm?.enabled !== false,
       windowSize: boundedPositiveInt(input?.toolStorm?.windowSize, defaults.toolStorm.windowSize, 128),
@@ -665,6 +681,9 @@ function normalizeKunModelProfile(
     ? input.contextWindowTokens
     : undefined
   const reasoning = normalizeKunReasoningCapability(input?.reasoning)
+  const endpointFormat = typeof input?.endpointFormat === 'string' && input.endpointFormat.trim()
+    ? normalizeModelEndpointFormat(input.endpointFormat)
+    : undefined
   return {
     ...(normalizeKunProfileAliases(input?.aliases).length
       ? { aliases: normalizeKunProfileAliases(input?.aliases) }
@@ -674,7 +693,8 @@ function normalizeKunModelProfile(
     outputModalities: normalizeKunModelInputModalities(input?.outputModalities),
     supportsToolCalling: input?.supportsToolCalling !== false,
     messageParts: normalizeKunModelMessageParts(input?.messageParts, fallbackMessageParts),
-    ...(reasoning ? { reasoning } : {})
+    ...(reasoning ? { reasoning } : {}),
+    ...(endpointFormat ? { endpointFormat } : {})
   }
 }
 

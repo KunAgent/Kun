@@ -62,7 +62,13 @@ export const ModelContextProfileConfigSchema = z
     outputModalities: z.array(ModelInputModality).optional(),
     supportsToolCalling: z.boolean().optional(),
     messageParts: z.array(ModelMessagePartSupport).optional(),
-    reasoning: ModelReasoningCapabilityMetadata.optional()
+    reasoning: ModelReasoningCapabilityMetadata.optional(),
+    // Per-model wire-format override. Omitted means "inherit the
+    // provider/runtime endpointFormat" — no default coercion here, otherwise
+    // every model would be pinned to chat_completions.
+    endpointFormat: z
+      .preprocess(normalizeModelEndpointFormat, z.enum(MODEL_ENDPOINT_FORMATS))
+      .optional()
   })
   .strict()
   .superRefine((profile, ctx) => {
@@ -119,6 +125,10 @@ export const ContextCompactionConfigSchema = z
 
 export const RuntimeTuningConfigSchema = z
   .object({
+    // Max idle gap (ms) between streaming chunks before a turn fails with
+    // `stream_idle_timeout`. Local LLM servers prefilling a huge prompt can
+    // stay silent well past the 45s default; `0` disables the guard entirely.
+    streamIdleTimeoutMs: z.number().int().min(0).optional(),
     toolStorm: z
       .object({
         enabled: z.boolean().optional(),

@@ -14,7 +14,6 @@ import {
 } from 'lucide-react'
 import { rendererRuntimeClient } from '../agent/runtime-client'
 import {
-  joinFsPath,
   loadPreferredSkillRootId,
   savePreferredSkillRootId,
   type SkillRootId
@@ -22,7 +21,7 @@ import {
 import { readBrowserStorageItem, writeBrowserStorageItem } from '../lib/browser-storage'
 import { normalizeWorkspaceRoot } from '../lib/workspace-path'
 import { getProvider } from '../agent/registry'
-import type { SkillListItem } from '@shared/kun-gui-api'
+import type { SkillListItem, SkillRootListItem } from '@shared/kun-gui-api'
 import type {
   CoreRuntimeInfoJson,
   CoreRuntimeToolDiagnosticsJson
@@ -63,7 +62,10 @@ type SkillRootOption = {
   id: SkillRootId
   label: string
   path: string
-  available: boolean
+  scope: 'project' | 'global'
+  enabled: boolean
+  exists: boolean
+  skillCount: number
 }
 
 const INSTALLED_STORAGE_KEY = 'kun.installedPlugins'
@@ -348,6 +350,34 @@ export function skillMarketplaceItemsFromDiscoveredSkills(
   }))
 }
 
+/** Last two path segments, e.g. `/Users/me/.claude/skills` → `.claude/skills`. */
+export function skillRootShortLabel(path: string): string {
+  const parts = path.split(/[\\/]+/).filter(Boolean)
+  return parts.slice(-2).join('/') || path
+}
+
+/**
+ * Builds the skill-root picker options from the backend's detected roots
+ * (`skill:list-roots`) — the same source the settings page renders — so the
+ * marketplace stays in sync instead of hardcoding a fixed subset of dirs.
+ * Common dirs use their i18n label; user-added extra dirs fall back to a short
+ * path label. (#321)
+ */
+export function skillRootOptionsFromRoots(
+  roots: SkillRootListItem[],
+  t: (key: string) => string
+): SkillRootOption[] {
+  return roots.map((root) => ({
+    id: root.id,
+    label: root.labelKey ? t(root.labelKey) : skillRootShortLabel(root.path),
+    path: root.path,
+    scope: root.scope,
+    enabled: root.enabled,
+    exists: root.exists,
+    skillCount: root.skillCount
+  }))
+}
+
 export function mcpMarketplaceItemsFromConfigAndDiagnostics(
   configText: string,
   diagnostics: CoreRuntimeToolDiagnosticsJson | null,
@@ -536,50 +566,27 @@ export function PluginMarketplaceView(): ReactElement {
   const [discoveredSkills, setDiscoveredSkills] = useState<SkillListItem[]>([])
   const [skillListLoading, setSkillListLoading] = useState(false)
   const [skillListError, setSkillListError] = useState('')
+  const [skillRoots, setSkillRoots] = useState<SkillRootListItem[]>([])
   const [disabledSkillIds, setDisabledSkillIds] = useState<string[]>([])
   const [skillToggleBusyId, setSkillToggleBusyId] = useState<string | null>(null)
 
-  const skillRootOptions = useMemo<SkillRootOption[]>(() => {
-    const hasWorkspace = !!workspaceRoot
-    return [
-      {
-        id: 'workspace-agents',
-        label: t('pluginSkillRootWorkspaceAgents'),
-        path: workspaceRoot ? joinFsPath(workspaceRoot, '.agents/skills') : '',
-        available: hasWorkspace
-      },
-      {
-        id: 'workspace-skills',
-        label: t('pluginSkillRootWorkspaceSkills'),
-        path: workspaceRoot ? joinFsPath(workspaceRoot, 'skills') : '',
-        available: hasWorkspace
-      },
-      {
-        id: 'global-agents',
-        label: t('pluginSkillRootGlobalAgents'),
-        path: '~/.agents/skills',
-        available: true
-      },
-      {
-        id: 'global-deepseek',
-        label: t('pluginSkillRootGlobalDeepseek'),
-        path: '~/.kun/skills',
-        available: true
-      }
-    ]
-  }, [t, workspaceRoot])
+  const skillRootOptions = useMemo<SkillRootOption[]>(
+    () => skillRootOptionsFromRoots(skillRoots, t),
+    [skillRoots, t]
+  )
 
   const selectedSkillRoot =
-    skillRootOptions.find((option) => option.id === skillRootId && option.available) ??
-    skillRootOptions.find((option) => option.available)
+    skillRootOptions.find((option) => option.id === skillRootId) ??
+    skillRootOptions.find((option) => option.enabled) ??
+    skillRootOptions[0]
 
   useEffect(() => {
-    const selectedOption = skillRootOptions.find((option) => option.id === skillRootId && option.available)
-    if (selectedOption) {
+    if (skillRootOptions.length === 0) return
+    if (skillRootOptions.some((option) => option.id === skillRootId)) {
       savePreferredSkillRootId(skillRootId)
       return
     }
-    const fallback = skillRootOptions.find((option) => option.available)
+    const fallback = skillRootOptions.find((option) => option.enabled) ?? skillRootOptions[0]
     if (fallback && fallback.id !== skillRootId) {
       setSkillRootId(fallback.id)
     }
@@ -666,10 +673,24 @@ export function PluginMarketplaceView(): ReactElement {
     }
   }, [t, workspaceRoot])
 
+  const refreshSkillRoots = useCallback(async (): Promise<void> => {
+    if (typeof window.kunGui?.listSkillRoots !== 'function') {
+      setSkillRoots([])
+      return
+    }
+    try {
+      const result = await window.kunGui.listSkillRoots(workspaceRoot || undefined)
+      setSkillRoots(result.ok ? result.roots : [])
+    } catch {
+      setSkillRoots([])
+    }
+  }, [workspaceRoot])
+
   useEffect(() => {
     if (activeKind !== 'skill') return
     void refreshSkillList()
-  }, [activeKind, refreshSkillList])
+    void refreshSkillRoots()
+  }, [activeKind, refreshSkillList, refreshSkillRoots])
 
   useEffect(() => {
     if (activeKind !== 'skill') return
@@ -820,7 +841,7 @@ export function PluginMarketplaceView(): ReactElement {
         return
       }
       markInstalled(storageKey('skill', item.id))
-      await refreshSkillList()
+      await Promise.all([refreshSkillList(), refreshSkillRoots()])
       setNotice({ tone: 'success', message: t('pluginSkillAdded', { path: result.path }) })
     } catch (e) {
       setNotice({ tone: 'error', message: e instanceof Error ? e.message : String(e) })
@@ -862,7 +883,7 @@ export function PluginMarketplaceView(): ReactElement {
           return
         }
         markInstalled(storageKey('skill', id))
-        await refreshSkillList()
+        await Promise.all([refreshSkillList(), refreshSkillRoots()])
         setNotice({ tone: 'success', message: t('pluginSkillAdded', { path: result.path }) })
       }
       setCustomName('')
@@ -1009,13 +1030,18 @@ export function PluginMarketplaceView(): ReactElement {
             <select
               value={selectedSkillRoot?.id ?? ''}
               onChange={(event) => setSkillRootId(event.target.value as SkillRootId)}
-              className="h-10 rounded-xl border border-ds-border bg-ds-card px-3 text-[13px] text-ds-ink shadow-sm outline-none focus:border-accent/40 focus:ring-1 focus:ring-accent/30"
+              disabled={skillRootOptions.length === 0}
+              className="h-10 rounded-xl border border-ds-border bg-ds-card px-3 text-[13px] text-ds-ink shadow-sm outline-none focus:border-accent/40 focus:ring-1 focus:ring-accent/30 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {skillRootOptions.map((option) => (
-                <option key={option.id} value={option.id} disabled={!option.available}>
-                  {option.available ? option.label : `${option.label} · ${t('pluginSkillRootNeedsWorkspace')}`}
-                </option>
-              ))}
+              {skillRootOptions.length === 0 ? (
+                <option value="">{t('pluginSkillRootNone')}</option>
+              ) : (
+                skillRootOptions.map((option) => (
+                  <option key={option.id} value={option.id}>
+                    {option.enabled ? option.label : `${option.label} · ${t('pluginSkillStatusDisabled')}`}
+                  </option>
+                ))
+              )}
             </select>
             <button
               type="button"
@@ -1027,7 +1053,7 @@ export function PluginMarketplaceView(): ReactElement {
             </button>
             <button
               type="button"
-              onClick={() => void refreshSkillList()}
+              onClick={() => void Promise.all([refreshSkillList(), refreshSkillRoots()])}
               disabled={skillListLoading}
               className="inline-flex h-10 items-center gap-2 rounded-xl border border-ds-border bg-ds-card px-3 text-[13px] font-medium text-ds-ink shadow-sm transition hover:bg-ds-hover disabled:cursor-not-allowed disabled:opacity-60"
             >

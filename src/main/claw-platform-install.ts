@@ -10,8 +10,11 @@ type ClawPlatformInstallPollResult =
   | { done: true; kind: 'weixin'; accountId: string; sessionKey: string }
   | { done: false; error?: string }
 
-let feishuInstallIsLark = false
-const feishuInstallTargets = new Map<string, boolean>()
+type FeishuRegistrationDomain = 'feishu' | 'lark'
+const FEISHU_ACCOUNTS_URL = 'https://accounts.feishu.cn'
+const LARK_ACCOUNTS_URL = 'https://accounts.larksuite.com'
+let feishuInstallSelectedIsLark = false
+const feishuInstallDomains = new Map<string, FeishuRegistrationDomain>()
 const MAX_FEISHU_INSTALL_TARGETS = 32
 const weixinInstallSessions = new Map<string, string>()
 const MAX_WEIXIN_INSTALL_SESSIONS = 32
@@ -98,18 +101,25 @@ function normalizeIntervalSeconds(value: unknown, fallback: number): number {
   return Number.isFinite(parsed) ? Math.max(3, Math.floor(parsed)) : fallback
 }
 
-function rememberFeishuInstallTarget(deviceCode: string, isLark: boolean): void {
-  feishuInstallTargets.delete(deviceCode)
-  feishuInstallTargets.set(deviceCode, isLark)
-  while (feishuInstallTargets.size > MAX_FEISHU_INSTALL_TARGETS) {
-    const oldestDeviceCode = feishuInstallTargets.keys().next().value
+function feishuAccountsBaseUrl(domain: FeishuRegistrationDomain): string {
+  return domain === 'lark' ? LARK_ACCOUNTS_URL : FEISHU_ACCOUNTS_URL
+}
+
+function rememberFeishuInstallDomain(deviceCode: string, domain: FeishuRegistrationDomain): void {
+  feishuInstallDomains.delete(deviceCode)
+  feishuInstallDomains.set(deviceCode, domain)
+  while (feishuInstallDomains.size > MAX_FEISHU_INSTALL_TARGETS) {
+    const oldestDeviceCode = feishuInstallDomains.keys().next().value
     if (!oldestDeviceCode) break
-    feishuInstallTargets.delete(oldestDeviceCode)
+    feishuInstallDomains.delete(oldestDeviceCode)
   }
 }
 
-function resolveFeishuInstallTarget(deviceCode: string): boolean {
-  return feishuInstallTargets.get(deviceCode) ?? feishuInstallIsLark
+function resolveFeishuInstallDomain(deviceCode: string): FeishuRegistrationDomain {
+  // Registration always begins on Feishu, so polling starts there too and only
+  // switches once tenant_brand reveals a Lark tenant. The selected brand is a
+  // fallback for the rare case the device code was evicted from the map.
+  return feishuInstallDomains.get(deviceCode) ?? (feishuInstallSelectedIsLark ? 'lark' : 'feishu')
 }
 
 function rememberWeixinInstallSession(deviceCode: string, sessionKey: string): void {
@@ -225,14 +235,22 @@ async function startWeixinBridgeChannel(
 
 export async function startFeishuInstallQrcode(isLark: boolean): Promise<ClawPlatformInstallStartResult> {
   try {
-    const baseUrl = isLark ? 'https://accounts.larksuite.com' : 'https://accounts.feishu.cn'
-    feishuInstallIsLark = isLark
-    await postForm(`${baseUrl}/oauth/v1/app/registration`, { action: 'init' })
+    // Always begin on Feishu — even when the user picked Lark. The official
+    // Lark CLI and @larksuiteoapi SDK both mint the QR on accounts.feishu.cn
+    // (so the user scans an open.feishu.cn launcher link) and only switch to
+    // Lark while polling, once the response's tenant_brand comes back "lark".
+    // Minting the QR on accounts.larksuite.com instead yields an
+    // open.larksuite.com link that the Lark app rejects as "Link expired"
+    // (issue #316). There is also no `action: 'init'` step — the CLI/SDK go
+    // straight to `begin`; init only returns an unused 60s nonce.
+    feishuInstallSelectedIsLark = isLark
+    const baseUrl = FEISHU_ACCOUNTS_URL
     const data = await postForm(`${baseUrl}/oauth/v1/app/registration`, {
       action: 'begin',
       archetype: 'PersonalAgent',
       auth_method: 'client_secret',
-      request_user_info: 'open_id'
+      // Request tenant_brand so polling can detect a Lark tenant and switch.
+      request_user_info: 'open_id tenant_brand'
     })
     const url = recordString(data, 'verification_uri_complete')
     const deviceCode = recordString(data, 'device_code')
@@ -240,7 +258,7 @@ export async function startFeishuInstallQrcode(isLark: boolean): Promise<ClawPla
     if (!url || !deviceCode) {
       throw new Error(recordString(data, 'error_description') || recordString(data, 'message') || 'Feishu QR response is incomplete.')
     }
-    rememberFeishuInstallTarget(deviceCode, isLark)
+    rememberFeishuInstallDomain(deviceCode, 'feishu')
     return {
       ok: true,
       url,
@@ -254,22 +272,44 @@ export async function startFeishuInstallQrcode(isLark: boolean): Promise<ClawPla
   }
 }
 
+async function pollFeishuRegistration(
+  domain: FeishuRegistrationDomain,
+  deviceCode: string
+): Promise<{ ok: boolean; status: number; data: Record<string, unknown> }> {
+  return postFormResult(`${feishuAccountsBaseUrl(domain)}/oauth/v1/app/registration`, {
+    action: 'poll',
+    device_code: deviceCode
+  })
+}
+
 export async function pollFeishuInstall(deviceCode: string): Promise<ClawPlatformInstallPollResult> {
   try {
-    const baseUrl = resolveFeishuInstallTarget(deviceCode) ? 'https://accounts.larksuite.com' : 'https://accounts.feishu.cn'
-    const result = await postFormResult(`${baseUrl}/oauth/v1/app/registration`, {
-      action: 'poll',
-      device_code: deviceCode
-    })
+    let domain = resolveFeishuInstallDomain(deviceCode)
+    let result = await pollFeishuRegistration(domain, deviceCode)
+
+    // Once the scanning user is identified as a Lark tenant, the credentials are
+    // issued by accounts.larksuite.com — switch there and re-poll immediately,
+    // then persist the switch for subsequent polls (matches the official
+    // CLI/SDK). The Feishu poll returns tenant_brand="lark" with no secret.
+    if (domain === 'feishu') {
+      const tenantBrand = recordString(asRecord(result.data.user_info), 'tenant_brand')
+      const hasSecret = recordString(result.data, 'client_secret') !== ''
+      if (tenantBrand === 'lark' && !hasSecret) {
+        domain = 'lark'
+        rememberFeishuInstallDomain(deviceCode, 'lark')
+        result = await pollFeishuRegistration(domain, deviceCode)
+      }
+    }
+
     const data = result.data
     const error = recordString(data, 'error')
     if (error) {
       if (error === 'authorization_pending' || error === 'slow_down') return { done: false }
-      feishuInstallTargets.delete(deviceCode)
+      feishuInstallDomains.delete(deviceCode)
       return { done: false, error: recordString(data, 'error_description') || error }
     }
     if (!result.ok) {
-      feishuInstallTargets.delete(deviceCode)
+      feishuInstallDomains.delete(deviceCode)
       return {
         done: false,
         error: recordString(data, 'error_description') || recordString(data, 'message') || `HTTP ${result.status}`
@@ -278,9 +318,7 @@ export async function pollFeishuInstall(deviceCode: string): Promise<ClawPlatfor
     const appId = recordString(data, 'client_id')
     const appSecret = recordString(data, 'client_secret')
     if (appId && appSecret) {
-      const userInfo = asRecord(data.user_info)
-      const domain = recordString(userInfo, 'tenant_brand') === 'lark' ? 'lark' : 'feishu'
-      feishuInstallTargets.delete(deviceCode)
+      feishuInstallDomains.delete(deviceCode)
       return { done: true, kind: 'feishu', appId, appSecret, domain }
     }
     return { done: false }

@@ -216,11 +216,15 @@ export function WorktreeSettingsSection({ ctx }: { ctx: Record<string, any> }): 
               </div>
             </div>
 
-            {error && (
+            {poolStatus?.isGitRepo === false ? (
+              <div className="rounded-xl border border-amber-200/80 bg-amber-50/80 px-3 py-2 text-[12px] text-amber-700 dark:border-amber-800/40 dark:bg-amber-500/10 dark:text-amber-300">
+                {t('worktreeNotGitRepo')}
+              </div>
+            ) : error ? (
               <div className="rounded-xl border border-red-200/80 bg-red-50/80 px-3 py-2 text-[12px] text-red-700 dark:border-red-800/40 dark:bg-red-500/10 dark:text-red-300">
                 {error}
               </div>
-            )}
+            ) : null}
 
             {/* Pool cards */}
             <div className="flex flex-col gap-2">

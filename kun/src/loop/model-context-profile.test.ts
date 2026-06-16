@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { contextThresholdsForModel } from './model-context-profile.js'
+import {
+  contextThresholdsForModel,
+  modelCapabilitiesForModel,
+  modelContextProfilesFromConfig
+} from './model-context-profile.js'
 
 describe('contextThresholdsForModel safety cap', () => {
   it('caps soft/hard thresholds to 75%/85% of the context window', () => {
@@ -47,5 +51,25 @@ describe('contextThresholdsForModel safety cap', () => {
     const fallback = { softThreshold: 1234, hardThreshold: 5678 }
     const thresholds = contextThresholdsForModel('unknown-model', fallback, [])
     expect(thresholds).toEqual(fallback)
+  })
+})
+
+describe('per-model endpointFormat', () => {
+  it('carries a configured endpointFormat from models.profiles into capabilities', () => {
+    const profiles = modelContextProfilesFromConfig({
+      models: {
+        profiles: {
+          'minimax-m3': { contextWindowTokens: 256_000, endpointFormat: 'messages' },
+          'glm-5.1': { contextWindowTokens: 131_072 }
+        }
+      }
+    })
+    expect(modelCapabilitiesForModel('minimax-m3', profiles).endpointFormat).toBe('messages')
+    // A model without an override inherits (no endpointFormat emitted).
+    expect(modelCapabilitiesForModel('glm-5.1', profiles).endpointFormat).toBeUndefined()
+  })
+
+  it('omits endpointFormat for unknown models so they inherit the provider format', () => {
+    expect(modelCapabilitiesForModel('unknown-model', []).endpointFormat).toBeUndefined()
   })
 })

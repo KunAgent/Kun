@@ -1,36 +1,21 @@
 import { readBrowserStorageItem, writeBrowserStorageItem } from './browser-storage'
 
-export type SkillRootId =
-  | 'workspace-agents'
-  | 'workspace-skills'
-  | 'global-agents'
-  | 'global-deepseek'
+/**
+ * A skill-root identifier: a common-directory id (e.g. `workspace-claude`,
+ * `global-codex`) or, for user-configured extra dirs, the absolute path itself.
+ * Kept as a plain string so the marketplace picker stays in sync with whatever
+ * roots the backend (`skill:list-roots`) and the settings page report, rather
+ * than a hardcoded subset.
+ */
+export type SkillRootId = string
 
-const DEFAULT_SKILL_ROOT_ID: SkillRootId = 'workspace-agents'
 const SKILL_ROOT_PREFERENCE_KEY = 'kun.skillRootPreference'
 
-function isSkillRootId(value: string): value is SkillRootId {
-  return (
-    value === 'workspace-agents' ||
-    value === 'workspace-skills' ||
-    value === 'global-agents' ||
-    value === 'global-deepseek'
-  )
-}
-
+/** The skill root the user last picked in the marketplace, or '' when unset. */
 export function loadPreferredSkillRootId(): SkillRootId {
-  const raw = readBrowserStorageItem(SKILL_ROOT_PREFERENCE_KEY)?.trim() ?? ''
-  return isSkillRootId(raw) ? raw : DEFAULT_SKILL_ROOT_ID
+  return readBrowserStorageItem(SKILL_ROOT_PREFERENCE_KEY)?.trim() ?? ''
 }
 
 export function savePreferredSkillRootId(id: SkillRootId): void {
   writeBrowserStorageItem(SKILL_ROOT_PREFERENCE_KEY, id)
-}
-
-export function joinFsPath(base: string, suffix: string): string {
-  const root = base.trim().replace(/[\\/]+$/, '')
-  const tail = suffix.replace(/^[\\/]+/, '')
-  if (!root) return tail
-  const separator = root.includes('\\') && !root.includes('/') ? '\\' : '/'
-  return `${root}${separator}${tail.replace(/[\\/]+/g, separator)}`
 }

@@ -47,7 +47,7 @@ import {
   type TextToSpeechProtocol,
   type VideoGenerationProtocol
 } from './app-settings-types'
-import { normalizeModelEndpointFormat } from '../../kun/src/contracts/model-endpoint-format.js'
+import { normalizeModelEndpointFormat, type ModelEndpointFormat } from '../../kun/src/contracts/model-endpoint-format.js'
 import { getKunRuntimeSettings } from './app-settings-kun'
 import { normalizeDeepseekBaseUrl } from './app-settings-normalizers'
 import { DEFAULT_COMPOSER_MODEL_IDS } from './default-composer-models'
@@ -978,6 +978,7 @@ function normalizeModelProviderModelProfile(
     : ['text']
   const contextWindowTokens = boundedPositiveInteger(input?.contextWindowTokens)
   const reasoning = normalizeModelReasoningCapability(input?.reasoning)
+  const endpointFormat = normalizeOptionalModelEndpointFormat(input?.endpointFormat)
   return {
     ...(normalizeProviderModels(input?.aliases).length
       ? { aliases: normalizeProviderModels(input?.aliases) }
@@ -987,8 +988,23 @@ function normalizeModelProviderModelProfile(
     outputModalities: normalizeModelInputModalities(input?.outputModalities),
     supportsToolCalling: input?.supportsToolCalling !== false,
     messageParts: normalizeModelMessageParts(input?.messageParts, defaultMessageParts),
-    ...(reasoning ? { reasoning } : {})
+    ...(reasoning ? { reasoning } : {}),
+    ...(endpointFormat ? { endpointFormat } : {})
   }
+}
+
+/**
+ * A per-model wire-format override is only meaningful when explicitly set;
+ * an absent value means "inherit the provider's endpointFormat". Returns
+ * undefined for blank/missing input instead of coercing to the default, so
+ * inheritance is preserved end-to-end.
+ */
+function normalizeOptionalModelEndpointFormat(
+  value: unknown
+): ModelEndpointFormat | undefined {
+  return typeof value === 'string' && value.trim()
+    ? normalizeModelEndpointFormat(value)
+    : undefined
 }
 
 function normalizeModelReasoningCapability(

@@ -1,4 +1,4 @@
-import { useState, type ReactElement, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactElement, type ReactNode } from 'react'
 import type {
   AppSettingsPatch,
   ImageGenerationProtocol,
@@ -130,6 +130,13 @@ function tokenPlanPresetForProfileId(id: string): ModelProviderPreset | null {
   if (!id.endsWith(TOKEN_PLAN_PROVIDER_ID_SUFFIX)) return null
   const preset = getModelProviderPreset(id.slice(0, -TOKEN_PLAN_PROVIDER_ID_SUFFIX.length))
   return preset?.tokenPlan ? preset : null
+}
+
+// 「套餐订阅」组 = Token Plan 套餐档(<id>-token-plan)或本身就是订阅制的预设(category==='subscription');
+// 其余(默认 / 按量预设 / 自定义)归入「按量 API」组,便于一眼分辨两类计费方式。
+function isSubscriptionProviderId(id: string): boolean {
+  if (tokenPlanPresetForProfileId(id)) return true
+  return getModelProviderPreset(id)?.category === 'subscription'
 }
 
 function mergeProviderModelIds(primary: readonly string[], secondary: readonly string[]): string[] {
@@ -337,6 +344,28 @@ function ProviderBadge({
   )
 }
 
+function ProviderListGroup({
+  label,
+  count,
+  children
+}: {
+  label: string
+  count: number
+  children: ReactNode
+}): ReactElement {
+  return (
+    <div className="grid gap-2">
+      <div className="flex items-center gap-2 px-1">
+        <span className="text-[11.5px] font-semibold text-ds-muted">{label}</span>
+        <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-ds-main/60 px-1.5 text-[10.5px] font-medium text-ds-faint">
+          {count}
+        </span>
+      </div>
+      {children}
+    </div>
+  )
+}
+
 function ModelChipsInput({
   values,
   onChange,
@@ -434,6 +463,26 @@ export function ProvidersSettingsSection({ ctx }: { ctx: Record<string, any> }):
     kun.providerId?.trim() || modelProviders[0]?.id || DEFAULT_MODEL_PROVIDER_ID
   )
   const [addMenuOpen, setAddMenuOpen] = useState(false)
+  const addMenuRef = useRef<HTMLDivElement>(null)
+  // 点击菜单外部或按 Esc 关闭「添加供应商」下拉。用监听器代替全屏遮罩:全屏 fixed 遮罩会吞掉滚轮事件,
+  // 导致下拉打开时整个设置页无法滚动(用户反馈的 bug)。
+  useEffect(() => {
+    if (!addMenuOpen) return
+    const onPointerDown = (event: PointerEvent): void => {
+      const target = event.target
+      if (target instanceof Node && addMenuRef.current?.contains(target)) return
+      setAddMenuOpen(false)
+    }
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') setAddMenuOpen(false)
+    }
+    window.addEventListener('pointerdown', onPointerDown)
+    window.addEventListener('keydown', onKeyDown)
+    return () => {
+      window.removeEventListener('pointerdown', onPointerDown)
+      window.removeEventListener('keydown', onKeyDown)
+    }
+  }, [addMenuOpen])
   const [probeStates, setProbeStates] = useState<Record<string, ProbeState>>({})
   // 新增供应商先停留在本地草稿,点「添加」才写入设置,避免半配置状态被持久化。
   const [draftProvider, setDraftProvider] = useState<ModelProviderProfileV1 | null>(null)
@@ -867,7 +916,9 @@ export function ProvidersSettingsSection({ ctx }: { ctx: Record<string, any> }):
   const providerKindLabel = (item: ModelProviderProfileV1): string => {
     if (item.id === DEFAULT_MODEL_PROVIDER_ID) return t('modelProviderDefaultBadge')
     if (tokenPlanPresetForProfileId(item.id)) return t('modelProviderTokenPlanBadge')
-    if (getModelProviderPreset(item.id)) return t('modelProviderPresetBadge')
+    const preset = getModelProviderPreset(item.id)
+    if (preset?.category === 'subscription') return t('modelProviderPlanBadge')
+    if (preset) return t('modelProviderPresetBadge')
     return t('modelProviderCustomBadge')
   }
 
@@ -912,6 +963,109 @@ export function ProvidersSettingsSection({ ctx }: { ctx: Record<string, any> }):
   const activeTokenPlanRegions = activeProvider
     ? tokenPlanPresetForProfileId(activeProvider.id)?.tokenPlan?.regions ?? []
     : []
+
+  const planProviders = displayProviders.filter((item) => isSubscriptionProviderId(item.id))
+  const apiProviders = displayProviders.filter((item) => !isSubscriptionProviderId(item.id))
+  // 只要存在任一套餐类供应商就分组展示;否则(通常只有默认 DeepSeek)保持单一平铺列表。
+  const grouped = planProviders.length > 0
+
+  const renderProviderButton = (item: ModelProviderProfileV1): ReactElement => {
+    const selected = activeProvider?.id === item.id
+    const isDraft = draftProvider?.id === item.id
+    const inUse = !isDraft && activeKunProviderId === item.id
+    const missingKey = !item.apiKey.trim()
+    return (
+      <button
+        key={item.id}
+        type="button"
+        aria-pressed={selected}
+        onClick={() => setSelectedProviderId(item.id)}
+        className={`w-full rounded-xl border px-3 py-2.5 text-left transition ${
+          selected
+            ? 'border-accent/60 bg-ds-main/45 ring-1 ring-accent/30'
+            : 'border-ds-border bg-ds-card hover:bg-ds-hover'
+        }`}
+      >
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="min-w-0 truncate text-[13.5px] font-semibold text-ds-ink">
+            {item.name.trim() || item.id}
+          </span>
+          {isDraft ? <ProviderBadge tone="warning">{t('modelProviderDraftBadge')}</ProviderBadge> : null}
+          {inUse ? <ProviderBadge tone="accent">{t('modelProviderInUse')}</ProviderBadge> : null}
+          {!isDraft && missingKey ? <ProviderBadge tone="warning">{t('modelProviderMissingKey')}</ProviderBadge> : null}
+        </div>
+        <div className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[12px] text-ds-faint">
+          <span>{t('modelProviderModelCount', { total: providerModelCount(item) })}</span>
+          <span aria-hidden="true">·</span>
+          <span>{providerKindLabel(item)}</span>
+          {item.apiKey.trim() ? <KeyRound className="h-3 w-3" strokeWidth={1.9} /> : null}
+          {item.image ? <ImageIcon className="h-3 w-3" strokeWidth={1.9} /> : null}
+          {item.models.some((model) =>
+            modelSupportsImageInput(profileForModel(item, model))
+          ) ? <span className="text-[11px] font-semibold text-ds-muted">{t('modelProviderVisionBadge')}</span> : null}
+          {item.speech ? <Mic className="h-3 w-3" strokeWidth={1.9} /> : null}
+          {item.textToSpeech ? <AudioLines className="h-3 w-3" strokeWidth={1.9} /> : null}
+          {item.music ? <Music2 className="h-3 w-3" strokeWidth={1.9} /> : null}
+          {item.video ? <Clapperboard className="h-3 w-3" strokeWidth={1.9} /> : null}
+        </div>
+      </button>
+    )
+  }
+
+  const addMenuEntries = MODEL_PROVIDER_PRESETS.flatMap((preset) => {
+    const entries: {
+      preset: ModelProviderPreset
+      mode: 'api' | 'token-plan'
+      profileId: string
+      label: string
+      group: 'subscription' | 'api'
+    }[] = [
+      {
+        preset,
+        mode: 'api',
+        profileId: preset.id,
+        label: preset.name,
+        group: preset.category === 'subscription' ? 'subscription' : 'api'
+      }
+    ]
+    if (preset.tokenPlan) {
+      entries.push({
+        preset,
+        mode: 'token-plan',
+        profileId: tokenPlanProviderId(preset.id),
+        label: `${preset.name} · Token Plan`,
+        group: 'subscription'
+      })
+    }
+    return entries
+  })
+  const planAddEntries = addMenuEntries.filter((entry) => entry.group === 'subscription')
+  const apiAddEntries = addMenuEntries.filter((entry) => entry.group === 'api')
+  const renderAddEntry = (entry: (typeof addMenuEntries)[number]): ReactElement => {
+    const exists = modelProviders.some((item) => item.id === entry.profileId)
+    return (
+      <button
+        key={entry.profileId}
+        type="button"
+        role="menuitem"
+        onClick={() => {
+          setAddMenuOpen(false)
+          void addPresetModelProvider(entry.preset, entry.mode)
+        }}
+        className="flex w-full items-center justify-between gap-2 rounded-lg px-2.5 py-2 text-left text-[13px] text-ds-ink transition hover:bg-ds-hover"
+      >
+        <span>{entry.label}</span>
+        <span className="text-[11px] text-ds-faint">
+          {exists
+            ? t('modelProviderPresetUpdateTag')
+            : entry.group === 'subscription'
+              ? t('modelProviderPlanBadge')
+              : t('modelProviderPresetBadge')}
+        </span>
+      </button>
+    )
+  }
+
   return (
     <SettingsCard title={t('providers')}>
       <SettingRow
@@ -920,50 +1074,20 @@ export function ProvidersSettingsSection({ ctx }: { ctx: Record<string, any> }):
         wideControl
         control={
           <div className="grid gap-4 lg:grid-cols-[280px_minmax(0,1fr)]">
-            <div className="flex flex-col gap-2">
-              {displayProviders.map((item) => {
-                const selected = activeProvider?.id === item.id
-                const isDraft = draftProvider?.id === item.id
-                const inUse = !isDraft && activeKunProviderId === item.id
-                const missingKey = !item.apiKey.trim()
-                return (
-                  <button
-                    key={item.id}
-                    type="button"
-                    aria-pressed={selected}
-                    onClick={() => setSelectedProviderId(item.id)}
-                    className={`w-full rounded-xl border px-3 py-2.5 text-left transition ${
-                      selected
-                        ? 'border-accent/60 bg-ds-main/45 ring-1 ring-accent/30'
-                        : 'border-ds-border bg-ds-card hover:bg-ds-hover'
-                    }`}
-                  >
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      <span className="min-w-0 truncate text-[13.5px] font-semibold text-ds-ink">
-                        {item.name.trim() || item.id}
-                      </span>
-                      {isDraft ? <ProviderBadge tone="warning">{t('modelProviderDraftBadge')}</ProviderBadge> : null}
-                      {inUse ? <ProviderBadge tone="accent">{t('modelProviderInUse')}</ProviderBadge> : null}
-                      {!isDraft && missingKey ? <ProviderBadge tone="warning">{t('modelProviderMissingKey')}</ProviderBadge> : null}
-                    </div>
-                    <div className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[12px] text-ds-faint">
-                      <span>{t('modelProviderModelCount', { total: providerModelCount(item) })}</span>
-                      <span aria-hidden="true">·</span>
-                      <span>{providerKindLabel(item)}</span>
-                      {item.apiKey.trim() ? <KeyRound className="h-3 w-3" strokeWidth={1.9} /> : null}
-                      {item.image ? <ImageIcon className="h-3 w-3" strokeWidth={1.9} /> : null}
-                      {item.models.some((model) =>
-                        modelSupportsImageInput(profileForModel(item, model))
-                      ) ? <span className="text-[11px] font-semibold text-ds-muted">{t('modelProviderVisionBadge')}</span> : null}
-                      {item.speech ? <Mic className="h-3 w-3" strokeWidth={1.9} /> : null}
-                      {item.textToSpeech ? <AudioLines className="h-3 w-3" strokeWidth={1.9} /> : null}
-                      {item.music ? <Music2 className="h-3 w-3" strokeWidth={1.9} /> : null}
-                      {item.video ? <Clapperboard className="h-3 w-3" strokeWidth={1.9} /> : null}
-                    </div>
-                  </button>
-                )
-              })}
-              <div className="relative">
+            <div className="flex flex-col gap-3">
+              {grouped ? (
+                <>
+                  <ProviderListGroup label={t('modelProviderGroupPlans')} count={planProviders.length}>
+                    {planProviders.map(renderProviderButton)}
+                  </ProviderListGroup>
+                  <ProviderListGroup label={t('modelProviderGroupApi')} count={apiProviders.length}>
+                    {apiProviders.map(renderProviderButton)}
+                  </ProviderListGroup>
+                </>
+              ) : (
+                <div className="grid gap-2">{displayProviders.map(renderProviderButton)}</div>
+              )}
+              <div ref={addMenuRef} className="relative">
                 <button
                   type="button"
                   aria-haspopup="menu"
@@ -976,64 +1100,32 @@ export function ProvidersSettingsSection({ ctx }: { ctx: Record<string, any> }):
                   <ChevronDown className="h-3.5 w-3.5" strokeWidth={1.9} />
                 </button>
                 {addMenuOpen ? (
-                  <>
+                  <div
+                    role="menu"
+                    className="absolute left-0 right-0 z-20 mt-1 max-h-[min(60vh,420px)] overflow-y-auto rounded-xl border border-ds-border bg-ds-card p-1 shadow-lg"
+                  >
+                    <div className="px-2.5 pb-1 pt-1 text-[11px] font-semibold text-ds-faint">
+                      {t('modelProviderGroupPlans')}
+                    </div>
+                    {planAddEntries.map(renderAddEntry)}
+                    <div className="my-1 border-t border-ds-border-muted" />
+                    <div className="px-2.5 pb-1 text-[11px] font-semibold text-ds-faint">
+                      {t('modelProviderGroupApi')}
+                    </div>
+                    {apiAddEntries.map(renderAddEntry)}
+                    <div className="my-1 border-t border-ds-border-muted" />
                     <button
                       type="button"
-                      aria-hidden="true"
-                      tabIndex={-1}
-                      className="fixed inset-0 z-10 cursor-default"
-                      onClick={() => setAddMenuOpen(false)}
-                    />
-                    <div
-                      role="menu"
-                      className="absolute left-0 right-0 z-20 mt-1 rounded-xl border border-ds-border bg-ds-card p-1 shadow-lg"
+                      role="menuitem"
+                      onClick={() => {
+                        setAddMenuOpen(false)
+                        addModelProvider()
+                      }}
+                      className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[13px] text-ds-ink transition hover:bg-ds-hover"
                     >
-                      {MODEL_PROVIDER_PRESETS.flatMap((preset) => {
-                        const entries: { mode: 'api' | 'token-plan'; profileId: string; label: string }[] = [
-                          { mode: 'api', profileId: preset.id, label: preset.name }
-                        ]
-                        if (preset.tokenPlan) {
-                          entries.push({
-                            mode: 'token-plan',
-                            profileId: tokenPlanProviderId(preset.id),
-                            label: `${preset.name} · Token Plan`
-                          })
-                        }
-                        return entries.map((entry) => {
-                          const exists = modelProviders.some((item) => item.id === entry.profileId)
-                          return (
-                            <button
-                              key={entry.profileId}
-                              type="button"
-                              role="menuitem"
-                              onClick={() => {
-                                setAddMenuOpen(false)
-                                void addPresetModelProvider(preset, entry.mode)
-                              }}
-                              className="flex w-full items-center justify-between gap-2 rounded-lg px-2.5 py-2 text-left text-[13px] text-ds-ink transition hover:bg-ds-hover"
-                            >
-                              <span>{entry.label}</span>
-                              <span className="text-[11px] text-ds-faint">
-                                {exists ? t('modelProviderPresetUpdateTag') : t('modelProviderPresetBadge')}
-                              </span>
-                            </button>
-                          )
-                        })
-                      })}
-                      <div className="my-1 border-t border-ds-border-muted" />
-                      <button
-                        type="button"
-                        role="menuitem"
-                        onClick={() => {
-                          setAddMenuOpen(false)
-                          addModelProvider()
-                        }}
-                        className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-[13px] text-ds-ink transition hover:bg-ds-hover"
-                      >
-                        {t('modelProviderAddMenuCustom')}
-                      </button>
-                    </div>
-                  </>
+                      {t('modelProviderAddMenuCustom')}
+                    </button>
+                  </div>
                 ) : null}
               </div>
             </div>

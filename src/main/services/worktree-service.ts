@@ -150,8 +150,16 @@ export async function listWorktrees(params: {
 }): Promise<WorktreePoolStatus> {
   const { projectPath, worktreeRoot } = params
   const poolDir = resolvePoolDir(projectPath, worktreeRoot)
-  const mainBranch = await detectMainBranch(projectPath)
-  const headCommit = await getHeadCommit(projectPath)
+
+  let mainBranch: string
+  let headCommit: string
+  try {
+    mainBranch = await detectMainBranch(projectPath)
+    headCommit = await getHeadCommit(projectPath)
+  } catch {
+    return { projectPath, poolDir, mainBranch: '', headCommit: '', worktrees: [], inUseCount: 0, isGitRepo: false }
+  }
+
   const worktrees: WorktreeInfo[] = []
   let inUseCount = 0
 
@@ -177,7 +185,7 @@ export async function listWorktrees(params: {
     })
   }
 
-  return { projectPath, poolDir, mainBranch, headCommit, worktrees, inUseCount }
+  return { projectPath, poolDir, mainBranch, headCommit, worktrees, inUseCount, isGitRepo: true }
 }
 
 export async function removeWorktree(params: {

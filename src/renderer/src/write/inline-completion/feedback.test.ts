@@ -58,6 +58,20 @@ describe('evaluateInlineCompletionCandidate', () => {
     expect(decision.feedback.reason).toBe('model-returned-action')
   })
 
+  it('suppresses candidates that still carry leaked protocol markers', () => {
+    const decision = evaluateInlineCompletionCandidate(
+      context(),
+      {
+        text: '>>> <<<LONG >>> <<<EDIT',
+        action: { kind: 'short', text: '>>> <<<LONG >>> <<<EDIT' }
+      },
+      { minAcceptScore: 0.52, mode: 'short' }
+    )
+
+    expect(decision.accepted).toBe(false)
+    expect(decision.feedback.reason).toBe('marker-artifact')
+  })
+
   it('still suppresses structured actions that duplicate the suffix', () => {
     const decision = evaluateInlineCompletionCandidate(
       context({ suffixWindow: 'a focused continuation after the cursor' }),

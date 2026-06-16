@@ -38,7 +38,7 @@ import {
 import { useTranslation } from 'react-i18next'
 import type { ModelProviderModelGroup } from '@shared/kun-gui-api'
 import type { WorkspaceEntry } from '@shared/workspace-file'
-import type { AttachmentReference, ReviewTarget } from '../../agent/types'
+import type { AttachmentReference, ChatBlock, ReviewTarget } from '../../agent/types'
 import { useChatStore } from '../../store/chat-store'
 import { normalizeWorkspaceRoot } from '../../lib/workspace-path'
 import {
@@ -70,8 +70,11 @@ import {
   formatCompactNumber,
   formatCost,
   formatPercent,
+  primaryCacheHitRate,
   useThreadUsageState
 } from '../../hooks/use-thread-usage'
+import { buildContextCapacity, estimateBlockTokens } from '../../lib/context-capacity'
+import { ContextCapacityPopover } from './ContextCapacityPopover'
 import { GitBranchPicker } from './GitBranchPicker'
 import { WorkspaceProjectPicker } from './WorkspaceProjectPicker'
 import {
@@ -164,10 +167,17 @@ type Props = {
    * Hide the `/btw` slash entry (e.g. inside a side conversation).
    */
   hideBtwCommand?: boolean
+  /** Active model's context window, for the 上下文容量 gauge. */
+  contextWindowTokens?: number
+  /** Tool definitions advertised to the model (built-ins are added on top). */
+  runtimeToolCount?: number
+  /** Skills in the always-injected catalog. */
+  runtimeSkillCount?: number
 }
 
 type SkillCommand = NonNullable<Props['skillCommands']>[number]
 
+const EMPTY_CONTEXT_BLOCKS: ChatBlock[] = []
 const EMPTY_MODEL_GROUPS: ModelProviderModelGroup[] = []
 const EMPTY_ATTACHMENTS: AttachmentReference[] = []
 const EMPTY_FILE_REFERENCES: ComposerFileReference[] = []
@@ -609,13 +619,17 @@ export function FloatingComposer({
   onReviewChanges,
   reviewChangesDisabled = false,
   onBtwCommand,
-  hideBtwCommand = false
+  hideBtwCommand = false,
+  contextWindowTokens,
+  runtimeToolCount,
+  runtimeSkillCount
 }: Props): ReactElement {
   const { t, i18n } = useTranslation('common')
   const route = useChatStore((s) => s.route)
   const workspaceRoot = useChatStore((s) => s.workspaceRoot)
   const activeThreadId = useChatStore((s) => s.activeThreadId)
   const usageRefreshKey = useChatStore((s) => s.usageRefreshKey)
+  const lastTurnUsage = useChatStore((s) => s.lastTurnUsage)
   const threads = useChatStore((s) => s.threads)
   const compactActiveThread = useChatStore((s) => s.compactActiveThread)
   const forkActiveThread = useChatStore((s) => s.forkActiveThread)
@@ -727,11 +741,90 @@ export function FloatingComposer({
   const [dismissedFileMentionKey, setDismissedFileMentionKey] = useState<string | null>(null)
   const [composerMenuOpen, setComposerMenuOpen] = useState(false)
   const [goalPanelOpen, setGoalPanelOpen] = useState(false)
+  const [contextCapacityOpen, setContextCapacityOpen] = useState(false)
   const [goalRuntimeNowMs, setGoalRuntimeNowMs] = useState(() => Date.now())
   const composerRootRef = useRef<HTMLDivElement | null>(null)
   const composerMenuButtonRef = useRef<HTMLButtonElement | null>(null)
   const composerMenuPanelRef = useRef<HTMLDivElement | null>(null)
   const goalPanelRef = useRef<HTMLDivElement | null>(null)
+  const contextCapacityRef = useRef<HTMLDivElement | null>(null)
+  const messageTokenCacheRef = useRef<WeakMap<object, number>>(new WeakMap())
+  // Cache the last-known runtime capacity inputs. `runtimeInfo` (and thus these
+  // props) goes null whenever the runtime drops/reconnects; without caching, the
+  // chip would vanish ("context 没有了") and flap in/out as the connection flaps,
+  // which itself reads as flicker. Writing refs during render is idempotent here.
+  const lastKnownWindowRef = useRef(0)
+  if (typeof contextWindowTokens === 'number' && contextWindowTokens > 0) {
+    lastKnownWindowRef.current = contextWindowTokens
+  }
+  const lastKnownToolCountRef = useRef(0)
+  if (typeof runtimeToolCount === 'number') lastKnownToolCountRef.current = runtimeToolCount
+  const lastKnownSkillCountRef = useRef(0)
+  if (typeof runtimeSkillCount === 'number') lastKnownSkillCountRef.current = runtimeSkillCount
+  const effectiveContextWindow =
+    typeof contextWindowTokens === 'number' && contextWindowTokens > 0
+      ? contextWindowTokens
+      : lastKnownWindowRef.current
+  const effectiveToolCount =
+    typeof runtimeToolCount === 'number' ? runtimeToolCount : lastKnownToolCountRef.current
+  const effectiveSkillCount =
+    typeof runtimeSkillCount === 'number' ? runtimeSkillCount : lastKnownSkillCountRef.current
+  const canShowContextCapacity =
+    !compact && route === 'chat' && Boolean(activeThreadId) && effectiveContextWindow > 0
+  // Freeze the measured total for the duration of a turn: the runtime can emit
+  // several `usage` events while streaming, and tracking them live makes the
+  // chip jitter (visible flicker). Adopt the latest value only while idle.
+  const liveMeasuredTotal =
+    lastTurnUsage && lastTurnUsage.threadId === activeThreadId
+      ? lastTurnUsage.snapshot.inputTokens
+      : null
+  const measuredTotalRef = useRef<number | null>(null)
+  if (!busy) measuredTotalRef.current = liveMeasuredTotal
+  const measuredContextTotal = busy ? measuredTotalRef.current : liveMeasuredTotal
+  // The message estimate only feeds the per-category split (popover) or the
+  // no-measured-total fallback. Never subscribe to `blocks` while streaming with
+  // the popover closed — blocks churn on every delta and re-render the whole
+  // composer. Freeze the last estimate in a ref instead.
+  const needMessageEstimate =
+    canShowContextCapacity && (contextCapacityOpen || measuredContextTotal == null)
+  const subscribeContextBlocks = needMessageEstimate && (contextCapacityOpen || !busy)
+  const contextBlocks = useChatStore((s) => (subscribeContextBlocks ? s.blocks : EMPTY_CONTEXT_BLOCKS))
+  const conversationTokensRef = useRef(0)
+  const conversationTokens = useMemo(() => {
+    if (!subscribeContextBlocks) return conversationTokensRef.current
+    // Cache per block: block identity is preserved for unchanged history across
+    // streaming updates, so only the block that changed is re-estimated.
+    const cache = messageTokenCacheRef.current
+    let sum = 0
+    for (const block of contextBlocks) {
+      let cached = cache.get(block)
+      if (cached === undefined) {
+        cached = estimateBlockTokens(block)
+        cache.set(block, cached)
+      }
+      sum += cached
+    }
+    conversationTokensRef.current = sum
+    return sum
+  }, [subscribeContextBlocks, contextBlocks])
+  const contextCapacity = useMemo(() => {
+    if (!canShowContextCapacity) return null
+    return buildContextCapacity({
+      windowTokens: effectiveContextWindow,
+      lastTurnInputTokens: measuredContextTotal,
+      messageTokens: conversationTokens,
+      toolCount: effectiveToolCount,
+      skillCount: effectiveSkillCount
+    })
+  }, [
+    canShowContextCapacity,
+    effectiveContextWindow,
+    measuredContextTotal,
+    conversationTokens,
+    effectiveToolCount,
+    effectiveSkillCount
+  ])
+  const showContextCapacity = canShowContextCapacity && Boolean(contextCapacity)
   const goalRuntimeStartedAtRef = useRef<number | null>(null)
   const placeholder = !runtimeReady
     ? t('runtimeActionNeedsConnection')
@@ -1054,6 +1147,25 @@ export function FloatingComposer({
       window.removeEventListener('keydown', onKeyDown)
     }
   }, [composerMenuOpen, goalPanelOpen])
+
+  useEffect(() => {
+    if (!contextCapacityOpen) return
+    const onPointerDown = (event: PointerEvent): void => {
+      const target = event.target
+      if (!(target instanceof Node)) return
+      if (contextCapacityRef.current?.contains(target)) return
+      setContextCapacityOpen(false)
+    }
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') setContextCapacityOpen(false)
+    }
+    window.addEventListener('pointerdown', onPointerDown)
+    window.addEventListener('keydown', onKeyDown)
+    return () => {
+      window.removeEventListener('pointerdown', onPointerDown)
+      window.removeEventListener('keydown', onKeyDown)
+    }
+  }, [contextCapacityOpen])
 
   useEffect(() => {
     const shouldTimeGoal = busy && activeThreadGoal?.status === 'active'
@@ -2055,6 +2167,46 @@ export function FloatingComposer({
                 </>
               ) : (
               <>
+              {showContextCapacity && contextCapacity ? (
+                <div className="relative shrink-0" ref={contextCapacityRef}>
+                  <button
+                    type="button"
+                    onClick={() => setContextCapacityOpen((open) => !open)}
+                    className="ds-composer-context ds-no-drag inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full border border-ds-border-muted bg-ds-card/70 px-2.5 text-[12.5px] font-medium text-ds-muted transition hover:bg-ds-hover"
+                    aria-label={t('contextCapacityChipAria', {
+                      percent: formatPercent(contextCapacity.usedRatio)
+                    })}
+                    aria-expanded={contextCapacityOpen}
+                    title={t('contextCapacityTitle')}
+                  >
+                    <span
+                      className="relative flex h-1.5 w-6 overflow-hidden rounded-full"
+                      style={{ background: 'var(--ds-surface-subtle)' }}
+                      aria-hidden="true"
+                    >
+                      <span
+                        style={{
+                          width: `${Math.min(100, contextCapacity.usedRatio * 100)}%`,
+                          background:
+                            contextCapacity.usedRatio >= 0.9
+                              ? '#d9544e'
+                              : contextCapacity.usedRatio >= 0.75
+                                ? '#d9920f'
+                                : 'var(--ds-accent)'
+                        }}
+                      />
+                    </span>
+                    <span className="shrink-0 tabular-nums">
+                      {formatPercent(contextCapacity.usedRatio)}
+                    </span>
+                  </button>
+                  {contextCapacityOpen ? (
+                    <div className="absolute bottom-full right-0 z-30 mb-2">
+                      <ContextCapacityPopover capacity={contextCapacity} />
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
               {hideModelPicker ? null : (
                 <FloatingComposerModelPicker
                   compact={compact}
@@ -2138,15 +2290,21 @@ export function FloatingComposer({
                 className="ds-composer-usage ds-no-drag inline-flex min-h-7 max-w-full min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 overflow-visible rounded-lg border border-ds-border-muted bg-ds-card/72 px-2.5 py-0.5 text-[12.5px] font-medium leading-5 text-ds-muted shadow-sm"
                 title={
                   threadUsage
-                    ? t('sessionUsageDetailsTitle', {
+                    ? t(
+                        threadUsage.lastTurnCacheHitRate != null
+                          ? 'sessionUsageDetailsTitleWithLatestCache'
+                          : 'sessionUsageDetailsTitle',
+                        {
                         tokens: formatCompactNumber(threadUsage.totalTokens),
                         cost: formatCost(threadUsage.costUsd, i18n.language, threadUsage.costCny),
                         saved: formatCompactNumber(threadUsage.tokenEconomySavingsTokens),
                         cache: formatPercent(threadUsage.cacheHitRate),
+                        latestCache: formatPercent(threadUsage.lastTurnCacheHitRate),
                         cached: formatCompactNumber(threadUsage.cachedTokens),
                         miss: formatCompactNumber(threadUsage.cacheMissTokens),
                         turns: threadUsage.turns
-                      })
+                        }
+                      )
                     : t('sessionUsageUnavailable')
                 }
               >
@@ -2182,7 +2340,7 @@ export function FloatingComposer({
                     <span className="ds-composer-usage-cache-separator text-ds-faint">·</span>
                     <span className="ds-composer-usage-cache shrink-0 truncate tabular-nums">
                       {t('sessionUsageCache', {
-                        cache: formatPercent(threadUsage.lastTurnCacheHitRate ?? threadUsage.cacheHitRate)
+                        cache: formatPercent(primaryCacheHitRate(threadUsage))
                       })}
                     </span>
                     <span className="ds-composer-usage-turns-separator text-ds-faint">·</span>

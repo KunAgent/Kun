@@ -815,4 +815,60 @@ describe('parseWriteInlineAction', () => {
       scopeKind: 'selection'
     })
   })
+
+  it('returns an empty completion for a malformed marker skeleton instead of leaking markers', () => {
+    // Regression: a degenerate single-line skeleton used to fall through to the
+    // plain-text fallback and render ">>> <<<LONG >>> <<<EDIT" as ghost text.
+    expect(parseWriteInlineAction('>>> <<<LONG >>> <<<EDIT')).toEqual({
+      kind: 'short',
+      text: ''
+    })
+    expect(parseWriteInlineAction('<<<SHORT >>> <<<LONG >>> <<<EDIT >>>', { fallbackKind: 'long' })).toEqual({
+      kind: 'long',
+      text: ''
+    })
+  })
+
+  it('returns an empty completion when the model parrots the protocol template', () => {
+    const template = [
+      '<<<SHORT',
+      'short text to insert at the cursor',
+      '>>>',
+      '<<<LONG',
+      'longer continuation to insert at the cursor',
+      '>>>',
+      '<<<EDIT',
+      'replacement text for the editable local scope',
+      '>>>'
+    ].join('\n')
+    expect(parseWriteInlineAction(template)).toEqual({ kind: 'short', text: '' })
+  })
+
+  it('parses same-line marked blocks', () => {
+    expect(parseWriteInlineAction('<<<SHORT next words >>>')).toEqual({
+      kind: 'short',
+      text: 'next words'
+    })
+  })
+
+  it('prefers the first non-empty block when an earlier block is empty', () => {
+    expect(parseWriteInlineAction('<<<SHORT\n>>>\n<<<LONG\nA fuller continuation.\n>>>')).toEqual({
+      kind: 'long',
+      text: 'A fuller continuation.'
+    })
+  })
+
+  it('extracts a block that dropped its closing marker without swallowing the next marker', () => {
+    expect(parseWriteInlineAction('<<<SHORT\nnext words\n<<<EDIT\nignored\n>>>')).toEqual({
+      kind: 'short',
+      text: 'next words'
+    })
+  })
+
+  it('keeps plain text that legitimately contains >>> when no protocol marker is present', () => {
+    expect(parseWriteInlineAction('>>> a Python prompt')).toEqual({
+      kind: 'short',
+      text: '>>> a Python prompt'
+    })
+  })
 })

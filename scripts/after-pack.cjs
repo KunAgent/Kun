@@ -1,5 +1,5 @@
 const { execFileSync } = require('node:child_process')
-const { existsSync, rmSync } = require('node:fs')
+const { chmodSync, existsSync, readdirSync, rmSync } = require('node:fs')
 const { join } = require('node:path')
 
 const KUN_RUNTIME_REQUIRED_PATHS = [
@@ -112,9 +112,29 @@ function maybeAdhocSignMacApp(context) {
   )
 }
 
+// node-pty execs a bundled `spawn-helper` binary to fork the child shell.
+// asar unpacking can drop the executable bit, which makes every PTY spawn
+// fail with `posix_spawnp`. Re-chmod every bundled helper after packing so
+// the built-in terminal works in the shipped app. Non-fatal: best effort.
+function ensureNodePtyHelpersExecutable(context) {
+  const root = unpackedAppRoot(context)
+  const prebuildsDir = join(root, 'node_modules', 'node-pty', 'prebuilds')
+  if (!existsSync(prebuildsDir)) return
+  for (const folder of readdirSync(prebuildsDir)) {
+    const helper = join(prebuildsDir, folder, 'spawn-helper')
+    if (!existsSync(helper)) continue
+    try {
+      chmodSync(helper, 0o755)
+    } catch (error) {
+      console.warn(`[after-pack] could not chmod node-pty spawn-helper (${folder}):`, error.message)
+    }
+  }
+}
+
 async function afterPack(context) {
   prunePackedKunDependencies(context)
   validateBundledKunRuntime(context)
+  ensureNodePtyHelpersExecutable(context)
   maybeAdhocSignMacApp(context)
 }
 
@@ -125,6 +145,7 @@ exports._internals = {
   unpackedAppRoot,
   npmCommand,
   prunePackedKunDependencies,
-  validateBundledKunRuntime
+  validateBundledKunRuntime,
+  ensureNodePtyHelpersExecutable
 }
 exports.default = afterPack

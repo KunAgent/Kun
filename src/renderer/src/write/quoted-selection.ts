@@ -12,7 +12,8 @@ export const WRITE_RETRIEVAL_HEADING = '[相关文献上下文]'
 export const WRITE_RETRIEVAL_END = '[/相关文献上下文]'
 
 const WRITE_ASSISTANT_INTERACTION_RULE =
-  '交互限制: 当前 GUI 无法提交 request_user_input 的 HTTP 响应；需要更多信息时，直接用普通文本向用户提问，不要调用 request_user_input。'
+  '交互限制: 当前 GUI 无法提交 request_user_input 的 HTTP 响应；需要更多信息时，直接用普通文本向用户提问，不要调用 request_user_input。\n' +
+  '改稿约定: 当用户要求修改、改写、润色、翻译、续写、扩写或整理“当前文件”所指的文档时，你必须用 edit 或 write 工具把改动直接写入该文件（建议先用 read 取到准确原文，再 edit/write），完成后只用一两句话说明改了什么——绝不要只在回复里贴出修改后的文本却不落盘。用户会在编辑器里以行级红绿 Diff 审阅你的改动、逐行接受或拒绝，所以请放心直接改。仅当用户只是提问、讨论、或处理的是只读引用片段时，才用纯文本回答、不改文件。'
 
 export type WriteQuotedSelection = {
   id: string
@@ -110,6 +111,9 @@ type WritePromptContext = {
   workspaceRoot?: string
   activeFilePath?: string | null
   retrieval?: WriteRetrievalContext | null
+  /** Active writing-agent persona; folded into the context block so it frames the
+   * model without showing as raw text in the user's message bubble. */
+  agentPersona?: string
 }
 
 export type WritePromptDisplayContext = {
@@ -190,6 +194,9 @@ export function composeWritePrompt(
   const body = input.trim()
   const contextLines: string[] = []
   contextLines.push(WRITE_ASSISTANT_INTERACTION_RULE)
+  if (context.agentPersona?.trim()) {
+    contextLines.push(`当前写作 Agent 人设（请严格遵循）：${context.agentPersona.trim()}`)
+  }
   if (context.workspaceRoot?.trim()) {
     contextLines.push(`工作空间: ${context.workspaceRoot.trim()}`)
   }

@@ -678,7 +678,8 @@ function modelConfigProfilesFromProviderProfiles(
       outputModalities: profile.outputModalities,
       supportsToolCalling: profile.supportsToolCalling,
       messageParts: profile.messageParts,
-      ...(profile.reasoning ? { reasoning: profile.reasoning } : {})
+      ...(profile.reasoning ? { reasoning: profile.reasoning } : {}),
+      ...(profile.endpointFormat ? { endpointFormat: profile.endpointFormat } : {})
     }
   }
   return out
@@ -851,6 +852,7 @@ function runtimeTuningConfigForRuntime(
   const existingToolArgumentRepair = objectValue(existing.toolArgumentRepair)
   return {
     ...existing,
+    streamIdleTimeoutMs: runtimeTuning.streamIdleTimeoutMs,
     toolStorm: {
       ...existingToolStorm,
       enabled: runtimeTuning.toolStorm.enabled,

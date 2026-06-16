@@ -8,17 +8,30 @@ import {
   DEFAULT_WRITE_INLINE_LONG_COMPLETION_MAX_TOKENS,
   DEFAULT_WRITE_INLINE_LONG_COMPLETION_MIN_ACCEPT_SCORE,
   DEFAULT_WRITE_WORKSPACE_ROOT,
+  DEFAULT_WRITE_EDITOR_FONT_SIZE_PX,
+  DEFAULT_WRITE_EDITOR_LINE_HEIGHT,
+  WRITE_EDITOR_FONT_SIZE_MAX,
+  WRITE_EDITOR_FONT_SIZE_MIN,
+  WRITE_EDITOR_LINE_HEIGHT_MAX,
+  WRITE_EDITOR_LINE_HEIGHT_MIN,
+  WRITE_FONT_PRESETS,
+  WRITE_AGENT_PERSONA_MAX_CHARS,
+  WRITE_AGENT_PRESET_MAX_COUNT,
+  WRITE_AGENT_PRESET_NAME_MAX_CHARS,
   DEFAULT_MODEL_ENDPOINT_FORMAT,
   DEFAULT_MODEL_PROVIDER_ID,
   type AppSettingsV1,
   type ModelEndpointFormat,
   type ModelProviderProfileV1,
+  type WriteAgentPresetV1,
+  type WriteFontPreset,
   type WriteInlineCompletionSettingsV1,
   type WriteQuickActionMode,
   type WriteQuickActionV1,
   type WriteSelectionAssistSettingsV1,
   type WriteSettingsPatchV1,
-  type WriteSettingsV1
+  type WriteSettingsV1,
+  type WriteTypographySettingsV1
 } from './app-settings-types'
 import { getActiveAgentApiKey, getKunRuntimeSettings } from './app-settings-kun'
 import { getModelProviderProfile, resolveModelProviderBaseUrl } from './app-settings-provider'
@@ -35,9 +48,11 @@ export const WRITE_QUICK_ACTION_MAX_COUNT = 12
 export const WRITE_QUICK_ACTION_LABEL_MAX_CHARS = 64
 export const WRITE_QUICK_ACTION_PROMPT_MAX_CHARS = 4_000
 
-// Built-in default modes: polish/explain answer through the sidebar assistant
-// (the inline rewrite pipeline proved too lossy for prose), reformat rewrites
-// the selection in place.
+// Built-in default modes: polish/explain answer through the sidebar assistant —
+// reliable, high-quality prose (the in-place inline-edit pipeline proved too
+// lossy/slow for whole-paragraph rewrites). reformat rewrites in place and lands
+// as an inline red/green diff review, as does any instruction typed into the
+// floating "AI edit" box.
 const WRITE_QUICK_ACTION_BUILTIN_MODES: Record<string, WriteQuickActionMode> = {
   polish: 'chat',
   explain: 'chat',
@@ -114,19 +129,133 @@ export function normalizeWriteSelectionAssistSettings(
     if (pristineBuiltin && WRITE_QUICK_ACTION_RETIRED_IDS.has(id)) continue
     const storedMode: WriteQuickActionMode | null =
       raw?.mode === 'edit' || raw?.mode === 'chat' ? raw.mode : null
-    // One-shot migration: pristine 'polish' rows persisted the old in-place
-    // default; they follow the new sidebar default. Customized rows keep the
-    // user's explicit mode choice.
+    // Pristine 'polish' rows follow the current built-in default (sidebar chat),
+    // migrating away from any older in-place value. Customized rows (with a label
+    // or prompt) keep the user's explicit mode choice.
     const mode: WriteQuickActionMode = storedMode === null
       ? builtinWriteQuickActionMode(id)
-      : pristineBuiltin && id === 'polish' && storedMode === 'edit'
-        ? 'chat'
+      : pristineBuiltin && id === 'polish'
+        ? builtinWriteQuickActionMode(id)
         : storedMode
     seen.add(id)
     quickActions.push({ id, label, prompt, mode })
     if (quickActions.length >= WRITE_QUICK_ACTION_MAX_COUNT) break
   }
   return { infographicPrompt, designDraftPrompt, prototypePrompt, quickActions }
+}
+
+// Concrete CSS font-family stacks per preset. Every stack ends with a generic
+// family and chains CJK fallbacks so a missing primary face still renders a
+// sensible Chinese font across macOS/Windows.
+const WRITE_FONT_STACKS: Record<Exclude<WriteFontPreset, 'custom'>, string> = {
+  system:
+    "-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Noto Sans SC', 'Microsoft YaHei', sans-serif",
+  sourceHanSans: "'Source Han Sans SC', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif",
+  yahei: "'Microsoft YaHei', '微软雅黑', 'PingFang SC', 'Noto Sans SC', sans-serif",
+  pingfang: "'PingFang SC', 'Hiragino Sans GB', 'Noto Sans SC', 'Microsoft YaHei', sans-serif",
+  simhei: "'SimHei', '黑体', 'PingFang SC', 'Noto Sans SC', sans-serif",
+  simsun: "'SimSun', '宋体', 'Songti SC', serif",
+  kaiti: "'KaiTi', '楷体', 'STKaiti', 'Songti SC', serif"
+}
+
+export const DEFAULT_WRITE_FONT_PRESET: WriteFontPreset = 'system'
+
+export function defaultWriteTypography(): WriteTypographySettingsV1 {
+  return {
+    fontPreset: DEFAULT_WRITE_FONT_PRESET,
+    customFontFamily: '',
+    fontSizePx: DEFAULT_WRITE_EDITOR_FONT_SIZE_PX,
+    lineHeight: DEFAULT_WRITE_EDITOR_LINE_HEIGHT
+  }
+}
+
+/** Resolves a typography preset to a concrete CSS `font-family` stack. */
+export function writeFontStackFor(preset: WriteFontPreset, customFontFamily: string): string {
+  if (preset === 'custom') {
+    const trimmed = customFontFamily.trim()
+    return trimmed || WRITE_FONT_STACKS.system
+  }
+  return WRITE_FONT_STACKS[preset] ?? WRITE_FONT_STACKS.system
+}
+
+function clampWriteNumber(value: unknown, min: number, max: number, fallback: number): number {
+  const n = Number(value)
+  if (!Number.isFinite(n)) return fallback
+  return Math.max(min, Math.min(max, n))
+}
+
+export function normalizeWriteTypography(
+  input: Partial<WriteTypographySettingsV1> | undefined
+): WriteTypographySettingsV1 {
+  const defaults = defaultWriteTypography()
+  const fontPreset =
+    typeof input?.fontPreset === 'string' &&
+    (WRITE_FONT_PRESETS as readonly string[]).includes(input.fontPreset)
+      ? (input.fontPreset as WriteFontPreset)
+      : defaults.fontPreset
+  const customFontFamily =
+    typeof input?.customFontFamily === 'string' ? input.customFontFamily.slice(0, 200) : defaults.customFontFamily
+  const fontSizePx = Math.round(
+    clampWriteNumber(input?.fontSizePx, WRITE_EDITOR_FONT_SIZE_MIN, WRITE_EDITOR_FONT_SIZE_MAX, defaults.fontSizePx)
+  )
+  // Snap line-height to one decimal so the slider produces clean values.
+  const lineHeight =
+    Math.round(
+      clampWriteNumber(
+        input?.lineHeight,
+        WRITE_EDITOR_LINE_HEIGHT_MIN,
+        WRITE_EDITOR_LINE_HEIGHT_MAX,
+        defaults.lineHeight
+      ) * 10
+    ) / 10
+  return { fontPreset, customFontFamily, fontSizePx, lineHeight }
+}
+
+export const WRITE_AGENT_PRESET_BUILTIN_IDS = ['coordinator', 'editor', 'foreshadowing', 'continuity'] as const
+
+const WRITE_AGENT_PRESET_BUILTIN_EMOJI: Record<string, string> = {
+  coordinator: '🧭',
+  editor: '✒️',
+  foreshadowing: '🪤',
+  continuity: '🔍'
+}
+
+export function isBuiltinWriteAgentPresetId(id: string): boolean {
+  return (WRITE_AGENT_PRESET_BUILTIN_IDS as readonly string[]).includes(id)
+}
+
+// Writing agents are fully user-defined and opt-in: default to none and ship no
+// preset templates. Pristine built-in ids left over from older builds are
+// dropped in normalizeWriteAgentPresets so the list always starts clean.
+export function defaultWriteAgentPresets(): WriteAgentPresetV1[] {
+  return []
+}
+
+export function normalizeWriteAgentPresets(
+  input: Array<Partial<WriteAgentPresetV1>> | undefined
+): WriteAgentPresetV1[] {
+  if (!Array.isArray(input)) return defaultWriteAgentPresets()
+  const seen = new Set<string>()
+  const presets: WriteAgentPresetV1[] = []
+  for (const raw of input) {
+    const id = typeof raw?.id === 'string' ? raw.id.trim().slice(0, 64) : ''
+    if (!id || seen.has(id)) continue
+    const name = typeof raw?.name === 'string' ? raw.name.slice(0, WRITE_AGENT_PRESET_NAME_MAX_CHARS) : ''
+    const persona = typeof raw?.persona === 'string' ? raw.persona.slice(0, WRITE_AGENT_PERSONA_MAX_CHARS) : ''
+    // Drop un-customized built-in templates left over from older builds: writing
+    // agents ship no presets, so a pristine 'coordinator'/'editor'/… row (empty
+    // name AND persona) is cleared instead of resurrected with a default.
+    if (isBuiltinWriteAgentPresetId(id) && !name.trim() && !persona.trim()) continue
+    seen.add(id)
+    presets.push({
+      id,
+      name,
+      emoji: typeof raw?.emoji === 'string' ? raw.emoji.slice(0, 8) : (WRITE_AGENT_PRESET_BUILTIN_EMOJI[id] ?? ''),
+      persona
+    })
+    if (presets.length >= WRITE_AGENT_PRESET_MAX_COUNT) break
+  }
+  return presets
 }
 
 export function defaultWriteSettings(): WriteSettingsV1 {
@@ -151,7 +280,9 @@ export function defaultWriteSettings(): WriteSettingsV1 {
       maxTokens: DEFAULT_WRITE_INLINE_COMPLETION_MAX_TOKENS,
       longMaxTokens: DEFAULT_WRITE_INLINE_LONG_COMPLETION_MAX_TOKENS
     },
-    selectionAssist: defaultWriteSelectionAssistSettings()
+    selectionAssist: defaultWriteSelectionAssistSettings(),
+    typography: defaultWriteTypography(),
+    agentPresets: defaultWriteAgentPresets()
   }
 }
 
@@ -304,7 +435,9 @@ export function normalizeWriteSettings(input: WriteSettingsPatchV1 | undefined):
     activeWorkspaceRoot,
     workspaces: workspaces.length > 0 ? workspaces : [defaultWorkspaceRoot],
     inlineCompletion: normalizeWriteInlineCompletionSettings(source.inlineCompletion),
-    selectionAssist: normalizeWriteSelectionAssistSettings(source.selectionAssist)
+    selectionAssist: normalizeWriteSelectionAssistSettings(source.selectionAssist),
+    typography: normalizeWriteTypography(source.typography),
+    agentPresets: normalizeWriteAgentPresets(source.agentPresets)
   }
 }
 
@@ -331,10 +464,17 @@ export function mergeWriteSettings(
     ...selectionAssistPatch
   }
 
+  const typographyPatch = patch?.typography ?? {}
+  const nextTypography: Partial<WriteTypographySettingsV1> = {
+    ...current.typography,
+    ...typographyPatch
+  }
+
   return normalizeWriteSettings({
     ...current,
     ...(patch ?? {}),
     inlineCompletion: nextInlineCompletion,
-    selectionAssist: nextSelectionAssist
+    selectionAssist: nextSelectionAssist,
+    typography: nextTypography
   })
 }

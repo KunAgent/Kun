@@ -4,7 +4,9 @@ import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirro
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
 import { bracketMatching, indentOnInput } from '@codemirror/language'
 import { languages } from '@codemirror/language-data'
-import { drawSelection, EditorView, highlightActiveLine, keymap, type ViewUpdate } from '@codemirror/view'
+import { drawSelection, EditorView, highlightActiveLine, keymap, showPanel, type Panel, type ViewUpdate } from '@codemirror/view'
+import { acceptChunk, getChunks, rejectChunk, unifiedMergeView } from '@codemirror/merge'
+import i18n from '../../i18n'
 import {
   applyWriteBlockTypeToLines,
   detectWriteBlockTypeFromLine,
@@ -87,6 +89,19 @@ export type WriteMarkdownEditorHandle = {
   ) => boolean
   /** Rewrite the block markers of the lines spanning the current selection. */
   setBlockType: (type: WriteBlockType) => boolean
+  /**
+   * Enters an inline red/green diff review: swaps the document to `nextDoc` and
+   * shows a per-chunk accept/reject merge view against `original`. Returns false
+   * when the editor is read-only/unavailable, a review is already running, or
+   * the texts are identical.
+   */
+  beginDiffReview: (params: { original: string; nextDoc: string }) => boolean
+  /** True while an inline diff review is in progress. */
+  isDiffReviewActive: () => boolean
+  /** Accepts every pending diff chunk and commits the result. */
+  acceptAllDiff: () => void
+  /** Rejects every pending diff chunk (reverting to the original) and commits. */
+  rejectAllDiff: () => void
 }
 
 type Props = {
@@ -111,6 +126,8 @@ type Props = {
   onSaveShortcut: () => void
   onImagePasteSaved?: () => void
   onImagePasteError?: (message: string) => void
+  /** Notified when an inline diff review starts (true) or commits/cancels (false). */
+  onReviewStateChange?: (active: boolean) => void
   handleRef?: MutableRefObject<WriteMarkdownEditorHandle | null>
 }
 
@@ -270,14 +287,16 @@ function buildEditorTheme(appearance: 'source' | 'live'): Extension {
       minHeight: '0',
       color: 'var(--ds-text)',
       backgroundColor: 'transparent',
+      // Prose (live) appearance follows the configured editor font; the raw
+      // source appearance keeps a monospace family but still honors the size.
       fontFamily: sourceMode
         ? 'ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace'
-        : "-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Noto Sans SC', 'Microsoft YaHei', sans-serif",
-      fontSize: sourceMode ? '14px' : '16px'
+        : "var(--write-editor-font-family, -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Noto Sans SC', 'Microsoft YaHei', sans-serif)",
+      fontSize: 'var(--write-editor-font-size, 16px)'
     },
     '.cm-scroller': {
       overflow: 'auto',
-      lineHeight: '1.75',
+      lineHeight: 'var(--write-editor-line-height, 1.75)',
       backgroundColor: 'transparent'
     },
     '.cm-content': {
@@ -387,6 +406,7 @@ export function WriteMarkdownEditor({
   onSaveShortcut,
   onImagePasteSaved,
   onImagePasteError,
+  onReviewStateChange,
   handleRef
 }: Props): ReactElement {
   const hostRef = useRef<HTMLDivElement | null>(null)
@@ -414,6 +434,9 @@ export function WriteMarkdownEditor({
   const onSaveShortcutRef = useRef(onSaveShortcut)
   const onImagePasteSavedRef = useRef(onImagePasteSaved)
   const onImagePasteErrorRef = useRef(onImagePasteError)
+  const onReviewStateChangeRef = useRef(onReviewStateChange)
+  const mergeCompartmentRef = useRef<Compartment | null>(null)
+  const reviewActiveRef = useRef(false)
   const valueRef = useRef(value)
   const lastSelectionRef = useRef<WriteEditorSelectionState | null>(null)
   const lastEmittedValueRef = useRef<string | null>(null)
@@ -438,6 +461,7 @@ export function WriteMarkdownEditor({
   onSaveShortcutRef.current = onSaveShortcut
   onImagePasteSavedRef.current = onImagePasteSaved
   onImagePasteErrorRef.current = onImagePasteError
+  onReviewStateChangeRef.current = onReviewStateChange
   valueRef.current = value
 
   useEffect(() => {
@@ -447,9 +471,94 @@ export function WriteMarkdownEditor({
     const themeCompartment = new Compartment()
     const livePreviewCompartment = new Compartment()
     const editableCompartment = new Compartment()
+    const mergeCompartment = new Compartment()
     themeCompartmentRef.current = themeCompartment
     livePreviewCompartmentRef.current = livePreviewCompartment
     editableCompartmentRef.current = editableCompartment
+    mergeCompartmentRef.current = mergeCompartment
+
+    // --- Inline red/green diff review -----------------------------------------
+    // AI rewrites enter a unified merge view (per-line accept/reject) instead of
+    // overwriting the document. While a review is active, onChange is suppressed
+    // so nothing is persisted until the user resolves every chunk.
+    const finishDiffReview = (): void => {
+      const instance = viewRef.current
+      if (!instance || !reviewActiveRef.current) return
+      const finalDoc = instance.state.doc.toString()
+      reviewActiveRef.current = false
+      instance.dispatch({
+        effects: [
+          mergeCompartment.reconfigure([]),
+          // Restore the live-preview decorations that were suspended for review.
+          livePreviewCompartment.reconfigure(
+            appearanceRef.current === 'live' && livePreviewEnabledRef.current
+              ? writeMarkdownLivePreviewExtensions(filePathRef.current, workspaceRootRef.current)
+              : []
+          )
+        ]
+      })
+      lastEmittedValueRef.current = finalDoc
+      onChangeRef.current(finalDoc)
+      onReviewStateChangeRef.current?.(false)
+    }
+    const resolveAllDiffChunks = (mode: 'accept' | 'reject'): void => {
+      const instance = viewRef.current
+      if (!instance || !reviewActiveRef.current) return
+      for (let guard = 0; guard < 10_000; guard += 1) {
+        const data = getChunks(instance.state)
+        if (!data || data.chunks.length === 0) break
+        const pos = data.chunks[0].fromB
+        if (mode === 'accept') acceptChunk(instance, pos)
+        else rejectChunk(instance, pos)
+      }
+      finishDiffReview()
+    }
+    const buildDiffReviewPanel = (): Panel => {
+      const dom = document.createElement('div')
+      dom.className = 'cm-write-diff-panel'
+      const label = document.createElement('span')
+      label.className = 'cm-write-diff-panel-label'
+      label.textContent = i18n.t('writeDiffReviewing', { ns: 'common' })
+      const reject = document.createElement('button')
+      reject.type = 'button'
+      reject.className = 'cm-write-diff-reject-all'
+      reject.textContent = i18n.t('writeDiffRejectAll', { ns: 'common' })
+      reject.addEventListener('mousedown', (event) => event.preventDefault())
+      reject.addEventListener('click', () => resolveAllDiffChunks('reject'))
+      const accept = document.createElement('button')
+      accept.type = 'button'
+      accept.className = 'cm-write-diff-accept-all'
+      accept.textContent = i18n.t('writeDiffAcceptAll', { ns: 'common' })
+      accept.addEventListener('mousedown', (event) => event.preventDefault())
+      accept.addEventListener('click', () => resolveAllDiffChunks('accept'))
+      dom.append(label, reject, accept)
+      return { dom, top: true }
+    }
+    // Restartable: when a review is already active (e.g. the agent edits the
+    // file again mid-turn), this re-points the merge view at the new target
+    // against the same baseline instead of bailing.
+    const beginDiffReview = (original: string, nextDoc: string): boolean => {
+      const instance = viewRef.current
+      if (!instance || readOnlyRef.current) return false
+      if (nextDoc === original) return false
+      reviewActiveRef.current = true
+      instance.dispatch({
+        changes: { from: 0, to: instance.state.doc.length, insert: nextDoc },
+        annotations: externalValueSyncAnnotation.of(true),
+        effects: [
+          // Suspend live-preview decorations so the raw red/green diff (and the
+          // merge view's deleted-line widgets) render cleanly during review.
+          livePreviewCompartment.reconfigure([]),
+          mergeCompartment.reconfigure([
+            unifiedMergeView({ original, gutter: false, collapseUnchanged: { margin: 3, minSize: 4 } }),
+            showPanel.of(buildDiffReviewPanel)
+          ])
+        ]
+      })
+      lastEmittedValueRef.current = nextDoc
+      onReviewStateChangeRef.current?.(true)
+      return true
+    }
     const inlineCompletionExtension = buildInlineCompletionExtension({
       getDebounceMs: () => completionDebounceMsRef.current,
       getMinAcceptScore: () => completionMinAcceptScoreRef.current,
@@ -498,6 +607,7 @@ export function WriteMarkdownEditor({
             : []
         ),
         editableCompartment.of(buildInteractionExtensions(readOnlyRef.current, appearanceRef.current)),
+        mergeCompartment.of([]),
         markdown({ base: markdownLanguage, codeLanguages: languages }),
         history(),
         drawSelection(),
@@ -586,6 +696,14 @@ export function WriteMarkdownEditor({
           const termPropagationSync = update.transactions.some((transaction) =>
             transaction.annotation(termPropagationAnnotation)
           )
+          // A diff review resolves once every chunk is accepted/rejected. Commit
+          // it after the dispatch settles to avoid reentrant transactions.
+          if (reviewActiveRef.current && !externalValueSync) {
+            const chunkData = getChunks(update.state)
+            if (!chunkData || chunkData.chunks.length === 0) {
+              queueMicrotask(() => finishDiffReview())
+            }
+          }
           // Materialise the document string at most once per update; on large
           // documents doc.toString() walks the whole rope and used to run for
           // both the onChange emit and the term propagation scan.
@@ -594,7 +712,7 @@ export function WriteMarkdownEditor({
             if (docString === null) docString = update.state.doc.toString()
             return docString
           }
-          if (update.docChanged && !externalValueSync) {
+          if (update.docChanged && !externalValueSync && !reviewActiveRef.current) {
             const recentEdits = recentEditsFromUpdate(update, filePathRef.current)
             if (recentEdits.length > 0) onDocumentEditRef.current?.(recentEdits)
             lastEmittedValueRef.current = docText()
@@ -610,7 +728,7 @@ export function WriteMarkdownEditor({
               onSelectionChangeRef.current(nextSelection)
             }
           }
-          if (update.docChanged && !externalValueSync && !termPropagationSync) {
+          if (update.docChanged && !externalValueSync && !termPropagationSync && !reviewActiveRef.current) {
             const seed = termReplacementSeedFromUpdate(update)
             if (seed) {
               const content = docText()
@@ -682,17 +800,23 @@ export function WriteMarkdownEditor({
             scrollIntoView: true
           })
           return true
-        }
+        },
+        beginDiffReview: ({ original, nextDoc }) => beginDiffReview(original, nextDoc),
+        isDiffReviewActive: () => reviewActiveRef.current,
+        acceptAllDiff: () => resolveAllDiffChunks('accept'),
+        rejectAllDiff: () => resolveAllDiffChunks('reject')
       }
     }
 
     return () => {
       if (handleRef) handleRef.current = null
+      reviewActiveRef.current = false
       view.destroy()
       viewRef.current = null
       themeCompartmentRef.current = null
       livePreviewCompartmentRef.current = null
       editableCompartmentRef.current = null
+      mergeCompartmentRef.current = null
     }
     // Mount-once editor; handleRef is a stable ref container from the parent.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -720,6 +844,9 @@ export function WriteMarkdownEditor({
   useEffect(() => {
     const view = viewRef.current
     if (!view) return
+    // While an inline diff review owns the document, never let the controlled
+    // value sync clobber the in-progress merge view.
+    if (reviewActiveRef.current) return
     // The value usually round-trips from our own onChange emit; comparing the
     // reference first avoids re-serialising the whole document per keystroke.
     if (value === lastEmittedValueRef.current) return

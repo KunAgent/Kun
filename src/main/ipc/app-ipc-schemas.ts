@@ -48,6 +48,15 @@ import { KEYBOARD_SHORTCUT_COMMANDS } from '../../shared/keyboard-shortcuts'
 import { WRITE_EXPORT_FORMATS } from '../../shared/write-export'
 import { WRITE_INFOGRAPHIC_MAX_TEXT_CHARS } from '../../shared/write-infographic'
 import { SPEECH_TRANSCRIPTION_MAX_BASE64_CHARS, SPEECH_TRANSCRIPTION_MAX_DURATION_MS } from '../../shared/speech-to-text'
+import {
+  TERMINAL_DEFAULT_COLS,
+  TERMINAL_DEFAULT_ROWS,
+  TERMINAL_MAX_COLS,
+  TERMINAL_MAX_CWD_LENGTH,
+  TERMINAL_MAX_DATA_WRITE_BYTES,
+  TERMINAL_MAX_ROWS,
+  TERMINAL_MAX_SESSION_ID_LENGTH
+} from '../../shared/terminal'
 
 const MAX_BODY_BYTES = 2_000_000
 const MAX_PATH_LENGTH = 4_096
@@ -91,6 +100,12 @@ export const confirmDialogPayloadSchema = z
     detail: z.string().max(8_000).optional(),
     confirmLabel: z.string().trim().max(200).optional(),
     cancelLabel: z.string().trim().max(200).optional()
+  })
+  .strict()
+
+export const legacySessionImportPayloadSchema = z
+  .object({
+    sourceDir: defaultPathSchema
   })
   .strict()
 
@@ -230,7 +245,8 @@ const modelProfilePatchSchema = z.object({
     supportedEfforts: z.array(modelReasoningEffortSchema).min(1).max(8),
     defaultEffort: modelReasoningEffortSchema,
     requestProtocol: modelReasoningRequestProtocolSchema
-  }).strict().optional()
+  }).strict().optional(),
+  endpointFormat: modelEndpointFormatSchema.optional()
 }).strict()
 
 const modelProviderPatchSchema = z.object({
@@ -327,6 +343,7 @@ const kunRuntimePatchSchema = z.object({
     summaryInputMaxBytes: z.number().int().positive().max(8 * 1024 * 1024).optional()
   }).strict().optional(),
   runtimeTuning: z.object({
+    streamIdleTimeoutMs: z.number().int().min(0).max(3_600_000).optional(),
     toolStorm: z.object({
       enabled: z.boolean().optional(),
       windowSize: z.number().int().positive().max(128).optional(),
@@ -457,12 +474,28 @@ const writeSelectionAssistPatchSchema = z.object({
   quickActions: z.array(writeQuickActionSchema).max(24).optional()
 }).strict()
 
+const writeTypographyPatchSchema = z.object({
+  fontPreset: z.string().max(32).optional(),
+  customFontFamily: z.string().max(200).optional(),
+  fontSizePx: z.number().optional(),
+  lineHeight: z.number().optional()
+}).strict()
+
+const writeAgentPresetSchema = z.object({
+  id: trimmedString(64),
+  name: z.string().max(64).optional(),
+  emoji: z.string().max(16).optional(),
+  persona: z.string().max(4_000).optional()
+}).strict()
+
 const writeSettingsPatchSchema = z.object({
   defaultWorkspaceRoot: defaultPathSchema,
   activeWorkspaceRoot: defaultPathSchema,
   workspaces: z.array(trimmedString(MAX_PATH_LENGTH)).max(256).optional(),
   inlineCompletion: writeInlineCompletionPatchSchema.optional(),
-  selectionAssist: writeSelectionAssistPatchSchema.optional()
+  selectionAssist: writeSelectionAssistPatchSchema.optional(),
+  typography: writeTypographyPatchSchema.optional(),
+  agentPresets: z.array(writeAgentPresetSchema).max(24).optional()
 }).strict()
 
 const clawSkillPatchSchema = z.object({
@@ -1073,5 +1106,31 @@ export const streamIdSchema = trimmedString(MAX_ID_LENGTH)
 export const uiPluginIdPayloadSchema = z
   .object({
     id: z.string().trim().regex(/^[a-z0-9][a-z0-9-]{1,39}$/)
+  })
+  .strict()
+
+export const terminalSessionIdSchema = trimmedString(TERMINAL_MAX_SESSION_ID_LENGTH)
+
+export const terminalCreatePayloadSchema = z
+  .object({
+    sessionId: trimmedString(TERMINAL_MAX_SESSION_ID_LENGTH),
+    cwd: optionalTrimmedString(TERMINAL_MAX_CWD_LENGTH),
+    cols: z.number().int().min(1).max(TERMINAL_MAX_COLS).optional(),
+    rows: z.number().int().min(1).max(TERMINAL_MAX_ROWS).optional()
+  })
+  .strict()
+
+export const terminalWritePayloadSchema = z
+  .object({
+    sessionId: trimmedString(TERMINAL_MAX_SESSION_ID_LENGTH),
+    data: z.string().min(1).max(TERMINAL_MAX_DATA_WRITE_BYTES)
+  })
+  .strict()
+
+export const terminalResizePayloadSchema = z
+  .object({
+    sessionId: trimmedString(TERMINAL_MAX_SESSION_ID_LENGTH),
+    cols: z.number().int().min(1).max(TERMINAL_MAX_COLS).default(TERMINAL_DEFAULT_COLS),
+    rows: z.number().int().min(1).max(TERMINAL_MAX_ROWS).default(TERMINAL_DEFAULT_ROWS)
   })
   .strict()

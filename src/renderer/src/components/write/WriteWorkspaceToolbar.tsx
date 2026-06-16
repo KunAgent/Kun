@@ -15,6 +15,7 @@ import { useTranslation } from 'react-i18next'
 import type { WriteExportFormat } from '@shared/write-export'
 import type { WritePreviewMode, WriteSaveStatus } from '../../write/write-workspace-store'
 import { SidebarTitlebarToggleButton } from '../sidebar/SidebarPrimitives'
+import { WriteFontSizeControl } from './WriteFontSizeControl'
 import {
   WRITE_EXPORT_FORMATS,
   exportFormatLabel,
@@ -31,6 +32,7 @@ type Props = {
   activeFileLabel: string
   activeFileName: string
   activeFilePath: string
+  documentStatsLabel: string | null
   assistantOpen: boolean
   exportInFlight: boolean
   exportMenuOpen: boolean
@@ -48,6 +50,7 @@ type Props = {
   readOnly: boolean
   saveLabel: string
   saveStatus: WriteSaveStatus
+  reviewActive?: boolean
   setAssistantOpen: (open: boolean) => void
   setExportMenuOpen: (open: boolean | ((open: boolean) => boolean)) => void
   setModeMenuOpen: (open: boolean | ((open: boolean) => boolean)) => void
@@ -61,6 +64,7 @@ export function WriteWorkspaceToolbar({
   activeFileLabel,
   activeFileName,
   activeFilePath,
+  documentStatsLabel,
   assistantOpen,
   exportInFlight,
   exportMenuOpen,
@@ -78,6 +82,7 @@ export function WriteWorkspaceToolbar({
   readOnly,
   saveLabel,
   saveStatus,
+  reviewActive = false,
   setAssistantOpen,
   setExportMenuOpen,
   setModeMenuOpen,
@@ -94,13 +99,11 @@ export function WriteWorkspaceToolbar({
                 leftSidebarCollapsed ? 'ds-window-controls-safe-inset' : ''
               }`}
             >
-              {leftSidebarCollapsed ? (
-                <SidebarTitlebarToggleButton
-                  onClick={onToggleLeftSidebar}
-                  title={t('sidebarExpand')}
-                  ariaLabel={t('sidebarExpand')}
-                />
-              ) : null}
+              <SidebarTitlebarToggleButton
+                onClick={onToggleLeftSidebar}
+                title={leftSidebarCollapsed ? t('sidebarExpand') : t('sidebarCollapse')}
+                ariaLabel={leftSidebarCollapsed ? t('sidebarExpand') : t('sidebarCollapse')}
+              />
               <span className="write-pdf-topbar-file-icon">
                 <FileText className="h-4 w-4" strokeWidth={1.9} />
               </span>
@@ -147,13 +150,11 @@ export function WriteWorkspaceToolbar({
               leftSidebarCollapsed ? 'ds-window-controls-safe-inset' : ''
             }`}
           >
-            {leftSidebarCollapsed ? (
-              <SidebarTitlebarToggleButton
-                onClick={onToggleLeftSidebar}
-                title={t('sidebarExpand')}
-                ariaLabel={t('sidebarExpand')}
-              />
-            ) : null}
+            <SidebarTitlebarToggleButton
+              onClick={onToggleLeftSidebar}
+              title={leftSidebarCollapsed ? t('sidebarExpand') : t('sidebarCollapse')}
+              ariaLabel={leftSidebarCollapsed ? t('sidebarExpand') : t('sidebarCollapse')}
+            />
             <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-accent/10 text-accent">
               <FilePenLine className="h-4 w-4" strokeWidth={1.9} />
             </span>
@@ -161,8 +162,13 @@ export function WriteWorkspaceToolbar({
               <div className="truncate text-[15px] font-semibold tracking-[-0.01em] text-ds-ink">
                 {activeFileName}
               </div>
-              <div className="mt-1.5 truncate text-[12px] text-ds-faint">
-                {activeFileLabel}
+              <div className="mt-1.5 flex min-w-0 items-center gap-2 text-[12px] text-ds-faint">
+                <span className="truncate">{activeFileLabel}</span>
+                {documentStatsLabel ? (
+                  <span className="shrink-0 rounded-full bg-ds-hover px-2 py-0.5 text-[11px] font-medium text-ds-muted">
+                    {documentStatsLabel}
+                  </span>
+                ) : null}
               </div>
             </div>
           </div>
@@ -234,6 +240,7 @@ export function WriteWorkspaceToolbar({
           </div>
 
           <div className="write-workspace-toolbar-actions flex min-w-0 items-center justify-end gap-1.5">
+            {activeFileIsText ? <WriteFontSizeControl /> : null}
             <button
               type="button"
               onClick={() => setAssistantOpen(!assistantOpen)}
@@ -254,7 +261,9 @@ export function WriteWorkspaceToolbar({
               <Save className="h-4 w-4" strokeWidth={1.85} />
             </button>
             <span className={`ml-1 inline-flex min-w-[64px] justify-center rounded-lg px-2.5 py-1 text-[11.5px] font-semibold ${
-              readOnly
+              reviewActive
+                ? 'bg-accent/12 text-accent'
+                : readOnly
                 ? 'bg-slate-500/12 text-slate-700 dark:text-slate-300'
                 : saveStatus === 'error'
                 ? 'bg-red-500/12 text-red-600 dark:text-red-300'
@@ -264,7 +273,7 @@ export function WriteWorkspaceToolbar({
                     ? 'bg-sky-500/12 text-sky-700 dark:text-sky-300'
                     : 'bg-emerald-500/12 text-emerald-700 dark:text-emerald-300'
             }`}>
-              {saveLabel}
+              {reviewActive ? t('writeReviewPending') : saveLabel}
             </span>
             <div ref={exportMenuRef} className="relative">
               <button

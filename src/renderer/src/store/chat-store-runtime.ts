@@ -418,7 +418,8 @@ function notifyWriteWorkspaceFileRefresh(
   void useWriteWorkspaceStore.getState().syncActiveFileFromDisk(workspaceRoot, {
     path: activeFilePath,
     animate: true,
-    force: true
+    force: true,
+    reviewAsDiff: true
   })
 }
 
@@ -1150,9 +1151,12 @@ export function buildThreadEventSink(
       // permanently in the busy state.
       if (get().busy) armBusyWatchdog(set, get)
     },
-    onUsage: () => {
+    onUsage: (usage) => {
       if (!isCurrentStream()) return
-      set((s) => ({ usageRefreshKey: s.usageRefreshKey + 1 }))
+      set((s) => ({
+        usageRefreshKey: s.usageRefreshKey + 1,
+        lastTurnUsage: { threadId: s.activeThreadId ?? '', snapshot: usage }
+      }))
     }
   }
 }

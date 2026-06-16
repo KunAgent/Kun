@@ -78,6 +78,12 @@ export function formatPercent(value: number | null): string {
   return `${percent.toFixed(1)}%`
 }
 
+export function primaryCacheHitRate(
+  usage: Pick<ThreadUsageSummary, 'cacheHitRate' | 'lastTurnCacheHitRate'>
+): number | null {
+  return usage.lastTurnCacheHitRate ?? usage.cacheHitRate
+}
+
 export async function loadThreadUsage(threadId: string): Promise<ThreadUsageSummary | null> {
   if (typeof window.kunGui?.runtimeRequest !== 'function') return null
   const params = new URLSearchParams({

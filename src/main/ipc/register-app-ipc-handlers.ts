@@ -75,8 +75,11 @@ import {
   writeInlineCompletionPayloadSchema,
   writePrototypeFilePayloadSchema,
   writeRetrievalPayloadSchema,
-  workspaceRootSchema
+  workspaceRootSchema,
+  legacySessionImportPayloadSchema
 } from './app-ipc-schemas'
+import { DEFAULT_KUN_DATA_DIR, resolveKunRuntimeSettings } from '../../shared/app-settings'
+import { detectLegacySessions, importLegacySessions } from '../services/legacy-session-import-service'
 import type { JsonSettingsStore } from '../settings-store'
 import { probeModelProvider } from '../provider-connection'
 import type { ClawRuntime } from '../claw-runtime'
@@ -768,6 +771,49 @@ export function registerAppIpcHandlers(options: RegisterAppIpcHandlersOptions): 
         ok: false as const,
         message: error instanceof Error ? error.message : String(error)
       }
+    }
+  })
+
+  const resolveKunThreadsDataDir = async (): Promise<string> => {
+    const settings = await store.load()
+    const runtime = resolveKunRuntimeSettings(settings)
+    return expandHomePath(runtime.dataDir?.trim() || DEFAULT_KUN_DATA_DIR)
+  }
+
+  ipcMain.handle('kun:sessions:detect-legacy', async () =>
+    detectLegacySessions({ homeDir: homedir(), destDataDir: await resolveKunThreadsDataDir() })
+  )
+
+  ipcMain.handle('kun:sessions:import-legacy', async (_, payload: unknown) => {
+    const request = parseIpcPayload('kun:sessions:import-legacy', legacySessionImportPayloadSchema, payload)
+    try {
+      const summary = await importLegacySessions({
+        homeDir: homedir(),
+        destDataDir: await resolveKunThreadsDataDir(),
+        ...(request.sourceDir ? { sourceDir: request.sourceDir } : {}),
+        log: (message, detail) => logError('legacy-session-import', message, detail)
+      })
+      return { ok: true as const, ...summary }
+    } catch (error) {
+      return {
+        ok: false as const,
+        message: error instanceof Error ? error.message : String(error)
+      }
+    }
+  })
+
+  ipcMain.handle('kun:sessions:pick-source-dir', async (): Promise<WorkspacePickResult> => {
+    const options: Electron.OpenDialogOptions = {
+      title: 'Select a folder containing previous conversations',
+      properties: ['openDirectory', 'dontAddToRecent']
+    }
+    const mainWindow = getMainWindow()
+    const result = mainWindow
+      ? await dialog.showOpenDialog(mainWindow, options)
+      : await dialog.showOpenDialog(options)
+    return {
+      canceled: result.canceled,
+      path: result.canceled ? null : (result.filePaths[0] ?? null)
     }
   })
 

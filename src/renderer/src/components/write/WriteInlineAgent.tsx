@@ -13,6 +13,7 @@ import {
   AppWindow,
   Bold,
   ChevronDown,
+  ChevronRight,
   Code,
   Heading1,
   Heading2,
@@ -28,6 +29,7 @@ import {
   Pilcrow,
   Quote,
   Replace,
+  Settings2,
   Sparkles,
   Strikethrough,
   Wand2,
@@ -38,6 +40,7 @@ import { useTranslation } from 'react-i18next'
 import { WRITE_BLOCK_TYPES, type WriteBlockType } from '../../write/block-type'
 import type { WriteInlineFormatKind } from '../../write/inline-format'
 import type { ResolvedWriteQuickAction } from '../../write/quick-actions'
+import type { ResolvedWriteAgentPreset } from '../../write/agent-presets'
 import { clamp, INLINE_AGENT_GAP, type WriteInlineAgentPosition } from './write-workspace-view-utils'
 
 type Props = {
@@ -58,6 +61,12 @@ type Props = {
   /** Configurable AI quick actions (edit ones rewrite in place, chat ones go to the sidebar). */
   quickActions?: ResolvedWriteQuickAction[]
   onQuickAction?: (action: ResolvedWriteQuickAction) => void
+  /** Writing-assistant persona presets for quick role switching; active '' = no agent. */
+  agentPresets?: ResolvedWriteAgentPreset[]
+  activeAgentId?: string
+  onSelectAgent?: (id: string) => void
+  /** Opens the writing-agent settings (empty-state hint + manage link). */
+  onOpenAgentSettings?: () => void
   /** Adds the current selection to the writing assistant quote tray without sending a message. */
   onQuoteSelection?: () => void
   /** Shown only when the image generation provider is configured. Generation
@@ -165,6 +174,10 @@ export function WriteInlineAgent({
   onSetBlockType,
   quickActions = [],
   onQuickAction,
+  agentPresets = [],
+  activeAgentId = '',
+  onSelectAgent,
+  onOpenAgentSettings,
   onQuoteSelection,
   infographicEnabled = false,
   onGenerateInfographic,
@@ -183,6 +196,8 @@ export function WriteInlineAgent({
   const showFormatting = !imageMode && formattingEnabled && Boolean(onApplyFormat)
   const showQuoteSelection = !imageMode && Boolean(onQuoteSelection)
   const showQuickActions = !imageMode && quickActions.length > 0 && Boolean(onQuickAction)
+  const showAgentSwitcher =
+    !imageMode && Boolean(onSelectAgent) && (agentPresets.length > 0 || Boolean(onOpenAgentSettings))
   const showInfographic = !imageMode && infographicEnabled && Boolean(onGenerateInfographic)
   const showDesignDraft = designDraftEnabled && Boolean(onGenerateDesignDraft)
   const showPrototype = prototypeEnabled && Boolean(onGeneratePrototype)
@@ -324,9 +339,73 @@ export function WriteInlineAgent({
           </div>
         ) : null}
 
-        {showQuoteSelection || showQuickActions || showInfographic || showDesignDraft || showPrototype ? (
+        {showAgentSwitcher || showQuoteSelection || showQuickActions || showInfographic || showDesignDraft || showPrototype ? (
           <div className="write-inline-agent-actions">
-            <div className="write-inline-agent-section-label">{t('writeSelectionSkills')}</div>
+            {showAgentSwitcher ? (
+              <div className="mb-1">
+                <div className="flex items-center justify-between gap-2 pr-1">
+                  <span className="write-inline-agent-section-label">{t('writeAgentSwitcherLabel')}</span>
+                  {onOpenAgentSettings && agentPresets.length > 0 ? (
+                    <button
+                      type="button"
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => onOpenAgentSettings()}
+                      className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] text-ds-faint transition hover:text-accent"
+                    >
+                      <Settings2 className="h-3 w-3" strokeWidth={1.9} />
+                      {t('writeAgentSwitcherManage')}
+                    </button>
+                  ) : null}
+                </div>
+                {agentPresets.length > 0 ? (
+                  <div className="mt-1 flex flex-wrap gap-1.5 px-1">
+                    <button
+                      type="button"
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => onSelectAgent?.('')}
+                      className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[12px] font-medium transition ${
+                        activeAgentId === ''
+                          ? 'border-accent/40 bg-accent/12 text-accent'
+                          : 'border-ds-border bg-ds-card text-ds-faint hover:border-accent/40 hover:bg-accent/5'
+                      }`}
+                    >
+                      {t('writeAgentSwitcherNone')}
+                    </button>
+                    {agentPresets.map((preset) => (
+                      <button
+                        key={preset.id}
+                        type="button"
+                        title={preset.persona}
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => onSelectAgent?.(activeAgentId === preset.id ? '' : preset.id)}
+                        className={`inline-flex max-w-[150px] items-center gap-1 rounded-full border px-2.5 py-1 text-[12px] font-medium transition ${
+                          activeAgentId === preset.id
+                            ? 'border-accent/40 bg-accent/12 text-accent'
+                            : 'border-ds-border bg-ds-card text-ds-ink hover:border-accent/40 hover:bg-accent/5'
+                        }`}
+                      >
+                        <span aria-hidden="true" className="text-[13px] leading-none">{preset.emoji}</span>
+                        <span className="truncate">{preset.name}</span>
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => onOpenAgentSettings?.()}
+                    className="mt-1 flex w-full items-center gap-2 rounded-lg border border-dashed border-ds-border px-2.5 py-1.5 text-[12px] text-ds-ink transition hover:border-accent/40 hover:bg-accent/5"
+                  >
+                    <Sparkles className="h-3.5 w-3.5 shrink-0 text-accent" strokeWidth={1.85} />
+                    <span className="min-w-0 flex-1 truncate text-left">{t('writeAgentSwitcherEmptyHint')}</span>
+                    <ChevronRight className="h-3.5 w-3.5 shrink-0 opacity-60" strokeWidth={1.8} />
+                  </button>
+                )}
+              </div>
+            ) : null}
+            {showQuoteSelection || showQuickActions || showInfographic || showDesignDraft || showPrototype ? (
+              <div className="write-inline-agent-section-label">{t('writeSelectionSkills')}</div>
+            ) : null}
             {showQuoteSelection ? (
               <ToolbarButton
                 className="write-inline-agent-action-row"

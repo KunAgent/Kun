@@ -79,6 +79,11 @@ GUI 启动 Kun 时会按下面的顺序合并配置。
     "summaryTimeoutMs": 15000,
     "summaryMaxTokens": 1200,
     "summaryInputMaxBytes": 98304
+  },
+  "runtime": {
+    "streamIdleTimeoutMs": 45000,
+    "toolStorm": { "enabled": true, "windowSize": 8, "threshold": 3 },
+    "toolArgumentRepair": { "maxStringBytes": 524288 }
   }
 }
 ```

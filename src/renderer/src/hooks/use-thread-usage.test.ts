@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { formatCost, loadThreadUsage } from './use-thread-usage'
+import { formatCost, loadThreadUsage, primaryCacheHitRate } from './use-thread-usage'
 
 type RuntimeRequest = (path: string, method?: string) => Promise<{ ok: boolean; status: number; body: string }>
 
@@ -32,6 +32,12 @@ describe('thread usage formatting', () => {
     expect(formatCost(null, 'zh-CN', null)).toBe('-')
     expect(formatCost(null, 'en', 0.88)).toBe('￥0.8800')
     expect(formatCost(0.00000001, 'en')).toBe('$<0.0001')
+  })
+
+  it('prefers latest-turn cache hit rate for compact cache chips', () => {
+    expect(primaryCacheHitRate({ cacheHitRate: 0.4, lastTurnCacheHitRate: 0.95 })).toBe(0.95)
+    expect(primaryCacheHitRate({ cacheHitRate: 0.4, lastTurnCacheHitRate: null })).toBe(0.4)
+    expect(primaryCacheHitRate({ cacheHitRate: null, lastTurnCacheHitRate: null })).toBeNull()
   })
 
   it('keeps cache hit rate unknown for cachedTokens-only thread usage buckets', async () => {

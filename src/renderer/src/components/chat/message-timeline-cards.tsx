@@ -175,10 +175,12 @@ export function ReviewSummaryCard({ review }: { review: ReviewBlock }): ReactEle
 
 export function TurnChangeSummary({
   changes,
-  viewportRef
+  viewportRef,
+  compact = false
 }: {
   changes: ToolBlock[]
   viewportRef: RefObject<HTMLDivElement | null>
+  compact?: boolean
 }): ReactElement {
   const { t } = useTranslation('common')
   const [expanded, setExpanded] = useState(false)
@@ -211,22 +213,36 @@ export function TurnChangeSummary({
   })
 
   return (
-    <section className="ds-card-strong overflow-hidden rounded-[24px] border border-ds-border shadow-[0_16px_40px_rgba(86,103,136,0.08)]">
+    <section
+      className={`ds-card-strong overflow-hidden border border-ds-border shadow-[0_16px_40px_rgba(86,103,136,0.08)] ${
+        compact ? 'rounded-[20px]' : 'rounded-[24px]'
+      }`}
+    >
       <button
         type="button"
         onClick={() => setExpanded((value) => !value)}
         aria-expanded={expanded}
-        className="flex w-full items-center gap-4 px-5 py-4 text-left transition hover:bg-ds-hover/40"
+        className={`flex w-full items-center text-left transition hover:bg-ds-hover/40 ${
+          compact ? 'gap-3 px-4 py-3' : 'gap-4 px-5 py-4'
+        }`}
       >
-        <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[16px] bg-ds-card-muted text-ds-muted">
-          <FileEdit className="h-5 w-5" strokeWidth={1.85} />
+        <span
+          className={`flex shrink-0 items-center justify-center bg-ds-card-muted text-ds-muted ${
+            compact ? 'h-10 w-10 rounded-[14px]' : 'h-12 w-12 rounded-[16px]'
+          }`}
+        >
+          <FileEdit className={compact ? 'h-4.5 w-4.5' : 'h-5 w-5'} strokeWidth={1.85} />
         </span>
         <span className="min-w-0 flex-1">
-          <span className="block text-[18px] font-semibold tracking-[-0.02em] text-ds-ink">
+          <span
+            className={`block font-semibold tracking-[-0.02em] text-ds-ink ${
+              compact ? 'text-[15px]' : 'text-[18px]'
+            }`}
+          >
             {title}
           </span>
           {totals ? (
-            <span className="mt-1 block font-mono text-[12px]">
+            <span className={`block font-mono ${compact ? 'mt-0.5 text-[11px]' : 'mt-1 text-[12px]'}`}>
               <span className="text-ds-diff-added">+{totals.added}</span>
               <span className="mx-1.5 text-ds-faint">·</span>
               <span className="text-ds-diff-removed">-{totals.removed}</span>
@@ -244,7 +260,7 @@ export function TurnChangeSummary({
         <div
           ref={deferredBodyRef}
           className="border-t border-ds-border-muted/70"
-          style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 280px' }}
+          style={{ contentVisibility: 'auto', containIntrinsicSize: compact ? 'auto 180px' : 'auto 280px' }}
         >
           {shouldRenderBody
             ? changes.map((change) => {
@@ -258,17 +274,20 @@ export function TurnChangeSummary({
                   type="button"
                   onClick={() => setActiveId(open ? null : change.id)}
                   aria-expanded={open}
-                  className={`flex w-full items-start gap-3 px-5 py-3 text-left transition ${
+                  className={`flex w-full items-start text-left transition ${
                     open ? 'bg-ds-hover/45' : 'hover:bg-ds-hover/35'
-                  }`}
+                  } ${compact ? 'gap-2.5 px-4 py-2.5' : 'gap-3 px-5 py-3'}`}
                 >
                   <span className="min-w-0 flex-1">
-                    <span className="block break-all text-[14px] font-medium text-ds-ink">
+                    <span
+                      className={`block truncate font-medium text-ds-ink ${compact ? 'text-[12px]' : 'text-[13px]'}`}
+                      title={primary}
+                    >
                       {primary}
                     </span>
                   </span>
                   {stats ? (
-                    <span className="shrink-0 font-mono text-[12px] tabular-nums">
+                    <span className={`shrink-0 font-mono tabular-nums ${compact ? 'text-[11px]' : 'text-[12px]'}`}>
                       <span className="text-ds-diff-added">+{stats.added}</span>
                       <span className="ml-1.5 text-ds-diff-removed">-{stats.removed}</span>
                     </span>
@@ -281,11 +300,11 @@ export function TurnChangeSummary({
                 </button>
 
                 {open && change.detail ? (
-                  <div className="bg-ds-card-muted/45 px-4 pb-4 pt-1">
+                  <div className={`bg-ds-card-muted/45 ${compact ? 'px-3 pb-2.5 pt-1' : 'px-4 pb-3 pt-1'}`}>
                     <DiffView
                       patch={change.detail}
                       filePath={change.filePath}
-                      maxHeight={440}
+                      maxHeight={compact ? 148 : 260}
                       className="border border-ds-border-muted/70"
                     />
                   </div>

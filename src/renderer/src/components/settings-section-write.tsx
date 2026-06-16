@@ -5,11 +5,21 @@ import {
   DEFAULT_WRITE_INLINE_COMPLETION_MODEL,
   DEFAULT_WRITE_INLINE_LONG_COMPLETION_MAX_TOKENS,
   DEFAULT_MODEL_PROVIDER_ID,
+  WRITE_EDITOR_FONT_SIZE_MAX,
+  WRITE_EDITOR_FONT_SIZE_MIN,
+  WRITE_EDITOR_LINE_HEIGHT_MAX,
+  WRITE_EDITOR_LINE_HEIGHT_MIN,
+  WRITE_FONT_PRESETS,
+  WRITE_AGENT_PRESET_MAX_COUNT,
   WRITE_INLINE_COMPLETION_MODEL_IDS,
   WRITE_QUICK_ACTION_MAX_COUNT,
   defaultModelProviderSettings,
+  defaultWriteAgentPresets,
   defaultWriteSelectionAssistSettings,
+  defaultWriteTypography,
   resolveWriteInlineCompletionProviderId,
+  type WriteAgentPresetV1,
+  type WriteFontPreset,
   type WriteQuickActionV1
 } from '@shared/app-settings'
 import { WRITE_DESIGN_DRAFT_DEFAULT_PROMPT, WRITE_INFOGRAPHIC_DEFAULT_PROMPT } from '@shared/write-infographic'
@@ -28,6 +38,17 @@ const textInputClass =
   'w-full rounded-xl border border-ds-border bg-ds-card px-3 py-2 text-[14px] text-ds-ink shadow-sm focus:border-accent/40 focus:outline-none focus:ring-1 focus:ring-accent/30'
 const ghostButtonClass =
   'inline-flex items-center gap-1.5 rounded-xl border border-ds-border bg-ds-card px-3 py-2 text-[13px] font-medium text-ds-ink shadow-sm transition hover:bg-ds-hover'
+
+const WRITE_FONT_PRESET_LABEL_KEYS: Record<WriteFontPreset, string> = {
+  system: 'writeFontSystem',
+  sourceHanSans: 'writeFontSourceHanSans',
+  yahei: 'writeFontYahei',
+  pingfang: 'writeFontPingfang',
+  simhei: 'writeFontSimhei',
+  simsun: 'writeFontSimsun',
+  kaiti: 'writeFontKaiti',
+  custom: 'writeFontCustom'
+}
 
 export function writeInlineCompletionModelOptions(providerModels: readonly string[]): string[] {
   const scopedModels = providerModels
@@ -56,6 +77,11 @@ export function WriteSettingsSection({ ctx }: { ctx: Record<string, any> }): Rea
   const { t: tCommon } = useTranslation('common')
   const providerSettings = provider ?? defaultModelProviderSettings()
   const selectionAssist = form.write.selectionAssist ?? defaultWriteSelectionAssistSettings()
+  const typography = form.write.typography ?? defaultWriteTypography()
+  const agentPresets: WriteAgentPresetV1[] = form.write.agentPresets ?? defaultWriteAgentPresets()
+  const updateAgentPresets = (next: WriteAgentPresetV1[]): void => {
+    update({ write: { agentPresets: next } })
+  }
   const updateQuickActions = (quickActions: WriteQuickActionV1[]): void => {
     update({ write: { selectionAssist: { quickActions } } })
   }
@@ -119,6 +145,103 @@ export function WriteSettingsSection({ ctx }: { ctx: Record<string, any> }): Rea
                         </p>
                       ) : null}
                     </div>
+                  }
+                />
+              </SettingsCard>
+
+              <SettingsCard title={t('writeTypography')} className="mt-5">
+                <SettingRow
+                  title={t('writeFontPreset')}
+                  description={t('writeFontPresetDesc')}
+                  control={
+                    <div className="w-full min-w-0 md:max-w-md">
+                      <select
+                        className={selectControlClass}
+                        value={typography.fontPreset}
+                        onChange={(e) =>
+                          update({ write: { typography: { fontPreset: e.target.value as WriteFontPreset } } })
+                        }
+                      >
+                        {WRITE_FONT_PRESETS.map((preset) => (
+                          <option key={preset} value={preset}>
+                            {t(WRITE_FONT_PRESET_LABEL_KEYS[preset])}
+                          </option>
+                        ))}
+                      </select>
+                      {typography.fontPreset === 'custom' ? (
+                        <input
+                          className={`${textInputClass} mt-2`}
+                          value={typography.customFontFamily}
+                          onChange={(e) =>
+                            update({ write: { typography: { customFontFamily: e.target.value } } })
+                          }
+                          placeholder={t('writeFontCustomPlaceholder')}
+                        />
+                      ) : null}
+                    </div>
+                  }
+                />
+                <SettingRow
+                  title={t('writeFontSize')}
+                  description={t('writeFontSizeDesc', {
+                    min: WRITE_EDITOR_FONT_SIZE_MIN,
+                    max: WRITE_EDITOR_FONT_SIZE_MAX
+                  })}
+                  control={
+                    <div className="flex w-full min-w-[200px] items-center gap-3 md:max-w-xs">
+                      <input
+                        type="range"
+                        min={WRITE_EDITOR_FONT_SIZE_MIN}
+                        max={WRITE_EDITOR_FONT_SIZE_MAX}
+                        step={1}
+                        value={typography.fontSizePx}
+                        onChange={(e) =>
+                          update({ write: { typography: { fontSizePx: Number(e.target.value) } } })
+                        }
+                        className="flex-1 accent-accent"
+                        aria-label={t('writeFontSize')}
+                      />
+                      <span className="w-12 shrink-0 text-right text-[13px] tabular-nums text-ds-ink">
+                        {typography.fontSizePx}px
+                      </span>
+                    </div>
+                  }
+                />
+                <SettingRow
+                  title={t('writeLineHeight')}
+                  description={t('writeLineHeightDesc')}
+                  control={
+                    <div className="flex w-full min-w-[200px] items-center gap-3 md:max-w-xs">
+                      <input
+                        type="range"
+                        min={WRITE_EDITOR_LINE_HEIGHT_MIN}
+                        max={WRITE_EDITOR_LINE_HEIGHT_MAX}
+                        step={0.05}
+                        value={typography.lineHeight}
+                        onChange={(e) =>
+                          update({ write: { typography: { lineHeight: Number(e.target.value) } } })
+                        }
+                        className="flex-1 accent-accent"
+                        aria-label={t('writeLineHeight')}
+                      />
+                      <span className="w-12 shrink-0 text-right text-[13px] tabular-nums text-ds-ink">
+                        {typography.lineHeight.toFixed(2)}
+                      </span>
+                    </div>
+                  }
+                />
+                <SettingRow
+                  title={t('writeTypographyReset')}
+                  description={t('writeTypographyResetDesc')}
+                  control={
+                    <button
+                      type="button"
+                      onClick={() => update({ write: { typography: defaultWriteTypography() } })}
+                      className={ghostButtonClass}
+                    >
+                      <RotateCcw className="h-4 w-4" />
+                      {t('writeTypographyResetButton')}
+                    </button>
                   }
                 />
               </SettingsCard>
@@ -466,6 +589,87 @@ export function WriteSettingsSection({ ctx }: { ctx: Record<string, any> }): Rea
                       </div>
                     </div>
                   </AdvancedSettingsDisclosure>
+                </div>
+              </SettingsCard>
+
+              <SettingsCard title={t('writeAgentPresets')} className="mt-5">
+                <p className="text-[12.5px] leading-5 text-ds-faint">
+                  {t('writeAgentPresetsDesc')}
+                </p>
+                <div className="mt-3 flex flex-col gap-3">
+                  {agentPresets.map((preset: WriteAgentPresetV1, index: number) => {
+                    return (
+                      <div
+                        key={preset.id}
+                        className="rounded-xl border border-ds-border-muted bg-ds-card/70 p-3"
+                      >
+                        <div className="flex items-center gap-2">
+                          <input
+                            className={`${textInputClass} max-w-[56px] text-center`}
+                            value={preset.emoji}
+                            placeholder="🤖"
+                            spellCheck={false}
+                            onChange={(e) => {
+                              const next = [...agentPresets]
+                              next[index] = { ...preset, emoji: e.target.value }
+                              updateAgentPresets(next)
+                            }}
+                          />
+                          <input
+                            className={`${textInputClass} max-w-[220px]`}
+                            value={preset.name}
+                            placeholder={t('writeAgentPresetNamePlaceholder')}
+                            spellCheck={false}
+                            onChange={(e) => {
+                              const next = [...agentPresets]
+                              next[index] = { ...preset, name: e.target.value }
+                              updateAgentPresets(next)
+                            }}
+                          />
+                          <button
+                            type="button"
+                            className="ml-auto inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-ds-faint transition hover:bg-red-500/10 hover:text-red-600 dark:hover:text-red-300"
+                            title={t('writeAgentPresetRemove')}
+                            aria-label={t('writeAgentPresetRemove')}
+                            onClick={() =>
+                              updateAgentPresets(
+                                agentPresets.filter((item: WriteAgentPresetV1) => item.id !== preset.id)
+                              )
+                            }
+                          >
+                            <Trash2 className="h-4 w-4" strokeWidth={1.8} />
+                          </button>
+                        </div>
+                        <textarea
+                          className={`${textInputClass} mt-2 min-h-[84px] resize-y leading-5`}
+                          value={preset.persona}
+                          placeholder={t('writeAgentPersonaPlaceholder')}
+                          spellCheck={false}
+                          onChange={(e) => {
+                            const next = [...agentPresets]
+                            next[index] = { ...preset, persona: e.target.value }
+                            updateAgentPresets(next)
+                          }}
+                        />
+                      </div>
+                    )
+                  })}
+                </div>
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    className={ghostButtonClass}
+                    disabled={agentPresets.length >= WRITE_AGENT_PRESET_MAX_COUNT}
+                    onClick={() =>
+                      updateAgentPresets([
+                        ...agentPresets,
+                        { id: `custom-${Date.now().toString(36)}`, name: '', emoji: '🤖', persona: '' }
+                      ])
+                    }
+                  >
+                    <Plus className="h-4 w-4" strokeWidth={2} />
+                    {t('writeAgentPresetAdd')}
+                  </button>
                 </div>
               </SettingsCard>
 

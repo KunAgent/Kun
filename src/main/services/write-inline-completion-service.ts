@@ -35,6 +35,21 @@ const MAX_INLINE_COMPLETION_DEBUG_ENTRIES = 120
 const MAX_DEBUG_TEXT_CHARS = 80_000
 const INPUT_BOUNDARY_MARKERS = ['PREFIX', 'SUFFIX', 'EDIT_SCOPE'] as const
 const OUTPUT_ACTION_MARKERS = ['SHORT', 'LONG', 'EDIT'] as const
+// Every protocol marker name, longest first so the alternation prefers EDIT_SCOPE
+// over EDIT. Used to terminate a marked body that lost its closing >>> and to
+// scrub malformed marker soup that must never reach the ghost text.
+const PROTOCOL_MARKER_NAMES = [...INPUT_BOUNDARY_MARKERS, ...OUTPUT_ACTION_MARKERS]
+  .slice()
+  .sort((a, b) => b.length - a.length)
+  .join('|')
+const PROTOCOL_MARKER_OPENER = new RegExp(`<<<[ \\t]*(?:${PROTOCOL_MARKER_NAMES})\\b`, 'i')
+// The placeholder lines from buildResponseProtocolPromptBlock(). A weak model
+// sometimes parrots them verbatim; such an echo is never a real suggestion.
+const PROTOCOL_PLACEHOLDER_BODIES = new Set([
+  'short text to insert at the cursor',
+  'longer continuation to insert at the cursor',
+  'replacement text for the editable local scope'
+])
 
 type ChatCompletionResponse = {
   choices?: Array<{
@@ -642,15 +657,50 @@ function containsInputBoundaryEcho(text: string): boolean {
     text.includes('Return only the text to insert at the cursor.')
 }
 
+/**
+ * Strip protocol marker tokens that leaked into a malformed response so they can
+ * never surface as ghost text. Guarded on an actual marker opener being present,
+ * so ordinary prose that merely contains ">>>" (a REPL transcript, a merge
+ * conflict marker) is returned untouched.
+ */
+function stripActionMarkerArtifacts(text: string): string {
+  if (!PROTOCOL_MARKER_OPENER.test(text)) return text
+  return text
+    .replace(new RegExp(`<<<[ \\t]*(?:${PROTOCOL_MARKER_NAMES})\\b[ \\t]*`, 'gi'), '')
+    .replace(/>>>/g, '')
+    // Drop any line that is a bare echo of the protocol placeholder text, so a
+    // full-template parrot collapses to empty rather than leaking the sample lines.
+    .split('\n')
+    .filter((line) => !PROTOCOL_PLACEHOLDER_BODIES.has(line.trim().toLowerCase()))
+    .join('\n')
+    .replace(/[ \t]+$/gm, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+}
+
 function parseMarkedActionBlock(
   text: string,
   options: { editTarget?: WriteInlineActionEditTarget }
 ): WriteInlineCompletionAction | null {
+  // A body ends at the first closing >>> or the next protocol opener, whichever
+  // comes first, so a block that dropped its >>> never swallows later markers.
+  const bodyTerminator = new RegExp(`>>>|<<<[ \\t]*(?:${PROTOCOL_MARKER_NAMES})\\b`, 'i')
   for (const marker of OUTPUT_ACTION_MARKERS) {
-    const exact = new RegExp(`^<<<[ \\t]*${marker}[ \\t]*\\n([\\s\\S]*?)\\n?>>>$`, 'i').exec(text)
-    const embedded = exact ?? new RegExp(`<<<[ \\t]*${marker}[ \\t]*\\n([\\s\\S]*?)\\n?>>>`, 'i').exec(text)
-    if (!embedded) continue
-    const body = trimMarkerPadding(embedded[1])
+    // Tolerant opener: trailing spaces/tabs and an optional single newline after
+    // the keyword, so same-line bodies (<<<SHORT text >>>) parse too.
+    const opener = new RegExp(`<<<[ \\t]*${marker}\\b[ \\t]*\\n?`, 'i').exec(text)
+    if (!opener) continue
+    const rest = text.slice(opener.index + opener[0].length)
+    const end = rest.search(bodyTerminator)
+    // Drop horizontal whitespace abutting the close marker, then a single
+    // trailing newline; leading whitespace is kept so a continuation like
+    // " next words" stays intact.
+    const body = trimMarkerPadding((end >= 0 ? rest.slice(0, end) : rest).replace(/[ \t]+$/, ''))
+    // Skip empty blocks (a contentless SHORT must not shadow a filled LONG, and
+    // a pure marker skeleton must fall through to the scrubbing fallback below)
+    // and skip a verbatim echo of the protocol's own placeholder text.
+    const condensed = body.trim().toLowerCase()
+    if (!condensed || PROTOCOL_PLACEHOLDER_BODIES.has(condensed)) continue
     if (marker === 'SHORT') return completionAction(body, 'short')
     if (marker === 'LONG') return completionAction(body, 'long')
     return editAction(body, options.editTarget)
@@ -716,9 +766,13 @@ export function parseWriteInlineAction(
   const labeledEdit = trimmed.match(/^(?:edit|replacement|replace|new text|edited text|替换文本|修改后|修改|替换)[:：]\s*([\s\S]*)$/i)
   if (labeledEdit) return editAction(labeledEdit[1], options.editTarget)
 
+  // Last resort: treat the response as plain insertable text, but scrub any
+  // leaked protocol markers first so a malformed skeleton (">>> <<<LONG >>>
+  // <<<EDIT") degrades to an empty completion instead of polluting the ghost text.
+  const scrubbed = stripActionMarkerArtifacts(normalized)
   return fallbackKind === 'edit'
-    ? editAction(normalized, options.editTarget)
-    : completionAction(normalized, fallbackKind === 'long' ? 'long' : 'short')
+    ? editAction(scrubbed, options.editTarget)
+    : completionAction(scrubbed, fallbackKind === 'long' ? 'long' : 'short')
 }
 
 export function extractWriteInlineAction(

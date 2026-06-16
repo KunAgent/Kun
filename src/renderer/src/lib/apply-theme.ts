@@ -1,3 +1,5 @@
+import { writeFontStackFor, type WriteTypographySettingsV1 } from '@shared/app-settings'
+
 export type ThemePreference = 'system' | 'light' | 'dark'
 export type UiFontScale = 'small' | 'medium' | 'large'
 
@@ -45,6 +47,19 @@ export function applyUiFontScale(scale: UiFontScale): void {
         ? '1'
         : '0.88'
   root.style.setProperty('--ds-ui-scale', factor)
+}
+
+/**
+ * Pushes the Write editor typography onto CSS variables consumed by the rich
+ * editor, the CodeMirror live appearance, and the markdown preview. Setting the
+ * variables on `<html>` keeps chat surfaces untouched (only `.write-*` and the
+ * editor theme read them) and live-updates open editors without a rebuild.
+ */
+export function applyWriteTypography(typography: WriteTypographySettingsV1): void {
+  const root = document.documentElement.style
+  root.setProperty('--write-editor-font-family', writeFontStackFor(typography.fontPreset, typography.customFontFamily))
+  root.setProperty('--write-editor-font-size', `${typography.fontSizePx}px`)
+  root.setProperty('--write-editor-line-height', String(typography.lineHeight))
 }
 
 /**

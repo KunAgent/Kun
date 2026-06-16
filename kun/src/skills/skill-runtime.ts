@@ -1,3 +1,4 @@
+import { type Dirent } from 'node:fs'
 import { readdir, readFile, stat } from 'node:fs/promises'
 import { basename, extname, join, resolve } from 'node:path'
 import { z } from 'zod'
@@ -333,14 +334,31 @@ async function packageCandidates(root: string): Promise<string[]> {
   }
   const entries = await readdir(root, { withFileTypes: true })
   for (const entry of entries) {
-    if (entry.isDirectory()) {
-      const dir = join(root, entry.name)
-      if (await exists(join(dir, 'skill.json')) || await exists(join(dir, 'SKILL.md'))) {
-        candidates.add(dir)
-      }
+    const dir = join(root, entry.name)
+    if (!(await entryIsDirectory(entry, dir))) continue
+    if (await exists(join(dir, 'skill.json')) || await exists(join(dir, 'SKILL.md'))) {
+      candidates.add(dir)
     }
   }
   return [...candidates]
+}
+
+/**
+ * Whether a directory entry is — or resolves to — a directory. `readdir` with
+ * `withFileTypes` describes the link itself, so a symlinked skill package (e.g.
+ * the per-skill links `cc switch` drops into `.claude/skills`) reports
+ * `isDirectory() === false` and would be skipped. Follow such links via `stat`
+ * so those packages are still discovered. Also covers filesystems that report
+ * an unknown `d_type`. (#320)
+ */
+async function entryIsDirectory(entry: Dirent, path: string): Promise<boolean> {
+  if (entry.isDirectory()) return true
+  if (entry.isFile()) return false
+  try {
+    return (await stat(path)).isDirectory()
+  } catch {
+    return false
+  }
 }
 
 async function loadSkillPackage(root: string, allowLegacy: boolean): Promise<LoadedSkill | null> {

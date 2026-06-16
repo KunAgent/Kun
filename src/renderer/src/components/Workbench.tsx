@@ -55,6 +55,7 @@ import { SddAssistantPanel } from './sdd/SddAssistantPanel'
 import { SddDraftEditorView } from './sdd/SddDraftEditorView'
 import { SidebarTitlebarToggleButton } from './sidebar/SidebarPrimitives'
 import { composeWritePrompt } from '../write/quoted-selection'
+import { resolveWriteAgentPreset } from '../write/agent-presets'
 import { useWriteWorkspaceStore } from '../write/write-workspace-store'
 import { isWriteThreadId } from '../write/write-thread-registry'
 import { buildSddDraftId, createSddDraft, forgetRememberedSddDraft, useSddDraftStore } from '../sdd/sdd-draft-store'
@@ -118,6 +119,9 @@ const PlanPanel = lazy(() =>
 )
 const TodoPanel = lazy(() =>
   import('./todo/TodoPanel').then((module) => ({ default: module.TodoPanel }))
+)
+const TerminalPanel = lazy(() =>
+  import('./terminal/TerminalPanel').then((module) => ({ default: module.TerminalPanel }))
 )
 const ScheduleTasksView = lazy(() =>
   import('./schedule/ScheduleTasksView').then((module) => ({ default: module.ScheduleTasksView }))
@@ -526,6 +530,7 @@ export function Workbench(): ReactElement {
   const {
     beginLeftResize,
     beginRightResize,
+    beginTerminalResize,
     filePreviewTarget,
     leftSidebarCollapsed,
     leftSidebarWidth,
@@ -537,8 +542,11 @@ export function Workbench(): ReactElement {
     setRightPanelMode,
     setRightSidebarWidth,
     shellRef,
+    terminalHeight,
+    terminalOpen,
     toggleLeftSidebar,
     toggleRightPanelMode,
+    toggleTerminal,
   } = useWorkbenchLayout({
     activeThreadId,
     latestAutoOpenDevPreviewUrl,
@@ -1075,10 +1083,15 @@ export function Workbench(): ReactElement {
         }
       }
       const messageText = v || t('composerImageOnlyPrompt')
+      const activeAgentPreset = writeState.agentPresets.find(
+        (preset) => preset.id === writeState.assistantAgentPresetId
+      )
+      const agentPersona = activeAgentPreset ? resolveWriteAgentPreset(activeAgentPreset).persona : ''
       const prompt = composeWritePrompt(messageText, writeState.quotedSelections, {
         workspaceRoot: writeWorkspaceRoot,
         activeFilePath: writeState.activeFilePath,
-        retrieval
+        retrieval,
+        ...(agentPersona ? { agentPersona } : {})
       })
       const model = writeState.assistantModel.trim()
       const providerId =
@@ -2185,7 +2198,6 @@ export function Workbench(): ReactElement {
                 onWriteOpen={openWriteMode}
                 onOpenSettings={(section) => openSettings(section)}
                 onToggleConnectPhone={toggleConnectPhone}
-                onToggleSidebar={toggleLeftSidebar}
               />
             ) : (
             <Sidebar
@@ -2216,7 +2228,6 @@ export function Workbench(): ReactElement {
               onCodeOpen={openCodeMode}
               onWriteOpen={openWriteMode}
               onScheduleOpen={openScheduleView}
-              onToggleSidebar={toggleLeftSidebar}
             />
             )}
           </div>
@@ -2265,6 +2276,7 @@ export function Workbench(): ReactElement {
                 input={input}
                 setInput={setInput}
                 onSubmitPrompt={sendWritePrompt}
+                onOpenAgentSettings={() => openSettings('write')}
               />
               {renderRightPanel()}
             </div>
@@ -2274,7 +2286,7 @@ export function Workbench(): ReactElement {
         {error && !(runtimeConnection !== 'ready' && !activeThreadId) ? renderRuntimeBanner(error, runtimeErrorDetail) : null}
 
         <div className="flex min-h-0 flex-1">
-          <div className={`flex min-h-0 min-w-0 flex-1 ${activeSddDraft ? '' : stageInsetClass}`}>
+          <div className="flex min-h-0 min-w-0 flex-1">
           {activeSddDraft ? (
             <SddDraftEditorView
               leftSidebarCollapsed={leftSidebarCollapsed}
@@ -2289,6 +2301,7 @@ export function Workbench(): ReactElement {
             />
           ) : (
             <section className="ds-chat-stage ds-drag flex min-h-0 min-w-0 flex-1 flex-col">
+            <div className={`${stageInsetClass} flex min-h-0 min-w-0 flex-1 flex-col`}>
             <header className="chat-topbar ds-topbar-surface relative z-10 mt-3 flex min-h-[46px] w-full shrink-0 items-stretch overflow-visible rounded-[24px]">
               <div className="chat-topbar-grid grid w-full min-w-0 items-start gap-2.5 px-3 py-2 sm:px-4 md:pl-5 md:pr-2">
                 <div
@@ -2296,13 +2309,11 @@ export function Workbench(): ReactElement {
                     leftSidebarCollapsed ? 'ds-window-controls-safe-inset' : ''
                   }`}
                 >
-                  {leftSidebarCollapsed ? (
-                    <SidebarTitlebarToggleButton
-                      onClick={toggleLeftSidebar}
-                      title={t('sidebarExpand')}
-                      ariaLabel={t('sidebarExpand')}
-                    />
-                  ) : null}
+                  <SidebarTitlebarToggleButton
+                    onClick={toggleLeftSidebar}
+                    title={leftSidebarCollapsed ? t('sidebarExpand') : t('sidebarCollapse')}
+                    ariaLabel={leftSidebarCollapsed ? t('sidebarExpand') : t('sidebarCollapse')}
+                  />
                   <SessionHeader compact className="min-w-0 flex-1" />
                 </div>
                 <div className="chat-topbar-actions flex min-w-0 flex-wrap items-center justify-end gap-2 self-start">
@@ -2315,6 +2326,8 @@ export function Workbench(): ReactElement {
                     rightPanelMode={rightPanelMode}
                     onToggleRightPanelMode={toggleRightPanelMode}
                     planPanelEnabled={Boolean(activeGuiPlan)}
+                    terminalOpen={terminalOpen}
+                    onToggleTerminal={toggleTerminal}
                     sideChatCount={currentSideConversations.length}
                     sideChatRunningCount={currentSideRunningCount}
                     sideChatOpen={sidePanel.open}
@@ -2361,6 +2374,15 @@ export function Workbench(): ReactElement {
                 busy={busy}
                 runtimeReady={runtimeConnection === 'ready'}
                 hasActiveThread={Boolean(activeThreadId)}
+                contextWindowTokens={runtimeInfo?.capabilities.model.contextWindowTokens}
+                runtimeToolCount={
+                  runtimeInfo
+                    ? runtimeInfo.capabilities.mcp.search?.active
+                      ? runtimeInfo.capabilities.mcp.search.advertisedToolCount
+                      : runtimeInfo.capabilities.mcp.toolCount
+                    : undefined
+                }
+                runtimeSkillCount={runtimeInfo?.capabilities.skills.discoveredSkills}
                 composerModel={
                   route === 'claw'
                     ? clawChannels.find((channel) => channel.id === activeClawChannelId)?.model ?? 'auto'
@@ -2421,6 +2443,25 @@ export function Workbench(): ReactElement {
                 }}
               />
             </div>
+            </div>
+            {terminalOpen ? (
+              <div className="ds-no-drag flex w-full shrink-0 flex-col px-0 pb-0">
+                <div
+                  role="separator"
+                  aria-orientation="horizontal"
+                  className="relative z-20 h-1 shrink-0 cursor-row-resize bg-transparent transition hover:bg-ds-border-muted"
+                  onPointerDown={beginTerminalResize}
+                />
+                <Suspense fallback={<div className="ds-surface-strong h-full w-full" />}>
+                  <TerminalPanel
+                    workspaceRoot={workspaceRoot}
+                    height={terminalHeight}
+                    className="w-full"
+                    onCollapse={toggleTerminal}
+                  />
+                </Suspense>
+              </div>
+            ) : null}
           </section>
           )}
           </div>

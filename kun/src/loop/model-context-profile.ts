@@ -4,6 +4,7 @@ import type {
   ModelMessagePartSupport,
   ModelReasoningCapabilityMetadata
 } from '../contracts/capabilities.js'
+import type { ModelEndpointFormat } from '../contracts/model-endpoint-format.js'
 
 export type ModelContextThresholds = {
   softThreshold: number
@@ -26,6 +27,7 @@ export type ModelContextProfile = ModelContextThresholds & {
   supportsToolCalling: boolean
   messageParts: readonly ModelMessagePartSupport[]
   reasoning?: ModelReasoningCapabilityMetadata
+  endpointFormat?: ModelEndpointFormat
 }
 
 export type ModelContextProfileConfig = {
@@ -45,6 +47,7 @@ export type ModelContextProfileConfig = {
   supportsToolCalling?: boolean
   messageParts?: readonly ModelMessagePartSupport[]
   reasoning?: ModelReasoningCapabilityMetadata
+  endpointFormat?: ModelEndpointFormat
 }
 
 export type ModelConfig = {
@@ -148,7 +151,8 @@ export function modelCapabilitiesForModel(
     supportsToolCalling: profile?.supportsToolCalling ?? true,
     contextWindowTokens: profile?.contextWindowTokens,
     messageParts: [...(profile?.messageParts ?? DEFAULT_MODEL_MESSAGE_PARTS)],
-    ...(profile?.reasoning ? { reasoning: copyReasoningCapability(profile.reasoning) } : {})
+    ...(profile?.reasoning ? { reasoning: copyReasoningCapability(profile.reasoning) } : {}),
+    ...(profile?.endpointFormat ? { endpointFormat: profile.endpointFormat } : {})
   }
 }
 
@@ -232,6 +236,7 @@ function mergeModelContextProfile(
     ...(input.aliases ?? [])
   ])
   const reasoning = input.reasoning ?? current?.reasoning
+  const endpointFormat = input.endpointFormat ?? current?.endpointFormat
   return {
     canonicalModel,
     modelIds,
@@ -244,7 +249,8 @@ function mergeModelContextProfile(
     messageParts: uniqueModelCapabilityValues(input.messageParts ?? current?.messageParts ?? DEFAULT_MODEL_MESSAGE_PARTS),
     ...(reasoning
       ? { reasoning: copyReasoningCapability(reasoning) }
-      : {})
+      : {}),
+    ...(endpointFormat ? { endpointFormat } : {})
   }
 }
 

@@ -134,11 +134,10 @@ function normalizeStoredSettings(settings: AppSettingsV1): AppSettingsV1 {
     ...normalized,
     workspaceRoot: normalizeWorkspaceRoot(normalized.workspaceRoot),
     write: {
+      ...normalized.write,
       defaultWorkspaceRoot: writeDefaultRoot,
       activeWorkspaceRoot: writeWorkspaces.includes(writeActiveRoot) ? writeActiveRoot : writeDefaultRoot,
-      workspaces: writeWorkspaces.length > 0 ? writeWorkspaces : [writeDefaultRoot],
-      inlineCompletion: normalized.write.inlineCompletion,
-      selectionAssist: normalized.write.selectionAssist
+      workspaces: writeWorkspaces.length > 0 ? writeWorkspaces : [writeDefaultRoot]
     },
     claw: {
       ...normalized.claw,

@@ -26,6 +26,7 @@ export interface WorktreePoolStatus {
   headCommit: string
   worktrees: WorktreeInfo[]
   inUseCount: number
+  isGitRepo: boolean
 }
 
 export interface WorktreeChanges {

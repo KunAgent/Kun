@@ -605,13 +605,11 @@ export function ScheduleTasksView({
                 leftSidebarCollapsed ? 'ds-window-controls-safe-inset' : ''
               }`}
             >
-              {leftSidebarCollapsed ? (
-                <SidebarTitlebarToggleButton
-                  onClick={onToggleLeftSidebar}
-                  title={t('sidebarExpand')}
-                  ariaLabel={t('sidebarExpand')}
-                />
-              ) : null}
+              <SidebarTitlebarToggleButton
+                onClick={onToggleLeftSidebar}
+                title={leftSidebarCollapsed ? t('sidebarExpand') : t('sidebarCollapse')}
+                ariaLabel={leftSidebarCollapsed ? t('sidebarExpand') : t('sidebarCollapse')}
+              />
               <h1 className="min-w-0 flex-1 truncate text-[15px] font-medium text-ds-muted">
                 {t('schedule')}
               </h1>

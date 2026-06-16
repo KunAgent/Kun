@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -85,6 +85,34 @@ describe('SkillRuntime', () => {
 
     expect(diagnostics.skills.map((skill) => skill.id).sort()).toEqual(['代码审查', '需求分析'])
     expect(diagnostics.validationErrors).toEqual([])
+  })
+
+  it('discovers a skill package symlinked into a root (e.g. cc switch)', async (ctx) => {
+    // cc switch keeps the real skill files in its own config dir and symlinks
+    // the skill directory into the scanned root; the link must still load. (#320)
+    const realDir = await mkdtemp(join(tmpdir(), 'kun-skill-real-'))
+    try {
+      await writeFile(join(realDir, 'skill.json'), JSON.stringify({
+        id: 'linked',
+        name: 'Linked',
+        triggers: { commands: ['/linked'] }
+      }), 'utf8')
+      await writeFile(join(realDir, 'SKILL.md'), 'linked body', 'utf8')
+      try {
+        await symlink(realDir, join(root, 'linked'), 'dir')
+      } catch {
+        // Symlink creation can be unprivileged (e.g. Windows) — skip there.
+        ctx.skip()
+        return
+      }
+
+      const runtime = await createRuntime()
+
+      expect(runtime.diagnostics().skills.map((skill) => skill.id)).toContain('linked')
+      expect(runtime.resolveTurn({ prompt: '/linked go', workspace: root }).activeSkillIds).toEqual(['linked'])
+    } finally {
+      await rm(realDir, { recursive: true, force: true })
+    }
   })
 
   it('matches triggers deterministically and respects injection budgets', async () => {

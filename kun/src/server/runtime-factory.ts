@@ -162,7 +162,10 @@ export async function createKunServeRuntime(
     endpointFormat: options.endpointFormat ?? DEFAULT_MODEL_ENDPOINT_FORMAT,
     model: options.model,
     modelCapabilities,
-    debugSink: llmDebug
+    debugSink: llmDebug,
+    ...(options.runtime?.streamIdleTimeoutMs !== undefined
+      ? { streamIdleTimeoutMs: options.runtime.streamIdleTimeoutMs }
+      : {})
   })
   const reviewService = new ReviewService({
     threadStore,

@@ -44,7 +44,6 @@ type Props = {
   onWriteOpen: () => void
   onOpenSettings: (section?: SettingsRouteSection) => void
   onToggleConnectPhone: () => void
-  onToggleSidebar: () => void
 }
 
 type EntryDialog =
@@ -61,8 +60,7 @@ export function WriteSidebar({
   onCodeOpen,
   onWriteOpen,
   onOpenSettings,
-  onToggleConnectPhone,
-  onToggleSidebar
+  onToggleConnectPhone
 }: Props): ReactElement {
   const { t } = useTranslation('common')
   const clawChannels = useChatStore((s) => s.clawChannels)
@@ -259,7 +257,6 @@ export function WriteSidebar({
     <>
     <SidebarFrame
       title={t('appName')}
-      onCollapse={onToggleSidebar}
       footer={
         <div className="space-y-1">
           <SidebarCommandRow

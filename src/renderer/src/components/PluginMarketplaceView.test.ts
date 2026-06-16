@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import type { SkillRootListItem } from '@shared/kun-gui-api'
 import {
   buildMcpConfig,
   customMcpConfigFragment,
@@ -7,7 +8,8 @@ import {
   mergeMcpJsonConfig,
   recommendedMarketplaceItemIds,
   setMcpServerEnabled,
-  skillMarketplaceItemsFromDiscoveredSkills
+  skillMarketplaceItemsFromDiscoveredSkills,
+  skillRootOptionsFromRoots
 } from './PluginMarketplaceView'
 
 describe('PluginMarketplaceView MCP config helpers', () => {
@@ -265,5 +267,57 @@ describe('skillMarketplaceItemsFromDiscoveredSkills', () => {
         sourceLabel: 'Global'
       })
     ])
+  })
+})
+
+describe('skillRootOptionsFromRoots', () => {
+  const roots: SkillRootListItem[] = [
+    {
+      id: 'workspace-claude',
+      disableKey: 'workspace-claude',
+      path: '/ws/.claude/skills',
+      scope: 'project',
+      source: 'common',
+      labelKey: 'pluginSkillRootWorkspaceClaude',
+      exists: true,
+      enabled: true,
+      skillCount: 2
+    },
+    {
+      id: 'global-codex',
+      disableKey: 'global-codex',
+      path: '/home/me/.codex/skills',
+      scope: 'global',
+      source: 'common',
+      labelKey: 'pluginSkillRootGlobalCodex',
+      exists: false,
+      enabled: false,
+      skillCount: 0
+    },
+    {
+      id: '/opt/team/skills',
+      disableKey: '/opt/team/skills',
+      path: '/opt/team/skills',
+      scope: 'global',
+      source: 'extra',
+      exists: true,
+      enabled: true,
+      skillCount: 5
+    }
+  ]
+
+  it('maps backend roots — common (.claude/.codex) and custom dirs — into picker options synced with settings', () => {
+    const options = skillRootOptionsFromRoots(roots, (key) => `t:${key}`)
+
+    expect(options).toEqual([
+      { id: 'workspace-claude', label: 't:pluginSkillRootWorkspaceClaude', path: '/ws/.claude/skills', scope: 'project', enabled: true, exists: true, skillCount: 2 },
+      { id: 'global-codex', label: 't:pluginSkillRootGlobalCodex', path: '/home/me/.codex/skills', scope: 'global', enabled: false, exists: false, skillCount: 0 },
+      // Custom extra dir has no i18n labelKey, so it falls back to a short path label.
+      { id: '/opt/team/skills', label: 'team/skills', path: '/opt/team/skills', scope: 'global', enabled: true, exists: true, skillCount: 5 }
+    ])
+  })
+
+  it('returns an empty list when the backend reports no roots', () => {
+    expect(skillRootOptionsFromRoots([], (key) => key)).toEqual([])
   })
 })

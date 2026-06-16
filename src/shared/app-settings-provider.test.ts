@@ -1026,4 +1026,30 @@ describe('provider presets', () => {
       }))
     }
   })
+
+  it('keeps per-model endpointFormat overrides on the OpenCode Go preset', () => {
+    const preset = getModelProviderPreset('opencode-go')
+    expect(preset).not.toBeNull()
+    const profile = modelProviderPresetProfile(preset!, 'sk-opencode')
+    // MiniMax / Qwen route over Anthropic Messages...
+    expect(profile.modelProfiles['minimax-m3'].endpointFormat).toBe('messages')
+    expect(profile.modelProfiles['qwen3.7-max'].endpointFormat).toBe('messages')
+    // ...while chat-completions models carry no override (they inherit).
+    expect(profile.modelProfiles['glm-5.1'].endpointFormat).toBeUndefined()
+    expect(profile.modelProfiles['kimi-k2.7'].endpointFormat).toBeUndefined()
+
+    // The override survives the full settings normalization round-trip.
+    const resolved = resolveKunRuntimeSettings({
+      ...settings(),
+      provider: {
+        ...defaultModelProviderSettings(),
+        providers: [...defaultModelProviderSettings().providers, profile]
+      },
+      agents: {
+        kun: { ...defaultKunRuntimeSettings(), providerId: profile.id, model: 'minimax-m3' }
+      }
+    })
+    expect(resolved.modelProfiles['minimax-m3'].endpointFormat).toBe('messages')
+    expect(resolved.modelProfiles['glm-5.1'].endpointFormat).toBeUndefined()
+  })
 })

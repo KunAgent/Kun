@@ -409,6 +409,28 @@ describe('app-ipc-schemas', () => {
     expect(payload.keyboardShortcuts?.bindings?.settings).toEqual(['Ctrl+,'])
   })
 
+  it('accepts a configurable stream idle timeout in runtime tuning patches', () => {
+    const payload = settingsPatchSchema.parse({
+      agents: {
+        kun: {
+          runtimeTuning: {
+            streamIdleTimeoutMs: 300000
+          }
+        }
+      }
+    })
+
+    expect(payload.agents?.kun?.runtimeTuning?.streamIdleTimeoutMs).toBe(300000)
+  })
+
+  it('rejects an out-of-range stream idle timeout', () => {
+    expect(() =>
+      settingsPatchSchema.parse({
+        agents: { kun: { runtimeTuning: { streamIdleTimeoutMs: -1 } } }
+      })
+    ).toThrow()
+  })
+
   it('rejects unknown settings patch fields', () => {
     expect(() =>
       settingsPatchSchema.parse({

@@ -81,6 +81,14 @@ import type {
   WriteRichClipboardPayload,
   WriteRichClipboardResult
 } from './write-export'
+import type {
+  TerminalCreatePayload,
+  TerminalCreateResult,
+  TerminalDataPayload,
+  TerminalExitPayload,
+  TerminalResizePayload,
+  TerminalWritePayload
+} from './terminal'
 
 export type KunRuntimeStatusPayload = {
   state: 'starting' | 'running' | 'restarting' | 'crashed' | 'failed' | 'stopped'
@@ -196,6 +204,42 @@ export type ConfirmDialogOptions = {
   confirmLabel?: string
   cancelLabel?: string
 }
+/** Which legacy install a set of importable conversations came from. */
+export type LegacySessionSourceKind = 'kun' | 'coreagent' | 'custom'
+export type LegacySessionDetectedSource = {
+  id: string
+  kind: LegacySessionSourceKind
+  /** Absolute path to the legacy threads directory. */
+  path: string
+  /** Conversation folders found in this source. */
+  threadCount: number
+  /** Folders not already present in the destination (would be newly imported). */
+  newCount: number
+}
+export type LegacySessionDetectResult = {
+  /** Destination threads directory (current Kun data dir + /threads). */
+  destDir: string
+  sources: LegacySessionDetectedSource[]
+}
+export type LegacySessionImportSourceSummary = {
+  path: string
+  total: number
+  imported: number
+  skipped: number
+}
+export type LegacySessionImportSummary = {
+  destDir: string
+  /** Conversation folders seen across all sources. */
+  total: number
+  /** Folders copied into the destination this run. */
+  imported: number
+  /** Folders skipped because they already existed (or failed to copy). */
+  skipped: number
+  sources: LegacySessionImportSourceSummary[]
+}
+export type LegacySessionImportResult =
+  | ({ ok: true } & LegacySessionImportSummary)
+  | { ok: false; message: string }
 /** One IPC message carries every SSE event parsed from a network chunk. */
 export type SseEventPayload = { streamId: string; events: unknown[] }
 export type SseEndPayload = { streamId: string }
@@ -224,6 +268,12 @@ export type KunGuiApi = {
   ) => Promise<ClawImInstallPollResult>
   pickWorkspaceDirectory: (defaultPath?: string) => Promise<WorkspacePickResult>
   confirmDialog: (options: ConfirmDialogOptions) => Promise<boolean>
+  /** Detect importable conversations from a previous DeepSeek GUI install. */
+  detectLegacySessions: () => Promise<LegacySessionDetectResult>
+  /** Import legacy conversations; omit sourceDir to import all auto-detected sources. */
+  importLegacySessions: (sourceDir?: string) => Promise<LegacySessionImportResult>
+  /** Open a directory picker for choosing a legacy conversations folder. */
+  pickLegacySessionDir: () => Promise<WorkspacePickResult>
   listSkills: (workspaceRoot?: string) => Promise<SkillListResult>
   listSkillRoots: (workspaceRoot?: string) => Promise<SkillRootListResult>
   saveSkillFile: (rootPath: string, skillName: string, content: string) => Promise<SkillSaveResult>
@@ -367,4 +417,10 @@ export type KunGuiApi = {
   logError: (category: string, message: string, detail?: unknown) => Promise<void>
   getLogPath: () => Promise<string>
   openLogDir: () => Promise<{ ok: boolean; message?: string }>
+  createTerminal: (payload: TerminalCreatePayload) => Promise<TerminalCreateResult>
+  writeToTerminal: (payload: TerminalWritePayload) => Promise<boolean>
+  resizeTerminal: (payload: TerminalResizePayload) => Promise<boolean>
+  disposeTerminal: (sessionId: string) => Promise<boolean>
+  onTerminalData: (handler: (payload: TerminalDataPayload) => void) => () => void
+  onTerminalExit: (handler: (payload: TerminalExitPayload) => void) => () => void
 }

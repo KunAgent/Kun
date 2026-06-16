@@ -194,6 +194,70 @@ export function latestAssistantText(
   return ''
 }
 
+/** Reply sent when a turn finished but produced no concluding text. */
+export const IM_COMPLETED_NO_TEXT_REPLY = '✅ 任务已完成。'
+
+/**
+ * Ack sent when a turn outruns the IM response timeout. The turn keeps
+ * running and the real result is pushed back when it finishes.
+ */
+export const IM_PROCESSING_ACK = '⏳ 收到，正在处理，完成后会把结果发给你。'
+
+const TOOL_ITEM_KINDS = new Set<string>(['tool_call', 'tool_result'])
+
+/**
+ * The turn's *concluding* assistant message — the last `assistant_text`
+ * that appears after the final tool activity.
+ *
+ * Mid-turn narration is intentionally skipped: a model often writes an
+ * upfront plan as text ("先做 X，再做 Y") and then performs the work
+ * through tool calls, frequently ending without any further text (the
+ * wrap-up stays in `reasoning_content`, or it just stops after the last
+ * tool succeeds). `latestAssistantText` would return that stale plan,
+ * so the phone received the plan instead of the result. Scanning only
+ * the post-tool tail fixes that.
+ *
+ * Pure chat turns (no tool calls) fall back to the last assistant
+ * message. Returns '' when the turn ended without concluding text;
+ * callers then substitute {@link IM_COMPLETED_NO_TEXT_REPLY}.
+ */
+export function finalAssistantReplyText(
+  detail: ThreadDetailJson,
+  options: { turnId?: string } = {}
+): string {
+  const turnId = options.turnId?.trim()
+  const items = turnId
+    ? threadItems(detail).filter((item) => item.turnId === turnId)
+    : threadItems(detail)
+  let lastToolIndex = -1
+  for (let index = items.length - 1; index >= 0; index -= 1) {
+    if (TOOL_ITEM_KINDS.has(items[index].kind)) {
+      lastToolIndex = index
+      break
+    }
+  }
+  for (let index = items.length - 1; index > lastToolIndex; index -= 1) {
+    const item = items[index]
+    if (item.kind !== 'assistant_text' && item.kind !== 'agent_message') continue
+    const text = (item.text ?? item.detail ?? item.summary ?? '').trim()
+    if (text) return text
+  }
+  return ''
+}
+
+/**
+ * Reply used by the asynchronous result push when the finished turn has
+ * no concluding text. Files generated during a long run cannot be media
+ * pushed out-of-band, so their names are surfaced for retrieval instead.
+ */
+export function imCompletionReplyForPush(files: readonly ClawGeneratedFileV1[]): string {
+  if (files.length > 0) {
+    const names = files.map((file) => file.fileName).join('、')
+    return `${IM_COMPLETED_NO_TEXT_REPLY}（生成的文件：${names}，回复"发给我"获取）`
+  }
+  return IM_COMPLETED_NO_TEXT_REPLY
+}
+
 function outputRecord(output: unknown): Record<string, unknown> | null {
   return typeof output === 'object' && output !== null && !Array.isArray(output)
     ? output as Record<string, unknown>

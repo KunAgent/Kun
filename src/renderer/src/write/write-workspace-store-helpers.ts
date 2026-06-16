@@ -8,12 +8,14 @@ import {
   DEFAULT_WRITE_INLINE_LONG_COMPLETION_MAX_TOKENS,
   DEFAULT_WRITE_INLINE_LONG_COMPLETION_MIN_ACCEPT_SCORE,
   DEFAULT_WRITE_WORKSPACE_ROOT,
+  normalizeWriteAgentPresets,
   normalizeWriteInlineCompletionModel,
   normalizeWriteSelectionAssistSettings,
   resolveWriteInlineCompletionApiKey,
   resolveWriteInlineCompletionBaseUrl,
   resolveWriteInlineCompletionModel,
   type AppSettingsV1,
+  type WriteAgentPresetV1,
   type WriteInlineCompletionSettingsV1,
   type WriteSelectionAssistSettingsV1,
   type WriteSettingsV1
@@ -100,6 +102,7 @@ export function normalizeWriteSettings(settings?: Partial<WriteSettingsV1> | nul
   workspaces: string[]
   inlineCompletion: WriteInlineCompletionSettingsV1
   selectionAssist: WriteSelectionAssistSettingsV1
+  agentPresets: WriteAgentPresetV1[]
 } {
   const defaultWorkspaceRoot = normalizePath(settings?.defaultWorkspaceRoot || DEFAULT_WRITE_WORKSPACE_ROOT)
   const activeWorkspaceRoot = normalizePath(settings?.activeWorkspaceRoot || defaultWorkspaceRoot)
@@ -154,7 +157,8 @@ export function normalizeWriteSettings(settings?: Partial<WriteSettingsV1> | nul
         ? Math.max(64, Math.min(1_024, Math.round(longMaxTokens)))
         : DEFAULT_WRITE_INLINE_LONG_COMPLETION_MAX_TOKENS
     },
-    selectionAssist: normalizeWriteSelectionAssistSettings(settings?.selectionAssist)
+    selectionAssist: normalizeWriteSelectionAssistSettings(settings?.selectionAssist),
+    agentPresets: normalizeWriteAgentPresets(settings?.agentPresets)
   }
 }
 
@@ -165,6 +169,7 @@ export function withResolvedInlineCompletionSettings(
     workspaces: string[]
     inlineCompletion: WriteInlineCompletionSettingsV1
     selectionAssist: WriteSelectionAssistSettingsV1
+    agentPresets: WriteAgentPresetV1[]
   },
   settings: Pick<AppSettingsV1, 'provider' | 'agents' | 'write'>
 ): {
@@ -173,6 +178,7 @@ export function withResolvedInlineCompletionSettings(
   workspaces: string[]
   inlineCompletion: WriteInlineCompletionSettingsV1
   selectionAssist: WriteSelectionAssistSettingsV1
+  agentPresets: WriteAgentPresetV1[]
 } {
   return {
     ...write,
@@ -282,6 +288,8 @@ export function initialState(): Pick<
   | 'fileError'
   | 'fileLoading'
   | 'saveStatus'
+  | 'pendingAgentReview'
+  | 'reviewActive'
   | 'selection'
   | 'quotedSelections'
   | 'recentEdits'
@@ -306,6 +314,8 @@ export function initialState(): Pick<
     fileError: null,
     fileLoading: false,
     saveStatus: 'saved',
+    pendingAgentReview: null,
+    reviewActive: false,
     selection: emptySelection(),
     quotedSelections: [],
     recentEdits: []

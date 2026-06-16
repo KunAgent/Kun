@@ -187,6 +187,50 @@ describe('CompatModelClient', () => {
     ])
   })
 
+  it('maps Responses API cached input token details into cache telemetry', async () => {
+    const fetchImpl: typeof fetch = async () =>
+      new Response(JSON.stringify({
+        id: 'resp_cache',
+        status: 'completed',
+        output_text: 'cached',
+        usage: {
+          input_tokens: 400,
+          output_tokens: 20,
+          total_tokens: 420,
+          input_tokens_details: { cached_tokens: 300 }
+        }
+      }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' }
+      })
+    const client = new CompatModelClient({
+      baseUrl: 'https://example.com/api/v1',
+      apiKey: 'k',
+      model: 'gpt-5-mini',
+      endpointFormat: 'responses',
+      fetchImpl,
+      nonStreaming: true
+    })
+
+    const chunks: ModelStreamChunk[] = []
+    for await (const chunk of client.stream(buildRequest(new AbortController().signal))) {
+      chunks.push(chunk)
+    }
+
+    const usageChunk = chunks.find((chunk) => chunk.kind === 'usage')
+    const usage = usageChunk && usageChunk.kind === 'usage' ? usageChunk.usage : null
+    expect(usage).not.toBeNull()
+    expect(usage).toMatchObject({
+      promptTokens: 400,
+      completionTokens: 20,
+      totalTokens: 420,
+      cachedTokens: 300,
+      cacheHitTokens: 300,
+      cacheMissTokens: 100
+    })
+    expect(usage?.cacheHitRate).toBeCloseTo(0.75)
+  })
+
   it('uses the Anthropic Messages API format when selected', async () => {
     const sentUrls: string[] = []
     const sentBodies: Array<Record<string, unknown>> = []

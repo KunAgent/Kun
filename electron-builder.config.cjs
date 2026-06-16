@@ -96,6 +96,7 @@ module.exports = {
     '**/kun/package*.json',
     '**/kun/node_modules/**/*',
     '**/node_modules/better-sqlite3/**/*',
+    '**/node_modules/node-pty/**/*',
     '**/node_modules/bindings/**/*',
     '**/node_modules/file-uri-to-path/**/*'
   ],

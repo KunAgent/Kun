@@ -76,6 +76,7 @@ export const useWriteWorkspaceStore = create<WriteWorkspaceState>((set, get) => 
   },
   inlineCompletionApiReady: false,
   selectionAssist: defaultWriteSelectionAssistSettings(),
+  agentPresets: [],
   imageGenReady: false,
   prototypeReady: false,
   settingsLoading: false,
@@ -85,6 +86,7 @@ export const useWriteWorkspaceStore = create<WriteWorkspaceState>((set, get) => 
   assistantOpen: readStoredAssistantOpen(),
   assistantModel: readStoredAssistantModel(),
   assistantProviderId: readStoredAssistantProviderId(),
+  assistantAgentPresetId: '',
 
   ...createWriteSettingsActions({ set, get }),
   ...createWriteFileActions({
@@ -103,6 +105,10 @@ export const useWriteWorkspaceStore = create<WriteWorkspaceState>((set, get) => 
       saveStatus: state.activeFileKind === 'text' && state.activeFilePath && content !== lastSavedContent ? 'dirty' : 'saved'
     }))
   },
+
+  setReviewActive: (active) => set({ reviewActive: active === true }),
+
+  clearPendingAgentReview: () => set({ pendingAgentReview: null }),
 
   syncActiveFileFromDisk: async (workspaceRoot, options = {}) => {
     const snapshot = get()
@@ -174,6 +180,29 @@ export const useWriteWorkspaceStore = create<WriteWorkspaceState>((set, get) => 
     }
 
     cancelExternalSyncAnimation()
+
+    // Agent edits surface as a red/green diff review instead of silently
+    // overwriting the editor. The disk already holds `content`, so we record it
+    // as the saved baseline and stash it for review; the review's commit later
+    // reconciles disk to whatever the user accepts or rejects.
+    if (
+      options.reviewAsDiff === true &&
+      !nextTruncated &&
+      content.length <= MAX_ANIMATED_EXTERNAL_SYNC_CHARS &&
+      latest.fileContent !== content
+    ) {
+      lastSavedContent = content
+      set({
+        pendingAgentReview: { nextContent: content },
+        reviewActive: true,
+        fileSize: nextSize,
+        fileTruncated: nextTruncated,
+        fileError: null,
+        fileLoading: false
+      })
+      return true
+    }
+
     lastSavedContent = content
 
     if (
@@ -325,6 +354,10 @@ export const useWriteWorkspaceStore = create<WriteWorkspaceState>((set, get) => 
     const normalizedProviderId = providerId?.trim() ?? ''
     writeBrowserStorageItem(WRITE_ASSISTANT_PROVIDER_KEY, normalizedProviderId)
     set({ assistantModel: normalized, assistantProviderId: normalizedProviderId })
+  },
+
+  setAssistantAgentPresetId: (id) => {
+    set({ assistantAgentPresetId: typeof id === 'string' ? id : '' })
   },
 
   setSelection: (selection) => {

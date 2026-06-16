@@ -18,6 +18,7 @@ import {
   SettingRow,
   Toggle
 } from './settings-controls'
+import { LegacySessionImportCard } from './settings-section-general-legacy-import'
 
 export function GeneralSettingsSection({ ctx }: { ctx: Record<string, any> }): ReactElement {
   const {
@@ -262,6 +263,8 @@ export function GeneralSettingsSection({ ctx }: { ctx: Record<string, any> }): R
                   }
                 />
               </SettingsCard>
+
+              <LegacySessionImportCard t={t} tCommon={tCommon} />
 
               <SettingsCard title={t('logTitle')} className="mt-6">
                 <SettingRow

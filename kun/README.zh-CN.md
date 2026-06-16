@@ -239,6 +239,7 @@ Kun 默认使用混合存储：`threads/{threadId}/messages.jsonl` 与 `events.j
 - `serve.tokenEconomy` / `tokenEconomyMode` 会压缩工具描述、工具结果和历史上下文；保留代码、路径、命令、URL、错误信号等高价值信息，同时省掉重复、超长或二进制 payload。
 - `contextCompaction` 控制长会话压缩的兜底阈值和摘要方式；模型级阈值写在 `models.profiles`。压缩时保留目标、约束、决策、已触碰文件、工具结果和未解决事项。
 - `serve.runtimeTuning.toolStorm` 会抑制同一回合内重复的相同工具调用，阻止无意义 tool loop 继续烧 token。
+- `runtime.streamIdleTimeoutMs`（`config.json` 顶层）限制流式分片之间的最大空闲间隔，超时会以 `stream_idle_timeout` 结束本轮（默认 `45000`）。本地模型预处理超大输入时会长时间静默，可调大此值；填 `0` 表示不限制。
 - `capabilities.web` 暴露 `web_fetch` 与/或 `web_search`。内置 provider 负责 HTTP(S) 抓取；搜索功能依赖 provider 实现，未配置时会变为不可用。
 - `capabilities.skills` 扫描 `roots` 下的 `skill.json`，并在 `legacySkillMd` 为 `true` 时兼容 `SKILL.md`。
 - `capabilities.attachments` 将图片二进制从线程日志剥离，允许回合记录引用 `attachmentIds`。视觉模型直接接收图片部分，纯文本模型走受限文本 fallback。
