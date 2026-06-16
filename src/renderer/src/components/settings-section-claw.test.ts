@@ -73,13 +73,18 @@ function buildSettings(): AppSettingsV1 {
   }
   settings.claw.enabled = true
   settings.claw.im.workspaceRoot = '/tmp/claw'
+  settings.provider.providers = [{
+    ...settings.provider.providers[0],
+    models: ['team-chat-model'],
+    modelProfiles: {}
+  }]
   settings.claw.channels = [
     {
       id: 'channel_1',
       provider: 'feishu',
       label: 'Team helper',
       enabled: true,
-      model: 'auto',
+      model: 'team-chat-model',
       threadId: 'thr_1',
       workspaceRoot: '',
       agentProfile: {
@@ -121,6 +126,7 @@ describe('ClawSettingsSection', () => {
     expect(html).toContain('Personality')
     expect(html).toContain('Reply rules')
     expect(html).toContain('Start with the conclusion.')
-    expect(html).toContain('<option value="deepseek-v4-pro"')
+    expect(html).toContain('<option value="team-chat-model"')
+    expect(html).not.toContain('<option value="deepseek-v4-pro"')
   })
 })

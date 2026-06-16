@@ -1,6 +1,5 @@
 import type { ReactElement } from 'react'
 import {
-  CLAW_MODEL_IDS,
   type AppSettingsPatch,
   type AppSettingsV1,
   type ClawImAgentProfileV1,
@@ -8,6 +7,7 @@ import {
   type ClawModel
 } from '@shared/app-settings'
 import { SettingsCard, SettingRow, Toggle } from './settings-controls'
+import { clawModelSelectOptions } from '../lib/claw-model-options'
 
 type ClawSettingsContext = {
   t: (key: string, values?: Record<string, unknown>) => string
@@ -200,7 +200,7 @@ export function ClawSettingsSection({ ctx }: { ctx: ClawSettingsContext }): Reac
                       value={channel.model}
                       onChange={(e) => updateChannel(form, update, channel.id, { model: e.target.value as ClawModel })}
                     >
-                      {CLAW_MODEL_IDS.map((model) => (
+                      {clawModelSelectOptions(form, channel.model).map((model) => (
                         <option key={model} value={model}>{model}</option>
                       ))}
                     </select>

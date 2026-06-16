@@ -26,6 +26,7 @@ import type {
 } from '@shared/app-settings'
 import type { ClawImInstallQrResult } from '@shared/kun-gui-api'
 import { confirmDialog } from '../../lib/confirm-dialog'
+import { clawModelSelectOptions, mergeClawModelOptions } from '../../lib/claw-model-options'
 import {
   ClawProviderLogo,
   clawProviderDisplayLabel
@@ -131,6 +132,7 @@ export function ClawAddImDialog({
   const [advancedSettingsOpen, setAdvancedSettingsOpen] = useState(false)
   const [officialInstallTarget, setOfficialInstallTarget] = useState<ClawInstallTarget>('feishu')
   const [channelModel, setChannelModel] = useState<string>('auto')
+  const [configuredModelOptions, setConfiguredModelOptions] = useState<string[]>(['auto'])
   const [channelWorkspaceRoot, setChannelWorkspaceRoot] = useState('')
   const [channelEnabled, setChannelEnabled] = useState(true)
   const [showSecret, setShowSecret] = useState(false)
@@ -239,6 +241,7 @@ export function ClawAddImDialog({
         setSecret(settings.claw.im.secret.trim())
         setResponseTimeoutSec(Math.round(settings.claw.im.responseTimeoutMs / 1000))
         setRunMode(settings.claw.im.mode)
+        setConfiguredModelOptions(clawModelSelectOptions(settings))
       })
       .catch((e: unknown) => {
         if (!cancelled) setError(e instanceof Error ? e.message : String(e))
@@ -269,6 +272,10 @@ export function ClawAddImDialog({
       existingChannel?.id
     ),
     [effectiveProvider, existingChannel?.id, officialInstallTarget, resolvedPlatformCredential]
+  )
+  const channelModelOptions = useMemo(
+    () => mergeClawModelOptions(configuredModelOptions, channelModel),
+    [channelModel, configuredModelOptions]
   )
   const bindingPayload = useMemo(() => {
     const payload: Record<string, unknown> = {
@@ -618,7 +625,7 @@ export function ClawAddImDialog({
   }
 
   const dialogViewContext = {
-    activeStep, activeStepConfig, activeStepIndex, advancedSettingsOpen, agentProfile, atLastStep, bindingPayload, busy, channelEnabled, channelModel, channelWorkspaceRoot, copied, copyBindingPayload, credentialStatusText,
+    activeStep, activeStepConfig, activeStepIndex, advancedSettingsOpen, agentProfile, atLastStep, bindingPayload, busy, channelEnabled, channelModel, channelModelOptions, channelWorkspaceRoot, copied, copyBindingPayload, credentialStatusText,
     defaultWorkspacePreview, effectiveProvider, editableChannels, endpoint, enterManageConfigure, error, existingChannel, goToPreviousStep, handleDeleteChannel, handlePrimaryAction,
     imEnabled, imPath, imPort, installQr, isManageSelection, loadingConfig, mode, navigationDisabled, noEditableChannel, officialInstallTarget, onClose, onDeleteChannel,
     primaryActionLabel, providerConfigured, providerListTitle, qrValue, requiresOfficialInstall, resolvedPlatformCredential, responseTimeoutSec, returnToManageSelection, runMode,
