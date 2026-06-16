@@ -1,9 +1,25 @@
 import { readFileSync } from 'node:fs'
-import { dirname, isAbsolute, join, win32 } from 'node:path'
+import { dirname, isAbsolute, relative, resolve, sep, win32 } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { nativeImage } from 'electron'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
+
+function usesWin32PathRules(baseDir: string): boolean {
+  return (win32.isAbsolute(baseDir) && !baseDir.startsWith('/')) ||
+    baseDir.startsWith('\\\\')
+}
+
+function isInsideDirectory(candidate: string, baseDir: string, useWin32: boolean): boolean {
+  const relativePath = useWin32 ? win32.relative(baseDir, candidate) : relative(baseDir, candidate)
+  const separator = useWin32 ? '\\' : sep
+  const absoluteRelativePath = useWin32 ? win32.isAbsolute(relativePath) : isAbsolute(relativePath)
+  return relativePath === '' || (
+    relativePath !== '..' &&
+    !relativePath.startsWith(`..${separator}`) &&
+    !absoluteRelativePath
+  )
+}
 
 /**
  * 解析 Vite/Rollup 给出的资产 URL,得到一个真实可读的文件系统路径。
@@ -28,7 +44,15 @@ export function resolveAppIconPath(source: string, baseDir: string = __dirname):
   // 前导斜杠剥掉,再判断 absoluteness。Windows 风格的真绝对路径(带盘符或 UNC)
   // 不以斜杠开头,原样透传。
   const normalized = source.replace(/^\/+/, '')
-  return isAbsolute(normalized) || win32.isAbsolute(normalized) ? normalized : join(baseDir, normalized)
+  if (isAbsolute(normalized) || win32.isAbsolute(normalized)) return normalized
+
+  const useWin32 = usesWin32PathRules(baseDir)
+  const resolvedBaseDir = useWin32 ? win32.resolve(baseDir) : resolve(baseDir)
+  const resolved = useWin32 ? win32.resolve(resolvedBaseDir, normalized) : resolve(resolvedBaseDir, normalized)
+  if (!isInsideDirectory(resolved, resolvedBaseDir, useWin32)) {
+    throw new Error('App icon path escapes the bundle directory.')
+  }
+  return resolved
 }
 
 /**
@@ -48,14 +72,15 @@ export function createAppIcon(source: string): Electron.NativeImage {
     return nativeImage.createFromDataURL(source)
   }
 
-  const absolute = resolveAppIconPath(source)
+  let absolute = ''
   try {
+    absolute = resolveAppIconPath(source)
     return nativeImage.createFromBuffer(readFileSync(absolute))
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     console.warn(
       '[kun-gui] failed to load app icon from',
-      absolute,
+      absolute || source,
       '-',
       message
     )

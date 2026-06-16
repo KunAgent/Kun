@@ -55,7 +55,7 @@ describe('app icon loader', () => {
     it('joins a relative source with the provided baseDir', () => {
       const resolved = mod.resolveAppIconPath('chunks/kun-XXXX.png', '/app/bundle')
       // 路径分隔符因平台而异(Windows 是 \,其它是 /),用 toMatch 避免硬编码
-      expect(resolved.replace(/\\/g, '/')).toBe('/app/bundle/chunks/kun-XXXX.png')
+      expect(resolved.replace(/\\/g, '/')).toMatch(/(?:^[A-Za-z]:)?\/app\/bundle\/chunks\/kun-XXXX\.png$/)
     })
 
     it('strips a leading slash before joining with baseDir (dev mode quirk)', () => {
@@ -74,6 +74,12 @@ describe('app icon loader', () => {
     it('passes a data: URL through unchanged', () => {
       const dataUrl = 'data:image/png;base64,iVBORw0KGgo='
       expect(mod.resolveAppIconPath(dataUrl, '/ignored')).toBe(dataUrl)
+    })
+
+    it('rejects relative sources that escape the bundle directory', () => {
+      expect(() => mod.resolveAppIconPath('../secret.png', '/app/bundle')).toThrow(
+        /bundle directory/
+      )
     })
   })
 

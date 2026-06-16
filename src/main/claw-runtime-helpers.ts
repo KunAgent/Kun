@@ -107,7 +107,9 @@ export function sanitizePathSegment(raw: string, fallback: string): string {
 }
 
 export function feishuSenderLabel(message: NormalizedMessage): string {
-  return message.senderName?.trim() || message.senderId.trim() || 'feishu-user'
+  const senderName = typeof message.senderName === 'string' ? message.senderName.trim() : ''
+  const senderId = typeof message.senderId === 'string' ? message.senderId.trim() : ''
+  return senderName || senderId || 'feishu-user'
 }
 
 export function buildFeishuPrompt(message: NormalizedMessage): string {

@@ -88,9 +88,12 @@ type IncomingRemoteSession = Pick<
 >
 
 function hasFeishuPlatformCredential(channel: ClawImChannelV1): channel is FeishuClawChannel {
-  return channel.platformCredential?.kind === 'feishu' &&
-    !!channel.platformCredential.appId.trim() &&
-    !!channel.platformCredential.appSecret.trim()
+  const credential = channel.platformCredential
+  return credential?.kind === 'feishu' &&
+    typeof credential.appId === 'string' &&
+    credential.appId.trim() !== '' &&
+    typeof credential.appSecret === 'string' &&
+    credential.appSecret.trim() !== ''
 }
 
 function isMissingThreadResult(result: { ok: boolean; status: number; body: string }): boolean {

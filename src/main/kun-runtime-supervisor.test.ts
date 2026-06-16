@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { RestartBudget } from './kun-runtime-supervisor'
+import { MAX_RESTART_DELAY_MS, RestartBudget } from './kun-runtime-supervisor'
 
 function budgetAt(times: { value: number }): RestartBudget {
   return new RestartBudget({
@@ -59,5 +59,33 @@ describe('RestartBudget', () => {
 
     const verdict = budget.note()
     expect(verdict).toEqual({ allowed: true, attempt: 1, delayMs: 1_000 })
+  })
+
+  it('clamps restart delays to the maximum timer delay', () => {
+    const budget = new RestartBudget({
+      windowMs: 60_000,
+      maxRestarts: 3,
+      baseDelayMs: Number.MAX_SAFE_INTEGER,
+      delayFactor: Number.MAX_SAFE_INTEGER,
+      now: () => 0
+    })
+
+    expect(budget.note()).toEqual({
+      allowed: true,
+      attempt: 1,
+      delayMs: MAX_RESTART_DELAY_MS
+    })
+  })
+
+  it('falls back from non-finite numeric options', () => {
+    const budget = new RestartBudget({
+      windowMs: Number.NaN,
+      maxRestarts: Number.NaN,
+      baseDelayMs: Number.NaN,
+      delayFactor: Number.NaN,
+      now: () => 0
+    })
+
+    expect(budget.note()).toEqual({ allowed: true, attempt: 1, delayMs: 1_000 })
   })
 })

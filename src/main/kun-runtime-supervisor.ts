@@ -22,6 +22,12 @@ export type RestartBudgetOptions = {
   now?: () => number
 }
 
+export const MAX_RESTART_DELAY_MS = 2_147_483_647
+
+function finiteNumber(value: number | undefined, fallback: number): number {
+  return typeof value === 'number' && Number.isFinite(value) ? value : fallback
+}
+
 /**
  * Sliding-window restart budget: allows up to `maxRestarts` attempts per
  * `windowMs`, with exponential backoff delays (base, base*factor, ...).
@@ -37,10 +43,10 @@ export class RestartBudget {
   private attempts: number[] = []
 
   constructor(options: RestartBudgetOptions) {
-    this.windowMs = Math.max(1, options.windowMs)
-    this.maxRestarts = Math.max(1, options.maxRestarts)
-    this.baseDelayMs = Math.max(0, options.baseDelayMs ?? 1_000)
-    this.delayFactor = Math.max(1, options.delayFactor ?? 3)
+    this.windowMs = Math.max(1, finiteNumber(options.windowMs, 60_000))
+    this.maxRestarts = Math.max(1, finiteNumber(options.maxRestarts, 3))
+    this.baseDelayMs = Math.max(0, finiteNumber(options.baseDelayMs, 1_000))
+    this.delayFactor = Math.max(1, finiteNumber(options.delayFactor, 3))
     this.now = options.now ?? (() => Date.now())
   }
 
@@ -56,7 +62,10 @@ export class RestartBudget {
     return {
       allowed: true,
       attempt,
-      delayMs: Math.round(this.baseDelayMs * Math.pow(this.delayFactor, attempt - 1))
+      delayMs: Math.min(
+        MAX_RESTART_DELAY_MS,
+        Math.round(this.baseDelayMs * Math.pow(this.delayFactor, attempt - 1))
+      )
     }
   }
 

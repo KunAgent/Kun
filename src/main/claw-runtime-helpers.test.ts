@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  feishuSenderLabel,
   finalAssistantReplyText,
   imCompletionReplyForPush,
   IM_COMPLETED_NO_TEXT_REPLY,
@@ -77,5 +78,18 @@ describe('imCompletionReplyForPush', () => {
     ])
     expect(reply).toContain('a.md')
     expect(reply).toContain('b.png')
+  })
+})
+
+describe('feishuSenderLabel', () => {
+  it('falls back when sender fields are missing', () => {
+    expect(feishuSenderLabel({} as Parameters<typeof feishuSenderLabel>[0])).toBe('feishu-user')
+  })
+
+  it('prefers senderName over senderId', () => {
+    expect(feishuSenderLabel({
+      senderName: ' Alice ',
+      senderId: 'ou_123'
+    } as Parameters<typeof feishuSenderLabel>[0])).toBe('Alice')
   })
 })
