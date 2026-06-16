@@ -156,8 +156,8 @@ export function ClawSettingsSection({ ctx }: { ctx: ClawSettingsContext }): Reac
           form.claw.channels.map((channel) => {
             const name = channel.agentProfile.name.trim() || channel.label
             return (
-              <div key={channel.id} className="px-3 py-4">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div key={channel.id}>
+                <div className="flex flex-col gap-3 px-3 py-4 sm:flex-row sm:items-start sm:justify-between">
                   <div className="min-w-0">
                     <div className="truncate text-[14px] font-semibold text-ds-ink">{name}</div>
                     <div className="mt-1 text-[12px] text-ds-faint">
@@ -192,7 +192,7 @@ export function ClawSettingsSection({ ctx }: { ctx: ClawSettingsContext }): Reac
                   />
                 )}
 
-                <div className="mt-4 grid gap-3 md:grid-cols-2">
+                <div className="mt-4 grid gap-3 px-3 md:grid-cols-2">
                   <label className="block min-w-0">
                     <span className="mb-1.5 block text-[12px] font-semibold text-ds-muted">
                       {t('clawManageAgentName')}
