@@ -829,7 +829,14 @@ export function resolveKunRuntimeSettings(settings: AppSettingsV1): KunRuntimeSe
 
   return {
     ...runtime,
-    apiKey: useProviderCredentials ? provider.apiKey.trim() : runtimeApiKey || provider.apiKey.trim(),
+    // When a provider is selected we prefer that profile's key, but fall back
+    // to the agent's own runtime.apiKey if the profile happens to be keyless.
+    // A providerId pointing at a keyless profile must NOT resolve to an empty
+    // key (issue #329) — that briefly reads as "no API key" and the
+    // settings-apply gate then stops a perfectly healthy Kun runtime.
+    apiKey: useProviderCredentials
+      ? provider.apiKey.trim() || runtimeApiKey
+      : runtimeApiKey || provider.apiKey.trim(),
     baseUrl:
       !useProviderCredentials && runtimeBaseUrl && runtimeBaseUrl !== DEFAULT_DEEPSEEK_BASE_URL
         ? normalizeDeepseekBaseUrl(runtimeBaseUrl)

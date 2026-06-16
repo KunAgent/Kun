@@ -546,6 +546,93 @@ describe('MCP tool provider', () => {
     })
   })
 
+  it('recovers a server that lost the startup connect race via background reconnect (issue #342)', async () => {
+    let factories = 0
+    const config = KunCapabilitiesConfig.parse({
+      mcp: {
+        enabled: true,
+        servers: {
+          github: {
+            transport: 'stdio',
+            command: 'node',
+            trustScope: 'workspace',
+            trustedWorkspaceRoots: ['/tmp/project']
+          }
+        }
+      }
+    })
+    const built = await buildMcpToolProviders(config.mcp, {
+      delay: async () => undefined,
+      backgroundReconnect: { baseDelayMs: 0, maxDelayMs: 0 },
+      clientFactory: async () => {
+        factories += 1
+        if (factories === 1) {
+          // Mimics the fast startup race timing out on a slow npx cold start.
+          throw new Error('MCP server "github" did not connect within 10000ms during startup')
+        }
+        return {
+          async listTools() {
+            return {
+              tools: [{ name: 'read', inputSchema: { type: 'object' }, annotations: { readOnlyHint: true } }]
+            }
+          },
+          async callTool() {
+            return { ok: true }
+          },
+          async close() {
+            // no-op
+          }
+        }
+      }
+    })
+
+    // Startup pass: the server failed and advertised no tools.
+    expect(built.diagnostics).toEqual([expect.objectContaining({ id: 'github', status: 'error' })])
+    expect(built.providers).toHaveLength(0)
+
+    const registry = new CapabilityRegistry(built.providers)
+    await built.startBackgroundReconnect((provider) => registry.registerProvider(provider))
+
+    // The background retry connected, registered the tools live, and flipped
+    // the diagnostic without a runtime restart.
+    expect(factories).toBe(2)
+    expect(built.diagnostics).toEqual([
+      expect.objectContaining({ id: 'github', status: 'connected', toolCount: 1 })
+    ])
+    const host = new LocalToolHost({ registry })
+    expect((await host.listTools(buildContext('/tmp/project'))).map((tool) => tool.name)).toContain(
+      'mcp_github_read'
+    )
+  })
+
+  it('does not retry when every MCP server connected at startup', async () => {
+    let factories = 0
+    const config = KunCapabilitiesConfig.parse({
+      mcp: {
+        enabled: true,
+        servers: {
+          github: {
+            transport: 'stdio',
+            command: 'node',
+            trustScope: 'workspace',
+            trustedWorkspaceRoots: ['/tmp/project']
+          }
+        }
+      }
+    })
+    const built = await buildMcpToolProviders(config.mcp, {
+      delay: async () => undefined,
+      clientFactory: async () => {
+        factories += 1
+        return fakeClient()
+      }
+    })
+    await built.startBackgroundReconnect(() => {
+      throw new Error('register should not be called when nothing failed')
+    })
+    expect(factories).toBe(1)
+  })
+
   it('reports catalog drift after refreshing MCP search records', async () => {
     let expanded = false
     const config = KunCapabilitiesConfig.parse({

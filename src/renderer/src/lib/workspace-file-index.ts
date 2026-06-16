@@ -1,5 +1,6 @@
 import type { WorkspaceEntry } from '@shared/workspace-file'
 import {
+  composerFileReferenceKey,
   isFileWithinDirectory,
   relativeWorkspacePath,
   type ComposerFileReference
@@ -174,4 +175,83 @@ export function filesUnderDirectory(
   dirRelativePath: string
 ): ComposerFileReference[] {
   return files.filter((file) => isFileWithinDirectory(file.relativePath, dirRelativePath))
+}
+
+const workspaceMentionDirectoryCache = new Map<
+  string,
+  ComposerFileReference[] | Promise<ComposerFileReference[]>
+>()
+
+/** Directory portion of a path-like @-mention query (`src/a/b/file` → `src/a/b`). */
+export function mentionQueryDirectory(query: string): string | null {
+  const normalized = query.replaceAll('\\', '/').replace(/\/+/g, '/')
+  const lastSlash = normalized.lastIndexOf('/')
+  if (lastSlash < 0) return null
+  return normalized.slice(0, lastSlash)
+}
+
+/**
+ * Resolve the directory a path-like @-mention points at, on demand. The cached
+ * BFS index ([[buildWorkspaceFileIndex]]) is bounded by depth/dir/file caps, so
+ * a file in a deep or wide tree may never be indexed. When the user types a
+ * path (`@src/a/b/c/deep.ts`) we list exactly that directory through the
+ * existing workspace IPC so the file shows up regardless of how deep it sits
+ * (issue #340). Returns [] for name-only queries — the index covers those.
+ */
+export async function loadWorkspaceMentionPathSuggestions(
+  workspaceRoot: string,
+  query: string
+): Promise<ComposerFileReference[]> {
+  const root = workspaceRoot.trim()
+  if (!root) return []
+  const dir = mentionQueryDirectory(query)
+  if (dir == null) return []
+
+  const cacheKey = `${root}::${dir}`
+  const cached = workspaceMentionDirectoryCache.get(cacheKey)
+  if (cached) return cached
+
+  const task = (async () => {
+    const result = await window.kunGui.listWorkspaceDirectory({ workspaceRoot: root, path: dir })
+    if (!result.ok) return []
+    const references: ComposerFileReference[] = []
+    for (const entry of result.entries) {
+      if (entry.type === 'directory') {
+        if (FILE_MENTION_IGNORED_DIRS.has(entry.name.toLowerCase())) continue
+        references.push(referenceFromEntry(entry, root, 'directory'))
+      } else if (isMentionableWorkspaceFile(entry)) {
+        references.push(referenceFromEntry(entry, root, 'file'))
+      }
+    }
+    return references
+  })()
+
+  workspaceMentionDirectoryCache.set(cacheKey, task)
+  try {
+    const references = await task
+    workspaceMentionDirectoryCache.set(cacheKey, references)
+    // Bound the cache; deep typing can touch many directories.
+    setTimeout(() => workspaceMentionDirectoryCache.delete(cacheKey), FILE_MENTION_CACHE_TTL_MS)
+    return references
+  } catch (error) {
+    workspaceMentionDirectoryCache.delete(cacheKey)
+    throw error
+  }
+}
+
+/** Merge on-demand path suggestions into the indexed candidates, de-duped by path. */
+export function mergeMentionCandidates(
+  base: ComposerFileReference[],
+  extra: ComposerFileReference[]
+): ComposerFileReference[] {
+  if (extra.length === 0) return base
+  const seen = new Set(base.map(composerFileReferenceKey))
+  const merged = [...base]
+  for (const reference of extra) {
+    const key = composerFileReferenceKey(reference)
+    if (seen.has(key)) continue
+    seen.add(key)
+    merged.push(reference)
+  }
+  return merged
 }

@@ -339,6 +339,22 @@ export async function createKunServeRuntime(
     readTracker: true,
     ...(resolvedHooks.length ? { hooks: resolvedHooks } : {})
   })
+  // Keep retrying MCP servers that lost the fast startup connect race so a slow
+  // npx cold start eventually shows up as connected instead of staying "error"
+  // until the next runtime restart (issue #342). Both registries advertise the
+  // MCP providers, so a late connection must be registered into each.
+  void mcpProviders.startBackgroundReconnect((provider) => {
+    try {
+      registry.registerProvider(provider)
+    } catch {
+      // ignore duplicate/colliding registration
+    }
+    try {
+      childRegistry.registerProvider(provider)
+    } catch {
+      // ignore duplicate/colliding registration
+    }
+  })
   const loop = new AgentLoop({
     threadStore,
     sessionStore,

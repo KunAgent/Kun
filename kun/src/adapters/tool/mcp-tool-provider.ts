@@ -72,6 +72,17 @@ export type McpToolProviderBuildResult = {
   search: McpSearchRuntimeDiagnostic
   connectedServers: number
   toolCount: number
+  /**
+   * Begin retrying servers that failed/timed out during the fast startup pass.
+   * Call once, after the tool registries exist, passing a callback that adds a
+   * late-connected server's provider to them. Without this, a server that loses
+   * the startup race (e.g. an npx-based stdio server whose first cold start
+   * exceeds the connect timeout on Windows) stays "error" forever until the
+   * whole runtime restarts — exactly issue #342. Safe to call when there is
+   * nothing to retry (it no-ops). The returned promise resolves once every
+   * failed server has reconnected or exhausted its retries (used by tests).
+   */
+  startBackgroundReconnect: (register: (provider: CapabilityToolProvider) => void) => Promise<void>
   close: () => Promise<void>
 }
 
@@ -84,9 +95,27 @@ export type McpToolProviderOptions = {
    * must not keep the whole runtime from reporting ready.
    */
   startupConnectTimeoutMs?: number
+  /** Tunables for the post-startup background reconnect of failed servers. */
+  backgroundReconnect?: McpBackgroundReconnectOptions
+  /** Test seam for the inter-attempt backoff; defaults to a real unref'd timer. */
+  delay?: (ms: number) => Promise<void>
+}
+
+export type McpBackgroundReconnectOptions = {
+  /** Disable the retry loop entirely. Defaults to enabled. */
+  enabled?: boolean
+  /** Attempts per failed server before giving up. Default 5. */
+  maxAttempts?: number
+  /** First backoff delay; doubles each attempt up to maxDelayMs. Default 4000. */
+  baseDelayMs?: number
+  /** Backoff ceiling. Default 30000. */
+  maxDelayMs?: number
 }
 
 const DEFAULT_MCP_STARTUP_CONNECT_TIMEOUT_MS = 10_000
+const DEFAULT_MCP_RECONNECT_MAX_ATTEMPTS = 5
+const DEFAULT_MCP_RECONNECT_BASE_DELAY_MS = 4_000
+const DEFAULT_MCP_RECONNECT_MAX_DELAY_MS = 30_000
 
 export type McpStdioEnvironmentOptions = {
   platform?: NodeJS.Platform
@@ -138,6 +167,7 @@ export async function buildMcpToolProviders(
       }),
       connectedServers: 0,
       toolCount: 0,
+      startBackgroundReconnect: async () => undefined,
       close: async () => undefined
     }
   }
@@ -247,6 +277,13 @@ export async function buildMcpToolProviders(
     providers.push(...directProviders)
   }
   const advertisedToolCount = providers.reduce((total, provider) => total + provider.tools.length, 0)
+
+  const failedServers = outcomes.flatMap((outcome) =>
+    outcome.status === 'error' ? [{ serverId: outcome.serverId, server: outcome.server }] : []
+  )
+  let reconnectAborted = false
+  let reconnectStarted = false
+
   return {
     providers,
     diagnostics,
@@ -259,10 +296,139 @@ export async function buildMcpToolProviders(
     }),
     connectedServers,
     toolCount,
+    startBackgroundReconnect: (register) => {
+      if (reconnectStarted) return Promise.resolve()
+      reconnectStarted = true
+      if (failedServers.length === 0) return Promise.resolve()
+      if (options.backgroundReconnect?.enabled === false) return Promise.resolve()
+      return runMcpBackgroundReconnect({
+        failedServers,
+        clientFactory,
+        nowIso,
+        diagnostics,
+        connected,
+        catalogState,
+        searchActive,
+        register,
+        isAborted: () => reconnectAborted,
+        delay: options.delay ?? defaultMcpReconnectDelay,
+        options: options.backgroundReconnect
+      })
+    },
     close: async () => {
+      reconnectAborted = true
       await Promise.all(connected.map((state) => state.client.close().catch(() => undefined)))
     }
   }
+}
+
+type FailedMcpServer = { serverId: string; server: McpServerConfig }
+
+type McpBackgroundReconnectParams = {
+  failedServers: FailedMcpServer[]
+  clientFactory: (serverId: string, server: McpServerConfig) => Promise<McpClientLike>
+  nowIso: () => string
+  diagnostics: McpServerDiagnostic[]
+  connected: McpConnectionState[]
+  catalogState: McpSearchCatalogState
+  searchActive: boolean
+  register: (provider: CapabilityToolProvider) => void
+  isAborted: () => boolean
+  delay: (ms: number) => Promise<void>
+  options?: McpBackgroundReconnectOptions
+}
+
+/**
+ * Retry every server that lost the fast startup connect race. Each server is
+ * retried independently with exponential backoff; the per-attempt connect is
+ * bounded by the server's own `timeoutMs` (not the short startup race), so a
+ * cold `npx` download finally gets the time it needs. On success the server's
+ * tools are registered live and its diagnostic flips from "error" to
+ * "connected" — no full runtime restart required (issue #342).
+ */
+async function runMcpBackgroundReconnect(params: McpBackgroundReconnectParams): Promise<void> {
+  const maxAttempts = params.options?.maxAttempts ?? DEFAULT_MCP_RECONNECT_MAX_ATTEMPTS
+  const baseDelayMs = params.options?.baseDelayMs ?? DEFAULT_MCP_RECONNECT_BASE_DELAY_MS
+  const maxDelayMs = params.options?.maxDelayMs ?? DEFAULT_MCP_RECONNECT_MAX_DELAY_MS
+  await Promise.all(
+    params.failedServers.map((failed) =>
+      reconnectFailedMcpServer(params, failed, maxAttempts, baseDelayMs, maxDelayMs)
+    )
+  )
+}
+
+async function reconnectFailedMcpServer(
+  params: McpBackgroundReconnectParams,
+  failed: FailedMcpServer,
+  maxAttempts: number,
+  baseDelayMs: number,
+  maxDelayMs: number
+): Promise<void> {
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    if (params.isAborted()) return
+    await params.delay(Math.min(maxDelayMs, baseDelayMs * 2 ** (attempt - 1)))
+    if (params.isAborted()) return
+    try {
+      const client = await params.clientFactory(failed.serverId, failed.server)
+      const state: McpConnectionState = {
+        serverId: failed.serverId,
+        server: failed.server,
+        client,
+        clientFactory: params.clientFactory,
+        nowIso: params.nowIso,
+        lastConnectedAt: params.nowIso()
+      }
+      const listed = await refreshMcpConnectionCatalog(state)
+      if (params.isAborted()) {
+        await client.close().catch(() => undefined)
+        return
+      }
+      registerLateMcpConnection(params, state, listed)
+      return
+    } catch {
+      // Leave the diagnostic as "error" and try again until attempts run out.
+    }
+  }
+}
+
+function registerLateMcpConnection(
+  params: McpBackgroundReconnectParams,
+  state: McpConnectionState,
+  listed: McpToolDescriptor[]
+): void {
+  params.connected.push(state)
+  params.catalogState.records.push(...listed.map((tool) => createMcpSearchCatalogRecord(state, tool)))
+  const tools = listed.map((tool) => createMcpLocalTool(state, tool))
+  // In search mode the model reaches MCP tools through the search provider
+  // (which re-lists `connected`), so advertising them directly would double up.
+  // In direct mode, register the provider so its tools become callable.
+  if (!params.searchActive) {
+    try {
+      params.register({
+        id: `mcp:${state.serverId}`,
+        kind: 'mcp',
+        enabled: true,
+        available: true,
+        tools
+      })
+    } catch {
+      // A registry collision must not crash the loop; the diagnostic still
+      // flips to connected below so the UI stops showing the server as failed.
+    }
+  }
+  const diagnostic = serverDiagnostic(state, 'connected', tools.length)
+  const index = params.diagnostics.findIndex((entry) => entry.id === state.serverId)
+  if (index >= 0) params.diagnostics[index] = diagnostic
+  else params.diagnostics.push(diagnostic)
+}
+
+function defaultMcpReconnectDelay(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(resolve, ms)
+    if (timer && typeof timer === 'object' && 'unref' in timer) {
+      ;(timer as { unref: () => void }).unref()
+    }
+  })
 }
 
 export function normalizeMcpToolName(serverId: string, toolName: string): string {

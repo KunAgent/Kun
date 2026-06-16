@@ -1078,9 +1078,27 @@ async function restartManagedRuntimeForSettingsChange(
   const wasRunning = adapter.isChildRunning()
 
   if (!wasRunning) return
+
+  // Decide BEFORE stopping the child. Stranding a healthy runtime is exactly
+  // issue #329: a partial/transient save (e.g. the active providerId moved to
+  // a profile whose key lives elsewhere) can momentarily resolve to "no API
+  // key" even though the user clearly has one configured. If the runtime we
+  // are about to restart was healthy and the previous settings had a usable
+  // key, don't kill it on the strength of a key check the new settings fail —
+  // leave it running on its current config; the next save with a resolvable
+  // key restarts cleanly.
+  const nextHasApiKey = Boolean(resolveConfiguredApiKey(next))
+  if (!nextHasApiKey && Boolean(resolveConfiguredApiKey(prev))) {
+    logWarn(
+      'settings-apply',
+      'Skipping Kun restart: the new settings resolve to no API key but the running runtime had one — leaving the healthy runtime in place.'
+    )
+    return
+  }
+
   await waitForManagedRuntimeReadyBeforeStop(prev, 'settings-apply')
   await adapter.stopAndWait()
-  if (!resolveConfiguredApiKey(next) || !runtime.autoStart) {
+  if (!nextHasApiKey || !runtime.autoStart) {
     publishRuntimeStatus({
       state: 'stopped',
       source: 'settings-apply',

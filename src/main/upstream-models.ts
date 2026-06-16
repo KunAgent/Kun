@@ -2,9 +2,7 @@ import { readFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import {
-  getModelProviderProfile,
   getModelProviderSettings,
-  isCustomModelEndpointFormat,
   isComposerChatModelId,
   listModelProviderModelIds,
   listNonTextModelIds,
@@ -15,21 +13,34 @@ import {
 } from '../shared/app-settings'
 import { DEFAULT_COMPOSER_MODEL_IDS } from '../shared/default-composer-models'
 import type { ModelProviderModelGroup } from '../shared/kun-gui-api'
-import { upstreamOpenAiModelsUrl } from '../shared/openai-compat-url'
 
 export type FetchUpstreamModelsResult =
   | { ok: true; modelIds: string[]; defaultModelId?: string; modelGroups?: ModelProviderModelGroup[] }
   | { ok: false; message: string }
 
-const UPSTREAM_MODELS_TIMEOUT_MS = 8_000
-
 export function fallbackModelIds(): string[] {
   return sortComposerModelIds(DEFAULT_COMPOSER_MODEL_IDS)
 }
 
+/**
+ * Builds the model list the composer picker shows. Despite the historical name,
+ * this intentionally mirrors only the models the user has explicitly added to
+ * each provider (`provider.models`) — it does NOT query the provider's full
+ * upstream `GET /v1/models` catalog.
+ *
+ * Pulling the whole catalog (issue #337) buried the few configured models under
+ * hundreds of upstream ids (e.g. every OpenRouter / Aliyun model) and surfaced
+ * ids that error when actually used. Custom-endpoint providers never triggered
+ * it, which is why only preset providers were affected. Discover and add
+ * upstream models deliberately via "从 API 拉取" (probeModelProvider) in
+ * Settings instead.
+ *
+ * The second argument is kept for call-site compatibility; the upstream key is
+ * no longer needed here.
+ */
 export async function fetchUpstreamModelIds(
   settings: AppSettingsV1,
-  apiKey: string
+  _apiKey?: string
 ): Promise<FetchUpstreamModelsResult> {
   const configuredModelIds = await readConfiguredKunModelIds(settings)
   const configuredGroups = await readConfiguredModelGroups(settings)
@@ -37,98 +48,12 @@ export async function fetchUpstreamModelIds(
   const runtime = resolveKunRuntimeSettings(settings)
   const runtimeModel = runtime.model.trim()
   const defaultModelId = isComposerChatModelId(runtimeModel, nonTextModelIds) ? runtimeModel : ''
-  if (isCustomModelEndpointFormat(runtime.endpointFormat)) {
-    return modelListOrError(
-      configuredModelIds,
-      configuredGroups,
-      defaultModelId,
-      'Custom full endpoint mode does not support querying upstream /models.'
-    )
-  }
-  const key = apiKey.trim()
-  if (!key) {
-    return modelListOrError(
-      configuredModelIds,
-      configuredGroups,
-      defaultModelId,
-      'Missing API key; cannot query upstream /v1/models.'
-    )
-  }
-  const activeProvider = getModelProviderProfile(settings, runtime.providerId)
-  const url = upstreamOpenAiModelsUrl(runtime.baseUrl)
-  try {
-    const res = await fetch(url, {
-      method: 'GET',
-      headers: {
-        Accept: 'application/json',
-        Authorization: `Bearer ${key}`
-      },
-      signal: AbortSignal.timeout(UPSTREAM_MODELS_TIMEOUT_MS)
-    })
-    const text = await res.text()
-    if (!res.ok) {
-      return modelListOrError(
-        configuredModelIds,
-        configuredGroups,
-        defaultModelId,
-        `Upstream models request failed (${res.status}): ${text.slice(0, 400)}`
-      )
-    }
-    let parsed: unknown
-    try {
-      parsed = JSON.parse(text) as unknown
-    } catch {
-      return modelListOrError(
-        configuredModelIds,
-        configuredGroups,
-        defaultModelId,
-        'Upstream /v1/models returned non-JSON body.'
-      )
-    }
-    const data = (parsed as { data?: unknown }).data
-    if (!Array.isArray(data)) {
-      return modelListOrError(
-        configuredModelIds,
-        configuredGroups,
-        defaultModelId,
-        'Upstream /v1/models JSON missing data[] array.'
-      )
-    }
-    const ids = new Set<string>()
-    for (const row of data) {
-      if (row && typeof row === 'object' && typeof (row as { id?: unknown }).id === 'string') {
-        const id = (row as { id: string }).id.trim()
-        if (
-          id
-          && isComposerChatModelId(id, nonTextModelIds)
-          && modelProfileSupportsTextChat(modelProviderModelProfile(activeProvider, id))
-        ) {
-          ids.add(id)
-        }
-      }
-    }
-    const sorted = mergeModelIds([...ids, ...configuredModelIds])
-    if (sorted.length === 0) {
-      return { ok: false, message: 'Upstream returned an empty model list.' }
-    }
-    return {
-      ok: true,
-      modelIds: sorted,
-      defaultModelId,
-      modelGroups: mergeModelGroups([
-        ...configuredGroups,
-        {
-          providerId: activeProvider.id,
-          label: activeProvider.name,
-          modelIds: [...ids],
-          modelProfiles: activeProvider.modelProfiles
-        }
-      ])
-    }
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e)
-    return modelListOrError(configuredModelIds, configuredGroups, defaultModelId, msg)
-  }
+  return modelListOrError(
+    configuredModelIds,
+    configuredGroups,
+    defaultModelId,
+    'Configured providers have no usable text models yet.'
+  )
 }
 
 export async function readConfiguredKunModelIds(settings: AppSettingsV1): Promise<string[]> {

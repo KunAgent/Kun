@@ -99,6 +99,20 @@ describe('model provider settings', () => {
     expect(runtime.baseUrl).toBe('https://legacy-runtime.example/v1')
   })
 
+  it('falls back to the runtime apiKey when the selected provider profile is keyless (issue #329)', () => {
+    const state = settings()
+    state.provider.providers = state.provider.providers.map((provider) =>
+      provider.id === 'custom' ? { ...provider, apiKey: '' } : provider
+    )
+    state.agents.kun.providerId = 'custom'
+    state.agents.kun.apiKey = 'sk-runtime-fallback'
+    const runtime = resolveKunRuntimeSettings(state)
+
+    // The keyless provider must not erase a configured key — otherwise the
+    // settings-apply gate reads "no API key" and strands a healthy runtime.
+    expect(runtime.apiKey).toBe('sk-runtime-fallback')
+  })
+
   it('creates Xiaomi and MiniMax provider presets for Kun runtime profiles', () => {
     const xiaomi = getModelProviderPreset('xiaomi')
     const minimax = getModelProviderPreset('minimax')

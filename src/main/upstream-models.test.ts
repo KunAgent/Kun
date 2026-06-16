@@ -137,18 +137,14 @@ describe('upstream model picker list', () => {
     }
   })
 
-  it('filters speech-only upstream models out of the composer picker', async () => {
+  it('never queries the upstream /v1/models catalog for the composer picker (issue #337)', async () => {
     const dataDir = mkdtempSync(join(tmpdir(), 'deepseek-gui-models-'))
     await mkdir(dataDir, { recursive: true })
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
       text: async () => JSON.stringify({
-        data: [
-          { id: 'chat-capable-model' },
-          { id: 'mimo-v2.5-asr' },
-          { id: 'whisper-1' }
-        ]
+        data: [{ id: 'upstream-only-model' }, { id: 'another-upstream-model' }]
       })
     })
     vi.stubGlobal('fetch', fetchMock)
@@ -158,18 +154,17 @@ describe('upstream model picker list', () => {
 
       expect(result).toMatchObject({ ok: true })
       if (result.ok) {
-        expect(result.modelIds).toContain('chat-capable-model')
-        expect(result.modelIds).not.toContain('mimo-v2.5-asr')
-        expect(result.modelIds).not.toContain('whisper-1')
+        // The configured provider models are present...
+        expect(result.modelIds).toContain('custom-provider-model')
+        // ...but the upstream catalog is never pulled in, so a preset
+        // provider's full model list no longer floods the picker.
+        expect(result.modelIds).not.toContain('upstream-only-model')
+        expect(result.modelIds).not.toContain('another-upstream-model')
         expect(result.modelIds).not.toContain('auto')
-        expect(result.defaultModelId).toBe('settings-model')
-        expect(result.modelGroups).toEqual(expect.arrayContaining([
-          expect.objectContaining({
-            providerId: 'custom-provider',
-            modelIds: expect.arrayContaining(['chat-capable-model'])
-          })
-        ]))
+        const customGroup = result.modelGroups?.find((group) => group.providerId === 'custom-provider')
+        expect(customGroup?.modelIds).toEqual(['custom-provider-model'])
       }
+      expect(fetchMock).not.toHaveBeenCalled()
     } finally {
       vi.unstubAllGlobals()
     }
@@ -201,7 +196,7 @@ describe('upstream model picker list', () => {
     }
   })
 
-  it('filters image-generation and other non-text models out of the composer picker', async () => {
+  it('excludes configured non-text (image-output) models from the composer picker', async () => {
     const dataDir = mkdtempSync(join(tmpdir(), 'deepseek-gui-models-'))
     await mkdir(dataDir, { recursive: true })
     const base = settings(dataDir)
@@ -213,7 +208,7 @@ describe('upstream model picker list', () => {
           provider.id === 'custom-provider'
             ? {
                 ...provider,
-                models: [...provider.models, 'paint-house', 'banana-canvas'],
+                models: [...provider.models, 'banana-canvas'],
                 modelProfiles: {
                   'banana-canvas': {
                     inputModalities: ['text'],
@@ -221,32 +216,13 @@ describe('upstream model picker list', () => {
                     supportsToolCalling: false,
                     messageParts: ['text']
                   }
-                },
-                image: {
-                  protocol: 'openai-images',
-                  baseUrl: 'https://custom.example/v1',
-                  models: ['paint-house']
                 }
               }
             : provider
         )
       }
     }
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      status: 200,
-      text: async () => JSON.stringify({
-        data: [
-          { id: 'chat-capable-model' },
-          { id: 'paint-house' },
-          { id: 'banana-canvas' },
-          { id: 'dall-e-3' },
-          { id: 'seedream-4-0-250828' },
-          { id: 'text-embedding-3-large' },
-          { id: 'wan2.2-t2v-plus' }
-        ]
-      })
-    })
+    const fetchMock = vi.fn()
     vi.stubGlobal('fetch', fetchMock)
 
     try {
@@ -254,23 +230,14 @@ describe('upstream model picker list', () => {
 
       expect(result).toMatchObject({ ok: true })
       if (result.ok) {
-        expect(result.modelIds).toContain('chat-capable-model')
-        expect(result.modelIds).not.toContain('paint-house')
-        expect(result.modelIds).not.toContain('banana-canvas')
-        expect(result.modelIds).not.toContain('dall-e-3')
-        expect(result.modelIds).not.toContain('seedream-4-0-250828')
-        expect(result.modelIds).not.toContain('text-embedding-3-large')
-        expect(result.modelIds).not.toContain('wan2.2-t2v-plus')
-        expect(result.modelGroups).toEqual(expect.arrayContaining([
-          expect.objectContaining({
-            providerId: 'custom-provider',
-            modelIds: expect.arrayContaining(['chat-capable-model'])
-          })
-        ]))
         const customGroup = result.modelGroups?.find((group) => group.providerId === 'custom-provider')
-        expect(customGroup?.modelIds).not.toContain('paint-house')
+        expect(customGroup?.modelIds).toContain('custom-provider-model')
+        // An image-output model added to a provider stays out of the text
+        // composer picker, whether in the flat list or the provider submenu.
         expect(customGroup?.modelIds).not.toContain('banana-canvas')
+        expect(result.modelIds).not.toContain('banana-canvas')
       }
+      expect(fetchMock).not.toHaveBeenCalled()
     } finally {
       vi.unstubAllGlobals()
     }

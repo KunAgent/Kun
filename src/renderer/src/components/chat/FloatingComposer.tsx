@@ -51,7 +51,11 @@ import {
   type ComposerFileMention,
   type ComposerFileReference
 } from '../../lib/composer-file-references'
-import { loadWorkspaceFileIndex } from '../../lib/workspace-file-index'
+import {
+  loadWorkspaceFileIndex,
+  loadWorkspaceMentionPathSuggestions,
+  mergeMentionCandidates
+} from '../../lib/workspace-file-index'
 import {
   COMPACT_COMMAND_ALIASES,
   getGoalPanelDraftObjective,
@@ -942,17 +946,24 @@ export function FloatingComposer({
     }
 
     let cancelled = false
+    const query = activeFileMention.query
     const timer = window.setTimeout(() => {
       setFileMentionLoading(true)
-      void loadWorkspaceFileIndex(effectiveWorkspaceRoot)
-        .then((index) => {
+      // Resolve the index and any deep path-mention target in parallel so a
+      // deeply nested file the bounded index never reached still resolves
+      // (issue #340).
+      void Promise.all([
+        loadWorkspaceFileIndex(effectiveWorkspaceRoot),
+        loadWorkspaceMentionPathSuggestions(effectiveWorkspaceRoot, query).catch(() => [])
+      ])
+        .then(([index, pathSuggestions]) => {
           if (cancelled) return
+          const candidates = mergeMentionCandidates(
+            [...index.directories, ...index.files],
+            pathSuggestions
+          )
           setFileMentionSuggestions(
-            filterWorkspaceFileMentionSuggestions(
-              [...index.directories, ...index.files],
-              activeFileMention.query,
-              fileReferences
-            )
+            filterWorkspaceFileMentionSuggestions(candidates, query, fileReferences)
           )
         })
         .catch(() => {
