@@ -157,40 +157,40 @@ export function ClawSettingsSection({ ctx }: { ctx: ClawSettingsContext }): Reac
             const name = channel.agentProfile.name.trim() || channel.label
             return (
               <div key={channel.id} className="px-3 py-4">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                  <div className="min-w-0">
-                    <div className="truncate text-[14px] font-semibold text-ds-ink">{name}</div>
-                    <div className="mt-1 text-[12px] text-ds-faint">
-                      {t('clawManageAgentMeta', {
-                        provider: 'Feishu / Lark',
-                        model: channel.model,
-                        workspace: channelEffectiveWorkspace(form, channel)
-                      })}
-                    </div>
-                  </div>
-                  <div className="flex shrink-0 flex-col items-end gap-1.5">
-                    <div className="flex items-center gap-2">
-                      <span className="text-[12px] font-medium text-ds-muted">
-                        {channel.enabled ? t('clawManageAgentEnabled') : t('clawManageAgentDisabled')}
-                      </span>
-                      <Toggle
-                        checked={channel.enabled}
-                        onChange={(value) => updateChannel(form, update, channel.id, { enabled: value })}
-                      />
-                    </div>
-                    {channel.provider === 'feishu' && (
-                      <div className="flex items-center gap-2" title={t('clawFeishuStreamDesc')}>
-                        <span className="text-[12px] font-medium text-ds-muted">
-                          {t('clawFeishuStream')}
-                        </span>
-                        <Toggle
-                          checked={channel.feishuStream === true}
-                          onChange={(value) => updateChannel(form, update, channel.id, { feishuStream: value })}
-                        />
-                      </div>
-                    )}
+                <div className="px-0 pb-3">
+                  <div className="truncate text-[14px] font-semibold text-ds-ink">{name}</div>
+                  <div className="mt-1 text-[12px] text-ds-faint">
+                    {t('clawManageAgentMeta', {
+                      provider: 'Feishu / Lark',
+                      model: channel.model,
+                      workspace: channelEffectiveWorkspace(form, channel)
+                    })}
                   </div>
                 </div>
+
+                <SettingRow
+                  title={channel.enabled ? t('clawManageAgentEnabled') : t('clawManageAgentDisabled')}
+                  description={t('clawEnabledDesc')}
+                  control={
+                    <Toggle
+                      checked={channel.enabled}
+                      onChange={(value) => updateChannel(form, update, channel.id, { enabled: value })}
+                    />
+                  }
+                />
+
+                {channel.provider === 'feishu' && (
+                  <SettingRow
+                    title={t('clawFeishuStream')}
+                    description={t('clawFeishuStreamDesc')}
+                    control={
+                      <Toggle
+                        checked={channel.feishuStream === true}
+                        onChange={(value) => updateChannel(form, update, channel.id, { feishuStream: value })}
+                      />
+                    }
+                  />
+                )}
 
                 <div className="mt-4 grid gap-3 md:grid-cols-2">
                   <label className="block min-w-0">
