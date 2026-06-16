@@ -253,7 +253,13 @@ describe('deriveTurnSections', () => {
     expect(result.turnFileChanges[0]?.detail).toContain('+new detail')
   })
 
-  it('renders live assistant output inside the active process timeline', () => {
+  it('keeps live reasoning in the process timeline; live assistant is rendered separately by MessageTimeline', () => {
+    // The streaming assistant text is rendered as a dedicated MessageBubble
+    // by MessageTimeline (`<MessageBubble block={{ kind: 'assistant',
+    // id: 'live-assistant', text: liveContent }} />`). It must NOT also
+    // appear in processBlocks, otherwise the user sees the same text twice
+    // during streaming (once in the WorkMetaRow process area, once in
+    // the regular message flow).
     const result = processingSections({
       liveProcessText: 'private reasoning',
       liveContent: '这里是正在生成的回答。'
@@ -261,8 +267,7 @@ describe('deriveTurnSections', () => {
 
     expect(result.assistantContentBlocks).toEqual([])
     expect(result.processBlocks).toEqual([
-      { kind: 'reasoning', id: 'live-reasoning', text: 'private reasoning' },
-      { kind: 'assistant', id: 'live-assistant', text: '这里是正在生成的回答。' }
+      { kind: 'reasoning', id: 'live-reasoning', text: 'private reasoning' }
     ])
   })
 
