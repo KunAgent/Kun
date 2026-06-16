@@ -179,8 +179,6 @@
   "clawWebhookEnabled": "Webhook",
   "clawWebhookEnabledDesc": "Built-in Feishu / Lark direct connections do not depend on the local webhook. Change this only when you also use an external relay or forwarder.",
   "clawResponseTimeout": "Response timeout (seconds)",
-  "clawFeishuStream": "Enable streaming output",
-  "clawFeishuStreamDesc": "Send the agent's reply character-by-character in a live Feishu / Lark card instead of as one full message. Off by default.",
   "clawRunMode": "Run mode",
   "clawWorkspaceOverrideHint": "Optional. Enter a custom working directory",
   "clawWorkspaceOverrideDesc": "If left empty, this IM uses the default working directory:",

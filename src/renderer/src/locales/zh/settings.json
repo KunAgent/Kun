@@ -63,6 +63,8 @@
   "codePromptPrefixPlaceholder": "例如：新代码必须编写单元测试。优先使用函数式组件而非类组件。遵循 TypeScript 严格模式规范。",
   "clawRunMode": "运行模式",
   "clawRunModeDesc": "手机消息和定时任务默认使用的处理方式。",
+  "clawFeishuStream": "启用流式输出",
+  "clawFeishuStreamDesc": "开启后 agent 回复会逐字写入同一张飞书 / Lark 卡片，而不是一次性整条发出。默认关闭。",
   "clawModeAgent": "直接处理",
   "clawModePlan": "Plan",
   "clawModel": "模型",

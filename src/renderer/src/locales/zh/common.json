@@ -179,8 +179,6 @@
   "clawWebhookEnabled": "Webhook",
   "clawWebhookEnabledDesc": "内置飞书 / Lark 直连不依赖本地 webhook；只有额外接 relay 或外部转发时才需要改这里。",
   "clawResponseTimeout": "同步响应超时（秒）",
-  "clawFeishuStream": "启用流式输出",
-  "clawFeishuStreamDesc": "开启后 agent 回复会逐字写入同一张飞书 / Lark 卡片，而不是一次性整条发出。默认关闭。",
   "clawRunMode": "运行模式",
   "clawWorkspaceOverrideHint": "可选，填入自定义工作目录",
   "clawWorkspaceOverrideDesc": "留空则自动为这个 IM 使用默认工作目录：",
