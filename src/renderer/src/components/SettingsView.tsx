@@ -44,6 +44,7 @@ import { loadKunDiagnostics } from '../lib/load-kun-diagnostics'
 import { SETTINGS_CHANGED_EVENT, emitRendererSettingsChanged } from '../lib/keyboard-shortcut-settings'
 import {
   AgentsSettingsSection,
+  ArchivedThreadsSettingsSection,
   ClawSettingsSection,
   EasterEggSettingsSection,
   GeneralSettingsSection,
@@ -59,7 +60,7 @@ import {
   WriteSettingsSection
 } from './settings-sections'
 
-type SettingsCategory = 'general' | 'providers' | 'write' | 'imageGeneration' | 'mediaGeneration' | 'speechToText' | 'agents' | 'permissions' | 'worktree' | 'memory' | 'shortcuts' | 'easterEgg' | 'claw' | 'updates' | 'debug'
+type SettingsCategory = 'general' | 'providers' | 'write' | 'imageGeneration' | 'mediaGeneration' | 'speechToText' | 'agents' | 'archives' | 'permissions' | 'worktree' | 'memory' | 'shortcuts' | 'easterEgg' | 'claw' | 'updates' | 'debug'
 type SaveStatus = 'idle' | 'saving' | 'saved' | 'error'
 type SettingsPatch = AppSettingsPatch
 type InlineNotice = {
@@ -81,6 +82,12 @@ export function SettingsView(): ReactElement {
   const applyI18n = useChatStore((s) => s.applyI18nFromSettings)
   const reloadUiSettings = useChatStore((s) => s.reloadUiSettings)
   const probeRuntime = useChatStore((s) => s.probeRuntime)
+  const threads = useChatStore((s) => s.threads)
+  const runtimeConnection = useChatStore((s) => s.runtimeConnection)
+  const refreshThreads = useChatStore((s) => s.refreshThreads)
+  const selectThread = useChatStore((s) => s.selectThread)
+  const archiveThread = useChatStore((s) => s.archiveThread)
+  const deleteThread = useChatStore((s) => s.deleteThread)
   const [category, setCategory] = useState<SettingsCategory>('general')
   const [form, setForm] = useState<AppSettingsV1 | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -261,6 +268,10 @@ export function SettingsView(): ReactElement {
       setCategory('permissions')
       return
     }
+    if (settingsSection === 'archives') {
+      setCategory('archives')
+      return
+    }
     if (settingsSection === 'claw') {
       setCategory('claw')
       return
@@ -289,6 +300,7 @@ export function SettingsView(): ReactElement {
       settingsSection === 'imageGeneration' ||
       settingsSection === 'mediaGeneration' ||
       settingsSection === 'speechToText' ||
+      settingsSection === 'archives' ||
       settingsSection === 'claw' ||
       settingsSection === 'shortcuts' ||
       settingsSection === 'easterEgg' ||
@@ -298,7 +310,7 @@ export function SettingsView(): ReactElement {
       return
     }
     const refs: Record<
-      Exclude<SettingsRouteSection, 'general' | 'providers' | 'write' | 'imageGeneration' | 'mediaGeneration' | 'speechToText' | 'claw' | 'shortcuts' | 'easterEgg' | 'updates'>,
+      Exclude<SettingsRouteSection, 'general' | 'providers' | 'write' | 'imageGeneration' | 'mediaGeneration' | 'speechToText' | 'archives' | 'claw' | 'shortcuts' | 'easterEgg' | 'updates'>,
       HTMLDivElement | null
     > = {
       agents: agentsSectionRef.current,
@@ -903,7 +915,15 @@ export function SettingsView(): ReactElement {
     resetClawWorkspaceToDefault,
     clawWorkspacePickerError,
     splitSettingsList,
-    listSettingsText
+    listSettingsText,
+    threads,
+    runtimeReady: runtimeConnection === 'ready',
+    locale: form.locale,
+    refreshThreads,
+    openCode,
+    selectThread,
+    archiveThread,
+    deleteThread
   }
 
   return (
@@ -966,6 +986,7 @@ export function SettingsView(): ReactElement {
           {category === 'mediaGeneration' ? <MediaGenerationSettingsSection ctx={settingsSectionContext} /> : null}
           {category === 'speechToText' ? <SpeechToTextSettingsSection ctx={settingsSectionContext} /> : null}
           {category === 'agents' || category === 'permissions' ? <AgentsSettingsSection ctx={settingsSectionContext} /> : null}
+          {category === 'archives' ? <ArchivedThreadsSettingsSection ctx={settingsSectionContext} /> : null}
           {category === 'worktree' ? <WorktreeSettingsSection ctx={settingsSectionContext} /> : null}
           {category === 'memory' ? <MemorySettingsSection ctx={settingsSectionContext} /> : null}
           {category === 'shortcuts' ? <KeyboardShortcutsSettingsSection ctx={settingsSectionContext} /> : null}

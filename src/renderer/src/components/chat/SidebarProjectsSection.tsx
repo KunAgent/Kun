@@ -61,7 +61,6 @@ type SidebarProjectsSectionProps = {
   onDeleteThread: (threadId: string) => Promise<void>
   onRestoreThread: (threadId: string) => Promise<void>
   onSearchQueryChange: (query: string) => void
-  onShowArchivedChange: (show: boolean) => void
   t: (k: string, opts?: Record<string, unknown>) => string
 }
 
@@ -310,7 +309,6 @@ export function SidebarProjectsSection({
   onDeleteThread,
   onRestoreThread,
   onSearchQueryChange,
-  onShowArchivedChange,
   t
 }: SidebarProjectsSectionProps): ReactElement {
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
@@ -608,15 +606,6 @@ export function SidebarProjectsSection({
             ariaLabel={t('sidebarSearchThreads')}
           >
             <Search className="h-3.5 w-3.5" strokeWidth={1.85} />
-          </SidebarIconButton>
-          <SidebarIconButton
-            onClick={() => onShowArchivedChange(!showArchived)}
-            active={showArchived}
-            className="h-7 w-7"
-            title={showArchived ? t('sidebarShowActiveThreads') : t('sidebarShowArchivedThreads')}
-            ariaLabel={showArchived ? t('sidebarShowActiveThreads') : t('sidebarShowArchivedThreads')}
-          >
-            <Archive className="h-3.5 w-3.5" strokeWidth={1.85} />
           </SidebarIconButton>
           <SidebarIconButton
             onClick={onPickWorkspace}

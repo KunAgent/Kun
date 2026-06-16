@@ -40,7 +40,6 @@ type Props = {
   threadSearch: string
   showArchivedThreads: boolean
   onThreadSearchChange: (query: string) => void
-  onShowArchivedThreadsChange: (show: boolean) => void
   onSelectThread: (id: string) => void
   onRenameThread: (id: string, title: string) => Promise<void>
   onArchiveThread: (id: string) => Promise<void>
@@ -70,7 +69,6 @@ export function Sidebar({
   threadSearch,
   showArchivedThreads,
   onThreadSearchChange,
-  onShowArchivedThreadsChange,
   onSelectThread,
   onRenameThread,
   onArchiveThread,
@@ -237,7 +235,6 @@ export function Sidebar({
           onDeleteThread={onDeleteThread}
           onRestoreThread={onRestoreThread}
           onSearchQueryChange={onThreadSearchChange}
-          onShowArchivedChange={onShowArchivedThreadsChange}
           t={t}
         />
       ) : (
@@ -264,7 +261,6 @@ export function Sidebar({
         onDeleteThread={onDeleteThread}
         onRestoreThread={onRestoreThread}
         onSearchQueryChange={onThreadSearchChange}
-        onShowArchivedChange={onShowArchivedThreadsChange}
         t={t}
       />
       )}

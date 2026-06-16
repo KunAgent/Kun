@@ -84,6 +84,7 @@ export type SettingsRouteSection =
   | 'mediaGeneration'
   | 'speechToText'
   | 'agents'
+  | 'archives'
   | 'permissions'
   | 'skill'
   | 'mcp'

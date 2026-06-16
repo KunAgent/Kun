@@ -1,7 +1,7 @@
 import type { Dispatch, ReactElement, SetStateAction } from 'react'
-import { AudioLines, Bot, BrainCircuit, GitBranch, Bug, ChevronLeft, Globe, ImageIcon, Keyboard, Mic, PencilLine, RefreshCw, ServerCog, Settings, ShieldCheck, Smartphone, Sparkles } from 'lucide-react'
+import { Archive, AudioLines, Bot, BrainCircuit, GitBranch, Bug, ChevronLeft, Globe, ImageIcon, Keyboard, Mic, PencilLine, RefreshCw, ServerCog, Settings, ShieldCheck, Smartphone, Sparkles } from 'lucide-react'
 
-type SettingsCategory = 'general' | 'providers' | 'write' | 'imageGeneration' | 'mediaGeneration' | 'speechToText' | 'agents' | 'permissions' | 'worktree' | 'memory' | 'shortcuts' | 'easterEgg' | 'claw' | 'updates' | 'debug'
+type SettingsCategory = 'general' | 'providers' | 'write' | 'imageGeneration' | 'mediaGeneration' | 'speechToText' | 'agents' | 'archives' | 'permissions' | 'worktree' | 'memory' | 'shortcuts' | 'easterEgg' | 'claw' | 'updates' | 'debug'
 
 export function SettingsSidebar({
   category,
@@ -74,6 +74,10 @@ export function SettingsSidebar({
         <button type="button" className={catCls('agents')} onClick={() => setCategory('agents')}>
           <Bot className="h-4 w-4 shrink-0 opacity-70" strokeWidth={1.75} />
           {t('agents')}
+        </button>
+        <button type="button" className={catCls('archives')} onClick={() => setCategory('archives')}>
+          <Archive className="h-4 w-4 shrink-0 opacity-70" strokeWidth={1.75} />
+          {t('archives')}
         </button>
         <button type="button" className={catCls('permissions')} onClick={() => setCategory('permissions')}>
           <ShieldCheck className="h-4 w-4 shrink-0 opacity-70" strokeWidth={1.75} />
