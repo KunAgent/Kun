@@ -44,6 +44,7 @@ import {
 } from '../../shared/app-settings'
 import { DESKTOP_COMMANDS } from '../../shared/kun-gui-api'
 import { GUI_UPDATE_CHANNELS } from '../../shared/gui-update'
+import { WINDOW_CLOSE_ACTIONS } from '../../shared/app-settings'
 import { KEYBOARD_SHORTCUT_COMMANDS } from '../../shared/keyboard-shortcuts'
 import { WRITE_EXPORT_FORMATS } from '../../shared/write-export'
 import { WRITE_INFOGRAPHIC_MAX_TEXT_CHARS } from '../../shared/write-infographic'
@@ -427,6 +428,7 @@ const notificationsPatchSchema = z.object({
 const appBehaviorPatchSchema = z.object({
   openAtLogin: z.boolean().optional(),
   startMinimized: z.boolean().optional(),
+  closeAction: z.enum(WINDOW_CLOSE_ACTIONS).optional(),
   closeToTray: z.boolean().optional()
 }).strict()
 
