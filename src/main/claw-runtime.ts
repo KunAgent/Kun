@@ -1813,6 +1813,11 @@ export class ClawRuntime {
     }
 
     let result: ClawRunResult
+    // Tracks whether the streaming path (or its in-band one-shot fallback)
+    // already delivered a message to Feishu / Lark. When true, the post-
+    // branch `sendFeishuMessage` below is skipped to avoid duplicating the
+    // streamed text as a separate message bubble.
+    let streamedToFeishu = false
     try {
       if (settings.claw.im.feishuStream !== false) {
         // Streaming path: start the turn (this also persists the
@@ -1851,6 +1856,11 @@ export class ClawRuntime {
           })
           if (streamResult.ok) {
             const streamedText = streamResult.finalText.trim() || 'Completed.'
+            // Either the streaming card (FeishuStreamer) or its one-shot
+            // fallback already delivered the text to the chat. Mark
+            // `streamedToFeishu` so the post-branch sendFeishuMessage
+            // below is skipped.
+            streamedToFeishu = true
             result = {
               ok: true,
               threadId: started.threadId,
@@ -1929,30 +1939,35 @@ export class ClawRuntime {
       : (result.message.trim() || 'Sorry, something went wrong while handling your message.')
     const resultThreadId = result.ok ? result.threadId : undefined
     const resultTurnId = result.ok ? result.turnId : undefined
-    try {
-      await this.sendFeishuMessage(
-        bridge,
-        message.chatId,
-        { markdown: replyText },
-        replyOptions,
-        {
-          purpose: 'agent-reply',
-          channelId,
+    // The streaming path already delivered the text (either as a live
+    // SDK card or via its one-shot fallback). Sending another one-shot
+    // message here would duplicate the reply.
+    if (!streamedToFeishu) {
+      try {
+        await this.sendFeishuMessage(
+          bridge,
+          message.chatId,
+          { markdown: replyText },
+          replyOptions,
+          {
+            purpose: 'agent-reply',
+            channelId,
+            chatId: message.chatId,
+            inboundMessageId: message.messageId,
+            runtimeOk: result.ok,
+            threadId: resultThreadId,
+            turnId: resultTurnId
+          }
+        )
+      } catch (error) {
+        this.deps.logError('claw-feishu', 'Failed to send Feishu / Lark agent reply', {
+          message: errorMessage(error),
           chatId: message.chatId,
-          inboundMessageId: message.messageId,
-          runtimeOk: result.ok,
+          senderId: message.senderId,
           threadId: resultThreadId,
           turnId: resultTurnId
-        }
-      )
-    } catch (error) {
-      this.deps.logError('claw-feishu', 'Failed to send Feishu / Lark agent reply', {
-        message: errorMessage(error),
-        chatId: message.chatId,
-        senderId: message.senderId,
-        threadId: resultThreadId,
-        turnId: resultTurnId
-      })
+        })
+      }
     }
     if (filesToSend.length > 0) {
       const delivery = await this.sendFeishuGeneratedFiles(

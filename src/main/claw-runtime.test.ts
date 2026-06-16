@@ -3732,15 +3732,10 @@ describe('ClawRuntime handleFeishuMessage streaming', () => {
     // The three deltas came through the producer and were appended to
     // the streaming card.
     expect(appendChunks).toEqual(['hello ', 'streamed ', 'world'])
-    // handleFeishuMessage's post-streaming branch sends the streamed
-    // text as a follow-up one-shot text reply (in addition to the
-    // streaming card). Verify it carries the streamed final text.
-    expect(bridge.send).toHaveBeenCalledTimes(1)
-    expect(bridge.send).toHaveBeenCalledWith(
-      'oc_chat_a',
-      { markdown: 'hello streamed world' },
-      { replyTo: 'om_inbound', replyInThread: false }
-    )
+    // The streaming card is the single user-visible reply. handleFeishuMessage
+    // must NOT call `bridge.send` again to deliver the streamed text as a
+    // separate message — that would duplicate the reply.
+    expect(bridge.send).not.toHaveBeenCalled()
   })
 
   it('falls back to one-shot send when bridge.stream throws', async () => {
@@ -3787,10 +3782,11 @@ describe('ClawRuntime handleFeishuMessage streaming', () => {
     })
 
     expect(bridge.stream).toHaveBeenCalledTimes(1)
-    // Fallback path: bridge.send is called twice — once from
-    // runStreamingReply's catch arm (the canned "Sorry" message) and
-    // once from handleFeishuMessage's post-streaming agent-reply branch.
-    expect(bridge.send).toHaveBeenCalledTimes(2)
+    // Fallback path: bridge.send is called once from runStreamingReply's
+    // catch arm (the canned "Sorry" message). handleFeishuMessage must
+    // NOT call bridge.send again — the in-band fallback already delivered
+    // the user-visible message.
+    expect(bridge.send).toHaveBeenCalledTimes(1)
     const fallbackCall = bridge.send.mock.calls.find(
       (call) => (call[1] as { markdown?: string })?.markdown === 'Sorry, I could not finish streaming the response.'
     )
@@ -3882,16 +3878,10 @@ describe('ClawRuntime handleFeishuMessage streaming', () => {
     const setContentArg = controllerRef!.setContent.mock.calls[0]?.[0] as string
     expect(typeof setContentArg).toBe('string')
     expect(setContentArg.length).toBeGreaterThan(0)
-    // bridge.send is called once for the post-streaming agent-reply
-    // branch (the partial text written via setContent IS the streaming
-    // card; handleFeishuMessage still emits a one-shot text reply with
-    // the streamed text).
-    expect(bridge.send).toHaveBeenCalledTimes(1)
-    expect(bridge.send).toHaveBeenCalledWith(
-      'oc_chat_a',
-      { markdown: setContentArg },
-      { replyTo: 'om_inbound_partial', replyInThread: false }
-    )
+    // The partial text was finalized on the streaming card via
+    // setContent. handleFeishuMessage must NOT call bridge.send again
+    // — the streaming card is the only user-visible reply.
+    expect(bridge.send).not.toHaveBeenCalled()
   })
 
   it('does not use FeishuStreamer when feishuStream=false', async () => {
@@ -4041,16 +4031,11 @@ describe('ClawRuntime handleFeishuMessage streaming', () => {
     // The SSE event stream was opened (proves the streaming branch ran
     // end-to-end without falling back to the polling path).
     expect(fetchMock).toHaveBeenCalledTimes(1)
-    // handleFeishuMessage's post-streaming branch sends the streamed
-    // text as a follow-up one-shot text reply. The streaming result
-    // does not currently carry a `files` payload, so no file
+    // The streaming card is the single user-visible reply. No
+    // follow-up one-shot text message is sent. The streaming result
+    // also does not currently carry a `files` payload, so no file
     // attachment is dispatched (see the comment above).
-    expect(bridge.send).toHaveBeenCalledTimes(1)
-    expect(bridge.send).toHaveBeenCalledWith(
-      'oc_chat_a',
-      { markdown: '好的' },
-      { replyTo: 'om_inbound_files', replyInThread: false }
-    )
+    expect(bridge.send).not.toHaveBeenCalled()
   })
 
   it('does not touch FeishuStreamer for non-feishu providers (weixin unchanged)', async () => {

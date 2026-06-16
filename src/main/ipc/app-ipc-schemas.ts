@@ -517,7 +517,8 @@ const clawImPatchSchema = z.object({
   providerId: z.string().trim().max(64).optional(),
   model: z.string().trim().min(1).max(128).optional(),
   mode: clawRunModeSchema.optional(),
-  responseTimeoutMs: z.number().int().min(5_000).max(600_000).optional()
+  responseTimeoutMs: z.number().int().min(5_000).max(600_000).optional(),
+  feishuStream: z.boolean().optional()
 }).strict()
 
 const clawImAgentProfilePatchSchema = z.object({
