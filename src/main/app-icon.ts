@@ -105,3 +105,28 @@ export function pickTrayIcon(
 ): Electron.NativeImage {
   return primary.isEmpty() ? fallback : primary
 }
+
+export function trayIconSize(platform: NodeJS.Platform = process.platform): number {
+  return platform === 'darwin' ? 22 : 16
+}
+
+export function prepareTrayIcon(
+  image: Electron.NativeImage,
+  platform: NodeJS.Platform = process.platform
+): Electron.NativeImage {
+  if (image.isEmpty()) return image
+
+  const size = trayIconSize(platform)
+  const resized = image.resize({
+    width: size,
+    height: size,
+    quality: 'best'
+  })
+  const result = resized.isEmpty() ? image : resized
+
+  if (platform === 'darwin') {
+    result.setTemplateImage(false)
+  }
+
+  return result
+}

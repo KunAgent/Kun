@@ -158,4 +158,72 @@ describe('app icon loader', () => {
       expect(mod.pickTrayIcon(tray, main)).toBe(main)
     })
   })
+
+  describe('prepareTrayIcon', () => {
+    type FakeNativeImage = Electron.NativeImage & {
+      resize: ReturnType<typeof vi.fn>
+      setTemplateImage: ReturnType<typeof vi.fn>
+    }
+
+    function fakeResized(empty: boolean): FakeNativeImage {
+      return {
+        isEmpty: () => empty,
+        resize: vi.fn(),
+        setTemplateImage: vi.fn()
+      } as unknown as FakeNativeImage
+    }
+
+    function fakeImage(empty: boolean, resizeResult?: Electron.NativeImage): FakeNativeImage {
+      const fallbackResizeResult = fakeResized(false)
+      return {
+        isEmpty: () => empty,
+        resize: vi.fn(() => resizeResult ?? fallbackResizeResult),
+        setTemplateImage: vi.fn()
+      } as unknown as FakeNativeImage
+    }
+
+    it('uses a 22px tray icon target on macOS', () => {
+      expect(mod.trayIconSize('darwin')).toBe(22)
+    })
+
+    it('uses a 16px tray icon target outside macOS', () => {
+      expect(mod.trayIconSize('win32')).toBe(16)
+      expect(mod.trayIconSize('linux')).toBe(16)
+    })
+
+    it('resizes a non-empty tray image to the platform target size', () => {
+      const resized = fakeResized(false)
+      const source = fakeImage(false, resized)
+
+      expect(mod.prepareTrayIcon(source, 'win32')).toBe(resized)
+      expect(source.resize).toHaveBeenCalledWith({
+        width: 16,
+        height: 16,
+        quality: 'best'
+      })
+    })
+
+    it('keeps a macOS color tray icon out of template mode', () => {
+      const resized = fakeResized(false)
+      const source = fakeImage(false, resized)
+
+      expect(mod.prepareTrayIcon(source, 'darwin')).toBe(resized)
+      expect(resized.setTemplateImage).toHaveBeenCalledWith(false)
+    })
+
+    it('does not resize an empty image', () => {
+      const source = fakeImage(true)
+
+      expect(mod.prepareTrayIcon(source, 'darwin')).toBe(source)
+      expect(source.resize).not.toHaveBeenCalled()
+      expect(source.setTemplateImage).not.toHaveBeenCalled()
+    })
+
+    it('falls back to the original image when resizing fails', () => {
+      const emptyResized = fakeResized(true)
+      const source = fakeImage(false, emptyResized)
+
+      expect(mod.prepareTrayIcon(source, 'win32')).toBe(source)
+    })
+  })
 })

@@ -10,7 +10,7 @@ import {
 import kunLogoPng from '../asset/img/kun.png?url'
 import kunMacLogoPng from '../asset/img/kun_mac.png?url'
 import kunTrayPng from '../asset/img/kun_tray.png?url'
-import { createAppIcon, pickTrayIcon } from './app-icon'
+import { createAppIcon, pickTrayIcon, prepareTrayIcon } from './app-icon'
 import { configureLinuxWaylandImeSwitches } from './app-command-line'
 import { configureAppIdentity } from './app-identity'
 import { runLegacyKunDataMigration } from './legacy-data-migration'
@@ -202,6 +202,7 @@ let managedRuntimesStoppedForQuit = false
 let managedRuntimesStopPromise: Promise<void> | null = null
 let appBehavior: AppBehaviorConfigV1 = normalizeAppBehaviorSettings()
 let tray: Tray | null = null
+let trayMenu: Menu | null = null
 let isQuitting = false
 let closeWindowPromptOpen = false
 
@@ -404,6 +405,7 @@ function syncTray(settings: AppSettingsV1): void {
     if (tray) {
       tray.destroy()
       tray = null
+      trayMenu = null
     }
     return
   }
@@ -411,27 +413,31 @@ function syncTray(settings: AppSettingsV1): void {
   if (!tray) {
     // Tray 优先用专门的托盘图(在 16x16/24x24 任务栏尺寸下更清晰的剪影);
     // 托盘图加载失败时回退到主应用图,这样不会看到 electron 默认占位。
-    const traySource = pickTrayIcon(trayIcon, appIcon)
+    const traySource = prepareTrayIcon(pickTrayIcon(trayIcon, appIcon))
     tray = new Tray(traySource.isEmpty() ? nativeImage.createEmpty() : traySource)
     tray.on('click', revealMainWindow)
     tray.on('double-click', revealMainWindow)
+    if (process.platform === 'darwin') {
+      tray.on('right-click', () => {
+        if (trayMenu) tray?.popUpContextMenu(trayMenu)
+      })
+    }
   }
 
   const labels = trayLabels(settings.locale)
   tray.setToolTip(labels.tooltip)
-  tray.setContextMenu(
-    Menu.buildFromTemplate([
-      { label: labels.show, click: revealMainWindow },
-      { type: 'separator' },
-      {
-        label: labels.quit,
-        click: () => {
-          isQuitting = true
-          app.quit()
-        }
+  trayMenu = Menu.buildFromTemplate([
+    { label: labels.show, click: revealMainWindow },
+    { type: 'separator' },
+    {
+      label: labels.quit,
+      click: () => {
+        isQuitting = true
+        app.quit()
       }
-    ])
-  )
+    }
+  ])
+  tray.setContextMenu(process.platform === 'darwin' ? null : trayMenu)
 }
 
 async function saveWindowCloseActionPreference(closeAction: WindowCloseAction): Promise<void> {
