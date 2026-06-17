@@ -230,6 +230,13 @@ export type ChatState = {
   setShowArchivedThreads: (show: boolean) => void
   createThread: (options?: { workspaceRoot?: string; forceNew?: boolean }) => Promise<void>
   selectThread: (id: string) => Promise<void>
+  /**
+   * 打开 SSE 订阅一条 thread(不预先拉 getThreadDetail)。
+   * 用于:onClawChannelActivity 自动切到 bot thread,让流式 deltas 立即可见。
+   * 与 selectThread 的区别:selectThread 先做 HTTP getThreadDetail 拉元数据,
+   * subscribeThreadEventsLive 直接开 SSE (sinceSeq=0),跳过 HTTP 抢在 SSE 之前。
+   */
+  subscribeThreadEventsLive: (threadId: string) => Promise<void>
   recoverActiveTurn: () => Promise<boolean>
   sendMessage: (text: string, mode?: string, overrides?: SendMessageOverrides) => Promise<boolean>
   reviewActiveThread: (target: ReviewTarget) => Promise<boolean>

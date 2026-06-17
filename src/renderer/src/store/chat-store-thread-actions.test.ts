@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { NormalizedThread } from '../agent/types'
+import type { NormalizedThread, ThreadEventSink } from '../agent/types'
 import type { ChatState, ChatStoreGet, ChatStoreSet, GuiPlanMessageContext } from './chat-store-types'
 import { rendererRuntimeClient } from '../agent/runtime-client'
 
@@ -227,5 +227,139 @@ describe('chat-store-thread-actions queued messages', () => {
       'make a prototype',
       expect.objectContaining({ model: 'MiniMax-M3' })
     )
+  })
+})
+
+describe('chat-store-thread-actions subscribeThreadEventsLive', () => {
+  beforeEach(() => {
+    rendererRuntimeClient.invalidateSettings()
+    registryMock.getProvider.mockReset()
+    registryMock.getProvider.mockReturnValue({})
+  })
+
+  afterEach(() => {
+    rendererRuntimeClient.invalidateSettings()
+    vi.unstubAllGlobals()
+  })
+
+  it('opens SSE with sinceSeq=0 in parallel with the fetch, so deltas flow in immediately', async () => {
+    const subscribeCalls: Array<{ threadId: string; sinceSeq: number }> = []
+    const getDetailCalls: string[] = []
+    let capturedSink: ThreadEventSink | null = null
+
+    const provider = {
+      getThreadDetail: vi.fn(async (id: string) => {
+        getDetailCalls.push(id)
+        return { blocks: [], latestSeq: 0, threadStatus: 'idle' }
+      }),
+      subscribeThreadEvents: vi.fn(
+        async (threadId: string, sinceSeq: number, sink: ThreadEventSink) => {
+          subscribeCalls.push({ threadId, sinceSeq })
+          capturedSink = sink
+          return { streamId: 'stream_1' }
+        }
+      )
+    }
+    registryMock.getProvider.mockReturnValue(provider)
+
+    const { actions, state } = buildHarness()
+    state.activeThreadId = 'thr_existing'
+    state.busy = true
+    state.runtimeConnection = 'ready'
+
+    await actions.subscribeThreadEventsLive('thr_live')
+
+    // Both HTTP fetch and SSE are kicked off in parallel.
+    expect(provider.getThreadDetail).toHaveBeenCalledWith('thr_live')
+    expect(getDetailCalls).toEqual(['thr_live'])
+    // SSE opens with sinceSeq=0 so all events replay.
+    expect(subscribeCalls).toEqual([{ threadId: 'thr_live', sinceSeq: 0 }])
+    // The chat view switches to the live thread.
+    expect(state.activeThreadId).toBe('thr_live')
+    // SSE-sourced deltas flow into the chat-store's live state.
+    expect(capturedSink).not.toBeNull()
+    if (capturedSink) {
+      capturedSink.onDeltas([{ kind: 'agent_message', text: 'hello', seq: 1 } as never])
+      expect(state.liveAssistant).toBe('hello')
+      capturedSink.onDeltas([{ kind: 'agent_message', text: ' world', seq: 2 } as never])
+      expect(state.liveAssistant).toBe('hello world')
+    }
+  })
+
+  it('merges fetched history without overwriting live buffers, and takes lastSeq = max(fetched, current)', async () => {
+    let capturedSink: ThreadEventSink | null = null
+    const fetchedBlocks = [
+      { id: 'b1', kind: 'user', text: 'prior turn' }
+    ]
+    const provider = {
+      getThreadDetail: vi.fn(async () => ({
+        blocks: fetchedBlocks,
+        latestSeq: 5,
+        threadStatus: 'idle'
+      })),
+      subscribeThreadEvents: vi.fn(
+        async (_threadId: string, _sinceSeq: number, sink: ThreadEventSink) => {
+          capturedSink = sink
+          return { streamId: 'stream_2' }
+        }
+      )
+    }
+    registryMock.getProvider.mockReturnValue(provider)
+
+    const { actions, state } = buildHarness()
+    state.activeThreadId = 'thr_other'
+    state.busy = false
+    state.runtimeConnection = 'ready'
+    state.blocks = []
+    state.lastSeq = 0
+
+    await actions.subscribeThreadEventsLive('thr_live')
+
+    // Wait a microtask for the fetch promise to settle into the store.
+    await new Promise((r) => setTimeout(r, 0))
+
+    // Fetched blocks are written.
+    expect(state.blocks.length).toBeGreaterThan(0)
+    expect(state.blocks[0].id).toBe('b1')
+    // SSE deltas that arrived during the fetch are preserved.
+    if (capturedSink) {
+      capturedSink.onDeltas([{ kind: 'agent_message', text: 'live text', seq: 8 } as never])
+      expect(state.liveAssistant).toBe('live text')
+    }
+    // lastSeq is bumped to the max of fetched and current (SSE advanced it).
+    expect(state.lastSeq).toBeGreaterThanOrEqual(8)
+  })
+
+  it('falls back gracefully when the fetch fails: SSE stays open and the error is surfaced', async () => {
+    let capturedSink: ThreadEventSink | null = null
+    const provider = {
+      getThreadDetail: vi.fn(async () => {
+        throw new Error('network down')
+      }),
+      subscribeThreadEvents: vi.fn(
+        async (_threadId: string, _sinceSeq: number, sink: ThreadEventSink) => {
+          capturedSink = sink
+          return { streamId: 'stream_3' }
+        }
+      )
+    }
+    registryMock.getProvider.mockReturnValue(provider)
+
+    const { actions, state } = buildHarness()
+    state.activeThreadId = 'thr_other'
+    state.busy = false
+    state.runtimeConnection = 'ready'
+
+    await actions.subscribeThreadEventsLive('thr_live')
+    await new Promise((r) => setTimeout(r, 0))
+
+    // SSE is still open and deltas still flow.
+    expect(capturedSink).not.toBeNull()
+    if (capturedSink) {
+      capturedSink.onDeltas([{ kind: 'agent_message', text: 'still works', seq: 1 } as never])
+      expect(state.liveAssistant).toBe('still works')
+    }
+    // Error is surfaced.
+    expect(state.error).toBeTruthy()
   })
 })

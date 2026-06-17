@@ -123,17 +123,13 @@ export function deriveTurnSections({
   if (liveProcessText.trim()) {
     processBlocks.push({ kind: 'reasoning', id: 'live-reasoning', text: liveProcessText })
   }
-  if (isProcessing && liveContent.trim()) {
-    const liveText = liveContent.trim()
-    const latestText = latestAssistantContentBlock?.text.trim() ?? ''
-    if (liveText !== latestText) {
-      processBlocks.push({
-        kind: 'assistant',
-        id: 'live-assistant',
-        text: liveContent
-      } satisfies TurnAssistantBlock)
-    }
-  }
+  // The streaming assistant text is rendered as a separate MessageBubble by
+  // MessageTimeline (see `<MessageBubble block={{ kind: 'assistant',
+  // id: 'live-assistant', text: liveContent }} />`). Avoid adding it to
+  // processBlocks here — that would show the same content twice (once in
+  // the WorkMetaRow process area, once in the regular message flow) until
+  // turn_completed drains the live block. Reasoning, by contrast, is
+  // process-only and stays here.
 
   const turnFileChanges: ToolBlock[] = isProcessing
     ? []

@@ -182,7 +182,7 @@ function subscribeThreadEventsWithRecovery(
 
 export function createThreadActions(
   { set, get, sseAbortRef }: StoreActionContext
-): Pick<ChatState, 'createThread' | 'recoverActiveTurn' | 'selectThread' | 'drainQueuedMessages' | 'removeQueuedMessage' | 'sendMessage' | 'reviewActiveThread'> {
+): Pick<ChatState, 'createThread' | 'recoverActiveTurn' | 'selectThread' | 'subscribeThreadEventsLive' | 'drainQueuedMessages' | 'removeQueuedMessage' | 'sendMessage' | 'reviewActiveThread'> {
   return {
   createThread: async (options = {}) => {
     if (get().runtimeConnection !== 'ready') {
@@ -391,6 +391,107 @@ export function createThreadActions(
       subscribeThreadEventsWithRecovery(p, id, latestSeq, sink, ac.signal, get)
       if (busy) armBusyWatchdog(set, get)
     } catch (e) {
+      set({
+        error: formatRuntimeError(e),
+        ...(shouldOpenSettingsForError(e)
+          ? { route: 'settings' as const, settingsSection: 'agents' as const }
+          : {})
+      })
+    }
+  },
+
+  subscribeThreadEventsLive: async (threadId) => {
+    if (get().runtimeConnection !== 'ready') return
+    const targetThreadId = threadId.trim()
+    if (!targetThreadId) return
+    // Live-only entry point for claw channel events (e.g. Feishu / Lark
+    // bot replies). Three things happen in parallel:
+    //   1. Synchronously switch the chat view to this thread + mark busy
+    //      so the user sees the bot's deltas arrive as they stream in,
+    //      not blocked by the HTTP fetch.
+    //   2. Open the SSE stream immediately with `sinceSeq: 0` to capture
+    //      any deltas that arrive during the fetch window.
+    //   3. Pre-fetch the thread's persisted history so the user is not
+    //      left staring at an empty view if the thread had prior turns.
+    // On fetch success we merge the persisted blocks into the store
+    // while preserving the liveAssistant/liveReasoning buffers (which
+    // may have accumulated SSE deltas during the fetch) and bumping
+    // `lastSeq` to `Math.max(fetched, current)` so no deltas are lost.
+    sseAbortRef.current?.abort()
+    sseAbortRef.current = null
+    const p = getProvider()
+    const prevState = get()
+    // Same-thread case: keep the existing blocks/lastSeq so the user does
+    // not see the view blank out for a turn that is already streaming.
+    // Cross-thread case: start empty (the fetch will populate history).
+    const keepExistingBlocks = prevState.activeThreadId === targetThreadId
+    resetBusyRecoveryAttempts()
+    clearBusyWatchdog()
+    set({
+      activeThreadId: targetThreadId,
+      blocks: keepExistingBlocks ? prevState.blocks : [],
+      lastSeq: keepExistingBlocks ? prevState.lastSeq : 0,
+      liveReasoning: '',
+      liveAssistant: '',
+      unreadThreadIds: { ...prevState.unreadThreadIds, [targetThreadId]: false },
+      busy: true,
+      currentTurnId: null,
+      currentTurnUserId: null,
+      turnStartedAtByUserId: {},
+      turnDurationByUserId: {},
+      turnReasoningFirstAtByUserId: {},
+      turnReasoningLastAtByUserId: {},
+      inspectorSelectedId: null,
+      queuedMessages: []
+    })
+    const ac = new AbortController()
+    sseAbortRef.current = ac
+    const sink = buildThreadEventSink(set, get, { threadId: targetThreadId, signal: ac.signal, sinceSeq: 0 })
+    subscribeThreadEventsWithRecovery(p, targetThreadId, 0, sink, ac.signal, get)
+    armBusyWatchdog(set, get)
+    // Pre-fetch persisted history in parallel. The SSE is already open
+    // and may have started accumulating deltas; the merge step below
+    // must not stomp on those buffers.
+    try {
+      const {
+        blocks: rawBlocks,
+        latestSeq,
+        threadStatus,
+        latestTurnId,
+        latestUserMessageId,
+        turnDurationByUserId = {},
+        goal,
+        todos
+      } = await p.getThreadDetail(targetThreadId)
+      if (ac.signal.aborted) return
+      const blocks = hydrateBlockModelLabels(targetThreadId, rawBlocks)
+      const busy = threadSnapshotLooksRunning(blocks, threadStatus)
+      const currentTurnUserId = busy
+        ? latestUserMessageId ?? findLatestUserBlockId(blocks)
+        : null
+      set((s) => ({
+        activeThreadGoal: goal ?? null,
+        activeThreadTodos: todos ?? null,
+        blocks,
+        // Bump lastSeq to the max of fetched and current so deltas
+        // received during the fetch window are not lost.
+        lastSeq: Math.max(latestSeq, s.lastSeq),
+        busy,
+        currentTurnId: busy ? latestTurnId ?? null : null,
+        currentTurnUserId,
+        turnDurationByUserId
+        // Note: `liveAssistant` and `liveReasoning` are intentionally
+        // NOT touched here. They may contain deltas that arrived during
+        // the fetch and must be preserved for `flushLiveBlocks` to pick
+        // them up at turn boundaries.
+      }))
+      if (!busy && get().queuedMessages.length > 0) {
+        void get().drainQueuedMessages()
+      }
+    } catch (e) {
+      // Fetch failure: keep the SSE open so the user still sees the
+      // streaming deltas, but surface the error in the UI.
+      if (ac.signal.aborted) return
       set({
         error: formatRuntimeError(e),
         ...(shouldOpenSettingsForError(e)

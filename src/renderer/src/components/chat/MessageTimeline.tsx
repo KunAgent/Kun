@@ -451,7 +451,17 @@ function MessageTurn({
     () => processSections.filter((section) => section.kind === 'reasoning').length,
     [processSections]
   )
-  const showLiveAssistant = !isProcessing && !!liveContent.trim()
+  // Show the live assistant bubble whenever the SSE has streamed any text
+  // into `live`. We deliberately do NOT gate on `isProcessing`: the
+  // processing indicator (WorkMetaRow above) already covers "the agent is
+  // working", and hiding the streaming text here causes real-time updates
+  // (Feishu bot streaming) to appear only after turn_completed, which the
+  // user perceives as a long delay.
+  // Note: `live` is the generic SSE sink output across ALL channels
+  // (Kun runtime turns, claw channel replies from feishu/weixin/etc),
+  // not feishu-specific. Removing the !isProcessing gate is intentional
+  // for all streaming paths, not just feishu.
+  const showLiveAssistant = !!liveContent.trim()
 
   // Keep completed reasoning/tool work tucked away, but make the active turn's
   // work visible unless the user explicitly collapses it.
