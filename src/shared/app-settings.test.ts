@@ -200,8 +200,8 @@ describe('kun defaults', () => {
         sqlitePath: ''
       },
       contextCompaction: {
-        defaultSoftThreshold: 16000,
-        defaultHardThreshold: 24000,
+        defaultSoftThreshold: 96000,
+        defaultHardThreshold: 108800,
         summaryMode: 'heuristic',
         summaryTimeoutMs: 15000,
         summaryMaxTokens: 1200,
@@ -482,7 +482,7 @@ describe('mergeKunRuntimeSettings', () => {
     expect(next.storage.backend).toBe('hybrid')
     expect(next.storage.sqlitePath).toBe('/tmp/kun.sqlite3')
     expect(next.contextCompaction.defaultSoftThreshold).toBe(64000)
-    expect(next.contextCompaction.defaultHardThreshold).toBe(64000)
+    expect(next.contextCompaction.defaultHardThreshold).toBe(108800)
     expect(next.contextCompaction.summaryMode).toBe('heuristic')
     expect(next.runtimeTuning.toolStorm.enabled).toBe(true)
     expect(next.runtimeTuning.toolStorm.windowSize).toBe(current.runtimeTuning.toolStorm.windowSize)

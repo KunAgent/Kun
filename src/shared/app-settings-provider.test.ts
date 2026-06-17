@@ -21,6 +21,7 @@ import {
   listSpeechToTextProviderProfiles,
   listTextToSpeechProviderProfiles,
   listVideoGenerationProviderProfiles,
+  modelProviderModelProfilesForSettings,
   listModelProviderModelIds,
   modelSupportsImageInput,
   normalizeModelProviderSettings,
@@ -111,6 +112,27 @@ describe('model provider settings', () => {
     // The keyless provider must not erase a configured key — otherwise the
     // settings-apply gate reads "no API key" and strands a healthy runtime.
     expect(runtime.apiKey).toBe('sk-runtime-fallback')
+  })
+
+  it('uses a 128k context window for custom provider models without explicit context metadata', () => {
+    const state = settings()
+    state.provider.providers = state.provider.providers.map((provider) =>
+      provider.id === 'custom'
+        ? {
+            ...provider,
+            modelProfiles: {
+              'custom-model': {
+                inputModalities: ['text'],
+                outputModalities: ['text'],
+                supportsToolCalling: true,
+                messageParts: ['text']
+              }
+            }
+          }
+        : provider
+    )
+
+    expect(modelProviderModelProfilesForSettings(state)['custom-model'].contextWindowTokens).toBe(128_000)
   })
 
   it('creates Xiaomi and MiniMax provider presets for Kun runtime profiles', () => {

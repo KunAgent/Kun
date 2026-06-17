@@ -153,8 +153,8 @@ Shape:
     "insecure": false
   },
   "contextCompaction": {
-    "defaultSoftThreshold": 16000,
-    "defaultHardThreshold": 24000,
+    "defaultSoftThreshold": 96000,
+    "defaultHardThreshold": 108800,
     "summaryMode": "heuristic",
     "summaryTimeoutMs": 15000,
     "summaryMaxTokens": 1200,

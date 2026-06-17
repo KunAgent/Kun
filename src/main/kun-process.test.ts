@@ -316,8 +316,8 @@ describe('syncGuiManagedKunConfig', () => {
       }
     })
     expect(parsed.contextCompaction).toMatchObject({
-      defaultSoftThreshold: 16000,
-      defaultHardThreshold: 24000,
+      defaultSoftThreshold: 96000,
+      defaultHardThreshold: 108800,
       summaryMode: 'heuristic'
     })
     expect(parsed.models.profiles['deepseek-v4-pro']).toMatchObject({

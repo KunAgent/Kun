@@ -262,8 +262,8 @@ export function defaultKunStorageSettings(): KunStorageSettingsV1 {
 
 export function defaultKunContextCompactionSettings(): KunContextCompactionSettingsV1 {
   return {
-    defaultSoftThreshold: 16_000,
-    defaultHardThreshold: 24_000,
+    defaultSoftThreshold: 96_000,
+    defaultHardThreshold: 108_800,
     summaryMode: 'heuristic',
     summaryTimeoutMs: 15_000,
     summaryMaxTokens: 1_200,

@@ -60,7 +60,7 @@ import {
 } from './model-provider-presets'
 
 const DEFAULT_MODEL_PROVIDER_NAME = 'DeepSeek'
-const DEFAULT_PROVIDER_CONTEXT_WINDOW_TOKENS = 24_000
+const DEFAULT_PROVIDER_CONTEXT_WINDOW_TOKENS = 128_000
 const DEFAULT_TEXT_MODEL_PROFILE: ModelProviderModelProfileV1 = {
   inputModalities: ['text'],
   outputModalities: ['text'],

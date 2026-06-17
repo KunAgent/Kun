@@ -73,13 +73,15 @@ export type ModelProfileConfigSource = {
   contextCompaction?: ContextCompactionConfig
 }
 
+export const DEFAULT_CONTEXT_WINDOW_TOKENS = 128_000
+
 export const DEFAULT_CONTEXT_THRESHOLDS: ModelContextThresholds = {
   // Fallback for models without a registered profile. These assume a
   // reasonably large window (>=128k). A custom endpoint with a small
   // window (e.g. 32k) should register a profile with explicit thresholds,
   // otherwise it may exceed its window before the first compaction.
   softThreshold: 96_000,
-  hardThreshold: 120_000
+  hardThreshold: 108_800
 }
 
 const DEEPSEEK_V4_CONTEXT_WINDOW_TOKENS = 1_000_000
@@ -149,7 +151,7 @@ export function modelCapabilitiesForModel(
     inputModalities: [...(profile?.inputModalities ?? DEFAULT_MODEL_INPUT_MODALITIES)],
     outputModalities: [...(profile?.outputModalities ?? DEFAULT_MODEL_OUTPUT_MODALITIES)],
     supportsToolCalling: profile?.supportsToolCalling ?? true,
-    contextWindowTokens: profile?.contextWindowTokens,
+    contextWindowTokens: profile?.contextWindowTokens ?? DEFAULT_CONTEXT_WINDOW_TOKENS,
     messageParts: [...(profile?.messageParts ?? DEFAULT_MODEL_MESSAGE_PARTS)],
     ...(profile?.reasoning ? { reasoning: copyReasoningCapability(profile.reasoning) } : {}),
     ...(profile?.endpointFormat ? { endpointFormat: profile.endpointFormat } : {})

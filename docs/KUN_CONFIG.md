@@ -73,8 +73,8 @@ GUI 启动 Kun 时会按下面的顺序合并配置。
     }
   },
   "contextCompaction": {
-    "defaultSoftThreshold": 16000,
-    "defaultHardThreshold": 24000,
+    "defaultSoftThreshold": 96000,
+    "defaultHardThreshold": 108800,
     "summaryMode": "heuristic",
     "summaryTimeoutMs": 15000,
     "summaryMaxTokens": 1200,
@@ -175,8 +175,8 @@ Kun 内置 DeepSeek V4 默认模型画像：
 ```json
 {
   "contextCompaction": {
-    "defaultSoftThreshold": 16000,
-    "defaultHardThreshold": 24000,
+    "defaultSoftThreshold": 96000,
+    "defaultHardThreshold": 108800,
     "summaryMode": "heuristic",
     "summaryTimeoutMs": 15000,
     "summaryMaxTokens": 1200,

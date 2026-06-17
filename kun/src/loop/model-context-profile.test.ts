@@ -70,6 +70,9 @@ describe('per-model endpointFormat', () => {
   })
 
   it('omits endpointFormat for unknown models so they inherit the provider format', () => {
-    expect(modelCapabilitiesForModel('unknown-model', []).endpointFormat).toBeUndefined()
+    const model = modelCapabilitiesForModel('unknown-model', [])
+
+    expect(model.contextWindowTokens).toBe(128_000)
+    expect(model.endpointFormat).toBeUndefined()
   })
 })
