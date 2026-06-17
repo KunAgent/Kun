@@ -108,9 +108,10 @@ export function pickTrayIcon(
 
 /**
  * 菜单栏(macOS)/托盘(Windows、Linux)合适的图标点尺寸。kun_tray.png 源图
- * 接近 954x994,远大于菜单栏高度。
+ * 接近 954x994,远大于菜单栏高度。macOS 菜单栏图标区高约 22pt,用这个值
+ * 缩放后清晰可见;之前用 18px 会被菜单栏压得几乎看不见。
  */
-export const TRAY_ICON_SIZE = 18
+export const TRAY_ICON_SIZE = 22
 
 /**
  * 把托盘图缩到菜单栏合适的尺寸。
@@ -118,6 +119,9 @@ export const TRAY_ICON_SIZE = 18
  * macOS 菜单栏按图标的"点尺寸"绘制,不会自动把大图缩到菜单栏高度 —— 直接把
  * 一张 ~954x994 的源图塞给 `Tray` 会显示成一个超大图标(见 #363)。Windows 会
  * 缩放,所以这个 bug 只在 macOS 暴露,但统一缩放对各平台都更可控。
+ *
+ * kun_tray.png 是彩色图(不是单色剪影),必须显式关闭 template 模式 —— 否则
+ * macOS 会把它当模板处理:只取 alpha 通道、涂成单色,彩色细节全部丢失。
  *
  * 缩放失败(得到空图)时原样返回输入,交给上层的 `isEmpty` 兜底,绝不把一个
  * 空图当成功结果返回。
@@ -129,5 +133,9 @@ export function prepareTrayIcon(image: Electron.NativeImage): Electron.NativeIma
     height: TRAY_ICON_SIZE,
     quality: 'best'
   })
-  return resized.isEmpty() ? image : resized
+  const result = resized.isEmpty() ? image : resized
+  // 彩色托盘图:显式声明不是模板图,防止 macOS 把它涂成单色。
+  // 无论缩放成功还是回退原图,都要关 template,否则 macOS 默认按模板处理。
+  result.setTemplateImage(false)
+  return result
 }

@@ -160,40 +160,65 @@ describe('app icon loader', () => {
   })
 
   describe('prepareTrayIcon', () => {
-    // resize 返回一个非空的"缩放后"图;用对象身份区分输入/输出
-    function fakeResizable(empty: boolean, resizeResult?: Electron.NativeImage): Electron.NativeImage {
+    // 缩放后的图对象:可断言 setTemplateImage 是否被调用。用对象身份区分输入/输出。
+    function fakeImage(opts: {
+      empty?: boolean
+      resizeResult?: Electron.NativeImage
+    }): Electron.NativeImage {
+      const resize = vi.fn(() => opts.resizeResult ?? fakeResized(false))
+      // source 本身也可能成为回退目标(setTemplateImage 会作用在它上),
+      // 所以 source 也要带 setTemplateImage。
+      const setTemplateImage = vi.fn()
+      return {
+        isEmpty: () => opts.empty ?? false,
+        resize,
+        setTemplateImage
+      } as unknown as Electron.NativeImage
+    }
+
+    // 缩放结果:带可断言的 setTemplateImage。
+    function fakeResized(empty: boolean): Electron.NativeImage {
       return {
         isEmpty: () => empty,
-        resize: vi.fn(() => resizeResult ?? ({ isEmpty: () => false } as Electron.NativeImage))
+        setTemplateImage: vi.fn()
       } as unknown as Electron.NativeImage
     }
 
     it('resizes a non-empty icon down to the menu-bar point size', () => {
-      const resized = { isEmpty: () => false } as Electron.NativeImage
-      const source = fakeResizable(false, resized)
+      const resized = fakeResized(false)
+      const source = fakeImage({ resizeResult: resized })
 
       const result = mod.prepareTrayIcon(source)
 
       expect(result).toBe(resized)
-      expect((source as unknown as { resize: ReturnType<typeof vi.fn> }).resize).toHaveBeenCalledWith({
+      expect(source.resize).toHaveBeenCalledWith({
         width: mod.TRAY_ICON_SIZE,
         height: mod.TRAY_ICON_SIZE,
         quality: 'best'
       })
     })
 
-    it('returns the empty input untouched without attempting a resize', () => {
-      const source = fakeResizable(true)
-      const result = mod.prepareTrayIcon(source)
+    it('marks the resized icon as a non-template image so macOS keeps it colorful', () => {
+      // kun_tray 是彩色图,必须显式关闭 template 模式,否则 macOS 只取 alpha
+      // 通道涂成单色,彩色细节全丢。
+      const resized = fakeResized(false)
+      const source = fakeImage({ resizeResult: resized })
 
-      expect(result).toBe(source)
-      expect((source as unknown as { resize: ReturnType<typeof vi.fn> }).resize).not.toHaveBeenCalled()
+      mod.prepareTrayIcon(source)
+
+      expect(resized.setTemplateImage).toHaveBeenCalledWith(false)
+    })
+
+    it('returns the empty input untouched without attempting a resize', () => {
+      const source = fakeImage({ empty: true })
+
+      expect(mod.prepareTrayIcon(source)).toBe(source)
+      expect(source.resize).not.toHaveBeenCalled()
     })
 
     it('falls back to the original image when resize yields an empty image', () => {
       // 缩放退化成空图时绝不返回空图,回退到原图交给上层 isEmpty 兜底。
-      const emptyResized = { isEmpty: () => true } as Electron.NativeImage
-      const source = fakeResizable(false, emptyResized)
+      const source = fakeImage({ resizeResult: fakeResized(true) })
 
       expect(mod.prepareTrayIcon(source)).toBe(source)
     })
