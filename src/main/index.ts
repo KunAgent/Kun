@@ -202,6 +202,9 @@ let managedRuntimesStoppedForQuit = false
 let managedRuntimesStopPromise: Promise<void> | null = null
 let appBehavior: AppBehaviorConfigV1 = normalizeAppBehaviorSettings()
 let tray: Tray | null = null
+// 当前托盘右键菜单。macOS 不走 setContextMenu(那会让左键也弹菜单),而是在
+// right-click 事件里手动 popUp 这个菜单;locale 变化时 syncTray 会重建它。
+let trayMenu: Menu | null = null
 let isQuitting = false
 let closeWindowPromptOpen = false
 
@@ -404,6 +407,7 @@ function syncTray(settings: AppSettingsV1): void {
     if (tray) {
       tray.destroy()
       tray = null
+      trayMenu = null
     }
     return
   }
@@ -414,25 +418,38 @@ function syncTray(settings: AppSettingsV1): void {
     // 再缩到菜单栏合适的点尺寸 —— macOS 菜单栏不会自动缩放大图(见 #363)。
     const traySource = prepareTrayIcon(pickTrayIcon(trayIcon, appIcon))
     tray = new Tray(traySource.isEmpty() ? nativeImage.createEmpty() : traySource)
+    // 左键(及双击)唤醒主界面 —— Windows / macOS 一致。
     tray.on('click', revealMainWindow)
     tray.on('double-click', revealMainWindow)
+    if (process.platform === 'darwin') {
+      // macOS:setContextMenu 会让左键点击也弹出菜单,抢掉"左键唤醒"。
+      // 改成右键时手动弹出当前菜单,左键保持唤醒。
+      tray.on('right-click', () => {
+        if (trayMenu) tray?.popUpContextMenu(trayMenu)
+      })
+    }
   }
 
   const labels = trayLabels(settings.locale)
   tray.setToolTip(labels.tooltip)
-  tray.setContextMenu(
-    Menu.buildFromTemplate([
-      { label: labels.show, click: revealMainWindow },
-      { type: 'separator' },
-      {
-        label: labels.quit,
-        click: () => {
-          isQuitting = true
-          app.quit()
-        }
+  trayMenu = Menu.buildFromTemplate([
+    { label: labels.show, click: revealMainWindow },
+    { type: 'separator' },
+    {
+      label: labels.quit,
+      click: () => {
+        isQuitting = true
+        app.quit()
       }
-    ])
-  )
+    }
+  ])
+  // Windows / Linux:右键由系统通过 setContextMenu 弹出菜单,左键仍触发 click。
+  // macOS:不挂 setContextMenu(否则左键被菜单抢走),右键走上面的事件手动弹出。
+  if (process.platform === 'darwin') {
+    tray.setContextMenu(null)
+  } else {
+    tray.setContextMenu(trayMenu)
+  }
 }
 
 async function saveWindowCloseActionPreference(closeAction: WindowCloseAction): Promise<void> {
