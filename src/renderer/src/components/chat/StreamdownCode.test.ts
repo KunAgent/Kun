@@ -33,3 +33,38 @@ describe('StreamdownCode plain text fences', () => {
     expect(html).toBe('')
   })
 })
+
+describe('StreamdownCode HTML preview', () => {
+  it('renders html fenced blocks as an inline sandboxed preview by default', () => {
+    const html = renderToStaticMarkup(
+      createElement(
+        StreamdownCode,
+        { className: 'language-html', 'data-block': true },
+        '<style>body{color:red}</style><h1>Hello</h1>\n'
+      )
+    )
+
+    expect(html).toContain('data-streamdown="html-preview"')
+    expect(html).toContain('class="ds-code-block-preview-frame"')
+    expect(html).toContain('sandbox="allow-forms allow-modals allow-popups allow-scripts"')
+    expect(html).toContain('Show HTML source')
+    expect(html).toContain('&lt;h1&gt;Hello&lt;/h1&gt;')
+    expect(html).toContain('<iframe')
+    expect(html).not.toContain('ds-code-block-html')
+  })
+
+  it('does not render previews or preview toggles for non-html fenced blocks', () => {
+    const html = renderToStaticMarkup(
+      createElement(
+        StreamdownCode,
+        { className: 'language-ts', 'data-block': true },
+        'const value = 1\n'
+      )
+    )
+
+    expect(html).not.toContain('data-streamdown="html-preview"')
+    expect(html).not.toContain('<iframe')
+    expect(html).not.toContain('Show HTML source')
+    expect(html).not.toContain('Show HTML preview')
+  })
+})

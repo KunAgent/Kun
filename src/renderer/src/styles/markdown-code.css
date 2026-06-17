@@ -344,6 +344,20 @@ html[data-theme='dark'] .ds-markdown .ds-code-block-html > pre span {
   text-decoration: var(--shiki-dark-text-decoration, inherit) !important;
 }
 
+.ds-markdown .ds-code-block-preview {
+  background: var(--ds-bg-canvas);
+  padding: 0.5rem;
+}
+
+.ds-markdown .ds-code-block-preview-frame {
+  display: block;
+  width: 100%;
+  min-height: 320px;
+  border: 1px solid var(--ds-border-muted);
+  border-radius: 10px;
+  background: #fff;
+}
+
 .ds-code-sidebar {
   --ds-code-sidebar-editor-bg: #fbfcff;
   --ds-code-sidebar-gutter-bg: #f3f6fb;

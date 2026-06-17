@@ -3,8 +3,10 @@ import {
   Check,
   ChevronDown,
   ChevronUp,
+  Code2,
   Copy,
-  Download
+  Download,
+  Eye
 } from 'lucide-react'
 import {
   isValidElement,
@@ -38,6 +40,7 @@ const TRAILING_NEWLINES_REGEX = /\n+$/
 const PLAIN_TEXT_LANGUAGES = new Set(['', 'plain', 'plaintext', 'text', 'txt'])
 const COLLAPSE_HEIGHT = 200
 const COPY_RESET_MS = 2000
+const HTML_PREVIEW_LANGUAGES = new Set(['html', 'htm'])
 
 type CodeProps = DetailedHTMLProps<HTMLAttributes<HTMLElement>, HTMLElement> & {
   'data-block'?: string | boolean
@@ -93,6 +96,30 @@ function downloadCode(code: string, language: string): void {
 
 function isPlainTextLanguage(language: string): boolean {
   return PLAIN_TEXT_LANGUAGES.has(language.trim().toLowerCase())
+}
+
+function isHtmlPreviewLanguage(language: string): boolean {
+  return HTML_PREVIEW_LANGUAGES.has(language.trim().toLowerCase())
+}
+
+function htmlPreviewSrcDoc(code: string): string {
+  const trimmed = code.trim()
+  if (!trimmed) return ''
+
+  if (/<!doctype\b|<html[\s>]/i.test(trimmed)) return trimmed
+
+  return [
+    '<!doctype html>',
+    '<html>',
+    '<head>',
+    '<meta charset="utf-8">',
+    '<meta name="viewport" content="width=device-width, initial-scale=1">',
+    '</head>',
+    '<body>',
+    trimmed,
+    '</body>',
+    '</html>'
+  ].join('')
 }
 
 function PlainTextBlock({ code }: { code: string }): ReactNode {
@@ -182,8 +209,17 @@ function CodeBlock({
   const [isCopied, setIsCopied] = useState(false)
   const [expandable, setExpandable] = useState(false)
   const [expanded, setExpanded] = useState(false)
+  const [htmlView, setHtmlView] = useState<'preview' | 'source'>(() =>
+    isHtmlPreviewLanguage(language) ? 'preview' : 'source'
+  )
   const bodyRef = useRef<HTMLDivElement>(null)
   const copyResetRef = useRef<number | null>(null)
+  const previewSrcDoc = useMemo(
+    () => (isHtmlPreviewLanguage(language) ? htmlPreviewSrcDoc(trimmedCode) : ''),
+    [trimmedCode, language]
+  )
+  const showPreview = Boolean(previewSrcDoc && htmlView === 'preview')
+  const showSource = !showPreview
 
   useEffect(() => {
     let cancelled = false
@@ -200,7 +236,10 @@ function CodeBlock({
 
   useEffect(() => {
     const el = bodyRef.current
-    if (!el) return
+    if (!el || !showSource) {
+      setExpandable(false)
+      return
+    }
 
     const update = (): void => {
       setExpandable(el.scrollHeight > COLLAPSE_HEIGHT)
@@ -212,10 +251,14 @@ function CodeBlock({
     const observer = new ResizeObserver(() => update())
     observer.observe(el)
     return () => observer.disconnect()
-  }, [html, trimmedCode])
+  }, [html, trimmedCode, showSource])
 
   useEffect(() => {
     setExpanded(false)
+  }, [trimmedCode, language])
+
+  useEffect(() => {
+    setHtmlView(isHtmlPreviewLanguage(language) ? 'preview' : 'source')
   }, [trimmedCode, language])
 
   useEffect(
@@ -250,6 +293,22 @@ function CodeBlock({
       <div className="ds-code-block-header" data-streamdown="code-block-header">
         <span className="ds-code-block-language">{language || 'text'}</span>
         <div className="ds-code-block-actions">
+          {previewSrcDoc ? (
+            <button
+              type="button"
+              className="ds-code-block-action"
+              title={showPreview ? 'Show HTML source' : 'Show HTML preview'}
+              aria-label={showPreview ? 'Show HTML source' : 'Show HTML preview'}
+              onClick={() => setHtmlView((value) => (value === 'preview' ? 'source' : 'preview'))}
+              disabled={isAnimating}
+            >
+              {showPreview ? (
+                <Code2 className="h-3.5 w-3.5" strokeWidth={1.9} />
+              ) : (
+                <Eye className="h-3.5 w-3.5" strokeWidth={1.9} />
+              )}
+            </button>
+          ) : null}
           <button
             type="button"
             className="ds-code-block-action"
@@ -274,7 +333,7 @@ function CodeBlock({
               <Copy className="h-3.5 w-3.5" strokeWidth={1.9} />
             )}
           </button>
-          {expandable ? (
+          {showSource && expandable ? (
             <button
               type="button"
               className="ds-code-block-action"
@@ -292,23 +351,34 @@ function CodeBlock({
         </div>
       </div>
 
-      <div
-        className={`ds-code-block-body ${expandable && !expanded ? 'is-collapsed' : ''}`}
-      >
-        <div
-          ref={bodyRef}
-          className="ds-code-block-html"
-          dangerouslySetInnerHTML={{ __html: html }}
-        />
-        {expandable && !expanded ? (
-          <button
-            type="button"
-            className="ds-code-block-fade"
-            aria-label="Expand code"
-            onClick={() => setExpanded(true)}
+      {showPreview ? (
+        <div className="ds-code-block-preview" data-streamdown="html-preview">
+          <iframe
+            title="HTML preview"
+            className="ds-code-block-preview-frame"
+            sandbox="allow-forms allow-modals allow-popups allow-scripts"
+            srcDoc={previewSrcDoc}
           />
-        ) : null}
-      </div>
+        </div>
+      ) : (
+        <div
+          className={`ds-code-block-body ${expandable && !expanded ? 'is-collapsed' : ''}`}
+        >
+          <div
+            ref={bodyRef}
+            className="ds-code-block-html"
+            dangerouslySetInnerHTML={{ __html: html }}
+          />
+          {expandable && !expanded ? (
+            <button
+              type="button"
+              className="ds-code-block-fade"
+              aria-label="Expand code"
+              onClick={() => setExpanded(true)}
+            />
+          ) : null}
+        </div>
+      )}
     </div>
   )
 }
