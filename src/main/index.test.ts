@@ -158,4 +158,44 @@ describe('app icon loader', () => {
       expect(mod.pickTrayIcon(tray, main)).toBe(main)
     })
   })
+
+  describe('prepareTrayIcon', () => {
+    // resize 返回一个非空的"缩放后"图;用对象身份区分输入/输出
+    function fakeResizable(empty: boolean, resizeResult?: Electron.NativeImage): Electron.NativeImage {
+      return {
+        isEmpty: () => empty,
+        resize: vi.fn(() => resizeResult ?? ({ isEmpty: () => false } as Electron.NativeImage))
+      } as unknown as Electron.NativeImage
+    }
+
+    it('resizes a non-empty icon down to the menu-bar point size', () => {
+      const resized = { isEmpty: () => false } as Electron.NativeImage
+      const source = fakeResizable(false, resized)
+
+      const result = mod.prepareTrayIcon(source)
+
+      expect(result).toBe(resized)
+      expect((source as unknown as { resize: ReturnType<typeof vi.fn> }).resize).toHaveBeenCalledWith({
+        width: mod.TRAY_ICON_SIZE,
+        height: mod.TRAY_ICON_SIZE,
+        quality: 'best'
+      })
+    })
+
+    it('returns the empty input untouched without attempting a resize', () => {
+      const source = fakeResizable(true)
+      const result = mod.prepareTrayIcon(source)
+
+      expect(result).toBe(source)
+      expect((source as unknown as { resize: ReturnType<typeof vi.fn> }).resize).not.toHaveBeenCalled()
+    })
+
+    it('falls back to the original image when resize yields an empty image', () => {
+      // 缩放退化成空图时绝不返回空图,回退到原图交给上层 isEmpty 兜底。
+      const emptyResized = { isEmpty: () => true } as Electron.NativeImage
+      const source = fakeResizable(false, emptyResized)
+
+      expect(mod.prepareTrayIcon(source)).toBe(source)
+    })
+  })
 })

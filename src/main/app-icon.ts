@@ -105,3 +105,29 @@ export function pickTrayIcon(
 ): Electron.NativeImage {
   return primary.isEmpty() ? fallback : primary
 }
+
+/**
+ * 菜单栏(macOS)/托盘(Windows、Linux)合适的图标点尺寸。kun_tray.png 源图
+ * 接近 954x994,远大于菜单栏高度。
+ */
+export const TRAY_ICON_SIZE = 18
+
+/**
+ * 把托盘图缩到菜单栏合适的尺寸。
+ *
+ * macOS 菜单栏按图标的"点尺寸"绘制,不会自动把大图缩到菜单栏高度 —— 直接把
+ * 一张 ~954x994 的源图塞给 `Tray` 会显示成一个超大图标(见 #363)。Windows 会
+ * 缩放,所以这个 bug 只在 macOS 暴露,但统一缩放对各平台都更可控。
+ *
+ * 缩放失败(得到空图)时原样返回输入,交给上层的 `isEmpty` 兜底,绝不把一个
+ * 空图当成功结果返回。
+ */
+export function prepareTrayIcon(image: Electron.NativeImage): Electron.NativeImage {
+  if (image.isEmpty()) return image
+  const resized = image.resize({
+    width: TRAY_ICON_SIZE,
+    height: TRAY_ICON_SIZE,
+    quality: 'best'
+  })
+  return resized.isEmpty() ? image : resized
+}

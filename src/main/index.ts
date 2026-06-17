@@ -10,7 +10,7 @@ import {
 import kunLogoPng from '../asset/img/kun.png?url'
 import kunMacLogoPng from '../asset/img/kun_mac.png?url'
 import kunTrayPng from '../asset/img/kun_tray.png?url'
-import { createAppIcon, pickTrayIcon } from './app-icon'
+import { createAppIcon, pickTrayIcon, prepareTrayIcon } from './app-icon'
 import { configureLinuxWaylandImeSwitches } from './app-command-line'
 import { configureAppIdentity } from './app-identity'
 import { runLegacyKunDataMigration } from './legacy-data-migration'
@@ -411,7 +411,8 @@ function syncTray(settings: AppSettingsV1): void {
   if (!tray) {
     // Tray 优先用专门的托盘图(在 16x16/24x24 任务栏尺寸下更清晰的剪影);
     // 托盘图加载失败时回退到主应用图,这样不会看到 electron 默认占位。
-    const traySource = pickTrayIcon(trayIcon, appIcon)
+    // 再缩到菜单栏合适的点尺寸 —— macOS 菜单栏不会自动缩放大图(见 #363)。
+    const traySource = prepareTrayIcon(pickTrayIcon(trayIcon, appIcon))
     tray = new Tray(traySource.isEmpty() ? nativeImage.createEmpty() : traySource)
     tray.on('click', revealMainWindow)
     tray.on('double-click', revealMainWindow)
