@@ -71,6 +71,7 @@ export type ModelInputAttachment = {
   dataBase64: string
   width?: number
   height?: number
+  localFilePath?: string
 }
 
 export type ModelTextAttachmentFallback = {
