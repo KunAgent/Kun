@@ -21,6 +21,7 @@ import {
   getKunRuntimeSettings,
   mergeKunRuntimeSettings,
   mergeClawSettings,
+  mergeAppBehaviorSettings,
   mergeModelProviderSettings,
   mergeScheduleSettings,
   mergeWriteSettings,
@@ -30,7 +31,8 @@ import {
   resolveKunRuntimeSettings,
   type AppBehaviorConfigV1,
   type AppSettingsPatch,
-  type AppSettingsV1
+  type AppSettingsV1,
+  type WindowCloseAction
 } from '../shared/app-settings'
 import { parseRuntimeErrorBody, runtimeErrorToError, type RuntimeErrorCode } from '../shared/runtime-error'
 import type { GuiUpdateState } from '../shared/gui-update'
@@ -201,6 +203,7 @@ let managedRuntimesStopPromise: Promise<void> | null = null
 let appBehavior: AppBehaviorConfigV1 = normalizeAppBehaviorSettings()
 let tray: Tray | null = null
 let isQuitting = false
+let closeWindowPromptOpen = false
 
 type GuiUpdaterModule = typeof import('./gui-updater')
 
@@ -327,6 +330,37 @@ function trayLabels(locale: AppSettingsV1['locale']): { show: string; quit: stri
   }
 }
 
+function windowCloseLabels(locale: AppSettingsV1['locale']): {
+  title: string
+  message: string
+  detail: string
+  minimizeToTray: string
+  quit: string
+  cancel: string
+  remember: string
+} {
+  if (locale === 'zh') {
+    return {
+      title: '关闭窗口',
+      message: '关闭窗口时要怎么处理？',
+      detail: '选择最小化到托盘时，Kun 会继续在后台运行；选择退出应用会结束后台服务。',
+      minimizeToTray: '最小化到托盘',
+      quit: '退出应用',
+      cancel: '取消',
+      remember: '记住我的选择，不再询问'
+    }
+  }
+  return {
+    title: 'Close window',
+    message: 'What should Kun do when this window closes?',
+    detail: 'Minimize to tray keeps Kun running in the background. Quit app stops the background service.',
+    minimizeToTray: 'Minimize to tray',
+    quit: 'Quit app',
+    cancel: 'Cancel',
+    remember: 'Remember my choice and do not ask again'
+  }
+}
+
 function shouldStartHidden(settings: AppSettingsV1): boolean {
   return (
     process.platform === 'win32' &&
@@ -366,7 +400,7 @@ function revealMainWindow(): void {
 
 function syncTray(settings: AppSettingsV1): void {
   appBehavior = settings.appBehavior
-  if (!appBehavior.closeToTray) {
+  if (appBehavior.closeAction === 'quit') {
     if (tray) {
       tray.destroy()
       tray = null
@@ -398,6 +432,65 @@ function syncTray(settings: AppSettingsV1): void {
       }
     ])
   )
+}
+
+async function saveWindowCloseActionPreference(closeAction: WindowCloseAction): Promise<void> {
+  const saved = await store.patch({ appBehavior: { closeAction } })
+  syncLoginItemSettings(saved)
+  syncTray(saved)
+}
+
+async function promptWindowCloseAction(window: BrowserWindow): Promise<void> {
+  if (closeWindowPromptOpen || window.isDestroyed()) return
+  closeWindowPromptOpen = true
+  try {
+    const settings = await store.load()
+    const labels = windowCloseLabels(settings.locale)
+    const result = await dialog.showMessageBox(window, {
+      type: 'question',
+      title: labels.title,
+      message: labels.message,
+      detail: labels.detail,
+      buttons: [labels.minimizeToTray, labels.quit, labels.cancel],
+      defaultId: 0,
+      cancelId: 2,
+      noLink: true,
+      checkboxLabel: labels.remember,
+      checkboxChecked: false
+    })
+    if (result.response === 0) {
+      if (result.checkboxChecked) {
+        await saveWindowCloseActionPreference('tray')
+      }
+      window.hide()
+      return
+    }
+    if (result.response === 1) {
+      if (result.checkboxChecked) {
+        await saveWindowCloseActionPreference('quit')
+      }
+      isQuitting = true
+      app.quit()
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    console.warn('[kun-gui] failed to handle close-window prompt:', error)
+    logWarn('desktop-behavior', 'Failed to handle close-window prompt.', { message })
+  } finally {
+    closeWindowPromptOpen = false
+  }
+}
+
+function handleMainWindowClose(window: BrowserWindow, event: Electron.Event): void {
+  if (isQuitting) return
+  if (appBehavior.closeAction === 'quit') return
+
+  event.preventDefault()
+  if (appBehavior.closeAction === 'tray') {
+    window.hide()
+    return
+  }
+  void promptWindowCloseAction(window)
 }
 
 function normalizeNotificationText(raw: string | undefined, fallback: string, maxLength: number): string {
@@ -975,9 +1068,8 @@ function createWindow(options: { suppressInitialShow?: boolean } = {}): void {
     mainWindow.show()
   }
   mainWindow.on('close', (event) => {
-    if (isQuitting || !appBehavior.closeToTray) return
-    event.preventDefault()
-    mainWindow?.hide()
+    if (!mainWindow || mainWindow.isDestroyed()) return
+    handleMainWindowClose(mainWindow, event)
   })
   mainWindow.on('closed', () => {
     mainWindow = null
@@ -1321,10 +1413,7 @@ app.whenReady().then(async () => {
       provider: mergeModelProviderSettings(prev.provider, providerPatch),
       log: { ...prev.log, ...(partial.log ?? {}) },
       notifications: { ...prev.notifications, ...(partial.notifications ?? {}) },
-      appBehavior: normalizeAppBehaviorSettings({
-        ...prev.appBehavior,
-        ...(partial.appBehavior ?? {})
-      }),
+      appBehavior: mergeAppBehaviorSettings(prev.appBehavior, partial.appBehavior),
       keyboardShortcuts: normalizeKeyboardShortcuts({
         bindings: {
           ...prev.keyboardShortcuts.bindings,

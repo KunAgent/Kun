@@ -1,5 +1,5 @@
 import type { ReactElement } from 'react'
-import type { ApprovalPolicy, AppSettingsV1, SandboxMode } from '@shared/app-settings'
+import type { ApprovalPolicy, AppSettingsV1, SandboxMode, WindowCloseAction } from '@shared/app-settings'
 import {
   DEFAULT_WRITE_INLINE_COMPLETION_BASE_URL,
   DEFAULT_WRITE_INLINE_COMPLETION_MAX_TOKENS,
@@ -80,6 +80,8 @@ export function GeneralSettingsSection({ ctx }: { ctx: Record<string, any> }): R
   const openAtLoginSupported = platform === 'win32' || platform === 'darwin'
   const startMinimizedSupported = platform === 'win32'
   const desktopBehavior = form.appBehavior
+  const closeAction = desktopBehavior.closeAction ?? (desktopBehavior.closeToTray ? 'tray' : 'ask')
+  const closeActionOptions: WindowCloseAction[] = ['ask', 'tray', 'quit']
   const fontScaleOptions: AppSettingsV1['uiFontScale'][] = ['small', 'medium', 'large']
   const selectedFontScaleIndex = fontScaleOptions.indexOf(form.uiFontScale)
   const fontScaleIndex = selectedFontScaleIndex >= 0 ? selectedFontScaleIndex : 0
@@ -227,13 +229,20 @@ export function GeneralSettingsSection({ ctx }: { ctx: Record<string, any> }): R
                   }
                 />
                 <SettingRow
-                  title={t('desktopCloseToTray')}
-                  description={t('desktopCloseToTrayDesc')}
+                  title={t('desktopCloseAction')}
+                  description={t('desktopCloseActionDesc')}
                   control={
-                    <Toggle
-                      checked={desktopBehavior.closeToTray}
-                      onChange={(v) => update({ appBehavior: { closeToTray: v } })}
-                    />
+                    <select
+                      className={selectControlClass}
+                      value={closeAction}
+                      onChange={(e) => update({ appBehavior: { closeAction: e.target.value as WindowCloseAction } })}
+                    >
+                      {closeActionOptions.map((option) => (
+                        <option key={option} value={option}>
+                          {t(`desktopCloseAction_${option}`)}
+                        </option>
+                      ))}
+                    </select>
                   }
                 />
                 <SettingRow

@@ -16,6 +16,7 @@ import {
   mergeModelProviderSettings,
   defaultWriteSettings,
   mergeClawSettings,
+  mergeAppBehaviorSettings,
   mergeScheduleSettings,
   mergeWriteSettings,
   normalizeAppBehaviorSettings,
@@ -231,10 +232,7 @@ function buildMergedSettings(parsed: Partial<AppSettingsV1>): AppSettingsV1 {
     ),
     log: { ...defaults.log, ...migrated.log },
     notifications: { ...defaults.notifications, ...migrated.notifications },
-    appBehavior: normalizeAppBehaviorSettings({
-      ...defaults.appBehavior,
-      ...migrated.appBehavior
-    }),
+    appBehavior: mergeAppBehaviorSettings(defaults.appBehavior, migrated.appBehavior),
     keyboardShortcuts: normalizeKeyboardShortcuts(migrated.keyboardShortcuts),
     write: mergeWriteSettings(defaults.write, migrated.write),
     claw: mergeClawSettings(defaults.claw, migrated.claw),
@@ -400,10 +398,7 @@ export class JsonSettingsStore {
       provider: mergeModelProviderSettings(cur.provider, providerPatch),
       log: { ...cur.log, ...(partial.log ?? {}) },
       notifications: { ...cur.notifications, ...(partial.notifications ?? {}) },
-      appBehavior: normalizeAppBehaviorSettings({
-        ...cur.appBehavior,
-        ...(partial.appBehavior ?? {})
-      }),
+      appBehavior: mergeAppBehaviorSettings(cur.appBehavior, partial.appBehavior),
       keyboardShortcuts: normalizeKeyboardShortcuts({
         bindings: {
           ...cur.keyboardShortcuts.bindings,

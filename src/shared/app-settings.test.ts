@@ -21,6 +21,7 @@ import {
   getModelProviderPreset,
   defaultKeyboardShortcuts,
   modelProviderPresetProfile,
+  mergeAppBehaviorSettings,
   mergeWriteSettings,
   normalizeWriteSettings,
   normalizeWriteAgentPresets,
@@ -231,6 +232,7 @@ describe('app behavior settings', () => {
     expect(normalizeAppSettings(raw).appBehavior).toEqual({
       openAtLogin: false,
       startMinimized: false,
+      closeAction: 'ask',
       closeToTray: false
     })
   })
@@ -248,8 +250,20 @@ describe('app behavior settings', () => {
     expect(normalized.appBehavior).toEqual({
       openAtLogin: false,
       startMinimized: false,
+      closeAction: 'tray',
       closeToTray: true
     })
+  })
+
+  it('maps legacy closeToTray patches to explicit close actions', () => {
+    const current = normalizeAppSettings({
+      ...settings(),
+      appBehavior: undefined
+    } as unknown as AppSettingsV1)
+
+    expect(current.appBehavior.closeAction).toBe('ask')
+    expect(mergeAppBehaviorSettings(current.appBehavior, { closeToTray: true }).closeAction).toBe('tray')
+    expect(mergeAppBehaviorSettings(current.appBehavior, { closeToTray: false }).closeAction).toBe('quit')
   })
 })
 

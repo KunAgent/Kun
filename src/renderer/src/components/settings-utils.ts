@@ -5,6 +5,7 @@ import {
   getKunRuntimeSettings,
   kunSettingsEnvelope,
   mergeKunRuntimeSettings,
+  mergeAppBehaviorSettings,
   mergeClawSettings,
   mergeModelProviderSettings,
   mergeScheduleSettings,
@@ -57,10 +58,7 @@ export function mergeSettings(current: AppSettingsV1, patch: SettingsPatch): App
       ...safeCurrent.notifications,
       ...(patch.notifications ?? {})
     },
-    appBehavior: normalizeAppBehaviorSettings({
-      ...safeCurrent.appBehavior,
-      ...(patch.appBehavior ?? {})
-    }),
+    appBehavior: mergeAppBehaviorSettings(safeCurrent.appBehavior, patch.appBehavior),
     keyboardShortcuts: normalizeKeyboardShortcuts({
       bindings: {
         ...safeCurrent.keyboardShortcuts.bindings,

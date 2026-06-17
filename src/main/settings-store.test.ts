@@ -18,6 +18,7 @@ describe('JsonSettingsStore', () => {
     expect(loaded.appBehavior).toEqual({
       openAtLogin: false,
       startMinimized: false,
+      closeAction: 'ask',
       closeToTray: false
     })
   })
@@ -363,24 +364,27 @@ describe('JsonSettingsStore', () => {
       appBehavior: {
         openAtLogin: true,
         startMinimized: true,
-        closeToTray: true
+        closeAction: 'tray'
       }
     })
     const disabled = await store.patch({
       appBehavior: {
-        openAtLogin: false
+        openAtLogin: false,
+        closeToTray: false
       }
     })
 
     expect(enabled.appBehavior).toEqual({
       openAtLogin: true,
       startMinimized: true,
+      closeAction: 'tray',
       closeToTray: true
     })
     expect(disabled.appBehavior).toEqual({
       openAtLogin: false,
       startMinimized: false,
-      closeToTray: true
+      closeAction: 'quit',
+      closeToTray: false
     })
   })
 
