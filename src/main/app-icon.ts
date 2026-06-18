@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url'
 import { nativeImage } from 'electron'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
+const MAC_TRAY_TEMPLATE_ICON_SIZE = 18
 
 function usesWin32PathRules(baseDir: string): boolean {
   return (win32.isAbsolute(baseDir) && !baseDir.startsWith('/')) ||
@@ -81,6 +82,32 @@ export function createAppIcon(source: string): Electron.NativeImage {
     console.warn(
       '[kun-gui] failed to load app icon from',
       absolute || source,
+      '-',
+      message
+    )
+    return nativeImage.createEmpty()
+  }
+}
+
+export function createMacTemplateIconFromNamedImage(name: string): Electron.NativeImage {
+  if (process.platform !== 'darwin') return nativeImage.createEmpty()
+
+  try {
+    const image = nativeImage.createFromNamedImage(name)
+    if (!image.isEmpty()) {
+      const trayImage = image.resize({
+        width: MAC_TRAY_TEMPLATE_ICON_SIZE,
+        height: MAC_TRAY_TEMPLATE_ICON_SIZE
+      })
+      trayImage.setTemplateImage(true)
+      return trayImage
+    }
+    return image
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    console.warn(
+      '[kun-gui] failed to load named macOS template icon',
+      name,
       '-',
       message
     )

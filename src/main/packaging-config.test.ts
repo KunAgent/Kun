@@ -1,4 +1,4 @@
-import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -58,6 +58,18 @@ function createMacPackContext(root: string): {
   return {
     appOutDir: join(root, 'mac-arm64'),
     electronPlatformName: 'darwin',
+    packager: {
+      appInfo: {
+        productFilename: 'Kun'
+      }
+    }
+  }
+}
+
+function createWinPackContext(root: string): ReturnType<typeof createMacPackContext> {
+  return {
+    appOutDir: join(root, 'win-unpacked'),
+    electronPlatformName: 'win32',
     packager: {
       appInfo: {
         productFilename: 'Kun'
@@ -131,8 +143,28 @@ describe('electron-builder Kun packaging', () => {
     })
   })
 
-  it('uses the rounded Kun icon for Windows installers and shortcuts', () => {
-    expect(builderConfig.win.icon).toBe('./src/asset/img/kun_mac.png')
+  it('ships a macOS SF Symbol asset catalog for the tray icon', () => {
+    const symbolsetDir = join(process.cwd(), 'src/asset/macos/Assets.xcassets/kun.symbolset')
+    const contentsPath = join(symbolsetDir, 'Contents.json')
+    const symbolPath = join(symbolsetDir, 'kun-sf-symbol.svg')
+
+    expect(existsSync(symbolPath)).toBe(true)
+    expect(require(contentsPath)).toEqual({
+      info: { author: 'xcode', version: 1 },
+      symbols: [{ filename: 'kun-sf-symbol.svg', idiom: 'universal' }]
+    })
+  })
+
+  it('skips SF Symbol asset compilation for non-macOS packages', () => {
+    const root = tempRoot()
+    const context = createWinPackContext(root)
+
+    expect(() => afterPack._internals.compileMacSymbolAssets(context)).not.toThrow()
+    expect(existsSync(join(context.appOutDir, 'resources', 'Assets.car'))).toBe(false)
+  })
+
+  it('uses the generated multi-size Kun icon for Windows installers and shortcuts', () => {
+    expect(builderConfig.win.icon).toBe('./build/icon.ico')
   })
 
   it('requires Apple secure timestamps when Developer ID signing is enabled', () => {

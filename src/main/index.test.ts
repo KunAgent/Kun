@@ -1,9 +1,10 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-// electron nativeImage 是测试对象,只 stub 出 createAppIcon 用到的 4 个方法
+// electron nativeImage 是测试对象,只 stub 出 app-icon 用到的方法
 const createFromBuffer = vi.fn()
 const createFromPath = vi.fn()
 const createFromDataURL = vi.fn()
+const createFromNamedImage = vi.fn()
 const createEmpty = vi.fn()
 
 vi.mock('electron', () => ({
@@ -11,6 +12,7 @@ vi.mock('electron', () => ({
     createFromBuffer,
     createFromPath,
     createFromDataURL,
+    createFromNamedImage,
     createEmpty
   }
 }))
@@ -43,6 +45,7 @@ describe('app icon loader', () => {
     createFromBuffer.mockReset()
     createFromPath.mockReset()
     createFromDataURL.mockReset()
+    createFromNamedImage.mockReset()
     createEmpty.mockReset()
     fsMock.readFileSync.mockReset()
     // 让 mock 在被调用时返回非 undefined 的 NativeImage 占位符
@@ -129,6 +132,44 @@ describe('app icon loader', () => {
       expect(createFromBuffer).not.toHaveBeenCalled()
       expect(createFromPath).not.toHaveBeenCalled()
       expect(icon).toBeDefined()
+    })
+  })
+
+  describe('createMacTemplateIconFromNamedImage', () => {
+    const originalPlatform = process.platform
+
+    afterEach(() => {
+      Object.defineProperty(process, 'platform', { value: originalPlatform })
+    })
+
+    it('marks the named macOS image as a template image', () => {
+      Object.defineProperty(process, 'platform', { value: 'darwin' })
+      const setTemplateImage = vi.fn()
+      const resizedImage = {
+        isEmpty: () => false,
+        setTemplateImage
+      } as unknown as Electron.NativeImage
+      const resize = vi.fn().mockReturnValue(resizedImage)
+      const namedImage = {
+        isEmpty: () => false,
+        resize
+      } as unknown as Electron.NativeImage
+      createFromNamedImage.mockReturnValue(namedImage)
+
+      expect(mod.createMacTemplateIconFromNamedImage('kun')).toBe(resizedImage)
+      expect(createFromNamedImage).toHaveBeenCalledWith('kun')
+      expect(resize).toHaveBeenCalledWith({ width: 18, height: 18 })
+      expect(setTemplateImage).toHaveBeenCalledWith(true)
+      expect(createEmpty).not.toHaveBeenCalled()
+    })
+
+    it('returns an empty image outside macOS', () => {
+      Object.defineProperty(process, 'platform', { value: 'linux' })
+
+      mod.createMacTemplateIconFromNamedImage('kun')
+
+      expect(createFromNamedImage).not.toHaveBeenCalled()
+      expect(createEmpty).toHaveBeenCalledTimes(1)
     })
   })
 

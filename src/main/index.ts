@@ -10,7 +10,7 @@ import {
 import kunLogoPng from '../asset/img/kun.png?url'
 import kunMacLogoPng from '../asset/img/kun_mac.png?url'
 import kunTrayPng from '../asset/img/kun_tray.png?url'
-import { createAppIcon, pickTrayIcon } from './app-icon'
+import { createAppIcon, createMacTemplateIconFromNamedImage, pickTrayIcon } from './app-icon'
 import { configureLinuxWaylandImeSwitches } from './app-command-line'
 import { configureAppIdentity } from './app-identity'
 import { runLegacyKunDataMigration } from './legacy-data-migration'
@@ -307,7 +307,6 @@ function installDevPreviewWebviewGuards(): void {
 
 const appIconSource = process.platform === 'win32' ? kunMacLogoPng : kunLogoPng
 const appIcon = createAppIcon(appIconSource)
-const trayIcon = createAppIcon(kunTrayPng)
 traceStartup('app icon loaded', { source: appIconSource.startsWith('data:') ? 'data-url' : 'path' })
 const gotSingleInstanceLock = runningClawScheduleMcpServer || app.requestSingleInstanceLock()
 traceStartup('single instance lock checked', {
@@ -328,6 +327,13 @@ function trayLabels(locale: AppSettingsV1['locale']): { show: string; quit: stri
     quit: 'Quit',
     tooltip: 'Kun'
   }
+}
+
+function createTrayIcon(): Electron.NativeImage {
+  if (process.platform === 'darwin') {
+    return createMacTemplateIconFromNamedImage('kun')
+  }
+  return createAppIcon(kunTrayPng)
 }
 
 function windowCloseLabels(locale: AppSettingsV1['locale']): {
@@ -411,7 +417,7 @@ function syncTray(settings: AppSettingsV1): void {
   if (!tray) {
     // Tray 优先用专门的托盘图(在 16x16/24x24 任务栏尺寸下更清晰的剪影);
     // 托盘图加载失败时回退到主应用图,这样不会看到 electron 默认占位。
-    const traySource = pickTrayIcon(trayIcon, appIcon)
+    const traySource = pickTrayIcon(createTrayIcon(), appIcon)
     tray = new Tray(traySource.isEmpty() ? nativeImage.createEmpty() : traySource)
     tray.on('click', revealMainWindow)
     tray.on('double-click', revealMainWindow)

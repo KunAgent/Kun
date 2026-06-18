@@ -1,5 +1,6 @@
 const { execFileSync } = require('node:child_process')
-const { chmodSync, existsSync, readdirSync, rmSync } = require('node:fs')
+const { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync } = require('node:fs')
+const { tmpdir } = require('node:os')
 const { join } = require('node:path')
 
 const KUN_RUNTIME_REQUIRED_PATHS = [
@@ -10,6 +11,7 @@ const KUN_RUNTIME_REQUIRED_PATHS = [
   'kun/node_modules/diff/package.json',
   'kun/node_modules/@modelcontextprotocol/sdk/package.json'
 ]
+const MAC_SYMBOL_ASSETS_DIR = join(__dirname, '..', 'src', 'asset', 'macos', 'Assets.xcassets')
 
 function normalizePlatform(platform) {
   return platform === 'win' ? 'win32' : platform
@@ -112,6 +114,42 @@ function maybeAdhocSignMacApp(context) {
   )
 }
 
+function compileMacSymbolAssets(context) {
+  if (normalizePlatform(context.electronPlatformName) !== 'darwin') {
+    return
+  }
+
+  if (!existsSync(MAC_SYMBOL_ASSETS_DIR)) {
+    throw new Error(`[after-pack] Missing macOS symbol assets: ${MAC_SYMBOL_ASSETS_DIR}`)
+  }
+
+  const resourcesDir = packedResourcesDir(context)
+  const partialInfoDir = mkdtempSync(join(tmpdir(), 'kun-symbol-assets-'))
+  mkdirSync(resourcesDir, { recursive: true })
+  try {
+    execFileSync(
+      'xcrun',
+      [
+        'actool',
+        MAC_SYMBOL_ASSETS_DIR,
+        '--compile',
+        resourcesDir,
+        '--platform',
+        'macosx',
+        '--minimum-deployment-target',
+        '11.0',
+        '--target-device',
+        'mac',
+        '--output-partial-info-plist',
+        join(partialInfoDir, 'info.plist')
+      ],
+      { stdio: 'inherit' }
+    )
+  } finally {
+    rmSync(partialInfoDir, { recursive: true, force: true })
+  }
+}
+
 // node-pty execs a bundled `spawn-helper` binary to fork the child shell.
 // asar unpacking can drop the executable bit, which makes every PTY spawn
 // fail with `posix_spawnp`. Re-chmod every bundled helper after packing so
@@ -135,6 +173,7 @@ async function afterPack(context) {
   prunePackedKunDependencies(context)
   validateBundledKunRuntime(context)
   ensureNodePtyHelpersExecutable(context)
+  compileMacSymbolAssets(context)
   maybeAdhocSignMacApp(context)
 }
 
@@ -146,6 +185,7 @@ exports._internals = {
   npmCommand,
   prunePackedKunDependencies,
   validateBundledKunRuntime,
+  compileMacSymbolAssets,
   ensureNodePtyHelpersExecutable
 }
 exports.default = afterPack
