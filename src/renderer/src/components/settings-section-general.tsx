@@ -188,6 +188,16 @@ export function GeneralSettingsSection({ ctx }: { ctx: Record<string, any> }): R
                     </div>
                   }
                 />
+                <SettingRow
+                  title={t('cursorSpotlight')}
+                  description={t('cursorSpotlightDesc')}
+                  control={
+                    <Toggle
+                      checked={form.cursorSpotlight !== false}
+                      onChange={(enabled) => update({ cursorSpotlight: enabled })}
+                    />
+                  }
+                />
               </SettingsCard>
 
               <SettingsCard title={t('desktopBehavior')} className="mt-6">

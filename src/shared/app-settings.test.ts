@@ -267,6 +267,19 @@ describe('app behavior settings', () => {
   })
 })
 
+describe('cursor spotlight settings', () => {
+  it('defaults the interaction effect on and preserves an explicit opt-out', () => {
+    expect(normalizeAppSettings({
+      ...settings(),
+      cursorSpotlight: undefined
+    }).cursorSpotlight).toBe(true)
+    expect(normalizeAppSettings({
+      ...settings(),
+      cursorSpotlight: false
+    }).cursorSpotlight).toBe(false)
+  })
+})
+
 describe('keyboard shortcut settings', () => {
   it('defaults shortcut overrides to empty', () => {
     const raw = {

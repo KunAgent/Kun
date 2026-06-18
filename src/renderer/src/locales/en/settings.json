@@ -142,6 +142,8 @@
   "fontScaleMedium": "Medium",
   "fontScaleLarge": "Large",
   "fontScaleCurrent": "Current: {{value}}",
+  "cursorSpotlight": "Interactive effects",
+  "cursorSpotlightDesc": "Show a soft cursor-follow spotlight on the title bar and sidebar.",
   "turnCompleteNotification": "Reply completion notifications",
   "turnCompleteNotificationDesc": "Show a native Windows/macOS notification when the AI assistant finishes replying.",
   "desktopBehavior": "Desktop behavior",

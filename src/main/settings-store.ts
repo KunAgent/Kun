@@ -196,6 +196,7 @@ const defaultSettings = (): AppSettingsV1 => ({
   locale: 'en',
   theme: 'system',
   uiFontScale: 'small',
+  cursorSpotlight: true,
   provider: defaultModelProviderSettings(),
   agents: {
     kun: defaultKunRuntimeSettings()

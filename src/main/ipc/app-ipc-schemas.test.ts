@@ -184,6 +184,10 @@ describe('app-ipc-schemas', () => {
     expect(payload.disabledSkillIds).toEqual(['test-skill-08'])
   })
 
+  it('accepts the cursor spotlight preference', () => {
+    expect(settingsPatchSchema.parse({ cursorSpotlight: false }).cursorSpotlight).toBe(false)
+  })
+
   it('accepts media generation settings and provider capability patches', () => {
     const payload = settingsPatchSchema.parse({
       provider: {

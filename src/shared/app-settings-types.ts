@@ -846,6 +846,7 @@ export type AppSettingsV1 = {
   locale: 'en' | 'zh'
   theme: 'system' | 'light' | 'dark'
   uiFontScale: UiFontScale
+  cursorSpotlight?: boolean
   provider: ModelProviderSettingsV1
   agents: KunSettingsEnvelopeV1
   workspaceRoot: string

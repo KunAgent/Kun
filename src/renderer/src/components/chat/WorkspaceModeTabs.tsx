@@ -37,6 +37,7 @@ export function WorkspaceModeTabs({
     >
       <button
         type="button"
+        data-cursor-spotlight-target
         role="tab"
         aria-selected={activeView === 'chat'}
         onClick={onCodeOpen}
@@ -47,6 +48,7 @@ export function WorkspaceModeTabs({
       </button>
       <button
         type="button"
+        data-cursor-spotlight-target
         role="tab"
         aria-selected={activeView === 'write'}
         onClick={onWriteOpen}

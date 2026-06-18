@@ -716,6 +716,7 @@ const settingsPatchObjectSchema = z.object({
   locale: localeSchema.optional(),
   theme: themeSchema.optional(),
   uiFontScale: uiFontScaleSchema.optional(),
+  cursorSpotlight: z.boolean().optional(),
   provider: modelProviderPatchSchema.optional(),
   agents: z.object({
     kun: kunRuntimePatchSchema.optional()

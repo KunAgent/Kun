@@ -287,6 +287,7 @@ export function WindowsTitleBar({ platform, actions }: Props): ReactElement | nu
               <div key={menu.id} className="ds-windows-menu-slot">
                 <button
                   type="button"
+                  data-cursor-spotlight-target
                   className={`ds-windows-menu-button ${open ? 'is-open' : ''}`}
                   aria-haspopup="menu"
                   aria-expanded={open}
@@ -307,6 +308,7 @@ export function WindowsTitleBar({ platform, actions }: Props): ReactElement | nu
                         <button
                           key={item.id}
                           type="button"
+                          data-cursor-spotlight-target
                           role="menuitem"
                           className="ds-windows-menu-item"
                           onClick={() => runMenuAction(item)}

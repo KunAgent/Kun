@@ -142,6 +142,8 @@
   "fontScaleMedium": "中",
   "fontScaleLarge": "大",
   "fontScaleCurrent": "当前：{{value}}",
+  "cursorSpotlight": "交互特效",
+  "cursorSpotlightDesc": "在置顶栏和侧边栏显示跟随鼠标的柔和高光。",
   "turnCompleteNotification": "回复完成通知",
   "turnCompleteNotificationDesc": "AI 助手回复完成时，显示 Windows/macOS 系统通知。",
   "desktopBehavior": "桌面行为",

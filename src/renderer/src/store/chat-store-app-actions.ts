@@ -24,6 +24,7 @@ type CreateAppActionsOptions = {
   setComposerModelLoadPromise: (promise: Promise<void> | null) => void
   applyTheme: (theme: AppSettingsV1['theme']) => void
   applyUiFontScale: (scale: AppSettingsV1['uiFontScale']) => void
+  applyCursorSpotlight: (enabled: boolean) => void
   applyWriteTypography: (typography: AppSettingsV1['write']['typography']) => void
   applyDocumentLocale: (locale: AppSettingsV1['locale']) => void
   workspaceLabelFromPath: (workspaceRoot: string) => string
@@ -59,6 +60,7 @@ export function createAppActions(options: CreateAppActionsOptions): Pick<
     setComposerModelLoadPromise,
     applyTheme,
     applyUiFontScale,
+    applyCursorSpotlight,
     applyWriteTypography,
     applyDocumentLocale,
     workspaceLabelFromPath,
@@ -188,6 +190,7 @@ export function createAppActions(options: CreateAppActionsOptions): Pick<
       const workspaceRoot = normalizeWorkspaceRoot(settings.workspaceRoot)
       applyTheme(settings.theme)
       applyUiFontScale(settings.uiFontScale)
+      applyCursorSpotlight(settings.cursorSpotlight !== false)
       if (settings.write?.typography) applyWriteTypography(settings.write.typography)
       set({
         workspaceRoot,

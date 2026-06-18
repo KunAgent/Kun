@@ -49,6 +49,10 @@ export function applyUiFontScale(scale: UiFontScale): void {
   root.style.setProperty('--ds-ui-scale', factor)
 }
 
+export function applyCursorSpotlight(enabled: boolean): void {
+  document.documentElement.dataset.cursorSpotlight = enabled ? 'on' : 'off'
+}
+
 /**
  * Pushes the Write editor typography onto CSS variables consumed by the rich
  * editor, the CodeMirror live appearance, and the markdown preview. Setting the

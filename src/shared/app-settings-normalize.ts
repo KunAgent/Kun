@@ -69,6 +69,7 @@ export function normalizeAppSettings(settings: AppSettingsV1): AppSettingsV1 {
       maybeSettings.uiFontScale === 'large'
         ? maybeSettings.uiFontScale
         : 'small',
+    cursorSpotlight: maybeSettings.cursorSpotlight !== false,
     provider: providerSettings,
     agents: kunSettingsEnvelope(mergeKunRuntimeSettings(defaultKunRuntimeSettings(), {
       ...runtime,

@@ -11,8 +11,12 @@ import './styles/write-editor.css'
 import './styles/write-rich-editor.css'
 import App from './App'
 import './i18n'
+import { applyCursorSpotlight } from './lib/apply-theme'
+import { installCursorSpotlightTracking } from './lib/cursor-spotlight'
 
 document.documentElement.dataset.platform = window.kunGui?.platform ?? 'unknown'
+applyCursorSpotlight(true)
+installCursorSpotlightTracking()
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>

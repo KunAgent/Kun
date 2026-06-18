@@ -302,6 +302,7 @@ function FocusModeToggle({
   return (
     <button
       type="button"
+      data-cursor-spotlight-target
       role="switch"
       aria-checked={enabled}
       aria-label={ariaLabel}
