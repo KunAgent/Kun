@@ -243,7 +243,8 @@ async function loadGuiUpdaterModule(): Promise<GuiUpdaterModule> {
           module.initializeGuiUpdater(
             () => mainWindow,
             async () => (await store.load()).guiUpdate.channel,
-            stopManagedRuntimesForQuit
+            stopManagedRuntimesForQuit,
+            async () => (await store.load()).locale
           )
           guiUpdaterInitialized = true
         }
@@ -1507,6 +1508,11 @@ app.whenReady().then(async () => {
 
   createWindow({ suppressInitialShow: shouldStartHidden(initial) })
   traceStartup('createWindow:returned')
+  void loadGuiUpdaterModule()
+    .then((module) => module.showPostUpdateReleaseNotes())
+    .catch((error) => {
+      console.warn('[kun-gui updater] failed to show post-update release notes:', error)
+    })
 
   void pruneOnStartup().catch((err) => {
     console.warn('[kun-gui] prune logs:', err)

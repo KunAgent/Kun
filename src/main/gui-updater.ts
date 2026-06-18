@@ -1,4 +1,5 @@
-import { app, autoUpdater as nativeAutoUpdater, BrowserWindow } from 'electron'
+import { app, autoUpdater as nativeAutoUpdater, BrowserWindow, dialog, shell } from 'electron'
+import type { MessageBoxOptions } from 'electron'
 import { existsSync, readFileSync } from 'node:fs'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
@@ -40,12 +41,24 @@ let configuredChannel: GuiUpdateChannel = normalizeGuiUpdateChannel(
 )
 let configuredFeedUrl = ''
 let getSelectedChannel: (() => GuiUpdateChannel | Promise<GuiUpdateChannel>) | null = null
+let getSelectedLocale: (() => 'en' | 'zh' | Promise<'en' | 'zh'>) | null = null
 let beforeInstallUpdate: (() => void | Promise<void>) | null = null
 let beforeInstallUpdatePromise: Promise<void> | null = null
+let pendingVersionStateWrite: Promise<void> | null = null
 let backgroundCheckTimer: NodeJS.Timeout | null = null
 let backgroundCheckPromise: Promise<void> | null = null
 
 const GUI_UPDATE_SCHEDULE_FILE = 'gui-update-schedule.json'
+const GUI_VERSION_STATE_FILE = 'gui-version-state.json'
+const DEFAULT_CHANGELOG_URL = 'https://deepseek-gui.com/changelog'
+
+type GuiVersionState = {
+  lastSeenVersion?: string
+  pendingUpdate?: {
+    version: string
+    releaseNotes?: string
+  }
+}
 
 function trimSlashes(value: string): string {
   return value.replace(/^\/+|\/+$/g, '')
@@ -130,6 +143,61 @@ async function resolveUpdateFeedUrl(channel: GuiUpdateChannel): Promise<string> 
 
 function guiUpdateSchedulePath(): string {
   return join(app.getPath('userData'), GUI_UPDATE_SCHEDULE_FILE)
+}
+
+function guiVersionStatePath(): string {
+  return join(app.getPath('userData'), GUI_VERSION_STATE_FILE)
+}
+
+async function readGuiVersionState(): Promise<GuiVersionState> {
+  try {
+    const raw = await readFile(guiVersionStatePath(), 'utf8')
+    const parsed = JSON.parse(raw) as GuiVersionState
+    return parsed && typeof parsed === 'object' ? parsed : {}
+  } catch {
+    return {}
+  }
+}
+
+async function writeGuiVersionState(state: GuiVersionState): Promise<void> {
+  const path = guiVersionStatePath()
+  await mkdir(dirname(path), { recursive: true })
+  await writeFile(path, JSON.stringify(state, null, 2), 'utf8')
+}
+
+function changelogUrl(): string {
+  return envWithLegacyFallback('KUN_CHANGELOG_URL', 'DEEPSEEK_GUI_CHANGELOG_URL') || DEFAULT_CHANGELOG_URL
+}
+
+function normalizeReleaseNotes(value: unknown): string | undefined {
+  if (typeof value === 'string') return value.trim() || undefined
+  if (!Array.isArray(value)) return undefined
+  const notes = value
+    .map((entry) => {
+      if (!entry || typeof entry !== 'object' || !('note' in entry)) return ''
+      return typeof entry.note === 'string' ? entry.note.trim() : ''
+    })
+    .filter(Boolean)
+  return notes.length > 0 ? notes.join('\n\n') : undefined
+}
+
+async function recordPendingUpdate(updateInfo: UpdateInfo): Promise<void> {
+  const state = await readGuiVersionState()
+  await writeGuiVersionState({
+    ...state,
+    pendingUpdate: {
+      version: updateInfo.version.trim(),
+      releaseNotes: normalizeReleaseNotes(updateInfo.releaseNotes)
+    }
+  })
+}
+
+async function selectedLocale(): Promise<'en' | 'zh'> {
+  try {
+    return (await getSelectedLocale?.()) === 'zh' ? 'zh' : 'en'
+  } catch {
+    return app.getLocale().toLowerCase().startsWith('zh') ? 'zh' : 'en'
+  }
 }
 
 async function readLastScheduledCheckAt(): Promise<number | null> {
@@ -475,11 +543,13 @@ async function checkManualUpdate(
 export function initializeGuiUpdater(
   windowGetter: () => BrowserWindow | null,
   channelGetter?: () => GuiUpdateChannel | Promise<GuiUpdateChannel>,
-  beforeInstall?: () => void | Promise<void>
+  beforeInstall?: () => void | Promise<void>,
+  localeGetter?: () => 'en' | 'zh' | Promise<'en' | 'zh'>
 ): void {
   getMainWindow = windowGetter
   getSelectedChannel = channelGetter ?? null
   beforeInstallUpdate = beforeInstall ?? null
+  getSelectedLocale = localeGetter ?? null
   if (initialized) return
   initialized = true
 
@@ -522,6 +592,13 @@ export function initializeGuiUpdater(
     downloaded = true
     const info = toGuiInfo(event, true)
     lastInfo = info
+    pendingVersionStateWrite = recordPendingUpdate(event)
+      .catch((error) => {
+        console.warn('[kun-gui updater] failed to save release notes:', error)
+      })
+      .finally(() => {
+        pendingVersionStateWrite = null
+      })
     emitGuiUpdateState({ status: 'downloaded', info })
   })
 
@@ -537,6 +614,45 @@ export function initializeGuiUpdater(
   })
 
   void scheduleNextBackgroundCheck()
+}
+
+export async function showPostUpdateReleaseNotes(): Promise<void> {
+  const currentVersion = app.getVersion().trim()
+  const state = await readGuiVersionState()
+  if (!state.lastSeenVersion) {
+    await writeGuiVersionState({ ...state, lastSeenVersion: currentVersion })
+    return
+  }
+  if (state.lastSeenVersion === currentVersion) return
+
+  const pendingUpdate =
+    state.pendingUpdate?.version === currentVersion ? state.pendingUpdate : undefined
+  await writeGuiVersionState({ lastSeenVersion: currentVersion })
+
+  const locale = await selectedLocale()
+  const isZh = locale === 'zh'
+  const options: MessageBoxOptions = {
+    type: 'info',
+    title: isZh ? 'Kun 已更新' : 'Kun updated',
+    message: isZh ? `已更新到 Kun ${currentVersion}` : `Kun has been updated to ${currentVersion}`,
+    detail:
+      pendingUpdate?.releaseNotes ??
+      (isZh
+        ? '此版本的完整更新内容可在 Kun 更新日志中查看。'
+        : 'See the Kun changelog for the complete release notes.'),
+    buttons: isZh ? ['查看更新日志', '稍后'] : ['View changelog', 'Later'],
+    defaultId: 0,
+    cancelId: 1,
+    noLink: true
+  }
+  const window = getMainWindow?.()
+  const result =
+    window && !window.isDestroyed()
+      ? await dialog.showMessageBox(window, options)
+      : await dialog.showMessageBox(options)
+  if (result.response === 0) {
+    await shell.openExternal(changelogUrl())
+  }
 }
 
 export function getGuiUpdateState(): GuiUpdateState {
@@ -635,7 +751,7 @@ export async function installGuiUpdate(): Promise<GuiUpdateInstallResult> {
       }
     }
     emitGuiUpdateState({ status: 'installing', info: lastInfo ?? undefined })
-    await runBeforeInstallUpdate()
+    await Promise.all([pendingVersionStateWrite, runBeforeInstallUpdate()])
     autoUpdater.quitAndInstall(false, true)
     return { ok: true }
   } catch (e) {

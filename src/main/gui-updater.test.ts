@@ -1,4 +1,5 @@
 import { EventEmitter } from 'node:events'
+import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 type MockUpdater = EventEmitter & {
@@ -16,6 +17,10 @@ type MockUpdater = EventEmitter & {
 let updater: MockUpdater
 let nativeUpdater: EventEmitter
 let originalEnv: NodeJS.ProcessEnv
+let appVersion: string
+let mockedFiles: Map<string, string>
+let showMessageBox: ReturnType<typeof vi.fn>
+let openExternal: ReturnType<typeof vi.fn>
 
 function createUpdater(): MockUpdater {
   return Object.assign(new EventEmitter(), {
@@ -37,15 +42,33 @@ beforeEach(() => {
   vi.resetModules()
   updater = createUpdater()
   nativeUpdater = new EventEmitter()
+  appVersion = '0.1.0'
+  mockedFiles = new Map()
+  showMessageBox = vi.fn().mockResolvedValue({ response: 1 })
+  openExternal = vi.fn().mockResolvedValue(undefined)
+  vi.doMock('node:fs/promises', () => ({
+    mkdir: vi.fn().mockResolvedValue(undefined),
+    readFile: vi.fn(async (path: string) => {
+      const value = mockedFiles.get(String(path))
+      if (value === undefined) throw Object.assign(new Error('not found'), { code: 'ENOENT' })
+      return value
+    }),
+    writeFile: vi.fn(async (path: string, value: string) => {
+      mockedFiles.set(String(path), String(value))
+    })
+  }))
   vi.doMock('electron', () => ({
     app: {
       isPackaged: true,
       getAppPath: () => '/tmp/deepseek-gui-updater-test-app',
       getPath: () => '/tmp/deepseek-gui-updater-test-user-data',
-      getVersion: () => '0.1.0'
+      getVersion: () => appVersion,
+      getLocale: () => 'en-US'
     },
     autoUpdater: nativeUpdater,
-    BrowserWindow: class {}
+    BrowserWindow: class {},
+    dialog: { showMessageBox },
+    shell: { openExternal }
   }))
   vi.doMock('electron-updater', () => ({
     default: { autoUpdater: updater },
@@ -60,6 +83,7 @@ afterEach(() => {
   vi.unstubAllGlobals()
   vi.doUnmock('electron')
   vi.doUnmock('electron-updater')
+  vi.doUnmock('node:fs/promises')
   vi.resetModules()
 })
 
@@ -220,5 +244,58 @@ describe('installGuiUpdate', () => {
     finishCleanup()
     await expect(installing).resolves.toEqual({ ok: true })
     expect(updater.quitAndInstall).toHaveBeenCalledWith(false, true)
+  })
+})
+
+describe('showPostUpdateReleaseNotes', () => {
+  const versionStatePath = join(
+    '/tmp/deepseek-gui-updater-test-user-data',
+    'gui-version-state.json'
+  )
+
+  it('records the first launched version without showing a notice', async () => {
+    const module = await import('./gui-updater')
+    module.initializeGuiUpdater(() => null, () => 'stable')
+
+    await module.showPostUpdateReleaseNotes()
+
+    expect(showMessageBox).not.toHaveBeenCalled()
+    expect(JSON.parse(mockedFiles.get(versionStatePath) ?? '{}')).toEqual({
+      lastSeenVersion: '0.1.0'
+    })
+  })
+
+  it('shows downloaded release notes once after the version changes', async () => {
+    appVersion = '0.2.0'
+    mockedFiles.set(
+      versionStatePath,
+      JSON.stringify({
+        lastSeenVersion: '0.1.0',
+        pendingUpdate: {
+          version: '0.2.0',
+          releaseNotes: '修复更新流程并改进启动体验。'
+        }
+      })
+    )
+    showMessageBox.mockResolvedValue({ response: 0 })
+    const module = await import('./gui-updater')
+    module.initializeGuiUpdater(() => null, () => 'stable', undefined, () => 'zh')
+
+    await module.showPostUpdateReleaseNotes()
+    await module.showPostUpdateReleaseNotes()
+
+    expect(showMessageBox).toHaveBeenCalledTimes(1)
+    expect(showMessageBox).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: 'Kun 已更新',
+        message: '已更新到 Kun 0.2.0',
+        detail: '修复更新流程并改进启动体验。',
+        buttons: ['查看更新日志', '稍后']
+      })
+    )
+    expect(openExternal).toHaveBeenCalledWith('https://deepseek-gui.com/changelog')
+    expect(JSON.parse(mockedFiles.get(versionStatePath) ?? '{}')).toEqual({
+      lastSeenVersion: '0.2.0'
+    })
   })
 })
