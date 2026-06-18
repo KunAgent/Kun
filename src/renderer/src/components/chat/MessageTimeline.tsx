@@ -515,10 +515,6 @@ function MessageTurn({
     <div className="flex min-w-0 flex-col gap-4">
       {turn.user ? <MessageBubble block={turn.user} /> : null}
 
-      {compactionBlocks.map((block) => (
-        <CompactionDivider key={block.id} block={block} />
-      ))}
-
       {hasProcess ? (
         <div className="flex flex-col gap-1 pb-2">
           <WorkMetaRow
@@ -578,6 +574,14 @@ function MessageTurn({
       {!isProcessing && turnFileChanges.length > 0 ? (
         <TurnChangeSummary changes={turnFileChanges} viewportRef={viewportRef} compact={compactCards} />
       ) : null}
+
+      {/* The compaction marker renders LAST so "已压缩上下文" sits at the very
+          bottom of the turn it belongs to — i.e. the bottom of the latest turn
+          when the compaction just happened — rather than wedged between the
+          user's question and the assistant's answer. */}
+      {compactionBlocks.map((block) => (
+        <CompactionDivider key={block.id} block={block} />
+      ))}
     </div>
   )
 }

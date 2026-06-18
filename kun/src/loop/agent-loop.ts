@@ -23,7 +23,8 @@ import type { ImmutablePrefix } from '../cache/immutable-prefix.js'
 import { ContextCompactor } from './context-compactor.js'
 import {
   effectiveHistoryAfterLatestCompaction,
-  insertCompactionIntoVisibleHistory
+  insertCompactionIntoVisibleHistory,
+  placeCompactionsAtTurnEnd
 } from './compaction-history.js'
 import { summarizeCompactionWithModel } from './compaction-summary.js'
 import { InflightTracker } from './inflight-tracker.js'
@@ -2254,7 +2255,7 @@ export class AgentLoop {
       const sessionItems = itemsByTurn.get(turn.id)
       if (!sessionItems) return turn
       changed = true
-      return { ...turn, items: sessionItems }
+      return { ...turn, items: placeCompactionsAtTurnEnd(sessionItems) }
     })
     if (!changed) return
     await this.opts.threadStore.upsert(touchThread({ ...current, turns }, this.opts.nowIso()))

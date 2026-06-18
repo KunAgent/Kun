@@ -12,7 +12,8 @@ import type { SteeringQueue } from '../loop/steering-queue.js'
 import { ContextCompactor } from '../loop/context-compactor.js'
 import {
   effectiveHistoryAfterLatestCompaction,
-  insertCompactionIntoVisibleHistory
+  insertCompactionIntoVisibleHistory,
+  placeCompactionsAtTurnEnd
 } from '../loop/compaction-history.js'
 import { summarizeCompactionWithModel } from '../loop/compaction-summary.js'
 import type { ContextCompactionConfig } from '../loop/model-context-profile.js'
@@ -552,7 +553,7 @@ export class TurnService {
         const sessionItems = itemsByTurn.get(turn.id)
         if (!sessionItems) return turn
         changed = true
-        return { ...turn, items: sessionItems }
+        return { ...turn, items: placeCompactionsAtTurnEnd(sessionItems) }
       })
       return changed ? { ...current, turns } : current
     })

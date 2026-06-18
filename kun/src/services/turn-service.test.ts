@@ -161,9 +161,22 @@ describe('TurnService compact', () => {
       'item_6'
     ])
     const hydratedThread = await threadStore.get(threadId)
-    expect(hydratedThread?.turns[0]?.items.map((item) => item.id)).toEqual(
-      visibleItems.map((item) => item.id)
-    )
+    // Thread-store layout diverges from session-store on purpose: the runtime
+    // wants `[head, summary, tail]` so `effectiveHistoryAfterLatestCompaction`
+    // can return `[summary, tail]`, but the renderer groups blocks by user
+    // message — leaving the summary in the middle of the flat list would push
+    // the 已压缩上下文 row into the previous turn's process timeline. The
+    // bucket-level reorder appends the summary at the end of its turn so it
+    // renders inside the latest turn instead.
+    expect(hydratedThread?.turns[0]?.items.map((item) => item.id)).toEqual([
+      'item_1',
+      'item_2',
+      'item_3',
+      'item_4',
+      'item_5',
+      'item_6',
+      visibleItems[2]?.id
+    ])
 
     const runtimeEvents = await sessionStore.loadEventsSince(threadId, 0)
     const started = runtimeEvents.find((event) => event.kind === 'compaction_started')
