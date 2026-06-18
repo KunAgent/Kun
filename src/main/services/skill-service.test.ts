@@ -1,7 +1,7 @@
 import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   defaultClawSettings,
   defaultKeyboardShortcuts,
@@ -13,14 +13,24 @@ import {
 } from '../../shared/app-settings'
 import { guiSkillRootsForRuntime, listGuiSkillRoots, listGuiSkills } from './skill-service'
 
+vi.mock('node:os', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('node:os')>()
+  return {
+    ...actual,
+    homedir: () => process.env.KUN_SKILL_TEST_HOME || actual.homedir()
+  }
+})
+
 describe('skill-service', () => {
   let tempRoot = ''
 
   beforeEach(async () => {
     tempRoot = await mkdtemp(join(tmpdir(), 'gui-skills-'))
+    process.env.KUN_SKILL_TEST_HOME = tempRoot
   })
 
   afterEach(async () => {
+    delete process.env.KUN_SKILL_TEST_HOME
     await rm(tempRoot, { recursive: true, force: true })
   })
 
@@ -181,6 +191,21 @@ describe('skill-service', () => {
     if (!list.ok) return
     const claude = list.roots.find((root) => root.labelKey === 'pluginSkillRootWorkspaceClaude')
     expect(claude?.enabled).toBe(false)
+  })
+
+  it('omits discovered Codex plugin roots disabled by path', async () => {
+    const workspaceRoot = join(tempRoot, 'ws-plugin-toggle')
+    const pluginRoot = join(tempRoot, '.codex', 'plugins', 'cache', 'github', '1.0', 'skills')
+    await mkdir(join(pluginRoot, 'review'), { recursive: true })
+    await writeFile(join(pluginRoot, 'review', 'SKILL.md'), ['---', 'name: review', '---'].join('\n'), 'utf8')
+
+    const settings = createSettings(workspaceRoot)
+    expect((await guiSkillRootsForRuntime(settings, workspaceRoot)).map((root) => comparable(root.path)))
+      .toContain(comparable(pluginRoot))
+
+    settings.claw.skills.disabledDirs = [pluginRoot]
+    expect((await guiSkillRootsForRuntime(settings, workspaceRoot)).map((root) => comparable(root.path)))
+      .not.toContain(comparable(pluginRoot))
   })
 
   function comparable(path: string): string {

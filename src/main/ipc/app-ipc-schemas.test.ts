@@ -310,7 +310,7 @@ describe('app-ipc-schemas', () => {
     expect(fromText.modelHint).toBe('deepseek-v4-pro')
   })
 
-  it('strips legacy settings keys before validating settings patches', () => {
+  it('strips legacy settings keys while preserving current skill settings', () => {
     const payload = settingsPatchSchema.parse({
       locale: 'zh',
       disabledSkillIds: ['legacy-skill'],
@@ -340,7 +340,7 @@ describe('app-ipc-schemas', () => {
     expect(payload.provider?.providers?.[0]?.imageRecognition).toEqual({ enabled: true })
     expect(payload.agents?.kun?.port).toBe(9001)
     expect(payload.agents?.kun?.imageRecognition).toEqual({ enabled: true })
-    expect('disabledSkillIds' in payload).toBe(false)
+    expect(payload.disabledSkillIds).toEqual(['legacy-skill'])
     expect('reasonix' in payload).toBe(false)
     expect('quickChat' in payload).toBe(false)
     expect('reasonix' in (payload.agents ?? {})).toBe(false)

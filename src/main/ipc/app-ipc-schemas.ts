@@ -696,7 +696,6 @@ function stripLegacySettingsPatchKeys(payload: unknown): unknown {
 
   delete next.agentProvider
   delete next.deepseek
-  delete next.disabledSkillIds
   delete next.reasonix
   delete next.quickChat
 

@@ -64,8 +64,8 @@ type SkillRootCandidate = {
 /**
  * Enabled, on-disk skill roots passed to the Kun runtime. Builds the common
  * directory conventions (.agents/.claude/.codex/skills + global equivalents)
- * plus configured extra dirs, drops any the user toggled off, and appends the
- * always-on Codex plugin caches. Precedence (earlier wins on duplicate skill
+ * plus configured extra dirs, drops any the user toggled off, and appends
+ * enabled Codex plugin caches. Precedence (earlier wins on duplicate skill
  * id): project commons → global commons → plugin caches → extra dirs.
  */
 export async function guiSkillRootsForRuntime(
@@ -86,6 +86,7 @@ export async function guiSkillRootsForRuntime(
   const extra = candidates.filter((c) => c.source === 'extra')
   const pluginRoots = (await discoverCodexPluginSkillRoots())
     .filter((root) => existsSync(root))
+    .filter((root) => !disabled.has(comparablePath(root)))
     .map((path) => ({ path, scope: 'global' as const }))
 
   return uniqueSkillRoots([
