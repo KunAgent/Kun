@@ -955,6 +955,18 @@ const workflowPatchSchema = z
   })
   .strict()
 
+// Lenient: nodeType / config are re-validated per kind by normalizeNodePreset.
+const workflowNodePresetSchema = z
+  .object({
+    id: z.string().max(MAX_ID_LENGTH),
+    label: z.string().max(200),
+    icon: z.string().max(64).optional(),
+    nodeType: z.string().max(64),
+    nodeName: z.string().max(200).optional(),
+    config: z.record(z.unknown()).optional()
+  })
+  .strict()
+
 const workflowSettingsPatchSchema = z
   .object({
     enabled: z.boolean().optional(),
@@ -965,7 +977,8 @@ const workflowSettingsPatchSchema = z
     keepAwake: z.boolean().optional(),
     webhookPort: z.number().int().min(1024).max(65_535).optional(),
     webhookSecret: z.string().max(MAX_BODY_BYTES).optional(),
-    workflows: z.array(workflowPatchSchema).max(200).optional()
+    workflows: z.array(workflowPatchSchema).max(200).optional(),
+    presets: z.array(workflowNodePresetSchema).max(100).optional()
   })
   .strict()
 

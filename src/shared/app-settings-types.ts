@@ -861,6 +861,24 @@ export type WorkflowV1 = {
   runs: WorkflowRunV1[]
 }
 
+/**
+ * A reusable palette item created by snapshotting a configured node. Dropping it
+ * onto the canvas creates a fresh node of `nodeType` pre-filled with `config`.
+ */
+export type WorkflowNodePresetV1 = {
+  id: string
+  /** Palette label chosen by the user. */
+  label: string
+  /** Optional lucide icon name; empty falls back to the node kind's default icon. */
+  icon: string
+  /** Underlying built-in node kind this preset instantiates. */
+  nodeType: WorkflowNodeKind
+  /** Default name applied to the created node. */
+  nodeName: string
+  /** Saved config snapshot; shape matches `nodeType`. */
+  config: WorkflowNodeV1['config']
+}
+
 export type WorkflowSettingsV1 = {
   enabled: boolean
   defaultWorkspaceRoot: string
@@ -874,6 +892,8 @@ export type WorkflowSettingsV1 = {
   /** Optional shared secret required on inbound webhook requests (x-kun-secret / Bearer). */
   webhookSecret: string
   workflows: WorkflowV1[]
+  /** Reusable palette items the user saved from configured nodes. */
+  presets: WorkflowNodePresetV1[]
 }
 
 export type WorkflowSettingsPatchV1 = Partial<Omit<WorkflowSettingsV1, 'workflows'>> & {

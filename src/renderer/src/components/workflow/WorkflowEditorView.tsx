@@ -18,10 +18,11 @@ import {
   type OnConnectEnd,
   type OnConnectStart
 } from '@xyflow/react'
-import { ArrowLeft, ChevronRight, MousePointerClick, Play, Plus, Save, Square } from 'lucide-react'
+import { ArrowLeft, ChevronRight, MousePointerClick, Play, Plus, Save, Square, X } from 'lucide-react'
 import type {
   AppSettingsV1,
   WorkflowNodeKind,
+  WorkflowNodePresetV1,
   WorkflowNodeRunResultV1,
   WorkflowNodeRunStatus,
   WorkflowNodeV1,
@@ -39,8 +40,11 @@ import {
   TRIGGER_KINDS,
   WORKFLOW_PALETTE,
   WORKFLOW_PALETTE_GROUPS,
+  createNodeFromPreset,
   createWorkflowNode,
   flowToWorkflowGraph,
+  presetFromNode,
+  presetUid,
   toFlowEdges,
   toFlowNodes,
   type WorkflowFlowEdge,
@@ -56,6 +60,7 @@ type ConnectMenuState = {
 }
 
 const DND_MIME = 'application/x-workflow-node'
+const PRESET_DND_MIME = 'application/x-workflow-preset'
 
 type WorkflowConnectionsArg = ReturnType<typeof flowToWorkflowGraph>['connections']
 
@@ -75,6 +80,9 @@ type Props = {
   onRunNode: (nodeId: string) => Promise<void> | void
   onStop: () => Promise<void> | void
   onBack: () => void
+  presets: WorkflowNodePresetV1[]
+  onSavePreset: (preset: WorkflowNodePresetV1) => void | Promise<void>
+  onDeletePreset: (presetId: string) => void | Promise<void>
 }
 
 function WorkflowEditorInner({
@@ -87,7 +95,10 @@ function WorkflowEditorInner({
   onRun,
   onRunNode,
   onStop,
-  onBack
+  onBack,
+  presets,
+  onSavePreset,
+  onDeletePreset
 }: Props): ReactElement {
   const { t } = useTranslation('common')
   const { screenToFlowPosition } = useReactFlow()
@@ -193,6 +204,33 @@ function WorkflowEditorInner({
     setDirty(true)
   }, [])
 
+  const insertPresetNode = useCallback((preset: WorkflowNodePresetV1, position: { x: number; y: number }) => {
+    const node = createNodeFromPreset(preset, position)
+    setRfNodes((nodes) => [...nodes, { id: node.id, type: node.type, position: node.position, data: { node } }])
+    setSelectedNodeId(node.id)
+    setDirty(true)
+  }, [])
+
+  const addPresetNode = useCallback(
+    (preset: WorkflowNodePresetV1) => {
+      const offset = rfNodes.length * 28
+      insertPresetNode(preset, { x: 360 + (offset % 180), y: 140 + offset })
+    },
+    [insertPresetNode, rfNodes.length]
+  )
+
+  const onPresetDragStart = useCallback((event: DragEvent, presetId: string) => {
+    event.dataTransfer.setData(PRESET_DND_MIME, presetId)
+    event.dataTransfer.effectAllowed = 'move'
+  }, [])
+
+  const handleSavePreset = useCallback(
+    (node: WorkflowNodeV1, label: string) => {
+      void onSavePreset(presetFromNode(presetUid(), label, node))
+    },
+    [onSavePreset]
+  )
+
   const addNode = useCallback(
     (kind: WorkflowNodeKind) => {
       const offset = rfNodes.length * 28
@@ -214,12 +252,17 @@ function WorkflowEditorInner({
   const onCanvasDrop = useCallback(
     (event: DragEvent) => {
       event.preventDefault()
+      const presetId = event.dataTransfer.getData(PRESET_DND_MIME)
+      if (presetId) {
+        const preset = presets.find((item) => item.id === presetId)
+        if (preset) insertPresetNode(preset, screenToFlowPosition({ x: event.clientX, y: event.clientY }))
+        return
+      }
       const kind = event.dataTransfer.getData(DND_MIME) as WorkflowNodeKind
       if (!kind || !WORKFLOW_PALETTE.includes(kind)) return
-      const position = screenToFlowPosition({ x: event.clientX, y: event.clientY })
-      insertNode(kind, position)
+      insertNode(kind, screenToFlowPosition({ x: event.clientX, y: event.clientY }))
     },
-    [insertNode, screenToFlowPosition]
+    [insertNode, insertPresetNode, presets, screenToFlowPosition]
   )
 
   const handleNodeChange = useCallback((updated: WorkflowNodeV1) => {
@@ -394,6 +437,54 @@ function WorkflowEditorInner({
               </div>
             )
           })}
+
+          <div className="flex flex-col">
+            <button
+              type="button"
+              onClick={() => toggleGroup('custom')}
+              className="flex items-center gap-1 px-2 py-1 text-[10.5px] font-semibold uppercase tracking-wide text-ds-faint transition hover:text-ds-muted"
+            >
+              <ChevronRight
+                className={`h-3 w-3 shrink-0 transition-transform ${collapsedGroups.has('custom') ? '' : 'rotate-90'}`}
+                strokeWidth={2}
+              />
+              <span className="min-w-0 flex-1 truncate text-left">{t('workflowGroup_custom')}</span>
+            </button>
+            {!collapsedGroups.has('custom') ? (
+              presets.length === 0 ? (
+                <p className="px-2 py-1 text-[11px] leading-4 text-ds-faint">{t('workflowPresetEmpty')}</p>
+              ) : (
+                presets.map((preset) => {
+                  const Icon = NODE_ICONS[preset.nodeType]
+                  return (
+                    <div key={preset.id} className="group/preset relative flex items-center">
+                      <button
+                        type="button"
+                        draggable
+                        onDragStart={(event) => onPresetDragStart(event, preset.id)}
+                        onClick={() => addPresetNode(preset)}
+                        className="flex min-w-0 flex-1 cursor-grab items-center gap-2 rounded-lg border border-transparent px-2 py-1.5 pr-7 text-left text-[12.5px] text-ds-ink transition hover:border-ds-border hover:bg-ds-hover active:cursor-grabbing"
+                      >
+                        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-accent/10 text-accent">
+                          <Icon className="h-3.5 w-3.5" strokeWidth={1.9} />
+                        </span>
+                        <span className="min-w-0 flex-1 truncate">{preset.label}</span>
+                      </button>
+                      <button
+                        type="button"
+                        title={t('workflowPresetDelete')}
+                        aria-label={t('workflowPresetDelete')}
+                        onClick={() => void onDeletePreset(preset.id)}
+                        className="absolute right-1 flex h-5 w-5 items-center justify-center rounded text-ds-faint opacity-0 transition hover:bg-red-500/10 hover:text-red-600 group-hover/preset:opacity-100"
+                      >
+                        <X className="h-3 w-3" strokeWidth={2} />
+                      </button>
+                    </div>
+                  )
+                })
+              )
+            ) : null}
+          </div>
         </aside>
 
         <div className="relative min-w-0 flex-1" onDrop={onCanvasDrop} onDragOver={onCanvasDragOver}>
@@ -472,6 +563,7 @@ function WorkflowEditorInner({
             lastResult={selectedNodeId ? lastResults[selectedNodeId] ?? null : null}
             onChange={handleNodeChange}
             onDelete={handleDeleteNode}
+            onSavePreset={handleSavePreset}
           />
         </aside>
       </div>

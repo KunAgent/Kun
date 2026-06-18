@@ -3,6 +3,7 @@ import { MarkerType } from '@xyflow/react'
 import type {
   WorkflowConnectionV1,
   WorkflowNodeKind,
+  WorkflowNodePresetV1,
   WorkflowNodeRunStatus,
   WorkflowNodeV1,
   WorkflowV1
@@ -145,6 +146,33 @@ export function createWorkflowNode(
     default:
       return { ...base, type: 'manual-trigger', config: {} }
   }
+}
+
+/** Build a node from a saved preset: a fresh id + position, the preset's name/config. */
+export function createNodeFromPreset(
+  preset: WorkflowNodePresetV1,
+  position: { x: number; y: number }
+): WorkflowNodeV1 {
+  const fresh = createWorkflowNode(preset.nodeType, position)
+  // preset.config matches preset.nodeType; clone so instances never share references.
+  const config = structuredClone(preset.config)
+  return { ...fresh, name: preset.nodeName || fresh.name, config } as WorkflowNodeV1
+}
+
+/** Snapshot a node into a reusable preset (id is assigned by the caller). */
+export function presetFromNode(id: string, label: string, node: WorkflowNodeV1): WorkflowNodePresetV1 {
+  return {
+    id,
+    label: label.trim() || node.name.trim() || node.type,
+    icon: '',
+    nodeType: node.type,
+    nodeName: node.name,
+    config: structuredClone(node.config)
+  }
+}
+
+export function presetUid(): string {
+  return uid('preset')
 }
 
 export function createWorkflow(name: string): WorkflowV1 {

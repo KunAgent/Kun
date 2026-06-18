@@ -7,6 +7,7 @@ import {
   type WorkflowHttpMethod,
   type WorkflowNodeKind,
   type WorkflowNodeRunResultV1,
+  type WorkflowNodePresetV1,
   type WorkflowNodeRunStatus,
   type WorkflowNodeV1,
   type WorkflowRunV1,
@@ -31,6 +32,7 @@ import {
 export const MAX_WORKFLOW_RUNS = 20
 const MAX_WORKFLOW_CONNECTIONS = 512
 const MAX_WORKFLOW_HTTP_HEADERS = 50
+const MAX_WORKFLOW_PRESETS = 100
 
 const CONDITION_OPERATORS: readonly WorkflowConditionOperator[] = [
   'contains',
@@ -414,7 +416,23 @@ export function defaultWorkflowSettings(): WorkflowSettingsV1 {
     keepAwake: false,
     webhookPort: 8799,
     webhookSecret: '',
-    workflows: []
+    workflows: [],
+    presets: []
+  }
+}
+
+function normalizeNodePreset(value: unknown, index: number): WorkflowNodePresetV1 | null {
+  const p = record(value)
+  // Reuse the node normalizer so the preset's saved config is validated per kind.
+  const node = normalizeWorkflowNode({ type: p.nodeType, name: p.nodeName, config: p.config }, index)
+  if (!node) return null
+  return {
+    id: asTrimmed(p.id) || `preset-${index}`,
+    label: asTrimmed(p.label) || node.name || node.type,
+    icon: asTrimmed(p.icon),
+    nodeType: node.type,
+    nodeName: node.name,
+    config: node.config
   }
 }
 
@@ -433,6 +451,12 @@ export function normalizeWorkflowSettings(input: WorkflowSettingsPatchV1 | undef
     webhookSecret: asTrimmed(source.webhookSecret),
     workflows: Array.isArray(source.workflows)
       ? source.workflows.map((workflow, index) => normalizeWorkflow(workflow as Partial<WorkflowV1>, index, now))
+      : [],
+    presets: Array.isArray(source.presets)
+      ? source.presets
+          .map((preset, index) => normalizeNodePreset(preset, index))
+          .filter((preset): preset is WorkflowNodePresetV1 => preset !== null)
+          .slice(0, MAX_WORKFLOW_PRESETS)
       : []
   }
 }
@@ -445,6 +469,7 @@ export function mergeWorkflowSettings(
   return normalizeWorkflowSettings({
     ...current,
     ...patch,
-    workflows: patch.workflows ?? current.workflows
+    workflows: patch.workflows ?? current.workflows,
+    presets: patch.presets ?? current.presets
   })
 }

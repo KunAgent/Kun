@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactElement, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Trash2 } from 'lucide-react'
+import { Star, Trash2 } from 'lucide-react'
 import { ModelPicker } from './ModelPicker'
 import {
   SCHEDULE_REASONING_EFFORT_IDS,
@@ -49,6 +49,8 @@ type Props = {
   lastResult?: WorkflowNodeRunResultV1 | null
   onChange: (node: WorkflowNodeV1) => void
   onDelete: (nodeId: string) => void
+  /** Save the current node as a reusable palette preset. */
+  onSavePreset?: (node: WorkflowNodeV1, label: string) => void
 }
 
 function Field({ label, children }: { label: string; children: ReactNode }): ReactElement {
@@ -60,9 +62,18 @@ function Field({ label, children }: { label: string; children: ReactNode }): Rea
   )
 }
 
-export function NodeConfigPanel({ node, settings, lastResult, onChange, onDelete }: Props): ReactElement {
+export function NodeConfigPanel({
+  node,
+  settings,
+  lastResult,
+  onChange,
+  onDelete,
+  onSavePreset
+}: Props): ReactElement {
   const { t } = useTranslation('common')
 
+  const [presetLabel, setPresetLabel] = useState('')
+  const [presetSaved, setPresetSaved] = useState(false)
   // Debounced editor-time syntax check for the Code node (runs in the main process).
   const [codeCheck, setCodeCheck] = useState<WorkflowCodeCheckResult | null>(null)
   const codeValue = node && node.type === 'code' ? node.config.code : ''
@@ -978,6 +989,38 @@ export function NodeConfigPanel({ node, settings, lastResult, onChange, onDelete
           />
           {t('workflowNodeDisabled')}
         </label>
+
+        {onSavePreset ? (
+          <div className="flex flex-col gap-1.5 border-t border-ds-border pt-3">
+            <span className="text-[12px] font-medium text-ds-muted">{t('workflowSaveAsPreset')}</span>
+            <div className="flex items-center gap-2">
+              <input
+                className={INPUT_CLASS}
+                value={presetLabel}
+                placeholder={node.name.trim() || t(`workflowNode_${node.type}`)}
+                onChange={(event) => setPresetLabel(event.target.value)}
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  onSavePreset(node, presetLabel)
+                  setPresetLabel('')
+                  setPresetSaved(true)
+                  window.setTimeout(() => setPresetSaved(false), 1500)
+                }}
+                className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg border border-ds-border px-3 text-[12.5px] font-medium text-ds-ink transition hover:bg-ds-hover"
+              >
+                <Star className="h-3.5 w-3.5" strokeWidth={1.8} />
+                {t('workflowSaveAsPresetButton')}
+              </button>
+            </div>
+            {presetSaved ? (
+              <span className="text-[11.5px] text-emerald-600">{t('workflowPresetSaved')}</span>
+            ) : (
+              <span className="text-[11px] leading-4 text-ds-faint">{t('workflowSaveAsPresetHint')}</span>
+            )}
+          </div>
+        ) : null}
 
         {lastResult && (lastResult.message || lastResult.error || lastResult.outputJson) ? (
           <div className="flex flex-col gap-1.5 border-t border-ds-border pt-3">
