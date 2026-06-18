@@ -18,7 +18,13 @@ const labels: Record<string, string> = {
   providerModelKindSpeech: 'Speech to text',
   providerModelKindTts: 'Text to speech',
   providerModelKindMusic: 'Music generation',
-  providerModelKindVideo: 'Video generation'
+  providerModelKindVideo: 'Video generation',
+  providerModelSearchPlaceholder: 'Search models',
+  providerModelBatchSelectVisible: 'Select page ({{count}})',
+  providerModelBatchClearVisible: 'Clear page selection',
+  providerModelBatchSelectedCount: '{{count}} selected',
+  providerModelBatchDelete: 'Delete selected ({{count}})',
+  providerModelBatchToggleRow: 'Select {{model}}'
 }
 
 function t(key: string, params?: Record<string, unknown>): string {
@@ -141,5 +147,23 @@ describe('ProviderModelsManager', () => {
     expect(html).toContain('Music generation')
     expect(html).toContain('MiniMax-Hailuo-2.3')
     expect(html).toContain('Video generation')
+  })
+
+  it('exposes batch-selection toolbar with a per-row checkbox once the list paginates', () => {
+    // 9 entries crosses the MODEL_LIST_PAGE_SIZE = 8 threshold so the toolbar
+    // and per-row checkboxes show up. Below the threshold both stay hidden to
+    // avoid noise on tiny lists.
+    const html = renderManager(provider({
+      models: ['m1', 'm2', 'm3', 'm4', 'm5', 'm6', 'm7', 'm8', 'm9']
+    }))
+    expect(html).toContain('Select page (8)')
+    expect(html).toContain('type="checkbox"')
+    expect(html).toContain('Select m1')
+  })
+
+  it('keeps the batch toolbar and checkboxes hidden for short model lists', () => {
+    const html = renderManager(provider({ models: ['m1', 'm2'] }))
+    expect(html).not.toContain('Select page')
+    expect(html).not.toContain('type="checkbox"')
   })
 })

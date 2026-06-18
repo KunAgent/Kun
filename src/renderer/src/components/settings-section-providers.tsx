@@ -65,6 +65,10 @@ import {
 } from './settings-controls'
 import { classifyProviderModelIds, providerModelListEntries } from './provider-model-editor'
 import { ProviderModelsManager } from './settings-section-provider-models'
+import {
+  ProviderModelImportDialog,
+  type ProviderModelImportResult
+} from './provider-model-import-dialog'
 
 const MODEL_ENDPOINT_FORMAT_LABEL_KEYS: Record<ModelEndpointFormat, string> = {
   chat_completions: 'modelEndpointChatCompletions',
@@ -484,6 +488,13 @@ export function ProvidersSettingsSection({ ctx }: { ctx: Record<string, any> }):
     }
   }, [addMenuOpen])
   const [probeStates, setProbeStates] = useState<Record<string, ProbeState>>({})
+  // Pending import dialog: when /v1/models returns hundreds of entries we want
+  // the user to choose which ones to keep instead of dropping the whole list
+  // into settings and forcing them to delete unwanted models one-by-one (#397).
+  const [pendingImport, setPendingImport] = useState<
+    | { providerId: string; modelIds: string[]; latencyMs?: number }
+    | null
+  >(null)
   // 新增供应商先停留在本地草稿,点「添加」才写入设置,避免半配置状态被持久化。
   const [draftProvider, setDraftProvider] = useState<ModelProviderProfileV1 | null>(null)
   const displayProviders = draftProvider ? [...modelProviders, draftProvider] : modelProviders
@@ -850,55 +861,21 @@ export function ProvidersSettingsSection({ ctx }: { ctx: Record<string, any> }):
       return
     }
     if (mode === 'fetch') {
-      const modelGroups = classifyProviderModelIds(target, result.modelIds)
-      const nextChatModels = mergeProviderModelIds(target.models, modelGroups.chat)
-      const nextImageModels = target.image
-        ? mergeProviderModelIds(target.image.models, modelGroups.image)
-        : modelGroups.image
-      const nextSpeechModels = target.speech
-        ? mergeProviderModelIds(target.speech.models, modelGroups.speech)
-        : modelGroups.speech
-      const nextTextToSpeechModels = target.textToSpeech
-        ? mergeProviderModelIds(target.textToSpeech.models, modelGroups.tts)
-        : modelGroups.tts
-      const nextMusicModels = target.music
-        ? mergeProviderModelIds(target.music.models, modelGroups.music)
-        : modelGroups.music
-      const nextVideoModels = target.video
-        ? mergeProviderModelIds(target.video.models, modelGroups.video)
-        : modelGroups.video
-      const added =
-        addedModelCount(target.models, nextChatModels)
-        + addedModelCount(target.image?.models ?? [], nextImageModels)
-        + addedModelCount(target.speech?.models ?? [], nextSpeechModels)
-        + addedModelCount(target.textToSpeech?.models ?? [], nextTextToSpeechModels)
-        + addedModelCount(target.music?.models ?? [], nextMusicModels)
-        + addedModelCount(target.video?.models ?? [], nextVideoModels)
-      if (added > 0) {
-        patchProviderProfile(target, (item) => ({
-          ...item,
-          models: nextChatModels,
-          ...(nextImageModels.length > 0
-            ? { image: { ...(item.image ?? presetImageCapability(item.id) ?? defaultImageCapability(item.baseUrl)), models: nextImageModels } }
-            : {}),
-          ...(nextSpeechModels.length > 0
-            ? { speech: { ...(item.speech ?? presetSpeechCapability(item) ?? defaultSpeechCapability(item.baseUrl)), models: nextSpeechModels } }
-            : {}),
-          ...(nextTextToSpeechModels.length > 0
-            ? { textToSpeech: { ...(item.textToSpeech ?? presetTextToSpeechCapability(item) ?? defaultTextToSpeechCapability(item.baseUrl)), models: nextTextToSpeechModels } }
-            : {}),
-          ...(nextMusicModels.length > 0
-            ? { music: { ...(item.music ?? presetMusicCapability(item) ?? defaultMusicCapability(item.baseUrl)), models: nextMusicModels } }
-            : {}),
-          ...(nextVideoModels.length > 0
-            ? { video: { ...(item.video ?? presetVideoCapability(item) ?? defaultVideoCapability(item.baseUrl)), models: nextVideoModels } }
-            : {})
-        }))
-      }
       setProbeStates((prev) => ({
         ...prev,
-        [target.id]: { fingerprint, mode, status: 'ok', latencyMs: result.latencyMs, total: added }
+        [target.id]: {
+          fingerprint,
+          mode,
+          status: 'ok',
+          latencyMs: result.latencyMs,
+          total: result.modelIds.length
+        }
       }))
+      setPendingImport({
+        providerId: target.id,
+        modelIds: [...result.modelIds],
+        latencyMs: result.latencyMs
+      })
       return
     }
     setProbeStates((prev) => ({
@@ -911,6 +888,61 @@ export function ProvidersSettingsSection({ ctx }: { ctx: Record<string, any> }):
         total: result.modelIds.length
       }
     }))
+  }
+
+  const importPickedModels = (target: ModelProviderProfileV1, picked: ProviderModelImportResult): void => {
+    const nextChatModels = mergeProviderModelIds(target.models, picked.chat)
+    const nextImageModels = target.image
+      ? mergeProviderModelIds(target.image.models, picked.image)
+      : picked.image
+    const nextSpeechModels = target.speech
+      ? mergeProviderModelIds(target.speech.models, picked.speech)
+      : picked.speech
+    const nextTextToSpeechModels = target.textToSpeech
+      ? mergeProviderModelIds(target.textToSpeech.models, picked.tts)
+      : picked.tts
+    const nextMusicModels = target.music
+      ? mergeProviderModelIds(target.music.models, picked.music)
+      : picked.music
+    const nextVideoModels = target.video
+      ? mergeProviderModelIds(target.video.models, picked.video)
+      : picked.video
+    const added =
+      addedModelCount(target.models, nextChatModels)
+      + addedModelCount(target.image?.models ?? [], nextImageModels)
+      + addedModelCount(target.speech?.models ?? [], nextSpeechModels)
+      + addedModelCount(target.textToSpeech?.models ?? [], nextTextToSpeechModels)
+      + addedModelCount(target.music?.models ?? [], nextMusicModels)
+      + addedModelCount(target.video?.models ?? [], nextVideoModels)
+    if (added > 0) {
+      patchProviderProfile(target, (item) => ({
+        ...item,
+        models: nextChatModels,
+        ...(nextImageModels.length > 0
+          ? { image: { ...(item.image ?? presetImageCapability(item.id) ?? defaultImageCapability(item.baseUrl)), models: nextImageModels } }
+          : {}),
+        ...(nextSpeechModels.length > 0
+          ? { speech: { ...(item.speech ?? presetSpeechCapability(item) ?? defaultSpeechCapability(item.baseUrl)), models: nextSpeechModels } }
+          : {}),
+        ...(nextTextToSpeechModels.length > 0
+          ? { textToSpeech: { ...(item.textToSpeech ?? presetTextToSpeechCapability(item) ?? defaultTextToSpeechCapability(item.baseUrl)), models: nextTextToSpeechModels } }
+          : {}),
+        ...(nextMusicModels.length > 0
+          ? { music: { ...(item.music ?? presetMusicCapability(item) ?? defaultMusicCapability(item.baseUrl)), models: nextMusicModels } }
+          : {}),
+        ...(nextVideoModels.length > 0
+          ? { video: { ...(item.video ?? presetVideoCapability(item) ?? defaultVideoCapability(item.baseUrl)), models: nextVideoModels } }
+          : {})
+      }))
+    }
+    setProbeStates((prev) => {
+      const previous = prev[target.id]
+      if (!previous) return prev
+      return {
+        ...prev,
+        [target.id]: { ...previous, total: added }
+      }
+    })
   }
 
   const providerKindLabel = (item: ModelProviderProfileV1): string => {
@@ -1066,7 +1098,12 @@ export function ProvidersSettingsSection({ ctx }: { ctx: Record<string, any> }):
     )
   }
 
+  const pendingImportProvider = pendingImport
+    ? displayProviders.find((item) => item.id === pendingImport.providerId)
+    : null
+
   return (
+    <>
     <SettingsCard title={t('providers')}>
       <SettingRow
         title={t('providers')}
@@ -1667,5 +1704,18 @@ export function ProvidersSettingsSection({ ctx }: { ctx: Record<string, any> }):
         }
       />
     </SettingsCard>
+    {pendingImport && pendingImportProvider ? (
+      <ProviderModelImportDialog
+        provider={pendingImportProvider}
+        fetchedModelIds={pendingImport.modelIds}
+        t={t}
+        onCancel={() => setPendingImport(null)}
+        onConfirm={(picked) => {
+          importPickedModels(pendingImportProvider, picked)
+          setPendingImport(null)
+        }}
+      />
+    ) : null}
+    </>
   )
 }

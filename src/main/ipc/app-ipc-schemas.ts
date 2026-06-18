@@ -259,7 +259,11 @@ const modelProviderPatchSchema = z.object({
     apiKey: z.string().max(MAX_BODY_BYTES).optional(),
     baseUrl: z.string().trim().max(MAX_URL_LENGTH).optional(),
     endpointFormat: modelEndpointFormatSchema.optional(),
-    models: z.array(z.string().trim().min(1).max(128)).max(200).optional(),
+    // Some third-party aggregators (litellm, oneapi, …) advertise 500+ chat
+    // models in a single /v1/models response. The previous 200/50 caps caused
+    // settings:set to silently fail with no toast (#397). Raised to leave
+    // plenty of headroom while still bounding pathological payloads.
+    models: z.array(z.string().trim().min(1).max(128)).max(2000).optional(),
     // 兼容旧版保存的视觉识别能力字段。当前能力已经迁移到 modelProfiles 的 inputModalities/messageParts。
     imageRecognition: z.unknown().optional(),
     modelProfiles: z.record(
@@ -269,27 +273,27 @@ const modelProviderPatchSchema = z.object({
     image: z.object({
       protocol: imageGenerationProtocolSchema.optional(),
       baseUrl: z.string().trim().max(MAX_URL_LENGTH).optional(),
-      models: z.array(z.string().trim().min(1).max(128)).max(50).optional()
+      models: z.array(z.string().trim().min(1).max(128)).max(500).optional()
     }).strict().nullable().optional(),
     speech: z.object({
       protocol: speechToTextProtocolSchema.optional(),
       baseUrl: z.string().trim().max(MAX_URL_LENGTH).optional(),
-      models: z.array(z.string().trim().min(1).max(128)).max(50).optional()
+      models: z.array(z.string().trim().min(1).max(128)).max(500).optional()
     }).strict().nullable().optional(),
     textToSpeech: z.object({
       protocol: textToSpeechProtocolSchema.optional(),
       baseUrl: z.string().trim().max(MAX_URL_LENGTH).optional(),
-      models: z.array(z.string().trim().min(1).max(128)).max(50).optional()
+      models: z.array(z.string().trim().min(1).max(128)).max(500).optional()
     }).strict().nullable().optional(),
     music: z.object({
       protocol: musicGenerationProtocolSchema.optional(),
       baseUrl: z.string().trim().max(MAX_URL_LENGTH).optional(),
-      models: z.array(z.string().trim().min(1).max(128)).max(50).optional()
+      models: z.array(z.string().trim().min(1).max(128)).max(500).optional()
     }).strict().nullable().optional(),
     video: z.object({
       protocol: videoGenerationProtocolSchema.optional(),
       baseUrl: z.string().trim().max(MAX_URL_LENGTH).optional(),
-      models: z.array(z.string().trim().min(1).max(128)).max(50).optional()
+      models: z.array(z.string().trim().min(1).max(128)).max(500).optional()
     }).strict().nullable().optional()
   }).strict()).max(50).optional()
 }).strict()

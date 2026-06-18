@@ -1,4 +1,4 @@
-import { useState, type ReactElement, type ReactNode } from 'react'
+import { useEffect, useState, type ReactElement, type ReactNode } from 'react'
 import {
   AudioLines,
   Brain,
@@ -282,6 +282,13 @@ export function ProviderModelsManager({
   const [editor, setEditor] = useState<EditorState | null>(null)
   const [query, setQuery] = useState('')
   const [page, setPage] = useState(0)
+  // Batch selection for bulk delete (#397). Survives search/page changes so a
+  // user can search, select-all-visible, search again, select-all-visible, then
+  // delete. Reset when the user navigates to a different provider.
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  useEffect(() => {
+    setSelected(new Set())
+  }, [provider.id])
 
   const updateForm = (patch: Partial<ProviderModelForm>): void => {
     setEditor((prev) => prev ? { ...prev, form: { ...prev.form, ...patch } } : prev)
@@ -302,6 +309,23 @@ export function ProviderModelsManager({
         ? null
         : prev
     )
+    const key = modelEntryKey(kind, modelId)
+    setSelected((prev) => {
+      if (!prev.has(key)) return prev
+      const next = new Set(prev)
+      next.delete(key)
+      return next
+    })
+  }
+
+  const toggleSelected = (kind: ProviderModelKind, modelId: string): void => {
+    const key = modelEntryKey(kind, modelId)
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
   }
 
   const modelEntries = providerModelListEntries(provider)
@@ -317,6 +341,40 @@ export function ProviderModelsManager({
   const visibleEntries = showListTools
     ? filteredEntries.slice(safePage * MODEL_LIST_PAGE_SIZE, safePage * MODEL_LIST_PAGE_SIZE + MODEL_LIST_PAGE_SIZE)
     : filteredEntries
+  const allVisibleSelected =
+    visibleEntries.length > 0 &&
+    visibleEntries.every(({ kind, modelId }) => selected.has(modelEntryKey(kind, modelId)))
+  const selectVisible = (): void => {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      for (const { kind, modelId } of visibleEntries) next.add(modelEntryKey(kind, modelId))
+      return next
+    })
+  }
+  const clearVisible = (): void => {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      for (const { kind, modelId } of visibleEntries) next.delete(modelEntryKey(kind, modelId))
+      return next
+    })
+  }
+  const deleteSelected = (): void => {
+    if (selected.size === 0) return
+    let next = provider
+    for (const { kind, modelId } of modelEntries) {
+      if (selected.has(modelEntryKey(kind, modelId))) {
+        next = removeProviderModel(next, kind, modelId)
+      }
+    }
+    if (next !== provider) onChange(next)
+    setSelected(new Set())
+    setEditor((prev) =>
+      prev?.mode === 'edit' &&
+      selected.has(modelEntryKey(prev.form.kind, prev.form.originalModelId))
+        ? null
+        : prev
+    )
+  }
   const effectiveForm = editor ? effectiveFormForEditor(editor) : null
   const errors = editor && effectiveForm ? validateProviderModelForm(effectiveForm, provider) : []
   const showNonTextWarning = Boolean(effectiveForm && chatModelIdLooksNonText(effectiveForm))
@@ -355,6 +413,36 @@ export function ProviderModelsManager({
               />
             </div>
           ) : null}
+          {showListTools && visibleEntries.length > 0 ? (
+            <div className="flex flex-wrap items-center justify-between gap-1.5">
+              <div className="flex flex-wrap items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={allVisibleSelected ? clearVisible : selectVisible}
+                  className="inline-flex h-7 items-center gap-1.5 rounded-full border border-ds-border bg-ds-card px-2.5 text-[12px] font-medium text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink"
+                >
+                  {allVisibleSelected
+                    ? t('providerModelBatchClearVisible')
+                    : t('providerModelBatchSelectVisible', { count: visibleEntries.length })}
+                </button>
+                {selected.size > 0 ? (
+                  <span className="text-[12px] text-ds-faint">
+                    {t('providerModelBatchSelectedCount', { count: selected.size })}
+                  </span>
+                ) : null}
+              </div>
+              {selected.size > 0 ? (
+                <button
+                  type="button"
+                  onClick={deleteSelected}
+                  className="inline-flex h-7 items-center gap-1.5 rounded-full border border-red-300/70 bg-red-50/80 px-3 text-[12px] font-semibold text-red-700 transition hover:bg-red-100 dark:border-red-800/60 dark:bg-red-950/40 dark:text-red-200 dark:hover:bg-red-900/40"
+                >
+                  <Trash2 className="h-3 w-3" strokeWidth={2} />
+                  {t('providerModelBatchDelete', { count: selected.size })}
+                </button>
+              ) : null}
+            </div>
+          ) : null}
           {filteredEntries.length === 0 ? (
             <p className="rounded-xl border border-dashed border-ds-border-muted px-3 py-3 text-[12.5px] text-ds-faint">
               {t('providerModelSearchEmpty', { query: query.trim() })}
@@ -364,13 +452,27 @@ export function ProviderModelsManager({
               {visibleEntries.map(({ kind, modelId }) => {
                 const profile = kind === 'chat' ? chatModelProfile(provider, modelId) : undefined
                 const active = editingKey !== '' && editingKey === modelEntryKey(kind, modelId)
+                const isSelected = selected.has(modelEntryKey(kind, modelId))
                 return (
                   <li
                     key={modelEntryKey(kind, modelId)}
                     className={`flex items-start gap-2 rounded-xl border px-3 py-2 ${
-                      active ? 'border-accent/60 bg-ds-main/45 ring-1 ring-accent/30' : 'border-ds-border bg-ds-card'
+                      active
+                        ? 'border-accent/60 bg-ds-main/45 ring-1 ring-accent/30'
+                        : isSelected
+                          ? 'border-accent/40 bg-ds-main/35'
+                          : 'border-ds-border bg-ds-card'
                     }`}
                   >
+                    {showListTools ? (
+                      <input
+                        type="checkbox"
+                        className="mt-1 h-3.5 w-3.5 shrink-0 accent-accent"
+                        aria-label={t('providerModelBatchToggleRow', { model: modelId })}
+                        checked={isSelected}
+                        onChange={() => toggleSelected(kind, modelId)}
+                      />
+                    ) : null}
                     <span className="grid min-w-0 flex-1 gap-1.5">
                       <ModelName modelId={modelId} />
                       <span className="flex min-w-0 flex-wrap items-center gap-1">
