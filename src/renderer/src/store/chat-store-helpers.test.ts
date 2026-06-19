@@ -1,10 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ClawImChannelV1 } from '@shared/app-settings'
+import type { ModelProviderModelGroup } from '@shared/kun-gui-api'
 import { CLAW_MANAGED_INSTRUCTIONS_HEADING } from '@shared/app-settings'
 import {
   MAX_TURN_MODEL_LABELS,
   MAX_THREAD_COMPOSER_SELECTIONS,
   MAX_CODE_WORKSPACE_ROOTS,
+  DEFAULT_COMPOSER_CONTEXT_WINDOW_TOKENS,
   clawThreadIdsFromChannels,
   clawThreadTitleLooksManaged,
   compactCodeWorkspaceRoots,
@@ -18,7 +20,8 @@ import {
   readThreadComposerSelection,
   reconcileCodeWorkspaceRoots,
   rememberThreadComposerSelection,
-  rememberTurnModel
+  rememberTurnModel,
+  resolveComposerContextWindowTokens
 } from './chat-store-helpers'
 
 const TURN_MODEL_STORAGE_KEY = 'kun.turnModelLabel'
@@ -207,6 +210,67 @@ describe('chat-store Claw helpers', () => {
     expect(fallbackComposerModel(pick, 'missing-model')).toBe('deepseek-v4-pro')
     expect(fallbackComposerModel(['a-model'], '')).toBe('a-model')
     expect(fallbackComposerModel([], '')).toBe('')
+  })
+
+  it('resolves context windows from the selected provider model profile', () => {
+    const modelGroups: ModelProviderModelGroup[] = [
+      {
+        providerId: 'other',
+        label: 'Other',
+        modelIds: ['glm-4.5'],
+        modelProfiles: {
+          'glm-4.5': {
+            contextWindowTokens: 256_000,
+            inputModalities: ['text'],
+            outputModalities: ['text'],
+            supportsToolCalling: true,
+            messageParts: ['text']
+          }
+        }
+      },
+      {
+        providerId: 'zhipu',
+        label: 'Zhipu',
+        modelIds: ['glm-4.5'],
+        modelProfiles: {
+          'glm-4.5': {
+            contextWindowTokens: 200_000,
+            inputModalities: ['text'],
+            outputModalities: ['text'],
+            supportsToolCalling: true,
+            messageParts: ['text']
+          }
+        }
+      }
+    ]
+
+    expect(resolveComposerContextWindowTokens(modelGroups, 'glm-4.5', 'zhipu')).toBe(200_000)
+  })
+
+  it('falls back to 128k when the selected model lacks a configured window', () => {
+    const modelGroups: ModelProviderModelGroup[] = [
+      {
+        providerId: 'custom',
+        label: 'Custom',
+        modelIds: ['custom-model'],
+        modelProfiles: {
+          'custom-model': {
+            inputModalities: ['text'],
+            outputModalities: ['text'],
+            supportsToolCalling: true,
+            messageParts: ['text']
+          }
+        }
+      }
+    ]
+
+    expect(resolveComposerContextWindowTokens(modelGroups, 'custom-model', 'custom')).toBe(
+      DEFAULT_COMPOSER_CONTEXT_WINDOW_TOKENS
+    )
+    expect(resolveComposerContextWindowTokens(modelGroups, 'missing-model', 'custom')).toBe(
+      DEFAULT_COMPOSER_CONTEXT_WINDOW_TOKENS
+    )
+    expect(resolveComposerContextWindowTokens(modelGroups, '', 'custom')).toBeUndefined()
   })
 
   it('normalizes and caps persisted turn model labels', () => {

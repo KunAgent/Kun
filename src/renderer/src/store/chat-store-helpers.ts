@@ -30,6 +30,7 @@ const CODE_WORKSPACE_ROOTS_STORAGE_KEY = 'kun.codeWorkspaceRoots.v1'
 export const MAX_CODE_WORKSPACE_ROOTS = 30
 export const MAX_THREAD_COMPOSER_SELECTIONS = 500
 export const MAX_TURN_MODEL_LABELS = 500
+export const DEFAULT_COMPOSER_CONTEXT_WINDOW_TOKENS = 128_000
 
 export type ThreadComposerSelection = {
   model: string
@@ -118,6 +119,19 @@ export function providerIdForComposerModel(
   const model = modelId.trim()
   if (!model) return ''
   return modelGroups.find((group) => modelGroupHasModel(group, model))?.providerId ?? ''
+}
+
+export function resolveComposerContextWindowTokens(
+  modelGroups: readonly ModelProviderModelGroup[],
+  modelId: string,
+  providerId: string
+): number | undefined {
+  if (!modelId.trim()) return undefined
+  const profile = modelProfileForComposerSelection(modelGroups, modelId, providerId)
+  if (typeof profile?.contextWindowTokens === 'number' && profile.contextWindowTokens > 0) {
+    return profile.contextWindowTokens
+  }
+  return DEFAULT_COMPOSER_CONTEXT_WINDOW_TOKENS
 }
 
 export function canSwitchComposerModel(

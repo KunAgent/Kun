@@ -27,7 +27,11 @@ import type { CoreRuntimeInfoJson, CoreRuntimeSkillJson } from '../agent/kun-con
 import { getProvider } from '../agent/registry'
 import { rendererRuntimeClient } from '../agent/runtime-client'
 import { useChatStore } from '../store/chat-store'
-import { isClawThread, providerIdForComposerModel } from '../store/chat-store-helpers'
+import {
+  isClawThread,
+  providerIdForComposerModel,
+  resolveComposerContextWindowTokens
+} from '../store/chat-store-helpers'
 import { threadHasPendingRuntimeWork } from '../store/chat-store-runtime-helpers'
 import {
   extractLatestTurnAutoOpenDevPreviewUrls,
@@ -973,6 +977,13 @@ export function Workbench(): ReactElement {
     }
     return false
   }, [composerModelGroups, runtimeInfo, selectedComposerModel, selectedComposerProviderId])
+  const selectedContextWindowTokens = useMemo(() => {
+    return resolveComposerContextWindowTokens(
+      composerModelGroups,
+      selectedComposerModel,
+      selectedComposerProviderId
+    )
+  }, [composerModelGroups, selectedComposerModel, selectedComposerProviderId])
 
   const attachmentUploadEnabled = isChatAttachmentUploadEnabled({
     runtimeConnection,
@@ -2614,7 +2625,7 @@ export function Workbench(): ReactElement {
                 busy={busy}
                 runtimeReady={runtimeConnection === 'ready'}
                 hasActiveThread={Boolean(activeThreadId)}
-                contextWindowTokens={runtimeInfo?.capabilities.model.contextWindowTokens}
+                contextWindowTokens={selectedContextWindowTokens}
                 runtimeToolCount={
                   runtimeInfo
                     ? runtimeInfo.capabilities.mcp.search?.active
