@@ -109,6 +109,7 @@ import {
   removeUiPlugin
 } from '../services/ui-plugin-service'
 import { ensureBundledUiPlugins } from '../ui-plugin-bundled'
+import { ensureBundledSkills } from '../skill-bundled'
 import {
   createWorkspaceDirectory,
   createWorkspaceFile,
@@ -339,6 +340,8 @@ function runDesktopCommand(
 }
 
 export function registerAppIpcHandlers(options: RegisterAppIpcHandlersOptions): void {
+  // Seed the built-in "design system & craft" skill into ~/.kun/skills/ once.
+  void ensureBundledSkills(join(homedir(), '.kun'))
   const {
     store,
     getMainWindow,
