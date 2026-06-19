@@ -1004,7 +1004,7 @@ export function SddDraftHistoryRows({
   )
 }
 
-function ThreadRow({
+export function ThreadRow({
   thread,
   worktreeRecord,
   active,
@@ -1078,13 +1078,6 @@ function ThreadRow({
       onContextMenu={onContextMenu}
     >
       <span className="flex min-w-0 flex-1 items-center gap-1.5">
-        <span
-          className={`min-w-0 flex-1 truncate text-[13.5px] leading-5 ${
-            showUnreadDot && !active ? 'font-semibold text-ds-ink' : 'text-ds-ink'
-          }`}
-        >
-          {thread.title}
-        </span>
         {worktreeRecord ? (
           <span
             className="inline-grid h-5 w-5 shrink-0 place-items-center rounded-full border border-ds-border-muted bg-ds-card/80 text-ds-muted"
@@ -1094,7 +1087,14 @@ function ThreadRow({
             <GitBranch className="h-3 w-3" strokeWidth={1.8} />
           </span>
         ) : null}
-        <span className={`ml-auto flex shrink-0 items-center gap-1.5 transition ${
+        <span
+          className={`min-w-0 flex-1 truncate text-[13.5px] leading-5 ${
+            showUnreadDot && !active ? 'font-semibold text-ds-ink' : 'text-ds-ink'
+          }`}
+        >
+          {thread.title}
+        </span>
+        <span className={`ml-auto flex min-w-[3.75rem] shrink-0 items-center justify-end gap-1.5 transition ${
           deleting ? 'opacity-0' : 'group-hover:opacity-0 group-focus-within:opacity-0'
         }`}>
           <span className="shrink-0 text-right text-[12px] leading-4 text-ds-faint tabular-nums">
