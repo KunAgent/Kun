@@ -119,6 +119,51 @@ describe('registerAppIpcHandlers', () => {
     expect(applySettingsPatch).toHaveBeenCalledWith(payload)
   })
 
+  it('accepts telegram phone connection settings patches', async () => {
+    const { registerAppIpcHandlers } = await import('./register-app-ipc-handlers')
+    const applySettingsPatch = vi.fn(async () => settings())
+
+    registerAppIpcHandlers(registerOptions({ applySettingsPatch }))
+
+    const payload = {
+      claw: {
+        enabled: true,
+        im: { enabled: true, workspaceRoot: '' },
+        channels: [{
+          id: 'telegram_1',
+          provider: 'telegram' as const,
+          label: 'telegram agent',
+          enabled: true,
+          model: 'auto',
+          threadId: '',
+          workspaceRoot: '',
+          agentProfile: {
+            name: 'telegram agent',
+            description: '',
+            identity: '',
+            personality: '',
+            userContext: '',
+            replyRules: ''
+          },
+          platformCredential: {
+            kind: 'telegram' as const,
+            botToken: '123456:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghi',
+            allowedChatIds: '123456789',
+            botUsername: 'kun_test_bot',
+            createdAt: '2026-06-19T00:00:00.000Z'
+          },
+          conversations: [],
+          createdAt: '2026-06-19T00:00:00.000Z',
+          updatedAt: '2026-06-19T00:00:00.000Z'
+        }]
+      }
+    }
+
+    const handler = handlers.get('settings:set')
+    await expect(handler?.({}, payload)).resolves.toEqual(settings())
+    expect(applySettingsPatch).toHaveBeenCalledWith(payload)
+  })
+
   it('restarts the managed runtime through the restart IPC handler', async () => {
     const { registerAppIpcHandlers } = await import('./register-app-ipc-handlers')
     const restartRuntime = vi.fn(async () => undefined)

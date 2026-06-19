@@ -78,6 +78,7 @@ import {
   stopWeixinBridgeRuntime
 } from './weixin-bridge-runtime'
 import { webhookUrl } from './claw-runtime-helpers'
+import { createTelegramRuntime, type TelegramRuntime, verifyTelegramBotToken } from './telegram-runtime'
 import { isKunHealthResponseBody } from './kun-health'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -200,6 +201,7 @@ let store: JsonSettingsStore
 let logDir = ''
 let clawRuntime: ClawRuntime | null = null
 let scheduleRuntime: ScheduleRuntime | null = null
+let telegramRuntime: TelegramRuntime | null = null
 let managedRuntimesStoppedForQuit = false
 let managedRuntimesStopPromise: Promise<void> | null = null
 let appBehavior: AppBehaviorConfigV1 = normalizeAppBehaviorSettings()
@@ -230,6 +232,7 @@ async function stopManagedRuntimes(): Promise<void> {
     managedRuntimesStopPromise = (async () => {
       scheduleRuntime?.stop()
       clawRuntime?.stop()
+      telegramRuntime?.stop()
       stopWeixinBridgeRuntime()
       await kunRuntimeAdapter.stopAndWait()
     })().finally(() => {
@@ -1421,6 +1424,14 @@ app.whenReady().then(async () => {
   traceStartup('logger configured')
   scheduleRuntime = createScheduleRuntime({ store, runtimeRequest, logError, powerSaveBlocker })
   scheduleRuntime.sync(initial)
+  // Telegram runtime is created first so ClawRuntime can reference it via deps.
+  // The onInbound callback closes over the module-level clawRuntime, which is
+  // assigned on the next line — by the time an update arrives the reference is set.
+  telegramRuntime = createTelegramRuntime({
+    store,
+    logError,
+    onInbound: (payload) => clawRuntime?.handleTelegramUpdate(payload)
+  })
   clawRuntime = createClawRuntime({
     store,
     runtimeRequest,
@@ -1428,10 +1439,15 @@ app.whenReady().then(async () => {
     notifyChannelActivity: emitClawChannelActivity,
     sendWeixinBridgeMessage,
     resolveWeixinAccountUserId: getWeixinBridgeAccountUserId,
+    telegramRuntime,
     createScheduledTaskFromText: (text, options) =>
       scheduleRuntime?.createScheduledTaskFromText(text, options) ?? Promise.resolve({ kind: 'noop' })
   })
   clawRuntime.sync(initial)
+  // ClawRuntime.sync delegates Telegram reconciliation to telegramRuntime.sync,
+  // so the long-poll loops start as part of the call above. The explicit sync
+  // here is a no-op when settings are unchanged, kept for clarity.
+  telegramRuntime.sync(initial)
   configureWeixinBridgeRuntimeContextProvider(async () => {
     const settings = await store.load()
     const channel = settings.claw.channels.find((item) => item.enabled && item.provider === 'weixin')

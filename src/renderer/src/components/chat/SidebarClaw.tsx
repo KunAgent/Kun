@@ -152,6 +152,7 @@ export function ClawSidebarContent({
 
 export function clawProviderDisplayLabel(provider: ClawImChannelV1['provider']): string {
   if (provider === 'weixin') return 'WeChat'
+  if (provider === 'telegram') return 'Telegram'
   return 'Feishu / Lark'
 }
 
@@ -184,6 +185,30 @@ export function ClawProviderLogo({
         <circle cx="12.6" cy="14.9" r="0.62" fill="white" />
         <circle cx="16.2" cy="14.9" r="0.62" fill="white" />
       </svg>
+    )
+  }
+  if (provider === 'telegram') {
+    return (
+      <span
+        className={`inline-flex items-center justify-center rounded-full bg-[#27A7E7] text-white ${className}`}
+        aria-hidden="true"
+      >
+        <svg
+          className="h-[62%] w-[62%] -translate-x-[4%]"
+          viewBox="0 0 24 24"
+          fill="none"
+          focusable="false"
+        >
+          <path
+            d="M18.42 6.92 6.76 11.6c-.8.34-.8.82-.15 1.02l2.99.93.68 2.32c.09.24.04.34.29.34.2 0 .28-.09.39-.2l1.46-1.41 3.04 2.25c.56.31.96.15 1.1-.52l1.98-9.72c.18-.83-.32-1.2-.98-.89Z"
+            fill="white"
+          />
+          <path
+            d="m11.96 15.08-.24-2.05 3.75-3.4c.17-.15-.04-.24-.27-.1l-4.66 2.95-2.06-.64c-.45-.14-.46-.46.1-.68l7.94-3.19c.38-.15.71.09.58.68L15.77 15c-.08.46-.33.57-.69.37l-3.12-2.29Z"
+            fill="#DFF4FF"
+          />
+        </svg>
+      </span>
     )
   }
   return (

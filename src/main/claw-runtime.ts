@@ -77,10 +77,12 @@ import {
 } from './claw-runtime-helpers'
 import { getRuntimeBaseUrlForSettings, runtimeAuthHeaders } from './runtime/kun-adapter'
 import { FeishuStreamer } from './feishu-streamer'
+import type { TelegramInboundPayload } from './telegram-runtime'
 
 const MAX_IM_FILE_UPLOAD_BYTES = 50 * 1024 * 1024
 const CLAW_IM_APPROVAL_POLICY = 'auto'
 const CLAW_IM_SANDBOX_MODE = 'danger-full-access'
+const CLAW_TELEGRAM_INBOUND_IMAGE_HEADING = '[Telegram inbound message]'
 
 type FeishuClawChannel = ClawImChannelV1 & {
   platformCredential: ClawImFeishuPlatformCredentialV1
@@ -440,6 +442,17 @@ export class ClawRuntime {
     this.syncWebhook(settings)
     void this.syncFeishuChannels(settings)
     void this.syncWeixinConnectWelcomes(settings)
+    this.syncTelegramChannels(settings)
+  }
+
+  /**
+   * Delegates Telegram channel reconciliation to the dedicated long-polling
+   * runtime. Unlike Feishu (which owns its SDK channels here), Telegram's
+   * connection state lives in {@link TelegramRuntime}; ClawRuntime only needs
+   * to tell it about the current settings and check `has()` for outbound pushes.
+   */
+  private syncTelegramChannels(settings: AppSettingsV1): void {
+    this.deps.telegramRuntime?.sync(settings)
   }
 
   /**
@@ -658,6 +671,58 @@ export class ClawRuntime {
     }
   }
 
+  /**
+   * Polls a turn to completion. Resolves with the turn's concluding
+   * text (never an intermediate plan) and any generated files.
+   */
+  private async waitForAssistantResult(
+    settings: AppSettingsV1,
+    threadId: string,
+    turnId: string,
+    timeoutMs: number,
+    workspaceRoot?: string
+  ): Promise<{
+    status: 'completed' | 'failed' | 'aborted' | 'timeout'
+    text: string
+    files: ClawGeneratedFileV1[]
+    error?: string
+  }> {
+    const deadline = Date.now() + timeoutMs
+    while (Date.now() < deadline) {
+      await sleep(1_500)
+      const detailRes = await this.deps.runtimeRequest(
+        settings,
+        `/v1/threads/${encodeURIComponent(threadId)}`,
+        { method: 'GET' }
+      )
+      if (!detailRes.ok) {
+        throw new Error(runtimeErrorMessage(detailRes, 'Failed to read thread result.'))
+      }
+      const detail = JSON.parse(detailRes.body) as ThreadDetailJson
+      const targetTurn = Array.isArray(detail.turns)
+        ? detail.turns.find((turn) => turn.id === turnId)
+        : undefined
+      if (!targetTurn) continue
+      if (isRunningStatus(targetTurn.status)) continue
+      if (targetTurn.status === 'failed' || targetTurn.status === 'aborted') {
+        return {
+          status: targetTurn.status,
+          text: '',
+          files: [],
+          error: targetTurn.error?.trim() || `Agent turn ${targetTurn.status}.`
+        }
+      }
+      if (targetTurn.status === 'completed') {
+        return {
+          status: 'completed',
+          text: finalAssistantReplyText(detail, { turnId }),
+          files: latestGeneratedFiles(detail, { turnId, workspaceRoot })
+        }
+      }
+    }
+    return { status: 'timeout', text: '', files: [] }
+  }
+
   private async subscribeSse(
     settings: AppSettingsV1,
     threadId: string,
@@ -781,61 +846,6 @@ export class ClawRuntime {
   }
 
   /**
-   * Polls a turn to completion. Resolves with the turn's *concluding*
-   * text (never an intermediate plan — see {@link finalAssistantReplyText})
-   * and any generated files. Non-throwing on a failed/aborted/timed-out
-   * turn so both the synchronous reply and the asynchronous push can
-   * decide what to send; still throws when the thread read itself fails.
-   */
-  private async waitForAssistantResult(
-    settings: AppSettingsV1,
-    threadId: string,
-    turnId: string,
-    timeoutMs: number,
-    workspaceRoot?: string
-  ): Promise<{
-    status: 'completed' | 'failed' | 'aborted' | 'timeout'
-    text: string
-    files: ClawGeneratedFileV1[]
-    error?: string
-  }> {
-    const deadline = Date.now() + timeoutMs
-    while (Date.now() < deadline) {
-      await sleep(1_500)
-      const detailRes = await this.deps.runtimeRequest(
-        settings,
-        `/v1/threads/${encodeURIComponent(threadId)}`,
-        { method: 'GET' }
-      )
-      if (!detailRes.ok) {
-        throw new Error(runtimeErrorMessage(detailRes, 'Failed to read thread result.'))
-      }
-      const detail = JSON.parse(detailRes.body) as ThreadDetailJson
-      const targetTurn = Array.isArray(detail.turns)
-        ? detail.turns.find((turn) => turn.id === turnId)
-        : undefined
-      if (!targetTurn) continue
-      if (isRunningStatus(targetTurn.status)) continue
-      if (targetTurn.status === 'failed' || targetTurn.status === 'aborted') {
-        return {
-          status: targetTurn.status,
-          text: '',
-          files: [],
-          error: targetTurn.error?.trim() || `Agent turn ${targetTurn.status}.`
-        }
-      }
-      if (targetTurn.status === 'completed') {
-        return {
-          status: 'completed',
-          text: finalAssistantReplyText(detail, { turnId }),
-          files: latestGeneratedFiles(detail, { turnId, workspaceRoot })
-        }
-      }
-    }
-    return { status: 'timeout', text: '', files: [] }
-  }
-
-  /**
    * Fire-and-forget delivery of a turn's result that outran the IM
    * response window. Keeps polling in the background and pushes the
    * concluding text (or a completion note) back over the bridge when the
@@ -856,7 +866,8 @@ export class ClawRuntime {
     if (!channel || !turnId) return
     const canPush =
       (channel.provider === 'weixin' && Boolean(this.deps.sendWeixinBridgeMessage)) ||
-      (channel.provider === 'feishu' && this.feishuChannels.has(channel.id))
+      (channel.provider === 'feishu' && this.feishuChannels.has(channel.id)) ||
+      (channel.provider === 'telegram' && Boolean(this.deps.telegramRuntime?.has(channel.id)))
     if (!canPush) return
     const key = `${input.threadId}:${turnId}`
     if (this.pendingResultPushes.has(key)) return
@@ -926,6 +937,19 @@ export class ClawRuntime {
         {},
         { purpose: 'agent-reply-delayed', channelId: channel.id, chatId: to }
       )
+      return
+    }
+    if (channel.provider === 'telegram') {
+      const to = remoteSession?.chatId.trim() || channel.remoteSession?.chatId.trim() || ''
+      if (!to || !this.deps.telegramRuntime) return
+      const result = await this.deps.telegramRuntime.sendMessage(channel.id, to, text)
+      if (!result.ok) {
+        this.deps.logError('claw-telegram', 'Failed to push delayed result over Telegram.', {
+          channelId: channel.id,
+          chatId: to,
+          message: result.message
+        })
+      }
     }
   }
 
@@ -1578,6 +1602,153 @@ export class ClawRuntime {
     direction: 'user' | 'assistant'
   ): Promise<{ ok: true } | { ok: false; message: string }> {
     return this.mirrorThreadMessageToIm(threadId, text, direction)
+  }
+
+  /**
+   * Entry point for inbound Telegram updates. The {@link TelegramRuntime}
+   * long-poll loop calls this with a normalized payload per private-chat
+   * message. Mirrors {@link handleFeishuMessage}: welcome, slash commands,
+   * scheduled-task detection, then the regular agent turn — but adapts to
+   * Telegram's chat-id/message-id scheme and image attachments.
+   */
+  async handleTelegramUpdate(payload: TelegramInboundPayload): Promise<void> {
+    const settings = await this.deps.store.load()
+    const channel = settings.claw.channels.find((item) => item.id === payload.channelId && item.enabled)
+    if (!channel || channel.provider !== 'telegram') return
+    if (!this.deps.telegramRuntime?.has(channel.id)) return
+
+    const remoteSession: IncomingRemoteSession = {
+      chatId: payload.chatId,
+      messageId: payload.messageId,
+      threadId: '',
+      senderId: payload.senderId,
+      senderName: payload.senderName
+    }
+    const conversation = this.findChannelConversation(channel, {
+      chatId: remoteSession.chatId,
+      threadId: remoteSession.threadId
+    })
+    const workspaceRoot = this.resolveIncomingWorkspaceRoot(settings, channel, conversation, remoteSession)
+    const text = payload.text.trim()
+    const localFilePath = payload.localFilePath?.trim() || ''
+
+    // First inbound on a freshly connected Telegram bot: send the intro
+    // ahead of the (slow) model reply, mirroring the WeChat/Feishu path.
+    const welcomeText = this.pendingWelcomeText(settings, channel)
+    if (welcomeText) {
+      this.welcomeInFlight.add(channel.id)
+      try {
+        const pushed = await this.pushTelegramWelcome(channel, remoteSession, welcomeText)
+        if (!pushed) {
+          // Fallback: prepend to the reply once the turn finishes.
+        }
+        await this.markChannelWelcomeSent(channel.id)
+      } catch (error) {
+        this.deps.logError('claw-telegram', 'Failed to send the Telegram welcome message; it will be retried on the next inbound message.', {
+          message: errorMessage(error),
+          channelId: channel.id,
+          chatId: remoteSession.chatId
+        })
+      } finally {
+        this.welcomeInFlight.delete(channel.id)
+      }
+    }
+
+    const commandReply = await this.handleIncomingImCommand(settings, {
+      text,
+      channel,
+      conversation,
+      remoteSession
+    })
+    if (commandReply !== null) {
+      await this.deps.telegramRuntime!.sendMessage(channel.id, remoteSession.chatId, commandReply)
+      return
+    }
+
+    const taskCreation = await this.deps.createScheduledTaskFromText?.(text, {
+      workspaceRoot: this.resolveChannelWorkspaceRoot(settings, channel),
+      clawChannelId: channel.id,
+      providerId: channel.providerId?.trim() || settings.claw.im.providerId?.trim() || null,
+      modelHint: channel.model,
+      mode: settings.claw.im.mode
+    }) ?? { kind: 'noop' as const }
+    if (taskCreation.kind === 'created') {
+      await this.deps.telegramRuntime!.sendMessage(channel.id, remoteSession.chatId, taskCreation.confirmationText)
+      return
+    }
+    if (taskCreation.kind === 'error') {
+      await this.deps.telegramRuntime!.sendMessage(channel.id, remoteSession.chatId, `Failed to create the scheduled task: ${taskCreation.message}`)
+      return
+    }
+
+    // Build the prompt: a heading for image/attachment context, then the user text.
+    // Image content is surfaced as a text note — full attachment upload into the
+    // Kun runtime attachment store is a follow-up. The downloaded file path is
+    // already on disk (in the OS temp dir) for future localFilePath wiring.
+    const promptText = localFilePath && !text
+      ? `${CLAW_TELEGRAM_INBOUND_IMAGE_HEADING}\nSender: ${payload.senderName}\n\n[image attachment]`
+      : localFilePath
+        ? `${CLAW_TELEGRAM_INBOUND_IMAGE_HEADING}\nSender: ${payload.senderName}\n\n${text}`
+        : text
+    if (!promptText.trim()) {
+      await this.deps.telegramRuntime!.sendMessage(channel.id, remoteSession.chatId, 'Only text and image messages are supported right now.')
+      return
+    }
+
+    const result = await this.processIncomingImPrompt(settings, {
+      prompt: promptText,
+      sender: payload.senderName,
+      provider: 'telegram',
+      channel,
+      conversation,
+      remoteSession
+    })
+    if (!result.ok) {
+      this.deps.logError('claw-telegram', 'Telegram inbound prompt failed.', {
+        channelId: channel.id,
+        chatId: remoteSession.chatId,
+        message: result.message
+      })
+      await this.deps.telegramRuntime!.sendMessage(channel.id, remoteSession.chatId, `❌ 处理失败：${result.message}`)
+      return
+    }
+    if (result.completed === false) {
+      // Turn outran the response window: ack now, push the real answer later.
+      this.scheduleImResultPush(settings, {
+        channel,
+        remoteSession,
+        threadId: result.threadId,
+        turnId: result.turnId,
+        workspaceRoot
+      })
+      await this.deps.telegramRuntime!.sendMessage(channel.id, remoteSession.chatId, IM_PROCESSING_ACK)
+      return
+    }
+    const reply = (result.text ?? '').trim() || IM_COMPLETED_NO_TEXT_REPLY
+    await this.deps.telegramRuntime!.sendMessage(channel.id, remoteSession.chatId, reply)
+  }
+
+  /**
+   * Pushes the one-time channel intro as its own Telegram bubble. Returns
+   * false when the channel cannot push (missing runtime/recipient) so the
+   * caller can fall back to prepending the text to the HTTP reply.
+   */
+  private async pushTelegramWelcome(
+    channel: ClawImChannelV1,
+    remoteSession: IncomingRemoteSession | undefined,
+    text: string
+  ): Promise<boolean> {
+    if (channel.provider !== 'telegram' || !this.deps.telegramRuntime) return false
+    const to = remoteSession?.chatId.trim() || channel.remoteSession?.chatId.trim() || ''
+    if (!to) return false
+    const result = await this.deps.telegramRuntime.sendMessage(channel.id, to, text)
+    if (!result.ok) {
+      this.deps.logError('claw-telegram', 'Failed to push the Telegram welcome message; prepending it to the reply instead.', {
+        channelId: channel.id,
+        message: result.message
+      })
+    }
+    return result.ok
   }
 
   private async handleFeishuMessage(channelId: string, message: NormalizedMessage): Promise<void> {

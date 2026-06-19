@@ -13,6 +13,7 @@ import type {
 } from '../shared/app-settings'
 import { CLAW_FEISHU_INBOUND_MESSAGE_HEADING } from '../shared/app-settings'
 import type { JsonSettingsStore } from './settings-store'
+import type { TelegramRuntime } from './telegram-runtime'
 
 export type RuntimeRequestResult = { ok: boolean; status: number; body: string }
 
@@ -34,6 +35,8 @@ export type ClawRuntimeDeps = {
   }) => Promise<{ ok: true; messageId: string } | { ok: false; message: string }>
   /** WeChat owner (`ilink_user_id`) for a bridge account; '' when unknown. */
   resolveWeixinAccountUserId?: (accountId: string) => Promise<string>
+  /** Telegram long-polling runtime. Absent when no Telegram channel is configured. */
+  telegramRuntime?: TelegramRuntime
   createScheduledTaskFromText?: (
     text: string,
     options?: {

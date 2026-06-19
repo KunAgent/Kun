@@ -9,6 +9,7 @@ import {
 export const SETTINGS_CHANGED_EVENT = 'kun:settings-changed'
 
 export function emitRendererSettingsChanged(settings: AppSettingsV1): void {
+  if (typeof window === 'undefined' || typeof window.dispatchEvent !== 'function') return
   window.dispatchEvent(new CustomEvent<AppSettingsV1>(SETTINGS_CHANGED_EVENT, { detail: settings }))
 }
 

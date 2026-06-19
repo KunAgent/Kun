@@ -209,7 +209,7 @@ const mcpSearchModeSchema = z.enum(['direct', 'search', 'auto'])
 const kunStorageBackendSchema = z.enum(['hybrid', 'file'])
 const kunCompactionSummaryModeSchema = z.enum(['heuristic', 'model'])
 const clawRunModeSchema = z.enum(['agent', 'plan'])
-const clawImProviderSchema = z.enum(['feishu', 'weixin'])
+const clawImProviderSchema = z.enum(['feishu', 'weixin', 'telegram'])
 const clawScheduleKindSchema = z.enum(['manual', 'interval', 'daily', 'at'])
 const clawTaskStatusSchema = z.enum(['idle', 'running', 'success', 'error'])
 const scheduleReasoningEffortSchema = z.enum(SCHEDULE_REASONING_EFFORT_IDS)
@@ -566,6 +566,13 @@ const clawImPlatformCredentialPatchSchema = z.union([
     kind: z.literal('weixin'),
     accountId: z.string().max(512).optional(),
     sessionKey: z.string().max(MAX_BODY_BYTES).optional(),
+    createdAt: z.string().max(128).optional()
+  }).strict(),
+  z.object({
+    kind: z.literal('telegram'),
+    botToken: z.string().max(MAX_BODY_BYTES).optional(),
+    allowedChatIds: z.string().max(MAX_CHANNEL_TEXT_LENGTH).optional(),
+    botUsername: z.string().trim().max(128).optional(),
     createdAt: z.string().max(128).optional()
   }).strict()
 ])
@@ -1136,6 +1143,13 @@ export const clawImInstallPollPayloadSchema = z
   .object({
     provider: clawImProviderSchema,
     deviceCode: trimmedString(MAX_DEVICE_CODE_LENGTH)
+  })
+  .strict()
+
+export const clawImTelegramTokenPayloadSchema = z
+  .object({
+    botToken: z.string().trim().min(1),
+    allowedChatIds: z.string().trim().optional().default('')
   })
   .strict()
 

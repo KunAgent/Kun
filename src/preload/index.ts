@@ -25,6 +25,8 @@ const api = {
     ipcRenderer.invoke('claw:im-install:qrcode', { provider, isLark: options?.isLark }),
   pollClawImInstall: (provider, deviceCode) =>
     ipcRenderer.invoke('claw:im-install:poll', { provider, deviceCode }),
+  connectTelegramBot: (botToken, allowedChatIds) =>
+    ipcRenderer.invoke('claw:im-install:telegram-token', { botToken, allowedChatIds }),
   pickWorkspaceDirectory: (defaultPath) =>
     ipcRenderer.invoke('workspace:pick-directory', defaultPath),
   confirmDialog: (options) =>

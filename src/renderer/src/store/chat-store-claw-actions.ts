@@ -11,6 +11,7 @@ import { rendererRuntimeClient } from '../agent/runtime-client'
 import type { ChatState, ChatStoreGet, ChatStoreSet } from './chat-store-types'
 import type { ChatBlock, NormalizedThread } from '../agent/types'
 import { clawThreadTitleLooksManaged, clawThreadIdsFromChannels } from './chat-store-helpers'
+import { emitRendererSettingsChanged } from '../lib/keyboard-shortcut-settings'
 
 type ClawAgentProviderLike = {
   createThread: (input: { workspace: string; title: string; mode: 'agent' | 'plan' }) => Promise<NormalizedThread>
@@ -283,6 +284,7 @@ export function createClawActions(options: CreateClawActionsOptions): Pick<
             channels
           }
         })
+        emitRendererSettingsChanged(saved)
         set({
           clawChannels: saved.claw.channels,
           activeClawChannelId: existing.id,
@@ -293,7 +295,11 @@ export function createClawActions(options: CreateClawActionsOptions): Pick<
       }
       const duplicateProvider = settings.claw.channels.find((channel) => channel.provider === provider)
       if (duplicateProvider) {
-        const providerLabel = provider === 'weixin' ? 'WeChat' : 'Feishu / Lark'
+        const providerLabel = provider === 'weixin'
+          ? 'WeChat'
+          : provider === 'telegram'
+            ? 'Telegram'
+            : 'Feishu / Lark'
         throw new Error(i18n.t('common:connectPhoneProviderAlreadyConnected', { provider: providerLabel }))
       }
 
@@ -316,6 +322,7 @@ export function createClawActions(options: CreateClawActionsOptions): Pick<
           channels
         }
       })
+      emitRendererSettingsChanged(saved)
       set({
         clawChannels: saved.claw.channels,
         activeClawChannelId: nextChannel.id,
@@ -369,6 +376,7 @@ export function createClawActions(options: CreateClawActionsOptions): Pick<
               item.id === channel.id ? { ...item, threadId: '', updatedAt: now } : item
             )
             const saved = await rendererRuntimeClient.setSettings({ claw: { channels: nextChannels } })
+            emitRendererSettingsChanged(saved)
             set({ clawChannels: saved.claw.channels })
           }
           sseAbortRef.current?.abort()
@@ -412,6 +420,7 @@ export function createClawActions(options: CreateClawActionsOptions): Pick<
             : item
         )
         const saved = await rendererRuntimeClient.setSettings({ claw: { channels: nextChannels } })
+        emitRendererSettingsChanged(saved)
         set({ clawChannels: saved.claw.channels })
       }
       const placeholder = clawThreadPlaceholder(channel, threadId, desiredWorkspaceRoot)
@@ -512,6 +521,7 @@ export function createClawActions(options: CreateClawActionsOptions): Pick<
       const channel = settings.claw.channels.find((item) => item.id === channelId)
       const channels = settings.claw.channels.filter((item) => item.id !== channelId)
       const saved = await rendererRuntimeClient.setSettings({ claw: { channels } })
+      emitRendererSettingsChanged(saved)
       const nextChannel = saved.claw.channels.find((item) => item.enabled) ?? null
       set({
         clawChannels: saved.claw.channels,
@@ -569,6 +579,7 @@ export function createClawActions(options: CreateClawActionsOptions): Pick<
             : item
         )
         const saved = await rendererRuntimeClient.setSettings({ claw: { channels } })
+        emitRendererSettingsChanged(saved)
         set((state) => ({
           route: 'claw',
           activeClawChannelId: channel.id,
@@ -602,6 +613,7 @@ export function createClawActions(options: CreateClawActionsOptions): Pick<
         channel.id === channelId ? { ...channel, model: normalized, updatedAt: now } : channel
       )
       const saved = await rendererRuntimeClient.setSettings({ claw: { channels } })
+      emitRendererSettingsChanged(saved)
       set({
         clawChannels: saved.claw.channels,
         error: i18n.t('common:clawModelChanged', { model: normalized })

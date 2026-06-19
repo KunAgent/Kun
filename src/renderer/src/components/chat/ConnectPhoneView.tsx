@@ -17,6 +17,7 @@ import {
   PlusCircle,
   QrCode,
   RefreshCw,
+  Send,
   Settings,
   Smile,
   Wifi
@@ -72,7 +73,7 @@ type WeixinInstallRequest = {
 
 type ConnectPhoneInstallRequest = FeishuInstallRequest | WeixinInstallRequest
 
-const CONNECT_PHONE_TARGETS: readonly ClawInstallTarget[] = ['feishu', 'lark', 'weixin']
+const CONNECT_PHONE_TARGETS: readonly ClawInstallTarget[] = ['feishu', 'lark', 'weixin', 'telegram']
 
 const INITIAL_QR_STATE: ClawInstallQrState = {
   status: 'idle',
@@ -84,6 +85,7 @@ const INITIAL_QR_STATE: ClawInstallQrState = {
 }
 
 export function connectPhoneProviderForTarget(target: ClawInstallTarget): ClawImProvider {
+  if (target === 'telegram') return 'telegram'
   return target === 'weixin' ? 'weixin' : 'feishu'
 }
 
@@ -114,6 +116,21 @@ export function connectPhoneInstallRequestOptions(
   return {
     provider: 'feishu',
     options: { isLark: target === 'lark' }
+  }
+}
+
+export function createTelegramCredential(
+  botToken: string,
+  allowedChatIds: string,
+  botUsername?: string,
+  createdAt: string = new Date().toISOString()
+): ClawImPlatformCredentialV1 {
+  return {
+    kind: 'telegram',
+    botToken,
+    allowedChatIds,
+    ...(botUsername ? { botUsername } : {}),
+    createdAt
   }
 }
 
@@ -162,6 +179,29 @@ export function createConnectPhoneCredential(
     domain: poll.domain,
     createdAt
   }
+}
+
+function surfaceButtonClass(extra = ''): string {
+  return `inline-flex items-center justify-center gap-2 rounded-xl border border-ds-border bg-ds-card px-3 py-2 text-[12.5px] font-semibold text-ds-ink shadow-sm transition hover:bg-ds-hover disabled:cursor-not-allowed disabled:opacity-55 ${extra}`
+}
+
+function connectPhoneTargetIcon(provider: ClawImProvider, className = 'h-4 w-4'): ReactElement {
+  if (provider === 'telegram') {
+    return (
+      <span className={`inline-flex shrink-0 items-center justify-center rounded-full bg-[#27A7E7] text-white ${className}`}>
+        <Send className="h-[65%] w-[65%] -translate-x-[6%]" strokeWidth={2.4} />
+      </span>
+    )
+  }
+  return <ClawProviderLogo provider={provider} className={className} />
+}
+
+function connectPhoneTopTargetLabel(
+  t: (key: string, values?: Record<string, unknown>) => string,
+  target: ClawInstallTarget
+): string {
+  if (target === 'telegram') return 'TELE'
+  return clawInstallTargetLabel(t, target)
 }
 
 export function formatConnectPhoneUserCode(userCode: string, deviceCode: string): string {
@@ -256,6 +296,7 @@ export function ConnectPhoneView({
   }
 
   const startOfficialInstallQr = async (): Promise<void> => {
+    if (target === 'telegram') return
     if (hasExistingChannel) {
       setInstallQr({
         ...INITIAL_QR_STATE,
@@ -421,7 +462,7 @@ export function ConnectPhoneView({
               {t('connectPhoneSubtitle')}
             </p>
 
-            <div className="mt-7 inline-flex rounded-full bg-[#f0f1ef] p-1 shadow-inner dark:bg-white/[0.08]">
+            <div className="mx-auto mt-7 grid w-full max-w-[760px] grid-cols-4 gap-2 rounded-full bg-[#f0f1ef] p-2 shadow-inner dark:bg-white/[0.08]">
               {CONNECT_PHONE_TARGETS.map((item) => {
                 const active = target === item
                 const provider = connectPhoneProviderForTarget(item)
@@ -430,103 +471,133 @@ export function ConnectPhoneView({
                     key={item}
                     type="button"
                     onClick={() => setTarget(item)}
-                    className={`inline-flex h-8 min-w-[92px] items-center justify-center gap-1.5 rounded-full px-4 text-[13px] font-semibold transition ${
+                    className={`inline-flex h-10 w-full min-w-0 items-center justify-center gap-2.5 rounded-full px-4 text-[13px] font-semibold whitespace-nowrap transition ${
                       active
                         ? 'bg-white text-ds-ink shadow-sm dark:bg-white/[0.14] dark:text-white'
                         : 'text-[#727985] hover:text-ds-ink dark:hover:text-white'
                     }`}
                     aria-pressed={active}
                   >
-                    <ClawProviderLogo provider={provider} className="h-4 w-4" />
-                    {clawInstallTargetLabel(t, item)}
-                  </button>
-                )
-              })}
+                  {connectPhoneTargetIcon(provider, 'h-4 w-4')}
+                  {connectPhoneTopTargetLabel(t, item)}
+                </button>
+              )
+            })}
             </div>
 
-            <div className="mx-auto mt-9 flex h-[226px] w-[226px] flex-col items-center justify-center rounded-[14px] border border-[#ececea] bg-white p-3 shadow-[0_18px_38px_rgba(32,37,43,0.05)]">
-              {installQr.status === 'idle' ? (
-                <div className="grid justify-items-center gap-4">
-                  <div className="flex h-20 w-20 items-center justify-center rounded-[18px] bg-[#f3f4f2] text-[#9aa2ad]">
-                    <QrCode className="h-9 w-9" strokeWidth={1.7} />
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => void startOfficialInstallQr()}
-                    disabled={hasExistingChannel}
-                    className="inline-flex min-h-[36px] items-center justify-center gap-2 rounded-xl bg-[#222323] px-3.5 py-2 text-[12.5px] font-semibold text-white shadow-sm transition hover:bg-black disabled:cursor-not-allowed disabled:opacity-55 dark:bg-white dark:text-black"
-                  >
-                    {t('connectPhoneGenerateQr')}
-                  </button>
+            {target === 'telegram' ? (
+              <div className="mx-auto mt-9 flex w-full max-w-[400px] flex-col items-center rounded-[14px] border border-[#ececea] bg-white p-6 shadow-[0_18px_38px_rgba(32,37,43,0.05)]">
+                <span className="flex h-14 w-14 items-center justify-center rounded-[18px] bg-[#26A5E4]/10">
+                  <ClawProviderLogo provider="telegram" className="h-8 w-8" />
+                </span>
+                <div className="mt-4 text-center text-[15px] font-semibold text-ds-ink">
+                  {t('connectPhoneTelegramSetupTitle')}
                 </div>
-              ) : null}
+                <p className="mt-2 max-w-[320px] text-center text-[13px] leading-6 text-ds-faint">
+                  {t('connectPhoneTelegramSetupHint')}
+                </p>
+                <ol className="mt-3 grid max-w-[320px] gap-1.5 text-left text-[12.5px] leading-5 text-ds-muted">
+                  <li className="flex gap-2">
+                    <span className="shrink-0 font-semibold text-ds-faint">1.</span>
+                    <span>{t('connectPhoneTelegramStep1')}</span>
+                  </li>
+                  <li className="flex gap-2">
+                    <span className="shrink-0 font-semibold text-ds-faint">2.</span>
+                    <span>{t('connectPhoneTelegramStep2')}</span>
+                  </li>
+                  <li className="flex gap-2">
+                    <span className="shrink-0 font-semibold text-ds-faint">3.</span>
+                    <span>{t('connectPhoneTelegramStep3')}</span>
+                  </li>
+                </ol>
+              </div>
+            ) : (
+              <>
+                <div className="mx-auto mt-9 flex h-[226px] w-[226px] flex-col items-center justify-center rounded-[14px] border border-[#ececea] bg-white p-3 shadow-[0_18px_38px_rgba(32,37,43,0.05)]">
+                  {installQr.status === 'idle' ? (
+                    <div className="grid justify-items-center gap-4">
+                      <div className="flex h-20 w-20 items-center justify-center rounded-[18px] bg-[#f3f4f2] text-[#9aa2ad]">
+                        <QrCode className="h-9 w-9" strokeWidth={1.7} />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => void startOfficialInstallQr()}
+                        disabled={hasExistingChannel}
+                        className={surfaceButtonClass('min-h-[36px] px-3.5')}
+                      >
+                        {t('connectPhoneGenerateQr')}
+                      </button>
+                    </div>
+                  ) : null}
 
-              {installQr.status === 'loading' ? (
-                <div className="grid justify-items-center gap-2 text-ds-faint">
-                  <Loader2 className="h-6 w-6 animate-spin" strokeWidth={2} />
-                  <span className="text-[12px]">{t('connectPhoneQrLoading')}</span>
-                </div>
-              ) : null}
+                  {installQr.status === 'loading' ? (
+                    <div className="grid justify-items-center gap-2 text-ds-faint">
+                      <Loader2 className="h-6 w-6 animate-spin" strokeWidth={2} />
+                      <span className="text-[12px]">{t('connectPhoneQrLoading')}</span>
+                    </div>
+                  ) : null}
 
-              {installQr.url && installQr.status !== 'loading' ? (
-                installQrIsImage ? (
-                  <img
-                    src={installQr.url}
-                    alt={t('connectPhoneGenerateQr')}
-                    className="h-[204px] w-[204px] object-contain"
-                  />
-                ) : (
-                  <QRCodeSVG value={installQr.url} size={204} marginSize={1} />
-                )
-              ) : null}
+                  {installQr.url && installQr.status !== 'loading' ? (
+                    installQrIsImage ? (
+                      <img
+                        src={installQr.url}
+                        alt={t('connectPhoneGenerateQr')}
+                        className="h-[204px] w-[204px] object-contain"
+                      />
+                    ) : (
+                      <QRCodeSVG value={installQr.url} size={204} marginSize={1} />
+                    )
+                  ) : null}
 
-              {installQr.status === 'showing' ? (
-                <div className="mt-3 text-center text-[12px] text-[#8d95a1]">
-                  {t('clawAddImOfficialQrTimeLeft', { seconds: installQr.timeLeft })}
-                </div>
-              ) : null}
+                  {installQr.status === 'showing' ? (
+                    <div className="mt-3 text-center text-[12px] text-[#8d95a1]">
+                      {t('clawAddImOfficialQrTimeLeft', { seconds: installQr.timeLeft })}
+                    </div>
+                  ) : null}
 
-              {installQr.status === 'success' ? (
-                <div className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-3 py-1.5 text-[12px] font-semibold text-emerald-600 dark:text-emerald-300">
-                  <CheckCircle2 className="h-3.5 w-3.5" strokeWidth={1.9} />
-                  {saving ? t('connectPhoneBinding') : t('clawAddImOfficialQrSuccess')}
-                </div>
-              ) : null}
+                  {installQr.status === 'success' ? (
+                    <div className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-3 py-1.5 text-[12px] font-semibold text-emerald-600 dark:text-emerald-300">
+                      <CheckCircle2 className="h-3.5 w-3.5" strokeWidth={1.9} />
+                      {saving ? t('connectPhoneBinding') : t('clawAddImOfficialQrSuccess')}
+                    </div>
+                  ) : null}
 
-              {installQr.status === 'error' ? (
-                <div className="mt-3 grid justify-items-center gap-2">
-                  <div className="max-w-[220px] text-center text-[12px] leading-5 text-red-600 dark:text-red-300">
-                    {installQr.error || t('clawAddImOfficialQrFailed')}
-                  </div>
-                  {!hasExistingChannel ? (
-                    <button
-                      type="button"
-                      onClick={() => void startOfficialInstallQr()}
-                      className="inline-flex items-center gap-1.5 rounded-lg border border-ds-border bg-ds-card px-2.5 py-1.5 text-[12px] font-medium text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink"
-                    >
-                      <RefreshCw className="h-3.5 w-3.5" strokeWidth={1.8} />
-                      {t('clawAddImOfficialQrRetry')}
-                    </button>
+                  {installQr.status === 'error' ? (
+                    <div className="mt-3 grid justify-items-center gap-2">
+                      <div className="max-w-[220px] text-center text-[12px] leading-5 text-red-600 dark:text-red-300">
+                        {installQr.error || t('clawAddImOfficialQrFailed')}
+                      </div>
+                      {!hasExistingChannel ? (
+                        <button
+                          type="button"
+                          onClick={() => void startOfficialInstallQr()}
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-ds-border bg-ds-card px-2.5 py-1.5 text-[12px] font-medium text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink"
+                        >
+                          <RefreshCw className="h-3.5 w-3.5" strokeWidth={1.8} />
+                          {t('clawAddImOfficialQrRetry')}
+                        </button>
+                      ) : null}
+                    </div>
                   ) : null}
                 </div>
-              ) : null}
-            </div>
 
-            <div className="mt-4 text-center text-[12.5px] leading-5 text-[#a1a7af]">
-              <div className="inline-flex items-center justify-center gap-1.5 font-medium text-[#68707c] dark:text-white/55">
-                <ClawProviderLogo provider={targetProvider} className="h-4 w-4" />
-                {t(targetProvider === 'weixin' ? 'connectPhoneScanHintWeixin' : 'connectPhoneScanHint')}
-              </div>
-              <div className="mt-1">{t('connectPhoneAutoBindHint')}</div>
-              {displayUserCode ? (
-                <div className="mt-3 font-mono text-[13px] tracking-normal text-ds-ink">
-                  {t('connectPhoneUserCode', { code: displayUserCode })}
+                <div className="mt-4 text-center text-[12.5px] leading-5 text-[#a1a7af]">
+                  <div className="inline-flex items-center justify-center gap-1.5 font-medium text-[#68707c] dark:text-white/55">
+                    <ClawProviderLogo provider={targetProvider} className="h-4 w-4" />
+                    {t(targetProvider === 'weixin' ? 'connectPhoneScanHintWeixin' : 'connectPhoneScanHint')}
+                  </div>
+                  <div className="mt-1">{t('connectPhoneAutoBindHint')}</div>
+                  {displayUserCode ? (
+                    <div className="mt-3 font-mono text-[13px] tracking-normal text-ds-ink">
+                      {t('connectPhoneUserCode', { code: displayUserCode })}
+                    </div>
+                  ) : null}
+                  {hasDisabledChannels ? (
+                    <div className="mt-1">{t('connectPhoneDisabledConnectionHint')}</div>
+                  ) : null}
                 </div>
-              ) : null}
-              {hasDisabledChannels ? (
-                <div className="mt-1">{t('connectPhoneDisabledConnectionHint')}</div>
-              ) : null}
-            </div>
+              </>
+            )}
           </div>
         </div>
 
@@ -712,6 +783,7 @@ export function ConnectPhoneSidebarPanel({
   }
 
   const startOfficialInstallQr = async (): Promise<void> => {
+    if (target === 'telegram') return
     if (hasExistingChannel) {
       setInstallQr({
         ...INITIAL_QR_STATE,
@@ -910,14 +982,17 @@ export function ConnectPhoneSidebarPanel({
           ) : (
             <div className="space-y-1">
               {sortedChannels.map((channel) => {
-                const providerTarget: ClawInstallTarget = channel.provider === 'weixin' ? 'weixin' : 'feishu'
+                const providerTarget: ClawInstallTarget =
+                  channel.provider === 'telegram' ? 'telegram'
+                    : channel.provider === 'weixin' ? 'weixin' : 'feishu'
                 const active = channel.provider === targetProvider
                 const disabled = !channel.enabled
                 const sortedConversations = [...channel.conversations].sort(
                   (a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt)
                 )
                 const latestConversation = sortedConversations[0] ?? null
-                const providerLabel = channel.provider === 'weixin' ? 'WeChat' : 'Feishu / Lark'
+                const providerLabel = channel.provider === 'telegram' ? 'Telegram'
+                  : channel.provider === 'weixin' ? 'WeChat' : 'Feishu / Lark'
                 const secondaryLabel = latestConversation?.senderName.trim()
                   || latestConversation?.chatId.trim()
                   || `${providerLabel} · ${channel.model}`
@@ -964,7 +1039,7 @@ export function ConnectPhoneSidebarPanel({
           <span>{t('claw')}</span>
         </div>
 
-        <div className="grid grid-cols-3 gap-1 rounded-[14px] border border-ds-border bg-ds-card p-1 shadow-sm">
+        <div className="grid grid-cols-4 gap-1 rounded-[14px] border border-ds-border bg-ds-card p-1 shadow-sm">
           {CONNECT_PHONE_TARGETS.map((item) => {
             const active = target === item
             const provider = connectPhoneProviderForTarget(item)
@@ -973,15 +1048,15 @@ export function ConnectPhoneSidebarPanel({
                 key={item}
                 type="button"
                 onClick={() => setTarget(item)}
-                className={`inline-flex min-h-[30px] items-center justify-center gap-1 rounded-[10px] px-2 text-[11.5px] font-semibold transition ${
+                className={`inline-flex min-h-[32px] min-w-0 items-center justify-center gap-1.5 rounded-[10px] px-2 text-[10.5px] font-semibold whitespace-nowrap transition ${
                   active
                     ? 'bg-accent/10 text-accent'
                     : 'text-ds-faint hover:bg-ds-hover hover:text-ds-ink'
                 }`}
                 aria-pressed={active}
               >
-                <ClawProviderLogo provider={provider} className="h-3.5 w-3.5" />
-                {clawInstallTargetLabel(t, item)}
+                {connectPhoneTargetIcon(provider, 'h-3.5 w-3.5')}
+                {connectPhoneTopTargetLabel(t, item)}
               </button>
             )
           })}
@@ -1034,87 +1109,109 @@ export function ConnectPhoneSidebarPanel({
             ) : null}
           </div>
         ) : (
-          <div className="mt-3 flex flex-col items-center rounded-[14px] border border-ds-border bg-ds-card px-3 py-4 shadow-sm">
-            <div className="flex h-[156px] w-full items-center justify-center rounded-[10px] border border-[#ececea] bg-white p-2">
-              {installQr.status === 'idle' ? (
-                <div className="grid justify-items-center gap-3">
-                  <div className="flex h-14 w-14 items-center justify-center rounded-[14px] bg-[#f3f4f2] text-[#9aa2ad]">
-                    <QrCode className="h-7 w-7" strokeWidth={1.7} />
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => void startOfficialInstallQr()}
-                    className="inline-flex min-h-[32px] items-center justify-center gap-1.5 rounded-[8px] bg-[#222323] px-3 py-1.5 text-[12px] font-semibold text-white shadow-sm transition hover:bg-black dark:bg-white dark:text-black"
-                  >
-                    {t('connectPhoneGenerateQr')}
-                  </button>
-                </div>
-              ) : null}
-
-              {installQr.status === 'loading' ? (
-                <div className="grid justify-items-center gap-2 text-ds-faint">
-                  <Loader2 className="h-5 w-5 animate-spin" strokeWidth={2} />
-                  <span className="text-[12px]">{t('connectPhoneQrLoading')}</span>
-                </div>
-              ) : null}
-
-              {installQr.url && installQr.status !== 'loading' ? (
-                installQrIsImage ? (
-                  <img
-                    src={installQr.url}
-                    alt={t('connectPhoneGenerateQr')}
-                    className="h-[136px] w-[136px] object-contain"
-                  />
-                ) : (
-                  <QRCodeSVG value={installQr.url} size={136} marginSize={1} />
-                )
-              ) : null}
+          target === 'telegram' ? (
+            <div className="mt-3 flex flex-col items-center rounded-[14px] border border-ds-border bg-ds-card px-3 py-4 shadow-sm">
+              <span className="flex h-12 w-12 items-center justify-center rounded-[14px] bg-[#26A5E4]/10">
+                <ClawProviderLogo provider="telegram" className="h-6 w-6" />
+              </span>
+              <div className="mt-3 text-center text-[12.5px] font-semibold text-ds-ink">
+                {t('connectPhoneTelegramSetupTitle')}
+              </div>
+              <p className="mt-1.5 max-w-[240px] text-center text-[11.5px] leading-5 text-ds-faint">
+                {t('connectPhoneTelegramSetupHint')}
+              </p>
+              <button
+                type="button"
+                onClick={onOpenSettings}
+                className={surfaceButtonClass('mt-3 min-h-[30px] w-full rounded-[8px] px-2.5 py-1.5 text-[12px]')}
+              >
+                <Settings className="h-3.5 w-3.5" strokeWidth={1.8} />
+                {t('connectPhoneTelegramGoSettings')}
+              </button>
             </div>
+          ) : (
+            <div className="mt-3 flex flex-col items-center rounded-[14px] border border-ds-border bg-ds-card px-3 py-4 shadow-sm">
+              <div className="flex h-[156px] w-full items-center justify-center rounded-[10px] border border-[#ececea] bg-white p-2">
+                {installQr.status === 'idle' ? (
+                  <div className="grid justify-items-center gap-3">
+                    <div className="flex h-14 w-14 items-center justify-center rounded-[14px] bg-[#f3f4f2] text-[#9aa2ad]">
+                      <QrCode className="h-7 w-7" strokeWidth={1.7} />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => void startOfficialInstallQr()}
+                      className={surfaceButtonClass('min-h-[32px] rounded-[8px] px-3 py-1.5 text-[12px]')}
+                    >
+                      {t('connectPhoneGenerateQr')}
+                    </button>
+                  </div>
+                ) : null}
 
-            {installQr.status === 'showing' ? (
-              <div className="mt-3 text-center text-[12px] text-[#8d95a1]">
-                {t('clawAddImOfficialQrTimeLeft', { seconds: installQr.timeLeft })}
-              </div>
-            ) : null}
+                {installQr.status === 'loading' ? (
+                  <div className="grid justify-items-center gap-2 text-ds-faint">
+                    <Loader2 className="h-5 w-5 animate-spin" strokeWidth={2} />
+                    <span className="text-[12px]">{t('connectPhoneQrLoading')}</span>
+                  </div>
+                ) : null}
 
-            {installQr.status === 'success' ? (
-              <div className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-3 py-1.5 text-[12px] font-semibold text-emerald-600 dark:text-emerald-300">
-                <CheckCircle2 className="h-3.5 w-3.5" strokeWidth={1.9} />
-                {saving ? t('connectPhoneBinding') : t('clawAddImOfficialQrSuccess')}
-              </div>
-            ) : null}
-
-            {installQr.status === 'error' ? (
-              <div className="mt-3 grid justify-items-center gap-2">
-                <div className="max-w-[220px] text-center text-[12px] leading-5 text-red-600 dark:text-red-300">
-                  {installQr.error || t('clawAddImOfficialQrFailed')}
-                </div>
-                {!hasExistingChannel ? (
-                  <button
-                    type="button"
-                    onClick={() => void startOfficialInstallQr()}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-ds-border bg-ds-card px-2.5 py-1.5 text-[12px] font-medium text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink"
-                  >
-                    <RefreshCw className="h-3.5 w-3.5" strokeWidth={1.8} />
-                    {t('clawAddImOfficialQrRetry')}
-                  </button>
+                {installQr.url && installQr.status !== 'loading' ? (
+                  installQrIsImage ? (
+                    <img
+                      src={installQr.url}
+                      alt={t('connectPhoneGenerateQr')}
+                      className="h-[136px] w-[136px] object-contain"
+                    />
+                  ) : (
+                    <QRCodeSVG value={installQr.url} size={136} marginSize={1} />
+                  )
                 ) : null}
               </div>
-            ) : null}
 
-            <div className="mt-4 text-center text-[12px] leading-5 text-[#8d95a1]">
-              <div className="inline-flex items-center justify-center gap-1.5 font-medium text-[#68707c] dark:text-white/55">
-                <ClawProviderLogo provider={targetProvider} className="h-4 w-4" />
-                {clawInstallTargetLabel(t, target)}
-              </div>
-              <div className="mt-1">{t('connectPhoneAutoBindHint')}</div>
-              {displayUserCode ? (
-                <div className="mt-2 font-mono text-[13px] tracking-normal text-ds-ink">
-                  {t('connectPhoneUserCode', { code: displayUserCode })}
+              {installQr.status === 'showing' ? (
+                <div className="mt-3 text-center text-[12px] text-[#8d95a1]">
+                  {t('clawAddImOfficialQrTimeLeft', { seconds: installQr.timeLeft })}
                 </div>
               ) : null}
+
+              {installQr.status === 'success' ? (
+                <div className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-3 py-1.5 text-[12px] font-semibold text-emerald-600 dark:text-emerald-300">
+                  <CheckCircle2 className="h-3.5 w-3.5" strokeWidth={1.9} />
+                  {saving ? t('connectPhoneBinding') : t('clawAddImOfficialQrSuccess')}
+                </div>
+              ) : null}
+
+              {installQr.status === 'error' ? (
+                <div className="mt-3 grid justify-items-center gap-2">
+                  <div className="max-w-[220px] text-center text-[12px] leading-5 text-red-600 dark:text-red-300">
+                    {installQr.error || t('clawAddImOfficialQrFailed')}
+                  </div>
+                  {!hasExistingChannel ? (
+                    <button
+                      type="button"
+                      onClick={() => void startOfficialInstallQr()}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-ds-border bg-ds-card px-2.5 py-1.5 text-[12px] font-medium text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink"
+                    >
+                      <RefreshCw className="h-3.5 w-3.5" strokeWidth={1.8} />
+                      {t('clawAddImOfficialQrRetry')}
+                    </button>
+                  ) : null}
+                </div>
+              ) : null}
+
+              <div className="mt-4 text-center text-[12px] leading-5 text-[#8d95a1]">
+                <div className="inline-flex items-center justify-center gap-1.5 font-medium text-[#68707c] dark:text-white/55">
+                  <ClawProviderLogo provider={targetProvider} className="h-4 w-4" />
+                  {clawInstallTargetLabel(t, target)}
+                </div>
+                <div className="mt-1">{t('connectPhoneAutoBindHint')}</div>
+                {displayUserCode ? (
+                  <div className="mt-2 font-mono text-[13px] tracking-normal text-ds-ink">
+                    {t('connectPhoneUserCode', { code: displayUserCode })}
+                  </div>
+                ) : null}
+              </div>
             </div>
-          </div>
+          )
         )}
       </div>
     </div>

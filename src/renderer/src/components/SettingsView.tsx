@@ -94,6 +94,7 @@ export function SettingsView(): ReactElement {
   const selectThread = useChatStore((s) => s.selectThread)
   const archiveThread = useChatStore((s) => s.archiveThread)
   const deleteThread = useChatStore((s) => s.deleteThread)
+  const addClawChannel = useChatStore((s) => s.addClawChannel)
   const [category, setCategory] = useState<SettingsCategory>('general')
   const [form, setForm] = useState<AppSettingsV1 | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -957,6 +958,7 @@ export function SettingsView(): ReactElement {
     pickClawWorkspace,
     resetClawWorkspaceToDefault,
     clawWorkspacePickerError,
+    addClawChannel,
     splitSettingsList,
     listSettingsText,
     threads,

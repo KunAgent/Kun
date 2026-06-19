@@ -199,6 +199,10 @@ export type ClawImInstallPollResult =
   | { done: true; kind: 'feishu'; appId: string; appSecret: string; domain: string }
   | { done: true; kind: 'weixin'; accountId: string; sessionKey: string }
   | { done: false; error?: string }
+export type ClawImTelegramConnectErrorCode = 'invalid_format' | 'rejected' | 'network' | 'unknown'
+export type ClawImTelegramConnectResult =
+  | { ok: true; botId: number; botUsername: string; botFirstName: string }
+  | { ok: false; code: ClawImTelegramConnectErrorCode; message: string }
 export type ConfirmDialogOptions = {
   message: string
   detail?: string
@@ -283,6 +287,10 @@ export type KunGuiApi = {
     provider: 'feishu' | 'weixin',
     deviceCode: string
   ) => Promise<ClawImInstallPollResult>
+  connectTelegramBot: (
+    botToken: string,
+    allowedChatIds?: string
+  ) => Promise<ClawImTelegramConnectResult>
   pickWorkspaceDirectory: (defaultPath?: string) => Promise<WorkspacePickResult>
   confirmDialog: (options: ConfirmDialogOptions) => Promise<boolean>
   /** Detect importable conversations from a previous DeepSeek GUI install. */
