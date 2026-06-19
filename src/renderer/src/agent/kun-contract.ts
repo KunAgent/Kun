@@ -353,6 +353,7 @@ export type CoreTurnJson = {
   activeSkillIds?: string[]
   injectedMemoryIds?: string[]
   skillInjectionBytes?: number
+  workspaceCheckpointId?: string
   error?: string
 }
 
@@ -395,6 +396,7 @@ export type CoreTurnItemJson = {
   severity?: 'info' | 'warning' | 'error'
   attachmentIds?: string[]
   fileReferences?: CoreUserFileReferenceJson[]
+  workspaceCheckpointId?: string
   activeSkillIds?: string[]
   injectedMemoryIds?: string[]
   skillInjectionBytes?: number

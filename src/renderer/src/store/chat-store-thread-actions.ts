@@ -839,6 +839,28 @@ export function createThreadActions(
         get
       })
       const settings = await rendererRuntimeClient.getSettings()
+      let workspaceCheckpointId: string | undefined
+      const checkpointThread = get().threads.find((thread) => thread.id === activeThreadId)
+      const checkpointWorkspaceRoot = normalizeWorkspaceRoot(checkpointThread?.workspace) || normalizeWorkspaceRoot(settings.workspaceRoot)
+      if (checkpointWorkspaceRoot && typeof window.kunGui.createGitCheckpoint === 'function') {
+        const checkpoint = await window.kunGui.createGitCheckpoint({
+          workspaceRoot: checkpointWorkspaceRoot,
+          threadId: activeThreadId
+        }).catch((error) => ({
+          ok: false as const,
+          reason: 'error' as const,
+          message: error instanceof Error ? error.message : String(error)
+        }))
+        if (checkpoint.ok) {
+          workspaceCheckpointId = checkpoint.checkpointId
+        } else if (checkpoint.reason !== 'not_git_repo' && checkpoint.reason !== 'no_workspace') {
+          void window.kunGui.logError('git-checkpoint', 'Failed to create Git checkpoint', {
+            message: checkpoint.message,
+            reason: checkpoint.reason,
+            workspaceRoot: checkpointWorkspaceRoot
+          }).catch(() => undefined)
+        }
+      }
       let runtimeText: string
       if (channel) {
         runtimeText = buildClawRuntimePrompt(settings, trimmedText, { channel })
@@ -853,6 +875,7 @@ export function createThreadActions(
         ...(runtimeDisplayText ? { displayText: runtimeDisplayText } : {}),
         ...((queued?.guiPlan ?? overrides?.guiPlan) ? { guiPlan: queued?.guiPlan ?? overrides?.guiPlan } : {}),
         ...(attachmentIds.length ? { attachmentIds } : {}),
+        ...(workspaceCheckpointId ? { workspaceCheckpointId } : {}),
         ...(fileReferences.length ? { fileReferences } : {})
       })
       // Mirror the composer model selection against the runtime's stable
@@ -869,6 +892,17 @@ export function createThreadActions(
             userMessageItemId,
             displayText,
             userModelChip
+          ).map((block) =>
+            block.kind === 'user' && block.id === userMessageItemId
+              ? {
+                  ...block,
+                  meta: {
+                    ...(block.meta ?? {}),
+                    turnId,
+                    ...(workspaceCheckpointId ? { workspaceCheckpointId } : {})
+                  }
+                }
+              : block
           ),
           currentTurnUserId: s.currentTurnUserId === userBlockId ? userMessageItemId : s.currentTurnUserId,
           turnStartedAtByUserId: (() => {

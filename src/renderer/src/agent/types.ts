@@ -61,6 +61,8 @@ export type WebCitationSource = {
 
 export type RuntimeDisclosureMetadata = {
   displayText?: string
+  turnId?: string
+  workspaceCheckpointId?: string
   attachmentIds?: string[]
   attachments?: AttachmentReference[]
   fileReferences?: UserFileReference[]
@@ -449,9 +451,11 @@ export interface AgentProvider {
         title?: string
       }
       attachmentIds?: string[]
+      workspaceCheckpointId?: string
       fileReferences?: UserFileReference[]
     }
   ): Promise<{ turnId: string; threadId: string; userMessageItemId?: string }>
+  rewindThread?(threadId: string, turnId: string): Promise<void>
   reviewThread?(
     threadId: string,
     target: ReviewTarget,

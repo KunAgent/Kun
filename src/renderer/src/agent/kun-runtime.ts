@@ -23,6 +23,7 @@ import {
   kunThreadForkPath,
   kunThreadGoalPath,
   kunThreadReviewPath,
+  kunThreadRewindPath,
   kunThreadTodosPath,
   kunThreadInterruptPath,
   kunThreadPath,
@@ -204,7 +205,8 @@ export class KunRuntimeProvider implements AgentProvider {
         attachmentIds: turn.attachmentIds,
         activeSkillIds: turn.activeSkillIds,
         injectedMemoryIds: turn.injectedMemoryIds,
-        skillInjectionBytes: turn.skillInjectionBytes
+        skillInjectionBytes: turn.skillInjectionBytes,
+        workspaceCheckpointId: item.workspaceCheckpointId ?? turn.workspaceCheckpointId
       }))
     )
     const blocks = mergeChatBlocks(items.flatMap((item) => {
@@ -241,6 +243,7 @@ export class KunRuntimeProvider implements AgentProvider {
         title?: string
       }
       attachmentIds?: string[]
+      workspaceCheckpointId?: string
       fileReferences?: Array<{ path: string; relativePath: string; name: string; kind?: 'file' | 'directory' }>
     }
   ): Promise<{ turnId: string; threadId: string; userMessageItemId?: string }> {
@@ -275,6 +278,9 @@ export class KunRuntimeProvider implements AgentProvider {
     if (options?.attachmentIds?.length) {
       body.attachmentIds = options.attachmentIds
     }
+    if (options?.workspaceCheckpointId?.trim()) {
+      body.workspaceCheckpointId = options.workspaceCheckpointId.trim()
+    }
     if (options?.fileReferences?.length) {
       body.fileReferences = options.fileReferences
     }
@@ -294,6 +300,17 @@ export class KunRuntimeProvider implements AgentProvider {
       threadId: parsed.threadId,
       turnId: parsed.turnId,
       userMessageItemId: parsed.userMessageItemId
+    }
+  }
+
+  async rewindThread(threadId: string, turnId: string): Promise<void> {
+    const response = await rendererRuntimeClient.runtimeRequest(
+      kunThreadRewindPath(threadId),
+      'POST',
+      JSON.stringify({ turnId })
+    )
+    if (!response.ok) {
+      throw runtimeErrorToError(readRuntimeError(response.body, 'failed to rewind thread'))
     }
   }
 

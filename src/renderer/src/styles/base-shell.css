@@ -2947,6 +2947,11 @@ pre {
   min-width: 0;
 }
 
+.ds-composer-footer {
+  flex-wrap: nowrap;
+  overflow: hidden;
+}
+
 .ds-composer-footer-left {
   flex: 1 1 auto;
   min-width: 0;
@@ -2967,7 +2972,8 @@ pre {
 
 .ds-composer-footer-hint {
   flex: 0 1 auto;
-  min-width: min(160px, 100%);
+  max-width: min(14rem, 34%);
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -3005,13 +3011,12 @@ pre {
     padding-inline: 0.5rem;
   }
 
-  .ds-composer-footer-left,
-  .ds-composer-footer-hint {
+  .ds-composer-footer-left {
     flex-basis: 100%;
   }
 
   .ds-composer-footer-hint {
-    text-align: left;
+    display: none;
   }
 
   .ds-git-branch-picker {

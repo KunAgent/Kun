@@ -14,6 +14,7 @@ export function createTurnRecord(input: {
   guiPlan?: GuiPlanContextJson
   mode?: ThreadMode
   disableUserInput?: boolean
+  workspaceCheckpointId?: string
   createdAt?: string
   status?: TurnStatus
 }): TurnEntity {
@@ -34,6 +35,7 @@ export function createTurnRecord(input: {
     ...(input.guiPlan ? { guiPlan: input.guiPlan } : {}),
     ...(input.mode ? { mode: input.mode } : {}),
     ...(input.disableUserInput ? { disableUserInput: true } : {}),
+    ...(input.workspaceCheckpointId ? { workspaceCheckpointId: input.workspaceCheckpointId } : {}),
     createdAt: input.createdAt ?? new Date().toISOString()
   }
 }

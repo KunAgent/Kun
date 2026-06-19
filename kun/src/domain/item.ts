@@ -11,6 +11,7 @@ export function makeUserItem(input: {
   displayText?: string
   attachmentIds?: string[]
   fileReferences?: Array<{ path: string; relativePath: string; name: string; kind?: 'file' | 'directory' }>
+  workspaceCheckpointId?: string
 }): TurnItem {
   const attachmentIds = input.attachmentIds?.filter((id) => id.trim().length > 0)
   const fileReferences = input.fileReferences
@@ -34,7 +35,8 @@ export function makeUserItem(input: {
     text: input.text,
     ...(displayText && displayText !== input.text ? { displayText } : {}),
     ...(attachmentIds?.length ? { attachmentIds } : {}),
-    ...(fileReferences?.length ? { fileReferences } : {})
+    ...(fileReferences?.length ? { fileReferences } : {}),
+    ...(input.workspaceCheckpointId ? { workspaceCheckpointId: input.workspaceCheckpointId } : {})
   }
 }
 

@@ -273,6 +273,10 @@ function applyRuntimeDisclosureMeta(
   item: CoreTurnItemJson,
   child?: CoreChildRuntimeMetadataJson
 ): void {
+  if (item.turnId) meta.turnId = item.turnId
+  if (typeof item.workspaceCheckpointId === 'string' && item.workspaceCheckpointId.trim()) {
+    meta.workspaceCheckpointId = item.workspaceCheckpointId.trim()
+  }
   const attachmentIds = stringArray(item.attachmentIds)
   const activeSkillIds = stringArray(item.activeSkillIds)
   const injectedMemoryIds = stringArray(item.injectedMemoryIds)

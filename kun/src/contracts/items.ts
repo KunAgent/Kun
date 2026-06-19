@@ -56,7 +56,8 @@ export const UserTurnItem = TurnItemBase.extend({
   text: z.string(),
   displayText: z.string().optional(),
   attachmentIds: z.array(z.string().min(1)).optional(),
-  fileReferences: z.array(UserFileReferenceSchema).optional()
+  fileReferences: z.array(UserFileReferenceSchema).optional(),
+  workspaceCheckpointId: z.string().min(1).optional()
 })
 export type UserTurnItem = z.infer<typeof UserTurnItem>
 

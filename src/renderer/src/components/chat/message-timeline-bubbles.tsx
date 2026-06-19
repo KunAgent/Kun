@@ -53,7 +53,7 @@ function UserMessageBubble({
       ? block.meta.displayText.trim()
       : null
   const displayText = metaDisplayText ?? parsedWritePrompt?.userInput ?? parsedClawPrompt?.text ?? block.text
-  const canEdit = !metaDisplayText
+  const canEdit = route === 'chat' || !metaDisplayText
   const showClawInboundCard = route === 'claw' && parsedClawPrompt?.inbound === true
 
   useEffect(() => {

@@ -67,6 +67,7 @@ export const TurnSchema = z.object({
   activeSkillIds: z.array(z.string().min(1)).default([]),
   injectedMemoryIds: z.array(z.string().min(1)).default([]),
   skillInjectionBytes: z.number().int().nonnegative().optional(),
+  workspaceCheckpointId: z.string().min(1).optional(),
   toolCatalogFingerprint: z.string().optional(),
   toolCatalogToolCount: z.number().int().nonnegative().optional(),
   toolCatalogDrift: z.boolean().optional(),
@@ -110,6 +111,7 @@ export const StartTurnRequest = z.object({
     .optional(),
   attachmentIds: z.array(z.string().min(1)).default([]),
   fileReferences: z.array(UserFileReferenceSchema).default([]),
+  workspaceCheckpointId: z.string().min(1).optional(),
   /**
    * Optional GUI plan context. When set, Kun advertises the
    * `create_plan` tool for the turn and writes only to the reserved
@@ -171,3 +173,16 @@ export const CompactResponse = z.object({
   sourceItemIds: z.array(z.string().min(1)).optional()
 })
 export type CompactResponse = z.infer<typeof CompactResponse>
+
+export const RewindThreadRequest = z.object({
+  turnId: z.string().min(1)
+})
+export type RewindThreadRequest = z.infer<typeof RewindThreadRequest>
+
+export const RewindThreadResponse = z.object({
+  threadId: z.string().min(1),
+  turnId: z.string().min(1),
+  removedTurns: z.number().int().nonnegative(),
+  remainingTurns: z.number().int().nonnegative()
+})
+export type RewindThreadResponse = z.infer<typeof RewindThreadResponse>

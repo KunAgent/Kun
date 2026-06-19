@@ -19,6 +19,7 @@ import {
   compactTurn,
   getTurn,
   interruptTurn,
+  rewindThread,
   startTurn,
   steerTurn
 } from './turns.js'
@@ -187,6 +188,10 @@ export function buildRouter(runtime: ServerRuntime): Router {
     return startTurn(runtime.turnService, ctx.params.id, request, ({ threadId, turnId }) => {
       runtime.runTurn(threadId, turnId)
     })
+  })
+  router.add('POST', '/v1/threads/:id/rewind', async (request, ctx) => {
+    if (!authorize(request, runtime)) return ERRORS.unauthorized()
+    return rewindThread(runtime.turnService, ctx.params.id, request)
   })
   router.add('POST', '/v1/threads/:id/review', async (request, ctx) => {
     if (!authorize(request, runtime)) return ERRORS.unauthorized()

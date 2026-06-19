@@ -37,6 +37,8 @@ import {
   desktopCommandSchema,
   defaultPathSchema,
   gitBranchPayloadSchema,
+  gitCheckpointCreatePayloadSchema,
+  gitCheckpointRestorePayloadSchema,
   guiUpdateChannelSchema,
   logErrorPayloadSchema,
   notificationPayloadSchema,
@@ -86,6 +88,7 @@ import { probeModelProvider } from '../provider-connection'
 import type { ClawRuntime } from '../claw-runtime'
 import type { ScheduleRuntime } from '../schedule-runtime'
 import { createAndSwitchGitBranch, getGitBranches, switchGitBranch } from '../services/git-service'
+import { createGitCheckpoint, restoreGitCheckpoint } from '../services/git-checkpoint-service'
 import {
   abortMerge,
   abortRebase,
@@ -843,6 +846,21 @@ export function registerAppIpcHandlers(options: RegisterAppIpcHandlersOptions): 
       return createAndSwitchGitBranch(request.workspaceRoot, request.branch)
     }
   )
+  ipcMain.handle('git:checkpoint:create', async (_, payload: unknown) => {
+    const request = parseIpcPayload('git:checkpoint:create', gitCheckpointCreatePayloadSchema, payload)
+    return createGitCheckpoint({
+      dataDir: await resolveKunThreadsDataDir(),
+      workspaceRoot: request.workspaceRoot,
+      threadId: request.threadId
+    })
+  })
+  ipcMain.handle('git:checkpoint:restore', async (_, payload: unknown) => {
+    const request = parseIpcPayload('git:checkpoint:restore', gitCheckpointRestorePayloadSchema, payload)
+    return restoreGitCheckpoint({
+      dataDir: await resolveKunThreadsDataDir(),
+      checkpointId: request.checkpointId
+    })
+  })
 
   // Worktree pool management
   ipcMain.handle('worktree:acquire', async (_, payload: unknown) => {

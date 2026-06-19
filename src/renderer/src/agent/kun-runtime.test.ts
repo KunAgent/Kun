@@ -230,6 +230,39 @@ describe('KunRuntimeProvider', () => {
     expect(result.userMessageItemId).toBe('item_user_real')
   })
 
+  it('posts workspace checkpoint ids with Kun turn requests when provided', async () => {
+    const runtimeRequest = vi.fn(async () => ({
+      ok: true,
+      status: 202,
+      body: JSON.stringify({ threadId: 'thr_1', turnId: 'turn_abc', userMessageItemId: 'item_user_real' })
+    }))
+    installDsGui({ runtimeRequest })
+    const provider = new KunRuntimeProvider()
+    await provider.sendUserMessage('thr_1', 'hello', { workspaceCheckpointId: 'gcp_1' })
+    expect(runtimeRequest).toHaveBeenCalledWith(
+      '/v1/threads/thr_1/turns',
+      'POST',
+      JSON.stringify({
+        prompt: 'hello',
+        approvalPolicy: 'auto',
+        sandboxMode: 'danger-full-access',
+        workspaceCheckpointId: 'gcp_1'
+      })
+    )
+  })
+
+  it('posts rewind requests to the runtime', async () => {
+    const runtimeRequest = vi.fn(async () => ({ ok: true, status: 200, body: '{}' }))
+    installDsGui({ runtimeRequest })
+    const provider = new KunRuntimeProvider()
+    await provider.rewindThread('thr_1', 'turn_1')
+    expect(runtimeRequest).toHaveBeenCalledWith(
+      '/v1/threads/thr_1/rewind',
+      'POST',
+      JSON.stringify({ turnId: 'turn_1' })
+    )
+  })
+
   it('posts attachment ids with Kun turn requests when provided', async () => {
     const runtimeRequest = vi.fn(async () => ({
       ok: true,

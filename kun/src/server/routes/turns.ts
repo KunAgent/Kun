@@ -2,6 +2,8 @@ import {
   CompactRequest,
   InterruptTurnRequest,
   InterruptTurnResponse,
+  RewindThreadRequest,
+  RewindThreadResponse,
   StartTurnRequest,
   StartTurnResponse,
   SteerTurnRequest,
@@ -92,6 +94,31 @@ export async function compactTurn(
       threadId,
       request: parsed.data,
       signal: request.signal
+    })
+    return jsonResponse(response)
+  } catch (error) {
+    if (error instanceof Error && /not found/i.test(error.message)) {
+      return ERRORS.notFound(error.message)
+    }
+    throw error
+  }
+}
+
+export async function rewindThread(
+  turns: TurnService,
+  threadId: string,
+  request: Request
+): Promise<JsonResponse | Response> {
+  const body = await readJsonBody(request)
+  if (!body.ok) return body.response
+  const parsed = RewindThreadRequest.safeParse(body.value)
+  if (!parsed.success) {
+    return ERRORS.validation('invalid rewind body', parsed.error.issues)
+  }
+  try {
+    const response: RewindThreadResponse = await turns.rewindThread({
+      threadId,
+      turnId: parsed.data.turnId
     })
     return jsonResponse(response)
   } catch (error) {

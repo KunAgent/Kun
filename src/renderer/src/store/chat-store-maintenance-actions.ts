@@ -662,11 +662,31 @@ export function createMaintenanceActions(
     }
     const idx = state.blocks.findIndex((b) => b.id === userBlockId && b.kind === 'user')
     if (idx < 0) return
+    const targetBlock = state.blocks[idx]
+    if (targetBlock?.kind !== 'user') return
+    const turnId = targetBlock.meta?.turnId
+    if (!state.activeThreadId || !turnId) {
+      set({ error: i18n.t('common:runtimeFeatureUnsupported') })
+      return
+    }
+    const p = getProvider()
+    if (typeof p.rewindThread !== 'function') {
+      set({ error: i18n.t('common:runtimeFeatureUnsupported') })
+      return
+    }
+    const checkpointId = targetBlock.meta?.workspaceCheckpointId
+    if (checkpointId) {
+      const restored = await window.kunGui.restoreGitCheckpoint({ checkpointId }).catch((error) => ({
+        ok: false as const,
+        reason: 'error' as const,
+        message: error instanceof Error ? error.message : String(error)
+      }))
+      if (!restored.ok) {
+        set({ error: restored.message })
+        return
+      }
+    }
 
-    // Drop the target user block and everything after it. The runtime keeps
-    // the old items on disk; this only truncates what the UI shows. A future
-    // reload of this thread will surface the old items again — acceptable
-    // tradeoff while no rewind endpoint is exposed by the runtime.
     const trimmedBlocks = state.blocks.slice(0, idx)
 
     const droppedUserIds = state.blocks
@@ -688,21 +708,25 @@ export function createMaintenanceActions(
     sseAbortRef.current = null
     clearBusyWatchdog()
 
-    set({
-      blocks: trimmedBlocks,
-      liveReasoning: '',
-      liveAssistant: '',
-      currentTurnId: null,
-      currentTurnUserId: null,
-      turnStartedAtByUserId,
-      turnDurationByUserId,
-      turnReasoningFirstAtByUserId,
-      turnReasoningLastAtByUserId,
-      queuedMessages: [],
-      error: null
-    })
-
-    await get().sendMessage(trimmed)
+    try {
+      await p.rewindThread(state.activeThreadId, turnId)
+      set({
+        blocks: trimmedBlocks,
+        liveReasoning: '',
+        liveAssistant: '',
+        currentTurnId: null,
+        currentTurnUserId: null,
+        turnStartedAtByUserId,
+        turnDurationByUserId,
+        turnReasoningFirstAtByUserId,
+        turnReasoningLastAtByUserId,
+        queuedMessages: [],
+        error: null
+      })
+      await get().sendMessage(trimmed)
+    } catch (e) {
+      set({ error: formatRuntimeError(e) })
+    }
   },
 
   resolveApproval: async (blockId, decision) => {

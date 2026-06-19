@@ -190,3 +190,98 @@ describe('TurnService compact', () => {
     expect(runtimeEvents.some((event) => event.kind === 'usage' && event.model === 'thread-model')).toBe(true)
   })
 })
+
+describe('TurnService rewindThread', () => {
+  it('removes the target turn and later session items from persisted history', async () => {
+    const sessionStore = new InMemorySessionStore()
+    const threadStore = new InMemoryThreadStore()
+    const eventBus = new InMemoryEventBus()
+    const nowIso = () => '2026-06-18T00:00:00.000Z'
+    const service = new TurnService({
+      threadStore,
+      sessionStore,
+      events: new RuntimeEventRecorder({
+        eventBus,
+        sessionStore,
+        allocateSeq: (threadId) => eventBus.allocateSeq(threadId),
+        nowIso
+      }),
+      inflight: new InflightTracker(),
+      steering: new SteeringQueue(),
+      compactor: new ContextCompactor(),
+      ids: new SequentialIdGenerator(),
+      nowIso
+    })
+
+    const threadId = 'thr_rewind'
+    const firstTurnId = 'turn_1'
+    const secondTurnId = 'turn_2'
+    const firstUser = makeUserItem({ id: 'item_1_user', threadId, turnId: firstTurnId, text: 'Keep me.' })
+    const firstAssistant = makeAssistantTextItem({
+      id: 'item_1_assistant',
+      threadId,
+      turnId: firstTurnId,
+      text: 'Kept.',
+      status: 'completed'
+    })
+    const secondUser = makeUserItem({
+      id: 'item_2_user',
+      threadId,
+      turnId: secondTurnId,
+      text: 'Rewind me.',
+      workspaceCheckpointId: 'gcp_1'
+    })
+    const secondAssistant = makeAssistantTextItem({
+      id: 'item_2_assistant',
+      threadId,
+      turnId: secondTurnId,
+      text: 'Removed.',
+      status: 'completed'
+    })
+    const firstTurn = finishTurn(
+      appendTurnItem(appendTurnItem(createTurnRecord({
+        id: firstTurnId,
+        threadId,
+        prompt: 'Keep me.',
+        status: 'completed'
+      }), firstUser), firstAssistant),
+      'completed'
+    )
+    const secondTurn = finishTurn(
+      appendTurnItem(appendTurnItem(createTurnRecord({
+        id: secondTurnId,
+        threadId,
+        prompt: 'Rewind me.',
+        workspaceCheckpointId: 'gcp_1',
+        status: 'completed'
+      }), secondUser), secondAssistant),
+      'completed'
+    )
+    for (const item of [firstUser, firstAssistant, secondUser, secondAssistant]) {
+      await sessionStore.appendItem(threadId, item)
+    }
+    await threadStore.upsert({
+      ...createThreadRecord({
+        id: threadId,
+        title: 'Rewind',
+        workspace: '/tmp/workspace',
+        model: 'thread-model'
+      }),
+      turns: [firstTurn, secondTurn]
+    })
+
+    const response = await service.rewindThread({ threadId, turnId: secondTurnId })
+
+    expect(response).toMatchObject({
+      threadId,
+      turnId: secondTurnId,
+      removedTurns: 1,
+      remainingTurns: 1
+    })
+    expect((await sessionStore.loadItems(threadId)).map((item) => item.id)).toEqual([
+      'item_1_user',
+      'item_1_assistant'
+    ])
+    expect((await threadStore.get(threadId))?.turns.map((turn) => turn.id)).toEqual([firstTurnId])
+  })
+})

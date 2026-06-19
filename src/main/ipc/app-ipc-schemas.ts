@@ -18,6 +18,7 @@ import {
   KUN_THREAD_FORK_TEMPLATE,
   KUN_THREAD_GOAL_TEMPLATE,
   KUN_THREAD_REVIEW_TEMPLATE,
+  KUN_THREAD_REWIND_TEMPLATE,
   KUN_THREAD_TODOS_TEMPLATE,
   KUN_THREAD_INTERRUPT_TEMPLATE,
   KUN_THREAD_STEER_TEMPLATE,
@@ -159,6 +160,7 @@ const ENDPOINTS: readonly EndpointTemplate[] = [
   compileEndpoint(KUN_THREAD_TODOS_TEMPLATE, ['GET', 'POST', 'DELETE']),
   compileEndpoint(KUN_THREAD_COMPACT_TEMPLATE, ['POST']),
   compileEndpoint(KUN_THREAD_REVIEW_TEMPLATE, ['POST']),
+  compileEndpoint(KUN_THREAD_REWIND_TEMPLATE, ['POST']),
   compileEndpoint(KUN_THREAD_TURNS_TEMPLATE, ['POST']),
   compileEndpoint(KUN_THREAD_STEER_TEMPLATE, ['POST']),
   compileEndpoint(KUN_THREAD_INTERRUPT_TEMPLATE, ['POST']),
@@ -767,6 +769,19 @@ export const gitBranchPayloadSchema = z
   .object({
     workspaceRoot: workspaceRootSchema,
     branch: trimmedString(MAX_BRANCH_LENGTH)
+  })
+  .strict()
+
+export const gitCheckpointCreatePayloadSchema = z
+  .object({
+    workspaceRoot: workspaceRootSchema,
+    threadId: trimmedString(MAX_ID_LENGTH)
+  })
+  .strict()
+
+export const gitCheckpointRestorePayloadSchema = z
+  .object({
+    checkpointId: trimmedString(MAX_ID_LENGTH * 4)
   })
   .strict()
 

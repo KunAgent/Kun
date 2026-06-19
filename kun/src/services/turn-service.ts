@@ -1,5 +1,13 @@
 import type { ThreadRecord, ThreadStatus } from '../contracts/threads.js'
-import type { CompactRequest, CompactResponse, StartTurnRequest, StartTurnResponse, Turn, TurnStatus } from '../contracts/turns.js'
+import type {
+  CompactRequest,
+  CompactResponse,
+  RewindThreadResponse,
+  StartTurnRequest,
+  StartTurnResponse,
+  Turn,
+  TurnStatus
+} from '../contracts/turns.js'
 import type { TurnItem } from '../contracts/items.js'
 import type { RuntimeErrorSeverity } from '../contracts/errors.js'
 import type { SessionStore } from '../ports/session-store.js'
@@ -71,7 +79,8 @@ export class TurnService {
       attachmentIds: input.request.attachmentIds ?? [],
       guiPlan: input.request.guiPlan,
       mode: input.request.mode,
-      disableUserInput: input.request.disableUserInput
+      disableUserInput: input.request.disableUserInput,
+      workspaceCheckpointId: input.request.workspaceCheckpointId
     })
     const userItem = makeUserItem({
       id: `item_${turnId}_user`,
@@ -80,7 +89,8 @@ export class TurnService {
       text: input.request.prompt,
       displayText: input.request.displayText,
       attachmentIds: input.request.attachmentIds ?? [],
-      fileReferences: input.request.fileReferences ?? []
+      fileReferences: input.request.fileReferences ?? [],
+      workspaceCheckpointId: input.request.workspaceCheckpointId
     })
     const controller = new AbortController()
     await this.upsertThread(input.threadId, (current) => ({
@@ -116,6 +126,34 @@ export class TurnService {
     })
     this.deps.steering.setTurn(turnId)
     return { threadId: input.threadId, turnId, userMessageItemId: userItem.id }
+  }
+
+  async rewindThread(input: {
+    threadId: string
+    turnId: string
+  }): Promise<RewindThreadResponse> {
+    const thread = await this.deps.threadStore.get(input.threadId)
+    if (!thread) throw new Error(`thread not found: ${input.threadId}`)
+    if (thread.status === 'running') throw new Error('Cannot rewind while a turn is running.')
+    const targetIndex = thread.turns.findIndex((turn) => turn.id === input.turnId)
+    if (targetIndex < 0) throw new Error(`turn not found: ${input.turnId}`)
+
+    const keptTurns = thread.turns.slice(0, targetIndex)
+    const keptTurnIds = new Set(keptTurns.map((turn) => turn.id))
+    const items = await this.deps.sessionStore.loadItems(input.threadId)
+    const keptItems = items.filter((item) => keptTurnIds.has(item.turnId))
+    await this.deps.sessionStore.rewriteItems(input.threadId, keptItems)
+    await this.upsertThread(input.threadId, (current) => ({
+      ...touchThread(current, this.deps.nowIso()),
+      status: 'idle',
+      turns: current.turns.slice(0, targetIndex)
+    }))
+    return {
+      threadId: input.threadId,
+      turnId: input.turnId,
+      removedTurns: thread.turns.length - targetIndex,
+      remainingTurns: keptTurns.length
+    }
   }
 
   async steerTurn(input: { threadId: string; turnId: string; text: string }): Promise<void> {

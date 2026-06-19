@@ -75,6 +75,11 @@ export function kunThreadReviewPath(threadId: string): string {
   return `${kunThreadPath(threadId)}/review`
 }
 
+export const KUN_THREAD_REWIND_TEMPLATE = '/v1/threads/{id}/rewind'
+export function kunThreadRewindPath(threadId: string): string {
+  return `${kunThreadPath(threadId)}/rewind`
+}
+
 export const KUN_THREAD_TURNS_TEMPLATE = '/v1/threads/{id}/turns'
 export function kunThreadTurnsPath(threadId: string): string {
   return `${kunThreadPath(threadId)}/turns`
