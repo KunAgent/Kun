@@ -701,9 +701,17 @@ const designSettingsPatchSchema = z.object({
   defaultWorkspaceRoot: defaultPathSchema,
   brandColor: z.string().trim().max(32).optional(),
   tone: z.array(trimmedString(32)).max(12).optional(),
-  designSystemPreset: z.enum(['none', 'shadcn', 'material', 'ios', 'fluent']).optional(),
+  designSystemPreset: z
+    .enum([
+      'none', 'shadcn', 'radix', 'material', 'ios', 'fluent', 'ant',
+      'chakra', 'carbon', 'polaris', 'bootstrap', 'geist', 'brutalism', 'editorial'
+    ])
+    .optional(),
   designType: z.enum(['', 'brand', 'product']).optional(),
   designGuidelines: z.string().max(4000).optional(),
+  radius: z.enum(['', 'sharp', 'soft', 'rounded', 'pill']).optional(),
+  density: z.enum(['', 'compact', 'cozy', 'spacious']).optional(),
+  fontStyle: z.enum(['', 'system', 'geometric', 'humanist', 'serif', 'mono']).optional(),
   model: z.string().trim().max(128).optional(),
   providerId: z.string().trim().max(128).optional(),
   reasoningEffort: z.string().trim().max(32).optional(),

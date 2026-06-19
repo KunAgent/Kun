@@ -137,6 +137,9 @@ export const useDesignWorkspaceStore = create<DesignWorkspaceState>((set) => ({
           ...state.designContext,
           designType: state.designContext.designType ?? (design.designType || undefined),
           designGuidelines: state.designContext.designGuidelines || design.designGuidelines || undefined,
+          radius: state.designContext.radius ?? (design.radius || undefined),
+          density: state.designContext.density ?? (design.density || undefined),
+          fontStyle: state.designContext.fontStyle ?? (design.fontStyle || undefined),
           brandColor: state.designContext.brandColor || design.brandColor || undefined,
           tone:
             state.designContext.tone && state.designContext.tone.length > 0

@@ -6,7 +6,13 @@ import {
   type DesignSettingsV1,
   type DesignSystemPreset
 } from '@shared/app-settings'
-import { DESIGN_TONE_OPTIONS } from '../design/design-context'
+import {
+  DESIGN_DENSITY_OPTIONS,
+  DESIGN_FONT_OPTIONS,
+  DESIGN_RADIUS_OPTIONS,
+  DESIGN_SYSTEM_DISPLAY,
+  DESIGN_TONE_OPTIONS
+} from '../design/design-context'
 import { SettingsCard, SettingRow, Toggle } from './settings-controls'
 
 const textInputClass =
@@ -77,7 +83,7 @@ export function DesignSettingsSection({ ctx }: { ctx: Record<string, unknown> })
             >
               {DESIGN_SYSTEM_PRESETS.map((preset) => (
                 <option key={preset} value={preset}>
-                  {t(`designSystem_${preset}`)}
+                  {preset === 'none' ? t('designSystem_none') : DESIGN_SYSTEM_DISPLAY[preset]}
                 </option>
               ))}
             </select>
@@ -95,6 +101,48 @@ export function DesignSettingsSection({ ctx }: { ctx: Record<string, unknown> })
               <option value="">{t('designSettingsTypeUnset')}</option>
               <option value="brand">{t('designSettingsTypeBrand')}</option>
               <option value="product">{t('designSettingsTypeProduct')}</option>
+            </select>
+          }
+        />
+        <SettingRow
+          title={t('designTokenRadius')}
+          control={
+            <select
+              value={design.radius}
+              onChange={(e) => update({ design: { radius: e.target.value as DesignSettingsV1['radius'] } })}
+              className={selectClass}
+            >
+              {DESIGN_RADIUS_OPTIONS.map((opt) => (
+                <option key={opt} value={opt}>{opt === '' ? t('designSettingsTypeUnset') : opt}</option>
+              ))}
+            </select>
+          }
+        />
+        <SettingRow
+          title={t('designTokenDensity')}
+          control={
+            <select
+              value={design.density}
+              onChange={(e) => update({ design: { density: e.target.value as DesignSettingsV1['density'] } })}
+              className={selectClass}
+            >
+              {DESIGN_DENSITY_OPTIONS.map((opt) => (
+                <option key={opt} value={opt}>{opt === '' ? t('designSettingsTypeUnset') : opt}</option>
+              ))}
+            </select>
+          }
+        />
+        <SettingRow
+          title={t('designTokenType')}
+          control={
+            <select
+              value={design.fontStyle}
+              onChange={(e) => update({ design: { fontStyle: e.target.value as DesignSettingsV1['fontStyle'] } })}
+              className={selectClass}
+            >
+              {DESIGN_FONT_OPTIONS.map((opt) => (
+                <option key={opt} value={opt}>{opt === '' ? t('designSettingsTypeUnset') : opt}</option>
+              ))}
             </select>
           }
         />

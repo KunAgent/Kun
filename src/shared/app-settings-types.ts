@@ -800,8 +800,25 @@ export type WriteSettingsPatchV1 = Partial<Omit<WriteSettingsV1, 'inlineCompleti
   agentPresets?: Array<Partial<WriteAgentPresetV1>>
 }
 
-export type DesignSystemPreset = 'none' | 'shadcn' | 'material' | 'ios' | 'fluent'
+export type DesignSystemPreset =
+  | 'none'
+  | 'shadcn'
+  | 'radix'
+  | 'material'
+  | 'ios'
+  | 'fluent'
+  | 'ant'
+  | 'chakra'
+  | 'carbon'
+  | 'polaris'
+  | 'bootstrap'
+  | 'geist'
+  | 'brutalism'
+  | 'editorial'
 export type DesignSurfaceSetting = '' | 'brand' | 'product'
+export type DesignRadiusSetting = '' | 'sharp' | 'soft' | 'rounded' | 'pill'
+export type DesignDensitySetting = '' | 'compact' | 'cozy' | 'spacious'
+export type DesignFontStyleSetting = '' | 'system' | 'geometric' | 'humanist' | 'serif' | 'mono'
 export type DesignViewportSetting = 'mobile' | 'tablet' | 'desktop'
 export type DesignCanvasViewSetting = 'preview' | 'code'
 export type DesignCanvasBackgroundSetting = 'light' | 'dark'
@@ -821,6 +838,12 @@ export type DesignSettingsV1 = {
   designType: DesignSurfaceSetting
   /** Free-form additional design rules injected alongside the preset and written to DESIGN_SYSTEM.md. */
   designGuidelines: string
+  /** Corner-radius token; '' = unset. */
+  radius: DesignRadiusSetting
+  /** Spacing-density token; '' = unset. */
+  density: DesignDensitySetting
+  /** Type-style token; '' = unset. */
+  fontStyle: DesignFontStyleSetting
 
   // --- Design agent ---
   /** Default model for design turns; '' = inherit runtime default. */

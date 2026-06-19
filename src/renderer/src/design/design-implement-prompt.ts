@@ -1,4 +1,4 @@
-import { formatDesignContextLines, type DesignContext } from './design-context'
+import { DESIGN_CRAFT_LINES, formatDesignContextLines, type DesignContext } from './design-context'
 
 export type ImplementDesignOptions = {
   artifactTitle: string
@@ -41,5 +41,6 @@ export function buildImplementDesignPrompt(options: ImplementDesignOptions): str
   ].filter(Boolean)
   const contextLines = formatDesignContextLines(options.designContext)
   if (contextLines.length > 0) lines.push('', ...contextLines)
+  lines.push('', ...DESIGN_CRAFT_LINES)
   return lines.join('\n')
 }

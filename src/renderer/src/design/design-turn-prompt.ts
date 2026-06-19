@@ -1,5 +1,5 @@
 import { WRITE_PROTOTYPE_DEFAULT_PROMPT, WRITE_PROTOTYPE_MAX_TEXT_CHARS } from '@shared/write-prototype'
-import { formatDesignContextLines, type DesignContext } from './design-context'
+import { DESIGN_CRAFT_LINES, formatDesignContextLines, type DesignContext } from './design-context'
 
 /** Generation target. P2 adds `'graph'` (node canvas), P3 adds `'penpot'`. */
 export type DesignTurnTarget = 'html'
@@ -11,6 +11,8 @@ export type DesignTurnOptions = {
   text?: string
   /** Workspace-relative path the agent must write the artifact to. */
   artifactRelativePath: string
+  /** Prior version to iterate on; set = update that design instead of starting fresh. */
+  basePath?: string
   workspaceRoot: string
   /** User override prompt; empty = built-in default. */
   customPrompt?: string
@@ -30,8 +32,16 @@ export type DesignTurnOptions = {
 export function buildDesignTurnPrompt(options: DesignTurnOptions): string {
   const requirements = options.customPrompt?.trim() || WRITE_PROTOTYPE_DEFAULT_PROMPT
   const lines = [
-    'Kun is asking you to design a single-file interactive HTML artifact.',
+    options.basePath
+      ? 'Kun is asking you to ITERATE on an existing single-file HTML design.'
+      : 'Kun is asking you to design a single-file interactive HTML artifact.',
     `Workspace: ${options.workspaceRoot}`,
+    ...(options.basePath
+      ? [
+          `Current design to iterate on: ${options.basePath}`,
+          'Read it first, reproduce it, then apply ONLY the changes in the brief below — preserve everything else (structure, content, styling).'
+        ]
+      : []),
     `Reserved artifact file: ${options.artifactRelativePath}`,
     '',
     `Design requirements: ${requirements}`,
@@ -47,6 +57,7 @@ export function buildDesignTurnPrompt(options: DesignTurnOptions): string {
   if (designContextLines.length > 0) {
     lines.push('', ...designContextLines)
   }
+  lines.push('', ...DESIGN_CRAFT_LINES)
   if (options.mode === 'image') {
     lines.push(
       '',
@@ -90,5 +101,6 @@ export function buildDesignFromCodePrompt(options: DesignFromCodeOptions): strin
   ]
   const contextLines = formatDesignContextLines(options.designContext)
   if (contextLines.length > 0) lines.push('', ...contextLines)
+  lines.push('', ...DESIGN_CRAFT_LINES)
   return lines.join('\n')
 }

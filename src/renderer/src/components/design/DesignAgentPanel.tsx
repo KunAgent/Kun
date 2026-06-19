@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { DESIGN_SYSTEM_PRESETS, type DesignSystemPreset } from '@shared/app-settings'
 import { useChatStore } from '../../store/chat-store'
 import { useDesignWorkspaceStore } from '../../design/design-workspace-store'
-import { DESIGN_TONE_OPTIONS } from '../../design/design-context'
+import { DESIGN_SYSTEM_DISPLAY, DESIGN_TONE_OPTIONS } from '../../design/design-context'
 
 type Props = {
   value: string
@@ -99,7 +99,7 @@ export function DesignAgentPanel({ value, onChange, onSubmit, onOpenSettings }: 
           >
             {DESIGN_SYSTEM_PRESETS.map((preset) => (
               <option key={preset} value={preset}>
-                {t(`designSystem_${preset}`)}
+                {preset === 'none' ? t('designSystem_none') : DESIGN_SYSTEM_DISPLAY[preset]}
               </option>
             ))}
           </select>

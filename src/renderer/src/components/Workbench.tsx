@@ -2123,26 +2123,44 @@ export function Workbench(): ReactElement {
         setInput(text)
         return
       }
-      const artifactId = createDesignArtifactId()
-      const createdAt = new Date().toISOString()
-      const relativePath = `.kun-design/${artifactId}/v1.html`
-      const title = text.length > 48 ? `${text.slice(0, 48)}…` : text
       const store = useDesignWorkspaceStore.getState()
       store.setWorkspaceRoot(designWorkspaceRoot)
-      store.upsertArtifact({
-        id: artifactId,
-        kind: 'html',
-        title,
-        relativePath,
-        createdAt,
-        updatedAt: createdAt,
-        versions: [{ id: `${artifactId}-v1`, relativePath, createdAt, summary: text }]
-      })
+      const createdAt = new Date().toISOString()
+      // A selected artifact means "iterate it" (new version reading the prior);
+      // no selection (e.g. after "New design") means a fresh artifact.
+      const active = store.artifacts.find((item) => item.id === store.activeArtifactId) ?? null
+      let relativePath: string
+      let basePath: string | undefined
+      if (active) {
+        const versionN = active.versions.length + 1
+        relativePath = `.kun-design/${active.id}/v${versionN}.html`
+        basePath = active.relativePath
+        store.addArtifactVersion(active.id, {
+          id: `${active.id}-v${versionN}`,
+          relativePath,
+          createdAt,
+          summary: text
+        })
+      } else {
+        const artifactId = createDesignArtifactId()
+        relativePath = `.kun-design/${artifactId}/v1.html`
+        const title = text.length > 48 ? `${text.slice(0, 48)}…` : text
+        store.upsertArtifact({
+          id: artifactId,
+          kind: 'html',
+          title,
+          relativePath,
+          createdAt,
+          updatedAt: createdAt,
+          versions: [{ id: `${artifactId}-v1`, relativePath, createdAt, summary: text }]
+        })
+      }
       const prompt = buildDesignTurnPrompt({
         target: 'html',
         mode: 'text',
         text,
         artifactRelativePath: relativePath,
+        basePath,
         workspaceRoot: designWorkspaceRoot,
         customPrompt: store.generationPrompt || undefined,
         designContext: store.designContext

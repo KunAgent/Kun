@@ -3,15 +3,27 @@ import type { DesignSettingsPatchV1, DesignSettingsV1, DesignSystemPreset } from
 export const DESIGN_SYSTEM_PRESETS: readonly DesignSystemPreset[] = [
   'none',
   'shadcn',
+  'radix',
   'material',
   'ios',
-  'fluent'
+  'fluent',
+  'ant',
+  'chakra',
+  'carbon',
+  'polaris',
+  'bootstrap',
+  'geist',
+  'brutalism',
+  'editorial'
 ]
 
 const DESIGN_TYPES = ['', 'brand', 'product'] as const
 const DESIGN_VIEWPORTS = ['mobile', 'tablet', 'desktop'] as const
 const DESIGN_CANVAS_VIEWS = ['preview', 'code'] as const
 const DESIGN_BACKGROUNDS = ['light', 'dark'] as const
+const DESIGN_RADII = ['', 'sharp', 'soft', 'rounded', 'pill'] as const
+const DESIGN_DENSITIES = ['', 'compact', 'cozy', 'spacious'] as const
+const DESIGN_FONT_STYLES = ['', 'system', 'geometric', 'humanist', 'serif', 'mono'] as const
 
 const MAX_TONE_CHIPS = 12
 const MAX_TONE_LENGTH = 32
@@ -71,6 +83,9 @@ export function defaultDesignSettings(): DesignSettingsV1 {
     designSystemPreset: 'none',
     designType: '',
     designGuidelines: '',
+    radius: '',
+    density: '',
+    fontStyle: '',
     model: '',
     providerId: '',
     reasoningEffort: '',
@@ -95,6 +110,9 @@ export function normalizeDesignSettings(input: DesignSettingsPatchV1 | undefined
     designSystemPreset: normalizeDesignSystemPreset(source.designSystemPreset),
     designType: oneOf(source.designType, DESIGN_TYPES, ''),
     designGuidelines: cappedString(source.designGuidelines, MAX_GUIDELINES_LENGTH),
+    radius: oneOf(source.radius, DESIGN_RADII, ''),
+    density: oneOf(source.density, DESIGN_DENSITIES, ''),
+    fontStyle: oneOf(source.fontStyle, DESIGN_FONT_STYLES, ''),
     model: trimmedString(source.model, MAX_MODEL_LENGTH),
     providerId: trimmedString(source.providerId, MAX_MODEL_LENGTH),
     reasoningEffort: trimmedString(source.reasoningEffort, MAX_EFFORT_LENGTH),
