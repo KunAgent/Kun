@@ -86,6 +86,7 @@ This stack lets Kun route different jobs to the right capability: fast models fo
 | Controlled changes | Tool approvals, filesystem permission modes, inline diffs, a change-review panel, and `/review` |
 | Writing in the same app | Markdown file tree, Live / Source / Split / Preview, export formats, and selection-based inline agent actions |
 | Remote or background triggers | Feishu / Lark / WeChat connection, local webhook / relay, and one-time or recurring scheduled tasks |
+| Reusable workflows for repeatable processes | Visual "Create Loop" node editor to draw, run, and reuse multi-step agent flows |
 | More than one model vendor | Custom Base URLs, protocols, model lists, and capability extensions beyond the three core providers |
 
 ## Core Features
@@ -96,6 +97,7 @@ This stack lets Kun route different jobs to the right capability: fast models fo
 - **Controlled changes**: inline diffs, a change-review panel, tool approvals, and filesystem permission modes.
 - **Write mode**: dedicated Markdown workspaces with a file tree, Live / Source / Split / Preview modes, completion, selection-based inline agent actions, and `HTML / PDF / DOC / DOCX` export.
 - **Connect phone**: Feishu / Lark / WeChat IM agents, local webhook / relay support, and one-time, daily, interval, or manual scheduled tasks.
+- **Visual workflows (Create Loop)**: an n8n / dify-style node canvas on top of scheduled tasks that turns multi-step agent flows into runnable, reusable workflows — rich triggers and nodes, typed dataflow, a local run API, exposable to Kun as a tool, and bindable to hook phases.
 - **Model-stack-first**: first-run setup, provider presets, and capability auto-wiring are designed around DeepSeek, Xiaomi MiMo, and MiniMax as a cost-efficient full agent stack.
 - **Multimodal and media capabilities**: image attachments, vision input, speech transcription, image generation, speech generation, music generation, and video generation, enabled by provider configuration.
 - **MCP and Skills**: Model Context Protocol servers and project/global Skills give Kun specialized tools and workflows for different tasks.
