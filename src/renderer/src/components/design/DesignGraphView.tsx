@@ -5,6 +5,7 @@ import { ExternalLink, Image as ImageIcon, Loader2, MessageSquare, Play, Plus, S
 import { useTranslation } from 'react-i18next'
 import {
   Background,
+  BackgroundVariant,
   Controls,
   Handle,
   MiniMap,
@@ -416,6 +417,12 @@ export function DesignGraphView({ artifact, workspaceRoot }: Props): ReactElemen
           defaultEdgeOptions={{ type: 'smoothstep', style: { stroke: '#3b82d8', strokeWidth: 1.6 } }}
           connectionLineStyle={{ stroke: '#3b82d8', strokeWidth: 2 }}
           connectionRadius={30}
+          minZoom={0.1}
+          maxZoom={4}
+          panOnScroll
+          panOnScrollSpeed={0.8}
+          zoomOnPinch
+          zoomOnDoubleClick={false}
           snapToGrid
           snapGrid={[16, 16]}
           fitView
@@ -423,7 +430,11 @@ export function DesignGraphView({ artifact, workspaceRoot }: Props): ReactElemen
           proOptions={{ hideAttribution: true }}
           style={{ width: '100%', height: '100%' }}
         >
-          <Background gap={18} size={1} />
+          {/* Two-tier "graph paper" grid (excalidraw-like): fine dots + a
+              coarser major line every 5 cells. Semi-transparent so it reads on
+              both light and dark canvases. */}
+          <Background id="grid-minor" variant={BackgroundVariant.Dots} gap={20} size={1} color="rgba(120,135,160,0.22)" />
+          <Background id="grid-major" variant={BackgroundVariant.Lines} gap={100} color="rgba(120,135,160,0.10)" />
           <Controls showInteractive={false} />
           <MiniMap
             pannable
