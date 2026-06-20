@@ -2677,6 +2677,7 @@ export function Workbench(): ReactElement {
                 onDesignOpen={openDesignMode}
                 onImplement={implementDesignInCode}
                 onNewCanvas={createDesignCanvas}
+                onToggleLeftSidebar={toggleLeftSidebar}
               />
             ) : route === 'write' ? (
               <WriteSidebar
@@ -2815,7 +2816,7 @@ export function Workbench(): ReactElement {
                 />
               </div>
             ) : (
-              <DesignAIRail />
+              <DesignAIRail onOpenSettings={(section) => openSettings(section as never)} />
             )}
           </div>
         ) : route === 'write' ? (

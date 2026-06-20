@@ -19,6 +19,7 @@ import { ShapeDispatcher } from './shapes/ShapeDispatcher'
 import { CanvasGrid } from './CanvasGrid'
 import { CanvasToolbar } from './CanvasToolbar'
 import { SelectionOverlay } from './SelectionOverlay'
+import { SidebarTitlebarToggleButton } from '../../sidebar/SidebarPrimitives'
 
 const toolFactories: Record<CanvasTool, () => CanvasToolHandler> = {
   select: createSelectTool,
@@ -33,9 +34,16 @@ const toolFactories: Record<CanvasTool, () => CanvasToolHandler> = {
 type Props = {
   workspaceRoot: string
   artifactId: string
+  leftSidebarCollapsed?: boolean
+  onToggleLeftSidebar?: () => void
 }
 
-export function CanvasViewport({ workspaceRoot, artifactId }: Props) {
+export function CanvasViewport({
+  workspaceRoot,
+  artifactId,
+  leftSidebarCollapsed,
+  onToggleLeftSidebar
+}: Props) {
   const { t } = useTranslation('common')
   const svgRef = useRef<SVGSVGElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -210,8 +218,25 @@ export function CanvasViewport({ workspaceRoot, artifactId }: Props) {
   const root = document?.objects?.[document?.rootId]
 
   return (
-    <div className="flex flex-col h-full w-full">
-      <CanvasToolbar />
+    <div className="ds-no-drag flex flex-col h-full w-full">
+      <div
+        className={`flex shrink-0 items-center ${
+          leftSidebarCollapsed ? 'ds-window-controls-safe-inset' : ''
+        }`}
+      >
+        {onToggleLeftSidebar ? (
+          <div className="pl-2">
+            <SidebarTitlebarToggleButton
+              onClick={onToggleLeftSidebar}
+              title={leftSidebarCollapsed ? t('sidebarExpand') : t('sidebarCollapse')}
+              ariaLabel={leftSidebarCollapsed ? t('sidebarExpand') : t('sidebarCollapse')}
+            />
+          </div>
+        ) : null}
+        <div className="min-w-0 flex-1">
+          <CanvasToolbar />
+        </div>
+      </div>
       <div
         ref={containerRef}
         className="flex-1 overflow-hidden relative"

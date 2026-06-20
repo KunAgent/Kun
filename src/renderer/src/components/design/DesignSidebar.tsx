@@ -22,6 +22,8 @@ type Props = {
   onImplement: (artifact: DesignArtifact) => void
   /** Create a new SVG design canvas artifact. */
   onNewCanvas: () => void
+  /** Collapse the left sidebar (rendered as the titlebar toggle inside SidebarFrame). */
+  onToggleLeftSidebar?: () => void
 }
 
 /** Design-mode left sidebar: mode tabs + artifact list with implement/provenance. */
@@ -30,7 +32,8 @@ export function DesignSidebar({
   onWriteOpen,
   onDesignOpen,
   onImplement,
-  onNewCanvas
+  onNewCanvas,
+  onToggleLeftSidebar
 }: Props): ReactElement {
   const { t } = useTranslation('common')
   const artifacts = useDesignWorkspaceStore((s) => s.artifacts)
@@ -181,7 +184,7 @@ export function DesignSidebar({
   )
 
   return (
-    <SidebarFrame title={t('appName')}>
+    <SidebarFrame title={t('appName')} onCollapse={onToggleLeftSidebar}>
       <div className="ds-no-drag flex flex-col px-1">
         <WorkspaceModeTabs
           activeView="design"

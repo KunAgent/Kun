@@ -25,6 +25,7 @@ import { highlightCodeHtml, renderFallbackCodeHtml } from '../../lib/code-highli
 import { DesignAgentPanel } from './DesignAgentPanel'
 import { DesignContextPopover } from './DesignContextPopover'
 import { CanvasViewport } from './canvas/CanvasViewport'
+import { SidebarTitlebarToggleButton } from '../sidebar/SidebarPrimitives'
 
 type WebviewEl = HTMLElement & { reload?: () => void }
 
@@ -42,6 +43,8 @@ function isCompleteHtml(content: string): boolean {
 }
 
 type CanvasProps = {
+  leftSidebarCollapsed: boolean
+  onToggleLeftSidebar: () => void
   input: string
   setInput: (value: string) => void
   onSubmitPrompt?: (prompt: string) => void
@@ -54,7 +57,14 @@ type CanvasProps = {
  * is reloaded (not remounted) once a complete document exists. Preview/code/live
  * are the discriminated-union seam for P2/P3 surfaces.
  */
-export function DesignCanvas({ input, setInput, onSubmitPrompt, onOpenAgentSettings }: CanvasProps): ReactElement {
+export function DesignCanvas({
+  leftSidebarCollapsed,
+  onToggleLeftSidebar,
+  input,
+  setInput,
+  onSubmitPrompt,
+  onOpenAgentSettings
+}: CanvasProps): ReactElement {
   const { t } = useTranslation('common')
   const busy = useChatStore((s) => s.busy)
   const workspaceRoot = useDesignWorkspaceStore((s) => s.workspaceRoot)
@@ -238,14 +248,28 @@ export function DesignCanvas({ input, setInput, onSubmitPrompt, onOpenAgentSetti
   if (isCanvasArtifact && activeArtifact) {
     return (
       <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-ds-main">
-        <CanvasViewport workspaceRoot={workspaceRoot} artifactId={activeArtifact.id} />
+        <CanvasViewport
+          workspaceRoot={workspaceRoot}
+          artifactId={activeArtifact.id}
+          leftSidebarCollapsed={leftSidebarCollapsed}
+          onToggleLeftSidebar={onToggleLeftSidebar}
+        />
       </div>
     )
   }
 
   return (
     <div className="relative flex min-h-0 min-w-0 flex-1 flex-col bg-ds-main">
-      <div className="ds-no-drag flex shrink-0 items-center gap-2 px-3 py-2 shadow-[inset_0_-1px_0_var(--ds-sidebar-row-ring)]">
+      <div
+        className={`ds-no-drag flex shrink-0 items-center gap-2 px-3 py-2 shadow-[inset_0_-1px_0_var(--ds-sidebar-row-ring)] ${
+          leftSidebarCollapsed ? 'ds-window-controls-safe-inset' : ''
+        }`}
+      >
+        <SidebarTitlebarToggleButton
+          onClick={onToggleLeftSidebar}
+          title={leftSidebarCollapsed ? t('sidebarExpand') : t('sidebarCollapse')}
+          ariaLabel={leftSidebarCollapsed ? t('sidebarExpand') : t('sidebarCollapse')}
+        />
         {hasHtmlArtifact && canvasView !== 'code' ? (
           <div className="flex items-center gap-0.5 rounded-lg bg-black/[0.04] p-0.5 dark:bg-white/[0.05]">
             {VIEWPORTS.map(({ id, icon: Icon, labelKey }) => (

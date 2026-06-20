@@ -3,7 +3,6 @@ import { useEffect } from 'react'
 import { X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useDesignWorkspaceStore } from '../../design/design-workspace-store'
-import { DesignAgentPanel } from './DesignAgentPanel'
 import { DesignCanvas } from './DesignCanvas'
 
 type Props = {
@@ -16,17 +15,19 @@ type Props = {
 }
 
 /**
- * Design-mode main surface: the live canvas (center) + the design agent (right).
+ * Design-mode main surface: a single full-width canvas with the design
+ * composer floating bottom-center (Stitch-style). The 设计上下文 form lives
+ * in a popover triggered from the canvas toolbar.
  */
 export function DesignWorkspaceView({
+  leftSidebarCollapsed,
+  onToggleLeftSidebar,
   input,
   setInput,
   onSubmitPrompt,
   onOpenAgentSettings
 }: Props): ReactElement {
   const { t } = useTranslation('common')
-  const agentPanelOpen = useDesignWorkspaceStore((s) => s.agentPanelOpen)
-  const implementOpen = useDesignWorkspaceStore((s) => s.implementOpen)
   const loadDesignSettings = useDesignWorkspaceStore((s) => s.loadDesignSettings)
   const fileError = useDesignWorkspaceStore((s) => s.fileError)
   const setFileError = useDesignWorkspaceStore((s) => s.setFileError)
@@ -50,18 +51,15 @@ export function DesignWorkspaceView({
           </button>
         </div>
       ) : null}
-      <div className="flex min-h-0 flex-1">
-        <DesignCanvas />
-        {agentPanelOpen && !implementOpen ? (
-          <div className="min-h-0 w-[360px] shrink-0 shadow-[inset_1px_0_0_var(--ds-sidebar-row-ring)]">
-            <DesignAgentPanel
-              value={input}
-              onChange={setInput}
-              onSubmit={(value) => onSubmitPrompt?.(value)}
-              onOpenSettings={onOpenAgentSettings}
-            />
-          </div>
-        ) : null}
+      <div className="relative flex min-h-0 flex-1">
+        <DesignCanvas
+          leftSidebarCollapsed={leftSidebarCollapsed}
+          onToggleLeftSidebar={onToggleLeftSidebar}
+          input={input}
+          setInput={setInput}
+          onSubmitPrompt={onSubmitPrompt}
+          onOpenAgentSettings={onOpenAgentSettings}
+        />
       </div>
     </div>
   )

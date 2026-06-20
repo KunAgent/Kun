@@ -149,6 +149,7 @@
   "designRailEmpty": "Describe the UI you want to design. The assistant will generate it for you.",
   "designRailThinking": "Thinking…",
   "designRailPlaceholder": "Describe what you want to design…",
+  "designRailSend": "Send",
   "designSystem_none": "No preset",
   "designSystem_shadcn": "shadcn/ui",
   "designSystem_material": "Material",

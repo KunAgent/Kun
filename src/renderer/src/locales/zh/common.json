@@ -149,6 +149,7 @@
   "designRailEmpty": "描述你想设计的界面，助手会为你生成。",
   "designRailThinking": "思考中…",
   "designRailPlaceholder": "描述你想设计的界面…",
+  "designRailSend": "发送",
   "designSystem_none": "无预设",
   "designSystem_shadcn": "shadcn/ui",
   "designSystem_material": "Material",
