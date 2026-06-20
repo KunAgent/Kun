@@ -6,12 +6,12 @@ import type { CanvasPointerEvent, CanvasToolHandler } from './tool-types'
 
 type DragMode = 'none' | 'move' | 'marquee'
 
-let dragMode: DragMode = 'none'
-let dragStartX = 0
-let dragStartY = 0
-let dragShapeStartPositions: Map<string, { x: number; y: number }> = new Map()
-
 export function createSelectTool(): CanvasToolHandler {
+  let dragMode: DragMode = 'none'
+  let dragStartX = 0
+  let dragStartY = 0
+  let dragShapeStartPositions: Map<string, { x: number; y: number }> = new Map()
+
   return {
     cursor: 'default',
 

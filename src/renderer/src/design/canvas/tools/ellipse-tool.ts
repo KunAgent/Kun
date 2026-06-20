@@ -4,12 +4,12 @@ import { useCanvasViewportStore } from '../canvas-viewport-store'
 import { createDefaultShape } from '../canvas-types'
 import type { CanvasPointerEvent, CanvasToolHandler } from './tool-types'
 
-let drawing = false
-let startX = 0
-let startY = 0
-let previewId: string | null = null
-
 export function createEllipseTool(): CanvasToolHandler {
+  let drawing = false
+  let startX = 0
+  let startY = 0
+  let previewId: string | null = null
+
   return {
     cursor: 'crosshair',
 

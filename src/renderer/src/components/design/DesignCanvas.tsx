@@ -238,7 +238,7 @@ export function DesignCanvas({ input, setInput, onSubmitPrompt, onOpenAgentSetti
   if (isCanvasArtifact && activeArtifact) {
     return (
       <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-ds-main">
-        <CanvasViewport />
+        <CanvasViewport workspaceRoot={workspaceRoot} artifactId={activeArtifact.id} />
       </div>
     )
   }

@@ -1,11 +1,27 @@
-import { memo } from 'react'
+import { memo, useCallback, useRef } from 'react'
 import type { CanvasShape, Rect } from '../../../design/canvas/canvas-types'
 import { getSelectionBounds } from '../../../design/canvas/canvas-hit-test'
+import {
+  computeResizedBounds,
+  scaleShapesToBounds,
+  type ResizeHandle,
+  type ShapeBoundsLike
+} from '../../../design/canvas/canvas-resize'
+import { useCanvasShapeStore } from '../../../design/canvas/canvas-shape-store'
+import { useCanvasUndoStore } from '../../../design/canvas/canvas-undo-store'
 
 const HANDLE_SIZE = 8
 const SELECTION_COLOR = '#3b82f6'
 
-type HandlePosition = 'nw' | 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w'
+const HANDLE_POSITIONS: ResizeHandle[] = ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w']
+
+type ResizeDragState = {
+  handle: ResizeHandle
+  startBounds: Rect
+  startClientX: number
+  startClientY: number
+  shapeStarts: Map<string, ShapeBoundsLike>
+}
 
 function SelectionOverlayInner({
   selectedIds,
@@ -23,11 +39,90 @@ function SelectionOverlayInner({
   const sw = Math.max(1, 1 / zoom)
   const hs = HANDLE_SIZE / zoom
 
-  const hoverShape = hoverTargetId && !selectedIds.has(hoverTargetId) ? objects[hoverTargetId] : null
+  const resizeStateRef = useRef<ResizeDragState | null>(null)
 
+  const hoverShape = hoverTargetId && !selectedIds.has(hoverTargetId) ? objects[hoverTargetId] : null
   const bounds = selectedIds.size > 0 ? getSelectionBounds(objects, selectedIds) : null
 
-  const handlePositions: { pos: HandlePosition; cx: number; cy: number }[] = bounds
+  const handlePointerDown = useCallback(
+    (handle: ResizeHandle, e: React.PointerEvent) => {
+      e.stopPropagation()
+      e.preventDefault()
+
+      const store = useCanvasShapeStore.getState()
+      const selBounds = getSelectionBounds(store.document.objects, selectedIds)
+      if (!selBounds) return
+
+      const shapeStarts = new Map<string, ShapeBoundsLike>()
+      for (const id of selectedIds) {
+        const s = store.document.objects[id]
+        if (s) shapeStarts.set(id, { x: s.x, y: s.y, width: s.width, height: s.height })
+      }
+
+      resizeStateRef.current = {
+        handle,
+        startBounds: selBounds,
+        startClientX: e.clientX,
+        startClientY: e.clientY,
+        shapeStarts
+      }
+
+      const onMove = (ev: PointerEvent): void => {
+        const state = resizeStateRef.current
+        if (!state) return
+        const dx = (ev.clientX - state.startClientX) / zoom
+        const dy = (ev.clientY - state.startClientY) / zoom
+        const endBounds = computeResizedBounds(
+          state.handle,
+          state.startBounds,
+          dx,
+          dy,
+          ev.shiftKey
+        )
+        const newShapeBounds = scaleShapesToBounds(state.shapeStarts, state.startBounds, endBounds)
+        const shapeStore = useCanvasShapeStore.getState()
+        for (const [id, b] of newShapeBounds) {
+          shapeStore.updateShape(id, b, true)
+        }
+      }
+
+      const onUp = (): void => {
+        const state = resizeStateRef.current
+        if (state) {
+          const doc = useCanvasShapeStore.getState().document
+          const patches: { id: string; before: Partial<CanvasShape>; after: Partial<CanvasShape> }[] = []
+          for (const [id, start] of state.shapeStarts) {
+            const end = doc.objects[id]
+            if (!end) continue
+            const changed =
+              end.x !== start.x ||
+              end.y !== start.y ||
+              end.width !== start.width ||
+              end.height !== start.height
+            if (changed) {
+              patches.push({
+                id,
+                before: { x: start.x, y: start.y, width: start.width, height: start.height },
+                after: { x: end.x, y: end.y, width: end.width, height: end.height }
+              })
+            }
+          }
+          if (patches.length > 0) {
+            useCanvasUndoStore.getState().pushChange({ patches })
+          }
+        }
+        resizeStateRef.current = null
+        window.removeEventListener('pointermove', onMove)
+        window.removeEventListener('pointerup', onUp)
+      }
+
+      window.addEventListener('pointermove', onMove)
+      window.addEventListener('pointerup', onUp)
+    },
+    [selectedIds, zoom]
+  )
+
+  const handlePositions: { pos: ResizeHandle; cx: number; cy: number }[] = bounds
     ? [
         { pos: 'nw', cx: bounds.x, cy: bounds.y },
         { pos: 'n', cx: bounds.x + bounds.width / 2, cy: bounds.y },
@@ -38,7 +133,7 @@ function SelectionOverlayInner({
         { pos: 'sw', cx: bounds.x, cy: bounds.y + bounds.height },
         { pos: 'w', cx: bounds.x, cy: bounds.y + bounds.height / 2 }
       ]
-    : []
+    : HANDLE_POSITIONS.map((p) => ({ pos: p, cx: 0, cy: 0 })).slice(0, 0)
 
   return (
     <>
@@ -82,6 +177,7 @@ function SelectionOverlayInner({
           style={{ cursor: handleCursor(pos) }}
           data-handle={pos}
           pointerEvents="all"
+          onPointerDown={(e) => handlePointerDown(pos, e)}
         />
       ))}
 
@@ -102,7 +198,7 @@ function SelectionOverlayInner({
   )
 }
 
-function handleCursor(pos: HandlePosition): string {
+function handleCursor(pos: ResizeHandle): string {
   switch (pos) {
     case 'nw':
     case 'se':

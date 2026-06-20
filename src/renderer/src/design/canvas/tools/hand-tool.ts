@@ -1,11 +1,11 @@
 import { useCanvasViewportStore } from '../canvas-viewport-store'
 import type { CanvasPointerEvent, CanvasToolHandler } from './tool-types'
 
-let dragging = false
-let lastX = 0
-let lastY = 0
-
 export function createHandTool(): CanvasToolHandler {
+  let dragging = false
+  let lastX = 0
+  let lastY = 0
+
   return {
     cursor: 'grab',
 
