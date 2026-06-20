@@ -56,6 +56,10 @@ describe('ConnectPhoneView', () => {
 
     expect(html).toContain('Use your phone to connect kun')
     expect(html).toContain('Generate authorization QR')
+    expect(html).toContain('max-w-[760px]')
+    expect(html).toContain('grid-cols-4')
+    expect(html).toContain('w-full min-w-0 items-center justify-center')
+    expect(html).toContain('TELE')
     expect(html).not.toContain('Kun usage')
   })
 
@@ -170,6 +174,30 @@ describe('ConnectPhoneView', () => {
 
     expect(html).toContain('Phone connection settings')
     expect(html).toContain('Disconnect phone')
+  })
+
+  it('uses themed surface buttons instead of hard-coded black hover states', () => {
+    const pageHtml = renderToStaticMarkup(
+      createElement(ConnectPhoneView, {
+        channels: [],
+        onAddProvider: async () => undefined,
+        leftSidebarCollapsed: false,
+        onToggleSidebar: () => undefined
+      })
+    )
+    const sidebarHtml = renderToStaticMarkup(
+      createElement(ConnectPhoneSidebarPanel, {
+        channels: [],
+        onAddProvider: async () => undefined,
+        onDisconnect: async () => undefined,
+        onOpenSettings: () => undefined
+      })
+    )
+
+    expect(pageHtml).not.toContain('hover:bg-black')
+    expect(sidebarHtml).not.toContain('hover:bg-black')
+    expect(sidebarHtml).toContain('hover:bg-ds-hover')
+    expect(sidebarHtml).toContain('TELE')
   })
 
   it('keeps the IM list above the phone connection panel in the sidebar', () => {

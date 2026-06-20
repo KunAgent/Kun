@@ -34,6 +34,7 @@ import type { GuiUpdateDownloadResult, GuiUpdateInfo, GuiUpdateInstallResult, Gu
 import {
   clawMirrorPayloadSchema,
   clawImInstallPollPayloadSchema,
+  clawImTelegramTokenPayloadSchema,
   confirmDialogPayloadSchema,
   clawTaskFromTextPayloadSchema,
   computerUsePermissionKindSchema,
@@ -96,6 +97,7 @@ import type { JsonSettingsStore } from '../settings-store'
 import { probeModelProvider } from '../provider-connection'
 import type { ClawRuntime } from '../claw-runtime'
 import type { ScheduleRuntime } from '../schedule-runtime'
+import { verifyTelegramBotToken } from '../telegram-runtime'
 import type { WorkflowRuntime } from '../workflow-runtime'
 import { checkWorkflowCode } from '../workflow-runtime'
 import {
@@ -670,6 +672,18 @@ export function registerAppIpcHandlers(options: RegisterAppIpcHandlersOptions): 
         return pollWeixinInstall(request.deviceCode)
       }
       return pollFeishuInstall(request.deviceCode)
+    }
+  )
+
+  ipcMain.handle(
+    'claw:im-install:telegram-token',
+    async (_, payload: unknown) => {
+      const request = parseIpcPayload(
+        'claw:im-install:telegram-token',
+        clawImTelegramTokenPayloadSchema,
+        payload
+      )
+      return verifyTelegramBotToken(request.botToken)
     }
   )
 

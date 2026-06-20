@@ -70,6 +70,19 @@ export function normalizeClawImPlatformCredential(input: unknown): ClawImPlatfor
       createdAt: typeof raw.createdAt === 'string' && raw.createdAt ? raw.createdAt : new Date().toISOString()
     }
   }
+  if (raw.kind === 'telegram') {
+    const botToken = typeof raw.botToken === 'string' ? raw.botToken.trim() : ''
+    if (!botToken) return undefined
+    const allowedChatIds = typeof raw.allowedChatIds === 'string' ? raw.allowedChatIds.trim() : ''
+    const botUsername = typeof raw.botUsername === 'string' ? raw.botUsername.trim() : ''
+    return {
+      kind: raw.kind,
+      botToken,
+      allowedChatIds,
+      ...(botUsername ? { botUsername } : {}),
+      createdAt: typeof raw.createdAt === 'string' && raw.createdAt ? raw.createdAt : new Date().toISOString()
+    }
+  }
   if (raw.kind !== 'feishu') return undefined
   const appId = typeof raw.appId === 'string' ? raw.appId.trim() : ''
   const appSecret = typeof raw.appSecret === 'string' ? raw.appSecret.trim() : ''

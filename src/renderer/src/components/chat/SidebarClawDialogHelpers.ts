@@ -9,8 +9,8 @@ import type {
 } from '@shared/app-settings'
 
 export type ClawImDialogMode = 'add' | 'edit'
-export type ClawConnectionMode = 'official-install-qr'
-export type ClawInstallTarget = 'feishu' | 'lark' | 'weixin'
+export type ClawConnectionMode = 'official-install-qr' | 'telegram-token'
+export type ClawInstallTarget = 'feishu' | 'lark' | 'weixin' | 'telegram'
 export type ClawAgentTab = 'identity' | 'personality' | 'userContext' | 'replyRules'
 export type ClawOfficialInstallProvider = 'feishu' | 'weixin'
 export type ClawDialogStep = 'defaults' | 'prompt' | 'connection'
@@ -101,6 +101,18 @@ export const CLAW_ADD_PROVIDER_OPTIONS: ClawAddProviderOption[] = [
       'clawAddImGuideWechat1',
       'clawAddImGuideWechat2',
       'clawAddImGuideWechat3'
+    ]
+  },
+  {
+    id: 'telegram',
+    label: 'Telegram',
+    toneClass: 'bg-sky-500/12 text-sky-700 dark:bg-sky-400/15 dark:text-sky-200',
+    connectionMode: 'telegram-token',
+    credentialHints: ['telegram.botToken'],
+    guideStepKeys: [
+      'clawAddImGuideTelegram1',
+      'clawAddImGuideTelegram2',
+      'clawAddImGuideTelegram3'
     ]
   }
 ]
@@ -198,6 +210,8 @@ export function clawCredentialLabelKey(hint: string): string {
       return 'clawAddImCredentialFeishuAppSecret'
     case 'weixin.accountId':
       return 'clawAddImCredentialWeixinAccountId'
+    case 'telegram.botToken':
+      return 'clawAddImCredentialTelegramBotToken'
     default:
       return 'clawAddImCredentialGeneric'
   }
@@ -235,11 +249,13 @@ export function clawInstallTargetLabel(
   target: ClawInstallTarget
 ): string {
   if (target === 'weixin') return t('clawAddImTargetWeixin')
+  if (target === 'telegram') return t('clawAddImTargetTelegram')
   return target === 'lark' ? t('clawAddImTargetLark') : t('clawAddImTargetFeishu')
 }
 
 export function clawDefaultAgentName(target: ClawInstallTarget): string {
   if (target === 'weixin') return 'weixin agent'
+  if (target === 'telegram') return 'telegram agent'
   return target === 'lark' ? 'lark agent' : 'feishu agent'
 }
 

@@ -36,7 +36,9 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function defaultClawChannelLabel(provider: ClawImProvider): string {
-  return provider === 'weixin' ? 'weixin agent' : 'feishu agent'
+  if (provider === 'weixin') return 'weixin agent'
+  if (provider === 'telegram') return 'telegram agent'
+  return 'feishu agent'
 }
 
 function normalizeLegacyDefaultClawChannelName(provider: ClawImProvider, value: string): string {
@@ -46,6 +48,9 @@ function normalizeLegacyDefaultClawChannelName(provider: ClawImProvider, value: 
     return lower === 'weixin agent' || lower === 'wechat agent' || lower === 'wechat'
       ? 'weixin agent'
       : trimmed
+  }
+  if (provider === 'telegram') {
+    return lower === 'telegram agent' || lower === 'telegram bot' ? 'telegram agent' : trimmed
   }
   if (lower === 'feishu agent' || lower === 'feishu / lark') return 'feishu agent'
   if (lower === 'lark agent') return 'lark agent'
@@ -100,7 +105,8 @@ export function normalizeClawSettings(input: ClawSettingsPatchV1 | undefined): C
           raw.provider === undefined ||
           raw.provider === null ||
           raw.provider === 'feishu' ||
-          raw.provider === 'weixin'
+          raw.provider === 'weixin' ||
+          raw.provider === 'telegram'
         )
       })
     : []

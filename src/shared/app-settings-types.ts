@@ -27,7 +27,7 @@ export type ScheduleTaskStatus = 'idle' | 'running' | 'success' | 'error'
 export type ScheduleModel = 'deepseek-v4-pro' | 'deepseek-v4-flash'
 export type ScheduleReasoningEffort = 'auto' | 'off' | 'low' | 'medium' | 'high' | 'max'
 export type ClawRunMode = ScheduleRunMode
-export type ClawImProvider = 'feishu' | 'weixin'
+export type ClawImProvider = 'feishu' | 'weixin' | 'telegram'
 export type ClawScheduleKind = ScheduleKind
 export type ClawTaskStatus = ScheduleTaskStatus
 export type ClawModel = 'auto' | ScheduleModel
@@ -1285,9 +1285,23 @@ export type ClawImWeixinPlatformCredentialV1 = {
   createdAt: string
 }
 
+export type ClawImTelegramPlatformCredentialV1 = {
+  kind: 'telegram'
+  botToken: string
+  /**
+   * Comma-separated Telegram chat ids allowed to talk to the bot.
+   * Empty string means "allow all private chats" (group chats are always rejected).
+   */
+  allowedChatIds: string
+  /** Bot username resolved via getMe, e.g. "my_kun_bot". Cosmetic only. */
+  botUsername?: string
+  createdAt: string
+}
+
 export type ClawImPlatformCredentialV1 =
   | ClawImFeishuPlatformCredentialV1
   | ClawImWeixinPlatformCredentialV1
+  | ClawImTelegramPlatformCredentialV1
 
 export type ClawImRemoteSessionV1 = {
   chatId: string
@@ -1317,6 +1331,8 @@ export type ClawImChannelV1 = {
   provider: ClawImProvider
   label: string
   enabled: boolean
+  /** Enable SSE-driven Feishu / Lark reply streaming instead of one-shot polling replies. */
+  feishuStream?: boolean
   /** Model provider used by this IM channel. Empty inherits the IM/global provider. */
   providerId?: string
   model: string
@@ -1331,8 +1347,6 @@ export type ClawImChannelV1 = {
   welcomeSentAt?: string
   createdAt: string
   updatedAt: string
-  /** 当 provider === 'feishu' 时,是否把 agent 回复改为流式输出。默认 false (per-channel)。 */
-  feishuStream?: boolean
 }
 
 export type ClawSettingsV1 = {
