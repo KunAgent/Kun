@@ -253,6 +253,7 @@ export type ChatState = {
   drainQueuedMessages: () => Promise<void>
   removeQueuedMessage: (id: string) => void
   rewindAndResend: (userBlockId: string, newText: string) => Promise<void>
+  rollbackWorkspaceToCheckpoint: (checkpointId: string) => Promise<void>
   interrupt: (options?: { discard?: boolean }) => Promise<void>
   renameActiveThread: (title: string) => Promise<void>
   renameThread: (threadId: string, title: string) => Promise<void>

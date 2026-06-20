@@ -3,6 +3,7 @@ import { getProvider } from '../agent/registry'
 import { rendererRuntimeClient } from '../agent/runtime-client'
 import i18n from '../i18n'
 import { applyTheme, applyUiFontScale } from '../lib/apply-theme'
+import { confirmDialog } from '../lib/confirm-dialog'
 import { formatWorkspacePickerError } from '../lib/format-workspace-picker-error'
 import { formatRuntimeError, getRuntimeErrorCode } from '../lib/format-runtime-error'
 import {
@@ -181,7 +182,7 @@ function settleInterruptedTurn(set: ChatStoreSet, get: ChatStoreGet): void {
 
 export function createMaintenanceActions(
   { set, get, sseAbortRef }: StoreActionContext
-): Pick<ChatState, 'renameActiveThread' | 'renameThread' | 'archiveThread' | 'compactActiveThread' | 'forkActiveThread' | 'forkThreadFromTurn' | 'setActiveThreadGoal' | 'setActiveThreadGoalStatus' | 'clearActiveThreadGoal' | 'setActiveThreadTodoStatus' | 'clearActiveThreadTodos' | 'syncPlanTodosFromMarkdown' | 'resumeSessionIntoThread' | 'deleteThread' | 'rewindAndResend' | 'resolveApproval' | 'resolveUserInput' | 'interrupt'> {
+): Pick<ChatState, 'renameActiveThread' | 'renameThread' | 'archiveThread' | 'compactActiveThread' | 'forkActiveThread' | 'forkThreadFromTurn' | 'setActiveThreadGoal' | 'setActiveThreadGoalStatus' | 'clearActiveThreadGoal' | 'setActiveThreadTodoStatus' | 'clearActiveThreadTodos' | 'syncPlanTodosFromMarkdown' | 'resumeSessionIntoThread' | 'deleteThread' | 'rewindAndResend' | 'rollbackWorkspaceToCheckpoint' | 'resolveApproval' | 'resolveUserInput' | 'interrupt'> {
   const forkActiveThreadWithOptions = async (options: { turnId?: string } = {}): Promise<void> => {
     const { activeThreadId, busy, blocks } = get()
     if (!activeThreadId) return
@@ -739,6 +740,33 @@ export function createMaintenanceActions(
     } catch (e) {
       set({ error: formatRuntimeError(e) })
     }
+  },
+
+  rollbackWorkspaceToCheckpoint: async (checkpointId) => {
+    const targetCheckpointId = checkpointId.trim()
+    if (!targetCheckpointId) {
+      set({ error: i18n.t('common:rollbackWorkspaceMissingCheckpoint') })
+      return
+    }
+    if (get().busy) {
+      set({ error: i18n.t('common:rollbackWorkspaceBusyError') })
+      return
+    }
+    const confirmed = await confirmDialog(
+      i18n.t('common:rollbackWorkspaceConfirm'),
+      i18n.t('common:rollbackWorkspaceConfirmDetail')
+    )
+    if (!confirmed) return
+    const restored = await window.kunGui.restoreGitCheckpoint({ checkpointId: targetCheckpointId }).catch((error) => ({
+      ok: false as const,
+      reason: 'error' as const,
+      message: error instanceof Error ? error.message : String(error)
+    }))
+    if (!restored.ok) {
+      set({ error: restored.message })
+      return
+    }
+    set({ error: null })
   },
 
   resolveApproval: async (blockId, decision) => {

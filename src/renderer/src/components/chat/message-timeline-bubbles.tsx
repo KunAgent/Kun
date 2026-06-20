@@ -3,7 +3,7 @@ import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { useTranslation } from 'react-i18next'
-import { Check, ChevronDown, ChevronRight, Copy, Download, File, FileEdit, GitFork, ImageIcon, Loader2, MessageSquareQuote, PencilLine, Terminal, Video, Wrench } from 'lucide-react'
+import { Check, ChevronDown, ChevronRight, Copy, Download, File, FileEdit, GitFork, ImageIcon, Loader2, MessageSquareQuote, PencilLine, RotateCcw, Terminal, Video, Wrench } from 'lucide-react'
 import type { AttachmentReference, ChatBlock, GeneratedFileReference, RuntimeDisclosureMetadata, ToolBlock, UserFileReference, UserInputAnswer, UserInputQuestion } from '../../agent/types'
 import { extractUnifiedDiffText } from '../../lib/diff-stats'
 import { useChatStore } from '../../store/chat-store'
@@ -137,7 +137,10 @@ function UserMessageBubble({
             </div>
           </div>
         </div>
-        <div className="mt-2 flex min-w-0 items-center justify-end">
+        <div className="mt-2 flex min-w-0 items-center justify-between gap-3">
+          <span className="min-w-0 flex-1 text-left text-[12px] font-medium leading-5 text-ds-faint">
+            {t('rewindFileRollbackNotice')}
+          </span>
           <ModelMetaTag label={block.modelLabel} />
         </div>
       </div>
@@ -1355,13 +1358,18 @@ export const MessageBubble = memo(MessageBubbleImpl)
 function MessageBubbleImpl({
   block,
   nested = false,
-  forkAction
+  forkAction,
+  rollbackAction
 }: {
   block: ChatBlock
   nested?: boolean
   forkAction?: {
     busy: boolean
     onFork: () => void
+  }
+  rollbackAction?: {
+    busy: boolean
+    onRollback: () => void
   }
 }): ReactElement {
   const { t, i18n } = useTranslation('common')
@@ -1383,6 +1391,19 @@ function MessageBubbleImpl({
           <div className="mt-1 flex min-h-5 min-w-0 items-center justify-between gap-3 text-[11.5px] text-ds-faint opacity-0 transition duration-150 group-hover/message:opacity-100">
             <span className="min-w-0 truncate">{createdAtLabel ?? ''}</span>
             <div className="flex shrink-0 items-center gap-1.5">
+              {rollbackAction ? (
+                <button
+                  type="button"
+                  onClick={() => rollbackAction.onRollback()}
+                  disabled={rollbackAction.busy}
+                  className="flex shrink-0 items-center gap-1 rounded-md px-1.5 py-0.5 transition hover:bg-ds-hover hover:text-ds-muted disabled:cursor-not-allowed disabled:opacity-60"
+                  title={t('rollbackWorkspaceFromAssistantResponse')}
+                  aria-label={t('rollbackWorkspaceFromAssistantResponse')}
+                >
+                  <RotateCcw className="h-3.5 w-3.5" strokeWidth={1.8} />
+                  <span>{rollbackAction.busy ? t('rollingBackWorkspace') : t('rollbackWorkspace')}</span>
+                </button>
+              ) : null}
               {forkAction ? (
                 <button
                   type="button"

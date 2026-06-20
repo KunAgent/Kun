@@ -690,6 +690,45 @@ describe('MessageTimeline Kun runtime metadata smoke', () => {
     expect(copyIndex).toBeGreaterThan(0)
   })
 
+  it('renders the workspace rollback action with fork in completed assistant response actions', () => {
+    const blocks: ChatBlock[] = [
+      {
+        kind: 'user',
+        id: 'user_1',
+        turnId: 'turn_1',
+        text: 'change files',
+        meta: { workspaceCheckpointId: 'gcp_1' }
+      },
+      {
+        kind: 'assistant',
+        id: 'assistant_1',
+        turnId: 'turn_1',
+        text: 'done'
+      }
+    ]
+
+    const html = renderToStaticMarkup(
+      createElement(MessageTimeline, {
+        blocks,
+        liveReasoning: '',
+        live: '',
+        activeThreadId: 'thr_1',
+        runtimeConnection: 'ready',
+        onRetryConnection: () => undefined,
+        onOpenSettings: () => undefined
+      })
+    )
+
+    expect(html).toMatch(/rollbackWorkspace|Rollback commit|回滚提交/)
+    expect(html).toMatch(/rollbackWorkspaceFromAssistantResponse|Rollback this response&#x27;s Git commit|只回滚这条回答对应的 Git 提交/)
+    const rollbackIndex = html.search(/rollbackWorkspaceFromAssistantResponse|Rollback this response&#x27;s Git commit|只回滚这条回答对应的 Git 提交/)
+    const forkIndex = html.slice(rollbackIndex).search(/forkFromAssistantResponse|Fork a new thread from this response|从这条回答分叉新会话/)
+    const copyIndex = html.slice(rollbackIndex + Math.max(forkIndex, 0)).search(/copyMessage|Copy message|复制消息/)
+    expect(rollbackIndex).toBeGreaterThanOrEqual(0)
+    expect(forkIndex).toBeGreaterThan(0)
+    expect(copyIndex).toBeGreaterThan(0)
+  })
+
   it('renders the live assistant bubble while busy is true (streaming period)', () => {
     // Streaming period: the user has just sent a turn, the agent is
     // running, and the SSE has streamed some `live` text into the chat

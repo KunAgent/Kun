@@ -28,6 +28,7 @@ type Harness = {
     clearThreadGoal: ReturnType<typeof vi.fn>
     interruptTurn: ReturnType<typeof vi.fn>
     forkThread: ReturnType<typeof vi.fn>
+    rewindThread: ReturnType<typeof vi.fn>
   }
   recoverActiveTurn: ReturnType<typeof vi.fn>
   refreshThreads: ReturnType<typeof vi.fn>
@@ -86,6 +87,7 @@ function buildHarness(options: {
     ),
     clearThreadGoal: vi.fn(async () => true),
     interruptTurn: vi.fn(async () => undefined),
+    rewindThread: vi.fn(async () => undefined),
     forkThread: vi.fn(async (
       threadId: string,
       options?: { turnId?: string }
@@ -166,6 +168,75 @@ describe('chat-store-maintenance-actions fork actions', () => {
     expect(refreshThreads).toHaveBeenCalledTimes(1)
     expect(selectThread).toHaveBeenCalledWith('thr_forked')
     expect(state.activeThreadId).toBe('thr_forked')
+  })
+})
+
+describe('chat-store-maintenance-actions workspace rollback', () => {
+  beforeEach(() => {
+    registryMock.getProvider.mockReset()
+  })
+
+  it('restores the workspace checkpoint without rewinding or resending the conversation', async () => {
+    const previousWindow = globalThis.window
+    const restoreGitCheckpoint = vi.fn(async () => ({
+      ok: true,
+      checkpointId: 'gcp_1',
+      repositoryRoot: '/workspace/deepseek-gui',
+      head: 'abc123',
+      currentBranch: 'develop',
+      rescueCheckpointId: 'gcp_rescue'
+    }))
+    ;(globalThis as { window?: unknown }).window = {
+      confirm: vi.fn(() => true),
+      kunGui: {
+        restoreGitCheckpoint
+      }
+    }
+    try {
+      const { actions, provider, sendMessage, state } = buildHarness()
+      state.blocks = [
+        { kind: 'user', id: 'user_1', turnId: 'turn_1', text: 'question', meta: { workspaceCheckpointId: 'gcp_1' } },
+        { kind: 'assistant', id: 'assistant_1', turnId: 'turn_1', text: 'answer' }
+      ]
+
+      await actions.rollbackWorkspaceToCheckpoint(' gcp_1 ')
+
+      expect(restoreGitCheckpoint).toHaveBeenCalledWith({ checkpointId: 'gcp_1' })
+      expect(provider.rewindThread).not.toHaveBeenCalled()
+      expect(sendMessage).not.toHaveBeenCalled()
+      expect(state.blocks).toHaveLength(2)
+      expect(state.error).toBeNull()
+    } finally {
+      ;(globalThis as { window?: unknown }).window = previousWindow
+    }
+  })
+
+  it('uses a checkpoint-specific error when rollback has no checkpoint id', async () => {
+    const previousWindow = globalThis.window
+    const restoreGitCheckpoint = vi.fn(async () => ({
+      ok: true,
+      checkpointId: 'gcp_1',
+      repositoryRoot: '/workspace/deepseek-gui',
+      head: 'abc123',
+      currentBranch: 'develop',
+      rescueCheckpointId: null
+    }))
+    ;(globalThis as { window?: unknown }).window = {
+      confirm: vi.fn(() => true),
+      kunGui: {
+        restoreGitCheckpoint
+      }
+    }
+    try {
+      const { actions, state } = buildHarness()
+
+      await actions.rollbackWorkspaceToCheckpoint('   ')
+
+      expect(restoreGitCheckpoint).not.toHaveBeenCalled()
+      expect(state.error).toBe('This turn has no file-change checkpoint to roll back.')
+    } finally {
+      ;(globalThis as { window?: unknown }).window = previousWindow
+    }
   })
 })
 
