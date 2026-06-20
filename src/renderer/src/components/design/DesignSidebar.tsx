@@ -47,7 +47,12 @@ export function DesignSidebar({
   }
 
   return (
-    <div className="ds-no-drag flex h-full min-h-0 flex-col bg-ds-sidebar px-1 pt-2">
+    <div className="ds-no-drag flex h-full min-h-0 flex-col bg-ds-sidebar px-1">
+      <div className="ds-drag ds-sidebar-titlebar-spacer shrink-0 pb-1 pt-2">
+        <div className="ds-sidebar-titlebar-row flex min-h-[34px] items-start">
+          <div aria-hidden className="ds-titlebar-safe-block min-w-[86px]" />
+        </div>
+      </div>
       <WorkspaceModeTabs
         activeView="design"
         onCodeOpen={onCodeOpen}
