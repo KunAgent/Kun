@@ -2699,8 +2699,11 @@ pre {
   top: 0.75rem;
   z-index: 30;
   display: flex;
+  width: max-content;
+  min-width: 2.25rem;
   max-height: min(48vh, 22rem);
   flex-direction: column;
+  align-items: center;
   gap: 0.25rem;
   align-self: flex-end;
   overflow-y: auto;
@@ -2720,17 +2723,20 @@ pre {
 
 .timeline-jump-rail-button {
   display: inline-flex;
-  min-width: 1.55rem;
+  min-width: 1.65rem;
   height: 1.55rem;
   align-items: center;
   justify-content: center;
+  padding-inline: 0.35rem;
   border: 0;
   border-radius: 999px;
   background: transparent;
   color: var(--ds-text-faint);
   font-size: 0.72rem;
   font-weight: 700;
+  font-variant-numeric: tabular-nums;
   line-height: 1;
+  white-space: nowrap;
   transition:
     background 140ms ease,
     color 140ms ease,
