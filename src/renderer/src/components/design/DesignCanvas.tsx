@@ -24,7 +24,6 @@ import { startWriteWorkspaceFileWatch } from '../../write/write-file-watch'
 import { highlightCodeHtml, renderFallbackCodeHtml } from '../../lib/code-highlighting'
 import { DesignAgentPanel } from './DesignAgentPanel'
 import { DesignContextPopover } from './DesignContextPopover'
-import { DesignGraphView } from './DesignGraphView'
 import { CanvasViewport } from './canvas/CanvasViewport'
 
 type WebviewEl = HTMLElement & { reload?: () => void }
@@ -75,7 +74,6 @@ export function DesignCanvas({ input, setInput, onSubmitPrompt, onOpenAgentSetti
 
   const activeArtifact = artifacts.find((item) => item.id === activeArtifactId) ?? null
   const relativePath = activeArtifact?.relativePath ?? ''
-  const isGraphArtifact = activeArtifact?.kind === 'graph'
   const isCanvasArtifact = activeArtifact?.kind === 'canvas'
 
   const [fileUrl, setFileUrl] = useState('')
@@ -95,7 +93,7 @@ export function DesignCanvas({ input, setInput, onSubmitPrompt, onOpenAgentSetti
     setFileUrl('')
     setReady(false)
     setError('')
-    if (canvasView === 'live' || !relativePath || !workspaceRoot || isGraphArtifact) return
+    if (canvasView === 'live' || !relativePath || !workspaceRoot || isCanvasArtifact) return
     if (typeof window.kunGui?.watchWorkspaceFile !== 'function') {
       setError(t('designCanvasUnavailable'))
       return
@@ -163,7 +161,7 @@ export function DesignCanvas({ input, setInput, onSubmitPrompt, onOpenAgentSetti
       if (retryTimer) clearTimeout(retryTimer)
       stop()
     }
-  }, [relativePath, workspaceRoot, canvasView, liveRefresh, isGraphArtifact, t])
+  }, [relativePath, workspaceRoot, canvasView, liveRefresh, isCanvasArtifact, t])
 
   // Re-highlight the cached source when switching into code view.
   useEffect(() => {
@@ -241,20 +239,6 @@ export function DesignCanvas({ input, setInput, onSubmitPrompt, onOpenAgentSetti
     return (
       <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-ds-main">
         <CanvasViewport />
-      </div>
-    )
-  }
-
-  if (isGraphArtifact && activeArtifact) {
-    return (
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-ds-main">
-        <DesignGraphView
-          artifact={activeArtifact}
-          workspaceRoot={workspaceRoot}
-          composerValue={input}
-          onComposerChange={setInput}
-          onOpenAgentSettings={onOpenAgentSettings}
-        />
       </div>
     )
   }
@@ -441,7 +425,6 @@ export function DesignCanvas({ input, setInput, onSubmitPrompt, onOpenAgentSetti
       {implementOpen ? null : (
         <div className="pointer-events-none absolute inset-x-0 bottom-4 z-30 flex justify-center px-4">
           <DesignAgentPanel
-            mode="html"
             value={input}
             onChange={setInput}
             onSubmit={(value) => onSubmitPrompt?.(value)}

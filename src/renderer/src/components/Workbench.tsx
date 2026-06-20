@@ -65,7 +65,6 @@ import { buildDesignFromCodePrompt, buildDesignTurnPrompt } from '../design/desi
 import { buildImplementDesignPrompt } from '../design/design-implement-prompt'
 import { createDesignArtifactId, type DesignArtifact } from '../design/design-types'
 import { formatDesignSystemMarkdown, hashDesignSystem } from '../design/design-context'
-import { serializeDesignGraph, starterDesignGraph } from '../design/design-graph'
 import { canImplementDesignArtifact } from '../design/design-artifact-actions'
 import { createEmptyDocument } from '../design/canvas/canvas-types'
 import { serializeCanvasDocument } from '../design/canvas/canvas-persistence'
@@ -2147,39 +2146,6 @@ export function Workbench(): ReactElement {
     openDesign()
   }
 
-  const createDesignGraph = (): void => {
-    const designWorkspaceRoot = useDesignWorkspaceStore.getState().workspaceRoot || workspaceRoot
-    if (!designWorkspaceRoot) {
-      setError(t('workspaceRequiredToCreateThread'))
-      return
-    }
-    const artifactId = createDesignArtifactId()
-    const createdAt = new Date().toISOString()
-    const relativePath = `.kun-design/${artifactId}/graph.json`
-    void (async () => {
-      try {
-        await window.kunGui.writeWorkspaceFile({
-          path: relativePath,
-          workspaceRoot: designWorkspaceRoot,
-          content: serializeDesignGraph(starterDesignGraph())
-        })
-      } catch {
-        // non-fatal: the editor creates it on first save
-      }
-      const store = useDesignWorkspaceStore.getState()
-      store.setWorkspaceRoot(designWorkspaceRoot)
-      store.upsertArtifact({
-        id: artifactId,
-        kind: 'graph',
-        title: t('designGraphTitle'),
-        relativePath,
-        createdAt,
-        updatedAt: createdAt,
-        versions: [{ id: `${artifactId}-v1`, relativePath, createdAt, summary: '' }]
-      })
-    })()
-  }
-
   const createDesignCanvas = (): void => {
     const designWorkspaceRoot = useDesignWorkspaceStore.getState().workspaceRoot || workspaceRoot
     if (!designWorkspaceRoot) {
@@ -2710,7 +2676,6 @@ export function Workbench(): ReactElement {
                 onWriteOpen={openWriteMode}
                 onDesignOpen={openDesignMode}
                 onImplement={implementDesignInCode}
-                onNewGraph={createDesignGraph}
                 onNewCanvas={createDesignCanvas}
               />
             ) : route === 'write' ? (

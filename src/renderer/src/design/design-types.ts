@@ -1,17 +1,7 @@
-/**
- * Design-mode core types.
- *
- * The unions below are the "layer on later" seams agreed for the hybrid
- * roadmap: the MVP ships only the `'html'` artifact with a `'preview' | 'code'`
- * canvas. The node-canvas phase (P2) and penpot phase (P3) each ADD a member
- * here plus a matching `case` in the canvas renderer and the turn builder —
- * they never rewrite the `'html'` path.
- */
+/** Artifact kind. `'canvas'` = Figma-style SVG design canvas. */
+export type DesignArtifactKind = 'html' | 'canvas'
 
-/** Artifact kind. `'graph'` = node canvas; `'canvas'` = Figma-style SVG design canvas. */
-export type DesignArtifactKind = 'html' | 'graph' | 'canvas'
-
-/** Canvas surface. `'live'` shows the real running app (code mode's dev server). P2 adds `'graph'`, P3 adds `'penpot'`. */
+/** Canvas surface for HTML artifacts. `'live'` shows the running dev server. */
 export type DesignCanvasView = 'preview' | 'code' | 'live'
 
 export type DesignViewport = 'mobile' | 'tablet' | 'desktop'

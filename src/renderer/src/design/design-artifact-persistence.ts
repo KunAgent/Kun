@@ -1,7 +1,7 @@
 /**
  * Durable design-artifact metadata. The in-memory artifact list is mirrored to
  * a per-artifact `.kun-design/<id>/meta.json` sidecar so the list survives a
- * reload/restart (the HTML/graph files alone can't recover title / versions /
+ * reload/restart (the HTML/canvas files alone can't recover title / versions /
  * implement provenance). On load the store rehydrates from these sidecars,
  * falling back to reconstructing from the on-disk files when a sidecar is
  * missing (artifacts created before this existed, or hand-authored dirs).
@@ -50,7 +50,7 @@ export function parseArtifactMeta(raw: string, dirId: string): DesignArtifact | 
     : []
   return {
     id,
-    kind: o.kind === 'graph' ? 'graph' : o.kind === 'canvas' ? 'canvas' : 'html',
+    kind: o.kind === 'canvas' ? 'canvas' : 'html',
     title: isStr(o.title) ? o.title : dirId,
     relativePath,
     createdAt,
@@ -65,21 +65,18 @@ export function parseArtifactMeta(raw: string, dirId: string): DesignArtifact | 
 /** Reconstruct an artifact from on-disk files when no meta.json sidecar exists. */
 export function reconstructArtifact(dirId: string, entries: WorkspaceEntry[]): DesignArtifact | null {
   const files = entries.filter((e) => e.type === 'file')
-  const hasGraph = files.some((f) => f.name === 'graph.json')
   const hasCanvas = files.some((f) => f.name === 'canvas.json')
   const htmlVersions = files
     .map((f) => /^v(\d+)\.html$/.exec(f.name))
     .filter((m): m is RegExpExecArray => m !== null)
     .map((m) => Number(m[1]))
     .sort((a, b) => b - a)
-  if (!hasGraph && !hasCanvas && htmlVersions.length === 0) return null
+  if (!hasCanvas && htmlVersions.length === 0) return null
   const now = new Date().toISOString()
-  const kind = hasCanvas ? 'canvas' : hasGraph ? 'graph' : 'html'
+  const kind: DesignArtifact['kind'] = hasCanvas ? 'canvas' : 'html'
   const relativePath = hasCanvas
     ? `${DESIGN_DIR}/${dirId}/canvas.json`
-    : hasGraph
-      ? `${DESIGN_DIR}/${dirId}/graph.json`
-      : `${DESIGN_DIR}/${dirId}/v${htmlVersions[0]}.html`
+    : `${DESIGN_DIR}/${dirId}/v${htmlVersions[0]}.html`
   const versions =
     kind === 'html'
       ? htmlVersions.map((n) => ({

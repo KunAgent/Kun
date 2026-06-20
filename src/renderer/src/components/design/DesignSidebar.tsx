@@ -1,5 +1,5 @@
 import { useRef, useState, type ReactElement } from 'react'
-import { Check, Code2, FileCode2, FilePlus2, Layers, Network, RotateCcw, Trash2, TriangleAlert } from 'lucide-react'
+import { Check, Code2, FileCode2, FilePlus2, Layers, RotateCcw, Trash2, TriangleAlert } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { WorkspaceModeTabs } from '../chat/WorkspaceModeTabs'
 import { useDesignWorkspaceStore } from '../../design/design-workspace-store'
@@ -20,8 +20,6 @@ type Props = {
   onDesignOpen: () => void
   /** Hand the artifact to the coding agent (design → code spine). */
   onImplement: (artifact: DesignArtifact) => void
-  /** Create a new node-canvas (graph) artifact. */
-  onNewGraph: () => void
   /** Create a new SVG design canvas artifact. */
   onNewCanvas: () => void
 }
@@ -32,7 +30,6 @@ export function DesignSidebar({
   onWriteOpen,
   onDesignOpen,
   onImplement,
-  onNewGraph,
   onNewCanvas
 }: Props): ReactElement {
   const { t } = useTranslation('common')
@@ -158,9 +155,7 @@ export function DesignSidebar({
                   </>
                 }
               >
-                {artifact.kind === 'graph' ? (
-                  <Network className="h-3.5 w-3.5 shrink-0 text-ds-muted" strokeWidth={1.9} />
-                ) : artifact.kind === 'canvas' ? (
+                {artifact.kind === 'canvas' ? (
                   <Layers className="h-3.5 w-3.5 shrink-0 text-ds-muted" strokeWidth={1.9} />
                 ) : (
                   <FileCode2 className="h-3.5 w-3.5 shrink-0 text-ds-muted" strokeWidth={1.9} />
@@ -205,11 +200,6 @@ export function DesignSidebar({
           label={t('designNewCanvas')}
           onClick={onNewCanvas}
         />
-        <SidebarCommandRow
-          icon={<Network className="h-4 w-4" strokeWidth={1.9} />}
-          label={t('designNewGraph')}
-          onClick={onNewGraph}
-        />
       </div>
 
       <div className="ds-no-drag mx-1.5 my-3" />
@@ -225,7 +215,6 @@ export function DesignSidebar({
             <>
               {renderSection(t('designDraftsSection'), grouped.html, t('designDraftsEmpty'))}
               {renderSection(t('designCanvasDesignSection'), grouped.canvas, t('designCanvasDesignEmpty'))}
-              {renderSection(t('designCanvasSection'), grouped.graph, t('designCanvasArtifactsEmpty'))}
             </>
           )}
           {activeArtifact?.kind === 'canvas' ? (
