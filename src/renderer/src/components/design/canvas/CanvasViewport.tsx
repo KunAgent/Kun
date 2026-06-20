@@ -15,10 +15,12 @@ import type { CanvasTool } from '../../../design/canvas/canvas-types'
 import { createEmptyDocument } from '../../../design/canvas/canvas-types'
 import { loadCanvasDocument, persistCanvasDocument } from '../../../design/canvas/canvas-persistence'
 import { handleCanvasKeyDown, handleCanvasKeyUp } from '../../../design/canvas/canvas-shortcuts'
+import { hitTest } from '../../../design/canvas/canvas-hit-test'
 import { ShapeDispatcher } from './shapes/ShapeDispatcher'
 import { CanvasGrid } from './CanvasGrid'
 import { CanvasToolbar } from './CanvasToolbar'
 import { SelectionOverlay } from './SelectionOverlay'
+import { AlignmentToolbar } from './AlignmentToolbar'
 import { SidebarTitlebarToggleButton } from '../../sidebar/SidebarPrimitives'
 
 const toolFactories: Record<CanvasTool, () => CanvasToolHandler> = {
@@ -58,6 +60,7 @@ export function CanvasViewport({
   const selectedIds = useCanvasSelectionStore((s) => s.selectedIds)
   const hoverTargetId = useCanvasSelectionStore((s) => s.hoverTargetId)
   const marqueeRect = useCanvasSelectionStore((s) => s.marqueeRect)
+  const snapGuides = useCanvasSelectionStore((s) => s.activeSnapGuides)
 
   const [docLoaded, setDocLoaded] = useState(false)
 
@@ -171,6 +174,21 @@ export function CanvasViewport({
     [tool, makePointerEvent]
   )
 
+  const onDoubleClick = useCallback(
+    (e: React.MouseEvent) => {
+      const canvas = screenToCanvas(e.clientX, e.clientY)
+      const doc = useCanvasShapeStore.getState().document
+      const hitId = hitTest(doc, canvas.x, canvas.y)
+      if (!hitId) return
+      const shape = doc.objects[hitId]
+      if (shape?.type === 'text') {
+        useCanvasSelectionStore.getState().select([hitId])
+        useCanvasSelectionStore.getState().setEditing(hitId)
+      }
+    },
+    [screenToCanvas]
+  )
+
   const onWheel = useCallback(
     (e: React.WheelEvent) => {
       e.preventDefault()
@@ -242,6 +260,7 @@ export function CanvasViewport({
         className="flex-1 overflow-hidden relative"
         style={{ background: '#f8f8f8' }}
       >
+        <AlignmentToolbar />
         {!docLoaded || !root ? (
           <div className="absolute inset-0 flex items-center justify-center text-sm text-gray-400">
             {t('designCanvasLoading')}
@@ -256,6 +275,7 @@ export function CanvasViewport({
             onPointerDown={onPointerDown}
             onPointerMove={onPointerMove}
             onPointerUp={onPointerUp}
+            onDoubleClick={onDoubleClick}
             onWheel={onWheel}
           >
             {gridVisible && <CanvasGrid zoom={zoom} />}
@@ -279,8 +299,10 @@ export function CanvasViewport({
                 selectedIds={selectedIds}
                 hoverTargetId={hoverTargetId}
                 marqueeRect={marqueeRect}
+                snapGuides={snapGuides}
                 objects={document.objects}
                 zoom={zoom}
+                viewBox={vbox}
               />
             </g>
           </svg>

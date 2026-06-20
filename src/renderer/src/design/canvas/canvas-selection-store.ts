@@ -1,11 +1,13 @@
 import { create } from 'zustand'
 import type { Rect } from './canvas-types'
+import type { SnapGuide } from './canvas-snap'
 
 type SelectionState = {
   selectedIds: Set<string>
   editingId: string | null
   hoverTargetId: string | null
   marqueeRect: Rect | null
+  activeSnapGuides: SnapGuide[]
 
   select: (ids: string[]) => void
   toggle: (id: string) => void
@@ -15,6 +17,7 @@ type SelectionState = {
   setEditing: (id: string | null) => void
   setHoverTarget: (id: string | null) => void
   setMarquee: (rect: Rect | null) => void
+  setSnapGuides: (guides: SnapGuide[]) => void
 }
 
 export const useCanvasSelectionStore = create<SelectionState>((set) => ({
@@ -22,6 +25,7 @@ export const useCanvasSelectionStore = create<SelectionState>((set) => ({
   editingId: null,
   hoverTargetId: null,
   marqueeRect: null,
+  activeSnapGuides: [],
 
   select: (ids) => set({ selectedIds: new Set(ids), editingId: null }),
 
@@ -48,5 +52,7 @@ export const useCanvasSelectionStore = create<SelectionState>((set) => ({
 
   setHoverTarget: (id) => set({ hoverTargetId: id }),
 
-  setMarquee: (rect) => set({ marqueeRect: rect })
+  setMarquee: (rect) => set({ marqueeRect: rect }),
+
+  setSnapGuides: (guides) => set({ activeSnapGuides: guides })
 }))

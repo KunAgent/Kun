@@ -12,7 +12,8 @@ import {
   Maximize,
   Undo2,
   Redo2,
-  Grid3x3
+  Grid3x3,
+  Magnet
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useCanvasViewportStore } from '../../../design/canvas/canvas-viewport-store'
@@ -38,6 +39,8 @@ function CanvasToolbarInner() {
   const zoom = useCanvasViewportStore((s) => s.getZoom())
   const gridVisible = useCanvasViewportStore((s) => s.gridVisible)
   const toggleGrid = useCanvasViewportStore((s) => s.toggleGrid)
+  const snapEnabled = useCanvasViewportStore((s) => s.snapEnabled)
+  const toggleSnap = useCanvasViewportStore((s) => s.toggleSnap)
   const undo = useCanvasShapeStore((s) => s.undo)
   const redo = useCanvasShapeStore((s) => s.redo)
 
@@ -111,6 +114,13 @@ function CanvasToolbarInner() {
         title={t('canvasGridToggle')}
       >
         <Grid3x3 className="h-4 w-4" />
+      </button>
+      <button
+        className={`${btnBase} ${snapEnabled ? btnActive : btnInactive}`}
+        onClick={toggleSnap}
+        title={t('canvasSnap')}
+      >
+        <Magnet className="h-4 w-4" />
       </button>
     </div>
   )

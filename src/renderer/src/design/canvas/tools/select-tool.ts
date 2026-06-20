@@ -1,7 +1,10 @@
 import { useCanvasSelectionStore } from '../canvas-selection-store'
 import { useCanvasShapeStore } from '../canvas-shape-store'
 import { useCanvasUndoStore } from '../canvas-undo-store'
-import { hitTest, hitTestAll } from '../canvas-hit-test'
+import { useCanvasViewportStore } from '../canvas-viewport-store'
+import { hitTest, hitTestAll, getSelectionBounds } from '../canvas-hit-test'
+import { findSnaps } from '../canvas-snap'
+import type { Rect } from '../canvas-types'
 import type { CanvasPointerEvent, CanvasToolHandler } from './tool-types'
 
 type DragMode = 'none' | 'move' | 'marquee'
@@ -10,7 +13,8 @@ export function createSelectTool(): CanvasToolHandler {
   let dragMode: DragMode = 'none'
   let dragStartX = 0
   let dragStartY = 0
-  let dragShapeStartPositions: Map<string, { x: number; y: number }> = new Map()
+  let dragShapeStartPositions: Map<string, { x: number; y: number; width: number; height: number }> = new Map()
+  let dragCollectiveStart: Rect | null = null
 
   return {
     cursor: 'default',
@@ -34,8 +38,16 @@ export function createSelectTool(): CanvasToolHandler {
         const ids = useCanvasSelectionStore.getState().selectedIds
         for (const id of ids) {
           const shape = doc.objects[id]
-          if (shape) dragShapeStartPositions.set(id, { x: shape.x, y: shape.y })
+          if (shape) {
+            dragShapeStartPositions.set(id, {
+              x: shape.x,
+              y: shape.y,
+              width: shape.width,
+              height: shape.height
+            })
+          }
         }
+        dragCollectiveStart = getSelectionBounds(doc.objects, ids)
       } else {
         if (!e.shiftKey && !e.metaKey && !e.ctrlKey) {
           selection.clearSelection()
@@ -49,8 +61,33 @@ export function createSelectTool(): CanvasToolHandler {
 
     onPointerMove(e: CanvasPointerEvent) {
       if (dragMode === 'move') {
-        const dx = e.canvasX - dragStartX
-        const dy = e.canvasY - dragStartY
+        let dx = e.canvasX - dragStartX
+        let dy = e.canvasY - dragStartY
+
+        // Apply snap based on the collective bbox if snap is enabled.
+        const viewport = useCanvasViewportStore.getState()
+        if (viewport.snapEnabled && dragCollectiveStart) {
+          const moving: Rect = {
+            x: dragCollectiveStart.x + dx,
+            y: dragCollectiveStart.y + dy,
+            width: dragCollectiveStart.width,
+            height: dragCollectiveStart.height
+          }
+          const doc = useCanvasShapeStore.getState().document
+          const staticShapes: Rect[] = []
+          for (const id of Object.keys(doc.objects)) {
+            if (id === doc.rootId) continue
+            if (dragShapeStartPositions.has(id)) continue
+            const s = doc.objects[id]
+            staticShapes.push({ x: s.x, y: s.y, width: s.width, height: s.height })
+          }
+          const gridSize = viewport.gridVisible ? 10 : null
+          const snap = findSnaps(moving, staticShapes, viewport.getZoom(), gridSize)
+          dx += snap.dx
+          dy += snap.dy
+          useCanvasSelectionStore.getState().setSnapGuides(snap.guides)
+        }
+
         const store = useCanvasShapeStore.getState()
         for (const [id, start] of dragShapeStartPositions) {
           store.updateShape(id, { x: start.x + dx, y: start.y + dy }, true)
@@ -68,23 +105,25 @@ export function createSelectTool(): CanvasToolHandler {
       }
     },
 
-    onPointerUp(e: CanvasPointerEvent) {
+    onPointerUp(_e: CanvasPointerEvent) {
       if (dragMode === 'move') {
-        const dx = e.canvasX - dragStartX
-        const dy = e.canvasY - dragStartY
-        if (Math.abs(dx) > 0.5 || Math.abs(dy) > 0.5) {
-          const patches = []
-          for (const [id, start] of dragShapeStartPositions) {
+        const doc = useCanvasShapeStore.getState().document
+        const patches: { id: string; before: { x: number; y: number }; after: { x: number; y: number } }[] = []
+        for (const [id, start] of dragShapeStartPositions) {
+          const end = doc.objects[id]
+          if (!end) continue
+          if (end.x !== start.x || end.y !== start.y) {
             patches.push({
               id,
               before: { x: start.x, y: start.y },
-              after: { x: start.x + dx, y: start.y + dy }
+              after: { x: end.x, y: end.y }
             })
           }
-          if (patches.length > 0) {
-            useCanvasUndoStore.getState().pushChange({ patches })
-          }
         }
+        if (patches.length > 0) {
+          useCanvasUndoStore.getState().pushChange({ patches, label: 'move' })
+        }
+        useCanvasSelectionStore.getState().setSnapGuides([])
       } else if (dragMode === 'marquee') {
         const marquee = useCanvasSelectionStore.getState().marqueeRect
         if (marquee && marquee.width > 2 && marquee.height > 2) {
@@ -99,6 +138,7 @@ export function createSelectTool(): CanvasToolHandler {
 
       dragMode = 'none'
       dragShapeStartPositions = new Map()
+      dragCollectiveStart = null
     }
   }
 }

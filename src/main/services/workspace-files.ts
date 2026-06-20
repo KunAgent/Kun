@@ -202,10 +202,22 @@ export async function readWorkspacePdf(
 export async function writeWorkspaceFile(
   payload: WorkspaceFileWritePayload
 ): Promise<WorkspaceFileWriteResult> {
+  // Atomic write: stage into a sibling `.tmp` then `rename` over the target.
+  // On POSIX (and NTFS via Win32 MoveFileEx with REPLACE_EXISTING, which Node uses)
+  // this is atomic within a single filesystem, so a crash mid-write leaves the
+  // previous version intact rather than producing a half-written file.
   try {
     const targetPath = await resolveTargetPathWithinWorkspace(payload.path, payload.workspaceRoot)
     await mkdir(dirname(targetPath), { recursive: true })
-    await writeFile(targetPath, payload.content, 'utf8')
+    const tmpPath = `${targetPath}.${randomUUID()}.tmp`
+    try {
+      await writeFile(tmpPath, payload.content, 'utf8')
+      await rename(tmpPath, targetPath)
+    } catch (writeError) {
+      // Best-effort cleanup; ignore if the tmp file isn't there.
+      await unlink(tmpPath).catch(() => undefined)
+      throw writeError
+    }
     return {
       ok: true,
       path: targetPath,

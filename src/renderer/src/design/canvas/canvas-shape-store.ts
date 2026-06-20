@@ -3,6 +3,7 @@ import type { CanvasDocument, CanvasShape } from './canvas-types'
 import { createEmptyDocument, createShapeId, ROOT_SHAPE_ID } from './canvas-types'
 import { useCanvasUndoStore } from './canvas-undo-store'
 import type { ShapePatch } from './canvas-undo-store'
+import { useCanvasSelectionStore } from './canvas-selection-store'
 
 type ShapeState = {
   document: CanvasDocument
@@ -23,6 +24,23 @@ type ShapeState = {
   applyPatches: (patches: ShapePatch[], direction: 'undo' | 'redo') => void
   undo: () => void
   redo: () => void
+}
+
+function makeUniqueName(
+  objects: Record<string, CanvasShape>,
+  parentId: string,
+  desiredName: string
+): string {
+  const parent = objects[parentId]
+  if (!parent) return desiredName
+  const siblings = parent.children.map((cid) => objects[cid]?.name).filter(Boolean) as string[]
+  if (!siblings.includes(desiredName)) return desiredName
+  // Strip trailing number to find base
+  const match = desiredName.match(/^(.*?)(?:\s+(\d+))?$/)
+  const base = match?.[1]?.trim() || desiredName
+  let n = 2
+  while (siblings.includes(`${base} ${n}`)) n++
+  return `${base} ${n}`
 }
 
 function collectDescendants(objects: Record<string, CanvasShape>, id: string): string[] {
@@ -100,7 +118,9 @@ export const useCanvasShapeStore = create<ShapeState>((set, get) => ({
       const parent = objects[pid]
       if (!parent) return s
 
-      const placed = { ...shape, parentId: pid }
+      // Make name unique among siblings so layers panel + AI naming stays unambiguous.
+      const uniqueName = makeUniqueName(objects, pid, shape.name)
+      const placed = { ...shape, name: uniqueName, parentId: pid }
       if (parent.type === 'frame' && pid !== s.document.rootId) {
         placed.frameId = pid
       }
@@ -120,7 +140,7 @@ export const useCanvasShapeStore = create<ShapeState>((set, get) => ({
       return { document: { ...s.document, objects } }
     })
 
-    useCanvasUndoStore.getState().pushChange({ patches })
+    useCanvasUndoStore.getState().pushChange({ patches, label: 'add-shape' })
   },
 
   updateShape: (id, patch, skipUndo) => {
@@ -286,11 +306,14 @@ export const useCanvasShapeStore = create<ShapeState>((set, get) => ({
   applyPatches: (patches, direction) => {
     set((s) => {
       const objects = { ...s.document.objects }
-      for (const patch of patches) {
+      // Undo must walk patches in reverse so chained changes (e.g. add A, then
+      // update A) revert in the opposite order they were applied.
+      const ordered = direction === 'undo' ? [...patches].reverse() : patches
+      for (const patch of ordered) {
         const values = direction === 'undo' ? patch.before : patch.after
-        if (Object.keys(values).length === 0 && direction === 'undo') {
-          delete objects[patch.id]
-        } else if (Object.keys(values).length === 0 && direction === 'redo') {
+        if (Object.keys(values).length === 0) {
+          // Empty before = the patch created the shape (undo deletes it).
+          // Empty after  = the patch deleted the shape (redo deletes it).
           delete objects[patch.id]
         } else if (objects[patch.id]) {
           objects[patch.id] = { ...objects[patch.id], ...values }
@@ -304,11 +327,15 @@ export const useCanvasShapeStore = create<ShapeState>((set, get) => ({
 
   undo: () => {
     const change = useCanvasUndoStore.getState().undo()
-    if (change) get().applyPatches(change.patches, 'undo')
+    if (!change) return
+    get().applyPatches(change.patches, 'undo')
+    useCanvasSelectionStore.getState().select(change.selectionBefore)
   },
 
   redo: () => {
     const change = useCanvasUndoStore.getState().redo()
-    if (change) get().applyPatches(change.patches, 'redo')
+    if (!change) return
+    get().applyPatches(change.patches, 'redo')
+    useCanvasSelectionStore.getState().select(change.selectionAfter)
   }
 }))

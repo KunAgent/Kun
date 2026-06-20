@@ -25,6 +25,7 @@ import { highlightCodeHtml, renderFallbackCodeHtml } from '../../lib/code-highli
 import { DesignAgentPanel } from './DesignAgentPanel'
 import { DesignContextPopover } from './DesignContextPopover'
 import { CanvasViewport } from './canvas/CanvasViewport'
+import { PropertiesPanel } from './canvas/PropertiesPanel'
 import { SidebarTitlebarToggleButton } from '../sidebar/SidebarPrimitives'
 
 type WebviewEl = HTMLElement & { reload?: () => void }
@@ -247,13 +248,16 @@ export function DesignCanvas({
 
   if (isCanvasArtifact && activeArtifact) {
     return (
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col bg-ds-main">
-        <CanvasViewport
-          workspaceRoot={workspaceRoot}
-          artifactId={activeArtifact.id}
-          leftSidebarCollapsed={leftSidebarCollapsed}
-          onToggleLeftSidebar={onToggleLeftSidebar}
-        />
+      <div className="flex min-h-0 min-w-0 flex-1 flex-row bg-ds-main">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+          <CanvasViewport
+            workspaceRoot={workspaceRoot}
+            artifactId={activeArtifact.id}
+            leftSidebarCollapsed={leftSidebarCollapsed}
+            onToggleLeftSidebar={onToggleLeftSidebar}
+          />
+        </div>
+        <PropertiesPanel />
       </div>
     )
   }

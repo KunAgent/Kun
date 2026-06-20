@@ -1,9 +1,15 @@
-import type { CanvasDocument, CanvasShape } from './canvas-types'
-import { ROOT_SHAPE_ID } from './canvas-types'
+import type { CanvasDocument, CanvasShape, Rect } from './canvas-types'
+import { pointInPolygon, shapeGeometry } from './canvas-types'
 
-function pointInBounds(px: number, py: number, shape: CanvasShape): boolean {
+function shapeHits(shape: CanvasShape, px: number, py: number): boolean {
   if (!shape.visible || shape.locked) return false
-  return px >= shape.x && px <= shape.x + shape.width && py >= shape.y && py <= shape.y + shape.height
+  const geom = shapeGeometry(shape)
+  // selrect early-out (axis-aligned coarse filter)
+  const s = geom.selrect
+  if (px < s.x || px > s.x + s.width || py < s.y || py > s.y + s.height) return false
+  // For unrotated shapes the selrect IS the shape — the coarse check above was exact.
+  if (!shape.rotation) return true
+  return pointInPolygon(px, py, geom.points)
 }
 
 function hitTestChildren(
@@ -25,7 +31,7 @@ function hitTestChildren(
       if (deepHit) return deepHit
     }
 
-    if (pointInBounds(px, py, child)) return childId
+    if (shapeHits(child, px, py)) return childId
   }
 
   return null
@@ -35,7 +41,16 @@ export function hitTest(doc: CanvasDocument, px: number, py: number): string | n
   return hitTestChildren(doc.objects, doc.rootId, px, py)
 }
 
-export function hitTestAll(doc: CanvasDocument, rect: { x: number; y: number; width: number; height: number }): string[] {
+function rectsIntersect(a: Rect, b: Rect): boolean {
+  return (
+    a.x + a.width >= b.x &&
+    a.x <= b.x + b.width &&
+    a.y + a.height >= b.y &&
+    a.y <= b.y + b.height
+  )
+}
+
+export function hitTestAll(doc: CanvasDocument, rect: Rect): string[] {
   const result: string[] = []
   const { objects, rootId } = doc
 
@@ -44,14 +59,9 @@ export function hitTestAll(doc: CanvasDocument, rect: { x: number; y: number; wi
     if (!parent) return
     for (const childId of parent.children) {
       const child = objects[childId]
-      if (!child || !child.visible) continue
-      if (
-        child.x + child.width >= rect.x &&
-        child.x <= rect.x + rect.width &&
-        child.y + child.height >= rect.y &&
-        child.y <= rect.y + rect.height &&
-        childId !== rootId
-      ) {
+      if (!child || !child.visible || childId === rootId) continue
+      const geom = shapeGeometry(child)
+      if (rectsIntersect(geom.selrect, rect)) {
         result.push(childId)
       }
       if (child.children.length > 0) walk(childId)
@@ -65,7 +75,7 @@ export function hitTestAll(doc: CanvasDocument, rect: { x: number; y: number; wi
 export function getSelectionBounds(
   objects: Record<string, CanvasShape>,
   ids: Set<string>
-): { x: number; y: number; width: number; height: number } | null {
+): Rect | null {
   let minX = Infinity
   let minY = Infinity
   let maxX = -Infinity
@@ -76,10 +86,13 @@ export function getSelectionBounds(
     const shape = objects[id]
     if (!shape) continue
     found = true
-    minX = Math.min(minX, shape.x)
-    minY = Math.min(minY, shape.y)
-    maxX = Math.max(maxX, shape.x + shape.width)
-    maxY = Math.max(maxY, shape.y + shape.height)
+    // Use the rotated bounding box so a multi-select around a rotated rect
+    // reports the actual visual extent.
+    const sel = shapeGeometry(shape).selrect
+    if (sel.x < minX) minX = sel.x
+    if (sel.y < minY) minY = sel.y
+    if (sel.x + sel.width > maxX) maxX = sel.x + sel.width
+    if (sel.y + sel.height > maxY) maxY = sel.y + sel.height
   }
 
   if (!found) return null
