@@ -10,6 +10,7 @@ import {
 } from '@shared/app-settings'
 import { parseClawCommand } from '@shared/claw-commands'
 import { DEFAULT_COMPOSER_MODEL_IDS } from '@shared/default-composer-models'
+import type { AssistantPresetId } from '@shared/assistant-presets'
 import { buildGuiPlanId, buildPlanRelativePath } from '@shared/gui-plan'
 import { sddDraftTraceRelativePath } from '@shared/sdd'
 import { buildSddTraceSnapshot } from '@shared/sdd-trace'
@@ -463,6 +464,7 @@ export function Workbench(): ReactElement {
   const [composerExecutionSettings, setComposerExecutionSettings] =
     useState<ComposerExecutionSettings | null>(null)
   const [composerExecutionApplying, setComposerExecutionApplying] = useState(false)
+  const [assistantPresetId, setAssistantPresetId] = useState<AssistantPresetId | ''>('')
   const [attachmentUploadBusy, setAttachmentUploadBusy] = useState(false)
   const [attachmentUploadError, setAttachmentUploadError] = useState<string | null>(null)
   const [connectPhoneSidebarOpen, setConnectPhoneSidebarOpen] = useState(false)
@@ -2072,6 +2074,7 @@ export function Workbench(): ReactElement {
     void sendMessage(prepared.text, mode === 'plan' ? 'plan' : 'agent', {
       ...(prepared.displayText ? { displayText: prepared.displayText } : {}),
       ...(reasoningEffort ? { reasoningEffort } : {}),
+      ...(assistantPresetId && mode !== 'plan' ? { assistantPresetId } : {}),
       ...(attachmentIds.length ? { attachmentIds, attachments } : {}),
       ...(userFileReferences.length ? { fileReferences: userFileReferences } : {})
     })
@@ -2667,6 +2670,7 @@ export function Workbench(): ReactElement {
                 webAccessAvailable={webAccessAvailable}
                 executionSettings={composerExecutionSettings}
                 executionSettingsApplying={composerExecutionApplying}
+                assistantPresetId={assistantPresetId}
                 changedFiles={composerChangeSummary?.files}
                 changedFileStats={composerChangeSummary}
                 skillCommands={runtimeSkills}
@@ -2687,6 +2691,7 @@ export function Workbench(): ReactElement {
                 onNewCommand={() => void createThread({ workspaceRoot: activeSkillWorkspace, forceNew: true })}
                 onReviewCommand={(target) => void reviewActiveThread(target)}
                 onExecutionSettingsChange={updateComposerExecutionSettings}
+                onAssistantPresetChange={setAssistantPresetId}
                 onOpenChanges={() => setRightPanelMode('changes')}
                 onReviewChanges={() => void reviewActiveThread({ kind: 'uncommittedChanges' })}
                 reviewChangesDisabled={busy || runtimeConnection !== 'ready'}

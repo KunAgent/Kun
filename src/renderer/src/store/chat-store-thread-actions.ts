@@ -603,6 +603,7 @@ export function createThreadActions(
         overrides?.modelLabel ?? optimisticUserModelLabel(composerModel, threadSnap?.model)
       const displayText = overrides?.displayText?.trim()
       const reasoningEffort = overrides?.reasoningEffort?.trim()
+      const assistantPresetId = overrides?.assistantPresetId
       const attachmentIds = overrides?.attachmentIds?.filter((id) => id.trim().length > 0)
       const attachments = overrides?.attachments?.filter((attachment) => attachment.id.trim().length > 0)
       const fileReferences = overrides?.fileReferences?.filter((reference) =>
@@ -622,6 +623,7 @@ export function createThreadActions(
             ...(composerProviderId ? { providerId: composerProviderId } : {}),
             ...(userModelChip ? { modelLabel: userModelChip } : {}),
             ...(reasoningEffort ? { reasoningEffort } : {}),
+            ...(assistantPresetId ? { assistantPresetId } : {}),
             ...(overrides?.guiPlan ? { guiPlan: overrides.guiPlan } : {}),
             ...(attachmentIds?.length ? { attachmentIds } : {}),
             ...(attachments?.length ? { attachments } : {}),
@@ -677,6 +679,7 @@ export function createThreadActions(
     const composerProviderId =
       queued?.providerId ?? overrides?.providerId?.trim() ?? fallbackComposerProviderIdForSend(get())
     const reasoningEffort = queued?.reasoningEffort ?? overrides?.reasoningEffort?.trim()
+    const assistantPresetId = queued?.assistantPresetId ?? overrides?.assistantPresetId
     const userModelChip =
       queued?.modelLabel ?? overrides?.modelLabel ?? optimisticUserModelLabel(composerModel, threadSnap?.model)
     const previousBlocks = get().blocks
@@ -852,6 +855,7 @@ export function createThreadActions(
         mode,
         ...(composerModel ? { model: composerModel } : {}),
         ...(reasoningEffort ? { reasoningEffort } : {}),
+        ...(assistantPresetId ? { assistantPresetId } : {}),
         ...(runtimeDisplayText ? { displayText: runtimeDisplayText } : {}),
         ...((queued?.guiPlan ?? overrides?.guiPlan) ? { guiPlan: queued?.guiPlan ?? overrides?.guiPlan } : {}),
         ...(attachmentIds.length ? { attachmentIds } : {}),

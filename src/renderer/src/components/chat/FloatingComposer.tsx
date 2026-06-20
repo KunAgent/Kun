@@ -40,6 +40,7 @@ import {
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { ModelProviderModelGroup } from '@shared/kun-gui-api'
+import { ASSISTANT_PRESETS, type AssistantPresetId } from '@shared/assistant-presets'
 import type { AttachmentReference, ChatBlock, ReviewTarget } from '../../agent/types'
 import { useChatStore } from '../../store/chat-store'
 import { normalizeWorkspaceRoot } from '../../lib/workspace-path'
@@ -151,6 +152,7 @@ type Props = {
   webAccessAvailable?: boolean
   executionSettings?: ComposerExecutionSettings | null
   executionSettingsApplying?: boolean
+  assistantPresetId?: AssistantPresetId | ''
   changedFiles?: ComposerChangedFile[]
   changedFileStats?: { added: number; removed: number } | null
   skillCommands?: Array<{
@@ -183,6 +185,7 @@ type Props = {
   onToggleWorktreeMode?: () => void
   onReviewCommand?: (target: ReviewTarget) => void
   onExecutionSettingsChange?: (patch: Partial<ComposerExecutionSettings>) => void
+  onAssistantPresetChange?: (presetId: AssistantPresetId | '') => void
   onOpenChanges?: () => void
   onReviewChanges?: () => void
   reviewChangesDisabled?: boolean
@@ -472,6 +475,7 @@ export function FloatingComposer({
   fileReferences = EMPTY_FILE_REFERENCES,
   executionSettings = null,
   executionSettingsApplying = false,
+  assistantPresetId = '',
   changedFiles = EMPTY_CHANGED_FILES,
   changedFileStats = null,
   skillCommands = EMPTY_SKILL_COMMANDS,
@@ -491,6 +495,7 @@ export function FloatingComposer({
   onToggleWorktreeMode,
   onReviewCommand,
   onExecutionSettingsChange,
+  onAssistantPresetChange,
   onOpenChanges,
   onReviewChanges,
   reviewChangesDisabled = false,
@@ -599,6 +604,7 @@ export function FloatingComposer({
   const showExecutionSettingsPicker = showIntentToolbar
     && Boolean(executionSettings)
     && Boolean(onExecutionSettingsChange)
+  const showAssistantPresetPicker = showIntentToolbar && Boolean(onAssistantPresetChange)
   const showChangeSummary = !compact && route === 'chat' && changedFiles.length > 0
   const effectiveChangedFileStats = changedFileStats ?? changedFiles.reduce(
     (stats, file) => ({
@@ -2145,6 +2151,27 @@ export function FloatingComposer({
                     disabled={!canCompose || busy}
                     onChange={onExecutionSettingsChange}
                   />
+                ) : null}
+                {showAssistantPresetPicker ? (
+                  <label
+                    className="ds-no-drag inline-flex h-8 max-w-[180px] shrink-0 items-center gap-1.5 rounded-lg border border-ds-border-muted bg-ds-card/72 px-2 text-[12.5px] font-semibold text-ds-muted shadow-sm transition hover:bg-ds-hover hover:text-ds-ink"
+                    title={t('assistantPresetPickerTitle')}
+                  >
+                    <Sparkles className="h-3.5 w-3.5 shrink-0" strokeWidth={1.8} />
+                    <select
+                      value={assistantPresetId}
+                      onChange={(event) => onAssistantPresetChange?.(event.target.value as AssistantPresetId | '')}
+                      className="min-w-0 bg-transparent text-ds-muted outline-none"
+                      aria-label={t('assistantPresetPickerTitle')}
+                    >
+                      <option value="">{t('assistantPresetGeneral')}</option>
+                      {ASSISTANT_PRESETS.map((preset) => (
+                        <option key={preset.id} value={preset.id}>
+                          {t(preset.nameKey)}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
                 ) : null}
               </div>
             ) : null}

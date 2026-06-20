@@ -22,6 +22,7 @@ import type {
   ClawModel
 } from '@shared/app-settings'
 import type { ModelProviderModelGroup } from '@shared/kun-gui-api'
+import type { AssistantPresetId } from '@shared/assistant-presets'
 
 export type QueuedUserMessage = {
   id: string
@@ -32,6 +33,7 @@ export type QueuedUserMessage = {
   providerId?: string
   modelLabel?: string
   reasoningEffort?: string
+  assistantPresetId?: AssistantPresetId
   attachmentIds?: string[]
   attachments?: AttachmentReference[]
   fileReferences?: UserFileReference[]
@@ -71,6 +73,7 @@ export type SendMessageOverrides = {
   providerId?: string
   modelLabel?: string
   reasoningEffort?: string
+  assistantPresetId?: AssistantPresetId
   displayText?: string
   guiPlan?: GuiPlanMessageContext
   attachmentIds?: string[]

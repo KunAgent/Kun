@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { TurnItem, UserFileReferenceSchema } from './items.js'
 import { isGuiPlanRelativePath } from '../shared/gui-plan.js'
 import { ApprovalPolicySchema, SandboxModeSchema } from './policy.js'
+import { isAssistantPresetId } from '../shared/assistant-presets.js'
 
 /**
  * Mode enum, inlined here (instead of importing `ThreadMode` from
@@ -41,6 +42,10 @@ export const GuiPlanContextSchema = z.object({
 })
 export type GuiPlanContextJson = z.infer<typeof GuiPlanContextSchema>
 
+export const AssistantPresetIdSchema = z.string().refine(isAssistantPresetId, {
+  message: 'assistantPresetId must be a built-in assistant preset id'
+})
+
 export const TurnStatus = z.enum([
   'queued',
   'running',
@@ -71,6 +76,7 @@ export const TurnSchema = z.object({
   toolCatalogFingerprint: z.string().optional(),
   toolCatalogToolCount: z.number().int().nonnegative().optional(),
   toolCatalogDrift: z.boolean().optional(),
+  assistantPresetId: AssistantPresetIdSchema.optional(),
   guiPlan: GuiPlanContextSchema.optional(),
   /**
    * Optional per-turn mode override. When set, it takes precedence over
@@ -112,6 +118,7 @@ export const StartTurnRequest = z.object({
   attachmentIds: z.array(z.string().min(1)).default([]),
   fileReferences: z.array(UserFileReferenceSchema).default([]),
   workspaceCheckpointId: z.string().min(1).optional(),
+  assistantPresetId: AssistantPresetIdSchema.optional(),
   /**
    * Optional GUI plan context. When set, Kun advertises the
    * `create_plan` tool for the turn and writes only to the reserved

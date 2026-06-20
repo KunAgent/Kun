@@ -89,6 +89,7 @@ import {
   DEFAULT_MAX_GOAL_RESUME_NO_PROGRESS_ATTEMPTS,
   type GoalResumeCoordinatorDeps
 } from './goal-resume-coordinator.js'
+import { assistantPresetInstruction } from '../shared/assistant-presets.js'
 
 const PARALLEL_READ_ONLY_TOOL_NAMES = new Set(['read', 'grep', 'find', 'ls'])
 const DELEGATE_TASK_TOOL_NAME = 'delegate_task'
@@ -1175,7 +1176,9 @@ export class AgentLoop {
     await this.recordPipelineStage(threadId, turnId, 'input_compressed', {
       historyItems: history.length
     })
+    const selectedAssistantPresetInstruction = assistantPresetInstruction(turn?.assistantPresetId)
     const contextInstructions = [
+      ...(selectedAssistantPresetInstruction ? [selectedAssistantPresetInstruction] : []),
       ...(activeGoalInstruction ? [activeGoalInstruction] : []),
       ...(goalRecoveryInstruction && (this.goalNoToolRecoveryStepsByTurn.get(turnId) ?? 0) > 0
         ? [goalRecoveryInstruction]

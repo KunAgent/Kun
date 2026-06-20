@@ -1,4 +1,5 @@
 import type { GuiPlanContextJson, Turn, TurnReasoningEffort, TurnStatus } from '../contracts/turns.js'
+import type { AssistantPresetId } from '../shared/assistant-presets.js'
 import type { ThreadMode } from '../contracts/threads.js'
 import type { TurnItem } from '../contracts/items.js'
 
@@ -15,6 +16,7 @@ export function createTurnRecord(input: {
   mode?: ThreadMode
   disableUserInput?: boolean
   workspaceCheckpointId?: string
+  assistantPresetId?: AssistantPresetId
   createdAt?: string
   status?: TurnStatus
 }): TurnEntity {
@@ -36,6 +38,7 @@ export function createTurnRecord(input: {
     ...(input.mode ? { mode: input.mode } : {}),
     ...(input.disableUserInput ? { disableUserInput: true } : {}),
     ...(input.workspaceCheckpointId ? { workspaceCheckpointId: input.workspaceCheckpointId } : {}),
+    ...(input.assistantPresetId ? { assistantPresetId: input.assistantPresetId } : {}),
     createdAt: input.createdAt ?? new Date().toISOString()
   }
 }

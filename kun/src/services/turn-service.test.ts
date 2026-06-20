@@ -18,6 +18,47 @@ import { RuntimeEventRecorder } from './runtime-event-recorder.js'
 import { TurnService } from './turn-service.js'
 import { UsageService } from './usage-service.js'
 
+describe('TurnService startTurn', () => {
+  it('persists the selected assistant preset on the turn record', async () => {
+    const sessionStore = new InMemorySessionStore()
+    const threadStore = new InMemoryThreadStore()
+    const eventBus = new InMemoryEventBus()
+    const nowIso = () => '2026-06-18T00:00:00.000Z'
+    const service = new TurnService({
+      threadStore,
+      sessionStore,
+      events: new RuntimeEventRecorder({
+        eventBus,
+        sessionStore,
+        allocateSeq: (threadId) => eventBus.allocateSeq(threadId),
+        nowIso
+      }),
+      inflight: new InflightTracker(),
+      steering: new SteeringQueue(),
+      compactor: new ContextCompactor(),
+      ids: new SequentialIdGenerator(),
+      nowIso
+    })
+    await threadStore.upsert(createThreadRecord({
+      id: 'thr_preset',
+      title: 'Preset',
+      workspace: '/tmp/workspace',
+      model: 'thread-model'
+    }))
+
+    const response = await service.startTurn({
+      threadId: 'thr_preset',
+      request: {
+        prompt: 'review this',
+        assistantPresetId: 'code-review'
+      }
+    })
+
+    const stored = await threadStore.get('thr_preset')
+    expect(stored?.turns.find((turn) => turn.id === response.turnId)?.assistantPresetId).toBe('code-review')
+  })
+})
+
 class SummaryModel implements ModelClient {
   readonly provider = 'test'
   readonly model = 'summary-model'

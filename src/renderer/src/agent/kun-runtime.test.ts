@@ -253,6 +253,27 @@ describe('KunRuntimeProvider', () => {
     )
   })
 
+  it('posts selected assistant presets with Kun turn requests when provided', async () => {
+    const runtimeRequest = vi.fn(async () => ({
+      ok: true,
+      status: 202,
+      body: JSON.stringify({ threadId: 'thr_1', turnId: 'turn_abc', userMessageItemId: 'item_user_real' })
+    }))
+    installDsGui({ runtimeRequest })
+    const provider = new KunRuntimeProvider()
+    await provider.sendUserMessage('thr_1', 'review this', { assistantPresetId: 'code-review' })
+    expect(runtimeRequest).toHaveBeenCalledWith(
+      '/v1/threads/thr_1/turns',
+      'POST',
+      JSON.stringify({
+        prompt: 'review this',
+        approvalPolicy: 'auto',
+        sandboxMode: 'danger-full-access',
+        assistantPresetId: 'code-review'
+      })
+    )
+  })
+
   it('posts rewind requests to the runtime', async () => {
     const runtimeRequest = vi.fn(async () => ({ ok: true, status: 200, body: '{}' }))
     installDsGui({ runtimeRequest })

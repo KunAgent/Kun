@@ -71,6 +71,7 @@ import {
   threadFromCore
 } from './kun-mapper'
 import { rendererRuntimeClient } from './runtime-client'
+import type { AssistantPresetId } from '@shared/assistant-presets'
 
 function createSseStreamId(): string {
   return globalThis.crypto?.randomUUID?.() ?? `sse-${Date.now()}-${Math.random().toString(16).slice(2)}`
@@ -244,6 +245,7 @@ export class KunRuntimeProvider implements AgentProvider {
       }
       attachmentIds?: string[]
       workspaceCheckpointId?: string
+      assistantPresetId?: AssistantPresetId
       fileReferences?: Array<{ path: string; relativePath: string; name: string; kind?: 'file' | 'directory' }>
     }
   ): Promise<{ turnId: string; threadId: string; userMessageItemId?: string }> {
@@ -280,6 +282,9 @@ export class KunRuntimeProvider implements AgentProvider {
     }
     if (options?.workspaceCheckpointId?.trim()) {
       body.workspaceCheckpointId = options.workspaceCheckpointId.trim()
+    }
+    if (options?.assistantPresetId?.trim()) {
+      body.assistantPresetId = options.assistantPresetId.trim()
     }
     if (options?.fileReferences?.length) {
       body.fileReferences = options.fileReferences

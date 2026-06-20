@@ -9,6 +9,7 @@ import type {
   CoreRuntimeToolDiagnosticsJson
 } from './kun-contract'
 import type { ApprovalPolicy, SandboxMode } from '@shared/app-settings'
+import type { AssistantPresetId } from '@shared/assistant-presets'
 
 export type ToolItemKind = 'tool_call' | 'command_execution' | 'file_change'
 export type RuntimeErrorSeverity = 'info' | 'warning' | 'error'
@@ -453,6 +454,7 @@ export interface AgentProvider {
       }
       attachmentIds?: string[]
       workspaceCheckpointId?: string
+      assistantPresetId?: AssistantPresetId
       fileReferences?: UserFileReference[]
     }
   ): Promise<{ turnId: string; threadId: string; userMessageItemId?: string }>

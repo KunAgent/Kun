@@ -31,6 +31,7 @@ import { touchThread } from '../domain/thread.js'
 import type { RuntimeEventRecorder } from './runtime-event-recorder.js'
 import type { UsageService } from './usage-service.js'
 import { createImmutablePrefix } from '../cache/immutable-prefix.js'
+import { isAssistantPresetId } from '../shared/assistant-presets.js'
 
 export type TurnServiceDeps = {
   threadStore: ThreadStore
@@ -80,7 +81,10 @@ export class TurnService {
       guiPlan: input.request.guiPlan,
       mode: input.request.mode,
       disableUserInput: input.request.disableUserInput,
-      workspaceCheckpointId: input.request.workspaceCheckpointId
+      workspaceCheckpointId: input.request.workspaceCheckpointId,
+      assistantPresetId: isAssistantPresetId(input.request.assistantPresetId)
+        ? input.request.assistantPresetId
+        : undefined
     })
     const userItem = makeUserItem({
       id: `item_${turnId}_user`,
