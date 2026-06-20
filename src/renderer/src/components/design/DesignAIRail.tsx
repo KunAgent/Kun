@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useRef } from 'react'
-import { Send, Loader2, MessageSquare, Trash2 } from 'lucide-react'
+import { Send, Loader2, MessageSquare, Trash2, PanelRightOpen, PanelRightClose } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import {
   useDesignAssistantStore,
@@ -30,6 +30,8 @@ function DesignAIRailInner({ onOpenSettings }: Props) {
   const assistantModel = useDesignWorkspaceStore((s) => s.assistantModel)
   const assistantProviderId = useDesignWorkspaceStore((s) => s.assistantProviderId)
   const setAssistantModel = useDesignWorkspaceStore((s) => s.setAssistantModel)
+  const collapsed = useDesignWorkspaceStore((s) => s.aiRailCollapsed)
+  const setCollapsed = useDesignWorkspaceStore((s) => s.setAiRailCollapsed)
 
   const composerPickList = useChatStore((s) => s.composerPickList)
   const composerModelGroups = useChatStore((s) => s.composerModelGroups)
@@ -85,11 +87,39 @@ function DesignAIRailInner({ onOpenSettings }: Props) {
 
   const canSend = input.trim().length > 0 && !busy && runtimeReady && Boolean(workspaceRoot)
 
+  // Collapsed: render only a thin strip with an expand button + the chat icon.
+  if (collapsed) {
+    return (
+      <div className="ds-no-drag flex h-full w-9 shrink-0 flex-col items-center gap-2 border-l border-[var(--ds-sidebar-row-ring)] bg-white py-2 dark:bg-[#1f242c]">
+        <button
+          type="button"
+          onClick={() => setCollapsed(false)}
+          className="inline-flex h-7 w-7 items-center justify-center rounded-md text-[#8b95a3] transition-colors hover:bg-black/[0.04] hover:text-[#1f2733] dark:text-white/45 dark:hover:bg-white/10 dark:hover:text-white/85"
+          title={t('designRailExpand')}
+          aria-label={t('designRailExpand')}
+        >
+          <PanelRightOpen className="h-4 w-4" strokeWidth={1.9} />
+        </button>
+        <MessageSquare className="h-4 w-4 text-[#3b82d8]" strokeWidth={1.9} aria-hidden="true" />
+        {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin text-[#8b95a3]" /> : null}
+      </div>
+    )
+  }
+
   return (
     <div className="ds-no-drag flex h-full w-[380px] shrink-0 flex-col border-l border-[var(--ds-sidebar-row-ring)] bg-white dark:bg-[#1f242c]">
       {/* Header */}
       <div className="flex shrink-0 items-center justify-between gap-2 px-3 py-2 shadow-[inset_0_-1px_0_var(--ds-sidebar-row-ring)]">
         <div className="flex min-w-0 items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setCollapsed(true)}
+            className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-[#8b95a3] transition-colors hover:bg-black/[0.04] hover:text-[#1f2733] dark:text-white/45 dark:hover:bg-white/10 dark:hover:text-white/85"
+            title={t('designRailCollapse')}
+            aria-label={t('designRailCollapse')}
+          >
+            <PanelRightClose className="h-4 w-4" strokeWidth={1.9} />
+          </button>
           <MessageSquare className="h-4 w-4 shrink-0 text-[#3b82d8]" strokeWidth={1.9} />
           <div className="min-w-0">
             <div className="text-[13px] font-medium text-[#1f2733] dark:text-white/90">

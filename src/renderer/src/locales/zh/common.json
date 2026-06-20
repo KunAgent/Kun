@@ -171,6 +171,8 @@
   "designRailThinking": "思考中…",
   "designRailPlaceholder": "描述你想设计的界面…",
   "designRailSend": "发送",
+  "designRailCollapse": "折叠助手",
+  "designRailExpand": "展开助手",
   "designSystem_none": "无预设",
   "designSystem_shadcn": "shadcn/ui",
   "designSystem_material": "Material",

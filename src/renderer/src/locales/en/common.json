@@ -171,6 +171,8 @@
   "designRailThinking": "Thinking…",
   "designRailPlaceholder": "Describe what you want to design…",
   "designRailSend": "Send",
+  "designRailCollapse": "Collapse assistant",
+  "designRailExpand": "Expand assistant",
   "designSystem_none": "No preset",
   "designSystem_shadcn": "shadcn/ui",
   "designSystem_material": "Material",

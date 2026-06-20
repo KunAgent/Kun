@@ -10,7 +10,6 @@ export type DesignWorkspaceState = {
   viewport: DesignViewport
   /** Live dev-server URL synced from code mode; '' = none running. */
   devPreviewUrl: string
-  agentPanelOpen: boolean
   /** Composer model used for design-agent turns; '' = inherit runtime default. */
   assistantModel: string
   assistantProviderId: string
@@ -32,6 +31,8 @@ export type DesignWorkspaceState = {
   implementOpen: boolean
   /** Title of the artifact being implemented (panel header). */
   implementTitle: string
+  /** When true, the right-side Design AI Rail collapses to a thin strip. Persisted. */
+  aiRailCollapsed: boolean
 
   setWorkspaceRoot: (workspaceRoot: string) => void
   setCanvasView: (view: DesignCanvasView) => void
@@ -50,10 +51,10 @@ export type DesignWorkspaceState = {
   renameArtifact: (artifactId: string, title: string) => void
   /** Set or clear the design-mode error banner. */
   setFileError: (error: string | null) => void
-  setAgentPanelOpen: (open: boolean) => void
   /** Open the in-page "implement in code" assistant for an artifact. */
   openImplementPanel: (title: string) => void
   closeImplementPanel: () => void
+  setAiRailCollapsed: (collapsed: boolean) => void
   setAssistantModel: (model: string, providerId?: string) => void
   updateDesignContext: (patch: Partial<DesignContext>) => void
   /** Hydrate workspace root + design context defaults from persisted settings. */

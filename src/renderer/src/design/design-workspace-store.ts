@@ -14,7 +14,7 @@ import type { DesignWorkspaceState } from './design-workspace-store-types'
 
 const CANVAS_VIEW_KEY = 'kun.design.canvasView.v1'
 const VIEWPORT_KEY = 'kun.design.viewport.v1'
-const AGENT_PANEL_KEY = 'kun.design.agentPanelOpen.v1'
+const AI_RAIL_COLLAPSED_KEY = 'kun.design.aiRailCollapsed.v1'
 
 /**
  * Ids removed this session, filtered out of rehydration so a not-yet-flushed
@@ -31,8 +31,8 @@ function readPersistedViewport(): DesignViewport {
   return value === 'mobile' || value === 'tablet' ? value : 'desktop'
 }
 
-function readPersistedAgentPanelOpen(): boolean {
-  return readBrowserStorageItem(AGENT_PANEL_KEY) !== '0'
+function readPersistedAiRailCollapsed(): boolean {
+  return readBrowserStorageItem(AI_RAIL_COLLAPSED_KEY) === '1'
 }
 
 export const useDesignWorkspaceStore = create<DesignWorkspaceState>((set, get) => ({
@@ -42,7 +42,6 @@ export const useDesignWorkspaceStore = create<DesignWorkspaceState>((set, get) =
   canvasView: readPersistedCanvasView(),
   viewport: readPersistedViewport(),
   devPreviewUrl: '',
-  agentPanelOpen: readPersistedAgentPanelOpen(),
   assistantModel: '',
   assistantProviderId: '',
   designContext: {},
@@ -59,6 +58,7 @@ export const useDesignWorkspaceStore = create<DesignWorkspaceState>((set, get) =
   designSystemHash: '',
   implementOpen: false,
   implementTitle: '',
+  aiRailCollapsed: readPersistedAiRailCollapsed(),
 
   setWorkspaceRoot: (workspaceRoot) => set({ workspaceRoot }),
 
@@ -148,14 +148,14 @@ export const useDesignWorkspaceStore = create<DesignWorkspaceState>((set, get) =
 
   setFileError: (error) => set({ fileError: error }),
 
-  setAgentPanelOpen: (open) => {
-    writeBrowserStorageItem(AGENT_PANEL_KEY, open ? '1' : '0')
-    set({ agentPanelOpen: open })
-  },
-
   openImplementPanel: (title) => set({ implementOpen: true, implementTitle: title }),
 
   closeImplementPanel: () => set({ implementOpen: false }),
+
+  setAiRailCollapsed: (collapsed) => {
+    writeBrowserStorageItem(AI_RAIL_COLLAPSED_KEY, collapsed ? '1' : '0')
+    set({ aiRailCollapsed: collapsed })
+  },
 
   setAssistantModel: (model, providerId) =>
     set({ assistantModel: model, assistantProviderId: providerId ?? '' }),
