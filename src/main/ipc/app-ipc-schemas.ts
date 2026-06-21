@@ -1431,6 +1431,87 @@ export const workspaceFileWatchPayloadSchema = z
   })
   .strict()
 
+export const larkDocumentListPayloadSchema = z
+  .object({
+    query: optionalTrimmedString(512),
+    pageSize: z.number().int().positive().max(20).optional(),
+    maxPages: z.number().int().positive().max(10).optional(),
+    editedSince: optionalTrimmedString(32),
+    openedSince: optionalTrimmedString(32),
+    wide: z.boolean().optional()
+  })
+  .strict()
+
+export const larkImportedDocumentsPayloadSchema = z
+  .object({
+    workspaceRoot: trimmedString(MAX_PATH_LENGTH)
+  })
+  .strict()
+
+export const larkCliConfigurePayloadSchema = z
+  .object({
+    appId: trimmedString(512),
+    appSecret: trimmedString(MAX_BODY_BYTES),
+    domain: z.string().trim().max(32).optional()
+  })
+  .strict()
+
+export const larkDocumentAuthCompletePayloadSchema = z
+  .object({
+    deviceCode: trimmedString(MAX_DEVICE_CODE_LENGTH)
+  })
+  .strict()
+
+const larkDocumentListItemSchema = z
+  .object({
+    id: trimmedString(MAX_URL_LENGTH),
+    source: z.literal('lark'),
+    title: trimmedString(512),
+    url: z.string().trim().max(MAX_URL_LENGTH),
+    token: z.string().trim().max(MAX_URL_LENGTH),
+    extension: z.string().trim().max(64),
+    larkType: z.string().trim().max(64).nullable().optional(),
+    ownerName: z.string().trim().max(256).nullable().optional(),
+    updatedAt: z.string().trim().max(128).nullable().optional(),
+    createdAt: z.string().trim().max(128).nullable().optional(),
+    openedAt: z.string().trim().max(128).nullable().optional(),
+    matchedBy: z.array(z.string().trim().max(64)).max(8).optional()
+  })
+  .strict()
+
+export const larkDocumentImportPayloadSchema = z
+  .object({
+    workspaceRoot: trimmedString(MAX_PATH_LENGTH),
+    document: larkDocumentListItemSchema,
+    limit: z.number().int().positive().max(400_000).optional()
+  })
+  .strict()
+
+export const larkDocumentMetadataPayloadSchema = z
+  .object({
+    workspaceRoot: trimmedString(MAX_PATH_LENGTH),
+    path: trimmedString(MAX_PATH_LENGTH)
+  })
+  .strict()
+
+export const larkDocumentUpdatePayloadSchema = z
+  .object({
+    workspaceRoot: trimmedString(MAX_PATH_LENGTH),
+    path: trimmedString(MAX_PATH_LENGTH),
+    content: z.string().max(MAX_BODY_BYTES),
+    mode: z.enum(['overwrite', 'create']).optional(),
+    title: z.string().trim().max(512).optional()
+  })
+  .strict()
+
+export const larkDocumentRefreshPayloadSchema = z
+  .object({
+    workspaceRoot: trimmedString(MAX_PATH_LENGTH),
+    path: trimmedString(MAX_PATH_LENGTH),
+    limit: z.number().int().positive().max(400_000).optional()
+  })
+  .strict()
+
 export const writeRetrievalPayloadSchema = z
   .object({
     workspaceRoot: defaultPathSchema,

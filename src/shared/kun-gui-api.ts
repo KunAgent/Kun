@@ -83,6 +83,26 @@ import type {
   WriteRetrievalResult
 } from './write-retrieval'
 import type {
+  LarkCliConfigurePayload,
+  LarkCliConfigureResult,
+  LarkCliInstallResult,
+  LarkDocumentAuthCompletePayload,
+  LarkDocumentAuthCompleteResult,
+  LarkDocumentAuthStartResult,
+  LarkImportedDocumentsPayload,
+  LarkImportedDocumentsResult,
+  LarkDocumentImportPayload,
+  LarkDocumentImportResult,
+  LarkDocumentMetadataPayload,
+  LarkDocumentMetadataResult,
+  LarkDocumentListPayload,
+  LarkDocumentListResult,
+  LarkDocumentRefreshPayload,
+  LarkDocumentRefreshResult,
+  LarkDocumentUpdatePayload,
+  LarkDocumentUpdateResult
+} from './lark-document'
+import type {
   WriteExportPayload,
   WriteExportResult,
   WriteRichClipboardPayload,
@@ -408,6 +428,30 @@ export type KunGuiApi = {
   retrieveWriteContext: (
     payload: WriteRetrievalRequest
   ) => Promise<WriteRetrievalResult>
+  installLarkCli: () => Promise<LarkCliInstallResult>
+  configureLarkCli: (
+    payload: LarkCliConfigurePayload
+  ) => Promise<LarkCliConfigureResult>
+  startLarkDocumentAuth: () => Promise<LarkDocumentAuthStartResult>
+  completeLarkDocumentAuth: (
+    payload: LarkDocumentAuthCompletePayload
+  ) => Promise<LarkDocumentAuthCompleteResult>
+  listLarkDocuments: (payload?: LarkDocumentListPayload) => Promise<LarkDocumentListResult>
+  listImportedLarkDocuments: (
+    payload: LarkImportedDocumentsPayload
+  ) => Promise<LarkImportedDocumentsResult>
+  importLarkDocumentToWorkspace: (
+    payload: LarkDocumentImportPayload
+  ) => Promise<LarkDocumentImportResult>
+  getLarkDocumentImportMetadata: (
+    payload: LarkDocumentMetadataPayload
+  ) => Promise<LarkDocumentMetadataResult>
+  refreshLarkDocumentFromWorkspace: (
+    payload: LarkDocumentRefreshPayload
+  ) => Promise<LarkDocumentRefreshResult>
+  updateLarkDocumentFromWorkspace: (
+    payload: LarkDocumentUpdatePayload
+  ) => Promise<LarkDocumentUpdateResult>
   generateWriteInfographic: (
     payload: WriteInfographicRequest
   ) => Promise<WriteInfographicResult>

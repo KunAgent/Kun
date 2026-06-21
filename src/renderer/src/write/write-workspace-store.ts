@@ -98,6 +98,82 @@ export const useWriteWorkspaceStore = create<WriteWorkspaceState>((set, get) => 
     }
   }),
 
+  listLarkDocuments: async (payload = {}) => {
+    if (typeof window.kunGui?.listLarkDocuments !== 'function') {
+      return {
+        ok: true,
+        source: 'lark',
+        status: 'disabled',
+        documents: [],
+        message: '当前版本不支持飞书文档导入。'
+      }
+    }
+    try {
+      return await window.kunGui.listLarkDocuments(payload)
+    } catch (error) {
+      return {
+        ok: true,
+        source: 'lark',
+        status: 'error',
+        documents: [],
+        message: error instanceof Error ? error.message : String(error)
+      }
+    }
+  },
+
+  listImportedLarkDocuments: async (workspaceRoot) => {
+    if (typeof window.kunGui?.listImportedLarkDocuments !== 'function') {
+      return {
+        ok: false,
+        source: 'lark',
+        status: 'disabled',
+        message: '当前版本不支持飞书文档增量导入。'
+      }
+    }
+    try {
+      return await window.kunGui.listImportedLarkDocuments({ workspaceRoot })
+    } catch (error) {
+      return {
+        ok: false,
+        source: 'lark',
+        status: 'error',
+        message: error instanceof Error ? error.message : String(error)
+      }
+    }
+  },
+
+  importLarkDocument: async (workspaceRoot, document) => {
+    if (typeof window.kunGui?.importLarkDocumentToWorkspace !== 'function') {
+      const message = '当前版本不支持飞书文档导入。'
+      set({ fileError: message })
+      return {
+        ok: false,
+        source: 'lark',
+        status: 'disabled',
+        message
+      }
+    }
+    try {
+      const result = await window.kunGui.importLarkDocumentToWorkspace({ workspaceRoot, document })
+      if (!result.ok) {
+        set({ fileError: result.message })
+        return result
+      }
+      await get().refreshWorkspace(workspaceRoot)
+      await get().openFile(workspaceRoot, result.path)
+      return result
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      set({ fileError: message })
+      return {
+        ok: false,
+        source: 'lark',
+        status: 'error',
+        message
+      }
+    }
+  },
+
   setFileContent: (content) => {
     cancelExternalSyncAnimation()
     set((state) => ({

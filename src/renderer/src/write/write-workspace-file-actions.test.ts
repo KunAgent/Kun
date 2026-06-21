@@ -31,6 +31,24 @@ function makeBaseState(): WriteWorkspaceState {
     toggleDirectory: async () => undefined,
     refreshWorkspace: async () => undefined,
     openFile: async () => undefined,
+    listLarkDocuments: async () => ({
+      ok: true,
+      source: 'lark',
+      status: 'disabled',
+      documents: []
+    }),
+    listImportedLarkDocuments: async () => ({
+      ok: false,
+      source: 'lark',
+      status: 'disabled',
+      message: 'disabled'
+    }),
+    importLarkDocument: async () => ({
+      ok: false,
+      source: 'lark',
+      status: 'disabled',
+      message: 'disabled'
+    }),
     setFileContent: () => undefined,
     syncActiveFileFromDisk: async () => false,
     syncActiveImageFromDisk: async () => false,

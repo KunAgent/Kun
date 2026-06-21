@@ -1,4 +1,11 @@
 import type { WriteAgentPresetV1, WriteInlineCompletionSettingsV1, WriteSelectionAssistSettingsV1 } from '@shared/app-settings'
+import type {
+  LarkDocumentImportPayload,
+  LarkDocumentImportResult,
+  LarkImportedDocumentsResult,
+  LarkDocumentListPayload,
+  LarkDocumentListResult
+} from '@shared/lark-document'
 import type { WorkspaceEntry } from '@shared/workspace-file'
 import type { WriteEditorSelectionState } from '../components/write/WriteMarkdownEditor'
 import type { WriteQuotedSelection } from './quoted-selection'
@@ -64,6 +71,12 @@ export type WriteWorkspaceState = {
   toggleDirectory: (workspaceRoot: string, path: string) => Promise<void>
   refreshWorkspace: (workspaceRoot: string) => Promise<void>
   openFile: (workspaceRoot: string, path: string) => Promise<void>
+  listLarkDocuments: (payload?: LarkDocumentListPayload) => Promise<LarkDocumentListResult>
+  listImportedLarkDocuments: (workspaceRoot: string) => Promise<LarkImportedDocumentsResult>
+  importLarkDocument: (
+    workspaceRoot: string,
+    document: LarkDocumentImportPayload['document']
+  ) => Promise<LarkDocumentImportResult>
   setFileContent: (content: string) => void
   syncActiveFileFromDisk: (
     workspaceRoot: string,

@@ -9,7 +9,8 @@ import {
   FileText,
   Loader2,
   Save,
-  Sparkles
+  Sparkles,
+  Upload
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { WriteExportFormat } from '@shared/write-export'
@@ -42,8 +43,14 @@ type Props = {
   modeMenuItems: WriteModeMenuItem[]
   modeMenuOpen: boolean
   modeMenuRef: RefObject<HTMLDivElement | null>
+  larkCanRefresh?: boolean
+  larkDocumentTitle?: string | null
+  larkRefreshInFlight?: boolean
+  larkSyncInFlight?: boolean
   onCopyRichText: () => void
   onExportFile: (format: WriteExportFormat) => void
+  onRefreshLarkDocument?: () => void
+  onUpdateLarkDocument?: () => void
   onSave: () => void
   onToggleLeftSidebar: () => void
   previewMode: WritePreviewMode
@@ -74,8 +81,14 @@ export function WriteWorkspaceToolbar({
   modeMenuItems,
   modeMenuOpen,
   modeMenuRef,
+  larkCanRefresh = false,
+  larkDocumentTitle = null,
+  larkRefreshInFlight = false,
+  larkSyncInFlight = false,
   onCopyRichText,
   onExportFile,
+  onRefreshLarkDocument,
+  onUpdateLarkDocument,
   onSave,
   onToggleLeftSidebar,
   previewMode,
@@ -260,6 +273,38 @@ export function WriteWorkspaceToolbar({
             >
               <Save className="h-4 w-4" strokeWidth={1.85} />
             </button>
+            {larkDocumentTitle && larkCanRefresh ? (
+              <button
+                type="button"
+                onClick={onRefreshLarkDocument}
+                disabled={!activeFilePath || !activeFileIsText || readOnly || reviewActive || larkRefreshInFlight || larkSyncInFlight}
+                className={`${toolbarIconButtonClass()} disabled:cursor-not-allowed disabled:opacity-40`}
+                title={t('writeLarkRefreshTitle', { title: larkDocumentTitle })}
+                aria-label={t('writeLarkRefreshTitle', { title: larkDocumentTitle })}
+              >
+                {larkRefreshInFlight ? (
+                  <Loader2 className="h-4 w-4 animate-spin" strokeWidth={1.85} />
+                ) : (
+                  <Download className="h-4 w-4" strokeWidth={1.85} />
+                )}
+              </button>
+            ) : null}
+            {larkDocumentTitle ? (
+              <button
+                type="button"
+                onClick={onUpdateLarkDocument}
+                disabled={!activeFilePath || !activeFileIsText || readOnly || reviewActive || larkRefreshInFlight || larkSyncInFlight}
+                className={`${toolbarIconButtonClass()} disabled:cursor-not-allowed disabled:opacity-40`}
+                title={t('writeLarkUpdateTitle', { title: larkDocumentTitle })}
+                aria-label={t('writeLarkUpdateTitle', { title: larkDocumentTitle })}
+              >
+                {larkSyncInFlight ? (
+                  <Loader2 className="h-4 w-4 animate-spin" strokeWidth={1.85} />
+                ) : (
+                  <Upload className="h-4 w-4" strokeWidth={1.85} />
+                )}
+              </button>
+            ) : null}
             <span className={`ml-1 inline-flex min-w-[64px] justify-center rounded-lg px-2.5 py-1 text-[11.5px] font-semibold ${
               reviewActive
                 ? 'bg-accent/12 text-accent'

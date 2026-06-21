@@ -170,6 +170,26 @@ const api = {
     ipcRenderer.invoke('write:inline-completion', payload),
   retrieveWriteContext: (payload) =>
     ipcRenderer.invoke('write:retrieve-context', payload),
+  installLarkCli: () =>
+    ipcRenderer.invoke('write:lark-documents:install-cli'),
+  configureLarkCli: (payload) =>
+    ipcRenderer.invoke('write:lark-documents:configure-cli', payload),
+  startLarkDocumentAuth: () =>
+    ipcRenderer.invoke('write:lark-documents:auth-start'),
+  completeLarkDocumentAuth: (payload) =>
+    ipcRenderer.invoke('write:lark-documents:auth-complete', payload),
+  listLarkDocuments: (payload) =>
+    ipcRenderer.invoke('write:lark-documents:list', payload),
+  listImportedLarkDocuments: (payload) =>
+    ipcRenderer.invoke('write:lark-documents:list-imported', payload),
+  importLarkDocumentToWorkspace: (payload) =>
+    ipcRenderer.invoke('write:lark-documents:import', payload),
+  getLarkDocumentImportMetadata: (payload) =>
+    ipcRenderer.invoke('write:lark-documents:metadata', payload),
+  refreshLarkDocumentFromWorkspace: (payload) =>
+    ipcRenderer.invoke('write:lark-documents:refresh', payload),
+  updateLarkDocumentFromWorkspace: (payload) =>
+    ipcRenderer.invoke('write:lark-documents:update', payload),
   generateWriteInfographic: (payload) =>
     ipcRenderer.invoke('write:generate-infographic', payload),
   authorizeWritePrototype: (payload) =>

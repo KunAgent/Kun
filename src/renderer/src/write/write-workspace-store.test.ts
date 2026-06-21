@@ -24,6 +24,39 @@ afterEach(() => {
 })
 
 describe('write workspace store', () => {
+  it('refreshes the workspace and opens the imported lark document', async () => {
+    const refreshWorkspace = vi.fn(async () => undefined)
+    const openFile = vi.fn(async () => undefined)
+    const importLarkDocumentToWorkspace = vi.fn(async () => ({
+      ok: true as const,
+      source: 'lark' as const,
+      status: 'enabled' as const,
+      path: '/tmp/write/飞书文档/Fake.md',
+      metadataPath: '/tmp/write/飞书文档/Fake.lark.json',
+      title: 'Fake',
+      message: 'imported'
+    }))
+    installDsGui({ importLarkDocumentToWorkspace })
+    useWriteWorkspaceStore.setState({ refreshWorkspace, openFile })
+
+    const result = await useWriteWorkspaceStore.getState().importLarkDocument('/tmp/write', {
+      id: 'lark:fake',
+      source: 'lark',
+      title: 'Fake',
+      url: 'https://example.feishu.cn/docx/fake',
+      token: 'fake',
+      extension: 'docx'
+    })
+
+    expect(result.ok).toBe(true)
+    expect(importLarkDocumentToWorkspace).toHaveBeenCalledWith({
+      workspaceRoot: '/tmp/write',
+      document: expect.objectContaining({ token: 'fake' })
+    })
+    expect(refreshWorkspace).toHaveBeenCalledWith('/tmp/write')
+    expect(openFile).toHaveBeenCalledWith('/tmp/write', '/tmp/write/飞书文档/Fake.md')
+  })
+
   it('reports read errors when syncing the active text file from disk', async () => {
     installDsGui({
       readWorkspaceFile: vi.fn(async () => {

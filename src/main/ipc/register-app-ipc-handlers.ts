@@ -46,6 +46,14 @@ import {
   gitCheckpointRestorePayloadSchema,
   gitWorktreeRemoveSchema,
   guiUpdateChannelSchema,
+  larkCliConfigurePayloadSchema,
+  larkImportedDocumentsPayloadSchema,
+  larkDocumentAuthCompletePayloadSchema,
+  larkDocumentImportPayloadSchema,
+  larkDocumentListPayloadSchema,
+  larkDocumentMetadataPayloadSchema,
+  larkDocumentRefreshPayloadSchema,
+  larkDocumentUpdatePayloadSchema,
   logErrorPayloadSchema,
   notificationPayloadSchema,
   openEditorPathPayloadSchema,
@@ -159,6 +167,18 @@ import {
 } from '../services/write-inline-completion-service'
 import { retrieveWriteContext } from '../services/write-retrieval-service'
 import { requestWriteInfographic } from '../services/write-infographic-service'
+import {
+  completeLarkDocumentAuth,
+  configureLarkCli,
+  getLarkDocumentImportMetadata,
+  importLarkDocumentToWorkspace,
+  installLarkCli,
+  listImportedLarkDocuments,
+  listLarkDocuments,
+  refreshLarkDocumentFromWorkspace,
+  startLarkDocumentAuth,
+  updateLarkDocumentFromWorkspace
+} from '../services/lark-documents'
 import { authorizePrototypePath } from '../services/prototype-embed-registry'
 import { requestSpeechTranscription } from '../services/speech-to-text-service'
 import {
@@ -1194,6 +1214,52 @@ export function registerAppIpcHandlers(options: RegisterAppIpcHandlersOptions): 
       }
     }
   })
+  ipcMain.handle('write:lark-documents:install-cli', async () =>
+    installLarkCli()
+  )
+  ipcMain.handle('write:lark-documents:configure-cli', async (_, payload: unknown) =>
+    configureLarkCli(
+      parseIpcPayload('write:lark-documents:configure-cli', larkCliConfigurePayloadSchema, payload)
+    )
+  )
+  ipcMain.handle('write:lark-documents:auth-start', async () =>
+    startLarkDocumentAuth()
+  )
+  ipcMain.handle('write:lark-documents:auth-complete', async (_, payload: unknown) =>
+    completeLarkDocumentAuth(
+      parseIpcPayload('write:lark-documents:auth-complete', larkDocumentAuthCompletePayloadSchema, payload)
+    )
+  )
+  ipcMain.handle('write:lark-documents:list', async (_, payload: unknown) =>
+    listLarkDocuments(
+      parseIpcPayload('write:lark-documents:list', larkDocumentListPayloadSchema, payload ?? {})
+    )
+  )
+  ipcMain.handle('write:lark-documents:list-imported', async (_, payload: unknown) =>
+    listImportedLarkDocuments(
+      parseIpcPayload('write:lark-documents:list-imported', larkImportedDocumentsPayloadSchema, payload)
+    )
+  )
+  ipcMain.handle('write:lark-documents:import', async (_, payload: unknown) =>
+    importLarkDocumentToWorkspace(
+      parseIpcPayload('write:lark-documents:import', larkDocumentImportPayloadSchema, payload)
+    )
+  )
+  ipcMain.handle('write:lark-documents:metadata', async (_, payload: unknown) =>
+    getLarkDocumentImportMetadata(
+      parseIpcPayload('write:lark-documents:metadata', larkDocumentMetadataPayloadSchema, payload)
+    )
+  )
+  ipcMain.handle('write:lark-documents:refresh', async (_, payload: unknown) =>
+    refreshLarkDocumentFromWorkspace(
+      parseIpcPayload('write:lark-documents:refresh', larkDocumentRefreshPayloadSchema, payload)
+    )
+  )
+  ipcMain.handle('write:lark-documents:update', async (_, payload: unknown) =>
+    updateLarkDocumentFromWorkspace(
+      parseIpcPayload('write:lark-documents:update', larkDocumentUpdatePayloadSchema, payload)
+    )
+  )
   ipcMain.handle('write:generate-infographic', async (_, payload: unknown) =>
     requestWriteInfographic(
       await store.load(),

@@ -9,7 +9,9 @@ import {
 import { useTranslation } from 'react-i18next'
 import type { WriteExportFormat } from '@shared/write-export'
 import { WRITE_INFOGRAPHIC_MAX_TEXT_CHARS } from '@shared/write-infographic'
+import type { LarkDocumentImportMetadata, LarkDocumentUpdateMode } from '@shared/lark-document'
 import { useChatStore } from '../../store/chat-store'
+import { confirmDialog } from '../../lib/confirm-dialog'
 import { formatWorkspacePickerError } from '../../lib/format-workspace-picker-error'
 import {
   useWriteWorkspaceStore,
@@ -193,6 +195,10 @@ export function WriteWorkspaceView({
   const [exportMenuOpen, setExportMenuOpen] = useState(false)
   const [exportingFormat, setExportingFormat] = useState<WriteExportFormat | typeof WRITE_RICH_CLIPBOARD_ACTION | null>(null)
   const [exportNotice, setExportNotice] = useState<WriteNotice | null>(null)
+  const [activeLarkMetadata, setActiveLarkMetadata] = useState<LarkDocumentImportMetadata | null>(null)
+  const [larkRefreshInFlight, setLarkRefreshInFlight] = useState(false)
+  const [larkSyncInFlight, setLarkSyncInFlight] = useState(false)
+  const [larkUploadDialogOpen, setLarkUploadDialogOpen] = useState(false)
   const workspaceReady = workspaceRoot.trim().length > 0
   const activeFileIsImage = activeFileKind === 'image'
   const activeFileIsPdf = activeFileKind === 'pdf'
@@ -248,6 +254,31 @@ export function WriteWorkspaceView({
   const showExportNotice = (notice: WriteNotice): void => {
     setExportNotice(notice)
   }
+
+  useEffect(() => {
+    let cancelled = false
+    setActiveLarkMetadata(null)
+    if (!activeFilePath || !workspaceRoot.trim() || !activeFileIsText) return () => {
+      cancelled = true
+    }
+    if (typeof window.kunGui?.getLarkDocumentImportMetadata !== 'function') return () => {
+      cancelled = true
+    }
+
+    void window.kunGui.getLarkDocumentImportMetadata({
+      workspaceRoot,
+      path: activeFilePath
+    }).then((result) => {
+      if (cancelled) return
+      setActiveLarkMetadata(result.ok ? result.metadata : null)
+    }).catch(() => {
+      if (!cancelled) setActiveLarkMetadata(null)
+    })
+
+    return () => {
+      cancelled = true
+    }
+  }, [activeFileIsText, activeFilePath, workspaceRoot])
 
   const createDraftFile = async (): Promise<void> => {
     if (!workspaceReady) {
@@ -734,12 +765,129 @@ export function WriteWorkspaceView({
     }
   }
 
+  const uploadCurrentLarkDocument = async (mode: LarkDocumentUpdateMode): Promise<void> => {
+    if (!activeFilePath || !activeFileIsText) return
+    if (typeof window.kunGui?.updateLarkDocumentFromWorkspace !== 'function') {
+      showExportNotice({ tone: 'error', message: t('writeLarkUpdateUnavailable') })
+      return
+    }
+
+    setExportMenuOpen(false)
+    setLarkUploadDialogOpen(false)
+    setLarkSyncInFlight(true)
+    try {
+      if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current)
+      if (saveStatus === 'dirty') {
+        const saved = await flushSave(workspaceRoot)
+        if (!saved) {
+          showExportNotice({ tone: 'error', message: t('writeLarkUpdateSaveFirstFailed') })
+          return
+        }
+      }
+
+      const latest = useWriteWorkspaceStore.getState()
+      const content = latest.activeFilePath === activeFilePath ? latest.fileContent : fileContent
+      const result = await window.kunGui.updateLarkDocumentFromWorkspace({
+        workspaceRoot,
+        path: activeFilePath,
+        mode,
+        title: activeLarkMetadata?.document.title || activeFileName,
+        content
+      })
+      if (!result.ok) {
+        showExportNotice({
+          tone: 'error',
+          message: t('writeLarkUpdateFailed', { message: result.message })
+        })
+        return
+      }
+
+      showExportNotice({
+        tone: 'success',
+        message: mode === 'create' ? t('writeLarkCreateSuccess') : t('writeLarkUpdateSuccess')
+      })
+      const metadataResult = await window.kunGui.getLarkDocumentImportMetadata?.({
+        workspaceRoot,
+        path: activeFilePath
+      })
+      if (metadataResult?.ok) setActiveLarkMetadata(metadataResult.metadata)
+    } catch (error) {
+      showExportNotice({
+        tone: 'error',
+        message: t('writeLarkUpdateFailed', {
+          message: error instanceof Error ? error.message : String(error)
+        })
+      })
+    } finally {
+      setLarkSyncInFlight(false)
+    }
+  }
+
+  const refreshCurrentLarkDocument = async (): Promise<void> => {
+    if (!activeFilePath || !activeFileIsText || !activeLarkMetadata) return
+    if (typeof window.kunGui?.refreshLarkDocumentFromWorkspace !== 'function') {
+      showExportNotice({ tone: 'error', message: t('writeLarkRefreshUnavailable') })
+      return
+    }
+
+    const title = activeLarkMetadata.document.title || activeFileName
+    const confirmed = await confirmDialog(
+      t('writeLarkRefreshConfirm', { title }),
+      t('writeLarkRefreshConfirmDetail')
+    )
+    if (!confirmed) return
+
+    setExportMenuOpen(false)
+    setLarkUploadDialogOpen(false)
+    setLarkRefreshInFlight(true)
+    try {
+      if (saveTimerRef.current) {
+        window.clearTimeout(saveTimerRef.current)
+        saveTimerRef.current = null
+      }
+      const result = await window.kunGui.refreshLarkDocumentFromWorkspace({
+        workspaceRoot,
+        path: activeFilePath
+      })
+      if (!result.ok) {
+        showExportNotice({
+          tone: 'error',
+          message: t('writeLarkRefreshFailed', { message: result.message })
+        })
+        return
+      }
+
+      await syncActiveFileFromDisk(workspaceRoot, {
+        path: result.path,
+        content: result.content,
+        force: true,
+        animate: false
+      })
+      const metadataResult = await window.kunGui.getLarkDocumentImportMetadata?.({
+        workspaceRoot,
+        path: result.path
+      })
+      if (metadataResult?.ok) setActiveLarkMetadata(metadataResult.metadata)
+      showExportNotice({ tone: 'success', message: t('writeLarkRefreshSuccess') })
+    } catch (error) {
+      showExportNotice({
+        tone: 'error',
+        message: t('writeLarkRefreshFailed', {
+          message: error instanceof Error ? error.message : String(error)
+        })
+      })
+    } finally {
+      setLarkRefreshInFlight(false)
+    }
+  }
+
   useEffect(() => {
     void loadWriteSettings()
   }, [loadWriteSettings])
 
   useEffect(() => {
     setExportMenuOpen(false)
+    setLarkUploadDialogOpen(false)
   }, [activeFilePath])
 
   useEffect(() => {
@@ -980,6 +1128,10 @@ export function WriteWorkspaceView({
         modeMenuItems={modeMenuItems}
         modeMenuOpen={modeMenuOpen}
         modeMenuRef={modeMenuRef}
+        larkCanRefresh={Boolean(activeLarkMetadata)}
+        larkDocumentTitle={activeFileIsText && activeFilePath ? (activeLarkMetadata?.document.title || activeFileName) : null}
+        larkRefreshInFlight={larkRefreshInFlight}
+        larkSyncInFlight={larkSyncInFlight}
         previewMode={previewMode}
         readOnly={renderSafety.readOnly}
         saveLabel={saveLabel}
@@ -991,6 +1143,8 @@ export function WriteWorkspaceView({
         setPreviewMode={setPreviewMode}
         onCopyRichText={() => void copyCurrentFileAsRichText()}
         onExportFile={(format) => void exportCurrentFile(format)}
+        onRefreshLarkDocument={() => void refreshCurrentLarkDocument()}
+        onUpdateLarkDocument={() => setLarkUploadDialogOpen(true)}
         onSave={() => {
           if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current)
           void flushSave(workspaceRoot)
@@ -1084,6 +1238,17 @@ export function WriteWorkspaceView({
         />
       ) : null}
 
+      {larkUploadDialogOpen && activeFilePath && activeFileIsText ? (
+        <LarkUploadDialog
+          title={activeLarkMetadata?.document.title || activeFileName}
+          canOverwrite={Boolean(activeLarkMetadata)}
+          inFlight={larkSyncInFlight}
+          onClose={() => setLarkUploadDialogOpen(false)}
+          onUpload={(mode) => void uploadCurrentLarkDocument(mode)}
+          t={t}
+        />
+      ) : null}
+
       {fileError ? (
         <div className="pointer-events-none fixed bottom-5 left-1/2 z-40 -translate-x-1/2 rounded-full border border-red-200/70 bg-red-50/92 px-4 py-2 text-[13px] text-red-700 shadow-[0_14px_32px_rgba(20,47,95,0.12)] dark:border-red-900/60 dark:bg-red-950/84 dark:text-red-200">
           {fileError}
@@ -1101,6 +1266,77 @@ export function WriteWorkspaceView({
           {exportNotice.message}
         </div>
       ) : null}
+    </div>
+  )
+}
+
+function LarkUploadDialog({
+  title,
+  canOverwrite,
+  inFlight,
+  onClose,
+  onUpload,
+  t
+}: {
+  title: string
+  canOverwrite: boolean
+  inFlight: boolean
+  onClose: () => void
+  onUpload: (mode: LarkDocumentUpdateMode) => void
+  t: (key: string, opts?: Record<string, unknown>) => string
+}): ReactElement {
+  return (
+    <div
+      className="ds-no-drag fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/18 px-4 backdrop-blur-[2px] dark:bg-black/35"
+      onMouseDown={onClose}
+    >
+      <div
+        onMouseDown={(event) => event.stopPropagation()}
+        className="w-full max-w-sm rounded-[24px] border border-ds-border bg-ds-card p-5 shadow-[0_24px_72px_rgba(20,47,95,0.22)]"
+      >
+        <h2 className="text-[18px] font-semibold tracking-[-0.035em] text-ds-ink">
+          {t('writeLarkUploadDialogTitle')}
+        </h2>
+        <p className="mt-2 text-[13px] leading-6 text-ds-muted">
+          {t(canOverwrite ? 'writeLarkUploadDialogDesc' : 'writeLarkUploadLocalDialogDesc', { title })}
+        </p>
+        <div className="mt-4 grid gap-2">
+          {canOverwrite ? (
+            <button
+              type="button"
+              disabled={inFlight}
+              onClick={() => onUpload('overwrite')}
+              className="rounded-xl border border-red-200/80 bg-red-50/80 px-3 py-2.5 text-left text-[13px] font-semibold text-red-700 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-55 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-200"
+            >
+              {t('writeLarkUploadOverwrite')}
+              <span className="mt-1 block text-[12px] font-normal leading-5 text-red-600/80 dark:text-red-200/75">
+                {t('writeLarkUploadOverwriteSub')}
+              </span>
+            </button>
+          ) : null}
+          <button
+            type="button"
+            disabled={inFlight}
+            onClick={() => onUpload('create')}
+            className="rounded-xl border border-ds-border bg-ds-main/55 px-3 py-2.5 text-left text-[13px] font-semibold text-ds-ink transition hover:border-accent/35 hover:bg-ds-hover disabled:cursor-not-allowed disabled:opacity-55"
+          >
+            {t('writeLarkUploadCreate')}
+            <span className="mt-1 block text-[12px] font-normal leading-5 text-ds-muted">
+              {t(canOverwrite ? 'writeLarkUploadCreateSub' : 'writeLarkUploadCreateOnlySub')}
+            </span>
+          </button>
+        </div>
+        <div className="mt-5 flex justify-end">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={inFlight}
+            className="rounded-xl border border-ds-border bg-ds-card px-3 py-2 text-[13px] font-medium text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink disabled:cursor-not-allowed disabled:opacity-55"
+          >
+            {t('writeEntryDialogCancel')}
+          </button>
+        </div>
+      </div>
     </div>
   )
 }
