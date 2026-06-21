@@ -40,8 +40,15 @@ import {
   type ScheduleModelConfig,
   type ScheduleRuntimeDeps
 } from './schedule-runtime-helpers'
+import {
+  acquireWorktree,
+  findAvailablePoolIndex,
+  releaseWorktree
+} from './services/worktree-service'
 
 export { computeScheduleNextRunAt } from './schedule-runtime-helpers'
+
+const MAX_CONCURRENT_BACKGROUND_TASKS = 3
 
 export function scheduledThreadTitle(title: string): string {
   const trimmed = title.trim()
@@ -56,6 +63,10 @@ export class ScheduleRuntime {
   private server: Server | null = null
   private serverKey = ''
   private runningTaskIds = new Set<string>()
+  private queuedTaskIds = new Set<string>()
+  private queuedTaskModes = new Map<string, boolean>()
+  private worktreeLeases = new Map<string, { projectPath: string; poolIndex: number }>()
+  private drainingQueue = false
   private powerSaveBlockerId: number | null = null
 
   constructor(deps: ScheduleRuntimeDeps) {
@@ -77,7 +88,7 @@ export class ScheduleRuntime {
     this.syncInternalServer(settings)
     this.startScheduler()
     this.syncPowerSaveBlocker(settings)
-    void this.ensureNextRuns(settings)
+    void this.ensureNextRuns(settings).then(() => this.drainQueue())
   }
 
   stop(): void {
@@ -95,6 +106,7 @@ export class ScheduleRuntime {
       internalServerRunning: this.server !== null,
       internalUrl: internalUrl(settings),
       runningTaskIds: [...this.runningTaskIds],
+      queuedTaskIds: [...this.queuedTaskIds],
       powerSaveBlockerActive: this.isPowerSaveBlockerActive()
     }
   }
@@ -103,7 +115,24 @@ export class ScheduleRuntime {
     const settings = await this.deps.store.load()
     const task = settings.schedule.tasks.find((item) => item.id === taskId)
     if (!task) return { ok: false, message: 'Task not found.' }
-    return this.runTaskInternal(task, false)
+    if (!task.prompt.trim()) return { ok: false, message: 'Task prompt is empty.' }
+    if (this.runningTaskIds.has(task.id) || this.queuedTaskIds.has(task.id)) {
+      return { ok: false, message: 'Task is already queued or running.' }
+    }
+    const dependencies = (task.dependsOn ?? [])
+      .map((id) => settings.schedule.tasks.find((candidate) => candidate.id === id))
+    if (dependencies.some((dependency) => !dependency || dependency.lastStatus === 'error')) {
+      return { ok: false, message: 'A required task is missing or failed.' }
+    }
+    if (hasTaskDependencyCycle(task.id, settings.schedule.tasks)) {
+      return { ok: false, message: 'Task dependencies contain a cycle.' }
+    }
+    const dependenciesReady = dependencies.every((dependency) => dependency?.lastStatus === 'success')
+    if (dependenciesReady && this.runningTaskIds.size < MAX_CONCURRENT_BACKGROUND_TASKS) {
+      return this.runTaskInternal(task, false)
+    }
+    await this.enqueueTask(task, false)
+    return { ok: true, threadId: '', queued: true, message: 'Task queued.' }
   }
 
   async createScheduledTaskFromText(
@@ -214,6 +243,9 @@ export class ScheduleRuntime {
       model: modelConfig.model,
       reasoningEffort: modelConfig.reasoningEffort,
       mode: input.mode ?? settings.schedule.mode,
+      priority: 0,
+      dependsOn: [],
+      useWorktree: false,
       schedule: {
         kind: input.schedule.kind,
         everyMinutes: typeof input.schedule.everyMinutes === 'number' ? input.schedule.everyMinutes : 60,
@@ -283,12 +315,16 @@ export class ScheduleRuntime {
     await this.ensureNextRuns(settings)
     const fresh = await this.deps.store.load()
     const now = Date.now()
-    for (const task of fresh.schedule.tasks) {
-      if (!task.enabled || task.schedule.kind === 'manual') continue
-      if (this.runningTaskIds.has(task.id)) continue
-      const dueAt = Date.parse(task.nextRunAt)
-      if (!Number.isFinite(dueAt) || dueAt > now) continue
-      void this.runTaskInternal(task, true)
+    const dueTasks = fresh.schedule.tasks
+      .filter((task) => task.enabled && task.schedule.kind !== 'manual')
+      .filter((task) => !this.runningTaskIds.has(task.id) && !this.queuedTaskIds.has(task.id))
+      .filter((task) => {
+        const dueAt = Date.parse(task.nextRunAt)
+        return Number.isFinite(dueAt) && dueAt <= now
+      })
+      .sort((left, right) => (right.priority ?? 0) - (left.priority ?? 0) || left.createdAt.localeCompare(right.createdAt))
+    for (const task of dueTasks) {
+      await this.enqueueTask(task, true)
     }
   }
 
@@ -300,7 +336,14 @@ export class ScheduleRuntime {
     let changed = false
     const now = new Date()
     const tasks = settings.schedule.tasks.map((task) => {
-      const wasInterrupted = task.lastStatus === 'running' && !this.runningTaskIds.has(task.id)
+      const wasRunning = task.lastStatus === 'running' && !this.runningTaskIds.has(task.id)
+      const wasQueued = task.lastStatus === 'queued' && !this.queuedTaskIds.has(task.id)
+      if (wasQueued && task.enabled && task.schedule.kind !== 'manual') {
+        this.queuedTaskIds.add(task.id)
+        this.queuedTaskModes.set(task.id, true)
+        return task
+      }
+      const wasInterrupted = wasRunning || wasQueued
       if (!task.enabled || task.schedule.kind === 'manual' || this.runningTaskIds.has(task.id)) {
         if (!wasInterrupted) return task
         changed = true
@@ -346,6 +389,90 @@ export class ScheduleRuntime {
     return saved
   }
 
+  private async enqueueTask(task: ScheduledTaskV1, scheduled: boolean): Promise<void> {
+    this.queuedTaskIds.add(task.id)
+    this.queuedTaskModes.set(task.id, scheduled)
+    await this.updateTask(task.id, (current) => ({
+      ...current,
+      lastStatus: 'queued',
+      lastMessage: 'Queued',
+      updatedAt: new Date().toISOString()
+    }))
+    void this.drainQueue()
+  }
+
+  private async drainQueue(): Promise<void> {
+    if (this.drainingQueue) return
+    this.drainingQueue = true
+    try {
+      while (
+        this.runningTaskIds.size < MAX_CONCURRENT_BACKGROUND_TASKS &&
+        this.queuedTaskIds.size > 0
+      ) {
+        const settings = await this.deps.store.load()
+        const queued = settings.schedule.tasks
+          .filter((task) => this.queuedTaskIds.has(task.id))
+          .sort((left, right) => (right.priority ?? 0) - (left.priority ?? 0) || left.createdAt.localeCompare(right.createdAt))
+        let next: ScheduledTaskV1 | undefined
+        for (const task of queued) {
+          if (!task.enabled) {
+            this.queuedTaskIds.delete(task.id)
+            this.queuedTaskModes.delete(task.id)
+            await this.updateTask(task.id, (current) => ({
+              ...current,
+              lastStatus: 'idle',
+              lastMessage: 'Paused',
+              updatedAt: new Date().toISOString()
+            }))
+            continue
+          }
+          if (!task.prompt.trim()) {
+            this.queuedTaskIds.delete(task.id)
+            this.queuedTaskModes.delete(task.id)
+            await this.updateTask(task.id, (current) => ({
+              ...current,
+              lastStatus: 'error',
+              lastMessage: 'Task prompt is empty.',
+              updatedAt: new Date().toISOString()
+            }))
+            continue
+          }
+          const dependencies = (task.dependsOn ?? [])
+            .map((id) => settings.schedule.tasks.find((candidate) => candidate.id === id))
+          if (
+            hasTaskDependencyCycle(task.id, settings.schedule.tasks) ||
+            dependencies.some((dependency) => !dependency || dependency.lastStatus === 'error')
+          ) {
+            this.queuedTaskIds.delete(task.id)
+            this.queuedTaskModes.delete(task.id)
+            await this.updateTask(task.id, (current) => ({
+              ...current,
+              lastStatus: 'error',
+              lastMessage: hasTaskDependencyCycle(task.id, settings.schedule.tasks)
+                ? 'Task dependencies contain a cycle.'
+                : 'A required task is missing or failed.',
+              updatedAt: new Date().toISOString()
+            }))
+            continue
+          }
+          if (dependencies.every((dependency) => dependency?.lastStatus === 'success')) {
+            next = task
+            break
+          }
+        }
+        if (!next) break
+        const scheduled = this.queuedTaskModes.get(next.id) ?? false
+        this.queuedTaskIds.delete(next.id)
+        this.queuedTaskModes.delete(next.id)
+        void this.runTaskInternal(next, scheduled).finally(() => {
+          void this.drainQueue()
+        })
+      }
+    } finally {
+      this.drainingQueue = false
+    }
+  }
+
   private async runTaskInternal(task: ScheduledTaskV1, scheduled: boolean): Promise<ScheduleRunResult> {
     if (this.runningTaskIds.has(task.id)) {
       return { ok: false, message: 'Task is already running.' }
@@ -369,6 +496,15 @@ export class ScheduleRuntime {
     try {
       const settings = await this.deps.store.load()
       const clawChannel = this.resolveTaskClawChannel(settings, task)
+      let workspaceRoot = this.resolveTaskWorkspaceRoot(settings, task, clawChannel)
+      if (task.useWorktree) {
+        const projectPath = workspaceRoot
+        const poolIndex = await findAvailablePoolIndex({ projectPath })
+        if (poolIndex === null) throw new Error('No worktree pool slot is available.')
+        const worktree = await acquireWorktree({ projectPath, poolIndex, taskId: task.id })
+        workspaceRoot = worktree.path
+        this.worktreeLeases.set(task.id, { projectPath, poolIndex })
+      }
       const modelConfig = this.resolveScheduleModelConfig(settings, {
         providerId: task.providerId,
         model: task.model,
@@ -377,7 +513,7 @@ export class ScheduleRuntime {
       const result = await this.runPrompt(settings, {
         prompt: task.prompt,
         title: scheduledThreadTitle(task.title),
-        workspaceRoot: this.resolveTaskWorkspaceRoot(settings, task, clawChannel),
+        workspaceRoot,
         model: modelConfig.model,
         ...(modelConfig.providerId ? { providerId: modelConfig.providerId } : {}),
         reasoningEffort: modelConfig.reasoningEffort,
@@ -398,6 +534,8 @@ export class ScheduleRuntime {
           updatedAt: finishedAt.toISOString()
         }))
         this.runningTaskIds.delete(task.id)
+        await this.releaseTaskWorktree(task.id)
+        void this.drainQueue()
         return result
       }
 
@@ -425,6 +563,8 @@ export class ScheduleRuntime {
         updatedAt: finishedAt.toISOString()
       }))
       this.runningTaskIds.delete(task.id)
+      await this.releaseTaskWorktree(task.id)
+      void this.drainQueue()
       return { ok: false, message }
     }
   }
@@ -465,7 +605,21 @@ export class ScheduleRuntime {
       this.deps.logError('schedule-task', 'Scheduled task failed', { message, taskId, threadId })
     } finally {
       this.runningTaskIds.delete(taskId)
+      await this.releaseTaskWorktree(taskId)
+      void this.drainQueue()
     }
+  }
+
+  private async releaseTaskWorktree(taskId: string): Promise<void> {
+    const lease = this.worktreeLeases.get(taskId)
+    if (!lease) return
+    this.worktreeLeases.delete(taskId)
+    await releaseWorktree(lease).catch((error) => {
+      this.deps.logError('schedule-worktree', 'Failed to release task worktree', {
+        taskId,
+        message: error instanceof Error ? error.message : String(error)
+      })
+    })
   }
 
   private runPrompt(settings: AppSettingsV1, options: RunPromptOptions): Promise<ScheduleRunResult> {
@@ -700,6 +854,24 @@ export class ScheduleRuntime {
       return false
     }
   }
+}
+
+export function hasTaskDependencyCycle(taskId: string, tasks: readonly ScheduledTaskV1[]): boolean {
+  const dependencies = new Map(tasks.map((task) => [task.id, task.dependsOn ?? []]))
+  const visiting = new Set<string>()
+  const visited = new Set<string>()
+  const visit = (id: string): boolean => {
+    if (visiting.has(id)) return true
+    if (visited.has(id)) return false
+    visiting.add(id)
+    for (const dependency of dependencies.get(id) ?? []) {
+      if (visit(dependency)) return true
+    }
+    visiting.delete(id)
+    visited.add(id)
+    return false
+  }
+  return visit(taskId)
 }
 
 export function createScheduleRuntime(deps: ScheduleRuntimeDeps): ScheduleRuntime {

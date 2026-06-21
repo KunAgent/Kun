@@ -13,7 +13,12 @@ import {
   type ClawImChannelV1,
   type ScheduledTaskV1
 } from '../shared/app-settings'
-import { ScheduleRuntime, computeScheduleNextRunAt, scheduledThreadTitle } from './schedule-runtime'
+import {
+  ScheduleRuntime,
+  computeScheduleNextRunAt,
+  hasTaskDependencyCycle,
+  scheduledThreadTitle
+} from './schedule-runtime'
 
 function makeTask(patch: Partial<ScheduledTaskV1> = {}): ScheduledTaskV1 {
   const schedule = {
@@ -156,6 +161,42 @@ describe('ScheduleRuntime', () => {
     expect(scheduledThreadTitle('每日A股行情盘')).toBe('[Scheduled task] 每日A股')
     expect(scheduledThreadTitle('Task 1')).toBe('[Scheduled task] Task')
     expect(scheduledThreadTitle('   ')).toBe('[Scheduled task]')
+  })
+
+  it('queues a task until its dependencies complete', async () => {
+    const dependency = makeTask({ id: 'dependency', lastStatus: 'idle' })
+    const task = makeTask({ id: 'dependent', dependsOn: [dependency.id], priority: 10 })
+    const { runtime, store } = createRuntime(settingsWith([dependency, task]))
+
+    await expect(runtime.runTask(task.id)).resolves.toMatchObject({
+      ok: true,
+      queued: true
+    })
+    await expect(runtime.status()).resolves.toMatchObject({ queuedTaskIds: [task.id] })
+    expect(store.read().schedule.tasks.find((item) => item.id === task.id)?.lastStatus).toBe('queued')
+  })
+
+  it('restores scheduled queued tasks into the in-memory queue after restart', async () => {
+    const task = makeTask({
+      id: 'queued-scheduled',
+      lastStatus: 'queued',
+      schedule: { kind: 'daily', everyMinutes: 60, timeOfDay: '09:00', atTime: '' }
+    })
+    const settings = settingsWith([task])
+    const { runtime } = createRuntime(settings)
+
+    await (runtime as unknown as {
+      ensureNextRuns: (settings: AppSettingsV1) => Promise<void>
+    }).ensureNextRuns(settings)
+
+    await expect(runtime.status()).resolves.toMatchObject({ queuedTaskIds: [task.id] })
+  })
+
+  it('rejects dependency cycles before queueing', () => {
+    const first = makeTask({ id: 'first', dependsOn: ['second'] })
+    const second = makeTask({ id: 'second', dependsOn: ['first'] })
+    expect(hasTaskDependencyCycle(first.id, [first, second])).toBe(true)
+    expect(hasTaskDependencyCycle(first.id, [first, makeTask({ id: 'second' })])).toBe(false)
   })
 
   it('creates detected reminder requests into top-level schedule settings', async () => {

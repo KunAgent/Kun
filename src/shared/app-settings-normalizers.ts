@@ -86,6 +86,6 @@ export function normalizePathSegment(value: unknown): string {
 }
 
 export function normalizeStatus(value: unknown): ScheduleTaskStatus {
-  if (value === 'running' || value === 'success' || value === 'error') return value
+  if (value === 'queued' || value === 'running' || value === 'success' || value === 'error') return value
   return 'idle'
 }

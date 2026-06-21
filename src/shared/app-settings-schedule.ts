@@ -39,6 +39,9 @@ export function normalizeScheduledTask(
     model,
     reasoningEffort: normalizeScheduleReasoningEffort(task.reasoningEffort),
     mode: normalizeRunMode(task.mode),
+    priority: normalizePositiveInteger(task.priority, 0, 0, 100),
+    dependsOn: compactStrings(task.dependsOn).filter((id) => id !== task.id),
+    useWorktree: normalizeBoolean(task.useWorktree, false),
     schedule: {
       kind: normalizeScheduleKind(schedule?.kind),
       everyMinutes: normalizePositiveInteger(schedule?.everyMinutes, 60, 1, 10_080),

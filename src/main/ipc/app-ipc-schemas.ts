@@ -213,7 +213,7 @@ const kunCompactionSummaryModeSchema = z.enum(['heuristic', 'model'])
 const clawRunModeSchema = z.enum(['agent', 'plan'])
 const clawImProviderSchema = z.enum(['feishu', 'weixin', 'telegram'])
 const clawScheduleKindSchema = z.enum(['manual', 'interval', 'daily', 'at'])
-const clawTaskStatusSchema = z.enum(['idle', 'running', 'success', 'error'])
+const clawTaskStatusSchema = z.enum(['idle', 'queued', 'running', 'success', 'error'])
 const scheduleReasoningEffortSchema = z.enum(SCHEDULE_REASONING_EFFORT_IDS)
 const writeInlineCompletionModelSchema = z.union([
   z.enum(WRITE_INLINE_COMPLETION_MODEL_IDS),
@@ -695,6 +695,9 @@ const scheduledTaskPatchSchema = z.object({
   model: z.string().trim().min(1).max(128).optional(),
   reasoningEffort: scheduleReasoningEffortSchema.optional(),
   mode: clawRunModeSchema.optional(),
+  priority: z.number().int().min(0).max(100).optional(),
+  dependsOn: z.array(z.string().trim().min(1).max(MAX_ID_LENGTH)).max(32).optional(),
+  useWorktree: z.boolean().optional(),
   schedule: scheduledTaskSchedulePatchSchema.optional(),
   createdAt: z.string().max(128).optional(),
   updatedAt: z.string().max(128).optional(),

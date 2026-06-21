@@ -480,7 +480,7 @@ export async function findAvailablePoolIndex(params: {
   const status = await listWorktrees(params)
   for (let i = 0; i < MAX_WORKTREE_POOL_SIZE; i++) {
     const wt = status.worktrees.find((w) => w.poolIndex === i)
-    if (!wt || !wt.inUse) return i
+    if (!wt || (!wt.inUse && wt.changesCount === 0)) return i
   }
   return null
 }

@@ -198,6 +198,9 @@ export function newScheduledTask(workspaceRoot: string, defaults?: Partial<Sched
     providerId: '',
     model: DEFAULT_SCHEDULE_MODEL,
     reasoningEffort: DEFAULT_SCHEDULE_REASONING_EFFORT,
+    priority: 0,
+    dependsOn: [],
+    useWorktree: false,
     schedule: {
       kind: 'daily',
       everyMinutes: 60,
@@ -337,7 +340,7 @@ export function validateScheduledTaskDraft(
 export function filterScheduledTasks(tasks: ScheduledTaskV1[], filter: TaskFilter): ScheduledTaskV1[] {
   const filtered = tasks.filter((task) => {
     if (filter === 'enabled') return task.enabled
-    if (filter === 'running') return task.lastStatus === 'running'
+    if (filter === 'running') return task.lastStatus === 'queued' || task.lastStatus === 'running'
     if (filter === 'done') return task.lastStatus === 'success' || task.lastStatus === 'error'
     return true
   })
@@ -370,6 +373,7 @@ function formatDateTime(value: string, fallback: string): string {
 }
 
 function statusTone(status: ScheduledTaskV1['lastStatus']): string {
+  if (status === 'queued') return 'bg-sky-500/15 text-sky-800 dark:text-sky-100'
   if (status === 'running') return 'bg-amber-500/15 text-amber-900 dark:text-amber-100'
   if (status === 'success') return 'bg-emerald-500/15 text-emerald-800 dark:text-emerald-100'
   if (status === 'error') return 'bg-red-500/15 text-red-700 dark:text-red-100'
@@ -424,6 +428,7 @@ export function ScheduleTasksView({
     [settings]
   )
   const runningTaskIds = useMemo(() => new Set(status?.runningTaskIds ?? []), [status])
+  const queuedTaskIds = useMemo(() => new Set(status?.queuedTaskIds ?? []), [status])
   const visibleTasks = useMemo(() => filterScheduledTasks(tasks, filter), [filter, tasks])
 
   const persistSchedule = async (patch: Parameters<typeof mergeScheduleSettings>[1]): Promise<void> => {
@@ -694,7 +699,12 @@ export function ScheduleTasksView({
           ) : (
             <div className="flex flex-col gap-3">
               {visibleTasks.map((task) => {
-                const running = runningTaskIds.has(task.id) || task.lastStatus === 'running'
+                const busy =
+                  runningTaskIds.has(task.id) || queuedTaskIds.has(task.id) ||
+                  task.lastStatus === 'running' || task.lastStatus === 'queued'
+                const displayedStatus = runningTaskIds.has(task.id)
+                  ? 'running'
+                  : queuedTaskIds.has(task.id) ? 'queued' : task.lastStatus
                 const lastThreadId = scheduledTaskLastThreadId(task)
                 const clawLabel = scheduledTaskClawLabel(task, clawChannels, t)
                 const providerLabel = task.providerId
@@ -713,7 +723,7 @@ export function ScheduleTasksView({
                             {task.title || t('scheduleUntitled')}
                           </h2>
                           <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ${statusTone(task.lastStatus)}`}>
-                            {running ? t('scheduleStatus_running') : t(`scheduleStatus_${task.lastStatus}`)}
+                            {t(`scheduleStatus_${displayedStatus}`)}
                           </span>
                         </div>
                         <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-[12px] text-ds-faint">
@@ -739,7 +749,7 @@ export function ScheduleTasksView({
                         <button
                           type="button"
                           onClick={() => void runTask(task.id)}
-                          disabled={running}
+                          disabled={busy}
                           className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink disabled:cursor-not-allowed disabled:opacity-45"
                           title={t('scheduleRunNow')}
                           aria-label={t('scheduleRunNow')}
@@ -834,6 +844,7 @@ export function ScheduleTasksView({
           clawChannels={clawChannels}
           defaultClawWorkspaceRoot={settings?.claw.im.workspaceRoot.trim() || ''}
           modelProviders={modelProviders}
+          tasks={tasks}
           t={t}
         />
       ) : null}
@@ -865,6 +876,7 @@ function ScheduleTaskDialog({
   clawChannels,
   defaultClawWorkspaceRoot,
   modelProviders,
+  tasks,
   t
 }: {
   dialog: TaskDialogState
@@ -877,6 +889,7 @@ function ScheduleTaskDialog({
   clawChannels: ClawImChannelV1[]
   defaultClawWorkspaceRoot: string
   modelProviders: ScheduleModelProviderOption[]
+  tasks: ScheduledTaskV1[]
   t: (key: string, values?: Record<string, unknown>) => string
 }): ReactElement {
   const draft = dialog.draft
@@ -1235,6 +1248,57 @@ function ScheduleTaskDialog({
                   </button>
                 </div>
               </div>
+              <div className="grid gap-4 md:grid-cols-[160px_minmax(0,1fr)]">
+                <label className="grid gap-2">
+                  <FieldLabel>{t('scheduleTaskPriority')}</FieldLabel>
+                  <input
+                    type="number"
+                    min={0}
+                    max={100}
+                    value={draft.priority ?? 0}
+                    onChange={(event) => updateDraft({ priority: Number(event.target.value) })}
+                    className="h-10 w-full rounded-xl border border-ds-border bg-ds-main/55 px-3 text-[14px] text-ds-ink outline-none transition focus:border-accent/45 focus:ring-2 focus:ring-accent/15"
+                  />
+                </label>
+                <div className="grid gap-2">
+                  <FieldLabel>{t('scheduleTaskIsolation')}</FieldLabel>
+                  <button
+                    type="button"
+                    onClick={() => updateDraft({ useWorktree: !draft.useWorktree })}
+                    className="flex h-10 items-center justify-between gap-3 rounded-xl border border-ds-border bg-ds-main/55 px-3 text-[13px] font-medium text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink"
+                    aria-pressed={Boolean(draft.useWorktree)}
+                  >
+                    <span>{t('scheduleTaskUseWorktree')}</span>
+                    <span className={`relative h-5 w-9 shrink-0 rounded-full transition ${draft.useWorktree ? 'bg-ds-ink' : 'bg-ds-border-strong'}`}>
+                      <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition ${draft.useWorktree ? 'left-[18px]' : 'left-0.5'}`} />
+                    </span>
+                  </button>
+                </div>
+              </div>
+              {tasks.some((task) => task.id !== draft.id) ? (
+                <div className="grid gap-2">
+                  <FieldLabel>{t('scheduleTaskDependencies')}</FieldLabel>
+                  <div className="grid max-h-32 gap-2 overflow-y-auto rounded-xl border border-ds-border bg-ds-main/35 p-3 sm:grid-cols-2">
+                    {tasks.filter((task) => task.id !== draft.id).map((task) => {
+                      const selected = (draft.dependsOn ?? []).includes(task.id)
+                      return (
+                        <label key={task.id} className="flex min-w-0 items-center gap-2 text-[13px] text-ds-muted">
+                          <input
+                            type="checkbox"
+                            checked={selected}
+                            onChange={() => updateDraft({
+                              dependsOn: selected
+                                ? (draft.dependsOn ?? []).filter((id) => id !== task.id)
+                                : [...(draft.dependsOn ?? []), task.id]
+                            })}
+                          />
+                          <span className="truncate">{task.title || t('scheduleUntitled')}</span>
+                        </label>
+                      )
+                    })}
+                  </div>
+                </div>
+              ) : null}
             </ScheduleDialogSection>
           </div>
 
