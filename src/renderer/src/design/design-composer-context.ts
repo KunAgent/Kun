@@ -3,10 +3,20 @@ import type { DesignArtifact } from './design-types'
 
 export type DesignComposerContext = {
   id: string
-  kind: 'html-artifact' | 'html-screen-frame' | 'canvas-selection'
+  kind: 'html-artifact' | 'html-screen-frame' | 'html-element' | 'canvas-selection'
   label: string
   detail?: string
   removable?: boolean
+}
+
+export type DesignHtmlElementContext = {
+  artifactId: string
+  artifactTitle: string
+  artifactRelativePath: string
+  selector: string
+  tagName: string
+  text: string
+  html: string
 }
 
 export type DesignComposerContextTarget =
@@ -20,6 +30,12 @@ export type DesignComposerContextTarget =
       chip: DesignComposerContext
       artifact: DesignArtifact
       shape: CanvasShape
+    }
+  | {
+      kind: 'html-element'
+      chip: DesignComposerContext
+      artifact: DesignArtifact
+      element: DesignHtmlElementContext
     }
   | {
       kind: 'canvas-selection'
@@ -88,6 +104,36 @@ export function resolveDesignComposerContextTargets(input: {
   }
 
   return []
+}
+
+export function designHtmlElementContextTarget(input: {
+  artifacts: readonly DesignArtifact[]
+  element: DesignHtmlElementContext
+  suppressedIds?: ReadonlySet<string>
+}): DesignComposerContextTarget | null {
+  const artifact = input.artifacts.find((item) => item.id === input.element.artifactId)
+  if (artifact?.kind !== 'html') return null
+  const text = input.element.text.trim()
+  const label = text ? `${input.element.tagName.toLowerCase()}: ${text}` : `${input.element.tagName.toLowerCase()} element`
+  const chip = {
+    id: `html-element:${input.element.artifactId}:${input.element.selector}`,
+    kind: 'html-element' as const,
+    label,
+    detail: input.element.selector,
+    removable: true
+  }
+  return input.suppressedIds?.has(chip.id)
+    ? null
+    : {
+        kind: 'html-element',
+        chip,
+        artifact,
+        element: {
+          ...input.element,
+          artifactRelativePath: artifact.relativePath,
+          artifactTitle: artifact.title
+        }
+      }
 }
 
 export function designComposerContextChips(targets: readonly DesignComposerContextTarget[]): DesignComposerContext[] {

@@ -66,6 +66,8 @@ import {
   buildDesignFromCodePrompt,
   buildDesignTurnPrompt
 } from '../design/design-turn-prompt'
+import { buildDesignArtifactMarkdown } from '../design/design-artifact-markdown'
+import { prepareDesignPreviewFile } from '../design/design-preview-file'
 import { buildImplementDesignPrompt } from '../design/design-implement-prompt'
 import { createDesignArtifactId, defaultDesignArtifactNode, type DesignArtifact } from '../design/design-types'
 import { formatDesignSystemMarkdown, hashDesignSystem } from '../design/design-context'
@@ -77,8 +79,10 @@ import { useCanvasSelectionStore } from '../design/canvas/canvas-selection-store
 import { snapshotCanvas } from '../design/canvas/canvas-snapshot'
 import {
   designComposerContextChips,
+  designHtmlElementContextTarget,
   resolveDesignComposerContextTargets
 } from '../design/design-composer-context'
+import type { DesignHtmlElementContext } from '../design/design-composer-context'
 import type { ScreenTurnOptions, ScreenManifestEntry } from '../design/design-turn-prompt'
 import { SddAssistantPanel } from './sdd/SddAssistantPanel'
 import { SddDraftEditorView } from './sdd/SddDraftEditorView'
@@ -515,6 +519,8 @@ export function Workbench(): ReactElement {
   const [designContextSuppressedIds, setDesignContextSuppressedIds] = useState<Set<string>>(
     () => new Set()
   )
+  const [designHtmlElementContext, setDesignHtmlElementContext] =
+    useState<DesignHtmlElementContext | null>(null)
   const writeAssistantOpen = useWriteWorkspaceStore((s) => s.assistantOpen)
   const setWriteAssistantOpen = useWriteWorkspaceStore((s) => s.setAssistantOpen)
   const designImplementOpen = useDesignWorkspaceStore((s) => s.implementOpen)
@@ -533,16 +539,30 @@ export function Workbench(): ReactElement {
   const canvasDocument = useCanvasShapeStore((s) => s.document)
   const canvasSelectedIds = useCanvasSelectionStore((s) => s.selectedIds)
   const rawDesignContextTargets = useMemo(
-    () =>
-      route === 'design'
-        ? resolveDesignComposerContextTargets({
+    () => {
+      if (route !== 'design') return []
+      const elementTarget = designHtmlElementContext
+        ? designHtmlElementContextTarget({
+            artifacts: designArtifacts,
+            element: designHtmlElementContext
+          })
+        : null
+      const baseTargets = resolveDesignComposerContextTargets({
             artifacts: designArtifacts,
             activeArtifactId: designActiveArtifactId,
             canvasDocument,
             selectedIds: canvasSelectedIds
           })
-        : [],
-    [canvasDocument, canvasSelectedIds, designActiveArtifactId, designArtifacts, route]
+      return elementTarget ? [elementTarget, ...baseTargets] : baseTargets
+    },
+    [
+      canvasDocument,
+      canvasSelectedIds,
+      designActiveArtifactId,
+      designArtifacts,
+      designHtmlElementContext,
+      route
+    ]
   )
   const rawDesignContextKey = useMemo(
     () => rawDesignContextTargets.map((target) => target.chip.id).join('|'),
@@ -551,22 +571,38 @@ export function Workbench(): ReactElement {
   useEffect(() => {
     setDesignContextSuppressedIds(new Set())
   }, [rawDesignContextKey])
+  useEffect(() => {
+    setDesignHtmlElementContext((current) => {
+      if (!current) return current
+      if (route !== 'design') return null
+      return current.artifactId === designActiveArtifactId ? current : null
+    })
+  }, [designActiveArtifactId, route])
   const visibleDesignContextTargets = useMemo(
-    () =>
-      route === 'design'
-        ? resolveDesignComposerContextTargets({
+    () => {
+      if (route !== 'design') return []
+      const elementTarget = designHtmlElementContext
+        ? designHtmlElementContextTarget({
+            artifacts: designArtifacts,
+            element: designHtmlElementContext,
+            suppressedIds: designContextSuppressedIds
+          })
+        : null
+      const baseTargets = resolveDesignComposerContextTargets({
             artifacts: designArtifacts,
             activeArtifactId: designActiveArtifactId,
             canvasDocument,
             selectedIds: canvasSelectedIds,
             suppressedIds: designContextSuppressedIds
           })
-        : [],
+      return elementTarget ? [elementTarget, ...baseTargets] : baseTargets
+    },
     [
       canvasDocument,
       canvasSelectedIds,
       designActiveArtifactId,
       designArtifacts,
+      designHtmlElementContext,
       designContextSuppressedIds,
       route
     ]
@@ -576,12 +612,27 @@ export function Workbench(): ReactElement {
     [visibleDesignContextTargets]
   )
   const removeDesignContextChip = useCallback((id: string): void => {
+    if (id.startsWith('html-element:')) {
+      setDesignHtmlElementContext(null)
+    }
     setDesignContextSuppressedIds((current) => {
       const next = new Set(current)
       next.add(id)
       return next
     })
   }, [])
+  const useDesignHtmlElementAsContext = useCallback(
+    (context: DesignHtmlElementContext | null, promptSeed?: string): void => {
+      setDesignHtmlElementContext(context)
+      if (context && promptSeed) {
+        setInput((current) => (current.trim() ? current : promptSeed))
+        requestAnimationFrame(() => {
+          document.querySelector<HTMLTextAreaElement>('[data-design-rail-composer] textarea')?.focus()
+        })
+      }
+    },
+    []
+  )
   const writeAssistantPickList = useMemo(() => {
     const ordered = new Set<string>()
     for (const id of DEFAULT_COMPOSER_MODEL_IDS) {
@@ -1420,16 +1471,27 @@ export function Workbench(): ReactElement {
       const isCanvas = active?.kind === 'canvas'
       let artifactRelativePath = active?.relativePath ?? ''
       let basePath: string | undefined
+      let htmlArtifactId = ''
+      let designNotesPath = ''
+      let htmlElementContext: DesignHtmlElementContext | undefined
 
       const canvasDoc = useCanvasShapeStore.getState().document
       const selectedShapeIds = useCanvasSelectionStore.getState().selectedIds
-      const visibleTargets = resolveDesignComposerContextTargets({
+      const elementTarget = designHtmlElementContext
+        ? designHtmlElementContextTarget({
+            artifacts: latestDesignState.artifacts,
+            element: designHtmlElementContext,
+            suppressedIds: designContextSuppressedIds
+          })
+        : null
+      const baseVisibleTargets = resolveDesignComposerContextTargets({
         artifacts: latestDesignState.artifacts,
         activeArtifactId: latestDesignState.activeArtifactId,
         canvasDocument: canvasDoc,
         selectedIds: selectedShapeIds,
         suppressedIds: designContextSuppressedIds
       })
+      const visibleTargets = elementTarget ? [elementTarget, ...baseVisibleTargets] : baseVisibleTargets
       const primaryTarget = visibleTargets[0] ?? null
       const isScreenTarget = primaryTarget?.kind === 'html-screen-frame'
       const selectedFrame = isScreenTarget ? primaryTarget.shape : null
@@ -1449,6 +1511,23 @@ export function Workbench(): ReactElement {
         })
         artifactRelativePath = prep.relativePath
         basePath = prep.basePath
+        htmlArtifactId = prep.artifactId
+        designNotesPath = prep.designMdPath
+      } else if (primaryTarget?.kind === 'html-element') {
+        const prep = latestDesignState.prepareHtmlTurn(promptText, {
+          artifactId: primaryTarget.artifact.id,
+          forceNew: false,
+          activate: true
+        })
+        artifactRelativePath = prep.relativePath
+        basePath = prep.basePath
+        htmlArtifactId = prep.artifactId
+        designNotesPath = prep.designMdPath
+        htmlElementContext = {
+          ...primaryTarget.element,
+          artifactRelativePath: prep.basePath ?? primaryTarget.artifact.relativePath
+        }
+        useDesignWorkspaceStore.getState().setDesignIntentMode('modify')
       } else if (primaryTarget?.kind === 'html-artifact') {
         const prep = latestDesignState.prepareHtmlTurn(promptText, {
           artifactId: primaryTarget.artifact.id,
@@ -1457,11 +1536,15 @@ export function Workbench(): ReactElement {
         })
         artifactRelativePath = prep.relativePath
         basePath = prep.basePath
+        htmlArtifactId = prep.artifactId
+        designNotesPath = prep.designMdPath
         useDesignWorkspaceStore.getState().setDesignIntentMode('modify')
       } else if (!isCanvas) {
         const prep = latestDesignState.prepareHtmlTurn(promptText, { forceNew: true })
         artifactRelativePath = prep.relativePath
         basePath = prep.basePath
+        htmlArtifactId = prep.artifactId
+        designNotesPath = prep.designMdPath
         useDesignWorkspaceStore.getState().setDesignIntentMode('modify')
       }
 
@@ -1486,13 +1569,65 @@ export function Workbench(): ReactElement {
       }
 
       const target = isScreenTarget ? 'screen' : isCanvas ? 'canvas' : 'html'
+      if (target !== 'canvas') {
+        const previewFile = await prepareDesignPreviewFile(
+          designWorkspaceRoot,
+          artifactRelativePath,
+          basePath
+        )
+        if (!previewFile.ok) {
+          const message = `Design preview setup failed: ${previewFile.message}`
+          useDesignWorkspaceStore.getState().setFileError(message)
+          setInput(text)
+          return
+        }
+
+        const notesArtifact = useDesignWorkspaceStore
+          .getState()
+          .artifacts.find((artifact) => artifact.id === htmlArtifactId)
+        if (
+          notesArtifact &&
+          designNotesPath &&
+          typeof window.kunGui?.writeWorkspaceFile === 'function'
+        ) {
+          const notes = buildDesignArtifactMarkdown({
+            artifact: notesArtifact,
+            designMdPath: designNotesPath,
+            currentTurn: promptText,
+            selectedContext: visibleTargets.map((item) => ({
+              kind: item.chip.kind,
+              label: item.chip.label,
+              detail: item.chip.detail
+            }))
+          })
+          const writeNotes = await window.kunGui
+            .writeWorkspaceFile({
+              path: designNotesPath,
+              workspaceRoot: designWorkspaceRoot,
+              content: notes
+            })
+            .catch((error: unknown) => ({
+              ok: false as const,
+              message: error instanceof Error ? error.message : String(error)
+            }))
+          if (!writeNotes.ok) {
+            const message = `Design notes setup failed: ${writeNotes.message}`
+            useDesignWorkspaceStore.getState().setFileError(message)
+            setInput(text)
+            return
+          }
+        }
+      }
+
       const promptState = useDesignWorkspaceStore.getState()
       const prompt = buildDesignTurnPrompt({
         target,
         mode: attachmentIds.length > 0 ? 'image' : 'text',
         text: promptText,
         artifactRelativePath,
+        designNotesPath,
         basePath,
+        htmlElementContext,
         workspaceRoot: designWorkspaceRoot,
         customPrompt: promptState.generationPrompt || undefined,
         designContext: promptState.designContext,
@@ -1515,7 +1650,10 @@ export function Workbench(): ReactElement {
         ...(reasoningEffort ? { reasoningEffort } : {}),
         ...(attachmentIds.length ? { attachmentIds, attachments } : {})
       })
-      if (sent && attachmentIds.length > 0) clearComposerAttachments()
+      if (sent) {
+        setDesignHtmlElementContext(null)
+        if (attachmentIds.length > 0) clearComposerAttachments()
+      }
     })()
   }
 
@@ -2890,7 +3028,6 @@ export function Workbench(): ReactElement {
                 onCodeOpen={openCodeMode}
                 onWriteOpen={openWriteMode}
                 onDesignOpen={openDesignMode}
-                onImplement={implementDesignInCode}
                 onNewCanvas={createDesignCanvas}
               />
             ) : route === 'write' ? (
@@ -2986,6 +3123,7 @@ export function Workbench(): ReactElement {
               onToggleLeftSidebar={toggleLeftSidebar}
               onOpenAgentSettings={() => openSettings('design')}
               onImplementDesign={implementDesignInCode}
+              onUseElementAsContext={useDesignHtmlElementAsContext}
               onScreenCreated={(shapeId, userPrompt) => {
                 useCanvasSelectionStore.getState().select([shapeId])
                 setTimeout(() => sendDesignPrompt(userPrompt || 'Design this screen'), 300)

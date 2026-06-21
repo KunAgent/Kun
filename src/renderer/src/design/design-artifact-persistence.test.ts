@@ -22,6 +22,7 @@ describe('design artifact persistence', () => {
     )
 
     expect(artifact?.id).toBe('draft')
+    expect(artifact?.designMdPath).toBe('.kun-design/draft/DESIGN.md')
     expect(artifact?.node).toBeUndefined()
   })
 
@@ -35,12 +36,16 @@ describe('design artifact persistence', () => {
       createdAt,
       updatedAt: createdAt,
       versions: [{ id: 'draft-v1', relativePath: '.kun-design/draft/v1.html', createdAt, summary: '' }],
+      designMdPath: '.kun-design/draft/DESIGN.md',
+      previewStatus: 'ready',
       node: { x: 120, y: 240, width: 512, height: 384, sizeMode: 'auto', favorite: true, viewMode: 'code' }
     }
 
     const parsed = parseArtifactMeta(serializeArtifactMeta(artifact), 'draft')
 
     expect(parsed?.node).toEqual(artifact.node)
+    expect(parsed?.designMdPath).toBe('.kun-design/draft/DESIGN.md')
+    expect(parsed?.previewStatus).toBe('ready')
   })
 
   it('adds a default node when reconstructing legacy artifact folders', () => {
@@ -50,5 +55,6 @@ describe('design artifact persistence', () => {
     ])
 
     expect(artifact?.node).toEqual(defaultDesignArtifactNode(0))
+    expect(artifact?.designMdPath).toBe('.kun-design/legacy/DESIGN.md')
   })
 })

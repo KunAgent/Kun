@@ -45,14 +45,18 @@ describe('design workspace store', () => {
       .prepareHtmlTurn('Make it a login screen', { artifactId: 'screen', activate: false })
 
     expect(result).toEqual({
+      artifactId: 'screen',
       relativePath: '.kun-design/screen/v2.html',
-      basePath: '.kun-design/screen/v1.html'
+      basePath: '.kun-design/screen/v1.html',
+      designMdPath: '.kun-design/screen/DESIGN.md'
     })
 
     const state = useDesignWorkspaceStore.getState()
     const screen = state.artifacts.find((item) => item.id === 'screen')
     expect(state.activeArtifactId).toBe('canvas')
     expect(screen?.relativePath).toBe('.kun-design/screen/v2.html')
+    expect(screen?.designMdPath).toBe('.kun-design/screen/DESIGN.md')
+    expect(screen?.previewStatus).toBe('pending')
     expect(screen?.versions[0]).toMatchObject({
       id: 'screen-v2',
       relativePath: '.kun-design/screen/v2.html',

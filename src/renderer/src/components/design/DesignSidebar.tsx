@@ -1,10 +1,11 @@
 import { useMemo, useRef, useState, type ReactElement } from 'react'
-import { Check, Code2, FileCode2, FilePlus2, Layers, RotateCcw, Trash2, TriangleAlert } from 'lucide-react'
+import { Check, FileCode2, FilePlus2, Layers, RotateCcw, Trash2, TriangleAlert } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { WorkspaceModeTabs } from '../chat/WorkspaceModeTabs'
 import { useDesignWorkspaceStore } from '../../design/design-workspace-store'
 import type { DesignArtifact } from '../../design/design-types'
-import { canImplementDesignArtifact, groupDesignArtifacts } from '../../design/design-artifact-actions'
+import { DESIGN_CANVAS_ENABLED } from '../../design/design-feature-flags'
+import { groupDesignArtifacts } from '../../design/design-artifact-actions'
 import { useCanvasShapeStore } from '../../design/canvas/canvas-shape-store'
 import { isHtmlFrame } from '../../design/canvas/canvas-types'
 import {
@@ -20,8 +21,6 @@ type Props = {
   onCodeOpen: () => void
   onWriteOpen: () => void
   onDesignOpen: () => void
-  /** Hand the artifact to the coding agent (design → code spine). */
-  onImplement: (artifact: DesignArtifact) => void
   /** Create a new SVG design canvas artifact. */
   onNewCanvas: () => void
 }
@@ -31,7 +30,6 @@ export function DesignSidebar({
   onCodeOpen,
   onWriteOpen,
   onDesignOpen,
-  onImplement,
   onNewCanvas
 }: Props): ReactElement {
   const { t } = useTranslation('common')
@@ -144,28 +142,15 @@ export function DesignSidebar({
                   </>
                 }
                 actions={
-                  <>
-                    {canImplementDesignArtifact(artifact) ? (
-                      <SidebarIconButton
-                        onClick={() => onImplement(artifact)}
-                        title={t('designImplement')}
-                        ariaLabel={t('designImplement')}
-                        tone="accent"
-                        stopPropagation
-                      >
-                        <Code2 className="h-3.5 w-3.5" strokeWidth={1.9} />
-                      </SidebarIconButton>
-                    ) : null}
-                    <SidebarIconButton
-                      onClick={() => removeArtifact(artifact.id)}
-                      title={t('designDeleteArtifact')}
-                      ariaLabel={t('designDeleteArtifact')}
-                      tone="danger"
-                      stopPropagation
-                    >
-                      <Trash2 className="h-3.5 w-3.5" strokeWidth={1.9} />
-                    </SidebarIconButton>
-                  </>
+                  <SidebarIconButton
+                    onClick={() => removeArtifact(artifact.id)}
+                    title={t('designDeleteArtifact')}
+                    ariaLabel={t('designDeleteArtifact')}
+                    tone="danger"
+                    stopPropagation
+                  >
+                    <Trash2 className="h-3.5 w-3.5" strokeWidth={1.9} />
+                  </SidebarIconButton>
                 }
               >
                 {artifact.kind === 'canvas' ? (
@@ -208,11 +193,13 @@ export function DesignSidebar({
           onClick={startNewDesign}
           variant="accent"
         />
-        <SidebarCommandRow
-          icon={<Layers className="h-4 w-4" strokeWidth={1.9} />}
-          label={t('designNewCanvas')}
-          onClick={onNewCanvas}
-        />
+        {DESIGN_CANVAS_ENABLED ? (
+          <SidebarCommandRow
+            icon={<Layers className="h-4 w-4" strokeWidth={1.9} />}
+            label={t('designNewCanvas')}
+            onClick={onNewCanvas}
+          />
+        ) : null}
       </div>
 
       <div className="ds-no-drag mx-1.5 my-3" />
@@ -227,10 +214,12 @@ export function DesignSidebar({
           ) : (
             <>
               {renderSection(t('designDraftsSection'), grouped.html, t('designDraftsEmpty'))}
-              {renderSection(t('designCanvasDesignSection'), grouped.canvas, t('designCanvasDesignEmpty'))}
+              {DESIGN_CANVAS_ENABLED
+                ? renderSection(t('designCanvasDesignSection'), grouped.canvas, t('designCanvasDesignEmpty'))
+                : null}
             </>
           )}
-          {activeArtifact?.kind === 'canvas' ? (
+          {DESIGN_CANVAS_ENABLED && activeArtifact?.kind === 'canvas' ? (
             <section>
               <SidebarSectionHeader label={t('canvasLayersTitle')} />
               <CanvasLayersPanel />

@@ -1,7 +1,9 @@
 import { useEffect, type ReactElement } from 'react'
 import { useDesignWorkspaceStore } from '../../design/design-workspace-store'
+import { DESIGN_CANVAS_ENABLED } from '../../design/design-feature-flags'
 import { createDesignArtifactId, defaultDesignArtifactNode } from '../../design/design-types'
 import type { DesignArtifact } from '../../design/design-types'
+import type { DesignHtmlElementContext } from '../../design/design-composer-context'
 import { setScreenArtifactFactory } from '../../design/canvas/screen-artifact-bridge'
 import { CanvasViewport } from './canvas/CanvasViewport'
 import { PropertiesPanel } from './canvas/PropertiesPanel'
@@ -14,6 +16,7 @@ type CanvasProps = {
   onOpenAgentSettings?: () => void
   onImplementDesign?: (artifact: DesignArtifact) => void
   onScreenCreated?: (shapeId: string, userPrompt: string) => void
+  onUseElementAsContext?: (context: DesignHtmlElementContext | null, promptSeed?: string) => void
 }
 
 /**
@@ -25,14 +28,16 @@ export function DesignCanvas({
   onToggleLeftSidebar,
   onOpenAgentSettings,
   onImplementDesign,
-  onScreenCreated
+  onScreenCreated,
+  onUseElementAsContext
 }: CanvasProps): ReactElement {
   const workspaceRoot = useDesignWorkspaceStore((s) => s.workspaceRoot)
   const artifacts = useDesignWorkspaceStore((s) => s.artifacts)
   const activeArtifactId = useDesignWorkspaceStore((s) => s.activeArtifactId)
   const activeArtifact = artifacts.find((item) => item.id === activeArtifactId) ?? null
+  const showCanvasStage = DESIGN_CANVAS_ENABLED && activeArtifact?.kind === 'canvas'
 
-  useApplyShapeOpsOnTurnComplete(activeArtifact?.kind === 'canvas', onScreenCreated)
+  useApplyShapeOpsOnTurnComplete(showCanvasStage, onScreenCreated)
 
   // Register the factory that add-screen ShapeOps and the Screen tool use to
   // create a linked HTML artifact (returns the new artifact id synchronously).
@@ -58,7 +63,7 @@ export function DesignCanvas({
     return () => setScreenArtifactFactory(() => null)
   }, [])
 
-  if (activeArtifact?.kind === 'canvas') {
+  if (showCanvasStage && activeArtifact) {
     return (
       <div className="relative min-h-0 min-w-0 flex-1 overflow-hidden bg-ds-main">
         <CanvasViewport
@@ -78,6 +83,7 @@ export function DesignCanvas({
       onToggleLeftSidebar={onToggleLeftSidebar}
       onOpenAgentSettings={onOpenAgentSettings}
       onImplementDesign={onImplementDesign}
+      onUseElementAsContext={onUseElementAsContext}
     />
   )
 }

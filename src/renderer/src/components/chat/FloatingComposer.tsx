@@ -37,6 +37,7 @@ import {
   Square,
   Target,
   Trash2,
+  Type as TypeIcon,
   X
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
@@ -1998,7 +1999,12 @@ export function FloatingComposer({
           {contextChips.length > 0 ? (
             <div className="flex flex-wrap items-center gap-2 px-1">
               {contextChips.map((chip) => {
-                const Icon = chip.kind === 'canvas-selection' ? Target : Monitor
+                const Icon =
+                  chip.kind === 'canvas-selection'
+                    ? Target
+                    : chip.kind === 'html-element'
+                      ? TypeIcon
+                      : Monitor
                 const title = chip.detail ? `${chip.label} - ${chip.detail}` : chip.label
                 const removable = chip.removable !== false && Boolean(onRemoveContextChip)
                 return (

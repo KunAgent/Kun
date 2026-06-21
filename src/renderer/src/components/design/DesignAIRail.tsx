@@ -125,14 +125,6 @@ function DesignAIRailInner({
     }
   }, [threadListOpen])
 
-  useEffect(() => {
-    if (!input.trim()) return
-    if (isNarrowViewport()) {
-      setNarrowPanelOpen(true)
-    } else {
-      setAssistantOpen(true)
-    }
-  }, [input, setAssistantOpen])
 
   const activeThread = designThreads.find((th) => th.id === activeThreadId) ?? null
   const headerTitle = activeThread?.title || t('designRailTitle')
@@ -360,7 +352,7 @@ function DesignAIRailInner({
           onPasteClipboardImage={onPasteClipboardImage}
           onRemoveAttachment={onRemoveAttachment}
           onRemoveContextChip={onRemoveContextChip}
-          onSend={onSend}
+          onSend={() => { openAssistant(); onSend() }}
           onInterrupt={onInterrupt}
           onConfigureProviders={onConfigureProviders}
         />

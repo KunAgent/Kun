@@ -79,7 +79,7 @@ export type DesignWorkspaceState = {
   prepareHtmlTurn: (
     brief: string,
     options?: { forceNew?: boolean; artifactId?: string; activate?: boolean }
-  ) => { relativePath: string; basePath?: string }
+  ) => { artifactId: string; relativePath: string; basePath?: string; designMdPath: string }
   setAiRailCollapsed: (collapsed: boolean) => void
   setCanvasAssistantOpen: (open: boolean) => void
   setCanvasInspectorPinned: (pinned: boolean) => void

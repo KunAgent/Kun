@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { createDefaultShape, createEmptyDocument, createHtmlFrameShape, type CanvasDocument } from './canvas/canvas-types'
-import { resolveDesignComposerContextTargets } from './design-composer-context'
+import {
+  designHtmlElementContextTarget,
+  resolveDesignComposerContextTargets
+} from './design-composer-context'
 import type { DesignArtifact } from './design-types'
 
 const createdAt = '2026-06-20T00:00:00.000Z'
@@ -100,5 +103,31 @@ describe('design composer context', () => {
     })
 
     expect(targets).toEqual([])
+  })
+
+  it('creates context for a selected HTML element', () => {
+    const html = artifact('screen-a')
+    const target = designHtmlElementContextTarget({
+      artifacts: [html],
+      element: {
+        artifactId: html.id,
+        artifactTitle: html.title,
+        artifactRelativePath: html.relativePath,
+        selector: 'body > main:nth-of-type(1) > h1:nth-of-type(1)',
+        tagName: 'H1',
+        text: 'Hello World',
+        html: '<h1>Hello World</h1>'
+      }
+    })
+
+    expect(target).toMatchObject({
+      kind: 'html-element',
+      artifact: html,
+      chip: {
+        id: 'html-element:screen-a:body > main:nth-of-type(1) > h1:nth-of-type(1)',
+        label: 'h1: Hello World',
+        detail: 'body > main:nth-of-type(1) > h1:nth-of-type(1)'
+      }
+    })
   })
 })

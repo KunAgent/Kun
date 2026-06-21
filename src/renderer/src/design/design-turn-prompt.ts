@@ -2,6 +2,7 @@ import { WRITE_PROTOTYPE_DEFAULT_PROMPT, WRITE_PROTOTYPE_MAX_TEXT_CHARS } from '
 import { DESIGN_CRAFT_LINES, formatDesignContextLines, type DesignContext } from './design-context'
 import type { CanvasSnapshot } from './canvas/canvas-snapshot'
 import { snapshotToCompactJson } from './canvas/canvas-snapshot'
+import type { DesignHtmlElementContext } from './design-composer-context'
 
 export type DesignTurnTarget = 'html' | 'canvas' | 'screen'
 
@@ -12,8 +13,12 @@ export type DesignTurnOptions = {
   text?: string
   /** Workspace-relative path the agent must write the artifact to. */
   artifactRelativePath: string
+  /** Workspace-relative per-artifact design notes file the agent may update. */
+  designNotesPath?: string
   /** Prior version to iterate on; set = update that design instead of starting fresh. */
   basePath?: string
+  /** HTML preview element selected by the user for this turn. */
+  htmlElementContext?: DesignHtmlElementContext
   workspaceRoot: string
   /** User override prompt; empty = built-in default. */
   customPrompt?: string
@@ -54,6 +59,9 @@ export function buildDesignTurnPrompt(options: DesignTurnOptions): string {
     return buildScreenTurnPrompt(options as ScreenTurnOptions)
   }
   const requirements = options.customPrompt?.trim() || WRITE_PROTOTYPE_DEFAULT_PROMPT
+  const editableFiles = options.designNotesPath
+    ? `\`${options.artifactRelativePath}\` and \`${options.designNotesPath}\``
+    : `\`${options.artifactRelativePath}\``
   const lines = [
     options.basePath
       ? 'Kun is asking you to ITERATE on an existing single-file HTML design.'
@@ -66,19 +74,30 @@ export function buildDesignTurnPrompt(options: DesignTurnOptions): string {
         ]
       : []),
     `Reserved artifact file: ${options.artifactRelativePath}`,
+    ...(options.designNotesPath ? [`Design notes file: ${options.designNotesPath}`] : []),
     '',
     `Design requirements: ${requirements}`,
     '',
     'Hard rules:',
-    `- Produce ONE complete standalone HTML document at \`${options.artifactRelativePath}\`; create parent directories as needed.`,
-    '- Build it INCREMENTALLY to stay inside your output limit: first `write` a small valid skeleton (doctype, head, empty body), then extend it with several `edit` calls. Keep every tool call payload under ~4000 characters — oversized tool arguments get truncated and fail.',
-    '- Do not create or modify any other file during this turn.',
+    `- Modify ONLY ${editableFiles} during this turn. Do not create or modify any other file.`,
+    `- Produce ONE complete standalone HTML document at \`${options.artifactRelativePath}\`; it has already been pre-created so the canvas can preview it while you work.`,
+    '- Make the HTML responsive to arbitrary canvas frame sizes: use fluid layout, min/max constraints, media queries, and avoid fixed viewport wrappers unless the brief explicitly asks for one.',
+    '- Build it INCREMENTALLY to stay inside your output limit: use focused `edit` calls or small `write` replacements and keep every tool call payload under ~4000 characters — oversized tool arguments get truncated and fail.',
+    ...(options.designNotesPath
+      ? [
+          `- Keep \`${options.designNotesPath}\` aligned with the final screen: brief, visual direction, interactions, assumptions, and handoff notes.`
+        ]
+      : []),
     '- The file content must be raw HTML — no markdown fences, no commentary inside the file.',
     '- Finish with the document ending in `</html>`, then reply with a one-paragraph summary of what you designed and the interactions you implemented.'
   ]
   const designContextLines = formatDesignContextLines(options.designContext)
   if (designContextLines.length > 0) {
     lines.push('', ...designContextLines)
+  }
+  const htmlElementLines = formatHtmlElementContextLines(options.htmlElementContext)
+  if (htmlElementLines.length > 0) {
+    lines.push('', ...htmlElementLines)
   }
   lines.push('', ...DESIGN_CRAFT_LINES)
   if (options.mode === 'image') {
@@ -102,6 +121,9 @@ export function buildDesignTurnPrompt(options: DesignTurnOptions): string {
  */
 function buildScreenTurnPrompt(options: ScreenTurnOptions): string {
   const requirements = options.customPrompt?.trim() || WRITE_PROTOTYPE_DEFAULT_PROMPT
+  const editableFiles = options.designNotesPath
+    ? `\`${options.artifactRelativePath}\` and \`${options.designNotesPath}\``
+    : `\`${options.artifactRelativePath}\``
   const lines = [
     options.basePath
       ? `Kun is asking you to ITERATE on an existing screen design: "${options.screenName}".`
@@ -117,13 +139,20 @@ function buildScreenTurnPrompt(options: ScreenTurnOptions): string {
         ]
       : []),
     `Reserved artifact file: ${options.artifactRelativePath}`,
+    ...(options.designNotesPath ? [`Design notes file: ${options.designNotesPath}`] : []),
     '',
     `Design requirements: ${requirements}`,
     '',
     'Hard rules:',
-    `- Produce ONE complete standalone HTML document at \`${options.artifactRelativePath}\`; create parent directories as needed.`,
-    '- Build it INCREMENTALLY to stay inside your output limit: first `write` a small valid skeleton (doctype, head, empty body), then extend it with several `edit` calls. Keep every tool call payload under ~4000 characters.',
-    '- Do not create or modify any other file during this turn.',
+    `- Modify ONLY ${editableFiles} during this turn. Do not create or modify any other file.`,
+    `- Produce ONE complete standalone HTML document at \`${options.artifactRelativePath}\`; it has already been pre-created so the canvas can preview it while you work.`,
+    '- Make the HTML responsive to arbitrary selected frame sizes: use fluid layout, min/max constraints, media queries, and avoid fixed viewport wrappers unless the brief explicitly asks for one.',
+    '- Build it INCREMENTALLY to stay inside your output limit: use focused `edit` calls or small `write` replacements and keep every tool call payload under ~4000 characters.',
+    ...(options.designNotesPath
+      ? [
+          `- Keep \`${options.designNotesPath}\` aligned with this screen: brief, selected frame, visual direction, interactions, assumptions, and handoff notes.`
+        ]
+      : []),
     '- The file content must be raw HTML — no markdown fences, no commentary inside the file.',
     '- Finish with the document ending in `</html>`, then reply with a one-paragraph summary of what you designed.'
   ]
@@ -143,6 +172,10 @@ function buildScreenTurnPrompt(options: ScreenTurnOptions): string {
   if (designContextLines.length > 0) {
     lines.push('', ...designContextLines)
   }
+  const htmlElementLines = formatHtmlElementContextLines(options.htmlElementContext)
+  if (htmlElementLines.length > 0) {
+    lines.push('', ...htmlElementLines)
+  }
   lines.push('', ...DESIGN_CRAFT_LINES)
   if (options.mode === 'image') {
     lines.push(
@@ -156,6 +189,21 @@ function buildScreenTurnPrompt(options: ScreenTurnOptions): string {
     lines.push('', 'Brief:', text.slice(0, WRITE_PROTOTYPE_MAX_TEXT_CHARS))
   }
   return lines.join('\n')
+}
+
+function formatHtmlElementContextLines(element: DesignHtmlElementContext | undefined): string[] {
+  if (!element) return []
+  const text = element.text.trim()
+  const html = element.html.trim()
+  return [
+    'Selected HTML element context:',
+    `- Artifact: ${element.artifactTitle} (${element.artifactRelativePath})`,
+    `- CSS selector: ${element.selector}`,
+    `- Tag: <${element.tagName.toLowerCase()}>`,
+    ...(text ? [`- Current text: ${text.slice(0, 700)}`] : []),
+    ...(html ? [`- HTML excerpt: ${html.slice(0, 1200)}`] : []),
+    '- Treat this selected element as the binding target for wording like "this", "here", "这个", "这里", or "选中的". Prefer focused edits to this element and its local styling/children unless the user asks for broader layout changes.'
+  ]
 }
 
 /**

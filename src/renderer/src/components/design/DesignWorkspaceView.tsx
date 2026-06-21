@@ -3,6 +3,7 @@ import { useEffect } from 'react'
 import { X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useDesignWorkspaceStore } from '../../design/design-workspace-store'
+import type { DesignHtmlElementContext } from '../../design/design-composer-context'
 import type { DesignArtifact } from '../../design/design-types'
 import { DesignCanvas } from './DesignCanvas'
 
@@ -12,6 +13,7 @@ type Props = {
   onOpenAgentSettings?: () => void
   onImplementDesign?: (artifact: DesignArtifact) => void
   onScreenCreated?: (shapeId: string, userPrompt: string) => void
+  onUseElementAsContext?: (context: DesignHtmlElementContext | null, promptSeed?: string) => void
 }
 
 /**
@@ -24,7 +26,8 @@ export function DesignWorkspaceView({
   onToggleLeftSidebar,
   onOpenAgentSettings,
   onImplementDesign,
-  onScreenCreated
+  onScreenCreated,
+  onUseElementAsContext
 }: Props): ReactElement {
   const { t } = useTranslation('common')
   const loadDesignSettings = useDesignWorkspaceStore((s) => s.loadDesignSettings)
@@ -57,6 +60,7 @@ export function DesignWorkspaceView({
           onOpenAgentSettings={onOpenAgentSettings}
           onImplementDesign={onImplementDesign}
           onScreenCreated={onScreenCreated}
+          onUseElementAsContext={onUseElementAsContext}
         />
       </div>
     </div>

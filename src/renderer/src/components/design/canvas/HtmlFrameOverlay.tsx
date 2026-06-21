@@ -4,6 +4,7 @@ import { useCanvasShapeStore } from '../../../design/canvas/canvas-shape-store'
 import { useCanvasViewportStore } from '../../../design/canvas/canvas-viewport-store'
 import { useCanvasSelectionStore } from '../../../design/canvas/canvas-selection-store'
 import { isHtmlFrame, type CanvasShape } from '../../../design/canvas/canvas-types'
+import { startDesignHtmlPreviewWatch } from '../../../design/design-preview-file'
 import { useDesignWorkspaceStore } from '../../../design/design-workspace-store'
 
 const MAX_ACTIVE_WEBVIEWS = 6
@@ -33,40 +34,71 @@ function ScreenOverlayInner({
   onDoubleClick
 }: ScreenOverlayProps): ReactElement {
   const [fileUrl, setFileUrl] = useState('')
+  const [revision, setRevision] = useState(0)
+  const [previewError, setPreviewError] = useState('')
   const webviewRef = useRef<HTMLElement | null>(null)
 
   const artifact = useDesignWorkspaceStore((s) =>
     s.artifacts.find((a) => a.id === shape.htmlArtifactId)
   )
+  const setFileError = useDesignWorkspaceStore((s) => s.setFileError)
 
   useEffect(() => {
     let cancelled = false
-    let timer: ReturnType<typeof setInterval> | null = null
+    let cleanupWatch: (() => void) | null = null
+    let retryTimer = 0
+    let attempts = 0
     setFileUrl('')
+    setRevision(0)
+    setPreviewError('')
     if (!artifact || artifact.kind !== 'html' || !workspaceRoot) return
     if (typeof window.kunGui?.authorizeWritePrototype !== 'function') return
 
+    const reportError = (message: string): void => {
+      setPreviewError(message)
+      setFileError(message)
+    }
+
     const tryAuthorize = (): void => {
+      attempts += 1
       void window.kunGui
         .authorizeWritePrototype({ path: artifact.relativePath, workspaceRoot })
         .then((res) => {
           if (cancelled) return
           if (res.ok) {
+            setPreviewError('')
             setFileUrl(res.fileUrl)
-            if (timer) { clearInterval(timer); timer = null }
+            cleanupWatch?.()
+            cleanupWatch = startDesignHtmlPreviewWatch({
+              workspaceRoot,
+              path: artifact.relativePath,
+              onRevision: (nextRevision) => {
+                setPreviewError('')
+                setRevision(nextRevision)
+              },
+              onError: reportError
+            })
+            return
           }
+          if (res.message === 'prototype file not found' && attempts < 24) {
+            retryTimer = window.setTimeout(tryAuthorize, 250)
+            return
+          }
+          reportError(res.message)
         })
-        .catch(() => {})
+        .catch((error: unknown) => {
+          if (!cancelled) reportError(error instanceof Error ? error.message : String(error))
+        })
     }
 
     tryAuthorize()
-    timer = setInterval(tryAuthorize, 2000)
 
     return () => {
       cancelled = true
-      if (timer) clearInterval(timer)
+      if (retryTimer) window.clearTimeout(retryTimer)
+      cleanupWatch?.()
     }
-  }, [artifact?.relativePath, artifact?.kind, workspaceRoot])
+  }, [artifact?.relativePath, artifact?.kind, setFileError, workspaceRoot])
 
   const handleDoubleClick = useCallback(
     (e: React.MouseEvent) => {
@@ -79,6 +111,7 @@ function ScreenOverlayInner({
   if (screenWidth < 20 || screenHeight < 20) return <></>
 
   const titleBarHeight = Math.min(28, screenHeight * 0.06)
+  const webviewUrl = fileUrl ? `${fileUrl}${fileUrl.includes('?') ? '&' : '?'}rev=${revision}` : ''
 
   return (
     <div
@@ -114,10 +147,11 @@ function ScreenOverlayInner({
 
       {/* Content */}
       <div style={{ height: screenHeight - titleBarHeight }} className="bg-white">
-        {fileUrl ? (
+        {webviewUrl ? (
           <webview
+            key={webviewUrl}
             ref={webviewRef as React.Ref<HTMLElement>}
-            src={fileUrl}
+            src={webviewUrl}
             partition="kun-proto"
             webpreferences="contextIsolation=yes,nodeIntegration=no,sandbox=yes"
             className="h-full w-full border-0"
@@ -126,7 +160,7 @@ function ScreenOverlayInner({
         ) : (
           <div className="flex h-full items-center justify-center text-ds-faint">
             <div className="text-center" style={{ fontSize: Math.min(12, screenWidth * 0.028) }}>
-              {artifact ? 'Loading...' : 'No content'}
+              {previewError || (artifact ? 'Generating...' : 'No content')}
             </div>
           </div>
         )}

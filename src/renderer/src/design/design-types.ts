@@ -43,6 +43,10 @@ export type DesignArtifact = {
   createdAt: string
   updatedAt: string
   versions: DesignArtifactVersion[]
+  /** Per-artifact design notes that travel with the HTML screen. */
+  designMdPath?: string
+  /** Renderer-side preview lifecycle state; persisted for restart recovery. */
+  previewStatus?: 'pending' | 'ready' | 'error'
   /** Optional Stitch-style project-canvas placement metadata. */
   node?: DesignArtifactNode
   /** ISO time the design was handed to code; absent = not implemented yet. */

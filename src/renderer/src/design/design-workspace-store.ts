@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { rendererRuntimeClient } from '../agent/runtime-client'
 import { readBrowserStorageItem, writeBrowserStorageItem } from '../lib/browser-storage'
 import {
+  artifactDesignMdPath,
   artifactMetaPath,
   deleteArtifactDir,
   parseArtifactMeta,
@@ -113,9 +114,13 @@ export const useDesignWorkspaceStore = create<DesignWorkspaceState>((set, get) =
   upsertArtifact: (artifact) => {
     set((state) => {
       const exists = state.artifacts.some((item) => item.id === artifact.id)
-      const nextArtifact = artifact.node
-        ? artifact
-        : { ...artifact, node: defaultDesignArtifactNode(state.artifacts.length) }
+      const artifactWithDefaults =
+        artifact.kind === 'html'
+          ? { ...artifact, designMdPath: artifact.designMdPath ?? artifactDesignMdPath(artifact.id) }
+          : artifact
+      const nextArtifact = artifactWithDefaults.node
+        ? artifactWithDefaults
+        : { ...artifactWithDefaults, node: defaultDesignArtifactNode(state.artifacts.length) }
       const artifacts = exists
         ? state.artifacts.map((item) => (item.id === artifact.id ? nextArtifact : item))
         : [nextArtifact, ...state.artifacts]
@@ -133,7 +138,10 @@ export const useDesignWorkspaceStore = create<DesignWorkspaceState>((set, get) =
               ...item,
               relativePath: version.relativePath,
               updatedAt: version.createdAt,
-              versions: [version, ...item.versions]
+              versions: [version, ...item.versions],
+              ...(item.kind === 'html'
+                ? { designMdPath: item.designMdPath ?? artifactDesignMdPath(item.id), previewStatus: 'pending' as const }
+                : {})
             }
           : item
       )
@@ -222,6 +230,7 @@ export const useDesignWorkspaceStore = create<DesignWorkspaceState>((set, get) =
     const createdAt = new Date().toISOString()
     const copyId = createDesignArtifactId()
     const relativePath = `.kun-design/${copyId}/v1.html`
+    const designMdPath = artifactDesignMdPath(copyId)
     const write = await window.kunGui
       .writeWorkspaceFile({ path: relativePath, workspaceRoot, content: read.content })
       .catch(() => null)
@@ -235,6 +244,8 @@ export const useDesignWorkspaceStore = create<DesignWorkspaceState>((set, get) =
       createdAt,
       updatedAt: createdAt,
       versions: [{ id: `${copyId}-v1`, relativePath, createdAt, summary: source.versions[0]?.summary ?? '' }],
+      designMdPath,
+      previewStatus: 'ready',
       node: {
         ...sourceNode,
         x: sourceNode.x + 44,
@@ -282,6 +293,7 @@ export const useDesignWorkspaceStore = create<DesignWorkspaceState>((set, get) =
     if (activeHtml) {
       const versionN = activeHtml.versions.length + 1
       const relativePath = `.kun-design/${activeHtml.id}/v${versionN}.html`
+      const designMdPath = activeHtml.designMdPath ?? artifactDesignMdPath(activeHtml.id)
       get().addArtifactVersion(activeHtml.id, {
         id: `${activeHtml.id}-v${versionN}`,
         relativePath,
@@ -289,11 +301,12 @@ export const useDesignWorkspaceStore = create<DesignWorkspaceState>((set, get) =
         summary: text
       })
       if (options.activate !== false) set({ activeArtifactId: activeHtml.id })
-      return { relativePath, basePath: activeHtml.relativePath }
+      return { artifactId: activeHtml.id, relativePath, basePath: activeHtml.relativePath, designMdPath }
     }
 
     const artifactId = createDesignArtifactId()
     const relativePath = `.kun-design/${artifactId}/v1.html`
+    const designMdPath = artifactDesignMdPath(artifactId)
     const title = text.length > 48 ? `${text.slice(0, 48)}…` : text || 'Untitled design'
     get().upsertArtifact({
       id: artifactId,
@@ -303,9 +316,11 @@ export const useDesignWorkspaceStore = create<DesignWorkspaceState>((set, get) =
       createdAt,
       updatedAt: createdAt,
       versions: [{ id: `${artifactId}-v1`, relativePath, createdAt, summary: text }],
+      designMdPath,
+      previewStatus: 'pending',
       node: defaultDesignArtifactNode(state.artifacts.length)
     })
-    return { relativePath }
+    return { artifactId, relativePath, designMdPath }
   },
 
   setAiRailCollapsed: (collapsed) => {

@@ -23,6 +23,10 @@ export function artifactMetaPath(id: string): string {
   return `${DESIGN_DIR}/${id}/meta.json`
 }
 
+export function artifactDesignMdPath(id: string): string {
+  return `${DESIGN_DIR}/${id}/DESIGN.md`
+}
+
 export function serializeArtifactMeta(artifact: DesignArtifact): string {
   return `${JSON.stringify(artifact, null, 2)}\n`
 }
@@ -75,14 +79,21 @@ export function parseArtifactMeta(raw: string, dirId: string): DesignArtifact | 
         }))
     : []
   const parsedNode = parseNode(o.node)
+  const kind: DesignArtifact['kind'] = o.kind === 'canvas' ? 'canvas' : 'html'
+  const previewStatus =
+    o.previewStatus === 'pending' || o.previewStatus === 'ready' || o.previewStatus === 'error'
+      ? o.previewStatus
+      : undefined
   return {
     id,
-    kind: o.kind === 'canvas' ? 'canvas' : 'html',
+    kind,
     title: isStr(o.title) ? o.title : dirId,
     relativePath,
     createdAt,
     updatedAt,
     versions: versions.length > 0 ? versions : [{ id, relativePath, createdAt, summary: '' }],
+    ...(kind === 'html' ? { designMdPath: isStr(o.designMdPath) ? o.designMdPath : artifactDesignMdPath(id) } : {}),
+    ...(previewStatus ? { previewStatus } : {}),
     ...(parsedNode ? { node: parsedNode } : {}),
     implementedAt: isStr(o.implementedAt) ? o.implementedAt : undefined,
     implementedThreadId: isStr(o.implementedThreadId) ? o.implementedThreadId : undefined,
@@ -122,6 +133,7 @@ export function reconstructArtifact(dirId: string, entries: WorkspaceEntry[]): D
     createdAt: now,
     updatedAt: now,
     versions,
+    ...(kind === 'html' ? { designMdPath: artifactDesignMdPath(dirId) } : {}),
     node: defaultDesignArtifactNode(0)
   }
 }

@@ -1,4 +1,13 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement, type Ref } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactElement,
+  type Ref
+} from 'react'
 import {
   CheckCircle2,
   Code2,
@@ -16,16 +25,22 @@ import {
   Plus,
   Share2,
   Smartphone,
+  Sparkles,
   Star,
   Tablet,
   Trash2,
+  Type as TypeIcon,
   type LucideIcon
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import type { DesignHtmlElementContext } from '../../design/design-composer-context'
+import { resizeDesignArtifactNode, type DesignNodeResizeHandle } from '../../design/design-node-resize'
+import { startDesignHtmlPreviewWatch } from '../../design/design-preview-file'
 import { useDesignWorkspaceStore } from '../../design/design-workspace-store'
 import {
   defaultDesignArtifactNode,
   type DesignArtifact,
+  type DesignArtifactNode,
   type DesignCanvasView,
   type DesignViewport
 } from '../../design/design-types'
@@ -44,8 +59,51 @@ const PROJECT_VIEWPORT_NODE_WIDTHS: Record<DesignViewport, number> = {
   desktop: 1280
 }
 
+const RESIZE_HANDLES: { id: DesignNodeResizeHandle; className: string; label: string }[] = [
+  { id: 'nw', className: 'left-1 top-1 cursor-nwse-resize', label: 'Resize top left' },
+  { id: 'n', className: 'left-1/2 top-1 -translate-x-1/2 cursor-ns-resize', label: 'Resize top' },
+  { id: 'ne', className: 'right-1 top-1 cursor-nesw-resize', label: 'Resize top right' },
+  { id: 'e', className: 'right-1 top-1/2 -translate-y-1/2 cursor-ew-resize', label: 'Resize right' },
+  { id: 'se', className: 'bottom-1 right-1 cursor-nwse-resize', label: 'Resize bottom right' },
+  { id: 's', className: 'bottom-1 left-1/2 -translate-x-1/2 cursor-ns-resize', label: 'Resize bottom' },
+  { id: 'sw', className: 'bottom-1 left-1 cursor-nesw-resize', label: 'Resize bottom left' },
+  { id: 'w', className: 'left-1 top-1/2 -translate-y-1/2 cursor-ew-resize', label: 'Resize left' }
+]
+
 type WebviewElement = HTMLElement & {
   executeJavaScript?: (code: string) => Promise<unknown>
+}
+
+/** Computed typography copied from the element so the in-place editor matches it visually. */
+type InlineEditStyle = {
+  fontFamily: string
+  fontSize: string
+  fontWeight: string
+  fontStyle: string
+  lineHeight: string
+  letterSpacing: string
+  color: string
+  textAlign: string
+  textTransform: string
+  padding: string
+}
+
+type HtmlElementSelection = DesignHtmlElementContext & {
+  rect: { left: number; top: number; width: number; height: number }
+  /** True when the element has no child elements, so setting text content is non-destructive. */
+  editableText: boolean
+  /** Full text content used to seed the inline editor (untruncated, unlike `text`). */
+  editText: string
+  /** Typography of the element, used to render the in-place editor on top of it. */
+  style: InlineEditStyle
+}
+
+type InlineEditState = {
+  selector: string
+  rect: { left: number; top: number; width: number; height: number }
+  style: InlineEditStyle
+  text: string
+  multiline: boolean
 }
 
 type Props = {
@@ -53,47 +111,98 @@ type Props = {
   onToggleLeftSidebar: () => void
   onOpenAgentSettings?: () => void
   onImplementDesign?: (artifact: DesignArtifact) => void
+  onUseElementAsContext?: (context: DesignHtmlElementContext | null, promptSeed?: string) => void
 }
 
 function HtmlScreenPreview({
   artifact,
   workspaceRoot,
   enabled,
+  editable = false,
   viewMode = 'preview',
   devPreviewUrl = '',
   onError,
-  onContentSize
+  onContentSize,
+  onUseElementAsContext
 }: {
   artifact: DesignArtifact
   workspaceRoot: string
   enabled: boolean
+  editable?: boolean
   viewMode?: DesignCanvasView
   devPreviewUrl?: string
   onError: (message: string) => void
   onContentSize?: (size: { width: number; height: number }) => void
+  onUseElementAsContext?: (context: DesignHtmlElementContext | null, promptSeed?: string) => void
 }): ReactElement {
   const { t } = useTranslation('common')
   const [fileUrl, setFileUrl] = useState('')
+  const [revision, setRevision] = useState(0)
+  const [previewError, setPreviewError] = useState('')
+  const [selectedElement, setSelectedElement] = useState<HtmlElementSelection | null>(null)
+  const [inlineEdit, setInlineEdit] = useState<InlineEditState | null>(null)
   const [source, setSource] = useState('')
+  const frameRef = useRef<HTMLDivElement | null>(null)
   const webviewRef = useRef<WebviewElement | null>(null)
+  const inlineEditRef = useRef<HTMLDivElement | null>(null)
+  const inlineCancelledRef = useRef(false)
 
   useEffect(() => {
     let cancelled = false
+    let cleanupWatch: (() => void) | null = null
+    let retryTimer = 0
+    let attempts = 0
     setFileUrl('')
+    setRevision(0)
+    setPreviewError('')
     if (!enabled || !workspaceRoot || artifact.kind !== 'html' || viewMode !== 'preview') return
-    if (typeof window.kunGui?.authorizeWritePrototype !== 'function') return
-    void window.kunGui
-      .authorizeWritePrototype({ path: artifact.relativePath, workspaceRoot })
-      .then((res) => {
-        if (cancelled) return
-        if (res.ok) setFileUrl(res.fileUrl)
-        else if (res.message !== 'prototype file not found') onError(res.message)
-      })
-      .catch((error: unknown) => {
-        if (!cancelled) onError(error instanceof Error ? error.message : String(error))
-      })
+    if (typeof window.kunGui?.authorizeWritePrototype !== 'function') {
+      setPreviewError('authorizeWritePrototype is unavailable.')
+      return
+    }
+
+    const reportError = (message: string): void => {
+      setPreviewError(message)
+      onError(message)
+    }
+
+    const authorize = (): void => {
+      attempts += 1
+      void window.kunGui
+        .authorizeWritePrototype({ path: artifact.relativePath, workspaceRoot })
+        .then((res) => {
+          if (cancelled) return
+          if (res.ok) {
+            setPreviewError('')
+            setFileUrl(res.fileUrl)
+            cleanupWatch?.()
+            cleanupWatch = startDesignHtmlPreviewWatch({
+              workspaceRoot,
+              path: artifact.relativePath,
+              onRevision: (nextRevision) => {
+                setPreviewError('')
+                setRevision(nextRevision)
+              },
+              onError: reportError
+            })
+            return
+          }
+          if (res.message === 'prototype file not found' && attempts < 24) {
+            retryTimer = window.setTimeout(authorize, 250)
+            return
+          }
+          reportError(res.message)
+        })
+        .catch((error: unknown) => {
+          if (!cancelled) reportError(error instanceof Error ? error.message : String(error))
+        })
+    }
+
+    authorize()
     return () => {
       cancelled = true
+      if (retryTimer) window.clearTimeout(retryTimer)
+      cleanupWatch?.()
     }
   }, [artifact.kind, artifact.relativePath, enabled, onError, viewMode, workspaceRoot])
 
@@ -105,7 +214,9 @@ function HtmlScreenPreview({
     void window.kunGui
       .readWorkspaceFile({ path: artifact.relativePath, workspaceRoot })
       .then((res) => {
-        if (!cancelled && res.ok) setSource(res.content)
+        if (cancelled) return
+        if (res.ok) setSource(res.content)
+        else onError(res.message)
       })
       .catch((error: unknown) => {
         if (!cancelled) onError(error instanceof Error ? error.message : String(error))
@@ -115,15 +226,8 @@ function HtmlScreenPreview({
     }
   }, [artifact.kind, artifact.relativePath, enabled, onError, viewMode, workspaceRoot])
 
-  if (viewMode === 'code') {
-    return (
-      <pre className="h-full overflow-hidden bg-[#101318] p-4 text-left text-[11px] leading-5 text-[#d6deeb]">
-        <code>{source || t('designCanvasLoading')}</code>
-      </pre>
-    )
-  }
-
-  const webviewUrl = viewMode === 'live' && devPreviewUrl ? devPreviewUrl : fileUrl
+  const previewUrl = fileUrl ? `${fileUrl}${fileUrl.includes('?') ? '&' : '?'}rev=${revision}` : ''
+  const webviewUrl = viewMode === 'live' && devPreviewUrl ? devPreviewUrl : previewUrl
   const measureContent = useCallback((): void => {
     const webview = webviewRef.current
     if (!webview || !onContentSize || typeof webview.executeJavaScript !== 'function') return
@@ -174,15 +278,477 @@ function HtmlScreenPreview({
     }
   }, [measureContent, onContentSize, webviewUrl])
 
+  useEffect(() => {
+    const frame = frameRef.current
+    if (!frame || !webviewUrl || !onContentSize || typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver(() => {
+      window.setTimeout(measureContent, 60)
+    })
+    observer.observe(frame)
+    return () => observer.disconnect()
+  }, [measureContent, onContentSize, webviewUrl])
+
+  useEffect(() => {
+    setSelectedElement(null)
+    setInlineEdit(null)
+    onUseElementAsContext?.(null)
+  }, [artifact.id, artifact.relativePath, onUseElementAsContext])
+
+  // Focus the in-place editor and select all its text when editing starts.
+  useEffect(() => {
+    if (!inlineEdit) return
+    const el = inlineEditRef.current
+    if (!el) return
+    el.focus()
+    const range = document.createRange()
+    range.selectNodeContents(el)
+    const selection = window.getSelection()
+    selection?.removeAllRanges()
+    selection?.addRange(range)
+  }, [inlineEdit])
+
+  const selectElementAt = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>): void => {
+      if (!editable || event.button !== 0) return
+      const webview = webviewRef.current
+      if (!webview || typeof webview.executeJavaScript !== 'function') return
+      event.preventDefault()
+      event.stopPropagation()
+      const rect = event.currentTarget.getBoundingClientRect()
+      const x = event.clientX - rect.left
+      const y = event.clientY - rect.top
+      void webview
+        .executeJavaScript(`(() => {
+          const x = ${JSON.stringify(x)}
+          const y = ${JSON.stringify(y)}
+          const escapeCss = (value) => {
+            if (window.CSS && typeof window.CSS.escape === 'function') return window.CSS.escape(value)
+            return String(value).replace(/[^a-zA-Z0-9_-]/g, '\\\\$&')
+          }
+          const selectorFor = (element) => {
+            if (!element || element.nodeType !== Node.ELEMENT_NODE) return ''
+            if (element.id) return '#' + escapeCss(element.id)
+            const parts = []
+            let current = element
+            while (current && current.nodeType === Node.ELEMENT_NODE && current !== document.documentElement) {
+              const tag = current.tagName.toLowerCase()
+              if (tag === 'body') {
+                parts.unshift('body')
+                break
+              }
+              let index = 1
+              let sibling = current.previousElementSibling
+              while (sibling) {
+                if (sibling.tagName === current.tagName) index += 1
+                sibling = sibling.previousElementSibling
+              }
+              parts.unshift(tag + ':nth-of-type(' + index + ')')
+              current = current.parentElement
+            }
+            return parts.join(' > ')
+          }
+          let element = document.elementFromPoint(x, y)
+          if (!element || element === document.documentElement || element === document.body) {
+            return { ok: false, message: 'No editable element at this point.' }
+          }
+          const bounds = element.getBoundingClientRect()
+          const cs = window.getComputedStyle(element)
+          return {
+            ok: true,
+            selector: selectorFor(element),
+            tagName: element.tagName,
+            text: (element.innerText || element.textContent || '').trim().slice(0, 500),
+            editableText: element.children.length === 0,
+            editText: (element.textContent || '').slice(0, 20000),
+            html: element.outerHTML.slice(0, 1400),
+            style: {
+              fontFamily: cs.fontFamily,
+              fontSize: cs.fontSize,
+              fontWeight: cs.fontWeight,
+              fontStyle: cs.fontStyle,
+              lineHeight: cs.lineHeight,
+              letterSpacing: cs.letterSpacing,
+              color: cs.color,
+              textAlign: cs.textAlign,
+              textTransform: cs.textTransform,
+              padding: cs.padding
+            },
+            rect: {
+              left: Math.round(bounds.left),
+              top: Math.round(bounds.top),
+              width: Math.round(bounds.width),
+              height: Math.round(bounds.height)
+            }
+          }
+        })()`)
+        .then((value) => {
+          if (!value || typeof value !== 'object') return
+          const result = value as {
+            ok?: unknown
+            message?: unknown
+            selector?: unknown
+            tagName?: unknown
+            text?: unknown
+            editableText?: unknown
+            editText?: unknown
+            html?: unknown
+            style?: unknown
+            rect?: unknown
+          }
+          if (!result.ok) {
+            if (typeof result.message === 'string') setPreviewError(result.message)
+            return
+          }
+          if (!result.rect || typeof result.rect !== 'object') return
+          const resultRect = result.rect as { left?: unknown; top?: unknown; width?: unknown; height?: unknown }
+          if (
+            typeof result.selector !== 'string' ||
+            typeof result.tagName !== 'string' ||
+            typeof result.text !== 'string' ||
+            typeof result.editableText !== 'boolean' ||
+            typeof result.editText !== 'string' ||
+            typeof result.html !== 'string' ||
+            typeof result.style !== 'object' ||
+            result.style === null ||
+            typeof resultRect.left !== 'number' ||
+            typeof resultRect.top !== 'number' ||
+            typeof resultRect.width !== 'number' ||
+            typeof resultRect.height !== 'number'
+          ) {
+            return
+          }
+          const selection: HtmlElementSelection = {
+            artifactId: artifact.id,
+            artifactTitle: artifact.title,
+            artifactRelativePath: artifact.relativePath,
+            selector: result.selector,
+            tagName: result.tagName,
+            text: result.text,
+            editableText: result.editableText,
+            editText: result.editText,
+            html: result.html,
+            style: result.style as InlineEditStyle,
+            rect: {
+              left: resultRect.left,
+              top: resultRect.top,
+              width: resultRect.width,
+              height: resultRect.height
+            }
+          }
+          setPreviewError('')
+          setInlineEdit(null)
+          setSelectedElement(selection)
+          onUseElementAsContext?.(selection)
+        })
+        .catch((error: unknown) => {
+          onError(error instanceof Error ? error.message : String(error))
+        })
+    },
+    [artifact.id, artifact.relativePath, artifact.title, editable, onError, onUseElementAsContext]
+  )
+
+  const persistElementMutation = useCallback(
+    async (selector: string, mutation: 'text' | 'delete', nextText?: string): Promise<boolean> => {
+      const webview = webviewRef.current
+      if (
+        !webview ||
+        typeof webview.executeJavaScript !== 'function' ||
+        typeof window.kunGui?.writeWorkspaceFile !== 'function'
+      ) {
+        onError('HTML element editing is unavailable.')
+        return false
+      }
+      const result = await webview
+        .executeJavaScript(`(() => {
+          const selector = ${JSON.stringify(selector)}
+          const mutation = ${JSON.stringify(mutation)}
+          const nextText = ${JSON.stringify(nextText ?? '')}
+          const element = document.querySelector(selector)
+          if (!element) return { ok: false, message: 'Selected element was not found.' }
+          if (mutation === 'delete') {
+            element.remove()
+          } else if (element.children.length > 0) {
+            return {
+              ok: false,
+              message: 'This element contains nested elements and cannot be edited as plain text.'
+            }
+          } else {
+            element.style.removeProperty('visibility')
+            element.textContent = nextText
+          }
+          const doctype = document.doctype
+            ? '<!doctype ' + document.doctype.name + '>'
+            : '<!doctype html>'
+          return { ok: true, html: doctype + '\\n' + document.documentElement.outerHTML + '\\n' }
+        })()`)
+        .catch((error: unknown) => ({
+          ok: false,
+          message: error instanceof Error ? error.message : String(error)
+        }))
+      if (!result || typeof result !== 'object') return false
+      const payload = result as { ok?: unknown; message?: unknown; html?: unknown }
+      if (!payload.ok || typeof payload.html !== 'string') {
+        onError(typeof payload.message === 'string' ? payload.message : 'HTML element edit failed.')
+        return false
+      }
+      const write = await window.kunGui
+        .writeWorkspaceFile({
+          path: artifact.relativePath,
+          workspaceRoot,
+          content: payload.html
+        })
+        .catch((error: unknown) => ({
+          ok: false as const,
+          message: error instanceof Error ? error.message : String(error)
+        }))
+      if (!write.ok) {
+        onError(write.message)
+        return false
+      }
+      setSelectedElement(null)
+      onUseElementAsContext?.(null)
+      measureContent()
+      return true
+    },
+    [artifact.relativePath, measureContent, onError, onUseElementAsContext, workspaceRoot]
+  )
+
+  const editSelectedText = useCallback((): void => {
+    if (!selectedElement || !selectedElement.editableText) return
+    const webview = webviewRef.current
+    // Hide the live element so only the in-place editor (rendered on top of it) shows.
+    if (webview && typeof webview.executeJavaScript === 'function') {
+      void webview
+        .executeJavaScript(`(() => {
+          const el = document.querySelector(${JSON.stringify(selectedElement.selector)})
+          if (el) el.style.visibility = 'hidden'
+          return true
+        })()`)
+        .catch(() => undefined)
+    }
+    inlineCancelledRef.current = false
+    setInlineEdit({
+      selector: selectedElement.selector,
+      rect: selectedElement.rect,
+      style: selectedElement.style,
+      text: selectedElement.editText,
+      multiline: /\n/.test(selectedElement.editText)
+    })
+  }, [selectedElement])
+
+  const restoreHiddenElement = useCallback((selector: string): void => {
+    const webview = webviewRef.current
+    if (!webview || typeof webview.executeJavaScript !== 'function') return
+    void webview
+      .executeJavaScript(`(() => {
+        const el = document.querySelector(${JSON.stringify(selector)})
+        if (el) el.style.removeProperty('visibility')
+        return true
+      })()`)
+      .catch(() => undefined)
+  }, [])
+
+  const finishInlineEdit = useCallback(
+    (commit: boolean): void => {
+      const current = inlineEdit
+      if (!current) return
+      const nextText = inlineEditRef.current?.innerText ?? current.text
+      setInlineEdit(null)
+      if (commit && nextText !== current.text) {
+        void persistElementMutation(current.selector, 'text', nextText)
+      } else {
+        restoreHiddenElement(current.selector)
+      }
+    },
+    [inlineEdit, persistElementMutation, restoreHiddenElement]
+  )
+
+  const onInlineEditKeyDown = useCallback(
+    (event: React.KeyboardEvent<HTMLDivElement>): void => {
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        inlineCancelledRef.current = true
+        inlineEditRef.current?.blur()
+      } else if (event.key === 'Enter' && !event.shiftKey && !inlineEdit?.multiline) {
+        event.preventDefault()
+        inlineEditRef.current?.blur()
+      }
+    },
+    [inlineEdit]
+  )
+
+  const onInlineEditBlur = useCallback((): void => {
+    if (inlineCancelledRef.current) {
+      inlineCancelledRef.current = false
+      finishInlineEdit(false)
+      return
+    }
+    finishInlineEdit(true)
+  }, [finishInlineEdit])
+
+  const onInlineEditPaste = useCallback((event: React.ClipboardEvent<HTMLDivElement>): void => {
+    event.preventDefault()
+    const text = event.clipboardData.getData('text/plain')
+    const selection = window.getSelection()
+    if (!selection || selection.rangeCount === 0) return
+    const range = selection.getRangeAt(0)
+    range.deleteContents()
+    range.insertNode(document.createTextNode(text))
+    range.collapse(false)
+    selection.removeAllRanges()
+    selection.addRange(range)
+  }, [])
+
+  const deleteSelectedElement = useCallback((): void => {
+    if (!selectedElement) return
+    const confirmed = window.confirm(t('designElementDeleteConfirm', 'Delete this element?'))
+    if (!confirmed) return
+    void persistElementMutation(selectedElement.selector, 'delete')
+  }, [persistElementMutation, selectedElement, t])
+
+  const requestAiElementEdit = useCallback((): void => {
+    if (!selectedElement) return
+    onUseElementAsContext?.(
+      selectedElement,
+      t('designElementAiPromptSeed', 'Modify the selected element: ')
+    )
+  }, [onUseElementAsContext, selectedElement, t])
+
+  if (viewMode === 'code') {
+    return (
+      <pre className="h-full overflow-hidden bg-[#101318] p-4 text-left text-[11px] leading-5 text-[#d6deeb]">
+        <code>{source || t('designCanvasLoading')}</code>
+      </pre>
+    )
+  }
+
   if (webviewUrl) {
     return (
-      <webview
-        ref={webviewRef as Ref<WebviewElement>}
-        src={webviewUrl}
-        partition="kun-proto"
-        webpreferences="contextIsolation=yes,nodeIntegration=no,sandbox=yes"
-        className="pointer-events-none h-full w-full border-0"
-      />
+      <div ref={frameRef} className="relative h-full w-full bg-white">
+        <webview
+          key={webviewUrl}
+          ref={webviewRef as Ref<WebviewElement>}
+          src={webviewUrl}
+          partition="kun-proto"
+          webpreferences="contextIsolation=yes,nodeIntegration=no,sandbox=yes"
+          className="pointer-events-none h-full w-full border-0"
+        />
+        {previewError ? (
+          <div className="pointer-events-none absolute inset-x-2 top-2 rounded-lg border border-[#c0392b]/25 bg-white/90 px-2 py-1 text-left text-[11px] leading-4 text-[#c0392b] shadow-sm backdrop-blur">
+            {previewError}
+          </div>
+        ) : null}
+        {editable && !inlineEdit ? (
+          <div
+            className="absolute inset-0 z-10 cursor-crosshair"
+            onPointerDown={selectElementAt}
+            title={t('designElementSelectHint', 'Select an element')}
+          />
+        ) : null}
+        {editable && selectedElement && !inlineEdit ? (
+          <div className="pointer-events-none absolute inset-0 z-20">
+            <div
+              className="absolute rounded-[4px] border-2 border-accent bg-accent/8 shadow-[0_0_0_1px_rgba(255,255,255,0.7)]"
+              style={{
+                left: selectedElement.rect.left,
+                top: selectedElement.rect.top,
+                width: Math.max(8, selectedElement.rect.width),
+                height: Math.max(8, selectedElement.rect.height)
+              }}
+            />
+            <div
+              className="pointer-events-auto absolute min-w-44 overflow-hidden rounded-[14px] border border-ds-border bg-white/96 p-1.5 text-[12px] font-medium text-ds-muted shadow-[0_18px_46px_rgba(20,47,95,0.18)] backdrop-blur-xl"
+              style={{
+                left: Math.min(
+                  Math.max(8, selectedElement.rect.left + Math.min(selectedElement.rect.width, 180) + 8),
+                  Math.max(8, (frameRef.current?.clientWidth ?? 260) - 188)
+                ),
+                top: Math.min(
+                  Math.max(8, selectedElement.rect.top),
+                  Math.max(8, (frameRef.current?.clientHeight ?? 220) - 128)
+                )
+              }}
+              onPointerDown={(event) => event.stopPropagation()}
+            >
+              <button
+                type="button"
+                onClick={editSelectedText}
+                disabled={!selectedElement.editableText}
+                title={
+                  selectedElement.editableText
+                    ? undefined
+                    : t('designElementEditTextDisabled', '该元素包含子元素,请使用「利用 AI 修改」')
+                }
+                className="flex h-9 w-full items-center gap-2 rounded-xl px-2.5 text-left transition hover:bg-ds-hover hover:text-ds-ink disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-ds-muted"
+              >
+                <TypeIcon className="h-4 w-4" strokeWidth={1.8} />
+                {t('designElementEditText', '修改文本')}
+              </button>
+              <button
+                type="button"
+                onClick={requestAiElementEdit}
+                className="flex h-9 w-full items-center gap-2 rounded-xl px-2.5 text-left transition hover:bg-ds-hover hover:text-ds-ink"
+              >
+                <Sparkles className="h-4 w-4 text-accent" strokeWidth={1.8} />
+                {t('designElementAiEdit', '利用 AI 修改')}
+              </button>
+              <button
+                type="button"
+                onClick={deleteSelectedElement}
+                className="flex h-9 w-full items-center gap-2 rounded-xl px-2.5 text-left text-[#c0392b] transition hover:bg-[#c0392b]/10"
+              >
+                <Trash2 className="h-4 w-4" strokeWidth={1.8} />
+                {t('designElementDelete', '删除')}
+              </button>
+            </div>
+          </div>
+        ) : null}
+        {editable && inlineEdit ? (
+          <div className="pointer-events-none absolute inset-0 z-30">
+            <div
+              key={inlineEdit.selector}
+              ref={inlineEditRef}
+              contentEditable
+              suppressContentEditableWarning
+              spellCheck={false}
+              role="textbox"
+              aria-label={t('designElementEditText', '修改文本')}
+              onKeyDown={onInlineEditKeyDown}
+              onBlur={onInlineEditBlur}
+              onPaste={onInlineEditPaste}
+              className="pointer-events-auto absolute rounded-[3px] outline outline-2 outline-accent"
+              style={
+                {
+                  left: inlineEdit.rect.left,
+                  top: inlineEdit.rect.top,
+                  minWidth: Math.max(24, inlineEdit.rect.width),
+                  maxWidth: Math.max(
+                    inlineEdit.rect.width,
+                    (frameRef.current?.clientWidth ?? 600) - inlineEdit.rect.left - 8
+                  ),
+                  margin: 0,
+                  background: 'transparent',
+                  caretColor: 'currentColor',
+                  whiteSpace: 'pre-wrap',
+                  overflowWrap: 'anywhere',
+                  fontFamily: inlineEdit.style.fontFamily,
+                  fontSize: inlineEdit.style.fontSize,
+                  fontWeight: inlineEdit.style.fontWeight,
+                  fontStyle: inlineEdit.style.fontStyle,
+                  lineHeight: inlineEdit.style.lineHeight,
+                  letterSpacing: inlineEdit.style.letterSpacing,
+                  color: inlineEdit.style.color,
+                  textAlign: inlineEdit.style.textAlign,
+                  textTransform: inlineEdit.style.textTransform,
+                  padding: inlineEdit.style.padding
+                } as CSSProperties
+              }
+            >
+              {inlineEdit.text}
+            </div>
+          </div>
+        ) : null}
+      </div>
     )
   }
 
@@ -194,7 +760,7 @@ function HtmlScreenPreview({
           <Eye className="h-5 w-5" strokeWidth={1.7} />
         </div>
         <p className="mt-3 line-clamp-3 text-[12.5px] leading-5 text-ds-muted">
-          {summary || t('designProjectCardPlaceholder')}
+          {previewError || summary || t('designPreviewGenerating', 'Generating...')}
         </p>
       </div>
     </div>
@@ -211,7 +777,8 @@ export function DesignProjectCanvas({
   leftSidebarCollapsed,
   onToggleLeftSidebar,
   onOpenAgentSettings,
-  onImplementDesign
+  onImplementDesign,
+  onUseElementAsContext
 }: Props): ReactElement {
   const { t } = useTranslation('common')
   const workspaceRoot = useDesignWorkspaceStore((s) => s.workspaceRoot)
@@ -243,12 +810,20 @@ export function DesignProjectCanvas({
   const [moreOpen, setMoreOpen] = useState(false)
   const [contextPopoverOpen, setContextPopoverOpen] = useState(false)
   const [draggingId, setDraggingId] = useState<string | null>(null)
+  const [resizingId, setResizingId] = useState<string | null>(null)
   const dragRef = useRef<{
     id: string
     startClientX: number
     startClientY: number
     startX: number
     startY: number
+  } | null>(null)
+  const resizeRef = useRef<{
+    id: string
+    handle: DesignNodeResizeHandle
+    startClientX: number
+    startClientY: number
+    node: DesignArtifactNode
   } | null>(null)
   const panningRef = useRef<{ clientX: number; clientY: number; x: number; y: number } | null>(null)
 
@@ -337,6 +912,65 @@ export function DesignProjectCanvas({
     [updateArtifactNode]
   )
 
+  const startResize = (
+    event: React.PointerEvent<HTMLButtonElement>,
+    artifactId: string,
+    node: DesignArtifactNode,
+    handle: DesignNodeResizeHandle
+  ): void => {
+    if (event.button !== 0) return
+    event.preventDefault()
+    event.stopPropagation()
+    setActiveArtifact(artifactId)
+    if (designIntentMode === 'generate') setDesignIntentMode('modify')
+    resizeRef.current = {
+      id: artifactId,
+      handle,
+      startClientX: event.clientX,
+      startClientY: event.clientY,
+      node
+    }
+    dragRef.current = null
+    panningRef.current = null
+    setDraggingId(null)
+    setResizingId(artifactId)
+    window.getSelection()?.removeAllRanges()
+  }
+
+  useEffect(() => {
+    if (!resizingId) return
+
+    const onPointerMove = (event: PointerEvent): void => {
+      const resize = resizeRef.current
+      if (!resize) return
+      const deltaX = (event.clientX - resize.startClientX) / zoom
+      const deltaY = (event.clientY - resize.startClientY) / zoom
+      updateArtifactNode(
+        resize.id,
+        resizeDesignArtifactNode({
+          node: resize.node,
+          handle: resize.handle,
+          deltaX,
+          deltaY
+        })
+      )
+    }
+
+    const onPointerEnd = (): void => {
+      resizeRef.current = null
+      setResizingId(null)
+    }
+
+    window.addEventListener('pointermove', onPointerMove)
+    window.addEventListener('pointerup', onPointerEnd)
+    window.addEventListener('pointercancel', onPointerEnd)
+    return () => {
+      window.removeEventListener('pointermove', onPointerMove)
+      window.removeEventListener('pointerup', onPointerEnd)
+      window.removeEventListener('pointercancel', onPointerEnd)
+    }
+  }, [resizingId, updateArtifactNode, zoom])
+
   const onWorldPointerDown = (event: React.PointerEvent<HTMLDivElement>): void => {
     if (event.button !== 0 || event.target !== event.currentTarget) return
     panningRef.current = { clientX: event.clientX, clientY: event.clientY, x: pan.x, y: pan.y }
@@ -361,8 +995,10 @@ export function DesignProjectCanvas({
 
   const endPointerAction = (): void => {
     dragRef.current = null
+    resizeRef.current = null
     panningRef.current = null
     setDraggingId(null)
+    setResizingId(null)
   }
 
   const onWheel = (event: React.WheelEvent<HTMLDivElement>): void => {
@@ -593,7 +1229,9 @@ export function DesignProjectCanvas({
             return (
               <div
                 key={artifact.id}
-                className={`absolute overflow-hidden rounded-[18px] border bg-white shadow-[0_16px_46px_rgba(20,47,95,0.12)] transition ${
+                className={`absolute overflow-hidden rounded-[18px] border bg-white shadow-[0_16px_46px_rgba(20,47,95,0.12)] ${
+                  draggingId === artifact.id || resizingId === artifact.id ? '' : 'transition'
+                } ${
                   active
                     ? 'border-accent ring-4 ring-accent/18'
                     : 'border-ds-border hover:border-accent/55'
@@ -633,10 +1271,12 @@ export function DesignProjectCanvas({
                     artifact={artifact}
                     workspaceRoot={workspaceRoot}
                     enabled={previewEnabled}
+                    editable={active && cardView === 'preview'}
                     viewMode={cardView}
                     devPreviewUrl={active ? devPreviewUrl : ''}
                     onError={setFileError}
                     onContentSize={(size) => applyMeasuredContentSize(artifact.id, size)}
+                    onUseElementAsContext={active ? onUseElementAsContext : undefined}
                   />
                 </div>
                 {active ? (
@@ -644,6 +1284,20 @@ export function DesignProjectCanvas({
                     <span className="rounded-full bg-accent px-3 py-1 text-[12px] font-semibold text-white shadow-lg">
                       {Math.round(node.width)} x {Math.round(node.height)}
                     </span>
+                  </div>
+                ) : null}
+                {active ? (
+                  <div className="pointer-events-none absolute inset-0">
+                    {RESIZE_HANDLES.map((handle) => (
+                      <button
+                        key={handle.id}
+                        type="button"
+                        aria-label={handle.label}
+                        title={handle.label}
+                        onPointerDown={(event) => startResize(event, artifact.id, node, handle.id)}
+                        className={`pointer-events-auto absolute h-3.5 w-3.5 rounded-[4px] border border-accent bg-white shadow-[0_2px_8px_rgba(37,99,235,0.28)] transition hover:scale-110 ${handle.className}`}
+                      />
+                    ))}
                   </div>
                 ) : null}
               </div>
@@ -686,6 +1340,7 @@ export function DesignProjectCanvas({
                 artifact={activeHtmlArtifact}
                 workspaceRoot={workspaceRoot}
                 enabled
+                editable={false}
                 viewMode={canvasView}
                 devPreviewUrl={devPreviewUrl}
                 onError={setFileError}
