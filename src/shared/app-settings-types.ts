@@ -142,6 +142,16 @@ export type ModelProviderVideoCapabilityV1 = {
   baseUrl: string
   models: string[]
 }
+export type ModelProviderOAuthV1 = {
+  provider: 'openai'
+  accessToken: string
+  refreshToken: string
+  tokenType: string
+  scope: string
+  expiresAt: string
+  accountId?: string
+  updatedAt: string
+}
 export type ModelProviderProfileV1 = {
   id: string
   name: string
@@ -150,6 +160,7 @@ export type ModelProviderProfileV1 = {
   endpointFormat: ModelEndpointFormat
   models: string[]
   modelProfiles: Record<string, ModelProviderModelProfileV1>
+  oauth?: ModelProviderOAuthV1
   image?: ModelProviderImageCapabilityV1
   speech?: ModelProviderSpeechCapabilityV1
   textToSpeech?: ModelProviderTextToSpeechCapabilityV1
@@ -169,8 +180,10 @@ export type ModelProviderTextToSpeechCapabilityPatchV1 = Partial<ModelProviderTe
 export type ModelProviderMusicCapabilityPatchV1 = Partial<ModelProviderMusicCapabilityV1>
 export type ModelProviderVideoCapabilityPatchV1 = Partial<ModelProviderVideoCapabilityV1>
 export type ModelProviderModelProfilePatchV1 = Partial<ModelProviderModelProfileV1>
-export type ModelProviderProfilePatchV1 = Partial<Omit<ModelProviderProfileV1, 'image' | 'speech' | 'textToSpeech' | 'music' | 'video' | 'modelProfiles'>> & {
+export type ModelProviderOAuthPatchV1 = Partial<ModelProviderOAuthV1>
+export type ModelProviderProfilePatchV1 = Partial<Omit<ModelProviderProfileV1, 'oauth' | 'image' | 'speech' | 'textToSpeech' | 'music' | 'video' | 'modelProfiles'>> & {
   modelProfiles?: Record<string, ModelProviderModelProfilePatchV1 | null>
+  oauth?: ModelProviderOAuthPatchV1 | null
   image?: ModelProviderImageCapabilityPatchV1 | null
   speech?: ModelProviderSpeechCapabilityPatchV1 | null
   textToSpeech?: ModelProviderTextToSpeechCapabilityPatchV1 | null
@@ -196,6 +209,8 @@ export type KunRuntimeSettingsV1 = {
   providerId: string
   /** Effective model request format. Resolved from the selected model provider. */
   endpointFormat: ModelEndpointFormat
+  /** Derived request headers for provider-specific auth modes such as OpenAI OAuth. */
+  headers?: Record<string, string>
   runtimeToken: string
   dataDir: string
   model: string

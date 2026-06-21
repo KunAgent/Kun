@@ -822,6 +822,27 @@ describe('syncGuiManagedKunConfig', () => {
     })
   })
 
+  it('writes derived model request headers into the Kun serve config', async () => {
+    if (!tempRoot) throw new Error('temp root not initialized')
+    const configPath = join(tempRoot, 'config.json')
+    const module = await import('./kun-process')
+
+    await module.syncGuiManagedKunConfig(tempRoot, {
+      ...defaultKunRuntimeSettings(),
+      headers: {
+        originator: 'codex_cli_rs',
+        'chatgpt-account-id': 'acct_123'
+      }
+    })
+
+    const parsed = JSON.parse(readFileSync(configPath, 'utf8')) as any
+    expect(parsed.serve.headers).toEqual({
+      originator: 'codex_cli_rs',
+      'chatgpt-account-id': 'acct_123'
+    })
+    expect(KunConfigSchema.safeParse(parsed).success).toBe(true)
+  })
+
   it('imports GUI-managed MCP servers into runtime capabilities', async () => {
     if (!tempRoot) throw new Error('temp root not initialized')
     const configPath = join(tempRoot, 'config.json')

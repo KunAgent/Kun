@@ -17,6 +17,7 @@ import type {
 
 export type ModelProviderPresetId =
   | 'litellm'
+  | 'openai'
   | 'zhipu-coding-plan'
   | 'zai-coding-plan'
   | 'kimi-code'
@@ -196,6 +197,47 @@ const MOONSHOT_CHAT_MODELS = [
 ]
 
 export const MODEL_PROVIDER_PRESETS: ModelProviderPreset[] = [
+  {
+    id: 'openai',
+    name: 'OpenAI',
+    baseUrl: 'https://api.openai.com/v1',
+    endpointFormat: 'responses',
+    models: ['gpt-5.5', 'gpt-5.4', 'gpt-5.4-mini'],
+    modelProfiles: {
+      'gpt-5.5': visionChatProfile(400_000, {
+        supportedEfforts: ['off', 'low', 'medium', 'high'],
+        defaultEffort: 'medium',
+        requestProtocol: 'openai-responses'
+      }),
+      'gpt-5.4': visionChatProfile(400_000, {
+        supportedEfforts: ['off', 'low', 'medium', 'high'],
+        defaultEffort: 'medium',
+        requestProtocol: 'openai-responses'
+      }),
+      'gpt-5.4-mini': visionChatProfile(400_000, {
+        supportedEfforts: ['off', 'low', 'medium', 'high'],
+        defaultEffort: 'medium',
+        requestProtocol: 'openai-responses'
+      })
+    },
+    image: {
+      protocol: 'openai-images',
+      baseUrl: 'https://api.openai.com/v1',
+      models: ['gpt-image-1']
+    },
+    speech: {
+      protocol: 'openai-transcriptions',
+      baseUrl: 'https://api.openai.com/v1',
+      models: ['gpt-4o-transcribe', 'whisper-1']
+    },
+    textToSpeech: {
+      protocol: 'openai-speech',
+      baseUrl: 'https://api.openai.com/v1',
+      models: ['gpt-4o-mini-tts', 'tts-1']
+    },
+    docsUrl: 'https://developers.openai.com/api/docs/',
+    apiKeyUrl: 'https://platform.openai.com/api-keys'
+  },
   {
     id: 'litellm',
     name: 'LiteLLM',

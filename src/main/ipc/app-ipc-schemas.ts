@@ -263,6 +263,17 @@ const modelProfilePatchSchema = z.object({
   endpointFormat: modelEndpointFormatSchema.optional()
 }).strict()
 
+const modelProviderOAuthPatchSchema = z.object({
+  provider: z.literal('openai').optional(),
+  accessToken: z.string().max(MAX_BODY_BYTES).optional(),
+  refreshToken: z.string().max(MAX_BODY_BYTES).optional(),
+  tokenType: z.string().trim().max(64).optional(),
+  scope: z.string().trim().max(512).optional(),
+  expiresAt: z.string().trim().max(64).optional(),
+  accountId: z.string().trim().max(256).optional(),
+  updatedAt: z.string().trim().max(64).optional()
+}).strict()
+
 const modelProviderPatchSchema = z.object({
   apiKey: z.string().max(MAX_BODY_BYTES).optional(),
   baseUrl: z.string().trim().max(MAX_URL_LENGTH).optional(),
@@ -287,6 +298,7 @@ const modelProviderPatchSchema = z.object({
       z.string().trim().min(1).max(128),
       modelProfilePatchSchema.nullable()
     ).optional(),
+    oauth: modelProviderOAuthPatchSchema.nullable().optional(),
     image: z.object({
       protocol: imageGenerationProtocolSchema.optional(),
       baseUrl: z.string().trim().max(MAX_URL_LENGTH).optional(),
@@ -313,6 +325,14 @@ const modelProviderPatchSchema = z.object({
       models: z.array(z.string().trim().min(1).max(128)).max(500).optional()
     }).strict().nullable().optional()
   }).strict()).max(50).optional()
+}).strict()
+
+export const openAiOAuthStartPayloadSchema = z.object({
+  providerId: z.string().trim().min(1).max(64)
+}).strict()
+
+export const openAiOAuthLogoutPayloadSchema = z.object({
+  providerId: z.string().trim().min(1).max(64)
 }).strict()
 
 const kunRuntimePatchSchema = z.object({

@@ -11,6 +11,7 @@ import {
   isKunRuntimeInsecure,
   getKunRuntimeSettings,
   getModelProviderSettings,
+  modelProviderRuntimeConnection,
   resolveModelProviderProxyUrl,
   resolveKunRuntimeSettings,
   type ModelProviderModelProfileV1,
@@ -393,6 +394,7 @@ export async function syncGuiManagedKunConfig(
     | 'videoGeneration'
     | 'computerUse'
     | 'modelProfiles'
+    | 'headers'
     | 'memoryEnabled'
     | 'quality'
   >,
@@ -447,6 +449,7 @@ export async function syncGuiManagedKunConfig(
     serve: {
       ...serve,
       storage,
+      headers: runtime.headers ?? {},
       tokenEconomy: tokenEconomyConfigForRuntime(runtime.tokenEconomy, existingTokenEconomy),
       ...(providers && Object.keys(providers).length ? { providers } : {})
     },
@@ -754,10 +757,12 @@ function providersConfigForRuntime(settings: AppSettingsV1): Record<string, Reco
     // skipping it keeps the map smaller and avoids paying twice for one
     // provider that happens to be the active runtime binding.
     if (id === runtimeProviderId) continue
+    const connection = modelProviderRuntimeConnection(provider)
     out[id] = {
-      apiKey: provider.apiKey?.trim() ?? '',
-      baseUrl,
-      ...(provider.endpointFormat ? { endpointFormat: provider.endpointFormat } : {}),
+      apiKey: connection.apiKey,
+      baseUrl: connection.baseUrl || baseUrl,
+      endpointFormat: connection.endpointFormat,
+      ...(connection.headers ? { headers: connection.headers } : {}),
       ...(proxyUrl ? { modelProxyUrl: proxyUrl } : {})
     }
   }

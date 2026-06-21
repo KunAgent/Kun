@@ -31,6 +31,8 @@ import {
   defaultMiniMaxMediaGenerationKunPatch,
   defaultModelProviderSettings,
   getModelProviderPreset,
+  isModelProviderOAuthUsable,
+  modelProviderEffectiveApiKey,
   modelProviderPresetProfile,
   modelSupportsImageInput,
   modelProviderTokenPlanProfile,
@@ -290,7 +292,12 @@ function isAcceptableHttpUrl(value: string): boolean {
 }
 
 function providerConnectionFingerprint(provider: ModelProviderProfileV1): string {
-  return [provider.baseUrl, provider.apiKey, provider.endpointFormat].join('\0')
+  return [
+    provider.baseUrl,
+    modelProviderEffectiveApiKey(provider),
+    provider.oauth?.expiresAt ?? '',
+    provider.endpointFormat
+  ].join('\0')
 }
 
 type ProbeState = {
@@ -489,6 +496,8 @@ export function ProvidersSettingsSection({ ctx }: { ctx: Record<string, any> }):
     }
   }, [addMenuOpen])
   const [probeStates, setProbeStates] = useState<Record<string, ProbeState>>({})
+  const [oauthBusyProviderId, setOauthBusyProviderId] = useState<string | null>(null)
+  const [oauthNotice, setOauthNotice] = useState<InlineNotice | null>(null)
   // Pending import dialog: when /v1/models returns hundreds of entries we want
   // the user to choose which ones to keep instead of dropping the whole list
   // into settings and forcing them to delete unwanted models one-by-one (#397).
@@ -562,6 +571,15 @@ export function ProvidersSettingsSection({ ctx }: { ctx: Record<string, any> }):
     const target = displayProviders.find((item) => item.id === id)
     if (!target) return
     patchProviderProfile(target, (item) => ({ ...item, ...patch }))
+  }
+
+  const refreshSettingsFromDisk = async (): Promise<void> => {
+    if (typeof window.kunGui?.getSettings !== 'function') return
+    const next = await window.kunGui.getSettings()
+    update({
+      provider: next.provider,
+      agents: { kun: next.agents.kun }
+    })
   }
 
   const updateModelProviderImage = (id: string, patch: Partial<ModelProviderImageCapabilityV1>): void => {
@@ -843,7 +861,8 @@ export function ProvidersSettingsSection({ ctx }: { ctx: Record<string, any> }):
   const runProbe = async (target: ModelProviderProfileV1, mode: 'test' | 'fetch'): Promise<void> => {
     if (typeof window.kunGui?.probeModelProvider !== 'function') return
     const fingerprint = providerConnectionFingerprint(target)
-    if (providerPresetRequiresApiKey(target) && !target.apiKey.trim()) {
+    const apiKey = modelProviderEffectiveApiKey(target)
+    if (providerPresetRequiresApiKey(target) && !apiKey) {
       setProbeStates((prev) => ({
         ...prev,
         [target.id]: {
@@ -860,7 +879,7 @@ export function ProvidersSettingsSection({ ctx }: { ctx: Record<string, any> }):
     try {
       result = await window.kunGui.probeModelProvider({
         baseUrl: target.baseUrl,
-        apiKey: target.apiKey,
+        apiKey,
         endpointFormat: target.endpointFormat
       })
     } catch (error) {
@@ -901,6 +920,44 @@ export function ProvidersSettingsSection({ ctx }: { ctx: Record<string, any> }):
         total: result.modelIds.length
       }
     }))
+  }
+
+  const startOpenAiOAuth = async (target: ModelProviderProfileV1): Promise<void> => {
+    if (typeof window.kunGui?.startOpenAiOAuth !== 'function') return
+    setOauthBusyProviderId(target.id)
+    setOauthNotice(null)
+    try {
+      const result = await window.kunGui.startOpenAiOAuth(target.id)
+      if (!result.ok) {
+        setOauthNotice({ tone: 'error', message: result.message })
+        return
+      }
+      await refreshSettingsFromDisk()
+      setOauthNotice({ tone: 'success', message: t('modelProviderOpenAiOAuthConnected') })
+    } catch (error) {
+      setOauthNotice({ tone: 'error', message: error instanceof Error ? error.message : String(error) })
+    } finally {
+      setOauthBusyProviderId(null)
+    }
+  }
+
+  const logoutOpenAiOAuth = async (target: ModelProviderProfileV1): Promise<void> => {
+    if (typeof window.kunGui?.logoutOpenAiOAuth !== 'function') return
+    setOauthBusyProviderId(target.id)
+    setOauthNotice(null)
+    try {
+      const result = await window.kunGui.logoutOpenAiOAuth(target.id)
+      if (!result.ok) {
+        setOauthNotice({ tone: 'error', message: result.message })
+        return
+      }
+      await refreshSettingsFromDisk()
+      setOauthNotice({ tone: 'success', message: t('modelProviderOpenAiOAuthDisconnected') })
+    } catch (error) {
+      setOauthNotice({ tone: 'error', message: error instanceof Error ? error.message : String(error) })
+    } finally {
+      setOauthBusyProviderId(null)
+    }
   }
 
   const importPickedModels = (target: ModelProviderProfileV1, picked: ProviderModelImportResult): void => {
@@ -1008,6 +1065,12 @@ export function ProvidersSettingsSection({ ctx }: { ctx: Record<string, any> }):
   const activeTokenPlanRegions = activeProvider
     ? tokenPlanPresetForProfileId(activeProvider.id)?.tokenPlan?.regions ?? []
     : []
+  const activeProviderSupportsOpenAiOAuth = activeProvider?.id === 'openai' ||
+    activeProvider?.oauth?.provider === 'openai'
+  const activeOpenAiOAuthUsable = Boolean(
+    activeProvider && isModelProviderOAuthUsable(activeProvider.oauth)
+  )
+  const activeOAuthBusy = Boolean(activeProvider && oauthBusyProviderId === activeProvider.id)
 
   const planProviders = displayProviders.filter((item) => isSubscriptionProviderId(item.id))
   const apiProviders = displayProviders.filter((item) => !isSubscriptionProviderId(item.id))
@@ -1228,6 +1291,7 @@ export function ProvidersSettingsSection({ ctx }: { ctx: Record<string, any> }):
                   </button>
                 </div>
                 {probeNotice ? <InlineNoticeView notice={probeNotice} /> : null}
+                {oauthNotice ? <InlineNoticeView notice={oauthNotice} /> : null}
                 <DetailSection title={t('modelProviderSectionBasics')}>
                   <div className="grid gap-3 md:grid-cols-2">
                     <label className={fieldLabelClass}>
@@ -1265,6 +1329,51 @@ export function ProvidersSettingsSection({ ctx }: { ctx: Record<string, any> }):
                   </div>
                 </DetailSection>
                 <DetailSection title={t('modelProviderSectionConnection')}>
+                  {activeProviderSupportsOpenAiOAuth ? (
+                    <div className="grid gap-2 rounded-xl border border-ds-border-muted bg-ds-card/70 p-3">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div className="grid min-w-0 gap-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="text-[13px] font-semibold text-ds-ink">
+                              {t('modelProviderOpenAiOAuthTitle')}
+                            </span>
+                            <ProviderBadge tone={activeOpenAiOAuthUsable ? 'accent' : 'warning'}>
+                              {activeOpenAiOAuthUsable
+                                ? t('modelProviderOpenAiOAuthConnectedBadge')
+                                : t('modelProviderOpenAiOAuthDisconnectedBadge')}
+                            </ProviderBadge>
+                          </div>
+                          <p className="text-[12px] leading-5 text-ds-muted">
+                            {t('modelProviderOpenAiOAuthDesc')}
+                          </p>
+                          {activeProvider.oauth?.accountId ? (
+                            <p className="font-mono text-[11.5px] text-ds-faint">
+                              {activeProvider.oauth.accountId}
+                            </p>
+                          ) : null}
+                        </div>
+                        <button
+                          type="button"
+                          disabled={activeOAuthBusy}
+                          onClick={() => {
+                            if (activeOpenAiOAuthUsable) {
+                              void logoutOpenAiOAuth(activeProvider)
+                            } else {
+                              void startOpenAiOAuth(activeProvider)
+                            }
+                          }}
+                          className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full border border-ds-border bg-ds-card px-3 text-[12px] font-medium text-ds-muted shadow-sm transition hover:bg-ds-hover hover:text-ds-ink disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {activeOAuthBusy
+                            ? <Loader2 className="h-3.5 w-3.5 animate-spin" strokeWidth={1.9} />
+                            : <KeyRound className="h-3.5 w-3.5" strokeWidth={1.9} />}
+                          {activeOpenAiOAuthUsable
+                            ? t('modelProviderOpenAiOAuthSignOut')
+                            : t('modelProviderOpenAiOAuthSignIn')}
+                        </button>
+                      </div>
+                    </div>
+                  ) : null}
                   <label className={fieldLabelClass}>
                     {t('modelProviderApiKey')}
                     <SecretInput

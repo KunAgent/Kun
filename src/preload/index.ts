@@ -21,6 +21,8 @@ const api = {
   restartRuntime: () => ipcRenderer.invoke('runtime:restart'),
   fetchUpstreamModels: () => ipcRenderer.invoke('upstream:models'),
   probeModelProvider: (payload) => ipcRenderer.invoke('provider:probe', payload),
+  startOpenAiOAuth: (providerId) => ipcRenderer.invoke('oauth:openai:start', { providerId }),
+  logoutOpenAiOAuth: (providerId) => ipcRenderer.invoke('oauth:openai:logout', { providerId }),
   getClawStatus: () => ipcRenderer.invoke('claw:status'),
   runClawTask: (taskId) =>
     ipcRenderer.invoke('claw:task:run', taskId),

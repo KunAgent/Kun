@@ -33,6 +33,7 @@ import {
   type ModelProviderModelProfileV1,
   type ModelProviderMusicCapabilityPatchV1,
   type ModelProviderMusicCapabilityV1,
+  type ModelProviderOAuthV1,
   type ModelProviderReasoningCapabilityV1,
   type ModelProviderProfilePatchV1,
   type ModelProviderProfileV1,
@@ -63,6 +64,7 @@ import {
 
 const DEFAULT_MODEL_PROVIDER_NAME = 'DeepSeek'
 const DEFAULT_PROVIDER_CONTEXT_WINDOW_TOKENS = 128_000
+export const OPENAI_OAUTH_CODEX_RESPONSES_URL = 'https://chatgpt.com/backend-api/codex/responses'
 const DEFAULT_TEXT_MODEL_PROFILE: ModelProviderModelProfileV1 = {
   inputModalities: ['text'],
   outputModalities: ['text'],
@@ -150,7 +152,59 @@ export function modelProviderSettingsPatch(
 }
 
 export function resolveModelProviderApiKey(settings: AppSettingsV1): string {
-  return getDefaultModelProviderProfile(settings).apiKey.trim()
+  return modelProviderEffectiveApiKey(getDefaultModelProviderProfile(settings))
+}
+
+export function isModelProviderOAuthUsable(
+  oauth: ModelProviderOAuthV1 | undefined,
+  now = Date.now()
+): boolean {
+  if (!oauth || oauth.provider !== 'openai') return false
+  if (!oauth.accessToken.trim()) return false
+  const expiresAt = Date.parse(oauth.expiresAt)
+  if (!Number.isFinite(expiresAt)) return false
+  // Keep a small buffer so the runtime does not start a request with a token
+  // that is about to expire during streaming.
+  return expiresAt - now > 60_000
+}
+
+export function modelProviderEffectiveApiKey(
+  provider: Pick<ModelProviderProfileV1, 'apiKey' | 'oauth'>,
+  now = Date.now()
+): string {
+  const oauth = provider.oauth
+  if (oauth && isModelProviderOAuthUsable(oauth, now)) {
+    return oauth.accessToken.trim()
+  }
+  return provider.apiKey.trim()
+}
+
+export function modelProviderRuntimeConnection(
+  provider: ModelProviderProfileV1,
+  now = Date.now()
+): {
+  apiKey: string
+  baseUrl: string
+  endpointFormat: ModelEndpointFormat
+  headers?: Record<string, string>
+} {
+  const oauth = provider.oauth
+  if (oauth && isModelProviderOAuthUsable(oauth, now)) {
+    return {
+      apiKey: oauth.accessToken.trim(),
+      baseUrl: OPENAI_OAUTH_CODEX_RESPONSES_URL,
+      endpointFormat: 'custom_endpoint',
+      headers: {
+        originator: 'codex_cli_rs',
+        ...(oauth.accountId ? { 'chatgpt-account-id': oauth.accountId } : {})
+      }
+    }
+  }
+  return {
+    apiKey: provider.apiKey.trim(),
+    baseUrl: provider.baseUrl.trim(),
+    endpointFormat: provider.endpointFormat
+  }
 }
 
 export function resolveModelProviderBaseUrl(settings: AppSettingsV1): string {
@@ -835,6 +889,7 @@ export function resolveKunRuntimeSettings(settings: AppSettingsV1): KunRuntimeSe
   const runtimeBaseUrl = runtime.baseUrl?.trim() ?? ''
   const providerBaseUrl = provider.baseUrl.trim() || DEFAULT_DEEPSEEK_BASE_URL
   const useProviderCredentials = Boolean(providerId)
+  const providerConnection = modelProviderRuntimeConnection(provider)
 
   return {
     ...runtime,
@@ -844,13 +899,16 @@ export function resolveKunRuntimeSettings(settings: AppSettingsV1): KunRuntimeSe
     // key (issue #329) — that briefly reads as "no API key" and the
     // settings-apply gate then stops a perfectly healthy Kun runtime.
     apiKey: useProviderCredentials
-      ? provider.apiKey.trim() || runtimeApiKey
-      : runtimeApiKey || provider.apiKey.trim(),
+      ? providerConnection.apiKey || runtimeApiKey
+      : runtimeApiKey || providerConnection.apiKey,
     baseUrl:
-      !useProviderCredentials && runtimeBaseUrl && runtimeBaseUrl !== DEFAULT_DEEPSEEK_BASE_URL
+      useProviderCredentials && providerConnection.baseUrl
+        ? providerConnection.baseUrl
+        : !useProviderCredentials && runtimeBaseUrl && runtimeBaseUrl !== DEFAULT_DEEPSEEK_BASE_URL
         ? normalizeDeepseekBaseUrl(runtimeBaseUrl)
         : normalizeDeepseekBaseUrl(providerBaseUrl),
-    endpointFormat: provider.endpointFormat,
+    endpointFormat: useProviderCredentials ? providerConnection.endpointFormat : provider.endpointFormat,
+    ...(useProviderCredentials && providerConnection.headers ? { headers: providerConnection.headers } : {}),
     imageGeneration: resolveKunImageGenerationSettings(settings),
     speechToText: resolveKunSpeechToTextSettings(settings),
     textToSpeech: resolveKunTextToSpeechSettings(settings),
@@ -897,6 +955,7 @@ function normalizeModelProviderProfile(
   const textToSpeech = normalizeModelProviderTextToSpeechCapability(input?.textToSpeech)
   const music = normalizeModelProviderMusicCapability(input?.music)
   const video = normalizeModelProviderVideoCapability(input?.video)
+  const oauth = normalizeModelProviderOAuth(input?.oauth)
   return providerWithPresetCapabilities({
     id,
     name,
@@ -905,12 +964,42 @@ function normalizeModelProviderProfile(
     endpointFormat: normalizeModelEndpointFormat(input?.endpointFormat),
     models,
     modelProfiles,
+    ...(oauth ? { oauth } : {}),
     ...(image ? { image } : {}),
     ...(speech ? { speech } : {}),
     ...(textToSpeech ? { textToSpeech } : {}),
     ...(music ? { music } : {}),
     ...(video ? { video } : {})
   })
+}
+
+function normalizeModelProviderOAuth(
+  input: ModelProviderProfilePatchV1['oauth'] | undefined
+): ModelProviderOAuthV1 | undefined {
+  if (!input || typeof input !== 'object') return undefined
+  const accessToken = typeof input.accessToken === 'string' ? input.accessToken.trim() : ''
+  const refreshToken = typeof input.refreshToken === 'string' ? input.refreshToken.trim() : ''
+  const expiresAt = typeof input.expiresAt === 'string' ? input.expiresAt.trim() : ''
+  const updatedAt = typeof input.updatedAt === 'string' ? input.updatedAt.trim() : ''
+  const expiresAtMs = Date.parse(expiresAt)
+  const updatedAtMs = Date.parse(updatedAt)
+  if (!accessToken || !refreshToken || !Number.isFinite(expiresAtMs) || !Number.isFinite(updatedAtMs)) {
+    return undefined
+  }
+  return {
+    provider: 'openai',
+    accessToken,
+    refreshToken,
+    tokenType: typeof input.tokenType === 'string' && input.tokenType.trim()
+      ? input.tokenType.trim()
+      : 'Bearer',
+    scope: typeof input.scope === 'string' ? input.scope.trim() : '',
+    expiresAt: new Date(expiresAtMs).toISOString(),
+    ...(typeof input.accountId === 'string' && input.accountId.trim()
+      ? { accountId: input.accountId.trim() }
+      : {}),
+    updatedAt: new Date(updatedAtMs).toISOString()
+  }
 }
 
 function deepseekTextModelProfile(): ModelProviderModelProfileV1 {

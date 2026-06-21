@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   DEFAULT_DEEPSEEK_BASE_URL,
+  OPENAI_OAUTH_CODEX_RESPONSES_URL,
   defaultClawSettings,
   defaultKeyboardShortcuts,
   defaultKunRuntimeSettings,
@@ -25,6 +26,7 @@ import {
   modelProviderModelProfilesForSettings,
   listModelProviderModelIds,
   modelSupportsImageInput,
+  modelProviderEffectiveApiKey,
   normalizeModelProviderSettings,
   resolveKunImageGenerationSettings,
   resolveKunMusicGenerationSettings,
@@ -90,6 +92,87 @@ describe('model provider settings', () => {
     expect(runtime.apiKey).toBe('sk-custom')
     expect(runtime.baseUrl).toBe('https://custom.example/v1')
     expect(runtime.endpointFormat).toBe('messages')
+  })
+
+  it('prefers usable provider OAuth tokens over API keys', () => {
+    const provider = {
+      id: 'openai',
+      name: 'OpenAI',
+      apiKey: 'sk-api-key',
+      baseUrl: 'https://api.openai.com/v1',
+      endpointFormat: 'responses' as const,
+      models: ['gpt-5.5'],
+      modelProfiles: {},
+      oauth: {
+        provider: 'openai' as const,
+        accessToken: 'oauth-access',
+        refreshToken: 'oauth-refresh',
+        tokenType: 'Bearer',
+        scope: 'openid',
+        expiresAt: new Date(Date.now() + 3_600_000).toISOString(),
+        updatedAt: new Date().toISOString()
+      }
+    }
+
+    expect(modelProviderEffectiveApiKey(provider)).toBe('oauth-access')
+  })
+
+  it('falls back to API keys when provider OAuth tokens are expired', () => {
+    const provider = {
+      id: 'openai',
+      name: 'OpenAI',
+      apiKey: 'sk-api-key',
+      baseUrl: 'https://api.openai.com/v1',
+      endpointFormat: 'responses' as const,
+      models: ['gpt-5.5'],
+      modelProfiles: {},
+      oauth: {
+        provider: 'openai' as const,
+        accessToken: 'oauth-access',
+        refreshToken: 'oauth-refresh',
+        tokenType: 'Bearer',
+        scope: 'openid',
+        expiresAt: new Date(Date.now() - 1_000).toISOString(),
+        updatedAt: new Date().toISOString()
+      }
+    }
+
+    expect(modelProviderEffectiveApiKey(provider)).toBe('sk-api-key')
+  })
+
+  it('routes selected OpenAI OAuth providers through the ChatGPT Codex backend', () => {
+    const state = settings()
+    state.provider.providers.push({
+      id: 'openai',
+      name: 'OpenAI',
+      apiKey: 'sk-api-key',
+      baseUrl: 'https://api.openai.com/v1',
+      endpointFormat: 'responses',
+      models: ['gpt-5.5'],
+      modelProfiles: {},
+      oauth: {
+        provider: 'openai',
+        accessToken: 'oauth-access',
+        refreshToken: 'oauth-refresh',
+        tokenType: 'Bearer',
+        scope: 'openid',
+        expiresAt: new Date(Date.now() + 3_600_000).toISOString(),
+        accountId: 'acct_123',
+        updatedAt: new Date().toISOString()
+      }
+    })
+    state.agents.kun.providerId = 'openai'
+    state.agents.kun.model = 'gpt-5.5'
+
+    const runtime = resolveKunRuntimeSettings(state)
+
+    expect(runtime.apiKey).toBe('oauth-access')
+    expect(runtime.baseUrl).toBe(OPENAI_OAUTH_CODEX_RESPONSES_URL)
+    expect(runtime.endpointFormat).toBe('custom_endpoint')
+    expect(runtime.headers).toEqual({
+      originator: 'codex_cli_rs',
+      'chatgpt-account-id': 'acct_123'
+    })
   })
 
   it('normalizes and resolves model request proxy settings', () => {

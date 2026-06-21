@@ -93,6 +93,7 @@ export function parseServeOptions(
             env.DEEPSEEK_BASE_URL ??
             configServe.baseUrl ??
             DEFAULT_SERVE_OPTIONS.baseUrl,
+    headers: configServe.headers,
     modelProxyUrl:
       typeof raw['model-proxy-url'] === 'string'
         ? raw['model-proxy-url']

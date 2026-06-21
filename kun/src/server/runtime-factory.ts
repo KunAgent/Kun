@@ -85,6 +85,7 @@ export type KunServeRuntimeOptions = {
   runtimeToken: string
   apiKey: string
   baseUrl: string
+  headers?: Record<string, string>
   modelProxyUrl?: string
   endpointFormat?: ModelEndpointFormat
   /**
@@ -172,6 +173,7 @@ export async function createKunServeRuntime(
   const defaultModelClient = new CompatModelClient({
     baseUrl: options.baseUrl,
     apiKey: options.apiKey,
+    headers: options.headers,
     modelProxyUrl: options.modelProxyUrl,
     endpointFormat: options.endpointFormat ?? DEFAULT_MODEL_ENDPOINT_FORMAT,
     model: options.model,
@@ -192,6 +194,7 @@ export async function createKunServeRuntime(
       new CompatModelClient({
         baseUrl: provider.baseUrl,
         apiKey: provider.apiKey,
+        headers: provider.headers,
         modelProxyUrl: provider.modelProxyUrl ?? options.modelProxyUrl,
         endpointFormat: provider.endpointFormat ?? options.endpointFormat ?? DEFAULT_MODEL_ENDPOINT_FORMAT,
         model: options.model,

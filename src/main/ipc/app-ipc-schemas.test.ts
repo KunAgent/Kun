@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest'
 import {
   clawImInstallPollPayloadSchema,
   isSafeOpenExternalUrl,
+  openAiOAuthLogoutPayloadSchema,
+  openAiOAuthStartPayloadSchema,
   runtimeRequestPayloadSchema,
   scheduleTaskFromTextPayloadSchema,
   settingsPatchSchema,
@@ -18,6 +20,15 @@ import {
 } from './app-ipc-schemas'
 
 describe('app-ipc-schemas', () => {
+  it('accepts OpenAI OAuth provider payloads', () => {
+    expect(openAiOAuthStartPayloadSchema.parse({ providerId: ' openai ' })).toEqual({
+      providerId: 'openai'
+    })
+    expect(openAiOAuthLogoutPayloadSchema.parse({ providerId: 'openai' })).toEqual({
+      providerId: 'openai'
+    })
+  })
+
   it('normalizes runtime request paths', () => {
     const payload = runtimeRequestPayloadSchema.parse({
       path: 'v1/threads?limit=1',

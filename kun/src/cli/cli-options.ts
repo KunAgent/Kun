@@ -46,6 +46,7 @@ export const ServeOptionsSchema = z.object({
   runtimeToken: z.string().default(''),
   apiKey: z.string().default(''),
   baseUrl: z.string().default('https://api.deepseek.com/beta'),
+  headers: z.record(z.string(), z.string()).optional(),
   modelProxyUrl: z.string().default(''),
   endpointFormat: z.preprocess(normalizeModelEndpointFormat, z.enum(MODEL_ENDPOINT_FORMATS)).default(DEFAULT_MODEL_ENDPOINT_FORMAT),
   model: z.string().default(DEFAULT_SERVE_MODEL),

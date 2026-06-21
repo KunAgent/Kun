@@ -213,6 +213,7 @@ export const ServeProviderConfigSchema = z
       .preprocess(normalizeModelEndpointFormat, z.enum(MODEL_ENDPOINT_FORMATS))
       .default(DEFAULT_MODEL_ENDPOINT_FORMAT)
       .optional(),
+    headers: z.record(z.string(), z.string()).optional(),
     modelProxyUrl: z.string().optional()
   })
   .strict()
@@ -226,6 +227,7 @@ export const KunServeConfigSchema = z
     runtimeToken: z.string().optional(),
     apiKey: z.string().optional(),
     baseUrl: z.string().optional(),
+    headers: z.record(z.string(), z.string()).optional(),
     modelProxyUrl: z.string().optional(),
     endpointFormat: z.preprocess(
       normalizeModelEndpointFormat,

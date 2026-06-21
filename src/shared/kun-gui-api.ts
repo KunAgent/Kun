@@ -207,6 +207,15 @@ export type ModelProviderProbeRequest = {
 export type ModelProviderProbeResult =
   | { ok: true; latencyMs: number; modelIds: string[] }
   | { ok: false; message: string }
+export type OpenAiOAuthStatus = {
+  connected: boolean
+  providerId: string
+  accountId?: string
+  expiresAt?: string
+}
+export type OpenAiOAuthResult =
+  | { ok: true; status: OpenAiOAuthStatus }
+  | { ok: false; message: string }
 export type ClawImInstallQrResult =
   | { ok: true; url: string; deviceCode: string; userCode: string; interval: number; expireIn: number }
   | { ok: false; message: string }
@@ -290,6 +299,8 @@ export type KunGuiApi = {
   restartRuntime: () => Promise<void>
   fetchUpstreamModels: () => Promise<UpstreamModelsResult>
   probeModelProvider: (payload: ModelProviderProbeRequest) => Promise<ModelProviderProbeResult>
+  startOpenAiOAuth: (providerId: string) => Promise<OpenAiOAuthResult>
+  logoutOpenAiOAuth: (providerId: string) => Promise<OpenAiOAuthResult>
   getClawStatus: () => Promise<ClawRuntimeStatus>
   runClawTask: (taskId: string) => Promise<ClawRunResult>
   getScheduleStatus: () => Promise<ScheduleRuntimeStatus>

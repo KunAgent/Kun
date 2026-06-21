@@ -50,6 +50,8 @@ import {
   notificationPayloadSchema,
   openEditorPathPayloadSchema,
   providerProbePayloadSchema,
+  openAiOAuthLogoutPayloadSchema,
+  openAiOAuthStartPayloadSchema,
   rootPathSchema,
   worktreeCommitSchema,
   worktreeContinueMergeSchema,
@@ -178,6 +180,7 @@ import {
 } from '../services/computer-use-permissions'
 import { copyWriteDocumentAsRichText, exportWriteDocument } from '../services/write-export-service'
 import { listGuiSkillRoots, listGuiSkills } from '../services/skill-service'
+import { logoutOpenAiOAuth, startOpenAiOAuthLogin } from '../services/openai-oauth-service'
 
 type GuiUpdaterModule = typeof import('../gui-updater')
 
@@ -505,6 +508,24 @@ export function registerAppIpcHandlers(options: RegisterAppIpcHandlersOptions): 
   ipcMain.handle('provider:probe', async (_, payload: unknown) => {
     const request = parseIpcPayload('provider:probe', providerProbePayloadSchema, payload)
     return probeModelProvider(request, await store.load())
+  })
+
+  ipcMain.handle('oauth:openai:start', async (_, payload: unknown) => {
+    const request = parseIpcPayload('oauth:openai:start', openAiOAuthStartPayloadSchema, payload)
+    return startOpenAiOAuthLogin({
+      settings: await store.load(),
+      providerId: request.providerId,
+      applySettingsPatch
+    })
+  })
+
+  ipcMain.handle('oauth:openai:logout', async (_, payload: unknown) => {
+    const request = parseIpcPayload('oauth:openai:logout', openAiOAuthLogoutPayloadSchema, payload)
+    return logoutOpenAiOAuth({
+      settings: await store.load(),
+      providerId: request.providerId,
+      applySettingsPatch
+    })
   })
 
   ipcMain.handle('claw:status', async (): Promise<ClawRuntimeStatus> =>
