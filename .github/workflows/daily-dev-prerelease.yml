@@ -1,0 +1,313 @@
+name: Daily Dev Prerelease
+
+on:
+  workflow_dispatch:
+  schedule:
+    # GitHub cron 使用 UTC,对应 Asia/Shanghai 的 12:00 和次日 00:00。
+    - cron: '0 4,16 * * *'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: daily-dev-prerelease
+  cancel-in-progress: false
+
+env:
+  NODE_VERSION: '22'
+  RELEASE_CHANNEL: frontier
+
+jobs:
+  prepare:
+    name: Prepare dev version
+    runs-on: ubuntu-latest
+    outputs:
+      app_version: ${{ steps.version.outputs.app_version }}
+      dev_version: ${{ steps.version.outputs.dev_version }}
+      head_sha: ${{ steps.version.outputs.head_sha }}
+      release_name: ${{ steps.version.outputs.release_name }}
+      tag: ${{ steps.version.outputs.tag }}
+    steps:
+      - name: Check out develop
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: develop
+
+      - name: Compute dev version
+        id: version
+        env:
+          TZ: Asia/Shanghai
+        run: |
+          set -euo pipefail
+          dev_version="$(date +'%Y%m%d.%H%M')"
+          app_version="0.0.0-dev-${dev_version//./-}"
+          tag="dev-${dev_version}"
+          release_name="Kun Dev ${dev_version}"
+          head_sha="$(git rev-parse HEAD)"
+
+          {
+            echo "app_version=${app_version}"
+            echo "dev_version=${dev_version}"
+            echo "head_sha=${head_sha}"
+            echo "release_name=${release_name}"
+            echo "tag=${tag}"
+          } >> "${GITHUB_OUTPUT}"
+
+          echo "Dev version: ${dev_version}"
+          echo "App version: ${app_version}"
+          echo "Commit: ${head_sha}"
+
+  build-macos:
+    name: Build macOS
+    runs-on: macos-latest
+    needs: prepare
+    env:
+      KUN_APP_VERSION: ${{ needs.prepare.outputs.app_version }}
+      KUN_ARTIFACT_VERSION: ${{ needs.prepare.outputs.dev_version }}
+      KUN_UPDATE_CHANNEL: frontier
+      DEEPSEEK_GUI_APP_VERSION: ${{ needs.prepare.outputs.app_version }}
+      DEEPSEEK_GUI_ARTIFACT_VERSION: ${{ needs.prepare.outputs.dev_version }}
+      DEEPSEEK_GUI_UPDATE_CHANNEL: frontier
+      RELEASE_CHANNEL: frontier
+    steps:
+      - name: Check out develop commit
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ needs.prepare.outputs.head_sha }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build macOS packages
+        run: npm run dist:mac
+
+      - name: Upload macOS artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: daily-dev-mac
+          if-no-files-found: error
+          retention-days: 7
+          path: |
+            dist/Kun-*-mac-*.dmg
+            dist/Kun-*-mac-*.zip
+            dist/Kun-*-mac-*.blockmap
+            dist/latest-mac.yml
+
+  build-windows:
+    name: Build Windows
+    runs-on: windows-latest
+    needs: prepare
+    env:
+      KUN_APP_VERSION: ${{ needs.prepare.outputs.app_version }}
+      KUN_ARTIFACT_VERSION: ${{ needs.prepare.outputs.dev_version }}
+      KUN_UPDATE_CHANNEL: frontier
+      DEEPSEEK_GUI_APP_VERSION: ${{ needs.prepare.outputs.app_version }}
+      DEEPSEEK_GUI_ARTIFACT_VERSION: ${{ needs.prepare.outputs.dev_version }}
+      DEEPSEEK_GUI_UPDATE_CHANNEL: frontier
+      RELEASE_CHANNEL: frontier
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+    steps:
+      - name: Check out develop commit
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ needs.prepare.outputs.head_sha }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Windows installer
+        run: npm run dist:win
+
+      - name: Upload Windows artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: daily-dev-win
+          if-no-files-found: error
+          retention-days: 7
+          path: |
+            dist/Kun-*-win-x64.exe
+            dist/Kun-*-win-x64.exe.blockmap
+            dist/latest.yml
+
+  build-linux:
+    name: Build Linux
+    runs-on: ubuntu-latest
+    needs: prepare
+    env:
+      KUN_APP_VERSION: ${{ needs.prepare.outputs.app_version }}
+      KUN_ARTIFACT_VERSION: ${{ needs.prepare.outputs.dev_version }}
+      KUN_UPDATE_CHANNEL: frontier
+      DEEPSEEK_GUI_APP_VERSION: ${{ needs.prepare.outputs.app_version }}
+      DEEPSEEK_GUI_ARTIFACT_VERSION: ${{ needs.prepare.outputs.dev_version }}
+      DEEPSEEK_GUI_UPDATE_CHANNEL: frontier
+      RELEASE_CHANNEL: frontier
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+    steps:
+      - name: Check out develop commit
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ needs.prepare.outputs.head_sha }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install Linux packaging dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libarchive-tools rpm build-essential python3
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Linux AppImage
+        run: npm run dist:linux
+
+      - name: Upload Linux artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: daily-dev-linux
+          if-no-files-found: error
+          retention-days: 7
+          path: |
+            dist/Kun-*-linux-x86_64.AppImage
+            dist/Kun-*-linux-x86_64.AppImage.blockmap
+            dist/latest-linux.yml
+
+  publish:
+    name: Publish prerelease
+    runs-on: ubuntu-latest
+    needs:
+      - prepare
+      - build-macos
+      - build-windows
+      - build-linux
+    env:
+      GH_TOKEN: ${{ github.token }}
+      DEV_VERSION: ${{ needs.prepare.outputs.dev_version }}
+      HEAD_SHA: ${{ needs.prepare.outputs.head_sha }}
+      RELEASE_NAME: ${{ needs.prepare.outputs.release_name }}
+      TAG_NAME: ${{ needs.prepare.outputs.tag }}
+    steps:
+      - name: Check out develop commit
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ env.HEAD_SHA }}
+
+      - name: Download daily dev artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: daily-dev-*
+          path: release-artifacts
+          merge-multiple: true
+
+      - name: Verify daily dev artifacts
+        run: |
+          set -euo pipefail
+          required=(
+            "Kun-${DEV_VERSION}-mac-arm64.dmg"
+            "Kun-${DEV_VERSION}-mac-x64.dmg"
+            "Kun-${DEV_VERSION}-mac-arm64.zip"
+            "Kun-${DEV_VERSION}-mac-x64.zip"
+            "Kun-${DEV_VERSION}-win-x64.exe"
+            "Kun-${DEV_VERSION}-linux-x86_64.AppImage"
+            "latest-mac.yml"
+            "latest.yml"
+            "latest-linux.yml"
+          )
+
+          for file in "${required[@]}"; do
+            if [[ ! -f "release-artifacts/${file}" ]]; then
+              echo "::error::Missing release artifact ${file}"
+              find release-artifacts -maxdepth 2 -type f -print | sort
+              exit 1
+            fi
+          done
+
+          find release-artifacts -maxdepth 2 -type f -print | sort
+
+      - name: Generate prerelease notes
+        run: |
+          set -euo pipefail
+          short_sha="${HEAD_SHA::7}"
+          cat > release-notes.md <<EOF
+          Daily dev prerelease built from develop.
+
+          ### Build information
+
+          - Dev version: \`${DEV_VERSION}\`
+          - App version: \`0.0.0-dev-${DEV_VERSION//./-}\`
+          - Branch: \`develop\`
+          - Commit: \`${short_sha}\`
+          - Platforms: macOS arm64/x64, Windows x64, Linux x64
+          EOF
+
+      - name: Ensure prerelease tag
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          if git rev-parse -q --verify "refs/tags/${TAG_NAME}" > /dev/null; then
+            tag_sha="$(git rev-list -n 1 "${TAG_NAME}")"
+            if [[ "${tag_sha}" != "${HEAD_SHA}" ]]; then
+              echo "::error::Tag ${TAG_NAME} points at ${tag_sha}, expected ${HEAD_SHA}"
+              exit 1
+            fi
+            echo "Reusing existing tag ${TAG_NAME}"
+          else
+            git tag -a "${TAG_NAME}" -m "${RELEASE_NAME}" "${HEAD_SHA}"
+            git push origin "refs/tags/${TAG_NAME}"
+          fi
+
+      - name: Create or update GitHub prerelease
+        run: |
+          set -euo pipefail
+          if gh release view "${TAG_NAME}" > /dev/null 2>&1; then
+            gh release edit "${TAG_NAME}" \
+              --title "${RELEASE_NAME}" \
+              --notes-file release-notes.md \
+              --prerelease
+          else
+            gh release create "${TAG_NAME}" \
+              --title "${RELEASE_NAME}" \
+              --notes-file release-notes.md \
+              --verify-tag \
+              --prerelease \
+              --latest=false
+          fi
+
+      - name: Upload GitHub prerelease assets
+        run: |
+          set -euo pipefail
+          mapfile -d '' assets < <(
+            find release-artifacts -type f \
+              \( -name 'Kun-*' -o -name 'latest*.yml' \) \
+              -print0
+          )
+
+          if [[ "${#assets[@]}" -eq 0 ]]; then
+            echo "::error::No release assets found"
+            exit 1
+          fi
+
+          gh release upload "${TAG_NAME}" "${assets[@]}" --clobber

@@ -16,6 +16,10 @@ export const UsageSnapshotSchema = z.object({
   cacheHitTokens: z.number().int().nonnegative().optional(),
   cacheMissTokens: z.number().int().nonnegative().optional(),
   cacheHitRate: z.number().min(0).max(1).nullable(),
+  cacheableTokenHitRate: z.number().min(0).max(1).nullable().optional(),
+  totalInputTokenHitRate: z.number().min(0).max(1).nullable().optional(),
+  cacheMissReasons: z.array(z.string()).optional(),
+  cacheSuggestions: z.array(z.string()).optional(),
   turns: z.number().int().nonnegative(),
   costUsd: z.number().nonnegative().optional(),
   costCny: z.number().nonnegative().optional(),
@@ -88,7 +92,11 @@ export const ThreadUsageBucketSchema = DailyUsageCountersSchema.omit({
    * the unavoidable cold first turn; this reflects steady-state caching for the
    * usage chip. Null when the latest turn had no cache telemetry.
    */
-  last_turn_cache_hit_rate: z.number().min(0).max(1).nullable().default(null)
+  last_turn_cache_hit_rate: z.number().min(0).max(1).nullable().default(null),
+  last_turn_cacheable_hit_rate: z.number().min(0).max(1).nullable().default(null),
+  last_turn_total_input_hit_rate: z.number().min(0).max(1).nullable().default(null),
+  last_cache_miss_reasons: z.array(z.string()).default([]),
+  last_cache_suggestions: z.array(z.string()).default([])
 })
 export type ThreadUsageBucket = z.infer<typeof ThreadUsageBucketSchema>
 

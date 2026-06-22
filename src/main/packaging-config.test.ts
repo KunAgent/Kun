@@ -161,6 +161,27 @@ describe('electron-builder Kun packaging', () => {
     expect(builderConfig.win.icon).toBe('./build/icon.ico')
   })
 
+  it('uses a process-tree shutdown guard for Windows overwrite installs', () => {
+    const installerScript = readFileSync(join(process.cwd(), 'build/installer.nsh'), 'utf8')
+
+    expect(builderConfig.nsis.include).toBe('build/installer.nsh')
+    expect(installerScript).toContain('customCheckAppRunning')
+    expect(installerScript).toContain('customUnInstallCheck')
+    expect(installerScript).toContain('customUnInstallCheckCurrentUser')
+    expect(installerScript).toContain('kunContinueAfterOldUninstallerFailure')
+    expect(installerScript).toContain('KUN_INSTALLER_UNINSTALL_EXE')
+    expect(installerScript).toContain('${UNINSTALL_FILENAME}')
+    expect(installerScript).toContain('old-uninstaller.exe')
+    expect(installerScript).toContain('$$_.ExecutablePath')
+    expect(installerScript).toContain("$$r=[IO.Path]::GetFullPath")
+    expect(installerScript).toContain('taskkill.exe /PID $$_.ProcessId /T /F')
+    expect(installerScript).toContain('RMDir /r "$INSTDIR"')
+    expect(installerScript).toContain('!ifdef BUILD_UNINSTALLER')
+    expect(installerScript).toContain('${ifNot} ${isUpdated}')
+    expect(installerScript).toContain('MessageBox MB_RETRYCANCEL|MB_ICONEXCLAMATION "$(appCannotBeClosed)"')
+    expect(installerScript).not.toContain('Stop-Process -Id')
+  })
+
   it('keeps sandboxed preload free of Node builtin imports', () => {
     for (const sourcePath of preloadSourceFiles()) {
       expect(forbiddenPreloadImports(readFileSync(sourcePath, 'utf8'))).toEqual([])

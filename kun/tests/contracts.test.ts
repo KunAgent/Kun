@@ -298,7 +298,7 @@ describe('cli', () => {
       '--host',
       '127.0.0.1',
       '--port',
-      '8787',
+      '18787',
       '--data-dir',
       '/tmp/ca',
       '--runtime-token',
@@ -313,7 +313,7 @@ describe('cli', () => {
       '--insecure'
     ])
     expect(parsed.host).toBe('127.0.0.1')
-    expect(parsed.port).toBe(8787)
+    expect(parsed.port).toBe(18787)
     expect(parsed.tokenEconomyMode).toBe(true)
     expect(parsed.tokenEconomy?.enabled).toBe(true)
     expect(parsed.insecure).toBe(true)
@@ -322,12 +322,12 @@ describe('cli', () => {
   it('parses flags in --key=value form', () => {
     const parsed = parseServeOptions([
       '--host=0.0.0.0',
-      '--port=9090',
+      '--port=19090',
       '--data-dir=/srv/ca',
       '--storage-backend=file'
     ])
     expect(parsed.host).toBe('0.0.0.0')
-    expect(parsed.port).toBe(9090)
+    expect(parsed.port).toBe(19090)
     expect(parsed.dataDir).toBe('/srv/ca')
     expect(parsed.storage.backend).toBe('file')
   })
@@ -339,7 +339,7 @@ describe('cli', () => {
       await writeFile(configPath, JSON.stringify({
         serve: {
           host: '0.0.0.0',
-          port: 7777,
+          port: 17777,
           dataDir: join(dir, 'data'),
           model: 'deepseek-v4-flash',
           approvalPolicy: 'auto',
@@ -416,12 +416,12 @@ describe('cli', () => {
         '--model',
         'deepseek-v4-pro'
       ], {
-        KUN_PORT: '9091'
+        KUN_PORT: '19091'
       })
 
       expect(parsed.configPath).toBe(configPath)
       expect(parsed.host).toBe('0.0.0.0')
-      expect(parsed.port).toBe(9091)
+      expect(parsed.port).toBe(19091)
       expect(parsed.model).toBe('deepseek-v4-pro')
       expect(parsed.approvalPolicy).toBe('auto')
       expect(parsed.tokenEconomyMode).toBe(true)
@@ -691,7 +691,7 @@ describe('cli', () => {
       '--host',
       '127.0.0.1',
       '--port',
-      '8899'
+      '18899'
     ])
     expect(result.ok).toBe(false)
     if (!result.ok) {
@@ -702,7 +702,7 @@ describe('cli', () => {
   it('validates pre-constructed options', () => {
     const parsed = validateServeOptions({
       host: '127.0.0.1',
-      port: 8899,
+      port: 18899,
       dataDir: '/srv/ca',
       runtimeToken: '',
       model: 'deepseek-chat',
@@ -710,7 +710,7 @@ describe('cli', () => {
       sandboxMode: 'workspace-write',
       insecure: false
     })
-    expect(parsed.port).toBe(8899)
+    expect(parsed.port).toBe(18899)
     expect(parsed.storage.backend).toBe('hybrid')
     expect(parsed.capabilities.mcp.enabled).toBe(false)
   })

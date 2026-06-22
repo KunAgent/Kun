@@ -50,4 +50,13 @@ export class MultiProviderModelClient implements ModelClient {
   get config(): unknown {
     return (this.default_ as { config?: unknown }).config
   }
+
+  /**
+   * Exposes the routed client's HTTP config for per-request diagnostics.
+   * Streaming already resolves by providerId; cache and pipeline telemetry
+   * should describe the same client that will handle the request.
+   */
+  configFor(providerId?: string): unknown {
+    return (this.resolve(providerId) as { config?: unknown }).config
+  }
 }

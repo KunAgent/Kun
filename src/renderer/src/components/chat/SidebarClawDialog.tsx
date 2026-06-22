@@ -105,8 +105,8 @@ export function ClawAddImDialog({
     selectedOption.connectionMode === 'official-install-qr'
     ? effectiveProvider
     : null
-  const [endpoint, setEndpoint] = useState('http://127.0.0.1:8787/claw/im')
-  const [imPort, setImPort] = useState(8787)
+  const [endpoint, setEndpoint] = useState('http://127.0.0.1:18787/claw/im')
+  const [imPort, setImPort] = useState(18787)
   const [imPath, setImPath] = useState('/claw/im')
   const [secret, setSecret] = useState('')
   const [imEnabled, setImEnabled] = useState(true)

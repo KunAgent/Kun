@@ -70,6 +70,7 @@ export function threadFromCore(thread: CoreThreadSummaryJson): NormalizedThread 
 
 function normalizeApprovalPolicy(value: string | undefined): NormalizedThread['approvalPolicy'] {
   switch (value) {
+    case 'always':
     case 'auto':
     case 'on-request':
     case 'untrusted':

@@ -25,6 +25,7 @@ import {
   TERMINAL_MAX_SESSIONS,
   TERMINAL_RING_BUFFER_BYTES
 } from '../../shared/terminal'
+import type { TerminalColorMode } from '../../shared/app-settings-terminal'
 import {
   terminalCreatePayloadSchema,
   terminalResizePayloadSchema,
@@ -86,10 +87,59 @@ function resolveDefaultShell(): { file: string; args: string[] } {
   return { file: process.env.SHELL || fallback, args: [] }
 }
 
-function buildShellEnv(): NodeJS.ProcessEnv {
+/**
+ * True when a locale string requests a UTF-8 codeset. Matches the common
+ * spellings case-insensitively: `UTF-8`, `UTF8`, `utf8`, `utf-8`, etc.
+ */
+function isUtf8Locale(value: string | undefined): value is string {
+  if (!value) return false
+  return /utf-?8/i.test(value)
+}
+
+/**
+ * Resolve a UTF-8 locale for the child shell.
+ *
+ * POSIX precedence for the character-encoding category is
+ * `LC_ALL` > `LC_CTYPE` > `LANG`: LC_ALL overrides everything, then the
+ * category-specific LC_CTYPE, then the catch-all LANG. The previous order
+ * checked LANG before LC_ALL, which inverted that precedence.
+ */
+function resolveLocale(): string {
+  if (isUtf8Locale(process.env.LC_ALL)) return process.env.LC_ALL
+  if (isUtf8Locale(process.env.LC_CTYPE)) return process.env.LC_CTYPE
+  if (isUtf8Locale(process.env.LANG)) return process.env.LANG
+  if (process.platform === 'darwin') return 'en_US.UTF-8'
+  if (process.platform === 'win32') return 'C.UTF-8'
+  return 'en_US.UTF-8'
+}
+
+function buildShellEnv(colorMode: TerminalColorMode): NodeJS.ProcessEnv {
   // xterm-256color matches what xterm.js advertises and keeps color-capable
   // programs (ls, git, etc.) emitting escape codes.
-  return { ...process.env, TERM: 'xterm-256color', COLORTERM: 'truecolor' }
+  // LANG/LC_ALL ensure the child shell uses a UTF-8 locale so that CJK
+  // output (echo, git log, cat, etc.) is not garbled. Electron launched
+  // from Finder/Dock does not inherit the login-shell locale that
+  // ~/.zprofile/~/.zshrc would normally set.
+  const locale = resolveLocale()
+  const env: NodeJS.ProcessEnv = {
+    ...process.env,
+    TERM: 'xterm-256color',
+    LANG: locale,
+    LC_ALL: locale
+  }
+  // In monochrome mode we deliberately do NOT advertise truecolor: COLORTERM
+  // would let tools emit 24-bit (ESC[38;2;R;G;Bm) sequences that bypass the
+  // xterm palette entirely, defeating the mono theme. Without it, color-aware
+  // programs fall back to the 16-color ANSI palette, which the mono theme maps
+  // to the foreground. The xterm theme additionally neutralizes the 256-color
+  // (16-255) range so even 8-bit color sequences stay monochrome.
+  // Inherited COLORTERM from the parent env is stripped for the same reason.
+  if (colorMode === 'none') {
+    delete env.COLORTERM
+  } else {
+    env.COLORTERM = 'truecolor'
+  }
+  return env
 }
 
 function pushToRingBuffer(session: TerminalSession, chunk: string): void {
@@ -108,10 +158,16 @@ export type RegisterTerminalPtyIpcOptions = {
   ipcMain: IpcMain
   getMainWindow: () => BrowserWindow | null
   logError: (category: string, message: string, detail?: unknown) => void
+  /**
+   * Resolve the current terminal color mode so the spawned shell's env can be
+   * tuned (e.g. dropping COLORTERM in monochrome mode). Defaults to 'none'
+   * when not provided.
+   */
+  getTerminalColorMode?: () => TerminalColorMode | Promise<TerminalColorMode>
 }
 
 export function registerTerminalPtyIpc(options: RegisterTerminalPtyIpcOptions): void {
-  const { ipcMain, getMainWindow, logError } = options
+  const { ipcMain, getMainWindow, logError, getTerminalColorMode } = options
   const sessions = new Map<string, TerminalSession>()
 
   const disposeSession = (sessionId: string, killedByClient: boolean): boolean => {
@@ -189,6 +245,15 @@ export function registerTerminalPtyIpc(options: RegisterTerminalPtyIpcOptions): 
     const cols = request.cols ?? TERMINAL_DEFAULT_COLS
     const rows = request.rows ?? TERMINAL_DEFAULT_ROWS
     const cwd = request.cwd && request.cwd.trim() ? request.cwd.trim() : homedir()
+    let colorMode: TerminalColorMode = 'none'
+    try {
+      colorMode = (await getTerminalColorMode?.()) ?? 'none'
+    } catch (error) {
+      logError('terminal', 'Failed to resolve terminal color mode', {
+        sessionId: request.sessionId,
+        message: error instanceof Error ? error.message : String(error)
+      })
+    }
 
     try {
       const pty = ptyModule.spawn(file, shellArgs, {
@@ -196,7 +261,7 @@ export function registerTerminalPtyIpc(options: RegisterTerminalPtyIpcOptions): 
         cols,
         rows,
         cwd,
-        env: buildShellEnv(),
+        env: buildShellEnv(colorMode),
         // ConPTY on Windows, ignored elsewhere.
         useConpty: true
       })

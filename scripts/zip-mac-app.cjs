@@ -12,7 +12,14 @@ if (arch !== 'arm64' && arch !== 'x64') {
 
 const root = resolve(__dirname, '..')
 const pkg = require(join(root, 'package.json'))
-const version = (process.env.KUN_APP_VERSION || process.env.DEEPSEEK_GUI_APP_VERSION || pkg.version || '').trim()
+const version = (
+  process.env.KUN_ARTIFACT_VERSION ||
+  process.env.DEEPSEEK_GUI_ARTIFACT_VERSION ||
+  process.env.KUN_APP_VERSION ||
+  process.env.DEEPSEEK_GUI_APP_VERSION ||
+  pkg.version ||
+  ''
+).trim()
 if (!version) {
   console.error('[zip-mac-app] Could not resolve package version.')
   process.exit(1)

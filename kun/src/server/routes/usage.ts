@@ -250,6 +250,14 @@ function diffUsage(current: UsageSnapshot, previous: UsageSnapshot): UsageSnapsh
     ...(cacheHitTokens !== undefined ? { cacheHitTokens } : {}),
     ...(cacheMissTokens !== undefined ? { cacheMissTokens } : {}),
     cacheHitRate,
+    ...(current.cacheableTokenHitRate !== undefined
+      ? { cacheableTokenHitRate: current.cacheableTokenHitRate }
+      : {}),
+    ...(current.totalInputTokenHitRate !== undefined
+      ? { totalInputTokenHitRate: current.totalInputTokenHitRate }
+      : {}),
+    ...(current.cacheMissReasons ? { cacheMissReasons: [...current.cacheMissReasons] } : {}),
+    ...(current.cacheSuggestions ? { cacheSuggestions: [...current.cacheSuggestions] } : {}),
     turns: diffNumber(current.turns, previous.turns),
     ...(current.costUsd !== undefined || previous.costUsd !== undefined
       ? { costUsd: diffNumber(current.costUsd ?? 0, previous.costUsd ?? 0) }

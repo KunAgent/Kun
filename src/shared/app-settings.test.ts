@@ -6,6 +6,7 @@ import {
   DEFAULT_KUN_DATA_DIR,
   DEFAULT_KUN_MODEL,
   DEFAULT_LOG_RETENTION_DAYS,
+  DEFAULT_CURSOR_SPOTLIGHT_COLOR,
   DEFAULT_APPROVAL_POLICY,
   DEFAULT_SANDBOX_MODE,
   DEFAULT_WEIXIN_BRIDGE_RPC_URL,
@@ -18,6 +19,7 @@ import {
   defaultKunRuntimeSettings,
   defaultScheduleSettings,
   defaultWorkflowSettings,
+  defaultTerminalSettings,
   defaultWriteSelectionAssistSettings,
   defaultWriteSettings,
   getModelProviderPreset,
@@ -32,6 +34,8 @@ import {
   normalizeAppSettings,
   parseClawUserPromptForDisplay,
   inferModelEndpointFormatFromUrl,
+  kunToolPermissionModeFromSettings,
+  kunToolPermissionModeSettings,
   normalizeScheduleSettings,
   resolveKunRuntimeSettings,
   resolveWriteInlineCompletionApiKey,
@@ -61,6 +65,7 @@ function settings(): AppSettingsV1 {
     claw: defaultClawSettings(),
     schedule: defaultScheduleSettings(),
     workflow: defaultWorkflowSettings(),
+    terminal: defaultTerminalSettings(),
     guiUpdate: { channel: 'stable' },
     codePromptPrefix: '',
     disabledSkillIds: []
@@ -117,6 +122,42 @@ describe('kun defaults', () => {
   it('defaults sandbox mode to full access', () => {
     expect(defaultKunRuntimeSettings().sandboxMode).toBe(DEFAULT_SANDBOX_MODE)
     expect(defaultKunRuntimeSettings().sandboxMode).toBe('danger-full-access')
+  })
+
+  it('maps unified tool permission modes to approval and sandbox settings', () => {
+    expect(kunToolPermissionModeSettings('always-ask')).toEqual({
+      approvalPolicy: 'always',
+      sandboxMode: 'danger-full-access'
+    })
+    expect(kunToolPermissionModeSettings('read-only')).toEqual({
+      approvalPolicy: 'on-request',
+      sandboxMode: 'danger-full-access'
+    })
+    expect(kunToolPermissionModeSettings('sensitive-ask')).toEqual({
+      approvalPolicy: 'untrusted',
+      sandboxMode: 'danger-full-access'
+    })
+    expect(kunToolPermissionModeSettings('workspace-write')).toEqual({
+      approvalPolicy: 'on-request',
+      sandboxMode: 'workspace-write'
+    })
+    expect(kunToolPermissionModeSettings('bypass')).toEqual({
+      approvalPolicy: 'auto',
+      sandboxMode: 'danger-full-access'
+    })
+    expect(kunToolPermissionModeFromSettings(defaultKunRuntimeSettings())).toBe('bypass')
+    expect(kunToolPermissionModeFromSettings({
+      approvalPolicy: 'always',
+      sandboxMode: 'danger-full-access'
+    })).toBe('always-ask')
+    expect(kunToolPermissionModeFromSettings({
+      approvalPolicy: 'untrusted',
+      sandboxMode: 'danger-full-access'
+    })).toBe('sensitive-ask')
+    expect(kunToolPermissionModeFromSettings({
+      approvalPolicy: 'on-request',
+      sandboxMode: 'workspace-write'
+    })).toBe('workspace-write')
   })
 
   it('defaults token economy mode to off', () => {
@@ -292,6 +333,23 @@ describe('cursor spotlight settings', () => {
       cursorSpotlight: false
     }).cursorSpotlight).toBe(false)
   })
+
+  it('defaults, preserves, and validates the interaction effect color', () => {
+    expect(normalizeAppSettings({
+      ...settings(),
+      cursorSpotlightColor: undefined
+    }).cursorSpotlightColor).toBe(DEFAULT_CURSOR_SPOTLIGHT_COLOR)
+
+    expect(normalizeAppSettings({
+      ...settings(),
+      cursorSpotlightColor: '  #FF8800  '
+    }).cursorSpotlightColor).toBe('#ff8800')
+
+    expect(normalizeAppSettings({
+      ...settings(),
+      cursorSpotlightColor: 'not-a-color'
+    }).cursorSpotlightColor).toBe(DEFAULT_CURSOR_SPOTLIGHT_COLOR)
+  })
 })
 
 describe('keyboard shortcut settings', () => {
@@ -318,12 +376,12 @@ describe('claw settings', () => {
         ...defaults,
         im: {
           ...defaults.im,
-          weixinBridgeUrl: '  http://127.0.0.1:8787/rpc  '
+          weixinBridgeUrl: '  http://127.0.0.1:18787/rpc  '
         }
       }
     })
 
-    expect(normalized.claw.im.weixinBridgeUrl).toBe('http://127.0.0.1:8787/rpc')
+    expect(normalized.claw.im.weixinBridgeUrl).toBe('http://127.0.0.1:18787/rpc')
   })
 
   it('migrates the legacy OpenClaw Gateway URL into the WeChat bridge URL', () => {
@@ -335,12 +393,12 @@ describe('claw settings', () => {
         im: {
           ...defaults.im,
           weixinBridgeUrl: '',
-          openClawGatewayUrl: '  http://127.0.0.1:8787/rpc  '
+          openClawGatewayUrl: '  http://127.0.0.1:18787/rpc  '
         } as typeof defaults.im & { openClawGatewayUrl: string }
       }
     })
 
-    expect(normalized.claw.im.weixinBridgeUrl).toBe('http://127.0.0.1:8787/rpc')
+    expect(normalized.claw.im.weixinBridgeUrl).toBe('http://127.0.0.1:18787/rpc')
   })
 
   it('normalizes phone agent default names without touching custom names', () => {
@@ -438,11 +496,11 @@ describe('mergeKunRuntimeSettings', () => {
     const current = defaultKunRuntimeSettings()
     const next = mergeKunRuntimeSettings(current, {
       model: 'deepseek-reasoner',
-      port: 9000,
+      port: 19000,
       tokenEconomyMode: true
     })
     expect(next.model).toBe('deepseek-reasoner')
-    expect(next.port).toBe(9000)
+    expect(next.port).toBe(19000)
     expect(next.tokenEconomyMode).toBe(true)
     expect(next.tokenEconomy.enabled).toBe(true)
     expect(next.baseUrl).toBe(current.baseUrl)
@@ -488,6 +546,38 @@ describe('mergeKunRuntimeSettings', () => {
     expect(next.mcpSearch.mode).toBe('search')
     expect(next.mcpSearch.topKDefault).toBe(3)
     expect(next.mcpSearch.topKMax).toBe(current.mcpSearch.topKMax)
+  })
+
+  it('preserves workspace-write when normalizing unified tool permission settings', () => {
+    const current = defaultKunRuntimeSettings()
+    const next = mergeKunRuntimeSettings(current, {
+      approvalPolicy: 'on-request',
+      sandboxMode: 'workspace-write'
+    })
+
+    expect(next.approvalPolicy).toBe('on-request')
+    expect(next.sandboxMode).toBe('workspace-write')
+    expect(kunToolPermissionModeFromSettings(next)).toBe('workspace-write')
+  })
+
+  it('preserves non-UI approval/sandbox combinations instead of canonicalizing them', () => {
+    // The unified 5-mode selector cannot represent every approvalPolicy/sandboxMode
+    // combination. mergeKunRuntimeSettings must NOT snap these to a canonical mode,
+    // otherwise it would silently weaken a user's saved security posture.
+    const current = defaultKunRuntimeSettings()
+
+    const neverReadOnly = mergeKunRuntimeSettings(current, {
+      approvalPolicy: 'never',
+      sandboxMode: 'read-only'
+    })
+    expect(neverReadOnly.approvalPolicy).toBe('never')
+    expect(neverReadOnly.sandboxMode).toBe('read-only')
+
+    const suggest = mergeKunRuntimeSettings(current, { approvalPolicy: 'suggest' })
+    expect(suggest.approvalPolicy).toBe('suggest')
+
+    const externalSandbox = mergeKunRuntimeSettings(current, { sandboxMode: 'external-sandbox' })
+    expect(externalSandbox.sandboxMode).toBe('external-sandbox')
   })
 
   it('deep-merges advanced Kun settings', () => {
@@ -725,7 +815,7 @@ describe('legacy Kun defaults migration', () => {
       agentProvider: 'deepseek-runtime',
       deepseek: {
         binaryPath: '/usr/local/bin/deepseek',
-        port: 8787,
+        port: 18787,
         autoStart: false,
         apiKey: 'sk-old',
         baseUrl: 'https://api.deepseek.com',
@@ -743,7 +833,7 @@ describe('legacy Kun defaults migration', () => {
 
     expect(normalized.agents.kun).toEqual(expect.objectContaining({
       binaryPath: '',
-      port: 8787,
+      port: 18787,
       autoStart: false,
       runtimeToken: 'old-token',
       approvalPolicy: 'on-request',
@@ -757,16 +847,72 @@ describe('legacy Kun defaults migration', () => {
     expect('deepseek' in normalized).toBe(false)
   })
 
+  it('keeps legacy workspace-write permissions during Kun migration', () => {
+    const normalized = normalizeAppSettings({
+      version: 1,
+      locale: 'zh',
+      theme: 'dark',
+      uiFontScale: 'small',
+      agentProvider: 'deepseek-runtime',
+      deepseek: {
+        binaryPath: '/usr/local/bin/deepseek',
+        port: 8787,
+        autoStart: false,
+        apiKey: 'sk-old',
+        baseUrl: 'https://api.deepseek.com',
+        runtimeToken: 'old-token',
+        extraCorsOrigins: [],
+        approvalPolicy: 'on-request',
+        sandboxMode: 'workspace-write'
+      },
+      workspaceRoot: '/tmp/legacy-workspace',
+      log: { enabled: true, retentionDays: 2 },
+      notifications: { turnComplete: true },
+      guiUpdate: { channel: 'frontier' },
+      claw: defaultClawSettings()
+    } as unknown as AppSettingsV1)
+
+    expect(normalized.agents.kun).toEqual(expect.objectContaining({
+      approvalPolicy: 'on-request',
+      sandboxMode: 'workspace-write'
+    }))
+  })
+
   it('moves the legacy local HTTP default port to the Kun default port', () => {
     const migrated = migrateLegacyAppSettings({
       version: 1,
       agentProvider: 'deepseek-runtime',
       deepseek: {
+        // 这里必须保留旧版真实写入值, 用于升级到当前 Kun 默认端口。
         port: 7878
       }
     } as unknown as Parameters<typeof migrateLegacyAppSettings>[0])
 
-    expect(migrated.agents?.kun?.port).toBe(8899)
+    expect(migrated.agents?.kun?.port).toBe(18899)
+  })
+
+  it('moves previous Kun local default ports out of the low range', () => {
+    const normalized = normalizeAppSettings({
+      ...settings(),
+      agents: { kun: { ...defaultKunRuntimeSettings(), port: 8899 } },
+      claw: {
+        ...defaultClawSettings(),
+        im: { ...defaultClawSettings().im, port: 8787 }
+      },
+      schedule: {
+        ...defaultScheduleSettings(),
+        internal: { ...defaultScheduleSettings().internal, port: 8788 }
+      },
+      workflow: {
+        ...defaultWorkflowSettings(),
+        webhookPort: 8799
+      }
+    })
+
+    expect(normalized.agents.kun.port).toBe(18899)
+    expect(normalized.claw.im.port).toBe(18787)
+    expect(normalized.schedule.internal.port).toBe(18788)
+    expect(normalized.workflow.webhookPort).toBe(18799)
   })
 
   it('fills image generation defaults for settings stored before the feature existed', () => {
@@ -938,7 +1084,7 @@ describe('schedule settings', () => {
 
     expect(merged.enabled).toBe(true)
     expect(merged.defaultWorkspaceRoot).toBe('/tmp/schedule')
-    expect(merged.internal.port).toBe(1024)
+    expect(merged.internal.port).toBe(10000)
     expect(merged.internal.secret).toBe('secret')
     expect(merged.tasks[0].schedule.everyMinutes).toBe(1)
     expect(merged.tasks[0].schedule.timeOfDay).toBe('09:00')

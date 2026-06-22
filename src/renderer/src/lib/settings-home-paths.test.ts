@@ -7,6 +7,7 @@ import {
   defaultScheduleSettings,
   defaultWorkflowSettings,
   defaultWriteSettings,
+  defaultTerminalSettings,
   type AppSettingsV1,
   type ClawImChannelV1,
   type ScheduledTaskV1
@@ -138,6 +139,7 @@ function settings(): AppSettingsV1 {
       tasks: [scheduledTask('~/schedule/task-1')]
     },
     workflow: defaultWorkflowSettings(),
+    terminal: defaultTerminalSettings(),
     guiUpdate: { channel: 'stable' },
     codePromptPrefix: '',
     disabledSkillIds: []

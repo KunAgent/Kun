@@ -279,7 +279,7 @@ describe('JsonSettingsStore', () => {
       JSON.stringify({
         version: 1,
         agentProvider: 'deepseek-runtime',
-        deepseek: { port: 8787 }
+        deepseek: { port: 18787 }
       }),
       'utf8'
     )
@@ -287,7 +287,7 @@ describe('JsonSettingsStore', () => {
     const store = new JsonSettingsStore(userDataDir)
     const loaded = await store.load()
 
-    expect(loaded.agents.kun.port).toBe(8787)
+    expect(loaded.agents.kun.port).toBe(18787)
   })
 
   it('backs up invalid JSON and replaces it with defaults', async () => {

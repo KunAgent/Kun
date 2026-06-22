@@ -82,6 +82,7 @@ function readRuntimeError(body: string, fallback: string): RuntimeError {
 
 function normalizeApprovalPolicy(value: string | undefined): NormalizedThread['approvalPolicy'] {
   switch (value) {
+    case 'always':
     case 'auto':
     case 'on-request':
     case 'untrusted':
@@ -894,6 +895,7 @@ export class KunRuntimeProvider implements AgentProvider {
         case 'on-request':
         case 'suggest':
         case 'untrusted':
+        case 'always':
           break
       }
     } catch {

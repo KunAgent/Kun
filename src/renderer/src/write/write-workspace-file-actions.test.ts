@@ -129,6 +129,38 @@ describe('write workspace file actions', () => {
     expect(get().fileError).toBe('rename failed')
   })
 
+  it('keeps markdown files visible when renaming without an extension', async () => {
+    const renameWorkspaceEntry = vi.fn(async () => ({
+      ok: true as const,
+      path: '/tmp/write/final.md',
+      previousPath: '/tmp/write/draft.md',
+      renamedAt: '2026-06-21T00:00:00.000Z'
+    }))
+    installDsGui({
+      renameWorkspaceEntry,
+      listWorkspaceDirectory: vi.fn(async () => ({
+        ok: true as const,
+        root: '/tmp/write',
+        entries: [{
+          name: 'final.md',
+          path: '/tmp/write/final.md',
+          type: 'file' as const,
+          ext: '.md'
+        }]
+      }))
+    })
+    const { actions } = createHarness()
+
+    const result = await actions.renameEntry('/tmp/write', '/tmp/write/draft.md', 'final')
+
+    expect(result).toBe('/tmp/write/final.md')
+    expect(renameWorkspaceEntry).toHaveBeenCalledWith({
+      workspaceRoot: '/tmp/write',
+      path: '/tmp/write/draft.md',
+      newName: 'final.md'
+    })
+  })
+
   it('returns false and reports file errors when delete IPC throws', async () => {
     installDsGui({
       deleteWorkspaceEntry: vi.fn(async () => {

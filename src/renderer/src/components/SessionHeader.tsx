@@ -7,6 +7,7 @@ import { formatRelativeTime } from '../lib/format-relative-time'
 import { workspaceLabelFromPath } from '../lib/workspace-label'
 import {
   formatCompactNumber,
+  formatCacheMissReason,
   formatCost,
   formatPercent,
   primaryCacheHitRate,
@@ -204,8 +205,12 @@ export function SessionHeader({ compact = false, className = '' }: Props): React
                       {
                         cache: formatPercent(threadUsage.cacheHitRate),
                         latestCache: formatPercent(threadUsage.lastTurnCacheHitRate),
+                        cacheableCache: formatPercent(threadUsage.lastTurnCacheableHitRate ?? null),
+                        totalInputCache: formatPercent(threadUsage.lastTurnTotalInputHitRate ?? null),
                         cached: formatCompactNumber(threadUsage.cachedTokens),
-                        miss: formatCompactNumber(threadUsage.cacheMissTokens)
+                        miss: formatCompactNumber(threadUsage.cacheMissTokens),
+                        reasons: threadUsage.cacheMissReasons?.map(formatCacheMissReason).join(', ') || '-',
+                        suggestions: threadUsage.cacheSuggestions?.join(' ') || '-'
                       }
                     )}
                   >

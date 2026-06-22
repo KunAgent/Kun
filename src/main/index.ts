@@ -27,10 +27,13 @@ import {
   mergeModelProviderSettings,
   mergeScheduleSettings,
   mergeWriteSettings,
+  mergeTerminalSettings,
+  MIN_KUN_LOCAL_PORT,
   normalizeAppSettings,
   normalizeAppBehaviorSettings,
   normalizeKeyboardShortcuts,
   resolveKunRuntimeSettings,
+  resolveTerminalColorMode,
   type AppBehaviorConfigV1,
   type AppSettingsPatch,
   type AppSettingsV1,
@@ -1192,8 +1195,8 @@ function runtimeStartupConfigChanged(prev: AppSettingsV1, next: AppSettingsV1): 
  */
 function validateRuntimeSettingsForApply(next: AppSettingsV1): string | null {
   const runtime = resolveKunRuntimeSettings(next)
-  if (!Number.isInteger(runtime.port) || runtime.port < 1 || runtime.port > 65_535) {
-    return `Kun port must be an integer between 1 and 65535 (got ${String(runtime.port)})`
+  if (!Number.isInteger(runtime.port) || runtime.port < MIN_KUN_LOCAL_PORT || runtime.port > 65_535) {
+    return `Kun port must be an integer between ${MIN_KUN_LOCAL_PORT} and 65535 (got ${String(runtime.port)})`
   }
   const baseUrl = (runtime.baseUrl ?? '').trim()
   if (baseUrl) {
@@ -1489,6 +1492,7 @@ app.whenReady().then(async () => {
       claw: mergeClawSettings(prev.claw, partial.claw),
       schedule: mergeScheduleSettings(prev.schedule, partial.schedule),
       workflow: mergeWorkflowSettings(prev.workflow, partial.workflow),
+      terminal: mergeTerminalSettings(prev.terminal, partial.terminal),
       guiUpdate: { ...prev.guiUpdate, ...(partial.guiUpdate ?? {}) }
     })
     if (prev.log.enabled !== next.log.enabled || prev.log.retentionDays !== next.log.retentionDays) {
@@ -1570,7 +1574,12 @@ app.whenReady().then(async () => {
   })
 
   registerRuntimeSseIpc({ ipcMain, store, ensureRuntime, logError })
-  registerTerminalPtyIpc({ ipcMain, getMainWindow: () => mainWindow, logError })
+  registerTerminalPtyIpc({
+    ipcMain,
+    getMainWindow: () => mainWindow,
+    logError,
+    getTerminalColorMode: async () => resolveTerminalColorMode(await store.load())
+  })
   traceStartup('ipc registration:done')
 
   createWindow({ suppressInitialShow: shouldStartHidden(initial) })

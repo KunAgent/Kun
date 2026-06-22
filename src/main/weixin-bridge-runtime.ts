@@ -130,7 +130,7 @@ async function resolveRuntimeContext(): Promise<WeixinBridgeRuntimeContext> {
   return runtimeContextProvider
     ? runtimeContextProvider()
     : {
-        webhookUrl: 'http://127.0.0.1:8787/claw/im',
+        webhookUrl: 'http://127.0.0.1:18787/claw/im',
         webhookSecret: '',
         channelId: ''
       }

@@ -114,7 +114,7 @@ describe('subscribeRuntimeThreadEvents', () => {
     const ac = new AbortController()
     fetchMock.mockResolvedValueOnce(new Response('', { status: 404 }))
     await subscribeRuntimeThreadEvents({
-      baseUrl: 'http://127.0.0.1:8788',
+      baseUrl: 'http://127.0.0.1:18788',
       threadId: 'thr_1',
       headers: { Authorization: 'Bearer x' },
       onEvent: vi.fn(),
@@ -138,7 +138,7 @@ describe('subscribeRuntimeThreadEvents', () => {
         .mockResolvedValue(new Response('', { status: 503 }))
       const onEvent = vi.fn()
       const handle = await subscribeRuntimeThreadEvents({
-        baseUrl: 'http://127.0.0.1:8788',
+        baseUrl: 'http://127.0.0.1:18788',
         threadId: 'thr_1',
         headers: {},
         onEvent,
@@ -158,7 +158,7 @@ describe('subscribeRuntimeThreadEvents', () => {
     const ac = new AbortController()
     fetchMock.mockResolvedValueOnce(new Response('', { status: 401 }))
     await subscribeRuntimeThreadEvents({
-      baseUrl: 'http://127.0.0.1:8788',
+      baseUrl: 'http://127.0.0.1:18788',
       threadId: 'thr_1',
       headers: {},
       onEvent: vi.fn(),

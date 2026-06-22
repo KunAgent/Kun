@@ -37,6 +37,8 @@ export function createBuiltinLocalTool(
       return createFindLocalTool(options.find)
     case 'ls':
       return createLsLocalTool(options.ls)
+    case 'lsp':
+      return createLspLocalTool()
   }
 }
 
@@ -101,7 +103,8 @@ export function buildBuiltinLocalToolRecord(
     write: createWriteLocalTool(options.write),
     grep: createGrepLocalTool(options.grep),
     find: createFindLocalTool(options.find),
-    ls: createLsLocalTool(options.ls)
+    ls: createLsLocalTool(options.ls),
+    lsp: createLspLocalTool()
   }
 }
 

@@ -1,14 +1,16 @@
 import type { ReactElement } from 'react'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   Clock3,
   FileQuestion,
   Focus,
   LayoutGrid,
+  Moon,
   Plus,
   Settings,
   Smartphone,
+  Sun,
   Workflow
 } from 'lucide-react'
 import type { NormalizedThread } from '../../agent/types'
@@ -28,7 +30,8 @@ import { SidebarProjectsSection } from './SidebarProjectsSection'
 import { WorkspaceModeTabs } from './WorkspaceModeTabs'
 import {
   SidebarCommandRow,
-  SidebarFrame
+  SidebarFrame,
+  SidebarIconButton
 } from '../sidebar/SidebarPrimitives'
 
 type Props = {
@@ -52,6 +55,7 @@ type Props = {
   onOpenRequirementDraft: (draft: SddDraft) => void
   onOpenSettings: (section?: SettingsRouteSection) => void
   onOpenPlugins: () => void
+  onToggleTheme: () => void
   focusModeEnabled: boolean
   onFocusModeChange: (enabled: boolean) => void
   onToggleConnectPhone: () => void
@@ -82,6 +86,7 @@ export function Sidebar({
   onOpenRequirementDraft,
   onOpenSettings,
   onOpenPlugins,
+  onToggleTheme,
   focusModeEnabled,
   onFocusModeChange,
   onToggleConnectPhone,
@@ -91,6 +96,18 @@ export function Sidebar({
   onWorkflowOpen
 }: Props): ReactElement {
   const { t, i18n } = useTranslation('common')
+  const [isDarkMode, setIsDarkMode] = useState(
+    () => typeof document !== 'undefined' && document.documentElement.getAttribute('data-theme') === 'dark'
+  )
+
+  useEffect(() => {
+    const observer = new MutationObserver(() => {
+      setIsDarkMode(document.documentElement.getAttribute('data-theme') === 'dark')
+    })
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] })
+    return () => observer.disconnect()
+  }, [])
+
   const workspaceRoot = useChatStore((s) => s.workspaceRoot)
   const codeWorkspaceRoots = useChatStore((s) => s.codeWorkspaceRoots)
   const chooseWorkspace = useChatStore((s) => s.chooseWorkspace)
@@ -139,12 +156,27 @@ export function Sidebar({
             active={connectPhoneSidebarOpen}
             variant="footer"
           />
-          <SidebarCommandRow
-            icon={<Settings className="h-4 w-4" strokeWidth={1.75} />}
-            label={t('settings')}
-            onClick={() => onOpenSettings('general')}
-            variant="footer"
-          />
+          <div className="flex items-center gap-1">
+            <div className="min-w-0 flex-1">
+              <SidebarCommandRow
+                icon={<Settings className="h-4 w-4" strokeWidth={1.75} />}
+                label={t('settings')}
+                onClick={() => onOpenSettings('general')}
+                variant="footer"
+              />
+            </div>
+            <SidebarIconButton
+              title={isDarkMode ? t('switchToLight') : t('switchToDark')}
+              ariaLabel={t('toggleTheme')}
+              onClick={onToggleTheme}
+            >
+              {isDarkMode ? (
+                <Sun className="h-4 w-4" strokeWidth={1.75} />
+              ) : (
+                <Moon className="h-4 w-4" strokeWidth={1.75} />
+              )}
+            </SidebarIconButton>
+          </div>
         </div>
       }
     >

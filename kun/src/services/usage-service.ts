@@ -1,5 +1,9 @@
 import { UsageCounter } from '../telemetry/usage-counter.js'
 import { CacheTelemetry } from '../telemetry/cache-telemetry.js'
+import {
+  diagnoseCacheUsage,
+  type CacheRequestSignature
+} from '../cache/cache-diagnostics.js'
 import type {
   DailyUsageBucket,
   DailyUsageCounters,
@@ -19,10 +23,16 @@ import type {
 export class UsageService {
   private readonly counter = new UsageCounter()
   private readonly cache = new CacheTelemetry()
+  private readonly cacheSignatures = new Map<string, CacheRequestSignature>()
 
-  record(threadId: string, usage: UsageSnapshot): UsageSnapshot {
-    this.cache.ingest(threadId, usage)
-    return this.counter.record(threadId, usage)
+  record(
+    threadId: string,
+    usage: UsageSnapshot,
+    signature?: CacheRequestSignature
+  ): UsageSnapshot {
+    const enriched = signature ? this.withCacheDiagnostics(threadId, usage, signature) : usage
+    this.cache.ingest(threadId, enriched)
+    return this.counter.record(threadId, enriched)
   }
 
   recordTokenEconomySavings(
@@ -39,6 +49,7 @@ export class UsageService {
     const seeded = this.counter.seed(threadId, usage)
     this.cache.reset(threadId)
     this.cache.ingest(threadId, seeded)
+    this.cacheSignatures.delete(threadId)
     return seeded
   }
 
@@ -57,6 +68,31 @@ export class UsageService {
   reset(threadId?: string): void {
     this.counter.reset(threadId)
     this.cache.reset(threadId)
+    if (threadId === undefined) this.cacheSignatures.clear()
+    else this.cacheSignatures.delete(threadId)
+  }
+
+  private withCacheDiagnostics(
+    threadId: string,
+    usage: UsageSnapshot,
+    signature: CacheRequestSignature
+  ): UsageSnapshot {
+    const diagnostic = diagnoseCacheUsage({
+      usage,
+      previous: this.cacheSignatures.get(threadId),
+      current: signature
+    })
+    this.cacheSignatures.set(threadId, {
+      ...signature,
+      activeSkillIds: [...signature.activeSkillIds]
+    })
+    return {
+      ...usage,
+      cacheableTokenHitRate: diagnostic.cacheableTokenHitRate,
+      totalInputTokenHitRate: diagnostic.totalInputTokenHitRate,
+      cacheMissReasons: diagnostic.reasons,
+      cacheSuggestions: diagnostic.suggestions
+    }
   }
 }
 
@@ -353,6 +389,10 @@ function emptyThreadBucket(threadId: string): ThreadUsageAccumulator {
     turns: 0,
     cache_hit_rate: null,
     last_turn_cache_hit_rate: null,
+    last_turn_cacheable_hit_rate: null,
+    last_turn_total_input_hit_rate: null,
+    last_cache_miss_reasons: [],
+    last_cache_suggestions: [],
     hasCacheTelemetry: false,
     lastCompletedAt: ''
   }
@@ -409,7 +449,11 @@ function finalizeThreadBucket(bucket: ThreadUsageAccumulator): ThreadUsageBucket
     token_economy_savings_cny: finalized.token_economy_savings_cny,
     turns: finalized.turns,
     cache_hit_rate: finalized.cache_hit_rate,
-    last_turn_cache_hit_rate: bucket.last_turn_cache_hit_rate
+    last_turn_cache_hit_rate: bucket.last_turn_cache_hit_rate,
+    last_turn_cacheable_hit_rate: bucket.last_turn_cacheable_hit_rate,
+    last_turn_total_input_hit_rate: bucket.last_turn_total_input_hit_rate,
+    last_cache_miss_reasons: bucket.last_cache_miss_reasons,
+    last_cache_suggestions: bucket.last_cache_suggestions
   }
 }
 
@@ -447,6 +491,10 @@ export function buildThreadUsageResponse(records: readonly ThreadUsageRecord[]):
     if (record.completedAt >= bucket.lastCompletedAt) {
       bucket.lastCompletedAt = record.completedAt
       bucket.last_turn_cache_hit_rate = record.usage.cacheHitRate ?? null
+      bucket.last_turn_cacheable_hit_rate = record.usage.cacheableTokenHitRate ?? null
+      bucket.last_turn_total_input_hit_rate = record.usage.totalInputTokenHitRate ?? null
+      bucket.last_cache_miss_reasons = record.usage.cacheMissReasons ?? []
+      bucket.last_cache_suggestions = record.usage.cacheSuggestions ?? []
     }
     buckets.set(record.threadId, bucket)
   }

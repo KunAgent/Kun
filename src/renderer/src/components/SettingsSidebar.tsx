@@ -1,7 +1,7 @@
 import type { Dispatch, ReactElement, SetStateAction } from 'react'
-import { Archive, AudioLines, Bot, BrainCircuit, GitBranch, Bug, ChevronLeft, Globe, Keyboard, Mic, PencilLine, RefreshCw, ServerCog, Settings, ShieldCheck, Smartphone, Sparkles } from 'lucide-react'
+import { Archive, AudioLines, Bot, BrainCircuit, GitBranch, Bug, ChevronLeft, Globe, Keyboard, Mic, PencilLine, RefreshCw, ServerCog, Settings, Smartphone, Sparkles, TerminalSquare } from 'lucide-react'
 
-type SettingsCategory = 'general' | 'providers' | 'write' | 'mediaGeneration' | 'speechToText' | 'agents' | 'archives' | 'permissions' | 'worktree' | 'memory' | 'shortcuts' | 'easterEgg' | 'claw' | 'updates' | 'debug'
+type SettingsCategory = 'general' | 'providers' | 'write' | 'mediaGeneration' | 'speechToText' | 'agents' | 'archives' | 'permissions' | 'worktree' | 'memory' | 'shortcuts' | 'easterEgg' | 'claw' | 'updates' | 'debug' | 'terminal'
 
 export function SettingsSidebar({
   category,
@@ -93,15 +93,6 @@ export function SettingsSidebar({
         <button
           type="button"
           data-cursor-spotlight-target
-          className={catCls('permissions')}
-          onClick={() => setCategory('permissions')}
-        >
-          <ShieldCheck className="h-4 w-4 shrink-0 opacity-70" strokeWidth={1.75} />
-          {t('permissions')}
-        </button>
-        <button
-          type="button"
-          data-cursor-spotlight-target
           className={catCls('archives')}
           onClick={() => setCategory('archives')}
         >
@@ -161,6 +152,15 @@ export function SettingsSidebar({
         >
           <Smartphone className="h-4 w-4 shrink-0 opacity-70" strokeWidth={1.75} />
           {t('claw')}
+        </button>
+        <button
+          type="button"
+          data-cursor-spotlight-target
+          className={catCls('terminal')}
+          onClick={() => setCategory('terminal')}
+        >
+          <TerminalSquare className="h-4 w-4 shrink-0 opacity-70" strokeWidth={1.75} />
+          {t('terminal')}
         </button>
         <button
           type="button"

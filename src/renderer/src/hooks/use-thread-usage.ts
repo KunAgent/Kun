@@ -11,6 +11,10 @@ export type ThreadUsageSummary = {
   cacheHitRate: number | null
   /** Cache hit rate of the most recent turn; preferred for the usage chip. */
   lastTurnCacheHitRate: number | null
+  lastTurnCacheableHitRate?: number | null
+  lastTurnTotalInputHitRate?: number | null
+  cacheMissReasons?: string[]
+  cacheSuggestions?: string[]
   totalTokens: number
   costUsd: number | null
   costCny: number | null
@@ -84,6 +88,33 @@ export function primaryCacheHitRate(
   return usage.lastTurnCacheHitRate ?? usage.cacheHitRate
 }
 
+export function formatCacheMissReason(reason: string): string {
+  switch (reason) {
+    case 'cold_request':
+      return 'cold request'
+    case 'model_changed':
+      return 'model changed'
+    case 'provider_changed':
+      return 'provider changed'
+    case 'endpoint_changed':
+      return 'endpoint changed'
+    case 'stable_prefix_changed':
+      return 'stable prefix changed'
+    case 'tool_catalog_changed':
+      return 'tool catalog changed'
+    case 'skills_changed':
+      return 'skills changed'
+    case 'cache_ttl_unknown':
+      return 'cache TTL/provider reuse unknown'
+    case 'provider_cache_miss':
+      return 'provider reported cache miss'
+    case 'provider_metrics_unavailable':
+      return 'provider cache metrics unavailable'
+    default:
+      return reason.replace(/_/g, ' ')
+  }
+}
+
 export async function loadThreadUsage(threadId: string): Promise<ThreadUsageSummary | null> {
   if (typeof window.kunGui?.runtimeRequest !== 'function') return null
   const params = new URLSearchParams({
@@ -113,6 +144,14 @@ export async function loadThreadUsage(threadId: string): Promise<ThreadUsageSumm
       : 0
   const cacheHitRate = bucketCacheHitRate
   const lastTurnCacheHitRate = usageRate(bucket.last_turn_cache_hit_rate)
+  const lastTurnCacheableHitRate = usageRate(bucket.last_turn_cacheable_hit_rate)
+  const lastTurnTotalInputHitRate = usageRate(bucket.last_turn_total_input_hit_rate)
+  const cacheMissReasons = Array.isArray(bucket.last_cache_miss_reasons)
+    ? bucket.last_cache_miss_reasons.filter((value): value is string => typeof value === 'string')
+    : []
+  const cacheSuggestions = Array.isArray(bucket.last_cache_suggestions)
+    ? bucket.last_cache_suggestions.filter((value): value is string => typeof value === 'string')
+    : []
   const totalTokens = inputTokens + outputTokens
   const rawCostUsd = hasFiniteNumber(bucket, 'cost_usd') ? usageNumber(bucket.cost_usd) : null
   const rawCostCny = hasFiniteNumber(bucket, 'cost_cny') ? usageNumber(bucket.cost_cny) : null
@@ -136,6 +175,10 @@ export async function loadThreadUsage(threadId: string): Promise<ThreadUsageSumm
     cacheMissTokens,
     cacheHitRate,
     lastTurnCacheHitRate,
+    lastTurnCacheableHitRate,
+    lastTurnTotalInputHitRate,
+    cacheMissReasons,
+    cacheSuggestions,
     totalTokens,
     costUsd,
     costCny,

@@ -33,7 +33,7 @@ type HtmlToDocxConverter = (
   headerHtmlString?: string | null,
   documentOptions?: HtmlToDocxDocumentOptions,
   footerHtmlString?: string | null
-) => Promise<ArrayBuffer | Blob>
+) => Promise<ArrayBuffer | Blob | Buffer | Uint8Array>
 
 const require = createRequire(import.meta.url)
 const htmlToDocx = require('html-to-docx') as HtmlToDocxConverter
@@ -440,7 +440,13 @@ export async function copyWriteDocumentAsRichText(
   }
 }
 
-async function bufferFromDocxResult(result: ArrayBuffer | Blob): Promise<Buffer> {
+async function bufferFromDocxResult(result: ArrayBuffer | Blob | Buffer | Uint8Array): Promise<Buffer> {
+  if (Buffer.isBuffer(result)) {
+    return result
+  }
+  if (ArrayBuffer.isView(result)) {
+    return Buffer.from(result.buffer, result.byteOffset, result.byteLength)
+  }
   if (typeof ArrayBuffer !== 'undefined' && result instanceof ArrayBuffer) {
     return Buffer.from(new Uint8Array(result))
   }

@@ -256,6 +256,10 @@ export function isKunChildRunning(): boolean {
   return child !== null && child.exitCode === null && child.signalCode === null
 }
 
+function isCurrentKunChildPid(pid: number): boolean {
+  return Boolean(child?.pid === pid && isKunChildRunning())
+}
+
 export function startKunChild(settings: AppSettingsV1): Promise<void> {
   if (kunStartPromise) return kunStartPromise
   const runtime = resolveKunRuntimeSettings(settings)
@@ -1187,6 +1191,7 @@ async function killStaleKunOnPort(port: number): Promise<boolean> {
   const pids = await listListeningPidsOnPort(port)
   let reclaimed = false
   for (const pid of pids) {
+    if (isCurrentKunChildPid(pid)) continue
     let command = ''
     try {
       command = await processCommandLine(pid)

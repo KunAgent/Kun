@@ -1,8 +1,8 @@
-import { app, shell } from 'electron'
+import { app, nativeImage, shell } from 'electron'
 import { execFile } from 'node:child_process'
 import { readFile, stat, unlink } from 'node:fs/promises'
 import { homedir, tmpdir } from 'node:os'
-import { basename, dirname, isAbsolute, join } from 'node:path'
+import { basename, dirname, extname, isAbsolute, join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { promisify } from 'node:util'
 import type {
@@ -27,6 +27,8 @@ type EditorCandidate = {
   macAppPaths?: string[]
   macAppPathResolver?: () => Promise<string | undefined>
   winAppPaths?: string[]
+  iconNames?: string[]
+  linuxDesktopIds?: string[]
   lineStyle?: EditorLineStyle
   alwaysAvailable?: boolean
   openDirectory?: boolean
@@ -37,12 +39,15 @@ type ResolvedEditor = EditorInfo & {
   command?: string
   macAppName?: string
   appPath?: string
+  iconPaths?: string[]
   lineStyle?: EditorLineStyle
   openDirectory?: boolean
 }
 
 const DEFAULT_EDITOR_ID = 'system'
 const EDITOR_ICON_SOURCE_PX = 64
+const LINUX_ICON_SIZES = ['512x512', '256x256', '128x128', '64x64', '48x48', '32x32', '24x24', '16x16']
+const ICON_IMAGE_EXTENSIONS = ['.png', '.ico', '.jpg', '.jpeg', '.webp', '.svg']
 
 const EDITOR_CANDIDATES: EditorCandidate[] = [
   {
@@ -64,6 +69,8 @@ const EDITOR_CANDIDATES: EditorCandidate[] = [
       join(process.env.LOCALAPPDATA ?? '', 'Programs', 'Microsoft VS Code', 'Code.exe'),
       join(process.env.PROGRAMFILES ?? '', 'Microsoft VS Code', 'Code.exe')
     ],
+    iconNames: ['code'],
+    linuxDesktopIds: ['code', 'com.visualstudio.code'],
     lineStyle: 'vscode'
   },
   {
@@ -82,6 +89,8 @@ const EDITOR_CANDIDATES: EditorCandidate[] = [
       join(process.env.LOCALAPPDATA ?? '', 'Programs', 'Cursor', 'Cursor.exe'),
       join(process.env.PROGRAMFILES ?? '', 'Cursor', 'Cursor.exe')
     ],
+    iconNames: ['cursor'],
+    linuxDesktopIds: ['cursor', 'Cursor'],
     lineStyle: 'vscode'
   },
   {
@@ -100,6 +109,8 @@ const EDITOR_CANDIDATES: EditorCandidate[] = [
       join(process.env.LOCALAPPDATA ?? '', 'Programs', 'Windsurf', 'Windsurf.exe'),
       join(process.env.PROGRAMFILES ?? '', 'Windsurf', 'Windsurf.exe')
     ],
+    iconNames: ['windsurf'],
+    linuxDesktopIds: ['windsurf', 'Windsurf'],
     lineStyle: 'vscode'
   },
   {
@@ -118,6 +129,8 @@ const EDITOR_CANDIDATES: EditorCandidate[] = [
       join(process.env.LOCALAPPDATA ?? '', 'Programs', 'Antigravity', 'Antigravity.exe'),
       join(process.env.PROGRAMFILES ?? '', 'Antigravity', 'Antigravity.exe')
     ],
+    iconNames: ['antigravity'],
+    linuxDesktopIds: ['antigravity', 'Antigravity'],
     lineStyle: 'vscode'
   },
   {
@@ -128,6 +141,12 @@ const EDITOR_CANDIDATES: EditorCandidate[] = [
     commonCommandPaths: ['/usr/local/bin/zed', '/opt/homebrew/bin/zed'],
     macAppName: 'Zed',
     macAppPaths: ['/Applications/Zed.app', join(homedir(), 'Applications/Zed.app')],
+    winAppPaths: [
+      join(process.env.LOCALAPPDATA ?? '', 'Programs', 'Zed', 'Zed.exe'),
+      join(process.env.PROGRAMFILES ?? '', 'Zed', 'Zed.exe')
+    ],
+    iconNames: ['zed', 'dev.zed.Zed'],
+    linuxDesktopIds: ['zed', 'dev.zed.Zed'],
     lineStyle: 'zed'
   },
   {
@@ -141,6 +160,12 @@ const EDITOR_CANDIDATES: EditorCandidate[] = [
       '/Applications/Sublime Text.app',
       join(homedir(), 'Applications/Sublime Text.app')
     ],
+    winAppPaths: [
+      join(process.env.PROGRAMFILES ?? '', 'Sublime Text', 'sublime_text.exe'),
+      join(process.env.LOCALAPPDATA ?? '', 'Programs', 'Sublime Text', 'sublime_text.exe')
+    ],
+    iconNames: ['sublime_text', 'sublime-text'],
+    linuxDesktopIds: ['sublime_text', 'sublime-text'],
     lineStyle: 'sublime'
   },
   {
@@ -275,6 +300,128 @@ async function resolveXcodeAppPath(): Promise<string | undefined> {
   }
 }
 
+function iconResourceFileNames(iconNames: string[], platform: NodeJS.Platform): string[] {
+  const names = iconNames.flatMap((iconName) => {
+    if (platform === 'win32') {
+      return [
+        `${iconName}_256x256.png`,
+        `${iconName}_150x150.png`,
+        `${iconName}_70x70.png`,
+        `${iconName}.png`,
+        `${iconName}.ico`
+      ]
+    }
+    return [`${iconName}.png`, `${iconName}.svg`, `${iconName}.ico`]
+  })
+
+  return [...new Set([...names, 'icon.png', 'icon.ico', 'app.png', 'app.ico'])]
+}
+
+function commandResourceIconPaths(command: string | undefined, iconNames: string[] = []): string[] {
+  if (!command || iconNames.length === 0) return []
+
+  const commandDir = dirname(command)
+  const resourceDirs =
+    process.platform === 'win32'
+      ? [
+          join(commandDir, 'resources', 'app', 'resources', 'win32'),
+          join(commandDir, 'resources', 'app', 'build'),
+          join(commandDir, 'resources'),
+          commandDir
+        ]
+      : [
+          join(commandDir, 'resources', 'app', 'resources', 'linux'),
+          join(commandDir, 'resources', 'app', 'build'),
+          join(commandDir, 'resources')
+        ]
+
+  return resourceDirs.flatMap((dir) =>
+    iconResourceFileNames(iconNames, process.platform).map((fileName) => join(dir, fileName))
+  )
+}
+
+function linuxIconNamePaths(iconName: string): string[] {
+  if (isAbsolute(iconName)) {
+    const ext = extname(iconName)
+    return ext ? [iconName] : ICON_IMAGE_EXTENSIONS.map((extension) => `${iconName}${extension}`)
+  }
+
+  const home = homedir()
+  const roots = [
+    '/usr/share/icons/hicolor',
+    '/usr/local/share/icons/hicolor',
+    join(home, '.local', 'share', 'icons', 'hicolor'),
+    '/var/lib/flatpak/exports/share/icons/hicolor',
+    join(home, '.local', 'share', 'flatpak', 'exports', 'share', 'icons', 'hicolor')
+  ]
+  const themed = roots.flatMap((root) =>
+    LINUX_ICON_SIZES.flatMap((size) =>
+      ICON_IMAGE_EXTENSIONS.map((extension) => join(root, size, 'apps', `${iconName}${extension}`))
+    )
+  )
+  const pixmaps = ['/usr/share/pixmaps', '/usr/local/share/pixmaps'].flatMap((root) =>
+    ICON_IMAGE_EXTENSIONS.map((extension) => join(root, `${iconName}${extension}`))
+  )
+
+  return [...themed, ...pixmaps]
+}
+
+function linuxDesktopFilePaths(desktopIds: string[]): string[] {
+  const home = homedir()
+  const roots = [
+    '/usr/share/applications',
+    '/usr/local/share/applications',
+    join(home, '.local', 'share', 'applications'),
+    '/var/lib/flatpak/exports/share/applications',
+    join(home, '.local', 'share', 'flatpak', 'exports', 'share', 'applications')
+  ]
+
+  return roots.flatMap((root) => desktopIds.map((desktopId) => join(root, `${desktopId}.desktop`)))
+}
+
+async function linuxDesktopIconNames(desktopIds: string[] = []): Promise<string[]> {
+  if (process.platform !== 'linux' || desktopIds.length === 0) return []
+
+  const iconNames: string[] = []
+  for (const desktopPath of linuxDesktopFilePaths(desktopIds)) {
+    if (!(await pathExists(desktopPath))) continue
+    try {
+      const source = await readFile(desktopPath, 'utf8')
+      const iconLine = source
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .find((line) => line.startsWith('Icon='))
+      const iconName = iconLine?.slice('Icon='.length).trim()
+      if (iconName) iconNames.push(iconName)
+    } catch {
+      /* 忽略不可读的 desktop entry */
+    }
+  }
+
+  return iconNames
+}
+
+async function findFirstExistingIconPath(paths: string[]): Promise<string | undefined> {
+  for (const candidate of paths) {
+    if (await pathExists(candidate)) return candidate
+  }
+  return undefined
+}
+
+async function buildIconCandidatePaths(candidate: EditorCandidate, command: string | undefined): Promise<string[]> {
+  const iconNames = candidate.iconNames ?? []
+  const paths = commandResourceIconPaths(command, iconNames)
+
+  if (process.platform !== 'linux') return paths
+
+  const desktopIconNames = await linuxDesktopIconNames(candidate.linuxDesktopIds)
+  const linuxNames = [...new Set([...desktopIconNames, ...iconNames])]
+  return [
+    ...paths,
+    ...linuxNames.flatMap((iconName) => linuxIconNamePaths(iconName))
+  ]
+}
+
 async function resolveEditor(candidate: EditorCandidate): Promise<ResolvedEditor | null> {
   if (!candidateSupportsPlatform(candidate)) return null
 
@@ -288,6 +435,7 @@ async function resolveEditor(candidate: EditorCandidate): Promise<ResolvedEditor
       : undefined
   const available = Boolean(candidate.alwaysAvailable || command || macAppPath)
   if (!available) return null
+  const iconPaths = await buildIconCandidatePaths(candidate, command)
 
   return {
     id: candidate.id,
@@ -299,6 +447,7 @@ async function resolveEditor(candidate: EditorCandidate): Promise<ResolvedEditor
     command,
     macAppName: candidate.macAppName,
     appPath: macAppPath ?? (process.platform === 'win32' ? command : undefined),
+    iconPaths,
     lineStyle: candidate.lineStyle,
     openDirectory: candidate.openDirectory
   }
@@ -378,6 +527,29 @@ async function getFileIconDataUrl(targetPath: string): Promise<string | undefine
   }
 }
 
+async function explicitIconFileDataUrl(iconPath: string): Promise<string | undefined> {
+  const extension = extname(iconPath).toLowerCase()
+
+  try {
+    if (extension === '.svg') {
+      const buffer = await readFile(iconPath)
+      if (!buffer.length) return undefined
+      return `data:image/svg+xml;base64,${buffer.toString('base64')}`
+    }
+
+    if (extension === '.ico') {
+      const icon = nativeImage.createFromPath(iconPath)
+      return nativeImageToDataUrl(icon)
+    }
+
+    const buffer = await readFile(iconPath)
+    if (!buffer.length) return undefined
+    return nativeImageToDataUrl(nativeImage.createFromBuffer(buffer))
+  } catch {
+    return undefined
+  }
+}
+
 async function macAppBundleIconDataUrl(appPath: string): Promise<string | undefined> {
   const infoPlistPath = join(appPath, 'Contents', 'Info')
 
@@ -408,6 +580,12 @@ async function editorIconDataUrl(editor: ResolvedEditor): Promise<string | undef
     if (bundleIcon) return bundleIcon
   }
 
+  const explicitIconPath = await findFirstExistingIconPath(editor.iconPaths ?? [])
+  if (explicitIconPath) {
+    const icon = await explicitIconFileDataUrl(explicitIconPath)
+    if (icon) return icon
+  }
+
   const commandIconPath =
     editor.command && process.platform !== 'darwin' && (isAbsolute(editor.command) || process.platform === 'win32')
       ? editor.command
@@ -428,6 +606,7 @@ export async function listEditorsResult(): Promise<EditorListResult> {
           command: _command,
           macAppName: _macAppName,
           appPath: _appPath,
+          iconPaths: _iconPaths,
           lineStyle: _lineStyle,
           openDirectory: _openDirectory,
           ...editor

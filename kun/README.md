@@ -59,7 +59,7 @@ Run from the `kun/` directory.
 | --- | --- | --- |
 | `--config` | JSON config file. If omitted, Kun reads `{--data-dir}/config.json` when present | optional |
 | `--host` | Bind address | `127.0.0.1` |
-| `--port` | HTTP port | `8899` |
+| `--port` | HTTP port | `18899` |
 | `--data-dir` | Root directory for threads, events, and usage | required |
 | `--runtime-token` | Bearer token for `/v1/*` requests | empty |
 | `--api-key` | DeepSeek-compatible API key | empty |
@@ -75,7 +75,7 @@ Example:
 kun serve \
   --config ~/.deepseekgui/kun/config.json \
   --host 127.0.0.1 \
-  --port 8899 \
+  --port 18899 \
   --data-dir ~/.deepseekgui/kun \
   --runtime-token dev-token \
   --api-key "$DEEPSEEK_API_KEY" \
@@ -139,7 +139,7 @@ Shape:
 {
   "serve": {
     "host": "127.0.0.1",
-    "port": 8899,
+    "port": 18899,
     "dataDir": "~/.deepseekgui/kun",
     "runtimeToken": "",
     "apiKey": "",

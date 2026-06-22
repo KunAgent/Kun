@@ -79,6 +79,10 @@ export class UsageCounter {
       cacheHitTokens,
       cacheMissTokens,
       cacheHitRate,
+      cacheableTokenHitRate: snapshot.cacheableTokenHitRate,
+      totalInputTokenHitRate: snapshot.totalInputTokenHitRate,
+      cacheMissReasons: snapshot.cacheMissReasons,
+      cacheSuggestions: snapshot.cacheSuggestions,
       turns,
       costUsd,
       costCny,
@@ -152,6 +156,14 @@ function normalizeUsageSnapshot(snapshot: UsageSnapshot): UsageSnapshot {
     ...(cacheHitTokens !== undefined ? { cacheHitTokens } : {}),
     ...(cacheMissTokens !== undefined ? { cacheMissTokens } : {}),
     cacheHitRate: cacheHitTokens !== undefined && cacheTotal > 0 ? cacheHitTokens / cacheTotal : null,
+    ...(snapshot.cacheableTokenHitRate !== undefined
+      ? { cacheableTokenHitRate: snapshot.cacheableTokenHitRate }
+      : {}),
+    ...(snapshot.totalInputTokenHitRate !== undefined
+      ? { totalInputTokenHitRate: snapshot.totalInputTokenHitRate }
+      : {}),
+    ...(snapshot.cacheMissReasons ? { cacheMissReasons: [...snapshot.cacheMissReasons] } : {}),
+    ...(snapshot.cacheSuggestions ? { cacheSuggestions: [...snapshot.cacheSuggestions] } : {}),
     turns: Math.max(0, Math.floor(snapshot.turns)),
     ...(snapshot.costUsd !== undefined ? { costUsd: Math.max(0, snapshot.costUsd) } : {}),
     ...(snapshot.costCny !== undefined ? { costCny: Math.max(0, snapshot.costCny) } : {}),
@@ -182,6 +194,15 @@ function mergeUsage(into: UsageSnapshot, delta: UsageSnapshot): UsageSnapshot {
   const cacheTotal = cacheHitTokens + cacheMissTokens
   const cacheHitRate =
     cacheTotal === 0 ? null : cacheHitTokens / cacheTotal
+  // Union diagnostic string arrays across all folded threads instead of
+  // dropping them from the cross-thread aggregate.
+  const cacheMissReasons = unionStrings(into.cacheMissReasons, delta.cacheMissReasons)
+  const cacheSuggestions = unionStrings(into.cacheSuggestions, delta.cacheSuggestions)
+  // Per-turn hit rates are not additive across threads; recompute from the
+  // aggregated token counts when telemetry exists, else leave unset.
+  const cacheableTokenHitRate = cacheTotal > 0 ? cacheHitTokens / cacheTotal : undefined
+  const totalInputTokenHitRate =
+    promptTokens > 0 && cacheTotal > 0 ? cacheHitTokens / promptTokens : undefined
   const turns = into.turns + delta.turns
   const costUsd =
     into.costUsd === undefined && delta.costUsd === undefined
@@ -217,6 +238,10 @@ function mergeUsage(into: UsageSnapshot, delta: UsageSnapshot): UsageSnapshot {
     cacheHitTokens,
     cacheMissTokens,
     cacheHitRate,
+    cacheableTokenHitRate,
+    totalInputTokenHitRate,
+    cacheMissReasons,
+    cacheSuggestions,
     turns,
     costUsd,
     costCny,
@@ -226,4 +251,23 @@ function mergeUsage(into: UsageSnapshot, delta: UsageSnapshot): UsageSnapshot {
     tokenEconomySavingsUsd,
     tokenEconomySavingsCny
   }
+}
+
+/**
+ * Merge two optional string lists into a deduplicated union, preserving first-
+ * seen order. Returns `undefined` when neither side carried any values.
+ */
+function unionStrings(
+  left: readonly string[] | undefined,
+  right: readonly string[] | undefined
+): string[] | undefined {
+  if (!left?.length && !right?.length) return undefined
+  const merged: string[] = []
+  const seen = new Set<string>()
+  for (const value of [...(left ?? []), ...(right ?? [])]) {
+    if (seen.has(value)) continue
+    seen.add(value)
+    merged.push(value)
+  }
+  return merged
 }

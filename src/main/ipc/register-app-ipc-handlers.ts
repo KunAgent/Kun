@@ -62,6 +62,7 @@ import {
   runtimeRequestPayloadSchema,
   scheduleTaskFromTextPayloadSchema,
   shellOpenExternalUrlSchema,
+  skillGithubImportPayloadSchema,
   skillListPayloadSchema,
   skillSaveFilePayloadSchema,
   settingsPatchSchema,
@@ -142,7 +143,6 @@ import {
   expandHomePath,
   listEditorsResult,
   listWorkspaceDirectory,
-  normalizeSkillFolderName,
   openEditorPath,
   openPathWithShell,
   readClipboardImage,
@@ -177,6 +177,8 @@ import {
   requestComputerUsePermission
 } from '../services/computer-use-permissions'
 import { copyWriteDocumentAsRichText, exportWriteDocument } from '../services/write-export-service'
+import { importGithubSkillsToRoot } from '../services/github-skill-import-service'
+import { saveGuiSkillPackage } from '../services/skill-save-service'
 import { listGuiSkillRoots, listGuiSkills } from '../services/skill-service'
 
 type GuiUpdaterModule = typeof import('../gui-updater')
@@ -749,16 +751,8 @@ export function registerAppIpcHandlers(options: RegisterAppIpcHandlersOptions): 
     async (_, payload: unknown) => {
       const request = parseIpcPayload('skill:save-file', skillSaveFilePayloadSchema, payload)
       try {
-        const rootPath = expandHomePath(request.rootPath)
-        if (!rootPath) {
-          return { ok: false as const, message: 'Skill directory is required.' }
-        }
-        const skillName = normalizeSkillFolderName(request.skillName)
-        const skillDir = join(rootPath, skillName)
-        const filePath = join(skillDir, 'SKILL.md')
-        await mkdir(skillDir, { recursive: true })
-        await writeFile(filePath, request.content, 'utf8')
-        return { ok: true as const, path: filePath }
+        const result = await saveGuiSkillPackage(request)
+        return { ok: true as const, path: result.path }
       } catch (error) {
         return {
           ok: false as const,
@@ -767,6 +761,11 @@ export function registerAppIpcHandlers(options: RegisterAppIpcHandlersOptions): 
       }
     }
   )
+
+  ipcMain.handle('skill:import-github', async (_, payload: unknown) => {
+    const request = parseIpcPayload('skill:import-github', skillGithubImportPayloadSchema, payload)
+    return importGithubSkillsToRoot(request)
+  })
 
   ipcMain.handle('skill:list', async (_, payload: unknown) => {
     const request = parseIpcPayload('skill:list', skillListPayloadSchema, payload)

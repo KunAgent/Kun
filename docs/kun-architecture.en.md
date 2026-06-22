@@ -153,7 +153,7 @@ Saved settings should now be just:
   "agents": {
     "kun": {
       "binaryPath": "",
-      "port": 8899,
+      "port": 18899,
       "autoStart": true,
       "apiKey": "",
       "baseUrl": "https://api.deepseek.com/beta",

@@ -39,6 +39,21 @@ function formatActionError(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
 
+function extensionFromWritePath(path: string): string {
+  const normalized = path.replaceAll('\\', '/')
+  const slash = normalized.lastIndexOf('/')
+  const dot = normalized.lastIndexOf('.')
+  return dot > slash ? normalized.slice(dot) : ''
+}
+
+function ensureMarkdownRenameExtension(path: string, newName: string): string {
+  if (extensionFromWritePath(newName)) return newName
+  const currentExtension = extensionFromWritePath(path)
+  return /^(?:\.md|\.markdown|\.mdx)$/i.test(currentExtension)
+    ? `${newName}${currentExtension.toLowerCase()}`
+    : newName
+}
+
 function withoutLoadingDirs(
   loadingDirs: Record<string, boolean>,
   keys: Array<string | undefined>
@@ -319,9 +334,10 @@ export function createWriteFileActions({
 
     renameEntry: async (workspaceRoot, path, newName) => {
       cancelExternalSyncAnimation()
+      const nextName = ensureMarkdownRenameExtension(path, newName.trim())
       let result: Awaited<ReturnType<typeof window.kunGui.renameWorkspaceEntry>>
       try {
-        result = await window.kunGui.renameWorkspaceEntry({ workspaceRoot, path, newName })
+        result = await window.kunGui.renameWorkspaceEntry({ workspaceRoot, path, newName: nextName })
       } catch (error) {
         set({ fileError: formatActionError(error) })
         return null

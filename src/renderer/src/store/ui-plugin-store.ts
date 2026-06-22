@@ -11,6 +11,7 @@ import {
 import {
   UI_MODE_DEFAULT,
   UI_MODE_IKUN,
+  UI_MODE_RETROMA,
   readUiModePreference,
   writeUiModePreference
 } from '../lib/ui-mode'
@@ -50,6 +51,9 @@ function applyUiModeDom(mode: string, runtime: UiPluginRuntime | null): void {
   if (typeof document === 'undefined') return
   const root = document.documentElement
   root.setAttribute('data-ikun-mode', mode === UI_MODE_IKUN ? 'on' : 'off')
+  // Retroma 是纯配色模式:仅点亮 data-retroma-mode(浅色守卫在 CSS 侧),
+  // 不走插件运行时,不注入插件 token。
+  root.setAttribute('data-retroma-mode', mode === UI_MODE_RETROMA ? 'on' : 'off')
   if (runtime && mode === runtime.manifest.id) {
     root.setAttribute('data-ui-plugin', runtime.manifest.id)
   } else {
@@ -82,7 +86,7 @@ export const useUiPluginStore = create<UiPluginState>((set, get) => ({
     if (get().initialized) return
     set({ initialized: true })
     const mode = readUiModePreference()
-    if (mode === UI_MODE_DEFAULT) {
+    if (mode === UI_MODE_DEFAULT || mode === UI_MODE_RETROMA) {
       set({ uiMode: mode })
       applyUiModeDom(mode, null)
       void get().refreshUiPlugins()
@@ -108,6 +112,14 @@ export const useUiPluginStore = create<UiPluginState>((set, get) => ({
   activateUiMode: async (mode: string) => {
     const normalized = mode.trim().toLowerCase()
     if (normalized === UI_MODE_DEFAULT) {
+      writeUiModePreference(normalized)
+      set({ uiMode: normalized, activeRuntime: null, lastError: null })
+      applyUiModeDom(normalized, null)
+      return
+    }
+
+    // 'retroma' 是纯配色内置模式,无吉祥物图集,不走插件加载链路
+    if (normalized === UI_MODE_RETROMA) {
       writeUiModePreference(normalized)
       set({ uiMode: normalized, activeRuntime: null, lastError: null })
       applyUiModeDom(normalized, null)

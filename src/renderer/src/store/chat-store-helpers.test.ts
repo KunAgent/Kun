@@ -19,6 +19,9 @@ import {
   normalizeTurnModelMap,
   readThreadComposerSelection,
   reconcileCodeWorkspaceRoots,
+  composerModeForThread,
+  rememberThreadComposerMode,
+  readThreadComposerMode,
   rememberThreadComposerSelection,
   rememberTurnModel,
   resolveComposerContextWindowTokens
@@ -336,6 +339,24 @@ describe('chat-store Claw helpers', () => {
     expect(normalized['thread-5']).toEqual({ model: 'model-5', providerId: 'provider-5' })
     expect(normalized['bad-empty-model']).toBeUndefined()
     expect(normalized['bad-number']).toBeUndefined()
+  })
+
+  it('persists composer plan mode independently per thread', () => {
+    rememberThreadComposerMode('thread-a', 'plan')
+    rememberThreadComposerMode('thread-b', 'agent')
+
+    expect(readThreadComposerMode('thread-a')).toBe('plan')
+    expect(readThreadComposerMode('thread-b')).toBe('agent')
+  })
+
+  it('resolves composer mode from stored selection before thread metadata', () => {
+    rememberThreadComposerMode('thread-a', 'agent')
+
+    expect(
+      composerModeForThread({ id: 'thread-a', mode: 'plan' }, readThreadComposerMode('thread-a'))
+    ).toBe('agent')
+    expect(composerModeForThread({ id: 'thread-b', mode: 'plan' }, null)).toBe('plan')
+    expect(composerModeForThread({ id: 'thread-c', mode: 'agent' }, null)).toBe('agent')
   })
 
   it('persists composer model selections independently per thread', () => {

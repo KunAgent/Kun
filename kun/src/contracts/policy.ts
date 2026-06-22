@@ -1,6 +1,7 @@
 import { z } from 'zod'
 
 export const APPROVAL_POLICIES = [
+  'always',
   'on-request',
   'untrusted',
   'never',

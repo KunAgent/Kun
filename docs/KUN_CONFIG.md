@@ -48,7 +48,7 @@ GUI 启动 Kun 时会按下面的顺序合并配置。
 {
   "serve": {
     "host": "127.0.0.1",
-    "port": 8899,
+    "port": 18899,
     "dataDir": "~/.kun/data",
     "runtimeToken": "",
     "apiKey": "",
@@ -203,7 +203,7 @@ Kun 内置 DeepSeek V4 默认模型画像：
   "agents": {
     "kun": {
       "binaryPath": "",
-      "port": 8899,
+      "port": 18899,
       "autoStart": true,
       "dataDir": "~/.kun/data",
       "model": "deepseek-v4-pro",

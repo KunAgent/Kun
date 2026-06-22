@@ -57,8 +57,10 @@ const api = {
     ipcRenderer.invoke('skill:list', { workspaceRoot }),
   listSkillRoots: (workspaceRoot) =>
     ipcRenderer.invoke('skill:list-roots', { workspaceRoot }),
-  saveSkillFile: (rootPath, skillName, content) =>
-    ipcRenderer.invoke('skill:save-file', { rootPath, skillName, content }),
+  saveSkillFile: (rootPath, skillName, content, manifestContent) =>
+    ipcRenderer.invoke('skill:save-file', { rootPath, skillName, content, manifestContent }),
+  importSkillsFromGitHub: (rootPath, url) =>
+    ipcRenderer.invoke('skill:import-github', { rootPath, url }),
   openSkillRoot: (rootPath) =>
     ipcRenderer.invoke('skill:open-root', rootPath),
   listUiPlugins: () =>

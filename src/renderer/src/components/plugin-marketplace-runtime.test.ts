@@ -7,7 +7,7 @@ describe('buildMcpMarketplaceOverlay', () => {
     const overlay = buildMcpMarketplaceOverlay({
       runtimeInfo: {
         host: '127.0.0.1',
-        port: 8899,
+        port: 18899,
         dataDir: '/tmp/kun',
         startedAt: '2026-06-03T00:00:00.000Z',
         capabilities: {
@@ -112,7 +112,7 @@ describe('buildMcpMarketplaceOverlay', () => {
     expect(buildMcpMarketplaceOverlay({
       runtimeInfo: {
         host: '127.0.0.1',
-        port: 8899,
+        port: 18899,
         dataDir: '/tmp/kun',
         startedAt: '2026-06-03T00:00:00.000Z',
         capabilities: {

@@ -9,7 +9,7 @@
   min-height: 100%;
   /* Notion-like reading column: ~720px of text, the rest of the surface
      stays clickable padding so the caret can always be placed. */
-  padding: clamp(40px, 7vh, 72px) max(28px, calc((100% - 720px) / 2)) 120px;
+  padding: clamp(40px, 7vh, 72px) 28px 120px;
   outline: none;
   color: var(--ds-text);
   caret-color: var(--ds-text);
@@ -18,6 +18,12 @@
   font-size: var(--write-editor-font-size, 16px);
   line-height: var(--write-editor-line-height, 1.75);
   word-break: break-word;
+}
+
+.write-rich-editor > * {
+  max-width: 720px;
+  margin-left: auto;
+  margin-right: auto;
 }
 
 .write-rich-editor ::selection {
@@ -272,18 +278,22 @@
 }
 
 [data-theme='dark'] .write-rich-editor .sdd-req-pill-planned {
+  background: color-mix(in srgb, #93c5fd 18%, transparent);
   color: #93c5fd;
 }
 
 [data-theme='dark'] .write-rich-editor .sdd-req-pill-building {
+  background: color-mix(in srgb, #fcd34d 20%, transparent);
   color: #fcd34d;
 }
 
 [data-theme='dark'] .write-rich-editor .sdd-req-pill-done {
+  background: color-mix(in srgb, #86efac 20%, transparent);
   color: #86efac;
 }
 
 [data-theme='dark'] .write-rich-editor .sdd-req-pill-verified {
+  background: color-mix(in srgb, #5eead4 20%, transparent);
   color: #5eead4;
 }
 
@@ -317,6 +327,22 @@
 
 .sdd-req-progress-seg-planned {
   background: #3b82f6;
+}
+
+[data-theme='dark'] .sdd-req-progress-seg-verified {
+  background: #2dd4bf;
+}
+
+[data-theme='dark'] .sdd-req-progress-seg-done {
+  background: #4ade80;
+}
+
+[data-theme='dark'] .sdd-req-progress-seg-building {
+  background: #fbbf24;
+}
+
+[data-theme='dark'] .sdd-req-progress-seg-planned {
+  background: #60a5fa;
 }
 
 /* Inline AI: ghost text suggestion (Phase 3) */

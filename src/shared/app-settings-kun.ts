@@ -6,6 +6,7 @@ import {
   DEFAULT_KUN_MODEL,
   DEFAULT_KUN_PORT,
   DEFAULT_MUSIC_GENERATION_PROTOCOL,
+  MIN_KUN_LOCAL_PORT,
   DEFAULT_MODEL_ENDPOINT_FORMAT,
   DEFAULT_SANDBOX_MODE,
   DEFAULT_SPEECH_TO_TEXT_PROTOCOL,
@@ -58,7 +59,9 @@ import {
 
 const LEGACY_COREAGENT_DATA_DIR = '~/.deepseekgui/coreagent'
 const LEGACY_KUN_DEFAULT_MODEL = 'deepseek-chat'
+// 旧版真实落盘默认值, 用于把升级前配置迁移到当前 Kun 默认端口。
 const LEGACY_LOCAL_HTTP_DEFAULT_PORT = 7878
+const PREVIOUS_KUN_DEFAULT_PORT = 8899
 
 type LegacyLocalHttpRuntimeSettingsV1 = {
   binaryPath: string
@@ -90,7 +93,7 @@ type LegacyReasoningRuntimeSettingsV1 = {
  * options. It is the only active agent settings object the GUI
  * stores after legacy settings have been migrated.
  */
-function legacyLocalHttpRuntimeDefaults(port = 7878): LegacyLocalHttpRuntimeSettingsV1 {
+function legacyLocalHttpRuntimeDefaults(port = LEGACY_LOCAL_HTTP_DEFAULT_PORT): LegacyLocalHttpRuntimeSettingsV1 {
   return {
     binaryPath: '',
     port,
@@ -428,9 +431,19 @@ export function mergeKunRuntimeSettings(
       : {})
   })
   const nextModelProfiles = normalizeKunModelProfiles(current.modelProfiles, patch?.modelProfiles)
+  const nextPort = normalizeKunLocalPort(patch?.port ?? current.port, DEFAULT_KUN_PORT)
+  // NOTE: approvalPolicy/sandboxMode are merged through verbatim from the patch.
+  // The unified 5-mode UI selector already resolves a mode to its concrete
+  // {approvalPolicy, sandboxMode} pair via kunToolPermissionModeSettings before
+  // dispatching the patch. We must NOT re-canonicalize here: the mode->settings
+  // mapping is lossy (only 5 of the 6x4 policy/sandbox combos are representable),
+  // so round-tripping would silently rewrite valid non-UI values — e.g. demote
+  // approvalPolicy 'never'/'suggest' to 'on-request', or escalate a 'read-only'/
+  // 'external-sandbox' sandbox to 'danger-full-access' — on every settings merge.
   return {
     ...current,
     ...(patch ?? {}),
+    port: nextPort,
     tokenEconomyMode: nextTokenEconomy.enabled,
     tokenEconomy: nextTokenEconomy,
     mcpSearch: nextMcpSearch,
@@ -969,6 +982,15 @@ function upgradeLegacyKunDefaultPort(value: unknown, fallback: number): number {
   return value === LEGACY_LOCAL_HTTP_DEFAULT_PORT ? DEFAULT_KUN_PORT : fallback
 }
 
+function normalizeKunLocalPort(value: unknown, fallback: number): number {
+  if (value === LEGACY_LOCAL_HTTP_DEFAULT_PORT || value === PREVIOUS_KUN_DEFAULT_PORT) {
+    return DEFAULT_KUN_PORT
+  }
+  const parsed = typeof value === 'number' ? value : Number(value)
+  if (!Number.isFinite(parsed)) return fallback
+  return Math.min(65_535, Math.max(MIN_KUN_LOCAL_PORT, Math.floor(parsed)))
+}
+
 export function migrateLegacyAppSettings(parsed: LegacyAppSettingsShape): Partial<AppSettingsV1> {
   const rawAgentProvider = parsed.agentProvider
   const isReasoningLegacy = rawAgentProvider === 'reasonix'
@@ -1015,6 +1037,7 @@ export function migrateLegacyAppSettings(parsed: LegacyAppSettingsShape): Partia
     ...kunDefaults,
     ...legacySeed,
     ...explicitKun,
+    port: normalizeKunLocalPort(explicitKun.port ?? legacySeed.port, kunDefaults.port),
     apiKey: hasProviderSettings ? explicitKun.apiKey ?? '' : '',
     baseUrl: hasProviderSettings ? explicitKun.baseUrl ?? '' : '',
     runtimeToken: nonEmptyStringOrFallback(explicitKun.runtimeToken, legacySeed.runtimeToken),

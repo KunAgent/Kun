@@ -278,6 +278,8 @@ export class LocalToolHost implements ToolHost {
     if (this.isInteractiveGuiGateTool(call.toolName)) return false
     if (tool.policy === 'never' || context.approvalPolicy === 'never') return false
     switch (context.approvalPolicy) {
+      case 'always':
+        return true
       case 'auto':
         return false
       case 'on-request':

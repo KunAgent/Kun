@@ -1520,7 +1520,7 @@ function ToolEntry({ block, nested = false }: { block: ToolBlock; nested?: boole
 
   const tone =
     block.status === 'error'
-      ? 'border-red-300/80 bg-red-500/10 text-red-950 dark:border-red-800/60 dark:bg-red-950/35 dark:text-red-100'
+      ? 'border-orange-300/80 bg-orange-500/10 text-orange-950 dark:border-orange-800/60 dark:bg-orange-950/35 dark:text-orange-100'
       : block.status === 'running'
         ? 'border-amber-300/80 bg-amber-500/10 text-amber-950 dark:border-amber-800/50 dark:bg-amber-950/30 dark:text-amber-100'
         : 'border-ds-border bg-ds-subtle text-ds-ink'
@@ -1570,7 +1570,7 @@ function ToolEntry({ block, nested = false }: { block: ToolBlock; nested?: boole
                 className={`rounded-full px-2 py-0.5 text-[11px] font-mono ${
                   exitCode === 0
                     ? 'bg-ds-success-soft text-ds-success'
-                    : 'bg-ds-danger-soft text-ds-danger'
+                    : 'bg-orange-500/10 text-orange-800 dark:text-orange-200'
                 }`}
               >
                 exit {exitCode}

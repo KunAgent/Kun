@@ -87,4 +87,27 @@ describe('MultiProviderModelClient', () => {
     expect(router.model).toBe('deepseek-v4-pro')
     expect((router.config as { baseUrl?: string }).baseUrl).toBe('https://default.example/v1')
   })
+
+  it('exposes routed client config for per-request diagnostics', () => {
+    const defaultClient = new CompatModelClient({
+      baseUrl: 'https://default.example/v1',
+      apiKey: 'sk-default',
+      model: 'deepseek-v4-pro',
+      endpointFormat: 'chat_completions'
+    })
+    const minimaxClient = new CompatModelClient({
+      baseUrl: 'https://minimax.example/anthropic',
+      apiKey: 'sk-minimax',
+      model: 'MiniMax-M3',
+      endpointFormat: 'messages'
+    })
+    const router = new MultiProviderModelClient({
+      default: defaultClient,
+      providers: new Map([['minimax-token-plan', minimaxClient]])
+    })
+
+    expect((router.configFor() as { baseUrl?: string }).baseUrl).toBe('https://default.example/v1')
+    expect((router.configFor('minimax-token-plan') as { endpointFormat?: string }).endpointFormat).toBe('messages')
+    expect((router.configFor('unknown-provider') as { baseUrl?: string }).baseUrl).toBe('https://default.example/v1')
+  })
 })

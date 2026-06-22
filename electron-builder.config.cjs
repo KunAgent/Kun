@@ -67,7 +67,12 @@ const genericUpdateUrl = `${r2PublicBaseUrl}/${r2ReleasePrefix}/channels/${updat
 const releaseAppVersion = (
   envWithLegacyFallback('KUN_APP_VERSION', 'DEEPSEEK_GUI_APP_VERSION') || ''
 ).trim()
-const artifactVersion = releaseAppVersion || '${version}'
+const releaseArtifactVersion = (
+  envWithLegacyFallback('KUN_ARTIFACT_VERSION', 'DEEPSEEK_GUI_ARTIFACT_VERSION') || ''
+).trim()
+const artifactVersion = releaseArtifactVersion || releaseAppVersion || '${version}'
+const semverVersionPattern = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/
+const artifactVersionPattern = /^[0-9A-Za-z][0-9A-Za-z._-]*$/
 
 function normalizeUpdateChannel(raw) {
   const value = String(raw || '').trim()
@@ -75,9 +80,15 @@ function normalizeUpdateChannel(raw) {
   throw new Error(`KUN_UPDATE_CHANNEL (or legacy DEEPSEEK_GUI_UPDATE_CHANNEL) must be "stable" or "frontier", got: ${raw}`)
 }
 
-if (releaseAppVersion && !/^\d+\.\d+\.\d+$/.test(releaseAppVersion)) {
+if (releaseAppVersion && !semverVersionPattern.test(releaseAppVersion)) {
   throw new Error(
-    `KUN_APP_VERSION (or legacy DEEPSEEK_GUI_APP_VERSION) must be a valid x.y.z semver for electron-updater, got: ${releaseAppVersion}`
+    `KUN_APP_VERSION (or legacy DEEPSEEK_GUI_APP_VERSION) must be a valid semver for electron-updater, got: ${releaseAppVersion}`
+  )
+}
+
+if (releaseArtifactVersion && !artifactVersionPattern.test(releaseArtifactVersion)) {
+  throw new Error(
+    `KUN_ARTIFACT_VERSION (or legacy DEEPSEEK_GUI_ARTIFACT_VERSION) must use only letters, numbers, dots, dashes, and underscores, got: ${releaseArtifactVersion}`
   )
 }
 

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { mkdtemp, writeFile } from 'node:fs/promises'
+import { mkdtemp, readFile, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
@@ -18,9 +18,10 @@ import {
   buildWriteClipboardHtmlFragment,
   buildWriteExportFileName,
   buildWriteExportHtmlDocument,
-  copyWriteDocumentAsRichText
+  copyWriteDocumentAsRichText,
+  exportWriteDocument
 } from './write-export-service'
-import { clipboard } from 'electron'
+import { clipboard, dialog } from 'electron'
 
 describe('write-export-service helpers', () => {
   let workspaceRoot = ''
@@ -28,6 +29,7 @@ describe('write-export-service helpers', () => {
   beforeEach(async () => {
     workspaceRoot = await mkdtemp(join(tmpdir(), 'ds-gui-write-export-'))
     vi.mocked(clipboard.write).mockReset()
+    vi.mocked(dialog.showSaveDialog).mockReset()
   })
 
   it('builds export file names with the requested extension', () => {
@@ -101,5 +103,31 @@ describe('write-export-service helpers', () => {
         html: expect.stringContaining('src="data:image/png;base64,')
       })
     )
+  })
+
+  it('exports markdown documents as docx files', async () => {
+    const sourcePath = join(workspaceRoot, 'draft.md')
+    const targetPath = join(workspaceRoot, 'draft.docx')
+    await writeFile(sourcePath, '# Heading\n\n**Bold** text\n\n- item', 'utf8')
+    vi.mocked(dialog.showSaveDialog).mockResolvedValue({
+      canceled: false,
+      filePath: targetPath
+    })
+
+    const result = await exportWriteDocument({
+      path: sourcePath,
+      workspaceRoot,
+      format: 'docx',
+      content: '# Heading\n\n**Bold** text\n\n- item'
+    })
+
+    expect(result).toMatchObject({
+      ok: true,
+      path: targetPath,
+      format: 'docx'
+    })
+    const bytes = await readFile(targetPath)
+    expect(bytes.subarray(0, 2).toString('utf8')).toBe('PK')
+    expect(bytes.length).toBeGreaterThan(1000)
   })
 })

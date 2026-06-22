@@ -33,6 +33,7 @@ import {
   type WorkflowScheduleV1,
   type WorkflowSwitchRuleV1,
   type WorkflowWebhookMethod,
+  MIN_KUN_LOCAL_PORT,
   type WorkflowSettingsPatchV1,
   type WorkflowSettingsV1,
   type WorkflowTriggerScheduleKind,
@@ -48,6 +49,7 @@ import {
 } from './app-settings-normalizers'
 
 export const MAX_WORKFLOW_RUNS = 20
+const PREVIOUS_WORKFLOW_WEBHOOK_PORT = 8799
 const MAX_WORKFLOW_CONNECTIONS = 512
 const MAX_WORKFLOW_HTTP_HEADERS = 50
 const MAX_WORKFLOW_PRESETS = 100
@@ -80,6 +82,11 @@ function asTrimmed(value: unknown, fallback = ''): string {
 
 function asText(value: unknown): string {
   return typeof value === 'string' ? value : ''
+}
+
+function normalizeWorkflowWebhookPort(value: unknown, fallback: number): number {
+  if (value === PREVIOUS_WORKFLOW_WEBHOOK_PORT) return fallback
+  return normalizePositiveInteger(value, fallback, MIN_KUN_LOCAL_PORT, 65_535)
 }
 
 function normalizeWorkflowScheduleKind(value: unknown): WorkflowTriggerScheduleKind {
@@ -692,7 +699,7 @@ export function defaultWorkflowSettings(): WorkflowSettingsV1 {
     model: '',
     mode: 'agent',
     keepAwake: false,
-    webhookPort: 8799,
+    webhookPort: 18799,
     webhookSecret: '',
     workflows: [],
     presets: [],
@@ -727,7 +734,7 @@ export function normalizeWorkflowSettings(input: WorkflowSettingsPatchV1 | undef
     model: asTrimmed(source.model),
     mode: normalizeRunMode(source.mode),
     keepAwake: normalizeBoolean(source.keepAwake, defaults.keepAwake),
-    webhookPort: normalizePositiveInteger(source.webhookPort, defaults.webhookPort, 1024, 65_535),
+    webhookPort: normalizeWorkflowWebhookPort(source.webhookPort, defaults.webhookPort),
     webhookSecret: asTrimmed(source.webhookSecret),
     workflows: Array.isArray(source.workflows)
       ? source.workflows.map((workflow, index) => normalizeWorkflow(workflow as Partial<WorkflowV1>, index, now))

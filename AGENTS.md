@@ -88,8 +88,8 @@ This guide is for AI agents working in this repository. It collects the project 
 - Packaging configuration lives in `electron-builder.config.cjs`, release scripts live in `scripts/`, and the release workflow lives in `.github/workflows/release.yml`.
 - For local macOS arm64 testing, unzip `dist/Kun-0.1.0-mac-arm64.zip` after packaging and test the extracted app, usually at `dist/Kun-0.1.0-mac-arm64-unzipped/Kun.app`.
 - Before a new packaged-app test, make sure old `Kun.app` processes have exited. Multiple worktree builds share the same bundle identifier, so macOS may reuse an old instance.
-- Startup debugging should not rely on a single port check. Combine the real process path, `open -n <Kun.app>`, `lsof -iTCP:8787,8788,8899`, `curl http://127.0.0.1:8899/health`, and `~/Library/Application Support/Kun/logs/kun-*.log`.
-- Port `8787` may be occupied by a non-Kun process. Keep it separate from Kun runtime/health ports such as `8788` and `8899`.
+- Startup debugging should not rely on a single port check. Combine the real process path, `open -n <Kun.app>`, `lsof -iTCP:18787,18788,18899`, `curl http://127.0.0.1:18899/health`, and `~/Library/Application Support/Kun/logs/kun-*.log`.
+- Port `18787` may be occupied by a non-Kun process. Keep it separate from Kun runtime/health ports such as `18788` and `18899`.
 
 ## Git And Pull Requests
 
@@ -117,7 +117,7 @@ gh pr create --base develop --head <branch> --title "<title>" --body-file <file>
 - SSE/event/OOM issue: inspect `runtime-factory`, `RuntimeEventRecorder`, `FileSessionStore.highestSeq()`, `events.jsonl`, and events route replay.
 - `/new`, session resume, fork, archive/search issue: trace the full path from renderer command/store to Kun routes instead of changing only the UI command.
 - Clipboard/image fallback issue: inspect `webUtils.getPathForFile`, temporary file persistence, the `localFilePath` contract, attachment store, and model client fallback.
-- Packaged app startup issue: first confirm which extracted app owns the active process, then inspect ports `8788`/`8899`, logs, and `open -n`; do not assume the build failed first.
+- Packaged app startup issue: first confirm which extracted app owns the active process, then inspect ports `18788`/`18899`, logs, and `open -n`; do not assume the build failed first.
 
 ## Repository Hygiene
 

@@ -374,7 +374,7 @@ async function loadSkillSummary(root: string, scope: GuiSkillScope): Promise<Gui
   if (existsSync(manifestPath)) {
     const manifest = JSON.parse(await readFile(manifestPath, 'utf8')) as Record<string, unknown>
     const name = stringValue(manifest.name) || titleFromSlug(basename(root))
-    const entry = stringValue(manifest.entry) || 'SKILL.md'
+    const entry = assertSafeEntryName(stringValue(manifest.entry) || 'SKILL.md', root)
     return {
       id: slug(stringValue(manifest.id) || name || basename(root)),
       name,
@@ -399,6 +399,22 @@ async function loadSkillSummary(root: string, scope: GuiSkillScope): Promise<Gui
     scope,
     legacy: true
   }
+}
+
+/**
+ * Guard against path traversal via a crafted `skill.json` `entry` field. The
+ * entry is joined onto the skill root and read from disk, so a value like
+ * `../../etc/passwd` or `nested/file` could escape the package directory. We
+ * require a plain filename: no path separators (POSIX or Windows), no `..`,
+ * and `basename(entry) === entry`. On violation we throw so the caller records
+ * a validation error and skips the skill rather than reading outside root.
+ */
+function assertSafeEntryName(entry: string, root: string): string {
+  const hasSeparator = entry.includes('/') || entry.includes('\\')
+  if (!entry || hasSeparator || entry.includes('..') || basename(entry) !== entry) {
+    throw new Error(`Unsafe skill entry "${entry}" in ${join(root, 'skill.json')}`)
+  }
+  return entry
 }
 
 function readFrontmatter(content: string): { id?: string; name?: string; description?: string } {

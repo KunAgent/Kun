@@ -94,6 +94,39 @@ function isRequestUserInputTool(block: ChatBlock): boolean {
   return /^request_user_input\s*:/i.test(block.summary.trim())
 }
 
+type ProcessErrorTone = 'tool' | 'error' | null
+
+function processBlockErrorTone(block: ChatBlock): ProcessErrorTone {
+  if (block.kind === 'tool' && block.status === 'error') return 'tool'
+  if (block.kind === 'compaction' && block.status === 'error') return 'error'
+  if (block.kind === 'approval' && block.status === 'error') return 'error'
+  if (block.kind === 'user_input' && block.status === 'error') return 'error'
+  if (block.kind === 'system' && block.severity === 'error') return 'error'
+  return null
+}
+
+function processSectionErrorTone(blocks: ChatBlock[]): ProcessErrorTone {
+  let fallback: ProcessErrorTone = null
+  for (const block of blocks) {
+    const tone = processBlockErrorTone(block)
+    if (tone === 'error') return tone
+    if (tone === 'tool') fallback = tone
+  }
+  return fallback
+}
+
+function processErrorTextClass(tone: ProcessErrorTone): string {
+  if (tone === 'tool') return 'text-orange-700 dark:text-orange-300'
+  if (tone === 'error') return 'text-red-600 dark:text-red-300'
+  return 'text-ds-muted'
+}
+
+function processErrorDotClass(tone: ProcessErrorTone): string {
+  if (tone === 'tool') return 'bg-orange-500 dark:bg-orange-300'
+  if (tone === 'error') return 'bg-red-500 dark:bg-red-300'
+  return ''
+}
+
 function sectionHasRequestUserInput(section: ProcessSection): boolean {
   return section.blocks.some(isRequestUserInputTool)
 }
@@ -129,13 +162,8 @@ export function ProcessSectionRow({
       : []
   const hasDetails = sectionHasDetails(section, t)
   const active = isProcessSectionActive(section, processing)
-  const hasError = section.blocks.some(
-    (block) =>
-      (block.kind === 'tool' && block.status === 'error') ||
-      (block.kind === 'approval' && block.status === 'error') ||
-      (block.kind === 'user_input' && block.status === 'error') ||
-      (block.kind === 'system' && block.severity === 'error')
-  )
+  const errorTone = processSectionErrorTone(section.blocks)
+  const hasError = errorTone !== null
   const defaultExpanded =
     hasError ||
     sectionHasPendingApproval(section) ||
@@ -190,12 +218,12 @@ export function ProcessSectionRow({
           type="button"
           onClick={() => setUserExpanded(!(userExpanded ?? defaultExpanded))}
           className={`group flex w-fit max-w-full items-center gap-1.5 rounded-md py-0.5 text-left text-[14px] font-medium transition hover:opacity-85 ${
-            hasError ? 'text-red-600 dark:text-red-300' : 'text-ds-muted'
+            hasError ? processErrorTextClass(errorTone) : 'text-ds-muted'
           }`}
         >
           {showActiveError ? (
             <span className="ds-work-logo-slot ds-work-logo-slot-sm mr-0.5">
-              <span className="h-2 w-2 rounded-full bg-red-500 dark:bg-red-300" />
+              <span className={`h-2 w-2 rounded-full ${processErrorDotClass(errorTone)}`} />
             </span>
           ) : null}
           <span className={active && !hasError ? 'ds-shiny-text' : ''}>{title}</span>
@@ -208,12 +236,12 @@ export function ProcessSectionRow({
       ) : (
         <div
           className={`flex w-fit max-w-full items-center gap-1.5 py-0.5 text-[14px] font-medium ${
-            hasError ? 'text-red-600 dark:text-red-300' : 'text-ds-muted'
+            hasError ? processErrorTextClass(errorTone) : 'text-ds-muted'
           }`}
         >
           {showActiveError ? (
             <span className="ds-work-logo-slot ds-work-logo-slot-sm mr-0.5">
-              <span className="h-2 w-2 rounded-full bg-red-500 dark:bg-red-300" />
+              <span className={`h-2 w-2 rounded-full ${processErrorDotClass(errorTone)}`} />
             </span>
           ) : null}
           <span className={active && !hasError ? 'ds-shiny-text' : ''}>{title}</span>
@@ -263,13 +291,7 @@ function processBlockIsActive(block: ChatBlock, processing: boolean): boolean {
 }
 
 function processBlockHasError(block: ChatBlock): boolean {
-  return (
-    (block.kind === 'tool' && block.status === 'error') ||
-    (block.kind === 'compaction' && block.status === 'error') ||
-    (block.kind === 'approval' && block.status === 'error') ||
-    (block.kind === 'user_input' && block.status === 'error') ||
-    (block.kind === 'system' && block.severity === 'error')
-  )
+  return processBlockErrorTone(block) !== null
 }
 
 function ProcessStackRows({
@@ -292,7 +314,8 @@ function ProcessStackRows({
         const canExpand = detail.kind !== 'none'
         const autoOpenRequestInput = processing && isRequestUserInputTool(block)
         const autoOpenPending = processBlockIsAutoOpenPending(block, processing) || isPendingApproval(block)
-        const isError = processBlockHasError(block)
+        const errorTone = processBlockErrorTone(block)
+        const isError = errorTone !== null
         const defaultOpen = isError
         const forceOpen = autoOpenPending || autoOpenRequestInput
         const userClosed = closedBlockIds.has(block.id)
@@ -342,7 +365,7 @@ function ProcessStackRows({
               onKeyDown={handleKeyDown}
               className={`group flex w-full min-w-0 items-center gap-1.5 rounded-md px-1 py-0.5 text-left text-[13.5px] leading-6 transition ${
                 isError
-                  ? 'text-red-600 dark:text-red-300'
+                  ? processErrorTextClass(errorTone)
                   : 'text-ds-faint hover:text-ds-muted'
               } ${canToggle ? 'cursor-pointer hover:bg-ds-hover/45' : 'cursor-default'}`}
             >
@@ -403,7 +426,8 @@ function ProcessEntryRow({
   const isRunningTool = processBlockIsRunningTool(block, processing)
   const isAutoOpenPending = processBlockIsAutoOpenPending(block, processing) || isPendingApproval(block)
   const isStreamingAssistant = processing && block.kind === 'assistant' && block.id === 'live-assistant'
-  const isError = processBlockHasError(block)
+  const errorTone = processBlockErrorTone(block)
+  const isError = errorTone !== null
   const forceOpen = isAutoOpenPending || isAssistantProcessText || isStreamingAssistant
   const defaultOpen = isError
   const open =
@@ -439,7 +463,7 @@ function ProcessEntryRow({
         onKeyDown={handleKeyDown}
         className={`group flex w-full items-start gap-2 rounded-md px-2 py-1 text-left text-[13.5px] leading-[1.55] transition ${
           isError
-            ? 'text-red-600 dark:text-red-300'
+            ? processErrorTextClass(errorTone)
             : 'text-ds-faint hover:text-ds-ink'
         } ${
           canToggle
@@ -973,13 +997,13 @@ function ProcessEntryDetail({
     }
     if (detail.isError) {
       return (
-        <div className="overflow-hidden rounded-[10px] border border-red-200/80 bg-red-50/80 dark:border-red-800/40 dark:bg-red-500/10">
+        <div className="overflow-hidden rounded-[10px] border border-orange-200/80 bg-orange-50/80 dark:border-orange-800/40 dark:bg-orange-500/10">
           {detail.filePath ? (
-            <div className="border-b border-red-200/70 bg-red-100/50 px-3 py-1.5 font-mono text-[12px] text-red-700 dark:border-red-800/40 dark:bg-red-500/15 dark:text-red-300">
+            <div className="border-b border-orange-200/70 bg-orange-100/50 px-3 py-1.5 font-mono text-[12px] text-orange-700 dark:border-orange-800/40 dark:bg-orange-500/15 dark:text-orange-300">
               {detail.filePath}
             </div>
           ) : null}
-          <pre className="max-h-72 overflow-auto whitespace-pre-wrap break-words px-3 py-2.5 font-mono text-[12px] leading-6 text-red-800 dark:text-red-200">
+          <pre className="max-h-72 overflow-auto whitespace-pre-wrap break-words px-3 py-2.5 font-mono text-[12px] leading-6 text-orange-900 dark:text-orange-100">
             {detail.text}
           </pre>
         </div>

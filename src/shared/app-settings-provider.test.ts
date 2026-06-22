@@ -17,6 +17,7 @@ import {
   modelProviderTokenPlanProfile,
   defaultScheduleSettings,
   defaultWorkflowSettings,
+  defaultTerminalSettings,
   defaultWriteSettings,
   listMusicGenerationProviderProfiles,
   listSpeechToTextProviderProfiles,
@@ -74,6 +75,7 @@ function settings(): AppSettingsV1 {
     claw: defaultClawSettings(),
     schedule: defaultScheduleSettings(),
     workflow: defaultWorkflowSettings(),
+    terminal: defaultTerminalSettings(),
     guiUpdate: { channel: 'stable' },
     codePromptPrefix: '',
     disabledSkillIds: []
@@ -943,8 +945,10 @@ describe('model provider settings', () => {
 })
 
 describe('provider presets', () => {
-  it('includes a LiteLLM preset', () => {
+  it('includes optional LiteLLM and Vercel AI Gateway presets', () => {
     const litellm = getModelProviderPreset('litellm')
+    const vercel = getModelProviderPreset('vercel-ai-gateway')
+
     expect(litellm).not.toBeNull()
     expect(litellm && modelProviderPresetProfile(litellm)).toMatchObject({
       id: 'litellm',
@@ -953,14 +957,42 @@ describe('provider presets', () => {
       endpointFormat: 'chat_completions',
       models: []
     })
+
+    expect(vercel).not.toBeNull()
+    expect(vercel && modelProviderPresetProfile(vercel)).toMatchObject({
+      id: 'vercel-ai-gateway',
+      name: 'Vercel AI Gateway',
+      baseUrl: 'https://ai-gateway.vercel.sh/v1',
+      endpointFormat: 'chat_completions',
+      models: []
+    })
+    expect(vercel?.docsUrl).toBe(
+      'https://vercel.com/docs/ai-gateway/sdks-and-apis/openai-chat-completions'
+    )
   })
 
-  it('includes Zhipu, Z.ai, Kimi Code, and Moonshot presets', () => {
+  it('includes LongCat, Zhipu, Z.ai, Kimi Code, and Moonshot presets', () => {
+    const longcat = getModelProviderPreset('longcat')
     const zhipu = getModelProviderPreset('zhipu-coding-plan')
     const zai = getModelProviderPreset('zai-coding-plan')
     const kimiCode = getModelProviderPreset('kimi-code')
     const moonshotCn = getModelProviderPreset('moonshot-cn')
     const moonshotGlobal = getModelProviderPreset('moonshot-global')
+
+    expect(longcat && modelProviderPresetProfile(longcat)).toMatchObject({
+      id: 'longcat',
+      name: 'LongCat',
+      baseUrl: 'https://api.longcat.chat/openai',
+      endpointFormat: 'chat_completions',
+      models: ['LongCat-2.0-Preview'],
+      modelProfiles: {
+        'LongCat-2.0-Preview': expect.objectContaining({
+          contextWindowTokens: 1_000_000,
+          supportsToolCalling: true,
+          inputModalities: ['text']
+        })
+      }
+    })
 
     expect(zhipu && modelProviderPresetProfile(zhipu)).toMatchObject({
       id: 'zhipu-coding-plan',
@@ -1062,6 +1094,7 @@ describe('provider presets', () => {
 
   it('resolves new OpenAI-compatible presets through the selected provider', () => {
     const cases = [
+      ['longcat', 'https://api.longcat.chat/openai', 'LongCat-2.0-Preview'],
       ['zhipu-coding-plan', 'https://open.bigmodel.cn/api/coding/paas/v4/chat/completions', 'glm-5.2', 'custom_endpoint'],
       ['zai-coding-plan', 'https://api.z.ai/api/coding/paas/v4/chat/completions', 'glm-5.1', 'custom_endpoint'],
       ['kimi-code', 'https://api.kimi.com/coding/v1', 'kimi-for-coding'],
@@ -1097,7 +1130,7 @@ describe('provider presets', () => {
         endpointFormat,
         model
       }))
-      expect(resolved.modelProfiles[model]).toEqual(expect.objectContaining({
+      expect(resolved.modelProfiles[model.toLowerCase()]).toEqual(expect.objectContaining({
         supportsToolCalling: true
       }))
     }

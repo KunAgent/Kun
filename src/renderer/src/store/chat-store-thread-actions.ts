@@ -44,6 +44,8 @@ import {
   providerIdForComposerModel,
   providerIdMatchesComposerModel,
   readCodeWorkspaceRoots,
+  composerModeForThread,
+  readThreadComposerMode,
   readThreadComposerSelection,
   rememberCodeWorkspaceRoots,
   rememberThreadComposerSelection,
@@ -401,6 +403,7 @@ export function createThreadActions(
         : null
       const threadSnap = get().threads.find((thread) => thread.id === id) ?? null
       const composerSelection = composerSelectionForThread(get(), threadSnap)
+      const composerMode = composerModeForThread(threadSnap, readThreadComposerMode(id))
       set({
         watchTurnCompletion: nextWatch,
         unreadThreadIds: nextUnread,
@@ -421,6 +424,7 @@ export function createThreadActions(
         turnReasoningLastAtByUserId: {},
         inspectorSelectedId: null,
         queuedMessages: [],
+        composerMode,
         ...(composerSelection
           ? {
               composerModel: composerSelection.model,

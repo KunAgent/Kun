@@ -25,12 +25,16 @@ import { readBrowserStorageItem, writeBrowserStorageItem } from '../lib/browser-
 const COMPOSER_MODEL_STORAGE_KEY = 'kun.composerModel'
 const COMPOSER_PROVIDER_STORAGE_KEY = 'kun.composerProviderId'
 const THREAD_COMPOSER_SELECTION_STORAGE_KEY = 'kun.threadComposerSelection.v1'
+const THREAD_COMPOSER_MODE_STORAGE_KEY = 'kun.threadComposerMode.v1'
+const COMPOSER_MODE_STORAGE_KEY = 'kun.composerMode'
 const TURN_MODEL_STORAGE_KEY = 'kun.turnModelLabel'
 const CODE_WORKSPACE_ROOTS_STORAGE_KEY = 'kun.codeWorkspaceRoots.v1'
 export const MAX_CODE_WORKSPACE_ROOTS = 30
 export const MAX_THREAD_COMPOSER_SELECTIONS = 500
 export const MAX_TURN_MODEL_LABELS = 500
 export const DEFAULT_COMPOSER_CONTEXT_WINDOW_TOKENS = 128_000
+
+export type ComposerPlanMode = 'plan' | 'agent'
 
 export type ThreadComposerSelection = {
   model: string
@@ -78,6 +82,56 @@ export function readThreadComposerSelection(threadId: string): ThreadComposerSel
   const thread = threadId.trim()
   if (!thread) return null
   return loadThreadComposerSelectionMap()[thread] ?? null
+}
+
+export function normalizeComposerPlanMode(raw: unknown): ComposerPlanMode | null {
+  if (raw === 'plan' || raw === 'agent') return raw
+  return null
+}
+
+export function readStoredComposerMode(): ComposerPlanMode {
+  const raw = readBrowserStorageItem(COMPOSER_MODE_STORAGE_KEY)
+  return normalizeComposerPlanMode(raw) ?? 'agent'
+}
+
+export function persistComposerMode(mode: ComposerPlanMode): void {
+  writeBrowserStorageItem(COMPOSER_MODE_STORAGE_KEY, mode)
+}
+
+export function normalizeThreadComposerModeMap(raw: unknown): Record<string, ComposerPlanMode> {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {}
+  const entries: Array<[string, ComposerPlanMode]> = []
+  for (const [rawKey, rawValue] of Object.entries(raw as Record<string, unknown>)) {
+    const key = rawKey.trim()
+    const mode = normalizeComposerPlanMode(rawValue)
+    if (!key || !mode) continue
+    entries.push([key, mode])
+  }
+  return Object.fromEntries(entries.slice(-MAX_THREAD_COMPOSER_SELECTIONS))
+}
+
+export function readThreadComposerMode(threadId: string): ComposerPlanMode | null {
+  const thread = threadId.trim()
+  if (!thread) return null
+  return loadThreadComposerModeMap()[thread] ?? null
+}
+
+export function rememberThreadComposerMode(threadId: string, mode: ComposerPlanMode): void {
+  const thread = threadId.trim()
+  if (!thread) return
+  const map = loadThreadComposerModeMap()
+  delete map[thread]
+  map[thread] = mode
+  saveThreadComposerModeMap(map)
+}
+
+export function composerModeForThread(
+  thread: Pick<NormalizedThread, 'id' | 'mode'> | null | undefined,
+  storedMode: ComposerPlanMode | null
+): ComposerPlanMode {
+  if (storedMode) return storedMode
+  if (thread?.mode.trim() === 'plan') return 'plan'
+  return 'agent'
 }
 
 export function rememberThreadComposerSelection(
@@ -503,5 +557,22 @@ function saveThreadComposerSelectionMap(map: Record<string, ThreadComposerSelect
   writeBrowserStorageItem(
     THREAD_COMPOSER_SELECTION_STORAGE_KEY,
     JSON.stringify(normalizeThreadComposerSelectionMap(map))
+  )
+}
+
+function loadThreadComposerModeMap(): Record<string, ComposerPlanMode> {
+  try {
+    const raw = readBrowserStorageItem(THREAD_COMPOSER_MODE_STORAGE_KEY)
+    if (!raw) return {}
+    return normalizeThreadComposerModeMap(JSON.parse(raw))
+  } catch {
+    return {}
+  }
+}
+
+function saveThreadComposerModeMap(map: Record<string, ComposerPlanMode>): void {
+  writeBrowserStorageItem(
+    THREAD_COMPOSER_MODE_STORAGE_KEY,
+    JSON.stringify(normalizeThreadComposerModeMap(map))
   )
 }

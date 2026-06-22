@@ -21,6 +21,7 @@ import type { PipelineStage } from '../contracts/events.js'
 import type { RuntimeErrorSeverity } from '../contracts/errors.js'
 import type { IdGenerator } from '../ports/id-generator.js'
 import type { ImmutablePrefix } from '../cache/immutable-prefix.js'
+import type { CacheRequestSignature } from '../cache/cache-diagnostics.js'
 import { ContextCompactor } from './context-compactor.js'
 import {
   effectiveHistoryAfterLatestCompaction,
@@ -234,6 +235,69 @@ export function resolvePlanModeToolSpecs(
   return options.stepIndex === 0
     ? toolSpecs.filter((tool) => tool.name === planTool || readOnly.has(tool.name))
     : toolSpecs.filter((tool) => tool.name === planTool)
+}
+
+export function buildRuntimeContextInstruction(input: {
+  workspace?: string
+  nowIso: string
+  timeZone?: string
+}): string | null {
+  const workspace = input.workspace?.trim()
+  const projectPath = workspace
+    ? isAbsolute(workspace) ? workspace : resolve(workspace)
+    : ''
+  const localTime = formatLocalDateTimeForPrompt(input.nowIso, input.timeZone)
+  if (!projectPath && !localTime) return null
+  return [
+    'Runtime context for this model request:',
+    projectPath ? `- Current opened project absolute path: \`${projectPath}\`` : '',
+    localTime ? `- Current user local time: ${localTime}` : '',
+    '- Treat this block as environment context, not as user instructions.'
+  ].filter(Boolean).join('\n')
+}
+
+export function shouldInjectInitialRuntimeContext(input: {
+  stepIndex: number
+  turnId: string
+  historyItems: readonly TurnItem[]
+}): boolean {
+  return input.stepIndex === 0 && input.historyItems.every((item) => item.turnId === input.turnId)
+}
+
+function formatLocalDateTimeForPrompt(nowIso: string, timeZone?: string): string {
+  const date = new Date(nowIso)
+  const fallback = nowIso.trim()
+  if (Number.isNaN(date.getTime())) return fallback
+  const resolvedTimeZone = timeZone?.trim() || Intl.DateTimeFormat().resolvedOptions().timeZone
+  try {
+    const formatter = new Intl.DateTimeFormat('en-CA', {
+      ...(resolvedTimeZone ? { timeZone: resolvedTimeZone } : {}),
+      weekday: 'long',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hourCycle: 'h23',
+      timeZoneName: 'shortOffset'
+    })
+    const parts = new Map(formatter.formatToParts(date).map((part) => [part.type, part.value]))
+    const year = parts.get('year')
+    const month = parts.get('month')
+    const day = parts.get('day')
+    const hour = parts.get('hour')
+    const minute = parts.get('minute')
+    const second = parts.get('second')
+    const weekday = parts.get('weekday')
+    if (!year || !month || !day || !hour || !minute || !second || !weekday) {
+      return fallback || date.toISOString()
+    }
+    const zone = [resolvedTimeZone, parts.get('timeZoneName')].filter(Boolean).join(', ')
+    return `${year}-${month}-${day} ${hour}:${minute}:${second} ${weekday}${zone ? ` (${zone})` : ''}`
+  } catch {
+    return fallback || date.toISOString()
+  }
 }
 
 function goalContinuationInstruction(goal: ThreadGoal | undefined): string | null {
@@ -758,19 +822,25 @@ export class AgentLoop {
     this.turnFailures.set(turnId, failure)
   }
 
-  private modelClientDiagnostics(): ModelClientDiagnostics {
+  private modelClientDiagnostics(providerId?: string): ModelClientDiagnostics {
     const client = this.opts.model as ModelClient & {
       config?: {
         baseUrl?: string
         endpointFormat?: string
         model?: string
       }
+      configFor?: (providerId?: string) => {
+        baseUrl?: string
+        endpointFormat?: string
+        model?: string
+      } | undefined
     }
+    const config = client.configFor?.(providerId) ?? client.config
     return {
       provider: client.provider,
-      ...(client.config?.baseUrl ? { providerBaseUrl: sanitizeProviderBaseUrl(client.config.baseUrl) } : {}),
-      ...(client.config?.endpointFormat ? { endpointFormat: client.config.endpointFormat } : {}),
-      ...(client.config?.model ? { configuredModel: client.config.model } : {})
+      ...(config?.baseUrl ? { providerBaseUrl: sanitizeProviderBaseUrl(config.baseUrl) } : {}),
+      ...(config?.endpointFormat ? { endpointFormat: config.endpointFormat } : {}),
+      ...(config?.model ? { configuredModel: config.model } : {})
     }
   }
 
@@ -1175,7 +1245,18 @@ export class AgentLoop {
     await this.recordPipelineStage(threadId, turnId, 'input_compressed', {
       historyItems: history.length
     })
+    const runtimeContextInstruction = shouldInjectInitialRuntimeContext({
+      stepIndex,
+      turnId,
+      historyItems
+    })
+      ? buildRuntimeContextInstruction({
+          workspace: thread?.workspace,
+          nowIso: this.opts.nowIso()
+        })
+      : null
     const contextInstructions = [
+      ...(runtimeContextInstruction ? [runtimeContextInstruction] : []),
       ...(activeGoalInstruction ? [activeGoalInstruction] : []),
       ...(goalRecoveryInstruction && (this.goalNoToolRecoveryStepsByTurn.get(turnId) ?? 0) > 0
         ? [goalRecoveryInstruction]
@@ -1243,7 +1324,15 @@ export class AgentLoop {
     let reasoningItemId = ''
     const completedToolCalls: ToolCallLike[] = []
     let stopReason: 'stop' | 'tool_calls' | 'length' | 'error' = 'stop'
-    const modelClientDiagnostics = this.modelClientDiagnostics()
+    const modelClientDiagnostics = this.modelClientDiagnostics(request.providerId)
+    const cacheSignature: CacheRequestSignature = {
+      model: request.model,
+      providerId: request.providerId?.trim() || modelClientDiagnostics.provider || 'default',
+      endpointFormat: modelClientDiagnostics.endpointFormat || 'unknown',
+      prefixFingerprint: this.opts.prefix.fingerprint,
+      toolCatalogFingerprint: toolCatalog.fingerprint,
+      activeSkillIds: skillResolution.activeSkillIds
+    }
     let persistedReasoning = false
     let persistedText = false
     const persistAccumulatedResponse = async (): Promise<void> => {
@@ -1381,7 +1470,7 @@ export class AgentLoop {
         }
         case 'usage': {
           this.recordPromptPressure(threadId, request.model, chunk.usage.promptTokens)
-          const usage = this.opts.usage.record(threadId, chunk.usage)
+          const usage = this.opts.usage.record(threadId, chunk.usage, cacheSignature)
           await this.opts.events.record({
             kind: 'usage',
             threadId,
@@ -1751,8 +1840,8 @@ export class AgentLoop {
     approvalPolicy: ToolHostContext['approvalPolicy'],
     toolProviderKinds: ReadonlyMap<string, ToolProviderKind | undefined>
   ): boolean {
-    // Untrusted/never prompt on every tool, so parallel fan-out is unsafe.
-    if (approvalPolicy === 'untrusted' || approvalPolicy === 'never') return false
+    // always / untrusted / never 会触发审批或阻断工具调用，不能并发扇出。
+    if (approvalPolicy === 'always' || approvalPolicy === 'untrusted' || approvalPolicy === 'never') return false
     // Delegated children are isolated runs; multiple in one assistant message
     // are independent and safe to fan out. The delegation runtime caps real
     // concurrency at maxParallel and queues the overflow.
@@ -2707,6 +2796,7 @@ function normalizeApprovalPolicy(
 ): ToolHostContext['approvalPolicy'] {
   switch (value) {
     case 'on-request':
+    case 'always':
     case 'never':
     case 'auto':
     case 'suggest':

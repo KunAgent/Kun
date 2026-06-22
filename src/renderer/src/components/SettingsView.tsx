@@ -24,7 +24,13 @@ import type {
   CoreRuntimeToolDiagnosticsJson
 } from '../agent/kun-contract'
 import type { WriteInlineCompletionDebugEntry } from '@shared/write-inline-completion'
-import { applyCursorSpotlight, applyTheme, applyUiFontScale, applyWriteTypography } from '../lib/apply-theme'
+import {
+  applyCursorSpotlight,
+  applyCursorSpotlightColor,
+  applyTheme,
+  applyUiFontScale,
+  applyWriteTypography
+} from '../lib/apply-theme'
 import { formatWorkspacePickerError } from '../lib/format-workspace-picker-error'
 import type { SkillRootListItem } from '@shared/kun-gui-api'
 import { normalizeWorkspaceRoot } from '../lib/workspace-path'
@@ -63,10 +69,11 @@ import {
   ProvidersSettingsSection,
   SpeechToTextSettingsSection,
   UpdatesSettingsSection,
-  WriteSettingsSection
+  WriteSettingsSection,
+  TerminalSettingsSection
 } from './settings-sections'
 
-type SettingsCategory = 'general' | 'providers' | 'write' | 'mediaGeneration' | 'speechToText' | 'agents' | 'archives' | 'permissions' | 'worktree' | 'memory' | 'shortcuts' | 'easterEgg' | 'claw' | 'updates' | 'debug'
+type SettingsCategory = 'general' | 'providers' | 'write' | 'mediaGeneration' | 'speechToText' | 'agents' | 'archives' | 'permissions' | 'worktree' | 'memory' | 'shortcuts' | 'easterEgg' | 'claw' | 'updates' | 'debug' | 'terminal'
 type SaveStatus = 'idle' | 'saving' | 'saved' | 'error'
 type SettingsPatch = AppSettingsPatch
 type InlineNotice = {
@@ -144,6 +151,7 @@ export function SettingsView(): ReactElement {
   const formPort = formKun?.port
   const formGuiUpdateChannel = form?.guiUpdate?.channel
   const formCursorSpotlight = form?.cursorSpotlight
+  const formCursorSpotlightColor = form?.cursorSpotlightColor
   const settingsPlatform = typeof window !== 'undefined' ? window.kunGui?.platform ?? '' : ''
   const settingsHomeDir = typeof window !== 'undefined' ? window.kunGui?.homeDir ?? '' : ''
   const compactHomePath = useCallback((value: string): string =>
@@ -202,7 +210,8 @@ export function SettingsView(): ReactElement {
     if (typeof formCursorSpotlight === 'boolean') {
       applyCursorSpotlight(formCursorSpotlight)
     }
-  }, [formCursorSpotlight])
+    applyCursorSpotlightColor(formCursorSpotlightColor)
+  }, [formCursorSpotlight, formCursorSpotlightColor])
 
   // Live-preview the Write editor typography as the form changes, mirroring the
   // theme/scale preview above. Keyed on the scalar fields so it only re-applies
@@ -289,7 +298,7 @@ export function SettingsView(): ReactElement {
       return
     }
     if (settingsSection === 'permissions') {
-      setCategory('permissions')
+      setCategory('agents')
       return
     }
     if (settingsSection === 'archives') {
@@ -312,6 +321,10 @@ export function SettingsView(): ReactElement {
       setCategory('updates')
       return
     }
+    if (settingsSection === 'terminal') {
+      setCategory('terminal')
+      return
+    }
     setCategory('agents')
   }, [settingsSection])
 
@@ -329,12 +342,13 @@ export function SettingsView(): ReactElement {
       settingsSection === 'shortcuts' ||
       settingsSection === 'easterEgg' ||
       settingsSection === 'updates' ||
-      (category !== 'agents' && category !== 'permissions')
+      settingsSection === 'terminal' ||
+      category !== 'agents'
     ) {
       return
     }
     const refs: Record<
-      Exclude<SettingsRouteSection, 'general' | 'providers' | 'write' | 'imageGeneration' | 'mediaGeneration' | 'speechToText' | 'archives' | 'claw' | 'shortcuts' | 'easterEgg' | 'updates'>,
+      Exclude<SettingsRouteSection, 'general' | 'providers' | 'write' | 'imageGeneration' | 'mediaGeneration' | 'speechToText' | 'archives' | 'claw' | 'shortcuts' | 'easterEgg' | 'updates' | 'terminal'>,
       HTMLDivElement | null
     > = {
       agents: agentsSectionRef.current,
@@ -348,15 +362,6 @@ export function SettingsView(): ReactElement {
       target.scrollIntoView({ behavior: 'smooth', block: 'start' })
     })
   }, [category, form, settingsSection])
-
-  useEffect(() => {
-    if (!form || category !== 'permissions') return
-    const target = permissionsSectionRef.current
-    if (!target) return
-    window.requestAnimationFrame(() => {
-      target.scrollIntoView({ behavior: 'smooth', block: 'start' })
-    })
-  }, [category, form])
 
   useEffect(() => {
     return () => {
@@ -411,7 +416,7 @@ export function SettingsView(): ReactElement {
   }
 
   useEffect(() => {
-    if ((category !== 'agents' && category !== 'permissions') || mcpLoaded || mcpLoading) return
+    if (category !== 'agents' || mcpLoaded || mcpLoading) return
     void loadMcpConfig()
   }, [category, mcpLoaded, mcpLoading])
 
@@ -502,7 +507,7 @@ export function SettingsView(): ReactElement {
   }, [expandHomePath, formWorkspaceRoot])
 
   useEffect(() => {
-    if (category !== 'agents' && category !== 'permissions' && category !== 'memory') return
+    if (category !== 'agents' && category !== 'memory') return
     void refreshKunDiagnostics()
   }, [category, refreshKunDiagnostics])
 
@@ -1029,7 +1034,7 @@ export function SettingsView(): ReactElement {
           {category === 'write' ? <WriteSettingsSection ctx={settingsSectionContext} /> : null}
           {category === 'mediaGeneration' ? <MediaGenerationSettingsSection ctx={settingsSectionContext} /> : null}
           {category === 'speechToText' ? <SpeechToTextSettingsSection ctx={settingsSectionContext} /> : null}
-          {category === 'agents' || category === 'permissions' ? <AgentsSettingsSection ctx={settingsSectionContext} /> : null}
+          {category === 'agents' ? <AgentsSettingsSection ctx={settingsSectionContext} /> : null}
           {category === 'archives' ? <ArchivedThreadsSettingsSection ctx={settingsSectionContext} /> : null}
           {category === 'worktree' ? <WorktreeSettingsSection ctx={settingsSectionContext} /> : null}
           {category === 'memory' ? <MemorySettingsSection ctx={settingsSectionContext} /> : null}
@@ -1037,6 +1042,7 @@ export function SettingsView(): ReactElement {
           {category === 'easterEgg' ? <EasterEggSettingsSection ctx={settingsSectionContext} /> : null}
           {category === 'claw' ? <ClawSettingsSection ctx={settingsSectionContext} /> : null}
           {category === 'updates' ? <UpdatesSettingsSection ctx={settingsSectionContext} /> : null}
+          {category === 'terminal' ? <TerminalSettingsSection ctx={settingsSectionContext} /> : null}
           {category === 'debug' ? <LlmDebugSettingsSection ctx={settingsSectionContext} /> : null}
         </div>
       </div>

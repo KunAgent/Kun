@@ -12,6 +12,7 @@ import {
   defaultScheduleSettings,
   defaultWorkflowSettings,
   defaultWriteSettings,
+  defaultTerminalSettings,
   type AppSettingsV1
 } from '../../shared/app-settings'
 
@@ -31,6 +32,7 @@ const settings: AppSettingsV1 = {
   claw: defaultClawSettings(),
   schedule: defaultScheduleSettings(),
   workflow: defaultWorkflowSettings(),
+  terminal: defaultTerminalSettings(),
   guiUpdate: { channel: 'stable' },
   codePromptPrefix: '',
   disabledSkillIds: []

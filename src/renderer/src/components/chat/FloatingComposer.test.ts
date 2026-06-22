@@ -700,14 +700,72 @@ describe('FloatingComposer capability controls', () => {
         })
       )
 
-      expect(html).toContain('自动执行')
-      expect(html).toContain('访问所有文件')
+      expect(html).toContain('完全访问')
       expect(html).not.toContain('>审批<')
       expect(html).not.toContain('>权限<')
-      expect(html).toContain('aria-label="审批"')
-      expect(html).toContain('aria-label="权限"')
+      expect(html).toContain('aria-label="工具权限"')
+      expect(html).toContain('lucide-lock-keyhole-open')
       expect(html).not.toContain('Full access')
       expect(html).not.toContain('Auto')
+      expect(html).not.toContain('Bypass')
+    } finally {
+      await i18n.changeLanguage(previousLanguage)
+    }
+  })
+
+  it('renders the workspace-write permission mode in the execution picker', () => {
+    const html = renderToStaticMarkup(
+      createElement(FloatingComposerExecutionPicker, {
+        value: {
+          approvalPolicy: 'on-request',
+          sandboxMode: 'workspace-write'
+        },
+        onChange: () => undefined
+      })
+    )
+
+    expect(html).toContain('Workspace write')
+    expect(html).toContain('Can modify the workspace')
+    expect(html).toContain('aria-label="Tool permission"')
+    expect(html).toContain('lucide-folder-pen')
+  })
+
+  it('renders the sensitive-ask permission mode in the execution picker', () => {
+    const html = renderToStaticMarkup(
+      createElement(FloatingComposerExecutionPicker, {
+        value: {
+          approvalPolicy: 'untrusted',
+          sandboxMode: 'danger-full-access'
+        },
+        onChange: () => undefined
+      })
+    )
+
+    expect(html).toContain('Sensitive ask')
+    expect(html).toContain('Ordinary reads can run automatically')
+    expect(html).toContain('aria-label="Tool permission"')
+    expect(html).toContain('lucide-shield-question')
+  })
+
+  it('renders the always-ask permission label in Chinese as 永远询问', async () => {
+    const previousLanguage = i18n.language
+    await i18n.changeLanguage('zh')
+
+    try {
+      const html = renderToStaticMarkup(
+        createElement(FloatingComposerExecutionPicker, {
+          value: {
+            approvalPolicy: 'always',
+            sandboxMode: 'danger-full-access'
+          },
+          onChange: () => undefined
+        })
+      )
+
+      expect(html).toContain('永远询问')
+      expect(html).toContain('每次工具调用都要你确认')
+      expect(html).toContain('lucide-hand')
+      expect(html).not.toContain('永远咨询')
     } finally {
       await i18n.changeLanguage(previousLanguage)
     }
@@ -1233,13 +1291,12 @@ describe('FloatingComposer capability controls', () => {
       })
     )
 
-    expect(html).toContain('Approval')
-    expect(html).toContain('Auto')
+    expect(html).toContain('Tool permission')
     expect(html).toContain('Full access')
+    expect(html).not.toContain('Bypass')
     expect(html).not.toContain('>Approval<')
     expect(html).not.toContain('>Access<')
-    expect(html).toContain('aria-label="Approval"')
-    expect(html).toContain('aria-label="Access"')
+    expect(html).toContain('aria-label="Tool permission"')
   })
 
   it('renders a changed-file review card above the input', () => {

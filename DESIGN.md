@@ -679,7 +679,7 @@ If any box is unchecked, fix it before merging.
 │       │ spawn child process + HTTP/SSE                       │
 │       ▼                                                      │
 │ Kun (TypeScript package)                              │
-│  serve --host 127.0.0.1 --port 7878                          │
+│  serve --host 127.0.0.1 --port 18899                          │
 │  /health · /v1/* · SSE /v1/threads/{id}/events              │
 │  cache-first AgentLoop · ports & adapters · append-only log  │
 │       │                                                      │

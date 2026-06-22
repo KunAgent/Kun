@@ -35,6 +35,17 @@ make all of their models appear in the composer before credentials are set.
 
 ## Built-in Providers
 
+Vercel AI Gateway:
+
+- id: `vercel-ai-gateway`
+- base URL: `https://ai-gateway.vercel.sh/v1`
+- endpoint format: OpenAI Chat Completions
+- models: imported on demand from the gateway `GET /models` endpoint
+- role: optional multi-provider gateway with Vercel-managed routing, fallback,
+  spend monitoring, and BYOK support
+- behavior: direct providers remain the default; adding this preset does not
+  route existing providers through Vercel
+
 DeepSeek:
 
 - id: `deepseek`
@@ -119,5 +130,6 @@ if provider endpoints change, and they can add custom compatible providers at
 any time.
 
 First-run setup intentionally remains focused on the default stack. It only
-shows DeepSeek plus the Xiaomi and MiniMax presets; LiteLLM, Zhipu, Z.ai, Kimi
-Code, and Moonshot presets are opt-in from Settings > Providers.
+shows DeepSeek plus the Xiaomi and MiniMax presets; Vercel AI Gateway, LiteLLM,
+Zhipu, Z.ai, Kimi Code, and Moonshot presets are opt-in from Settings >
+Providers.

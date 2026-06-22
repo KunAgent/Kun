@@ -45,7 +45,7 @@ type WorkbenchPlanControllerOptions = {
   route: ChatState['route']
   sendMessage: ChatState['sendMessage']
   setError: ChatState['setError']
-  setMode: Dispatch<SetStateAction<'plan' | 'agent'>>
+  setComposerMode: ChatState['setComposerMode']
   setRightPanelMode: Dispatch<SetStateAction<RightPanelMode>>
   setRightSidebarWidth: Dispatch<SetStateAction<number>>
   t: (key: string) => string
@@ -129,7 +129,7 @@ export function useWorkbenchPlanController({
   route,
   sendMessage,
   setError,
-  setMode,
+  setComposerMode,
   setRightPanelMode,
   setRightSidebarWidth,
   t,
@@ -263,7 +263,7 @@ export function useWorkbenchPlanController({
     }
     const saved = await savePlanContentToDisk(plan, snapshot.content)
     if (!saved) return
-    setMode('agent')
+    setComposerMode('agent')
     const prompt = buildPlanBuildPrompt(plan.relativePath)
     const sent = await sendMessage(prompt, 'agent', {
       displayText: `${t('planBuild')}: ${plan.relativePath}`
@@ -274,7 +274,7 @@ export function useWorkbenchPlanController({
   }
 
   const handleGuiPlanCommand = async (request?: string): Promise<void> => {
-    setMode('plan')
+    setComposerMode('plan')
     if (request?.trim()) {
       await sendPlanTurn(request.trim())
     }
@@ -291,7 +291,7 @@ export function useWorkbenchPlanController({
       setError(t('composerQueuePlaceholder'))
       return
     }
-    setMode('agent')
+    setComposerMode('agent')
     await sendMessage(
       buildSddVerifyPrompt({
         workspaceRoot: plan.workspaceRoot,
@@ -338,7 +338,7 @@ export function useWorkbenchPlanController({
       '```'
     ].join('\n')
 
-    setMode('plan')
+    setComposerMode('plan')
     const sent = await sendPlanTurn(
       buildRefinePlanPrompt({
         feedback,
@@ -379,9 +379,9 @@ export function useWorkbenchPlanController({
 
   useEffect(() => {
     if (route !== 'chat' && mode === 'plan') {
-      setMode('agent')
+      setComposerMode('agent')
     }
-  }, [mode, route, setMode])
+  }, [mode, route, setComposerMode])
 
   useEffect(() => {
     if (latestPlanBlock && lastLoadedPlanBlockIdRef.current === latestPlanBlock.blockId) return

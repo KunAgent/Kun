@@ -139,6 +139,9 @@ export const DESKTOP_COMMANDS = [
 ] as const
 export type DesktopCommand = typeof DESKTOP_COMMANDS[number]
 export type SkillSaveResult = { ok: true; path: string } | { ok: false; message: string }
+export type SkillGithubImportResult =
+  | { ok: true; count: number; names: string[]; paths: string[] }
+  | { ok: false; message: string }
 export type SkillListItem = {
   id: string
   name: string
@@ -323,7 +326,13 @@ export type KunGuiApi = {
   pickLegacySessionDir: () => Promise<WorkspacePickResult>
   listSkills: (workspaceRoot?: string) => Promise<SkillListResult>
   listSkillRoots: (workspaceRoot?: string) => Promise<SkillRootListResult>
-  saveSkillFile: (rootPath: string, skillName: string, content: string) => Promise<SkillSaveResult>
+  saveSkillFile: (
+    rootPath: string,
+    skillName: string,
+    content: string,
+    manifestContent?: string
+  ) => Promise<SkillSaveResult>
+  importSkillsFromGitHub: (rootPath: string, url: string) => Promise<SkillGithubImportResult>
   openSkillRoot: (rootPath: string) => Promise<PathOpenResult>
   listUiPlugins: () => Promise<UiPluginListIpcResult>
   installUiPlugin: () => Promise<UiPluginInstallIpcResult>

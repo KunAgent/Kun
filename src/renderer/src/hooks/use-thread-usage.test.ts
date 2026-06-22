@@ -226,6 +226,47 @@ describe('thread usage formatting', () => {
     })
   })
 
+  it('surfaces latest-turn cache diagnostics', async () => {
+    const runtimeRequest = vi.fn<RuntimeRequest>(async (path) => {
+      if (path === threadUsagePath('thr_cache_diagnostics')) {
+        return {
+          ok: true,
+          status: 200,
+          body: JSON.stringify({
+            buckets: [
+              {
+                thread_id: 'thr_cache_diagnostics',
+                input_tokens: 1000,
+                output_tokens: 20,
+                total_tokens: 1020,
+                cached_tokens: 600,
+                cache_miss_tokens: 200,
+                cache_hit_rate: 0.75,
+                last_turn_cache_hit_rate: 0.75,
+                last_turn_cacheable_hit_rate: 0.75,
+                last_turn_total_input_hit_rate: 0.6,
+                last_cache_miss_reasons: ['tool_catalog_changed'],
+                last_cache_suggestions: ['Keep MCP and Skill tools stable within a thread.'],
+                turns: 1
+              }
+            ]
+          })
+        }
+      }
+      throw new Error(`unexpected request: ${path}`)
+    })
+    setRuntimeRequest(runtimeRequest)
+
+    const usage = await loadThreadUsage('thr_cache_diagnostics')
+
+    expect(usage).toMatchObject({
+      lastTurnCacheableHitRate: 0.75,
+      lastTurnTotalInputHitRate: 0.6,
+      cacheMissReasons: ['tool_catalog_changed'],
+      cacheSuggestions: ['Keep MCP and Skill tools stable within a thread.']
+    })
+  })
+
   it('falls back to null last-turn cache rate when the field is absent', async () => {
     const runtimeRequest = vi.fn<RuntimeRequest>(async (path) => {
       if (path === threadUsagePath('thr_no_last_turn')) {
