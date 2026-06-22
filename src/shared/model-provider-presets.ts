@@ -24,6 +24,7 @@ export type ModelProviderPresetId =
   | 'volcengine-coding-plan'
   | 'opencode-go'
   | 'codex'
+  | 'claude-subscription'
   | 'moonshot-cn'
   | 'moonshot-global'
   | 'xiaomi'
@@ -633,6 +634,25 @@ export const MODEL_PROVIDER_PRESETS: ModelProviderPreset[] = [
     },
     docsUrl: 'https://openai.com/index/codex/',
     apiKeyUrl: 'https://chatgpt.com'
+  },
+  {
+    id: 'claude-subscription',
+    name: 'Claude (Pro/Max)',
+    category: 'subscription',
+    baseUrl: 'https://api.anthropic.com',
+    endpointFormat: 'messages',
+    models: [
+      'claude-opus-4-8',
+      'claude-sonnet-4-6',
+      'claude-haiku-4-5-20251001'
+    ],
+    modelProfiles: {
+      'claude-opus-4-8': visionChatProfile(200_000),
+      'claude-sonnet-4-6': visionChatProfile(200_000),
+      'claude-haiku-4-5-20251001': visionChatProfile(200_000)
+    },
+    docsUrl: 'https://docs.anthropic.com/en/docs/claude-code',
+    apiKeyUrl: 'https://claude.ai'
   },
   {
     id: 'vercel-ai-gateway',

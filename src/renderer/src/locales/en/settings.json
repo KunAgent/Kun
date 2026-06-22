@@ -1127,6 +1127,8 @@
   "memoryEnableDesc": "When enabled, the assistant persists facts and preferences across sessions and injects them into context automatically. Changes apply on the next turn.",
   "codexEndpointLocked": "Codex uses a fixed endpoint and cannot be changed.",
   "codexLoginButton": "Log in to ChatGPT",
+  "claudeLoginButton": "Log in to Claude",
+  "claudeEndpointLocked": "Claude subscription uses a fixed endpoint and cannot be changed.",
   "codexLoginDeviceCodeFallback": "Use device code instead",
   "codexBrowserOpened": "Browser opened. Complete the sign-in to return automatically.",
   "codexDisconnect": "Disconnect",

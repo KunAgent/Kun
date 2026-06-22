@@ -105,6 +105,7 @@ import type { ClawRuntime } from '../claw-runtime'
 import type { ScheduleRuntime } from '../schedule-runtime'
 import { verifyTelegramBotToken } from '../telegram-runtime'
 import { startCodexDeviceAuth, pollCodexDeviceAuth, startCodexBrowserAuth } from '../codex-auth'
+import { startAnthropicBrowserAuth } from '../anthropic-auth'
 import type { WorkflowRuntime } from '../workflow-runtime'
 import { checkWorkflowCode } from '../workflow-runtime'
 import {
@@ -730,6 +731,12 @@ export function registerAppIpcHandlers(options: RegisterAppIpcHandlersOptions): 
 
   ipcMain.handle('codex:auth:browser', async () => {
     return startCodexBrowserAuth(async (url: string) => {
+      await shell.openExternal(url)
+    })
+  })
+
+  ipcMain.handle('anthropic:auth:browser', async () => {
+    return startAnthropicBrowserAuth(async (url: string) => {
       await shell.openExternal(url)
     })
   })

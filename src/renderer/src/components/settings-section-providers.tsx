@@ -306,11 +306,27 @@ type ProbeState = {
 function providerPresetRequiresApiKey(provider: ModelProviderProfileV1): boolean {
   if (provider.id === 'litellm') return false
   if (isCodexProvider(provider.id)) return false
+  if (isAnthropicProvider(provider.id)) return false
   return Boolean(getModelProviderPreset(provider.id) || tokenPlanPresetForProfileId(provider.id))
 }
 
 function isCodexProvider(id: string): boolean {
   return id === 'codex'
+}
+
+function isAnthropicProvider(id: string): boolean {
+  return id === 'claude-subscription'
+}
+
+function anthropicAccountLabel(apiKey: string): string | undefined {
+  if (!apiKey.startsWith('{')) return undefined
+  try {
+    const parsed = JSON.parse(apiKey) as Record<string, unknown>
+    if (parsed.kind !== 'anthropic-oauth') return undefined
+    return typeof parsed.email === 'string' && parsed.email ? parsed.email : 'Claude'
+  } catch {
+    return undefined
+  }
 }
 
 function parseCodexEmail(apiKey: string): string | undefined {
@@ -515,6 +531,104 @@ function CodexLoginSection({
         onClick={startDeviceCodeLogin}
       >
         {t('codexLoginDeviceCodeFallback')}
+      </button>
+      {phase === 'error' && error ? (
+        <span className="text-[12px] text-red-500">{error}</span>
+      ) : null}
+    </div>
+  )
+}
+
+function AnthropicLoginSection({
+  provider,
+  onCredentialChange,
+  t
+}: {
+  provider: ModelProviderProfileV1
+  onCredentialChange: (apiKey: string) => void
+  t: (key: string, params?: Record<string, unknown>) => string
+}): ReactElement {
+  const [phase, setPhase] = useState<'idle' | 'browser' | 'error'>('idle')
+  const [error, setError] = useState('')
+  const accountLabel = anthropicAccountLabel(provider.apiKey)
+  const connected = Boolean(accountLabel)
+
+  const startBrowserLogin = async (): Promise<void> => {
+    if (typeof window.kunGui?.startAnthropicBrowserAuth !== 'function') {
+      setPhase('error')
+      setError('Claude 浏览器登录不可用，请重启应用')
+      return
+    }
+    setPhase('browser')
+    setError('')
+    try {
+      const result = await window.kunGui.startAnthropicBrowserAuth()
+      if (result.ok) {
+        onCredentialChange(JSON.stringify(result.credentials))
+        setPhase('idle')
+      } else {
+        setPhase('error')
+        setError(result.message)
+      }
+    } catch (err) {
+      setPhase('error')
+      setError(err instanceof Error ? err.message : String(err))
+    }
+  }
+
+  const cancelLogin = (): void => {
+    setPhase('idle')
+    setError('')
+  }
+
+  const disconnect = (): void => {
+    onCredentialChange('')
+    setPhase('idle')
+  }
+
+  if (connected) {
+    return (
+      <div className="flex items-center gap-2">
+        <span className="inline-block h-2 w-2 rounded-full bg-emerald-500" />
+        <span className="text-[13px] text-ds-ink">{accountLabel}</span>
+        <button
+          type="button"
+          className="ml-auto rounded-lg px-3 py-1.5 text-[12px] font-medium text-ds-muted hover:bg-ds-hover"
+          onClick={disconnect}
+        >
+          {t('codexDisconnect')}
+        </button>
+      </div>
+    )
+  }
+
+  if (phase === 'browser') {
+    return (
+      <div className="grid gap-2">
+        <p className="text-[13px] text-ds-muted">{t('codexBrowserOpened')}</p>
+        <div className="flex items-center gap-1.5 text-[12px] text-ds-muted">
+          <Loader2 className="h-3 w-3 animate-spin" />
+          {t('codexWaitingAuth')}
+        </div>
+        <button
+          type="button"
+          className="w-fit text-[12px] font-medium text-ds-muted hover:text-ds-ink"
+          onClick={cancelLogin}
+        >
+          {t('codexCancel')}
+        </button>
+      </div>
+    )
+  }
+
+  return (
+    <div className="grid gap-2">
+      <button
+        type="button"
+        className="w-full rounded-xl bg-accent px-4 py-2.5 text-[14px] font-semibold text-white shadow-sm hover:bg-accent/90"
+        onClick={startBrowserLogin}
+      >
+        {t('claudeLoginButton')}
       </button>
       {phase === 'error' && error ? (
         <span className="text-[12px] text-red-500">{error}</span>
@@ -1487,6 +1601,12 @@ export function ProvidersSettingsSection({ ctx }: { ctx: Record<string, any> }):
                       onCredentialChange={(apiKey) => updateModelProvider(activeProvider.id, { apiKey })}
                       t={t}
                     />
+                  ) : isAnthropicProvider(activeProvider.id) ? (
+                    <AnthropicLoginSection
+                      provider={activeProvider}
+                      onCredentialChange={(apiKey) => updateModelProvider(activeProvider.id, { apiKey })}
+                      t={t}
+                    />
                   ) : (
                     <>
                       <label className={fieldLabelClass}>
@@ -1562,7 +1682,7 @@ export function ProvidersSettingsSection({ ctx }: { ctx: Record<string, any> }):
                     <select
                       className={selectControlClass}
                       value={activeProvider.endpointFormat}
-                      disabled={isCodexProvider(activeProvider.id)}
+                      disabled={isCodexProvider(activeProvider.id) || isAnthropicProvider(activeProvider.id)}
                       onChange={(e) => updateModelProvider(activeProvider.id, {
                         endpointFormat: e.target.value as ModelEndpointFormat
                       })}
@@ -1577,6 +1697,10 @@ export function ProvidersSettingsSection({ ctx }: { ctx: Record<string, any> }):
                   {isCodexProvider(activeProvider.id) ? (
                     <p className="text-[12px] leading-5 text-ds-muted">
                       {t('codexEndpointLocked')}
+                    </p>
+                  ) : isAnthropicProvider(activeProvider.id) ? (
+                    <p className="text-[12px] leading-5 text-ds-muted">
+                      {t('claudeEndpointLocked')}
                     </p>
                   ) : activeProvider.endpointFormat === 'custom_endpoint' ? (
                     <p className="text-[12px] leading-5 text-ds-muted">

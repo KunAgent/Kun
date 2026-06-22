@@ -24,6 +24,7 @@ import {
   resolveKunExecutable
 } from './resolve-kun-binary'
 import { isCodexOAuthCredentials, parseCodexCredentials, type CodexOAuthCredentials } from './codex-auth'
+import { isAnthropicOAuthCredentials, parseAnthropicCredentials } from './anthropic-auth'
 import {
   KunConfigSchema,
   KunServeConfigSchema,
@@ -330,7 +331,7 @@ async function startKunChildOnce(
   // When the active provider is Codex, runtime.apiKey holds JSON-encoded OAuth
   // credentials; unwrap to the bare access token so the default client sends a
   // valid Bearer (the Codex headers are written to serve.headers in config).
-  const defaultClientApiKey = resolveCodexDefaultClient(runtime.apiKey).apiKey
+  const defaultClientApiKey = resolveOAuthDefaultClient(runtime.apiKey).apiKey
   const childEnv: NodeJS.ProcessEnv = {
     ...process.env,
     KUN_RUNTIME_TOKEN: runtime.runtimeToken,
@@ -458,7 +459,7 @@ export async function syncGuiManagedKunConfig(
   // client's serve.headers (the bare access token goes to DEEPSEEK_API_KEY).
   // Always set the key explicitly (undefined clears it) so switching away from
   // Codex doesn't leave stale headers carried over by the `...serve` spread.
-  const defaultClientHeaders = resolveCodexDefaultClient(runtime.apiKey).headers
+  const defaultClientHeaders = resolveOAuthDefaultClient(runtime.apiKey).headers
   const next = {
     serve: {
       ...serve,
@@ -768,7 +769,7 @@ const CODEX_SESSION_ID = randomUUID()
 /**
  * HTTP headers the Codex backend requires alongside the OAuth Bearer token.
  * Shared by both the per-provider client (providersConfigForRuntime) and the
- * default client (resolveCodexDefaultClient) so the two never drift.
+ * default client (resolveOAuthDefaultClient) so the two never drift.
  */
 function codexRequestHeaders(creds: CodexOAuthCredentials): Record<string, string> {
   return {
@@ -791,17 +792,41 @@ function codexRequestHeaders(creds: CodexOAuthCredentials): Record<string, strin
   }
 }
 
+// User-Agent version reported to Anthropic's OAuth endpoint. Pairing the
+// claude-cli UA with the oauth/claude-code betas is what lets a Claude Pro/Max
+// subscription token through; bump to track Claude Code if Anthropic starts
+// version-gating the client.
+const CLAUDE_CODE_UA_VERSION = '2.1.75'
+
+/**
+ * HTTP headers Anthropic requires alongside a Claude Pro/Max OAuth Bearer
+ * token so the request is accepted as the Claude Code client. `anthropic-beta`
+ * MUST carry oauth + claude-code; the messages client itself sets
+ * anthropic-version and the Authorization Bearer (see compat-model-client).
+ * These don't depend on the credentials, but the signature mirrors
+ * codexRequestHeaders for symmetry at the call sites.
+ */
+function anthropicRequestHeaders(): Record<string, string> {
+  return {
+    'anthropic-beta': 'oauth-2025-04-20,claude-code-20250219,fine-grained-tool-streaming-2025-05-14',
+    'User-Agent': `claude-cli/${CLAUDE_CODE_UA_VERSION}`,
+    'x-app': 'cli'
+  }
+}
+
 /**
  * Resolve the default-client API key + headers for the active runtime
- * provider. Codex stores OAuth credentials JSON-encoded in the apiKey field:
- * unwrap it to the bare access token (used as the Bearer) and emit the Codex
- * headers. Non-Codex keys pass through untouched.
+ * provider. Codex and Anthropic store OAuth credentials JSON-encoded in the
+ * apiKey field: unwrap to the bare access token (used as the Bearer) and emit
+ * the provider's required headers. Plain API keys pass through untouched.
  */
-function resolveCodexDefaultClient(rawApiKey: string): { apiKey: string; headers?: Record<string, string> } {
+function resolveOAuthDefaultClient(rawApiKey: string): { apiKey: string; headers?: Record<string, string> } {
   const key = rawApiKey.trim()
-  const creds = isCodexOAuthCredentials(key) ? parseCodexCredentials(key) : null
-  if (!creds) return { apiKey: key }
-  return { apiKey: creds.accessToken, headers: codexRequestHeaders(creds) }
+  const codex = isCodexOAuthCredentials(key) ? parseCodexCredentials(key) : null
+  if (codex) return { apiKey: codex.accessToken, headers: codexRequestHeaders(codex) }
+  const anthropic = isAnthropicOAuthCredentials(key) ? parseAnthropicCredentials(key) : null
+  if (anthropic) return { apiKey: anthropic.accessToken, headers: anthropicRequestHeaders() }
+  return { apiKey: key }
 }
 
 function providersConfigForRuntime(settings: AppSettingsV1): Record<string, Record<string, unknown>> {
@@ -817,13 +842,13 @@ function providersConfigForRuntime(settings: AppSettingsV1): Record<string, Reco
     // and avoids paying twice for one provider that happens to be active.
     if (id === runtimeProviderId) continue
     const rawApiKey = provider.apiKey?.trim() ?? ''
-    const codexCreds = isCodexOAuthCredentials(rawApiKey) ? parseCodexCredentials(rawApiKey) : null
+    const resolved = resolveOAuthDefaultClient(rawApiKey)
     out[id] = {
-      apiKey: codexCreds ? codexCreds.accessToken : rawApiKey,
+      apiKey: resolved.apiKey,
       baseUrl,
       ...(provider.endpointFormat ? { endpointFormat: provider.endpointFormat } : {}),
       ...(proxyUrl ? { modelProxyUrl: proxyUrl } : {}),
-      ...(codexCreds ? { headers: codexRequestHeaders(codexCreds) } : {})
+      ...(resolved.headers ? { headers: resolved.headers } : {})
     }
   }
   return out

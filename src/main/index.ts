@@ -56,6 +56,7 @@ import { waitForRuntimeTurnsIdle } from './runtime/managed-runtime-idle'
 import { setKunUnexpectedExitHandler, type KunUnexpectedExitInfo } from './kun-process'
 import { RestartBudget, type KunRuntimeStatus } from './kun-runtime-supervisor'
 import { configureLogger, logError, logWarn, pruneOnStartup } from './logger'
+import { createAnthropicTokenRefresher } from './anthropic-token-refresh'
 import { createClawRuntime, type ClawRuntime } from './claw-runtime'
 import { createScheduleRuntime, type ScheduleRuntime } from './schedule-runtime'
 import { createWorkflowRuntime, type WorkflowRuntime } from './workflow-runtime'
@@ -1576,6 +1577,16 @@ app.whenReady().then(async () => {
   })
 
   registerRuntimeSseIpc({ ipcMain, store, ensureRuntime, logError })
+
+  // Keep Claude Pro/Max OAuth tokens fresh (they expire ~hourly). Refreshes
+  // ahead of expiry and re-persists via applySettingsPatch, which restarts the
+  // runtime onto the new Bearer. The timer is unref'd so it never blocks quit.
+  createAnthropicTokenRefresher({
+    load: () => store.load(),
+    applyPatch: applySettingsPatch,
+    log: (message, extra) => logWarn('anthropic-token-refresh', message, extra)
+  }).start()
+
   registerTerminalPtyIpc({
     ipcMain,
     getMainWindow: () => mainWindow,

@@ -1127,6 +1127,8 @@
   "memoryEnableDesc": "启用后,助手会跨会话保存事实和偏好,并自动注入到上下文中。修改后会在下一轮对话生效。",
   "codexEndpointLocked": "Codex 使用固定端点，不可修改。",
   "codexLoginButton": "登录 ChatGPT",
+  "claudeLoginButton": "登录 Claude",
+  "claudeEndpointLocked": "Claude 订阅使用固定端点，不可修改。",
   "codexLoginDeviceCodeFallback": "改用验证码登录",
   "codexBrowserOpened": "已打开浏览器，完成登录后会自动返回。",
   "codexDisconnect": "断开连接",

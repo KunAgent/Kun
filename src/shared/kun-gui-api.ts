@@ -237,6 +237,16 @@ export type CodexAuthPollResult =
 export type CodexBrowserAuthResult =
   | { ok: true; credentials: CodexOAuthCredentials }
   | { ok: false; message: string }
+export type AnthropicOAuthCredentials = {
+  kind: 'anthropic-oauth'
+  accessToken: string
+  refreshToken: string
+  expiresAt: number
+  email?: string
+}
+export type AnthropicBrowserAuthResult =
+  | { ok: true; credentials: AnthropicOAuthCredentials }
+  | { ok: false; message: string }
 export type ClawImTelegramConnectErrorCode = 'invalid_format' | 'rejected' | 'network' | 'unknown'
 export type ClawImTelegramConnectResult =
   | { ok: true; botId: number; botUsername: string; botFirstName: string }
@@ -339,6 +349,7 @@ export type KunGuiApi = {
   startCodexAuth: () => Promise<CodexAuthStartResult>
   pollCodexAuth: (deviceCode: string, userCode: string) => Promise<CodexAuthPollResult>
   startCodexBrowserAuth: () => Promise<CodexBrowserAuthResult>
+  startAnthropicBrowserAuth: () => Promise<AnthropicBrowserAuthResult>
   pickWorkspaceDirectory: (defaultPath?: string) => Promise<WorkspacePickResult>
   confirmDialog: (options: ConfirmDialogOptions) => Promise<boolean>
   /** Detect importable conversations from a previous DeepSeek GUI install. */

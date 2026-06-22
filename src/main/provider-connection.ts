@@ -9,10 +9,16 @@ import type { ModelProviderProbeRequest, ModelProviderProbeResult } from '../sha
 import { upstreamOpenAiModelsUrl } from '../shared/openai-compat-url'
 import { fetchWithOptionalProxy } from './proxy-fetch'
 import { isCodexOAuthCredentials, parseCodexCredentials } from './codex-auth'
+import { isAnthropicOAuthCredentials, parseAnthropicCredentials } from './anthropic-auth'
 
 const CODEX_FIXED_MODEL_IDS = ['gpt-5.5', 'gpt-5.4', 'gpt-5.4-mini', 'gpt-5.3-codex-spark']
 function isCodexBaseUrl(url: string): boolean {
   return url.includes('chatgpt.com/backend-api/codex')
+}
+
+const ANTHROPIC_FIXED_MODEL_IDS = ['claude-opus-4-8', 'claude-sonnet-4-6', 'claude-haiku-4-5-20251001']
+function isAnthropicBaseUrl(url: string): boolean {
+  return url.includes('api.anthropic.com')
 }
 
 const PROBE_TIMEOUT_MS = 10_000
@@ -61,6 +67,22 @@ export async function probeModelProvider(
       return { ok: false, message: 'Codex 凭据已过期，将在下次启动时自动刷新；或重新登录。' }
     }
     return { ok: true, latencyMs: 0, modelIds: [...CODEX_FIXED_MODEL_IDS] }
+  }
+  const rawAnthropicKey = request.apiKey.trim()
+  if (isAnthropicOAuthCredentials(rawAnthropicKey)) {
+    const creds = parseAnthropicCredentials(rawAnthropicKey)
+    if (!creds) {
+      return { ok: false, message: 'Claude 凭据已损坏，请重新登录。' }
+    }
+    if (creds.expiresAt < Date.now()) {
+      return { ok: false, message: 'Claude 凭据已过期，将在下次启动时自动刷新；或重新登录。' }
+    }
+    // The subscription endpoint rejects /models with an OAuth token, so report
+    // the fixed Claude line-up instead of probing.
+    return { ok: true, latencyMs: 0, modelIds: [...ANTHROPIC_FIXED_MODEL_IDS] }
+  }
+  if (isAnthropicBaseUrl(baseUrl) && !rawAnthropicKey) {
+    return { ok: false, message: 'Claude 未登录，请先点击「登录 Claude」。' }
   }
   const endpointFormat = normalizeModelEndpointFormat(request.endpointFormat)
   if (isCustomModelEndpointFormat(endpointFormat)) {
