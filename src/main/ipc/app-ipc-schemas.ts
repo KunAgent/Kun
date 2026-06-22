@@ -1700,7 +1700,7 @@ export const clawTaskFromTextPayloadSchema = z
     text: z.string().trim().min(1).max(MAX_CHANNEL_TEXT_LENGTH),
     channelId: z.string().trim().min(1).max(MAX_ID_LENGTH).nullable().optional(),
     providerId: z.string().trim().max(64).nullable().optional(),
-    modelHint: z.string().trim().min(1).max(128).nullable().optional(),
+    modelHint: modelIdSchema.nullable().optional(),
     reasoningEffort: scheduleReasoningEffortSchema.nullable().optional(),
     mode: z.enum(['agent', 'plan']).nullable().optional()
   })
@@ -1712,7 +1712,7 @@ export const scheduleTaskFromTextPayloadSchema = z
     workspaceRoot: defaultPathSchema,
     clawChannelId: z.string().trim().min(1).max(MAX_ID_LENGTH).nullable().optional(),
     providerId: z.string().trim().max(64).nullable().optional(),
-    modelHint: z.string().trim().min(1).max(128).nullable().optional(),
+    modelHint: modelIdSchema.nullable().optional(),
     reasoningEffort: scheduleReasoningEffortSchema.nullable().optional(),
     mode: z.enum(['agent', 'plan']).nullable().optional()
   })
