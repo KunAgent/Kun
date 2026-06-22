@@ -1,8 +1,8 @@
 /**
  * `lsp` tool — exposes Language Server Protocol queries to the AI agent.
  *
- * Currently supports TypeScript / JavaScript via typescript-language-server.
- * The server binary must be installed (locally or on PATH); if missing the
+ * Supports the configured language servers in lsp-servers.ts.
+ * The matching server binary must be installed (locally or on PATH); if missing the
  * tool returns a helpful error instead of crashing.
  *
  * Operations: goToDefinition, findReferences, hover, documentSymbol,
@@ -65,10 +65,10 @@ export function createLspLocalTool(): LocalTool {
   return LocalToolHost.defineTool({
     name: 'lsp',
     description:
-      'Query a language server (currently TypeScript/JavaScript and Python). ' +
+      'Query a language server for TypeScript/JavaScript, Python, Rust, Go, C/C++, JSON, and YAML. ' +
       'Supports: goToDefinition, findReferences, hover, documentSymbol, workspaceSymbol, goToImplementation, getDiagnostics. ' +
       'Positions are 1-based (line/character as shown in editors). ' +
-      'Diagnostics are best-effort and reflect cached publishDiagnostics notifications. ' +
+      'Diagnostics are best-effort and use publishDiagnostics caches or pull diagnostics when supported. ' +
       'Requires a matching language server to be installed.',
     inputSchema: {
       type: 'object',

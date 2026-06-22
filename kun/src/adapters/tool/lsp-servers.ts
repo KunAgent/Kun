@@ -24,6 +24,23 @@ function normalizeExtension(filePath: string): string {
   return filePath.toLowerCase()
 }
 
+async function resolveLocalOrPath(
+  workspaceRoot: string,
+  binary: string,
+  args: string[]
+): Promise<LspServerCommand | null> {
+  const localBinary = process.platform === 'win32' ? `${binary}.cmd` : binary
+  const localPath = join(workspaceRoot, 'node_modules', '.bin', localBinary)
+  try {
+    await access(localPath)
+    return { command: localPath, args }
+  } catch {
+    // fall through to PATH lookup
+  }
+  const found = await probeServerBinary(binary)
+  return found ? { command: binary, args } : null
+}
+
 function registerDefaultLanguageServers(): void {
   if (!registry.has('typescript')) {
     registerLanguageServer({
@@ -32,15 +49,7 @@ function registerDefaultLanguageServers(): void {
       extensions: ['.ts', '.tsx', '.js', '.jsx', '.mts', '.mjs', '.cts', '.cjs'],
       installHint: 'Install with: npm install -g typescript-language-server typescript',
       resolveCommand: async (workspaceRoot) => {
-        const localPath = join(workspaceRoot, 'node_modules', '.bin', 'typescript-language-server')
-        try {
-          await access(localPath)
-          return { command: localPath, args: ['--stdio'] }
-        } catch {
-          // fall through to PATH lookup
-        }
-        const found = await probeServerBinary('typescript-language-server')
-        return found ? { command: 'typescript-language-server', args: ['--stdio'] } : null
+        return resolveLocalOrPath(workspaceRoot, 'typescript-language-server', ['--stdio'])
       },
       languageIdForFile: (filePath) => {
         const normalized = normalizeExtension(filePath)
@@ -75,6 +84,79 @@ function registerDefaultLanguageServers(): void {
         return null
       },
       languageIdForFile: () => 'python'
+    })
+  }
+
+  if (!registry.has('rust')) {
+    registerLanguageServer({
+      key: 'rust',
+      displayName: 'Rust',
+      extensions: ['.rs'],
+      installHint: 'Install with: rustup component add rust-analyzer',
+      resolveCommand: async () => {
+        const found = await probeServerBinary('rust-analyzer')
+        return found ? { command: 'rust-analyzer', args: [] } : null
+      },
+      languageIdForFile: () => 'rust'
+    })
+  }
+
+  if (!registry.has('go')) {
+    registerLanguageServer({
+      key: 'go',
+      displayName: 'Go',
+      extensions: ['.go'],
+      installHint: 'Install with: go install golang.org/x/tools/gopls@latest',
+      resolveCommand: async () => {
+        const found = await probeServerBinary('gopls')
+        return found ? { command: 'gopls', args: [] } : null
+      },
+      languageIdForFile: () => 'go'
+    })
+  }
+
+  if (!registry.has('clangd')) {
+    registerLanguageServer({
+      key: 'clangd',
+      displayName: 'C/C++',
+      extensions: ['.c', '.h', '.cc', '.cpp', '.cxx', '.hh', '.hpp', '.hxx'],
+      installHint: 'Install clangd from LLVM or your system package manager',
+      resolveCommand: async () => {
+        const found = await probeServerBinary('clangd')
+        return found ? { command: 'clangd', args: [] } : null
+      },
+      languageIdForFile: (filePath) => {
+        const normalized = normalizeExtension(filePath)
+        return normalized.endsWith('.c') ? 'c' : 'cpp'
+      }
+    })
+  }
+
+  if (!registry.has('json')) {
+    registerLanguageServer({
+      key: 'json',
+      displayName: 'JSON',
+      extensions: ['.json', '.jsonc'],
+      installHint: 'Install with: npm install -g vscode-langservers-extracted',
+      resolveCommand: async (workspaceRoot) => {
+        return resolveLocalOrPath(workspaceRoot, 'vscode-json-languageserver', ['--stdio'])
+      },
+      languageIdForFile: (filePath) => (
+        normalizeExtension(filePath).endsWith('.jsonc') ? 'jsonc' : 'json'
+      )
+    })
+  }
+
+  if (!registry.has('yaml')) {
+    registerLanguageServer({
+      key: 'yaml',
+      displayName: 'YAML',
+      extensions: ['.yaml', '.yml'],
+      installHint: 'Install with: npm install -g yaml-language-server',
+      resolveCommand: async (workspaceRoot) => {
+        return resolveLocalOrPath(workspaceRoot, 'yaml-language-server', ['--stdio'])
+      },
+      languageIdForFile: () => 'yaml'
     })
   }
 }
