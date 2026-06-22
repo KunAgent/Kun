@@ -55,6 +55,9 @@ describe('git checkpoint service', () => {
       dataDir,
       checkpointId: checkpoint.checkpointId
     })
+    if (!restored.ok) {
+      console.error('Restore failed:', restored.message || restored.reason)
+    }
     expect(restored.ok).toBe(true)
     if (!restored.ok) throw new Error(restored.message)
 

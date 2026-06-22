@@ -131,12 +131,41 @@ function isJsonRecord(value: unknown): value is JsonRecord {
 }
 
 /**
+ * Validates all servers in a servers object enforce HTTPS for remote endpoints.
+ * Only https:// URLs are allowed for MCP server URLs; command-based servers
+ * (no `url` field) are allowed through. Throws on any http:// or other scheme.
+ *
+ * Uses Object.prototype.hasOwnProperty.call to prevent prototype pollution attacks
+ * where an attacker injects Object.prototype.url to bypass validation.
+ */
+function validateMcpServersHttps(servers: JsonRecord): void {
+  // Use Object.entries to get own properties only (not inherited via prototype)
+  for (const [id, server] of Object.entries(servers)) {
+    if (!isJsonRecord(server)) {
+      throw new Error(`MCP server "${id}" must be an object`)
+    }
+    // Use hasOwnProperty to ensure we're checking the server's own property,
+    // not something injected via Object.prototype
+    if (!Object.prototype.hasOwnProperty.call(server, 'url')) continue
+    const url = server.url
+    if (url !== undefined && !isHttpsUrl(url)) {
+      throw new Error(`MCP server "${id}" URL must use HTTPS (got ${typeof url}: ${url})`)
+    }
+  }
+}
+
+/**
  * Returns true only when `url` parses as an absolute `https://` URL. The URL
  * constructor throws on malformed input, so it is guarded; any non-https scheme
  * (http, file, javascript, data, …) is rejected. Remote MCP servers carry the
  * `user` trust scope, so we never want to write a non-TLS endpoint into config.
+ *
+ * Explicitly checks that the input is a string to prevent type coercion attacks
+ * where an attacker passes a number, array, or object that might stringify to
+ * a valid URL but bypass validation.
  */
 export function isHttpsUrl(url: unknown): boolean {
+  // Explicitly reject non-string types to prevent coercion attacks
   if (typeof url !== 'string' || !url.trim()) return false
   try {
     return new URL(url).protocol === 'https:'
@@ -332,12 +361,21 @@ export function customMcpConfigFragment(id: string, raw: string, fallback: JsonR
   const trimmed = raw.trim()
   if (!trimmed) return fallback
   const parsed = parseMcpJsonConfig(trimmed)
-  if (isJsonRecord(parsed.servers)) return parsed
+  if (isJsonRecord(parsed.servers)) {
+    validateMcpServersHttps(parsed.servers)
+    return parsed
+  }
   if (isJsonRecord(parsed.capabilities)) {
     const mcp = isJsonRecord(parsed.capabilities.mcp) ? parsed.capabilities.mcp : undefined
-    if (isJsonRecord(mcp?.servers)) return { servers: mcp.servers }
+    if (isJsonRecord(mcp?.servers)) {
+      validateMcpServersHttps(mcp.servers)
+      return { servers: mcp.servers }
+    }
   }
   if (parsed.command !== undefined || parsed.url !== undefined || parsed.transport !== undefined) {
+    if (parsed.url !== undefined && !isHttpsUrl(parsed.url)) {
+      throw new Error(`MCP server URL must use HTTPS: ${parsed.url}`)
+    }
     return { servers: { [id]: parsed } }
   }
   throw new Error('MCP JSON config must include a servers object or a single server object.')

@@ -1,5 +1,5 @@
-import { cp, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
-import { dirname, join, resolve } from 'node:path'
+import { cp, mkdir, readFile, realpath, rm, stat, writeFile } from 'node:fs/promises'
+import { dirname, isAbsolute, join, normalize, relative, resolve, sep } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { runGit, resolveGitCwd } from './git-service'
 import type {
@@ -94,6 +94,48 @@ async function resolveRepositoryRoot(workspaceRoot: string): Promise<string | nu
   return stdout.trim()
 }
 
+/**
+ * Validates that a path intended to be relative to repositoryRoot does not
+ * escape that root via `..` segments, absolute paths, or symlinks. Defends
+ * against path traversal in untrusted metadata (e.g., a tampered metadata.json).
+ *
+ * This check resolves symlinks in the repository root to prevent attacks where
+ * the attacker creates a symlink inside the repo pointing outside, then uses a
+ * relative path through that symlink to write arbitrary files.
+ */
+async function assertPathWithinRepository(repositoryRoot: string, relativePath: string): Promise<void> {
+  // Block empty strings, current/parent directory references, and absolute paths
+  if (!relativePath || relativePath === '.' || relativePath === '..' || isAbsolute(relativePath)) {
+    throw new Error(`invalid path: ${relativePath}`)
+  }
+
+  // Block null bytes (can cause unexpected behavior in filesystem calls)
+  // and Windows drive-relative paths like "C:file.txt" which bypass isAbsolute()
+  if (relativePath.includes('\0') || /^[a-zA-Z]:/.test(relativePath)) {
+    throw new Error(`invalid path: ${relativePath}`)
+  }
+
+  // Resolve symlinks in the repository root to get the canonical path.
+  // If the repo root doesn't exist or isn't accessible, realpath throws
+  // and we fail closed (reject the operation).
+  const repoReal = await realpath(repositoryRoot)
+
+  // Normalize the target path (resolve '.' and '..' segments) and compute
+  // the canonical target. We don't call realpath on the target itself because
+  // it might not exist yet; we're checking the *intended* destination.
+  const targetNormalized = normalize(join(repoReal, relativePath))
+
+  // Final check: the normalized target must be inside the canonical repo root.
+  // Use startsWith with a trailing separator to prevent prefix attacks like:
+  //   repoReal = '/repo'
+  //   target = '/repo-evil/file.txt'
+  // We also allow exact equality to handle writing to the root itself (though
+  // this is blocked earlier by checking for '.' explicitly).
+  if (!targetNormalized.startsWith(repoReal + sep) && targetNormalized !== repoReal) {
+    throw new Error(`path escapes the repository root: ${relativePath}`)
+  }
+}
+
 export async function createGitCheckpoint(params: {
   dataDir: string
   workspaceRoot: string
@@ -159,6 +201,7 @@ export async function createGitCheckpoint(params: {
 export async function restoreGitCheckpoint(params: {
   dataDir: string
   checkpointId: string
+  runtimeRequest?: (path: string, init: { method?: string; body?: string }) => Promise<{ ok: boolean; status: number; body: string }>
 }): Promise<GitCheckpointRestoreResult> {
   const checkpointId = params.checkpointId.trim()
   const metadata = await readMetadata(params.dataDir, checkpointId)
@@ -169,6 +212,48 @@ export async function restoreGitCheckpoint(params: {
     const repositoryRoot = metadata.repositoryRoot
     await assertNoUnmerged(repositoryRoot)
     const targetRef = metadata.checkpointRef || metadata.head
+
+    // If a runtime request function is provided, check if any thread is currently
+    // running a turn. This prevents `git reset --hard` from wiping files that the
+    // agent is actively editing, closing a TOCTOU race where the renderer's local
+    // `busy` check passes but a turn starts before the main-process destructive ops.
+    //
+    // We check for multiple busy states: streaming (actively generating), tool (executing
+    // tools), queued (waiting in the run queue), and pending (initial state before streaming).
+    // If the runtime is unavailable or returns an error, we fail closed (reject the restore)
+    // rather than proceeding unsafely.
+    if (params.runtimeRequest) {
+      try {
+        const response = await params.runtimeRequest('/v1/threads?limit=500&include=side', { method: 'GET' })
+        if (!response.ok) {
+          // Fail closed: if we cannot verify thread state, refuse to proceed
+          return {
+            ok: false,
+            reason: 'error',
+            message: 'Cannot verify runtime state before checkpoint restore. Please ensure the runtime is healthy and try again.'
+          }
+        }
+        const data = JSON.parse(response.body) as { threads?: Array<{ state?: string }> }
+        const busyStates = ['streaming', 'tool', 'queued', 'pending']
+        const hasRunning = data.threads?.some((thread) => busyStates.includes(thread.state ?? ''))
+        if (hasRunning) {
+          return {
+            ok: false,
+            reason: 'error',
+            message: 'Cannot restore checkpoint while a thread is running. Please wait for the current turn to finish.'
+          }
+        }
+      } catch (error) {
+        // Fail closed: if the check throws (network error, parse error, etc.),
+        // reject the restore rather than proceeding blindly.
+        const message = error instanceof Error ? error.message : String(error)
+        return {
+          ok: false,
+          reason: 'error',
+          message: `Cannot verify runtime state before checkpoint restore: ${message}`
+        }
+      }
+    }
 
     const rescue = await createGitCheckpoint({
       dataDir: params.dataDir,
@@ -192,7 +277,27 @@ export async function restoreGitCheckpoint(params: {
     await applyPatchIfPresent(repositoryRoot, join(dir, 'unstaged.patch'), false)
 
     for (const relativePath of metadata.untrackedFiles) {
-      const from = join(dir, 'untracked', relativePath)
+      // Validate that the destination path stays within the repository
+      await assertPathWithinRepository(repositoryRoot, relativePath)
+
+      // Also validate that the source path stays within the checkpoint directory.
+      // This prevents an attacker from using a traversal path in metadata to read
+      // files outside the checkpoint and copy them into the repository.
+      const checkpointUntracked = join(dir, 'untracked')
+      // realpath may fail if the checkpoint untracked directory doesn't exist
+      // (no untracked files were saved). In that case, use the normalized lexical path.
+      let checkpointUntrackedResolved: string
+      try {
+        checkpointUntrackedResolved = await realpath(checkpointUntracked)
+      } catch {
+        checkpointUntrackedResolved = normalize(checkpointUntracked)
+      }
+      // Compute the source path using the same resolved/normalized base as above
+      const from = normalize(join(checkpointUntrackedResolved, relativePath))
+      if (!from.startsWith(checkpointUntrackedResolved + sep) && from !== checkpointUntrackedResolved) {
+        throw new Error(`source path escapes the checkpoint directory: ${relativePath}`)
+      }
+
       if (!(await fileExists(from))) continue
       const to = join(repositoryRoot, relativePath)
       await mkdir(dirname(to), { recursive: true })
