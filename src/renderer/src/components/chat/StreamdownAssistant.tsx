@@ -158,8 +158,17 @@ type Props = {
 export function StreamdownAssistant({ text, streaming, className }: Props): ReactElement {
   const pacedText = useTypewriterText(text, streaming)
 
+  // While streaming, keep a stable key so the typewriter doesn't tear down
+  // mid-stroke. Once settled, key on `text.length` — any subsequent edit
+  // remounts Streamdown clean instead of relying on its block-diff to swap
+  // children in place, which has been observed to leave stale fragments
+  // (bullet tail spliced into the next paragraph) on bullet→paragraph
+  // transitions containing inline code.
+  const streamdownKey = streaming ? 'live' : `static:${text.length}`
+
   return (
     <Streamdown
+      key={streamdownKey}
       className={className}
       mode="static"
       parseIncompleteMarkdown={false}
