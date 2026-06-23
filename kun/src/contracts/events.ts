@@ -27,6 +27,7 @@ export const RuntimeEventKind = z.enum([
   'tool_result_upload_wait',
   'tool_storm_suppressed',
   'tool_catalog_changed',
+  'mcp_status_changed',
   'tool_call_started',
   'tool_call_finished',
   'approval_requested',
@@ -195,6 +196,22 @@ export const ToolCatalogEvent = RuntimeEventBase.extend({
 })
 export type ToolCatalogEvent = z.infer<typeof ToolCatalogEvent>
 
+export const McpConnectionStatus = z.enum(['connecting', 'connected', 'disconnected', 'error', 'disabled'])
+export type McpConnectionStatus = z.infer<typeof McpConnectionStatus>
+
+export const McpStatusEvent = RuntimeEventBase.extend({
+  kind: z.literal('mcp_status_changed'),
+  serverId: z.string().min(1),
+  status: McpConnectionStatus,
+  toolCount: z.number().int().nonnegative(),
+  transport: z.enum(['stdio', 'streamable-http', 'sse']),
+  lastError: z.string().optional(),
+  lastActivityAt: z.string().optional(),
+  lastConnectedAt: z.string().optional(),
+  reconnectAttempt: z.number().int().nonnegative().optional()
+})
+export type McpStatusEvent = z.infer<typeof McpStatusEvent>
+
 export const CompactionEvent = RuntimeEventBase.extend({
   kind: z.enum(['compaction_started', 'compaction_completed']),
   summary: z.string().optional(),
@@ -263,6 +280,7 @@ export const RuntimeEvent = z.discriminatedUnion('kind', [
   ToolUploadStatusEvent,
   ToolStormSuppressedEvent,
   ToolCatalogEvent,
+  McpStatusEvent,
   CompactionEvent,
   GoalEvent,
   TodoEvent,

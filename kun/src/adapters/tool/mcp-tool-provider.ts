@@ -10,6 +10,7 @@ import type {
   McpServerConfig
 } from '../../contracts/capabilities.js'
 import { redactSecretText } from '../../config/secret-redaction.js'
+import type { McpConnectionStatus } from '../../contracts/events.js'
 import type { ToolHostContext } from '../../ports/tool-host.js'
 import type { CapabilityToolProvider } from './capability-registry.js'
 import { LocalToolHost, type LocalTool } from './local-tool-host.js'
@@ -58,12 +59,14 @@ export type McpServerDiagnostic = {
   transport: McpServerConfig['transport']
   trustScope: McpServerConfig['trustScope']
   available: boolean
-  status: 'disabled' | 'connected' | 'error'
+  status: McpConnectionStatus
   toolCount: number
   catalogFingerprint?: string
   catalogDrift?: boolean
   lastConnectedAt?: string
+  lastActivityAt?: string
   lastError?: string
+  reconnectAttempt?: number
 }
 
 export type McpToolProviderBuildResult = {
@@ -444,7 +447,7 @@ export function isMcpServerTrusted(server: McpServerConfig, workspace: string): 
   })
 }
 
-async function createSdkMcpClient(serverId: string, server: McpServerConfig): Promise<McpClientLike> {
+export async function createSdkMcpClient(serverId: string, server: McpServerConfig): Promise<McpClientLike> {
   const client = new Client({ name: `kun-${serverId}`, version: '0.1.0' })
   const transport = createTransport(server)
   await client.connect(transport, { timeout: server.timeoutMs })
@@ -651,7 +654,15 @@ function policyFromAnnotations(annotation: McpToolDescriptor['annotations']): Lo
 }
 
 function serverDiagnostic(
-  state: { serverId: string; server: McpServerConfig; catalogFingerprint?: string; catalogDrift?: boolean; lastConnectedAt?: string },
+  state: {
+    serverId: string
+    server: McpServerConfig
+    catalogFingerprint?: string
+    catalogDrift?: boolean
+    lastConnectedAt?: string
+    lastActivityAt?: string
+    reconnectAttempt?: number
+  },
   status: McpServerDiagnostic['status'],
   toolCount: number,
   lastError?: string
@@ -667,6 +678,10 @@ function serverDiagnostic(
     ...(state.catalogFingerprint ? { catalogFingerprint: state.catalogFingerprint } : {}),
     ...(state.catalogDrift !== undefined ? { catalogDrift: state.catalogDrift } : {}),
     ...(state.lastConnectedAt ? { lastConnectedAt: state.lastConnectedAt } : {}),
+    ...(state.lastActivityAt ? { lastActivityAt: state.lastActivityAt } : {}),
+    ...(state.reconnectAttempt !== undefined && state.reconnectAttempt > 0
+      ? { reconnectAttempt: state.reconnectAttempt }
+      : {}),
     ...(lastError ? { lastError: redactSecretText(lastError) } : {})
   }
 }
