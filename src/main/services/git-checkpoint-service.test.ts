@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { execFileSync } from 'node:child_process'
 import { mkdtemp, mkdir, readFile, rm, stat, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -259,5 +259,80 @@ describe('git checkpoint service', () => {
     await expect(testResolvePathWithinRepository(repoRoot, 'evil\0.txt')).rejects.toThrow()
     await expect(testResolvePathWithinRepository(repoRoot, '.')).rejects.toThrow()
     await expect(testResolvePathWithinRepository(repoRoot, '..')).rejects.toThrow()
+  })
+
+  it('refuses to restore while a thread is running and leaves the working tree untouched', async () => {
+    const checkpoint = await createGitCheckpoint({
+      dataDir,
+      workspaceRoot: repoRoot,
+      threadId: 'thr_busy'
+    })
+    expect(checkpoint.ok).toBe(true)
+    if (!checkpoint.ok) throw new Error(checkpoint.message)
+
+    // Mutate the working tree after the checkpoint so we can assert the restore
+    // did NOT clobber it. If the busy guard fails open, these changes vanish.
+    await writeFile(join(repoRoot, 'tracked.txt'), 'agent editing\n')
+    await writeFile(join(repoRoot, 'post-checkpoint.txt'), 'should survive\n')
+    const headBefore = execFileSync('git', ['-C', repoRoot, 'rev-parse', 'HEAD'], { encoding: 'utf-8' }).trim()
+
+    const runtimeRequest = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      // ThreadSummary exposes `status` (idle|running|archived|deleted), NOT
+      // `state`. A running thread must be reported as status === 'running'.
+      body: JSON.stringify({ threads: [{ id: 'thr_running', status: 'running' }] })
+    }))
+
+    const restored = await restoreGitCheckpoint({
+      dataDir,
+      checkpointId: checkpoint.checkpointId,
+      runtimeRequest
+    })
+
+    expect(restored.ok).toBe(false)
+    if (restored.ok) throw new Error('expected restore to be refused')
+    expect(restored.reason).toBe('error')
+    expect(restored.message).toMatch(/Cannot restore checkpoint while a thread is running/)
+
+    // The busy guard must fire BEFORE any destructive git op, so the runtime
+    // probe is the only call made and the working tree is byte-for-byte intact.
+    expect(runtimeRequest).toHaveBeenCalledTimes(1)
+    expect(await readFile(join(repoRoot, 'tracked.txt'), 'utf-8')).toBe('agent editing\n')
+    expect(await readFile(join(repoRoot, 'post-checkpoint.txt'), 'utf-8')).toBe('should survive\n')
+    expect(execFileSync('git', ['-C', repoRoot, 'rev-parse', 'HEAD'], { encoding: 'utf-8' }).trim()).toBe(headBefore)
+  })
+
+  it('restores when the runtime reports all threads idle (runtimeRequest exercised)', async () => {
+    const checkpoint = await createGitCheckpoint({
+      dataDir,
+      workspaceRoot: repoRoot,
+      threadId: 'thr_idle'
+    })
+    expect(checkpoint.ok).toBe(true)
+    if (!checkpoint.ok) throw new Error(checkpoint.message)
+
+    await writeFile(join(repoRoot, 'tracked.txt'), 'changed after checkpoint\n')
+    await writeFile(join(repoRoot, 'new-after.txt'), 'new\n')
+
+    const runtimeRequest = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      body: JSON.stringify({ threads: [{ id: 'thr_a', status: 'idle' }, { id: 'thr_b', status: 'archived' }] })
+    }))
+
+    const restored = await restoreGitCheckpoint({
+      dataDir,
+      checkpointId: checkpoint.checkpointId,
+      runtimeRequest
+    })
+    expect(restored.ok).toBe(true)
+    if (!restored.ok) throw new Error(restored.message)
+    // The guard ran and let the restore proceed.
+    expect(runtimeRequest).toHaveBeenCalledTimes(1)
+    // Restore rewound the tracked file to its checkpoint content and removed the
+    // post-checkpoint untracked file (git clean -fd).
+    expect(await readFile(join(repoRoot, 'tracked.txt'), 'utf-8')).toBe('base\n')
+    await expect(stat(join(repoRoot, 'new-after.txt'))).rejects.toThrow()
   })
 })

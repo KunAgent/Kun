@@ -22,6 +22,7 @@ export type CoreThreadSummaryJson = {
   status: CoreThreadStatus
   approvalPolicy?: string
   sandboxMode?: string
+  pinned?: boolean
   relation?: 'primary' | 'fork' | 'side'
   parentThreadId?: string
   forkedFromThreadId?: string

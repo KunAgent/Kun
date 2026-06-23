@@ -958,7 +958,18 @@ export function registerAppIpcHandlers(options: RegisterAppIpcHandlersOptions): 
     const request = parseIpcPayload('git:checkpoint:restore', gitCheckpointRestorePayloadSchema, payload)
     return restoreGitCheckpoint({
       dataDir: await resolveKunThreadsDataDir(),
-      checkpointId: request.checkpointId
+      checkpointId: request.checkpointId,
+      // Bridge the main-process runtimeRequest into the shape restoreGitCheckpoint
+      // expects ((path, {method, body}) => {ok,status,body}). On a transport-level
+      // failure (runtime not up, connection refused) we return a non-ok result so
+      // the busy guard fails closed instead of throwing past the handler.
+      runtimeRequest: async (path, init) => {
+        try {
+          return await runtimeRequest(path, init?.method, init?.body)
+        } catch (error) {
+          return { ok: false, status: 0, body: error instanceof Error ? error.message : String(error) }
+        }
+      }
     })
   })
   ipcMain.handle(

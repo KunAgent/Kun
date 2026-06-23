@@ -64,12 +64,14 @@ describe('domain.thread', () => {
       workspace: '/tmp',
       model: 'deepseek-chat',
       approvalPolicy: 'on-request',
-      sandboxMode: 'read-only'
+      sandboxMode: 'read-only',
+      pinned: true
     })
     const summary = toThreadSummary(thread)
     expect(summary).not.toHaveProperty('turns')
     expect(summary.approvalPolicy).toBe('on-request')
     expect(summary.sandboxMode).toBe('read-only')
+    expect(summary.pinned).toBe(true)
   })
 })
 

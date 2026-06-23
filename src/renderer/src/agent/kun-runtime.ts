@@ -388,6 +388,17 @@ export class KunRuntimeProvider implements AgentProvider {
     }
   }
 
+  async updateThreadPinned(threadId: string, pinned: boolean): Promise<void> {
+    const response = await rendererRuntimeClient.runtimeRequest(
+      kunThreadPath(threadId),
+      'PATCH',
+      JSON.stringify({ pinned })
+    )
+    if (!response.ok) {
+      throw runtimeErrorToError(readRuntimeError(response.body, 'update thread pin failed'))
+    }
+  }
+
   async archiveThread(threadId: string, archived: boolean): Promise<void> {
     const response = await window.kunGui.runtimeRequest(
       kunThreadPath(threadId),

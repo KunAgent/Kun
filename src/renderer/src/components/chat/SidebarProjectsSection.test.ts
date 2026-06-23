@@ -9,6 +9,7 @@ import {
   filterEmptySddAssistantThreadsFromSidebar,
   filterSddDraftHistoryItems,
   mergeSidebarWorkspaceGroupsWithDraftHistory,
+  sortSidebarThreads,
   SddDraftHistoryRows,
   ThreadRow,
   ThreadRenameDialog
@@ -33,6 +34,7 @@ function thread(overrides: Partial<NormalizedThread> & Pick<NormalizedThread, 'i
     ...(overrides.preview ? { preview: overrides.preview } : {}),
     ...(overrides.latestTurnId ? { latestTurnId: overrides.latestTurnId } : {}),
     ...(overrides.status ? { status: overrides.status } : {}),
+    ...(overrides.pinned !== undefined ? { pinned: overrides.pinned } : {}),
     ...(overrides.archived !== undefined ? { archived: overrides.archived } : {})
   }
 }
@@ -268,6 +270,29 @@ describe('SidebarProjectsSection groups', () => {
         .map((item) => item.id)
     ).toEqual(['thread-normal', 'thread-sdd-active-build'])
   })
+
+  it('sorts pinned threads before newer unpinned threads', () => {
+    const sorted = sortSidebarThreads([
+      thread({
+        id: 'recent',
+        workspace: '/tmp/app',
+        updatedAt: '2026-06-03T00:00:00.000Z'
+      }),
+      thread({
+        id: 'pinned-old',
+        workspace: '/tmp/app',
+        updatedAt: '2026-06-01T00:00:00.000Z',
+        pinned: true
+      }),
+      thread({
+        id: 'older',
+        workspace: '/tmp/app',
+        updatedAt: '2026-06-02T00:00:00.000Z'
+      })
+    ])
+
+    expect(sorted.map((item) => item.id)).toEqual(['pinned-old', 'recent', 'older'])
+  })
 })
 
 describe('ThreadRenameDialog', () => {
@@ -319,6 +344,10 @@ describe('ThreadRow', () => {
         showUnread: false,
         onSelect: vi.fn(),
         onContextMenu: vi.fn(),
+        onPreviewOpen: vi.fn(),
+        onPreviewMove: vi.fn(),
+        onPreviewClose: vi.fn(),
+        onPin: vi.fn(),
         onRename: vi.fn(),
         onArchive: vi.fn(),
         onDelete: vi.fn(),
@@ -340,6 +369,37 @@ describe('ThreadRow', () => {
     expect(actionsHtml).toContain('sidebarThreadRestore')
     expect(actionsHtml).toContain('sidebarThreadDelete')
     expect(actionsHtml).not.toContain('Worktree feature/layout-fix')
+  })
+
+  it('renders pinned state and an unpin action for pinned threads', () => {
+    const html = renderToStaticMarkup(
+      createElement(ThreadRow, {
+        thread: thread({
+          id: 'thr_pinned',
+          title: 'Pinned thread',
+          workspace: '/Users/zxy/project-a',
+          pinned: true
+        }),
+        active: false,
+        deleting: false,
+        locale: 'en-US',
+        showRunning: false,
+        showUnread: false,
+        onSelect: vi.fn(),
+        onContextMenu: vi.fn(),
+        onPreviewOpen: vi.fn(),
+        onPreviewMove: vi.fn(),
+        onPreviewClose: vi.fn(),
+        onPin: vi.fn(),
+        onRename: vi.fn(),
+        onArchive: vi.fn(),
+        onDelete: vi.fn(),
+        onRestore: vi.fn()
+      })
+    )
+
+    expect(html).toContain('sidebarThreadPinned')
+    expect(html).toContain('sidebarThreadUnpin')
   })
 })
 

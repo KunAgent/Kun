@@ -106,6 +106,7 @@ export const ThreadSchema = z.object({
   status: ThreadStatus,
   approvalPolicy: ApprovalPolicySchema.default(DEFAULT_APPROVAL_POLICY),
   sandboxMode: SandboxModeSchema.default(DEFAULT_SANDBOX_MODE),
+  pinned: z.boolean().optional(),
   costBudgetUsd: z.number().positive().optional(),
   costBudgetWarningSent: z.boolean().optional(),
   relation: ThreadRelation.default('primary'),
@@ -133,6 +134,7 @@ export const ThreadSummarySchema = ThreadSchema.pick({
   status: true,
   approvalPolicy: true,
   sandboxMode: true,
+  pinned: true,
   costBudgetUsd: true,
   costBudgetWarningSent: true,
   relation: true,
@@ -246,6 +248,7 @@ export const UpdateThreadRequest = z
     status: ThreadStatus.optional(),
     approvalPolicy: ApprovalPolicySchema.optional(),
     sandboxMode: SandboxModeSchema.optional(),
+    pinned: z.boolean().optional(),
     costBudgetUsd: z.number().positive().nullable().optional(),
     costBudgetWarningSent: z.boolean().optional(),
     relation: ThreadRelation.optional()
@@ -257,6 +260,7 @@ export const UpdateThreadRequest = z
       value.status !== undefined ||
       value.approvalPolicy !== undefined ||
       value.sandboxMode !== undefined ||
+      value.pinned !== undefined ||
       value.costBudgetUsd !== undefined ||
       value.costBudgetWarningSent !== undefined ||
       value.relation !== undefined,

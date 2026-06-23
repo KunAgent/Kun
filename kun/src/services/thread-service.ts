@@ -143,6 +143,7 @@ export class ThreadService {
     status?: ThreadStatus
     approvalPolicy?: ApprovalPolicy
     sandboxMode?: SandboxMode
+    pinned?: boolean
     costBudgetUsd?: number | null
     costBudgetWarningSent?: boolean
     relation?: ThreadRelation

@@ -103,6 +103,7 @@ export type NormalizedThread = {
   approvalPolicy?: ApprovalPolicy
   sandboxMode?: SandboxMode
   archived?: boolean
+  pinned?: boolean
   preview?: string
   latestTurnId?: string
   latestTurnStatus?: string
@@ -498,6 +499,7 @@ export interface AgentProvider {
   interruptTurn(threadId: string, turnId: string, options?: { discard?: boolean }): Promise<void>
   renameThread(threadId: string, title: string): Promise<void>
   updateThreadWorkspace?(threadId: string, workspace: string): Promise<void>
+  updateThreadPinned?(threadId: string, pinned: boolean): Promise<void>
   archiveThread?(threadId: string, archived: boolean): Promise<void>
   deleteThread(threadId: string): Promise<void>
   compactThread?(threadId: string, reason?: string): Promise<{ replacedTokens: number } | void>

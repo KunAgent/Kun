@@ -46,6 +46,7 @@ type Props = {
   onThreadSearchChange: (query: string) => void
   onSelectThread: (id: string) => void
   onRenameThread: (id: string, title: string) => Promise<void>
+  onPinThread: (id: string, pinned: boolean) => Promise<void>
   onArchiveThread: (id: string) => Promise<void>
   onDeleteThread: (id: string) => Promise<void>
   onRestoreThread: (id: string) => Promise<void>
@@ -77,6 +78,7 @@ export function Sidebar({
   onThreadSearchChange,
   onSelectThread,
   onRenameThread,
+  onPinThread,
   onArchiveThread,
   onDeleteThread,
   onRestoreThread,
@@ -276,6 +278,7 @@ export function Sidebar({
           onOpenRequirementDraft={onOpenRequirementDraft}
           onSelectThread={onSelectThread}
           onRenameThread={onRenameThread}
+          onPinThread={onPinThread}
           onArchiveThread={onArchiveThread}
           onDeleteThread={onDeleteThread}
           onRestoreThread={onRestoreThread}
@@ -302,6 +305,7 @@ export function Sidebar({
         onOpenRequirementDraft={onOpenRequirementDraft}
         onSelectThread={onSelectThread}
         onRenameThread={onRenameThread}
+        onPinThread={onPinThread}
         onArchiveThread={onArchiveThread}
         onDeleteThread={onDeleteThread}
         onRestoreThread={onRestoreThread}

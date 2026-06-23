@@ -56,6 +56,7 @@ export function threadFromCore(thread: CoreThreadSummaryJson): NormalizedThread 
     approvalPolicy: normalizeApprovalPolicy(thread.approvalPolicy),
     sandboxMode: normalizeSandboxMode(thread.sandboxMode),
     archived: thread.status === 'archived',
+    pinned: thread.pinned === true,
     relation: thread.relation,
     parentThreadId: thread.parentThreadId,
     forkedFromThreadId: thread.forkedFromThreadId,

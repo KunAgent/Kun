@@ -260,6 +260,7 @@ export type ChatState = {
   interrupt: (options?: { discard?: boolean }) => Promise<void>
   renameActiveThread: (title: string) => Promise<void>
   renameThread: (threadId: string, title: string) => Promise<void>
+  pinThread: (threadId: string, pinned: boolean) => Promise<void>
   archiveThread: (threadId: string, archived: boolean) => Promise<void>
   compactActiveThread: (reason?: string) => Promise<void>
   forkActiveThread: () => Promise<void>

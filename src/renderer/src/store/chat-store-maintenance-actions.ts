@@ -182,7 +182,7 @@ function settleInterruptedTurn(set: ChatStoreSet, get: ChatStoreGet): void {
 
 export function createMaintenanceActions(
   { set, get, sseAbortRef }: StoreActionContext
-): Pick<ChatState, 'renameActiveThread' | 'renameThread' | 'archiveThread' | 'compactActiveThread' | 'forkActiveThread' | 'forkThreadFromTurn' | 'setActiveThreadGoal' | 'setActiveThreadGoalStatus' | 'clearActiveThreadGoal' | 'setActiveThreadTodoStatus' | 'clearActiveThreadTodos' | 'syncPlanTodosFromMarkdown' | 'resumeSessionIntoThread' | 'deleteThread' | 'rewindAndResend' | 'rollbackWorkspaceToCheckpoint' | 'resolveApproval' | 'resolveUserInput' | 'interrupt'> {
+): Pick<ChatState, 'renameActiveThread' | 'renameThread' | 'pinThread' | 'archiveThread' | 'compactActiveThread' | 'forkActiveThread' | 'forkThreadFromTurn' | 'setActiveThreadGoal' | 'setActiveThreadGoalStatus' | 'clearActiveThreadGoal' | 'setActiveThreadTodoStatus' | 'clearActiveThreadTodos' | 'syncPlanTodosFromMarkdown' | 'resumeSessionIntoThread' | 'deleteThread' | 'rewindAndResend' | 'rollbackWorkspaceToCheckpoint' | 'resolveApproval' | 'resolveUserInput' | 'interrupt'> {
   const forkActiveThreadWithOptions = async (options: { turnId?: string } = {}): Promise<void> => {
     const { activeThreadId, busy, blocks } = get()
     if (!activeThreadId) return
@@ -252,6 +252,37 @@ export function createMaintenanceActions(
       set((s) => ({
         threads: s.threads.map((thread) =>
           thread.id === targetId ? { ...thread, title: nextTitle } : thread
+        ),
+        error: null
+      }))
+      await get().refreshThreads()
+    } catch (e) {
+      set({
+        error: formatRuntimeError(e),
+        ...(shouldOpenSettingsForError(e)
+          ? { route: 'settings' as const, settingsSection: 'agents' as const }
+          : {})
+      })
+    }
+  },
+
+  pinThread: async (threadId, pinned) => {
+    const targetId = threadId.trim()
+    if (!targetId) return
+    if (get().runtimeConnection !== 'ready') {
+      set({ error: i18n.t('common:runtimeActionNeedsConnection') })
+      return
+    }
+    const p = getProvider()
+    if (typeof p.updateThreadPinned !== 'function') {
+      set({ error: i18n.t('common:runtimeFeatureUnsupported') })
+      return
+    }
+    try {
+      await p.updateThreadPinned(targetId, pinned)
+      set((s) => ({
+        threads: s.threads.map((thread) =>
+          thread.id === targetId ? { ...thread, pinned } : thread
         ),
         error: null
       }))

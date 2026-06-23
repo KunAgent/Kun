@@ -313,6 +313,14 @@ export async function createGitCheckpoint(params: {
 export async function restoreGitCheckpoint(params: {
   dataDir: string
   checkpointId: string
+  /**
+   * Optional runtime bridge used to verify that no thread is mid-turn before
+   * running the destructive `git reset --hard` / `git clean -fd`. When omitted
+   * (e.g. from existing callers and unit tests) the check is skipped and the
+   * function behaves as before. When provided, a non-ok response or any thrown
+   * error fails closed: the restore is refused rather than proceeding.
+   */
+  runtimeRequest?: (path: string, init: { method?: string; body?: string }) => Promise<{ ok: boolean; status: number; body: string }>
 }): Promise<GitCheckpointRestoreResult> {
   const checkpointId = params.checkpointId.trim()
   const metadata = await readMetadata(params.dataDir, checkpointId)
@@ -323,6 +331,46 @@ export async function restoreGitCheckpoint(params: {
     const repositoryRoot = metadata.repositoryRoot
     await assertNoUnmerged(repositoryRoot)
     const targetRef = await resolveCheckpointTarget(repositoryRoot, params.dataDir, metadata)
+
+    // Busy guard: a checkpoint restore runs `git reset --hard` + `git clean
+    // -fd`, which would destroy files the agent is actively editing. Before
+    // those destructive ops, ask the runtime whether any thread is currently
+    // running a turn. `GET /v1/threads` serializes ThreadSummary, whose only
+    // activity-relevant field is `status` with the enum
+    // `idle | running | archived | deleted`; a thread is busy exactly when its
+    // status is `running`. Fail closed if the runtime cannot be queried.
+    //
+    // (An earlier version of this guard read a non-existent `thread.state`
+    // field and compared it against turn-level states that never appear on a
+    // thread summary; that made the guard a no-op and the race still fired.)
+    if (params.runtimeRequest) {
+      try {
+        const response = await params.runtimeRequest('/v1/threads?limit=500&include=side', { method: 'GET' })
+        if (!response.ok) {
+          return {
+            ok: false,
+            reason: 'error',
+            message: 'Cannot verify runtime state before checkpoint restore. Please ensure the runtime is healthy and try again.'
+          }
+        }
+        const data = JSON.parse(response.body) as { threads?: Array<{ status?: string }> }
+        const hasRunning = data.threads?.some((thread) => thread.status === 'running')
+        if (hasRunning) {
+          return {
+            ok: false,
+            reason: 'error',
+            message: 'Cannot restore checkpoint while a thread is running. Please wait for the current turn to finish.'
+          }
+        }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error)
+        return {
+          ok: false,
+          reason: 'error',
+          message: `Cannot verify runtime state before checkpoint restore: ${message}`
+        }
+      }
+    }
 
     const rescue = await createGitCheckpoint({
       dataDir: params.dataDir,
