@@ -43,6 +43,19 @@ describe('buildContextCapacity', () => {
     expect(cap.usedRatio).toBeCloseTo(138_389 / 200_000, 5)
   })
 
+  it('lets live message estimates raise a stale measured total while streaming', () => {
+    const cap = buildContextCapacity({
+      windowTokens: 200_000,
+      lastTurnInputTokens: 20_000,
+      messageTokens: 40_000,
+      toolCount: 20,
+      skillCount: 4
+    })
+    expect(cap.hasMeasuredTotal).toBe(true)
+    expect(cap.usedTokens).toBeGreaterThan(20_000)
+    expect(cap.usedTokens).toBeGreaterThan(cap.categories.find((c) => c.key === 'messages')?.tokens ?? 0)
+  })
+
   it('clamps a measured total that exceeds the window', () => {
     const cap = buildContextCapacity({
       windowTokens: 100_000,

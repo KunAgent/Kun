@@ -658,26 +658,19 @@ export function FloatingComposer({
     typeof runtimeSkillCount === 'number' ? runtimeSkillCount : lastKnownSkillCountRef.current
   const canShowContextCapacity =
     !compact && route === 'chat' && Boolean(activeThreadId) && effectiveContextWindow > 0
-  // Freeze the measured total for the duration of a turn: the runtime can emit
-  // several `usage` events while streaming, and tracking them live makes the
-  // chip jitter (visible flicker). Adopt the latest value only while idle.
   const liveMeasuredTotal =
     lastTurnUsage && lastTurnUsage.threadId === activeThreadId
       ? lastTurnUsage.snapshot.inputTokens
       : null
-  const measuredTotalRef = useRef<number | null>(null)
-  if (!busy) measuredTotalRef.current = liveMeasuredTotal
-  const measuredContextTotal = busy ? measuredTotalRef.current : liveMeasuredTotal
+  const measuredContextTotal = liveMeasuredTotal
   // The message estimate feeds the per-category split (popover), the
   // no-measured-total fallback, AND the sanity check that rejects an inflated
   // measured total (some providers over-report prompt_tokens — see
-  // buildContextCapacity). We therefore need it whenever the gauge is idle, not
-  // just when the popover is open. Never subscribe to `blocks` while streaming
-  // with the popover closed — blocks churn on every delta and re-render the
-  // whole composer; the frozen ref is good enough for that transient window.
-  const needMessageEstimate =
-    canShowContextCapacity && (contextCapacityOpen || measuredContextTotal == null || !busy)
-  const subscribeContextBlocks = needMessageEstimate && (contextCapacityOpen || !busy)
+  // buildContextCapacity). We therefore keep it live whenever the gauge can render, not
+  // just when the popover is open. Subscribe while streaming too so the context
+  // usage ring reflects the assistant reply as it becomes future context.
+  const needMessageEstimate = canShowContextCapacity
+  const subscribeContextBlocks = needMessageEstimate
   const contextBlocks = useChatStore((s) => (subscribeContextBlocks ? s.blocks : EMPTY_CONTEXT_BLOCKS))
   const conversationTokensRef = useRef(0)
   const conversationTokens = useMemo(() => {

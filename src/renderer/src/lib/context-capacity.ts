@@ -196,9 +196,12 @@ export function buildContextCapacity(input: ContextCapacityInput): ContextCapaci
   let usedTokens: number
 
   if (hasMeasuredTotal) {
-    // Real total; estimate the breakdown but scale the prefix so the parts add
-    // up to the measured occupancy exactly.
-    usedTokens = clamp(Math.round(measuredTotal), 0, windowTokens)
+    // Real total from the latest provider count, with a live local floor. While
+    // an assistant reply is streaming, the provider count can still describe
+    // the request that started the turn, but the partial reply is already
+    // visible future context. Let the estimate raise the total until the next
+    // provider usage event calibrates it again.
+    usedTokens = clamp(Math.round(Math.max(measuredTotal, localEstimate)), 0, windowTokens)
     messages = clamp(messageEstimate, 0, usedTokens)
     const prefixActual = Math.max(0, usedTokens - messages)
     const scale = prefixEstimate > 0 ? prefixActual / prefixEstimate : 0
