@@ -145,6 +145,28 @@ export function isHttpsUrl(url: unknown): boolean {
   }
 }
 
+/**
+ * Validates that every server entry in a `servers` object that declares a
+ * remote `url` enforces HTTPS. Command-based servers (no `url` field) pass
+ * through. Throws on any non-https url so the caller surfaces a clear error
+ * before the fragment is written into the persisted MCP config.
+ *
+ * Iteration uses Object.entries (own enumerable properties) and the url lookup
+ * uses Object.prototype.hasOwnProperty.call, so a prototype-polluted object
+ * cannot smuggle a non-https url past the check via an inherited `url` key.
+ */
+function validateMcpServersHttps(servers: JsonRecord): void {
+  for (const [id, server] of Object.entries(servers)) {
+    if (!isJsonRecord(server)) {
+      throw new Error(`MCP server "${id}" must be an object`)
+    }
+    if (!Object.prototype.hasOwnProperty.call(server, 'url')) continue
+    if (!isHttpsUrl(server.url)) {
+      throw new Error(`MCP server "${id}" URL must use HTTPS (got ${typeof server.url === 'string' ? server.url : typeof server.url})`)
+    }
+  }
+}
+
 /** Origins whose docs links the OAuth connector preview may open externally. */
 const OAUTH_DOCS_ALLOWED_ORIGINS: readonly string[] = [
   'https://vercel.com',
@@ -332,12 +354,21 @@ export function customMcpConfigFragment(id: string, raw: string, fallback: JsonR
   const trimmed = raw.trim()
   if (!trimmed) return fallback
   const parsed = parseMcpJsonConfig(trimmed)
-  if (isJsonRecord(parsed.servers)) return parsed
+  if (isJsonRecord(parsed.servers)) {
+    validateMcpServersHttps(parsed.servers)
+    return parsed
+  }
   if (isJsonRecord(parsed.capabilities)) {
     const mcp = isJsonRecord(parsed.capabilities.mcp) ? parsed.capabilities.mcp : undefined
-    if (isJsonRecord(mcp?.servers)) return { servers: mcp.servers }
+    if (isJsonRecord(mcp?.servers)) {
+      validateMcpServersHttps(mcp.servers)
+      return { servers: mcp.servers }
+    }
   }
   if (parsed.command !== undefined || parsed.url !== undefined || parsed.transport !== undefined) {
+    if (parsed.url !== undefined && !isHttpsUrl(parsed.url)) {
+      throw new Error(`MCP server URL must use HTTPS: ${String(parsed.url)}`)
+    }
     return { servers: { [id]: parsed } }
   }
   throw new Error('MCP JSON config must include a servers object or a single server object.')

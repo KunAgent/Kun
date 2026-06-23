@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { execFileSync } from 'node:child_process'
-import { mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
+import { mkdtemp, mkdir, readFile, rm, stat, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
-import { createGitCheckpoint, restoreGitCheckpoint } from './git-checkpoint-service'
+import { join, normalize } from 'node:path'
+import { createGitCheckpoint, restoreGitCheckpoint, testResolvePathWithinRepository } from './git-checkpoint-service'
 
 let sandbox = ''
 let repoRoot = ''
@@ -152,5 +152,112 @@ describe('git checkpoint service', () => {
     )
     const refs = execFileSync('git', ['-C', repoRoot, 'show-ref'], { encoding: 'utf-8' })
     expect(refs).not.toContain('refs/kun/checkpoints')
+  })
+
+  it('refuses to restore when a tampered checkpoint smuggles a path-traversal untracked entry', async () => {
+    // Build a legitimate checkpoint, then rewrite its metadata.json so an
+    // untracked entry escapes the repository root (`../escape.txt`). The restore
+    // must reject the traversal rather than copying the file outside the repo.
+    const checkpoint = await createGitCheckpoint({
+      dataDir,
+      workspaceRoot: repoRoot,
+      threadId: 'thr_traversal'
+    })
+    expect(checkpoint.ok).toBe(true)
+    if (!checkpoint.ok) throw new Error(checkpoint.message)
+
+    const checkpointDir = join(dataDir, 'git-checkpoints', checkpoint.checkpointId)
+    const metadataPath = join(checkpointDir, 'metadata.json')
+    const metadata = JSON.parse(await readFile(metadataPath, 'utf-8')) as {
+      untrackedFiles: string[]
+      [key: string]: unknown
+    }
+    metadata.untrackedFiles = ['../escape.txt']
+    await writeFile(metadataPath, JSON.stringify(metadata, null, 2), 'utf-8')
+
+    // Plant a payload at the smuggled source location inside the checkpoint
+    // untracked dir so the existence check would succeed without the guard.
+    const smuggledSource = join(checkpointDir, 'untracked', '..', 'escape.txt')
+    await writeFile(smuggledSource, 'escaped payload\n')
+
+    // The destination the traversal would write to, OUTSIDE the repo.
+    const escapeTarget = join(repoRoot, '..', 'escape.txt')
+
+    const restored = await restoreGitCheckpoint({
+      dataDir,
+      checkpointId: checkpoint.checkpointId
+    })
+    expect(restored.ok).toBe(false)
+    if (restored.ok) throw new Error('expected restore to be refused')
+    expect(restored.reason).toBe('error')
+    expect(restored.message).toMatch(/escapes the repository root/)
+
+    // Nothing must have been written outside the repository.
+    await expect(stat(escapeTarget)).rejects.toThrow()
+  })
+
+  it('refuses to restore when a tampered checkpoint smuggles an absolute untracked path', async () => {
+    const checkpoint = await createGitCheckpoint({
+      dataDir,
+      workspaceRoot: repoRoot,
+      threadId: 'thr_absolute'
+    })
+    expect(checkpoint.ok).toBe(true)
+    if (!checkpoint.ok) throw new Error(checkpoint.message)
+
+    const checkpointDir = join(dataDir, 'git-checkpoints', checkpoint.checkpointId)
+    const metadataPath = join(checkpointDir, 'metadata.json')
+    const metadata = JSON.parse(await readFile(metadataPath, 'utf-8')) as {
+      untrackedFiles: string[]
+      [key: string]: unknown
+    }
+    metadata.untrackedFiles = ['/tmp/escape-absolute.txt']
+    await writeFile(metadataPath, JSON.stringify(metadata, null, 2), 'utf-8')
+
+    const restored = await restoreGitCheckpoint({
+      dataDir,
+      checkpointId: checkpoint.checkpointId
+    })
+    expect(restored.ok).toBe(false)
+    if (restored.ok) throw new Error('expected restore to be refused')
+    expect(restored.reason).toBe('error')
+    expect(restored.message).toMatch(/invalid untracked path|escapes the repository root/)
+  })
+
+  it('resolvePathWithinRepository rejects a path that escapes via an in-repo symlink', async () => {
+    // An in-repo symlink `repo/link -> /outside` makes the relative path
+    // `link/payload.txt` lexically contained (target startsWith repo+sep), but
+    // cp() would follow the link and write OUTSIDE the repo. The helper must
+    // resolve the target's real path (walking up to the existing symlink dir)
+    // and reject the escape. This is the regression for the symlink-anchored
+    // traversal that a lexical-only check misses.
+    const outsideDir = join(sandbox, 'outside')
+    await mkdir(outsideDir, { recursive: true })
+    await symlink(outsideDir, join(repoRoot, 'link'), 'dir')
+
+    await expect(
+      testResolvePathWithinRepository(repoRoot, 'link/payload.txt')
+    ).rejects.toThrow(/escapes the repository root/)
+    // And nothing should have been created outside the repo.
+    await expect(stat(join(outsideDir, 'payload.txt'))).rejects.toThrow()
+  })
+
+  it('resolvePathWithinRepository accepts a legitimate path inside the repo', async () => {
+    const { realpath } = await import('node:fs/promises')
+    await mkdir(join(repoRoot, 'sub'), { recursive: true })
+    // The helper anchors against the realpath'd root (macOS /var -> /private/var),
+    // so compare against the canonical root, not the lexical repoRoot.
+    const repoReal = await realpath(repoRoot)
+    await expect(
+      testResolvePathWithinRepository(repoRoot, 'sub/file.txt')
+    ).resolves.toBe(normalize(join(repoReal, 'sub', 'file.txt')))
+  })
+
+  it('resolvePathWithinRepository rejects traversal, absolute, and null-byte paths', async () => {
+    await expect(testResolvePathWithinRepository(repoRoot, '../escape.txt')).rejects.toThrow()
+    await expect(testResolvePathWithinRepository(repoRoot, '/tmp/escape.txt')).rejects.toThrow()
+    await expect(testResolvePathWithinRepository(repoRoot, 'evil\0.txt')).rejects.toThrow()
+    await expect(testResolvePathWithinRepository(repoRoot, '.')).rejects.toThrow()
+    await expect(testResolvePathWithinRepository(repoRoot, '..')).rejects.toThrow()
   })
 })

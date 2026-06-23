@@ -1,5 +1,5 @@
-import { cp, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
-import { dirname, join, resolve } from 'node:path'
+import { cp, mkdir, readFile, realpath, rm, stat, writeFile } from 'node:fs/promises'
+import { dirname, basename, isAbsolute, join, normalize, resolve, sep } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { runGit, resolveGitCwd } from './git-service'
 import type {
@@ -128,6 +128,128 @@ async function resolveRepositoryRoot(workspaceRoot: string): Promise<string | nu
   return stdout.trim()
 }
 
+/**
+ * Validates that `relativePath` (taken from checkpoint metadata, which is
+ * persisted JSON and therefore untrusted) stays inside `repositoryRoot` when
+ * joined to it. Defends the restore path against a tampered metadata.json that
+ * smuggles `..` segments, absolute paths, or symlink-anchored escapes.
+ *
+ * Returns the canonical absolute target so callers reuse the same resolved
+ * path for both the existence check and the copy, avoiding a second resolution
+ * that could disagree with the validated one.
+ *
+ * Fail closed: if `repositoryRoot` cannot be canonicalized (missing, EACCES,
+ * ELOOP, …) the check throws rather than letting an unchecked path through.
+ */
+async function resolvePathWithinRepository(
+  repositoryRoot: string,
+  relativePath: string
+): Promise<string> {
+  // Reject empty / current / parent / absolute, plus null bytes and Windows
+  // drive-relative forms ("C:file") that bypass isAbsolute().
+  if (!relativePath || relativePath === '.' || relativePath === '..' || isAbsolute(relativePath)) {
+    throw new Error(`invalid untracked path: ${relativePath}`)
+  }
+  if (relativePath.includes('\0') || /^[a-zA-Z]:/.test(relativePath)) {
+    throw new Error(`invalid untracked path: ${relativePath}`)
+  }
+
+  const repoReal = await realpath(repositoryRoot)
+  const targetNormalized = normalize(join(repoReal, relativePath))
+  // startsWith with a trailing separator prevents prefix attacks where
+  // repoReal is a textual prefix of an unrelated dir (e.g. "/repo" vs
+  // "/repo-evil"). Exact equality covers the (already-rejected) root case.
+  if (targetNormalized !== repoReal && !targetNormalized.startsWith(repoReal + sep)) {
+    throw new Error(`untracked path escapes the repository root: ${relativePath}`)
+  }
+
+  // The lexical check above is necessary but NOT sufficient: an in-repo
+  // symlink (e.g. repo/link -> /outside) makes `link/payload.txt` lexically
+  // contained while cp() follows the link and writes outside the repo. Resolve
+  // the target via realpath to defeat any symlink on the path. The target may
+  // not exist yet (cp creates it), so when the direct realpath fails with
+  // ENOENT we canonicalize the nearest existing ancestor (the parent dir) and
+  // re-join the remaining suffix, then re-assert containment on the resolved
+  // pair. Any other realpath failure (EACCES/ELOOP/ENOTDIR/…) fails closed.
+  const targetReal = await resolveSymlinkSafe(targetNormalized)
+  if (targetReal !== repoReal && !targetReal.startsWith(repoReal + sep)) {
+    throw new Error(`untracked path escapes the repository root: ${relativePath}`)
+  }
+
+  // Return the lexical target so downstream mkdir/cp operate on the path the
+  // caller asked for; the escape check above already proved it cannot leave
+  // the repository root through any symlink on the path.
+  return targetNormalized
+}
+
+/**
+ * Exported for tests. Validates an untracked-file relative path (from
+ * persisted metadata) stays inside `repositoryRoot`, defeating `..`,
+ * absolute, drive-relative, null-byte, AND in-repo-symlink escapes.
+ */
+export async function testResolvePathWithinRepository(
+  repositoryRoot: string,
+  relativePath: string
+): Promise<string> {
+  return resolvePathWithinRepository(repositoryRoot, relativePath)
+}
+
+/**
+ * Canonicalizes `lexicalPath`, tolerating a not-yet-existing leaf (the
+ * write/create case) by realpath-ing the nearest existing ancestor and
+ * re-joining the non-existent suffix. Fail-closed on realpath errors other
+ * than ENOENT. Mirrors the approach used by the workspace tool escape check.
+ */
+async function resolveSymlinkSafe(lexicalPath: string): Promise<string> {
+  const direct = await safeRealpath(lexicalPath)
+  if (direct !== null) return direct
+  const segments: string[] = []
+  let current = lexicalPath
+  let ancestor: string | null = null
+  for (let i = 0; i < 128 && current !== dirname(current); i += 1) {
+    const resolved = await safeRealpath(current)
+    if (resolved !== null) {
+      ancestor = resolved
+      break
+    }
+    segments.unshift(basename(current))
+    current = dirname(current)
+  }
+  if (ancestor === null) {
+    throw new Error(`cannot canonicalize path (no existing ancestor): ${lexicalPath}`)
+  }
+  return segments.length > 0 ? normalize(join(ancestor, ...segments)) : ancestor
+}
+
+async function safeRealpath(target: string): Promise<string | null> {
+  try {
+    return await realpath(target)
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code
+    if (code === 'ENOENT' || code === 'EACCES' || code === 'ELOOP' || code === 'ENOTDIR') {
+      return null
+    }
+    throw error
+  }
+}
+
+/**
+ * Lexical containment check used against an already-realpath'd base (the
+ * checkpoint untracked dir, whose realpath may be a fallback when the dir is
+ * absent). Shares the same rejection rules as {@link resolvePathWithinRepository}
+ * so a traversal path cannot slip through on the source side.
+ */
+function isValidWithinBase(relativePath: string, baseReal: string): boolean {
+  if (!relativePath || relativePath === '.' || relativePath === '..' || isAbsolute(relativePath)) {
+    return false
+  }
+  if (relativePath.includes('\0') || /^[a-zA-Z]:/.test(relativePath)) {
+    return false
+  }
+  const targetNormalized = normalize(join(baseReal, relativePath))
+  return targetNormalized === baseReal || targetNormalized.startsWith(baseReal + sep)
+}
+
 export async function createGitCheckpoint(params: {
   dataDir: string
   workspaceRoot: string
@@ -223,12 +345,33 @@ export async function restoreGitCheckpoint(params: {
     await applyPatchIfPresent(repositoryRoot, join(dir, 'staged.patch'), true)
     await applyPatchIfPresent(repositoryRoot, join(dir, 'unstaged.patch'), false)
 
+    const checkpointUntrackedDir = join(dir, 'untracked')
+    // The untracked dir is created at checkpoint time but may legitimately be
+    // absent on old checkpoints that had no untracked files. realpath() would
+    // throw ENOENT, so canonicalize tolerantly for this non-security-critical
+    // anchor (the per-path escape check below still runs).
+    let checkpointUntrackedReal: string
+    try {
+      checkpointUntrackedReal = await realpath(checkpointUntrackedDir)
+    } catch {
+      checkpointUntrackedReal = normalize(checkpointUntrackedDir)
+    }
+
     for (const relativePath of metadata.untrackedFiles) {
-      const from = join(dir, 'untracked', relativePath)
-      if (!(await fileExists(from))) continue
-      const to = join(repositoryRoot, relativePath)
-      await mkdir(dirname(to), { recursive: true })
-      await cp(from, to, { recursive: true, force: true, errorOnExist: false })
+      // `relativePath` comes from persisted, untrusted metadata. Validate it
+      // stays inside the repository root (rejecting `..`, absolute, drive
+      // forms, null bytes) and inside the checkpoint's untracked dir. Both
+      // checks run through realpath/normalize so symlinks cannot redirect the
+      // copy outside the validated roots.
+      const targetWithinRepo = await resolvePathWithinRepository(repositoryRoot, relativePath)
+      if (!isValidWithinBase(relativePath, checkpointUntrackedReal)) {
+        throw new Error(`untracked path escapes the checkpoint directory: ${relativePath}`)
+      }
+      const sourceWithinCheckpoint = normalize(join(checkpointUntrackedReal, relativePath))
+
+      if (!(await fileExists(sourceWithinCheckpoint))) continue
+      await mkdir(dirname(targetWithinRepo), { recursive: true })
+      await cp(sourceWithinCheckpoint, targetWithinRepo, { recursive: true, force: true, errorOnExist: false })
     }
 
     return {

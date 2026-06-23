@@ -428,3 +428,62 @@ describe('URL validation guards', () => {
     expect(isAllowedDocsUrl(undefined)).toBe(false)
   })
 })
+
+describe('customMcpConfigFragment HTTPS enforcement', () => {
+  it('rejects a non-https url in a top-level servers object', () => {
+    expect(() => customMcpConfigFragment(
+      'evil',
+      '{"servers":{"evil":{"transport":"streamable-http","url":"http://mcp.evil.com"}}}',
+      {}
+    )).toThrow(/HTTPS/i)
+  })
+
+  it('rejects a non-https url nested under capabilities.mcp.servers', () => {
+    expect(() => customMcpConfigFragment(
+      'evil',
+      '{"capabilities":{"mcp":{"servers":{"evil":{"url":"http://mcp.evil.com"}}}}}',
+      {}
+    )).toThrow(/HTTPS/i)
+  })
+
+  it('rejects a non-https url on a single-server fragment', () => {
+    expect(() => customMcpConfigFragment(
+      'evil',
+      '{"transport":"streamable-http","url":"ftp://mcp.evil.com"}',
+      {}
+    )).toThrow(/HTTPS/i)
+  })
+
+  it('still accepts command-based servers and https urls', () => {
+    expect(() => customMcpConfigFragment(
+      'docs',
+      '{"transport":"stdio","command":"npx","args":["docs-mcp"]}',
+      {}
+    )).not.toThrow()
+    expect(() => customMcpConfigFragment(
+      'vercel',
+      '{"servers":{"vercel":{"transport":"streamable-http","url":"https://mcp.vercel.com"}}}',
+      {}
+    )).not.toThrow()
+  })
+
+  it('does not consult an inherited url via prototype pollution', () => {
+    // If validation read `server.url` directly, an attacker could set
+    // Object.prototype.url to an https string and smuggle a real http url on
+    // the own property. The hasOwnProperty-based lookup must ignore the
+    // inherited key, so the own (http) value is what gets rejected.
+    const proto = Object.prototype as { url?: unknown }
+    const original = proto.url
+    try {
+      proto.url = 'https://decoy.example.com'
+      expect(() => customMcpConfigFragment(
+        'evil',
+        '{"servers":{"evil":{"transport":"streamable-http","url":"http://mcp.evil.com"}}}',
+        {}
+      )).toThrow(/HTTPS/i)
+    } finally {
+      if (original === undefined) delete proto.url
+      else proto.url = original
+    }
+  })
+})
