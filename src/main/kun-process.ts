@@ -93,10 +93,45 @@ export function setKunUnexpectedExitHandler(
 
 const execFileAsync = promisify(execFile)
 const KUN_READY_PREFIX = 'KUN_READY '
-// Cold starts on slow disks (Windows + antivirus scans, sqlite rebuilds,
-// MCP server connects) routinely exceed 15s; killing kun that early left
-// fresh installs permanently "unable to connect" (#188).
-const KUN_STARTUP_TIMEOUT_MS = 45_000
+const KUN_STARTUP_TIMEOUT_FLOOR_MS = 15_000
+const KUN_STARTUP_TIMEOUT_CEILING_MS = 600_000
+
+/**
+ * How long to wait for a freshly spawned kun to report ready before giving
+ * up and killing it. kun emits its ready marker only after the HTTP server
+ * is actually listening, which it does only after sqlite opens, the thread
+ * store finishes its backfill, usage carryover replays every thread's
+ * events, and the MCP fast-connect race runs. On a slow disk (Windows +
+ * antivirus scans) with a large history this routinely exceeds 45s, leaving
+ * the runtime stuck in a "did not report ready within 45000ms" → SIGTERM →
+ * respawn loop (#188, #544).
+ *
+ * A generous ceiling is free on fast machines: the parallel /health probe
+ * in waitForKunStartup settles the moment the server responds, and a process
+ * that actually crashes rejects immediately via its exit event rather than
+ * waiting out the timeout. Only a slow-but-progressing boot uses the extra
+ * runway. Windows gets the larger default; everything is overridable via the
+ * KUN_STARTUP_TIMEOUT_MS env var (milliseconds, clamped to 15s–10min) for
+ * extreme cases without a rebuild.
+ */
+export function resolveKunStartupTimeoutMs(
+  platform: NodeJS.Platform,
+  env: NodeJS.ProcessEnv
+): number {
+  const raw = env.KUN_STARTUP_TIMEOUT_MS
+  if (raw && raw.trim()) {
+    const parsed = Number(raw)
+    if (Number.isFinite(parsed)) {
+      return Math.min(
+        KUN_STARTUP_TIMEOUT_CEILING_MS,
+        Math.max(KUN_STARTUP_TIMEOUT_FLOOR_MS, Math.floor(parsed))
+      )
+    }
+  }
+  return platform === 'win32' ? 90_000 : 60_000
+}
+
+const KUN_STARTUP_TIMEOUT_MS = resolveKunStartupTimeoutMs(process.platform, process.env)
 const KUN_STARTUP_HEALTH_POLL_MS = 500
 const KUN_STARTUP_HEALTH_REQUEST_TIMEOUT_MS = 1_000
 const KUN_STOP_GRACE_MS = 5_000
@@ -258,6 +293,21 @@ export function isKunChildRunning(): boolean {
 
 function isCurrentKunChildPid(pid: number): boolean {
   return Boolean(child?.pid === pid && isKunChildRunning())
+}
+
+/**
+ * Resolve once any in-flight kun launch has settled — whether it became
+ * ready or failed. The settings/MCP-apply paths use this to avoid
+ * SIGTERM-ing a child that is still inside its (deliberately generous)
+ * startup window: interrupting a slow-but-healthy boot only restarts the
+ * clock and is what turns one slow start into the #544 restart storm.
+ *
+ * Deadlock-safe by construction: `kunStartPromise` is only set once a launch
+ * has already passed the settings-apply gate, so an apply that awaits it can
+ * never be the thing that launch is itself waiting on.
+ */
+export function waitForKunStartupSettled(): Promise<void> {
+  return kunStartPromise ? kunStartPromise.catch(() => undefined) : Promise.resolve()
 }
 
 export function startKunChild(settings: AppSettingsV1): Promise<void> {

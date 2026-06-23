@@ -52,7 +52,11 @@ import {
   runtimeRequestViaHost
 } from './runtime/kun-adapter'
 import { waitForRuntimeTurnsIdle } from './runtime/managed-runtime-idle'
-import { setKunUnexpectedExitHandler, type KunUnexpectedExitInfo } from './kun-process'
+import {
+  setKunUnexpectedExitHandler,
+  waitForKunStartupSettled,
+  type KunUnexpectedExitInfo
+} from './kun-process'
 import { RestartBudget, type KunRuntimeStatus } from './kun-runtime-supervisor'
 import { configureLogger, logError, logWarn, pruneOnStartup } from './logger'
 import { createClawRuntime, type ClawRuntime } from './claw-runtime'
@@ -1049,6 +1053,10 @@ async function restartRuntime(settings: AppSettingsV1): Promise<void> {
 
 async function restartRuntimeOnce(settings: AppSettingsV1): Promise<void> {
   await waitForQueuedRuntimeSettingsApply()
+  // Don't tear down a child that is still completing its startup; wait for it
+  // to settle so a restart trigger that races a boot doesn't reset the clock
+  // (#544). Resolves immediately when nothing is launching.
+  await waitForKunStartupSettled()
   const runtime = getKunRuntimeSettings(settings)
 
   if (!resolveConfiguredApiKey(settings)) {
@@ -1225,6 +1233,13 @@ async function restartManagedRuntimeForSettingsChange(
 ): Promise<void> {
   if (!runtimeStartupConfigChanged(prev, next)) return
 
+  // Let any in-flight boot launch finish (or fail) before we read liveness
+  // and stop the child. Killing a kun that is still inside its startup window
+  // throws away the boot's progress and restarts the clock — the #544 restart
+  // storm. Once it settles, the child is either healthy (graceful restart
+  // below) or already gone (`wasRunning` is false and we return).
+  await waitForKunStartupSettled()
+
   const runtime = resolveKunRuntimeSettings(next)
   const adapter = kunRuntimeAdapter
   const wasRunning = adapter.isChildRunning()
@@ -1335,6 +1350,10 @@ async function rollbackRuntimeSettingsAfterFailedApply(
 }
 
 async function restartManagedRuntimeForMcpConfigChange(settings: AppSettingsV1): Promise<void> {
+  // See restartManagedRuntimeForSettingsChange: never interrupt an in-flight
+  // boot launch (#544 restart storm).
+  await waitForKunStartupSettled()
+
   const runtime = resolveKunRuntimeSettings(settings)
   const adapter = kunRuntimeAdapter
   const wasRunning = adapter.isChildRunning()

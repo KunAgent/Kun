@@ -188,6 +188,89 @@ describe('startKunChild', () => {
   })
 })
 
+describe('resolveKunStartupTimeoutMs', () => {
+  it('gives Windows the larger default and other platforms a smaller one', async () => {
+    const { resolveKunStartupTimeoutMs } = await import('./kun-process')
+    expect(resolveKunStartupTimeoutMs('win32', {})).toBe(90_000)
+    expect(resolveKunStartupTimeoutMs('darwin', {})).toBe(60_000)
+    expect(resolveKunStartupTimeoutMs('linux', {})).toBe(60_000)
+  })
+
+  it('honors a valid KUN_STARTUP_TIMEOUT_MS override on every platform', async () => {
+    const { resolveKunStartupTimeoutMs } = await import('./kun-process')
+    expect(resolveKunStartupTimeoutMs('win32', { KUN_STARTUP_TIMEOUT_MS: '120000' })).toBe(120_000)
+    expect(resolveKunStartupTimeoutMs('linux', { KUN_STARTUP_TIMEOUT_MS: ' 30000 ' })).toBe(30_000)
+  })
+
+  it('clamps an out-of-range override to the 15s–10min bounds', async () => {
+    const { resolveKunStartupTimeoutMs } = await import('./kun-process')
+    expect(resolveKunStartupTimeoutMs('linux', { KUN_STARTUP_TIMEOUT_MS: '1000' })).toBe(15_000)
+    expect(resolveKunStartupTimeoutMs('linux', { KUN_STARTUP_TIMEOUT_MS: '99999999' })).toBe(600_000)
+  })
+
+  it('falls back to the platform default when the override is not a finite number', async () => {
+    const { resolveKunStartupTimeoutMs } = await import('./kun-process')
+    expect(resolveKunStartupTimeoutMs('win32', { KUN_STARTUP_TIMEOUT_MS: 'soon' })).toBe(90_000)
+    expect(resolveKunStartupTimeoutMs('darwin', { KUN_STARTUP_TIMEOUT_MS: '' })).toBe(60_000)
+    expect(resolveKunStartupTimeoutMs('darwin', { KUN_STARTUP_TIMEOUT_MS: '   ' })).toBe(60_000)
+  })
+})
+
+describe('waitForKunStartupSettled', () => {
+  it('resolves immediately when no launch is in flight', async () => {
+    const module = await import('./kun-process')
+    let resolved = false
+    await Promise.race([
+      module.waitForKunStartupSettled().then(() => {
+        resolved = true
+      }),
+      new Promise((resolve) => setTimeout(resolve, 50))
+    ])
+    expect(resolved).toBe(true)
+  })
+
+  it('does not resolve until an in-flight launch settles', async () => {
+    if (!tempRoot) throw new Error('temp root not initialized')
+    const readySignalPath = join(tempRoot, 'allow-ready-settled')
+    const script = writeScript(
+      'settled-delayed-child.js',
+      [
+        "const { existsSync } = require('node:fs')",
+        `const readySignalPath = ${JSON.stringify(readySignalPath)}`,
+        'let sentReady = false',
+        'setInterval(() => {',
+        '  if (sentReady || !existsSync(readySignalPath)) return',
+        '  sentReady = true',
+        "  process.stdout.write('KUN_READY ' + JSON.stringify({ service: 'kun', mode: 'serve', port: 18899 }) + '\\n')",
+        '}, 10)',
+        'setInterval(() => {}, 1_000)'
+      ].join('\n')
+    )
+    const module = await import('./kun-process')
+    const settings = createSettings(script)
+    const start = module.startKunChild(settings)
+
+    for (let attempt = 0; attempt < 100 && !module.isKunChildRunning(); attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 10))
+    }
+    expect(module.isKunChildRunning()).toBe(true)
+
+    let settled = false
+    const settledPromise = module.waitForKunStartupSettled().then(() => {
+      settled = true
+    })
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    expect(settled).toBe(false)
+
+    writeFileSync(readySignalPath, 'ready', 'utf8')
+    await start
+    await settledPromise
+    expect(settled).toBe(true)
+
+    await module.stopKunChildAndWait()
+  })
+})
+
 describe('reclaimKunPort', () => {
   it('reports a port as unavailable when another listener owns it', async () => {
     const server = createServer()
