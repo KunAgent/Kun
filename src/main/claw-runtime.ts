@@ -80,8 +80,6 @@ import { FeishuStreamer } from './feishu-streamer'
 import type { TelegramInboundPayload } from './telegram-runtime'
 
 const MAX_IM_FILE_UPLOAD_BYTES = 50 * 1024 * 1024
-const CLAW_IM_APPROVAL_POLICY = 'auto'
-const CLAW_IM_SANDBOX_MODE = 'danger-full-access'
 const CLAW_TELEGRAM_INBOUND_IMAGE_HEADING = '[Telegram inbound message]'
 
 type FeishuClawChannel = ClawImChannelV1 & {
@@ -573,8 +571,8 @@ export class ClawRuntime {
     const createThread = async (): Promise<ThreadRecordJson | null> => {
       const body: Record<string, unknown> = { workspace, model, mode: options.mode }
       if (options.source === 'im') {
-        body.approvalPolicy = CLAW_IM_APPROVAL_POLICY
-        body.sandboxMode = CLAW_IM_SANDBOX_MODE
+        body.approvalPolicy = runtimeSettings.agents.kun.approvalPolicy
+        body.sandboxMode = runtimeSettings.agents.kun.sandboxMode
       }
       const create = await this.deps.runtimeRequest(runtimeSettings, '/v1/threads', {
         method: 'POST',
@@ -604,10 +602,12 @@ export class ClawRuntime {
     if (model) turnBody.model = model
     // IM senders can only reply in their chat app; they cannot answer
     // GUI prompts, so the runtime must not expose user-input tools.
+    // Permission fields are pure passthrough from the agent settings so
+    // IM turns follow the same policy the user picked for the GUI.
     if (options.source === 'im') {
       turnBody.disableUserInput = true
-      turnBody.approvalPolicy = CLAW_IM_APPROVAL_POLICY
-      turnBody.sandboxMode = CLAW_IM_SANDBOX_MODE
+      turnBody.approvalPolicy = runtimeSettings.agents.kun.approvalPolicy
+      turnBody.sandboxMode = runtimeSettings.agents.kun.sandboxMode
     }
     let turn = await this.startRuntimeTurn(runtimeSettings, thread.id, turnBody)
     if (!turn.ok && existingThreadId && isMissingThreadResult(turn)) {

@@ -435,6 +435,230 @@ describe('ClawRuntime', () => {
     })
   })
 
+  it('passes non-default agent approval/sandbox settings through to IM turns without downgrading', async () => {
+    const settings = buildSettings()
+    settings.agents.kun.approvalPolicy = 'untrusted'
+    settings.agents.kun.sandboxMode = 'read-only'
+    const runtimeRequest = vi.fn(async (_settings, path, init) => {
+      if (path === '/v1/threads') {
+        return { ok: true, status: 200, body: JSON.stringify({ id: 'thr_1' }) }
+      }
+      if (path === '/v1/threads/thr_1' && init?.method === 'PATCH') {
+        return { ok: true, status: 200, body: '{}' }
+      }
+      if (path === '/v1/threads/thr_1' && init?.method === 'GET') {
+        return {
+          ok: true,
+          status: 200,
+          body: JSON.stringify({
+            thread: { id: 'thr_1', status: 'completed' },
+            turns: [{ id: 'turn_1', status: 'completed' }],
+            items: [{ kind: 'assistant_text', detail: 'ok' }]
+          })
+        }
+      }
+      if (path === '/v1/threads/thr_1/turns') {
+        return { ok: true, status: 202, body: JSON.stringify({ threadId: 'thr_1', turnId: 'turn_1' }) }
+      }
+      return { ok: true, status: 200, body: '{}' }
+    })
+    const runtime = createClawRuntime({
+      store: { load: vi.fn(async () => settings), patch: vi.fn(async () => settings) } as never,
+      runtimeRequest,
+      logError: () => undefined
+    })
+
+    await (runtime as unknown as {
+      runPrompt: (
+        settingsArg: AppSettingsV1,
+        options: {
+          prompt: string
+          title: string
+          workspaceRoot: string
+          model: string
+          mode: 'agent' | 'plan'
+          waitForResult: boolean
+          responseTimeoutMs: number
+          source: 'task' | 'im'
+        }
+      ) => Promise<{ ok: boolean; text?: string }>
+    }).runPrompt(settings, {
+      prompt: 'hello',
+      title: 'demo',
+      workspaceRoot: '/tmp/workspace',
+      model: 'auto',
+      mode: 'agent',
+      waitForResult: true,
+      responseTimeoutMs: 10,
+      source: 'im'
+    })
+
+    const createThreadCall = runtimeRequest.mock.calls.find(
+      ([, path, init]) => path === '/v1/threads' && init?.method === 'POST'
+    )
+    expect(JSON.parse(String(createThreadCall?.[2]?.body ?? '{}'))).toMatchObject({
+      approvalPolicy: 'untrusted',
+      sandboxMode: 'read-only'
+    })
+    const turnCall = runtimeRequest.mock.calls.find(
+      ([, path, init]) => path === '/v1/threads/thr_1/turns' && init?.method === 'POST'
+    )
+    expect(JSON.parse(String(turnCall?.[2]?.body ?? '{}'))).toMatchObject({
+      disableUserInput: true,
+      approvalPolicy: 'untrusted',
+      sandboxMode: 'read-only'
+    })
+  })
+
+  it('passes the never approval policy through to IM turns without escalating to auto', async () => {
+    const settings = buildSettings()
+    settings.agents.kun.approvalPolicy = 'never'
+    settings.agents.kun.sandboxMode = 'read-only'
+    const runtimeRequest = vi.fn(async (_settings, path, init) => {
+      if (path === '/v1/threads') {
+        return { ok: true, status: 200, body: JSON.stringify({ id: 'thr_1' }) }
+      }
+      if (path === '/v1/threads/thr_1' && init?.method === 'PATCH') {
+        return { ok: true, status: 200, body: '{}' }
+      }
+      if (path === '/v1/threads/thr_1' && init?.method === 'GET') {
+        return {
+          ok: true,
+          status: 200,
+          body: JSON.stringify({
+            thread: { id: 'thr_1', status: 'completed' },
+            turns: [{ id: 'turn_1', status: 'completed' }],
+            items: [{ kind: 'assistant_text', detail: 'ok' }]
+          })
+        }
+      }
+      if (path === '/v1/threads/thr_1/turns') {
+        return { ok: true, status: 202, body: JSON.stringify({ threadId: 'thr_1', turnId: 'turn_1' }) }
+      }
+      return { ok: true, status: 200, body: '{}' }
+    })
+    const runtime = createClawRuntime({
+      store: { load: vi.fn(async () => settings), patch: vi.fn(async () => settings) } as never,
+      runtimeRequest,
+      logError: () => undefined
+    })
+
+    await (runtime as unknown as {
+      runPrompt: (
+        settingsArg: AppSettingsV1,
+        options: {
+          prompt: string
+          title: string
+          workspaceRoot: string
+          model: string
+          mode: 'agent' | 'plan'
+          waitForResult: boolean
+          responseTimeoutMs: number
+          source: 'task' | 'im'
+        }
+      ) => Promise<{ ok: boolean; text?: string }>
+    }).runPrompt(settings, {
+      prompt: 'hello',
+      title: 'demo',
+      workspaceRoot: '/tmp/workspace',
+      model: 'auto',
+      mode: 'agent',
+      waitForResult: true,
+      responseTimeoutMs: 10,
+      source: 'im'
+    })
+
+    const createThreadCall = runtimeRequest.mock.calls.find(
+      ([, path, init]) => path === '/v1/threads' && init?.method === 'POST'
+    )
+    expect(JSON.parse(String(createThreadCall?.[2]?.body ?? '{}'))).toMatchObject({
+      approvalPolicy: 'never',
+      sandboxMode: 'read-only'
+    })
+    const turnCall = runtimeRequest.mock.calls.find(
+      ([, path, init]) => path === '/v1/threads/thr_1/turns' && init?.method === 'POST'
+    )
+    expect(JSON.parse(String(turnCall?.[2]?.body ?? '{}'))).toMatchObject({
+      disableUserInput: true,
+      approvalPolicy: 'never',
+      sandboxMode: 'read-only'
+    })
+  })
+
+  it('does not attach IM-only permission fields when source is not im', async () => {
+    const settings = buildSettings()
+    settings.agents.kun.approvalPolicy = 'untrusted'
+    settings.agents.kun.sandboxMode = 'read-only'
+    const runtimeRequest = vi.fn(async (_settings, path, init) => {
+      if (path === '/v1/threads') {
+        return { ok: true, status: 200, body: JSON.stringify({ id: 'thr_1' }) }
+      }
+      if (path === '/v1/threads/thr_1' && init?.method === 'PATCH') {
+        return { ok: true, status: 200, body: '{}' }
+      }
+      if (path === '/v1/threads/thr_1' && init?.method === 'GET') {
+        return {
+          ok: true,
+          status: 200,
+          body: JSON.stringify({
+            thread: { id: 'thr_1', status: 'completed' },
+            turns: [{ id: 'turn_1', status: 'completed' }],
+            items: [{ kind: 'assistant_text', detail: 'ok' }]
+          })
+        }
+      }
+      if (path === '/v1/threads/thr_1/turns') {
+        return { ok: true, status: 202, body: JSON.stringify({ threadId: 'thr_1', turnId: 'turn_1' }) }
+      }
+      return { ok: true, status: 200, body: '{}' }
+    })
+    const runtime = createClawRuntime({
+      store: { load: vi.fn(async () => settings), patch: vi.fn(async () => settings) } as never,
+      runtimeRequest,
+      logError: () => undefined
+    })
+
+    await (runtime as unknown as {
+      runPrompt: (
+        settingsArg: AppSettingsV1,
+        options: {
+          prompt: string
+          title: string
+          workspaceRoot: string
+          model: string
+          mode: 'agent' | 'plan'
+          waitForResult: boolean
+          responseTimeoutMs: number
+          source: 'task' | 'im'
+        }
+      ) => Promise<{ ok: boolean; text?: string }>
+    }).runPrompt(settings, {
+      prompt: 'hello',
+      title: 'demo',
+      workspaceRoot: '/tmp/workspace',
+      model: 'auto',
+      mode: 'agent',
+      waitForResult: true,
+      responseTimeoutMs: 10,
+      source: 'task'
+    })
+
+    const createThreadCall = runtimeRequest.mock.calls.find(
+      ([, path, init]) => path === '/v1/threads' && init?.method === 'POST'
+    )
+    const createBody = JSON.parse(String(createThreadCall?.[2]?.body ?? '{}'))
+    expect(createBody).not.toHaveProperty('approvalPolicy')
+    expect(createBody).not.toHaveProperty('sandboxMode')
+    expect(createBody).not.toHaveProperty('disableUserInput')
+    const turnCall = runtimeRequest.mock.calls.find(
+      ([, path, init]) => path === '/v1/threads/thr_1/turns' && init?.method === 'POST'
+    )
+    const turnBody = JSON.parse(String(turnCall?.[2]?.body ?? '{}'))
+    expect(turnBody).not.toHaveProperty('approvalPolicy')
+    expect(turnBody).not.toHaveProperty('sandboxMode')
+    expect(turnBody).not.toHaveProperty('disableUserInput')
+  })
+
   it('reads assistant text from the Kun thread detail shape used by the real runtime', async () => {
     const settings = buildSettings()
     const runtimeRequest = vi.fn(async (_settings, path, init) => {
@@ -1211,6 +1435,105 @@ describe('ClawRuntime', () => {
       disableUserInput: true,
       approvalPolicy: 'auto',
       sandboxMode: 'danger-full-access'
+    })
+  })
+
+  it('passes non-default agent approval/sandbox settings through the WeChat webhook path without downgrading', async () => {
+    const settings = buildSettings()
+    settings.claw.im.enabled = true
+    settings.claw.im.responseTimeoutMs = 2_500
+    settings.agents.kun.approvalPolicy = 'untrusted'
+    settings.agents.kun.sandboxMode = 'read-only'
+    settings.claw.channels = [buildChannel({
+      provider: 'weixin' as const,
+      id: 'channel_weixin',
+      label: 'WeChat',
+      threadId: '',
+      conversations: []
+    })]
+    const { store } = mutableSettingsStore(settings)
+    const runtimeRequest = vi.fn(async (_settings, path, init) => {
+      if (path === '/v1/threads' && init?.method === 'POST') {
+        return { ok: true, status: 201, body: JSON.stringify({ id: 'thr_weixin' }) }
+      }
+      if (path === '/v1/threads/thr_weixin' && init?.method === 'PATCH') {
+        return { ok: true, status: 200, body: '{}' }
+      }
+      if (path === '/v1/threads/thr_weixin/turns' && init?.method === 'POST') {
+        return { ok: true, status: 202, body: JSON.stringify({ turnId: 'turn_weixin' }) }
+      }
+      if (path === '/v1/threads/thr_weixin' && init?.method === 'GET') {
+        return {
+          ok: true,
+          status: 200,
+          body: JSON.stringify({
+            id: 'thr_weixin',
+            status: 'idle',
+            turns: [
+              {
+                id: 'turn_weixin',
+                status: 'completed',
+                items: [{ kind: 'assistant_text', text: 'hello from GUI' }]
+              }
+            ]
+          })
+        }
+      }
+      throw new Error(`unexpected path ${path}`)
+    })
+    const runtime = createClawRuntime({
+      store: store as never,
+      runtimeRequest: runtimeRequest as never,
+      logError: () => undefined,
+      createScheduledTaskFromText: vi.fn(async () => ({ kind: 'noop' as const }))
+    })
+    const body = JSON.stringify({
+      text: '你好',
+      provider: 'weixin',
+      channelId: 'channel_weixin',
+      chatId: 'wx_user_1',
+      messageId: 'wx_msg_1',
+      senderId: 'wx_user_1',
+      senderName: 'Alice'
+    })
+    const req = {
+      method: 'POST',
+      url: settings.claw.im.path,
+      headers: {},
+      async *[Symbol.asyncIterator]() {
+        yield Buffer.from(body)
+      }
+    }
+    let status = 0
+    let responseBody = ''
+    const res = {
+      writeHead: vi.fn((nextStatus: number) => {
+        status = nextStatus
+      }),
+      end: vi.fn((payload: string) => {
+        responseBody = payload
+      })
+    }
+
+    await (runtime as unknown as {
+      handleWebhook: (request: typeof req, response: typeof res) => Promise<void>
+    }).handleWebhook(req, res)
+
+    expect(status).toBe(200)
+    const createThreadCall = runtimeRequest.mock.calls.find(
+      ([, path, init]) => path === '/v1/threads' && init?.method === 'POST'
+    )
+    expect(JSON.parse(String(createThreadCall?.[2]?.body ?? '{}'))).toMatchObject({
+      approvalPolicy: 'untrusted',
+      sandboxMode: 'read-only'
+    })
+    const turnCall = runtimeRequest.mock.calls.find(
+      ([, path, init]) => path === '/v1/threads/thr_weixin/turns' && init?.method === 'POST'
+    )
+    expect(JSON.parse(String(turnCall?.[2]?.body ?? '{}'))).toMatchObject({
+      disableUserInput: true,
+      approvalPolicy: 'untrusted',
+      sandboxMode: 'read-only'
     })
   })
 

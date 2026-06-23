@@ -111,7 +111,7 @@ export function createLspLocalTool(): LocalTool {
           return { output: { error: `Unknown operation: ${operation}` }, isError: true }
         }
 
-        const { absolutePath, workspaceRoot } = resolveWorkspacePath(rawPath, context)
+        const { absolutePath, workspaceRoot } = await resolveWorkspacePath(rawPath, context)
         const server = findLanguageServerForFile(absolutePath)
         if (!server) {
           const supported = listLanguageServers()
