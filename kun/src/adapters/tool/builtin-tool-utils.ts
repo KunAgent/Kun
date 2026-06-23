@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs'
-import { readFile, readdir, stat } from 'node:fs/promises'
+import { readFile, readdir, realpath, stat } from 'node:fs/promises'
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process'
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import type { ToolHostContext } from '../../ports/tool-host.js'
@@ -57,22 +57,71 @@ export function workspaceRoot(workspace: string): string {
   return isAbsolute(workspace) ? resolve(workspace) : resolve(process.cwd(), workspace)
 }
 
-export function resolveWorkspacePath(inputPath: string, context: ToolHostContext): {
+export async function resolveWorkspacePath(inputPath: string, context: ToolHostContext): Promise<{
   workspaceRoot: string
   absolutePath: string
   relativePath: string
-} {
+}> {
   const root = workspaceRoot(context.workspace)
-  const absolutePath = isAbsolute(inputPath) ? resolve(inputPath) : resolve(root, inputPath)
-  const relativePath = relative(root, absolutePath)
-  if (relativePath === '..' || relativePath.startsWith(`..${sep}`) || isAbsolute(relativePath)) {
+  const lexicalAbsolutePath = isAbsolute(inputPath) ? resolve(inputPath) : resolve(root, inputPath)
+  const resolvedRoot = await safeRealpath(root)
+  if (resolvedRoot === null) {
+    // Workspace root itself does not exist; nothing to anchor the escape
+    // check against. This is distinct from an actual escape (handled below).
+    throw new Error(`workspace root does not exist: ${root}`)
+  }
+  const resolvedAbsolute = await resolveSymlinkSafe(lexicalAbsolutePath)
+  const resolvedRelative = relative(resolvedRoot, resolvedAbsolute)
+  if (resolvedRelative === '..' || resolvedRelative.startsWith(`..${sep}`) || isAbsolute(resolvedRelative)) {
     throw new Error(`path escapes the workspace root: ${inputPath}`)
   }
+  // Return LEXICAL paths to callers. The realpath-resolved pair is only used
+  // for the escape check above; downstream code (subprocess cwd, display
+  // paths, language-server init) expects the user-facing workspace path,
+  // which on symlinked roots (e.g. macOS `/tmp` -> `/private/tmp`) would
+  // otherwise diverge from what the user typed and break display layers.
   return {
     workspaceRoot: root,
-    absolutePath,
-    relativePath: relativePath || '.'
+    absolutePath: lexicalAbsolutePath,
+    relativePath: relative(root, lexicalAbsolutePath) || '.'
   }
+}
+
+async function safeRealpath(target: string): Promise<string | null> {
+  try {
+    return await realpath(target)
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code
+    if (code === 'ENOENT') return null
+    if (code === 'EACCES' || code === 'ELOOP' || code === 'ENOTDIR') return null
+    throw error
+  }
+}
+
+async function resolveSymlinkSafe(lexicalPath: string): Promise<string> {
+  const direct = await safeRealpath(lexicalPath)
+  if (direct !== null) return direct
+  // Target doesn't exist (ENOENT) — relevant for write/create operations.
+  // Walk up until we find an existing ancestor, realpath it, then verify the
+  // remaining (non-existent) suffix stays inside the workspace root.
+  const segments: string[] = []
+  let current = lexicalPath
+  let ancestor: string | null = null
+  // Guard against infinite loops on pathological inputs.
+  for (let i = 0; i < 128 && current !== dirname(current); i += 1) {
+    const resolved = await safeRealpath(current)
+    if (resolved !== null) {
+      ancestor = resolved
+      break
+    }
+    segments.unshift(basename(current))
+    current = dirname(current)
+  }
+  if (ancestor === null) {
+    // Nothing on the path exists; treat as escape.
+    throw new Error(`path escapes the workspace root: ${lexicalPath}`)
+  }
+  return segments.length > 0 ? resolve(ancestor, ...segments) : ancestor
 }
 
 export function isBinaryBuffer(buffer: Buffer): boolean {

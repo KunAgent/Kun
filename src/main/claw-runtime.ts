@@ -80,9 +80,29 @@ import { FeishuStreamer } from './feishu-streamer'
 import type { TelegramInboundPayload } from './telegram-runtime'
 
 const MAX_IM_FILE_UPLOAD_BYTES = 50 * 1024 * 1024
-const CLAW_IM_APPROVAL_POLICY = 'auto'
-const CLAW_IM_SANDBOX_MODE = 'danger-full-access'
 const CLAW_TELEGRAM_INBOUND_IMAGE_HEADING = '[Telegram inbound message]'
+
+/**
+ * Approval policies that require an interactive GUI prompt to proceed. IM
+ * channels (Feishu/WeChat/Telegram) cannot surface these prompts, so any
+ * user-chosen policy in this set is downgraded to `'auto'` for IM sources.
+ *
+ * `'never'` is intentionally excluded: it does not require a GUI — it
+ * auto-denies every tool call (`local-tool-host.ts` returns
+ * `approval_policy_blocked`), which is a safe, non-interactive policy that
+ * must survive the IM code path. Downgrading `'never'` to `'auto'` would
+ * silently grant auto-approval to a user who disabled tools entirely.
+ *
+ * See `kun/src/contracts/policy.ts` for the exhaustive `ApprovalPolicy` list
+ * and `kun/src/adapters/tool/local-tool-host.ts` for how each value is
+ * enforced at the tool-call boundary.
+ */
+const IM_GUI_REQUIRED_APPROVAL_POLICIES = new Set<string>([
+  'always',
+  'on-request',
+  'untrusted',
+  'suggest'
+])
 
 type FeishuClawChannel = ClawImChannelV1 & {
   platformCredential: ClawImFeishuPlatformCredentialV1
@@ -570,11 +590,39 @@ export class ClawRuntime {
     const requestedModel = normalizeTaskModel(options.model) ?? (settings.agents.kun.model.trim() || DEFAULT_CLAW_MODEL)
     const runtimeSettings = settingsWithImModelProvider(settings, options.providerId, requestedModel)
     const model = effectiveImRuntimeModel(runtimeSettings, requestedModel)
+    // IM channels cannot show GUI approval prompts. Respect the user's chosen
+    // sandboxMode verbatim, but if their approvalPolicy would require an
+    // interactive prompt, downgrade to 'auto' so the turn does not deadlock.
+    // `'auto'` runs without prompts; `'never'` auto-denies without prompts;
+    // every other ApprovalPolicy value (always/on-request/untrusted/suggest)
+    // needs a human at a GUI. See `IM_GUI_REQUIRED_APPROVAL_POLICIES` above.
+    const imSandboxMode = runtimeSettings.agents.kun.sandboxMode
+    let imApprovalPolicy = runtimeSettings.agents.kun.approvalPolicy
+    if (
+      options.source === 'im' &&
+      IM_GUI_REQUIRED_APPROVAL_POLICIES.has(runtimeSettings.agents.kun.approvalPolicy)
+    ) {
+      try {
+        this.deps.logError(
+          'claw-runtime',
+          `IM source downgraded approvalPolicy from "${runtimeSettings.agents.kun.approvalPolicy}" to "auto" because IM channels cannot answer GUI approval prompts.`,
+          {
+            channelId: options.channel?.id,
+            source: options.source,
+            originalApprovalPolicy: runtimeSettings.agents.kun.approvalPolicy,
+            sandboxMode: runtimeSettings.agents.kun.sandboxMode
+          }
+        )
+      } catch {
+        // Logging is best-effort; never let it abort the turn.
+      }
+      imApprovalPolicy = 'auto'
+    }
     const createThread = async (): Promise<ThreadRecordJson | null> => {
       const body: Record<string, unknown> = { workspace, model, mode: options.mode }
       if (options.source === 'im') {
-        body.approvalPolicy = CLAW_IM_APPROVAL_POLICY
-        body.sandboxMode = CLAW_IM_SANDBOX_MODE
+        body.approvalPolicy = imApprovalPolicy
+        body.sandboxMode = imSandboxMode
       }
       const create = await this.deps.runtimeRequest(runtimeSettings, '/v1/threads', {
         method: 'POST',
@@ -606,8 +654,8 @@ export class ClawRuntime {
     // GUI prompts, so the runtime must not expose user-input tools.
     if (options.source === 'im') {
       turnBody.disableUserInput = true
-      turnBody.approvalPolicy = CLAW_IM_APPROVAL_POLICY
-      turnBody.sandboxMode = CLAW_IM_SANDBOX_MODE
+      turnBody.approvalPolicy = imApprovalPolicy
+      turnBody.sandboxMode = imSandboxMode
     }
     let turn = await this.startRuntimeTurn(runtimeSettings, thread.id, turnBody)
     if (!turn.ok && existingThreadId && isMissingThreadResult(turn)) {

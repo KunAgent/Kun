@@ -60,7 +60,7 @@ export function createWriteLocalTool(_options: WriteLocalToolOptions = {}): Loca
       if (!rawPath.trim() || content == null) {
         return { output: { error: 'path and content are required' }, isError: true }
       }
-      const { absolutePath, relativePath } = resolveWorkspacePath(rawPath, context)
+      const { absolutePath, relativePath } = await resolveWorkspacePath(rawPath, context)
       assertCanWritePath(absolutePath, context)
       return withFileMutationQueue(absolutePath, async () => {
         await mkdirOp(dirname(absolutePath))
@@ -118,7 +118,7 @@ export function createEditLocalTool(_options: EditLocalToolOptions = {}): LocalT
       if (!rawPath.trim() || edits.length === 0) {
         return { output: { error: 'path and at least one edit are required' }, isError: true }
       }
-      const { absolutePath, relativePath } = resolveWorkspacePath(rawPath, context)
+      const { absolutePath, relativePath } = await resolveWorkspacePath(rawPath, context)
       assertCanWritePath(absolutePath, context)
       return withFileMutationQueue(absolutePath, async () => {
         const rawSource = await readFileOp(absolutePath)

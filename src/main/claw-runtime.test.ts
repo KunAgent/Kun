@@ -435,6 +435,195 @@ describe('ClawRuntime', () => {
     })
   })
 
+  it('respects the user-chosen sandboxMode for IM sources and downgrades GUI-required approval policies to auto', async () => {
+    const settings = buildSettings()
+    // User picked a restrictive sandbox and an interactive approval policy via
+    // the unified tool-permission picker. IM cannot show GUI prompts, so the
+    // approval policy must be downgraded to 'auto' while the sandbox survives.
+    settings.agents.kun.sandboxMode = 'workspace-write'
+    settings.agents.kun.approvalPolicy = 'untrusted'
+    const runtimeRequest = vi.fn(async (_settings, path, init) => {
+      if (path === '/v1/threads') {
+        return { ok: true, status: 200, body: JSON.stringify({ id: 'thr_im_fix' }) }
+      }
+      if (path === '/v1/threads/thr_im_fix' && init?.method === 'PATCH') {
+        return { ok: true, status: 200, body: '{}' }
+      }
+      if (path === '/v1/threads/thr_im_fix' && init?.method === 'GET') {
+        return {
+          ok: true,
+          status: 200,
+          body: JSON.stringify({
+            thread: { id: 'thr_im_fix', status: 'completed' },
+            turns: [{ id: 'turn_im_fix', status: 'completed' }],
+            items: [{ kind: 'assistant_text', detail: 'sandbox respected' }]
+          })
+        }
+      }
+      if (path === '/v1/threads/thr_im_fix/turns') {
+        return { ok: true, status: 202, body: JSON.stringify({ threadId: 'thr_im_fix', turnId: 'turn_im_fix' }) }
+      }
+      return { ok: true, status: 200, body: '{}' }
+    })
+    const logError = vi.fn()
+    const store = {
+      load: vi.fn(async () => settings),
+      patch: vi.fn(async () => settings)
+    }
+    const runtime = createClawRuntime({
+      store: store as never,
+      runtimeRequest,
+      logError
+    })
+
+    const result = await (runtime as unknown as {
+      runPrompt: (
+        settingsArg: AppSettingsV1,
+        options: {
+          prompt: string
+          title: string
+          workspaceRoot: string
+          model: string
+          mode: 'agent' | 'plan'
+          waitForResult: boolean
+          responseTimeoutMs: number
+          source: 'task' | 'im'
+        }
+      ) => Promise<{ ok: boolean; text?: string }>
+    }).runPrompt(settings, {
+      prompt: 'hello',
+      title: 'demo',
+      workspaceRoot: '/tmp/workspace',
+      model: 'auto',
+      mode: 'agent',
+      waitForResult: true,
+      responseTimeoutMs: 10,
+      source: 'im'
+    })
+
+    expect(result).toMatchObject({ ok: true, text: 'sandbox respected' })
+    const createThreadCall = runtimeRequest.mock.calls.find(
+      ([, path, init]) => path === '/v1/threads' && init?.method === 'POST'
+    )
+    expect(JSON.parse(String(createThreadCall?.[2]?.body ?? '{}'))).toMatchObject({
+      approvalPolicy: 'auto',
+      sandboxMode: 'workspace-write'
+    })
+    const turnCall = runtimeRequest.mock.calls.find(
+      ([, path, init]) => path === '/v1/threads/thr_im_fix/turns' && init?.method === 'POST'
+    )
+    expect(JSON.parse(String(turnCall?.[2]?.body ?? '{}'))).toMatchObject({
+      disableUserInput: true,
+      approvalPolicy: 'auto',
+      sandboxMode: 'workspace-write'
+    })
+    // The downgrade must be logged exactly once with the original policy.
+    const downgradeCalls = logError.mock.calls.filter(
+      ([category, message]) =>
+        category === 'claw-runtime' &&
+        typeof message === 'string' &&
+        message.includes('IM source downgraded approvalPolicy')
+    )
+    expect(downgradeCalls).toHaveLength(1)
+    expect(downgradeCalls[0]?.[2]).toMatchObject({
+      originalApprovalPolicy: 'untrusted',
+      sandboxMode: 'workspace-write'
+    })
+  })
+
+  it('preserves the never approval policy for IM sources instead of escalating to auto', async () => {
+    // Regression: `never` is not a GUI-gated policy — it auto-denies every
+    // tool call without prompting. Downgrading it to `auto` for IM would
+    // silently grant auto-approval to a user who explicitly disabled tools,
+    // which is the exact privilege-escalation class this fix targets.
+    const settings = buildSettings()
+    settings.agents.kun.sandboxMode = 'read-only'
+    settings.agents.kun.approvalPolicy = 'never'
+    const runtimeRequest = vi.fn(async (_settings, path, init) => {
+      if (path === '/v1/threads') {
+        return { ok: true, status: 200, body: JSON.stringify({ id: 'thr_never' }) }
+      }
+      if (path === '/v1/threads/thr_never' && init?.method === 'PATCH') {
+        return { ok: true, status: 200, body: '{}' }
+      }
+      if (path === '/v1/threads/thr_never' && init?.method === 'GET') {
+        return {
+          ok: true,
+          status: 200,
+          body: JSON.stringify({
+            thread: { id: 'thr_never', status: 'completed' },
+            turns: [{ id: 'turn_never', status: 'completed' }],
+            items: [{ kind: 'assistant_text', detail: 'never preserved' }]
+          })
+        }
+      }
+      if (path === '/v1/threads/thr_never/turns') {
+        return { ok: true, status: 202, body: JSON.stringify({ threadId: 'thr_never', turnId: 'turn_never' }) }
+      }
+      return { ok: true, status: 200, body: '{}' }
+    })
+    const logError = vi.fn()
+    const store = {
+      load: vi.fn(async () => settings),
+      patch: vi.fn(async () => settings)
+    }
+    const runtime = createClawRuntime({
+      store: store as never,
+      runtimeRequest,
+      logError
+    })
+
+    const result = await (runtime as unknown as {
+      runPrompt: (
+        settingsArg: AppSettingsV1,
+        options: {
+          prompt: string
+          title: string
+          workspaceRoot: string
+          model: string
+          mode: 'agent' | 'plan'
+          waitForResult: boolean
+          responseTimeoutMs: number
+          source: 'task' | 'im'
+        }
+      ) => Promise<{ ok: boolean; text?: string }>
+    }).runPrompt(settings, {
+      prompt: 'hello',
+      title: 'demo',
+      workspaceRoot: '/tmp/workspace',
+      model: 'auto',
+      mode: 'agent',
+      waitForResult: true,
+      responseTimeoutMs: 10,
+      source: 'im'
+    })
+
+    expect(result).toMatchObject({ ok: true, text: 'never preserved' })
+    const createThreadCall = runtimeRequest.mock.calls.find(
+      ([, path, init]) => path === '/v1/threads' && init?.method === 'POST'
+    )
+    expect(JSON.parse(String(createThreadCall?.[2]?.body ?? '{}'))).toMatchObject({
+      approvalPolicy: 'never',
+      sandboxMode: 'read-only'
+    })
+    const turnCall = runtimeRequest.mock.calls.find(
+      ([, path, init]) => path === '/v1/threads/thr_never/turns' && init?.method === 'POST'
+    )
+    expect(JSON.parse(String(turnCall?.[2]?.body ?? '{}'))).toMatchObject({
+      disableUserInput: true,
+      approvalPolicy: 'never',
+      sandboxMode: 'read-only'
+    })
+    // No downgrade log should fire when the policy is `never` (or `auto`).
+    const downgradeCalls = logError.mock.calls.filter(
+      ([category, message]) =>
+        category === 'claw-runtime' &&
+        typeof message === 'string' &&
+        message.includes('IM source downgraded approvalPolicy')
+    )
+    expect(downgradeCalls).toHaveLength(0)
+  })
+
   it('reads assistant text from the Kun thread detail shape used by the real runtime', async () => {
     const settings = buildSettings()
     const runtimeRequest = vi.fn(async (_settings, path, init) => {

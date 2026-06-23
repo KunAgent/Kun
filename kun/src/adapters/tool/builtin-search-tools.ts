@@ -43,7 +43,7 @@ export function createLsLocalTool(options: LsLocalToolOptions = {}): LocalTool {
     execute: async (args, context) => withToolBoundary(async () => {
       const rawPath = typeof args.path === 'string' && args.path.trim() ? args.path : '.'
       const limit = normalizePositiveInteger(args.limit, options.defaultLimit ?? DEFAULT_LIST_LIMIT)
-      const { workspaceRoot: root, absolutePath, relativePath } = resolveWorkspacePath(rawPath, context)
+      const { workspaceRoot: root, absolutePath, relativePath } = await resolveWorkspacePath(rawPath, context)
       const targetStat = await statOp(absolutePath)
       if (!targetStat.isDirectory()) {
         return {
@@ -95,7 +95,7 @@ export function createFindLocalTool(options: FindLocalToolOptions = {}): LocalTo
       if (!pattern) return { output: { error: 'pattern is required' }, isError: true }
       const rawPath = typeof args.path === 'string' && args.path.trim() ? args.path : '.'
       const limit = normalizePositiveInteger(args.limit, options.defaultLimit ?? DEFAULT_FIND_LIMIT)
-      const { workspaceRoot: root, absolutePath, relativePath } = resolveWorkspacePath(rawPath, context)
+      const { workspaceRoot: root, absolutePath, relativePath } = await resolveWorkspacePath(rawPath, context)
       const matcher = globToRegExp(pattern.includes('/') ? pattern : `**/${pattern}`)
       if (options.operations?.glob) {
         const matches = await options.operations.glob({ pattern, path: absolutePath, limit })
@@ -213,7 +213,7 @@ export function createGrepLocalTool(options: GrepLocalToolOptions = {}): LocalTo
         ? new RegExp(pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), flags)
         : new RegExp(pattern, flags)
       const globMatcher = glob ? globToRegExp(glob.includes('/') ? glob : `**/${glob}`) : null
-      const { workspaceRoot: root, absolutePath, relativePath } = resolveWorkspacePath(rawPath, context)
+      const { workspaceRoot: root, absolutePath, relativePath } = await resolveWorkspacePath(rawPath, context)
       if (options.operations?.search) {
         const matches = await options.operations.search({
           pattern,

@@ -49,7 +49,7 @@ export function createReadLocalTool(options: ReadLocalToolOptions = {}): LocalTo
           isError: true
         }
       }
-      const { absolutePath, relativePath } = resolveWorkspacePath(rawPath, context)
+      const { absolutePath, relativePath } = await resolveWorkspacePath(rawPath, context)
       await statOp(absolutePath)
       const fileBuffer = await readFileOp(absolutePath)
       const classification = getReadClassification(absolutePath, context.workspace)
