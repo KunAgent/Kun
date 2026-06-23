@@ -51,4 +51,9 @@ export class Router {
     }
     return undefined
   }
+
+  /** Return all registered routes for discovery. */
+  listRoutes(): Array<{ method: string; path: string }> {
+    return this.routes.map((r) => ({ method: r.method, path: r.pattern }))
+  }
 }

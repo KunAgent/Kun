@@ -133,3 +133,6 @@ export function isKunThreadMode(value: unknown): value is KunThreadMode {
 export function normalizeThreadMode(value: unknown): KunThreadMode {
   return value === 'plan' ? 'plan' : 'agent'
 }
+
+/** Route discovery endpoint — returns all registered API routes. */
+export const KUN_ROUTES_PATH = '/v1/routes'

@@ -1,4 +1,5 @@
 import { Router } from '../router.js'
+import { jsonResponse } from '../response.js'
 import { healthJsonResponse } from './health.js'
 import { buildWorkspaceStatusResponse } from './workspace.js'
 import {
@@ -81,6 +82,7 @@ import type { ServerRuntime } from './server-runtime.js'
 export function buildRouter(runtime: ServerRuntime): Router {
   const router = new Router()
   router.add('GET', '/health', () => healthJsonResponse())
+  router.add('GET', '/v1/routes', async (_request) => routesDiscoveryResponse(router))
   router.add('GET', '/v1/runtime/info', async (request) => {
     if (!authorize(request, runtime)) return ERRORS.unauthorized()
     return runtimeInfoJsonResponse(runtime)
@@ -276,6 +278,11 @@ export function buildRouter(runtime: ServerRuntime): Router {
 
 function authorize(request: Request, runtime: ServerRuntime): boolean {
   return isAuthorized(request.headers, runtime.runtimeToken, runtime.insecure)
+}
+
+/** Return all registered API routes for client-side RouteRegistry. */
+function routesDiscoveryResponse(router: Router) {
+  return jsonResponse({ routes: router.listRoutes() })
 }
 
 void bearerToken
