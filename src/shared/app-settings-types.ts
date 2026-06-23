@@ -1600,10 +1600,10 @@ export type GuiUpdateConfigV1 = {
   channel: GuiUpdateChannel
 }
 
-export type TerminalColorMode = 'none' | 'custom'
+export type TerminalColorMode = 'native' | 'none' | 'custom'
 
 export type TerminalColorSettingsV1 = {
-  /** 'none' = monochrome (all ANSI colors map to foreground, no red commands); 'custom' = use user-defined colors. */
+  /** 'native' = built-in app theme colors; 'none' = monochrome; 'custom' = use user-defined colors. */
   colorMode: TerminalColorMode
   foreground: string
   background: string

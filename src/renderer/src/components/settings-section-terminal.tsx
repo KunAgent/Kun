@@ -1,5 +1,5 @@
 import { type ReactElement } from 'react'
-import type { TerminalColorSettingsV1 } from '@shared/app-settings'
+import { defaultTerminalColors, type TerminalColorSettingsV1 } from '@shared/app-settings'
 import { SettingsCard, SettingRow } from './settings-controls'
 
 type ColorField = {
@@ -80,15 +80,22 @@ export function TerminalSettingsSection({ ctx }: { ctx: Record<string, any> }): 
           <select
             className={ctx.selectControlClass}
             value={colors.colorMode}
-            onChange={(e) => updateColors({ colorMode: e.target.value as 'none' | 'custom' })}
+            onChange={(e) => updateColors({ colorMode: e.target.value as TerminalColorSettingsV1['colorMode'] })}
           >
+            <option value="native">{t('terminalColorModeNative')}</option>
             <option value="none">{t('terminalColorModeNone')}</option>
             <option value="custom">{t('terminalColorModeCustom')}</option>
           </select>
         }
       />
 
-      {colors.colorMode === 'none' ? (
+      {colors.colorMode === 'native' ? (
+        <SettingRow
+          title={t('terminalColorModeNativeHint')}
+          description={t('terminalColorModeNativeDesc')}
+          control={<span />}
+        />
+      ) : colors.colorMode === 'none' ? (
         <SettingRow
           title={t('terminalColorModeNoneHint')}
           description={t('terminalColorModeNoneDesc')}
@@ -140,7 +147,7 @@ export function TerminalSettingsSection({ ctx }: { ctx: Record<string, any> }): 
             control={
               <button
                 type="button"
-                onClick={() => updateColors({ colorMode: 'none' })}
+                onClick={() => updateColors(defaultTerminalColors())}
                 className="rounded-full border border-ds-border bg-ds-card px-3 py-1.5 text-[12px] font-medium text-ds-muted shadow-sm transition hover:bg-ds-hover hover:text-ds-ink"
               >
                 {t('terminalColorResetButton')}

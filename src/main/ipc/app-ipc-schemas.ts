@@ -542,7 +542,7 @@ const writeSettingsPatchSchema = z.object({
 }).strict()
 
 const terminalColorPatchSchema = z.object({
-  colorMode: z.enum(['none', 'custom']).optional(),
+  colorMode: z.enum(['native', 'none', 'custom']).optional(),
   foreground: z.string().max(64).optional(),
   background: z.string().max(64).optional(),
   cursor: z.string().max(64).optional(),

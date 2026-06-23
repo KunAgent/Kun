@@ -37,12 +37,17 @@ const TERMINAL_SURFACE_COLOR_KEYS = [
   'selectionBackground'
 ] as const
 
-export const TERMINAL_COLOR_MODES: readonly TerminalColorMode[] = ['none', 'custom']
+const TERMINAL_COLOR_KEYS = [
+  ...TERMINAL_SURFACE_COLOR_KEYS,
+  ...TERMINAL_ANSI_COLOR_KEYS
+] as const
+
+export const TERMINAL_COLOR_MODES: readonly TerminalColorMode[] = ['native', 'none', 'custom']
 
 /**
  * Built-in dark preset for the terminal surface (background, foreground,
- * cursor, selection). Used as the base in 'none' mode and as the default
- * starting point for 'custom' mode.
+ * cursor, selection). Used by native mode, as the base in 'none' mode, and as
+ * the default starting point for 'custom' mode.
  */
 export const TERMINAL_PRESET_DARK = {
   background: '#151d31',
@@ -59,9 +64,8 @@ export const TERMINAL_PRESET_LIGHT = {
 } as const
 
 /**
- * Default ANSI 16-color palette for 'custom' mode. Mirrors the previous
- * hardcoded dark theme so switching from 'none' to 'custom' gives a
- * familiar starting point.
+ * Default ANSI 16-color palette for dark/custom mode. Mirrors the previous
+ * hardcoded dark theme.
  */
 export const TERMINAL_DEFAULT_ANSI_COLORS = {
   black: '#000000',
@@ -82,9 +86,28 @@ export const TERMINAL_DEFAULT_ANSI_COLORS = {
   brightWhite: '#ffffff'
 } as const
 
+export const TERMINAL_NATIVE_LIGHT_ANSI_COLORS = {
+  black: '#1f2328',
+  red: '#cf222e',
+  green: '#1a7f37',
+  yellow: '#9a6700',
+  blue: '#0969da',
+  magenta: '#8250df',
+  cyan: '#1b7c83',
+  white: '#57606a',
+  brightBlack: '#6e7781',
+  brightRed: '#a40e26',
+  brightGreen: '#2da44e',
+  brightYellow: '#bf8700',
+  brightBlue: '#218bff',
+  brightMagenta: '#a475f9',
+  brightCyan: '#3192aa',
+  brightWhite: '#8c959f'
+} as const
+
 export function defaultTerminalColors(): TerminalColorSettingsV1 {
   return {
-    colorMode: 'none',
+    colorMode: 'native',
     ...TERMINAL_PRESET_DARK,
     ...TERMINAL_DEFAULT_ANSI_COLORS
   }
@@ -103,6 +126,19 @@ function normalizeColor(value: unknown, fallback: string): string {
   return HEX_COLOR_RE.test(trimmed) ? trimmed : fallback
 }
 
+function isLegacyDefaultCustomColors(
+  input: Partial<TerminalColorSettingsV1> | undefined,
+  colors: TerminalColorSettingsV1
+): boolean {
+  if (input?.colorMode !== 'custom') return false
+  if (!TERMINAL_COLOR_KEYS.every((key) => typeof input[key] === 'string')) return false
+  const defaults = {
+    ...TERMINAL_PRESET_DARK,
+    ...TERMINAL_DEFAULT_ANSI_COLORS
+  }
+  return TERMINAL_COLOR_KEYS.every((key) => colors[key] === defaults[key])
+}
+
 export function normalizeTerminalColors(
   input: Partial<TerminalColorSettingsV1> | undefined
 ): TerminalColorSettingsV1 {
@@ -112,7 +148,7 @@ export function normalizeTerminalColors(
       ? (input.colorMode as TerminalColorMode)
       : defaults.colorMode
 
-  return {
+  const normalized = {
     colorMode,
     foreground: normalizeColor(input?.foreground, defaults.foreground),
     background: normalizeColor(input?.background, defaults.background),
@@ -135,6 +171,10 @@ export function normalizeTerminalColors(
     brightCyan: normalizeColor(input?.brightCyan, defaults.brightCyan),
     brightWhite: normalizeColor(input?.brightWhite, defaults.brightWhite)
   }
+  if (isLegacyDefaultCustomColors(input, normalized)) {
+    return { ...normalized, colorMode: 'native' }
+  }
+  return normalized
 }
 
 export function normalizeTerminalSettings(
@@ -155,11 +195,11 @@ export function mergeTerminalSettings(
 }
 
 /**
- * Resolves the terminal color mode from settings, falling back to 'none'
- * (monochrome) when settings are unavailable.
+ * Resolves the terminal color mode from settings, falling back to the native
+ * default when settings are unavailable.
  */
 export function resolveTerminalColorMode(settings: { terminal?: TerminalSettingsV1 } | undefined): TerminalColorMode {
-  return settings?.terminal?.colors.colorMode ?? 'none'
+  return settings?.terminal?.colors.colorMode ?? defaultTerminalColors().colorMode
 }
 
 type TerminalTheme = {
@@ -196,6 +236,8 @@ type TerminalTheme = {
 /**
  * Builds an xterm.js theme object from terminal color settings.
  *
+ * - 'native' mode: follows the app light/dark theme using the built-in
+ *   terminal palette that existed before user-configurable terminal colors.
  * - 'none' mode: uses the built-in dark/light preset for surface colors
  *   (background, foreground, cursor, selection) and maps ALL 16 ANSI colors
  *   to the foreground so commands and output are monochrome (no red).
@@ -206,7 +248,7 @@ type TerminalTheme = {
  * @param colors   Terminal color settings from app settings
  * @param mode     'dark' or 'light' (from data-theme)
  * @param surfaceColor  Opaque RGB of the DOM surface behind the terminal
- *                      (only used in 'none' mode for background compositing)
+ *                      (used in native/none modes for background compositing)
  */
 export function resolveTerminalTheme(
   colors: TerminalColorSettingsV1,
@@ -240,6 +282,18 @@ export function resolveTerminalTheme(
   }
 
   const preset = mode === 'light' ? TERMINAL_PRESET_LIGHT : TERMINAL_PRESET_DARK
+  if (colors.colorMode === 'native') {
+    const ansi = mode === 'light' ? TERMINAL_NATIVE_LIGHT_ANSI_COLORS : TERMINAL_DEFAULT_ANSI_COLORS
+    return {
+      background: surfaceColor,
+      foreground: preset.foreground,
+      cursor: preset.cursor,
+      cursorAccent: surfaceColor,
+      selectionBackground: preset.selectionBackground,
+      ...ansi
+    }
+  }
+
   const foreground = preset.foreground
 
   return {

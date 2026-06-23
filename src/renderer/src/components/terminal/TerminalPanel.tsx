@@ -151,6 +151,7 @@ function resolveTerminalTheme(
 
 export function TerminalPanel({ className = '', workspaceRoot, onCollapse, height }: Props): ReactElement {
   const { t } = useTranslation('common')
+  const terminalBodyRef = useRef<HTMLDivElement | null>(null)
   const containerRef = useRef<HTMLDivElement | null>(null)
   const termRef = useRef<Terminal | null>(null)
   const fitRef = useRef<FitAddon | null>(null)
@@ -164,6 +165,7 @@ export function TerminalPanel({ className = '', workspaceRoot, onCollapse, heigh
   const [contextMenu, setContextMenu] = useState<TerminalTabContextMenu | null>(null)
   const [renamingTabId, setRenamingTabId] = useState<string | null>(null)
   const [renameValue, setRenameValue] = useState('')
+  const [terminalBackground, setTerminalBackground] = useState<string | null>(null)
   const renameInputRef = useRef<HTMLInputElement | null>(null)
   const tabButtonRefs = useRef<Record<string, HTMLButtonElement | null>>({})
   const workspaceTabStatesRef = useRef<Record<string, TerminalTabState>>({})
@@ -178,6 +180,11 @@ export function TerminalPanel({ className = '', workspaceRoot, onCollapse, heigh
   tabsRef.current = tabs
   activeTabIdRef.current = activeTabId
   terminalColorsRef.current = terminalColors
+
+  const resolvePanelTheme = useCallback((colors: TerminalColorSettingsV1) => {
+    const surfaceSource = terminalBodyRef.current?.parentElement ?? containerRef.current
+    return resolveTerminalTheme(surfaceSource, colors)
+  }, [])
 
   // Load terminal color settings from the main process and keep them in
   // sync when settings change while the panel is open. The ref lets
@@ -204,10 +211,12 @@ export function TerminalPanel({ className = '', workspaceRoot, onCollapse, heigh
   // Apply new colors to the live xterm instance without re-attaching.
   useEffect(() => {
     const term = termRef.current
-    const container = containerRef.current
-    if (!term || !container) return
-    term.options.theme = resolveTerminalTheme(container, terminalColors)
-  }, [terminalColors])
+    if (!containerRef.current) return
+    const theme = resolvePanelTheme(terminalColors)
+    setTerminalBackground(theme.background)
+    if (!term) return
+    term.options.theme = theme
+  }, [resolvePanelTheme, terminalColors])
 
   const getTabTitle = useCallback((tab: TerminalTab): string => {
     return tab.title?.trim() || t('terminalTabTitle', { index: tab.index })
@@ -264,13 +273,16 @@ export function TerminalPanel({ className = '', workspaceRoot, onCollapse, heigh
     const cols = fitRef.current?.proposeDimensions()?.cols ?? TERMINAL_DEFAULT_COLS
     const rows = fitRef.current?.proposeDimensions()?.rows ?? TERMINAL_DEFAULT_ROWS
 
+    const theme = resolvePanelTheme(terminalColorsRef.current)
+    setTerminalBackground(theme.background)
+
     const term = new Terminal({
       fontFamily: TERMINAL_FONT_FAMILY,
       fontSize: TERMINAL_FONT_SIZE,
       cursorBlink: true,
       scrollback: TERMINAL_SCROLLBACK,
       allowProposedApi: true,
-      theme: resolveTerminalTheme(container, terminalColorsRef.current),
+      theme,
       cols,
       rows
     })
@@ -372,7 +384,7 @@ export function TerminalPanel({ className = '', workspaceRoot, onCollapse, heigh
       resizeObserver.disconnect()
       if (resizeTimer) clearTimeout(resizeTimer)
     }
-  }, [sessionIdForTab, workspaceRoot])
+  }, [resolvePanelTheme, sessionIdForTab, workspaceRoot])
 
   useEffect(() => {
     aliveRef.current = true
@@ -388,12 +400,15 @@ export function TerminalPanel({ className = '', workspaceRoot, onCollapse, heigh
   useEffect(() => {
     const observer = new MutationObserver(() => {
       const term = termRef.current
+      if (!containerRef.current) return
+      const theme = resolvePanelTheme(terminalColorsRef.current)
+      setTerminalBackground(theme.background)
       if (!term) return
-      term.options.theme = resolveTerminalTheme(containerRef.current, terminalColorsRef.current)
+      term.options.theme = theme
     })
     observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] })
     return () => observer.disconnect()
-  }, [])
+  }, [resolvePanelTheme])
 
   useEffect(() => {
     if (!contextMenu) return
@@ -658,7 +673,11 @@ export function TerminalPanel({ className = '', workspaceRoot, onCollapse, heigh
         ) : null}
       </div>
 
-      <div className="ds-surface-strong relative min-h-0 flex-1 overflow-hidden px-5 py-4 dark:bg-[rgba(21,29,49,0.98)]">
+      <div
+        ref={terminalBodyRef}
+        className="ds-surface-strong relative min-h-0 flex-1 overflow-hidden px-5 py-4 dark:bg-[rgba(21,29,49,0.98)]"
+        style={terminalBackground ? { backgroundColor: terminalBackground } : undefined}
+      >
         <div ref={containerRef} className="h-full w-full" key={activeTab?.id} />
         {error ? (
           <div className="absolute inset-0 flex items-center justify-center p-6 text-center">

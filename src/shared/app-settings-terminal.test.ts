@@ -6,6 +6,29 @@ import {
 } from './app-settings-terminal'
 
 describe('normalizeTerminalColors hex validation', () => {
+  it('defaults to native colors so shell ANSI colors are shown', () => {
+    expect(defaultTerminalColors().colorMode).toBe('native')
+    expect(normalizeTerminalColors(undefined).colorMode).toBe('native')
+  })
+
+  it('migrates the old persisted default custom palette to native mode', () => {
+    const result = normalizeTerminalColors({
+      ...defaultTerminalColors(),
+      colorMode: 'custom'
+    })
+    expect(result.colorMode).toBe('native')
+  })
+
+  it('keeps user-edited custom colors as custom mode', () => {
+    const result = normalizeTerminalColors({
+      ...defaultTerminalColors(),
+      colorMode: 'custom',
+      background: '#101828'
+    })
+    expect(result.colorMode).toBe('custom')
+    expect(result.background).toBe('#101828')
+  })
+
   it('accepts #rgb, #rrggbb, and #rrggbbaa forms', () => {
     const result = normalizeTerminalColors({
       colorMode: 'custom',
@@ -30,6 +53,26 @@ describe('normalizeTerminalColors hex validation', () => {
     })
     expect(result.foreground).toBe(defaults.foreground)
     expect(result.red).toBe(defaults.red)
+  })
+})
+
+describe('resolveTerminalTheme native colors', () => {
+  it('keeps the built-in ANSI palette in native mode', () => {
+    const colors = normalizeTerminalColors({ colorMode: 'native' })
+    const theme = resolveTerminalTheme(colors, 'dark', 'rgb(21, 29, 49)')
+    expect(theme.extendedAnsi).toBeUndefined()
+    expect(theme.red).toBe('#ff6b6b')
+    expect(theme.green).toBe('#7ee787')
+    expect(theme.background).toBe('rgb(21, 29, 49)')
+  })
+
+  it('uses the previous light ANSI palette in native light mode', () => {
+    const colors = normalizeTerminalColors({ colorMode: 'native' })
+    const theme = resolveTerminalTheme(colors, 'light', 'rgb(243, 245, 252)')
+    expect(theme.extendedAnsi).toBeUndefined()
+    expect(theme.red).toBe('#cf222e')
+    expect(theme.green).toBe('#1a7f37')
+    expect(theme.foreground).toBe('#1f2328')
   })
 })
 
