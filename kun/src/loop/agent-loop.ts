@@ -23,6 +23,7 @@ import type { IdGenerator } from '../ports/id-generator.js'
 import type { ImmutablePrefix } from '../cache/immutable-prefix.js'
 import type { CacheRequestSignature } from '../cache/cache-diagnostics.js'
 import { ContextCompactor } from './context-compactor.js'
+import { ContextCompiler } from './context-compiler/context-compiler.js'
 import {
   effectiveHistoryAfterLatestCompaction,
   insertCompactionIntoVisibleHistory,
@@ -652,6 +653,7 @@ export class AgentLoop {
   /** Turns that executed at least one real (non-goal-status) tool call. */
   private readonly turnMadeProgress = new Set<string>()
   private readonly goalResume: GoalResumeCoordinator
+  private readonly contextCompiler = new ContextCompiler()
 
   constructor(opts: AgentLoopOptions) {
     this.opts = opts
@@ -749,6 +751,13 @@ export class AgentLoop {
       })
       finalStatus = status
       finalError = failure?.error
+      // Extract fact anchors from completed turn to prevent context drift (#247)
+      if (status !== 'aborted') {
+        const turnItems = await this.opts.sessionStore.loadItems(threadId)
+        this.contextCompiler.extractAnchorsFromTurn(
+          turnItems.filter((item) => item.turnId === turnId)
+        )
+      }
       return status
     } catch (error) {
       const raw = error instanceof Error ? error.message : String(error)
@@ -1350,12 +1359,17 @@ export class AgentLoop {
       contextInstructionCount: contextInstructions.length
     })
     const tokenEconomy = normalizeTokenEconomyConfig(this.opts.tokenEconomy)
+    // Inject fact anchors into system prompt to prevent context drift (#247)
+    const factAnchorText = this.contextCompiler.formatAnchors()
+    const enrichedSystemPrompt = factAnchorText
+      ? `${this.opts.prefix.systemPrompt}\n\n${factAnchorText}`
+      : this.opts.prefix.systemPrompt
     const baseRequest: ModelRequest = {
       threadId,
       turnId,
       model,
       ...(thread?.providerId?.trim() ? { providerId: thread.providerId.trim() } : {}),
-      systemPrompt: this.opts.prefix.systemPrompt,
+      systemPrompt: enrichedSystemPrompt,
       ...(planTurnActive ? { modeInstruction: PLAN_MODE_INSTRUCTION } : {}),
       ...(contextInstructions.length ? { contextInstructions } : {}),
       prefix: this.opts.prefix.fewShots,
