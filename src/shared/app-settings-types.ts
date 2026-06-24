@@ -83,6 +83,9 @@ export const DEFAULT_LOG_RETENTION_DAYS = 3
 export const CHECKPOINT_CLEANUP_INTERVAL_DAYS = [1, 2, 3, 5, 10] as const
 export type CheckpointCleanupIntervalDays = (typeof CHECKPOINT_CLEANUP_INTERVAL_DAYS)[number]
 export const DEFAULT_CHECKPOINT_CLEANUP_INTERVAL_DAYS: CheckpointCleanupIntervalDays = 3
+// Checkpoint cleanup deletes data, so it is opt-in: disabled until the user
+// explicitly enables it in settings.
+export const DEFAULT_CHECKPOINT_CLEANUP_ENABLED = false
 export const DEFAULT_CURSOR_SPOTLIGHT_COLOR = '#85c1f1'
 export const DEFAULT_WEIXIN_BRIDGE_RPC_URL = 'http://127.0.0.1:18790/api/v1/admin/rpc'
 export const DEFAULT_MODEL_PROVIDER_ID = 'deepseek'
@@ -507,6 +510,7 @@ export type LogConfigV1 = {
 }
 
 export type CheckpointCleanupConfigV1 = {
+  enabled: boolean
   intervalDays: CheckpointCleanupIntervalDays
 }
 

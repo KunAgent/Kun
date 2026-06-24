@@ -243,6 +243,7 @@ function stopCheckpointCleanupTimer(): void {
 }
 
 async function runCheckpointCleanupIfDue(settings: AppSettingsV1): Promise<void> {
+  if (!settings.checkpointCleanup.enabled) return
   const runtime = resolveKunRuntimeSettings(settings)
   const dataDir = resolveKunDataDir(runtime)
   const intervalDays = settings.checkpointCleanup.intervalDays
@@ -268,6 +269,7 @@ async function runCheckpointCleanupIfDue(settings: AppSettingsV1): Promise<void>
 
 function syncCheckpointCleanupTimer(settings: AppSettingsV1): void {
   stopCheckpointCleanupTimer()
+  if (!settings.checkpointCleanup.enabled) return
   const intervalMs = settings.checkpointCleanup.intervalDays * 24 * 60 * 60 * 1_000
   const run = (): void => {
     void runCheckpointCleanupIfDue(settings)

@@ -352,9 +352,21 @@ function isCheckpointCleanupDue(lastRunAt: string | undefined, intervalDays: num
   return now.getTime() - lastRunMs >= intervalDays * DAY_MS
 }
 
+// A checkpoint directory is created before its referencing thread item is
+// flushed to disk, so a freshly-created checkpoint can momentarily look
+// unreferenced. Skip directories modified within this window so a cleanup pass
+// landing in that gap can't delete a checkpoint a concurrent turn just created;
+// a genuinely orphaned one is removed on a later pass. Injectable so tests can
+// disable it with graceMs: 0.
+const CHECKPOINT_CLEANUP_GRACE_MS = 10 * 60 * 1_000
+
 export async function cleanupUnusedGitCheckpoints(params: {
   dataDir: string
+  graceMs?: number
+  now?: Date
 }): Promise<GitCheckpointCleanupResult> {
+  const graceMs = params.graceMs ?? CHECKPOINT_CLEANUP_GRACE_MS
+  const nowMs = (params.now ?? new Date()).getTime()
   const root = checkpointRootDir(params.dataDir)
   const referenced = await collectReferencedCheckpointIds(params.dataDir)
   const result: GitCheckpointCleanupResult = {
@@ -383,6 +395,18 @@ export async function cleanupUnusedGitCheckpoints(params: {
       result.kept += 1
       continue
     }
+    if (graceMs > 0) {
+      try {
+        const dirStat = await stat(join(root, checkpointId))
+        if (nowMs - dirStat.mtimeMs < graceMs) {
+          // Recently touched — may be referenced by an item not yet flushed.
+          result.kept += 1
+          continue
+        }
+      } catch {
+        // Cannot stat (e.g. removed concurrently); fall through to the delete.
+      }
+    }
     try {
       await rm(join(root, checkpointId), { recursive: true, force: true })
       result.deleted += 1
@@ -400,6 +424,7 @@ export async function cleanupUnusedGitCheckpointsIfDue(params: {
   dataDir: string
   intervalDays: number
   now?: Date
+  graceMs?: number
 }): Promise<GitCheckpointCleanupDueResult> {
   const now = params.now ?? new Date()
   const state = await readCleanupState(params.dataDir)
@@ -407,7 +432,7 @@ export async function cleanupUnusedGitCheckpointsIfDue(params: {
   if (!isCheckpointCleanupDue(lastRunAt, params.intervalDays, now)) {
     return { due: false, lastRunAt: lastRunAt ?? null }
   }
-  const result = await cleanupUnusedGitCheckpoints({ dataDir: params.dataDir })
+  const result = await cleanupUnusedGitCheckpoints({ dataDir: params.dataDir, now, graceMs: params.graceMs })
   const nextLastRunAt = now.toISOString()
   await writeCleanupState(params.dataDir, { lastRunAt: nextLastRunAt })
   return { due: true, lastRunAt: nextLastRunAt, result }

@@ -453,12 +453,23 @@ export function GeneralSettingsSection({ ctx }: { ctx: Record<string, any> }): R
 
               <SettingsCard title={t('gitCheckpointTitle')} className="mt-6">
                 <SettingRow
+                  title={t('checkpointCleanupEnabled')}
+                  description={t('checkpointCleanupEnabledDesc')}
+                  control={
+                    <Toggle
+                      checked={form.checkpointCleanup.enabled}
+                      onChange={(v) => update({ checkpointCleanup: { enabled: v } })}
+                    />
+                  }
+                />
+                <SettingRow
                   title={t('checkpointCleanupInterval')}
                   description={t('checkpointCleanupIntervalDesc')}
                   control={
                     <select
                       className={selectControlClass}
                       value={form.checkpointCleanup.intervalDays}
+                      disabled={!form.checkpointCleanup.enabled}
                       onChange={(e) =>
                         update({
                           checkpointCleanup: {

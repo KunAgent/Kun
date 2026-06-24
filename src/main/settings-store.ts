@@ -6,6 +6,7 @@ import {
   applyKunRuntimePatch,
   kunSettingsEnvelope,
   DEFAULT_GUI_UPDATE_CHANNEL,
+  DEFAULT_CHECKPOINT_CLEANUP_ENABLED,
   DEFAULT_CHECKPOINT_CLEANUP_INTERVAL_DAYS,
   DEFAULT_CURSOR_SPOTLIGHT_COLOR,
   DEFAULT_LOG_RETENTION_DAYS,
@@ -216,6 +217,7 @@ const defaultSettings = (): AppSettingsV1 => ({
     retentionDays: DEFAULT_LOG_RETENTION_DAYS
   },
   checkpointCleanup: {
+    enabled: DEFAULT_CHECKPOINT_CLEANUP_ENABLED,
     intervalDays: DEFAULT_CHECKPOINT_CLEANUP_INTERVAL_DAYS
   },
   notifications: {

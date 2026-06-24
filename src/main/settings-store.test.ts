@@ -21,6 +21,8 @@ describe('JsonSettingsStore', () => {
     expect(loaded.guiUpdate.channel).toBe(DEFAULT_GUI_UPDATE_CHANNEL)
     expect(loaded.agents.kun.approvalPolicy).toBe(DEFAULT_APPROVAL_POLICY)
     expect(loaded.checkpointCleanup.intervalDays).toBe(DEFAULT_CHECKPOINT_CLEANUP_INTERVAL_DAYS)
+    // Checkpoint cleanup deletes data, so it must be opt-in (disabled by default).
+    expect(loaded.checkpointCleanup.enabled).toBe(false)
     expect(loaded.appBehavior).toEqual({
       openAtLogin: false,
       startMinimized: false,

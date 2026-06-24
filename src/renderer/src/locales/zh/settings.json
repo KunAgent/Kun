@@ -1089,6 +1089,8 @@
   "logRetentionFive": "5 天",
   "logRetentionSeven": "7 天",
   "gitCheckpointTitle": "Git checkpoint 管理",
+  "checkpointCleanupEnabled": "自动清理未使用的 checkpoint",
+  "checkpointCleanupEnabledDesc": "开启后，定期删除不再被任何会话引用的 Git checkpoint 目录。默认关闭。",
   "checkpointCleanupInterval": "未使用 Git checkpoint 清理",
   "checkpointCleanupIntervalDesc": "按所选周期删除不再被任何会话引用的 Git checkpoint 目录。",
   "checkpointCleanupInterval1": "每 1 天",

@@ -58,7 +58,7 @@ function settings(): AppSettingsV1 {
     },
     workspaceRoot: '/tmp/workspace',
     log: { enabled: false, retentionDays: 7 },
-    checkpointCleanup: { intervalDays: 3 },
+    checkpointCleanup: { enabled: false, intervalDays: 3 },
     notifications: { turnComplete: true },
     appBehavior: { openAtLogin: false, startMinimized: false, closeToTray: false },
     keyboardShortcuts: defaultKeyboardShortcuts(),

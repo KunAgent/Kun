@@ -1,6 +1,7 @@
 import {
   DEFAULT_GUI_UPDATE_CHANNEL,
   CHECKPOINT_CLEANUP_INTERVAL_DAYS,
+  DEFAULT_CHECKPOINT_CLEANUP_ENABLED,
   DEFAULT_CHECKPOINT_CLEANUP_INTERVAL_DAYS,
   DEFAULT_CURSOR_SPOTLIGHT_COLOR,
   DEFAULT_LOG_RETENTION_DAYS,
@@ -132,6 +133,7 @@ export function normalizeCheckpointCleanupSettings(
 ): CheckpointCleanupConfigV1 {
   const intervalDays = normalizeCheckpointCleanupIntervalDays(settings?.intervalDays)
   return {
+    enabled: typeof settings?.enabled === 'boolean' ? settings.enabled : DEFAULT_CHECKPOINT_CLEANUP_ENABLED,
     intervalDays: CHECKPOINT_CLEANUP_INTERVAL_DAYS.includes(intervalDays)
       ? intervalDays
       : DEFAULT_CHECKPOINT_CLEANUP_INTERVAL_DAYS

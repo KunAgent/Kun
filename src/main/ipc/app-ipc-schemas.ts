@@ -463,6 +463,7 @@ const logPatchSchema = z.object({
 }).strict()
 
 const checkpointCleanupPatchSchema = z.object({
+  enabled: z.boolean().optional(),
   intervalDays: z.union([
     z.literal(1),
     z.literal(2),
