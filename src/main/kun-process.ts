@@ -612,6 +612,8 @@ async function skillCapabilityConfigForRuntime(
     // skills. An explicit `true` still forces on even with no roots.
     enabled: roots.length > 0 || existing.enabled === true,
     roots,
+    // #149: Pass global skill roots from settings (e.g. ~/.kun/skills)
+    globalRoots: existing.globalRoots ?? [],
     legacySkillMd: existing.legacySkillMd === false ? false : true
   }
 }
