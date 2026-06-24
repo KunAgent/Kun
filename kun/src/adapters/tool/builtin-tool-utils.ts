@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs'
-import { readFile, readdir, realpath, stat } from 'node:fs/promises'
+import { lstat, readFile, readdir, readlink, realpath, stat } from 'node:fs/promises'
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process'
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import type { ToolHostContext } from '../../ports/tool-host.js'
@@ -98,30 +98,55 @@ async function safeRealpath(target: string): Promise<string | null> {
   }
 }
 
-async function resolveSymlinkSafe(lexicalPath: string): Promise<string> {
+// Whether `target` is itself a symbolic link, without following it. Returns
+// false when the entry is absent or cannot be stat-ed (treated as "not a link"
+// — the escape check still anchors against the nearest existing ancestor).
+async function isSymlink(target: string): Promise<boolean> {
+  try {
+    return (await lstat(target)).isSymbolicLink()
+  } catch {
+    return false
+  }
+}
+
+async function resolveSymlinkSafe(lexicalPath: string, depth = 0): Promise<string> {
+  // Guard against symlink loops (dangling link A -> B -> A never resolves).
+  if (depth > 40) {
+    throw new Error(`too many symbolic links resolving: ${lexicalPath}`)
+  }
   const direct = await safeRealpath(lexicalPath)
   if (direct !== null) return direct
-  // Target doesn't exist (ENOENT) — relevant for write/create operations.
-  // Walk up until we find an existing ancestor, realpath it, then verify the
-  // remaining (non-existent) suffix stays inside the workspace root.
+  // Target doesn't fully resolve — either a genuinely missing path (write/create
+  // case) or a *dangling* symlink whose target is absent. `realpath` reports
+  // both as ENOENT, so we must walk the components ourselves: anchor on the
+  // nearest existing ancestor, but if a non-resolving component is actually a
+  // symlink, follow it explicitly so the redirection is reflected in the escape
+  // check. Re-anchoring a dangling symlink lexically (the old behavior) let a
+  // planted link like `<ws>/evil -> /etc/passwd` (target absent) pass as an
+  // in-workspace path and escape on the subsequent write.
   const segments: string[] = []
   let current = lexicalPath
-  let ancestor: string | null = null
-  // Guard against infinite loops on pathological inputs.
+  // Guard against pathological component counts.
   for (let i = 0; i < 128 && current !== dirname(current); i += 1) {
     const resolved = await safeRealpath(current)
     if (resolved !== null) {
-      ancestor = resolved
-      break
+      return segments.length > 0 ? resolve(resolved, ...segments) : resolved
+    }
+    if (await isSymlink(current)) {
+      // Dangling (or otherwise non-resolving) symlink: follow its target so the
+      // redirection is reflected, then re-resolve the target plus the suffix
+      // collected below this component.
+      const linkTarget = await readlink(current)
+      const resolvedParent = (await safeRealpath(dirname(current))) ?? dirname(current)
+      const followed = isAbsolute(linkTarget) ? resolve(linkTarget) : resolve(resolvedParent, linkTarget)
+      const rejoined = segments.length > 0 ? resolve(followed, ...segments) : followed
+      return resolveSymlinkSafe(rejoined, depth + 1)
     }
     segments.unshift(basename(current))
     current = dirname(current)
   }
-  if (ancestor === null) {
-    // Nothing on the path exists; treat as escape.
-    throw new Error(`path escapes the workspace root: ${lexicalPath}`)
-  }
-  return segments.length > 0 ? resolve(ancestor, ...segments) : ancestor
+  // Nothing on the path exists; treat as escape.
+  throw new Error(`path escapes the workspace root: ${lexicalPath}`)
 }
 
 export function isBinaryBuffer(buffer: Buffer): boolean {
