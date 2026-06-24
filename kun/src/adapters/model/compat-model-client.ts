@@ -9,6 +9,9 @@ import { isToolResultBridgeItem, repairModelHistoryItems } from '../../domain/mo
 import { extractToolResultImages, toolResultTextWithoutImages } from '../../loop/tool-result-image.js'
 import { repairToolArguments } from './tool-argument-repair.js'
 import { isDeepSeekHost, probeDeepSeekReachable } from './model-error-probe.js'
+import { validateModelRequest, detectProviderRules, type ModelValidationRules } from './model-request-validator.js'
+import { StreamTimeoutTracker } from './stream-timeout.js'
+import { streamTimeoutTelemetry } from '../../telemetry/stream-timeout-telemetry.js'
 import {
   DEFAULT_MODEL_ENDPOINT_FORMAT,
   isCustomModelEndpointFormat,
@@ -252,12 +255,32 @@ export class CompatModelClient implements ModelClient {
     const url = buildModelEndpointUrl(this.config.baseUrl, configuredEndpointFormat)
     const stream = request.stream ?? !this.config.nonStreaming
     const body = this.buildRequestBody(request, stream, { endpointFormat })
+    // Validate model request parameters before sending (#281)
+    const providerRules = detectProviderRules(this.config.baseUrl)
+    const validation = validateModelRequest(request, providerRules)
+    if (!validation.valid) {
+      yield { kind: 'error', message: `Parameter validation failed: ${validation.error} (field: ${validation.field})` }
+      return
+    }
     if (round) {
       round.requestBody = body
       round.url = redactUrlForLog(url)
     }
     const headers = this.buildHeaders(stream, endpointFormat)
+    // Stream timeout tracking (#299): T1=first token, T2=inter-token, T3=total
+    const timeoutTracker = new StreamTimeoutTracker(
+      { firstTokenTimeoutMs: 30_000, interTokenTimeoutMs: 45_000, totalTimeoutMs: 600_000 },
+      { provider: this.provider, model: requestModel, threadId: request.threadId, turnId: request.turnId }
+    )
+    timeoutTracker.start()
     let result = await this.postChatCompletion(url, headers, body, request.abortSignal)
+    // T1 check — first token timeout (#299)
+    const t1Check = timeoutTracker.checkFirstToken()
+    if (t1Check.kind === 'timeout') {
+      streamTimeoutTelemetry.record(timeoutTracker.createTelemetryEvent(t1Check.timeoutKind))
+      yield { kind: 'error', message: t1Check.message, code: 'first_token_timeout' }
+      return
+    }
     // Retry transient gateway failures (502/503/504) a few times before giving
     // up. These are upstream load-balancer hiccups (e.g. an ALB returning
     // "502 Bad Gateway"), not request errors — failing the whole turn on the
