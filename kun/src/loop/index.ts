@@ -8,5 +8,5 @@ export * from './model-context-profile.js'
 export * from './token-economy.js'
 export * from './request-history-hygiene.js'
 export * from './tool-storm-breaker.js'
+
 export * from './router/index.js'
-export * from './context-compiler/index.js'
