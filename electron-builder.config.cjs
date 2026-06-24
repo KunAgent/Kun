@@ -71,9 +71,6 @@ const releaseArtifactVersion = (
   envWithLegacyFallback('KUN_ARTIFACT_VERSION', 'DEEPSEEK_GUI_ARTIFACT_VERSION') || ''
 ).trim()
 const artifactVersion = releaseArtifactVersion || releaseAppVersion || '${version}'
-const macArtifactName = `Kun-${artifactVersion}-mac-\${arch}.\${ext}`
-const windowsArtifactName = `Kun-${artifactVersion}-win-\${arch}.\${ext}`
-const linuxAppImageArtifactName = `Kun-${artifactVersion}-linux-x86_64.\${ext}`
 const semverVersionPattern = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/
 const artifactVersionPattern = /^[0-9A-Za-z][0-9A-Za-z._-]*$/
 
@@ -180,7 +177,6 @@ module.exports = {
     ]
   },
   dmg: {
-    artifactName: macArtifactName,
     sign: hasExplicitMacSigningIdentity
   },
   win: {
@@ -193,7 +189,6 @@ module.exports = {
     target: [{ target: 'nsis', arch: ['x64'] }]
   },
   nsis: {
-    artifactName: windowsArtifactName,
     oneClick: false,
     allowToChangeInstallationDirectory: true,
     perMachine: false,
@@ -211,9 +206,6 @@ module.exports = {
     category: 'Development',
     icon: './src/asset/img/kun.png',
     target: [{ target: 'AppImage', arch: ['x64'] }]
-  },
-  appImage: {
-    artifactName: linuxAppImageArtifactName
   },
   extraMetadata: {
     ...(releaseAppVersion ? { version: releaseAppVersion } : {}),
