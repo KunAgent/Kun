@@ -16,6 +16,7 @@ import { buildGoalLocalTools } from '../adapters/tool/goal-tools.js'
 import { buildTodoLocalTools } from '../adapters/tool/todo-tools.js'
 import { LocalToolHost, buildDefaultLocalTools } from '../adapters/tool/local-tool-host.js'
 import { buildMcpToolProviders } from '../adapters/tool/mcp-tool-provider.js'
+import { McpRuntimeManager } from '../adapters/tool/mcp-runtime-manager.js'
 import { buildMemoryToolProviders } from '../adapters/tool/memory-tool-provider.js'
 import { buildSkillToolProviders } from '../adapters/tool/skill-tool-provider.js'
 import { buildDelegationToolProviders } from '../adapters/tool/delegation-tool-provider.js'
@@ -206,8 +207,34 @@ export async function createKunServeRuntime(
     providers: providerClients
   })
   // Independent I/O; all must still finish before the server listens.
+  const mcpRuntimeManager = new McpRuntimeManager({
+    clientFactory: undefined,
+    backgroundReconnect: options.capabilities?.mcp?.servers ? {
+      maxAttempts: 3,
+      baseDelayMs: 2000,
+      maxDelayMs: 30000,
+    } : undefined,
+    watchConfig: false,
+  })
   const [mcpProviders, skillRuntime] = await Promise.all([
-    buildMcpToolProviders(options.capabilities?.mcp),
+    mcpRuntimeManager.initialize(options.capabilities?.mcp).then((result) => {
+      // Propagate MCP status changes to the event bus (#168)
+      mcpRuntimeManager.getConnectionManager().getAllStatuses().forEach((info) => {
+        void events.record({
+          kind: 'mcp_status_changed',
+          threadId: 'system',
+          serverId: info.serverId,
+          status: info.status,
+          toolCount: info.toolCount,
+          transport: info.transport,
+          ...(info.lastError ? { lastError: info.lastError } : {}),
+          ...(info.lastActivityAt ? { lastActivityAt: info.lastActivityAt } : {}),
+          ...(info.lastConnectedAt ? { lastConnectedAt: info.lastConnectedAt } : {}),
+          ...(info.reconnectAttempt > 0 ? { reconnectAttempt: info.reconnectAttempt } : {}),
+        })
+      })
+      return result
+    }),
     SkillRuntime.create(options.capabilities?.skills),
     seedUsageCarryover({ threadStore, sessionStore, usageService })
   ])
