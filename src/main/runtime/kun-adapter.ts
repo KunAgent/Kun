@@ -96,10 +96,33 @@ export async function runtimeRequestViaHost(
 ): Promise<{ ok: boolean; status: number; body: string }> {
   const ensuredSettings = await ensureRuntime(settings)
   const requestSettings = ensuredSettings ?? settings
+  const method = (init.method ?? 'GET').toUpperCase()
   const base = getRuntimeBaseUrlForSettings(requestSettings)
   const pathNorm = pathAndQuery.startsWith('/') ? pathAndQuery : `/${pathAndQuery}`
+  try {
+    return await fetchRuntimeRequest(requestSettings, base, pathNorm, method, init)
+  } catch (error) {
+    const retrySettings = await ensureRuntime(requestSettings)
+    const nextSettings = retrySettings ?? requestSettings
+    const nextBase = getRuntimeBaseUrlForSettings(nextSettings)
+    const safeToRetry =
+      method === 'GET' ||
+      method === 'HEAD' ||
+      (nextBase !== base && isRuntimeConnectionFailure(error))
+    if (!safeToRetry) throw error
+    return fetchRuntimeRequest(nextSettings, nextBase, pathNorm, method, init)
+  }
+}
+
+async function fetchRuntimeRequest(
+  settings: AppSettingsV1,
+  base: string,
+  pathNorm: string,
+  method: string,
+  init: RuntimeRequestInit
+): Promise<{ ok: boolean; status: number; body: string }> {
   const url = `${base}${pathNorm}`
-  const hdrs = runtimeAuthHeaders(requestSettings)
+  const hdrs = runtimeAuthHeaders(settings)
   for (const [key, value] of Object.entries(init.headers ?? {})) {
     hdrs.set(key, value)
   }
@@ -108,13 +131,25 @@ export async function runtimeRequestViaHost(
     hdrs.set('Content-Type', 'application/json')
   }
   const res = await fetch(url, {
-    method: init.method ?? 'GET',
+    method,
     headers: hdrs,
     body: init.body,
-    signal: AbortSignal.timeout(init.method === 'POST' ? 60_000 : 15_000)
+    signal: AbortSignal.timeout(method === 'POST' ? 60_000 : 15_000)
   })
   const text = await res.text()
   return { ok: res.ok, status: res.status, body: text }
+}
+
+function isRuntimeConnectionFailure(error: unknown): boolean {
+  if (!(error instanceof Error)) return false
+  const text = `${error.name} ${error.message} ${String((error as { cause?: unknown }).cause ?? '')}`.toLowerCase()
+  return (
+    text.includes('fetch failed') ||
+    text.includes('econnrefused') ||
+    text.includes('econnreset') ||
+    text.includes('socket') ||
+    text.includes('connect')
+  )
 }
 
 export { buildKunServeArgs, resolveKunExecutable }
