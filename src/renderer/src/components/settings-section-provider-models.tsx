@@ -127,6 +127,7 @@ type EditorState = {
   mode: 'add' | 'edit'
   form: ProviderModelForm
   contextText: string
+  maxOutputText: string
   aliasesText: string
 }
 
@@ -136,6 +137,7 @@ function editorStateForNew(provider: ModelProviderProfileV1): EditorState {
     mode: 'add',
     form,
     contextText: form.contextWindowTokens ? describeContextWindowTokens(form.contextWindowTokens) : '',
+    maxOutputText: form.maxOutputTokens ? describeContextWindowTokens(form.maxOutputTokens) : '',
     aliasesText: ''
   }
 }
@@ -150,6 +152,7 @@ function editorStateForExisting(
     mode: 'edit',
     form,
     contextText: form.contextWindowTokens ? describeContextWindowTokens(form.contextWindowTokens) : '',
+    maxOutputText: form.maxOutputTokens ? describeContextWindowTokens(form.maxOutputTokens) : '',
     aliasesText: form.aliases.join(', ')
   }
 }
@@ -164,9 +167,15 @@ function effectiveFormForEditor(editor: EditorState): ProviderModelForm {
     editor.form.kind !== 'chat' || trimmedContext === ''
       ? null
       : parseContextWindowInput(trimmedContext) ?? Number.NaN
+  const trimmedMaxOutput = editor.maxOutputText.trim()
+  const maxOutputTokens =
+    editor.form.kind !== 'chat' || trimmedMaxOutput === ''
+      ? null
+      : parseContextWindowInput(trimmedMaxOutput) ?? Number.NaN
   return {
     ...editor.form,
     contextWindowTokens,
+    maxOutputTokens,
     aliases: parseAliasesText(editor.aliasesText)
   }
 }
@@ -179,6 +188,8 @@ function formErrorMessage(t: Translate, error: ProviderModelFormError): string {
       return t(`providerModelErrorDuplicate${duplicateKindSuffix(error.kind)}`)
     case 'invalidContextWindow':
       return t('providerModelErrorContext')
+    case 'invalidMaxOutput':
+      return t('providerModelErrorMaxOutput')
     case 'noReasoningEfforts':
       return t('providerModelErrorNoEfforts')
   }
@@ -380,6 +391,8 @@ export function ProviderModelsManager({
   const showNonTextWarning = Boolean(effectiveForm && chatModelIdLooksNonText(effectiveForm))
   const parsedContextTokens =
     editor && editor.contextText.trim() !== '' ? parseContextWindowInput(editor.contextText) : null
+  const parsedMaxOutputTokens =
+    editor && editor.maxOutputText.trim() !== '' ? parseContextWindowInput(editor.maxOutputText) : null
   const editingKey = editor?.mode === 'edit' ? modelEntryKey(editor.form.kind, editor.form.originalModelId) : ''
   const reasoningEffortPool = effectiveForm
     ? sortReasoningEfforts([...PROVIDER_MODEL_REASONING_EFFORT_CHOICES, ...effectiveForm.reasoningEfforts])
@@ -484,6 +497,11 @@ export function ProviderModelsManager({
                             {profile.contextWindowTokens ? (
                               <ModelBadge>{t('providerModelContextBadge', {
                                 size: describeContextWindowTokens(profile.contextWindowTokens)
+                              })}</ModelBadge>
+                            ) : null}
+                            {profile.maxOutputTokens ? (
+                              <ModelBadge>{t('providerModelMaxOutputBadge', {
+                                size: describeContextWindowTokens(profile.maxOutputTokens)
                               })}</ModelBadge>
                             ) : null}
                             {profile.inputModalities.includes('image') ? (
@@ -657,6 +675,27 @@ export function ProviderModelsManager({
                 </div>
                 <span className="text-[12px] leading-5 text-ds-faint">{t('providerModelContextHint')}</span>
               </div>
+              <label className={fieldLabelClass}>
+                {t('providerModelMaxOutputLabel')}
+                <input
+                  className="w-36 min-w-0 rounded-xl border border-ds-border bg-ds-card px-3 py-1.5 font-mono text-[12.5px] text-ds-ink shadow-sm focus:border-accent/40 focus:outline-none focus:ring-1 focus:ring-accent/30"
+                  value={editor.maxOutputText}
+                  placeholder={t('providerModelMaxOutputPlaceholder')}
+                  spellCheck={false}
+                  onChange={(e) => {
+                    const value = e.target.value
+                    setEditor((prev) => prev ? { ...prev, maxOutputText: value } : prev)
+                  }}
+                />
+                {parsedMaxOutputTokens ? (
+                  <span className="text-[12px] font-normal leading-5 text-ds-faint">
+                    {t('providerModelMaxOutputParsed', { tokens: parsedMaxOutputTokens.toLocaleString() })}
+                  </span>
+                ) : null}
+                <span className="text-[12px] font-normal leading-5 text-ds-faint">
+                  {t('providerModelMaxOutputHint')}
+                </span>
+              </label>
               <div className="grid gap-2 md:grid-cols-2">
                 <ToggleField
                   label={t('providerModelVisionLabel')}

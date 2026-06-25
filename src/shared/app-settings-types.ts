@@ -138,6 +138,7 @@ export type ModelProviderReasoningCapabilityV1 = {
 export type ModelProviderModelProfileV1 = {
   aliases?: string[]
   contextWindowTokens?: number
+  maxOutputTokens?: number
   inputModalities: ModelProviderInputModality[]
   outputModalities: ModelProviderInputModality[]
   supportsToolCalling: boolean

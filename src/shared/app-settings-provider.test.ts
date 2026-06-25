@@ -173,6 +173,32 @@ describe('model provider settings', () => {
     expect(modelProviderModelProfilesForSettings(state)['custom-model'].contextWindowTokens).toBe(128_000)
   })
 
+  it('preserves per-model max output tokens in custom provider profiles', () => {
+    const normalized = normalizeModelProviderSettings({
+      providers: [{
+        id: 'custom',
+        name: 'Custom',
+        apiKey: 'sk-custom',
+        baseUrl: 'https://custom.example/v1',
+        endpointFormat: 'chat_completions',
+        models: ['writer'],
+        modelProfiles: {
+          writer: {
+            contextWindowTokens: 256_000,
+            maxOutputTokens: 32_000,
+            inputModalities: ['text'],
+            outputModalities: ['text'],
+            supportsToolCalling: true,
+            messageParts: ['text']
+          }
+        }
+      }]
+    })
+
+    const custom = normalized.providers.find((provider) => provider.id === 'custom')
+    expect(custom?.modelProfiles.writer.maxOutputTokens).toBe(32_000)
+  })
+
   it('creates Xiaomi and MiniMax provider presets for Kun runtime profiles', () => {
     const xiaomi = getModelProviderPreset('xiaomi')
     const minimax = getModelProviderPreset('minimax')

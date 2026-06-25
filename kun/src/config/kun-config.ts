@@ -54,6 +54,7 @@ export const ModelContextProfileConfigSchema = z
   .object({
     aliases: z.array(z.string().min(1)).optional(),
     contextWindowTokens: PositiveInt.optional(),
+    maxOutputTokens: PositiveInt.optional(),
     contextCompaction: ModelContextCompactionProfileConfigSchema.optional(),
     softRatio: PositiveRatio.optional(),
     hardRatio: PositiveRatio.optional(),
@@ -65,7 +66,7 @@ export const ModelContextProfileConfigSchema = z
     messageParts: z.array(ModelMessagePartSupport).optional(),
     reasoning: ModelReasoningCapabilityMetadata.optional(),
     // Per-model wire-format override. Omitted means "inherit the
-    // provider/runtime endpointFormat" — no default coercion here, otherwise
+    // provider/runtime endpointFormat"; no default coercion here, otherwise
     // every model would be pinned to chat_completions.
     endpointFormat: z
       .preprocess(normalizeModelEndpointFormat, z.enum(MODEL_ENDPOINT_FORMATS))

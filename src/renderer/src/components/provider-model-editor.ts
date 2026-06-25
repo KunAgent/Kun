@@ -45,6 +45,7 @@ export type ProviderModelForm = {
   modelId: string
   /** null means "not specified" — Kun falls back to its built-in default. */
   contextWindowTokens: number | null
+  maxOutputTokens: number | null
   visionInput: boolean
   supportsToolCalling: boolean
   reasoningEnabled: boolean
@@ -60,6 +61,7 @@ export type ProviderModelFormError =
   | { code: 'missingId' }
   | { code: 'duplicate'; kind: ProviderModelKind }
   | { code: 'invalidContextWindow' }
+  | { code: 'invalidMaxOutput' }
   | { code: 'noReasoningEfforts' }
 
 export type ProviderModelListEntry = {
@@ -97,6 +99,7 @@ export function newProviderModelForm(
     originalModelId: '',
     modelId: '',
     contextWindowTokens: kind === 'chat' ? 128_000 : null,
+    maxOutputTokens: null,
     visionInput: false,
     supportsToolCalling: true,
     reasoningEnabled: false,
@@ -118,12 +121,13 @@ export function providerModelFormForExisting(
     originalModelId: modelId,
     modelId
   }
-  if (kind !== 'chat') return { ...base, contextWindowTokens: null }
+  if (kind !== 'chat') return { ...base, contextWindowTokens: null, maxOutputTokens: null }
   const profile = chatModelProfile(provider, modelId)
-  if (!profile) return { ...base, contextWindowTokens: null }
+  if (!profile) return { ...base, contextWindowTokens: null, maxOutputTokens: null }
   return {
     ...base,
     contextWindowTokens: profile.contextWindowTokens ?? null,
+    maxOutputTokens: profile.maxOutputTokens ?? null,
     visionInput: profile.inputModalities.includes('image'),
     supportsToolCalling: profile.supportsToolCalling,
     reasoningEnabled: Boolean(profile.reasoning),
@@ -230,6 +234,12 @@ export function validateProviderModelForm(
     (!Number.isInteger(form.contextWindowTokens) || form.contextWindowTokens <= 0)
   ) {
     errors.push({ code: 'invalidContextWindow' })
+  }
+  if (
+    form.maxOutputTokens !== null &&
+    (!Number.isInteger(form.maxOutputTokens) || form.maxOutputTokens <= 0)
+  ) {
+    errors.push({ code: 'invalidMaxOutput' })
   }
   if (form.kind === 'chat' && form.reasoningEnabled && form.reasoningEfforts.length === 0) {
     errors.push({ code: 'noReasoningEfforts' })
@@ -387,7 +397,7 @@ export function describeContextWindowTokens(tokens: number): string {
   return String(tokens)
 }
 
-/** Accepts "128000", "128k", "1m", "1 M" … and returns tokens, or null when unparsable/empty. */
+/** Accepts "128000", "128k", "1m", "1 M", and returns tokens, or null when unparsable/empty. */
 export function parseContextWindowInput(raw: string): number | null {
   const text = raw.trim().toLowerCase().replace(/[\s,_]/g, '')
   if (!text) return null
@@ -406,6 +416,9 @@ function chatProfileFromForm(form: ProviderModelForm): ModelProviderModelProfile
     ...(aliases.length > 0 ? { aliases } : {}),
     ...(form.contextWindowTokens && form.contextWindowTokens > 0
       ? { contextWindowTokens: form.contextWindowTokens }
+      : {}),
+    ...(form.maxOutputTokens && form.maxOutputTokens > 0
+      ? { maxOutputTokens: form.maxOutputTokens }
       : {}),
     inputModalities: form.visionInput ? ['text', 'image'] : ['text'],
     outputModalities: ['text'],

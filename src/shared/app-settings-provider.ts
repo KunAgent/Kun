@@ -993,6 +993,7 @@ function normalizeModelProviderModelProfile(
     ? ['text', 'image_url']
     : ['text']
   const contextWindowTokens = boundedPositiveInteger(input?.contextWindowTokens)
+  const maxOutputTokens = boundedPositiveInteger(input?.maxOutputTokens)
   const reasoning = normalizeModelReasoningCapability(input?.reasoning)
   const endpointFormat = normalizeOptionalModelEndpointFormat(input?.endpointFormat)
   return {
@@ -1000,6 +1001,7 @@ function normalizeModelProviderModelProfile(
       ? { aliases: normalizeProviderModels(input?.aliases) }
       : {}),
     ...(contextWindowTokens ? { contextWindowTokens } : {}),
+    ...(maxOutputTokens ? { maxOutputTokens } : {}),
     inputModalities,
     outputModalities: normalizeModelInputModalities(input?.outputModalities),
     supportsToolCalling: input?.supportsToolCalling !== false,

@@ -576,6 +576,33 @@ describe('syncGuiManagedKunConfig', () => {
     })
   })
 
+  it('exports per-model max output tokens into Kun model profiles', async () => {
+    if (!tempRoot) throw new Error('temp root not initialized')
+    const configPath = join(tempRoot, 'config.json')
+    const module = await import('./kun-process')
+
+    await module.syncGuiManagedKunConfig(tempRoot, {
+      ...defaultKunRuntimeSettings(),
+      modelProfiles: {
+        writer: {
+          contextWindowTokens: 256_000,
+          maxOutputTokens: 32_000,
+          inputModalities: ['text'],
+          outputModalities: ['text'],
+          supportsToolCalling: true,
+          messageParts: ['text']
+        }
+      }
+    })
+
+    const parsed = JSON.parse(readFileSync(configPath, 'utf8')) as any
+    expect(KunConfigSchema.safeParse(parsed).success).toBe(true)
+    expect(parsed.models.profiles.writer).toMatchObject({
+      contextWindowTokens: 256_000,
+      maxOutputTokens: 32_000
+    })
+  })
+
   it('writes the memory capability from the GUI memory toggle', async () => {
     if (!tempRoot) throw new Error('temp root not initialized')
     const configPath = join(tempRoot, 'config.json')

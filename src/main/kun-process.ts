@@ -808,6 +808,7 @@ function modelConfigProfilesFromProviderProfiles(
     out[trimmed] = {
       ...(profile.aliases?.length ? { aliases: profile.aliases } : {}),
       ...(profile.contextWindowTokens ? { contextWindowTokens: profile.contextWindowTokens } : {}),
+      ...(profile.maxOutputTokens ? { maxOutputTokens: profile.maxOutputTokens } : {}),
       inputModalities: profile.inputModalities,
       outputModalities: profile.outputModalities,
       supportsToolCalling: profile.supportsToolCalling,

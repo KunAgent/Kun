@@ -173,6 +173,7 @@ describe('app-ipc-schemas', () => {
             'custom-vision-model': {
               aliases: ['custom-vision'],
               contextWindowTokens: 128000,
+              maxOutputTokens: 32000,
               inputModalities: ['text', 'image'],
               outputModalities: ['text'],
               supportsToolCalling: true,
@@ -206,6 +207,7 @@ describe('app-ipc-schemas', () => {
 
     expect(payload.agents?.kun?.port).toBe(19000)
     expect(payload.agents?.kun?.modelProfiles?.['custom-vision-model']?.inputModalities).toEqual(['text', 'image'])
+    expect(payload.agents?.kun?.modelProfiles?.['custom-vision-model']?.maxOutputTokens).toBe(32000)
     expect(payload.agents?.kun?.tokenEconomy?.enabled).toBe(true)
     expect(payload.agents?.kun?.tokenEconomy?.historyHygiene?.maxToolResultTokens).toBe(4000)
     expect(payload.write?.inlineCompletion?.model).toBe('deepseek-v4-pro')

@@ -260,6 +260,7 @@ const modelReasoningRequestProtocolSchema = z.enum(MODEL_REASONING_REQUEST_PROTO
 const modelProfilePatchSchema = z.object({
   aliases: z.array(modelIdSchema).max(50).optional(),
   contextWindowTokens: z.number().int().positive().max(10_000_000).optional(),
+  maxOutputTokens: z.number().int().positive().max(1_000_000).optional(),
   inputModalities: z.array(modelProviderInputModalitySchema).max(8).optional(),
   outputModalities: z.array(modelProviderInputModalitySchema).max(8).optional(),
   supportsToolCalling: z.boolean().optional(),
