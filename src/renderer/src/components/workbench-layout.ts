@@ -1,21 +1,14 @@
 import type { PointerEvent as ReactPointerEvent } from 'react'
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { WorkspaceFileTarget } from '@shared/workspace-file'
-import type { AppRoute } from '../store/chat-store-types'
 import {
   readBrowserStorageItem,
-  removeBrowserStorageItem,
   writeBrowserStorageItem
 } from '../lib/browser-storage'
-import { WORKSPACE_FILE_PREVIEW_EVENT, type WorkspaceFilePreviewDetail } from '../lib/workspace-file-preview'
-import type { RightPanelMode } from './chat/WorkbenchTopBar'
 
 const LEFT_PANEL_WIDTH_KEY = 'kun.layout.leftSidebarWidth'
 const LEFT_PANEL_COLLAPSED_KEY = 'kun.layout.leftSidebarCollapsed'
 const RIGHT_PANEL_WIDTH_KEY = 'kun.layout.rightInspectorWidth'
-const RIGHT_PANEL_MODE_KEY = 'kun.layout.rightPanelMode'
-const TERMINAL_OPEN_KEY = 'kun.layout.terminalOpen'
-const TERMINAL_HEIGHT_KEY = 'kun.layout.terminalHeight'
 const LEFT_PANEL_DEFAULT = 304
 const RIGHT_PANEL_DEFAULT = 360
 export const CODE_PANEL_PREFERRED = 560
@@ -26,11 +19,6 @@ const RIGHT_PANEL_MAX = 760
 const SIDEBAR_HARD_MIN = 180
 const MAIN_MIN_WIDTH = 560
 const PANEL_RESIZE_HANDLE_WIDTH = 5
-// Bottom terminal drawer sizing. The drawer lives below the chat stage and
-// resizes vertically, so it has its own clamps instead of the column widths.
-const TERMINAL_HEIGHT_DEFAULT = 360
-const TERMINAL_HEIGHT_MIN = 220
-const TERMINAL_HEIGHT_MAX = 760
 
 function clampWidth(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value))
@@ -57,19 +45,6 @@ function readStoredBoolean(key: string, fallback: boolean): boolean {
 
 function persistBoolean(key: string, value: boolean): void {
   writeBrowserStorageItem(key, value ? '1' : '0')
-}
-
-function readStoredRightPanelMode(): RightPanelMode {
-  const raw = readBrowserStorageItem(RIGHT_PANEL_MODE_KEY)
-  return raw === 'todo' || raw === 'changes' || raw === 'browser' ? raw : null
-}
-
-function persistRightPanelMode(mode: RightPanelMode): void {
-  if (mode === 'todo' || mode === 'changes' || mode === 'browser') {
-    writeBrowserStorageItem(RIGHT_PANEL_MODE_KEY, mode)
-  } else {
-    removeBrowserStorageItem(RIGHT_PANEL_MODE_KEY)
-  }
 }
 
 function fitWorkbenchWidths(
@@ -152,20 +127,11 @@ function fitWorkbenchWidths(
 
 export function useWorkbenchLayout({
   activeThreadId,
-  latestAutoOpenDevPreviewUrl,
-  latestDevPreviewUrl,
-  route,
-  workspaceRoot,
-  writeAssistantOpen
+  rightPanelVisible
 }: {
   activeThreadId: string | null
-  latestAutoOpenDevPreviewUrl: string | null
-  latestDevPreviewUrl: string | null
-  route: AppRoute
-  workspaceRoot: string
-  writeAssistantOpen: boolean
+  rightPanelVisible: boolean
 }) {
-  const [rightPanelMode, setRightPanelMode] = useState<RightPanelMode>(readStoredRightPanelMode)
   const [filePreviewTarget, setFilePreviewTarget] = useState<WorkspaceFileTarget | null>(null)
   const [leftSidebarWidth, setLeftSidebarWidth] = useState(() =>
     readStoredWidth(LEFT_PANEL_WIDTH_KEY, LEFT_PANEL_DEFAULT)
@@ -176,14 +142,8 @@ export function useWorkbenchLayout({
   const [rightSidebarWidth, setRightSidebarWidth] = useState(() =>
     readStoredWidth(RIGHT_PANEL_WIDTH_KEY, RIGHT_PANEL_DEFAULT)
   )
-  const [terminalOpen, setTerminalOpen] = useState(false)
-  const [terminalHeight, setTerminalHeight] = useState(() =>
-    readStoredWidth(TERMINAL_HEIGHT_KEY, TERMINAL_HEIGHT_DEFAULT)
-  )
   const shellRef = useRef<HTMLDivElement | null>(null)
   const previewThreadId = useRef<string | null>(activeThreadId)
-  const autoOpenedPreviewUrlRef = useRef<string | null>(null)
-  const rightPanelVisible = route === 'write' ? writeAssistantOpen : rightPanelMode !== null
 
   useEffect(() => {
     persistWidth(LEFT_PANEL_WIDTH_KEY, leftSidebarWidth)
@@ -198,55 +158,9 @@ export function useWorkbenchLayout({
   }, [rightSidebarWidth])
 
   useEffect(() => {
-    persistRightPanelMode(rightPanelMode)
-  }, [rightPanelMode])
-
-  useEffect(() => {
-    removeBrowserStorageItem(TERMINAL_OPEN_KEY)
-  }, [])
-
-  useEffect(() => {
-    persistWidth(TERMINAL_HEIGHT_KEY, terminalHeight)
-  }, [terminalHeight])
-
-  useEffect(() => {
-    const onPreview = (event: Event): void => {
-      const detail = (event as CustomEvent<WorkspaceFilePreviewDetail>).detail
-      if (!detail?.path) return
-      setFilePreviewTarget({
-        ...detail,
-        workspaceRoot: detail.workspaceRoot ?? workspaceRoot
-      })
-      setRightSidebarWidth((width) => Math.max(width, CODE_PANEL_PREFERRED))
-      setRightPanelMode('file')
-    }
-
-    window.addEventListener(WORKSPACE_FILE_PREVIEW_EVENT, onPreview)
-    return () => window.removeEventListener(WORKSPACE_FILE_PREVIEW_EVENT, onPreview)
-  }, [workspaceRoot])
-
-  useEffect(() => {
     if (previewThreadId.current === activeThreadId) return
     previewThreadId.current = activeThreadId
-    autoOpenedPreviewUrlRef.current = null
-    if (rightPanelMode === 'browser') setRightPanelMode(null)
-    if (rightPanelMode === 'file') {
-      setRightPanelMode(null)
-      setFilePreviewTarget(null)
-    }
-  }, [activeThreadId, rightPanelMode])
-
-  useEffect(() => {
-    if (!latestAutoOpenDevPreviewUrl || route !== 'chat') return
-    if (autoOpenedPreviewUrlRef.current === latestAutoOpenDevPreviewUrl) return
-    autoOpenedPreviewUrlRef.current = latestAutoOpenDevPreviewUrl
-    setRightPanelMode('browser')
-  }, [latestAutoOpenDevPreviewUrl, route])
-
-  useEffect(() => {
-    if (route !== 'write') return
-    if (rightPanelMode !== null) setRightPanelMode(null)
-  }, [route, rightPanelMode])
+  }, [activeThreadId])
 
   useLayoutEffect(() => {
     const sync = (): void => {
@@ -268,19 +182,8 @@ export function useWorkbenchLayout({
     return () => window.removeEventListener('resize', sync)
   }, [leftSidebarCollapsed, leftSidebarWidth, rightPanelVisible, rightSidebarWidth])
 
-  const toggleRightPanelMode = (nextMode: Exclude<RightPanelMode, null>): void => {
-    setRightPanelMode((current) => (current === nextMode ? null : nextMode))
-  }
-
   const toggleLeftSidebar = (): void => {
     setLeftSidebarCollapsed((current) => !current)
-  }
-
-  const openDevPreview = (): void => {
-    if (latestDevPreviewUrl) {
-      autoOpenedPreviewUrlRef.current = latestDevPreviewUrl
-    }
-    setRightPanelMode('browser')
   }
 
   const beginLeftResize = (event: ReactPointerEvent<HTMLDivElement>): void => {
@@ -359,60 +262,16 @@ export function useWorkbenchLayout({
     window.addEventListener('pointerup', onUp)
   }
 
-  // Bottom terminal drawer: dragging the top edge up grows the panel. The
-  // clamps keep enough chat stage visible above it.
-  const beginTerminalResize = (event: ReactPointerEvent<HTMLDivElement>): void => {
-    if (event.button !== 0 || !terminalOpen) return
-    event.preventDefault()
-    const startY = event.clientY
-    const startHeight = terminalHeight
-    const prevCursor = document.body.style.cursor
-    const prevUserSelect = document.body.style.userSelect
-    document.body.style.cursor = 'row-resize'
-    document.body.style.userSelect = 'none'
-
-    const onMove = (moveEvent: PointerEvent): void => {
-      const containerHeight = shellRef.current?.clientHeight ?? window.innerHeight
-      const delta = startY - moveEvent.clientY
-      const maxHeight = Math.max(TERMINAL_HEIGHT_MIN, Math.min(TERMINAL_HEIGHT_MAX, containerHeight - 260))
-      const nextHeight = Math.min(Math.max(startHeight + delta, TERMINAL_HEIGHT_MIN), maxHeight)
-      setTerminalHeight(nextHeight)
-    }
-
-    const onUp = (): void => {
-      document.body.style.cursor = prevCursor
-      document.body.style.userSelect = prevUserSelect
-      window.removeEventListener('pointermove', onMove)
-      window.removeEventListener('pointerup', onUp)
-    }
-
-    window.addEventListener('pointermove', onMove)
-    window.addEventListener('pointerup', onUp)
-  }
-
-  const toggleTerminal = (): void => {
-    setTerminalOpen((current) => !current)
-  }
-
   return {
     beginLeftResize,
     beginRightResize,
-    beginTerminalResize,
     filePreviewTarget,
     leftSidebarCollapsed,
     leftSidebarWidth,
-    openDevPreview,
-    rightPanelMode,
-    rightPanelVisible,
     rightSidebarWidth,
     setFilePreviewTarget,
-    setRightPanelMode,
     setRightSidebarWidth,
     shellRef,
-    terminalHeight,
-    terminalOpen,
-    toggleLeftSidebar,
-    toggleRightPanelMode,
-    toggleTerminal
+    toggleLeftSidebar
   }
 }

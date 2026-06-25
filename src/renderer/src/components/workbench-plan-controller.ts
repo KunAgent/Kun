@@ -22,7 +22,7 @@ import {
   planFeatureNameFromRequest
 } from '../plan/plan-path'
 import { extractPlanMetadataFromBlock } from '../plan/plan-tool'
-import type { RightPanelMode } from './chat/WorkbenchTopBar'
+import type { PanelType } from './tool-sidebar/tool-sidebar-store'
 import type { GuiPlanMessageContext, SendMessageOverrides } from '../store/chat-store-types'
 import { normalizeWorkspaceRoot } from '../lib/workspace-path'
 
@@ -46,7 +46,7 @@ type WorkbenchPlanControllerOptions = {
   sendMessage: ChatState['sendMessage']
   setError: ChatState['setError']
   setComposerMode: ChatState['setComposerMode']
-  setRightPanelMode: Dispatch<SetStateAction<RightPanelMode>>
+  openTab: (type: PanelType) => void
   setRightSidebarWidth: Dispatch<SetStateAction<number>>
   t: (key: string) => string
   workspaceRoot: string
@@ -145,7 +145,7 @@ export function useWorkbenchPlanController({
   sendMessage,
   setError,
   setComposerMode,
-  setRightPanelMode,
+  openTab,
   setRightSidebarWidth,
   t,
   workspaceRoot,
@@ -158,8 +158,8 @@ export function useWorkbenchPlanController({
 
   const openGuiPlanPanel = useCallback((): void => {
     setRightSidebarWidth((width) => Math.max(width, CODE_PANEL_PREFERRED))
-    setRightPanelMode('plan')
-  }, [setRightPanelMode, setRightSidebarWidth])
+    openTab('plan')
+  }, [openTab, setRightSidebarWidth])
 
   const savePlanContentToDisk = async (
     plan: GuiPlanArtifact,

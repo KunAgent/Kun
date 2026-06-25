@@ -39,7 +39,7 @@ import {
   extractLatestTurnDevPreviewUrls
 } from '../lib/dev-preview-detection'
 import { Sidebar } from './chat/Sidebar'
-import { WorkbenchTopBar, type RightPanelMode } from './chat/WorkbenchTopBar'
+import { WorkbenchTopBar } from './chat/WorkbenchTopBar'
 import { MessageTimeline } from './chat/MessageTimeline'
 import { IkunCameoLayer, KunCelebrationLayer } from './chat/AnimatedWorkLogo'
 import {
@@ -92,6 +92,13 @@ import { DevPreviewLaunchCard } from './DevPreviewLaunchCard'
 import { RuntimeBanner } from './RuntimeBanner'
 import { CODE_PANEL_PREFERRED, useWorkbenchLayout } from './workbench-layout'
 import { useWorkbenchPlanController } from './workbench-plan-controller'
+import { ToolSidebar } from './tool-sidebar/ToolSidebar'
+import {
+  useToolSidebarStore,
+  useActiveTabType,
+  useToolSidebarOpen,
+  type PanelTab
+} from './tool-sidebar/tool-sidebar-store'
 import { prepareImageAttachmentUpload } from '../lib/image-attachment-upload'
 import { isChatAttachmentUploadEnabled } from '../lib/attachment-upload-availability'
 import { normalizeWorkspaceRoot } from '../lib/workspace-path'
@@ -155,7 +162,6 @@ const COMPOSER_FILE_CONTEXT_MAX_TOTAL_CHARS = 180_000
 // Upper bound on how many files a single `@directory` mention expands into, so a
 // large folder cannot flood the prompt (the char budget above is the hard cap).
 const COMPOSER_DIRECTORY_CONTEXT_MAX_FILES = 60
-const FILE_TREE_SIDEBAR_WIDTH = 320
 const SDD_ASSISTANT_TITLE_SYNC_DELAY_MS = 900
 
 function workspaceFileTargetKey(target: WorkspaceFileTarget | null | undefined): string {
@@ -504,7 +510,6 @@ export function Workbench(): ReactElement {
   const [attachmentUploadBusy, setAttachmentUploadBusy] = useState(false)
   const [attachmentUploadError, setAttachmentUploadError] = useState<string | null>(null)
   const [connectPhoneSidebarOpen, setConnectPhoneSidebarOpen] = useState(false)
-  const [fileTreeSidePanelOpen, setFileTreeSidePanelOpen] = useState(false)
   const [openFilePreviewTargets, setOpenFilePreviewTargets] = useState<WorkspaceFileTarget[]>([])
   const initUiPlugins = useUiPluginStore((s) => s.initUiPlugins)
   const uiModeCameosEnabled = useUiModeCameosEnabled()
@@ -604,6 +609,17 @@ export function Workbench(): ReactElement {
   )
   const latestDevPreviewUrl = detectedDevPreviewUrls[0] ?? null
   const latestAutoOpenDevPreviewUrl = autoOpenDevPreviewUrls[0] ?? null
+  const autoOpenedPreviewUrlRef = useRef<string | null>(null)
+  const toolSidebarOpen = useToolSidebarOpen()
+  const activeTabType = useActiveTabType()
+  const openTab = useToolSidebarStore((s) => s.openTab)
+
+  useEffect(() => {
+    if (!latestAutoOpenDevPreviewUrl || route !== 'chat') return
+    if (autoOpenedPreviewUrlRef.current === latestAutoOpenDevPreviewUrl) return
+    autoOpenedPreviewUrlRef.current = latestAutoOpenDevPreviewUrl
+    openTab('browser')
+  }, [latestAutoOpenDevPreviewUrl, openTab, route])
   const currentSideConversations = useMemo(
     () =>
       Object.values(sideConversations)
@@ -615,33 +631,31 @@ export function Workbench(): ReactElement {
     (count, side) => count + (side.busy ? 1 : 0),
     0
   )
+  const closeToolSidebar = useToolSidebarStore((s) => s.close)
+  const closeTabsByType = useToolSidebarStore((s) => s.closeTabsByType)
+  const toggleTab = useToolSidebarStore((s) => s.toggleTab)
+  const toggleToolSidebar = useToolSidebarStore((s) => s.toggleOpen)
+  const planPanelInOverlay =
+    route === 'chat' &&
+    !activeSddDraft &&
+    activeTabType === 'plan' &&
+    planPanelOverlayPreferred
+  const rightPanelVisible =
+    route === 'write' ? writeAssistantOpen : toolSidebarOpen && !planPanelInOverlay
   const {
     beginLeftResize,
     beginRightResize,
-    beginTerminalResize,
     filePreviewTarget,
     leftSidebarCollapsed,
     leftSidebarWidth,
-    openDevPreview,
-    rightPanelMode,
-    rightPanelVisible,
     rightSidebarWidth,
     setFilePreviewTarget,
-    setRightPanelMode,
     setRightSidebarWidth,
     shellRef,
-    terminalHeight,
-    terminalOpen,
-    toggleLeftSidebar,
-    toggleRightPanelMode,
-    toggleTerminal,
+    toggleLeftSidebar
   } = useWorkbenchLayout({
     activeThreadId,
-    latestAutoOpenDevPreviewUrl,
-    latestDevPreviewUrl,
-    route,
-    workspaceRoot,
-    writeAssistantOpen
+    rightPanelVisible
   })
   const titleForSddDraft = useCallback((draft: SddDraft): string => {
     const snapshot = useSddDraftStore.getState()
@@ -685,7 +699,7 @@ export function Workbench(): ReactElement {
     sendMessage,
     setError,
     setComposerMode,
-    setRightPanelMode,
+    openTab,
     setRightSidebarWidth,
     t,
     workspaceRoot,
@@ -698,11 +712,6 @@ export function Workbench(): ReactElement {
       await useChatStore.getState().refreshThreads()
     }
   })
-  const planPanelInOverlay =
-    route === 'chat' &&
-    !activeSddDraft &&
-    rightPanelMode === 'plan' &&
-    planPanelOverlayPreferred
 
   useEffect(() => {
     if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return
@@ -720,11 +729,11 @@ export function Workbench(): ReactElement {
   useEffect(() => {
     if (!planPanelInOverlay) return
     const onKeyDown = (event: KeyboardEvent): void => {
-      if (event.key === 'Escape') setRightPanelMode(null)
+      if (event.key === 'Escape') closeTabsByType('plan')
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [planPanelInOverlay, setRightPanelMode])
+  }, [planPanelInOverlay, closeTabsByType])
 
   useEffect(() => {
     const runDesktopShortcut = (command: DesktopCommand): void => {
@@ -760,7 +769,7 @@ export function Workbench(): ReactElement {
         return
       }
       if (commandId === 'toggle-terminal') {
-        toggleTerminal()
+        toggleTab('terminal')
         return
       }
       if (commandId === 'settings') {
@@ -782,7 +791,7 @@ export function Workbench(): ReactElement {
     composerMode,
     openSettings,
     setComposerMode,
-    toggleTerminal,
+    toggleTab,
     useWorktreePool,
     worktreeBranch
   ])
@@ -925,10 +934,10 @@ export function Workbench(): ReactElement {
   }, [input])
 
   useEffect(() => {
-    if (rightPanelMode === 'plan' && !activeGuiPlan) {
-      setRightPanelMode(null)
+    if (activeTabType === 'plan' && !activeGuiPlan) {
+      closeTabsByType('plan')
     }
-  }, [activeGuiPlan, rightPanelMode, setRightPanelMode])
+  }, [activeGuiPlan, activeTabType, closeTabsByType])
 
   useEffect(() => {
     if (
@@ -1001,10 +1010,10 @@ export function Workbench(): ReactElement {
 
   const selectedComposerModel = route === 'claw'
     ? activeClawChannel?.model ?? 'auto'
-    : route === 'write' || rightPanelMode === 'sdd-ai'
+    : route === 'write' || activeTabType === 'sdd-ai'
       ? writeAssistantModel
     : composerModel
-  const selectedComposerProviderId = route === 'write' || rightPanelMode === 'sdd-ai'
+  const selectedComposerProviderId = route === 'write' || activeTabType === 'sdd-ai'
     ? resolvedWriteAssistantProviderId
     : route === 'chat'
       ? composerProviderId
@@ -1047,7 +1056,7 @@ export function Workbench(): ReactElement {
 
   const activeComposerWorkspace = (): string | undefined => {
     const sddDraft = useSddDraftStore.getState().activeDraft
-    if (rightPanelMode === 'sdd-ai' && sddDraft?.workspaceRoot) return sddDraft.workspaceRoot
+    if (activeTabType === 'sdd-ai' && sddDraft?.workspaceRoot) return sddDraft.workspaceRoot
     const writeWorkspace = useWriteWorkspaceStore.getState().workspaceRoot
     if (route === 'write' && writeWorkspace.trim()) return writeWorkspace
     return threads.find((thread) => thread.id === activeThreadId)?.workspace || workspaceRoot || undefined
@@ -1088,7 +1097,7 @@ export function Workbench(): ReactElement {
     })
     setFilePreviewTarget(nextTarget)
     setRightSidebarWidth((width) => Math.max(width, CODE_PANEL_PREFERRED))
-    setRightPanelMode('file')
+    openTab('file')
   }
 
   const previewWorkspaceFileFromSidebar = (path: string): void => {
@@ -1106,7 +1115,7 @@ export function Workbench(): ReactElement {
       if (workspaceFileTargetKey(filePreviewTarget) === closingKey) {
         const fallback = next[Math.max(0, index - 1)] ?? next[0] ?? null
         setFilePreviewTarget(fallback)
-        if (!fallback) setRightPanelMode(null)
+        if (!fallback) closeTabsByType('file')
       }
       return next
     })
@@ -1116,18 +1125,14 @@ export function Workbench(): ReactElement {
     addComposerFileReference(reference)
   }
 
-  const toggleFileTreeSidePanel = (): void => {
-    setFileTreeSidePanelOpen((open) => !open)
-  }
-
   useEffect(() => {
-    if (rightPanelMode !== 'file' || !filePreviewTarget) return
+    if (activeTabType !== 'file' || !filePreviewTarget) return
     setOpenFilePreviewTargets((current) => {
       const key = workspaceFileTargetKey(filePreviewTarget)
       if (current.some((item) => workspaceFileTargetKey(item) === key)) return current
       return [...current, filePreviewTarget]
     })
-  }, [filePreviewTarget, rightPanelMode])
+  }, [filePreviewTarget, activeTabType])
 
   useEffect(() => {
     if (route !== 'chat') setComposerFileReferences([])
@@ -1422,12 +1427,12 @@ export function Workbench(): ReactElement {
       setRightSidebarWidth((width) => Math.max(width, 420))
       const sddThreadId = await ensureSddAssistantThreadForDraft(draft)
       if (sddThreadId) {
-        setRightPanelMode('sdd-ai')
+        openTab('sdd-ai')
       } else {
-        setRightPanelMode(null)
+        closeTabsByType('sdd-ai')
       }
     } else {
-      setRightPanelMode(null)
+      closeTabsByType('sdd-ai')
     }
     return true
   }
@@ -1438,7 +1443,7 @@ export function Workbench(): ReactElement {
       void saveActiveSddDraftToDisk()
       useSddDraftStore.getState().clearActiveDraft()
     }
-    if (options.closeAssistant && rightPanelMode === 'sdd-ai') setRightPanelMode(null)
+    if (options.closeAssistant && activeTabType === 'sdd-ai') closeTabsByType('sdd-ai')
   }
 
   const openSddAssistantPanel = async (): Promise<void> => {
@@ -1447,12 +1452,12 @@ export function Workbench(): ReactElement {
     setRightSidebarWidth((width) => Math.max(width, 420))
     const threadId = await ensureSddAssistantThreadForDraft(draft)
     if (!threadId) return
-    setRightPanelMode('sdd-ai')
+    openTab('sdd-ai')
   }
 
   const toggleSddAssistantPanel = async (): Promise<void> => {
-    if (rightPanelMode === 'sdd-ai') {
-      setRightPanelMode(null)
+    if (activeTabType === 'sdd-ai') {
+      closeTabsByType('sdd-ai')
       return
     }
     await openSddAssistantPanel()
@@ -2037,7 +2042,7 @@ export function Workbench(): ReactElement {
       }
     }
 
-    if (activeSddDraft && rightPanelMode === 'sdd-ai') {
+    if (activeSddDraft && activeTabType === 'sdd-ai') {
       void sendSddAssistantPrompt(v)
       return
     }
@@ -2250,8 +2255,8 @@ export function Workbench(): ReactElement {
       setWriteAssistantOpen(false)
       return
     }
-    if (rightPanelMode === 'file') setOpenFilePreviewTargets([])
-    setRightPanelMode(null)
+    if (activeTabType === 'file') setOpenFilePreviewTargets([])
+    closeToolSidebar()
     setFilePreviewTarget(null)
   }
 
@@ -2309,7 +2314,6 @@ export function Workbench(): ReactElement {
     runtimeActionNeedsConnection: t('runtimeActionNeedsConnection')
   })
   const rightPanelDockedVisible = rightPanelVisible && !planPanelInOverlay
-  const fileTreeSidePanelOffset = fileTreeSidePanelOpen ? FILE_TREE_SIDEBAR_WIDTH + 24 : 0
 
   const renderPlanPanel = (className: string): ReactElement => (
     <PlanPanel
@@ -2325,8 +2329,8 @@ export function Workbench(): ReactElement {
     />
   )
 
-  const renderRightPanel = (): ReactElement | null => {
-    if (!rightPanelDockedVisible) return null
+  const renderWriteAssistantPanel = (): ReactElement | null => {
+    if (!rightPanelDockedVisible || !(route === 'write' && writeAssistantOpen)) return null
     return (
       <>
         <div
@@ -2337,140 +2341,125 @@ export function Workbench(): ReactElement {
         />
         <div className="h-full min-h-0 shrink-0" style={{ width: rightSidebarWidth }}>
           <Suspense fallback={<div className="h-full w-full bg-ds-sidebar" />}>
-            {route === 'write' && writeAssistantOpen ? (
-              <WriteAssistantPanel
-                input={input}
-                setInput={setInput}
-                mode={composerMode}
-                setMode={setComposerMode}
-                busy={busy}
-                runtimeConnection={runtimeConnection}
-                activeThreadId={activeThreadId}
-                blocks={blocks}
-                liveReasoning={liveReasoning}
-                liveAssistant={liveAssistant}
-                composerModel={writeAssistantModel}
-                composerProviderId={resolvedWriteAssistantProviderId}
-                composerPickList={writeAssistantPickList}
-                composerModelGroups={composerModelGroups}
-                composerReasoningEffort={composerReasoningEffort}
-                setComposerModel={setWriteAssistantModel}
-                setComposerReasoningEffort={setComposerReasoningEffort}
-                queuedMessages={queuedMessages}
-                removeQueuedMessage={removeQueuedMessage}
-                attachments={composerAttachments}
-                attachmentUploadEnabled={attachmentUploadEnabled}
-                attachmentUploadBusy={attachmentUploadBusy}
-                attachmentUploadError={attachmentUploadError}
-                onPickAttachments={(files) => void handlePickAttachments(files)}
-                onPasteClipboardImage={(options) => void handlePasteClipboardImage(options)}
-                onRemoveAttachment={removeComposerAttachment}
-                onSend={handleSend}
-                onInterrupt={(options) => void interrupt(options)}
-                onRetryConnection={() => void probeRuntime('user', { restart: true })}
-                onOpenSettings={() => openSettings('agents')}
-                onConfigureProviders={() => openSettings('providers')}
-                onNewConversation={startNewWriteAssistantConversation}
-                onPickWorkspace={() => void pickWriteAssistantWorkspace()}
-                onCollapse={closeRightPanel}
-                className="h-full max-h-full w-full"
-              />
-            ) : rightPanelMode === 'sdd-ai' && activeSddDraft ? (
-              <SddAssistantPanel
-                draft={activeSddDraft}
-                input={input}
-                setInput={setInput}
-                mode={composerMode}
-                setMode={setComposerMode}
-                busy={busy}
-                runtimeConnection={runtimeConnection}
-                activeThreadId={activeThreadId}
-                blocks={blocks}
-                liveReasoning={liveReasoning}
-                liveAssistant={liveAssistant}
-                composerModel={writeAssistantModel}
-                composerProviderId={resolvedWriteAssistantProviderId}
-                composerPickList={writeAssistantPickList}
-                composerModelGroups={composerModelGroups}
-                composerReasoningEffort={composerReasoningEffort}
-                setComposerModel={setWriteAssistantModel}
-                setComposerReasoningEffort={setComposerReasoningEffort}
-                queuedMessages={queuedMessages}
-                removeQueuedMessage={removeQueuedMessage}
-                attachments={composerAttachments}
-                attachmentUploadEnabled={attachmentUploadEnabled}
-                attachmentUploadBusy={attachmentUploadBusy}
-                attachmentUploadError={attachmentUploadError}
-                onPickAttachments={(files) => void handlePickAttachments(files)}
-                onPasteClipboardImage={(options) => void handlePasteClipboardImage(options)}
-                onRemoveAttachment={removeComposerAttachment}
-                onSend={handleSend}
-                onInterrupt={(options) => void interrupt(options)}
-                onRetryConnection={() => void probeRuntime('user', { restart: true })}
-                onOpenSettings={() => openSettings('agents')}
-                onConfigureProviders={() => openSettings('providers')}
-                onApplyFramework={applySddFramework}
-                onNewConversation={() => {
-                  setInput('')
-                  pendingSddFrameworkRef.current = null
-                  pendingSddFrameworkPromptRef.current = null
-                  void createSddAssistantThreadForDraft(activeSddDraft)
-                }}
-                onCollapse={closeRightPanel}
-                className="h-full max-h-full w-full"
-              />
-            ) : rightPanelMode === 'changes' ? (
-              <ChangeInspector
-                blocks={blocks}
-                className="h-full max-h-full w-full flex-col"
-                onCollapse={closeRightPanel}
-              />
-            ) : rightPanelMode === 'todo' ? (
-              <TodoPanel
-                className="h-full max-h-full w-full"
-                onCollapse={closeRightPanel}
-                onOpenPlan={openGuiPlanPanel}
-              />
-            ) : rightPanelMode === 'browser' ? (
-              <DevBrowserPanel
-                blocks={devPreviewBlocks}
-                preferredUrl={latestDevPreviewUrl}
-                className="h-full max-h-full w-full flex-col"
-                onCollapse={closeRightPanel}
-              />
-            ) : rightPanelMode === 'plan' ? (
-              renderPlanPanel('h-full max-h-full w-full')
-            ) : (
-              <WorkspaceFilePreviewPanel
-                target={filePreviewTarget}
-                openTargets={openFilePreviewTargets}
-                workspaceRoot={workspaceRoot}
-                className="h-full max-h-full w-full"
-                onSelectTarget={openWorkspaceFilePreviewTarget}
-                onCloseTarget={closeWorkspaceFilePreviewTarget}
-                onClose={closeRightPanel}
-              />
-            )}
+            <WriteAssistantPanel
+              input={input}
+              setInput={setInput}
+              mode={composerMode}
+              setMode={setComposerMode}
+              busy={busy}
+              runtimeConnection={runtimeConnection}
+              activeThreadId={activeThreadId}
+              blocks={blocks}
+              liveReasoning={liveReasoning}
+              liveAssistant={liveAssistant}
+              composerModel={writeAssistantModel}
+              composerProviderId={resolvedWriteAssistantProviderId}
+              composerPickList={writeAssistantPickList}
+              composerModelGroups={composerModelGroups}
+              composerReasoningEffort={composerReasoningEffort}
+              setComposerModel={setWriteAssistantModel}
+              setComposerReasoningEffort={setComposerReasoningEffort}
+              queuedMessages={queuedMessages}
+              removeQueuedMessage={removeQueuedMessage}
+              attachments={composerAttachments}
+              attachmentUploadEnabled={attachmentUploadEnabled}
+              attachmentUploadBusy={attachmentUploadBusy}
+              attachmentUploadError={attachmentUploadError}
+              onPickAttachments={(files) => void handlePickAttachments(files)}
+              onPasteClipboardImage={(options) => void handlePasteClipboardImage(options)}
+              onRemoveAttachment={removeComposerAttachment}
+              onSend={handleSend}
+              onInterrupt={(options) => void interrupt(options)}
+              onRetryConnection={() => void probeRuntime('user', { restart: true })}
+              onOpenSettings={() => openSettings('agents')}
+              onConfigureProviders={() => openSettings('providers')}
+              onNewConversation={startNewWriteAssistantConversation}
+              onPickWorkspace={() => void pickWriteAssistantWorkspace()}
+              onCollapse={closeRightPanel}
+              className="h-full max-h-full w-full"
+            />
           </Suspense>
         </div>
       </>
     )
   }
 
-  const renderFileTreeSidePanel = (): ReactElement | null => {
-    if (!fileTreeSidePanelOpen) return null
+  const renderTab = (tab: PanelTab): ReactElement | null => {
     return (
-      <>
-        <div
-          role="separator"
-          aria-orientation="vertical"
-          className="ds-workbench-divider ds-no-drag relative z-20 shrink-0"
-        />
-        <aside
-          className="ds-no-drag h-full min-h-0 shrink-0 border-l border-ds-border-muted bg-ds-sidebar"
-          style={{ width: FILE_TREE_SIDEBAR_WIDTH }}
-        >
-          {fileTreeWorkspaceRoot ? (
+      <Suspense fallback={<div className="h-full w-full bg-ds-sidebar" />}>
+        {tab.type === 'sdd-ai' && activeSddDraft ? (
+          <SddAssistantPanel
+            draft={activeSddDraft}
+            input={input}
+            setInput={setInput}
+            mode={composerMode}
+            setMode={setComposerMode}
+            busy={busy}
+            runtimeConnection={runtimeConnection}
+            activeThreadId={activeThreadId}
+            blocks={blocks}
+            liveReasoning={liveReasoning}
+            liveAssistant={liveAssistant}
+            composerModel={writeAssistantModel}
+            composerProviderId={resolvedWriteAssistantProviderId}
+            composerPickList={writeAssistantPickList}
+            composerModelGroups={composerModelGroups}
+            composerReasoningEffort={composerReasoningEffort}
+            setComposerModel={setWriteAssistantModel}
+            setComposerReasoningEffort={setComposerReasoningEffort}
+            queuedMessages={queuedMessages}
+            removeQueuedMessage={removeQueuedMessage}
+            attachments={composerAttachments}
+            attachmentUploadEnabled={attachmentUploadEnabled}
+            attachmentUploadBusy={attachmentUploadBusy}
+            attachmentUploadError={attachmentUploadError}
+              onPickAttachments={(files) => void handlePickAttachments(files)}
+              onPasteClipboardImage={(options) => void handlePasteClipboardImage(options)}
+              onRemoveAttachment={removeComposerAttachment}
+              onSend={handleSend}
+              onInterrupt={(options) => void interrupt(options)}
+              onRetryConnection={() => void probeRuntime('user', { restart: true })}
+              onOpenSettings={() => openSettings('agents')}
+              onConfigureProviders={() => openSettings('providers')}
+              onApplyFramework={applySddFramework}
+              onNewConversation={() => {
+                setInput('')
+                pendingSddFrameworkRef.current = null
+                pendingSddFrameworkPromptRef.current = null
+                void createSddAssistantThreadForDraft(activeSddDraft)
+              }}
+              onCollapse={closeRightPanel}
+              className="h-full max-h-full w-full"
+            />
+        ) : tab.type === 'changes' ? (
+          <ChangeInspector
+            blocks={blocks}
+            className="h-full max-h-full w-full flex-col"
+            onCollapse={closeRightPanel}
+          />
+        ) : tab.type === 'todo' ? (
+          <TodoPanel
+            className="h-full max-h-full w-full"
+            onCollapse={closeRightPanel}
+            onOpenPlan={openGuiPlanPanel}
+          />
+        ) : tab.type === 'browser' ? (
+          <DevBrowserPanel
+            blocks={devPreviewBlocks}
+            preferredUrl={latestDevPreviewUrl}
+            className="h-full max-h-full w-full flex-col"
+            onCollapse={closeRightPanel}
+          />
+        ) : tab.type === 'plan' ? (
+          renderPlanPanel('h-full max-h-full w-full')
+        ) : tab.type === 'terminal' ? (
+          <TerminalPanel
+            workspaceRoot={fileTreeWorkspaceRoot}
+            className="h-full w-full"
+            onCollapse={closeRightPanel}
+          />
+        ) : tab.type === 'files' ? (
+          fileTreeWorkspaceRoot ? (
             <ChatFileTreePanel
               workspaceRoot={fileTreeWorkspaceRoot}
               selectedPath={filePreviewTarget?.path}
@@ -2483,9 +2472,19 @@ export function Workbench(): ReactElement {
             <div className="px-4 py-3 text-[12px] leading-5 text-ds-muted">
               {t('workspaceRequiredToCreateThread')}
             </div>
-          )}
-        </aside>
-      </>
+          )
+        ) : (
+          <WorkspaceFilePreviewPanel
+            target={filePreviewTarget}
+            openTargets={openFilePreviewTargets}
+            workspaceRoot={workspaceRoot}
+            className="h-full max-h-full w-full"
+            onSelectTarget={openWorkspaceFilePreviewTarget}
+            onCloseTarget={closeWorkspaceFilePreviewTarget}
+            onClose={closeRightPanel}
+          />
+        )}
+      </Suspense>
     )
   }
 
@@ -2613,7 +2612,7 @@ export function Workbench(): ReactElement {
                 onSubmitPrompt={sendWritePrompt}
                 onOpenAgentSettings={() => openSettings('write')}
               />
-              {renderRightPanel()}
+              {renderWriteAssistantPanel()}
             </div>
           </>
         ) : (
@@ -2627,7 +2626,7 @@ export function Workbench(): ReactElement {
           {activeSddDraft ? (
             <SddDraftEditorView
               leftSidebarCollapsed={leftSidebarCollapsed}
-              assistantOpen={rightPanelMode === 'sdd-ai'}
+              assistantOpen={activeTabType === 'sdd-ai'}
               onToggleLeftSidebar={toggleLeftSidebar}
               onToggleAssistant={() => void toggleSddAssistantPanel()}
               onAssistantQuote={quoteToSddAssistant}
@@ -2660,18 +2659,12 @@ export function Workbench(): ReactElement {
                     </span>
                   ) : null}
                   <WorkbenchTopBar
-                    rightPanelMode={rightPanelMode}
-                    onToggleRightPanelMode={toggleRightPanelMode}
-                    planPanelEnabled={Boolean(activeGuiPlan)}
-                    terminalOpen={terminalOpen}
-                    onToggleTerminal={toggleTerminal}
                     sideChatCount={currentSideConversations.length}
                     sideChatRunningCount={currentSideRunningCount}
                     sideChatOpen={sidePanel.open}
                     sideChatEnabled={runtimeConnection === 'ready' && Boolean(activeThreadId)}
-                    fileTreeOpen={fileTreeSidePanelOpen}
-                    fileTreeEnabled={Boolean(fileTreeWorkspaceRoot)}
-                    onToggleFileTree={toggleFileTreeSidePanel}
+                    toolSidebarOpen={toolSidebarOpen}
+                    onToggleToolSidebar={toggleToolSidebar}
                     onOpenSideChat={openSideChat}
                   />
                 </div>
@@ -2696,8 +2689,8 @@ export function Workbench(): ReactElement {
                   showDevPreviewCard ? (
                     <DevPreviewLaunchCard
                       url={latestDevPreviewUrl}
-                      opened={rightPanelMode === 'browser'}
-                      onOpen={openDevPreview}
+                      opened={activeTabType === 'browser'}
+                      onOpen={() => openTab('browser')}
                     />
                   ) : null
                 }
@@ -2776,7 +2769,7 @@ export function Workbench(): ReactElement {
                 onNewCommand={() => void createThread({ workspaceRoot: activeSkillWorkspace, forceNew: true })}
                 onReviewCommand={(target) => void reviewActiveThread(target)}
                 onExecutionSettingsChange={updateComposerExecutionSettings}
-                onOpenChanges={() => setRightPanelMode('changes')}
+                onOpenChanges={() => openTab('changes')}
                 onReviewChanges={() => void reviewActiveThread({ kind: 'uncommittedChanges' })}
                 reviewChangesDisabled={busy || runtimeConnection !== 'ready'}
                 onBtwCommand={(seedText) => {
@@ -2789,36 +2782,23 @@ export function Workbench(): ReactElement {
               />
             </div>
             </div>
-            {terminalOpen ? (
-              <div className="ds-no-drag flex w-full shrink-0 flex-col px-0 pb-0">
-                <div
-                  role="separator"
-                  aria-orientation="horizontal"
-                  className="relative z-20 h-1 shrink-0 cursor-row-resize bg-transparent transition hover:bg-ds-border-muted"
-                  onPointerDown={beginTerminalResize}
-                />
-                <Suspense fallback={<div className="ds-surface-strong h-full w-full" />}>
-                  <TerminalPanel
-                    workspaceRoot={fileTreeWorkspaceRoot}
-                    height={terminalHeight}
-                    className="w-full"
-                    onCollapse={toggleTerminal}
-                  />
-                </Suspense>
-              </div>
-            ) : null}
           </section>
           )}
           </div>
 
           {route === 'chat' && !activeSddDraft ? (
             <SideConversationPanel
-              rightOffset={(rightPanelDockedVisible ? rightSidebarWidth + 24 : 24) + fileTreeSidePanelOffset}
+              rightOffset={rightPanelDockedVisible ? rightSidebarWidth + 24 : 24}
             />
           ) : null}
 
-          {renderRightPanel()}
-          {renderFileTreeSidePanel()}
+          {toolSidebarOpen ? (
+            <ToolSidebar
+              width={rightSidebarWidth}
+              onBeginResize={beginRightResize}
+              renderTab={renderTab}
+            />
+          ) : null}
         </div>
 
           </>

@@ -1307,6 +1307,13 @@
   "terminalExitMessage": "Process exited — click to restart",
   "terminalUnavailable": "Terminal unavailable",
   "rightPanelCollapse": "Collapse right sidebar",
+  "toolSidebarToggle": "Toggle tool sidebar",
+  "toolSidebarCloseTab": "Close tab",
+  "toolSidebarAddPanel": "Add panel",
+  "toolSidebarEmpty": "No panels open. Click + to add one.",
+  "rightPanelFilesTree": "File Tree",
+  "rightPanelSddAssistant": "Assistant",
+
   "editorPickerTitle": "Choose default editor",
   "editorPickerTitleWithEditor": "Default editor: {{editor}}",
   "editorPickerMenuTitle": "Open files with",

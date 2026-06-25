@@ -1307,6 +1307,13 @@
   "terminalExitMessage": "进程已退出 — 点击重启",
   "terminalUnavailable": "终端不可用",
   "rightPanelCollapse": "收起右侧栏",
+  "toolSidebarToggle": "切换工具侧栏",
+  "toolSidebarCloseTab": "关闭标签页",
+  "toolSidebarAddPanel": "添加面板",
+  "toolSidebarEmpty": "没有打开的面板,点击 + 添加。",
+  "rightPanelFilesTree": "文件树",
+  "rightPanelSddAssistant": "需求助手",
+
   "editorPickerTitle": "选择默认编辑器",
   "editorPickerTitleWithEditor": "默认编辑器：{{editor}}",
   "editorPickerMenuTitle": "打开文件使用",

@@ -1,5 +1,5 @@
 import type { ReactElement } from 'react'
-import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { EditorInfo } from '@shared/editor'
 import type { GuiUpdateState } from '@shared/gui-update'
 import {
@@ -7,16 +7,12 @@ import {
   Check,
   ChevronDown,
   Code2,
-  ClipboardList,
   Download,
   ExternalLink,
-  FileEdit,
-  Folders,
   FolderOpen,
-  Globe2,
-  ListTodo,
   Loader2,
   MessageCircleMore,
+  PanelRight,
   RefreshCw,
   Terminal
 } from 'lucide-react'
@@ -33,18 +29,12 @@ export type RightPanelMode =
   | null
 
 type Props = {
-  rightPanelMode: RightPanelMode
-  onToggleRightPanelMode: (mode: Exclude<RightPanelMode, null>) => void
-  planPanelEnabled?: boolean
-  terminalOpen?: boolean
-  onToggleTerminal?: () => void
   sideChatCount?: number
   sideChatRunningCount?: number
   sideChatOpen?: boolean
   sideChatEnabled?: boolean
-  fileTreeOpen?: boolean
-  fileTreeEnabled?: boolean
-  onToggleFileTree?: () => void
+  toolSidebarOpen?: boolean
+  onToggleToolSidebar?: () => void
   onOpenSideChat?: () => void
 }
 
@@ -60,18 +50,12 @@ function topbarIconButtonClass(active: boolean): string {
 }
 
 export function WorkbenchTopBar({
-  rightPanelMode,
-  onToggleRightPanelMode,
-  planPanelEnabled = false,
-  terminalOpen = false,
-  onToggleTerminal,
   sideChatCount = 0,
   sideChatRunningCount = 0,
   sideChatOpen = false,
   sideChatEnabled = true,
-  fileTreeOpen = false,
-  fileTreeEnabled = true,
-  onToggleFileTree,
+  toolSidebarOpen = false,
+  onToggleToolSidebar,
   onOpenSideChat
 }: Props): ReactElement {
   const { t } = useTranslation(['common', 'settings'])
@@ -82,12 +66,6 @@ export function WorkbenchTopBar({
   const [guiUpdateState, setGuiUpdateState] = useState<GuiUpdateState>({ status: 'idle' })
   const [applyingGuiUpdate, setApplyingGuiUpdate] = useState(false)
   const editorMenuRef = useRef<HTMLDivElement>(null)
-  const items = [
-    { mode: 'todo' as const, label: t('rightPanelTodo'), icon: ListTodo },
-    ...(planPanelEnabled ? [{ mode: 'plan' as const, label: t('rightPanelPlan'), icon: ClipboardList }] : []),
-    { mode: 'changes' as const, label: t('rightPanelChanges'), icon: FileEdit },
-    { mode: 'browser' as const, label: t('rightPanelBrowser'), icon: Globe2 }
-  ]
   const selectedEditor = useMemo(
     () => editors.find((editor) => editor.id === selectedEditorId) ?? editors[0],
     [editors, selectedEditorId]
@@ -363,49 +341,16 @@ export function WorkbenchTopBar({
         </button>
       ) : null}
 
-      {items.map((item) => {
-        const active = rightPanelMode === item.mode
-        const Icon = item.icon
-        const isChanges = item.mode === 'changes'
-        return (
-          <Fragment key={item.mode}>
-            <button
-              type="button"
-              onClick={() => onToggleRightPanelMode(item.mode)}
-              className={topbarIconButtonClass(active)}
-              aria-label={item.label}
-              aria-pressed={active}
-              title={item.label}
-            >
-              <Icon className={TOPBAR_ICON_CLASS} strokeWidth={1.75} />
-            </button>
-            {isChanges && onToggleTerminal ? (
-              <button
-                type="button"
-                onClick={onToggleTerminal}
-                className={topbarIconButtonClass(terminalOpen)}
-                aria-label={t('rightPanelTerminal')}
-                aria-pressed={terminalOpen}
-                title={t('rightPanelTerminal')}
-              >
-                <Terminal className={TOPBAR_ICON_CLASS} strokeWidth={1.75} />
-              </button>
-            ) : null}
-          </Fragment>
-        )
-      })}
-
-      {onToggleFileTree ? (
+      {onToggleToolSidebar ? (
         <button
           type="button"
-          onClick={onToggleFileTree}
-          disabled={!fileTreeEnabled}
-          className={`${topbarIconButtonClass(fileTreeOpen)} disabled:cursor-not-allowed disabled:opacity-45`}
-          aria-label={t('rightPanelFiles')}
-          aria-pressed={fileTreeOpen}
-          title={t('rightPanelFiles')}
+          onClick={onToggleToolSidebar}
+          className={topbarIconButtonClass(toolSidebarOpen)}
+          aria-label={t('toolSidebarToggle')}
+          aria-pressed={toolSidebarOpen}
+          title={t('toolSidebarToggle')}
         >
-          <Folders className={TOPBAR_ICON_CLASS} strokeWidth={1.75} />
+          <PanelRight className={TOPBAR_ICON_CLASS} strokeWidth={1.75} />
         </button>
       ) : null}
     </div>
