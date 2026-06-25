@@ -114,5 +114,10 @@ export function mergeBuiltinSubagentProfiles(
     const override = config.profiles[id]
     profiles[id] = override ? { ...builtin, ...override } : builtin
   }
-  return { ...config, profiles }
+  // Default a child with no explicit `profile` to the built-in `general`
+  // profile (always present after the merge). Without this, an omitted profile
+  // resolves to `undefined`, so the run carries no profile id — the GUI then
+  // can't label the subagent and falls back to a generic name.
+  const defaultProfile = config.defaultProfile ?? 'general'
+  return { ...config, profiles, defaultProfile }
 }

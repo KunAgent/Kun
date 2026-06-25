@@ -110,7 +110,15 @@ export class ThreadService {
 
   async create(
     request: CreateThreadRequest,
-    options: { id?: string; title?: string; status?: ThreadStatus } = {}
+    options: {
+      id?: string
+      title?: string
+      status?: ThreadStatus
+      /** Relationship to a parent thread; `side` threads are hidden from the default list. */
+      relation?: ThreadRelation
+      /** Parent thread this thread branches from (used by `side`/`fork` relations). */
+      parentThreadId?: string
+    } = {}
   ): Promise<ThreadRecord> {
     // Always advance the id generator so externally-supplied ids
     // don't collide with later allocations from `fork`/etc.
@@ -129,6 +137,8 @@ export class ThreadService {
       approvalPolicy: request.approvalPolicy,
       sandboxMode: request.sandboxMode,
       ...(request.costBudgetUsd !== undefined ? { costBudgetUsd: request.costBudgetUsd } : {}),
+      ...(options.relation ? { relation: options.relation } : {}),
+      ...(options.parentThreadId ? { parentThreadId: options.parentThreadId } : {}),
       status: options.status
     })
     await this.threadStore.upsert(thread)

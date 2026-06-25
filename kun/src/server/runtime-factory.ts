@@ -318,6 +318,11 @@ export async function createKunServeRuntime(
           modelCapabilities,
           skillRuntime,
           tokenEconomy,
+          // Persist the child as a hidden `side` thread on the shared stores +
+          // event bus so its session is loadable and streams live in the GUI.
+          sessionStore,
+          threadStore,
+          events,
           ...(options.runtime ? { runtime: options.runtime } : {}),
           ...(memoryStore ? { memoryStore } : {}),
           nowIso

@@ -197,6 +197,8 @@ export class KunRuntimeProvider implements AgentProvider {
     latestUserMessageId?: string
     turnDurationByUserId?: Record<string, number>
     usage?: ThreadUsageSnapshot
+    relation?: 'primary' | 'fork' | 'side'
+    parentThreadId?: string
     goal?: NormalizedThread['goal']
     todos?: NormalizedThread['todos']
   }> {
@@ -231,6 +233,9 @@ export class KunRuntimeProvider implements AgentProvider {
       threadStatus: thread.status ?? latestTurn?.status,
       latestTurnId: latestTurn?.id,
       latestUserMessageId,
+      relation: thread.relation,
+      ...(thread.parentThreadId ? { parentThreadId: thread.parentThreadId } : {}),
+      ...(typeof thread.model === 'string' && thread.model.trim() ? { model: thread.model.trim() } : {}),
       goal: thread.goal ? goalFromCore(thread.goal) : null,
       todos: thread.todos ? todosFromCore(thread.todos) : null
     }

@@ -34,6 +34,8 @@ const REDUCED_MOTION_QUERY = '(prefers-reduced-motion: reduce)'
 
 /** Parsed shape of the `delegate_task` tool `detail` JSON (all optional). */
 type DelegateDetail = {
+  /** The child thread id — always present in the tool result, unlike `meta.child`. */
+  childId?: string
   summary?: string
   error?: string
   profile?: string
@@ -60,6 +62,7 @@ function parseDelegateDetail(detail: string | undefined): DelegateDetail {
   const num = (v: unknown): number | undefined =>
     typeof v === 'number' && Number.isFinite(v) ? v : undefined
   return {
+    childId: str(obj.childId),
     summary: str(obj.summary),
     error: str(obj.error),
     profile: str(obj.profile),
@@ -74,6 +77,7 @@ function parseDelegateDetail(detail: string | undefined): DelegateDetail {
 type ChildMeta = {
   childId?: string
   childLabel?: string
+  childProfile?: string
   childStatus?: string
   childSeq?: number
   parentTurnId?: string
@@ -91,6 +95,7 @@ function readChildMeta(block: ChatBlock): ChildMeta {
   return {
     childId: str(child.childId),
     childLabel: str(child.childLabel),
+    childProfile: str(child.childProfile),
     childStatus: str(child.childStatus),
     childSeq: typeof child.childSeq === 'number' ? child.childSeq : undefined,
     parentTurnId: str(child.parentTurnId)
@@ -374,8 +379,12 @@ export function SubagentCallCard({
   const status = resolveStatus(block, child)
   const animate = !reducedMotion && onScreen && status === 'running'
 
-  // Pose key: detail.profile → childLabel → block toolName → 'custom'.
-  const poseId = detail.profile || child.childLabel || child.childId || 'custom'
+  // Profile id: prefer the live `childProfile` from the runtime metadata (set on
+  // the first queued/running event) so the agent type shows immediately; the
+  // result-JSON `profile` only arrives after the child completes.
+  const profileId = child.childProfile || detail.profile
+  // Pose key: profile → childLabel → block toolName → 'custom'.
+  const poseId = profileId || child.childLabel || child.childId || 'custom'
   const isKnownPose = KNOWN_POSE_IDS.has(poseId)
   const hue = isKnownPose ? null : hashHue(poseId)
 
@@ -383,14 +392,14 @@ export function SubagentCallCard({
   // → a custom profile's own name → a short name derived from the task → default.
   const taskText = block.kind === 'tool' ? splitTaskLine(block as ToolBlock) : undefined
   const roleName =
-    (detail.profile && KNOWN_POSE_IDS.has(detail.profile)
-      ? t(`subagentsPanel.role.${detail.profile}.name`, detail.profile)
+    (profileId && KNOWN_POSE_IDS.has(profileId)
+      ? t(`subagentsPanel.role.${profileId}.name`, profileId)
       : undefined) ||
     child.childLabel?.trim() ||
-    detail.profile?.trim() ||
+    profileId?.trim() ||
     taskText?.trim().split(/\s+/).slice(0, 6).join(' ').slice(0, 28) ||
     t('subagentDefaultName')
-  const taskParts = [detail.profile || child.childLabel, detail.summary || (block.kind === 'tool' ? splitTaskLine(block as ToolBlock) : undefined)]
+  const taskParts = [child.childLabel, detail.summary || (block.kind === 'tool' ? splitTaskLine(block as ToolBlock) : undefined)]
     .filter((p): p is string => Boolean(p && p.trim()))
   const taskLine = taskParts.join(' · ')
 
@@ -411,7 +420,10 @@ export function SubagentCallCard({
   }, [status, hasBody, inGroup])
   const expanded = (userToggled ?? autoExpanded) && hasBody
 
-  const childId = child.childId
+  // `meta.child` is only attached on the live child events (which the renderer
+  // currently drops), so for a completed delegation the reliable source of the
+  // child thread id is the tool result JSON (`detail.childId`).
+  const childId = child.childId || detail.childId
   const openChild = (): void => {
     if (!childId) return
     void selectThread(childId).catch(() => undefined)
@@ -470,6 +482,20 @@ export function SubagentCallCard({
                 : ''}
           </span>
         </span>
+        {childId ? (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation()
+              openChild()
+            }}
+            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-ds-faint transition hover:bg-accent/10 hover:text-accent"
+            aria-label={t('subagentOpenSession')}
+            title={t('subagentOpenSession')}
+          >
+            <ExternalLink className="h-3.5 w-3.5" strokeWidth={2} />
+          </button>
+        ) : null}
         {hasBody ? (
           expanded ? (
             <ChevronDown className="h-4 w-4 shrink-0 text-ds-faint" strokeWidth={1.8} />
@@ -503,20 +529,6 @@ export function SubagentCallCard({
                 {detail.toolPolicy === 'readOnly' ? t('subagentPolicyReadOnly') : t('subagentPolicyFull')}
               </MetaChip>
             ) : null}
-            <span className="ml-auto" />
-            {childId ? (
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  openChild()
-                }}
-                className="inline-flex items-center gap-1.5 rounded-[9px] bg-accent/10 px-3 py-1.5 text-[12px] font-semibold text-accent transition hover:bg-accent/15"
-              >
-                {t('subagentOpenSession')}
-                <ExternalLink className="h-3 w-3" strokeWidth={2} />
-              </button>
-            ) : null}
           </div>
         </div>
       ) : null}
@@ -547,6 +559,8 @@ function splitTaskLine(block: ToolBlock): string | undefined {
   if (!raw) return undefined
   const stripped = raw.replace(/^delegate_task\s*:\s*/i, '').trim()
   if (!stripped || stripped.length > 160) return undefined
+  // Bare tool name (no task text yet, e.g. while running) — nothing useful.
+  if (/^delegate_task$/i.test(stripped)) return undefined
   return stripped
 }
 
@@ -586,7 +600,7 @@ export function SubagentGroup({ blocks }: { blocks: ChatBlock[] }): ReactElement
   const clusterPoses = sorted.slice(0, 5).map((b) => {
     const c = readChildMeta(b)
     const d = parseDelegateDetail(b.kind === 'tool' ? (b as ToolBlock).detail : undefined)
-    return d.profile || c.childLabel || c.childId || 'custom'
+    return c.childProfile || d.profile || c.childLabel || c.childId || 'custom'
   })
   const overflow = sorted.length - clusterPoses.length
 

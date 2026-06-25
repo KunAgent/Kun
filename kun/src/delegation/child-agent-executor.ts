@@ -18,6 +18,8 @@ import type { TokenEconomyConfig } from '../loop/token-economy.js'
 import type { MemoryStore } from '../memory/memory-store.js'
 import type { ModelClient } from '../ports/model-client.js'
 import { RandomIdGenerator } from '../ports/id-generator.js'
+import type { SessionStore } from '../ports/session-store.js'
+import type { ThreadStore } from '../ports/thread-store.js'
 import type { ToolHost } from '../ports/tool-host.js'
 import type { SkillRuntime } from '../skills/skill-runtime.js'
 import { RuntimeEventRecorder } from '../services/runtime-event-recorder.js'
@@ -41,14 +43,42 @@ export type ChildAgentExecutorOptions = {
   modelCapabilities?: (model: string) => ModelCapabilityMetadata
   skillRuntime?: SkillRuntime
   memoryStore?: MemoryStore
+  /**
+   * Persistence wiring. When the main runtime's stores + event recorder are
+   * supplied, the child runs as a persisted `relation: 'side'` thread on the
+   * shared event bus: its full session (reasoning, tool calls, results) is
+   * queryable via `getThreadDetail(childId)` and streams live to UI
+   * subscribers. The thread is hidden from the default thread list (the store
+   * filters `side`). When omitted (e.g. in unit tests) the child falls back to
+   * throwaway in-memory stores, preserving full isolation.
+   */
+  sessionStore?: SessionStore
+  threadStore?: ThreadStore
+  events?: RuntimeEventRecorder
 }
 
 export function createChildAgentExecutor(options: ChildAgentExecutorOptions): ChildRunExecutor {
   return async (input) => {
     const nowIso = options.nowIso ?? (() => new Date().toISOString())
-    const eventBus = new InMemoryEventBus()
-    const sessionStore = new InMemorySessionStore()
-    const threadStore = new InMemoryThreadStore()
+    // Persist into the main runtime's stores + event bus when supplied, so the
+    // child session is queryable and streams live; otherwise stay isolated in
+    // throwaway in-memory stores (preserves test behavior). The recorder is
+    // shared too — events persist-before-publish to the same bus, and seq
+    // allocation is per-thread (childId), so child events never bleed into the
+    // parent thread's stream.
+    const sessionStore: SessionStore = options.sessionStore ?? new InMemorySessionStore()
+    const threadStore: ThreadStore = options.threadStore ?? new InMemoryThreadStore()
+    const events =
+      options.events ??
+      (() => {
+        const eventBus = new InMemoryEventBus()
+        return new RuntimeEventRecorder({
+          eventBus,
+          sessionStore,
+          allocateSeq: (threadId) => eventBus.allocateSeq(threadId),
+          nowIso
+        })
+      })()
     const usage = new UsageService()
     const ids = new RandomIdGenerator()
     const inflight = new InflightTracker()
@@ -56,12 +86,6 @@ export function createChildAgentExecutor(options: ChildAgentExecutorOptions): Ch
     const compactor = new ContextCompactor({
       contextCompaction: options.contextCompaction,
       models: options.models
-    })
-    const events = new RuntimeEventRecorder({
-      eventBus,
-      sessionStore,
-      allocateSeq: (threadId) => eventBus.allocateSeq(threadId),
-      nowIso
     })
     const turns = new TurnService({
       threadStore,
@@ -142,8 +166,9 @@ export function createChildAgentExecutor(options: ChildAgentExecutorOptions): Ch
     })
 
     const model = input.model?.trim() || options.defaultModel
+    const title = childThreadTitle(input.childId, input.label, input.profile)
     const thread = await threads.create({
-      title: childThreadTitle(input.childId, input.label),
+      title,
       workspace: input.workspace?.trim() || '~',
       model,
       mode: 'agent',
@@ -155,7 +180,12 @@ export function createChildAgentExecutor(options: ChildAgentExecutorOptions): Ch
       ...(input.providerId ? { providerId: input.providerId } : {})
     }, {
       id: input.childId,
-      title: childThreadTitle(input.childId, input.label)
+      title,
+      // Persist as a side branch of the parent: hidden from the default thread
+      // list, but loadable on demand so the user can open the subagent's own
+      // session from the parent's delegate_task card.
+      relation: 'side',
+      parentThreadId: input.parentThreadId
     })
     // A profile preamble rides in the prompt body (not the system prompt) so
     // the cached stable prefix stays byte-identical to the main agent's.
@@ -174,8 +204,21 @@ export function createChildAgentExecutor(options: ChildAgentExecutorOptions): Ch
       }
     })
     const status = await loop.runTurn(thread.id, started.turnId)
+    // Only a FATAL error fails the child. Recoverable tool errors — a tool
+    // rejected by the child's read-only policy, or a tool that crashed — are
+    // recorded as `severity: 'warning'` error events but the loop hands the
+    // model an error tool-result it adapts to and the turn still completes.
+    // Treating those as fatal wrongly marked the whole subagent "failed" for a
+    // single denied `bash` call. Genuine failures are caught by the `status`
+    // check below; here we only honor non-warning (fatal) error events.
     const runtimeError = (await sessionStore.loadEventsSince(thread.id, 0))
-      .find((event) => event.kind === 'error' && event.turnId === started.turnId)
+      .find(
+        (event) =>
+          event.kind === 'error' &&
+          event.turnId === started.turnId &&
+          event.severity !== 'warning' &&
+          event.severity !== 'info'
+      )
     if (runtimeError?.kind === 'error') {
       throw new Error(runtimeError.message)
     }
@@ -199,8 +242,8 @@ export function createChildAgentExecutor(options: ChildAgentExecutorOptions): Ch
   }
 }
 
-function childThreadTitle(childId: string, label?: string): string {
-  const suffix = label?.trim() || childId
+function childThreadTitle(childId: string, label?: string, profile?: string): string {
+  const suffix = label?.trim() || profile?.trim() || childId
   return `Child agent: ${suffix}`
 }
 

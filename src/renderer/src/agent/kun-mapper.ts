@@ -228,6 +228,9 @@ function normalizeChildMetadata(
     parentTurnId: child.parentTurnId,
     childId: child.childId,
     ...(child.childLabel ? { childLabel: child.childLabel } : {}),
+    ...(child.childProfile ? { childProfile: child.childProfile } : {}),
+    ...(child.childModel ? { childModel: child.childModel } : {}),
+    ...(child.childToolPolicy ? { childToolPolicy: child.childToolPolicy } : {}),
     childStatus: child.childStatus,
     childSeq: child.childSeq
   }

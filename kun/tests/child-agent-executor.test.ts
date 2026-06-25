@@ -2,9 +2,13 @@ import { describe, expect, it } from 'vitest'
 
 import { CapabilityRegistry } from '../src/adapters/tool/capability-registry.js'
 import { LocalToolHost, buildDefaultLocalTools } from '../src/adapters/tool/local-tool-host.js'
+import { InMemoryEventBus } from '../src/adapters/in-memory-event-bus.js'
+import { InMemorySessionStore } from '../src/adapters/in-memory-session-store.js'
+import { InMemoryThreadStore } from '../src/adapters/in-memory-thread-store.js'
 import { createImmutablePrefix } from '../src/cache/immutable-prefix.js'
 import { createChildAgentExecutor } from '../src/delegation/child-agent-executor.js'
 import type { ModelClient, ModelRequest, ModelStreamChunk } from '../src/ports/model-client.js'
+import { RuntimeEventRecorder } from '../src/services/runtime-event-recorder.js'
 
 function model(chunks: ModelStreamChunk[], seen: ModelRequest[] = []): ModelClient {
   return {
@@ -141,6 +145,54 @@ describe('child agent executor', () => {
     expect(result).toMatchObject({ prefixReused: true, inheritedHistoryItems: 0 })
   })
 
+  it('does NOT fail the child when a tool call is rejected by its read-only policy', async () => {
+    // The child (read-only) calls `bash`, which its policy denies. That is a
+    // recoverable tool error (warning), not a fatal one: the loop hands the
+    // model an error result, the model adapts and the turn completes. The
+    // child run must report success, not "failed".
+    const registry = new CapabilityRegistry([{
+      id: 'builtin',
+      kind: 'built-in',
+      enabled: true,
+      available: true,
+      tools: buildDefaultLocalTools()
+    }])
+    let calls = 0
+    const recoveringModel: ModelClient = {
+      provider: 'child-test',
+      model: 'child-test',
+      async *stream(): AsyncIterable<ModelStreamChunk> {
+        calls += 1
+        if (calls === 1) {
+          yield { kind: 'tool_call_complete', callId: 'call_bash', toolName: 'bash', arguments: { command: 'ls' } }
+          yield { kind: 'completed', stopReason: 'tool_calls' }
+        } else {
+          yield { kind: 'assistant_text_delta', text: 'bash was denied, so here is my read-only summary' }
+          yield { kind: 'completed', stopReason: 'stop' }
+        }
+      }
+    }
+    const executor = createChildAgentExecutor({
+      model: recoveringModel,
+      toolHost: new LocalToolHost({ registry }),
+      prefix: createImmutablePrefix({ systemPrompt: 'child system' }),
+      defaultModel: 'child-test',
+      nowIso: () => '2026-06-03T00:00:00.000Z'
+    })
+
+    const result = await executor({
+      childId: 'child_rejected_tool',
+      parentThreadId: 'thr_parent',
+      parentTurnId: 'turn_parent',
+      prompt: 'Investigate the project',
+      toolPolicy: 'readOnly',
+      signal: new AbortController().signal
+    })
+
+    expect(calls).toBe(2)
+    expect(result.summary).toContain('read-only summary')
+  })
+
   it('threads the input providerId onto the child ModelRequest for routing', async () => {
     const seen: ModelRequest[] = []
     const executor = createChildAgentExecutor({
@@ -165,6 +217,53 @@ describe('child agent executor', () => {
     })
 
     expect(seen[0]?.providerId).toBe('minimax')
+  })
+
+  it('persists the child as a hidden side thread when shared stores are supplied', async () => {
+    const eventBus = new InMemoryEventBus()
+    const sessionStore = new InMemorySessionStore()
+    const threadStore = new InMemoryThreadStore()
+    const events = new RuntimeEventRecorder({
+      eventBus,
+      sessionStore,
+      allocateSeq: (threadId) => eventBus.allocateSeq(threadId),
+      nowIso: () => '2026-06-03T00:00:00.000Z'
+    })
+    const executor = createChildAgentExecutor({
+      model: model([
+        { kind: 'assistant_text_delta', text: 'child answer' },
+        { kind: 'completed', stopReason: 'stop' }
+      ]),
+      toolHost: new LocalToolHost({ registry: new CapabilityRegistry([]) }),
+      prefix: createImmutablePrefix({ systemPrompt: 'child system' }),
+      defaultModel: 'child-test',
+      nowIso: () => '2026-06-03T00:00:00.000Z',
+      sessionStore,
+      threadStore,
+      events
+    })
+
+    await executor({
+      childId: 'child_persisted',
+      parentThreadId: 'thr_parent',
+      parentTurnId: 'turn_parent',
+      profile: 'explore',
+      prompt: 'Investigate',
+      toolPolicy: 'readOnly',
+      signal: new AbortController().signal
+    })
+
+    // The child thread is queryable from the shared store, flagged `side` and
+    // linked to its parent so the GUI can load it but the sidebar hides it.
+    const persisted = await threadStore.get('child_persisted')
+    expect(persisted).not.toBeNull()
+    expect(persisted?.relation).toBe('side')
+    expect(persisted?.parentThreadId).toBe('thr_parent')
+    expect(persisted?.title).toContain('explore')
+
+    // The child's transcript persists too (loadable for the read-only viewer).
+    const items = await sessionStore.loadItems('child_persisted')
+    expect(items.some((item) => item.kind === 'assistant_text')).toBe(true)
   })
 
   it('gives an inherit child the parent agent full tool set (no forced read-only allowlist)', async () => {
@@ -339,5 +438,56 @@ describe('child agent executor', () => {
     })
 
     expect(seen[0]?.systemPrompt).toBe('BASE PROMPT\n\nYou are a careful reviewer.')
+  })
+
+  it('persists the child as a hidden side thread on the shared stores when provided', async () => {
+    const sessionStore = new InMemorySessionStore()
+    const threadStore = new InMemoryThreadStore()
+    const eventBus = new InMemoryEventBus()
+    const events = new RuntimeEventRecorder({
+      eventBus,
+      sessionStore,
+      allocateSeq: (threadId) => eventBus.allocateSeq(threadId),
+      nowIso: () => '2026-06-03T00:00:00.000Z'
+    })
+    const executor = createChildAgentExecutor({
+      model: model([
+        { kind: 'assistant_text_delta', text: 'persisted answer' },
+        { kind: 'completed', stopReason: 'stop' }
+      ]),
+      toolHost: new LocalToolHost({ registry: new CapabilityRegistry([]) }),
+      prefix: createImmutablePrefix({ systemPrompt: 'child system' }),
+      defaultModel: 'child-test',
+      sessionStore,
+      threadStore,
+      events,
+      nowIso: () => '2026-06-03T00:00:00.000Z'
+    })
+
+    await executor({
+      childId: 'child_persist',
+      parentThreadId: 'thr_parent',
+      parentTurnId: 'turn_parent',
+      profile: 'explore',
+      prompt: 'Investigate',
+      toolPolicy: 'readOnly',
+      signal: new AbortController().signal
+    })
+
+    // The child thread is persisted as a `side` branch of the parent. The
+    // `side` relation is what the thread store / ThreadService.list filter on
+    // to keep it out of the default (sidebar) list while leaving it loadable.
+    const thread = await threadStore.get('child_persist')
+    expect(thread).toMatchObject({ relation: 'side', parentThreadId: 'thr_parent' })
+
+    // The full session must live on the thread RECORD's turns/items — that is
+    // what `GET /threads/:id` (getThreadDetail → selectThread) reads to render
+    // the child's conversation when the user drills into it.
+    const recordItems = (thread?.turns ?? []).flatMap((turn) => turn.items)
+    const recordAssistantText = recordItems
+      .filter((item): item is Extract<typeof item, { kind: 'assistant_text' }> => item.kind === 'assistant_text')
+      .map((item) => item.text)
+      .join('')
+    expect(recordAssistantText).toContain('persisted answer')
   })
 })

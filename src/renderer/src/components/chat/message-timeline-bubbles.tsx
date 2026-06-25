@@ -865,9 +865,11 @@ function RuntimeMetaChips({
   const childLabel =
     typeof child?.childLabel === 'string' && child.childLabel.trim()
       ? child.childLabel.trim()
-      : typeof child?.childId === 'string'
-        ? child.childId
-        : ''
+      : typeof child?.childProfile === 'string' && child.childProfile.trim()
+        ? child.childProfile.trim()
+        : typeof child?.childId === 'string'
+          ? child.childId
+          : ''
   if (
     (hideAttachments || attachmentIds.length === 0) &&
     activeSkillIds.length === 0 &&

@@ -149,6 +149,10 @@ export type ChatState = {
   threadSearch: string
   showArchivedThreads: boolean
   activeThreadId: string | null
+  /** Relationship of the active thread (e.g. `side` for a subagent's own session). */
+  activeThreadRelation: 'primary' | 'fork' | 'side' | null
+  /** Parent thread of the active thread, when it is a `side`/`fork` branch. */
+  activeThreadParentId: string | null
   activeThreadGoal: ThreadGoal | null
   activeThreadTodos: ThreadTodoList | null
   blocks: ChatBlock[]

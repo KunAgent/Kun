@@ -42,6 +42,7 @@ import {
 import { Sidebar } from './chat/Sidebar'
 import { WorkbenchTopBar, type RightPanelMode } from './chat/WorkbenchTopBar'
 import { MessageTimeline } from './chat/MessageTimeline'
+import { SubagentReturnBar } from './chat/message-timeline-empty'
 import { IkunCameoLayer, KunCelebrationLayer } from './chat/AnimatedWorkLogo'
 import {
   FloatingComposer,
@@ -373,6 +374,8 @@ export function Workbench(): ReactElement {
     threadSearch,
     showArchivedThreads,
     activeThreadId,
+    activeThreadRelation,
+    activeThreadParentId,
     selectThread,
     createThread,
     blocks,
@@ -435,6 +438,8 @@ export function Workbench(): ReactElement {
       threadSearch: s.threadSearch,
       showArchivedThreads: s.showArchivedThreads,
       activeThreadId: s.activeThreadId,
+      activeThreadRelation: s.activeThreadRelation,
+      activeThreadParentId: s.activeThreadParentId,
       selectThread: s.selectThread,
       createThread: s.createThread,
       blocks: s.blocks,
@@ -2715,6 +2720,16 @@ export function Workbench(): ReactElement {
               {!focusModeEnabled ? <KunCelebrationLayer active={busy} suppressed={Boolean(error)} /> : null}
             </div>
             <div className="ds-no-drag flex shrink-0 justify-center px-2 pb-3 pt-0 sm:px-4 md:px-6 lg:px-8">
+              {activeThreadRelation === 'side' && activeThreadParentId ? (
+              <SubagentReturnBar
+                parentTitle={
+                  threads.find((thread) => thread.id === activeThreadParentId)?.title?.trim() ?? ''
+                }
+                onBack={() => {
+                  if (activeThreadParentId) void selectThread(activeThreadParentId)
+                }}
+              />
+              ) : (
               <FloatingComposer
                 input={input}
                 setInput={setInput}
@@ -2796,6 +2811,7 @@ export function Workbench(): ReactElement {
                   openSideConversationDraft()
                 }}
               />
+              )}
             </div>
             </div>
             {terminalOpen ? (

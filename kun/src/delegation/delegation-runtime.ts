@@ -64,6 +64,8 @@ export type ChildRunExecutor = (input: {
   parentThreadId: string
   parentTurnId: string
   label?: string
+  /** Resolved subagent profile id (e.g. `general`, `explore`); used for the child thread title. */
+  profile?: string
   prompt: string
   workspace?: string
   model?: string
@@ -179,6 +181,14 @@ export class DelegationRuntime {
      * after the parent turn finishes. Default: false (synchronous).
      */
     detach?: boolean
+    /**
+     * Invoked once, as soon as the child id is allocated (before the child
+     * finishes), so the caller can surface the id while the child is still
+     * running — e.g. the delegate_task tool emits a partial result so the GUI
+     * can offer "open session" mid-run. Carries the resolved profile id so the
+     * caller can keep showing the subagent type while it runs.
+     */
+    onStart?: (childId: string, profile?: string) => void
     signal: AbortSignal
   }): Promise<ChildRunRecord> {
     const config = this.options.config
@@ -235,6 +245,9 @@ export class DelegationRuntime {
     })
     await this.options.store.upsert(record)
     await this.recordChildEvent(record)
+    // Surface the child id immediately (both sync + detached paths) so the
+    // caller can show it while the child is still running.
+    input.onStart?.(record.id, profileName)
 
     if (input.detach) {
       // Spawn an independent signal so the parent turn's signal aborting
@@ -295,6 +308,7 @@ export class DelegationRuntime {
         parentThreadId: input.parentThreadId,
         parentTurnId: input.parentTurnId,
         ...(input.label ? { label: input.label } : {}),
+        ...(profileName ? { profile: profileName } : {}),
         prompt: input.prompt,
         workspace: input.workspace,
         model: resolvedModel,
@@ -397,6 +411,7 @@ export class DelegationRuntime {
         parentThreadId: args.parentThreadId,
         parentTurnId: args.parentTurnId,
         ...(args.label ? { label: args.label } : {}),
+        ...(args.profileName ? { profile: args.profileName } : {}),
         prompt: args.prompt,
         workspace: args.workspace,
         model: args.resolvedModel,

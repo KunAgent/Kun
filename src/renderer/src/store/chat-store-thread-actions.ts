@@ -411,10 +411,25 @@ export function createThreadActions(
         latestUserMessageId,
         turnDurationByUserId = {},
         usage: threadUsage,
+        relation: threadRelation,
+        parentThreadId: threadParentId,
+        model: threadModel,
         goal,
         todos
       } = await p.getThreadDetail(id)
-      const blocks = hydrateBlockModelLabels(id, rawBlocks)
+      // A subagent's `side` thread has no locally-stored per-turn model labels
+      // (it was never sent through the composer). Backfill the user blocks with
+      // the child thread's resolved model so the session shows "which model",
+      // matching the main conversation. Safe: a child runs on a single model.
+      const labeledBlocks =
+        threadRelation === 'side' && threadModel
+          ? rawBlocks.map((block) =>
+              block.kind === 'user' && !block.modelLabel
+                ? { ...block, modelLabel: threadModel }
+                : block
+            )
+          : rawBlocks
+      const blocks = hydrateBlockModelLabels(id, labeledBlocks)
       const busy = threadSnapshotLooksRunning(blocks, threadStatus)
       const currentTurnUserId = busy
         ? latestUserMessageId ?? findLatestUserBlockId(blocks)
@@ -426,6 +441,8 @@ export function createThreadActions(
         watchTurnCompletion: nextWatch,
         unreadThreadIds: nextUnread,
         activeThreadId: id,
+        activeThreadRelation: threadRelation ?? 'primary',
+        activeThreadParentId: threadParentId ?? null,
         activeThreadGoal: goal ?? null,
         activeThreadTodos: todos ?? null,
         blocks,
@@ -794,6 +811,10 @@ export function createThreadActions(
         }
         set((s) => ({
           activeThreadId: threadId,
+          // Freshly created threads are always primary — clear any side-session
+          // relation carried over from the previously active thread.
+          activeThreadRelation: 'primary',
+          activeThreadParentId: null,
           codeWorkspaceRoots: rememberCodeWorkspaceRoots(s.codeWorkspaceRoots, [workspaceRoot, createdThread?.workspace]),
           lastSeq: 0,
           inspectorSelectedId: null,

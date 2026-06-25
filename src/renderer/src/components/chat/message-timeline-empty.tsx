@@ -1,6 +1,6 @@
 import { Fragment, useState, type ReactElement } from 'react'
 import { useTranslation } from 'react-i18next'
-import { GitFork, RefreshCw, Settings } from 'lucide-react'
+import { Bot, CornerUpLeft, GitFork, RefreshCw, Settings } from 'lucide-react'
 import type { ClawImChannelV1 } from '@shared/app-settings'
 import { KunStateFigure } from './AnimatedWorkLogo'
 import { InitialSessionUsageHeatmap } from './InitialSessionUsageHeatmap'
@@ -201,6 +201,47 @@ export function ThreadForkBanner({ parentTitle }: { parentTitle: string }): Reac
         </span>
       </div>
     </div>
+  )
+}
+
+/**
+ * Bar shown where the composer normally sits when viewing a subagent's own
+ * (`relation: 'side'`) session. The subagent runs autonomously, so there is no
+ * input box — only a way back to the parent conversation that delegated it.
+ * These threads are hidden from the sidebar, so this is the route home.
+ */
+export function SubagentReturnBar({
+  parentTitle,
+  onBack
+}: {
+  parentTitle: string
+  onBack: () => void
+}): ReactElement {
+  const { t } = useTranslation('common')
+  return (
+    <button
+      type="button"
+      onClick={onBack}
+      className="group flex w-full max-w-4xl items-center gap-3 rounded-[16px] border border-accent/16 bg-accent/7 px-4 py-3 text-left text-ds-muted shadow-[0_14px_36px_rgba(59,130,216,0.05)] transition hover:bg-accent/12"
+    >
+      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[12px] bg-accent/12 text-accent">
+        <Bot className="h-4 w-4" strokeWidth={1.85} />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-[13.5px] font-semibold text-ds-ink">
+          {t('subagentSessionBannerTitle')}
+        </span>
+        <span className="mt-1 block truncate text-[12.5px] leading-5 text-ds-muted">
+          {parentTitle
+            ? t('subagentSessionBannerSub', { title: parentTitle })
+            : t('subagentSessionBannerSubUnknown')}
+        </span>
+      </span>
+      <span className="flex shrink-0 items-center gap-1.5 rounded-[10px] bg-accent/10 px-2.5 py-1.5 text-[12px] font-semibold text-accent transition group-hover:bg-accent/15">
+        <CornerUpLeft className="h-3.5 w-3.5" strokeWidth={2} />
+        {t('subagentSessionBannerBack')}
+      </span>
+    </button>
   )
 }
 

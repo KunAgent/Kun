@@ -36,7 +36,7 @@ export function buildDelegationToolProviders(runtime: DelegationRuntime | undefi
           additionalProperties: false
         },
         policy: 'auto',
-        execute: async (args, context) => {
+        execute: async (args, context, onUpdate) => {
           const prompt = typeof args.prompt === 'string' ? args.prompt.trim() : ''
           if (!prompt) return { output: { error: 'prompt is required' }, isError: true }
           const record = await runtime.runChild({
@@ -48,6 +48,15 @@ export function buildDelegationToolProviders(runtime: DelegationRuntime | undefi
             ...(typeof args.model === 'string' ? { model: args.model } : {}),
             ...(typeof args.profile === 'string' ? { profile: args.profile } : {}),
             ...(args.detach === true ? { detach: true } : {}),
+            // Emit a partial result the moment the child id exists, so the GUI
+            // can offer "open session" (and stream the child live) while the
+            // child is still running — not only after it completes.
+            onStart: (childId, profile) => {
+              void onUpdate?.({
+                output: { childId, status: 'running', ...(profile ? { profile } : {}) },
+                isError: false
+              })
+            },
             signal: context.abortSignal
           })
           return {

@@ -43,6 +43,20 @@ describe('DelegationRuntime', () => {
     expect(externalUsage[0]).toMatchObject({ totalTokens: 3 })
   })
 
+  it('fires onStart with the child id (so the tool can surface it mid-run)', async () => {
+    const runtime = createRuntime({})
+    const started: Array<{ childId: string; profile?: string }> = []
+    const result = await runtime.runChild({
+      parentThreadId: 'thr_1',
+      parentTurnId: 'turn_1',
+      prompt: 'Research B',
+      onStart: (childId, profile) => started.push({ childId, profile }),
+      signal: new AbortController().signal
+    })
+    expect(started).toHaveLength(1)
+    expect(started[0]?.childId).toBe(result.id)
+  })
+
   it('denies disabled delegation and exhausted child budgets', async () => {
     const disabled = createRuntime({ enabled: false })
     await expect(disabled.runChild({

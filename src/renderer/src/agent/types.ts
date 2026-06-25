@@ -53,6 +53,12 @@ export type RuntimeChildMetadata = {
   parentTurnId: string
   childId: string
   childLabel?: string
+  /** Subagent profile id (e.g. `general`, `explore`) resolved by the runtime. */
+  childProfile?: string
+  /** Model override the child ran under, when one was resolved. */
+  childModel?: string
+  /** Tool policy applied to the child run. */
+  childToolPolicy?: 'readOnly' | 'inherit'
   childStatus: 'queued' | 'running' | 'completed' | 'failed' | 'aborted'
   childSeq: number
 }
@@ -450,6 +456,9 @@ export interface AgentProvider {
     latestUserMessageId?: string
     turnDurationByUserId?: Record<string, number>
     usage?: ThreadUsageSnapshot
+    relation?: 'primary' | 'fork' | 'side'
+    parentThreadId?: string
+    model?: string
     goal?: ThreadGoal | null
     todos?: ThreadTodoList | null
   }>
