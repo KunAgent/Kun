@@ -1664,7 +1664,7 @@ function SidebarActionDialog({
     >
       <div
         onMouseDown={(event) => event.stopPropagation()}
-        className="w-full max-w-[520px] rounded-[26px] border border-ds-border bg-ds-card/96 p-6 shadow-[0_26px_82px_rgba(20,47,95,0.24)] backdrop-blur-xl dark:bg-ds-card"
+        className="w-full max-w-[520px] rounded-[26px] border border-ds-border bg-ds-elevated p-6 shadow-[0_26px_82px_rgba(20,47,95,0.24)] backdrop-blur-xl"
       >
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
@@ -1686,7 +1686,7 @@ function SidebarActionDialog({
             <X className="h-4 w-4" strokeWidth={1.9} />
           </button>
         </div>
-        <p className="mt-4 rounded-2xl border border-ds-border-muted bg-ds-main/55 px-3.5 py-3 text-[13px] leading-6 text-ds-muted">
+        <p className="mt-4 rounded-2xl border border-ds-border-muted bg-ds-main px-3.5 py-3 text-[13px] leading-6 text-ds-muted">
           {state.detail}
         </p>
         <div className="mt-5 flex justify-end gap-2">
