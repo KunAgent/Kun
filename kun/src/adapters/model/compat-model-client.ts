@@ -150,10 +150,6 @@ const DEFAULT_STREAM_IDLE_TIMEOUT_MS = 45_000
 // more headroom; a per-model `maxOutputTokens` capability still overrides both.
 const DEFAULT_MESSAGES_MAX_TOKENS = 8192
 const DEFAULT_MESSAGES_REASONING_MAX_TOKENS = 32_768
-// Claude Pro/Max OAuth tokens (sk-ant-oat...) are only accepted by Anthropic
-// when the request presents as the Claude Code client. The first system block
-// must be exactly this identity line; see buildAnthropicMessagesRequestBody.
-const CLAUDE_CODE_SYSTEM_IDENTITY = "You are Claude Code, Anthropic's official CLI for Claude."
 
 /**
  * Multi-provider HTTP model client.
@@ -426,12 +422,7 @@ export class CompatModelClient implements ModelClient {
     if (this.config.apiKey) {
       if (endpointFormat === 'messages') {
         headers.Authorization = `Bearer ${this.config.apiKey}`
-        // Claude Pro/Max OAuth tokens authenticate via the Bearer only; also
-        // sending x-api-key makes Anthropic validate the token as a console API
-        // key and reject it. Plain API keys still go through x-api-key.
-        if (!this.isAnthropicOAuthToken()) {
-          headers['x-api-key'] = this.config.apiKey
-        }
+        headers['x-api-key'] = this.config.apiKey
         headers['anthropic-version'] = '2023-06-01'
       } else {
         headers.Authorization = `Bearer ${this.config.apiKey}`
@@ -620,14 +611,6 @@ export class CompatModelClient implements ModelClient {
     return this.config.baseUrl.includes('chatgpt.com/backend-api/codex')
   }
 
-  // Claude Pro/Max OAuth access tokens are prefixed `sk-ant-oat`. They need the
-  // Claude Code disguise (Bearer-only auth + identity system block); plain
-  // `sk-ant-api` console keys do not. Self-contained on purpose: this package
-  // can't import the GUI's anthropic-auth module.
-  private isAnthropicOAuthToken(): boolean {
-    return this.config.apiKey.trim().startsWith('sk-ant-oat')
-  }
-
   private buildAnthropicMessagesRequestBody(
     request: ModelRequest,
     model: string,
@@ -667,12 +650,6 @@ export class CompatModelClient implements ModelClient {
     const systemBlocks: AnthropicContentBlock[] = systemText
       ? [{ type: 'text', text: systemText, cache_control: { type: 'ephemeral' } }]
       : []
-    // Claude Pro/Max OAuth requires presenting as the Claude Code client: the
-    // first system block must be the exact identity line, ahead of our own
-    // system prompt. Non-OAuth (API-key) requests are unaffected.
-    if (this.isAnthropicOAuthToken()) {
-      systemBlocks.unshift({ type: 'text', text: CLAUDE_CODE_SYSTEM_IDENTITY })
-    }
     if (systemBlocks.length > 0) {
       body.system = systemBlocks
     }

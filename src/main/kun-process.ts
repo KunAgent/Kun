@@ -25,7 +25,6 @@ import {
   resolveKunExecutable
 } from './resolve-kun-binary'
 import { isCodexOAuthCredentials, parseCodexCredentials, type CodexOAuthCredentials } from './codex-auth'
-import { isAnthropicOAuthCredentials, parseAnthropicCredentials } from './anthropic-auth'
 import {
   KunConfigSchema,
   KunServeConfigSchema,
@@ -59,6 +58,7 @@ import {
 } from './claw-schedule-mcp-config'
 import { defaultKunDataDir } from './runtime/kun-adapter'
 import { isKunHealthResponseBody } from './kun-health'
+import { resolveClaudeBinary } from './agent-sdk-installer'
 import { appendManagedLogLine } from './logger'
 import {
   comparableSkillRootPath,
@@ -386,10 +386,22 @@ async function startKunChildOnce(
   // credentials; unwrap to the bare access token so the default client sends a
   // valid Bearer (the Codex headers are written to serve.headers in config).
   const defaultClientApiKey = resolveOAuthDefaultClient(runtime.apiKey).apiKey
+  // When the runtime's own (default) provider is the Claude subscription, tell
+  // the runtime so its dispatch routes default-provider turns (thread.providerId
+  // absent or equal to it) to the embedded SDK instead of the HTTP default.
+  const activeProviderKind = (getModelProviderSettings(settings).providers as ModelProviderProfileV1[]).find(
+    (provider) => provider.id?.trim() === getKunRuntimeSettings(settings).providerId.trim()
+  )?.kind
+  // Point the runtime at the on-demand Claude Code binary (the ~222MB binary is
+  // not bundled; it's downloaded into userData). Absent in dev when it's still
+  // resolvable from kun/node_modules — the SDK auto-resolves it there.
+  const claudeBinary = resolveClaudeBinary(app.getPath('userData'), [join(appRoot(), 'kun')])
   const childEnv: NodeJS.ProcessEnv = {
     ...process.env,
     KUN_RUNTIME_TOKEN: runtime.runtimeToken,
-    DEEPSEEK_API_KEY: defaultClientApiKey || process.env.DEEPSEEK_API_KEY || ''
+    DEEPSEEK_API_KEY: defaultClientApiKey || process.env.DEEPSEEK_API_KEY || '',
+    ...(activeProviderKind === 'agent-sdk' ? { KUN_RUNTIME_PROVIDER_KIND: 'agent-sdk' } : {}),
+    ...(claudeBinary ? { KUN_CLAUDE_BINARY: claudeBinary } : {})
   }
   if (!runAsElectron) childEnv.ELECTRON_RUN_AS_NODE = '1'
   else delete childEnv.ELECTRON_RUN_AS_NODE
@@ -679,7 +691,7 @@ function uniqueStrings(values: string[]): string[] {
   return out
 }
 
-async function readGuiManagedMcpServers(path: string): Promise<Record<string, unknown>> {
+async function readGuiManagedMcpServers(path: string): Promise<Record<string, Record<string, unknown>>> {
   const parsed = await readJsonObjectIfExists(path)
   if (!parsed) return {}
 
@@ -714,6 +726,7 @@ function normalizeGuiManagedMcpServer(server: unknown): Record<string, unknown> 
   const transport = normalizeMcpTransport(raw.transport, command, url)
   if (!transport) return null
 
+  const workspaceRoots = stringArrayValue(raw.workspaceRoots)
   const trustedWorkspaceRoots = stringArrayValue(raw.trustedWorkspaceRoots)
   const trustScope = normalizeMcpTrustScope(raw.trustScope, trustedWorkspaceRoots)
   if (trustScope === 'workspace' && trustedWorkspaceRoots.length === 0) return null
@@ -728,6 +741,7 @@ function normalizeGuiManagedMcpServer(server: unknown): Record<string, unknown> 
     ...(url ? { url } : {}),
     ...(Object.keys(headers).length > 0 ? { headers } : {}),
     ...(Object.keys(env).length > 0 ? { env } : {}),
+    ...(workspaceRoots.length > 0 ? { workspaceRoots } : {}),
     trustScope,
     ...(trustedWorkspaceRoots.length > 0 ? { trustedWorkspaceRoots } : {}),
     ...(timeoutMs ? { timeoutMs } : {})
@@ -822,6 +836,7 @@ function modelConfigProfilesFromProviderProfiles(
     out[trimmed] = {
       ...(profile.aliases?.length ? { aliases: profile.aliases } : {}),
       ...(profile.contextWindowTokens ? { contextWindowTokens: profile.contextWindowTokens } : {}),
+      ...(profile.maxOutputTokens ? { maxOutputTokens: profile.maxOutputTokens } : {}),
       inputModalities: profile.inputModalities,
       outputModalities: profile.outputModalities,
       supportsToolCalling: profile.supportsToolCalling,
@@ -876,40 +891,16 @@ function codexRequestHeaders(creds: CodexOAuthCredentials): Record<string, strin
   }
 }
 
-// User-Agent version reported to Anthropic's OAuth endpoint. Pairing the
-// claude-cli UA with the oauth/claude-code betas is what lets a Claude Pro/Max
-// subscription token through; bump to track Claude Code if Anthropic starts
-// version-gating the client.
-const CLAUDE_CODE_UA_VERSION = '2.1.75'
-
-/**
- * HTTP headers Anthropic requires alongside a Claude Pro/Max OAuth Bearer
- * token so the request is accepted as the Claude Code client. `anthropic-beta`
- * MUST carry oauth + claude-code; the messages client itself sets
- * anthropic-version and the Authorization Bearer (see compat-model-client).
- * These don't depend on the credentials, but the signature mirrors
- * codexRequestHeaders for symmetry at the call sites.
- */
-function anthropicRequestHeaders(): Record<string, string> {
-  return {
-    'anthropic-beta': 'oauth-2025-04-20,claude-code-20250219,fine-grained-tool-streaming-2025-05-14',
-    'User-Agent': `claude-cli/${CLAUDE_CODE_UA_VERSION}`,
-    'x-app': 'cli'
-  }
-}
-
 /**
  * Resolve the default-client API key + headers for the active runtime
- * provider. Codex and Anthropic store OAuth credentials JSON-encoded in the
- * apiKey field: unwrap to the bare access token (used as the Bearer) and emit
- * the provider's required headers. Plain API keys pass through untouched.
+ * provider. Codex stores OAuth credentials JSON-encoded in the apiKey field:
+ * unwrap to the bare access token (used as the Bearer) and emit the provider's
+ * required headers. Plain API keys pass through untouched.
  */
 function resolveOAuthDefaultClient(rawApiKey: string): { apiKey: string; headers?: Record<string, string> } {
   const key = rawApiKey.trim()
   const codex = isCodexOAuthCredentials(key) ? parseCodexCredentials(key) : null
   if (codex) return { apiKey: codex.accessToken, headers: codexRequestHeaders(codex) }
-  const anthropic = isAnthropicOAuthCredentials(key) ? parseAnthropicCredentials(key) : null
-  if (anthropic) return { apiKey: anthropic.accessToken, headers: anthropicRequestHeaders() }
   return { apiKey: key }
 }
 
@@ -920,16 +911,24 @@ function providersConfigForRuntime(settings: AppSettingsV1): Record<string, Reco
   for (const provider of getModelProviderSettings(settings).providers as ModelProviderProfileV1[]) {
     const id = provider.id?.trim()
     const baseUrl = provider.baseUrl?.trim()
-    if (!id || !baseUrl) continue
+    const isAgentSdk = provider.kind === 'agent-sdk'
+    if (!id) continue
+    // agent-sdk providers carry no usable HTTP endpoint; everyone else needs one.
+    if (!baseUrl && !isAgentSdk) continue
     // The runtime's own provider is already wired via the default client
-    // (DEEPSEEK_API_KEY + serve.headers); skipping it keeps the map smaller
-    // and avoids paying twice for one provider that happens to be active.
-    if (id === runtimeProviderId) continue
+    // (DEEPSEEK_API_KEY + serve.headers); we normally skip it here — EXCEPT
+    // agent-sdk: its turns must be routable to the embedded SDK via
+    // `serve.providers`, otherwise they fall back to the HTTP default client and
+    // 401 on api.anthropic.com (invalid x-api-key).
+    if (id === runtimeProviderId && !isAgentSdk) continue
     const rawApiKey = provider.apiKey?.trim() ?? ''
+    // Codex stores JSON OAuth creds in apiKey; unwrap to the bare token + the
+    // headers the backend requires. Plain keys (and agent-sdk tokens) pass through.
     const resolved = resolveOAuthDefaultClient(rawApiKey)
     out[id] = {
       apiKey: resolved.apiKey,
-      baseUrl,
+      ...(baseUrl ? { baseUrl } : {}),
+      ...(provider.kind ? { kind: provider.kind } : {}),
       ...(provider.endpointFormat ? { endpointFormat: provider.endpointFormat } : {}),
       ...(proxyUrl ? { modelProxyUrl: proxyUrl } : {}),
       ...(resolved.headers ? { headers: resolved.headers } : {})

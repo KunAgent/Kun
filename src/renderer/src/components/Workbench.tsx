@@ -422,6 +422,7 @@ export function Workbench(): ReactElement {
     activeThreadParentId,
     selectThread,
     createThread,
+    createConversation,
     blocks,
     liveReasoning,
     liveAssistant,
@@ -489,6 +490,7 @@ export function Workbench(): ReactElement {
       activeThreadParentId: s.activeThreadParentId,
       selectThread: s.selectThread,
       createThread: s.createThread,
+      createConversation: s.createConversation,
       blocks: s.blocks,
       liveReasoning: s.liveReasoning,
       liveAssistant: s.liveAssistant,
@@ -1367,6 +1369,10 @@ export function Workbench(): ReactElement {
 
   const toggleFileTreeSidePanel = (): void => {
     setFileTreeSidePanelOpen((open) => !open)
+  }
+
+  const openFileTreeSidePanel = (): void => {
+    setFileTreeSidePanelOpen(true)
   }
 
   useEffect(() => {
@@ -2860,6 +2866,13 @@ export function Workbench(): ReactElement {
     if (useWorktreePool) setUseWorktreePool(false)
   }
 
+  const startNewConversation = (): void => {
+    if (activeSddDraft) dismissActiveSddDraft({ closeAssistant: true })
+    setConnectPhoneSidebarOpen(false)
+    setRoute('chat')
+    void createConversation()
+  }
+
   const openCodeMode = (): void => {
     setConnectPhoneSidebarOpen(false)
     void openCode()
@@ -3355,6 +3368,7 @@ export function Workbench(): ReactElement {
               onDesignOpen={openDesignMode}
               onScheduleOpen={openScheduleView}
               onWorkflowOpen={openWorkflowView}
+              onNewConversation={startNewConversation}
             />
             )}
           </div>
@@ -3652,6 +3666,7 @@ export function Workbench(): ReactElement {
                 onPasteClipboardImage={(options) => void handlePasteClipboardImage(options)}
                 onRemoveAttachment={removeComposerAttachment}
                 onAddFileReference={addComposerFileReference}
+                onOpenFileReferencePicker={openFileTreeSidePanel}
                 onRemoveFileReference={removeComposerFileReference}
                 queuedMessages={queuedMessages}
                 onRemoveQueuedMessage={removeQueuedMessage}

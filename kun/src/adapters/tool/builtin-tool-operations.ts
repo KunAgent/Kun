@@ -23,6 +23,7 @@ import {
   resolveExecutable,
   shellCommandArgs,
   shellRuntimeInfo,
+  shellSpawnEnv,
   spawnCapture,
   terminateSpawnTree,
   waitForSpawnExit
@@ -136,7 +137,7 @@ export function createLocalBashOperations(): BashLocalToolOperations {
       const { shell, args, name } = shellRuntimeInfo()
       const child = spawn(shell, shellCommandArgs({ shell, args }, command), {
         cwd,
-        env: process.env,
+        env: shellSpawnEnv(),
         detached: process.platform !== 'win32',
         stdio: ['ignore', 'pipe', 'pipe'],
         windowsHide: true

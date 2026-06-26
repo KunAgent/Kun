@@ -1,5 +1,16 @@
-import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, Notification, powerSaveBlocker, Tray } from 'electron'
-import { existsSync } from 'node:fs'
+import {
+  app,
+  BrowserWindow,
+  dialog,
+  ipcMain,
+  Menu,
+  nativeImage,
+  Notification,
+  powerSaveBlocker,
+  Tray,
+  type ContextMenuParams,
+  type MenuItemConstructorOptions
+} from 'electron'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -14,6 +25,8 @@ import { createAppIcon, pickTrayIcon, prepareTrayIcon } from './app-icon'
 import { buildTrayMenuTemplate, parseTrayThreads, type TrayThreadSummary } from './tray-session-menu'
 import { configureLinuxWaylandImeSwitches } from './app-command-line'
 import { configureAppIdentity } from './app-identity'
+import { shouldStartHidden, syncLoginItemSettings } from './desktop-behavior'
+import { resolveLogDirectory, resolvePreloadPath } from './main-paths'
 import { runLegacyKunDataMigration } from './legacy-data-migration'
 import {
   applyKunRuntimePatch,
@@ -62,7 +75,6 @@ import {
 } from './kun-process'
 import { RestartBudget, type KunRuntimeStatus } from './kun-runtime-supervisor'
 import { configureLogger, logError, logWarn, pruneOnStartup } from './logger'
-import { createAnthropicTokenRefresher } from './anthropic-token-refresh'
 import { cleanupUnusedGitCheckpointsIfDue } from './services/git-checkpoint-service'
 import { createClawRuntime, type ClawRuntime } from './claw-runtime'
 import { createScheduleRuntime, type ScheduleRuntime } from './schedule-runtime'
@@ -100,7 +112,6 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 // 的 appId 一致才能让 Windows 通知 / 任务栏分组在升级前后连续,而
 // appId 因为 NSIS 升级 GUID 与 macOS 更新签名校验的原因永远不改。
 const APP_USER_MODEL_ID = 'com.xingyuzhong.deepseekgui'
-const HIDDEN_START_ARG = '--hidden'
 const startupTraceEnabled =
   process.env.KUN_STARTUP_TRACE === '1' || process.env.DEEPSEEK_GUI_STARTUP_TRACE === '1'
 const startupTraceStart = Date.now()
@@ -132,16 +143,6 @@ function syncWeixinBridgeRuntime(settings: AppSettingsV1): void {
 
 const runningClawScheduleMcpServer =
   process.argv.includes('--gui-schedule-mcp-server') || process.argv.includes('--claw-schedule-mcp-server')
-
-function resolveLogDirectory(): string {
-  return join(app.getPath('userData'), 'logs')
-}
-
-function resolvePreloadPath(): string {
-  const cjsPath = join(__dirname, '../preload/index.cjs')
-  if (existsSync(cjsPath)) return cjsPath
-  return join(__dirname, '../preload/index.mjs')
-}
 
 function getClawScheduleMcpLaunchConfig(): ClawScheduleMcpLaunchConfig {
   return {
@@ -415,33 +416,6 @@ function windowCloseLabels(locale: AppSettingsV1['locale']): {
   }
 }
 
-function shouldStartHidden(settings: AppSettingsV1): boolean {
-  return (
-    process.platform === 'win32' &&
-    settings.appBehavior.openAtLogin &&
-    settings.appBehavior.startMinimized &&
-    process.argv.includes(HIDDEN_START_ARG)
-  )
-}
-
-function syncLoginItemSettings(settings: AppSettingsV1): void {
-  if (process.platform !== 'win32' && process.platform !== 'darwin') return
-  const behavior = settings.appBehavior
-  try {
-    app.setLoginItemSettings({
-      openAtLogin: behavior.openAtLogin,
-      args:
-        process.platform === 'win32' && behavior.openAtLogin && behavior.startMinimized
-          ? [HIDDEN_START_ARG]
-          : []
-    })
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
-    console.warn('[kun-gui] failed to update login item settings:', error)
-    logWarn('desktop-behavior', 'Failed to update login item settings.', { message })
-  }
-}
-
 function revealMainWindow(): void {
   if (!mainWindow || mainWindow.isDestroyed()) {
     createWindow()
@@ -464,6 +438,38 @@ function dispatchTrayAction(action: TrayActionPayload): void {
   } else {
     send()
   }
+}
+
+function showRendererContextMenu(window: BrowserWindow, params: ContextMenuParams): void {
+  const template: MenuItemConstructorOptions[] = []
+  const hasSelection = params.selectionText.trim().length > 0
+  if (params.isEditable) {
+    template.push(
+      { role: 'undo', enabled: params.editFlags.canUndo },
+      { role: 'redo', enabled: params.editFlags.canRedo },
+      { type: 'separator' },
+      { role: 'cut', enabled: params.editFlags.canCut },
+      { role: 'copy', enabled: params.editFlags.canCopy || hasSelection },
+      { role: 'paste', enabled: params.editFlags.canPaste },
+      { type: 'separator' },
+      { role: 'selectAll', enabled: params.editFlags.canSelectAll }
+    )
+  } else if (hasSelection) {
+    template.push(
+      { role: 'copy', enabled: true },
+      { type: 'separator' },
+      { role: 'selectAll' }
+    )
+  }
+  if (!app.isPackaged) {
+    if (template.length > 0) template.push({ type: 'separator' })
+    template.push({
+      label: 'Inspect Element',
+      click: () => window.webContents.inspectElement(params.x, params.y)
+    })
+  }
+  if (template.length === 0) return
+  Menu.buildFromTemplate(template).popup({ window, x: params.x, y: params.y })
 }
 
 function quitFromTray(): void {
@@ -1150,7 +1156,7 @@ async function restartRuntimeOnce(settings: AppSettingsV1): Promise<void> {
 
 function createWindow(options: { suppressInitialShow?: boolean } = {}): void {
   traceStartup('createWindow:start')
-  const preloadPath = resolvePreloadPath()
+  const preloadPath = resolvePreloadPath(__dirname)
   const usesDesktopTitleBar = process.platform === 'win32' || process.platform === 'linux'
   mainWindow = new BrowserWindow({
     width: 1280,
@@ -1179,6 +1185,12 @@ function createWindow(options: { suppressInitialShow?: boolean } = {}): void {
     const message = error instanceof Error ? error.message : String(error)
     console.error(`[kun-gui] failed to load preload ${preloadPath}:`, error)
     logError('preload', 'Failed to load preload script', { preloadPath, message })
+  })
+  mainWindow.webContents.on('context-menu', (event, params) => {
+    event.preventDefault()
+    const window = mainWindow
+    if (!window || window.isDestroyed()) return
+    showRendererContextMenu(window, params)
   })
   const showWindow = (): void => {
     if (options.suppressInitialShow) return
@@ -1500,7 +1512,7 @@ app.whenReady().then(async () => {
     console.error('[claw-schedule-mcp] failed to sync config on startup:', error)
   })
 
-  logDir = resolveLogDirectory()
+  logDir = resolveLogDirectory(app)
   configureLogger({
     dir: logDir,
     enabled: initial.log.enabled,
@@ -1648,7 +1660,7 @@ app.whenReady().then(async () => {
     getAppVersion: () => app.getVersion(),
     readGuiUpdateState,
     loadGuiUpdaterModule,
-    resolveLogDirectory,
+    resolveLogDirectory: () => resolveLogDirectory(app),
     logError
   })
 
@@ -1657,15 +1669,6 @@ app.whenReady().then(async () => {
   })
 
   registerRuntimeSseIpc({ ipcMain, store, ensureRuntime, logError })
-
-  // Keep Claude Pro/Max OAuth tokens fresh (they expire ~hourly). Refreshes
-  // ahead of expiry and re-persists via applySettingsPatch, which restarts the
-  // runtime onto the new Bearer. The timer is unref'd so it never blocks quit.
-  createAnthropicTokenRefresher({
-    load: () => store.load(),
-    applyPatch: applySettingsPatch,
-    log: (message, extra) => logWarn('anthropic-token-refresh', message, extra)
-  }).start()
 
   registerTerminalPtyIpc({
     ipcMain,

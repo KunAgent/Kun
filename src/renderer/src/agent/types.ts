@@ -300,6 +300,13 @@ export type ChatBlock =
       status: 'pending' | 'submitted' | 'cancelled' | 'error'
       answers?: UserInputAnswer[]
       errorMessage?: string
+      /**
+       * True only for a request the live runtime is currently awaiting (set by
+       * the `onUserInput` stream event). Historical blocks rehydrated from a
+       * finished thread never carry it, so a stale `pending` request reopened
+       * from history is not re-surfaced as an actionable prompt (issue #606).
+       */
+      live?: boolean
     }
 
 export type ApprovalRequestPayload = {

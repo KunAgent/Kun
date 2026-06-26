@@ -68,6 +68,7 @@ function settings(): AppSettingsV1 {
       }
     },
     workspaceRoot: '/tmp/workspace',
+    conversationWorkspaceRoot: '~/Documents/Kun',
     log: { enabled: false, retentionDays: 7 },
     checkpointCleanup: { enabled: false, intervalDays: 3 },
     notifications: { turnComplete: true },
@@ -107,7 +108,7 @@ describe('model provider settings', () => {
 
     expect(provider.proxy).toEqual({
       enabled: true,
-      url: ' socks5://127.0.0.1:1080 '
+      url: 'socks5://127.0.0.1:1080'
     })
 
     const state = settings()
@@ -115,7 +116,7 @@ describe('model provider settings', () => {
     expect(resolveModelProviderProxyUrl(state)).toBe('socks5://127.0.0.1:1080')
   })
 
-  it('resolves empty for invalid proxy URLs even when enabled', () => {
+  it('keeps the raw proxy URL in storage but refuses to apply invalid protocols', () => {
     const provider = normalizeModelProviderSettings({
       proxy: {
         enabled: true,
@@ -123,14 +124,39 @@ describe('model provider settings', () => {
       }
     })
 
+    // Storage keeps exactly what the user typed (so editing is never destroyed)…
     expect(provider.proxy).toEqual({
       enabled: true,
       url: 'ftp://127.0.0.1:2121'
     })
 
+    // …but an unsupported proxy protocol is not applied to outbound requests.
     const state = settings()
     state.provider.proxy = provider.proxy
     expect(resolveModelProviderProxyUrl(state)).toBe('')
+  })
+
+  it('does not blank partial proxy URLs while typing (regression for #600)', () => {
+    // Intermediate values as the user types "http://127.0.0.1:7890"; none of
+    // them may be wiped to '' by the per-keystroke normalizer.
+    for (const partial of ['h', 'http:', 'http://127.0.0.1', 'http://127.0.0.1:78']) {
+      const provider = normalizeModelProviderSettings({ proxy: { enabled: true, url: partial } })
+      expect(provider.proxy.url).toBe(partial)
+      expect(provider.proxy.enabled).toBe(true)
+    }
+
+    // A completed URL applies cleanly; a port is optional.
+    const withPort = settings()
+    withPort.provider.proxy = normalizeModelProviderSettings({
+      proxy: { enabled: true, url: 'http://127.0.0.1:7890' }
+    }).proxy
+    expect(resolveModelProviderProxyUrl(withPort)).toBe('http://127.0.0.1:7890/')
+
+    const noPort = settings()
+    noPort.provider.proxy = normalizeModelProviderSettings({
+      proxy: { enabled: true, url: 'http://proxy.lan' }
+    }).proxy
+    expect(resolveModelProviderProxyUrl(noPort)).toBe('http://proxy.lan/')
   })
 
   it('keeps legacy Kun runtime credential overrides only when no provider is selected', () => {
@@ -177,6 +203,32 @@ describe('model provider settings', () => {
     )
 
     expect(modelProviderModelProfilesForSettings(state)['custom-model'].contextWindowTokens).toBe(128_000)
+  })
+
+  it('preserves per-model max output tokens in custom provider profiles', () => {
+    const normalized = normalizeModelProviderSettings({
+      providers: [{
+        id: 'custom',
+        name: 'Custom',
+        apiKey: 'sk-custom',
+        baseUrl: 'https://custom.example/v1',
+        endpointFormat: 'chat_completions',
+        models: ['writer'],
+        modelProfiles: {
+          writer: {
+            contextWindowTokens: 256_000,
+            maxOutputTokens: 32_000,
+            inputModalities: ['text'],
+            outputModalities: ['text'],
+            supportsToolCalling: true,
+            messageParts: ['text']
+          }
+        }
+      }]
+    })
+
+    const custom = normalized.providers.find((provider) => provider.id === 'custom')
+    expect(custom?.modelProfiles.writer.maxOutputTokens).toBe(32_000)
   })
 
   it('creates Xiaomi and MiniMax provider presets for Kun runtime profiles', () => {

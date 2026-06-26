@@ -126,6 +126,10 @@ module.exports = {
     'kun/package.json',
     'kun/package-lock.json',
     'kun/node_modules/**/*',
+    // The Agent SDK ships a ~222MB per-platform Claude Code binary as an optional
+    // dep; do NOT bundle it into the installer. It's downloaded on demand into the
+    // user-data dir (see src/main/agent-sdk-installer.ts). The small SDK JS stays.
+    '!kun/node_modules/@anthropic-ai/claude-agent-sdk-*/**',
     '!**/*.map',
     '!**/*.d.ts',
     '!**/*.ts',

@@ -34,4 +34,17 @@ describe('WorkspaceProjectPicker options', () => {
     ])
     expect(options.filter((option) => option.label === 'Kook-VoiceShop-Bot')).toHaveLength(1)
   })
+
+  it('resolves worktree roots to their source project without a registry entry', () => {
+    const projectPath = '/Users/zxy/code/Kook-VoiceShop-Bot'
+    const worktreePath = '/Users/zxy/.kun/worktrees/ab12/Kook-VoiceShop-Bot'
+    const { currentRoot, options } = buildWorkspaceProjectPickerOptions({
+      currentWorkspaceRoot: worktreePath,
+      workspaceRoots: [projectPath, worktreePath],
+      threadWorktrees: {}
+    })
+
+    expect(currentRoot).toBe(projectPath)
+    expect(options.map((option) => option.root)).toEqual([projectPath])
+  })
 })

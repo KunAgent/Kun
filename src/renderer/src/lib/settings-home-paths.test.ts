@@ -108,6 +108,7 @@ function settings(): AppSettingsV1 {
       }
     },
     workspaceRoot: '~/.kun/default_workspace',
+    conversationWorkspaceRoot: '~/Documents/Kun',
     log: { enabled: true, retentionDays: 2 },
     checkpointCleanup: { enabled: false, intervalDays: 3 },
     notifications: { turnComplete: true },
@@ -187,6 +188,7 @@ describe('settings home paths', () => {
     const expanded = expandSettingsHomePathsForUse(settings(), '/Users/mothra', 'darwin')
 
     expect(expanded.workspaceRoot).toBe('/Users/mothra/.kun/default_workspace')
+    expect(expanded.conversationWorkspaceRoot).toBe('/Users/mothra/Documents/Kun')
     expect(expanded.agents.kun.binaryPath).toBe('/Users/mothra/bin/kun')
     expect(expanded.agents.kun.dataDir).toBe('/Users/mothra/.kun/data')
     expect(expanded.agents.kun.storage.sqlitePath).toBe('/Users/mothra/Library/Application Support/Kun/kun.sqlite3')

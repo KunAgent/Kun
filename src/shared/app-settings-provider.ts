@@ -160,6 +160,9 @@ export function resolveModelProviderBaseUrl(settings: AppSettingsV1): string {
 export function resolveModelProviderProxyUrl(settings: AppSettingsV1): string {
   const proxy = getModelProviderSettings(settings).proxy
   if (!proxy.enabled) return ''
+  // Validation happens here, at the apply boundary — not while the user types
+  // (see `normalizeNetworkProxySettings`). An invalid/incomplete URL simply
+  // means "no proxy" for outbound requests instead of wiping the saved value.
   return normalizeProxyUrl(proxy.url)
 }
 
@@ -904,6 +907,7 @@ function normalizeModelProviderProfile(
     apiKey: typeof input?.apiKey === 'string' ? input.apiKey.trim() : '',
     baseUrl,
     endpointFormat: normalizeModelEndpointFormat(input?.endpointFormat),
+    ...(input?.kind === 'agent-sdk' ? { kind: 'agent-sdk' as const } : {}),
     models,
     modelProfiles,
     ...(image ? { image } : {}),
@@ -994,6 +998,7 @@ function normalizeModelProviderModelProfile(
     ? ['text', 'image_url']
     : ['text']
   const contextWindowTokens = boundedPositiveInteger(input?.contextWindowTokens)
+  const maxOutputTokens = boundedPositiveInteger(input?.maxOutputTokens)
   const reasoning = normalizeModelReasoningCapability(input?.reasoning)
   const endpointFormat = normalizeOptionalModelEndpointFormat(input?.endpointFormat)
   return {
@@ -1001,6 +1006,7 @@ function normalizeModelProviderModelProfile(
       ? { aliases: normalizeProviderModels(input?.aliases) }
       : {}),
     ...(contextWindowTokens ? { contextWindowTokens } : {}),
+    ...(maxOutputTokens ? { maxOutputTokens } : {}),
     inputModalities,
     outputModalities: normalizeModelInputModalities(input?.outputModalities),
     supportsToolCalling: input?.supportsToolCalling !== false,
@@ -1239,9 +1245,14 @@ export function defaultNetworkProxySettings(): NetworkProxySettingsV1 {
 export function normalizeNetworkProxySettings(
   input: Partial<NetworkProxySettingsV1> | undefined
 ): NetworkProxySettingsV1 {
+  // Keep the user's raw (only-trimmed) URL and the enable toggle exactly as
+  // given. This normalizer runs on every keystroke (renderer `mergeSettings`),
+  // so it must NOT validate/blank the URL here — doing so wiped each
+  // half-typed value and made the proxy impossible to set (issue #600).
+  // Validity is enforced lazily in `resolveModelProviderProxyUrl`.
   return {
     enabled: input?.enabled === true,
-    url: typeof input?.url === 'string' ? input.url : ''
+    url: typeof input?.url === 'string' ? input.url.trim() : ''
   }
 }
 
@@ -1252,7 +1263,9 @@ export function normalizeProxyUrl(value: unknown): string {
     const parsed = new URL(raw)
     const protocol = parsed.protocol.replace(/:$/, '').toLowerCase()
     if (!NETWORK_PROXY_PROTOCOLS.includes(protocol as typeof NETWORK_PROXY_PROTOCOLS[number])) return ''
-    if (!parsed.hostname || !parsed.port) return ''
+    // A hostname is required; the port is optional (the proxy agent falls back
+    // to the protocol's default port) so URLs like `http://proxy.lan` work.
+    if (!parsed.hostname) return ''
     return parsed.toString()
   } catch {
     return ''

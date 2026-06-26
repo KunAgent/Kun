@@ -166,7 +166,7 @@ export function buildRouter(runtime: ServerRuntime): Router {
   })
   router.add('GET', '/v1/threads/:id', async (request, ctx) => {
     if (!authorize(request, runtime)) return ERRORS.unauthorized()
-    return getThread(runtime.threadService, ctx.params.id, runtime.sessionStore)
+    return getThread(runtime.threadService, ctx.params.id, runtime.sessionStore, runtime.userInputGate)
   })
   router.add('PATCH', '/v1/threads/:id', async (request, ctx) => {
     if (!authorize(request, runtime)) return ERRORS.unauthorized()

@@ -45,7 +45,6 @@ import {
   Clapperboard,
   Download,
   Image as ImageIcon,
-  Info,
   KeyRound,
   Loader2,
   Lock,
@@ -66,6 +65,7 @@ import {
 } from './settings-controls'
 import { classifyProviderModelIds, providerModelListEntries } from './provider-model-editor'
 import { ProviderModelsManager } from './settings-section-provider-models'
+import { ClaudeSubscriptionSection } from './claude-subscription-section'
 import {
   ProviderModelImportDialog,
   type ProviderModelImportResult
@@ -141,6 +141,10 @@ function tokenPlanPresetForProfileId(id: string): ModelProviderPreset | null {
 
 // 「套餐订阅」组 = Token Plan 套餐档(<id>-token-plan)或本身就是订阅制的预设(category==='subscription');
 // 其余(默认 / 按量预设 / 自定义)归入「按量 API」组,便于一眼分辨两类计费方式。
+function isAgentSdkProvider(provider: ModelProviderProfileV1): boolean {
+  return provider.kind === 'agent-sdk'
+}
+
 function isSubscriptionProviderId(id: string): boolean {
   if (tokenPlanPresetForProfileId(id)) return true
   return getModelProviderPreset(id)?.category === 'subscription'
@@ -307,27 +311,11 @@ type ProbeState = {
 function providerPresetRequiresApiKey(provider: ModelProviderProfileV1): boolean {
   if (provider.id === 'litellm') return false
   if (isCodexProvider(provider.id)) return false
-  if (isAnthropicProvider(provider.id)) return false
   return Boolean(getModelProviderPreset(provider.id) || tokenPlanPresetForProfileId(provider.id))
 }
 
 function isCodexProvider(id: string): boolean {
   return id === 'codex'
-}
-
-function isAnthropicProvider(id: string): boolean {
-  return id === 'claude-subscription'
-}
-
-function anthropicAccountLabel(apiKey: string): string | undefined {
-  if (!apiKey.startsWith('{')) return undefined
-  try {
-    const parsed = JSON.parse(apiKey) as Record<string, unknown>
-    if (parsed.kind !== 'anthropic-oauth') return undefined
-    return typeof parsed.email === 'string' && parsed.email ? parsed.email : 'Claude'
-  } catch {
-    return undefined
-  }
 }
 
 function parseCodexEmail(apiKey: string): string | undefined {
@@ -532,104 +520,6 @@ function CodexLoginSection({
         onClick={startDeviceCodeLogin}
       >
         {t('codexLoginDeviceCodeFallback')}
-      </button>
-      {phase === 'error' && error ? (
-        <span className="text-[12px] text-red-500">{error}</span>
-      ) : null}
-    </div>
-  )
-}
-
-function AnthropicLoginSection({
-  provider,
-  onCredentialChange,
-  t
-}: {
-  provider: ModelProviderProfileV1
-  onCredentialChange: (apiKey: string) => void
-  t: (key: string, params?: Record<string, unknown>) => string
-}): ReactElement {
-  const [phase, setPhase] = useState<'idle' | 'browser' | 'error'>('idle')
-  const [error, setError] = useState('')
-  const accountLabel = anthropicAccountLabel(provider.apiKey)
-  const connected = Boolean(accountLabel)
-
-  const startBrowserLogin = async (): Promise<void> => {
-    if (typeof window.kunGui?.startAnthropicBrowserAuth !== 'function') {
-      setPhase('error')
-      setError('Claude 浏览器登录不可用，请重启应用')
-      return
-    }
-    setPhase('browser')
-    setError('')
-    try {
-      const result = await window.kunGui.startAnthropicBrowserAuth()
-      if (result.ok) {
-        onCredentialChange(JSON.stringify(result.credentials))
-        setPhase('idle')
-      } else {
-        setPhase('error')
-        setError(result.message)
-      }
-    } catch (err) {
-      setPhase('error')
-      setError(err instanceof Error ? err.message : String(err))
-    }
-  }
-
-  const cancelLogin = (): void => {
-    setPhase('idle')
-    setError('')
-  }
-
-  const disconnect = (): void => {
-    onCredentialChange('')
-    setPhase('idle')
-  }
-
-  if (connected) {
-    return (
-      <div className="flex items-center gap-2">
-        <span className="inline-block h-2 w-2 rounded-full bg-emerald-500" />
-        <span className="text-[13px] text-ds-ink">{accountLabel}</span>
-        <button
-          type="button"
-          className="ml-auto rounded-lg px-3 py-1.5 text-[12px] font-medium text-ds-muted hover:bg-ds-hover"
-          onClick={disconnect}
-        >
-          {t('codexDisconnect')}
-        </button>
-      </div>
-    )
-  }
-
-  if (phase === 'browser') {
-    return (
-      <div className="grid gap-2">
-        <p className="text-[13px] text-ds-muted">{t('codexBrowserOpened')}</p>
-        <div className="flex items-center gap-1.5 text-[12px] text-ds-muted">
-          <Loader2 className="h-3 w-3 animate-spin" />
-          {t('codexWaitingAuth')}
-        </div>
-        <button
-          type="button"
-          className="w-fit text-[12px] font-medium text-ds-muted hover:text-ds-ink"
-          onClick={cancelLogin}
-        >
-          {t('codexCancel')}
-        </button>
-      </div>
-    )
-  }
-
-  return (
-    <div className="grid gap-2">
-      <button
-        type="button"
-        className="w-full rounded-xl bg-accent px-4 py-2.5 text-[14px] font-semibold text-white shadow-sm hover:bg-accent/90"
-        onClick={startBrowserLogin}
-      >
-        {t('claudeLoginButton')}
       </button>
       {phase === 'error' && error ? (
         <span className="text-[12px] text-red-500">{error}</span>
@@ -1174,6 +1064,50 @@ export function ProvidersSettingsSection({ ctx }: { ctx: Record<string, any> }):
   const runProbe = async (target: ModelProviderProfileV1, mode: 'test' | 'fetch'): Promise<void> => {
     if (typeof window.kunGui?.probeModelProvider !== 'function') return
     const fingerprint = providerConnectionFingerprint(target)
+    // Subscription (agent-sdk) providers have no HTTP /models endpoint — the turn
+    // is delegated to the Claude Agent SDK. "Test" reports login readiness instead
+    // of probing api.anthropic.com, which would 401 on the x-api-key header.
+    if (isAgentSdkProvider(target)) {
+      setProbeStates((prev) => ({ ...prev, [target.id]: { fingerprint, mode, status: 'busy' } }))
+      if (mode === 'fetch') {
+        // No HTTP /models endpoint — list the subscription's models via the SDK.
+        let modelIds: string[] = []
+        try {
+          modelIds = await window.kunGui.claudeSubscriptionModels(target.apiKey.trim() || undefined)
+        } catch {
+          modelIds = []
+        }
+        if (modelIds.length > 0) {
+          setProbeStates((prev) => ({
+            ...prev,
+            [target.id]: { fingerprint, mode, status: 'ok', latencyMs: 0, total: modelIds.length }
+          }))
+          setPendingImport({ providerId: target.id, modelIds: [...modelIds], latencyMs: 0 })
+        } else {
+          setProbeStates((prev) => ({
+            ...prev,
+            [target.id]: { fingerprint, mode, status: 'error', message: t('claudeSubProbeNotReady') }
+          }))
+        }
+        return
+      }
+      // mode === 'test': report login/token readiness instead of an HTTP probe.
+      let ready = target.apiKey.trim().length > 0
+      if (!ready) {
+        try {
+          ready = (await window.kunGui.claudeSubscriptionStatus()).loggedIn
+        } catch {
+          ready = false
+        }
+      }
+      setProbeStates((prev) => ({
+        ...prev,
+        [target.id]: ready
+          ? { fingerprint, mode, status: 'ok', latencyMs: 0, total: target.models.length }
+          : { fingerprint, mode, status: 'error', message: t('claudeSubProbeNotReady') }
+      }))
+      return
+    }
     if (providerPresetRequiresApiKey(target) && !target.apiKey.trim()) {
       setProbeStates((prev) => ({
         ...prev,
@@ -1580,18 +1514,13 @@ export function ProvidersSettingsSection({ ctx }: { ctx: Record<string, any> }):
                       onCredentialChange={(apiKey) => updateModelProvider(activeProvider.id, { apiKey })}
                       t={t}
                     />
-                  ) : isAnthropicProvider(activeProvider.id) ? (
-                    <>
-                      <AnthropicLoginSection
-                        provider={activeProvider}
-                        onCredentialChange={(apiKey) => updateModelProvider(activeProvider.id, { apiKey })}
-                        t={t}
-                      />
-                      <div className="flex gap-2 rounded-xl border border-amber-300/60 bg-amber-50/60 px-3 py-2.5 text-[12px] leading-relaxed text-amber-900 dark:border-amber-700/40 dark:bg-amber-950/30 dark:text-amber-200">
-                        <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" strokeWidth={2} />
-                        <span>{t('claudeExtraUsageNotice')}</span>
-                      </div>
-                    </>
+                  ) : isAgentSdkProvider(activeProvider) ? (
+                    <ClaudeSubscriptionSection
+                      provider={activeProvider}
+                      onTokenChange={(token) => updateModelProvider(activeProvider.id, { apiKey: token })}
+                      onModelsChange={(models) => updateModelProvider(activeProvider.id, { models })}
+                      t={t}
+                    />
                   ) : (
                     <>
                       <label className={fieldLabelClass}>
@@ -1667,7 +1596,7 @@ export function ProvidersSettingsSection({ ctx }: { ctx: Record<string, any> }):
                     <select
                       className={selectControlClass}
                       value={activeProvider.endpointFormat}
-                      disabled={isCodexProvider(activeProvider.id) || isAnthropicProvider(activeProvider.id)}
+                      disabled={isCodexProvider(activeProvider.id) || isAgentSdkProvider(activeProvider)}
                       onChange={(e) => updateModelProvider(activeProvider.id, {
                         endpointFormat: e.target.value as ModelEndpointFormat
                       })}
@@ -1683,7 +1612,7 @@ export function ProvidersSettingsSection({ ctx }: { ctx: Record<string, any> }):
                     <p className="text-[12px] leading-5 text-ds-muted">
                       {t('codexEndpointLocked')}
                     </p>
-                  ) : isAnthropicProvider(activeProvider.id) ? (
+                  ) : isAgentSdkProvider(activeProvider) ? (
                     <p className="text-[12px] leading-5 text-ds-muted">
                       {t('claudeEndpointLocked')}
                     </p>

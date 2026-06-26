@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { CapabilityRegistry } from '../src/adapters/tool/capability-registry.js'
 import { LocalToolHost } from '../src/adapters/tool/local-tool-host.js'
+import { canUseMcpServer } from '../src/adapters/tool/mcp-tool-provider.js'
 import {
   createMcpSearchProvider,
   type McpSearchCatalogRecord
@@ -14,11 +15,16 @@ const SEARCH_CONFIG = KunCapabilitiesConfig.parse({
 
 const SERVER = McpServerConfig.parse({ transport: 'stdio', command: 'noop', trustScope: 'user' })
 
-function record(serverId: string, toolName: string, calls: string[]): McpSearchCatalogRecord {
+function record(
+  serverId: string,
+  toolName: string,
+  calls: string[],
+  server: McpServerConfig = SERVER
+): McpSearchCatalogRecord {
   return {
     toolId: `${serverId}/${toolName}`,
     serverId,
-    server: SERVER,
+    server,
     client: {
       async callTool(input) {
         calls.push(`${serverId}/${input.name}`)
@@ -53,7 +59,7 @@ describe('MCP search provider honors blockedProviderIds', () => {
           config: SEARCH_CONFIG,
           state: { records },
           refreshCatalog: async () => records,
-          isServerTrusted: () => true
+          isServerAvailable: () => true
         })
       ])
     })
@@ -103,5 +109,62 @@ describe('MCP search provider honors blockedProviderIds', () => {
     )
     expect(callDefault.item).toMatchObject({ kind: 'tool_result', isError: false })
     expect(calls).toEqual(['files/read_file', 'github/create_issue'])
+  })
+})
+
+describe('MCP search provider honors workspace visibility roots', () => {
+  it('hides scoped servers from search, describe, and call outside matching workspaces', async () => {
+    const calls: string[] = []
+    const scopedServer = McpServerConfig.parse({
+      transport: 'stdio',
+      command: 'noop',
+      workspaceRoots: ['/ws/project'],
+      trustScope: 'user'
+    })
+    const records = [
+      record('codegraph-a', 'read_symbol', calls, scopedServer),
+      record('global', 'read_file', calls)
+    ]
+    const host = new LocalToolHost({
+      registry: new CapabilityRegistry([
+        createMcpSearchProvider({
+          config: SEARCH_CONFIG,
+          state: { records },
+          refreshCatalog: async () => records,
+          isServerAvailable: canUseMcpServer
+        })
+      ])
+    })
+
+    const outside = ctx({ workspace: '/ws/other' })
+    const search = await host.execute(
+      { callId: 'c0', toolName: 'mcp_search', arguments: { query: 'read symbol' } },
+      outside
+    )
+    expect(search.item.kind).toBe('tool_result')
+    if (search.item.kind === 'tool_result') {
+      const output = search.item.output as { searchedTools: number; results: Array<{ serverId: string }> }
+      expect(output.searchedTools).toBe(1)
+      expect(output.results.every((result) => result.serverId !== 'codegraph-a')).toBe(true)
+    }
+
+    const describeBlocked = await host.execute(
+      { callId: 'c1', toolName: 'mcp_describe', arguments: { toolId: 'codegraph-a/read_symbol' } },
+      outside
+    )
+    expect(describeBlocked.item).toMatchObject({ kind: 'tool_result', isError: true })
+
+    const callBlocked = await host.execute(
+      { callId: 'c2', toolName: 'mcp_call', arguments: { toolId: 'codegraph-a/read_symbol', arguments: {} } },
+      outside
+    )
+    expect(callBlocked.item).toMatchObject({ kind: 'tool_result', isError: true })
+    expect(calls).toEqual([])
+
+    const describeInside = await host.execute(
+      { callId: 'c3', toolName: 'mcp_describe', arguments: { toolId: 'codegraph-a/read_symbol' } },
+      ctx({ workspace: '/ws/project/sub' })
+    )
+    expect(describeInside.item).toMatchObject({ kind: 'tool_result', isError: false })
   })
 })

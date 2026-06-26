@@ -1006,7 +1006,12 @@ function UserInputBubble({
   const [answers, setAnswers] = useState<Record<string, UserInputAnswer>>(() =>
     answersByQuestionId(block.answers)
   )
-  const pending = block.status === 'pending'
+  // A `pending` block is only actionable while the live runtime is awaiting it.
+  // One rehydrated from a finished thread keeps its stored `pending` status but
+  // is not live, so it renders as a read-only ended record rather than a live
+  // prompt — and crucially never offers cancel, which would hit a dead gate and
+  // raise "user input not found" (issue #606).
+  const pending = block.status === 'pending' && block.live === true
   const done = block.status !== 'pending'
 
   useEffect(() => {
@@ -1028,7 +1033,9 @@ function UserInputBubble({
         ? t('userInputCancelled')
         : block.status === 'error'
           ? t('userInputFailed')
-          : t('userInputPending')
+          : pending
+            ? t('userInputPending')
+            : t('userInputCancelled')
   const tone =
     block.status === 'error'
       ? 'error'
@@ -1036,7 +1043,9 @@ function UserInputBubble({
         ? 'success'
         : block.status === 'cancelled'
           ? 'muted'
-          : 'active'
+          : pending
+            ? 'active'
+            : 'muted'
   const questionCount = block.questions.length
   const containerClass = nested
     ? `overflow-hidden rounded-[14px] border px-3.5 py-3 text-[13px] leading-5 shadow-[0_8px_22px_rgba(20,47,95,0.035)] ${

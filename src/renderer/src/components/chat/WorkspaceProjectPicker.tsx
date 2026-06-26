@@ -10,6 +10,7 @@ import {
   normalizeWorkspaceRoot,
   workspaceRootIdentityKey
 } from '../../lib/workspace-path'
+import { resolveProjectWorkspacePath } from '../../lib/worktree-project-path'
 import { readThreadWorktreeRegistry, type ThreadWorktreeRecord } from '../../lib/thread-worktree-registry'
 
 type Props = {
@@ -36,7 +37,8 @@ function workspaceContext(root: string, label: string): string {
 
 function workspaceProjectRootForPicker(
   workspacePath: string,
-  threadWorktrees: WorkspaceProjectPickerWorktrees = {}
+  threadWorktrees: WorkspaceProjectPickerWorktrees = {},
+  candidateProjectPaths: readonly string[] = []
 ): string {
   const normalized = normalizeWorkspaceRoot(workspacePath)
   const key = workspaceRootIdentityKey(normalized)
@@ -47,16 +49,10 @@ function workspaceProjectRootForPicker(
       return normalizeWorkspaceRoot(record.projectPath) || normalized
     }
   }
-  return normalized
-}
-
-function isWorkspaceProjectPickerRoot(root: string): boolean {
-  const normalized = normalizeWorkspaceRoot(root)
-  if (!normalized) return false
-  if (isInternalTemporaryWorkspace(normalized)) return false
-  if (isInternalDeepSeekGuiWorkspace(normalized)) return false
-  if (isClawWorkspacePath(normalized)) return false
-  return true
+  return resolveProjectWorkspacePath(normalized, {
+    threadWorktrees,
+    candidateProjectPaths
+  })
 }
 
 export function buildWorkspaceProjectPickerOptions(options: {
@@ -65,11 +61,20 @@ export function buildWorkspaceProjectPickerOptions(options: {
   threadWorktrees?: WorkspaceProjectPickerWorktrees
 }): { currentRoot: string, options: WorkspaceOption[] } {
   const threadWorktrees = options.threadWorktrees ?? {}
-  const currentRoot = workspaceProjectRootForPicker(options.currentWorkspaceRoot, threadWorktrees)
+  const candidateProjectPaths = [
+    options.currentWorkspaceRoot,
+    ...options.workspaceRoots,
+    ...Object.values(threadWorktrees).map((record) => record.projectPath)
+  ]
+  const currentRoot = workspaceProjectRootForPicker(
+    options.currentWorkspaceRoot,
+    threadWorktrees,
+    candidateProjectPaths
+  )
   const seen = new Set<string>()
   const out: WorkspaceOption[] = []
   for (const raw of [currentRoot, ...options.workspaceRoots]) {
-    const root = workspaceProjectRootForPicker(raw, threadWorktrees)
+    const root = workspaceProjectRootForPicker(raw, threadWorktrees, candidateProjectPaths)
     if (!isWorkspaceProjectPickerRoot(root)) continue
     const key = workspaceRootIdentityKey(root)
     if (seen.has(key)) continue
@@ -81,6 +86,15 @@ export function buildWorkspaceProjectPickerOptions(options: {
     currentRoot,
     options: out.sort((a, b) => a.label.localeCompare(b.label))
   }
+}
+
+function isWorkspaceProjectPickerRoot(root: string): boolean {
+  const normalized = normalizeWorkspaceRoot(root)
+  if (!normalized) return false
+  if (isInternalTemporaryWorkspace(normalized)) return false
+  if (isInternalDeepSeekGuiWorkspace(normalized)) return false
+  if (isClawWorkspacePath(normalized)) return false
+  return true
 }
 
 export function WorkspaceProjectPicker({ currentWorkspaceRoot }: Props): ReactElement {

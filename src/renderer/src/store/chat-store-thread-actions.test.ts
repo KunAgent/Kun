@@ -377,3 +377,73 @@ describe('chat-store-thread-actions subscribeThreadEventsLive', () => {
     expect(state.error).toBeTruthy()
   })
 })
+
+describe('chat-store-thread-actions createThread conversation mode', () => {
+  beforeEach(() => {
+    rendererRuntimeClient.invalidateSettings()
+    registryMock.getProvider.mockReset()
+  })
+
+  afterEach(() => {
+    rendererRuntimeClient.invalidateSettings()
+    vi.unstubAllGlobals()
+  })
+
+  it('creates a conversation thread bound to the auto-created timestamped workspace', async () => {
+    const createdPath = '/home/alice/.local/share/Kun/conversations/20260626-153012'
+    const selectThread = vi.fn(async () => undefined)
+    const refreshThreads = vi.fn(async () => undefined)
+    const createThreadProvider = vi.fn(async () => ({
+      id: 'thr_new',
+      title: 'New',
+      updatedAt: '2026-06-26T15:30:12.000Z',
+      model: 'deepseek-v4-pro',
+      mode: 'agent',
+      workspace: createdPath,
+      status: 'idle'
+    }))
+    registryMock.getProvider.mockReturnValue({ createThread: createThreadProvider })
+
+    vi.stubGlobal('window', {
+      kunGui: {
+        platform: 'linux',
+        getSettings: vi.fn(async () => ({
+          version: 1,
+          locale: 'en',
+          theme: 'system',
+          uiFontScale: 0.82,
+          provider: { providers: [], apiKey: '', baseUrl: '', proxy: { enabled: false } },
+          agents: { kun: { model: 'deepseek-v4-pro', apiKey: 'k', baseUrl: '' } },
+          workspaceRoot: '/tmp/workspace',
+          conversationWorkspaceRoot: '~/.local/share/Kun/conversations',
+          log: { enabled: false, retentionDays: 7 },
+          checkpointCleanup: { enabled: false, intervalDays: 3 },
+          notifications: { turnComplete: true },
+          appBehavior: { openAtLogin: false, startMinimized: false, closeToTray: false },
+          keyboardShortcuts: { bindings: [] },
+          write: { workspaces: [], defaultWorkspaceRoot: '', activeWorkspaceRoot: '' },
+          claw: { channels: [], tasks: [], im: { workspaceRoot: '' }, enabled: false, skills: { extraDirs: [] } },
+          schedule: { tasks: [], defaultWorkspaceRoot: '', skills: { extraDirs: [] } },
+          workflow: { workflows: [] },
+          terminal: { colors: {} },
+          guiUpdate: { channel: 'stable' },
+          codePromptPrefix: '',
+          disabledSkillIds: []
+        })),
+        createConversationWorkspace: vi.fn(async () => ({ ok: true, path: createdPath }))
+      }
+    })
+
+    const { actions, state } = buildHarness()
+    state.selectThread = selectThread as never
+    state.refreshThreads = refreshThreads as never
+
+    await actions.createThread({ conversation: true })
+
+    expect(window.kunGui.createConversationWorkspace).toHaveBeenCalled()
+    expect(createThreadProvider).toHaveBeenCalledWith(expect.objectContaining({ workspace: createdPath }))
+    expect(state.activeThreadId).toBe('thr_new')
+    expect(selectThread).toHaveBeenCalledWith('thr_new')
+    expect(refreshThreads).toHaveBeenCalled()
+  })
+})

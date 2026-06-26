@@ -119,6 +119,7 @@ describe('Kun single-agent regression', () => {
         kun: defaultKunRuntimeSettings(19000)
       },
       workspaceRoot: '/tmp',
+      conversationWorkspaceRoot: '~/Documents/Kun',
       log: { enabled: true, retentionDays: 7 },
       checkpointCleanup: { enabled: false, intervalDays: 3 },
       notifications: { turnComplete: true },

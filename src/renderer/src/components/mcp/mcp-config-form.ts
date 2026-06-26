@@ -32,6 +32,8 @@ export type McpFormServer = {
   env: McpKeyValue[]
   url: string
   headers: McpKeyValue[]
+  /** Visibility roots. Empty = visible in every workspace. */
+  workspaceRoots: string[]
   trustScope: 'user' | 'workspace'
   trustedWorkspaceRoots: string[]
   /** null = use the runtime default (30s). */
@@ -99,6 +101,7 @@ function parseServerEntry(name: string, raw: unknown): McpFormServer {
   const url = asString(record.url).trim()
   // Accept both `transport` (kun) and `type` (Claude Desktop) field names.
   const transport = normalizeTransport(record.transport ?? record.type, command, url)
+  const workspaceRoots = asStringArray(record.workspaceRoots)
   const trustedWorkspaceRoots = asStringArray(record.trustedWorkspaceRoots)
   const rawScope = asString(record.trustScope).trim().toLowerCase()
   const trustScope: 'user' | 'workspace' =
@@ -125,6 +128,7 @@ function parseServerEntry(name: string, raw: unknown): McpFormServer {
     env: asKeyValues(record.env),
     url,
     headers: asKeyValues(record.headers),
+    workspaceRoots,
     trustScope,
     trustedWorkspaceRoots,
     timeoutMs
@@ -144,6 +148,7 @@ export function createBlankMcpServer(transport: McpTransport = 'stdio'): McpForm
     env: [],
     url: '',
     headers: [],
+    workspaceRoots: [],
     trustScope: 'user',
     trustedWorkspaceRoots: [],
     timeoutMs: null
@@ -216,6 +221,8 @@ export function serializeMcpServer(server: McpFormServer): Record<string, unknow
   }
 
   out.trustScope = server.trustScope
+  const workspaceRoots = server.workspaceRoots.map((r) => r.trim()).filter(Boolean)
+  if (workspaceRoots.length > 0) out.workspaceRoots = workspaceRoots
   if (server.trustScope === 'workspace') {
     const roots = server.trustedWorkspaceRoots.map((r) => r.trim()).filter(Boolean)
     if (roots.length > 0) out.trustedWorkspaceRoots = roots

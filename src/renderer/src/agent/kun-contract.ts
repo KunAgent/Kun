@@ -46,6 +46,8 @@ export type CoreThreadSummaryJson = {
 export type CoreThreadJson = CoreThreadSummaryJson & {
   turns?: CoreTurnJson[]
   latestSeq?: number
+  /** Request ids the runtime is still actively awaiting (live ask-user gate). */
+  pendingUserInputIds?: string[]
 }
 
 export type CoreAttachmentMetadataJson = {

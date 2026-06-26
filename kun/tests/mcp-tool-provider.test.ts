@@ -6,6 +6,7 @@ import {
   buildMcpToolProviders,
   formatMcpConnectionError,
   isMcpServerTrusted,
+  isMcpServerVisible,
   normalizeMcpToolName,
   resolveMcpServerCwd,
   type McpClientLike
@@ -129,6 +130,7 @@ describe('MCP tool provider', () => {
       url: undefined,
       headers: {},
       env: {},
+      workspaceRoots: [],
       trustScope: 'workspace',
       trustedWorkspaceRoots: ['/tmp/project'],
       timeoutMs: 30_000
@@ -137,6 +139,27 @@ describe('MCP tool provider', () => {
     expect(isMcpServerTrusted(server, '/tmp/project')).toBe(true)
     expect(isMcpServerTrusted(server, '/tmp/project/sub')).toBe(true)
     expect(isMcpServerTrusted(server, '/tmp/other')).toBe(false)
+  })
+
+  it('evaluates workspace visibility scopes independently from trust', () => {
+    const server = {
+      enabled: true,
+      transport: 'stdio',
+      command: 'node',
+      args: [],
+      url: undefined,
+      headers: {},
+      env: {},
+      workspaceRoots: ['/tmp/project'],
+      trustScope: 'user',
+      trustedWorkspaceRoots: [],
+      timeoutMs: 30_000
+    } satisfies McpServerConfig
+
+    expect(isMcpServerTrusted(server, '/tmp/other')).toBe(true)
+    expect(isMcpServerVisible(server, '/tmp/project')).toBe(true)
+    expect(isMcpServerVisible(server, '/tmp/project/sub')).toBe(true)
+    expect(isMcpServerVisible(server, '/tmp/other')).toBe(false)
   })
 
   it('resolves stdio MCP working directories from explicit config or trusted workspace fallback', () => {
@@ -148,6 +171,7 @@ describe('MCP tool provider', () => {
       url: undefined,
       headers: {},
       env: {},
+      workspaceRoots: [],
       trustScope: 'workspace',
       trustedWorkspaceRoots: ['/tmp/project'],
       timeoutMs: 30_000
@@ -341,6 +365,31 @@ describe('MCP tool provider', () => {
         arguments: { query: 'bug' }
       }, buildContext('/tmp/other'))
     ).rejects.toThrow(/not advertised/)
+  })
+
+  it('hides workspace-visible tools outside configured visibility roots', async () => {
+    const config = KunCapabilitiesConfig.parse({
+      mcp: {
+        enabled: true,
+        servers: {
+          codegraph: {
+            transport: 'stdio',
+            command: 'node',
+            workspaceRoots: ['/tmp/project'],
+            trustScope: 'user'
+          }
+        }
+      }
+    })
+    const built = await buildMcpToolProviders(config.mcp, {
+      clientFactory: async () => fakeClient()
+    })
+    const host = new LocalToolHost({ registry: new CapabilityRegistry(built.providers) })
+
+    expect((await host.listTools(buildContext('/tmp/project'))).map((tool) => tool.name)).toEqual([
+      'mcp_codegraph_search_issues'
+    ])
+    expect(await host.listTools(buildContext('/tmp/other'))).toEqual([])
   })
 
   it('records diagnostics for failed MCP server connections', async () => {

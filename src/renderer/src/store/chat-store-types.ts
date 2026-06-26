@@ -143,6 +143,8 @@ export type ChatState = {
   initialSetupMode: InitialSetupMode
   workspaceRoot: string
   workspaceLabel: string
+  /** 对话会话的工作目录根(默认 ~/Documents/Kun),供侧边栏对话区块和项目保护使用。 */
+  conversationWorkspaceRoot: string
   runtimeConnection: RuntimeConnectionStatus
   runtimeStatus: KunRuntimeStatusPayload | null
   codeWorkspaceRoots: string[]
@@ -276,7 +278,13 @@ export type ChatState = {
      * providerId / model / systemPrompt are snapshotted onto the thread.
      */
     agentId?: string
+    /**
+     * 创建一条不绑定项目文件夹的对话会话:在 conversationWorkspaceRoot 下
+     * 自动创建一个时间戳子目录作为工作目录。
+     */
+    conversation?: boolean
   }) => Promise<void>
+  createConversation: () => Promise<void>
   selectThread: (id: string) => Promise<void>
   /**
    * 打开 SSE 订阅一条 thread(不预先拉 getThreadDetail)。

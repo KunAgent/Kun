@@ -9,6 +9,7 @@ import {
   filterEmptySddAssistantThreadsFromSidebar,
   filterSddDraftHistoryItems,
   mergeSidebarWorkspaceGroupsWithDraftHistory,
+  resolveThreadPreviewPosition,
   sortSidebarThreads,
   SddDraftHistoryRows,
   ThreadRow,
@@ -61,6 +62,7 @@ describe('SidebarProjectsSection groups', () => {
       searchQuery: '',
       showArchived: false,
       workspaceRoot: '/Users/zxy/project-a',
+      conversationRoot: '',
       workspaceRoots: [
         '/Users/zxy/project-a',
         '/Users/zxy/project-b',
@@ -81,6 +83,7 @@ describe('SidebarProjectsSection groups', () => {
     const base = {
       threads: [thread({ id: 'reasonix-current', workspace: '/Users/zxy/project-a' })],
       workspaceRoot: '/Users/zxy/project-a',
+      conversationRoot: '',
       workspaceRoots: ['/Users/zxy/project-b']
     }
 
@@ -111,6 +114,7 @@ describe('SidebarProjectsSection groups', () => {
       searchQuery: '',
       showArchived: false,
       workspaceRoot: '/Users/zxy/project-a',
+      conversationRoot: '',
       workspaceRoots: [
         '/Users/zxy/project-a',
         '/Users/zxy/.deepseekgui/default_workspace',
@@ -134,6 +138,7 @@ describe('SidebarProjectsSection groups', () => {
       searchQuery: '',
       showArchived: false,
       workspaceRoot: 'C:\\Users\\zxy\\.deepseekgui\\default_workspace',
+      conversationRoot: '',
       workspaceRoots: [
         '~/.deepseekgui/default_workspace',
         'C:\\Users\\zxy\\.deepseekgui\\default_workspace'
@@ -143,6 +148,22 @@ describe('SidebarProjectsSection groups', () => {
     expect(groups).toHaveLength(1)
     expect(groups[0]?.[0]).toBe('C:\\Users\\zxy\\.deepseekgui\\default_workspace')
     expect(groups[0]?.[1].map((item) => item.id)).toEqual(['default-short', 'default-absolute'])
+  })
+
+  it('maps remembered worktree roots to their source project without a registry entry', () => {
+    const projectPath = '/Users/zxy/code/Kook-VoiceShop-Bot'
+    const worktreePath = '/Users/zxy/.kun/worktrees/ab12/Kook-VoiceShop-Bot'
+    const groups = buildSidebarWorkspaceGroups({
+      threads: [thread({ id: 'thread-worktree', workspace: worktreePath })],
+      searchQuery: '',
+      showArchived: false,
+      workspaceRoot: projectPath,
+      conversationRoot: '',
+      workspaceRoots: [projectPath, worktreePath]
+    })
+
+    expect(groups.map(([workspace]) => workspace)).toEqual([projectPath])
+    expect(groups[0]?.[1].map((item) => item.id)).toEqual(['thread-worktree'])
   })
 
   it('shows worktree threads under their source project instead of a separate worktree project', () => {
@@ -162,6 +183,7 @@ describe('SidebarProjectsSection groups', () => {
       searchQuery: '',
       showArchived: false,
       workspaceRoot: projectPath,
+      conversationRoot: '',
       workspaceRoots: [
         projectPath,
         worktreePath
@@ -201,12 +223,31 @@ describe('SidebarProjectsSection groups', () => {
     ])
   })
 
+  it('excludes conversation workspaces from project groups', () => {
+    // 工作目录落在对话工作目录根下的会话不进「项目」分组。
+    const groups = buildSidebarWorkspaceGroups({
+      threads: [
+        thread({ id: 'project-thread', workspace: '/Users/zxy/project-a' }),
+        thread({ id: 'conversation-thread', workspace: '/Users/zxy/Documents/Kun/20260626-153012' })
+      ],
+      searchQuery: '',
+      showArchived: false,
+      workspaceRoot: '/Users/zxy/project-a',
+      conversationRoot: '/Users/zxy/Documents/Kun',
+      workspaceRoots: ['/Users/zxy/project-a']
+    })
+
+    expect(groups.map(([workspace]) => workspace)).toEqual(['/Users/zxy/project-a'])
+    expect(groups[0]?.[1].map((item) => item.id)).toEqual(['project-thread'])
+  })
+
   it('merges requirement-only search matches into displayed groups', () => {
     const groups = buildSidebarWorkspaceGroups({
       threads: [thread({ id: 'reasonix-current', workspace: '/Users/zxy/project-a' })],
       searchQuery: 'checkout',
       showArchived: false,
       workspaceRoot: '/Users/zxy/project-a',
+      conversationRoot: '',
       workspaceRoots: ['/Users/zxy/project-a', '/Users/zxy/project-b']
     })
     const filteredDraftHistory = {
@@ -323,6 +364,24 @@ describe('ThreadRenameDialog', () => {
 })
 
 describe('ThreadRow', () => {
+  it('anchors the preview beside the row instead of following the pointer', () => {
+    expect(
+      resolveThreadPreviewPosition(
+        { left: 20, right: 300, top: 80, height: 34 } as DOMRect,
+        { width: 900, height: 600 }
+      )
+    ).toEqual({ x: 310, y: 69 })
+  })
+
+  it('flips the preview left when the row is close to the right edge', () => {
+    expect(
+      resolveThreadPreviewPosition(
+        { left: 700, right: 780, top: 80, height: 34 } as DOMRect,
+        { width: 900, height: 600 }
+      )
+    ).toEqual({ x: 370, y: 69 })
+  })
+
   it('renders the worktree badge before the truncated title and outside the action buttons', () => {
     const html = renderToStaticMarkup(
       createElement(ThreadRow, {
@@ -345,7 +404,6 @@ describe('ThreadRow', () => {
         onSelect: vi.fn(),
         onContextMenu: vi.fn(),
         onPreviewOpen: vi.fn(),
-        onPreviewMove: vi.fn(),
         onPreviewClose: vi.fn(),
         onPin: vi.fn(),
         onRename: vi.fn(),
@@ -388,7 +446,6 @@ describe('ThreadRow', () => {
         onSelect: vi.fn(),
         onContextMenu: vi.fn(),
         onPreviewOpen: vi.fn(),
-        onPreviewMove: vi.fn(),
         onPreviewClose: vi.fn(),
         onPin: vi.fn(),
         onRename: vi.fn(),

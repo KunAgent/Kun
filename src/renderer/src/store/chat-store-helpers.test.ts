@@ -142,6 +142,15 @@ describe('chat-store Claw helpers', () => {
     expect(compacted).not.toContain(`/Users/zxy/project-${MAX_CODE_WORKSPACE_ROOTS}`)
   })
 
+  it('drops Kun branch worktree paths from remembered code workspaces', () => {
+    expect(
+      compactCodeWorkspaceRoots([
+        '/Users/zxy/code/project-a',
+        '/Users/zxy/.kun/worktrees/ab12/project-a'
+      ])
+    ).toEqual(['/Users/zxy/code/project-a'])
+  })
+
   it('drops remembered write-only workspaces from the code workspace list', () => {
     expect(
       reconcileCodeWorkspaceRoots({

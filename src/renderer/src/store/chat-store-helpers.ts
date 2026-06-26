@@ -20,6 +20,7 @@ import {
   normalizeWorkspaceRoot,
   workspaceRootIdentityKey
 } from '../lib/workspace-path'
+import { shouldOmitFromCodeWorkspaceRoots } from '../lib/worktree-project-path'
 import { readBrowserStorageItem, writeBrowserStorageItem } from '../lib/browser-storage'
 
 const COMPOSER_MODEL_STORAGE_KEY = 'kun.composerModel'
@@ -314,6 +315,7 @@ export function compactCodeWorkspaceRoots(workspaceRoots: readonly (string | und
     if (isInternalTemporaryWorkspace(normalized)) continue
     if (isInternalDeepSeekGuiWorkspace(normalized)) continue
     if (isClawWorkspacePath(normalized)) continue
+    if (shouldOmitFromCodeWorkspaceRoots(normalized)) continue
     const key = workspaceRootIdentityKey(normalized)
     if (seen.has(key)) continue
     seen.add(key)

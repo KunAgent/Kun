@@ -2,6 +2,7 @@ import { isAbsolute, join, relative, resolve } from 'node:path'
 import { mkdir, writeFile } from 'node:fs/promises'
 import { randomBytes } from 'node:crypto'
 import type { ModelClient, ModelRequest, ModelToolSpec } from '../ports/model-client.js'
+import type { AgentSdkRuntime } from '../runtime/agent-sdk/agent-sdk-runtime.js'
 import type {
   ToolHost,
   ToolCallLike,
@@ -677,6 +678,13 @@ export type AgentLoopOptions = {
     relativePath: string
     markdown: string
   }) => Promise<void>
+  /**
+   * Subscription engine. When set and it owns the active thread's provider
+   * (kind: 'agent-sdk'), the entire turn is delegated to the embedded Claude
+   * Agent SDK instead of kun's own model loop, billing the user's Claude
+   * subscription. kun's tools/persona/permissions are injected into the SDK.
+   */
+  sdkRuntime?: AgentSdkRuntime
 }
 
 /**
@@ -754,6 +762,17 @@ export class AgentLoop {
     if (signal.aborted) {
       await this.opts.turns.finishTurn({ threadId, turnId, status: 'aborted' })
       return 'aborted'
+    }
+    // Subscription engine dispatch: if a Claude Agent SDK runtime owns this
+    // thread's provider, delegate the whole turn to it (the SDK runs the loop on
+    // the user's subscription; kun's brain is injected). All other providers
+    // fall through to kun's native loop below.
+    const sdkRuntime = this.opts.sdkRuntime
+    if (sdkRuntime) {
+      const providerId = (await this.opts.threadStore.get(threadId))?.providerId
+      if (sdkRuntime.handlesProvider(providerId)) {
+        return sdkRuntime.runTurn(threadId, turnId, signal)
+      }
     }
     let goalTimer: GoalElapsedTimer | null = null
     let finalStatus: 'completed' | 'failed' | 'aborted' | undefined

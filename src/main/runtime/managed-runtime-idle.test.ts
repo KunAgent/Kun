@@ -25,6 +25,7 @@ const settings: AppSettingsV1 = {
   provider: defaultModelProviderSettings(),
   agents: { kun: defaultKunRuntimeSettings() },
   workspaceRoot: '/tmp/workspace',
+  conversationWorkspaceRoot: '~/Documents/Kun',
   log: { enabled: false, retentionDays: 7 },
   checkpointCleanup: { enabled: false, intervalDays: 3 },
   notifications: { turnComplete: true },

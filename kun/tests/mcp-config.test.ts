@@ -20,7 +20,20 @@ describe('MCP config', () => {
     expect(server.enabled).toBe(true)
     expect(server.transport).toBe('stdio')
     expect(server.cwd).toBe('/tmp/project')
+    expect(server.workspaceRoots).toEqual([])
     expect(server.timeoutMs).toBe(30_000)
+  })
+
+  it('accepts workspace visibility roots without changing trust scope', () => {
+    const server = McpServerConfig.parse({
+      transport: 'streamable-http',
+      url: 'https://mcp.example.test/mcp',
+      workspaceRoots: ['/tmp/project-a', '/tmp/project-b'],
+      trustScope: 'user'
+    })
+
+    expect(server.workspaceRoots).toEqual(['/tmp/project-a', '/tmp/project-b'])
+    expect(server.trustScope).toBe('user')
   })
 
   it('accepts trusted streamable HTTP MCP servers', () => {

@@ -875,6 +875,11 @@ function normalizeKunModelProfile(
     input.contextWindowTokens > 0
     ? input.contextWindowTokens
     : undefined
+  const maxOutputTokens = typeof input?.maxOutputTokens === 'number' &&
+    Number.isInteger(input.maxOutputTokens) &&
+    input.maxOutputTokens > 0
+    ? input.maxOutputTokens
+    : undefined
   const reasoning = normalizeKunReasoningCapability(input?.reasoning)
   const endpointFormat = typeof input?.endpointFormat === 'string' && input.endpointFormat.trim()
     ? normalizeModelEndpointFormat(input.endpointFormat)
@@ -884,6 +889,7 @@ function normalizeKunModelProfile(
       ? { aliases: normalizeKunProfileAliases(input?.aliases) }
       : {}),
     ...(contextWindowTokens ? { contextWindowTokens } : {}),
+    ...(maxOutputTokens ? { maxOutputTokens } : {}),
     inputModalities,
     outputModalities: normalizeKunModelInputModalities(input?.outputModalities),
     supportsToolCalling: input?.supportsToolCalling !== false,
