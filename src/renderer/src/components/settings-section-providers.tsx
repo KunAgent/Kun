@@ -848,6 +848,27 @@ export function ProvidersSettingsSection({ ctx }: { ctx: Record<string, any> }):
   const runProbe = async (target: ModelProviderProfileV1, mode: 'test' | 'fetch'): Promise<void> => {
     if (typeof window.kunGui?.probeModelProvider !== 'function') return
     const fingerprint = providerConnectionFingerprint(target)
+    // Subscription (agent-sdk) providers have no HTTP /models endpoint — the turn
+    // is delegated to the Claude Agent SDK. "Test" reports login readiness instead
+    // of probing api.anthropic.com, which would 401 on the x-api-key header.
+    if (isAgentSdkProvider(target)) {
+      setProbeStates((prev) => ({ ...prev, [target.id]: { fingerprint, mode, status: 'busy' } }))
+      let ready = target.apiKey.trim().length > 0
+      if (!ready) {
+        try {
+          ready = (await window.kunGui.claudeSubscriptionStatus()).loggedIn
+        } catch {
+          ready = false
+        }
+      }
+      setProbeStates((prev) => ({
+        ...prev,
+        [target.id]: ready
+          ? { fingerprint, mode, status: 'ok', latencyMs: 0, total: target.models.length }
+          : { fingerprint, mode, status: 'error', message: t('claudeSubProbeNotReady') }
+      }))
+      return
+    }
     if (providerPresetRequiresApiKey(target) && !target.apiKey.trim()) {
       setProbeStates((prev) => ({
         ...prev,

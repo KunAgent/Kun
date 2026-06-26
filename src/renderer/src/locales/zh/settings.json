@@ -289,6 +289,7 @@
   "claudeSubManualPlaceholder": "粘贴 claude setup-token 生成的 token,或留空使用本机登录",
   "claudeSubTokenSetHint": "已填入 token,将用于订阅认证。",
   "claudeSubEmptyHint": "留空则使用本机 Claude Code 登录凭据。",
+  "claudeSubProbeNotReady": "未检测到 Claude 登录,请在上方「登录」区登录或粘贴订阅 token。",
   "modelProviderApiKeyPlaceholder": "填写此供应商的 API Key",
   "modelProviderBaseUrl": "Base URL",
   "modelProviderEndpointFormat": "端点格式",

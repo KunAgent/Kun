@@ -289,6 +289,7 @@
   "claudeSubManualPlaceholder": "Paste the token from claude setup-token, or leave empty to use the local login",
   "claudeSubTokenSetHint": "Token set — it will be used for subscription auth.",
   "claudeSubEmptyHint": "Leave empty to use the local Claude Code login credentials.",
+  "claudeSubProbeNotReady": "No Claude login detected — log in above or paste a subscription token.",
   "modelProviderApiKeyPlaceholder": "Enter this provider's API key",
   "modelProviderBaseUrl": "Base URL",
   "modelProviderEndpointFormat": "Endpoint format",
