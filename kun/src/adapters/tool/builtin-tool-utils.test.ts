@@ -9,6 +9,7 @@ import {
   shellDisplayName,
   shellRuntimeInfo,
   shellRuntimeInstruction,
+  shellSpawnEnv,
   terminateSpawnTree
 } from './builtin-tool-utils.js'
 
@@ -52,9 +53,30 @@ describe('shellConfig', () => {
     })
   })
 
-  it('falls back to cmd.exe on Windows when no richer shell is available', () => {
-    expect(shellConfig('win32', lookup({}))).toEqual({
-      shell: 'cmd.exe',
+  it('resolves Windows PowerShell by absolute path when PATH lookups all fail', () => {
+    // Simulates a GUI-launched app whose PATH lost System32: every `where`
+    // lookup returns nothing, so resolution must not depend on PATH.
+    const winPwsh = 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe'
+    expect(
+      shellConfig('win32', lookup({}), (path) => path === winPwsh, { SystemRoot: 'C:\\Windows' })
+    ).toEqual({
+      shell: winPwsh,
+      args: ['-NoLogo', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command']
+    })
+  })
+
+  it('falls back to an absolute cmd.exe (never a bare name) when nothing else resolves', () => {
+    expect(shellConfig('win32', lookup({}), () => false, { SystemRoot: 'C:\\Windows' })).toEqual({
+      shell: 'C:\\Windows\\System32\\cmd.exe',
+      args: ['/d', '/s', '/c']
+    })
+  })
+
+  it('prefers %ComSpec% for the cmd.exe fallback when it is set', () => {
+    expect(
+      shellConfig('win32', lookup({}), () => false, { ComSpec: 'D:\\Windows\\System32\\cmd.exe' })
+    ).toEqual({
+      shell: 'D:\\Windows\\System32\\cmd.exe',
       args: ['/d', '/s', '/c']
     })
   })
@@ -64,6 +86,37 @@ describe('shellConfig', () => {
       shell: '/bin/bash',
       args: ['-lc']
     })
+  })
+})
+
+describe('shellSpawnEnv', () => {
+  it('returns the env unchanged on non-Windows platforms', () => {
+    const env = { PATH: '/usr/bin:/bin' }
+    expect(shellSpawnEnv(env, 'darwin')).toBe(env)
+  })
+
+  it('appends the core Windows system dirs when PATH is missing them', () => {
+    const result = shellSpawnEnv({ Path: 'C:\\Program Files\\nodejs', SystemRoot: 'C:\\Windows' }, 'win32')
+    const entries = (result.Path ?? '').split(';')
+    expect(entries[0]).toBe('C:\\Program Files\\nodejs') // user entries keep precedence
+    expect(entries).toContain('C:\\Windows\\System32')
+    expect(entries).toContain('C:\\Windows\\System32\\WindowsPowerShell\\v1.0')
+  })
+
+  it('rebuilds PATH from scratch when the inherited PATH is empty', () => {
+    const result = shellSpawnEnv({ Path: '', SystemRoot: 'C:\\Windows' }, 'win32')
+    expect((result.Path ?? '').split(';')).toContain('C:\\Windows\\System32')
+  })
+
+  it('does not duplicate system dirs already present (case-insensitive)', () => {
+    const path = [
+      'c:\\windows\\system32',
+      'C:\\Windows',
+      'C:\\Windows\\System32\\Wbem',
+      'C:\\Windows\\System32\\WindowsPowerShell\\v1.0'
+    ].join(';')
+    const result = shellSpawnEnv({ Path: path, SystemRoot: 'C:\\Windows' }, 'win32')
+    expect(result.Path).toBe(path)
   })
 })
 

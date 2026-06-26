@@ -1,8 +1,9 @@
 import { existsSync } from 'node:fs'
 import { lstat, readFile, readdir, readlink, realpath, stat } from 'node:fs/promises'
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process'
-import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
+import { basename, dirname, isAbsolute, join, relative, resolve, sep, win32 } from 'node:path'
 import type { ToolHostContext } from '../../ports/tool-host.js'
+import { effectiveSandboxMode } from './sandbox-policy.js'
 import type {
   EditInstruction,
   FsStats,
@@ -64,6 +65,19 @@ export async function resolveWorkspacePath(inputPath: string, context: ToolHostC
 }> {
   const root = workspaceRoot(context.workspace)
   const lexicalAbsolutePath = isAbsolute(inputPath) ? resolve(inputPath) : resolve(root, inputPath)
+  // In full-access mode the workspace boundary is not enforced: the user has
+  // explicitly opted into reaching paths outside the workspace. This mirrors
+  // canWritePath(), which already permits writes anywhere under
+  // danger-full-access, and lets read/ls/find/grep/lsp reach system paths
+  // (e.g. C:\Windows on Windows, /etc on POSIX) instead of failing with
+  // "path escapes the workspace root".
+  if (effectiveSandboxMode(context) === 'danger-full-access') {
+    return {
+      workspaceRoot: root,
+      absolutePath: lexicalAbsolutePath,
+      relativePath: relative(root, lexicalAbsolutePath) || '.'
+    }
+  }
   const resolvedRoot = await safeRealpath(root)
   if (resolvedRoot === null) {
     // Workspace root itself does not exist; nothing to anchor the escape
@@ -262,34 +276,84 @@ export function describeKind(mode: TruncateMode): string {
   return mode === 'head' ? 'first' : 'last'
 }
 
+const WINDOWS_POWERSHELL_ARGS = ['-NoLogo', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command']
+
+// `%SystemRoot%` (a.k.a. `%windir%`) — the Windows install directory. Always
+// present in a sane environment; the literal fallback covers the rare case
+// where even that has been stripped from the spawned process's env.
+function windowsSystemRoot(env: NodeJS.ProcessEnv = process.env): string {
+  return env.SystemRoot || env.windir || env.SYSTEMROOT || 'C:\\Windows'
+}
+
+// Absolute path to cmd.exe. `%ComSpec%` is the canonical pointer the OS itself
+// uses; fall back to System32\cmd.exe so we never depend on PATH resolution.
+function windowsComSpec(env: NodeJS.ProcessEnv = process.env): string {
+  return env.ComSpec || env.COMSPEC || win32.join(windowsSystemRoot(env), 'System32', 'cmd.exe')
+}
+
 export function shellConfig(
   platform: NodeJS.Platform = process.platform,
   lookup: SpawnSyncLike = spawnSync,
-  fileExists: (path: string) => boolean = existsSync
+  fileExists: (path: string) => boolean = existsSync,
+  env: NodeJS.ProcessEnv = process.env
 ): ShellConfig {
   if (platform === 'win32') {
     const pwsh = firstLookupResult(lookup, 'where', ['pwsh.exe'])
-    if (pwsh) {
-      return {
-        shell: pwsh,
-        args: ['-NoLogo', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command']
-      }
-    }
+    if (pwsh) return { shell: pwsh, args: WINDOWS_POWERSHELL_ARGS }
     const powershell = firstLookupResult(lookup, 'where', ['powershell.exe'])
-    if (powershell) {
-      return {
-        shell: powershell,
-        args: ['-NoLogo', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command']
-      }
-    }
+    if (powershell) return { shell: powershell, args: WINDOWS_POWERSHELL_ARGS }
     const bash = firstLookupResult(lookup, 'where', ['bash.exe'])
     if (bash) return { shell: bash, args: ['-lc'] }
-    return { shell: 'cmd.exe', args: ['/d', '/s', '/c'] }
+    // Every branch above resolves the shell through PATH (`where` itself lives
+    // in System32). A GUI-launched Windows app frequently inherits a PATH that
+    // has lost System32, so `where.exe`, `powershell.exe` and even a bare
+    // `cmd.exe` all fail to spawn with "ENOENT". Resolve a shell by absolute
+    // path from well-known environment variables so the shell always starts.
+    const winPowerShell = win32.join(
+      windowsSystemRoot(env),
+      'System32',
+      'WindowsPowerShell',
+      'v1.0',
+      'powershell.exe'
+    )
+    if (fileExists(winPowerShell)) return { shell: winPowerShell, args: WINDOWS_POWERSHELL_ARGS }
+    return { shell: windowsComSpec(env), args: ['/d', '/s', '/c'] }
   }
   if (fileExists('/bin/bash')) return { shell: '/bin/bash', args: ['-lc'] }
   const candidate = firstLookupResult(lookup, 'which', ['bash'])
   if (candidate) return { shell: candidate, args: ['-lc'] }
   return { shell: 'sh', args: ['-lc'] }
+}
+
+// Environment for spawned shells/commands. On Windows, guarantees the core
+// system directories are on PATH so built-in utilities (`where`, `findstr`,
+// `tasklist`, …) and PATH-resolved tools (`node`, `npm`, `python`) remain
+// reachable from inside the shell even when the app inherited a PATH without
+// System32 — the same breakage that makes the bare `cmd.exe` spawn fail. The
+// directories are appended (never prepended), so the user's own PATH entries
+// keep their precedence. A no-op on non-Windows platforms.
+export function shellSpawnEnv(
+  env: NodeJS.ProcessEnv = process.env,
+  platform: NodeJS.Platform = process.platform
+): NodeJS.ProcessEnv {
+  if (platform !== 'win32') return env
+  const systemRoot = windowsSystemRoot(env)
+  const required = [
+    win32.join(systemRoot, 'System32'),
+    systemRoot,
+    win32.join(systemRoot, 'System32', 'Wbem'),
+    win32.join(systemRoot, 'System32', 'WindowsPowerShell', 'v1.0')
+  ]
+  // PATH casing varies on Windows (PATH vs Path); update the key as it exists.
+  const pathKey = Object.keys(env).find((key) => key.toLowerCase() === 'path') ?? 'Path'
+  const existing = (env[pathKey] ?? '').split(win32.delimiter).filter(Boolean)
+  const seen = new Set(existing.map((entry) => entry.toLowerCase().replace(/[\\/]+$/, '')))
+  const missing = required.filter((dir) => !seen.has(dir.toLowerCase()))
+  if (missing.length === 0) return env
+  return {
+    ...env,
+    [pathKey]: [...existing, ...missing].join(win32.delimiter)
+  }
 }
 
 export type ShellRuntimeInfo = ShellConfig & {
@@ -473,7 +537,7 @@ export async function spawnCapture(
 ): Promise<{ stdout: string; stderr: string; exitCode: number | null }> {
   const child = spawn(file, args, {
     cwd: options.cwd,
-    env: process.env,
+    env: shellSpawnEnv(),
     stdio: ['ignore', 'pipe', 'pipe'],
     windowsHide: true
   })
