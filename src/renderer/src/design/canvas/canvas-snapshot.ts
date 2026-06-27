@@ -1,7 +1,9 @@
 /**
- * Token-economic canvas snapshot for the AI. Excludes per-shape rendering noise
- * (fills/strokes/transform matrices) and uses parent NAMES instead of opaque ids
- * so the AI can reason about layer structure in human terms.
+ * Token-economic canvas snapshot for the AI. Drops transform matrices and other
+ * rendering noise and uses parent NAMES instead of opaque ids so the AI can
+ * reason about layer structure in human terms — but DOES carry a compact color
+ * digest (primary fill / stroke / fontColor / cornerRadius) so a visual agent
+ * can match the existing palette and styling instead of guessing.
  *
  * The id is still included so the AI can target shapes precisely in ShapeOps.
  */
@@ -37,8 +39,38 @@ export type CanvasSnapshotShape = {
    */
   imageUrl?: string
 
+  /** Primary fill color (hex) when the shape has a visible fill. */
+  fill?: string
+  /** Primary stroke as `color/width` (e.g. `#111827/1`) when visibly stroked. */
+  stroke?: string
+  /** Text color (hex) for text shapes. */
+  fontColor?: string
+  /** Corner radius in px when rounded. */
+  cornerRadius?: number
+
   /** Linear shapes only: vertices in ABSOLUTE canvas coords. */
   points?: Point[]
+}
+
+/**
+ * Compact, token-cheap style summary: only the primary visible fill/stroke plus
+ * fontColor/cornerRadius, and only when present. Lets the agent reuse the real
+ * palette ("match the same blue", "restyle to fit") instead of guessing blind.
+ */
+function styleDigest(s: CanvasShape): {
+  fill?: string
+  stroke?: string
+  fontColor?: string
+  cornerRadius?: number
+} {
+  const out: { fill?: string; stroke?: string; fontColor?: string; cornerRadius?: number } = {}
+  const fill = s.fills?.find((f) => f.opacity > 0)
+  if (fill?.color) out.fill = fill.color
+  const stroke = s.strokes?.find((st) => st.opacity > 0 && st.width > 0)
+  if (stroke) out.stroke = `${stroke.color}/${round(stroke.width)}`
+  if (s.fontColor) out.fontColor = s.fontColor
+  if (typeof s.cornerRadius === 'number' && s.cornerRadius > 0) out.cornerRadius = round(s.cornerRadius)
+  return out
 }
 
 export type CanvasSnapshot = {
@@ -86,6 +118,7 @@ export function snapshotCanvas(
         ...(s.textContent ? { textContent: s.textContent.slice(0, 120) } : {}),
         ...(s.htmlArtifactId ? { htmlArtifactId: s.htmlArtifactId } : {}),
         ...(s.imageUrl && !s.imageUrl.startsWith('data:') ? { imageUrl: s.imageUrl } : {}),
+        ...styleDigest(s),
         ...(selected ? { selected: true } : {}),
         ...(isHolder ? { aiImageHolder: true } : {}),
         ...(s.points && s.points.length > 0

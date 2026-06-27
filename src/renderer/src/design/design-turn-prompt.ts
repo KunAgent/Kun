@@ -277,13 +277,49 @@ function formatHtmlElementContextLines(element: DesignHtmlElementContext | undef
  *
  * Keep the schema documentation here in sync with `shape-ops.ts` ShapeOpSchema.
  */
+/**
+ * Deterministic intent prior: when the snapshot shows EXACTLY ONE selected,
+ * filled image, an "edit it" request almost always means edit-that-image — but a
+ * terse brief ("把我的设计改成 task") reads like a new screen to the model, which is
+ * the long-standing skew toward building HTML. The renderer already knows the
+ * high-signal facts, so we hand the model a hard prior instead of leaning on the
+ * prose lanes alone. Hint-only: the model still overrides on an explicit "new
+ * page / screen", so the legitimate "use this image as a reference for a screen"
+ * case is not regressed.
+ */
+function deriveSelectedImageEditHint(
+  snapshot: CanvasSnapshot | undefined
+): { id: string; imageUrl: string } | null {
+  if (!snapshot) return null
+  const selected = snapshot.shapes.filter((s) => s.selected)
+  if (selected.length !== 1) return null
+  const only = selected[0]
+  if (
+    only.type === 'image' &&
+    typeof only.imageUrl === 'string' &&
+    only.imageUrl.length > 0 &&
+    !only.aiImageHolder
+  ) {
+    return { id: only.id, imageUrl: only.imageUrl }
+  }
+  return null
+}
+
 function buildCanvasTurnPrompt(options: DesignTurnOptions): string {
   const snapshot = options.canvasSnapshot
   const snapshotJson = snapshot ? snapshotToCompactJson(snapshot) : '(empty canvas)'
+  const editHint = deriveSelectedImageEditHint(snapshot)
+  const editHintLines = editHint
+    ? [
+        `IMPORTANT PRIOR — the user has EXACTLY ONE filled image selected (id "${editHint.id}", imageUrl \`${editHint.imageUrl}\`). Unless they EXPLICITLY ask for a NEW page / screen / 页面, this is the EDIT AN EXISTING IMAGE lane: call generate_image with reference_image_paths: ["${editHint.imageUrl}"], then update_shapes that SAME shape's imageUrl. Do NOT add_screen / add-screen and do NOT write or edit HTML.`,
+        ''
+      ]
+    : []
   const lines = [
     'Kun is asking you to operate the design canvas by calling the `design_canvas` tool.',
     `Workspace: ${options.workspaceRoot}`,
     '',
+    ...editHintLines,
     'How to respond:',
     '- Reply with a short plain-text plan (1-3 sentences) describing what you will do.',
     '- Then emit one or more ` ```design_canvas ` fenced JSON tool-call blocks. Do not ask the user to manually create a canvas first.',
@@ -353,7 +389,7 @@ function buildCanvasTurnPrompt(options: DesignTurnOptions): string {
     '- Before constructing `reference_image_paths`, locate each target shape in the snapshot by its `id` and copy its `imageUrl` verbatim. If the `imageUrl` field is absent on any target, drop that target from the array (do not guess or reconstruct a path from the shape name, position, or any other field).',
     '- Do NOT invent paths. If the target shape has no `imageUrl` field in the snapshot, treat it as empty and generate fresh.',
     '',
-    'Current canvas snapshot (shape ids, names, positions, `selected`/`aiImageHolder` flags, and `imageUrl` for filled image shapes; other rendering details omitted):',
+    'Current canvas snapshot (shape ids, names, positions, `selected`/`aiImageHolder` flags, `imageUrl` for filled image shapes, plus a style digest — `fill`/`stroke` (color/width)/`fontColor`/`cornerRadius` — when set, so you can MATCH the existing palette instead of guessing):',
     '```json',
     snapshotJson,
     '```'

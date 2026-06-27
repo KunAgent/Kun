@@ -191,6 +191,37 @@ describe('design turn prompt', () => {
     expect(prompt).toContain('MUST NOT use `add_screen` / `add-screen`')
     expect(prompt).toContain('把这张图改成…')
     expect(prompt).toContain('do NOT `add_screen` / `add-screen` — edit that image instead')
+
+    // Deterministic prior: the renderer pre-classifies the single selected filled
+    // image and states it up front (with the exact id + path), hoisted ABOVE the
+    // lane list, so a terse "task" brief can't drag it toward a new HTML screen.
+    expect(prompt).toContain('IMPORTANT PRIOR')
+    expect(prompt).toContain('EXACTLY ONE filled image selected')
+    expect(prompt).toContain('.deepseekgui-images/shot.png')
+    expect(prompt.indexOf('IMPORTANT PRIOR')).toBeLessThan(lanesAt)
+  })
+
+  it('does NOT emit the edit-image prior when the selection is ambiguous (multi-select or empty holder)', () => {
+    const doc = createEmptyDocument()
+    const root = doc.objects[doc.rootId]
+    const a = createDefaultShape('image', 0, 0)
+    a.imageUrl = '.deepseekgui-images/a.png'
+    const b = createDefaultShape('image', 0, 0)
+    b.imageUrl = '.deepseekgui-images/b.png'
+    doc.objects[a.id] = { ...a, parentId: doc.rootId }
+    doc.objects[b.id] = { ...b, parentId: doc.rootId }
+    doc.objects[doc.rootId] = { ...root, children: [a.id, b.id] }
+    const canvasSnapshot = snapshotCanvas(doc, new Set([a.id, b.id]))
+
+    const prompt = buildDesignTurnPrompt({
+      target: 'canvas',
+      mode: 'text',
+      text: 'do something',
+      artifactRelativePath: '.kun-design/board/canvas.json',
+      workspaceRoot: '/workspace',
+      canvasSnapshot
+    })
+    expect(prompt).not.toContain('IMPORTANT PRIOR')
   })
 
   it('canvas turn prompt frames screen creation as a design_canvas tool call', () => {

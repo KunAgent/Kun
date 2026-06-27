@@ -150,6 +150,35 @@ describe('snapshotCanvas', () => {
     expect(unselected.shapes[0]).not.toHaveProperty('imageUrl')
   })
 
+  it('includes a compact style digest (fill/stroke/fontColor/cornerRadius) when set', () => {
+    const doc = createEmptyDocument()
+    const root = doc.objects[doc.rootId]
+    const rect = createDefaultShape('rect', 0, 0)
+    rect.fills = [{ type: 'solid', color: '#3b82d8', opacity: 1 }]
+    rect.strokes = [{ color: '#111827', width: 2, opacity: 1, position: 'inside' }]
+    rect.cornerRadius = 8
+    const text = createDefaultShape('text', 0, 0)
+    text.fontColor = '#0a0a0a'
+    doc.objects[rect.id] = { ...rect, parentId: doc.rootId }
+    doc.objects[text.id] = { ...text, parentId: doc.rootId }
+    doc.objects[doc.rootId] = { ...root, children: [rect.id, text.id] }
+
+    const snap = snapshotCanvas(doc)
+    expect(snap.shapes[0]).toMatchObject({ fill: '#3b82d8', stroke: '#111827/2', cornerRadius: 8 })
+    expect(snap.shapes[1].fontColor).toBe('#0a0a0a')
+  })
+
+  it('omits stroke when it is invisible (width 0 or opacity 0)', () => {
+    const doc = createEmptyDocument()
+    const root = doc.objects[doc.rootId]
+    const rect = createDefaultShape('rect', 0, 0)
+    rect.strokes = [{ color: '#000000', width: 0, opacity: 1, position: 'inside' }]
+    doc.objects[rect.id] = { ...rect, parentId: doc.rootId }
+    doc.objects[doc.rootId] = { ...root, children: [rect.id] }
+
+    expect(snapshotCanvas(doc).shapes[0]).not.toHaveProperty('stroke')
+  })
+
   it('auto-flags a selected empty box as a holder, but not when unselected or filled', () => {
     const doc = createEmptyDocument()
     const root = doc.objects[doc.rootId]
