@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useDesignWorkspaceStore } from './design-workspace-store'
+import { buildHtmlSiblingManifest } from './design-pages'
 import type { DesignArtifact, DesignDocument } from './design-types'
 
 const createdAt = '2026-06-20T00:00:00.000Z'
@@ -78,6 +79,28 @@ describe('design workspace store', () => {
       workspaceRoot: '/workspace',
       content: expect.stringContaining('.kun-design/doc/screen/v2.html')
     }))
+  })
+
+  it('setVersionSummary writes the agent summary back so the sibling manifest surfaces it', () => {
+    const versionId = useDesignWorkspaceStore.getState().artifacts.find((a) => a.id === 'screen')!.versions[0].id
+    useDesignWorkspaceStore.getState().setVersionSummary('screen', versionId, '  A clean login screen with email + SSO  ')
+
+    const updated = useDesignWorkspaceStore.getState().artifacts.find((a) => a.id === 'screen')!
+    expect(updated.versions[0].summary).toBe('A clean login screen with email + SSO')
+
+    const manifest = buildHtmlSiblingManifest(useDesignWorkspaceStore.getState().artifacts, null)
+    expect(manifest.find((entry) => entry.htmlPath === updated.relativePath)?.summary).toBe(
+      'A clean login screen with email + SSO'
+    )
+  })
+
+  it('setVersionSummary no-ops on empty text or unknown ids', () => {
+    const before = useDesignWorkspaceStore.getState().artifacts.find((a) => a.id === 'screen')!.versions[0].summary
+    const versionId = useDesignWorkspaceStore.getState().artifacts.find((a) => a.id === 'screen')!.versions[0].id
+    useDesignWorkspaceStore.getState().setVersionSummary('screen', versionId, '   ')
+    useDesignWorkspaceStore.getState().setVersionSummary('screen', 'screen-vNope', 'ignored')
+    useDesignWorkspaceStore.getState().setVersionSummary('missing', versionId, 'ignored')
+    expect(useDesignWorkspaceStore.getState().artifacts.find((a) => a.id === 'screen')!.versions[0].summary).toBe(before)
   })
 
   it('createDocument adds a new active 设计稿 with an empty projection', () => {

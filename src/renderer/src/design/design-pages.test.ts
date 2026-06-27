@@ -3,9 +3,40 @@ import {
   DESIGN_PAGES_MAX,
   buildDesignPlanPrompt,
   buildHtmlSiblingManifest,
+  extractAgentDesignSummary,
   parsePagesPlan
 } from './design-pages'
 import type { DesignArtifact } from './design-types'
+
+describe('extractAgentDesignSummary', () => {
+  it('returns the closing prose paragraph, dropping code fences', () => {
+    const reply = [
+      'Here is the dashboard.',
+      '',
+      '```html',
+      '<div>...</div>',
+      '```',
+      '',
+      'A dark analytics dashboard with a teal accent, KPI cards and a sortable table.'
+    ].join('\n')
+    expect(extractAgentDesignSummary(reply)).toBe(
+      'A dark analytics dashboard with a teal accent, KPI cards and a sortable table.'
+    )
+  })
+
+  it('returns empty for blank or code-only replies', () => {
+    expect(extractAgentDesignSummary('')).toBe('')
+    expect(extractAgentDesignSummary('   ')).toBe('')
+    expect(extractAgentDesignSummary('```html\n<div/>\n```')).toBe('')
+  })
+
+  it('caps an over-long summary', () => {
+    const long = 'x'.repeat(400)
+    const out = extractAgentDesignSummary(long)
+    expect(out.length).toBeLessThanOrEqual(280)
+    expect(out.endsWith('…')).toBe(true)
+  })
+})
 
 function htmlArtifact(over: Partial<DesignArtifact> & { id: string }): DesignArtifact {
   return {

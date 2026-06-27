@@ -532,6 +532,31 @@ export const useDesignWorkspaceStore = create<DesignWorkspaceState>((set, get) =
       persistIndex()
     },
 
+    setVersionSummary: (artifactId, versionId, summary) => {
+      const trimmed = summary.trim()
+      if (!trimmed) return
+      let changedAny = false
+      set((state) =>
+        applyToActiveDoc(state, (artifacts) =>
+          artifacts.map((item) => {
+            if (item.id !== artifactId) return item
+            let changed = false
+            const versions = item.versions.map((version) => {
+              if (version.id !== versionId || version.summary === trimmed) return version
+              changed = true
+              return { ...version, summary: trimmed }
+            })
+            if (changed) changedAny = true
+            return changed ? { ...item, versions } : item
+          })
+        )
+      )
+      if (!changedAny) return
+      const updated = get().artifacts.find((item) => item.id === artifactId)
+      if (updated) persistArtifactMeta(get().workspaceRoot, updated)
+      persistIndex()
+    },
+
     updateArtifactNode: (artifactId, patch) => {
       set((state) =>
         applyToActiveDoc(state, (artifacts) =>

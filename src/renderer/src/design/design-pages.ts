@@ -15,6 +15,26 @@ export const DESIGN_PAGES_MIN = 2
 export const DESIGN_PAGES_MAX = 6
 
 /**
+ * Each design turn ends with the agent's one-paragraph summary of what it built
+ * (the prompts ask for it). Pull that closing prose out of the assistant reply —
+ * code/HTML fences dropped, last paragraph, length-capped — so it can be written
+ * back to the artifact version. The sibling manifest then describes what a page
+ * BECAME instead of echoing the user's raw prompt forever. Returns '' when there
+ * is no usable prose (caller keeps the existing summary).
+ */
+export function extractAgentDesignSummary(assistantText: string): string {
+  const withoutCode = (assistantText ?? '').replace(/```[\s\S]*?```/g, '').trim()
+  if (!withoutCode) return ''
+  const paragraphs = withoutCode
+    .split(/\n{2,}/)
+    .map((paragraph) => paragraph.trim())
+    .filter((paragraph) => paragraph.length > 0)
+  if (paragraphs.length === 0) return ''
+  const last = paragraphs[paragraphs.length - 1]
+  return last.length > 280 ? `${last.slice(0, 277).trimEnd()}…` : last
+}
+
+/**
  * Sibling-page manifest for the design turn prompt: every OTHER HTML page on the
  * project canvas, so a generated/iterated page can keep one cohesive design
  * system (the cohesion half of the Stitch-style multi-page model).

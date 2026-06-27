@@ -94,6 +94,8 @@ export type DesignWorkspaceState = {
   removeArtifact: (artifactId: string) => void
   /** Rename an artifact's title (persisted to its meta.json sidecar). */
   renameArtifact: (artifactId: string, title: string) => void
+  /** Overwrite a version's summary with the agent's actual end-of-turn description. */
+  setVersionSummary: (artifactId: string, versionId: string, summary: string) => void
   updateArtifactNode: (artifactId: string, patch: Partial<DesignArtifactNode>) => void
   duplicateArtifact: (artifactId: string) => Promise<void>
   selectArtifactVersion: (artifactId: string, versionId: string) => void

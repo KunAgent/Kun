@@ -6,6 +6,7 @@ import {
   DESIGN_PAGES_MAX,
   buildDesignPlanPrompt,
   buildHtmlSiblingManifest,
+  extractAgentDesignSummary,
   parsePagesPlan,
   type DesignPagePlanEntry
 } from './design-pages'
@@ -221,6 +222,12 @@ export async function runDesignPages(deps: RunDesignPagesDeps): Promise<void> {
       if (pageResult === 'timeout') {
         store.setFileError(`Generating "${page.entry.title}" timed out.`)
         return
+      }
+      // Write the agent's actual end-of-turn summary back to this page's version so
+      // the NEXT page's sibling manifest describes what was built, not the brief.
+      const summary = extractAgentDesignSummary(assistantTextForLastTurn())
+      if (summary) {
+        useDesignWorkspaceStore.getState().setVersionSummary(page.id, `${page.id}-v1`, summary)
       }
       builtIds.add(page.id)
     }
