@@ -169,7 +169,11 @@ export class AgentSdkRuntime {
         kunSystemPrompt: this.deps.kunSystemPrompt(),
         threadPersona: ctx.threadPersona,
         approvalPolicy: ctx.approvalPolicy,
-        planMode: ctx.planMode,
+        // Deliberately NOT mapping kun's plan turn to the SDK's 'plan' permission
+        // mode: that mode blocks tool execution, which would also block kun's
+        // bridged create_plan tool (the whole point of a plan turn). kun's plan
+        // behavior comes from advertising create_plan + the injected plan
+        // instruction instead (see resolveTurnPlanContext + contextInstructions).
         bridgedToolModelNames: bridgedToolModelNames(bridged),
         mcpServers,
         canUseTool: buildCanUseTool((name, input) =>

@@ -22,8 +22,11 @@ import {
   PLAN_MODE_INSTRUCTION,
   goalContinuationInstruction,
   todoContinuationInstruction,
-  memoryInstructions
+  memoryInstructions,
+  isStalePlanContext
 } from '../../loop/agent-loop.js'
+import type { GuiPlanContext } from '../../ports/tool-host.js'
+import type { ThreadRecord } from '../../contracts/threads.js'
 import {
   buildHistoryTranscript,
   DEFAULT_SDK_HISTORY_TRANSCRIPT_MAX_BYTES
@@ -69,6 +72,27 @@ function loadAgentSdk(): Promise<SdkApi> {
   return sdkPromise
 }
 
+/**
+ * Resolve the plan-tool context for a turn. When the turn carries a (non-stale)
+ * GUI plan — the SDD "下一步"/Plan-mode flow — we must expose it so the kun
+ * `create_plan` tool is BOTH advertised to the model and executable: its
+ * `shouldAdvertise` and executor are gated on `guiPlan`/`threadMode === 'plan'`
+ * (create-plan-tool.ts). Without this the model is told to call create_plan but
+ * the tool was never bridged, so it writes the plan as prose and the GUI reports
+ * "no matching create_plan result". Mirrors the native loop's candidate/stale
+ * derivation (agent-loop.ts).
+ */
+export function resolveTurnPlanContext(
+  thread: ThreadRecord,
+  turnId: string
+): { planMode: boolean; guiPlan?: GuiPlanContext } {
+  const turn = thread.turns.find((entry) => entry.id === turnId)
+  const candidate = turn?.guiPlan ? ({ ...turn.guiPlan, turnId } as GuiPlanContext) : undefined
+  const guiPlan = candidate && !isStalePlanContext(candidate, thread.workspace) ? candidate : undefined
+  const planMode = (turn?.mode ?? thread.mode) === 'plan' || Boolean(guiPlan)
+  return { planMode, ...(guiPlan ? { guiPlan } : {}) }
+}
+
 export function createAgentSdkRuntime(deps: AgentSdkRuntimeFactoryDeps): AgentSdkRuntime {
   // Last SDK session id per thread, recorded for diagnostics only. We do NOT
   // resume from it: kun owns the canonical history and replays it as a transcript
@@ -76,12 +100,21 @@ export function createAgentSdkRuntime(deps: AgentSdkRuntimeFactoryDeps): AgentSd
   // survives a provider switch mid-thread and a runtime restart.
   const sessionIds = new Map<string, string>()
 
-  const toolContext = (threadId: string, turnId: string, workspace: string): ToolHostContext => ({
+  const toolContext = (
+    threadId: string,
+    turnId: string,
+    workspace: string,
+    plan?: { planMode?: boolean; guiPlan?: GuiPlanContext }
+  ): ToolHostContext => ({
     threadId,
     turnId,
     workspace,
     approvalPolicy: deps.defaultApprovalPolicy,
     abortSignal: new AbortController().signal,
+    // Expose plan state so `create_plan` is advertised (listTools) and executable
+    // (executeKunTool) on plan turns — both are gated on it.
+    ...(plan?.planMode ? { threadMode: 'plan' as const } : {}),
+    ...(plan?.guiPlan ? { guiPlan: plan.guiPlan } : {}),
     // The SDK gates every call via canUseTool, so the bridged execution path
     // itself does not re-prompt; this stub keeps the context type satisfied.
     awaitApproval: async () => 'allow'
@@ -132,7 +165,10 @@ export function createAgentSdkRuntime(deps: AgentSdkRuntimeFactoryDeps): AgentSd
 
       const providerCfg = thread.providerId ? deps.providerConfigs[thread.providerId] : undefined
       const token = providerCfg?.apiKey?.trim() || deps.defaultToken?.trim()
-      const ctx = toolContext(threadId, turnId, thread.workspace)
+      // Plan turns expose create_plan (and narrow kun tools to the plan-allowed
+      // set); resolve before listing tools so the bridge sees create_plan.
+      const plan = resolveTurnPlanContext(thread, turnId)
+      const ctx = toolContext(threadId, turnId, thread.workspace, plan)
       const bridgeableTools: BridgeableTool[] = deps.registry.listTools(ctx).map((spec) => ({
         name: spec.name,
         description: spec.description,
@@ -149,12 +185,9 @@ export function createAgentSdkRuntime(deps: AgentSdkRuntimeFactoryDeps): AgentSd
         deps.historyTranscriptMaxBytes ?? DEFAULT_SDK_HISTORY_TRANSCRIPT_MAX_BYTES
       )
 
-      // Plan turns: per-turn mode override wins over the thread mode, matching the
-      // native loop. A plan turn suppresses goal/todo continuation and injects the
-      // plan-mode instruction (the SDK already gets the 'plan' permission posture
-      // via ctx.planMode -> mapApprovalPolicyToPermissionMode).
-      const turn = thread.turns.find((entry) => entry.id === turnId)
-      const planMode = (turn?.mode ?? thread.mode) === 'plan' || Boolean(turn?.guiPlan)
+      // A plan turn suppresses goal/todo continuation and injects the plan-mode
+      // instruction telling the model to call create_plan (now advertised above).
+      const planMode = plan.planMode
 
       const skillResolution = deps.skillRuntime
         ? await deps.skillRuntime.resolveTurn({ prompt: userText, workspace: thread.workspace })
@@ -203,7 +236,9 @@ export function createAgentSdkRuntime(deps: AgentSdkRuntimeFactoryDeps): AgentSd
 
     async executeKunTool(threadId, turnId, toolName, args): Promise<KunToolResult> {
       const thread = await deps.threadStore.get(threadId)
-      const ctx = toolContext(threadId, turnId, thread?.workspace ?? process.cwd())
+      // Re-resolve plan context so create_plan can write to its reserved path.
+      const plan = thread ? resolveTurnPlanContext(thread, turnId) : undefined
+      const ctx = toolContext(threadId, turnId, thread?.workspace ?? process.cwd(), plan)
       try {
         const record = deps.registry.resolveTool(toolName, ctx)
         const result = await record.tool.execute(args, ctx)

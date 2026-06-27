@@ -1,5 +1,61 @@
 import { describe, expect, test } from 'vitest'
-import { createAgentSdkRuntime } from './agent-sdk-runtime-factory.js'
+import { createAgentSdkRuntime, resolveTurnPlanContext } from './agent-sdk-runtime-factory.js'
+import type { ThreadRecord } from '../../contracts/threads.js'
+
+function threadWith(partial: Partial<ThreadRecord>): ThreadRecord {
+  return {
+    id: 'th',
+    title: 't',
+    workspace: '/ws',
+    model: 'claude-haiku-4-5',
+    mode: 'agent',
+    status: 'idle',
+    approvalPolicy: 'auto',
+    sandboxMode: 'danger-full-access',
+    relation: 'primary',
+    createdAt: '2026-06-27T00:00:00Z',
+    updatedAt: '2026-06-27T00:00:00Z',
+    turns: [],
+    ...partial
+  } as ThreadRecord
+}
+
+const planTurn = (id: string, workspaceRoot: string): ThreadRecord['turns'][number] =>
+  ({
+    id,
+    prompt: 'plan it',
+    guiPlan: { operation: 'draft', workspaceRoot, relativePath: '.kun/plan.md', planId: 'p1' }
+  }) as ThreadRecord['turns'][number]
+
+describe('resolveTurnPlanContext', () => {
+  test('exposes the GUI plan + planMode for a plan turn in the same workspace', () => {
+    const thread = threadWith({ workspace: '/ws', turns: [planTurn('tn', '/ws')] })
+    const resolved = resolveTurnPlanContext(thread, 'tn')
+    expect(resolved.planMode).toBe(true)
+    expect(resolved.guiPlan?.relativePath).toBe('.kun/plan.md')
+    expect(resolved.guiPlan?.turnId).toBe('tn')
+  })
+
+  test('drops a stale plan whose workspace does not match the thread', () => {
+    const thread = threadWith({ workspace: '/ws', turns: [planTurn('tn', '/other-ws')] })
+    const resolved = resolveTurnPlanContext(thread, 'tn')
+    expect(resolved.guiPlan).toBeUndefined()
+    // mode falls back to the thread mode (no live plan to force plan mode)
+    expect(resolved.planMode).toBe(false)
+  })
+
+  test('plan mode via thread.mode without a GUI plan', () => {
+    const thread = threadWith({ mode: 'plan', turns: [{ id: 'tn', prompt: 'x' } as ThreadRecord['turns'][number]] })
+    const resolved = resolveTurnPlanContext(thread, 'tn')
+    expect(resolved.planMode).toBe(true)
+    expect(resolved.guiPlan).toBeUndefined()
+  })
+
+  test('a normal agent turn is not a plan turn', () => {
+    const thread = threadWith({ turns: [{ id: 'tn', prompt: 'x' } as ThreadRecord['turns'][number]] })
+    expect(resolveTurnPlanContext(thread, 'tn')).toEqual({ planMode: false })
+  })
+})
 
 // handlesProvider only reads providerConfigs / agentSdkProviderIds / defaultIsAgentSdk,
 // so the heavy service deps can be stubbed for this routing test.
