@@ -2849,7 +2849,11 @@ pre {
 }
 
 .ds-chat-column-inset {
-  padding-inline: clamp(0.75rem, calc((100% - 48rem) / 2 + 1rem), 2rem);
+  padding-inline: clamp(0.75rem, calc((100% - var(--ds-chat-content-max-width, 56rem)) / 2 + 1rem), 2rem);
+}
+
+.ds-chat-content-max-width {
+  max-width: var(--ds-chat-content-max-width, 56rem);
 }
 
 .ds-chat-stage {

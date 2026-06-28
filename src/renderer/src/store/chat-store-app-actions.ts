@@ -33,6 +33,7 @@ type CreateAppActionsOptions = {
   setComposerModelLoadPromise: (promise: Promise<void> | null) => void
   applyTheme: (theme: AppSettingsV1['theme']) => void
   applyUiFontScale: (scale: AppSettingsV1['uiFontScale']) => void
+  applyChatContentMaxWidth: (widthPx: AppSettingsV1['chatContentMaxWidthPx']) => void
   applyCursorSpotlight: (enabled: boolean) => void
   applyCursorSpotlightColor: (color: AppSettingsV1['cursorSpotlightColor']) => void
   applyWriteTypography: (typography: AppSettingsV1['write']['typography']) => void
@@ -75,6 +76,7 @@ export function createAppActions(options: CreateAppActionsOptions): Pick<
     setComposerModelLoadPromise,
     applyTheme,
     applyUiFontScale,
+    applyChatContentMaxWidth,
     applyCursorSpotlight,
     applyCursorSpotlightColor,
     applyWriteTypography,
@@ -239,6 +241,7 @@ export function createAppActions(options: CreateAppActionsOptions): Pick<
       const workspaceRoot = normalizeWorkspaceRoot(settings.workspaceRoot)
       applyTheme(settings.theme)
       applyUiFontScale(settings.uiFontScale)
+      applyChatContentMaxWidth(settings.chatContentMaxWidthPx)
       applyCursorSpotlight(settings.cursorSpotlight !== false)
       applyCursorSpotlightColor(settings.cursorSpotlightColor)
       if (settings.write?.typography) applyWriteTypography(settings.write.typography)

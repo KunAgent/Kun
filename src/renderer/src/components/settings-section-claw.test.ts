@@ -91,6 +91,7 @@ function buildSettings(): AppSettingsV1 {
     locale: 'en',
     theme: 'system',
     uiFontScale: 0.88,
+    chatContentMaxWidthPx: 896,
     provider: defaultModelProviderSettings(),
     agents: { kun: defaultKunRuntimeSettings() },
     workspaceRoot: '/tmp/workspace',

@@ -49,7 +49,7 @@ export function ChatStarterGrid({
 }): ReactElement {
   const { t } = useTranslation('common')
   return (
-    <div className={`${compact ? 'mt-5' : 'mt-12'} grid w-full gap-3 sm:grid-cols-2 ${compact ? 'max-w-none' : 'max-w-[980px]'}`}>
+    <div className={`${compact ? 'mt-5' : 'mt-12'} grid w-full gap-3 sm:grid-cols-2 ${compact ? 'max-w-none' : 'ds-chat-content-max-width'}`}>
       {CHAT_STARTERS.map((starter) => (
         <button
           key={starter.titleKey}

@@ -230,6 +230,7 @@ describe('onClawChannelActivity routes through subscribeThreadEventsLive (not se
       },
       theme: 'dark',
       uiFontScale: 1,
+    chatContentMaxWidthPx: 896,
       locale: 'en',
       agents: { kun: { apiKey: 'test-key', model: 'deepseek-v4-pro', baseUrl: '' } },
       disabledSkillIds: []

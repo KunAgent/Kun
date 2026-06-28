@@ -3,6 +3,8 @@ import type { ApprovalPolicy, AppSettingsV1, SandboxMode, WindowCloseAction } fr
 import {
   CHECKPOINT_CLEANUP_INTERVAL_DAYS,
   DEFAULT_CURSOR_SPOTLIGHT_COLOR,
+  CHAT_CONTENT_MAX_WIDTH_MAX,
+  CHAT_CONTENT_MAX_WIDTH_MIN,
   DEFAULT_WRITE_INLINE_COMPLETION_BASE_URL,
   DEFAULT_WRITE_INLINE_COMPLETION_MAX_TOKENS,
   DEFAULT_WRITE_INLINE_COMPLETION_MODEL,
@@ -12,6 +14,7 @@ import {
   UI_FONT_SCALE_MIN,
   WRITE_INLINE_COMPLETION_MODEL_IDS,
   isKunRuntimeInsecure,
+  normalizeChatContentMaxWidth,
   normalizeUiFontScale
 } from '@shared/app-settings'
 import type { SkillRootId } from '../lib/skill-root-preference'
@@ -244,6 +247,9 @@ export function GeneralSettingsSection({ ctx }: { ctx: Record<string, any> }): R
   const fontScale = normalizeUiFontScale(form.uiFontScale)
   const fontScalePercent = Math.round(fontScale * 100)
   const setFontScale = (value: number): void => update({ uiFontScale: normalizeUiFontScale(value) })
+  const chatContentMaxWidthPx = normalizeChatContentMaxWidth(form.chatContentMaxWidthPx)
+  const setChatContentMaxWidthPx = (value: number): void =>
+    update({ chatContentMaxWidthPx: normalizeChatContentMaxWidth(value) })
   const cursorSpotlightColor = normalizeHexColor(form.cursorSpotlightColor)
 
   return (
@@ -327,6 +333,63 @@ export function GeneralSettingsSection({ ctx }: { ctx: Record<string, any> }): R
                             aria-label={t('fontScaleLarge')}
                             className="flex h-7 w-7 items-center justify-center rounded-r-lg text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink"
                             onClick={() => setFontScale(fontScale + 0.05)}
+                          >
+                            +
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  }
+                />
+                <SettingRow
+                  title={t('chatContentMaxWidth')}
+                  description={t('chatContentMaxWidthDesc')}
+                  control={
+                    <div className="w-full min-w-0 space-y-2.5 md:max-w-md">
+                      <div className="flex items-center gap-3">
+                        <span className="shrink-0 text-[12px] leading-none text-ds-faint" aria-hidden="true">
+                          {t('chatContentMaxWidthNarrow')}
+                        </span>
+                        <input
+                          type="range"
+                          min={CHAT_CONTENT_MAX_WIDTH_MIN}
+                          max={CHAT_CONTENT_MAX_WIDTH_MAX}
+                          step={8}
+                          value={chatContentMaxWidthPx}
+                          aria-label={t('chatContentMaxWidth')}
+                          className="w-full accent-accent"
+                          onChange={(e) => setChatContentMaxWidthPx(Number(e.target.value))}
+                        />
+                        <span className="shrink-0 text-[12px] leading-none text-ds-faint" aria-hidden="true">
+                          {t('chatContentMaxWidthWide')}
+                        </span>
+                        <div className="inline-flex shrink-0 items-center rounded-lg border border-ds-border bg-ds-card">
+                          <button
+                            type="button"
+                            aria-label={t('chatContentMaxWidthDecrease')}
+                            className="flex h-7 w-7 items-center justify-center rounded-l-lg text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink"
+                            onClick={() => setChatContentMaxWidthPx(chatContentMaxWidthPx - 32)}
+                          >
+                            −
+                          </button>
+                          <div className="flex h-7 min-w-[4.5rem] items-center justify-center border-x border-ds-border px-2 tabular-nums">
+                            <input
+                              type="number"
+                              min={CHAT_CONTENT_MAX_WIDTH_MIN}
+                              max={CHAT_CONTENT_MAX_WIDTH_MAX}
+                              step={8}
+                              value={chatContentMaxWidthPx}
+                              aria-label={t('chatContentMaxWidth')}
+                              className="hide-number-spinner w-full border-0 bg-transparent p-0 text-center text-[13px] font-medium text-ds-ink outline-none"
+                              onChange={(e) => setChatContentMaxWidthPx(Number(e.target.value))}
+                            />
+                            <span className="text-[11px] text-ds-faint">px</span>
+                          </div>
+                          <button
+                            type="button"
+                            aria-label={t('chatContentMaxWidthIncrease')}
+                            className="flex h-7 w-7 items-center justify-center rounded-r-lg text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink"
+                            onClick={() => setChatContentMaxWidthPx(chatContentMaxWidthPx + 32)}
                           >
                             +
                           </button>

@@ -1608,7 +1608,7 @@ export function FloatingComposer({
       ref={composerRootRef}
       className={compact
         ? 'ds-floating-composer ds-no-drag pointer-events-auto w-full pb-0 pt-0'
-        : 'ds-floating-composer ds-no-drag ds-chat-column-inset pointer-events-auto w-full max-w-4xl pb-3 pt-0'}
+        : 'ds-floating-composer ds-no-drag ds-chat-column-inset ds-chat-content-max-width pointer-events-auto w-full pb-3 pt-0'}
     >
       <FloatingComposerQueuedMessages
         messages={queuedMessages}

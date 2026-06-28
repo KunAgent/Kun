@@ -23,6 +23,7 @@ function settings(dataDir: string, model = 'settings-model'): AppSettingsV1 {
     locale: 'en',
     theme: 'system',
     uiFontScale: 0.82,
+    chatContentMaxWidthPx: 896,
     provider: {
       ...provider,
       providers: [

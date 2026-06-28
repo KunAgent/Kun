@@ -275,7 +275,7 @@ export function MessageTimeline({
           ))}
         </nav>
       ) : null}
-      <div className={`ds-message-timeline-content ds-chat-column-inset mx-auto flex w-full min-w-0 max-w-4xl flex-col gap-8 pt-8 ${
+      <div className={`ds-message-timeline-content ds-chat-column-inset ds-chat-content-max-width mx-auto flex w-full min-w-0 flex-col gap-8 pt-8 ${
         goalTimelinePaddingClass(heroRoute, Boolean(activeThreadGoal))
       }`}>
         {!hasContent || !activeThreadId ? (

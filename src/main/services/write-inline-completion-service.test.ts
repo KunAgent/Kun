@@ -30,6 +30,7 @@ function createSettings(patch: Partial<AppSettingsV1['write']['inlineCompletion'
     locale: 'en',
     theme: 'system',
     uiFontScale: 0.82,
+    chatContentMaxWidthPx: 896,
     provider: defaultModelProviderSettings(),
     agents: {
       kun: {

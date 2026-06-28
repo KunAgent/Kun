@@ -1,13 +1,15 @@
 import {
   DEFAULT_CURSOR_SPOTLIGHT_COLOR,
+  normalizeChatContentMaxWidth,
   normalizeUiFontScale,
   writeFontStackFor,
+  type ChatContentMaxWidthPx,
   type UiFontScale,
   type WriteTypographySettingsV1
 } from '@shared/app-settings'
 
 export type ThemePreference = 'system' | 'light' | 'dark'
-export type { UiFontScale }
+export type { ChatContentMaxWidthPx, UiFontScale }
 
 let removeSystemListener: (() => void) | null = null
 
@@ -47,6 +49,11 @@ export function applyTheme(pref: ThemePreference): void {
 export function applyUiFontScale(scale: UiFontScale): void {
   const root = document.documentElement
   root.style.setProperty('--ds-ui-scale', String(normalizeUiFontScale(scale)))
+}
+
+export function applyChatContentMaxWidth(widthPx: ChatContentMaxWidthPx): void {
+  const root = document.documentElement
+  root.style.setProperty('--ds-chat-content-max-width', `${normalizeChatContentMaxWidth(widthPx)}px`)
 }
 
 export function applyCursorSpotlight(enabled: boolean): void {

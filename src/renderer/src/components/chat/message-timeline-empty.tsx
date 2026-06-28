@@ -44,7 +44,7 @@ function ClawEmptyHero({
 
   return (
     <div className="ds-no-drag flex justify-center px-4 pb-6 pt-12 md:px-8 md:pt-16">
-      <div className="w-full max-w-[980px] rounded-[32px] border border-ds-border-muted bg-ds-card/78 px-8 py-10 text-center shadow-[0_16px_40px_rgba(20,47,95,0.06)] backdrop-blur md:px-12 md:py-14">
+      <div className="w-full ds-chat-content-max-width rounded-[32px] border border-ds-border-muted bg-ds-card/78 px-8 py-10 text-center shadow-[0_16px_40px_rgba(20,47,95,0.06)] backdrop-blur md:px-12 md:py-14">
         <div className="mx-auto max-w-[720px]">
           <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-[24px] border border-ds-border-muted bg-ds-main/55 text-accent">
             <KunStateFigure kind="greet" className="h-14 w-14" />
@@ -222,7 +222,7 @@ export function SubagentReturnBar({
     <button
       type="button"
       onClick={onBack}
-      className="group flex w-full max-w-4xl items-center gap-3 rounded-[16px] border border-accent/16 bg-accent/7 px-4 py-3 text-left text-ds-muted shadow-[0_14px_36px_rgba(59,130,216,0.05)] transition hover:bg-accent/12"
+      className="group ds-chat-content-max-width flex w-full items-center gap-3 rounded-[16px] border border-accent/16 bg-accent/7 px-4 py-3 text-left text-ds-muted shadow-[0_14px_36px_rgba(59,130,216,0.05)] transition hover:bg-accent/12"
     >
       <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[12px] bg-accent/12 text-accent">
         <Bot className="h-4 w-4" strokeWidth={1.85} />

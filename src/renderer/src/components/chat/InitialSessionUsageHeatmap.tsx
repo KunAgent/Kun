@@ -830,7 +830,7 @@ export function InitialSessionUsageHeatmapView({
 
   return (
     <div className="ds-initial-usage-heatmap ds-no-drag mx-auto flex min-h-[min(620px,calc(100dvh-220px))] w-full items-center justify-center px-3 py-6 text-left sm:px-5 sm:py-8">
-      <div className="flex w-full max-w-[980px] min-w-0 flex-col gap-5">
+      <div className="ds-chat-content-max-width flex w-full min-w-0 flex-col gap-5">
         {!hideHero ? (
           <UsageHeroSection
             title={heroTitle}

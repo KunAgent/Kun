@@ -84,6 +84,7 @@ function buildHarness(fetchModelsResult: FetchModelsResult): {
       },
       applyTheme: () => undefined,
       applyUiFontScale: () => undefined,
+      applyChatContentMaxWidth: () => undefined,
       applyCursorSpotlight: () => undefined,
       applyCursorSpotlightColor: () => undefined,
       applyWriteTypography: () => undefined,

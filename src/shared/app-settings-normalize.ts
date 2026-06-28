@@ -6,6 +6,7 @@ import {
   DEFAULT_CURSOR_SPOTLIGHT_COLOR,
   DEFAULT_LOG_RETENTION_DAYS,
   normalizeGuiUpdateChannel,
+  normalizeChatContentMaxWidth,
   normalizeUiFontScale,
   type AppBehaviorConfigV1,
   type AppSettingsV1,
@@ -78,6 +79,7 @@ export function normalizeAppSettings(settings: AppSettingsV1): AppSettingsV1 {
         ? maybeSettings.theme
         : 'system',
     uiFontScale: normalizeUiFontScale(maybeSettings.uiFontScale),
+    chatContentMaxWidthPx: normalizeChatContentMaxWidth(maybeSettings.chatContentMaxWidthPx),
     cursorSpotlight: maybeSettings.cursorSpotlight !== false,
     cursorSpotlightColor: normalizeCursorSpotlightColor(maybeSettings.cursorSpotlightColor),
     provider: providerSettings,

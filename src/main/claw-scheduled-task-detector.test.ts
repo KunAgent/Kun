@@ -28,6 +28,7 @@ function settings(endpointFormat: ModelEndpointFormat): AppSettingsV1 {
     locale: 'en',
     theme: 'system',
     uiFontScale: 0.82,
+    chatContentMaxWidthPx: 896,
     provider,
     agents: {
       kun: defaultKunRuntimeSettings()

@@ -25,6 +25,7 @@ import type {
 } from '../agent/kun-contract'
 import type { WriteInlineCompletionDebugEntry } from '@shared/write-inline-completion'
 import {
+  applyChatContentMaxWidth,
   applyCursorSpotlight,
   applyCursorSpotlightColor,
   applyTheme,
@@ -151,6 +152,7 @@ export function SettingsView(): ReactElement {
   const permissionsSectionRef = useRef<HTMLDivElement | null>(null)
   const formTheme = form?.theme
   const formUiFontScale = form?.uiFontScale
+  const formChatContentMaxWidthPx = form?.chatContentMaxWidthPx
   const writeTypography = form?.write?.typography
   const formWorkspaceRoot = form?.workspaceRoot
   const formKun = form ? getKunRuntimeSettings(form) : null
@@ -207,10 +209,11 @@ export function SettingsView(): ReactElement {
   }, [])
 
   useEffect(() => {
-    if (!formTheme || !formUiFontScale) return
+    if (!formTheme || formUiFontScale == null || formChatContentMaxWidthPx == null) return
     applyTheme(formTheme)
     applyUiFontScale(formUiFontScale)
-  }, [formTheme, formUiFontScale])
+    applyChatContentMaxWidth(formChatContentMaxWidthPx)
+  }, [formTheme, formUiFontScale, formChatContentMaxWidthPx])
 
   useEffect(() => {
     if (typeof formCursorSpotlight === 'boolean') {
