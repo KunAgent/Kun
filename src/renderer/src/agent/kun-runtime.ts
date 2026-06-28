@@ -225,6 +225,20 @@ export class KunRuntimeProvider implements AgentProvider {
       const block = chatBlockFromItem(item)
       return block ? [block] : []
     }))
+    // Re-derive the live ask-user flag from the runtime's pending gate so a
+    // request the agent is still awaiting stays answerable after a rehydration
+    // (thread switch, SSE recovery, restart) — and a stale `pending` item from a
+    // finished thread, whose gate entry is gone, stays a read-only record (#606).
+    const pendingUserInputIds = new Set(
+      Array.isArray(thread.pendingUserInputIds) ? thread.pendingUserInputIds : []
+    )
+    if (pendingUserInputIds.size > 0) {
+      for (const block of blocks) {
+        if (block.kind === 'user_input' && pendingUserInputIds.has(block.requestId)) {
+          block.live = true
+        }
+      }
+    }
     const latestTurn = turns.at(-1)
     const latestUserMessageId = [...items].reverse().find((item) => item.kind === 'user_message')?.id
     return {

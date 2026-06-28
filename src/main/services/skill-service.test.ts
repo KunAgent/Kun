@@ -293,6 +293,7 @@ describe('skill-service', () => {
       provider: defaultModelProviderSettings(),
       agents: { kun: defaultKunRuntimeSettings() },
       workspaceRoot,
+      conversationWorkspaceRoot: '~/Documents/Kun',
       log: { enabled: false, retentionDays: 7 },
       checkpointCleanup: { enabled: false, intervalDays: 3 },
       notifications: { turnComplete: true },

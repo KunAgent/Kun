@@ -198,6 +198,30 @@ describe('worktree branch checkout — integration with real git', () => {
     })
   })
 
+  it('creates multiple derived worktrees from the same source branch', async () => {
+    const sub = join(repoRoot, 'src', 'components')
+    const worktreeRoot = join(sandbox, 'kun-worktrees')
+    await mkdir(sub, { recursive: true })
+
+    const first = await checkoutGitBranchWorktree(sub, 'main', worktreeRoot)
+    const second = await checkoutGitBranchWorktree(sub, 'main', worktreeRoot)
+
+    expect(first.ok).toBe(true)
+    expect(second.ok).toBe(true)
+    if (!first.ok || !second.ok) throw new Error('unreachable')
+    expect(first.worktreePath).not.toBe(second.worktreePath)
+    expect(first.currentBranch).toMatch(/^kun\/worktree-[0-9a-f]{6}$/)
+    expect(second.currentBranch).toMatch(/^kun\/worktree-[0-9a-f]{6}$/)
+    expect(first.currentBranch).not.toBe(second.currentBranch)
+
+    const listed = await listGitBranchWorktrees(repoRoot, worktreeRoot)
+    expect(listed.ok).toBe(true)
+    if (!listed.ok) throw new Error('unreachable')
+    expect(listed.worktrees.map((item) => item.path)).toEqual(
+      expect.arrayContaining([first.worktreePath, second.worktreePath])
+    )
+  })
+
   it('creates a derived worktree branch when the selected branch is checked out in the main repo', async () => {
     const sub = join(repoRoot, 'src', 'components')
     const worktreeRoot = join(sandbox, 'kun-worktrees')

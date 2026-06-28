@@ -30,6 +30,7 @@ function settingsForPort(port: number): AppSettingsV1 {
       }
     },
     workspaceRoot: '/tmp',
+    conversationWorkspaceRoot: '~/Documents/Kun',
     log: { enabled: true, retentionDays: 7 },
     checkpointCleanup: { enabled: false, intervalDays: 3 },
     notifications: { turnComplete: true },
@@ -134,5 +135,55 @@ describe('runtimeRequestViaHost', () => {
     expect(response.ok).toBe(true)
     expect(response.status).toBe(200)
     expect(seenUrl).toBe('/v1/threads?limit=1')
+  })
+
+  it('retries a stale endpoint after ensureRuntime returns a new runtime port', async () => {
+    let seenMethod = ''
+    const port = await listen((req, res) => {
+      seenMethod = req.method ?? ''
+      res.setHeader('Content-Type', 'application/json')
+      res.end(JSON.stringify({ ok: true, retried: true }))
+    })
+    let ensureCalls = 0
+
+    const response = await runtimeRequestViaHost(
+      settingsForPort(1),
+      '/v1/threads',
+      { method: 'POST', body: JSON.stringify({ title: 'hello' }) },
+      async () => {
+        ensureCalls += 1
+        return ensureCalls === 1 ? settingsForPort(1) : settingsForPort(port)
+      }
+    )
+
+    expect(ensureCalls).toBe(2)
+    expect(response.ok).toBe(true)
+    expect(response.status).toBe(200)
+    expect(JSON.parse(response.body)).toMatchObject({ retried: true })
+    expect(seenMethod).toBe('POST')
+  })
+
+  it('retries idempotent requests even when the runtime port stays the same', async () => {
+    let requestCount = 0
+    const port = await listen((_req, res) => {
+      requestCount += 1
+      if (requestCount === 1) {
+        res.destroy()
+        return
+      }
+      res.setHeader('Content-Type', 'application/json')
+      res.end(JSON.stringify({ ok: true }))
+    })
+
+    const response = await runtimeRequestViaHost(
+      settingsForPort(port),
+      '/v1/usage?group_by=day',
+      { method: 'GET' },
+      async () => settingsForPort(port)
+    )
+
+    expect(requestCount).toBe(2)
+    expect(response.ok).toBe(true)
+    expect(JSON.parse(response.body)).toEqual({ ok: true })
   })
 })

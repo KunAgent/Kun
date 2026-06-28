@@ -99,6 +99,7 @@ export function expandSettingsHomePathsForUse(
   return {
     ...settings,
     workspaceRoot: expand(settings.workspaceRoot),
+    conversationWorkspaceRoot: expand(settings.conversationWorkspaceRoot),
     agents: {
       ...settings.agents,
       kun: {

@@ -68,7 +68,7 @@ function makeCoordinator(
 describe('GoalResumeCoordinator', () => {
   it('schedules a backoff resume that launches a continuation turn', async () => {
     const ctx = makeCoordinator()
-    const outcome = ctx.coordinator.noteGoalTurnFailed({
+    const outcome = ctx.coordinator.noteGoalTurnSettled({
       threadId: 'thr',
       goalKey: 'thr::t0::obj',
       madeProgress: false
@@ -85,7 +85,7 @@ describe('GoalResumeCoordinator', () => {
     const ctx = makeCoordinator({ baseDelayMs: 1000, maxDelayMs: 30_000 })
     const delays: number[] = []
     for (let i = 0; i < 3; i += 1) {
-      ctx.coordinator.noteGoalTurnFailed({ threadId: 'thr', goalKey: 'k', madeProgress: false })
+      ctx.coordinator.noteGoalTurnSettled({ threadId: 'thr', goalKey: 'k', madeProgress: false })
       const latest = [...ctx.timer.scheduled].reverse().find((e) => !e.cancelled)
       delays.push(latest!.delayMs)
     }
@@ -96,7 +96,7 @@ describe('GoalResumeCoordinator', () => {
     const ctx = makeCoordinator({ baseDelayMs: 1000, maxDelayMs: 2500, maxNoProgressAttempts: 10 })
     let last = 0
     for (let i = 0; i < 6; i += 1) {
-      ctx.coordinator.noteGoalTurnFailed({ threadId: 'thr', goalKey: 'k', madeProgress: false })
+      ctx.coordinator.noteGoalTurnSettled({ threadId: 'thr', goalKey: 'k', madeProgress: false })
       last = [...ctx.timer.scheduled].reverse().find((e) => !e.cancelled)!.delayMs
     }
     expect(last).toBe(2500)
@@ -105,7 +105,7 @@ describe('GoalResumeCoordinator', () => {
   it('exhausts the budget after consecutive no-progress failures', () => {
     const ctx = makeCoordinator({ maxNoProgressAttempts: 3 })
     const outcomes = [1, 2, 3, 4].map(() =>
-      ctx.coordinator.noteGoalTurnFailed({ threadId: 'thr', goalKey: 'k', madeProgress: false })
+      ctx.coordinator.noteGoalTurnSettled({ threadId: 'thr', goalKey: 'k', madeProgress: false })
     )
     expect(outcomes).toEqual(['scheduled', 'scheduled', 'scheduled', 'exhausted'])
   })
@@ -113,7 +113,7 @@ describe('GoalResumeCoordinator', () => {
   it('never exhausts while each failure still makes progress', () => {
     const ctx = makeCoordinator({ maxNoProgressAttempts: 2 })
     const outcomes = [1, 2, 3, 4, 5].map(() =>
-      ctx.coordinator.noteGoalTurnFailed({ threadId: 'thr', goalKey: 'k', madeProgress: true })
+      ctx.coordinator.noteGoalTurnSettled({ threadId: 'thr', goalKey: 'k', madeProgress: true })
     )
     expect(outcomes).toEqual(['scheduled', 'scheduled', 'scheduled', 'scheduled', 'scheduled'])
   })
@@ -121,7 +121,7 @@ describe('GoalResumeCoordinator', () => {
   it('resets the no-progress budget when a failure makes progress', () => {
     const ctx = makeCoordinator({ maxNoProgressAttempts: 2 })
     const fail = (madeProgress: boolean) =>
-      ctx.coordinator.noteGoalTurnFailed({ threadId: 'thr', goalKey: 'k', madeProgress })
+      ctx.coordinator.noteGoalTurnSettled({ threadId: 'thr', goalKey: 'k', madeProgress })
     // Two no-progress failures bring the streak to the cap...
     expect(fail(false)).toBe('scheduled') // streak 1
     expect(fail(false)).toBe('scheduled') // streak 2 (== cap)
@@ -135,15 +135,15 @@ describe('GoalResumeCoordinator', () => {
 
   it('resets the budget when the goal identity changes', () => {
     const ctx = makeCoordinator({ maxNoProgressAttempts: 2 })
-    ctx.coordinator.noteGoalTurnFailed({ threadId: 'thr', goalKey: 'old', madeProgress: false })
-    ctx.coordinator.noteGoalTurnFailed({ threadId: 'thr', goalKey: 'old', madeProgress: false })
+    ctx.coordinator.noteGoalTurnSettled({ threadId: 'thr', goalKey: 'old', madeProgress: false })
+    ctx.coordinator.noteGoalTurnSettled({ threadId: 'thr', goalKey: 'old', madeProgress: false })
     // New goal key restarts the counter rather than immediately exhausting.
-    expect(ctx.coordinator.noteGoalTurnFailed({ threadId: 'thr', goalKey: 'new', madeProgress: false })).toBe('scheduled')
+    expect(ctx.coordinator.noteGoalTurnSettled({ threadId: 'thr', goalKey: 'new', madeProgress: false })).toBe('scheduled')
   })
 
   it('does not launch when the goal is no longer active at fire time', async () => {
     const ctx = makeCoordinator()
-    ctx.coordinator.noteGoalTurnFailed({ threadId: 'thr', goalKey: 'thr::t0::obj', madeProgress: false })
+    ctx.coordinator.noteGoalTurnSettled({ threadId: 'thr', goalKey: 'thr::t0::obj', madeProgress: false })
     ctx.setActiveGoalKey(null) // goal completed/cleared while waiting
     await ctx.timer.fireLatest()
     expect(ctx.launches).toEqual([])
@@ -151,7 +151,7 @@ describe('GoalResumeCoordinator', () => {
 
   it('does not launch when the goal was replaced while waiting', async () => {
     const ctx = makeCoordinator()
-    ctx.coordinator.noteGoalTurnFailed({ threadId: 'thr', goalKey: 'thr::t0::obj', madeProgress: false })
+    ctx.coordinator.noteGoalTurnSettled({ threadId: 'thr', goalKey: 'thr::t0::obj', madeProgress: false })
     ctx.setActiveGoalKey('thr::t1::different')
     await ctx.timer.fireLatest()
     expect(ctx.launches).toEqual([])
@@ -159,7 +159,7 @@ describe('GoalResumeCoordinator', () => {
 
   it('skips launching when a turn is already running at fire time', async () => {
     const ctx = makeCoordinator()
-    ctx.coordinator.noteGoalTurnFailed({ threadId: 'thr', goalKey: 'thr::t0::obj', madeProgress: false })
+    ctx.coordinator.noteGoalTurnSettled({ threadId: 'thr', goalKey: 'thr::t0::obj', madeProgress: false })
     ctx.setBusy(true)
     await ctx.timer.fireLatest()
     expect(ctx.launches).toEqual([])
@@ -167,17 +167,17 @@ describe('GoalResumeCoordinator', () => {
 
   it('clear() cancels a pending resume', async () => {
     const ctx = makeCoordinator()
-    ctx.coordinator.noteGoalTurnFailed({ threadId: 'thr', goalKey: 'k', madeProgress: false })
+    ctx.coordinator.noteGoalTurnSettled({ threadId: 'thr', goalKey: 'k', madeProgress: false })
     ctx.coordinator.clear('thr')
     expect(ctx.timer.pending()).toHaveLength(0)
   })
 
   it('shutdown() cancels pending resumes and stops scheduling', () => {
     const ctx = makeCoordinator()
-    ctx.coordinator.noteGoalTurnFailed({ threadId: 'thr', goalKey: 'k', madeProgress: false })
+    ctx.coordinator.noteGoalTurnSettled({ threadId: 'thr', goalKey: 'k', madeProgress: false })
     ctx.coordinator.shutdown()
     expect(ctx.timer.pending()).toHaveLength(0)
-    expect(ctx.coordinator.noteGoalTurnFailed({ threadId: 'thr', goalKey: 'k', madeProgress: false })).toBe('skipped')
+    expect(ctx.coordinator.noteGoalTurnSettled({ threadId: 'thr', goalKey: 'k', madeProgress: false })).toBe('skipped')
   })
 
   it('resumeInterrupted launches an active, idle goal', async () => {

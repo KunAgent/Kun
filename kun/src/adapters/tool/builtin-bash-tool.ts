@@ -11,6 +11,7 @@ import {
   normalizePositiveInteger,
   shellCommandArgs,
   shellRuntimeInfo,
+  shellSpawnEnv,
   terminateSpawnTree,
   waitForSpawnExit,
   withToolBoundary,
@@ -94,7 +95,7 @@ async function bashExecute(
     ? null
     : spawn(shellRuntime.shell, shellCommandArgs(shellRuntime, command), {
         cwd,
-        env: process.env,
+        env: shellSpawnEnv(),
         detached: process.platform !== 'win32',
         stdio: ['ignore', 'pipe', 'pipe'],
         windowsHide: true
@@ -395,7 +396,7 @@ async function startBashSession(
   const shellRuntime = shellRuntimeInfo()
   const child = spawn(shellRuntime.shell, shellCommandArgs(shellRuntime, input.command), {
     cwd: input.cwd,
-    env: process.env,
+    env: shellSpawnEnv(),
     detached: process.platform !== 'win32',
     stdio: ['pipe', 'pipe', 'pipe'],
     windowsHide: true

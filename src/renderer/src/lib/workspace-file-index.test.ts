@@ -4,7 +4,11 @@ import {
   mentionQueryDirectory,
   mergeMentionCandidates
 } from './workspace-file-index'
-import { filterWorkspaceFileMentionSuggestions, type ComposerFileReference } from './composer-file-references'
+import {
+  composerFileReferenceFromPath,
+  filterWorkspaceFileMentionSuggestions,
+  type ComposerFileReference
+} from './composer-file-references'
 
 function entry(path: string, type: 'file' | 'directory'): {
   name: string
@@ -27,6 +31,24 @@ function installListDirectory(
 
 afterEach(() => {
   vi.unstubAllGlobals()
+})
+
+describe('composerFileReferenceFromPath', () => {
+  it('keeps workspace files relative and external user-picked files explicit', () => {
+    expect(composerFileReferenceFromPath('C:\\repo\\src\\app.ts', 'C:\\repo')).toEqual({
+      path: 'C:/repo/src/app.ts',
+      relativePath: 'src/app.ts',
+      name: 'app.ts',
+      type: 'file'
+    })
+    expect(composerFileReferenceFromPath('D:\\notes\\context.md', 'C:\\repo')).toEqual({
+      path: 'D:/notes/context.md',
+      relativePath: 'D:/notes/context.md',
+      name: 'context.md',
+      type: 'file',
+      workspaceRoot: null
+    })
+  })
 })
 
 describe('mentionQueryDirectory', () => {

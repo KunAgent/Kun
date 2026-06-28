@@ -3,20 +3,33 @@ import { app } from 'electron'
 export const LINUX_WAYLAND_IME_SWITCHES = [
   { name: 'ozone-platform-hint', value: 'auto' },
   { name: 'enable-wayland-ime' },
-  // 显式选用 text-input-v3:Chromium 开启 enable-wayland-ime 后默认走
-  // text-input-v1,而 niri / sway / Hyprland 等 wlroots/smithay 系合成器
-  // 只实现 v3,不加这一项会导致纯 Wayland 下中文输入法完全无法使用
-  // (issue:archlinux + niri 无法切换中文输入法)。GNOME/KDE 同样支持 v3,
-  // 故无条件开启;Chromium 的 v1 实现本身也不稳定。
+  // Chromium defaults to text-input-v1 after enable-wayland-ime. wlroots /
+  // smithay compositors such as niri, sway and Hyprland need v3 for IME.
   { name: 'wayland-text-input-version', value: '3' }
 ] as const
 
-export function shouldConfigureLinuxWaylandImeSwitches(platform = process.platform): boolean {
-  return platform === 'linux'
+type LinuxImeEnv = Record<string, string | undefined>
+
+export function shouldConfigureLinuxWaylandImeSwitches(
+  platform = process.platform,
+  env: LinuxImeEnv = process.env
+): boolean {
+  if (platform !== 'linux') return false
+  const explicit = env.KUN_LINUX_WAYLAND_IME?.trim().toLowerCase()
+  if (explicit === '1' || explicit === 'true' || explicit === 'yes') return true
+  if (explicit === '0' || explicit === 'false' || explicit === 'no') return false
+
+  // Do not force Ozone/ANGLE on generic Linux or X11 sessions. Electron's
+  // default GPU path is safer there, and forcing Wayland flags can push Intel
+  // Mesa systems into SwiftShader/software rendering (#571).
+  return Boolean(env.WAYLAND_DISPLAY) && !env.DISPLAY
 }
 
-export function configureLinuxWaylandImeSwitches(platform = process.platform): void {
-  if (!shouldConfigureLinuxWaylandImeSwitches(platform)) return
+export function configureLinuxWaylandImeSwitches(
+  platform = process.platform,
+  env: LinuxImeEnv = process.env
+): void {
+  if (!shouldConfigureLinuxWaylandImeSwitches(platform, env)) return
 
   for (const commandLineSwitch of LINUX_WAYLAND_IME_SWITCHES) {
     if (app.commandLine.hasSwitch(commandLineSwitch.name)) continue

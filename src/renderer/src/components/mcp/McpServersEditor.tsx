@@ -357,6 +357,18 @@ function McpServerCard({
           </label>
         </div>
 
+        <label className={labelClass}>
+          {t('mcpFormVisibleRoots')}
+          <textarea
+            value={server.workspaceRoots.join('\n')}
+            disabled={disabled}
+            placeholder={t('mcpFormVisibleRootsPlaceholder')}
+            onChange={(e) => onChange({ workspaceRoots: e.target.value.split('\n') })}
+            className="min-h-[60px] w-full rounded-xl border border-ds-border bg-ds-card px-3 py-2 font-mono text-[12.5px] leading-5 text-ds-ink shadow-sm focus:border-accent/40 focus:outline-none focus:ring-1 focus:ring-accent/30"
+          />
+          <span className="text-[11px] font-normal text-ds-faint">{t('mcpFormVisibleRootsHint')}</span>
+        </label>
+
         {server.trustScope === 'workspace' ? (
           <label className={labelClass}>
             {t('mcpFormTrustedRoots')}

@@ -30,6 +30,7 @@ export type ModelProviderPresetId =
   | 'aliyun'
   | 'tencentcloud'
   | 'vercel-ai-gateway'
+  | 'claude-subscription'
 
 export const TOKEN_PLAN_PROVIDER_ID_SUFFIX = '-token-plan'
 
@@ -91,6 +92,11 @@ export type ModelProviderPreset = {
    * 'api'(默认) = 按量付费。仅用于设置页把套餐类供应商收拢成一组,不写入存储的 profile。
    */
   category?: 'api' | 'subscription'
+  /**
+   * 传输类型。'agent-sdk' = 把整轮委托给内置的官方 Claude Agent SDK(消耗 Claude
+   * Pro/Max 订阅额度,合规路径);缺省按 HTTP 模型客户端走 baseUrl。
+   */
+  kind?: 'agent-sdk'
   baseUrl: string
   endpointFormat: ModelEndpointFormat
   models: string[]
@@ -218,6 +224,32 @@ export const MODEL_PROVIDER_PRESETS: ModelProviderPreset[] = [
     },
     docsUrl: 'https://longcat.chat/platform/docs/zh/',
     apiKeyUrl: 'https://longcat.chat/platform/'
+  },
+  {
+    id: 'claude-subscription',
+    name: 'Claude (Pro/Max 订阅)',
+    category: 'subscription',
+    // Delegates whole turns to the official Claude Agent SDK so requests draw on
+    // the user's Claude subscription. baseUrl is unused for this kind (kept for
+    // display); auth comes from the host's Claude Code login or a pasted
+    // CLAUDE_CODE_OAUTH_TOKEN in the API Key field.
+    kind: 'agent-sdk',
+    baseUrl: 'https://api.anthropic.com',
+    endpointFormat: 'messages',
+    // Ids match what the SDK's supportedModels() returns (see claude-subscription-models).
+    models: ['claude-opus-4-8', 'claude-sonnet-4-6', 'claude-haiku-4-5'],
+    // The SDK does NOT report a context window, so we set it manually: Opus 4.8 and
+    // Sonnet 4.x support 1M; Haiku 4.5 is 200K. All Claude 4.x models are vision-capable,
+    // so every profile uses visionChatProfile (inputModalities text+image). Cosmetic on
+    // the agent-sdk path (the SDK enforces the real limit); preset profiles are
+    // authoritative, so edit them here.
+    modelProfiles: {
+      'claude-opus-4-8': visionChatProfile(1_000_000),
+      'claude-sonnet-4-6': visionChatProfile(1_000_000),
+      'claude-haiku-4-5': visionChatProfile(200_000)
+    },
+    docsUrl: 'https://code.claude.com/docs/en/authentication',
+    apiKeyUrl: 'https://claude.ai'
   },
   {
     id: 'zhipu-coding-plan',
@@ -637,6 +669,7 @@ export function modelProviderPresetProfile(
     apiKey: apiKey.trim(),
     baseUrl: preset.baseUrl,
     endpointFormat: preset.endpointFormat,
+    ...(preset.kind ? { kind: preset.kind } : {}),
     models: [...preset.models],
     modelProfiles: copyModelProfiles(preset.modelProfiles),
     ...(preset.image ? { image: modelProviderPresetImageCapability(preset.image) } : {}),

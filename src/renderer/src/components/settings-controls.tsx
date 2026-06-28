@@ -89,7 +89,13 @@ export function InlineNoticeView({
         : 'border-ds-border bg-ds-main/50 text-ds-muted'
 
   return (
-    <div className={`rounded-xl border px-3 py-2 text-[12.5px] leading-5 ${className}`}>
+    // `min-w-0 break-words` keeps long messages (a failed-probe error can carry
+    // a full URL or a 300-char response body) wrapping inside the container
+    // instead of forcing horizontal overflow that stretches the settings panel
+    // — the success notice is short so the bug only ever showed on failure (#617).
+    <div
+      className={`min-w-0 break-words rounded-xl border px-3 py-2 text-[12.5px] leading-5 ${className}`}
+    >
       {notice.message}
     </div>
   )

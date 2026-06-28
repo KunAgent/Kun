@@ -2124,6 +2124,50 @@ describe('CompatModelClient', () => {
     expect(JSON.stringify(chunks[0])).toContain(providerMessage)
   })
 
+  it('adds a proxy hint when a proxied model request fails before receiving a response', async () => {
+    const fetchImpl: typeof fetch = async () => {
+      throw new Error('connect ETIMEDOUT')
+    }
+    const client = new CompatModelClient({
+      baseUrl: 'https://api.deepseek.com',
+      apiKey: 'k',
+      model: 'deepseek-v4-pro',
+      modelProxyUrl: 'http://127.0.0.1:7890',
+      fetchImpl
+    })
+    const chunks: ModelStreamChunk[] = []
+    for await (const chunk of client.stream(buildRequest(new AbortController().signal))) {
+      chunks.push(chunk)
+    }
+
+    expect(chunks[0]).toMatchObject({
+      kind: 'error',
+      message: 'model request failed: connect ETIMEDOUT. Check the configured model-request proxy in Settings > Providers.'
+    })
+  })
+
+  it('omits the proxy hint when a proxied request is aborted (cancel/idle-timeout)', async () => {
+    const fetchImpl: typeof fetch = async () => {
+      const abort = new Error('The operation was aborted')
+      abort.name = 'AbortError'
+      throw abort
+    }
+    const client = new CompatModelClient({
+      baseUrl: 'https://api.deepseek.com',
+      apiKey: 'k',
+      model: 'deepseek-v4-pro',
+      modelProxyUrl: 'http://127.0.0.1:7890',
+      fetchImpl
+    })
+    const chunks: ModelStreamChunk[] = []
+    for await (const chunk of client.stream(buildRequest(new AbortController().signal))) {
+      chunks.push(chunk)
+    }
+
+    expect(chunks[0]).toMatchObject({ kind: 'error' })
+    expect(JSON.stringify(chunks[0])).not.toContain('model-request proxy')
+  })
+
   it('adds a provider configuration hint and logs request context for HTTP 404', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
     const fetchImpl: typeof fetch = async () => new Response('', { status: 404 })

@@ -87,6 +87,10 @@ export function normalizeAppSettings(settings: AppSettingsV1): AppSettingsV1 {
       ...(miniMaxMediaDefaults ?? {})
     })),
     workspaceRoot: typeof maybeSettings.workspaceRoot === 'string' ? maybeSettings.workspaceRoot : '',
+    conversationWorkspaceRoot:
+      typeof maybeSettings.conversationWorkspaceRoot === 'string'
+        ? maybeSettings.conversationWorkspaceRoot
+        : '',
     log: {
       enabled: maybeSettings.log?.enabled !== false,
       retentionDays: typeof maybeSettings.log?.retentionDays === 'number'

@@ -404,7 +404,11 @@ export class TurnService {
    * caller can resume goals that were interrupted mid-run (KunAgent/Kun#370).
    */
   async reconcileOrphanedTurns(): Promise<string[]> {
-    const summaries = await this.deps.threadStore.list()
+    // Include `side` threads: a delegated subagent runs on a hidden side thread
+    // whose own turn is left `running` when the runtime is interrupted. Without
+    // includeSide it is never swept, so its turn (and the parent's delegate_task
+    // tool item) stay pending forever, wedging the thread (KunAgent/Kun#621).
+    const summaries = await this.deps.threadStore.list({ includeSide: true })
     const reconciledThreadIds = new Set<string>()
     for (const summary of summaries) {
       const thread = await this.deps.threadStore.get(summary.id).catch(() => null)

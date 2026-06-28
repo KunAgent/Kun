@@ -521,6 +521,8 @@ describe('MessageTimeline Kun runtime metadata smoke', () => {
       id: 'ui_freeform',
       requestId: 'input_freeform',
       status: 'pending',
+      // The live runtime is actively awaiting this request.
+      live: true,
       questions: [
         {
           header: 'Input',
@@ -546,6 +548,42 @@ describe('MessageTimeline Kun runtime metadata smoke', () => {
     expect(html).not.toContain('<textarea')
     expect(html).toContain('Answer below the input box')
     expect(html).toContain('Cancel')
+  })
+
+  it('renders a stale pending request_user_input from history as a non-actionable record (issue #606)', () => {
+    // A request rehydrated from a finished thread keeps `status: 'pending'` but
+    // is not `live`, so it must not offer Cancel (which would hit a dead gate).
+    const inputBlock: ChatBlock = {
+      kind: 'user_input',
+      id: 'ui_stale',
+      requestId: 'input_stale',
+      status: 'pending',
+      questions: [
+        {
+          header: 'Input',
+          id: 'direction',
+          question: '你更想去南方还是北方？',
+          options: []
+        }
+      ]
+    }
+
+    const html = renderToStaticMarkup(
+      createElement(ProcessSectionRow, {
+        section: { id: 'execution-input', kind: 'execution', blocks: [inputBlock] },
+        processing: true,
+        singleReasoningSection: false,
+        viewportRef: { current: null }
+      })
+    )
+
+    // The record still shows what was asked…
+    expect(html).toContain('你更想去南方还是北方？')
+    // …but offers no live affordances (the "answer below" hint and the Cancel
+    // button share one `pending` branch), so it can't fire a dead resolve.
+    expect(html).not.toContain('Answer below the input box')
+    // It reads as an ended record rather than an active prompt.
+    expect(html).toContain('Cancelled')
   })
 
   it('expands the live work timeline by default while keeping tool details collapsed', () => {

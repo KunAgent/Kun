@@ -8,7 +8,7 @@ import { CapabilityRegistry } from '../src/adapters/tool/capability-registry.js'
 import { buildDelegationToolProviders } from '../src/adapters/tool/delegation-tool-provider.js'
 import { LocalToolHost } from '../src/adapters/tool/local-tool-host.js'
 import { KunCapabilitiesConfig } from '../src/contracts/capabilities.js'
-import { DelegationRuntime, FileDelegationStore } from '../src/delegation/delegation-runtime.js'
+import { ChildRunRecord, DelegationRuntime, FileDelegationStore } from '../src/delegation/delegation-runtime.js'
 import { RuntimeEventRecorder } from '../src/services/runtime-event-recorder.js'
 
 describe('DelegationRuntime', () => {
@@ -451,6 +451,35 @@ describe('DelegationRuntime', () => {
       prompt: 'abort',
       signal: controller.signal
     })).resolves.toMatchObject({ status: 'aborted' })
+  })
+
+  it('reconciles child runs left running/queued by a previous process, leaving terminal ones', async () => {
+    const store = new FileDelegationStore(join(dir, 'children'))
+    const base = {
+      parentThreadId: 'thr_1',
+      parentTurnId: 'turn_1',
+      prompt: 'x',
+      toolPolicy: 'inherit' as const,
+      createdAt: '2026-06-03T00:00:00.000Z',
+      updatedAt: '2026-06-03T00:00:00.000Z'
+    }
+    await store.upsert(ChildRunRecord.parse({ ...base, id: 'child_run', status: 'running' }))
+    await store.upsert(ChildRunRecord.parse({ ...base, id: 'child_queued', status: 'queued' }))
+    await store.upsert(ChildRunRecord.parse({ ...base, id: 'child_done', status: 'completed' }))
+
+    const runtime = createRuntime({})
+    const reconciled = await runtime.reconcileOrphanedChildRuns()
+    expect(reconciled).toBe(2)
+
+    const byId = new Map((await store.list('thr_1')).map((run) => [run.id, run]))
+    expect(byId.get('child_run')?.status).toBe('failed')
+    expect(byId.get('child_run')?.error).toMatch(/interrupted by a runtime restart/)
+    expect(byId.get('child_queued')?.status).toBe('failed')
+    // Terminal records are left exactly as they were.
+    expect(byId.get('child_done')?.status).toBe('completed')
+
+    // Idempotent: a second sweep finds nothing new.
+    expect(await runtime.reconcileOrphanedChildRuns()).toBe(0)
   })
 
   function createRuntime(options: {

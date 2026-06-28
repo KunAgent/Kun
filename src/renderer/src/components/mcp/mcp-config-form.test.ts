@@ -77,6 +77,27 @@ describe('parseMcpConfigText', () => {
     expect(server.headers).toEqual([{ key: 'Authorization', value: 'Bearer x' }])
   })
 
+  it('parses workspace visibility roots separately from trust roots', () => {
+    const model = expectOk(
+      parseMcpConfigText(
+        JSON.stringify({
+          servers: {
+            codegraph: {
+              transport: 'streamable-http',
+              url: 'https://example.com/mcp',
+              workspaceRoots: ['/workspace/project-a'],
+              trustScope: 'workspace',
+              trustedWorkspaceRoots: ['/workspace']
+            }
+          }
+        })
+      )
+    )
+    const server = model.servers[0]
+    expect(server.workspaceRoots).toEqual(['/workspace/project-a'])
+    expect(server.trustedWorkspaceRoots).toEqual(['/workspace'])
+  })
+
   it('accepts the Claude Desktop format: mcpServers + type:http', () => {
     const model = expectOk(
       parseMcpConfigText(
@@ -220,6 +241,16 @@ describe('serializeMcpConfig', () => {
       trustedWorkspaceRoots: ['/a', ' /b ', '']
     }
     expect(serializeMcpServer(server).trustedWorkspaceRoots).toEqual(['/a', '/b'])
+  })
+
+  it('writes visibility roots when present', () => {
+    const server: McpFormServer = {
+      ...createBlankMcpServer('stdio'),
+      name: 's',
+      command: 'run',
+      workspaceRoots: ['/a', ' /b ', '']
+    }
+    expect(serializeMcpServer(server).workspaceRoots).toEqual(['/a', '/b'])
   })
 
   it('drops blank env/header rows on serialize', () => {

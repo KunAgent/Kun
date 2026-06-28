@@ -266,7 +266,9 @@ export async function checkoutGitBranchWorktree(
     const wtPath = await allocateBranchWorktreePath(sourceRepositoryRoot, worktreeRoot)
     const worktreeBranch = await allocateDerivedWorktreeBranch(cwd)
     await mkdir(join(wtPath, '..'), { recursive: true })
-    await runGit(cwd, ['worktree', 'add', '-b', worktreeBranch, wtPath, branch], 30_000)
+    // Always add from the primary checkout so multiple derived worktrees can be
+    // created from the same source branch regardless of the caller's cwd.
+    await runGit(sourceRepositoryRoot, ['worktree', 'add', '-b', worktreeBranch, wtPath, branch], 30_000)
     return worktreeCheckoutResult(wtPath, sourceRepositoryRoot)
   } catch (error) {
     return gitWorktreeFailure(error)
@@ -288,7 +290,7 @@ export async function createGitBranchWorktree(
     const sourceRepositoryRoot = await getPrimaryWorktreeRoot(cwd, currentRepositoryRoot)
     const wtPath = await allocateBranchWorktreePath(sourceRepositoryRoot, worktreeRoot)
     await mkdir(join(wtPath, '..'), { recursive: true })
-    await runGit(cwd, ['worktree', 'add', '-b', branch, wtPath, 'HEAD'], 30_000)
+    await runGit(sourceRepositoryRoot, ['worktree', 'add', '-b', branch, wtPath, 'HEAD'], 30_000)
     return worktreeCheckoutResult(wtPath, sourceRepositoryRoot)
   } catch (error) {
     return gitWorktreeFailure(error)

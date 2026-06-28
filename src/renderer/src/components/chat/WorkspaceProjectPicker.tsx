@@ -5,11 +5,13 @@ import { useChatStore } from '../../store/chat-store'
 import { workspaceLabelFromPath } from '../../lib/workspace-label'
 import {
   isClawWorkspacePath,
+  isConversationWorkspacePath,
   isInternalDeepSeekGuiWorkspace,
   isInternalTemporaryWorkspace,
   normalizeWorkspaceRoot,
   workspaceRootIdentityKey
 } from '../../lib/workspace-path'
+import { resolveProjectWorkspacePath } from '../../lib/worktree-project-path'
 import { readThreadWorktreeRegistry, type ThreadWorktreeRecord } from '../../lib/thread-worktree-registry'
 
 type Props = {
@@ -36,7 +38,8 @@ function workspaceContext(root: string, label: string): string {
 
 function workspaceProjectRootForPicker(
   workspacePath: string,
-  threadWorktrees: WorkspaceProjectPickerWorktrees = {}
+  threadWorktrees: WorkspaceProjectPickerWorktrees = {},
+  candidateProjectPaths: readonly string[] = []
 ): string {
   const normalized = normalizeWorkspaceRoot(workspacePath)
   const key = workspaceRootIdentityKey(normalized)
@@ -47,30 +50,34 @@ function workspaceProjectRootForPicker(
       return normalizeWorkspaceRoot(record.projectPath) || normalized
     }
   }
-  return normalized
-}
-
-function isWorkspaceProjectPickerRoot(root: string): boolean {
-  const normalized = normalizeWorkspaceRoot(root)
-  if (!normalized) return false
-  if (isInternalTemporaryWorkspace(normalized)) return false
-  if (isInternalDeepSeekGuiWorkspace(normalized)) return false
-  if (isClawWorkspacePath(normalized)) return false
-  return true
+  return resolveProjectWorkspacePath(normalized, {
+    threadWorktrees,
+    candidateProjectPaths
+  })
 }
 
 export function buildWorkspaceProjectPickerOptions(options: {
   currentWorkspaceRoot: string
   workspaceRoots: readonly string[]
   threadWorktrees?: WorkspaceProjectPickerWorktrees
+  conversationWorkspaceRoot?: string
 }): { currentRoot: string, options: WorkspaceOption[] } {
   const threadWorktrees = options.threadWorktrees ?? {}
-  const currentRoot = workspaceProjectRootForPicker(options.currentWorkspaceRoot, threadWorktrees)
+  const candidateProjectPaths = [
+    options.currentWorkspaceRoot,
+    ...options.workspaceRoots,
+    ...Object.values(threadWorktrees).map((record) => record.projectPath)
+  ]
+  const currentRoot = workspaceProjectRootForPicker(
+    options.currentWorkspaceRoot,
+    threadWorktrees,
+    candidateProjectPaths
+  )
   const seen = new Set<string>()
   const out: WorkspaceOption[] = []
   for (const raw of [currentRoot, ...options.workspaceRoots]) {
-    const root = workspaceProjectRootForPicker(raw, threadWorktrees)
-    if (!isWorkspaceProjectPickerRoot(root)) continue
+    const root = workspaceProjectRootForPicker(raw, threadWorktrees, candidateProjectPaths)
+    if (!isWorkspaceProjectPickerRoot(root, options.conversationWorkspaceRoot)) continue
     const key = workspaceRootIdentityKey(root)
     if (seen.has(key)) continue
     seen.add(key)
@@ -83,9 +90,21 @@ export function buildWorkspaceProjectPickerOptions(options: {
   }
 }
 
+function isWorkspaceProjectPickerRoot(root: string, conversationRoot?: string): boolean {
+  const normalized = normalizeWorkspaceRoot(root)
+  if (!normalized) return false
+  if (isInternalTemporaryWorkspace(normalized)) return false
+  if (isInternalDeepSeekGuiWorkspace(normalized)) return false
+  if (isClawWorkspacePath(normalized)) return false
+  // Exclude conversation workspaces created via "New Conversation"
+  if (isConversationWorkspacePath(normalized, conversationRoot)) return false
+  return true
+}
+
 export function WorkspaceProjectPicker({ currentWorkspaceRoot }: Props): ReactElement {
   const { t } = useTranslation('common')
   const codeWorkspaceRoots = useChatStore((s) => s.codeWorkspaceRoots)
+  const conversationWorkspaceRoot = useChatStore((s) => s.conversationWorkspaceRoot)
   const selectWorkspaceRoot = useChatStore((s) => s.selectWorkspaceRoot)
   const chooseWorkspace = useChatStore((s) => s.chooseWorkspace)
   const runtimeReady = useChatStore((s) => s.runtimeConnection === 'ready')
@@ -101,9 +120,10 @@ export function WorkspaceProjectPicker({ currentWorkspaceRoot }: Props): ReactEl
     return buildWorkspaceProjectPickerOptions({
       currentWorkspaceRoot: current,
       workspaceRoots: codeWorkspaceRoots,
-      threadWorktrees: readThreadWorktreeRegistry().worktrees
+      threadWorktrees: readThreadWorktreeRegistry().worktrees,
+      conversationWorkspaceRoot
     })
-  }, [codeWorkspaceRoots, current])
+  }, [codeWorkspaceRoots, current, conversationWorkspaceRoot])
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()

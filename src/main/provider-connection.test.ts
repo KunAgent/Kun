@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import type { AppSettingsV1 } from '../shared/app-settings'
 import { probeModelProvider, providerProbeHeaders } from './provider-connection'
 
 afterEach(() => {
@@ -99,6 +100,37 @@ describe('probeModelProvider', () => {
     })
 
     expect(result).toEqual({ ok: false, message: 'socket hang up' })
+  })
+
+  it('identifies a broken configured proxy when direct connectivity works', async () => {
+    const timeout = new Error('timed out')
+    timeout.name = 'TimeoutError'
+    const fetcher = vi.fn(async (_url: string | URL, _init: RequestInit | undefined, proxyUrl: string) => {
+      if (proxyUrl) throw timeout
+      return new Response('unauthorized', { status: 401 })
+    })
+    const settings = {
+      provider: {
+        proxy: { enabled: true, url: 'http://127.0.0.1:7890' }
+      }
+    } as unknown as AppSettingsV1
+
+    const result = await probeModelProvider({
+      baseUrl: 'https://api.deepseek.com',
+      apiKey: 'sk-test',
+      endpointFormat: 'chat_completions'
+    }, settings, fetcher)
+
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.message).toContain('timed out after 10s')
+      expect(result.message).toContain('configured model-request proxy failed')
+      expect(result.message).toContain('direct connection reached the provider')
+    }
+    expect(fetcher.mock.calls.map((call) => call[2])).toEqual([
+      'http://127.0.0.1:7890/',
+      ''
+    ])
   })
 
   it('does not probe /models for custom full endpoint providers', async () => {

@@ -35,6 +35,7 @@ import {
   isClawWorkspacePath,
   isInternalDeepSeekGuiWorkspace,
   isInternalTemporaryWorkspace,
+  isConversationWorkspacePath,
   normalizeWorkspaceRoot,
   workspaceRootIdentityKey
 } from '../../lib/workspace-path'
@@ -43,6 +44,11 @@ import {
   SidebarSearchField,
   SidebarTreeRow
 } from '../sidebar/SidebarPrimitives'
+import {
+  projectPathForWorktreeRecord,
+  resolveProjectWorkspacePath,
+  shouldOmitFromCodeWorkspaceRoots
+} from '../../lib/worktree-project-path'
 import { readThreadWorktreeRegistry, type ThreadWorktreeRecord } from '../../lib/thread-worktree-registry'
 
 type SidebarProjectsSectionProps = {
@@ -54,6 +60,8 @@ type SidebarProjectsSectionProps = {
   showArchived: boolean
   workspaceRoot: string
   workspaceRoots: string[]
+  /** 对话工作目录根,用于在项目区块中过滤掉对话会话。 */
+  conversationRoot: string
   busy: boolean
   watchTurnCompletion: Record<string, boolean>
   unreadThreadIds: Record<string, boolean>
@@ -89,12 +97,12 @@ type WorkspaceContextMenuState = {
   y: number
 }
 
-type ThreadPreviewState = {
-  thread: NormalizedThread
-  worktreeRecord?: SidebarThreadWorktreeRecord
-  x: number
-  y: number
-}
+type ThreadPreviewAnchorRect = Pick<DOMRect, 'left' | 'right' | 'top' | 'height'>
+
+const THREAD_PREVIEW_WIDTH = 320
+const THREAD_PREVIEW_MAX_HEIGHT = 220
+const THREAD_PREVIEW_GAP = 10
+const THREAD_PREVIEW_VIEWPORT_MARGIN = 12
 
 type SidebarActionDialogState = {
   title: string
@@ -114,6 +122,29 @@ export type RenameThreadDialogState = {
 
 const SDD_DRAFT_HISTORY_PAGE_SIZE = 3
 const SDD_DRAFT_HISTORY_LOAD_LIMIT = 40
+
+export function resolveThreadPreviewPosition(
+  anchor: ThreadPreviewAnchorRect,
+  viewport: { width: number; height: number }
+): { x: number; y: number } {
+  const rightX = anchor.right + THREAD_PREVIEW_GAP
+  const leftX = anchor.left - THREAD_PREVIEW_WIDTH - THREAD_PREVIEW_GAP
+  const maxX = Math.max(
+    THREAD_PREVIEW_VIEWPORT_MARGIN,
+    viewport.width - THREAD_PREVIEW_WIDTH - THREAD_PREVIEW_VIEWPORT_MARGIN
+  )
+  const x =
+    rightX + THREAD_PREVIEW_WIDTH <= viewport.width - THREAD_PREVIEW_VIEWPORT_MARGIN
+      ? rightX
+      : Math.max(THREAD_PREVIEW_VIEWPORT_MARGIN, Math.min(leftX, maxX))
+  const idealY = anchor.top + anchor.height / 2 - 28
+  const maxY = Math.max(
+    THREAD_PREVIEW_VIEWPORT_MARGIN,
+    viewport.height - THREAD_PREVIEW_MAX_HEIGHT - THREAD_PREVIEW_VIEWPORT_MARGIN
+  )
+  const y = Math.max(THREAD_PREVIEW_VIEWPORT_MARGIN, Math.min(idealY, maxY))
+  return { x, y }
+}
 
 function isSidebarProjectWorkspacePath(workspacePath: string): boolean {
   const normalized = normalizeWorkspaceRoot(workspacePath)
@@ -137,18 +168,56 @@ function sortWorkspacePathsByActive(workspacePaths: string[], selectedWorkspace:
   return [...workspacePaths].sort((a, b) => compareWorkspacePathsByActive(a, b, selectedWorkspace))
 }
 
+function sidebarWorkspaceResolutionCandidates(options: {
+  workspaceRoot: string
+  workspaceRoots: string[]
+  threadWorktrees?: SidebarThreadWorktrees
+  threads?: NormalizedThread[]
+}): string[] {
+  const candidates = new Set<string>()
+  const selectedWorkspace = normalizeWorkspaceRoot(options.workspaceRoot)
+  if (selectedWorkspace) candidates.add(selectedWorkspace)
+  for (const workspacePath of options.workspaceRoots) {
+    const normalized = normalizeWorkspaceRoot(workspacePath)
+    if (normalized) candidates.add(normalized)
+  }
+  for (const record of Object.values(options.threadWorktrees ?? {})) {
+    const projectPath = projectPathForWorktreeRecord(record)
+    if (projectPath) candidates.add(projectPath)
+  }
+  for (const thread of options.threads ?? []) {
+    const normalized = normalizeWorkspaceRoot(thread.workspace)
+    if (normalized) candidates.add(normalized)
+  }
+  return [...candidates]
+}
+
 function workspacePathForWorktreeRecord(record: Pick<ThreadWorktreeRecord, 'projectPath' | 'worktreePath'> | undefined): string {
-  const projectPath = normalizeWorkspaceRoot(record?.projectPath ?? '')
-  const worktreePath = normalizeWorkspaceRoot(record?.worktreePath ?? '')
-  return projectPath && worktreePath ? projectPath : ''
+  return projectPathForWorktreeRecord(record)
 }
 
-function sidebarWorkspacePathForThread(thread: NormalizedThread, worktrees: SidebarThreadWorktrees = {}): string {
+function sidebarWorkspacePathForThread(
+  thread: NormalizedThread,
+  worktrees: SidebarThreadWorktrees = {},
+  candidateProjectPaths: readonly string[] = []
+): string {
   const worktreeProjectPath = workspacePathForWorktreeRecord(worktrees[thread.id])
-  return worktreeProjectPath || normalizeWorkspaceRoot(thread.workspace)
+  if (worktreeProjectPath) return worktreeProjectPath
+  const workspace = thread.workspace ?? ''
+  const resolved = resolveProjectWorkspacePath(workspace, {
+    threadWorktrees: worktrees,
+    candidateProjectPaths
+  })
+  if (resolved) return resolved
+  if (shouldOmitFromCodeWorkspaceRoots(workspace)) return ''
+  return normalizeWorkspaceRoot(workspace)
 }
 
-function sidebarWorkspacePathForRememberedRoot(workspacePath: string, worktrees: SidebarThreadWorktrees = {}): string {
+function sidebarWorkspacePathForRememberedRoot(
+  workspacePath: string,
+  worktrees: SidebarThreadWorktrees = {},
+  candidateProjectPaths: readonly string[] = []
+): string {
   const normalized = normalizeWorkspaceRoot(workspacePath)
   const key = workspaceRootIdentityKey(normalized)
   if (!key) return ''
@@ -158,6 +227,12 @@ function sidebarWorkspacePathForRememberedRoot(workspacePath: string, worktrees:
       return workspacePathForWorktreeRecord(record) || normalized
     }
   }
+  const resolved = resolveProjectWorkspacePath(normalized, {
+    threadWorktrees: worktrees,
+    candidateProjectPaths
+  })
+  if (resolved) return resolved
+  if (shouldOmitFromCodeWorkspaceRoots(normalized)) return ''
   return normalized
 }
 
@@ -180,12 +255,15 @@ export function buildSidebarWorkspaceGroups(options: {
   showArchived: boolean
   workspaceRoot: string
   workspaceRoots: string[]
+  conversationRoot: string
   threadWorktrees?: SidebarThreadWorktrees
 }): SidebarWorkspaceGroup[] {
   const map = new Map<string, { workspacePath: string, threads: NormalizedThread[] }>()
   const selectedWorkspace = normalizeWorkspaceRoot(options.workspaceRoot)
   const selectedWorkspaceKey = workspaceRootIdentityKey(selectedWorkspace)
   const query = options.searchQuery.trim().toLowerCase()
+  const candidateProjectPaths = sidebarWorkspaceResolutionCandidates(options)
+  const conversationRoot = options.conversationRoot
 
   const upsertWorkspace = (workspacePath: string, threads: NormalizedThread[] = []): void => {
     const normalized = normalizeWorkspaceRoot(workspacePath)
@@ -206,8 +284,9 @@ export function buildSidebarWorkspaceGroups(options: {
     if (isInternalTemporaryWorkspace(th.workspace)) continue
     if (isInternalDeepSeekGuiWorkspace(th.workspace)) continue
     if (isClawWorkspacePath(th.workspace)) continue
+    if (isConversationWorkspacePath(th.workspace, conversationRoot)) continue
     if ((th.archived === true) !== options.showArchived) continue
-    const key = sidebarWorkspacePathForThread(th, options.threadWorktrees)
+    const key = sidebarWorkspacePathForThread(th, options.threadWorktrees, candidateProjectPaths)
     if (!key) continue
     if (query) {
       const haystack = [th.title, th.preview, key, workspaceLabelFromPath(key), th.workspace]
@@ -224,11 +303,16 @@ export function buildSidebarWorkspaceGroups(options: {
   }
   if (!query && !options.showArchived) {
     for (const workspacePath of options.workspaceRoots) {
-      const key = sidebarWorkspacePathForRememberedRoot(workspacePath, options.threadWorktrees)
+      const key = sidebarWorkspacePathForRememberedRoot(
+        workspacePath,
+        options.threadWorktrees,
+        candidateProjectPaths
+      )
       if (!key || map.has(workspaceRootIdentityKey(key))) continue
       if (isInternalTemporaryWorkspace(key)) continue
       if (isInternalDeepSeekGuiWorkspace(key)) continue
       if (isClawWorkspacePath(key)) continue
+      if (isConversationWorkspacePath(key, conversationRoot)) continue
       upsertWorkspace(key)
     }
   }
@@ -250,6 +334,7 @@ export function buildSidebarDraftWorkspacePaths(options: {
 }): string[] {
   const map = new Map<string, string>()
   const selectedWorkspace = normalizeWorkspaceRoot(options.workspaceRoot)
+  const candidateProjectPaths = sidebarWorkspaceResolutionCandidates(options)
 
   const upsertWorkspace = (workspacePath: string): void => {
     const normalized = normalizeWorkspaceRoot(workspacePath)
@@ -264,10 +349,16 @@ export function buildSidebarDraftWorkspacePaths(options: {
 
   upsertWorkspace(selectedWorkspace)
   for (const workspacePath of options.workspaceRoots) {
-    upsertWorkspace(sidebarWorkspacePathForRememberedRoot(workspacePath, options.threadWorktrees))
+    upsertWorkspace(
+      sidebarWorkspacePathForRememberedRoot(
+        workspacePath,
+        options.threadWorktrees,
+        candidateProjectPaths
+      )
+    )
   }
   for (const thread of options.threads) {
-    upsertWorkspace(sidebarWorkspacePathForThread(thread, options.threadWorktrees))
+    upsertWorkspace(sidebarWorkspacePathForThread(thread, options.threadWorktrees, candidateProjectPaths))
   }
 
   return sortWorkspacePathsByActive([...map.values()], selectedWorkspace)
@@ -376,6 +467,7 @@ export function SidebarProjectsSection({
   showArchived,
   workspaceRoot,
   workspaceRoots,
+  conversationRoot,
   busy,
   watchTurnCompletion,
   unreadThreadIds,
@@ -402,7 +494,6 @@ export function SidebarProjectsSection({
   const [searchOpen, setSearchOpen] = useState(false)
   const [threadContextMenu, setThreadContextMenu] = useState<ThreadContextMenuState | null>(null)
   const [workspaceContextMenu, setWorkspaceContextMenu] = useState<WorkspaceContextMenuState | null>(null)
-  const [threadPreview, setThreadPreview] = useState<ThreadPreviewState | null>(null)
   const [actionDialog, setActionDialog] = useState<SidebarActionDialogState | null>(null)
   const [renameThreadDialog, setRenameThreadDialog] = useState<RenameThreadDialogState | null>(null)
   const [draftHistoryByWorkspace, setDraftHistoryByWorkspace] = useState<Record<string, SddDraftHistoryItem[]>>({})
@@ -420,9 +511,10 @@ export function SidebarProjectsSection({
       showArchived,
       workspaceRoot,
       workspaceRoots,
+      conversationRoot,
       threadWorktrees
     })
-  }, [searchQuery, showArchived, threadWorktrees, threads, workspaceRoot, workspaceRoots])
+  }, [searchQuery, showArchived, threadWorktrees, threads, workspaceRoot, workspaceRoots, conversationRoot])
 
   const draftHistoryWorkspacePaths = useMemo(() => {
     return buildSidebarDraftWorkspacePaths({
@@ -519,7 +611,6 @@ export function SidebarProjectsSection({
   }
 
   const openActionDialog = (dialog: Omit<SidebarActionDialogState, 'submitting'>): void => {
-    setThreadPreview(null)
     setActionDialog({ ...dialog, submitting: false })
   }
 
@@ -697,7 +788,6 @@ export function SidebarProjectsSection({
     event.preventDefault()
     event.stopPropagation()
     const worktreeRecord = worktreeRecordForSidebarThread(thread, threadWorktrees)
-    setThreadPreview(null)
     setWorkspaceContextMenu(null)
     setThreadContextMenu({
       thread,
@@ -713,7 +803,6 @@ export function SidebarProjectsSection({
   ): void => {
     event.preventDefault()
     event.stopPropagation()
-    setThreadPreview(null)
     setThreadContextMenu(null)
     setWorkspaceContextMenu({
       workspacePath,
@@ -722,23 +811,11 @@ export function SidebarProjectsSection({
     })
   }
 
-  const openThreadPreview = (
-    event: ReactMouseEvent<HTMLDivElement>,
-    thread: NormalizedThread,
-    worktreeRecord?: SidebarThreadWorktreeRecord
-  ): void => {
-    if (threadContextMenu || workspaceContextMenu || actionDialog || renameThreadDialog) return
-    setThreadPreview({
-      thread,
-      ...(worktreeRecord ? { worktreeRecord } : {}),
-      x: Math.min(event.clientX + 14, Math.max(16, window.innerWidth - 340)),
-      y: Math.min(event.clientY + 10, Math.max(16, window.innerHeight - 180))
-    })
-  }
+  // Thread hover preview card removed: it showed no useful content. Keep no-op
+  // handlers so row hover wiring stays intact without rendering a popup.
+  const openThreadPreview = (): void => {}
 
-  const closeThreadPreview = (): void => {
-    setThreadPreview(null)
-  }
+  const closeThreadPreview = (): void => {}
 
   const openWorkspaceInSystem = async (workspacePath: string): Promise<void> => {
     if (typeof window === 'undefined' || typeof window.kunGui?.openEditorPath !== 'function') return
@@ -980,8 +1057,7 @@ export function SidebarProjectsSection({
                         }
                         onSelect={() => onSelectThread(thread.id)}
                         onContextMenu={(event) => openThreadContextMenu(event, thread)}
-                        onPreviewOpen={(event, worktreeRecord) => openThreadPreview(event, thread, worktreeRecord)}
-                        onPreviewMove={(event, worktreeRecord) => openThreadPreview(event, thread, worktreeRecord)}
+                        onPreviewOpen={openThreadPreview}
                         onPreviewClose={closeThreadPreview}
                         onPin={() => void handlePinThread(thread, thread.pinned !== true)}
                         onRename={() => openRenameThreadDialog(thread)}
@@ -1043,14 +1119,6 @@ export function SidebarProjectsSection({
         />
       ) : null}
 
-      {threadPreview ? (
-        <ThreadPreviewCard
-          state={threadPreview}
-          locale={locale}
-          t={t}
-        />
-      ) : null}
-
       {renameThreadDialog ? (
         <ThreadRenameDialog
           state={renameThreadDialog}
@@ -1086,7 +1154,6 @@ type ThreadRowProps = {
   onSelect: () => void
   onContextMenu: (event: ReactMouseEvent<HTMLDivElement>) => void
   onPreviewOpen: (event: ReactMouseEvent<HTMLDivElement>, worktreeRecord?: SidebarThreadWorktreeRecord) => void
-  onPreviewMove: (event: ReactMouseEvent<HTMLDivElement>, worktreeRecord?: SidebarThreadWorktreeRecord) => void
   onPreviewClose: () => void
   onPin: () => void
   onRename: () => void
@@ -1234,7 +1301,6 @@ export function ThreadRow({
   onSelect,
   onContextMenu,
   onPreviewOpen,
-  onPreviewMove,
   onPreviewClose,
   onPin,
   onRename,
@@ -1319,7 +1385,6 @@ export function ThreadRow({
       onClick={onSelect}
       onContextMenu={onContextMenu}
       onMouseEnter={(event) => onPreviewOpen(event, worktreeRecord)}
-      onMouseMove={(event) => onPreviewMove(event, worktreeRecord)}
       onMouseLeave={onPreviewClose}
     >
       <span className="flex min-w-0 flex-1 items-center gap-1.5">
@@ -1569,71 +1634,6 @@ function WorkspaceContextMenu({
   )
 }
 
-function ThreadPreviewCard({
-  state,
-  locale,
-  t
-}: {
-  state: ThreadPreviewState
-  locale: string
-  t: (k: string, opts?: Record<string, unknown>) => string
-}): ReactElement {
-  const branch = state.worktreeRecord?.branch?.trim() ?? ''
-  const workspace = sidebarWorkspacePathForThread(
-    state.thread,
-    state.worktreeRecord ? { [state.thread.id]: state.worktreeRecord } : {}
-  )
-  const updatedLabel = formatRelativeTime(state.thread.updatedAt, locale)
-  const preview = state.thread.preview?.trim()
-  const summary = state.thread.summary?.trim()
-
-  return (
-    <div
-      role="tooltip"
-      className="ds-no-drag pointer-events-none fixed z-40 w-[320px] rounded-[18px] border border-ds-border bg-ds-card/95 p-3 text-[13px] text-ds-ink shadow-[0_18px_54px_rgba(20,47,95,0.18)] backdrop-blur-xl dark:bg-ds-card/95"
-      style={{ left: state.x, top: state.y }}
-    >
-      <div className="flex items-start gap-2">
-        {state.thread.pinned === true ? (
-          <Pin className="mt-0.5 h-3.5 w-3.5 shrink-0 text-accent" strokeWidth={1.9} />
-        ) : null}
-        <div className="min-w-0 flex-1">
-          <div className="line-clamp-2 text-[14px] font-semibold leading-5 text-ds-ink">
-            {state.thread.title}
-          </div>
-          <div className="mt-2 flex items-center gap-1.5 text-ds-muted">
-            <Folder className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} />
-            <span className="min-w-0 truncate">{workspaceLabelFromPath(workspace || state.thread.workspace || '')}</span>
-          </div>
-          {branch ? (
-            <div className="mt-1.5 flex items-center gap-1.5 text-ds-muted">
-              <GitBranch className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} />
-              <span className="min-w-0 truncate">{branch}</span>
-            </div>
-          ) : null}
-          <div className="mt-1.5 text-[12px] text-ds-faint">
-            {t('sidebarThreadPreviewUpdated', { time: updatedLabel })}
-          </div>
-          {summary ? (
-            <p className="mt-2 line-clamp-4 text-[12.5px] leading-5 text-ds-ink/90">
-              {summary}
-            </p>
-          ) : null}
-          {preview ? (
-            <p className="mt-2 line-clamp-3 text-[12.5px] leading-5 text-ds-muted">
-              {preview}
-            </p>
-          ) : (
-            <p className="mt-2 text-[12.5px] leading-5 text-ds-faint">
-              {t('sidebarThreadPreviewEmpty')}
-            </p>
-          )}
-        </div>
-      </div>
-    </div>
-  )
-}
-
 function SidebarActionDialog({
   state,
   onClose,
@@ -1664,7 +1664,7 @@ function SidebarActionDialog({
     >
       <div
         onMouseDown={(event) => event.stopPropagation()}
-        className="w-full max-w-[520px] rounded-[26px] border border-ds-border bg-ds-card/96 p-6 shadow-[0_26px_82px_rgba(20,47,95,0.24)] backdrop-blur-xl dark:bg-ds-card"
+        className="w-full max-w-[520px] rounded-[26px] border border-ds-border bg-ds-elevated p-6 shadow-[0_26px_82px_rgba(20,47,95,0.24)] backdrop-blur-xl"
       >
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
@@ -1686,7 +1686,7 @@ function SidebarActionDialog({
             <X className="h-4 w-4" strokeWidth={1.9} />
           </button>
         </div>
-        <p className="mt-4 rounded-2xl border border-ds-border-muted bg-ds-main/55 px-3.5 py-3 text-[13px] leading-6 text-ds-muted">
+        <p className="mt-4 rounded-2xl border border-ds-border-muted bg-ds-main px-3.5 py-3 text-[13px] leading-6 text-ds-muted">
           {state.detail}
         </p>
         <div className="mt-5 flex justify-end gap-2">

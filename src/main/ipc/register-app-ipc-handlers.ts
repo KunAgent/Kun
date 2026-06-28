@@ -1,9 +1,9 @@
 import { app, dialog, ipcMain, shell, type BrowserWindow, type WebContents } from 'electron'
 import { watch, type FSWatcher } from 'node:fs'
-import { randomUUID } from 'node:crypto'
+import { randomBytes, randomUUID } from 'node:crypto'
 import { homedir } from 'node:os'
 import { basename, dirname, extname, join, resolve } from 'node:path'
-import { copyFile, mkdir, readFile, writeFile } from 'node:fs/promises'
+import { access, copyFile, mkdir, readFile, writeFile } from 'node:fs/promises'
 import { z } from 'zod'
 import {
   type AppSettingsPatch,
@@ -22,6 +22,7 @@ import {
 import type {
   ClawImInstallPollResult,
   ClawImInstallQrResult,
+  ConversationWorkspaceCreateResult,
   DesktopCommand,
   RuntimeRequestResult,
   SystemNotificationResult,
@@ -96,8 +97,20 @@ import {
   workspaceRootSchema,
   legacySessionImportPayloadSchema
 } from './app-ipc-schemas'
-import { DEFAULT_KUN_DATA_DIR, resolveKunRuntimeSettings } from '../../shared/app-settings'
+import {
+  DEFAULT_KUN_DATA_DIR,
+  resolveKunRuntimeSettings,
+  resolveModelProviderProxyUrl
+} from '../../shared/app-settings'
 import { detectLegacySessions, importLegacySessions } from '../services/legacy-session-import-service'
+import { claudeSubscriptionStatus, runClaudeSetupToken } from '../claude-subscription-auth'
+import { fetchSdkModels } from '../claude-subscription-models'
+import {
+  agentSdkDownloadState,
+  agentSdkStatus,
+  resolveClaudeBinary,
+  startAgentSdkInstall
+} from '../agent-sdk-installer'
 import type { JsonSettingsStore } from '../settings-store'
 import { probeModelProvider } from '../provider-connection'
 import type { ClawRuntime } from '../claw-runtime'
@@ -229,6 +242,16 @@ function parseIpcPayload<T>(channel: string, schema: z.ZodType<T>, payload: unkn
   if (parsed.success) return parsed.data
   const issue = parsed.error.issues[0]
   throw new Error(`Invalid payload for ${channel}: ${issue?.message ?? 'Bad request.'}`)
+}
+
+// node:fs/promises 没有内置 pathExists;用 access 实现。
+async function pathExists(target: string): Promise<boolean> {
+  try {
+    await access(target)
+    return true
+  } catch {
+    return false
+  }
 }
 
 function safeSaveAsFileName(input: string | undefined, fallback = 'generated-file'): string {
@@ -486,6 +509,38 @@ export function registerAppIpcHandlers(options: RegisterAppIpcHandlersOptions): 
   }
 
   ipcMain.handle('settings:get', async () => store.load())
+  // Claude Pro/Max subscription login (compliant path: official CLI does the
+  // OAuth; we only detect it / capture the setup-token).
+  ipcMain.handle('claude-subscription:status', async () => claudeSubscriptionStatus())
+  // The Claude Code binary (~222MB) is NOT bundled — it's downloaded on demand
+  // into userData/agent-sdk and resolved from there (or kun/node_modules in dev).
+  const claudeSubKunDirs = (): string[] =>
+    [
+      app.isPackaged ? app.getAppPath().replace(/app\.asar$/, 'app.asar.unpacked') : app.getAppPath(),
+      process.cwd()
+    ].map((root) => join(root, 'kun'))
+  const claudeSubBinary = (): string | undefined =>
+    resolveClaudeBinary(app.getPath('userData'), claudeSubKunDirs())
+  ipcMain.handle('claude-subscription:sdk-status', async () => ({
+    ...agentSdkStatus(app.getPath('userData'), claudeSubKunDirs()),
+    download: agentSdkDownloadState()
+  }))
+  ipcMain.handle('claude-subscription:sdk-install', async () =>
+    startAgentSdkInstall(
+      { userDataDir: app.getPath('userData'), proxyUrl: resolveModelProviderProxyUrl(await store.load()) },
+      (state) => getMainWindow()?.webContents.send('claude-subscription:sdk-progress', state)
+    )
+  )
+  ipcMain.handle('claude-subscription:login', async () =>
+    runClaudeSetupToken({ binaryPath: claudeSubBinary() })
+  )
+  ipcMain.handle('claude-subscription:models', async (_event, token: unknown) =>
+    fetchSdkModels({
+      token: typeof token === 'string' ? token : undefined,
+      kunRoots: claudeSubKunDirs(),
+      binaryPath: claudeSubBinary()
+    })
+  )
   ipcMain.handle('settings:set', async (_, partial: unknown) =>
     applySettingsPatch(
       parseIpcPayload('settings:set', settingsPatchSchema, partial) as AppSettingsPatch
@@ -726,6 +781,72 @@ export function registerAppIpcHandlers(options: RegisterAppIpcHandlersOptions): 
       path: result.canceled ? null : (result.filePaths[0] ?? null)
     }
   })
+
+  ipcMain.handle('file:pick-local-files', async (_, defaultPath: unknown) => {
+    const normalizedDefaultPath = parseIpcPayload(
+      'file:pick-local-files',
+      z.object({ defaultPath: defaultPathSchema }).strict(),
+      { defaultPath }
+    ).defaultPath
+    const options: Electron.OpenDialogOptions = {
+      title: 'Add files to conversation',
+      defaultPath: normalizedDefaultPath,
+      properties: ['openFile', 'multiSelections', 'dontAddToRecent']
+    }
+    const mainWindow = getMainWindow()
+    const result = mainWindow
+      ? await dialog.showOpenDialog(mainWindow, options)
+      : await dialog.showOpenDialog(options)
+    return {
+      canceled: result.canceled,
+      paths: result.canceled ? [] : result.filePaths
+    }
+  })
+
+  // 在对话工作目录根下创建一个 YYYYMMDD-HHmmss 时间戳子目录作为新对话的工作目录。
+  ipcMain.handle(
+    'conversation:create-workspace',
+    async (_, payload: unknown): Promise<ConversationWorkspaceCreateResult> => {
+      try {
+        const request = parseIpcPayload(
+          'conversation:create-workspace',
+          z.object({ root: defaultPathSchema }).strict(),
+          payload ?? {}
+        )
+        const settings = await store.load()
+        const rawRoot = request.root ?? settings.conversationWorkspaceRoot ?? ''
+        const root = expandHomePath(rawRoot)
+        if (!root) {
+          return { ok: false, path: '', error: 'conversation workspace root is empty' }
+        }
+        const stamp = new Date()
+        const pad = (n: number): string => String(n).padStart(2, '0')
+        const base =
+          `${stamp.getFullYear()}${pad(stamp.getMonth() + 1)}${pad(stamp.getDate())}` +
+          `-${pad(stamp.getHours())}${pad(stamp.getMinutes())}${pad(stamp.getSeconds())}`
+        // 同秒内连建两个对话会得到相同时间戳目录;mkdir(recursive) 对已存在目录
+        // 不报错,会导致两个会话静默共用目录。冲突时追加随机后缀保证唯一。
+        let workspacePath = join(root, base)
+        let suffixAttempt = 0
+        while (await pathExists(workspacePath)) {
+          suffixAttempt += 1
+          // 形如 20260626-153012-a3f9;重试到上限仍未解决就用毫秒兜底。
+          const suffix = suffixAttempt <= 6
+            ? randomBytes(2).toString('hex')
+            : `${stamp.getMilliseconds()}${randomBytes(1).toString('hex')}`
+          workspacePath = join(root, `${base}-${suffix}`)
+        }
+        await mkdir(workspacePath, { recursive: true })
+        return { ok: true, path: workspacePath }
+      } catch (error) {
+        return {
+          ok: false,
+          path: '',
+          error: error instanceof Error ? error.message : String(error)
+        }
+      }
+    }
+  )
 
   // Replaces window.confirm in the renderer: the synchronous native confirm
   // leaves the WebContents unable to focus inputs after it closes

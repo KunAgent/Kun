@@ -57,7 +57,6 @@ import {
   persistComposerModel,
   rememberThreadComposerMode,
   readCodeWorkspaceRoots,
-  readStoredComposerMode,
   readStoredComposerModel,
   rememberCodeWorkspaceRoots,
   rememberTurnModel
@@ -112,6 +111,7 @@ import {
 import { createNavigationActions } from './chat-store-navigation-actions'
 import { createThreadActions } from './chat-store-thread-actions'
 import { createMaintenanceActions } from './chat-store-maintenance-actions'
+import { createInitialChatStoreState } from './chat-store-initial-state'
 
 export type { AppRoute, SettingsRouteSection } from './chat-store-types'
 export { CLAW_COMPOSER_MODEL_IDS } from './chat-store-helpers'
@@ -128,55 +128,7 @@ const sseAbortRef = {
 let composerModelLoadPromise: Promise<void> | null = null
 
 export const useChatStore = create<ChatState>((set, get) => ({
-  route: 'chat',
-  settingsReturnRoute: 'chat',
-  pluginHostRoute: 'chat',
-  settingsSection: 'general',
-  initialSetupOpen: false,
-  initialSetupMode: 'required',
-  workspaceRoot: '',
-  workspaceLabel: i18n.t('common:workingDirectory'),
-  runtimeConnection: 'idle',
-  runtimeStatus: null,
-  codeWorkspaceRoots: [],
-  threads: [],
-  threadSearch: '',
-  showArchivedThreads: false,
-  activeThreadId: null,
-  activeThreadRelation: null,
-  activeThreadParentId: null,
-  activeThreadGoal: null,
-  activeThreadTodos: null,
-  blocks: [],
-  liveReasoning: '',
-  liveAssistant: '',
-  lastSeq: 0,
-  usageRefreshKey: 0,
-  lastTurnUsage: null,
-  busy: false,
-  error: null,
-  runtimeErrorDetail: null,
-  currentTurnId: null,
-  currentTurnUserId: null,
-  turnStartedAtByUserId: {},
-  turnDurationByUserId: {},
-  turnReasoningFirstAtByUserId: {},
-  turnReasoningLastAtByUserId: {},
-  inspectorSelectedId: null,
-  composerMode: readStoredComposerMode(),
-  composerModel: '',
-  composerProviderId: '',
-  composerAgentId: '',
-  composerPickList: mergeComposerPickList(false, []),
-  composerModelGroups: [],
-  disabledSkillIds: [],
-  queuedMessages: [],
-  watchTurnCompletion: {},
-  unreadThreadIds: {},
-  sideConversations: {},
-  sidePanel: { open: false, activeSideId: null },
-  clawChannels: [],
-  activeClawChannelId: '',
+  ...createInitialChatStoreState(i18n.t('common:workingDirectory')),
 
   ...createClawActions({
     set,

@@ -39,6 +39,7 @@ function createSettings(patch: Partial<AppSettingsV1['schedule']['internal']> = 
       kun: defaultKunRuntimeSettings()
     },
     workspaceRoot: '/tmp/workspace',
+    conversationWorkspaceRoot: '~/Documents/Kun',
     log: {
       enabled: true,
       retentionDays: 2

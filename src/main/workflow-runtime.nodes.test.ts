@@ -109,6 +109,7 @@ function buildSettings(
     provider: defaultModelProviderSettings(),
     agents: { kun: { ...defaultKunRuntimeSettings(), model: 'test-model', apiKey: 'test-key' } },
     workspaceRoot: '/tmp/workflow-workspace',
+    conversationWorkspaceRoot: '~/Documents/Kun',
     log: { enabled: true, retentionDays: 7 },
     checkpointCleanup: { enabled: false, intervalDays: 3 },
     notifications: { turnComplete: true },

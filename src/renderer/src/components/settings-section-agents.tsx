@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactElement, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, type ReactElement, type ReactNode } from 'react'
 import type {
   AppSettingsV1,
   KunToolPermissionMode,
@@ -41,6 +41,7 @@ import {
 } from 'lucide-react'
 import { GuiUpdateControl } from './settings-gui-update'
 import { McpServersEditor } from './mcp/McpServersEditor'
+import { parseMcpConfigText, type McpFormServer } from './mcp/mcp-config-form'
 import {
   AdvancedSettingsDisclosure,
   InlineNoticeView,
@@ -117,6 +118,77 @@ function compactList(values: unknown, empty: string): string {
     .map((value) => typeof value === 'string' ? value : JSON.stringify(value))
     .slice(0, 4)
     .join(', ')
+}
+
+type SkillPermissionSummary = {
+  enabledRoots: number
+  disabledRoots: number
+  workspaceRoots: number
+  globalRoots: number
+  disabledSkillIds: number
+}
+
+function summarizeSkillPermissionSources(
+  roots: readonly SkillRootListItem[],
+  disabledSkillIds: unknown
+): SkillPermissionSummary {
+  return {
+    enabledRoots: roots.filter((root) => root.enabled).length,
+    disabledRoots: roots.filter((root) => !root.enabled).length,
+    workspaceRoots: roots.filter((root) => root.enabled && root.scope === 'project').length,
+    globalRoots: roots.filter((root) => root.enabled && root.scope === 'global').length,
+    disabledSkillIds: Array.isArray(disabledSkillIds) ? disabledSkillIds.length : 0
+  }
+}
+
+type McpPermissionSummary = {
+  parseError: string | null
+  enabledServers: number
+  disabledServers: number
+  userScopeServers: number
+  workspaceScopeServers: number
+  workspaceVisibleServers: number
+  localServers: number
+  remoteServers: number
+  envServers: number
+  headerServers: number
+}
+
+function hasEntries(entries: McpFormServer['env'] | McpFormServer['headers']): boolean {
+  return entries.some((entry) => entry.key.trim() || entry.value.trim())
+}
+
+function summarizeMcpPermissionSources(text: string): McpPermissionSummary {
+  const parsed = parseMcpConfigText(text)
+  if (!parsed.ok) {
+    return {
+      parseError: parsed.error,
+      enabledServers: 0,
+      disabledServers: 0,
+      userScopeServers: 0,
+      workspaceScopeServers: 0,
+      workspaceVisibleServers: 0,
+      localServers: 0,
+      remoteServers: 0,
+      envServers: 0,
+      headerServers: 0
+    }
+  }
+  const enabled = parsed.model.servers.filter((server) => server.enabled)
+  return {
+    parseError: null,
+    enabledServers: enabled.length,
+    disabledServers: parsed.model.servers.length - enabled.length,
+    userScopeServers: enabled.filter((server) => server.trustScope === 'user').length,
+    workspaceScopeServers: enabled.filter((server) => server.trustScope === 'workspace').length,
+    workspaceVisibleServers: enabled.filter((server) =>
+      server.workspaceRoots.some((root) => root.trim())
+    ).length,
+    localServers: enabled.filter((server) => server.transport === 'stdio').length,
+    remoteServers: enabled.filter((server) => server.transport !== 'stdio').length,
+    envServers: enabled.filter((server) => hasEntries(server.env)).length,
+    headerServers: enabled.filter((server) => hasEntries(server.headers)).length
+  }
 }
 
 type TokenEconomySavingsSummary = {
@@ -317,6 +389,11 @@ export function AgentsSettingsSection({ ctx }: { ctx: Record<string, any> }): Re
   const [tokenEconomySavingsState, setTokenEconomySavingsState] =
     useState<TokenEconomySavingsState>(EMPTY_TOKEN_ECONOMY_SAVINGS_STATE)
   const [mcpRawMode, setMcpRawMode] = useState(false)
+  const skillPermissionSummary = summarizeSkillPermissionSources(skillRoots, form.disabledSkillIds)
+  const mcpPermissionSummary = useMemo(
+    () => summarizeMcpPermissionSources(mcpConfigText),
+    [mcpConfigText]
+  )
   useEffect(() => {
     let cancelled = false
     if (!tokenEconomy.enabled) {
@@ -861,6 +938,35 @@ export function AgentsSettingsSection({ ctx }: { ctx: Record<string, any> }): Re
                     }
                   />
                   <SettingRow
+                    title={t('skillsPermissionSources')}
+                    description={t('skillsPermissionSourcesDesc')}
+                    wideControl
+                    control={
+                      <div className="flex w-full flex-col gap-2">
+                        <div className="grid gap-2 text-[12.5px] text-ds-muted sm:grid-cols-5">
+                          <div className="rounded-xl border border-ds-border-muted bg-ds-main/40 px-3 py-2">
+                            {t('skillsPermissionEnabledRoots')}: <span className="font-mono text-ds-ink">{skillPermissionSummary.enabledRoots}</span>
+                          </div>
+                          <div className="rounded-xl border border-ds-border-muted bg-ds-main/40 px-3 py-2">
+                            {t('skillsPermissionDisabledRoots')}: <span className="font-mono text-ds-ink">{skillPermissionSummary.disabledRoots}</span>
+                          </div>
+                          <div className="rounded-xl border border-ds-border-muted bg-ds-main/40 px-3 py-2">
+                            {t('skillsPermissionWorkspaceRoots')}: <span className="font-mono text-ds-ink">{skillPermissionSummary.workspaceRoots}</span>
+                          </div>
+                          <div className="rounded-xl border border-ds-border-muted bg-ds-main/40 px-3 py-2">
+                            {t('skillsPermissionGlobalRoots')}: <span className="font-mono text-ds-ink">{skillPermissionSummary.globalRoots}</span>
+                          </div>
+                          <div className="rounded-xl border border-ds-border-muted bg-ds-main/40 px-3 py-2">
+                            {t('skillsPermissionDisabledIds')}: <span className="font-mono text-ds-ink">{skillPermissionSummary.disabledSkillIds}</span>
+                          </div>
+                        </div>
+                        <div className="rounded-xl border border-amber-400/25 bg-amber-500/10 px-3 py-2 text-[12px] leading-5 text-amber-700 dark:text-amber-200">
+                          {t('skillsPermissionRuntimeNote')}
+                        </div>
+                      </div>
+                    }
+                  />
+                  <SettingRow
                     title={t('skillsScanDirs')}
                     description={t('skillsScanDirsDesc')}
                     wideControl
@@ -1009,6 +1115,53 @@ export function AgentsSettingsSection({ ctx }: { ctx: Record<string, any> }): Re
                         <div className="rounded-xl border border-ds-border-muted bg-ds-main/40 px-3 py-2">
                           {t('mcpSearchAdvertised')}: <span className="font-mono text-ds-ink">{toolDiagnostics?.mcpSearch?.advertisedToolCount ?? runtimeInfo?.capabilities?.mcp?.search?.advertisedToolCount ?? 0}</span>
                         </div>
+                      </div>
+                    }
+                  />
+                  <SettingRow
+                    title={t('mcpPermissionSources')}
+                    description={t('mcpPermissionSourcesDesc')}
+                    wideControl
+                    control={
+                      <div className="flex w-full flex-col gap-2">
+                        <div className="grid gap-2 text-[12.5px] text-ds-muted sm:grid-cols-4">
+                          <div className="rounded-xl border border-ds-border-muted bg-ds-main/40 px-3 py-2">
+                            {t('mcpPermissionEnabledServers')}: <span className="font-mono text-ds-ink">{mcpPermissionSummary.enabledServers}</span>
+                          </div>
+                          <div className="rounded-xl border border-ds-border-muted bg-ds-main/40 px-3 py-2">
+                            {t('mcpPermissionDisabledServers')}: <span className="font-mono text-ds-ink">{mcpPermissionSummary.disabledServers}</span>
+                          </div>
+                          <div className="rounded-xl border border-ds-border-muted bg-ds-main/40 px-3 py-2">
+                            {t('mcpPermissionUserServers')}: <span className="font-mono text-ds-ink">{mcpPermissionSummary.userScopeServers}</span>
+                          </div>
+                          <div className="rounded-xl border border-ds-border-muted bg-ds-main/40 px-3 py-2">
+                            {t('mcpPermissionWorkspaceServers')}: <span className="font-mono text-ds-ink">{mcpPermissionSummary.workspaceScopeServers}</span>
+                          </div>
+                          <div className="rounded-xl border border-ds-border-muted bg-ds-main/40 px-3 py-2">
+                            {t('mcpPermissionVisibleServers')}: <span className="font-mono text-ds-ink">{mcpPermissionSummary.workspaceVisibleServers}</span>
+                          </div>
+                          <div className="rounded-xl border border-ds-border-muted bg-ds-main/40 px-3 py-2">
+                            {t('mcpPermissionLocalServers')}: <span className="font-mono text-ds-ink">{mcpPermissionSummary.localServers}</span>
+                          </div>
+                          <div className="rounded-xl border border-ds-border-muted bg-ds-main/40 px-3 py-2">
+                            {t('mcpPermissionRemoteServers')}: <span className="font-mono text-ds-ink">{mcpPermissionSummary.remoteServers}</span>
+                          </div>
+                          <div className="rounded-xl border border-ds-border-muted bg-ds-main/40 px-3 py-2">
+                            {t('mcpPermissionEnvServers')}: <span className="font-mono text-ds-ink">{mcpPermissionSummary.envServers}</span>
+                          </div>
+                          <div className="rounded-xl border border-ds-border-muted bg-ds-main/40 px-3 py-2">
+                            {t('mcpPermissionHeaderServers')}: <span className="font-mono text-ds-ink">{mcpPermissionSummary.headerServers}</span>
+                          </div>
+                        </div>
+                        {mcpPermissionSummary.parseError ? (
+                          <div className="rounded-xl border border-red-400/40 bg-red-500/10 px-3 py-2 text-[12px] leading-5 text-red-700 dark:text-red-200">
+                            {t('mcpPermissionParseError')}
+                          </div>
+                        ) : (
+                          <div className="rounded-xl border border-amber-400/25 bg-amber-500/10 px-3 py-2 text-[12px] leading-5 text-amber-700 dark:text-amber-200">
+                            {t('mcpPermissionRuntimeNote')}
+                          </div>
+                        )}
                       </div>
                     }
                   />

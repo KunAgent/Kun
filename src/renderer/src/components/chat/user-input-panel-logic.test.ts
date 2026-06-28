@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { UserInputQuestion } from '../../agent/types'
+import type { ChatBlock, UserInputQuestion } from '../../agent/types'
 import {
   USER_INPUT_FREEFORM_LABEL,
   USER_INPUT_OTHER_LABEL,
@@ -7,10 +7,12 @@ import {
   answerFromOption,
   answerFromTypedText,
   answersByQuestionId,
+  isLivePendingUserInput,
   isQuestionAnswered,
   nextUnansweredIndex,
   optionsNeedRows,
   orderedAnswers,
+  selectLivePendingUserInput,
   shouldShowQuestionHeader
 } from './user-input-panel-logic'
 
@@ -30,6 +32,43 @@ const freeformQuestion: UserInputQuestion = {
   question: 'Service name?',
   options: []
 }
+
+function userInputBlock(overrides: Partial<Extract<ChatBlock, { kind: 'user_input' }>>): ChatBlock {
+  return {
+    kind: 'user_input',
+    id: overrides.id ?? 'ui_1',
+    requestId: overrides.requestId ?? 'in_1',
+    questions: overrides.questions ?? [optionQuestion],
+    status: overrides.status ?? 'pending',
+    ...overrides
+  }
+}
+
+describe('selectLivePendingUserInput', () => {
+  it('surfaces a live pending request', () => {
+    const block = userInputBlock({ status: 'pending', live: true })
+    expect(isLivePendingUserInput(block as Extract<ChatBlock, { kind: 'user_input' }>)).toBe(true)
+    expect(selectLivePendingUserInput([block])).toBe(block)
+  })
+
+  it('ignores a stale pending request rehydrated from history (issue #606)', () => {
+    // No `live` flag — this is exactly the block a finished thread replays.
+    const stale = userInputBlock({ status: 'pending' })
+    expect(isLivePendingUserInput(stale as Extract<ChatBlock, { kind: 'user_input' }>)).toBe(false)
+    expect(selectLivePendingUserInput([stale])).toBeNull()
+  })
+
+  it('ignores resolved requests even when marked live', () => {
+    const submitted = userInputBlock({ status: 'submitted', live: true })
+    expect(selectLivePendingUserInput([submitted])).toBeNull()
+  })
+
+  it('returns the latest live pending block when several exist', () => {
+    const older = userInputBlock({ id: 'ui_old', requestId: 'in_old', status: 'pending', live: true })
+    const newer = userInputBlock({ id: 'ui_new', requestId: 'in_new', status: 'pending', live: true })
+    expect(selectLivePendingUserInput([older, newer])).toBe(newer)
+  })
+})
 
 describe('answerFromOption', () => {
   it('uses the option label as both label and value', () => {

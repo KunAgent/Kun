@@ -26,6 +26,7 @@ function settings(): AppSettingsV1 {
       kun: defaultKunRuntimeSettings()
     },
     workspaceRoot: '/tmp/workspace',
+    conversationWorkspaceRoot: '~/Documents/Kun',
     log: { enabled: false, retentionDays: 7 },
     checkpointCleanup: { enabled: false, intervalDays: 3 },
     notifications: { turnComplete: true },
@@ -149,6 +150,61 @@ describe('KunRuntimeProvider', () => {
     expect(detail.latestSeq).toBe(9)
     expect(detail.latestTurnId).toBe('turn_1')
     expect(detail.latestUserMessageId).toBe('item_user')
+  })
+
+  it('flags user_input blocks live only when the runtime gate still awaits them (#606)', async () => {
+    const threadBody = (pendingUserInputIds: string[]): string =>
+      JSON.stringify({
+        id: 'thr_1',
+        title: 'Demo',
+        workspace: '/tmp',
+        model: 'deepseek-chat',
+        mode: 'agent',
+        status: 'running',
+        createdAt: 't0',
+        updatedAt: 't1',
+        latestSeq: 9,
+        pendingUserInputIds,
+        turns: [
+          {
+            id: 'turn_1',
+            threadId: 'thr_1',
+            status: 'running',
+            prompt: 'hi',
+            createdAt: 't0',
+            items: [
+              {
+                id: 'item_input',
+                turnId: 'turn_1',
+                threadId: 'thr_1',
+                role: 'assistant',
+                status: 'pending',
+                createdAt: 't1',
+                kind: 'user_input',
+                inputId: 'in_live',
+                prompt: 'north or south?'
+              }
+            ]
+          }
+        ]
+      })
+
+    // Gate still awaiting in_live -> the rehydrated prompt stays answerable.
+    installDsGui({
+      runtimeRequest: vi.fn(async () => ({ ok: true, status: 200, body: threadBody(['in_live']) }))
+    })
+    const liveDetail = await new KunRuntimeProvider().getThreadDetail('thr_1')
+    const liveBlock = liveDetail.blocks.find((block) => block.kind === 'user_input')
+    expect(liveBlock).toMatchObject({ requestId: 'in_live', status: 'pending', live: true })
+
+    // Gate empty (finished thread) -> the same pending item is NOT live.
+    resetProviderCacheForTests()
+    installDsGui({
+      runtimeRequest: vi.fn(async () => ({ ok: true, status: 200, body: threadBody([]) }))
+    })
+    const staleDetail = await new KunRuntimeProvider().getThreadDetail('thr_1')
+    const staleBlock = staleDetail.blocks.find((block) => block.kind === 'user_input')
+    expect(staleBlock?.kind === 'user_input' && staleBlock.live).toBeFalsy()
   })
 
   it('coalesces tool_call and tool_result pairs into one tool block on thread load', async () => {

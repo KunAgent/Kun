@@ -57,6 +57,7 @@ function settings(): AppSettingsV1 {
       kun: defaultKunRuntimeSettings()
     },
     workspaceRoot: '/tmp/workspace',
+    conversationWorkspaceRoot: '~/Documents/Kun',
     log: { enabled: false, retentionDays: 7 },
     checkpointCleanup: { enabled: false, intervalDays: 3 },
     notifications: { turnComplete: true },
@@ -986,6 +987,10 @@ describe('legacy Kun defaults migration', () => {
       provider: {
         apiKey: 'sk-default',
         baseUrl: 'https://api.deepseek.com',
+        proxy: {
+          enabled: true,
+          url: 'http://127.0.0.1:7890'
+        },
         providers: [
           ...defaultModelProviderSettings().providers,
           {
@@ -1020,6 +1025,10 @@ describe('legacy Kun defaults migration', () => {
       ])
     )
     expect(migrated.agents.kun.providerId).toBe('custom-provider-2')
+    expect(migrated.provider.proxy).toEqual({
+      enabled: true,
+      url: 'http://127.0.0.1:7890'
+    })
     expect(resolveKunRuntimeSettings(migrated)).toEqual(
       expect.objectContaining({
         apiKey: 'sk-custom',

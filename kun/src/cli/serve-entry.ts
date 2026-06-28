@@ -7,6 +7,10 @@ import {
   splitKunCliCommand
 } from './agent-cli.js'
 import { startKunServe, type KunServeHandle } from '../server/runtime-factory.js'
+import {
+  resolveEventLoopStallThresholdMs,
+  startEventLoopMonitor
+} from '../server/event-loop-monitor.js'
 
 export const KUN_READY_PREFIX = 'KUN_READY '
 
@@ -80,8 +84,14 @@ async function serveMain(argv: readonly string[]): Promise<number> {
   }
   process.stdout.write(`${KUN_READY_PREFIX}${JSON.stringify(startupInfo)}\n`)
   process.stdout.write(JSON.stringify(startupInfo, null, 2) + '\n')
+  // Watch for event-loop stalls so a hang that starves /health (and trips the
+  // GUI watchdog) is attributable to CPU starvation vs a hard deadlock (#621).
+  const loopMonitor = startEventLoopMonitor({
+    stallThresholdMs: resolveEventLoopStallThresholdMs(process.env)
+  })
   await new Promise<void>((resolve) => {
     const stop = () => {
+      loopMonitor.stop()
       void server.close().finally(resolve)
     }
     process.once('SIGTERM', stop)

@@ -245,6 +245,7 @@ export function createAppActions(options: CreateAppActionsOptions): Pick<
       set({
         workspaceRoot,
         workspaceLabel: workspaceLabelFromPath(workspaceRoot),
+        conversationWorkspaceRoot: settings.conversationWorkspaceRoot || '',
         disabledSkillIds: settings.disabledSkillIds,
         clawChannels: settings.claw.channels,
         activeClawChannelId: settings.claw.channels.some(

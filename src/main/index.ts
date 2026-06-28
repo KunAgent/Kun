@@ -1,5 +1,16 @@
-import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, Notification, powerSaveBlocker, Tray } from 'electron'
-import { existsSync } from 'node:fs'
+import {
+  app,
+  BrowserWindow,
+  dialog,
+  ipcMain,
+  Menu,
+  nativeImage,
+  Notification,
+  powerSaveBlocker,
+  Tray,
+  type ContextMenuParams,
+  type MenuItemConstructorOptions
+} from 'electron'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -14,6 +25,8 @@ import { createAppIcon, pickTrayIcon, prepareTrayIcon } from './app-icon'
 import { buildTrayMenuTemplate, parseTrayThreads, type TrayThreadSummary } from './tray-session-menu'
 import { configureLinuxWaylandImeSwitches } from './app-command-line'
 import { configureAppIdentity } from './app-identity'
+import { shouldStartHidden, syncLoginItemSettings } from './desktop-behavior'
+import { resolveLogDirectory, resolvePreloadPath } from './main-paths'
 import { runLegacyKunDataMigration } from './legacy-data-migration'
 import {
   applyKunRuntimePatch,
@@ -98,7 +111,6 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 // 的 appId 一致才能让 Windows 通知 / 任务栏分组在升级前后连续,而
 // appId 因为 NSIS 升级 GUID 与 macOS 更新签名校验的原因永远不改。
 const APP_USER_MODEL_ID = 'com.xingyuzhong.deepseekgui'
-const HIDDEN_START_ARG = '--hidden'
 const startupTraceEnabled =
   process.env.KUN_STARTUP_TRACE === '1' || process.env.DEEPSEEK_GUI_STARTUP_TRACE === '1'
 const startupTraceStart = Date.now()
@@ -130,16 +142,6 @@ function syncWeixinBridgeRuntime(settings: AppSettingsV1): void {
 
 const runningClawScheduleMcpServer =
   process.argv.includes('--gui-schedule-mcp-server') || process.argv.includes('--claw-schedule-mcp-server')
-
-function resolveLogDirectory(): string {
-  return join(app.getPath('userData'), 'logs')
-}
-
-function resolvePreloadPath(): string {
-  const cjsPath = join(__dirname, '../preload/index.cjs')
-  if (existsSync(cjsPath)) return cjsPath
-  return join(__dirname, '../preload/index.mjs')
-}
 
 function getClawScheduleMcpLaunchConfig(): ClawScheduleMcpLaunchConfig {
   return {
@@ -413,33 +415,6 @@ function windowCloseLabels(locale: AppSettingsV1['locale']): {
   }
 }
 
-function shouldStartHidden(settings: AppSettingsV1): boolean {
-  return (
-    process.platform === 'win32' &&
-    settings.appBehavior.openAtLogin &&
-    settings.appBehavior.startMinimized &&
-    process.argv.includes(HIDDEN_START_ARG)
-  )
-}
-
-function syncLoginItemSettings(settings: AppSettingsV1): void {
-  if (process.platform !== 'win32' && process.platform !== 'darwin') return
-  const behavior = settings.appBehavior
-  try {
-    app.setLoginItemSettings({
-      openAtLogin: behavior.openAtLogin,
-      args:
-        process.platform === 'win32' && behavior.openAtLogin && behavior.startMinimized
-          ? [HIDDEN_START_ARG]
-          : []
-    })
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
-    console.warn('[kun-gui] failed to update login item settings:', error)
-    logWarn('desktop-behavior', 'Failed to update login item settings.', { message })
-  }
-}
-
 function revealMainWindow(): void {
   if (!mainWindow || mainWindow.isDestroyed()) {
     createWindow()
@@ -462,6 +437,38 @@ function dispatchTrayAction(action: TrayActionPayload): void {
   } else {
     send()
   }
+}
+
+function showRendererContextMenu(window: BrowserWindow, params: ContextMenuParams): void {
+  const template: MenuItemConstructorOptions[] = []
+  const hasSelection = params.selectionText.trim().length > 0
+  if (params.isEditable) {
+    template.push(
+      { role: 'undo', enabled: params.editFlags.canUndo },
+      { role: 'redo', enabled: params.editFlags.canRedo },
+      { type: 'separator' },
+      { role: 'cut', enabled: params.editFlags.canCut },
+      { role: 'copy', enabled: params.editFlags.canCopy || hasSelection },
+      { role: 'paste', enabled: params.editFlags.canPaste },
+      { type: 'separator' },
+      { role: 'selectAll', enabled: params.editFlags.canSelectAll }
+    )
+  } else if (hasSelection) {
+    template.push(
+      { role: 'copy', enabled: true },
+      { type: 'separator' },
+      { role: 'selectAll' }
+    )
+  }
+  if (!app.isPackaged) {
+    if (template.length > 0) template.push({ type: 'separator' })
+    template.push({
+      label: 'Inspect Element',
+      click: () => window.webContents.inspectElement(params.x, params.y)
+    })
+  }
+  if (template.length === 0) return
+  Menu.buildFromTemplate(template).popup({ window, x: params.x, y: params.y })
 }
 
 function quitFromTray(): void {
@@ -687,26 +694,51 @@ async function waitForKunHealth(settings: AppSettingsV1, timeoutMs: number): Pro
   let lastError = ''
 
   while (Date.now() <= deadline) {
-    try {
-      const remaining = Math.max(1, deadline - Date.now())
-      const res = await fetch(`${base}/health`, {
-        headers: runtimeAuthHeaders(settings),
-        signal: AbortSignal.timeout(Math.max(250, Math.min(1_000, remaining)))
-      })
-      if (res.ok && isKunHealthResponseBody(await res.text())) return true
-      lastError = `unexpected status ${res.status}`
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e)
-      if (msg !== lastError) {
-        lastError = msg
-        logWarn('health-probe', `${base}/health: ${msg}`)
-      }
+    const remaining = Math.max(1, deadline - Date.now())
+    const result = await probeKunHealthOnce(settings, base, remaining)
+    if (result.healthy) return true
+    if (result.error !== lastError) {
+      lastError = result.error
+      logWarn('health-probe', `${base}/health: ${result.error}`)
     }
     await sleep(150)
   }
 
   logWarn('health-probe', `gave up after ${timeoutMs}ms, last error: ${lastError}`)
   return false
+}
+
+type KunHealthProbeResult = { healthy: boolean; error: string }
+const kunHealthProbeInFlight = new Map<string, Promise<KunHealthProbeResult>>()
+
+function probeKunHealthOnce(
+  settings: AppSettingsV1,
+  base: string,
+  remainingMs: number
+): Promise<KunHealthProbeResult> {
+  const existing = kunHealthProbeInFlight.get(base)
+  if (existing) return existing
+
+  let task: Promise<KunHealthProbeResult>
+  task = (async () => {
+    try {
+      const res = await fetch(`${base}/health`, {
+        headers: runtimeAuthHeaders(settings),
+        signal: AbortSignal.timeout(Math.max(250, Math.min(1_000, remainingMs)))
+      })
+      const healthy = res.ok && isKunHealthResponseBody(await res.text())
+      return { healthy, error: healthy ? '' : `unexpected status ${res.status}` }
+    } catch (error) {
+      return {
+        healthy: false,
+        error: error instanceof Error ? error.message : String(error)
+      }
+    }
+  })().finally(() => {
+    if (kunHealthProbeInFlight.get(base) === task) kunHealthProbeInFlight.delete(base)
+  })
+  kunHealthProbeInFlight.set(base, task)
+  return task
 }
 
 async function sleepWithAbort(ms: number, signal: AbortSignal): Promise<void> {
@@ -733,6 +765,13 @@ let lastAppliedSettings: AppSettingsV1 | null = null
 
 const RUNTIME_WATCHDOG_INTERVAL_MS = 30_000
 const RUNTIME_WATCHDOG_FAILURE_THRESHOLD = 3
+/**
+ * How long a managed child that failed the initial health probe gets to prove
+ * it is merely busy (e.g. a long synchronous step) rather than hung, before the
+ * ensure path force-restarts it in place. Generous on purpose: killing a
+ * slow-but-alive runtime would cost the user their in-flight turn (#621).
+ */
+const RUNTIME_HUNG_CONFIRM_MS = 10_000
 const runtimeRestartBudget = new RestartBudget({ windowMs: 60_000, maxRestarts: 3 })
 let lastRuntimeStatus: KunRuntimeStatus | null = null
 let supervisedRestartInFlight = false
@@ -1061,6 +1100,38 @@ async function ensureKunRuntime(settings: AppSettingsV1): Promise<AppSettingsV1>
     )
   }
 
+  // A managed child that is alive but failed the probe is hung (blocked event
+  // loop) or merely busy — not absent. The launch path below cannot recover it
+  // on its own: resolveAvailablePort skips our own child when reclaiming the
+  // port (isCurrentKunChildPid) and startKunChild early-returns while
+  // isChildRunning() stays true, so it would pick a fresh port, never spawn,
+  // and fail every request until the ~90s watchdog finally force-restarts
+  // (KunAgent/Kun#621). Stop the hung child here so the relaunch spawns a fresh
+  // process on the SAME port instead.
+  if (kunRuntimeAdapter.isChildRunning()) {
+    // Never tear down a child still inside its (deliberately generous) startup
+    // window — interrupting a slow-but-healthy boot is the #544 restart storm.
+    await waitForKunStartupSettled()
+    if (kunRuntimeAdapter.isChildRunning()) {
+      // Give a merely-busy runtime a real chance to answer before judging it
+      // hung, so one long synchronous step does not cost the user their turn.
+      const recovered = await waitForKunHealth(settings, RUNTIME_HUNG_CONFIRM_MS)
+      if (recovered) {
+        const threadApi = await probeThreadApi(settings)
+        if (threadApi.ok) {
+          noteRuntimeHealthy('ensure')
+          return settings
+        }
+        throw runtimeJsonError(threadApi.error, threadApi.message)
+      }
+      logWarn(
+        'runtime-start',
+        `managed Kun child stopped responding on port ${runtime.port}; restarting it in place`
+      )
+      await kunRuntimeAdapter.stopAndWait()
+    }
+  }
+
   const launchSettings = await resolveManagedKunLaunchSettings(settings, 'runtime-start')
   const adapter = kunRuntimeAdapter
   try {
@@ -1148,7 +1219,7 @@ async function restartRuntimeOnce(settings: AppSettingsV1): Promise<void> {
 
 function createWindow(options: { suppressInitialShow?: boolean } = {}): void {
   traceStartup('createWindow:start')
-  const preloadPath = resolvePreloadPath()
+  const preloadPath = resolvePreloadPath(__dirname)
   const usesDesktopTitleBar = process.platform === 'win32' || process.platform === 'linux'
   mainWindow = new BrowserWindow({
     width: 1280,
@@ -1177,6 +1248,12 @@ function createWindow(options: { suppressInitialShow?: boolean } = {}): void {
     const message = error instanceof Error ? error.message : String(error)
     console.error(`[kun-gui] failed to load preload ${preloadPath}:`, error)
     logError('preload', 'Failed to load preload script', { preloadPath, message })
+  })
+  mainWindow.webContents.on('context-menu', (event, params) => {
+    event.preventDefault()
+    const window = mainWindow
+    if (!window || window.isDestroyed()) return
+    showRendererContextMenu(window, params)
   })
   const showWindow = (): void => {
     if (options.suppressInitialShow) return
@@ -1498,7 +1575,7 @@ app.whenReady().then(async () => {
     console.error('[claw-schedule-mcp] failed to sync config on startup:', error)
   })
 
-  logDir = resolveLogDirectory()
+  logDir = resolveLogDirectory(app)
   configureLogger({
     dir: logDir,
     enabled: initial.log.enabled,
@@ -1645,7 +1722,7 @@ app.whenReady().then(async () => {
     getAppVersion: () => app.getVersion(),
     readGuiUpdateState,
     loadGuiUpdaterModule,
-    resolveLogDirectory,
+    resolveLogDirectory: () => resolveLogDirectory(app),
     logError
   })
 

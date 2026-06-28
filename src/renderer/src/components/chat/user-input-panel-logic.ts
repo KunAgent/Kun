@@ -1,4 +1,26 @@
-import type { UserInputAnswer, UserInputOption, UserInputQuestion } from '../../agent/types'
+import type { ChatBlock, UserInputAnswer, UserInputOption, UserInputQuestion } from '../../agent/types'
+
+type UserInputBlock = Extract<ChatBlock, { kind: 'user_input' }>
+
+/**
+ * A `user_input` request is actionable only while the live runtime is awaiting
+ * it (`block.live`). A block rehydrated from a finished thread keeps its stored
+ * `pending` status but is NOT live, so reopening that history must not re-prompt
+ * the user (issue #606) — answering it would hit a dead gate ("user input not
+ * found").
+ */
+export function isLivePendingUserInput(block: UserInputBlock): boolean {
+  return block.status === 'pending' && block.live === true
+}
+
+/** The live, awaited `user_input` block in a thread, if any (latest wins). */
+export function selectLivePendingUserInput(blocks: ChatBlock[]): UserInputBlock | null {
+  for (let i = blocks.length - 1; i >= 0; i -= 1) {
+    const block = blocks[i]
+    if (block.kind === 'user_input' && isLivePendingUserInput(block)) return block
+  }
+  return null
+}
 
 /**
  * Shared, framework-free helpers for the user_input / ask-user interaction.

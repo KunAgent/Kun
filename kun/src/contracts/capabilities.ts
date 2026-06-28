@@ -121,6 +121,9 @@ export const McpServerConfig = z
     url: z.string().min(1).optional(),
     headers: StringRecord.default({}),
     env: StringRecord.default({}),
+    // Visibility scope: empty means globally visible; otherwise the server is
+    // advertised only when ToolHostContext.workspace is under one of these roots.
+    workspaceRoots: z.array(z.string().min(1)).default([]),
     trustScope: McpTrustScope.default('workspace'),
     trustedWorkspaceRoots: z.array(z.string().min(1)).default([]),
     timeoutMs: z.number().int().positive().default(30_000)

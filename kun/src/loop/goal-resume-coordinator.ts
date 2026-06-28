@@ -2,14 +2,16 @@
  * Goal auto-resume coordinator.
  *
  * Goal mode runs as a single long-lived turn that self-continues *within*
- * its own loop. When that turn ends abnormally (model/network/tool error or
- * the per-turn model-step budget) while the goal is still `active`, nothing
- * used to relaunch it — the goal banner kept showing "in progress" while the
- * runtime sat idle (KunAgent/Kun#370). This coordinator owns the cross-turn
- * resume policy:
+ * its own loop. When that turn ends without finishing the goal (an error, the
+ * per-turn model-step budget, or a clean stop while the objective is still
+ * unmet) and the goal is still `active`, nothing used to relaunch it — the
+ * goal banner kept showing "in progress" while the runtime sat idle
+ * (KunAgent/Kun#370). This coordinator owns the cross-turn resume policy:
  *
- * - It relaunches a continuation turn after a failed goal turn (path B) and
- *   after a runtime restart strands an active goal (path A).
+ * - It relaunches a continuation turn after a goal turn settles without
+ *   finishing the goal (path B: an error, the step-budget, or a clean stop
+ *   that left the goal active) and after a runtime restart strands an active
+ *   goal (path A).
  * - Consecutive *no-progress* failures are bounded with exponential backoff;
  *   once the budget is exhausted the goal is moved out of `active` so the UI
  *   stops lying. A failure that made real progress resets the counter, so a
@@ -84,12 +86,15 @@ export class GoalResumeCoordinator {
   }
 
   /**
-   * Record that a goal turn failed and schedule a backoff resume.
+   * Record that a goal turn settled without finishing the goal and schedule a
+   * backoff resume. Covers both interrupted turns (model/network/tool error or
+   * the per-turn model-step budget) and clean turns that stopped while the
+   * objective was still unmet.
    *
    * Returns `'exhausted'` when the consecutive no-progress budget is spent —
    * the caller should move the goal out of `active` (e.g. to `blocked`).
    */
-  noteGoalTurnFailed(input: {
+  noteGoalTurnSettled(input: {
     threadId: string
     goalKey: string
     madeProgress: boolean

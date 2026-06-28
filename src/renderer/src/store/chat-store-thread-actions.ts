@@ -1,4 +1,4 @@
-import type { AgentProvider, NormalizedThread, ReviewTarget, ThreadEventSink } from '../agent/types'
+import type { ReviewTarget } from '../agent/types'
 import { getProvider } from '../agent/registry'
 import { rendererRuntimeClient } from '../agent/runtime-client'
 import i18n from '../i18n'
@@ -26,27 +26,21 @@ import {
 import { workspaceLabelFromPath } from '../lib/workspace-label'
 import { isInternalTemporaryWorkspace, normalizeWorkspaceRoot } from '../lib/workspace-path'
 import {
-  DEFAULT_MODEL_PROVIDER_ID,
   buildClawRuntimePrompt,
   buildCodeRuntimePrompt,
-  getActiveAgentApiKey,
-  getKunRuntimeSettings
+  getActiveAgentApiKey
 } from '@shared/app-settings'
 import type { ChatState, ChatStoreGet, ChatStoreSet } from './chat-store-types'
 import {
   activeClawChannel,
-  composerModelSelectable,
   compactCodeWorkspaceRoots,
   forgetCodeWorkspaceRoot,
   hydrateBlockModelLabels,
   isClawThread,
   optimisticUserModelLabel,
-  providerIdForComposerModel,
-  providerIdMatchesComposerModel,
   readCodeWorkspaceRoots,
   composerModeForThread,
   readThreadComposerMode,
-  readThreadComposerSelection,
   rememberCodeWorkspaceRoots,
   rememberThreadComposerSelection,
   rememberTurnModel
@@ -57,6 +51,7 @@ import {
   findLatestUserBlockId,
   findReusableEmptyThreadId,
   reconcileOptimisticUserBlock,
+  settlePendingRuntimeWorkAfterInterrupt,
   threadHasPendingRuntimeWork,
   threadSnapshotLooksRunning,
   threadBelongsToWorkspace
@@ -101,6 +96,12 @@ import {
   syncTurnCompletionPoll,
   watchTurnCompletionNotification
 } from './chat-store-runtime'
+import {
+  composerSelectionForThread,
+  ensureRuntimeProviderForSend,
+  fallbackComposerProviderIdForSend,
+  subscribeThreadEventsWithRecovery
+} from './chat-store-thread-action-helpers'
 
 type SseAbortRef = { current: AbortController | null }
 
@@ -113,83 +114,9 @@ type StoreActionContext = {
 let drainingQueuedMessages = false
 const checkpointGitUnavailableWorkspaces = new Set<string>()
 
-function fallbackComposerProviderIdForSend(state: ChatState): string {
-  return state.route === 'claw' ? '' : state.composerProviderId.trim()
-}
-
-async function ensureRuntimeProviderForSend(input: {
-  providerId?: string
-  model?: string
-  set: ChatStoreSet
-  get: ChatStoreGet
-}): Promise<void> {
-  const providerId = input.providerId?.trim()
-  const model = input.model?.trim()
-  if (!providerId || !model || model.toLowerCase() === 'auto') return
-  const settings = await rendererRuntimeClient.getSettings({ forceRefresh: true })
-  const runtime = getKunRuntimeSettings(settings)
-  const activeProviderId = runtime.providerId?.trim() || DEFAULT_MODEL_PROVIDER_ID
-  if (activeProviderId === providerId) return
-  input.set({ runtimeConnection: 'checking', error: null, runtimeErrorDetail: null })
-  try {
-    await window.kunGui.saveSettingsSilent({ agents: { kun: { providerId, model } } })
-    rendererRuntimeClient.invalidateSettings()
-    await rendererRuntimeClient.restartRuntime()
-    await getProvider().connect()
-    input.set({ runtimeConnection: 'ready', error: null, runtimeErrorDetail: null })
-    void input.get().loadComposerModels()
-  } catch (error) {
-    input.set({ runtimeConnection: 'offline' })
-    throw error
-  }
-}
-
-function composerSelectionForThread(
-  state: ChatState,
-  thread: Pick<NormalizedThread, 'id' | 'model'> | null | undefined
-): { model: string; providerId: string } | null {
-  if (!thread) return null
-  const pickList = state.composerPickList
-  const stored = readThreadComposerSelection(thread.id)
-  const storedModel = stored?.model.trim() ?? ''
-  const threadModel = thread.model.trim()
-  const model = composerModelSelectable(pickList, state.composerModelGroups, storedModel)
-    ? storedModel
-    : composerModelSelectable(pickList, state.composerModelGroups, threadModel)
-      ? threadModel
-      : ''
-  if (!model) return null
-  const storedProviderId =
-    stored && providerIdMatchesComposerModel(state.composerModelGroups, stored.providerId, model)
-      ? stored.providerId
-      : ''
-  return {
-    model,
-    providerId: storedProviderId || providerIdForComposerModel(state.composerModelGroups, model)
-  }
-}
-
-function subscribeThreadEventsWithRecovery(
-  provider: AgentProvider,
-  threadId: string,
-  sinceSeq: number,
-  sink: ThreadEventSink,
-  signal: AbortSignal,
-  get: ChatStoreGet
-): void {
-  void provider.subscribeThreadEvents(threadId, sinceSeq, sink, signal)
-    .catch(() => undefined)
-    .then(() => {
-      if (signal.aborted) return
-      const state = get()
-      if (state.activeThreadId !== threadId || !state.busy) return
-      void state.recoverActiveTurn()
-    })
-}
-
 export function createThreadActions(
   { set, get, sseAbortRef }: StoreActionContext
-): Pick<ChatState, 'createThread' | 'recoverActiveTurn' | 'selectThread' | 'subscribeThreadEventsLive' | 'drainQueuedMessages' | 'removeQueuedMessage' | 'sendMessage' | 'reviewActiveThread'> {
+): Pick<ChatState, 'createThread' | 'createConversation' | 'recoverActiveTurn' | 'selectThread' | 'subscribeThreadEventsLive' | 'drainQueuedMessages' | 'removeQueuedMessage' | 'sendMessage' | 'reviewActiveThread'> {
   return {
   createThread: async (options = {}) => {
     if (get().runtimeConnection !== 'ready') {
@@ -202,6 +129,49 @@ export function createThreadActions(
       const activeThread = get().activeThreadId
         ? get().threads.find((thread) => thread.id === get().activeThreadId)
         : null
+
+      // 对话会话:不绑定项目文件夹,在 conversationWorkspaceRoot 下自动创建
+      // 一个时间戳子目录作为工作目录(主进程负责实际建目录)。
+      if (options.conversation) {
+        if (typeof window.kunGui === 'undefined' || typeof window.kunGui.createConversationWorkspace !== 'function') {
+          set({ error: i18n.t('common:workspacePickerUnavailable') })
+          return
+        }
+        const created = await window.kunGui.createConversationWorkspace(
+          settings.conversationWorkspaceRoot || undefined
+        )
+        if (!created.ok || !created.path) {
+          set({ error: created.error || i18n.t('common:worktreeAcquireFailed') })
+          return
+        }
+        const pickedAgentId = options.agentId?.trim() || get().composerAgentId?.trim() || ''
+        const personaProfile = pickedAgentId
+          ? settings.agents?.kun?.subagents?.profiles?.find(
+            (profile) => profile.id === pickedAgentId &&
+              profile.enabled &&
+              (profile.mode === 'primary' || profile.mode === 'all')
+          )
+          : undefined
+        const t = await p.createThread({
+          workspace: created.path,
+          title: getDefaultThreadTitle(),
+          mode: 'agent',
+          ...(personaProfile ? {
+            agentId: personaProfile.id,
+            ...(personaProfile.providerId ? { providerId: personaProfile.providerId } : {}),
+            ...(personaProfile.model ? { model: personaProfile.model } : {}),
+            ...(personaProfile.systemPrompt ? { systemPrompt: personaProfile.systemPrompt } : {})
+          } : {})
+        })
+        set((s) => ({
+          activeThreadId: t.id,
+          threads: s.threads.some((thread) => thread.id === t.id) ? s.threads : [t, ...s.threads]
+        }))
+        await get().selectThread(t.id)
+        await get().refreshThreads()
+        return
+      }
+
       let workspaceRoot =
         normalizeWorkspaceRoot(options.workspaceRoot) ||
         (activeThread && !isInternalTemporaryWorkspace(activeThread.workspace)
@@ -287,7 +257,10 @@ export function createThreadActions(
       // Setting it active first lets refreshThreads preserve it in the sidebar.
       set((s) => ({
         activeThreadId: t.id,
-        codeWorkspaceRoots: rememberCodeWorkspaceRoots(s.codeWorkspaceRoots, [workspaceRoot, t.workspace]),
+        codeWorkspaceRoots: rememberCodeWorkspaceRoots(
+          s.codeWorkspaceRoots,
+          [acquiredWorktree?.projectPath ?? workspaceRoot]
+        ),
         threads: s.threads.some((thread) => thread.id === t.id) ? s.threads : [t, ...s.threads]
       }))
       await get().selectThread(t.id)
@@ -312,6 +285,10 @@ export function createThreadActions(
     }
   },
 
+  createConversation: async () => {
+    await get().createThread({ conversation: true })
+  },
+
   recoverActiveTurn: async () => {
     const state = get()
     if (!state.activeThreadId) return false
@@ -332,8 +309,13 @@ export function createThreadActions(
         goal,
         todos
       } = await p.getThreadDetail(activeThreadId)
-      const blocks = hydrateBlockModelLabels(activeThreadId, rawBlocks)
-      const busy = threadSnapshotLooksRunning(blocks, threadStatus)
+      const loaded = hydrateBlockModelLabels(activeThreadId, rawBlocks)
+      const busy = threadSnapshotLooksRunning(loaded, threadStatus)
+      // The server has settled but a tool/approval/user_input block may still be
+      // open (e.g. a delegate_task interrupted by a runtime restart). Settle it,
+      // otherwise threadHasPendingRuntimeWork stays true and the queued message
+      // we are recovering re-queues forever instead of draining (KunAgent/Kun#621).
+      const blocks = busy ? loaded : settlePendingRuntimeWorkAfterInterrupt(loaded)
       const currentTurnUserId = busy
         ? state.currentTurnUserId ?? latestUserMessageId ?? findLatestUserBlockId(blocks)
         : null
@@ -429,8 +411,11 @@ export function createThreadActions(
                 : block
             )
           : rawBlocks
-      const blocks = hydrateBlockModelLabels(id, labeledBlocks)
-      const busy = threadSnapshotLooksRunning(blocks, threadStatus)
+      const loaded = hydrateBlockModelLabels(id, labeledBlocks)
+      const busy = threadSnapshotLooksRunning(loaded, threadStatus)
+      // Settle blocks left open by an interrupted turn when the server has
+      // already settled, so selecting the thread doesn't keep it wedged (#621).
+      const blocks = busy ? loaded : settlePendingRuntimeWorkAfterInterrupt(loaded)
       const currentTurnUserId = busy
         ? latestUserMessageId ?? findLatestUserBlockId(blocks)
         : null
@@ -547,8 +532,11 @@ export function createThreadActions(
         todos
       } = await p.getThreadDetail(targetThreadId)
       if (ac.signal.aborted) return
-      const blocks = hydrateBlockModelLabels(targetThreadId, rawBlocks)
-      const busy = threadSnapshotLooksRunning(blocks, threadStatus)
+      const loaded = hydrateBlockModelLabels(targetThreadId, rawBlocks)
+      const busy = threadSnapshotLooksRunning(loaded, threadStatus)
+      // Settle blocks left open by an interrupted turn when the server has
+      // already settled, so the thread doesn't stay wedged on load (#621).
+      const blocks = busy ? loaded : settlePendingRuntimeWorkAfterInterrupt(loaded)
       const currentTurnUserId = busy
         ? latestUserMessageId ?? findLatestUserBlockId(blocks)
         : null

@@ -1,5 +1,6 @@
 import { isAbsolute, relative, resolve } from 'node:path'
 import type { ModelClient, ModelRequest, ModelToolSpec } from '../ports/model-client.js'
+import type { AgentSdkRuntime } from '../runtime/agent-sdk/agent-sdk-runtime.js'
 import type {
   ToolHost,
   ToolCallLike,
@@ -88,6 +89,7 @@ import { guiPlanWorkspaceMatches } from '../shared/gui-plan.js'
 import { GET_GOAL_TOOL_NAME, UPDATE_GOAL_TOOL_NAME } from '../adapters/tool/goal-tools.js'
 import { TODO_LIST_TOOL_NAME, TODO_WRITE_TOOL_NAME } from '../adapters/tool/todo-tools.js'
 import { shellRuntimeInstruction } from '../adapters/tool/builtin-tool-utils.js'
+import { VERIFY_CHANGES_TOOL_NAME } from '../adapters/tool/builtin-verify-tool.js'
 import {
   GoalResumeCoordinator,
   DEFAULT_MAX_GOAL_RESUME_NO_PROGRESS_ATTEMPTS,
@@ -123,7 +125,7 @@ const GOAL_NON_PROGRESS_TOOL_NAMES = new Set<string>([
  */
 const GOAL_RESUME_PROMPT = [
   'Continue working toward the active goal.',
-  'The previous attempt was interrupted before the goal was complete (it failed or the runtime restarted).',
+  'The previous attempt stopped before the goal was complete (it was interrupted, truncated, or the runtime restarted, or it simply stopped early).',
   'Review the current state, pick up where the work left off, and keep going until the goal is genuinely achieved or blocked.'
 ].join(' ')
 
@@ -284,6 +286,65 @@ export function resolvePlanModeToolSpecs(
     : toolSpecs.filter((tool) => tool.name === planTool)
 }
 
+// Source files a `verify_changes` run can meaningfully validate (Vitest/tsc).
+// Documents and HTML written in write / design / SDD modes never match, so
+// those modes are never nudged to run code verification.
+const VERIFIABLE_SOURCE_PATH = /\.[cm]?[jt]sx?$/i
+
+function fileChangeResultPath(item: TurnItem): string | null {
+  if (item.kind !== 'tool_result') return null
+  const output = item.output
+  if (!output || typeof output !== 'object') return null
+  const record = output as Record<string, unknown>
+  const path = record.relative_path ?? record.path
+  return typeof path === 'string' ? path : null
+}
+
+/**
+ * Whether this turn changed real source files (.ts/.js family) that a later
+ * `verify_changes` run has not yet covered. Only successful, non-plan
+ * file-change results with a source-code path count — so writing docs or HTML
+ * (write / design / SDD modes) never asks for code verification, and a denied
+ * or failed edit never does either. Used only to surface an optional nudge;
+ * verification is never forced.
+ */
+export function turnHasUnverifiedSourceChanges(
+  items: readonly TurnItem[],
+  turnId: string
+): boolean {
+  let lastSourceChangeIndex = -1
+  let lastVerificationIndex = -1
+  for (let index = 0; index < items.length; index += 1) {
+    const item = items[index]
+    if (!item || item.turnId !== turnId || item.kind !== 'tool_result') continue
+    if (item.toolName === VERIFY_CHANGES_TOOL_NAME) {
+      lastVerificationIndex = index
+      continue
+    }
+    if (
+      item.toolKind === 'file_change' &&
+      item.toolName !== CREATE_PLAN_TOOL_NAME &&
+      item.isError !== true
+    ) {
+      const path = fileChangeResultPath(item)
+      if (path && VERIFIABLE_SOURCE_PATH.test(path)) lastSourceChangeIndex = index
+    }
+  }
+  return lastSourceChangeIndex >= 0 && lastSourceChangeIndex > lastVerificationIndex
+}
+
+/**
+ * A soft, optional nudge to run acceptance checks after source edits. The loop
+ * never forces `verify_changes` — the model decides whether validation applies.
+ */
+function verificationSuggestionInstruction(): string {
+  return [
+    'You changed source files in this turn.',
+    `If these are code changes, consider running \`${VERIFY_CHANGES_TOOL_NAME}\` to run the project's adjacent tests and typecheck before finishing.`,
+    'This is optional — skip it when verification does not apply.'
+  ].join(' ')
+}
+
 /**
  * A GUI plan context whose workspace doesn't match the thread it runs in is
  * stale — e.g. carried in by a conversation fork (the fork keeps the source
@@ -395,7 +456,7 @@ function formatLocalDateTimeForPrompt(nowIso: string, timeZone?: string): string
   }
 }
 
-function goalContinuationInstruction(goal: ThreadGoal | undefined): string | null {
+export function goalContinuationInstruction(goal: ThreadGoal | undefined): string | null {
   if (!goal || goal.status !== 'active') return null
   const tokenBudget = goal.tokenBudget == null ? 'none' : String(goal.tokenBudget)
   const remainingTokens = goal.tokenBudget == null
@@ -500,7 +561,7 @@ function charBigramCounts(text: string): Map<string, number> {
   return counts
 }
 
-function todoContinuationInstruction(todos: ThreadTodoList | undefined): string | null {
+export function todoContinuationInstruction(todos: ThreadTodoList | undefined): string | null {
   const items = todos?.items ?? []
   if (items.length === 0) return null
   const rows = items.slice(0, 50).map((item, index) => {
@@ -675,6 +736,13 @@ export type AgentLoopOptions = {
     relativePath: string
     markdown: string
   }) => Promise<void>
+  /**
+   * Subscription engine. When set and it owns the active thread's provider
+   * (kind: 'agent-sdk'), the entire turn is delegated to the embedded Claude
+   * Agent SDK instead of kun's own model loop, billing the user's Claude
+   * subscription. kun's tools/persona/permissions are injected into the SDK.
+   */
+  sdkRuntime?: AgentSdkRuntime
 }
 
 /**
@@ -703,6 +771,13 @@ export class AgentLoop {
   private readonly turnFailures = new Map<string, TurnFailure>()
   /** Turns that executed at least one real (non-goal-status) tool call. */
   private readonly turnMadeProgress = new Set<string>()
+  /**
+   * Turns whose stop was a deliberate cap rather than an unfinished-goal
+   * interruption (cost-budget exhaustion, or a repetition stall that made no
+   * real progress). These must not drive goal auto-resume even though the goal
+   * is still `active`.
+   */
+  private readonly goalResumeSuppressedByTurn = new Set<string>()
   private readonly goalResume: GoalResumeCoordinator
 
   constructor(opts: AgentLoopOptions) {
@@ -752,6 +827,17 @@ export class AgentLoop {
     if (signal.aborted) {
       await this.opts.turns.finishTurn({ threadId, turnId, status: 'aborted' })
       return 'aborted'
+    }
+    // Subscription engine dispatch: if a Claude Agent SDK runtime owns this
+    // thread's provider, delegate the whole turn to it (the SDK runs the loop on
+    // the user's subscription; kun's brain is injected). All other providers
+    // fall through to kun's native loop below.
+    const sdkRuntime = this.opts.sdkRuntime
+    if (sdkRuntime) {
+      const providerId = (await this.opts.threadStore.get(threadId))?.providerId
+      if (sdkRuntime.handlesProvider(providerId)) {
+        return sdkRuntime.runTurn(threadId, turnId, signal)
+      }
     }
     let goalTimer: GoalElapsedTimer | null = null
     let finalStatus: 'completed' | 'failed' | 'aborted' | undefined
@@ -842,6 +928,7 @@ export class AgentLoop {
       this.lastNoToolTextByTurn.delete(turnId)
       this.goalNoToolRecoveryStepsByTurn.delete(turnId)
       this.turnMadeProgress.delete(turnId)
+      this.goalResumeSuppressedByTurn.delete(turnId)
       this.emptyPostToolRecoveryStepsByTurn.delete(turnId)
       this.turnFailures.delete(turnId)
       await this.runTurnEndHooks(threadId, turnId, finalStatus ?? 'failed', finalError)
@@ -1073,12 +1160,22 @@ export class AgentLoop {
   /**
    * Decide whether to auto-resume the goal after a turn settles (path B).
    *
-   * Only failed, non-plan turns on a still-`active` goal are resumed: a model
-   * step-budget stop or a model/network/tool error left the goal "in
-   * progress" with nothing running (KunAgent/Kun#370). Deliberate stops
-   * (`completed`: the goal-repetition guard or a cost-budget block) and user
-   * interrupts / shutdown (`aborted`) are never relaunched. When the
-   * consecutive no-progress budget is exhausted the goal is moved to
+   * A goal still `active` once the turn ends means the model never marked it
+   * complete or blocked, so the objective is unfinished and nothing is running
+   * (KunAgent/Kun#370). Mirroring codex's idle-relaunch-while-active policy, we
+   * drive a fresh continuation turn — routed through the backoff coordinator —
+   * not only after a `failed` turn (error / step-budget) but also after a
+   * `completed` turn that left the goal active (e.g. the model stopped early or
+   * its output was truncated). Without this, such a clean stop stranded the
+   * goal with the banner still showing "in progress" until the user nudged it.
+   *
+   * Deliberate stops are never relaunched: a plan turn, a user interrupt or
+   * shutdown (`aborted`), and the caps that set `goalResumeSuppressedByTurn`
+   * (cost-budget exhaustion, or a repetition stall that made no real progress
+   * — relaunching those would just re-hit the budget or reproduce the filler).
+   * A repetition stall that *did* make progress first (e.g. edited files, then
+   * trailed off) is not suppressed: it resumes like any other unfinished turn.
+   * When the consecutive no-progress budget is exhausted the goal is moved to
    * `blocked` so the banner reflects reality.
    */
   private async evaluateGoalResume(
@@ -1094,11 +1191,12 @@ export class AgentLoop {
     }
     const turn = thread.turns.find((t) => t.id === turnId)
     const wasPlanTurn = turn?.mode === 'plan' || Boolean(turn?.guiPlan)
-    if (finalStatus !== 'failed' || wasPlanTurn) {
+    const deliberateStop = this.goalResumeSuppressedByTurn.has(turnId)
+    if (finalStatus === 'aborted' || wasPlanTurn || deliberateStop) {
       this.goalResume.clear(threadId)
       return
     }
-    const outcome = this.goalResume.noteGoalTurnFailed({
+    const outcome = this.goalResume.noteGoalTurnSettled({
       threadId,
       goalKey: goalResumeKey(threadId, goal),
       madeProgress: this.turnMadeProgress.has(turnId)
@@ -1251,7 +1349,13 @@ export class AgentLoop {
     const planContextStale = isStalePlanContext(candidatePlanContext, thread?.workspace ?? '')
     const activePlanContext = planContextStale ? undefined : candidatePlanContext
     const budgetGate = await this.checkBudgetGate(thread, threadId, turnId)
-    if (budgetGate === 'blocked') return 'stop'
+    if (budgetGate === 'blocked') {
+      // A cost-budget stop is a deliberate cap, not an interrupted goal turn:
+      // suppress goal auto-resume so it isn't relaunched straight back into
+      // the same exhausted budget.
+      this.goalResumeSuppressedByTurn.add(turnId)
+      return 'stop'
+    }
     const loadedItems = await this.opts.sessionStore.loadItems(threadId)
     // Heal (and possibly rewrite) on-disk history once per turn: within a
     // turn the loop only appends well-formed items, and healing's deep
@@ -1421,6 +1525,10 @@ export class AgentLoop {
       toolSpecs.some((tool) => tool.name === CREATE_PLAN_TOOL_NAME)
         ? CREATE_PLAN_TOOL_NAME
         : undefined
+    const suggestVerification =
+      !planTurnActive &&
+      toolSpecs.some((tool) => tool.name === VERIFY_CHANGES_TOOL_NAME) &&
+      turnHasUnverifiedSourceChanges(historyItems, turnId)
     const effectiveToolSpecs = resolvePlanModeToolSpecs(toolSpecs, {
       planTurnActive,
       createPlanSatisfied,
@@ -1467,6 +1575,7 @@ export class AgentLoop {
       ...skillResolution.instructions,
       ...(userInputDisabled ? [userInputUnavailableInstruction()] : []),
       ...(effectiveToolSpecs.some((tool) => tool.name === 'bash') ? [shellRuntimeInstruction()] : []),
+      ...(suggestVerification ? [verificationSuggestionInstruction()] : []),
       ...(toolCatalogDriftMessage ? [toolCatalogDriftMessage] : [])
     ]
     await this.recordPipelineStage(threadId, turnId, 'input_remembered', {
@@ -1892,6 +2001,15 @@ export class AgentLoop {
           })
           this.lastNoToolTextByTurn.delete(turnId)
           this.goalNoToolRecoveryStepsByTurn.delete(turnId)
+          // A repetition stall on a turn that never made real progress would
+          // just be reproduced by a fresh resume turn, so suppress auto-resume.
+          // But a turn that edited files (etc.) and only then trailed off into
+          // "I'm done" filler IS advancing the goal — the common "stops right
+          // after editing files" case — so let the normal resume path carry it
+          // forward instead of stranding it.
+          if (!this.turnMadeProgress.has(turnId)) {
+            this.goalResumeSuppressedByTurn.add(turnId)
+          }
           return 'stop'
         }
         this.goalNoToolRecoveryStepsByTurn.delete(turnId)
@@ -3133,7 +3251,7 @@ function autoModelRouteKey(threadId: string, turnId: string): string {
   return `${threadId}:${turnId}`
 }
 
-function memoryInstructions(memories: Array<{ id: string; content: string; scope: string }>): string[] {
+export function memoryInstructions(memories: Array<{ id: string; content: string; scope: string }>): string[] {
   if (memories.length === 0) return []
   return [
     [

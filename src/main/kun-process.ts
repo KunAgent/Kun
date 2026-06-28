@@ -56,6 +56,7 @@ import {
 } from './claw-schedule-mcp-config'
 import { defaultKunDataDir } from './runtime/kun-adapter'
 import { isKunHealthResponseBody } from './kun-health'
+import { resolveClaudeBinary } from './agent-sdk-installer'
 import { appendManagedLogLine } from './logger'
 import {
   comparableSkillRootPath,
@@ -67,6 +68,7 @@ import {
 } from './services/skill-service'
 
 let child: ChildProcess | null = null
+let childPort: number | null = null
 let childLogCapture: KunChildLogCapture | null = null
 let lastResolvedBinary: string | null = null
 let kunStartPromise: Promise<void> | null = null
@@ -379,10 +381,22 @@ async function startKunChildOnce(
   // when the user actually opted into host control.
   const runAsElectron = process.platform === 'darwin' && runtime.computerUse?.enabled === true
   const command = runAsElectron ? resolution.command : resolveNodeScriptCommand(resolution.command)
+  // When the runtime's own (default) provider is the Claude subscription, tell
+  // the runtime so its dispatch routes default-provider turns (thread.providerId
+  // absent or equal to it) to the embedded SDK instead of the HTTP default.
+  const activeProviderKind = (getModelProviderSettings(settings).providers as ModelProviderProfileV1[]).find(
+    (provider) => provider.id?.trim() === getKunRuntimeSettings(settings).providerId.trim()
+  )?.kind
+  // Point the runtime at the on-demand Claude Code binary (the ~222MB binary is
+  // not bundled; it's downloaded into userData). Absent in dev when it's still
+  // resolvable from kun/node_modules — the SDK auto-resolves it there.
+  const claudeBinary = resolveClaudeBinary(app.getPath('userData'), [join(appRoot(), 'kun')])
   const childEnv: NodeJS.ProcessEnv = {
     ...process.env,
     KUN_RUNTIME_TOKEN: runtime.runtimeToken,
-    DEEPSEEK_API_KEY: runtime.apiKey || process.env.DEEPSEEK_API_KEY || ''
+    DEEPSEEK_API_KEY: runtime.apiKey || process.env.DEEPSEEK_API_KEY || '',
+    ...(activeProviderKind === 'agent-sdk' ? { KUN_RUNTIME_PROVIDER_KIND: 'agent-sdk' } : {}),
+    ...(claudeBinary ? { KUN_CLAUDE_BINARY: claudeBinary } : {})
   }
   if (!runAsElectron) childEnv.ELECTRON_RUN_AS_NODE = '1'
   else delete childEnv.ELECTRON_RUN_AS_NODE
@@ -392,6 +406,7 @@ async function startKunChildOnce(
     detached: false
   })
   const startedChild = child
+  childPort = runtime.port
   const startedLogCapture = createKunChildLogCapture(startedChild.pid)
   childLogCapture = startedLogCapture
   childStderrTail = ''
@@ -408,7 +423,10 @@ async function startKunChildOnce(
         : `exited with code ${code ?? 'unknown'}`
     )
     void startedLogCapture.close()
-    if (child === startedChild) child = null
+    if (child === startedChild) {
+      child = null
+      childPort = null
+    }
     if (readyChildren.has(startedChild) && !intentionalStops.has(startedChild)) {
       onUnexpectedKunExit?.({
         code: code ?? null,
@@ -665,7 +683,7 @@ function uniqueStrings(values: string[]): string[] {
   return out
 }
 
-async function readGuiManagedMcpServers(path: string): Promise<Record<string, unknown>> {
+async function readGuiManagedMcpServers(path: string): Promise<Record<string, Record<string, unknown>>> {
   const parsed = await readJsonObjectIfExists(path)
   if (!parsed) return {}
 
@@ -700,6 +718,7 @@ function normalizeGuiManagedMcpServer(server: unknown): Record<string, unknown> 
   const transport = normalizeMcpTransport(raw.transport, command, url)
   if (!transport) return null
 
+  const workspaceRoots = stringArrayValue(raw.workspaceRoots)
   const trustedWorkspaceRoots = stringArrayValue(raw.trustedWorkspaceRoots)
   const trustScope = normalizeMcpTrustScope(raw.trustScope, trustedWorkspaceRoots)
   if (trustScope === 'workspace' && trustedWorkspaceRoots.length === 0) return null
@@ -714,6 +733,7 @@ function normalizeGuiManagedMcpServer(server: unknown): Record<string, unknown> 
     ...(url ? { url } : {}),
     ...(Object.keys(headers).length > 0 ? { headers } : {}),
     ...(Object.keys(env).length > 0 ? { env } : {}),
+    ...(workspaceRoots.length > 0 ? { workspaceRoots } : {}),
     trustScope,
     ...(trustedWorkspaceRoots.length > 0 ? { trustedWorkspaceRoots } : {}),
     ...(timeoutMs ? { timeoutMs } : {})
@@ -808,6 +828,7 @@ function modelConfigProfilesFromProviderProfiles(
     out[trimmed] = {
       ...(profile.aliases?.length ? { aliases: profile.aliases } : {}),
       ...(profile.contextWindowTokens ? { contextWindowTokens: profile.contextWindowTokens } : {}),
+      ...(profile.maxOutputTokens ? { maxOutputTokens: profile.maxOutputTokens } : {}),
       inputModalities: profile.inputModalities,
       outputModalities: profile.outputModalities,
       supportsToolCalling: profile.supportsToolCalling,
@@ -837,14 +858,19 @@ function providersConfigForRuntime(settings: AppSettingsV1): Record<string, Reco
   for (const provider of getModelProviderSettings(settings).providers as ModelProviderProfileV1[]) {
     const id = provider.id?.trim()
     const baseUrl = provider.baseUrl?.trim()
-    if (!id || !baseUrl) continue
-    // The runtime's own provider is already wired via the default CLI args;
-    // skipping it keeps the map smaller and avoids paying twice for one
-    // provider that happens to be the active runtime binding.
-    if (id === runtimeProviderId) continue
+    const isAgentSdk = provider.kind === 'agent-sdk'
+    if (!id) continue
+    // agent-sdk providers carry no usable HTTP endpoint; everyone else needs one.
+    if (!baseUrl && !isAgentSdk) continue
+    // The runtime's own provider is already wired via the default CLI args, so
+    // we normally skip it here — EXCEPT agent-sdk: its turns must be routable to
+    // the embedded SDK via `serve.providers`, otherwise they fall back to the
+    // HTTP default client and 401 on api.anthropic.com (invalid x-api-key).
+    if (id === runtimeProviderId && !isAgentSdk) continue
     out[id] = {
       apiKey: provider.apiKey?.trim() ?? '',
-      baseUrl,
+      ...(baseUrl ? { baseUrl } : {}),
+      ...(provider.kind ? { kind: provider.kind } : {}),
       ...(provider.endpointFormat ? { endpointFormat: provider.endpointFormat } : {}),
       ...(proxyUrl ? { modelProxyUrl: proxyUrl } : {})
     }
@@ -1306,7 +1332,10 @@ export async function stopKunChildAndWait(): Promise<void> {
     }
     await waitForChildExit(stoppingChild, KUN_STOP_FORCE_MS)
   }
-  if (child === stoppingChild) child = null
+  if (child === stoppingChild) {
+    child = null
+    childPort = null
+  }
   if (capture) {
     childLogCapture = null
     await capture.close()
@@ -1348,6 +1377,12 @@ export async function resolveAvailableKunPort(
   preferredPort: number
 ): Promise<{ port: number; changed: boolean; message?: string }> {
   if (preferredPort > 0) {
+    // A temporarily unresponsive managed child still owns its configured
+    // endpoint. Moving settings to another port here strands the live child
+    // and makes every concurrent request launch/probe a port with no server.
+    if (isKunChildRunning() && childPort === preferredPort) {
+      return { port: preferredPort, changed: false }
+    }
     if (await canBindTcpPort(preferredPort, '127.0.0.1')) {
       return { port: preferredPort, changed: false }
     }

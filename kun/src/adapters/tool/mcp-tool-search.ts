@@ -118,7 +118,7 @@ export type McpSearchProviderOptions = {
   config: McpSearchConfig
   state: McpSearchCatalogState
   refreshCatalog: () => Promise<McpSearchCatalogRecord[]>
-  isServerTrusted: (server: McpServerConfig, workspace: string) => boolean
+  isServerAvailable: (server: McpServerConfig, workspace: string) => boolean
 }
 
 type IndexedTool = {
@@ -232,7 +232,7 @@ function createMcpSearchTools(options: McpSearchProviderOptions): LocalTool[] {
         if (!query) return { output: { error: 'query is required' }, isError: true }
         const serverId = stringArg(args.serverId)
         const topK = clampPositiveInt(numberArg(args.topK), options.config.topKDefault, options.config.topKMax)
-        const records = trustedRecords(options, context)
+        const records = availableRecords(options, context)
           .filter((record) => !serverId || record.serverId === serverId)
         const results = searchRecords(records, query, topK, options.config)
         return {
@@ -258,7 +258,7 @@ function createMcpSearchTools(options: McpSearchProviderOptions): LocalTool[] {
       policy: 'auto',
       execute: async (args, context) => {
         const toolId = stringArg(args.toolId)
-        const record = resolveTrustedRecord(options, context, toolId)
+        const record = resolveAvailableRecord(options, context, toolId)
         if (!record) return { output: { error: `unknown MCP tool: ${toolId}` }, isError: true }
         return { output: describeRecord(record) }
       }
@@ -277,7 +277,7 @@ function createMcpSearchTools(options: McpSearchProviderOptions): LocalTool[] {
       policy: 'on-request',
       execute: async (args, context) => {
         const toolId = stringArg(args.toolId)
-        const record = resolveTrustedRecord(options, context, toolId)
+        const record = resolveAvailableRecord(options, context, toolId)
         if (!record) return { output: { error: `unknown MCP tool: ${toolId}` }, isError: true }
         const callArgs = objectArg(args.arguments)
         const result = await record.client.callTool(
@@ -318,10 +318,10 @@ function createMcpSearchTools(options: McpSearchProviderOptions): LocalTool[] {
   ]
 }
 
-function trustedRecords(options: McpSearchProviderOptions, context: ToolHostContext): McpSearchCatalogRecord[] {
+function availableRecords(options: McpSearchProviderOptions, context: ToolHostContext): McpSearchCatalogRecord[] {
   const blocked = context.blockedProviderIds
   return options.state.records.filter((record) =>
-    options.isServerTrusted(record.server, context.workspace)
+    options.isServerAvailable(record.server, context.workspace)
     // Honor the per-turn provider deny-list (e.g. a subagent's blockedMcpServers).
     // In search mode the per-server `mcp:<id>` provider is never registered, so
     // CapabilityRegistry.canUseProvider can't gate it — this is the single
@@ -331,13 +331,13 @@ function trustedRecords(options: McpSearchProviderOptions, context: ToolHostCont
   )
 }
 
-function resolveTrustedRecord(
+function resolveAvailableRecord(
   options: McpSearchProviderOptions,
   context: ToolHostContext,
   toolId: string
 ): McpSearchCatalogRecord | undefined {
   if (!toolId) return undefined
-  return trustedRecords(options, context).find((record) => record.toolId === toolId)
+  return availableRecords(options, context).find((record) => record.toolId === toolId)
 }
 
 function searchRecords(

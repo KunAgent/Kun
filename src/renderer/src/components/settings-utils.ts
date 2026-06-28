@@ -108,6 +108,8 @@ export function coerceRendererSettings(settings: AppSettingsV1): AppSettingsV1 {
     provider: normalizeModelProviderSettings(raw.provider),
     agents: kunSettingsEnvelope(mergeKunRuntimeSettings(defaultKunRuntimeSettings(), getKunRuntimeSettings(settings))),
     workspaceRoot: typeof raw.workspaceRoot === 'string' ? raw.workspaceRoot : DEFAULT_WORKSPACE_ROOT,
+    conversationWorkspaceRoot:
+      typeof raw.conversationWorkspaceRoot === 'string' ? raw.conversationWorkspaceRoot : '',
     log: {
       enabled: raw.log?.enabled !== false,
       retentionDays: typeof raw.log?.retentionDays === 'number'

@@ -89,7 +89,16 @@ export type ReadClassification = {
 
 export const COMPACT_RESOURCE_FILE_NAMES = new Set(['AGENTS.md', 'AGENTS.MD', 'CLAUDE.md', 'CLAUDE.MD'])
 
-export type BuiltinToolName = 'read' | 'bash' | 'edit' | 'write' | 'grep' | 'find' | 'ls' | 'lsp'
+export type BuiltinToolName =
+  | 'read'
+  | 'bash'
+  | 'edit'
+  | 'write'
+  | 'grep'
+  | 'find'
+  | 'ls'
+  | 'lsp'
+  | 'verify_changes'
 export const allBuiltinToolNames: Set<BuiltinToolName> = new Set([
   'read',
   'bash',
@@ -98,7 +107,8 @@ export const allBuiltinToolNames: Set<BuiltinToolName> = new Set([
   'grep',
   'find',
   'ls',
-  'lsp'
+  'lsp',
+  'verify_changes'
 ])
 export type ToolName = BuiltinToolName
 export const allToolNames: Set<ToolName> = allBuiltinToolNames

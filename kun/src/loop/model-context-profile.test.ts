@@ -55,6 +55,18 @@ describe('contextThresholdsForModel safety cap', () => {
 })
 
 describe('per-model endpointFormat', () => {
+  it('carries a configured maxOutputTokens from models.profiles into capabilities', () => {
+    const profiles = modelContextProfilesFromConfig({
+      models: {
+        profiles: {
+          'long-writer': { contextWindowTokens: 256_000, maxOutputTokens: 32_000 }
+        }
+      }
+    })
+
+    expect(modelCapabilitiesForModel('long-writer', profiles).maxOutputTokens).toBe(32_000)
+  })
+
   it('carries a configured endpointFormat from models.profiles into capabilities', () => {
     const profiles = modelContextProfilesFromConfig({
       models: {

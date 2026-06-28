@@ -43,6 +43,7 @@ function createSettings(binaryPath: string): AppSettingsV1 {
       }
     },
     workspaceRoot: '/tmp/workspace',
+    conversationWorkspaceRoot: '~/Documents/Kun',
     log: { enabled: false, retentionDays: 7 },
     checkpointCleanup: { enabled: false, intervalDays: 3 },
     notifications: { turnComplete: true },
@@ -409,7 +410,7 @@ describe('reclaimKunPort', () => {
     }
   })
 
-  it('does not kill the currently managed Kun child while resolving an occupied port', async () => {
+  it('keeps the configured endpoint when the currently managed Kun child owns it', async () => {
     const probe = createServer()
     await new Promise<void>((resolve, reject) => {
       probe.once('error', reject)
@@ -440,8 +441,7 @@ describe('reclaimKunPort', () => {
     await module.startKunChild(settings)
     const resolved = await module.resolveAvailableKunPort(preferredPort)
 
-    expect(resolved.changed).toBe(true)
-    expect(resolved.port).not.toBe(preferredPort)
+    expect(resolved).toEqual({ port: preferredPort, changed: false })
     expect(module.isKunChildRunning()).toBe(true)
     expect(await readKunLog()).not.toContain(`killing stale kun process holding port ${preferredPort}`)
   })
@@ -573,6 +573,33 @@ describe('syncGuiManagedKunConfig', () => {
       defaultResolution: '1080P',
       timeoutMs: 900000,
       pollIntervalMs: 10000
+    })
+  })
+
+  it('exports per-model max output tokens into Kun model profiles', async () => {
+    if (!tempRoot) throw new Error('temp root not initialized')
+    const configPath = join(tempRoot, 'config.json')
+    const module = await import('./kun-process')
+
+    await module.syncGuiManagedKunConfig(tempRoot, {
+      ...defaultKunRuntimeSettings(),
+      modelProfiles: {
+        writer: {
+          contextWindowTokens: 256_000,
+          maxOutputTokens: 32_000,
+          inputModalities: ['text'],
+          outputModalities: ['text'],
+          supportsToolCalling: true,
+          messageParts: ['text']
+        }
+      }
+    })
+
+    const parsed = JSON.parse(readFileSync(configPath, 'utf8')) as any
+    expect(KunConfigSchema.safeParse(parsed).success).toBe(true)
+    expect(parsed.models.profiles.writer).toMatchObject({
+      contextWindowTokens: 256_000,
+      maxOutputTokens: 32_000
     })
   })
 
@@ -1085,6 +1112,7 @@ describe('syncGuiManagedKunConfig', () => {
         },
         'docs-mcp': {
           url: 'https://mcp.example.test/mcp',
+          workspaceRoots: ['D:\\Workspace\\docs-project'],
           headers: {
             Authorization: 'Bearer docs-token'
           }
@@ -1114,11 +1142,37 @@ describe('syncGuiManagedKunConfig', () => {
       enabled: true,
       transport: 'streamable-http',
       url: 'https://mcp.example.test/mcp',
+      workspaceRoots: ['D:\\Workspace\\docs-project'],
       headers: {
         Authorization: 'Bearer docs-token'
       },
       trustScope: 'user'
     })
+  })
+
+  it('does not auto-import repo-local .kun/mcp.json servers into the runtime', async () => {
+    // Security: a cloned/untrusted repo must not be able to register an MCP
+    // server that the runtime would spawn on startup. Workspace-scoped
+    // *visibility* stays supported on user-authored servers (see the test
+    // above); only the unsafe repo-file auto-discovery is intentionally absent.
+    if (!tempRoot) throw new Error('temp root not initialized')
+    const configPath = join(tempRoot, 'config.json')
+    const repo = join(tempRoot, 'cloned-repo')
+    mkdirSync(join(repo, '.kun'), { recursive: true })
+    writeFileSync(join(repo, '.kun', 'mcp.json'), JSON.stringify({
+      servers: {
+        evil: { command: 'node', args: ['evil.js'], trustScope: 'user' }
+      }
+    }), 'utf8')
+    const module = await import('./kun-process')
+
+    await module.syncGuiManagedKunConfig(tempRoot, defaultKunRuntimeSettings(), {
+      mcpConfigPath: join(tempRoot, 'missing-mcp.json')
+    })
+
+    const parsed = JSON.parse(readFileSync(configPath, 'utf8')) as any
+    const servers = parsed.capabilities?.mcp?.servers ?? {}
+    expect(JSON.stringify(servers)).not.toContain('evil.js')
   })
 
   it('replaces unparsable historical Kun config with a valid GUI-managed config', async () => {

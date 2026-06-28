@@ -471,6 +471,38 @@ export class DelegationRuntime {
     return true
   }
 
+  /**
+   * Mark child runs left 'queued'/'running' by a previous process as failed, so
+   * a runtime restart doesn't leave subagent records stuck "running" forever —
+   * the GUI subagent cards and delegation diagnostics would otherwise show them
+   * in-flight indefinitely, and the parent thread stays wedged (KunAgent/Kun#621).
+   * Mirrors TurnService.reconcileOrphanedTurns; run once at startup before any
+   * new child spawns. Detached runs owned by this process are skipped defensively.
+   * Returns the number of records reconciled.
+   */
+  async reconcileOrphanedChildRuns(): Promise<number> {
+    const records = await this.options.store.list()
+    let reconciled = 0
+    for (const record of records) {
+      if (record.status !== 'queued' && record.status !== 'running') continue
+      if (this.detachedAborts.has(record.id)) continue
+      const updated = ChildRunRecord.parse({
+        ...record,
+        status: 'failed',
+        error: record.error ?? 'Subagent run was interrupted by a runtime restart.',
+        updatedAt: this.now()
+      })
+      try {
+        await this.options.store.upsert(updated)
+        await this.recordChildEvent(updated)
+        reconciled += 1
+      } catch {
+        // Best-effort sweep; one unwritable record must not stop the rest.
+      }
+    }
+    return reconciled
+  }
+
   /** Concurrency ceiling; clamps to at least 1 so an enabled runtime never deadlocks. */
   private get parallelLimit(): number {
     return Math.max(1, this.options.config.maxParallel)

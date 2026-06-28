@@ -107,10 +107,11 @@ export function GitBranchPicker({ workspaceRoot }: Props): ReactElement | null {
 
   const trimmedQuery = query.trim()
   const exactBranchExists = branches.some((branch) => branch.name === trimmedQuery)
-  const canCreate = trimmedQuery.length > 0 && !exactBranchExists
   const switchTargetRow = exactBranchExists
     ? branches.find((branch) => branch.name === trimmedQuery) ?? null
     : null
+  const canCreate = trimmedQuery.length > 0 && !exactBranchExists
+  const canCreateWorktree = trimmedQuery.length > 0 && (canCreate || Boolean(switchTargetRow))
   const currentBranch = result?.ok ? result.currentBranch : null
   const label = currentBranch || (result?.ok ? t('gitDetached') : t('gitBranchUnavailable'))
   const footerBranchLabel = middleEllipsize(trimmedQuery, BRANCH_FOOTER_LABEL_MAX_LENGTH)
@@ -148,7 +149,7 @@ export function GitBranchPicker({ workspaceRoot }: Props): ReactElement | null {
       })
     )
     useChatStore.setState((state) => ({
-      codeWorkspaceRoots: rememberCodeWorkspaceRoots(state.codeWorkspaceRoots, [record.worktreePath]),
+      codeWorkspaceRoots: rememberCodeWorkspaceRoots(state.codeWorkspaceRoots, [record.projectPath]),
       threads: state.threads.map((thread) =>
         thread.id === activeThreadId ? { ...thread, workspace: record.worktreePath } : thread
       )
@@ -205,7 +206,7 @@ export function GitBranchPicker({ workspaceRoot }: Props): ReactElement | null {
             )
       )
       useChatStore.setState((state) => ({
-        codeWorkspaceRoots: rememberCodeWorkspaceRoots(state.codeWorkspaceRoots, [worktreePath]),
+        codeWorkspaceRoots: rememberCodeWorkspaceRoots(state.codeWorkspaceRoots, [projectPath]),
         threads: state.threads.map((thread) =>
           thread.id === activeThreadId ? { ...thread, workspace: worktreePath } : thread
         )
@@ -451,29 +452,35 @@ export function GitBranchPicker({ workspaceRoot }: Props): ReactElement | null {
             ) : null}
           </div>
 
-          {canCreate ? (
+          {canCreateWorktree ? (
             <div className="flex items-center gap-1 border-t border-ds-border-muted px-3 py-3">
-              <button
-                type="button"
-                disabled={actingBranch != null}
-                className="flex min-w-0 flex-1 items-center gap-3 rounded-lg px-1 py-2 text-left text-[14px] font-medium text-ds-ink transition hover:bg-ds-hover disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-transparent"
-                aria-label={footerCreateTitle}
-                onPointerEnter={(event) => showTooltip(footerCreateTitle, event.clientX, event.clientY)}
-                onPointerMove={(event) => moveTooltip(event.clientX, event.clientY)}
-                onPointerLeave={hideTooltip}
-                onPointerCancel={hideTooltip}
-                onClick={() => {
-                  hideTooltip()
-                  void createAndSwitchBranch()
-                }}
-              >
-                {actingBranch === trimmedQuery && actingKind === 'switch' ? (
-                  <Loader2 className="h-4 w-4 shrink-0 animate-spin text-ds-muted" strokeWidth={2} />
-                ) : (
-                  <Plus className="h-4 w-4 shrink-0 text-ds-muted" strokeWidth={1.9} />
-                )}
-                <span className="min-w-0 truncate">{footerCreateLabel}</span>
-              </button>
+              {canCreate ? (
+                <button
+                  type="button"
+                  disabled={actingBranch != null}
+                  className="flex min-w-0 flex-1 items-center gap-3 rounded-lg px-1 py-2 text-left text-[14px] font-medium text-ds-ink transition hover:bg-ds-hover disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-transparent"
+                  aria-label={footerCreateTitle}
+                  onPointerEnter={(event) => showTooltip(footerCreateTitle, event.clientX, event.clientY)}
+                  onPointerMove={(event) => moveTooltip(event.clientX, event.clientY)}
+                  onPointerLeave={hideTooltip}
+                  onPointerCancel={hideTooltip}
+                  onClick={() => {
+                    hideTooltip()
+                    void createAndSwitchBranch()
+                  }}
+                >
+                  {actingBranch === trimmedQuery && actingKind === 'switch' ? (
+                    <Loader2 className="h-4 w-4 shrink-0 animate-spin text-ds-muted" strokeWidth={2} />
+                  ) : (
+                    <Plus className="h-4 w-4 shrink-0 text-ds-muted" strokeWidth={1.9} />
+                  )}
+                  <span className="min-w-0 truncate">{footerCreateLabel}</span>
+                </button>
+              ) : (
+                <div className="min-w-0 flex-1 truncate px-1 py-2 text-[14px] font-medium text-ds-muted">
+                  {middleEllipsize(trimmedQuery, BRANCH_FOOTER_LABEL_MAX_LENGTH)}
+                </div>
+              )}
               <button
                 type="button"
                 disabled={actingBranch != null}
@@ -485,7 +492,11 @@ export function GitBranchPicker({ workspaceRoot }: Props): ReactElement | null {
                 onPointerCancel={hideTooltip}
                 onClick={() => {
                   hideTooltip()
-                  void createBranchWorktree()
+                  if (canCreate) {
+                    void createBranchWorktree()
+                  } else {
+                    void checkoutBranchWorktree(trimmedQuery)
+                  }
                 }}
               >
                 {actingBranch === trimmedQuery && actingKind === 'worktree' ? (

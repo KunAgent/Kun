@@ -5,6 +5,8 @@ export type ComposerFileReference = {
   relativePath: string
   name: string
   type?: ComposerFileReferenceKind
+  /** null explicitly allows a user-picked file outside the active workspace. */
+  workspaceRoot?: string | null
 }
 
 export type ComposerFileMention = {
@@ -46,6 +48,22 @@ export function relativeWorkspacePath(path: string, workspaceRoot: string): stri
     return normalizedPath.slice(normalizedRoot.length + 1)
   }
   return normalizedPath
+}
+
+export function composerFileReferenceFromPath(
+  path: string,
+  workspaceRoot: string
+): ComposerFileReference {
+  const normalizedPath = normalizeSlashes(path)
+  const relativePath = relativeWorkspacePath(normalizedPath, workspaceRoot)
+  const insideWorkspace = normalizeForCompare(relativePath) !== normalizeForCompare(normalizedPath)
+  return {
+    path: normalizedPath,
+    relativePath,
+    name: normalizedPath.split('/').filter(Boolean).pop() || normalizedPath,
+    type: 'file',
+    ...(insideWorkspace ? {} : { workspaceRoot: null })
+  }
 }
 
 export function composerFileReferenceKey(reference: Pick<ComposerFileReference, 'relativePath'>): string {

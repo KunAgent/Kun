@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type RefObject } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react'
 
 /** Threshold (px) from the top of the scroll container that triggers
  * auto-loading earlier turns. */
@@ -108,8 +108,9 @@ export function useTimelineScroll({
   }, [pageSize])
 
   // A freshly submitted user turn should become visible even if the user was
-  // reading older history before pressing Enter.
-  useEffect(() => {
+  // reading older history before pressing Enter. Runs as a layout effect so the
+  // stick-to-bottom intent is set before the snap effect below pins (issue #603).
+  useLayoutEffect(() => {
     if (!userTurnKey || lastUserTurnKeyRef.current === userTurnKey) return
     lastUserTurnKeyRef.current = userTurnKey
     stickToBottomRef.current = true
@@ -130,21 +131,28 @@ export function useTimelineScroll({
     return () => el.removeEventListener('scroll', onScroll)
   }, [containerRef, hiddenTurnCount, loadEarlierTurns])
 
-  // Snap to bottom when content changes, but only if the user was
-  // already at the bottom.
-  useEffect(() => {
+  // Snap to bottom when the content or the visible window changes, but only if
+  // the user was already at the bottom. Runs as a layout effect so a discrete
+  // change (e.g. sending a message, which slides the collapsed turn window and
+  // drops the oldest visible turn) pins *before* paint instead of flashing the
+  // viewport upward and then jumping back once the model streams (issue #603).
+  // Streaming deltas stay rAF-throttled to avoid a forced reflow per delta.
+  useLayoutEffect(() => {
     if (!stickToBottomRef.current) return
+    // A visibleTurnCount bump from loading earlier turns must not pull the
+    // viewport to the bottom — the prepend effect owns scroll position there.
+    if (prependInFlightRef.current) return
+    if (!streaming) {
+      endRef.current?.scrollIntoView({ behavior: 'auto', block: 'end' })
+    }
     if (scrollFrameRef.current !== null) {
       window.cancelAnimationFrame(scrollFrameRef.current)
     }
     scrollFrameRef.current = window.requestAnimationFrame(() => {
       scrollFrameRef.current = null
-      endRef.current?.scrollIntoView({
-        behavior: streaming ? 'auto' : 'smooth',
-        block: 'end'
-      })
+      endRef.current?.scrollIntoView({ behavior: 'auto', block: 'end' })
     })
-  }, [contentKey, endRef, streaming])
+  }, [contentKey, visibleTurnCount, streaming, endRef])
 
   // Hard reset on thread switch.
   useEffect(() => {

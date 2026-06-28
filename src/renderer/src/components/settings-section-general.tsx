@@ -189,6 +189,9 @@ export function GeneralSettingsSection({ ctx }: { ctx: Record<string, any> }): R
     pickWorkspace,
     resetWorkspaceToDefault,
     workspacePickerError,
+    pickConversationWorkspace,
+    resetConversationWorkspaceToDefault,
+    conversationWorkspacePickerError,
     logPath,
     logDirOpenError,
     setLogDirOpenError,
@@ -364,6 +367,43 @@ export function GeneralSettingsSection({ ctx }: { ctx: Record<string, any> }): R
                       {workspacePickerError ? (
                         <p className="mt-2 text-[13px] leading-5 text-amber-700 dark:text-amber-300">
                           {workspacePickerError}
+                        </p>
+                      ) : null}
+                    </div>
+                  }
+                />
+                <SettingRow
+                  title={t('conversationWorkspaceRoot')}
+                  description={t('conversationWorkspaceRootDesc')}
+                  control={
+                    <div className="grid w-full min-w-0 gap-2 md:max-w-xl">
+                      <div className="min-w-0">
+                        <input
+                          className="w-full min-w-0 rounded-xl border border-ds-border bg-ds-card px-3 py-2 text-[14px] text-ds-ink shadow-sm focus:border-accent/40 focus:outline-none focus:ring-1 focus:ring-accent/30"
+                          value={compactHomePath(form.conversationWorkspaceRoot)}
+                          onChange={(e) => update({ conversationWorkspaceRoot: expandHomePath(e.target.value) })}
+                          placeholder={t('conversationWorkspaceRootPlaceholder')}
+                        />
+                      </div>
+                      <div className="flex flex-wrap justify-end gap-2">
+                        <button
+                          type="button"
+                          onClick={resetConversationWorkspaceToDefault}
+                          className="shrink-0 rounded-xl border border-ds-border bg-ds-card px-3 py-2 text-[13px] font-medium text-ds-ink shadow-sm transition hover:bg-ds-hover"
+                        >
+                          {t('restoreConversationWorkspaceDefault')}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void pickConversationWorkspace()}
+                          className="shrink-0 rounded-xl border border-ds-border bg-ds-card px-3 py-2 text-[13px] font-medium text-ds-ink shadow-sm transition hover:bg-ds-hover"
+                        >
+                          {t('browse')}
+                        </button>
+                      </div>
+                      {conversationWorkspacePickerError ? (
+                        <p className="mt-2 text-[13px] leading-5 text-amber-700 dark:text-amber-300">
+                          {conversationWorkspacePickerError}
                         </p>
                       ) : null}
                     </div>

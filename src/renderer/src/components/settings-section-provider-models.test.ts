@@ -13,6 +13,7 @@ const labels: Record<string, string> = {
   providerModelNoToolsBadge: 'No tool calling',
   providerModelDefaultProfileBadge: 'Default profile',
   providerModelContextBadge: '{{size}} context',
+  providerModelMaxOutputBadge: '{{size}} output',
   providerModelKindChat: 'Text chat',
   providerModelKindImage: 'Image generation',
   providerModelKindSpeech: 'Speech to text',
@@ -67,6 +68,7 @@ describe('ProviderModelsManager', () => {
       modelProfiles: {
         'vision-thinker': {
           contextWindowTokens: 1_000_000,
+          maxOutputTokens: 32_000,
           inputModalities: ['text', 'image'],
           outputModalities: ['text'],
           supportsToolCalling: false,
@@ -81,6 +83,7 @@ describe('ProviderModelsManager', () => {
     }))
     expect(html).toContain('vision-thinker')
     expect(html).toContain('1M context')
+    expect(html).toContain('32K output')
     expect(html).toContain('Vision')
     expect(html).toContain('Reasoning')
     expect(html).toContain('No tool calling')

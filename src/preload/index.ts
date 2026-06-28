@@ -12,6 +12,19 @@ const api = {
   platform: process.platform,
   homeDir: homeDirFromArgs,
   getSettings: () => ipcRenderer.invoke('settings:get'),
+  claudeSubscriptionStatus: () => ipcRenderer.invoke('claude-subscription:status'),
+  claudeSubscriptionLogin: () => ipcRenderer.invoke('claude-subscription:login'),
+  claudeSubscriptionModels: (token) => ipcRenderer.invoke('claude-subscription:models', token),
+  claudeSubscriptionSdkStatus: () => ipcRenderer.invoke('claude-subscription:sdk-status'),
+  claudeSubscriptionSdkInstall: () => ipcRenderer.invoke('claude-subscription:sdk-install'),
+  onClaudeSubscriptionSdkProgress: (handler) => {
+    const wrapped = (
+      _: Electron.IpcRendererEvent,
+      payload: Parameters<typeof handler>[0]
+    ) => handler(payload)
+    ipcRenderer.on('claude-subscription:sdk-progress', wrapped)
+    return () => ipcRenderer.removeListener('claude-subscription:sdk-progress', wrapped)
+  },
   setSettings: (partial) =>
     ipcRenderer.invoke('settings:set', partial),
   saveSettingsSilent: (partial) =>
@@ -45,6 +58,10 @@ const api = {
     ipcRenderer.invoke('claw:im-install:telegram-token', { botToken, allowedChatIds }),
   pickWorkspaceDirectory: (defaultPath) =>
     ipcRenderer.invoke('workspace:pick-directory', defaultPath),
+  pickLocalFiles: (defaultPath) =>
+    ipcRenderer.invoke('file:pick-local-files', defaultPath),
+  createConversationWorkspace: (root) =>
+    ipcRenderer.invoke('conversation:create-workspace', { root }),
   confirmDialog: (options) =>
     ipcRenderer.invoke('dialog:confirm', options),
   detectLegacySessions: () =>

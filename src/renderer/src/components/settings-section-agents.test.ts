@@ -179,6 +179,14 @@ const labels: Record<string, string> = {
   skillsPath: 'Skills path',
   skillsPathDesc: 'Skills path description',
   skillsRootUnavailable: 'Unavailable',
+  skillsPermissionSources: 'Skill permission sources',
+  skillsPermissionSourcesDesc: 'Skill permission sources description',
+  skillsPermissionEnabledRoots: 'Enabled roots',
+  skillsPermissionDisabledRoots: 'Disabled roots',
+  skillsPermissionWorkspaceRoots: 'Workspace roots',
+  skillsPermissionGlobalRoots: 'Global roots',
+  skillsPermissionDisabledIds: 'Blocked skills',
+  skillsPermissionRuntimeNote: 'Only enabled skill roots reach runtime',
   skillsScanDirs: 'Scan dirs',
   skillsScanDirsDesc: 'Scan dirs description',
   skillsActions: 'Skill actions',
@@ -208,6 +216,19 @@ const labels: Record<string, string> = {
   mcpSearchInactive: 'Inactive',
   mcpSearchIndexed: 'Indexed',
   mcpSearchAdvertised: 'Advertised',
+  mcpPermissionSources: 'External tool permission sources',
+  mcpPermissionSourcesDesc: 'External tool permission sources description',
+  mcpPermissionEnabledServers: 'Enabled servers',
+  mcpPermissionDisabledServers: 'Disabled servers',
+  mcpPermissionUserServers: 'All-workspace scope',
+  mcpPermissionWorkspaceServers: 'Workspace scope',
+  mcpPermissionVisibleServers: 'Workspace-visible only',
+  mcpPermissionLocalServers: 'Local commands',
+  mcpPermissionRemoteServers: 'HTTP/SSE servers',
+  mcpPermissionEnvServers: 'Uses env',
+  mcpPermissionHeaderServers: 'Uses headers',
+  mcpPermissionParseError: 'Permission preview unavailable: {{error}}',
+  mcpPermissionRuntimeNote: 'Secret values stay hidden here',
   configFilePath: 'External tool config path',
   mcpPathDesc: 'MCP JSON path description',
   mcpEditor: 'MCP editor',
@@ -648,6 +669,91 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
     expect(html).not.toContain('DeepSeek auth')
     expect(html).not.toContain('Base URL are stored in this file')
     expect(html).not.toContain('config.toml')
+  })
+
+  it('renders Skill and MCP permission-source previews without exposing secret values', () => {
+    const ctx = {
+      ...baseCtx(),
+      form: {
+        claw: { skills: { extraDirs: ['/tmp/project/.agents/skills'] } },
+        disabledSkillIds: ['legacy-skill']
+      },
+      skillRoots: [
+        {
+          id: 'workspace-agents',
+          disableKey: 'workspace-agents',
+          path: '/repo/.agents/skills',
+          scope: 'project',
+          source: 'common',
+          exists: true,
+          enabled: true,
+          skillCount: 2
+        },
+        {
+          id: 'global-kun',
+          disableKey: 'global-kun',
+          path: '/home/me/.kun/skills',
+          scope: 'global',
+          source: 'common',
+          exists: true,
+          enabled: true,
+          skillCount: 1
+        },
+        {
+          id: 'disabled-extra',
+          disableKey: 'disabled-extra',
+          path: '/tmp/disabled-skills',
+          scope: 'global',
+          source: 'extra',
+          exists: true,
+          enabled: false,
+          skillCount: 1
+        }
+      ],
+      mcpConfigText: JSON.stringify({
+        servers: {
+          github: {
+            transport: 'stdio',
+            command: 'npx',
+            env: { GITHUB_TOKEN: '' },
+            trustScope: 'workspace',
+            trustedWorkspaceRoots: ['/repo']
+          },
+          docs: {
+            transport: 'streamable-http',
+            url: 'https://mcp.example.com',
+            workspaceRoots: ['/repo/docs'],
+            headers: { Authorization: '' },
+            trustScope: 'user'
+          },
+          disabled: {
+            transport: 'sse',
+            url: 'https://disabled.example.com',
+            enabled: false
+          }
+        }
+      })
+    }
+
+    const html = renderToStaticMarkup(createElement(AgentsSettingsSection, { ctx }))
+
+    expect(html).toContain('Skill permission sources')
+    expect(html).toContain('Enabled roots')
+    expect(html).toContain('Disabled roots')
+    expect(html).toContain('Workspace roots')
+    expect(html).toContain('Global roots')
+    expect(html).toContain('Blocked skills')
+    expect(html).toContain('External tool permission sources')
+    expect(html).toContain('Enabled servers')
+    expect(html).toContain('Disabled servers')
+    expect(html).toContain('All-workspace scope')
+    expect(html).toContain('Workspace scope')
+    expect(html).toContain('Workspace-visible only')
+    expect(html).toContain('Local commands')
+    expect(html).toContain('HTTP/SSE servers')
+    expect(html).toContain('Uses env')
+    expect(html).toContain('Uses headers')
+    expect(html).toContain('Secret values stay hidden here')
   })
 
   it('defines the LiteLLM provider preset for the Providers menu', () => {

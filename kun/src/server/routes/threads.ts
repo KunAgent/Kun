@@ -19,6 +19,7 @@ import { readJsonBody } from '../read-json-body.js'
 import type { ForkThreadOptions, ListThreadsOptions, ThreadService } from '../../services/thread-service.js'
 import type { RuntimeError } from './runtime-error.js'
 import type { SessionStore } from '../../ports/session-store.js'
+import type { UserInputGate } from '../../ports/user-input-gate.js'
 import type { Turn } from '../../contracts/turns.js'
 import type { TurnItem } from '../../contracts/items.js'
 
@@ -79,7 +80,8 @@ export async function createThread(
 export async function getThread(
   service: ThreadService,
   threadId: string,
-  sessionStore?: SessionStore
+  sessionStore?: SessionStore,
+  userInputGate?: UserInputGate
 ): Promise<JsonResponse> {
   const thread = await service.get(threadId)
   if (!thread) {
@@ -98,9 +100,14 @@ export async function getThread(
     sessionItems = await healSessionItemsForFinishedTurns(thread, sessionItems, sessionStore)
   }
   const hydratedThread = hydrateThreadItemsFromSession(thread, sessionItems)
+  // Request ids the runtime is still actively awaiting. The renderer uses these
+  // to tell a live ask-user prompt (answerable across reconnects) apart from a
+  // stale `pending` item rehydrated from a finished thread (issue #606).
+  const pendingUserInputIds = userInputGate?.pending(threadId).map((request) => request.id) ?? []
   return jsonResponse({
     ...ThreadSchema.parse(hydratedThread),
-    latestSeq
+    latestSeq,
+    pendingUserInputIds
   })
 }
 
