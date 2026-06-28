@@ -29,6 +29,7 @@ export function DesignCanvas({
   onUseElementAsContext
 }: CanvasProps): ReactElement {
   const workspaceRoot = useDesignWorkspaceStore((s) => s.workspaceRoot)
+  const settingsLoaded = useDesignWorkspaceStore((s) => s.settingsLoaded)
   const artifacts = useDesignWorkspaceStore((s) => s.artifacts)
   const activeDocumentId = useDesignWorkspaceStore((s) => s.activeDocumentId)
   const boardArtifact = findDesignBoardArtifact(artifacts)
@@ -37,9 +38,9 @@ export function DesignCanvas({
   useApplyShapeOpsLive(Boolean(boardArtifact), onScreenCreated)
 
   useEffect(() => {
-    if (!workspaceRoot) return
+    if (!workspaceRoot || !settingsLoaded) return
     void ensureDesignBoardArtifact(workspaceRoot)
-  }, [workspaceRoot, artifacts.length])
+  }, [workspaceRoot, settingsLoaded, artifacts.length])
 
   // Register the factory that design_canvas/add-screen calls and the Screen
   // tool use to create a linked HTML artifact (returns the new artifact id synchronously).

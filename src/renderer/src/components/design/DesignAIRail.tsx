@@ -331,13 +331,15 @@ function DesignAIRailInner({
               <div className="flex max-w-full items-center gap-2 rounded-full border border-accent/40 bg-accent/10 px-3 py-2 text-[12.5px] font-semibold text-accent shadow-[0_12px_34px_rgba(20,47,95,0.10)] backdrop-blur-xl">
                 <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" strokeWidth={2} />
                 <span className="min-w-0 truncate">
-                  {pagesRun.phase === 'planning'
-                    ? t('designPagesPlanning')
-                    : t('designPagesGenerating', {
+                  {pagesRun.phase === 'generating'
+                    ? t('designPagesGenerating', {
                         done: Math.min(pagesRun.done + 1, pagesRun.total),
                         total: pagesRun.total,
                         title: pagesRun.title
-                      })}
+                      })
+                    : pagesRun.phase === 'foundation'
+                      ? t('designPagesFoundation', { title: pagesRun.title })
+                      : t('designPagesPlanning')}
                 </span>
                 <button
                   type="button"

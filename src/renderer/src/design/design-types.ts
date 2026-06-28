@@ -55,6 +55,12 @@ export type DesignArtifact = {
   implementedThreadId?: string
   /** Hash of the DESIGN_SYSTEM.md published at implement time (code-drift baseline). */
   implementedDesignSystemHash?: string
+  /**
+   * Foundation role in a Stitch-style run: the shared visual style guide or the
+   * brand logo. Absent for normal pages. Lets the run reuse them on re-runs and
+   * label them in the sibling manifest.
+   */
+  role?: 'design-system' | 'logo'
 }
 
 /**

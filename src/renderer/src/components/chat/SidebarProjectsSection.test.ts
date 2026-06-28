@@ -241,6 +241,30 @@ describe('SidebarProjectsSection groups', () => {
     expect(groups[0]?.[1].map((item) => item.id)).toEqual(['project-thread'])
   })
 
+  it('excludes internal design workspaces from project groups and remembered roots', () => {
+    const groups = buildSidebarWorkspaceGroups({
+      threads: [
+        thread({ id: 'project-thread', workspace: '/Users/zxy/project-a' }),
+        thread({
+          id: 'design-assistant',
+          title: 'Design Assistant',
+          workspace: '/Users/zxy/.kun/design-workspace'
+        })
+      ],
+      searchQuery: '',
+      showArchived: false,
+      workspaceRoot: '/Users/zxy/.kun/design-workspace',
+      conversationRoot: '',
+      workspaceRoots: [
+        '/Users/zxy/project-a',
+        '/Users/zxy/.kun/design-workspace'
+      ]
+    })
+
+    expect(groups.map(([workspace]) => workspace)).toEqual(['/Users/zxy/project-a'])
+    expect(groups[0]?.[1].map((item) => item.id)).toEqual(['project-thread'])
+  })
+
   it('merges requirement-only search matches into displayed groups', () => {
     const groups = buildSidebarWorkspaceGroups({
       threads: [thread({ id: 'reasonix-current', workspace: '/Users/zxy/project-a' })],

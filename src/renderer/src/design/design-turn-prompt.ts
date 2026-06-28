@@ -126,6 +126,8 @@ export type ScreenManifestEntry = {
   accent?: string
   /** Sibling's primary font family, extracted from its render, for cohesion. */
   fontFamily?: string
+  /** Foundation role, so a page knows which sibling is the canonical style guide. */
+  role?: 'design-system' | 'logo'
 }
 
 /**
@@ -145,8 +147,14 @@ function formatScreenManifestLines(manifest: ScreenManifestEntry[] | undefined):
         s.fontFamily ? `font ${s.fontFamily}` : ''
       ].filter(Boolean)
       const tokens = tokenParts.length > 0 ? ` [${tokenParts.join(', ')}]` : ''
+      const roleTag =
+        s.role === 'design-system'
+          ? ' [design system — the canonical style guide; follow it]'
+          : s.role === 'logo'
+            ? ' [logo]'
+            : ''
       const summary = s.summary?.trim() ? ` — ${s.summary.trim().slice(0, 160)}` : ''
-      return `- "${s.name}"${dims}${tokens} → ${s.htmlPath}${summary}`
+      return `- "${s.name}"${dims}${tokens}${roleTag} → ${s.htmlPath}${summary}`
     }),
     'Read a relevant sibling page if you need to match its exact styling. Do NOT modify sibling files — only the reserved file for this turn.'
   ]
@@ -265,6 +273,7 @@ function buildScreenTurnPrompt(options: ScreenTurnOptions): string {
     `- Produce ONE complete standalone HTML document at \`${options.artifactRelativePath}\`; it has already been pre-created so the canvas can preview it while you work.`,
     '- Make the HTML responsive to arbitrary selected frame sizes: use fluid layout, min/max constraints, media queries, and avoid fixed viewport wrappers unless the brief explicitly asks for one.',
     '- Build it INCREMENTALLY to stay inside your output limit: use focused `edit` calls or small `write` replacements and keep every tool call payload under ~4000 characters.',
+    '- Wrap each major section (nav, hero, each card group, footer…) in a top-level element carrying `data-ds-section="<short label>"` — e.g. `<header data-ds-section="导航栏">` — and write sections top-to-bottom. The canvas reads these to show a live "AI is drawing here" cursor as the page builds; they are inert in the final design.',
     ...(options.designNotesPath
       ? [
           `- Keep \`${options.designNotesPath}\` aligned with this screen: brief, selected frame, visual direction, interactions, assumptions, and handoff notes.`

@@ -1721,7 +1721,20 @@ export function Workbench(): ReactElement {
         designContext: promptState.designContext,
         labels: {
           plan: (b) => t('designPagesPlanDisplay', { brief: b }),
-          page: (title, index, total) => t('designPagesPageDisplay', { title, index, total })
+          page: (title, index, total) => t('designPagesPageDisplay', { title, index, total }),
+          foundationStep: (step) =>
+            t(
+              step === 'spec'
+                ? 'designFoundationStepSpec'
+                : step === 'system'
+                  ? 'designFoundationStepSystem'
+                  : 'designFoundationStepLogo'
+            ),
+          specDisplay: (b) => t('designFoundationSpecDisplay', { brief: b }),
+          systemDisplay: () => t('designFoundationSystemDisplay'),
+          logoDisplay: () => t('designFoundationLogoDisplay'),
+          systemTitle: () => t('designFoundationSystemTitle'),
+          logoTitle: () => t('designFoundationLogoTitle')
         }
       })
     })()

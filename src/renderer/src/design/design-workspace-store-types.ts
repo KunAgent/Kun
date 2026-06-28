@@ -11,13 +11,16 @@ import type { DesignContext } from './design-context'
 
 /** Progress of an in-flight Stitch-style multi-page generation run. */
 export type DesignPagesRunState = {
-  phase: 'planning' | 'generating'
-  /** Total pages to generate (0 while still planning). */
+  /** `foundation` = laying design.md / design-system / logo before any screen. */
+  phase: 'foundation' | 'planning' | 'generating'
+  /** Total pages to generate (0 while still planning / in foundation). */
   total: number
   /** Pages already generated. */
   done: number
-  /** Title of the page being generated (or '' while planning). */
+  /** Page title being generated, or the localized foundation step label. */
   title: string
+  /** Which foundation artifact is being produced (phase `foundation` only). */
+  step?: 'spec' | 'system' | 'logo'
 }
 
 export type DesignWorkspaceState = {

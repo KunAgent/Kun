@@ -14,7 +14,12 @@ import { getProvider } from '../agent/registry'
 import { rendererRuntimeClient } from '../agent/runtime-client'
 import i18n from '../i18n'
 import { describeRuntimeError, formatRuntimeError, getRuntimeErrorCode } from '../lib/format-runtime-error'
-import { isClawWorkspacePath, isInternalTemporaryWorkspace, normalizeWorkspaceRoot } from '../lib/workspace-path'
+import {
+  isClawWorkspacePath,
+  isInternalDeepSeekGuiWorkspace,
+  isInternalTemporaryWorkspace,
+  normalizeWorkspaceRoot
+} from '../lib/workspace-path'
 import type { ClawImChannelV1 } from '@shared/app-settings'
 import type { ChatState } from './chat-store-types'
 import { isClawThread } from './chat-store-helpers'
@@ -403,6 +408,7 @@ export function isCodeSidebarThread(
   const workspace = normalizeWorkspaceRoot(thread.workspace)
   return Boolean(workspace) &&
     !isInternalTemporaryWorkspace(thread.workspace) &&
+    !isInternalDeepSeekGuiWorkspace(thread.workspace) &&
     !isClawWorkspacePath(thread.workspace) &&
     !isClawThread(thread, clawChannels) &&
     !isWriteThreadId(thread.id, writeRegistry) &&

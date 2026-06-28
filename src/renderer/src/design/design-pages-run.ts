@@ -1,7 +1,19 @@
 import { useChatStore } from '../store/chat-store'
 import { collectAssistantTextForTurn } from '../store/chat-store-runtime-helpers'
 import type { SendMessageOverrides } from '../store/chat-store-types'
-import type { DesignContext } from './design-context'
+import { formatDesignSystemMarkdown, type DesignContext } from './design-context'
+import {
+  DESIGN_SYSTEM_MD_PATH,
+  buildDesignLogoPrompt,
+  buildDesignSpecPrompt,
+  buildDesignSpecStub,
+  buildDesignSystemBoardPrompt,
+  buildFoundationFollowLines,
+  designSpecPath,
+  findFoundationArtifact,
+  type DesignFoundationRole,
+  type DesignFoundationStep
+} from './design-foundation'
 import {
   DESIGN_PAGES_MAX,
   buildDesignPlanPrompt,
@@ -31,10 +43,27 @@ export type RunDesignPagesDeps = {
   reasoningEffort?: string
   generationPrompt?: string
   designContext?: DesignContext
+  /**
+   * When false, skip the design.md / design-system / logo foundation and just
+   * plan + generate pages (the legacy flow). Defaults to true.
+   */
+  foundation?: boolean
   /** Localized chat-bubble labels (English fallbacks used when omitted). */
   labels?: {
     plan?: (brief: string) => string
     page?: (title: string, index: number, total: number) => string
+    /** Progress-chip title for a foundation step. */
+    foundationStep?: (step: DesignFoundationStep) => string
+    /** Chat-bubble display for the spec turn. */
+    specDisplay?: (brief: string) => string
+    /** Chat-bubble display for the design-system turn. */
+    systemDisplay?: () => string
+    /** Chat-bubble display for the logo turn. */
+    logoDisplay?: () => string
+    /** Canvas card title for the design-system artifact. */
+    systemTitle?: () => string
+    /** Canvas card title for the logo artifact. */
+    logoTitle?: () => string
   }
 }
 
@@ -55,6 +84,19 @@ export function cancelDesignPagesRun(): void {
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+/** Best-effort write of a plain workspace file (the design.md stub, DESIGN_SYSTEM.md baseline). */
+async function writeWorkspaceTextFile(
+  workspaceRoot: string,
+  path: string,
+  content: string
+): Promise<boolean> {
+  if (typeof window === 'undefined' || typeof window.kunGui?.writeWorkspaceFile !== 'function') {
+    return false
+  }
+  const res = await window.kunGui.writeWorkspaceFile({ path, workspaceRoot, content }).catch(() => null)
+  return Boolean(res && res.ok)
 }
 
 /**
@@ -96,10 +138,64 @@ function assistantTextForLastTurn(): string {
 }
 
 /**
- * Stitch-style multi-page run: plan the pages from one brief, drop a skeleton
- * card for each onto the project canvas, then generate every page on its own
- * turn — each aware of the whole project and its already-built siblings so the
- * set shares one cohesive design system.
+ * Send one design turn and wait for it to settle. Returns a coarse status so the
+ * caller can set a tailored error banner. Captures the agent's end-of-turn
+ * summary onto the artifact version when an `artifactId` is given.
+ */
+async function runTurn(opts: {
+  sendMessage: SendMessageFn
+  prompt: string
+  overrides: SendMessageOverrides
+  signal: { cancelled: boolean }
+  timeoutMs: number
+  artifactId?: string
+}): Promise<'complete' | 'cancelled' | 'timeout' | 'send-failed'> {
+  const sent = await opts.sendMessage(opts.prompt, 'agent', opts.overrides)
+  if (!sent) return 'send-failed'
+  const result = await waitForTurnComplete(opts.signal, opts.timeoutMs)
+  if (result !== 'complete') return result
+  if (opts.artifactId) {
+    const summary = extractAgentDesignSummary(assistantTextForLastTurn())
+    if (summary) {
+      useDesignWorkspaceStore.getState().setVersionSummary(opts.artifactId, `${opts.artifactId}-v1`, summary)
+    }
+  }
+  return 'complete'
+}
+
+/** Create a foundation artifact card (HTML) and pre-create its preview file. */
+async function createFoundationCard(opts: {
+  docId: string
+  workspaceRoot: string
+  role: DesignFoundationRole
+  title: string
+}): Promise<{ id: string; relativePath: string } | null> {
+  const id = createDesignArtifactId()
+  const relativePath = `.kun-design/${opts.docId}/${id}/v1.html`
+  const createdAt = new Date().toISOString()
+  const index = useDesignWorkspaceStore.getState().artifacts.length
+  useDesignWorkspaceStore.getState().upsertArtifact({
+    id,
+    kind: 'html',
+    title: opts.title,
+    relativePath,
+    createdAt,
+    updatedAt: createdAt,
+    versions: [{ id: `${id}-v1`, relativePath, createdAt, summary: '' }],
+    previewStatus: 'pending',
+    role: opts.role,
+    node: defaultDesignArtifactNode(index)
+  })
+  useDesignWorkspaceStore.getState().setActiveArtifact(id)
+  const prep = await prepareDesignPreviewFile(opts.workspaceRoot, relativePath)
+  return prep.ok ? { id, relativePath } : null
+}
+
+/**
+ * Stitch-style multi-page run with a foundation-first pipeline: first lay the
+ * project `design.md`, a visual design-system style guide (+ DESIGN_SYSTEM.md
+ * tokens) and a brand logo, THEN generate every page on its own turn — each one
+ * following the established foundation and cohesive with its built siblings.
  */
 export async function runDesignPages(deps: RunDesignPagesDeps): Promise<void> {
   if (activeRun) return
@@ -107,8 +203,8 @@ export async function runDesignPages(deps: RunDesignPagesDeps): Promise<void> {
   activeRun = signal
   const store = useDesignWorkspaceStore.getState()
   store.setFileError(null)
-  store.setPagesRun({ phase: 'planning', total: 0, done: 0, title: '' })
-  // Capture the active 设计稿 once so every generated page lands in the same one.
+  const withFoundation = deps.foundation !== false
+  // Capture the active 设计稿 once so every generated artifact lands in the same one.
   const docId = store.ensureActiveDocument()
 
   const overrides = (display: string): SendMessageOverrides => ({
@@ -119,35 +215,206 @@ export async function runDesignPages(deps: RunDesignPagesDeps): Promise<void> {
   })
 
   try {
-    // 1) Plan turn — ask the agent which pages the app needs.
-    const existingPages = buildHtmlSiblingManifest(store.artifacts, null)
-    const planPrompt = buildDesignPlanPrompt({
-      brief: deps.brief,
-      workspaceRoot: deps.workspaceRoot,
-      ...(deps.designContext ? { designContext: deps.designContext } : {}),
-      ...(existingPages.length > 0 ? { existingPages } : {})
-    })
-    const planDisplay = deps.labels?.plan?.(deps.brief) ?? `Plan a multi-page design: ${deps.brief}`
-    const planSent = await deps.sendMessage(planPrompt, 'agent', overrides(planDisplay))
-    if (!planSent) {
-      store.setFileError('Could not start the multi-page planning turn.')
-      return
-    }
-    const planResult = await waitForTurnComplete(signal, PLAN_TIMEOUT_MS)
-    if (planResult === 'cancelled') return
-    if (planResult === 'timeout') {
-      store.setFileError('The page-planning step timed out.')
-      return
-    }
-    await delay(300) // let the final assistant block settle before we read it
+    const foundationBuiltIds = new Set<string>()
+    let designMdRef: string | undefined
+    let designSystemRef: string | undefined
 
-    let plan: DesignPagePlanEntry[] = parsePagesPlan(assistantTextForLastTurn(), { max: DESIGN_PAGES_MAX })
+    // 1) Plan the pages. With foundation on, the same turn writes design.md.
+    let plan: DesignPagePlanEntry[]
+    if (withFoundation) {
+      store.setPagesRun({
+        phase: 'foundation',
+        step: 'spec',
+        total: 0,
+        done: 0,
+        title: deps.labels?.foundationStep?.('spec') ?? 'Design brief'
+      })
+      const designMdPath = designSpecPath(docId)
+      await writeWorkspaceTextFile(deps.workspaceRoot, designMdPath, buildDesignSpecStub(deps.brief))
+      const existingPages = buildHtmlSiblingManifest(store.artifacts, null)
+      const specPrompt = buildDesignSpecPrompt({
+        brief: deps.brief,
+        workspaceRoot: deps.workspaceRoot,
+        designMdPath,
+        ...(deps.designContext ? { designContext: deps.designContext } : {}),
+        ...(existingPages.length > 0 ? { existingPages } : {})
+      })
+      const specDisplay =
+        deps.labels?.specDisplay?.(deps.brief) ??
+        deps.labels?.plan?.(deps.brief) ??
+        `Draft the design brief: ${deps.brief}`
+      const status = await runTurn({
+        sendMessage: deps.sendMessage,
+        prompt: specPrompt,
+        overrides: overrides(specDisplay),
+        signal,
+        timeoutMs: PLAN_TIMEOUT_MS
+      })
+      if (status === 'cancelled') return
+      if (status === 'send-failed') {
+        store.setFileError('Could not start the design-brief turn.')
+        return
+      }
+      if (status === 'timeout') {
+        store.setFileError('The design-brief step timed out.')
+        return
+      }
+      await delay(300) // let the final assistant block settle before we read it
+      plan = parsePagesPlan(assistantTextForLastTurn(), { max: DESIGN_PAGES_MAX })
+      designMdRef = designMdPath
+    } else {
+      store.setPagesRun({ phase: 'planning', total: 0, done: 0, title: '' })
+      const existingPages = buildHtmlSiblingManifest(store.artifacts, null)
+      const planPrompt = buildDesignPlanPrompt({
+        brief: deps.brief,
+        workspaceRoot: deps.workspaceRoot,
+        ...(deps.designContext ? { designContext: deps.designContext } : {}),
+        ...(existingPages.length > 0 ? { existingPages } : {})
+      })
+      const planDisplay = deps.labels?.plan?.(deps.brief) ?? `Plan a multi-page design: ${deps.brief}`
+      const status = await runTurn({
+        sendMessage: deps.sendMessage,
+        prompt: planPrompt,
+        overrides: overrides(planDisplay),
+        signal,
+        timeoutMs: PLAN_TIMEOUT_MS
+      })
+      if (status === 'cancelled') return
+      if (status === 'send-failed') {
+        store.setFileError('Could not start the multi-page planning turn.')
+        return
+      }
+      if (status === 'timeout') {
+        store.setFileError('The page-planning step timed out.')
+        return
+      }
+      await delay(300)
+      plan = parsePagesPlan(assistantTextForLastTurn(), { max: DESIGN_PAGES_MAX })
+    }
     if (plan.length === 0) {
       // The planner produced nothing parseable — degrade to a single page.
       plan = [{ title: deps.brief.slice(0, 40) || 'Design', brief: deps.brief }]
     }
 
-    // 2) Create a skeleton card per page up front so they all appear immediately.
+    // 2) Foundation artifacts: a visual design-system style guide, then a logo.
+    if (withFoundation) {
+      if (signal.cancelled) return
+      const existingSystem = findFoundationArtifact(
+        useDesignWorkspaceStore.getState().artifacts,
+        'design-system'
+      )
+      if (existingSystem) {
+        foundationBuiltIds.add(existingSystem.id)
+        designSystemRef = DESIGN_SYSTEM_MD_PATH
+      } else {
+        store.setPagesRun({
+          phase: 'foundation',
+          step: 'system',
+          total: 0,
+          done: 0,
+          title: deps.labels?.foundationStep?.('system') ?? 'Design system'
+        })
+        const card = await createFoundationCard({
+          docId,
+          workspaceRoot: deps.workspaceRoot,
+          role: 'design-system',
+          title: deps.labels?.systemTitle?.() ?? 'Design system'
+        })
+        if (!card) {
+          store.setFileError('Design preview setup failed for the design system.')
+          return
+        }
+        // Baseline DESIGN_SYSTEM.md from the static context so the file always
+        // exists; the agent enriches it with the real tokens it used.
+        await writeWorkspaceTextFile(
+          deps.workspaceRoot,
+          DESIGN_SYSTEM_MD_PATH,
+          formatDesignSystemMarkdown(deps.designContext)
+        )
+        const systemPrompt = buildDesignSystemBoardPrompt({
+          brief: deps.brief,
+          workspaceRoot: deps.workspaceRoot,
+          artifactRelativePath: card.relativePath,
+          designSystemMdPath: DESIGN_SYSTEM_MD_PATH,
+          ...(designMdRef ? { designMdPath: designMdRef } : {}),
+          ...(deps.designContext ? { designContext: deps.designContext } : {})
+        })
+        const status = await runTurn({
+          sendMessage: deps.sendMessage,
+          prompt: systemPrompt,
+          overrides: overrides(deps.labels?.systemDisplay?.() ?? 'Design the visual system'),
+          signal,
+          timeoutMs: PAGE_TIMEOUT_MS,
+          artifactId: card.id
+        })
+        if (status === 'cancelled') return
+        if (status === 'send-failed') {
+          store.setFileError('Could not start the design-system turn.')
+          return
+        }
+        if (status === 'timeout') {
+          store.setFileError('The design-system step timed out.')
+          return
+        }
+        // Refresh the drift baseline against whatever the agent published.
+        await useDesignWorkspaceStore.getState().refreshDesignSystemHash()
+        foundationBuiltIds.add(card.id)
+        designSystemRef = DESIGN_SYSTEM_MD_PATH
+      }
+
+      if (signal.cancelled) return
+      const existingLogo = findFoundationArtifact(useDesignWorkspaceStore.getState().artifacts, 'logo')
+      if (existingLogo) {
+        foundationBuiltIds.add(existingLogo.id)
+      } else {
+        store.setPagesRun({
+          phase: 'foundation',
+          step: 'logo',
+          total: 0,
+          done: 0,
+          title: deps.labels?.foundationStep?.('logo') ?? 'Logo'
+        })
+        const card = await createFoundationCard({
+          docId,
+          workspaceRoot: deps.workspaceRoot,
+          role: 'logo',
+          title: deps.labels?.logoTitle?.() ?? 'Logo'
+        })
+        if (!card) {
+          store.setFileError('Design preview setup failed for the logo.')
+          return
+        }
+        const logoPrompt = buildDesignLogoPrompt({
+          brief: deps.brief,
+          workspaceRoot: deps.workspaceRoot,
+          artifactRelativePath: card.relativePath,
+          ...(designMdRef ? { designMdPath: designMdRef } : {}),
+          ...(designSystemRef ? { designSystemMdPath: designSystemRef } : {}),
+          ...(deps.designContext ? { designContext: deps.designContext } : {})
+        })
+        const status = await runTurn({
+          sendMessage: deps.sendMessage,
+          prompt: logoPrompt,
+          overrides: overrides(deps.labels?.logoDisplay?.() ?? 'Design the brand logo'),
+          signal,
+          timeoutMs: PAGE_TIMEOUT_MS,
+          artifactId: card.id
+        })
+        if (status === 'cancelled') return
+        if (status === 'send-failed') {
+          store.setFileError('Could not start the logo turn.')
+          return
+        }
+        if (status === 'timeout') {
+          store.setFileError('The logo step timed out.')
+          return
+        }
+        foundationBuiltIds.add(card.id)
+      }
+    }
+
+    // 3) Create a skeleton card per page up front so they all appear immediately.
+    // baseIndex already accounts for any foundation cards added above.
     const baseIndex = useDesignWorkspaceStore.getState().artifacts.length
     const planTitles = plan.map((p) => `"${p.title}"`).join(', ')
     const created: { id: string; relativePath: string; entry: DesignPagePlanEntry }[] = []
@@ -176,8 +443,15 @@ export async function runDesignPages(deps: RunDesignPagesDeps): Promise<void> {
       created.push({ id, relativePath, entry })
     }
 
-    // 3) Generate each page on its own turn, aware of the full plan + built siblings.
-    const builtIds = new Set<string>()
+    // 4) Generate each page on its own turn, following the foundation and aware of
+    // the full plan + already-built siblings (the design-system board + logo +
+    // prior pages all read as siblings for cohesion).
+    const foundationLines = buildFoundationFollowLines({
+      ...(designMdRef ? { designMdPath: designMdRef } : {}),
+      ...(designSystemRef ? { designSystemMdPath: designSystemRef } : {})
+    })
+    const foundationBlock = foundationLines.length > 0 ? `${foundationLines.join('\n')}\n\n` : ''
+    const builtIds = new Set<string>(foundationBuiltIds)
     for (let i = 0; i < created.length; i += 1) {
       if (signal.cancelled) return
       const page = created[i]
@@ -189,8 +463,8 @@ export async function runDesignPages(deps: RunDesignPagesDeps): Promise<void> {
       })
       useDesignWorkspaceStore.getState().setActiveArtifact(page.id)
 
-      // Only already-built pages are readable; mention the rest as upcoming so the
-      // agent designs cohesively without trying to read empty skeleton files.
+      // Only already-built artifacts are readable; mention the rest as upcoming so
+      // the agent designs cohesively without trying to read empty skeleton files.
       const readable = useDesignWorkspaceStore
         .getState()
         .artifacts.filter((a) => builtIds.has(a.id))
@@ -202,7 +476,7 @@ export async function runDesignPages(deps: RunDesignPagesDeps): Promise<void> {
       const prompt = buildDesignTurnPrompt({
         target: 'html',
         mode: 'text',
-        text: `${projectContext}${page.entry.brief}`,
+        text: `${foundationBlock}${projectContext}${page.entry.brief}`,
         artifactRelativePath: page.relativePath,
         workspaceRoot: deps.workspaceRoot,
         ...(deps.generationPrompt ? { customPrompt: deps.generationPrompt } : {}),
@@ -212,22 +486,22 @@ export async function runDesignPages(deps: RunDesignPagesDeps): Promise<void> {
       const pageDisplay =
         deps.labels?.page?.(page.entry.title, i + 1, created.length) ??
         `Design page ${i + 1}/${created.length}: ${page.entry.title}`
-      const sent = await deps.sendMessage(prompt, 'agent', overrides(pageDisplay))
-      if (!sent) {
+      const status = await runTurn({
+        sendMessage: deps.sendMessage,
+        prompt,
+        overrides: overrides(pageDisplay),
+        signal,
+        timeoutMs: PAGE_TIMEOUT_MS,
+        artifactId: page.id
+      })
+      if (status === 'cancelled') return
+      if (status === 'send-failed') {
         store.setFileError(`Could not start generating "${page.entry.title}".`)
         return
       }
-      const pageResult = await waitForTurnComplete(signal, PAGE_TIMEOUT_MS)
-      if (pageResult === 'cancelled') return
-      if (pageResult === 'timeout') {
+      if (status === 'timeout') {
         store.setFileError(`Generating "${page.entry.title}" timed out.`)
         return
-      }
-      // Write the agent's actual end-of-turn summary back to this page's version so
-      // the NEXT page's sibling manifest describes what was built, not the brief.
-      const summary = extractAgentDesignSummary(assistantTextForLastTurn())
-      if (summary) {
-        useDesignWorkspaceStore.getState().setVersionSummary(page.id, `${page.id}-v1`, summary)
       }
       builtIds.add(page.id)
     }

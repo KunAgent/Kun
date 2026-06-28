@@ -1,4 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { defaultDesignSettings, type AppSettingsV1 } from '@shared/app-settings'
+import { rendererRuntimeClient } from '../agent/runtime-client'
 import { useDesignWorkspaceStore } from './design-workspace-store'
 import { buildHtmlSiblingManifest } from './design-pages'
 import type { DesignArtifact, DesignDocument } from './design-types'
@@ -17,6 +19,22 @@ function artifact(id: string, kind: DesignArtifact['kind']): DesignArtifact {
     updatedAt: createdAt,
     versions: [{ id: `${id}-v1`, relativePath, createdAt, summary: '' }]
   }
+}
+
+function settingsWithDesign(
+  design: Partial<ReturnType<typeof defaultDesignSettings>> = {}
+): AppSettingsV1 {
+  return {
+    design: { ...defaultDesignSettings(), ...design }
+  } as AppSettingsV1
+}
+
+function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>((res) => {
+    resolve = res
+  })
+  return { promise, resolve }
 }
 
 describe('design workspace store', () => {
@@ -48,6 +66,8 @@ describe('design workspace store', () => {
   })
 
   afterEach(() => {
+    rendererRuntimeClient.invalidateSettings()
+    vi.restoreAllMocks()
     vi.unstubAllGlobals()
   })
 
@@ -135,5 +155,63 @@ describe('design workspace store', () => {
     expect(state.documents.map((d) => d.id)).toEqual(['doc'])
     expect(state.activeDocumentId).toBe('doc')
     expect(state.artifacts.map((a) => a.id).sort()).toEqual(['canvas', 'screen'])
+  })
+
+  it('keeps settings unloaded until existing design documents are rehydrated', async () => {
+    const indexRead = deferred<{ ok: true; content: string }>()
+    const documentsIndex = JSON.stringify({
+      version: 1,
+      activeDocumentId: 'existing-doc',
+      documents: [
+        {
+          id: 'existing-doc',
+          title: 'Existing design',
+          order: 0,
+          createdAt,
+          updatedAt: createdAt,
+          activeArtifactId: null
+        }
+      ]
+    })
+    const readWorkspaceFile = vi.fn((request: { path: string }) => {
+      if (request.path === '.kun-design/documents.json') return indexRead.promise
+      return Promise.resolve({ ok: false as const, error: 'missing' })
+    })
+    const listWorkspaceDirectory = vi.fn(async () => ({
+      ok: true as const,
+      entries: [] as Array<{ name: string; type: 'file' | 'directory' }>
+    }))
+    vi.spyOn(rendererRuntimeClient, 'getSettings').mockResolvedValue(
+      settingsWithDesign({ defaultWorkspaceRoot: '/workspace' })
+    )
+    vi.stubGlobal('window', {
+      kunGui: { writeWorkspaceFile, readWorkspaceFile, listWorkspaceDirectory }
+    })
+    useDesignWorkspaceStore.setState({
+      workspaceRoot: '',
+      documents: [],
+      activeDocumentId: null,
+      artifacts: [],
+      activeArtifactId: null,
+      settingsLoaded: true,
+      designSystemHash: '',
+      fileError: null
+    })
+
+    const loading = useDesignWorkspaceStore.getState().loadDesignSettings()
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(useDesignWorkspaceStore.getState().settingsLoaded).toBe(false)
+
+    indexRead.resolve({ ok: true, content: documentsIndex })
+    await loading
+
+    const state = useDesignWorkspaceStore.getState()
+    expect(state.settingsLoaded).toBe(true)
+    expect(state.activeDocumentId).toBe('existing-doc')
+    expect(state.documents.map((doc) => ({ id: doc.id, title: doc.title }))).toEqual([
+      { id: 'existing-doc', title: 'Existing design' }
+    ])
   })
 })

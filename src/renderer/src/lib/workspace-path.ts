@@ -89,8 +89,12 @@ export function isInternalDeepSeekGuiWorkspace(path?: string): boolean {
   return (
     normalized === '~/.kun/write_workspace'
     || normalized.endsWith('/.kun/write_workspace')
+    || normalized === '~/.kun/design-workspace'
+    || normalized.endsWith('/.kun/design-workspace')
     || normalized === '~/.deepseekgui/write_workspace'
     || normalized.endsWith('/.deepseekgui/write_workspace')
+    || normalized === '~/.deepseekgui/design-workspace'
+    || normalized.endsWith('/.deepseekgui/design-workspace')
   )
 }
 

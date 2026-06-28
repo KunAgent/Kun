@@ -90,6 +90,17 @@ describe('code thread classification', () => {
     expect(isCodeSidebarThread(design, [], undefined, designRegistry)).toBe(false)
     expect(isCodeThread(design, [], undefined, designRegistry)).toBe(false)
   })
+
+  it('excludes threads stored in the internal design workspace even without registry data', () => {
+    const designWorkspaceThread = makeThread({
+      id: 'thr_design_workspace',
+      title: 'Design Assistant',
+      workspace: '/Users/zxy/.kun/design-workspace'
+    })
+
+    expect(isCodeSidebarThread(designWorkspaceThread)).toBe(false)
+    expect(isCodeThread(designWorkspaceThread)).toBe(false)
+  })
 })
 
 describe('thread event sink binding', () => {

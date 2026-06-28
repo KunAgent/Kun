@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from 'react'
-import { Monitor } from 'lucide-react'
+import { Monitor, MousePointer2 } from 'lucide-react'
 import { useCanvasShapeStore } from '../../../design/canvas/canvas-shape-store'
 import { useCanvasViewportStore } from '../../../design/canvas/canvas-viewport-store'
 import { useCanvasSelectionStore } from '../../../design/canvas/canvas-selection-store'
@@ -10,6 +10,35 @@ import { useDesignWorkspaceStore } from '../../../design/design-workspace-store'
 
 const MAX_ACTIVE_WEBVIEWS = 6
 const MIN_ZOOM_FOR_WEBVIEW = 0.04
+
+/** Hide the "AI is drawing here" cursor this long after the last file change. */
+const AI_CURSOR_TTL_MS = 4500
+
+/**
+ * Runs inside the live webview to locate the section the agent just wrote: the
+ * LAST element tagged `data-ds-section` (sections are written top-to-bottom), or
+ * the last top-level body child as a fallback for untagged HTML. Returns its
+ * label + rect in the webview's CSS px, which maps 1:1 to the overlay content div.
+ */
+const AI_SECTION_QUERY = `(() => {
+  const tagged = document.querySelectorAll('[data-ds-section]')
+  let el = null
+  let label = ''
+  if (tagged.length) {
+    el = tagged[tagged.length - 1]
+    label = el.getAttribute('data-ds-section') || ''
+  } else if (document.body) {
+    const kids = Array.prototype.slice.call(document.body.children).filter((n) => {
+      const r = n.getBoundingClientRect()
+      return r.height > 8 && r.width > 8
+    })
+    el = kids.length ? kids[kids.length - 1] : null
+  }
+  if (!el) return null
+  const r = el.getBoundingClientRect()
+  if (r.width < 1 || r.height < 1) return null
+  return { label: label, left: Math.round(r.left), top: Math.round(r.top), width: Math.round(r.width), height: Math.round(r.height) }
+})()`
 
 type WebviewElement = HTMLElement & {
   executeJavaScript?: (code: string) => Promise<unknown>
@@ -50,6 +79,15 @@ function ScreenOverlayInner({
     height: number
   } | null>(null)
   const webviewRef = useRef<WebviewElement | null>(null)
+  const [aiCursor, setAiCursor] = useState<{
+    label: string
+    left: number
+    top: number
+    width: number
+    height: number
+  } | null>(null)
+  const aiFadeTimerRef = useRef<number>(0)
+  const firstRevisionRef = useRef<number | null>(null)
 
   const artifact = useDesignWorkspaceStore((s) =>
     s.artifacts.find((a) => a.id === shape.htmlArtifactId)
@@ -241,6 +279,61 @@ function ScreenOverlayInner({
     setSelectedElementRect(null)
   }, [artifact?.id, artifact?.relativePath, shape.id])
 
+  const queryAiCursor = useCallback(() => {
+    const wv = webviewRef.current
+    if (typeof wv?.executeJavaScript !== 'function') return
+    void wv
+      .executeJavaScript(AI_SECTION_QUERY)
+      .then((value) => {
+        if (!value || typeof value !== 'object') return
+        const v = value as Record<string, unknown>
+        if (
+          typeof v.left !== 'number' ||
+          typeof v.top !== 'number' ||
+          typeof v.width !== 'number' ||
+          typeof v.height !== 'number'
+        ) {
+          return
+        }
+        setAiCursor({
+          label: typeof v.label === 'string' ? v.label : '',
+          left: v.left,
+          top: v.top,
+          width: v.width,
+          height: v.height
+        })
+        if (aiFadeTimerRef.current) window.clearTimeout(aiFadeTimerRef.current)
+        aiFadeTimerRef.current = window.setTimeout(() => setAiCursor(null), AI_CURSOR_TTL_MS)
+      })
+      .catch(() => undefined)
+  }, [])
+
+  // Live "AI is drawing here" cursor. The watcher bumps `revision` once when the
+  // watch is established (the file just loaded — baseline, no cursor); every later
+  // bump means the agent wrote more, so query the newest tagged section and move
+  // the cursor onto it. A static design never bumps past the baseline → no cursor.
+  useEffect(() => {
+    if (!fileUrl) {
+      firstRevisionRef.current = null
+      setAiCursor(null)
+      return
+    }
+    if (firstRevisionRef.current === null) {
+      firstRevisionRef.current = revision
+      return
+    }
+    if (revision <= firstRevisionRef.current) return
+    const timer = window.setTimeout(queryAiCursor, 450)
+    return () => window.clearTimeout(timer)
+  }, [revision, fileUrl, queryAiCursor])
+
+  useEffect(
+    () => () => {
+      if (aiFadeTimerRef.current) window.clearTimeout(aiFadeTimerRef.current)
+    },
+    []
+  )
+
   if (screenWidth < 20 || screenHeight < 20) return <></>
 
   const titleBarHeight = Math.min(28, screenHeight * 0.06)
@@ -314,6 +407,48 @@ function ScreenOverlayInner({
               height: selectedElementRect.height
             }}
           />
+        ) : null}
+        {aiCursor ? (
+          <div className="pointer-events-none absolute inset-0 overflow-hidden">
+            {/* Glow on the section the agent just wrote */}
+            <div
+              className="absolute rounded-[3px] border"
+              style={{
+                left: aiCursor.left,
+                top: aiCursor.top,
+                width: aiCursor.width,
+                height: aiCursor.height,
+                borderColor: 'color-mix(in srgb, var(--ds-accent) 75%, transparent)',
+                background: 'color-mix(in srgb, var(--ds-accent) 9%, transparent)',
+                boxShadow:
+                  '0 0 0 1px color-mix(in srgb, var(--ds-accent) 30%, transparent), 0 8px 26px color-mix(in srgb, var(--ds-accent) 22%, transparent)',
+                transition:
+                  'left 360ms cubic-bezier(0.22,1,0.36,1), top 360ms cubic-bezier(0.22,1,0.36,1), width 360ms ease, height 360ms ease'
+              }}
+            />
+            {/* Animated AI cursor + label, clamped to stay visible */}
+            <div
+              className="absolute flex items-center gap-1"
+              style={{
+                left: Math.min(aiCursor.left + aiCursor.width - 8, screenWidth - 8),
+                top: Math.max(2, Math.min(aiCursor.top - 2, screenHeight - titleBarHeight - 22)),
+                transition:
+                  'left 360ms cubic-bezier(0.22,1,0.36,1), top 360ms cubic-bezier(0.22,1,0.36,1)'
+              }}
+            >
+              <MousePointer2
+                className="h-3.5 w-3.5 drop-shadow"
+                strokeWidth={1.6}
+                style={{ color: 'var(--ds-accent)', fill: 'var(--ds-accent)' }}
+              />
+              <span
+                className="max-w-[150px] truncate rounded-full px-1.5 py-0.5 text-[10px] font-medium text-white shadow"
+                style={{ background: 'var(--ds-accent)' }}
+              >
+                {aiCursor.label || 'AI 正在生成…'}
+              </span>
+            </div>
+          </div>
         ) : null}
       </div>
     </div>

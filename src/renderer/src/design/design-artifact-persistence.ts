@@ -102,6 +102,7 @@ export function parseArtifactMeta(raw: string, dirId: string): DesignArtifact | 
     o.previewStatus === 'pending' || o.previewStatus === 'ready' || o.previewStatus === 'error'
       ? o.previewStatus
       : undefined
+  const role = o.role === 'design-system' || o.role === 'logo' ? o.role : undefined
   return {
     id,
     kind,
@@ -115,7 +116,8 @@ export function parseArtifactMeta(raw: string, dirId: string): DesignArtifact | 
     ...(parsedNode ? { node: parsedNode } : {}),
     implementedAt: isStr(o.implementedAt) ? o.implementedAt : undefined,
     implementedThreadId: isStr(o.implementedThreadId) ? o.implementedThreadId : undefined,
-    implementedDesignSystemHash: isStr(o.implementedDesignSystemHash) ? o.implementedDesignSystemHash : undefined
+    implementedDesignSystemHash: isStr(o.implementedDesignSystemHash) ? o.implementedDesignSystemHash : undefined,
+    ...(role ? { role } : {})
   }
 }
 

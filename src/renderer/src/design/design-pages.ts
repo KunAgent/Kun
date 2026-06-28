@@ -54,7 +54,8 @@ export function buildHtmlSiblingManifest(
       ...(artifact.node
         ? { width: artifact.node.width, height: artifact.node.height }
         : {}),
-      ...(summary ? { summary } : {})
+      ...(summary ? { summary } : {}),
+      ...(artifact.role ? { role: artifact.role } : {})
     })
     if (siblings.length >= limit) break
   }

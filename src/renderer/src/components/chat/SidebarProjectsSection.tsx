@@ -298,7 +298,12 @@ export function buildSidebarWorkspaceGroups(options: {
     upsertWorkspace(key, [th])
   }
 
-  if (selectedWorkspace && !map.has(selectedWorkspaceKey)) {
+  if (
+    selectedWorkspace &&
+    !map.has(selectedWorkspaceKey) &&
+    isSidebarProjectWorkspacePath(selectedWorkspace) &&
+    !isConversationWorkspacePath(selectedWorkspace, conversationRoot)
+  ) {
     upsertWorkspace(selectedWorkspace)
   }
   if (!query && !options.showArchived) {

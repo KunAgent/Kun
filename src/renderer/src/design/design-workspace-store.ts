@@ -727,52 +727,56 @@ export const useDesignWorkspaceStore = create<DesignWorkspaceState>((set, get) =
       set((state) => ({ designContext: { ...state.designContext, ...patch } })),
 
     loadDesignSettings: async () => {
+      set({ settingsLoaded: false })
       try {
-        const settings = await rendererRuntimeClient.getSettings()
-        const design = settings.design
-        const hasStoredViewport = readBrowserStorageItem(VIEWPORT_KEY) !== null
-        const hasStoredView = readBrowserStorageItem(CANVAS_VIEW_KEY) !== null
-        set((state) => ({
-          settingsLoaded: true,
-          workspaceRoot: state.workspaceRoot || design.defaultWorkspaceRoot || builtinDesignWorkspaceRoot() || '',
-          assistantModel: state.assistantModel || design.model,
-          assistantProviderId: state.assistantProviderId || design.providerId,
-          canvasBackground: design.canvasBackground,
-          liveRefresh: design.liveRefresh,
-          deviceFrame: design.deviceFrame,
-          generationPrompt: design.generationPrompt,
-          reasoningEffort: design.reasoningEffort,
-          implementStackHint: design.implementStackHint,
-          injectIntoCode: design.injectIntoCode,
-          publishDesignSystem: design.publishDesignSystem,
-          viewport: hasStoredViewport ? state.viewport : design.defaultViewport,
-          canvasView: hasStoredView ? state.canvasView : design.defaultCanvasView,
-          designContext: {
-            ...state.designContext,
-            designType: state.designContext.designType ?? (design.designType || undefined),
-            designGuidelines: state.designContext.designGuidelines || design.designGuidelines || undefined,
-            radius: state.designContext.radius ?? (design.radius || undefined),
-            density: state.designContext.density ?? (design.density || undefined),
-            fontStyle: state.designContext.fontStyle ?? (design.fontStyle || undefined),
-            brandColor: state.designContext.brandColor || design.brandColor || undefined,
-            tone:
-              state.designContext.tone && state.designContext.tone.length > 0
-                ? state.designContext.tone
-                : design.tone.length > 0
-                  ? design.tone
-                  : undefined,
-            designSystemPreset:
-              state.designContext.designSystemPreset ??
-              (design.designSystemPreset === 'none' ? undefined : design.designSystemPreset)
-          }
-        }))
-      } catch {
+        try {
+          const settings = await rendererRuntimeClient.getSettings()
+          const design = settings.design
+          const hasStoredViewport = readBrowserStorageItem(VIEWPORT_KEY) !== null
+          const hasStoredView = readBrowserStorageItem(CANVAS_VIEW_KEY) !== null
+          set((state) => ({
+            workspaceRoot: state.workspaceRoot || design.defaultWorkspaceRoot || builtinDesignWorkspaceRoot() || '',
+            assistantModel: state.assistantModel || design.model,
+            assistantProviderId: state.assistantProviderId || design.providerId,
+            canvasBackground: design.canvasBackground,
+            liveRefresh: design.liveRefresh,
+            deviceFrame: design.deviceFrame,
+            generationPrompt: design.generationPrompt,
+            reasoningEffort: design.reasoningEffort,
+            implementStackHint: design.implementStackHint,
+            injectIntoCode: design.injectIntoCode,
+            publishDesignSystem: design.publishDesignSystem,
+            viewport: hasStoredViewport ? state.viewport : design.defaultViewport,
+            canvasView: hasStoredView ? state.canvasView : design.defaultCanvasView,
+            designContext: {
+              ...state.designContext,
+              designType: state.designContext.designType ?? (design.designType || undefined),
+              designGuidelines: state.designContext.designGuidelines || design.designGuidelines || undefined,
+              radius: state.designContext.radius ?? (design.radius || undefined),
+              density: state.designContext.density ?? (design.density || undefined),
+              fontStyle: state.designContext.fontStyle ?? (design.fontStyle || undefined),
+              brandColor: state.designContext.brandColor || design.brandColor || undefined,
+              tone:
+                state.designContext.tone && state.designContext.tone.length > 0
+                  ? state.designContext.tone
+                  : design.tone.length > 0
+                    ? design.tone
+                    : undefined,
+              designSystemPreset:
+                state.designContext.designSystemPreset ??
+                (design.designSystemPreset === 'none' ? undefined : design.designSystemPreset)
+            }
+          }))
+        } catch {
+          // Keep local/default state and still let rehydration/fallback below settle the workspace.
+        }
+        await get().rehydrateArtifacts()
+        await get().refreshDesignSystemHash()
+        // Always land on an active 设计稿 so the canvas has somewhere to render.
+        if (get().documents.length === 0) get().createDocument()
+      } finally {
         set({ settingsLoaded: true })
       }
-      await get().rehydrateArtifacts()
-      await get().refreshDesignSystemHash()
-      // Always land on an active 设计稿 so the canvas has somewhere to render.
-      if (get().documents.length === 0) get().createDocument()
     },
 
     rehydrateArtifacts: async () => {
