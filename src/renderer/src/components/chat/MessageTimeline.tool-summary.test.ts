@@ -359,7 +359,7 @@ describe('MessageTimeline Kun runtime metadata smoke', () => {
     expect(html).toContain('ds-process-file-reference')
   })
 
-  it('shows failed tool details by default while keeping the row collapsible', () => {
+  it('keeps a completed failed-tool detail collapsed by default while staying expandable', () => {
     const block: ChatBlock = toolBlock({
       summary: 'Recognize image recognize_image',
       status: 'error',
@@ -376,13 +376,15 @@ describe('MessageTimeline Kun runtime metadata smoke', () => {
       })
     )
 
+    // The header (summary + warning tone) renders, but once the turn has
+    // completed a failed tool call stays collapsed by default — the error
+    // detail is revealed only after the user expands the row.
     expect(html).toContain('Recognize image recognize_image')
-    expect(html).toContain('model request failed with status 401')
-    expect(html).toContain('role="button"')
     expect(html).toContain('text-orange-700')
-    expect(html).toContain('border-orange-200/80')
     expect(html).not.toContain('text-red-600')
-    expect(html).not.toContain('border-red-200/80')
+    expect(html).not.toContain('model request failed with status 401')
+    expect(html).toContain('role="button"')
+    expect(html).toContain('aria-expanded="false"')
   })
 
   it('expands active reasoning so the current process is visible', () => {
@@ -658,7 +660,7 @@ describe('MessageTimeline Kun runtime metadata smoke', () => {
     expect(html).not.toContain('aria-expanded=')
   })
 
-  it('keeps completed runtime errors visible instead of folding them into the work summary', () => {
+  it('folds a completed runtime error into the collapsed work summary', () => {
     const blocks: ChatBlock[] = [
       {
         kind: 'user',
@@ -699,9 +701,14 @@ describe('MessageTimeline Kun runtime metadata smoke', () => {
       })
     )
 
-    expect(html).toContain('request failed with status 400')
-    expect(html).toContain('Code: http_400')
-    expect(html).toContain('full provider body only visible in the expanded error detail')
+    // Completed turns auto-collapse: a runtime error folds into the toggleable
+    // work summary rather than rendering inline, so its text and detail stay
+    // hidden until the user expands the panel.
+    expect(html).toContain('Work process (1 steps)')
+    expect(html).toContain('aria-expanded="false"')
+    expect(html).not.toContain('request failed with status 400')
+    expect(html).not.toContain('Code: http_400')
+    expect(html).not.toContain('full provider body only visible in the expanded error detail')
   })
 
   it('adds extra bottom padding only for chat timelines with an active goal banner', () => {

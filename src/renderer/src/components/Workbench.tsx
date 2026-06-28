@@ -30,10 +30,10 @@ import { applyTheme } from '../lib/apply-theme'
 import { useChatStore } from '../store/chat-store'
 import {
   conversationHasVisionAttachments,
-  isClawThread,
   providerIdForComposerModel,
   resolveComposerContextWindowTokens
 } from '../store/chat-store-helpers'
+import { isCodeSidebarThread } from '../store/chat-store-runtime'
 import { threadHasPendingRuntimeWork } from '../store/chat-store-runtime-helpers'
 import {
   extractLatestTurnAutoOpenDevPreviewUrls,
@@ -96,7 +96,6 @@ import { SidebarTitlebarToggleButton } from './sidebar/SidebarPrimitives'
 import { composeWritePrompt } from '../write/quoted-selection'
 import { resolveWriteAgentPreset } from '../write/agent-presets'
 import { useWriteWorkspaceStore } from '../write/write-workspace-store'
-import { isWriteThreadId } from '../write/write-thread-registry'
 import {
   readDesignThreadRegistry,
   activeDesignThreadForWorkspace,
@@ -1108,11 +1107,12 @@ export function Workbench(): ReactElement {
   }
 
   const codeThreads = useMemo(
-    () => threads.filter((thread) =>
-      !isWriteThreadId(thread.id) &&
-      !isClawThread(thread, clawChannels) &&
-      !isSddAssistantThread(thread)
-    ),
+    () => {
+      const designRegistry = readDesignThreadRegistry()
+      return threads.filter((thread) =>
+        isCodeSidebarThread(thread, clawChannels, undefined, designRegistry)
+      )
+    },
     [clawChannels, threads]
   )
 

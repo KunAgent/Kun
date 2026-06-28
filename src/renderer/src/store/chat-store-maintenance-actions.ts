@@ -85,6 +85,10 @@ import {
   writeWorkspaceForThreadId
 } from '../write/write-thread-registry'
 import {
+  forgetDesignThread,
+  saveDesignThreadRegistry
+} from '../design/design-thread-registry'
+import {
   clearBusyWatchdog,
   resetBusyRecoveryAttempts,
   scheduleStartupRuntimeProbe,
@@ -665,6 +669,7 @@ export function createMaintenanceActions(
     try {
       await p.deleteThread(targetId)
       saveWriteThreadRegistry(forgetWriteThread(targetId))
+      saveDesignThreadRegistry(forgetDesignThread(targetId))
       saveThreadForkRegistry(forgetThreadFork(targetId))
       if (wtRecord) saveThreadWorktreeRegistry(forgetThreadWorktree(targetId))
       if (deletingActive) {

@@ -163,6 +163,21 @@ export type CanvasShape = {
   layout?: AutoLayout
   /** Resize behaviour relative to the parent frame. */
   constraints?: Constraints
+  /**
+   * Design-token bindings: shape property → token name (e.g.
+   * `{ "fill": "brand/primary" }`). Written by the `apply-token` op so editing
+   * the token later re-resolves every bound shape. See design-system-types.
+   */
+  tokenBindings?: Record<string, string>
+  /**
+   * Component instance back-reference (only on an instance's ROOT shape): which
+   * component def it was stamped from, at what version, and the per-instance slot
+   * overrides. Lets `update-component` re-materialize instances while preserving
+   * their overrides, and `detach` cut the link. See design-system-types.
+   */
+  componentId?: string
+  componentVersion?: number
+  overrides?: Record<string, unknown>
   textContent?: string
   fontSize?: number
   fontFamily?: string

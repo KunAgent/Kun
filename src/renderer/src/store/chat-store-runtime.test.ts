@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { ChatBlock } from '../agent/types'
+import type { ChatBlock, NormalizedThread } from '../agent/types'
 import {
   armBusyWatchdog,
   buildThreadEventSink,
@@ -7,6 +7,8 @@ import {
   clearWatchedCompletionNotifications,
   clearPendingClawFeishuMirrors,
   completionNotificationDedupeKeyForWatchedThread,
+  isCodeSidebarThread,
+  isCodeThread,
   MAX_PENDING_CLAW_FEISHU_MIRRORS,
   MAX_WATCHED_COMPLETION_NOTIFICATIONS,
   rememberPendingClawFeishuMirror,
@@ -15,6 +17,7 @@ import {
 } from './chat-store-runtime'
 import { clearBusyWatchdog, resetBusyRecoveryAttempts } from './chat-store-schedulers'
 import type { ChatState, ChatStoreSet } from './chat-store-types'
+import { emptyDesignThreadRegistry, markDesignThread } from '../design/design-thread-registry'
 
 function makeSinkHarness(overrides: Partial<ChatState> = {}): {
   getState: () => ChatState
@@ -53,6 +56,41 @@ function makeSinkHarness(overrides: Partial<ChatState> = {}): {
     get
   }
 }
+
+function makeThread(overrides: Partial<NormalizedThread> & Pick<NormalizedThread, 'id'>): NormalizedThread {
+  return {
+    id: overrides.id,
+    title: overrides.title ?? overrides.id,
+    updatedAt: overrides.updatedAt ?? '2026-06-01T00:00:00.000Z',
+    model: overrides.model ?? 'deepseek-v4-pro',
+    mode: overrides.mode ?? 'agent',
+    workspace: overrides.workspace ?? '/workspace/deepseek-gui',
+    ...(overrides.archived !== undefined ? { archived: overrides.archived } : {}),
+    ...(overrides.status ? { status: overrides.status } : {})
+  }
+}
+
+describe('code thread classification', () => {
+  it('keeps archived Code threads visible for the sidebar archive view', () => {
+    const archived = makeThread({ id: 'thr_archived', archived: true })
+
+    expect(isCodeSidebarThread(archived)).toBe(true)
+    expect(isCodeThread(archived)).toBe(false)
+  })
+
+  it('excludes registered design threads from Code-visible and active Code thread sets', () => {
+    const designRegistry = markDesignThread(
+      '/workspace/deepseek-gui',
+      'login-screen',
+      'thr_design',
+      emptyDesignThreadRegistry()
+    )
+    const design = makeThread({ id: 'thr_design' })
+
+    expect(isCodeSidebarThread(design, [], undefined, designRegistry)).toBe(false)
+    expect(isCodeThread(design, [], undefined, designRegistry)).toBe(false)
+  })
+})
 
 describe('thread event sink binding', () => {
   it('ignores reasoning deltas from a stream bound to a different active thread', () => {

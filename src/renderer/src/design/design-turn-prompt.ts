@@ -3,6 +3,9 @@ import { DESIGN_CRAFT_LINES, formatDesignContextLines, type DesignContext } from
 import type { CanvasSnapshot } from './canvas/canvas-snapshot'
 import { snapshotToCompactJson } from './canvas/canvas-snapshot'
 import type { OpError } from './canvas/shape-ops'
+import { useDesignSystemStore } from './canvas/design-system-store'
+import type { DesignToken } from './canvas/design-system-types'
+import { takeLastLintFindings } from './canvas/design-lint'
 import type { DerivedTokens } from './design-token-extract'
 import type { DesignContextLocation, DesignHtmlElementContext } from './design-composer-context'
 
@@ -383,6 +386,74 @@ function formatPreviousOpErrorLines(errors: OpError[] | undefined): string[] {
   ]
 }
 
+function summarizeToken(t: DesignToken): string {
+  switch (t.kind) {
+    case 'color':
+      return t.value
+    case 'gradient':
+      return `${t.value.type} ${t.value.stops.map((s) => s.color).join('→')}`
+    case 'type':
+      return [
+        t.value.fontSize ? `${t.value.fontSize}px` : '',
+        t.value.fontWeight ? `w${t.value.fontWeight}` : '',
+        t.value.fontFamily ?? ''
+      ]
+        .filter(Boolean)
+        .join(' ')
+    case 'space':
+    case 'radius':
+      return String(t.value)
+    case 'shadow':
+      return t.value.map((s) => `${s.x}/${s.y} b${s.blur}`).join(', ')
+  }
+}
+
+/**
+ * The active document's design system (tokens + components), injected ABOVE the
+ * canvas snapshot so the agent reuses named tokens / stamps components instead of
+ * hardcoding hex and re-drawing the same element. Empty when nothing is defined.
+ */
+function formatDesignSystemLines(): string[] {
+  const { system } = useDesignSystemStore.getState()
+  const tokens = Object.values(system.tokens)
+  const components = Object.values(system.components)
+  if (tokens.length === 0 && components.length === 0) return []
+  const lines: string[] = []
+  if (tokens.length > 0) {
+    lines.push(
+      'Design tokens — REFERENCE these by name (`apply-token`) instead of hardcoding hex; redefining one (`define-token`) re-flows every bound shape:'
+    )
+    for (const t of tokens) lines.push(`- ${t.name} (${t.kind}): ${summarizeToken(t)}`)
+    lines.push('')
+  }
+  if (components.length > 0) {
+    lines.push(
+      'Components — stamp with `instantiate` / `instantiate-many` (feed a data row per instance) instead of re-adding shapes:'
+    )
+    for (const c of components) {
+      const slots = c.slots.map((s) => `${s.path}:${s.kind}`).join(', ')
+      lines.push(`- ${c.name} (slots: ${slots || 'none'})`)
+    }
+    lines.push('')
+  }
+  return lines
+}
+
+/**
+ * Findings from the agent's last `lint-design-system` run, surfaced at the top
+ * of this turn so it repairs them (bind off-token colors, fix contrast, grow tap
+ * targets) — the canvas-side generate → lint → repair loop. One-shot (cleared on read).
+ */
+function formatLintFindingsLines(): string[] {
+  const findings = takeLastLintFindings()
+  if (findings.length === 0) return []
+  return [
+    `Design-system lint flagged ${findings.length} issue(s) from your last lint-design-system run — fix these (apply-token / set-style / resize / bulk-edit) before adding more:`,
+    ...findings.slice(0, 20).map((f) => `- [${f.code}]${f.shapeId ? ` (${f.shapeId})` : ''} ${f.message}`),
+    ''
+  ]
+}
+
 function buildCanvasTurnPrompt(options: DesignTurnOptions): string {
   const snapshot = options.canvasSnapshot
   const snapshotJson = snapshot ? snapshotToCompactJson(snapshot) : '(empty canvas)'
@@ -400,6 +471,7 @@ function buildCanvasTurnPrompt(options: DesignTurnOptions): string {
     `Workspace: ${options.workspaceRoot}`,
     '',
     ...errorLines,
+    ...formatLintFindingsLines(),
     ...editHintLines,
     ...selectionLines,
     'How to respond:',
@@ -437,6 +509,24 @@ function buildCanvasTurnPrompt(options: DesignTurnOptions): string {
     '- { "op": "set-style", "ids": ["<id>",...], "style": { "fills"?, "strokes"?, "cornerRadius"?, "opacity"?, "shadows"?, "blendMode"?, "fontColor"?, "fontSize"?, "fontFamily"?, "fontWeight"?, "textAlign"?, "lineHeight"? } }  // apply ONE style to many shapes at once — use this instead of N separate update ops',
     '- { "op": "auto-layout", "id": "<frame-or-group-id>", "layout": { "direction": "horizontal"|"vertical", "gap"?, "padding"?, "paddingTop"?, "paddingRight"?, "paddingBottom"?, "paddingLeft"?, "primaryAlign"?: "start"|"center"|"end"|"space-between", "counterAlign"?: "start"|"center"|"end" } }  // flex-style; children reflow automatically with even gap/padding. Add "clear": true to remove it.',
     '- { "op": "add-screen", "name": "Screen Name", "x"?, "y"?, "width"?, "height"?, "devicePreset"?: "mobile"|"tablet"|"desktop" }  // legacy alias accepted inside `update_shapes`; prefer `action: "add_screen"`',
+    '',
+    'Design-system ops (use these for cohesion + batch — they make "change the brand color" or "12 identical cards" one call instead of N edits):',
+    '- { "op": "define-token", "name": "brand/primary", "kind": "color"|"gradient"|"type"|"space"|"radius"|"shadow", "value": <by kind> }  // color: "#3b82d8"; gradient: a full gradient fill; type: { fontSize?, fontWeight?, fontFamily?, lineHeight?, textAlign?, fontColor? }; space/radius: a number; shadow: a shadows array. Redefining an existing token re-flows every shape bound to it.',
+    '- { "op": "apply-token", "ids": ["<id>",...], "prop": "fill"|"stroke"|"text-color"|"font"|"radius"|"shadow"|"gap"|"padding", "token": "brand/primary" }  // binds the shapes to the token (so a later define-token edit updates them). Prefer this over hardcoding a hex you used elsewhere.',
+    '- { "op": "define-component", "name": "ProductCard", "fromId": "<shape-id>", "slots": [{ "path": "<descendant shape name>", "kind": "text"|"image"|"color"|"visible" }] }  // turn a well-made shape/subtree into a reusable component; `slots` name the parts each instance can override (matched by the descendant\'s name).',
+    '- { "op": "instantiate", "name": "ProductCard", "at": { "x": N, "y": N }, "parentId"?, "overrides"?: { "<slot name>": <value> } }  // stamp one instance; overrides feed the slots (text→textContent, image→imageUrl, color→hex fill, visible→bool).',
+    '- { "op": "instantiate-many", "name": "ProductCard", "data": [ { "<slot>": <value> }, ... ], "layout": { "kind": "grid"|"row"|"column", "cols"?: N, "gap"?: N }, "at"?: { "x": N, "y": N }, "parentId"? }  // BATCH: one instance per data row, auto-placed on a grid. Use this for card walls / lists / repeated rows instead of N add ops.',
+    '- { "op": "update-component", "name": "ProductCard", "fromId": "<edited shape-id>" }  // re-snapshot the master from an edited instance/subtree; every other instance re-flows, keeping its own overrides.',
+    '- { "op": "detach", "id": "<instance root id>" }  // cut an instance loose from its component so it can diverge freely.',
+    '- { "op": "add-screens", "specs": [ { "name": "Home", "brief"?, "devicePreset"?, "x"?, "y"? }, ... ] }  // BATCH: create several screen frames in one call (auto-arranged in a row); each gets its HTML generated afterwards.',
+    '- { "op": "bulk-edit", "filter": { "type"?, "nameContains"?, "boundToken"?, "component"?, "inFrame"? }, "set": { ...style fields... } }  // restyle every shape matching the filter in one call (e.g. round all buttons, recolor every ProductCard).',
+    '- { "op": "grid", "id": "<frame/group id>", "cols": N, "rowGap"?, "colGap"? }  // arrange a container’s existing children on a grid (cell = largest child).',
+    '- { "op": "stack", "ids": ["<id>",...], "direction": "horizontal"|"vertical", "gap"?, "name"?, "asFrame"?: true }  // wrap loose shapes into one auto-layout container (group + auto-layout in a single step).',
+    '- { "op": "responsive-reflow", "frameId": "<id>", "device": "mobile"|"tablet"|"desktop" }  // resize a frame to a device preset and re-flow constrained children.',
+    '- { "op": "apply-theme", "ids": ["<id>",...], "remap": { "<oldToken>": "<newToken>" } }  // re-skin a subtree by rebinding its token-bound props to themed tokens (e.g. light→dark). Define both token sets first.',
+    '- { "op": "recolor", "ids": ["<id>",...], "mapping": { "<oldHex>": "<newHex>" } }  // swap exact colors across a subtree (escape hatch for un-tokenized art).',
+    '- { "op": "variant-matrix", "baseId": "<id>", "devices"?: ["mobile","desktop"], "themes"?: [ { "name": "dark", "remap": { "<oldToken>": "<newToken>" } } ], "gap"?, "at"? }  // BATCH: tile clones of a base across device × theme cells, each reflowed + themed. The flagship "show it everywhere" op.',
+    '- { "op": "lint-design-system" }  // self-check the design for off-token colors, low text contrast, and sub-44px tap targets. Findings surface at the top of your NEXT turn — fix them there. Run this after a big batch.',
     '',
     'Styling vocabulary:',
     '- Solid fill: `{ "type": "solid", "color": "#3b82d8", "opacity": 1 }`. Gradient fill: `{ "type": "linear", "angle": 90, "stops": [{ "offset": 0, "color": "#6366f1" }, { "offset": 1, "color": "#8b5cf6" }], "opacity": 1 }` (or `"type": "radial"`, no angle). `angle` is degrees clockwise: 0 = left→right, 90 = top→bottom.',
@@ -483,7 +573,8 @@ function buildCanvasTurnPrompt(options: DesignTurnOptions): string {
     '- Before constructing `reference_image_paths`, locate each target shape in the snapshot by its `id` and copy its `imageUrl` verbatim. If the `imageUrl` field is absent on any target, drop that target from the array (do not guess or reconstruct a path from the shape name, position, or any other field).',
     '- Do NOT invent paths. If the target shape has no `imageUrl` field in the snapshot, treat it as empty and generate fresh.',
     '',
-    'Current canvas snapshot (shape ids, names, positions, `selected`/`aiImageHolder` flags, `imageUrl` for filled image shapes, plus a style digest — `fill`/`stroke` (color/width)/`fontColor`/`cornerRadius` — when set, so you can MATCH the existing palette instead of guessing):',
+    ...formatDesignSystemLines(),
+    'Current canvas snapshot (shape ids, names, positions, `selected`/`aiImageHolder` flags, `imageUrl` for filled image shapes, `tokenBindings` for token-bound props, plus a style digest — `fill`/`stroke` (color/width)/`fontColor`/`cornerRadius` — when set, so you can MATCH the existing palette instead of guessing; if `omitted` > 0 the view is truncated — focus a frame to see the rest):',
     '```json',
     snapshotJson,
     '```'

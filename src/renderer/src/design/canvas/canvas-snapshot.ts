@@ -55,6 +55,8 @@ export type CanvasSnapshotShape = {
   blendMode?: string
   /** Auto-layout summary (e.g. `row gap12 pad16`) on laid-out frames/groups. */
   layout?: string
+  /** Design-token bindings (prop → token name) so the agent sees what's already systematized. */
+  tokenBindings?: Record<string, string>
 
   /** Linear shapes only: vertices in ABSOLUTE canvas coords. */
   points?: Point[]
@@ -111,15 +113,32 @@ function styleDigest(s: CanvasShape): StyleDigest {
 export type CanvasSnapshot = {
   shapeCount: number
   shapes: CanvasSnapshotShape[]
+  /** When `maxShapes` truncated the result, how many shapes were dropped. */
+  omitted?: number
+}
+
+/**
+ * Options to keep big-document snapshots token-cheap:
+ * - `rootFrameId` scopes the walk to one frame's subtree (the active screen)
+ *   instead of the whole canvas.
+ * - `maxShapes` caps how many shapes are emitted; the overflow count is reported
+ *   as `omitted` so the agent knows the view is partial.
+ */
+export type SnapshotOptions = {
+  rootFrameId?: string
+  maxShapes?: number
 }
 
 export function snapshotCanvas(
   doc: CanvasDocument,
-  selectedIds?: ReadonlySet<string>
+  selectedIds?: ReadonlySet<string>,
+  opts?: SnapshotOptions
 ): CanvasSnapshot {
   const { objects, rootId } = doc
   const shapes: CanvasSnapshotShape[] = []
   const seen = new Set<string>()
+  const startId = opts?.rootFrameId && objects[opts.rootFrameId] ? opts.rootFrameId : rootId
+  const startName = startId === rootId ? null : (objects[startId]?.name ?? null)
 
   function walk(parentId: string, parentName: string | null): void {
     const parent = objects[parentId]
@@ -154,6 +173,9 @@ export function snapshotCanvas(
         ...(s.htmlArtifactId ? { htmlArtifactId: s.htmlArtifactId } : {}),
         ...(s.imageUrl && !s.imageUrl.startsWith('data:') ? { imageUrl: s.imageUrl } : {}),
         ...styleDigest(s),
+        ...(s.tokenBindings && Object.keys(s.tokenBindings).length > 0
+          ? { tokenBindings: s.tokenBindings }
+          : {}),
         ...(selected ? { selected: true } : {}),
         ...(isHolder ? { aiImageHolder: true } : {}),
         ...(s.points && s.points.length > 0
@@ -164,7 +186,13 @@ export function snapshotCanvas(
     }
   }
 
-  walk(rootId, null)
+  walk(startId, startName)
+
+  const max = opts?.maxShapes
+  if (typeof max === 'number' && shapes.length > max) {
+    const omitted = shapes.length - max
+    return { shapeCount: shapes.length, shapes: shapes.slice(0, max), omitted }
+  }
   return { shapeCount: shapes.length, shapes }
 }
 

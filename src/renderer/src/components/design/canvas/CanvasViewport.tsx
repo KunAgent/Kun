@@ -17,6 +17,9 @@ import type { CanvasToolHandler } from '../../../design/canvas/tools/tool-types'
 import type { CanvasTool } from '../../../design/canvas/canvas-types'
 import { createEmptyDocument } from '../../../design/canvas/canvas-types'
 import { loadCanvasDocument, persistCanvasDocument } from '../../../design/canvas/canvas-persistence'
+import { loadDesignSystem, persistDesignSystem } from '../../../design/canvas/design-system-persistence'
+import { useDesignSystemStore } from '../../../design/canvas/design-system-store'
+import { createEmptyDesignSystem } from '../../../design/canvas/design-system-types'
 import { syncHtmlArtifactsToBoardDocument } from '../../../design/design-board'
 import type { DesignArtifact } from '../../../design/design-types'
 import type { DesignHtmlElementContext } from '../../../design/design-composer-context'
@@ -146,6 +149,13 @@ export function CanvasViewport({
       setDocLoaded(true)
     })
 
+    // 2b) Load the doc-level design system (tokens + components), shared across
+    // this document's artifacts. Reset to empty when none on disk.
+    void loadDesignSystem(workspaceRoot, baseDir).then((system) => {
+      if (cancelled) return
+      useDesignSystemStore.getState().loadSystem(system ?? createEmptyDesignSystem())
+    })
+
     // 3) Subscribe to document changes and persist (debounced by persistCanvasDocument)
     const unsubscribe = useCanvasShapeStore.subscribe((state, prev) => {
       if (cancelled) return
@@ -153,9 +163,17 @@ export function CanvasViewport({
       persistCanvasDocument(workspaceRoot, artifactId, state.document, baseDir)
     })
 
+    // 3b) Persist the design system when tokens/components change (debounced).
+    const unsubscribeDesignSystem = useDesignSystemStore.subscribe((state, prev) => {
+      if (cancelled) return
+      if (state.system === prev.system) return
+      persistDesignSystem(workspaceRoot, state.system, baseDir)
+    })
+
     return () => {
       cancelled = true
       unsubscribe()
+      unsubscribeDesignSystem()
     }
   }, [workspaceRoot, artifactId, baseDir, syncHtmlScreens])
 

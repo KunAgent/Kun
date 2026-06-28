@@ -30,7 +30,7 @@ import {
   type WriteThreadRegistry
 } from '../write/write-thread-registry'
 import { isSddAssistantThread } from '../sdd/sdd-thread-registry'
-import { isDesignThreadId } from '../design/design-thread-registry'
+import { isDesignThreadId, type DesignThreadRegistry } from '../design/design-thread-registry'
 import { readThreadWorktreeRegistry, saveThreadWorktreeRegistry, forgetThreadWorktree } from '../lib/thread-worktree-registry'
 import { notifySddChatTranscriptMirror } from '../sdd/sdd-chat-transcript'
 import { useWriteWorkspaceStore } from '../write/write-workspace-store'
@@ -388,17 +388,26 @@ export function looksLikeActiveTurnError(error: unknown): boolean {
 export function isCodeThread(
   thread: NormalizedThread,
   clawChannels: ClawImChannelV1[] = [],
-  writeRegistry?: WriteThreadRegistry
+  writeRegistry?: WriteThreadRegistry,
+  designRegistry?: DesignThreadRegistry
+): boolean {
+  return thread.archived !== true && isCodeSidebarThread(thread, clawChannels, writeRegistry, designRegistry)
+}
+
+export function isCodeSidebarThread(
+  thread: NormalizedThread,
+  clawChannels: ClawImChannelV1[] = [],
+  writeRegistry?: WriteThreadRegistry,
+  designRegistry?: DesignThreadRegistry
 ): boolean {
   const workspace = normalizeWorkspaceRoot(thread.workspace)
   return Boolean(workspace) &&
-    thread.archived !== true &&
     !isInternalTemporaryWorkspace(thread.workspace) &&
     !isClawWorkspacePath(thread.workspace) &&
     !isClawThread(thread, clawChannels) &&
     !isWriteThreadId(thread.id, writeRegistry) &&
     !isSddAssistantThread(thread) &&
-    !isDesignThreadId(thread.id)
+    !isDesignThreadId(thread.id, designRegistry)
 }
 
 export function latestThread(threads: NormalizedThread[]): NormalizedThread | null {

@@ -70,6 +70,7 @@ import {
   DESIGN_ASSISTANT_THREAD_TITLE,
   activeDesignThreadForWorkspace,
   designDocKey,
+  isDesignThreadId,
   markDesignThread,
   readDesignThreadRegistry,
   saveDesignThreadRegistry
@@ -864,7 +865,8 @@ export function createNavigationActions(
         get().route === 'chat' &&
         activeThread != null &&
         (isWriteThreadId(activeThread.id, writeRegistry) ||
-          isClawThread(activeThread, get().clawChannels))
+          isClawThread(activeThread, get().clawChannels) ||
+          isDesignThreadId(activeThread.id))
       const shouldClearSelection =
         activeThreadId != null && !displayThreads.some((thread) => thread.id === activeThreadId)
       if (shouldClearSelection) {

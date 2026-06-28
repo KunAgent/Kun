@@ -2,6 +2,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { NormalizedThread } from '../agent/types'
 import { rendererRuntimeClient } from '../agent/runtime-client'
 import type { ChatState, ChatStoreGet, ChatStoreSet } from './chat-store-types'
+import type { BrowserStorageLike } from '../lib/browser-storage'
+import {
+  emptyDesignThreadRegistry,
+  markDesignThread,
+  saveDesignThreadRegistry
+} from '../design/design-thread-registry'
 
 const registryMock = vi.hoisted(() => ({
   getProvider: vi.fn()
@@ -33,6 +39,18 @@ function thread(overrides: Partial<NormalizedThread> & Pick<NormalizedThread, 'i
     workspace: overrides.workspace,
     ...(overrides.status ? { status: overrides.status } : {}),
     ...(overrides.archived !== undefined ? { archived: overrides.archived } : {})
+  }
+}
+
+class MemoryStorage implements BrowserStorageLike {
+  private readonly values = new Map<string, string>()
+
+  getItem(key: string): string | null {
+    return this.values.get(key) ?? null
+  }
+
+  setItem(key: string, value: string): void {
+    this.values.set(key, value)
   }
 }
 
@@ -185,6 +203,42 @@ describe('chat-store navigation workspace selection', () => {
     await expect(harness.actions.selectWorkspaceRoot('   ')).resolves.toBeNull()
     expect(setSettings).not.toHaveBeenCalled()
     expect(harness.state.activeThreadId).toBe('thr_default')
+  })
+
+  it('openCode does not keep a registered design thread active in Code mode', async () => {
+    const storage = new MemoryStorage()
+    saveDesignThreadRegistry(
+      markDesignThread(
+        '/Users/zxy/project',
+        'login',
+        'thr_design',
+        emptyDesignThreadRegistry()
+      ),
+      storage
+    )
+    vi.stubGlobal('window', { localStorage: storage })
+    const harness = buildHarness()
+    harness.state.activeThreadId = 'thr_design'
+    harness.state.workspaceRoot = '/Users/zxy/project'
+    harness.state.threads = [
+      thread({
+        id: 'thr_design',
+        title: 'Design Assistant',
+        workspace: '/Users/zxy/project',
+        updatedAt: '2026-06-12T10:00:00.000Z'
+      }),
+      thread({
+        id: 'thr_code',
+        title: 'Code task',
+        workspace: '/Users/zxy/project',
+        updatedAt: '2026-06-12T09:00:00.000Z'
+      })
+    ]
+
+    await harness.actions.openCode()
+
+    expect(harness.state.route).toBe('chat')
+    expect(harness.selectThread).toHaveBeenCalledWith('thr_code')
   })
 })
 

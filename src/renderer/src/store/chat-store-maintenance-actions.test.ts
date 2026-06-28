@@ -1,6 +1,14 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ChatBlock, NormalizedThread, ThreadGoal, ThreadGoalStatus } from '../agent/types'
 import type { ChatState, ChatStoreGet, ChatStoreSet, SendMessageOverrides } from './chat-store-types'
+import type { BrowserStorageLike } from '../lib/browser-storage'
+import {
+  emptyDesignThreadRegistry,
+  isDesignThreadId,
+  markDesignThread,
+  readDesignThreadRegistry,
+  saveDesignThreadRegistry
+} from '../design/design-thread-registry'
 
 const registryMock = vi.hoisted(() => ({
   getProvider: vi.fn()
@@ -24,6 +32,7 @@ type Harness = {
   drainQueuedMessages: ReturnType<typeof vi.fn>
   get: ChatStoreGet
   provider: {
+    deleteThread: ReturnType<typeof vi.fn>
     setThreadGoal: ReturnType<typeof vi.fn>
     clearThreadGoal: ReturnType<typeof vi.fn>
     interruptTurn: ReturnType<typeof vi.fn>
@@ -35,6 +44,18 @@ type Harness = {
   selectThread: ReturnType<typeof vi.fn>
   sendMessage: ReturnType<typeof vi.fn>
   state: ChatState
+}
+
+class MemoryStorage implements BrowserStorageLike {
+  private readonly values = new Map<string, string>()
+
+  getItem(key: string): string | null {
+    return this.values.get(key) ?? null
+  }
+
+  setItem(key: string, value: string): void {
+    this.values.set(key, value)
+  }
 }
 
 function thread(id: string, goal: ThreadGoal | null = null): NormalizedThread {
@@ -78,6 +99,7 @@ function buildHarness(options: {
   let state: ChatState
 
   const provider = {
+    deleteThread: vi.fn(async () => undefined),
     setThreadGoal: vi.fn(async (threadId: string, patch: GoalPatch) =>
       goal(
         threadId,
@@ -149,6 +171,10 @@ function buildHarness(options: {
   return { actions, createThread, drainQueuedMessages, get, provider, recoverActiveTurn, refreshThreads, selectThread, sendMessage, state }
 }
 
+afterEach(() => {
+  vi.unstubAllGlobals()
+})
+
 describe('chat-store-maintenance-actions fork actions', () => {
   beforeEach(() => {
     registryMock.getProvider.mockReset()
@@ -168,6 +194,38 @@ describe('chat-store-maintenance-actions fork actions', () => {
     expect(refreshThreads).toHaveBeenCalledTimes(1)
     expect(selectThread).toHaveBeenCalledWith('thr_forked')
     expect(state.activeThreadId).toBe('thr_forked')
+  })
+})
+
+describe('chat-store-maintenance-actions delete actions', () => {
+  beforeEach(() => {
+    registryMock.getProvider.mockReset()
+  })
+
+  it('removes deleted design threads from the design registry', async () => {
+    const storage = new MemoryStorage()
+    saveDesignThreadRegistry(
+      markDesignThread(
+        '/workspace/deepseek-gui',
+        'login',
+        'thr_design',
+        emptyDesignThreadRegistry()
+      ),
+      storage
+    )
+    vi.stubGlobal('window', { localStorage: storage })
+    const { actions, provider, refreshThreads, state } = buildHarness({ activeThreadId: 'thr_design' })
+    state.threads = [thread('thr_design')]
+    state.watchTurnCompletion = { thr_design: true }
+    state.unreadThreadIds = { thr_design: true }
+
+    await actions.deleteThread(' thr_design ')
+
+    expect(provider.deleteThread).toHaveBeenCalledWith('thr_design')
+    expect(isDesignThreadId('thr_design', readDesignThreadRegistry(storage))).toBe(false)
+    expect(state.threads).toEqual([])
+    expect(state.activeThreadId).toBeNull()
+    expect(refreshThreads).toHaveBeenCalledTimes(1)
   })
 })
 
