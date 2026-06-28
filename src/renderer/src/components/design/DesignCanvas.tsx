@@ -6,6 +6,7 @@ import type { DesignHtmlElementContext } from '../../design/design-composer-cont
 import { setScreenArtifactFactory } from '../../design/canvas/screen-artifact-bridge'
 import { artifactDesignMdPath, artifactDirPath } from '../../design/design-artifact-persistence'
 import { ensureDesignBoardArtifact, findDesignBoardArtifact } from '../../design/design-board'
+import { prepareDesignPreviewFile } from '../../design/design-preview-file'
 import { CanvasViewport } from './canvas/CanvasViewport'
 import { PropertiesPanel } from './canvas/PropertiesPanel'
 import { useApplyShapeOpsLive } from '../../design/canvas/use-apply-shape-ops-live'
@@ -65,6 +66,10 @@ export function DesignCanvas({
         designMdPath,
         previewStatus: 'pending'
       })
+      // Drop a placeholder HTML file immediately so the canvas tile renders the
+      // "Generating…" skeleton instead of polling a missing file (and tripping the
+      // "prototype file not found" banner) until the agent writes the real page.
+      void prepareDesignPreviewFile(store.workspaceRoot, relativePath)
       store.setActiveArtifact(boardArtifact.id)
       return artifactId
     })

@@ -14,6 +14,11 @@ const MIN_ZOOM_FOR_WEBVIEW = 0.04
 /** Hide the "AI is drawing here" cursor this long after the last file change. */
 const AI_CURSOR_TTL_MS = 4500
 
+/** A just-created screen has no HTML file yet; poll fast for this long, then slowly. */
+const PREVIEW_FAST_POLL_MS = 6_000
+/** Give up polling a preview that never lands after this (matches the page-generation ceiling). */
+const PREVIEW_MAX_WAIT_MS = 300_000
+
 /**
  * Runs inside the live webview to locate the section the agent just wrote: the
  * LAST element tagged `data-ds-section` (sections are written top-to-bottom), or
@@ -100,7 +105,7 @@ function ScreenOverlayInner({
     let cancelled = false
     let cleanupWatch: (() => void) | null = null
     let retryTimer = 0
-    let attempts = 0
+    const startedAt = Date.now()
     setFileUrl('')
     setRevision(0)
     setPreviewError('')
@@ -113,7 +118,6 @@ function ScreenOverlayInner({
     }
 
     const tryAuthorize = (): void => {
-      attempts += 1
       void window.kunGui
         .authorizeWritePrototype({ path: artifactRelativePath, workspaceRoot })
         .then((res) => {
@@ -133,8 +137,19 @@ function ScreenOverlayInner({
             })
             return
           }
-          if (res.message === 'prototype file not found' && attempts < 24) {
-            retryTimer = window.setTimeout(tryAuthorize, 250)
+          if (res.message === 'prototype file not found') {
+            // The agent creates the artifact card before it writes the HTML, so a
+            // missing file is the normal "still generating" state — never the
+            // canvas-wide error banner. Keep polling (fast, then slow) and let the
+            // tile show its local "Generating…" placeholder; the success path below
+            // installs the watcher, so this self-heals the moment the file lands.
+            const elapsed = Date.now() - startedAt
+            if (elapsed <= PREVIEW_MAX_WAIT_MS) {
+              retryTimer = window.setTimeout(
+                tryAuthorize,
+                elapsed < PREVIEW_FAST_POLL_MS ? 250 : 2000
+              )
+            }
             return
           }
           reportError(res.message)
