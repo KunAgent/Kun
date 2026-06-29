@@ -78,6 +78,10 @@ import { resolveConfiguredHooks, type HooksConfig } from '../hooks/hook-config.j
 import { FileMemoryStore } from '../memory/memory-store.js'
 import { DelegationRuntime, FileDelegationStore } from '../delegation/delegation-runtime.js'
 import { createChildAgentExecutor } from '../delegation/child-agent-executor.js'
+import { BackgroundShellRuntime } from '../services/background-shell-runtime.js'
+import { stopBashSessionById, createBashLocalTool } from '../adapters/tool/builtin-bash-tool.js'
+import { createBackgroundShellTool } from '../adapters/tool/background-shell-tool.js'
+import type { LocalTool } from '../adapters/tool/local-tool-host.js'
 
 export type KunServeRuntimeOptions = {
   host: string
@@ -246,6 +250,28 @@ export async function createKunServeRuntime(
     ids,
     nowIso
   })
+  const backgroundShellRuntime = new BackgroundShellRuntime({
+    events,
+    threadStore,
+    turns: turnService,
+    nowIso
+  })
+  backgroundShellRuntime.bindStopHandler(stopBashSessionById)
+  const backgroundShellTool = createBackgroundShellTool({
+    listBackgroundSessions: (threadId) => backgroundShellRuntime.listSessions(threadId)
+  })
+  const withBackgroundShellTools = (tools: LocalTool[]): LocalTool[] => {
+    const mapped = tools.map((tool) =>
+      tool.name === 'bash'
+        ? createBashLocalTool({
+            backgroundShell: backgroundShellRuntime.bashHooks(),
+            backgroundShellDataDir: options.dataDir
+          })
+        : tool
+    )
+    const withoutBackgroundShell = mapped.filter((tool) => tool.name !== 'background_shell')
+    return [...withoutBackgroundShell, backgroundShellTool]
+  }
   const reviewService = new ReviewService({
     threadStore,
     turns: turnService,
@@ -290,7 +316,7 @@ export async function createKunServeRuntime(
       kind: 'built-in' as const,
       enabled: true,
       available: true,
-      tools: buildDefaultLocalTools()
+      tools: withBackgroundShellTools(buildDefaultLocalTools())
     },
     ...mcpProviders.providers,
     ...webProviders.providers,
@@ -505,6 +531,7 @@ export async function createKunServeRuntime(
     ...(resolvedHooks.length ? { hooks: resolvedHooks } : {}),
     ...(attachmentStore ? { attachmentStore } : {}),
     ...(memoryStore ? { memoryStore } : {}),
+    runtimeDataDir: options.dataDir,
     onPlanWritten: async ({ threadId, planId, relativePath, markdown }) => {
       await threadService.syncTodosFromPlan(threadId, {
         planId,
@@ -513,6 +540,9 @@ export async function createKunServeRuntime(
         preserveCompleted: true
       })
     }
+  })
+  backgroundShellRuntime.bindAgentLoop({
+    runTurn: (threadId, turnId) => loop.runTurn(threadId, turnId)
   })
   const startedAt = options.startedAt ?? nowIso()
   return {
@@ -531,6 +561,7 @@ export async function createKunServeRuntime(
     ...(attachmentStore ? { attachmentStore } : {}),
     ...(memoryStore ? { memoryStore } : {}),
     ...(delegationRuntime ? { delegationRuntime } : {}),
+    backgroundShellRuntime,
     modelClient,
     defaultModel: options.model,
     ...(options.roles ? { roles: options.roles } : {}),
@@ -548,21 +579,32 @@ export async function createKunServeRuntime(
     insecure: options.insecure,
     allocateSeq,
     nowIso,
-    info: () => ({
-      host: options.host,
-      port: options.port,
-      configPath: options.configPath,
-      dataDir: options.dataDir,
-      model: options.model,
-      endpointFormat: options.endpointFormat ?? DEFAULT_MODEL_ENDPOINT_FORMAT,
-      approvalPolicy: options.approvalPolicy,
-      sandboxMode: options.sandboxMode,
-      tokenEconomyMode: options.tokenEconomyMode,
-      insecure: options.insecure,
-      startedAt,
-      pid: process.pid,
-      capabilities
-    }),
+    info: () => {
+      const memory = process.memoryUsage()
+      const peakRssBytes = Math.max(memory.rss, process.resourceUsage().maxRSS * 1024)
+      return {
+        host: options.host,
+        port: options.port,
+        configPath: options.configPath,
+        dataDir: options.dataDir,
+        model: options.model,
+        endpointFormat: options.endpointFormat ?? DEFAULT_MODEL_ENDPOINT_FORMAT,
+        approvalPolicy: options.approvalPolicy,
+        sandboxMode: options.sandboxMode,
+        tokenEconomyMode: options.tokenEconomyMode,
+        insecure: options.insecure,
+        startedAt,
+        pid: process.pid,
+        memoryUsage: {
+          rssBytes: memory.rss,
+          peakRssBytes,
+          heapUsedBytes: memory.heapUsed,
+          heapTotalBytes: memory.heapTotal,
+          externalBytes: memory.external
+        },
+        capabilities
+      }
+    },
     toolDiagnostics: async () => ({
       providers: registry.diagnostics(),
       mcpServers: mcpProviders.diagnostics,

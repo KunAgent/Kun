@@ -4,6 +4,7 @@ import { spawn, spawnSync, type ChildProcess } from 'node:child_process'
 import { basename, dirname, isAbsolute, join, relative, resolve, sep, win32 } from 'node:path'
 import type { ToolHostContext } from '../../ports/tool-host.js'
 import { effectiveSandboxMode } from './sandbox-policy.js'
+import { isBackgroundShellOutputPath } from '../../services/background-shell-output.js'
 import type {
   EditInstruction,
   FsStats,
@@ -65,6 +66,18 @@ export async function resolveWorkspacePath(inputPath: string, context: ToolHostC
 }> {
   const root = workspaceRoot(context.workspace)
   const lexicalAbsolutePath = isAbsolute(inputPath) ? resolve(inputPath) : resolve(root, inputPath)
+  if (
+    isBackgroundShellOutputPath(lexicalAbsolutePath, {
+      runtimeDataDir: context.runtimeDataDir,
+      threadId: context.threadId
+    })
+  ) {
+    return {
+      workspaceRoot: root,
+      absolutePath: resolve(lexicalAbsolutePath),
+      relativePath: relative(root, resolve(lexicalAbsolutePath)) || '.'
+    }
+  }
   // In full-access mode the workspace boundary is not enforced: the user has
   // explicitly opted into reaching paths outside the workspace. This mirrors
   // canWritePath(), which already permits writes anywhere under

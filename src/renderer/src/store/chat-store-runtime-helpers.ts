@@ -4,6 +4,10 @@ import type {
   RuntimeDisclosureMetadata,
   UserMessageEventPayload
 } from '../agent/types'
+import {
+  applyClientUserMessageSourceMeta,
+  isBackgroundShellNoticeUserMessage
+} from '@shared/background-shell-notice'
 import { normalizeWorkspaceRoot } from '../lib/workspace-path'
 import { shouldAutoTitleThread } from '../lib/thread-title'
 import type { ChatState } from './chat-store-types'
@@ -40,6 +44,7 @@ export function threadHasPendingRuntimeWork(blocks: ChatBlock[]): boolean {
 
   for (const block of blocks) {
     if (block.kind === 'user') {
+      if (isBackgroundShellNoticeUserMessage(block)) continue
       pendingInCurrentTurn = false
       continue
     }
@@ -99,6 +104,8 @@ export function findLatestUserBlockId(blocks: ChatBlock[]): string | null {
 }
 
 export function upsertUserBlock(blocks: ChatBlock[], ev: UserMessageEventPayload): ChatBlock[] {
+  const clientMeta: RuntimeDisclosureMetadata = { ...(ev.meta ?? {}) }
+  applyClientUserMessageSourceMeta(clientMeta as Record<string, unknown>, ev.text)
   const nextBlock: ChatBlock = {
     kind: 'user',
     id: ev.itemId,
@@ -107,12 +114,12 @@ export function upsertUserBlock(blocks: ChatBlock[], ev: UserMessageEventPayload
     text: ev.text,
     ...(ev.modelLabel ? { modelLabel: ev.modelLabel } : {}),
     ...(ev.managedBy ? { managedBy: ev.managedBy } : {}),
-    ...(ev.meta ? { meta: ev.meta } : {})
+    ...(Object.keys(clientMeta).length > 0 ? { meta: clientMeta } : {})
   }
   const existingIndex = blocks.findIndex((block) => block.kind === 'user' && block.id === ev.itemId)
   if (existingIndex < 0) return [...blocks, nextBlock]
   const current = blocks[existingIndex]
-  const meta = mergeRuntimeDisclosureMeta(
+  const mergedMeta = mergeRuntimeDisclosureMeta(
     current.kind === 'user' ? current.meta : undefined,
     nextBlock.kind === 'user' ? nextBlock.meta : undefined
   )
@@ -120,7 +127,12 @@ export function upsertUserBlock(blocks: ChatBlock[], ev: UserMessageEventPayload
     ...current,
     ...nextBlock,
     createdAt: current.createdAt ?? nextBlock.createdAt,
-    ...(meta ? { meta } : {})
+    ...(mergedMeta ? { meta: mergedMeta } : {})
+  }
+  if (merged.kind === 'user') {
+    const metaRecord = { ...(merged.meta ?? {}) } as Record<string, unknown>
+    applyClientUserMessageSourceMeta(metaRecord, merged.text)
+    merged.meta = Object.keys(metaRecord).length > 0 ? (metaRecord as RuntimeDisclosureMetadata) : undefined
   }
   const next = [...blocks]
   next[existingIndex] = merged
@@ -136,6 +148,10 @@ function mergeRuntimeDisclosureMeta(
     ...(current ?? {}),
     ...(next ?? {})
   }
+}
+
+export function isOptimisticUserBlockId(id: string): boolean {
+  return id.startsWith('u-')
 }
 
 export function reconcileOptimisticUserBlock(

@@ -51,6 +51,27 @@ Run from the `kun/` directory.
 - `npm run serve` – start the runtime after a build.
 - `npm run dev` – rebuild in watch mode.
 
+- `npm run benchmark:replay -- --suite <file>` - run a read-only HTTP/SSE agent replay suite.
+
+### Agent replay benchmark
+
+Start a Kun runtime, set `KUN_RUNTIME_URL` and `KUN_RUNTIME_TOKEN`, then run the five-task smoke set:
+
+```bash
+npm run benchmark:replay -- --suite benchmarks/agent-core.json --tag smoke --output replay-smoke.json
+```
+
+Run all 20 tasks twice and compare with an earlier report:
+
+```bash
+npm run benchmark:replay -- --suite benchmarks/agent-core.json --repeat 2 \
+  --baseline replay-baseline.json --output replay-current.json --fail-on-regression
+```
+
+Replay threads always use the `read-only` sandbox and disable interactive input. Reports include success rate,
+TTFT, full latency, tool time, SSE delivery delay, token/cache/cost counters, and Kun process peak RSS. The runtime
+token is accepted only through `KUN_RUNTIME_TOKEN`, so it does not leak through process arguments.
+
 ## CLI
 
 `kun serve` accepts the following flags:

@@ -26,6 +26,7 @@ function baseCtx(): Record<string, unknown> {
       locale: 'zh',
       theme: 'dark',
       uiFontScale: 0.88,
+    chatContentMaxWidthPx: 896,
       workspaceRoot: '~/data/code/python/Kook-Voices',
       cursorSpotlight: true,
       cursorSpotlightColor: '#3b82f6',

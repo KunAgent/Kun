@@ -56,6 +56,7 @@ import {
   makeErrorItem
 } from '../domain/item.js'
 import { touchThread } from '../domain/thread.js'
+import { memoryPreview } from '../shared/memory-preview.js'
 import { repairModelHistoryItems } from '../domain/model-history-repair.js'
 import type { TurnItem } from '../contracts/items.js'
 import type { ThreadGoal, ThreadTodoList } from '../contracts/threads.js'
@@ -111,7 +112,6 @@ const MAX_PARALLEL_TOOL_CALLS = 3
 // request. Older ones collapse to a text note (Anthropic-style "keep last
 // N images"), bounding context growth for long computer-use sessions.
 const MAX_FORWARDED_TOOL_IMAGES = 3
-const MAX_TURN_MODEL_STEPS = 64
 
 /**
  * Tools that, on their own, do not count as "progress" toward a goal when
@@ -680,6 +680,8 @@ export type AgentLoopOptions = {
   skillRuntime?: SkillRuntime
   attachmentStore?: AttachmentStore
   memoryStore?: MemoryStore
+  /** Kun runtime data root for sandbox-safe background shell output reads. */
+  runtimeDataDir?: string
   tokenEconomy?: TokenEconomyConfig
   contextCompaction?: ContextCompactionConfig
   /** Internal-LLM role model routing (smallModel slot + title/summary/codeReview overrides). */
@@ -1277,18 +1279,15 @@ export class AgentLoop {
   private async drainSteering(threadId: string, turnId: string, signal: AbortSignal): Promise<void> {
     const pending = this.opts.steering.drain()
     if (pending.length === 0) return
-    for (const text of pending) {
-      const item: TurnItem = {
+    for (const entry of pending) {
+      const item = makeUserItem({
         id: this.opts.ids.next('item_steered'),
         turnId,
         threadId,
-        role: 'user',
-        status: 'completed',
-        createdAt: this.opts.nowIso(),
-        finishedAt: this.opts.nowIso(),
-        kind: 'user_message',
-        text
-      }
+        text: entry.text,
+        ...(entry.displayText ? { displayText: entry.displayText } : {}),
+        ...(entry.messageSource ? { messageSource: entry.messageSource } : {})
+      })
       await this.opts.turns.applyItem(threadId, item)
     }
     void signal
@@ -1301,30 +1300,6 @@ export class AgentLoop {
   ): Promise<'completed' | 'failed' | 'aborted'> {
     for (let step = 0; ; step += 1) {
       if (signal.aborted) return 'aborted'
-      if (step >= MAX_TURN_MODEL_STEPS) {
-        const message =
-          `Turn stopped after ${MAX_TURN_MODEL_STEPS} model steps without reaching a final response.`
-        await this.opts.events.record({
-          kind: 'error',
-          threadId,
-          turnId,
-          message,
-          code: 'turn_step_limit_exceeded',
-          severity: 'error'
-        })
-        await this.opts.turns.applyItem(
-          threadId,
-          makeErrorItem({
-            id: this.opts.ids.next('item_error'),
-            turnId,
-            threadId,
-            message,
-            code: 'turn_step_limit_exceeded',
-            severity: 'error'
-          })
-        )
-        return 'failed'
-      }
       await this.drainSteering(threadId, turnId, signal)
       const stepResult = await this.modelStep(threadId, turnId, signal, step)
       if (stepResult === 'stop') return 'completed'
@@ -1474,6 +1449,7 @@ export class AgentLoop {
       ...(this.opts.blockedSkillIds ? { blockedSkillIds: this.opts.blockedSkillIds } : {}),
       approvalPolicy,
       sandboxMode,
+      ...(this.opts.runtimeDataDir ? { runtimeDataDir: this.opts.runtimeDataDir } : {}),
       abortSignal: signal,
       awaitApproval: async () => 'allow',
       ...(userInputDisabled
@@ -1517,6 +1493,10 @@ export class AgentLoop {
         activeSkillIds: skillResolution.activeSkillIds,
         skillInjectionBytes: skillResolution.injectedBytes,
         injectedMemoryIds: memories.map((memory) => memory.id),
+        injectedMemorySummaries: memories.map((memory) => ({
+          id: memory.id,
+          content: memoryPreview(memory.content)
+        })),
         toolCatalogFingerprint: toolCatalog.fingerprint,
         toolCatalogToolCount: toolCatalog.toolCount,
         toolCatalogDrift: toolCatalogDrift.kind !== 'none'
@@ -2288,6 +2268,7 @@ export class AgentLoop {
       ...(this.opts.blockedSkillIds ? { blockedSkillIds: this.opts.blockedSkillIds } : {}),
       approvalPolicy: input.approvalPolicy,
       sandboxMode: input.sandboxMode,
+      ...(this.opts.runtimeDataDir ? { runtimeDataDir: this.opts.runtimeDataDir } : {}),
       abortSignal: input.signal,
       awaitApproval: async (approval) => {
         await this.opts.events.record({

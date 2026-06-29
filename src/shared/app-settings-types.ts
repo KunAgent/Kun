@@ -43,6 +43,19 @@ export function normalizeUiFontScale(value: unknown): UiFontScale {
   if (!Number.isFinite(num)) return DEFAULT_UI_FONT_SCALE
   return Math.min(UI_FONT_SCALE_MAX, Math.max(UI_FONT_SCALE_MIN, Math.round(num * 100) / 100))
 }
+/** Max width of the main chat message column, in CSS pixels. */
+export type ChatContentMaxWidthPx = number
+export const CHAT_CONTENT_MAX_WIDTH_MIN = 640
+export const CHAT_CONTENT_MAX_WIDTH_MAX = 1200
+export const DEFAULT_CHAT_CONTENT_MAX_WIDTH_PX = 896
+export function normalizeChatContentMaxWidth(value: unknown): ChatContentMaxWidthPx {
+  const num = typeof value === 'number' ? value : Number(value)
+  if (!Number.isFinite(num)) return DEFAULT_CHAT_CONTENT_MAX_WIDTH_PX
+  return Math.min(
+    CHAT_CONTENT_MAX_WIDTH_MAX,
+    Math.max(CHAT_CONTENT_MAX_WIDTH_MIN, Math.round(num / 8) * 8)
+  )
+}
 export type ScheduleRunMode = 'agent' | 'plan'
 export type ScheduleKind = 'manual' | 'interval' | 'daily' | 'at'
 export type ScheduleTaskStatus = 'idle' | 'queued' | 'running' | 'success' | 'error'
@@ -1822,6 +1835,7 @@ export type AppSettingsV1 = {
   locale: 'en' | 'zh'
   theme: 'system' | 'light' | 'dark'
   uiFontScale: UiFontScale
+  chatContentMaxWidthPx: ChatContentMaxWidthPx
   cursorSpotlight?: boolean
   cursorSpotlightColor?: string
   provider: ModelProviderSettingsV1

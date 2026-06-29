@@ -1,7 +1,5 @@
 import type { ReactElement } from 'react'
 import { memo, useEffect, useMemo, useRef, useState } from 'react'
-import ReactMarkdown from 'react-markdown'
-import remarkGfm from 'remark-gfm'
 import { useTranslation } from 'react-i18next'
 import { ArrowDown, Check, ChevronDown, ChevronRight, Copy, Download, File, FileEdit, GitFork, ImageIcon, Loader2, MessageSquareQuote, PencilLine, RotateCcw, Terminal, Video, Wrench } from 'lucide-react'
 import type { AttachmentReference, ChatBlock, GeneratedFileReference, RuntimeDisclosureMetadata, ToolBlock, UserFileReference, UserInputAnswer } from '../../agent/types'
@@ -10,15 +8,120 @@ import { useChatStore } from '../../store/chat-store'
 import { getProvider } from '../../agent/registry'
 import { parseWritePromptForDisplay } from '../../write/quoted-selection'
 import { parseClawUserPromptForDisplay, type ClawUserPromptDisplay } from '@shared/app-settings'
+import { parseBackgroundShellCompletionNotice } from '@shared/background-shell-notice'
+import { isBackgroundShellNoticeBlock } from './message-timeline-turns'
 import { openWorkspacePathInEditor } from '../../lib/open-workspace-path'
 import { DiffView } from '../DiffView'
 import { AssistantMarkdown } from './AssistantMarkdown'
 import { ImagePreviewLightbox } from './ImagePreviewLightbox'
 import { ModelMetaTag, WritePromptMetaDisclosure } from './message-timeline-cards'
-import { readNumber, formatDuration, formatToolTitle } from './message-timeline-tools'
+import { readNumber, formatDuration, formatToolTitle, summarizeBackgroundShellToolBlock } from './message-timeline-tools'
 import { answersByQuestionId, shouldShowQuestionHeader } from './user-input-panel-logic'
+import { InjectedMemoryMetaChip } from './injected-memory-meta-chip'
 
 const COPY_FEEDBACK_RESET_MS = 1600
+
+function BackgroundShellNoticeBubble({
+  block,
+  nested = false
+}: {
+  block: Extract<ChatBlock, { kind: 'user' }>
+  nested?: boolean
+}): ReactElement {
+  const { t } = useTranslation('common')
+  const [outputExpanded, setOutputExpanded] = useState(false)
+  const parsed = useMemo(() => parseBackgroundShellCompletionNotice(block.text), [block.text])
+  const title =
+    block.meta?.displayText?.trim() ||
+    t('backgroundShellNotice.title', { defaultValue: 'Background shell completed' })
+  const outputPreview = parsed?.outputPreview ?? ''
+  const canExpandOutput = outputPreview.length > 180
+  const exitCodeTone =
+    parsed && parsed.exitCode === 0
+      ? 'border-emerald-500/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
+      : 'border-orange-400/30 bg-orange-500/10 text-orange-800 dark:text-orange-200'
+
+  return (
+    <div className={nested ? 'min-w-0' : 'flex w-full justify-start'}>
+      <div className="w-full max-w-[min(640px,calc(100vw-3rem))] rounded-[18px] border border-accent/25 bg-[linear-gradient(180deg,rgba(79,124,255,0.06),rgba(79,124,255,0.1))] px-3.5 py-3 text-ds-muted shadow-sm">
+        <div className="mb-2 flex flex-wrap items-center gap-2">
+          <span className="rounded-full border border-accent/25 bg-accent/10 px-2 py-0.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-accent">
+            {t('backgroundShellNotice.kindLabel', { defaultValue: 'Background callback' })}
+          </span>
+          {parsed ? (
+            <>
+              <span
+                className="inline-flex items-center gap-1 rounded-full border border-ds-border/80 bg-ds-card/70 px-2 py-0.5 font-mono text-[11px] text-ds-ink"
+                title={parsed.sessionId}
+              >
+                <span className="font-sans font-medium text-ds-muted">
+                  {t('backgroundShellNotice.sessionId', { defaultValue: 'Session' })}
+                </span>
+                <span>{parsed.sessionId}</span>
+              </span>
+              <span
+                className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 font-mono text-[11px] ${exitCodeTone}`}
+              >
+                <span className="font-sans font-medium opacity-80">
+                  {t('backgroundShellNotice.exitCode', { defaultValue: 'Exit code' })}
+                </span>
+                <span>{parsed.exitCode}</span>
+              </span>
+            </>
+          ) : null}
+        </div>
+        <div className="min-w-0">
+            <p className="text-[13px] font-medium text-ds-ink">{title}</p>
+            {parsed ? (
+              <dl className="mt-2 space-y-1.5 text-[12.5px] leading-5">
+                <div className="flex flex-wrap gap-x-2">
+                  <dt className="font-medium text-ds-muted">
+                    {t('backgroundShellNotice.command', { defaultValue: 'Command' })}
+                  </dt>
+                  <dd className="min-w-0 break-all font-mono text-ds-ink">{parsed.command}</dd>
+                </div>
+              </dl>
+            ) : null}
+            {outputPreview ? (
+              <div className="mt-2.5">
+                <button
+                  type="button"
+                  className={`flex w-full items-center justify-between gap-2 text-left text-[12px] font-medium text-ds-muted ${
+                    canExpandOutput ? 'hover:text-ds-ink' : 'cursor-default'
+                  }`}
+                  onClick={() => {
+                    if (canExpandOutput) setOutputExpanded((value) => !value)
+                  }}
+                  disabled={!canExpandOutput}
+                >
+                  <span>{t('backgroundShellNotice.outputPreview', { defaultValue: 'Output preview' })}</span>
+                  {canExpandOutput ? (
+                    outputExpanded ? (
+                      <ChevronDown className="h-3.5 w-3.5" />
+                    ) : (
+                      <ChevronRight className="h-3.5 w-3.5" />
+                    )
+                  ) : null}
+                </button>
+                <pre
+                  className={`mt-1 overflow-auto whitespace-pre-wrap break-words rounded-[10px] border border-ds-border/70 bg-ds-card/70 px-2.5 py-2 font-mono text-[11.5px] leading-5 text-ds-ink ${
+                    canExpandOutput && !outputExpanded ? 'max-h-24' : 'max-h-72'
+                  }`}
+                >
+                  {outputPreview}
+                </pre>
+              </div>
+            ) : null}
+            {parsed?.outputFile ? (
+              <p className="mt-2 truncate font-mono text-[11px] text-ds-muted" title={parsed.outputFile}>
+                {t('backgroundShellNotice.outputFile', { defaultValue: 'Full output file' })}: {parsed.outputFile}
+              </p>
+            ) : null}
+        </div>
+      </div>
+    </div>
+  )
+}
 
 /**
  * User message bubble with hover affordance to rewind/edit. Click the rewind
@@ -850,16 +953,18 @@ function metaSources(meta: Record<string, unknown> | undefined): Array<{ title?:
 function RuntimeMetaChips({
   meta,
   align = 'left',
-  hideAttachments = false
+  hideAttachments = false,
+  hideTurnDisclosure = false
 }: {
   meta?: Record<string, unknown>
   align?: 'left' | 'right'
   hideAttachments?: boolean
+  hideTurnDisclosure?: boolean
 }): ReactElement | null {
   const { t } = useTranslation('common')
-  const attachmentIds = metaStringArray(meta, 'attachmentIds')
-  const activeSkillIds = metaStringArray(meta, 'activeSkillIds')
-  const injectedMemoryIds = metaStringArray(meta, 'injectedMemoryIds')
+  const attachmentIds = hideTurnDisclosure || hideAttachments ? [] : metaStringArray(meta, 'attachmentIds')
+  const activeSkillIds = hideTurnDisclosure ? [] : metaStringArray(meta, 'activeSkillIds')
+  const injectedMemoryIds = hideTurnDisclosure ? [] : metaStringArray(meta, 'injectedMemoryIds')
   const sources = metaSources(meta)
   const child = meta?.child && typeof meta.child === 'object' ? meta.child as Record<string, unknown> : null
   const childLabel =
@@ -893,9 +998,7 @@ function RuntimeMetaChips({
         </span>
       ) : null}
       {injectedMemoryIds.length > 0 ? (
-        <span className={chipClass} title={injectedMemoryIds.join(', ')}>
-          {t('toolInjectedMemories')} {injectedMemoryIds.length}
-        </span>
+        <InjectedMemoryMetaChip meta={meta} memoryIds={injectedMemoryIds} chipClass={chipClass} />
       ) : null}
       {childLabel ? (
         <span className={chipClass} title={childLabel}>
@@ -1253,6 +1356,9 @@ function MessageBubbleImpl({
 }): ReactElement {
   const { t, i18n } = useTranslation('common')
   const resolveApproval = useChatStore((s) => s.resolveApproval)
+  if (block.kind === 'user' && isBackgroundShellNoticeBlock(block)) {
+    return <BackgroundShellNoticeBubble block={block} nested={nested} />
+  }
   if (block.kind === 'user') {
     return <UserMessageBubble block={block} />
   }
@@ -1307,7 +1413,7 @@ function MessageBubbleImpl({
     return (
       <div className="ds-card-soft rounded-[20px] px-4 py-3 text-[13.5px] leading-6 text-ds-muted">
         <div className="ds-markdown">
-          <ReactMarkdown remarkPlugins={[remarkGfm]}>{block.text}</ReactMarkdown>
+          <AssistantMarkdown text={block.text} streaming={false} />
         </div>
       </div>
     )
@@ -1435,13 +1541,21 @@ function ToolEntry({ block, nested = false }: { block: ToolBlock; nested?: boole
         ? 'border-amber-300/80 bg-amber-500/10 text-amber-950 dark:border-amber-800/50 dark:bg-amber-950/30 dark:text-amber-100'
         : 'border-ds-border bg-ds-subtle text-ds-ink'
 
+  const toolName = typeof block.meta?.toolName === 'string' ? block.meta.toolName.trim() : ''
+  const displaySummary =
+    toolName === 'background_shell'
+      ? summarizeBackgroundShellToolBlock(block, t)
+      : block.summary
+
   const Icon = block.toolKind === 'file_change' ? FileEdit : block.toolKind === 'command_execution' ? Terminal : Wrench
   const kindLabel =
-    block.toolKind === 'file_change'
-      ? t('toolKindFile')
-      : block.toolKind === 'command_execution'
-        ? t('toolKindCommand')
-        : t('toolKindTool')
+    toolName === 'background_shell'
+      ? t('toolBuiltinBackgroundShell', { defaultValue: 'Background shell' })
+      : block.toolKind === 'file_change'
+        ? t('toolKindFile')
+        : block.toolKind === 'command_execution'
+          ? t('toolKindCommand')
+          : t('toolKindTool')
 
   const exitCode = readNumber(block.meta, 'exit_code')
   const durationMs = readNumber(block.meta, 'duration_ms')
@@ -1501,9 +1615,9 @@ function ToolEntry({ block, nested = false }: { block: ToolBlock; nested?: boole
             {block.filePath ? (
               <span className="font-mono text-[12px] opacity-90">{block.filePath} — </span>
             ) : null}
-            <span>{block.summary}</span>
+            <span>{displaySummary}</span>
           </div>
-          <RuntimeMetaChips meta={block.meta} />
+          <RuntimeMetaChips meta={block.meta} hideTurnDisclosure />
         </div>
         {canExpand ? (
           effectiveOpen ? (

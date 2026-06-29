@@ -406,10 +406,12 @@ function compactToolOutput(toolName: string, output: unknown): unknown {
 }
 
 function compactBashOutput(output: JsonRecord): JsonRecord {
+  const hasExternalOutput =
+    Boolean(output.full_output_path) || Boolean(output.output_file)
   return {
     ...output,
     output: typeof output.output === 'string'
-      ? compactCommandOutput(output.output, Boolean(output.full_output_path))
+      ? compactCommandOutput(output.output, hasExternalOutput)
       : output.output
   }
 }

@@ -61,6 +61,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "transcript:diff": "node ./scripts/transcript-diff.mjs",
+    "benchmark:replay": "npm run build && node ./dist/cli/replay-entry.js",
     "serve": "node ./dist/cli/serve-entry.js",
     "dev": "tsc -p tsconfig.build.json --watch"
   },

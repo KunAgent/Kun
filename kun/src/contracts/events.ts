@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { TurnItem } from './items.js'
+import { TurnItem, UserMessageSource } from './items.js'
 import { ThreadGoalSchema, ThreadTodoListSchema } from './threads.js'
 import { UsageSnapshotSchema } from './usage.js'
 import { RuntimeErrorSeverity } from './errors.js'
@@ -39,6 +39,9 @@ export const RuntimeEventKind = z.enum([
   'goal_cleared',
   'todos_updated',
   'todos_cleared',
+  'bash_session_started',
+  'bash_session_updated',
+  'bash_session_completed',
   'pipeline_stage',
   'usage',
   'error',
@@ -125,6 +128,8 @@ export const TurnLifecycleEvent = RuntimeEventBase.extend({
   ]),
   status: z.string().optional(),
   text: z.string().optional(),
+  displayText: z.string().optional(),
+  messageSource: UserMessageSource.optional(),
   message: z.string().optional(),
   code: z.string().optional(),
   details: z.unknown().optional(),
@@ -226,6 +231,24 @@ export const TodoEvent = RuntimeEventBase.extend({
 })
 export type TodoEvent = z.infer<typeof TodoEvent>
 
+export const BashSessionEvent = RuntimeEventBase.extend({
+  kind: z.enum(['bash_session_started', 'bash_session_updated', 'bash_session_completed']),
+  sessionId: z.string().min(1),
+  command: z.string(),
+  cwd: z.string(),
+  shell: z.string(),
+  status: z.enum(['running', 'completed', 'stopped', 'failed']),
+  startedAt: z.string(),
+  finishedAt: z.string().optional(),
+  exitCode: z.number().int().nullable().optional(),
+  detached: z.boolean(),
+  output: z.string().default(''),
+  outputTruncated: z.boolean().optional(),
+  outputFilePath: z.string().optional(),
+  error: z.string().optional()
+})
+export type BashSessionEvent = z.infer<typeof BashSessionEvent>
+
 export const UsageEvent = RuntimeEventBase.extend({
   kind: z.literal('usage'),
   model: z.string().optional(),
@@ -268,6 +291,7 @@ export const RuntimeEvent = z.discriminatedUnion('kind', [
   CompactionEvent,
   GoalEvent,
   TodoEvent,
+  BashSessionEvent,
   PipelineStageEvent,
   UsageEvent,
   ErrorEvent,

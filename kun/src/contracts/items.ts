@@ -51,10 +51,14 @@ export const UserFileReferenceSchema = z.object({
 })
 export type UserFileReference = z.infer<typeof UserFileReferenceSchema>
 
+export const UserMessageSource = z.enum(['background_shell'])
+export type UserMessageSource = z.infer<typeof UserMessageSource>
+
 export const UserTurnItem = TurnItemBase.extend({
   kind: z.literal('user_message'),
   text: z.string(),
   displayText: z.string().optional(),
+  messageSource: UserMessageSource.optional(),
   attachmentIds: z.array(z.string().min(1)).optional(),
   fileReferences: z.array(UserFileReferenceSchema).optional(),
   workspaceCheckpointId: z.string().min(1).optional()

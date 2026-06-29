@@ -9,6 +9,7 @@ export function makeUserItem(input: {
   threadId: string
   text: string
   displayText?: string
+  messageSource?: 'background_shell'
   attachmentIds?: string[]
   fileReferences?: Array<{ path: string; relativePath: string; name: string; kind?: 'file' | 'directory' }>
   workspaceCheckpointId?: string
@@ -34,6 +35,7 @@ export function makeUserItem(input: {
     kind: 'user_message',
     text: input.text,
     ...(displayText && displayText !== input.text ? { displayText } : {}),
+    ...(input.messageSource ? { messageSource: input.messageSource } : {}),
     ...(attachmentIds?.length ? { attachmentIds } : {}),
     ...(fileReferences?.length ? { fileReferences } : {}),
     ...(input.workspaceCheckpointId ? { workspaceCheckpointId: input.workspaceCheckpointId } : {})

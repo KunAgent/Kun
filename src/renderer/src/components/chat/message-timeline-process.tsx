@@ -12,6 +12,7 @@ import {
   MessageSquareQuote,
   Minimize2,
   PencilLine,
+  BellRing,
   Search,
   Terminal,
   Wrench
@@ -25,9 +26,15 @@ import { useChatStore } from '../../store/chat-store'
 import { DiffView } from '../DiffView'
 import { AssistantMarkdown } from './AssistantMarkdown'
 import { MessageBubble } from './message-timeline-bubbles'
-import { blockHasPendingRuntimeWork, splitThink } from './message-timeline-turns'
-import { formatDuration, formatToolTitle } from './message-timeline-tools'
+import { blockHasPendingRuntimeWork, isBackgroundShellNoticeBlock, splitThink } from './message-timeline-turns'
+import {
+  formatDuration,
+  formatToolTitle,
+  isBackgroundShellCommandBlock,
+  summarizeBackgroundShellToolBlock
+} from './message-timeline-tools'
 import { SubagentGroup } from './SubagentCallCard'
+import { InjectedMemoryMetaChip } from './injected-memory-meta-chip'
 
 export type ProcessSection = {
   id: string
@@ -312,12 +319,12 @@ export function ProcessSectionRow({
       {expanded ? (
         <div
           ref={deferredDetailRef}
-          className="mt-1 border-l-2 border-ds-border-muted/35 pl-3"
+          className="mt-1"
           style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 220px' }}
         >
           {shouldRenderDetail ? (
             section.kind === 'reasoning' ? (
-            <div className="ds-markdown text-[13.5px] leading-6 text-ds-muted">
+            <div className="ds-markdown text-[13.5px] leading-6 text-ds-faint">
               <AssistantMarkdown text={reasoningText} streaming={active && processing} />
             </div>
           ) : (
@@ -641,6 +648,7 @@ function summarizeExecutionSection(
 ): string {
   let fileCount = 0
   let commandCount = 0
+  let backgroundCommandCount = 0
   let toolCount = 0
   let approvalCount = 0
 
@@ -653,7 +661,11 @@ function summarizeExecutionSection(
     if (block.toolKind === 'file_change') {
       fileCount += 1
     } else if (block.toolKind === 'command_execution') {
-      commandCount += 1
+      if (isBackgroundShellCommandBlock(block)) {
+        backgroundCommandCount += 1
+      } else {
+        commandCount += 1
+      }
     } else {
       toolCount += 1
     }
@@ -663,6 +675,13 @@ function summarizeExecutionSection(
   if (fileCount > 0) {
     parts.push(
       fileCount === 1 ? t('groupEditedFile') : t('groupEditedFiles', { count: fileCount })
+    )
+  }
+  if (backgroundCommandCount > 0) {
+    parts.push(
+      backgroundCommandCount === 1
+        ? t('groupRanBackgroundCommand')
+        : t('groupRanBackgroundCommands', { count: backgroundCommandCount })
     )
   }
   if (commandCount > 0) {
@@ -703,6 +722,7 @@ function processBlockIcon(block: ChatBlock): LucideIcon | null {
   if (block.kind === 'compaction') return Minimize2
   if (block.kind === 'approval') return Wrench
   if (block.kind === 'user_input') return MessageSquareQuote
+  if (isBackgroundShellNoticeBlock(block)) return BellRing
   if (block.kind !== 'tool') return null
   return toolBlockIcon(block)
 }
@@ -848,6 +868,7 @@ type ProcessDetail =
   | { kind: 'tool'; text: string; isPatch: boolean; isError: boolean; filePath?: string }
   | { kind: 'approval' }
   | { kind: 'user_input' }
+  | { kind: 'background_shell' }
   | { kind: 'text'; text: string }
 
 function summarizeProcessText(text: string, max = 96): string {
@@ -888,6 +909,8 @@ function builtInToolLabel(
     case 'bash':
     case 'shell':
       return t('toolBuiltinBash')
+    case 'background_shell':
+      return t('toolBuiltinBackgroundShell', { defaultValue: 'Background shell' })
     case 'delegate_task':
       // Routed to SubagentCallCard before the generic row; labeled here as a
       // defensive fallback so an ungrouped delegate block never reads as raw JSON.
@@ -946,10 +969,11 @@ function RuntimeMetaBadges({
 }): ReactElement | null {
   const meta = block.kind === 'tool' || block.kind === 'approval' || block.kind === 'user' ? block.meta : undefined
   if (!meta) return null
+  const showTurnDisclosure = block.kind !== 'tool'
   const sources = readMetaSources(meta)
-  const attachmentIds = readMetaStringArray(meta, 'attachmentIds')
-  const activeSkillIds = readMetaStringArray(meta, 'activeSkillIds')
-  const injectedMemoryIds = readMetaStringArray(meta, 'injectedMemoryIds')
+  const attachmentIds = showTurnDisclosure ? readMetaStringArray(meta, 'attachmentIds') : []
+  const activeSkillIds = showTurnDisclosure ? readMetaStringArray(meta, 'activeSkillIds') : []
+  const injectedMemoryIds = showTurnDisclosure ? readMetaStringArray(meta, 'injectedMemoryIds') : []
   const child = meta.child && typeof meta.child === 'object' ? meta.child as Record<string, unknown> : null
   const childLabel =
     typeof child?.childLabel === 'string' && child.childLabel.trim()
@@ -983,9 +1007,7 @@ function RuntimeMetaBadges({
         </span>
       ) : null}
       {injectedMemoryIds.length > 0 ? (
-        <span className={chipClass} title={injectedMemoryIds.join(', ')}>
-          {t('toolInjectedMemories')} {injectedMemoryIds.length}
-        </span>
+        <InjectedMemoryMetaChip meta={meta} memoryIds={injectedMemoryIds} chipClass={chipClass} />
       ) : null}
       {attachmentIds.length > 0 ? (
         <span className={chipClass} title={attachmentIds.join(', ')}>
@@ -1030,6 +1052,10 @@ export function summarizeToolBlock(
     readMetaString(block.meta, 'pattern')
   const command = readMetaString(block.meta, 'command')
 
+  if (toolName === 'background_shell') {
+    return summarizeBackgroundShellToolBlock(block, t)
+  }
+
   if ((toolName === 'read_file' || toolName === 'read') && filePath) {
     return `${label} ${filePath}`
   }
@@ -1043,7 +1069,10 @@ export function summarizeToolBlock(
     return `${label} ${filePath}`
   }
   if (command && block.toolKind === 'command_execution') {
-    return `${formatToolTitle(block, t)} ${summarizeProcessText(command, 72)}`
+    const action = isBackgroundShellCommandBlock(block)
+      ? t('toolActionBackgroundCommand')
+      : formatToolTitle(block, t)
+    return `${action} ${summarizeProcessText(command, 72)}`
   }
   if (filePath) {
     return `${label} ${filePath}`
@@ -1101,6 +1130,7 @@ function getProcessDetail(block: ChatBlock, summaryText?: string): ProcessDetail
   }
   if (block.kind === 'approval') return { kind: 'approval' }
   if (block.kind === 'user_input') return { kind: 'user_input' }
+  if (isBackgroundShellNoticeBlock(block)) return { kind: 'background_shell' }
   if (block.kind === 'system' && block.text.trim()) {
     if (block.detail?.trim()) return { kind: 'text', text: block.detail }
     // Short system messages already fit in the summary line — skip the
@@ -1171,6 +1201,9 @@ function ProcessEntryDetail({
   if (detail.kind === 'user_input' && block.kind === 'user_input') {
     return <MessageBubble block={block} nested />
   }
+  if (detail.kind === 'background_shell' && block.kind === 'user') {
+    return <MessageBubble block={block} nested />
+  }
   return null
 }
 
@@ -1186,6 +1219,9 @@ function describeProcessBlock(
   }
   if (block.kind === 'tool') {
     return summarizeToolBlock(block, t)
+  }
+  if (block.kind === 'user' && isBackgroundShellNoticeBlock(block)) {
+    return block.meta?.displayText?.trim() || t('backgroundShellNotice.title', { defaultValue: 'Background shell completed' })
   }
   if (block.kind === 'compaction') {
     if (block.status === 'running') return t('compactionRunning')

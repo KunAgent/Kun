@@ -15,7 +15,10 @@ const labels: Record<string, string> = {
   toolBuiltinGrep: 'Search',
   toolBuiltinFind: 'Find',
   toolBuiltinLs: 'List',
-  toolBuiltinBash: 'Bash'
+  toolBuiltinBash: 'Bash',
+  toolBuiltinBackgroundShell: 'Background shell',
+  toolActionBackgroundShellRead: 'Read background shell',
+  toolActionBackgroundShellList: 'List background shells'
 }
 
 const t = (key: string) => labels[key] ?? (key === 'toolActionCommand' ? 'Ran command' : key)
@@ -119,6 +122,34 @@ describe('MessageTimeline tool summaries', () => {
         t
       )
     ).toBe('Ran command npm test')
+  })
+
+  it('summarizes background_shell with action, session id, and command', () => {
+    expect(
+      summarizeToolBlock(
+        toolBlock({
+          summary: 'background_shell',
+          meta: {
+            toolName: 'background_shell',
+            action: 'read',
+            session_id: '2mcorxhe',
+            command: 'sleep 15 && echo "Hello from background!"'
+          },
+          detail: JSON.stringify(
+            {
+              action: 'read',
+              session_id: '2mcorxhe',
+              command: 'sleep 15 && echo "Hello from background!"',
+              exit_code: 0,
+              status: 'completed'
+            },
+            null,
+            2
+          )
+        }),
+        t
+      )
+    ).toBe('Read background shell 2mcorxhe sleep 15 && echo "Hello from background!"')
   })
 })
 
@@ -248,7 +279,7 @@ describe('MessageTimeline Kun runtime metadata smoke', () => {
     expect(html).not.toContain('Feishu / Lark inbound message')
   })
 
-  it('renders attachment, Skill, memory, web source, and child-agent chips in bubbles', () => {
+  it('renders tool-specific metadata chips in tool bubbles', () => {
     const block: ToolBlock = toolBlock({
       summary: 'web_search: docs',
       meta: {
@@ -270,9 +301,9 @@ describe('MessageTimeline Kun runtime metadata smoke', () => {
 
     const html = renderToStaticMarkup(createElement(MessageBubble, { block }))
 
-    expect(html).toContain('Attachments 1')
-    expect(html).toContain('Skills 1')
-    expect(html).toContain('Memories 1')
+    expect(html).not.toContain('Attachments 1')
+    expect(html).not.toContain('Skills 1')
+    expect(html).not.toContain('Memories 1')
     expect(html).toContain('Child agent')
     expect(html).toContain('research')
     expect(html).toContain('Sources 1')
@@ -296,7 +327,7 @@ describe('MessageTimeline Kun runtime metadata smoke', () => {
     expect(html).not.toContain('bg-red-500/10')
   })
 
-  it('renders the same runtime metadata on process timeline rows', () => {
+  it('renders tool-specific runtime metadata on process timeline rows', () => {
     const block: ChatBlock = toolBlock({
       summary: 'delegate: research',
       meta: {
@@ -325,9 +356,9 @@ describe('MessageTimeline Kun runtime metadata smoke', () => {
       })
     )
 
-    expect(html).toContain('Attachments 1')
-    expect(html).toContain('Skills 1')
-    expect(html).toContain('Memories 1')
+    expect(html).not.toContain('Attachments 1')
+    expect(html).not.toContain('Skills 1')
+    expect(html).not.toContain('Memories 1')
     expect(html).toContain('Child agent')
     expect(html).toContain('research')
     expect(html).toContain('Sources 1')

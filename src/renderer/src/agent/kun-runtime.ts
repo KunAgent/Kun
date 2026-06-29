@@ -217,6 +217,7 @@ export class KunRuntimeProvider implements AgentProvider {
         attachmentIds: turn.attachmentIds,
         activeSkillIds: turn.activeSkillIds,
         injectedMemoryIds: turn.injectedMemoryIds,
+        injectedMemorySummaries: turn.injectedMemorySummaries,
         skillInjectionBytes: turn.skillInjectionBytes,
         workspaceCheckpointId: item.workspaceCheckpointId ?? turn.workspaceCheckpointId
       }))
@@ -705,10 +706,11 @@ export class KunRuntimeProvider implements AgentProvider {
     )
   }
 
-  async listMemories(options: { workspace?: string; includeDeleted?: boolean } = {}): Promise<CoreMemoryRecordJson[]> {
+  async listMemories(options: { workspace?: string; includeDeleted?: boolean; all?: boolean } = {}): Promise<CoreMemoryRecordJson[]> {
     const query = buildQuery({
       workspace: options.workspace,
-      include_deleted: options.includeDeleted
+      include_deleted: options.includeDeleted,
+      all: options.all
     })
     const response = await rendererRuntimeClient.runtimeRequest(`${KUN_MEMORY_PATH}${query}`, 'GET')
     if (!response.ok) {

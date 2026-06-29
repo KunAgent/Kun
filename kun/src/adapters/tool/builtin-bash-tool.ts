@@ -1,11 +1,14 @@
 import { mkdir } from 'node:fs/promises'
-import { randomUUID } from 'node:crypto'
+import { randomBytes } from 'node:crypto'
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { LocalToolHost, type LocalTool } from './local-tool-host.js'
 import { OutputAccumulator } from './output-accumulator.js'
 import { DEFAULT_MAX_BYTES, DEFAULT_MAX_LINES, formatSize } from './truncate.js'
-import type { BashLocalToolOptions, TextSlice, TruncateMode } from './builtin-tool-types.js'
+import type { BashLocalToolOptions, TextSlice, TruncateMode, BackgroundShellRecordInput } from './builtin-tool-types.js'
 import { DEFAULT_BASH_TIMEOUT_SECONDS } from './builtin-tool-types.js'
+import {
+  BackgroundShellOutputWriter
+} from '../../services/background-shell-output.js'
 import {
   describeKind,
   normalizePositiveInteger,
@@ -28,6 +31,8 @@ type BashSessionStatus = 'running' | 'completed' | 'stopped' | 'failed'
 
 type BashSession = {
   id: string
+  threadId?: string
+  turnId?: string
   command: string
   cwd: string
   shell: string
@@ -40,7 +45,9 @@ type BashSession = {
   error?: string
   stopRequested: boolean
   finalized: boolean
+  detached: boolean
   exitWaiters: Set<() => void>
+  outputWriter?: BackgroundShellOutputWriter
 }
 
 type BashPayload = {
@@ -49,8 +56,8 @@ type BashPayload = {
   shell: string
   exit_code: number | null
   output: string
-  full_output_path: string | null
-  truncation: null | {
+  full_output_path?: string | null
+  truncation?: null | {
     total_lines: number
     output_lines: number
     total_bytes: number
@@ -66,6 +73,7 @@ type BashPayload = {
   partial?: boolean
   stop_sent?: boolean
   error?: string
+  output_file?: string
 }
 
 const bashSessions = new Map<string, BashSession>()
@@ -241,8 +249,24 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
+const SESSION_ID_ALPHABET = 'abcdefghijklmnopqrstuvwxyz0123456789'
+const SESSION_ID_LENGTH = 8
+const SESSION_ID_PATTERN = /^[a-z0-9]{8}$/
+
 function nextSessionId(): string {
-  return `bash_${randomUUID().replace(/-/g, '').slice(0, 12)}`
+  for (let attempt = 0; attempt < 64; attempt++) {
+    const bytes = randomBytes(SESSION_ID_LENGTH)
+    let id = ''
+    for (let i = 0; i < SESSION_ID_LENGTH; i++) {
+      id += SESSION_ID_ALPHABET[bytes[i]! % SESSION_ID_ALPHABET.length]
+    }
+    if (!bashSessions.has(id)) return id
+  }
+  throw new Error('failed to allocate unique bash session id')
+}
+
+export function isBashSessionId(value: unknown): value is string {
+  return typeof value === 'string' && SESSION_ID_PATTERN.test(value)
 }
 
 function textSliceFromSnapshot(snapshot: ReturnType<OutputAccumulator['snapshot']>): TextSlice {
@@ -297,13 +321,43 @@ async function finalizeSessionOutput(session: BashSession): Promise<void> {
   await sleep(SESSION_EXIT_FLUSH_MS)
   session.output.finish()
   await session.output.closeTempFile()
+  await session.outputWriter?.close()
   session.finalized = true
+}
+
+async function backgroundSessionPayload(
+  session: BashSession,
+  options: { stopSent?: boolean } = {}
+): Promise<BashPayload> {
+  if (session.status !== 'running') {
+    await finalizeSessionOutput(session)
+  }
+  const fields = await backgroundShellOutputFields(session)
+  return {
+    command: session.command,
+    cwd: session.cwd,
+    shell: session.shell,
+    exit_code: session.exitCode,
+    output: fields.output,
+    output_file: fields.output_file,
+    session_id: session.id,
+    status: session.status,
+    started_at: session.startedAt,
+    ...(session.finishedAt ? { finished_at: session.finishedAt } : {}),
+    ...(typeof session.child.pid === 'number' ? { pid: session.child.pid } : {}),
+    ...(session.status === 'running' ? { partial: true } : {}),
+    ...(options.stopSent ? { stop_sent: true } : {}),
+    ...(session.error ? { error: session.error } : {})
+  }
 }
 
 async function sessionPayload(
   session: BashSession,
   options: { stopSent?: boolean } = {}
 ): Promise<BashPayload> {
+  if (session.outputWriter) {
+    return backgroundSessionPayload(session, options)
+  }
   if (session.status !== 'running') {
     await finalizeSessionOutput(session)
   }
@@ -377,21 +431,132 @@ function normalizeYieldSeconds(value: unknown): number {
   return Math.max(1, Math.min(MAX_BASH_YIELD_SECONDS, raw))
 }
 
+function recordFromSession(
+  session: BashSession,
+  output: string,
+  truncated?: boolean,
+  detached = false,
+  outputFilePath?: string
+): BackgroundShellRecordInput {
+  return {
+    id: session.id,
+    threadId: session.threadId ?? '',
+    turnId: session.turnId ?? '',
+    command: session.command,
+    cwd: session.cwd,
+    shell: session.shell,
+    status: session.status,
+    startedAt: session.startedAt,
+    ...(session.finishedAt ? { finishedAt: session.finishedAt } : {}),
+    exitCode: session.exitCode,
+    output,
+    ...(truncated ? { outputTruncated: true } : {}),
+    ...(outputFilePath ? { outputFilePath } : {}),
+    ...(session.error ? { error: session.error } : {}),
+    detached
+  }
+}
+
+async function backgroundShellOutputFields(session: BashSession): Promise<{
+  output: string
+  output_truncated: boolean
+  output_total_chars: number
+  output_file: string
+}> {
+  const writer = session.outputWriter
+  if (!writer) {
+    return {
+      output: '',
+      output_truncated: false,
+      output_total_chars: 0,
+      output_file: ''
+    }
+  }
+  const fields = await writer.buildReturnFields()
+  return {
+    output: fields.summary,
+    output_truncated: fields.truncated,
+    output_total_chars: fields.totalChars,
+    output_file: fields.output_file
+  }
+}
+
+async function recordFromBackgroundSession(session: BashSession, detached: boolean): Promise<BackgroundShellRecordInput> {
+  const fields = await backgroundShellOutputFields(session)
+  return recordFromSession(
+    session,
+    fields.output,
+    fields.output_truncated,
+    detached,
+    fields.output_file
+  )
+}
+
 function sessionById(sessionId: unknown): BashSession | null {
   const id = typeof sessionId === 'string' ? sessionId.trim() : ''
   return id ? bashSessions.get(id) ?? null : null
 }
 
-async function startBashSession(
+export async function stopBashSessionById(sessionId: string): Promise<boolean> {
+  const session = sessionById(sessionId)
+  if (!session || session.status !== 'running') return false
+  stopSession(session)
+  await waitForSessionExitOrDelay(session, STOP_GRACE_MS)
+  return session.status !== 'running'
+}
+
+export async function readBashSessionPayload(sessionId: string): Promise<BashPayload | null> {
+  const session = sessionById(sessionId)
+  if (!session) return null
+  return sessionPayload(session)
+}
+
+export async function listBashSessionRecords(threadId?: string): Promise<BackgroundShellRecordInput[]> {
+  const records: BackgroundShellRecordInput[] = []
+  for (const session of bashSessions.values()) {
+    if (threadId && session.threadId !== threadId) continue
+    records.push(await recordFromBackgroundSession(session, session.detached))
+  }
+  return records.sort((a, b) => b.startedAt.localeCompare(a.startedAt))
+}
+
+export async function pollBashSession(sessionId: string, yieldSeconds: number): Promise<BashPayload | null> {
+  const session = sessionById(sessionId)
+  if (!session) return null
+  await waitForSessionExitOrDelay(session, normalizeYieldSeconds(yieldSeconds) * 1000)
+  return sessionPayload(session)
+}
+
+export async function writeBashSessionStdin(
+  sessionId: string,
+  input: string,
+  yieldSeconds: number
+): Promise<BashPayload | null> {
+  const session = sessionById(sessionId)
+  if (!session) return null
+  if (session.status !== 'running') return sessionPayload(session)
+  session.child.stdin.write(input)
+  await waitForSessionExitOrDelay(session, normalizeYieldSeconds(yieldSeconds) * 1000)
+  return sessionPayload(session)
+}
+
+async function startBackgroundBashSession(
   input: {
     command: string
     cwd: string
+    threadId: string
+    turnId: string
     signal: AbortSignal
     timeoutSeconds: number
-    yieldSeconds: number
+    detached: boolean
+    dataDir?: string
   },
+  hooks: BashLocalToolOptions['backgroundShell'],
   onUpdate?: (update: { output: unknown; isError?: boolean }) => Promise<void> | void
 ): Promise<{ payload: BashPayload; isError?: boolean }> {
+  if (!input.dataDir?.trim()) {
+    throw new Error('background shell sessions require runtime dataDir')
+  }
   await mkdir(input.cwd, { recursive: true })
   const shellRuntime = shellRuntimeInfo()
   const child = spawn(shellRuntime.shell, shellCommandArgs(shellRuntime, input.command), {
@@ -401,21 +566,37 @@ async function startBashSession(
     stdio: ['pipe', 'pipe', 'pipe'],
     windowsHide: true
   })
+  const sessionId = nextSessionId()
+  const outputWriter = new BackgroundShellOutputWriter(input.dataDir, input.threadId, sessionId)
+  await outputWriter.open()
   const session: BashSession = {
-    id: nextSessionId(),
+    id: sessionId,
+    threadId: input.threadId,
+    turnId: input.turnId,
     command: input.command,
     cwd: input.cwd,
     shell: shellRuntime.name,
     child,
     output: createOutputAccumulator(),
+    outputWriter,
     startedAt: new Date().toISOString(),
     exitCode: null,
     status: 'running',
     stopRequested: false,
     finalized: false,
+    detached: input.detached,
     exitWaiters: new Set()
   }
   bashSessions.set(session.id, session)
+
+  const notifyUpdated = async () => {
+    if (!hooks) return
+    await hooks.onSessionUpdated?.(await recordFromBackgroundSession(session, input.detached))
+  }
+  const notifySettled = async () => {
+    if (!hooks) return
+    await hooks.onSessionSettled?.(await recordFromBackgroundSession(session, input.detached))
+  }
 
   let updateDirty = false
   let updateTimer: NodeJS.Timeout | undefined
@@ -425,7 +606,9 @@ async function startBashSession(
     if (!liveUpdates || !onUpdate || !updateDirty) return
     updateDirty = false
     lastUpdateAt = Date.now()
-    await onUpdate({ output: await sessionPayload(session) })
+    const payload = await sessionPayload(session)
+    await onUpdate({ output: payload })
+    void notifyUpdated()
   }
   const scheduleUpdate = () => {
     if (!liveUpdates || !onUpdate) return
@@ -443,49 +626,38 @@ async function startBashSession(
   }
   const handleData = (chunk: Buffer | string) => {
     if (session.finalized) return
-    session.output.append(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk))
+    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
+    session.output.append(buffer)
+    session.outputWriter?.append(buffer)
     scheduleUpdate()
   }
   child.stdout.on('data', handleData)
   child.stderr.on('data', handleData)
   child.once('error', (error) => {
     settleSession(session, 'failed', null, error.message)
+    void notifySettled()
   })
   child.once('exit', (code) => {
     settleSession(session, session.stopRequested ? 'stopped' : 'completed', code)
+    void notifySettled()
   })
 
-  const onAbort = () => stopSession(session)
-  input.signal.addEventListener('abort', onAbort, { once: true })
-  const timeoutMs = input.timeoutSeconds * 1000
-  const yieldMs = Math.min(input.yieldSeconds * 1000, timeoutMs)
-  const exited = await waitForSessionExitOrDelay(session, yieldMs)
-  input.signal.removeEventListener('abort', onAbort)
-  if (updateTimer) clearTimeout(updateTimer)
+  const initialPayload = await sessionPayload(session)
+  await hooks?.onSessionStarted?.(await recordFromBackgroundSession(session, input.detached))
 
-  if (input.signal.aborted) {
-    liveUpdates = false
-    stopSession(session)
-    throw new Error('command aborted')
-  }
-  if (!exited && timeoutMs <= yieldMs) {
-    liveUpdates = false
-    stopSession(session)
-    await waitForSessionExitOrDelay(session, STOP_GRACE_MS)
-    throw new Error(`command timed out after ${input.timeoutSeconds} seconds`)
+  if (input.detached) {
+    const timeoutMs = input.timeoutSeconds * 1000
+    const timeoutTimer = setTimeout(() => {
+      if (session.status !== 'running') return
+      stopSession(session)
+    }, timeoutMs)
+    timeoutTimer.unref?.()
+    child.once('exit', () => clearTimeout(timeoutTimer))
+    child.once('error', () => clearTimeout(timeoutTimer))
+    return { payload: initialPayload }
   }
 
-  if (exited) {
-    await emitUpdate()
-    liveUpdates = false
-    const payload = await sessionPayload(session)
-    if (session.status === 'failed') return { payload, isError: true }
-    return { payload, isError: session.exitCode !== null && session.exitCode !== 0 }
-  }
-
-  await emitUpdate()
-  liveUpdates = false
-  return { payload: await sessionPayload(session) }
+  throw new Error('startBackgroundBashSession requires detached=true')
 }
 
 function appendTruncationNotice(text: string, truncated: TextSlice, mode: TruncateMode): string {
@@ -499,22 +671,18 @@ function appendTruncationNotice(text: string, truncated: TextSlice, mode: Trunca
 
 export function createBashLocalTool(options: BashLocalToolOptions = {}): LocalTool {
   const bashOps = options.operations
+  const shellHooks = options.backgroundShell
+  const backgroundShellDataDir = options.backgroundShellDataDir
   const shellRuntime = shellRuntimeInfo()
   return LocalToolHost.defineTool({
     name: 'bash',
-    description: `Execute a shell command in the workspace using the host platform shell. Current shell: ${shellRuntime.name}. Use ${shellRuntime.syntax} syntax. Return combined stdout and stderr. Long-running commands return a session_id; use action="poll" to block up to yield_seconds (default ${DEFAULT_BASH_YIELD_SECONDS}s, max ${MAX_BASH_YIELD_SECONDS}s) waiting for more output or process exit, action="write" with input to send stdin, or action="stop" to terminate the session.`,
+    description: `Execute a shell command in the workspace using the host platform shell. Current shell: ${shellRuntime.name}. Use ${shellRuntime.syntax} syntax. Return combined stdout and stderr. Runs synchronously by default (background defaults to false). Set background=true to start a detached session that keeps running after the turn ends; the tool assigns an 8-character session_id in the response. Use the background_shell tool to list, read, poll, write, or stop background sessions.`,
     inputSchema: {
       type: 'object',
       properties: {
         command: { type: 'string' },
         timeout: { type: 'number' },
-        yield_seconds: { type: 'number' },
-        action: {
-          type: 'string',
-          enum: ['run', 'poll', 'write', 'stop']
-        },
-        session_id: { type: 'string' },
-        input: { type: 'string' }
+        background: { type: 'boolean', default: false }
       },
       required: [],
       additionalProperties: false
@@ -522,53 +690,34 @@ export function createBashLocalTool(options: BashLocalToolOptions = {}): LocalTo
     policy: 'on-request',
     toolKind: 'command_execution',
     execute: async (args, context, onUpdate) => withToolBoundary(async () => {
-      const action = typeof args.action === 'string' ? args.action.trim() : ''
-      if (action && action !== 'run') {
-        if (action !== 'poll' && action !== 'write' && action !== 'stop') {
-          return { output: { error: `unsupported bash session action: ${action}` }, isError: true }
-        }
-        const session = sessionById(args.session_id)
-        if (!session) {
-          return { output: { error: 'bash session not found', session_id: args.session_id ?? null }, isError: true }
-        }
-        if (action === 'write') {
-          if (session.status !== 'running') {
-            return { output: await sessionPayload(session), isError: true }
-          }
-          const input = typeof args.input === 'string' ? args.input : ''
-          session.child.stdin.write(input)
-          await waitForSessionExitOrDelay(session, normalizeYieldSeconds(args.yield_seconds) * 1000)
-          const payload = await sessionPayload(session)
-          return { output: payload, isError: payload.status === 'failed' }
-        }
-        if (action === 'stop') {
-          stopSession(session)
-          await waitForSessionExitOrDelay(session, STOP_GRACE_MS)
-          const payload = await sessionPayload(session, { stopSent: true })
-          return { output: payload, isError: session.status === 'running' || session.status === 'failed' }
-        }
-        await waitForSessionExitOrDelay(session, normalizeYieldSeconds(args.yield_seconds) * 1000)
-        return { output: await sessionPayload(session), isError: session.status === 'failed' }
-      }
-
       const command = typeof args.command === 'string' ? args.command : ''
       if (!command.trim()) return { output: { error: 'command is required' }, isError: true }
       const timeout = normalizePositiveInteger(
         args.timeout,
         options.defaultTimeoutSeconds ?? DEFAULT_BASH_TIMEOUT_SECONDS
       )
-      const yieldSeconds = normalizeYieldSeconds(args.yield_seconds)
+      const background = args.background === true
       const cwd = workspaceRoot(context.workspace)
       try {
-        if (!bashOps?.exec) {
-          const result = await startBashSession(
+        if (background) {
+          if (bashOps?.exec) {
+            return {
+              output: { error: 'background sessions are not supported with custom bash exec operations' },
+              isError: true
+            }
+          }
+          const result = await startBackgroundBashSession(
             {
               command,
               cwd,
+              threadId: context.threadId,
+              turnId: context.turnId,
               signal: context.abortSignal,
               timeoutSeconds: timeout,
-              yieldSeconds
+              detached: true,
+              dataDir: backgroundShellDataDir
             },
+            shellHooks,
             onUpdate
           )
           return {
@@ -582,7 +731,7 @@ export function createBashLocalTool(options: BashLocalToolOptions = {}): LocalTo
           context.abortSignal,
           timeout,
           onUpdate,
-          bashOps.exec
+          bashOps?.exec
         )
         const payload = resultPayload({
           command,

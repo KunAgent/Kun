@@ -33,6 +33,7 @@ import {
   isKunRuntimeInsecure,
   migrateLegacyAppSettings,
   normalizeAppSettings,
+  normalizeChatContentMaxWidth,
   parseClawUserPromptForDisplay,
   inferModelEndpointFormatFromUrl,
   kunToolPermissionModeFromSettings,
@@ -53,6 +54,7 @@ function settings(): AppSettingsV1 {
     locale: 'en',
     theme: 'system',
     uiFontScale: 0.82,
+    chatContentMaxWidthPx: 896,
     provider: defaultModelProviderSettings(),
     agents: {
       kun: defaultKunRuntimeSettings()
@@ -75,6 +77,20 @@ function settings(): AppSettingsV1 {
     disabledSkillIds: []
   }
 }
+
+describe('chat content max width', () => {
+  it('defaults invalid values to 896px', () => {
+    expect(normalizeChatContentMaxWidth(undefined)).toBe(896)
+    expect(normalizeChatContentMaxWidth('bad')).toBe(896)
+  })
+
+  it('clamps and rounds to 8px steps', () => {
+    expect(normalizeChatContentMaxWidth(500)).toBe(640)
+    expect(normalizeChatContentMaxWidth(896)).toBe(896)
+    expect(normalizeChatContentMaxWidth(1300)).toBe(1200)
+    expect(normalizeChatContentMaxWidth(905)).toBe(904)
+  })
+})
 
 describe('model endpoint format inference', () => {
   it('treats /completions custom endpoints as Chat Completions-shaped', () => {

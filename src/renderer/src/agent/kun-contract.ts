@@ -261,6 +261,13 @@ export type CoreRuntimeInfoJson = {
   insecure?: boolean
   startedAt: string
   pid?: number
+  memoryUsage?: {
+    rssBytes: number
+    peakRssBytes: number
+    heapUsedBytes: number
+    heapTotalBytes: number
+    externalBytes: number
+  }
   capabilities: CoreRuntimeCapabilityManifestJson
 }
 
@@ -362,6 +369,7 @@ export type CoreTurnJson = {
   attachmentIds?: string[]
   activeSkillIds?: string[]
   injectedMemoryIds?: string[]
+  injectedMemorySummaries?: Array<{ id: string; content: string }>
   skillInjectionBytes?: number
   workspaceCheckpointId?: string
   error?: string
@@ -409,6 +417,7 @@ export type CoreTurnItemJson = {
   workspaceCheckpointId?: string
   activeSkillIds?: string[]
   injectedMemoryIds?: string[]
+  injectedMemorySummaries?: Array<{ id: string; content: string }>
   skillInjectionBytes?: number
   target?: CoreReviewTargetJson
   title?: string

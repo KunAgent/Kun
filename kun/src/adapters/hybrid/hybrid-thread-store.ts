@@ -932,6 +932,10 @@ function mergeTurnMetadata(previous: Turn, next: Turn): Turn {
     attachmentIds: mergeStringArrays(previous.attachmentIds, next.attachmentIds),
     activeSkillIds: mergeStringArrays(previous.activeSkillIds, next.activeSkillIds),
     injectedMemoryIds: mergeStringArrays(previous.injectedMemoryIds, next.injectedMemoryIds),
+    injectedMemorySummaries:
+      next.injectedMemorySummaries.length > 0
+        ? next.injectedMemorySummaries
+        : previous.injectedMemorySummaries,
     items: mergeTurnItems(previous.items, next.items)
   }
 }
@@ -971,6 +975,7 @@ function turnFromItems(threadId: string, turnId: string, items: TurnItem[], fall
     attachmentIds: attachmentIdsFromItems(items),
     activeSkillIds: [],
     injectedMemoryIds: [],
+    injectedMemorySummaries: [],
     createdAt,
     finishedAt: hasOpenItem ? undefined : items[items.length - 1]?.finishedAt ?? fallbackTime,
     items

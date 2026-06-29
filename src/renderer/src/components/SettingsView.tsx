@@ -1,5 +1,5 @@
-import type { ReactElement } from 'react'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import type { ComponentProps, ReactElement } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   DEFAULT_WRITE_INLINE_COMPLETION_BASE_URL,
@@ -25,6 +25,7 @@ import type {
 } from '../agent/kun-contract'
 import type { WriteInlineCompletionDebugEntry } from '@shared/write-inline-completion'
 import {
+  applyChatContentMaxWidth,
   applyCursorSpotlight,
   applyCursorSpotlightColor,
   applyTheme,
@@ -43,7 +44,6 @@ import {
 } from '../lib/settings-home-paths'
 import { useChatStore, type SettingsRouteSection } from '../store/chat-store'
 import { SettingsSidebar } from './SettingsSidebar'
-import { WriteDebugLogModal } from './settings-debug-log'
 import { useSettingsGuiUpdate } from './use-settings-gui-update'
 import {
   DEFAULT_WORKSPACE_ROOT,
@@ -55,24 +55,75 @@ import {
 } from './settings-utils'
 import { loadKunDiagnostics } from '../lib/load-kun-diagnostics'
 import { SETTINGS_CHANGED_EVENT, emitRendererSettingsChanged } from '../lib/keyboard-shortcut-settings'
-import {
-  AgentsSettingsSection,
-  ArchivedThreadsSettingsSection,
-  ClawSettingsSection,
-  EasterEggSettingsSection,
-  GeneralSettingsSection,
-  KeyboardShortcutsSettingsSection,
-  LlmDebugSettingsSection,
-  WorktreeSettingsSection,
-  MediaGenerationSettingsSection,
-  MemorySettingsSection,
-  ProvidersSettingsSection,
-  SpeechToTextSettingsSection,
-  UpdatesSettingsSection,
-  WriteSettingsSection,
-  TerminalSettingsSection
-} from './settings-sections'
-import { DesignSettingsSection } from './settings-section-design'
+import { GeneralSettingsSection } from './settings-section-general'
+
+const ProvidersSettingsSection = lazy(() =>
+  import('./settings-section-providers').then((module) => ({ default: module.ProvidersSettingsSection }))
+)
+const WriteSettingsSection = lazy(() =>
+  import('./settings-section-write').then((module) => ({ default: module.WriteSettingsSection }))
+)
+const DesignSettingsSection = lazy(() =>
+  import('./settings-section-design').then((module) => ({ default: module.DesignSettingsSection }))
+)
+const MediaGenerationSettingsSection = lazy(() =>
+  import('./settings-section-media-generation').then((module) => ({ default: module.MediaGenerationSettingsSection }))
+)
+const SpeechToTextSettingsSection = lazy(() =>
+  import('./settings-section-speech-to-text').then((module) => ({ default: module.SpeechToTextSettingsSection }))
+)
+const AgentsSettingsSection = lazy(() =>
+  import('./settings-section-agents').then((module) => ({ default: module.AgentsSettingsSection }))
+)
+const ArchivedThreadsSettingsSection = lazy(() =>
+  import('./settings-section-archives').then((module) => ({ default: module.ArchivedThreadsSettingsSection }))
+)
+const WorktreeSettingsSection = lazy(() =>
+  import('./settings-section-worktree').then((module) => ({ default: module.WorktreeSettingsSection }))
+)
+const MemorySettingsSection = lazy(() =>
+  import('./settings-section-memory').then((module) => ({ default: module.MemorySettingsSection }))
+)
+const KeyboardShortcutsSettingsSection = lazy(() =>
+  import('./settings-section-shortcuts').then((module) => ({ default: module.KeyboardShortcutsSettingsSection }))
+)
+const EasterEggSettingsSection = lazy(() =>
+  import('./settings-section-easter-egg').then((module) => ({ default: module.EasterEggSettingsSection }))
+)
+const ClawSettingsSection = lazy(() =>
+  import('./settings-section-claw').then((module) => ({ default: module.ClawSettingsSection }))
+)
+const UpdatesSettingsSection = lazy(() =>
+  import('./settings-section-updates').then((module) => ({ default: module.UpdatesSettingsSection }))
+)
+const TerminalSettingsSection = lazy(() =>
+  import('./settings-section-terminal').then((module) => ({ default: module.TerminalSettingsSection }))
+)
+const LlmDebugSettingsSection = lazy(() =>
+  import('./settings-section-llm-debug').then((module) => ({ default: module.LlmDebugSettingsSection }))
+)
+const WriteDebugLogModal = lazy(() =>
+  import('./settings-debug-log').then((module) => ({ default: module.WriteDebugLogModal }))
+)
+
+function LoadedAgentsSettingsSection({
+  onReady,
+  ...props
+}: ComponentProps<typeof AgentsSettingsSection> & { onReady: () => void }): ReactElement {
+  useEffect(() => {
+    onReady()
+  }, [onReady])
+  return <AgentsSettingsSection {...props} />
+}
+
+function SettingsSectionFallback(): ReactElement {
+  return (
+    <div aria-busy="true" className="space-y-3" data-testid="settings-section-fallback">
+      <div className="h-7 w-48 animate-pulse rounded-lg bg-ds-subtle" />
+      <div className="h-32 animate-pulse rounded-2xl bg-ds-subtle" />
+    </div>
+  )
+}
 
 type SettingsCategory = 'general' | 'providers' | 'write' | 'design' | 'mediaGeneration' | 'speechToText' | 'agents' | 'archives' | 'permissions' | 'worktree' | 'memory' | 'shortcuts' | 'easterEgg' | 'claw' | 'updates' | 'debug' | 'terminal'
 type SaveStatus = 'idle' | 'saving' | 'saved' | 'error'
@@ -132,6 +183,7 @@ export function SettingsView(): ReactElement {
   const [memoryDiagnostics, setMemoryDiagnostics] = useState<CoreMemoryDiagnosticsJson | null>(null)
   const [runtimeDiagnosticsBusy, setRuntimeDiagnosticsBusy] = useState(false)
   const [runtimeDiagnosticsNotice, setRuntimeDiagnosticsNotice] = useState<InlineNotice | null>(null)
+  const [agentsSectionReady, setAgentsSectionReady] = useState(false)
   const [writeDebugModalOpen, setWriteDebugModalOpen] = useState(false)
   const [writeCompletionDebugEntries, setWriteCompletionDebugEntries] = useState<WriteInlineCompletionDebugEntry[]>([])
   const [writeCompletionDebugSelectedId, setWriteCompletionDebugSelectedId] = useState<string | null>(null)
@@ -152,13 +204,14 @@ export function SettingsView(): ReactElement {
   const permissionsSectionRef = useRef<HTMLDivElement | null>(null)
   const formTheme = form?.theme
   const formUiFontScale = form?.uiFontScale
+  const formChatContentMaxWidthPx = form?.chatContentMaxWidthPx
   const writeTypography = form?.write?.typography
-  const formWorkspaceRoot = form?.workspaceRoot
   const formKun = form ? getKunRuntimeSettings(form) : null
   const formPort = formKun?.port
   const formGuiUpdateChannel = form?.guiUpdate?.channel
   const formCursorSpotlight = form?.cursorSpotlight
   const formCursorSpotlightColor = form?.cursorSpotlightColor
+  const markAgentsSectionReady = useCallback(() => setAgentsSectionReady(true), [])
   const settingsPlatform = typeof window !== 'undefined' ? window.kunGui?.platform ?? '' : ''
   const settingsHomeDir = typeof window !== 'undefined' ? window.kunGui?.homeDir ?? '' : ''
   const compactHomePath = useCallback((value: string): string =>
@@ -208,10 +261,11 @@ export function SettingsView(): ReactElement {
   }, [])
 
   useEffect(() => {
-    if (!formTheme || !formUiFontScale) return
+    if (!formTheme || formUiFontScale == null || formChatContentMaxWidthPx == null) return
     applyTheme(formTheme)
     applyUiFontScale(formUiFontScale)
-  }, [formTheme, formUiFontScale])
+    applyChatContentMaxWidth(formChatContentMaxWidthPx)
+  }, [formTheme, formUiFontScale, formChatContentMaxWidthPx])
 
   useEffect(() => {
     if (typeof formCursorSpotlight === 'boolean') {
@@ -359,6 +413,7 @@ export function SettingsView(): ReactElement {
     ) {
       return
     }
+    if (!agentsSectionReady) return
     const refs: Record<
       Exclude<SettingsRouteSection, 'general' | 'providers' | 'write' | 'design' | 'imageGeneration' | 'mediaGeneration' | 'speechToText' | 'archives' | 'claw' | 'shortcuts' | 'easterEgg' | 'updates' | 'terminal'>,
       HTMLDivElement | null
@@ -373,7 +428,7 @@ export function SettingsView(): ReactElement {
     window.requestAnimationFrame(() => {
       target.scrollIntoView({ behavior: 'smooth', block: 'start' })
     })
-  }, [category, form, settingsSection])
+  }, [agentsSectionReady, category, form, settingsSection])
 
   useEffect(() => {
     return () => {
@@ -394,15 +449,16 @@ export function SettingsView(): ReactElement {
     if (typeof window.kunGui?.listSkillRoots !== 'function') return
     setSkillRootsLoading(true)
     try {
-      const workspaceRoot = normalizeWorkspaceRoot(expandHomePath(formWorkspaceRoot ?? ''))
-      const result = await window.kunGui.listSkillRoots(workspaceRoot || undefined)
+      // Settings is global: list every configured skill root from persisted
+      // settings, not the sidebar's currently selected project workspace.
+      const result = await window.kunGui.listSkillRoots()
       if (result.ok) setSkillRoots(result.roots)
     } catch {
       /* listing skill roots is best-effort; keep the last known list */
     } finally {
       setSkillRootsLoading(false)
     }
-  }, [expandHomePath, formWorkspaceRoot])
+  }, [])
 
   useEffect(() => {
     if (category !== 'agents') return
@@ -498,9 +554,7 @@ export function SettingsView(): ReactElement {
     setRuntimeDiagnosticsBusy(true)
     setRuntimeDiagnosticsNotice(null)
     try {
-      const loaded = await loadKunDiagnostics(provider, {
-        workspace: normalizeWorkspaceRoot(expandHomePath(formWorkspaceRoot ?? ''))
-      })
+      const loaded = await loadKunDiagnostics(provider, { listAllMemories: true })
       if (loaded.runtimeInfo !== undefined) setRuntimeInfo(loaded.runtimeInfo)
       if (loaded.toolDiagnostics !== undefined) setToolDiagnostics(loaded.toolDiagnostics)
       if (loaded.memoryRecords !== undefined) setMemoryRecords(loaded.memoryRecords)
@@ -518,7 +572,7 @@ export function SettingsView(): ReactElement {
     } finally {
       setRuntimeDiagnosticsBusy(false)
     }
-  }, [expandHomePath, formWorkspaceRoot])
+  }, [])
 
   useEffect(() => {
     if (category !== 'agents' && category !== 'memory') return
@@ -541,18 +595,31 @@ export function SettingsView(): ReactElement {
     void refreshMemoryDiagnostics()
   }, [category, memoryRecords])
 
+  const memoryMutationWorkspace = useCallback((memoryId: string): string | undefined => {
+    const record = memoryRecords.find((item) => item.id === memoryId)
+    if (!record || record.scope === 'user') return undefined
+    if (record.scope === 'project') {
+      return record.project ?? record.workspace
+    }
+    return record.workspace
+  }, [memoryRecords])
+
   const createMemoryRecord = async (input: {
     content: string
     scope?: 'user' | 'workspace' | 'project'
+    targetPath?: string
     tags?: string[]
     confidence?: number
   }): Promise<boolean> => {
     const provider = getProvider()
     if (typeof provider.createMemory !== 'function') return false
     try {
-      const workspace = normalizeWorkspaceRoot(formWorkspaceRoot)
+      const workspace = normalizeWorkspaceRoot(expandHomePath(input.targetPath ?? ''))
       const memory = await provider.createMemory({
-        ...input,
+        content: input.content,
+        scope: input.scope,
+        tags: input.tags,
+        confidence: input.confidence,
         ...(input.scope === 'user' ? {} : { workspace }),
         ...(input.scope === 'project' ? { project: workspace } : {})
       })
@@ -575,7 +642,7 @@ export function SettingsView(): ReactElement {
     if (typeof provider.updateMemory !== 'function') return false
     try {
       const memory = await provider.updateMemory(memoryId, patch, {
-        workspace: normalizeWorkspaceRoot(formWorkspaceRoot)
+        workspace: memoryMutationWorkspace(memoryId)
       })
       setMemoryRecords((records) => records.map((record) => (record.id === memoryId ? memory : record)))
       return true
@@ -593,7 +660,7 @@ export function SettingsView(): ReactElement {
     if (typeof provider.updateMemory !== 'function') return
     try {
       const memory = await provider.updateMemory(memoryId, { disabled: true }, {
-        workspace: normalizeWorkspaceRoot(formWorkspaceRoot)
+        workspace: memoryMutationWorkspace(memoryId)
       })
       setMemoryRecords((records) => records.map((record) => record.id === memoryId ? memory : record))
     } catch (error) {
@@ -609,7 +676,7 @@ export function SettingsView(): ReactElement {
     if (typeof provider.deleteMemory !== 'function') return
     try {
       await provider.deleteMemory(memoryId, {
-        workspace: normalizeWorkspaceRoot(formWorkspaceRoot)
+        workspace: memoryMutationWorkspace(memoryId)
       })
       setMemoryRecords((records) => records.filter((record) => record.id !== memoryId))
     } catch (error) {
@@ -1099,21 +1166,25 @@ export function SettingsView(): ReactElement {
           ) : null}
 
           {category === 'general' ? <GeneralSettingsSection ctx={settingsSectionContext} /> : null}
-          {category === 'providers' ? <ProvidersSettingsSection ctx={settingsSectionContext} /> : null}
-          {category === 'write' ? <WriteSettingsSection ctx={settingsSectionContext} /> : null}
-          {category === 'design' ? <DesignSettingsSection ctx={settingsSectionContext} /> : null}
-          {category === 'mediaGeneration' ? <MediaGenerationSettingsSection ctx={settingsSectionContext} /> : null}
-          {category === 'speechToText' ? <SpeechToTextSettingsSection ctx={settingsSectionContext} /> : null}
-          {category === 'agents' ? <AgentsSettingsSection ctx={settingsSectionContext} /> : null}
-          {category === 'archives' ? <ArchivedThreadsSettingsSection ctx={settingsSectionContext} /> : null}
-          {category === 'worktree' ? <WorktreeSettingsSection ctx={settingsSectionContext} /> : null}
-          {category === 'memory' ? <MemorySettingsSection ctx={settingsSectionContext} /> : null}
-          {category === 'shortcuts' ? <KeyboardShortcutsSettingsSection ctx={settingsSectionContext} /> : null}
-          {category === 'easterEgg' ? <EasterEggSettingsSection ctx={settingsSectionContext} /> : null}
-          {category === 'claw' ? <ClawSettingsSection ctx={settingsSectionContext} /> : null}
-          {category === 'updates' ? <UpdatesSettingsSection ctx={settingsSectionContext} /> : null}
-          {category === 'terminal' ? <TerminalSettingsSection ctx={settingsSectionContext} /> : null}
-          {category === 'debug' ? <LlmDebugSettingsSection ctx={settingsSectionContext} /> : null}
+          <Suspense fallback={<SettingsSectionFallback />}>
+            {category === 'providers' ? <ProvidersSettingsSection ctx={settingsSectionContext} /> : null}
+            {category === 'write' ? <WriteSettingsSection ctx={settingsSectionContext} /> : null}
+            {category === 'design' ? <DesignSettingsSection ctx={settingsSectionContext} /> : null}
+            {category === 'mediaGeneration' ? <MediaGenerationSettingsSection ctx={settingsSectionContext} /> : null}
+            {category === 'speechToText' ? <SpeechToTextSettingsSection ctx={settingsSectionContext} /> : null}
+            {category === 'agents' ? (
+              <LoadedAgentsSettingsSection ctx={settingsSectionContext} onReady={markAgentsSectionReady} />
+            ) : null}
+            {category === 'archives' ? <ArchivedThreadsSettingsSection ctx={settingsSectionContext} /> : null}
+            {category === 'worktree' ? <WorktreeSettingsSection ctx={settingsSectionContext} /> : null}
+            {category === 'memory' ? <MemorySettingsSection ctx={settingsSectionContext} /> : null}
+            {category === 'shortcuts' ? <KeyboardShortcutsSettingsSection ctx={settingsSectionContext} /> : null}
+            {category === 'easterEgg' ? <EasterEggSettingsSection ctx={settingsSectionContext} /> : null}
+            {category === 'claw' ? <ClawSettingsSection ctx={settingsSectionContext} /> : null}
+            {category === 'updates' ? <UpdatesSettingsSection ctx={settingsSectionContext} /> : null}
+            {category === 'terminal' ? <TerminalSettingsSection ctx={settingsSectionContext} /> : null}
+            {category === 'debug' ? <LlmDebugSettingsSection ctx={settingsSectionContext} /> : null}
+          </Suspense>
         </div>
       </div>
       {saveStatus === 'error' && saveError ? (
@@ -1138,17 +1209,19 @@ export function SettingsView(): ReactElement {
         </div>
       ) : null}
       {writeDebugModalOpen ? (
-        <WriteDebugLogModal
-          completionEntries={writeCompletionDebugEntries}
-          completionSelectedId={writeCompletionDebugSelectedId}
-          loading={writeDebugLoading}
-          error={writeDebugError}
-          onSelectCompletion={setWriteCompletionDebugSelectedId}
-          onRefresh={() => void loadWriteDebugEntries()}
-          onClear={() => void clearWriteDebugEntries()}
-          onClose={() => setWriteDebugModalOpen(false)}
-          t={t}
-        />
+        <Suspense fallback={null}>
+          <WriteDebugLogModal
+            completionEntries={writeCompletionDebugEntries}
+            completionSelectedId={writeCompletionDebugSelectedId}
+            loading={writeDebugLoading}
+            error={writeDebugError}
+            onSelectCompletion={setWriteCompletionDebugSelectedId}
+            onRefresh={() => void loadWriteDebugEntries()}
+            onClear={() => void clearWriteDebugEntries()}
+            onClose={() => setWriteDebugModalOpen(false)}
+            t={t}
+          />
+        </Suspense>
       ) : null}
     </div>
   )

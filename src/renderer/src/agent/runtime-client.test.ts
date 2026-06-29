@@ -19,6 +19,7 @@ function settings(apiKey: string): AppSettingsV1 {
     locale: 'en',
     theme: 'system',
     uiFontScale: 0.82,
+    chatContentMaxWidthPx: 896,
     provider: defaultModelProviderSettings(),
     agents: {
       kun: {

@@ -53,7 +53,13 @@ export async function steerTurn(
   if (!parsed.success) {
     return ERRORS.validation('invalid steer turn body', parsed.error.issues)
   }
-  await turns.steerTurn({ threadId, turnId, text: parsed.data.text })
+  await turns.steerTurn({
+    threadId,
+    turnId,
+    text: parsed.data.text,
+    ...(parsed.data.displayText ? { displayText: parsed.data.displayText } : {}),
+    ...(parsed.data.messageSource ? { messageSource: parsed.data.messageSource } : {})
+  })
   return jsonResponse({ ok: true })
 }
 

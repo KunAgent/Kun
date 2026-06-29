@@ -72,6 +72,7 @@ export type WebCitationSource = {
 
 export type RuntimeDisclosureMetadata = {
   displayText?: string
+  messageSource?: 'background_shell' // client-only rendering hint; never sent to the runtime
   turnId?: string
   workspaceCheckpointId?: string
   attachmentIds?: string[]
@@ -80,6 +81,7 @@ export type RuntimeDisclosureMetadata = {
   generatedFiles?: GeneratedFileReference[]
   activeSkillIds?: string[]
   injectedMemoryIds?: string[]
+  injectedMemorySummaries?: Array<{ id: string; content: string }>
   skillInjectionBytes?: number
   child?: RuntimeChildMetadata
   sources?: WebCitationSource[]
@@ -512,7 +514,7 @@ export interface AgentProvider {
     attachmentId: string,
     options?: { threadId?: string; workspace?: string }
   ): Promise<CoreAttachmentContentResponseJson>
-  listMemories?(options?: { workspace?: string; includeDeleted?: boolean }): Promise<CoreMemoryRecordJson[]>
+  listMemories?(options?: { workspace?: string; includeDeleted?: boolean; all?: boolean }): Promise<CoreMemoryRecordJson[]>
   createMemory?(input: {
     content: string
     scope?: 'user' | 'workspace' | 'project'

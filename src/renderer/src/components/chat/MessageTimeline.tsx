@@ -22,12 +22,14 @@ import type { UiPluginLabelKey } from '@shared/ui-plugin'
 import { useUiPluginWorkLabel } from '../../store/ui-plugin-store'
 import {
   groupTurns,
+  isBackgroundShellNoticeBlock,
   sameTurnContent,
   splitThink,
   stableTurnKey,
   type Turn
 } from './message-timeline-turns'
 import { extractPlanMetadataFromBlock } from '../../plan/plan-tool'
+import { InjectedMemoryLookupProvider } from './injected-memory-lookup'
 import { planDisplayNameFromRelativePath } from '../../plan/plan-path'
 
 export { summarizeToolBlock } from './message-timeline-process'
@@ -90,6 +92,12 @@ function blockScrollStamp(block: ChatBlock | undefined): string {
 }
 
 function turnPreview(turn: Turn, fallback: string): string {
+  if (turn.user && isBackgroundShellNoticeBlock(turn.user)) {
+    const display = turn.user.meta?.displayText?.trim()
+    if (display) {
+      return display.length > 48 ? `${display.slice(0, 47).trimEnd()}...` : display
+    }
+  }
   const text = turn.user?.text.trim() ?? ''
   if (!text) return fallback
   const oneLine = text.replace(/\s+/g, ' ')
@@ -255,6 +263,7 @@ export function MessageTimeline({
   }
 
   return (
+    <InjectedMemoryLookupProvider workspaceRoot={workspaceRoot}>
     <div ref={containerRef} className="ds-no-drag relative flex min-h-0 flex-1 flex-col overflow-y-auto overflow-x-hidden">
       {visibleTurnAnchors.length > 2 ? (
         <nav
@@ -275,7 +284,7 @@ export function MessageTimeline({
           ))}
         </nav>
       ) : null}
-      <div className={`ds-message-timeline-content ds-chat-column-inset mx-auto flex w-full min-w-0 max-w-4xl flex-col gap-8 pt-8 ${
+      <div className={`ds-message-timeline-content ds-chat-column-inset ds-chat-content-max-width mx-auto flex w-full min-w-0 flex-col gap-8 pt-8 ${
         goalTimelinePaddingClass(heroRoute, Boolean(activeThreadGoal))
       }`}>
         {!hasContent || !activeThreadId ? (
@@ -409,6 +418,7 @@ export function MessageTimeline({
         <div ref={endRef} aria-hidden className="h-px w-full shrink-0" />
       </div>
     </div>
+    </InjectedMemoryLookupProvider>
   )
 }
 

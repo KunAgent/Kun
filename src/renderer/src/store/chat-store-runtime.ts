@@ -21,10 +21,12 @@ import {
   normalizeWorkspaceRoot
 } from '../lib/workspace-path'
 import type { ClawImChannelV1 } from '@shared/app-settings'
+import { isBackgroundShellNoticeUserMessage } from '@shared/background-shell-notice'
 import type { ChatState } from './chat-store-types'
 import { isClawThread } from './chat-store-helpers'
 import {
   collectAssistantTextForTurn,
+  isOptimisticUserBlockId,
   reconcileOptimisticUserBlock,
   settlePendingRuntimeWorkAfterInterrupt,
   threadSnapshotLooksRunning,
@@ -651,31 +653,45 @@ export function buildThreadEventSink(
         const flushed = flushLiveBlocks(s)
         const baseBlocks = flushed.blocks ?? s.blocks
         const optimisticCurrentUserId = s.currentTurnUserId
-        const reconciledBlocks =
+        const isBackgroundShellNotice = isBackgroundShellNoticeUserMessage({
+          text: ev.text,
+          meta: ev.meta
+        })
+        const canReconcileOptimisticUser =
+          !isBackgroundShellNotice &&
           optimisticCurrentUserId &&
           optimisticCurrentUserId !== ev.itemId &&
+          isOptimisticUserBlockId(optimisticCurrentUserId) &&
           baseBlocks.some((block) => block.kind === 'user' && block.id === optimisticCurrentUserId)
-            ? reconcileOptimisticUserBlock(
-                baseBlocks,
-                optimisticCurrentUserId,
-                ev.itemId,
-                ev.text,
-                ev.modelLabel
-              )
-            : baseBlocks
+        const reconciledBlocks = canReconcileOptimisticUser
+          ? reconcileOptimisticUserBlock(
+              baseBlocks,
+              optimisticCurrentUserId,
+              ev.itemId,
+              ev.text,
+              ev.modelLabel
+            )
+          : baseBlocks
         const nextBlocks = upsertUserBlock(reconciledBlocks, ev)
         const startedAt = runtimeEventStartedAt(ev.createdAt)
         armBusyWatchdog(set, get)
+        const nextCurrentTurnUserId = isBackgroundShellNotice
+          ? optimisticCurrentUserId
+          : canReconcileOptimisticUser || !optimisticCurrentUserId
+            ? ev.itemId
+            : optimisticCurrentUserId
         return {
           ...flushed,
           blocks: nextBlocks,
           busy: true,
           currentTurnId: ev.turnId ?? s.currentTurnId,
-          currentTurnUserId: ev.itemId,
-          turnStartedAtByUserId: {
-            ...s.turnStartedAtByUserId,
-            [ev.itemId]: s.turnStartedAtByUserId[ev.itemId] ?? startedAt
-          },
+          currentTurnUserId: nextCurrentTurnUserId,
+          turnStartedAtByUserId: isBackgroundShellNotice
+            ? s.turnStartedAtByUserId
+            : {
+                ...s.turnStartedAtByUserId,
+                [ev.itemId]: s.turnStartedAtByUserId[ev.itemId] ?? startedAt
+              },
           error: clearRuntimeStreamRecoveringError(s.error)
         }
       }),

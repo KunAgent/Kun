@@ -50,6 +50,12 @@ export type McpClientLike = {
     options?: { signal?: AbortSignal; timeout?: number }
   ): Promise<unknown>
   close(): Promise<void>
+  setLifecycleHandlers?(handlers: McpClientLifecycleHandlers): void
+}
+
+export type McpClientLifecycleHandlers = {
+  onError?: (error: Error) => void
+  onClose?: () => void
 }
 
 export type McpServerDiagnostic = {
@@ -58,11 +64,15 @@ export type McpServerDiagnostic = {
   transport: McpServerConfig['transport']
   trustScope: McpServerConfig['trustScope']
   available: boolean
-  status: 'disabled' | 'connected' | 'error'
+  status: 'disabled' | 'connected' | 'reconnecting' | 'error'
   toolCount: number
   catalogFingerprint?: string
   catalogDrift?: boolean
   lastConnectedAt?: string
+  lastDisconnectedAt?: string
+  lastReconnectAt?: string
+  nextReconnectAt?: string
+  reconnectAttempts?: number
   lastError?: string
 }
 
@@ -131,7 +141,16 @@ type McpConnectionState = {
   catalogFingerprint?: string
   catalogDrift?: boolean
   lastConnectedAt?: string
+  lastDisconnectedAt?: string
+  lastReconnectAt?: string
+  nextReconnectAt?: string
+  reconnectAttempts: number
+  reconnectBackoffMs: number
+  reconnectPromise?: Promise<McpClientLike>
   lastError?: string
+  status: 'connected' | 'reconnecting' | 'error'
+  diagnostic?: McpServerDiagnostic
+  intentionallyClosing?: boolean
 }
 
 export async function buildMcpToolProviders(
@@ -199,8 +218,12 @@ export async function buildMcpToolProviders(
           client,
           clientFactory,
           nowIso,
+          reconnectAttempts: 0,
+          reconnectBackoffMs: DEFAULT_MCP_RECONNECT_BASE_DELAY_MS,
+          status: 'connected',
           lastConnectedAt: nowIso()
         }
+        attachMcpClientLifecycle(state)
         const listed = await refreshMcpConnectionCatalog(state)
         return { state, listed }
       })()
@@ -240,7 +263,7 @@ export async function buildMcpToolProviders(
       available: true,
       tools
     })
-    diagnostics.push(serverDiagnostic(state, 'connected', tools.length))
+    diagnostics.push(syncMcpDiagnostic(state, 'connected', tools.length))
   }
 
   const connectedServers = diagnostics.filter((diagnostic) => diagnostic.status === 'connected').length
@@ -317,7 +340,7 @@ export async function buildMcpToolProviders(
     },
     close: async () => {
       reconnectAborted = true
-      await Promise.all(connected.map((state) => state.client.close().catch(() => undefined)))
+      await Promise.all(connected.map((state) => closeMcpClient(state)))
     }
   }
 }
@@ -366,6 +389,7 @@ async function reconnectFailedMcpServer(
 ): Promise<void> {
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     if (params.isAborted()) return
+    updateFailedServerDiagnostic(params.diagnostics, failed, 'reconnecting', attempt)
     await params.delay(Math.min(maxDelayMs, baseDelayMs * 2 ** (attempt - 1)))
     if (params.isAborted()) return
     try {
@@ -376,17 +400,27 @@ async function reconnectFailedMcpServer(
         client,
         clientFactory: params.clientFactory,
         nowIso: params.nowIso,
+        reconnectAttempts: 0,
+        reconnectBackoffMs: DEFAULT_MCP_RECONNECT_BASE_DELAY_MS,
+        status: 'connected',
         lastConnectedAt: params.nowIso()
       }
+      attachMcpClientLifecycle(state)
       const listed = await refreshMcpConnectionCatalog(state)
       if (params.isAborted()) {
-        await client.close().catch(() => undefined)
+        await closeMcpClient(state)
         return
       }
       registerLateMcpConnection(params, state, listed)
       return
-    } catch {
-      // Leave the diagnostic as "error" and try again until attempts run out.
+    } catch (error) {
+      updateFailedServerDiagnostic(
+        params.diagnostics,
+        failed,
+        'error',
+        attempt,
+        formatMcpConnectionError(error, failed.server)
+      )
     }
   }
 }
@@ -416,10 +450,31 @@ function registerLateMcpConnection(
       // flips to connected below so the UI stops showing the server as failed.
     }
   }
-  const diagnostic = serverDiagnostic(state, 'connected', tools.length)
+  const diagnostic = syncMcpDiagnostic(state, 'connected', tools.length)
   const index = params.diagnostics.findIndex((entry) => entry.id === state.serverId)
   if (index >= 0) params.diagnostics[index] = diagnostic
   else params.diagnostics.push(diagnostic)
+}
+
+function updateFailedServerDiagnostic(
+  diagnostics: McpServerDiagnostic[],
+  failed: FailedMcpServer,
+  status: Extract<McpServerDiagnostic['status'], 'reconnecting' | 'error'>,
+  attempt: number,
+  lastError?: string
+): void {
+  const index = diagnostics.findIndex((entry) => entry.id === failed.serverId)
+  const previous = index >= 0 ? diagnostics[index] : undefined
+  const next: McpServerDiagnostic = {
+    ...(previous ?? serverDiagnostic({ serverId: failed.serverId, server: failed.server }, 'error', 0)),
+    status,
+    available: false,
+    reconnectAttempts: attempt,
+    lastReconnectAt: new Date().toISOString(),
+    ...(lastError ? { lastError: redactSecretText(lastError) } : {})
+  }
+  if (index >= 0) diagnostics[index] = next
+  else diagnostics.push(next)
 }
 
 function defaultMcpReconnectDelay(ms: number): Promise<void> {
@@ -459,6 +514,16 @@ function workspaceMatchesRoots(workspace: string, roots: readonly string[]): boo
 
 async function createSdkMcpClient(serverId: string, server: McpServerConfig): Promise<McpClientLike> {
   const client = new Client({ name: `kun-${serverId}`, version: '0.1.0' })
+  // Observe transport-level failures explicitly. The SDK routes a dropped SSE
+  // stream and exhausted background reconnects to `onerror`; with no handler
+  // they are silently swallowed, which hides real outages from the logs and (on
+  // some SDK/runtime versions) lets the rejection escape as unhandled. Handling
+  // it here keeps a streamable-http disconnect from destabilizing the runtime
+  // (#639) — the per-call reconnect in callMcpToolWithReconnect still recovers
+  // the connection on the next tool use.
+  client.onerror = (error) => {
+    process.stderr.write(`kun mcp[${serverId}]: transport error: ${redactSecretText(errorMessage(error))}\n`)
+  }
   const transport = createTransport(server)
   await client.connect(transport, { timeout: server.timeoutMs })
   return {
@@ -470,7 +535,11 @@ async function createSdkMcpClient(serverId: string, server: McpServerConfig): Pr
       })
     },
     callTool: (input, options) => client.callTool(input, undefined, options),
-    close: () => client.close()
+    close: () => client.close(),
+    setLifecycleHandlers: (handlers) => {
+      client.onerror = handlers.onError
+      client.onclose = handlers.onClose
+    }
   }
 }
 
@@ -539,6 +608,17 @@ function createMcpLocalTool(
           isError: true
         }
       }
+      if (state.status === 'error' && !canAttemptMcpReconnect(state)) {
+        return {
+          output: {
+            error: mcpReconnectCooldownMessage(state),
+            serverId: state.serverId,
+            status: state.status,
+            nextReconnectAt: state.nextReconnectAt
+          },
+          isError: true
+        }
+      }
       const result = await callMcpToolWithReconnect(
         state,
         { name: descriptor.name, arguments: args },
@@ -591,6 +671,7 @@ async function refreshMcpConnectionCatalog(state: McpConnectionState): Promise<M
   state.catalogDrift = Boolean(state.catalogFingerprint && state.catalogFingerprint !== nextFingerprint)
   state.catalogFingerprint = nextFingerprint
   state.lastError = undefined
+  syncMcpDiagnostic(state, state.status, listed.length)
   return listed
 }
 
@@ -601,16 +682,21 @@ async function callMcpToolWithReconnect(
   timeout = state.server.timeoutMs
 ): Promise<unknown> {
   try {
+    await ensureMcpConnectionForCall(state, signal)
     return await state.client.callTool(input, { signal, timeout })
   } catch (error) {
-    state.lastError = redactSecretText(errorMessage(error))
     if (signal?.aborted) throw error
     // Deterministic server-side failures (validation errors, bad
     // arguments) come back identically on a fresh connection; tearing
     // down a healthy session for them just loses server state. Only
     // transport-looking failures earn a reconnect + retry.
-    if (!looksLikeMcpTransportError(error)) throw error
-    const client = await reconnectMcpConnection(state)
+    if (!looksLikeMcpTransportError(error)) {
+      state.lastError = redactSecretText(errorMessage(error))
+      syncMcpDiagnostic(state)
+      throw error
+    }
+    markMcpConnectionError(state, error)
+    const client = await reconnectMcpConnection(state, signal)
     return client.callTool(input, { signal, timeout })
   }
 }
@@ -657,13 +743,110 @@ async function raceStartupTimeout<T extends { state: McpConnectionState }>(
   }
 }
 
-async function reconnectMcpConnection(state: McpConnectionState): Promise<McpClientLike> {
-  await state.client.close().catch(() => undefined)
+async function ensureMcpConnectionForCall(
+  state: McpConnectionState,
+  signal: AbortSignal | undefined
+): Promise<void> {
+  if (state.status === 'connected') return
+  await reconnectMcpConnection(state, signal)
+}
+
+async function reconnectMcpConnection(
+  state: McpConnectionState,
+  signal?: AbortSignal
+): Promise<McpClientLike> {
+  if (state.reconnectPromise) return state.reconnectPromise
+  if (!canAttemptMcpReconnect(state)) {
+    throw new Error(mcpReconnectCooldownMessage(state))
+  }
+  state.status = 'reconnecting'
+  state.reconnectAttempts += 1
+  state.lastReconnectAt = state.nowIso()
+  syncMcpDiagnostic(state, 'reconnecting')
+  state.reconnectPromise = reconnectMcpConnectionOnce(state, signal)
+    .catch((error) => {
+      markMcpReconnectFailed(state, error)
+      throw error
+    })
+    .finally(() => {
+      state.reconnectPromise = undefined
+    })
+  return state.reconnectPromise
+}
+
+async function reconnectMcpConnectionOnce(
+  state: McpConnectionState,
+  signal?: AbortSignal
+): Promise<McpClientLike> {
+  if (signal?.aborted) throw new Error('MCP reconnect aborted')
+  await closeMcpClient(state)
+  if (signal?.aborted) throw new Error('MCP reconnect aborted')
   const client = await state.clientFactory(state.serverId, state.server)
   state.client = client
+  state.status = 'connected'
   state.lastConnectedAt = state.nowIso()
   state.lastError = undefined
+  state.nextReconnectAt = undefined
+  state.reconnectBackoffMs = DEFAULT_MCP_RECONNECT_BASE_DELAY_MS
+  attachMcpClientLifecycle(state)
+  await refreshMcpConnectionCatalog(state)
+  syncMcpDiagnostic(state, 'connected')
   return client
+}
+
+async function closeMcpClient(state: McpConnectionState): Promise<void> {
+  state.intentionallyClosing = true
+  try {
+    await state.client.close().catch(() => undefined)
+  } finally {
+    state.intentionallyClosing = false
+  }
+}
+
+function attachMcpClientLifecycle(state: McpConnectionState): void {
+  state.client.setLifecycleHandlers?.({
+    onError: (error) => {
+      if (looksLikeMcpTransportError(error)) {
+        markMcpConnectionError(state, error)
+      } else {
+        state.lastError = redactSecretText(errorMessage(error))
+        syncMcpDiagnostic(state)
+      }
+    },
+    onClose: () => {
+      if (state.intentionallyClosing) return
+      markMcpConnectionError(state, new Error('MCP transport closed'))
+    }
+  })
+}
+
+function markMcpConnectionError(state: McpConnectionState, error: unknown): void {
+  if (state.intentionallyClosing) return
+  state.status = 'error'
+  state.lastError = redactSecretText(errorMessage(error))
+  state.lastDisconnectedAt = state.nowIso()
+  syncMcpDiagnostic(state, 'error')
+}
+
+function markMcpReconnectFailed(state: McpConnectionState, error: unknown): void {
+  state.status = 'error'
+  state.lastError = redactSecretText(errorMessage(error))
+  state.lastDisconnectedAt = state.nowIso()
+  const nextDelay = state.reconnectBackoffMs
+  state.reconnectBackoffMs = Math.min(DEFAULT_MCP_RECONNECT_MAX_DELAY_MS, nextDelay * 2)
+  state.nextReconnectAt = new Date(Date.now() + nextDelay).toISOString()
+  syncMcpDiagnostic(state, 'error')
+}
+
+function canAttemptMcpReconnect(state: McpConnectionState): boolean {
+  if (!state.nextReconnectAt) return true
+  return Date.now() >= Date.parse(state.nextReconnectAt)
+}
+
+function mcpReconnectCooldownMessage(state: McpConnectionState): string {
+  return state.nextReconnectAt
+    ? `MCP server ${state.serverId} is offline; reconnect is cooling down until ${state.nextReconnectAt}. Last error: ${state.lastError ?? 'unknown error'}`
+    : `MCP server ${state.serverId} is offline. Last error: ${state.lastError ?? 'unknown error'}`
 }
 
 function shouldUseMcpSearch(config: NonNullable<McpCapabilityConfig['search']>, toolCount: number): boolean {
@@ -699,6 +882,39 @@ function serverDiagnostic(
     ...(state.lastConnectedAt ? { lastConnectedAt: state.lastConnectedAt } : {}),
     ...(lastError ? { lastError: redactSecretText(lastError) } : {})
   }
+}
+
+function syncMcpDiagnostic(
+  state: McpConnectionState,
+  status: McpServerDiagnostic['status'] = state.status,
+  toolCount = state.diagnostic?.toolCount ?? 0
+): McpServerDiagnostic {
+  const diagnostic: McpServerDiagnostic = {
+    id: state.serverId,
+    enabled: state.server.enabled,
+    transport: state.server.transport,
+    trustScope: state.server.trustScope,
+    available: status === 'connected',
+    status,
+    toolCount,
+    ...(state.catalogFingerprint ? { catalogFingerprint: state.catalogFingerprint } : {}),
+    ...(state.catalogDrift !== undefined ? { catalogDrift: state.catalogDrift } : {}),
+    ...(state.lastConnectedAt ? { lastConnectedAt: state.lastConnectedAt } : {}),
+    ...(state.lastDisconnectedAt ? { lastDisconnectedAt: state.lastDisconnectedAt } : {}),
+    ...(state.lastReconnectAt ? { lastReconnectAt: state.lastReconnectAt } : {}),
+    ...(state.nextReconnectAt ? { nextReconnectAt: state.nextReconnectAt } : {}),
+    ...(state.reconnectAttempts > 0 ? { reconnectAttempts: state.reconnectAttempts } : {}),
+    ...(state.lastError ? { lastError: redactSecretText(state.lastError) } : {})
+  }
+  if (!state.diagnostic) {
+    state.diagnostic = diagnostic
+    return diagnostic
+  }
+  for (const key of Object.keys(state.diagnostic) as Array<keyof McpServerDiagnostic>) {
+    delete (state.diagnostic as Record<string, unknown>)[key]
+  }
+  Object.assign(state.diagnostic, diagnostic)
+  return state.diagnostic
 }
 
 function catalogFingerprint(values: readonly string[]): string {

@@ -21,6 +21,7 @@ import type {
   UserInputQuestion
 } from './types'
 import { redactSecrets, redactSecretText } from '@shared/secret-redaction'
+import { applyClientUserMessageSourceMeta } from '@shared/background-shell-notice'
 import type {
   CoreChildRuntimeMetadataJson,
   CoreRuntimeEventJson,
@@ -278,6 +279,22 @@ function normalizeUserFileReferences(value: unknown): Array<{
   return references.length > 0 ? references : undefined
 }
 
+function normalizeInjectedMemorySummaries(
+  value: unknown
+): Array<{ id: string; content: string }> | undefined {
+  if (!Array.isArray(value)) return undefined
+  const summaries = value
+    .map((entry) => {
+      if (!entry || typeof entry !== 'object') return null
+      const raw = entry as Record<string, unknown>
+      const id = typeof raw.id === 'string' && raw.id.trim() ? raw.id.trim() : ''
+      const content = typeof raw.content === 'string' && raw.content.trim() ? raw.content.trim() : ''
+      return id && content ? { id, content } : null
+    })
+    .filter((entry): entry is { id: string; content: string } => entry !== null)
+  return summaries.length > 0 ? summaries : undefined
+}
+
 function applyRuntimeDisclosureMeta(
   meta: Record<string, unknown>,
   item: CoreTurnItemJson,
@@ -290,16 +307,19 @@ function applyRuntimeDisclosureMeta(
   const attachmentIds = stringArray(item.attachmentIds)
   const activeSkillIds = stringArray(item.activeSkillIds)
   const injectedMemoryIds = stringArray(item.injectedMemoryIds)
+  const injectedMemorySummaries = normalizeInjectedMemorySummaries(item.injectedMemorySummaries)
   const fileReferences = normalizeUserFileReferences(item.fileReferences)
   const normalizedChild = normalizeChildMetadata(child)
   const displayText = typeof item.displayText === 'string' ? item.displayText.trim() : ''
   if (displayText && displayText !== item.text?.trim()) {
     meta.displayText = displayText
   }
+  applyClientUserMessageSourceMeta(meta, item.text ?? '')
   if (attachmentIds) meta.attachmentIds = attachmentIds
   if (fileReferences) meta.fileReferences = fileReferences
   if (activeSkillIds) meta.activeSkillIds = activeSkillIds
   if (injectedMemoryIds) meta.injectedMemoryIds = injectedMemoryIds
+  if (injectedMemorySummaries) meta.injectedMemorySummaries = injectedMemorySummaries
   if (typeof item.skillInjectionBytes === 'number') {
     meta.skillInjectionBytes = item.skillInjectionBytes
   }
@@ -522,8 +542,13 @@ function toolBlockFromItem(item: CoreTurnItemJson, child?: CoreChildRuntimeMetad
   const generatedFiles = extractToolGeneratedFiles(item)
   if (generatedFiles) meta.generatedFiles = generatedFiles
   const presentation = inferToolPresentation(item)
+  const payload = payloadFor(item)
   if (presentation.command) meta.command = presentation.command
-  if (presentation.toolKind === 'command_execution') applyCommandResultMeta(meta, item)
+  if (presentation.toolKind === 'command_execution' || item.toolName === 'background_shell') {
+    applyCommandResultMeta(meta, item)
+  }
+  const action = readStructuredString(payload, 'action')
+  if (action) meta.action = action
   if (isPlan) {
     const plan = extractPlanMetadata(item)
     if (plan) meta.plan = plan

@@ -41,7 +41,6 @@ import {
 } from '../lib/dev-preview-detection'
 import { Sidebar } from './chat/Sidebar'
 import { WorkbenchSideRail, type RightPanelMode } from './chat/WorkbenchTopBar'
-import { MessageTimeline } from './chat/MessageTimeline'
 import { SubagentReturnBar } from './chat/message-timeline-empty'
 import { IkunCameoLayer, KunCelebrationLayer } from './chat/AnimatedWorkLogo'
 import {
@@ -173,6 +172,9 @@ import { shouldSuppressRuntimeErrorBanner } from '../lib/runtime-banner-visibili
 
 const ChangeInspector = lazy(() =>
   import('./ChangeInspector').then((module) => ({ default: module.ChangeInspector }))
+)
+const MessageTimeline = lazy(() =>
+  import('./chat/MessageTimeline').then((module) => ({ default: module.MessageTimeline }))
 )
 const DevBrowserPanel = lazy(() =>
   import('./DevBrowserPanel').then((module) => ({ default: module.DevBrowserPanel }))
@@ -3920,34 +3922,36 @@ export function Workbench(): ReactElement {
               </div>
             </header>
             <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
-              <MessageTimeline
-                blocks={timelineBlocks}
-                liveReasoning={timelineLiveReasoning}
-                live={timelineLiveAssistant}
-                activeThreadId={activeThreadId}
-                runtimeConnection={runtimeConnection}
-                runtimeError={error}
-                onRetryConnection={() => void probeRuntime('user', { restart: true })}
-                onOpenSettings={() => openSettings('agents')}
-                onSelectSuggestion={(text) => setInput(text)}
-                focusModeEnabled={focusModeEnabled}
-                planActionsBusy={busy}
-                onBuildPlan={() => void buildGuiPlan()}
-                onOpenPlan={openGuiPlanPanel}
-                devPreviewCard={
-                  showDevPreviewCard ? (
-                    <DevPreviewLaunchCard
-                      url={latestDevPreviewUrl}
-                      opened={rightPanelMode === 'browser'}
-                      onOpen={openDevPreview}
-                    />
-                  ) : null
-                }
-              />
+              <Suspense fallback={<WorkbenchPaneFallback />}>
+                <MessageTimeline
+                  blocks={timelineBlocks}
+                  liveReasoning={timelineLiveReasoning}
+                  live={timelineLiveAssistant}
+                  activeThreadId={activeThreadId}
+                  runtimeConnection={runtimeConnection}
+                  runtimeError={error}
+                  onRetryConnection={() => void probeRuntime('user', { restart: true })}
+                  onOpenSettings={() => openSettings('agents')}
+                  onSelectSuggestion={(text) => setInput(text)}
+                  focusModeEnabled={focusModeEnabled}
+                  planActionsBusy={busy}
+                  onBuildPlan={() => void buildGuiPlan()}
+                  onOpenPlan={openGuiPlanPanel}
+                  devPreviewCard={
+                    showDevPreviewCard ? (
+                      <DevPreviewLaunchCard
+                        url={latestDevPreviewUrl}
+                        opened={rightPanelMode === 'browser'}
+                        onOpen={openDevPreview}
+                      />
+                    ) : null
+                  }
+                />
+              </Suspense>
               {uiModeCameosEnabled && !focusModeEnabled ? <IkunCameoLayer /> : null}
               {!focusModeEnabled ? <KunCelebrationLayer active={busy} suppressed={Boolean(error)} /> : null}
             </div>
-            <div className="ds-no-drag flex shrink-0 justify-center px-2 pb-3 pt-0 sm:px-4 md:px-6 lg:px-8">
+            <div className="ds-no-drag relative flex shrink-0 justify-center px-2 pb-3 pt-0 sm:px-4 md:px-6 lg:px-8">
               {activeThreadRelation === 'side' && activeThreadParentId ? (
               <SubagentReturnBar
                 parentTitle={

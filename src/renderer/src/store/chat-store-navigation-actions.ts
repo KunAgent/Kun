@@ -3,6 +3,7 @@ import { getProvider } from '../agent/registry'
 import { rendererRuntimeClient } from '../agent/runtime-client'
 import i18n from '../i18n'
 import {
+  applyChatContentMaxWidth,
   applyCursorSpotlight,
   applyCursorSpotlightColor,
   applyTheme,
@@ -457,6 +458,7 @@ export function createNavigationActions(
         const needsInitialSetup = !getActiveAgentApiKey(settings).trim()
         applyTheme(settings.theme)
         applyUiFontScale(settings.uiFontScale)
+        applyChatContentMaxWidth(settings.chatContentMaxWidthPx)
         applyCursorSpotlight(settings.cursorSpotlight !== false)
         applyCursorSpotlightColor(settings.cursorSpotlightColor)
         if (settings.write?.typography) applyWriteTypography(settings.write.typography)

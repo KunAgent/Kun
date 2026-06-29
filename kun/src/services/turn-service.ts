@@ -88,6 +88,7 @@ export class TurnService {
       threadId: input.threadId,
       text: input.request.prompt,
       displayText: input.request.displayText,
+      messageSource: input.request.messageSource,
       attachmentIds: input.request.attachmentIds ?? [],
       fileReferences: input.request.fileReferences ?? [],
       workspaceCheckpointId: input.request.workspaceCheckpointId
@@ -156,13 +157,25 @@ export class TurnService {
     }
   }
 
-  async steerTurn(input: { threadId: string; turnId: string; text: string }): Promise<void> {
-    this.deps.steering.enqueue(input.turnId, input.text)
+  async steerTurn(input: {
+    threadId: string
+    turnId: string
+    text: string
+    displayText?: string
+    messageSource?: 'background_shell'
+  }): Promise<void> {
+    this.deps.steering.enqueue(input.turnId, {
+      text: input.text,
+      ...(input.displayText ? { displayText: input.displayText } : {}),
+      ...(input.messageSource ? { messageSource: input.messageSource } : {})
+    })
     await this.deps.events.record({
       kind: 'turn_steered',
       threadId: input.threadId,
       turnId: input.turnId,
-      text: input.text
+      text: input.text,
+      ...(input.displayText ? { displayText: input.displayText } : {}),
+      ...(input.messageSource ? { messageSource: input.messageSource } : {})
     })
   }
 
@@ -446,6 +459,7 @@ export class TurnService {
       Partial<Turn>,
       | 'activeSkillIds'
       | 'injectedMemoryIds'
+      | 'injectedMemorySummaries'
       | 'skillInjectionBytes'
       | 'toolCatalogFingerprint'
       | 'toolCatalogToolCount'
@@ -460,6 +474,9 @@ export class TurnService {
               ...turn,
               ...(patch.activeSkillIds ? { activeSkillIds: [...patch.activeSkillIds] } : {}),
               ...(patch.injectedMemoryIds ? { injectedMemoryIds: [...patch.injectedMemoryIds] } : {}),
+              ...(patch.injectedMemorySummaries
+                ? { injectedMemorySummaries: [...patch.injectedMemorySummaries] }
+                : {}),
               ...(patch.skillInjectionBytes !== undefined ? { skillInjectionBytes: patch.skillInjectionBytes } : {}),
               ...(patch.toolCatalogFingerprint ? { toolCatalogFingerprint: patch.toolCatalogFingerprint } : {}),
               ...(patch.toolCatalogToolCount !== undefined ? { toolCatalogToolCount: patch.toolCatalogToolCount } : {}),

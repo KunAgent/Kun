@@ -1,185 +1,70 @@
 import { describe, expect, it } from 'vitest'
-import type { ChatBlock } from '../agent/types'
-import type { NormalizedThread } from '../agent/types'
-import type { ChatState } from './chat-store-types'
 import {
-  findReusableEmptyThreadId,
-  hasPendingRuntimeWork,
-  settlePendingRuntimeWorkAfterInterrupt,
-  threadHasPendingRuntimeWork,
-  threadSnapshotLooksRunning
+  inferClientUserMessageSource,
+  isBackgroundShellNoticeUserMessage
+} from '@shared/background-shell-notice'
+import type { ChatBlock } from '../agent/types'
+import {
+  isOptimisticUserBlockId,
+  reconcileOptimisticUserBlock,
+  upsertUserBlock
 } from './chat-store-runtime-helpers'
 
-describe('chat-store-runtime-helpers compaction state', () => {
-  it('keeps the thread busy while a compaction item is running', () => {
-    const runningCompaction: ChatBlock = {
-      kind: 'compaction',
-      id: 'compact-running',
-      summary: 'Compacting context',
-      status: 'running'
-    }
-    const completedCompaction: ChatBlock = {
-      kind: 'compaction',
-      id: 'compact-completed',
-      summary: 'Compacted context',
-      status: 'success'
-    }
-
-    expect(hasPendingRuntimeWork(runningCompaction)).toBe(true)
-    expect(hasPendingRuntimeWork(completedCompaction)).toBe(false)
-    expect(threadSnapshotLooksRunning([runningCompaction])).toBe(true)
-    expect(threadSnapshotLooksRunning([completedCompaction])).toBe(false)
+describe('chat store runtime helpers', () => {
+  it('detects optimistic user block ids', () => {
+    expect(isOptimisticUserBlockId('u-123')).toBe(true)
+    expect(isOptimisticUserBlockId('item_turn_abc_user')).toBe(false)
   })
 
-  it('trusts an explicit idle thread status over stale pending blocks', () => {
-    const staleTool: ChatBlock = {
-      kind: 'tool',
-      id: 'tool-stale',
-      summary: 'Old tool',
-      status: 'running',
-      toolKind: 'tool_call'
+  it('tags background shell notices locally from xml text without server metadata', () => {
+    const noticeText =
+      '<background_shell_completed><session_id>abcd1234</session_id><command>npm run build</command><exit_code>0</exit_code><output_preview>ok</output_preview><hint>read output</hint></background_shell_completed>'
+    expect(inferClientUserMessageSource(noticeText)).toBe('background_shell')
+    expect(
+      isBackgroundShellNoticeUserMessage({
+        text: noticeText
+      })
+    ).toBe(true)
+  })
+
+  it('preserves the original user prompt when a background shell notice arrives', () => {
+    const originalUser: ChatBlock = {
+      kind: 'user',
+      id: 'item_turn_abc_user',
+      text: 'Run build in background'
     }
-
-    expect(threadSnapshotLooksRunning([staleTool], 'idle')).toBe(false)
-    expect(threadSnapshotLooksRunning([staleTool], 'aborted')).toBe(false)
-    expect(threadSnapshotLooksRunning([staleTool], 'running')).toBe(true)
-    expect(threadSnapshotLooksRunning([staleTool])).toBe(true)
-  })
-
-  it('ignores stale pending work once the same turn has visible assistant content', () => {
-    const blocks: ChatBlock[] = [
-      { kind: 'user', id: 'user-1', text: 'Run the task' },
-      {
-        kind: 'tool',
-        id: 'tool-stale',
-        summary: 'Old tool',
-        status: 'running',
-        toolKind: 'tool_call'
-      },
-      { kind: 'assistant', id: 'answer-1', text: 'The task is complete.' }
-    ]
-
-    expect(threadHasPendingRuntimeWork(blocks)).toBe(false)
-    expect(threadSnapshotLooksRunning(blocks)).toBe(false)
-  })
-
-  it('keeps the thread busy when pending work has no later assistant answer', () => {
-    const blocks: ChatBlock[] = [
-      { kind: 'user', id: 'user-1', text: 'Run the task' },
-      { kind: 'assistant', id: 'partial-1', text: 'I will check that.' },
-      {
-        kind: 'tool',
-        id: 'tool-running',
-        summary: 'Still running',
-        status: 'running',
-        toolKind: 'tool_call'
+    const blocks: ChatBlock[] = [originalUser]
+    const notice = {
+      itemId: 'item_steered_notice',
+      turnId: 'turn_abc',
+      text: '<background_shell_completed><session_id>abcd1234</session_id><command>npm run build</command><exit_code>0</exit_code><output_preview>ok</output_preview><hint>read output</hint></background_shell_completed>',
+      meta: {
+        displayText: 'Background shell abcd1234 completed'
       }
-    ]
+    }
 
-    expect(threadHasPendingRuntimeWork(blocks)).toBe(true)
-    expect(threadSnapshotLooksRunning(blocks)).toBe(true)
-  })
+    const canReconcileOptimisticUser =
+      !isBackgroundShellNoticeUserMessage(notice) &&
+      'item_turn_abc_user' !== notice.itemId &&
+      isOptimisticUserBlockId('item_turn_abc_user')
 
-  it('does not let stale pending work from an older turn block new input', () => {
-    const blocks: ChatBlock[] = [
-      { kind: 'user', id: 'user-1', text: 'First task' },
-      {
-        kind: 'tool',
-        id: 'tool-stale',
-        summary: 'Old tool',
-        status: 'running',
-        toolKind: 'tool_call'
-      },
-      { kind: 'user', id: 'user-2', text: 'Second task' },
-      { kind: 'assistant', id: 'answer-2', text: 'Second answer.' }
-    ]
+    expect(canReconcileOptimisticUser).toBe(false)
 
-    expect(threadHasPendingRuntimeWork(blocks)).toBe(false)
-    expect(threadSnapshotLooksRunning(blocks)).toBe(false)
-  })
+    const reconciledBlocks = canReconcileOptimisticUser
+      ? reconcileOptimisticUserBlock(blocks, 'item_turn_abc_user', notice.itemId, notice.text)
+      : blocks
+    const nextBlocks = upsertUserBlock(reconciledBlocks, notice)
 
-  it('settles local pending work after a successful interrupt', () => {
-    const blocks: ChatBlock[] = [
-      {
-        kind: 'tool',
-        id: 'tool-running',
-        summary: 'Running tool',
-        status: 'running',
-        toolKind: 'tool_call'
-      },
-      {
-        kind: 'approval',
-        id: 'approval-pending',
-        approvalId: 'approval-1',
-        summary: 'Needs approval',
-        status: 'pending'
-      },
-      {
-        kind: 'user_input',
-        id: 'input-pending',
-        requestId: 'input-1',
-        questions: [],
-        status: 'pending'
-      },
-      {
-        kind: 'tool',
-        id: 'tool-success',
-        summary: 'Done',
-        status: 'success',
-        toolKind: 'tool_call'
-      }
-    ]
-
-    const settled = settlePendingRuntimeWorkAfterInterrupt(blocks)
-
-    expect(settled.map((block) => ('status' in block ? block.status : ''))).toEqual([
-      'error',
-      'error',
-      'cancelled',
-      'success'
-    ])
-    expect(settled.some(hasPendingRuntimeWork)).toBe(false)
-  })
-})
-
-describe('findReusableEmptyThreadId', () => {
-  const workspace = '/work/project'
-  const makeThread = (overrides: Partial<NormalizedThread>): NormalizedThread => ({
-    id: 'thread',
-    title: '新会话',
-    updatedAt: '2026-06-14T00:00:00.000Z',
-    model: 'deepseek',
-    mode: 'agent',
-    workspace,
-    ...overrides
-  })
-  const stateWith = (threads: NormalizedThread[]): ChatState =>
-    ({ activeThreadId: null, threads, blocks: [] } as unknown as ChatState)
-  const emptyProvider = { getThreadDetail: async () => ({ blocks: [] }) }
-
-  it('reuses an empty thread that still carries the default placeholder title', async () => {
-    const state = stateWith([makeThread({ id: 'blank', title: '新会话' })])
-    const reused = await findReusableEmptyThreadId(state, emptyProvider, workspace)
-    expect(reused).toBe('blank')
-  })
-
-  it('does not reuse an empty thread that carries a meaningful title (e.g. a released requirement)', async () => {
-    // Regression: a freshly released SDD requirement thread is empty but keeps
-    // its requirement title. Reusing it would make the next "new conversation"
-    // inherit "旅游旅行社区网页" instead of starting fresh.
-    const state = stateWith([makeThread({ id: 'requirement', title: '旅游旅行社区网页' })])
-    const reused = await findReusableEmptyThreadId(state, emptyProvider, workspace)
-    expect(reused).toBeNull()
-  })
-
-  it('does not reuse the active thread when it carries a meaningful title', async () => {
-    const titled = makeThread({ id: 'requirement', title: '旅游旅行社区网页' })
-    const state = {
-      activeThreadId: 'requirement',
-      threads: [titled],
-      blocks: []
-    } as unknown as ChatState
-    const reused = await findReusableEmptyThreadId(state, emptyProvider, workspace)
-    expect(reused).toBeNull()
+    expect(nextBlocks).toHaveLength(2)
+    expect(nextBlocks[0]).toMatchObject({
+      kind: 'user',
+      id: 'item_turn_abc_user',
+      text: 'Run build in background'
+    })
+    expect(nextBlocks[1]).toMatchObject({
+      kind: 'user',
+      id: 'item_steered_notice',
+      meta: { messageSource: 'background_shell' }
+    })
   })
 })

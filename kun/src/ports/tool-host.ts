@@ -91,6 +91,8 @@ export type ToolHostContext = {
   approvalPolicy: ApprovalPolicy
   /** Filesystem/command sandbox selected for this turn. Defaults at execution time for old callers. */
   sandboxMode?: SandboxMode
+  /** Kun runtime data root; used to allow sandbox-safe reads of background shell output files. */
+  runtimeDataDir?: string
   abortSignal: AbortSignal
   /** Resolves a pending approval with the user's decision. */
   awaitApproval: (approval: ApprovalRequest) => Promise<'allow' | 'deny'>

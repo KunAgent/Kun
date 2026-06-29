@@ -10,6 +10,7 @@ type MemoryScope = 'user' | 'workspace' | 'project'
 export type MemoryDraft = {
   content: string
   scope: MemoryScope
+  targetPath: string
   tags: string
   confidence: number
 }
@@ -22,6 +23,7 @@ export type MemoryDialogState =
 const EMPTY_DRAFT: MemoryDraft = {
   content: '',
   scope: 'workspace',
+  targetPath: '',
   tags: '',
   confidence: 1
 }
@@ -64,6 +66,7 @@ export function isMemoryDraftDirty(
   return (
     draft.content.trim() !== '' ||
     draft.tags.trim() !== '' ||
+    draft.targetPath.trim() !== '' ||
     draft.scope !== DEFAULT_DRAFT_SCOPE
   )
 }
@@ -135,6 +138,7 @@ export function MemorySettingsSection({ ctx }: { ctx: Record<string, any> }): Re
     setDraft({
       content: record.content,
       scope: record.scope,
+      targetPath: projectForMemory(record) ?? '',
       tags: (record.tags ?? []).join(', '),
       confidence: record.confidence ?? 1
     })
@@ -164,11 +168,14 @@ export function MemorySettingsSection({ ctx }: { ctx: Record<string, any> }): Re
   const saveDraft = async (): Promise<void> => {
     const trimmed = draft.content.trim()
     if (!trimmed) return
+    const targetPath = draft.targetPath.trim()
+    if (dialog?.mode === 'create' && draft.scope !== 'user' && !targetPath) return
     let ok = false
     if (dialog?.mode === 'create') {
       ok = await createMemoryRecord({
         content: trimmed,
         scope: draft.scope,
+        ...(draft.scope === 'user' ? {} : { targetPath }),
         tags: parseTags(draft.tags),
         confidence: draft.confidence
       })
@@ -465,6 +472,15 @@ function MemoryRecordDialog({
                     <option value="project">{t('memoryScope_project')}</option>
                   </select>
                 ) : null}
+                {dialog.mode === 'create' && draft.scope !== 'user' ? (
+                  <input
+                    type="text"
+                    value={draft.targetPath}
+                    onChange={(e) => onDraftChange((prev) => ({ ...prev, targetPath: e.target.value }))}
+                    placeholder={t('memoryTargetPathPlaceholder')}
+                    className="min-w-[200px] flex-1 rounded-lg border border-ds-border-muted bg-ds-surface-subtle px-2 py-1 text-[12px] text-ds-ink outline-none"
+                  />
+                ) : null}
                 <input
                   type="text"
                   value={draft.tags}
@@ -508,7 +524,10 @@ function MemoryRecordDialog({
             <button
               type="button"
               onClick={onSave}
-              disabled={!draft.content.trim()}
+              disabled={
+                !draft.content.trim() ||
+                (dialog.mode === 'create' && draft.scope !== 'user' && !draft.targetPath.trim())
+              }
               className="rounded-lg bg-ds-ink px-3 py-1.5 text-[12px] font-semibold text-ds-main transition hover:opacity-85 disabled:cursor-not-allowed disabled:opacity-45"
             >
               {t('memorySave')}

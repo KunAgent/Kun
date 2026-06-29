@@ -27,6 +27,7 @@ import type { MemoryDiagnostics } from '../../contracts/memory.js'
 import type { MemoryStore } from '../../memory/memory-store.js'
 import type { ReviewTarget } from '../../contracts/review.js'
 import type { DelegationRuntime } from '../../delegation/delegation-runtime.js'
+import type { BackgroundShellRuntime } from '../../services/background-shell-runtime.js'
 import type { ModelClient } from '../../ports/model-client.js'
 import type { RolesConfig } from '../../config/kun-config.js'
 import type { ImmutablePrefix } from '../../cache/immutable-prefix.js'
@@ -71,6 +72,7 @@ export type ServerRuntime = {
    * listing. Optional so test scaffolds can omit it.
    */
   delegationRuntime?: DelegationRuntime
+  backgroundShellRuntime?: BackgroundShellRuntime
   /**
    * Default ModelClient + model id for one-shot completions outside the
    * agent loop (e.g. AI-generated subagent profiles). Optional so test

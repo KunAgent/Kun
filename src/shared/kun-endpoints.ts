@@ -121,6 +121,16 @@ export const KUN_USAGE_TEMPLATE = '/v1/usage'
 export const KUN_DEBUG_LLM_ROUNDS_PATH = '/v1/debug/llm-rounds'
 export const KUN_DEBUG_LLM_ROUNDS_TEMPLATE = '/v1/debug/llm-rounds'
 
+export const KUN_BACKGROUND_SHELLS_PATH = '/v1/background-shells'
+export const KUN_BACKGROUND_SHELLS_TEMPLATE = '/v1/background-shells'
+export const KUN_BACKGROUND_SHELL_TEMPLATE = '/v1/background-shells/{sessionId}'
+export function kunBackgroundShellPath(sessionId: string): string {
+  return `/v1/background-shells/${encodeURIComponent(sessionId)}`
+}
+export function kunBackgroundShellStopPath(sessionId: string): string {
+  return `${kunBackgroundShellPath(sessionId)}/stop`
+}
+
 /** Thread mode shared with the Kun contract. */
 export type KunThreadMode = 'agent' | 'plan'
 

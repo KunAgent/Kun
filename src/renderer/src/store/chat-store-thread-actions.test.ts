@@ -475,6 +475,7 @@ describe('chat-store-thread-actions createThread conversation mode', () => {
           locale: 'en',
           theme: 'system',
           uiFontScale: 0.82,
+    chatContentMaxWidthPx: 896,
           provider: { providers: [], apiKey: '', baseUrl: '', proxy: { enabled: false } },
           agents: { kun: { model: 'deepseek-v4-pro', apiKey: 'k', baseUrl: '' } },
           workspaceRoot: '/tmp/workspace',

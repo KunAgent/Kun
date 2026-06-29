@@ -43,6 +43,7 @@ import {
   createLsTool,
   createLsToolDefinition
 } from '../src/adapters/tool/builtin-tools.js'
+import { createBackgroundShellTool } from '../src/adapters/tool/background-shell-tool.js'
 import { createReadTool as createReadToolFromModule } from '../src/adapters/tool/read.js'
 import { createBashTool as createBashToolFromModule } from '../src/adapters/tool/bash.js'
 import { createEditTool as createEditToolFromModule } from '../src/adapters/tool/edit.js'
@@ -92,15 +93,27 @@ async function executeTool(
 
 describe('Kun built-in tools', () => {
   let workspace: string
+  let backgroundShellDataDir: string
   let host: LocalToolHost
+
+  function createBackgroundBashLocalTool(
+    options: Parameters<typeof createBashLocalTool>[0] = {}
+  ): ReturnType<typeof createBashLocalTool> {
+    return createBashLocalTool({
+      ...options,
+      backgroundShellDataDir
+    })
+  }
 
   beforeEach(async () => {
     workspace = await mkdtemp(join(tmpdir(), 'kun-tools-'))
+    backgroundShellDataDir = await mkdtemp(join(tmpdir(), 'kun-bg-shell-data-'))
     host = new LocalToolHost({ tools: defaultLocalTools })
   })
 
   afterEach(async () => {
     await rm(workspace, { recursive: true, force: true })
+    await rm(backgroundShellDataDir, { recursive: true, force: true })
   })
 
   it('advertises the pi-style built-in tool family by default', async () => {
@@ -561,89 +574,258 @@ describe('Kun built-in tools', () => {
     expect(Date.now() - startedAt).toBeLessThan(1500)
   })
 
-  it('returns a pollable bash session for foreground long-running commands', async () => {
+  it('blocks foreground bash commands until the process exits', async () => {
     const startedAt = Date.now()
-    const output = await executeTool(host, workspace, 'bash', {
-      command: 'echo ready; sleep 5',
-      yield_seconds: 1,
-      timeout: 10
-    })
-
-    expect(output.exit_code).toBe(null)
-    expect(output.status).toBe('running')
-    expect(typeof output.session_id).toBe('string')
-    expect(String(output.output)).toContain('ready')
-    expect(Date.now() - startedAt).toBeLessThan(2500)
-
-    const stopped = await executeTool(host, workspace, 'bash', {
-      action: 'stop',
-      session_id: String(output.session_id)
-    })
-    expect(stopped.status).toBe('stopped')
-    expect(stopped.stop_sent).toBe(true)
-  })
-
-  it('polls completed bash sessions for final output', async () => {
     const output = await executeTool(host, workspace, 'bash', {
       command: 'echo ready; sleep 2; echo done',
-      yield_seconds: 1,
       timeout: 10
     })
 
-    expect(output.status).toBe('running')
+    expect(output.exit_code).toBe(0)
+    expect(String(output.output)).toContain('ready')
+    expect(String(output.output)).toContain('done')
+    expect(output.session_id).toBeUndefined()
+    expect(Date.now() - startedAt).toBeGreaterThanOrEqual(1800)
+  })
+
+  it('returns immediately for background bash sessions and keeps running after abort', async () => {
+    const hooks = {
+      started: [] as string[],
+      settled: [] as string[]
+    }
+    const backgroundHost = new LocalToolHost({
+      tools: [
+        createBackgroundBashLocalTool({
+          backgroundShell: {
+            onSessionStarted: async (record) => {
+              hooks.started.push(record.id)
+            },
+            onSessionSettled: async (record) => {
+              hooks.settled.push(record.id)
+            },
+            isDetachedSession: (sessionId) => hooks.started.includes(sessionId)
+          }
+        }),
+        createBackgroundShellTool()
+      ]
+    })
+    const abortController = new AbortController()
+    const startedAt = Date.now()
+    const output = await backgroundHost.execute(
+      {
+        callId: 'call_bash_background',
+        toolName: 'bash',
+        arguments: {
+          command: 'echo bg-ready; sleep 5; echo bg-done',
+          background: true,
+          timeout: 10
+        }
+      },
+      buildContext(workspace, { abortSignal: abortController.signal })
+    )
+    expect(output.item.kind).toBe('tool_result')
+    if (output.item.kind !== 'tool_result') throw new Error('expected tool_result')
+    const payload = output.item.output as Record<string, unknown>
+    expect(payload.status).toBe('running')
+    expect(typeof payload.session_id).toBe('string')
+    expect(String(payload.session_id)).toMatch(/^[a-z0-9]{8}$/)
+    expect(typeof payload.output_file).toBe('string')
+    expect(String(payload.output_file)).toMatch(/\.output$/)
+    expect(Date.now() - startedAt).toBeLessThan(500)
+    expect(hooks.started).toHaveLength(1)
+
+    abortController.abort()
     await new Promise((resolve) => setTimeout(resolve, 2500))
-    const polled = await executeTool(host, workspace, 'bash', {
+    const read = await backgroundHost.execute(
+      {
+        callId: 'call_bash_background_read',
+        toolName: 'background_shell',
+        arguments: {
+          action: 'read',
+          session_id: String(payload.session_id)
+        }
+      },
+      buildContext(workspace)
+    )
+    expect(read.item.kind).toBe('tool_result')
+    if (read.item.kind !== 'tool_result') throw new Error('expected tool_result')
+    const readPayload = read.item.output as Record<string, unknown>
+    expect(readPayload.status).toBe('running')
+
+    await backgroundHost.execute(
+      {
+        callId: 'call_bash_background_stop',
+        toolName: 'background_shell',
+        arguments: {
+          action: 'stop',
+          session_id: String(payload.session_id)
+        }
+      },
+      buildContext(workspace)
+    )
+    expect(hooks.settled.length).toBeGreaterThanOrEqual(1)
+  })
+
+  it('polls completed background shell sessions via background_shell', async () => {
+    const backgroundHost = new LocalToolHost({
+      tools: [createBackgroundBashLocalTool(), createBackgroundShellTool()]
+    })
+    const started = await backgroundHost.execute(
+      {
+        callId: 'call_bash_bg_poll',
+        toolName: 'bash',
+        arguments: {
+          command: 'echo ready; sleep 2; echo done',
+          background: true,
+          timeout: 10
+        }
+      },
+      buildContext(workspace)
+    )
+    expect(started.item.kind).toBe('tool_result')
+    if (started.item.kind !== 'tool_result') throw new Error('expected tool_result')
+    const sessionId = String((started.item.output as { session_id?: string }).session_id)
+    await new Promise((resolve) => setTimeout(resolve, 2500))
+    const polled = await executeTool(backgroundHost, workspace, 'background_shell', {
       action: 'poll',
-      session_id: String(output.session_id)
+      session_id: sessionId,
+      yield_seconds: 1
     })
     expect(polled.status).toBe('completed')
     expect(polled.exit_code).toBe(0)
     expect(String(polled.output)).toContain('done')
+    expect(typeof polled.output_file).toBe('string')
   })
 
-  it('blocks the poll action for at least yield_seconds while the session keeps running', async () => {
-    const output = await executeTool(host, workspace, 'bash', {
-      command: 'echo ready; sleep 5; echo done',
-      yield_seconds: 1,
-      timeout: 10
+  it('lists background shell sessions via background_shell', async () => {
+    const backgroundHost = new LocalToolHost({
+      tools: [
+        createBackgroundBashLocalTool(),
+        createBackgroundShellTool({
+          listBackgroundSessions: () => [
+            {
+              id: 'abcd1234',
+              threadId: 'thr_1',
+              turnId: 'turn_1',
+              command: 'sleep 10',
+              cwd: workspace,
+              shell: 'bash',
+              status: 'running',
+              startedAt: '2026-01-01T00:00:00.000Z',
+              exitCode: null,
+              output: 'running',
+              detached: true
+            }
+          ]
+        })
+      ]
     })
-    expect(output.status).toBe('running')
-
-    const startedAt = Date.now()
-    const polled = await executeTool(host, workspace, 'bash', {
-      action: 'poll',
-      session_id: String(output.session_id),
-      yield_seconds: 2
+    await backgroundHost.execute(
+      {
+        callId: 'call_bash_bg',
+        toolName: 'bash',
+        arguments: { command: 'echo hi', background: true, timeout: 10 }
+      },
+      buildContext(workspace)
+    )
+    const listed = await executeTool(backgroundHost, workspace, 'background_shell', {
+      action: 'list',
+      thread_only: false
     })
-    const elapsed = Date.now() - startedAt
-    expect(elapsed).toBeGreaterThanOrEqual(1800)
-    expect(polled.status).toBe('running')
-
-    await executeTool(host, workspace, 'bash', {
-      action: 'stop',
-      session_id: String(output.session_id)
-    })
+    expect(listed.running).toBe(1)
+    expect((listed.sessions as Array<{ session_id?: string }>)?.[0]?.session_id).toBe('abcd1234')
   })
 
-  it('returns from poll early once the session exits before yield_seconds', async () => {
-    const output = await executeTool(host, workspace, 'bash', {
-      command: 'echo ready; sleep 1; echo done',
-      yield_seconds: 1,
-      timeout: 10
+  it('persists full background shell output to the thread record directory', async () => {
+    const backgroundHost = new LocalToolHost({
+      tools: [createBackgroundBashLocalTool(), createBackgroundShellTool()]
     })
-    expect(output.status).toBe('running')
+    const started = await backgroundHost.execute(
+      {
+        callId: 'call_bash_bg_output_file',
+        toolName: 'bash',
+        arguments: {
+          command: "node -e \"process.stdout.write('line-one\\n'); process.stdout.write('x'.repeat(10050))\"",
+          background: true,
+          timeout: 10
+        }
+      },
+      buildContext(workspace)
+    )
+    expect(started.item.kind).toBe('tool_result')
+    if (started.item.kind !== 'tool_result') throw new Error('expected tool_result')
+    const payload = started.item.output as Record<string, unknown>
+    const outputFile = String(payload.output_file)
+    expect(outputFile).toContain('background-shells')
+    expect(outputFile.endsWith(`${String(payload.session_id)}.output`)).toBe(true)
+    await new Promise((resolve) => setTimeout(resolve, 500))
+    const full = await readFile(outputFile, 'utf-8')
+    expect(full.startsWith('line-one\n')).toBe(true)
+    expect([...full].length).toBeGreaterThan(10_000)
+    const read = await executeTool(backgroundHost, workspace, 'background_shell', {
+      action: 'read',
+      session_id: String(payload.session_id)
+    })
+    expect(String(read.output)).toContain('[background shell output truncated')
+    expect(read.output_file).toBe(outputFile)
+    expect(read.full_output_path).toBeUndefined()
+    expect(read.truncation).toBeUndefined()
+    expect(read.output_truncated).toBeUndefined()
+  })
 
-    const startedAt = Date.now()
-    const polled = await executeTool(host, workspace, 'bash', {
-      action: 'poll',
-      session_id: String(output.session_id),
-      yield_seconds: 10
+  it('hides finished background shell sessions from list unless include_finished=true', async () => {
+    const backgroundHost = new LocalToolHost({
+      tools: [
+        createBackgroundShellTool({
+          listBackgroundSessions: () => [
+            {
+              id: 'runng001',
+              threadId: 'thr_1',
+              turnId: 'turn_1',
+              command: 'sleep 10',
+              cwd: workspace,
+              shell: 'bash',
+              status: 'running',
+              startedAt: '2026-01-01T00:00:00.000Z',
+              exitCode: null,
+              output: 'running',
+              detached: true
+            },
+            {
+              id: 'done0001',
+              threadId: 'thr_1',
+              turnId: 'turn_1',
+              command: 'echo done',
+              cwd: workspace,
+              shell: 'bash',
+              status: 'completed',
+              startedAt: '2026-01-01T00:00:00.000Z',
+              finishedAt: '2026-01-01T00:00:05.000Z',
+              exitCode: 0,
+              output: 'done',
+              detached: true
+            }
+          ]
+        })
+      ]
     })
-    const elapsed = Date.now() - startedAt
-    expect(elapsed).toBeLessThan(3000)
-    expect(polled.status).toBe('completed')
-    expect(polled.exit_code).toBe(0)
-    expect(String(polled.output)).toContain('done')
+    const runningOnly = await executeTool(backgroundHost, workspace, 'background_shell', {
+      action: 'list',
+      thread_only: false
+    })
+    expect(runningOnly.running).toBe(1)
+    expect((runningOnly.sessions as Array<{ session_id?: string }>).map((s) => s.session_id)).toEqual(['runng001'])
+
+    const withFinished = await executeTool(backgroundHost, workspace, 'background_shell', {
+      action: 'list',
+      thread_only: false,
+      include_finished: true
+    })
+    expect(withFinished.running).toBe(1)
+    expect((withFinished.sessions as Array<{ session_id?: string }>).map((s) => s.session_id)).toEqual([
+      'runng001',
+      'done0001'
+    ])
   })
 
   it('includes the active shell in bash partial updates', async () => {

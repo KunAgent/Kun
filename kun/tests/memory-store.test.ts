@@ -236,6 +236,27 @@ describe('Memory store and recall', () => {
     expect(hits).toEqual([])
   })
 
+  it('lists every memory for settings management when all=true', async () => {
+    const store = createStore()
+    await store.create({
+      content: 'Project Alpha deploys with pnpm',
+      scope: 'project',
+      workspace: '/tmp/project-alpha'
+    })
+    await store.create({
+      content: 'Other workspace preference',
+      scope: 'workspace',
+      workspace: '/tmp/other'
+    })
+    await store.create({
+      content: 'User prefers concise answers',
+      scope: 'user'
+    })
+
+    expect(await store.list({ workspace: '/tmp/project-alpha' })).toHaveLength(2)
+    expect(await store.list({ all: true })).toHaveLength(3)
+  })
+
   it('isolates project memories and scope-protects mutations', async () => {
     const store = createStore()
     const memory = await store.create({

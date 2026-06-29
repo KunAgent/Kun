@@ -94,6 +94,7 @@ function settings(): AppSettingsV1 {
     locale: 'en',
     theme: 'system',
     uiFontScale: 0.82,
+    chatContentMaxWidthPx: 896,
     cursorSpotlight: true,
     provider: defaultModelProviderSettings(),
     agents: {

@@ -1,0 +1,130 @@
+{
+  "version": 1,
+  "name": "kun-agent-core",
+  "defaults": {
+    "reasoningEffort": "off",
+    "timeoutMs": 300000
+  },
+  "tasks": [
+    {
+      "id": "architecture-summary",
+      "tags": ["smoke", "architecture"],
+      "prompt": "Read the repository and explain the active Renderer -> preload -> main -> Kun runtime data path. Cite the most relevant file paths. Do not modify files.",
+      "expect": { "requiredAnyTools": ["read", "grep", "find", "ls"] }
+    },
+    {
+      "id": "runtime-entrypoint",
+      "tags": ["smoke", "runtime"],
+      "prompt": "Find the Kun serve-mode composition root and summarize how stores, model clients, tools, and the agent loop are assembled. Cite exact file paths. Do not modify files.",
+      "expect": { "requiredAnyTools": ["read", "grep", "find", "ls"] }
+    },
+    {
+      "id": "renderer-send-flow",
+      "tags": ["smoke", "frontend"],
+      "prompt": "Trace a chat message from the renderer composer through the preload/main bridge to the Kun turn endpoint. Return a concise ordered call path with files. Do not modify files.",
+      "expect": { "requiredAnyTools": ["read", "grep", "find", "ls"] }
+    },
+    {
+      "id": "sse-replay",
+      "tags": ["smoke", "runtime"],
+      "prompt": "Explain how Kun SSE event replay avoids duplicates and cursor rewind after reconnect or restart. Cite the implementation and tests. Do not modify files.",
+      "expect": { "requiredAnyTools": ["read", "grep", "find", "ls"] }
+    },
+    {
+      "id": "mcp-lifecycle",
+      "tags": ["smoke", "mcp"],
+      "prompt": "Inspect MCP startup, tool discovery, execution, and reconnect behavior. Identify the main reliability boundaries and cite the implementation files. Do not modify files.",
+      "expect": { "requiredAnyTools": ["read", "grep", "find", "ls"] }
+    },
+    {
+      "id": "cache-prefix",
+      "tags": ["cache"],
+      "prompt": "Explain what makes Kun's immutable prompt prefix stable and list dynamic data that must remain outside it. Cite code and documentation. Do not modify files.",
+      "expect": { "requiredAnyTools": ["read", "grep", "find", "ls"] }
+    },
+    {
+      "id": "provider-url-contract",
+      "tags": ["provider"],
+      "prompt": "Trace how baseUrl and endpointFormat affect provider URL construction and request bodies across chat and auxiliary model calls. Cite all important consumers. Do not modify files.",
+      "expect": { "requiredAnyTools": ["read", "grep", "find", "ls"] }
+    },
+    {
+      "id": "attachment-flow",
+      "tags": ["attachments"],
+      "prompt": "Trace an image or local file attachment from renderer selection to model input or fallback. Identify the cross-layer contract fields and failure points. Do not modify files.",
+      "expect": { "requiredAnyTools": ["read", "grep", "find", "ls"] }
+    },
+    {
+      "id": "approval-flow",
+      "tags": ["runtime", "security"],
+      "prompt": "Trace a tool approval request from agent loop creation through SSE/UI resolution back to tool execution. Cite routes, gates, and renderer handlers. Do not modify files.",
+      "expect": { "requiredAnyTools": ["read", "grep", "find", "ls"] }
+    },
+    {
+      "id": "goal-resume",
+      "tags": ["runtime", "goal"],
+      "prompt": "Explain how active goals survive runtime restart, how orphaned turns are reconciled, and where auto-resume is triggered. Cite tests if present. Do not modify files.",
+      "expect": { "requiredAnyTools": ["read", "grep", "find", "ls"] }
+    },
+    {
+      "id": "subagent-permissions",
+      "tags": ["subagent", "security"],
+      "prompt": "Explain how subagent tool policies inherit or restrict built-in tools, MCP servers, and skills without escalating the parent permissions. Cite enforcement points. Do not modify files.",
+      "expect": { "requiredAnyTools": ["read", "grep", "find", "ls"] }
+    },
+    {
+      "id": "settings-persistence",
+      "tags": ["settings"],
+      "prompt": "Trace a Kun settings change from renderer state through validation/persistence to managed runtime restart. Highlight rollback behavior. Do not modify files.",
+      "expect": { "requiredAnyTools": ["read", "grep", "find", "ls"] }
+    },
+    {
+      "id": "test-selection",
+      "tags": ["quality"],
+      "prompt": "Identify how the verify_changes tool selects and runs validation after edits. Explain its safety limits and output contract. Do not modify files.",
+      "expect": { "requiredAnyTools": ["read", "grep", "find", "ls"] }
+    },
+    {
+      "id": "build-pipeline",
+      "tags": ["build"],
+      "prompt": "Summarize the development, typecheck, test, build, and packaging pipeline for Kun. Cite package scripts and packaging configuration. Do not modify files.",
+      "expect": { "requiredAnyTools": ["read", "grep", "find", "ls"] }
+    },
+    {
+      "id": "security-boundaries",
+      "tags": ["security"],
+      "prompt": "Map the main trust boundaries for renderer IPC, filesystem tools, command execution, MCP, and secrets. Cite concrete enforcement files. Do not modify files.",
+      "expect": { "requiredAnyTools": ["read", "grep", "find", "ls"] }
+    },
+    {
+      "id": "runtime-hotspots",
+      "tags": ["performance"],
+      "prompt": "Inspect runtime event persistence, SSE replay, tool execution, and context assembly. Identify three evidence-based performance or memory hotspots with file references. Do not modify files.",
+      "expect": { "requiredAnyTools": ["read", "grep", "find", "ls"] }
+    },
+    {
+      "id": "thread-persistence",
+      "tags": ["storage"],
+      "prompt": "Explain how thread/session data is persisted and indexed across file and hybrid SQLite stores, including usage carryover. Cite implementation files. Do not modify files.",
+      "expect": { "requiredAnyTools": ["read", "grep", "find", "ls"] }
+    },
+    {
+      "id": "model-capabilities",
+      "tags": ["provider"],
+      "prompt": "Explain how model capabilities control image input, tool calling, reasoning effort, endpoint format, and context limits. Cite schemas and request construction. Do not modify files.",
+      "expect": { "requiredAnyTools": ["read", "grep", "find", "ls"] }
+    },
+    {
+      "id": "frontend-chunking",
+      "tags": ["frontend", "performance"],
+      "prompt": "Inspect renderer lazy loading and identify which Workbench surfaces are split into separate chunks and which heavy chat dependencies still load eagerly. Do not modify files.",
+      "expect": { "requiredAnyTools": ["read", "grep", "find", "ls"] }
+    },
+    {
+      "id": "failure-recovery",
+      "tags": ["runtime", "reliability"],
+      "prompt": "Map how the desktop app detects an unhealthy Kun child, budgets restarts, distinguishes settings restarts from crashes, and reports status to the renderer. Do not modify files.",
+      "expect": { "requiredAnyTools": ["read", "grep", "find", "ls"] }
+    }
+  ]
+}

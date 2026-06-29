@@ -120,9 +120,36 @@ export type ReadLocalToolOptions = {
   operations?: ReadLocalToolOperations
 }
 
+export type BackgroundShellRecordInput = {
+  id: string
+  threadId: string
+  turnId: string
+  command: string
+  cwd: string
+  shell: string
+  status: 'running' | 'completed' | 'stopped' | 'failed'
+  startedAt: string
+  finishedAt?: string
+  exitCode: number | null
+  output: string
+  outputTruncated?: boolean
+  outputFilePath?: string
+  error?: string
+  detached: boolean
+}
+
+export type BackgroundShellHooks = {
+  onSessionStarted?: (record: BackgroundShellRecordInput) => void | Promise<void>
+  onSessionUpdated?: (record: BackgroundShellRecordInput) => void | Promise<void>
+  onSessionSettled?: (record: BackgroundShellRecordInput) => void | Promise<void>
+  isDetachedSession?: (sessionId: string) => boolean
+}
+
 export type BashLocalToolOptions = {
   defaultTimeoutSeconds?: number
   operations?: BashLocalToolOperations
+  backgroundShell?: BackgroundShellHooks
+  backgroundShellDataDir?: string
 }
 
 export type WriteLocalToolOptions = {

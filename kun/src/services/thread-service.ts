@@ -749,6 +749,7 @@ function rebuildTurnsFromItems(input: {
       attachmentIds: [],
       activeSkillIds: [],
       injectedMemoryIds: [],
+      injectedMemorySummaries: [],
       createdAt: input.now,
       finishedAt: input.now,
       items: []
@@ -767,6 +768,7 @@ function rebuildTurnsFromItems(input: {
       attachmentIds: attachmentIdsFromItems(items),
       activeSkillIds: [],
       injectedMemoryIds: [],
+      injectedMemorySummaries: [],
       createdAt: items[0]?.createdAt ?? input.now,
       finishedAt: input.now,
       items

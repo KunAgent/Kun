@@ -1,8 +1,13 @@
 import type { ChatBlock } from '../../agent/types'
+import { isBackgroundShellNoticeUserMessage } from '@shared/background-shell-notice'
 
 export type Turn = {
   user?: Extract<ChatBlock, { kind: 'user' }>
   blocks: ChatBlock[]
+}
+
+export function isBackgroundShellNoticeBlock(block: ChatBlock): boolean {
+  return block.kind === 'user' && isBackgroundShellNoticeUserMessage(block)
 }
 
 export function groupTurns(blocks: ChatBlock[]): Turn[] {
@@ -11,6 +16,11 @@ export function groupTurns(blocks: ChatBlock[]): Turn[] {
 
   for (const block of blocks) {
     if (block.kind === 'user') {
+      if (isBackgroundShellNoticeBlock(block)) {
+        if (!current) current = { blocks: [] }
+        current.blocks.push(block)
+        continue
+      }
       if (current) turns.push(current)
       current = { user: block, blocks: [] }
       continue
@@ -56,6 +66,7 @@ export function blockHasPendingRuntimeWork(block: ChatBlock): boolean {
 
 export function isProcessBlock(block: ChatBlock): boolean {
   return (
+    isBackgroundShellNoticeBlock(block) ||
     block.kind === 'reasoning' ||
     block.kind === 'tool' ||
     block.kind === 'compaction' ||

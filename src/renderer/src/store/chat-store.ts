@@ -4,6 +4,7 @@ import { getProvider } from '../agent/registry'
 import { rendererRuntimeClient } from '../agent/runtime-client'
 import i18n from '../i18n'
 import {
+  applyChatContentMaxWidth,
   applyCursorSpotlight,
   applyCursorSpotlightColor,
   applyDocumentLocale,
@@ -166,6 +167,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     },
     applyTheme,
     applyUiFontScale,
+    applyChatContentMaxWidth,
     applyCursorSpotlight,
     applyCursorSpotlightColor,
     applyWriteTypography,

@@ -2027,7 +2027,7 @@ describe('AgentLoop', () => {
   it('steers the turn and injects user messages', async () => {
     const h = makeHarness(makeSilentModel())
     await bootstrapThread(h)
-    h.steering.enqueue(h.turnId, 'follow up')
+    h.steering.enqueue(h.turnId, { text: 'follow up' })
     await h.loop.runTurn(h.threadId, h.turnId)
     const items = await h.sessionStore.loadItems(h.threadId)
     const user = items.find((item) => item.kind === 'user_message' && item.text === 'follow up')

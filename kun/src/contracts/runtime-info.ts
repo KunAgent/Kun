@@ -17,6 +17,13 @@ export const RuntimeInfoResponse = z
     insecure: z.boolean().optional(),
     startedAt: z.string(),
     pid: z.number().int().positive().optional(),
+    memoryUsage: z.object({
+      rssBytes: z.number().int().nonnegative(),
+      peakRssBytes: z.number().int().nonnegative(),
+      heapUsedBytes: z.number().int().nonnegative(),
+      heapTotalBytes: z.number().int().nonnegative(),
+      externalBytes: z.number().int().nonnegative()
+    }).strict().optional(),
     capabilities: RuntimeCapabilityManifest
   })
   .strict()

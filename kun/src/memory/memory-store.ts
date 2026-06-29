@@ -13,7 +13,7 @@ export interface MemoryStore {
   create(input: MemoryCreateRequest): Promise<MemoryRecord>
   update(id: string, patch: MemoryUpdateRequest, access?: MemoryAccess): Promise<MemoryRecord>
   delete(id: string, access?: MemoryAccess): Promise<MemoryRecord>
-  list(filter?: { workspace?: string; includeDeleted?: boolean }): Promise<MemoryRecord[]>
+  list(filter?: { workspace?: string; includeDeleted?: boolean; all?: boolean }): Promise<MemoryRecord[]>
   retrieve(input: { query: string; workspace?: string; limit: number }): Promise<MemoryRecord[]>
   diagnostics(): Promise<MemoryDiagnostics>
   setLastInjected(ids: string[]): void
@@ -84,11 +84,11 @@ export class FileMemoryStore implements MemoryStore {
     return next
   }
 
-  async list(filter: { workspace?: string; includeDeleted?: boolean } = {}): Promise<MemoryRecord[]> {
+  async list(filter: { workspace?: string; includeDeleted?: boolean; all?: boolean } = {}): Promise<MemoryRecord[]> {
     const records = await this.readAll()
     return records
       .filter((record) => filter.includeDeleted || !record.deletedAt)
-      .filter((record) => inScope(record, filter.workspace))
+      .filter((record) => filter.all || inScope(record, filter.workspace))
       .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
   }
 
