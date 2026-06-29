@@ -57,14 +57,14 @@ export class ReadTracker {
           'Read the current file contents in this turn before editing so SEARCH text is based on fresh bytes.'
       }
     }
-    if (record.turnId !== input.context.turnId) {
-      return {
-        ok: false,
-        message:
-          `read-before-edit guard blocked edit for ${displayPath(rawPath, input.context.workspace)}. ` +
-          'The previous read is from an earlier turn; read the file again before editing.'
-      }
-    }
+    // A read from an earlier turn still counts: agent responses routinely span
+    // multiple turns (a long reply, or tool results arriving as separate turn
+    // items), so read-in-turn-A then edit-in-turn-B is a legitimate sequence.
+    // Hard-blocking it forced a fallback to sed/bash, which mangles code (#640).
+    // Freshness is still enforced below — `requireOldTextInRead` checks the
+    // oldText fragments against the cached read content, and the edit's own
+    // fuzzy matching runs against the current bytes on disk, so a stale SEARCH
+    // string fails there with a clear error instead of corrupting the file.
     if (!this.options.requireOldTextInRead) return { ok: true }
     const missing = oldTextFragments(input.call.arguments).filter((fragment) => {
       if (!fragment.trim()) return false

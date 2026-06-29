@@ -459,6 +459,16 @@ function workspaceMatchesRoots(workspace: string, roots: readonly string[]): boo
 
 async function createSdkMcpClient(serverId: string, server: McpServerConfig): Promise<McpClientLike> {
   const client = new Client({ name: `kun-${serverId}`, version: '0.1.0' })
+  // Observe transport-level failures explicitly. The SDK routes a dropped SSE
+  // stream and exhausted background reconnects to `onerror`; with no handler
+  // they are silently swallowed, which hides real outages from the logs and (on
+  // some SDK/runtime versions) lets the rejection escape as unhandled. Handling
+  // it here keeps a streamable-http disconnect from destabilizing the runtime
+  // (#639) — the per-call reconnect in callMcpToolWithReconnect still recovers
+  // the connection on the next tool use.
+  client.onerror = (error) => {
+    process.stderr.write(`kun mcp[${serverId}]: transport error: ${redactSecretText(errorMessage(error))}\n`)
+  }
   const transport = createTransport(server)
   await client.connect(transport, { timeout: server.timeoutMs })
   return {
