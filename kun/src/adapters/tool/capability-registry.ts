@@ -29,6 +29,7 @@ const PLAN_MODE_ALLOWED_TOOL_NAMES = new Set([
   'grep',
   'find',
   'ls',
+  'repo_map',
   'create_plan',
   'user_input',
   'request_user_input'
