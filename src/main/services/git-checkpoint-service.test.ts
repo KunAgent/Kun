@@ -417,3 +417,81 @@ describe('git checkpoint service', () => {
     expect(second.result.deletedIds).toEqual(['gcp_second'])
   })
 })
+
+describe('git checkpoint storage limits (issue #651)', () => {
+  it('stores checkpoints under a user-configured directory (e.g. another drive)', async () => {
+    const customRoot = join(sandbox, 'other-drive', 'kun-checkpoints')
+    const checkpoint = await createGitCheckpoint({
+      dataDir,
+      workspaceRoot: repoRoot,
+      threadId: 'thr_1',
+      storage: { checkpointsRoot: customRoot }
+    })
+    expect(checkpoint.ok).toBe(true)
+    if (!checkpoint.ok) throw new Error(checkpoint.message)
+    await expect(stat(join(customRoot, checkpoint.checkpointId, 'metadata.json'))).resolves.toBeTruthy()
+    // Nothing should have been written under the default data dir location.
+    await expect(stat(join(dataDir, 'git-checkpoints', checkpoint.checkpointId))).rejects.toBeTruthy()
+  })
+
+  it('skips untracked files larger than the per-file cap and records them', async () => {
+    await writeFile(join(repoRoot, 'small.txt'), 'tiny')
+    await writeFile(join(repoRoot, 'huge.bin'), Buffer.alloc(2_000_000, 1))
+    const checkpoint = await createGitCheckpoint({
+      dataDir,
+      workspaceRoot: repoRoot,
+      threadId: 'thr_1',
+      storage: { maxUntrackedFileBytes: 1_000_000 }
+    })
+    expect(checkpoint.ok).toBe(true)
+    if (!checkpoint.ok) throw new Error(checkpoint.message)
+    const dir = join(dataDir, 'git-checkpoints', checkpoint.checkpointId)
+    const metadata = JSON.parse(await readFile(join(dir, 'metadata.json'), 'utf-8')) as {
+      untrackedFiles: string[]; skippedUntracked?: string[]
+    }
+    expect(metadata.untrackedFiles).toContain('small.txt')
+    expect(metadata.skippedUntracked).toContain('huge.bin')
+    await expect(stat(join(dir, 'untracked', 'huge.bin'))).rejects.toBeTruthy()
+    await expect(stat(join(dir, 'untracked', 'small.txt'))).resolves.toBeTruthy()
+  })
+
+  it('stops snapshotting untracked files once the total budget is hit', async () => {
+    await writeFile(join(repoRoot, 'a.bin'), Buffer.alloc(600_000, 1))
+    await writeFile(join(repoRoot, 'b.bin'), Buffer.alloc(600_000, 1))
+    const checkpoint = await createGitCheckpoint({
+      dataDir,
+      workspaceRoot: repoRoot,
+      threadId: 'thr_1',
+      storage: { maxUntrackedFileBytes: 1_000_000, maxUntrackedTotalBytes: 1_000_000 }
+    })
+    if (!checkpoint.ok) throw new Error(checkpoint.message)
+    const dir = join(dataDir, 'git-checkpoints', checkpoint.checkpointId)
+    const metadata = JSON.parse(await readFile(join(dir, 'metadata.json'), 'utf-8')) as {
+      untrackedFiles: string[]; skippedUntracked?: string[]
+    }
+    // One file fits the 1MB budget, the second is skipped.
+    expect(metadata.untrackedFiles.length).toBe(1)
+    expect(metadata.skippedUntracked?.length).toBe(1)
+  })
+
+  it('prunes oldest checkpoints beyond the per-thread cap', async () => {
+    const ids: string[] = []
+    for (let i = 0; i < 4; i += 1) {
+      const cp = await createGitCheckpoint({
+        dataDir,
+        workspaceRoot: repoRoot,
+        threadId: 'thr_cap',
+        checkpointId: `gcp_${1000 + i}_fixed-${i}`,
+        storage: { maxPerThread: 2 }
+      })
+      if (!cp.ok) throw new Error(cp.message)
+      ids.push(cp.checkpointId)
+    }
+    const root = join(dataDir, 'git-checkpoints')
+    // Only the two newest survive; the two oldest are pruned.
+    await expect(stat(join(root, ids[0]))).rejects.toBeTruthy()
+    await expect(stat(join(root, ids[1]))).rejects.toBeTruthy()
+    await expect(stat(join(root, ids[2]))).resolves.toBeTruthy()
+    await expect(stat(join(root, ids[3]))).resolves.toBeTruthy()
+  })
+})

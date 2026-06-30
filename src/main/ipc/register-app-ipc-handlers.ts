@@ -127,7 +127,7 @@ import {
   removeGitBranchWorktree,
   switchGitBranch
 } from '../services/git-service'
-import { createGitCheckpoint, restoreGitCheckpoint } from '../services/git-checkpoint-service'
+import { createGitCheckpoint, restoreGitCheckpoint, type GitCheckpointStorageOptions } from '../services/git-checkpoint-service'
 import {
   abortMerge,
   abortRebase,
@@ -1011,6 +1011,16 @@ export function registerAppIpcHandlers(options: RegisterAppIpcHandlersOptions): 
     return expandHomePath(runtime.dataDir?.trim() || DEFAULT_KUN_DATA_DIR)
   }
 
+  // Map the user's checkpoint settings (issue #651) to the service storage
+  // options: an optional directory override (e.g. another drive) and the
+  // per-thread retention cap. Home-relative paths are expanded.
+  const resolveCheckpointStorageOptions = (
+    cfg: { directory?: string; maxPerThread?: number }
+  ): GitCheckpointStorageOptions => ({
+    ...(cfg.directory?.trim() ? { checkpointsRoot: expandHomePath(cfg.directory.trim()) } : {}),
+    ...(cfg.maxPerThread !== undefined ? { maxPerThread: cfg.maxPerThread } : {})
+  })
+
   ipcMain.handle('kun:sessions:detect-legacy', async () =>
     detectLegacySessions({ homeDir: homedir(), destDataDir: await resolveKunThreadsDataDir() })
   )
@@ -1071,17 +1081,21 @@ export function registerAppIpcHandlers(options: RegisterAppIpcHandlersOptions): 
   )
   ipcMain.handle('git:checkpoint:create', async (_, payload: unknown) => {
     const request = parseIpcPayload('git:checkpoint:create', gitCheckpointCreatePayloadSchema, payload)
+    const settings = await store.load()
     return createGitCheckpoint({
       dataDir: await resolveKunThreadsDataDir(),
       workspaceRoot: request.workspaceRoot,
-      threadId: request.threadId
+      threadId: request.threadId,
+      storage: resolveCheckpointStorageOptions(settings.checkpointCleanup)
     })
   })
   ipcMain.handle('git:checkpoint:restore', async (_, payload: unknown) => {
     const request = parseIpcPayload('git:checkpoint:restore', gitCheckpointRestorePayloadSchema, payload)
+    const settings = await store.load()
     return restoreGitCheckpoint({
       dataDir: await resolveKunThreadsDataDir(),
       checkpointId: request.checkpointId,
+      storage: resolveCheckpointStorageOptions(settings.checkpointCleanup),
       // Bridge the main-process runtimeRequest into the shape restoreGitCheckpoint
       // expects ((path, {method, body}) => {ok,status,body}). On a transport-level
       // failure (runtime not up, connection refused) we return a non-ok result so

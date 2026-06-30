@@ -134,11 +134,19 @@ export function normalizeCheckpointCleanupSettings(
   settings?: Partial<CheckpointCleanupConfigV1>
 ): CheckpointCleanupConfigV1 {
   const intervalDays = normalizeCheckpointCleanupIntervalDays(settings?.intervalDays)
+  const directory = typeof settings?.directory === 'string' ? settings.directory.trim() : ''
+  const maxPerThread = typeof settings?.maxPerThread === 'number' && Number.isFinite(settings.maxPerThread)
+    ? Math.max(1, Math.min(100, Math.floor(settings.maxPerThread)))
+    : undefined
   return {
     enabled: typeof settings?.enabled === 'boolean' ? settings.enabled : DEFAULT_CHECKPOINT_CLEANUP_ENABLED,
     intervalDays: CHECKPOINT_CLEANUP_INTERVAL_DAYS.includes(intervalDays)
       ? intervalDays
-      : DEFAULT_CHECKPOINT_CLEANUP_INTERVAL_DAYS
+      : DEFAULT_CHECKPOINT_CLEANUP_INTERVAL_DAYS,
+    // Only include the optional storage overrides when explicitly set so
+    // existing settings snapshots (which omit them) stay byte-for-byte equal.
+    ...(directory ? { directory } : {}),
+    ...(maxPerThread !== undefined ? { maxPerThread } : {})
   }
 }
 

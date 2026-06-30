@@ -614,6 +614,36 @@ export function GeneralSettingsSection({ ctx }: { ctx: Record<string, any> }): R
                     </select>
                   }
                 />
+                <SettingRow
+                  title={t('checkpointDirectory')}
+                  description={t('checkpointDirectoryDesc')}
+                  control={
+                    <input
+                      type="text"
+                      className={selectControlClass}
+                      placeholder={t('checkpointDirectoryPlaceholder')}
+                      value={form.checkpointCleanup.directory ?? ''}
+                      onChange={(e) => update({ checkpointCleanup: { directory: e.target.value } })}
+                    />
+                  }
+                />
+                <SettingRow
+                  title={t('checkpointMaxPerThread')}
+                  description={t('checkpointMaxPerThreadDesc')}
+                  control={
+                    <input
+                      type="number"
+                      min={1}
+                      max={100}
+                      className={selectControlClass}
+                      value={form.checkpointCleanup.maxPerThread ?? 5}
+                      onChange={(e) => {
+                        const n = Number(e.target.value)
+                        update({ checkpointCleanup: { maxPerThread: Number.isFinite(n) ? Math.max(1, Math.min(100, Math.floor(n))) : 5 } })
+                      }}
+                    />
+                  }
+                />
               </SettingsCard>
 
               <SettingsCard title={t('logTitle')} className="mt-6">

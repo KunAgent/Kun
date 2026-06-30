@@ -622,6 +622,15 @@ export type LogConfigV1 = {
 export type CheckpointCleanupConfigV1 = {
   enabled: boolean
   intervalDays: CheckpointCleanupIntervalDays
+  /**
+   * Optional override for the Git checkpoint storage directory (issue #651).
+   * Lets users point checkpoints at another drive with more free space instead
+   * of filling the system drive under the Kun data dir. Absent = default
+   * (`<dataDir>/git-checkpoints`).
+   */
+  directory?: string
+  /** Keep at most this many checkpoints per thread (oldest pruned). Absent = default 5. */
+  maxPerThread?: number
 }
 
 export type NotificationConfigV1 = {

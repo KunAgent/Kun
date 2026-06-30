@@ -72,6 +72,7 @@ import {
   waitForKunStartupSettled,
   type KunUnexpectedExitInfo
 } from './kun-process'
+import { expandHomePath } from './settings-store'
 import { RestartBudget, type KunRuntimeStatus } from './kun-runtime-supervisor'
 import { configureLogger, logError, logWarn, pruneOnStartup } from './logger'
 import { cleanupUnusedGitCheckpointsIfDue } from './services/git-checkpoint-service'
@@ -249,8 +250,15 @@ async function runCheckpointCleanupIfDue(settings: AppSettingsV1): Promise<void>
   const runtime = resolveKunRuntimeSettings(settings)
   const dataDir = resolveKunDataDir(runtime)
   const intervalDays = settings.checkpointCleanup.intervalDays
+  const checkpointsRoot = settings.checkpointCleanup.directory?.trim()
+    ? expandHomePath(settings.checkpointCleanup.directory.trim())
+    : undefined
   try {
-    const cleanup = await cleanupUnusedGitCheckpointsIfDue({ dataDir, intervalDays })
+    const cleanup = await cleanupUnusedGitCheckpointsIfDue({
+      dataDir,
+      intervalDays,
+      ...(checkpointsRoot ? { checkpointsRoot } : {})
+    })
     if (!cleanup.due) return
     const { result } = cleanup
     console.info(
