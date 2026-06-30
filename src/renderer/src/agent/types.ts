@@ -503,6 +503,7 @@ export interface AgentProvider {
   getToolDiagnostics?(): Promise<CoreRuntimeToolDiagnosticsJson>
   getMcpOAuthDiagnostics?(): Promise<CoreMcpOAuthDiagnosticJson[]>
   clearMcpOAuthCredentials?(serverId?: string): Promise<string[]>
+  authorizeMcpOAuthCredentials?(serverId: string): Promise<import('./kun-contract').CoreMcpOAuthAuthorizeResponseJson>
   listSkills?(): Promise<CoreRuntimeSkillJson[]>
   uploadAttachment?(input: {
     name: string

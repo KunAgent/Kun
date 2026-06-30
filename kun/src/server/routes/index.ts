@@ -56,7 +56,7 @@ import {
   backgroundShellList,
   backgroundShellStop
 } from './background-shells.js'
-import { clearMcpOAuth, mcpOAuthDiagnostics } from './mcp-oauth.js'
+import { authorizeMcpOAuth, clearMcpOAuth, mcpOAuthDiagnostics } from './mcp-oauth.js'
 import { isAuthorized, bearerToken } from '../auth.js'
 import { ERRORS } from './runtime-error.js'
 import type { ServerRuntime } from './server-runtime.js'
@@ -116,6 +116,10 @@ export function buildRouter(runtime: ServerRuntime): Router {
   router.add('DELETE', '/v1/mcp/oauth/:id', async (request, ctx) => {
     if (!authorize(request, runtime)) return ERRORS.unauthorized()
     return clearMcpOAuth(runtime, ctx.params.id)
+  })
+  router.add('POST', '/v1/mcp/oauth/:id', async (request, ctx) => {
+    if (!authorize(request, runtime)) return ERRORS.unauthorized()
+    return authorizeMcpOAuth(runtime, ctx.params.id)
   })
   router.add('GET', '/v1/skills', async (request) => {
     if (!authorize(request, runtime)) return ERRORS.unauthorized()

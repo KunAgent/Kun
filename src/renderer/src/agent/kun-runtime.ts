@@ -49,6 +49,7 @@ import type {
   CoreMemoryListResponseJson,
   CoreMemoryRecordJson,
   CoreMcpOAuthClearResponseJson,
+  CoreMcpOAuthAuthorizeResponseJson,
   CoreMcpOAuthDiagnosticJson,
   CoreMcpOAuthDiagnosticsResponseJson,
   CoreResumeSessionResponseJson,
@@ -668,6 +669,17 @@ export class KunRuntimeProvider implements AgentProvider {
       response.body,
       'runtime returned an invalid MCP OAuth reset response'
     ).cleared
+  }
+
+  async authorizeMcpOAuthCredentials(serverId: string): Promise<CoreMcpOAuthAuthorizeResponseJson> {
+    const response = await rendererRuntimeClient.runtimeRequest(kunMcpOAuthServerPath(serverId), 'POST')
+    if (!response.ok) {
+      throw runtimeErrorToError(readRuntimeError(response.body, 'failed to authorize MCP OAuth connector'))
+    }
+    return readRuntimeJson<CoreMcpOAuthAuthorizeResponseJson>(
+      response.body,
+      'runtime returned an invalid MCP OAuth authorize response'
+    )
   }
 
   async listSkills(): Promise<CoreRuntimeSkillJson[]> {

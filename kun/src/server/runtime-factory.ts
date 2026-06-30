@@ -84,6 +84,7 @@ import { createChildAgentExecutor } from '../delegation/child-agent-executor.js'
 import { BackgroundShellRuntime } from '../services/background-shell-runtime.js'
 import { stopBashSessionById, createBashLocalTool } from '../adapters/tool/builtin-bash-tool.js'
 import { createBackgroundShellTool } from '../adapters/tool/background-shell-tool.js'
+import { createSecretEncryptor, defaultSecretCommandRunner } from '../security/secret-store.js'
 import type { LocalTool } from '../adapters/tool/local-tool-host.js'
 
 export type KunServeRuntimeOptions = {
@@ -224,10 +225,20 @@ export async function createKunServeRuntime(
     default: defaultModelClient,
     providers: providerClients
   })
+  const hasMcpOAuth = Object.values(options.capabilities?.mcp?.servers ?? {}).some((server) =>
+    server.oauth?.enabled !== false && Boolean(server.oauth) && server.transport !== 'stdio'
+  )
+  const oauthEncryptor = hasMcpOAuth
+    ? (await createSecretEncryptor({
+        keyFilePath: join(options.dataDir, 'secret.key'),
+        run: defaultSecretCommandRunner
+      })).encryptor
+    : undefined
   // Independent I/O; all must still finish before the server listens.
   const [mcpProviders, skillRuntime] = await Promise.all([
     buildMcpToolProviders(options.capabilities?.mcp, {
-      oauthStorageDir: join(options.dataDir, 'mcp-oauth')
+      oauthStorageDir: join(options.dataDir, 'mcp-oauth'),
+      ...(oauthEncryptor ? { oauthEncryptor } : {})
     }),
     SkillRuntime.create(options.capabilities?.skills),
     seedUsageCarryover({ threadStore, sessionStore, usageService })
@@ -639,6 +650,7 @@ export async function createKunServeRuntime(
     }),
     mcpOAuth: async () => mcpProviders.oauth,
     clearMcpOAuth: async (serverId) => mcpProviders.clearOAuthCredentials(serverId),
+    authorizeMcpOAuth: async (serverId) => mcpProviders.authorizeOAuth(serverId),
     skills: () => skillRuntime.diagnostics(),
     shutdown: async () => {
       try {

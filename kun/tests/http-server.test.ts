@@ -211,6 +211,46 @@ describe('HTTP server', () => {
     await expect(readJson(cleared)).resolves.toEqual({ cleared: ['google_drive'] })
   })
 
+  it('runs MCP OAuth authorization through the HTTP layer', async () => {
+    const h = buildHarness()
+    const authorized: string[] = []
+    h.runtime.authorizeMcpOAuth = async (serverId: string) => {
+      authorized.push(serverId)
+      return { serverId, status: 'authorized', authorized: true }
+    }
+
+    const response = await dispatchRequest(
+      h.router,
+      new Request('http://localhost/v1/mcp/oauth/google_drive', {
+        method: 'POST',
+        headers: { authorization: 'Bearer tok-1' }
+      })
+    )
+
+    expect(response.status).toBe(200)
+    await expect(readJson(response)).resolves.toEqual({
+      serverId: 'google_drive',
+      status: 'authorized',
+      authorized: true
+    })
+    expect(authorized).toEqual(['google_drive'])
+  })
+
+  it('reports MCP OAuth authorization as unavailable when the runtime lacks it', async () => {
+    const h = buildHarness()
+    h.runtime.authorizeMcpOAuth = undefined
+
+    const response = await dispatchRequest(
+      h.router,
+      new Request('http://localhost/v1/mcp/oauth/google_drive', {
+        method: 'POST',
+        headers: { authorization: 'Bearer tok-1' }
+      })
+    )
+
+    expect(response.status).toBe(503)
+  })
+
   it('lists discovered skills through the HTTP layer', async () => {
     const h = buildHarness()
     h.runtime.skills = () => ({

@@ -96,6 +96,20 @@ describe('KunRuntimeProvider', () => {
     )
   })
 
+  it('starts MCP OAuth authorization through the authenticated runtime bridge', async () => {
+    const runtimeRequest = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      body: JSON.stringify({ serverId: 'google_drive', status: 'authorized', authorized: true })
+    }))
+    installDsGui({ runtimeRequest })
+
+    const result = await new KunRuntimeProvider().authorizeMcpOAuthCredentials('google_drive')
+
+    expect(runtimeRequest).toHaveBeenCalledWith('/v1/mcp/oauth/google_drive', 'POST')
+    expect(result).toEqual({ serverId: 'google_drive', status: 'authorized', authorized: true })
+  })
+
   it('maps Kun thread items into chat blocks', async () => {
     installDsGui({
       runtimeRequest: vi.fn(async () => ({

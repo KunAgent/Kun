@@ -11,3 +11,8 @@ export async function clearMcpOAuth(runtime: ServerRuntime, serverId?: string): 
   if (!runtime.clearMcpOAuth) return ERRORS.unavailable('MCP OAuth credential reset is not available')
   return jsonResponse(await runtime.clearMcpOAuth(serverId))
 }
+
+export async function authorizeMcpOAuth(runtime: ServerRuntime, serverId: string): Promise<JsonResponse> {
+  if (!runtime.authorizeMcpOAuth) return ERRORS.unavailable('MCP OAuth authorization is not available')
+  return jsonResponse(await runtime.authorizeMcpOAuth(serverId))
+}
