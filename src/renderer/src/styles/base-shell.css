@@ -855,7 +855,8 @@ body {
   position: relative;
   isolation: isolate;
   font-family:
-    'SF Pro Text', 'PingFang SC', 'Noto Sans SC', 'Helvetica Neue', Arial, sans-serif;
+    -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', 'Helvetica Neue', Arial, 'Noto Sans',
+    'PingFang SC', 'Hiragino Sans GB', 'Noto Sans SC', 'Microsoft YaHei', sans-serif;
   background-color: var(--ds-bg-main);
   color: var(--ds-text);
   user-select: none;

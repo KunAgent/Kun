@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { nextVisibleLength } from './StreamdownAssistant'
+import { nextVisibleLength, visibleTextForTypewriter } from './StreamdownAssistant'
 
 describe('nextVisibleLength', () => {
   it('stays put when caught up', () => {
@@ -29,5 +29,21 @@ describe('nextVisibleLength', () => {
       expect(current).toBeLessThanOrEqual(target)
     }
     expect(current).toBe(target)
+  })
+})
+
+describe('visibleTextForTypewriter', () => {
+  it('does not split decomposed Vietnamese accents mid-stream', () => {
+    const text = `Pha\u0302n ti\u0301ch`
+
+    expect(visibleTextForTypewriter(text, 3)).toBe(`Pha\u0302`)
+    expect(visibleTextForTypewriter(text, 8)).toBe(`Pha\u0302n ti\u0301`)
+  })
+
+  it('keeps joined emoji intact', () => {
+    const text = '👩‍💻 demo'
+
+    expect(visibleTextForTypewriter(text, 1)).toBe('👩‍💻')
+    expect(visibleTextForTypewriter(text, 2)).toBe('👩‍💻')
   })
 })

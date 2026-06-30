@@ -29,7 +29,7 @@
 .ds-markdown h2,
 .ds-markdown h3 {
   margin: 0 0 0.42rem;
-  font-family: 'SF Pro Display', 'PingFang SC', 'Noto Sans SC', sans-serif;
+  font-family: 'SF Pro Display', 'Segoe UI', 'Noto Sans', 'PingFang SC', 'Noto Sans SC', sans-serif;
   font-weight: 600;
   letter-spacing: 0;
   line-height: 1.2;
