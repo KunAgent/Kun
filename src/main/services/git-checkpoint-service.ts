@@ -637,8 +637,9 @@ export async function restoreGitCheckpoint(params: {
    * untracked files because they were over the size budget). A partial restore
    * runs `git clean -fd`, which deletes those never-captured files; without this
    * flag the restore is refused so the user does not silently lose data. When
-   * enabled, a full (unbounded) rescue checkpoint is taken first so the cleaned
-   * files remain recoverable.
+   * enabled, a complete rescue checkpoint is taken first so the cleaned files
+   * remain recoverable. The restore still fails closed when the configured
+   * checkpoint budget cannot capture that rescue.
    */
   allowPartialRestore?: boolean
   /**
@@ -718,22 +719,35 @@ export async function restoreGitCheckpoint(params: {
       }
     }
 
-    // The rescue checkpoint is the safety net for `reset --hard` + `clean -fd`,
-    // so it MUST capture everything currently in the workspace — including large
-    // untracked files the normal size budget would skip. Use unbounded caps here
-    // (this is a rare, explicit, destructive operation) so nothing the clean is
-    // about to delete becomes unrecoverable.
+    // The rescue checkpoint is the safety net for `reset --hard` + `clean -fd`.
+    // Never bypass the storage budget here: an unbounded rescue reintroduces the
+    // disk-exhaustion failure this service is meant to prevent. Instead require a
+    // COMPLETE rescue and fail closed before the first destructive git command.
     const rescue = await createGitCheckpoint({
       dataDir: params.dataDir,
-      storage: {
-        ...(params.storage ?? {}),
-        maxUntrackedFileBytes: Number.POSITIVE_INFINITY,
-        maxUntrackedTotalBytes: Number.POSITIVE_INFINITY
-      },
+      storage: params.storage,
       workspaceRoot: repositoryRoot,
       threadId: `${metadata.threadId}:rollback-rescue`
     })
-    const rescueCheckpointId = rescue.ok ? rescue.checkpointId : null
+    if (!rescue.ok) {
+      return {
+        ok: false,
+        reason: rescue.reason,
+        message: `Cannot safely restore checkpoint because the rescue snapshot failed: ${rescue.message}`
+      }
+    }
+    const rescueMetadata = await readMetadata(root, rescue.checkpointId)
+    if (!rescueMetadata || rescueMetadata.completeness !== 'complete') {
+      return {
+        ok: false,
+        reason: 'partial',
+        message:
+          'Cannot safely restore checkpoint because the current workspace does not fit the configured rescue snapshot limits. ' +
+          'Increase the checkpoint limits or move/remove the oversized untracked files, then retry.',
+        skippedUntracked: rescueMetadata?.skippedUntracked ?? []
+      }
+    }
+    const rescueCheckpointId = rescue.checkpointId
 
     await runGit(repositoryRoot, ['reset', '--hard'], 30_000)
     await runGit(repositoryRoot, ['clean', '-fd'], 30_000)

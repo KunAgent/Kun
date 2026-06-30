@@ -508,7 +508,7 @@ describe('git checkpoint storage limits (issue #651)', () => {
     expect(metadata.completeness).toBe('complete')
   })
 
-  it('restores a partial checkpoint with allowPartialRestore and captures skipped files in a full rescue', async () => {
+  it('restores a partial checkpoint only when the bounded rescue is complete', async () => {
     await writeFile(join(repoRoot, 'huge.bin'), Buffer.alloc(2_000_000, 7))
     const checkpoint = await createGitCheckpoint({
       dataDir,
@@ -526,10 +526,31 @@ describe('git checkpoint storage limits (issue #651)', () => {
     expect(restored.ok).toBe(true)
     if (!restored.ok) throw new Error(restored.message)
     expect(restored.rescueCheckpointId).toMatch(/^gcp_/)
-    // The rescue used unbounded caps, so the over-budget file IS recoverable
-    // from the rescue even though the live workspace was cleaned.
+    // The file exceeds the original checkpoint's custom cap but fits the normal
+    // bounded rescue policy, so it remains recoverable.
     const rescueUntracked = join(dataDir, 'git-checkpoints', restored.rescueCheckpointId as string, 'untracked', 'huge.bin')
     expect((await stat(rescueUntracked)).size).toBe(2_000_000)
+  })
+
+  it('fails closed before reset/clean when the rescue snapshot is partial', async () => {
+    await writeFile(join(repoRoot, 'huge.bin'), Buffer.alloc(6_000_000, 9))
+    const checkpoint = await createGitCheckpoint({
+      dataDir,
+      workspaceRoot: repoRoot,
+      threadId: 'thr_partial_rescue',
+      storage: { maxUntrackedFileBytes: 1_000_000 }
+    })
+    if (!checkpoint.ok) throw new Error(checkpoint.message)
+
+    const restored = await restoreGitCheckpoint({
+      dataDir,
+      checkpointId: checkpoint.checkpointId,
+      allowPartialRestore: true
+    })
+    expect(restored.ok).toBe(false)
+    if (restored.ok) throw new Error('expected incomplete rescue to refuse restore')
+    expect(restored.reason).toBe('partial')
+    expect((await stat(join(repoRoot, 'huge.bin'))).size).toBe(6_000_000)
   })
 
   it('prunes oldest checkpoints beyond the per-thread cap', async () => {
