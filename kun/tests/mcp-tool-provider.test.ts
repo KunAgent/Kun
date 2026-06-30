@@ -16,6 +16,7 @@ import {
   isMcpServerTrusted,
   isMcpServerVisible,
   listMcpOAuthDiagnostics,
+  McpAuthorizationRequiredError,
   normalizeMcpToolName,
   resolveMcpServerCwd,
   type McpClientLike
@@ -939,9 +940,12 @@ describe('MCP tool provider', () => {
       join(root, 'vercel.json'),
       async (url) => {
         opened.push(url.toString())
-      }
+      },
+      undefined,
+      true
     )
 
+    const oauthState = provider.state()
     await provider.redirectToAuthorization(new URL('https://auth.example.test/authorize'))
     expect(provider.redirectUrl.port).toBe(String(redirectPort))
     const code = provider.waitForAuthorizationCode()
@@ -949,6 +953,7 @@ describe('MCP tool provider', () => {
       .catch((error: unknown) => ({ ok: false as const, error }))
     const callbackUrl = new URL(provider.redirectUrl)
     callbackUrl.searchParams.set('code', 'abc123')
+    callbackUrl.searchParams.set('state', oauthState)
     const status = await httpStatus(callbackUrl)
 
     expect(status).toBe(200)
@@ -978,7 +983,9 @@ describe('MCP tool provider', () => {
       join(root, 'vercel.json'),
       async (url) => {
         opened.push(url.toString())
-      }
+      },
+      undefined,
+      true
     )
 
     await expect(provider.redirectToAuthorization(new URL('file:///tmp/token'))).rejects.toThrow(/http or https/)
@@ -1008,7 +1015,9 @@ describe('MCP tool provider', () => {
       'vercel',
       server,
       join(root, 'vercel.json'),
-      async () => undefined
+      async () => undefined,
+      undefined,
+      true
     )
 
     const state = provider.state()
@@ -1061,5 +1070,226 @@ describe('MCP tool provider', () => {
     await built.close()
 
     expect(closed).toBe(1)
+  })
+})
+
+describe('mcp oauth diagnostics state machine', () => {
+  function oauthServer(): McpServerConfig {
+    return KunCapabilitiesConfig.parse({
+      mcp: {
+        enabled: true,
+        servers: {
+          vercel: {
+            transport: 'streamable-http',
+            url: 'https://mcp.vercel.com',
+            trustScope: 'user',
+            oauth: { scopes: ['projects.read'] }
+          }
+        }
+      }
+    }).mcp.servers.vercel as McpServerConfig
+  }
+
+  it('reports empty then partial as credential material accrues', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kun-mcp-oauth-'))
+    const provider = new FileMcpOAuthProvider('vercel', oauthServer(), join(root, 'vercel.json'), async () => undefined)
+
+    expect((await provider.diagnostics()).status).toBe('empty')
+
+    await provider.saveCodeVerifier('verifier-1')
+    expect((await provider.diagnostics()).status).toBe('partial')
+  })
+
+  it('treats a saved token with future expiry as authorized and exposes expiresAt', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kun-mcp-oauth-'))
+    let clock = 1_700_000_000_000
+    const provider = new FileMcpOAuthProvider(
+      'vercel',
+      oauthServer(),
+      join(root, 'vercel.json'),
+      async () => undefined,
+      () => clock
+    )
+
+    await provider.saveTokens({ access_token: 'access-1', token_type: 'Bearer', expires_in: 3600 })
+    const diagnostics = await provider.diagnostics()
+
+    expect(diagnostics.status).toBe('authorized')
+    expect(diagnostics.expiresAt).toBe(new Date(clock + 3600 * 1000).toISOString())
+  })
+
+  it('flips to expired once the access token outlives its lifetime', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kun-mcp-oauth-'))
+    let clock = 1_700_000_000_000
+    const provider = new FileMcpOAuthProvider(
+      'vercel',
+      oauthServer(),
+      join(root, 'vercel.json'),
+      async () => undefined,
+      () => clock
+    )
+
+    await provider.saveTokens({ access_token: 'access-1', token_type: 'Bearer', expires_in: 10, refresh_token: 'refresh-1' })
+    clock += 20_000
+    const diagnostics = await provider.diagnostics()
+
+    expect(diagnostics.status).toBe('expired')
+    expect(diagnostics.hasRefreshToken).toBe(true)
+  })
+
+  it('surfaces the provider-granted scopes parsed from the token', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kun-mcp-oauth-'))
+    const provider = new FileMcpOAuthProvider('vercel', oauthServer(), join(root, 'vercel.json'), async () => undefined)
+
+    await provider.saveTokens({
+      access_token: 'access-1',
+      token_type: 'Bearer',
+      scope: 'projects.read  deployments.read projects.read deployments.write'
+    })
+    const diagnostics = await provider.diagnostics()
+
+    expect(diagnostics.grantedScopes).toEqual(['projects.read', 'deployments.read', 'deployments.write'])
+  })
+
+  it('omits grantedScopes when the provider returns no scope', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kun-mcp-oauth-'))
+    const provider = new FileMcpOAuthProvider('vercel', oauthServer(), join(root, 'vercel.json'), async () => undefined)
+
+    await provider.saveTokens({ access_token: 'access-1', token_type: 'Bearer' })
+    const diagnostics = await provider.diagnostics()
+
+    expect(diagnostics.grantedScopes).toBeUndefined()
+  })
+
+  it('surfaces a recorded authorization failure as error and clears it on the next token', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kun-mcp-oauth-'))
+    const provider = new FileMcpOAuthProvider('vercel', oauthServer(), join(root, 'vercel.json'), async () => undefined)
+
+    await provider.recordAuthorizationError('MCP OAuth authorization failed: access_denied')
+    const failed = await provider.diagnostics()
+    expect(failed.status).toBe('error')
+    expect(failed.lastError).toContain('access_denied')
+    expect(failed.lastErrorAt).toBeDefined()
+
+    await provider.saveTokens({ access_token: 'access-1', token_type: 'Bearer' })
+    const recovered = await provider.diagnostics()
+    expect(recovered.status).toBe('authorized')
+    expect(recovered.lastError).toBeUndefined()
+  })
+
+  it('exposes an authorize entry point that no-ops for unknown servers', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kun-mcp-oauth-'))
+    const config = KunCapabilitiesConfig.parse({
+      mcp: { enabled: true, servers: { vercel: oauthServer() } }
+    })
+    const built = await buildMcpToolProviders(config.mcp, {
+      oauthStorageDir: root,
+      clientFactory: async () => fakeClient()
+    })
+    await built.close()
+
+    await expect(built.authorizeOAuth('does-not-exist')).resolves.toEqual({
+      serverId: 'does-not-exist',
+      status: 'disabled',
+      authorized: false
+    })
+  })
+
+  it('does not block startup when a remote server needs authorization', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kun-mcp-oauth-'))
+    const config = KunCapabilitiesConfig.parse({
+      mcp: { enabled: true, servers: { vercel: oauthServer() } }
+    })
+    let opened = 0
+    // A non-interactive startup surfaces a typed "needs authorization" error
+    // instead of opening a browser; the build still resolves so the runtime is
+    // never blocked on a user completing an OAuth handshake.
+    const built = await buildMcpToolProviders(config.mcp, {
+      oauthStorageDir: root,
+      openExternal: () => {
+        opened += 1
+      },
+      clientFactory: async () => {
+        throw new McpAuthorizationRequiredError('vercel')
+      }
+    })
+    await built.close()
+
+    expect(opened).toBe(0)
+    const diagnostic = built.diagnostics.find((entry) => entry.id === 'vercel')
+    expect(diagnostic?.status).toBe('authorization_required')
+    expect(diagnostic?.lastError).toContain('Authorize')
+  })
+
+  it('refuses to open a browser from a non-interactive provider', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kun-mcp-oauth-'))
+    const opened: string[] = []
+    const server = oauthServer()
+    const provider = new FileMcpOAuthProvider('vercel', server, join(root, 'vercel.json'), async (url) => {
+      opened.push(url.toString())
+    })
+    // Default (non-interactive): must throw before opening a browser/callback.
+    await expect(provider.redirectToAuthorization(new URL('https://auth.example.test/authorize')))
+      .rejects.toThrow(/requires OAuth authorization/)
+    expect(opened).toEqual([])
+  })
+
+  it('connects and registers a server immediately after a successful authorization', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kun-mcp-oauth-'))
+    const config = KunCapabilitiesConfig.parse({
+      mcp: { enabled: true, servers: { vercel: oauthServer() } }
+    })
+    const registered: string[] = []
+    let authorizeCalls = 0
+    let connectCalls = 0
+    const built = await buildMcpToolProviders(config.mcp, {
+      oauthStorageDir: root,
+      // Startup: the server needs authorization, so the first connect fails and
+      // it must not connect/register yet.
+      clientFactory: async (serverId) => {
+        connectCalls += 1
+        if (connectCalls === 1) throw new McpAuthorizationRequiredError(serverId)
+        return fakeClient()
+      },
+      authorize: async (serverId) => {
+        authorizeCalls += 1
+        return { serverId, status: 'authorized', authorized: true }
+      }
+    })
+    // Capture the live register callback (as the runtime does).
+    await built.startBackgroundReconnect((provider) => registered.push(provider.id))
+
+    const result = await built.authorizeOAuth('vercel')
+    await built.close()
+
+    expect(result).toMatchObject({ serverId: 'vercel', authorized: true })
+    expect(authorizeCalls).toBe(1)
+    // The freshly authorized server is connected + registered live.
+    expect(registered).toContain('mcp:vercel')
+    expect(built.diagnostics.find((entry) => entry.id === 'vercel')?.status).toBe('connected')
+  })
+
+  it('shares one authorization run per server for concurrent clicks (single-flight)', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kun-mcp-oauth-'))
+    const config = KunCapabilitiesConfig.parse({
+      mcp: { enabled: true, servers: { vercel: oauthServer() } }
+    })
+    let authorizeCalls = 0
+    const built = await buildMcpToolProviders(config.mcp, {
+      oauthStorageDir: root,
+      clientFactory: async () => fakeClient(),
+      authorize: async (serverId) => {
+        authorizeCalls += 1
+        await new Promise((resolve) => setTimeout(resolve, 20))
+        return { serverId, status: 'authorized', authorized: true }
+      }
+    })
+    await built.startBackgroundReconnect(() => undefined)
+
+    const [a, b] = await Promise.all([built.authorizeOAuth('vercel'), built.authorizeOAuth('vercel')])
+    await built.close()
+
+    expect(authorizeCalls).toBe(1)
+    expect(a).toEqual(b)
   })
 })
