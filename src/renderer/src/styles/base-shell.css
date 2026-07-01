@@ -2864,7 +2864,7 @@ pre {
   position: fixed;
   top: 7.6rem;
   right: 1.55rem;
-  z-index: 45;
+  z-index: 15;
   display: flex;
   box-sizing: border-box;
   width: 2.4rem;
@@ -2915,7 +2915,8 @@ pre {
 }
 
 .timeline-jump-rail-button:hover,
-.timeline-jump-rail-button:focus-visible {
+.timeline-jump-rail-button:focus-visible,
+.timeline-jump-rail-button.is-active {
   background: var(--ds-accent-soft);
   color: var(--ds-accent);
   transform: translateY(-1px);

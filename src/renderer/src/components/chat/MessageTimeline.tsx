@@ -70,6 +70,19 @@ export function liveTurnProgressClass(hasActiveGoal: boolean): string {
     : 'flex w-fit max-w-full items-center gap-2 py-0.5 text-[14px] font-medium text-ds-muted'
 }
 
+export function activeTimelineTurnKey(
+  positions: readonly { key: string; top: number }[],
+  threshold = 96
+): string | null {
+  if (positions.length === 0) return null
+  let active = positions[0].key
+  for (const position of positions) {
+    if (position.top > threshold) break
+    active = position.key
+  }
+  return active
+}
+
 function blockScrollStamp(block: ChatBlock | undefined): string {
   if (!block) return ''
   switch (block.kind) {
@@ -184,6 +197,7 @@ export function MessageTimeline({
   const endRef = useRef<HTMLDivElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const turnRefMap = useRef(new Map<string, HTMLDivElement>())
+  const [activeTurnKey, setActiveTurnKey] = useState<string | null>(null)
 
   const turns = useMemo(() => groupTurns(blocks), [blocks])
   const latestBlock = blocks[blocks.length - 1]
@@ -247,6 +261,39 @@ export function MessageTimeline({
       ? Math.max(0, activeThread.forkedFromTurnCount)
       : undefined
 
+  useEffect(() => {
+    const container = containerRef.current
+    if (!container || visibleTurnAnchors.length === 0) {
+      setActiveTurnKey(null)
+      return
+    }
+    let frame: number | null = null
+    const update = (): void => {
+      frame = null
+      if (container.scrollHeight - container.scrollTop - container.clientHeight <= 2) {
+        setActiveTurnKey(visibleTurnAnchors.at(-1)?.key ?? null)
+        return
+      }
+      const containerTop = container.getBoundingClientRect().top
+      const positions = visibleTurnAnchors.flatMap((anchor) => {
+        const node = turnRefMap.current.get(anchor.key)
+        return node ? [{ key: anchor.key, top: node.getBoundingClientRect().top - containerTop }] : []
+      })
+      setActiveTurnKey(activeTimelineTurnKey(positions))
+    }
+    const schedule = (): void => {
+      if (frame === null) frame = window.requestAnimationFrame(update)
+    }
+    container.addEventListener('scroll', schedule, { passive: true })
+    window.addEventListener('resize', schedule)
+    schedule()
+    return () => {
+      container.removeEventListener('scroll', schedule)
+      window.removeEventListener('resize', schedule)
+      if (frame !== null) window.cancelAnimationFrame(frame)
+    }
+  }, [visibleTurnAnchors])
+
   // Tick a clock while a turn is running so the live "Worked for Xs" updates.
   const [tickNow, setTickNow] = useState(() => Date.now())
   useEffect(() => {
@@ -259,6 +306,7 @@ export function MessageTimeline({
   const jumpToTurn = (key: string): void => {
     const target = turnRefMap.current.get(key)
     if (!target) return
+    setActiveTurnKey(key)
     target.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
 
@@ -274,9 +322,10 @@ export function MessageTimeline({
             <button
               key={anchor.key}
               type="button"
-              className="timeline-jump-rail-button"
+              className={`timeline-jump-rail-button${activeTurnKey === anchor.key ? ' is-active' : ''}`}
               title={anchor.title}
               aria-label={anchor.title}
+              aria-current={activeTurnKey === anchor.key ? 'true' : undefined}
               onClick={() => jumpToTurn(anchor.key)}
             >
               {anchor.label}
