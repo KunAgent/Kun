@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { execFile } from 'node:child_process'
+import { execFile, type ExecFileOptions } from 'node:child_process'
 import { promisify } from 'node:util'
 import type { WorkspaceInspector } from '../../ports/workspace-inspector.js'
 import type { WorkspaceStatus } from '../../contracts/workspace.js'
@@ -16,12 +16,17 @@ const execFileAsync = promisify(execFile)
 export class LocalWorkspaceInspector implements WorkspaceInspector {
   private readonly exec: (
     file: string,
-    args: string[]
+    args: string[],
+    options?: ExecFileOptions
   ) => Promise<{ stdout: string; stderr: string }>
 
   constructor(
     options: {
-      exec?: (file: string, args: string[]) => Promise<{ stdout: string; stderr: string }>
+      exec?: (
+        file: string,
+        args: string[],
+        options?: ExecFileOptions
+      ) => Promise<{ stdout: string; stderr: string }>
     } = {}
   ) {
     this.exec = options.exec ?? execFileAsync
@@ -80,7 +85,7 @@ export class LocalWorkspaceInspector implements WorkspaceInspector {
   }
 
   private async runGit(cwd: string, args: string[]): Promise<string> {
-    const { stdout } = await this.exec('git', args)
+    const { stdout } = await this.exec('git', args, { cwd })
     return stdout.trim()
   }
 }
