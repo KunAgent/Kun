@@ -9,8 +9,12 @@ const ReplayExpectationSchema = z.object({
   minAssistantChars: z.number().int().nonnegative().default(1),
   requiredTools: z.array(z.string().min(1)).default([]),
   requiredAnyTools: z.array(z.string().min(1)).default([]),
+  requiredOutputs: z.array(z.string().min(1)).default([]),
+  forbiddenBehaviors: z.array(z.string().min(1)).default([]),
+  expectedChangedFiles: z.array(z.string().min(1)).default([]),
   maxErrorEvents: z.number().int().nonnegative().default(0),
-  maxTotalMs: z.number().int().positive().optional()
+  maxTotalMs: z.number().int().positive().optional(),
+  maxCostUsd: z.number().nonnegative().optional()
 }).strict()
 
 const ReplayTaskSchema = z.object({
@@ -91,7 +95,22 @@ export type ReplayRunResult = {
   status: 'passed' | 'failed' | 'timeout' | 'error'
   failureReasons: string[]
   metrics: ReplayRunMetrics
+  quality?: ReplayQualityResult
   error?: string
+}
+
+export type ReplayQualityDimension = {
+  dimension: 'files' | 'forbidden' | 'outputs' | 'cost'
+  score: number
+  weight: number
+  detail: string
+}
+
+export type ReplayQualityResult = {
+  score: number
+  passed: boolean
+  violations: string[]
+  breakdown: ReplayQualityDimension[]
 }
 
 export type ReplayReportSummary = {
@@ -284,7 +303,11 @@ async function runReplayTask(input: {
       collected.elapsedMs,
       after.memoryUsage?.peakRssBytes
     )
-    const failureReasons = replayExpectationFailures(task, collected.timedOut, metrics, collected.events)
+    const quality = evaluateReplayQuality(task, metrics, collected.events)
+    const failureReasons = [
+      ...replayExpectationFailures(task, collected.timedOut, metrics, collected.events),
+      ...quality.violations
+    ]
     return {
       id: runId,
       taskId: task.id,
@@ -294,7 +317,8 @@ async function runReplayTask(input: {
       turnId,
       status: collected.timedOut ? 'timeout' : failureReasons.length > 0 ? 'failed' : 'passed',
       failureReasons,
-      metrics
+      metrics,
+      quality
     }
   } catch (error) {
     shouldInterrupt = turnId !== undefined
@@ -655,6 +679,134 @@ function replayExpectationFailures(
     failures.push(`none of the required tools were used: ${task.expect.requiredAnyTools.join(', ')}`)
   }
   return failures
+}
+
+export function evaluateReplayQuality(
+  task: ReplayTask,
+  metrics: ReplayRunMetrics,
+  events: ObservedReplayEvent[]
+): ReplayQualityResult {
+  const breakdown: ReplayQualityDimension[] = []
+  const violations: string[] = []
+  const observation = replayQualityObservation(events)
+
+  if (task.expect.expectedChangedFiles.length > 0) {
+    const expected = uniqueNormalizedPaths(task.expect.expectedChangedFiles)
+    const actual = uniqueNormalizedPaths(observation.changedFiles)
+    const score = jaccard(expected, actual)
+    const missing = expected.filter((path) => !actual.includes(path))
+    if (missing.length > 0) violations.push(`missing expected changed file(s): ${missing.join(', ')}`)
+    breakdown.push({
+      dimension: 'files',
+      score,
+      weight: 2,
+      detail: `${Math.round(score * 100)}% changed-file overlap`
+    })
+  }
+
+  let hardFail = false
+  if (task.expect.forbiddenBehaviors.length > 0) {
+    const haystack = `${observation.behaviors.join('\n')}\n${observation.finalOutput}`.toLowerCase()
+    const hits = task.expect.forbiddenBehaviors.filter((value) => haystack.includes(value.toLowerCase()))
+    if (hits.length > 0) {
+      hardFail = true
+      violations.push(`forbidden behavior(s) detected: ${hits.join(', ')}`)
+    }
+    breakdown.push({
+      dimension: 'forbidden',
+      score: hits.length === 0 ? 1 : 0,
+      weight: 3,
+      detail: hits.length === 0 ? 'none detected' : hits.join(', ')
+    })
+  }
+
+  if (task.expect.requiredOutputs.length > 0) {
+    const output = observation.finalOutput.toLowerCase()
+    const missing = task.expect.requiredOutputs.filter((value) => !output.includes(value.toLowerCase()))
+    const score = 1 - missing.length / task.expect.requiredOutputs.length
+    if (missing.length > 0) violations.push(`missing required output(s): ${missing.join(', ')}`)
+    breakdown.push({
+      dimension: 'outputs',
+      score,
+      weight: 2,
+      detail: `${task.expect.requiredOutputs.length - missing.length}/${task.expect.requiredOutputs.length} present`
+    })
+  }
+
+  if (task.expect.maxCostUsd !== undefined) {
+    const withinBudget = metrics.costUsd <= task.expect.maxCostUsd
+    const score = withinBudget || metrics.costUsd === 0
+      ? 1
+      : Math.max(0, task.expect.maxCostUsd / metrics.costUsd)
+    if (!withinBudget) {
+      violations.push(`cost $${metrics.costUsd.toFixed(4)} exceeds $${task.expect.maxCostUsd.toFixed(4)}`)
+    }
+    breakdown.push({ dimension: 'cost', score, weight: 1, detail: `$${metrics.costUsd.toFixed(4)}` })
+  }
+
+  const totalWeight = breakdown.reduce((total, item) => total + item.weight, 0)
+  const weightedScore = totalWeight === 0
+    ? 1
+    : breakdown.reduce((total, item) => total + item.score * item.weight, 0) / totalWeight
+  return {
+    score: hardFail ? 0 : weightedScore,
+    passed: violations.length === 0,
+    violations,
+    breakdown
+  }
+}
+
+function replayQualityObservation(events: ObservedReplayEvent[]): {
+  finalOutput: string
+  behaviors: string[]
+  changedFiles: string[]
+} {
+  const assistantText = new Map<string, string>()
+  const toolCalls = new Map<string, { name: string; arguments: Record<string, unknown>; toolKind: string }>()
+  for (const { event } of events) {
+    if ('item' in event && event.item.kind === 'assistant_text') {
+      if (event.kind === 'assistant_text_delta') {
+        assistantText.set(event.item.id, `${assistantText.get(event.item.id) ?? ''}${event.item.text}`)
+      } else {
+        assistantText.set(event.item.id, event.item.text)
+      }
+    }
+    if ('item' in event && event.item.kind === 'tool_call') {
+      toolCalls.set(event.item.callId, {
+        name: event.item.toolName,
+        arguments: event.item.arguments,
+        toolKind: event.item.toolKind
+      })
+    }
+  }
+  const changedFiles = [...toolCalls.values()]
+    .filter((call) => call.toolKind === 'file_change')
+    .flatMap((call) => filePathsFromArguments(call.arguments))
+  return {
+    finalOutput: [...assistantText.values()].join('\n'),
+    behaviors: [...toolCalls.values()].map((call) => `${call.name} ${JSON.stringify(call.arguments)}`),
+    changedFiles
+  }
+}
+
+function filePathsFromArguments(args: Record<string, unknown>): string[] {
+  return ['path', 'filePath', 'file_path', 'targetPath', 'target_path']
+    .map((key) => args[key])
+    .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+}
+
+function uniqueNormalizedPaths(paths: readonly string[]): string[] {
+  return [...new Set(paths.map((path) => path.trim().replace(/\\/g, '/')).filter(Boolean))]
+}
+
+function jaccard(expected: readonly string[], actual: readonly string[]): number {
+  if (expected.length === 0) return 1
+  const expectedSet = new Set(expected)
+  const actualSet = new Set(actual)
+  let intersection = 0
+  for (const value of expectedSet) if (actualSet.has(value)) intersection += 1
+  const union = new Set([...expectedSet, ...actualSet]).size
+  return union === 0 ? 1 : intersection / union
 }
 
 function errorReplayRun(id: string, task: ReplayTask, iteration: number, error: string): ReplayRunResult {

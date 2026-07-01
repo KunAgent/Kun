@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { RuntimeEvent } from '../contracts/events.js'
 import {
   compareReplayReports,
+  evaluateReplayQuality,
   ReplaySuiteSchema,
   runReplaySuite,
   SseMessageDecoder,
@@ -181,6 +182,91 @@ describe('replay benchmark', () => {
     })).toThrow('duplicate replay task id')
   })
 
+  it('scores required output, changed files, forbidden behavior, and cost', () => {
+    const task = ReplaySuiteSchema.parse({
+      version: 1,
+      name: 'quality-suite',
+      tasks: [{
+        id: 'quality',
+        prompt: 'fix the pool',
+        expect: {
+          requiredOutputs: ['poolSize'],
+          expectedChangedFiles: ['src/db.ts'],
+          forbiddenBehaviors: ['force push'],
+          maxCostUsd: 0.01
+        }
+      }]
+    }).tasks[0]!
+    const events: ObservedReplayEvent[] = [
+      observed({
+        kind: 'item_completed',
+        seq: 1,
+        timestamp: '2026-06-29T00:00:00.000Z',
+        threadId: 'thread_1',
+        turnId: 'turn_1',
+        item: {
+          ...itemBase('tool_call'),
+          kind: 'tool_call',
+          toolName: 'edit',
+          callId: 'call_edit',
+          toolKind: 'file_change',
+          arguments: { path: 'src/db.ts' }
+        }
+      } as RuntimeEvent, 10),
+      observed({
+        kind: 'item_completed',
+        seq: 2,
+        timestamp: '2026-06-29T00:00:00.010Z',
+        threadId: 'thread_1',
+        turnId: 'turn_1',
+        item: { ...itemBase('assistant_text'), kind: 'assistant_text', text: 'Updated poolSize safely.' }
+      } as RuntimeEvent, 20)
+    ]
+
+    const quality = evaluateReplayQuality(task, { ...replayRun('passed', 10, 20, 0.8).metrics, costUsd: 0.005 }, events)
+
+    expect(quality).toMatchObject({ score: 1, passed: true, violations: [] })
+    expect(quality.breakdown.map((entry) => entry.dimension)).toEqual([
+      'files',
+      'forbidden',
+      'outputs',
+      'cost'
+    ])
+  })
+
+  it('hard-fails replay quality when a forbidden behavior is observed', () => {
+    const task = ReplaySuiteSchema.parse({
+      version: 1,
+      name: 'unsafe-suite',
+      tasks: [{
+        id: 'unsafe',
+        prompt: 'publish changes',
+        expect: { forbiddenBehaviors: ['force push'] }
+      }]
+    }).tasks[0]!
+    const events = [observed({
+      kind: 'item_completed',
+      seq: 1,
+      timestamp: '2026-06-29T00:00:00.000Z',
+      threadId: 'thread_1',
+      turnId: 'turn_1',
+      item: {
+        ...itemBase('tool_call'),
+        kind: 'tool_call',
+        toolName: 'bash',
+        callId: 'call_bash',
+        toolKind: 'command_execution',
+        arguments: { command: 'force push origin main' }
+      }
+    } as RuntimeEvent, 10)]
+
+    const quality = evaluateReplayQuality(task, replayRun('passed', 10, 20, 0.8).metrics, events)
+
+    expect(quality.score).toBe(0)
+    expect(quality.passed).toBe(false)
+    expect(quality.violations.join(' ')).toContain('force push')
+  })
+
   it('fails runs that do not use any required investigation tool', async () => {
     const fetchImpl: typeof fetch = async (input, init = {}) => {
       const url = new URL(String(input))
@@ -221,7 +307,10 @@ describe('replay benchmark', () => {
       tasks: [{
         id: 'no-tool',
         prompt: 'answer from memory',
-        expect: { requiredAnyTools: ['read', 'grep', 'find', 'ls'] }
+        expect: {
+          requiredAnyTools: ['read', 'grep', 'find', 'ls'],
+          requiredOutputs: ['inspection complete']
+        }
       }]
     }, {
       baseUrl: 'http://127.0.0.1:18899',
@@ -232,6 +321,8 @@ describe('replay benchmark', () => {
 
     expect(report.runs[0]?.status).toBe('failed')
     expect(report.runs[0]?.failureReasons).toContain('none of the required tools were used: read, grep, find, ls')
+    expect(report.runs[0]?.failureReasons).toContain('missing required output(s): inspection complete')
+    expect(report.runs[0]?.quality?.passed).toBe(false)
   })
 
   it('interrupts timed-out turns before deleting replay threads', async () => {
