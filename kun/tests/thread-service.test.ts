@@ -131,6 +131,30 @@ async function seedParentWithTurns(
   }
 }
 
+describe('ThreadService remote target binding', () => {
+  it('persists and clears a secret-free SSH binding', async () => {
+    const { service } = buildService()
+    const thread = await service.create({
+      title: 'Remote',
+      workspace: '/tmp/project',
+      model: DEFAULT_KUN_MODEL,
+      mode: 'agent',
+      remoteTarget: {
+        kind: 'ssh',
+        alias: 'prod',
+        remoteDir: '/srv/app',
+        runMode: 'observe',
+        production: false,
+        protectedPaths: ['.env']
+      }
+    })
+    expect(thread.remoteTarget).toMatchObject({ alias: 'prod', remoteDir: '/srv/app' })
+
+    const cleared = await service.update(thread.id, { remoteTarget: null })
+    expect(cleared.remoteTarget).toBeUndefined()
+  })
+})
+
 describe('ThreadService.fork with side relation', () => {
   it('sets parentThreadId and side relation on the new thread', async () => {
     const { service, threadStore } = buildService()

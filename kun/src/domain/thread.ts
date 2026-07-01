@@ -4,6 +4,7 @@ import type {
   ThreadGoal,
   ThreadTodoList,
   ThreadRelation,
+  ThreadRemoteTarget,
   ThreadStatus
 } from '../contracts/threads.js'
 import {
@@ -33,6 +34,7 @@ export function createThreadRecord(input: {
   status?: ThreadStatus
   approvalPolicy?: ApprovalPolicy
   sandboxMode?: SandboxMode
+  remoteTarget?: ThreadRemoteTarget
   pinned?: boolean
   costBudgetUsd?: number
   costBudgetWarningSent?: boolean
@@ -61,6 +63,7 @@ export function createThreadRecord(input: {
     status: input.status ?? 'idle',
     approvalPolicy: input.approvalPolicy ?? DEFAULT_APPROVAL_POLICY,
     sandboxMode: input.sandboxMode ?? DEFAULT_SANDBOX_MODE,
+    ...(input.remoteTarget ? { remoteTarget: input.remoteTarget } : {}),
     ...(input.pinned !== undefined ? { pinned: input.pinned } : {}),
     ...(input.costBudgetUsd !== undefined ? { costBudgetUsd: input.costBudgetUsd } : {}),
     ...(input.costBudgetWarningSent !== undefined ? { costBudgetWarningSent: input.costBudgetWarningSent } : {}),
@@ -87,7 +90,7 @@ export function toThreadSummary(
   thread: ThreadEntity
 ): Pick<
   ThreadEntity,
-  'id' | 'title' | 'titleAuto' | 'summary' | 'workspace' | 'model' | 'providerId' | 'agentId' | 'systemPrompt' | 'mode' | 'status' | 'approvalPolicy' | 'sandboxMode' | 'pinned' | 'createdAt' | 'updatedAt'
+  'id' | 'title' | 'titleAuto' | 'summary' | 'workspace' | 'model' | 'providerId' | 'agentId' | 'systemPrompt' | 'mode' | 'status' | 'approvalPolicy' | 'sandboxMode' | 'remoteTarget' | 'pinned' | 'createdAt' | 'updatedAt'
   | 'costBudgetUsd' | 'costBudgetWarningSent'
   | 'relation' | 'parentThreadId'
   | 'forkedFromThreadId' | 'forkedFromTitle' | 'forkedAt' | 'forkedFromMessageCount' | 'forkedFromTurnCount'
@@ -107,6 +110,7 @@ export function toThreadSummary(
     status: thread.status,
     approvalPolicy: thread.approvalPolicy,
     sandboxMode: thread.sandboxMode,
+    ...(thread.remoteTarget ? { remoteTarget: thread.remoteTarget } : {}),
     ...(thread.pinned !== undefined ? { pinned: thread.pinned } : {}),
     ...(thread.costBudgetUsd !== undefined ? { costBudgetUsd: thread.costBudgetUsd } : {}),
     ...(thread.costBudgetWarningSent !== undefined ? { costBudgetWarningSent: thread.costBudgetWarningSent } : {}),

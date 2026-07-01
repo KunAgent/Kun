@@ -13,6 +13,21 @@ export type ThreadStatus = z.infer<typeof ThreadStatus>
 export const ThreadMode = z.enum(['agent', 'plan'])
 export type ThreadMode = z.infer<typeof ThreadMode>
 
+export const ThreadRemoteRunMode = z.enum(['observe', 'develop', 'operations', 'deploy'])
+export type ThreadRemoteRunMode = z.infer<typeof ThreadRemoteRunMode>
+
+export const ThreadRemoteTargetSchema = z.object({
+  kind: z.literal('ssh'),
+  alias: z.string().min(1),
+  host: z.string().min(1).optional(),
+  remoteDir: z.string().min(1).optional(),
+  runMode: ThreadRemoteRunMode.default('observe'),
+  production: z.boolean().default(false),
+  profileName: z.string().min(1).optional(),
+  protectedPaths: z.array(z.string().min(1)).default([])
+})
+export type ThreadRemoteTarget = z.infer<typeof ThreadRemoteTargetSchema>
+
 /**
  * Discriminator describing how a thread relates to its origin.
  *
@@ -133,6 +148,7 @@ export const ThreadSchema = z.object({
   status: ThreadStatus,
   approvalPolicy: ApprovalPolicySchema.default(DEFAULT_APPROVAL_POLICY),
   sandboxMode: SandboxModeSchema.default(DEFAULT_SANDBOX_MODE),
+  remoteTarget: ThreadRemoteTargetSchema.optional(),
   pinned: z.boolean().optional(),
   costBudgetUsd: z.number().positive().optional(),
   costBudgetWarningSent: z.boolean().optional(),
@@ -165,6 +181,7 @@ export const ThreadSummarySchema = ThreadSchema.pick({
   status: true,
   approvalPolicy: true,
   sandboxMode: true,
+  remoteTarget: true,
   pinned: true,
   costBudgetUsd: true,
   costBudgetWarningSent: true,
@@ -202,6 +219,7 @@ export const CreateThreadRequest = z.object({
   mode: ThreadMode.default('agent'),
   approvalPolicy: ApprovalPolicySchema.optional(),
   sandboxMode: SandboxModeSchema.optional(),
+  remoteTarget: ThreadRemoteTargetSchema.optional(),
   costBudgetUsd: z.number().positive().optional()
 })
 export type CreateThreadRequest = z.infer<typeof CreateThreadRequest>
@@ -287,6 +305,7 @@ export const UpdateThreadRequest = z
     status: ThreadStatus.optional(),
     approvalPolicy: ApprovalPolicySchema.optional(),
     sandboxMode: SandboxModeSchema.optional(),
+    remoteTarget: ThreadRemoteTargetSchema.nullable().optional(),
     pinned: z.boolean().optional(),
     costBudgetUsd: z.number().positive().nullable().optional(),
     costBudgetWarningSent: z.boolean().optional(),
@@ -300,6 +319,7 @@ export const UpdateThreadRequest = z
       value.status !== undefined ||
       value.approvalPolicy !== undefined ||
       value.sandboxMode !== undefined ||
+      value.remoteTarget !== undefined ||
       value.pinned !== undefined ||
       value.costBudgetUsd !== undefined ||
       value.costBudgetWarningSent !== undefined ||

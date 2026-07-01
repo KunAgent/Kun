@@ -20,6 +20,7 @@ import {
   withToolBoundary,
   workspaceRoot
 } from './builtin-tool-utils.js'
+import { executeRemoteCommand } from './remote-command-tool.js'
 
 const DEFAULT_BASH_YIELD_SECONDS = 10
 const MAX_BASH_YIELD_SECONDS = 60
@@ -718,6 +719,17 @@ export function createBashLocalTool(options: BashLocalToolOptions = {}): LocalTo
       const background = args.background === true
       const cwd = workspaceRoot(context.workspace)
       try {
+        if (context.executionTarget) {
+          if (background) {
+            return { output: { error: 'background sessions are not supported for remote targets' }, isError: true }
+          }
+          return executeRemoteCommand({
+            handle: context.executionTarget,
+            command,
+            timeoutSeconds: timeout,
+            context
+          })
+        }
         if (background) {
           if (bashOps?.exec) {
             return {

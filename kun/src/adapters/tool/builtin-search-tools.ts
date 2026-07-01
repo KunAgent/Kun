@@ -23,6 +23,7 @@ import {
   spawnCapture,
   withToolBoundary
 } from './builtin-tool-utils.js'
+import { remoteFind, remoteGrep, remoteLs } from './remote-file-tools.js'
 
 export function createLsLocalTool(options: LsLocalToolOptions = {}): LocalTool {
   const statOp = options.operations?.stat ?? defaultLsLocalToolOperations.stat!
@@ -41,6 +42,7 @@ export function createLsLocalTool(options: LsLocalToolOptions = {}): LocalTool {
     },
     policy: 'auto',
     execute: async (args, context) => withToolBoundary(async () => {
+      if (context.executionTarget) return remoteLs(context.executionTarget, args, context)
       const rawPath = typeof args.path === 'string' && args.path.trim() ? args.path : '.'
       const limit = normalizePositiveInteger(args.limit, options.defaultLimit ?? DEFAULT_LIST_LIMIT)
       const { workspaceRoot: root, absolutePath, relativePath } = await resolveWorkspacePath(rawPath, context)
@@ -91,6 +93,7 @@ export function createFindLocalTool(options: FindLocalToolOptions = {}): LocalTo
     },
     policy: 'auto',
     execute: async (args, context) => withToolBoundary(async () => {
+      if (context.executionTarget) return remoteFind(context.executionTarget, args, context)
       const pattern = typeof args.pattern === 'string' ? args.pattern.trim() : ''
       if (!pattern) return { output: { error: 'pattern is required' }, isError: true }
       const rawPath = typeof args.path === 'string' && args.path.trim() ? args.path : '.'
@@ -198,6 +201,7 @@ export function createGrepLocalTool(options: GrepLocalToolOptions = {}): LocalTo
     },
     policy: 'auto',
     execute: async (args, context) => withToolBoundary(async () => {
+      if (context.executionTarget) return remoteGrep(context.executionTarget, args, context)
       const pattern = typeof args.pattern === 'string' ? args.pattern : ''
       if (!pattern.trim()) return { output: { error: 'pattern is required' }, isError: true }
       const literal = normalizeBoolean(args.literal)
