@@ -27,7 +27,7 @@ export const KUN_SYSTEM_PROMPT = [
   'Tool behavior:',
   '- Use tools when they are available and relevant. Do not claim a file, command, route, or UI state was checked unless it was actually checked.',
   '- The default built-in coding tool family is `read`, `bash`, `edit`, `write`, `grep`, `find`, and `ls`. Prefer these over ad hoc prose about what you would inspect or change.',
-  '- Prefer `read`/`grep`/`find`/`ls` for inspection, `bash` for shell commands appropriate for the host platform, and `edit`/`write` for file mutations.',
+  '- Prefer the most specific advertised tool for the task. Use `read`/`grep`/`find`/`ls` as general inspection fallbacks, `bash` for shell commands appropriate for the host platform, and `edit`/`write` for file mutations.',
   '- Approval and request_user_input are explicit GUI gates. If the model asks the user for structured input, wait for the GUI response and then continue.',
   '- Tool results are part of conversation history. Keep them concise, preserve important facts, and avoid injecting unstable metadata into the stable prefix.',
   '- If a tool is not advertised in the current turn, do not call it.',
@@ -57,3 +57,47 @@ export const KUN_SYSTEM_PROMPT = [
   '- If a requirement says a capability must not be missing, audit the old surface and prove parity with code paths and tests.',
   '- A task is complete only when the current code, tests, build, and relevant runtime behavior prove it.'
 ].join('\n')
+
+type ToolPreferenceSpec = {
+  name: string
+  description: string
+  providerKind?: string
+}
+
+const SOURCE_EXPLORATION_PATTERN =
+  /\b(?:code(?:base|graph)?|source|repository|repo|symbol|definition|reference|implementation|dependency|call[ -]?graph|ast)\b/i
+
+/**
+ * Keep availability-dependent guidance after the immutable system prefix.
+ * Tool schemas remain canonically sorted for prompt-cache stability; this
+ * instruction carries the semantic preference instead of reordering them.
+ */
+export function buildToolPreferenceInstruction(
+  tools: readonly ToolPreferenceSpec[]
+): string | null {
+  const mcpTools = tools.filter((tool) => tool.providerKind === 'mcp')
+  if (mcpTools.length === 0) return null
+
+  const sourceTools = mcpTools.filter((tool) =>
+    SOURCE_EXPLORATION_PATTERN.test(`${tool.name.replace(/[_-]+/g, ' ')} ${tool.description}`)
+  )
+  if (sourceTools.length > 0) {
+    return [
+      `Specialized source-code MCP tools are available for this turn: ${formatToolNames(sourceTools)}.`,
+      'For source navigation and structural inspection, prefer a listed MCP tool whose description matches the task before broad `read`/`grep`/`find`/`ls` scans.',
+      'Use the built-in inspection tools for unsupported files, narrow fallback checks, and verification.'
+    ].join(' ')
+  }
+
+  if (mcpTools.some((tool) => tool.name === 'mcp_search')) {
+    return 'MCP tool discovery is available through `mcp_search`. When a task may benefit from a specialized external tool, search the MCP catalog before using a general built-in fallback.'
+  }
+
+  return `Specialized MCP tools are available for this turn: ${formatToolNames(mcpTools)}. Prefer one when its advertised description directly matches the task; otherwise use the built-in tools.`
+}
+
+function formatToolNames(tools: readonly ToolPreferenceSpec[]): string {
+  const names = tools.slice(0, 8).map((tool) => `\`${tool.name}\``).join(', ')
+  const remaining = tools.length - 8
+  return remaining > 0 ? `${names}, and ${remaining} more` : names
+}

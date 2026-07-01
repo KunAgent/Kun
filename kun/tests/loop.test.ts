@@ -67,6 +67,52 @@ describe('AgentLoop', () => {
     expect(request.tools.map((tool) => tool.name)).toContain('bash')
     expect(request.contextInstructions?.join('\n')).toContain('<shell_environment>')
     expect(request.contextInstructions?.join('\n')).toContain('<syntax>')
+    expect(request.contextInstructions?.join('\n')).not.toContain('Specialized MCP tools are available')
+  })
+
+  it('prefers specialized MCP tools only when they are advertised', async () => {
+    let observedRequest: ModelRequest | null = null
+    const sourceExplorer = LocalToolHost.defineTool({
+      name: 'mcp_semantic_find_symbol',
+      description: 'Find source-code symbols and their references.',
+      inputSchema: { type: 'object' },
+      policy: 'auto',
+      execute: async () => ({ output: {} })
+    })
+    const registry = new CapabilityRegistry([
+      {
+        id: 'builtin',
+        kind: 'built-in',
+        enabled: true,
+        available: true,
+        tools: buildDefaultLocalTools()
+      },
+      {
+        id: 'mcp:semantic',
+        kind: 'mcp',
+        enabled: true,
+        available: true,
+        tools: [sourceExplorer]
+      }
+    ])
+    const h = makeHarness({
+      provider: 'tool-preference',
+      model: 'tool-preference',
+      async *stream(request: ModelRequest): AsyncIterable<ModelStreamChunk> {
+        observedRequest = request
+        yield { kind: 'completed', stopReason: 'stop' }
+      }
+    }, { toolHost: new LocalToolHost({ registry }) })
+    await bootstrapThread(h)
+
+    await h.loop.runTurn(h.threadId, h.turnId)
+
+    const request = observedRequest as ModelRequest | null
+    if (!request) throw new Error('expected model request')
+    const instructions = request.contextInstructions?.join('\n') ?? ''
+    expect(instructions).toContain('Specialized source-code MCP tools are available')
+    expect(instructions).toContain('`mcp_semantic_find_symbol`')
+    expect(instructions).toContain('before broad `read`/`grep`/`find`/`ls` scans')
   })
 
   it('records elapsed seconds for active goals after a turn finishes', async () => {

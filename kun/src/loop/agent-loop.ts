@@ -91,6 +91,7 @@ import { GET_GOAL_TOOL_NAME, UPDATE_GOAL_TOOL_NAME } from '../adapters/tool/goal
 import { TODO_LIST_TOOL_NAME, TODO_WRITE_TOOL_NAME } from '../adapters/tool/todo-tools.js'
 import { shellRuntimeInstruction } from '../adapters/tool/builtin-tool-utils.js'
 import { VERIFY_CHANGES_TOOL_NAME } from '../adapters/tool/builtin-verify-tool.js'
+import { buildToolPreferenceInstruction } from '../prompt/kun-system-prompt.js'
 import {
   GoalResumeCoordinator,
   DEFAULT_MAX_GOAL_RESUME_NO_PROGRESS_ATTEMPTS,
@@ -1534,6 +1535,7 @@ export class AgentLoop {
           nowIso: this.opts.nowIso()
         })
       : null
+    const toolPreferenceInstruction = buildToolPreferenceInstruction(tools)
     const contextInstructions = [
       ...(runtimeContextInstruction ? [runtimeContextInstruction] : []),
       ...(activeGoalInstruction ? [activeGoalInstruction] : []),
@@ -1554,6 +1556,7 @@ export class AgentLoop {
       ...(skillResolution.catalogInstruction ? [skillResolution.catalogInstruction] : []),
       ...skillResolution.instructions,
       ...(userInputDisabled ? [userInputUnavailableInstruction()] : []),
+      ...(toolPreferenceInstruction ? [toolPreferenceInstruction] : []),
       ...(effectiveToolSpecs.some((tool) => tool.name === 'bash') ? [shellRuntimeInstruction()] : []),
       ...(suggestVerification ? [verificationSuggestionInstruction()] : []),
       ...(toolCatalogDriftMessage ? [toolCatalogDriftMessage] : [])
