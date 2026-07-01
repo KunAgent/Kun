@@ -43,6 +43,7 @@ Common options:
   --model <model>            Model id
   --approval-policy <p>      on-request | untrusted | never | auto | suggest
   --json                     Emit machine-readable JSON where supported
+  --jsonl                    Stream one machine-readable event per line for kun run
 
 Exec options:
   --list-tools               Print available tools
@@ -110,6 +111,11 @@ export async function runAgentCommand(
 async function runOneShot(argv: readonly string[], io: CliIo): Promise<number> {
   const parsed = parseSharedOptions(argv, io)
   if (!parsed.ok) return writeParseError(parsed, io, 'kun run')
+  const jsonl = hasFlag(argv, 'jsonl')
+  if (parsed.json && jsonl) {
+    io.stderr.write('kun run: --json and --jsonl are mutually exclusive\n')
+    return ServeExitCode.usage
+  }
   const prompt = stringFlag(argv, ['prompt', 'p']) ?? positionals(argv).join(' ').trim()
   if (!prompt) {
     io.stderr.write('kun run: missing prompt\n')
@@ -126,13 +132,16 @@ async function runOneShot(argv: readonly string[], io: CliIo): Promise<number> {
       approvalPolicy: parsed.options.approvalPolicy,
       sandboxMode: parsed.options.sandboxMode
     })
+    if (jsonl) writeJsonLine(io.stdout, { type: 'run_started', threadId: thread.id })
     const turn = await runtime.turnService.startTurn({
       threadId: thread.id,
       request: { prompt, model: parsed.options.model, mode: 'agent' }
     })
     let streamed = false
-    const unsubscribe = parsed.json ? undefined : runtime.eventBus.subscribe(thread.id, (event) => {
-      if (event.kind === 'assistant_text_delta' && event.item.kind === 'assistant_text') {
+    const unsubscribe = runtime.eventBus.subscribe(thread.id, (event) => {
+      if (jsonl) {
+        writeJsonLine(io.stdout, { type: 'runtime_event', event })
+      } else if (!parsed.json && event.kind === 'assistant_text_delta' && event.item.kind === 'assistant_text') {
         streamed = true
         io.stdout.write(event.item.text)
       }
@@ -140,7 +149,9 @@ async function runOneShot(argv: readonly string[], io: CliIo): Promise<number> {
     const status = await runtime.runTurn(thread.id, turn.turnId)
     unsubscribe?.()
     const items = await runtime.sessionStore.loadItems(thread.id)
-    if (parsed.json) {
+    if (jsonl) {
+      writeJsonLine(io.stdout, { type: 'run_finished', threadId: thread.id, turnId: turn.turnId, status })
+    } else if (parsed.json) {
       io.stdout.write(JSON.stringify({ threadId: thread.id, turnId: turn.turnId, status, items }) + '\n')
     } else {
       if (!streamed) {
@@ -156,6 +167,10 @@ async function runOneShot(argv: readonly string[], io: CliIo): Promise<number> {
   } finally {
     await shutdownRuntime(runtime, io, 'kun run')
   }
+}
+
+function writeJsonLine(output: WritableLike, value: unknown): void {
+  output.write(`${JSON.stringify(value)}\n`)
 }
 
 async function runChat(argv: readonly string[], io: CliIo): Promise<number> {
