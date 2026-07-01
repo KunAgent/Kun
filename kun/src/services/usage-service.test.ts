@@ -30,6 +30,72 @@ describe('usage cache diagnostics', () => {
     expect(current.cacheMissReasons).toContain('cold_request')
   })
 
+  it('explains a hit-rate regression once a thread has a warm baseline', () => {
+    const usage = new UsageService()
+    const warm = (hit: number, miss: number) => ({
+      promptTokens: hit + miss,
+      completionTokens: 10,
+      totalTokens: hit + miss + 10,
+      cacheHitTokens: hit,
+      cacheMissTokens: miss,
+      cacheHitRate: hit / (hit + miss),
+      turns: 1
+    })
+
+    // Two warm turns at ~90% establish the baseline (no regression yet).
+    usage.record('thread-r', warm(900, 100), signature)
+    usage.record('thread-r', warm(900, 100), signature)
+    // A prefix change collapses the hit rate — should be explained.
+    const dropped = usage.record('thread-r', warm(50, 950), {
+      ...signature,
+      prefixFingerprint: 'prefix-b'
+    })
+
+    expect(dropped.cacheMissReasons).toContain('stable_prefix_changed')
+    expect(dropped.cacheSuggestions?.some((s) => /Cache hit rate dropped/.test(s))).toBe(true)
+    expect(dropped.cacheSuggestions?.some((s) => /stable system prefix changed/.test(s))).toBe(true)
+  })
+
+  it('does not re-announce the same regression every turn (cooldown)', () => {
+    const usage = new UsageService()
+    const warm = (hit: number, miss: number) => ({
+      promptTokens: hit + miss,
+      completionTokens: 10,
+      totalTokens: hit + miss + 10,
+      cacheHitTokens: hit,
+      cacheMissTokens: miss,
+      cacheHitRate: hit / (hit + miss),
+      turns: 1
+    })
+    usage.record('thread-c', warm(900, 100), signature)
+    usage.record('thread-c', warm(900, 100), signature)
+    const first = usage.record('thread-c', warm(50, 950), { ...signature, prefixFingerprint: 'prefix-b' })
+    const second = usage.record('thread-c', warm(50, 950), { ...signature, prefixFingerprint: 'prefix-b' })
+
+    expect(first.cacheSuggestions?.some((s) => /Cache hit rate dropped/.test(s))).toBe(true)
+    // The very next turn at the same low rate must NOT repeat the announcement.
+    expect(second.cacheSuggestions?.some((s) => /Cache hit rate dropped/.test(s))).toBe(false)
+  })
+
+  it('starts a fresh baseline when the model changes (no cross-model false regression)', () => {
+    const usage = new UsageService()
+    const warm = (hit: number, miss: number) => ({
+      promptTokens: hit + miss,
+      completionTokens: 10,
+      totalTokens: hit + miss + 10,
+      cacheHitTokens: hit,
+      cacheMissTokens: miss,
+      cacheHitRate: hit / (hit + miss),
+      turns: 1
+    })
+    usage.record('thread-m', warm(900, 100), signature)
+    usage.record('thread-m', warm(900, 100), signature)
+    // Switch model: the first turn on model-b is cold and has a low hit rate,
+    // but must not be reported as a regression against model-a's baseline.
+    const switched = usage.record('thread-m', warm(50, 950), { ...signature, model: 'model-b' })
+    expect(switched.cacheSuggestions?.some((s) => /Cache hit rate dropped/.test(s))).toBe(false)
+  })
+
   it('surfaces the latest-turn cache diagnostic fields in thread usage', () => {
     const records: ThreadUsageRecord[] = [
       {

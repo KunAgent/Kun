@@ -4,6 +4,7 @@ import {
   diagnoseCacheUsage,
   type CacheRequestSignature
 } from '../cache/cache-diagnostics.js'
+import { analyzeCacheRegression, cacheRegressionSeverityRank } from '../cache/cache-regression.js'
 import type {
   DailyUsageBucket,
   DailyUsageCounters,
@@ -24,6 +25,18 @@ export class UsageService {
   private readonly counter = new UsageCounter()
   private readonly cache = new CacheTelemetry()
   private readonly cacheSignatures = new Map<string, CacheRequestSignature>()
+  /**
+   * Rolling cacheable-hit-rate history keyed by thread + provider/model/endpoint
+   * so a model or provider switch starts a FRESH baseline instead of polluting
+   * the previous one. Cold-start and outliers are absorbed by the analyzer's
+   * median baseline.
+   */
+  private readonly cacheHitHistory = new Map<string, number[]>()
+  /**
+   * Cooldown state per history key so one regression isn't re-announced every
+   * turn: we only re-emit when the cooldown window elapses or severity worsens.
+   */
+  private readonly cacheRegressionCooldown = new Map<string, { severityRank: number; turnsSinceEmit: number }>()
 
   record(
     threadId: string,
@@ -50,6 +63,7 @@ export class UsageService {
     this.cache.reset(threadId)
     this.cache.ingest(threadId, seeded)
     this.cacheSignatures.delete(threadId)
+    this.clearCacheHistory(threadId)
     return seeded
   }
 
@@ -70,6 +84,23 @@ export class UsageService {
     this.cache.reset(threadId)
     if (threadId === undefined) this.cacheSignatures.clear()
     else this.cacheSignatures.delete(threadId)
+    if (threadId === undefined) {
+      this.cacheHitHistory.clear()
+      this.cacheRegressionCooldown.clear()
+    } else {
+      this.clearCacheHistory(threadId)
+    }
+  }
+
+  /** Drop all signature-keyed cache history + cooldown rows for one thread. */
+  private clearCacheHistory(threadId: string): void {
+    const prefix = `${threadId}::`
+    for (const key of this.cacheHitHistory.keys()) {
+      if (key === threadId || key.startsWith(prefix)) this.cacheHitHistory.delete(key)
+    }
+    for (const key of this.cacheRegressionCooldown.keys()) {
+      if (key === threadId || key.startsWith(prefix)) this.cacheRegressionCooldown.delete(key)
+    }
   }
 
   private withCacheDiagnostics(
@@ -86,17 +117,65 @@ export class UsageService {
       ...signature,
       activeSkillIds: [...signature.activeSkillIds]
     })
+    // Trend-based regression: compare this turn's cacheable hit rate against
+    // the thread's recent baseline FOR THE SAME provider/model/endpoint so we
+    // can explain a *drop* (not just the per-turn miss reasons). A cooldown
+    // stops the same regression from being re-announced every turn.
+    const historyKey = cacheHistoryKey(threadId, signature)
+    const history = this.cacheHitHistory.get(historyKey) ?? []
+    const regression = analyzeCacheRegression({
+      current: diagnostic.cacheableTokenHitRate,
+      baseline: history,
+      reasons: diagnostic.reasons,
+      minBaselineSamples: 2
+    })
+    const cooldown = this.cacheRegressionCooldown.get(historyKey) ?? { severityRank: 0, turnsSinceEmit: CACHE_REGRESSION_COOLDOWN_TURNS }
+    cooldown.turnsSinceEmit += 1
+    const severityRank = cacheRegressionSeverityRank(regression.severity)
+    const shouldAnnounce = Boolean(regression.explanation) && (
+      cooldown.turnsSinceEmit >= CACHE_REGRESSION_COOLDOWN_TURNS || severityRank > cooldown.severityRank
+    )
+    const suggestions = shouldAnnounce && regression.explanation
+      ? [regression.explanation, ...diagnostic.suggestions]
+      : diagnostic.suggestions
+    if (shouldAnnounce) {
+      this.cacheRegressionCooldown.set(historyKey, { severityRank, turnsSinceEmit: 0 })
+    } else if (regression.severity === 'none') {
+      // Recovered — clear cooldown so the next genuine drop is announced promptly.
+      this.cacheRegressionCooldown.set(historyKey, { severityRank: 0, turnsSinceEmit: cooldown.turnsSinceEmit })
+    } else {
+      this.cacheRegressionCooldown.set(historyKey, cooldown)
+    }
+    if (typeof diagnostic.cacheableTokenHitRate === 'number') {
+      this.cacheHitHistory.set(historyKey, [...history, diagnostic.cacheableTokenHitRate].slice(-CACHE_HIT_HISTORY_LIMIT))
+    }
     return {
       ...usage,
       cacheableTokenHitRate: diagnostic.cacheableTokenHitRate,
       totalInputTokenHitRate: diagnostic.totalInputTokenHitRate,
       cacheMissReasons: diagnostic.reasons,
-      cacheSuggestions: diagnostic.suggestions
+      cacheSuggestions: [...new Set(suggestions)]
     }
   }
 }
 
 export const MAX_DAILY_USAGE_DAYS = 370
+
+/** Rolling window of recent cacheable-hit-rate samples kept per thread. */
+const CACHE_HIT_HISTORY_LIMIT = 20
+
+/** Turns to wait before re-announcing the same cache regression severity. */
+const CACHE_REGRESSION_COOLDOWN_TURNS = 5
+
+/**
+ * History/cooldown key: per thread AND per provider/model/endpoint so a model
+ * or provider switch starts a fresh baseline instead of polluting the prior
+ * one. The prefix fingerprint is intentionally excluded — a prefix change is a
+ * regression *cause* we want to detect, not a reason to reset the baseline.
+ */
+function cacheHistoryKey(threadId: string, signature: CacheRequestSignature): string {
+  return `${threadId}::${signature.providerId}::${signature.model}::${signature.endpointFormat}`
+}
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
 
