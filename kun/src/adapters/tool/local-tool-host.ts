@@ -230,7 +230,7 @@ export class LocalToolHost implements ToolHost {
       }
     }
     const rateLimited = normalizeRateLimitedToolOutput(hookedResult.output)
-    const output = rateLimited.rateLimited ? rateLimited.output : hookedResult.output
+    let output = rateLimited.rateLimited ? rateLimited.output : hookedResult.output
     const isError = hookedResult.isError || rateLimited.isError
     this.readTracker.observeToolResult({
       context,
@@ -238,6 +238,7 @@ export class LocalToolHost implements ToolHost {
       output,
       isError
     })
+    if (!isError) output = await offloadLargeToolOutput(output, activeCall.toolName, context)
     const item = makeToolResultItem({
       id: `item_${activeCall.callId}`,
       turnId: context.turnId,
@@ -337,6 +338,35 @@ export class LocalToolHost implements ToolHost {
       execute: tool.execute,
       ...(tool.shouldAdvertise ? { shouldAdvertise: tool.shouldAdvertise } : {})
     }
+  }
+}
+
+const ARTIFACT_OUTPUT_THRESHOLD_BYTES = 128 * 1024
+
+async function offloadLargeToolOutput(
+  output: unknown,
+  toolName: string,
+  context: ToolHostContext
+): Promise<unknown> {
+  if (!context.artifactStore) return output
+  let content: string
+  try {
+    content = typeof output === 'string' ? output : JSON.stringify(output)
+  } catch {
+    return output
+  }
+  if (Buffer.byteLength(content, 'utf8') <= ARTIFACT_OUTPUT_THRESHOLD_BYTES) return output
+  try {
+    const stored = await context.artifactStore.put({ content, source: 'tool', origin: toolName })
+    return {
+      artifactId: stored.meta.id,
+      byteSize: stored.meta.byteSize,
+      lineCount: stored.meta.lineCount,
+      truncated: stored.summary.truncated,
+      preview: stored.summary.inline
+    }
+  } catch {
+    return output
   }
 }
 

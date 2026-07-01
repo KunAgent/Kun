@@ -16,6 +16,8 @@ import { createAgentSdkRuntime } from '../runtime/agent-sdk/agent-sdk-runtime-fa
 import { buildGoalLocalTools } from '../adapters/tool/goal-tools.js'
 import { buildTodoLocalTools } from '../adapters/tool/todo-tools.js'
 import { LocalToolHost, buildDefaultLocalTools } from '../adapters/tool/local-tool-host.js'
+import { createReadArtifactTool } from '../adapters/tool/artifact-tool.js'
+import { FileArtifactStore } from '../artifacts/artifact-store.js'
 import { buildMcpToolProviders } from '../adapters/tool/mcp-tool-provider.js'
 import { buildMemoryToolProviders } from '../adapters/tool/memory-tool-provider.js'
 import { buildSkillToolProviders } from '../adapters/tool/skill-tool-provider.js'
@@ -167,6 +169,7 @@ export async function createKunServeRuntime(
     ]
   })
   const threadService = new ThreadService({ threadStore, sessionStore, events, ids, nowIso })
+  const artifactStore = new FileArtifactStore(join(options.dataDir, 'artifacts'), nowIso)
   const modelProfiles = modelContextProfilesFromConfig({
     contextCompaction: options.contextCompaction,
     models: options.models
@@ -309,6 +312,13 @@ export async function createKunServeRuntime(
       available: true,
       tools: withBackgroundShellTools(buildDefaultLocalTools())
     },
+    {
+      id: 'artifacts',
+      kind: 'built-in' as const,
+      enabled: true,
+      available: true,
+      tools: [createReadArtifactTool()]
+    },
     ...mcpProviders.providers,
     ...webProviders.providers,
     ...buildMemoryToolProviders(memoryStore),
@@ -359,6 +369,7 @@ export async function createKunServeRuntime(
           events,
           ...(options.runtime ? { runtime: options.runtime } : {}),
           ...(memoryStore ? { memoryStore } : {}),
+          artifactStore,
           nowIso
         }),
         recordExternalUsage: (threadId, usage) => {
@@ -521,6 +532,7 @@ export async function createKunServeRuntime(
     ...(options.runtime?.toolArgumentRepair ? { toolArgumentRepair: options.runtime.toolArgumentRepair } : {}),
     ...(resolvedHooks.length ? { hooks: resolvedHooks } : {}),
     ...(attachmentStore ? { attachmentStore } : {}),
+    artifactStore,
     ...(memoryStore ? { memoryStore } : {}),
     runtimeDataDir: options.dataDir,
     onPlanWritten: async ({ threadId, planId, relativePath, markdown }) => {

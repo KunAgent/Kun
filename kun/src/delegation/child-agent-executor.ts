@@ -16,6 +16,7 @@ import { InflightTracker } from '../loop/inflight-tracker.js'
 import { SteeringQueue } from '../loop/steering-queue.js'
 import type { TokenEconomyConfig } from '../loop/token-economy.js'
 import type { MemoryStore } from '../memory/memory-store.js'
+import type { ArtifactStore } from '../artifacts/artifact-store.js'
 import type { ModelClient } from '../ports/model-client.js'
 import { RandomIdGenerator } from '../ports/id-generator.js'
 import type { SessionStore } from '../ports/session-store.js'
@@ -43,6 +44,7 @@ export type ChildAgentExecutorOptions = {
   modelCapabilities?: (model: string) => ModelCapabilityMetadata
   skillRuntime?: SkillRuntime
   memoryStore?: MemoryStore
+  artifactStore?: ArtifactStore
   /**
    * Persistence wiring. When the main runtime's stores + event recorder are
    * supplied, the child runs as a persisted `relation: 'side'` thread on the
@@ -159,6 +161,7 @@ export function createChildAgentExecutor(options: ChildAgentExecutorOptions): Ch
       ...(options.modelCapabilities ? { modelCapabilities: options.modelCapabilities } : {}),
       ...(options.skillRuntime ? { skillRuntime: options.skillRuntime } : {}),
       ...(options.memoryStore ? { memoryStore: options.memoryStore } : {}),
+      ...(options.artifactStore ? { artifactStore: options.artifactStore } : {}),
       ...(options.contextCompaction ? { contextCompaction: options.contextCompaction } : {}),
       ...(options.tokenEconomy ? { tokenEconomy: options.tokenEconomy } : {}),
       ...(options.runtime?.toolStorm ? { toolStorm: options.runtime.toolStorm } : {}),

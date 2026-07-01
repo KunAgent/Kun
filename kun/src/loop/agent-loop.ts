@@ -63,6 +63,7 @@ import type { SkillRuntime } from '../skills/skill-runtime.js'
 import type { AttachmentContent, AttachmentStore } from '../attachments/attachment-store.js'
 import type { ModelInputAttachment, ModelTextAttachmentFallback } from '../ports/model-client.js'
 import type { MemoryStore } from '../memory/memory-store.js'
+import type { ArtifactStore } from '../artifacts/artifact-store.js'
 import {
   hasHooksForPhase,
   runObserverHooks,
@@ -672,6 +673,7 @@ export type AgentLoopOptions = {
   skillRuntime?: SkillRuntime
   attachmentStore?: AttachmentStore
   memoryStore?: MemoryStore
+  artifactStore?: ArtifactStore
   /** Kun runtime data root for sandbox-safe background shell output reads. */
   runtimeDataDir?: string
   tokenEconomy?: TokenEconomyConfig
@@ -2225,6 +2227,7 @@ export class AgentLoop {
       approvalPolicy: input.approvalPolicy,
       sandboxMode: input.sandboxMode,
       ...(this.opts.runtimeDataDir ? { runtimeDataDir: this.opts.runtimeDataDir } : {}),
+      ...(this.opts.artifactStore ? { artifactStore: this.opts.artifactStore } : {}),
       abortSignal: input.signal,
       awaitApproval: async (approval) => {
         await this.opts.events.record({
