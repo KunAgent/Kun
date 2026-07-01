@@ -841,7 +841,9 @@ describe('syncGuiManagedKunConfig', () => {
     expect(parsed.capabilities.skills.enabled).toBe(true)
     expect(parsed.capabilities.skills.legacySkillMd).toBe(true)
     expect(parsed.capabilities.skills.roots).toEqual(expect.arrayContaining([
-      join(workspaceRoot, '.codex', 'skills'),
+      join(workspaceRoot, '.codex', 'skills')
+    ]))
+    expect(parsed.capabilities.skills.globalRoots).toEqual(expect.arrayContaining([
       extraRoot
     ]))
   })
