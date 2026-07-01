@@ -26,6 +26,8 @@ import { buildDelegationToolProviders } from '../adapters/tool/delegation-tool-p
 import { buildWebToolProviders } from '../adapters/tool/web-tool-provider.js'
 import { buildImageGenToolProviders } from '../adapters/tool/image-gen-tool-provider.js'
 import { buildComputerUseToolProviders } from '../adapters/tool/computer-use-tool-provider.js'
+import { createRemoteHostsService } from '../remote/remote-hosts-service.js'
+import { RemoteTargetRegistry } from '../remote/remote-target-registry.js'
 import {
   buildMusicGenToolProviders,
   buildSpeechGenToolProviders,
@@ -172,6 +174,10 @@ export async function createKunServeRuntime(
   })
   const threadService = new ThreadService({ threadStore, sessionStore, events, ids, nowIso })
   const artifactStore = new FileArtifactStore(join(options.dataDir, 'artifacts'), nowIso)
+  const remote = createRemoteHostsService()
+  const remoteTargetRegistry = new RemoteTargetRegistry({
+    loadBinding: async (threadId) => (await threadStore.get(threadId))?.remoteTarget
+  })
   const modelProfiles = modelContextProfilesFromConfig({
     contextCompaction: options.contextCompaction,
     models: options.models
@@ -556,6 +562,7 @@ export async function createKunServeRuntime(
     ...(attachmentStore ? { attachmentStore } : {}),
     artifactStore,
     ...(memoryStore ? { memoryStore } : {}),
+    resolveExecutionTarget: (threadId) => remoteTargetRegistry.resolve(threadId),
     runtimeDataDir: options.dataDir,
     onPlanWritten: async ({ threadId, planId, relativePath, markdown }) => {
       await threadService.syncTodosFromPlan(threadId, {
@@ -587,12 +594,17 @@ export async function createKunServeRuntime(
     ...(memoryStore ? { memoryStore } : {}),
     ...(delegationRuntime ? { delegationRuntime } : {}),
     backgroundShellRuntime,
+    remote,
     modelClient,
     defaultModel: options.model,
     ...(options.roles ? { roles: options.roles } : {}),
     immutablePrefix: prefix,
-    runTurn(threadId, turnId) {
+    async runTurn(threadId, turnId) {
+      await remoteTargetRegistry.prime(threadId)
       return loop.runTurn(threadId, turnId)
+    },
+    disposeThreadResources(threadId) {
+      remoteTargetRegistry.evict(threadId)
     },
     resumeInterruptedGoals(threadIds) {
       return loop.resumeInterruptedGoals(threadIds)

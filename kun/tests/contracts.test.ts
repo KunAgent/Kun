@@ -45,6 +45,28 @@ describe('contracts', () => {
     expect(parsed.mode).toBe('agent')
   })
 
+  it('accepts a secret-free SSH remote target on thread creation', () => {
+    const parsed = CreateThreadRequest.parse({
+      title: 'remote',
+      workspace: '/tmp/ws',
+      model: 'deepseek-chat',
+      remoteTarget: {
+        kind: 'ssh',
+        alias: 'prod',
+        remoteDir: '/srv/app',
+        runMode: 'develop',
+        production: true,
+        protectedPaths: ['.env', '/etc']
+      }
+    })
+    expect(parsed.remoteTarget).toMatchObject({
+      kind: 'ssh',
+      alias: 'prod',
+      runMode: 'develop',
+      production: true
+    })
+  })
+
   it('accepts thread goal contracts and events', () => {
     const goal = ThreadGoalSchema.parse({
       threadId: 'thr_1',
