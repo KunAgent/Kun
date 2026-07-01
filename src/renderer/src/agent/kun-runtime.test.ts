@@ -81,6 +81,118 @@ describe('KunRuntimeProvider', () => {
     expect(caps.approvals).toBe(true)
   })
 
+  it('posts remote target metadata when creating a thread', async () => {
+    const runtimeRequest = vi.fn(async () => ({
+      ok: true,
+      status: 201,
+      body: JSON.stringify({
+        id: 'thr_remote',
+        title: 'Remote',
+        workspace: '/tmp/workspace',
+        model: defaultKunRuntimeSettings().model,
+        mode: 'agent',
+        status: 'idle',
+        remoteTarget: {
+          kind: 'ssh',
+          alias: 'prod-box',
+          remoteDir: '/srv/app',
+          runMode: 'develop',
+          production: true,
+          protectedPaths: ['.env']
+        },
+        createdAt: 't0',
+        updatedAt: 't1'
+      })
+    }))
+    installDsGui({ runtimeRequest })
+    const provider = new KunRuntimeProvider()
+
+    const thread = await provider.createThread({
+      workspace: '/tmp/workspace',
+      title: 'Remote',
+      mode: 'agent',
+      remoteTarget: {
+        kind: 'ssh',
+        alias: 'prod-box',
+        remoteDir: '/srv/app',
+        runMode: 'develop',
+        production: true,
+        protectedPaths: ['.env']
+      }
+    })
+
+    expect(runtimeRequest).toHaveBeenCalledWith(
+      '/v1/threads',
+      'POST',
+      JSON.stringify({
+        workspace: '/tmp/workspace',
+        title: 'Remote',
+        model: defaultKunRuntimeSettings().model,
+        mode: 'agent',
+        approvalPolicy: 'auto',
+        sandboxMode: 'danger-full-access',
+        remoteTarget: {
+          kind: 'ssh',
+          alias: 'prod-box',
+          remoteDir: '/srv/app',
+          runMode: 'develop',
+          production: true,
+          protectedPaths: ['.env']
+        }
+      })
+    )
+    expect(thread.remoteTarget?.alias).toBe('prod-box')
+  })
+
+  it('lists remote SSH hosts through the runtime', async () => {
+    const runtimeRequest = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      body: JSON.stringify({
+        configFound: true,
+        hosts: [{ alias: 'dev', hostName: 'dev.example.com', user: 'kun', port: 22 }]
+      })
+    }))
+    installDsGui({ runtimeRequest })
+    const provider = new KunRuntimeProvider()
+
+    await expect(provider.listRemoteHosts()).resolves.toEqual({
+      configFound: true,
+      hosts: [{ alias: 'dev', hostName: 'dev.example.com', user: 'kun', port: 22 }]
+    })
+    expect(runtimeRequest).toHaveBeenCalledWith('/v1/remote/hosts', 'GET')
+  })
+
+  it('tests remote SSH connections through the runtime', async () => {
+    const runtimeRequest = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      body: JSON.stringify({
+        ok: true,
+        alias: 'dev',
+        remoteDir: '/srv/app',
+        status: 'connected',
+        latencyMs: 42,
+        os: 'linux',
+        branch: 'main',
+        dirty: false,
+        repoRoot: '/srv/app',
+        tools: { bash: true, read: true }
+      })
+    }))
+    installDsGui({ runtimeRequest })
+    const provider = new KunRuntimeProvider()
+
+    const result = await provider.testRemoteConnection({ alias: 'dev', remoteDir: '/srv/app' })
+
+    expect(runtimeRequest).toHaveBeenCalledWith(
+      '/v1/remote/test',
+      'POST',
+      JSON.stringify({ alias: 'dev', remoteDir: '/srv/app' })
+    )
+    expect(result).toMatchObject({ ok: true, status: 'connected', latencyMs: 42 })
+  })
+
   it('reports invalid runtime JSON responses with a stable error message', async () => {
     installDsGui({
       runtimeRequest: vi.fn(async () => ({

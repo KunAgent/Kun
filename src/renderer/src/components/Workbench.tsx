@@ -92,6 +92,7 @@ import { parseGuiPlanCommand } from '../plan/plan-command'
 import { confirmDialog } from '../lib/confirm-dialog'
 import { DevPreviewLaunchCard } from './DevPreviewLaunchCard'
 import { RuntimeBanner } from './RuntimeBanner'
+import { RemoteTargetPicker } from './RemoteTargetPicker'
 import { CODE_PANEL_PREFERRED, useWorkbenchLayout } from './workbench-layout'
 import { useWorkbenchPlanController } from './workbench-plan-controller'
 import { prepareImageAttachmentUpload } from '../lib/image-attachment-upload'
@@ -451,6 +452,8 @@ export function Workbench(): ReactElement {
     composerProviderId,
     composerPickList,
     composerModelGroups,
+    composerRemoteTarget,
+    setComposerRemoteTarget,
     disabledSkillIds,
     composerMode,
     setComposerMode,
@@ -517,6 +520,8 @@ export function Workbench(): ReactElement {
       composerProviderId: s.composerProviderId,
       composerPickList: s.composerPickList,
       composerModelGroups: s.composerModelGroups,
+      composerRemoteTarget: s.composerRemoteTarget,
+      setComposerRemoteTarget: s.setComposerRemoteTarget,
       disabledSkillIds: s.disabledSkillIds,
       composerMode: s.composerMode,
       setComposerMode: s.setComposerMode,
@@ -649,6 +654,16 @@ export function Workbench(): ReactElement {
   )
   const latestDevPreviewUrl = detectedDevPreviewUrls[0] ?? null
   const latestAutoOpenDevPreviewUrl = autoOpenDevPreviewUrls[0] ?? null
+  const listRemoteHosts = useCallback(async () => {
+    const provider = getProvider()
+    if (!provider.listRemoteHosts) throw new Error('Remote targets are not available.')
+    return provider.listRemoteHosts()
+  }, [])
+  const testRemoteConnection = useCallback(async (input: { alias: string; remoteDir?: string }) => {
+    const provider = getProvider()
+    if (!provider.testRemoteConnection) throw new Error('Remote targets are not available.')
+    return provider.testRemoteConnection(input)
+  }, [])
   const currentSideConversations = useMemo(
     () =>
       Object.values(sideConversations)
@@ -2804,6 +2819,16 @@ export function Workbench(): ReactElement {
                 }}
               />
               ) : (
+              <div className="flex w-full max-w-5xl flex-col items-center gap-2">
+                {route === 'chat' ? (
+                  <RemoteTargetPicker
+                    value={composerRemoteTarget}
+                    onChange={setComposerRemoteTarget}
+                    listHosts={listRemoteHosts}
+                    testConnection={testRemoteConnection}
+                    disabled={busy || runtimeConnection !== 'ready'}
+                  />
+                ) : null}
               <FloatingComposer
                 input={input}
                 setInput={setInput}
@@ -2887,6 +2912,7 @@ export function Workbench(): ReactElement {
                   openSideConversationDraft()
                 }}
               />
+              </div>
               )}
             </div>
             </div>

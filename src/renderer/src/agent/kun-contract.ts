@@ -1,4 +1,5 @@
 import { GUI_PLAN_CREATE_PLAN_TOOL_NAME } from '@shared/gui-plan'
+import type { NormalizedRemoteTarget } from './remote-target'
 
 export type CoreThreadStatus = 'idle' | 'running' | 'archived' | 'deleted'
 export type CoreTurnStatus = 'queued' | 'running' | 'completed' | 'failed' | 'aborted'
@@ -39,6 +40,7 @@ export type CoreThreadSummaryJson = {
   forkedFromTurnCount?: number
   goal?: CoreThreadGoalJson | null
   todos?: CoreThreadTodoListJson | null
+  remoteTarget?: NormalizedRemoteTarget
   createdAt: string
   updatedAt: string
 }
