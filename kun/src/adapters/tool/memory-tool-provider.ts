@@ -18,7 +18,9 @@ export function buildMemoryToolProviders(store: MemoryStore | undefined): Capabi
           properties: {
             content: { type: 'string' },
             scope: { type: 'string', enum: ['user', 'workspace', 'project'] },
-            tags: { type: 'array', items: { type: 'string' } }
+            tags: { type: 'array', items: { type: 'string' } },
+            ttlDays: { type: 'number', minimum: 1, description: 'Optional lifetime in days.' },
+            supersedes: { type: 'string', description: 'Optional memory id replaced by this memory.' }
           },
           required: ['content'],
           additionalProperties: false
@@ -36,6 +38,13 @@ export function buildMemoryToolProviders(store: MemoryStore | undefined): Capabi
                 ...(args.scope === 'project' ? { project: context.workspace } : {}),
                 sourceThreadId: context.threadId,
                 sourceTurnId: context.turnId,
+                provenance: { kind: 'user', turnId: context.turnId, origin: 'memory_create' },
+                ...(typeof args.ttlDays === 'number' && Number.isFinite(args.ttlDays) && args.ttlDays > 0
+                  ? { ttlMs: Math.round(args.ttlDays * 24 * 60 * 60 * 1_000) }
+                  : {}),
+                ...(typeof args.supersedes === 'string' && args.supersedes.trim()
+                  ? { supersedes: args.supersedes.trim() }
+                  : {}),
                 tags: Array.isArray(args.tags) ? args.tags.filter((tag): tag is string => typeof tag === 'string') : []
               })
             }

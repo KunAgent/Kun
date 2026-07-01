@@ -1,4 +1,4 @@
-import { mkdtemp, readdir, readFile, rm } from 'node:fs/promises'
+import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -6,7 +6,7 @@ import { CapabilityRegistry } from '../src/adapters/tool/capability-registry.js'
 import { LocalToolHost } from '../src/adapters/tool/local-tool-host.js'
 import { buildMemoryToolProviders } from '../src/adapters/tool/memory-tool-provider.js'
 import { KunCapabilitiesConfig, type MemoryCapabilityConfig } from '../src/contracts/capabilities.js'
-import { FileMemoryStore } from '../src/memory/memory-store.js'
+import { effectiveMemoryConfidence, FileMemoryStore } from '../src/memory/memory-store.js'
 import type { ModelClient, ModelRequest } from '../src/ports/model-client.js'
 import { dispatchRequest } from '../src/server/http-server.js'
 import { bootstrapThread, makeHarness } from './loop-test-harness.js'
@@ -50,6 +50,77 @@ describe('Memory store and recall', () => {
     await store.delete(memory.id)
     expect(await store.retrieve({ query: 'pnpm', workspace: '/tmp/ws', limit: 3 })).toEqual([])
     expect((await store.list({ workspace: '/tmp/ws', includeDeleted: true })).find((item) => item.id === memory.id)?.deletedAt).toBeTruthy()
+  })
+
+  it('tracks provenance, expiry, confidence decay, and legacy records', async () => {
+    let now = '2026-06-03T00:00:00.000Z'
+    const store = new FileMemoryStore({
+      rootDir: join(dir, 'memory'),
+      config: memoryConfig(),
+      nowIso: () => now,
+      idGenerator: () => `mem_${nextId++}`,
+      confidenceHalfLifeMs: 1_000
+    })
+    const memory = await store.create({
+      content: 'Observed build uses a generated manifest',
+      scope: 'workspace',
+      workspace: '/tmp/ws',
+      provenance: { kind: 'inference', turnId: 'turn_1', origin: 'analysis' },
+      ttlMs: 2_000
+    })
+    expect(memory).toMatchObject({
+      confidence: 0.4,
+      provenance: { kind: 'inference', turnId: 'turn_1', origin: 'analysis' },
+      expiresAt: '2026-06-03T00:00:02.000Z'
+    })
+    expect(effectiveMemoryConfidence(memory, Date.parse(now) + 1_000, 1_000)).toBeCloseTo(0.2)
+    expect(await store.retrieve({ query: 'generated manifest', workspace: '/tmp/ws', limit: 3 })).toHaveLength(1)
+
+    now = '2026-06-03T00:00:03.000Z'
+    expect(await store.retrieve({ query: 'generated manifest', workspace: '/tmp/ws', limit: 3 })).toEqual([])
+    expect((await store.diagnostics()).activeCount).toBe(0)
+
+    await mkdir(join(dir, 'memory'), { recursive: true })
+    await writeFile(join(dir, 'memory', 'legacy.json'), JSON.stringify({
+      id: 'legacy',
+      content: 'Legacy user preference',
+      scope: 'user',
+      tags: [],
+      confidence: 1,
+      createdAt: now,
+      updatedAt: now
+    }))
+    expect((await store.list({ all: true })).find((item) => item.id === 'legacy')).toBeTruthy()
+  })
+
+  it('supersedes older memories and preserves user corrections', async () => {
+    const store = createStore()
+    const older = await store.create({
+      content: 'Use npm for frontend installs',
+      scope: 'workspace',
+      workspace: '/tmp/ws'
+    })
+    const newer = await store.create({
+      content: 'Use pnpm for frontend installs',
+      scope: 'workspace',
+      workspace: '/tmp/ws',
+      provenance: { kind: 'tool', origin: 'package-manager-check' },
+      supersedes: older.id
+    })
+
+    const records = await store.list({ workspace: '/tmp/ws' })
+    expect(records.find((item) => item.id === older.id)?.supersededAt).toBeTruthy()
+    expect((await store.retrieve({ query: 'frontend installs', workspace: '/tmp/ws', limit: 3 })).map((item) => item.id)).toEqual([newer.id])
+
+    const corrected = await store.update(newer.id, { content: 'Use Bun for frontend installs' }, {
+      workspace: '/tmp/ws'
+    })
+    expect(corrected).toMatchObject({
+      content: 'Use Bun for frontend installs',
+      correctedFrom: 'Use pnpm for frontend installs',
+      confidence: 1,
+      provenance: { kind: 'user' }
+    })
   })
 
   it('exposes memory API routes with diagnostics', async () => {
@@ -153,7 +224,7 @@ describe('Memory store and recall', () => {
 
     await h.loop.runTurn(h.threadId, h.turnId)
 
-    expect(seenRequests.at(-1)?.contextInstructions?.[0]).toContain(memory.id)
+    expect(seenRequests.at(-1)?.contextInstructions?.join('\n')).toContain(memory.id)
     expect((await h.turns.getTurn(h.threadId, h.turnId))?.injectedMemoryIds).toEqual([memory.id])
     expect((await store.diagnostics()).lastInjectedIds).toEqual([memory.id])
 

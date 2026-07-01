@@ -5,9 +5,12 @@ import { atomicWriteFile } from '../adapters/file/atomic-write.js'
 import {
   MemoryDiagnostics,
   MemoryRecord,
+  type MemoryProvenance,
   type MemoryCreateRequest,
   type MemoryUpdateRequest
 } from '../contracts/memory.js'
+
+const DEFAULT_MEMORY_CONFIDENCE_HALF_LIFE_MS = 180 * 24 * 60 * 60 * 1_000
 
 export interface MemoryStore {
   create(input: MemoryCreateRequest): Promise<MemoryRecord>
@@ -30,6 +33,8 @@ export class FileMemoryStore implements MemoryStore {
       config: MemoryCapabilityConfig
       nowIso?: () => string
       idGenerator?: () => string
+      confidenceHalfLifeMs?: number
+      minConfidence?: number
     }
   ) {}
 
@@ -39,6 +44,7 @@ export class FileMemoryStore implements MemoryStore {
     const scope = input.scope ?? 'workspace'
     const workspace = normalizeScopePath(input.workspace)
     const project = normalizeScopePath(input.project ?? (scope === 'project' ? input.workspace : undefined))
+    const provenance = input.provenance ?? defaultProvenance(input)
     const parsed = MemoryRecord.parse({
       id: this.options.idGenerator?.() ?? `mem_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`,
       content: input.content,
@@ -47,11 +53,21 @@ export class FileMemoryStore implements MemoryStore {
       ...(scope === 'project' && project ? { project } : {}),
       sourceThreadId: input.sourceThreadId,
       sourceTurnId: input.sourceTurnId,
+      provenance,
       tags: input.tags ?? [],
-      confidence: input.confidence ?? 1,
+      confidence: input.confidence ?? defaultConfidence(provenance.kind),
       createdAt: now,
-      updatedAt: now
+      updatedAt: now,
+      ...(input.ttlMs ? { expiresAt: new Date(Date.parse(now) + input.ttlMs).toISOString() } : {}),
+      ...(input.supersedes ? { supersedes: input.supersedes } : {})
     })
+    if (input.supersedes) {
+      const older = await this.mustGet(input.supersedes, { workspace })
+      if (older.scope !== parsed.scope) {
+        throw new Error('a memory can only supersede another memory in the same scope')
+      }
+      await this.write(MemoryRecord.parse({ ...older, supersededAt: now, updatedAt: now }))
+    }
     await this.write(parsed)
     return parsed
   }
@@ -59,11 +75,23 @@ export class FileMemoryStore implements MemoryStore {
   async update(id: string, patch: MemoryUpdateRequest, access?: MemoryAccess): Promise<MemoryRecord> {
     const current = await this.mustGet(id, access)
     const now = this.now()
+    const corrected = patch.content !== undefined && patch.content !== current.content
     const next = MemoryRecord.parse({
       ...current,
       ...(patch.content !== undefined ? { content: patch.content } : {}),
       ...(patch.tags !== undefined ? { tags: patch.tags } : {}),
-      ...(patch.confidence !== undefined ? { confidence: patch.confidence } : {}),
+      ...(patch.confidence !== undefined
+        ? { confidence: patch.confidence }
+        : corrected
+          ? { confidence: 1 }
+          : {}),
+      ...(corrected
+        ? {
+            correctedFrom: current.correctedFrom ?? current.content,
+            provenance: { ...(current.provenance ?? defaultLegacyProvenance(current)), kind: 'user' }
+          }
+        : {}),
+      ...(patch.expiresAt !== undefined ? { expiresAt: patch.expiresAt ?? undefined } : {}),
       ...(patch.disabled === true ? { disabledAt: current.disabledAt ?? now } : {}),
       ...(patch.disabled === false ? { disabledAt: undefined } : {}),
       updatedAt: now
@@ -94,8 +122,14 @@ export class FileMemoryStore implements MemoryStore {
 
   async retrieve(input: { query: string; workspace?: string; limit: number }): Promise<MemoryRecord[]> {
     if (!this.options.config.enabled) return []
+    const nowMs = Date.parse(this.now())
     const active = (await this.list({ workspace: input.workspace }))
-      .filter((record) => !record.disabledAt)
+      .filter((record) => isMemoryActive(
+        record,
+        nowMs,
+        this.options.minConfidence ?? 0,
+        this.options.confidenceHalfLifeMs ?? DEFAULT_MEMORY_CONFIDENCE_HALF_LIFE_MS
+      ))
     // User-scope memories are persistent identity facts (name, preferences,
     // account) — small in number, high in value, and frequently queried by
     // semantic prompts ("who am I?", "what do you know about me") that share
@@ -105,7 +139,12 @@ export class FileMemoryStore implements MemoryStore {
     const userMemories = active.filter((record) => record.scope === 'user')
     const scored = active
       .filter((record) => record.scope !== 'user')
-      .map((record) => ({ record, score: scoreMemory(record, input.query) }))
+      .map((record) => ({ record, score: scoreMemory(
+        record,
+        input.query,
+        nowMs,
+        this.options.confidenceHalfLifeMs ?? DEFAULT_MEMORY_CONFIDENCE_HALF_LIFE_MS
+      ) }))
       .filter((entry) => entry.score > 0)
       .sort((a, b) => b.score - a.score || b.record.updatedAt.localeCompare(a.record.updatedAt))
       .map((entry) => entry.record)
@@ -114,10 +153,16 @@ export class FileMemoryStore implements MemoryStore {
 
   async diagnostics(): Promise<MemoryDiagnostics> {
     const records = await this.readAll()
+    const nowMs = Date.parse(this.now())
     return {
       enabled: this.options.config.enabled,
       rootDir: this.options.rootDir,
-      activeCount: records.filter((record) => !record.deletedAt && !record.disabledAt).length,
+      activeCount: records.filter((record) => isMemoryActive(
+        record,
+        nowMs,
+        this.options.minConfidence ?? 0,
+        this.options.confidenceHalfLifeMs ?? DEFAULT_MEMORY_CONFIDENCE_HALF_LIFE_MS
+      )).length,
       tombstoneCount: records.filter((record) => Boolean(record.deletedAt)).length,
       lastInjectedIds: [...this.lastInjectedIds]
     }
@@ -176,7 +221,12 @@ function normalizeScopePath(value: string | undefined): string | undefined {
   return process.platform === 'win32' ? normalized.toLowerCase() : normalized
 }
 
-function scoreMemory(record: MemoryRecord, query: string): number {
+function scoreMemory(
+  record: MemoryRecord,
+  query: string,
+  nowMs: number,
+  confidenceHalfLifeMs: number
+): number {
   // Build n-gram fingerprints so matching works for both Latin words and CJK
   // text. The previous implementation split on `[^a-z0-9_]+`, which treated
   // every Chinese/Japanese/Korean character as a separator and produced an
@@ -190,7 +240,61 @@ function scoreMemory(record: MemoryRecord, query: string): number {
   }
   // Normalize by query coverage so long queries do not drown out short ones.
   const coverage = overlap / queryGrams.size
-  return (overlap + coverage) * record.confidence
+  return (overlap + coverage) * effectiveMemoryConfidence(record, nowMs, confidenceHalfLifeMs)
+}
+
+export function isMemoryActive(
+  record: MemoryRecord,
+  nowMs: number,
+  minConfidence = 0,
+  halfLifeMs = DEFAULT_MEMORY_CONFIDENCE_HALF_LIFE_MS
+): boolean {
+  if (record.deletedAt || record.disabledAt || record.supersededAt) return false
+  if (record.expiresAt && Date.parse(record.expiresAt) <= nowMs) return false
+  return effectiveMemoryConfidence(
+    record,
+    nowMs,
+    halfLifeMs
+  ) >= minConfidence
+}
+
+export function effectiveMemoryConfidence(
+  record: MemoryRecord,
+  nowMs: number,
+  halfLifeMs = DEFAULT_MEMORY_CONFIDENCE_HALF_LIFE_MS
+): number {
+  const provenance = record.provenance ?? defaultLegacyProvenance(record)
+  if (provenance.kind === 'user' || halfLifeMs <= 0) return record.confidence
+  const createdAtMs = Date.parse(record.createdAt)
+  if (!Number.isFinite(createdAtMs)) return record.confidence
+  const ageMs = Math.max(0, nowMs - createdAtMs)
+  return record.confidence * Math.pow(0.5, ageMs / halfLifeMs)
+}
+
+function defaultProvenance(input: MemoryCreateRequest): MemoryProvenance {
+  return {
+    kind: 'user',
+    ...(input.sourceTurnId ? { turnId: input.sourceTurnId } : {}),
+    origin: 'memory'
+  }
+}
+
+function defaultLegacyProvenance(record: Pick<MemoryRecord, 'sourceTurnId'>): MemoryProvenance {
+  return {
+    kind: 'user',
+    ...(record.sourceTurnId ? { turnId: record.sourceTurnId } : {}),
+    origin: 'legacy'
+  }
+}
+
+function defaultConfidence(kind: MemoryProvenance['kind']): number {
+  switch (kind) {
+    case 'user': return 1
+    case 'file': return 0.8
+    case 'tool': return 0.7
+    case 'web': return 0.5
+    case 'inference': return 0.4
+  }
 }
 
 /**
