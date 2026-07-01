@@ -86,6 +86,7 @@ import { stopBashSessionById, createBashLocalTool } from '../adapters/tool/built
 import { createBackgroundShellTool } from '../adapters/tool/background-shell-tool.js'
 import { createSecretEncryptor, defaultSecretCommandRunner } from '../security/secret-store.js'
 import type { LocalTool } from '../adapters/tool/local-tool-host.js'
+import { InMemoryPublisherTrustStore } from '../supplychain/publisher-trust-store.js'
 
 export type KunServeRuntimeOptions = {
   host: string
@@ -264,6 +265,7 @@ export async function createKunServeRuntime(
     turns: turnService,
     nowIso
   })
+  const supplyChainTrust = new InMemoryPublisherTrustStore()
   backgroundShellRuntime.bindStopHandler(stopBashSessionById)
   const backgroundShellTool = createBackgroundShellTool({
     listBackgroundSessions: (threadId) => backgroundShellRuntime.listSessions(threadId)
@@ -587,6 +589,7 @@ export async function createKunServeRuntime(
     ...(memoryStore ? { memoryStore } : {}),
     ...(delegationRuntime ? { delegationRuntime } : {}),
     backgroundShellRuntime,
+    supplyChainTrust,
     modelClient,
     defaultModel: options.model,
     ...(options.roles ? { roles: options.roles } : {}),

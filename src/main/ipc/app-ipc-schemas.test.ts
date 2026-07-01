@@ -47,6 +47,19 @@ describe('app-ipc-schemas', () => {
     expect(payload.path).toBe('/v1/runtime/tools')
   })
 
+  it('accepts Kun supply-chain audit endpoints', () => {
+    expect(runtimeRequestPayloadSchema.parse({
+      path: '/v1/supply-chain/audit',
+      method: 'POST',
+      body: '{}'
+    }).path).toBe('/v1/supply-chain/audit')
+    expect(runtimeRequestPayloadSchema.parse({
+      path: '/v1/supply-chain/update-check',
+      method: 'POST',
+      body: '{}'
+    }).path).toBe('/v1/supply-chain/update-check')
+  })
+
   it('accepts Kun MCP OAuth status and token reset endpoints', () => {
     expect(runtimeRequestPayloadSchema.parse({
       path: '/v1/mcp/oauth',

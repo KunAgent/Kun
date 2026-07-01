@@ -36,6 +36,7 @@ import type { BackgroundShellRuntime } from '../../services/background-shell-run
 import type { ModelClient } from '../../ports/model-client.js'
 import type { RolesConfig } from '../../config/kun-config.js'
 import type { ImmutablePrefix } from '../../cache/immutable-prefix.js'
+import type { PublisherTrustStore } from '../../supplychain/publisher-trust-store.js'
 
 export type RuntimeToolDiagnostics = {
   providers: ToolProviderPolicy[]
@@ -79,6 +80,7 @@ export type ServerRuntime = {
    */
   delegationRuntime?: DelegationRuntime
   backgroundShellRuntime?: BackgroundShellRuntime
+  supplyChainTrust?: PublisherTrustStore
   /**
    * Default ModelClient + model id for one-shot completions outside the
    * agent loop (e.g. AI-generated subagent profiles). Optional so test
