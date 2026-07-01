@@ -211,6 +211,16 @@ export function createSddDraft(options: {
   }
 }
 
+export function resolveSddRequirementWorkspace(
+  threads: readonly { id: string; workspace?: string }[],
+  activeThreadId: string | null,
+  fallbackWorkspace: string
+): string {
+  return normalizeWorkspaceRoot(
+    threads.find((thread) => thread.id === activeThreadId)?.workspace ?? fallbackWorkspace
+  )
+}
+
 export function rememberSddDraft(draft: SddDraft): void {
   const normalized = normalizeDraft(draft)
   if (!normalized) return

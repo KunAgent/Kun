@@ -60,11 +60,17 @@ import { composeWritePrompt } from '../write/quoted-selection'
 import { resolveWriteAgentPreset } from '../write/agent-presets'
 import { useWriteWorkspaceStore } from '../write/write-workspace-store'
 import { isWriteThreadId } from '../write/write-thread-registry'
-import { buildSddDraftId, createSddDraft, forgetRememberedSddDraft, useSddDraftStore } from '../sdd/sdd-draft-store'
+import {
+  buildSddDraftId,
+  createSddDraft,
+  forgetRememberedSddDraft,
+  resolveSddRequirementWorkspace,
+  useSddDraftStore
+} from '../sdd/sdd-draft-store'
 import type { SddDraft, SddDraftSaveStatus } from '../sdd/sdd-draft-store'
 import { listSddDraftHistory, titleFromSddDraftContent } from '../sdd/sdd-draft-history'
 import { saveActiveSddDraftToDisk } from '../sdd/sdd-draft-actions'
-import { restoreRememberedSddDraft, restoreSddDraft } from '../sdd/sdd-draft-restore'
+import { restoreSddDraft } from '../sdd/sdd-draft-restore'
 import { composeSddAssistantPrompt } from '../sdd/sdd-assistant-prompt'
 import { frameworkById } from '../sdd/pm-skill-frameworks'
 import { collectSddDraftImages, withAttachmentIds, type SddDraftImageReference } from '../sdd/sdd-draft-images'
@@ -90,7 +96,7 @@ import { CODE_PANEL_PREFERRED, useWorkbenchLayout } from './workbench-layout'
 import { useWorkbenchPlanController } from './workbench-plan-controller'
 import { prepareImageAttachmentUpload } from '../lib/image-attachment-upload'
 import { isChatAttachmentUploadEnabled } from '../lib/attachment-upload-availability'
-import { normalizeWorkspaceRoot } from '../lib/workspace-path'
+import { isConversationWorkspacePath, normalizeWorkspaceRoot } from '../lib/workspace-path'
 import { useKeyboardShortcutSettings } from '../lib/keyboard-shortcut-settings'
 import { collectComposerChangeSummary } from '../lib/composer-change-summary'
 import { formatWorkspacePickerError } from '../lib/format-workspace-picker-error'
@@ -406,6 +412,7 @@ export function Workbench(): ReactElement {
     route,
     pluginHostRoute,
     workspaceRoot,
+    conversationWorkspaceRoot,
     runtimeConnection,
     setRoute,
     openCode,
@@ -471,6 +478,7 @@ export function Workbench(): ReactElement {
       route: s.route,
       pluginHostRoute: s.pluginHostRoute,
       workspaceRoot: s.workspaceRoot,
+      conversationWorkspaceRoot: s.conversationWorkspaceRoot,
       runtimeConnection: s.runtimeConnection,
       setRoute: s.setRoute,
       openCode: s.openCode,
@@ -1506,29 +1514,26 @@ export function Workbench(): ReactElement {
   }
 
   const startNewSddRequirement = async (): Promise<void> => {
-    const activeCodeWorkspace = activeThreadId
-      ? normalizeWorkspaceRoot(codeThreads.find((thread) => thread.id === activeThreadId)?.workspace ?? '')
-      : ''
-    let targetWorkspace = activeCodeWorkspace || normalizeWorkspaceRoot(workspaceRoot)
-    if (!targetWorkspace) {
-      const picked = await chooseWorkspace({ selectThreadAfter: false })
-      targetWorkspace = normalizeWorkspaceRoot(picked ?? useChatStore.getState().workspaceRoot)
+    const suggestedWorkspace = resolveSddRequirementWorkspace(codeThreads, activeThreadId, workspaceRoot)
+    let targetWorkspace = ''
+    try {
+      const picked = await window.kunGui.pickWorkspaceDirectory(suggestedWorkspace || undefined)
+      if (picked.canceled || !picked.path) return
+      targetWorkspace = normalizeWorkspaceRoot(picked.path)
+    } catch (error) {
+      setError(formatWorkspacePickerError(error))
+      return
     }
     if (!targetWorkspace) {
       setError(t('workspaceRequiredToCreateThread'))
       return
     }
-    const restored = await restoreRememberedSddDraft({
-      workspaceRoot: targetWorkspace,
-      readWorkspaceFile: window.kunGui.readWorkspaceFile
-    })
-    if (restored.kind === 'restored') {
-      await openSddRequirementDraft(restored.draft, restored.content, {
-        lastSavedContent: restored.lastSavedContent,
-        saveStatus: restored.saveStatus
-      })
+    if (isConversationWorkspacePath(targetWorkspace, conversationWorkspaceRoot)) {
+      setError(t('workspaceInsideConversationDir'))
       return
     }
+
+    if (useSddDraftStore.getState().activeDraft && !await saveActiveSddDraftToDisk()) return
 
     const draftUuid = globalThis.crypto?.randomUUID?.() ?? `draft-${Date.now()}`
     const draft = createSddDraft({ id: draftUuid, workspaceRoot: targetWorkspace })

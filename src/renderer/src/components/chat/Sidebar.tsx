@@ -15,7 +15,7 @@ import {
 } from 'lucide-react'
 import type { NormalizedThread } from '../../agent/types'
 import { useChatStore, type SettingsRouteSection } from '../../store/chat-store'
-import type { SddDraft } from '../../sdd/sdd-draft-store'
+import { resolveSddRequirementWorkspace, type SddDraft } from '../../sdd/sdd-draft-store'
 import type {
   ClawImChannelV1,
 } from '@shared/app-settings'
@@ -29,6 +29,7 @@ import { ConnectPhoneSidebarPanel } from './ConnectPhoneView'
 import { SidebarProjectsSection } from './SidebarProjectsSection'
 import { SidebarConversationsSection } from './SidebarConversationsSection'
 import { WorkspaceModeTabs } from './WorkspaceModeTabs'
+import { workspaceLabelFromPath } from '../../lib/workspace-label'
 import {
   SidebarCommandRow,
   SidebarFrame,
@@ -128,6 +129,7 @@ export function Sidebar({
   const deleteClawChannel = useChatStore((s) => s.deleteClawChannel)
   const resetClawChannelSession = useChatStore((s) => s.resetClawChannelSession)
   const [imDialogMode, setImDialogMode] = useState<ClawImDialogMode | null>(null)
+  const requirementWorkspace = resolveSddRequirementWorkspace(threads, activeThreadId, workspaceRoot)
 
   const activeClawChannel = useMemo(
     () => clawChannels.find((channel) => channel.id === activeClawChannelId) ?? clawChannels[0] ?? null,
@@ -210,6 +212,14 @@ export function Sidebar({
               disabled={!runtimeReady}
               disabledHint={t('runtimeActionNeedsConnection')}
               variant="accent"
+              trailing={requirementWorkspace ? (
+                <span
+                  className="max-w-[92px] truncate text-[11.5px] text-ds-faint"
+                  title={requirementWorkspace}
+                >
+                  {workspaceLabelFromPath(requirementWorkspace)}
+                </span>
+              ) : null}
             />
           </>
         ) : null}

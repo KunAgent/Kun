@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   createSddDraft,
   forgetRememberedSddDraft,
+  resolveSddRequirementWorkspace,
   readRememberedSddDraftContent,
   readRememberedSddDraft,
   useSddDraftStore
@@ -29,6 +30,15 @@ function createMemoryStorage(): Storage {
 }
 
 describe('sdd-draft-store', () => {
+  it('prefers the active thread workspace when creating a requirement', () => {
+    expect(resolveSddRequirementWorkspace(
+      [{ id: 'thread-1', workspace: '/projects/active' }],
+      'thread-1',
+      '/projects/default'
+    )).toBe('/projects/active')
+    expect(resolveSddRequirementWorkspace([], null, '/projects/default/')).toBe('/projects/default')
+  })
+
   beforeEach(() => {
     vi.stubGlobal('localStorage', createMemoryStorage())
     vi.stubGlobal('window', {
