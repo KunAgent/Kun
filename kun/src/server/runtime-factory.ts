@@ -18,6 +18,7 @@ import { buildTodoLocalTools } from '../adapters/tool/todo-tools.js'
 import { LocalToolHost, buildDefaultLocalTools } from '../adapters/tool/local-tool-host.js'
 import { createReadArtifactTool } from '../adapters/tool/artifact-tool.js'
 import { FileArtifactStore } from '../artifacts/artifact-store.js'
+import { createTaskGraphTool } from '../adapters/tool/task-graph-tool.js'
 import { buildMcpToolProviders } from '../adapters/tool/mcp-tool-provider.js'
 import { buildMemoryToolProviders } from '../adapters/tool/memory-tool-provider.js'
 import { buildSkillToolProviders } from '../adapters/tool/skill-tool-provider.js'
@@ -304,6 +305,7 @@ export async function createKunServeRuntime(
   const musicGenProviders = buildMusicGenToolProviders(options.capabilities?.musicGen, { nowIso })
   const videoGenProviders = buildVideoGenToolProviders(options.capabilities?.videoGen, { nowIso })
   const computerUseProviders = await buildComputerUseToolProviders(options.capabilities?.computerUse)
+  const taskGraphTool = createTaskGraphTool({ rootDir: join(options.dataDir, 'task-graphs') })
   const baseToolProviders = [
     {
       id: 'builtin',
@@ -450,6 +452,13 @@ export async function createKunServeRuntime(
       enabled: true,
       available: true,
       tools: buildTodoLocalTools(threadService)
+    },
+    {
+      id: 'planning',
+      kind: 'built-in' as const,
+      enabled: true,
+      available: true,
+      tools: [taskGraphTool]
     },
     ...buildDelegationToolProviders(delegationRuntime)
   ])
