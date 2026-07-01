@@ -24,6 +24,11 @@ export function kunMcpOAuthServerPath(serverId: string): string {
   return `/v1/mcp/oauth/${encodeURIComponent(serverId)}`
 }
 
+export const KUN_REMOTE_HOSTS_PATH = '/v1/remote/hosts'
+export const KUN_REMOTE_HOSTS_TEMPLATE = '/v1/remote/hosts'
+export const KUN_REMOTE_TEST_PATH = '/v1/remote/test'
+export const KUN_REMOTE_TEST_TEMPLATE = '/v1/remote/test'
+
 export const KUN_SKILLS_PATH = '/v1/skills'
 export const KUN_SKILLS_TEMPLATE = '/v1/skills'
 

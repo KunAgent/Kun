@@ -15,6 +15,8 @@ import {
   KUN_MEMORY_DIAGNOSTICS_PATH,
   KUN_MEMORY_PATH,
   KUN_MCP_OAUTH_PATH,
+  KUN_REMOTE_HOSTS_PATH,
+  KUN_REMOTE_TEST_PATH,
   KUN_RUNTIME_INFO_PATH,
   KUN_RUNTIME_TOOLS_PATH,
   KUN_SKILLS_PATH,
@@ -77,6 +79,11 @@ import {
   threadFromCore
 } from './kun-mapper'
 import { rendererRuntimeClient } from './runtime-client'
+import type {
+  NormalizedRemoteTarget,
+  RemoteConnectionTestResult,
+  RemoteHostsResult
+} from './remote-target'
 
 function createSseStreamId(): string {
   return globalThis.crypto?.randomUUID?.() ?? `sse-${Date.now()}-${Math.random().toString(16).slice(2)}`
@@ -167,6 +174,7 @@ export class KunRuntimeProvider implements AgentProvider {
     providerId?: string
     model?: string
     systemPrompt?: string
+    remoteTarget?: NormalizedRemoteTarget
   }): Promise<NormalizedThread> {
     const settings = await rendererRuntimeClient.getSettings()
     const runtime = getKunRuntimeSettings(settings)
@@ -183,7 +191,8 @@ export class KunRuntimeProvider implements AgentProvider {
         sandboxMode: runtime.sandboxMode,
         ...(input.providerId?.trim() ? { providerId: input.providerId.trim() } : {}),
         ...(input.agentId?.trim() ? { agentId: input.agentId.trim() } : {}),
-        ...(input.systemPrompt?.trim() ? { systemPrompt: input.systemPrompt.trim() } : {})
+        ...(input.systemPrompt?.trim() ? { systemPrompt: input.systemPrompt.trim() } : {}),
+        ...(input.remoteTarget ? { remoteTarget: input.remoteTarget } : {})
       })
     )
     if (!response.ok) {
@@ -193,6 +202,39 @@ export class KunRuntimeProvider implements AgentProvider {
       response.body,
       'runtime returned an invalid thread response'
     ))
+  }
+
+  async listRemoteHosts(): Promise<RemoteHostsResult> {
+    const response = await rendererRuntimeClient.runtimeRequest(KUN_REMOTE_HOSTS_PATH, 'GET')
+    if (!response.ok) {
+      throw runtimeErrorToError(readRuntimeError(response.body, 'failed to list remote hosts'))
+    }
+    return readRuntimeJson<RemoteHostsResult>(
+      response.body,
+      'runtime returned an invalid remote hosts response'
+    )
+  }
+
+  async testRemoteConnection(input: {
+    alias: string
+    remoteDir?: string
+  }): Promise<RemoteConnectionTestResult> {
+    const body = {
+      alias: input.alias.trim(),
+      ...(input.remoteDir?.trim() ? { remoteDir: input.remoteDir.trim() } : {})
+    }
+    const response = await rendererRuntimeClient.runtimeRequest(
+      KUN_REMOTE_TEST_PATH,
+      'POST',
+      JSON.stringify(body)
+    )
+    if (!response.ok) {
+      throw runtimeErrorToError(readRuntimeError(response.body, 'failed to test remote connection'))
+    }
+    return readRuntimeJson<RemoteConnectionTestResult>(
+      response.body,
+      'runtime returned an invalid remote connection test response'
+    )
   }
 
   async getThreadDetail(threadId: string): Promise<{

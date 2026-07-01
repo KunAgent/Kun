@@ -31,6 +31,7 @@ import {
   getActiveAgentApiKey
 } from '@shared/app-settings'
 import type { ChatState, ChatStoreGet, ChatStoreSet } from './chat-store-types'
+import { normalizeRemoteTarget } from '../agent/remote-target'
 import {
   activeClawChannel,
   compactCodeWorkspaceRoots,
@@ -114,6 +115,11 @@ type StoreActionContext = {
 let drainingQueuedMessages = false
 const checkpointGitUnavailableWorkspaces = new Set<string>()
 
+function selectedRemoteTarget(state: ChatState) {
+  const target = state.composerRemoteTarget
+  return target?.alias.trim() ? normalizeRemoteTarget(target) : null
+}
+
 export function createThreadActions(
   { set, get, sseAbortRef }: StoreActionContext
 ): Pick<ChatState, 'createThread' | 'createConversation' | 'recoverActiveTurn' | 'selectThread' | 'subscribeThreadEventsLive' | 'drainQueuedMessages' | 'removeQueuedMessage' | 'sendMessage' | 'reviewActiveThread'> {
@@ -126,6 +132,7 @@ export function createThreadActions(
     try {
       const p = getProvider()
       const settings = await rendererRuntimeClient.getSettings()
+      const remoteTarget = selectedRemoteTarget(get())
       const activeThread = get().activeThreadId
         ? get().threads.find((thread) => thread.id === get().activeThreadId)
         : null
@@ -156,6 +163,7 @@ export function createThreadActions(
           workspace: created.path,
           title: getDefaultThreadTitle(),
           mode: 'agent',
+          ...(remoteTarget ? { remoteTarget } : {}),
           ...(personaProfile ? {
             agentId: personaProfile.id,
             ...(personaProfile.providerId ? { providerId: personaProfile.providerId } : {}),
@@ -187,6 +195,7 @@ export function createThreadActions(
       // Worktree pool mode always needs a fresh thread bound to a fresh pool
       // slot, so never reuse an existing main-workspace thread in that case.
       const reusableThreadId = options.forceNew || options.useWorktreePool
+        || remoteTarget
         ? null
         : await findReusableEmptyThreadId(
             get(),
@@ -245,6 +254,7 @@ export function createThreadActions(
         workspace: workspaceRoot,
         title: getDefaultThreadTitle(),
         mode: 'agent',
+        ...(remoteTarget ? { remoteTarget } : {}),
         ...(personaProfile ? {
           agentId: personaProfile.id,
           ...(personaProfile.providerId ? { providerId: personaProfile.providerId } : {}),
@@ -749,6 +759,7 @@ export function createThreadActions(
     if (!activeThreadId) {
       try {
         const settings = await rendererRuntimeClient.getSettings()
+        const remoteTarget = selectedRemoteTarget(get())
         const workspaceRoot = normalizeWorkspaceRoot(settings.workspaceRoot)
         if (!workspaceRoot) {
           set({
@@ -771,7 +782,7 @@ export function createThreadActions(
           get(),
           p,
           workspaceRoot,
-          (thread) => isCodeThread(thread, get().clawChannels)
+          (thread) => !remoteTarget && isCodeThread(thread, get().clawChannels)
         )
         const reusableThread = reusableThreadId
           ? get().threads.find((thread) => thread.id === reusableThreadId) ?? null
@@ -786,7 +797,8 @@ export function createThreadActions(
                 title: generatedTitle,
                 // Provisional first-message title; let the backend LLM titler upgrade it.
                 titleAuto: true,
-                mode: mode ?? 'agent'
+                mode: mode ?? 'agent',
+                ...(remoteTarget ? { remoteTarget } : {})
               })
             : null
         const threadId = reusableThreadId ?? createdThread?.id ?? null
@@ -1060,6 +1072,7 @@ export function createThreadActions(
     try {
       if (!activeThreadId) {
         const settings = await rendererRuntimeClient.getSettings()
+        const remoteTarget = selectedRemoteTarget(get())
         const workspaceRoot = normalizeWorkspaceRoot(settings.workspaceRoot)
         if (!workspaceRoot) {
           set({ error: i18n.t('common:workspaceRequiredToCreateThread') })
@@ -1071,14 +1084,15 @@ export function createThreadActions(
           get(),
           p,
           workspaceRoot,
-          (thread) => isCodeThread(thread, get().clawChannels)
+          (thread) => !remoteTarget && isCodeThread(thread, get().clawChannels)
         )
         const createdThread =
           reusableThreadId == null
             ? await p.createThread({
                 workspace: workspaceRoot,
                 title: i18n.t('common:slashCommandReviewTitle'),
-                mode: 'agent'
+                mode: 'agent',
+                ...(remoteTarget ? { remoteTarget } : {})
               })
             : null
         activeThreadId = reusableThreadId ?? createdThread?.id ?? null

@@ -47,6 +47,7 @@ export function createAppActions(options: CreateAppActionsOptions): Pick<
   | 'setError'
   | 'setComposerMode'
   | 'setComposerModel'
+  | 'setComposerRemoteTarget'
   | 'setComposerAgentId'
   | 'loadComposerModels'
   | 'setRoute'
@@ -127,6 +128,10 @@ export function createAppActions(options: CreateAppActionsOptions): Pick<
       if (!activeThreadId && trimmed && trimmed.toLowerCase() !== 'auto' && typeof window.kunGui !== 'undefined') {
         void window.kunGui.saveSettingsSilent({ agents: { kun: { model: trimmed } } })
       }
+    },
+
+    setComposerRemoteTarget: (target) => {
+      set({ composerRemoteTarget: target })
     },
 
     setComposerAgentId: (agentId) => {

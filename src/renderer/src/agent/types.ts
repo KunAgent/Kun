@@ -9,6 +9,11 @@ import type {
   CoreRuntimeSkillJson,
   CoreRuntimeToolDiagnosticsJson
 } from './kun-contract'
+import type {
+  NormalizedRemoteTarget,
+  RemoteConnectionTestResult,
+  RemoteHostsResult
+} from './remote-target'
 import type { ApprovalPolicy, SandboxMode } from '@shared/app-settings'
 
 export type ToolItemKind = 'tool_call' | 'command_execution' | 'file_change'
@@ -140,6 +145,7 @@ export type NormalizedThread = {
   forkedFromTurnCount?: number
   goal?: ThreadGoal | null
   todos?: ThreadTodoList | null
+  remoteTarget?: NormalizedRemoteTarget
 }
 
 export type ThreadGoalStatus =
@@ -457,7 +463,7 @@ export interface AgentProvider {
   }
   connect(): Promise<void>
   listThreads(options?: ThreadListOptions): Promise<NormalizedThread[]>
-  createThread(input: { workspace?: string; title?: string; titleAuto?: boolean; mode?: string; agentId?: string; providerId?: string; model?: string; systemPrompt?: string }): Promise<NormalizedThread>
+  createThread(input: { workspace?: string; title?: string; titleAuto?: boolean; mode?: string; agentId?: string; providerId?: string; model?: string; systemPrompt?: string; remoteTarget?: NormalizedRemoteTarget }): Promise<NormalizedThread>
   getThreadDetail(threadId: string): Promise<{
     blocks: ChatBlock[]
     latestSeq: number
@@ -505,6 +511,8 @@ export interface AgentProvider {
   clearMcpOAuthCredentials?(serverId?: string): Promise<string[]>
   authorizeMcpOAuthCredentials?(serverId: string): Promise<import('./kun-contract').CoreMcpOAuthAuthorizeResponseJson>
   listSkills?(): Promise<CoreRuntimeSkillJson[]>
+  listRemoteHosts?(): Promise<RemoteHostsResult>
+  testRemoteConnection?(input: { alias: string; remoteDir?: string }): Promise<RemoteConnectionTestResult>
   uploadAttachment?(input: {
     name: string
     mimeType?: string
