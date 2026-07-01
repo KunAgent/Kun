@@ -86,6 +86,7 @@ import { stopBashSessionById, createBashLocalTool } from '../adapters/tool/built
 import { createBackgroundShellTool } from '../adapters/tool/background-shell-tool.js'
 import { createSecretEncryptor, defaultSecretCommandRunner } from '../security/secret-store.js'
 import type { LocalTool } from '../adapters/tool/local-tool-host.js'
+import { FileOperationJournal } from '../reliability/operation-journal.js'
 
 export type KunServeRuntimeOptions = {
   host: string
@@ -310,6 +311,7 @@ export async function createKunServeRuntime(
         nowIso
       })
     : undefined
+  const operationJournal = new FileOperationJournal(join(options.dataDir, 'operation-journal'), nowIso)
   const imageGenProviders = buildImageGenToolProviders(options.capabilities?.imageGen, {
     attachmentStore,
     nowIso
@@ -357,6 +359,7 @@ export async function createKunServeRuntime(
   const childToolHost = new LocalToolHost({
     registry: childRegistry,
     readTracker: true,
+    operationJournal,
     ...(resolvedHooks.length ? { hooks: resolvedHooks } : {})
   })
   const delegationRuntime = options.capabilities?.subagents.enabled
@@ -478,6 +481,7 @@ export async function createKunServeRuntime(
   const toolHost = new LocalToolHost({
     registry,
     readTracker: true,
+    operationJournal,
     ...(resolvedHooks.length ? { hooks: resolvedHooks } : {})
   })
   // Keep retrying MCP servers that lost the fast startup connect race so a slow

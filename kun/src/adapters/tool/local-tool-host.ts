@@ -27,6 +27,11 @@ import {
   type ReadTrackerOptions
 } from './read-tracker.js'
 import { sandboxBlockForTool, type SandboxBlock } from './sandbox-policy.js'
+import type {
+  OperationIdentity,
+  OperationInspection,
+  OperationJournal
+} from '../../reliability/operation-journal.js'
 
 /**
  * A single registered tool. Tools are pure functions that observe the
@@ -43,6 +48,8 @@ export type LocalTool = {
    * prompts unless the call is in an allow-list.
    */
   policy: 'auto' | 'on-request' | 'suggest' | 'never' | 'untrusted'
+  /** True only when repeating the same interrupted call cannot duplicate side effects. */
+  replaySafe?: boolean
   /**
    * Optional gating predicate. When present, the tool is only listed
    * and only executed when `shouldAdvertise` returns true for the
@@ -66,6 +73,8 @@ export type LocalToolHostOptions = {
   hooks?: readonly ResolvedHook[]
   /** Runtime read-before-edit guard. Disabled by default for direct unit use. */
   readTracker?: boolean | ReadTrackerOptions
+  /** Durable tool-call journal used for crash recovery and duplicate-call reuse. */
+  operationJournal?: OperationJournal
 }
 
 /**
@@ -88,12 +97,14 @@ export class LocalToolHost implements ToolHost {
   private readonly allowList: Set<string>
   private readonly hooks: readonly ResolvedHook[]
   private readonly readTracker: ReadTracker
+  private readonly operationJournal?: OperationJournal
 
   constructor(options: LocalToolHostOptions) {
     this.registry = options.registry ?? CapabilityRegistry.fromLocalTools(options.tools ?? [])
     this.allowList = new Set(options.allowList ?? [])
     this.hooks = options.hooks ?? []
     this.readTracker = new ReadTracker(normalizeReadTrackerOptions(options.readTracker))
+    this.operationJournal = options.operationJournal
   }
 
   listTools(context?: ToolHostContext) {
@@ -162,7 +173,73 @@ export class LocalToolHost implements ToolHost {
         approved: false
       }
     }
-    const needsApproval = !preHooks.autoApproved && this.requiresApproval(tool, activeCall, context)
+    const operation: OperationIdentity = {
+      threadId: context.threadId,
+      turnId: context.turnId,
+      callId: activeCall.callId,
+      toolName: activeCall.toolName,
+      arguments: activeCall.arguments,
+      replaySafe: tool.replaySafe === true
+    }
+    let operationInspection: OperationInspection | undefined
+    if (this.operationJournal) {
+      try {
+        operationInspection = await this.operationJournal.inspect(operation)
+      } catch (error) {
+        return {
+          item: this.errorToolResult(
+            context,
+            activeCall,
+            tool,
+            `operation journal is unavailable: ${hookErrorMessage(error)}`,
+            'operation_journal_failed'
+          ),
+          approved: false
+        }
+      }
+      if (operationInspection.kind === 'collision') {
+        return {
+          item: this.errorToolResult(
+            context,
+            activeCall,
+            tool,
+            'tool call id was already journaled with different arguments; refusing ambiguous replay',
+            'operation_identity_collision'
+          ),
+          approved: false
+        }
+      }
+      if (operationInspection.kind === 'reuse') {
+        return {
+          item: makeToolResultItem({
+            id: `item_${activeCall.callId}`,
+            turnId: context.turnId,
+            threadId: context.threadId,
+            callId: activeCall.callId,
+            toolName: activeCall.toolName,
+            toolKind: activeCall.toolKind ?? tool.toolKind,
+            output: operationInspection.result.output,
+            isError: operationInspection.result.isError
+          }),
+          approved: true
+        }
+      }
+    }
+    const uncertainReplay = operationInspection?.kind === 'uncertain'
+    if (uncertainReplay && (context.approvalPolicy === 'auto' || context.approvalPolicy === 'never')) {
+      return {
+        item: this.errorToolResult(
+          context,
+          activeCall,
+          tool,
+          'the previous non-idempotent execution has an unknown outcome; explicit user approval is required before retrying',
+          'operation_outcome_unknown'
+        ),
+        approved: false
+      }
+    }
+    const needsApproval = uncertainReplay ||
+      (!preHooks.autoApproved && this.requiresApproval(tool, activeCall, context))
     if (needsApproval) {
       const approvalId = `appr_${activeCall.callId}`
       const approval: ApprovalRequest = createApprovalRequest({
@@ -170,7 +247,9 @@ export class LocalToolHost implements ToolHost {
         threadId: context.threadId,
         turnId: context.turnId,
         toolName: activeCall.toolName,
-        summary: this.buildApprovalSummary(activeCall)
+        summary: uncertainReplay
+          ? `Retry ${activeCall.toolName}: the previous execution outcome is unknown and may already have applied side effects.`
+          : this.buildApprovalSummary(activeCall)
       })
       const decision = await context.awaitApproval(approval)
       if (decision !== 'allow') {
@@ -187,6 +266,23 @@ export class LocalToolHost implements ToolHost {
     }
     if (context.abortSignal.aborted) {
       throw new Error('tool call aborted while waiting for approval')
+    }
+    let operationId: string | undefined
+    if (this.operationJournal) {
+      try {
+        operationId = (await this.operationJournal.start(operation)).operationId
+      } catch (error) {
+        return {
+          item: this.errorToolResult(
+            context,
+            activeCall,
+            tool,
+            `failed to persist operation start: ${hookErrorMessage(error)}`,
+            'operation_journal_failed'
+          ),
+          approved: needsApproval
+        }
+      }
     }
     let result: Awaited<ReturnType<LocalTool['execute']>>
     try {
@@ -211,6 +307,9 @@ export class LocalToolHost implements ToolHost {
       // whole turn. Only abort keeps propagating.
       if (context.abortSignal.aborted) throw error
       const message = error instanceof Error ? error.message : String(error)
+      if (operationId && this.operationJournal) {
+        await this.operationJournal.fail(operationId, message).catch(() => undefined)
+      }
       return {
         item: this.errorToolResult(context, activeCall, tool, message, 'tool_execution_failed'),
         approved: true
@@ -224,6 +323,9 @@ export class LocalToolHost implements ToolHost {
         result
       })
     } catch (error) {
+      if (operationId && this.operationJournal) {
+        await this.operationJournal.fail(operationId, hookErrorMessage(error)).catch(() => undefined)
+      }
       return {
         item: this.errorToolResult(context, activeCall, tool, hookErrorMessage(error), 'hook_failed'),
         approved: true
@@ -239,6 +341,22 @@ export class LocalToolHost implements ToolHost {
       isError
     })
     if (!isError) output = await offloadLargeToolOutput(output, activeCall.toolName, context)
+    if (operationId && this.operationJournal) {
+      try {
+        await this.operationJournal.complete(operationId, { output, isError })
+      } catch (error) {
+        return {
+          item: this.errorToolResult(
+            context,
+            activeCall,
+            tool,
+            `tool finished, but its outcome could not be journaled; do not retry automatically: ${hookErrorMessage(error)}`,
+            'operation_journal_failed'
+          ),
+          approved: needsApproval
+        }
+      }
+    }
     const item = makeToolResultItem({
       id: `item_${activeCall.callId}`,
       turnId: context.turnId,
@@ -336,6 +454,7 @@ export class LocalToolHost implements ToolHost {
       inputSchema: tool.inputSchema,
       toolKind: tool.toolKind ?? 'tool_call',
       execute: tool.execute,
+      ...(tool.replaySafe !== undefined ? { replaySafe: tool.replaySafe } : {}),
       ...(tool.shouldAdvertise ? { shouldAdvertise: tool.shouldAdvertise } : {})
     }
   }
