@@ -3,6 +3,7 @@ import type { ReactElement } from 'react'
 import { GitBranch, Loader2, RefreshCw, Trash2 } from 'lucide-react'
 import type { NormalizedThread } from '../agent/types'
 import type { GitBranchWorktreeRow, GitBranchWorktreesResult } from '@shared/git-branches'
+import { DEFAULT_GIT_BRANCH_PREFIX } from '@shared/app-settings'
 import { readThreadWorktreeRegistry } from '../lib/thread-worktree-registry'
 import { SettingsCard, SettingRow } from './settings-controls'
 
@@ -99,6 +100,19 @@ export function WorktreeSettingsSection({ ctx }: { ctx: Record<string, any> }): 
 
   return (
     <SettingsCard title={t('sectionWorktree')}>
+      <SettingRow
+        title={t('gitBranchPrefix')}
+        description={t('gitBranchPrefixDesc')}
+        control={
+          <input
+            className="w-full rounded-xl border border-ds-border bg-ds-card px-3 py-2 font-mono text-[13px] text-ds-ink shadow-sm focus:border-accent/40 focus:outline-none focus:ring-1 focus:ring-accent/30"
+            value={String(ctx.form?.gitBranchPrefix ?? DEFAULT_GIT_BRANCH_PREFIX)}
+            placeholder={DEFAULT_GIT_BRANCH_PREFIX}
+            spellCheck={false}
+            onChange={(event) => ctx.update({ gitBranchPrefix: event.target.value })}
+          />
+        }
+      />
       <SettingRow
         title={t('worktreeOverview')}
         description={t('worktreeOverviewDesc')}

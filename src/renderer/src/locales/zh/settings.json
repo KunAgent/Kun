@@ -1189,6 +1189,8 @@
   "uiPluginDocsHint": "开发指南:docs/UI_PLUGINS.md",
   "worktree": "工作树",
   "sectionWorktree": "Git 工作树",
+  "gitBranchPrefix": "新分支前缀",
+  "gitBranchPrefixDesc": "为分支选择器中新建的分支名添加前缀。留空则完全按输入的名称创建。",
   "worktreeOverview": "工作树",
   "worktreeOverviewDesc": "查看从对话中 checkout 出来的 Git 工作树，并清理不再需要的工作树目录。",
   "worktreeMainBranch": "主分支",

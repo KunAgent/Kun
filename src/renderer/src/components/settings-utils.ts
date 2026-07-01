@@ -2,6 +2,7 @@ import {
   DEFAULT_CHECKPOINT_CLEANUP_INTERVAL_DAYS,
   DEFAULT_LOG_RETENTION_DAYS,
   DEFAULT_GUI_UPDATE_CHANNEL,
+  DEFAULT_GIT_BRANCH_PREFIX,
   MIN_KUN_LOCAL_PORT,
   defaultKunRuntimeSettings,
   applyKunRuntimePatch,
@@ -20,6 +21,7 @@ import {
   normalizeCheckpointCleanupSettings,
   normalizeCursorSpotlightColor,
   normalizeGuiUpdateChannel,
+  normalizeGitBranchPrefix,
   normalizeKeyboardShortcuts,
   normalizeModelProviderSettings,
   normalizeScheduleSettings,
@@ -122,6 +124,7 @@ export function coerceRendererSettings(settings: AppSettingsV1): AppSettingsV1 {
     checkpointCleanup: normalizeCheckpointCleanupSettings(
       raw.checkpointCleanup ?? { intervalDays: DEFAULT_CHECKPOINT_CLEANUP_INTERVAL_DAYS }
     ),
+    gitBranchPrefix: normalizeGitBranchPrefix(raw.gitBranchPrefix ?? DEFAULT_GIT_BRANCH_PREFIX),
     notifications: {
       turnComplete: raw.notifications?.turnComplete !== false
     },

@@ -7,6 +7,7 @@ import {
   DEFAULT_KUN_MODEL,
   DEFAULT_LOG_RETENTION_DAYS,
   DEFAULT_CURSOR_SPOTLIGHT_COLOR,
+  DEFAULT_GIT_BRANCH_PREFIX,
   DEFAULT_APPROVAL_POLICY,
   DEFAULT_SANDBOX_MODE,
   DEFAULT_WEIXIN_BRIDGE_RPC_URL,
@@ -33,6 +34,8 @@ import {
   migrateLegacyAppSettings,
   normalizeAppSettings,
   normalizeChatContentMaxWidth,
+  normalizeGitBranchPrefix,
+  applyGitBranchPrefix,
   parseClawUserPromptForDisplay,
   inferModelEndpointFormatFromUrl,
   kunToolPermissionModeFromSettings,
@@ -87,6 +90,21 @@ describe('chat content max width', () => {
     expect(normalizeChatContentMaxWidth(896)).toBe(896)
     expect(normalizeChatContentMaxWidth(1300)).toBe(1200)
     expect(normalizeChatContentMaxWidth(905)).toBe(904)
+  })
+})
+
+describe('git branch prefix', () => {
+  it('normalizes separators and applies the default prefix once', () => {
+    expect(normalizeGitBranchPrefix(' feature ')).toBe('feature/')
+    expect(normalizeGitBranchPrefix('team\\')).toBe('team/')
+    expect(normalizeGitBranchPrefix(undefined)).toBe(DEFAULT_GIT_BRANCH_PREFIX)
+    expect(applyGitBranchPrefix('fix/workspace', 'codex/')).toBe('codex/fix/workspace')
+    expect(applyGitBranchPrefix('codex/fix/workspace', 'codex/')).toBe('codex/fix/workspace')
+  })
+
+  it('allows branch prefixes to be disabled', () => {
+    expect(normalizeGitBranchPrefix('')).toBe('')
+    expect(applyGitBranchPrefix('fix/workspace', '')).toBe('fix/workspace')
   })
 })
 

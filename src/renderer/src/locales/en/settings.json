@@ -1189,6 +1189,8 @@
   "uiPluginDocsHint": "Developer guide: docs/UI_PLUGINS.md",
   "worktree": "Worktrees",
   "sectionWorktree": "Git worktrees",
+  "gitBranchPrefix": "New branch prefix",
+  "gitBranchPrefixDesc": "Prefix branch names created from the branch picker. Leave blank to create names exactly as entered.",
   "worktreeOverview": "Worktrees",
   "worktreeOverviewDesc": "View Git worktrees checked out from conversations and clean up worktree directories you no longer need.",
   "worktreeMainBranch": "Main branch",

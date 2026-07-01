@@ -4,6 +4,7 @@ import {
   DEFAULT_CHECKPOINT_CLEANUP_ENABLED,
   DEFAULT_CHECKPOINT_CLEANUP_INTERVAL_DAYS,
   DEFAULT_CURSOR_SPOTLIGHT_COLOR,
+  DEFAULT_GIT_BRANCH_PREFIX,
   DEFAULT_LOG_RETENTION_DAYS,
   normalizeGuiUpdateChannel,
   normalizeChatContentMaxWidth,
@@ -100,6 +101,7 @@ export function normalizeAppSettings(settings: AppSettingsV1): AppSettingsV1 {
         : DEFAULT_LOG_RETENTION_DAYS
     },
     checkpointCleanup: normalizeCheckpointCleanupSettings(maybeSettings.checkpointCleanup),
+    gitBranchPrefix: normalizeGitBranchPrefix(maybeSettings.gitBranchPrefix),
     notifications: {
       turnComplete: maybeSettings.notifications?.turnComplete !== false
     },
@@ -118,6 +120,23 @@ export function normalizeAppSettings(settings: AppSettingsV1): AppSettingsV1 {
     codePromptPrefix: typeof maybeSettings.codePromptPrefix === 'string' ? maybeSettings.codePromptPrefix : '',
     disabledSkillIds: normalizeDisabledSkillIds(maybeSettings.disabledSkillIds)
   }
+}
+
+export function normalizeGitBranchPrefix(value: unknown): string {
+  const normalized = typeof value === 'string'
+    ? value.trim().replace(/\\/g, '/').replace(/^\/+/, '')
+    : DEFAULT_GIT_BRANCH_PREFIX
+  if (!normalized) return ''
+  return normalized.endsWith('/') ? normalized : `${normalized}/`
+}
+
+export function applyGitBranchPrefix(branch: string, prefix: unknown): string {
+  const normalizedBranch = branch.trim().replace(/^\/+/, '')
+  const normalizedPrefix = normalizeGitBranchPrefix(prefix)
+  if (!normalizedBranch || !normalizedPrefix || normalizedBranch.startsWith(normalizedPrefix)) {
+    return normalizedBranch
+  }
+  return `${normalizedPrefix}${normalizedBranch}`
 }
 
 export function normalizeCheckpointCleanupIntervalDays(value: unknown): CheckpointCleanupIntervalDays {

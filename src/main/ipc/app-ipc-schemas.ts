@@ -1364,6 +1364,7 @@ const settingsPatchObjectSchema = z.object({
   conversationWorkspaceRoot: defaultPathSchema,
   log: logPatchSchema.optional(),
   checkpointCleanup: checkpointCleanupPatchSchema.optional(),
+  gitBranchPrefix: trimmedString(128).or(z.literal('')).optional(),
   notifications: notificationsPatchSchema.optional(),
   appBehavior: appBehaviorPatchSchema.optional(),
   keyboardShortcuts: keyboardShortcutsPatchSchema.optional(),

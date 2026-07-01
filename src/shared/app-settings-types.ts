@@ -122,6 +122,7 @@ export const DEFAULT_CHECKPOINT_CLEANUP_INTERVAL_DAYS: CheckpointCleanupInterval
 // Checkpoint cleanup is enabled by default so stale Git checkpoint directories
 // do not accumulate. Users who want to keep every checkpoint can opt out in settings.
 export const DEFAULT_CHECKPOINT_CLEANUP_ENABLED = true
+export const DEFAULT_GIT_BRANCH_PREFIX = 'codex/'
 export const DEFAULT_CURSOR_SPOTLIGHT_COLOR = '#85c1f1'
 export const DEFAULT_WEIXIN_BRIDGE_RPC_URL = 'http://127.0.0.1:18790/api/v1/admin/rpc'
 export const DEFAULT_MODEL_PROVIDER_ID = 'deepseek'
@@ -1771,6 +1772,8 @@ export type AppSettingsV1 = {
   conversationWorkspaceRoot: string
   log: LogConfigV1
   checkpointCleanup: CheckpointCleanupConfigV1
+  /** Prefix applied when the branch picker creates a branch or worktree branch. */
+  gitBranchPrefix?: string
   notifications: NotificationConfigV1
   appBehavior: AppBehaviorConfigV1
   keyboardShortcuts: KeyboardShortcutsConfigV1

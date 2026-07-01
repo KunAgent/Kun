@@ -2,8 +2,16 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } 
 import { createPortal } from 'react-dom'
 import { AlertCircle, Check, ChevronDown, GitBranch, GitFork, Loader2, Plus, Search } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import {
+  applyGitBranchPrefix,
+  DEFAULT_GIT_BRANCH_PREFIX,
+  normalizeGitBranchPrefix,
+  type AppSettingsV1
+} from '@shared/app-settings'
 import type { GitBranchesResult, GitBranchRow } from '@shared/git-branches'
 import { getProvider } from '../../agent/registry'
+import { rendererRuntimeClient } from '../../agent/runtime-client'
+import { SETTINGS_CHANGED_EVENT } from '../../lib/keyboard-shortcut-settings'
 import { middleEllipsize } from '../../lib/middle-ellipsize'
 import {
   forgetThreadWorktree,
@@ -46,6 +54,7 @@ export function GitBranchPicker({ workspaceRoot }: Props): ReactElement | null {
   const [actingKind, setActingKind] = useState<'switch' | 'worktree' | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [tooltip, setTooltip] = useState<BranchTooltip | null>(null)
+  const [branchPrefix, setBranchPrefix] = useState(DEFAULT_GIT_BRANCH_PREFIX)
   const wrapRef = useRef<HTMLDivElement | null>(null)
   const inputRef = useRef<HTMLInputElement | null>(null)
 
@@ -78,6 +87,22 @@ export function GitBranchPicker({ workspaceRoot }: Props): ReactElement | null {
   }, [load])
 
   useEffect(() => {
+    let cancelled = false
+    const apply = (settings: Pick<AppSettingsV1, 'gitBranchPrefix'>): void => {
+      if (!cancelled) setBranchPrefix(normalizeGitBranchPrefix(settings.gitBranchPrefix))
+    }
+    void rendererRuntimeClient.getSettings().then(apply).catch(() => undefined)
+    const onSettingsChanged = (event: Event): void => {
+      apply((event as CustomEvent<AppSettingsV1>).detail)
+    }
+    window.addEventListener(SETTINGS_CHANGED_EVENT, onSettingsChanged)
+    return () => {
+      cancelled = true
+      window.removeEventListener(SETTINGS_CHANGED_EVENT, onSettingsChanged)
+    }
+  }, [])
+
+  useEffect(() => {
     if (!open) return
     void load()
     window.setTimeout(() => inputRef.current?.focus(), 0)
@@ -106,18 +131,19 @@ export function GitBranchPicker({ workspaceRoot }: Props): ReactElement | null {
   }, [branches, query])
 
   const trimmedQuery = query.trim()
-  const exactBranchExists = branches.some((branch) => branch.name === trimmedQuery)
-  const switchTargetRow = exactBranchExists
-    ? branches.find((branch) => branch.name === trimmedQuery) ?? null
-    : null
-  const canCreate = trimmedQuery.length > 0 && !exactBranchExists
+  const createBranchName = applyGitBranchPrefix(trimmedQuery, branchPrefix)
+  const switchTargetRow = branches.find((branch) => branch.name === trimmedQuery)
+    ?? branches.find((branch) => branch.name === createBranchName)
+    ?? null
+  const canCreate = createBranchName.length > 0 && !switchTargetRow
   const canCreateWorktree = trimmedQuery.length > 0 && (canCreate || Boolean(switchTargetRow))
   const currentBranch = result?.ok ? result.currentBranch : null
   const label = currentBranch || (result?.ok ? t('gitDetached') : t('gitBranchUnavailable'))
-  const footerBranchLabel = middleEllipsize(trimmedQuery, BRANCH_FOOTER_LABEL_MAX_LENGTH)
+  const footerBranchLabel = middleEllipsize(createBranchName, BRANCH_FOOTER_LABEL_MAX_LENGTH)
   const footerCreateLabel = t('gitCreateNamedBranch', { branch: footerBranchLabel })
-  const footerCreateTitle = t('gitCreateNamedBranch', { branch: trimmedQuery })
-  const footerWorktreeTitle = t('gitNewBranchWorktree', { branch: trimmedQuery })
+  const footerCreateTitle = t('gitCreateNamedBranch', { branch: createBranchName })
+  const footerWorktreeBranch = canCreate ? createBranchName : switchTargetRow?.name ?? trimmedQuery
+  const footerWorktreeTitle = t('gitNewBranchWorktree', { branch: footerWorktreeBranch })
   const showTooltip = useCallback((text: string, clientX: number, clientY: number): void => {
     if (!text.trim()) return
     setTooltip({ text, ...branchTooltipPosition(clientX, clientY) })
@@ -230,7 +256,7 @@ export function GitBranchPicker({ workspaceRoot }: Props): ReactElement | null {
   }
 
   const createAndSwitchBranch = async (): Promise<void> => {
-    const branch = query.trim()
+    const branch = createBranchName
     if (!root || !branch) return
     setActingBranch(branch)
     setActingKind('switch')
@@ -280,7 +306,7 @@ export function GitBranchPicker({ workspaceRoot }: Props): ReactElement | null {
   }
 
   const createBranchWorktree = async (): Promise<void> => {
-    const branch = query.trim()
+    const branch = createBranchName
     if (!root || !branch) return
     setActingBranch(branch)
     setActingKind('worktree')
@@ -469,7 +495,7 @@ export function GitBranchPicker({ workspaceRoot }: Props): ReactElement | null {
                     void createAndSwitchBranch()
                   }}
                 >
-                  {actingBranch === trimmedQuery && actingKind === 'switch' ? (
+                  {actingBranch === createBranchName && actingKind === 'switch' ? (
                     <Loader2 className="h-4 w-4 shrink-0 animate-spin text-ds-muted" strokeWidth={2} />
                   ) : (
                     <Plus className="h-4 w-4 shrink-0 text-ds-muted" strokeWidth={1.9} />
@@ -495,11 +521,11 @@ export function GitBranchPicker({ workspaceRoot }: Props): ReactElement | null {
                   if (canCreate) {
                     void createBranchWorktree()
                   } else {
-                    void checkoutBranchWorktree(trimmedQuery)
+                    void checkoutBranchWorktree(footerWorktreeBranch)
                   }
                 }}
               >
-                {actingBranch === trimmedQuery && actingKind === 'worktree' ? (
+                {actingBranch === footerWorktreeBranch && actingKind === 'worktree' ? (
                   <Loader2 className="h-4 w-4 animate-spin" strokeWidth={2} />
                 ) : (
                   <GitFork className="h-4 w-4" strokeWidth={1.8} />
