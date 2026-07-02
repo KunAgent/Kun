@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import type { ReactElement } from 'react'
-import { Ban, BrainCircuit, Eye, Pencil, Plus, Trash2, X } from 'lucide-react'
+import { Ban, BrainCircuit, Eye, Pencil, Plus, RotateCcw, Trash2, X } from 'lucide-react'
 import type { CoreMemoryRecordJson } from '../agent/kun-contract'
 import { confirmDialog } from '../lib/confirm-dialog'
 import { SettingsCard, SettingRow, Toggle } from './settings-controls'
@@ -116,6 +116,7 @@ export function MemorySettingsSection({ ctx }: { ctx: Record<string, any> }): Re
     createMemoryRecord,
     updateMemoryRecord,
     disableMemoryRecord,
+    restoreMemoryRecord,
     deleteMemoryRecord
   } = ctx
 
@@ -323,16 +324,27 @@ export function MemorySettingsSection({ ctx }: { ctx: Record<string, any> }): Re
                         >
                           <Eye className="h-3.5 w-3.5" strokeWidth={1.8} />
                         </button>
-                        <button
-                          type="button"
-                          disabled={Boolean(memory.disabledAt)}
-                          onClick={() => void disableMemoryRecord(memory.id)}
-                          className="rounded-lg p-1.5 text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink disabled:cursor-not-allowed disabled:opacity-45"
-                          aria-label={t('memoryDisable')}
-                          title={t('memoryDisable')}
-                        >
-                          <Ban className="h-3.5 w-3.5" strokeWidth={1.8} />
-                        </button>
+                        {memory.disabledAt ? (
+                          <button
+                            type="button"
+                            onClick={() => void restoreMemoryRecord(memory.id)}
+                            className="rounded-lg p-1.5 text-ds-muted transition hover:bg-emerald-500/10 hover:text-emerald-600"
+                            aria-label={t('memoryRestore')}
+                            title={t('memoryRestore')}
+                          >
+                            <RotateCcw className="h-3.5 w-3.5" strokeWidth={1.8} />
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => void disableMemoryRecord(memory.id)}
+                            className="rounded-lg p-1.5 text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink"
+                            aria-label={t('memoryDisable')}
+                            title={t('memoryDisable')}
+                          >
+                            <Ban className="h-3.5 w-3.5" strokeWidth={1.8} />
+                          </button>
+                        )}
                         <button
                           type="button"
                           onClick={() => void deleteMemoryRecord(memory.id)}

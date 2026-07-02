@@ -55,6 +55,7 @@ import {
 } from './settings-utils'
 import { loadKunDiagnostics } from '../lib/load-kun-diagnostics'
 import { SETTINGS_CHANGED_EVENT, emitRendererSettingsChanged } from '../lib/keyboard-shortcut-settings'
+import { confirmDialog } from '../lib/confirm-dialog'
 import { GeneralSettingsSection } from './settings-section-general'
 
 const ProvidersSettingsSection = lazy(() =>
@@ -647,11 +648,11 @@ export function SettingsView(): ReactElement {
     }
   }
 
-  const disableMemoryRecord = async (memoryId: string): Promise<void> => {
+  const setMemoryRecordDisabled = async (memoryId: string, disabled: boolean): Promise<void> => {
     const provider = getProvider()
     if (typeof provider.updateMemory !== 'function') return
     try {
-      const memory = await provider.updateMemory(memoryId, { disabled: true }, {
+      const memory = await provider.updateMemory(memoryId, { disabled }, {
         workspace: memoryMutationWorkspace(memoryId)
       })
       setMemoryRecords((records) => records.map((record) => record.id === memoryId ? memory : record))
@@ -663,7 +664,25 @@ export function SettingsView(): ReactElement {
     }
   }
 
+  const disableMemoryRecord = async (memoryId: string): Promise<void> => {
+    const confirmed = await confirmDialog(
+      t('memoryDisableConfirm'),
+      t('memoryDisableConfirmDetail')
+    )
+    if (!confirmed) return
+    await setMemoryRecordDisabled(memoryId, true)
+  }
+
+  const restoreMemoryRecord = async (memoryId: string): Promise<void> => {
+    await setMemoryRecordDisabled(memoryId, false)
+  }
+
   const deleteMemoryRecord = async (memoryId: string): Promise<void> => {
+    const confirmed = await confirmDialog(
+      t('memoryDeleteConfirm'),
+      t('memoryDeleteConfirmDetail')
+    )
+    if (!confirmed) return
     const provider = getProvider()
     if (typeof provider.deleteMemory !== 'function') return
     try {
@@ -1087,6 +1106,7 @@ export function SettingsView(): ReactElement {
     createMemoryRecord,
     updateMemoryRecord,
     disableMemoryRecord,
+    restoreMemoryRecord,
     deleteMemoryRecord,
     pickClawWorkspace,
     resetClawWorkspaceToDefault,
