@@ -25,6 +25,11 @@ import type {
   McpOAuthAuthorizeResult,
   McpOAuthClearResult,
   McpOAuthDiagnostic,
+  McpPromptDescriptor,
+  McpPromptResult,
+  McpResourceContents,
+  McpResourceDescriptor,
+  McpResourceTemplateDescriptor,
   McpServerDiagnostic,
   McpToolDescriptor
 } from './mcp-types.js'
@@ -47,6 +52,11 @@ export type {
   McpOAuthClearResult,
   McpOAuthDiagnostic,
   McpOAuthStatus,
+  McpPromptDescriptor,
+  McpPromptResult,
+  McpResourceContents,
+  McpResourceDescriptor,
+  McpResourceTemplateDescriptor,
   McpServerDiagnostic,
   McpToolDescriptor
 } from './mcp-types.js'
@@ -143,6 +153,11 @@ const DEFAULT_MCP_STARTUP_CONNECT_TIMEOUT_MS = 10_000
 const DEFAULT_MCP_RECONNECT_MAX_ATTEMPTS = 5
 const DEFAULT_MCP_RECONNECT_BASE_DELAY_MS = 4_000
 const DEFAULT_MCP_RECONNECT_MAX_DELAY_MS = 30_000
+const MCP_LIST_RESOURCES_TOOL_NAME = 'mcp_list_resources'
+const MCP_READ_RESOURCE_TOOL_NAME = 'mcp_read_resource'
+const MCP_LIST_RESOURCE_TEMPLATES_TOOL_NAME = 'mcp_list_resource_templates'
+const MCP_LIST_PROMPTS_TOOL_NAME = 'mcp_list_prompts'
+const MCP_GET_PROMPT_TOOL_NAME = 'mcp_get_prompt'
 
 type McpConnectionState = {
   serverId: string
@@ -328,6 +343,9 @@ export async function buildMcpToolProviders(
   } else {
     providers.push(...directProviders)
   }
+  if (hasAnyMcpFacadeCapability(connected)) {
+    providers.push(createMcpFacadeProvider(connected))
+  }
   const advertisedToolCount = providers.reduce((total, provider) => total + provider.tools.length, 0)
 
   // Servers that need OAuth authorization are NOT retried by the background
@@ -388,6 +406,7 @@ export async function buildMcpToolProviders(
     if (!searchActive && liveRegister) {
       try {
         liveRegister({ id: `mcp:${serverId}`, kind: 'mcp', enabled: true, available: true, tools })
+        registerMcpFacadeProvider(liveRegister, connected)
       } catch {
         // Registry collision must not break the authorize flow; the diagnostic
         // still flips to connected below.
@@ -588,6 +607,7 @@ function registerLateMcpConnection(
         available: true,
         tools
       })
+      registerMcpFacadeProvider(params.register, params.connected)
     } catch {
       // A registry collision must not crash the loop; the diagnostic still
       // flips to connected below so the UI stops showing the server as failed.
@@ -606,6 +626,309 @@ function defaultMcpReconnectDelay(ms: number): Promise<void> {
       ;(timer as { unref: () => void }).unref()
     }
   })
+}
+
+type McpFacadeListMethod = 'listResources' | 'listResourceTemplates' | 'listPrompts'
+type McpFacadeSingleMethod = 'readResource' | 'getPrompt'
+type McpFacadeMethod = McpFacadeListMethod | McpFacadeSingleMethod
+
+function hasMcpFacadeCapability(state: McpConnectionState): boolean {
+  return (
+    typeof state.client.listResources === 'function' ||
+    typeof state.client.listResourceTemplates === 'function' ||
+    typeof state.client.readResource === 'function' ||
+    typeof state.client.listPrompts === 'function' ||
+    typeof state.client.getPrompt === 'function'
+  )
+}
+
+function hasAnyMcpFacadeCapability(connected: McpConnectionState[]): boolean {
+  return connected.some(hasMcpFacadeCapability)
+}
+
+function registerMcpFacadeProvider(
+  register: (provider: CapabilityToolProvider) => void,
+  connected: McpConnectionState[]
+): void {
+  if (!hasAnyMcpFacadeCapability(connected)) return
+  try {
+    register(createMcpFacadeProvider(connected))
+  } catch {
+    // The facade has a stable provider id. If it is already registered, the
+    // existing provider closes over the same mutable connection array.
+  }
+}
+
+function createMcpFacadeProvider(connected: McpConnectionState[]): CapabilityToolProvider {
+  return {
+    id: 'mcp:facade',
+    kind: 'mcp',
+    enabled: true,
+    available: true,
+    tools: createMcpFacadeTools(connected)
+  }
+}
+
+function createMcpFacadeTools(connected: McpConnectionState[]): LocalTool[] {
+  return [
+    LocalToolHost.defineTool({
+      name: MCP_LIST_RESOURCES_TOOL_NAME,
+      description: 'List resources exposed by connected MCP servers.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          serverId: { type: 'string', description: 'Optional MCP server id to list resources from.' },
+          cursor: { type: 'string', description: 'Optional pagination cursor. Use with serverId.' }
+        }
+      },
+      policy: 'auto',
+      shouldAdvertise: (context) => hasAvailableMcpFacadeMethod(connected, context, 'listResources'),
+      execute: async (args, context) =>
+        listMcpFacadeItems(connected, context, 'listResources', 'resources', mcpStringArg(args.serverId), mcpStringArg(args.cursor))
+    }),
+    LocalToolHost.defineTool({
+      name: MCP_READ_RESOURCE_TOOL_NAME,
+      description: 'Read one resource from a connected MCP server by URI.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          serverId: { type: 'string', description: 'MCP server id.' },
+          uri: { type: 'string', description: 'Resource URI to read.' }
+        },
+        required: ['serverId', 'uri']
+      },
+      policy: 'auto',
+      shouldAdvertise: (context) => hasAvailableMcpFacadeMethod(connected, context, 'readResource'),
+      execute: async (args, context) => {
+        const serverId = mcpStringArg(args.serverId)
+        const uri = mcpStringArg(args.uri)
+        if (!serverId || !uri) return { output: { error: 'serverId and uri are required' }, isError: true }
+        const resolved = resolveMcpFacadeConnection(connected, context, serverId, 'readResource')
+        if (!resolved.ok) return { output: { error: resolved.message }, isError: true }
+        try {
+          const result = await callMcpReadOnlyWithReconnect(
+            resolved.state,
+            context.abortSignal,
+            (client) => client.readResource!({ uri }, { signal: context.abortSignal, timeout: resolved.state.server.timeoutMs })
+          )
+          return { output: { serverId, uri, contents: result.contents } }
+        } catch (error) {
+          return { output: { error: redactSecretText(errorMessage(error)), serverId, uri }, isError: true }
+        }
+      }
+    }),
+    LocalToolHost.defineTool({
+      name: MCP_LIST_RESOURCE_TEMPLATES_TOOL_NAME,
+      description: 'List resource templates exposed by connected MCP servers.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          serverId: { type: 'string', description: 'Optional MCP server id to list templates from.' },
+          cursor: { type: 'string', description: 'Optional pagination cursor. Use with serverId.' }
+        }
+      },
+      policy: 'auto',
+      shouldAdvertise: (context) => hasAvailableMcpFacadeMethod(connected, context, 'listResourceTemplates'),
+      execute: async (args, context) =>
+        listMcpFacadeItems(
+          connected,
+          context,
+          'listResourceTemplates',
+          'resourceTemplates',
+          mcpStringArg(args.serverId),
+          mcpStringArg(args.cursor)
+        )
+    }),
+    LocalToolHost.defineTool({
+      name: MCP_LIST_PROMPTS_TOOL_NAME,
+      description: 'List prompts exposed by connected MCP servers.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          serverId: { type: 'string', description: 'Optional MCP server id to list prompts from.' },
+          cursor: { type: 'string', description: 'Optional pagination cursor. Use with serverId.' }
+        }
+      },
+      policy: 'auto',
+      shouldAdvertise: (context) => hasAvailableMcpFacadeMethod(connected, context, 'listPrompts'),
+      execute: async (args, context) =>
+        listMcpFacadeItems(connected, context, 'listPrompts', 'prompts', mcpStringArg(args.serverId), mcpStringArg(args.cursor))
+    }),
+    LocalToolHost.defineTool({
+      name: MCP_GET_PROMPT_TOOL_NAME,
+      description: 'Get one prompt from a connected MCP server by name.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          serverId: { type: 'string', description: 'MCP server id.' },
+          name: { type: 'string', description: 'Prompt name.' },
+          arguments: { type: 'object', description: 'Prompt arguments.' }
+        },
+        required: ['serverId', 'name']
+      },
+      policy: 'auto',
+      shouldAdvertise: (context) => hasAvailableMcpFacadeMethod(connected, context, 'getPrompt'),
+      execute: async (args, context) => {
+        const serverId = mcpStringArg(args.serverId)
+        const name = mcpStringArg(args.name)
+        if (!serverId || !name) return { output: { error: 'serverId and name are required' }, isError: true }
+        const resolved = resolveMcpFacadeConnection(connected, context, serverId, 'getPrompt')
+        if (!resolved.ok) return { output: { error: resolved.message }, isError: true }
+        try {
+          const result = await callMcpReadOnlyWithReconnect(
+            resolved.state,
+            context.abortSignal,
+            (client) =>
+              client.getPrompt!(
+                { name, arguments: mcpObjectArg(args.arguments) },
+                { signal: context.abortSignal, timeout: resolved.state.server.timeoutMs }
+              )
+          )
+          return { output: { serverId, name, prompt: result } }
+        } catch (error) {
+          return { output: { error: redactSecretText(errorMessage(error)), serverId, name }, isError: true }
+        }
+      }
+    })
+  ]
+}
+
+async function listMcpFacadeItems(
+  connected: McpConnectionState[],
+  context: ToolHostContext,
+  method: McpFacadeListMethod,
+  resultKey: 'resources' | 'resourceTemplates' | 'prompts',
+  serverId?: string,
+  cursor?: string
+): Promise<{ output: unknown; isError?: boolean }> {
+  const resolved = resolveMcpFacadeConnections(connected, context, method, serverId)
+  if (!resolved.ok) return { output: { error: resolved.message }, isError: true }
+  const servers: Array<{
+    serverId: string
+    resources?: McpResourceDescriptor[]
+    resourceTemplates?: McpResourceTemplateDescriptor[]
+    prompts?: McpPromptDescriptor[]
+    nextCursor?: string
+    error?: string
+  }> = []
+  for (const state of resolved.states) {
+    try {
+      const result = await callMcpReadOnlyWithReconnect(
+        state,
+        context.abortSignal,
+        (client) => listMcpFacadePage(client, method, cursor && serverId ? cursor : undefined, context.abortSignal, state.server.timeoutMs)
+      )
+      servers.push({
+        serverId: state.serverId,
+        [resultKey]: result[resultKey],
+        ...(result.nextCursor ? { nextCursor: result.nextCursor } : {})
+      })
+    } catch (error) {
+      servers.push({ serverId: state.serverId, error: redactSecretText(errorMessage(error)) })
+    }
+  }
+  return {
+    output: { servers },
+    isError: servers.length > 0 && servers.every((entry) => Boolean(entry.error))
+  }
+}
+
+type McpFacadeListResult = {
+  resources?: McpResourceDescriptor[]
+  resourceTemplates?: McpResourceTemplateDescriptor[]
+  prompts?: McpPromptDescriptor[]
+  nextCursor?: string
+}
+
+function listMcpFacadePage(
+  client: McpClientLike,
+  method: McpFacadeListMethod,
+  cursor: string | undefined,
+  signal: AbortSignal | undefined,
+  timeout: number
+): Promise<McpFacadeListResult> {
+  const options = { ...(cursor ? { cursor } : {}), signal, timeout }
+  switch (method) {
+    case 'listResources':
+      return client.listResources!(options)
+    case 'listResourceTemplates':
+      return client.listResourceTemplates!(options)
+    case 'listPrompts':
+      return client.listPrompts!(options)
+  }
+}
+
+function hasAvailableMcpFacadeMethod(
+  connected: McpConnectionState[],
+  context: ToolHostContext,
+  method: McpFacadeMethod
+): boolean {
+  return connected.some((state) => typeof state.client[method] === 'function' && canUseMcpServer(state.server, context.workspace))
+}
+
+function resolveMcpFacadeConnections(
+  connected: McpConnectionState[],
+  context: ToolHostContext,
+  method: McpFacadeMethod,
+  serverId?: string
+): { ok: true; states: McpConnectionState[] } | { ok: false; message: string } {
+  if (serverId) {
+    const resolved = resolveMcpFacadeConnection(connected, context, serverId, method)
+    return resolved.ok ? { ok: true, states: [resolved.state] } : { ok: false, message: resolved.message }
+  }
+  const states = connected.filter((state) => typeof state.client[method] === 'function' && canUseMcpServer(state.server, context.workspace))
+  return { ok: true, states }
+}
+
+function resolveMcpFacadeConnection(
+  connected: McpConnectionState[],
+  context: ToolHostContext,
+  serverId: string,
+  method: McpFacadeMethod
+): { ok: true; state: McpConnectionState } | { ok: false; message: string } {
+  const state = connected.find((entry) => entry.serverId === serverId)
+  if (!state) return { ok: false, message: 'unknown MCP server: ' + serverId }
+  if (!isMcpServerVisible(state.server, context.workspace)) {
+    return { ok: false, message: 'MCP server ' + serverId + ' is not enabled for this workspace' }
+  }
+  if (!isMcpServerTrusted(state.server, context.workspace)) {
+    return { ok: false, message: 'MCP server ' + serverId + ' is not trusted for this workspace' }
+  }
+  if (typeof state.client[method] !== 'function') {
+    return { ok: false, message: 'MCP server ' + serverId + ' does not support ' + method }
+  }
+  return { ok: true, state }
+}
+
+async function callMcpReadOnlyWithReconnect<T>(
+  state: McpConnectionState,
+  signal: AbortSignal | undefined,
+  call: (client: McpClientLike) => Promise<T>
+): Promise<T> {
+  try {
+    await ensureMcpConnectionForCall(state, signal)
+    return await call(state.client)
+  } catch (error) {
+    if (signal?.aborted) throw error
+    if (!looksLikeMcpTransportError(error)) {
+      state.lastError = redactSecretText(errorMessage(error))
+      syncMcpDiagnostic(state)
+      throw error
+    }
+    markMcpConnectionError(state, error)
+    const client = await reconnectMcpConnection(state, signal)
+    return call(client)
+  }
+}
+
+function mcpStringArg(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined
+}
+
+function mcpObjectArg(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {}
 }
 
 function createMcpLocalTool(

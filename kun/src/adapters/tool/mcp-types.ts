@@ -18,6 +18,57 @@ export type McpToolDescriptor = {
   _meta?: Record<string, unknown>
 }
 
+export type McpResourceDescriptor = {
+  uri: string
+  name: string
+  title?: string
+  description?: string
+  mimeType?: string
+  size?: number
+  annotations?: unknown
+  icons?: unknown
+  _meta?: Record<string, unknown>
+}
+
+export type McpResourceTemplateDescriptor = {
+  uriTemplate: string
+  name: string
+  title?: string
+  description?: string
+  mimeType?: string
+  annotations?: unknown
+  icons?: unknown
+  _meta?: Record<string, unknown>
+}
+
+export type McpResourceContents = {
+  uri: string
+  mimeType?: string
+  text?: string
+  blob?: string
+  _meta?: Record<string, unknown>
+}
+
+export type McpPromptDescriptor = {
+  name: string
+  title?: string
+  description?: string
+  arguments?: Array<{
+    name: string
+    title?: string
+    description?: string
+    required?: boolean
+  }>
+  icons?: unknown
+  _meta?: Record<string, unknown>
+}
+
+export type McpPromptResult = {
+  description?: string
+  messages: unknown[]
+  _meta?: Record<string, unknown>
+}
+
 export type McpClientLifecycleHandlers = {
   onError?: (error: Error) => void
   onClose?: () => void
@@ -29,6 +80,29 @@ export type McpClientLike = {
     signal?: AbortSignal
     timeout?: number
   }): Promise<{ tools: McpToolDescriptor[]; nextCursor?: string }>
+  listResources?(options?: {
+    cursor?: string
+    signal?: AbortSignal
+    timeout?: number
+  }): Promise<{ resources: McpResourceDescriptor[]; nextCursor?: string }>
+  listResourceTemplates?(options?: {
+    cursor?: string
+    signal?: AbortSignal
+    timeout?: number
+  }): Promise<{ resourceTemplates: McpResourceTemplateDescriptor[]; nextCursor?: string }>
+  readResource?(
+    input: { uri: string },
+    options?: { signal?: AbortSignal; timeout?: number }
+  ): Promise<{ contents: McpResourceContents[] }>
+  listPrompts?(options?: {
+    cursor?: string
+    signal?: AbortSignal
+    timeout?: number
+  }): Promise<{ prompts: McpPromptDescriptor[]; nextCursor?: string }>
+  getPrompt?(
+    input: { name: string; arguments?: Record<string, unknown> },
+    options?: { signal?: AbortSignal; timeout?: number }
+  ): Promise<McpPromptResult>
   callTool(
     input: { name: string; arguments: Record<string, unknown> },
     options?: { signal?: AbortSignal; timeout?: number }

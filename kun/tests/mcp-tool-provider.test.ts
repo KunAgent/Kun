@@ -258,6 +258,142 @@ describe('MCP tool provider', () => {
     }
   })
 
+  it('exposes MCP resources and prompts through workspace-scoped facade tools', async () => {
+    let promptArguments: Record<string, unknown> | undefined
+    const config = KunCapabilitiesConfig.parse({
+      mcp: {
+        enabled: true,
+        servers: {
+          docs: {
+            transport: 'stdio',
+            command: 'node',
+            trustScope: 'workspace',
+            trustedWorkspaceRoots: ['/tmp/project']
+          }
+        }
+      }
+    })
+    const built = await buildMcpToolProviders(config.mcp, {
+      clientFactory: async () => ({
+        async listTools() {
+          return { tools: [] }
+        },
+        async listResources() {
+          return { resources: [{ uri: 'docs://guide', name: 'Guide', mimeType: 'text/markdown' }] }
+        },
+        async readResource(input) {
+          return { contents: [{ uri: input.uri, text: '# Guide' }] }
+        },
+        async listResourceTemplates() {
+          return { resourceTemplates: [{ uriTemplate: 'docs://{slug}', name: 'Docs' }] }
+        },
+        async listPrompts() {
+          return {
+            prompts: [{
+              name: 'review',
+              description: 'Review a target',
+              arguments: [{ name: 'target', required: true }]
+            }]
+          }
+        },
+        async getPrompt(input) {
+          promptArguments = input.arguments
+          return {
+            description: 'Review prompt',
+            messages: [{ role: 'user', content: { type: 'text', text: `Review ${input.arguments?.target}` } }]
+          }
+        },
+        async callTool() {
+          return {}
+        },
+        async close() {
+          // no-op
+        }
+      })
+    })
+    const host = new LocalToolHost({ registry: new CapabilityRegistry(built.providers) })
+    const context = buildContext('/tmp/project')
+
+    expect((await host.listTools(context)).map((tool) => tool.name)).toEqual([
+      'mcp_list_resources',
+      'mcp_read_resource',
+      'mcp_list_resource_templates',
+      'mcp_list_prompts',
+      'mcp_get_prompt'
+    ])
+
+    const resources = await host.execute({
+      callId: 'call_resources',
+      toolName: 'mcp_list_resources',
+      arguments: {}
+    }, context)
+    expect(resources.item.kind === 'tool_result' ? resources.item.output : {}).toMatchObject({
+      servers: [{
+        serverId: 'docs',
+        resources: [{ uri: 'docs://guide', name: 'Guide' }]
+      }]
+    })
+
+    const resource = await host.execute({
+      callId: 'call_resource',
+      toolName: 'mcp_read_resource',
+      arguments: { serverId: 'docs', uri: 'docs://guide' }
+    }, context)
+    expect(resource.item.kind === 'tool_result' ? resource.item.output : {}).toMatchObject({
+      serverId: 'docs',
+      uri: 'docs://guide',
+      contents: [{ uri: 'docs://guide', text: '# Guide' }]
+    })
+
+    const templates = await host.execute({
+      callId: 'call_templates',
+      toolName: 'mcp_list_resource_templates',
+      arguments: {}
+    }, context)
+    expect(templates.item.kind === 'tool_result' ? templates.item.output : {}).toMatchObject({
+      servers: [{
+        serverId: 'docs',
+        resourceTemplates: [{ uriTemplate: 'docs://{slug}', name: 'Docs' }]
+      }]
+    })
+
+    const prompts = await host.execute({
+      callId: 'call_prompts',
+      toolName: 'mcp_list_prompts',
+      arguments: {}
+    }, context)
+    expect(prompts.item.kind === 'tool_result' ? prompts.item.output : {}).toMatchObject({
+      servers: [{
+        serverId: 'docs',
+        prompts: [{ name: 'review', arguments: [{ name: 'target', required: true }] }]
+      }]
+    })
+
+    const prompt = await host.execute({
+      callId: 'call_prompt',
+      toolName: 'mcp_get_prompt',
+      arguments: { serverId: 'docs', name: 'review', arguments: { target: 'src' } }
+    }, context)
+    expect(prompt.item.kind === 'tool_result' ? prompt.item.output : {}).toMatchObject({
+      serverId: 'docs',
+      name: 'review',
+      prompt: {
+        description: 'Review prompt',
+        messages: [{ role: 'user', content: { type: 'text', text: 'Review src' } }]
+      }
+    })
+    expect(promptArguments).toEqual({ target: 'src' })
+
+    expect(await host.listTools(buildContext('/tmp/other'))).toEqual([])
+    await expect(
+      host.execute({
+        callId: 'call_blocked',
+        toolName: 'mcp_read_resource',
+        arguments: { serverId: 'docs', uri: 'docs://guide' }
+      }, buildContext('/tmp/other'))
+    ).rejects.toThrow(/not advertised/)
+  })
+
   it('uses BM25 MCP search meta tools when search discovery is enabled', async () => {
     const config = KunCapabilitiesConfig.parse({
       mcp: {
