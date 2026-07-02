@@ -8,6 +8,7 @@ import {
   cleanupUnusedGitCheckpointsIfDue,
   createGitCheckpoint,
   restoreGitCheckpoint,
+  updateGitCheckpointManifest,
   testResolvePathWithinRepository
 } from './git-checkpoint-service'
 
@@ -48,9 +49,21 @@ describe('git checkpoint service', () => {
 
     const checkpointDir = join(dataDir, 'git-checkpoints', checkpoint.checkpointId)
     const metadata = JSON.parse(await readFile(join(checkpointDir, 'metadata.json'), 'utf-8')) as {
+      version?: number
+      threadId?: string
+      workspaceRoot?: string
       checkpointRef?: string
     }
+    expect(metadata.version).toBe(1)
+    expect(metadata.threadId).toBe('thr_1')
+    expect(normalize(metadata.workspaceRoot ?? '')).toBe(normalize(repoRoot))
     expect(metadata.checkpointRef).toBeUndefined()
+    expect(checkpoint.manifest.version).toBe(1)
+    expect(checkpoint.manifest.checkpointId).toBe(checkpoint.checkpointId)
+    expect(checkpoint.manifest.threadId).toBe('thr_1')
+    expect(normalize(checkpoint.manifest.workspaceRoot)).toBe(normalize(repoRoot))
+    expect(normalize(checkpoint.manifest.repositoryRoot)).toBe(normalize(repoRoot))
+    expect(checkpoint.manifest.completeness).toBe('complete')
     await expect(stat(join(checkpointDir, 'head.bundle'))).resolves.toBeTruthy()
 
     const refs = execFileSync('git', ['-C', repoRoot, 'show-ref'], { encoding: 'utf-8' })
@@ -91,6 +104,86 @@ describe('git checkpoint service', () => {
       .split('\n')
       .filter(Boolean)
       .sort()).toEqual([' M tracked.txt', 'M  staged.txt', '?? untracked.txt'].sort())
+  })
+
+  it('refuses coordinated restore when the active thread or workspace does not match the manifest', async () => {
+    const checkpoint = await createGitCheckpoint({
+      dataDir,
+      workspaceRoot: repoRoot,
+      threadId: 'thr_1'
+    })
+    expect(checkpoint.ok).toBe(true)
+    if (!checkpoint.ok) throw new Error(checkpoint.message)
+
+    await writeFile(join(repoRoot, 'tracked.txt'), 'agent changed\n')
+    const wrongThread = await restoreGitCheckpoint({
+      dataDir,
+      checkpointId: checkpoint.checkpointId,
+      expectedThreadId: 'thr_other'
+    })
+    expect(wrongThread.ok).toBe(false)
+    if (wrongThread.ok) throw new Error('expected restore to be refused')
+    expect(wrongThread.reason).toBe('mismatch')
+    expect(await readFile(join(repoRoot, 'tracked.txt'), 'utf-8')).toBe('agent changed\n')
+
+    const otherRepo = join(sandbox, 'other-repo')
+    execFileSync('git', ['init', '-b', 'main', otherRepo], { stdio: 'pipe' })
+    const wrongWorkspace = await restoreGitCheckpoint({
+      dataDir,
+      checkpointId: checkpoint.checkpointId,
+      expectedThreadId: 'thr_1',
+      expectedWorkspaceRoot: otherRepo
+    })
+    expect(wrongWorkspace.ok).toBe(false)
+    if (wrongWorkspace.ok) throw new Error('expected restore to be refused')
+    expect(wrongWorkspace.reason).toBe('mismatch')
+    expect(await readFile(join(repoRoot, 'tracked.txt'), 'utf-8')).toBe('agent changed\n')
+  })
+
+  it('updates the manifest with turn ids and refuses restore for the wrong turn', async () => {
+    const checkpoint = await createGitCheckpoint({
+      dataDir,
+      workspaceRoot: repoRoot,
+      threadId: 'thr_1'
+    })
+    expect(checkpoint.ok).toBe(true)
+    if (!checkpoint.ok) throw new Error(checkpoint.message)
+
+    const wrongThread = await updateGitCheckpointManifest({
+      dataDir,
+      checkpointId: checkpoint.checkpointId,
+      threadId: 'thr_other',
+      turnId: 'turn_1',
+      userMessageItemId: 'item_turn_1_user'
+    })
+    expect(wrongThread.ok).toBe(false)
+    if (wrongThread.ok) throw new Error('expected manifest update to be refused')
+    expect(wrongThread.reason).toBe('mismatch')
+
+    const updated = await updateGitCheckpointManifest({
+      dataDir,
+      checkpointId: checkpoint.checkpointId,
+      threadId: 'thr_1',
+      turnId: 'turn_1',
+      userMessageItemId: 'item_turn_1_user'
+    })
+    expect(updated.ok).toBe(true)
+    if (!updated.ok) throw new Error(updated.message)
+    expect(updated.manifest.turnId).toBe('turn_1')
+    expect(updated.manifest.userMessageItemId).toBe('item_turn_1_user')
+
+    await writeFile(join(repoRoot, 'tracked.txt'), 'agent changed\n')
+    const wrongTurn = await restoreGitCheckpoint({
+      dataDir,
+      checkpointId: checkpoint.checkpointId,
+      expectedThreadId: 'thr_1',
+      expectedTurnId: 'turn_2',
+      expectedUserMessageItemId: 'item_turn_1_user',
+    })
+    expect(wrongTurn.ok).toBe(false)
+    if (wrongTurn.ok) throw new Error('expected restore to be refused')
+    expect(wrongTurn.reason).toBe('mismatch')
+    expect(await readFile(join(repoRoot, 'tracked.txt'), 'utf-8')).toBe('agent changed\n')
   })
 
   it('rolls back commits created after the checkpoint', async () => {

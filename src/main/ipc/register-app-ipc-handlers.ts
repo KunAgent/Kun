@@ -44,6 +44,7 @@ import {
   defaultPathSchema,
   gitBranchPayloadSchema,
   gitCheckpointCreatePayloadSchema,
+  gitCheckpointManifestUpdatePayloadSchema,
   gitCheckpointRestorePayloadSchema,
   gitWorktreeRemoveSchema,
   guiUpdateChannelSchema,
@@ -127,7 +128,7 @@ import {
   removeGitBranchWorktree,
   switchGitBranch
 } from '../services/git-service'
-import { createGitCheckpoint, restoreGitCheckpoint, type GitCheckpointStorageOptions } from '../services/git-checkpoint-service'
+import { createGitCheckpoint, restoreGitCheckpoint, updateGitCheckpointManifest, type GitCheckpointStorageOptions } from '../services/git-checkpoint-service'
 import {
   abortMerge,
   abortRebase,
@@ -1086,6 +1087,24 @@ export function registerAppIpcHandlers(options: RegisterAppIpcHandlersOptions): 
       dataDir: await resolveKunThreadsDataDir(),
       workspaceRoot: request.workspaceRoot,
       threadId: request.threadId,
+      ...(request.turnId ? { turnId: request.turnId } : {}),
+      ...(request.userMessageItemId ? { userMessageItemId: request.userMessageItemId } : {}),
+      storage: resolveCheckpointStorageOptions(settings.checkpointCleanup)
+    })
+  })
+  ipcMain.handle('git:checkpoint:update-manifest', async (_, payload: unknown) => {
+    const request = parseIpcPayload(
+      'git:checkpoint:update-manifest',
+      gitCheckpointManifestUpdatePayloadSchema,
+      payload
+    )
+    const settings = await store.load()
+    return updateGitCheckpointManifest({
+      dataDir: await resolveKunThreadsDataDir(),
+      checkpointId: request.checkpointId,
+      threadId: request.threadId,
+      turnId: request.turnId,
+      userMessageItemId: request.userMessageItemId,
       storage: resolveCheckpointStorageOptions(settings.checkpointCleanup)
     })
   })
@@ -1096,6 +1115,10 @@ export function registerAppIpcHandlers(options: RegisterAppIpcHandlersOptions): 
       dataDir: await resolveKunThreadsDataDir(),
       checkpointId: request.checkpointId,
       ...(request.allowPartialRestore ? { allowPartialRestore: true } : {}),
+      ...(request.expectedThreadId ? { expectedThreadId: request.expectedThreadId } : {}),
+      ...(request.expectedWorkspaceRoot ? { expectedWorkspaceRoot: request.expectedWorkspaceRoot } : {}),
+      ...(request.expectedTurnId ? { expectedTurnId: request.expectedTurnId } : {}),
+      ...(request.expectedUserMessageItemId ? { expectedUserMessageItemId: request.expectedUserMessageItemId } : {}),
       storage: resolveCheckpointStorageOptions(settings.checkpointCleanup),
       // Bridge the main-process runtimeRequest into the shape restoreGitCheckpoint
       // expects ((path, {method, body}) => {ok,status,body}). On a transport-level

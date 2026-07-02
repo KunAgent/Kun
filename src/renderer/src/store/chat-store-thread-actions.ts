@@ -905,6 +905,36 @@ export function createThreadActions(
         ...(workspaceCheckpointId ? { workspaceCheckpointId } : {}),
         ...(fileReferences.length ? { fileReferences } : {})
       })
+      if (workspaceCheckpointId && userMessageItemId && typeof window.kunGui.updateGitCheckpointManifest === 'function') {
+        void window.kunGui
+          .updateGitCheckpointManifest({
+            checkpointId: workspaceCheckpointId,
+            threadId: activeThreadId,
+            turnId,
+            userMessageItemId
+          })
+          .then((updated) => {
+            if (!updated.ok) {
+              void window.kunGui.logError('git-checkpoint', 'Failed to update Git checkpoint manifest', {
+                message: updated.message,
+                reason: updated.reason,
+                checkpointId: workspaceCheckpointId,
+                threadId: activeThreadId,
+                turnId,
+                userMessageItemId
+              }).catch(() => undefined)
+            }
+          })
+          .catch((error) => {
+            void window.kunGui.logError('git-checkpoint', 'Failed to update Git checkpoint manifest', {
+              message: error instanceof Error ? error.message : String(error),
+              checkpointId: workspaceCheckpointId,
+              threadId: activeThreadId,
+              turnId,
+              userMessageItemId
+            }).catch(() => undefined)
+          })
+      }
       // Mirror the composer model selection against the runtime's stable
       // user_message item id so the badge survives page refresh / thread
       // re-selection. The runtime itself doesn't persist per-turn metadata.

@@ -126,6 +126,45 @@ type StoreActionContext = {
   sseAbortRef: SseAbortRef
 }
 
+function buildCheckpointRestorePayload(
+  state: ChatState,
+  checkpointId: string,
+  options: { allowPartialRestore?: boolean; turnId?: string; userMessageItemId?: string } = {}
+): {
+  checkpointId: string
+  allowPartialRestore?: boolean
+  expectedThreadId?: string
+  expectedWorkspaceRoot?: string
+  expectedTurnId?: string
+  expectedUserMessageItemId?: string
+} {
+  const activeThreadId = state.activeThreadId?.trim()
+  const activeThread = activeThreadId
+    ? state.threads.find((thread) => thread.id === activeThreadId)
+    : null
+  const expectedWorkspaceRoot =
+    normalizeWorkspaceRoot(activeThread?.workspace) || normalizeWorkspaceRoot(state.workspaceRoot)
+  const checkpointBlock = state.blocks.find(
+    (block) => block.kind === 'user' && block.meta?.workspaceCheckpointId?.trim() === checkpointId
+  )
+  return {
+    checkpointId,
+    ...(options.allowPartialRestore ? { allowPartialRestore: true } : {}),
+    ...(activeThreadId ? { expectedThreadId: activeThreadId } : {}),
+    ...(expectedWorkspaceRoot ? { expectedWorkspaceRoot } : {}),
+    ...(options.turnId?.trim()
+      ? { expectedTurnId: options.turnId.trim() }
+      : checkpointBlock?.kind === 'user' && (checkpointBlock.meta?.turnId || checkpointBlock.turnId)
+        ? { expectedTurnId: checkpointBlock.meta?.turnId || checkpointBlock.turnId }
+        : {}),
+    ...(options.userMessageItemId?.trim()
+      ? { expectedUserMessageItemId: options.userMessageItemId.trim() }
+      : checkpointBlock?.kind === 'user'
+        ? { expectedUserMessageItemId: checkpointBlock.id }
+        : {})
+  }
+}
+
 function applyGoalSnapshot(
   set: ChatStoreSet,
   threadId: string,
@@ -721,11 +760,18 @@ export function createMaintenanceActions(
     }
     const checkpointId = targetBlock.meta?.workspaceCheckpointId
     if (checkpointId) {
-      const restored = await window.kunGui.restoreGitCheckpoint({ checkpointId }).catch((error) => ({
-        ok: false as const,
-        reason: 'error' as const,
-        message: error instanceof Error ? error.message : String(error)
-      }))
+      const restored = await window.kunGui
+        .restoreGitCheckpoint(
+          buildCheckpointRestorePayload(state, checkpointId, {
+            turnId,
+            userMessageItemId: targetBlock.id
+          })
+        )
+        .catch((error) => ({
+          ok: false as const,
+          reason: 'error' as const,
+          message: error instanceof Error ? error.message : String(error)
+        }))
       if (!restored.ok) {
         set({ error: restored.message })
         return
@@ -796,8 +842,10 @@ export function createMaintenanceActions(
       set({ error: i18n.t('common:rollbackWorkspaceBusyError') })
       return
     }
-    const { activeThreadId, workspaceRoot } = get()
-    let restored = await window.kunGui.restoreGitCheckpoint({ checkpointId: targetCheckpointId }).catch((error) => ({
+    const state = get()
+    const { activeThreadId, workspaceRoot } = state
+    const restorePayload = buildCheckpointRestorePayload(state, targetCheckpointId)
+    let restored = await window.kunGui.restoreGitCheckpoint(restorePayload).catch((error) => ({
       ok: false as const,
       reason: 'error' as const,
       message: error instanceof Error ? error.message : String(error)
@@ -824,7 +872,7 @@ export function createMaintenanceActions(
         return
       }
       restored = await window.kunGui
-        .restoreGitCheckpoint({ checkpointId: targetCheckpointId, allowPartialRestore: true })
+        .restoreGitCheckpoint({ ...restorePayload, allowPartialRestore: true })
         .catch((error) => ({
           ok: false as const,
           reason: 'error' as const,

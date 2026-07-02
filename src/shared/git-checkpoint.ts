@@ -1,3 +1,19 @@
+export type GitCheckpointManifest = {
+  version: 1
+  checkpointId: string
+  threadId: string
+  workspaceRoot: string
+  repositoryRoot: string
+  head: string
+  currentBranch: string | null
+  createdAt: string
+  completeness: 'complete' | 'partial'
+  untrackedFiles: string[]
+  skippedUntracked?: string[]
+  turnId?: string
+  userMessageItemId?: string
+}
+
 export type GitCheckpointCreateResult =
   | {
       ok: true
@@ -5,10 +21,23 @@ export type GitCheckpointCreateResult =
       repositoryRoot: string
       head: string
       currentBranch: string | null
+      manifest: GitCheckpointManifest
     }
   | {
       ok: false
       reason: 'no_workspace' | 'not_git_repo' | 'git_unavailable' | 'conflict' | 'error'
+      message: string
+    }
+
+export type GitCheckpointManifestUpdateResult =
+  | {
+      ok: true
+      checkpointId: string
+      manifest: GitCheckpointManifest
+    }
+  | {
+      ok: false
+      reason: 'not_found' | 'mismatch' | 'error'
       message: string
     }
 
@@ -20,6 +49,7 @@ export type GitCheckpointRestoreResult =
       head: string
       currentBranch: string | null
       rescueCheckpointId: string | null
+      manifest: GitCheckpointManifest
     }
   | {
       ok: false
@@ -30,6 +60,7 @@ export type GitCheckpointRestoreResult =
         | 'not_found'
         | 'conflict'
         | 'partial'
+        | 'mismatch'
         | 'error'
       message: string
       /**

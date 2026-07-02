@@ -18,7 +18,7 @@ import type {
 } from './app-settings'
 import type { EditorListResult, EditorOpenResult, OpenEditorPathOptions } from './editor'
 import type { GitBranchesResult, GitBranchWorktreesResult, GitWorktreeCheckoutResult } from './git-branches'
-import type { GitCheckpointCreateResult, GitCheckpointRestoreResult } from './git-checkpoint'
+import type { GitCheckpointCreateResult, GitCheckpointManifestUpdateResult, GitCheckpointRestoreResult } from './git-checkpoint'
 import type {
   MergeResult,
   SyncResult,
@@ -385,10 +385,22 @@ export type KunGuiApi = {
   createGitCheckpoint: (params: {
     workspaceRoot: string
     threadId: string
+    turnId?: string
+    userMessageItemId?: string
   }) => Promise<GitCheckpointCreateResult>
+  updateGitCheckpointManifest: (params: {
+    checkpointId: string
+    threadId: string
+    turnId: string
+    userMessageItemId: string
+  }) => Promise<GitCheckpointManifestUpdateResult>
   restoreGitCheckpoint: (params: {
     checkpointId: string
     allowPartialRestore?: boolean
+    expectedThreadId?: string
+    expectedWorkspaceRoot?: string
+    expectedTurnId?: string
+    expectedUserMessageItemId?: string
   }) => Promise<GitCheckpointRestoreResult>
   checkoutGitBranchWorktree: (workspaceRoot: string, branch: string) => Promise<GitWorktreeCheckoutResult>
   createGitBranchWorktree: (workspaceRoot: string, branch: string) => Promise<GitWorktreeCheckoutResult>
