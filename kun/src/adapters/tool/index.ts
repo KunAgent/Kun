@@ -18,6 +18,7 @@ export * from './memory-tool-provider.js'
 export * from './output-accumulator.js'
 export * from './read.js'
 export * from './truncate.js'
+export * from './virtual-tool-catalog.js'
 export * from './web-tool-provider.js'
 export * from './write.js'
 export {

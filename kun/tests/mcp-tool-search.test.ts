@@ -168,3 +168,81 @@ describe('MCP search provider honors workspace visibility roots', () => {
     expect(describeInside.item).toMatchObject({ kind: 'tool_result', isError: false })
   })
 })
+
+describe('MCP search provider freezes its virtual catalog per turn', () => {
+  it('defers refreshed tools and schema changes until the next turn', async () => {
+    const calls: string[] = []
+    const original = record('github', 'search_issues', calls)
+    original.descriptor.description = 'Search issues with the old schema'
+    const replacement = record('github', 'search_issues', calls)
+    replacement.descriptor.description = 'Search issues with the new schema'
+    replacement.descriptor.inputSchema = {
+      type: 'object',
+      properties: { query: { type: 'string' } },
+      required: ['query']
+    }
+    const added = record('github', 'create_issue', calls)
+    const state = { records: [original] }
+    const host = new LocalToolHost({
+      registry: new CapabilityRegistry([
+        createMcpSearchProvider({
+          config: SEARCH_CONFIG,
+          state,
+          refreshCatalog: async () => {
+            state.records = [replacement, added]
+            return state.records
+          },
+          isServerAvailable: () => true
+        })
+      ])
+    })
+    const firstTurn = ctx({ turnId: 'turn_1' })
+
+    const before = await host.execute(
+      { callId: 'c0', toolName: 'mcp_describe', arguments: { toolId: 'github/search_issues' } },
+      firstTurn
+    )
+    expect(before.item.kind === 'tool_result' ? before.item.output : {}).toMatchObject({
+      description: 'Search issues with the old schema'
+    })
+
+    const refresh = await host.execute(
+      { callId: 'c1', toolName: 'mcp_refresh_catalog', arguments: {} },
+      firstTurn
+    )
+    expect(refresh.item.kind === 'tool_result' ? refresh.item.output : {}).toMatchObject({
+      totalIndexed: 2,
+      catalogUpdatePending: true
+    })
+
+    const stillFrozen = await host.execute(
+      { callId: 'c2', toolName: 'mcp_describe', arguments: { toolId: 'github/search_issues' } },
+      firstTurn
+    )
+    expect(stillFrozen.item.kind === 'tool_result' ? stillFrozen.item.output : {}).toMatchObject({
+      description: 'Search issues with the old schema'
+    })
+    const hiddenUntilNextTurn = await host.execute(
+      { callId: 'c3', toolName: 'mcp_call', arguments: { toolId: 'github/create_issue', arguments: {} } },
+      firstTurn
+    )
+    expect(hiddenUntilNextTurn.item).toMatchObject({ kind: 'tool_result', isError: true })
+    expect(calls).toEqual([])
+
+    const nextTurn = ctx({ turnId: 'turn_2' })
+    const updated = await host.execute(
+      { callId: 'c4', toolName: 'mcp_describe', arguments: { toolId: 'github/search_issues' } },
+      nextTurn
+    )
+    expect(updated.item.kind === 'tool_result' ? updated.item.output : {}).toMatchObject({
+      description: 'Search issues with the new schema',
+      inputSchema: { required: ['query'] }
+    })
+    const callable = await host.execute(
+      { callId: 'c5', toolName: 'mcp_call', arguments: { toolId: 'github/create_issue', arguments: {} } },
+      nextTurn
+    )
+    expect(callable.item).toMatchObject({ kind: 'tool_result', isError: false })
+    expect(calls).toEqual(['github/create_issue'])
+  })
+})
