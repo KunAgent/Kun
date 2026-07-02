@@ -1373,3 +1373,14 @@ html[data-theme='dark'] .cm-write-md-code-block-html > pre span {
   color: var(--ds-danger);
   background: var(--ds-danger-soft);
 }
+
+.katex-display {
+  overflow-x: auto;
+  overflow-y: hidden;
+  max-width: 100%;
+  padding: 0.35rem 0;
+}
+
+.katex-display > .katex {
+  white-space: nowrap;
+}
