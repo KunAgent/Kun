@@ -105,6 +105,43 @@ export async function createSdkMcpClient(
         timeout: listOptions?.timeout
       })
     },
+    listResources: (listOptions) => {
+      const params = listOptions?.cursor ? { cursor: listOptions.cursor } : undefined
+      return client.listResources(params, {
+        signal: listOptions?.signal,
+        timeout: listOptions?.timeout
+      })
+    },
+    listResourceTemplates: (listOptions) => {
+      const params = listOptions?.cursor ? { cursor: listOptions.cursor } : undefined
+      return client.listResourceTemplates(params, {
+        signal: listOptions?.signal,
+        timeout: listOptions?.timeout
+      })
+    },
+    readResource: (input, readOptions) =>
+      client.readResource({ uri: input.uri }, {
+        signal: readOptions?.signal,
+        timeout: readOptions?.timeout
+      }),
+    listPrompts: (listOptions) => {
+      const params = listOptions?.cursor ? { cursor: listOptions.cursor } : undefined
+      return client.listPrompts(params, {
+        signal: listOptions?.signal,
+        timeout: listOptions?.timeout
+      })
+    },
+    getPrompt: (input, promptOptions) =>
+      client.getPrompt(
+        {
+          name: input.name,
+          ...(input.arguments ? { arguments: stringifyPromptArguments(input.arguments) } : {})
+        },
+        {
+          signal: promptOptions?.signal,
+          timeout: promptOptions?.timeout
+        }
+      ),
     callTool: (input, callOptions) => client.callTool(input, undefined, callOptions),
     close: () => client.close(),
     setLifecycleHandlers: (handlers) => {
@@ -112,6 +149,16 @@ export async function createSdkMcpClient(
       ;(client as { onclose?: () => void }).onclose = handlers.onClose
     }
   }
+}
+
+function stringifyPromptArguments(args: Record<string, unknown>): Record<string, string> {
+  const next: Record<string, string> = {}
+  for (const [key, value] of Object.entries(args)) {
+    if (value === undefined) continue
+    const encoded = typeof value === 'string' ? value : JSON.stringify(value)
+    next[key] = encoded ?? String(value)
+  }
+  return next
 }
 
 /**
