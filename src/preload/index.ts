@@ -102,6 +102,8 @@ const api = {
     ipcRenderer.invoke('git:create-and-switch-branch', { workspaceRoot, branch }),
   createGitCheckpoint: (payload) =>
     ipcRenderer.invoke('git:checkpoint:create', payload),
+  updateGitCheckpointManifest: (payload) =>
+    ipcRenderer.invoke('git:checkpoint:update-manifest', payload),
   restoreGitCheckpoint: (payload) =>
     ipcRenderer.invoke('git:checkpoint:restore', payload),
   checkoutGitBranchWorktree: (workspaceRoot, branch) =>

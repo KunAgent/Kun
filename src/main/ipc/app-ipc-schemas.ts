@@ -1443,14 +1443,29 @@ export const gitBranchPayloadSchema = z
 export const gitCheckpointCreatePayloadSchema = z
   .object({
     workspaceRoot: workspaceRootSchema,
-    threadId: trimmedString(MAX_ID_LENGTH)
+    threadId: trimmedString(MAX_ID_LENGTH),
+    turnId: trimmedString(MAX_ID_LENGTH).optional(),
+    userMessageItemId: trimmedString(MAX_ID_LENGTH).optional()
   })
   .strict()
 
 export const gitCheckpointRestorePayloadSchema = z
   .object({
     checkpointId: trimmedString(MAX_ID_LENGTH * 4),
-    allowPartialRestore: z.boolean().optional()
+    allowPartialRestore: z.boolean().optional(),
+    expectedThreadId: trimmedString(MAX_ID_LENGTH).optional(),
+    expectedWorkspaceRoot: workspaceRootSchema.optional(),
+    expectedTurnId: trimmedString(MAX_ID_LENGTH).optional(),
+    expectedUserMessageItemId: trimmedString(MAX_ID_LENGTH).optional()
+  })
+  .strict()
+
+export const gitCheckpointManifestUpdatePayloadSchema = z
+  .object({
+    checkpointId: trimmedString(MAX_ID_LENGTH * 4),
+    threadId: trimmedString(MAX_ID_LENGTH),
+    turnId: trimmedString(MAX_ID_LENGTH),
+    userMessageItemId: trimmedString(MAX_ID_LENGTH)
   })
   .strict()
 

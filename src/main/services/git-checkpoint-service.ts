@@ -5,12 +5,16 @@ import { randomUUID } from 'node:crypto'
 import { runGit, resolveGitCwd } from './git-service'
 import type {
   GitCheckpointCreateResult,
+  GitCheckpointManifest,
+  GitCheckpointManifestUpdateResult,
   GitCheckpointRestoreResult
 } from '../../shared/git-checkpoint'
 
 type GitCheckpointMetadata = {
+  version?: 1
   checkpointId: string
   threadId: string
+  workspaceRoot?: string
   repositoryRoot: string
   head: string
   checkpointRef?: string | null
@@ -26,6 +30,8 @@ type GitCheckpointMetadata = {
    * partial checkpoint unless the caller explicitly opts in.
    */
   completeness?: 'complete' | 'partial'
+  turnId?: string
+  userMessageItemId?: string
 }
 
 /**
@@ -150,6 +156,36 @@ async function readMetadata(root: string, checkpointId: string): Promise<GitChec
   }
 }
 
+function checkpointManifest(metadata: GitCheckpointMetadata): GitCheckpointManifest {
+  const skippedUntracked = metadata.skippedUntracked?.filter(Boolean) ?? []
+  return {
+    version: 1,
+    checkpointId: metadata.checkpointId,
+    threadId: metadata.threadId,
+    workspaceRoot: metadata.workspaceRoot ?? metadata.repositoryRoot,
+    repositoryRoot: metadata.repositoryRoot,
+    head: metadata.head,
+    currentBranch: metadata.currentBranch,
+    createdAt: metadata.createdAt,
+    completeness: metadata.completeness ?? (skippedUntracked.length ? 'partial' : 'complete'),
+    untrackedFiles: metadata.untrackedFiles ?? [],
+    ...(skippedUntracked.length ? { skippedUntracked } : {}),
+    ...(metadata.turnId ? { turnId: metadata.turnId } : {}),
+    ...(metadata.userMessageItemId ? { userMessageItemId: metadata.userMessageItemId } : {})
+  }
+}
+
+async function pathKey(path: string): Promise<string> {
+  let canonical = path
+  try {
+    canonical = await realpath(path)
+  } catch {
+    canonical = resolve(path)
+  }
+  const normalized = normalize(resolve(canonical))
+  return process.platform === 'win32' ? normalized.toLowerCase() : normalized
+}
+
 async function writePatch(repositoryRoot: string, args: string[], path: string): Promise<void> {
   const { stdout } = await runGit(repositoryRoot, args, 30_000)
   await writeFile(path, stdout, 'utf-8')
@@ -200,6 +236,74 @@ async function resolveRepositoryRoot(workspaceRoot: string): Promise<string | nu
   if (!cwd) return null
   const { stdout } = await runGit(cwd, ['rev-parse', '--show-toplevel'])
   return stdout.trim()
+}
+
+async function validateRestoreExpectation(
+  metadata: GitCheckpointMetadata,
+  expected: {
+    threadId?: string
+    workspaceRoot?: string
+    turnId?: string
+    userMessageItemId?: string
+  }
+): Promise<Extract<GitCheckpointRestoreResult, { ok: false }> | null> {
+  const expectedThreadId = expected.threadId?.trim()
+  if (expectedThreadId && metadata.threadId !== expectedThreadId) {
+    return {
+      ok: false,
+      reason: 'mismatch',
+      message: 'Checkpoint belongs to thread ' + metadata.threadId + ', not the active thread ' + expectedThreadId + '.'
+    }
+  }
+
+  const expectedTurnId = expected.turnId?.trim()
+  if (expectedTurnId && metadata.turnId && metadata.turnId !== expectedTurnId) {
+    return {
+      ok: false,
+      reason: 'mismatch',
+      message: 'Checkpoint belongs to turn ' + metadata.turnId + ', not turn ' + expectedTurnId + '.'
+    }
+  }
+
+  const expectedUserMessageItemId = expected.userMessageItemId?.trim()
+  if (
+    expectedUserMessageItemId &&
+    metadata.userMessageItemId &&
+    metadata.userMessageItemId !== expectedUserMessageItemId
+  ) {
+    return {
+      ok: false,
+      reason: 'mismatch',
+      message:
+        'Checkpoint belongs to message ' +
+        metadata.userMessageItemId +
+        ', not message ' +
+        expectedUserMessageItemId +
+        '.'
+    }
+  }
+
+  const expectedWorkspaceRoot = expected.workspaceRoot?.trim()
+  if (expectedWorkspaceRoot) {
+    const expectedRepositoryRoot = await resolveRepositoryRoot(expectedWorkspaceRoot)
+    if (!expectedRepositoryRoot) {
+      return { ok: false, reason: 'no_workspace', message: 'No working directory selected.' }
+    }
+    if ((await pathKey(expectedRepositoryRoot)) !== (await pathKey(metadata.repositoryRoot))) {
+      return {
+        ok: false,
+        reason: 'mismatch',
+        message:
+          'Checkpoint belongs to ' +
+          metadata.repositoryRoot +
+          ', not the active workspace ' +
+          expectedRepositoryRoot +
+          '.'
+      }
+    }
+  }
+
+  return null
 }
 
 /**
@@ -493,6 +597,8 @@ export async function createGitCheckpoint(params: {
   dataDir: string
   workspaceRoot: string
   threadId: string
+  turnId?: string
+  userMessageItemId?: string
   checkpointId?: string
   storage?: GitCheckpointStorageOptions
 }): Promise<GitCheckpointCreateResult> {
@@ -556,26 +662,71 @@ export async function createGitCheckpoint(params: {
     }
 
     const metadata: GitCheckpointMetadata = {
+      version: 1,
       checkpointId,
       threadId: params.threadId,
+      workspaceRoot: resolve(workspaceRoot),
       repositoryRoot,
       head,
       currentBranch,
       createdAt: new Date().toISOString(),
       untrackedFiles,
       ...(skippedUntracked.length ? { skippedUntracked } : {}),
-      completeness: skippedUntracked.length ? 'partial' : 'complete'
+      completeness: skippedUntracked.length ? 'partial' : 'complete',
+      ...(params.turnId?.trim() ? { turnId: params.turnId.trim() } : {}),
+      ...(params.userMessageItemId?.trim() ? { userMessageItemId: params.userMessageItemId.trim() } : {})
     }
     await writeFile(join(dir, 'metadata.json'), JSON.stringify(metadata, null, 2), 'utf-8')
     // Bound per-thread retention so an active thread cannot grow unboundedly.
     await pruneThreadCheckpoints(root, params.threadId, maxPerThread, checkpointId).catch(() => undefined)
-    return { ok: true, checkpointId, repositoryRoot, head, currentBranch }
+    return { ok: true, checkpointId, repositoryRoot, head, currentBranch, manifest: checkpointManifest(metadata) }
   } catch (error) {
     const failure = checkpointFailure(error)
     if (/merge conflicts/i.test(failure.message)) {
       return { ...failure, reason: 'conflict' }
     }
     return failure
+  }
+}
+
+export async function updateGitCheckpointManifest(params: {
+  dataDir: string
+  checkpointId: string
+  threadId: string
+  turnId: string
+  userMessageItemId: string
+  storage?: GitCheckpointStorageOptions
+}): Promise<GitCheckpointManifestUpdateResult> {
+  const checkpointId = params.checkpointId.trim()
+  const root = resolveCheckpointsRoot(params.dataDir, params.storage?.checkpointsRoot)
+  const metadata = await readMetadata(root, checkpointId)
+  if (!metadata) {
+    return { ok: false, reason: 'not_found', message: `Git checkpoint not found: ${checkpointId}` }
+  }
+  const threadId = params.threadId.trim()
+  if (metadata.threadId !== threadId) {
+    return {
+      ok: false,
+      reason: 'mismatch',
+      message: 'Checkpoint belongs to thread ' + metadata.threadId + ', not thread ' + threadId + '.'
+    }
+  }
+  const turnId = params.turnId.trim()
+  const userMessageItemId = params.userMessageItemId.trim()
+  if (!turnId || !userMessageItemId) {
+    return { ok: false, reason: 'error', message: 'Checkpoint manifest update requires turn and user message ids.' }
+  }
+  const next: GitCheckpointMetadata = {
+    ...metadata,
+    version: 1,
+    turnId,
+    userMessageItemId
+  }
+  try {
+    await writeFile(metadataPath(root, checkpointId), JSON.stringify(next, null, 2), 'utf-8')
+    return { ok: true, checkpointId, manifest: checkpointManifest(next) }
+  } catch (error) {
+    return { ok: false, reason: 'error', message: error instanceof Error ? error.message : String(error) }
   }
 }
 
@@ -632,6 +783,10 @@ export async function restoreGitCheckpoint(params: {
   dataDir: string
   checkpointId: string
   storage?: GitCheckpointStorageOptions
+  expectedThreadId?: string
+  expectedWorkspaceRoot?: string
+  expectedTurnId?: string
+  expectedUserMessageItemId?: string
   /**
    * Opt-in to restoring a PARTIAL checkpoint (one whose snapshot skipped some
    * untracked files because they were over the size budget). A partial restore
@@ -656,6 +811,18 @@ export async function restoreGitCheckpoint(params: {
   const metadata = await readMetadata(root, checkpointId)
   if (!metadata) {
     return { ok: false, reason: 'not_found', message: `Git checkpoint not found: ${checkpointId}` }
+  }
+
+  try {
+    const expectationFailure = await validateRestoreExpectation(metadata, {
+      threadId: params.expectedThreadId,
+      workspaceRoot: params.expectedWorkspaceRoot,
+      turnId: params.expectedTurnId,
+      userMessageItemId: params.expectedUserMessageItemId
+    })
+    if (expectationFailure) return expectationFailure
+  } catch (error) {
+    return restoreFailure(error)
   }
 
   // Partial-checkpoint data-loss guard (P0-01). If the snapshot skipped any
@@ -798,7 +965,8 @@ export async function restoreGitCheckpoint(params: {
       repositoryRoot,
       head: metadata.head,
       currentBranch: metadata.currentBranch,
-      rescueCheckpointId
+      rescueCheckpointId,
+      manifest: checkpointManifest(metadata)
     }
   } catch (error) {
     const failure = restoreFailure(error)

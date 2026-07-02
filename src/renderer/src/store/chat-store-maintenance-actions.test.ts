@@ -201,7 +201,13 @@ describe('chat-store-maintenance-actions workspace rollback', () => {
 
       await actions.rollbackWorkspaceToCheckpoint(' gcp_1 ')
 
-      expect(restoreGitCheckpoint).toHaveBeenCalledWith({ checkpointId: 'gcp_1' })
+      expect(restoreGitCheckpoint).toHaveBeenCalledWith({
+        checkpointId: 'gcp_1',
+        expectedThreadId: 'thr_existing',
+        expectedWorkspaceRoot: '/workspace/deepseek-gui',
+        expectedTurnId: 'turn_1',
+        expectedUserMessageItemId: 'user_1'
+      })
       expect(provider.rewindThread).not.toHaveBeenCalled()
       expect(sendMessage).not.toHaveBeenCalled()
       expect(state.blocks).toHaveLength(2)
@@ -309,7 +315,13 @@ describe('chat-store-maintenance-actions workspace rollback', () => {
 
       await actions.rollbackWorkspaceToCheckpoint('gcp_1')
 
-      expect(restoreGitCheckpoint).toHaveBeenCalledWith({ checkpointId: 'gcp_1' })
+      expect(restoreGitCheckpoint).toHaveBeenCalledWith({
+        checkpointId: 'gcp_1',
+        expectedThreadId: 'thr_existing',
+        expectedWorkspaceRoot: '/workspace/deepseek-gui',
+        expectedTurnId: 'turn_1',
+        expectedUserMessageItemId: 'user_1'
+      })
       expect(consoleInfo).toHaveBeenCalledTimes(1)
       const logArgs = consoleInfo.mock.calls[0]
       expect(logArgs[0]).toBe('[rollback] rescue checkpoint:')
