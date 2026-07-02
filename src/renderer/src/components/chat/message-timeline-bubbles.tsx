@@ -9,6 +9,7 @@ import { getProvider } from '../../agent/registry'
 import { parseWritePromptForDisplay } from '../../write/quoted-selection'
 import { parseClawUserPromptForDisplay, type ClawUserPromptDisplay } from '@shared/app-settings'
 import { parseBackgroundShellCompletionNotice } from '@shared/background-shell-notice'
+import type { WriteExportFormat } from '@shared/write-export'
 import { isBackgroundShellNoticeBlock } from './message-timeline-turns'
 import { openWorkspacePathInEditor } from '../../lib/open-workspace-path'
 import { DiffView } from '../DiffView'
@@ -20,6 +21,7 @@ import { answersByQuestionId, shouldShowQuestionHeader } from './user-input-pane
 import { InjectedMemoryMetaChip } from './injected-memory-meta-chip'
 
 const COPY_FEEDBACK_RESET_MS = 1600
+const ASSISTANT_EXPORT_FORMATS: WriteExportFormat[] = ['pdf', 'docx', 'png', 'html']
 
 function BackgroundShellNoticeBubble({
   block,
@@ -1097,6 +1099,95 @@ function CopyFeedbackButton({
   )
 }
 
+function AssistantExportButton({
+  text,
+  createdAt
+}: {
+  text: string
+  createdAt?: string
+}): ReactElement {
+  const { t } = useTranslation('common')
+  const workspaceRoot = useChatStore((state) => state.workspaceRoot)
+  const detailsRef = useRef<HTMLDetailsElement | null>(null)
+  const [exportingFormat, setExportingFormat] = useState<WriteExportFormat | null>(null)
+  const [error, setError] = useState('')
+
+  const handleExport = async (format: WriteExportFormat): Promise<void> => {
+    if (typeof window.kunGui?.exportWriteDocument !== 'function') {
+      setError(t('writeExportUnavailable'))
+      return
+    }
+
+    setError('')
+    setExportingFormat(format)
+    try {
+      const parsedDate = createdAt ? new Date(createdAt) : new Date()
+      const date = Number.isNaN(parsedDate.getTime()) ? new Date() : parsedDate
+      const title = `Kun-answer-${date.toISOString().replace(/[:.]/g, '-')}`
+      const result = await window.kunGui.exportWriteDocument({
+        title,
+        workspaceRoot: workspaceRoot || undefined,
+        format,
+        content: text
+      })
+      if (!result.ok && !result.canceled) {
+        setError(result.message)
+      } else if (result.ok) {
+        detailsRef.current?.removeAttribute('open')
+      }
+    } catch (exportError) {
+      setError(exportError instanceof Error ? exportError.message : String(exportError))
+    } finally {
+      setExportingFormat(null)
+    }
+  }
+
+  return (
+    <details ref={detailsRef} className="relative">
+      <summary
+        className="flex cursor-pointer list-none items-center gap-1 rounded-md px-1.5 py-0.5 text-ds-faint transition hover:bg-ds-hover hover:text-ds-muted"
+        title={error ? t('exportAnswerFailed', { message: error }) : t('exportAnswer')}
+        aria-label={t('exportAnswer')}
+      >
+        {exportingFormat ? (
+          <Loader2 className="h-3.5 w-3.5 animate-spin" strokeWidth={1.8} />
+        ) : (
+          <Download className="h-3.5 w-3.5" strokeWidth={1.8} />
+        )}
+        <span>{exportingFormat ? t('writeExporting') : t('exportAnswer')}</span>
+      </summary>
+      <div className="absolute bottom-full right-0 z-30 mb-1 min-w-36 rounded-xl border border-ds-border-muted bg-ds-card p-1.5 shadow-xl">
+        {ASSISTANT_EXPORT_FORMATS.map((format) => {
+          const label =
+            format === 'pdf'
+              ? t('writeExportPdf')
+              : format === 'png'
+                ? t('writeExportPng')
+                : format === 'html'
+                  ? t('writeExportHtml')
+                  : t('writeExportDocx')
+          return (
+            <button
+              key={format}
+              type="button"
+              disabled={exportingFormat !== null}
+              onClick={() => void handleExport(format)}
+              className="flex w-full items-center rounded-lg px-2.5 py-1.5 text-left text-[12px] text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink disabled:opacity-60"
+            >
+              {label}
+            </button>
+          )
+        })}
+        {error ? (
+          <p className="max-w-64 px-2.5 py-1 text-[11px] leading-4 text-rose-500">
+            {t('exportAnswerFailed', { message: error })}
+          </p>
+        ) : null}
+      </div>
+    </details>
+  )
+}
+
 function UserInputBubble({
   block,
   nested = false
@@ -1402,6 +1493,7 @@ function MessageBubbleImpl({
                   <span>{forkAction.busy ? t('forkingThread') : t('forkResponse')}</span>
                 </button>
               ) : null}
+              <AssistantExportButton text={block.text} createdAt={block.createdAt} />
               <CopyFeedbackButton text={block.text} />
             </div>
           </div>

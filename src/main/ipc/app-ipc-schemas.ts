@@ -1607,12 +1607,16 @@ export const writeRetrievalPayloadSchema = z
 
 export const writeExportPayloadSchema = z
   .object({
-    path: trimmedString(MAX_PATH_LENGTH),
+    path: optionalTrimmedString(MAX_PATH_LENGTH),
+    title: optionalTrimmedString(200),
     workspaceRoot: optionalTrimmedString(MAX_PATH_LENGTH),
     format: z.enum(WRITE_EXPORT_FORMATS),
     content: z.string().max(MAX_BODY_BYTES)
   })
   .strict()
+  .refine((payload) => Boolean(payload.path || payload.title), {
+    message: 'An export path or title is required.'
+  })
 
 export const writeRichClipboardPayloadSchema = z
   .object({

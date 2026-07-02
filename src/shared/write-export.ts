@@ -1,9 +1,10 @@
-export const WRITE_EXPORT_FORMATS = ['html', 'pdf', 'doc', 'docx'] as const
+export const WRITE_EXPORT_FORMATS = ['html', 'pdf', 'png', 'doc', 'docx'] as const
 
 export type WriteExportFormat = (typeof WRITE_EXPORT_FORMATS)[number]
 
 export type WriteExportPayload = {
-  path: string
+  path?: string
+  title?: string
   workspaceRoot?: string
   format: WriteExportFormat
   content: string

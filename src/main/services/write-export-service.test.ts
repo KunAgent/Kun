@@ -35,6 +35,7 @@ describe('write-export-service helpers', () => {
   it('builds export file names with the requested extension', () => {
     expect(buildWriteExportFileName('/tmp/draft.md', 'html')).toBe('draft.html')
     expect(buildWriteExportFileName('/tmp/draft.md', 'pdf')).toBe('draft.pdf')
+    expect(buildWriteExportFileName('/tmp/draft.md', 'png')).toBe('draft.png')
     expect(buildWriteExportFileName('/tmp/draft.md', 'doc')).toBe('draft.doc')
     expect(buildWriteExportFileName('/tmp/draft.md', 'docx')).toBe('draft.docx')
   })
@@ -129,5 +130,27 @@ describe('write-export-service helpers', () => {
     const bytes = await readFile(targetPath)
     expect(bytes.subarray(0, 2).toString('utf8')).toBe('PK')
     expect(bytes.length).toBeGreaterThan(1000)
+  })
+
+  it('exports content without requiring a source file', async () => {
+    const targetPath = join(workspaceRoot, 'Kun-answer.html')
+    vi.mocked(dialog.showSaveDialog).mockResolvedValue({
+      canceled: false,
+      filePath: targetPath
+    })
+
+    const result = await exportWriteDocument({
+      title: 'Kun answer',
+      workspaceRoot,
+      format: 'html',
+      content: '# Answer\n\nShareable content'
+    })
+
+    expect(result).toMatchObject({
+      ok: true,
+      path: targetPath,
+      format: 'html'
+    })
+    expect(await readFile(targetPath, 'utf8')).toContain('<h1>Answer</h1>')
   })
 })
