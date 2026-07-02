@@ -239,6 +239,7 @@ function escapeHtml(value: string): string {
 function exportExtension(format: WriteExportFormat): string {
   if (format === 'html') return '.html'
   if (format === 'pdf') return '.pdf'
+  if (format === 'png') return '.png'
   if (format === 'doc') return '.doc'
   return '.docx'
 }
@@ -246,6 +247,7 @@ function exportExtension(format: WriteExportFormat): string {
 function exportDialogFilter(format: WriteExportFormat): Electron.FileFilter {
   if (format === 'html') return { name: 'HTML', extensions: ['html'] }
   if (format === 'pdf') return { name: 'PDF', extensions: ['pdf'] }
+  if (format === 'png') return { name: 'PNG', extensions: ['png'] }
   if (format === 'doc') return { name: 'DOC', extensions: ['doc'] }
   return { name: 'DOCX', extensions: ['docx'] }
 }
@@ -456,7 +458,7 @@ async function bufferFromDocxResult(result: ArrayBuffer | Blob | Buffer | Uint8A
   throw new TypeError('Unsupported DOCX export result.')
 }
 
-async function renderHtmlToPdf(html: string): Promise<Buffer> {
+async function renderHtmlDocument(html: string, format: 'pdf' | 'png'): Promise<Buffer> {
   const tempDir = await mkdtemp(join(tmpdir(), 'kun-export-'))
   const tempHtmlPath = join(tempDir, 'document.html')
   await writeFile(tempHtmlPath, html, 'utf8')
@@ -464,6 +466,8 @@ async function renderHtmlToPdf(html: string): Promise<Buffer> {
   const hiddenWindow = new BrowserWindow({
     show: false,
     backgroundColor: '#ffffff',
+    width: 1200,
+    height: 900,
     webPreferences: {
       sandbox: true
     }
@@ -487,6 +491,18 @@ async function renderHtmlToPdf(html: string): Promise<Buffer> {
       ]).then(() => undefined)
     `)
     await delay(120)
+    if (format === 'png') {
+      const size = await hiddenWindow.webContents.executeJavaScript(`
+        ({
+          width: Math.min(1600, Math.max(800, document.documentElement.scrollWidth)),
+          height: Math.min(16384, Math.max(600, document.documentElement.scrollHeight))
+        })
+      `) as { width: number; height: number }
+      hiddenWindow.setContentSize(size.width, size.height)
+      await delay(50)
+      const image = await hiddenWindow.webContents.capturePage()
+      return image.toPNG()
+    }
     const pdf = await hiddenWindow.webContents.printToPDF({
       printBackground: true,
       preferCSSPageSize: true
@@ -518,19 +534,29 @@ export async function exportWriteDocument(
   options?: { parentWindow?: BrowserWindow | null }
 ): Promise<WriteExportResult> {
   try {
-    const resolved = await resolveWorkspaceFile({
-      path: payload.path,
-      workspaceRoot: payload.workspaceRoot
-    })
-    if (!resolved.ok) {
-      return {
-        ok: false,
-        canceled: false,
-        message: resolved.message
+    let sourcePath: string
+    if (payload.path) {
+      const resolved = await resolveWorkspaceFile({
+        path: payload.path,
+        workspaceRoot: payload.workspaceRoot
+      })
+      if (!resolved.ok) {
+        return {
+          ok: false,
+          canceled: false,
+          message: resolved.message
+        }
       }
+      sourcePath = resolved.path
+    } else {
+      const title = payload.title?.trim() || 'Kun answer'
+      const safeTitle = Array.from(title, (character) => {
+        const code = character.charCodeAt(0)
+        return code <= 31 || '<>:"/\\|?*'.includes(character) ? '-' : character
+      }).join('')
+      sourcePath = join(payload.workspaceRoot?.trim() || tmpdir(), `${safeTitle}.md`)
     }
 
-    const sourcePath = resolved.path
     const exportDialogResult = await showExportSaveDialog(sourcePath, payload.format, options?.parentWindow)
     if (exportDialogResult.canceled || !exportDialogResult.filePath) {
       return {
@@ -540,7 +566,7 @@ export async function exportWriteDocument(
     }
 
     const targetPath = ensureExportExtension(exportDialogResult.filePath, payload.format)
-    const title = basenameWithoutExtension(sourcePath)
+    const title = payload.title?.trim() || basenameWithoutExtension(sourcePath)
     const html = await buildWriteExportHtmlDocument({
       sourcePath,
       content: payload.content,
@@ -561,7 +587,7 @@ export async function exportWriteDocument(
       })
       await writeFile(targetPath, await bufferFromDocxResult(docx))
     } else {
-      await writeFile(targetPath, await renderHtmlToPdf(html))
+      await writeFile(targetPath, await renderHtmlDocument(html, payload.format))
     }
 
     return {

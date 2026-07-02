@@ -764,6 +764,18 @@ describe('app-ipc-schemas', () => {
     expect(payload.content).toBe('# Draft')
   })
 
+  it('accepts content-only export payloads', () => {
+    const payload = writeExportPayloadSchema.parse({
+      title: 'Kun answer',
+      workspaceRoot: '/tmp/workspace',
+      format: 'png',
+      content: '# Answer'
+    })
+
+    expect(payload.title).toBe('Kun answer')
+    expect(payload.format).toBe('png')
+  })
+
   it('accepts write rich clipboard payloads', () => {
     const payload = writeRichClipboardPayloadSchema.parse({
       path: '/tmp/workspace/draft.md',

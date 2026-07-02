@@ -782,6 +782,24 @@ describe('MessageTimeline Kun runtime metadata smoke', () => {
     expect(copyIndex).toBeGreaterThan(0)
   })
 
+  it('renders an export action for completed assistant responses', () => {
+    const html = renderToStaticMarkup(
+      createElement(MessageBubble, {
+        block: {
+          kind: 'assistant',
+          id: 'assistant_1',
+          turnId: 'turn_1',
+          text: 'share this answer'
+        }
+      })
+    )
+
+    expect(html).toMatch(/exportAnswer|Export answer|导出回答/)
+    expect(html).toMatch(/writeExportPdf|Export PDF|导出 PDF/)
+    expect(html).toMatch(/writeExportDocx|Export DOCX|导出 DOCX/)
+    expect(html).toMatch(/writeExportPng|Export PNG|导出 PNG/)
+  })
+
   it('renders the workspace rollback action with fork in completed assistant response actions', () => {
     const blocks: ChatBlock[] = [
       {
