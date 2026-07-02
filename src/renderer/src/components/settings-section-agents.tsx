@@ -35,6 +35,7 @@ import {
   Loader2,
   LockKeyholeOpen,
   RefreshCw,
+  RotateCcw,
   Settings,
   ShieldQuestion,
   Trash2
@@ -348,6 +349,7 @@ export function AgentsSettingsSection({ ctx }: { ctx: Record<string, any> }): Re
     runtimeDiagnosticsNotice,
     refreshKunDiagnostics,
     disableMemoryRecord,
+    restoreMemoryRecord,
     deleteMemoryRecord,
     pickClawWorkspace,
     resetClawWorkspaceToDefault,
@@ -1711,16 +1713,27 @@ export function AgentsSettingsSection({ ctx }: { ctx: Record<string, any> }): Re
                                   </div>
                                 </div>
                                 <div className="flex shrink-0 items-center gap-1">
-                                  <button
-                                    type="button"
-                                    disabled={Boolean(memory.disabledAt)}
-                                    onClick={() => void disableMemoryRecord(memory.id)}
-                                    className="rounded-lg p-1.5 text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink disabled:cursor-not-allowed disabled:opacity-45"
-                                    aria-label={t('kunMemoryDisable')}
-                                    title={t('kunMemoryDisable')}
-                                  >
-                                    <Ban className="h-3.5 w-3.5" strokeWidth={1.8} />
-                                  </button>
+                                  {memory.disabledAt ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => void restoreMemoryRecord(memory.id)}
+                                      className="rounded-lg p-1.5 text-ds-muted transition hover:bg-emerald-500/10 hover:text-emerald-600"
+                                      aria-label={t('memoryRestore')}
+                                      title={t('memoryRestore')}
+                                    >
+                                      <RotateCcw className="h-3.5 w-3.5" strokeWidth={1.8} />
+                                    </button>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      onClick={() => void disableMemoryRecord(memory.id)}
+                                      className="rounded-lg p-1.5 text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink"
+                                      aria-label={t('kunMemoryDisable')}
+                                      title={t('kunMemoryDisable')}
+                                    >
+                                      <Ban className="h-3.5 w-3.5" strokeWidth={1.8} />
+                                    </button>
+                                  )}
                                   <button
                                     type="button"
                                     onClick={() => void deleteMemoryRecord(memory.id)}

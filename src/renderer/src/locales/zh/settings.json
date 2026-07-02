@@ -1238,6 +1238,7 @@
   "memoryDetails": "详情",
   "memoryClose": "关闭",
   "memoryDisable": "禁用",
+  "memoryRestore": "恢复",
   "memoryDelete": "删除",
   "memoryDisabled": "已禁用",
   "memorySave": "保存",
@@ -1260,5 +1261,9 @@
   "memoryDiscardConfirm": "放弃未保存的更改？",
   "memoryDiscardConfirmDetail": "您的修改将会丢失。",
   "memoryDiscardConfirmAction": "放弃",
-  "memoryDiscardCancel": "继续编辑"
+  "memoryDiscardCancel": "继续编辑",
+  "memoryDisableConfirm": "禁用这条记忆？",
+  "memoryDisableConfirmDetail": "助手将停止使用这条记忆，之后仍可在此恢复。",
+  "memoryDeleteConfirm": "删除这条记忆？",
+  "memoryDeleteConfirmDetail": "删除后将从当前列表移除，且无法在此恢复。"
 }

@@ -1238,6 +1238,7 @@
   "memoryDetails": "Details",
   "memoryClose": "Close",
   "memoryDisable": "Disable",
+  "memoryRestore": "Restore",
   "memoryDelete": "Delete",
   "memoryDisabled": "disabled",
   "memorySave": "Save",
@@ -1260,5 +1261,9 @@
   "memoryDiscardConfirm": "Discard unsaved changes?",
   "memoryDiscardConfirmDetail": "Your edits will be lost.",
   "memoryDiscardConfirmAction": "Discard",
-  "memoryDiscardCancel": "Keep editing"
+  "memoryDiscardCancel": "Keep editing",
+  "memoryDisableConfirm": "Disable this memory?",
+  "memoryDisableConfirmDetail": "The assistant will stop using this memory. You can restore it later.",
+  "memoryDeleteConfirm": "Delete this memory?",
+  "memoryDeleteConfirmDetail": "Deleted memories are removed from this list and cannot be restored here."
 }

@@ -42,6 +42,7 @@ const labels: Record<string, string> = {
   memoryDetails: 'Details',
   memoryClose: 'Close',
   memoryDisable: 'Disable',
+  memoryRestore: 'Restore',
   memoryDelete: 'Delete',
   memoryDisabled: 'Disabled',
   memoryProject: 'Project',
@@ -50,7 +51,11 @@ const labels: Record<string, string> = {
   memoryDiscardConfirm: 'Discard unsaved changes?',
   memoryDiscardConfirmDetail: 'Your edits will be lost.',
   memoryDiscardConfirmAction: 'Discard',
-  memoryDiscardCancel: 'Keep editing'
+  memoryDiscardCancel: 'Keep editing',
+  memoryDisableConfirm: 'Disable this memory?',
+  memoryDisableConfirmDetail: 'The assistant will stop using this memory.',
+  memoryDeleteConfirm: 'Delete this memory?',
+  memoryDeleteConfirmDetail: 'Deleted memories cannot be restored here.'
 }
 
 function baseCtx(overrides: Record<string, any> = {}): Record<string, any> {
@@ -68,6 +73,7 @@ function baseCtx(overrides: Record<string, any> = {}): Record<string, any> {
     createMemoryRecord: async () => true,
     updateMemoryRecord: async () => true,
     disableMemoryRecord: async () => undefined,
+    restoreMemoryRecord: async () => undefined,
     deleteMemoryRecord: async () => undefined,
     ...overrides
   }
@@ -164,6 +170,18 @@ describe('MemorySettingsSection', () => {
     // to screen readers / hover tooltips.
     const titleAttrPattern = /title="[^"]*this tail should only appear inside the details dialog[^"]*"/
     expect(html).toMatch(titleAttrPattern)
+  })
+
+  it('offers restore instead of disable for a disabled memory', () => {
+    const html = renderToStaticMarkup(createElement(MemorySettingsSection, {
+      ctx: baseCtx({
+        memoryRecords: [sampleRecord({ disabledAt: '2026-07-02T00:00:00.000Z' })]
+      })
+    }))
+
+    expect(html).toContain('aria-label="Restore"')
+    expect(html).not.toContain('aria-label="Disable"')
+    expect(html).toContain('Disabled')
   })
 })
 
