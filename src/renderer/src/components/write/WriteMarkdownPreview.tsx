@@ -32,6 +32,8 @@ import {
   highlightCodeHtml,
   renderFallbackCodeHtml
 } from '../../lib/code-highlighting'
+import { createMathPlugin } from '@streamdown/math'
+import 'katex/dist/katex.min.css'
 
 export {
   resolveWriteMarkdownResource,
@@ -68,7 +70,13 @@ export const writeMarkdownHardenOptions = {
   allowedImagePrefixes: ['*']
 }
 
+const math = createMathPlugin({
+  singleDollarTextMath: false,
+  errorColor: 'var(--ds-text-muted)'
+})
+
 const rehypePlugins = [
+  math.rehypePlugin,
   [
     harden,
     writeMarkdownHardenOptions
@@ -115,6 +123,7 @@ export function preserveRawMarkdownImageSrc() {
 
 const remarkPlugins = [
   remarkGfm,
+  math.remarkPlugin,
   preserveRawMarkdownImageSrc
 ] as unknown as PluggableList
 

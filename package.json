@@ -48,6 +48,7 @@
     "@floating-ui/dom": "^1.7.6",
     "@larksuiteoapi/node-sdk": "^1.64.0",
     "@modelcontextprotocol/sdk": "^1.29.0",
+    "@streamdown/math": "^1.0.2",
     "@tencent-weixin/openclaw-weixin": "2.4.3",
     "@tiptap/core": "^3.26.0",
     "@tiptap/extension-image": "^3.26.0",
