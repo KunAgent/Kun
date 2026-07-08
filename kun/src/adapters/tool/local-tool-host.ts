@@ -28,6 +28,10 @@ import {
   type ReadTrackerOptions
 } from './read-tracker.js'
 import { sandboxBlockForTool, type SandboxBlock } from './sandbox-policy.js'
+import {
+  createToolOperationIdentity,
+  ToolOperationJournal
+} from '../../reliability/operation-journal.js'
 
 /**
  * A single registered tool. Tools are pure functions that observe the
@@ -67,6 +71,11 @@ export type LocalToolHostOptions = {
   hooks?: readonly ResolvedHook[]
   /** Runtime read-before-edit guard. Disabled by default for direct unit use. */
   readTracker?: boolean | ReadTrackerOptions
+  /**
+   * Turn-scoped operation journal. Defaults to an in-memory journal so fallback
+   * call ids such as `call_1` are isolated by turnId/toolName/argsHash.
+   */
+  operationJournal?: ToolOperationJournal
 }
 
 /**
@@ -89,12 +98,14 @@ export class LocalToolHost implements ToolHost {
   private readonly allowList: Set<string>
   private hooks: readonly ResolvedHook[]
   private readonly readTracker: ReadTracker
+  private readonly operationJournal: ToolOperationJournal
 
   constructor(options: LocalToolHostOptions) {
     this.registry = options.registry ?? CapabilityRegistry.fromLocalTools(options.tools ?? [])
     this.allowList = new Set(options.allowList ?? [])
     this.hooks = options.hooks ?? []
     this.readTracker = new ReadTracker(normalizeReadTrackerOptions(options.readTracker))
+    this.operationJournal = options.operationJournal ?? new ToolOperationJournal()
   }
 
   replaceRuntimeComponents(input: {
@@ -197,6 +208,21 @@ export class LocalToolHost implements ToolHost {
     if (context.abortSignal.aborted) {
       throw new Error('tool call aborted while waiting for approval')
     }
+    const operationIdentity = createToolOperationIdentity({
+      threadId: context.threadId,
+      turnId: context.turnId,
+      callId: activeCall.callId,
+      toolName: activeCall.toolName,
+      args: activeCall.arguments
+    })
+    const replayed = this.operationJournal.getCompleted(operationIdentity)
+    if (replayed) {
+      return {
+        item: this.completedToolResult(context, activeCall, tool, replayed.output, replayed.isError),
+        approved: !needsApproval
+      }
+    }
+    this.operationJournal.begin(operationIdentity)
     let result: Awaited<ReturnType<LocalTool['execute']>>
     try {
       result = await tool.execute(activeCall.arguments, context, async (update) => {
@@ -218,7 +244,11 @@ export class LocalToolHost implements ToolHost {
       // A tool blowing up (an MCP server returning a protocol error, a
       // provider bug) is feedback for the model, not a reason to kill the
       // whole turn. Only abort keeps propagating.
-      if (context.abortSignal.aborted) throw error
+      if (context.abortSignal.aborted) {
+        this.operationJournal.unknown(operationIdentity, 'tool call aborted during execution')
+        throw error
+      }
+      this.operationJournal.fail(operationIdentity, error)
       const message = error instanceof Error ? error.message : String(error)
       return {
         item: this.errorToolResult(context, activeCall, tool, message, 'tool_execution_failed'),
@@ -233,6 +263,7 @@ export class LocalToolHost implements ToolHost {
         result
       })
     } catch (error) {
+      this.operationJournal.fail(operationIdentity, error)
       return {
         item: this.errorToolResult(context, activeCall, tool, hookErrorMessage(error), 'hook_failed'),
         approved: true
@@ -248,16 +279,8 @@ export class LocalToolHost implements ToolHost {
       isError
     })
     if (!isError) output = await offloadLargeToolOutput(output, activeCall.toolName, context)
-    const item = makeToolResultItem({
-      id: `item_${activeCall.callId}`,
-      turnId: context.turnId,
-      threadId: context.threadId,
-      callId: activeCall.callId,
-      toolName: activeCall.toolName,
-      toolKind: activeCall.toolKind ?? tool.toolKind,
-      output,
-      isError
-    })
+    this.operationJournal.complete(operationIdentity, { output, isError })
+    const item = this.completedToolResult(context, activeCall, tool, output, isError)
     return { item, approved: !needsApproval }
   }
 
@@ -310,6 +333,25 @@ export class LocalToolHost implements ToolHost {
       .map(([key, value]) => `${key}=${JSON.stringify(value)}`)
       .join(', ')
     return `Run ${call.toolName}(${args})`
+  }
+
+  private completedToolResult(
+    context: ToolHostContext,
+    call: ToolCallLike,
+    tool: LocalTool,
+    output: unknown,
+    isError?: boolean
+  ): TurnItem {
+    return makeToolResultItem({
+      id: `item_${call.callId}`,
+      turnId: context.turnId,
+      threadId: context.threadId,
+      callId: call.callId,
+      toolName: call.toolName,
+      toolKind: call.toolKind ?? tool.toolKind,
+      output,
+      isError
+    })
   }
 
   private errorToolResult(
