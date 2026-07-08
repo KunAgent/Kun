@@ -1,5 +1,6 @@
 import { lazy, Suspense } from 'react'
 import { AppErrorBoundary } from './components/AppErrorBoundary'
+import './lib/issue-781-document-usability'
 
 const AppShell = lazy(() => import('./AppShell'))
 

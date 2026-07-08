@@ -339,6 +339,7 @@ export function WorkspaceFilePreviewPanel({
 
   return (
     <aside
+      data-kun-workspace-root={(target?.workspaceRoot ?? workspaceRoot).replaceAll('\\', '/')}
       className={`ds-no-drag ds-code-sidebar flex min-h-0 flex-col border-l border-ds-border-muted ${className ?? ''}`}
     >
       <div className="ds-code-sidebar-topbar">
@@ -353,6 +354,7 @@ export function WorkspaceFilePreviewPanel({
             return (
               <div
                 key={targetKey(item)}
+                data-kun-preview-key={targetKey(item)}
                 role="tab"
                 tabIndex={0}
                 aria-selected={active}
