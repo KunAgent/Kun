@@ -339,7 +339,7 @@ describe('MCP tool provider', () => {
       mode: 'search',
       active: true,
       indexedToolCount: 2,
-      advertisedToolCount: 4
+      advertisedToolCount: 9
     })
     expect((await host.listTools(context)).map((tool) => tool.name)).toEqual([
       'mcp_search',
@@ -461,7 +461,7 @@ describe('MCP tool provider', () => {
       }
     })
 
-    expect(built.providers).toEqual([])
+    expect(built.providers.map((provider) => provider.id)).toEqual(['mcp:facade'])
     expect(built.connectedServers).toBe(0)
     expect(built.diagnostics[0]).toMatchObject({
       id: 'broken',
@@ -492,7 +492,7 @@ describe('MCP tool provider', () => {
       }
     })
 
-    expect(built.providers).toEqual([])
+    expect(built.providers.map((provider) => provider.id)).toEqual(['mcp:facade'])
     expect(built.diagnostics[0]).toMatchObject({
       id: 'filesystem',
       status: 'error'
@@ -708,7 +708,7 @@ describe('MCP tool provider', () => {
 
     // Startup pass: the server failed and advertised no tools.
     expect(built.diagnostics).toEqual([expect.objectContaining({ id: 'github', status: 'error' })])
-    expect(built.providers).toHaveLength(0)
+    expect(built.providers.map((provider) => provider.id)).toEqual(['mcp:facade'])
 
     const registry = new CapabilityRegistry(built.providers)
     await built.startBackgroundReconnect((provider) => registry.registerProvider(provider))

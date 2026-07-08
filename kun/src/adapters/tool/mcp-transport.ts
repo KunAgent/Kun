@@ -24,6 +24,14 @@ type OAuthTransport = Transport & {
   finishAuth?: (authorizationCode: string) => Promise<void>
 }
 
+type SdkClientFacade = Client & {
+  listResources?: (params?: { cursor?: string }, options?: { signal?: AbortSignal; timeout?: number }) => Promise<unknown>
+  readResource?: (input: { uri: string }, options?: { signal?: AbortSignal; timeout?: number }) => Promise<unknown>
+  listResourceTemplates?: (params?: { cursor?: string }, options?: { signal?: AbortSignal; timeout?: number }) => Promise<unknown>
+  listPrompts?: (params?: { cursor?: string }, options?: { signal?: AbortSignal; timeout?: number }) => Promise<unknown>
+  getPrompt?: (input: { name: string; arguments?: Record<string, unknown> }, options?: { signal?: AbortSignal; timeout?: number }) => Promise<unknown>
+}
+
 export type SdkMcpClientOptions = {
   storageDir?: string
   openExternal?: (url: URL) => void | Promise<void>
@@ -48,6 +56,7 @@ export async function createSdkMcpClient(
   options: SdkMcpClientOptions = {}
 ): Promise<McpClientLike> {
   const client = new Client({ name: `kun-${serverId}`, version: '0.1.0' })
+  const sdk = client as SdkClientFacade
   // Observe transport-level failures explicitly (#639). The SDK routes a
   // dropped SSE stream / exhausted reconnect to `onerror`; with no handler it
   // is silently swallowed and can escape as an unhandled rejection that
@@ -106,6 +115,39 @@ export async function createSdkMcpClient(
       })
     },
     callTool: (input, callOptions) => client.callTool(input, undefined, callOptions),
+    ...(sdk.listResources ? {
+      listResources: async (listOptions) => {
+        const params = listOptions?.cursor ? { cursor: listOptions.cursor } : undefined
+        return await sdk.listResources?.(params, {
+          signal: listOptions?.signal,
+          timeout: listOptions?.timeout
+        }) as Awaited<ReturnType<NonNullable<McpClientLike['listResources']>>>
+      }
+    } : {}),
+    ...(sdk.readResource ? {
+      readResource: async (input, callOptions) => await sdk.readResource?.(input, callOptions) as unknown
+    } : {}),
+    ...(sdk.listResourceTemplates ? {
+      listResourceTemplates: async (listOptions) => {
+        const params = listOptions?.cursor ? { cursor: listOptions.cursor } : undefined
+        return await sdk.listResourceTemplates?.(params, {
+          signal: listOptions?.signal,
+          timeout: listOptions?.timeout
+        }) as Awaited<ReturnType<NonNullable<McpClientLike['listResourceTemplates']>>>
+      }
+    } : {}),
+    ...(sdk.listPrompts ? {
+      listPrompts: async (listOptions) => {
+        const params = listOptions?.cursor ? { cursor: listOptions.cursor } : undefined
+        return await sdk.listPrompts?.(params, {
+          signal: listOptions?.signal,
+          timeout: listOptions?.timeout
+        }) as Awaited<ReturnType<NonNullable<McpClientLike['listPrompts']>>>
+      }
+    } : {}),
+    ...(sdk.getPrompt ? {
+      getPrompt: async (input, callOptions) => await sdk.getPrompt?.(input, callOptions) as unknown
+    } : {}),
     close: () => client.close(),
     setLifecycleHandlers: (handlers) => {
       ;(client as { onerror?: (error: Error) => void }).onerror = handlers.onError
