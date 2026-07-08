@@ -1,4 +1,9 @@
-import type { FormEvent, MouseEvent as ReactMouseEvent, ReactElement } from 'react'
+import type {
+  DragEvent as ReactDragEvent,
+  FormEvent,
+  MouseEvent as ReactMouseEvent,
+  ReactElement
+} from 'react'
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
@@ -12,6 +17,7 @@ import {
   FolderOpen,
   GitBranch,
   Loader2,
+  MoveRight,
   PencilLine,
   Pin,
   PinOff,
@@ -23,8 +29,10 @@ import {
   X
 } from 'lucide-react'
 import type { NormalizedThread } from '../../agent/types'
+import { getProvider } from '../../agent/registry'
 import { rendererRuntimeClient } from '../../agent/runtime-client'
 import { useChatStore } from '../../store/chat-store'
+import { rememberCodeWorkspaceRoots } from '../../store/chat-store-helpers'
 import { formatRelativeTime } from '../../lib/format-relative-time'
 import { workspaceLabelFromPath } from '../../lib/workspace-label'
 import { deleteSddDraft } from '../../sdd/sdd-draft-actions'
@@ -97,12 +105,21 @@ type WorkspaceContextMenuState = {
   y: number
 }
 
+type MoveThreadDialogState = {
+  thread: NormalizedThread
+  targets: string[]
+  targetWorkspace: string | null
+  submitting: boolean
+  error?: string
+}
+
 type ThreadPreviewAnchorRect = Pick<DOMRect, 'left' | 'right' | 'top' | 'height'>
 
 const THREAD_PREVIEW_WIDTH = 320
 const THREAD_PREVIEW_MAX_HEIGHT = 220
 const THREAD_PREVIEW_GAP = 10
 const THREAD_PREVIEW_VIEWPORT_MARGIN = 12
+const SIDEBAR_THREAD_DRAG_DATA_KEY = 'application/x-kun-thread-id'
 
 type SidebarActionDialogState = {
   title: string
@@ -369,6 +386,56 @@ export function buildSidebarDraftWorkspacePaths(options: {
   return sortWorkspacePathsByActive([...map.values()], selectedWorkspace)
 }
 
+type SidebarThreadMoveBlockedOptions = {
+  thread: NormalizedThread
+  deleting?: boolean
+  worktreeRecord?: SidebarThreadWorktreeRecord
+  activeThreadId?: string | null
+  busy?: boolean
+  watchTurnCompletion?: Record<string, boolean>
+}
+
+export function isSidebarThreadMoveBlocked({
+  thread,
+  deleting = false,
+  worktreeRecord,
+  activeThreadId = null,
+  busy = false,
+  watchTurnCompletion = {}
+}: SidebarThreadMoveBlockedOptions): boolean {
+  const threadId = thread.id.trim()
+  if (!threadId) return true
+  if (deleting) return true
+  if (worktreeRecord) return true
+  if (thread.status?.trim().toLowerCase() === 'running') return true
+  if (watchTurnCompletion[threadId] === true) return true
+  if (activeThreadId === threadId && busy) return true
+  return false
+}
+
+export function buildSidebarThreadMoveTargets(options: {
+  thread: NormalizedThread
+  groups: SidebarWorkspaceGroup[]
+  threadWorktrees?: SidebarThreadWorktrees
+}): string[] {
+  const candidateProjectPaths = options.groups.map(([workspacePath]) => workspacePath)
+  const currentWorkspaceKey = workspaceRootIdentityKey(
+    sidebarWorkspacePathForThread(options.thread, options.threadWorktrees, candidateProjectPaths)
+  )
+  const targets: string[] = []
+  const seen = new Set<string>()
+
+  for (const [workspacePath] of options.groups) {
+    if (!isSidebarProjectWorkspacePath(workspacePath)) continue
+    const targetKey = workspaceRootIdentityKey(workspacePath)
+    if (!targetKey || targetKey === currentWorkspaceKey || seen.has(targetKey)) continue
+    seen.add(targetKey)
+    targets.push(workspacePath)
+  }
+
+  return targets
+}
+
 export function filterSddDraftHistoryItems(
   items: SddDraftHistoryItem[],
   searchQuery: string,
@@ -501,6 +568,9 @@ export function SidebarProjectsSection({
   const [workspaceContextMenu, setWorkspaceContextMenu] = useState<WorkspaceContextMenuState | null>(null)
   const [actionDialog, setActionDialog] = useState<SidebarActionDialogState | null>(null)
   const [renameThreadDialog, setRenameThreadDialog] = useState<RenameThreadDialogState | null>(null)
+  const [moveThreadDialog, setMoveThreadDialog] = useState<MoveThreadDialogState | null>(null)
+  const [draggingThreadId, setDraggingThreadId] = useState<string | null>(null)
+  const [dragOverWorkspace, setDragOverWorkspace] = useState<string | null>(null)
   const [draftHistoryByWorkspace, setDraftHistoryByWorkspace] = useState<Record<string, SddDraftHistoryItem[]>>({})
   const [threadWorktrees, setThreadWorktrees] = useState<SidebarThreadWorktrees>(() => readThreadWorktreeRegistry().worktrees)
   const activeSddDraftId = useSddDraftStore((s) => s.activeDraft?.id ?? '')
@@ -552,6 +622,7 @@ export function SidebarProjectsSection({
   const searchVisible = searchOpen || searchQuery.trim().length > 0
   const allGroupsCollapsed = displayGroups.length > 0 && displayGroups.every(([workspacePath]) => collapsed[workspacePath] === true)
   const workspaceHistoryKey = draftHistoryWorkspacePaths.join('\n')
+  const projectWorkspaceGroups = displayGroups.filter(([workspacePath]) => isSidebarProjectWorkspacePath(workspacePath))
 
   useEffect(() => {
     if (
@@ -786,6 +857,179 @@ export function SidebarProjectsSection({
     }
   }
 
+  const moveTargetsForThread = (thread: NormalizedThread): string[] => {
+    return buildSidebarThreadMoveTargets({
+      thread,
+      groups: projectWorkspaceGroups,
+      threadWorktrees
+    })
+  }
+
+  const threadMoveDisabledReason = (
+    thread: NormalizedThread,
+    worktreeRecord?: SidebarThreadWorktreeRecord
+  ): string => {
+    if (!thread.id.trim()) return t('sidebarThreadMoveUnsupported')
+    if (deletingThreadIds[thread.id] === true) return t('loading')
+    if (worktreeRecord) return t('sidebarThreadMoveWorktreeBlocked')
+    if (thread.status?.trim().toLowerCase() === 'running') return t('sidebarThreadMoveRunningBlocked')
+    if (watchTurnCompletion[thread.id] === true) return t('sidebarThreadMoveRunningBlocked')
+    if (activeThreadId === thread.id && busy) return t('sidebarThreadMoveRunningBlocked')
+    if (typeof getProvider().updateThreadWorkspace !== 'function') return t('sidebarThreadMoveUnsupported')
+    return ''
+  }
+
+  const moveThreadToWorkspace = async (
+    thread: NormalizedThread,
+    targetWorkspace: string
+  ): Promise<void> => {
+    const threadId = thread.id.trim()
+    const normalizedTarget = normalizeWorkspaceRoot(targetWorkspace)
+    if (!threadId || !normalizedTarget) return
+    const provider = getProvider()
+    if (typeof provider.updateThreadWorkspace !== 'function') {
+      throw new Error(t('sidebarThreadMoveUnsupported'))
+    }
+    setDeletingThreadIds((prev) => ({ ...prev, [threadId]: true }))
+    try {
+      await provider.updateThreadWorkspace(threadId, normalizedTarget)
+      useChatStore.setState((state) => ({
+        codeWorkspaceRoots: rememberCodeWorkspaceRoots(state.codeWorkspaceRoots, [normalizedTarget]),
+        threads: state.threads.map((item) =>
+          item.id === threadId ? { ...item, workspace: normalizedTarget } : item
+        )
+      }))
+      await useChatStore.getState().refreshThreads()
+      setMoveThreadDialog(null)
+      setThreadContextMenu(null)
+      setDragOverWorkspace(null)
+    } finally {
+      setDeletingThreadIds((prev) => {
+        const next = { ...prev }
+        delete next[threadId]
+        return next
+      })
+    }
+  }
+
+  const confirmThreadWorkspaceMove = (
+    thread: NormalizedThread,
+    targetWorkspace: string,
+    worktreeRecord?: SidebarThreadWorktreeRecord
+  ): void => {
+    if (threadMoveDisabledReason(thread, worktreeRecord)) return
+    const normalizedTarget = normalizeWorkspaceRoot(targetWorkspace)
+    if (!normalizedTarget) return
+    const currentWorkspaceKey = workspaceRootIdentityKey(
+      sidebarWorkspacePathForThread(thread, threadWorktrees, projectWorkspaceGroups.map(([workspacePath]) => workspacePath))
+    )
+    if (!currentWorkspaceKey || workspaceRootIdentityKey(normalizedTarget) === currentWorkspaceKey) return
+    setMoveThreadDialog({
+      thread,
+      targets: moveTargetsForThread(thread),
+      targetWorkspace: normalizedTarget,
+      submitting: false,
+      error: ''
+    })
+  }
+
+  const openMoveThreadDialog = (
+    thread: NormalizedThread,
+    worktreeRecord?: SidebarThreadWorktreeRecord
+  ): void => {
+    if (busy || threadMoveDisabledReason(thread, worktreeRecord)) return
+    setMoveThreadDialog({
+      thread,
+      targets: moveTargetsForThread(thread),
+      targetWorkspace: null,
+      submitting: false,
+      error: ''
+    })
+    setThreadContextMenu(null)
+  }
+
+  const closeMoveThreadDialog = (): void => {
+    setMoveThreadDialog((current) => current?.submitting ? current : null)
+  }
+
+  const submitMoveThreadDialog = async (): Promise<void> => {
+    const dialog = moveThreadDialog
+    if (!dialog || !dialog.targetWorkspace || dialog.submitting) return
+    setMoveThreadDialog((current) => current ? { ...current, submitting: true } : current)
+    try {
+      await moveThreadToWorkspace(dialog.thread, dialog.targetWorkspace)
+    } catch (error) {
+      setMoveThreadDialog((current) =>
+        current
+          ? {
+              ...current,
+              submitting: false,
+              error: error instanceof Error && error.message.trim()
+                ? error.message
+                : t('sidebarThreadMoveFailed')
+            }
+          : current
+      )
+    }
+  }
+
+  const handleThreadDragStart = (
+    event: ReactDragEvent<HTMLDivElement>,
+    thread: NormalizedThread
+  ): void => {
+    const worktreeRecord = worktreeRecordForSidebarThread(thread, threadWorktrees)
+    if (busy || threadMoveDisabledReason(thread, worktreeRecord) || moveTargetsForThread(thread).length === 0) {
+      event.preventDefault()
+      return
+    }
+    event.dataTransfer.effectAllowed = 'move'
+    event.dataTransfer.setData(SIDEBAR_THREAD_DRAG_DATA_KEY, thread.id)
+    setDraggingThreadId(thread.id)
+    setDragOverWorkspace(null)
+  }
+
+  const handleThreadDragEnd = (): void => {
+    setDraggingThreadId(null)
+    setDragOverWorkspace(null)
+  }
+
+  const handleWorkspaceDragOver = (
+    event: ReactDragEvent<HTMLDivElement>,
+    workspacePath: string
+  ): void => {
+    const threadId = draggingThreadId || event.dataTransfer.getData(SIDEBAR_THREAD_DRAG_DATA_KEY)
+    if (!threadId) return
+    const thread = threads.find((item) => item.id === threadId)
+    if (!thread) return
+    const worktreeRecord = worktreeRecordForSidebarThread(thread, threadWorktrees)
+    if (threadMoveDisabledReason(thread, worktreeRecord)) return
+    const targets = moveTargetsForThread(thread)
+    if (!targets.some((target) => workspaceRootIdentityKey(target) === workspaceRootIdentityKey(workspacePath))) {
+      return
+    }
+    event.preventDefault()
+    event.dataTransfer.dropEffect = 'move'
+    setDragOverWorkspace(workspacePath)
+  }
+
+  const handleWorkspaceDrop = (
+    event: ReactDragEvent<HTMLDivElement>,
+    workspacePath: string
+  ): void => {
+    event.preventDefault()
+    const threadId = draggingThreadId || event.dataTransfer.getData(SIDEBAR_THREAD_DRAG_DATA_KEY)
+    setDraggingThreadId(null)
+    setDragOverWorkspace(null)
+    if (!threadId) return
+    const thread = threads.find((item) => item.id === threadId)
+    if (!thread) return
+    confirmThreadWorkspaceMove(
+      thread,
+      workspacePath,
+      worktreeRecordForSidebarThread(thread, threadWorktrees)
+    )
+  }
+
   const openThreadContextMenu = (
     event: ReactMouseEvent<HTMLDivElement>,
     thread: NormalizedThread
@@ -1004,6 +1248,9 @@ export function SidebarProjectsSection({
           const folderName = workspaceLabelFromPath(workspacePath)
           const workspaceContext = workspaceContextLabel(workspacePath, folderName)
           const isCollapsed = collapsed[workspacePath] === true
+          const isDragOver =
+            dragOverWorkspace !== null
+            && workspaceRootIdentityKey(dragOverWorkspace) === workspaceRootIdentityKey(workspacePath)
           const draftHistory = sddDraftHistoryForWorkspace(filteredDraftHistoryByWorkspace, workspacePath)
           const sortedThreads = sortSidebarThreads(
             filterEmptySddAssistantThreadsFromSidebar(list, draftHistory)
@@ -1021,7 +1268,20 @@ export function SidebarProjectsSection({
                   setCollapsed((current) => ({ ...current, [workspacePath]: !current[workspacePath] }))
                 }
                 onContextMenu={(event) => openWorkspaceContextMenu(event, workspacePath)}
-                className="min-h-[36px] text-[13.5px]"
+                onDragOver={(event) => handleWorkspaceDragOver(event, workspacePath)}
+                onDragLeave={() =>
+                  setDragOverWorkspace((current) =>
+                    workspaceRootIdentityKey(current ?? undefined) === workspaceRootIdentityKey(workspacePath)
+                      ? null
+                      : current
+                  )
+                }
+                onDrop={(event) => handleWorkspaceDrop(event, workspacePath)}
+                className={`min-h-[36px] text-[13.5px] ${
+                  isDragOver
+                    ? 'bg-accent/10 shadow-[inset_0_0_0_1px_rgba(79,124,255,0.32)]'
+                    : ''
+                }`}
                 buttonClassName="items-center gap-2 px-2.5 py-2"
                 actionsVisibility="hidden"
                 actionsLayout="overlay"
@@ -1114,6 +1374,13 @@ export function SidebarProjectsSection({
                         onContextMenu={(event) => openThreadContextMenu(event, thread)}
                         onPreviewOpen={openThreadPreview}
                         onPreviewClose={closeThreadPreview}
+                        draggable={
+                          !busy
+                          && !threadMoveDisabledReason(thread, worktreeRecordForSidebarThread(thread, threadWorktrees))
+                          && moveTargetsForThread(thread).length > 0
+                        }
+                        onDragStart={(event) => handleThreadDragStart(event, thread)}
+                        onDragEnd={handleThreadDragEnd}
                         onPin={() => void handlePinThread(thread, thread.pinned !== true)}
                         onRename={() => openRenameThreadDialog(thread)}
                         onArchive={() => void handleArchiveThread(thread)}
@@ -1152,7 +1419,10 @@ export function SidebarProjectsSection({
         <ThreadContextMenu
           state={threadContextMenu}
           busy={deletingThreadIds[threadContextMenu.thread.id] === true}
+          moveDisabled={busy || Boolean(threadMoveDisabledReason(threadContextMenu.thread, threadContextMenu.worktreeRecord))}
+          moveDisabledTitle={threadMoveDisabledReason(threadContextMenu.thread, threadContextMenu.worktreeRecord) || undefined}
           onClose={() => setThreadContextMenu(null)}
+          onMove={() => openMoveThreadDialog(threadContextMenu.thread, threadContextMenu.worktreeRecord)}
           onPin={() => void handlePinThread(threadContextMenu.thread, threadContextMenu.thread.pinned !== true)}
           onRename={() => openRenameThreadDialog(threadContextMenu.thread)}
           onSummarize={() => void handleSummarizeThread(threadContextMenu.thread)}
@@ -1188,6 +1458,22 @@ export function SidebarProjectsSection({
         />
       ) : null}
 
+      {moveThreadDialog ? (
+        <MoveThreadDialog
+          state={moveThreadDialog}
+          onClose={closeMoveThreadDialog}
+          onPickTarget={(targetWorkspace) =>
+            confirmThreadWorkspaceMove(
+              moveThreadDialog.thread,
+              targetWorkspace,
+              worktreeRecordForSidebarThread(moveThreadDialog.thread, threadWorktrees)
+            )
+          }
+          onConfirm={submitMoveThreadDialog}
+          t={t}
+        />
+      ) : null}
+
       {actionDialog ? (
         <SidebarActionDialog
           state={actionDialog}
@@ -1212,6 +1498,9 @@ type ThreadRowProps = {
   onContextMenu: (event: ReactMouseEvent<HTMLDivElement>) => void
   onPreviewOpen: (event: ReactMouseEvent<HTMLDivElement>, worktreeRecord?: SidebarThreadWorktreeRecord) => void
   onPreviewClose: () => void
+  draggable?: boolean
+  onDragStart?: (event: ReactDragEvent<HTMLDivElement>) => void
+  onDragEnd?: (event: ReactDragEvent<HTMLDivElement>) => void
   onPin: () => void
   onRename: () => void
   onArchive: () => void
@@ -1359,6 +1648,9 @@ export function ThreadRow({
   onContextMenu,
   onPreviewOpen,
   onPreviewClose,
+  draggable = false,
+  onDragStart,
+  onDragEnd,
   onPin,
   onRename,
   onArchive,
@@ -1437,6 +1729,9 @@ export function ThreadRow({
       className="min-h-[34px]"
       buttonClassName="items-center gap-2 px-2.5 py-1.5"
       disabled={deleting}
+      draggable={draggable}
+      onDragStart={onDragStart}
+      onDragEnd={onDragEnd}
       ariaLabel={ariaLabel}
       title={[thread.title, thread.summary?.trim(), worktreeLabel].filter(Boolean).join('\n')}
       onClick={onSelect}
@@ -1560,10 +1855,130 @@ export function ThreadRenameDialog({
   )
 }
 
+export function MoveThreadDialog({
+  state,
+  onClose,
+  onPickTarget,
+  onConfirm,
+  t
+}: {
+  state: MoveThreadDialogState
+  onClose: () => void
+  onPickTarget: (workspacePath: string) => void
+  onConfirm: () => Promise<void>
+  t: (k: string, opts?: Record<string, unknown>) => string
+}): ReactElement {
+  const threadTitle = state.thread.title.trim() || state.thread.id
+  const fromWorkspace = normalizeWorkspaceRoot(state.thread.workspace)
+  const selectedTarget = state.targetWorkspace ? normalizeWorkspaceRoot(state.targetWorkspace) : ''
+  const canConfirm = Boolean(selectedTarget) && !state.submitting
+
+  useEffect(() => {
+    if (state.submitting) return
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [onClose, state.submitting])
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="move-thread-dialog-title"
+      className="ds-no-drag fixed inset-0 z-[85] flex items-center justify-center bg-slate-950/18 px-4 backdrop-blur-[2px] dark:bg-black/35"
+      onMouseDown={onClose}
+    >
+      <div
+        onMouseDown={(event) => event.stopPropagation()}
+        className="w-full max-w-lg rounded-[24px] border border-ds-border bg-ds-card p-5 shadow-[0_24px_72px_rgba(20,47,95,0.22)]"
+      >
+        <h2
+          id="move-thread-dialog-title"
+          className="text-[18px] font-semibold tracking-[-0.035em] text-ds-ink"
+        >
+          {state.targetWorkspace
+            ? t('sidebarThreadMoveDialogTitle', { title: threadTitle })
+            : t('sidebarThreadMovePickerTitle')}
+        </h2>
+        <p className="mt-2 text-[13px] leading-6 text-ds-muted">
+          {state.targetWorkspace
+            ? t('sidebarThreadMoveDialogDescription', {
+                from: workspaceLabelFromPath(fromWorkspace),
+                to: workspaceLabelFromPath(selectedTarget)
+              })
+            : t('sidebarThreadMovePickerDescription')}
+        </p>
+        {state.targetWorkspace ? (
+          <p className="mt-4 rounded-2xl border border-ds-border-muted bg-ds-main px-3.5 py-3 text-[13px] leading-6 text-ds-muted">
+            {t('sidebarThreadMoveDialogDetail')}
+          </p>
+        ) : (
+          <div className="mt-4 space-y-2">
+            {state.targets.length === 0 ? (
+              <div className="rounded-2xl border border-ds-border-muted bg-ds-main px-3.5 py-3 text-[13px] leading-6 text-ds-muted">
+                {t('sidebarThreadMoveNoTargets')}
+              </div>
+            ) : (
+              state.targets.map((workspacePath) => (
+                <button
+                  key={workspacePath}
+                  type="button"
+                  onClick={() => onPickTarget(workspacePath)}
+                  className="flex w-full items-center justify-between gap-3 rounded-2xl border border-ds-border bg-ds-main/55 px-3.5 py-3 text-left transition hover:border-accent/35 hover:bg-accent/6"
+                >
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-[13.5px] font-medium text-ds-ink">
+                      {workspaceLabelFromPath(workspacePath)}
+                    </span>
+                    <span className="mt-1 block truncate text-[12px] text-ds-faint">
+                      {workspacePath}
+                    </span>
+                  </span>
+                  <MoveRight className="h-4 w-4 shrink-0 text-ds-faint" strokeWidth={1.9} />
+                </button>
+              ))
+            )}
+          </div>
+        )}
+        {state.error ? (
+          <p className="mt-4 text-[12.5px] leading-5 text-red-600 dark:text-red-300">
+            {state.error}
+          </p>
+        ) : null}
+        <div className="mt-5 flex justify-end gap-2">
+          <button
+            type="button"
+            disabled={state.submitting}
+            onClick={onClose}
+            className="rounded-xl border border-ds-border bg-ds-card px-3 py-2 text-[13px] font-medium text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink disabled:cursor-wait disabled:opacity-60"
+          >
+            {t('cancel')}
+          </button>
+          {state.targetWorkspace ? (
+            <button
+              type="button"
+              disabled={!canConfirm}
+              onClick={() => void onConfirm()}
+              className="rounded-xl bg-accent px-3 py-2 text-[13px] font-semibold text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-55"
+            >
+              {state.submitting ? t('loading') : t('sidebarThreadMoveConfirmButton')}
+            </button>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function ThreadContextMenu({
   state,
   busy,
+  moveDisabled,
+  moveDisabledTitle,
   onClose,
+  onMove,
   onPin,
   onRename,
   onSummarize,
@@ -1574,7 +1989,10 @@ function ThreadContextMenu({
 }: {
   state: ThreadContextMenuState
   busy: boolean
+  moveDisabled: boolean
+  moveDisabledTitle?: string
   onClose: () => void
+  onMove: () => void
   onPin: () => void
   onRename: () => void
   onSummarize: () => void
@@ -1605,6 +2023,13 @@ function ThreadContextMenu({
         onClick={() => run(onPin)}
       />
       <div className="my-1 h-px bg-ds-border-muted" />
+      <ThreadContextMenuItem
+        icon={<MoveRight className="h-3.5 w-3.5" strokeWidth={1.9} />}
+        label={t('sidebarThreadMove')}
+        disabled={moveDisabled}
+        title={moveDisabledTitle}
+        onClick={() => run(onMove)}
+      />
       <ThreadContextMenuItem
         icon={<PencilLine className="h-3.5 w-3.5" strokeWidth={1.9} />}
         label={t('sidebarThreadRename')}
@@ -1787,12 +2212,14 @@ function ThreadContextMenuItem({
   icon,
   label,
   disabled,
+  title,
   danger = false,
   onClick
 }: {
   icon: ReactElement
   label: string
   disabled: boolean
+  title?: string
   danger?: boolean
   onClick: () => void
 }): ReactElement {
@@ -1802,6 +2229,7 @@ function ThreadContextMenuItem({
       role="menuitem"
       disabled={disabled}
       onClick={onClick}
+      title={title}
       className={`flex min-h-[30px] w-full items-center gap-2 rounded-md px-2 text-left transition disabled:cursor-not-allowed disabled:opacity-50 ${
         danger
           ? 'text-red-600 hover:bg-red-500/10 dark:text-red-300'
