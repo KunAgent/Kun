@@ -1523,7 +1523,9 @@ export const gitCheckpointCreatePayloadSchema = z
 export const gitCheckpointRestorePayloadSchema = z
   .object({
     checkpointId: trimmedString(MAX_ID_LENGTH * 4),
-    allowPartialRestore: z.boolean().optional()
+    allowPartialRestore: z.boolean().optional(),
+    expectedThreadId: trimmedString(MAX_ID_LENGTH).optional(),
+    expectedWorkspaceRoot: workspaceRootSchema.optional()
   })
   .strict()
 

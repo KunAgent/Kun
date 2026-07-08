@@ -426,6 +426,8 @@ export type KunGuiApi = {
   restoreGitCheckpoint: (params: {
     checkpointId: string
     allowPartialRestore?: boolean
+    expectedThreadId?: string
+    expectedWorkspaceRoot?: string
   }) => Promise<GitCheckpointRestoreResult>
   checkoutGitBranchWorktree: (workspaceRoot: string, branch: string) => Promise<GitWorktreeCheckoutResult>
   createGitBranchWorktree: (workspaceRoot: string, branch: string) => Promise<GitWorktreeCheckoutResult>

@@ -3,6 +3,11 @@ import type { Dirent } from 'node:fs'
 import { dirname, basename, extname, isAbsolute, join, normalize, resolve, sep } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { runGit, resolveGitCwd } from './git-service'
+import {
+  createCheckpointManifestV1,
+  type GitCheckpointManifestV1,
+  validateCheckpointRestoreContext
+} from './git-checkpoint-manifest'
 import type {
   GitCheckpointCreateResult,
   GitCheckpointRestoreResult
@@ -12,6 +17,7 @@ type GitCheckpointMetadata = {
   checkpointId: string
   threadId: string
   repositoryRoot: string
+  workspaceRoot?: string
   head: string
   checkpointRef?: string | null
   currentBranch: string | null
@@ -120,6 +126,10 @@ function metadataPath(root: string, checkpointId: string): string {
   return join(checkpointDir(root, checkpointId), 'metadata.json')
 }
 
+function manifestPath(root: string, checkpointId: string): string {
+  return join(checkpointDir(root, checkpointId), 'manifest.json')
+}
+
 async function fileExists(path: string): Promise<boolean> {
   try {
     await stat(path)
@@ -147,6 +157,32 @@ async function readMetadata(root: string, checkpointId: string): Promise<GitChec
     return JSON.parse(raw) as GitCheckpointMetadata
   } catch {
     return null
+  }
+}
+
+async function readManifest(root: string, checkpointId: string): Promise<GitCheckpointManifestV1 | null> {
+  try {
+    const raw = await readFile(manifestPath(root, checkpointId), 'utf-8')
+    return JSON.parse(raw) as GitCheckpointManifestV1
+  } catch {
+    return null
+  }
+}
+
+async function resolveCheckpointManifest(
+  root: string,
+  metadata: GitCheckpointMetadata
+): Promise<{ manifest: GitCheckpointManifestV1; hasWorkspaceIdentity: boolean }> {
+  const manifest = await readManifest(root, metadata.checkpointId)
+  if (manifest) {
+    return { manifest, hasWorkspaceIdentity: true }
+  }
+  return {
+    manifest: await createCheckpointManifestV1({
+      metadata,
+      ...(metadata.workspaceRoot?.trim() ? { workspaceRoot: metadata.workspaceRoot } : {})
+    }),
+    hasWorkspaceIdentity: Boolean(metadata.workspaceRoot?.trim())
   }
 }
 
@@ -559,6 +595,7 @@ export async function createGitCheckpoint(params: {
       checkpointId,
       threadId: params.threadId,
       repositoryRoot,
+      workspaceRoot,
       head,
       currentBranch,
       createdAt: new Date().toISOString(),
@@ -567,6 +604,8 @@ export async function createGitCheckpoint(params: {
       completeness: skippedUntracked.length ? 'partial' : 'complete'
     }
     await writeFile(join(dir, 'metadata.json'), JSON.stringify(metadata, null, 2), 'utf-8')
+    const manifest = await createCheckpointManifestV1({ metadata, workspaceRoot })
+    await writeFile(manifestPath(root, checkpointId), JSON.stringify(manifest, null, 2), 'utf-8')
     // Bound per-thread retention so an active thread cannot grow unboundedly.
     await pruneThreadCheckpoints(root, params.threadId, maxPerThread, checkpointId).catch(() => undefined)
     return { ok: true, checkpointId, repositoryRoot, head, currentBranch }
@@ -632,6 +671,8 @@ export async function restoreGitCheckpoint(params: {
   dataDir: string
   checkpointId: string
   storage?: GitCheckpointStorageOptions
+  expectedThreadId?: string
+  expectedWorkspaceRoot?: string
   /**
    * Opt-in to restoring a PARTIAL checkpoint (one whose snapshot skipped some
    * untracked files because they were over the size budget). A partial restore
@@ -676,6 +717,21 @@ export async function restoreGitCheckpoint(params: {
 
   try {
     const repositoryRoot = metadata.repositoryRoot
+    const expectedThreadId = params.expectedThreadId?.trim()
+    const expectedWorkspaceRoot = params.expectedWorkspaceRoot?.trim()
+    if (expectedThreadId || expectedWorkspaceRoot) {
+      const { manifest, hasWorkspaceIdentity } = await resolveCheckpointManifest(root, metadata)
+      const validation = await validateCheckpointRestoreContext({
+        manifest,
+        expected: {
+          ...(expectedThreadId ? { expectedThreadId } : {}),
+          ...(hasWorkspaceIdentity && expectedWorkspaceRoot ? { expectedWorkspaceRoot } : {})
+        }
+      })
+      if (!validation.ok) {
+        return { ok: false, reason: 'error', message: validation.message }
+      }
+    }
     await assertNoUnmerged(repositoryRoot)
     const targetRef = await resolveCheckpointTarget(repositoryRoot, root, metadata)
 

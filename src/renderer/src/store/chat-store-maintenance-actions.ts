@@ -726,7 +726,11 @@ export function createMaintenanceActions(
     }
     const checkpointId = targetBlock.meta?.workspaceCheckpointId
     if (checkpointId) {
-      const restored = await window.kunGui.restoreGitCheckpoint({ checkpointId }).catch((error) => ({
+      const restored = await window.kunGui.restoreGitCheckpoint({
+        checkpointId,
+        ...(state.activeThreadId ? { expectedThreadId: state.activeThreadId } : {}),
+        ...(state.workspaceRoot ? { expectedWorkspaceRoot: state.workspaceRoot } : {})
+      }).catch((error) => ({
         ok: false as const,
         reason: 'error' as const,
         message: error instanceof Error ? error.message : String(error)
@@ -802,7 +806,11 @@ export function createMaintenanceActions(
       return
     }
     const { activeThreadId, workspaceRoot } = get()
-    let restored = await window.kunGui.restoreGitCheckpoint({ checkpointId: targetCheckpointId }).catch((error) => ({
+    let restored = await window.kunGui.restoreGitCheckpoint({
+      checkpointId: targetCheckpointId,
+      ...(activeThreadId ? { expectedThreadId: activeThreadId } : {}),
+      ...(workspaceRoot ? { expectedWorkspaceRoot: workspaceRoot } : {})
+    }).catch((error) => ({
       ok: false as const,
       reason: 'error' as const,
       message: error instanceof Error ? error.message : String(error)
@@ -829,7 +837,12 @@ export function createMaintenanceActions(
         return
       }
       restored = await window.kunGui
-        .restoreGitCheckpoint({ checkpointId: targetCheckpointId, allowPartialRestore: true })
+        .restoreGitCheckpoint({
+          checkpointId: targetCheckpointId,
+          allowPartialRestore: true,
+          ...(activeThreadId ? { expectedThreadId: activeThreadId } : {}),
+          ...(workspaceRoot ? { expectedWorkspaceRoot: workspaceRoot } : {})
+        })
         .catch((error) => ({
           ok: false as const,
           reason: 'error' as const,
