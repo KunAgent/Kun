@@ -10,6 +10,8 @@ export type WorkspaceEntry = {
   path: string
   type: 'file' | 'directory'
   ext: string
+  mtimeMs?: number
+  size?: number
 }
 
 export type WorkspaceDirectoryTarget = {

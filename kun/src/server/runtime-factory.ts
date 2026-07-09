@@ -56,6 +56,7 @@ import {
   DEFAULT_STORAGE_CONFIG,
   DEFAULT_TOOL_OUTPUT_LIMITS_CONFIG,
   expandHomePath,
+  type ObservabilityConfig,
   type QualityConfig,
   type RolesConfig,
   type RuntimeTuningConfig,
@@ -64,6 +65,7 @@ import {
   type StorageConfig,
   type ToolOutputLimitsConfig
 } from '../config/kun-config.js'
+import { createAgentObservabilityRecorder } from '../telemetry/agent-observability.js'
 import { buildBuiltinHooks } from '../hooks/builtins/index.js'
 import { mergeBuiltinSubagentProfiles } from '../delegation/builtin-profiles.js'
 import { InflightTracker } from '../loop/inflight-tracker.js'
@@ -140,6 +142,7 @@ export type KunServeRuntimeOptions = {
   /** Internal-LLM role model routing (small-model slot + title/summary/codeReview overrides). */
   roles?: RolesConfig
   storage?: StorageConfig
+  observability?: ObservabilityConfig
   capabilities?: KunCapabilitiesConfig
   /** Command hooks from config.json; resolved and wired into tool hosts and the loop. */
   hooks?: HooksConfig
@@ -184,7 +187,17 @@ export async function createKunServeRuntime(
   const ids = new RandomIdGenerator()
   const nowIso = () => new Date().toISOString()
   const allocateSeq = (threadId: string) => eventBus.allocateSeq(threadId)
-  const events = new RuntimeEventRecorder({ eventBus, sessionStore, allocateSeq, nowIso })
+  const agentObservability = createAgentObservabilityRecorder({
+    config: activeOptions.observability,
+    dataDir: activeOptions.dataDir
+  })
+  const events = new RuntimeEventRecorder({
+    eventBus,
+    sessionStore,
+    allocateSeq,
+    nowIso,
+    ...(agentObservability ? { observers: [agentObservability] } : {})
+  })
   let prefix = createImmutablePrefix({
     systemPrompt: KUN_SYSTEM_PROMPT,
     pinnedConstraints: [

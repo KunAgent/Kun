@@ -272,7 +272,7 @@ function createMcpSearchTools(
       inputSchema: {
         type: 'object',
         properties: {
-          toolId: { type: 'string', description: 'Canonical MCP tool id in the form serverId/toolName.' }
+          toolId: { type: 'string', description: 'Canonical MCP tool id in the form mcp_<server>_<tool>.' }
         },
         required: ['toolId']
       },
@@ -290,7 +290,7 @@ function createMcpSearchTools(
       inputSchema: {
         type: 'object',
         properties: {
-          toolId: { type: 'string', description: 'Canonical MCP tool id in the form serverId/toolName.' },
+          toolId: { type: 'string', description: 'Canonical MCP tool id in the form mcp_<server>_<tool>.' },
           arguments: { type: 'object', description: 'Arguments matching the MCP tool input schema.' }
         },
         required: ['toolId', 'arguments']

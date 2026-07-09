@@ -90,12 +90,12 @@ describe('mcp tool provider reliability', () => {
       clientFactory,
       nowIso: () => '2026-06-29T00:00:00.000Z'
     })
-    const tool = built.providers[0]?.tools[0]
-    expect(tool?.name).toBe('mcp_docs_lookup')
+    const tool = built.providers[0]?.tools.find((item) => item.name === 'mcp_call')
+    expect(tool).toBeTruthy()
 
     const [one, two] = await Promise.all([
-      tool!.execute({}, context),
-      tool!.execute({}, context)
+      tool!.execute({ toolId: 'mcp_docs_lookup', arguments: {} }, context),
+      tool!.execute({ toolId: 'mcp_docs_lookup', arguments: {} }, context)
     ])
 
     expect(clientFactory).toHaveBeenCalledTimes(2)
@@ -126,8 +126,8 @@ describe('mcp tool provider reliability', () => {
       lastError: 'MCP transport closed'
     })
 
-    const tool = built.providers[0]!.tools[0]!
-    const result = await tool.execute({}, context)
+    const tool = built.providers[0]!.tools.find((item) => item.name === 'mcp_call')!
+    const result = await tool.execute({ toolId: 'mcp_docs_lookup', arguments: {} }, context)
 
     expect(result).toMatchObject({ output: { result: { fresh: true } } })
     expect(clientFactory).toHaveBeenCalledTimes(2)
@@ -145,9 +145,9 @@ describe('mcp tool provider reliability', () => {
     const built = await buildMcpToolProviders(config, {
       clientFactory: vi.fn(async () => client)
     })
-    const tool = built.providers[0]!.tools[0]!
+    const tool = built.providers[0]!.tools.find((item) => item.name === 'mcp_call')!
 
-    await expect(tool.execute({}, context)).rejects.toThrow('Invalid arguments')
+    await expect(tool.execute({ toolId: 'mcp_docs_lookup', arguments: {} }, context)).rejects.toThrow('Invalid arguments')
 
     expect(built.diagnostics[0]).toMatchObject({
       status: 'connected',

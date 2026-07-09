@@ -24,6 +24,7 @@ import {
 } from '../../contracts/model-endpoint-format.js'
 import { createProxyFetch } from './proxy-fetch.js'
 import { wrapUntrustedContent } from '../../security/untrusted-content.js'
+import { resolveCompatModelCapabilities } from './compat-capabilities.js'
 
 /**
  * Configuration for the compatible HTTP model client. Chat
@@ -378,17 +379,24 @@ export class CompatModelClient implements ModelClient {
    * Anthropic Messages models (e.g. OpenCode Go's minimax/qwen entries).
    */
   private endpointFormatForModel(model: string): ModelEndpointFormat {
-    const perModel = this.config.modelCapabilities?.(model).endpointFormat
-    return normalizeModelEndpointFormat(perModel ?? this.config.endpointFormat ?? DEFAULT_MODEL_ENDPOINT_FORMAT)
+    return this.capabilitiesForModel(model).endpointFormat
   }
 
   private modelReasoningFor(model: string): ModelCapabilityMetadata['reasoning'] | undefined {
-    return this.config.modelCapabilities?.(model).reasoning
+    return this.capabilitiesForModel(model).reasoning
   }
 
   /** Per-model output-token cap from capability metadata, if declared. */
   private maxOutputTokensFor(model: string): number | undefined {
-    return this.config.modelCapabilities?.(model).maxOutputTokens
+    return this.capabilitiesForModel(model).maxOutputTokens
+  }
+
+  private capabilitiesForModel(model: string) {
+    return resolveCompatModelCapabilities({
+      model,
+      providerEndpointFormat: this.config.endpointFormat,
+      modelCapabilities: this.config.modelCapabilities
+    })
   }
 
   /**
@@ -899,9 +907,8 @@ export class CompatModelClient implements ModelClient {
    * resolver is configured (the runtime always sets one).
    */
   private modelSupportsImageInput(model: string): boolean {
-    const capabilities = this.config.modelCapabilities?.(model)
-    if (!capabilities) return true
-    return capabilities.inputModalities.includes('image')
+    if (!this.config.modelCapabilities) return true
+    return this.capabilitiesForModel(model).supportsVision
   }
 
   private itemToMessage(item: TurnItem, thinkingMode: boolean, supportsImages: boolean): ChatMessage | null {

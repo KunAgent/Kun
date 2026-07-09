@@ -99,6 +99,12 @@ describe('workspace-service boundary checks', () => {
     if (result.ok) {
       expect(result.entries.map((entry) => entry.name)).toEqual(['notes', 'inside.txt'])
       expect(result.entries[0].type).toBe('directory')
+      expect(result.entries[0].mtimeMs).toBeTypeOf('number')
+      expect(result.entries[1]).toMatchObject({
+        type: 'file',
+        size: 6
+      })
+      expect(result.entries[1].mtimeMs).toBeTypeOf('number')
     }
   })
 

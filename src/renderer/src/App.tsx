@@ -1,7 +1,13 @@
-import { lazy, Suspense } from 'react'
+import { lazy, Suspense, useEffect } from 'react'
 import { AppErrorBoundary } from './components/AppErrorBoundary'
+import { installIssue781DocumentUsability } from './lib/issue-781-document-usability'
 
 const AppShell = lazy(() => import('./AppShell'))
+
+function DocumentUsabilityLifecycle(): null {
+  useEffect(() => installIssue781DocumentUsability(), [])
+  return null
+}
 
 function StartupShell(): React.ReactElement {
   return (
@@ -17,6 +23,7 @@ function StartupShell(): React.ReactElement {
 export default function App(): React.ReactElement {
   return (
     <AppErrorBoundary>
+      <DocumentUsabilityLifecycle />
       <Suspense fallback={<StartupShell />}>
         <AppShell />
       </Suspense>

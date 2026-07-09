@@ -8,6 +8,7 @@ import {
 import { useTranslation } from 'react-i18next'
 import type { ChatBlock, RuntimeConnectionStatus } from '../../agent/types'
 import { FloatingComposer } from '../chat/FloatingComposer'
+import { LazyMessageTimeline } from '../chat/LazyMessageTimeline'
 import { SubagentReturnBar } from '../chat/message-timeline-empty'
 import { WorkbenchTopActions } from '../chat/WorkbenchTopBar'
 import { IkunCameoLayer, KunCelebrationLayer } from '../chat/AnimatedWorkLogo'
@@ -15,9 +16,6 @@ import { DevPreviewLaunchCard } from '../DevPreviewLaunchCard'
 import { SessionHeader } from '../SessionHeader'
 import { SidebarTitlebarToggleButton } from '../sidebar/SidebarPrimitives'
 
-const MessageTimeline = lazy(() =>
-  import('../chat/MessageTimeline').then((module) => ({ default: module.MessageTimeline }))
-)
 const TerminalPanel = lazy(() =>
   import('../terminal/TerminalPanel').then((module) => ({ default: module.TerminalPanel }))
 )
@@ -127,32 +125,31 @@ export function WorkbenchChatStage({
           </div>
         </header>
         <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
-          <Suspense fallback={<WorkbenchPaneFallback />}>
-            <MessageTimeline
-              blocks={blocks}
-              liveReasoning={liveReasoning}
-              live={liveAssistant}
-              activeThreadId={activeThreadId}
-              runtimeConnection={runtimeConnection}
-              runtimeError={runtimeError}
-              onRetryConnection={onRetryConnection}
-              onOpenSettings={onOpenSettings}
-              onSelectSuggestion={onSelectSuggestion}
-              focusModeEnabled={focusModeEnabled}
-              planActionsBusy={planActionsBusy}
-              onBuildPlan={onBuildPlan}
-              onOpenPlan={onOpenPlan}
-              devPreviewCard={
-                devPreviewVisible && devPreviewUrl ? (
-                  <DevPreviewLaunchCard
-                    url={devPreviewUrl}
-                    opened={devPreviewOpened}
-                    onOpen={onOpenDevPreview}
-                  />
-                ) : null
-              }
-            />
-          </Suspense>
+          <LazyMessageTimeline
+            fallback={<WorkbenchPaneFallback />}
+            blocks={blocks}
+            liveReasoning={liveReasoning}
+            live={liveAssistant}
+            activeThreadId={activeThreadId}
+            runtimeConnection={runtimeConnection}
+            runtimeError={runtimeError}
+            onRetryConnection={onRetryConnection}
+            onOpenSettings={onOpenSettings}
+            onSelectSuggestion={onSelectSuggestion}
+            focusModeEnabled={focusModeEnabled}
+            planActionsBusy={planActionsBusy}
+            onBuildPlan={onBuildPlan}
+            onOpenPlan={onOpenPlan}
+            devPreviewCard={
+              devPreviewVisible && devPreviewUrl ? (
+                <DevPreviewLaunchCard
+                  url={devPreviewUrl}
+                  opened={devPreviewOpened}
+                  onOpen={onOpenDevPreview}
+                />
+              ) : null
+            }
+          />
           {uiModeCameosEnabled && !focusModeEnabled ? <IkunCameoLayer /> : null}
           {!focusModeEnabled ? <KunCelebrationLayer active={busy} suppressed={Boolean(runtimeError)} /> : null}
         </div>

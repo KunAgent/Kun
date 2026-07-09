@@ -1,4 +1,8 @@
-import type { WorkspaceEntry } from '@shared/workspace-file'
+import type {
+  WorkspaceDirectoryListResult,
+  WorkspaceDirectoryTarget,
+  WorkspaceEntry
+} from '@shared/workspace-file'
 import {
   ChevronDown,
   ChevronRight,
@@ -17,12 +21,16 @@ import {
   useMemo,
   useRef,
   useState,
+  type DragEvent as ReactDragEvent,
   type MouseEvent as ReactMouseEvent,
   type ReactElement
 } from 'react'
 import type { TFunction } from 'i18next'
 import type { ComposerFileReference } from '../../lib/composer-file-references'
-import { relativeWorkspacePath } from '../../lib/composer-file-references'
+import {
+  formatComposerFileMentionToken,
+  relativeWorkspacePath
+} from '../../lib/composer-file-references'
 import { isWorkspaceTextPreviewPath } from '../../lib/workspace-text-preview'
 import {
   SidebarIconButton,
@@ -55,8 +63,28 @@ type ContextMenuState = {
   entry: WorkspaceEntry
 } | null
 
+type FileTreeSortMode = 'name' | 'modified'
+
+type ListWorkspaceDirectory = (target: WorkspaceDirectoryTarget) => Promise<WorkspaceDirectoryListResult>
+
+type RecentScanState = {
+  entries: WorkspaceEntry[]
+  loading: boolean
+  error: string | null
+}
+
+type RecentScanOptions = {
+  isCancelled?: () => boolean
+  limit?: number
+  maxDepth?: number
+  maxEntries?: number
+}
+
 const ROOT_PATH = ''
 const IGNORED_DIRS = new Set(['.git', '.hg', '.svn', 'node_modules'])
+const RECENT_FILE_LIMIT = 8
+const RECENT_SCAN_MAX_ENTRIES = 2_000
+const RECENT_SCAN_MAX_DEPTH = 8
 
 function normalizePath(path: string): string {
   return path.replaceAll('\\', '/').replace(/\/+$/g, '')
@@ -82,6 +110,72 @@ function entryReference(entry: WorkspaceEntry, workspaceRoot: string): ChatFileT
   }
 }
 
+export function compareChatFileTreeEntriesByName(left: WorkspaceEntry, right: WorkspaceEntry): number {
+  if (left.type !== right.type) return left.type === 'directory' ? -1 : 1
+  return left.name.localeCompare(right.name, undefined, { numeric: true, sensitivity: 'base' })
+}
+
+export function compareChatFileTreeEntriesByModified(left: WorkspaceEntry, right: WorkspaceEntry): number {
+  if (left.type !== right.type) return left.type === 'directory' ? -1 : 1
+  const leftTime = left.mtimeMs ?? 0
+  const rightTime = right.mtimeMs ?? 0
+  if (leftTime !== rightTime) return rightTime - leftTime
+  return compareChatFileTreeEntriesByName(left, right)
+}
+
+export function sortChatFileTreeEntries(entries: WorkspaceEntry[], mode: FileTreeSortMode): WorkspaceEntry[] {
+  return [...entries].sort(mode === 'modified' ? compareChatFileTreeEntriesByModified : compareChatFileTreeEntriesByName)
+}
+
+function sortRecentFiles(entries: WorkspaceEntry[]): WorkspaceEntry[] {
+  return [...entries]
+    .filter(isChatFileTreePreviewableEntry)
+    .sort((left, right) => {
+      const leftTime = left.mtimeMs ?? 0
+      const rightTime = right.mtimeMs ?? 0
+      if (leftTime !== rightTime) return rightTime - leftTime
+      return compareChatFileTreeEntriesByName(left, right)
+    })
+}
+
+export async function scanChatFileTreeRecentFiles(
+  root: string,
+  listWorkspaceDirectory: ListWorkspaceDirectory,
+  options: RecentScanOptions = {}
+): Promise<WorkspaceEntry[]> {
+  const limit = options.limit ?? RECENT_FILE_LIMIT
+  const maxDepth = options.maxDepth ?? RECENT_SCAN_MAX_DEPTH
+  const maxEntries = options.maxEntries ?? RECENT_SCAN_MAX_ENTRIES
+  const isCancelled = options.isCancelled ?? (() => false)
+  const collected: WorkspaceEntry[] = []
+
+  const scanDirectory = async (
+    path: string,
+    depth: number,
+    seenDirectories: Set<string>
+  ): Promise<void> => {
+    if (isCancelled() || depth > maxDepth || collected.length >= maxEntries) return
+    const directoryKey = pathKey(path || root)
+    if (seenDirectories.has(directoryKey)) return
+    seenDirectories.add(directoryKey)
+    const result = await listWorkspaceDirectory({ workspaceRoot: root, path: path || root })
+    if (!result.ok) throw new Error(result.message)
+    for (const entry of result.entries) {
+      if (isCancelled() || collected.length >= maxEntries) return
+      if (entry.type === 'directory') {
+        if (!isChatFileTreeIgnoredDirectory(entry.name)) {
+          await scanDirectory(entry.path, depth + 1, seenDirectories)
+        }
+        continue
+      }
+      if (isChatFileTreePreviewableEntry(entry)) collected.push(entry)
+    }
+  }
+
+  await scanDirectory(root, 0, new Set())
+  return sortRecentFiles(collected).slice(0, limit)
+}
+
 export function isChatFileTreeIgnoredDirectory(name: string): boolean {
   return IGNORED_DIRS.has(name.toLowerCase())
 }
@@ -105,6 +199,9 @@ export function ChatFileTreePanel({
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set([ROOT_PATH]))
   const [directories, setDirectories] = useState<Record<string, DirectoryState>>({})
   const [contextMenu, setContextMenu] = useState<ContextMenuState>(null)
+  const [sortMode, setSortMode] = useState<FileTreeSortMode>('name')
+  const [recentScan, setRecentScan] = useState<RecentScanState>({ entries: [], loading: false, error: null })
+  const [recentScanNonce, setRecentScanNonce] = useState(0)
   const menuRef = useRef<HTMLDivElement | null>(null)
   const root = workspaceRoot.trim()
   const rootName = useMemo(() => workspaceDisplayName(root), [root])
@@ -113,6 +210,7 @@ export function ChatFileTreePanel({
     setExpanded(new Set([ROOT_PATH]))
     setDirectories({})
     setContextMenu(null)
+    setRecentScan({ entries: [], loading: false, error: null })
   }, [root])
 
   const loadDirectory = useCallback((path: string): void => {
@@ -158,6 +256,40 @@ export function ChatFileTreePanel({
   }, [directories, expanded, loadDirectory, root])
 
   useEffect(() => {
+    const listWorkspaceDirectory = window.kunGui?.listWorkspaceDirectory?.bind(window.kunGui)
+    if (!root || typeof listWorkspaceDirectory !== 'function') return
+    let cancelled = false
+    setRecentScan({ entries: [], loading: true, error: null })
+
+    void (async () => {
+      try {
+        const entries = await scanChatFileTreeRecentFiles(root, listWorkspaceDirectory, {
+          isCancelled: () => cancelled
+        })
+        if (!cancelled) {
+          setRecentScan({
+            entries,
+            loading: false,
+            error: null
+          })
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setRecentScan({
+            entries: [],
+            loading: false,
+            error: error instanceof Error ? error.message : String(error)
+          })
+        }
+      }
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [root, recentScanNonce])
+
+  useEffect(() => {
     if (!contextMenu) return
     const onPointerDown = (event: PointerEvent): void => {
       const target = event.target
@@ -176,6 +308,7 @@ export function ChatFileTreePanel({
   }, [contextMenu])
 
   const selectedKey = useMemo(() => pathKey(selectedPath ?? ''), [selectedPath])
+  const recentEntries = recentScan.entries
 
   if (!root) return null
 
@@ -191,11 +324,25 @@ export function ChatFileTreePanel({
   const refresh = (): void => {
     setDirectories({})
     setExpanded(new Set([ROOT_PATH]))
+    setRecentScan((current) => ({
+      entries: current.entries,
+      loading: true,
+      error: null
+    }))
+    setRecentScanNonce((value) => value + 1)
   }
 
   const addReference = (entry: WorkspaceEntry): void => {
     onAddReference(entryReference(entry, root))
     setContextMenu(null)
+  }
+
+  const setEntryDragData = (event: ReactDragEvent<HTMLElement>, entry: WorkspaceEntry): void => {
+    const reference = entryReference(entry, root)
+    const token = formatComposerFileMentionToken(reference.relativePath, reference.type === 'directory')
+    event.dataTransfer.effectAllowed = 'copy'
+    event.dataTransfer.setData('text/plain', `${token} `)
+    event.dataTransfer.setData('application/x-kun-file-reference', JSON.stringify(reference))
   }
 
   const copyEntryPath = async (entry: WorkspaceEntry, mode: 'absolute' | 'relative'): Promise<void> => {
@@ -260,7 +407,7 @@ export function ChatFileTreePanel({
         : []
     }
 
-    return state.entries
+    return sortChatFileTreeEntries(state.entries, sortMode)
       .filter((entry) => entry.type !== 'directory' || !isChatFileTreeIgnoredDirectory(entry.name))
       .flatMap((entry) => {
         const isDirectory = entry.type === 'directory'
@@ -273,35 +420,40 @@ export function ChatFileTreePanel({
             : <Folder className="h-3.5 w-3.5 shrink-0 text-ds-muted" strokeWidth={1.75} />
           : <FileText className="h-3.5 w-3.5 shrink-0 text-ds-muted" strokeWidth={1.75} />
         const row = (
-          <SidebarTreeRow
+          <div
             key={entry.path}
-            title={previewable || isDirectory ? entry.path : formatChatFileTreeUnsupportedMessage(entry.name)}
-            active={active}
-            onClick={() => {
-              if (isDirectory) {
-                toggleDirectory(entry.path)
-                return
-              }
-              onPreviewFile(entry.path)
-            }}
-            onContextMenu={(event) => openContextMenu(event, entry)}
-            buttonClassName="items-center gap-1.5 py-1.5 pr-1.5 text-[12.5px]"
-            buttonStyle={{ paddingLeft: depth * 14 + 8 }}
-            trailing={
-              isDirectory ? (
-                entryExpanded ? (
-                  <ChevronDown className="h-3.5 w-3.5 text-ds-faint" strokeWidth={1.8} />
-                ) : (
-                  <ChevronRight className="h-3.5 w-3.5 text-ds-faint" strokeWidth={1.8} />
-                )
-              ) : null
-            }
+            draggable
+            onDragStart={(event) => setEntryDragData(event, entry)}
           >
-            {icon}
-            <span className={previewable || isDirectory ? 'min-w-0 truncate' : 'min-w-0 truncate text-ds-faint'}>
-              {entry.name}
-            </span>
-          </SidebarTreeRow>
+            <SidebarTreeRow
+              title={previewable || isDirectory ? entry.path : formatChatFileTreeUnsupportedMessage(entry.name)}
+              active={active}
+              onClick={() => {
+                if (isDirectory) {
+                  toggleDirectory(entry.path)
+                  return
+                }
+                onPreviewFile(entry.path)
+              }}
+              onContextMenu={(event) => openContextMenu(event, entry)}
+              buttonClassName="items-center gap-1.5 py-1.5 pr-1.5 text-[12.5px]"
+              buttonStyle={{ paddingLeft: depth * 14 + 8 }}
+              trailing={
+                isDirectory ? (
+                  entryExpanded ? (
+                    <ChevronDown className="h-3.5 w-3.5 text-ds-faint" strokeWidth={1.8} />
+                  ) : (
+                    <ChevronRight className="h-3.5 w-3.5 text-ds-faint" strokeWidth={1.8} />
+                  )
+                ) : null
+              }
+            >
+              {icon}
+              <span className={previewable || isDirectory ? 'min-w-0 truncate' : 'min-w-0 truncate text-ds-faint'}>
+                {entry.name}
+              </span>
+            </SidebarTreeRow>
+          </div>
         )
         if (!isDirectory || !entryExpanded) return [row]
         return [row, ...renderDirectory(entry.path, depth + 1)]
@@ -312,6 +464,9 @@ export function ChatFileTreePanel({
   const contextLabel = contextEntry?.type === 'directory'
     ? t('fileTreeAddFolderReference')
     : t('fileTreeAddFileReference')
+  const sortTitle = sortMode === 'modified'
+    ? t('fileTreeSortByName', { defaultValue: 'Sort by name' })
+    : t('fileTreeSortByModifiedTime', { defaultValue: 'Sort by modified time' })
 
   return (
     <div className={`ds-no-drag min-h-0 ${fill ? 'flex h-full flex-col' : ''}`}>
@@ -319,15 +474,57 @@ export function ChatFileTreePanel({
         label={rootName || t('fileTreeTitle')}
         title={root}
         actions={
-          <SidebarIconButton
-            title={t('fileTreeRefresh')}
-            ariaLabel={t('fileTreeRefresh')}
-            onClick={refresh}
-          >
-            <RefreshCw className="h-3.5 w-3.5" strokeWidth={1.8} />
-          </SidebarIconButton>
+          <>
+            <SidebarIconButton
+              title={sortTitle}
+              ariaLabel={sortTitle}
+              active={sortMode === 'modified'}
+              onClick={() => setSortMode((mode) => mode === 'modified' ? 'name' : 'modified')}
+            >
+              <span className="text-[11px] font-semibold">{sortMode === 'modified' ? 'MT' : 'AZ'}</span>
+            </SidebarIconButton>
+            <SidebarIconButton
+              title={t('fileTreeRefresh')}
+              ariaLabel={t('fileTreeRefresh')}
+              onClick={refresh}
+            >
+              <RefreshCw className="h-3.5 w-3.5" strokeWidth={1.8} />
+            </SidebarIconButton>
+          </>
         }
       />
+      {recentEntries.length || recentScan.loading || recentScan.error ? (
+        <div className="border-b border-ds-border-muted/60 px-1 pb-2">
+          <div className="px-2.5 pb-1 text-[11px] font-medium text-ds-faint">
+            {t('fileTreeRecentModifiedFiles', { defaultValue: 'Recent modified files' })}
+          </div>
+          <div className="flex flex-col gap-0.5">
+            {recentScan.loading ? (
+              <div className="flex items-center gap-2 px-2.5 py-1 text-[12px] text-ds-muted">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" strokeWidth={1.8} />
+                {t('fileTreeScanningRecent', { defaultValue: 'Scanning workspace…' })}
+              </div>
+            ) : recentScan.error ? (
+              <div className="px-2.5 py-1 text-[12px] text-red-700 dark:text-red-300" title={recentScan.error}>
+                {recentScan.error}
+              </div>
+            ) : recentEntries.map((entry) => (
+              <button
+                key={`recent-${entry.path}`}
+                type="button"
+                draggable
+                onDragStart={(event) => setEntryDragData(event, entry)}
+                onClick={() => onPreviewFile(entry.path)}
+                className="flex min-w-0 items-center gap-1.5 rounded-md px-2.5 py-1 text-left text-[12px] text-ds-muted transition hover:bg-ds-hover hover:text-ds-ink"
+                title={entry.path}
+              >
+                <FileText className="h-3.5 w-3.5 shrink-0" strokeWidth={1.7} />
+                <span className="min-w-0 truncate">{relativeWorkspacePath(entry.path, root)}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : null}
       <div className={`${fill ? 'min-h-0 flex-1' : 'max-h-[34vh] min-h-[96px]'} overflow-y-auto overflow-x-hidden px-1`}>
         {renderDirectory(ROOT_PATH, 0)}
       </div>

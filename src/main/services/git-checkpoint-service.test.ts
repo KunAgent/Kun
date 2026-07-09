@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { execFileSync } from 'node:child_process'
-import { mkdtemp, mkdir, readFile, rm, stat, symlink, utimes, writeFile } from 'node:fs/promises'
+import { mkdtemp, mkdir, readFile, realpath, rm, stat, symlink, utimes, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, normalize } from 'node:path'
 import {
@@ -57,6 +57,36 @@ describe('git checkpoint service', () => {
 
     const refs = execFileSync('git', ['-C', repoRoot, 'show-ref'], { encoding: 'utf-8' })
     expect(refs).not.toContain('refs/kun/checkpoints')
+  })
+
+  it('writes a checkpoint manifest with canonical thread and workspace identity', async () => {
+    const checkpoint = await createGitCheckpoint({
+      dataDir,
+      workspaceRoot: repoRoot,
+      threadId: 'thr_manifest'
+    })
+    expect(checkpoint.ok).toBe(true)
+    if (!checkpoint.ok) throw new Error(checkpoint.message)
+
+    const manifest = JSON.parse(
+      await readFile(join(dataDir, 'git-checkpoints', checkpoint.checkpointId, 'manifest.json'), 'utf-8')
+    ) as {
+      version: number
+      checkpointId: string
+      threadId: string
+      repositoryRootCanonical: string
+      workspaceRootCanonical?: string
+    }
+
+    const repoRootCanonical = normalize(await realpath(repoRoot))
+
+    expect(manifest).toMatchObject({
+      version: 1,
+      checkpointId: checkpoint.checkpointId,
+      threadId: 'thr_manifest',
+      repositoryRootCanonical: repoRootCanonical,
+      workspaceRootCanonical: repoRootCanonical
+    })
   })
 
   it('restores staged, unstaged, and untracked files to the checkpoint state', async () => {
@@ -309,6 +339,30 @@ describe('git checkpoint service', () => {
     expect(await readFile(join(repoRoot, 'tracked.txt'), 'utf-8')).toBe('agent editing\n')
     expect(await readFile(join(repoRoot, 'post-checkpoint.txt'), 'utf-8')).toBe('should survive\n')
     expect(execFileSync('git', ['-C', repoRoot, 'rev-parse', 'HEAD'], { encoding: 'utf-8' }).trim()).toBe(headBefore)
+  })
+
+  it('refuses to restore when the active thread does not match the checkpoint manifest', async () => {
+    const checkpoint = await createGitCheckpoint({
+      dataDir,
+      workspaceRoot: repoRoot,
+      threadId: 'thr_expected'
+    })
+    expect(checkpoint.ok).toBe(true)
+    if (!checkpoint.ok) throw new Error(checkpoint.message)
+
+    await writeFile(join(repoRoot, 'tracked.txt'), 'agent editing\n')
+
+    const restored = await restoreGitCheckpoint({
+      dataDir,
+      checkpointId: checkpoint.checkpointId,
+      expectedThreadId: 'thr_other',
+      expectedWorkspaceRoot: repoRoot
+    })
+    expect(restored.ok).toBe(false)
+    if (restored.ok) throw new Error('expected restore to be refused')
+    expect(restored.reason).toBe('error')
+    expect(restored.message).toContain('Checkpoint belongs to thread thr_expected, not thr_other.')
+    expect(await readFile(join(repoRoot, 'tracked.txt'), 'utf-8')).toBe('agent editing\n')
   })
 
   it('restores when the runtime reports all threads idle (runtimeRequest exercised)', async () => {

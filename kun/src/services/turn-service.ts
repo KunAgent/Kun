@@ -191,7 +191,13 @@ export class TurnService {
 
   async interruptTurn(input: { threadId: string; turnId: string; discard?: boolean }): Promise<{ status: TurnStatus }> {
     const controller = this.inflightTurns.get(input.turnId)
-    if (controller) controller.abort()
+    console.warn(`[kun] interrupt requested thread=${input.threadId} turn=${input.turnId} discard=${input.discard === true} inflight=${Boolean(controller)}`)
+    if (controller) {
+      controller.abort()
+      console.warn(`[kun] interrupt abort signal fired thread=${input.threadId} turn=${input.turnId}`)
+    } else {
+      console.warn(`[kun] interrupt had no inflight controller thread=${input.threadId} turn=${input.turnId}`)
+    }
     this.deps.steering.clear()
     this.inflightTurns.delete(input.turnId)
     this.deps.inflight.end(input.turnId)
@@ -218,6 +224,7 @@ export class TurnService {
       )
       return { ...touchThread(current, this.deps.nowIso()), turns: next, status: 'idle' }
     })
+    console.warn(`[kun] interrupt persisted aborted state thread=${input.threadId} turn=${input.turnId}`)
     return { status: 'aborted' }
   }
 

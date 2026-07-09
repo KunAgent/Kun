@@ -4,11 +4,14 @@ import { describe, expect, it, vi } from 'vitest'
 import type { NormalizedThread } from '../../agent/types'
 import type { SddDraftHistoryItem } from '../../sdd/sdd-draft-history'
 import {
+  buildSidebarThreadMoveTargets,
   buildSidebarDraftWorkspacePaths,
   buildSidebarWorkspaceGroups,
   filterEmptySddAssistantThreadsFromSidebar,
   filterSddDraftHistoryItems,
+  isSidebarThreadMoveBlocked,
   mergeSidebarWorkspaceGroupsWithDraftHistory,
+  MoveThreadDialog,
   resolveThreadPreviewPosition,
   sortSidebarThreads,
   SddDraftHistoryRows,
@@ -361,6 +364,87 @@ describe('SidebarProjectsSection groups', () => {
   })
 })
 
+describe('sidebar thread move helpers', () => {
+  it('excludes the current workspace from move targets', () => {
+    const groups = buildSidebarWorkspaceGroups({
+      threads: [thread({ id: 'thread-a', workspace: '/Users/zxy/project-a' })],
+      searchQuery: '',
+      showArchived: false,
+      workspaceRoot: '/Users/zxy/project-a',
+      conversationRoot: '',
+      workspaceRoots: ['/Users/zxy/project-a', '/Users/zxy/project-b']
+    })
+
+    expect(
+      buildSidebarThreadMoveTargets({
+        thread: thread({ id: 'thread-a', workspace: '/Users/zxy/project-a' }),
+        groups
+      })
+    ).toEqual(['/Users/zxy/project-b'])
+  })
+
+  it('includes remembered empty project workspaces as move targets', () => {
+    const groups = buildSidebarWorkspaceGroups({
+      threads: [thread({ id: 'thread-a', workspace: '/Users/zxy/project-a' })],
+      searchQuery: '',
+      showArchived: false,
+      workspaceRoot: '/Users/zxy/project-a',
+      conversationRoot: '',
+      workspaceRoots: [
+        '/Users/zxy/project-a',
+        '/Users/zxy/project-b',
+        '/Users/zxy/project-c'
+      ]
+    })
+
+    expect(
+      buildSidebarThreadMoveTargets({
+        thread: thread({ id: 'thread-a', workspace: '/Users/zxy/project-a' }),
+        groups
+      })
+    ).toEqual(['/Users/zxy/project-b', '/Users/zxy/project-c'])
+  })
+
+  it('blocks moving a running thread', () => {
+    expect(
+      isSidebarThreadMoveBlocked({
+        thread: thread({ id: 'thread-running', workspace: '/Users/zxy/project-a', status: 'running' })
+      })
+    ).toBe(true)
+  })
+
+  it('blocks moving a watched thread', () => {
+    expect(
+      isSidebarThreadMoveBlocked({
+        thread: thread({ id: 'thread-watch', workspace: '/Users/zxy/project-a' }),
+        watchTurnCompletion: { 'thread-watch': true }
+      })
+    ).toBe(true)
+  })
+
+  it('blocks moving the active thread while globally busy', () => {
+    expect(
+      isSidebarThreadMoveBlocked({
+        thread: thread({ id: 'thread-active', workspace: '/Users/zxy/project-a' }),
+        activeThreadId: 'thread-active',
+        busy: true
+      })
+    ).toBe(true)
+  })
+
+  it('blocks moving a worktree-linked thread', () => {
+    expect(
+      isSidebarThreadMoveBlocked({
+        thread: thread({ id: 'thread-worktree', workspace: '/Users/zxy/.kun/worktrees/abcd/project-a' }),
+        worktreeRecord: {
+          projectPath: '/Users/zxy/project-a',
+          worktreePath: '/Users/zxy/.kun/worktrees/abcd/project-a'
+        }
+      })
+    ).toBe(true)
+  })
+})
+
 describe('ThreadRenameDialog', () => {
   it('renders an in-app rename form with the current thread title prefilled', () => {
     const html = renderToStaticMarkup(
@@ -412,6 +496,81 @@ describe('SidebarActionDialog', () => {
     expect(html).toContain('bg-[var(--surface-3)]')
     expect(html).not.toContain('bg-ds-elevated')
     expect(html).not.toContain('bg-ds-card/96')
+  })
+})
+
+describe('MoveThreadDialog', () => {
+  it('renders the target project picker', () => {
+    const html = renderToStaticMarkup(
+      createElement(MoveThreadDialog, {
+        state: {
+          thread: thread({
+            id: 'thr_move',
+            title: 'Move me',
+            workspace: '/Users/zxy/project-a'
+          }),
+          targets: ['/Users/zxy/project-b'],
+          targetWorkspace: null,
+          submitting: false
+        },
+        onClose: vi.fn(),
+        onPickTarget: vi.fn(),
+        onConfirm: vi.fn(async () => undefined),
+        t: (key: string) => key
+      })
+    )
+
+    expect(html).toContain('sidebarThreadMovePickerTitle')
+    expect(html).toContain('/Users/zxy/project-b')
+    expect(html).toContain('project-b')
+  })
+
+  it('renders the empty state when no targets are available', () => {
+    const html = renderToStaticMarkup(
+      createElement(MoveThreadDialog, {
+        state: {
+          thread: thread({
+            id: 'thr_move_empty',
+            title: 'Move me',
+            workspace: '/Users/zxy/project-a'
+          }),
+          targets: [],
+          targetWorkspace: null,
+          submitting: false
+        },
+        onClose: vi.fn(),
+        onPickTarget: vi.fn(),
+        onConfirm: vi.fn(async () => undefined),
+        t: (key: string) => key
+      })
+    )
+
+    expect(html).toContain('sidebarThreadMoveNoTargets')
+  })
+
+  it('shows the metadata-only scope before confirming a move', () => {
+    const html = renderToStaticMarkup(
+      createElement(MoveThreadDialog, {
+        state: {
+          thread: thread({
+            id: 'thr_move_confirm',
+            title: 'Move me',
+            workspace: '/Users/zxy/project-a'
+          }),
+          targets: ['/Users/zxy/project-b'],
+          targetWorkspace: '/Users/zxy/project-b',
+          submitting: false
+        },
+        onClose: vi.fn(),
+        onPickTarget: vi.fn(),
+        onConfirm: vi.fn(async () => undefined),
+        t: (key: string) => key
+      })
+    )
+
+    expect(html).toContain('sidebarThreadMoveDialogDetail')
+    expect(html).toContain('sidebarThreadMoveMetadataOnlyDetail')
+    expect(html).toContain('sidebarThreadMoveConfirmButton')
   })
 })
 

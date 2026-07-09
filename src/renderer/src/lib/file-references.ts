@@ -20,7 +20,7 @@ type HastNode = {
 }
 
 const FILE_REFERENCE_SCHEME = 'deepseek-file:'
-const PATH_PREFIX_BOUNDARY = String.raw`(?<![\w@.~\/\\-])`
+const PATH_PREFIX_BOUNDARY = String.raw`(?<![\p{L}\p{N}_@.~\/\\-])`
 
 const EXTENSIONS = [
   'astro',
@@ -45,6 +45,7 @@ const EXTENSIONS = [
   'kt',
   'less',
   'lock',
+  'log',
   'mdx?',
   'mjs',
   'php',
@@ -66,15 +67,15 @@ const EXTENSIONS = [
   'zsh'
 ].join('|')
 
-const PATH_CHARS = String.raw`[\w@.()+=[\]{} $,;!%#~\/\\-]`
+const PATH_CHARS = String.raw`[\p{L}\p{N}\p{M}_@.()+=[\]{} $,;!%#~\/\\-]`
 const PATH_END = String.raw`(?=$|[\s(),.;:!?\]\u3001\u3002\uff0c\uff1b\uff08\uff09]|#L)`
 const PATH_WITH_SEPARATOR = new RegExp(
-  String.raw`${PATH_PREFIX_BOUNDARY}(?:~|\/|\.{1,2}\/|[A-Za-z]:[\\/]|[\w@.-]+[\\/])${PATH_CHARS}*?\.(?:${EXTENSIONS})${PATH_END}`,
+  String.raw`${PATH_PREFIX_BOUNDARY}(?:~|\/|\.{1,2}\/|[A-Za-z]:[\\/]|[\p{L}\p{N}_@.-]+[\\/])${PATH_CHARS}*?\.(?:${EXTENSIONS})${PATH_END}`,
   'giu'
 )
 const LINE_SUFFIX = /(?::(\d+)(?::(\d+))?|#L(\d+)(?:-L\d+)?|\s*[（(](?:line|lines)\s+(\d+)[）)]|\s*[（(]第\s*(\d+)\s*行[）)]|\s+line\s+(\d+)|\s+第\s*(\d+)\s*行)/iy
 const TRAILING_PUNCTUATION = /[.,;!?]+$/
-const BLOCKED_PARENTS = new Set(['a', 'code', 'pre', 'script', 'style', 'textarea'])
+const BLOCKED_PARENTS = new Set(['a', 'button', 'script', 'style', 'textarea'])
 
 function lineFromSuffix(match: RegExpExecArray): { line?: number; column?: number } {
   const lineText = match[1] ?? match[3] ?? match[4] ?? match[5] ?? match[6] ?? match[7]

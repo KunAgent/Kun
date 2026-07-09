@@ -508,9 +508,7 @@ export async function syncGuiManagedKunConfig(
 ): Promise<KunConfig> {
   const configPath = join(dataDir, 'config.json')
   const existing = sanitizeKunConfigSections(await readJsonObjectIfExists(configPath))
-  const importedMcpServers = await readGuiManagedMcpServers(
-    options?.mcpConfigPath ?? resolveKunMcpJsonPath()
-  )
+  const importedMcpServers = await readGuiManagedMcpServers(options?.mcpConfigPath ?? resolveKunMcpJsonPath())
   const hasImportedEnabledMcpServer = Object.values(importedMcpServers).some(
     (server) => objectValue(server).enabled !== false
   )

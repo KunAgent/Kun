@@ -300,8 +300,9 @@ export async function buildMcpToolProviders(
   })
   catalogState.lastRefreshedAt = nowIso()
   catalogState.catalogFingerprint = catalogFingerprint(catalogState.records.map((record) => record.toolId))
+  const gatewayActive = Object.keys(mcp.servers).length > 0
   const searchActive = shouldUseMcpSearch(mcp.search, toolCount) && connectedServers > 0
-  if (searchActive) {
+  if (gatewayActive) {
     providers.push(createMcpSearchProvider({
       config: mcp.search,
       state: catalogState,
@@ -326,7 +327,8 @@ export async function buildMcpToolProviders(
       },
       isServerAvailable: canUseMcpServer
     }))
-  } else {
+  }
+  if (!searchActive) {
     providers.push(...directProviders)
   }
   providers.push(createMcpFacadeProvider(connected))
@@ -441,7 +443,7 @@ export async function buildMcpToolProviders(
     oauth: oauthDiagnostics,
     search: mcpSearchDiagnostic({
       config: mcp.search,
-      active: searchActive,
+      active: gatewayActive,
       indexedToolCount: toolCount,
       advertisedToolCount,
       state: catalogState
@@ -518,7 +520,7 @@ type McpBackgroundReconnectParams = {
  * retried independently with exponential backoff; the per-attempt connect is
  * bounded by the server's own `timeoutMs` (not the short startup race), so a
  * cold `npx` download finally gets the time it needs. On success the server's
- * tools are registered live and its diagnostic flips from "error" to
+ * tools are added to the MCP gateway catalog and its diagnostic flips from "error" to
  * "connected" — no full runtime restart required (issue #342).
  */
 async function runMcpBackgroundReconnect(params: McpBackgroundReconnectParams): Promise<void> {
@@ -578,9 +580,6 @@ function registerLateMcpConnection(
   params.connected.push(state)
   params.catalogState.records.push(...listed.map((tool) => createMcpSearchCatalogRecord(state, tool)))
   const tools = listed.map((tool) => createMcpLocalTool(state, tool))
-  // In search mode the model reaches MCP tools through the search provider
-  // (which re-lists `connected`), so advertising them directly would double up.
-  // In direct mode, register the provider so its tools become callable.
   if (!params.searchActive) {
     try {
       params.register({
@@ -668,7 +667,7 @@ function createMcpSearchCatalogRecord(
   descriptor: McpToolDescriptor
 ): McpSearchCatalogRecord {
   return {
-    toolId: `${state.serverId}/${descriptor.name}`,
+    toolId: normalizeMcpToolName(state.serverId, descriptor.name),
     serverId: state.serverId,
     server: state.server,
     client: {

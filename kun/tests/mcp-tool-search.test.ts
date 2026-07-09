@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { CapabilityRegistry } from '../src/adapters/tool/capability-registry.js'
 import { LocalToolHost } from '../src/adapters/tool/local-tool-host.js'
-import { canUseMcpServer } from '../src/adapters/tool/mcp-tool-provider.js'
+import { canUseMcpServer, normalizeMcpToolName } from '../src/adapters/tool/mcp-tool-provider.js'
 import {
   createMcpSearchProvider,
   type McpSearchCatalogRecord
@@ -22,7 +22,7 @@ function record(
   server: McpServerConfig = SERVER
 ): McpSearchCatalogRecord {
   return {
-    toolId: `${serverId}/${toolName}`,
+    toolId: normalizeMcpToolName(serverId, toolName),
     serverId,
     server,
     client: {
@@ -32,7 +32,7 @@ function record(
       }
     },
     descriptor: { name: toolName, description: `${toolName} on ${serverId}` },
-    normalizedName: `mcp_${serverId}_${toolName}`,
+    normalizedName: normalizeMcpToolName(serverId, toolName),
     policy: 'auto'
   }
 }
@@ -80,14 +80,14 @@ describe('MCP search provider honors blockedProviderIds', () => {
 
     // mcp_describe (schema disclosure) is refused for the blocked server.
     const describeBlocked = await host.execute(
-      { callId: 'c1', toolName: 'mcp_describe', arguments: { toolId: 'github/create_issue' } },
+      { callId: 'c1', toolName: 'mcp_describe', arguments: { toolId: 'mcp_github_create_issue' } },
       blocked
     )
     expect(describeBlocked.item).toMatchObject({ kind: 'tool_result', isError: true })
 
     // mcp_call (execution) is refused AND the underlying client is never invoked.
     const callBlocked = await host.execute(
-      { callId: 'c2', toolName: 'mcp_call', arguments: { toolId: 'github/create_issue', arguments: {} } },
+      { callId: 'c2', toolName: 'mcp_call', arguments: { toolId: 'mcp_github_create_issue', arguments: {} } },
       blocked
     )
     expect(callBlocked.item).toMatchObject({ kind: 'tool_result', isError: true })
@@ -95,7 +95,7 @@ describe('MCP search provider honors blockedProviderIds', () => {
 
     // A non-blocked server still works.
     const callOk = await host.execute(
-      { callId: 'c3', toolName: 'mcp_call', arguments: { toolId: 'files/read_file', arguments: {} } },
+      { callId: 'c3', toolName: 'mcp_call', arguments: { toolId: 'mcp_files_read_file', arguments: {} } },
       blocked
     )
     expect(callOk.item).toMatchObject({ kind: 'tool_result', isError: false })
@@ -104,7 +104,7 @@ describe('MCP search provider honors blockedProviderIds', () => {
     // Without a deny-list the blocked server is reachable again (the deny is
     // per-turn, not baked into the catalog).
     const callDefault = await host.execute(
-      { callId: 'c4', toolName: 'mcp_call', arguments: { toolId: 'github/create_issue', arguments: {} } },
+      { callId: 'c4', toolName: 'mcp_call', arguments: { toolId: 'mcp_github_create_issue', arguments: {} } },
       ctx()
     )
     expect(callDefault.item).toMatchObject({ kind: 'tool_result', isError: false })
@@ -149,20 +149,20 @@ describe('MCP search provider honors workspace visibility roots', () => {
     }
 
     const describeBlocked = await host.execute(
-      { callId: 'c1', toolName: 'mcp_describe', arguments: { toolId: 'codegraph-a/read_symbol' } },
+      { callId: 'c1', toolName: 'mcp_describe', arguments: { toolId: 'mcp_codegraph_a_read_symbol' } },
       outside
     )
     expect(describeBlocked.item).toMatchObject({ kind: 'tool_result', isError: true })
 
     const callBlocked = await host.execute(
-      { callId: 'c2', toolName: 'mcp_call', arguments: { toolId: 'codegraph-a/read_symbol', arguments: {} } },
+      { callId: 'c2', toolName: 'mcp_call', arguments: { toolId: 'mcp_codegraph_a_read_symbol', arguments: {} } },
       outside
     )
     expect(callBlocked.item).toMatchObject({ kind: 'tool_result', isError: true })
     expect(calls).toEqual([])
 
     const describeInside = await host.execute(
-      { callId: 'c3', toolName: 'mcp_describe', arguments: { toolId: 'codegraph-a/read_symbol' } },
+      { callId: 'c3', toolName: 'mcp_describe', arguments: { toolId: 'mcp_codegraph_a_read_symbol' } },
       ctx({ workspace: '/ws/project/sub' })
     )
     expect(describeInside.item).toMatchObject({ kind: 'tool_result', isError: false })
@@ -199,7 +199,7 @@ describe('MCP search provider freezes its virtual catalog per turn', () => {
     const firstTurn = ctx({ turnId: 'turn_1' })
 
     const before = await host.execute(
-      { callId: 'c0', toolName: 'mcp_describe', arguments: { toolId: 'github/search_issues' } },
+      { callId: 'c0', toolName: 'mcp_describe', arguments: { toolId: 'mcp_github_search_issues' } },
       firstTurn
     )
     expect(before.item.kind === 'tool_result' ? before.item.output : {}).toMatchObject({
@@ -216,14 +216,14 @@ describe('MCP search provider freezes its virtual catalog per turn', () => {
     })
 
     const stillFrozen = await host.execute(
-      { callId: 'c2', toolName: 'mcp_describe', arguments: { toolId: 'github/search_issues' } },
+      { callId: 'c2', toolName: 'mcp_describe', arguments: { toolId: 'mcp_github_search_issues' } },
       firstTurn
     )
     expect(stillFrozen.item.kind === 'tool_result' ? stillFrozen.item.output : {}).toMatchObject({
       description: 'Search issues with the old schema'
     })
     const hiddenUntilNextTurn = await host.execute(
-      { callId: 'c3', toolName: 'mcp_call', arguments: { toolId: 'github/create_issue', arguments: {} } },
+      { callId: 'c3', toolName: 'mcp_call', arguments: { toolId: 'mcp_github_create_issue', arguments: {} } },
       firstTurn
     )
     expect(hiddenUntilNextTurn.item).toMatchObject({ kind: 'tool_result', isError: true })
@@ -231,7 +231,7 @@ describe('MCP search provider freezes its virtual catalog per turn', () => {
 
     const nextTurn = ctx({ turnId: 'turn_2' })
     const updated = await host.execute(
-      { callId: 'c4', toolName: 'mcp_describe', arguments: { toolId: 'github/search_issues' } },
+      { callId: 'c4', toolName: 'mcp_describe', arguments: { toolId: 'mcp_github_search_issues' } },
       nextTurn
     )
     expect(updated.item.kind === 'tool_result' ? updated.item.output : {}).toMatchObject({
@@ -239,7 +239,7 @@ describe('MCP search provider freezes its virtual catalog per turn', () => {
       inputSchema: { required: ['query'] }
     })
     const callable = await host.execute(
-      { callId: 'c5', toolName: 'mcp_call', arguments: { toolId: 'github/create_issue', arguments: {} } },
+      { callId: 'c5', toolName: 'mcp_call', arguments: { toolId: 'mcp_github_create_issue', arguments: {} } },
       nextTurn
     )
     expect(callable.item).toMatchObject({ kind: 'tool_result', isError: false })

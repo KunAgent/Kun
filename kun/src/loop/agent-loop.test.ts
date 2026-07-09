@@ -1,13 +1,163 @@
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { InMemoryEventBus } from '../adapters/in-memory-event-bus.js'
+import { InMemorySessionStore } from '../adapters/in-memory-session-store.js'
+import { InMemoryThreadStore } from '../adapters/in-memory-thread-store.js'
+import { LocalToolHost } from '../adapters/tool/local-tool-host.js'
+import { createImmutablePrefix } from '../cache/immutable-prefix.js'
+import { emptyUsageSnapshot } from '../contracts/usage.js'
+import { createThreadRecord } from '../domain/thread.js'
+import type { ApprovalRequest } from '../domain/approval.js'
+import { InflightTracker } from './inflight-tracker.js'
+import { SteeringQueue } from './steering-queue.js'
+import { ContextCompactor } from './context-compactor.js'
 import {
+  AgentLoop,
   buildRuntimeContextInstruction,
   isStalePlanContext,
   resolvePlanModeToolSpecs,
   shouldInjectInitialRuntimeContext,
   turnHasUnverifiedSourceChanges
 } from './agent-loop.js'
-import type { ModelToolSpec } from '../ports/model-client.js'
+import { SequentialIdGenerator } from '../ports/id-generator.js'
+import type { ModelClient, ModelRequest, ModelStreamChunk, ModelToolSpec } from '../ports/model-client.js'
+import type { UserInputGate, UserInputRequest, UserInputResolution } from '../ports/user-input-gate.js'
+import { RuntimeEventRecorder } from '../services/runtime-event-recorder.js'
+import { TurnService } from '../services/turn-service.js'
+import { UsageService } from '../services/usage-service.js'
+
+class AllowApprovalGate {
+  request(_approval: ApprovalRequest): Promise<'allow' | 'deny'> {
+    return Promise.resolve('allow')
+  }
+
+  decide(): boolean {
+    return false
+  }
+
+  pending(): ApprovalRequest[] {
+    return []
+  }
+
+  get(): ApprovalRequest | undefined {
+    return undefined
+  }
+}
+
+class NoopUserInputGate implements UserInputGate {
+  request(_input: UserInputRequest): Promise<UserInputResolution> {
+    return Promise.resolve({ status: 'cancelled' })
+  }
+
+  get(): UserInputRequest | undefined {
+    return undefined
+  }
+
+  resolve(): boolean {
+    return false
+  }
+
+  pending(): UserInputRequest[] {
+    return []
+  }
+
+  reset(): void {}
+}
+
+class AbortAwareModel implements ModelClient {
+  readonly provider = 'test'
+  readonly model = 'abort-aware-model'
+  readonly requests: ModelRequest[] = []
+  abortObserved = false
+  private readonly streamStartedListeners: Array<() => void> = []
+
+  async *stream(request: ModelRequest): AsyncIterable<ModelStreamChunk> {
+    this.requests.push(request)
+    for (const listener of this.streamStartedListeners.splice(0)) listener()
+    if (!request.abortSignal.aborted) {
+      await new Promise<void>((resolve) => {
+        request.abortSignal.addEventListener('abort', () => resolve(), { once: true })
+      })
+    }
+    this.abortObserved = request.abortSignal.aborted
+  }
+
+  waitForStreamStart(): Promise<void> {
+    if (this.requests.length > 0) return Promise.resolve()
+    return new Promise((resolve) => this.streamStartedListeners.push(resolve))
+  }
+}
+
+describe('AgentLoop interruption', () => {
+  it('aborts an in-flight model stream when the turn service interrupts the turn', async () => {
+    const sessionStore = new InMemorySessionStore()
+    const threadStore = new InMemoryThreadStore()
+    const eventBus = new InMemoryEventBus()
+    const inflight = new InflightTracker()
+    const steering = new SteeringQueue()
+    const ids = new SequentialIdGenerator()
+    const nowIso = () => '2026-07-08T00:00:00.000Z'
+    const events = new RuntimeEventRecorder({
+      eventBus,
+      sessionStore,
+      allocateSeq: (threadId) => eventBus.allocateSeq(threadId),
+      nowIso
+    })
+    const model = new AbortAwareModel()
+    const turns = new TurnService({
+      threadStore,
+      sessionStore,
+      events,
+      inflight,
+      steering,
+      compactor: new ContextCompactor(),
+      ids,
+      nowIso
+    })
+    const loop = new AgentLoop({
+      threadStore,
+      sessionStore,
+      approvalGate: new AllowApprovalGate(),
+      userInputGate: new NoopUserInputGate(),
+      model,
+      toolHost: new LocalToolHost({ tools: [] }),
+      usage: new UsageService(),
+      events,
+      turns,
+      inflight,
+      steering,
+      compactor: new ContextCompactor(),
+      prefix: createImmutablePrefix({ systemPrompt: 'test system prompt' }),
+      ids,
+      nowIso
+    })
+    const threadId = 'thr_interrupt'
+    await threadStore.upsert(createThreadRecord({
+      id: threadId,
+      title: 'Interrupt test',
+      workspace: '/tmp/workspace',
+      model: model.model
+    }))
+    const started = await turns.startTurn({
+      threadId,
+      request: { prompt: 'keep streaming until interrupted', model: model.model }
+    })
+
+    const run = loop.runTurn(threadId, started.turnId)
+    await model.waitForStreamStart()
+    const interrupted = await turns.interruptTurn({ threadId, turnId: started.turnId })
+    const status = await Promise.race([
+      run,
+      new Promise<'timed_out'>((resolve) => setTimeout(() => resolve('timed_out'), 500))
+    ])
+
+    expect(interrupted.status).toBe('aborted')
+    expect(status).toBe('aborted')
+    expect(model.abortObserved).toBe(true)
+    expect((await threadStore.get(threadId))?.status).toBe('idle')
+    expect((await threadStore.get(threadId))?.turns[0]?.status).toBe('aborted')
+  })
+})
 
 function spec(name: string): ModelToolSpec {
   return {
