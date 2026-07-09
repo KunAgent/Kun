@@ -1,10 +1,15 @@
-import { describe, expect, it } from 'vitest'
-import type { WorkspaceEntry } from '@shared/workspace-file'
+import { describe, expect, it, vi } from 'vitest'
+import type {
+  WorkspaceDirectoryListResult,
+  WorkspaceDirectoryTarget,
+  WorkspaceEntry
+} from '@shared/workspace-file'
 import {
   compareChatFileTreeEntriesByModified,
   formatChatFileTreeUnsupportedMessage,
   isChatFileTreeIgnoredDirectory,
   isChatFileTreePreviewableEntry,
+  scanChatFileTreeRecentFiles,
   sortChatFileTreeEntries
 } from './ChatFileTreePanel'
 
@@ -16,6 +21,14 @@ function entry(overrides: Partial<WorkspaceEntry> & Pick<WorkspaceEntry, 'name' 
     ext: overrides.ext ?? '',
     ...(overrides.mtimeMs === undefined ? {} : { mtimeMs: overrides.mtimeMs }),
     ...(overrides.size === undefined ? {} : { size: overrides.size })
+  }
+}
+
+function directory(entries: WorkspaceEntry[]): WorkspaceDirectoryListResult {
+  return {
+    ok: true,
+    root: '/tmp/project',
+    entries
   }
 }
 
@@ -56,5 +69,31 @@ describe('ChatFileTreePanel helpers', () => {
       entry({ name: 'docs', type: 'directory', mtimeMs: 100 }),
       entry({ name: 'old.md', type: 'file', mtimeMs: 50 })
     ], 'modified').map((item) => item.name)).toEqual(['docs', 'new.md', 'old.md'])
+  })
+
+  it('rescans recent files instead of reusing the previous refresh result', async () => {
+    const root = '/tmp/project'
+    const snapshots = [
+      directory([entry({ name: 'old.md', type: 'file', path: `${root}/old.md`, mtimeMs: 100 })]),
+      directory([entry({ name: 'new.md', type: 'file', path: `${root}/new.md`, mtimeMs: 200 })])
+    ]
+    let snapshotIndex = 0
+    const listWorkspaceDirectory = vi.fn(
+      async (_target: WorkspaceDirectoryTarget): Promise<WorkspaceDirectoryListResult> => snapshots[snapshotIndex]
+    )
+
+    await expect(scanChatFileTreeRecentFiles(root, listWorkspaceDirectory)).resolves.toMatchObject([
+      { name: 'old.md' }
+    ])
+    snapshotIndex = 1
+    await expect(scanChatFileTreeRecentFiles(root, listWorkspaceDirectory)).resolves.toMatchObject([
+      { name: 'new.md' }
+    ])
+
+    expect(listWorkspaceDirectory).toHaveBeenCalledTimes(2)
+    expect(listWorkspaceDirectory.mock.calls.map(([target]) => target)).toEqual([
+      { workspaceRoot: root, path: root },
+      { workspaceRoot: root, path: root }
+    ])
   })
 })

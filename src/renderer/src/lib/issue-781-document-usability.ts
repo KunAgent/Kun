@@ -34,6 +34,11 @@ let installed = false
 let observer: MutationObserver | null = null
 let scanTimer: number | null = null
 let menuEl: HTMLDivElement | null = null
+let cleanups: Array<() => void> = []
+
+function trackCleanup(cleanup: () => void): void {
+  cleanups.push(cleanup)
+}
 
 function label(key: keyof typeof LABELS.en): string {
   const language = document.documentElement.lang || navigator.language || ''
@@ -125,6 +130,9 @@ function injectStyle(): void {
     }
   `
   document.head.appendChild(style)
+  trackCleanup(() => {
+    style.remove()
+  })
 }
 
 function isBlockedTextNode(node: Text): boolean {
@@ -293,21 +301,28 @@ function enhancePreviewTabs(): void {
   const tabs = document.querySelector('.ds-code-sidebar-tabs')
   if (!(tabs instanceof HTMLElement) || tabs.getAttribute(ENHANCED_ATTR) === 'tabs') return
   tabs.setAttribute(ENHANCED_ATTR, 'tabs')
-  tabs.addEventListener('wheel', (event) => {
+  const onWheel = (event: WheelEvent): void => {
     const tabList = Array.from(tabs.querySelectorAll('.ds-code-sidebar-tab')) as HTMLElement[]
     if (tabList.length < 2) return
     event.preventDefault()
     const activeIndex = Math.max(0, tabList.findIndex((tab) => tab.classList.contains('is-active')))
     const nextIndex = (activeIndex + (event.deltaY > 0 ? 1 : -1) + tabList.length) % tabList.length
     tabList[nextIndex]?.click()
-  }, { passive: false })
-  tabs.addEventListener('contextmenu', (event) => {
+  }
+  const onContextMenu = (event: MouseEvent): void => {
     const target = event.target
     if (!(target instanceof HTMLElement)) return
     const tab = target.closest('.ds-code-sidebar-tab')
     if (!(tab instanceof HTMLElement)) return
     event.preventDefault()
     showTabMenu(tab, event.clientX, event.clientY)
+  }
+  tabs.addEventListener('wheel', onWheel, { passive: false })
+  tabs.addEventListener('contextmenu', onContextMenu)
+  trackCleanup(() => {
+    tabs.removeEventListener('wheel', onWheel)
+    tabs.removeEventListener('contextmenu', onContextMenu)
+    if (tabs.getAttribute(ENHANCED_ATTR) === 'tabs') tabs.removeAttribute(ENHANCED_ATTR)
   })
 }
 
@@ -317,7 +332,12 @@ function enhanceScrollMemory(): void {
     if (!(element instanceof HTMLElement)) return
     if (element.getAttribute(ENHANCED_ATTR) !== 'scroll') {
       element.setAttribute(ENHANCED_ATTR, 'scroll')
-      element.addEventListener('scroll', () => setScrollPosition(activeTabKey(), element.scrollTop), { passive: true })
+      const onScroll = (): void => setScrollPosition(activeTabKey(), element.scrollTop)
+      element.addEventListener('scroll', onScroll, { passive: true })
+      trackCleanup(() => {
+        element.removeEventListener('scroll', onScroll)
+        if (element.getAttribute(ENHANCED_ATTR) === 'scroll') element.removeAttribute(ENHANCED_ATTR)
+      })
     }
     const key = activeTabKey()
     const stored = scrollPositions()[key]
@@ -351,13 +371,18 @@ function enhanceReadingButton(): void {
   button.title = label('expandRead')
   button.setAttribute('aria-label', label('expandRead'))
   button.textContent = label('read')
-  button.addEventListener('click', (event) => {
+  const onClick = (event: MouseEvent): void => {
     event.preventDefault()
     event.stopPropagation()
     const sidebar = document.querySelector('.ds-code-sidebar')
     setReadingMode(!(sidebar instanceof HTMLElement && sidebar.classList.contains('kun-issue781-reader-mode')))
-  })
+  }
+  button.addEventListener('click', onClick)
   actions.insertBefore(button, actions.firstChild)
+  trackCleanup(() => {
+    button.removeEventListener('click', onClick)
+    button.remove()
+  })
 }
 
 function scheduleScan(): void {
@@ -385,25 +410,56 @@ function onDocumentClick(event: MouseEvent): void {
   }
 }
 
-export function installIssue781DocumentUsability(): void {
-  if (installed || typeof window === 'undefined' || typeof document === 'undefined') return
+function onDocumentKeyDown(event: KeyboardEvent): void {
+  if (event.key === 'Escape') setReadingMode(false)
+}
+
+function onDocumentPointerDown(event: PointerEvent): void {
+  if (menuEl && event.target instanceof Node && !menuEl.contains(event.target)) closeIssue781Menu()
+}
+
+export function uninstallIssue781DocumentUsability(): void {
+  if (!installed || typeof window === 'undefined' || typeof document === 'undefined') return
+  installed = false
+  if (scanTimer !== null) {
+    window.clearTimeout(scanTimer)
+    scanTimer = null
+  }
+  observer?.disconnect()
+  observer = null
+  closeIssue781Menu()
+  document.querySelectorAll('.kun-issue781-reader-mode').forEach((element) => {
+    element.classList.remove('kun-issue781-reader-mode')
+  })
+  document.querySelectorAll('.kun-issue781-pinned').forEach((element) => {
+    element.classList.remove('kun-issue781-pinned')
+  })
+  for (const cleanup of cleanups.splice(0).reverse()) {
+    cleanup()
+  }
+}
+
+export function installIssue781DocumentUsability(): () => void {
+  if (typeof window === 'undefined' || typeof document === 'undefined') return () => {}
+  if (installed) return uninstallIssue781DocumentUsability
   installed = true
+  cleanups = []
   injectStyle()
   scanRenderedOutput()
   enhancePreviewTabs()
   enhanceScrollMemory()
   enhanceReadingButton()
   document.addEventListener('click', onDocumentClick, true)
-  document.addEventListener('keydown', (event) => {
-    if (event.key === 'Escape') setReadingMode(false)
+  document.addEventListener('keydown', onDocumentKeyDown)
+  document.addEventListener('pointerdown', onDocumentPointerDown, true)
+  trackCleanup(() => {
+    document.removeEventListener('click', onDocumentClick, true)
+    document.removeEventListener('keydown', onDocumentKeyDown)
+    document.removeEventListener('pointerdown', onDocumentPointerDown, true)
   })
-  document.addEventListener('pointerdown', (event) => {
-    if (menuEl && event.target instanceof Node && !menuEl.contains(event.target)) closeIssue781Menu()
-  }, true)
   observer = new MutationObserver(() => {
     scheduleScan()
   })
   observer.observe(document.body, { childList: true, subtree: true })
+  return uninstallIssue781DocumentUsability
 }
-
-installIssue781DocumentUsability()

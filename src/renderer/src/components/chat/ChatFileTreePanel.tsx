@@ -1,4 +1,8 @@
-import type { WorkspaceEntry } from '@shared/workspace-file'
+import type {
+  WorkspaceDirectoryListResult,
+  WorkspaceDirectoryTarget,
+  WorkspaceEntry
+} from '@shared/workspace-file'
 import {
   ChevronDown,
   ChevronRight,
@@ -61,10 +65,19 @@ type ContextMenuState = {
 
 type FileTreeSortMode = 'name' | 'modified'
 
+type ListWorkspaceDirectory = (target: WorkspaceDirectoryTarget) => Promise<WorkspaceDirectoryListResult>
+
 type RecentScanState = {
   entries: WorkspaceEntry[]
   loading: boolean
   error: string | null
+}
+
+type RecentScanOptions = {
+  isCancelled?: () => boolean
+  limit?: number
+  maxDepth?: number
+  maxEntries?: number
 }
 
 const ROOT_PATH = ''
@@ -123,6 +136,44 @@ function sortRecentFiles(entries: WorkspaceEntry[]): WorkspaceEntry[] {
       if (leftTime !== rightTime) return rightTime - leftTime
       return compareChatFileTreeEntriesByName(left, right)
     })
+}
+
+export async function scanChatFileTreeRecentFiles(
+  root: string,
+  listWorkspaceDirectory: ListWorkspaceDirectory,
+  options: RecentScanOptions = {}
+): Promise<WorkspaceEntry[]> {
+  const limit = options.limit ?? RECENT_FILE_LIMIT
+  const maxDepth = options.maxDepth ?? RECENT_SCAN_MAX_DEPTH
+  const maxEntries = options.maxEntries ?? RECENT_SCAN_MAX_ENTRIES
+  const isCancelled = options.isCancelled ?? (() => false)
+  const collected: WorkspaceEntry[] = []
+
+  const scanDirectory = async (
+    path: string,
+    depth: number,
+    seenDirectories: Set<string>
+  ): Promise<void> => {
+    if (isCancelled() || depth > maxDepth || collected.length >= maxEntries) return
+    const directoryKey = pathKey(path || root)
+    if (seenDirectories.has(directoryKey)) return
+    seenDirectories.add(directoryKey)
+    const result = await listWorkspaceDirectory({ workspaceRoot: root, path: path || root })
+    if (!result.ok) throw new Error(result.message)
+    for (const entry of result.entries) {
+      if (isCancelled() || collected.length >= maxEntries) return
+      if (entry.type === 'directory') {
+        if (!isChatFileTreeIgnoredDirectory(entry.name)) {
+          await scanDirectory(entry.path, depth + 1, seenDirectories)
+        }
+        continue
+      }
+      if (isChatFileTreePreviewableEntry(entry)) collected.push(entry)
+    }
+  }
+
+  await scanDirectory(root, 0, new Set())
+  return sortRecentFiles(collected).slice(0, limit)
 }
 
 export function isChatFileTreeIgnoredDirectory(name: string): boolean {
@@ -205,41 +256,19 @@ export function ChatFileTreePanel({
   }, [directories, expanded, loadDirectory, root])
 
   useEffect(() => {
-    if (!root || typeof window.kunGui?.listWorkspaceDirectory !== 'function') return
+    const listWorkspaceDirectory = window.kunGui?.listWorkspaceDirectory?.bind(window.kunGui)
+    if (!root || typeof listWorkspaceDirectory !== 'function') return
     let cancelled = false
     setRecentScan({ entries: [], loading: true, error: null })
 
-    const scanDirectory = async (
-      path: string,
-      depth: number,
-      collected: WorkspaceEntry[],
-      seenDirectories: Set<string>
-    ): Promise<void> => {
-      if (cancelled || depth > RECENT_SCAN_MAX_DEPTH || collected.length >= RECENT_SCAN_MAX_ENTRIES) return
-      const directoryKey = pathKey(path || root)
-      if (seenDirectories.has(directoryKey)) return
-      seenDirectories.add(directoryKey)
-      const result = await window.kunGui.listWorkspaceDirectory({ workspaceRoot: root, path: path || root })
-      if (!result.ok) throw new Error(result.message)
-      for (const entry of result.entries) {
-        if (cancelled || collected.length >= RECENT_SCAN_MAX_ENTRIES) return
-        if (entry.type === 'directory') {
-          if (!isChatFileTreeIgnoredDirectory(entry.name)) {
-            await scanDirectory(entry.path, depth + 1, collected, seenDirectories)
-          }
-          continue
-        }
-        if (isChatFileTreePreviewableEntry(entry)) collected.push(entry)
-      }
-    }
-
     void (async () => {
       try {
-        const collected: WorkspaceEntry[] = []
-        await scanDirectory(root, 0, collected, new Set())
+        const entries = await scanChatFileTreeRecentFiles(root, listWorkspaceDirectory, {
+          isCancelled: () => cancelled
+        })
         if (!cancelled) {
           setRecentScan({
-            entries: sortRecentFiles(collected).slice(0, RECENT_FILE_LIMIT),
+            entries,
             loading: false,
             error: null
           })
@@ -258,7 +287,7 @@ export function ChatFileTreePanel({
     return () => {
       cancelled = true
     }
-  }, [root])
+  }, [root, recentScanNonce])
 
   useEffect(() => {
     if (!contextMenu) return
