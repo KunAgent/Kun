@@ -66,4 +66,25 @@ describe('runtime event recorder', () => {
 
     expect(highestSeq).toHaveBeenCalledTimes(1)
   })
+
+  it('does not let observer failures break event persistence or publishing', async () => {
+    const bus = new InMemoryEventBus()
+    const sessionStore = new InMemorySessionStore()
+    const publish = vi.spyOn(bus, 'publish')
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const recorder = new RuntimeEventRecorder({
+      eventBus: bus,
+      sessionStore,
+      allocateSeq: (threadId) => bus.allocateSeq(threadId),
+      nowIso: () => new Date().toISOString(),
+      observers: [{ record: () => { throw new Error('observer down') } }]
+    })
+
+    await recorder.record({ kind: 'heartbeat', threadId: 'thr_1' })
+
+    expect(await sessionStore.loadEventsSince('thr_1', 0)).toHaveLength(1)
+    expect(publish).toHaveBeenCalledTimes(1)
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('observer down'))
+    warn.mockRestore()
+  })
 })
