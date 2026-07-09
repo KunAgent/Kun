@@ -48,8 +48,10 @@
     "@floating-ui/dom": "^1.7.6",
     "@larksuiteoapi/node-sdk": "^1.64.0",
     "@modelcontextprotocol/sdk": "^1.29.0",
+    "@napi-rs/canvas": "^0.1.100",
     "@streamdown/math": "^1.0.2",
     "@tencent-weixin/openclaw-weixin": "2.4.3",
+    "@tesseract.js-data/eng": "^1.0.0",
     "@tiptap/core": "^3.26.0",
     "@tiptap/extension-image": "^3.26.0",
     "@tiptap/extension-list": "^3.26.0",
@@ -83,6 +85,7 @@
     "remark-gfm": "^4.0.1",
     "shiki": "^3.23.0",
     "streamdown": "^2.5.0",
+    "tesseract.js": "^7.0.0",
     "zod": "^4.4.3",
     "zustand": "^5.0.3"
   },

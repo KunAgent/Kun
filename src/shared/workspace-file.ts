@@ -188,6 +188,8 @@ export type LocalPdfTextReadResult =
       pageCount: number
       text: string
       hasText: boolean
+      ocrApplied?: boolean
+      ocrPageCount?: number
       truncated: boolean
     }
   | { ok: false; message: string }

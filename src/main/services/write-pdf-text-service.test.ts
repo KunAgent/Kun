@@ -1,6 +1,7 @@
 import { mkdir, mkdtemp, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { createCanvas } from '@napi-rs/canvas'
 import { afterEach, describe, expect, it } from 'vitest'
 import { clearWritePdfTextCache, readLocalPdfText, readWritePdfText } from './write-pdf-text-service'
 
@@ -36,6 +37,66 @@ function createSimpleTextPdf(text: string): Buffer {
   }
   pdf += `trailer\n<< /Root 1 0 R /Size 6 >>\nstartxref\n${xrefOffset}\n%%EOF\n`
   return Buffer.from(pdf, 'ascii')
+}
+
+function createImageOnlyPdf(text: string): Buffer {
+  const width = 1200
+  const height = 360
+  const canvas = createCanvas(width, height)
+  const context = canvas.getContext('2d')
+  context.fillStyle = '#fff'
+  context.fillRect(0, 0, width, height)
+  context.fillStyle = '#111'
+  context.font = '76px Arial'
+  context.fillText(text, 72, 155)
+  context.font = '44px Arial'
+  context.fillText('This page has no PDF text layer.', 72, 245)
+  const jpeg = canvas.toBuffer('image/jpeg', 95)
+
+  const chunks: Buffer[] = []
+  const offsets: number[] = []
+  let byteLength = 0
+  const write = (part: string | Buffer): void => {
+    const chunk = Buffer.isBuffer(part) ? part : Buffer.from(part, 'ascii')
+    chunks.push(chunk)
+    byteLength += chunk.byteLength
+  }
+  const writeObject = (id: number, parts: Array<string | Buffer>): void => {
+    offsets[id] = byteLength
+    write(`${id} 0 obj\n`)
+    for (const part of parts) write(part)
+    write('\nendobj\n')
+  }
+
+  write('%PDF-1.4\n')
+  writeObject(1, ['<< /Type /Catalog /Pages 2 0 R >>'])
+  writeObject(2, ['<< /Type /Pages /Kids [3 0 R] /Count 1 >>'])
+  writeObject(3, [[
+    '<< /Type /Page /Parent 2 0 R',
+    `/MediaBox [0 0 ${width} ${height}]`,
+    '/Resources << /XObject << /Im1 4 0 R >> >>',
+    '/Contents 5 0 R >>'
+  ].join('\n')])
+  writeObject(4, [
+    [
+      '<< /Type /XObject /Subtype /Image',
+      `/Width ${width} /Height ${height}`,
+      '/ColorSpace /DeviceRGB /BitsPerComponent 8',
+      '/Filter /DCTDecode',
+      `/Length ${jpeg.byteLength} >>\nstream\n`
+    ].join('\n'),
+    jpeg,
+    '\nendstream'
+  ])
+  const content = `q ${width} 0 0 ${height} 0 0 cm /Im1 Do Q`
+  writeObject(5, [`<< /Length ${Buffer.byteLength(content, 'ascii')} >>\nstream\n${content}\nendstream`])
+  const xrefOffset = byteLength
+  write('xref\n0 6\n0000000000 65535 f \n')
+  for (let id = 1; id <= 5; id += 1) {
+    write(`${String(offsets[id]).padStart(10, '0')} 00000 n \n`)
+  }
+  write(`trailer\n<< /Root 1 0 R /Size 6 >>\nstartxref\n${xrefOffset}\n%%EOF\n`)
+  return Buffer.concat(chunks)
 }
 
 afterEach(() => {
@@ -78,4 +139,22 @@ describe('write PDF text service', () => {
     expect(result.hasText).toBe(true)
     expect(result.pages[0]?.text).toContain('Local PDF attachment text')
   }, 15_000)
+
+  it('falls back to OCR for image-only local PDF attachments', async () => {
+    const workspaceRoot = await mkdtemp(join(tmpdir(), 'ds-gui-local-pdf-ocr-'))
+    const pdfPath = join(workspaceRoot, 'scanned.pdf')
+    await writeFile(pdfPath, createImageOnlyPdf('SCANNED PDF OCR'))
+
+    const result = await readLocalPdfText({ path: pdfPath })
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.pageCount).toBe(1)
+    expect(result.hasText).toBe(true)
+    expect(result.ocrApplied).toBe(true)
+    expect(result.ocrPageCount).toBe(1)
+    expect(result.pages[0]?.source).toBe('ocr')
+    expect(result.pages[0]?.text.toUpperCase()).toContain('SCANNED')
+    expect(result.pages[0]?.text.toUpperCase()).toContain('OCR')
+  }, 60_000)
 })
