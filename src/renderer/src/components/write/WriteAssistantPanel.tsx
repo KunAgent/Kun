@@ -19,7 +19,7 @@ import {
   useWriteWorkspaceStore,
   writeRelativeToWorkspace
 } from '../../write/write-workspace-store'
-import { MessageTimeline } from '../chat/MessageTimeline'
+import { LazyMessageTimeline } from '../chat/LazyMessageTimeline'
 import { FloatingComposer } from '../chat/FloatingComposer'
 import type { ComposerReasoningEffort } from '../chat/FloatingComposerModelPicker'
 
@@ -194,7 +194,7 @@ export function WriteAssistantPanel({
 
       <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-ds-main/45 dark:bg-transparent">
         {hasTimeline ? (
-          <MessageTimeline
+          <LazyMessageTimeline
             blocks={blocks}
             liveReasoning={liveReasoning}
             live={liveAssistant}

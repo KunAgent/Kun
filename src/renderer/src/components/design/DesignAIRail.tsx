@@ -24,7 +24,7 @@ import { DESIGN_ASSISTANT_THREAD_TITLE } from '../../design/design-thread-regist
 import { useDesignWorkspaceStore } from '../../design/design-workspace-store'
 import { defaultFrameSizeForDesignTarget } from '../../design/design-context'
 import { cancelDesignPagesRun } from '../../design/design-pages-run'
-import { MessageTimeline } from '../chat/MessageTimeline'
+import { LazyMessageTimeline } from '../chat/LazyMessageTimeline'
 import { FloatingComposer } from '../chat/FloatingComposer'
 import type { DesignComposerContext } from '../chat/FloatingComposer'
 import type { ComposerReasoningEffort } from '../chat/FloatingComposerModelPicker'
@@ -445,7 +445,7 @@ function DesignAIRailInner({
               {t('designRailChildLoading')}
             </div>
           ) : hasTimeline ? (
-            <MessageTimeline
+            <LazyMessageTimeline
               blocks={timelineBlocks}
               liveReasoning={timelineLiveReasoning}
               live={timelineLiveAssistant}
