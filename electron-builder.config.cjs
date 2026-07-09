@@ -113,7 +113,23 @@ module.exports = {
     // Computer-use native automation (@computer-use/nut-js + its libnut
     // binding + node-mac-permissions) ships prebuilt .node files that must
     // live outside the asar archive to load.
-    '**/node_modules/@computer-use/**/*'
+    '**/node_modules/@computer-use/**/*',
+    // OCR fallback loads native canvas bindings plus Tesseract worker/core
+    // wasm and language data by filesystem path at runtime.
+    '**/node_modules/@napi-rs/canvas*/**/*',
+    '**/node_modules/tesseract.js/**/*',
+    '**/node_modules/tesseract.js-core/**/*',
+    '**/node_modules/@tesseract.js-data/**/*',
+    '**/node_modules/bmp-js/**/*',
+    '**/node_modules/idb-keyval/**/*',
+    '**/node_modules/is-url/**/*',
+    '**/node_modules/node-fetch/**/*',
+    '**/node_modules/whatwg-url/**/*',
+    '**/node_modules/tr46/**/*',
+    '**/node_modules/webidl-conversions/**/*',
+    '**/node_modules/regenerator-runtime/**/*',
+    '**/node_modules/wasm-feature-detect/**/*',
+    '**/node_modules/zlibjs/**/*'
   ],
   npmRebuild: true,
   directories: {

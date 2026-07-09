@@ -295,8 +295,7 @@ async function extractPdfText(
       let ocrTexts: Map<number, string>
       try {
         ocrTexts = await extractOcrPageTexts(document, pagesToOcr)
-      } catch (error) {
-        if (drafts.size === 0) throw error
+      } catch {
         ocrTexts = new Map()
       }
       for (const [pageNumber, text] of ocrTexts) {

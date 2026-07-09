@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createCanvas } from '@napi-rs/canvas'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { clearWritePdfTextCache, readLocalPdfText, readWritePdfText } from './write-pdf-text-service'
 
 function escapePdfText(text: string): string {
@@ -157,4 +157,43 @@ describe('write PDF text service', () => {
     expect(result.pages[0]?.text.toUpperCase()).toContain('SCANNED')
     expect(result.pages[0]?.text.toUpperCase()).toContain('OCR')
   }, 60_000)
+
+  it('returns a recoverable no-text result when OCR fails for an image-only PDF', async () => {
+    const workspaceRoot = await mkdtemp(join(tmpdir(), 'ds-gui-local-pdf-ocr-failure-'))
+    const pdfPath = join(workspaceRoot, 'scanned-ocr-failure.pdf')
+    await writeFile(pdfPath, createImageOnlyPdf('SCANNED PDF OCR FAILURE'))
+
+    const createWorker = vi.fn(async () => {
+      throw new Error('OCR worker unavailable')
+    })
+
+    vi.resetModules()
+    vi.doMock('tesseract.js', () => ({
+      createWorker,
+      default: {
+        createWorker,
+        PSM: { AUTO: '3' }
+      },
+      PSM: { AUTO: '3' }
+    }))
+
+    try {
+      const service = await import('./write-pdf-text-service')
+      const result = await service.readLocalPdfText({ path: pdfPath })
+
+      expect(createWorker).toHaveBeenCalledTimes(1)
+      expect(result.ok).toBe(true)
+      if (!result.ok) return
+      expect(result.pageCount).toBe(1)
+      expect(result.hasText).toBe(false)
+      expect(result.pages).toEqual([])
+      expect(result.ocrApplied).toBe(false)
+      expect(result.ocrPageCount).toBe(0)
+      expect(result.truncated).toBe(false)
+      service.clearWritePdfTextCache()
+    } finally {
+      vi.doUnmock('tesseract.js')
+      vi.resetModules()
+    }
+  }, 30_000)
 })

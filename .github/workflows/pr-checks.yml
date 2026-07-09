@@ -87,6 +87,9 @@ jobs:
       - name: Build Linux AppImage
         run: npm run dist:linux
 
+      - name: Smoke packaged OCR dependencies
+        run: node scripts/smoke-packaged-ocr.cjs
+
       - name: Upload Linux package
         uses: actions/upload-artifact@v4
         with:
