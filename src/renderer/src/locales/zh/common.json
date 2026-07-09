@@ -1461,7 +1461,7 @@
   "pluginOAuthGoogleSetupConsent": "配置 OAuth 同意屏幕和允许的 Workspace scopes。",
   "pluginOAuthGoogleSetupAuthenticate": "运行时启动后，用你的 Google 账号完成 Workspace MCP 授权。",
   "pluginOAuthVercelNote": "Kun 现在会安装 Vercel 官方远程 MCP 端点。Token 存储和刷新由运行时支持交互式授权后接管。",
-  "pluginOAuthGoogleNote": "Kun 现在会安装官方 Gmail、Drive、Calendar、Chat 和 People MCP 端点。Google OAuth client 配置仍按 Google Workspace MCP 文档处理。",
+  "pluginOAuthGoogleNote": "Kun 现在会安装官方 Gmail、Drive、Calendar、Chat 和 People MCP 端点。Google OAuth client 配置仍按 Google Workspace MCP 文档处理。邮件、文档、聊天消息和文件都属于外部不可信内容，工具在总结或执行动作时应按不可信输入处理。",
   "pluginOAuthConfigPreviewTitle": "即将添加的配置",
   "pluginOAuthOpenDocs": "打开官方文档",
   "pluginOAuthCancel": "取消",

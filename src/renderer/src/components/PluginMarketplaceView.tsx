@@ -370,6 +370,14 @@ const GOOGLE_WORKSPACE_MCP_SERVERS = {
   google_chat: 'https://chatmcp.googleapis.com/mcp/v1'
 } as const
 
+export function googleWorkspaceMcpServerIds(): string[] {
+  return Object.keys(GOOGLE_WORKSPACE_MCP_SERVERS)
+}
+
+export function googleWorkspaceMcpServers(): Record<string, string> {
+  return { ...GOOGLE_WORKSPACE_MCP_SERVERS }
+}
+
 export function buildRemoteMcpConfig(servers: Record<string, string>): JsonRecord {
   return {
     servers: Object.fromEntries(
@@ -751,7 +759,7 @@ const RECOMMENDED_ITEMS: MarketplaceItem[] = [
     group: 'recommended',
     sourceLabel: 'OAuth',
     statusTone: 'warning',
-    serverIds: Object.keys(GOOGLE_WORKSPACE_MCP_SERVERS),
+    serverIds: googleWorkspaceMcpServerIds(),
     oauth: {
       docsUrl: 'https://developers.google.com/workspace/guides/configure-mcp-servers',
       permissionKeys: [
@@ -774,7 +782,7 @@ const RECOMMENDED_ITEMS: MarketplaceItem[] = [
     },
     supplyChain: { source: 'remote-mcp', permissions: ['network', 'secret', 'file'] },
     mcpConfig: () =>
-      buildRemoteMcpConfig(GOOGLE_WORKSPACE_MCP_SERVERS)
+      buildRemoteMcpConfig(googleWorkspaceMcpServers())
   },
   {
     id: 'context7',

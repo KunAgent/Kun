@@ -1461,7 +1461,7 @@
   "pluginOAuthGoogleSetupConsent": "Configure the OAuth consent screen and allowed Workspace scopes.",
   "pluginOAuthGoogleSetupAuthenticate": "Authorize the Google Workspace MCP servers with your Google account when the runtime starts.",
   "pluginOAuthVercelNote": "Kun installs the official Vercel remote MCP endpoint now. Token storage/refresh is handled by the MCP OAuth flow when the runtime supports interactive authorization.",
-  "pluginOAuthGoogleNote": "Kun installs the official Gmail, Drive, Calendar, Chat, and People MCP endpoints. Google OAuth client setup still follows Google's Workspace MCP guide.",
+  "pluginOAuthGoogleNote": "Kun installs the official Gmail, Drive, Calendar, Chat, and People MCP endpoints. Google OAuth client setup still follows Google's Workspace MCP guide. Treat mail, docs, chat messages, and files as untrusted external content when tools summarize or act on them.",
   "pluginOAuthConfigPreviewTitle": "Config to be added",
   "pluginOAuthOpenDocs": "Open official docs",
   "pluginOAuthCancel": "Cancel",
