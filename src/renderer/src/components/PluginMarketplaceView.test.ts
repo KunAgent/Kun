@@ -6,6 +6,8 @@ import {
   customMcpConfigFragment,
   auditMcpConfigSupplyChain,
   auditMarketplaceInstall,
+  googleWorkspaceMcpServerIds,
+  googleWorkspaceMcpServers,
   isAllowedDocsUrl,
   isHttpsUrl,
   mcpConfigHasServer,
@@ -62,6 +64,27 @@ describe('PluginMarketplaceView MCP config helpers', () => {
         })
       }
     })
+  })
+
+  it('covers every official Google Workspace MCP server in the recommended connector', () => {
+    expect(googleWorkspaceMcpServerIds()).toEqual([
+      'google_gmail',
+      'google_drive',
+      'google_calendar',
+      'google_people',
+      'google_chat'
+    ])
+
+    const config = buildRemoteMcpConfig(googleWorkspaceMcpServers())
+    expect(Object.keys(config.servers as Record<string, unknown>)).toEqual(googleWorkspaceMcpServerIds())
+    for (const server of Object.values(config.servers as Record<string, any>)) {
+      expect(server).toMatchObject({
+        enabled: true,
+        transport: 'streamable-http',
+        trustScope: 'user'
+      })
+      expect(server.url).toMatch(/^https:\/\//)
+    }
   })
 
   it('rejects non-https remote MCP server URLs', () => {

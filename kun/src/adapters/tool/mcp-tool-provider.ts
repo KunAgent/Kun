@@ -20,6 +20,7 @@ import {
   isMcpAuthorizationRequiredError
 } from './mcp-transport.js'
 import { errorMessage, formatMcpConnectionError } from './mcp-stdio-environment.js'
+import { createMcpFacadeProvider } from './mcp-facade-provider.js'
 import type {
   McpClientLike,
   McpOAuthAuthorizeResult,
@@ -328,6 +329,7 @@ export async function buildMcpToolProviders(
   } else {
     providers.push(...directProviders)
   }
+  providers.push(createMcpFacadeProvider(connected))
   const advertisedToolCount = providers.reduce((total, provider) => total + provider.tools.length, 0)
 
   // Servers that need OAuth authorization are NOT retried by the background

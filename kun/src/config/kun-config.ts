@@ -234,6 +234,16 @@ export const DEFAULT_STORAGE_CONFIG: StorageConfig = {
   backend: 'hybrid'
 }
 
+export const ObservabilityConfigSchema = z
+  .object({
+    enabled: z.boolean().default(false).optional(),
+    outputPath: z.string().min(1).optional(),
+    // Reserved for future trace payload sampling. The current exporter never
+    // records prompts, tool arguments, tool output, command text, or secrets.
+    includeSensitiveContent: z.boolean().default(false).optional()
+  })
+  .strict()
+
 /**
  * Per-`providerId` HTTP credentials. Lets the runtime route a thread's turns
  * to a non-default provider without restart — the workflow / scheduled task
@@ -294,6 +304,7 @@ export const KunServeConfigSchema = z
     toolOutputLimits: ToolOutputLimitsConfigSchema.optional(),
     insecure: z.boolean().optional(),
     storage: StorageConfigSchema.optional(),
+    observability: ObservabilityConfigSchema.optional(),
     /**
      * Extra HTTP headers merged into every default-client model request
      * (last, so they win). Used for providers that authenticate with more
@@ -360,6 +371,7 @@ export type RuntimeTuningConfig = z.infer<typeof RuntimeTuningConfigSchema>
 export type TokenEconomyConfig = z.infer<typeof TokenEconomyConfigSchema>
 export type ToolOutputLimitsConfig = z.infer<typeof ToolOutputLimitsConfigSchema>
 export type StorageConfig = z.infer<typeof StorageConfigSchema>
+export type ObservabilityConfig = z.infer<typeof ObservabilityConfigSchema>
 
 export type LoadedKunConfig = {
   path: string

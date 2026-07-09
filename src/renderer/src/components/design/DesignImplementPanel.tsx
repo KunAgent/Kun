@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next'
 import type { AttachmentReference, RuntimeConnectionStatus, ChatBlock } from '../../agent/types'
 import type { QueuedUserMessage } from '../../store/chat-store-types'
 import type { ModelProviderModelGroup } from '@shared/kun-gui-api'
-import { MessageTimeline } from '../chat/MessageTimeline'
+import { LazyMessageTimeline } from '../chat/LazyMessageTimeline'
 import { FloatingComposer } from '../chat/FloatingComposer'
 import type { ComposerReasoningEffort } from '../chat/FloatingComposerModelPicker'
 
@@ -128,7 +128,7 @@ export function DesignImplementPanel({
 
       <div className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-ds-main/45 dark:bg-transparent">
         {hasTimeline ? (
-          <MessageTimeline
+          <LazyMessageTimeline
             blocks={blocks}
             liveReasoning={liveReasoning}
             live={liveAssistant}

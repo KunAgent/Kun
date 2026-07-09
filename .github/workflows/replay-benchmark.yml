@@ -1,0 +1,124 @@
+name: Replay Benchmark
+
+on:
+  workflow_dispatch:
+    inputs:
+      suite:
+        description: Path to the replay suite JSON file
+        required: true
+        type: string
+      runtime_url:
+        description: Kun runtime URL reachable from the runner
+        required: false
+        default: http://127.0.0.1:18899
+        type: string
+      tag:
+        description: Optional suite tag filter
+        required: false
+        type: string
+      repeat:
+        description: Repetitions per selected task
+        required: false
+        default: "1"
+        type: string
+      concurrency:
+        description: Parallel replay tasks
+        required: false
+        default: "1"
+        type: string
+      baseline:
+        description: Optional baseline report JSON path
+        required: false
+        type: string
+      budget:
+        description: Optional replay budget JSON path
+        required: false
+        type: string
+      fail_on_regression:
+        description: Fail when baseline comparison detects regressions
+        required: false
+        default: true
+        type: boolean
+      fail_on_budget:
+        description: Fail when explicit budget thresholds are exceeded
+        required: false
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: replay-benchmark-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  replay:
+    name: Run replay benchmark
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      KUN_RUNTIME_TOKEN: ${{ secrets.KUN_RUNTIME_TOKEN }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run replay benchmark
+        shell: bash
+        env:
+          SUITE_PATH: ${{ inputs.suite }}
+          RUNTIME_URL: ${{ inputs.runtime_url }}
+          TAG_FILTER: ${{ inputs.tag }}
+          REPEAT_COUNT: ${{ inputs.repeat }}
+          CONCURRENCY: ${{ inputs.concurrency }}
+          BASELINE_PATH: ${{ inputs.baseline }}
+          BUDGET_PATH: ${{ inputs.budget }}
+          FAIL_ON_REGRESSION: ${{ inputs.fail_on_regression }}
+          FAIL_ON_BUDGET: ${{ inputs.fail_on_budget }}
+        run: |
+          set -euo pipefail
+          mkdir -p replay-artifacts
+          args=(
+            --suite "${SUITE_PATH}"
+            --base-url "${RUNTIME_URL}"
+            --workspace "${{ github.workspace }}"
+            --repeat "${REPEAT_COUNT}"
+            --concurrency "${CONCURRENCY}"
+            --output replay-artifacts/replay-report.json
+            --summary-output replay-artifacts/replay-summary.md
+          )
+          if [[ -n "${TAG_FILTER}" ]]; then
+            args+=(--tag "${TAG_FILTER}")
+          fi
+          if [[ -n "${BASELINE_PATH}" ]]; then
+            args+=(--baseline "${BASELINE_PATH}")
+            if [[ "${FAIL_ON_REGRESSION}" == "true" ]]; then
+              args+=(--fail-on-regression)
+            fi
+          fi
+          if [[ -n "${BUDGET_PATH}" ]]; then
+            args+=(--budget "${BUDGET_PATH}")
+            if [[ "${FAIL_ON_BUDGET}" == "true" ]]; then
+              args+=(--fail-on-budget)
+            fi
+          fi
+          npm --prefix kun run benchmark:replay -- "${args[@]}"
+
+      - name: Upload replay report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: kun-replay-report
+          path: |
+            replay-artifacts/replay-report.json
+            replay-artifacts/replay-summary.md
+          if-no-files-found: warn

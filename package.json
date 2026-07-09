@@ -63,6 +63,7 @@
     "@xterm/xterm": "^6.0.0",
     "@xyflow/react": "^12.11.0",
     "better-sqlite3": "^12.10.0",
+    "diff": "^8.0.4",
     "electron-store": "^10.1.0",
     "electron-updater": "^6.8.3",
     "html-to-docx": "^1.8.0",

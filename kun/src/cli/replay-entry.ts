@@ -3,6 +3,8 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
 import {
   compareReplayReports,
+  evaluateReplayBudget,
+  formatReplayReportMarkdown,
   runReplaySuite,
   type ReplayReport
 } from '../benchmark/replay-benchmark.js'
@@ -15,12 +17,15 @@ type CliOptions = {
   baseUrl: string
   workspace: string
   outputPath?: string
+  summaryPath?: string
   baselinePath?: string
+  budgetPath?: string
   repeat: number
   concurrency: number
   tag?: string
   keepThreads: boolean
   failOnRegression: boolean
+  failOnBudget: boolean
   help: boolean
 }
 
@@ -57,6 +62,10 @@ if (options.baselinePath) {
   const baseline = JSON.parse(await readFile(resolve(options.baselinePath), 'utf8')) as ReplayReport
   report.comparison = compareReplayReports(report, baseline)
 }
+if (options.budgetPath) {
+  const budget = JSON.parse(await readFile(resolve(options.budgetPath), 'utf8')) as unknown
+  report.budget = evaluateReplayBudget(report, budget)
+}
 
 printSummary(report)
 if (options.outputPath) {
@@ -67,8 +76,17 @@ if (options.outputPath) {
 } else {
   console.log(JSON.stringify(report, null, 2))
 }
+if (options.summaryPath) {
+  const summaryPath = resolve(options.summaryPath)
+  await mkdir(dirname(summaryPath), { recursive: true })
+  await writeFile(summaryPath, formatReplayReportMarkdown(report), 'utf8')
+  console.error(`Replay summary written to ${summaryPath}`)
+}
 
 if (options.failOnRegression && report.comparison?.regressions.length) {
+  process.exitCode = 1
+}
+if (options.failOnBudget && report.budget && !report.budget.passed) {
   process.exitCode = 1
 }
 
@@ -80,6 +98,7 @@ function parseArgs(args: string[]): CliOptions {
     concurrency: 1,
     keepThreads: false,
     failOnRegression: false,
+    failOnBudget: false,
     help: false
   }
   for (let index = 0; index < args.length; index += 1) {
@@ -97,8 +116,14 @@ function parseArgs(args: string[]): CliOptions {
       case '--output':
         options.outputPath = requiredValue(args, ++index, arg)
         break
+      case '--summary-output':
+        options.summaryPath = requiredValue(args, ++index, arg)
+        break
       case '--baseline':
         options.baselinePath = requiredValue(args, ++index, arg)
+        break
+      case '--budget':
+        options.budgetPath = requiredValue(args, ++index, arg)
         break
       case '--tag':
         options.tag = requiredValue(args, ++index, arg)
@@ -114,6 +139,9 @@ function parseArgs(args: string[]): CliOptions {
         break
       case '--fail-on-regression':
         options.failOnRegression = true
+        break
+      case '--fail-on-budget':
+        options.failOnBudget = true
         break
       case '--help':
       case '-h':
@@ -149,9 +177,12 @@ function printUsage(): void {
   console.log('  --repeat <n>              Repeat each selected task (default 1)')
   console.log('  --concurrency <n>         Parallel tasks, capped at 8 (default 1)')
   console.log('  --baseline <report.json>  Compare against an earlier report')
+  console.log('  --budget <budget.json>    Evaluate explicit CI budget thresholds')
   console.log('  --output <report.json>    Write the full machine-readable report')
+  console.log('  --summary-output <file>   Write a Markdown summary report')
   console.log('  --keep-threads            Keep generated replay threads')
   console.log('  --fail-on-regression      Exit 1 when comparison thresholds regress')
+  console.log('  --fail-on-budget          Exit 1 when explicit budget thresholds fail')
   console.log('')
   console.log('Authentication: set KUN_RUNTIME_TOKEN; it is intentionally not accepted as a CLI flag.')
 }
@@ -171,6 +202,10 @@ function printSummary(report: ReplayReport): void {
   if (report.comparison) {
     console.error(`Regressions: ${report.comparison.regressions.length}`)
     for (const regression of report.comparison.regressions) console.error(`  - ${regression}`)
+  }
+  if (report.budget) {
+    console.error(`Budget gate: ${report.budget.passed ? 'passed' : 'failed'}`)
+    for (const violation of report.budget.violations) console.error(`  - ${violation.message}`)
   }
 }
 

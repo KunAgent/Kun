@@ -338,6 +338,20 @@ describe('cli', () => {
     expect(parsed.storage.backend).toBe('file')
   })
 
+  it('enables sanitized observability from env and output flag', () => {
+    const parsed = parseServeOptions([
+      '--data-dir=/srv/ca',
+      '--observability-output=otel/spans.jsonl'
+    ], {
+      KUN_OBSERVABILITY: '1'
+    })
+    expect(parsed.observability).toEqual({
+      enabled: true,
+      outputPath: 'otel/spans.jsonl',
+      includeSensitiveContent: false
+    })
+  })
+
   it('loads serve and context compaction settings from an explicit config file', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'kun-config-'))
     try {

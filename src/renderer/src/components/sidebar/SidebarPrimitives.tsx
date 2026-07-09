@@ -1,4 +1,10 @@
-import type { CSSProperties, MouseEvent as ReactMouseEvent, ReactElement, ReactNode } from 'react'
+import type {
+  CSSProperties,
+  DragEvent as ReactDragEvent,
+  MouseEvent as ReactMouseEvent,
+  ReactElement,
+  ReactNode
+} from 'react'
 import { ChevronRight, Command, PanelLeft, Search, X } from 'lucide-react'
 
 function cx(...parts: Array<string | false | null | undefined>): string {
@@ -279,6 +285,12 @@ type SidebarTreeRowProps = {
   onMouseEnter?: (event: ReactMouseEvent<HTMLDivElement>) => void
   onMouseMove?: (event: ReactMouseEvent<HTMLDivElement>) => void
   onMouseLeave?: (event: ReactMouseEvent<HTMLDivElement>) => void
+  draggable?: boolean
+  onDragStart?: (event: ReactDragEvent<HTMLDivElement>) => void
+  onDragEnd?: (event: ReactDragEvent<HTMLDivElement>) => void
+  onDragOver?: (event: ReactDragEvent<HTMLDivElement>) => void
+  onDragLeave?: (event: ReactDragEvent<HTMLDivElement>) => void
+  onDrop?: (event: ReactDragEvent<HTMLDivElement>) => void
   disabled?: boolean
   active?: boolean
   activeVariant?: 'rail' | 'outline'
@@ -301,6 +313,12 @@ export function SidebarTreeRow({
   onMouseEnter,
   onMouseMove,
   onMouseLeave,
+  draggable = false,
+  onDragStart,
+  onDragEnd,
+  onDragOver,
+  onDragLeave,
+  onDrop,
   disabled,
   active = false,
   activeVariant = 'rail',
@@ -346,6 +364,12 @@ export function SidebarTreeRow({
       onMouseEnter={onMouseEnter}
       onMouseMove={onMouseMove}
       onMouseLeave={onMouseLeave}
+      draggable={draggable}
+      onDragStart={onDragStart}
+      onDragEnd={onDragEnd}
+      onDragOver={onDragOver}
+      onDragLeave={onDragLeave}
+      onDrop={onDrop}
     >
       {rail ? (
         <span

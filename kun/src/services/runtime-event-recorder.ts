@@ -19,6 +19,12 @@ export type RuntimeEventRecorderOptions = {
   sessionStore: SessionStore
   allocateSeq: (threadId: string) => number
   nowIso: () => string
+  observers?: RuntimeEventObserver[]
+}
+
+export type RuntimeEventObserver = {
+  record(event: RuntimeEvent): Promise<void> | void
+  clearThread?(threadId: string): void
 }
 
 /**
@@ -51,6 +57,7 @@ export class RuntimeEventRecorder {
     })
     await this.options.sessionStore.appendEvent(event.threadId, event)
     this.options.eventBus.publish(event)
+    await this.notifyObservers(event)
     return event
   }
 
@@ -81,5 +88,19 @@ export class RuntimeEventRecorder {
 
   clearThread(threadId: string): void {
     this.lastIssuedSeq.delete(threadId)
+    for (const observer of this.options.observers ?? []) {
+      observer.clearThread?.(threadId)
+    }
+  }
+
+  private async notifyObservers(event: RuntimeEvent): Promise<void> {
+    for (const observer of this.options.observers ?? []) {
+      try {
+        await observer.record(event)
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error)
+        console.warn(`[kun] runtime event observer failed: ${message}`)
+      }
+    }
   }
 }

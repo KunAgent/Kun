@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { execFileSync } from 'node:child_process'
-import { mkdtemp, mkdir, readFile, rm, stat, symlink, utimes, writeFile } from 'node:fs/promises'
+import { mkdtemp, mkdir, readFile, realpath, rm, stat, symlink, utimes, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, normalize } from 'node:path'
 import {
@@ -78,12 +78,14 @@ describe('git checkpoint service', () => {
       workspaceRootCanonical?: string
     }
 
+    const repoRootCanonical = normalize(await realpath(repoRoot))
+
     expect(manifest).toMatchObject({
       version: 1,
       checkpointId: checkpoint.checkpointId,
       threadId: 'thr_manifest',
-      repositoryRootCanonical: normalize(repoRoot),
-      workspaceRootCanonical: normalize(repoRoot)
+      repositoryRootCanonical: repoRootCanonical,
+      workspaceRootCanonical: repoRootCanonical
     })
   })
 

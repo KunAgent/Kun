@@ -18,6 +18,40 @@ export type McpToolDescriptor = {
   _meta?: Record<string, unknown>
 }
 
+export type McpResourceDescriptor = {
+  uri: string
+  name?: string
+  title?: string
+  description?: string
+  mimeType?: string
+  size?: number
+  annotations?: Record<string, unknown>
+  _meta?: Record<string, unknown>
+}
+
+export type McpResourceTemplateDescriptor = {
+  uriTemplate: string
+  name?: string
+  title?: string
+  description?: string
+  mimeType?: string
+  annotations?: Record<string, unknown>
+  _meta?: Record<string, unknown>
+}
+
+export type McpPromptDescriptor = {
+  name: string
+  title?: string
+  description?: string
+  arguments?: Array<{
+    name: string
+    title?: string
+    description?: string
+    required?: boolean
+  }>
+  _meta?: Record<string, unknown>
+}
+
 export type McpClientLifecycleHandlers = {
   onError?: (error: Error) => void
   onClose?: () => void
@@ -31,6 +65,29 @@ export type McpClientLike = {
   }): Promise<{ tools: McpToolDescriptor[]; nextCursor?: string }>
   callTool(
     input: { name: string; arguments: Record<string, unknown> },
+    options?: { signal?: AbortSignal; timeout?: number }
+  ): Promise<unknown>
+  listResources?(options?: {
+    cursor?: string
+    signal?: AbortSignal
+    timeout?: number
+  }): Promise<{ resources: McpResourceDescriptor[]; nextCursor?: string }>
+  readResource?(
+    input: { uri: string },
+    options?: { signal?: AbortSignal; timeout?: number }
+  ): Promise<unknown>
+  listResourceTemplates?(options?: {
+    cursor?: string
+    signal?: AbortSignal
+    timeout?: number
+  }): Promise<{ resourceTemplates: McpResourceTemplateDescriptor[]; nextCursor?: string }>
+  listPrompts?(options?: {
+    cursor?: string
+    signal?: AbortSignal
+    timeout?: number
+  }): Promise<{ prompts: McpPromptDescriptor[]; nextCursor?: string }>
+  getPrompt?(
+    input: { name: string; arguments?: Record<string, unknown> },
     options?: { signal?: AbortSignal; timeout?: number }
   ): Promise<unknown>
   close(): Promise<void>

@@ -311,6 +311,12 @@ export class DelegationRuntime {
       // via abortChild(id).
       const detachedController = new AbortController()
       this.detachedAborts.set(record.id, detachedController)
+      const logIgnoredParentAbort = (): void => {
+        console.warn(`[kun] detached subagent ignored parent abort child=${record.id} parentThread=${input.parentThreadId} parentTurn=${input.parentTurnId}`)
+      }
+      if (input.signal.aborted) logIgnoredParentAbort()
+      else input.signal.addEventListener('abort', logIgnoredParentAbort, { once: true })
+      console.warn(`[kun] detached subagent started with independent abort signal child=${record.id} parentThread=${input.parentThreadId} parentTurn=${input.parentTurnId}`)
       // Surface ChildRunExecutor's resolved fields via the closure shared with
       // the synchronous path. The same executor block runs inside executeChild.
       void this.executeChild({
@@ -340,7 +346,11 @@ export class DelegationRuntime {
       })
         .then((settled) => this.notifyDetachedChild(settled))
         .catch(() => undefined)
-        .finally(() => this.detachedAborts.delete(record.id))
+        .finally(() => {
+          input.signal.removeEventListener('abort', logIgnoredParentAbort)
+          this.detachedAborts.delete(record.id)
+          console.warn(`[kun] detached subagent finished background tracking child=${record.id}`)
+        })
       return record
     }
 
@@ -569,8 +579,13 @@ export class DelegationRuntime {
    */
   abortChild(childId: string): boolean {
     const controller = this.detachedAborts.get(childId)
-    if (!controller) return false
+    if (!controller) {
+      console.warn(`[kun] detached subagent abort requested but no running child found child=${childId}`)
+      return false
+    }
+    console.warn(`[kun] detached subagent abort requested child=${childId}`)
     controller.abort()
+    console.warn(`[kun] detached subagent abort signal fired child=${childId}`)
     return true
   }
 

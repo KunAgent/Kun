@@ -30,7 +30,7 @@ import type { AttachmentReference, ChatBlock, RuntimeConnectionStatus } from '..
 import type { QueuedUserMessage } from '../../store/chat-store-types'
 import type { ModelProviderModelGroup } from '@shared/kun-gui-api'
 import type { SddDraft } from '../../sdd/sdd-draft-store'
-import { MessageTimeline } from '../chat/MessageTimeline'
+import { LazyMessageTimeline } from '../chat/LazyMessageTimeline'
 import { FloatingComposer } from '../chat/FloatingComposer'
 import type { ComposerReasoningEffort } from '../chat/FloatingComposerModelPicker'
 import { SidebarTitlebarToggleButton } from '../sidebar/SidebarPrimitives'
@@ -181,7 +181,7 @@ export function SddAssistantPanel({
       <div className="sdd-assistant-body min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-ds-main/45 dark:bg-transparent">
         {hasTimeline ? (
           <div className="sdd-assistant-timeline">
-            <MessageTimeline
+            <LazyMessageTimeline
               blocks={blocks}
               liveReasoning={liveReasoning}
               live={liveAssistant}
