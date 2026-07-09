@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest'
 import type { RuntimeEvent } from '../contracts/events.js'
 import {
   compareReplayReports,
+  evaluateReplayBudget,
   evaluateReplayQuality,
+  formatReplayReportMarkdown,
   ReplaySuiteSchema,
   runReplaySuite,
   SseMessageDecoder,
@@ -169,6 +171,53 @@ describe('replay benchmark', () => {
       expect.stringContaining('total latency'),
       expect.stringContaining('cache hit rate')
     ]))
+  })
+
+  it('evaluates explicit replay budget gates', () => {
+    const passing = report([
+      replayRun('passed', 100, 1_000, 0.8),
+      replayRun('passed', 120, 1_100, 0.7)
+    ], '2026-06-29T00:00:00.000Z')
+
+    expect(evaluateReplayBudget(passing, {
+      minSuccessRate: 1,
+      maxTtftP95Ms: 150,
+      maxTotalP95Ms: 1_200,
+      maxPromptTokens: 250,
+      maxTotalTokens: 300,
+      minCacheHitRate: 0.7,
+      maxCostUsd: 0.01,
+      maxPeakRssBytes: 200
+    })).toEqual({ passed: true, violations: [] })
+
+    const failing = report([
+      replayRun('passed', 200, 2_000, 0.2),
+      replayRun('failed', 250, 2_500, 0.1)
+    ], '2026-06-29T00:00:00.000Z')
+    const result = evaluateReplayBudget(failing, {
+      minSuccessRate: 1,
+      maxTotalP95Ms: 2_000,
+      minCacheHitRate: 0.5
+    })
+
+    expect(result.passed).toBe(false)
+    expect(result.violations.map((violation) => violation.metric)).toEqual([
+      'successRate',
+      'totalP95Ms',
+      'cacheHitRate'
+    ])
+  })
+
+  it('renders a Markdown report with budget violations', () => {
+    const current = report([replayRun('failed', 250, 2_500, 0.2)], '2026-06-29T00:00:00.000Z')
+    current.budget = evaluateReplayBudget(current, {
+      minSuccessRate: 1,
+      maxTotalP95Ms: 2_000
+    })
+
+    expect(formatReplayReportMarkdown(current)).toContain('## Budget Gate')
+    expect(formatReplayReportMarkdown(current)).toContain('- Result: failed')
+    expect(formatReplayReportMarkdown(current)).toContain('totalP95Ms')
   })
 
   it('rejects duplicate task ids before spending model tokens', () => {

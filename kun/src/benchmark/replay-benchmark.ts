@@ -148,6 +148,35 @@ export type ReplayComparison = {
   regressions: string[]
 }
 
+const ReplayBudgetSchema = z.object({
+  minSuccessRate: z.number().min(0).max(1).optional(),
+  maxTtftP95Ms: z.number().nonnegative().optional(),
+  maxTotalP95Ms: z.number().nonnegative().optional(),
+  maxToolDurationP95Ms: z.number().nonnegative().optional(),
+  maxSseDelayP95Ms: z.number().nonnegative().optional(),
+  maxPromptTokens: z.number().int().nonnegative().optional(),
+  maxTotalTokens: z.number().int().nonnegative().optional(),
+  minCacheHitRate: z.number().min(0).max(1).optional(),
+  minCacheableTokenHitRate: z.number().min(0).max(1).optional(),
+  minTotalInputTokenHitRate: z.number().min(0).max(1).optional(),
+  maxCostUsd: z.number().nonnegative().optional(),
+  maxPeakRssBytes: z.number().int().nonnegative().optional()
+}).strict()
+
+export type ReplayBudget = z.infer<typeof ReplayBudgetSchema>
+
+export type ReplayBudgetViolation = {
+  metric: string
+  actual: number | null
+  limit: number
+  message: string
+}
+
+export type ReplayBudgetEvaluation = {
+  passed: boolean
+  violations: ReplayBudgetViolation[]
+}
+
 export type ReplayReport = {
   version: 1
   generatedAt: string
@@ -161,6 +190,7 @@ export type ReplayReport = {
   summary: ReplayReportSummary
   runs: ReplayRunResult[]
   comparison?: ReplayComparison
+  budget?: ReplayBudgetEvaluation
 }
 
 export type RunReplaySuiteOptions = {
@@ -535,6 +565,81 @@ export function compareReplayReports(current: ReplayReport, baseline: ReplayRepo
   }
 }
 
+export function parseReplayBudget(input: unknown): ReplayBudget {
+  return ReplayBudgetSchema.parse(input)
+}
+
+export function evaluateReplayBudget(report: ReplayReport, budgetInput: unknown): ReplayBudgetEvaluation {
+  const budget = parseReplayBudget(budgetInput)
+  const { summary } = report
+  const violations: ReplayBudgetViolation[] = []
+
+  addMinimumViolation(violations, 'successRate', summary.successRate, budget.minSuccessRate)
+  addMaximumViolation(violations, 'ttftP95Ms', summary.ttftP95Ms, budget.maxTtftP95Ms)
+  addMaximumViolation(violations, 'totalP95Ms', summary.totalP95Ms, budget.maxTotalP95Ms)
+  addMaximumViolation(violations, 'toolDurationP95Ms', summary.toolDurationP95Ms, budget.maxToolDurationP95Ms)
+  addMaximumViolation(violations, 'sseDelayP95Ms', summary.sseDelayP95Ms, budget.maxSseDelayP95Ms)
+  addMaximumViolation(violations, 'promptTokens', summary.promptTokens, budget.maxPromptTokens)
+  addMaximumViolation(violations, 'totalTokens', summary.totalTokens, budget.maxTotalTokens)
+  addMinimumViolation(violations, 'cacheHitRate', summary.cacheHitRate, budget.minCacheHitRate)
+  addMinimumViolation(violations, 'cacheableTokenHitRate', summary.cacheableTokenHitRate, budget.minCacheableTokenHitRate)
+  addMinimumViolation(violations, 'totalInputTokenHitRate', summary.totalInputTokenHitRate, budget.minTotalInputTokenHitRate)
+  addMaximumViolation(violations, 'costUsd', summary.costUsd, budget.maxCostUsd)
+  addMaximumViolation(violations, 'peakRssBytes', summary.peakRssBytes, budget.maxPeakRssBytes)
+
+  return { passed: violations.length === 0, violations }
+}
+
+export function formatReplayReportMarkdown(report: ReplayReport): string {
+  const lines = [
+    `# Replay Benchmark Report`,
+    '',
+    `- Suite: ${report.suite.name}`,
+    `- Generated: ${report.generatedAt}`,
+    `- Runtime: ${report.runtime.baseUrl}`,
+    `- Model: ${report.runtime.model ?? 'n/a'}`,
+    `- Runs: ${report.summary.passed}/${report.summary.runCount} passed (${formatPercent(report.summary.successRate)})`,
+    `- TTFT p50/p95: ${formatOptionalMs(report.summary.ttftP50Ms)} / ${formatOptionalMs(report.summary.ttftP95Ms)}`,
+    `- Total p50/p95: ${formatOptionalMs(report.summary.totalP50Ms)} / ${formatOptionalMs(report.summary.totalP95Ms)}`,
+    `- Tool p95: ${formatOptionalMs(report.summary.toolDurationP95Ms)}`,
+    `- SSE delay p95: ${formatOptionalMs(report.summary.sseDelayP95Ms)}`,
+    `- Tokens: ${report.summary.promptTokens} input + ${report.summary.completionTokens} output`,
+    `- Cache hit: ${formatOptionalPercent(report.summary.cacheHitRate)}`,
+    `- Cost: $${report.summary.costUsd.toFixed(6)}`,
+    `- Peak RSS: ${report.summary.peakRssBytes === null ? 'n/a' : formatBytes(report.summary.peakRssBytes)}`,
+    ''
+  ]
+  if (report.comparison) {
+    lines.push('## Baseline Comparison', '')
+    lines.push(`- Baseline: ${report.comparison.baselineGeneratedAt}`)
+    lines.push(`- Success rate delta: ${formatSignedPercent(report.comparison.successRateDelta)}`)
+    lines.push(`- TTFT p95 delta: ${formatSignedOptionalMs(report.comparison.ttftP95MsDelta)}`)
+    lines.push(`- Total p95 delta: ${formatSignedOptionalMs(report.comparison.totalP95MsDelta)}`)
+    lines.push(`- Prompt token delta: ${formatSignedNumber(report.comparison.promptTokensDelta)}`)
+    lines.push(`- Cache hit delta: ${formatSignedOptionalPercent(report.comparison.cacheHitRateDelta)}`)
+    lines.push(`- Cost delta: $${formatSignedFixed(report.comparison.costUsdDelta, 6)}`)
+    lines.push('')
+    appendList(lines, 'Regressions', report.comparison.regressions)
+  }
+  if (report.budget) {
+    lines.push('## Budget Gate', '')
+    lines.push(`- Result: ${report.budget.passed ? 'passed' : 'failed'}`)
+    lines.push('')
+    appendList(lines, 'Violations', report.budget.violations.map((violation) => violation.message))
+  }
+  lines.push('## Failed Runs', '')
+  const failedRuns = report.runs.filter((run) => run.status !== 'passed')
+  if (failedRuns.length === 0) {
+    lines.push('- None')
+  } else {
+    for (const run of failedRuns) {
+      lines.push(`- ${run.id}: ${run.status}${run.failureReasons.length ? ` - ${run.failureReasons.join('; ')}` : ''}`)
+    }
+  }
+  lines.push('')
+  return `${lines.join('\n').trimEnd()}\n`
+}
+
 export type SseMessage = { event?: string; id?: string; data: string }
 
 export class SseMessageDecoder {
@@ -902,6 +1007,108 @@ function sum(left: number, right: number): number {
 
 function formatPercent(value: number): string {
   return `${(value * 100).toFixed(2)}%`
+}
+
+function addMinimumViolation(
+  violations: ReplayBudgetViolation[],
+  metric: string,
+  actual: number | null,
+  limit: number | undefined
+): void {
+  if (limit === undefined) return
+  if (actual === null) {
+    violations.push({
+      metric,
+      actual,
+      limit,
+      message: `${metric} is unavailable; required at least ${formatBudgetValue(metric, limit)}`
+    })
+    return
+  }
+  if (actual < limit) {
+    violations.push({
+      metric,
+      actual,
+      limit,
+      message: `${metric} ${formatBudgetValue(metric, actual)} is below ${formatBudgetValue(metric, limit)}`
+    })
+  }
+}
+
+function addMaximumViolation(
+  violations: ReplayBudgetViolation[],
+  metric: string,
+  actual: number | null,
+  limit: number | undefined
+): void {
+  if (limit === undefined) return
+  if (actual === null) {
+    violations.push({
+      metric,
+      actual,
+      limit,
+      message: `${metric} is unavailable; required at most ${formatBudgetValue(metric, limit)}`
+    })
+    return
+  }
+  if (actual > limit) {
+    violations.push({
+      metric,
+      actual,
+      limit,
+      message: `${metric} ${formatBudgetValue(metric, actual)} exceeds ${formatBudgetValue(metric, limit)}`
+    })
+  }
+}
+
+function appendList(lines: string[], title: string, values: string[]): void {
+  lines.push(`### ${title}`, '')
+  if (values.length === 0) {
+    lines.push('- None', '')
+    return
+  }
+  for (const value of values) lines.push(`- ${value}`)
+  lines.push('')
+}
+
+function formatBudgetValue(metric: string, value: number): string {
+  if (metric.endsWith('Rate')) return formatPercent(value)
+  if (metric.endsWith('Ms')) return `${Math.round(value)}ms`
+  if (metric === 'costUsd') return `$${value.toFixed(6)}`
+  if (metric.endsWith('Bytes')) return formatBytes(value)
+  return String(value)
+}
+
+function formatOptionalMs(value: number | null): string {
+  return value === null ? 'n/a' : `${Math.round(value)}ms`
+}
+
+function formatSignedOptionalMs(value: number | null): string {
+  return value === null ? 'n/a' : `${formatSignedNumber(Math.round(value))}ms`
+}
+
+function formatOptionalPercent(value: number | null): string {
+  return value === null ? 'n/a' : formatPercent(value)
+}
+
+function formatSignedOptionalPercent(value: number | null): string {
+  return value === null ? 'n/a' : formatSignedPercent(value)
+}
+
+function formatSignedPercent(value: number): string {
+  return `${value >= 0 ? '+' : ''}${formatPercent(value)}`
+}
+
+function formatSignedFixed(value: number, digits: number): string {
+  return `${value >= 0 ? '+' : ''}${value.toFixed(digits)}`
+}
+
+function formatSignedNumber(value: number): string {
+  return `${value >= 0 ? '+' : ''}${value}`
+}
+
+function formatBytes(value: number): string {
+  return `${(value / 1024 / 1024).toFixed(1)} MiB`
 }
 
 function errorMessage(error: unknown): string {
