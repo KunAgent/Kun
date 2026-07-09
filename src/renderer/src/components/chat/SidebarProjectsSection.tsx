@@ -1911,9 +1911,14 @@ export function MoveThreadDialog({
             : t('sidebarThreadMovePickerDescription')}
         </p>
         {state.targetWorkspace ? (
-          <p className="mt-4 rounded-2xl border border-ds-border-muted bg-ds-main px-3.5 py-3 text-[13px] leading-6 text-ds-muted">
-            {t('sidebarThreadMoveDialogDetail')}
-          </p>
+          <div className="mt-4 space-y-2">
+            <p className="rounded-2xl border border-ds-border-muted bg-ds-main px-3.5 py-3 text-[13px] leading-6 text-ds-muted">
+              {t('sidebarThreadMoveDialogDetail')}
+            </p>
+            <p className="rounded-2xl border border-amber-300/45 bg-amber-50/75 px-3.5 py-3 text-[12.5px] leading-5 text-amber-900 dark:border-amber-400/30 dark:bg-amber-400/10 dark:text-amber-100">
+              {t('sidebarThreadMoveMetadataOnlyDetail')}
+            </p>
+          </div>
         ) : (
           <div className="mt-4 space-y-2">
             {state.targets.length === 0 ? (

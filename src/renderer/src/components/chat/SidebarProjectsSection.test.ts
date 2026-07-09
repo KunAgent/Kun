@@ -547,6 +547,31 @@ describe('MoveThreadDialog', () => {
 
     expect(html).toContain('sidebarThreadMoveNoTargets')
   })
+
+  it('shows the metadata-only scope before confirming a move', () => {
+    const html = renderToStaticMarkup(
+      createElement(MoveThreadDialog, {
+        state: {
+          thread: thread({
+            id: 'thr_move_confirm',
+            title: 'Move me',
+            workspace: '/Users/zxy/project-a'
+          }),
+          targets: ['/Users/zxy/project-b'],
+          targetWorkspace: '/Users/zxy/project-b',
+          submitting: false
+        },
+        onClose: vi.fn(),
+        onPickTarget: vi.fn(),
+        onConfirm: vi.fn(async () => undefined),
+        t: (key: string) => key
+      })
+    )
+
+    expect(html).toContain('sidebarThreadMoveDialogDetail')
+    expect(html).toContain('sidebarThreadMoveMetadataOnlyDetail')
+    expect(html).toContain('sidebarThreadMoveConfirmButton')
+  })
 })
 
 describe('ThreadRow', () => {
