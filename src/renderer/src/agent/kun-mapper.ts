@@ -1,4 +1,5 @@
 import type {
+  ApprovalStatusPayload,
   ChatBlock,
   CompactionEventPayload,
   GeneratedFileReference,
@@ -838,12 +839,27 @@ function approvalBlockFromItem(item: CoreTurnItemJson, child?: CoreChildRuntimeM
     summary: item.summary?.trim() || 'Approval required',
     toolName: item.toolName,
     status:
-      item.status === 'allowed' || item.status === 'denied'
+      item.status === 'allowed' || item.status === 'denied' || item.status === 'expired'
         ? item.status
         : item.status === 'failed'
           ? 'error'
           : 'pending',
     ...(Object.keys(meta).length > 0 ? { meta } : {})
+  }
+}
+
+function approvalStatusFromEvent(event: CoreRuntimeEventJson): ApprovalStatusPayload | null {
+  const approvalId = event.approvalId ?? event.itemId ?? ''
+  if (!approvalId) return null
+  if (event.status !== 'allowed' && event.status !== 'denied' && event.status !== 'expired') {
+    return null
+  }
+  return {
+    approvalId,
+    status: event.status,
+    ...(event.status === 'expired' && event.reason?.trim()
+      ? { errorMessage: redactSecretText(event.reason.trim()) }
+      : {})
   }
 }
 
@@ -1359,6 +1375,11 @@ export async function dispatchKunRuntimeEvent(
     case 'approval_requested':
       await handleApprovalRequest(event, sink)
       return
+    case 'approval_resolved': {
+      const status = approvalStatusFromEvent(event)
+      if (status) sink.onApprovalStatus?.(status)
+      return
+    }
     case 'user_input_requested':
       sink.onUserInput(
         userInputRequestFromCore({

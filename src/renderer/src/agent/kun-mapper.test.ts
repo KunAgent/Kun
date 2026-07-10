@@ -868,6 +868,46 @@ describe('approval mapping', () => {
     )
     expect(called).toBe(false)
   })
+
+  it('rehydrates expired approval items as non-actionable blocks', () => {
+    expect(chatBlockFromItem({
+      id: 'item_approval_expired',
+      turnId: 'turn_1',
+      threadId: 'thr_1',
+      role: 'tool',
+      status: 'expired',
+      createdAt: '2024-01-01T00:00:00.000Z',
+      kind: 'approval',
+      approvalId: 'appr_expired',
+      toolName: 'shell',
+      summary: 'Approval required'
+    })).toMatchObject({
+      kind: 'approval',
+      approvalId: 'appr_expired',
+      status: 'expired'
+    })
+  })
+
+  it('maps live approval resolution events to status updates', async () => {
+    const onApprovalStatus = vi.fn()
+    await dispatchKunRuntimeEvent(
+      {
+        kind: 'approval_resolved',
+        seq: 10,
+        approvalId: 'appr_expired',
+        status: 'expired',
+        reason: 'turn aborted while awaiting approval'
+      },
+      { ...makeSink(), onApprovalStatus },
+      async () => undefined
+    )
+
+    expect(onApprovalStatus).toHaveBeenCalledWith({
+      approvalId: 'appr_expired',
+      status: 'expired',
+      errorMessage: 'turn aborted while awaiting approval'
+    })
+  })
 })
 
 describe('tool block merging', () => {

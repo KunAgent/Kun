@@ -1824,6 +1824,7 @@
   "approvalDeny": "Deny",
   "approvalAllowed": "Allowed",
   "approvalDenied": "Denied",
+  "approvalExpired": "Expired because the turn ended",
   "approvalSubmitting": "Submitting decision…",
   "approvalFailed": "Request failed",
   "userInputTitle": "Input required",

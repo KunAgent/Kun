@@ -136,6 +136,31 @@ describe('code thread classification', () => {
 })
 
 describe('thread event sink binding', () => {
+  it('marks a resolved approval as expired so it cannot be submitted again', () => {
+    const approval: ChatBlock = {
+      kind: 'approval',
+      id: 'approval-appr_1',
+      approvalId: 'appr_1',
+      summary: 'Run shell command',
+      status: 'pending'
+    }
+    const { getState, set, get } = makeSinkHarness({ blocks: [approval] })
+    const sink = buildThreadEventSink(set, get, { threadId: 'thread-current' })
+
+    sink.onApprovalStatus?.({
+      approvalId: 'appr_1',
+      status: 'expired',
+      errorMessage: 'turn aborted while awaiting approval'
+    })
+
+    expect(getState().blocks[0]).toMatchObject({
+      kind: 'approval',
+      approvalId: 'appr_1',
+      status: 'expired',
+      errorMessage: 'turn aborted while awaiting approval'
+    })
+  })
+
   it('ignores reasoning deltas from a stream bound to a different active thread', () => {
     const { getState, set, get } = makeSinkHarness({ activeThreadId: 'thread-new' })
     const controller = new AbortController()

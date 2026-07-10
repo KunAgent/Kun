@@ -1824,6 +1824,7 @@
   "approvalDeny": "拒绝",
   "approvalAllowed": "已允许",
   "approvalDenied": "已拒绝",
+  "approvalExpired": "当前任务已结束，此审批已过期",
   "approvalSubmitting": "正在提交选择…",
   "approvalFailed": "请求失败",
   "userInputTitle": "需要你的输入",

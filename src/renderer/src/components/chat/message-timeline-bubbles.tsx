@@ -1643,6 +1643,8 @@ function MessageBubbleImpl({
         ? t('approvalAllowed')
         : block.status === 'denied'
           ? t('approvalDenied')
+          : block.status === 'expired'
+            ? t('approvalExpired')
           : block.status === 'error'
             ? t('approvalFailed')
             : submitting
@@ -1653,6 +1655,8 @@ function MessageBubbleImpl({
         className={`rounded-[22px] border px-4 py-4 text-[13px] leading-6 shadow-[0_12px_30px_rgba(86,103,136,0.04)] ${
           block.status === 'error'
             ? 'border-red-300/80 bg-red-500/10 dark:border-red-800/60 dark:bg-red-950/35'
+            : block.status === 'expired'
+              ? 'border-amber-300/80 bg-amber-500/10 dark:border-amber-800/60 dark:bg-amber-950/30'
             : 'border-accent/35 bg-[linear-gradient(180deg,rgba(79,124,255,0.08),rgba(79,124,255,0.12))] text-ds-ink'
         }`}
       >

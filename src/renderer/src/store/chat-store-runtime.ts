@@ -1160,6 +1160,21 @@ export function buildThreadEventSink(
           error: clearRuntimeStreamRecoveringError(s.error)
         }
       }),
+    onApprovalStatus: (ev) => {
+      if (!isCurrentStream()) return
+      resetBusyRecoveryAttempts()
+      set((s) => ({
+        blocks: s.blocks.map((block) =>
+          block.kind === 'approval' && block.approvalId === ev.approvalId
+            ? {
+                ...block,
+                status: ev.status,
+                errorMessage: ev.errorMessage ?? block.errorMessage
+              }
+            : block
+        )
+      }))
+    },
     onUserInput: (req) => {
       if (!isCurrentStream()) return
       resetBusyRecoveryAttempts()

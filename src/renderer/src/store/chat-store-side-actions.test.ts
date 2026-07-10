@@ -349,6 +349,24 @@ describe('chat-store-side-actions', () => {
     expect(state.busy).toBe(true)
   })
 
+  it('updates approval resolution inside the matching side conversation', async () => {
+    const { actions, state, provider } = buildHarness()
+    const id = (await actions.spawnSideConversation())!
+    const lastCall = provider.subscribeMock.mock.calls.at(-1) as
+      | [string, number, ThreadEventSink, AbortSignal]
+      | undefined
+    const sink = lastCall?.[2]
+    sink?.onApproval({ approvalId: 'appr_side', summary: 'Run remote command' })
+    sink?.onApprovalStatus?.({ approvalId: 'appr_side', status: 'expired' })
+
+    expect(state.sideConversations[id].blocks).toContainEqual(expect.objectContaining({
+      kind: 'approval',
+      approvalId: 'appr_side',
+      status: 'expired'
+    }))
+    expect(state.blocks).toEqual([])
+  })
+
   it('promoteSideConversation clears the relation by PATCH /v1/threads/{id} and refreshes the thread list', async () => {
     const { actions, state } = buildHarness()
     const id = (await actions.spawnSideConversation())!

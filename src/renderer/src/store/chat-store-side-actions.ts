@@ -222,6 +222,22 @@ function buildSideSink(sideId: string, ctx: SideContext, sinceSeq = 0): ThreadEv
         }))
       )
     },
+    onApprovalStatus: (ev) => {
+      ctx.set((s) =>
+        patchSide(s, sideId, (side) => ({
+          ...side,
+          blocks: side.blocks.map((block) =>
+            block.kind === 'approval' && block.approvalId === ev.approvalId
+              ? {
+                  ...block,
+                  status: ev.status,
+                  errorMessage: ev.errorMessage ?? block.errorMessage
+                }
+              : block
+          )
+        }))
+      )
+    },
     onUserInput: (req) => {
       ctx.set((s) =>
         patchSide(s, sideId, (side) => ({

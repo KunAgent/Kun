@@ -651,6 +651,7 @@ export type CoreRuntimeEventJson = {
   label?: string
   details?: unknown
   summary?: string
+  reason?: string
   prompt?: string
   inputId?: string
   questions?: Array<{
