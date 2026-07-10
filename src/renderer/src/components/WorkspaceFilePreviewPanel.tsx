@@ -7,11 +7,16 @@ import {
   Eye,
   ExternalLink,
   FileCode2,
+  Files,
   Loader2,
+  Maximize2,
+  Minimize2,
   Palette,
   PanelRightClose,
+  Pin,
   X
 } from 'lucide-react'
+import { createPortal } from 'react-dom'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { harden } from 'rehype-harden'
@@ -24,8 +29,11 @@ import {
   useState,
   type ComponentPropsWithoutRef,
   type CSSProperties,
+  type MouseEvent as ReactMouseEvent,
   type ReactElement,
-  type ReactNode
+  type ReactNode,
+  type UIEvent as ReactUIEvent,
+  type WheelEvent as ReactWheelEvent
 } from 'react'
 import { useTranslation } from 'react-i18next'
 import { formatFilePathForDisplay } from '../lib/diff-stats'
@@ -48,6 +56,11 @@ type Props = {
   className?: string
   onSelectTarget?: (target: WorkspaceFileTarget) => void
   onCloseTarget?: (target: WorkspaceFileTarget) => void
+  pinnedTargetKeys?: string[]
+  preserveAcrossThreads?: boolean
+  onTogglePinnedTarget?: (target: WorkspaceFileTarget) => void
+  onCloseOtherTargets?: (target: WorkspaceFileTarget) => void
+  onTogglePreserveAcrossThreads?: () => void
   onClose: () => void
   /** Redesign this file in design mode (code → design). */
   onRedesign?: (path: string, workspaceRoot: string) => void
@@ -55,6 +68,8 @@ type Props = {
 
 const COPY_RESET_MS = 1400
 const MARKDOWN_DEFAULT_ORIGIN = 'https://kun.local'
+const PREVIEW_SCROLL_POSITIONS_KEY = 'kun.issue781.previewScrollPositions'
+const MAX_PREVIEW_SCROLL_POSITIONS = 200
 const markdownRehypePlugins = [
   rehypeRaw,
   [
@@ -100,6 +115,30 @@ function extensionBadge(path: string, language: string): string {
 function targetKey(target: WorkspaceFileTarget | null | undefined): string {
   if (!target?.path) return ''
   return `${target.workspaceRoot ?? ''}\n${target.path}`.replaceAll('\\', '/').toLowerCase()
+}
+
+function readPreviewScrollPositions(): Record<string, number> {
+  if (typeof window === 'undefined') return {}
+  try {
+    const value = JSON.parse(window.localStorage.getItem(PREVIEW_SCROLL_POSITIONS_KEY) ?? '{}')
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return {}
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>)
+        .filter((entry): entry is [string, number] => typeof entry[1] === 'number' && Number.isFinite(entry[1]))
+        .slice(-MAX_PREVIEW_SCROLL_POSITIONS)
+    )
+  } catch {
+    return {}
+  }
+}
+
+function persistPreviewScrollPositions(positions: Record<string, number>): void {
+  try {
+    const bounded = Object.fromEntries(Object.entries(positions).slice(-MAX_PREVIEW_SCROLL_POSITIONS))
+    window.localStorage.setItem(PREVIEW_SCROLL_POSITIONS_KEY, JSON.stringify(bounded))
+  } catch {
+    // Keep scroll memory in the mounted panel when storage is unavailable.
+  }
 }
 
 function isMarkdownPreviewPath(path: string): boolean {
@@ -185,6 +224,11 @@ export function WorkspaceFilePreviewPanel({
   className,
   onSelectTarget,
   onCloseTarget,
+  pinnedTargetKeys = [],
+  preserveAcrossThreads = false,
+  onTogglePinnedTarget,
+  onCloseOtherTargets,
+  onTogglePreserveAcrossThreads,
   onClose,
   onRedesign
 }: Props): ReactElement {
@@ -193,8 +237,16 @@ export function WorkspaceFilePreviewPanel({
   const [loading, setLoading] = useState(false)
   const [copied, setCopied] = useState(false)
   const [markdownRendered, setMarkdownRendered] = useState(true)
+  const [readerMode, setReaderMode] = useState(false)
+  const [tabMenu, setTabMenu] = useState<{
+    target: WorkspaceFileTarget
+    x: number
+    y: number
+  } | null>(null)
   const [highlightHtml, setHighlightHtml] = useState(() => renderFallbackCodeHtml(''))
   const scrollRef = useRef<HTMLDivElement>(null)
+  const scrollPositionsRef = useRef(readPreviewScrollPositions())
+  const tabMenuRef = useRef<HTMLDivElement>(null)
   const copyResetRef = useRef<number | null>(null)
 
   useEffect(() => {
@@ -268,6 +320,8 @@ export function WorkspaceFilePreviewPanel({
     return target?.path ? languageFromFilePath(target.path) : ''
   }, [result, target])
   const activeTargetKey = targetKey(target)
+  const visibleTargets = openTargets.length ? openTargets : target ? [target] : []
+  const pinnedTargetKeySet = useMemo(() => new Set(pinnedTargetKeys), [pinnedTargetKeys])
   const isMarkdownFile = isMarkdownPreviewPath(result?.ok ? result.path : target?.path ?? '')
   const lines = useMemo(() => (result?.ok ? result.content.split('\n') : []), [result])
   const breadcrumbSegments = useMemo(() => {
@@ -305,23 +359,93 @@ export function WorkspaceFilePreviewPanel({
     }
   }, [result, language])
 
-  const openInEditor = (): void => {
-    const path = result?.ok ? result.path : target?.path
+  const openTargetInEditor = (targetToOpen: WorkspaceFileTarget | null): void => {
+    const isActive = targetKey(targetToOpen) === activeTargetKey
+    const path = isActive && result?.ok ? result.path : targetToOpen?.path
     if (!path) return
     void openWorkspacePathInEditor(
       {
         path,
-        line: result?.ok ? result.line : target?.line,
-        column: result?.ok ? result.column : target?.column
+        line: isActive && result?.ok ? result.line : targetToOpen?.line,
+        column: isActive && result?.ok ? result.column : targetToOpen?.column
       },
-      target?.workspaceRoot ?? workspaceRoot
+      targetToOpen?.workspaceRoot ?? workspaceRoot
     ).then((next) => {
       if (!next.ok) {
         void window.kunGui?.logError?.('editor-open', 'Failed to open previewed file', {
           message: next.message,
-          target
+          target: targetToOpen
         })?.catch(() => undefined)
       }
+    })
+  }
+  const openInEditor = (): void => openTargetInEditor(target)
+
+  useEffect(() => {
+    const key = activeTargetKey
+    if (!key || !result?.ok || result.line) return
+    const positions = scrollPositionsRef.current
+    const frame = window.requestAnimationFrame(() => {
+      const stored = positions[key]
+      if (typeof stored === 'number' && scrollRef.current) scrollRef.current.scrollTop = stored
+    })
+    return () => {
+      window.cancelAnimationFrame(frame)
+    }
+  }, [activeTargetKey, markdownRendered, result])
+
+  useEffect(() => {
+    const positions = scrollPositionsRef.current
+    return () => persistPreviewScrollPositions(positions)
+  }, [activeTargetKey])
+
+  useEffect(() => {
+    if (!tabMenu) return
+    const closeMenu = (event: PointerEvent): void => {
+      if (event.target instanceof Node && tabMenuRef.current?.contains(event.target)) return
+      setTabMenu(null)
+    }
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') setTabMenu(null)
+    }
+    window.addEventListener('pointerdown', closeMenu)
+    window.addEventListener('keydown', onKeyDown)
+    return () => {
+      window.removeEventListener('pointerdown', closeMenu)
+      window.removeEventListener('keydown', onKeyDown)
+    }
+  }, [tabMenu])
+
+  useEffect(() => {
+    if (!readerMode) return
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') setReaderMode(false)
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [readerMode])
+
+  const handlePreviewScroll = (event: ReactUIEvent<HTMLDivElement>): void => {
+    if (!activeTargetKey) return
+    scrollPositionsRef.current[activeTargetKey] = event.currentTarget.scrollTop
+  }
+
+  const handleTabWheel = (event: ReactWheelEvent<HTMLDivElement>): void => {
+    if (visibleTargets.length < 2 || event.deltaY === 0) return
+    event.preventDefault()
+    const activeIndex = Math.max(0, visibleTargets.findIndex((item) => targetKey(item) === activeTargetKey))
+    const nextIndex = (activeIndex + (event.deltaY > 0 ? 1 : -1) + visibleTargets.length) % visibleTargets.length
+    const nextTarget = visibleTargets[nextIndex]
+    if (nextTarget) onSelectTarget?.(nextTarget)
+  }
+
+  const openTabMenu = (event: ReactMouseEvent, item: WorkspaceFileTarget): void => {
+    event.preventDefault()
+    event.stopPropagation()
+    setTabMenu({
+      target: item,
+      x: Math.max(8, Math.min(event.clientX, window.innerWidth - 192)),
+      y: Math.max(8, Math.min(event.clientY, window.innerHeight - 104))
     })
   }
 
@@ -338,14 +462,25 @@ export function WorkspaceFilePreviewPanel({
   }
 
   return (
+    <>
     <aside
       data-kun-workspace-root={(target?.workspaceRoot ?? workspaceRoot).replaceAll('\\', '/')}
-      className={`ds-no-drag ds-code-sidebar flex min-h-0 flex-col border-l border-ds-border-muted ${className ?? ''}`}
+      className={`ds-no-drag ds-code-sidebar flex min-h-0 flex-col border-l border-ds-border-muted ${
+        readerMode
+          ? 'fixed inset-[18px] z-[9998] w-auto min-w-0 overflow-hidden rounded-[18px] border bg-ds-main shadow-2xl'
+          : className ?? ''
+      }`}
     >
       <div className="ds-code-sidebar-topbar">
-        <div className="ds-code-sidebar-tabs" role="tablist" aria-label={t('filePreviewOpenFiles')}>
-          {(openTargets.length ? openTargets : target ? [target] : []).map((item) => {
+        <div
+          className="ds-code-sidebar-tabs"
+          role="tablist"
+          aria-label={t('filePreviewOpenFiles')}
+          onWheel={handleTabWheel}
+        >
+          {visibleTargets.map((item) => {
             const active = targetKey(item) === activeTargetKey
+            const pinned = pinnedTargetKeySet.has(targetKey(item))
             const itemPath = item.path
             const itemRoot = item.workspaceRoot ?? workspaceRoot
             const itemLabel = fileNameFromPath(itemPath)
@@ -358,8 +493,9 @@ export function WorkspaceFilePreviewPanel({
                 role="tab"
                 tabIndex={0}
                 aria-selected={active}
-                onDoubleClick={openInEditor}
+                onDoubleClick={() => openTargetInEditor(item)}
                 onClick={() => onSelectTarget?.(item)}
+                onContextMenu={(event) => openTabMenu(event, item)}
                 className={`ds-code-sidebar-tab ${active ? 'is-active' : ''}`}
                 title={itemTitle}
                 onKeyDown={(event) => {
@@ -368,6 +504,9 @@ export function WorkspaceFilePreviewPanel({
                   onSelectTarget?.(item)
                 }}
               >
+                {pinned ? (
+                  <Pin className="h-3 w-3 shrink-0" style={{ color: 'var(--ds-accent)' }} strokeWidth={1.8} />
+                ) : null}
                 <span className="ds-code-sidebar-file-badge">{itemBadge}</span>
                 <span className="min-w-0 truncate">{itemLabel}</span>
                 {onCloseTarget ? (
@@ -407,6 +546,31 @@ export function WorkspaceFilePreviewPanel({
         </div>
 
         <div className="ds-code-sidebar-actions">
+          {onTogglePreserveAcrossThreads ? (
+            <button
+              type="button"
+              onClick={onTogglePreserveAcrossThreads}
+              className="ds-code-sidebar-icon-button"
+              style={preserveAcrossThreads ? { color: 'var(--ds-accent)' } : undefined}
+              title={t('filePreviewPreserveAcrossThreads')}
+              aria-label={t('filePreviewPreserveAcrossThreads')}
+              aria-pressed={preserveAcrossThreads}
+            >
+              <Files className="h-4 w-4" strokeWidth={1.75} />
+            </button>
+          ) : null}
+          <button
+            type="button"
+            onClick={() => setReaderMode((value) => !value)}
+            className="ds-code-sidebar-icon-button"
+            title={readerMode ? t('filePreviewExitReading') : t('filePreviewExpandReading')}
+            aria-label={readerMode ? t('filePreviewExitReading') : t('filePreviewExpandReading')}
+            aria-pressed={readerMode}
+          >
+            {readerMode
+              ? <Minimize2 className="h-4 w-4" strokeWidth={1.75} />
+              : <Maximize2 className="h-4 w-4" strokeWidth={1.75} />}
+          </button>
           {onRedesign && target ? (
             <button
               type="button"
@@ -523,7 +687,11 @@ export function WorkspaceFilePreviewPanel({
               </div>
             ) : null}
             {isMarkdownFile && markdownRendered ? (
-              <div className="ds-file-preview-markdown min-h-0 flex-1 overflow-auto px-5 py-4">
+              <div
+                ref={scrollRef}
+                onScroll={handlePreviewScroll}
+                className="ds-file-preview-markdown min-h-0 flex-1 overflow-auto px-5 py-4"
+              >
                 <div className="ds-markdown min-h-full text-ds-ink">
                   <ReactMarkdown
                     remarkPlugins={[remarkGfm]}
@@ -559,6 +727,7 @@ export function WorkspaceFilePreviewPanel({
             ) : (
               <div
                 ref={scrollRef}
+                onScroll={handlePreviewScroll}
                 className="ds-file-preview-scroll min-h-0 flex-1 overflow-auto font-mono text-[12px] leading-[22px] text-ds-ink"
               >
                 <div
@@ -597,5 +766,44 @@ export function WorkspaceFilePreviewPanel({
         )}
       </div>
     </aside>
+    {tabMenu && typeof document !== 'undefined' ? createPortal(
+      <div
+        ref={tabMenuRef}
+        role="menu"
+        className="fixed z-[10000] min-w-[184px] rounded-lg border border-ds-border bg-ds-card p-1 shadow-xl"
+        style={{ left: tabMenu.x, top: tabMenu.y }}
+      >
+        {onTogglePinnedTarget ? (
+          <button
+            type="button"
+            role="menuitem"
+            className="block w-full rounded-md px-2.5 py-2 text-left text-[12px] text-ds-ink hover:bg-ds-hover"
+            onClick={() => {
+              onTogglePinnedTarget(tabMenu.target)
+              setTabMenu(null)
+            }}
+          >
+            {pinnedTargetKeySet.has(targetKey(tabMenu.target))
+              ? t('filePreviewUnpinTab')
+              : t('filePreviewPinTab')}
+          </button>
+        ) : null}
+        {onCloseOtherTargets ? (
+          <button
+            type="button"
+            role="menuitem"
+            className="block w-full rounded-md px-2.5 py-2 text-left text-[12px] text-ds-ink hover:bg-ds-hover"
+            onClick={() => {
+              onCloseOtherTargets(tabMenu.target)
+              setTabMenu(null)
+            }}
+          >
+            {t('filePreviewCloseOtherTabs')}
+          </button>
+        ) : null}
+      </div>,
+      document.body
+    ) : null}
+    </>
   )
 }

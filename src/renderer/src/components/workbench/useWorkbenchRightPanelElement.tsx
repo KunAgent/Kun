@@ -81,6 +81,11 @@ type WorkbenchRightPanelElementOptions = Pick<
     | 'workspaceRoot'
     | 'onSelectTarget'
     | 'onCloseTarget'
+    | 'pinnedTargetKeys'
+    | 'preserveAcrossThreads'
+    | 'onTogglePinnedTarget'
+    | 'onCloseOtherTargets'
+    | 'onTogglePreserveAcrossThreads'
     | 'onRedesign'
   >
 }

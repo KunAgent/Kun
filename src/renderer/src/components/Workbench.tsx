@@ -160,10 +160,12 @@ export function Workbench(): ReactElement {
     writeAssistantOpen
   })
   const {
-    composerFileReferences, fileTreeSidePanelOpen, fileTreeSidePanelView, openFilePreviewTargets, fileTreeWorkspaceRoot,
+    composerFileReferences, fileTreeSidePanelOpen, fileTreeSidePanelView, openFilePreviewTargets,
+    pinnedFilePreviewTargetKeys, preserveFilePreviewTargets, fileTreeWorkspaceRoot,
     clearComposerFileReferences, addComposerFileReference, pickComposerFileReferences,
     removeComposerFileReference, openWorkspaceFilePreviewTarget, previewWorkspaceFileFromSidebar,
-    closeWorkspaceFilePreviewTarget, addWorkspaceReferenceFromSidebar, toggleFileTreeSidePanel,
+    closeWorkspaceFilePreviewTarget, togglePinnedFilePreviewTarget, closeOtherFilePreviewTargets,
+    togglePreserveFilePreviewTargets, addWorkspaceReferenceFromSidebar, toggleFileTreeSidePanel,
     openFileTreeSidePanel, openDesignFileTreeSidePanel, setFileTreeSidePanelView,
     clearFilePreviewTargets
   } = useWorkbenchFileTreeController({
@@ -546,6 +548,11 @@ export function Workbench(): ReactElement {
       workspaceRoot,
       onSelectTarget: openWorkspaceFilePreviewTarget,
       onCloseTarget: closeWorkspaceFilePreviewTarget,
+      pinnedTargetKeys: pinnedFilePreviewTargetKeys,
+      preserveAcrossThreads: preserveFilePreviewTargets,
+      onTogglePinnedTarget: togglePinnedFilePreviewTarget,
+      onCloseOtherTargets: closeOtherFilePreviewTargets,
+      onTogglePreserveAcrossThreads: togglePreserveFilePreviewTargets,
       onRedesign: sendDesignFromCode
     }
   })

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { WorkspaceFileTarget } from '@shared/workspace-file'
 import type { NormalizedThread } from '../../agent/types'
 import {
@@ -26,9 +26,44 @@ export type WorkbenchFileTreeControllerOptions = {
   setRightSidebarWidth: (updater: (width: number) => number) => void
 }
 
-function workspaceFileTargetKey(target: WorkspaceFileTarget | null | undefined): string {
+const PINNED_FILE_PREVIEW_TARGETS_KEY = 'kun.filePreview.pinnedTargets'
+const PRESERVE_FILE_PREVIEW_TARGETS_KEY = 'kun.filePreview.preserveAcrossThreads'
+
+export function workspaceFileTargetKey(target: WorkspaceFileTarget | null | undefined): string {
   if (!target?.path) return ''
   return `${target.workspaceRoot ?? ''}\n${target.path}`.replaceAll('\\', '/').toLowerCase()
+}
+
+export function retainFilePreviewTargets(
+  targets: WorkspaceFileTarget[],
+  pinnedTargetKeys: ReadonlySet<string>,
+  preserveAcrossThreads: boolean
+): WorkspaceFileTarget[] {
+  if (preserveAcrossThreads) return targets
+  return targets.filter((target) => pinnedTargetKeys.has(workspaceFileTargetKey(target)))
+}
+
+function readStoredPinnedTargetKeys(): string[] {
+  if (typeof window === 'undefined') return []
+  try {
+    const value = JSON.parse(window.localStorage.getItem(PINNED_FILE_PREVIEW_TARGETS_KEY) ?? '[]')
+    return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : []
+  } catch {
+    return []
+  }
+}
+
+function readStoredPreserveAcrossThreads(): boolean {
+  if (typeof window === 'undefined') return false
+  return window.localStorage.getItem(PRESERVE_FILE_PREVIEW_TARGETS_KEY) === 'true'
+}
+
+function storeJson(key: string, value: unknown): void {
+  try {
+    window.localStorage.setItem(key, JSON.stringify(value))
+  } catch {
+    // Storage can be unavailable in private or locked-down renderer sessions.
+  }
 }
 
 export function useWorkbenchFileTreeController({
@@ -48,6 +83,13 @@ export function useWorkbenchFileTreeController({
   const [fileTreeSidePanelView, setFileTreeSidePanelView] =
     useState<WorkbenchFileTreeSidePanelView>('workspace')
   const [openFilePreviewTargets, setOpenFilePreviewTargets] = useState<WorkspaceFileTarget[]>([])
+  const [pinnedFilePreviewTargetKeys, setPinnedFilePreviewTargetKeys] = useState<string[]>(
+    readStoredPinnedTargetKeys
+  )
+  const [preserveFilePreviewTargets, setPreserveFilePreviewTargets] = useState(
+    readStoredPreserveAcrossThreads
+  )
+  const previousActiveThreadIdRef = useRef(activeThreadId)
   const fileTreeWorkspaceRoot = useMemo(
     () => normalizeWorkspaceRoot(threads.find((thread) => thread.id === activeThreadId)?.workspace || workspaceRoot),
     [activeThreadId, threads, workspaceRoot]
@@ -102,6 +144,11 @@ export function useWorkbenchFileTreeController({
 
   function closeWorkspaceFilePreviewTarget(target: WorkspaceFileTarget): void {
     const closingKey = workspaceFileTargetKey(target)
+    setPinnedFilePreviewTargetKeys((current) => {
+      const next = current.filter((key) => key !== closingKey)
+      storeJson(PINNED_FILE_PREVIEW_TARGETS_KEY, next)
+      return next
+    })
     setOpenFilePreviewTargets((current) => {
       const index = current.findIndex((item) => workspaceFileTargetKey(item) === closingKey)
       if (index < 0) return current
@@ -110,6 +157,40 @@ export function useWorkbenchFileTreeController({
         const fallback = next[Math.max(0, index - 1)] ?? next[0] ?? null
         setFilePreviewTarget(fallback)
         if (!fallback) setRightPanelMode(null)
+      }
+      return next
+    })
+  }
+
+  function togglePinnedFilePreviewTarget(target: WorkspaceFileTarget): void {
+    const key = workspaceFileTargetKey(target)
+    if (!key) return
+    setPinnedFilePreviewTargetKeys((current) => {
+      const next = current.includes(key)
+        ? current.filter((item) => item !== key)
+        : [...current, key]
+      storeJson(PINNED_FILE_PREVIEW_TARGETS_KEY, next)
+      return next
+    })
+  }
+
+  function closeOtherFilePreviewTargets(target: WorkspaceFileTarget): void {
+    const keepKey = workspaceFileTargetKey(target)
+    const pinned = new Set(pinnedFilePreviewTargetKeys)
+    setOpenFilePreviewTargets((current) => current.filter((item) => {
+      const key = workspaceFileTargetKey(item)
+      return key === keepKey || pinned.has(key)
+    }))
+    setFilePreviewTarget(target)
+  }
+
+  function togglePreserveFilePreviewTargets(): void {
+    setPreserveFilePreviewTargets((current) => {
+      const next = !current
+      try {
+        window.localStorage.setItem(PRESERVE_FILE_PREVIEW_TARGETS_KEY, String(next))
+      } catch {
+        // Keep the in-memory preference when storage is unavailable.
       }
       return next
     })
@@ -135,6 +216,8 @@ export function useWorkbenchFileTreeController({
 
   function clearFilePreviewTargets(): void {
     setOpenFilePreviewTargets([])
+    setPinnedFilePreviewTargetKeys([])
+    storeJson(PINNED_FILE_PREVIEW_TARGETS_KEY, [])
     setFilePreviewTarget(null)
   }
 
@@ -148,6 +231,35 @@ export function useWorkbenchFileTreeController({
   }, [filePreviewTarget, rightPanelMode])
 
   useEffect(() => {
+    const previousThreadId = previousActiveThreadIdRef.current
+    previousActiveThreadIdRef.current = activeThreadId
+    if (previousThreadId === null || previousThreadId === activeThreadId || rightPanelMode !== 'file') return
+
+    const pinned = new Set(pinnedFilePreviewTargetKeys)
+    const retained = retainFilePreviewTargets(
+      openFilePreviewTargets,
+      pinned,
+      preserveFilePreviewTargets
+    )
+    const activeKey = workspaceFileTargetKey(filePreviewTarget)
+    const nextTarget = retained.find((item) => workspaceFileTargetKey(item) === activeKey)
+      ?? retained[0]
+      ?? null
+    setOpenFilePreviewTargets(retained)
+    setFilePreviewTarget(nextTarget)
+    if (!nextTarget) setRightPanelMode(null)
+  }, [
+    activeThreadId,
+    filePreviewTarget,
+    openFilePreviewTargets,
+    pinnedFilePreviewTargetKeys,
+    preserveFilePreviewTargets,
+    rightPanelMode,
+    setFilePreviewTarget,
+    setRightPanelMode
+  ])
+
+  useEffect(() => {
     if (route !== 'chat') setComposerFileReferences([])
   }, [route])
 
@@ -156,6 +268,8 @@ export function useWorkbenchFileTreeController({
     fileTreeSidePanelOpen,
     fileTreeSidePanelView,
     openFilePreviewTargets,
+    pinnedFilePreviewTargetKeys,
+    preserveFilePreviewTargets,
     fileTreeWorkspaceRoot,
     clearComposerFileReferences,
     addComposerFileReference,
@@ -164,6 +278,9 @@ export function useWorkbenchFileTreeController({
     openWorkspaceFilePreviewTarget,
     previewWorkspaceFileFromSidebar,
     closeWorkspaceFilePreviewTarget,
+    togglePinnedFilePreviewTarget,
+    closeOtherFilePreviewTargets,
+    togglePreserveFilePreviewTargets,
     addWorkspaceReferenceFromSidebar,
     toggleFileTreeSidePanel,
     openFileTreeSidePanel,
