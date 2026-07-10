@@ -110,4 +110,44 @@ describe('evaluateInlineCompletionCandidate', () => {
     })
     expect(decision.feedback.reason).toBe('model-selected-edit')
   })
+
+  it('adds a missing space between adjacent Latin words', () => {
+    const decision = evaluateInlineCompletionCandidate(
+      context({
+        currentLinePrefix: 'hello',
+        prefixWindow: 'hello',
+        endsWithWordChar: true
+      }),
+      { text: 'world', action: { kind: 'short', text: 'world' } },
+      { minAcceptScore: 0.52, mode: 'short' }
+    )
+
+    expect(decision.accepted).toBe(true)
+    expect(decision.text).toBe(' world')
+    expect(decision.action).toEqual({ kind: 'short', text: ' world' })
+  })
+
+  it.each([
+    ['existing whitespace', 'hello', ' world', false, false, ' world'],
+    ['punctuation continuation', 'hello', ', world', false, false, ', world'],
+    ['cursor inside a word', 'hello', 'world', true, false, 'world'],
+    ['URL continuation', 'https://example.com', 'path', false, true, 'path'],
+    ['CJK continuation', '你好', '世界', false, false, '世界']
+  ])('keeps %s unchanged', (_label, prefix, suggestion, nextCharIsWord, looksLikeUrlTail, expected) => {
+    const decision = evaluateInlineCompletionCandidate(
+      context({
+        currentLinePrefix: prefix,
+        prefixWindow: prefix,
+        endsWithWordChar: true,
+        nextCharIsWord,
+        looksLikeUrlTail
+      }),
+      { text: suggestion, action: { kind: 'short', text: suggestion } },
+      { minAcceptScore: 0, mode: 'short' }
+    )
+
+    expect(decision.accepted).toBe(true)
+    expect(decision.text).toBe(expected)
+    expect(decision.action).toEqual({ kind: 'short', text: expected })
+  })
 })

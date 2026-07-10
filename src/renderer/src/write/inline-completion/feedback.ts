@@ -33,6 +33,29 @@ function compactText(text = ''): string {
   return sanitizeText(text).replace(/\s+/g, ' ').trim()
 }
 
+const SPACE_SEPARATED_WORD_CHAR = /[\p{Script=Latin}\p{Number}_]/u
+
+function normalizeCompletionBoundary(
+  context: InlineCompletionRequestContext,
+  text: string
+): string {
+  if (
+    !context.endsWithWordChar ||
+    context.nextCharIsWord ||
+    context.looksLikeUrlTail ||
+    !text ||
+    /^\s/u.test(text)
+  ) {
+    return text
+  }
+
+  const previous = context.currentLinePrefix.at(-1) ?? ''
+  const next = text.at(0) ?? ''
+  return SPACE_SEPARATED_WORD_CHAR.test(previous) && SPACE_SEPARATED_WORD_CHAR.test(next)
+    ? ` ${text}`
+    : text
+}
+
 function clipPreview(text = '', maxChars = 100): string {
   const normalized = compactText(text)
   if (normalized.length <= maxChars) return normalized
@@ -193,7 +216,10 @@ export function evaluateInlineCompletionCandidate(
   const rawAction = actionFromSuggestion(suggestion, requestedMode)
   const isEditAction = rawAction?.kind === 'edit'
   const structuredModelAction = hasStructuredModelAction(suggestion)
-  const text = sanitizeText(rawAction ? actionText(rawAction) : '')
+  const sanitizedText = sanitizeText(rawAction ? actionText(rawAction) : '')
+  const text = isEditAction
+    ? sanitizedText
+    : normalizeCompletionBoundary(context, sanitizedText)
   const mode = rawAction?.kind ?? requestedMode
   const minAcceptScore = Number.isFinite(options.minAcceptScore)
     ? Number(options.minAcceptScore)
