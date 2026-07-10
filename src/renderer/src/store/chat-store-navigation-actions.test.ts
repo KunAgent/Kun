@@ -8,6 +8,14 @@ import {
   markDesignThread,
   saveDesignThreadRegistry
 } from '../design/design-thread-registry'
+import {
+  activeWriteThreadForWorkspace,
+  emptyWriteThreadRegistry,
+  markWriteThread,
+  readWriteThreadRegistry,
+  saveWriteThreadRegistry
+} from '../write/write-thread-registry'
+import { useWriteWorkspaceStore } from '../write/write-workspace-store'
 
 const registryMock = vi.hoisted(() => ({
   getProvider: vi.fn()
@@ -340,6 +348,84 @@ describe('chat-store navigation workspace selection', () => {
     expect(harness.state.blocks).toEqual([])
     expect(harness.state.busy).toBe(false)
     expect(harness.state.watchTurnCompletion).toEqual({ thr_old_design: true })
+  })
+})
+
+describe('write assistant file conversation selection', () => {
+  beforeEach(() => {
+    rendererRuntimeClient.invalidateSettings()
+    registryMock.getProvider.mockReset()
+  })
+
+  afterEach(() => {
+    useWriteWorkspaceStore.getState().resetWorkspace()
+    rendererRuntimeClient.invalidateSettings()
+    vi.unstubAllGlobals()
+  })
+
+  it('selects the conversation mapped to the active file', async () => {
+    const storage = new MemoryStorage()
+    const workspace = '/Users/zxy/write'
+    const registry = markWriteThread(
+      workspace,
+      'thr_b',
+      markWriteThread(workspace, 'thr_a', emptyWriteThreadRegistry(), `${workspace}/a.md`),
+      `${workspace}/b.md`
+    )
+    saveWriteThreadRegistry(registry, storage)
+    vi.stubGlobal('window', { localStorage: storage })
+    useWriteWorkspaceStore.setState({
+      workspaceRoot: workspace,
+      activeFilePath: `${workspace}/b.md`,
+      activeFileKind: 'text'
+    })
+    const harness = buildHarness()
+    Object.assign(harness.state, harness.actions)
+    harness.state.activeThreadId = 'thr_a'
+    harness.state.workspaceRoot = workspace
+    harness.state.threads = [
+      thread({ id: 'thr_a', workspace }),
+      thread({ id: 'thr_b', workspace })
+    ]
+
+    await expect(harness.actions.ensureWriteThreadForWorkspace(workspace)).resolves.toBe('thr_b')
+    expect(harness.selectThread).toHaveBeenCalledWith('thr_b')
+  })
+
+  it('creates and records a fresh conversation for an unmapped file', async () => {
+    const storage = new MemoryStorage()
+    const workspace = '/Users/zxy/write'
+    const activeFilePath = `${workspace}/new.md`
+    vi.stubGlobal('window', { localStorage: storage })
+    useWriteWorkspaceStore.setState({
+      workspaceRoot: workspace,
+      activeFilePath,
+      activeFileKind: 'text'
+    })
+    const created = thread({ id: 'thr_new', workspace, title: 'Write Assistant' })
+    const createThread = vi.fn(async () => created)
+    registryMock.getProvider.mockReturnValue({ createThread })
+    const harness = buildHarness()
+    Object.assign(harness.state, harness.actions)
+    harness.state.activeThreadId = null
+    harness.state.workspaceRoot = workspace
+    harness.state.threads = []
+
+    await expect(harness.actions.ensureWriteThreadForWorkspace(workspace)).resolves.toBe('thr_new')
+
+    const registry = readWriteThreadRegistry(storage)
+    expect(createThread).toHaveBeenCalledWith({
+      workspace,
+      title: 'Write Assistant',
+      mode: 'agent'
+    })
+    expect(activeWriteThreadForWorkspace(
+      workspace,
+      [created],
+      registry,
+      activeFilePath
+    )?.id).toBe('thr_new')
+    expect(harness.selectThread).toHaveBeenCalledWith('thr_new')
   })
 })
 

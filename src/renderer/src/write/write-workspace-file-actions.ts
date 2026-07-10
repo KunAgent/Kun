@@ -14,6 +14,11 @@ import {
   rememberActiveFile,
   writeDirnameFromPath
 } from './write-workspace-store-helpers'
+import {
+  forgetWriteFileThreads,
+  moveWriteFileThreads,
+  saveWriteThreadRegistry
+} from './write-thread-registry'
 
 type WriteFileActions = Pick<
   WriteWorkspaceState,
@@ -364,6 +369,11 @@ export function createWriteFileActions({
         set({ fileError: result.message })
         return null
       }
+      saveWriteThreadRegistry(moveWriteFileThreads(
+        workspaceRoot,
+        result.previousPath,
+        result.path
+      ))
       const previousPrefix = `${normalizePath(result.previousPath)}/`
       set((state) => {
         const nextActiveFilePath = state.activeFilePath === result.previousPath
@@ -426,6 +436,7 @@ export function createWriteFileActions({
         set({ fileError: result.message })
         return false
       }
+      saveWriteThreadRegistry(forgetWriteFileThreads(workspaceRoot, result.path))
       const deletedPath = normalizePath(result.path)
       const currentActiveFilePath = get().activeFilePath
       const activePath = currentActiveFilePath ? normalizePath(currentActiveFilePath) : ''

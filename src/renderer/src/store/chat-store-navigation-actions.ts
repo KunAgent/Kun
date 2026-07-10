@@ -31,7 +31,8 @@ import {
   isConversationWorkspacePath,
   isInternalDeepSeekGuiWorkspace,
   isInternalTemporaryWorkspace,
-  normalizeWorkspaceRoot
+  normalizeWorkspaceRoot,
+  workspaceRootIdentityKey
 } from '../lib/workspace-path'
 import { resolveProjectWorkspacePath } from '../lib/worktree-project-path'
 import { readThreadWorktreeRegistry } from '../lib/thread-worktree-registry'
@@ -72,6 +73,7 @@ import {
   writeThreadBelongsToWorkspace,
   writeWorkspaceForThreadId
 } from '../write/write-thread-registry'
+import { useWriteWorkspaceStore } from '../write/write-workspace-store'
 import {
   DESIGN_ASSISTANT_THREAD_TITLE,
   activeDesignThreadForWorkspace,
@@ -264,13 +266,19 @@ export function createNavigationActions(
     syncTurnCompletionPoll(set, get)
   },
 
-  ensureWriteThreadForWorkspace: async (workspaceRoot) => {
+  ensureWriteThreadForWorkspace: async (workspaceRoot, activeFilePath) => {
     const state = get()
     const targetWorkspace = normalizeWorkspaceRoot(workspaceRoot) || (await readActiveWriteWorkspace(state.workspaceRoot))
     if (!targetWorkspace) {
       set({ error: i18n.t('common:workspaceRequiredToCreateThread') })
       return null
     }
+    const writeState = useWriteWorkspaceStore.getState()
+    const targetFilePath = activeFilePath?.trim() || (
+      workspaceRootIdentityKey(writeState.workspaceRoot) === workspaceRootIdentityKey(targetWorkspace)
+        ? writeState.activeFilePath?.trim() || undefined
+        : undefined
+    )
     if (state.runtimeConnection !== 'ready') {
       set({ error: i18n.t('common:runtimeActionNeedsConnection') })
       return null
@@ -285,22 +293,27 @@ export function createNavigationActions(
     const activeThread = state.activeThreadId
       ? state.threads.find((thread) => thread.id === state.activeThreadId) ?? null
       : null
-    if (activeThread && writeThreadBelongsToWorkspace(activeThread, targetWorkspace, registry)) {
+    const existing = activeWriteThreadForWorkspace(
+      targetWorkspace,
+      state.threads,
+      registry,
+      targetFilePath
+    )
+    if (activeThread && existing?.id === activeThread.id) {
       set({ route: 'write', error: null })
       return activeThread.id
     }
 
-    const existing = activeWriteThreadForWorkspace(targetWorkspace, state.threads, registry)
     if (existing) {
       set({ route: 'write' })
       await get().selectThread(existing.id)
       return existing.id
     }
 
-    return get().createWriteThread(targetWorkspace)
+    return get().createWriteThread(targetWorkspace, targetFilePath)
   },
 
-  createWriteThread: async (workspaceRoot) => {
+  createWriteThread: async (workspaceRoot, activeFilePath) => {
     const targetWorkspace = normalizeWorkspaceRoot(workspaceRoot) || (await readActiveWriteWorkspace(get().workspaceRoot))
     if (!targetWorkspace) {
       set({ error: i18n.t('common:workspaceRequiredToCreateThread') })
@@ -317,7 +330,12 @@ export function createNavigationActions(
         title: WRITE_ASSISTANT_THREAD_TITLE,
         mode: 'agent'
       })
-      saveWriteThreadRegistry(markWriteThread(targetWorkspace, thread.id))
+      saveWriteThreadRegistry(markWriteThread(
+        targetWorkspace,
+        thread.id,
+        readWriteThreadRegistry(),
+        activeFilePath
+      ))
       set((s) => ({
         route: 'write',
         threads: s.threads.some((item) => item.id === thread.id) ? s.threads : [thread, ...s.threads],

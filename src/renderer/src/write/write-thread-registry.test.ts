@@ -6,10 +6,12 @@ import {
   WRITE_ASSISTANT_THREAD_TITLE,
   activeWriteThreadForWorkspace,
   emptyWriteThreadRegistry,
+  forgetWriteFileThreads,
   forgetWriteThread,
   hydrateWriteThreadRegistry,
   isWriteThreadId,
   markWriteThread,
+  moveWriteFileThreads,
   pruneWriteThreadRegistry,
   readWriteThreadRegistry,
   saveWriteThreadRegistry,
@@ -58,6 +60,130 @@ describe('write-thread-registry', () => {
     expect(second.workspaces['/Users/zxy/workspace'].threadIds).toEqual(['thread-2', 'thread-1'])
   })
 
+  it('keeps independent conversations for files in the same workspace', () => {
+    const workspace = '/Users/zxy/workspace'
+    const first = markWriteThread(
+      workspace,
+      'thread-a',
+      emptyWriteThreadRegistry(),
+      `${workspace}/draft-a.md`
+    )
+    const registry = markWriteThread(
+      workspace,
+      'thread-b',
+      first,
+      `${workspace}/draft-b.md`
+    )
+    const threads = [
+      thread('thread-a', workspace),
+      thread('thread-b', workspace)
+    ]
+
+    expect(activeWriteThreadForWorkspace(
+      workspace,
+      threads,
+      registry,
+      `${workspace}/draft-a.md`
+    )?.id).toBe('thread-a')
+    expect(activeWriteThreadForWorkspace(
+      workspace,
+      threads,
+      registry,
+      `${workspace}/draft-b.md`
+    )?.id).toBe('thread-b')
+    expect(activeWriteThreadForWorkspace(
+      workspace,
+      threads,
+      registry,
+      `${workspace}/new-file.md`
+    )).toBeNull()
+  })
+
+  it('does not assign a legacy workspace conversation to an arbitrary file', () => {
+    const workspace = '/Users/zxy/workspace'
+    const registry = markWriteThread(workspace, 'legacy-thread', emptyWriteThreadRegistry())
+    const threads = [thread('legacy-thread', workspace)]
+
+    expect(activeWriteThreadForWorkspace(workspace, threads, registry)?.id).toBe('legacy-thread')
+    expect(activeWriteThreadForWorkspace(
+      workspace,
+      threads,
+      registry,
+      `${workspace}/draft.md`
+    )).toBeNull()
+  })
+
+  it('keeps case-sensitive POSIX file paths separate', () => {
+    const workspace = '/Users/zxy/workspace'
+    const registry = markWriteThread(
+      workspace,
+      'thread-lower',
+      markWriteThread(
+        workspace,
+        'thread-upper',
+        emptyWriteThreadRegistry(),
+        `${workspace}/Foo.md`
+      ),
+      `${workspace}/foo.md`
+    )
+    const threads = [
+      thread('thread-upper', workspace),
+      thread('thread-lower', workspace)
+    ]
+
+    expect(activeWriteThreadForWorkspace(
+      workspace,
+      threads,
+      registry,
+      `${workspace}/Foo.md`
+    )?.id).toBe('thread-upper')
+    expect(activeWriteThreadForWorkspace(
+      workspace,
+      threads,
+      registry,
+      `${workspace}/foo.md`
+    )?.id).toBe('thread-lower')
+  })
+
+  it('moves directory mappings on rename and removes them on delete', () => {
+    const workspace = '/Users/zxy/workspace'
+    const original = markWriteThread(
+      workspace,
+      'thread-a',
+      emptyWriteThreadRegistry(),
+      `${workspace}/drafts/chapter.md`
+    )
+    const moved = moveWriteFileThreads(
+      workspace,
+      `${workspace}/drafts`,
+      `${workspace}/archive`,
+      original
+    )
+    const threads = [thread('thread-a', workspace)]
+
+    expect(activeWriteThreadForWorkspace(
+      workspace,
+      threads,
+      moved,
+      `${workspace}/archive/chapter.md`
+    )?.id).toBe('thread-a')
+    expect(activeWriteThreadForWorkspace(
+      workspace,
+      threads,
+      moved,
+      `${workspace}/drafts/chapter.md`
+    )).toBeNull()
+
+    const removed = forgetWriteFileThreads(workspace, `${workspace}/archive`, moved)
+    expect(activeWriteThreadForWorkspace(
+      workspace,
+      threads,
+      removed,
+      `${workspace}/archive/chapter.md`
+    )).toBeNull()
+    expect(isWriteThreadId('thread-a', removed)).toBe(true)
+  })
+
   it('caps remembered write thread ids per workspace', () => {
     let registry = emptyWriteThreadRegistry()
     for (let index = 0; index < MAX_WRITE_THREAD_IDS_PER_WORKSPACE + 5; index += 1) {
@@ -94,12 +220,20 @@ describe('write-thread-registry', () => {
   })
 
   it('prunes missing runtime threads and forgets deleted threads', () => {
-    const registry = markWriteThread('/Users/zxy/workspace', 'thread-2',
-      markWriteThread('/Users/zxy/workspace', 'thread-1', emptyWriteThreadRegistry()))
+    const workspace = '/Users/zxy/workspace'
+    const registry = markWriteThread(
+      workspace,
+      'thread-2',
+      markWriteThread(workspace, 'thread-1', emptyWriteThreadRegistry(), `${workspace}/a.md`),
+      `${workspace}/b.md`
+    )
     const pruned = pruneWriteThreadRegistry([thread('thread-1', '/Users/zxy/workspace')], registry)
 
     expect(isWriteThreadId('thread-2', pruned)).toBe(false)
     expect(pruned.workspaces['/Users/zxy/workspace'].activeThreadId).toBe('thread-1')
+    expect(pruned.workspaces[workspace].fileThreadIds).toEqual({
+      '/Users/zxy/workspace/a.md': 'thread-1'
+    })
     expect(forgetWriteThread('thread-1', pruned).workspaces['/Users/zxy/workspace']).toBeUndefined()
   })
 

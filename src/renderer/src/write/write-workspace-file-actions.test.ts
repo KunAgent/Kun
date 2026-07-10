@@ -3,6 +3,37 @@ import { defaultWriteSettings } from '@shared/app-settings'
 import { createWriteFileActions } from './write-workspace-file-actions'
 import { initialState } from './write-workspace-store-helpers'
 import type { WriteWorkspaceGet, WriteWorkspaceSet, WriteWorkspaceState } from './write-workspace-store-types'
+import {
+  activeWriteThreadForWorkspace,
+  emptyWriteThreadRegistry,
+  markWriteThread,
+  readWriteThreadRegistry,
+  saveWriteThreadRegistry
+} from './write-thread-registry'
+import type { NormalizedThread } from '../agent/types'
+
+class MemoryStorage {
+  private values = new Map<string, string>()
+
+  getItem(key: string): string | null {
+    return this.values.get(key) ?? null
+  }
+
+  setItem(key: string, value: string): void {
+    this.values.set(key, value)
+  }
+}
+
+function writeThread(id: string, workspace: string): NormalizedThread {
+  return {
+    id,
+    title: 'Write Assistant',
+    updatedAt: '2026-07-11T00:00:00.000Z',
+    model: 'auto',
+    mode: 'agent',
+    workspace
+  }
+}
 
 function makeBaseState(): WriteWorkspaceState {
   return {
@@ -240,35 +271,52 @@ describe('write workspace file actions', () => {
   })
 
   it('keeps markdown files visible when renaming without an extension', async () => {
+    const workspace = '/Users/zxy/write'
+    const storage = new MemoryStorage()
+    saveWriteThreadRegistry(markWriteThread(
+      workspace,
+      'thread-draft',
+      emptyWriteThreadRegistry(),
+      `${workspace}/draft.md`
+    ), storage)
     const renameWorkspaceEntry = vi.fn(async () => ({
       ok: true as const,
-      path: '/tmp/write/final.md',
-      previousPath: '/tmp/write/draft.md',
+      path: `${workspace}/final.md`,
+      previousPath: `${workspace}/draft.md`,
       renamedAt: '2026-06-21T00:00:00.000Z'
     }))
-    installDsGui({
-      renameWorkspaceEntry,
-      listWorkspaceDirectory: vi.fn(async () => ({
-        ok: true as const,
-        root: '/tmp/write',
-        entries: [{
-          name: 'final.md',
-          path: '/tmp/write/final.md',
-          type: 'file' as const,
-          ext: '.md'
-        }]
-      }))
+    vi.stubGlobal('window', {
+      localStorage: storage,
+      kunGui: {
+        renameWorkspaceEntry,
+        listWorkspaceDirectory: vi.fn(async () => ({
+          ok: true as const,
+          root: workspace,
+          entries: [{
+            name: 'final.md',
+            path: `${workspace}/final.md`,
+            type: 'file' as const,
+            ext: '.md'
+          }]
+        }))
+      }
     })
     const { actions } = createHarness()
 
-    const result = await actions.renameEntry('/tmp/write', '/tmp/write/draft.md', 'final')
+    const result = await actions.renameEntry(workspace, `${workspace}/draft.md`, 'final')
 
-    expect(result).toBe('/tmp/write/final.md')
+    expect(result).toBe(`${workspace}/final.md`)
     expect(renameWorkspaceEntry).toHaveBeenCalledWith({
-      workspaceRoot: '/tmp/write',
-      path: '/tmp/write/draft.md',
+      workspaceRoot: workspace,
+      path: `${workspace}/draft.md`,
       newName: 'final.md'
     })
+    expect(activeWriteThreadForWorkspace(
+      workspace,
+      [writeThread('thread-draft', workspace)],
+      readWriteThreadRegistry(storage),
+      `${workspace}/final.md`
+    )?.id).toBe('thread-draft')
   })
 
   it('returns false and reports file errors when delete IPC throws', async () => {
@@ -283,6 +331,44 @@ describe('write workspace file actions', () => {
 
     expect(result).toBe(false)
     expect(get().fileError).toBe('delete failed')
+  })
+
+  it('removes deleted file conversation mappings without deleting thread history', async () => {
+    const workspace = '/Users/zxy/write'
+    const storage = new MemoryStorage()
+    saveWriteThreadRegistry(markWriteThread(
+      workspace,
+      'thread-draft',
+      emptyWriteThreadRegistry(),
+      `${workspace}/drafts/chapter.md`
+    ), storage)
+    vi.stubGlobal('window', {
+      localStorage: storage,
+      kunGui: {
+        deleteWorkspaceEntry: vi.fn(async () => ({
+          ok: true as const,
+          path: `${workspace}/drafts`,
+          deletedAt: '2026-07-11T00:00:00.000Z'
+        })),
+        listWorkspaceDirectory: vi.fn(async () => ({
+          ok: true as const,
+          root: workspace,
+          entries: []
+        }))
+      }
+    })
+    const { actions } = createHarness()
+
+    await expect(actions.deleteEntry(workspace, `${workspace}/drafts`)).resolves.toBe(true)
+
+    const registry = readWriteThreadRegistry(storage)
+    expect(activeWriteThreadForWorkspace(
+      workspace,
+      [writeThread('thread-draft', workspace)],
+      registry,
+      `${workspace}/drafts/chapter.md`
+    )).toBeNull()
+    expect(registry.workspaces[workspace].threadIds).toContain('thread-draft')
   })
 
   it('opens PDF files through the read-only PDF preview state', async () => {
