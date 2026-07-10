@@ -93,6 +93,7 @@ import {
   type AutoModelRouteSelection
 } from './auto-model-router.js'
 import { ToolStormBreaker, type ToolStormBreakerOptions } from './tool-storm-breaker.js'
+import { dispatchToolCalls as dispatchToolCallBatch } from './tool-call-dispatcher.js'
 import { healLoadedHistoryItems } from './history-healing.js'
 import { repairDispatchToolArguments } from './tool-call-repair.js'
 import { CREATE_PLAN_TOOL_NAME } from '../adapters/tool/create-plan-tool.js'
@@ -148,9 +149,6 @@ export {
   todoContinuationInstruction
 } from './continuation-instructions.js'
 
-const PARALLEL_READ_ONLY_TOOL_NAMES = new Set(['read', 'grep', 'find', 'ls'])
-const DELEGATE_TASK_TOOL_NAME = 'delegate_task'
-const MAX_PARALLEL_TOOL_CALLS = 3
 // Number of most-recent tool-result screenshots/images kept inline in a
 // request. Older ones collapse to a text note (Anthropic-style "keep last
 // N images"), bounding context growth for long computer-use sessions.
@@ -1761,129 +1759,29 @@ export class AgentLoop {
     signal: AbortSignal
   }): Promise<'continue' | 'aborted' | 'all_suppressed'> {
     const context = this.createToolContext(input)
-    let index = 0
-    let executedAny = false
-    const markProgress = (toolName: string): void => {
-      if (!GOAL_NON_PROGRESS_TOOL_NAMES.has(toolName)) {
-        this.turnMadeProgress.add(input.turnId)
-      }
-    }
-
-    while (index < input.calls.length) {
-      if (input.signal.aborted) return 'aborted'
-
-      const call = input.calls[index]
-      if (!call) break
-
-      const storm = this.toolStormBreakers.get(input.turnId)?.inspect(call)
-      if (storm?.suppress) {
-        await this.persistSuppressedToolCall({
+    return dispatchToolCallBatch(input, {
+      inspectStorm: (call) => this.toolStormBreakers.get(input.turnId)?.inspect(call),
+      execute: (call) => this.executeToolCallSafely({
+        threadId: input.threadId,
+        turnId: input.turnId,
+        call,
+        context
+      }),
+      persistResult: (call, result) =>
+        this.persistToolCallResult(input.threadId, input.turnId, call, result),
+      persistSuppressed: (call, reason) =>
+        this.persistSuppressedToolCall({
           threadId: input.threadId,
           turnId: input.turnId,
           call,
-          reason: storm.reason
-        })
-        index += 1
-        continue
-      }
-
-      if (!this.isParallelSafeToolCall(call, input.approvalPolicy, input.toolProviderKinds)) {
-        const result = await this.executeToolCallSafely({
-          threadId: input.threadId,
-          turnId: input.turnId,
-          call,
-          context
-        })
-        executedAny = true
-        markProgress(call.toolName)
-        await this.persistToolCallResult(input.threadId, input.turnId, call, result)
-        index += 1
-        continue
-      }
-
-      // Keep batches homogeneous: delegation children fan out together (the
-      // runtime semaphore bounds real concurrency), while built-in read-only
-      // tools stay capped at MAX_PARALLEL_TOOL_CALLS.
-      const headIsDelegation = this.isParallelDelegationCall(call, input.toolProviderKinds)
-      const batchCap = headIsDelegation ? input.calls.length : MAX_PARALLEL_TOOL_CALLS
-      const batch: ToolCallLike[] = [call]
-      index += 1
-      let suppressedAfterBatch: { call: ToolCallLike; reason?: string } | undefined
-
-      while (batch.length < batchCap && index < input.calls.length) {
-        const next = input.calls[index]
-        if (!next) break
-        if (!this.isParallelSafeToolCall(next, input.approvalPolicy, input.toolProviderKinds)) break
-        if (this.isParallelDelegationCall(next, input.toolProviderKinds) !== headIsDelegation) break
-
-        const nextStorm = this.toolStormBreakers.get(input.turnId)?.inspect(next)
-        if (nextStorm?.suppress) {
-          suppressedAfterBatch = { call: next, reason: nextStorm.reason }
-          index += 1
-          break
+          reason
+        }),
+      markProgress: (toolName) => {
+        if (!GOAL_NON_PROGRESS_TOOL_NAMES.has(toolName)) {
+          this.turnMadeProgress.add(input.turnId)
         }
-
-        batch.push(next)
-        index += 1
       }
-
-      const settled = await Promise.allSettled(
-        batch.map((entry) =>
-          this.executeToolCallSafely({
-            threadId: input.threadId,
-            turnId: input.turnId,
-            call: entry,
-            context
-          })
-        )
-      )
-      executedAny = true
-      for (let batchIndex = 0; batchIndex < batch.length; batchIndex += 1) {
-        const result = settled[batchIndex]
-        const batchCall = batch[batchIndex]
-        if (!result || !batchCall) continue
-        if (result.status === 'rejected') throw result.reason
-        markProgress(batchCall.toolName)
-        await this.persistToolCallResult(input.threadId, input.turnId, batchCall, result.value)
-      }
-
-      if (suppressedAfterBatch) {
-        await this.persistSuppressedToolCall({
-          threadId: input.threadId,
-          turnId: input.turnId,
-          call: suppressedAfterBatch.call,
-          reason: suppressedAfterBatch.reason
-        })
-      }
-    }
-
-    return executedAny ? 'continue' : 'all_suppressed'
-  }
-
-  private isParallelSafeToolCall(
-    call: ToolCallLike,
-    approvalPolicy: ToolHostContext['approvalPolicy'],
-    toolProviderKinds: ReadonlyMap<string, ToolProviderKind | undefined>
-  ): boolean {
-    // always / untrusted / never 会触发审批或阻断工具调用，不能并发扇出。
-    if (approvalPolicy === 'always' || approvalPolicy === 'untrusted' || approvalPolicy === 'never') return false
-    // Delegated children are isolated runs; multiple in one assistant message
-    // are independent and safe to fan out. The delegation runtime caps real
-    // concurrency at maxParallel and queues the overflow.
-    if (this.isParallelDelegationCall(call, toolProviderKinds)) return true
-    if (!PARALLEL_READ_ONLY_TOOL_NAMES.has(call.toolName)) return false
-    if (call.toolKind && call.toolKind !== 'tool_call') return false
-    return toolProviderKinds.get(call.toolName) === 'built-in'
-  }
-
-  private isParallelDelegationCall(
-    call: ToolCallLike,
-    toolProviderKinds: ReadonlyMap<string, ToolProviderKind | undefined>
-  ): boolean {
-    return (
-      call.toolName === DELEGATE_TASK_TOOL_NAME &&
-      toolProviderKinds.get(call.toolName) === 'delegation'
-    )
+    })
   }
 
   private createToolContext(input: {
