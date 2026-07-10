@@ -25,6 +25,7 @@ import type { WriteBlockType } from '../block-type'
 import type { WriteInlineFormatKind } from '../inline-format'
 import { createWriteRecentEdit, type WriteRecentEdit } from '../recent-edits'
 import {
+  WriteCodeBlock,
   auditWriteMarkdownFidelity,
   getWriteMarkdownManager,
   parseWriteMarkdown,
@@ -363,11 +364,13 @@ export function WriteRichEditor({
     const extensions: AnyExtension[] = [
       StarterKit.configure({
         link: { openOnClick: false },
+        codeBlock: false,
         undoRedo: { depth: 200 }
       }),
       TableKit.configure({ table: { resizable: false } }),
       TaskList,
       TaskItem.configure({ nested: true }),
+      WriteCodeBlock,
       WriteLocalImage.configure({
         getFilePath: () => filePathRef.current,
         getWorkspaceRoot: () => workspaceRootRef.current
