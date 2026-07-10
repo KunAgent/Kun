@@ -3,7 +3,7 @@ import { z } from 'zod'
 export const ApprovalDecisionRequest = z.object({
   decision: z.enum(['allow', 'deny']),
   /** Optional human-readable reason stored alongside the resolution. */
-  reason: z.string().optional()
+  reason: z.string().trim().max(4096).optional().transform((value) => value || undefined)
 })
 export type ApprovalDecisionRequest = z.infer<typeof ApprovalDecisionRequest>
 

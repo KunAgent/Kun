@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import type {
   ToolHost,
   ToolHostContext,
@@ -9,7 +10,7 @@ import type { UserInputQuestion } from '../../ports/user-input-gate.js'
 import type { ApprovalRequest } from '../../domain/approval.js'
 import { createApprovalRequest } from '../../domain/approval.js'
 import type { TurnItem } from '../../contracts/items.js'
-import { makeToolResultItem, makeApprovalItem } from '../../domain/item.js'
+import { makeToolResultItem } from '../../domain/item.js'
 import { buildBuiltinLocalTools } from './builtin-tools.js'
 import type { BuiltinLocalToolsOptions } from './builtin-tool-types.js'
 import { CapabilityRegistry } from './capability-registry.js'
@@ -185,7 +186,7 @@ export class LocalToolHost implements ToolHost {
     }
     const needsApproval = !preHooks.autoApproved && this.requiresApproval(tool, activeCall, context)
     if (needsApproval) {
-      const approvalId = `appr_${activeCall.callId}`
+      const approvalId = `appr_${randomUUID().replaceAll('-', '')}`
       const approval: ApprovalRequest = createApprovalRequest({
         id: approvalId,
         threadId: context.threadId,
@@ -193,17 +194,30 @@ export class LocalToolHost implements ToolHost {
         toolName: activeCall.toolName,
         summary: this.buildApprovalSummary(activeCall)
       })
-      const decision = await context.awaitApproval(approval)
+      const resolution = await context.awaitApproval(approval)
+      const decision = typeof resolution === 'string' ? resolution : resolution.decision
       if (decision !== 'allow') {
-        const item = makeApprovalItem({
-          id: `item_${approvalId}`,
-          turnId: context.turnId,
-          threadId: context.threadId,
-          approvalId,
-          toolName: activeCall.toolName,
-          summary: approval.summary
-        })
-        return { item, approved: false }
+        const reason = typeof resolution === 'string' ? undefined : resolution.reason
+        return {
+          item: makeToolResultItem({
+            id: `item_${activeCall.callId}`,
+            turnId: context.turnId,
+            threadId: context.threadId,
+            callId: activeCall.callId,
+            toolName: activeCall.toolName,
+            toolKind: activeCall.toolKind ?? tool.toolKind,
+            output: {
+              code: 'approval_denied',
+              error: reason
+                ? `User denied approval for ${activeCall.toolName}: ${reason}`
+                : `User denied approval for ${activeCall.toolName}`,
+              approvalId,
+              ...(reason ? { reason } : {})
+            },
+            isError: true
+          }),
+          approved: false
+        }
       }
     }
     if (context.abortSignal.aborted) {

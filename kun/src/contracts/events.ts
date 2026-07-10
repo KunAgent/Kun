@@ -151,7 +151,8 @@ export const ApprovalEvent = RuntimeEventBase.extend({
   status: z.enum(['pending', 'allowed', 'denied', 'expired']),
   approvalPolicy: ApprovalPolicySchema.optional(),
   sandboxMode: SandboxModeSchema.optional(),
-  summary: z.string().optional()
+  summary: z.string().optional(),
+  reason: z.string().optional()
 })
 export type ApprovalEvent = z.infer<typeof ApprovalEvent>
 

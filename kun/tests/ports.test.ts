@@ -65,6 +65,25 @@ describe('InMemoryApprovalGate', () => {
     expect(gate.decide('missing', 'deny')).toBe(false)
   })
 
+  it('expires a pending approval and releases its waiter', async () => {
+    const gate = new InMemoryApprovalGate()
+    const pending = gate.request(createApprovalRequest({
+      id: 'expiring',
+      threadId: 't',
+      turnId: 'tu',
+      toolName: 'echo',
+      summary: 's'
+    }))
+
+    expect(gate.expire('expiring', 'turn aborted')).toBe(true)
+    await expect(pending).resolves.toBe('deny')
+    expect(gate.get('expiring')).toMatchObject({
+      status: 'expired',
+      reason: 'turn aborted'
+    })
+    expect(gate.expire('expiring')).toBe(false)
+  })
+
   it('filters pending by thread', () => {
     const gate = new InMemoryApprovalGate()
     gate.request(
@@ -74,6 +93,60 @@ describe('InMemoryApprovalGate', () => {
       createApprovalRequest({ id: 'b', threadId: 'th2', turnId: 't', toolName: 'x', summary: 's' })
     )
     expect(gate.pending('th1')).toHaveLength(1)
+  })
+
+  it('rejects duplicate ids instead of overwriting a pending waiter', async () => {
+    const gate = new InMemoryApprovalGate()
+    const approval = createApprovalRequest({
+      id: 'duplicate',
+      threadId: 't',
+      turnId: 'tu',
+      toolName: 'echo',
+      summary: 's'
+    })
+    const first = gate.request(approval)
+
+    expect(() => gate.request(approval)).toThrow('duplicate approval id: duplicate')
+    expect(gate.decide('duplicate', 'allow')).toBe(true)
+    await expect(first).resolves.toBe('allow')
+  })
+
+  it('commits a reserved decision after a concurrent expiration request', async () => {
+    const gate = new InMemoryApprovalGate()
+    const pending = gate.request(createApprovalRequest({
+      id: 'reserved',
+      threadId: 't',
+      turnId: 'tu',
+      toolName: 'echo',
+      summary: 's'
+    }))
+
+    expect(gate.reserveDecision('reserved', 'allow')).toBe(true)
+    expect(gate.expire('reserved', 'turn aborted')).toBe(true)
+    expect(gate.get('reserved')?.status).toBe('pending')
+    expect(gate.commitDecision('reserved')).toBe(true)
+    await expect(pending).resolves.toBe('allow')
+    expect(gate.get('reserved')?.status).toBe('allowed')
+  })
+
+  it('applies deferred expiration when an audited decision rolls back', async () => {
+    const gate = new InMemoryApprovalGate()
+    const pending = gate.request(createApprovalRequest({
+      id: 'rolled_back',
+      threadId: 't',
+      turnId: 'tu',
+      toolName: 'echo',
+      summary: 's'
+    }))
+
+    expect(gate.reserveDecision('rolled_back', 'allow')).toBe(true)
+    expect(gate.expire('rolled_back', 'turn aborted')).toBe(true)
+    expect(gate.rollbackDecision('rolled_back')).toBe(true)
+    await expect(pending).resolves.toBe('deny')
+    expect(gate.get('rolled_back')).toMatchObject({
+      status: 'expired',
+      reason: 'turn aborted'
+    })
   })
 })
 

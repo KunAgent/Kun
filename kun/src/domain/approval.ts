@@ -1,5 +1,10 @@
 export type ApprovalStatus = 'pending' | 'allowed' | 'denied' | 'expired'
 
+export type ApprovalResolution = {
+  decision: 'allow' | 'deny'
+  reason?: string
+}
+
 /**
  * A pending approval request surfaced by the loop. The runtime stores
  * approval records so that an SSE subscriber can replay the request to
@@ -53,11 +58,13 @@ export function resolveApprovalRequest(
 
 export function expireApprovalRequest(
   request: ApprovalRequest,
+  reason?: string,
   decidedAt?: string
 ): ApprovalRequest {
   return {
     ...request,
     status: 'expired',
+    ...(reason ? { reason } : {}),
     decidedAt: decidedAt ?? new Date().toISOString()
   }
 }

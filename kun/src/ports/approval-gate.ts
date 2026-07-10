@@ -9,6 +9,10 @@ import type { ApprovalRequest } from '../domain/approval.js'
 export interface ApprovalGate {
   request(approval: ApprovalRequest): Promise<'allow' | 'deny'>
   decide(approvalId: string, decision: 'allow' | 'deny', reason?: string): boolean
+  reserveDecision(approvalId: string, decision: 'allow' | 'deny', reason?: string): boolean
+  commitDecision(approvalId: string): boolean
+  rollbackDecision(approvalId: string): boolean
+  expire(approvalId: string, reason?: string): boolean
   pending(threadId?: string): ApprovalRequest[]
   get(approvalId: string): ApprovalRequest | undefined
 }

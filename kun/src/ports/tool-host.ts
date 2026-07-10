@@ -1,5 +1,5 @@
 import type { ApprovalPolicy, SandboxMode } from '../contracts/policy.js'
-import type { ApprovalRequest } from '../domain/approval.js'
+import type { ApprovalRequest, ApprovalResolution } from '../domain/approval.js'
 import type { TurnItem } from '../contracts/items.js'
 import type { ModelCapabilityMetadata } from '../contracts/capabilities.js'
 import type { ArtifactStore } from '../artifacts/artifact-store.js'
@@ -104,7 +104,9 @@ export type ToolHostContext = {
   artifactStore?: ArtifactStore
   abortSignal: AbortSignal
   /** Resolves a pending approval with the user's decision. */
-  awaitApproval: (approval: ApprovalRequest) => Promise<'allow' | 'deny'>
+  awaitApproval: (
+    approval: ApprovalRequest
+  ) => Promise<'allow' | 'deny' | ApprovalResolution>
   /** Resolves structured GUI input requested by a tool call. */
   awaitUserInput?: (
     input: Omit<UserInputRequest, 'threadId' | 'turnId'>

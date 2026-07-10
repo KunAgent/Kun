@@ -1397,6 +1397,209 @@ describe('AgentLoop', () => {
     expect(approvalDecisions).toEqual(['dangerous_auto'])
   })
 
+  it('expires a pending approval and releases tool inflight work when interrupted', async () => {
+    const guardedTool = LocalToolHost.defineTool({
+      name: 'guarded_action',
+      description: 'Waits for explicit approval.',
+      inputSchema: { type: 'object' },
+      policy: 'on-request',
+      execute: async () => ({ output: { ok: true } })
+    })
+    const h = makeHarness(makeFakeModel([
+      {
+        kind: 'tool_call_complete',
+        callId: 'call_guarded',
+        toolName: 'guarded_action',
+        arguments: {}
+      },
+      { kind: 'completed', stopReason: 'tool_calls' }
+    ]), { tools: [guardedTool] })
+    await bootstrapThread(h)
+    const thread = await h.threadStore.get(h.threadId)
+    if (!thread) throw new Error('expected thread')
+    await h.threadStore.upsert({ ...thread, approvalPolicy: 'on-request' })
+
+    const running = h.loop.runTurn(h.threadId, h.turnId)
+    let pendingApprovalId = ''
+    for (let attempt = 0; attempt < 50; attempt += 1) {
+      pendingApprovalId = h.approvalGate.pending(h.threadId)[0]?.id ?? ''
+      if (pendingApprovalId) break
+      await new Promise((resolve) => setTimeout(resolve, 5))
+    }
+    expect(pendingApprovalId).toMatch(/^appr_[a-f0-9]{32}$/)
+
+    await h.turns.interruptTurn({ threadId: h.threadId, turnId: h.turnId })
+    await expect(running).resolves.toBe('aborted')
+
+    expect(h.approvalGate.get(pendingApprovalId)).toMatchObject({ status: 'expired' })
+    expect(h.approvalGate.pending(h.threadId)).toEqual([])
+    expect(h.inflight.size()).toBe(0)
+    const events = await h.sessionStore.loadEventsSince(h.threadId, 0)
+    expect(events).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        kind: 'approval_resolved',
+        approvalId: pendingApprovalId,
+        status: 'expired',
+        reason: 'turn aborted while awaiting approval'
+      })
+    ]))
+  })
+
+  it('interrupts immediately while approval request persistence is blocked', async () => {
+    const guardedTool = LocalToolHost.defineTool({
+      name: 'guarded_action',
+      description: 'Waits for explicit approval.',
+      inputSchema: { type: 'object' },
+      policy: 'on-request',
+      execute: async () => ({ output: { ok: true } })
+    })
+    const h = makeHarness(makeFakeModel([
+      {
+        kind: 'tool_call_complete',
+        callId: 'call_blocked_event',
+        toolName: 'guarded_action',
+        arguments: {}
+      },
+      { kind: 'completed', stopReason: 'tool_calls' }
+    ]), { tools: [guardedTool] })
+    await bootstrapThread(h)
+    const thread = await h.threadStore.get(h.threadId)
+    if (!thread) throw new Error('expected thread')
+    await h.threadStore.upsert({ ...thread, approvalPolicy: 'on-request' })
+    const originalAppend = h.sessionStore.appendEvent.bind(h.sessionStore)
+    let releaseRequest!: () => void
+    const requestBlocked = new Promise<void>((resolve) => { releaseRequest = resolve })
+    let requestWriteStarted = false
+    vi.spyOn(h.sessionStore, 'appendEvent').mockImplementation(async (threadId, event) => {
+      if (event.kind === 'approval_requested') {
+        requestWriteStarted = true
+        await requestBlocked
+      }
+      await originalAppend(threadId, event)
+    })
+
+    const running = h.loop.runTurn(h.threadId, h.turnId)
+    await vi.waitFor(() => expect(requestWriteStarted).toBe(true))
+    await h.turns.interruptTurn({ threadId: h.threadId, turnId: h.turnId })
+    const status = await Promise.race([
+      running,
+      new Promise<'timeout'>((resolve) => setTimeout(() => resolve('timeout'), 500))
+    ])
+    releaseRequest()
+
+    expect(status).toBe('aborted')
+    await expect(running).resolves.toBe('aborted')
+    await vi.waitFor(async () => {
+      const events = await h.sessionStore.loadEventsSince(h.threadId, 0)
+      expect(events).toEqual(expect.arrayContaining([
+        expect.objectContaining({ kind: 'approval_resolved', status: 'expired' })
+      ]))
+    })
+  })
+
+  it('persists a denied approval as a failed tool call with model-visible feedback', async () => {
+    const guardedTool = LocalToolHost.defineTool({
+      name: 'guarded_action',
+      description: 'Waits for explicit approval.',
+      inputSchema: { type: 'object' },
+      policy: 'on-request',
+      execute: async () => ({ output: { ok: true } })
+    })
+    let modelStep = 0
+    const modelRequests: ModelRequest[] = []
+    const h = makeHarness({
+      provider: 'approval-denied',
+      model: 'approval-denied',
+      async *stream(request: ModelRequest): AsyncIterable<ModelStreamChunk> {
+        modelRequests.push(request)
+        modelStep += 1
+        if (modelStep === 1) {
+          yield {
+            kind: 'tool_call_complete',
+            callId: 'call_denied',
+            toolName: 'guarded_action',
+            arguments: {}
+          }
+          yield { kind: 'completed', stopReason: 'tool_calls' }
+          return
+        }
+        yield { kind: 'completed', stopReason: 'stop' }
+      }
+    }, { tools: [guardedTool] })
+    await bootstrapThread(h)
+    const thread = await h.threadStore.get(h.threadId)
+    if (!thread) throw new Error('expected thread')
+    await h.threadStore.upsert({ ...thread, approvalPolicy: 'on-request' })
+
+    const running = h.loop.runTurn(h.threadId, h.turnId)
+    let approvalId = ''
+    for (let attempt = 0; attempt < 50; attempt += 1) {
+      approvalId = h.approvalGate.pending(h.threadId)[0]?.id ?? ''
+      if (approvalId) break
+      await new Promise((resolve) => setTimeout(resolve, 5))
+    }
+    expect(h.approvalGate.decide(approvalId, 'deny', 'not approved for this task')).toBe(true)
+    await expect(running).resolves.toBe('completed')
+
+    const items = await h.sessionStore.loadItems(h.threadId)
+    expect(items.find((item) => item.kind === 'tool_call' && item.callId === 'call_denied'))
+      .toMatchObject({ status: 'failed' })
+    expect(items.find((item) => item.kind === 'tool_result' && item.callId === 'call_denied'))
+      .toMatchObject({
+        isError: true,
+        output: {
+          code: 'approval_denied',
+          approvalId,
+          reason: 'not approved for this task'
+        }
+      })
+    expect(modelRequests).toHaveLength(2)
+    expect(JSON.stringify(modelRequests[1]?.history)).toContain('not approved for this task')
+  })
+
+  it('registers an approval before publishing it to live event subscribers', async () => {
+    const guardedTool = LocalToolHost.defineTool({
+      name: 'guarded_action',
+      description: 'Waits for explicit approval.',
+      inputSchema: { type: 'object' },
+      policy: 'on-request',
+      execute: async () => ({ output: { ok: true } })
+    })
+    let modelStep = 0
+    const h = makeHarness({
+      provider: 'approval-immediate',
+      model: 'approval-immediate',
+      async *stream(): AsyncIterable<ModelStreamChunk> {
+        modelStep += 1
+        if (modelStep === 1) {
+          yield {
+            kind: 'tool_call_complete',
+            callId: 'call_immediate',
+            toolName: 'guarded_action',
+            arguments: {}
+          }
+          yield { kind: 'completed', stopReason: 'tool_calls' }
+          return
+        }
+        yield { kind: 'completed', stopReason: 'stop' }
+      }
+    }, { tools: [guardedTool] })
+    await bootstrapThread(h)
+    const thread = await h.threadStore.get(h.threadId)
+    if (!thread) throw new Error('expected thread')
+    await h.threadStore.upsert({ ...thread, approvalPolicy: 'on-request' })
+    let registeredBeforePublish = false
+    const unsubscribe = h.bus.subscribe(h.threadId, (event) => {
+      if (event.kind !== 'approval_requested') return
+      registeredBeforePublish = h.approvalGate.get(event.approvalId)?.status === 'pending'
+      h.approvalGate.decide(event.approvalId, 'deny', 'decided immediately')
+    })
+
+    await expect(h.loop.runTurn(h.threadId, h.turnId)).resolves.toBe('completed')
+    unsubscribe()
+    expect(registeredBeforePublish).toBe(true)
+  })
+
   it('persists toolKind from the advertised tool metadata', async () => {
     const tool = LocalToolHost.defineTool({
       name: 'write_file',

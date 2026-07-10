@@ -16,6 +16,7 @@ import { DEFAULT_APPROVAL_POLICY, DEFAULT_SANDBOX_MODE } from '../contracts/poli
 import type { ThreadStore } from '../ports/thread-store.js'
 import type { SessionStore } from '../ports/session-store.js'
 import type { ApprovalGate } from '../ports/approval-gate.js'
+import type { ApprovalRequest, ApprovalResolution } from '../domain/approval.js'
 import type { UserInputGate, UserInputQuestion, UserInputResolution } from '../ports/user-input-gate.js'
 import type { UsageService } from '../services/usage-service.js'
 import type { TurnService } from '../services/turn-service.js'
@@ -515,6 +516,11 @@ export class AgentLoop {
       }
       return status
     } catch (error) {
+      if (signal.aborted) {
+        await this.opts.turns.finishTurn({ threadId, turnId, status: 'aborted' })
+        finalStatus = 'aborted'
+        return 'aborted'
+      }
       const raw = error instanceof Error ? error.message : String(error)
       // Best-effort enrichment so the renderer can show "what failed where"
       // instead of the bare "Kun turn failed" string. See issue #26.
@@ -1925,20 +1931,12 @@ export class AgentLoop {
       ...(this.opts.runtimeDataDir ? { runtimeDataDir: this.opts.runtimeDataDir } : {}),
       ...(this.opts.artifactStore ? { artifactStore: this.opts.artifactStore } : {}),
       abortSignal: input.signal,
-      awaitApproval: async (approval) => {
-        await this.opts.events.record({
-          kind: 'approval_requested',
-          threadId: approval.threadId,
-          turnId: approval.turnId,
-          approvalId: approval.id,
-          toolName: approval.toolName,
-          status: 'pending',
-          approvalPolicy: input.approvalPolicy,
-          sandboxMode: input.sandboxMode,
-          summary: approval.summary
-        })
-        return this.opts.approvalGate.request(approval)
-      },
+      awaitApproval: (approval) => this.awaitApproval(
+        approval,
+        input.signal,
+        input.approvalPolicy,
+        input.sandboxMode
+      ),
       ...(input.userInputDisabled
         ? {}
         : {
@@ -1946,6 +1944,95 @@ export class AgentLoop {
               this.awaitUserInput(input.threadId, input.turnId, inputRequest, input.signal)
           })
     }
+  }
+
+  private async awaitApproval(
+    approval: ApprovalRequest,
+    signal: AbortSignal,
+    approvalPolicy: ToolHostContext['approvalPolicy'],
+    sandboxMode: NonNullable<ToolHostContext['sandboxMode']>
+  ): Promise<ApprovalResolution> {
+    const pending = this.opts.approvalGate.request(approval)
+    return new Promise<ApprovalResolution>((resolve, reject) => {
+      let settled = false
+      const cleanup = (): void => signal.removeEventListener('abort', onAbort)
+      const recordExpiredAfterRequest = (requested: Promise<unknown>): void => {
+        void requested.then(async () => {
+          await pending
+          const current = this.opts.approvalGate.get(approval.id)
+          if (current?.status !== 'expired') return
+          await this.opts.events.record({
+            kind: 'approval_resolved',
+            threadId: approval.threadId,
+            turnId: approval.turnId,
+            approvalId: approval.id,
+            toolName: approval.toolName,
+            status: 'expired',
+            summary: approval.summary,
+            ...(current.reason ? { reason: current.reason } : {})
+          })
+        }).catch(() => {})
+      }
+      let requested!: Promise<unknown>
+      const onAbort = (): void => {
+        if (settled) return
+        settled = true
+        cleanup()
+        const reason = 'turn aborted while awaiting approval'
+        if (this.opts.approvalGate.expire(approval.id, reason)) {
+          recordExpiredAfterRequest(requested)
+        }
+        reject(new Error(reason))
+      }
+
+      signal.addEventListener('abort', onAbort, { once: true })
+      requested = this.opts.events.record({
+        kind: 'approval_requested',
+        threadId: approval.threadId,
+        turnId: approval.turnId,
+        approvalId: approval.id,
+        toolName: approval.toolName,
+        status: 'pending',
+        approvalPolicy,
+        sandboxMode,
+        summary: approval.summary
+      })
+
+      if (signal.aborted) {
+        onAbort()
+        return
+      }
+      requested.then(
+        () => {
+          if (settled) return
+          pending.then(
+            (decision) => {
+              if (settled) return
+              settled = true
+              cleanup()
+              const resolved = this.opts.approvalGate.get(approval.id)
+              resolve({
+                decision,
+                ...(resolved?.reason ? { reason: resolved.reason } : {})
+              })
+            },
+            (error) => {
+              if (settled) return
+              settled = true
+              cleanup()
+              reject(error)
+            }
+          )
+        },
+        (error) => {
+          if (settled) return
+          settled = true
+          cleanup()
+          this.opts.approvalGate.expire(approval.id, 'failed to publish approval request')
+          reject(error)
+        }
+      )
+    })
   }
 
   private async executeToolCall(input: {

@@ -28,6 +28,67 @@ describe('LocalToolHost approval policy', () => {
     expect(result.approved).toBe(false)
   })
 
+  it('returns an error tool result when the user denies approval', async () => {
+    const host = new LocalToolHost({ tools: [echoTool] })
+    const result = await host.execute(
+      { callId: 'call_denied', toolName: 'echo', arguments: { text: 'blocked' } },
+      {
+        threadId: 'thread_1',
+        turnId: 'turn_1',
+        workspace: '/tmp/workspace',
+        approvalPolicy: 'always',
+        sandboxMode: 'danger-full-access',
+        abortSignal: new AbortController().signal,
+        awaitApproval: vi.fn(async () => ({
+          decision: 'deny' as const,
+          reason: 'Command is not expected here'
+        }))
+      }
+    )
+
+    expect(result).toMatchObject({
+      approved: false,
+      item: {
+        kind: 'tool_result',
+        callId: 'call_denied',
+        isError: true,
+        output: {
+          code: 'approval_denied',
+          approvalId: expect.stringMatching(/^appr_[a-f0-9]{32}$/),
+          reason: 'Command is not expected here'
+        }
+      }
+    })
+  })
+
+  it('uses fresh approval ids when providers reuse call ids', async () => {
+    const host = new LocalToolHost({ tools: [echoTool] })
+    const approvalIds: string[] = []
+    const execute = (threadId: string, turnId: string) => host.execute(
+      { callId: 'shared_call_id', toolName: 'echo', arguments: { text: 'blocked' } },
+      {
+        threadId,
+        turnId,
+        workspace: '/tmp/workspace',
+        approvalPolicy: 'always',
+        sandboxMode: 'danger-full-access',
+        abortSignal: new AbortController().signal,
+        awaitApproval: async (approval) => {
+          approvalIds.push(approval.id)
+          return 'deny'
+        }
+      }
+    )
+
+    await Promise.all([
+      execute('thread_a', 'turn_a'),
+      execute('thread_b', 'turn_b'),
+      execute('thread_a', 'turn_a')
+    ])
+    expect(approvalIds).toHaveLength(3)
+    expect(new Set(approvalIds).size).toBe(3)
+  })
+
   it('offloads oversized successful tool output to the artifact store', async () => {
     const artifactStore = new InMemoryArtifactStore()
     const host = new LocalToolHost({ tools: [LocalToolHost.defineTool({

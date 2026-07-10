@@ -1041,6 +1041,174 @@ describe('HTTP server', () => {
     expect(conflict.status).toBe(409)
   })
 
+  it('persists approval audit data before releasing an allowed tool waiter', async () => {
+    const h = buildHarness()
+    const approval = createApprovalRequest({
+      id: 'appr_audited',
+      threadId: 'thr_1',
+      turnId: 'turn_1',
+      toolName: 'echo',
+      summary: 'run echo'
+    })
+    const pending = h.approvalGate.request(approval)
+    const originalAppend = h.sessionStore.appendEvent.bind(h.sessionStore)
+    let releaseAudit!: () => void
+    const auditBlocked = new Promise<void>((resolve) => { releaseAudit = resolve })
+    let auditStarted = false
+    vi.spyOn(h.sessionStore, 'appendEvent').mockImplementation(async (threadId, event) => {
+      if (event.kind === 'approval_resolved') {
+        auditStarted = true
+        await auditBlocked
+      }
+      await originalAppend(threadId, event)
+    })
+
+    let waiterReleased = false
+    void pending.then(() => { waiterReleased = true })
+    const request = dispatchRequest(
+      h.router,
+      new Request('http://localhost/v1/approvals/appr_audited', {
+        method: 'POST',
+        headers: { authorization: 'Bearer tok-1', 'content-type': 'application/json' },
+        body: JSON.stringify({ decision: 'allow' })
+      })
+    )
+    await vi.waitFor(() => expect(auditStarted).toBe(true))
+    expect(waiterReleased).toBe(false)
+    expect(h.approvalGate.get('appr_audited')?.status).toBe('pending')
+
+    releaseAudit()
+    expect((await request).status).toBe(200)
+    await expect(pending).resolves.toBe('allow')
+  })
+
+  it('rolls back a reserved decision when audit persistence fails', async () => {
+    const h = buildHarness()
+    const pending = h.approvalGate.request(createApprovalRequest({
+      id: 'appr_audit_failure',
+      threadId: 'thr_1',
+      turnId: 'turn_1',
+      toolName: 'echo',
+      summary: 'run echo'
+    }))
+    vi.spyOn(h.sessionStore, 'appendEvent').mockImplementation(async (_threadId, event) => {
+      if (event.kind === 'approval_resolved') throw new Error('audit write failed')
+    })
+
+    await expect(dispatchRequest(
+      h.router,
+      new Request('http://localhost/v1/approvals/appr_audit_failure', {
+        method: 'POST',
+        headers: { authorization: 'Bearer tok-1', 'content-type': 'application/json' },
+        body: JSON.stringify({ decision: 'allow' })
+      })
+    )).rejects.toThrow('audit write failed')
+    expect(h.approvalGate.get('appr_audit_failure')?.status).toBe('pending')
+    expect(h.approvalGate.decide('appr_audit_failure', 'deny')).toBe(true)
+    await expect(pending).resolves.toBe('deny')
+  })
+
+  it('coalesces concurrent identical approval decisions into one audit event', async () => {
+    const h = buildHarness()
+    void h.approvalGate.request(createApprovalRequest({
+      id: 'appr_same_decision',
+      threadId: 'thr_1',
+      turnId: 'turn_1',
+      toolName: 'echo',
+      summary: 'run echo'
+    }))
+    const originalAppend = h.sessionStore.appendEvent.bind(h.sessionStore)
+    let releaseAudit!: () => void
+    const auditBlocked = new Promise<void>((resolve) => { releaseAudit = resolve })
+    let auditStarted = false
+    vi.spyOn(h.sessionStore, 'appendEvent').mockImplementation(async (threadId, event) => {
+      if (event.kind === 'approval_resolved') {
+        auditStarted = true
+        await auditBlocked
+      }
+      await originalAppend(threadId, event)
+    })
+    const makeRequest = () => dispatchRequest(
+      h.router,
+      new Request('http://localhost/v1/approvals/appr_same_decision', {
+        method: 'POST',
+        headers: { authorization: 'Bearer tok-1', 'content-type': 'application/json' },
+        body: JSON.stringify({ decision: 'allow' })
+      })
+    )
+
+    const first = makeRequest()
+    await vi.waitFor(() => expect(auditStarted).toBe(true))
+    const second = makeRequest()
+    releaseAudit()
+    const responses = await Promise.all([first, second])
+    expect(responses.map((response) => response.status)).toEqual([200, 200])
+    const events = await h.sessionStore.loadEventsSince('thr_1', 0)
+    expect(events.filter((event) => event.kind === 'approval_resolved')).toHaveLength(1)
+  })
+
+  it('returns conflict for the losing concurrent opposite decision', async () => {
+    const h = buildHarness()
+    void h.approvalGate.request(createApprovalRequest({
+      id: 'appr_opposite_decision',
+      threadId: 'thr_1',
+      turnId: 'turn_1',
+      toolName: 'echo',
+      summary: 'run echo'
+    }))
+    const originalAppend = h.sessionStore.appendEvent.bind(h.sessionStore)
+    let releaseAudit!: () => void
+    const auditBlocked = new Promise<void>((resolve) => { releaseAudit = resolve })
+    let auditStarted = false
+    vi.spyOn(h.sessionStore, 'appendEvent').mockImplementation(async (threadId, event) => {
+      if (event.kind === 'approval_resolved') {
+        auditStarted = true
+        await auditBlocked
+      }
+      await originalAppend(threadId, event)
+    })
+    const request = (decision: 'allow' | 'deny') => dispatchRequest(
+      h.router,
+      new Request('http://localhost/v1/approvals/appr_opposite_decision', {
+        method: 'POST',
+        headers: { authorization: 'Bearer tok-1', 'content-type': 'application/json' },
+        body: JSON.stringify({ decision })
+      })
+    )
+
+    const allow = request('allow')
+    await vi.waitFor(() => expect(auditStarted).toBe(true))
+    const deny = request('deny')
+    releaseAudit()
+    const [allowResponse, denyResponse] = await Promise.all([allow, deny])
+    expect(allowResponse.status).toBe(200)
+    expect(denyResponse.status).toBe(409)
+    expect(h.approvalGate.get('appr_opposite_decision')?.status).toBe('allowed')
+  })
+
+  it('rejects oversized approval reasons without resolving the request', async () => {
+    const h = buildHarness()
+    void h.approvalGate.request(createApprovalRequest({
+      id: 'appr_reason_limit',
+      threadId: 'thr_1',
+      turnId: 'turn_1',
+      toolName: 'echo',
+      summary: 'run echo'
+    }))
+
+    const response = await dispatchRequest(
+      h.router,
+      new Request('http://localhost/v1/approvals/appr_reason_limit', {
+        method: 'POST',
+        headers: { authorization: 'Bearer tok-1', 'content-type': 'application/json' },
+        body: JSON.stringify({ decision: 'deny', reason: 'x'.repeat(4097) })
+      })
+    )
+
+    expect(response.status).toBe(400)
+    expect(h.approvalGate.get('appr_reason_limit')?.status).toBe('pending')
+  })
+
   it('resolves GUI user input through both HTTP compatibility endpoints', async () => {
     const h = buildHarness()
     const pending = h.userInputGate.request({
