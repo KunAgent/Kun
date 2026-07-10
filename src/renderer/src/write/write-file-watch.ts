@@ -17,6 +17,7 @@ type TextSnapshot = {
   truncated?: boolean
   message?: string
   animate: boolean
+  reviewAsDiff: boolean
 }
 
 type StartWriteFileWatchOptions = {
@@ -37,10 +38,14 @@ export function startWriteWorkspaceFileWatch(options: StartWriteFileWatchOptions
     void options.api.unwatchWorkspaceFile(id).catch(() => undefined)
   }
 
-  const handleTextSnapshot = (snapshot: Omit<TextSnapshot, 'animate'> & { animate?: boolean }): void => {
+  const handleTextSnapshot = (
+    snapshot: Omit<TextSnapshot, 'animate' | 'reviewAsDiff'> & { animate?: boolean }
+  ): void => {
+    const animate = snapshot.animate ?? true
     options.onTextSnapshot({
       ...snapshot,
-      animate: snapshot.animate ?? true
+      animate,
+      reviewAsDiff: animate
     })
   }
 

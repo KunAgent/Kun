@@ -66,7 +66,8 @@ describe('write file watch helper', () => {
       content: 'fresh content',
       size: 13,
       truncated: false,
-      animate: false
+      animate: false,
+      reviewAsDiff: false
     })
   })
 
@@ -147,12 +148,14 @@ describe('write file watch helper', () => {
       content: 'changed',
       size: 7,
       truncated: false,
-      animate: true
+      animate: true,
+      reviewAsDiff: true
     })
     expect(onTextSnapshot).toHaveBeenNthCalledWith(2, {
       path: '/tmp/app/draft.md',
       message: 'read failed',
-      animate: false
+      animate: false,
+      reviewAsDiff: false
     })
   })
 

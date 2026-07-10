@@ -844,11 +844,17 @@ export function WriteWorkspaceView({
       nextDoc: nextContent
     }) ?? false
     if (!started) {
-      // Rich mode / no source editor / identical content: apply directly.
+      const latest = useWriteWorkspaceStore.getState()
+      if (latest.saveStatus !== 'saved') {
+        setFileError(t('writeExternalChangeConflict'))
+        setReviewActive(false)
+        return
+      }
+      // Rich mode / no source editor / identical saved content: apply directly.
       setFileContent(nextContent)
       setReviewActive(false)
     }
-  }, [pendingAgentReview, clearPendingAgentReview, setFileContent, setReviewActive])
+  }, [pendingAgentReview, clearPendingAgentReview, setFileContent, setFileError, setReviewActive, t])
 
   useEffect(() => {
     if (saveTimerRef.current) {

@@ -37,6 +37,7 @@ function makeBaseState(): WriteWorkspaceState {
     syncActiveFileFromDisk: async () => false,
     syncActiveImageFromDisk: async () => false,
     flushSave: async () => true,
+    prepareActiveFileForAssistant: async () => true,
     createFile: async () => null,
     createDirectory: async () => null,
     renameEntry: async () => null,

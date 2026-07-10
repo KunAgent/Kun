@@ -284,10 +284,16 @@ export function useWorkbenchComposerSubmitController({
       setAttachmentUploadError(t('composerAttachmentModelUnsupported'))
       return
     }
-    const writeState = useWriteWorkspaceStore.getState()
+    let writeState = useWriteWorkspaceStore.getState()
     const writeWorkspaceRoot = writeState.workspaceRoot || workspaceRoot
     setInput('')
     void (async () => {
+      if (!await writeState.prepareActiveFileForAssistant(writeWorkspaceRoot)) {
+        useWriteWorkspaceStore.getState().setFileError(t('writeAssistantSaveBeforeSendFailed'))
+        setInput(v)
+        return
+      }
+      writeState = useWriteWorkspaceStore.getState()
       const threadId = await ensureWriteThreadForWorkspace(writeWorkspaceRoot)
       if (!threadId) {
         setInput(v)

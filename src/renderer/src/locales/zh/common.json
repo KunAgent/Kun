@@ -2330,6 +2330,8 @@
   "writeAssistantChangeWorkspace": "更换 AI 工作目录",
   "writeAssistantModel": "模型",
   "writeAssistantNewConversation": "新建写作助手会话",
+  "writeAssistantSaveBeforeSendFailed": "请先成功保存当前文档，再发送给写作助手。",
+  "writeExternalChangeConflict": "文件在你有未保存修改时发生了外部变化。当前草稿已保留，请先审阅或保存后再继续。",
   "writeAssistantEmptyTitle": "写作助手待命中",
   "writeAssistantEmptySub": "它不会再抢占写作空间。选中文本后点引用，或直接从下面选一个写作动作开始。",
   "writeAssistantSummarize": "总结当前文档",

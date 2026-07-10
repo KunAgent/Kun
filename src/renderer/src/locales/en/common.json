@@ -2330,6 +2330,8 @@
   "writeAssistantChangeWorkspace": "Change AI working directory",
   "writeAssistantModel": "Model",
   "writeAssistantNewConversation": "New writing assistant conversation",
+  "writeAssistantSaveBeforeSendFailed": "Save the current document before sending it to the writing assistant.",
+  "writeExternalChangeConflict": "The file changed on disk while you had unsaved edits. Your draft was preserved; review or save it before continuing.",
   "writeAssistantEmptyTitle": "Writing assistant is ready",
   "writeAssistantEmptySub": "It stays out of the way. Select text to quote it, or start with one of these writing actions.",
   "writeAssistantSummarize": "Summarize document",

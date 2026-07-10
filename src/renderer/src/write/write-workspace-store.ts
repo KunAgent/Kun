@@ -28,6 +28,7 @@ import {
   initialState,
   isMissingImageIpc,
   normalizeWriteAssistantModel,
+  normalizePath,
   pathsEqual,
   readStoredAssistantModel,
   readStoredAssistantOpen,
@@ -45,6 +46,8 @@ const MAX_ANIMATED_EXTERNAL_SYNC_CHARS = 120_000
 let lastSavedContent = ''
 let externalSyncTimer: number | null = null
 let externalSyncAnimationToken = 0
+const saveFlights = new Map<string, Promise<boolean>>()
+const pendingSaveContents = new Map<string, string>()
 
 function cancelExternalSyncAnimation(): void {
   externalSyncAnimationToken += 1
@@ -118,7 +121,11 @@ export const useWriteWorkspaceStore = create<WriteWorkspaceState>((set, get) => 
     const force = options.force === true
     if (!snapshot.activeFilePath) return false
     if (snapshot.activeFileKind !== 'text') return false
-    if (!force && (snapshot.saveStatus === 'dirty' || snapshot.saveStatus === 'saving')) return false
+    if (
+      !force &&
+      snapshot.saveStatus !== 'saved' &&
+      typeof options.content !== 'string'
+    ) return false
     if (options.path && !pathsEqual(options.path, snapshot.activeFilePath)) return false
 
     if (options.message) {
@@ -165,7 +172,47 @@ export const useWriteWorkspaceStore = create<WriteWorkspaceState>((set, get) => 
 
     const latest = get()
     if (!latest.activeFilePath || !pathsEqual(latest.activeFilePath, resolvedPath)) return false
-    if (!force && (latest.saveStatus === 'dirty' || latest.saveStatus === 'saving')) return false
+    const hasLocalEdits = latest.saveStatus !== 'saved'
+    if (!force && hasLocalEdits) {
+      const pendingSaveContent = pendingSaveContents.get(normalizePath(resolvedPath))
+      if (latest.fileContent === content) {
+        lastSavedContent = content
+        set({
+          saveStatus: 'saved',
+          fileError: null,
+          fileLoading: false,
+          fileSize: nextSize,
+          fileTruncated: nextTruncated
+        })
+        return true
+      }
+      if (content === lastSavedContent || content === pendingSaveContent) {
+        set({
+          fileError: null,
+          fileLoading: false,
+          fileSize: nextSize,
+          fileTruncated: nextTruncated
+        })
+        return true
+      }
+      if (
+        options.reviewAsDiff === true &&
+        !nextTruncated &&
+        content.length <= MAX_ANIMATED_EXTERNAL_SYNC_CHARS
+      ) {
+        lastSavedContent = content
+        set({
+          pendingAgentReview: { nextContent: content },
+          reviewActive: true,
+          fileSize: nextSize,
+          fileTruncated: nextTruncated,
+          fileError: null,
+          fileLoading: false
+        })
+        return true
+      }
+      return false
+    }
     if (
       latest.fileContent === content &&
       lastSavedContent === content &&
@@ -314,27 +361,79 @@ export const useWriteWorkspaceStore = create<WriteWorkspaceState>((set, get) => 
       set({ saveStatus: 'saved' })
       return true
     }
-    set({ saveStatus: 'saving' })
-    try {
-      const result = await window.kunGui.writeWorkspaceFile({
-        path: state.activeFilePath,
-        workspaceRoot,
-        content: state.fileContent
-      })
-      if (!result.ok) {
-        set({ saveStatus: 'error', fileError: result.message })
-        return false
+    const filePath = state.activeFilePath
+    const pathKey = normalizePath(filePath)
+    const existing = saveFlights.get(pathKey)
+    if (existing) {
+      if (!await existing) return false
+      const latest = get()
+      if (
+        !latest.activeFilePath ||
+        !pathsEqual(latest.activeFilePath, filePath) ||
+        latest.activeFileKind !== 'text' ||
+        latest.fileContent === lastSavedContent
+      ) {
+        return true
       }
-      lastSavedContent = state.fileContent
-      set({ saveStatus: 'saved', fileError: null })
-      return true
-    } catch (error) {
-      set({
-        saveStatus: 'error',
-        fileError: error instanceof Error ? error.message : String(error)
-      })
-      return false
+      return get().flushSave(workspaceRoot)
     }
+
+    const content = state.fileContent
+    const operation = (async (): Promise<boolean> => {
+      pendingSaveContents.set(pathKey, content)
+      set({ saveStatus: 'saving' })
+      try {
+        const result = await window.kunGui.writeWorkspaceFile({
+          path: filePath,
+          workspaceRoot,
+          content
+        })
+        const latest = get()
+        if (!result.ok) {
+          if (latest.activeFilePath && pathsEqual(latest.activeFilePath, filePath)) {
+            set({ saveStatus: 'error', fileError: result.message })
+          }
+          return false
+        }
+        if (latest.activeFilePath && pathsEqual(latest.activeFilePath, filePath)) {
+          lastSavedContent = content
+          set({
+            saveStatus: latest.fileContent === content ? 'saved' : 'dirty',
+            fileError: null
+          })
+        }
+        return true
+      } catch (error) {
+        const latest = get()
+        if (latest.activeFilePath && pathsEqual(latest.activeFilePath, filePath)) {
+          set({
+            saveStatus: 'error',
+            fileError: error instanceof Error ? error.message : String(error)
+          })
+        }
+        return false
+      } finally {
+        if (pendingSaveContents.get(pathKey) === content) pendingSaveContents.delete(pathKey)
+      }
+    })()
+    saveFlights.set(pathKey, operation)
+    try {
+      return await operation
+    } finally {
+      if (saveFlights.get(pathKey) === operation) saveFlights.delete(pathKey)
+    }
+  },
+
+  prepareActiveFileForAssistant: async (workspaceRoot) => {
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      const state = get()
+      if (!state.activeFilePath || state.activeFileKind !== 'text' || state.fileTruncated) {
+        return true
+      }
+      if (state.saveStatus === 'saved') return true
+      if (!await state.flushSave(workspaceRoot)) return false
+    }
+    return get().saveStatus === 'saved'
   },
 
   setFileError: (message) => {
