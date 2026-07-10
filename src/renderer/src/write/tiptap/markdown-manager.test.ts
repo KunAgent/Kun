@@ -46,6 +46,16 @@ describe('write markdown round-trip', () => {
     expect(firstPass).toContain('![架构图](images/arch.png)')
   })
 
+  it('parses dash and asterisk bullets as rich list nodes', () => {
+    const doc = parseWriteMarkdown('- Dash item\n- Second item\n\n* Star item\n')
+    const bulletLists = doc.content?.filter((node) => node.type === 'bulletList') ?? []
+
+    expect(bulletLists).toHaveLength(2)
+    expect(bulletLists.every((list) =>
+      list.content?.every((item) => item.type === 'listItem') === true
+    )).toBe(true)
+  })
+
   it('keeps pending infographic tokens intact across the round trip', () => {
     const token = '![信息图](kun-pending-infographic://0a1b2c3d-e4f5-6789-abcd-ef0123456789)'
     const doc = `第一段。\n\n${token}\n\n第二段。\n`
