@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { SkillListItem } from '@shared/kun-gui-api'
 import type { CoreRuntimeInfoJson, CoreRuntimeSkillJson } from '../../agent/kun-contract'
 import { getProvider } from '../../agent/registry'
@@ -30,38 +30,55 @@ function mergeSkillCommands(
   return [...merged.values()]
 }
 
+function skillMenuJustOpened(wasOpen: boolean, isOpen: boolean): boolean {
+  return !wasOpen && isOpen
+}
+
+async function loadSkillCommands(
+  runtimeReady: boolean,
+  activeSkillWorkspace: string
+): Promise<CoreRuntimeSkillJson[]> {
+  const provider = getProvider()
+  const localSkillsTask = typeof window !== 'undefined' && typeof window.kunGui?.listSkills === 'function'
+    ? window.kunGui.listSkills(activeSkillWorkspace || undefined)
+    : Promise.resolve({ ok: true as const, skills: [], validationErrors: [] })
+  const [runtimeResult, localSkillsResult] = await Promise.allSettled([
+    runtimeReady && provider.listSkills ? provider.listSkills() : Promise.resolve([]),
+    localSkillsTask
+  ])
+  const runtimeSkillList = runtimeResult.status === 'fulfilled' ? runtimeResult.value : []
+  const localSkillList =
+    localSkillsResult.status === 'fulfilled' && localSkillsResult.value.ok
+      ? localSkillsResult.value.skills
+      : []
+  return mergeSkillCommands(runtimeSkillList, localSkillList)
+}
+
 export function useWorkbenchRuntimeMetadata(input: {
   activeSkillWorkspace: string
   runtimeConnection: string
+  skillMenuOpen: boolean
 }): {
   runtimeInfo: CoreRuntimeInfoJson | null
   runtimeSkills: CoreRuntimeSkillJson[]
 } {
   const [runtimeInfo, setRuntimeInfo] = useState<CoreRuntimeInfoJson | null>(null)
   const [runtimeSkills, setRuntimeSkills] = useState<CoreRuntimeSkillJson[]>([])
+  const skillMenuOpenRef = useRef(input.skillMenuOpen)
 
   useEffect(() => {
     let cancelled = false
     const runtimeReady = input.runtimeConnection === 'ready'
     if (!runtimeReady) setRuntimeInfo(null)
     const provider = getProvider()
-    const localSkillsTask = typeof window !== 'undefined' && typeof window.kunGui?.listSkills === 'function'
-      ? window.kunGui.listSkills(input.activeSkillWorkspace || undefined)
-      : Promise.resolve({ ok: true as const, skills: [], validationErrors: [] })
     void Promise.allSettled([
       runtimeReady && provider.getRuntimeInfo ? provider.getRuntimeInfo() : Promise.resolve(null),
-      runtimeReady && provider.listSkills ? provider.listSkills() : Promise.resolve([]),
-      localSkillsTask
+      loadSkillCommands(runtimeReady, input.activeSkillWorkspace)
     ])
-      .then(([runtimeResult, skillsResult, localSkillsResult]) => {
+      .then(([runtimeResult, skillsResult]) => {
         if (cancelled) return
         setRuntimeInfo(runtimeResult.status === 'fulfilled' ? runtimeResult.value : null)
-        const runtimeSkillList = skillsResult.status === 'fulfilled' ? skillsResult.value : []
-        const localSkillList =
-          localSkillsResult.status === 'fulfilled' && localSkillsResult.value.ok
-            ? localSkillsResult.value.skills
-            : []
-        setRuntimeSkills(mergeSkillCommands(runtimeSkillList, localSkillList))
+        setRuntimeSkills(skillsResult.status === 'fulfilled' ? skillsResult.value : [])
       })
       .catch(() => {
         if (!cancelled) {
@@ -73,6 +90,22 @@ export function useWorkbenchRuntimeMetadata(input: {
       cancelled = true
     }
   }, [input.activeSkillWorkspace, input.runtimeConnection])
+
+  useEffect(() => {
+    const opened = skillMenuJustOpened(skillMenuOpenRef.current, input.skillMenuOpen)
+    skillMenuOpenRef.current = input.skillMenuOpen
+    if (!opened) return
+    let cancelled = false
+    void loadSkillCommands(
+      input.runtimeConnection === 'ready',
+      input.activeSkillWorkspace
+    ).then((skills) => {
+      if (!cancelled) setRuntimeSkills(skills)
+    }).catch(() => undefined)
+    return () => {
+      cancelled = true
+    }
+  }, [input.activeSkillWorkspace, input.runtimeConnection, input.skillMenuOpen])
 
   return { runtimeInfo, runtimeSkills }
 }

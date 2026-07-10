@@ -41,6 +41,7 @@ import {
 } from '../lib/composer-file-references'
 import { useDesignWorkspaceStore } from '../design/design-workspace-store'
 import { designDocumentComposerFileReferences } from '../design/design-document-file-reference'
+import { getSlashQuery } from './chat/floating-composer-commands'
 
 const FILE_TREE_SIDEBAR_WIDTH = 320
 
@@ -142,7 +143,8 @@ export function Workbench(): ReactElement {
   })
   const { runtimeInfo, runtimeSkills } = useWorkbenchRuntimeMetadata({
     activeSkillWorkspace,
-    runtimeConnection
+    runtimeConnection,
+    skillMenuOpen: getSlashQuery(input) !== null
   })
   const {
     beginLeftResize, beginRightResize, beginTerminalResize, filePreviewTarget,
