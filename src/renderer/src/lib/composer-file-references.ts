@@ -22,6 +22,9 @@ export type ComposerFileContextEntry = {
   truncated?: boolean
 }
 
+export const COMPOSER_FILE_REFERENCE_DRAG_MIME = 'application/x-kun-file-reference'
+const MAX_COMPOSER_FILE_REFERENCE_DRAG_BYTES = 16 * 1024
+
 const FILE_MENTION_BOUNDARY = /(^|[\s([{，。；：、])@([^\s@"']*)$/u
 const QUOTED_FILE_MENTION_BOUNDARY = /(^|[\s([{，。；：、])@"([^"\n\r]*)$/u
 const TOKEN_SPECIAL_CHARS = /[\s"']/u
@@ -36,6 +39,46 @@ function trimTrailingSlash(value: string): string {
 
 function normalizeForCompare(value: string): string {
   return trimTrailingSlash(value).toLowerCase()
+}
+
+function isComposerFileReferenceKind(value: unknown): value is ComposerFileReferenceKind {
+  return value === 'file' || value === 'directory'
+}
+
+export function parseComposerFileReferenceDragData(raw: string): ComposerFileReference | null {
+  if (!raw || raw.length > MAX_COMPOSER_FILE_REFERENCE_DRAG_BYTES) return null
+  try {
+    const value = JSON.parse(raw) as Record<string, unknown>
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+    if (
+      typeof value.path !== 'string' || !value.path.trim() ||
+      typeof value.relativePath !== 'string' || !value.relativePath.trim() ||
+      typeof value.name !== 'string' || !value.name.trim()
+    ) {
+      return null
+    }
+    if (value.type !== undefined && !isComposerFileReferenceKind(value.type)) return null
+    if (
+      value.workspaceRoot !== undefined &&
+      value.workspaceRoot !== null &&
+      typeof value.workspaceRoot !== 'string'
+    ) {
+      return null
+    }
+    return {
+      path: normalizeSlashes(value.path),
+      relativePath: normalizeSlashes(value.relativePath),
+      name: value.name.trim(),
+      ...(value.type ? { type: value.type } : {}),
+      ...(value.workspaceRoot === null
+        ? { workspaceRoot: null }
+        : typeof value.workspaceRoot === 'string'
+          ? { workspaceRoot: normalizeSlashes(value.workspaceRoot) }
+          : {})
+    }
+  } catch {
+    return null
+  }
 }
 
 export function relativeWorkspacePath(path: string, workspaceRoot: string): string {
