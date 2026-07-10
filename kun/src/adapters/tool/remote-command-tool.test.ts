@@ -89,6 +89,47 @@ describe('executeRemoteCommand', () => {
     expect(result.output).toMatchObject({ exitCode: 1, stderr: 'boom' })
   })
 
+  it('marks a missing remote outcome as an error instead of a completed command', async () => {
+    const result = await executeRemoteCommand({
+      handle: handle({ exec: vi.fn(async (command) => ({
+        command,
+        stdout: '',
+        stderr: 'authentication failed',
+        exitCode: null,
+        signal: null,
+        durationMs: 0,
+        timedOut: false
+      })) }),
+      command: 'pwd',
+      timeoutSeconds: 30,
+      context: context()
+    })
+
+    expect(result.isError).toBe(true)
+    expect(result.output).toMatchObject({ exitCode: null, stderr: 'authentication failed' })
+  })
+
+  it('marks an aborted remote command as an error', async () => {
+    const result = await executeRemoteCommand({
+      handle: handle({ exec: vi.fn(async (command) => ({
+        command,
+        stdout: '',
+        stderr: 'command aborted',
+        exitCode: null,
+        signal: 'SIGTERM',
+        durationMs: 1,
+        timedOut: false,
+        aborted: true
+      })) }),
+      command: 'pwd',
+      timeoutSeconds: 30,
+      context: context()
+    })
+
+    expect(result.isError).toBe(true)
+    expect(result.output).toMatchObject({ aborted: true })
+  })
+
   it('preserves executor truncation metadata without requiring an artifact store', async () => {
     const big = 'x'.repeat(20_000)
     const result = await executeRemoteCommand({

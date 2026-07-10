@@ -89,6 +89,20 @@ describe('RemoteConnection', () => {
     expect(result.error).toBe('auth failed')
   })
 
+  it('does not probe or execute when the command is already aborted', async () => {
+    const probe = vi.fn(async () => ({ ok: true, latencyMs: 1 }))
+    const exec = vi.fn(async () => outcome({ stdout: 'unexpected' }))
+    const controller = new AbortController()
+    controller.abort()
+    const conn = new RemoteConnection({ executor: { exec, probe } })
+
+    const result = await conn.run('pwd', { writes: false, signal: controller.signal })
+
+    expect(probe).not.toHaveBeenCalled()
+    expect(exec).not.toHaveBeenCalled()
+    expect(result.error).toBe('command aborted')
+  })
+
   it('actually retries a read-only command after a reconnect and succeeds', async () => {
     const probe = vi.fn(async () => ({ ok: true, latencyMs: 1 }))
     let call = 0

@@ -92,9 +92,10 @@ export async function executeRemoteCommand(input: {
       stderr: result.stderr,
       durationMs: result.durationMs,
       timedOut: result.timedOut,
+      ...(result.aborted ? { aborted: true } : {}),
       ...(result.truncated ? { truncated: true } : {}),
       ...(guard.decision === 'confirm' ? { riskConfirmed: true, riskReasons: guard.reasons } : {})
     },
-    isError: result.timedOut || (result.exitCode !== null && result.exitCode !== 0)
+    isError: result.aborted === true || result.timedOut || result.exitCode === null || result.exitCode !== 0
   }
 }

@@ -119,8 +119,7 @@ export function createRemoteHostsService(deps: RemoteHostsServiceDeps = {}): Rem
         }
       }
       const profile = await runRemotePrecheck({
-        exec: (command) => executor.exec(command),
-        ...(input.remoteDir ? { remoteDir: input.remoteDir } : {})
+        exec: (command) => executor.exec(command)
       })
       return {
         ok: profile.ok,

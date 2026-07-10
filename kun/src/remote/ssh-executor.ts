@@ -56,7 +56,11 @@ export type SshExecutorOptions = Omit<SshConnectionOptions, 'alias' | 'batchMode
   killGraceMs?: number
 }
 
-const DEFAULT_SPAWN: SshSpawnFn = (command, args) => nodeSpawn(command, [...args], { shell: false }) as unknown as SshChildProcess
+const DEFAULT_SPAWN: SshSpawnFn = (command, args) => nodeSpawn(command, [...args], {
+  shell: false,
+  stdio: ['pipe', 'pipe', 'pipe'],
+  windowsHide: true
+}) as unknown as SshChildProcess
 const DEFAULT_MAX_OUTPUT_BYTES = 8 * 1_024 * 1_024
 const DEFAULT_KILL_GRACE_MS = 2_000
 

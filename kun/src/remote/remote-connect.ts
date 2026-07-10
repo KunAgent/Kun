@@ -32,9 +32,10 @@ export type RemotePrecheckExec = (command: string) => Promise<SshExecOutcome>
  */
 export async function runRemotePrecheck(input: {
   exec: RemotePrecheckExec
-  remoteDir?: string
 }): Promise<RemoteEnvironmentProfile> {
-  const plan = buildRemotePrecheckPlan(input.remoteDir)
+  // The injected executor is already scoped to remoteDir. Adding `git -C`
+  // here would apply a relative remote directory twice.
+  const plan = buildRemotePrecheckPlan()
   const tools: Record<string, boolean> = {}
   const profile: RemoteEnvironmentProfile = { ok: true, tools }
   for (const step of plan) {

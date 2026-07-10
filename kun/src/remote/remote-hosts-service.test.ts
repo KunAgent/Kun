@@ -41,13 +41,19 @@ describe('remote-hosts-service', () => {
   it('tests a connection by probing then running the precheck', async () => {
     const responses = ['', '/srv/api', 'Linux prod', '## main...origin/main', '/srv/api', 'rg=yes\ngit=yes']
     let i = 0
-    const spawn = vi.fn(() => scriptedChild(responses[i++] ?? ''))
+    const commands: string[] = []
+    const spawn = vi.fn((_command: string, args: readonly string[]) => {
+      commands.push(args.at(-1) ?? '')
+      return scriptedChild(responses[i++] ?? '')
+    })
     const service = createRemoteHostsService({ readSshConfig: async () => SSH_CONFIG, spawn })
     const result = await service.testConnection({ alias: 'prod-api', remoteDir: '/srv/api' })
     expect(result.ok).toBe(true)
     expect(result.status).toBe('connected')
     expect(result.os).toBe('Linux prod')
     expect(result.branch).toBe('main')
+    expect(commands.some((command) => command.includes("cd -- '/srv/api' && git status"))).toBe(true)
+    expect(commands.every((command) => !command.includes('git -C'))).toBe(true)
   })
 
   it('returns an error status when the probe fails', async () => {

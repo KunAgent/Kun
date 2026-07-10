@@ -66,6 +66,14 @@ export function normalizeRemotePath(remotePath: string): string {
   return normalized.length > 1 ? normalized.replace(/\/+$/, '') : normalized
 }
 
+/** Resolve a tool path against an absolute remote working directory for policy checks. */
+export function resolveRemotePolicyPath(remotePath: string, remoteDir?: string): string {
+  const target = normalizeRemotePath(remotePath)
+  if (!remoteDir || posix.isAbsolute(target)) return target
+  const base = normalizeRemotePath(remoteDir)
+  return posix.isAbsolute(base) ? normalizeRemotePath(posix.join(base, target)) : target
+}
+
 /** Whether a remote path is protected by the profile (normalized exact or prefix match). */
 export function isProtectedPath(profile: Pick<RemoteProfile, 'protectedPaths'>, remotePath: string): boolean {
   const target = normalizeRemotePath(remotePath)
@@ -106,13 +114,15 @@ export type RemotePathAccessDecision = {
 export function evaluateRemotePathAccess(input: {
   capability: RemotePathCapability
   path: string
+  remoteDir?: string
   profile: Pick<RemoteProfile, 'protectedPaths'>
   production?: boolean
   recursive?: boolean
 }): RemotePathAccessDecision {
+  const policyPath = resolveRemotePolicyPath(input.path, input.remoteDir)
   const protectedPath = input.recursive
-    ? containsProtectedPath(input.profile, input.path)
-    : isProtectedPath(input.profile, input.path)
+    ? containsProtectedPath(input.profile, policyPath)
+    : isProtectedPath(input.profile, policyPath)
   if (!protectedPath) {
     return { decision: 'allow', protected: false, reason: 'path is not protected' }
   }

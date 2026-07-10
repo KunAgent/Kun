@@ -18,6 +18,7 @@ export type RemoteCommandCategory =
   | 'filesystem-destructive'
   | 'db-migration'
   | 'network-security'
+  | 'shell-pipe'
   | 'container-destructive'
   | 'k8s-mutation'
   | 'secrets'
@@ -47,8 +48,10 @@ type Rule = {
 // patterns are listed first. Patterns match the raw command string.
 const RULES: readonly Rule[] = [
   { category: 'privilege-escalation', level: 'critical', writes: true, reason: 'runs with elevated privileges (sudo/su/doas)', test: /(^|[;&|]\s*)(sudo|su|doas)\b/ },
+  { category: 'secrets', level: 'critical', writes: false, reason: 'dumps the remote process environment, which may contain credentials', test: /^\s*(?:env|printenv|set)\s*$|^\s*printenv\s+\S*(?:key|token|secret|password|credential)\S*\s*$/i },
   { category: 'secrets', level: 'critical', writes: true, reason: 'reads or modifies secrets / credentials / env files', test: /(\.env\b|id_rsa|id_ed25519|\/etc\/shadow|\/etc\/passwd|\bsecrets?\b|\bcredentials?\b|\.pem\b)/i },
   { category: 'network-security', level: 'critical', writes: true, reason: 'changes firewall or SSH configuration', test: /\b(iptables|nft|ufw|firewall-cmd|sshd_config|authorized_keys)\b/i },
+  { category: 'shell-pipe', level: 'high', writes: true, reason: 'pipes generated or downloaded content directly into a shell', test: /\|\s*(?:sudo\s+|doas\s+)?(?:ba|da|fi|z)?sh\b|\|\s*(?:pwsh|powershell)\b/i },
   { category: 'db-migration', level: 'high', writes: true, reason: 'runs a database migration', test: /\b(migrat\w*|alembic|flyway|liquibase|prisma\s+migrate|knex\s+migrate|rails\s+db:migrate)\b/i },
   { category: 'k8s-mutation', level: 'high', writes: true, reason: 'mutates Kubernetes resources', test: /\bkubectl\s+(apply|delete|replace|patch|scale|drain|cordon)\b/i },
   { category: 'container-destructive', level: 'high', writes: true, reason: 'destroys container volumes or images', test: /\bdocker\b.*\b(volume\s+rm|system\s+prune|rmi|rm\s+-\w*f)\b|\bdocker-compose\s+down\b.*-v/i },

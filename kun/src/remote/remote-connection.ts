@@ -121,6 +121,9 @@ export class RemoteConnection {
     command: string,
     options: { writes: boolean; timeoutMs?: number; signal?: AbortSignal; input?: string | Buffer }
   ): Promise<RemoteRunResult> {
+    if (options.signal?.aborted) {
+      return { status: this.status(), statusUnknown: false, error: 'command aborted' }
+    }
     // Re-establish before running when not actively connected. `degraded` is
     // included: after a prior drop we must re-probe, not blindly exec.
     if (this._status !== 'connected') {
@@ -128,6 +131,9 @@ export class RemoteConnection {
       const status = this.status()
       if (status !== 'connected') {
         return { status, statusUnknown: false, ...(this._lastError ? { error: this._lastError } : {}) }
+      }
+      if (options.signal?.aborted) {
+        return { status, statusUnknown: false, error: 'command aborted' }
       }
     }
     const first = await this.execOnce(command, options)
@@ -145,9 +151,15 @@ export class RemoteConnection {
     if (options.writes) {
       return { ...(first.outcome ? { outcome: first.outcome } : {}), status: 'degraded', statusUnknown: true, ...(first.error ? { error: first.error } : {}) }
     }
+    if (options.signal?.aborted) {
+      return { ...(first.outcome ? { outcome: first.outcome } : {}), status: this.status(), statusUnknown: false, error: 'command aborted' }
+    }
     const probe = await this.probe(options.timeoutMs)
     if (!probe.ok) {
       return { ...(first.outcome ? { outcome: first.outcome } : {}), status: this.status(), statusUnknown: false, ...(first.error ? { error: first.error } : {}) }
+    }
+    if (options.signal?.aborted) {
+      return { ...(first.outcome ? { outcome: first.outcome } : {}), status: this.status(), statusUnknown: false, error: 'command aborted' }
     }
     const second = await this.execOnce(command, options)
     if (!second.dropped) {

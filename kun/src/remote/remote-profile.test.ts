@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { evaluateRemotePathAccess, isProtectedPath, normalizeRemotePath, parseRemoteProfile } from './remote-profile.js'
+import { evaluateRemotePathAccess, isProtectedPath, normalizeRemotePath, parseRemoteProfile, resolveRemotePolicyPath } from './remote-profile.js'
+import { SshRemoteExecutionHandle } from './remote-execution-handle.js'
 
 describe('remote-profile', () => {
   it('parses a valid secret-free profile with defaults', () => {
@@ -56,5 +57,36 @@ describe('remote-profile', () => {
     expect(evaluateRemotePathAccess({ capability: 'write', path: '/etc/hosts', profile }).decision).toBe('confirm')
     // Writing a protected path on production is denied outright.
     expect(evaluateRemotePathAccess({ capability: 'write', path: '/etc/hosts', profile, production: true }).decision).toBe('deny')
+  })
+
+  it('resolves relative tool paths against remoteDir before checking absolute protected paths', () => {
+    const profile = { protectedPaths: ['/srv/app/.env', '/srv/app/secrets'] }
+    expect(resolveRemotePolicyPath('.env', '/srv/app')).toBe('/srv/app/.env')
+    expect(evaluateRemotePathAccess({
+      capability: 'read',
+      path: '.env',
+      remoteDir: '/srv/app',
+      profile
+    }).decision).toBe('confirm')
+    expect(evaluateRemotePathAccess({
+      capability: 'read',
+      path: '.',
+      remoteDir: '/srv/app',
+      profile,
+      recursive: true
+    }).decision).toBe('confirm')
+
+    const handle = new SshRemoteExecutionHandle({
+      binding: {
+        kind: 'ssh',
+        alias: 'prod',
+        remoteDir: '/srv/app',
+        runMode: 'develop',
+        production: false,
+        protectedPaths: profile.protectedPaths
+      }
+    })
+    expect(handle.guardFile({ operation: 'read', path: '.env' }).decision).toBe('confirm')
+    expect(handle.guardFile({ operation: 'search', path: '.', recursive: true }).decision).toBe('confirm')
   })
 })

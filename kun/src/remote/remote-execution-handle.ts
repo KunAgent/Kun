@@ -61,6 +61,7 @@ export class SshRemoteExecutionHandle implements RemoteExecutionHandle {
     const decision = evaluateRemotePathAccess({
       capability: input.capability,
       path: input.path,
+      ...(this.target.kind === 'ssh' && this.target.remoteDir ? { remoteDir: this.target.remoteDir } : {}),
       profile: this.profile,
       production: this.production
     })
@@ -75,6 +76,7 @@ export class SshRemoteExecutionHandle implements RemoteExecutionHandle {
     const decision = evaluateRemotePathAccess({
       capability: mutates ? 'write' : 'read',
       path: input.path,
+      ...(this.target.kind === 'ssh' && this.target.remoteDir ? { remoteDir: this.target.remoteDir } : {}),
       profile: this.profile,
       production: this.production,
       recursive: input.recursive
@@ -99,6 +101,7 @@ export class SshRemoteExecutionHandle implements RemoteExecutionHandle {
         signal: null,
         durationMs: 0,
         timedOut: false,
+        ...(options.signal?.aborted ? { aborted: true } : {}),
         statusUnknown: result.statusUnknown
       }
     }

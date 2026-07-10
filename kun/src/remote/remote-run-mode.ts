@@ -34,15 +34,15 @@ const MODE_ALLOWED: Record<RemoteRunMode, ReadonlySet<RemoteCommandCategory>> = 
   // Observe: strictly read-only investigation.
   observe: new Set(['read-only']),
   // Develop: project work + tests + dependency installs, but not service/infra.
-  develop: new Set(['read-only', 'test-run', 'project-write', 'dependency-install', 'network-write', 'standard']),
+  develop: new Set(['read-only', 'test-run', 'project-write', 'dependency-install', 'network-write', 'shell-pipe', 'standard']),
   // Operations: process/container/service management on top of develop.
   operations: new Set([
-    'read-only', 'test-run', 'project-write', 'dependency-install', 'network-write', 'standard',
+    'read-only', 'test-run', 'project-write', 'dependency-install', 'network-write', 'shell-pipe', 'standard',
     'service-control', 'container-destructive', 'k8s-mutation'
   ]),
   // Deploy: everything operations can do; deploy-class actions still confirm.
   deploy: new Set([
-    'read-only', 'test-run', 'project-write', 'dependency-install', 'network-write', 'standard',
+    'read-only', 'test-run', 'project-write', 'dependency-install', 'network-write', 'shell-pipe', 'standard',
     'service-control', 'container-destructive', 'k8s-mutation', 'db-migration', 'network-security'
   ])
 }
