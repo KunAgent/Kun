@@ -1,4 +1,9 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
+import { execFile } from 'node:child_process'
+import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { promisify } from 'node:util'
 import {
   ReviewOutputSchema,
   StartReviewRequest,
@@ -6,6 +11,13 @@ import {
 } from '../src/contracts/index.js'
 import { parseReviewOutput, renderReviewOutput } from '../src/review/review-output.js'
 import { resolveReviewTargetPrompt } from '../src/review/git-review-target.js'
+
+const execFileAsync = promisify(execFile)
+const temporaryDirectories: string[] = []
+
+afterEach(async () => {
+  await Promise.all(temporaryDirectories.splice(0).map((path) => rm(path, { recursive: true, force: true })))
+})
 
 describe('review contracts', () => {
   it('accepts review start requests and persisted review items', () => {
@@ -77,4 +89,83 @@ describe('review target prompt resolution', () => {
     expect(resolved.title).toBe('Custom code review')
     expect(resolved.prompt).toContain('Review src/auth.ts for regressions.')
   })
+
+  it('aggregates staged and unstaged changes from independent repositories under a non-git workspace', async () => {
+    const workspace = await makeTemporaryDirectory('kun-review-multi-repo-')
+    const moduleA = join(workspace, 'module-a')
+    const moduleB = join(workspace, 'module-b')
+    await Promise.all([mkdir(moduleA), mkdir(moduleB)])
+    await Promise.all([initRepository(moduleA), initRepository(moduleB)])
+    await writeFile(join(moduleA, 'staged.txt'), 'staged change\n', 'utf8')
+    await runGit(moduleA, ['add', 'staged.txt'])
+    await writeFile(join(moduleB, 'unstaged.txt'), 'initial content\n', 'utf8')
+    await runGit(moduleB, ['add', 'unstaged.txt'])
+    await writeFile(join(moduleB, 'unstaged.txt'), 'unstaged change\n', 'utf8')
+
+    const resolved = await resolveReviewTargetPrompt({
+      target: { kind: 'uncommittedChanges' },
+      workspace
+    })
+
+    expect(resolved.prompt).toContain('2 Git repositories discovered under the workspace (2 with changes)')
+    expect(resolved.prompt).toContain('name="module-a"')
+    expect(resolved.prompt).toContain('name="module-b"')
+    expect(resolved.prompt).toContain('staged.txt')
+    expect(resolved.prompt).toContain('unstaged.txt')
+  })
+
+  it('discovers linked worktrees whose .git marker is a file', async () => {
+    const workspace = await makeTemporaryDirectory('kun-review-worktree-')
+    const source = join(workspace, 'source')
+    const linked = join(workspace, 'linked')
+    await mkdir(source)
+    await initRepository(source)
+    await runGit(source, ['config', 'user.email', 'kun-review@example.test'])
+    await runGit(source, ['config', 'user.name', 'Kun Review Test'])
+    await writeFile(join(source, 'base.txt'), 'base\n', 'utf8')
+    await runGit(source, ['add', 'base.txt'])
+    await runGit(source, ['commit', '-m', 'test: seed review fixture'])
+    await runGit(source, ['worktree', 'add', '-b', 'linked-review', linked])
+    await writeFile(join(linked, 'linked.txt'), 'linked worktree change\n', 'utf8')
+
+    const resolved = await resolveReviewTargetPrompt({
+      target: { kind: 'uncommittedChanges' },
+      workspace
+    })
+
+    expect(resolved.prompt).toContain('name="linked"')
+    expect(resolved.prompt).toContain('linked-review')
+    expect(resolved.prompt).toContain('linked.txt')
+  })
+
+  it('redacts credentials from repository remotes and keeps truncated UTF-8 valid', async () => {
+    const workspace = await makeTemporaryDirectory('kun-review-remote-')
+    await initRepository(workspace)
+    await runGit(workspace, ['remote', 'add', 'origin', 'https://secret-token@example.test/acme/repo.git'])
+    await writeFile(join(workspace, '中文.txt'), '变更内容'.repeat(64), 'utf8')
+
+    const resolved = await resolveReviewTargetPrompt({
+      target: { kind: 'uncommittedChanges' },
+      workspace,
+      maxDiffBytes: 300
+    })
+
+    expect(resolved.prompt).not.toContain('secret-token')
+    expect(resolved.prompt).not.toContain('\uFFFD')
+    expect(resolved.prompt).toContain('Review input truncated')
+  })
 })
+
+async function initRepository(directory: string): Promise<void> {
+  await runGit(directory, ['init'])
+}
+
+async function makeTemporaryDirectory(prefix: string): Promise<string> {
+  const path = await mkdtemp(join(tmpdir(), prefix))
+  temporaryDirectories.push(path)
+  return path
+}
+
+async function runGit(cwd: string, args: string[]): Promise<void> {
+  await execFileAsync('git', args, { cwd })
+}
