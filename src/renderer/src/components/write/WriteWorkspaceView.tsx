@@ -231,7 +231,12 @@ export function WriteWorkspaceView({
     () => (activeFileIsText ? computeWriteDocumentStats(fileContent, isMarkdown) : null),
     [activeFileIsText, fileContent, isMarkdown],
   )
-  const documentStatsLabel = documentStats ? t('writeCharacterCount', { count: documentStats.characterCount }) : null
+  const documentStatsLabel = documentStats
+    ? t('writeDocumentStats', {
+        words: documentStats.wordCount,
+        characters: documentStats.characterCount
+      })
+    : null
   const workspacePathLabel = rootDirectory || workspaceRoot
   const workspaceName = workspacePathLabel ? writeBasenameFromPath(workspacePathLabel) : t('writeWorkspace')
   const exportInFlight = exportingFormat !== null

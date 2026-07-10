@@ -31,6 +31,7 @@ export type WriteNotice = {
 
 export type WriteDocumentStats = {
   characterCount: number
+  wordCount: number
 }
 
 export type WriteModeMenuItem = {
@@ -76,16 +77,26 @@ function collectVisibleText(node: { type?: string; text?: string; content?: unkn
 
 function visibleTextFromMarkdown(markdown: string): string {
   try {
-    return collectVisibleText(parseWriteMarkdown(markdown), []).join('')
+    // Preserve block boundaries so adjacent Markdown nodes cannot become one
+    // word when document statistics are calculated.
+    return collectVisibleText(parseWriteMarkdown(markdown), []).join(' ')
   } catch {
     return markdown
   }
 }
 
+function countWords(text: string): number {
+  if (typeof Intl.Segmenter === 'function') {
+    const segmenter = new Intl.Segmenter(undefined, { granularity: 'word' })
+    return [...segmenter.segment(text)].filter((segment) => segment.isWordLike).length
+  }
+  return text.match(/[\p{L}\p{N}]+(?:['’][\p{L}\p{N}]+)*/gu)?.length ?? 0
+}
+
 export function computeWriteDocumentStats(content: string, isMarkdown: boolean): WriteDocumentStats {
   const visibleText = isMarkdown ? visibleTextFromMarkdown(content) : content
   const characterCount = Array.from(visibleText.replace(/\s+/g, '')).length
-  return { characterCount }
+  return { characterCount, wordCount: countWords(visibleText) }
 }
 
 export function clamp(value: number, min: number, max: number): number {
