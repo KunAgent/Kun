@@ -19,6 +19,7 @@ export function writePreviewDebounceMs(contentLength: number): number {
 export const INLINE_AGENT_MIN_WIDTH = 264
 export const INLINE_AGENT_MAX_WIDTH = 340
 export const INLINE_AGENT_GAP = 8
+export const INLINE_AGENT_VIEWPORT_MARGIN = 16
 export const WRITE_EXPORT_NOTICE_MS = 3_600
 export const INLINE_EDIT_RECENT_CONTEXT_CHARS = 180
 export const WRITE_EXPORT_FORMATS: WriteExportFormat[] = ['html', 'pdf', 'png', 'doc', 'docx']
@@ -44,10 +45,20 @@ export type WriteModeMenuItem = {
 export type WriteInlineAgentPosition = {
   left: number
   width: number
+  anchorLeft: number
+  anchorRight: number
   /** Top of the selection rect in viewport coords; the menu measures itself and places above/below. */
   anchorTop: number
   /** Bottom of the selection rect in viewport coords. */
   anchorBottom: number
+}
+
+export type WriteInlineAgentPlacement = {
+  left: number
+  top: number
+  maxHeight: number
+  constrained: boolean
+  origin: 'top-center' | 'bottom-center' | 'center-left' | 'center-right'
 }
 
 export function isMarkdownFile(filePath: string): boolean {
@@ -105,7 +116,7 @@ export function useDebouncedValue<T>(value: T, delayMs: number): T {
 }
 
 export function inlineAgentPosition(selection: {
-  anchorRect?: { left: number; top: number; bottom: number; width: number } | null
+  anchorRect?: { left: number; right?: number; top: number; bottom: number; width: number } | null
 }, options: { compact?: boolean } = {}): WriteInlineAgentPosition | null {
   const rect = selection.anchorRect
   if (!rect) return null
@@ -117,8 +128,99 @@ export function inlineAgentPosition(selection: {
   return {
     left,
     width,
+    anchorLeft: rect.left,
+    anchorRight: Number.isFinite(rect.right) ? Number(rect.right) : rect.left + rect.width,
     anchorTop: rect.top,
     anchorBottom: rect.bottom
+  }
+}
+
+export function inlineAgentPlacement(
+  action: WriteInlineAgentPosition,
+  options: {
+    menuHeight: number
+    viewportWidth: number
+    viewportHeight: number
+    preferAbove?: boolean
+  }
+): WriteInlineAgentPlacement {
+  const viewportWidth = Math.max(0, options.viewportWidth)
+  const viewportHeight = Math.max(0, options.viewportHeight)
+  const maxViewportHeight = Math.max(0, viewportHeight - INLINE_AGENT_VIEWPORT_MARGIN * 2)
+  const naturalMenuHeight = Math.max(0, options.menuHeight)
+  const menuHeight = Math.min(naturalMenuHeight, maxViewportHeight)
+  const left = clamp(
+    action.left,
+    INLINE_AGENT_VIEWPORT_MARGIN,
+    viewportWidth - action.width - INLINE_AGENT_VIEWPORT_MARGIN
+  )
+  const aboveSpace = Math.max(
+    0,
+    action.anchorTop - INLINE_AGENT_GAP - INLINE_AGENT_VIEWPORT_MARGIN
+  )
+  const belowSpace = Math.max(
+    0,
+    viewportHeight - INLINE_AGENT_VIEWPORT_MARGIN - action.anchorBottom - INLINE_AGENT_GAP
+  )
+  const aboveFits = menuHeight <= aboveSpace
+  const belowFits = menuHeight <= belowSpace
+
+  if (options.preferAbove && aboveFits || !belowFits && aboveFits) {
+    return {
+      left,
+      top: action.anchorTop - INLINE_AGENT_GAP - menuHeight,
+      maxHeight: menuHeight,
+      constrained: naturalMenuHeight > menuHeight,
+      origin: 'bottom-center'
+    }
+  }
+  if (belowFits) {
+    return {
+      left,
+      top: action.anchorBottom + INLINE_AGENT_GAP,
+      maxHeight: menuHeight,
+      constrained: naturalMenuHeight > menuHeight,
+      origin: 'top-center'
+    }
+  }
+
+  const rightSpace = Math.max(
+    0,
+    viewportWidth - INLINE_AGENT_VIEWPORT_MARGIN - action.anchorRight - INLINE_AGENT_GAP
+  )
+  const leftSpace = Math.max(
+    0,
+    action.anchorLeft - INLINE_AGENT_GAP - INLINE_AGENT_VIEWPORT_MARGIN
+  )
+  const rightFits = action.width <= rightSpace
+  const leftFits = action.width <= leftSpace
+  if (rightFits || leftFits) {
+    const placeRight = rightFits && (!leftFits || rightSpace >= leftSpace)
+    return {
+      left: placeRight
+        ? action.anchorRight + INLINE_AGENT_GAP
+        : action.anchorLeft - INLINE_AGENT_GAP - action.width,
+      top: clamp(
+        (action.anchorTop + action.anchorBottom - menuHeight) / 2,
+        INLINE_AGENT_VIEWPORT_MARGIN,
+        viewportHeight - menuHeight - INLINE_AGENT_VIEWPORT_MARGIN
+      ),
+      maxHeight: menuHeight,
+      constrained: naturalMenuHeight > menuHeight,
+      origin: placeRight ? 'center-left' : 'center-right'
+    }
+  }
+
+  const placeAbove = options.preferAbove ? aboveSpace > 0 : aboveSpace > belowSpace
+  const maxHeight = placeAbove ? aboveSpace : belowSpace
+  return {
+    left,
+    top: placeAbove
+      ? action.anchorTop - INLINE_AGENT_GAP - maxHeight
+      : action.anchorBottom + INLINE_AGENT_GAP,
+    maxHeight,
+    constrained: naturalMenuHeight > maxHeight,
+    origin: placeAbove ? 'bottom-center' : 'top-center'
   }
 }
 

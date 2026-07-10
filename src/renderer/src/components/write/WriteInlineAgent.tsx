@@ -41,7 +41,11 @@ import { WRITE_BLOCK_TYPES, type WriteBlockType } from '../../write/block-type'
 import type { WriteInlineFormatKind } from '../../write/inline-format'
 import type { ResolvedWriteQuickAction } from '../../write/quick-actions'
 import type { ResolvedWriteAgentPreset } from '../../write/agent-presets'
-import { clamp, INLINE_AGENT_GAP, type WriteInlineAgentPosition } from './write-workspace-view-utils'
+import {
+  inlineAgentPlacement,
+  type WriteInlineAgentPlacement,
+  type WriteInlineAgentPosition
+} from './write-workspace-view-utils'
 
 type Props = {
   action: WriteInlineAgentPosition
@@ -196,7 +200,11 @@ export function WriteInlineAgent({
 }: Props): ReactElement {
   const { t } = useTranslation('common')
   const menuRef = useRef<HTMLDivElement | null>(null)
-  const [placement, setPlacement] = useState<{ top: number; origin: 'top-center' | 'bottom-center' } | null>(null)
+  const [placement, setPlacement] = useState<WriteInlineAgentPlacement | null>(null)
+  const [viewport, setViewport] = useState(() => ({
+    width: window.innerWidth,
+    height: window.innerHeight
+  }))
   const [blockMenuOpen, setBlockMenuOpen] = useState(false)
 
   const showBlockSelector = !imageMode && formattingEnabled && Boolean(onSetBlockType)
@@ -212,24 +220,36 @@ export function WriteInlineAgent({
   const activeBlock = BLOCK_TYPE_META[blockType] ?? BLOCK_TYPE_META.paragraph
   const ActiveBlockIcon = activeBlock.icon
 
-  // Measure the rendered menu and place it below the selection, flipping above
-  // when there isn't enough room. Runs before paint so there is no flash.
+  useLayoutEffect(() => {
+    const updateViewport = (): void => {
+      setViewport({ width: window.innerWidth, height: window.innerHeight })
+    }
+    window.addEventListener('resize', updateViewport)
+    return () => window.removeEventListener('resize', updateViewport)
+  }, [])
+
+  // Measure before paint, then choose a non-overlapping side of the selection.
   useLayoutEffect(() => {
     const el = menuRef.current
     if (!el) return
-    const height = el.offsetHeight
-    const viewportHeight = window.innerHeight
-    const below = action.anchorBottom + INLINE_AGENT_GAP
-    const above = action.anchorTop - height - INLINE_AGENT_GAP
-    const canPlaceAbove = above >= 16
-    const placeAbove = preferAbove
-      ? canPlaceAbove
-      : below + height > viewportHeight - 16 && canPlaceAbove
-    const top = clamp(placeAbove ? above : below, 16, Math.max(16, viewportHeight - height - 16))
-    setPlacement({ top, origin: placeAbove ? 'bottom-center' : 'top-center' })
+    setPlacement(inlineAgentPlacement({
+      left: action.left,
+      width: action.width,
+      anchorLeft: action.anchorLeft,
+      anchorRight: action.anchorRight,
+      anchorTop: action.anchorTop,
+      anchorBottom: action.anchorBottom
+    }, {
+      menuHeight: el.scrollHeight,
+      viewportWidth: viewport.width,
+      viewportHeight: viewport.height,
+      preferAbove
+    }))
   }, [
     action.anchorTop,
     action.anchorBottom,
+    action.anchorLeft,
+    action.anchorRight,
     action.left,
     action.width,
     value,
@@ -243,7 +263,9 @@ export function WriteInlineAgent({
     showComposer,
     blockMenuOpen,
     quickActions.length,
-    preferAbove
+    preferAbove,
+    viewport.height,
+    viewport.width
   ])
 
   const handleKeyDown = (event: ReactKeyboardEvent<HTMLTextAreaElement>): void => {
@@ -274,13 +296,22 @@ export function WriteInlineAgent({
       data-origin={placement?.origin ?? 'top-center'}
       data-selection-ignore="true"
       style={{
-        left: action.left,
-        top: placement?.top ?? action.anchorBottom + INLINE_AGENT_GAP,
+        left: placement?.left ?? action.left,
+        top: placement?.top ?? action.anchorBottom,
         width: action.width,
+        maxHeight: placement?.maxHeight,
+        transformOrigin: placement?.origin.replace('-', ' '),
         visibility: placement ? 'visible' : 'hidden'
       }}
     >
-      <div ref={menuRef} className="write-inline-agent-menu">
+      <div
+        ref={menuRef}
+        className="write-inline-agent-menu"
+        style={{
+          maxHeight: placement?.maxHeight,
+          overflowY: placement?.constrained ? 'auto' : 'visible'
+        }}
+      >
         {showBlockSelector ? (
           <div className="write-inline-agent-block">
             <button
