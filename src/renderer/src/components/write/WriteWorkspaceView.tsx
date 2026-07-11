@@ -19,6 +19,7 @@ import {
   writeJoinPath,
   writeRelativeToWorkspace
 } from '../../write/write-workspace-store'
+import { pathsEqual } from '../../write/write-workspace-store-helpers'
 import { getWriteRenderSafety } from '../../write/write-render-safety'
 import {
   applyWriteInlineEditReplacement,
@@ -37,6 +38,10 @@ import {
   replacePendingInfographicInText
 } from '../../write/infographic-pending'
 import { startWriteWorkspaceFileWatch } from '../../write/write-file-watch'
+import {
+  readWriteOnboardingComplete,
+  writeWriteOnboardingComplete
+} from '../../write/write-onboarding'
 import type { WriteRichEditorHandle } from '../../write/tiptap/WriteRichEditor'
 import { useWriteSplitScrollSync } from './use-write-split-scroll-sync'
 import { WriteWorkspaceEmptyState } from './WriteWorkspaceEmptyState'
@@ -197,6 +202,11 @@ export function WriteWorkspaceView({
   const [exportMenuOpen, setExportMenuOpen] = useState(false)
   const [exportingFormat, setExportingFormat] = useState<WriteExportFormat | typeof WRITE_RICH_CLIPBOARD_ACTION | null>(null)
   const [exportNotice, setExportNotice] = useState<WriteNotice | null>(null)
+  const [onboardingComplete, setOnboardingComplete] = useState(readWriteOnboardingComplete)
+  const workspaceHasEntries = useWriteWorkspaceStore((state) => {
+    const root = state.rootDirectory || state.workspaceRoot
+    return Boolean(root && state.entriesByDir[root]?.length)
+  })
   const workspaceReady = workspaceRoot.trim().length > 0
   const activeFileIsImage = activeFileKind === 'image'
   const activeFileIsPdf = activeFileKind === 'pdf'
@@ -255,6 +265,11 @@ export function WriteWorkspaceView({
     setExportNotice(notice)
   }
 
+  const completeOnboarding = useCallback((): void => {
+    writeWriteOnboardingComplete()
+    setOnboardingComplete(true)
+  }, [])
+
   const createDraftFile = async (): Promise<void> => {
     if (!workspaceReady) {
       await pickWriteWorkspace()
@@ -263,7 +278,8 @@ export function WriteWorkspaceView({
     const root = rootDirectory || workspaceRoot
     const stamp = new Date().toISOString().replace(/[:.]/g, '-')
     const path = writeJoinPath(root, `draft-${stamp}.md`)
-    await createFile(workspaceRoot, path, `# ${t('writeUntitledDraft')}\n\n`)
+    const created = await createFile(workspaceRoot, path, `# ${t('writeUntitledDraft')}\n\n`)
+    if (created) completeOnboarding()
   }
 
   const setAssistantPrompt = (prompt: string): void => {
@@ -646,7 +662,11 @@ export function WriteWorkspaceView({
       const picked = await window.kunGui.pickWorkspaceDirectory(workspaceRoot || undefined)
       if (!picked.canceled && picked.path) {
         await addWriteWorkspace(picked.path)
-        if (runtimeConnection === 'ready') void ensureWriteThreadForWorkspace(picked.path)
+        const selected = pathsEqual(useWriteWorkspaceStore.getState().workspaceRoot, picked.path)
+        if (selected) {
+          completeOnboarding()
+          if (runtimeConnection === 'ready') void ensureWriteThreadForWorkspace(picked.path)
+        }
       }
     } catch (error) {
       setFileError(formatWorkspacePickerError(error))
@@ -751,6 +771,12 @@ export function WriteWorkspaceView({
   useEffect(() => {
     setModeMenuOpen(false)
   }, [activeFilePath, previewMode])
+
+  useEffect(() => {
+    if (!onboardingComplete && (Boolean(activeFilePath) || workspaceHasEntries)) {
+      completeOnboarding()
+    }
+  }, [activeFilePath, completeOnboarding, onboardingComplete, workspaceHasEntries])
 
   // Reset the AI-edit draft whenever the selection changes; the menu input is
   // always present (no open/close toggle) and must not carry stale text over.
@@ -1033,6 +1059,7 @@ export function WriteWorkspaceView({
             richHandleRef={richHandleRef}
             markdownHandleRef={markdownHandleRef}
             onMarkdownReviewStateChange={setReviewActive}
+            onboarding={!onboardingComplete && !activeFilePath && !workspaceHasEntries}
             debouncedPreviewContent={debouncedPreviewContent}
             isMarkdown={isMarkdown}
             inlineCompletion={inlineCompletion}

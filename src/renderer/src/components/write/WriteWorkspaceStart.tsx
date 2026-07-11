@@ -1,5 +1,5 @@
 import type { ReactElement } from 'react'
-import { FilePenLine, FilePlus2, FolderOpen, ListTodo, RefreshCw, Sparkles } from 'lucide-react'
+import { FilePenLine, FilePlus2, FolderOpen, FolderPlus, ListTodo, RefreshCw, Sparkles } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 export function WriteWorkspaceStart({
@@ -8,7 +8,8 @@ export function WriteWorkspaceStart({
   onPickWorkspace,
   onRefreshWorkspace,
   workspaceName,
-  workspacePathLabel
+  workspacePathLabel,
+  onboarding = false
 }: {
   onAskAssistant: () => void
   onCreateDraft: () => void
@@ -16,6 +17,7 @@ export function WriteWorkspaceStart({
   onRefreshWorkspace: () => void
   workspaceName: string
   workspacePathLabel: string
+  onboarding?: boolean
 }): ReactElement {
   const { t } = useTranslation('common')
   return (
@@ -27,30 +29,44 @@ export function WriteWorkspaceStart({
             <span>{t('writeStudio')}</span>
           </div>
           <h2 className="write-start-heading mt-5 max-w-[12ch] text-[clamp(2.25rem,5vw,3.25rem)] font-semibold leading-[1.08] tracking-[0] text-ds-ink">
-            {t('writeStartTitle')}
+            {t(onboarding ? 'writeOnboardingTitle' : 'writeStartTitle')}
           </h2>
           <p className="write-start-copy mt-4 max-w-[56ch] text-[15px] leading-7 text-ds-muted">
-            {t('writeStartSub')}
+            {t(onboarding ? 'writeOnboardingSub' : 'writeStartSub')}
           </p>
 
           <div className="write-start-primary-actions mt-7 grid gap-3">
             <button
               type="button"
-              onClick={onCreateDraft}
+              onClick={onboarding ? onPickWorkspace : onCreateDraft}
               className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-accent px-5 text-[14px] font-semibold text-white shadow-[0_14px_30px_rgba(59,130,216,0.22)] transition hover:brightness-110"
             >
-              <FilePlus2 className="h-4 w-4" strokeWidth={1.9} />
-              {t('writeStartNewDraft')}
+              {onboarding ? (
+                <FolderPlus className="h-4 w-4" strokeWidth={1.9} />
+              ) : (
+                <FilePlus2 className="h-4 w-4" strokeWidth={1.9} />
+              )}
+              {t(onboarding ? 'writeOnboardingCreateSpace' : 'writeStartNewDraft')}
             </button>
             <button
               type="button"
-              onClick={onAskAssistant}
+              onClick={onboarding ? onCreateDraft : onAskAssistant}
               className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl border border-ds-border bg-white/70 px-5 text-[14px] font-semibold text-ds-ink shadow-sm transition hover:bg-white dark:bg-white/[0.055] dark:hover:bg-white/[0.08]"
             >
-              <ListTodo className="h-4 w-4 text-emerald-600 dark:text-emerald-300" strokeWidth={1.9} />
-              {t('writeStartAskAi')}
+              {onboarding ? (
+                <FilePenLine className="h-4 w-4 text-emerald-600 dark:text-emerald-300" strokeWidth={1.9} />
+              ) : (
+                <ListTodo className="h-4 w-4 text-emerald-600 dark:text-emerald-300" strokeWidth={1.9} />
+              )}
+              {t(onboarding ? 'writeOnboardingUseDefault' : 'writeStartAskAi')}
             </button>
           </div>
+
+          {onboarding ? (
+            <p className="mt-4 rounded-2xl border border-accent/15 bg-accent/[0.06] px-4 py-3 text-[12.5px] leading-5 text-ds-muted">
+              {t('writeOnboardingSeparationNote')}
+            </p>
+          ) : null}
 
           <div className="write-start-shortcuts mt-7 grid gap-3">
             <button
@@ -101,7 +117,7 @@ export function WriteWorkspaceStart({
               </div>
             </div>
             <span className="shrink-0 rounded-full bg-emerald-500/10 px-2.5 py-1 text-[11.5px] font-semibold text-emerald-700 dark:text-emerald-300">
-              {t('writeStartReadyLabel')}
+              {t(onboarding ? 'writeOnboardingSetupLabel' : 'writeStartReadyLabel')}
             </span>
           </div>
 

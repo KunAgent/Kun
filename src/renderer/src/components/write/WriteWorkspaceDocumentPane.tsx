@@ -59,6 +59,7 @@ type Props = {
   onImagePasteSaved: () => void
   onImagePasteError: (message: string) => void
   onMarkdownReviewStateChange?: (active: boolean) => void
+  onboarding?: boolean
 }
 
 export function WriteWorkspaceDocumentPane({
@@ -105,7 +106,8 @@ export function WriteWorkspaceDocumentPane({
   onSaveShortcut,
   onImagePasteSaved,
   onImagePasteError,
-  onMarkdownReviewStateChange
+  onMarkdownReviewStateChange,
+  onboarding = false
 }: Props): ReactElement {
   const { t } = useTranslation('common')
 
@@ -118,6 +120,7 @@ export function WriteWorkspaceDocumentPane({
         onCreateDraft={onCreateDraft}
         onPickWorkspace={onPickWorkspace}
         onRefreshWorkspace={onRefreshWorkspace}
+        onboarding={onboarding}
       />
     )
   }
