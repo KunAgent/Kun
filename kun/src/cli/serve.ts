@@ -11,6 +11,7 @@ import {
   readOptionalKunConfigFile,
   type LoadedKunConfig
 } from '../config/kun-config.js'
+import { parseOtlpHeaders, resolveOtlpTracesEndpoint } from '../telemetry/otlp-http-json-sink.js'
 
 /**
  * Parse the `kun serve` command line into validated options.
@@ -58,6 +59,31 @@ export function parseServeOptions(
     stringFlag(raw, 'observabilityOutput') ??
     env.KUN_OBSERVABILITY_OUTPUT_PATH ??
     configServe.observability?.outputPath
+  const observabilityExporterValue =
+    stringFlag(raw, 'observability-exporter') ??
+    env.KUN_OBSERVABILITY_EXPORTER ??
+    configServe.observability?.exporter
+  const observabilityExporter = observabilityExporterValue as
+    | 'jsonl'
+    | 'otlp-http-json'
+    | undefined
+  const otlpProtocol = env.OTEL_EXPORTER_OTLP_TRACES_PROTOCOL ?? env.OTEL_EXPORTER_OTLP_PROTOCOL
+  const standardOtlpEnabled = env.OTEL_TRACES_EXPORTER
+    ?.split(',')
+    .map((entry) => entry.trim())
+    .includes('otlp') && otlpProtocol === 'http/json'
+  const resolvedObservabilityExporter = observabilityExporter ?? (standardOtlpEnabled ? 'otlp-http-json' : undefined)
+  const observabilityEndpoint =
+    env.OTEL_EXPORTER_OTLP_TRACES_ENDPOINT ??
+    (standardOtlpEnabled
+      ? resolveOtlpTracesEndpoint({ commonEndpoint: env.OTEL_EXPORTER_OTLP_ENDPOINT })
+      : configServe.observability?.endpoint)
+  const observabilityHeaders = parseOtlpHeaders(
+    env.OTEL_EXPORTER_OTLP_TRACES_HEADERS ?? env.OTEL_EXPORTER_OTLP_HEADERS
+  ) ?? configServe.observability?.headers
+  const observabilityTimeoutMs = numberEnv(
+    env.OTEL_EXPORTER_OTLP_TRACES_TIMEOUT ?? env.OTEL_EXPORTER_OTLP_TIMEOUT
+  ) ?? configServe.observability?.timeoutMs
   const merged: ServeOptions = {
     ...DEFAULT_SERVE_OPTIONS,
     ...(loadedConfig ? { configPath: loadedConfig.path } : {}),
@@ -151,11 +177,15 @@ export function parseServeOptions(
         : {})
     },
     observability:
-      observabilityEnabled !== undefined || observabilityOutputPath
+      observabilityEnabled !== undefined || observabilityOutputPath || resolvedObservabilityExporter
         ? {
             ...(configServe.observability ?? {}),
-            ...(observabilityEnabled !== undefined ? { enabled: observabilityEnabled } : {}),
-            ...(observabilityOutputPath ? { outputPath: observabilityOutputPath } : {})
+            enabled: observabilityEnabled ?? Boolean(standardOtlpEnabled),
+            ...(observabilityOutputPath ? { outputPath: observabilityOutputPath } : {}),
+            ...(resolvedObservabilityExporter ? { exporter: resolvedObservabilityExporter } : {}),
+            ...(observabilityEndpoint ? { endpoint: observabilityEndpoint } : {}),
+            ...(observabilityHeaders ? { headers: observabilityHeaders } : {}),
+            ...(observabilityTimeoutMs ? { timeoutMs: observabilityTimeoutMs } : {})
           }
         : configServe.observability,
     headers: configServe.headers,
@@ -169,6 +199,12 @@ export function parseServeOptions(
     quality: loadedConfig?.config.quality
   }
   return ServeOptionsSchema.parse(merged)
+}
+
+function numberEnv(value: string | undefined): number | undefined {
+  if (!value?.trim()) return undefined
+  const parsed = Number(value)
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined
 }
 
 /**
@@ -201,6 +237,8 @@ Options:
   --observability          Write sanitized OpenTelemetry-style agent spans
   --observability-output <path>
                            JSONL span output path (default {data-dir}/observability/agent-spans.jsonl)
+  --observability-exporter <exporter>
+                           jsonl | otlp-http-json
 `
 
 export const ServeExitCode = {

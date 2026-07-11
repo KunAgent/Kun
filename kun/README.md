@@ -476,6 +476,27 @@ cross-thread recall, create an explicit memory record through the
 GUI memory review surface or the `memory_create` tool. If it should
 stay local to one thread, leave it as a pinned constraint.
 
+## Agent observability
+
+Sanitized agent spans can stay in the default local JSONL file or be
+exported to an OpenTelemetry collector with OTLP/HTTP JSON. The OTLP
+exporter is opt-in, bounded, batched, and runs outside the runtime event
+persistence path. Set the standard variables below before starting Kun:
+
+```sh
+OTEL_TRACES_EXPORTER=otlp
+OTEL_EXPORTER_OTLP_PROTOCOL=http/json
+OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318
+```
+
+`OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` is used as-is when set. Otherwise
+Kun appends `/v1/traces` to `OTEL_EXPORTER_OTLP_ENDPOINT`. Standard
+`OTEL_EXPORTER_OTLP_HEADERS` and `OTEL_EXPORTER_OTLP_TIMEOUT` values are
+also supported, including their trace-specific variants. Prompts,
+assistant text, tool arguments, tool output, commands, and arbitrary
+error messages are excluded by default. `includeSensitiveContent` must
+be explicitly enabled before arbitrary error messages are exported.
+
 ## Troubleshooting
 
 - MCP server does not appear: check `capabilities.mcp.enabled`, the

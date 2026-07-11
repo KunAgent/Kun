@@ -352,6 +352,24 @@ describe('cli', () => {
     })
   })
 
+  it('enables the OTLP HTTP JSON exporter from standard environment variables', () => {
+    const parsed = parseServeOptions(['--data-dir=/srv/ca'], {
+      OTEL_TRACES_EXPORTER: 'otlp',
+      OTEL_EXPORTER_OTLP_PROTOCOL: 'http/json',
+      OTEL_EXPORTER_OTLP_ENDPOINT: 'https://collector.example/otel',
+      OTEL_EXPORTER_OTLP_HEADERS: 'api-key=hello%20world',
+      OTEL_EXPORTER_OTLP_TIMEOUT: '2500'
+    })
+    expect(parsed.observability).toEqual({
+      enabled: true,
+      exporter: 'otlp-http-json',
+      endpoint: 'https://collector.example/otel/v1/traces',
+      headers: { 'api-key': 'hello world' },
+      timeoutMs: 2500,
+      includeSensitiveContent: false
+    })
+  })
+
   it('loads serve and context compaction settings from an explicit config file', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'kun-config-'))
     try {
