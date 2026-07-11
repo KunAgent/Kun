@@ -52,6 +52,7 @@ import {
   WRITE_RICH_CLIPBOARD_ACTION,
   exportFormatLabel,
   formatSaveLabel,
+  isInlineCompletionToggleShortcut,
   inlineAgentPosition,
   isMarkdownFile,
   computeWriteDocumentStats,
@@ -107,6 +108,7 @@ export function WriteWorkspaceView({
     selection,
     recentEdits,
     loadWriteSettings,
+    setInlineCompletionEnabled,
     addWriteWorkspace,
     setFileContent,
     syncActiveFileFromDisk,
@@ -162,6 +164,7 @@ export function WriteWorkspaceView({
       selection: s.selection,
       recentEdits: s.recentEdits,
       loadWriteSettings: s.loadWriteSettings,
+      setInlineCompletionEnabled: s.setInlineCompletionEnabled,
       addWriteWorkspace: s.addWriteWorkspace,
       setFileContent: s.setFileContent,
       syncActiveFileFromDisk: s.syncActiveFileFromDisk,
@@ -187,6 +190,7 @@ export function WriteWorkspaceView({
   const inlineAgentTextareaRef = useRef<HTMLTextAreaElement | null>(null)
   const richHandleRef = useRef<WriteRichEditorHandle | null>(null)
   const markdownHandleRef = useRef<WriteMarkdownEditorHandle | null>(null)
+
   const [inlineAgentValue, setInlineAgentValue] = useState('')
   const [pointerSelecting, setPointerSelecting] = useState(false)
   const [inlineAgentFocused, setInlineAgentFocused] = useState(false)
@@ -208,6 +212,17 @@ export function WriteWorkspaceView({
     fileSize,
     truncated: fileTruncated
   })
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent): void => {
+      if (!activeFileIsText || renderSafety.readOnly || !isInlineCompletionToggleShortcut(event)) return
+      event.preventDefault()
+      void setInlineCompletionEnabled(!inlineCompletion.enabled)
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [activeFileIsText, inlineCompletion.enabled, renderSafety.readOnly, setInlineCompletionEnabled])
+
   const debouncedPreviewContent = useDebouncedValue(fileContent, writePreviewDebounceMs(fileContent.length))
   const saveLabel = activeFileIsImage
     ? t('writeImagePreview')
@@ -977,6 +992,7 @@ export function WriteWorkspaceView({
         activeFileName={activeFileName}
         activeFilePath={activeFilePath ?? ''}
         documentStatsLabel={documentStatsLabel}
+        inlineCompletionEnabled={inlineCompletion.enabled}
         assistantOpen={assistantOpen}
         exportInFlight={exportInFlight}
         exportMenuOpen={exportMenuOpen}
@@ -1001,6 +1017,7 @@ export function WriteWorkspaceView({
           if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current)
           void flushSave(workspaceRoot)
         }}
+        onToggleInlineCompletion={() => void setInlineCompletionEnabled(!inlineCompletion.enabled)}
         onToggleLeftSidebar={onToggleLeftSidebar}
       />
       <div className="flex min-h-0 min-w-0 flex-1 gap-3 overflow-hidden pb-3 pt-3">

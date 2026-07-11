@@ -61,6 +61,15 @@ export function formatSaveLabel(status: WriteSaveStatus, t: (key: string) => str
   return t('writeSaved')
 }
 
+export function isInlineCompletionToggleShortcut(event: Pick<KeyboardEvent, 'code' | 'ctrlKey' | 'metaKey' | 'shiftKey' | 'altKey' | 'repeat' | 'isComposing'>): boolean {
+  return event.code === 'Space' &&
+    event.shiftKey &&
+    (event.ctrlKey || event.metaKey) &&
+    !event.altKey &&
+    !event.repeat &&
+    !event.isComposing
+}
+
 function collectVisibleText(node: { type?: string; text?: string; content?: unknown[] } | undefined, acc: string[]): string[] {
   if (!node) return acc
   if (node.type === 'text' && typeof node.text === 'string') acc.push(node.text)

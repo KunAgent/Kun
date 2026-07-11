@@ -14,13 +14,16 @@ import {
 
 type WriteSettingsActions = Pick<
   WriteWorkspaceState,
-  'loadWriteSettings' | 'selectWriteWorkspace' | 'addWriteWorkspace' | 'removeWriteWorkspace'
+  'loadWriteSettings' | 'selectWriteWorkspace' | 'addWriteWorkspace' | 'removeWriteWorkspace' | 'setInlineCompletionEnabled'
 >
 
 type WriteSettingsActionContext = {
   set: WriteWorkspaceSet
   get: WriteWorkspaceGet
 }
+
+let inlineCompletionSettingsWrite: Promise<void> = Promise.resolve()
+let inlineCompletionSettingsRevision = 0
 
 function applyWriteSettingsState(
   set: WriteWorkspaceSet,
@@ -64,6 +67,31 @@ export function createWriteSettingsActions({ set, get }: WriteSettingsActionCont
       } catch (error) {
         set({
           settingsLoading: false,
+          settingsError: error instanceof Error ? error.message : String(error)
+        })
+      }
+    },
+
+    setInlineCompletionEnabled: async (enabled) => {
+      const previous = get().inlineCompletion
+      if (previous.enabled === enabled) return
+      const revision = ++inlineCompletionSettingsRevision
+      set({
+        inlineCompletion: { ...previous, enabled },
+        settingsError: null
+      })
+      const write = inlineCompletionSettingsWrite.then(async () => {
+        await rendererRuntimeClient.setSettings({
+          write: { inlineCompletion: { enabled } }
+        })
+      })
+      inlineCompletionSettingsWrite = write.catch(() => undefined)
+      try {
+        await write
+      } catch (error) {
+        if (revision !== inlineCompletionSettingsRevision) return
+        set({
+          inlineCompletion: previous,
           settingsError: error instanceof Error ? error.message : String(error)
         })
       }
