@@ -2788,6 +2788,9 @@
   "description": "Description",
   "color": "Color",
   "mode": "Mode",
+  "writeFocusModeEnter": "Enter focus mode",
+  "writeFocusModeExit": "Exit focus mode",
+  "writeFocusModeShortcut": "⌘/Ctrl + Shift + F",
   "systemPrompt": "System prompt",
   "toolPolicy": "Tool access"
 }

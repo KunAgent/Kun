@@ -2788,6 +2788,9 @@
   "description": "描述",
   "color": "颜色",
   "mode": "模式",
+  "writeFocusModeEnter": "进入专注模式",
+  "writeFocusModeExit": "退出专注模式",
+  "writeFocusModeShortcut": "⌘/Ctrl + Shift + F",
   "systemPrompt": "系统提示词",
   "toolPolicy": "工具权限"
 }
