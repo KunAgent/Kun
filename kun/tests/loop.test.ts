@@ -601,8 +601,9 @@ describe('AgentLoop', () => {
     })
   })
 
-  it('surfaces tool catalog drift to the UI and next model request', async () => {
+  it('defers additive tool catalog changes until the next turn', async () => {
     const seenInstructions: string[][] = []
+    const seenToolNames: string[][] = []
     let modelCalls = 0
     let advertiseExtra = false
     const echoTool = LocalToolHost.defineTool({
@@ -633,6 +634,7 @@ describe('AgentLoop', () => {
         model: 'catalog-drift',
         async *stream(request: ModelRequest): AsyncIterable<ModelStreamChunk> {
           seenInstructions.push(request.contextInstructions ?? [])
+          seenToolNames.push((request.tools ?? []).map((tool) => tool.name))
           modelCalls += 1
           if (modelCalls === 1) {
             yield {
@@ -662,10 +664,14 @@ describe('AgentLoop', () => {
 	    })
 	    expect(items.some((item) => item.kind === 'error' && item.code === 'tool_catalog_changed')).toBe(true)
 	    expect(seenInstructions[1]?.some((text) => text.includes('Tool catalog changed'))).toBe(true)
+	    expect(seenInstructions[1]?.some((text) => text.includes('next turn'))).toBe(true)
+	    expect(seenToolNames[0]).toEqual(['echo'])
+	    expect(seenToolNames[1]).toEqual(['echo'])
 	  })
 
-	  it('stops the turn when an existing tool schema mutates in-place', async () => {
+	  it('deep-freezes an existing tool schema for every model step in a turn', async () => {
 	    let modelCalls = 0
+	    const seenSchemas: Record<string, unknown>[] = []
 	    const inputSchema: Record<string, unknown> = {
 	      type: 'object',
 	      properties: { text: { type: 'string' } },
@@ -688,8 +694,13 @@ describe('AgentLoop', () => {
 	      {
 	        provider: 'catalog-breaking-drift',
 	        model: 'catalog-breaking-drift',
-	        async *stream(): AsyncIterable<ModelStreamChunk> {
+	        async *stream(request: ModelRequest): AsyncIterable<ModelStreamChunk> {
 	          modelCalls += 1
+	          seenSchemas.push(structuredClone(request.tools?.[0]?.inputSchema ?? {}))
+	          if (modelCalls > 1) {
+	            yield { kind: 'completed', stopReason: 'stop' }
+	            return
+	          }
 	          yield {
 	            kind: 'tool_call_complete',
 	            callId: 'call_echo',
@@ -708,7 +719,9 @@ describe('AgentLoop', () => {
 	    const items = await h.sessionStore.loadItems(h.threadId)
 
 	    expect(status).toBe('completed')
-	    expect(modelCalls).toBe(1)
+	    expect(modelCalls).toBe(2)
+	    expect(seenSchemas[1]).toEqual(seenSchemas[0])
+	    expect(JSON.stringify(seenSchemas[1])).not.toContain('unexpected')
 	    expect(events.find((event) => event.kind === 'tool_catalog_changed')).toMatchObject({
 	      kind: 'tool_catalog_changed',
 	      changeKind: 'breaking'
@@ -716,7 +729,7 @@ describe('AgentLoop', () => {
 	    expect(items.find((item) => item.kind === 'error' && item.code === 'tool_catalog_changed'))
 	      .toMatchObject({
 	        kind: 'error',
-	        message: expect.stringContaining('Kun stopped this turn')
+	        message: expect.stringContaining('next turn')
 	      })
 	  })
 

@@ -132,6 +132,12 @@ import {
   todoContinuationInstruction,
   userInputUnavailableInstruction
 } from './continuation-instructions.js'
+import {
+  TurnToolCatalogFreezer,
+  isAdditiveToolCatalogChange,
+  type ToolCatalogDrift,
+  type ToolCatalogSnapshot
+} from './turn-tool-catalog.js'
 export {
   PLAN_MODE_INSTRUCTION,
   isPlanClarifyingQuestion,
@@ -249,22 +255,11 @@ const PIPELINE_STAGE_LABELS: Record<PipelineStage, string> = {
   response_received: 'Response Received'
 }
 
-type ToolCatalogSnapshot = {
-  fingerprint: string
-  toolNames: string[]
-  toolHashes: Record<string, string>
-}
-
 type GoalElapsedTimer = {
   startedAtMs: number
   createdAt: string
   objective: string
 }
-
-type ToolCatalogDrift =
-  | { kind: 'none' }
-  | { kind: 'additive'; previous: ToolCatalogSnapshot }
-  | { kind: 'breaking'; previous: ToolCatalogSnapshot }
 
 export type AgentLoopOptions = {
   threadStore: ThreadStore
@@ -384,6 +379,7 @@ export class AgentLoop {
   private readonly hydratedPressureThreads = new Set<string>()
   private readonly toolStormBreakers = new Map<string, ToolStormBreaker>()
   private readonly toolCatalogSnapshots = new Map<string, ToolCatalogSnapshot>()
+  private readonly turnToolCatalogs = new TurnToolCatalogFreezer(MAX_TOOL_CATALOG_SNAPSHOTS)
   private readonly lastNoToolTextByTurn = new Map<string, string>()
   private readonly goalNoToolRecoveryStepsByTurn = new Map<string, number>()
   private readonly emptyPostToolRecoveryStepsByTurn = new Map<string, number>()
@@ -1076,13 +1072,15 @@ export class AgentLoop {
         ? {}
         : { awaitUserInput: (input) => this.awaitUserInput(threadId, turnId, input, signal) })
     }
-    const tools = await this.opts.toolHost.listTools(toolContext)
+    const liveTools = await this.opts.toolHost.listTools(toolContext)
+    const frozenToolCatalog = this.turnToolCatalogs.resolve(threadId, turnId, liveTools)
+    const tools = frozenToolCatalog.tools
     const toolSpecs: ModelToolSpec[] = tools
     const toolProviderMetadata = new Map(
       tools.map((tool) => [tool.name, { providerId: tool.providerId, providerKind: tool.providerKind }])
     )
     const toolCatalog = buildToolCatalogFingerprint(toolSpecs)
-    const toolCatalogDrift = this.recordToolCatalogFingerprint({
+    const previousTurnDrift = this.recordToolCatalogFingerprint({
       threadId,
       workspace: thread?.workspace ?? '',
       mode: effectiveMode ?? 'agent',
@@ -1095,16 +1093,24 @@ export class AgentLoop {
       toolNames: toolCatalog.toolNames,
       toolHashes: toolCatalog.toolHashes
     })
+    const toolCatalogDrift = frozenToolCatalog.pendingDrift.kind !== 'none'
+      ? frozenToolCatalog.pendingDrift
+      : previousTurnDrift
+    const diagnosticCatalog = frozenToolCatalog.pendingCatalog ?? toolCatalog
     const toolCatalogDriftMessage = toolCatalogDrift.kind !== 'none'
-      ? buildToolCatalogDriftMessage(toolCatalog, toolCatalogDrift.kind)
+      ? buildToolCatalogDriftMessage(
+          diagnosticCatalog,
+          toolCatalogDrift.kind,
+          frozenToolCatalog.pendingCatalog ? 'deferred' : 'applied'
+        )
       : undefined
     if (toolCatalogDrift.kind !== 'none' && toolCatalogDriftMessage) {
       await this.recordToolCatalogDrift({
         threadId,
         turnId,
-        fingerprint: toolCatalog.fingerprint,
-        toolCount: toolCatalog.toolCount,
-        toolNames: toolCatalog.toolNames,
+        fingerprint: diagnosticCatalog.fingerprint,
+        toolCount: diagnosticCatalog.toolCount,
+        toolNames: diagnosticCatalog.toolNames,
         changeKind: toolCatalogDrift.kind,
         message: toolCatalogDriftMessage
       })
@@ -1125,7 +1131,6 @@ export class AgentLoop {
         toolCatalogDrift: toolCatalogDrift.kind !== 'none'
       })
     }
-    if (toolCatalogDrift.kind === 'breaking') return 'stop'
     const toolKinds = new Map(toolSpecs.map((tool) => [tool.name, tool.toolKind]))
     const createPlanSatisfied = planTurnActive
       ? hasSuccessfulCreatePlanResult(historyItems, turnId)
@@ -2941,30 +2946,18 @@ function normalizeSandboxMode(
   }
 }
 
-function isAdditiveToolCatalogChange(previous: ToolCatalogSnapshot, current: ToolCatalogSnapshot): boolean {
-  let added = false
-  for (const name of current.toolNames) {
-    if (!previous.toolHashes[name]) added = true
-  }
-  if (!added) return false
-  for (const name of previous.toolNames) {
-    const previousHash = previous.toolHashes[name]
-    const currentHash = current.toolHashes[name]
-    if (!previousHash || !currentHash || previousHash !== currentHash) return false
-  }
-  return true
-}
-
 function buildToolCatalogDriftMessage(toolCatalog: {
   fingerprint: string
   toolCount: number
   toolNames: string[]
-}, changeKind: 'additive' | 'breaking'): string {
+}, changeKind: 'additive' | 'breaking', phase: 'deferred' | 'applied'): string {
   const sample = toolCatalog.toolNames.slice(0, 12).join(', ')
   const suffix = toolCatalog.toolNames.length > 12 ? `, +${toolCatalog.toolNames.length - 12} more` : ''
-  const policy = changeKind === 'additive'
-    ? 'Only additive tool changes are allowed in-place; Kun will continue with the refreshed tool list.'
-    : 'Non-additive tool changes can invalidate prompt-cache assumptions; Kun stopped this turn. Start a new thread after editing, removing, or reordering tool schemas.'
+  const policy = phase === 'deferred'
+    ? 'The active turn keeps its frozen tool schemas; this update will be available on the next turn.'
+    : changeKind === 'additive'
+      ? 'The additive update is active from the start of this turn.'
+      : 'The updated catalog is active from the start of this turn; earlier turns keep their original schema fingerprints.'
   return [
     `Tool catalog changed for this thread (${toolCatalog.toolCount} tools, fingerprint ${toolCatalog.fingerprint}).`,
     policy,
