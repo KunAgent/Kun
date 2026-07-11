@@ -173,6 +173,70 @@ describe('replay benchmark', () => {
     ]))
   })
 
+  it('uses per-model comparison tolerances without changing global defaults', () => {
+    const baseline = report([replayRun('passed', 100, 1_000, 0.8)], '2026-06-28T00:00:00.000Z')
+    const current = report([replayRun('passed', 450, 1_900, 0.8)], '2026-06-29T00:00:00.000Z')
+    current.runtime.model = 'local-model'
+
+    const comparison = compareReplayReports(current, baseline, {
+      allowModelChange: true,
+      defaults: {},
+      models: {
+        'local-model': {
+          maxTtftRelativeIncrease: 5,
+          maxTotalRelativeIncrease: 5
+        }
+      }
+    })
+
+    expect(comparison.model).toBe('local-model')
+    expect(comparison.policy.maxTtftRelativeIncrease).toBe(5)
+    expect(comparison.regressions).not.toEqual(expect.arrayContaining([
+      expect.stringContaining('TTFT'),
+      expect.stringContaining('total latency')
+    ]))
+  })
+
+  it('supports explicit token and memory regression thresholds', () => {
+    const baseline = report([replayRun('passed', 100, 1_000, 0.8)], '2026-06-28T00:00:00.000Z')
+    const current = report([replayRun('passed', 100, 1_000, 0.8)], '2026-06-29T00:00:00.000Z')
+    baseline.summary.promptTokens = 1_000
+    current.summary.promptTokens = 1_500
+    baseline.summary.peakRssBytes = 100_000
+    current.summary.peakRssBytes = 200_000
+
+    const comparison = compareReplayReports(current, baseline, {
+      defaults: {
+        maxPromptTokensRelativeIncrease: 0.1,
+        maxPromptTokensAbsoluteIncrease: 100,
+        maxPeakRssRelativeIncrease: 0.1,
+        maxPeakRssAbsoluteIncreaseBytes: 10_000
+      }
+    })
+
+    expect(comparison.regressions).toEqual(expect.arrayContaining([
+      expect.stringContaining('prompt tokens'),
+      expect.stringContaining('peak RSS')
+    ]))
+  })
+
+  it('rejects an incompatible baseline unless model changes are explicit', () => {
+    const baseline = report([replayRun('passed', 100, 1_000, 0.8)], '2026-06-28T00:00:00.000Z')
+    const current = report([replayRun('passed', 100, 1_000, 0.8)], '2026-06-29T00:00:00.000Z')
+    baseline.runtime.model = 'model-a'
+    current.runtime.model = 'model-b'
+
+    expect(() => compareReplayReports(current, baseline)).toThrow('runtime model')
+    expect(() => compareReplayReports(current, baseline, {
+      allowModelChange: true
+    })).not.toThrow()
+
+    current.suite.taskCount += 1
+    expect(() => compareReplayReports(current, baseline, {
+      allowModelChange: true
+    })).toThrow('task count')
+  })
+
   it('evaluates explicit replay budget gates', () => {
     const passing = report([
       replayRun('passed', 100, 1_000, 0.8),

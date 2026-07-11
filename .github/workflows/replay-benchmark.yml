@@ -30,6 +30,10 @@ on:
         description: Optional baseline report JSON path
         required: false
         type: string
+      comparison_policy:
+        description: Optional default and per-model comparison policy JSON path
+        required: false
+        type: string
       budget:
         description: Optional replay budget JSON path
         required: false
@@ -81,6 +85,7 @@ jobs:
           REPEAT_COUNT: ${{ inputs.repeat }}
           CONCURRENCY: ${{ inputs.concurrency }}
           BASELINE_PATH: ${{ inputs.baseline }}
+          COMPARISON_POLICY_PATH: ${{ inputs.comparison_policy }}
           BUDGET_PATH: ${{ inputs.budget }}
           FAIL_ON_REGRESSION: ${{ inputs.fail_on_regression }}
           FAIL_ON_BUDGET: ${{ inputs.fail_on_budget }}
@@ -101,6 +106,9 @@ jobs:
           fi
           if [[ -n "${BASELINE_PATH}" ]]; then
             args+=(--baseline "${BASELINE_PATH}")
+            if [[ -n "${COMPARISON_POLICY_PATH}" ]]; then
+              args+=(--comparison-policy "${COMPARISON_POLICY_PATH}")
+            fi
             if [[ "${FAIL_ON_REGRESSION}" == "true" ]]; then
               args+=(--fail-on-regression)
             fi

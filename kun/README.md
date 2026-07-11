@@ -68,6 +68,33 @@ npm run benchmark:replay -- --suite benchmarks/agent-core.json --repeat 2 \
   --baseline replay-baseline.json --output replay-current.json --fail-on-regression
 ```
 
+Use a comparison policy when providers or local models need different variance tolerances:
+
+```bash
+npm run benchmark:replay -- --suite benchmarks/agent-core.json \
+  --baseline replay-baseline.json --comparison-policy replay-policy.json \
+  --output replay-current.json --fail-on-regression
+```
+
+```json
+{
+  "defaults": {
+    "maxSuccessRateDrop": 0,
+    "maxTtftRelativeIncrease": 0.2,
+    "maxTtftAbsoluteIncreaseMs": 300
+  },
+  "models": {
+    "local-model": {
+      "maxTtftRelativeIncrease": 0.5,
+      "maxTtftAbsoluteIncreaseMs": 800
+    }
+  }
+}
+```
+
+Reports must use the same suite, task count, repeat count, and tag. Model changes are rejected unless the policy
+sets `allowModelChange` to `true`; per-model thresholds are resolved against the current report model.
+
 Replay threads always use the `read-only` sandbox and disable interactive input. Reports include success rate,
 TTFT, full latency, tool time, SSE delivery delay, token/cache/cost counters, and Kun process peak RSS. The runtime
 token is accepted only through `KUN_RUNTIME_TOKEN`, so it does not leak through process arguments.

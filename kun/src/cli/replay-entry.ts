@@ -19,6 +19,7 @@ type CliOptions = {
   outputPath?: string
   summaryPath?: string
   baselinePath?: string
+  comparisonPolicyPath?: string
   budgetPath?: string
   repeat: number
   concurrency: number
@@ -37,6 +38,9 @@ if (options.help) {
 if (!options.suitePath) {
   printUsage()
   process.exit(2)
+}
+if (options.comparisonPolicyPath && !options.baselinePath) {
+  throw new Error('--comparison-policy requires --baseline')
 }
 
 const suitePath = resolve(options.suitePath)
@@ -60,7 +64,10 @@ const report = await runReplaySuite(suite, {
 
 if (options.baselinePath) {
   const baseline = JSON.parse(await readFile(resolve(options.baselinePath), 'utf8')) as ReplayReport
-  report.comparison = compareReplayReports(report, baseline)
+  const comparisonPolicy = options.comparisonPolicyPath
+    ? JSON.parse(await readFile(resolve(options.comparisonPolicyPath), 'utf8')) as unknown
+    : undefined
+  report.comparison = compareReplayReports(report, baseline, comparisonPolicy)
 }
 if (options.budgetPath) {
   const budget = JSON.parse(await readFile(resolve(options.budgetPath), 'utf8')) as unknown
@@ -122,6 +129,9 @@ function parseArgs(args: string[]): CliOptions {
       case '--baseline':
         options.baselinePath = requiredValue(args, ++index, arg)
         break
+      case '--comparison-policy':
+        options.comparisonPolicyPath = requiredValue(args, ++index, arg)
+        break
       case '--budget':
         options.budgetPath = requiredValue(args, ++index, arg)
         break
@@ -177,6 +187,7 @@ function printUsage(): void {
   console.log('  --repeat <n>              Repeat each selected task (default 1)')
   console.log('  --concurrency <n>         Parallel tasks, capped at 8 (default 1)')
   console.log('  --baseline <report.json>  Compare against an earlier report')
+  console.log('  --comparison-policy <file> Configure default and per-model regression tolerances')
   console.log('  --budget <budget.json>    Evaluate explicit CI budget thresholds')
   console.log('  --output <report.json>    Write the full machine-readable report')
   console.log('  --summary-output <file>   Write a Markdown summary report')

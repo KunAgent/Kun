@@ -138,6 +138,8 @@ export type ReplayReportSummary = {
 
 export type ReplayComparison = {
   baselineGeneratedAt: string
+  model?: string
+  policy: ReplayComparisonThresholds
   successRateDelta: number
   ttftP95MsDelta: number | null
   totalP95MsDelta: number | null
@@ -147,6 +149,30 @@ export type ReplayComparison = {
   peakRssBytesDelta: number | null
   regressions: string[]
 }
+
+const ReplayComparisonThresholdsSchema = z.object({
+  maxSuccessRateDrop: z.number().min(0).max(1).default(0),
+  maxTtftRelativeIncrease: z.number().nonnegative().default(0.2),
+  maxTtftAbsoluteIncreaseMs: z.number().nonnegative().default(300),
+  maxTotalRelativeIncrease: z.number().nonnegative().default(0.2),
+  maxTotalAbsoluteIncreaseMs: z.number().nonnegative().default(500),
+  maxCacheHitRateDrop: z.number().min(0).max(1).default(0.05),
+  maxCostRelativeIncrease: z.number().nonnegative().default(0.1),
+  maxCostAbsoluteIncreaseUsd: z.number().nonnegative().optional(),
+  maxPromptTokensRelativeIncrease: z.number().nonnegative().optional(),
+  maxPromptTokensAbsoluteIncrease: z.number().int().nonnegative().optional(),
+  maxPeakRssRelativeIncrease: z.number().nonnegative().optional(),
+  maxPeakRssAbsoluteIncreaseBytes: z.number().int().nonnegative().optional()
+}).strict()
+
+export const ReplayComparisonPolicySchema = z.object({
+  defaults: ReplayComparisonThresholdsSchema.default(() => ReplayComparisonThresholdsSchema.parse({})),
+  models: z.record(z.string().min(1), ReplayComparisonThresholdsSchema.partial()).default({}),
+  allowModelChange: z.boolean().default(false)
+}).strict()
+
+export type ReplayComparisonThresholds = z.infer<typeof ReplayComparisonThresholdsSchema>
+export type ReplayComparisonPolicy = z.infer<typeof ReplayComparisonPolicySchema>
 
 const ReplayBudgetSchema = z.object({
   minSuccessRate: z.number().min(0).max(1).optional(),
@@ -532,28 +558,92 @@ export function summarizeReplayRuns(runs: ReplayRunResult[]): ReplayReportSummar
   }
 }
 
-export function compareReplayReports(current: ReplayReport, baseline: ReplayReport): ReplayComparison {
+export function parseReplayComparisonPolicy(input: unknown): ReplayComparisonPolicy {
+  return ReplayComparisonPolicySchema.parse(input ?? {})
+}
+
+export function compareReplayReports(
+  current: ReplayReport,
+  baseline: ReplayReport,
+  policyInput: unknown = {}
+): ReplayComparison {
+  const configuredPolicy = parseReplayComparisonPolicy(policyInput)
+  assertReplayReportsComparable(current, baseline, configuredPolicy)
+  const model = current.runtime.model
+  const policy = ReplayComparisonThresholdsSchema.parse({
+    ...configuredPolicy.defaults,
+    ...(model ? configuredPolicy.models[model] : {})
+  })
   const successRateDelta = current.summary.successRate - baseline.summary.successRate
   const ttftP95MsDelta = nullableDelta(current.summary.ttftP95Ms, baseline.summary.ttftP95Ms)
   const totalP95MsDelta = nullableDelta(current.summary.totalP95Ms, baseline.summary.totalP95Ms)
   const cacheHitRateDelta = nullableDelta(current.summary.cacheHitRate, baseline.summary.cacheHitRate)
   const peakRssBytesDelta = nullableDelta(current.summary.peakRssBytes, baseline.summary.peakRssBytes)
   const regressions: string[] = []
-  if (successRateDelta < 0) regressions.push(`success rate dropped by ${formatPercent(-successRateDelta)}`)
-  if (isRelativeRegression(current.summary.ttftP95Ms, baseline.summary.ttftP95Ms, 0.2, 300)) {
+  if (successRateDelta < -policy.maxSuccessRateDrop) {
+    regressions.push(`success rate dropped by ${formatPercent(-successRateDelta)}`)
+  }
+  if (isRelativeRegression(
+    current.summary.ttftP95Ms,
+    baseline.summary.ttftP95Ms,
+    policy.maxTtftRelativeIncrease,
+    policy.maxTtftAbsoluteIncreaseMs
+  )) {
     regressions.push(`TTFT p95 increased by ${ttftP95MsDelta}ms`)
   }
-  if (isRelativeRegression(current.summary.totalP95Ms, baseline.summary.totalP95Ms, 0.2, 500)) {
+  if (isRelativeRegression(
+    current.summary.totalP95Ms,
+    baseline.summary.totalP95Ms,
+    policy.maxTotalRelativeIncrease,
+    policy.maxTotalAbsoluteIncreaseMs
+  )) {
     regressions.push(`total latency p95 increased by ${totalP95MsDelta}ms`)
   }
-  if (cacheHitRateDelta !== null && cacheHitRateDelta < -0.05) {
+  if (cacheHitRateDelta !== null && cacheHitRateDelta < -policy.maxCacheHitRateDrop) {
     regressions.push(`cache hit rate dropped by ${formatPercent(-cacheHitRateDelta)}`)
   }
-  if (baseline.summary.costUsd > 0 && current.summary.costUsd > baseline.summary.costUsd * 1.1) {
+  if (isRelativeRegression(
+    current.summary.costUsd,
+    baseline.summary.costUsd,
+    policy.maxCostRelativeIncrease,
+    policy.maxCostAbsoluteIncreaseUsd ?? 0
+  )) {
     regressions.push(`cost increased by $${(current.summary.costUsd - baseline.summary.costUsd).toFixed(6)}`)
+  } else if (
+    baseline.summary.costUsd <= 0 &&
+    policy.maxCostAbsoluteIncreaseUsd !== undefined &&
+    current.summary.costUsd - baseline.summary.costUsd > policy.maxCostAbsoluteIncreaseUsd
+  ) {
+    regressions.push(`cost increased by $${(current.summary.costUsd - baseline.summary.costUsd).toFixed(6)}`)
+  }
+  if (
+    (policy.maxPromptTokensRelativeIncrease !== undefined ||
+      policy.maxPromptTokensAbsoluteIncrease !== undefined) &&
+    isRelativeRegression(
+      current.summary.promptTokens,
+      baseline.summary.promptTokens,
+      policy.maxPromptTokensRelativeIncrease ?? 0,
+      policy.maxPromptTokensAbsoluteIncrease ?? 0
+    )
+  ) {
+    regressions.push(`prompt tokens increased by ${current.summary.promptTokens - baseline.summary.promptTokens}`)
+  }
+  if (
+    (policy.maxPeakRssRelativeIncrease !== undefined ||
+      policy.maxPeakRssAbsoluteIncreaseBytes !== undefined) &&
+    isRelativeRegression(
+      current.summary.peakRssBytes,
+      baseline.summary.peakRssBytes,
+      policy.maxPeakRssRelativeIncrease ?? 0,
+      policy.maxPeakRssAbsoluteIncreaseBytes ?? 0
+    )
+  ) {
+    regressions.push(`peak RSS increased by ${formatBytes(peakRssBytesDelta ?? 0)}`)
   }
   return {
     baselineGeneratedAt: baseline.generatedAt,
+    ...(model ? { model } : {}),
+    policy,
     successRateDelta,
     ttftP95MsDelta,
     totalP95MsDelta,
@@ -562,6 +652,24 @@ export function compareReplayReports(current: ReplayReport, baseline: ReplayRepo
     costUsdDelta: current.summary.costUsd - baseline.summary.costUsd,
     peakRssBytesDelta,
     regressions
+  }
+}
+
+function assertReplayReportsComparable(
+  current: ReplayReport,
+  baseline: ReplayReport,
+  policy: ReplayComparisonPolicy
+): void {
+  const mismatches: string[] = []
+  if (current.suite.name !== baseline.suite.name) mismatches.push('suite name')
+  if (current.suite.taskCount !== baseline.suite.taskCount) mismatches.push('task count')
+  if (current.suite.repeat !== baseline.suite.repeat) mismatches.push('repeat count')
+  if ((current.suite.tag ?? '') !== (baseline.suite.tag ?? '')) mismatches.push('tag filter')
+  if (!policy.allowModelChange && (current.runtime.model ?? '') !== (baseline.runtime.model ?? '')) {
+    mismatches.push('runtime model')
+  }
+  if (mismatches.length > 0) {
+    throw new Error(`replay baseline is not comparable: ${mismatches.join(', ')} differ`)
   }
 }
 
@@ -612,6 +720,7 @@ export function formatReplayReportMarkdown(report: ReplayReport): string {
   if (report.comparison) {
     lines.push('## Baseline Comparison', '')
     lines.push(`- Baseline: ${report.comparison.baselineGeneratedAt}`)
+    lines.push(`- Comparison model: ${report.comparison.model ?? 'n/a'}`)
     lines.push(`- Success rate delta: ${formatSignedPercent(report.comparison.successRateDelta)}`)
     lines.push(`- TTFT p95 delta: ${formatSignedOptionalMs(report.comparison.ttftP95MsDelta)}`)
     lines.push(`- Total p95 delta: ${formatSignedOptionalMs(report.comparison.totalP95MsDelta)}`)
