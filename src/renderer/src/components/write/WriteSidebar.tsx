@@ -8,6 +8,7 @@ import {
   Folder,
   FolderOpen,
   FolderPlus,
+  FolderSearch,
   Plus,
   RefreshCw,
   Settings,
@@ -18,6 +19,7 @@ import { useTranslation } from 'react-i18next'
 import type { WorkspaceEntry } from '@shared/workspace-file'
 import { confirmDialog } from '../../lib/confirm-dialog'
 import { formatWorkspacePickerError } from '../../lib/format-workspace-picker-error'
+import { revealWorkspacePathInFileManager } from '../../lib/open-workspace-path'
 import { useChatStore, type SettingsRouteSection } from '../../store/chat-store'
 import {
   useWriteWorkspaceStore,
@@ -363,6 +365,18 @@ export function WriteSidebar({
                   actions={
                     active || removable ? (
                       <>
+                        <SidebarIconButton
+                          onClick={() => void revealWorkspacePathInFileManager(workspacePath, workspacePath)}
+                          title={window.kunGui?.platform === 'darwin'
+                            ? t('fileTreeRevealInFinder')
+                            : t('fileTreeRevealInFileManager')}
+                          ariaLabel={window.kunGui?.platform === 'darwin'
+                            ? t('fileTreeRevealInFinder')
+                            : t('fileTreeRevealInFileManager')}
+                          stopPropagation
+                        >
+                          <FolderSearch className="h-3.5 w-3.5" strokeWidth={1.8} />
+                        </SidebarIconButton>
                         {active ? (
                           <>
                             <SidebarIconButton
@@ -442,6 +456,7 @@ export function WriteSidebar({
                       onCreateDirectory={(directoryPath) => void openCreateDirectoryDialog(directoryPath)}
                       onRenameEntry={openRenameEntryDialog}
                       onDeleteEntry={openDeleteEntryDialog}
+                      onRevealEntry={(entry) => void revealWorkspacePathInFileManager(entry.path, workspaceRoot)}
                       onRefresh={() => void refreshWorkspace(workspaceRoot)}
                       showHeader={false}
                       showRootLabel={false}

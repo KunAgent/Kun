@@ -1,5 +1,5 @@
 import type { ReactElement, ReactNode } from 'react'
-import { ChevronDown, ChevronRight, FileText, FilePlus2, Folder, FolderPlus, Image, Pencil, RefreshCw, Trash2 } from 'lucide-react'
+import { ChevronDown, ChevronRight, FileText, FilePlus2, Folder, FolderPlus, FolderSearch, Image, Pencil, RefreshCw, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import type { WorkspaceEntry } from '@shared/workspace-file'
 import { isWriteImageFileExtension, isWriteWorkspaceEntry } from '@shared/write-text-file'
@@ -23,6 +23,7 @@ type Props = {
   onCreateDirectory: (directoryPath?: string) => void
   onRenameEntry: (entry: WorkspaceEntry) => void
   onDeleteEntry: (entry: WorkspaceEntry) => void
+  onRevealEntry: (entry: WorkspaceEntry) => void
   onRefresh: () => void
   showHeader?: boolean
   showRootLabel?: boolean
@@ -100,6 +101,7 @@ export function WriteFileTree({
   onCreateDirectory,
   onRenameEntry,
   onDeleteEntry,
+  onRevealEntry,
   onRefresh,
   showHeader = true,
   showRootLabel = true
@@ -143,6 +145,14 @@ export function WriteFileTree({
                     </TreeActionButton>
                   </>
                 ) : null}
+                <TreeActionButton
+                  title={window.kunGui?.platform === 'darwin'
+                    ? t('fileTreeRevealInFinder')
+                    : t('fileTreeRevealInFileManager')}
+                  onClick={() => onRevealEntry(entry)}
+                >
+                  <FolderSearch className="h-3.5 w-3.5" strokeWidth={1.85} />
+                </TreeActionButton>
                 <TreeActionButton
                   title={t('writeRenameEntry')}
                   onClick={() => onRenameEntry(entry)}
