@@ -1,10 +1,11 @@
-import { useEffect, useRef, type MutableRefObject, type ReactElement } from 'react'
+import { useEffect, useRef, useState, type MutableRefObject, type ReactElement } from 'react'
+import { ListOrdered, WrapText } from 'lucide-react'
 import { Annotation, Compartment, EditorSelection, EditorState, type Extension } from '@codemirror/state'
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands'
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
 import { bracketMatching, indentOnInput } from '@codemirror/language'
 import { languages } from '@codemirror/language-data'
-import { drawSelection, EditorView, highlightActiveLine, keymap, showPanel, type Panel, type ViewUpdate } from '@codemirror/view'
+import { drawSelection, EditorView, highlightActiveLine, keymap, lineNumbers, showPanel, type Panel, type ViewUpdate } from '@codemirror/view'
 import { acceptChunk, getChunks, rejectChunk, unifiedMergeView } from '@codemirror/merge'
 import i18n from '../../i18n'
 import {
@@ -23,6 +24,11 @@ import {
   type WriteTermReplacementSeed
 } from '../../write/term-propagation'
 import { writeSelectionStatesEqual } from '../../write/write-selection'
+import {
+  readWriteEditorDisplayPreferences,
+  writeWriteEditorDisplayPreferences,
+  type WriteEditorDisplayPreferences
+} from '../../write/write-editor-display-preferences'
 
 export type WriteSelectionAnchorRect = {
   left: number
@@ -384,6 +390,13 @@ function expandWriteTemplateShortcut(view: EditorView): boolean {
   return true
 }
 
+function writeEditorDisplayExtensions(preferences: WriteEditorDisplayPreferences): Extension[] {
+  return [
+    ...(preferences.lineNumbers ? [lineNumbers()] : []),
+    ...(preferences.lineWrapping ? [EditorView.lineWrapping] : [])
+  ]
+}
+
 export function WriteMarkdownEditor({
   value,
   workspaceRoot,
@@ -409,11 +422,13 @@ export function WriteMarkdownEditor({
   onReviewStateChange,
   handleRef
 }: Props): ReactElement {
+  const [displayPreferences, setDisplayPreferences] = useState(readWriteEditorDisplayPreferences)
   const hostRef = useRef<HTMLDivElement | null>(null)
   const viewRef = useRef<EditorView | null>(null)
   const themeCompartmentRef = useRef<Compartment | null>(null)
   const livePreviewCompartmentRef = useRef<Compartment | null>(null)
   const editableCompartmentRef = useRef<Compartment | null>(null)
+  const displayCompartmentRef = useRef<Compartment | null>(null)
   const workspaceRootRef = useRef(workspaceRoot ?? '')
   const filePathRef = useRef(filePath ?? '')
   const imageDirectoryRef = useRef(imageDirectory ?? '')
@@ -471,10 +486,12 @@ export function WriteMarkdownEditor({
     const themeCompartment = new Compartment()
     const livePreviewCompartment = new Compartment()
     const editableCompartment = new Compartment()
+    const displayCompartment = new Compartment()
     const mergeCompartment = new Compartment()
     themeCompartmentRef.current = themeCompartment
     livePreviewCompartmentRef.current = livePreviewCompartment
     editableCompartmentRef.current = editableCompartment
+    displayCompartmentRef.current = displayCompartment
     mergeCompartmentRef.current = mergeCompartment
 
     // --- Inline red/green diff review -----------------------------------------
@@ -607,6 +624,7 @@ export function WriteMarkdownEditor({
             : []
         ),
         editableCompartment.of(buildInteractionExtensions(readOnlyRef.current, appearanceRef.current)),
+        displayCompartment.of(writeEditorDisplayExtensions(displayPreferences)),
         mergeCompartment.of([]),
         markdown({ base: markdownLanguage, codeLanguages: languages }),
         history(),
@@ -614,7 +632,6 @@ export function WriteMarkdownEditor({
         highlightActiveLine(),
         indentOnInput(),
         bracketMatching(),
-        EditorView.lineWrapping,
         keymap.of([
           ...defaultKeymap,
           ...historyKeymap,
@@ -816,6 +833,7 @@ export function WriteMarkdownEditor({
       themeCompartmentRef.current = null
       livePreviewCompartmentRef.current = null
       editableCompartmentRef.current = null
+      displayCompartmentRef.current = null
       mergeCompartmentRef.current = null
     }
     // Mount-once editor; handleRef is a stable ref container from the parent.
@@ -840,6 +858,15 @@ export function WriteMarkdownEditor({
       ]
     })
   }, [appearance, filePath, livePreviewEnabled, readOnly, workspaceRoot])
+
+  useEffect(() => {
+    const view = viewRef.current
+    const compartment = displayCompartmentRef.current
+    if (!view || !compartment) return
+    view.dispatch({
+      effects: compartment.reconfigure(writeEditorDisplayExtensions(displayPreferences))
+    })
+  }, [displayPreferences])
 
   useEffect(() => {
     const view = viewRef.current
@@ -868,5 +895,39 @@ export function WriteMarkdownEditor({
     })
   }, [value])
 
-  return <div ref={hostRef} className="write-codemirror-host flex h-full min-h-0 w-full min-w-0" />
+  const updateDisplayPreferences = (patch: Partial<WriteEditorDisplayPreferences>): void => {
+    setDisplayPreferences((current) => {
+      const next = { ...current, ...patch }
+      writeWriteEditorDisplayPreferences(next)
+      return next
+    })
+  }
+
+  return (
+    <div className="relative flex h-full min-h-0 w-full min-w-0">
+      <div ref={hostRef} className="write-codemirror-host flex h-full min-h-0 w-full min-w-0" />
+      <div className="absolute bottom-3 right-3 z-20 flex items-center gap-1 rounded-xl border border-ds-border-muted bg-ds-card/92 p-1 opacity-55 shadow-[0_10px_24px_rgba(20,47,95,0.1)] backdrop-blur-xl transition hover:opacity-100 focus-within:opacity-100">
+        <button
+          type="button"
+          onClick={() => updateDisplayPreferences({ lineNumbers: !displayPreferences.lineNumbers })}
+          className={`inline-flex h-7 w-7 items-center justify-center rounded-lg transition ${displayPreferences.lineNumbers ? 'bg-accent/12 text-accent' : 'text-ds-faint hover:bg-ds-hover hover:text-ds-ink'}`}
+          title={i18n.t(displayPreferences.lineNumbers ? 'writeHideLineNumbers' : 'writeShowLineNumbers', { ns: 'common' })}
+          aria-label={i18n.t(displayPreferences.lineNumbers ? 'writeHideLineNumbers' : 'writeShowLineNumbers', { ns: 'common' })}
+          aria-pressed={displayPreferences.lineNumbers}
+        >
+          <ListOrdered className="h-3.5 w-3.5" strokeWidth={1.85} />
+        </button>
+        <button
+          type="button"
+          onClick={() => updateDisplayPreferences({ lineWrapping: !displayPreferences.lineWrapping })}
+          className={`inline-flex h-7 w-7 items-center justify-center rounded-lg transition ${displayPreferences.lineWrapping ? 'bg-accent/12 text-accent' : 'text-ds-faint hover:bg-ds-hover hover:text-ds-ink'}`}
+          title={i18n.t(displayPreferences.lineWrapping ? 'writeDisableLineWrapping' : 'writeEnableLineWrapping', { ns: 'common' })}
+          aria-label={i18n.t(displayPreferences.lineWrapping ? 'writeDisableLineWrapping' : 'writeEnableLineWrapping', { ns: 'common' })}
+          aria-pressed={displayPreferences.lineWrapping}
+        >
+          <WrapText className="h-3.5 w-3.5" strokeWidth={1.85} />
+        </button>
+      </div>
+    </div>
+  )
 }

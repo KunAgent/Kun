@@ -2788,6 +2788,10 @@
   "description": "Description",
   "color": "Color",
   "mode": "Mode",
+  "writeShowLineNumbers": "Show line numbers",
+  "writeHideLineNumbers": "Hide line numbers",
+  "writeEnableLineWrapping": "Enable line wrapping",
+  "writeDisableLineWrapping": "Disable line wrapping",
   "systemPrompt": "System prompt",
   "toolPolicy": "Tool access"
 }

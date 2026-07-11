@@ -2788,6 +2788,10 @@
   "description": "描述",
   "color": "颜色",
   "mode": "模式",
+  "writeShowLineNumbers": "显示行号",
+  "writeHideLineNumbers": "隐藏行号",
+  "writeEnableLineWrapping": "开启自动换行",
+  "writeDisableLineWrapping": "关闭自动换行",
   "systemPrompt": "系统提示词",
   "toolPolicy": "工具权限"
 }
