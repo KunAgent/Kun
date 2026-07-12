@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
-import { dirname, join } from 'node:path'
+import { dirname, join, posix, win32 } from 'node:path'
 import test from 'node:test'
 import { fileURLToPath } from 'node:url'
 import {
@@ -9,6 +9,7 @@ import {
   SDK_SNAPSHOTS_BEGIN,
   SDK_SNAPSHOTS_END,
   githubHeadingSlug,
+  isPathWithinRoot,
   renderApiExportsRegion,
   renderSdkSnapshotsRegion,
   validateBilingualPair,
@@ -108,6 +109,27 @@ test('detects generated API inventory and Changelog public-surface drift', () =>
     SDK_SNAPSHOTS_BEGIN,
     SDK_SNAPSHOTS_END
   )[0].includes('drifted'))
+})
+
+test('contains public SDK declarations across native and mixed Windows separators', () => {
+  assert.equal(
+    isPathWithinRoot(
+      'D:\\a\\Kun\\Kun\\packages\\extension-api\\src',
+      'D:/a/Kun/Kun/packages/extension-api/src/accounts.ts',
+      win32
+    ),
+    true
+  )
+  assert.equal(
+    isPathWithinRoot(
+      'D:\\a\\Kun\\Kun\\packages\\extension-api\\src',
+      'D:/a/Kun/Kun/packages/extension-api/src-escape/accounts.ts',
+      win32
+    ),
+    false
+  )
+  assert.equal(isPathWithinRoot('/repo/packages/api/src', '/repo/packages/api/src/index.ts', posix), true)
+  assert.equal(isPathWithinRoot('/repo/packages/api/src', '/repo/packages/other/index.ts', posix), false)
 })
 
 function fixture(name) {

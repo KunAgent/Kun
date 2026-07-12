@@ -193,6 +193,7 @@ function requirePublishDependencies(document, workflowLabel) {
 }
 
 function requireOrderedSourceMarkers(source, label, markers) {
+  source = source.replace(/\r\n/gu, '\n')
   let priorIndex = -1
   for (const marker of markers) {
     const index = source.indexOf(marker, priorIndex + 1)
@@ -202,6 +203,7 @@ function requireOrderedSourceMarkers(source, label, markers) {
 }
 
 function requireSourceMarkersAfter(source, label, priorMarker, markers) {
+  source = source.replace(/\r\n/gu, '\n')
   const priorIndex = source.indexOf(priorMarker)
   check(priorIndex >= 0, `${label} is missing required gate marker: ${priorMarker}`)
   for (const marker of markers) {

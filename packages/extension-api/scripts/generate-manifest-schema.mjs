@@ -29,7 +29,7 @@ const output = `${JSON.stringify(schema, null, 2)}\n`
 
 if (process.argv.includes('--check')) {
   const current = await readFile(outputPath, 'utf8').catch(() => '')
-  if (current !== output) {
+  if (current.replace(/\r\n/gu, '\n') !== output) {
     console.error('EXT_SCHEMA_STALE: schema/kun-extension.schema.json is not generated from ExtensionManifestSchema')
     process.exitCode = 1
   }

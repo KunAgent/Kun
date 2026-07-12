@@ -370,11 +370,22 @@ export class ExtensionHostProcess {
         state: this._state
       })
     }
-    return this.peer!.request('extension.invoke', { method, params }, {
-      signal: options.signal,
-      timeoutMs: options.timeoutMs ?? this.limits.operationTimeoutMs,
-      resetTimeoutOnStream: options.resetTimeoutOnStream
-    })
+    try {
+      return await this.peer!.request('extension.invoke', { method, params }, {
+        signal: options.signal,
+        timeoutMs: options.timeoutMs ?? this.limits.operationTimeoutMs,
+        resetTimeoutOnStream: options.resetTimeoutOnStream
+      })
+    } catch (error) {
+      if (
+        this.exitPromise !== undefined &&
+        this.child !== undefined &&
+        (this.child.exitCode !== null || this.child.signalCode !== null)
+      ) {
+        await this.exitPromise
+      }
+      throw error
+    }
   }
 
   async notify(method: string, params: JsonValue): Promise<void> {
@@ -539,16 +550,19 @@ export class ExtensionHostProcess {
     await this.log.write('lifecycle', `exited expected=${expected} code=${code} signal=${signal}`)
       .catch(() => undefined)
     await this.log.flush().catch(() => undefined)
-    this.resolveExit?.()
-    this.resolveExit = undefined
-    await this.options.onExit?.({
-      extensionId: this.principal.extensionId,
-      lifecycleNonce: this.lifecycleNonce,
-      expected,
-      code,
-      signal,
-      ...(this._lastError === undefined ? {} : { error: this._lastError })
-    })
+    try {
+      await this.options.onExit?.({
+        extensionId: this.principal.extensionId,
+        lifecycleNonce: this.lifecycleNonce,
+        expected,
+        code,
+        signal,
+        ...(this._lastError === undefined ? {} : { error: this._lastError })
+      })
+    } finally {
+      this.resolveExit?.()
+      this.resolveExit = undefined
+    }
   }
 
   private send(envelope: RpcEnvelope): Promise<void> {

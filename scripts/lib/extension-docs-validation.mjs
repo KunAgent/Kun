@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import { access, readFile, readdir } from 'node:fs/promises'
-import { dirname, extname, join, relative, resolve, sep } from 'node:path'
+import { dirname, extname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import ts from 'typescript'
 
 export const API_EXPORTS_BEGIN = '<!-- BEGIN GENERATED SDK EXPORTS -->'
@@ -244,7 +244,7 @@ export async function inspectPublicSdkPackages(root) {
       const declaration = symbol.valueDeclaration ?? symbol.declarations?.[0]
       if (!declaration) throw new Error(`Public export ${exportSymbol.name} has no declaration`)
       const sourceFile = declaration.getSourceFile().fileName
-      if (!sourceFile.startsWith(`${join(packageRoot, 'src')}${sep}`) && sourceFile !== entryPath) {
+      if (!isPathWithinRoot(join(packageRoot, 'src'), sourceFile)) {
         throw new Error(`Public export ${exportSymbol.name} escapes ${definition.name}: ${sourceFile}`)
       }
       return {
@@ -269,6 +269,15 @@ export async function inspectPublicSdkPackages(root) {
     })
   }
   return result
+}
+
+export function isPathWithinRoot(root, candidate, pathApi = { isAbsolute, relative, sep }) {
+  const relativePath = pathApi.relative(root, candidate)
+  return relativePath === '' || (
+    relativePath !== '..' &&
+    !relativePath.startsWith(`..${pathApi.sep}`) &&
+    !pathApi.isAbsolute(relativePath)
+  )
 }
 
 export function renderApiExportsRegion(sdkPackages, locale) {
