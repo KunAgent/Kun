@@ -141,9 +141,7 @@ async function main() {
       '--disable-component-update',
       '--disable-default-apps'
     ]
-    if (process.platform === 'linux') {
-      applicationArguments.push('--disable-gpu', '--disable-dev-shm-usage')
-    }
+    applicationArguments.push(...platformDesktopArguments(process.platform))
     const launch = createDesktopLaunchPlan({
       executable: desktopLaunchSelection.desktopExecutable,
       applicationArguments,
@@ -463,6 +461,11 @@ function createDesktopLaunchPlan({
     }
   }
   return { command: executable, args, env, wrappedByXvfb: false }
+}
+
+function platformDesktopArguments(platform = process.platform) {
+  if (platform !== 'linux') return []
+  return ['--disable-gpu', '--disable-dev-shm-usage']
 }
 
 function runPackagedKun(executable, runtimeEntry, args, environment, timeoutMs = DEFAULT_TIMEOUT_MS) {
@@ -1284,6 +1287,7 @@ module.exports = {
   findUnexpectedPopupTargets,
   isExtensionGuestTarget,
   isWorkbenchTarget,
+  platformDesktopArguments,
   resolveDesktopLaunchSelection,
   runPackagedKun,
   terminateProcessTree,

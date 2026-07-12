@@ -18,7 +18,7 @@
     "check:extension-docs": "node --test ./scripts/check-extension-docs.test.mjs && node ./scripts/check-extension-docs.mjs",
     "generate:extension-api-reference": "node ./scripts/generate-extension-api-reference.mjs",
     "check:extension-examples": "node ./scripts/check-extension-examples.mjs",
-    "check:extension-release-gate": "npm run build:extensions && npm run build:kun && node --test ./scripts/check-extension-release-execution.test.mjs ./scripts/smoke-packaged-extension-desktop.test.cjs ./scripts/smoke-packaged-extension-appimage.test.cjs ./scripts/write-extension-native-evidence.test.mjs && node ./scripts/check-extension-release-gate.mjs",
+    "check:extension-release-gate": "npm run build:extensions && npm run build:kun && node --test ./scripts/after-pack.test.cjs ./scripts/check-extension-release-execution.test.mjs ./scripts/smoke-packaged-extension-desktop.test.cjs ./scripts/smoke-packaged-extension-appimage.test.cjs ./scripts/write-extension-native-evidence.test.mjs && node ./scripts/check-extension-release-gate.mjs",
     "smoke:packaged-extensions": "node ./scripts/smoke-packaged-extensions.cjs",
     "smoke:packaged-extension-desktop": "node ./scripts/smoke-packaged-extension-desktop.cjs",
     "smoke:packaged-extension-appimage": "node ./scripts/smoke-packaged-extension-appimage.cjs",

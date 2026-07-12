@@ -1,5 +1,17 @@
 const { execFileSync } = require('node:child_process')
-const { chmodSync, cpSync, existsSync, lstatSync, readdirSync, rmSync } = require('node:fs')
+const {
+  chmodSync,
+  closeSync,
+  cpSync,
+  existsSync,
+  lstatSync,
+  openSync,
+  readSync,
+  readdirSync,
+  renameSync,
+  rmSync,
+  writeFileSync
+} = require('node:fs')
 const { join } = require('node:path')
 
 const KUN_RUNTIME_REQUIRED_PATHS = [
@@ -34,6 +46,8 @@ const KUN_RUNTIME_REQUIRED_PATHS = [
   'packages/create-kun-extension/templates/webview/kun-extension.json',
   'packages/create-kun-extension/templates/webview/src/webview/main.ts'
 ]
+const LINUX_SANDBOX_LAUNCHER_FLAG = '--disable-setuid-sandbox'
+const LINUX_REAL_EXECUTABLE_SUFFIX = '.electron-bin'
 
 function normalizePlatform(platform) {
   return platform === 'win' ? 'win32' : platform
@@ -173,6 +187,77 @@ function ensureNodePtyHelpersExecutable(context) {
   }
 }
 
+function linuxRealExecutableName(executableName) {
+  return `${executableName}${LINUX_REAL_EXECUTABLE_SUFFIX}`
+}
+
+function linuxElectronLauncherContent(executableName) {
+  if (typeof executableName !== 'string' || !/^[0-9A-Za-z._-]+$/u.test(executableName)) {
+    throw new Error(`[after-pack] Unsafe Linux executable name: ${String(executableName)}`)
+  }
+  const realExecutableName = linuxRealExecutableName(executableName)
+  return `#!/bin/sh
+set -eu
+
+case "$0" in
+  /*) launcher_path=$0 ;;
+  *) launcher_path=$PWD/$0 ;;
+esac
+launcher_dir=\${launcher_path%/*}
+launcher_dir=$(CDPATH= cd -P "$launcher_dir" && pwd -P)
+real_executable="$launcher_dir/${realExecutableName}"
+
+if [ "\${ELECTRON_RUN_AS_NODE:-}" = "1" ]; then
+  exec "$real_executable" "$@"
+fi
+
+exec "$real_executable" ${LINUX_SANDBOX_LAUNCHER_FLAG} "$@"
+`
+}
+
+function assertElfExecutable(path) {
+  const header = Buffer.alloc(4)
+  const descriptor = openSync(path, 'r')
+  let bytesRead
+  try {
+    bytesRead = readSync(descriptor, header, 0, header.length, 0)
+  } finally {
+    closeSync(descriptor)
+  }
+  if (bytesRead !== 4 || !header.equals(Buffer.from([0x7f, 0x45, 0x4c, 0x46]))) {
+    throw new Error(`[after-pack] Linux Electron executable is not an ELF payload: ${path}`)
+  }
+}
+
+function installLinuxElectronLauncher(context) {
+  if (normalizePlatform(context.electronPlatformName) !== 'linux') return
+  if (context.packager?.config?.electronFuses != null) {
+    throw new Error(
+      '[after-pack] electronFuses cannot be applied after installing the Linux shell launcher'
+    )
+  }
+  const executableName = context.packager?.executableName
+  const launcherContent = linuxElectronLauncherContent(executableName)
+  const executable = join(context.appOutDir, executableName)
+  const realExecutable = join(context.appOutDir, linuxRealExecutableName(executableName))
+  const details = lstatSync(executable)
+  if (details.isSymbolicLink() || !details.isFile() || (details.mode & 0o111) === 0) {
+    throw new Error(`[after-pack] Linux Electron executable must be a non-symlink executable file: ${executable}`)
+  }
+  assertElfExecutable(executable)
+  if (existsSync(realExecutable)) {
+    throw new Error(`[after-pack] Refusing to overwrite Linux Electron payload: ${realExecutable}`)
+  }
+
+  renameSync(executable, realExecutable)
+  chmodSync(realExecutable, 0o755)
+  // The running Electron process reports the renamed payload as process.execPath.
+  // Any future app.relaunch()/new Linux target must re-enter this launcher or
+  // explicitly preserve LINUX_SANDBOX_LAUNCHER_FLAG.
+  writeFileSync(executable, launcherContent, { encoding: 'utf8', flag: 'wx', mode: 0o755 })
+  chmodSync(executable, 0o755)
+}
+
 function normalizeArch(arch) {
   if (arch === 'x64' || arch === 1) return 'x64'
   if (arch === 'arm64' || arch === 3) return 'arm64'
@@ -197,10 +282,12 @@ async function afterPack(context) {
   validateBundledKunRuntime(context)
   prunePackedWhisperResources(context)
   ensureNodePtyHelpersExecutable(context)
+  installLinuxElectronLauncher(context)
   maybeAdhocSignMacApp(context)
 }
 
 exports.KUN_RUNTIME_REQUIRED_PATHS = KUN_RUNTIME_REQUIRED_PATHS
+exports.LINUX_SANDBOX_LAUNCHER_FLAG = LINUX_SANDBOX_LAUNCHER_FLAG
 exports._internals = {
   appBundlePath,
   packedResourcesDir,
@@ -211,6 +298,10 @@ exports._internals = {
   validateBundledKunRuntime,
   normalizeArch,
   prunePackedWhisperResources,
-  ensureNodePtyHelpersExecutable
+  ensureNodePtyHelpersExecutable,
+  assertElfExecutable,
+  installLinuxElectronLauncher,
+  linuxElectronLauncherContent,
+  linuxRealExecutableName
 }
 exports.default = afterPack

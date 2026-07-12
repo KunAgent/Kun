@@ -240,6 +240,11 @@ module.exports = {
     icon: './src/asset/img/kun.png',
     target: [{ target: 'AppImage', arch: ['x64'] }]
   },
+  // Override electron-builder's sandbox-disabling default desktop argument.
+  // Linux uses user namespaces and seccomp; only the legacy SUID helper is disabled.
+  appImage: {
+    executableArgs: ['--disable-setuid-sandbox', '--no-first-run']
+  },
   extraMetadata: {
     ...(releaseAppVersion ? { version: releaseAppVersion } : {}),
     updateChannel,

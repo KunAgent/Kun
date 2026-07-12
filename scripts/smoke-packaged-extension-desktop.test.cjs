@@ -31,6 +31,7 @@ const {
   findUnexpectedPopupTargets,
   isExtensionGuestTarget,
   isWorkbenchTarget,
+  platformDesktopArguments,
   resolvedDesktopResourceCandidates,
   resolveDesktopLaunchSelection,
   runPackagedKun,
@@ -39,8 +40,25 @@ const {
 } = require('./smoke-packaged-extension-desktop.cjs')
 
 const root = resolve(__dirname, '..')
+const linuxUserNamespaceStepName = 'Prepare and verify Linux user namespace sandbox'
+const linuxUserNamespaceSetup = [
+  'if [[ -e /proc/sys/kernel/unprivileged_userns_clone ]]; then',
+  '  sudo sysctl -w kernel.unprivileged_userns_clone=1',
+  'fi',
+  'if [[ -e /proc/sys/kernel/apparmor_restrict_unprivileged_userns ]]; then',
+  '  sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0',
+  'fi',
+  'unshare --user --map-root-user /bin/true'
+].join('\n')
 
 test('selects host-native packaged resources and never launches desktop Electron as Node', () => {
+  assert.deepEqual(platformDesktopArguments('linux'), [
+    '--disable-gpu',
+    '--disable-dev-shm-usage'
+  ])
+  assert.equal(platformDesktopArguments('linux').includes('--disable-setuid-sandbox'), false)
+  assert.equal(platformDesktopArguments('linux').includes('--no-sandbox'), false)
+  assert.deepEqual(platformDesktopArguments('darwin'), [])
   assert.deepEqual(desktopResourceCandidates('darwin', 'arm64'), ['dist/mac-arm64/Kun.app/Contents/Resources'])
   assert.deepEqual(desktopResourceCandidates('darwin', 'x64'), ['dist/mac/Kun.app/Contents/Resources'])
   assert.deepEqual(desktopResourceCandidates('win32', 'x64'), ['dist/win-unpacked/resources'])
@@ -646,6 +664,7 @@ test('every automated and local release path gates uploads behind packaged Exten
   assertStepAfter(release.jobs['build-windows'], 'Upload Windows artifacts', nativeEvidenceCommand)
   assertOrderedCommands(release.jobs['build-linux'], [
     'npm run smoke:packaged-extensions -- --resources dist/linux-unpacked/resources',
+    'unshare --user --map-root-user /bin/true',
     desktopCommand,
     appImageDesktopCommand,
     nativeEvidenceCommand
@@ -653,6 +672,7 @@ test('every automated and local release path gates uploads behind packaged Exten
   assertStepAfter(release.jobs['build-linux'], 'Upload Linux artifacts', nativeEvidenceCommand)
   assertOrderedCommands(pr.jobs.package, [
     'npm run smoke:packaged-extensions -- --resources dist/linux-unpacked/resources',
+    'unshare --user --map-root-user /bin/true',
     desktopCommand,
     appImageDesktopCommand,
     nativeEvidenceCommand
@@ -694,6 +714,7 @@ test('every automated and local release path gates uploads behind packaged Exten
     'npm run check:extension-release-gate',
     'npm run dist:linux',
     'npm run smoke:packaged-extensions -- --resources dist/linux-unpacked/resources',
+    'unshare --user --map-root-user /bin/true',
     desktopCommand,
     appImageDesktopCommand,
     nativeEvidenceCommand
@@ -723,6 +744,17 @@ test('every automated and local release path gates uploads behind packaged Exten
       step?.['continue-on-error'] === undefined || step['continue-on-error'] === false,
       `${label} AppImage smoke must fail closed`
     )
+    const userNamespaceStep = job.steps.find(
+      (candidate) => candidate.name === linuxUserNamespaceStepName
+    )
+    assert.equal(userNamespaceStep?.run?.trim(), linuxUserNamespaceSetup)
+    assert.equal(userNamespaceStep?.if, undefined)
+    assert.ok(
+      userNamespaceStep?.['continue-on-error'] === undefined ||
+        userNamespaceStep['continue-on-error'] === false,
+      `${label} user namespace verification must fail closed`
+    )
+    assert.doesNotMatch(userNamespaceStep?.run ?? '', /\bdist\b|\$\{\{|AppImage|chown|chmod/)
   }
   for (const [label, job, evidenceFile] of [
     ['release macOS', release.jobs['build-macos'], 'extension-native-evidence-darwin.json'],
@@ -763,6 +795,9 @@ test('every automated and local release path gates uploads behind packaged Exten
   assert.match(prLinuxDependencies, /\bxvfb\b/)
   assert.match(dailyLinuxDependencies, /\bxvfb\b/)
   assert.match(dailyLinuxDependencies, /\bxauth\b/)
+  assert.match(releaseLinuxDependencies, /\butil-linux\b/)
+  assert.match(prLinuxDependencies, /\butil-linux\b/)
+  assert.match(dailyLinuxDependencies, /\butil-linux\b/)
 
   const releaseMac = readFileSync(join(root, 'scripts', 'release-mac.sh'), 'utf8')
   assertOrderedSourceMarkers(releaseMac, [
@@ -839,10 +874,32 @@ test('every automated and local release path gates uploads behind packaged Exten
   assert.match(desktopSource, /waitForPortsClosed/)
 
   const appImageSource = readFileSync(join(root, 'scripts', 'smoke-packaged-extension-appimage.cjs'), 'utf8')
-  assert.match(appImageSource, /APPIMAGE_EXTRACT_AND_RUN/)
+  const afterPackSource = readFileSync(join(root, 'scripts', 'after-pack.cjs'), 'utf8')
+  const builderConfig = readFileSync(join(root, 'electron-builder.config.cjs'), 'utf8')
+  assert.match(appImageSource, /--appimage-extract/)
+  assert.match(appImageSource, /squashfs-root/)
+  assert.match(appImageSource, /inspectExtractedAppImageBundle/)
   assert.match(appImageSource, /--desktop-executable/)
   assert.match(appImageSource, /candidates\.length !== 1/)
   assert.match(appImageSource, /shell: false/)
+  assert.match(appImageSource, /APPIMAGE_EXTRACT_AND_RUN/)
+  assert.match(appImageSource, /Exec=AppRun --disable-setuid-sandbox --no-first-run %U/)
+  assert.match(appImageSource, /linuxElectronLauncherContent/)
+  assert.match(appImageSource, /launcherContent\.includes\('--no-sandbox'\)/)
+  assert.match(afterPackSource, /installLinuxElectronLauncher/)
+  assert.match(afterPackSource, /ELECTRON_RUN_AS_NODE/)
+  assert.match(
+    afterPackSource,
+    /exec "\$real_executable" \$\{LINUX_SANDBOX_LAUNCHER_FLAG\} "\$@"/
+  )
+  assert.doesNotMatch(afterPackSource, /--no-sandbox/)
+  assert.match(
+    builderConfig,
+    /executableArgs: \['--disable-setuid-sandbox', '--no-first-run'\]/
+  )
+  assert.doesNotMatch(builderConfig, /--no-sandbox/)
+  assert.doesNotMatch(desktopSource, /'--no-sandbox'/)
+  assert.doesNotMatch(desktopSource, /'--disable-setuid-sandbox'/)
 })
 
 function assertOrderedCommands(job, commands) {

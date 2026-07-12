@@ -205,7 +205,7 @@ jobs:
       - name: Install Linux packaging dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends libarchive-tools rpm build-essential python3 xvfb xauth
+          sudo apt-get install -y --no-install-recommends libarchive-tools rpm build-essential python3 xvfb xauth util-linux
 
       - name: Install dependencies
         run: npm ci
@@ -218,6 +218,16 @@ jobs:
 
       - name: Smoke packaged Extension Node runtime
         run: npm run smoke:packaged-extensions -- --resources dist/linux-unpacked/resources
+
+      - name: Prepare and verify Linux user namespace sandbox
+        run: |
+          if [[ -e /proc/sys/kernel/unprivileged_userns_clone ]]; then
+            sudo sysctl -w kernel.unprivileged_userns_clone=1
+          fi
+          if [[ -e /proc/sys/kernel/apparmor_restrict_unprivileged_userns ]]; then
+            sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          fi
+          unshare --user --map-root-user /bin/true
 
       - name: Smoke packaged Extension desktop Chromium
         run: npm run smoke:packaged-extension-desktop

@@ -14,6 +14,16 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const require = createRequire(import.meta.url)
 const requireKun = createRequire(join(root, 'kun', 'package.json'))
 const problems = []
+const LINUX_USER_NAMESPACE_STEP_NAME = 'Prepare and verify Linux user namespace sandbox'
+const LINUX_USER_NAMESPACE_SETUP = [
+  'if [[ -e /proc/sys/kernel/unprivileged_userns_clone ]]; then',
+  '  sudo sysctl -w kernel.unprivileged_userns_clone=1',
+  'fi',
+  'if [[ -e /proc/sys/kernel/apparmor_restrict_unprivileged_userns ]]; then',
+  '  sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0',
+  'fi',
+  'unshare --user --map-root-user /bin/true'
+].join('\n')
 let currentApiVersion
 let currentApiMajor
 let canonicalSupportedApiVersions = []
@@ -149,6 +159,22 @@ function requireUnconditionalStepAfter(job, jobId, stepName, priorCommand) {
   check(
     priorIndex >= 0 && stepIndex > priorIndex,
     `Workflow job ${jobId} must run ${stepName} unconditionally after: ${priorCommand}`
+  )
+}
+
+function requireLinuxUserNamespaceStep(job, jobId) {
+  if (!job) return
+  const steps = Array.isArray(job.steps) ? job.steps : []
+  const step = steps.find((candidate) => candidate?.name === LINUX_USER_NAMESPACE_STEP_NAME)
+  const run = typeof step?.run === 'string' ? step.run.trim() : ''
+  check(
+    Boolean(step) && run === LINUX_USER_NAMESPACE_SETUP && step.if === undefined &&
+      (step['continue-on-error'] === undefined || step['continue-on-error'] === false),
+    `Workflow job ${jobId} must use the fixed fail-closed Linux user namespace setup`
+  )
+  check(
+    !/\bdist\b|\$\{\{|AppImage|chrome-sandbox|chown|chmod/.test(run),
+    `Workflow job ${jobId} user namespace setup must not accept or mutate artifact paths`
   )
 }
 
@@ -584,8 +610,21 @@ check(
   'Packaged desktop Chromium smoke must not disable the Chromium sandbox'
 )
 check(
+  !packagedDesktopSmoke.includes("'--disable-setuid-sandbox'"),
+  'Packaged desktop Chromium smoke must verify the product launcher without injecting its sandbox flag'
+)
+check(
   typeof packagedDesktopSmokeModule.createDesktopLaunchPlan === 'function',
   'Packaged desktop Chromium smoke does not export its launch contract for release validation'
+)
+check(
+  JSON.stringify(packagedDesktopSmokeModule.platformDesktopArguments?.('linux')) ===
+    JSON.stringify(['--disable-gpu', '--disable-dev-shm-usage']) &&
+    !packagedDesktopSmokeModule.platformDesktopArguments?.('linux').includes(
+      '--disable-setuid-sandbox'
+    ) &&
+    !packagedDesktopSmokeModule.platformDesktopArguments?.('linux').includes('--no-sandbox'),
+  'Packaged Linux desktop smoke must not inject sandbox flags that hide launcher defects'
 )
 check(
   packagedDesktopSmokeModule.CONTRIBUTION_ID === 'extension:kun-smoke.packaged/smoke',
@@ -653,20 +692,60 @@ check(
   'package.json must expose the final Linux AppImage Extension smoke command'
 )
 check(
+  rootPackage.scripts?.['configure:linux-chrome-sandbox'] === undefined,
+  'package.json must not expose a privileged Chromium SUID helper configuration command'
+)
+check(
   rootPackage.scripts?.['check:extension-release-gate']?.includes(
     './scripts/smoke-packaged-extension-appimage.test.cjs'
   ),
   'Extension release gate must execute the final Linux AppImage smoke tests'
 )
+check(
+  rootPackage.scripts?.['check:extension-release-gate']?.includes('./scripts/after-pack.test.cjs'),
+  'Extension release gate must execute the Linux product launcher tests'
+)
 for (const marker of [
-  'APPIMAGE_EXTRACT_AND_RUN',
+  'installLinuxElectronLauncher',
+  'linuxElectronLauncherContent',
+  'assertElfExecutable',
+  'electronFuses cannot be applied',
+  'chmodSync(realExecutable, 0o755)',
+  'ELECTRON_RUN_AS_NODE',
+  '--disable-setuid-sandbox',
+  'exec "$real_executable" "$@"',
+  'exec "$real_executable" ${LINUX_SANDBOX_LAUNCHER_FLAG} "$@"'
+]) check(afterPackSource.includes(marker), `Linux product launcher omits release contract: ${marker}`)
+const approvedLinuxLauncher = afterPack._internals.linuxElectronLauncherContent('kun-gui')
+check(
+  approvedLinuxLauncher.includes('launcher_path=$PWD/$0') &&
+    approvedLinuxLauncher.includes('pwd -P') &&
+    !approvedLinuxLauncher.includes('dirname') &&
+    !approvedLinuxLauncher.includes('readlink') &&
+    !approvedLinuxLauncher.includes('--no-sandbox'),
+  'Linux product launcher must never disable all Chromium sandboxing'
+)
+for (const marker of [
+  '--appimage-extract',
+  'squashfs-root',
+  'inspectExtractedAppImageBundle',
   '--desktop-executable',
+  'APPIMAGE_EXTRACT_AND_RUN',
   'candidates.length !== 1',
   'chmodSync',
   'shell: false'
 ]) {
   check(packagedAppImageSmoke.includes(marker), `Final Linux AppImage smoke omits fail-closed marker: ${marker}`)
 }
+for (const marker of [
+  'lstatSync',
+  'realpathSync',
+  'isSymbolicLink()',
+  "entry.name.endsWith('.desktop')",
+  'linuxElectronLauncherContent',
+  'linuxRealExecutableName',
+  "Exec=AppRun --disable-setuid-sandbox --no-first-run %U"
+]) check(packagedAppImageSmoke.includes(marker), `AppImage extraction validation omits: ${marker}`)
 check(
   packagedAppImageSmokeModule.APPIMAGE_FILE_PATTERN?.test(
     'Kun-1.2.3-linux-x86_64.AppImage'
@@ -679,18 +758,36 @@ check(
 if (typeof packagedAppImageSmokeModule.createAppImageSmokeInvocation === 'function') {
   const invocation = packagedAppImageSmokeModule.createAppImageSmokeInvocation({
     appImage: '/release/Kun-1.2.3-linux-x86_64.AppImage',
-    resourcesDir: '/release/linux-unpacked/resources',
+    resourcesDir: '/extract/squashfs-root/resources',
     desktopSmokePath: '/repo/scripts/smoke-packaged-extension-desktop.cjs',
-    environment: { ELECTRON_RUN_AS_NODE: '1' }
+    environment: { APPDIR: '/untrusted', APPIMAGE: '/untrusted', ELECTRON_RUN_AS_NODE: '1' }
   })
   check(
-    invocation.env.APPIMAGE_EXTRACT_AND_RUN === '1' &&
-      invocation.env.ELECTRON_RUN_AS_NODE === undefined &&
+    invocation.command === process.execPath &&
+      invocation.options.env.APPIMAGE_EXTRACT_AND_RUN === '1' &&
+      invocation.options.env.ELECTRON_RUN_AS_NODE === undefined &&
+      invocation.options.env.APPDIR === undefined &&
+      invocation.options.env.APPIMAGE === undefined &&
       invocation.args.includes('--desktop-executable') &&
+      invocation.args.includes(resolve('/release/Kun-1.2.3-linux-x86_64.AppImage')) &&
+      invocation.args.includes(resolve('/extract/squashfs-root/resources')) &&
+      invocation.options.timeout === undefined &&
+      invocation.options.killSignal === undefined &&
       !invocation.args.some((argument) => argument.endsWith('app.asar')),
-    'Final Linux AppImage smoke must execute the self-contained artifact without external app.asar'
+    'Final Linux AppImage smoke must let the desktop smoke own bounded cleanup while directly launching the final artifact'
   )
 }
+
+const electronBuilderConfig = await text('electron-builder.config.cjs')
+check(
+  electronBuilderConfig.includes(
+    "executableArgs: ['--disable-setuid-sandbox', '--no-first-run']"
+  ) &&
+    !electronBuilderConfig.includes('--no-sandbox') &&
+    !packagedDesktopSmoke.includes("'--no-sandbox'") &&
+    !packagedDesktopSmoke.includes("'--disable-setuid-sandbox'"),
+  'Linux packaging and native smokes must retain user namespace and seccomp sandboxing'
+)
 
 const prWorkflow = await text('.github/workflows/pr-checks.yml')
 const prWorkflowDocument = parseYaml(prWorkflow)
@@ -761,14 +858,18 @@ check(
   'Release and PR Linux jobs must directly smoke the final AppImage artifact'
 )
 check(
+  !releaseWorkflow.includes('--no-sandbox') && !prWorkflow.includes('--no-sandbox'),
+  'Release and PR workflows must not disable the Chromium sandbox'
+)
+check(
   (releaseWorkflow.match(/npm run evidence:extension-native/g) ?? []).length >= 3 &&
     (prWorkflow.match(/npm run evidence:extension-native/g) ?? []).length >= 3,
   'Release and PR jobs must record commit-bound native evidence on macOS, Windows, and Linux'
 )
 check(
-  /Install Linux packaging dependencies[\s\S]*?\bxvfb\b/.test(releaseWorkflow) &&
-    /Install Linux packaging dependencies[\s\S]*?\bxvfb\b/.test(prWorkflow),
-  'Linux release and PR package workflows must install xvfb for desktop Chromium smoke'
+  /Install Linux packaging dependencies[\s\S]*?\bxvfb\b[\s\S]*?\butil-linux\b/.test(releaseWorkflow) &&
+    /Install Linux packaging dependencies[\s\S]*?\bxvfb\b[\s\S]*?\butil-linux\b/.test(prWorkflow),
+  'Linux release and PR package workflows must install xvfb and util-linux'
 )
 
 const releaseMacJob = workflowJob(releaseWorkflowDocument, 'build-macos', 'macos-latest')
@@ -808,10 +909,12 @@ requireOrderedCommands(releaseLinuxJob, 'build-linux', [
   'npm run check:extension-release-gate',
   'npm run dist:linux',
   'npm run smoke:packaged-extensions -- --resources dist/linux-unpacked/resources',
+  'unshare --user --map-root-user /bin/true',
   'npm run smoke:packaged-extension-desktop',
   appImageDesktopCommand,
   nativeEvidenceCommand
 ])
+requireLinuxUserNamespaceStep(releaseLinuxJob, 'build-linux')
 requireBoundedCommandStep(
   releaseLinuxJob,
   'build-linux',
@@ -866,10 +969,12 @@ requireOrderedCommands(dailyLinuxJob, 'daily build-linux', [
   'npm run check:extension-release-gate',
   'npm run dist:linux',
   'npm run smoke:packaged-extensions -- --resources dist/linux-unpacked/resources',
+  'unshare --user --map-root-user /bin/true',
   'npm run smoke:packaged-extension-desktop',
   appImageDesktopCommand,
   nativeEvidenceCommand
 ])
+requireLinuxUserNamespaceStep(dailyLinuxJob, 'daily build-linux')
 requireBoundedCommandStep(
   dailyLinuxJob,
   'daily build-linux',
@@ -886,8 +991,13 @@ requireUnconditionalStepAfter(
 const dailyLinuxDependencies =
   dailyLinuxJob?.steps?.find((step) => step?.name === 'Install Linux packaging dependencies')?.run ?? ''
 check(
-  /\bxvfb\b/.test(dailyLinuxDependencies) && /\bxauth\b/.test(dailyLinuxDependencies),
-  'Daily Linux prerelease must install xvfb and xauth for packaged desktop Chromium smoke'
+  /\bxvfb\b/.test(dailyLinuxDependencies) && /\bxauth\b/.test(dailyLinuxDependencies) &&
+    /\butil-linux\b/.test(dailyLinuxDependencies),
+  'Daily Linux prerelease must install xvfb, xauth, and util-linux'
+)
+check(
+  !dailyWorkflow.includes('--no-sandbox'),
+  'Daily Linux prerelease must not disable the Chromium sandbox'
 )
 
 const releaseMacScript = await text('scripts/release-mac.sh')
@@ -989,10 +1099,12 @@ requireJobDependencies(prPackageJob, 'package', ['test'])
 requireOrderedCommands(prPackageJob, 'package', [
   'npm run dist:linux',
   'npm run smoke:packaged-extensions -- --resources dist/linux-unpacked/resources',
+  'unshare --user --map-root-user /bin/true',
   'npm run smoke:packaged-extension-desktop',
   appImageDesktopCommand,
   nativeEvidenceCommand
 ])
+requireLinuxUserNamespaceStep(prPackageJob, 'package')
 requireBoundedCommandStep(
   prPackageJob,
   'package',
