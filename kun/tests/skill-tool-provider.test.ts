@@ -6,6 +6,7 @@ import { buildSkillToolProviders } from '../src/adapters/tool/skill-tool-provide
 import { CapabilityRegistry } from '../src/adapters/tool/capability-registry.js'
 import { LocalToolHost } from '../src/adapters/tool/local-tool-host.js'
 import { KunCapabilitiesConfig } from '../src/contracts/capabilities.js'
+import type { ToolHostContext } from '../src/ports/tool-host.js'
 import { SkillRuntime } from '../src/skills/skill-runtime.js'
 
 describe('buildSkillToolProviders', () => {
@@ -141,7 +142,7 @@ describe('buildSkillToolProviders', () => {
       }
     ])
     const host = new LocalToolHost({ registry })
-    const baseContext = {
+    const baseContext: ToolHostContext = {
       threadId: 'thread_1',
       turnId: 'turn_1',
       workspace: root,
