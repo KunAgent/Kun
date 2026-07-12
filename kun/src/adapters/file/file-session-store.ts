@@ -13,6 +13,7 @@ import { assertSafeThreadId, isSafeThreadId } from '../../contracts/thread-id.js
 import type { AgentSession } from '../../domain/session.js'
 import { readJsonl } from './file-thread-store.js'
 import { atomicWriteFile } from './atomic-write.js'
+import { isPathBelowDirectory } from './path-containment.js'
 
 const DEFAULT_USAGE_EVENT_COMPACTION_MAX_BYTES = 5 * 1024 * 1024
 const DEFAULT_USAGE_EVENT_RETENTION_DAYS = 365
@@ -370,7 +371,9 @@ export class FileSessionStore implements SessionStore {
   private threadDir(threadId: string): string {
     assertSafeThreadId(threadId)
     const path = resolve(this.dataDir, threadId)
-    if (!path.startsWith(`${this.dataDir}/`)) throw new Error(`thread path escapes data directory: ${threadId}`)
+    if (!isPathBelowDirectory(this.dataDir, path)) {
+      throw new Error(`thread path escapes data directory: ${threadId}`)
+    }
     return path
   }
 

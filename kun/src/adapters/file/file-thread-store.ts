@@ -5,6 +5,7 @@ import type { ThreadRecord, ThreadSummary } from '../../contracts/threads.js'
 import { assertSafeThreadId, isSafeThreadId } from '../../contracts/thread-id.js'
 import { toThreadSummary } from '../../domain/thread.js'
 import { atomicWriteFile } from './atomic-write.js'
+import { isPathBelowDirectory } from './path-containment.js'
 
 /**
  * File-backed thread store. Writes small JSON state files via atomic
@@ -112,7 +113,7 @@ export class FileThreadStore implements ThreadStore {
   private threadDir(threadId: string): string {
     assertSafeThreadId(threadId)
     const path = resolve(this.dataDir, threadId)
-    if (!path.startsWith(`${this.dataDir}/`)) {
+    if (!isPathBelowDirectory(this.dataDir, path)) {
       throw new Error(`thread path escapes data directory: ${threadId}`)
     }
     return path
