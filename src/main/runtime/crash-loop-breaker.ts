@@ -97,7 +97,10 @@ export function reduceCrashLoop(
     case 'runtime-ready':
       return {
         ...withTripState(next, normalizedPolicy),
-        stableSince: now
+        // Readiness is normally reported by every health probe. Preserve the
+        // first ready timestamp so repeated probes cannot postpone the stable
+        // window indefinitely.
+        stableSince: next.stableSince ?? now
       }
 
     case 'runtime-stable': {
