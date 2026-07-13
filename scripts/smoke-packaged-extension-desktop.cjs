@@ -713,6 +713,11 @@ async function waitForContributionAndClick({
     return evaluationValue(evaluated, `locating ${selector}`)
   }, { timeoutMs, description: `workbench contribution ${contributionId}` })
 
+  // Xvfb does not always give the newly launched Electron window focus.  A
+  // mouse event sent to a background page can look successful to CDP while
+  // never reaching the contribution, leaving the extension guest uncreated.
+  // Bring the workbench to the foreground before dispatching the real click.
+  await cdp.send('Page.bringToFront', {}, sessionId)
   await cdp.send('Input.dispatchMouseEvent', {
     type: 'mouseMoved',
     x: point.x,
