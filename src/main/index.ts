@@ -126,6 +126,7 @@ import {
   classifyManagedRuntimeHotApplyResponse
 } from './runtime/kun-runtime-config-service'
 import { ManagedRuntimeShutdownCoordinator } from './runtime/managed-runtime-shutdown-coordinator'
+import { attachRendererProcessRecovery } from './renderer-process-recovery'
 import {
   registerKunExtensionProtocol,
   registerKunExtensionSchemeAsPrivileged
@@ -1095,6 +1096,9 @@ function createWindow(options: { suppressInitialShow?: boolean } = {}): void {
       additionalArguments: [`--kun-home-dir=${homedir()}`]
     }
   })
+  const disposeRendererRecovery = attachRendererProcessRecovery(mainWindow, {
+    log: (message, details) => logWarn('renderer-recovery', message, details)
+  })
   bindExtensionMainWindow?.(mainWindow)
   if (usesDesktopTitleBar) {
     mainWindow.setMenu(null)
@@ -1121,6 +1125,7 @@ function createWindow(options: { suppressInitialShow?: boolean } = {}): void {
     handleMainWindowClose(mainWindow, event)
   })
   mainWindow.on('closed', () => {
+    disposeRendererRecovery()
     mainWindow = null
   })
   const devUrl = devServerHintUrl()
