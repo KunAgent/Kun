@@ -775,6 +775,35 @@ describe('chat-store-thread-actions recoverActiveTurn settles interrupted work',
     const tool = state.blocks.find((block) => block.kind === 'tool')
     expect(tool?.status).toBe('running')
   })
+
+  it('coalesces concurrent recovery requests so reconnect cannot duplicate a turn', async () => {
+    let release!: () => void
+    const gate = new Promise<void>((resolve) => { release = resolve })
+    const provider = providerWith('running')
+    provider.getThreadDetail.mockImplementation(async () => {
+      await gate
+      return {
+        blocks: [
+          { id: 'u1', kind: 'user', text: 'do the big thing' },
+          { id: 'tool1', kind: 'tool', name: 'delegate_task', status: 'running' }
+        ],
+        latestSeq: 3,
+        threadStatus: 'running',
+        latestTurnId: 'turn_1',
+        latestUserMessageId: 'u1'
+      }
+    })
+    registryMock.getProvider.mockReturnValue(provider)
+
+    const { actions } = buildHarness()
+    const first = actions.recoverActiveTurn()
+    const second = actions.recoverActiveTurn()
+    expect(provider.getThreadDetail).toHaveBeenCalledOnce()
+    release()
+
+    await expect(Promise.all([first, second])).resolves.toEqual([true, true])
+    expect(provider.getThreadDetail).toHaveBeenCalledOnce()
+  })
 })
 
 describe('chat-store-thread-actions createThread conversation mode', () => {

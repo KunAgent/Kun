@@ -127,6 +127,31 @@ describe('useWorkbenchComposerSubmitController', () => {
     await vi.waitFor(() => expect(input.getValue()).toBe('keep this prompt'))
   })
 
+  it('keeps a chat draft and attachments when the runtime rejects a send', async () => {
+    const input = inputHarness('keep this chat prompt')
+    const sendMessage = vi.fn(async () => false)
+    const removeComposerAttachments = vi.fn()
+    const controller = useWorkbenchComposerSubmitController(controllerParams({
+      input: 'keep this chat prompt',
+      route: 'chat',
+      composerAttachments: [{
+        id: 'attachment-1',
+        kind: 'image',
+        name: 'screen.png',
+        mimeType: 'image/png'
+      }],
+      removeComposerAttachments,
+      sendMessage,
+      setInput: input.setInput
+    }))
+
+    controller.handleSend()
+
+    await vi.waitFor(() => expect(sendMessage).toHaveBeenCalledOnce())
+    expect(input.getValue()).toBe('keep this chat prompt')
+    expect(removeComposerAttachments).not.toHaveBeenCalled()
+  })
+
   it('saves the captured draft before sending it to the writing assistant', async () => {
     const write = deferred<{ ok: true; path: string; savedAt: string }>()
     const writeWorkspaceFile = vi.fn(() => write.promise)

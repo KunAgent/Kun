@@ -3,6 +3,8 @@
   "runtimeStatusRestarting": "Kun 正在自动重启…",
   "runtimeStatusRestartingAttempt": "Kun 正在自动重启(第 {{attempt}}/{{max}} 次)…",
   "runtimeStatusCrashed": "Kun 意外退出,正在自动恢复…",
+  "runtimeStatusDegraded": "Kun 暂时不健康,正在恢复中; 当前会话会保留。",
+  "runtimeStatusOffline": "Kun 当前离线。会话和草稿已保留,重新连接后即可继续。",
   "runtimeStatusRolledBack": "新设置应用失败,已自动回滚到之前可用的配置",
   "runtimeStatusFailed": "Kun 多次启动失败,已暂停自动重启",
   "runtimeStatusDismiss": "关闭",

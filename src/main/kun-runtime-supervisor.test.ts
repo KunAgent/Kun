@@ -129,9 +129,9 @@ describe('KunRuntimeSupervisor', () => {
   it('restarts after the configured consecutive watchdog failures', async () => {
     const h = harness()
     await h.supervisor.watchdogTick()
-    expect(h.statuses).toEqual([])
+    expect(h.statuses.map((status) => status.state)).toEqual(['degraded'])
     await h.supervisor.watchdogTick()
-    expect(h.statuses.map((status) => status.state)).toEqual(['restarting', 'running'])
+    expect(h.statuses.map((status) => status.state)).toEqual(['degraded', 'restarting', 'running'])
   })
 
   it('does not recover or restart after shutdown begins', async () => {
@@ -155,6 +155,8 @@ describe('KunRuntimeSupervisor', () => {
   it('publishes failed when watchdog restart fails', async () => {
     const h = harness({ restartError: new Error('restart failed') })
     await h.supervisor.watchdogTick()
+    await h.supervisor.watchdogTick()
+    expect(h.statuses.at(-1)).toMatchObject({ state: 'failed', source: 'watchdog' })
     await h.supervisor.watchdogTick()
     expect(h.statuses.at(-1)).toMatchObject({ state: 'failed', source: 'watchdog' })
   })

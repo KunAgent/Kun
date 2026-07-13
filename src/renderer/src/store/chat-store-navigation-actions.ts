@@ -134,6 +134,32 @@ let clawChannelActivityUnsubscribe: (() => void) | null = null
 let runtimeStatusUnsubscribe: (() => void) | null = null
 let trayActionUnsubscribe: (() => void) | null = null
 
+function connectionForRuntimeStatus(
+  state: NonNullable<ChatState['runtimeStatus']>['state']
+): ChatState['runtimeConnection'] | undefined {
+  switch (state) {
+    case 'degraded':
+    case 'restarting':
+    case 'crashed':
+      // Keep the workbench mounted while the runtime recovers. `checking`
+      // disables new sends without throwing away the active thread or draft.
+      return 'checking'
+    case 'offline':
+    case 'failed':
+    case 'stopped':
+      return 'offline'
+    case 'starting':
+      return 'checking'
+    case 'running':
+      // The supervisor's health event only proves the HTTP runtime is alive;
+      // the renderer still needs to re-establish its provider/SSE connection.
+      // Stay in `checking` until probeRuntime confirms that handshake.
+      return 'checking'
+    default:
+      return undefined
+  }
+}
+
 export function createNavigationActions(
   { set, get, sseAbortRef }: StoreActionContext
 ): Pick<ChatState, 'openCode' | 'openWrite' | 'openDesign' | 'clearActiveThreadSelection' | 'ensureWriteThreadForWorkspace' | 'createWriteThread' | 'selectWriteThread' | 'ensureDesignThreadForWorkspace' | 'createDesignThread' | 'probeRuntime' | 'boot' | 'chooseWorkspace' | 'selectWorkspaceRoot' | 'clearWorkspace' | 'deleteWorkspace' | 'refreshThreads' | 'setThreadSearch' | 'setShowArchivedThreads'> {
@@ -503,7 +529,7 @@ export function createNavigationActions(
             ? { route: 'settings' as const, settingsSection: 'agents' as const }
             : {})
         })
-      } else if (prev === 'ready') {
+      } else if (prev === 'ready' || (prev === 'checking' && get().runtimeStatus?.state === 'running')) {
         stopTurnCompletionPoll()
         set({
           runtimeConnection: 'offline',
@@ -557,12 +583,13 @@ export function createNavigationActions(
         await get().applyI18nFromSettings(settings.locale)
         if (!runtimeStatusUnsubscribe && typeof window.kunGui.onRuntimeStatus === 'function') {
           runtimeStatusUnsubscribe = window.kunGui.onRuntimeStatus((status) => {
-            set({ runtimeStatus: status })
-            if (status.state === 'restarting' || status.state === 'crashed') {
+            const runtimeConnection = connectionForRuntimeStatus(status.state)
+            set({ runtimeStatus: status, ...(runtimeConnection ? { runtimeConnection } : {}) })
+            if (status.state === 'starting' || status.state === 'degraded' || status.state === 'restarting' || status.state === 'crashed') {
               set({ error: null, runtimeErrorDetail: null })
               return
             }
-            if (status.state === 'failed' || status.state === 'stopped') {
+            if (status.state === 'offline' || status.state === 'failed' || status.state === 'stopped') {
               // Terminal states reuse the main error banner, which carries
               // the full diagnostics UI (details, log path, settings).
               set({ error: status.message ?? i18n.t('common:runtimeStatusFailed') })

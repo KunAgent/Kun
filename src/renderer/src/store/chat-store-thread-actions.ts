@@ -145,6 +145,8 @@ function activeWriteMessageContextMatches(context: WriteAssistantMessageContext)
 export function createThreadActions(
   { set, get, sseAbortRef }: StoreActionContext
 ): Pick<ChatState, 'createThread' | 'createConversation' | 'recoverActiveTurn' | 'selectThread' | 'subscribeThreadEventsLive' | 'drainQueuedMessages' | 'removeQueuedMessage' | 'sendMessage' | 'reviewActiveThread'> {
+  let recoverActiveTurnInFlight: Promise<boolean> | null = null
+
   return {
   createThread: async (options = {}) => {
     if (get().runtimeConnection !== 'ready') {
@@ -322,7 +324,9 @@ export function createThreadActions(
     await get().createThread({ conversation: true })
   },
 
-  recoverActiveTurn: async () => {
+  recoverActiveTurn: () => {
+    if (recoverActiveTurnInFlight) return recoverActiveTurnInFlight
+    recoverActiveTurnInFlight = (async () => {
     const state = get()
     if (!state.activeThreadId) return false
     const { activeThreadId } = state
@@ -396,6 +400,12 @@ export function createThreadActions(
       if (state.busy) armBusyWatchdog(set, get)
       return state.busy
     }
+    })()
+    const result = recoverActiveTurnInFlight.finally(() => {
+      recoverActiveTurnInFlight = null
+    })
+    recoverActiveTurnInFlight = result
+    return result
   },
 
   selectThread: async (id) => {
