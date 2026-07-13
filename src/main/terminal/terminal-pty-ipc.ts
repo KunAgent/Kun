@@ -32,13 +32,42 @@ import {
   terminalSessionIdSchema,
   terminalWritePayloadSchema
 } from '../ipc/app-ipc-schemas'
+import { ManagedChildProcessRegistry } from '../services/managed-child-process-registry'
 
 type TerminalSession = {
   pty: IPty
   sender: WebContents
+  processId: string
   /** Last ~64KB of output, replayed when a panel re-attaches. */
   ringBuffer: string
   exited: boolean
+}
+
+export function terminalProcessRecord(
+  sessionId: string,
+  pid: number,
+  startedAt = new Date().toISOString()
+) {
+  return {
+    id: `terminal:${sessionId}`,
+    ownerKind: 'terminal',
+    ownerId: sessionId,
+    pid,
+    startedAt,
+    detached: false,
+    cleanupPolicy: 'terminate-tree' as const
+  }
+}
+
+export function registerTerminalProcess(
+  registry: ManagedChildProcessRegistry,
+  sessionId: string,
+  pid: number,
+  startedAt?: string
+): string {
+  const record = terminalProcessRecord(sessionId, pid, startedAt)
+  registry.register(record)
+  return record.id
 }
 
 let nodePty: typeof import('node-pty') | null | undefined
@@ -164,11 +193,13 @@ export type RegisterTerminalPtyIpcOptions = {
    * when not provided.
    */
   getTerminalColorMode?: () => TerminalColorMode | Promise<TerminalColorMode>
+  processRegistry?: ManagedChildProcessRegistry
 }
 
 export function registerTerminalPtyIpc(options: RegisterTerminalPtyIpcOptions): void {
   const { ipcMain, getMainWindow, logError, getTerminalColorMode } = options
   const sessions = new Map<string, TerminalSession>()
+  const processRegistry = options.processRegistry ?? new ManagedChildProcessRegistry()
 
   const disposeSession = (sessionId: string, killedByClient: boolean): boolean => {
     const session = sessions.get(sessionId)
@@ -181,6 +212,7 @@ export function registerTerminalPtyIpc(options: RegisterTerminalPtyIpcOptions): 
         message: error instanceof Error ? error.message : String(error)
       })
     }
+    processRegistry.remove(session.processId)
     sessions.delete(sessionId)
     if (!killedByClient && !session.sender.isDestroyed()) {
       sendToSender(session.sender, 'terminal:exit', { sessionId, exitCode: null })
@@ -266,9 +298,21 @@ export function registerTerminalPtyIpc(options: RegisterTerminalPtyIpcOptions): 
         useConpty: true
       })
 
+      let processId: string
+      try {
+        processId = registerTerminalProcess(processRegistry, request.sessionId, pty.pid)
+      } catch (error) {
+        try {
+          pty.kill()
+        } catch {
+          // The registration failure is already the actionable error.
+        }
+        throw error
+      }
       const session: TerminalSession = {
         pty,
         sender: event.sender,
+        processId,
         ringBuffer: '',
         exited: false
       }
@@ -283,6 +327,7 @@ export function registerTerminalPtyIpc(options: RegisterTerminalPtyIpcOptions): 
 
       pty.onExit(({ exitCode }) => {
         session.exited = true
+        processRegistry.remove(session.processId)
         sendToSender(session.sender, 'terminal:exit', { sessionId: request.sessionId, exitCode })
         // Keep the entry briefly so a slow re-attach can still replay; the
         // next create disposes it. Full cleanup also happens on app quit.
