@@ -110,6 +110,7 @@ import type {
   MemoryMarkdownExportSavePayload,
   MemoryMarkdownExportSaveResult
 } from './memory-import-export'
+import type { ProjectTransferResult } from './project-transfer'
 import type {
   TerminalCreatePayload,
   TerminalCreateResult,
@@ -407,6 +408,8 @@ export type KunGuiApi = ExtensionIpcApi & {
   startCodexBrowserAuth: () => Promise<CodexBrowserAuthResult>
   pickWorkspaceDirectory: (defaultPath?: string) => Promise<WorkspacePickResult>
   workspaceDirectoryExists: (workspaceRoot: string) => Promise<boolean>
+  exportWorkspaceProject: (sourceRoot: string) => Promise<ProjectTransferResult>
+  importWorkspaceProject: (destinationParent?: string) => Promise<ProjectTransferResult>
   pickLocalFiles: (defaultPath?: string) => Promise<LocalFilesPickResult>
   /** 在对话工作目录根下创建一个时间戳子目录作为新对话的工作目录。 */
   createConversationWorkspace: (root?: string) => Promise<ConversationWorkspaceCreateResult>

@@ -61,6 +61,12 @@ export const localPdfTextTargetPayloadSchema = z
 export const deepseekConfigContentSchema = z.string().max(MAX_CONFIG_FILE_BYTES)
 
 export const workspaceRootSchema = trimmedString(MAX_PATH_LENGTH)
+export const projectExportPayloadSchema = z
+  .object({ sourceRoot: workspaceRootSchema })
+  .strict()
+export const projectImportPayloadSchema = z
+  .object({ destinationParent: optionalTrimmedString(MAX_PATH_LENGTH) })
+  .strict()
 export const gitBranchPayloadSchema = z
   .object({
     workspaceRoot: workspaceRootSchema,

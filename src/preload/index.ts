@@ -71,6 +71,10 @@ const api = {
     ipcRenderer.invoke('workspace:pick-directory', defaultPath),
   workspaceDirectoryExists: (workspaceRoot) =>
     ipcRenderer.invoke('workspace:directory-exists', workspaceRoot),
+  exportWorkspaceProject: (sourceRoot) =>
+    ipcRenderer.invoke('project:export', { sourceRoot }),
+  importWorkspaceProject: (destinationParent) =>
+    ipcRenderer.invoke('project:import', { destinationParent }),
   pickLocalFiles: (defaultPath) =>
     ipcRenderer.invoke('file:pick-local-files', defaultPath),
   createConversationWorkspace: (root) =>

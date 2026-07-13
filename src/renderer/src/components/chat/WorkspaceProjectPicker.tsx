@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react'
-import { Check, ChevronDown, Folder, FolderPlus, Loader2, Search } from 'lucide-react'
+import { Check, ChevronDown, Download, Folder, FolderPlus, Loader2, Search, Upload } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useChatStore } from '../../store/chat-store'
 import { workspaceLabelFromPath } from '../../lib/workspace-label'
@@ -187,6 +187,36 @@ export function WorkspaceProjectPicker({ currentWorkspaceRoot }: Props): ReactEl
     }
   }
 
+  const handleExport = async (): Promise<void> => {
+    if (acting || !currentRoot) return
+    setActing(true)
+    try {
+      const result = await window.kunGui.exportWorkspaceProject(currentRoot)
+      if (!result.ok && !result.canceled) {
+        await window.kunGui.alertDialog({ message: `${t('composerWorkspaceExportFailed')}: ${result.message}` })
+      }
+    } finally {
+      setActing(false)
+    }
+  }
+
+  const handleImport = async (): Promise<void> => {
+    if (acting) return
+    setActing(true)
+    try {
+      const result = await window.kunGui.importWorkspaceProject(currentRoot || undefined)
+      if (result.ok) {
+        await selectWorkspaceRoot(result.path)
+        setOpen(false)
+        setQuery('')
+      } else if (!result.canceled) {
+        await window.kunGui.alertDialog({ message: `${t('composerWorkspaceImportFailed')}: ${result.message}` })
+      }
+    } finally {
+      setActing(false)
+    }
+  }
+
   return (
     <div ref={wrapRef} className="ds-workspace-project-picker ds-no-drag relative min-w-0">
       <button
@@ -275,6 +305,26 @@ export function WorkspaceProjectPicker({ currentWorkspaceRoot }: Props): ReactEl
               <FolderPlus className="h-4 w-4 shrink-0 text-ds-muted" strokeWidth={1.9} />
               <span className="min-w-0 truncate">{t('composerWorkspaceAdd')}</span>
             </button>
+            <button
+              type="button"
+              disabled={acting}
+              className="mt-1 flex w-full items-center gap-3 rounded-lg px-1 py-2 text-left text-[14px] font-medium text-ds-ink transition hover:bg-ds-hover disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-transparent"
+              onClick={() => void handleImport()}
+            >
+              <Download className="h-4 w-4 shrink-0 text-ds-muted" strokeWidth={1.9} />
+              <span className="min-w-0 truncate">{t('composerWorkspaceImport')}</span>
+            </button>
+            {currentRoot ? (
+              <button
+                type="button"
+                disabled={acting}
+                className="mt-1 flex w-full items-center gap-3 rounded-lg px-1 py-2 text-left text-[14px] font-medium text-ds-ink transition hover:bg-ds-hover disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-transparent"
+                onClick={() => void handleExport()}
+              >
+                <Upload className="h-4 w-4 shrink-0 text-ds-muted" strokeWidth={1.9} />
+                <span className="min-w-0 truncate">{t('composerWorkspaceExport')}</span>
+              </button>
+            ) : null}
           </div>
         </div>
       ) : null}

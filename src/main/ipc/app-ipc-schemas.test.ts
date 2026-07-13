@@ -17,6 +17,8 @@ import {
   workspaceEntryRenamePayloadSchema,
   workspaceImageBytesSavePayloadSchema,
   workspaceImagePickPayloadSchema,
+  projectExportPayloadSchema,
+  projectImportPayloadSchema,
   writeExportPayloadSchema,
   writeRichClipboardPayloadSchema,
   writeInlineCompletionPayloadSchema
@@ -772,6 +774,16 @@ describe('app-ipc-schemas', () => {
 
     expect(payload.workspaceRoot).toBe('/tmp/workspace')
     expect(payload.path).toBeUndefined()
+  })
+
+  it('validates project transfer payloads', () => {
+    expect(projectExportPayloadSchema.parse({ sourceRoot: '/tmp/project' })).toEqual({
+      sourceRoot: '/tmp/project'
+    })
+    expect(projectImportPayloadSchema.parse({ destinationParent: ' /tmp/projects ' })).toEqual({
+      destinationParent: '/tmp/projects'
+    })
+    expect(projectImportPayloadSchema.parse({})).toEqual({})
   })
 
   it('accepts workspace directory create payloads', () => {

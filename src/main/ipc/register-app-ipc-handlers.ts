@@ -112,7 +112,9 @@ import {
   writePrototypeFilePayloadSchema,
   writeRetrievalPayloadSchema,
   workspaceRootSchema,
-  legacySessionImportPayloadSchema
+  legacySessionImportPayloadSchema,
+  projectExportPayloadSchema,
+  projectImportPayloadSchema
 } from './app-ipc-schemas'
 import {
   createApprovalConsentToken,
@@ -1020,6 +1022,20 @@ export function registerAppIpcHandlers(options: RegisterAppIpcHandlersOptions): 
       return false
     }
   })
+
+  ipcMain.handle('project:export', async (_, payload: unknown) =>
+    (await import('../services/project-transfer-service')).exportProjectDirectory({
+      sourceRoot: parseIpcPayload('project:export', projectExportPayloadSchema, payload).sourceRoot,
+      parentWindow: getMainWindow()
+    })
+  )
+
+  ipcMain.handle('project:import', async (_, payload: unknown) =>
+    (await import('../services/project-transfer-service')).importProjectDirectory({
+      destinationParent: parseIpcPayload('project:import', projectImportPayloadSchema, payload).destinationParent,
+      parentWindow: getMainWindow()
+    })
+  )
 
   ipcMain.handle('file:pick-local-files', async (_, defaultPath: unknown) => {
     const normalizedDefaultPath = parseIpcPayload(
