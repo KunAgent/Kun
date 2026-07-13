@@ -29,7 +29,7 @@ import {
   ReadTracker,
   type ReadTrackerOptions
 } from './read-tracker.js'
-import { sandboxBlockForTool, type SandboxBlock } from './sandbox-policy.js'
+import { externalPathForApproval, sandboxBlockForTool, type SandboxBlock } from './sandbox-policy.js'
 import {
   createToolOperationIdentity,
   ToolOperationJournal
@@ -205,7 +205,10 @@ export class LocalToolHost implements ToolHost {
     }
     // A configured hook may auto-approve ordinary tool calls, but it must not
     // bypass an explicit user decision for an external side effect.
+    const externalPath = externalPathForApproval(tool, activeCall, context)
+    const externalPathApproval = externalPath && context.approvalPolicy !== 'never'
     const needsApproval = tool.requiresExplicitApproval ||
+      Boolean(externalPathApproval) ||
       (!preHooks.autoApproved && this.requiresApproval(tool, activeCall, context))
     if (needsApproval) {
       const approvalId = `appr_${randomUUID().replaceAll('-', '')}`
@@ -214,7 +217,9 @@ export class LocalToolHost implements ToolHost {
         threadId: context.threadId,
         turnId: context.turnId,
         toolName: activeCall.toolName,
-        summary: this.buildApprovalSummary(activeCall)
+        summary: externalPathApproval
+          ? `Request access outside the workspace, then ${this.buildApprovalSummary(activeCall)}`
+          : this.buildApprovalSummary(activeCall)
       })
       const resolution = await context.awaitApproval(approval)
       const decision = typeof resolution === 'string' ? resolution : resolution.decision
@@ -285,9 +290,12 @@ export class LocalToolHost implements ToolHost {
       }
     }
     this.operationJournal.begin(operationIdentity)
+    const executionContext = externalPathApproval
+      ? { ...context, allowExternalPaths: true }
+      : context
     let result: Awaited<ReturnType<LocalTool['execute']>>
     try {
-      result = await tool.execute(activeCall.arguments, context, async (update) => {
+      result = await tool.execute(activeCall.arguments, executionContext, async (update) => {
         if (!onUpdate) return
         const partialItem = makeToolResultItem({
           id: `item_${activeCall.callId}`,

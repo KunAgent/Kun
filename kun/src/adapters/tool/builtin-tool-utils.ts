@@ -100,7 +100,10 @@ export async function resolveWorkspacePath(
   // danger-full-access, and lets read/ls/find/grep/lsp reach system paths
   // (e.g. C:\Windows on Windows, /etc on POSIX) instead of failing with
   // "path escapes the workspace root".
-  if (!options.enforceWorkspaceBoundary && effectiveSandboxMode(context) === 'danger-full-access') {
+  if (
+    !options.enforceWorkspaceBoundary &&
+    (effectiveSandboxMode(context) === 'danger-full-access' || context.allowExternalPaths === true)
+  ) {
     return {
       workspaceRoot: root,
       absolutePath: lexicalAbsolutePath,

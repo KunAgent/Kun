@@ -149,6 +149,73 @@ describe('LocalToolHost approval policy', () => {
     })
   })
 
+  it('asks before an external workspace-write path and scopes the grant to that call', async () => {
+    const awaitApproval = vi.fn(async () => 'allow' as const)
+    const execute = vi.fn(async (_args: Record<string, unknown>, context: ToolHostContext) => ({
+      output: { allowExternalPaths: context.allowExternalPaths === true }
+    }))
+    const host = new LocalToolHost({ tools: [LocalToolHost.defineTool({
+      name: 'write_external',
+      description: 'simulates a file change outside the workspace',
+      inputSchema: { type: 'object' },
+      toolKind: 'file_change',
+      policy: 'auto',
+      execute
+    })] })
+
+    const result = await host.execute(
+      { callId: 'call_external', toolName: 'write_external', arguments: { path: '../outside.txt' } },
+      {
+        threadId: 'thread_1',
+        turnId: 'turn_1',
+        workspace: '/tmp/workspace',
+        approvalPolicy: 'auto',
+        sandboxMode: 'workspace-write',
+        abortSignal: new AbortController().signal,
+        awaitApproval
+      }
+    )
+
+    expect(awaitApproval).toHaveBeenCalledTimes(1)
+    expect(awaitApproval).toHaveBeenCalledWith(
+      expect.objectContaining({ summary: expect.stringContaining('outside the workspace') })
+    )
+    expect(execute).toHaveBeenCalledWith(
+      { path: '../outside.txt' },
+      expect.objectContaining({ allowExternalPaths: true }),
+      expect.any(Function)
+    )
+    expect(result.item).toMatchObject({ output: { allowExternalPaths: true } })
+  })
+
+  it('does not execute an external path when the per-operation approval is denied', async () => {
+    const execute = vi.fn(async () => ({ output: { ran: true } }))
+    const host = new LocalToolHost({ tools: [LocalToolHost.defineTool({
+      name: 'write_external_denied',
+      description: 'simulates a denied external file change',
+      inputSchema: { type: 'object' },
+      toolKind: 'file_change',
+      policy: 'auto',
+      execute
+    })] })
+
+    const result = await host.execute(
+      { callId: 'call_external_denied', toolName: 'write_external_denied', arguments: { path: '../outside.txt' } },
+      {
+        threadId: 'thread_1',
+        turnId: 'turn_1',
+        workspace: '/tmp/workspace',
+        approvalPolicy: 'auto',
+        sandboxMode: 'workspace-write',
+        abortSignal: new AbortController().signal,
+        awaitApproval: vi.fn(async () => ({ decision: 'deny' as const, reason: 'not now' }))
+      }
+    )
+
+    expect(execute).not.toHaveBeenCalled()
+    expect(result.item).toMatchObject({ isError: true, output: { code: 'approval_denied', reason: 'not now' } })
+  })
+
   it('keeps user input tools advertised without a GUI gate but rejects execution', async () => {
     const host = new LocalToolHost({ tools: [echoTool, userInputTool] })
     const context = {

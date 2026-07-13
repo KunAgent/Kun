@@ -4,13 +4,48 @@ import {
   SandboxModeSchema,
   type SandboxMode
 } from '../../contracts/policy.js'
-import type { ToolHostContext } from '../../ports/tool-host.js'
+import type { ToolCallLike, ToolHostContext } from '../../ports/tool-host.js'
 import type { LocalTool } from './local-tool-host.js'
 import { workspaceRoot } from './builtin-tool-utils.js'
 
 export type SandboxBlock = {
   code: 'sandbox_read_only' | 'sandbox_command_blocked' | 'sandbox_write_blocked'
   message: string
+}
+
+const PATH_ARGUMENT_NAMES = [
+  'path',
+  'filePath',
+  'sourcePath',
+  'targetPath',
+  'outputPath',
+  'destinationPath',
+  'projectPath',
+  'root'
+] as const
+
+/**
+ * Returns the first lexical path that escapes the workspace for a file
+ * mutation call. Symlink escapes remain fail-closed in resolveWorkspacePath;
+ * this helper only decides whether an approval prompt is needed before the
+ * tool is executed.
+ */
+export function externalPathForApproval(
+  tool: Pick<LocalTool, 'toolKind'>,
+  call: Pick<ToolCallLike, 'arguments'>,
+  context: Pick<ToolHostContext, 'workspace' | 'sandboxMode'>
+): string | undefined {
+  if (tool.toolKind !== 'file_change' || effectiveSandboxMode(context) !== 'workspace-write') {
+    return undefined
+  }
+  const root = workspaceRoot(context.workspace)
+  for (const name of PATH_ARGUMENT_NAMES) {
+    const value = call.arguments[name]
+    if (typeof value !== 'string' || !value.trim()) continue
+    const candidate = isAbsolute(value) ? resolve(value) : resolve(root, value)
+    if (!isPathInsideOrEqual(root, candidate)) return value
+  }
+  return undefined
 }
 
 export function effectiveSandboxMode(
@@ -62,7 +97,7 @@ export function sandboxBlockForTool(
 
 export function canWritePath(
   absolutePath: string,
-  context: Pick<ToolHostContext, 'workspace' | 'sandboxMode'>
+  context: Pick<ToolHostContext, 'workspace' | 'sandboxMode' | 'allowExternalPaths'>
 ): { ok: true } | { ok: false; block: SandboxBlock } {
   const mode = effectiveSandboxMode(context)
   if (mode === 'danger-full-access') return { ok: true }
@@ -85,6 +120,8 @@ export function canWritePath(
     }
   }
 
+  if (context.allowExternalPaths === true) return { ok: true }
+
   const root = workspaceRoot(context.workspace)
   const resolvedPath = isAbsolute(absolutePath) ? resolve(absolutePath) : resolve(root, absolutePath)
   if (isPathInsideOrEqual(root, resolvedPath)) return { ok: true }
@@ -99,7 +136,7 @@ export function canWritePath(
 
 export function assertCanWritePath(
   absolutePath: string,
-  context: Pick<ToolHostContext, 'workspace' | 'sandboxMode'>
+  context: Pick<ToolHostContext, 'workspace' | 'sandboxMode' | 'allowExternalPaths'>
 ): void {
   const decision = canWritePath(absolutePath, context)
   if (!decision.ok) throw new Error(decision.block.message)
