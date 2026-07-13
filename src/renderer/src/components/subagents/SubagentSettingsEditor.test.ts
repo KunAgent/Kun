@@ -103,6 +103,7 @@ describe('SubagentSettingsEditor', () => {
     expect(text).toContain('Over-engineering review')
     expect(text).toContain('Researcher')
     expect(text).toContain('Code review')
+    expect(text).toContain('Plan mode')
     expect(text).toContain('Small model')
     expect(loadComposerModels).toHaveBeenCalledOnce()
   })

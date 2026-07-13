@@ -376,6 +376,9 @@ const kunRuntimePatchSchema = z.object({
   codeReviewModel: optionalModelIdSchema,
   codeReviewProviderId: z.string().trim().max(64).optional(),
   codeReviewAccountId: z.string().trim().max(256).optional(),
+  planModel: optionalModelIdSchema,
+  planProviderId: z.string().trim().max(64).optional(),
+  planAccountId: z.string().trim().max(256).optional(),
   // Per-role reasoning depth. Default 'off' is omitted by the normalizer.
   titleReasoningEffort: modelReasoningEffortSchema.optional(),
   summaryReasoningEffort: modelReasoningEffortSchema.optional(),

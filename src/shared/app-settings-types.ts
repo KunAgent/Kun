@@ -413,6 +413,12 @@ export type KunRuntimeSettingsV1 = {
   /** Provider id paired with codeReviewModel. */
   codeReviewProviderId?: string
   codeReviewAccountId?: string
+  /** Optional model override for Plan-mode turns. Empty = the main conversation model. */
+  planModel?: string
+  /** Provider id paired with planModel. */
+  planProviderId?: string
+  /** Opaque account id paired with planProviderId. */
+  planAccountId?: string
   /** Reasoning depth for thread-title generation. Default 'off'. */
   titleReasoningEffort?: ModelReasoningEffort
   /** Reasoning depth for whole-session summary generation. Default 'off'. */

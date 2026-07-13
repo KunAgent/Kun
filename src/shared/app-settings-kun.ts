@@ -572,7 +572,10 @@ const OPTIONAL_MODEL_SLOT_KEYS = [
   'summaryAccountId',
   'codeReviewModel',
   'codeReviewProviderId',
-  'codeReviewAccountId'
+  'codeReviewAccountId',
+  'planModel',
+  'planProviderId',
+  'planAccountId'
 ] as const
 
 type OptionalModelSlotKey = (typeof OPTIONAL_MODEL_SLOT_KEYS)[number]

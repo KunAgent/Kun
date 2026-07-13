@@ -2801,6 +2801,10 @@
         "name": "Code review",
         "desc": "Isolated read-only run · configurable"
       },
+      "plan": {
+        "name": "Plan mode",
+        "desc": "Planning turns · defaults to the conversation model"
+      },
       "title": {
         "name": "Title",
         "desc": "LLM · defaults to small model"

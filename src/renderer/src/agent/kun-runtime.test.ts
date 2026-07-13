@@ -360,6 +360,41 @@ describe('KunRuntimeProvider', () => {
     )
   })
 
+  it('uses the configured Plan-mode model and provider when the turn has no explicit override', async () => {
+    const runtimeRequest = vi.fn(async () => ({
+      ok: true,
+      status: 202,
+      body: JSON.stringify({ threadId: 'thr_1', turnId: 'turn_plan', userMessageItemId: 'item_plan' })
+    }))
+    installDsGui({
+      runtimeRequest,
+      getSettings: vi.fn(async () => ({
+        ...settings(),
+        agents: {
+          kun: {
+            ...defaultKunRuntimeSettings(),
+            planModel: 'reasoning-pro',
+            planProviderId: 'provider-pro'
+          }
+        }
+      }))
+    })
+    await new KunRuntimeProvider().sendUserMessage('thr_1', 'draft a plan', { mode: 'plan' })
+
+    expect(runtimeRequest).toHaveBeenCalledWith(
+      '/v1/threads/thr_1/turns',
+      'POST',
+      JSON.stringify({
+        prompt: 'draft a plan',
+        model: 'reasoning-pro',
+        providerId: 'provider-pro',
+        approvalPolicy: 'on-request',
+        sandboxMode: 'workspace-write',
+        mode: 'plan'
+      })
+    )
+  })
+
   it('posts workspace checkpoint ids with Kun turn requests when provided', async () => {
     const runtimeRequest = vi.fn(async () => ({
       ok: true,

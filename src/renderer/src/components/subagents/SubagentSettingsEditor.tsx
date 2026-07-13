@@ -169,6 +169,7 @@ export function SubagentSettingsEditor({
   const titleSlot: RoleSlot = { model: kun.titleModel ?? '', providerId: kun.titleProviderId ?? '' }
   const summarySlot: RoleSlot = { model: kun.summaryModel ?? '', providerId: kun.summaryProviderId ?? '' }
   const codeReviewSlot: RoleSlot = { model: kun.codeReviewModel ?? '', providerId: kun.codeReviewProviderId ?? '' }
+  const planSlot: RoleSlot = { model: kun.planModel ?? '', providerId: kun.planProviderId ?? '' }
   const titleReasoning = kun.titleReasoningEffort ?? 'off'
   const summaryReasoning = kun.summaryReasoningEffort ?? 'off'
   const codeReviewReasoning = kun.codeReviewReasoningEffort ?? 'off'
@@ -248,8 +249,8 @@ export function SubagentSettingsEditor({
   // them server-side (mergeKunRuntimeSettings omits blank slots).
   const persistRoleSlot = useCallback(
     (
-      modelKey: 'smallModel' | 'titleModel' | 'summaryModel' | 'codeReviewModel',
-      providerKey: 'smallModelProviderId' | 'titleProviderId' | 'summaryProviderId' | 'codeReviewProviderId',
+      modelKey: 'smallModel' | 'titleModel' | 'summaryModel' | 'codeReviewModel' | 'planModel',
+      providerKey: 'smallModelProviderId' | 'titleProviderId' | 'summaryProviderId' | 'codeReviewProviderId' | 'planProviderId',
       model: string,
       providerId: string
     ): void => {
@@ -407,6 +408,20 @@ export function SubagentSettingsEditor({
                 persistRoleSlot('codeReviewModel', 'codeReviewProviderId', model, providerId)}
               reasoning={codeReviewReasoning}
               onReasoningChange={(effort) => persistRoleReasoning('codeReviewReasoningEffort', effort)}
+            />
+          </Row>
+          <Row
+            variant="settings"
+            roleId="plan"
+            name={t('subagentsPanel.role.plan.name', 'Plan mode')}
+            desc={t('subagentsPanel.role.plan.desc', 'Used for planning turns; empty follows the conversation model')}
+          >
+            <ModelSelect
+              value={planSlot.model}
+              providerId={planSlot.providerId}
+              groups={composerModelGroups}
+              stretch
+              onChange={(model, providerId) => persistRoleSlot('planModel', 'planProviderId', model, providerId)}
             />
           </Row>
           <Row

@@ -309,11 +309,18 @@ export class KunRuntimeProvider implements AgentProvider {
   ): Promise<{ turnId: string; threadId: string; userMessageItemId?: string }> {
     const settings = await rendererRuntimeClient.getSettings()
     const runtime = getKunRuntimeSettings(settings)
+    const mode = options?.mode
+    const selectedModel = options?.model?.trim() ||
+      (mode === 'plan' ? runtime.planModel?.trim() : '')
+    const selectedProviderId = options?.providerId?.trim() ||
+      (mode === 'plan' ? runtime.planProviderId?.trim() : '')
+    const selectedAccountId = options?.accountId?.trim() ||
+      (mode === 'plan' ? runtime.planAccountId?.trim() : '')
     const body: Record<string, unknown> = {
       prompt: text,
-      model: options?.model,
-      providerId: options?.providerId,
-      accountId: options?.accountId,
+      ...(selectedModel ? { model: selectedModel } : {}),
+      ...(selectedProviderId ? { providerId: selectedProviderId } : {}),
+      ...(selectedAccountId ? { accountId: selectedAccountId } : {}),
       approvalPolicy: runtime.approvalPolicy,
       sandboxMode: runtime.sandboxMode
     }
@@ -323,7 +330,6 @@ export class KunRuntimeProvider implements AgentProvider {
     if (options?.displayText?.trim() && options.displayText.trim() !== text.trim()) {
       body.displayText = options.displayText.trim()
     }
-    const mode = options?.mode
     if (mode === 'agent' || mode === 'plan') {
       body.mode = mode
     }
