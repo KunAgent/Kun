@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AppSettingsV1 } from '../shared/app-settings'
 import { CHATGPT_SUBSCRIPTION_MODEL_IDS } from '../shared/app-settings'
-import { probeModelProvider, providerProbeHeaders } from './provider-connection'
+import { parseModelIds, probeModelProvider, providerProbeHeaders } from './provider-connection'
 
 afterEach(() => {
   vi.unstubAllGlobals()
@@ -90,6 +90,37 @@ describe('probeModelProvider', () => {
       'https://api.example.com/v1/models',
       expect.objectContaining({ method: 'GET' })
     )
+  })
+
+  it('parses top-level arrays and provider-specific models envelopes without changing wire IDs', () => {
+    expect(parseModelIds(JSON.stringify([
+      { id: 'MiniMaxAI/MiniMax-M3' },
+      { id: 'model-b' },
+      { id: 'MiniMaxAI/MiniMax-M3' }
+    ]))).toEqual(['MiniMaxAI/MiniMax-M3', 'model-b'])
+    expect(parseModelIds(JSON.stringify({ models: [{ id: 'Provider/Model-A' }] }))).toEqual(['Provider/Model-A'])
+  })
+
+  it('rejects unbounded or nested model payloads instead of recursively scanning them', () => {
+    expect(parseModelIds(JSON.stringify({ response: { data: [{ id: 'hidden-model' }] } }))).toEqual([])
+    expect(parseModelIds('x'.repeat(2_000_001))).toEqual([])
+    expect(parseModelIds(JSON.stringify([{ id: 'x'.repeat(513) }, { id: 'ok' }]))).toEqual(['ok'])
+  })
+
+  it('fails clearly when the model list response exceeds the bounded body limit', async () => {
+    const fetchMock = vi.fn(async () => new Response('x'.repeat(2_000_001), { status: 200 }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const result = await probeModelProvider({
+      baseUrl: 'https://api.example.com',
+      apiKey: 'sk-x',
+      endpointFormat: 'chat_completions'
+    })
+
+    expect(result).toEqual({
+      ok: false,
+      message: 'Model list response exceeded the 2000000 byte limit.'
+    })
   })
 
   it('reports http errors with status and body excerpt', async () => {
