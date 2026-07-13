@@ -311,8 +311,48 @@ function sanitizeCapabilities(value: unknown): Record<string, unknown> {
 }
 
 function parseKunConfigSection(schema: SafeParseSchema, value: unknown): Record<string, unknown> {
-  const parsed = schema.safeParse(objectValue(value))
-  return parsed.success ? objectValue(parsed.data) : {}
+  const raw = objectValue(value)
+  const parsed = schema.safeParse(raw)
+  if (parsed.success) return objectValue(parsed.data)
+
+  // Older GUI/runtime versions may leave a newly introduced top-level key in
+  // the config. A strict schema should reject that key, but dropping the
+  // entire section also discards valid credentials and endpoint settings.
+  // Retry with only keys known by the object schema; invalid known values are
+  // still rejected by the normal schema and therefore fail closed.
+  const shape = schemaShape(schema)
+  if (!shape) return {}
+  const known = Object.fromEntries(Object.keys(shape).flatMap((key) =>
+    key in raw ? [[key, raw[key]] as const] : []
+  ))
+  const sanitized = schema.safeParse(known)
+  if (sanitized.success) return objectValue(sanitized.data)
+
+  // A known nested object may itself contain an obsolete key. Validate each
+  // top-level value independently so one stale nested option cannot discard
+  // unrelated credentials or endpoint fields from the section.
+  const validEntries = Object.entries(known).flatMap(([key, entry]) => {
+    const parsedEntry = schema.safeParse({ [key]: entry })
+    return parsedEntry.success ? [[key, objectValue(parsedEntry.data)[key]] as const] : []
+  })
+  return Object.fromEntries(validEntries)
+}
+
+function schemaShape(schema: SafeParseSchema): Record<string, unknown> | undefined {
+  const candidate = schema as SafeParseSchema & {
+    shape?: unknown
+    def?: unknown
+    _def?: unknown
+  }
+  for (const container of [candidate, candidate.def, candidate._def]) {
+    if (!container || typeof container !== 'object') continue
+    const rawShape = 'shape' in container ? (container as { shape?: unknown }).shape : undefined
+    const shape = typeof rawShape === 'function' ? rawShape() : rawShape
+    if (shape && typeof shape === 'object' && !Array.isArray(shape)) {
+      return shape as Record<string, unknown>
+    }
+  }
+  return undefined
 }
 
 function parseKunHooksSection(value: unknown): unknown[] {

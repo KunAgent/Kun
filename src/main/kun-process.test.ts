@@ -1160,6 +1160,7 @@ describe('syncGuiManagedKunConfig', () => {
         }
       },
       serve: {
+        runtimeToken: 'keep-this-token',
         legacyServeFlag: true,
         tokenEconomy: {
           customTokenEconomyFlag: 'keep',
@@ -1248,6 +1249,7 @@ describe('syncGuiManagedKunConfig', () => {
     expect(KunConfigSchema.safeParse(parsed).success).toBe(true)
     expect(parsed.legacyTopLevelFlag).toBeUndefined()
     expect(parsed.serve.legacyServeFlag).toBeUndefined()
+    expect(parsed.serve.runtimeToken).toBe('keep-this-token')
     expect(parsed.serve.storage).toMatchObject({
       backend: 'hybrid',
       sqlitePath: '/tmp/kun-index.sqlite3'
