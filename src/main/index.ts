@@ -79,7 +79,8 @@ import {
   setKunUnexpectedExitHandler,
   syncGuiManagedKunConfig,
   waitForKunStartupSettled,
-  type KunUnexpectedExitInfo
+  type KunUnexpectedExitInfo,
+  type RuntimeStopReason
 } from './kun-process'
 import { expandHomePath } from './settings-store'
 import { KunRuntimeSupervisor, type KunRuntimeStatus } from './kun-runtime-supervisor'
@@ -339,7 +340,7 @@ function syncCheckpointCleanupTimer(settings: AppSettingsV1): void {
   checkpointCleanupTimer.unref?.()
 }
 
-const runtimeShutdown = new ManagedRuntimeShutdownCoordinator(async () => {
+const runtimeShutdown = new ManagedRuntimeShutdownCoordinator(async (stopReason: RuntimeStopReason) => {
   await scheduleRuntime?.stop()
   await workflowRuntime?.stop()
   await Promise.all([
@@ -348,15 +349,15 @@ const runtimeShutdown = new ManagedRuntimeShutdownCoordinator(async () => {
   ])
   await stopWeixinBridgeRuntime()
   await shutdownLocalWhisperService()
-  await kunRuntimeAdapter.stopAndWait()
+  await kunRuntimeAdapter.stopAndWait(stopReason)
 })
 
 function stopManagedRuntimesForQuit(): Promise<void> {
   return runtimeShutdown.stopForQuit()
 }
 
-function stopManagedRuntimes(): Promise<void> {
-  return runtimeShutdown.stop()
+function stopManagedRuntimes(reason: RuntimeStopReason = 'manual-restart'): Promise<void> {
+  return runtimeShutdown.stop(reason)
 }
 
 async function loadGuiUpdaterModule(): Promise<GuiUpdaterModule> {
@@ -936,7 +937,7 @@ async function ensureKunRuntime(settings: AppSettingsV1): Promise<AppSettingsV1>
   const currentSettings = tokenResult.settings
   if (tokenResult.generated && kunRuntimeAdapter.isChildRunning()) {
     logWarn('runtime-start', 'Restarting managed Kun to apply the generated runtime token.')
-    await kunRuntimeAdapter.stopAndWait()
+    await kunRuntimeAdapter.stopAndWait('settings-restart')
   }
 
   const runtime = getKunRuntimeSettings(currentSettings)
@@ -993,7 +994,7 @@ async function ensureKunRuntime(settings: AppSettingsV1): Promise<AppSettingsV1>
         'runtime-start',
         `managed Kun child stopped responding on port ${runtime.port}; restarting it in place`
       )
-      await kunRuntimeAdapter.stopAndWait()
+      await kunRuntimeAdapter.stopAndWait('health-recovery')
     }
   }
 
@@ -1047,7 +1048,7 @@ async function restartRuntimeOnce(settings: AppSettingsV1): Promise<void> {
   }
 
   const adapter = kunRuntimeAdapter
-  await adapter.stopAndWait()
+  await adapter.stopAndWait('health-recovery')
   const launchSettings = await resolveManagedKunLaunchSettings(settings, 'runtime-restart')
 
   try {
@@ -1297,7 +1298,7 @@ async function restartManagedRuntimeForSettingsChange(
   }
 
   await waitForManagedRuntimeReadyBeforeStop(prev, 'settings-apply')
-  await adapter.stopAndWait()
+  await adapter.stopAndWait('settings-restart')
   if (!nextHasApiKey || !runtime.autoStart) {
     publishRuntimeStatus({
       state: 'stopped',
@@ -1393,7 +1394,7 @@ async function restartManagedRuntimeForMcpConfigChange(settings: AppSettingsV1):
 
   if (!wasRunning) return
   await waitForManagedRuntimeReadyBeforeStop(settings, 'mcp-config')
-  await adapter.stopAndWait()
+  await adapter.stopAndWait('provider-change')
   if (!resolveConfiguredApiKey(settings) || !runtime.autoStart) return
 
   publishRuntimeStatus({ state: 'restarting', source: 'mcp-config' })
@@ -1830,7 +1831,11 @@ app.whenReady().then(async () => {
 }
 
 app.on('window-all-closed', () => {
-  void stopManagedRuntimes().catch((error) => {
+  // On non-macOS Electron quits immediately after this event. Pass the
+  // explicit quit reason now because `before-quit` may observe this existing
+  // single-flight stop and cannot replace its reason afterward.
+  const stopReason: RuntimeStopReason = process.platform === 'darwin' ? 'manual-restart' : 'app-quit'
+  void stopManagedRuntimes(stopReason).catch((error) => {
     console.warn('[kun-gui] failed to stop Kun runtime:', error)
   })
   if (process.platform !== 'darwin') {

@@ -58,6 +58,7 @@ import { resolveClaudeBinary } from './agent-sdk-installer'
 import { appendManagedLogLine } from './logger'
 import {
   KunProcessController,
+  type RuntimeStopReason,
   type KunUnexpectedExitInfo
 } from './runtime/kun-process-controller'
 import {
@@ -94,7 +95,11 @@ import { syncGuiManagedKunConfig } from './runtime/kun-runtime-config-service'
 export { subagentProfilesForRuntime } from './runtime/kun-runtime-subagent-config'
 export { syncGuiManagedKunConfig } from './runtime/kun-runtime-config-service'
 
-export type { KunUnexpectedExitInfo } from './runtime/kun-process-controller'
+export type {
+  KunUnexpectedExitInfo,
+  RuntimeProcessGeneration,
+  RuntimeStopReason
+} from './runtime/kun-process-controller'
 export { resolveKunStartupTimeoutMs } from './runtime/kun-runtime-health-monitor'
 
 /**
@@ -346,12 +351,12 @@ async function startKunChildOnce(
   }
   if (!runAsElectron) childEnv.ELECTRON_RUN_AS_NODE = '1'
   else delete childEnv.ELECTRON_RUN_AS_NODE
-  processController.child = spawn(command, args, {
+  const startedChild = spawn(command, args, {
     env: childEnv,
     stdio: ['ignore', 'pipe', 'pipe'],
     detached: false
   })
-  const startedChild = processController.child
+  const generation = processController.registerChild(startedChild)
   processController.childPort = runtime.port
   const startedLogCapture = createKunChildLogCapture(startedChild.pid)
   processController.logCapture = startedLogCapture
@@ -366,18 +371,29 @@ async function startKunChildOnce(
     startedLogCapture.captureStderr(chunk)
   })
   startedChild.on('exit', (code, signal) => {
+    const exit = processController.recordExit(startedChild, {
+      code: code ?? null,
+      signal: signal ?? null
+    })
+    const classification = exit
+      ? exit.stale
+        ? 'stale'
+        : exit.expected
+          ? 'expected'
+          : 'unexpected'
+      : 'duplicate'
     startedLogCapture.logLifecycle(
-      signal
-        ? `exited with signal ${signal}`
-        : `exited with code ${code ?? 'unknown'}`
+      `${signal ? `exited with signal ${signal}` : `exited with code ${code ?? 'unknown'}`} ` +
+      `(generation ${generation.generation}, reason ${exit?.reason ?? 'duplicate'}, ${classification})`
     )
     void startedLogCapture.close()
     processController.clearChild(startedChild)
-    if (processController.shouldReportUnexpectedExit(startedChild)) {
+    if (exit && !exit.stale && !exit.expected && generation.readyAt) {
       processController.reportUnexpectedExit({
         code: code ?? null,
         signal: signal ?? null,
-        stderrTail: processController.stderrTail
+        stderrTail: processController.stderrTail,
+        generation: generation.generation
       })
     }
   })
@@ -400,7 +416,7 @@ async function startKunChildOnce(
   startedLogCapture.logLifecycle(`ready marker received on port ${runtime.port}`)
 }
 
-export async function stopKunChildAndWait(): Promise<void> {
+export async function stopKunChildAndWait(reason: RuntimeStopReason = 'manual-restart'): Promise<void> {
   if (!processController.child) {
     if (processController.logCapture) {
       const capture = processController.logCapture
@@ -410,7 +426,7 @@ export async function stopKunChildAndWait(): Promise<void> {
     return
   }
   const stoppingChild = processController.child
-  processController.markIntentionalStop(stoppingChild)
+  processController.markIntentionalStop(stoppingChild, reason)
   const pid = stoppingChild.pid
   const capture = processController.logCapture
   if (stoppingChild.exitCode === null && stoppingChild.signalCode === null) {
