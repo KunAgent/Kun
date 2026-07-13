@@ -3,6 +3,8 @@
   "runtimeStatusRestarting": "Kun is restarting automatically…",
   "runtimeStatusRestartingAttempt": "Kun is restarting automatically (attempt {{attempt}}/{{max}})…",
   "runtimeStatusCrashed": "Kun exited unexpectedly; recovering…",
+  "runtimeStatusDegraded": "Kun is temporarily unhealthy; your conversation stays here while it recovers.",
+  "runtimeStatusOffline": "Kun is offline. Your conversation and draft are preserved; reconnect to continue.",
   "runtimeStatusRolledBack": "The new settings failed to apply; rolled back to the previous working configuration",
   "runtimeStatusFailed": "Kun keeps failing to start; automatic restarts are paused",
   "runtimeStatusDismiss": "Dismiss",

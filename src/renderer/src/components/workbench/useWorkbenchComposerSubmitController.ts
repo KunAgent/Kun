@@ -137,7 +137,6 @@ export function useWorkbenchComposerSubmitController({
   activeThreadId,
   attachmentUploadEnabled,
   buildCodeCanvasOutboundPrompt,
-  clearComposerAttachments,
   removeComposerAttachments,
   clearComposerFileReferences,
   composerAttachments,
@@ -541,16 +540,17 @@ export function useWorkbenchComposerSubmitController({
       if (route === 'chat' && composerMode === 'plan') {
         const prepared = await prepareChatMessage()
         if (!prepared) return
-        setInput('')
-        clearComposerAttachments(attachmentScope)
-        clearComposerFileReferences()
-        void sendPlanTurn(prepared.text, {
+        const sent = await sendPlanTurn(prepared.text, {
           ...(prepared.displayText ? { displayText: prepared.displayText } : {}),
           ...(reasoningEffort ? { reasoningEffort } : {}),
           ...(attachmentIds.length ? { attachmentIds } : {}),
           ...(publicAttachments.length ? { attachments: publicAttachments } : {}),
           ...(userFileReferences.length ? { fileReferences: userFileReferences } : {})
         })
+        if (!sent) return
+        setInput((current) => current.trim() === v ? '' : current)
+        if (attachmentIds.length > 0) removeComposerAttachments(attachmentIds, attachmentScope)
+        clearComposerFileReferences()
         return
       }
       if (route === 'write') {
@@ -653,9 +653,6 @@ export function useWorkbenchComposerSubmitController({
       }
       const prepared = await prepareChatMessage()
       if (!prepared) return
-      setInput('')
-      clearComposerAttachments(attachmentScope)
-      clearComposerFileReferences()
       let outboundText = prepared.text
       let outboundDisplay = prepared.displayText
       let outboundGuiDesignCanvas = false
@@ -677,7 +674,7 @@ export function useWorkbenchComposerSubmitController({
         outboundDisplay = codeCanvasRoute.displayText
         outboundGuiDesignCanvas = true
       }
-      void sendMessage(outboundText, composerMode === 'plan' ? 'plan' : 'agent', {
+      const sent = await sendMessage(outboundText, composerMode === 'plan' ? 'plan' : 'agent', {
         ...(outboundDisplay ? { displayText: outboundDisplay } : {}),
         ...(outboundGuiDesignCanvas ? { guiDesignCanvas: true } : {}),
         ...(reasoningEffort ? { reasoningEffort } : {}),
@@ -685,6 +682,13 @@ export function useWorkbenchComposerSubmitController({
         ...(publicAttachments.length ? { attachments: publicAttachments } : {}),
         ...(userFileReferences.length ? { fileReferences: userFileReferences } : {})
       })
+      // Keep the draft and attachments available when a health transition
+      // races the send. Only consume the captured composer inputs after the
+      // runtime has accepted the turn; this makes reconnect a safe retry.
+      if (!sent) return
+      setInput((current) => current.trim() === v ? '' : current)
+      if (attachmentIds.length > 0) removeComposerAttachments(attachmentIds, attachmentScope)
+      clearComposerFileReferences()
     })()
   }, [
     activeClawChannelId,
@@ -695,7 +699,6 @@ export function useWorkbenchComposerSubmitController({
     attachmentUploadEnabled,
     buildCodeCanvasOutboundPrompt,
     clawHelpText,
-    clearComposerAttachments,
     clearComposerFileReferences,
     clawModelListText,
     composerAttachments,
@@ -708,6 +711,7 @@ export function useWorkbenchComposerSubmitController({
     input,
     mirrorClawCommand,
     readComposerFileContextEntries,
+    removeComposerAttachments,
     resetClawChannelSession,
     rightPanelMode,
     route,

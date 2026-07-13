@@ -200,6 +200,10 @@ export class KunRuntimeSupervisor<Settings> {
   async watchdogTick(): Promise<void> {
     if (this.watchdogTickInFlight || this.deps.isStopped()) return
     if (this.crashRecoveryInFlight || this.operations.hasPendingOperation()) return
+    // A failed/stopped status is a deliberate terminal state until the user
+    // asks for a reconnect. Do not let later watchdog ticks downgrade it back
+    // to degraded and silently re-enter automatic recovery.
+    if (this.currentStatus?.state === 'failed' || this.currentStatus?.state === 'stopped') return
     if (!this.deps.isChildRunning()) return
     this.watchdogTickInFlight = true
     try {
@@ -213,7 +217,20 @@ export class KunRuntimeSupervisor<Settings> {
         'kun-watchdog',
         `health probe failed (${this.watchdogFailures}/${this.watchdogFailureThreshold})`
       )
-      if (this.watchdogFailures < this.watchdogFailureThreshold) return
+      if (this.watchdogFailures < this.watchdogFailureThreshold) {
+        // Keep the renderer informed while the runtime is still alive but no
+        // longer healthy. This is deliberately separate from crash recovery:
+        // a transient probe failure must not be treated as a process crash or
+        // consume the restart budget.
+        if (this.currentStatus?.state !== 'degraded') {
+          this.publish({
+            state: 'degraded',
+            source: 'watchdog',
+            message: 'Kun is responding slowly; waiting for the runtime to recover.'
+          })
+        }
+        return
+      }
       this.watchdogFailures = 0
       this.publish({
         state: 'restarting',

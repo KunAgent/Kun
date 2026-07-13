@@ -121,7 +121,13 @@ import type {
 import type { ExtensionIpcApi } from './extension-ipc'
 
 export type KunRuntimeStatusPayload = {
-  state: 'starting' | 'running' | 'restarting' | 'crashed' | 'failed' | 'stopped'
+  /**
+   * `degraded` means the health probe has failed but recovery has not started
+   * yet. `offline` is a terminal connection state for the renderer; the
+   * legacy `crashed`/`stopped` values remain accepted for older main-process
+   * builds and are normalized by the renderer.
+   */
+  state: 'starting' | 'running' | 'degraded' | 'restarting' | 'offline' | 'crashed' | 'failed' | 'stopped'
   source: string
   message?: string
   stderrTail?: string

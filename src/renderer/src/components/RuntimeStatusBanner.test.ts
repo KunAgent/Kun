@@ -6,17 +6,22 @@ import type { KunRuntimeStatusPayload } from '@shared/kun-gui-api'
 import { RuntimeStatusBanner } from './RuntimeStatusBanner'
 
 const storeState = vi.hoisted(() => ({
-  runtimeStatus: null as KunRuntimeStatusPayload | null
+  runtimeStatus: null as KunRuntimeStatusPayload | null,
+  probeRuntime: vi.fn(async () => undefined)
 }))
 
 vi.mock('../store/chat-store', () => ({
-  useChatStore: (selector: (state: { runtimeStatus: KunRuntimeStatusPayload | null }) => unknown) =>
+  useChatStore: (selector: (state: {
+    runtimeStatus: KunRuntimeStatusPayload | null
+    probeRuntime: typeof storeState.probeRuntime
+  }) => unknown) =>
     selector(storeState)
 }))
 
 describe('RuntimeStatusBanner', () => {
   afterEach(() => {
     storeState.runtimeStatus = null
+    storeState.probeRuntime.mockClear()
   })
 
   it('renders automatic restarts as an informational status banner', () => {
@@ -49,5 +54,33 @@ describe('RuntimeStatusBanner', () => {
     expect(html).toContain('data-variant="warning"')
     expect(html).toContain('role="alert"')
     expect(html).toContain('border-amber-200')
+  })
+
+  it('keeps the workbench mounted while the runtime is degraded', () => {
+    storeState.runtimeStatus = {
+      state: 'degraded',
+      source: 'watchdog',
+      at: '2026-06-18T15:02:00.000Z'
+    }
+
+    const html = renderToStaticMarkup(createElement(RuntimeStatusBanner))
+
+    expect(html).toContain('data-variant="warning"')
+    expect(html).toContain('runtimeStatusDegraded')
+    expect(html).not.toContain('retryConnection')
+  })
+
+  it('offers an explicit reconnect action for an offline runtime', async () => {
+    storeState.runtimeStatus = {
+      state: 'offline',
+      source: 'health-check',
+      at: '2026-06-18T15:03:00.000Z'
+    }
+
+    const html = renderToStaticMarkup(createElement(RuntimeStatusBanner))
+
+    expect(html).toContain('runtimeStatusOffline')
+    expect(html).toContain('aria-label="retryConnection"')
+    expect(html).toContain('role="alert"')
   })
 })
