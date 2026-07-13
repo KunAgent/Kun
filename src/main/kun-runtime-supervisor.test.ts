@@ -142,6 +142,16 @@ describe('KunRuntimeSupervisor', () => {
     expect(h.statuses).toEqual([])
   })
 
+  it('ignores a duplicate or older generation crash notification', async () => {
+    const h = harness()
+    const exit = { code: 1, signal: null, stderrTail: 'failed', generation: 4 }
+    h.supervisor.handleUnexpectedExit(exit)
+    h.supervisor.handleUnexpectedExit(exit)
+    h.supervisor.handleUnexpectedExit({ ...exit, generation: 3 })
+    await vi.waitFor(() => expect(h.statuses.some((status) => status.state === 'crashed')).toBe(true))
+    expect(h.statuses.filter((status) => status.state === 'crashed')).toHaveLength(1)
+  })
+
   it('publishes failed when watchdog restart fails', async () => {
     const h = harness({ restartError: new Error('restart failed') })
     await h.supervisor.watchdogTick()

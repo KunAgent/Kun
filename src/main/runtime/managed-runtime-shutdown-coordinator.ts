@@ -1,3 +1,5 @@
+import type { RuntimeStopReason } from './kun-process-controller'
+
 /** Owns application quit intent and single-flight managed-runtime shutdown. */
 export class ManagedRuntimeShutdownCoordinator {
   private quitRequested = false
@@ -5,7 +7,7 @@ export class ManagedRuntimeShutdownCoordinator {
   private stoppedForQuit = false
   private stopPromise: Promise<void> | null = null
 
-  constructor(private readonly stopManagedRuntimes: () => Promise<void>) {}
+  constructor(private readonly stopManagedRuntimes: (reason: RuntimeStopReason) => Promise<void>) {}
 
   get isQuitRequested(): boolean {
     return this.quitRequested
@@ -31,10 +33,10 @@ export class ManagedRuntimeShutdownCoordinator {
     this.updateInstallQuit = active
   }
 
-  stop(): Promise<void> {
+  stop(reason: RuntimeStopReason = 'manual-restart'): Promise<void> {
     if (this.stopPromise) return this.stopPromise
     let tracked: Promise<void>
-    tracked = this.stopManagedRuntimes().finally(() => {
+    tracked = this.stopManagedRuntimes(reason).finally(() => {
       if (this.stopPromise === tracked) this.stopPromise = null
     })
     this.stopPromise = tracked
@@ -45,7 +47,7 @@ export class ManagedRuntimeShutdownCoordinator {
     this.requestQuit()
     if (this.stoppedForQuit) return
     try {
-      await this.stop()
+      await this.stop(this.updateInstallQuit ? 'update-relaunch' : 'app-quit')
     } finally {
       // Quit remains terminal even when one adapter reports a stop error: the
       // supervisor must never spawn a replacement child after this point.

@@ -17,6 +17,7 @@ import {
   startKunChild,
   stopKunChildAndWait
 } from '../kun-process'
+import type { RuntimeStopReason } from './kun-process-controller'
 import { getKunBaseUrl } from '../kun-base-url'
 
 const KUN_RUNTIME_ID = 'kun' as const
@@ -46,8 +47,8 @@ export const kunRuntimeAdapter = {
     return startKunChild(settings)
   },
 
-  stopAndWait(): Promise<void> {
-    return stopKunChildAndWait()
+  stopAndWait(reason?: RuntimeStopReason): Promise<void> {
+    return stopKunChildAndWait(reason)
   },
 
   isChildRunning(): boolean {

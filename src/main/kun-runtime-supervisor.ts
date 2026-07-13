@@ -104,6 +104,7 @@ export class KunRuntimeSupervisor<Settings> {
   private watchdogTickInFlight = false
   private crashRecoveryInFlight = false
   private currentStatus: KunRuntimeStatus | null = null
+  private latestExitGeneration = 0
 
   constructor(options: {
     deps: KunRuntimeSupervisorDeps<Settings>
@@ -168,7 +169,18 @@ export class KunRuntimeSupervisor<Settings> {
     }
   }
 
-  handleUnexpectedExit(info: { code: number | null; signal: NodeJS.Signals | null; stderrTail: string }): void {
+  handleUnexpectedExit(info: {
+    code: number | null
+    signal: NodeJS.Signals | null
+    stderrTail: string
+    generation?: number
+  }): void {
+    // A delayed exit callback from an older child must not replace the status
+    // (or start another recovery loop) for a newer generation.
+    if (typeof info.generation === 'number') {
+      if (info.generation <= this.latestExitGeneration) return
+      this.latestExitGeneration = info.generation
+    }
     void this.recoverFromCrash(info).catch((error: unknown) => {
       this.deps.error('kun-supervisor', 'supervised restart crashed', {
         message: error instanceof Error ? error.message : String(error)
@@ -241,13 +253,14 @@ export class KunRuntimeSupervisor<Settings> {
     code: number | null
     signal: NodeJS.Signals | null
     stderrTail: string
+    generation?: number
   }): Promise<void> {
     if (this.deps.isStopped()) return
     const exitLabel = info.signal ? `signal ${info.signal}` : `code ${info.code ?? 'unknown'}`
     this.publish({
       state: 'crashed',
       source: 'supervisor',
-      message: `Kun exited unexpectedly (${exitLabel}).`,
+      message: `Kun exited unexpectedly (${exitLabel}${typeof info.generation === 'number' ? `, generation ${info.generation}` : ''}).`,
       stderrTail: info.stderrTail
     })
     if (this.crashRecoveryInFlight) return
