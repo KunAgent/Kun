@@ -72,6 +72,19 @@ describe('crash-loop breaker', () => {
     expect(state).toEqual(createCrashLoopState())
   })
 
+  it('does not reset the stable window on repeated readiness probes', () => {
+    let state = unexpected(createCrashLoopState(), 0)
+    state = unexpected(state, 1_000)
+    state = unexpected(state, 2_000)
+
+    state = reduceCrashLoop(state, { type: 'runtime-ready', at: 10_000 }, policy)
+    state = reduceCrashLoop(state, { type: 'runtime-ready', at: 60_000 }, policy)
+    expect(state.stableSince).toBe(10_000)
+
+    state = reduceCrashLoop(state, { type: 'runtime-stable', at: 130_000 }, policy)
+    expect(state).toEqual(createCrashLoopState())
+  })
+
   it('does not count exits outside the sliding window', () => {
     let state = unexpected(createCrashLoopState(), 0)
     state = unexpected(state, 60_000)
