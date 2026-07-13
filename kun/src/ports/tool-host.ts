@@ -112,8 +112,8 @@ export type ToolHostContext = {
   approvalPolicy: ApprovalPolicy
   /** Filesystem/command sandbox selected for this turn. Defaults at execution time for old callers. */
   sandboxMode?: SandboxMode
-  /** Set only for one call after the user approved an outside-workspace path. */
-  allowExternalPaths?: boolean
+  /** Exact lexical paths approved for this call; never a directory-wide grant. */
+  approvedExternalPaths?: readonly string[]
   /** Kun runtime data root; used to allow sandbox-safe reads of background shell output files. */
   runtimeDataDir?: string
   /** Store used to offload oversized tool results from model context. */

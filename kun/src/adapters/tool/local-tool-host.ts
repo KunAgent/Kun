@@ -205,8 +205,8 @@ export class LocalToolHost implements ToolHost {
     }
     // A configured hook may auto-approve ordinary tool calls, but it must not
     // bypass an explicit user decision for an external side effect.
-    const externalPath = externalPathForApproval(tool, activeCall, context)
-    const externalPathApproval = externalPath && context.approvalPolicy !== 'never'
+    const externalPaths = externalPathForApproval(tool, activeCall, context)
+    const externalPathApproval = externalPaths.length > 0 && context.approvalPolicy !== 'never'
     const needsApproval = tool.requiresExplicitApproval ||
       Boolean(externalPathApproval) ||
       (!preHooks.autoApproved && this.requiresApproval(tool, activeCall, context))
@@ -291,7 +291,7 @@ export class LocalToolHost implements ToolHost {
     }
     this.operationJournal.begin(operationIdentity)
     const executionContext = externalPathApproval
-      ? { ...context, allowExternalPaths: true }
+      ? { ...context, approvedExternalPaths: externalPaths }
       : context
     let result: Awaited<ReturnType<LocalTool['execute']>>
     try {

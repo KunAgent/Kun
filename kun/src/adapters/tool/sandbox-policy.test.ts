@@ -1,3 +1,4 @@
+import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { canWritePath, externalPathForApproval, sandboxBlockForTool } from './sandbox-policy.js'
 
@@ -22,20 +23,25 @@ describe('sandbox policy', () => {
       { toolKind: 'file_change' },
       { arguments: { path: '../outside.txt' } },
       { workspace: '/repo/workspace', sandboxMode: 'workspace-write' }
-    )).toBe('../outside.txt')
+    )).toEqual([resolve('/repo/outside.txt')])
     expect(externalPathForApproval(
       { toolKind: 'file_change' },
       { arguments: { path: 'src/app.ts' } },
       { workspace: '/repo/workspace', sandboxMode: 'workspace-write' }
-    )).toBeUndefined()
+    )).toEqual([])
   })
 
   it('allows a path only when the current call carries an approved grant', () => {
     expect(canWritePath('/repo/other/app.ts', {
       workspace: '/repo/workspace',
       sandboxMode: 'workspace-write',
-      allowExternalPaths: true
+      approvedExternalPaths: ['/repo/other/app.ts']
     })).toEqual({ ok: true })
+    expect(canWritePath('/repo/other/second.ts', {
+      workspace: '/repo/workspace',
+      sandboxMode: 'workspace-write',
+      approvedExternalPaths: ['/repo/other/app.ts']
+    })).toMatchObject({ ok: false })
   })
 
   it('keeps command execution blocked in workspace-write mode', () => {

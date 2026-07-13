@@ -102,7 +102,8 @@ export async function resolveWorkspacePath(
   // "path escapes the workspace root".
   if (
     !options.enforceWorkspaceBoundary &&
-    (effectiveSandboxMode(context) === 'danger-full-access' || context.allowExternalPaths === true)
+    (effectiveSandboxMode(context) === 'danger-full-access' ||
+      context.approvedExternalPaths?.some((path) => samePath(path, lexicalAbsolutePath)) === true)
   ) {
     return {
       workspaceRoot: root,
@@ -131,6 +132,15 @@ export async function resolveWorkspacePath(
     absolutePath: lexicalAbsolutePath,
     relativePath: normalizeToolPath(relative(root, lexicalAbsolutePath) || '.')
   }
+}
+
+function samePath(left: string, right: string): boolean {
+  const normalize = (value: string) => resolve(value).replace(/[\\/]+$/, '')
+  const normalizedLeft = normalize(left)
+  const normalizedRight = normalize(right)
+  return process.platform === 'win32'
+    ? normalizedLeft.toLowerCase() === normalizedRight.toLowerCase()
+    : normalizedLeft === normalizedRight
 }
 
 async function safeRealpath(target: string): Promise<string | null> {

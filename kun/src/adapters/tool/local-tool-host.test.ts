@@ -1,7 +1,9 @@
+import { resolve as resolvePath } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import { LocalToolHost, echoTool, userInputTool } from './local-tool-host.js'
 import type { ToolHostContext } from '../../ports/tool-host.js'
 import { InMemoryArtifactStore } from '../../artifacts/artifact-store.js'
+import { resolveWorkspacePath } from './builtin-tool-utils.js'
 
 describe('LocalToolHost approval policy', () => {
   it('asks before auto tools when approval policy is always', async () => {
@@ -151,8 +153,11 @@ describe('LocalToolHost approval policy', () => {
 
   it('asks before an external workspace-write path and scopes the grant to that call', async () => {
     const awaitApproval = vi.fn(async () => 'allow' as const)
-    const execute = vi.fn(async (_args: Record<string, unknown>, context: ToolHostContext) => ({
-      output: { allowExternalPaths: context.allowExternalPaths === true }
+    const execute = vi.fn(async (args: Record<string, unknown>, context: ToolHostContext) => ({
+      output: {
+        approvedExternalPaths: context.approvedExternalPaths,
+        requestedPath: args.path
+      }
     }))
     const host = new LocalToolHost({ tools: [LocalToolHost.defineTool({
       name: 'write_external',
@@ -182,10 +187,15 @@ describe('LocalToolHost approval policy', () => {
     )
     expect(execute).toHaveBeenCalledWith(
       { path: '../outside.txt' },
-      expect.objectContaining({ allowExternalPaths: true }),
+      expect.objectContaining({ approvedExternalPaths: [resolvePath('/tmp/outside.txt')] }),
       expect.any(Function)
     )
-    expect(result.item).toMatchObject({ output: { allowExternalPaths: true } })
+    expect(result.item).toMatchObject({
+      output: {
+        approvedExternalPaths: [resolvePath('/tmp/outside.txt')],
+        requestedPath: '../outside.txt'
+      }
+    })
   })
 
   it('does not execute an external path when the per-operation approval is denied', async () => {
@@ -214,6 +224,40 @@ describe('LocalToolHost approval policy', () => {
 
     expect(execute).not.toHaveBeenCalled()
     expect(result.item).toMatchObject({ isError: true, output: { code: 'approval_denied', reason: 'not now' } })
+  })
+
+  it('does not expand an approved external path to a sibling path', async () => {
+    const execute = vi.fn(async (_args: Record<string, unknown>, context: ToolHostContext) => {
+      await expect(resolveWorkspacePath('../outside.txt', context)).resolves.toMatchObject({
+        absolutePath: resolvePath('/tmp/outside.txt')
+      })
+      await expect(resolveWorkspacePath('../sibling.txt', context)).rejects.toThrow()
+      return { output: { ok: true } }
+    })
+    const host = new LocalToolHost({ tools: [LocalToolHost.defineTool({
+      name: 'write_external_exact',
+      description: 'checks that an external approval remains path-scoped',
+      inputSchema: { type: 'object' },
+      toolKind: 'file_change',
+      policy: 'auto',
+      execute
+    })] })
+
+    const result = await host.execute(
+      { callId: 'call_external_exact', toolName: 'write_external_exact', arguments: { path: '../outside.txt' } },
+      {
+        threadId: 'thread_1',
+        turnId: 'turn_1',
+        workspace: '/tmp/workspace',
+        approvalPolicy: 'auto',
+        sandboxMode: 'workspace-write',
+        abortSignal: new AbortController().signal,
+        awaitApproval: vi.fn(async () => 'allow' as const)
+      }
+    )
+
+    expect(execute).toHaveBeenCalledTimes(1)
+    expect(result.item).toMatchObject({ output: { ok: true } })
   })
 
   it('keeps user input tools advertised without a GUI gate but rejects execution', async () => {

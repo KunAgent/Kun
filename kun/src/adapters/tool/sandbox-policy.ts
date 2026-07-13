@@ -34,18 +34,21 @@ export function externalPathForApproval(
   tool: Pick<LocalTool, 'toolKind'>,
   call: Pick<ToolCallLike, 'arguments'>,
   context: Pick<ToolHostContext, 'workspace' | 'sandboxMode'>
-): string | undefined {
+): string[] {
   if (tool.toolKind !== 'file_change' || effectiveSandboxMode(context) !== 'workspace-write') {
-    return undefined
+    return []
   }
   const root = workspaceRoot(context.workspace)
+  const externalPaths: string[] = []
   for (const name of PATH_ARGUMENT_NAMES) {
     const value = call.arguments[name]
     if (typeof value !== 'string' || !value.trim()) continue
     const candidate = isAbsolute(value) ? resolve(value) : resolve(root, value)
-    if (!isPathInsideOrEqual(root, candidate)) return value
+    if (!isPathInsideOrEqual(root, candidate) && !externalPaths.some((path) => samePath(path, candidate))) {
+      externalPaths.push(candidate)
+    }
   }
-  return undefined
+  return externalPaths
 }
 
 export function effectiveSandboxMode(
@@ -97,7 +100,7 @@ export function sandboxBlockForTool(
 
 export function canWritePath(
   absolutePath: string,
-  context: Pick<ToolHostContext, 'workspace' | 'sandboxMode' | 'allowExternalPaths'>
+  context: Pick<ToolHostContext, 'workspace' | 'sandboxMode' | 'approvedExternalPaths'>
 ): { ok: true } | { ok: false; block: SandboxBlock } {
   const mode = effectiveSandboxMode(context)
   if (mode === 'danger-full-access') return { ok: true }
@@ -120,11 +123,10 @@ export function canWritePath(
     }
   }
 
-  if (context.allowExternalPaths === true) return { ok: true }
-
   const root = workspaceRoot(context.workspace)
   const resolvedPath = isAbsolute(absolutePath) ? resolve(absolutePath) : resolve(root, absolutePath)
   if (isPathInsideOrEqual(root, resolvedPath)) return { ok: true }
+  if (context.approvedExternalPaths?.some((path) => samePath(path, resolvedPath))) return { ok: true }
   return {
     ok: false,
     block: {
@@ -136,10 +138,19 @@ export function canWritePath(
 
 export function assertCanWritePath(
   absolutePath: string,
-  context: Pick<ToolHostContext, 'workspace' | 'sandboxMode' | 'allowExternalPaths'>
+  context: Pick<ToolHostContext, 'workspace' | 'sandboxMode' | 'approvedExternalPaths'>
 ): void {
   const decision = canWritePath(absolutePath, context)
   if (!decision.ok) throw new Error(decision.block.message)
+}
+
+function samePath(left: string, right: string): boolean {
+  const normalize = (value: string) => resolve(value).replace(/[\\/]+$/, '')
+  const normalizedLeft = normalize(left)
+  const normalizedRight = normalize(right)
+  return process.platform === 'win32'
+    ? normalizedLeft.toLowerCase() === normalizedRight.toLowerCase()
+    : normalizedLeft === normalizedRight
 }
 
 function isPathInsideOrEqual(root: string, candidate: string): boolean {
