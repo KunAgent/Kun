@@ -2,6 +2,7 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import { Readable } from 'node:stream'
 import type { Router } from './router.js'
 import { dispatchRequest } from './http-server.js'
+import type { FaultInjectionController } from '../services/fault-injection-controller.js'
 
 export type NodeHttpServerHandle = {
   server: Server
@@ -14,9 +15,10 @@ export async function startNodeHttpServer(input: {
   router: Router
   host: string
   port: number
+  faultInjection?: FaultInjectionController
 }): Promise<NodeHttpServerHandle> {
   const server = createServer((request, response) => {
-    void handleNodeRequest(input.router, request, response)
+    void handleNodeRequest(input.router, request, response, input.faultInjection)
   })
   await new Promise<void>((resolve, reject) => {
     server.once('error', reject)
@@ -46,13 +48,31 @@ export async function startNodeHttpServer(input: {
 async function handleNodeRequest(
   router: Router,
   incoming: IncomingMessage,
-  outgoing: ServerResponse
+  outgoing: ServerResponse,
+  faultInjection?: FaultInjectionController
 ): Promise<void> {
   try {
+    const timeout = await faultInjection?.activate('http-timeout')
+    if (timeout) {
+      sendInjectedResponse(outgoing, 504, { code: 'fault_injected', kind: timeout.kind })
+      return
+    }
+    const rateLimit = await faultInjection?.activate('http-429')
+    if (rateLimit) {
+      outgoing.setHeader('retry-after', '1')
+      sendInjectedResponse(outgoing, 429, { code: 'fault_injected', kind: rateLimit.kind })
+      return
+    }
+    const invalidJson = await faultInjection?.activate('invalid-json')
+    if (invalidJson) {
+      outgoing.writeHead(200, { 'content-type': 'application/json; charset=utf-8' })
+      outgoing.end('{"fault_injected":')
+      return
+    }
     const adapted = toFetchRequest(incoming, outgoing)
     try {
       const response = await dispatchRequest(router, adapted.request)
-      await writeFetchResponse(outgoing, response)
+      await writeFetchResponse(outgoing, response, faultInjection)
     } finally {
       adapted.dispose()
     }
@@ -64,6 +84,11 @@ async function handleNodeRequest(
     outgoing.writeHead(500, { 'content-type': 'application/json; charset=utf-8' })
     outgoing.end(body)
   }
+}
+
+function sendInjectedResponse(outgoing: ServerResponse, status: number, body: unknown): void {
+  outgoing.writeHead(status, { 'content-type': 'application/json; charset=utf-8' })
+  outgoing.end(JSON.stringify(body))
 }
 
 function toFetchRequest(incoming: IncomingMessage, outgoing: ServerResponse): {
@@ -109,7 +134,11 @@ function toFetchRequest(incoming: IncomingMessage, outgoing: ServerResponse): {
   }
 }
 
-async function writeFetchResponse(outgoing: ServerResponse, response: Response): Promise<void> {
+async function writeFetchResponse(
+  outgoing: ServerResponse,
+  response: Response,
+  faultInjection?: FaultInjectionController
+): Promise<void> {
   outgoing.statusCode = response.status
   response.headers.forEach((value, key) => {
     outgoing.setHeader(key, value)
@@ -118,6 +147,7 @@ async function writeFetchResponse(outgoing: ServerResponse, response: Response):
     outgoing.end()
     return
   }
+  const isSse = response.headers.get('content-type')?.toLowerCase().includes('text/event-stream') === true
   const reader = response.body.getReader()
   try {
     while (true) {
@@ -125,6 +155,10 @@ async function writeFetchResponse(outgoing: ServerResponse, response: Response):
       if (done) break
       if (value && !outgoing.write(Buffer.from(value))) {
         await waitForDrain(outgoing)
+      }
+      if (isSse && await faultInjection?.activate('sse-disconnect')) {
+        outgoing.destroy()
+        return
       }
     }
   } finally {

@@ -115,6 +115,7 @@ import { stopBashSessionById, createBashLocalTool } from '../adapters/tool/built
 import { createBackgroundShellTool } from '../adapters/tool/background-shell-tool.js'
 import { createSecretEncryptor, defaultSecretCommandRunner } from '../security/secret-store.js'
 import type { LocalTool } from '../adapters/tool/local-tool-host.js'
+import type { FaultInjectionController } from '../services/fault-injection-controller.js'
 import { InMemoryPublisherTrustStore } from '../supplychain/publisher-trust-store.js'
 import {
   CURRENT_MANIFEST_VERSION,
@@ -197,6 +198,8 @@ export type KunServeRuntimeOptions = {
   /** Design-quality linter config; drives the builtin PostToolUse hook. */
   quality?: QualityConfig
   startedAt?: string
+  /** Test-only fault injection; absent in normal production startup. */
+  faultInjection?: FaultInjectionController
   /** Test/embedding override; production uses the bundled Host runner. */
   extensionHostRunnerPath?: string
 }
@@ -1757,7 +1760,8 @@ export async function startKunServe(
   const server = await startNodeHttpServer({
     router,
     host: options.host,
-    port: options.port
+    port: options.port,
+    ...(options.faultInjection ? { faultInjection: options.faultInjection } : {})
   })
   // Background sweep after listen: settle turns orphaned by a crash so
   // clients stop spinning on them, without delaying readiness. Then resume

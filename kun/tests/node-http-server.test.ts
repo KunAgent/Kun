@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { startNodeHttpServer } from '../src/server/node-http-server.js'
 import { readJsonBody } from '../src/server/read-json-body.js'
 import { Router } from '../src/server/router.js'
+import { FaultInjectionController, faultInjectionSpecForTests } from '../src/services/fault-injection-controller.js'
 
 describe('Node HTTP server', () => {
   it('hides internal exception details in 500 responses', async () => {
@@ -95,5 +96,68 @@ describe('Node HTTP server', () => {
       server.close(),
       new Promise<void>((_, reject) => setTimeout(() => reject(new Error('server close timed out')), 1_000))
     ])).resolves.toBeUndefined()
+  })
+
+  it.each([
+    ['http-429', 429],
+    ['http-timeout', 504]
+  ] as const)('injects %s at the HTTP boundary', async (kind, status) => {
+    const router = new Router()
+    router.add('GET', '/ok', () => new Response(JSON.stringify({ ok: true }), {
+      headers: { 'content-type': 'application/json' }
+    }))
+    const faultInjection = new FaultInjectionController()
+    faultInjection.configure(faultInjectionSpecForTests(kind))
+    const server = await startNodeHttpServer({ router, host: '127.0.0.1', port: 0, faultInjection })
+    try {
+      const response = await fetch(`http://${server.host}:${server.port}/ok`)
+      expect(response.status).toBe(status)
+      expect(await response.json()).toMatchObject({ code: 'fault_injected', kind })
+    } finally {
+      await server.close()
+    }
+  })
+
+  it('can return malformed JSON for parser recovery tests', async () => {
+    const router = new Router()
+    router.add('GET', '/ok', () => new Response('{"ok":true}'))
+    const faultInjection = new FaultInjectionController()
+    faultInjection.configure(faultInjectionSpecForTests('invalid-json'))
+    const server = await startNodeHttpServer({ router, host: '127.0.0.1', port: 0, faultInjection })
+    try {
+      const response = await fetch(`http://${server.host}:${server.port}/ok`)
+      expect(response.status).toBe(200)
+      expect(await response.text()).toBe('{"fault_injected":')
+    } finally {
+      await server.close()
+    }
+  })
+
+  it('disconnects an SSE response after the first chunk when configured', async () => {
+    const router = new Router()
+    router.add('GET', '/events', () => new Response(new ReadableStream({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode('data: first\\n\\n'))
+        controller.enqueue(new TextEncoder().encode('data: second\\n\\n'))
+      }
+    }), { headers: { 'content-type': 'text/event-stream' } }))
+    const faultInjection = new FaultInjectionController()
+    faultInjection.configure(faultInjectionSpecForTests('sse-disconnect'))
+    const server = await startNodeHttpServer({ router, host: '127.0.0.1', port: 0, faultInjection })
+
+    try {
+      let disconnected = false
+      try {
+        const response = await fetch(`http://${server.host}:${server.port}/events`)
+        const reader = response.body!.getReader()
+        await expect(reader.read()).resolves.toMatchObject({ done: false })
+        await reader.read()
+      } catch {
+        disconnected = true
+      }
+      expect(disconnected).toBe(true)
+    } finally {
+      await server.close()
+    }
   })
 })

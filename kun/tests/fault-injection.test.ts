@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { normalizeFaultInjectionSpec, shouldInjectFault } from '../src/contracts/fault-injection.js'
+import { FaultInjectionController, faultInjectionSpecForTests } from '../src/services/fault-injection-controller.js'
 
 describe('fault injection contract', () => {
   it('defaults to disabled, one activation, and no delay', () => {
@@ -51,5 +52,29 @@ describe('fault injection contract', () => {
       expect(shouldInjectFault({ ...result.value, enabled: true }, Number.NaN)).toBe(false)
       expect(shouldInjectFault({ kind: 'unknown', enabled: true, once: false, delayMs: 0 }, 0)).toBe(false)
     }
+  })
+
+  it('activates a configured fault once and resets after reconfiguration', async () => {
+    const controller = new FaultInjectionController()
+    controller.configure(faultInjectionSpecForTests('http-429'))
+    await expect(controller.activate('http-429')).resolves.toMatchObject({ kind: 'http-429', activation: 0 })
+    await expect(controller.activate('http-429')).resolves.toBeNull()
+    await expect(controller.activate('http-timeout')).resolves.toBeNull()
+    controller.configure(faultInjectionSpecForTests('http-429'))
+    await expect(controller.activate('http-429')).resolves.toMatchObject({ activation: 0 })
+  })
+
+  it('honours bounded delay and aborts before activation completes', async () => {
+    const controller = new FaultInjectionController()
+    controller.configure(faultInjectionSpecForTests('http-timeout', { delayMs: 20 }))
+    const started = Date.now()
+    await controller.activate('http-timeout')
+    expect(Date.now() - started).toBeGreaterThanOrEqual(10)
+
+    controller.configure(faultInjectionSpecForTests('http-timeout', { delayMs: 60_000 }))
+    const abort = new AbortController()
+    const pending = controller.activate('http-timeout', abort.signal)
+    abort.abort()
+    await expect(pending).rejects.toThrow('aborted')
   })
 })
