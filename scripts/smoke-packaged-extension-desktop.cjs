@@ -693,16 +693,22 @@ async function waitForContributionAndClick({
   timeoutMs,
   processState: readProcessState
 }) {
-  const selector = `[data-contribution-id="${contributionId}"]`
+  // Contributions also decorate their wrapper and webview with this id. The
+  // smoke must click the actual workbench control, otherwise querySelector
+  // can hit a non-interactive wrapper and no guest target is created.
+  const selector = `button[data-contribution-id="${contributionId}"]`
   const point = await pollUntil(async () => {
     assertDesktopProcessRunning(readProcessState())
     const evaluated = await cdp.send('Runtime.evaluate', {
       expression: `(() => {
-        const element = document.querySelector(${JSON.stringify(selector)})
-        if (!(element instanceof HTMLElement) || element.matches(':disabled')) return null
+        const element = [...document.querySelectorAll(${JSON.stringify(selector)})].find((candidate) => {
+          if (!(candidate instanceof HTMLElement) || candidate.matches(':disabled')) return false
+          const rectangle = candidate.getBoundingClientRect()
+          return rectangle.width > 0 && rectangle.height > 0
+        })
+        if (!(element instanceof HTMLElement)) return null
         element.scrollIntoView({ block: 'center', inline: 'center' })
         const rectangle = element.getBoundingClientRect()
-        if (rectangle.width <= 0 || rectangle.height <= 0) return null
         return {
           x: rectangle.left + rectangle.width / 2,
           y: rectangle.top + rectangle.height / 2
