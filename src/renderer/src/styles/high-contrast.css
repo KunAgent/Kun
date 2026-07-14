@@ -1,0 +1,26 @@
+/* Keep controls and focus indicators visible when Windows forced-colors is active. */
+@media (forced-colors: active) {
+  button,
+  input,
+  select,
+  textarea,
+  [role='button'],
+  [role='tab'],
+  [role='menuitem'] {
+    forced-color-adjust: auto;
+    border-color: ButtonText;
+    color: ButtonText;
+    background-color: Canvas;
+  }
+
+  :focus-visible {
+    outline: 2px solid Highlight;
+    outline-offset: 2px;
+  }
+
+  [aria-disabled='true'],
+  :disabled {
+    color: GrayText;
+    border-color: GrayText;
+  }
+}
