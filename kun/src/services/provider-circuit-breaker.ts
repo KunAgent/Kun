@@ -53,7 +53,10 @@ export function decideProviderRequest(
     if (now - (normalized.openedAt ?? now) < limits.openDurationMs) {
       return { allowed: false, probe: false, reason: 'open', snapshot: normalized }
     }
-    const next = { ...normalized, state: 'half-open' as const, probeInFlight: false }
+    // Claim the single half-open probe in the returned snapshot. Callers can
+    // persist this decision before starting I/O, so concurrent admissions do
+    // not all observe an available probe after the open window expires.
+    const next = { ...normalized, state: 'half-open' as const, probeInFlight: true }
     return { allowed: true, probe: true, reason: 'half-open-probe', snapshot: next }
   }
   if (normalized.state === 'half-open') {

@@ -15,7 +15,8 @@ describe('provider circuit breaker policy', () => {
     expect(decideProviderRequest(state, 50, policy).reason).toBe('open')
     const probe = decideProviderRequest(state, 121, policy)
     expect(probe).toMatchObject({ allowed: true, probe: true, reason: 'half-open-probe' })
-    expect(decideProviderRequest({ ...probe.snapshot, probeInFlight: true }, 122, policy).reason)
+    expect(probe.snapshot.probeInFlight).toBe(true)
+    expect(decideProviderRequest(probe.snapshot, 122, policy).reason)
       .toBe('half-open-busy')
   })
 
