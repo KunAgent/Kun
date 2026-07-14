@@ -8,7 +8,10 @@ import {
   COMMON_WORKSPACE_SKILL_DIRS,
   type CommonSkillDir
 } from '../../shared/skill-dirs'
-import { expandHomePath } from './workspace-service'
+// Keep the skill catalog usable from Node-only migration/config tests. The
+// workspace barrel also exports Electron-backed editors and files, which
+// unnecessarily requires the Electron binary during CI.
+import { expandHomePath } from './workspace-paths'
 
 export type GuiSkillScope = 'project' | 'global'
 
