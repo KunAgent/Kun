@@ -693,16 +693,21 @@ async function waitForContributionAndClick({
   timeoutMs,
   processState: readProcessState
 }) {
-  const selector = `[data-contribution-id="${contributionId}"]`
+  // Contributions also decorate wrappers and webviews with this id. Target
+  // the actual workbench control so the click creates the guest target.
+  const selector = `button[data-contribution-id="${contributionId}"]`
   const point = await pollUntil(async () => {
     assertDesktopProcessRunning(readProcessState())
     const evaluated = await cdp.send('Runtime.evaluate', {
       expression: `(() => {
-        const element = document.querySelector(${JSON.stringify(selector)})
-        if (!(element instanceof HTMLElement) || element.matches(':disabled')) return null
+        const element = [...document.querySelectorAll(${JSON.stringify(selector)})].find((candidate) => {
+          if (!(candidate instanceof HTMLElement) || candidate.matches(':disabled')) return false
+          const rectangle = candidate.getBoundingClientRect()
+          return rectangle.width > 0 && rectangle.height > 0
+        })
+        if (!(element instanceof HTMLElement)) return null
         element.scrollIntoView({ block: 'center', inline: 'center' })
         const rectangle = element.getBoundingClientRect()
-        if (rectangle.width <= 0 || rectangle.height <= 0) return null
         return {
           x: rectangle.left + rectangle.width / 2,
           y: rectangle.top + rectangle.height / 2
@@ -739,6 +744,34 @@ async function waitForContributionAndClick({
     buttons: 0,
     clickCount: 1
   }, sessionId)
+
+  // A packaged Chromium window can accept the pointer sequence before its
+  // webview guest is attached. Poll briefly, then use one guarded DOM click;
+  // never send a second pointer sequence that could toggle the control twice.
+  try {
+    await pollUntil(async () => {
+      const { targetInfos = [] } = await cdp.send('Target.getTargets')
+      return targetInfos.some(isExtensionGuestTarget)
+    }, { timeoutMs: Math.min(timeoutMs, 1_500), description: 'guest target after pointer click' })
+    return
+  } catch {
+    const evaluated = await cdp.send('Runtime.evaluate', {
+      expression: `(() => {
+        const element = [...document.querySelectorAll(${JSON.stringify(selector)})].find((candidate) => {
+          if (!(candidate instanceof HTMLElement) || candidate.matches(':disabled')) return false
+          const rectangle = candidate.getBoundingClientRect()
+          return rectangle.width > 0 && rectangle.height > 0
+        })
+        if (!(element instanceof HTMLElement)) return false
+        element.click()
+        return true
+      })()`,
+      returnByValue: true
+    }, sessionId)
+    if (evaluationValue(evaluated, `activating ${selector}`) !== true) {
+      throw new Error(`Visible packaged contribution ${contributionId} disappeared before fallback activation`)
+    }
+  }
 }
 
 async function inspectGuestSecurity({
