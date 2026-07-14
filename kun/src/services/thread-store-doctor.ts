@@ -298,7 +298,11 @@ function isMissing(error: unknown): boolean {
 async function readBoundedFile(path: string): Promise<string> {
   const fileStat = await stat(path)
   if (fileStat.size > MAX_ARTIFACT_BYTES) throw new Error('artifact_too_large')
-  return readFile(path, 'utf8')
+  const raw = await readFile(path, 'utf8')
+  // The file can grow between stat and readFile. Re-check the decoded byte
+  // length so a concurrent writer cannot bypass the diagnostic bound.
+  if (Buffer.byteLength(raw, 'utf8') > MAX_ARTIFACT_BYTES) throw new Error('artifact_too_large')
+  return raw
 }
 
 type ReadonlyIndex = {
