@@ -4,13 +4,16 @@ import enCommon from './locales/en/common.json'
 import zhCommon from './locales/zh/common.json'
 import enSettings from './locales/en/settings.json'
 import zhSettings from './locales/zh/settings.json'
+import ruCommon from './locales/ru/common.json'
+import ruSettings from './locales/ru/settings.json'
 
 void i18n.use(initReactI18next).init({
   resources: {
     en: { common: enCommon, settings: enSettings },
-    zh: { common: zhCommon, settings: zhSettings }
+    zh: { common: zhCommon, settings: zhSettings },
+    ru: { common: ruCommon, settings: ruSettings }
   },
-  lng: 'en',
+  lng: 'ru',
   fallbackLng: 'en',
   interpolation: { escapeValue: false },
   defaultNS: 'common',

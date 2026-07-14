@@ -39,7 +39,7 @@ import {
   optionalTrimmedString,
   trimmedString
 } from './common'
-const localeSchema = z.enum(['en', 'zh'])
+const localeSchema = z.enum(['en', 'zh', 'ru'])
 const themeSchema = z.enum(['system', 'light', 'dark'])
 const uiFontScaleSchema = z.union([
   z.number().min(UI_FONT_SCALE_MIN).max(UI_FONT_SCALE_MAX),
