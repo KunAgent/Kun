@@ -1296,6 +1296,40 @@ describe('Kun built-in tools', () => {
     expect(String(output.content)).toContain('Use offset=4 to continue')
   })
 
+  it('allows an edit after a read window reaches EOF but omits leading lines', async () => {
+    await writeFile(join(workspace, 'paged-edit.txt'), 'one\ntwo\nthree\nfour', 'utf8')
+    const guardedHost = new LocalToolHost({
+      tools: buildCodingBuiltinLocalTools(),
+      readTracker: true
+    })
+    const context = buildContext(workspace)
+
+    const read = await guardedHost.execute(
+      {
+        callId: 'call_read_paged_edit',
+        toolName: 'read',
+        arguments: { path: 'paged-edit.txt', offset: 3 }
+      },
+      context
+    )
+    expect(read.item).toMatchObject({
+      kind: 'tool_result',
+      isError: false,
+      output: { start_line: 3, end_line: 4, total_lines: 4, truncated: false }
+    })
+
+    const edit = await guardedHost.execute(
+      {
+        callId: 'call_edit_paged_edit',
+        toolName: 'edit',
+        arguments: { path: 'paged-edit.txt', oldText: 'one', newText: 'ONE' }
+      },
+      context
+    )
+    expect(edit.item).toMatchObject({ kind: 'tool_result', isError: false })
+    await expect(readFile(join(workspace, 'paged-edit.txt'), 'utf8')).resolves.toContain('ONE')
+  })
+
   it('reads supported images with pi-style structured image metadata', async () => {
     const png = Buffer.from([
       0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,

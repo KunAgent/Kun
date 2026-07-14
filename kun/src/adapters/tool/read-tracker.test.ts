@@ -87,6 +87,90 @@ describe('ReadTracker cross-turn edits (#640)', () => {
     if (!verdict.ok) expect(verdict.message).toContain('was not present in the latest read output')
   })
 
+  it('does not block edits based on a bounded read that omitted the target', () => {
+    const tracker = new ReadTracker(normalizeReadTrackerOptions(true))
+    tracker.observeToolResult({
+      ...readResult('turn_a', 'file.ts', 'const value = 42\n'),
+      output: { path: 'file.ts', content: 'const value = 42\n', truncated: true }
+    })
+
+    expect(tracker.validateBeforeTool({
+      context: context('turn_b'),
+      call: editCall('file.ts', 'const other = 99')
+    })).toEqual({ ok: true })
+  })
+
+  it('treats a line window as partial even when the read itself was not byte-truncated', () => {
+    const tracker = new ReadTracker(normalizeReadTrackerOptions(true))
+    tracker.observeToolResult({
+      ...readResult('turn_a', 'file.ts', 'first line\n'),
+      output: {
+        path: 'file.ts',
+        content: 'first line\n',
+        truncated: false,
+        start_line: 1,
+        end_line: 1,
+        total_lines: 4
+      }
+    })
+
+    expect(tracker.validateBeforeTool({
+      context: context('turn_b'),
+      call: editCall('file.ts', 'fourth line')
+    })).toEqual({ ok: true })
+  })
+
+  it('treats a window that reaches EOF as partial when it omitted leading lines', () => {
+    const tracker = new ReadTracker(normalizeReadTrackerOptions(true))
+    tracker.observeToolResult({
+      ...readResult('turn_a', 'file.ts', 'third line\nfourth line\n'),
+      output: {
+        path: 'file.ts',
+        content: 'third line\nfourth line\n',
+        truncated: false,
+        start_line: 3,
+        end_line: 4,
+        total_lines: 4
+      }
+    })
+
+    expect(tracker.validateBeforeTool({
+      context: context('turn_b'),
+      call: editCall('file.ts', 'first line')
+    })).toEqual({ ok: true })
+  })
+
+  it('keeps complete-snapshot validation when line metadata covers the whole file', () => {
+    const tracker = new ReadTracker(normalizeReadTrackerOptions(true))
+    tracker.observeToolResult({
+      ...readResult('turn_a', 'file.ts', 'first line\nsecond line'),
+      output: {
+        path: 'file.ts',
+        content: 'first line\nsecond line',
+        truncated: false,
+        start_line: 1,
+        end_line: 2,
+        total_lines: 2
+      }
+    })
+
+    const verdict = tracker.validateBeforeTool({
+      context: context('turn_b'),
+      call: editCall('file.ts', 'missing line')
+    })
+    expect(verdict.ok).toBe(false)
+  })
+
+  it('uses the same newline and Unicode normalization as the edit matcher', () => {
+    const tracker = new ReadTracker(normalizeReadTrackerOptions(true))
+    tracker.observeToolResult(readResult('turn_a', 'file.ts', 'const label = “ready”\r\n'))
+
+    expect(tracker.validateBeforeTool({
+      context: context('turn_b'),
+      call: editCall('file.ts', 'const label = "ready"')
+    })).toEqual({ ok: true })
+  })
+
   it('allows a cross-turn multi-edit when every oldText fragment is present', () => {
     const tracker = new ReadTracker(normalizeReadTrackerOptions(true))
     tracker.observeToolResult(readResult('turn_a', 'file.ts', 'alpha\nbeta\ngamma\n'))
