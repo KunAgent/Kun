@@ -402,6 +402,20 @@ test('recognizes the workbench and kun-extension guest CDP targets', () => {
   )
 })
 
+test('targets the clickable contribution control instead of its wrapper', () => {
+  const source = readFileSync(join(__dirname, 'smoke-packaged-extension-desktop.cjs'), 'utf8')
+  assert.match(source, /button\[data-contribution-id=/)
+  assert.match(source, /querySelectorAll\(.*\)\]\.find/s)
+  assert.doesNotMatch(source, /const selector = `\[data-contribution-id=/)
+})
+
+test('uses one guarded DOM activation fallback when Linux pointer delivery races the guest attach', () => {
+  const source = readFileSync(join(__dirname, 'smoke-packaged-extension-desktop.cjs'), 'utf8')
+  assert.match(source, /guest target after pointer click/)
+  assert.match(source, /element\.click\(\)/)
+  assert.match(source, /Math\.min\(timeoutMs, 1_500\)/)
+})
+
 test('routes flattened CDP commands and rejects protocol errors', async () => {
   const socket = new FakeWebSocket()
   const cdp = new CdpConnection(socket, 1_000)

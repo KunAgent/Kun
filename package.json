@@ -24,6 +24,7 @@
     "smoke:packaged-extension-appimage": "node ./scripts/smoke-packaged-extension-appimage.cjs",
     "evidence:extension-native": "node ./scripts/write-extension-native-evidence.mjs",
     "check:extensions": "npm run check:extension-schema && npm run check:extension-docs && npm run check:extension-examples && npm run check:extension-release-gate",
+    "ci:reproduce": "node ./scripts/ci-reproduce.cjs",
     "lint": "eslint .",
     "test": "npm run test:extensions && vitest run",
     "test:watch": "vitest",
