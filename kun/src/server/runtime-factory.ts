@@ -147,6 +147,7 @@ import { ExtensionViewSessionService } from '../services/extension-view-session-
 import { ExtensionViewHostGenerationTracker } from '../extensions/view-host-generation-tracker.js'
 import { ExtensionSecretRevealConsentService } from '../services/extension-secret-reveal-consent.js'
 import { ExtensionConfigurationService } from '../services/extension-configuration-service.js'
+import { initializeExtensionServices } from '../seam/index.js' // EXT-SEAM
 
 export type KunServeRuntimeOptions = {
   host: string
@@ -198,6 +199,8 @@ export type KunServeRuntimeOptions = {
   startedAt?: string
   /** Test/embedding override; production uses the bundled Host runner. */
   extensionHostRunnerPath?: string
+  /** EXT-SEAM: extension feature configs (passthrough bag) */
+  extensions?: Record<string, unknown>
 }
 
 export type KunServeHandle = NodeHttpServerHandle & {
@@ -1098,6 +1101,28 @@ export async function createKunServeRuntime(
 	      reason: computerUseProviders.diagnostics.find((diagnostic) => diagnostic.reason)?.reason
 	    }
 	  })
+	  // EXT-SEAM: runtime services
+	  const extensionServices = await initializeExtensionServices(
+	    activeOptions.extensions || {},
+	    {
+	      threadService,
+	      turnService,
+	      usageService,
+	      eventBus,
+	      sessionStore,
+	      events,
+	      approvalGate,
+	      userInputGate,
+	      workspaceInspector,
+	      runtimeToken: activeOptions.runtimeToken,
+	      insecure: activeOptions.insecure,
+	      allocateSeq,
+	      nowIso,
+	      runTurn: () => undefined,
+	      info: () => ({ host: '', port: 0, dataDir: '', model: '', approvalPolicy: 'none', sandboxMode: 'inherit', tokenEconomyMode: false, insecure: false, startedAt: '', pid: 0, memoryUsage: { rssBytes: 0, peakRssBytes: 0, heapUsedBytes: 0, heapTotalBytes: 0, externalBytes: 0 }, capabilities: {} as any, extensions: { enabled: true, apiVersions: [], manifestVersions: [], packageRoot: '', dataRoot: '' } }),
+	      applyConfig: async () => ({ ok: true })
+	    } as any as ServerRuntime
+	  )
 	  let applyConfigQueue: Promise<RuntimeConfigApplyResponse> = Promise.resolve({ ok: true })
 	  const applyConfig = (request: RuntimeConfigApplyRequest): Promise<RuntimeConfigApplyResponse> => {
 	    const task = applyConfigQueue
@@ -1383,6 +1408,7 @@ export async function createKunServeRuntime(
 	      viewSessions: extensionViewSessions,
 	      secretReveals: extensionSecretReveals
 	    },
+	    extensions: extensionServices, // EXT-SEAM: attach feature services
 	    modelClient,
 	    get defaultModel() {
 	      return activeOptions.model

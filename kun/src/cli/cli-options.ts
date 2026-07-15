@@ -73,7 +73,8 @@ export const ServeOptionsSchema = z.object({
   roles: RolesConfigSchema.optional(),
   capabilities: KunCapabilitiesConfig.default(DEFAULT_KUN_CAPABILITIES_CONFIG),
   hooks: HooksConfigSchema.optional(),
-  quality: QualityConfigSchema.optional()
+  quality: QualityConfigSchema.optional(),
+  extensions: z.record(z.string(), z.unknown()).optional() // EXT-SEAM: feature configs (passthrough)
 }).superRefine((value, ctx) => {
   if (value.insecure && !isLoopbackHost(value.host)) {
     ctx.addIssue({

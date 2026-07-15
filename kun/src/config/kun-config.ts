@@ -339,7 +339,8 @@ export const KunServeConfigSchema = z
      * hold the same HTTP credentials shape as the runtime defaults. When
      * empty/absent, the runtime stays single-provider.
      */
-    providers: z.record(z.string().min(1), ServeProviderConfigSchema).optional()
+    providers: z.record(z.string().min(1), ServeProviderConfigSchema).optional(),
+    extensions: z.record(z.string(), z.unknown()).optional() // EXT-SEAM: feature configs (passthrough bag)
   })
   .strict()
 
