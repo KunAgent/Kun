@@ -238,6 +238,7 @@ import {
   listGuiSkills,
   normalizeSkillRootPath
 } from '../services/skill-service'
+import { registerExtensionIpc } from '../seam/index.js' // EXT-SEAM
 
 type GuiUpdaterModule = typeof import('../gui-updater')
 
@@ -1801,6 +1802,9 @@ export function registerAppIpcHandlers(options: RegisterAppIpcHandlersOptions): 
     if (error) return { ok: false, message: error }
     return { ok: true }
   })
+
+  // EXT-SEAM: extension IPC
+  registerExtensionIpc(ipcMain)
 }
 
 function isManagedPptMasterSkillRootDisabled(settings: AppSettingsV1): boolean {

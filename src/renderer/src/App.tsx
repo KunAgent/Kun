@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect } from 'react'
 import { AppErrorBoundary } from './components/AppErrorBoundary'
 import { installIssue781DocumentUsability } from './lib/issue-781-document-usability'
+import { renderExtensionPanels, extensionRoutes } from './seam/index.js' // EXT-SEAM
 
 const AppShell = lazy(() => import('./AppShell'))
 
@@ -21,11 +22,17 @@ function StartupShell(): React.ReactElement {
 }
 
 export default function App(): React.ReactElement {
+  // EXT-SEAM: Extension panels and routes
+  const extPanels = renderExtensionPanels()
+  const extRoutes = extensionRoutes()
+
   return (
     <AppErrorBoundary>
       <DocumentUsabilityLifecycle />
       <Suspense fallback={<StartupShell />}>
         <AppShell />
+        {/* EXT-SEAM: Render extension panels (Stage 0: empty, Stage 1+: will render expert panels) */}
+        {extPanels}
       </Suspense>
     </AppErrorBoundary>
   )

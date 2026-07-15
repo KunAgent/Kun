@@ -5,6 +5,7 @@ import type { ApprovalPolicy, SandboxMode } from '../../kun/src/contracts/policy
 import type { ComputerUseMode } from '../../kun/src/contracts/capabilities.js'
 import type { ModelEndpointFormat } from '../../kun/src/contracts/model-endpoint-format.js'
 import type { ToolOutputLimitsConfig } from '../../kun/src/contracts/tool-output-limits.js'
+import { mergeExtensionSettings } from './seam/index.js' // EXT-SEAM
 export {
   DEFAULT_MODEL_ENDPOINT_FORMAT,
   inferModelEndpointFormatFromUrl,
@@ -1980,6 +1981,9 @@ export type AppSettingsV1 = {
   /** User-disabled skill IDs. Disabled skills are hidden from command surfaces. */
   disabledSkillIds: string[]
 }
+
+// EXT-SEAM: Settings type with extension support
+export type AppSettingsWithExtensions = ReturnType<typeof mergeExtensionSettings>
 
 export type AppSettingsPatch = Partial<
   Omit<AppSettingsV1, 'provider' | 'agents' | 'log' | 'checkpointCleanup' | 'notifications' | 'appBehavior' | 'keyboardShortcuts' | 'write' | 'claw' | 'schedule' | 'design' | 'workflow' | 'guiUpdate' | 'terminal'>
