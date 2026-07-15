@@ -147,7 +147,7 @@ import { ExtensionViewSessionService } from '../services/extension-view-session-
 import { ExtensionViewHostGenerationTracker } from '../extensions/view-host-generation-tracker.js'
 import { ExtensionSecretRevealConsentService } from '../services/extension-secret-reveal-consent.js'
 import { ExtensionConfigurationService } from '../services/extension-configuration-service.js'
-import { initializeExtensionServices } from '../seam/index.js' // EXT-SEAM
+import { initializeExtensionServices, registerExtensionModelClients } from '../seam/index.js' // EXT-SEAM
 
 export type KunServeRuntimeOptions = {
   host: string
@@ -363,6 +363,8 @@ export async function createKunServeRuntime(
   const modelClient = new MultiProviderModelClient(
     buildModelClientRouterInput(activeOptions, modelCapabilities, llmDebug)
   )
+  // EXT-SEAM: model clients (Stage 0 no-op, Stage 3+ will register MoA)
+  registerExtensionModelClients(modelClient)
   const replaceRoutedModelClients = (): void => {
     const next = buildModelClientRouterInput(activeOptions, modelCapabilities, llmDebug)
     for (const [providerId, client] of extensionModelProviders.clientMap()) {

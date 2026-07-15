@@ -6,6 +6,7 @@ import type {
   GuiPlanContext,
   GuiDesignArtifactContext
 } from '../ports/tool-host.js'
+import { emitLoopHook } from '../seam/index.js' // EXT-SEAM
 import type { ModelCapabilityMetadata } from '../contracts/capabilities.js'
 import type { ThreadStore } from '../ports/thread-store.js'
 import type { SessionStore } from '../ports/session-store.js'
@@ -605,6 +606,8 @@ export class AgentLoop {
           status: finalStatus ?? 'failed',
           ...(finalError ? { error: finalError } : {})
         })
+        // EXT-SEAM: afterTurn
+        await emitLoopHook('afterTurn', { threadId, turnId })
       }
     }
   }
@@ -657,6 +660,8 @@ export class AgentLoop {
     turnId: string,
     signal: AbortSignal
   ): Promise<TurnExecutionStatus> {
+    // EXT-SEAM: beforeLoop
+    await emitLoopHook('beforeLoop', { threadId, turnId })
     const configuredLimits = normalizeTurnLimits(this.opts.turnLimits)
     const thread = await this.opts.threadStore.get(threadId)
     const limits = thread?.extensionBudget
@@ -699,6 +704,11 @@ export class AgentLoop {
       }
       await this.drainSteering(threadId, turnId, signal)
       const stepResult = await this.modelStep(threadId, turnId, signal, step, limits.maxToolCallsPerStep)
+      // EXT-SEAM: afterModelSelect
+      const turn = await this.opts.threadStore.get(threadId)?.then(t => t?.turns.find(x => x.id === turnId))
+      if (turn?.model) {
+        await emitLoopHook('afterModelSelect', { threadId, turnId, modelId: turn.model })
+      }
       if (stepResult === 'stop') return 'completed'
       if (stepResult === 'failed') return 'failed'
       if (stepResult === 'aborted') return 'aborted'
@@ -725,6 +735,12 @@ export class AgentLoop {
   }
 
   private async dispatchToolCalls(input: ToolDispatchInput): Promise<ToolDispatchOutcome> {
+    // EXT-SEAM: beforeToolCall (emit for each tool name if available)
+    if (input.calls.length > 0) {
+      for (const call of input.calls) {
+        await emitLoopHook('beforeToolCall', { threadId: input.threadId, turnId: input.turnId, toolName: call.toolName })
+      }
+    }
     const context = createToolExecutionContext(input, {
       memoryEnabled: Boolean(this.opts.memoryStore),
       ...(this.opts.blockedProviderIds ? { blockedProviderIds: this.opts.blockedProviderIds } : {}),
