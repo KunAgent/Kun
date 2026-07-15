@@ -65,6 +65,7 @@ import { ERRORS } from './runtime-error.js'
 import type { ServerRuntime } from './server-runtime.js'
 import { registerExtensionManagementRoutes } from './extensions.js'
 import { registerExtensionPublicRoutes } from './extension-public.js'
+import { registerExtensionRoutes } from '../seam/index.js' // EXT-SEAM
 
 /**
  * Build the full router used by the HTTP server. The router exposes:
@@ -373,6 +374,8 @@ export function buildRouter(runtime: ServerRuntime): Router {
     if (!authorize(request, runtime)) return ERRORS.unauthorized()
     return llmDebugRoundsResponse(runtime)
   })
+  // EXT-SEAM: routes
+  registerExtensionRoutes(router, runtime)
   return router
 }
 

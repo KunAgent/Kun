@@ -155,6 +155,8 @@ export type ServerRuntime = {
    * one-shot internal routes can reuse the runtime's systemPrompt. Optional.
    */
   immutablePrefix?: ImmutablePrefix
+  /** EXT-SEAM: feature services */
+  extensions?: Record<string, unknown>
   runTurn(threadId: string, turnId: string): Promise<'completed' | 'failed' | 'aborted'> | void
   /**
    * Relaunch goal continuation turns for threads whose in-flight turn was
