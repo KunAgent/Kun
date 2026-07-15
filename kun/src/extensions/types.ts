@@ -3,6 +3,18 @@ import type {
   ExtensionManifest as PublicExtensionManifest
 } from '@kun/extension-api'
 
+// Re-export seam contract types for backward compatibility
+export type {
+  KunExtension,
+  LoopHookName,
+  LoopHookContext,
+  LoopHookFn,
+  LoopHookBus,
+  ExtensionRuntimeServices,
+  RouteRegistrar
+} from '../seam/types.js'
+export { LOOP_HOOK_NAMES } from '../seam/types.js'
+
 export const EXTENSION_REGISTRY_SCHEMA_VERSION = 1 as const
 export const EXTENSION_INDEX_SCHEMA_VERSION = 1 as const
 export const EXTENSION_RPC_VERSION = 1 as const
