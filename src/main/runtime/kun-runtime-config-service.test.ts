@@ -1,3 +1,6 @@
+import { mkdtemp, readFile } from 'node:fs/promises'
+import { join } from 'node:path'
+import { tmpdir } from 'node:os'
 import { describe, expect, it } from 'vitest'
 import {
   defaultKunRuntimeSettings,
@@ -9,7 +12,8 @@ import { KunConfigSchema } from '../../../kun/src/config/kun-config.js'
 import type { AppSettingsV1 } from '../../shared/app-settings'
 import {
   buildManagedRuntimeHotApplyBody,
-  classifyManagedRuntimeHotApplyResponse
+  classifyManagedRuntimeHotApplyResponse,
+  syncGuiManagedKunConfig
 } from './kun-runtime-config-service'
 
 describe('Kun runtime config service', () => {
@@ -54,6 +58,28 @@ describe('Kun runtime config service', () => {
     )).toEqual({ result: 'restart_required', message: 'process field changed' })
     expect(classifyManagedRuntimeHotApplyResponse(500, false, 'broken')).toEqual({
       result: 'failed', message: 'broken'
+    })
+  })
+
+  it('seeds extension services for a new GUI-managed runtime profile', async () => {
+    const dataDir = await mkdtemp(join(tmpdir(), 'kun-extension-config-'))
+    const extensionRoot = join(dataDir, 'app-root')
+
+    await syncGuiManagedKunConfig(dataDir, defaultKunRuntimeSettings(), { extensionRoot })
+
+    const config = JSON.parse(await readFile(join(dataDir, 'config.json'), 'utf8'))
+    expect(config.serve.extensions).toMatchObject({
+      experts: {
+        pluginRoots: [join(extensionRoot, 'experts', 'plugins')],
+        customExpertsDir: join(dataDir, 'experts', 'custom')
+      },
+      moa: {},
+      automation: { enabled: true },
+      design: {
+        librariesRoot: join(extensionRoot, 'design', 'design_libraries'),
+        runtimeSkillsRoot: join(extensionRoot, 'design', 'runtime-skills'),
+        staticSkillsRoot: join(extensionRoot, 'design', 'skills')
+      }
     })
   })
 })
