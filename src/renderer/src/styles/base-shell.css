@@ -525,6 +525,125 @@
   opacity: 0.85;
 }
 
+html[data-ui-plugin='shuimo-yijing'] .ds-app-shell,
+html[data-ui-plugin='shuimo-yijing'] .ds-workbench-shell,
+html[data-ui-plugin='shuimo-yijing'] .ds-settings-shell {
+  background-color: color-mix(in srgb, var(--ds-bg-main) 92%, transparent);
+}
+
+html[data-ui-plugin='shuimo-yijing'] {
+  --ds-stage-gradient: linear-gradient(180deg, rgba(247, 245, 238, 0.94), rgba(232, 233, 226, 0.92));
+  --ds-topbar-bg: linear-gradient(180deg, rgba(248, 247, 240, 0.96), rgba(242, 240, 231, 0.9));
+  --ds-sidebar-gradient: linear-gradient(180deg, rgba(236, 237, 230, 0.96), rgba(229, 231, 223, 0.94));
+  --ds-sidebar-haze: linear-gradient(180deg, rgba(255, 255, 255, 0.22), transparent 34%);
+  --ds-sidebar-border: rgba(54, 68, 62, 0.16);
+  --ds-sidebar-row-hover: rgba(67, 83, 75, 0.08);
+  --ds-sidebar-row-active: rgba(67, 83, 75, 0.13);
+  --ds-card-soft: rgba(248, 247, 240, 0.9);
+  --ds-card-strong: rgba(252, 250, 244, 0.97);
+  --ds-card-muted: rgba(235, 235, 227, 0.9);
+  --ds-card-hover: rgba(252, 250, 244, 0.98);
+  --ds-chip-bg: rgba(248, 247, 240, 0.92);
+  --ds-chip-muted-bg: rgba(235, 235, 227, 0.9);
+  --ds-chip-hover: rgba(252, 250, 244, 0.98);
+  --ds-chip-border: rgba(54, 68, 62, 0.15);
+  --ds-code-bg: rgba(231, 232, 224, 0.95);
+  --ds-inline-code-bg: rgba(225, 228, 219, 0.92);
+  --ds-pre-bg: rgba(235, 235, 227, 0.96);
+  --ds-table-head-bg: rgba(230, 232, 223, 0.96);
+  --ds-scrollbar-thumb: rgba(70, 82, 76, 0.25);
+  --ds-scrollbar-thumb-hover: rgba(70, 82, 76, 0.36);
+}
+
+[data-theme='dark'][data-ui-plugin='shuimo-yijing'] {
+  --ds-stage-gradient: linear-gradient(180deg, rgba(31, 38, 34, 0.95), rgba(20, 25, 22, 0.94));
+  --ds-topbar-bg: linear-gradient(180deg, rgba(35, 42, 38, 0.96), rgba(24, 30, 27, 0.9));
+  --ds-sidebar-gradient: linear-gradient(180deg, rgba(25, 31, 28, 0.96), rgba(17, 22, 19, 0.95));
+  --ds-sidebar-haze: linear-gradient(180deg, rgba(228, 226, 217, 0.045), transparent 34%);
+  --ds-sidebar-border: rgba(218, 223, 214, 0.13);
+  --ds-sidebar-row-hover: rgba(218, 223, 214, 0.07);
+  --ds-sidebar-row-active: rgba(218, 223, 214, 0.11);
+  --ds-card-soft: rgba(31, 38, 34, 0.92);
+  --ds-card-strong: rgba(37, 44, 40, 0.98);
+  --ds-card-muted: rgba(34, 41, 37, 0.9);
+  --ds-card-hover: rgba(43, 51, 46, 0.98);
+  --ds-chip-bg: rgba(31, 38, 34, 0.94);
+  --ds-chip-muted-bg: rgba(34, 41, 37, 0.92);
+  --ds-chip-hover: rgba(43, 51, 46, 0.98);
+  --ds-chip-border: rgba(218, 223, 214, 0.13);
+  --ds-code-bg: rgba(30, 37, 33, 0.96);
+  --ds-inline-code-bg: rgba(218, 223, 214, 0.075);
+  --ds-pre-bg: rgba(20, 26, 23, 0.98);
+  --ds-table-head-bg: rgba(34, 41, 37, 0.96);
+  --ds-scrollbar-thumb: rgba(190, 201, 192, 0.24);
+  --ds-scrollbar-thumb-hover: rgba(190, 201, 192, 0.36);
+}
+
+.shuimo-yijing-backdrop {
+  color: rgba(39, 48, 44, 0.065);
+  background:
+    linear-gradient(180deg, rgba(247, 245, 238, 0.68), rgba(232, 233, 226, 0.46)),
+    var(--ds-bg-main);
+  opacity: 0;
+  animation: shuimo-yijing-reveal 180ms ease-out forwards;
+}
+
+[data-theme='dark'] .shuimo-yijing-backdrop {
+  color: rgba(228, 226, 217, 0.05);
+  background:
+    linear-gradient(180deg, rgba(28, 34, 31, 0.72), rgba(18, 22, 20, 0.62)),
+    var(--ds-bg-main);
+}
+
+.shuimo-yijing-script {
+  position: absolute;
+  inset: 4.5rem 2.5rem 2.5rem;
+  display: flex;
+  flex-direction: row-reverse;
+  justify-content: space-around;
+  gap: clamp(2rem, 5vw, 6rem);
+  overflow: hidden;
+  font-family: 'Ma Shan Zheng', 'STXingkai', 'KaiTi', serif;
+  font-size: 1.55rem;
+  line-height: 1.85;
+  letter-spacing: 0;
+  writing-mode: vertical-rl;
+  text-orientation: upright;
+}
+
+.shuimo-yijing-script p {
+  margin: 0;
+  max-height: 100%;
+}
+
+.shuimo-yijing-title {
+  font-size: 2.15rem;
+}
+
+@keyframes shuimo-yijing-reveal {
+  to {
+    opacity: 1;
+  }
+}
+
+@media (max-width: 900px) {
+  .shuimo-yijing-script {
+    inset-inline: 1.25rem;
+    gap: 2.25rem;
+  }
+
+  .shuimo-yijing-script p:nth-child(3) {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shuimo-yijing-backdrop {
+    animation: none;
+    opacity: 1;
+  }
+}
+
 html,
 body,
 #root {

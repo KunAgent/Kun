@@ -1184,7 +1184,7 @@ export function SettingsView(): ReactElement {
   }
 
   return (
-    <div className="ds-drag flex h-full min-h-0 w-full min-w-0 bg-ds-main">
+    <div className="ds-settings-shell ds-drag flex h-full min-h-0 w-full min-w-0 bg-ds-main">
       <SettingsSidebar
         category={category}
         setCategory={setCategory}
