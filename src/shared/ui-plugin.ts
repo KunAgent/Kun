@@ -123,6 +123,39 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === 'string' && value.trim().length > 0
+}
+
+export function isUiPluginHostEffect(value: unknown): value is UiPluginHostEffect {
+  if (!isPlainObject(value) || value.kind !== 'shuimo-yijing') return false
+  const hexagram = value.hexagram
+  if (!isPlainObject(hexagram)) return false
+  if (
+    !Number.isInteger(hexagram.ordinal) ||
+    Number(hexagram.ordinal) < 1 ||
+    Number(hexagram.ordinal) > 64
+  ) {
+    return false
+  }
+  if (
+    !Number.isInteger(hexagram.movingLine) ||
+    Number(hexagram.movingLine) < 1 ||
+    Number(hexagram.movingLine) > 6
+  ) {
+    return false
+  }
+  return [
+    hexagram.glyph,
+    hexagram.name,
+    hexagram.statement,
+    hexagram.statementCommentary,
+    hexagram.movingLineLabel,
+    hexagram.movingLineText,
+    hexagram.movingLineCommentary
+  ].every(isNonEmptyString)
+}
+
 function readTrimmedString(value: unknown, max: number): string | null {
   if (typeof value !== 'string') return null
   const trimmed = value.trim()

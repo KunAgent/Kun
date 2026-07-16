@@ -20,7 +20,7 @@ describe('createBundledUiPluginHostEffectResolver', () => {
         ordinal: 10,
         glyph: '䷉',
         name: '履',
-        statement: '虎尾不咥人亨',
+        statement: '履虎尾不咥人亨',
         statementCommentary:
           '咥直結反○兌亦三畫卦之名一隂見於二陽之上故其德為説其象為澤履有所躡而進之義也以兌遇乾和説以躡剛强之後有履虎尾而不見傷之象故其卦為履而占如是也人能如是則處危而不傷矣',
         movingLine: 4,

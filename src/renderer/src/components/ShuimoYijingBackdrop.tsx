@@ -1,12 +1,12 @@
-import type { UiPluginHostEffect } from '@shared/ui-plugin'
+import { isUiPluginHostEffect } from '@shared/ui-plugin'
 import { useUiPluginStore } from '../store/ui-plugin-store'
 
 export function ShuimoYijingBackdrop({
   effect
 }: {
-  effect?: UiPluginHostEffect
+  effect?: unknown
 }): React.ReactElement | null {
-  if (!effect || effect.kind !== 'shuimo-yijing') return null
+  if (!isUiPluginHostEffect(effect)) return null
 
   const hexagram = effect.hexagram
   return (

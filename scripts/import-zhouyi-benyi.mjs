@@ -43,6 +43,7 @@ const SOURCE_NAME_VARIANTS = new Map([
   [32, '恒'],
   [34, '大壮']
 ])
+const STATEMENT_INCLUDES_SOURCE_NAME = new Set([10, 13])
 const SOURCE_HEADER_CORRECTION = {
   expectedOrdinal: 39,
   sourceGlyph: '䷮',
@@ -182,7 +183,9 @@ function parseHexagramBlock(block, expectedOrdinal) {
     throw new Error(`Malformed statement commentary for ${expectedOrdinal} ${name}`)
   }
 
-  const statement = statementWithName.slice(sourceName.length)
+  const statement = STATEMENT_INCLUDES_SOURCE_NAME.has(expectedOrdinal)
+    ? statementWithName
+    : statementWithName.slice(sourceName.length)
   const statementCommentary = cleanField(statementMarker[1])
   const statementNoteEnd = statementNoteStart + statementMarker[0].length
   const lines = parsePrimaryLines(body, statementNoteEnd, expectedOrdinal, name)

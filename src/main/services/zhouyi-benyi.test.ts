@@ -49,6 +49,11 @@ describe('ZHOUYI_BENYI', () => {
     expect(qian.lines[0].text).toBe('潛龍勿用')
   })
 
+  it('preserves a hexagram name when it is part of the canonical statement', () => {
+    expect(zhouyiBenyiFor(10).statement).toBe('履虎尾不咥人亨')
+    expect(zhouyiBenyiFor(13).statement).toBe('同人于野亨利涉大川利君子貞')
+  })
+
   it('does not treat a line label mentioned in commentary as a primary line', () => {
     const tunFirstLine = zhouyiBenyiFor(3).lines[0]
 
@@ -75,7 +80,7 @@ describe('ZHOUYI_BENYI', () => {
       .update(JSON.stringify(ZHOUYI_BENYI))
       .digest('hex')
 
-    expect(digest).toBe('1c5c4ef421783e385e1b1c95ad328fa52addb2f1c9651bfc4b9ebad4d5753a6a')
+    expect(digest).toBe('3ffbdc1d3032ce284f7a32853fa609a648d7aa6d59b21b96f3a65ef5c6644e11')
   })
 
   it('runs importer parser self-checks without network access', () => {

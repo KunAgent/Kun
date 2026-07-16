@@ -27,6 +27,7 @@ const handlers = new Map<string, (event: unknown, payload?: unknown) => Promise<
 const electronMock = vi.hoisted(() => ({ showMessageBox: vi.fn() }))
 const uiPluginMock = vi.hoisted(() => ({
   ensureBundledUiPlugins: vi.fn(async () => undefined),
+  loadBundledShuimoYijingRuntime: vi.fn(),
   loadUiPluginFigures: vi.fn(),
   resolveBundledUiPluginHostEffect: vi.fn()
 }))
@@ -50,7 +51,8 @@ vi.mock('../services/ui-plugin-service', async (importOriginal) => ({
 }))
 
 vi.mock('../ui-plugin-bundled', () => ({
-  ensureBundledUiPlugins: uiPluginMock.ensureBundledUiPlugins
+  ensureBundledUiPlugins: uiPluginMock.ensureBundledUiPlugins,
+  loadBundledShuimoYijingRuntime: uiPluginMock.loadBundledShuimoYijingRuntime
 }))
 
 vi.mock('../services/shuimo-yijing-host-effect', () => ({
@@ -121,11 +123,12 @@ describe('registerAppIpcHandlers', () => {
     handlers.clear()
     electronMock.showMessageBox.mockReset()
     uiPluginMock.ensureBundledUiPlugins.mockClear()
+    uiPluginMock.loadBundledShuimoYijingRuntime.mockReset()
     uiPluginMock.loadUiPluginFigures.mockReset()
     uiPluginMock.resolveBundledUiPluginHostEffect.mockReset()
   })
 
-  it('enriches only a successful trusted UI plugin load with its host effect', async () => {
+  it('loads the trusted bundled runtime before enriching the reserved plugin id', async () => {
     const effect = {
       kind: 'shuimo-yijing' as const,
       hexagram: {
@@ -142,9 +145,20 @@ describe('registerAppIpcHandlers', () => {
     }
     uiPluginMock.loadUiPluginFigures.mockImplementation(async (_home: string, id: string) => ({
       ok: true,
-      manifest: { id, name: id, version: '1.0.0', figures: {} },
+      manifest: { id, name: id === 'shuimo-yijing' ? 'Impostor' : id, version: '9.9.9', figures: {} },
       figures: {}
     }))
+    const trustedRuntime = {
+      ok: true as const,
+      manifest: {
+        id: 'shuimo-yijing',
+        name: 'Water Ink Yijing',
+        version: '1.0.0',
+        figures: { swim: 'img/shuimo-yijing-kun.png' }
+      },
+      figures: { swim: 'data:image/png;base64,trusted' }
+    }
+    uiPluginMock.loadBundledShuimoYijingRuntime.mockResolvedValue(trustedRuntime)
     uiPluginMock.resolveBundledUiPluginHostEffect.mockImplementation((id: string) =>
       id === 'shuimo-yijing' ? effect : undefined
     )
@@ -153,20 +167,14 @@ describe('registerAppIpcHandlers', () => {
     const handler = handlers.get('ui-plugin:load')
     await expect(handler?.({}, { id: 'starlight' })).resolves.toEqual({
       ok: true,
-      manifest: { id: 'starlight', name: 'starlight', version: '1.0.0', figures: {} },
+      manifest: { id: 'starlight', name: 'starlight', version: '9.9.9', figures: {} },
       figures: {}
     })
     await expect(handler?.({}, { id: 'shuimo-yijing' })).resolves.toEqual({
-      ok: true,
-      manifest: {
-        id: 'shuimo-yijing',
-        name: 'shuimo-yijing',
-        version: '1.0.0',
-        figures: {}
-      },
-      figures: {},
+      ...trustedRuntime,
       hostEffect: effect
     })
+    expect(uiPluginMock.loadBundledShuimoYijingRuntime).toHaveBeenCalledTimes(1)
   })
 
   it('returns a generic UI plugin load failure unchanged without resolving an effect', async () => {
@@ -194,6 +202,7 @@ describe('registerAppIpcHandlers', () => {
     }
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
     uiPluginMock.loadUiPluginFigures.mockResolvedValue(loaded)
+    uiPluginMock.loadBundledShuimoYijingRuntime.mockResolvedValue(loaded)
     uiPluginMock.resolveBundledUiPluginHostEffect.mockImplementation(() => {
       throw new Error('launch 2026-07-16T08:09:10.000Z at C:\\Users\\private\\.kun')
     })

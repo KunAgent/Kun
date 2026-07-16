@@ -1,9 +1,12 @@
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
+import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { UiPluginHostEffect } from '@shared/ui-plugin'
-import AppShell from './AppShell'
+import AppShell, { UiPluginStartupLifecycle } from './AppShell'
 import { useUiPluginStore } from './store/ui-plugin-store'
+
+const initialInitUiPlugins = useUiPluginStore.getState().initUiPlugins
 
 const effect: UiPluginHostEffect = {
   kind: 'shuimo-yijing',
@@ -22,12 +25,37 @@ const effect: UiPluginHostEffect = {
 
 describe('AppShell', () => {
   afterEach(() => {
-    useUiPluginStore.setState({ uiMode: 'default', activeRuntime: null })
+    useUiPluginStore.setState({
+      uiMode: 'default',
+      activeRuntime: null,
+      initUiPlugins: initialInitUiPlugins
+    })
     Object.assign(useUiPluginStore.getInitialState(), {
       uiMode: 'default',
       activeRuntime: null
     })
     vi.unstubAllGlobals()
+  })
+
+  it('initializes persisted UI plugins from the app lifecycle before settings opens', async () => {
+    const initUiPlugins = vi.fn(async () => undefined)
+    useUiPluginStore.setState({ initUiPlugins })
+    let renderer: ReactTestRenderer
+    const actEnvironment = globalThis as typeof globalThis & {
+      IS_REACT_ACT_ENVIRONMENT?: boolean
+    }
+    actEnvironment.IS_REACT_ACT_ENVIRONMENT = true
+
+    try {
+      await act(async () => {
+        renderer = create(createElement(UiPluginStartupLifecycle))
+      })
+
+      expect(initUiPlugins).toHaveBeenCalledTimes(1)
+      act(() => renderer!.unmount())
+    } finally {
+      delete actEnvironment.IS_REACT_ACT_ENVIRONMENT
+    }
   })
 
   it('keeps the macOS app shell on the same full-height flex chain as desktop titlebar platforms', () => {

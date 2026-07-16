@@ -91,6 +91,18 @@ describe('ui-plugin-store host effect lifecycle', () => {
     })
   })
 
+  it('drops a malformed host effect at the renderer IPC boundary', async () => {
+    const loadUiPlugin = vi.fn().mockResolvedValue({
+      ...success('shuimo-yijing'),
+      hostEffect: { kind: 'shuimo-yijing' }
+    })
+    vi.stubGlobal('window', { kunGui: { loadUiPlugin } })
+
+    await useUiPluginStore.getState().activateUiMode('shuimo-yijing')
+
+    expect(useUiPluginStore.getState().activeRuntime?.hostEffect).toBeUndefined()
+  })
+
   it.each([UI_MODE_DEFAULT, UI_MODE_RETROMA])('clears the effect when switching to %s', async (mode) => {
     const loadUiPlugin = vi.fn().mockResolvedValue(success('shuimo-yijing', hostEffect))
     vi.stubGlobal('window', { kunGui: { loadUiPlugin } })

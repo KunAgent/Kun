@@ -2,9 +2,35 @@ import { describe, expect, it } from 'vitest'
 import {
   buildUiPluginTokenCss,
   isSafeUiPluginFigurePath,
+  isUiPluginHostEffect,
   normalizeUiPluginManifest,
   resolveUiPluginFigure
 } from './ui-plugin'
+
+describe('isUiPluginHostEffect', () => {
+  const validEffect = {
+    kind: 'shuimo-yijing',
+    hexagram: {
+      ordinal: 13,
+      glyph: '䷌',
+      name: '同人',
+      statement: '同人于野亨',
+      statementCommentary: '本義',
+      movingLine: 1,
+      movingLineLabel: '初九',
+      movingLineText: '同人于門无咎',
+      movingLineCommentary: '爻注'
+    }
+  }
+
+  it('accepts a complete bounded effect and rejects malformed IPC values', () => {
+    expect(isUiPluginHostEffect(validEffect)).toBe(true)
+    expect(isUiPluginHostEffect({ kind: 'shuimo-yijing' })).toBe(false)
+    expect(isUiPluginHostEffect({ ...validEffect, hexagram: { ...validEffect.hexagram, ordinal: 65 } })).toBe(false)
+    expect(isUiPluginHostEffect({ ...validEffect, hexagram: { ...validEffect.hexagram, movingLine: 0 } })).toBe(false)
+    expect(isUiPluginHostEffect({ ...validEffect, hexagram: { ...validEffect.hexagram, statement: '' } })).toBe(false)
+  })
+})
 
 const validManifest = {
   id: 'starlight',

@@ -24,3 +24,5 @@ Whitespace, source angle marks `〈〉`, and a leading commentary separator `○
 One source header glyph is corrected explicitly. The 蹇 block has source glyph `䷮` (U+4DEE, ordinal 47) with header note `艮下坎上`; the importer requires that exact combination at expected ordinal 39 and emits canonical glyph `䷦` (U+4DE6). The actual 困 block also uses `䷮` and is left unchanged. Every other source glyph must match its expected document ordinal or import fails.
 
 The importer verifies the pinned revision IDs, page block counts (30 and 34), exact ordinal sequence 1 through 64, one documented header correction, and six nonempty line records per hexagram. Output is stable pretty-printed JSON with no generated timestamp. Apart from the listed name and glyph normalization, extracted source text is retained rather than reconstructed.
+
+The statements for ordinal 10 `履` and ordinal 13 `同人` begin with the hexagram name as part of the canonical text (`履虎尾...` and `同人于野...`). The importer preserves that leading name for these two entries instead of treating it as a removable heading.

@@ -4,7 +4,8 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   BUNDLED_SHUIMO_YIJING_MANIFEST,
-  ensureBundledUiPlugins
+  ensureBundledUiPlugins,
+  loadBundledShuimoYijingRuntime
 } from '../ui-plugin-bundled'
 import { normalizeUiPluginManifest } from '../../shared/ui-plugin'
 import {
@@ -180,6 +181,17 @@ describe('bundled shuimo yijing manifest', () => {
     })
     expect(BUNDLED_SHUIMO_YIJING_MANIFEST.features.cameos).toBe(false)
     expect(BUNDLED_SHUIMO_YIJING_MANIFEST).not.toHaveProperty('hostEffect')
+  })
+
+  it('loads the trusted runtime directly from canonical bundled resources', async () => {
+    const runtime = await loadBundledShuimoYijingRuntime()
+
+    expect(runtime.ok).toBe(true)
+    if (!runtime.ok) return
+    expect(runtime.manifest).toBe(BUNDLED_SHUIMO_YIJING_MANIFEST)
+    expect(runtime.figures.swim).toMatch(/^data:image\/png;base64,/)
+    expect(runtime.figures.swim).toBe(runtime.figures.greet)
+    expect(runtime.figures.swim).toBe(runtime.figures.toggleIcon)
   })
 
   it('seeds iKun and Shuimo Yijing independently through the internal path', async () => {

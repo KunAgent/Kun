@@ -10,13 +10,16 @@ import ikunWaveFigureRef from '../asset/img/ikun_wave.png?url'
 import shuimoYijingKunFigureRef from '../asset/img/shuimo-yijing-kun.png?url'
 import {
   UI_PLUGIN_BUNDLED_IKUN_ID,
-  UI_PLUGIN_BUNDLED_SHUIMO_YIJING_ID
+  UI_PLUGIN_BUNDLED_SHUIMO_YIJING_ID,
+  type UiPluginFigureSlot,
+  type UiPluginManifestV1,
+  type UiPluginRuntimeFigures
 } from '../shared/ui-plugin'
 import {
   createBundledUiPluginSeedGuard,
   seedBundledUiPluginOnce
 } from './services/bundled-ui-plugin-seeder'
-import { seedUiPlugin } from './services/ui-plugin-service'
+import { seedUiPlugin, type UiPluginLoadResult } from './services/ui-plugin-service'
 
 /**
  * iKun 的 manifest。注意:激活 id 为 'ikun' 的插件时,渲染层会额外点亮
@@ -140,7 +143,7 @@ export const BUNDLED_SHUIMO_YIJING_MANIFEST = {
   features: {
     cameos: false
   }
-}
+} satisfies UiPluginManifestV1
 
 const BUNDLED_IKUN_FIGURE_REFS: Record<string, string> = {
   swim: ikunFigureRef,
@@ -175,6 +178,21 @@ async function bytesFromAssetRef(ref: string): Promise<Buffer> {
     return readFile(join(process.cwd(), ref.slice(1)))
   }
   return readFile(join(BUNDLE_DIR, ref))
+}
+
+export async function loadBundledShuimoYijingRuntime(): Promise<UiPluginLoadResult> {
+  const figures: UiPluginRuntimeFigures = {}
+  const dataUrls = new Map<string, string>()
+  for (const [slot, ref] of Object.entries(BUNDLED_SHUIMO_YIJING_FIGURE_REFS)) {
+    let dataUrl = dataUrls.get(ref)
+    if (!dataUrl) {
+      const bytes = await bytesFromAssetRef(ref)
+      dataUrl = `data:image/png;base64,${bytes.toString('base64')}`
+      dataUrls.set(ref, dataUrl)
+    }
+    figures[slot as UiPluginFigureSlot] = dataUrl
+  }
+  return { ok: true, manifest: BUNDLED_SHUIMO_YIJING_MANIFEST, figures }
 }
 
 const ensureIkunSeeded = createBundledUiPluginSeedGuard({

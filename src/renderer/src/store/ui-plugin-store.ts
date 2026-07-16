@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import {
   buildUiPluginTokenCss,
+  isUiPluginHostEffect,
   resolveUiPluginFigure,
   type UiPluginFigureSlot,
   type UiPluginHostEffect,
@@ -167,7 +168,7 @@ export const useUiPluginStore = create<UiPluginState>((set, get) => ({
       const runtime: UiPluginRuntime = {
         manifest: result.manifest,
         figures: result.figures,
-        ...(result.hostEffect ? { hostEffect: result.hostEffect } : {})
+        ...(isUiPluginHostEffect(result.hostEffect) ? { hostEffect: result.hostEffect } : {})
       }
       writeUiModePreference(normalized)
       set({ busy: false, uiMode: normalized, activeRuntime: runtime, lastError: null })

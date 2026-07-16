@@ -53,6 +53,16 @@ describe('ShuimoYijingBackdrop', () => {
     ).toBe('')
   })
 
+  it('renders nothing for a structurally invalid effect received at runtime', () => {
+    expect(
+      renderToStaticMarkup(
+        createElement(ShuimoYijingBackdrop, {
+          effect: { kind: 'shuimo-yijing' } as UiPluginHostEffect
+        })
+      )
+    ).toBe('')
+  })
+
   it('keeps vertical columns, exact ink levels, and accessibility media rules wired in CSS', async () => {
     const nodeFs = 'node:fs/promises'
     const { readFile } = await import(/* @vite-ignore */ nodeFs)

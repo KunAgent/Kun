@@ -8,6 +8,7 @@ import { ProtectedRendererSurface } from './extensions/ProtectedRendererSurface'
 import { ExtensionSettingsServiceProvider } from './extensions/ExtensionSettingsServiceContext'
 import { RuntimeExtensionSettingsService } from './extensions/runtime-extension-settings-service'
 import { ActiveShuimoYijingBackdrop } from './components/ShuimoYijingBackdrop'
+import { useUiPluginStore } from './store/ui-plugin-store'
 
 const extensionSettingsService = new RuntimeExtensionSettingsService()
 
@@ -36,6 +37,14 @@ function RouteFallback(): React.ReactElement {
       </div>
     </div>
   )
+}
+
+export function UiPluginStartupLifecycle(): null {
+  const initUiPlugins = useUiPluginStore((state) => state.initUiPlugins)
+  useEffect(() => {
+    void initUiPlugins()
+  }, [initUiPlugins])
+  return null
 }
 
 export default function AppShell(): React.ReactElement {
@@ -67,6 +76,7 @@ export default function AppShell(): React.ReactElement {
             : 'ds-app-shell relative isolate flex h-full min-h-0 flex-col bg-transparent'
         }
       >
+        <UiPluginStartupLifecycle />
         <ActiveShuimoYijingBackdrop />
         <div className="relative z-10 flex min-h-0 flex-1 flex-col">
           {hasDesktopTitleBar ? <WindowsTitleBar platform={platform} /> : null}
