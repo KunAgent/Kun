@@ -100,11 +100,7 @@ export async function resolveWorkspacePath(
   // danger-full-access, and lets read/ls/find/grep/lsp reach system paths
   // (e.g. C:\Windows on Windows, /etc on POSIX) instead of failing with
   // "path escapes the workspace root".
-  if (
-    !options.enforceWorkspaceBoundary &&
-    (effectiveSandboxMode(context) === 'danger-full-access' ||
-      context.approvedExternalPaths?.some((path) => samePath(path, lexicalAbsolutePath)) === true)
-  ) {
+  if (!options.enforceWorkspaceBoundary && effectiveSandboxMode(context) === 'danger-full-access') {
     return {
       workspaceRoot: root,
       absolutePath: lexicalAbsolutePath,
@@ -119,19 +115,30 @@ export async function resolveWorkspacePath(
   }
   const resolvedAbsolute = await resolveSymlinkSafe(lexicalAbsolutePath)
   const resolvedRelative = relative(resolvedRoot, resolvedAbsolute)
-  if (resolvedRelative === '..' || resolvedRelative.startsWith(`..${sep}`) || isAbsolute(resolvedRelative)) {
+  const isInsideWorkspace = resolvedRelative !== '..' &&
+    !resolvedRelative.startsWith(`..${sep}`) &&
+    !isAbsolute(resolvedRelative)
+  // External grants contain the target resolved at approval time. Compare the
+  // current physical target here so a file or parent directory swapped for a
+  // symlink/junction while the approval prompt was open cannot redirect a write.
+  const isApprovedExternalPath = !options.enforceWorkspaceBoundary &&
+    context.approvedExternalPaths?.some((path) => samePath(path, resolvedAbsolute)) === true
+  if (!isInsideWorkspace && !isApprovedExternalPath) {
     throw new Error(`path escapes the workspace root: ${inputPath}`)
   }
-  // Return LEXICAL paths to callers. The realpath-resolved pair is only used
-  // for the escape check above; downstream code (subprocess cwd, display
-  // paths, language-server init) expects the user-facing workspace path,
-  // which on symlinked roots (e.g. macOS `/tmp` -> `/private/tmp`) would
-  // otherwise diverge from what the user typed and break display layers.
+  // Keep lexical paths for workspace callers so display layers and subprocess
+  // cwd values preserve the path the user selected. An approved external path
+  // uses its resolved target instead, so the checked target is also the path
+  // handed to the file operation.
   return {
     workspaceRoot: root,
-    absolutePath: lexicalAbsolutePath,
+    absolutePath: isApprovedExternalPath ? resolvedAbsolute : lexicalAbsolutePath,
     relativePath: normalizeToolPath(relative(root, lexicalAbsolutePath) || '.')
   }
+}
+
+export async function resolvePathThroughSymlinks(path: string): Promise<string> {
+  return resolveSymlinkSafe(resolve(path))
 }
 
 function samePath(left: string, right: string): boolean {

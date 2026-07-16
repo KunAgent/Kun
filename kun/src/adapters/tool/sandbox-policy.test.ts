@@ -1,4 +1,6 @@
-import { resolve } from 'node:path'
+import { mkdtemp, mkdir, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { canWritePath, externalPathForApproval, sandboxBlockForTool } from './sandbox-policy.js'
 
@@ -18,17 +20,24 @@ describe('sandbox policy', () => {
     })
   })
 
-  it('identifies an external file path for per-operation approval', () => {
-    expect(externalPathForApproval(
-      { toolKind: 'file_change' },
-      { arguments: { path: '../outside.txt' } },
-      { workspace: '/repo/workspace', sandboxMode: 'workspace-write' }
-    )).toEqual([resolve('/repo/outside.txt')])
-    expect(externalPathForApproval(
-      { toolKind: 'file_change' },
-      { arguments: { path: 'src/app.ts' } },
-      { workspace: '/repo/workspace', sandboxMode: 'workspace-write' }
-    )).toEqual([])
+  it('identifies an external file path for per-operation approval', async () => {
+    const parent = await mkdtemp(join(tmpdir(), 'kun-sandbox-policy-'))
+    const workspace = join(parent, 'workspace')
+    try {
+      await mkdir(workspace)
+      await expect(externalPathForApproval(
+        { toolKind: 'file_change' },
+        { arguments: { path: '../outside.txt' } },
+        { workspace, sandboxMode: 'workspace-write' }
+      )).resolves.toEqual([resolve(parent, 'outside.txt')])
+      await expect(externalPathForApproval(
+        { toolKind: 'file_change' },
+        { arguments: { path: 'src/app.ts' } },
+        { workspace, sandboxMode: 'workspace-write' }
+      )).resolves.toEqual([])
+    } finally {
+      await rm(parent, { recursive: true, force: true })
+    }
   })
 
   it('allows a path only when the current call carries an approved grant', () => {

@@ -1,9 +1,12 @@
-import { resolve as resolvePath } from 'node:path'
+import { mkdtemp, mkdir, readFile, rm, symlink, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join, resolve as resolvePath } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import { LocalToolHost, echoTool, userInputTool } from './local-tool-host.js'
 import type { ToolHostContext } from '../../ports/tool-host.js'
 import { InMemoryArtifactStore } from '../../artifacts/artifact-store.js'
 import { resolveWorkspacePath } from './builtin-tool-utils.js'
+import { createWriteLocalTool } from './builtin-file-tools.js'
 
 describe('LocalToolHost approval policy', () => {
   it('asks before auto tools when approval policy is always', async () => {
@@ -227,9 +230,11 @@ describe('LocalToolHost approval policy', () => {
   })
 
   it('does not expand an approved external path to a sibling path', async () => {
+    let approvedPath = ''
     const execute = vi.fn(async (_args: Record<string, unknown>, context: ToolHostContext) => {
+      approvedPath = context.approvedExternalPaths?.[0] ?? ''
       await expect(resolveWorkspacePath('../outside.txt', context)).resolves.toMatchObject({
-        absolutePath: resolvePath('/tmp/outside.txt')
+        absolutePath: approvedPath
       })
       await expect(resolveWorkspacePath('../sibling.txt', context)).rejects.toThrow()
       return { output: { ok: true } }
@@ -257,7 +262,93 @@ describe('LocalToolHost approval policy', () => {
     )
 
     expect(execute).toHaveBeenCalledTimes(1)
+    expect(approvedPath).toBeTruthy()
     expect(result.item).toMatchObject({ output: { ok: true } })
+  })
+
+  it('writes a real external target only after a per-call approval', async () => {
+    const workspace = await mkdtemp(join(tmpdir(), 'kun-workspace-'))
+    const external = await mkdtemp(join(tmpdir(), 'kun-external-'))
+    const target = join(external, 'approved.txt')
+    try {
+      const awaitApproval = vi.fn(async () => 'allow' as const)
+      const host = new LocalToolHost({ tools: [createWriteLocalTool()] })
+      const result = await host.execute(
+        { callId: 'call_write_external_file', toolName: 'write', arguments: { path: target, content: 'approved' } },
+        {
+          threadId: 'thread_1',
+          turnId: 'turn_1',
+          workspace,
+          approvalPolicy: 'auto',
+          sandboxMode: 'workspace-write',
+          abortSignal: new AbortController().signal,
+          awaitApproval
+        } satisfies ToolHostContext
+      )
+
+      expect(awaitApproval).toHaveBeenCalledTimes(1)
+      expect(result.item).toMatchObject({ isError: false })
+      await expect(readFile(target, 'utf8')).resolves.toBe('approved')
+    } finally {
+      await Promise.all([
+        rm(workspace, { recursive: true, force: true }),
+        rm(external, { recursive: true, force: true })
+      ])
+    }
+  })
+
+  it('rejects an approved external path when it is replaced by a symlink before execution', async (ctx) => {
+    const workspace = await mkdtemp(join(tmpdir(), 'kun-workspace-'))
+    const external = await mkdtemp(join(tmpdir(), 'kun-external-'))
+    const approvedDirectory = join(external, 'approved')
+    const protectedDirectory = join(external, 'protected')
+    const target = join(approvedDirectory, 'target.txt')
+    const protectedTarget = join(protectedDirectory, 'target.txt')
+    let symlinkError: unknown
+    try {
+      await Promise.all([mkdir(approvedDirectory), mkdir(protectedDirectory)])
+      await Promise.all([
+        writeFile(target, 'original'),
+        writeFile(protectedTarget, 'must survive')
+      ])
+      const host = new LocalToolHost({ tools: [createWriteLocalTool()] })
+      const result = await host.execute(
+        { callId: 'call_write_swapped_link', toolName: 'write', arguments: { path: target, content: 'overwrite' } },
+        {
+          threadId: 'thread_1',
+          turnId: 'turn_1',
+          workspace,
+          approvalPolicy: 'auto',
+          sandboxMode: 'workspace-write',
+          abortSignal: new AbortController().signal,
+          awaitApproval: async () => {
+            await rm(approvedDirectory, { recursive: true, force: true })
+            try {
+              await symlink(protectedDirectory, approvedDirectory, process.platform === 'win32' ? 'junction' : 'dir')
+            } catch (error) {
+              symlinkError = error
+              return 'deny'
+            }
+            return 'allow'
+          }
+        } satisfies ToolHostContext
+      )
+
+      if (symlinkError) {
+        ctx.skip()
+        return
+      }
+      expect(result.item).toMatchObject({
+        isError: true,
+        output: { error: expect.stringContaining('path escapes the workspace root') }
+      })
+      await expect(readFile(protectedTarget, 'utf8')).resolves.toBe('must survive')
+    } finally {
+      await Promise.all([
+        rm(workspace, { recursive: true, force: true }),
+        rm(external, { recursive: true, force: true })
+      ])
+    }
   })
 
   it('keeps user input tools advertised without a GUI gate but rejects execution', async () => {

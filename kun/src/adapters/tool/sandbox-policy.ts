@@ -6,7 +6,7 @@ import {
 } from '../../contracts/policy.js'
 import type { ToolCallLike, ToolHostContext } from '../../ports/tool-host.js'
 import type { LocalTool } from './local-tool-host.js'
-import { workspaceRoot } from './builtin-tool-utils.js'
+import { resolvePathThroughSymlinks, workspaceRoot } from './builtin-tool-utils.js'
 
 export type SandboxBlock = {
   code: 'sandbox_read_only' | 'sandbox_command_blocked' | 'sandbox_write_blocked'
@@ -25,16 +25,16 @@ const PATH_ARGUMENT_NAMES = [
 ] as const
 
 /**
- * Returns the first lexical path that escapes the workspace for a file
- * mutation call. Symlink escapes remain fail-closed in resolveWorkspacePath;
- * this helper only decides whether an approval prompt is needed before the
- * tool is executed.
+ * Returns the resolved targets outside the workspace for a file mutation
+ * call. Capturing the resolved target before approval lets execution reject a
+ * path whose file or parent directory was replaced by a symlink/junction
+ * while the prompt was open.
  */
-export function externalPathForApproval(
+export async function externalPathForApproval(
   tool: Pick<LocalTool, 'toolKind'>,
   call: Pick<ToolCallLike, 'arguments'>,
   context: Pick<ToolHostContext, 'workspace' | 'sandboxMode'>
-): string[] {
+): Promise<string[]> {
   if (tool.toolKind !== 'file_change' || effectiveSandboxMode(context) !== 'workspace-write') {
     return []
   }
@@ -44,8 +44,11 @@ export function externalPathForApproval(
     const value = call.arguments[name]
     if (typeof value !== 'string' || !value.trim()) continue
     const candidate = isAbsolute(value) ? resolve(value) : resolve(root, value)
-    if (!isPathInsideOrEqual(root, candidate) && !externalPaths.some((path) => samePath(path, candidate))) {
-      externalPaths.push(candidate)
+    if (!isPathInsideOrEqual(root, candidate)) {
+      const resolvedCandidate = await resolvePathThroughSymlinks(candidate)
+      if (!externalPaths.some((path) => samePath(path, resolvedCandidate))) {
+        externalPaths.push(resolvedCandidate)
+      }
     }
   }
   return externalPaths
