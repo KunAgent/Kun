@@ -32,6 +32,17 @@ describe('normalizeUiPluginManifest', () => {
     expect(result.manifest.features?.cameos).toBe(true)
   })
 
+  it('does not accept host effects from plugin-authored manifests', () => {
+    const result = normalizeUiPluginManifest({
+      ...validManifest,
+      hostEffect: { kind: 'shuimo-yijing' }
+    })
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.manifest).not.toHaveProperty('hostEffect')
+  })
+
   it('rejects reserved and malformed ids', () => {
     for (const id of ['default', 'kun', 'ON', 'a', 'Has Space', '../x']) {
       const result = normalizeUiPluginManifest({ ...validManifest, id })
