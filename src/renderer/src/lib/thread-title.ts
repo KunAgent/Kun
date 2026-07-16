@@ -23,7 +23,7 @@ function stripTrailingPunctuation(text: string): string {
 
 function shortenTitle(text: string): string {
   if (text.length <= MAX_THREAD_TITLE_LENGTH) return text
-  const sliced = text.slice(0, MAX_THREAD_TITLE_LENGTH)
+  const sliced = text.slice(0, MAX_THREAD_TITLE_LENGTH - 3)
   const lastSpace = sliced.lastIndexOf(' ')
   const compact = lastSpace >= 18 ? sliced.slice(0, lastSpace) : sliced
   return `${compact.trim()}...`
