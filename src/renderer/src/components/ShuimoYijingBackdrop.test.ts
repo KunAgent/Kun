@@ -52,4 +52,35 @@ describe('ShuimoYijingBackdrop', () => {
       renderToStaticMarkup(createElement(ShuimoYijingBackdrop, { effect: undefined }))
     ).toBe('')
   })
+
+  it('keeps vertical columns, exact ink levels, and accessibility media rules wired in CSS', async () => {
+    const nodeFs = 'node:fs/promises'
+    const { readFile } = await import(/* @vite-ignore */ nodeFs)
+    const css = await readFile(new URL('../styles/base-shell.css', import.meta.url), 'utf8')
+
+    const scriptRule = readCssRule(css, '.shuimo-yijing-script')
+    expect(scriptRule).toContain('flex-direction: column;')
+    expect(scriptRule).toContain('writing-mode: vertical-rl;')
+
+    expect(readCssRule(css, '.shuimo-yijing-backdrop')).toContain(
+      'color: rgba(39, 48, 44, 0.065);'
+    )
+    expect(readCssRule(css, "[data-theme='dark'] .shuimo-yijing-backdrop")).toContain(
+      'color: rgba(228, 226, 217, 0.05);'
+    )
+    expect(css).toMatch(
+      /@media \(max-width: 900px\) \{[\s\S]*?\.shuimo-yijing-script p:nth-child\(3\) \{[^}]*display: none;/
+    )
+    expect(css).toMatch(
+      /@media \(prefers-reduced-motion: reduce\) \{[\s\S]*?\.shuimo-yijing-backdrop \{[^}]*animation: none;[^}]*opacity: 1;/
+    )
+  })
 })
+
+function readCssRule(css: string, selector: string): string {
+  const selectorStart = css.indexOf(`${selector} {`)
+  expect(selectorStart).toBeGreaterThanOrEqual(0)
+  const bodyStart = css.indexOf('{', selectorStart) + 1
+  const bodyEnd = css.indexOf('}', bodyStart)
+  return css.slice(bodyStart, bodyEnd)
+}

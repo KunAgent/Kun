@@ -599,7 +599,7 @@ html[data-ui-plugin='shuimo-yijing'] {
   position: absolute;
   inset: 4.5rem 2.5rem 2.5rem;
   display: flex;
-  flex-direction: row-reverse;
+  flex-direction: column;
   justify-content: space-around;
   gap: clamp(2rem, 5vw, 6rem);
   overflow: hidden;
