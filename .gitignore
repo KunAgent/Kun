@@ -22,6 +22,8 @@ release.local.env
 *.key
 *.mobileprovision
 
+ref_dir/
+
 ### AL ###
 #Template for AL projects for Dynamics 365 Business Central
 #launch.json folder
