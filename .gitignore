@@ -51,3 +51,6 @@ TestResults.xml
 
 ### Internal docs
 docs/R2_RELEASE.md
+
+# Isolated implementation worktrees
+.worktrees/
