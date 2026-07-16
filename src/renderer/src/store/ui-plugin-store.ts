@@ -3,6 +3,7 @@ import {
   buildUiPluginTokenCss,
   resolveUiPluginFigure,
   type UiPluginFigureSlot,
+  type UiPluginHostEffect,
   type UiPluginLabelKey,
   type UiPluginListItem,
   type UiPluginManifestV1,
@@ -24,6 +25,7 @@ import {
 export type UiPluginRuntime = {
   manifest: UiPluginManifestV1
   figures: UiPluginRuntimeFigures
+  hostEffect?: UiPluginHostEffect
 }
 
 type UiPluginState = {
@@ -152,7 +154,11 @@ export const useUiPluginStore = create<UiPluginState>((set, get) => ({
         applyUiModeDom(UI_MODE_DEFAULT, null)
         return
       }
-      const runtime: UiPluginRuntime = { manifest: result.manifest, figures: result.figures }
+      const runtime: UiPluginRuntime = {
+        manifest: result.manifest,
+        figures: result.figures,
+        ...(result.hostEffect ? { hostEffect: result.hostEffect } : {})
+      }
       writeUiModePreference(normalized)
       set({ busy: false, uiMode: normalized, activeRuntime: runtime, lastError: null })
       applyUiModeDom(normalized, runtime)

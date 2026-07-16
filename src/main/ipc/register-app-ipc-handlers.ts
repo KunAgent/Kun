@@ -177,6 +177,7 @@ import {
   loadUiPluginFigures,
   removeUiPlugin
 } from '../services/ui-plugin-service'
+import { resolveBundledUiPluginHostEffect } from '../services/shuimo-yijing-host-effect'
 import { ensureBundledUiPlugins } from '../ui-plugin-bundled'
 import { ensureBundledSkills } from '../skill-bundled'
 import {
@@ -1207,7 +1208,15 @@ export function registerAppIpcHandlers(options: RegisterAppIpcHandlersOptions): 
     const request = parseIpcPayload('ui-plugin:load', uiPluginIdPayloadSchema, payload)
     const kunHomeDir = join(homedir(), '.kun')
     await ensureBundledUiPlugins(kunHomeDir)
-    return loadUiPluginFigures(kunHomeDir, request.id)
+    const loaded = await loadUiPluginFigures(kunHomeDir, request.id)
+    if (!loaded.ok) return loaded
+    try {
+      const hostEffect = resolveBundledUiPluginHostEffect(request.id)
+      return { ...loaded, ...(hostEffect ? { hostEffect } : {}) }
+    } catch {
+      console.warn('[ui-plugin] shuimo yijing host effect unavailable')
+      return loaded
+    }
   })
 
   ipcMain.handle('kun:config:read', async () => {

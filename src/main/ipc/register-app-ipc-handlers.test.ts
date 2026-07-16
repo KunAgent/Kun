@@ -25,6 +25,11 @@ import {
 
 const handlers = new Map<string, (event: unknown, payload?: unknown) => Promise<unknown>>()
 const electronMock = vi.hoisted(() => ({ showMessageBox: vi.fn() }))
+const uiPluginMock = vi.hoisted(() => ({
+  ensureBundledUiPlugins: vi.fn(async () => undefined),
+  loadUiPluginFigures: vi.fn(),
+  resolveBundledUiPluginHostEffect: vi.fn()
+}))
 
 vi.mock('electron', () => ({
   app: {
@@ -37,6 +42,19 @@ vi.mock('electron', () => ({
       handlers.set(channel, handler)
     })
   }
+}))
+
+vi.mock('../services/ui-plugin-service', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../services/ui-plugin-service')>()),
+  loadUiPluginFigures: uiPluginMock.loadUiPluginFigures
+}))
+
+vi.mock('../ui-plugin-bundled', () => ({
+  ensureBundledUiPlugins: uiPluginMock.ensureBundledUiPlugins
+}))
+
+vi.mock('../services/shuimo-yijing-host-effect', () => ({
+  resolveBundledUiPluginHostEffect: uiPluginMock.resolveBundledUiPluginHostEffect
 }))
 
 function settings(): AppSettingsV1 {
@@ -102,6 +120,94 @@ describe('registerAppIpcHandlers', () => {
   beforeEach(() => {
     handlers.clear()
     electronMock.showMessageBox.mockReset()
+    uiPluginMock.ensureBundledUiPlugins.mockClear()
+    uiPluginMock.loadUiPluginFigures.mockReset()
+    uiPluginMock.resolveBundledUiPluginHostEffect.mockReset()
+  })
+
+  it('enriches only a successful trusted UI plugin load with its host effect', async () => {
+    const effect = {
+      kind: 'shuimo-yijing' as const,
+      hexagram: {
+        ordinal: 10,
+        glyph: '䷉',
+        name: '履',
+        statement: '履虎尾不咥人亨',
+        statementCommentary: '本义',
+        movingLine: 4,
+        movingLineLabel: '九四',
+        movingLineText: '履虎尾愔愔終吉',
+        movingLineCommentary: '本义爻注'
+      }
+    }
+    uiPluginMock.loadUiPluginFigures.mockImplementation(async (_home: string, id: string) => ({
+      ok: true,
+      manifest: { id, name: id, version: '1.0.0', figures: {} },
+      figures: {}
+    }))
+    uiPluginMock.resolveBundledUiPluginHostEffect.mockImplementation((id: string) =>
+      id === 'shuimo-yijing' ? effect : undefined
+    )
+    registerAppIpcHandlers(registerOptions())
+
+    const handler = handlers.get('ui-plugin:load')
+    await expect(handler?.({}, { id: 'starlight' })).resolves.toEqual({
+      ok: true,
+      manifest: { id: 'starlight', name: 'starlight', version: '1.0.0', figures: {} },
+      figures: {}
+    })
+    await expect(handler?.({}, { id: 'shuimo-yijing' })).resolves.toEqual({
+      ok: true,
+      manifest: {
+        id: 'shuimo-yijing',
+        name: 'shuimo-yijing',
+        version: '1.0.0',
+        figures: {}
+      },
+      figures: {},
+      hostEffect: effect
+    })
+  })
+
+  it('returns a generic UI plugin load failure unchanged without resolving an effect', async () => {
+    const failure = { ok: false as const, error: 'plugin unavailable' }
+    uiPluginMock.loadUiPluginFigures.mockResolvedValue(failure)
+    registerAppIpcHandlers(registerOptions())
+
+    const result = await handlers.get('ui-plugin:load')?.({}, { id: 'shuimo-yijing' })
+
+    expect(result).toBe(failure)
+    expect(result).toEqual({ ok: false, error: 'plugin unavailable' })
+    expect(uiPluginMock.resolveBundledUiPluginHostEffect).not.toHaveBeenCalled()
+  })
+
+  it('keeps generic load success when trusted effect resolution fails and logs no private context', async () => {
+    const loaded = {
+      ok: true as const,
+      manifest: {
+        id: 'shuimo-yijing',
+        name: 'shuimo-yijing',
+        version: '1.0.0',
+        figures: {}
+      },
+      figures: {}
+    }
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    uiPluginMock.loadUiPluginFigures.mockResolvedValue(loaded)
+    uiPluginMock.resolveBundledUiPluginHostEffect.mockImplementation(() => {
+      throw new Error('launch 2026-07-16T08:09:10.000Z at C:\\Users\\private\\.kun')
+    })
+    registerAppIpcHandlers(registerOptions())
+
+    try {
+      await expect(
+        handlers.get('ui-plugin:load')?.({}, { id: 'shuimo-yijing' })
+      ).resolves.toBe(loaded)
+      expect(warn).toHaveBeenCalledWith('[ui-plugin] shuimo yijing host effect unavailable')
+      expect(warn.mock.calls.flat().join(' ')).not.toMatch(/2026-07-16|Users|\.kun/)
+    } finally {
+      warn.mockRestore()
+    }
   })
 
   it('rejects invalid settings patches at the handler boundary', async () => {
