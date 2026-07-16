@@ -528,13 +528,15 @@
 html[data-ui-plugin='shuimo-yijing'] .ds-app-shell,
 html[data-ui-plugin='shuimo-yijing'] .ds-workbench-shell,
 html[data-ui-plugin='shuimo-yijing'] .ds-settings-shell {
-  background-color: color-mix(in srgb, var(--ds-bg-main) 92%, transparent);
+  background-color: transparent;
 }
 
-html[data-ui-plugin='shuimo-yijing'] {
-  --ds-stage-gradient: linear-gradient(180deg, rgba(247, 245, 238, 0.94), rgba(232, 233, 226, 0.92));
-  --ds-topbar-bg: linear-gradient(180deg, rgba(248, 247, 240, 0.96), rgba(242, 240, 231, 0.9));
-  --ds-sidebar-gradient: linear-gradient(180deg, rgba(236, 237, 230, 0.96), rgba(229, 231, 223, 0.94));
+html[data-ui-plugin='shuimo-yijing'],
+html[data-ui-plugin='shuimo-yijing'] .ds-workbench-shell,
+html[data-ui-plugin='shuimo-yijing'] .ds-settings-shell {
+  --ds-stage-gradient: linear-gradient(180deg, rgba(247, 245, 238, 0.38), rgba(232, 233, 226, 0.28));
+  --ds-topbar-bg: linear-gradient(180deg, rgba(248, 247, 240, 0.62), rgba(242, 240, 231, 0.45));
+  --ds-sidebar-gradient: linear-gradient(180deg, rgba(236, 237, 230, 0.56), rgba(229, 231, 223, 0.5));
   --ds-sidebar-haze: linear-gradient(180deg, rgba(255, 255, 255, 0.22), transparent 34%);
   --ds-sidebar-border: rgba(54, 68, 62, 0.16);
   --ds-sidebar-row-hover: rgba(67, 83, 75, 0.08);
@@ -555,10 +557,12 @@ html[data-ui-plugin='shuimo-yijing'] {
   --ds-scrollbar-thumb-hover: rgba(70, 82, 76, 0.36);
 }
 
-[data-theme='dark'][data-ui-plugin='shuimo-yijing'] {
-  --ds-stage-gradient: linear-gradient(180deg, rgba(31, 38, 34, 0.95), rgba(20, 25, 22, 0.94));
-  --ds-topbar-bg: linear-gradient(180deg, rgba(35, 42, 38, 0.96), rgba(24, 30, 27, 0.9));
-  --ds-sidebar-gradient: linear-gradient(180deg, rgba(25, 31, 28, 0.96), rgba(17, 22, 19, 0.95));
+[data-theme='dark'][data-ui-plugin='shuimo-yijing'],
+[data-theme='dark'][data-ui-plugin='shuimo-yijing'] .ds-workbench-shell,
+[data-theme='dark'][data-ui-plugin='shuimo-yijing'] .ds-settings-shell {
+  --ds-stage-gradient: linear-gradient(180deg, rgba(31, 38, 34, 0.38), rgba(20, 25, 22, 0.3));
+  --ds-topbar-bg: linear-gradient(180deg, rgba(35, 42, 38, 0.62), rgba(24, 30, 27, 0.48));
+  --ds-sidebar-gradient: linear-gradient(180deg, rgba(25, 31, 28, 0.58), rgba(17, 22, 19, 0.52));
   --ds-sidebar-haze: linear-gradient(180deg, rgba(228, 226, 217, 0.045), transparent 34%);
   --ds-sidebar-border: rgba(218, 223, 214, 0.13);
   --ds-sidebar-row-hover: rgba(218, 223, 214, 0.07);
@@ -577,6 +581,11 @@ html[data-ui-plugin='shuimo-yijing'] {
   --ds-table-head-bg: rgba(34, 41, 37, 0.96);
   --ds-scrollbar-thumb: rgba(190, 201, 192, 0.24);
   --ds-scrollbar-thumb-hover: rgba(190, 201, 192, 0.36);
+}
+
+[data-theme='dark'][data-ui-plugin='shuimo-yijing'] .ds-kun-state-figure,
+[data-theme='dark'][data-ui-plugin='shuimo-yijing'] [data-ui-plugin-id='shuimo-yijing'] img {
+  filter: brightness(1.7) contrast(0.92);
 }
 
 .shuimo-yijing-backdrop {

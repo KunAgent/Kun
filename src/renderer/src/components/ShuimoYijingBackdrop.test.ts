@@ -68,6 +68,52 @@ describe('ShuimoYijingBackdrop', () => {
     expect(readCssRule(css, "[data-theme='dark'] .shuimo-yijing-backdrop")).toContain(
       'color: rgba(228, 226, 217, 0.05);'
     )
+
+    const lightThemeSelectors = [
+      "html[data-ui-plugin='shuimo-yijing']",
+      "html[data-ui-plugin='shuimo-yijing'] .ds-workbench-shell",
+      "html[data-ui-plugin='shuimo-yijing'] .ds-settings-shell"
+    ].join(',\n')
+    const lightThemeRule = readCssRule(css, lightThemeSelectors)
+    expect(lightThemeRule).toContain(
+      '--ds-stage-gradient: linear-gradient(180deg, rgba(247, 245, 238, 0.38), rgba(232, 233, 226, 0.28));'
+    )
+    expect(lightThemeRule).toContain(
+      '--ds-topbar-bg: linear-gradient(180deg, rgba(248, 247, 240, 0.62), rgba(242, 240, 231, 0.45));'
+    )
+    expect(lightThemeRule).toContain(
+      '--ds-sidebar-gradient: linear-gradient(180deg, rgba(236, 237, 230, 0.56), rgba(229, 231, 223, 0.5));'
+    )
+
+    const darkThemeSelectors = [
+      "[data-theme='dark'][data-ui-plugin='shuimo-yijing']",
+      "[data-theme='dark'][data-ui-plugin='shuimo-yijing'] .ds-workbench-shell",
+      "[data-theme='dark'][data-ui-plugin='shuimo-yijing'] .ds-settings-shell"
+    ].join(',\n')
+    const darkThemeRule = readCssRule(css, darkThemeSelectors)
+    expect(darkThemeRule).toContain(
+      '--ds-stage-gradient: linear-gradient(180deg, rgba(31, 38, 34, 0.38), rgba(20, 25, 22, 0.3));'
+    )
+    expect(darkThemeRule).toContain(
+      '--ds-topbar-bg: linear-gradient(180deg, rgba(35, 42, 38, 0.62), rgba(24, 30, 27, 0.48));'
+    )
+    expect(darkThemeRule).toContain(
+      '--ds-sidebar-gradient: linear-gradient(180deg, rgba(25, 31, 28, 0.58), rgba(17, 22, 19, 0.52));'
+    )
+
+    const rootSurfaceRule = readCssRule(css, [
+      "html[data-ui-plugin='shuimo-yijing'] .ds-app-shell",
+      "html[data-ui-plugin='shuimo-yijing'] .ds-workbench-shell",
+      "html[data-ui-plugin='shuimo-yijing'] .ds-settings-shell"
+    ].join(',\n'))
+    expect(rootSurfaceRule).toContain('background-color: transparent;')
+
+    const darkFigureRule = readCssRule(css, [
+      "[data-theme='dark'][data-ui-plugin='shuimo-yijing'] .ds-kun-state-figure",
+      "[data-theme='dark'][data-ui-plugin='shuimo-yijing'] [data-ui-plugin-id='shuimo-yijing'] img"
+    ].join(',\n'))
+    expect(darkFigureRule).toContain('filter: brightness(1.7) contrast(0.92);')
+
     expect(css).toMatch(
       /@media \(max-width: 900px\) \{[\s\S]*?\.shuimo-yijing-script p:nth-child\(3\) \{[^}]*display: none;/
     )
