@@ -212,22 +212,36 @@ export const useUiPluginStore = create<UiPluginState>((set, get) => ({
     const api = uiPluginApi()
     if (typeof api?.removeUiPlugin !== 'function') return
     const normalized = id.trim().toLowerCase()
-    if (pendingActivation?.pluginId === normalized) {
-      activationGeneration += 1
-      pendingActivation = null
-      set({ busy: false })
-    }
-    if (get().uiMode === normalized) {
-      if (pendingActivation) {
-        writeUiModePreference(UI_MODE_DEFAULT)
-        set({ uiMode: UI_MODE_DEFAULT, activeRuntime: null, lastError: null })
-        applyUiModeDom(UI_MODE_DEFAULT, null)
-      } else {
-        await get().activateUiMode(UI_MODE_DEFAULT)
+    const cancelPendingRemovalTarget = (): void => {
+      if (pendingActivation?.pluginId === normalized) {
+        activationGeneration += 1
+        pendingActivation = null
+        set({ busy: false })
       }
     }
+    const clearRemovedPluginRuntime = (): void => {
+      const state = get()
+      if (
+        state.uiMode === normalized ||
+        state.activeRuntime?.manifest.id === normalized
+      ) {
+        const nextMode = state.uiMode === normalized ? UI_MODE_DEFAULT : state.uiMode
+        if (nextMode === UI_MODE_DEFAULT) {
+          writeUiModePreference(UI_MODE_DEFAULT)
+        }
+        set({ uiMode: nextMode, activeRuntime: null, lastError: null })
+        applyUiModeDom(nextMode, null)
+      }
+    }
+
+    cancelPendingRemovalTarget()
+    clearRemovedPluginRuntime()
     try {
-      await api.removeUiPlugin(id)
+      const result = await api.removeUiPlugin(id)
+      if (result.ok) {
+        cancelPendingRemovalTarget()
+        clearRemovedPluginRuntime()
+      }
     } finally {
       await get().refreshUiPlugins()
     }

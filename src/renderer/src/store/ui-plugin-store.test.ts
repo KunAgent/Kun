@@ -268,4 +268,150 @@ describe('ui-plugin-store host effect lifecycle', () => {
     expect(attributes.get('data-ui-plugin')).toBe('shuimo-yijing')
     expect(removeUiPlugin).toHaveBeenCalledWith('starlight')
   })
+
+  it('clears a matching activation that succeeds while removal is in flight', async () => {
+    const removal = deferred<{ ok: boolean }>()
+    const loadUiPlugin = vi.fn().mockResolvedValue(success('shuimo-yijing', hostEffect))
+    const removeUiPlugin = vi.fn(() => removal.promise)
+    const listUiPlugins = vi.fn().mockResolvedValue({ plugins: [] })
+    const { attributes, localStorage, storage } = installBrowserFakes()
+    storage.set(UI_MODE_STORAGE_KEY, UI_MODE_DEFAULT)
+    vi.stubGlobal('window', {
+      kunGui: { loadUiPlugin, removeUiPlugin, listUiPlugins },
+      localStorage
+    })
+
+    const removeTask = useUiPluginStore.getState().removeUiPluginById('shuimo-yijing')
+    await useUiPluginStore.getState().activateUiMode('shuimo-yijing')
+    removal.resolve({ ok: true })
+    await removeTask
+
+    expect(useUiPluginStore.getState()).toMatchObject({
+      uiMode: UI_MODE_DEFAULT,
+      activeRuntime: null,
+      busy: false,
+      lastError: null
+    })
+    expect(storage.get(UI_MODE_STORAGE_KEY)).toBe(UI_MODE_DEFAULT)
+    expect(attributes.get('data-ui-plugin')).toBeUndefined()
+  })
+
+  it('cancels a matching pending activation when removal completes', async () => {
+    const removal = deferred<{ ok: boolean }>()
+    const activation = deferred<ReturnType<typeof success>>()
+    const loadUiPlugin = vi.fn(() => activation.promise)
+    const removeUiPlugin = vi.fn(() => removal.promise)
+    const listUiPlugins = vi.fn().mockResolvedValue({ plugins: [] })
+    const { attributes, localStorage, storage } = installBrowserFakes()
+    storage.set(UI_MODE_STORAGE_KEY, UI_MODE_DEFAULT)
+    vi.stubGlobal('window', {
+      kunGui: { loadUiPlugin, removeUiPlugin, listUiPlugins },
+      localStorage
+    })
+
+    const removeTask = useUiPluginStore.getState().removeUiPluginById('shuimo-yijing')
+    const staleActivation = useUiPluginStore.getState().activateUiMode('shuimo-yijing')
+    removal.resolve({ ok: true })
+    await removeTask
+    expect(useUiPluginStore.getState()).toMatchObject({
+      uiMode: UI_MODE_DEFAULT,
+      activeRuntime: null,
+      busy: false
+    })
+    activation.resolve(success('shuimo-yijing', hostEffect))
+    await staleActivation
+
+    expect(useUiPluginStore.getState()).toMatchObject({
+      uiMode: UI_MODE_DEFAULT,
+      activeRuntime: null,
+      busy: false,
+      lastError: null
+    })
+    expect(storage.get(UI_MODE_STORAGE_KEY)).toBe(UI_MODE_DEFAULT)
+    expect(attributes.get('data-ui-plugin')).toBeUndefined()
+  })
+
+  it('does not clear an unrelated activation that succeeds while removal is in flight', async () => {
+    const removal = deferred<{ ok: boolean }>()
+    const loadUiPlugin = vi.fn().mockResolvedValue(success('starlight'))
+    const removeUiPlugin = vi.fn(() => removal.promise)
+    const listUiPlugins = vi.fn().mockResolvedValue({ plugins: [] })
+    const { attributes, localStorage, storage } = installBrowserFakes()
+    vi.stubGlobal('window', {
+      kunGui: { loadUiPlugin, removeUiPlugin, listUiPlugins },
+      localStorage
+    })
+
+    const removeTask = useUiPluginStore.getState().removeUiPluginById('shuimo-yijing')
+    await useUiPluginStore.getState().activateUiMode('starlight')
+    removal.resolve({ ok: true })
+    await removeTask
+
+    expect(useUiPluginStore.getState()).toMatchObject({
+      uiMode: 'starlight',
+      activeRuntime: { manifest: { id: 'starlight' } },
+      busy: false,
+      lastError: null
+    })
+    expect(storage.get(UI_MODE_STORAGE_KEY)).toBe('starlight')
+    expect(attributes.get('data-ui-plugin')).toBe('starlight')
+  })
+
+  it('does not cancel an unrelated pending activation when removal completes', async () => {
+    const removal = deferred<{ ok: boolean }>()
+    const activation = deferred<ReturnType<typeof success>>()
+    const loadUiPlugin = vi.fn(() => activation.promise)
+    const removeUiPlugin = vi.fn(() => removal.promise)
+    const listUiPlugins = vi.fn().mockResolvedValue({ plugins: [] })
+    const { attributes, localStorage, storage } = installBrowserFakes()
+    vi.stubGlobal('window', {
+      kunGui: { loadUiPlugin, removeUiPlugin, listUiPlugins },
+      localStorage
+    })
+
+    const removeTask = useUiPluginStore.getState().removeUiPluginById('shuimo-yijing')
+    const activateTask = useUiPluginStore.getState().activateUiMode('starlight')
+    removal.resolve({ ok: true })
+    await removeTask
+    expect(useUiPluginStore.getState()).toMatchObject({
+      uiMode: UI_MODE_DEFAULT,
+      activeRuntime: null,
+      busy: true
+    })
+    activation.resolve(success('starlight'))
+    await activateTask
+
+    expect(useUiPluginStore.getState()).toMatchObject({
+      uiMode: 'starlight',
+      activeRuntime: { manifest: { id: 'starlight' } },
+      busy: false
+    })
+    expect(storage.get(UI_MODE_STORAGE_KEY)).toBe('starlight')
+    expect(attributes.get('data-ui-plugin')).toBe('starlight')
+  })
+
+  it('keeps a matching activation when removal reports failure', async () => {
+    const removal = deferred<{ ok: boolean }>()
+    const loadUiPlugin = vi.fn().mockResolvedValue(success('shuimo-yijing', hostEffect))
+    const removeUiPlugin = vi.fn(() => removal.promise)
+    const listUiPlugins = vi.fn().mockResolvedValue({ plugins: [] })
+    const { attributes, localStorage, storage } = installBrowserFakes()
+    vi.stubGlobal('window', {
+      kunGui: { loadUiPlugin, removeUiPlugin, listUiPlugins },
+      localStorage
+    })
+
+    const removeTask = useUiPluginStore.getState().removeUiPluginById('shuimo-yijing')
+    await useUiPluginStore.getState().activateUiMode('shuimo-yijing')
+    removal.resolve({ ok: false })
+    await removeTask
+
+    expect(useUiPluginStore.getState()).toMatchObject({
+      uiMode: 'shuimo-yijing',
+      activeRuntime: { manifest: { id: 'shuimo-yijing' }, hostEffect },
+      busy: false
+    })
+    expect(storage.get(UI_MODE_STORAGE_KEY)).toBe('shuimo-yijing')
+    expect(attributes.get('data-ui-plugin')).toBe('shuimo-yijing')
+  })
 })
