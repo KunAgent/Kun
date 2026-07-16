@@ -43,6 +43,7 @@ type UiPluginState = {
 }
 
 const TOKEN_STYLE_ELEMENT_ID = 'ds-ui-plugin-tokens'
+let activationGeneration = 0
 
 function uiPluginApi(): Window['kunGui'] | null {
   if (typeof window === 'undefined') return null
@@ -112,10 +113,11 @@ export const useUiPluginStore = create<UiPluginState>((set, get) => ({
   },
 
   activateUiMode: async (mode: string) => {
+    const generation = ++activationGeneration
     const normalized = mode.trim().toLowerCase()
     if (normalized === UI_MODE_DEFAULT) {
       writeUiModePreference(normalized)
-      set({ uiMode: normalized, activeRuntime: null, lastError: null })
+      set({ busy: false, uiMode: normalized, activeRuntime: null, lastError: null })
       applyUiModeDom(normalized, null)
       return
     }
@@ -123,7 +125,7 @@ export const useUiPluginStore = create<UiPluginState>((set, get) => ({
     // 'retroma' 是纯配色内置模式,无吉祥物图集,不走插件加载链路
     if (normalized === UI_MODE_RETROMA) {
       writeUiModePreference(normalized)
-      set({ uiMode: normalized, activeRuntime: null, lastError: null })
+      set({ busy: false, uiMode: normalized, activeRuntime: null, lastError: null })
       applyUiModeDom(normalized, null)
       return
     }
@@ -135,7 +137,7 @@ export const useUiPluginStore = create<UiPluginState>((set, get) => ({
       // 桌面接口不可用(如纯渲染测试):ikun 仍可退化为仅属性模式
       if (normalized === UI_MODE_IKUN) {
         writeUiModePreference(normalized)
-        set({ uiMode: normalized, activeRuntime: null, lastError: null })
+        set({ busy: false, uiMode: normalized, activeRuntime: null, lastError: null })
         applyUiModeDom(normalized, null)
       }
       return
@@ -143,6 +145,7 @@ export const useUiPluginStore = create<UiPluginState>((set, get) => ({
     set({ busy: true })
     try {
       const result = await api.loadUiPlugin(normalized)
+      if (generation !== activationGeneration) return
       if (!result.ok) {
         set({
           busy: false,
@@ -163,6 +166,7 @@ export const useUiPluginStore = create<UiPluginState>((set, get) => ({
       set({ busy: false, uiMode: normalized, activeRuntime: runtime, lastError: null })
       applyUiModeDom(normalized, runtime)
     } catch (error) {
+      if (generation !== activationGeneration) return
       set({
         busy: false,
         uiMode: UI_MODE_DEFAULT,

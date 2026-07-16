@@ -1,6 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { UiPluginHostEffect } from '@shared/ui-plugin'
-import { UI_MODE_DEFAULT, UI_MODE_RETROMA } from '../lib/ui-mode'
+import {
+  UI_MODE_DEFAULT,
+  UI_MODE_RETROMA,
+  UI_MODE_STORAGE_KEY
+} from '../lib/ui-mode'
 import { useUiPluginStore } from './ui-plugin-store'
 
 const hostEffect: UiPluginHostEffect = {
@@ -25,6 +29,34 @@ function success(id: string, effect?: UiPluginHostEffect) {
     figures: {},
     ...(effect ? { hostEffect: effect } : {})
   }
+}
+
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  let reject!: (reason?: unknown) => void
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise
+    reject = rejectPromise
+  })
+  return { promise, resolve, reject }
+}
+
+function installBrowserFakes() {
+  const storage = new Map<string, string>()
+  const attributes = new Map<string, string>()
+  const localStorage = {
+    getItem: vi.fn((key: string) => storage.get(key) ?? null),
+    setItem: vi.fn((key: string, value: string) => storage.set(key, value))
+  }
+  const documentElement = {
+    setAttribute: vi.fn((key: string, value: string) => attributes.set(key, value)),
+    removeAttribute: vi.fn((key: string) => attributes.delete(key))
+  }
+  vi.stubGlobal('document', {
+    documentElement,
+    getElementById: vi.fn(() => null)
+  })
+  return { attributes, localStorage, storage }
 }
 
 describe('ui-plugin-store host effect lifecycle', () => {
@@ -97,5 +129,80 @@ describe('ui-plugin-store host effect lifecycle', () => {
 
     expect(useUiPluginStore.getState().activeRuntime).toBeNull()
     expect(removeUiPlugin).toHaveBeenCalledWith('shuimo-yijing')
+  })
+
+  it.each([UI_MODE_DEFAULT, UI_MODE_RETROMA])(
+    'ignores a plugin load that resolves after switching to %s',
+    async (mode) => {
+      const pending = deferred<ReturnType<typeof success>>()
+      const loadUiPlugin = vi.fn(() => pending.promise)
+      const { attributes, localStorage, storage } = installBrowserFakes()
+      vi.stubGlobal('window', { kunGui: { loadUiPlugin }, localStorage })
+
+      const staleActivation = useUiPluginStore.getState().activateUiMode('shuimo-yijing')
+      await useUiPluginStore.getState().activateUiMode(mode)
+      pending.resolve(success('shuimo-yijing', hostEffect))
+      await staleActivation
+
+      expect(useUiPluginStore.getState()).toMatchObject({
+        uiMode: mode,
+        activeRuntime: null,
+        busy: false,
+        lastError: null
+      })
+      expect(storage.get(UI_MODE_STORAGE_KEY)).toBe(mode)
+      expect(attributes.get('data-ui-plugin')).toBeUndefined()
+      expect(attributes.get('data-retroma-mode')).toBe(mode === UI_MODE_RETROMA ? 'on' : 'off')
+    }
+  )
+
+  it('ignores the first of two plugin loads when it resolves last', async () => {
+    const first = deferred<ReturnType<typeof success>>()
+    const second = deferred<ReturnType<typeof success>>()
+    const loadUiPlugin = vi.fn()
+      .mockReturnValueOnce(first.promise)
+      .mockReturnValueOnce(second.promise)
+    const { attributes, localStorage, storage } = installBrowserFakes()
+    vi.stubGlobal('window', { kunGui: { loadUiPlugin }, localStorage })
+
+    const staleActivation = useUiPluginStore.getState().activateUiMode('shuimo-yijing')
+    const currentActivation = useUiPluginStore.getState().activateUiMode('starlight')
+    second.resolve(success('starlight'))
+    await currentActivation
+    first.resolve(success('shuimo-yijing', hostEffect))
+    await staleActivation
+
+    expect(useUiPluginStore.getState()).toMatchObject({
+      uiMode: 'starlight',
+      activeRuntime: { manifest: { id: 'starlight' }, figures: {} },
+      busy: false,
+      lastError: null
+    })
+    expect(useUiPluginStore.getState().activeRuntime?.hostEffect).toBeUndefined()
+    expect(storage.get(UI_MODE_STORAGE_KEY)).toBe('starlight')
+    expect(attributes.get('data-ui-plugin')).toBe('starlight')
+  })
+
+  it('ignores a stale rejection after a newer plugin activation succeeds', async () => {
+    const first = deferred<ReturnType<typeof success>>()
+    const loadUiPlugin = vi.fn()
+      .mockReturnValueOnce(first.promise)
+      .mockResolvedValueOnce(success('starlight'))
+    const { attributes, localStorage, storage } = installBrowserFakes()
+    vi.stubGlobal('window', { kunGui: { loadUiPlugin }, localStorage })
+
+    const staleActivation = useUiPluginStore.getState().activateUiMode('shuimo-yijing')
+    await useUiPluginStore.getState().activateUiMode('starlight')
+    first.reject(new Error('stale load crashed'))
+    await staleActivation
+
+    expect(useUiPluginStore.getState()).toMatchObject({
+      uiMode: 'starlight',
+      activeRuntime: { manifest: { id: 'starlight' }, figures: {} },
+      busy: false,
+      lastError: null
+    })
+    expect(storage.get(UI_MODE_STORAGE_KEY)).toBe('starlight')
+    expect(attributes.get('data-ui-plugin')).toBe('starlight')
   })
 })
