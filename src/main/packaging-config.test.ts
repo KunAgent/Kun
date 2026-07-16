@@ -1,10 +1,12 @@
-import { chmodSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { builtinModules, createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it } from 'vitest'
 
 const require = createRequire(import.meta.url)
+const repoRoot = fileURLToPath(new URL('../..', import.meta.url))
 const builderConfig = require('../../electron-builder.config.cjs')
 const afterPack = require('../../scripts/after-pack.cjs')
 const nativeBuildEnv = require('../../scripts/electron-native-build-env.cjs')
@@ -141,6 +143,30 @@ describe('electron-builder Kun packaging', () => {
     expect(builderConfig.files).not.toEqual(expect.arrayContaining([
       '!**/node_modules/openclaw/**/*'
     ]))
+  })
+
+  it('packages bundled license resources without dropping Whisper resources', () => {
+    const resourcesByTarget = new Map(
+      builderConfig.extraResources.map((entry: { to: string }) => [entry.to, entry])
+    )
+
+    expect(resourcesByTarget.get('whisper')).toEqual({
+      from: 'resources/whisper',
+      to: 'whisper',
+      filter: ['**/*']
+    })
+    expect(resourcesByTarget.get('licenses')).toEqual({
+      from: 'resources/licenses',
+      to: 'licenses',
+      filter: ['**/*']
+    })
+
+    for (const relativePath of [
+      'resources/licenses/ma-shan-zheng-OFL-1.1.txt',
+      'resources/licenses/zhouyi-benyi-CC-BY-SA-4.0.md'
+    ]) {
+      expect(existsSync(join(repoRoot, relativePath)), `${relativePath} should exist`).toBe(true)
+    }
   })
 
   it('validates the unpacked Kun runtime before release artifacts are created', () => {
