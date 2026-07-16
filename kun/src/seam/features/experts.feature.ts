@@ -1,7 +1,8 @@
-import type { KunExtension, RouteRegistrar } from '../types.js'
+import type { KunExtension, RouteRegistrar, LoopHookBus } from '../types.js'
 import type { ServerRuntime } from '../../server/routes/server-runtime.js'
 import type { Router } from '../../server/router.js'
 import { ExpertService, type ExpertServiceOptions } from '../../experts/services/expert-service.js'
+import { createExpertContextHook } from '../../experts/loop/expert-context-hook.js'
 
 /**
  * Experts Feature Extension
@@ -9,8 +10,11 @@ import { ExpertService, type ExpertServiceOptions } from '../../experts/services
  * Registers:
  * - Expert management service (plugin scanning, custom experts)
  * - Expert routes (GET /v1/experts, GET /v1/experts/:id)
- * - Expert context hook (to be implemented in Stage 2)
+ * - Expert context hook (injects expert systemPrompt into agent loop)
  */
+
+// Module-level service reference for hook registration
+let expertServiceInstance: ExpertService | undefined
 
 const expertsExtension: KunExtension = {
   id: 'experts',
@@ -99,12 +103,21 @@ const expertsExtension: KunExtension = {
 
     await service.initialize()
 
+    // Store for hook registration (called after initServices)
+    expertServiceInstance = service
+
     return { experts: service }
   },
 
-  registerLoopHooks(bus) {
-    // TODO: Register expert-context-hook to inject expert roleDefinition
-    // Will be implemented in Stage 2 after thread schema migration
+  registerLoopHooks(bus: LoopHookBus) {
+    if (!expertServiceInstance) {
+      // Expert service not initialized, skip hook registration
+      return
+    }
+
+    // Register hook to inject expert systemPrompt before agent loop starts
+    const hook = createExpertContextHook({ expertService: expertServiceInstance })
+    bus.on('beforeLoop', hook)
   }
 }
 

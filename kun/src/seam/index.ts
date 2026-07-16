@@ -31,7 +31,13 @@ export async function initializeExtensionServices(
   config: Record<string, unknown>,
   runtime: ServerRuntime
 ): Promise<ExtensionRuntimeServices> {
-  return await registry.initServices(config, runtime)
+  const services = await registry.initServices(config, runtime)
+
+  // After services are initialized, register loop hooks
+  // (hooks may depend on services being available)
+  registry.registerAllLoopHooks()
+
+  return services
 }
 
 /**

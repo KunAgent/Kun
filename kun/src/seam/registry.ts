@@ -15,8 +15,13 @@ export class ExtensionRegistry {
 
   register(extension: KunExtension): void {
     this.extensions.push(extension)
-    if (extension.registerLoopHooks) {
-      extension.registerLoopHooks(this.getLoopHookBus())
+  }
+
+  registerAllLoopHooks(): void {
+    for (const ext of this.extensions) {
+      if (ext.registerLoopHooks) {
+        ext.registerLoopHooks(this.getLoopHookBus())
+      }
     }
   }
 

@@ -213,6 +213,24 @@ export const ThreadSchema = z.object({
    * thread (primary-agent persona snapshot path).
    */
   systemPrompt: z.string().optional(),
+  /**
+   * Optional expert profile id this thread is bound to. When set, the expert's
+   * roleDefinition is injected into the agent loop context as systemPrompt.
+   * (Stage 2: experts extension)
+   */
+  expertId: z.string().optional(),
+  /**
+   * Optional expert team id this thread is bound to. When set, enables team
+   * collaboration orchestration for this conversation.
+   * (Stage 2: experts extension)
+   */
+  expertTeamId: z.string().optional(),
+  /**
+   * Conversation mode when using experts: 'chat' for direct interaction,
+   * 'task' for task-oriented delegation with expert orchestration.
+   * (Stage 2: experts extension)
+   */
+  conversationMode: z.enum(['chat', 'task']).optional(),
   mode: ThreadMode,
   status: ThreadStatus,
   approvalPolicy: ApprovalPolicySchema.default(DEFAULT_APPROVAL_POLICY),
@@ -252,6 +270,9 @@ export const ThreadSummarySchema = ThreadSchema.pick({
   toolCatalogEpoch: true,
   agentId: true,
   systemPrompt: true,
+  expertId: true,
+  expertTeamId: true,
+  conversationMode: true,
   mode: true,
   status: true,
   approvalPolicy: true,
@@ -292,6 +313,12 @@ export const CreateThreadRequest = z.object({
   agentId: z.string().optional(),
   /** Optional persona systemPrompt snapshot applied to every ModelRequest on this thread. */
   systemPrompt: z.string().optional(),
+  /** Optional expert profile id to bind this thread to. */
+  expertId: z.string().optional(),
+  /** Optional expert team id to bind this thread to. */
+  expertTeamId: z.string().optional(),
+  /** Conversation mode when using experts. */
+  conversationMode: z.enum(['chat', 'task']).optional(),
   mode: ThreadMode.default('agent'),
   approvalPolicy: ApprovalPolicySchema.optional(),
   sandboxMode: SandboxModeSchema.optional(),
