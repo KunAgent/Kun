@@ -76,6 +76,7 @@ import {
 import { waitForRuntimeTurnsIdle } from './runtime/managed-runtime-idle'
 import {
   resolveKunDataDir,
+  resolveManagedExtensionResources,
   setKunUnexpectedExitHandler,
   syncGuiManagedKunConfig,
   waitForKunStartupSettled,
@@ -1223,6 +1224,7 @@ async function applyManagedRuntimeSettingsHot(
   const runtime = resolveKunRuntimeSettings(settings)
   const dataDir = resolveKunDataDir(runtime)
   const config = await syncGuiManagedKunConfig(dataDir, runtime, {
+    extensionResources: resolveManagedExtensionResources(),
     scheduleMcp: {
       settings,
       launch: getClawScheduleMcpLaunchConfig()

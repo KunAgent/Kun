@@ -174,6 +174,20 @@ module.exports = {
       from: 'resources/whisper',
       to: 'whisper',
       filter: ['**/*']
+    },
+    {
+      from: 'experts',
+      to: 'kun-extensions/experts',
+      filter: ['plugins/**/*']
+    },
+    {
+      from: 'design',
+      to: 'kun-extensions/design',
+      filter: [
+        'design_libraries/**/*',
+        'runtime-skills/**/*',
+        'skills/**/*'
+      ]
     }
   ],
   artifactName: `Kun-${artifactVersion}-\${os}-\${arch}.\${ext}`,

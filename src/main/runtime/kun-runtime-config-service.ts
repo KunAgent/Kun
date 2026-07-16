@@ -1,5 +1,5 @@
 import { mkdir, writeFile } from 'node:fs/promises'
-import { dirname, join } from 'node:path'
+import { dirname, join, normalize, resolve } from 'node:path'
 import {
   ContextCompactionConfigSchema,
   KunConfigSchema,
@@ -68,6 +68,10 @@ import {
   LEGACY_RUNTIME_OVERRIDE_SOURCE_ID,
   legacyProviderCredentialSourceId
 } from '../legacy-provider-settings-migration'
+import {
+  resolveExtensionResources,
+  type ExtensionResources
+} from './extension-resource-locator'
 
 export type ManagedRuntimeHotApplyResult = 'applied' | 'restart_required' | 'failed'
 
@@ -82,6 +86,8 @@ export async function syncGuiManagedKunConfig(
   options?: {
     scheduleMcp?: { settings: AppSettingsV1; launch: ClawScheduleMcpLaunchConfig }
     mcpConfigPath?: string
+    extensionRoot?: string
+    extensionResources?: ExtensionResources
   }
 ): Promise<KunConfig> {
   const configPath = join(dataDir, 'config.json')
@@ -92,6 +98,16 @@ export async function syncGuiManagedKunConfig(
   const hasImportedEnabledMcpServer = Object.values(importedMcpServers)
     .some((server) => objectValue(server).enabled !== false)
   const serve = objectValue(existing?.serve)
+  const extensionResources = options?.extensionResources ?? resolveExtensionResources({
+    isPackaged: false,
+    appPath: options?.extensionRoot ?? process.cwd(),
+    resourcesPath: options?.extensionRoot ?? process.cwd()
+  })
+  const extensions = managedExtensionConfig(
+    dataDir,
+    extensionResources,
+    objectValue(serve.extensions)
+  )
   const capabilities = objectValue(existing?.capabilities)
   const mcp = objectValue(capabilities.mcp)
   const search = objectValue(mcp.search)
@@ -124,6 +140,7 @@ export async function syncGuiManagedKunConfig(
       retry: runtime.retry,
       tokenEconomy: tokenEconomyConfigForRuntime(runtime.tokenEconomy, objectValue(serve.tokenEconomy)),
       toolOutputLimits: toolOutputLimitsConfigForRuntime(runtime.toolOutputLimits),
+      extensions,
       ...(providers && Object.keys(providers).length ? { providers } : {})
     },
     models: modelConfigForRuntime(objectValue(existing?.models), runtime.modelProfiles),
@@ -184,6 +201,92 @@ export async function syncGuiManagedKunConfig(
   await mkdir(dirname(configPath), { recursive: true })
   await writeFile(configPath, nextText, 'utf8')
   return parsed.data
+}
+
+function managedExtensionConfig(
+  dataDir: string,
+  resources: ExtensionResources,
+  existing: Record<string, unknown>
+): Record<string, unknown> {
+  const existingExperts = objectValue(existing.experts)
+  const existingDesign = objectValue(existing.design)
+  const previousManagedRoot = previousManagedExtensionRoot(existing, existingDesign)
+  const additionalExpertRoots = stringArray(existingExperts.pluginRoots)
+    .filter((root) => !isManagedExpertRoot(root, previousManagedRoot, resources.expertPluginRoot))
+  const pluginRoots = deduplicatePaths([resources.expertPluginRoot, ...additionalExpertRoots])
+
+  return {
+    ...existing,
+    experts: {
+      ...existingExperts,
+      pluginRoots,
+      customExpertsDir: join(dataDir, 'experts', 'custom')
+    },
+    moa: {
+      ...objectValue(existing.moa)
+    },
+    automation: {
+      enabled: true,
+      ...objectValue(existing.automation)
+    },
+    design: {
+      ...existingDesign,
+      librariesRoot: resources.designLibrariesRoot,
+      runtimeSkillsRoot: resources.designRuntimeSkillsRoot,
+      staticSkillsRoot: resources.designStaticSkillsRoot
+    },
+    resourceLocator: {
+      version: 1,
+      managedRoot: resources.managedRoot
+    }
+  }
+}
+
+function previousManagedExtensionRoot(
+  existing: Record<string, unknown>,
+  existingDesign: Record<string, unknown>
+): string | undefined {
+  const recordedRoot = objectValue(existing.resourceLocator).managedRoot
+  if (typeof recordedRoot === 'string' && recordedRoot.trim()) return recordedRoot
+
+  for (const key of ['librariesRoot', 'runtimeSkillsRoot', 'staticSkillsRoot']) {
+    const value = existingDesign[key]
+    if (typeof value === 'string' && value.trim()) return dirname(dirname(resolve(value)))
+  }
+  return undefined
+}
+
+function isManagedExpertRoot(
+  value: string,
+  previousManagedRoot: string | undefined,
+  currentManagedExpertRoot: string
+): boolean {
+  const key = pathKey(value)
+  if (key === pathKey(currentManagedExpertRoot)) return true
+  if (previousManagedRoot && key === pathKey(join(previousManagedRoot, 'experts', 'plugins'))) {
+    return true
+  }
+  return /(?:^|[\\/])(?:deepseek-gui-test-app|kun-process-[^\\/]*)(?:[\\/]|$)/i.test(value)
+}
+
+function stringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return []
+  return value.filter((entry): entry is string => typeof entry === 'string' && entry.trim().length > 0)
+}
+
+function deduplicatePaths(paths: string[]): string[] {
+  const seen = new Set<string>()
+  return paths.filter((path) => {
+    const key = pathKey(path)
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+}
+
+function pathKey(value: string): string {
+  const normalized = normalize(resolve(value))
+  return process.platform === 'win32' ? normalized.toLowerCase() : normalized
 }
 
 function defaultCredentialSourceId(settings: AppSettingsV1): string {

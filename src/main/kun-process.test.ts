@@ -45,7 +45,8 @@ function createSettings(binaryPath: string): AppSettingsV1 {
       kun: {
         ...defaultKunRuntimeSettings(testKunPort),
         binaryPath,
-        autoStart: true
+        autoStart: true,
+        dataDir: tempRoot ? join(tempRoot, 'kun-data') : join(tmpdir(), 'kun-process-test-data')
       }
     },
     workspaceRoot: '/tmp/workspace',

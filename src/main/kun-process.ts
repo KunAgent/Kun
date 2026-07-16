@@ -90,6 +90,10 @@ import {
 } from './runtime/kun-runtime-mcp-config'
 import { subagentProfilesForRuntime } from './runtime/kun-runtime-subagent-config'
 import { syncGuiManagedKunConfig } from './runtime/kun-runtime-config-service'
+import {
+  resolveExtensionResources,
+  type ExtensionResources
+} from './runtime/extension-resource-locator'
 
 export { subagentProfilesForRuntime } from './runtime/kun-runtime-subagent-config'
 export { syncGuiManagedKunConfig } from './runtime/kun-runtime-config-service'
@@ -230,6 +234,14 @@ export function resolveKunDataDir(runtime: { dataDir: string }): string {
   return defaultKunDataDir()
 }
 
+export function resolveManagedExtensionResources(): ExtensionResources {
+  return resolveExtensionResources({
+    isPackaged: app.isPackaged,
+    appPath: app.getAppPath(),
+    resourcesPath: process.resourcesPath
+  })
+}
+
 function expandHomePath(path: string): string {
   if (path === '~') return homedir()
   if (path.startsWith('~/') || path.startsWith('~\\')) {
@@ -286,6 +298,7 @@ async function startKunChildOnce(
   }
   const dataDir = resolveKunDataDir(runtime)
   await syncGuiManagedKunConfig(dataDir, runtime, {
+    extensionResources: resolveManagedExtensionResources(),
     scheduleMcp: {
       settings,
       launch: {

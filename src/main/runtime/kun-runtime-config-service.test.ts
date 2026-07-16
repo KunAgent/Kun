@@ -1,4 +1,4 @@
-import { mkdtemp, readFile } from 'node:fs/promises'
+import { mkdtemp, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { describe, expect, it } from 'vitest'
@@ -15,6 +15,7 @@ import {
   classifyManagedRuntimeHotApplyResponse,
   syncGuiManagedKunConfig
 } from './kun-runtime-config-service'
+import { resolveExtensionResources } from './extension-resource-locator'
 
 describe('Kun runtime config service', () => {
   it('projects canonical runtime fields into a hot-apply body', () => {
@@ -80,6 +81,58 @@ describe('Kun runtime config service', () => {
         runtimeSkillsRoot: join(extensionRoot, 'design', 'runtime-skills'),
         staticSkillsRoot: join(extensionRoot, 'design', 'skills')
       }
+    })
+  })
+
+  it('repairs stale managed extension roots while preserving user expert roots', async () => {
+    const dataDir = await mkdtemp(join(tmpdir(), 'kun-extension-config-repair-'))
+    const staleRoot = join(dataDir, 'deepseek-gui-test-app')
+    const userExpertRoot = join(dataDir, 'user-experts')
+    const appPath = join(dataDir, 'current-app')
+    const resources = resolveExtensionResources({
+      isPackaged: false,
+      appPath,
+      resourcesPath: join(dataDir, 'resources')
+    })
+    await writeFile(join(dataDir, 'config.json'), JSON.stringify({
+      serve: {
+        extensions: {
+          experts: {
+            pluginRoots: [
+              join(staleRoot, 'experts', 'plugins'),
+              userExpertRoot
+            ],
+            customFlag: 'preserved'
+          },
+          moa: { defaultPresetId: 'balanced-local' },
+          design: {
+            librariesRoot: join(staleRoot, 'design', 'design_libraries'),
+            runtimeSkillsRoot: join(staleRoot, 'design', 'runtime-skills'),
+            staticSkillsRoot: join(staleRoot, 'design', 'skills')
+          }
+        }
+      }
+    }), 'utf8')
+
+    await syncGuiManagedKunConfig(dataDir, defaultKunRuntimeSettings(), {
+      extensionResources: resources
+    })
+
+    const config = JSON.parse(await readFile(join(dataDir, 'config.json'), 'utf8'))
+    expect(config.serve.extensions.experts).toMatchObject({
+      pluginRoots: [resources.expertPluginRoot, userExpertRoot],
+      customExpertsDir: join(dataDir, 'experts', 'custom'),
+      customFlag: 'preserved'
+    })
+    expect(config.serve.extensions.design).toMatchObject({
+      librariesRoot: resources.designLibrariesRoot,
+      runtimeSkillsRoot: resources.designRuntimeSkillsRoot,
+      staticSkillsRoot: resources.designStaticSkillsRoot
+    })
+    expect(config.serve.extensions.moa).toEqual({ defaultPresetId: 'balanced-local' })
+    expect(config.serve.extensions.resourceLocator).toEqual({
+      version: 1,
+      managedRoot: resources.managedRoot
     })
   })
 })
