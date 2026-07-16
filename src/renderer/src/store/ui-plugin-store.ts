@@ -44,6 +44,7 @@ type UiPluginState = {
 
 const TOKEN_STYLE_ELEMENT_ID = 'ds-ui-plugin-tokens'
 let activationGeneration = 0
+let pendingActivation: { pluginId: string; generation: number } | null = null
 
 function uiPluginApi(): Window['kunGui'] | null {
   if (typeof window === 'undefined') return null
@@ -114,6 +115,7 @@ export const useUiPluginStore = create<UiPluginState>((set, get) => ({
 
   activateUiMode: async (mode: string) => {
     const generation = ++activationGeneration
+    pendingActivation = null
     const normalized = mode.trim().toLowerCase()
     if (normalized === UI_MODE_DEFAULT) {
       writeUiModePreference(normalized)
@@ -142,10 +144,15 @@ export const useUiPluginStore = create<UiPluginState>((set, get) => ({
       }
       return
     }
+    pendingActivation = { pluginId: normalized, generation }
     set({ busy: true })
     try {
       const result = await api.loadUiPlugin(normalized)
-      if (generation !== activationGeneration) return
+      if (
+        generation !== activationGeneration ||
+        pendingActivation?.generation !== generation
+      ) return
+      pendingActivation = null
       if (!result.ok) {
         set({
           busy: false,
@@ -166,7 +173,11 @@ export const useUiPluginStore = create<UiPluginState>((set, get) => ({
       set({ busy: false, uiMode: normalized, activeRuntime: runtime, lastError: null })
       applyUiModeDom(normalized, runtime)
     } catch (error) {
-      if (generation !== activationGeneration) return
+      if (
+        generation !== activationGeneration ||
+        pendingActivation?.generation !== generation
+      ) return
+      pendingActivation = null
       set({
         busy: false,
         uiMode: UI_MODE_DEFAULT,
@@ -200,8 +211,20 @@ export const useUiPluginStore = create<UiPluginState>((set, get) => ({
   removeUiPluginById: async (id: string) => {
     const api = uiPluginApi()
     if (typeof api?.removeUiPlugin !== 'function') return
-    if (get().uiMode === id) {
-      await get().activateUiMode(UI_MODE_DEFAULT)
+    const normalized = id.trim().toLowerCase()
+    if (pendingActivation?.pluginId === normalized) {
+      activationGeneration += 1
+      pendingActivation = null
+      set({ busy: false })
+    }
+    if (get().uiMode === normalized) {
+      if (pendingActivation) {
+        writeUiModePreference(UI_MODE_DEFAULT)
+        set({ uiMode: UI_MODE_DEFAULT, activeRuntime: null, lastError: null })
+        applyUiModeDom(UI_MODE_DEFAULT, null)
+      } else {
+        await get().activateUiMode(UI_MODE_DEFAULT)
+      }
     }
     try {
       await api.removeUiPlugin(id)
