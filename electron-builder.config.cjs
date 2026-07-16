@@ -174,6 +174,11 @@ module.exports = {
       from: 'resources/whisper',
       to: 'whisper',
       filter: ['**/*']
+    },
+    {
+      from: 'resources/licenses',
+      to: 'licenses',
+      filter: ['**/*']
     }
   ],
   artifactName: `Kun-${artifactVersion}-\${os}-\${arch}.\${ext}`,
