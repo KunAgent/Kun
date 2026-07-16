@@ -3,6 +3,7 @@ import { Router } from '../server/router.js'
 import type { ServerRuntime } from '../server/routes/server-runtime.js'
 import { MoaConfigAdapter } from '../moa/adapters/moa-config.js'
 import moaExtension from './features/moa.feature.js'
+import expertsExtension from './features/experts.feature.js'
 import { registerCollaborationRoutes } from '../experts/services/collaboration-routes.js'
 
 const runtimeBase = {
@@ -41,5 +42,27 @@ describe('extension runtime route contracts', () => {
     registerCollaborationRoutes(router, runtime)
 
     expect(router.match('GET', '/v1/collaboration/plans')).toBeDefined()
+  })
+
+  it('matches expert diagnostics before the parameterized expert route', async () => {
+    const router = new Router()
+    const expertService = {
+      diagnostics: () => ({ expertCount: 1 }),
+      getExpert: () => undefined,
+      getExpertTeam: () => undefined
+    }
+    const runtime = {
+      ...runtimeBase,
+      extensions: { experts: { experts: expertService } }
+    } as unknown as ServerRuntime
+    expertsExtension.registerRoutes!(router, runtime)
+
+    const match = router.match('GET', '/v1/experts/diagnostics')
+    expect(match).toBeDefined()
+    const response = await match!.handler(new Request('http://localhost/v1/experts/diagnostics', {
+      headers: { authorization: 'Bearer test-token' }
+    }), { params: match!.params })
+
+    expect(response.status).toBe(200)
   })
 })
