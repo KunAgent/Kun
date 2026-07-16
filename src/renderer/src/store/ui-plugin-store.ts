@@ -234,8 +234,6 @@ export const useUiPluginStore = create<UiPluginState>((set, get) => ({
       }
     }
 
-    cancelPendingRemovalTarget()
-    clearRemovedPluginRuntime()
     try {
       const result = await api.removeUiPlugin(id)
       if (result.ok) {

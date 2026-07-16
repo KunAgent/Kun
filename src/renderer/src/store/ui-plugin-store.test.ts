@@ -414,4 +414,83 @@ describe('ui-plugin-store host effect lifecycle', () => {
     expect(storage.get(UI_MODE_STORAGE_KEY)).toBe('shuimo-yijing')
     expect(attributes.get('data-ui-plugin')).toBe('shuimo-yijing')
   })
+
+  it('preserves a pre-existing active plugin when removal reports failure', async () => {
+    const loadUiPlugin = vi.fn().mockResolvedValue(success('shuimo-yijing', hostEffect))
+    const removeUiPlugin = vi.fn().mockResolvedValue({ ok: false })
+    const listUiPlugins = vi.fn().mockResolvedValue({ plugins: [] })
+    const { attributes, localStorage, storage } = installBrowserFakes()
+    vi.stubGlobal('window', {
+      kunGui: { loadUiPlugin, removeUiPlugin, listUiPlugins },
+      localStorage
+    })
+    await useUiPluginStore.getState().activateUiMode('shuimo-yijing')
+
+    await useUiPluginStore.getState().removeUiPluginById('shuimo-yijing')
+
+    expect(useUiPluginStore.getState()).toMatchObject({
+      uiMode: 'shuimo-yijing',
+      activeRuntime: { manifest: { id: 'shuimo-yijing' }, hostEffect },
+      busy: false,
+      lastError: null
+    })
+    expect(storage.get(UI_MODE_STORAGE_KEY)).toBe('shuimo-yijing')
+    expect(attributes.get('data-ui-plugin')).toBe('shuimo-yijing')
+  })
+
+  it('preserves a pre-existing pending activation when removal reports failure', async () => {
+    const activation = deferred<ReturnType<typeof success>>()
+    const loadUiPlugin = vi.fn(() => activation.promise)
+    const removeUiPlugin = vi.fn().mockResolvedValue({ ok: false })
+    const listUiPlugins = vi.fn().mockResolvedValue({ plugins: [] })
+    const { attributes, localStorage, storage } = installBrowserFakes()
+    vi.stubGlobal('window', {
+      kunGui: { loadUiPlugin, removeUiPlugin, listUiPlugins },
+      localStorage
+    })
+
+    const activateTask = useUiPluginStore.getState().activateUiMode('shuimo-yijing')
+    await useUiPluginStore.getState().removeUiPluginById('shuimo-yijing')
+    expect(useUiPluginStore.getState()).toMatchObject({
+      uiMode: UI_MODE_DEFAULT,
+      activeRuntime: null,
+      busy: true
+    })
+    activation.resolve(success('shuimo-yijing', hostEffect))
+    await activateTask
+
+    expect(useUiPluginStore.getState()).toMatchObject({
+      uiMode: 'shuimo-yijing',
+      activeRuntime: { manifest: { id: 'shuimo-yijing' }, hostEffect },
+      busy: false,
+      lastError: null
+    })
+    expect(storage.get(UI_MODE_STORAGE_KEY)).toBe('shuimo-yijing')
+    expect(attributes.get('data-ui-plugin')).toBe('shuimo-yijing')
+  })
+
+  it('preserves the active plugin and reports a thrown removal error', async () => {
+    const loadUiPlugin = vi.fn().mockResolvedValue(success('shuimo-yijing', hostEffect))
+    const removeUiPlugin = vi.fn().mockRejectedValue(new Error('remove crashed'))
+    const listUiPlugins = vi.fn().mockResolvedValue({ plugins: [] })
+    const { attributes, localStorage, storage } = installBrowserFakes()
+    vi.stubGlobal('window', {
+      kunGui: { loadUiPlugin, removeUiPlugin, listUiPlugins },
+      localStorage
+    })
+    await useUiPluginStore.getState().activateUiMode('shuimo-yijing')
+
+    await expect(
+      useUiPluginStore.getState().removeUiPluginById('shuimo-yijing')
+    ).rejects.toThrow('remove crashed')
+
+    expect(useUiPluginStore.getState()).toMatchObject({
+      uiMode: 'shuimo-yijing',
+      activeRuntime: { manifest: { id: 'shuimo-yijing' }, hostEffect },
+      busy: false,
+      lastError: null
+    })
+    expect(storage.get(UI_MODE_STORAGE_KEY)).toBe('shuimo-yijing')
+    expect(attributes.get('data-ui-plugin')).toBe('shuimo-yijing')
+  })
 })
