@@ -17,7 +17,7 @@ import type { ModelClient } from '../ports/model-client.js'
 import type { ImmutablePrefix } from '../cache/immutable-prefix.js'
 import type { InflightTracker } from '../loop/inflight-tracker.js'
 import type { SteeringQueue } from '../loop/steering-queue.js'
-import { ContextCompactor } from '../loop/context-compactor.js'
+import { ContextCompactor, extractSkillPins } from '../loop/context-compactor.js'
 import {
   effectiveHistoryAfterLatestCompaction,
   insertCompactionIntoVisibleHistory
@@ -490,30 +490,46 @@ export class TurnService {
                 `${reservation.reason} Model compaction summary was not sent; using heuristic summary.`
               )
             } else {
-              modelSummary = await summarizeCompactionWithModel({
-                threadId: input.threadId,
-                turnId,
-                model,
-                ...(compactionModel.providerId ? { providerId: compactionModel.providerId } : {}),
-                ...(compactionModel.accountId ? { accountId: compactionModel.accountId } : {}),
-                modelClient: this.deps.model,
-                prefix,
-                contextCompaction: this.deps.contextCompaction,
-                items: history,
-                heuristicSummary: result.summaryItem.kind === 'compaction' ? result.summaryItem.summary : '',
-                signal: input.signal ?? new AbortController().signal,
-                recordUsage: async (usageSnapshot) => {
-                  const usage = this.deps.usage?.record(input.threadId, usageSnapshot) ?? usageSnapshot
-                  await this.deps.events.record({
-                    kind: 'usage',
-                    threadId: input.threadId,
-                    turnId,
-                    model,
-                    usage
-                  })
-                },
-                recordFallback
-              })
+              const foldedItemIds = new Set(
+                result.summaryItem.kind === 'compaction'
+                  ? result.summaryItem.sourceItemIds ?? []
+                  : []
+              )
+              // Keep the manual compaction summarizer aligned with the
+              // automatic path: recent tail items are sent verbatim after the
+              // summary and must not be summarized a second time.
+              const summaryItems = history.filter((item) => foldedItemIds.has(item.id))
+              if (summaryItems.length === 0) {
+                await recordFallback(
+                  'Model compaction summary skipped because no folded source items were available; using heuristic summary.'
+                )
+              } else {
+                modelSummary = await summarizeCompactionWithModel({
+                  threadId: input.threadId,
+                  turnId,
+                  model,
+                  ...(compactionModel.providerId ? { providerId: compactionModel.providerId } : {}),
+                  ...(compactionModel.accountId ? { accountId: compactionModel.accountId } : {}),
+                  modelClient: this.deps.model,
+                  prefix,
+                  contextCompaction: this.deps.contextCompaction,
+                  items: summaryItems,
+                  pinnedSkillPins: extractSkillPins(summaryItems),
+                  heuristicSummary: result.summaryItem.kind === 'compaction' ? result.summaryItem.summary : '',
+                  signal: input.signal ?? new AbortController().signal,
+                  recordUsage: async (usageSnapshot) => {
+                    const usage = this.deps.usage?.record(input.threadId, usageSnapshot) ?? usageSnapshot
+                    await this.deps.events.record({
+                      kind: 'usage',
+                      threadId: input.threadId,
+                      turnId,
+                      model,
+                      usage
+                    })
+                  },
+                  recordFallback
+                })
+              }
             }
           }
           if (modelSummary) {

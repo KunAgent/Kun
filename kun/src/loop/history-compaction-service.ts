@@ -22,6 +22,7 @@ import { recordLifecycleHookWarnings } from './turn-lifecycle-hooks.js'
 import type { ContextCompactionConfig } from './model-context-profile.js'
 import { estimateRequestOverheadTokens } from './model-request-estimator.js'
 import type { LoopTelemetry } from './loop-telemetry.js'
+import { extractSkillPins } from './context-compactor.js'
 
 export type HistoryCompactionServiceDeps = {
   sessionStore: SessionStore
@@ -171,31 +172,48 @@ export class HistoryCompactionService {
                   : 'Model compaction summary skipped because its model-request budget is exhausted; using heuristic summary.'
               )
             } else {
-              modelSummary = await summarizeCompactionWithModel({
-                threadId: input.threadId,
-                turnId: input.turnId,
-                model: compactionModel.model,
-                ...(compactionModel.providerId ? { providerId: compactionModel.providerId } : {}),
-                ...(compactionModel.accountId ? { accountId: compactionModel.accountId } : {}),
-                modelClient: this.deps.model,
-                prefix: this.deps.prefix,
-                contextCompaction,
-                items: currentItems,
-                heuristicSummary: result.summaryItem.kind === 'compaction' ? result.summaryItem.summary : '',
-                signal: input.signal,
-                recordUsage: async (usageSnapshot) => {
-                  const usage = this.deps.usage.record(input.threadId, usageSnapshot)
-                  await this.deps.recordGoalUsage(input.threadId, usageSnapshot.totalTokens)
-                  await this.deps.events.record({
-                    kind: 'usage',
-                    threadId: input.threadId,
-                    turnId: input.turnId,
-                    model: compactionModel.model,
-                    usage
-                  })
-                },
-                recordFallback
-              })
+              const foldedItemIds = new Set(
+                result.summaryItem.kind === 'compaction'
+                  ? result.summaryItem.sourceItemIds ?? []
+                  : []
+              )
+              // The compaction summary is sent alongside the retained tail in
+              // the main request. Feed only the folded source items to the
+              // summarizer so the latest user instruction is not reproduced
+              // inside both the summary and the verbatim tail.
+              const summaryItems = currentItems.filter((item) => foldedItemIds.has(item.id))
+              if (summaryItems.length === 0) {
+                await recordFallback(
+                  'Model compaction summary skipped because no folded source items were available; using heuristic summary.'
+                )
+              } else {
+                modelSummary = await summarizeCompactionWithModel({
+                  threadId: input.threadId,
+                  turnId: input.turnId,
+                  model: compactionModel.model,
+                  ...(compactionModel.providerId ? { providerId: compactionModel.providerId } : {}),
+                  ...(compactionModel.accountId ? { accountId: compactionModel.accountId } : {}),
+                  modelClient: this.deps.model,
+                  prefix: this.deps.prefix,
+                  contextCompaction,
+                  items: summaryItems,
+                  pinnedSkillPins: extractSkillPins(summaryItems),
+                  heuristicSummary: result.summaryItem.kind === 'compaction' ? result.summaryItem.summary : '',
+                  signal: input.signal,
+                  recordUsage: async (usageSnapshot) => {
+                    const usage = this.deps.usage.record(input.threadId, usageSnapshot)
+                    await this.deps.recordGoalUsage(input.threadId, usageSnapshot.totalTokens)
+                    await this.deps.events.record({
+                      kind: 'usage',
+                      threadId: input.threadId,
+                      turnId: input.turnId,
+                      model: compactionModel.model,
+                      usage
+                    })
+                  },
+                  recordFallback
+                })
+              }
             }
           }
           if (input.signal.aborted) {

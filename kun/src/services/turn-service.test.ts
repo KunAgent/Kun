@@ -544,7 +544,7 @@ describe('TurnService compact', () => {
     const items: TurnItem[] = [
       makeUserItem({ id: 'item_1', threadId, turnId, text: 'Initial task: fix /compact.' }),
       makeAssistantTextItem({ id: 'item_2', threadId, turnId, text: 'I found the service path.', status: 'completed' }),
-      makeUserItem({ id: 'item_3', threadId, turnId, text: 'Please preserve this clue.' }),
+      makeUserItem({ id: 'item_3', threadId, turnId, text: 'Active Skill: retained-manual-tail-only\nPlease preserve this clue.' }),
       makeAssistantTextItem({ id: 'item_4', threadId, turnId, text: 'Recent tail A.', status: 'completed' }),
       makeUserItem({ id: 'item_5', threadId, turnId, text: 'Recent tail B.' }),
       makeAssistantTextItem({ id: 'item_6', threadId, turnId, text: 'Recent tail C.', status: 'completed' })
@@ -590,14 +590,20 @@ describe('TurnService compact', () => {
     expect(model.requests[0].systemPrompt).toBe(COMPACTION_SYSTEM_PROMPT)
     expect(model.requests[0].prefix).toEqual([])
     const summaryHistory = model.requests[0].history
-    expect(summaryHistory[0]?.kind === 'user_message' ? summaryHistory[0].text : '')
-      .toContain('Initial task: fix /compact.')
+    const summaryUserMessages = summaryHistory
+      .filter((item) => item.kind === 'user_message')
+      .map((item) => item.text)
+    expect(summaryUserMessages[0]).toContain('Initial task: fix /compact.')
+    expect(summaryUserMessages).not.toContain('Active Skill: retained-manual-tail-only\nPlease preserve this clue.')
+    expect(summaryUserMessages).not.toContain('Recent tail B.')
+    expect(summaryUserMessages).not.toContain('Recent tail C.')
     const continuationItem = summaryHistory[summaryHistory.length - 1]
     expect(continuationItem?.kind).toBe('user_message')
     if (!continuationItem || continuationItem.kind !== 'user_message') {
       throw new Error('expected compaction continuation message to be a user message')
     }
     expect(continuationItem.text).toContain('Provide a detailed summary of our conversation above')
+    expect(continuationItem.text).not.toContain('Active Skill: retained-manual-tail-only')
     expect(response.summary).toContain('MODEL SUMMARY kept the durable state.')
     expect(response.pinnedConstraints).toEqual(prefix.pinnedConstraints)
 

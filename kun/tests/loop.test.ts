@@ -2634,7 +2634,7 @@ describe('AgentLoop', () => {
     })
   })
 
-  it('trims trailing tool calls and preserves skill pins in compaction summaries', () => {
+  it('trims trailing tool calls and retains tail skill pins verbatim', () => {
     const compactor = new ContextCompactor({ softThreshold: 1, hardThreshold: 2 })
     const prefix = createImmutablePrefix({ systemPrompt: 'system' })
     const result = compactor.compact({
@@ -2664,7 +2664,12 @@ describe('AgentLoop', () => {
 
     expect(result.next.some((item) => item.kind === 'tool_call')).toBe(false)
     expect(result.summaryItem.kind === 'compaction' ? result.summaryItem.summary : '')
-      .toContain('Active Skill: documents (documents)')
+      .not.toContain('Active Skill: documents (documents)')
+    expect(result.next.at(-1)).toMatchObject({
+      kind: 'assistant_text',
+      id: 'a1',
+      text: 'Active Skill: documents (documents)'
+    })
   })
 
   it('keeps the latest user turn when force compaction would orphan a tool result', () => {

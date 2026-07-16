@@ -48,7 +48,10 @@ export const COMPACTION_SYSTEM_PROMPT = [
  * write a self-contained handoff. Optional pinned constraints are appended so
  * durable rules survive even in the free-form summary text.
  */
-export function buildCompactionContinuationMessage(pinnedConstraints?: readonly string[]): string {
+export function buildCompactionContinuationMessage(
+  pinnedConstraints?: readonly string[],
+  pinnedSkillPins?: readonly string[]
+): string {
   const lines = [
     'Provide a detailed summary of our conversation above, written so a new session with no access to ' +
       'this history can continue the work seamlessly. Cover what we set out to do, what has been done, ' +
@@ -61,6 +64,12 @@ export function buildCompactionContinuationMessage(pinnedConstraints?: readonly 
     lines.push('')
     lines.push('Durable constraints that MUST be preserved in your summary:')
     for (const pin of pins) lines.push(`- ${pin}`)
+  }
+  const skills = (pinnedSkillPins ?? []).map((pin) => pin.trim()).filter((pin) => pin.length > 0)
+  if (skills.length > 0) {
+    lines.push('')
+    lines.push('Active skill pins that MUST be preserved in your summary:')
+    for (const skill of skills) lines.push(`- ${skill}`)
   }
   return lines.join('\n')
 }
@@ -171,6 +180,7 @@ export async function summarizeCompactionWithModel(input: {
   prefix: ImmutablePrefix
   contextCompaction?: ContextCompactionConfig
   items: TurnItem[]
+  pinnedSkillPins?: readonly string[]
   heuristicSummary: string
   signal: AbortSignal
   recordUsage?: (usage: UsageSnapshot) => Promise<void> | void
@@ -209,7 +219,7 @@ export async function summarizeCompactionWithModel(input: {
       createdAt: new Date().toISOString(),
       finishedAt: new Date().toISOString(),
       kind: 'user_message' as const,
-      text: buildCompactionContinuationMessage(input.prefix.pinnedConstraints)
+      text: buildCompactionContinuationMessage(input.prefix.pinnedConstraints, input.pinnedSkillPins)
     }
     let text = ''
     for await (const chunk of input.modelClient.stream({

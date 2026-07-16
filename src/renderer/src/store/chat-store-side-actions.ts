@@ -189,16 +189,27 @@ function buildSideSink(sideId: string, ctx: SideContext, sinceSeq = 0): ThreadEv
       ctx.set((s) =>
         patchSide(s, sideId, (side) => {
           const flushed = flushSideLiveBlocks(side)
+          const index = flushed.blocks.findIndex(
+            (block) => block.kind === 'compaction' && block.id === ev.itemId
+          )
+          const current = index >= 0 ? flushed.blocks[index] : undefined
           const block: CompactionBlock = {
             kind: 'compaction',
             id: ev.itemId,
-            createdAt: ev.createdAt ?? new Date().toISOString(),
-            summary: ev.summary,
+            createdAt: current?.kind === 'compaction'
+              ? current.createdAt
+              : ev.createdAt ?? new Date().toISOString(),
+            summary: ev.summary || (current?.kind === 'compaction' ? current.summary : ''),
             status: ev.status,
-            detail: ev.detail,
-            auto: ev.auto
+            detail: ev.detail ?? (current?.kind === 'compaction' ? current.detail : undefined),
+            auto: ev.auto ?? (current?.kind === 'compaction' ? current.auto : undefined),
+            messagesBefore: ev.messagesBefore ?? (current?.kind === 'compaction' ? current.messagesBefore : undefined),
+            messagesAfter: ev.messagesAfter ?? (current?.kind === 'compaction' ? current.messagesAfter : undefined)
           }
-          return { ...flushed.side, blocks: [...flushed.blocks, block] }
+          const blocks = [...flushed.blocks]
+          if (index >= 0) blocks[index] = block
+          else blocks.push(block)
+          return { ...flushed.side, blocks }
         })
       )
     },

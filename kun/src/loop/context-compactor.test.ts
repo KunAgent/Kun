@@ -17,7 +17,7 @@ describe('ContextCompactor', () => {
         id: 'item_user_start',
         threadId,
         turnId,
-        text: 'Please keep the complete issue list when compacting.'
+        text: 'Repeat this instruction verbatim.'
       }),
       makeAssistantTextItem({
         id: 'item_problem_list',
@@ -39,7 +39,7 @@ describe('ContextCompactor', () => {
         id: 'item_recent_tail',
         threadId,
         turnId,
-        text: 'Recent tail request kept verbatim.'
+        text: 'Active Skill: retained-tail-only-skill\nRepeat this instruction verbatim.'
       })
     ]
 
@@ -60,5 +60,15 @@ describe('ContextCompactor', () => {
     expect(result.summaryItem.summary).toContain('Problem 42: preserve finding 42')
     expect(result.summaryItem.summary).toContain('Problem 80: preserve finding 80')
     expect(result.summaryItem.summary).not.toContain('middle item(s) omitted from this compact summary')
+    // The retained tail is sent verbatim after the summary. It must not be
+    // repeated inside the summary as well. A repeated instruction in a
+    // different turn is still preserved: the folded copy is summarized and
+    // the newest copy stays verbatim in the tail.
+    expect(result.summaryItem.summary).toContain('Repeat this instruction verbatim.')
+    expect(result.summaryItem.summary).not.toContain('Active Skill: retained-tail-only-skill')
+    expect(result.next.at(-1)).toMatchObject({
+      id: 'item_recent_tail',
+      text: 'Active Skill: retained-tail-only-skill\nRepeat this instruction verbatim.'
+    })
   })
 })
