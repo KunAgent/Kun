@@ -670,7 +670,10 @@ export function createThreadActions(
             ...(overrides?.guiDesignArtifact ? { guiDesignArtifact: overrides.guiDesignArtifact } : {}),
             ...(attachmentIds?.length ? { attachmentIds } : {}),
             ...(attachments?.length ? { attachments } : {}),
-            ...(fileReferences?.length ? { fileReferences } : {})
+            ...(fileReferences?.length ? { fileReferences } : {}),
+            ...(overrides?.executionProfile
+              ? { executionProfile: overrides.executionProfile }
+              : {})
           }
         ],
         error: null
@@ -702,6 +705,11 @@ export function createThreadActions(
       ) ??
       []
     let activeThreadId = get().activeThreadId
+    const executionProfile = queued?.executionProfile ?? overrides?.executionProfile
+    if (executionProfile && activeThreadId) {
+      const currentProfile = get().threads.find((thread) => thread.id === activeThreadId)?.executionProfile
+      if (JSON.stringify(currentProfile) !== JSON.stringify(executionProfile)) activeThreadId = null
+    }
     const displayText = queued?.displayText ?? overrides?.displayText?.trim() ?? trimmedText
     const userDisplayText = displayText !== trimmedText ? displayText : undefined
     const generatedTitle = deriveThreadTitleFromPrompt(displayText)
@@ -815,6 +823,7 @@ export function createThreadActions(
                 ...(composerModel ? { model: composerModel } : {}),
                 ...(composerProviderId ? { providerId: composerProviderId } : {}),
                 ...(composerAccountId ? { accountId: composerAccountId } : {}),
+                ...(executionProfile ? { executionProfile } : {}),
                 mode: mode ?? 'agent'
               })
             : null

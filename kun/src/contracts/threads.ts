@@ -164,6 +164,50 @@ export const ExtensionThreadMetadataSchema = z.object({
 })
 export type ExtensionThreadMetadata = z.infer<typeof ExtensionThreadMetadataSchema>
 
+export const ExpertRuleSnapshotSchema = z.object({
+  id: z.string().min(1),
+  displayName: z.string().min(1),
+  version: z.string().min(1),
+  roleDefinition: z.string().min(1),
+  behaviorRules: z.string().optional(),
+  outputPreferences: z.string().optional(),
+  skillRefs: z.array(z.string().min(1)).default([])
+})
+
+export const ExpertTeamRuleSnapshotSchema = z.object({
+  id: z.string().min(1),
+  displayName: z.string().min(1),
+  version: z.string().min(1),
+  workflow: z.string().min(1),
+  deliverableSpec: z.string().min(1),
+  skillRefs: z.array(z.string().min(1)).default([]),
+  members: z.array(z.object({
+    agentName: z.string().min(1),
+    roleLabel: z.string().min(1),
+    roleDefinition: z.string().min(1),
+    skillRefs: z.array(z.string().min(1)).default([])
+  })).min(1)
+})
+
+export const ConversationExecutionProfileSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('normal'), version: z.literal(1) }),
+  z.object({
+    kind: z.literal('expert'),
+    version: z.literal(1),
+    expertId: z.string().min(1),
+    digest: z.string().min(1),
+    snapshot: ExpertRuleSnapshotSchema
+  }),
+  z.object({
+    kind: z.literal('expert_team'),
+    version: z.literal(1),
+    teamId: z.string().min(1),
+    digest: z.string().min(1),
+    snapshot: ExpertTeamRuleSnapshotSchema
+  })
+])
+export type ConversationExecutionProfile = z.infer<typeof ConversationExecutionProfileSchema>
+
 export const ThreadSchema = z.object({
   id: z.string().min(1),
   title: z.string(),
@@ -231,6 +275,9 @@ export const ThreadSchema = z.object({
    * (Stage 2: experts extension)
    */
   conversationMode: z.enum(['chat', 'task']).optional(),
+  /** Optional MoA preset id to route this thread through a mixture-of-agents provider. */
+  moaPresetId: z.string().optional(),
+  executionProfile: ConversationExecutionProfileSchema.optional(),
   mode: ThreadMode,
   status: ThreadStatus,
   approvalPolicy: ApprovalPolicySchema.default(DEFAULT_APPROVAL_POLICY),
@@ -264,6 +311,7 @@ export const ThreadSummarySchema = ThreadSchema.pick({
   ownerExtensionId: true,
   ownerExtensionVersion: true,
   accountId: true,
+  moaPresetId: true,
   extensionVisibility: true,
   extensionProfile: true,
   extensionBudget: true,
@@ -273,6 +321,7 @@ export const ThreadSummarySchema = ThreadSchema.pick({
   expertId: true,
   expertTeamId: true,
   conversationMode: true,
+  executionProfile: true,
   mode: true,
   status: true,
   approvalPolicy: true,
@@ -319,6 +368,9 @@ export const CreateThreadRequest = z.object({
   expertTeamId: z.string().optional(),
   /** Conversation mode when using experts. */
   conversationMode: z.enum(['chat', 'task']).optional(),
+  /** Optional MoA preset id to route this thread through a mixture-of-agents provider. */
+  moaPresetId: z.string().optional(),
+  executionProfile: ConversationExecutionProfileSchema.optional(),
   mode: ThreadMode.default('agent'),
   approvalPolicy: ApprovalPolicySchema.optional(),
   sandboxMode: SandboxModeSchema.optional(),

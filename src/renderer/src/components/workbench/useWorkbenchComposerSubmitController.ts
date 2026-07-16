@@ -30,6 +30,9 @@ import {
 } from '../chat/FloatingComposerModelPicker'
 import type { ComposerFileReference } from '../chat/FloatingComposer'
 import type { ComposerAttachmentScope } from '../workbench-composer-attachments'
+import type { ConversationModeSelection } from '../chat/FloatingComposerConversationModePicker'
+import { expertsApi } from '@shared/seam/api'
+import type { ConversationExecutionProfileJson } from '../../agent/kun-contract'
 import type { RightPanelMode } from '../chat/WorkbenchTopBar'
 import { BUILTIN_RIGHT_PANEL_IDS } from '../../extensions/contribution-ids'
 import type { CodeCanvasOutboundPromptInput } from '../design/canvas/useCodeCanvasPromptController'
@@ -64,6 +67,7 @@ type UseWorkbenchComposerSubmitControllerParams = {
   composerMode: 'plan' | 'agent'
   composerModelGroups: ModelProviderModelGroup[]
   composerReasoningEffort: ComposerReasoningEffort
+  conversationModeSelection: ConversationModeSelection
   ensureWriteThreadForWorkspace: (workspaceRoot: string) => Promise<string | null>
   getAttachmentScope: () => ComposerAttachmentScope
   handleGuiPlanCommand: (request?: string) => void | Promise<void>
@@ -140,6 +144,7 @@ export function useWorkbenchComposerSubmitController({
   composerMode,
   composerModelGroups,
   composerReasoningEffort,
+  conversationModeSelection,
   ensureWriteThreadForWorkspace,
   getAttachmentScope,
   handleGuiPlanCommand,
@@ -573,13 +578,25 @@ export function useWorkbenchComposerSubmitController({
         outboundDisplay = codeCanvasRoute.displayText
         outboundGuiDesignCanvas = true
       }
+      let executionProfile: ConversationExecutionProfileJson = { kind: 'normal', version: 1 }
+      if (conversationModeSelection.kind === 'expert') {
+        try {
+          const response = await expertsApi.getExecutionProfile(conversationModeSelection.targetId)
+          executionProfile = response.executionProfile as ConversationExecutionProfileJson
+        } catch (error) {
+          setError(error instanceof Error ? error.message : String(error))
+          setInput(v)
+          return
+        }
+      }
       void sendMessage(outboundText, composerMode === 'plan' ? 'plan' : 'agent', {
         ...(outboundDisplay ? { displayText: outboundDisplay } : {}),
         ...(outboundGuiDesignCanvas ? { guiDesignCanvas: true } : {}),
         ...(reasoningEffort ? { reasoningEffort } : {}),
         ...(attachmentIds.length ? { attachmentIds } : {}),
         ...(publicAttachments.length ? { attachments: publicAttachments } : {}),
-        ...(userFileReferences.length ? { fileReferences: userFileReferences } : {})
+        ...(userFileReferences.length ? { fileReferences: userFileReferences } : {}),
+        executionProfile
       })
     })()
   }, [
@@ -599,6 +616,7 @@ export function useWorkbenchComposerSubmitController({
     composerMode,
     composerModelGroups,
     composerReasoningEffort,
+    conversationModeSelection,
     getAttachmentScope,
     handleGuiPlanCommand,
     input,

@@ -1,6 +1,6 @@
 import { mkdir, readFile, readdir, writeFile, rename, unlink, rm } from 'node:fs/promises'
 import { join } from 'node:path'
-import { randomBytes } from 'node:crypto'
+import { createHash, randomBytes } from 'node:crypto'
 import { expandHomePath } from '../../config/kun-config.js'
 import { resolveExpertPlugins } from '../adapters/expert-plugin-resolver.js'
 import { ExpertStatusStore, type ExpertStatusSnapshot } from './expert-status-store.js'
@@ -16,6 +16,7 @@ import {
   type CreateCustomExpertTeamRequest,
   type CreateCustomExpertTeamMemberRequest
 } from '../contracts/experts.js'
+import type { ConversationExecutionProfile } from '../../contracts/threads.js'
 
 /**
  * ExpertService — 专家管理服务。
@@ -44,6 +45,7 @@ type CustomExpertFile = {
 export type ExpertServiceOptions = {
   pluginRoots: readonly string[]
   customExpertsDir: string
+  statusDataDir?: string
 }
 
 export type ExpertServiceDiagnostics = {
@@ -56,6 +58,11 @@ export type ExpertServiceDiagnostics = {
   validationErrors: Array<{ plugin: string; message: string }>
 }
 
+export type ExpertActivationSnapshot = {
+  activeExpertIds: string[]
+  activeTeamIds: string[]
+}
+
 export class ExpertService {
   private experts = new Map<string, ExpertProfile>()
   private teams = new Map<string, ExpertTeam>()
@@ -63,10 +70,13 @@ export class ExpertService {
   private readonly customExpertsDir: string
   private readonly statusStore: ExpertStatusStore
   private statusRevision: number = 0
+  private activeExpertIds: string[] = []
+  private activeTeamIds: string[] = []
 
   constructor(private readonly options: ExpertServiceOptions) {
     this.customExpertsDir = expandHomePath(options.customExpertsDir)
-    this.statusStore = new ExpertStatusStore(expandHomePath(options.pluginRoots[0] || options.customExpertsDir))
+    const statusDir = options.statusDataDir || options.customExpertsDir
+    this.statusStore = new ExpertStatusStore(expandHomePath(statusDir))
   }
 
   /** 初始化：扫描插件 + 加载自定义专家 + 加载持久化状态 */
@@ -78,8 +88,7 @@ export class ExpertService {
 
   /** 加载持久化的 enabled/disabled 状态 */
   private async loadStatus(): Promise<void> {
-    const snapshot = await this.statusStore.load()
-    this.statusRevision = snapshot.revision
+    let snapshot = await this.statusStore.load()
 
     for (const [id, entry] of snapshot.entries) {
       const expert = this.experts.get(id)
@@ -90,6 +99,27 @@ export class ExpertService {
       if (team) {
         team.enabled = entry.enabled
       }
+    }
+
+    if (snapshot.schemaVersion === 1) {
+      const migrated: ExpertStatusSnapshot = {
+        ...snapshot,
+        schemaVersion: 2,
+        revision: snapshot.revision + 1,
+        activeExpertIds: snapshot.legacyEnabledIds.filter((id) => this.experts.has(id)).slice(-5),
+        activeTeamIds: snapshot.legacyEnabledIds.filter((id) => this.teams.has(id)).slice(-5),
+        legacyEnabledIds: []
+      }
+      await this.statusStore.save(migrated, snapshot.revision)
+      snapshot = migrated
+    }
+
+    this.statusRevision = snapshot.revision
+    this.activeExpertIds = snapshot.activeExpertIds.filter((id) => this.experts.has(id)).slice(-5)
+    this.activeTeamIds = snapshot.activeTeamIds.filter((id) => this.teams.has(id)).slice(-5)
+    for (const id of [...this.activeExpertIds, ...this.activeTeamIds]) {
+      const item = this.experts.get(id) ?? this.teams.get(id)
+      if (item) item.enabled = true
     }
   }
 
@@ -136,6 +166,78 @@ export class ExpertService {
     return this.teams.get(id)
   }
 
+  getActivationSnapshot(): ExpertActivationSnapshot {
+    return {
+      activeExpertIds: [...this.activeExpertIds],
+      activeTeamIds: [...this.activeTeamIds]
+    }
+  }
+
+  async activate(id: string): Promise<ExpertActivationSnapshot | undefined> {
+    const kind = this.experts.has(id) ? 'expert' : this.teams.has(id) ? 'team' : undefined
+    if (!kind) return undefined
+    const item = this.experts.get(id) ?? this.teams.get(id)
+    if (item && !item.enabled) await this.setEnabled(id, true)
+    const snapshot = await this.statusStore.activate(kind, id)
+    this.applyActivationSnapshot(snapshot)
+    return this.getActivationSnapshot()
+  }
+
+  async deactivate(id: string): Promise<ExpertActivationSnapshot | undefined> {
+    const kind = this.experts.has(id) ? 'expert' : this.teams.has(id) ? 'team' : undefined
+    if (!kind) return undefined
+    const snapshot = await this.statusStore.deactivate(kind, id)
+    this.applyActivationSnapshot(snapshot)
+    return this.getActivationSnapshot()
+  }
+
+  createExecutionProfile(id: string): ConversationExecutionProfile | undefined {
+    const expert = this.experts.get(id)
+    if (expert && this.activeExpertIds.includes(id)) {
+      const snapshot = {
+        id: expert.id,
+        displayName: expert.displayName,
+        version: expert.version,
+        roleDefinition: expert.roleDefinition,
+        ...(expert.behaviorRules ? { behaviorRules: expert.behaviorRules } : {}),
+        ...(expert.outputPreferences ? { outputPreferences: expert.outputPreferences } : {}),
+        skillRefs: [...expert.skillRefs]
+      }
+      return {
+        kind: 'expert',
+        version: 1,
+        expertId: id,
+        snapshot,
+        digest: digestSnapshot(snapshot)
+      }
+    }
+    const team = this.teams.get(id)
+    if (team && this.activeTeamIds.includes(id)) {
+      const snapshot = {
+        id: team.id,
+        displayName: team.displayName,
+        version: team.version,
+        workflow: team.workflow,
+        deliverableSpec: team.deliverableSpec,
+        skillRefs: [...team.skillRefs],
+        members: team.members.map((member) => ({
+          agentName: member.agentName,
+          roleLabel: member.roleLabel,
+          roleDefinition: member.roleDefinition,
+          skillRefs: [...member.skillRefs]
+        }))
+      }
+      return {
+        kind: 'expert_team',
+        version: 1,
+        teamId: id,
+        snapshot,
+        digest: digestSnapshot(snapshot)
+      }
+    }
+    return undefined
+  }
+
   /** 启用/停用专家/专家团 (async with persistence) */
   async setEnabled(id: string, enabled: boolean): Promise<boolean> {
     const expert = this.experts.get(id)
@@ -156,11 +258,22 @@ export class ExpertService {
     // Persist to disk
     const snapshot = await this.statusStore.load()
     snapshot.entries.set(id, { enabled, updatedAt: new Date().toISOString() })
+    if (!enabled) {
+      snapshot.activeExpertIds = snapshot.activeExpertIds.filter((value) => value !== id)
+      snapshot.activeTeamIds = snapshot.activeTeamIds.filter((value) => value !== id)
+    }
     await this.statusStore.save(
-      { revision: snapshot.revision + 1, entries: snapshot.entries },
+      {
+        revision: snapshot.revision + 1,
+        entries: snapshot.entries,
+        activeExpertIds: snapshot.activeExpertIds,
+        activeTeamIds: snapshot.activeTeamIds
+      },
       snapshot.revision
     )
     this.statusRevision = snapshot.revision + 1
+    this.activeExpertIds = [...snapshot.activeExpertIds]
+    this.activeTeamIds = [...snapshot.activeTeamIds]
 
     return true
   }
@@ -263,13 +376,8 @@ export class ExpertService {
       await this.deleteCustomFile(id)
 
       // Remove from status
-      const snapshot = await this.statusStore.load()
-      snapshot.entries.delete(id)
-      await this.statusStore.save(
-        { revision: snapshot.revision + 1, entries: snapshot.entries },
-        snapshot.revision
-      )
-      this.statusRevision = snapshot.revision + 1
+      const snapshot = await this.statusStore.remove(id)
+      this.applyActivationSnapshot(snapshot)
 
       return true
     }
@@ -279,13 +387,8 @@ export class ExpertService {
       await this.deleteCustomFile(id)
 
       // Remove from status
-      const snapshot = await this.statusStore.load()
-      snapshot.entries.delete(id)
-      await this.statusStore.save(
-        { revision: snapshot.revision + 1, entries: snapshot.entries },
-        snapshot.revision
-      )
-      this.statusRevision = snapshot.revision + 1
+      const snapshot = await this.statusStore.remove(id)
+      this.applyActivationSnapshot(snapshot)
 
       return true
     }
@@ -379,6 +482,16 @@ export class ExpertService {
       }
     }
   }
+
+  private applyActivationSnapshot(snapshot: ExpertStatusSnapshot): void {
+    this.statusRevision = snapshot.revision
+    this.activeExpertIds = [...snapshot.activeExpertIds]
+    this.activeTeamIds = [...snapshot.activeTeamIds]
+  }
+}
+
+function digestSnapshot(snapshot: object): string {
+  return `sha256:${createHash('sha256').update(JSON.stringify(snapshot)).digest('hex')}`
 }
 
 // ─────────────── 模块级工具函数（导出便于测试） ───────────────

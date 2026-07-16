@@ -166,6 +166,7 @@ export class ThreadService {
       ...(options.extensionMetadata ?? {}),
       ...(request.agentId?.trim() ? { agentId: request.agentId.trim() } : {}),
       ...(request.systemPrompt?.trim() ? { systemPrompt: request.systemPrompt.trim() } : {}),
+      ...(request.executionProfile ? { executionProfile: request.executionProfile } : {}),
       mode: request.mode,
       approvalPolicy: request.approvalPolicy ?? this.defaultApprovalPolicy,
       sandboxMode: request.sandboxMode ?? this.defaultSandboxMode,
@@ -545,6 +546,7 @@ export class ThreadService {
       title: options.title?.trim() || defaultTitle,
       workspace: current.workspace,
       model: current.model,
+      ...(current.executionProfile ? { executionProfile: current.executionProfile } : {}),
       // A fork is a fresh conversation branch, not a continuation of the
       // parent's plan workflow — the plan artifact and its workspace belong to
       // the source thread. Inheriting `mode: 'plan'` made a forked "new
@@ -617,6 +619,7 @@ export class ThreadService {
       title: `${sourceTitle} resumed`,
       workspace: options.workspace ?? sourceThread?.workspace ?? '~',
       model: options.model ?? sourceThread?.model ?? DEFAULT_KUN_MODEL,
+      ...(sourceThread?.executionProfile ? { executionProfile: sourceThread.executionProfile } : {}),
       mode: options.mode ?? sourceThread?.mode ?? 'agent',
       status: 'idle',
       approvalPolicy: sourceThread?.approvalPolicy,

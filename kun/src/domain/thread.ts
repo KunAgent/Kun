@@ -8,7 +8,8 @@ import type {
   ExtensionAgentProfileSnapshot,
   ExtensionRunBudget,
   ExtensionThreadVisibility,
-  ExtensionToolCatalogEpoch
+  ExtensionToolCatalogEpoch,
+  ConversationExecutionProfile
 } from '../contracts/threads.js'
 import {
   DEFAULT_APPROVAL_POLICY,
@@ -40,6 +41,7 @@ export function createThreadRecord(input: {
   toolCatalogEpoch?: ExtensionToolCatalogEpoch
   agentId?: string
   systemPrompt?: string
+  executionProfile?: ConversationExecutionProfile
   mode?: ThreadMode
   status?: ThreadStatus
   approvalPolicy?: ApprovalPolicy
@@ -75,6 +77,7 @@ export function createThreadRecord(input: {
     ...(input.toolCatalogEpoch ? { toolCatalogEpoch: input.toolCatalogEpoch } : {}),
     ...(input.agentId ? { agentId: input.agentId } : {}),
     ...(input.systemPrompt ? { systemPrompt: input.systemPrompt } : {}),
+    ...(input.executionProfile ? { executionProfile: input.executionProfile } : {}),
     mode: input.mode ?? 'agent',
     status: input.status ?? 'idle',
     approvalPolicy: input.approvalPolicy ?? DEFAULT_APPROVAL_POLICY,
@@ -105,7 +108,7 @@ export function toThreadSummary(
   thread: ThreadEntity
 ): Pick<
   ThreadEntity,
-  'id' | 'title' | 'titleAuto' | 'summary' | 'workspace' | 'model' | 'providerId' | 'agentId' | 'systemPrompt' | 'mode' | 'status' | 'approvalPolicy' | 'sandboxMode' | 'pinned' | 'createdAt' | 'updatedAt'
+  'id' | 'title' | 'titleAuto' | 'summary' | 'workspace' | 'model' | 'providerId' | 'agentId' | 'systemPrompt' | 'executionProfile' | 'mode' | 'status' | 'approvalPolicy' | 'sandboxMode' | 'pinned' | 'createdAt' | 'updatedAt'
   | 'ownerExtensionId' | 'ownerExtensionVersion' | 'accountId' | 'extensionVisibility'
   | 'extensionProfile' | 'extensionBudget' | 'toolCatalogEpoch'
   | 'costBudgetUsd' | 'costBudgetWarningSent'
@@ -130,6 +133,7 @@ export function toThreadSummary(
     ...(thread.toolCatalogEpoch ? { toolCatalogEpoch: thread.toolCatalogEpoch } : {}),
     ...(thread.agentId ? { agentId: thread.agentId } : {}),
     ...(thread.systemPrompt ? { systemPrompt: thread.systemPrompt } : {}),
+    ...(thread.executionProfile ? { executionProfile: thread.executionProfile } : {}),
     mode: thread.mode,
     status: thread.status,
     approvalPolicy: thread.approvalPolicy,

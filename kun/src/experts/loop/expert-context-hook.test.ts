@@ -101,4 +101,59 @@ describe('expert-context-hook', () => {
 
     expect(ctx.systemPrompt).toBeUndefined()
   })
+
+  it('uses the immutable execution snapshot after the source expert changes', async () => {
+    const expert = await expertService.createCustomExpert({
+      name: 'Snapshot Expert',
+      description: 'A snapshot expert',
+      domainTags: ['testing'],
+      profession: 'Testing',
+      roleDefinition: 'Original immutable rules.',
+      behaviorRules: 'Cite evidence.',
+      skillRefs: [],
+      quickPrompts: []
+    })
+    await expertService.activate(expert.id)
+    const executionProfile = expertService.createExecutionProfile(expert.id)
+    if (!executionProfile) throw new Error('expected execution profile')
+    expert.roleDefinition = 'Changed mutable rules.'
+
+    const ctx: LoopHookContext = {
+      threadId: 'thread-snapshot',
+      turnId: 'turn-snapshot',
+      executionProfile
+    }
+    await createExpertContextHook({ expertService })(ctx)
+
+    expect(ctx.systemPrompt).toContain('Original immutable rules.')
+    expect(ctx.systemPrompt).toContain('Cite evidence.')
+    expect(ctx.systemPrompt).not.toContain('Changed mutable rules.')
+  })
+
+  it('rejects a tampered expert snapshot', async () => {
+    const expert = await expertService.createCustomExpert({
+      name: 'Tamper Expert',
+      description: 'A tamper expert',
+      domainTags: ['testing'],
+      profession: 'Testing',
+      roleDefinition: 'Trusted rules.',
+      skillRefs: [],
+      quickPrompts: []
+    })
+    await expertService.activate(expert.id)
+    const executionProfile = expertService.createExecutionProfile(expert.id)
+    if (!executionProfile || executionProfile.kind !== 'expert') throw new Error('expected expert profile')
+
+    const ctx: LoopHookContext = {
+      threadId: 'thread-tampered',
+      turnId: 'turn-tampered',
+      executionProfile: {
+        ...executionProfile,
+        snapshot: { ...executionProfile.snapshot, roleDefinition: 'Tampered rules.' }
+      }
+    }
+    await createExpertContextHook({ expertService })(ctx)
+
+    expect(ctx.systemPrompt).toBeUndefined()
+  })
 })

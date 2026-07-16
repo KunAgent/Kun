@@ -70,4 +70,38 @@ describe('extension thread metadata', () => {
 
     expect(summaryFromRow(row)).toMatchObject(extensionMetadata)
   })
+
+  it('preserves immutable expert execution profiles in records and summaries', () => {
+    const executionProfile = {
+      kind: 'expert' as const,
+      version: 1 as const,
+      expertId: 'reviewer',
+      digest: 'sha256:reviewer-v1',
+      snapshot: {
+        id: 'reviewer',
+        displayName: 'Reviewer',
+        version: '1.0.0',
+        roleDefinition: 'Review changes carefully.',
+        behaviorRules: 'Cite evidence.',
+        outputPreferences: 'Findings first.',
+        skillRefs: ['review']
+      }
+    }
+    const thread = createThreadRecord({
+      id: 'thr_expert',
+      title: 'Expert run',
+      workspace: '/workspace',
+      model: 'deepseek-chat',
+      createdAt: '2026-07-16T00:00:00.000Z',
+      executionProfile
+    })
+    const row = rowFromIndexRecord(
+      { thread, messageCount: 0, eventSeqHighWater: 0, preview: '' },
+      { metadataPath: 'thread.json', messagesPath: 'messages.jsonl', eventsPath: 'events.jsonl' }
+    )
+
+    expect(ThreadSchema.parse(thread).executionProfile).toEqual(executionProfile)
+    expect(toThreadSummary(thread).executionProfile).toEqual(executionProfile)
+    expect(summaryFromRow(row).executionProfile).toEqual(executionProfile)
+  })
 })

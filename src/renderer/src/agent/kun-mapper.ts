@@ -57,6 +57,7 @@ export function threadFromCore(thread: CoreThreadSummaryJson): NormalizedThread 
     updatedAt: thread.updatedAt,
     model: thread.model,
     mode: thread.mode,
+    ...(thread.executionProfile ? { executionProfile: thread.executionProfile } : {}),
     workspace: thread.workspace,
     status: thread.status,
     approvalPolicy: normalizeApprovalPolicy(thread.approvalPolicy),

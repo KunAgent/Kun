@@ -64,7 +64,8 @@ import type {
   CoreThreadGoalResponseJson,
   CoreThreadJson,
   CoreThreadSummaryJson,
-  CoreThreadTodosResponseJson
+  CoreThreadTodosResponseJson,
+  ConversationExecutionProfileJson
 } from './kun-contract'
 import {
   buildQuery,
@@ -169,6 +170,7 @@ export class KunRuntimeProvider implements AgentProvider {
     accountId?: string
     model?: string
     systemPrompt?: string
+    executionProfile?: ConversationExecutionProfileJson
   }): Promise<NormalizedThread> {
     const settings = await rendererRuntimeClient.getSettings()
     const runtime = getKunRuntimeSettings(settings)
@@ -186,7 +188,8 @@ export class KunRuntimeProvider implements AgentProvider {
         ...(input.providerId?.trim() ? { providerId: input.providerId.trim() } : {}),
         ...(input.accountId?.trim() ? { accountId: input.accountId.trim() } : {}),
         ...(input.agentId?.trim() ? { agentId: input.agentId.trim() } : {}),
-        ...(input.systemPrompt?.trim() ? { systemPrompt: input.systemPrompt.trim() } : {})
+        ...(input.systemPrompt?.trim() ? { systemPrompt: input.systemPrompt.trim() } : {}),
+        ...(input.executionProfile ? { executionProfile: input.executionProfile } : {})
       })
     )
     if (!response.ok) {

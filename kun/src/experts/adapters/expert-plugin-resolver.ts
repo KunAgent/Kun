@@ -70,10 +70,24 @@ export async function resolveExpertPlugins(
         if (!parsed) continue
         if (parsed.manifest.expertType === 'agent') {
           const profile = await buildExpertProfile(pluginDir, parsed.manifest)
-          if (profile) experts.push(profile)
+          if (profile) {
+            experts.push(profile)
+          } else {
+            validationErrors.push({
+              plugin: entry,
+              message: `no agent markdown found for agentName '${parsed.manifest.agentName}'`
+            })
+          }
         } else {
           const team = await buildExpertTeam(pluginDir, parsed.manifest)
-          if (team) teams.push(team)
+          if (team) {
+            teams.push(team)
+          } else {
+            validationErrors.push({
+              plugin: entry,
+              message: `team lead agent markdown not found`
+            })
+          }
         }
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error)
@@ -124,26 +138,87 @@ async function findManifestPath(pluginDir: string): Promise<string | null> {
   return null
 }
 
+/**
+ * Coerce a value into a LocalizedText ({zh, en}). Accepts:
+ * - already-localized objects (passed through, filling a missing side)
+ * - plain strings (used for both zh and en)
+ * - undefined (falls back to the provided default string)
+ *
+ * This is the compat shim for older/minimal manifests (ISSUE-012) that omit
+ * the required LocalizedText fields the strict schema demands.
+ */
+function coerceLocalized(value: unknown, fallback: string): { zh: string; en: string } {
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    const obj = value as Record<string, unknown>
+    const zh = typeof obj.zh === 'string' && obj.zh.trim() ? obj.zh : undefined
+    const en = typeof obj.en === 'string' && obj.en.trim() ? obj.en : undefined
+    const resolved = zh || en || fallback
+    return { zh: zh || resolved, en: en || resolved }
+  }
+  if (typeof value === 'string' && value.trim()) {
+    return { zh: value, en: value }
+  }
+  return { zh: fallback, en: fallback }
+}
+
+/** Coerce an array whose entries should be LocalizedText. Drops empties. */
+function coerceLocalizedArray(value: unknown): Array<{ zh: string; en: string }> {
+  if (!Array.isArray(value)) return []
+  return value
+    .map((entry) => coerceLocalized(entry, typeof entry === 'string' ? entry : ''))
+    .filter((entry) => entry.zh || entry.en)
+}
+
+/** Normalize the `agents` field: accept string ("./agents/") or string[]. */
+function normalizeAgentsField(value: unknown): string[] {
+  if (Array.isArray(value)) return value.filter((v): v is string => typeof v === 'string')
+  // A bare directory reference ("./agents/") carries no explicit file list;
+  // the profile/team builders read the agent markdown by agentName directly,
+  // so an empty list is fine here.
+  return []
+}
+
+/** Derive an agent base name (no dir, no .md) from a manifest agents entry. */
+function agentBaseName(ref: string): string {
+  const base = ref.split(/[\\/]/).pop() ?? ref
+  return base.replace(/\.md$/i, '')
+}
+
 function normalizeManifestInput(value: unknown): unknown {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return value
   const raw = value as Record<string, unknown>
+  const description = typeof raw.description === 'string' && raw.description.trim()
+    ? raw.description
+    : (typeof raw.name === 'string' ? raw.name : 'Expert')
+  const name = typeof raw.name === 'string' ? raw.name : 'expert'
+  const agentsList = normalizeAgentsField(raw.agents)
+
+  // Compat: minimal manifests may omit agentName for single-agent experts.
+  // Derive it from the first agents entry, falling back to the plugin name.
+  let agentName = raw.agentName
+  if (raw.expertType === 'agent' && (typeof agentName !== 'string' || !agentName.trim())) {
+    agentName = agentsList.length > 0 ? agentBaseName(agentsList[0]) : name
+  }
+
   return {
     name: raw.name,
-    version: raw.version,
-    description: raw.description,
+    version: typeof raw.version === 'string' && raw.version.trim() ? raw.version : '1.0.0',
+    description,
     expertType: raw.expertType,
-    agentName: raw.agentName,
+    agentName,
     teamInfo: raw.teamInfo,
-    displayName: raw.displayName,
-    profession: raw.profession,
-    displayDescription: raw.displayDescription,
+    // Compat: synthesize required LocalizedText fields from available data so
+    // minimal manifests (ISSUE-012) load instead of failing strict validation.
+    displayName: coerceLocalized(raw.displayName, name),
+    profession: coerceLocalized(raw.profession, description),
+    displayDescription: coerceLocalized(raw.displayDescription, description),
     avatar: raw.avatar,
     categoryId: raw.categoryId,
-    tags: raw.tags,
-    quickPrompts: raw.quickPrompts,
-    defaultInitPrompt: raw.defaultInitPrompt,
-    skills: raw.skills,
-    agents: raw.agents
+    tags: coerceLocalizedArray(raw.tags),
+    quickPrompts: coerceLocalizedArray(raw.quickPrompts),
+    defaultInitPrompt: coerceLocalized(raw.defaultInitPrompt, description),
+    skills: Array.isArray(raw.skills) ? raw.skills.filter((s): s is string => typeof s === 'string') : [],
+    agents: normalizeAgentsField(raw.agents)
   }
 }
 
@@ -154,7 +229,13 @@ async function buildExpertProfile(
 ): Promise<ExpertProfile | null> {
   const agentName = manifest.agentName
   if (!agentName) return null
-  const roleDefinition = await readAgentFile(pluginDir, agentName)
+  let roleDefinition = await readAgentFile(pluginDir, agentName)
+  // Compat: when the named agent file is absent (agentName was derived from the
+  // plugin name but the dir uses differently-named agent files), fall back to
+  // the first agent markdown found under agents/.
+  if (!roleDefinition) {
+    roleDefinition = await readFirstAgentFile(pluginDir)
+  }
   if (!roleDefinition) return null
 
   const now = new Date().toISOString()
@@ -231,6 +312,19 @@ async function buildExpertTeam(
     categoryId: manifest.categoryId,
     version: manifest.version,
     updatedAt: now
+  }
+}
+
+/** Read the first *.md file under agents/ (compat fallback). */
+async function readFirstAgentFile(pluginDir: string): Promise<string | null> {
+  try {
+    const agentsDir = join(pluginDir, 'agents')
+    const files = (await readdir(agentsDir)).filter((f) => f.endsWith('.md')).sort()
+    if (files.length === 0) return null
+    const content = await readFile(join(agentsDir, files[0]), 'utf8')
+    return content.trim() || null
+  } catch {
+    return null
   }
 }
 

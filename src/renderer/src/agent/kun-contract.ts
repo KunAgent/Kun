@@ -1,6 +1,19 @@
 import { GUI_PLAN_CREATE_PLAN_TOOL_NAME } from '@shared/gui-plan'
 
 export type CoreThreadStatus = 'idle' | 'running' | 'archived' | 'deleted'
+export type ConversationExecutionProfileJson =
+  | { kind: 'normal'; version: 1 }
+  | {
+      kind: 'expert'; version: 1; expertId: string; digest: string
+      snapshot: { id: string; displayName: string; version: string; roleDefinition: string; behaviorRules?: string; outputPreferences?: string; skillRefs: string[] }
+    }
+  | {
+      kind: 'expert_team'; version: 1; teamId: string; digest: string
+      snapshot: {
+        id: string; displayName: string; version: string; workflow: string; deliverableSpec: string; skillRefs: string[]
+        members: Array<{ agentName: string; roleLabel: string; roleDefinition: string; skillRefs: string[] }>
+      }
+    }
 export type CoreTurnStatus = 'queued' | 'running' | 'completed' | 'failed' | 'aborted'
 export type CoreItemStatus =
   | 'pending'
@@ -30,6 +43,7 @@ export type CoreThreadSummaryJson = {
   providerId?: string
   agentId?: string
   systemPrompt?: string
+  executionProfile?: ConversationExecutionProfileJson
   relation?: 'primary' | 'fork' | 'side'
   parentThreadId?: string
   forkedFromThreadId?: string

@@ -9,6 +9,7 @@ import type {
   CoreRuntimeSkillJson,
   CoreRuntimeToolDiagnosticsJson
 } from './kun-contract'
+import type { ConversationExecutionProfileJson } from './kun-contract'
 import type { ApprovalPolicy, SandboxMode } from '@shared/app-settings'
 
 export type ToolItemKind = 'tool_call' | 'command_execution' | 'file_change'
@@ -134,6 +135,7 @@ export type NormalizedThread = {
   updatedAt: string
   model: string
   mode: string
+  executionProfile?: ConversationExecutionProfileJson
   workspace?: string
   status?: string
   approvalPolicy?: ApprovalPolicy
@@ -484,7 +486,7 @@ export interface AgentProvider {
   }
   connect(): Promise<void>
   listThreads(options?: ThreadListOptions): Promise<NormalizedThread[]>
-  createThread(input: { workspace?: string; title?: string; titleAuto?: boolean; mode?: string; agentId?: string; providerId?: string; accountId?: string; model?: string; systemPrompt?: string }): Promise<NormalizedThread>
+  createThread(input: { workspace?: string; title?: string; titleAuto?: boolean; mode?: string; agentId?: string; providerId?: string; accountId?: string; model?: string; systemPrompt?: string; executionProfile?: ConversationExecutionProfileJson }): Promise<NormalizedThread>
   getThreadDetail(threadId: string): Promise<{
     blocks: ChatBlock[]
     latestSeq: number

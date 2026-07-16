@@ -1,4 +1,5 @@
 import type { AppSettingsV1 } from '../app-settings.js'
+import { EXTENSION_ENDPOINT_TEMPLATES } from './endpoints.js'
 
 // EXT-SEAM: Extension settings merger
 export function mergeExtensionSettings(base: AppSettingsV1): AppSettingsV1 {
@@ -6,7 +7,6 @@ export function mergeExtensionSettings(base: AppSettingsV1): AppSettingsV1 {
   return base
 }
 
-// EXT-SEAM: Extension endpoints
-export const extensionEndpoints = {
-  // Stage 0: empty (Stage 1+ will add /v1/experts, /v1/design, etc.)
-}
+// EXT-SEAM: Extension endpoint allowlist templates (experts/moa/automation/design/collaboration)
+export { EXTENSION_ENDPOINT_TEMPLATES } from './endpoints.js'
+export const extensionEndpoints = EXTENSION_ENDPOINT_TEMPLATES

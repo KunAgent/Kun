@@ -88,6 +88,10 @@ import {
   type ComposerExecutionSettings
 } from './FloatingComposerExecutionPicker'
 import {
+  FloatingComposerConversationModePicker,
+  type ConversationModeSelection
+} from './FloatingComposerConversationModePicker'
+import {
   FloatingComposerAttachments,
   composerImageMimeTypeFromFileName as imageMimeTypeFromFileName,
   handleComposerImagePaste,
@@ -116,6 +120,7 @@ export { shouldCaptureFileMentionCommitKey } from './use-composer-file-mentions'
 import { FloatingComposerFileMentionMenu } from './FloatingComposerFileMentionMenu'
 import { useComposerSlashCommandMenu } from './use-composer-slash-command-menu'
 import { FloatingComposerSlashCommandMenu } from './FloatingComposerSlashCommandMenu'
+import { ExpertTeamProgressDrawer } from '../../seam/features/experts/ExpertTeamProgressDrawer'
 
 export type { ComposerFileReference } from '../../lib/composer-file-references'
 export type { ComposerExecutionSettings } from './FloatingComposerExecutionPicker'
@@ -200,6 +205,8 @@ type Props = {
   onToggleWorktreeMode?: () => void
   onReviewCommand?: (target: ReviewTarget) => void
   onExecutionSettingsChange?: (patch: Partial<ComposerExecutionSettings>) => void
+  conversationModeSelection?: ConversationModeSelection
+  onConversationModeSelectionChange?: (value: ConversationModeSelection) => void
   onOpenChanges?: () => void
   onReviewChanges?: () => void
   reviewChangesDisabled?: boolean
@@ -317,6 +324,8 @@ export function FloatingComposer({
   onToggleWorktreeMode,
   onReviewCommand,
   onExecutionSettingsChange,
+  conversationModeSelection = { kind: 'normal' },
+  onConversationModeSelectionChange,
   onOpenChanges,
   onReviewChanges,
   reviewChangesDisabled = false,
@@ -1084,6 +1093,9 @@ export function FloatingComposer({
       <div className="relative">
         <div className="pointer-events-none absolute inset-x-0 bottom-full z-30 mb-2 flex flex-col items-center gap-2">
           {runtimeReady ? <BackgroundShellOverlay /> : null}
+          {!compact && conversationModeSelection.kind === 'expert' && conversationModeSelection.targetKind === 'team' ? (
+            <ExpertTeamProgressDrawer teamId={conversationModeSelection.targetId} label={conversationModeSelection.label} />
+          ) : null}
           {showGoalFloater && activeThreadGoal && !pendingUserInputBlock ? (
             <div className="pointer-events-auto flex min-h-11 w-full max-w-[46rem] items-center gap-2 rounded-full border border-ds-border bg-white px-3 py-1.5 text-ds-muted shadow-[0_12px_34px_rgba(20,47,95,0.10)] backdrop-blur-xl dark:bg-ds-card">
               <Target className="h-3.5 w-3.5 shrink-0 text-ds-faint" strokeWidth={1.9} />
@@ -1622,6 +1634,13 @@ export function FloatingComposer({
                     applying={executionSettingsApplying}
                     disabled={!canCompose || busy}
                     onChange={onExecutionSettingsChange}
+                  />
+                ) : null}
+                {showIntentToolbar && route === 'chat' && onConversationModeSelectionChange ? (
+                  <FloatingComposerConversationModePicker
+                    value={conversationModeSelection}
+                    disabled={!canCompose || busy}
+                    onChange={onConversationModeSelectionChange}
                   />
                 ) : null}
               </div>

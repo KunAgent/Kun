@@ -59,4 +59,28 @@ describe('ExpertStatusStore', () => {
     expect(reloaded.revision).toBe(2)
     expect(reloaded.entries.size).toBe(2)
   })
+
+  it('keeps independent expert and team activation queues capped at five', async () => {
+    for (const id of ['e1', 'e2', 'e3', 'e4', 'e5', 'e6']) {
+      await store.activate('expert', id)
+    }
+    for (const id of ['t1', 't2', 't3']) {
+      await store.activate('team', id)
+    }
+
+    const snapshot = await store.load()
+    expect(snapshot.activeExpertIds).toEqual(['e2', 'e3', 'e4', 'e5', 'e6'])
+    expect(snapshot.activeTeamIds).toEqual(['t1', 't2', 't3'])
+  })
+
+  it('moves a reactivated item to the newest position and removes deactivated items', async () => {
+    for (const id of ['e1', 'e2', 'e3']) await store.activate('expert', id)
+
+    await store.activate('expert', 'e1')
+    await store.deactivate('expert', 'e2')
+
+    const snapshot = await store.load()
+    expect(snapshot.activeExpertIds).toEqual(['e3', 'e1'])
+    expect(snapshot.activeTeamIds).toEqual([])
+  })
 })

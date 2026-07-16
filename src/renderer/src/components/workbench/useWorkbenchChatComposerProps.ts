@@ -2,6 +2,7 @@ import { useMemo, type Dispatch, type SetStateAction } from 'react'
 import type { CoreRuntimeInfoJson } from '../../agent/kun-contract'
 import type { ComposerChangeSummary } from '../../lib/composer-change-summary'
 import type { WorkbenchChatStageProps } from './WorkbenchChatStage'
+import type { ConversationModeSelection } from '../chat/FloatingComposerConversationModePicker'
 
 type ComposerProps = WorkbenchChatStageProps['composerProps']
 
@@ -39,6 +40,8 @@ type UseWorkbenchChatComposerPropsInput = {
   webAccessAvailable: boolean
   composerExecutionSettings: ComposerProps['executionSettings']
   composerExecutionApplying: boolean
+  conversationModeSelection: ConversationModeSelection
+  setConversationModeSelection: (value: ConversationModeSelection) => void
   composerChangeSummary: ComposerChangeSummary | null
   runtimeSkills: ComposerProps['skillCommands']
   disabledSkillIds: ComposerProps['disabledSkillIds']
@@ -102,6 +105,8 @@ export function useWorkbenchChatComposerProps({
   webAccessAvailable,
   composerExecutionSettings,
   composerExecutionApplying,
+  conversationModeSelection,
+  setConversationModeSelection,
   composerChangeSummary,
   runtimeSkills,
   disabledSkillIds,
@@ -174,6 +179,8 @@ export function useWorkbenchChatComposerProps({
     webAccessAvailable,
     executionSettings: composerExecutionSettings,
     executionSettingsApplying: composerExecutionApplying,
+    conversationModeSelection,
+    onConversationModeSelectionChange: setConversationModeSelection,
     changedFiles: composerChangeSummary?.files,
     changedFileStats: composerChangeSummary,
     skillCommands: runtimeSkills,
@@ -222,6 +229,7 @@ export function useWorkbenchChatComposerProps({
     composerChangeSummary,
     composerExecutionApplying,
     composerExecutionSettings,
+    conversationModeSelection,
     extraFileMentionCandidates,
     composerFileReferences,
     composerMode,
@@ -260,6 +268,7 @@ export function useWorkbenchChatComposerProps({
     setComposerMode,
     setComposerModel,
     setComposerReasoningEffort,
+    setConversationModeSelection,
     setInput,
     setUseWorktreePool,
     setWorktreeBranch,

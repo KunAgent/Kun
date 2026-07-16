@@ -22,6 +22,7 @@ import type {
   ClawModel
 } from '@shared/app-settings'
 import type { ModelProviderModelGroup } from '@shared/kun-gui-api'
+import type { ConversationExecutionProfileJson } from '../agent/kun-contract'
 
 export type QueuedUserMessage = {
   id: string
@@ -36,6 +37,7 @@ export type QueuedUserMessage = {
   attachmentIds?: string[]
   attachments?: AttachmentReference[]
   fileReferences?: UserFileReference[]
+  executionProfile?: ConversationExecutionProfileJson
   /**
    * Optional GUI plan context forwarded to Kun. The renderer
    * attaches it for plan/refine turns so the runtime can advertise
@@ -91,6 +93,7 @@ export type SendMessageOverrides = {
   attachmentIds?: string[]
   attachments?: AttachmentReference[]
   fileReferences?: UserFileReference[]
+  executionProfile?: ConversationExecutionProfileJson
 }
 
 export type InitialSetupMode = 'required' | 'preview'
@@ -113,7 +116,7 @@ export type SettingsRouteSection =
   | 'claw'
   | 'updates'
   | 'terminal'
-export type AppRoute = 'chat' | 'write' | 'design' | 'settings' | 'plugins' | 'extensions' | 'claw' | 'schedule' | 'workflow'
+export type AppRoute = 'chat' | 'write' | 'design' | 'settings' | 'plugins' | 'extensions' | 'capabilities' | 'claw' | 'schedule' | 'workflow'
 export type PluginHostRoute = 'chat' | 'claw'
 
 /**

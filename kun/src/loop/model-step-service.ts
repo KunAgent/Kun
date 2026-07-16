@@ -87,6 +87,7 @@ import {
 } from '../cache/immutable-prefix.js'
 import { buildToolCatalogFingerprint } from '../cache/tool-catalog-fingerprint.js'
 import { rewriteItemHistoryWithRetry } from '../services/history-commit-coordinator.js'
+import { emitLoopHook, type LoopHookContext } from '../seam/index.js'
 
 export type ModelStepServiceDeps = {
   threadStore: ThreadStore
@@ -238,7 +239,7 @@ export class ModelStepService {
     const items = repairModelHistoryItems(
       effectiveHistoryAfterLatestCompaction(historyItems)
     )
-    const { providerId, accountId } = resolveCoherentProviderAccount({
+    let { providerId, accountId } = resolveCoherentProviderAccount({
       turnProviderId: turn.providerId,
       turnAccountId: turn.accountId,
       threadProviderId: thread.providerId,
@@ -259,7 +260,33 @@ export class ModelStepService {
       model: modelRoute.model,
       ...(modelRoute.reasoningEffort ? { reasoningEffort: modelRoute.reasoningEffort } : {})
     })
-    const model = modelRoute.model
+    let model = modelRoute.model
+    const requestHookContext: LoopHookContext = {
+      threadId,
+      turnId,
+      model,
+      ...(providerId ? { providerId } : {}),
+      ...(accountId ? { accountId } : {}),
+      ...(turn?.prompt ? { latestPrompt: turn.prompt } : {}),
+      ...(thread.expertId ? { expertId: thread.expertId } : {}),
+      ...(thread.expertTeamId ? { expertTeamId: thread.expertTeamId } : {}),
+      ...(thread.moaPresetId ? { moaPresetId: thread.moaPresetId } : {}),
+      ...(thread.executionProfile ? { executionProfile: thread.executionProfile } : {}),
+      ...(thread.systemPrompt ? { systemPrompt: thread.systemPrompt } : {})
+    }
+    await emitLoopHook('beforeModelRequest', requestHookContext)
+    if (typeof requestHookContext.model === 'string' && requestHookContext.model.trim()) {
+      model = requestHookContext.model.trim()
+    }
+    providerId = typeof requestHookContext.providerId === 'string' && requestHookContext.providerId.trim()
+      ? requestHookContext.providerId.trim()
+      : providerId
+    accountId = typeof requestHookContext.accountId === 'string' && requestHookContext.accountId.trim()
+      ? requestHookContext.accountId.trim()
+      : accountId
+    const hookSystemPrompt = typeof requestHookContext.systemPrompt === 'string'
+      ? requestHookContext.systemPrompt
+      : thread.systemPrompt
     const modelCapabilities = this.deps.modelCapabilities?.(model) ?? modelCapabilitiesForModel(model)
     const prepared = await this.deps.turnContextResolver.resolve({
       threadId,
@@ -512,7 +539,7 @@ export class ModelStepService {
       ...(accountId ? { accountId } : {}),
       ...(modelRoute.reasoningEffort ? { reasoningEffort: modelRoute.reasoningEffort } : {}),
       immutablePrefix: this.deps.prefix,
-      ...(thread.systemPrompt !== undefined ? { threadSystemPrompt: thread.systemPrompt } : {}),
+      ...(hookSystemPrompt !== undefined ? { threadSystemPrompt: hookSystemPrompt } : {}),
       ...(modeInstruction ? { modeInstruction } : {}),
       contextInstructions,
       history: forwardHistory,
