@@ -73,9 +73,13 @@ describe('kun-extension protocol confinement', () => {
     const outside = await mkdtemp(join(tmpdir(), 'kun-extension-outside-'))
     roots.push(outside)
     await writeFile(join(outside, 'secret.js'), 'secret')
-    await symlink(join(outside, 'secret.js'), join(descriptor.packageRoot, 'dist', 'assets', 'link.js'))
+    await symlink(
+      outside,
+      join(descriptor.packageRoot, 'dist', 'assets', 'link'),
+      process.platform === 'win32' ? 'junction' : 'dir'
+    )
     await expect(resolveKunExtensionResource(
-      'kun-extension://acme.example/dist/assets/link.js',
+      'kun-extension://acme.example/dist/assets/link/secret.js',
       async () => descriptor
     )).rejects.toThrow(/RESOURCE_ROOT_ESCAPE/)
   })
