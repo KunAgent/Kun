@@ -166,6 +166,14 @@ export const moaApi = {
 
   async getPreset(id: string): Promise<RuntimeResponse> {
     return runtimeRequest(`/v1/moa/presets/${id}`, 'GET')
+  },
+
+  async savePreset(data: unknown): Promise<RuntimeResponse> {
+    return runtimeRequest('/v1/moa/presets', 'POST', data)
+  },
+
+  async deletePreset(id: string): Promise<RuntimeResponse> {
+    return runtimeRequest(`/v1/moa/presets/${encodeURIComponent(id)}`, 'DELETE')
   }
 }
 

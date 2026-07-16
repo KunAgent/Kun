@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { collaborationApi, expertsApi } from './api'
+import { collaborationApi, expertsApi, moaApi } from './api'
 
 describe('extension seam renderer API', () => {
   afterEach(() => {
@@ -71,5 +71,17 @@ describe('extension seam renderer API', () => {
       '/v1/collaboration/tasks/task-1/retry?planId=plan-1',
       'POST'
     )
+  })
+
+  it('saves and deletes MoA presets through the runtime seam', async () => {
+    const runtimeRequest = vi.fn(async () => ({ ok: true, status: 200, body: '{}' }))
+    vi.stubGlobal('window', { kunGui: { runtimeRequest } })
+    const draft = { id: 'review-board' }
+
+    await moaApi.savePreset(draft)
+    await moaApi.deletePreset('review-board')
+
+    expect(runtimeRequest).toHaveBeenNthCalledWith(1, '/v1/moa/presets', 'POST', JSON.stringify(draft))
+    expect(runtimeRequest).toHaveBeenNthCalledWith(2, '/v1/moa/presets/review-board', 'DELETE')
   })
 })

@@ -30,8 +30,8 @@ export const EXTENSION_ENDPOINT_TEMPLATES: readonly ExtensionEndpointTemplate[] 
   { template: '/v1/experts/{id}/deactivate', allowedMethods: ['POST'] },
 
   // MoA
-  { template: '/v1/moa/presets', allowedMethods: ['GET'] },
-  { template: '/v1/moa/presets/{id}', allowedMethods: ['GET'] },
+  { template: '/v1/moa/presets', allowedMethods: ['GET', 'POST'] },
+  { template: '/v1/moa/presets/{id}', allowedMethods: ['GET', 'DELETE'] },
 
   // Automation
   { template: '/v1/automation/employees', allowedMethods: ['GET'] },

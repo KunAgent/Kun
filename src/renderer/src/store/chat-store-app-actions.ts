@@ -3,6 +3,8 @@ import type { AppSettingsV1 } from '@shared/app-settings'
 import type { ModelProviderModelGroup } from '@shared/kun-gui-api'
 import { rendererRuntimeClient } from '../agent/runtime-client'
 import { extensionWorkbenchClient } from '../extensions/extension-workbench-client'
+import { moaApi } from '@shared/seam/api'
+import { buildExtensionModelGroups, type ExtensionModelCatalogEntry } from '../components/chat/composer-model-selection'
 import type { ChatState, ChatStoreGet, ChatStoreSet, InitialSetupMode, PluginHostRoute, SettingsRouteSection } from './chat-store-types'
 import type { ComposerPlanMode } from './chat-store-helpers'
 import {
@@ -155,9 +157,12 @@ export function createAppActions(options: CreateAppActionsOptions): Pick<
       if (getComposerModelLoadPromise()) return getComposerModelLoadPromise()!
       if (typeof window.kunGui === 'undefined') return
       const task = (async () => {
-        const [res, extensionProviders] = await Promise.all([
+        const [res, extensionProviders, capabilityCatalog] = await Promise.all([
           window.kunGui.fetchUpstreamModels(),
-          extensionWorkbenchClient.listModelProviders(get().workspaceRoot || undefined).catch(() => [])
+          extensionWorkbenchClient.listModelProviders(get().workspaceRoot || undefined).catch(() => []),
+          moaApi.listPresets().then((response) =>
+            (response.models as ExtensionModelCatalogEntry[] | undefined) ?? []
+          ).catch(() => [])
         ])
         const extensionGroups: ModelProviderModelGroup[] = extensionProviders.flatMap((provider) => {
           if (!provider.binding?.valid) return []
@@ -203,10 +208,15 @@ export function createAppActions(options: CreateAppActionsOptions): Pick<
           }]
         })
         const upstreamGroups = res.ok ? res.modelGroups ?? [] : []
-        const groups = [...upstreamGroups, ...extensionGroups]
+        const capabilityGroups = buildExtensionModelGroups(capabilityCatalog)
+        const groups = [...upstreamGroups, ...extensionGroups, ...capabilityGroups]
         const pick = mergeComposerPickList(
-          res.ok || extensionGroups.length > 0,
-          [...(res.ok ? res.modelIds : []), ...extensionGroups.flatMap((group) => group.modelIds)]
+          res.ok || extensionGroups.length > 0 || capabilityGroups.length > 0,
+          [
+            ...(res.ok ? res.modelIds : []),
+            ...extensionGroups.flatMap((group) => group.modelIds),
+            ...capabilityGroups.flatMap((group) => group.modelIds)
+          ]
         )
         const runtimeDefault = res.ok ? res.defaultModelId?.trim() ?? '' : ''
         set((state) => {

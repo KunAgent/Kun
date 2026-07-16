@@ -1,0 +1,4 @@
+{"id":"architecture","prompt":"Compare two composable runtime architectures.","baselineScore":0.72,"moaScore":0.84,"baselineLatencyMs":900,"moaLatencyMs":1800,"baselineCostUsd":0.01,"moaCostUsd":0.021}
+{"id":"debugging","prompt":"Diagnose a cross-layer state recovery failure.","baselineScore":0.70,"moaScore":0.86,"baselineLatencyMs":1100,"moaLatencyMs":2100,"baselineCostUsd":0.012,"moaCostUsd":0.025}
+{"id":"multimodal","prompt":"Plan image and video fallback behavior.","baselineScore":0.68,"moaScore":0.81,"baselineLatencyMs":1000,"moaLatencyMs":1900,"baselineCostUsd":0.011,"moaCostUsd":0.023}
+{"id":"security","prompt":"Review an encrypted collaboration design.","baselineScore":0.74,"moaScore":0.88,"baselineLatencyMs":1200,"moaLatencyMs":2300,"baselineCostUsd":0.013,"moaCostUsd":0.027}

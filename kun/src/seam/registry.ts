@@ -5,7 +5,8 @@ import type {
   LoopHookBus,
   LoopHookContext,
   RouteRegistrar,
-  ExtensionRuntimeServices
+  ExtensionRuntimeServices,
+  ModelCatalogEntry
 } from './types.js'
 import type { ServerRuntime } from '../server/routes/server-runtime.js'
 
@@ -57,5 +58,15 @@ export class ExtensionRegistry {
         }
       }
     }
+  }
+
+  getModelClientRegistrars(): Array<(registry: unknown) => void> {
+    return this.extensions
+      .map(ext => ext.registerModelClients)
+      .filter((r): r is (registry: unknown) => void => r !== undefined)
+  }
+
+  getModelCatalogEntries(): ModelCatalogEntry[] {
+    return this.extensions.flatMap((extension) => extension.contributeModels?.() ?? [])
   }
 }

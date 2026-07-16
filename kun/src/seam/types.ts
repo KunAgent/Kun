@@ -1,7 +1,7 @@
 import type { Router } from '../server/router.js'
 import type { ServerRuntime } from '../server/routes/server-runtime.js'
 
-export const LOOP_HOOK_NAMES = ['beforeLoop', 'afterModelSelect', 'beforeToolCall', 'afterTurn'] as const
+export const LOOP_HOOK_NAMES = ['beforeLoop', 'beforeModelRequest', 'afterModelSelect', 'beforeToolCall', 'afterTurn'] as const
 export type LoopHookName = (typeof LOOP_HOOK_NAMES)[number]
 
 /** Mutable context passed through loop hooks. Features read/annotate only their own fields. */
@@ -20,6 +20,17 @@ export interface LoopHookBus {
 
 export type ExtensionRuntimeServices = Record<string, unknown>
 
+export type ModelCatalogEntry = {
+  providerId: string
+  modelId: string
+  label: string
+  capabilities: {
+    input: Array<'text' | 'image' | 'video'>
+    contextWindowTokens: number
+  }
+  source: 'configured' | 'extension'
+}
+
 export type RouteRegistrar = (router: Router, runtime: ServerRuntime) => void
 
 export interface KunExtension {
@@ -29,4 +40,5 @@ export interface KunExtension {
   initializeServices?(featureConfig: unknown, runtime: ServerRuntime): Promise<Record<string, unknown>>
   registerLoopHooks?(bus: LoopHookBus): void
   registerModelClients?(registry: unknown): void
+  contributeModels?(): ModelCatalogEntry[]
 }

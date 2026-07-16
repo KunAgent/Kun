@@ -1,10 +1,29 @@
 import { describe, expect, it } from 'vitest'
 import {
+  buildExtensionModelGroups,
   buildComposerAssistantPickList,
   resolveComposerAssistantProviderId
 } from './composer-model-selection'
 
 describe('composer model selection helpers', () => {
+  it('publishes MoA virtual models as a normal grouped provider', () => {
+    expect(buildExtensionModelGroups([{
+      providerId: 'moa',
+      modelId: 'moa:balanced',
+      label: 'Balanced review',
+      capabilities: { input: ['text', 'image'], contextWindowTokens: 32_000 }
+    }])).toEqual([expect.objectContaining({
+      providerId: 'moa',
+      modelIds: ['moa:balanced'],
+      modelProfiles: {
+        'moa:balanced': expect.objectContaining({
+          inputModalities: ['text', 'image'],
+          contextWindowTokens: 32_000
+        })
+      }
+    })])
+  })
+
   it('builds assistant pick lists from defaults and available models only', () => {
     expect(buildComposerAssistantPickList({
       defaultModelIds: ['auto', 'deepseek-chat'],

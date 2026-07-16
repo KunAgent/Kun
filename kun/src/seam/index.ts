@@ -54,8 +54,14 @@ export async function emitLoopHook(name: LoopHookName, ctx: LoopHookContext): Pr
  * Called by multi-provider-model-client setup
  */
 export function registerExtensionModelClients(clientRegistry: unknown): void {
-  // Stage 0: no-op (MoA not implemented yet)
-  // Stage 3+: registry will expose model clients
+  const registrars = registry.getModelClientRegistrars()
+  for (const registrar of registrars) {
+    registrar(clientRegistry)
+  }
+}
+
+export function getExtensionModelCatalog() {
+  return registry.getModelCatalogEntries()
 }
 
 // Re-export types for convenience

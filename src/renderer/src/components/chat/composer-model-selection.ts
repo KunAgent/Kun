@@ -2,6 +2,41 @@ import type { ModelProviderModelGroup } from '@shared/kun-gui-api'
 import { DEFAULT_COMPOSER_MODEL_IDS } from '@shared/default-composer-models'
 import { providerIdForComposerModel } from '../../store/chat-store-helpers'
 
+export type ExtensionModelCatalogEntry = {
+  providerId: string
+  modelId: string
+  label: string
+  capabilities: {
+    input: Array<'text' | 'image' | 'video'>
+    contextWindowTokens: number
+  }
+}
+
+export function buildExtensionModelGroups(
+  entries: readonly ExtensionModelCatalogEntry[]
+): ModelProviderModelGroup[] {
+  const grouped = new Map<string, ExtensionModelCatalogEntry[]>()
+  for (const entry of entries) {
+    const current = grouped.get(entry.providerId) ?? []
+    current.push(entry)
+    grouped.set(entry.providerId, current)
+  }
+  return [...grouped].map(([providerId, models]) => ({
+    providerId,
+    label: providerId === 'moa' ? 'MoA 多模型融合' : providerId,
+    modelIds: models.map((model) => model.modelId),
+    modelProfiles: Object.fromEntries(models.map((model) => [model.modelId, {
+      inputModalities: model.capabilities.input.includes('image') ? ['text', 'image'] : ['text'],
+      outputModalities: ['text'],
+      supportsToolCalling: true,
+      messageParts: model.capabilities.input.includes('image')
+        ? ['text', 'image_url', 'input_image']
+        : ['text'],
+      contextWindowTokens: model.capabilities.contextWindowTokens
+    }]))
+  }))
+}
+
 function normalizeModelKey(modelId: string): string {
   return modelId.trim().toLowerCase()
 }

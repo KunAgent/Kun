@@ -16,7 +16,9 @@ describe('IPC Extension Endpoints', () => {
 
     // MoA
     { path: '/v1/moa/presets', method: 'GET' },
+    { path: '/v1/moa/presets', method: 'POST' },
     { path: '/v1/moa/presets/balanced-local', method: 'GET' },
+    { path: '/v1/moa/presets/balanced-local', method: 'DELETE' },
 
     // Automation
     { path: '/v1/automation/employees', method: 'GET' },

@@ -24,7 +24,7 @@ describe('extension runtime route contracts', () => {
     expect(router.match('GET', '/v1/moa/presets/balanced-local')).toBeDefined()
   })
 
-  it('registers a collaboration plan collection route', () => {
+  it('registers collaboration plan and task control routes', () => {
     const router = new Router()
     const service = {}
     const runtime = {
@@ -42,6 +42,8 @@ describe('extension runtime route contracts', () => {
     registerCollaborationRoutes(router, runtime)
 
     expect(router.match('GET', '/v1/collaboration/plans')).toBeDefined()
+    expect(router.match('POST', '/v1/collaboration/tasks/task-1/interrupt')).toBeDefined()
+    expect(router.match('POST', '/v1/collaboration/tasks/task-1/retry')).toBeDefined()
   })
 
   it('matches expert diagnostics before the parameterized expert route', async () => {
