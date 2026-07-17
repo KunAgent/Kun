@@ -45,6 +45,7 @@ function ModeCardButton({
 }): ReactElement {
   return (
     <div
+      data-ui-plugin-id={card.mode}
       className={`relative flex flex-col items-center gap-2 rounded-2xl border p-4 text-center transition ${
         active
           ? 'border-accent/45 bg-accent/8 shadow-[0_10px_28px_rgba(59,130,216,0.12)]'

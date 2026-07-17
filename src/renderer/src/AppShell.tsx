@@ -7,6 +7,8 @@ import { ExtensionWorkbenchLifecycle } from './extensions/ExtensionWorkbenchLife
 import { ProtectedRendererSurface } from './extensions/ProtectedRendererSurface'
 import { ExtensionSettingsServiceProvider } from './extensions/ExtensionSettingsServiceContext'
 import { RuntimeExtensionSettingsService } from './extensions/runtime-extension-settings-service'
+import { ActiveShuimoYijingBackdrop } from './components/ShuimoYijingBackdrop'
+import { useUiPluginStore } from './store/ui-plugin-store'
 
 const extensionSettingsService = new RuntimeExtensionSettingsService()
 
@@ -37,6 +39,14 @@ function RouteFallback(): React.ReactElement {
   )
 }
 
+export function UiPluginStartupLifecycle(): null {
+  const initUiPlugins = useUiPluginStore((state) => state.initUiPlugins)
+  useEffect(() => {
+    void initUiPlugins()
+  }, [initUiPlugins])
+  return null
+}
+
 export default function AppShell(): React.ReactElement {
   const route = useChatStore((s) => s.route)
   const boot = useChatStore((s) => s.boot)
@@ -59,34 +69,44 @@ export default function AppShell(): React.ReactElement {
 
   return (
     <ExtensionSettingsServiceProvider service={extensionSettingsService}>
-      <div className={hasDesktopTitleBar ? 'ds-windows-app-frame flex h-full min-h-0 flex-col bg-ds-main' : 'flex h-full min-h-0 flex-col bg-transparent'}>
-        {hasDesktopTitleBar ? <WindowsTitleBar platform={platform} /> : null}
-        <div className="flex min-h-0 flex-1 flex-col">
-          <RuntimeStatusBanner />
-          <Suspense fallback={<RouteFallback />}>
-            {route === 'settings' ? (
-              <ProtectedRendererSurface
-                kind="account-credentials"
-                restoreTarget="settings"
-                fallback={<RouteFallback />}
-              >
-                <SettingsView />
-              </ProtectedRendererSurface>
-            ) : <Workbench />}
-          </Suspense>
-        </div>
-        <ExtensionWorkbenchLifecycle />
-        {initialSetupOpen ? (
-          <ProtectedRendererSurface
-            kind="account-credentials"
-            restoreTarget="initial-setup"
-            fallback={null}
-          >
-            <Suspense fallback={null}>
-              <InitialSetupDialog />
+      <div
+        className={
+          hasDesktopTitleBar
+            ? 'ds-app-shell ds-windows-app-frame relative isolate flex h-full min-h-0 flex-col bg-ds-main'
+            : 'ds-app-shell relative isolate flex h-full min-h-0 flex-col bg-transparent'
+        }
+      >
+        <UiPluginStartupLifecycle />
+        <ActiveShuimoYijingBackdrop />
+        <div className="relative z-10 flex min-h-0 flex-1 flex-col">
+          {hasDesktopTitleBar ? <WindowsTitleBar platform={platform} /> : null}
+          <div className="flex min-h-0 flex-1 flex-col">
+            <RuntimeStatusBanner />
+            <Suspense fallback={<RouteFallback />}>
+              {route === 'settings' ? (
+                <ProtectedRendererSurface
+                  kind="account-credentials"
+                  restoreTarget="settings"
+                  fallback={<RouteFallback />}
+                >
+                  <SettingsView />
+                </ProtectedRendererSurface>
+              ) : <Workbench />}
             </Suspense>
-          </ProtectedRendererSurface>
-        ) : null}
+          </div>
+          <ExtensionWorkbenchLifecycle />
+          {initialSetupOpen ? (
+            <ProtectedRendererSurface
+              kind="account-credentials"
+              restoreTarget="initial-setup"
+              fallback={null}
+            >
+              <Suspense fallback={null}>
+                <InitialSetupDialog />
+              </Suspense>
+            </ProtectedRendererSurface>
+          ) : null}
+        </div>
       </div>
     </ExtensionSettingsServiceProvider>
   )

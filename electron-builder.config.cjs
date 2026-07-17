@@ -188,6 +188,11 @@ module.exports = {
         'runtime-skills/**/*',
         'skills/**/*'
       ]
+    },
+    {
+      from: 'resources/licenses',
+      to: 'licenses',
+      filter: ['**/*']
     }
   ],
   artifactName: `Kun-${artifactVersion}-\${os}-\${arch}.\${ext}`,

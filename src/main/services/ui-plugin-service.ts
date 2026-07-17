@@ -1,6 +1,7 @@
 import { mkdir, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises'
 import { dirname, join, resolve, sep } from 'node:path'
 import {
+  UI_PLUGIN_BUNDLED_SHUIMO_YIJING_ID,
   UI_PLUGIN_LIMITS,
   UI_PLUGIN_MANIFEST_FILENAME,
   isSafeUiPluginFigurePath,
@@ -194,6 +195,12 @@ export async function installUiPluginFromDirectory(
   const manifestResult = await readManifestAt(sourceDir)
   if (!manifestResult.ok) return { ok: false, errors: manifestResult.errors }
   const manifest = manifestResult.manifest
+  if (manifest.id === UI_PLUGIN_BUNDLED_SHUIMO_YIJING_ID) {
+    return {
+      ok: false,
+      errors: [`预装 UI 插件 id "${UI_PLUGIN_BUNDLED_SHUIMO_YIJING_ID}" 不允许从目录安装`]
+    }
+  }
 
   // 先在源目录核验每张被引用的图片(存在 + 体积)
   const errors: string[] = []

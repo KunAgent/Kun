@@ -84,12 +84,34 @@ describe('create-kun-extension', () => {
       template: 'webview'
     })
 
-    const result = spawnSync(process.platform === 'win32' ? 'npm.cmd' : 'npm', ['test'], {
+    const npmCli = process.env.npm_execpath
+    if (!npmCli) throw new Error('npm_execpath is required to test the generated project')
+    const command = process.execPath
+    const args = [npmCli, 'test']
+    const result = spawnSync(command, args, {
       cwd: targetDirectory,
       encoding: 'utf8',
       env: { ...process.env, npm_config_audit: 'false', npm_config_fund: 'false' }
     })
-    expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0)
+    expect(result.status, JSON.stringify({
+      command,
+      args,
+      options: {
+        cwd: targetDirectory,
+        encoding: 'utf8',
+        shell: false,
+        envOverrides: { npm_config_audit: 'false', npm_config_fund: 'false' }
+      },
+      error: result.error ? {
+        ...result.error,
+        name: result.error.name,
+        message: result.error.message,
+        stack: result.error.stack
+      } : null,
+      signal: result.signal,
+      stdout: result.stdout ?? null,
+      stderr: result.stderr ?? null
+    }, null, 2)).toBe(0)
 
     const packageJson = JSON.parse(await readFile(join(targetDirectory, 'package.json'), 'utf8'))
     expect(packageJson.devDependencies.vite).toBe('^6.2.0')

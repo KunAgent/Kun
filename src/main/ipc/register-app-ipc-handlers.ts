@@ -41,6 +41,7 @@ import type {
 } from '../../shared/kun-gui-api'
 import type { WorkspaceFileSaveAsResult } from '../../shared/workspace-file'
 import type { GuiUpdateDownloadResult, GuiUpdateInfo, GuiUpdateInstallResult, GuiUpdateState } from '../../shared/gui-update'
+import { UI_PLUGIN_BUNDLED_SHUIMO_YIJING_ID } from '../../shared/ui-plugin'
 import {
   clawMirrorPayloadSchema,
   clawImInstallPollPayloadSchema,
@@ -177,7 +178,11 @@ import {
   loadUiPluginFigures,
   removeUiPlugin
 } from '../services/ui-plugin-service'
-import { ensureBundledUiPlugins } from '../ui-plugin-bundled'
+import { resolveBundledUiPluginHostEffect } from '../services/shuimo-yijing-host-effect'
+import {
+  ensureBundledUiPlugins,
+  loadBundledShuimoYijingRuntime
+} from '../ui-plugin-bundled'
 import { ensureBundledSkills } from '../skill-bundled'
 import {
   createWorkspaceDirectory,
@@ -1207,7 +1212,18 @@ export function registerAppIpcHandlers(options: RegisterAppIpcHandlersOptions): 
     const request = parseIpcPayload('ui-plugin:load', uiPluginIdPayloadSchema, payload)
     const kunHomeDir = join(homedir(), '.kun')
     await ensureBundledUiPlugins(kunHomeDir)
-    return loadUiPluginFigures(kunHomeDir, request.id)
+    const installed = await loadUiPluginFigures(kunHomeDir, request.id)
+    if (!installed.ok) return installed
+    const loaded = request.id === UI_PLUGIN_BUNDLED_SHUIMO_YIJING_ID
+      ? await loadBundledShuimoYijingRuntime()
+      : installed
+    try {
+      const hostEffect = resolveBundledUiPluginHostEffect(request.id)
+      return { ...loaded, ...(hostEffect ? { hostEffect } : {}) }
+    } catch {
+      console.warn('[ui-plugin] shuimo yijing host effect unavailable')
+      return loaded
+    }
   })
 
   ipcMain.handle('kun:config:read', async () => {

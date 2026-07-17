@@ -90,6 +90,7 @@ import type {
   LocalWhisperModelStatus
 } from './local-whisper'
 import type {
+  UiPluginHostEffect,
   UiPluginListItem,
   UiPluginManifestV1,
   UiPluginRuntimeFigures
@@ -191,7 +192,12 @@ export type UiPluginInstallIpcResult =
   | { canceled: false; ok: true; plugin: UiPluginListItem }
   | { canceled: false; ok: false; errors: string[] }
 export type UiPluginLoadIpcResult =
-  | { ok: true; manifest: UiPluginManifestV1; figures: UiPluginRuntimeFigures }
+  | {
+      ok: true
+      manifest: UiPluginManifestV1
+      figures: UiPluginRuntimeFigures
+      hostEffect?: UiPluginHostEffect
+    }
   | { ok: false; error: string }
 export type DeepseekConfigFileResult = { path: string; content: string; exists: boolean }
 export type DeepseekConfigSaveResult = { ok: true; path: string }

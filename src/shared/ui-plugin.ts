@@ -33,6 +33,21 @@ export type UiPluginLabelKey = (typeof UI_PLUGIN_LABEL_KEYS)[number]
 
 export type UiPluginLabelLocale = 'zh' | 'en'
 
+export type UiPluginHostEffect = {
+  readonly kind: 'shuimo-yijing'
+  readonly hexagram: {
+    readonly ordinal: number
+    readonly glyph: string
+    readonly name: string
+    readonly statement: string
+    readonly statementCommentary: string
+    readonly movingLine: number
+    readonly movingLineLabel: string
+    readonly movingLineText: string
+    readonly movingLineCommentary: string
+  }
+}
+
 export type UiPluginManifestV1 = {
   id: string
   name: string
@@ -85,6 +100,7 @@ const UI_PLUGIN_RESERVED_IDS = new Set(['default', 'kun', 'on', 'off', 'none'])
 
 /** 预装示例插件(iKun)的 id:激活时会同时启用 data-ikun-mode 手工动画机制 */
 export const UI_PLUGIN_BUNDLED_IKUN_ID = 'ikun'
+export const UI_PLUGIN_BUNDLED_SHUIMO_YIJING_ID = 'shuimo-yijing'
 const UI_PLUGIN_VERSION_PATTERN = /^\d+\.\d+\.\d+(?:[-+][\w.-]{0,40})?$/
 const UI_PLUGIN_FIGURE_PATH_PATTERN = /^[\w][\w./-]{0,200}$/
 const UI_PLUGIN_FIGURE_EXTENSIONS = new Set(['png', 'webp', 'jpg', 'jpeg', 'gif'])
@@ -105,6 +121,39 @@ export function isSafeUiPluginFigurePath(value: string): boolean {
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === 'string' && value.trim().length > 0
+}
+
+export function isUiPluginHostEffect(value: unknown): value is UiPluginHostEffect {
+  if (!isPlainObject(value) || value.kind !== 'shuimo-yijing') return false
+  const hexagram = value.hexagram
+  if (!isPlainObject(hexagram)) return false
+  if (
+    !Number.isInteger(hexagram.ordinal) ||
+    Number(hexagram.ordinal) < 1 ||
+    Number(hexagram.ordinal) > 64
+  ) {
+    return false
+  }
+  if (
+    !Number.isInteger(hexagram.movingLine) ||
+    Number(hexagram.movingLine) < 1 ||
+    Number(hexagram.movingLine) > 6
+  ) {
+    return false
+  }
+  return [
+    hexagram.glyph,
+    hexagram.name,
+    hexagram.statement,
+    hexagram.statementCommentary,
+    hexagram.movingLineLabel,
+    hexagram.movingLineText,
+    hexagram.movingLineCommentary
+  ].every(isNonEmptyString)
 }
 
 function readTrimmedString(value: unknown, max: number): string | null {

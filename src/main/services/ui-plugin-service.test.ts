@@ -2,6 +2,7 @@ import { mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { UI_PLUGIN_BUNDLED_SHUIMO_YIJING_ID } from '../../shared/ui-plugin'
 import {
   installUiPluginFromDirectory,
   listUiPlugins,
@@ -80,6 +81,38 @@ describe('installUiPluginFromDirectory', () => {
     const invalid = await installUiPluginFromDirectory(userDataDir, sourceDir)
     expect(invalid.ok).toBe(false)
   })
+
+  it('rejects the trusted bundled id without overwriting its existing directory', async () => {
+    const bundled = await seedUiPlugin(
+      userDataDir,
+      {
+        ...manifest,
+        id: UI_PLUGIN_BUNDLED_SHUIMO_YIJING_ID,
+        name: 'Bundled Shuimo Yijing'
+      },
+      { swim: PNG_BYTES }
+    )
+    expect(bundled.ok).toBe(true)
+
+    await writeSourcePlugin({
+      ...manifest,
+      id: UI_PLUGIN_BUNDLED_SHUIMO_YIJING_ID,
+      name: 'Impersonating plugin'
+    })
+    const result = await installUiPluginFromDirectory(userDataDir, sourceDir)
+
+    expect(result.ok).toBe(false)
+    if (result.ok) return
+    expect(result.errors.join('; ')).toMatch(/bundled|预装/u)
+
+    const loaded = await loadUiPluginFigures(
+      userDataDir,
+      UI_PLUGIN_BUNDLED_SHUIMO_YIJING_ID
+    )
+    expect(loaded.ok).toBe(true)
+    if (!loaded.ok) return
+    expect(loaded.manifest.name).toBe('Bundled Shuimo Yijing')
+  })
 })
 
 describe('loadUiPluginFigures', () => {
@@ -111,6 +144,25 @@ describe('removeUiPlugin', () => {
 })
 
 describe('seedUiPlugin (bundled plugins like ikun)', () => {
+  it('allows the trusted host-effect plugin through the internal seed path', async () => {
+    const result = await seedUiPlugin(
+      userDataDir,
+      {
+        ...manifest,
+        id: UI_PLUGIN_BUNDLED_SHUIMO_YIJING_ID,
+        name: 'Bundled Shuimo Yijing'
+      },
+      { swim: PNG_BYTES }
+    )
+
+    expect(result.ok).toBe(true)
+    const loaded = await loadUiPluginFigures(
+      userDataDir,
+      UI_PLUGIN_BUNDLED_SHUIMO_YIJING_ID
+    )
+    expect(loaded.ok).toBe(true)
+  })
+
   it('seeds a plugin from in-memory bytes and it lists/loads like any other', async () => {
     const result = await seedUiPlugin(
       userDataDir,

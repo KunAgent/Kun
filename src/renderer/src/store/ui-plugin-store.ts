@@ -1,8 +1,10 @@
 import { create } from 'zustand'
 import {
   buildUiPluginTokenCss,
+  isUiPluginHostEffect,
   resolveUiPluginFigure,
   type UiPluginFigureSlot,
+  type UiPluginHostEffect,
   type UiPluginLabelKey,
   type UiPluginListItem,
   type UiPluginManifestV1,
@@ -24,6 +26,7 @@ import {
 export type UiPluginRuntime = {
   manifest: UiPluginManifestV1
   figures: UiPluginRuntimeFigures
+  hostEffect?: UiPluginHostEffect
 }
 
 type UiPluginState = {
@@ -41,6 +44,8 @@ type UiPluginState = {
 }
 
 const TOKEN_STYLE_ELEMENT_ID = 'ds-ui-plugin-tokens'
+let activationGeneration = 0
+let pendingActivation: { pluginId: string; generation: number } | null = null
 
 function uiPluginApi(): Window['kunGui'] | null {
   if (typeof window === 'undefined') return null
@@ -110,10 +115,12 @@ export const useUiPluginStore = create<UiPluginState>((set, get) => ({
   },
 
   activateUiMode: async (mode: string) => {
+    const generation = ++activationGeneration
+    pendingActivation = null
     const normalized = mode.trim().toLowerCase()
     if (normalized === UI_MODE_DEFAULT) {
       writeUiModePreference(normalized)
-      set({ uiMode: normalized, activeRuntime: null, lastError: null })
+      set({ busy: false, uiMode: normalized, activeRuntime: null, lastError: null })
       applyUiModeDom(normalized, null)
       return
     }
@@ -121,7 +128,7 @@ export const useUiPluginStore = create<UiPluginState>((set, get) => ({
     // 'retroma' 是纯配色内置模式,无吉祥物图集,不走插件加载链路
     if (normalized === UI_MODE_RETROMA) {
       writeUiModePreference(normalized)
-      set({ uiMode: normalized, activeRuntime: null, lastError: null })
+      set({ busy: false, uiMode: normalized, activeRuntime: null, lastError: null })
       applyUiModeDom(normalized, null)
       return
     }
@@ -133,14 +140,20 @@ export const useUiPluginStore = create<UiPluginState>((set, get) => ({
       // 桌面接口不可用(如纯渲染测试):ikun 仍可退化为仅属性模式
       if (normalized === UI_MODE_IKUN) {
         writeUiModePreference(normalized)
-        set({ uiMode: normalized, activeRuntime: null, lastError: null })
+        set({ busy: false, uiMode: normalized, activeRuntime: null, lastError: null })
         applyUiModeDom(normalized, null)
       }
       return
     }
+    pendingActivation = { pluginId: normalized, generation }
     set({ busy: true })
     try {
       const result = await api.loadUiPlugin(normalized)
+      if (
+        generation !== activationGeneration ||
+        pendingActivation?.generation !== generation
+      ) return
+      pendingActivation = null
       if (!result.ok) {
         set({
           busy: false,
@@ -152,11 +165,20 @@ export const useUiPluginStore = create<UiPluginState>((set, get) => ({
         applyUiModeDom(UI_MODE_DEFAULT, null)
         return
       }
-      const runtime: UiPluginRuntime = { manifest: result.manifest, figures: result.figures }
+      const runtime: UiPluginRuntime = {
+        manifest: result.manifest,
+        figures: result.figures,
+        ...(isUiPluginHostEffect(result.hostEffect) ? { hostEffect: result.hostEffect } : {})
+      }
       writeUiModePreference(normalized)
       set({ busy: false, uiMode: normalized, activeRuntime: runtime, lastError: null })
       applyUiModeDom(normalized, runtime)
     } catch (error) {
+      if (
+        generation !== activationGeneration ||
+        pendingActivation?.generation !== generation
+      ) return
+      pendingActivation = null
       set({
         busy: false,
         uiMode: UI_MODE_DEFAULT,
@@ -190,11 +212,35 @@ export const useUiPluginStore = create<UiPluginState>((set, get) => ({
   removeUiPluginById: async (id: string) => {
     const api = uiPluginApi()
     if (typeof api?.removeUiPlugin !== 'function') return
-    if (get().uiMode === id) {
-      await get().activateUiMode(UI_MODE_DEFAULT)
+    const normalized = id.trim().toLowerCase()
+    const cancelPendingRemovalTarget = (): void => {
+      if (pendingActivation?.pluginId === normalized) {
+        activationGeneration += 1
+        pendingActivation = null
+        set({ busy: false })
+      }
     }
+    const clearRemovedPluginRuntime = (): void => {
+      const state = get()
+      if (
+        state.uiMode === normalized ||
+        state.activeRuntime?.manifest.id === normalized
+      ) {
+        const nextMode = state.uiMode === normalized ? UI_MODE_DEFAULT : state.uiMode
+        if (nextMode === UI_MODE_DEFAULT) {
+          writeUiModePreference(UI_MODE_DEFAULT)
+        }
+        set({ uiMode: nextMode, activeRuntime: null, lastError: null })
+        applyUiModeDom(nextMode, null)
+      }
+    }
+
     try {
-      await api.removeUiPlugin(id)
+      const result = await api.removeUiPlugin(id)
+      if (result.ok) {
+        cancelPendingRemovalTarget()
+        clearRemovedPluginRuntime()
+      }
     } finally {
       await get().refreshUiPlugins()
     }

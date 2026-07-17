@@ -101,4 +101,15 @@ describe('EasterEggSettingsSection (mode workshop)', () => {
     expect(html).toContain('Mode workshop')
     expect(html).toContain('bg-ds-subtle')
   })
+
+  it('identifies plugin cards for plugin-scoped preview styling', async () => {
+    const nodeFs = 'node:fs/promises'
+    const { readFile } = await import(/* @vite-ignore */ nodeFs)
+    const source = await readFile(
+      new URL('./settings-section-easter-egg.tsx', import.meta.url),
+      'utf8'
+    )
+
+    expect(source).toContain('data-ui-plugin-id={card.mode}')
+  })
 })
