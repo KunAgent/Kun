@@ -1,0 +1,59 @@
+{
+  "evals": [
+    {
+      "id": "diag-basic-zh",
+      "name": "基础中文诊断触发",
+      "prompt": "帮我诊断一下格力空调的GEO效果",
+      "should_trigger": true,
+      "assertions": [
+        "应触发 geo-diag-report skill",
+        "应提取 brandName=格力 productType=空调",
+        "应跳过Step1交互（品牌信息已提供）",
+        "应执行4阶段流水线",
+        "最终应输出 DiagReport JSON + HTML报告"
+      ]
+    },
+    {
+      "id": "diag-variant-trigger",
+      "name": "变体触发词测试",
+      "prompt": "看看华为手机在AI搜索里的可见度怎么样",
+      "should_trigger": true,
+      "assertions": [
+        "应触发 geo-diag-report skill（通过'AI可见度'变体词）",
+        "应提取 brandName=华为 productType=手机",
+        "应使用搜索增强模式（非纯虚拟）"
+      ]
+    },
+    {
+      "id": "diag-no-trigger-research",
+      "name": "不应触发-深度调研",
+      "prompt": "帮我做一份空调行业2025年的深度调研报告",
+      "should_trigger": false,
+      "assertions": [
+        "不应触发 geo-diag-report skill",
+        "用户需要的是行业调研而非GEO诊断"
+      ]
+    },
+    {
+      "id": "diag-no-trigger-market",
+      "name": "不应触发-市场规模",
+      "prompt": "分析一下中国空调市场的TAM SAM SOM",
+      "should_trigger": false,
+      "assertions": [
+        "不应触发 geo-diag-report skill",
+        "用户需要的是市场规模测算而非GEO诊断"
+      ]
+    },
+    {
+      "id": "diag-orchestration",
+      "name": "编排触发-深度分析",
+      "prompt": "全面分析一下比亚迪电动车的GEO表现",
+      "should_trigger": true,
+      "assertions": [
+        "应触发 geo-diag-report skill",
+        "应识别'全面分析'意图，启用编排2（先调研再诊断）",
+        "应先WebSearch补充行业背景，再执行4阶段诊断"
+      ]
+    }
+  ]
+}

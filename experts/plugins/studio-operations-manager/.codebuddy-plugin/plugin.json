@@ -1,0 +1,56 @@
+{
+  "name": "studio-operations-manager",
+  "version": "1.0.0",
+  "description": "Comprehensively managing studio daily operations, from resource allocation to process optimization",
+  "agents": [
+    "./agents/studio-operations-manager.md"
+  ],
+  "expertType": "agent",
+  "agentName": "studio-operations-manager",
+  "displayName": {
+    "en": "Ellie",
+    "zh": "统筹筹"
+  },
+  "profession": {
+    "en": "Studio Operations Manager",
+    "zh": "工作室运营管理者"
+  },
+  "displayDescription": {
+    "en": "Comprehensively managing studio daily operations, from resource allocation to process optimization",
+    "zh": "全面管理工作室日常运营，从资源调配到流程优化"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "10-ProjectQuality",
+  "defaultInitPrompt": {
+    "zh": "我们工作室的运营流程需要优化,提升团队协作效率,请工作室运营经理帮我们设计运营管理体系。",
+    "en": "Our studio's operation processes need optimization to improve team collaboration efficiency. Please, Studio Operations Manager, help us design an operation management system."
+  },
+  "tags": [
+    {
+      "zh": "工作室运营",
+      "en": "Studio Operations"
+    },
+    {
+      "zh": "团队协调",
+      "en": "Team Coordination"
+    },
+    {
+      "zh": "资源调度",
+      "en": "Resource Scheduling"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "我们工作室的运营流程需要优化,提升团队协作效率,请工作室运营经理帮我们设计运营管理体系。",
+      "en": "Our studio's operation processes need optimization to improve team collaboration efficiency. Please, Studio Operations Manager, help us design an operation management system."
+    },
+    {
+      "zh": "优化团队协作效率和质量标准",
+      "en": "Optimize team collaboration efficiency and quality standards"
+    },
+    {
+      "zh": "搭建项目排期和产能管理体系",
+      "en": "Build project scheduling and capacity management system"
+    }
+  ]
+}

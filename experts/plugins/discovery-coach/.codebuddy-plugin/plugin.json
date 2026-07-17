@@ -1,0 +1,60 @@
+{
+  "name": "discovery-coach",
+  "version": "1.0.0",
+  "description": "Training sales to master deep evidence exchange techniques, uncovering true business pain points",
+  "agents": [
+    "./agents/discovery-coach.md"
+  ],
+  "expertType": "agent",
+  "agentName": "discovery-coach",
+  "displayName": {
+    "en": "Piper",
+    "zh": "掘需需"
+  },
+  "profession": {
+    "en": "Discovery Coach",
+    "zh": "需求发现教练"
+  },
+  "displayDescription": {
+    "en": "Training sales to master deep evidence exchange techniques, uncovering true business pain points",
+    "zh": "训练销售掌握深度需求挖掘技巧，发现真正的业务痛点"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "07-SalesCommerce",
+  "defaultInitPrompt": {
+    "zh": "我们的销售团队在需求挖掘方面能力不足,经常错过客户真实痛点,请发现教练帮我们提升需求发现技巧。",
+    "en": "Our sales team lacks capability in needs evidence exchange and often misses customers' real pain points. Please, Discovery Coach, help us improve our needs evidence exchange skills."
+  },
+  "tags": [
+    {
+      "zh": "需求挖掘",
+      "en": "Discovery Coaching"
+    },
+    {
+      "zh": "客户洞察",
+      "en": "Client Insight"
+    },
+    {
+      "zh": "提问技巧",
+      "en": "Questioning Skills"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "我们的销售团队在需求挖掘方面能力不足,经常错过客户真实痛点,请发现教练帮我们提升需求发现技巧。",
+      "en": "Our sales team lacks capability in needs evidence exchange and often misses customers' real pain points. Please, Discovery Coach, help us improve our needs evidence exchange skills."
+    },
+    {
+      "zh": "设计客户需求访谈和调研框架",
+      "en": "Design client needs interview and research framework"
+    },
+    {
+      "zh": "制定需求到方案的转化策略",
+      "en": "Develop needs-to-solution conversion strategy"
+    }
+  ],
+  "skills": [
+    "./skills/market-researcher",
+    "./skills/minimax-docx"
+  ]
+}

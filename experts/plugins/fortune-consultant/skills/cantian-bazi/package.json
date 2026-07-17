@@ -1,0 +1,7 @@
+{
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "cantian-tymext": "^0.0.26"
+  }
+}

@@ -1,0 +1,238 @@
+{
+  "message": "",
+  "status": 0,
+  "data": {
+    "Flow": [
+      {
+        "did": 0,
+        "psId": 0,
+        "fid": 0,
+        "name": "待筛选",
+        "cname": "",
+        "type": "Flow",
+        "description": "",
+        "ordering": 1
+      },
+      {
+        "did": 1,
+        "psId": 0,
+        "fid": 0,
+        "name": "已锁定",
+        "cname": "",
+        "type": "Flow",
+        "description": "",
+        "ordering": 2
+      },
+      {
+        "did": 16,
+        "psId": 0,
+        "fid": 0,
+        "name": "待分配",
+        "cname": "",
+        "type": "Flow",
+        "description": "",
+        "ordering": 3
+      },
+      {
+        "did": 17,
+        "psId": 0,
+        "fid": 0,
+        "name": "已分配",
+        "cname": "",
+        "type": "Flow",
+        "description": "",
+        "ordering": 4
+      },
+      {
+        "did": 2,
+        "psId": 0,
+        "fid": 0,
+        "name": "集体面试",
+        "cname": "",
+        "type": "Flow",
+        "description": "",
+        "ordering": 5
+      },
+      {
+        "did": 3,
+        "psId": 0,
+        "fid": 0,
+        "name": "初试",
+        "cname": "",
+        "type": "Flow",
+        "description": "",
+        "ordering": 6
+      },
+      {
+        "did": 4,
+        "psId": 0,
+        "fid": 0,
+        "name": "复试",
+        "cname": "",
+        "type": "Flow",
+        "description": "",
+        "ordering": 7
+      },
+      {
+        "did": 5,
+        "psId": 0,
+        "fid": 0,
+        "name": "GM/面委会/EVP面试",
+        "cname": "",
+        "type": "Flow",
+        "description": "",
+        "ordering": 8
+      },
+      {
+        "did": 6,
+        "psId": 0,
+        "fid": 0,
+        "name": "HR面试",
+        "cname": "",
+        "type": "Flow",
+        "description": "",
+        "ordering": 9
+      },
+      {
+        "did": 8,
+        "psId": 0,
+        "fid": 0,
+        "name": "面试流程放弃",
+        "cname": "",
+        "type": "Flow",
+        "description": "",
+        "ordering": 10
+      },
+      {
+        "did": 26,
+        "psId": 0,
+        "fid": 0,
+        "name": "offer审批中",
+        "cname": null,
+        "type": "Flow",
+        "description": null,
+        "ordering": 11
+      },
+      {
+        "did": 25,
+        "psId": 0,
+        "fid": 0,
+        "name": "学生意向确认",
+        "cname": null,
+        "type": "Flow",
+        "description": null,
+        "ordering": 12
+      },
+      {
+        "did": 27,
+        "psId": 0,
+        "fid": 0,
+        "name": "offer流程放弃",
+        "cname": null,
+        "type": "Flow",
+        "description": null,
+        "ordering": 13
+      },
+      {
+        "did": 28,
+        "psId": 0,
+        "fid": 0,
+        "name": "实习生offer确认中",
+        "cname": null,
+        "type": "Flow",
+        "description": null,
+        "ordering": 13
+      },
+      {
+        "did": 30,
+        "psId": 0,
+        "fid": 0,
+        "name": "毕业生offer确认中",
+        "cname": null,
+        "type": "Flow",
+        "description": null,
+        "ordering": 13
+      },
+      {
+        "did": 12,
+        "psId": 0,
+        "fid": 0,
+        "name": "实习已录用",
+        "cname": "",
+        "type": "Flow",
+        "description": "",
+        "ordering": 14
+      },
+      {
+        "did": 13,
+        "psId": 0,
+        "fid": 0,
+        "name": "实习生考核淘汰",
+        "cname": "",
+        "type": "Flow",
+        "description": "",
+        "ordering": 15
+      },
+      {
+        "did": 24,
+        "psId": 0,
+        "fid": 0,
+        "name": "录用评估中",
+        "cname": null,
+        "type": "Flow",
+        "description": null,
+        "ordering": 16
+      },
+      {
+        "did": 14,
+        "psId": 0,
+        "fid": 0,
+        "name": "实习生考核转推荐",
+        "cname": "",
+        "type": "Flow",
+        "description": "",
+        "ordering": 16
+      },
+      {
+        "did": 15,
+        "psId": 0,
+        "fid": 0,
+        "name": "毕业生已录用",
+        "cname": "",
+        "type": "Flow",
+        "description": "",
+        "ordering": 17
+      },
+      {
+        "did": 22,
+        "psId": 0,
+        "fid": 0,
+        "name": "已锁定在项目",
+        "cname": "",
+        "type": "Flow",
+        "description": "",
+        "ordering": 22
+      },
+      {
+        "did": 23,
+        "psId": 0,
+        "fid": 0,
+        "name": "已锁定在项目面试官",
+        "cname": "",
+        "type": "Flow",
+        "description": "",
+        "ordering": 23
+      },
+      {
+        "did": 31,
+        "psId": 0,
+        "fid": 0,
+        "name": "入职流程放弃",
+        "cname": null,
+        "type": "Flow",
+        "description": null,
+        "ordering": 31
+      }
+    ]
+  }
+}

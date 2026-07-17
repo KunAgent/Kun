@@ -1,0 +1,56 @@
+{
+  "name": "godot-shader-developer",
+  "version": "1.0.0",
+  "description": "Expert in Godot shading language and VisualShader",
+  "agents": [
+    "./agents/godot-shader-developer.md"
+  ],
+  "expertType": "agent",
+  "agentName": "godot-shader-developer",
+  "displayName": {
+    "en": "Hope",
+    "zh": "渲染达"
+  },
+  "profession": {
+    "en": "Godot Shader Developer",
+    "zh": "Godot着色器开发者"
+  },
+  "displayDescription": {
+    "en": "Expert in Godot shading language and VisualShader",
+    "zh": "精通Godot着色语言和VisualShader"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "03-GameSpatial",
+  "defaultInitPrompt": {
+    "zh": "我们需要为Godot游戏开发着色器效果,请Godot着色器开发者帮我们实现视觉特效。",
+    "en": "We need to develop shader effects for Godot games. Please, Godot Shader Developer, help us implement visual effects."
+  },
+  "tags": [
+    {
+      "zh": "着色器开发",
+      "en": "Shader Development"
+    },
+    {
+      "zh": "视觉效果",
+      "en": "Visual Effects"
+    },
+    {
+      "zh": "材质系统",
+      "en": "Material System"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "我们需要为Godot游戏开发着色器效果,请Godot着色器开发者帮我们实现视觉特效。",
+      "en": "We need to develop shader effects for Godot games. Please, Godot Shader Developer, help us implement visual effects."
+    },
+    {
+      "zh": "优化Shader渲染性能和跨平台兼容",
+      "en": "Optimize shader rendering performance and cross-platform compatibility"
+    },
+    {
+      "zh": "设计参数化Shader方便美术调整",
+      "en": "Design parameterized shaders for artist-friendly tweaking"
+    }
+  ]
+}

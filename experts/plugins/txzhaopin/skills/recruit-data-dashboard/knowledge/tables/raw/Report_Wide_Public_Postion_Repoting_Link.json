@@ -1,0 +1,1273 @@
+{
+  "table_code" : "catalog_dos_da_mcp.hrdw.Report_Wide_Public_Postion_Repoting_Link",
+  "table_name" : "岗位与汇报链信息宽表",
+  "version" : 9,
+  "table_desc" : "定位：记录员工与其所在岗位的月度汇报关系快照，展示每个员工在组织中的完整汇报链路（从员工本人一直到CEO），包括员工的直接下属和全量下属信息展示在职员工当前在各实体/虚拟组织中担任的岗位信息，包含汇报关系、管理幅度、汇报层级等信息。\n唯一标识：该表以\"汇报关系ID\"(report_relation_id)作为唯一标识，每条记录对应一个员工在一个岗位上的月度汇报关系；若员工有兼岗，则同一员工在同一月份会有多条记录（主岗+兼岗各一条）\n主要包含下面几大部分内容：\n1、岗位与组织基础信息（岗位ID/名称、岗位时长、承岗时长、组织全路径、组织层级、组织类型、BG/线/部门/中心/组各层级）\n2、组织管理信息（是否为组织负责人、组织CVP/SVP/BP信息、组织秘书信息、组织员工总数）\n3、员工基础信息（员工ID/名称、管理主体、员工类型、管理职级、专业职级、主岗信息）\n4、汇报链路信息（汇报关系类型、兼岗类型、从汇报01级到15级的完整汇报链：每级对应员工ID/姓名/岗位/职级、到部门负责人/BG负责人/CEO/CVP的汇报层数）\n5、下属信息（直接下属数量及名单/主岗和含兼岗两个口径、全量下属总数及名单/主岗和含兼岗两个口径、直接下属中的管理者数量）\n6、完整汇报链ID全路径及汇报员工名全链路\n\n主要用途：\n1、查询某员工的完整汇报链，了解从员工本人到CEO的各级上级是谁；\n2、查询某员工的直接下属或全量下属名单及数量；\n3、查询某组织的汇报关系结构，分析组织层级深度；  \n6、分析组织管理宽度（某管理者的直接下属数量）；\n7、查询兼岗员工的汇报关系\n\n不支持的场景： \n不支持查询员工的人事状态、绩效等HR信息，此类需求应使用员工信息宽表；\n不支持查询组织架构变更历史，此类需求应使用组织异动宽表\n\n能回答的典型问题：\n某员工目前汇报给谁，汇报链路是什么；\nA管理者有多少直接下属，都有哪些人；    \nA部门中管理宽度（直接下属数）超过10人的管理者有哪些；\n某员工有兼岗的汇报关系是什么； \n\n优先场景：\n查询特定人员的汇报链路（谁的直接上级是谁，逐级向上）；\n查询管理者的下属范围（直接下属数量与名单）；",
+  "write_sql_background" : "",
+  "find_column_background" : "",
+  "columns" : [ {
+    "column_code" : "org_subtype_name",
+    "column_name" : "虚拟组织类别",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "staff_id8",
+    "column_name" : "员工ID",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "snapshot_date",
+    "column_name" : "当前统计日期",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "post_id8",
+    "column_name" : "岗位ID",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "post_name",
+    "column_name" : "岗位名称",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "post_begin_date",
+    "column_name" : "岗位设立日期",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "post_duration",
+    "column_name" : "岗位设立时长（年）",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "org_id8",
+    "column_name" : "组织ID",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "org_name",
+    "column_name" : "组织名称",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "org_level_name_short",
+    "column_name" : "组织架构层级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "org_type_name",
+    "column_name" : "组织类型",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "org_sublevel_name",
+    "column_name" : "组织层级补充描述",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "org_cvp_combined_name",
+    "column_name" : "组织所属CVP",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "org_svp_combined_name",
+    "column_name" : "组织所属SVP",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "org_head_combined_name",
+    "column_name" : "组织负责人",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "org_bp_combined_name_list",
+    "column_name" : "组织BP",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "org_secretary_combined_name",
+    "column_name" : "组织秘书",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "org_full_id8",
+    "column_name" : "组织ID全路径",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "org_full_name",
+    "column_name" : "组织全路径",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "nhs_pilot_org_flag_name",
+    "column_name" : "所属组织是否为试点体系",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "level00_org_name",
+    "column_name" : "一级组织",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "level00_org_level_name_short",
+    "column_name" : "一级组织架构层级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "level01_org_name",
+    "column_name" : "二级组织",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "level01_org_level_name_short",
+    "column_name" : "二级组织架构层级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "level02_org_name",
+    "column_name" : "三级组织",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "level02_org_level_name_short",
+    "column_name" : "三级组织架构层级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "level03_org_name",
+    "column_name" : "四级组织",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "level03_org_level_name_short",
+    "column_name" : "四级组织架构层级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "level04_org_name",
+    "column_name" : "五级组织",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "level04_org_level_name_short",
+    "column_name" : "五级组织架构层级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "level05_org_name",
+    "column_name" : "六级组织",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "level05_org_level_name_short",
+    "column_name" : "六级组织架构层级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "level06_org_name",
+    "column_name" : "七级组织",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "level06_org_level_name_short",
+    "column_name" : "七级组织架构层级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "level07_org_name",
+    "column_name" : "八级组织",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "level07_org_level_name_short",
+    "column_name" : "八级组织架构层级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "level08_org_name",
+    "column_name" : "九级组织",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "level08_org_level_name_short",
+    "column_name" : "九级组织架构层级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "bg_name",
+    "column_name" : "BG",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "line_name",
+    "column_name" : "线",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "dept_name",
+    "column_name" : "部门",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "center_name",
+    "column_name" : "中心",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "team_name",
+    "column_name" : "组",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "terminal_org_flag_name",
+    "column_name" : "是否为末端组织",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "dept_staff_cnt",
+    "column_name" : "部门员工数",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "dept_staff_cnt_all_post",
+    "column_name" : "部门含兼岗员工数",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "staff_combined_name",
+    "column_name" : "员工中英文名",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "manage_unit_name",
+    "column_name" : "员工所属管理主体",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "manage_unit_type_name",
+    "column_name" : "员工所属管理主体类型",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "post_type_name",
+    "column_name" : "岗位类型",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "post_number",
+    "column_name" : "员工岗位编号",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "incharge_begin_date",
+    "column_name" : "承担岗位日期",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "incharge_duration",
+    "column_name" : "承担岗位时长（年）",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "staff_type_name",
+    "column_name" : "员工类型",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "staff_subtype_name",
+    "column_name" : "员工子类型",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "overseas_nhs_pilot_flag_name",
+    "column_name" : "If NHS Pilot",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "manager_level_name",
+    "column_name" : "管理职级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "pro_position_level_name",
+    "column_name" : "专业职级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "staff_main_bg_name",
+    "column_name" : "主岗所属BG",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "staff_main_post_id8",
+    "column_name" : "主岗岗位ID",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "staff_main_post_name",
+    "column_name" : "主岗岗位名称",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "staff_main_post_org_name",
+    "column_name" : "主岗组织名称",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "staff_main_post_org_full_id8",
+    "column_name" : "主岗所属组织ID全路径",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "staff_main_post_org_full_name",
+    "column_name" : "主岗所属组织全路径",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "post_direct_subordinate_cnt_primary",
+    "column_name" : "本岗位直接下属员工数",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "post_direct_subordinate_cnt_all",
+    "column_name" : "本岗位直接下属员工数（含兼岗）",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "post_subordinate_cnt_primary",
+    "column_name" : "本岗位下属员工总数",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "post_subordinate_cnt_all",
+    "column_name" : "本岗位下属员工总数（含兼岗）",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "staff_direct_subordinate_cnt_main_post",
+    "column_name" : "本人直接下属员工数",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "staff_direct_subordinate_cnt_all_post",
+    "column_name" : "本人直接下属员工数（含兼岗）",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "staff_subordinate_cnt_main_post",
+    "column_name" : "本人下属员工总数",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "staff_subordinate_cnt_all_post",
+    "column_name" : "本人下属员工总数（含兼岗）",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "report_level_to_dept_leader",
+    "column_name" : "到部门负责人汇报层级（by人）",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "report_level_to_bg_leader",
+    "column_name" : "到BG负责人汇报层级（by人）",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "report_level_to_officer",
+    "column_name" : "到公司总裁汇报层级(by人)",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "report_level_to_cvp",
+    "column_name" : "到CVP汇报层级（by人）",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "outside_report_chain_name",
+    "column_name" : "是否超汇报层级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "report_yourself_name",
+    "column_name" : "是否向自己汇报",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "report_relation_id",
+    "column_name" : "汇报链ID",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "report_relation_staff_post_name_full_path",
+    "column_name" : "汇报链全路径",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "level01_post_id8",
+    "column_name" : "1级汇报岗位ID",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "level01_post_name",
+    "column_name" : "1级汇报岗位名称",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "level01_staff_combined_name",
+    "column_name" : "1级汇报人",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "level01_manager_level_name",
+    "column_name" : "1级汇报人管理职级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "level01_pro_position_level_name",
+    "column_name" : "1级汇报人专业职级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "level02_post_id8",
+    "column_name" : "2级汇报岗位ID",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "level02_post_name",
+    "column_name" : "2级汇报岗位名称",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "level02_staff_combined_name",
+    "column_name" : "2级汇报人",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "level02_manager_level_name",
+    "column_name" : "2级汇报人管理职级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "level02_pro_position_level_name",
+    "column_name" : "2级汇报人专业职级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "level03_post_id8",
+    "column_name" : "3级汇报岗位ID",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "level03_post_name",
+    "column_name" : "3级汇报岗位名称",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "level03_staff_combined_name",
+    "column_name" : "3级汇报人",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "level03_manager_level_name",
+    "column_name" : "3级汇报人管理职级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "level03_pro_position_level_name",
+    "column_name" : "3级汇报人专业职级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "level04_post_id8",
+    "column_name" : "4级汇报岗位ID",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "level04_post_name",
+    "column_name" : "4级汇报岗位名称",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "level04_staff_combined_name",
+    "column_name" : "4级汇报人",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "level04_manager_level_name",
+    "column_name" : "4级汇报人管理职级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "level04_pro_position_level_name",
+    "column_name" : "4级汇报人专业职级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "level05_post_id8",
+    "column_name" : "5级汇报岗位ID",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "level05_post_name",
+    "column_name" : "5级汇报岗位名称",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "level05_staff_combined_name",
+    "column_name" : "5级汇报人",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "level05_manager_level_name",
+    "column_name" : "5级汇报人管理职级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "level05_pro_position_level_name",
+    "column_name" : "5级汇报人专业职级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "level06_post_id8",
+    "column_name" : "6级汇报岗位ID",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "level06_post_name",
+    "column_name" : "6级汇报岗位名称",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "level06_staff_combined_name",
+    "column_name" : "6级汇报人",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "level06_manager_level_name",
+    "column_name" : "6级汇报人管理职级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "level06_pro_position_level_name",
+    "column_name" : "6级汇报人专业职级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "level07_post_id8",
+    "column_name" : "7级汇报岗位ID",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "level07_post_name",
+    "column_name" : "7级汇报岗位名称",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "level07_staff_combined_name",
+    "column_name" : "7级汇报人",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "level07_manager_level_name",
+    "column_name" : "7级汇报人管理职级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "level07_pro_position_level_name",
+    "column_name" : "7级汇报人专业职级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "level08_post_id8",
+    "column_name" : "8级汇报岗位ID",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "level08_post_name",
+    "column_name" : "8级汇报岗位名称",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "level08_staff_combined_name",
+    "column_name" : "8级汇报人",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "level08_manager_level_name",
+    "column_name" : "8级汇报人管理职级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "level08_pro_position_level_name",
+    "column_name" : "8级汇报人专业职级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "level09_post_id8",
+    "column_name" : "9级汇报岗位ID",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "level09_post_name",
+    "column_name" : "9级汇报岗位名称",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "level09_staff_combined_name",
+    "column_name" : "9级汇报人",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "level09_manager_level_name",
+    "column_name" : "9级汇报人管理职级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "level09_pro_position_level_name",
+    "column_name" : "9级汇报人专业职级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "level10_post_id8",
+    "column_name" : "10级汇报岗位ID",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "level10_post_name",
+    "column_name" : "10级汇报岗位名称",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "level10_staff_combined_name",
+    "column_name" : "10级汇报人",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "level10_manager_level_name",
+    "column_name" : "10级汇报人管理职级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "level10_pro_position_level_name",
+    "column_name" : "10级汇报人专业职级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "level11_post_id8",
+    "column_name" : "11级汇报岗位ID",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "level11_post_name",
+    "column_name" : "11级汇报岗位名称",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "level11_staff_combined_name",
+    "column_name" : "11级汇报人",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "level11_manager_level_name",
+    "column_name" : "11级汇报人管理职级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "level11_pro_position_level_name",
+    "column_name" : "11级汇报人专业职级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "level12_post_id8",
+    "column_name" : "12级汇报岗位ID",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "level12_post_name",
+    "column_name" : "12级汇报岗位名称",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "level12_staff_combined_name",
+    "column_name" : "12级汇报人",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "level12_manager_level_name",
+    "column_name" : "12级汇报人管理职级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "level12_pro_position_level_name",
+    "column_name" : "12级汇报人专业职级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "level13_post_id8",
+    "column_name" : "13级汇报岗位ID",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "level13_post_name",
+    "column_name" : "13级汇报岗位名称",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "level13_staff_combined_name",
+    "column_name" : "13级汇报人",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "level13_manager_level_name",
+    "column_name" : "13级汇报人管理职级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "level13_pro_position_level_name",
+    "column_name" : "13级汇报人专业职级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "level14_post_id8",
+    "column_name" : "14级汇报岗位ID",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "level14_post_name",
+    "column_name" : "14级汇报岗位名称",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "level14_staff_combined_name",
+    "column_name" : "14级汇报人",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "level14_manager_level_name",
+    "column_name" : "14级汇报人管理职级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "level14_pro_position_level_name",
+    "column_name" : "14级汇报人专业职级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "org_head_flag_name",
+    "column_name" : "是否组织负责人",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "report_relation_label",
+    "column_name" : "兼岗类型",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "sub_org_full_name",
+    "column_name" : "向下兼岗负责组织",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "concurrent_post_remind_lateral_duties_over_3_flag_name",
+    "column_name" : "兼岗重点提醒_横向职责超3",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "concurrent_post_remind_vertical_duties_over_2_flag_name",
+    "column_name" : "兼岗重点提醒_纵向职责超2",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "one_by_one_remind_flag_name",
+    "column_name" : "兼岗重点提醒_一串一",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "cross_functional_responsibilities_flag_name",
+    "column_name" : "是否属于横向职责",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "non_normative_type_name",
+    "column_name" : "汇报链不规范类型",
+    "column_type" : "VARCHAR",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  } ]
+}

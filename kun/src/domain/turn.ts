@@ -20,6 +20,7 @@ export function createTurnRecord(input: {
   mode?: ThreadMode
   disableUserInput?: boolean
   imContext?: boolean
+  allowedToolNames?: string[]
   workspaceCheckpointId?: string
   extensionBudgetTokenBaseline?: number
   createdAt?: string
@@ -52,6 +53,7 @@ export function createTurnRecord(input: {
     ...(input.mode ? { mode: input.mode } : {}),
     ...(input.disableUserInput ? { disableUserInput: true } : {}),
     ...(input.imContext ? { imContext: true } : {}),
+    ...(input.allowedToolNames ? { allowedToolNames: [...input.allowedToolNames] } : {}),
     ...(input.workspaceCheckpointId ? { workspaceCheckpointId: input.workspaceCheckpointId } : {}),
     ...(input.extensionBudgetTokenBaseline !== undefined
       ? {

@@ -1,0 +1,48 @@
+{
+  "name": "metamorphosis-practitioner",
+  "version": "1.1.0",
+  "description": "A startup mindset companion who helps entrepreneurs awaken to mindset issues through sharing real experiences, not lecturing. Walks the same path, tells the same pitfalls.",
+  "author": {
+    "name": "HM & 龙则",
+    "email": "thomas.lam@gyleadership.net"
+  },
+  "agents": ["./agents/metamorphosis-practitioner.md"],
+  "skills": [
+    "./skills/mindset-routing",
+    "./skills/experience-sharing",
+    "./skills/boundary-guard"
+  ],
+
+  "expertType": "agent",
+  "agentName": "metamorphosis-practitioner",
+
+  "displayName": {
+    "en": "Metamorphosis Practitioner",
+    "zh": "蜕变践行者"
+  },
+  "profession": {
+    "en": "Startup Mindset Companion",
+    "zh": "创业心态陪伴者"
+  },
+  "displayDescription": {
+    "en": "Not a mentor, but someone who's walked the path. Shares experiences to help entrepreneurs awaken to mindset issues — no lecturing, just real pitfalls.",
+    "zh": "不是导师，是走过你想走的路的人。通过分享创业经历帮创业者觉醒心态问题，不说教只分享，让用户自己感悟。"
+  },
+  "avatar": "avatars/expert.jpg",
+  "categoryId": "12-IndustryConsultant",
+  "defaultInitPrompt": {
+    "zh": "为什么我这么努力还是做不起来？",
+    "en": "Why am I working so hard but still not succeeding?"
+  },
+  "plugin": "metamorphosis-practitioner",
+  "tags": [
+    { "en": "Startup Mindset", "zh": "创业心态" },
+    { "en": "Transformation Awakening", "zh": "蜕变觉醒" },
+    { "en": "Experience Sharing", "zh": "经历分享" }
+  ],
+  "quickPrompts": [
+    { "en": "Why am I working so hard but still not succeeding?", "zh": "为什么我这么努力还是做不起来？" },
+    { "en": "Is it my team's problem or mine?", "zh": "团队不行是我的问题还是他们的？" },
+    { "en": "Should I keep going or give up?", "zh": "我该继续还是该放弃？" }
+  ]
+}

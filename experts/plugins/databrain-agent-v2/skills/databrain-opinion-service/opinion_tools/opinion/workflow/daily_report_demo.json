@@ -1,0 +1,141 @@
+{
+    "workflow_name": "daily_steam_report",
+    "description": "Steam平台日报数据收集和分析",
+    "steps": [ 
+            {
+            "step_id": 1,
+            "step_name": "steam_overview_period",
+            "description": "Steam平台24小时概览数据收集",
+            "agent": "Opinions Agent",
+            "tool_calls": [
+                {
+                    "function": {
+                        "name": "read_data",
+                        "arguments": {
+                            "query": {
+                                "measures": [
+                                    "feeds.game_store_reviews",
+                                    "feeds.steam_recommend_mentions",
+                                    "feeds.steam_unrecommend_mentions",
+                                    "feeds.steam_recommend_rate"
+                                ],
+                                "dimensions": [],
+                                "timeDimensions": [
+                                    {
+                                        "dimension": "feeds.date",
+                                        "granularity": "hour",
+                                        "dateRange": ["{start_time}", "{end_time}"]
+                                    }
+                                ],
+                                "filters": [
+                                    {
+                                        "member": "feeds.game_id",
+                                        "operator": "equals",
+                                        "values": [
+                                            "{game_id}"
+                                        ]
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                    "expected_output": "Steam 24小时概览数据",
+                    "metrics_collected": [
+                        "Total Reviews - 24H",
+                        "Positive Reviews - 24H",
+                        "Negative Reviews - 24H",
+                        "Positive Rate - 24H"
+                    ]
+                }
+            ]
+        },
+                {
+            "step_id": 5,
+            "step_name": "steam_reviews_topics",
+            "description": "Steam平台评论话题分析",
+            "agent": "Opinions Agent",
+            "tool_calls": [
+                {
+                    "function": {
+                        "name": "opinion_summary_tool",
+                        "arguments": {
+                            "start_time": "{start_time}",
+                            "end_time": "{end_time}",
+                            "sentiment_type": "total",
+                            "channel_type": "game_store",
+                            "date_type": "daily",
+                            "edition_unified_id": "{game_id}",
+                            "entity_type": "pc",
+                            "id_type": "edition_id"
+                        }
+                    },
+                    "expected_output": "Steam 评论话题分析",
+                    "metrics_collected": [
+                        "Topic Summary - By Topics",
+                        "number of reviews - By Topics",
+                        "percentage - By Topics"
+                    ]
+                },
+                {
+                    "function": {
+                        "name": "read_data",
+                        "arguments": {
+                            "query": {
+                                "measures": [
+                                    "feeds_topic.engagements"
+                                ],
+                                "dimensions": [
+                                    "feeds_topic.content_zh",
+                                    "feeds_topic.url"
+                                ],
+                                "timeDimensions": [
+                                    {
+                                        "dimension": "feeds_topic.date",
+                                        "dateRange": ["{start_time}", "{end_time}"]
+                                    }
+                                ],
+                                "filters": [
+                                    {
+                                        "member": "feeds_topic.game_id",
+                                        "operator": "equals",
+                                        "values": [
+                                            "{game_id}"
+                                        ]
+                                    },
+                                    {
+                                        "member": "feeds_topic.topic",
+                                        "operator": "equals",
+                                        "values": [
+                                            "topics_from_step_5"
+                                        ]
+                                    },
+                                    {
+                                        "member": "feeds_topic.reviews_type",
+                                        "operator": "equals",
+                                        "values": [
+                                            "Comments on Text Posts",
+                                            "Comments on Videos",
+                                            "Comments on Streams"
+                                        ]
+                                    }
+                                ],
+                                "order": [
+                                    {
+                                        "dimension": "feeds.engagements",
+                                        "order": "desc"
+                                    }
+                                ],
+                                "limit": 10
+                            }
+                        }
+                    },
+                    "expected_output": "社区热门评论",
+                    "metrics_collected": [
+                        "Mentions - Period By Language",
+                        "Engagements - Period By Language"
+                    ]
+                }
+            ]
+        }
+    ]
+}

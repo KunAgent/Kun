@@ -1,0 +1,411 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PPT封面模板库 - Pure Tailwind</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="../unified-styles.css" />
+    <style>
+      html,
+      body {
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+      }
+      .tpl-item {
+        padding: 8px 12px;
+        cursor: pointer;
+        border-bottom: 1px solid #e5e5e5;
+        font-size: 14px;
+        transition: background-color 0.2s;
+      }
+      .tpl-item:hover {
+        background-color: #f5f5f5;
+      }
+      .tpl-item.active {
+        background-color: #1890ff;
+        color: white;
+        font-weight: 500;
+      }
+      .tpl-item {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+      .tpl-item .copy-btn {
+        padding: 2px 6px;
+        font-size: 12px;
+        background: #e8e8e8;
+        border: none;
+        border-radius: 3px;
+        cursor: pointer;
+      }
+      .tpl-item.active .copy-btn {
+        background: rgba(255,255,255,0.3);
+        color: white;
+      }
+      .tpl-item .copy-btn:hover {
+        background: #d9d9d9;
+      }
+      .tpl-item.active .copy-btn:hover {
+        background: rgba(255,255,255,0.5);
+      }
+      .loading {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        height: 100%;
+        font-size: 18px;
+        color: #666;
+      }
+      .error {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        height: 100%;
+        font-size: 16px;
+        color: #ff4d4f;
+      }
+    </style>
+  </head>
+  <body style="background: #fff">
+    <div style="display: flex; padding: 10px">
+      <div style="width: 220px;height: 100vh;overflow-y: auto;border-right: 1px solid #000;" id="tplList">
+        <!-- JS自动填充tpl文件列表 -->
+      </div>
+      <div style="flex: 1;display: flex;justify-content: center;align-items: center;" id="previewArea"></div>
+    </div>
+
+    <script>
+      // **************** 核心配置 ****************
+      // 1. 配置需要预览的tpl文件列表（按实际文件名修改）
+      const TPL_FILES = [
+        // 简约风格 minimalist (40个: 1501-1510, 1591-1620)
+        'minimalist/1501.tpl',
+        'minimalist/1502.tpl',
+        'minimalist/1503.tpl',
+        'minimalist/1504.tpl',
+        'minimalist/1505.tpl',
+        'minimalist/1506.tpl',
+        'minimalist/1507.tpl',
+        'minimalist/1508.tpl',
+        'minimalist/1509.tpl',
+        'minimalist/1510.tpl',
+        // 中国风格 chinese (30个: 1511-1520, 1621-1640)
+        'chinese/1511.tpl',
+        'chinese/1512.tpl',
+        'chinese/1513.tpl',
+        'chinese/1514.tpl',
+        'chinese/1515.tpl',
+        'chinese/1516.tpl',
+        'chinese/1517.tpl',
+        'chinese/1518.tpl',
+        'chinese/1519.tpl',
+        'chinese/1520.tpl',
+        // 卡通风格 cartoon (10个: 1521-1530)
+        'cartoon/1521.tpl',
+        'cartoon/1522.tpl',
+        'cartoon/1523.tpl',
+        'cartoon/1524.tpl',
+        'cartoon/1525.tpl',
+        'cartoon/1526.tpl',
+        'cartoon/1527.tpl',
+        'cartoon/1528.tpl',
+        'cartoon/1529.tpl',
+        'cartoon/1530.tpl',
+        // 商务风格 business (10个: 1531-1540)
+        'business/1531.tpl',
+        'business/1532.tpl',
+        'business/1533.tpl',
+        'business/1534.tpl',
+        'business/1535.tpl',
+        'business/1536.tpl',
+        'business/1537.tpl',
+        'business/1538.tpl',
+        'business/1539.tpl',
+        'business/1540.tpl',
+        // 几何风格 geometric (10个: 1541-1550)
+        'geometric/1541.tpl',
+        'geometric/1542.tpl',
+        'geometric/1543.tpl',
+        'geometric/1544.tpl',
+        'geometric/1545.tpl',
+        'geometric/1546.tpl',
+        'geometric/1547.tpl',
+        'geometric/1548.tpl',
+        'geometric/1549.tpl',
+        'geometric/1550.tpl',
+        // 文艺风格 literary (10个: 1551-1560)
+        'literary/1551.tpl',
+        'literary/1552.tpl',
+        'literary/1553.tpl',
+        'literary/1554.tpl',
+        'literary/1555.tpl',
+        'literary/1556.tpl',
+        'literary/1557.tpl',
+        'literary/1558.tpl',
+        'literary/1559.tpl',
+        'literary/1560.tpl',
+        // 扁平风格 flat (10个: 1561-1570)
+        'flat/1561.tpl',
+        'flat/1562.tpl',
+        'flat/1563.tpl',
+        'flat/1564.tpl',
+        'flat/1565.tpl',
+        'flat/1566.tpl',
+        'flat/1567.tpl',
+        'flat/1568.tpl',
+        'flat/1569.tpl',
+        'flat/1570.tpl',
+        // 黑金风格 black-gold (10个: 1571-1580)
+        'black-gold/1571.tpl',
+        'black-gold/1572.tpl',
+        'black-gold/1573.tpl',
+        'black-gold/1574.tpl',
+        'black-gold/1575.tpl',
+        'black-gold/1576.tpl',
+        'black-gold/1577.tpl',
+        'black-gold/1578.tpl',
+        'black-gold/1579.tpl',
+        'black-gold/1580.tpl',
+        // 科技风格 tech (30个: 1581-1590, 1671-1690)
+        'tech/1581.tpl',
+        'tech/1582.tpl',
+        'tech/1583.tpl',
+        'tech/1584.tpl',
+        'tech/1585.tpl',
+        'tech/1586.tpl',
+        'tech/1587.tpl',
+        'tech/1588.tpl',
+        'tech/1589.tpl',
+        'tech/1590.tpl',
+        // 简约风格续 minimalist (30个: 1591-1620)
+        'minimalist/1591.tpl',
+        'minimalist/1592.tpl',
+        'minimalist/1593.tpl',
+        'minimalist/1594.tpl',
+        'minimalist/1595.tpl',
+        'minimalist/1596.tpl',
+        'minimalist/1597.tpl',
+        'minimalist/1598.tpl',
+        'minimalist/1599.tpl',
+        'minimalist/1600.tpl',
+        'minimalist/1601.tpl',
+        'minimalist/1602.tpl',
+        'minimalist/1603.tpl',
+        'minimalist/1604.tpl',
+        'minimalist/1605.tpl',
+        'minimalist/1606.tpl',
+        'minimalist/1607.tpl',
+        'minimalist/1608.tpl',
+        'minimalist/1609.tpl',
+        'minimalist/1610.tpl',
+        'minimalist/1611.tpl',
+        'minimalist/1612.tpl',
+        'minimalist/1613.tpl',
+        'minimalist/1614.tpl',
+        'minimalist/1615.tpl',
+        'minimalist/1616.tpl',
+        'minimalist/1617.tpl',
+        'minimalist/1618.tpl',
+        'minimalist/1619.tpl',
+        'minimalist/1620.tpl',
+        // 中国风格续 chinese (20个: 1621-1640)
+        'chinese/1621.tpl',
+        'chinese/1622.tpl',
+        'chinese/1623.tpl',
+        'chinese/1624.tpl',
+        'chinese/1625.tpl',
+        'chinese/1626.tpl',
+        'chinese/1627.tpl',
+        'chinese/1628.tpl',
+        'chinese/1629.tpl',
+        'chinese/1630.tpl',
+        'chinese/1631.tpl',
+        'chinese/1632.tpl',
+        'chinese/1633.tpl',
+        'chinese/1634.tpl',
+        'chinese/1635.tpl',
+        'chinese/1636.tpl',
+        'chinese/1637.tpl',
+        'chinese/1638.tpl',
+        'chinese/1639.tpl',
+        'chinese/1640.tpl',
+        // 教育风格 educational (30个: 1641-1670)
+        'educational/1641.tpl',
+        'educational/1642.tpl',
+        'educational/1643.tpl',
+        'educational/1644.tpl',
+        'educational/1645.tpl',
+        'educational/1646.tpl',
+        'educational/1647.tpl',
+        'educational/1648.tpl',
+        'educational/1649.tpl',
+        'educational/1650.tpl',
+        'educational/1651.tpl',
+        'educational/1652.tpl',
+        'educational/1653.tpl',
+        'educational/1654.tpl',
+        'educational/1655.tpl',
+        'educational/1656.tpl',
+        'educational/1657.tpl',
+        'educational/1658.tpl',
+        'educational/1659.tpl',
+        'educational/1660.tpl',
+        'educational/1661.tpl',
+        'educational/1662.tpl',
+        'educational/1663.tpl',
+        'educational/1664.tpl',
+        'educational/1665.tpl',
+        'educational/1666.tpl',
+        'educational/1667.tpl',
+        'educational/1668.tpl',
+        'educational/1669.tpl',
+        'educational/1670.tpl',
+        // 科技风格续 tech (20个: 1671-1690)
+        'tech/1671.tpl',
+        'tech/1672.tpl',
+        'tech/1673.tpl',
+        'tech/1674.tpl',
+        'tech/1675.tpl',
+        'tech/1676.tpl',
+        'tech/1677.tpl',
+        'tech/1678.tpl',
+        'tech/1679.tpl',
+        'tech/1680.tpl',
+        'tech/1681.tpl',
+        'tech/1682.tpl',
+        'tech/1683.tpl',
+        'tech/1684.tpl',
+        'tech/1685.tpl',
+        'tech/1686.tpl',
+        'tech/1687.tpl',
+        'tech/1688.tpl',
+        'tech/1689.tpl',
+        'tech/1690.tpl',
+        // 新增tpl文件直接在这里添加即可
+      ];
+      // **************** 核心逻辑 ****************
+      const tplListEl = document.getElementById("tplList");
+      const previewAreaEl = document.getElementById("previewArea");
+      let activeTpl = "";
+      let currentIndex = 0;
+
+      // 初始化：渲染tpl文件列表
+      function initTplList() {
+        TPL_FILES.forEach((filename, index) => {
+          const item = document.createElement("div");
+          item.className = "tpl-item";
+          item.dataset.file = filename;
+          item.dataset.index = index;
+          
+          // 文件名文本
+          const nameSpan = document.createElement("span");
+          nameSpan.textContent = filename;
+          item.appendChild(nameSpan);
+          
+          // 复制按钮
+          const copyBtn = document.createElement("button");
+          copyBtn.className = "copy-btn";
+          copyBtn.textContent = "复制";
+          copyBtn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            navigator.clipboard.writeText('content/' + filename + ',').then(() => {
+              copyBtn.textContent = "已复制";
+              setTimeout(() => { copyBtn.textContent = "复制"; }, 1000);
+            });
+          });
+          item.appendChild(copyBtn);
+          
+          // 点击切换预览文件
+          item.addEventListener("click", () => {
+            selectTplByIndex(index);
+          });
+          tplListEl.appendChild(item);
+        });
+        
+        // 默认加载第一个模板
+        if (TPL_FILES.length > 0) {
+          selectTplByIndex(0);
+        }
+      }
+
+      // 通过索引选择模板
+      function selectTplByIndex(index) {
+        if (index < 0 || index >= TPL_FILES.length) return;
+        
+        currentIndex = index;
+        const filename = TPL_FILES[index];
+        
+        // 切换选中样式
+        document
+          .querySelectorAll(".tpl-item")
+          .forEach((el) => el.classList.remove("active"));
+        
+        const items = document.querySelectorAll(".tpl-item");
+        items[index].classList.add("active");
+        
+        // 滚动到可见区域
+        items[index].scrollIntoView({ block: "nearest", behavior: "smooth" });
+        
+        // 加载并预览文件
+        loadAndPreviewTpl(filename);
+      }
+
+      // 加载tpl文件并预览
+      function loadAndPreviewTpl(filename) {
+        if (activeTpl === filename) return;
+        activeTpl = filename;
+
+        // 显示加载状态
+        previewAreaEl.innerHTML = '<div class="loading">正在加载文件...</div>';
+
+        // 读取tpl文件（注意：本地运行需开简易服务器，否则会跨域）
+        fetch(`./${filename}`)
+          .then((response) => {
+            if (!response.ok)
+              throw new Error(`文件加载失败：${response.status}`);
+            return response.text();
+          })
+          .then((tplContent) => {
+            // 包裹基础HTML骨架
+            const fullHtml = tplContent.replace("{{FILENAME}}", filename);
+            // 预览区域展示完整HTML（两种方式可选）
+            // 方式1：直接渲染HTML（可看到最终效果）
+            previewAreaEl.innerHTML = fullHtml;
+            // 方式2：展示HTML源码（方便查看结构，注释掉方式1，打开方式2）
+            // previewAreaEl.innerHTML = `<pre>${escapeHtml(fullHtml)}</pre>`;
+          })
+          .catch((error) => {
+            previewAreaEl.innerHTML = `<div class="error">${error.message}</div>`;
+            console.error("加载TPL文件出错：", error);
+          });
+      }
+
+      // 辅助函数：转义HTML字符（用于展示源码）
+      function escapeHtml(str) {
+        return str
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;")
+          .replace(/'/g, "&#039;");
+      }
+
+      // 初始化
+      initTplList();
+      
+      // 键盘事件：支持上下键切换模板
+      document.addEventListener("keydown", (e) => {
+        if (e.key === "ArrowUp") {
+          e.preventDefault();
+          selectTplByIndex(currentIndex - 1);
+        } else if (e.key === "ArrowDown") {
+          e.preventDefault();
+          selectTplByIndex(currentIndex + 1);
+        }
+      });
+    </script>
+  </body>
+</html>

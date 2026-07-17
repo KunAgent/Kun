@@ -1,0 +1,66 @@
+{
+  "name": "month-end-closer",
+  "version": "0.1.0",
+  "description": "Runs month-end close: accruals, roll-forwards, variance commentary, close package for controller sign-off.",
+  "author": {
+    "name": "Anthropic FSI"
+  },
+  "expertType": "agent",
+  "agentName": "month-end-closer",
+  "agents": [
+    "./agents/month-end-closer.md"
+  ],
+  "skills": [
+    "./skills/accrual-schedule",
+    "./skills/roll-forward",
+    "./skills/variance-commentary",
+    "./skills/audit-xls",
+    "./skills/xlsx-author"
+  ],
+  "displayName": {
+    "en": "Month-End Closer",
+    "zh": "关月结"
+  },
+  "profession": {
+    "en": "Month-End Close Accountant",
+    "zh": "月末结账会计"
+  },
+  "displayDescription": {
+    "en": "Controller's right hand who runs the month-end close checklist: accruals, roll-forwards, variance commentary, and staged close package for sign-off.",
+    "zh": "财务负责人的月末关账搭档,按清单跑应计、滚动表、差异说明,把关账包整理好交给 controller 签核。"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "08-FinanceInvestment",
+  "defaultInitPrompt": {
+    "en": "Please run month-end close for Entity ABC for 2026-04: build accrual schedule, roll-forwards for BS accounts, variance commentary vs budget, and stage the close package.",
+    "zh": "请帮某境内法人主体做 2026 年 4 月月末关账:建应计表、关键资产负债表科目滚动、对预算差异说明,并整理关账包。"
+  },
+  "tags": [
+    {
+      "en": "Month-End Close",
+      "zh": "月末关账"
+    },
+    {
+      "en": "Accrual Schedule",
+      "zh": "应计表"
+    },
+    {
+      "en": "Variance Commentary",
+      "zh": "差异说明"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "en": "Please run month-end close for Entity ABC for 2026-04: build accrual schedule, roll-forwards for BS accounts, variance commentary vs budget, and stage the close package.",
+      "zh": "请帮某境内法人主体做 2026 年 4 月月末关账:建应计表、关键资产负债表科目滚动、对预算差异说明,并整理关账包。"
+    },
+    {
+      "en": "Build me the period-end accrual schedule for rent, bonus, and utilities with supporting calculations and draft JEs.",
+      "zh": "帮我做月末的房租、年终奖、水电费应计表,附计算依据和建议分录。"
+    },
+    {
+      "en": "Write flux commentary for every P&L line with variance above $50k vs prior month and vs budget.",
+      "zh": "把所有同环比差异超过 30 万元的损益项写一遍差异说明,关联到具体业务驱动。"
+    }
+  ]
+}

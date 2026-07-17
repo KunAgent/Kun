@@ -1,0 +1,112 @@
+{
+  "name": "seo-content-team",
+  "version": "1.0.0",
+  "description": "Full-stack SEO content marketing team — 7 specialist roles across 5 phases from keyword research to publication",
+  "author": { "name": "CodeBuddy Teams" },
+  "agents": [
+    "./agents/seo-content-team-lead.md",
+    "./agents/keyword-researcher.md",
+    "./agents/content-writer.md",
+    "./agents/seo-optimizer.md",
+    "./agents/content-editor.md",
+    "./agents/cro-analyst.md",
+    "./agents/link-strategist.md"
+  ],
+  "skills": [
+    "./skills/seo-analysis",
+    "./skills/content-writing",
+    "./skills/cro-optimization"
+  ],
+  "expertType": "team",
+  "agentName": "seo-content-team-lead",
+  "teamInfo": {
+    "leadAgent": "seo-content-team-lead",
+    "memberAgents": [
+      "keyword-researcher",
+      "content-writer",
+      "seo-optimizer",
+      "content-editor",
+      "cro-analyst",
+      "link-strategist"
+    ]
+  },
+  "displayName": {
+    "en": "SEO Content Team",
+    "zh": "SEO 内容营销团队"
+  },
+  "profession": {
+    "en": "SEO Content Team",
+    "zh": "SEO 内容营销团队"
+  },
+  "displayDescription": {
+    "en": "7 specialist roles across 5 phases: keyword research, long-form writing, SEO optimization, content editing, link strategy, and CRO analysis — full-stack SEO content marketing",
+    "zh": "7位专业角色分5阶段协作：关键词研究、SEO长文创作、技术优化、内容编辑、链接策略、转化率分析，全流程自动化产出高质量SEO内容"
+  },
+  "avatar": "avatars/team.png",
+  "categoryId": "05-MarketingGrowth",
+  "defaultInitPrompt": {
+    "en": "Write an SEO-optimized long-form article to boost organic traffic",
+    "zh": "帮我写一篇提升自然流量的 SEO 长文"
+  },
+  "tags": [
+    { "en": "SEO Content", "zh": "SEO内容" },
+    { "en": "Keyword Research", "zh": "关键词研究" },
+    { "en": "Conversion Optimization", "zh": "转化率优化" }
+  ],
+  "quickPrompts": [
+    { "en": "Write an SEO-optimized long-form article to boost organic traffic", "zh": "帮我写一篇提升自然流量的 SEO 长文" },
+    { "en": "Do keyword research and competitive analysis for a topic", "zh": "帮我做一个主题的关键词研究和竞品分析" },
+    { "en": "Optimize an existing article for better search rankings", "zh": "帮我优化现有文章的搜索排名" }
+  ],
+  "members": [
+    {
+      "id": "seo-content-team-lead",
+      "name": { "en": "Sou", "zh": "搜尔文" },
+      "profession": { "en": "Chief Content Strategist", "zh": "首席内容策略官" },
+      "avatar": "avatars/seo-content-team-lead.png",
+      "role": "lead"
+    },
+    {
+      "id": "keyword-researcher",
+      "name": { "en": "Guan", "zh": "关宇霖" },
+      "profession": { "en": "Keyword Research & Cluster Strategist", "zh": "关键词研究与主题聚类策略师" },
+      "avatar": "avatars/keyword-researcher.png",
+      "role": "member"
+    },
+    {
+      "id": "content-writer",
+      "name": { "en": "Wen", "zh": "文笔舒" },
+      "profession": { "en": "SEO Content Writer", "zh": "SEO 内容撰稿人" },
+      "avatar": "avatars/content-writer.png",
+      "role": "member"
+    },
+    {
+      "id": "seo-optimizer",
+      "name": { "en": "Ou", "zh": "欧化成" },
+      "profession": { "en": "On-Page SEO Specialist", "zh": "页面 SEO 优化师" },
+      "avatar": "avatars/seo-optimizer.png",
+      "role": "member"
+    },
+    {
+      "id": "content-editor",
+      "name": { "en": "Ai", "zh": "艾笔润" },
+      "profession": { "en": "Content Editor & Humanizer", "zh": "内容编辑与人性化专家" },
+      "avatar": "avatars/content-editor.png",
+      "role": "member"
+    },
+    {
+      "id": "cro-analyst",
+      "name": { "en": "Lv", "zh": "率可成" },
+      "profession": { "en": "CRO & Landing Page Psychologist", "zh": "CRO 与落地页心理学专家" },
+      "avatar": "avatars/cro-analyst.png",
+      "role": "member"
+    },
+    {
+      "id": "link-strategist",
+      "name": { "en": "Lian", "zh": "连乐桥" },
+      "profession": { "en": "Link Strategy & Content Analyst", "zh": "链接策略与内容分析师" },
+      "avatar": "avatars/link-strategist.png",
+      "role": "member"
+    }
+  ]
+}

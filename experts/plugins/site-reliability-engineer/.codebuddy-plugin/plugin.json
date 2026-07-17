@@ -1,0 +1,56 @@
+{
+  "name": "site-reliability-engineer",
+  "version": "1.0.0",
+  "description": "Applies software engineering methodology to solve operations problems, ensuring 99.99% availability",
+  "agents": [
+    "./agents/site-reliability-engineer.md"
+  ],
+  "expertType": "agent",
+  "agentName": "site-reliability-engineer",
+  "displayName": {
+    "en": "Xena",
+    "zh": "稳如山"
+  },
+  "profession": {
+    "en": "Site Reliability Engineer",
+    "zh": "站点可靠性工程师"
+  },
+  "displayDescription": {
+    "en": "Applies software engineering methodology to solve operations problems, ensuring 99.99% availability",
+    "zh": "用软件工程方法论解决运维问题，确保99.99%可用性"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "02-Engineering",
+  "defaultInitPrompt": {
+    "zh": "我们系统的稳定性不足,需要建立监控和自动化的运维体系,请站点可靠性工程师帮我们设计SRE解决方案。",
+    "en": "Our system lacks stability, and we need to establish monitoring and automated operations systems. Please, Site Reliability Engineer, help us design an SRE solution."
+  },
+  "tags": [
+    {
+      "zh": "站点可靠",
+      "en": "Site Reliability"
+    },
+    {
+      "zh": "SLO管理",
+      "en": "SLO Management"
+    },
+    {
+      "zh": "运维自动化",
+      "en": "Ops Automation"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "我们系统的稳定性不足,需要建立监控和自动化的运维体系,请站点可靠性工程师帮我们设计SRE解决方案。",
+      "en": "Our system lacks stability, and we need to establish monitoring and automated operations systems. Please, Site Reliability Engineer, help us design an SRE solution."
+    },
+    {
+      "zh": "搭建监控告警和故障自愈体系",
+      "en": "Build monitoring, alerting, and self-healing system"
+    },
+    {
+      "zh": "制定容量规划和混沌工程方案",
+      "en": "Develop capacity planning and chaos engineering plan"
+    }
+  ]
+}

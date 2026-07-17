@@ -1,0 +1,1275 @@
+{
+  "version": "1.0",
+  "source_doc": "opinion_metric_definitions.xlsx",
+  "metric_count": 106,
+  "metrics": {
+    "hotness.mentions": {
+      "name_cn": "声量",
+      "name_en": "Mentions",
+      "category": "core_opinion",
+      "fields": [
+        "hotness.mentions",
+        "feeds_topic.mentions"
+      ],
+      "calculation": "全网抓取的玩家帖子与评论数汇总，包括社交媒体主贴、评论及商店评论，所有玩家发声均纳入统计",
+      "definition": "衡量游戏在全平台的讨论热度，是最基础的舆情量化指标。声量越高说明话题讨论越活跃。可按渠道（如Steam、YouTube）、语言、国家细分查看。",
+      "thresholds_brief": "极高（爆款级）：单日 >50万条\n高（热门大作发布期）：单日 10万~50万条\n中（活跃游戏日常）：单日 1万~10万条\n较低（中小游戏）：单日 1000~1万条\n低：单日 <1000条\n※ Agent回复基准：高>10万/中1万-10万/低<1万\n※ 参考：PoE2 EA当日约5.8万条（中-高边界）"
+    },
+    "feeds_topic.mentions": {
+      "name_cn": "话题相关声量",
+      "name_en": "Topic Mentions",
+      "category": "topic_analysis",
+      "fields": [
+        "feeds_topic.mentions"
+      ],
+      "calculation": "玩家讨论特定话题的评论总数量，以topic维度分组统计",
+      "definition": "衡量玩家对某一话题（如「玩法」「商业化」「性能」）的讨论数量，是话题热度的量化指标。支持按渠道、语言细分。",
+      "thresholds_brief": "主导话题（极高）：单日 >5万条\n热门话题（高）：单日 1万~5万条\n活跃话题（中）：单日 1000~1万条\n一般话题（低）：单日 100~1000条\n边缘话题：单日 <100条\n※ PoE2 12/5 最大话题Gameplay Mechanics约1.25万条（高）\n※ 12/11同话题升至2.35万条（极高，发布后机制讨论爆发）"
+    },
+    "hotness.positive_mentions": {
+      "name_cn": "正面声量",
+      "name_en": "Positive Mentions",
+      "category": "core_opinion",
+      "fields": [
+        "hotness.positive_mentions",
+        "feeds_topic.positive_mentions"
+      ],
+      "calculation": "情感分>3.5的评论数",
+      "definition": "正面情绪的玩家发声数量，用于衡量游戏口碑中积极评价的绝对量。",
+      "thresholds_brief": "参考占总声量比例判断：\n口碑极佳：正面占比 >70%\n口碑良好：正面占比 60%~70%\n口碑正常：正面占比 40%~60%\n口碑偏弱：正面占比 25%~40%\n需关注：正面占比 <25%\n※ Agent基准：高>60%/中40-60%/低<40%"
+    },
+    "feeds_topic.positive_mentions": {
+      "name_cn": "正面声量",
+      "name_en": "Positive Mentions",
+      "category": "core_opinion",
+      "fields": [
+        "hotness.positive_mentions",
+        "feeds_topic.positive_mentions"
+      ],
+      "calculation": "情感分>3.5的评论数",
+      "definition": "正面情绪的玩家发声数量，用于衡量游戏口碑中积极评价的绝对量。",
+      "thresholds_brief": "参考占总声量比例判断：\n口碑极佳：正面占比 >70%\n口碑良好：正面占比 60%~70%\n口碑正常：正面占比 40%~60%\n口碑偏弱：正面占比 25%~40%\n需关注：正面占比 <25%\n※ Agent基准：高>60%/中40-60%/低<40%"
+    },
+    "hotness.negative_mentions": {
+      "name_cn": "负面声量",
+      "name_en": "Negative Mentions",
+      "category": "core_opinion",
+      "fields": [
+        "hotness.negative_mentions",
+        "feeds_topic.negative_mentions"
+      ],
+      "calculation": "情感分<2.5的评论数",
+      "definition": "负面情绪的玩家发声数量，是舆情风险监控的核心指标，需及时关注骤增情况。",
+      "thresholds_brief": "参考占总声量比例判断：\n危机预警：负面占比 >35%\n需关注：负面占比 25%~35%\n偏高：负面占比 15%~25%\n正常：负面占比 <15%\n※ Agent基准：高风险>30%/中15-30%/低<15%\n※ 版本更新后48小时内负面短暂升高属正常"
+    },
+    "feeds_topic.negative_mentions": {
+      "name_cn": "负面声量",
+      "name_en": "Negative Mentions",
+      "category": "core_opinion",
+      "fields": [
+        "hotness.negative_mentions",
+        "feeds_topic.negative_mentions"
+      ],
+      "calculation": "情感分<2.5的评论数",
+      "definition": "负面情绪的玩家发声数量，是舆情风险监控的核心指标，需及时关注骤增情况。",
+      "thresholds_brief": "参考占总声量比例判断：\n危机预警：负面占比 >35%\n需关注：负面占比 25%~35%\n偏高：负面占比 15%~25%\n正常：负面占比 <15%\n※ Agent基准：高风险>30%/中15-30%/低<15%\n※ 版本更新后48小时内负面短暂升高属正常"
+    },
+    "hotness.neutral_mentions": {
+      "name_cn": "中性声量",
+      "name_en": "Neutral Mentions",
+      "category": "core_opinion",
+      "fields": [
+        "hotness.neutral_mentions",
+        "feeds_topic.neutral_mentions"
+      ],
+      "calculation": "情感分2.5~3.5之间，无明确正负面倾向的评论数",
+      "definition": "无明确情感倾向的讨论，通常为信息类、问题类或描述类内容，占比过高可能表示玩家态度尚未明朗。",
+      "thresholds_brief": "参考占总声量比例判断（无固定优劣）：\n游戏发布前期待阶段：中性通常占 50%~70%（玩家观望讨论）\n游戏发布后体验阶段：中性通常降至 20%~40%\n持续 >60%：玩家无强烈感受，参与度一般\n※ 中性声量本身无高低好坏之分，需结合阶段判断"
+    },
+    "feeds_topic.neutral_mentions": {
+      "name_cn": "中性声量",
+      "name_en": "Neutral Mentions",
+      "category": "core_opinion",
+      "fields": [
+        "hotness.neutral_mentions",
+        "feeds_topic.neutral_mentions"
+      ],
+      "calculation": "情感分2.5~3.5之间，无明确正负面倾向的评论数",
+      "definition": "无明确情感倾向的讨论，通常为信息类、问题类或描述类内容，占比过高可能表示玩家态度尚未明朗。",
+      "thresholds_brief": "参考占总声量比例判断（无固定优劣）：\n游戏发布前期待阶段：中性通常占 50%~70%（玩家观望讨论）\n游戏发布后体验阶段：中性通常降至 20%~40%\n持续 >60%：玩家无强烈感受，参与度一般\n※ 中性声量本身无高低好坏之分，需结合阶段判断"
+    },
+    "hotness.avg_sentiment": {
+      "name_cn": "情感分（平均）",
+      "name_en": "Avg Sentiment",
+      "category": "core_opinion",
+      "fields": [
+        "hotness.avg_sentiment",
+        "feeds_topic.avg_sentiment"
+      ],
+      "calculation": "NLP算法对每条评论进行1~5分情感打分后的均值",
+      "definition": "反映玩家整体情感倾向。分值越高代表玩家越正面。建议结合声量趋势观察，单纯高分但声量极低时参考价值有限。",
+      "thresholds_brief": "口碑极佳（高）：>3.5\n口碑正常（中）：2.5~3.5\n口碑偏负（低）：<2.5\n（情感分范围 1~5分，NLP算法输出）\n※ Agent基准：>3.5正面/2.5-3.5中性/<2.5负面\n※ 参考：PoE2 EA前约3.05（中性），发布后约2.91（偏负）\n※ 预警信号：单日情感分变化 >0.3分 需重点关注",
+      "disambiguation": "「平均情感分」取值范围 1~5（NLP 算法输出），不是百分比、也不是健康度。禁止与负面率(0~100%)、品牌健康度(-100~100)混入同一图表。"
+    },
+    "feeds_topic.avg_sentiment": {
+      "name_cn": "话题情感分",
+      "name_en": "Topic Sentiment",
+      "category": "topic_analysis",
+      "fields": [
+        "feeds_topic.avg_sentiment"
+      ],
+      "calculation": "特定话题相关评论的平均情感分（1~5分）",
+      "definition": "评估玩家对某话题的整体情感倾向，常用于判断玩家对某功能/内容的正负面评价方向。",
+      "thresholds_brief": "正面（高）：>3.5\n中性（中）：2.5~3.5\n偏负（低）：<2.5\n（与整体情感分标准一致，范围1~5分）\n※ PoE2 12/5 Server话题情感分2.81（偏低，预警服务器问题）\n※ 预警：负面话题情感分<2.5 且 声量占比>10% → 需介入",
+      "disambiguation": "「话题平均情感分」取值范围 1~5；禁止与负面率(0~100%)、话题健康度(-100~100)混入同一图表。"
+    },
+    "hotness.positive_rate": {
+      "name_cn": "正面情感占比",
+      "name_en": "Positive Mentions%",
+      "category": "core_opinion",
+      "fields": [
+        "hotness.positive_rate",
+        "feeds_topic.positive_rate"
+      ],
+      "calculation": "正面声量 ÷ 总声量 × 100%",
+      "definition": "正面评论占比，直观反映口碑健康度，是版本前后对比的常用指标。",
+      "thresholds_brief": "高（口碑良好）：>60%\n中（口碑正常）：40%~60%\n低（口碑偏弱）：<40%\n※ Agent基准：高>60%/中40-60%/低<40%\n※ Steam对应参考：>60%≈好评如潮方向"
+    },
+    "feeds_topic.positive_rate": {
+      "name_cn": "话题正面情感占比",
+      "name_en": "Topic Positive%",
+      "category": "topic_analysis",
+      "fields": [
+        "feeds_topic.positive_rate"
+      ],
+      "calculation": "某话题下正面声量 ÷ 该话题总声量 × 100%",
+      "definition": "话题维度的正面评价比例，适合对比不同话题的口碑健康度。",
+      "thresholds_brief": "高（口碑良好）：>60%\n中（正常）：40%~60%\n低（偏弱）：<40%\n※ 内容/创新类话题通常>60%；商业化/技术类通常偏低"
+    },
+    "hotness.negative_rate": {
+      "name_cn": "负面情感占比",
+      "name_en": "Negative Mentions%",
+      "category": "core_opinion",
+      "fields": [
+        "hotness.negative_rate",
+        "feeds_topic.negative_rate"
+      ],
+      "calculation": "负面声量 ÷ 总声量 × 100%",
+      "definition": "负面评论占比，是舆情风险的核心观测点。超过30%需重点关注，及时排查负面原因。",
+      "thresholds_brief": "危机（极高）：>35%\n高（需关注）：25%~35%\n中（正常偏高）：15%~25%\n低（健康）：<15%\n※ Agent基准：高风险>30%/中15-30%/低<15%\n※ 技术/Bug类话题负面率天然偏高，需配合话题维度判断",
+      "disambiguation": "这是「负面情感占比」（基于情感分类，分母 = 该游戏当期全部 mentions），不是「负面话题」。叙述时必须使用「负面情感占比」/「negative sentiment share」，禁止写成「负面话题」/「negative topics」。"
+    },
+    "feeds_topic.negative_rate": {
+      "name_cn": "话题负面情感占比",
+      "name_en": "Topic Negative%",
+      "category": "topic_analysis",
+      "fields": [
+        "feeds_topic.negative_rate"
+      ],
+      "calculation": "某话题下负面声量 ÷ 该话题总声量 × 100%",
+      "definition": "话题维度的负面评价比例，适合识别引发玩家不满的特定功能或内容方向。",
+      "thresholds_brief": "需立即介入：>35%\n高（需关注）：25%~35%\n中（偏高）：15%~25%\n低（正常）：<15%\n※ PoE2 12/5 Server话题负面率23.28%（高→预警成功）\n※ 技术/Bug类话题负面率天然偏高，需结合声量综合判断",
+      "disambiguation": "这是「话题级负面情感占比」（针对单个话题内的 mentions 计算），不是「话题数量」/「topic count」。叙述时使用「该话题的负面情感占比」，不要写成「负面话题占比」（后者会被误读为话题数量比例）。"
+    },
+    "hotness.brand_health": {
+      "name_cn": "品牌健康度",
+      "name_en": "Brand Health",
+      "category": "core_opinion",
+      "fields": [
+        "hotness.brand_health",
+        "feeds_topic.brand_health"
+      ],
+      "calculation": "基于情感分对不同渠道和评论有效性加权计算，取值范围 -100~100\n计算条件：正负面评论总量需>10条",
+      "definition": "综合反映品牌舆情健康状况的核心KPI。加权考虑渠道权威性与评论质量，正数表示整体舆情积极，负数表示舆情偏消极，应长期追踪趋势变化。",
+      "thresholds_brief": "优秀（极高）：>80\n健康（高）：50~80\n稳定（中）：0~50\n风险（低）：-30~0\n危机（极低）：<-30\n※ Agent基准：高>50/中0-50/低<0/极低<-50\n※ 取值范围 -100~100；大版本更新后7天是最敏感监测窗口",
+      "disambiguation": "「品牌健康度」取值范围 -100~100，是综合 KPI；禁止与「负面情感占比」(0~100%) 直接对比或混入同一图表。"
+    },
+    "feeds_topic.brand_health": {
+      "name_cn": "品牌健康度",
+      "name_en": "Brand Health",
+      "category": "core_opinion",
+      "fields": [
+        "hotness.brand_health",
+        "feeds_topic.brand_health"
+      ],
+      "calculation": "基于情感分对不同渠道和评论有效性加权计算，取值范围 -100~100\n计算条件：正负面评论总量需>10条",
+      "definition": "综合反映品牌舆情健康状况的核心KPI。加权考虑渠道权威性与评论质量，正数表示整体舆情积极，负数表示舆情偏消极，应长期追踪趋势变化。",
+      "thresholds_brief": "优秀（极高）：>80\n健康（高）：50~80\n稳定（中）：0~50\n风险（低）：-30~0\n危机（极低）：<-30\n※ Agent基准：高>50/中0-50/低<0/极低<-50\n※ 取值范围 -100~100；大版本更新后7天是最敏感监测窗口",
+      "disambiguation": "「话题健康度」取值范围 -100~100，与「品牌健康度」算法相同但限定到单个话题；禁止与负面率/正面率(0~100%)混入同一图表（量级差距 100x）。"
+    },
+    "steam_score.all_reviews_positive_rate": {
+      "name_cn": "Steam全部好评率",
+      "name_en": "Steam All Reviews Positive%",
+      "category": "store_review",
+      "fields": [
+        "steam_score.all_reviews_positive_rate"
+      ],
+      "calculation": "Steam商店历史累计的所有评论好评数 ÷ 所有评论总数，官方权威数据",
+      "definition": "Steam平台展示的累计好评率，反映游戏长期口碑。数值每日更新，适合观察长期趋势，不受短期舆情波动影响。",
+      "thresholds_brief": "Steam官方评级（≥500条评论）：\n特别好评（Overwhelmingly Positive）：≥95%\n好评如潮（Very Positive）：80%~94%\n多半好评（Mostly Positive）：70%~79%\n褒贬不一（Mixed）：40%~69%\n多半差评（Mostly Negative）：20%~39%\n特别差评（Overwhelmingly Negative）：<20%（≥500条）\n※ 来源：Steam官方评级体系\n※ PoE2 12/11实测：84%=好评如潮（Very Positive）"
+    },
+    "steam_score.recent_reviews_positive_rate": {
+      "name_cn": "Steam近30天好评率",
+      "name_en": "Steam Recent Reviews Positive%",
+      "category": "store_review",
+      "fields": [
+        "steam_score.recent_reviews_positive_rate"
+      ],
+      "calculation": "每个日期近30天的评论好评数 ÷ 近30天评论总数，官方滚动计算",
+      "definition": "反映近期口碑变化，对版本更新、运营活动的玩家反应更敏感。与全部好评率对比可判断近期口碑走势是改善还是恶化。",
+      "thresholds_brief": "Steam官方同一评级标准（近30天）：\n特别好评：≥95%\n好评如潮：80%~94%\n多半好评：70%~79%\n褒贬不一：40%~69%\n差评倾向：<40%\n※ 预警：较历史累计好评率下降 >10% → 版本存在问题\n※ 下降 >15% → 高风险，需紧急排查"
+    },
+    "steam_score_by_language.positive_rate_by_language": {
+      "name_cn": "Steam历史累计好评率（分语言）",
+      "name_en": "Steam Lifetime Positive% (by Language)",
+      "category": "store_review",
+      "fields": [
+        "steam_score_by_language.positive_rate_by_language"
+      ],
+      "calculation": "各语种的历史累计好评率（好评数 ÷ 该语种总评论数）",
+      "definition": "按语言/地区细分的历史好评率，用于定位特定市场口碑差异。如中文市场与英文市场好评率差异可指导本地化策略。",
+      "thresholds_brief": "参照Steam官方分级（同全部好评率）：\n特别好评：≥95% ｜ 好评如潮：80%~94%\n多半好评：70%~79% ｜ 褒贬不一：40%~69%\n※ 关注语区差异：某语区与整体差距 >10% → 本地化问题\n※ 中文/日文/韩文市场对本地化支持敏感度高"
+    },
+    "hotness.steam_recommend_rate": {
+      "name_cn": "Steam好评率（所选时段）",
+      "name_en": "Steam Positive% (Selected Time Range)",
+      "category": "store_review",
+      "fields": [
+        "hotness.steam_recommend_rate",
+        "feeds_topic.steam_recommend_rate"
+      ],
+      "calculation": "所选时间段内新增好评数 ÷ 所选时段新增评论总数",
+      "definition": "基于所选时间范围的好评率，可精确衡量特定版本或运营期间的玩家评价，与历史累计数据互补，更适合版本复盘分析。",
+      "thresholds_brief": "参照Steam官方分级（适用所选时段）：\n特别好评：≥95%\n好评如潮：80%~94%\n多半好评：70%~79%\n褒贬不一：40%~69%\n※ 用于版本复盘；版本期好评率<70% → 该版本存在明显问题"
+    },
+    "feeds_topic.steam_recommend_rate": {
+      "name_cn": "Steam好评率（所选时段）",
+      "name_en": "Steam Positive% (Selected Time Range)",
+      "category": "store_review",
+      "fields": [
+        "hotness.steam_recommend_rate",
+        "feeds_topic.steam_recommend_rate"
+      ],
+      "calculation": "所选时间段内新增好评数 ÷ 所选时段新增评论总数",
+      "definition": "基于所选时间范围的好评率，可精确衡量特定版本或运营期间的玩家评价，与历史累计数据互补，更适合版本复盘分析。",
+      "thresholds_brief": "参照Steam官方分级（适用所选时段）：\n特别好评：≥95%\n好评如潮：80%~94%\n多半好评：70%~79%\n褒贬不一：40%~69%\n※ 用于版本复盘；版本期好评率<70% → 该版本存在明显问题"
+    },
+    "steam_score.all_reviews_count": {
+      "name_cn": "Steam全部评论数",
+      "name_en": "Steam All Reviews",
+      "category": "store_review",
+      "fields": [
+        "steam_score.all_reviews_count"
+      ],
+      "calculation": "Steam商店历史累计的全部评论总数",
+      "definition": "衡量游戏在Steam平台的整体评论活跃度和玩家基础大小。",
+      "thresholds_brief": "评论极丰富：>100万条\n评论丰富（热门）：10万~100万条\n评论较多（中型）：1万~10万条\n评论一般（新游）：<1万条\n※ PoE2 EA发布6天后已累计约3.9万条\n※ 评论数高说明游戏受众基础大，评分置信度高"
+    },
+    "steam_score.recent_reviews_count": {
+      "name_cn": "Steam近30天评论数",
+      "name_en": "Steam Recent Reviews",
+      "category": "store_review",
+      "fields": [
+        "steam_score.recent_reviews_count"
+      ],
+      "calculation": "每个日期近30天的累计评论总数",
+      "definition": "反映近期玩家讨论热度。数值骤增通常与重大版本更新、促销活动或舆情事件相关。",
+      "thresholds_brief": "极活跃（爆款发布期）：单日新增 >5000条\n活跃（热门发布期）：单日新增 500~5000条\n正常（稳定运营期）：单日新增 50~500条\n较低：单日新增 <50条\n※ 评论数骤增通常对应版本更新、运营事件或舆情事件"
+    },
+    "hotness.steam_recommend_mentions": {
+      "name_cn": "Steam评论数（所选时段）",
+      "name_en": "Steam Reviews (Selected Time Range)",
+      "category": "store_review",
+      "fields": [
+        "hotness.steam_recommend_mentions",
+        "hotness.steam_unrecommend_mentions",
+        "feeds_topic.steam_recommend_mentions"
+      ],
+      "calculation": "所选时间段内Steam新增的好评数与差评数（可分别查询）",
+      "definition": "可分别查询好评数和差评数，适合精确统计某一版本/活动期间Steam新增评论的正负面分布。",
+      "thresholds_brief": "参考同期声量水平及Steam全部评论数基准\n※ 好评数与差评数可分别统计，适合版本复盘分析"
+    },
+    "hotness.steam_unrecommend_mentions": {
+      "name_cn": "Steam评论数（所选时段）",
+      "name_en": "Steam Reviews (Selected Time Range)",
+      "category": "store_review",
+      "fields": [
+        "hotness.steam_recommend_mentions",
+        "hotness.steam_unrecommend_mentions",
+        "feeds_topic.steam_recommend_mentions"
+      ],
+      "calculation": "所选时间段内Steam新增的好评数与差评数（可分别查询）",
+      "definition": "可分别查询好评数和差评数，适合精确统计某一版本/活动期间Steam新增评论的正负面分布。",
+      "thresholds_brief": "参考同期声量水平及Steam全部评论数基准\n※ 好评数与差评数可分别统计，适合版本复盘分析"
+    },
+    "feeds_topic.steam_recommend_mentions": {
+      "name_cn": "Steam评论数（所选时段）",
+      "name_en": "Steam Reviews (Selected Time Range)",
+      "category": "store_review",
+      "fields": [
+        "hotness.steam_recommend_mentions",
+        "hotness.steam_unrecommend_mentions",
+        "feeds_topic.steam_recommend_mentions"
+      ],
+      "calculation": "所选时间段内Steam新增的好评数与差评数（可分别查询）",
+      "definition": "可分别查询好评数和差评数，适合精确统计某一版本/活动期间Steam新增评论的正负面分布。",
+      "thresholds_brief": "参考同期声量水平及Steam全部评论数基准\n※ 好评数与差评数可分别统计，适合版本复盘分析"
+    },
+    "appstore_score.score": {
+      "name_cn": "App Store历史累计评分",
+      "name_en": "App Store Lifetime Rating",
+      "category": "store_review",
+      "fields": [
+        "appstore_score.score"
+      ],
+      "calculation": "App Store商店官方评分，历史累计（1~5星）",
+      "definition": "App Store平台的官方权威评分，反映iOS玩家的长期口碑。与Google Play对比可识别iOS与安卓玩家的评价差异。",
+      "thresholds_brief": "优秀：≥4.5星\n良好：4.0~4.4星\n一般：3.5~3.9星\n需关注：<3.5星\n※ App Store评分因有重置机制通常略高于Google Play\n※ 行业参考：头部手游（如原神iOS）历史约4.5~4.8星"
+    },
+    "googleplay_score.score": {
+      "name_cn": "Google Play历史累计评分",
+      "name_en": "Google Play Lifetime Rating",
+      "category": "store_review",
+      "fields": [
+        "googleplay_score.score"
+      ],
+      "calculation": "Google Play商店官方评分，历史累计（1~5星）",
+      "definition": "Google Play平台的官方权威评分，反映安卓玩家的长期口碑。",
+      "thresholds_brief": "优秀：≥4.5星\n良好：4.0~4.4星\n一般：3.5~3.9星\n需关注：<3.5星\n※ App Store评分因有重置机制通常略高于Google Play\n※ 行业参考：头部手游（如原神iOS）历史约4.5~4.8星"
+    },
+    "feeds_topic.avg_mobile_rating": {
+      "name_cn": "Google Play评分（所选时段）",
+      "name_en": "Google Play Rating (Selected Time Range)",
+      "category": "store_review",
+      "fields": [
+        "feeds_topic.avg_mobile_rating",
+        "hotness.avg_mobile_rating"
+      ],
+      "calculation": "所选时间段内Google Play新增评分的平均值",
+      "definition": "基于所选时段新增评分计算的平均分，反映特定时期安卓玩家满意度，可与App Store对比识别平台差异。",
+      "thresholds_brief": "优秀：≥4.5星\n良好：4.0~4.4星\n一般：3.5~3.9星\n需关注：<3.5星\n※ 预警信号：版本后评分下降 >0.3星 → 该版本引发明显不满\n※ 评分上升 >0.2星 → 版本获得积极反馈"
+    },
+    "hotness.avg_mobile_rating": {
+      "name_cn": "Google Play评分（所选时段）",
+      "name_en": "Google Play Rating (Selected Time Range)",
+      "category": "store_review",
+      "fields": [
+        "feeds_topic.avg_mobile_rating",
+        "hotness.avg_mobile_rating"
+      ],
+      "calculation": "所选时间段内Google Play新增评分的平均值",
+      "definition": "基于所选时段新增评分计算的平均分，反映特定时期安卓玩家满意度，可与App Store对比识别平台差异。",
+      "thresholds_brief": "优秀：≥4.5星\n良好：4.0~4.4星\n一般：3.5~3.9星\n需关注：<3.5星\n※ 预警信号：版本后评分下降 >0.3星 → 该版本引发明显不满\n※ 评分上升 >0.2星 → 版本获得积极反馈"
+    },
+    "appstore_score.all_reviews_count": {
+      "name_cn": "App Store历史累计评论数",
+      "name_en": "App Store Lifetime Reviews",
+      "category": "store_review",
+      "fields": [
+        "appstore_score.all_reviews_count"
+      ],
+      "calculation": "App Store商店历史累计的评论总数量",
+      "definition": "衡量App Store玩家评论基数的大小，数值越高表示参与评价的用户越多，评分置信度也越高。",
+      "thresholds_brief": "评论极丰富：>100万条\n评论丰富：10万~100万条\n评论较多：1万~10万条\n评论一般：<1万条\n※ 评论数越高，评分的统计代表性越强"
+    },
+    "googleplay_score.all_reviews_count": {
+      "name_cn": "Google Play历史累计评论数",
+      "name_en": "Google Play Lifetime Reviews",
+      "category": "store_review",
+      "fields": [
+        "googleplay_score.all_reviews_count"
+      ],
+      "calculation": "Google Play商店历史累计的评论总数量",
+      "definition": "衡量Google Play玩家评论基数，数值越高表示参与评价的安卓用户越多。",
+      "thresholds_brief": "评论极丰富：>100万条\n评论丰富：10万~100万条\n评论较多：1万~10万条\n评论一般：<1万条\n※ 评论数越高，评分的统计代表性越强"
+    },
+    "feeds_topic.game_store_reviews": {
+      "name_cn": "商店评论数（所选时段）",
+      "name_en": "Store Reviews (Selected Time Range)",
+      "category": "store_review",
+      "fields": [
+        "feeds_topic.game_store_reviews",
+        "hotness.game_store_reviews（手游）"
+      ],
+      "calculation": "所选时间段内App Store / Google Play新增的评论总数",
+      "definition": "反映特定时段内手游商店的评论活跃度，适合版本更新或活动期间的短期数据观测。",
+      "thresholds_brief": "—（参考同期整体声量）"
+    },
+    "hotness.game_store_reviews（手游）": {
+      "name_cn": "商店评论数（所选时段）",
+      "name_en": "Store Reviews (Selected Time Range)",
+      "category": "store_review",
+      "fields": [
+        "feeds_topic.game_store_reviews",
+        "hotness.game_store_reviews（手游）"
+      ],
+      "calculation": "所选时间段内App Store / Google Play新增的评论总数",
+      "definition": "反映特定时段内手游商店的评论活跃度，适合版本更新或活动期间的短期数据观测。",
+      "thresholds_brief": "—（参考同期整体声量）"
+    },
+    "game_store_reviews.content": {
+      "name_cn": "商店原始评论内容",
+      "name_en": "Store Reviews (Content)",
+      "category": "store_review",
+      "fields": [
+        "game_store_reviews.content",
+        "game_store_reviews.content_en",
+        "game_store_reviews.content_zh"
+      ],
+      "calculation": "商店玩家原始评论文本及多语言翻译",
+      "definition": "查看各商店玩家评论的具体内容，包括原文、英文翻译、中文翻译，可用于定性分析玩家反馈、提炼典型评论。",
+      "thresholds_brief": "—（定性内容）"
+    },
+    "game_store_reviews.content_en": {
+      "name_cn": "商店原始评论内容",
+      "name_en": "Store Reviews (Content)",
+      "category": "store_review",
+      "fields": [
+        "game_store_reviews.content",
+        "game_store_reviews.content_en",
+        "game_store_reviews.content_zh"
+      ],
+      "calculation": "商店玩家原始评论文本及多语言翻译",
+      "definition": "查看各商店玩家评论的具体内容，包括原文、英文翻译、中文翻译，可用于定性分析玩家反馈、提炼典型评论。",
+      "thresholds_brief": "—（定性内容）"
+    },
+    "game_store_reviews.content_zh": {
+      "name_cn": "商店原始评论内容",
+      "name_en": "Store Reviews (Content)",
+      "category": "store_review",
+      "fields": [
+        "game_store_reviews.content",
+        "game_store_reviews.content_en",
+        "game_store_reviews.content_zh"
+      ],
+      "calculation": "商店玩家原始评论文本及多语言翻译",
+      "definition": "查看各商店玩家评论的具体内容，包括原文、英文翻译、中文翻译，可用于定性分析玩家反馈、提炼典型评论。",
+      "thresholds_brief": "—（定性内容）"
+    },
+    "hotness.publications": {
+      "name_cn": "发帖数",
+      "name_en": "Publications",
+      "category": "social_media",
+      "fields": [
+        "hotness.publications",
+        "video_and_posts_stats.publications",
+        "feeds_topic.publications"
+      ],
+      "calculation": "游戏相关图文贴与视频贴的主贴总数（不含评论，不含官号）；可按content_type筛选",
+      "definition": "衡量KOL/玩家为游戏创作内容的数量，是内容生态活跃度的核心指标。支持区分视频贴（Video Titles）与图文贴（Text Posts）。",
+      "thresholds_brief": "极高（爆款现象级）：单日 >1万条\n高（热门大作发布期）：单日 3000~1万条\n中（活跃游戏日常）：单日 500~3000条\n低（中小游戏）：单日 100~500条\n较低：单日 <100条\n※ Agent基准：高>1万/中1000-1万/低<1000\n※ PoE2 EA当日3420条（中），发布6天后6410条（高-中边界）"
+    },
+    "video_and_posts_stats.publications": {
+      "name_cn": "发帖数",
+      "name_en": "Publications",
+      "category": "social_media",
+      "fields": [
+        "hotness.publications",
+        "video_and_posts_stats.publications",
+        "feeds_topic.publications"
+      ],
+      "calculation": "游戏相关图文贴与视频贴的主贴总数（不含评论，不含官号）；可按content_type筛选",
+      "definition": "衡量KOL/玩家为游戏创作内容的数量，是内容生态活跃度的核心指标。支持区分视频贴（Video Titles）与图文贴（Text Posts）。",
+      "thresholds_brief": "极高（爆款现象级）：单日 >1万条\n高（热门大作发布期）：单日 3000~1万条\n中（活跃游戏日常）：单日 500~3000条\n低（中小游戏）：单日 100~500条\n较低：单日 <100条\n※ Agent基准：高>1万/中1000-1万/低<1000\n※ PoE2 EA当日3420条（中），发布6天后6410条（高-中边界）"
+    },
+    "feeds_topic.publications": {
+      "name_cn": "发帖数",
+      "name_en": "Publications",
+      "category": "social_media",
+      "fields": [
+        "hotness.publications",
+        "video_and_posts_stats.publications",
+        "feeds_topic.publications"
+      ],
+      "calculation": "游戏相关图文贴与视频贴的主贴总数（不含评论，不含官号）；可按content_type筛选",
+      "definition": "衡量KOL/玩家为游戏创作内容的数量，是内容生态活跃度的核心指标。支持区分视频贴（Video Titles）与图文贴（Text Posts）。",
+      "thresholds_brief": "极高（爆款现象级）：单日 >1万条\n高（热门大作发布期）：单日 3000~1万条\n中（活跃游戏日常）：单日 500~3000条\n低（中小游戏）：单日 100~500条\n较低：单日 <100条\n※ Agent基准：高>1万/中1000-1万/低<1000\n※ PoE2 EA当日3420条（中），发布6天后6410条（高-中边界）"
+    },
+    "hotness.kol_publications": {
+      "name_cn": "KOL发帖数",
+      "name_en": "KOL Publications",
+      "category": "social_media",
+      "fields": [
+        "hotness.kol_publications"
+      ],
+      "calculation": "网红/KOL为该游戏发布的主贴总数（不含官号）",
+      "definition": "衡量网红生态对游戏的内容贡献量，KOL发帖数高通常带来更大的潜在曝光和话题扩散。",
+      "thresholds_brief": "KOL生态极活跃：单日 >500条\nKOL生态活跃：单日 100~500条\nKOL生态正常：单日 20~100条\nKOL参与较少：单日 <20条\n※ PoE2案例：99.89%内容为KOL/玩家自发（官号仅0.11%）"
+    },
+    "hotness.official_account_publications": {
+      "name_cn": "官号发帖数",
+      "name_en": "Official Account Publications",
+      "category": "social_media",
+      "fields": [
+        "hotness.official_account_publications"
+      ],
+      "calculation": "游戏官方账号在各平台发布的主贴总数",
+      "definition": "衡量游戏官方内容运营的活跃程度，官号发帖数高通常对应版本更新或重大活动。",
+      "thresholds_brief": "活跃（活动/危机公关期）：单日 >10条\n正常（版本发布期）：单日 3~10条\n一般（日常运营）：单日 1~3条\n较低：单日 <1条\n※ PoE2案例：GGG官方公告帖获386K观看/5.59K互动"
+    },
+    "hotness.posts": {
+      "name_cn": "图文主贴数",
+      "name_en": "Posts",
+      "category": "social_media",
+      "fields": [
+        "hotness.posts",
+        "feeds_topic.posts"
+      ],
+      "calculation": "游戏相关的图文贴数量（Text Posts）",
+      "definition": "不含视频，专指图文类内容，适合分析Twitter、Reddit等以文字讨论为主的社区。",
+      "thresholds_brief": "参考发帖数(Publications)总量中的占比\n图文贴通常占总发帖量的 60%~80%（视频贴20%~40%）\n※ Twitter/Reddit以图文为主；YouTube/TikTok以视频为主"
+    },
+    "feeds_topic.posts": {
+      "name_cn": "图文主贴数",
+      "name_en": "Posts",
+      "category": "social_media",
+      "fields": [
+        "hotness.posts",
+        "feeds_topic.posts"
+      ],
+      "calculation": "游戏相关的图文贴数量（Text Posts）",
+      "definition": "不含视频，专指图文类内容，适合分析Twitter、Reddit等以文字讨论为主的社区。",
+      "thresholds_brief": "参考发帖数(Publications)总量中的占比\n图文贴通常占总发帖量的 60%~80%（视频贴20%~40%）\n※ Twitter/Reddit以图文为主；YouTube/TikTok以视频为主"
+    },
+    "hotness.videos": {
+      "name_cn": "视频数",
+      "name_en": "Videos",
+      "category": "social_media",
+      "fields": [
+        "hotness.videos",
+        "feeds_topic.videos"
+      ],
+      "calculation": "游戏相关的视频贴数量（Video Titles）",
+      "definition": "专指视频类内容，适合分析YouTube、TikTok、Bilibili等视频平台的内容量。",
+      "thresholds_brief": "参考发帖数(Publications)总量中的占比\n视频贴通常占总发帖量的 20%~40%\n※ 视频单条观看量通常远高于图文帖，传播效率更高"
+    },
+    "feeds_topic.videos": {
+      "name_cn": "视频数",
+      "name_en": "Videos",
+      "category": "social_media",
+      "fields": [
+        "hotness.videos",
+        "feeds_topic.videos"
+      ],
+      "calculation": "游戏相关的视频贴数量（Video Titles）",
+      "definition": "专指视频类内容，适合分析YouTube、TikTok、Bilibili等视频平台的内容量。",
+      "thresholds_brief": "参考发帖数(Publications)总量中的占比\n视频贴通常占总发帖量的 20%~40%\n※ 视频单条观看量通常远高于图文帖，传播效率更高"
+    },
+    "hotness.creators": {
+      "name_cn": "发帖人数",
+      "name_en": "Creators",
+      "category": "social_media",
+      "fields": [
+        "hotness.creators",
+        "feeds_topic.creators"
+      ],
+      "calculation": "发布游戏相关内容的去重创作者数量",
+      "definition": "衡量内容创作者生态的宽度，发帖人数多说明更多独立玩家/创作者参与讨论，代表话题有更广泛的自发传播力。",
+      "thresholds_brief": "极活跃（爆款发布期）：单日 >5000人\n活跃（热门大作）：单日 1000~5000人\n正常（日常运营）：单日 100~1000人\n较低：单日 <100人\n※ PoE2 EA当日2850人（活跃），发布6天后5520人（极活跃）\n※ 创作者数/发帖数比值→1说明内容分散均匀，生态更健康"
+    },
+    "feeds_topic.creators": {
+      "name_cn": "发帖人数",
+      "name_en": "Creators",
+      "category": "social_media",
+      "fields": [
+        "hotness.creators",
+        "feeds_topic.creators"
+      ],
+      "calculation": "发布游戏相关内容的去重创作者数量",
+      "definition": "衡量内容创作者生态的宽度，发帖人数多说明更多独立玩家/创作者参与讨论，代表话题有更广泛的自发传播力。",
+      "thresholds_brief": "极活跃（爆款发布期）：单日 >5000人\n活跃（热门大作）：单日 1000~5000人\n正常（日常运营）：单日 100~1000人\n较低：单日 <100人\n※ PoE2 EA当日2850人（活跃），发布6天后5520人（极活跃）\n※ 创作者数/发帖数比值→1说明内容分散均匀，生态更健康"
+    },
+    "hotness.views": {
+      "name_cn": "总观看量",
+      "name_en": "Views",
+      "category": "social_media",
+      "fields": [
+        "hotness.views",
+        "video_and_posts_stats.views",
+        "feeds_topic.views"
+      ],
+      "calculation": "游戏相关图文贴及视频贴的总观看量（视频播放量+图文贴曝光量）",
+      "definition": "衡量内容的实际触达人次，是评估传播力的核心指标。视频观看量权重通常高于图文贴。",
+      "thresholds_brief": "极高（现象级）：单日 >5000万次\n高（热门大作发布期）：单日 500万~5000万次\n中（活跃游戏日常）：单日 50万~500万次\n低：单日 <50万次\n※ Agent基准：高>500万/中50-500万/低<50万\n※ PoE2 EA当日5.27M（中-高边界），发布6天后9.02M（高）"
+    },
+    "video_and_posts_stats.views": {
+      "name_cn": "总观看量",
+      "name_en": "Views",
+      "category": "social_media",
+      "fields": [
+        "hotness.views",
+        "video_and_posts_stats.views",
+        "feeds_topic.views"
+      ],
+      "calculation": "游戏相关图文贴及视频贴的总观看量（视频播放量+图文贴曝光量）",
+      "definition": "衡量内容的实际触达人次，是评估传播力的核心指标。视频观看量权重通常高于图文贴。",
+      "thresholds_brief": "极高（现象级）：单日 >5000万次\n高（热门大作发布期）：单日 500万~5000万次\n中（活跃游戏日常）：单日 50万~500万次\n低：单日 <50万次\n※ Agent基准：高>500万/中50-500万/低<50万\n※ PoE2 EA当日5.27M（中-高边界），发布6天后9.02M（高）"
+    },
+    "feeds_topic.views": {
+      "name_cn": "总观看量",
+      "name_en": "Views",
+      "category": "social_media",
+      "fields": [
+        "hotness.views",
+        "video_and_posts_stats.views",
+        "feeds_topic.views"
+      ],
+      "calculation": "游戏相关图文贴及视频贴的总观看量（视频播放量+图文贴曝光量）",
+      "definition": "衡量内容的实际触达人次，是评估传播力的核心指标。视频观看量权重通常高于图文贴。",
+      "thresholds_brief": "极高（现象级）：单日 >5000万次\n高（热门大作发布期）：单日 500万~5000万次\n中（活跃游戏日常）：单日 50万~500万次\n低：单日 <50万次\n※ Agent基准：高>500万/中50-500万/低<50万\n※ PoE2 EA当日5.27M（中-高边界），发布6天后9.02M（高）"
+    },
+    "hotness.video_views": {
+      "name_cn": "视频观看量",
+      "name_en": "Video Views",
+      "category": "social_media",
+      "fields": [
+        "hotness.video_views"
+      ],
+      "calculation": "游戏相关视频贴的总播放量",
+      "definition": "专指视频内容的播放量，可与总观看量对比判断视频vs图文内容的贡献比例。",
+      "thresholds_brief": "极高（头部游戏）：单日 >3000万次\n高（热门游戏）：单日 300万~3000万次\n中（活跃游戏）：单日 30万~300万次\n低：单日 <30万次\n※ YouTube头部KOL（>100万粉）单视频通常10万~500万播放"
+    },
+    "hotness.text_views": {
+      "name_cn": "图文贴观看量",
+      "name_en": "Text Views",
+      "category": "social_media",
+      "fields": [
+        "hotness.text_views"
+      ],
+      "calculation": "游戏相关图文贴的总曝光量",
+      "definition": "专指图文类内容的曝光量，反映Twitter、Reddit等平台文字内容的传播广度。",
+      "thresholds_brief": "极高：单日 >2000万次\n高：单日 200万~2000万次\n中：单日 20万~200万次\n低：单日 <20万次\n※ 图文贴触达率通常低于视频内容"
+    },
+    "hotness.engagement": {
+      "name_cn": "互动量",
+      "name_en": "Engagement",
+      "category": "social_media",
+      "fields": [
+        "hotness.engagement",
+        "video_and_posts_stats.engagement",
+        "feeds_topic.engagement"
+      ],
+      "calculation": "游戏相关帖子及视频的总互动量，包含点赞、评论、转发、分享等互动行为之和",
+      "definition": "衡量内容引发玩家主动参与的程度，是热度排名的核心依据。互动量高表明内容引发了较强的玩家共鸣或争议。",
+      "thresholds_brief": "极高（爆款内容）：单日 >100万次\n高（热门游戏）：单日 10万~100万次\n中（活跃游戏）：单日 1万~10万次\n低：单日 <1万次\n※ PoE2 EA当日264K次（中-高边界），发布6天后332K次（高）\n※ 单帖互动 >2000次 → 高热帖，需重点关注情感倾向"
+    },
+    "video_and_posts_stats.engagement": {
+      "name_cn": "互动量",
+      "name_en": "Engagement",
+      "category": "social_media",
+      "fields": [
+        "hotness.engagement",
+        "video_and_posts_stats.engagement",
+        "feeds_topic.engagement"
+      ],
+      "calculation": "游戏相关帖子及视频的总互动量，包含点赞、评论、转发、分享等互动行为之和",
+      "definition": "衡量内容引发玩家主动参与的程度，是热度排名的核心依据。互动量高表明内容引发了较强的玩家共鸣或争议。",
+      "thresholds_brief": "极高（爆款内容）：单日 >100万次\n高（热门游戏）：单日 10万~100万次\n中（活跃游戏）：单日 1万~10万次\n低：单日 <1万次\n※ PoE2 EA当日264K次（中-高边界），发布6天后332K次（高）\n※ 单帖互动 >2000次 → 高热帖，需重点关注情感倾向"
+    },
+    "feeds_topic.engagement": {
+      "name_cn": "话题互动量",
+      "name_en": "Topic Engagement",
+      "category": "topic_analysis",
+      "fields": [
+        "feeds_topic.engagement"
+      ],
+      "calculation": "特定话题相关声量下的总互动量（点赞+回复）",
+      "definition": "相对于声量数量，互动量更能体现玩家对该话题的讨论热度和情绪强度，适合发现[声量虽少但热度很高]的话题。",
+      "thresholds_brief": "极热（需立即关注）：单帖互动 >2000次\n热门：话题汇总互动 >5万次 / 单帖 500~2000次\n中等：话题汇总互动 5000~5万次\n较低：话题汇总互动 <5000次\n※ PoE2 12/11：Ascendancy话题单帖互动4701次（极热）\n On-death effects单帖互动2665次（极热，需关注负面情绪）"
+    },
+    "hotness.likes": {
+      "name_cn": "点赞量",
+      "name_en": "Likes",
+      "category": "social_media",
+      "fields": [
+        "hotness.likes",
+        "video_and_posts_stats.likes",
+        "feeds_topic.likes"
+      ],
+      "calculation": "游戏相关帖子及视频的总点赞数",
+      "definition": "互动量的子指标，专指点赞行为。点赞通常代表玩家认可或共鸣，趋势上升意味着正向内容引发传播。",
+      "thresholds_brief": "高：单日 >5万次\n中：单日 5000~5万次\n低：单日 <5000次\n※ 点赞率（点赞/观看）参考：高>3%/中1-3%/低<1%"
+    },
+    "video_and_posts_stats.likes": {
+      "name_cn": "点赞量",
+      "name_en": "Likes",
+      "category": "social_media",
+      "fields": [
+        "hotness.likes",
+        "video_and_posts_stats.likes",
+        "feeds_topic.likes"
+      ],
+      "calculation": "游戏相关帖子及视频的总点赞数",
+      "definition": "互动量的子指标，专指点赞行为。点赞通常代表玩家认可或共鸣，趋势上升意味着正向内容引发传播。",
+      "thresholds_brief": "高：单日 >5万次\n中：单日 5000~5万次\n低：单日 <5000次\n※ 点赞率（点赞/观看）参考：高>3%/中1-3%/低<1%"
+    },
+    "feeds_topic.likes": {
+      "name_cn": "点赞量",
+      "name_en": "Likes",
+      "category": "social_media",
+      "fields": [
+        "hotness.likes",
+        "video_and_posts_stats.likes",
+        "feeds_topic.likes"
+      ],
+      "calculation": "游戏相关帖子及视频的总点赞数",
+      "definition": "互动量的子指标，专指点赞行为。点赞通常代表玩家认可或共鸣，趋势上升意味着正向内容引发传播。",
+      "thresholds_brief": "高：单日 >5万次\n中：单日 5000~5万次\n低：单日 <5000次\n※ 点赞率（点赞/观看）参考：高>3%/中1-3%/低<1%"
+    },
+    "hotness.potential_impressions": {
+      "name_cn": "潜在曝光量",
+      "name_en": "Potential Impressions",
+      "category": "social_media",
+      "fields": [
+        "hotness.potential_impressions",
+        "feeds_topic.potential_impressions"
+      ],
+      "calculation": "游戏相关主贴（图文/视频）的发帖人粉丝总数（不去重）",
+      "definition": "估算内容潜在可触达的受众规模，数值=各主贴发帖人粉丝数之和。该指标为理论上限，实际触达率受平台算法影响。",
+      "thresholds_brief": "极广（现象级）：单日 >10亿\n广（热门大作）：单日 1亿~10亿\n中等：单日 1000万~1亿\n有限：单日 <1000万\n※ PoE2 EA当日5606万（中等），发布6天后1.96亿（广）\n※ 此为理论上限，实际触达率通常为潜在曝光的 1%~10%"
+    },
+    "feeds_topic.potential_impressions": {
+      "name_cn": "潜在曝光量",
+      "name_en": "Potential Impressions",
+      "category": "social_media",
+      "fields": [
+        "hotness.potential_impressions",
+        "feeds_topic.potential_impressions"
+      ],
+      "calculation": "游戏相关主贴（图文/视频）的发帖人粉丝总数（不去重）",
+      "definition": "估算内容潜在可触达的受众规模，数值=各主贴发帖人粉丝数之和。该指标为理论上限，实际触达率受平台算法影响。",
+      "thresholds_brief": "极广（现象级）：单日 >10亿\n广（热门大作）：单日 1亿~10亿\n中等：单日 1000万~1亿\n有限：单日 <1000万\n※ PoE2 EA当日5606万（中等），发布6天后1.96亿（广）\n※ 此为理论上限，实际触达率通常为潜在曝光的 1%~10%"
+    },
+    "feeds_topic.engagement_rate": {
+      "name_cn": "互动率",
+      "name_en": "Engagement Rate",
+      "category": "social_media",
+      "fields": [
+        "feeds_topic.engagement_rate"
+      ],
+      "calculation": "互动量 ÷ 观看量（或粉丝数）× 100%",
+      "definition": "衡量内容质量和受众粘性的效率指标，高互动率意味着内容对受众更有吸引力，即使绝对互动量不高也有参考价值。",
+      "thresholds_brief": "各平台行业均值参考（2024-2025，来源：Buffer/Socialinsider）：\nTikTok：高>6% / 中2%~6% / 低<2%（行业均值约4.86%）\nYouTube：高>5% / 中2%~5% / 低<2%（均值约4.41%）\nTwitter/X：高>3% / 中0.5%~3% / 低<0.5%（均值约0.12%~2.31%）\nInstagram：高>2% / 中0.5%~2% / 低<0.5%（均值约1.16%）\n※ 游戏类内容互动率通常高于行业均值"
+    },
+    "feeds_topic.content": {
+      "name_cn": "话题代表性评论",
+      "name_en": "Topic Reviews",
+      "category": "topic_analysis",
+      "fields": [
+        "feeds_topic.content",
+        "feeds_topic.content_en",
+        "feeds_topic.content_zh"
+      ],
+      "calculation": "特定话题下玩家的原始评论内容及多语言翻译",
+      "definition": "用于定性查看特定话题下玩家说了什么，结合情感分和关键词进行深度分析，支持原文、英文翻译和中文翻译三种格式。",
+      "thresholds_brief": "—（定性内容）"
+    },
+    "feeds_topic.content_en": {
+      "name_cn": "话题代表性评论",
+      "name_en": "Topic Reviews",
+      "category": "topic_analysis",
+      "fields": [
+        "feeds_topic.content",
+        "feeds_topic.content_en",
+        "feeds_topic.content_zh"
+      ],
+      "calculation": "特定话题下玩家的原始评论内容及多语言翻译",
+      "definition": "用于定性查看特定话题下玩家说了什么，结合情感分和关键词进行深度分析，支持原文、英文翻译和中文翻译三种格式。",
+      "thresholds_brief": "—（定性内容）"
+    },
+    "feeds_topic.content_zh": {
+      "name_cn": "话题代表性评论",
+      "name_en": "Topic Reviews",
+      "category": "topic_analysis",
+      "fields": [
+        "feeds_topic.content",
+        "feeds_topic.content_en",
+        "feeds_topic.content_zh"
+      ],
+      "calculation": "特定话题下玩家的原始评论内容及多语言翻译",
+      "definition": "用于定性查看特定话题下玩家说了什么，结合情感分和关键词进行深度分析，支持原文、英文翻译和中文翻译三种格式。",
+      "thresholds_brief": "—（定性内容）"
+    },
+    "feeds_topic.topic": {
+      "name_cn": "话题（维度）",
+      "name_en": "Topic",
+      "category": "topic_analysis",
+      "fields": [
+        "feeds_topic.topic",
+        "feeds_topic.topic_zh",
+        "feeds_topic.parent_topic",
+        "feeds_topic.parent_topic_zh"
+      ],
+      "calculation": "话题分类标签，分一级话题（parent_topic）和二级话题（topic），支持中英文",
+      "definition": "话题是评论分类的核心维度，预设包含：玩法、商业化、版本/更新、性能、画面、社区、活动、其他等8类通用话题，同时支持自定义话题配置。",
+      "thresholds_brief": "—（分类维度，无高低评判）"
+    },
+    "feeds_topic.topic_zh": {
+      "name_cn": "话题（维度）",
+      "name_en": "Topic",
+      "category": "topic_analysis",
+      "fields": [
+        "feeds_topic.topic",
+        "feeds_topic.topic_zh",
+        "feeds_topic.parent_topic",
+        "feeds_topic.parent_topic_zh"
+      ],
+      "calculation": "话题分类标签，分一级话题（parent_topic）和二级话题（topic），支持中英文",
+      "definition": "话题是评论分类的核心维度，预设包含：玩法、商业化、版本/更新、性能、画面、社区、活动、其他等8类通用话题，同时支持自定义话题配置。",
+      "thresholds_brief": "—（分类维度，无高低评判）"
+    },
+    "feeds_topic.parent_topic": {
+      "name_cn": "话题（维度）",
+      "name_en": "Topic",
+      "category": "topic_analysis",
+      "fields": [
+        "feeds_topic.topic",
+        "feeds_topic.topic_zh",
+        "feeds_topic.parent_topic",
+        "feeds_topic.parent_topic_zh"
+      ],
+      "calculation": "话题分类标签，分一级话题（parent_topic）和二级话题（topic），支持中英文",
+      "definition": "话题是评论分类的核心维度，预设包含：玩法、商业化、版本/更新、性能、画面、社区、活动、其他等8类通用话题，同时支持自定义话题配置。",
+      "thresholds_brief": "—（分类维度，无高低评判）"
+    },
+    "feeds_topic.parent_topic_zh": {
+      "name_cn": "话题（维度）",
+      "name_en": "Topic",
+      "category": "topic_analysis",
+      "fields": [
+        "feeds_topic.topic",
+        "feeds_topic.topic_zh",
+        "feeds_topic.parent_topic",
+        "feeds_topic.parent_topic_zh"
+      ],
+      "calculation": "话题分类标签，分一级话题（parent_topic）和二级话题（topic），支持中英文",
+      "definition": "话题是评论分类的核心维度，预设包含：玩法、商业化、版本/更新、性能、画面、社区、活动、其他等8类通用话题，同时支持自定义话题配置。",
+      "thresholds_brief": "—（分类维度，无高低评判）"
+    },
+    "streaming_stats.streamers": {
+      "name_cn": "主播数",
+      "name_en": "Streamers",
+      "category": "livestream",
+      "fields": [
+        "streaming_stats.streamers"
+      ],
+      "calculation": "特定时期直播该游戏的活跃主播数量（游戏为统计主体）",
+      "definition": "反映直播生态的广度，主播数多说明有更多创作者参与该游戏的直播，生态活跃度高。与热门主播数据结合可区分[量多但集中]还是[分散但广泛]。",
+      "thresholds_brief": "极高（现象级热度）：单日 >2000位\n高（热门大作发布期）：单日 500~2000位\n中（活跃游戏日常）：单日 100~500位\n低：单日 <100位\n※ 2024年Twitch平台日均活跃频道约9.3万个（全品类）\n※ PoE2案例：EA发布后直播主播数显著增长"
+    },
+    "streaming_stats.airtime_hours": {
+      "name_cn": "直播播出时长",
+      "name_en": "Airtime (Hour)",
+      "category": "livestream",
+      "fields": [
+        "streaming_stats.airtime_hours"
+      ],
+      "calculation": "游戏被直播的总小时数（游戏为统计主体）",
+      "definition": "衡量内容创作者为该游戏投入的直播时间总量，播出时长高说明主播持续为游戏产出内容。",
+      "thresholds_brief": "极高（现象级）：单日 >10万小时\n高（热门大作）：单日 1万~10万小时\n中（活跃游戏）：单日 1000~1万小时\n低：单日 <1000小时\n※ 人均播出时长 = 总时长/主播数；>4小时/日说明主播高度投入"
+    },
+    "streaming_stats.hours_watched": {
+      "name_cn": "直播观看时长",
+      "name_en": "Hours Watched",
+      "category": "livestream",
+      "fields": [
+        "streaming_stats.hours_watched"
+      ],
+      "calculation": "游戏直播的总观看时长（所有观众观看时长之和，游戏为统计主体）",
+      "definition": "核心直播热度指标，综合反映主播数量和观众参与度。Hours Watched=观看人数×平均观看时长，是衡量直播生态健康度最全面的指标。",
+      "thresholds_brief": "极高（顶级热门）：单日 >100万小时\n高（热门大作发布期）：单日 10万~100万小时\n中（活跃游戏日常）：单日 1万~10万小时\n低：单日 <1万小时\n※ 行业参考：Elden Ring DLC发布月Twitch约1.27亿总小时观看\n※ 2024年Twitch全平台年度Hours Watched约208亿小时"
+    },
+    "streaming_stats.average_viewers": {
+      "name_cn": "平均观看人数 (ACV)",
+      "name_en": "Average Concurrent Viewers",
+      "category": "livestream",
+      "fields": [
+        "streaming_stats.average_viewers"
+      ],
+      "calculation": "游戏直播的平均同时在线观看人数（游戏为统计主体）",
+      "definition": "衡量直播内容的平均受欢迎程度，ACV越高说明游戏直播对观众持续吸引力越强。",
+      "thresholds_brief": "极高（顶级热门游戏）：>10万人\n高（热门大作发布期）：1万~10万人\n中（活跃游戏）：1000~1万人\n低：<1000人\n※ 2024年Twitch全平台日均CCV约237万（全品类）\n※ 顶级游戏（LoL/GTA V）ACV通常 >10万"
+    },
+    "streaming_stats.peak_viewers": {
+      "name_cn": "最高观看人数 (PCV)",
+      "name_en": "Peak Concurrent Viewers",
+      "category": "livestream",
+      "fields": [
+        "streaming_stats.peak_viewers"
+      ],
+      "calculation": "游戏直播的历史最高同时在线观看人数（游戏为统计主体）",
+      "definition": "衡量直播高光时刻的观看规模，PCV通常出现于重大锦标赛、版本首发直播或顶级主播开播时，是事件影响力的重要参考。",
+      "thresholds_brief": "极高（顶级赛事/现象级）：>50万人\n高（热门大作）：10万~50万人\n中（活跃游戏）：1万~10万人\n低：<1万人\n※ PoE2 EA当日Top单播主PCV=11,862（中）\n※ PoE2发布6天后Top单播主PCV=39,731（中-高边界）\n※ 历史最高：LoL世界赛超过500万人同时在线"
+    },
+    "streaming_stats.total_sessions（若有）": {
+      "name_cn": "直播总场数",
+      "name_en": "Total Sessions",
+      "category": "livestream",
+      "fields": [
+        "streaming_stats.total_sessions（若有）"
+      ],
+      "calculation": "游戏相关的直播总场次数",
+      "definition": "衡量直播内容产出的频次，与主播数结合可计算人均开播场次，了解主播的直播频率。",
+      "thresholds_brief": "极高（爆款游戏）：单日 >2000场\n高（热门大作）：单日 500~2000场\n中（活跃游戏）：单日 50~500场\n低：单日 <50场"
+    },
+    "streamers.hours_watched": {
+      "name_cn": "主播观看时长（主播维度）",
+      "name_en": "Streamer Hours Watched",
+      "category": "livestream",
+      "fields": [
+        "streamers.hours_watched"
+      ],
+      "calculation": "单个主播直播该游戏的总观看时长",
+      "definition": "以主播为主体，评估单个主播播该游戏对观众的留存能力，时长高说明该主播的观众在该游戏直播期间保持高粘性。",
+      "thresholds_brief": "以相对排名判断（无绝对高低标准）：\n超头部主播（>5万ACV）：全球级KOL，影响力极大\n头部主播（1万~5万ACV）：PoE2 Top主播约属此级\n腰部主播（1000~1万ACV）：核心社区影响力\n尾部主播（<1000ACV）：新兴/小众主播"
+    },
+    "streamers.peak_viewers": {
+      "name_cn": "主播最高观看人数（主播维度）",
+      "name_en": "Streamer Peak Viewers",
+      "category": "livestream",
+      "fields": [
+        "streamers.peak_viewers"
+      ],
+      "calculation": "单个主播直播该游戏时的历史最高同时在线观看人数",
+      "definition": "以主播为主体，衡量该主播直播该游戏时的高光时刻，高PCV通常说明该主播在游戏社区有强大号召力。",
+      "thresholds_brief": "以相对排名判断（无绝对高低标准）：\n超头部主播（>5万ACV）：全球级KOL，影响力极大\n头部主播（1万~5万ACV）：PoE2 Top主播约属此级\n腰部主播（1000~1万ACV）：核心社区影响力\n尾部主播（<1000ACV）：新兴/小众主播"
+    },
+    "streamers.average_viewers": {
+      "name_cn": "主播平均观看人数（主播维度）",
+      "name_en": "Streamer ACV",
+      "category": "livestream",
+      "fields": [
+        "streamers.average_viewers"
+      ],
+      "calculation": "单个主播直播该游戏时的平均同时在线观看人数",
+      "definition": "以主播为主体，衡量该主播播该游戏的平均受欢迎程度，更稳定可靠，不受单次高峰值影响。",
+      "thresholds_brief": "以相对排名判断（无绝对高低标准）：\n超头部主播（>5万ACV）：全球级KOL，影响力极大\n头部主播（1万~5万ACV）：PoE2 Top主播约属此级\n腰部主播（1000~1万ACV）：核心社区影响力\n尾部主播（<1000ACV）：新兴/小众主播"
+    },
+    "kol.all_publications": {
+      "name_cn": "KOL发帖量（KOL维度）",
+      "name_en": "KOL All Publications",
+      "category": "kol",
+      "fields": [
+        "kol.all_publications"
+      ],
+      "calculation": "单个KOL发布游戏相关帖子的总数（以KOL为主体，一个或多个帖子加总）",
+      "definition": "衡量单个KOL为游戏创作的内容数量，发帖量高说明该KOL对游戏持续投入创作。",
+      "thresholds_brief": "极频繁（专职创作者）：单日 >5条\n频繁（高度活跃）：单日 2~5条\n正常：单日 1条\n偶尔：<1条/日\n※ 建议结合条均观看量评估——高质量低频优于低质量高频"
+    },
+    "kol.all_views": {
+      "name_cn": "KOL总观看量（KOL维度）",
+      "name_en": "KOL All Views",
+      "category": "kol",
+      "fields": [
+        "kol.all_views"
+      ],
+      "calculation": "单个KOL发布游戏相关帖子的总观看量（以KOL为主体）",
+      "definition": "衡量单个KOL的传播力，观看量越高说明该KOL发布的游戏内容触达用户越广。",
+      "thresholds_brief": "超头部传播力：总计 >1000万次\n头部传播力：总计 100万~1000万次\n腰部传播力：总计 10万~100万次\n尾部：总计 <10万次\n※ PoE2 12/5 Top KOL Asmongold TV：2帖共806K观看\n※ 头部KOL（>100万粉）单视频通常10万~500万播放"
+    },
+    "kol.all_engagement": {
+      "name_cn": "KOL总互动量（KOL维度）",
+      "name_en": "KOL All Engagement",
+      "category": "kol",
+      "fields": [
+        "kol.all_engagement"
+      ],
+      "calculation": "单个KOL发布游戏相关帖子的总互动量（以KOL为主体，含多帖子加总）",
+      "definition": "衡量单个KOL内容引发玩家参与的程度，高互动量说明该KOL的受众粘性强、内容引发共鸣。",
+      "thresholds_brief": "极高传播影响力：总计 >10万次\n高：总计 1万~10万次\n中：总计 1000~1万次\n低：总计 <1000次\n※ PoE2 12/5 Top KOL Asmongold TV总互动27,110次（高）"
+    },
+    "kol.followers": {
+      "name_cn": "KOL粉丝数",
+      "name_en": "KOL Followers",
+      "category": "kol",
+      "fields": [
+        "kol.followers"
+      ],
+      "calculation": "KOL账号的粉丝数量",
+      "definition": "衡量KOL的潜在影响力规模，是评估合作价值的基础指标。但需注意粉丝数≠实际影响力，需结合互动率综合判断。",
+      "thresholds_brief": "超头部（Mega-Influencer）：>100万粉\n头部（Macro-Influencer）：10万~100万粉\n腰部（Micro-Influencer）：1万~10万粉\n尾部（Nano-Influencer）：<1万粉\n※ PoE2 12/5 顶级KOL：Kripparrian 905K粉，Asmongold 316万粉\n※ 粉丝数≠影响力，需结合条均观看量和互动率综合判断"
+    },
+    "kol.view_per_publication": {
+      "name_cn": "KOL条均观看量",
+      "name_en": "KOL View Per Publication",
+      "category": "kol",
+      "fields": [
+        "kol.view_per_publication"
+      ],
+      "calculation": "KOL总观看量 ÷ KOL总发帖量",
+      "definition": "衡量单个KOL的内容质量效率，条均观看量高说明该KOL每条内容的平均传播效果好，适合用于筛选高效优质创作者。",
+      "thresholds_brief": "超级传播力：条均 >100万次/条\n强传播力：条均 10万~100万次/条\n中等传播力：条均 1万~10万次/条\n低：条均 <1万次/条\n※ PoE2 12/5：Asmongold TV条均403K（强），Josh Strife Hayes条均72K（中-强）\n※ 条均观看高→该KOL每条内容平均传播效果好，适合筛选高效创作者"
+    },
+    "kol_stats.influencers": {
+      "name_cn": "网红数量（KOL统计）",
+      "name_en": "Influencers Count",
+      "category": "kol",
+      "fields": [
+        "kol_stats.influencers"
+      ],
+      "calculation": "发布游戏相关内容的网红总数量（去重，按视频/图文区分）",
+      "definition": "评估创作者生态的广度，适合回答[有多少创作者为该游戏创作内容]，可按平台、语言拆解查看。",
+      "thresholds_brief": "KOL生态极活跃：单日 >1000位\nKOL生态活跃：单日 200~1000位\nKOL生态正常：单日 50~200位\nKOL生态冷淡：单日 <50位\n※ PoE2 EA发布后KOL参与数量显著增加，说明生态健康"
+    },
+    "news_stats.count": {
+      "name_cn": "新闻声量（数量）",
+      "name_en": "News Count",
+      "category": "news_media",
+      "fields": [
+        "news_stats.count"
+      ],
+      "calculation": "游戏相关新闻文章的总数量",
+      "definition": "衡量媒体对游戏报道的活跃程度，新闻声量骤增通常对应重大版本发布、争议事件或行业关注。",
+      "thresholds_brief": "极高（现象级事件）：单日 >500篇\n高（热门大作发布/重大事件）：单日 50~500篇\n中（正常新游发布）：单日 10~50篇\n低：单日 <10篇\n※ 游戏发布期/大型赛事期间媒体声量显著高于日常\n※ 负面媒体报道中[退款/崩溃/欺诈]类传播速度极快"
+    },
+    "news_stats.avg_sentiment": {
+      "name_cn": "新闻平均情感分",
+      "name_en": "News Avg Sentiment",
+      "category": "news_media",
+      "fields": [
+        "news_stats.avg_sentiment"
+      ],
+      "calculation": "游戏相关新闻文章的平均情感分（1~5分）",
+      "definition": "反映媒体对游戏的整体报道倾向，媒体情感与玩家情感的背离可能是舆情风险信号。",
+      "thresholds_brief": "正面（高）：>3.5\n中性（中）：2.5~3.5\n负面（低）：<2.5\n※ 媒体情感与玩家情感背离→是重要信号，需交叉验证\n※ 媒体负面但玩家正面→可能存在信息差或报道偏差"
+    },
+    "news_stats.positive_news": {
+      "name_cn": "正面新闻数",
+      "name_en": "Positive News",
+      "category": "news_media",
+      "fields": [
+        "news_stats.positive_news"
+      ],
+      "calculation": "情感为正面的新闻文章数量",
+      "definition": "衡量媒体积极报道的绝对量，正面新闻数高通常对应游戏获奖、高评分、创新玩法等积极事件。",
+      "thresholds_brief": "正面报道极多：单日 >50篇\n正面报道较多：单日 5~50篇\n正面报道较少：单日 <5篇\n※ 占比判断：正面占总新闻>60%=媒体口碑极佳"
+    },
+    "news_stats.negative_news": {
+      "name_cn": "负面新闻数",
+      "name_en": "Negative News",
+      "category": "news_media",
+      "fields": [
+        "news_stats.negative_news"
+      ],
+      "calculation": "情感为负面的新闻文章数量",
+      "definition": "舆情风险监控的重要信号，负面新闻骤增可能预警舆情危机，需及时排查报道原因。",
+      "thresholds_brief": "危机预警：单日 >20篇\n需关注：单日 5~20篇\n正常范围：单日 <5篇\n※ 占比判断：负面占总新闻>30%=需启动公关响应\n※ 负面新闻出现[退款/欺诈/崩溃]关键词传播速度极快"
+    },
+    "news_stats.positive_rate": {
+      "name_cn": "正面新闻占比",
+      "name_en": "News Positive%",
+      "category": "news_media",
+      "fields": [
+        "news_stats.positive_rate"
+      ],
+      "calculation": "正面新闻数 ÷ 总新闻数 × 100%",
+      "definition": "媒体报道的情感结构比例，是衡量媒体口碑的核心指标。",
+      "thresholds_brief": "媒体口碑极佳：>60%\n媒体口碑正常：40%~60%\n媒体口碑偏弱：25%~40%\n需关注：<25%"
+    },
+    "news_stats.negative_rate": {
+      "name_cn": "负面新闻占比",
+      "name_en": "News Negative%",
+      "category": "news_media",
+      "fields": [
+        "news_stats.negative_rate"
+      ],
+      "calculation": "负面新闻数 ÷ 总新闻数 × 100%",
+      "definition": "媒体负面报道比例，高占比需重点关注媒体报道内容，及时进行危机公关。",
+      "thresholds_brief": "危机（需立即公关响应）：>35%\n高（需关注）：25%~35%\n中（偏高）：15%~25%\n低（正常）：<15%"
+    },
+    "news_stats.engagement": {
+      "name_cn": "新闻互动量",
+      "name_en": "News Engagement",
+      "category": "news_media",
+      "fields": [
+        "news_stats.engagement"
+      ],
+      "calculation": "游戏相关新闻的总互动量",
+      "definition": "衡量媒体报道引发读者互动的规模，高互动量新闻通常具有更大的传播影响力。",
+      "thresholds_brief": "高：>10万次\n中：1万~10万次\n低：<1万次"
+    },
+    "news_stats.views": {
+      "name_cn": "新闻观看量",
+      "name_en": "News Views",
+      "category": "news_media",
+      "fields": [
+        "news_stats.views"
+      ],
+      "calculation": "游戏相关新闻的总阅读量/观看量",
+      "definition": "衡量媒体报道的实际触达人次，是评估报道传播效果的直接指标。",
+      "thresholds_brief": "高：>100万次\n中：10万~100万次\n低：<10万次"
+    },
+    "news_content.title": {
+      "name_cn": "新闻内容（明细）",
+      "name_en": "News Content",
+      "category": "news_media",
+      "fields": [
+        "news_content.title",
+        "news_content.content",
+        "news_content.content_en",
+        "news_content.content_zh"
+      ],
+      "calculation": "具体新闻文章的标题、正文及多语言翻译",
+      "definition": "查看新闻的具体内容，适合定性分析媒体报道角度和详细观点，支持原文、英文及中文翻译格式。",
+      "thresholds_brief": "—（定性内容）"
+    },
+    "news_content.content": {
+      "name_cn": "新闻内容（明细）",
+      "name_en": "News Content",
+      "category": "news_media",
+      "fields": [
+        "news_content.title",
+        "news_content.content",
+        "news_content.content_en",
+        "news_content.content_zh"
+      ],
+      "calculation": "具体新闻文章的标题、正文及多语言翻译",
+      "definition": "查看新闻的具体内容，适合定性分析媒体报道角度和详细观点，支持原文、英文及中文翻译格式。",
+      "thresholds_brief": "—（定性内容）"
+    },
+    "news_content.content_en": {
+      "name_cn": "新闻内容（明细）",
+      "name_en": "News Content",
+      "category": "news_media",
+      "fields": [
+        "news_content.title",
+        "news_content.content",
+        "news_content.content_en",
+        "news_content.content_zh"
+      ],
+      "calculation": "具体新闻文章的标题、正文及多语言翻译",
+      "definition": "查看新闻的具体内容，适合定性分析媒体报道角度和详细观点，支持原文、英文及中文翻译格式。",
+      "thresholds_brief": "—（定性内容）"
+    },
+    "news_content.content_zh": {
+      "name_cn": "新闻内容（明细）",
+      "name_en": "News Content",
+      "category": "news_media",
+      "fields": [
+        "news_content.title",
+        "news_content.content",
+        "news_content.content_en",
+        "news_content.content_zh"
+      ],
+      "calculation": "具体新闻文章的标题、正文及多语言翻译",
+      "definition": "查看新闻的具体内容，适合定性分析媒体报道角度和详细观点，支持原文、英文及中文翻译格式。",
+      "thresholds_brief": "—（定性内容）"
+    },
+    "official_account_stats.posts": {
+      "name_cn": "官号发帖量（统计）",
+      "name_en": "Official Posts",
+      "category": "official_account",
+      "fields": [
+        "official_account_stats.posts"
+      ],
+      "calculation": "多个官号发帖数量统计，支持按渠道/地区维度汇总",
+      "definition": "衡量官方账号的内容运营活跃程度，发帖量高通常对应版本发布、活动推广期。",
+      "thresholds_brief": "活跃（活动/危机公关期）：单日 >10条\n正常（版本发布期）：单日 3~10条\n一般（日常运营）：单日 1~3条\n较低：单日 <1条\n※ PoE2案例：GGG官方公告帖获386K观看/5.59K互动"
+    },
+    "official_account_stats.max_followers": {
+      "name_cn": "官号粉丝数",
+      "name_en": "Official Max Followers",
+      "category": "official_account",
+      "fields": [
+        "official_account_stats.max_followers"
+      ],
+      "calculation": "单个官号的粉丝数量",
+      "definition": "衡量官方账号的受众规模，是评估官号传播潜力的基础指标。不同平台的粉丝基数差异较大，需分平台对比。",
+      "thresholds_brief": "超头部账号：>1000万粉\n大型账号：100万~1000万粉\n中型账号：10万~100万粉\n小型账号：<10万粉\n※ 不同平台粉丝基数差异大，需分平台对比\n※ 粉丝数≠活跃度，需结合互动率判断账号真实影响力"
+    },
+    "official_account_stats.views": {
+      "name_cn": "官号观看量",
+      "name_en": "Official Views",
+      "category": "official_account",
+      "fields": [
+        "official_account_stats.views"
+      ],
+      "calculation": "多个官号发帖的总观看量汇总",
+      "definition": "衡量官方内容的实际触达规模，是评估官方传播力的重要指标。",
+      "thresholds_brief": "极高（热门官号）：单日 >1000万次\n高：单日 100万~1000万次\n中：单日 10万~100万次\n低：单日 <10万次"
+    },
+    "official_account_stats.engagement": {
+      "name_cn": "官号互动量",
+      "name_en": "Official Engagement",
+      "category": "official_account",
+      "fields": [
+        "official_account_stats.engagement"
+      ],
+      "calculation": "多个官号发帖的总互动量汇总（含点赞+评论+转发）",
+      "definition": "衡量官方内容引发玩家互动的能力，是评估官方账号内容质量和粉丝活跃度的核心指标。",
+      "thresholds_brief": "极高（热门官号）：单日 >50万次\n高：单日 10万~50万次\n中：单日 1万~10万次\n低：单日 <1万次\n※ 官号互动率参考（互动/粉丝）：Twitter>1% / YouTube>2% / TikTok>3%"
+    },
+    "official_account_stats.likes": {
+      "name_cn": "官号点赞量",
+      "name_en": "Official Likes",
+      "category": "official_account",
+      "fields": [
+        "official_account_stats.likes"
+      ],
+      "calculation": "多个官号发帖的总点赞数汇总",
+      "definition": "互动量子指标，专指点赞行为，反映玩家对官方内容的认可程度。",
+      "thresholds_brief": "高：单日 >5万次\n中：单日 5000~5万次\n低：单日 <5000次\n※ 点赞率（点赞/观看量）参考：高>3%/中1-3%/低<1%"
+    },
+    "official_account_stats.comments": {
+      "name_cn": "官号评论量",
+      "name_en": "Official Comments",
+      "category": "official_account",
+      "fields": [
+        "official_account_stats.comments"
+      ],
+      "calculation": "多个官号发帖的总评论数汇总",
+      "definition": "评论量反映玩家主动发声的意愿，评论量高且情感偏负可能是舆情问题信号。",
+      "thresholds_brief": "高：单日 >1万条\n中：单日 1000~1万条\n低：单日 <1000条\n※ 评论量高但情感偏负→可能是舆情风险信号，需排查"
+    },
+    "official_account_stats.shares": {
+      "name_cn": "官号转发量",
+      "name_en": "Official Shares",
+      "category": "official_account",
+      "fields": [
+        "official_account_stats.shares"
+      ],
+      "calculation": "多个官号发帖的总转发数汇总",
+      "definition": "转发量反映玩家对官方内容的主动传播意愿，高转发量的内容通常是成功的病毒式营销案例。",
+      "thresholds_brief": "高（内容病毒式传播）：单日 >5000次\n中（正常传播）：单日 500~5000次\n低：单日 <500次\n※ 转发率（转发/观看量）：高>2% / 中0.5-2% / 低<0.5%"
+    },
+    "official_account_content.content": {
+      "name_cn": "官号内容明细",
+      "name_en": "Official Account Content",
+      "category": "official_account",
+      "fields": [
+        "official_account_content.content",
+        "official_account_content.content_en",
+        "official_account_content.content_zh"
+      ],
+      "calculation": "官方账号具体发帖的内容文本及多语言翻译，含单帖观看量、互动量、点赞、评论、转发",
+      "definition": "查看官号具体发布内容，适合分析哪类官方内容表现最好，支持原文及英/中文翻译。",
+      "thresholds_brief": "—（定性内容）"
+    },
+    "official_account_content.content_en": {
+      "name_cn": "官号内容明细",
+      "name_en": "Official Account Content",
+      "category": "official_account",
+      "fields": [
+        "official_account_content.content",
+        "official_account_content.content_en",
+        "official_account_content.content_zh"
+      ],
+      "calculation": "官方账号具体发帖的内容文本及多语言翻译，含单帖观看量、互动量、点赞、评论、转发",
+      "definition": "查看官号具体发布内容，适合分析哪类官方内容表现最好，支持原文及英/中文翻译。",
+      "thresholds_brief": "—（定性内容）"
+    },
+    "official_account_content.content_zh": {
+      "name_cn": "官号内容明细",
+      "name_en": "Official Account Content",
+      "category": "official_account",
+      "fields": [
+        "official_account_content.content",
+        "official_account_content.content_en",
+        "official_account_content.content_zh"
+      ],
+      "calculation": "官方账号具体发帖的内容文本及多语言翻译，含单帖观看量、互动量、点赞、评论、转发",
+      "definition": "查看官号具体发布内容，适合分析哪类官方内容表现最好，支持原文及英/中文翻译。",
+      "thresholds_brief": "—（定性内容）"
+    }
+  }
+}

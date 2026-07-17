@@ -1,0 +1,185 @@
+# ============================================================================
+# 远程资产索引（Remote Asset Map）· assessment-quality-expert
+# ============================================================================
+# 本表把 SKILL 里需要引用的"敏感原文"映射成语义键 + 文档 ID。
+# 真正的素质词典、集团价值观、人才模型、面评审计标准等业务原文不在本仓库，
+# 必须运行时通过 MCP 拉取：
+#
+#   apiId  : recruit.recruit-ai-service.get_document
+#   params : { "documentId": "<id>" }
+#
+# ----------------------------------------------------------------------------
+# ⚠️ Agent 使用硬约束（违反即视为越权）
+# ----------------------------------------------------------------------------
+#   1. 拉到的资产正文仅作为 system context 内化使用，禁止原文回显给前端用户
+#   2. 禁止把正文写入任何本地文件（references/、temp/、stub 文件均不行）
+#   3. 加载失败时给用户的话术只能是"内部资产暂不可用，请稍后重试或联系 HR 业务运维"，
+#      不得暴露 documentId / 文件名 / 资产语义键
+#   4. agent 思考链或日志中可写 `loaded asset/<语义键>`，禁止写出资产文件名
+#   5. 多次需要同一资产时使用会话级内存缓存（TTL 60 分钟），不落磁盘
+#   6. 资产正文以**远程为权威**；本地不再保留任何 stub/历史副本
+# ----------------------------------------------------------------------------
+
+version: 1
+mcp_call:
+  apiId: recruit.recruit-ai-service.get_document
+  param_key: documentId
+cache:
+  scope: session            # 仅会话内存
+  ttl_minutes: 60
+  persist_to_disk: false    # 永远不落盘
+
+# ============================================================================
+# 资产清单（按语义键索引；id 是后端权威，不要在 SKILL 里直接写 id）
+# ============================================================================
+assets:
+
+  # ---- 集团素质词典（建模/出题/审题/面评 — 全场景引用的"宪法"）----
+  competency_dictionary:
+    id: 27
+    summary: 集团基础素质词典（统一维度命名 / 定义 / 行为表现）
+    when_to_load: 词典模式建模、维度审核、面评质量审计
+    used_by: [SKILL.md A 模块, SKILL.md audit 模块]
+
+  # ---- 集团价值观（所有模型的文化匹配维度统一引用）----
+  corporate_values:
+    id: 26
+    summary: 集团价值观（思考/正直/开放/务实）正负面行为锚点
+    when_to_load: 任何模型需要文化匹配维度时
+    used_by: [SKILL.md A 模块]
+
+  # ---- 校招面试环节×维度分工矩阵（A-3 面试设计 / D 面评质量审核引用）----
+  campus_flow_matrix:
+    id: 25
+    summary: 校招面试环节 × 维度分工矩阵（默认参考）
+    when_to_load: A-3 面试设计、出题/审题/面评涉及环节概念时
+    used_by: [SKILL.md A-3 模块, SKILL.md audit 模块, SKILL.md design 模块]
+
+  # ---- 面评质量审计标准（A/B/C/D 四档）----
+  quality_standards:
+    id: 29
+    summary: 面评质量审计标准（A/B/C/D 四档 + 空话率/证据完整性指标）
+    when_to_load: audit 面评质量审核场景
+    used_by: [SKILL.md audit 模块]
+
+  # ---- 面试偏差类型学（出题/审题去偏指引）----
+  interview_biases:
+    id: 28
+    summary: 面试偏差类型学（晕轮/对比/期望/暗示等偏差识别）
+    when_to_load: 出题/审题/面评质量审核需要去偏判断时
+    used_by: [SKILL.md audit 模块]
+
+  # ---- 公开方法论：甄选理论框架 / 敏捷建模 / AI 测评伦理 / 评估中心 ----
+  theory_frameworks:
+    id: 30
+    summary: 甄选理论框架（BEI / STAR / 案例 / 情境）
+    when_to_load: 出题、单题指导、面试设计需要方法论支持时
+    used_by: [SKILL.md 出题 模块, SKILL.md A-3 模块]
+
+  agile_modeling:
+    id: 22
+    summary: 敏捷建模方法论（建模检查清单）
+    when_to_load: 模型落地后的自检
+    used_by: [SKILL.md A 模块]
+
+  ai_assessment_ethics:
+    id: 23
+    summary: AI 测评伦理与创新指南
+    when_to_load: AI 甄选创新场景
+    used_by: [SKILL.md AI 创新 模块]
+
+  assessment_center:
+    id: 24
+    summary: 评估中心技术指南
+    when_to_load: 测评方案设计场景
+    used_by: [SKILL.md 测评设计 模块]
+
+  # ---- 标杆模型库（HR 搭建模型时的参考样板）----
+  model_lib_index:
+    id: null              # 索引由 yaml 替代，不再需要远程
+    summary: （已由本 yaml 内 model_lib_* 系列替代）
+    when_to_load: '-'
+    used_by: ['(已废弃)']
+
+  model_lib_tianmei:
+    id: 37
+    summary: 天美 L1&L2 素质模型
+    when_to_load: 用户提到天美 / IEG 游戏研发岗位 → 智能匹配
+    used_by: [SKILL.md A 模块 现成模型匹配]
+    match: { bg: IEG, business: tianmei }
+
+  model_lib_role_tianmei_designer:
+    id: 31
+    summary: 天美游戏策划模型
+    when_to_load: 用户提到天美游戏策划岗位
+    used_by: [SKILL.md A 模块 现成模型匹配]
+    match: { bg: IEG, business: tianmei, position_family: gameplan }
+
+  model_lib_role_teg_specialties:
+    id: 32
+    summary: TEG 岗位特色维度
+    when_to_load: 用户提到 TEG 专项岗位
+    used_by: [SKILL.md A 模块 现成模型匹配]
+    match: { bg: TEG }
+
+  model_lib_role_ieg_user_research:
+    id: 33
+    summary: IEG 用研经理模型
+    when_to_load: 用户提到 IEG 用研岗位
+    used_by: [SKILL.md A 模块 现成模型匹配]
+    match: { bg: IEG, position_family: userresearch }
+
+  # ---- 公司级模型（与 interview-assistant 的 model_default_campus 同源）----
+  model_lib_company_campus:
+    id: 15                # 直接复用 interview-assistant 远程已录的版本
+    summary: 集团校招通用胜任力模型
+    when_to_load: 校招通用 fallback / 用户搭模型时的样板
+    used_by: [SKILL.md A 模块 现成模型匹配]
+    match: { recruit_type: campus }
+
+  model_lib_company_product_trainee:
+    id: 35
+    summary: 产培生模型
+    when_to_load: 产培生招聘场景
+    used_by: [SKILL.md A 模块 现成模型匹配]
+    match: { recruit_type: product_trainee }
+
+  # ---- BG 红线/气质（与 interview-assistant 共享，复用其 ID）----
+  model_lib_bg_s3_redline:
+    id: 13                # 复用 interview-assistant 远程已录的版本
+    summary: S3 红线检查
+    when_to_load: 涉及 S3 业务（HR/法务/财务/审计等）
+    used_by: [SKILL.md A 模块 现成模型匹配]
+    match: { bg: S3 }
+
+  # ---- TEG / WXG / 微信气质 2.0 ----
+  # WXG 微信气质 2.0 尚未上传远程；上传后填入对应 id
+  model_lib_bg_teg:
+    id: 19                # 复用 interview-assistant 远程已录的版本
+    summary: TEG BG 通用素质模型
+    when_to_load: 涉及 TEG BG 任意岗位
+    used_by: [SKILL.md A 模块 现成模型匹配]
+    match: { bg: TEG }
+
+  # ⚠️ 待上传：微信气质 2.0
+  # model_lib_bg_wxg_v2:
+  #   id: <待上传后填入>
+  #   summary: 微信气质 2.0
+  #   match: { bg: WXG }
+
+# ============================================================================
+# 加载流程
+# ============================================================================
+# 1. SKILL 内的子流程（A 建模 / B JD / A-3 面试设计 / audit / 测评 / AI 创新）
+#    在需要敏感原文时，从本 yaml 找语义键 → 调 mcp_call 拉正文 → 内化使用
+# 2. 标杆模型匹配（A 模块"现成模型智能匹配"）：
+#    根据用户给的 BG / 岗位 / 招聘类型，扫描本 yaml 中所有 model_lib_* 资产的
+#    match 字段，按命中度排序返回 Top 1 给用户参考
+# 3. 命中失败：
+#    退回 model_lib_company_campus（id=15，集团校招通用兜底）
+#    或提示用户走"集团词典建模"路径自建
+#
+# 失败兜底：
+#   - 远程 5xx / 鉴权失败 → 用户侧给"内部资产暂不可用"
+#   - 严禁退化到本地原文（已无原文）
+# ============================================================================

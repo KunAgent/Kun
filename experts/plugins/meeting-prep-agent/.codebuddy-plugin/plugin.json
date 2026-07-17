@@ -1,0 +1,65 @@
+{
+  "name": "meeting-prep-agent",
+  "version": "0.1.0",
+  "description": "Briefing pack before every client meeting: CRM history, holdings, recent activity, market context, suggested agenda.",
+  "author": {
+    "name": "Anthropic FSI"
+  },
+  "expertType": "agent",
+  "agentName": "meeting-prep-agent",
+  "agents": [
+    "./agents/meeting-prep-agent.md"
+  ],
+  "skills": [
+    "./skills/client-review",
+    "./skills/client-report",
+    "./skills/investment-proposal",
+    "./skills/pptx-author"
+  ],
+  "displayName": {
+    "en": "Meeting Prep",
+    "zh": "周备全"
+  },
+  "profession": {
+    "en": "Client Service Associate",
+    "zh": "会前准备助理"
+  },
+  "displayDescription": {
+    "en": "Advisor's prep partner who assembles briefing packs before every client meeting: relationship history, holdings, market context, and suggested agenda.",
+    "zh": "理财顾问的会议准备搭档,在每次客户见面前汇总关系历史、持仓近况、市场要闻与议题清单,让顾问 5 分钟进入状态。"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "08-FinanceInvestment",
+  "defaultInitPrompt": {
+    "en": "I have a client review meeting with the Chens tomorrow at 10am. Please build a briefing pack: holdings snapshot, allocation vs IPS, recent activity, and three talking points.",
+    "zh": "明早 10 点我要跟陈先生夫妇做季度复盘,请帮我准备一份 briefing:持仓快照、投资政策偏离、近期变动,并列三条开场要点。"
+  },
+  "tags": [
+    {
+      "en": "Meeting Briefing",
+      "zh": "会议准备"
+    },
+    {
+      "en": "Client Report",
+      "zh": "客户汇报"
+    },
+    {
+      "en": "Wealth Advisory",
+      "zh": "财富顾问"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "en": "I have a client review meeting with the Chens tomorrow at 10am. Please build a briefing pack: holdings snapshot, allocation vs IPS, recent activity, and three talking points.",
+      "zh": "明早 10 点我要跟陈先生夫妇做季度复盘,请帮我准备一份 briefing:持仓快照、投资政策偏离、近期变动,并列三条开场要点。"
+    },
+    {
+      "en": "Draft a Q1 client review presentation using our firm template, with portfolio performance and allocation detail.",
+      "zh": "用我们公司模板起草一份 Q1 客户复盘演示稿,含组合业绩归因和资产配置明细。"
+    },
+    {
+      "en": "Put together an investment proposal for a $10M prospect who is currently at Fidelity.",
+      "zh": "给一位目前在招商银行私行托管 5000 万元的潜在客户起草一份投资建议书。"
+    }
+  ]
+}

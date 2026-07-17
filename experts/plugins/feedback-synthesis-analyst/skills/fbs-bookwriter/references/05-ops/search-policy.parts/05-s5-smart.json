@@ -1,0 +1,294 @@
+{
+  "s5FinalReviewNotes": "S5 终审：对拟发布的事实句、统计数据与引用进行按需 WebSearch/WebFetch 复核；与 SKILL.md §0 联网规范一致",
+  "smartMemory": {
+    "description": "智能记忆主链：以 smart-memory-core.mjs 为核心真值，smart-memory-natural.mjs 为自然语言入口。",
+    "versionNote": "核心引擎负责数据结构与确定性动作；自然语言入口负责用户口语命令；宿主桥接通过 userMemoryIntegration / environmentSnapshot 接入。",
+    "enabled": true,
+    "profileIsolation": true,
+    "learningRate": 0.1,
+    "memoryRetentionDays": 90,
+    "maxMemorySize": "10MB",
+    "profileId": null,
+    "entryLayers": {
+      "coreCliEntry": "smart-memory-core.mjs",
+      "naturalCliEntry": "smart-memory-natural.mjs",
+      "projectInitCli": "init-project-memory.mjs",
+      "hostOptionalBridges": [
+        "workbuddy-memory-digest.mjs",
+        "workbuddy-environment-snapshot.mjs"
+      ]
+    },
+    "architecture": {
+      "userProfileLayer": {
+        "description": "用户画像层（隔离）：只存储原始用户信息",
+        "features": [
+          "basicInfo",
+          "workContext",
+          "preferences",
+          "history"
+        ],
+        "readOnly": true,
+        "source": "workbuddy://USER.md,IDENTITY.md,SOUL.md",
+        "isolation": true
+      },
+      "learnedFeaturesLayer": {
+        "description": "学习特征层（代码实现）：存储代码提取的特征",
+        "features": [
+          "vocabulary",
+          "sentenceStructure",
+          "tone",
+          "formatting",
+          "rhetorical"
+        ],
+        "updateMode": "incremental",
+        "cliEntry": "smart-memory-core.mjs"
+      },
+      "applicationLayer": {
+        "description": "应用层（适配引擎）：根据学习特征进行内容适配",
+        "adapters": [
+          "vocabulary",
+          "sentenceStructure",
+          "tone",
+          "formatting"
+        ],
+        "adaptationMode": "balanced",
+        "dataFlow": "unidirectional"
+      },
+      "organizationLayer": {
+        "description": "整理分析层（WorkBuddy适应性）：监控变化、里程碑管理",
+        "features": [
+          "workbuddyMonitoring",
+          "milestoneManagement",
+          "dataCleanup"
+        ],
+        "workbuddyDir": "~/.workbuddy",
+        "adaptationStrategy": "automatic"
+      }
+    },
+    "resetMechanism": {
+      "description": "重置机制：支持软重置、硬重置、完全重置",
+      "types": [
+        "soft",
+        "hard",
+        "full"
+      ],
+      "soft": "清空学习特征，保留用户画像",
+      "hard": "清空学习特征 + 应用层配置",
+      "full": "清空所有数据",
+      "cliEntry": "smart-memory-core.mjs"
+    },
+    "decouplingMechanism": {
+      "description": "脱钩机制：支持临时脱钩、永久脱钩",
+      "types": [
+        "temporary",
+        "permanent"
+      ],
+      "temporary": "禁用应用层适配，自动恢复（默认1小时）",
+      "permanent": "删除学习特征，永久禁用个性化",
+      "autoRestoreAfter": 1,
+      "cliEntry": "smart-memory-core.mjs"
+    },
+    "applicationBoundaries": {
+      "description": "应用边界：防止过度适配、保护特定内容类型",
+      "maxAdaptationIntensity": 0.5,
+      "minAdaptationFrequency": 0.1,
+      "protectedContentTypes": [
+        "code",
+        "technical",
+        "legal"
+      ],
+      "memorySizeLimit": "10MB",
+      "cliEntry": "smart-memory-core.mjs"
+    },
+    "workbuddyAdaptation": {
+      "description": "WorkBuddy 升级适应性：定期分析变化，自动适配建议",
+      "monitoredFiles": [
+        "USER.md",
+        "IDENTITY.md",
+        "SOUL.md",
+        "memory/",
+        "memery/"
+      ],
+      "analysisInterval": "weekly",
+      "autoTrigger": true,
+      "milestoneAutoCreate": true,
+      "cliEntry": "smart-memory-core.mjs"
+    },
+    "cliEntry": "smart-memory-core.mjs",
+    "naturalCliEntry": "smart-memory-natural.mjs",
+    "naturalInterface": true,
+    "adjacentModules": {
+      "description": "与智能记忆强相关但不与内核同级的能力模块",
+      "modules": [
+        {
+          "name": "style-learning",
+          "cliEntry": "style-learning.mjs",
+          "role": "从历史文本学习风格，可向 learnedFeatures 层写入输入"
+        },
+        {
+          "name": "session-state",
+          "cliEntry": "session-state-manager.mjs",
+          "role": "跨会话状态恢复，不替代智能记忆真值结构"
+        },
+        {
+          "name": "template-recommendation",
+          "cliEntry": "template-recommender.mjs",
+          "role": "基于历史偏好推荐模板，不直接定义记忆底层结构"
+        },
+        {
+          "name": "workbuddy-user-profile-bridge",
+          "cliEntry": "workbuddy-user-profile-bridge.mjs",
+          "role": "读取宿主画像，供 intake / 个性化适配参考"
+        },
+        {
+          "name": "exa-search-enhancement",
+          "cliEntry": "exa-search-enhancer.mjs",
+          "role": "提供语义搜索增强，与智能记忆协作但不属于内核"
+        }
+      ]
+    },
+    "supportedCommands": [
+      "重置记忆 / 重新开始 / 清空学习",
+      "查看风格 / 显示记忆状态 / 我的写作特征",
+      "脱离个性化 / 与个性脱钩 / 断开个性化",
+      "恢复个性化 / 重新启用 / 恢复适配",
+      "查看学习历史 / 学习记录 / 特征统计",
+      "检查边界 / 应用边界 / 适配强度",
+      "WorkBuddy分析 / 整理分析 / 升级适配"
+    ]
+  },
+  "selfEnhancementEvolution": {
+    "description": "v2.0.1 新增自增强进化机制：通过联网搜索获取方法论知识，实现Skill能力的持续渐进式进化",
+    "versionNote": "实现去AI味、质检、创意选题、风格微调、内容资产化、会议角色智能设计等核心能力的自进化",
+    "enabled": true,
+    "evolutionEngine": "scripts/self-enhancement-evolution.mjs",
+    "knowledgeFetcher": "scripts/knowledge-fetcher.mjs",
+    "evolutionDomains": {
+      "deAIFlavor": {
+        "name": "去AI味方法论",
+        "description": "通过自然化表达、情感注入、语气调整等手段消除AI写作痕迹",
+        "capabilityModule": "de-aiflavor-enhancer"
+      },
+      "qualityCheck": {
+        "name": "质检优化方法论",
+        "description": "提升内容质量检查的准确性和覆盖面",
+        "capabilityModule": "quality-check-enhancer"
+      },
+      "creativeTopic": {
+        "name": "创意选题方法论",
+        "description": "创新性选题和角度挖掘的方法",
+        "capabilityModule": "creative-topic-enhancer"
+      },
+      "styleAdjustment": {
+        "name": "风格微调方法论",
+        "description": "根据目标风格和用户偏好进行精细化风格调整",
+        "capabilityModule": "style-adjustment-enhancer"
+      },
+      "contentAssetization": {
+        "name": "内容资产化方法论",
+        "description": "将内容转化为可复用、可交易的资产的方法",
+        "capabilityModule": "content-assetization-enhancer"
+      },
+      "meetingRoleDesign": {
+        "name": "会议角色智能设计",
+        "description": "根据会议目的和参与者特点设计最优角色配置",
+        "capabilityModule": "meeting-role-enhancer"
+      }
+    },
+    "evolutionTriggers": {
+      "timeBased": {
+        "enabled": true,
+        "intervalDays": 30
+      },
+      "usageBased": {
+        "enabled": true,
+        "thresholdOperations": 100
+      },
+      "performanceBased": {
+        "enabled": true,
+        "qualityDropThreshold": 0.1,
+        "userComplaintThreshold": 3
+      },
+      "manualTrigger": {
+        "enabled": true,
+        "requireConfirmation": true
+      }
+    },
+    "safetyMechanisms": {
+      "preEvolutionChecks": {
+        "versionCompatibility": true,
+        "resourceAvailability": true,
+        "networkStability": true,
+        "backupCurrent": true
+      },
+      "evolutionLimits": {
+        "maxDomainsPerRun": 1,
+        "maxKnowledgePoints": 5,
+        "maxModulesPerMonth": 2,
+        "rollbackDays": 7
+      },
+      "qualityValidation": {
+        "enabled": true,
+        "minSearchResults": 3,
+        "relevanceThreshold": 0.7,
+        "authorityCheck": true,
+        "duplicateDetection": true,
+        "harmfulContentCheck": true
+      },
+      "rollbackMechanism": {
+        "enabled": true,
+        "automaticRollback": true,
+        "manualRollback": true,
+        "maxRollbackVersions": 3
+      }
+    },
+    "userControl": {
+      "authorizationMode": "explicit",
+      "notification": {
+        "preEvolution": true,
+        "progressUpdates": true,
+        "postEvolution": true,
+        "rollbackAvailable": true
+      },
+      "userControls": {
+        "approveEvolution": true,
+        "rejectEvolution": true,
+        "pauseEvolution": true,
+        "rollbackEvolution": true,
+        "viewDetails": true,
+        "customizeScope": true
+      },
+      "transparency": {
+        "showSearchResults": true,
+        "showMethodology": true,
+        "showChanges": true,
+        "showImpact": true,
+        "showTesting": true,
+        "showRollbackOption": true
+      }
+    },
+    "knowledgeManagement": {
+      "knowledgeBasePath": ".fbs/evolution-knowledge/",
+      "knowledgeStructure": {
+        "domains": {},
+        "methodologies": {},
+        "bestPractices": {},
+        "expertInsights": {},
+        "evolutionHistory": []
+      },
+      "updateStrategy": {
+        "incremental": true,
+        "mergeConflicts": "prefer_new",
+        "pruneObsolete": true,
+        "obsoleteDays": 365
+      }
+    },
+    "naturalLanguageCommands": [
+      "检查进化状态 / 进化进度 / 能力更新情况",
+      "触发进化 / 开始能力提升 / 升级方法论",
+      "查看方法论知识 / 获取最新技巧 / 学习最佳实践",
+      "回滚进化 / 撤销更新 / 恢复之前的版本",
+      "暂停进化 / 停止自动更新 / 暂停能力提升"
+    ]
+  }
+}

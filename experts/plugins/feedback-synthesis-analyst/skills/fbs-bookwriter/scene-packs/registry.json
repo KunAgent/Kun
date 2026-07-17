@@ -1,0 +1,118 @@
+{
+  "_version": "2.1.2",
+  "_updated": "2026-04-16",
+  "official_spreadsheet_id": "s3_AdMAqgbHAIUCNTehd61tPS0uJg157",
+  "official_spreadsheet_url": "https://doc.weixin.qq.com/smartsheet/s3_AdMAqgbHAIUCNTehd61tPS0uJg157?scode=AMsARAf3AHEbJoc1mcAdMAqgbHAIU",
+  "commercial_hub_sheet_id": "c0pdp0",
+  "cache_ttl_days": 1,
+  "fallback_pack": "general",
+  "packs": {
+    "general": {
+      "label": "通用",
+      "schema_version": "2.0",
+      "sheet_ids": {
+        "meta": "meta_general",
+        "init": "init_general",
+        "outline": "outline_general",
+        "quality": "quality_general",
+        "search": "search_general",
+        "visual": "visual_general",
+        "entitlement": "entitlement_general"
+      }
+    },
+    "genealogy": {
+      "label": "家谱",
+      "schema_version": "2.0",
+      "sheet_ids": {
+        "meta": "meta_genealogy",
+        "init": "init_genealogy",
+        "outline": "outline_genealogy",
+        "quality": "quality_genealogy",
+        "search": "search_genealogy",
+        "visual": "visual_genealogy",
+        "entitlement": "entitlement_genealogy"
+      }
+    },
+    "consultant": {
+      "label": "创业顾问",
+      "schema_version": "2.0",
+      "sheet_ids": {
+        "meta": "meta_consultant",
+        "init": "init_consultant",
+        "outline": "outline_consultant",
+        "quality": "quality_consultant",
+        "search": "search_consultant",
+        "visual": "visual_consultant",
+        "entitlement": "entitlement_consultant"
+      }
+    },
+    "ghostwriter": {
+      "label": "代撰稿",
+      "schema_version": "2.0",
+      "sheet_ids": {
+        "meta": "meta_ghostwriter",
+        "init": "init_ghostwriter",
+        "outline": "outline_ghostwriter",
+        "quality": "quality_ghostwriter",
+        "search": "search_ghostwriter",
+        "visual": "visual_ghostwriter",
+        "entitlement": "entitlement_ghostwriter"
+      }
+    },
+    "training": {
+      "label": "企业培训",
+      "schema_version": "2.0",
+      "sheet_ids": {
+        "meta": "meta_training",
+        "init": "init_training",
+        "outline": "outline_training",
+        "quality": "quality_training",
+        "search": "search_training",
+        "visual": "visual_training",
+        "entitlement": "entitlement_training"
+      }
+    },
+    "personal-book": {
+      "label": "个人出书",
+      "schema_version": "2.0",
+      "sheet_ids": {
+        "meta": "meta_personal_book",
+        "init": "init_personal_book",
+        "outline": "outline_personal_book",
+        "quality": "quality_personal_book",
+        "search": "search_personal_book",
+        "visual": "visual_personal_book",
+        "entitlement": "entitlement_personal_book"
+      }
+    },
+    "whitepaper": {
+      "label": "白皮书",
+      "schema_version": "2.0",
+      "sheet_ids": {
+        "meta": "RQ8H5T",
+        "init": "Y0kxLn",
+        "outline": "OIzMDx",
+        "quality": "FhnQjj",
+        "search": "UvbjGQ",
+        "visual": "61AaNF",
+        "entitlement": "1lDoxP"
+      }
+    },
+    "report": {
+      "label": "报告",
+      "schema_version": "2.0",
+      "_note": "FIX-P1-01 COMPLETED (2026-04-10): report 与其他体裁共用同一套7张 Sheet（按 genre 字段区分数据行）。\n  sheet_ids 与 whitepaper 完全相同——这是正确的架构：initSheets 只需初始化一次，push <genre> 向同一 Sheet 追加不同体裁的行。\n  下一步：执行 node scripts/wecom/scene-pack-admin.mjs push report --admin-token=*** 写入数据行。",
+      "_registration_status": "REGISTERED",
+      "_registered_at": "2026-04-10T12:15:00.000Z",
+      "sheet_ids": {
+        "meta": "RQ8H5T",
+        "init": "Y0kxLn",
+        "outline": "OIzMDx",
+        "quality": "FhnQjj",
+        "search": "UvbjGQ",
+        "visual": "61AaNF",
+        "entitlement": "1lDoxP"
+      }
+    }
+  }
+}

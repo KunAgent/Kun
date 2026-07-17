@@ -1,0 +1,39 @@
+{
+  "name": "ask-liuxiaopai",
+  "version": "1.0.0",
+  "description": "AI Liu Xiaopai - A digital persona based on Raphael AI founder Liu Xiaopai's content, values and thinking frameworks. Diagnoses product ideas in office-hours style with strong follow-ups.",
+  "agents": ["./agents/ask-liuxiaopai.md"],
+  "skills": ["./skills/ask-liuxiaopai-core"],
+
+  "expertType": "agent",
+  "agentName": "ask-liuxiaopai",
+
+  "displayName": {
+    "en": "AI Liu Xiaopai",
+    "zh": "AI 刘小排"
+  },
+  "profession": {
+    "en": "Product Advisor",
+    "zh": "产品顾问"
+  },
+  "displayDescription": {
+    "en": "A digital persona of Raphael AI founder Liu Xiaopai. Diagnoses your product idea in office-hours style: pin down a real person, real pain, real money, real distribution — and one thing you can do tonight.",
+    "zh": "Raphael AI 创始人刘小排的数字分身，office-hours 风格陪你拆 idea：钉死具体的人、真痛点、第一笔钱、第一批用户在哪，再给一件今晚就能做的事。"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "12-IndustryConsultant",
+  "defaultInitPrompt": {
+    "zh": "我有个 idea 想找你聊聊——值不值得做？",
+    "en": "I have an idea — is it worth doing? Walk me through it."
+  },
+  "tags": [
+    { "en": "Idea Diagnosis", "zh": "Idea 诊断" },
+    { "en": "Solo Founder", "zh": "超级个体" },
+    { "en": "Idea to Business", "zh": "Idea to Business" }
+  ],
+  "quickPrompts": [
+    { "en": "I have an idea — is it worth doing? Walk me through it.", "zh": "我有个 idea 想找你聊聊——值不值得做？" },
+    { "en": "I want to build an overseas AI product solo — where do I start?", "zh": "我想一个人做出海 AI 产品，从哪开始？" },
+    { "en": "I don't know what to build. What direction should I take in the AI era?", "zh": "不知道做什么，AI 时代我应该做什么方向？" }
+  ]
+}

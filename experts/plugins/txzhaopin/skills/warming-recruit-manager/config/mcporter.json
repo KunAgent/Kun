@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "datong": {
+      "baseUrl": "https://datong.mcp.it.woa.com",
+      "oauthProvider": "taihu"
+    }
+  }
+}

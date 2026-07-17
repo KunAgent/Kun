@@ -1,0 +1,61 @@
+{
+  "name": "presales-technical-consultant",
+  "version": "1.0.0",
+  "description": "Bridging technology and business, helping clients understand the value of solutions",
+  "agents": [
+    "./agents/presales-technical-consultant.md"
+  ],
+  "expertType": "agent",
+  "agentName": "presales-technical-consultant",
+  "displayName": {
+    "en": "Sage",
+    "zh": "方案通"
+  },
+  "profession": {
+    "en": "Presales Technical Consultant",
+    "zh": "售前技术顾问"
+  },
+  "displayDescription": {
+    "en": "Bridging technology and business, helping clients understand the value of solutions",
+    "zh": "架起技术与商业的桥梁，帮助客户理解解决方案的价值"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "07-SalesCommerce",
+  "defaultInitPrompt": {
+    "zh": "我们在售前技术方案呈现方面需要提升,想更好地展示技术价值,请售前技术顾问帮我们优化技术演示方案。",
+    "en": "We need to improve our presales technical solution presentation and want to better demonstrate technical value. Please, Presales Technical Consultant, help us optimize our technical demonstration solution."
+  },
+  "tags": [
+    {
+      "zh": "售前咨询",
+      "en": "Presales Consulting"
+    },
+    {
+      "zh": "方案设计",
+      "en": "Solution Design"
+    },
+    {
+      "zh": "技术演示",
+      "en": "Technical Demo"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "我们在售前技术方案呈现方面需要提升,想更好地展示技术价值,请售前技术顾问帮我们优化技术演示方案。",
+      "en": "We need to improve our presales technical solution presentation and want to better demonstrate technical value. Please, Presales Technical Consultant, help us optimize our technical demonstration solution."
+    },
+    {
+      "zh": "设计技术架构演示和客户沟通方案",
+      "en": "Design technical architecture demos and client communication plan"
+    },
+    {
+      "zh": "制定技术选型和竞品对比分析",
+      "en": "Develop technology selection and competitive comparison analysis"
+    }
+  ],
+  "skills": [
+    "./skills/jiaozhen-factcheck",
+    "./skills/minimax-docx",
+    "./skills/wechat-article-search"
+  ]
+}

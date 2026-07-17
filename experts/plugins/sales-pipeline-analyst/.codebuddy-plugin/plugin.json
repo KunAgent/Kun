@@ -1,0 +1,59 @@
+{
+  "name": "sales-pipeline-analyst",
+  "version": "1.0.0",
+  "description": "Using data-driven methods to analyze pipeline health, turning forecasting from guesswork into science",
+  "agents": [
+    "./agents/sales-pipeline-analyst.md"
+  ],
+  "expertType": "agent",
+  "agentName": "sales-pipeline-analyst",
+  "displayName": {
+    "en": "Vince",
+    "zh": "漏斗通"
+  },
+  "profession": {
+    "en": "Sales Pipeline Analyst",
+    "zh": "销售管道分析师"
+  },
+  "displayDescription": {
+    "en": "Using data-driven methods to analyze pipeline health, turning forecasting from guesswork into science",
+    "zh": "用数据驱动方法分析销售管道健康度，让预测从猜测变科学"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "07-SalesCommerce",
+  "defaultInitPrompt": {
+    "zh": "我们的销售管道管理混乱,无法准确预测销售业绩,请销售管道分析师帮我们优化管道管理和预测。",
+    "en": "Our sales pipeline management is chaotic, and we cannot accurately forecast sales performance. Please, Sales Pipeline Analyst, help us optimize pipeline management and forecasting."
+  },
+  "tags": [
+    {
+      "zh": "销售漏斗",
+      "en": "Sales Pipeline"
+    },
+    {
+      "zh": "预测分析",
+      "en": "Forecast Analysis"
+    },
+    {
+      "zh": "转化优化",
+      "en": "Conversion Optimization"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "我们的销售管道管理混乱,无法准确预测销售业绩,请销售管道分析师帮我们优化管道管理和预测。",
+      "en": "Our sales pipeline management is chaotic, and we cannot accurately forecast sales performance. Please, Sales Pipeline Analyst, help us optimize pipeline management and forecasting."
+    },
+    {
+      "zh": "搭建销售预测和业绩分析模型",
+      "en": "Build sales forecasting and performance analysis models"
+    },
+    {
+      "zh": "优化销售流程和转化率提升方案",
+      "en": "Optimize sales processes and conversion rate improvement plan"
+    }
+  ],
+  "skills": [
+    "./skills/anti-distill"
+  ]
+}

@@ -1,0 +1,64 @@
+{
+  "name": "tencentcloud-api",
+  "version": "1.0.0",
+  "description": "Intelligent Tencent Cloud API assistant that manages cloud resources via natural language, auto-discovers APIs, and executes CLI commands.",
+  "author": {
+    "name": "Tencent Cloud",
+    "email": "cloud-api@tencent.com"
+  },
+  "expertType": "agent",
+  "agentName": "tencentcloud-api",
+  "agents": [
+    "./agents/tencentcloud-api.md"
+  ],
+  "skills": [
+    "./skills/tcapi"
+  ],
+  "displayName": {
+    "en": "Tencent Cloud API Expert",
+    "zh": "腾讯云API专家"
+  },
+  "profession": {
+    "en": "Tencent Cloud API Expert",
+    "zh": "腾讯云API专家"
+  },
+  "displayDescription": {
+    "en": "Manage Tencent Cloud resources via natural language. Auto-discovers APIs across 200+ products, builds tccli commands, and executes them with safety guardrails and error handling.",
+    "zh": "自然语言管理腾讯云200+产品资源，智能检索API并构造CLI命令，内置安全管控与异常处理"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "13-TencentZone",
+  "defaultInitPrompt": {
+    "zh": "帮我在广州创建一台2核4G的按量计费云服务器",
+    "en": "Create a 2-core 4GB pay-as-you-go CVM instance in Guangzhou"
+  },
+  "tags": [
+    {
+      "en": "Cloud Resource Management",
+      "zh": "云资源管理"
+    },
+    {
+      "en": "Smart API Invocation",
+      "zh": "API智能调用"
+    },
+    {
+      "en": "Ops Automation",
+      "zh": "运维自动化"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "en": "Create a 2-core 4GB pay-as-you-go CVM instance in Guangzhou",
+      "zh": "帮我在广州创建一台2核4G的按量计费云服务器"
+    },
+    {
+      "en": "List all my CVM instances and their status across regions",
+      "zh": "查看我所有地域的云服务器实例及运行状态"
+    },
+    {
+      "en": "Help me configure a security group to allow HTTP and SSH access",
+      "zh": "帮我配置一个安全组，放通HTTP和SSH访问"
+    }
+  ],
+  "plugin": "tencentcloud-api"
+}

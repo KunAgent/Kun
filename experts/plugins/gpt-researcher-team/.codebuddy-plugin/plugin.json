@@ -1,0 +1,160 @@
+{
+  "name": "gpt-researcher-team",
+  "version": "2.0.0",
+  "description": "Deep Research Team: 7 specialist roles orchestrate a 5-phase workflow (initial scouting → outline planning → per-chapter deep research with review-revise loop → report assembly → final publishing) to aggregate multi-source data into professional research reports with inline hyperlink citations.",
+  "author": {
+    "name": "Expert Marketplace"
+  },
+  "license": "MIT",
+  "keywords": [
+    "deep-research",
+    "research-report",
+    "industry-analysis",
+    "literature-review",
+    "multi-source",
+    "agent-team"
+  ],
+  "expertType": "team",
+  "agentName": "research-chief-editor",
+  "agents": [
+    "./agents/research-chief-editor.md",
+    "./agents/research-planner.md",
+    "./agents/topic-researcher.md",
+    "./agents/draft-reviewer.md",
+    "./agents/draft-reviser.md",
+    "./agents/report-writer.md",
+    "./agents/report-publisher.md"
+  ],
+  "teamInfo": {
+    "leadAgent": "research-chief-editor",
+    "memberAgents": [
+      "research-planner",
+      "topic-researcher",
+      "draft-reviewer",
+      "draft-reviser",
+      "report-writer",
+      "report-publisher"
+    ]
+  },
+  "displayName": {
+    "en": "Deep Research Team",
+    "zh": "深度研究团队"
+  },
+  "profession": {
+    "en": "Multi-source deep research report workshop",
+    "zh": "多源深度研究报告工坊"
+  },
+  "displayDescription": {
+    "en": "7 specialist roles collaborate across 5 phases (initial scouting → outline planning → per-chapter deep research with review-revise loop → report assembly → final publishing) to produce professional research reports with multi-source hyperlink citations. Supports full / fast / single-chapter modes. Ideal for industry research, competitive analysis, technology reviews, and academic literature reviews.",
+    "zh": "7 位专业角色分 5 阶段协作完成深度研究：初始调研 → 规划大纲 → 逐章深度研究（审稿修订循环）→ 撰写报告框架 → 发布输出。支持完整 / 快速 / 单章三种模式。适用于行业研究、竞品分析、技术综述、学术文献综述等场景，产出带多源超链接引用的专业研究报告。"
+  },
+  "avatar": "avatars/team.png",
+  "categoryId": "04-DataAI",
+  "defaultInitPrompt": {
+    "en": "Help me conduct deep research on the development trends of AI Agents in enterprise applications",
+    "zh": "帮我深度调研下AI Agent在企业级应用中的发展趋势"
+  },
+  "tags": [
+    { "en": "Deep Research", "zh": "深度研究" },
+    { "en": "Industry Report", "zh": "行业报告" },
+    { "en": "Multi-source Citation", "zh": "多源引用" }
+  ],
+  "quickPrompts": [
+    { "en": "Help me conduct deep research on the development trends of AI Agents in enterprise applications", "zh": "帮我深度调研下AI Agent在企业级应用中的发展趋势" },
+    { "en": "Quick research on the latest progress of large language models in 2025", "zh": "快速研究2025年大语言模型的最新进展" },
+    { "en": "Help me write a competitive analysis report comparing mainstream cloud computing platforms", "zh": "帮我写一份主流云计算平台的竞品分析报告" }
+  ],
+  "members": [
+    {
+      "id": "research-chief-editor",
+      "name": {
+        "en": "Gu",
+        "zh": "顾全之"
+      },
+      "profession": {
+        "en": "Research Editor-in-Chief",
+        "zh": "研究主编"
+      },
+      "avatar": "avatars/research-chief-editor.png",
+      "role": "lead"
+    },
+    {
+      "id": "research-planner",
+      "name": {
+        "en": "Ji",
+        "zh": "季要纲"
+      },
+      "profession": {
+        "en": "Research Planner & Editor",
+        "zh": "研究编辑"
+      },
+      "avatar": "avatars/research-planner.png",
+      "role": "member"
+    },
+    {
+      "id": "topic-researcher",
+      "name": {
+        "en": "Tan",
+        "zh": "谭溯源"
+      },
+      "profession": {
+        "en": "Topic Researcher",
+        "zh": "课题研究员"
+      },
+      "avatar": "avatars/topic-researcher.png",
+      "role": "member"
+    },
+    {
+      "id": "draft-reviewer",
+      "name": {
+        "en": "Ming",
+        "zh": "明鉴秋"
+      },
+      "profession": {
+        "en": "Draft Reviewer",
+        "zh": "草稿审稿人"
+      },
+      "avatar": "avatars/draft-reviewer.png",
+      "role": "member"
+    },
+    {
+      "id": "draft-reviser",
+      "name": {
+        "en": "Ren",
+        "zh": "任润泽"
+      },
+      "profession": {
+        "en": "Draft Reviser",
+        "zh": "内容修订员"
+      },
+      "avatar": "avatars/draft-reviser.png",
+      "role": "member"
+    },
+    {
+      "id": "report-writer",
+      "name": {
+        "en": "Cheng",
+        "zh": "程文成"
+      },
+      "profession": {
+        "en": "Report Writer",
+        "zh": "报告撰写人"
+      },
+      "avatar": "avatars/report-writer.png",
+      "role": "member"
+    },
+    {
+      "id": "report-publisher",
+      "name": {
+        "en": "Fu",
+        "zh": "傅梓铭"
+      },
+      "profession": {
+        "en": "Report Publisher",
+        "zh": "报告发布员"
+      },
+      "avatar": "avatars/report-publisher.png",
+      "role": "member"
+    }
+  ]
+}

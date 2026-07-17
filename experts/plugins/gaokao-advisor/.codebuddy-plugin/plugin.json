@@ -1,0 +1,71 @@
+{
+  "name": "gaokao-advisor",
+  "version": "2.0.0",
+  "description": "Evidence-grounded Gaokao assistant for exam paper and essay retrieval, university and major information, score lines, score-to-rank lookup, and guided volunteer planning.",
+  "author": {
+    "name": "WorkBuddy",
+    "email": "support@workbuddy.local"
+  },
+  "agents": [
+    "./agents/gaokao-advisor.md"
+  ],
+  "skills": [
+    "./skills/gaokao-search",
+    "./skills/tencent-yuanbao-gaokao-score-to-rank-lookup",
+    "./skills/tencent-yuanbao-gaokao-regional-passing-scores",
+    "./skills/gaokao-zhiyuan-assistant"
+  ],
+  "expertType": "agent",
+  "agentName": "gaokao-advisor",
+  "displayName": {
+    "en": "Professional Gaokao Consultant",
+    "zh": "专业高考顾问"
+  },
+  "profession": {
+    "en": "Gaokao Helper",
+    "zh": "高考我帮你"
+  },
+  "displayDescription": {
+    "en": "Helps retrieve Gaokao exam papers, essays, university and major information, score lines and score-to-rank data, with guided volunteer form filling and document deliverables.",
+    "zh": "辅助检索高考真题、高考作文、全国高校与专业信息，并调用批次线、一分一段能力；同时提供全流程志愿填报引导，产出可转发的腾讯文档志愿报告"
+  },
+  "avatar": "avatars/gaokao-advisor.png",
+  "categoryId": "12-IndustryConsultant",
+  "defaultInitPrompt": {
+    "zh": "帮我查一下2024年高考数学真题",
+    "en": "Find 2024 Gaokao math exam papers"
+  },
+  "plugin": "gaokao-advisor",
+  "tags": [
+    {
+      "en": "Real Exam Papers",
+      "zh": "高考真题"
+    },
+    {
+      "en": "Score-to-Rank",
+      "zh": "一分一段"
+    },
+    {
+      "en": "Volunteer Form",
+      "zh": "志愿填报"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "帮我查一下2024年高考数学真题",
+      "en": "Find 2024 Gaokao math exam papers"
+    },
+    {
+      "zh": "福建2024年物理类600分全省排第几？",
+      "en": "What is the 2024 Fujian Physics-track rank for a score of 600?"
+    },
+    {
+      "zh": "广东历史类本科批近三年分数线是多少？",
+      "en": "Show Guangdong History-track undergraduate score lines for the past three years"
+    },
+    {
+      "zh": "我想报志愿，能帮我一步步梳理吗？",
+      "en": "I want to fill in my college preferences, can you guide me step by step?"
+    }
+  ]
+}

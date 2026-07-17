@@ -1,0 +1,100 @@
+{
+  "materialLibrary": {
+    "description": "虚拟书房素材库：统一存放作者提供素材、搜索存盘素材、模型知识兜底（带标注）三类来源",
+    "libraryFile": ".fbs/material-library.md",
+    "allowedSourceTypes": [
+      "用户提供",
+      "WebSearch",
+      "WebFetch",
+      "模型知识（需标注）"
+    ],
+    "allowedMaterialTypes": [
+      "案例",
+      "数据",
+      "引言",
+      "故事",
+      "图表描述",
+      "政策摘要",
+      "其他"
+    ],
+    "modelKnowledgeTag": "〔模型知识，未经外部检索核实〕",
+    "modelKnowledgeProtocol": "启用条件：用户明确同意（如「可以用你的知识补充，但需标注」）；启用后每个来源为「模型知识」的素材点及正文段落末尾须附 modelKnowledgeTag；禁止在未经用户同意时静默使用模型知识填充"
+  },
+  "materialSufficiency": {
+    "description": "素材充分度评估基准：用于 S0-E 虚拟书房初始化和 S2.5 素材盘点卡的充分度评级",
+    "_unit_note": "recommended 和 criticalBelow 均为素材条数（items），非字数。部分文档将相同数值描述为'万字内容'属历史措辞，以本字段 unit=items 为准。",
+    "thresholds": [
+      {
+        "maxWords": 100000,
+        "label": "5–10万字",
+        "recommended": 30,
+        "criticalBelow": 10,
+        "unit": "items"
+      },
+      {
+        "maxWords": 300000,
+        "label": "10–30万字",
+        "recommended": 80,
+        "criticalBelow": 25,
+        "unit": "items"
+      },
+      {
+        "maxWords": 1000000,
+        "label": "30–100万字",
+        "recommended": 200,
+        "criticalBelow": 60,
+        "unit": "items"
+      },
+      {
+        "maxWords": 9999999,
+        "label": ">100万字",
+        "recommended": 500,
+        "criticalBelow": 150,
+        "unit": "items"
+      }
+    ],
+    "ratingLabels": {
+      "sufficient": "充足 ✅",
+      "low": "偏少 ⚠️",
+      "critical": "严重不足 ❌"
+    },
+    "perChapterBaseline": {
+      "materialsPerThousandWords": 3,
+      "note": "每 1000 字正文约需 3–5 个素材支撑点（数据/案例/引言/故事）；该值用于按章估算素材缺口"
+    },
+    "s25BlockOnCritical": true,
+    "s25BlockNote": "S2.5 素材盘点卡评级为「严重不足 ❌」时，阻断进入 S3；须先通过联网搜索入库/用户提供/明确启用模型知识兜底协议后解除阻断"
+  },
+  "autoMaterialArchive": {
+    "description": "搜索素材自动存盘机制：S0/S3 每次检索后，将高质量结果自动归档为待取用素材",
+    "enabled": true,
+    "triggerCondition": "每次 WebSearch/WebFetch 结果中出现符合以下任一条件的内容：含具体数字/比例/年份、含可引用的人物直接表述、含真实案例描述（有时间/地点/主体）、来自 high-quality-domains.json 中的域名",
+    "archiveToLedger": true,
+    "ledgerKind": "material",
+    "archiveToLibrary": true,
+    "libraryFile": ".fbs/material-library.md",
+    "defaultMaterialStatus": "待取用",
+    "maxSummaryLengthPerItem": 200,
+    "perChapterArchiveNote": "每章检索完成后，模型须检查本章未取用的高质量检索片段（qualityScore≥4），将其追加至素材库并标注适用章节范围，供后续章节取用，避免每章重复检索同类素材"
+  },
+  "materialTracking": {
+    "description": "素材取用机制（G2）：对检索结果进行状态标记，防止「检索到但未取用」和「重复检索相同素材」两类浪费",
+    "enabled": true,
+    "ledgerFile": ".fbs/search-ledger.jsonl",
+    "statusField": "materialStatus",
+    "allowedStatus": [
+      "待取用",
+      "已取用",
+      "部分取用",
+      "放弃"
+    ],
+    "statusNote": {
+      "待取用": "已检索入账，尚未在正文中引用",
+      "已取用": "已在正文中完整引用（含来源标注）",
+      "部分取用": "仅引用部分数据点，剩余内容在后续章节中备用",
+      "放弃": "已评估为质量不足/时效过期/与本章论点不符，不再引用"
+    },
+    "updateTiming": "章内自审卡「素材取用核查」检查时，对本章引用的 ledger 条目同步更新 materialStatus；S5 终审时，可通过汇总 status=「待取用」的条目发现「已检索但未使用的高质量素材」并决定是否补入正文",
+    "auditNote": "S5 时扫描 ledger 中 materialStatus=「待取用」且 qualityScore≥4 的条目，可作为「遗漏高质量素材」告警，建议补录或显式标注为「放弃（原因）」"
+  }
+}

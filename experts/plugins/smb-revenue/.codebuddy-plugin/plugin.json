@@ -1,0 +1,37 @@
+{
+  "name": "smb-revenue",
+  "version": "1.0.0",
+  "description": "Small business revenue growth driver: lead scoring and triage, content strategy, and campaign execution",
+  "author": { "name": "Expert Marketplace" },
+  "license": "MIT",
+  "expertType": "agent",
+  "agentName": "smb-revenue",
+  "agents": ["./agents/smb-revenue.md"],
+  "skills": [
+    "./skills/lead-management",
+    "./skills/content-strategy",
+    "./skills/campaign-execution"
+  ],
+  "displayName": { "en": "Zhen", "zh": "甄客来" },
+  "profession": { "en": "Revenue Growth Driver", "zh": "营收增长师" },
+  "displayDescription": {
+    "en": "Lead scoring, content strategy, and campaign execution to drive small business revenue growth",
+    "zh": "小企业营收增长师，从线索打分到内容策略再到营销活动，一条龙驱动营收增长"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "07-SalesCommerce",
+  "defaultInitPrompt": {
+    "zh": "今天进来的线索打个分排个序，生成电话清单。",
+    "en": "Score today's leads and generate the call list."
+  },
+  "tags": [
+    { "zh": "线索管理", "en": "Lead Management" },
+    { "zh": "内容策略", "en": "Content Strategy" },
+    { "zh": "营销活动", "en": "Campaign Execution" }
+  ],
+  "quickPrompts": [
+    { "zh": "今天进来的线索打个分排个序，生成电话清单。", "en": "Score today's leads and generate the call list." },
+    { "zh": "根据销售数据，做下个月的内容策略和发布日历。", "en": "Next month's content strategy and editorial calendar, based on sales data." },
+    { "zh": "策划并执行一轮新客获取的营销活动。", "en": "Plan and run a new customer acquisition campaign." }
+  ]
+}

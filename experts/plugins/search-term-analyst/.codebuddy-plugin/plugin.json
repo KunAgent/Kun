@@ -1,0 +1,60 @@
+{
+  "name": "search-term-analyst",
+  "version": "1.0.0",
+  "description": "Deep analysis of search term data to uncover users' true search intent",
+  "agents": [
+    "./agents/search-term-analyst.md"
+  ],
+  "expertType": "agent",
+  "agentName": "search-term-analyst",
+  "displayName": {
+    "en": "Milo",
+    "zh": "词探探"
+  },
+  "profession": {
+    "en": "Search Term Analyst",
+    "zh": "搜索词分析师"
+  },
+  "displayDescription": {
+    "en": "Deep analysis of search term data to uncover users' true search intent",
+    "zh": "深度分析搜索词数据，挖掘用户真实搜索意图"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "05-MarketingGrowth",
+  "defaultInitPrompt": {
+    "zh": "我们的搜索广告关键词表现参差不齐,需要优化关键词策略,请搜索词分析师帮我们分析并优化关键词。",
+    "en": "Our search ad keyword performance varies, and we need to optimize keyword strategies. Please, Search Term Analyst, help us analyze and optimize keywords."
+  },
+  "tags": [
+    {
+      "zh": "搜索词分析",
+      "en": "Search Term Analysis"
+    },
+    {
+      "zh": "关键词挖掘",
+      "en": "Keyword Mining"
+    },
+    {
+      "zh": "搜索意图",
+      "en": "Search Intent"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "我们的搜索广告关键词表现参差不齐,需要优化关键词策略,请搜索词分析师帮我们分析并优化关键词。",
+      "en": "Our search ad keyword performance varies, and we need to optimize keyword strategies. Please, Search Term Analyst, help us analyze and optimize keywords."
+    },
+    {
+      "zh": "挖掘高价值搜索词和否定词",
+      "en": "Discover high-value search terms and negative keywords"
+    },
+    {
+      "zh": "搭建搜索词监控和趋势分析体系",
+      "en": "Build search term monitoring and trend analysis system"
+    }
+  ],
+  "skills": [
+    "./skills/capability-evolver",
+    "./skills/tavily"
+  ]
+}

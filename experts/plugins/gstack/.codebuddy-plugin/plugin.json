@@ -1,0 +1,87 @@
+{
+  "name": "gstack",
+  "version": "1.0.0",
+  "description": "AI engineering workflow toolkit — product review, code review, security audit, QA testing, design system, debugging, and release automation",
+  "author": { "name": "gstack" },
+  "agents": [
+    "./agents/gstack-lead.md",
+    "./agents/gstack-product-reviewer.md",
+    "./agents/gstack-security-officer.md",
+    "./agents/gstack-qa-lead.md",
+    "./agents/gstack-designer.md",
+    "./agents/gstack-investigator.md"
+  ],
+  "skills": [
+    "./skills/review",
+    "./skills/qa",
+    "./skills/design-html"
+  ],
+  "expertType": "team",
+  "agentName": "gstack-lead",
+  "teamInfo": {
+    "leadAgent": "gstack-lead",
+    "memberAgents": [
+      "gstack-product-reviewer",
+      "gstack-security-officer",
+      "gstack-qa-lead",
+      "gstack-designer",
+      "gstack-investigator"
+    ]
+  },
+  "displayName": { "en": "Software Workshop", "zh": "软件工坊" },
+  "profession": { "en": "Engineering Workflow Team", "zh": "工程工作流团队" },
+  "displayDescription": {
+    "en": "6 specialist roles for engineering workflows: product review, code review, security audit, QA testing, design system, and debugging — covering the full software lifecycle from idea to production",
+    "zh": "6位工程专业角色：产品评审、代码审查、安全审计、QA测试、设计系统、调试运维，覆盖从想法到生产的完整软件生命周期"
+  },
+  "avatar": "avatars/team.png",
+  "categoryId": "02-Engineering",
+  "defaultInitPrompt": {
+    "zh": "帮我做一次全面的上线前检查：代码审查、安全审计、QA测试",
+    "en": "Run a full pre-launch check: code review, security audit, and QA testing"
+  },
+  "members": [
+    {
+      "id": "gstack-lead",
+      "name": { "en": "Gu", "zh": "沽思航" },
+      "profession": { "en": "Software Workshop CEO", "zh": "软件工坊CEO" },
+      "avatar": "avatars/gstack-lead.png",
+      "role": "lead"
+    },
+    {
+      "id": "gstack-product-reviewer",
+      "name": { "en": "Product Reviewer", "zh": "产品官" },
+      "profession": { "en": "Multi-lens Product Review", "zh": "多维产品评审" },
+      "avatar": "avatars/gstack-product-reviewer.png",
+      "role": "member"
+    },
+    {
+      "id": "gstack-security-officer",
+      "name": { "en": "Security Officer", "zh": "安全卫士" },
+      "profession": { "en": "OWASP+STRIDE Security Audit", "zh": "OWASP+STRIDE安全审计" },
+      "avatar": "avatars/gstack-security-officer.png",
+      "role": "member"
+    },
+    {
+      "id": "gstack-qa-lead",
+      "name": { "en": "QA & Ship Lead", "zh": "质量门神" },
+      "profession": { "en": "QA Testing & Release", "zh": "QA测试与发布" },
+      "avatar": "avatars/gstack-qa-lead.png",
+      "role": "member"
+    },
+    {
+      "id": "gstack-designer",
+      "name": { "en": "Design Consultant", "zh": "设计师" },
+      "profession": { "en": "Design System & Visual Review", "zh": "设计系统与视觉审查" },
+      "avatar": "avatars/gstack-designer.png",
+      "role": "member"
+    },
+    {
+      "id": "gstack-investigator",
+      "name": { "en": "Investigator", "zh": "排障手" },
+      "profession": { "en": "Debug & Root Cause Analysis", "zh": "调试与根因分析" },
+      "avatar": "avatars/gstack-investigator.png",
+      "role": "member"
+    }
+  ]
+}

@@ -1,0 +1,142 @@
+{
+  "name": "opc-team",
+  "version": "1.0.0",
+  "description": "OPC One-Person Company Team: a 9-stage co-creation team guiding founders from resource audit to operations review, based on the One-Person Company Methodology",
+  "author": {
+    "name": "WorkBuddy",
+    "email": ""
+  },
+  "license": "CC-BY-NC-SA-4.0",
+  "homepage": "https://github.com/easychen/opc-methodology",
+  "keywords": ["one-person-company", "business-model", "niche", "mvp", "operations-review"],
+  "expertType": "team",
+  "agentName": "opc-team-lead",
+  "teamInfo": {
+    "leadAgent": "opc-team-lead",
+    "memberAgents": [
+      "opc-resource-auditor",
+      "opc-niche-strategist",
+      "opc-value-designer",
+      "opc-model-architect",
+      "opc-mvp-designer",
+      "opc-conversion-designer",
+      "opc-asset-strategist",
+      "opc-dashboard-reviewer"
+    ]
+  },
+  "agents": [
+    "./agents/opc-team-lead.md",
+    "./agents/opc-resource-auditor.md",
+    "./agents/opc-niche-strategist.md",
+    "./agents/opc-value-designer.md",
+    "./agents/opc-model-architect.md",
+    "./agents/opc-mvp-designer.md",
+    "./agents/opc-conversion-designer.md",
+    "./agents/opc-asset-strategist.md",
+    "./agents/opc-dashboard-reviewer.md"
+  ],
+  "skills": [
+    "./skills/opc-orchestrator",
+    "./skills/opc-resource-audit",
+    "./skills/opc-niche-positioning",
+    "./skills/opc-value-proposition",
+    "./skills/opc-business-model-design",
+    "./skills/opc-mvp-designer",
+    "./skills/opc-conversion-loop",
+    "./skills/opc-asset-ops",
+    "./skills/opc-dashboard-review"
+  ],
+  "categoryId": "12-IndustryConsultant",
+  "displayName": {
+    "en": "One-Person Company Team",
+    "zh": "一人公司专家团"
+  },
+  "profession": {
+    "en": "One-Person Company Team",
+    "zh": "一人公司专家团"
+  },
+  "displayDescription": {
+    "en": "Based on «The One-Person Company Methodology» by Easy, 9 experts guide you through the full journey from resource audit, niche positioning to MVP, conversion, and operations review.",
+    "zh": "基于由Easy创作的《一人企业方法论》，9位专家陪你走完从资源盘点、利基定位到MVP、转化、复盘的一人公司全流程共创"
+  },
+  "avatar": "avatars/team.png",
+  "defaultInitPrompt": {
+    "en": "I want to start a one-person company from scratch; kick off the resource audit.",
+    "zh": "我想从零开始规划一个一人公司，帮我启动资源盘点。"
+  },
+  "tags": [
+    { "zh": "一人公司", "en": "One-Person Company" },
+    { "zh": "商业模式", "en": "Business Model" },
+    { "zh": "经营复盘", "en": "Operations Review" }
+  ],
+  "quickPrompts": [
+    { "zh": "我想从零开始规划一个一人公司，帮我启动资源盘点。", "en": "I want to start a one-person company from scratch; kick off the resource audit." },
+    { "zh": "我有个想法但找不到利基，帮我用三环框架梳理一下。", "en": "I have an idea but can't find a niche; help me with the three-ring framework." },
+    { "zh": "我的产品在跑但卡住了，帮我做一次系统的经营复盘。", "en": "My product is stuck; help me run a full operations review." }
+  ],
+  "members": [
+    {
+      "id": "opc-team-lead",
+      "name": { "en": "Yimu", "zh": "易牧" },
+      "profession": { "en": "Chief Orchestrator", "zh": "首席编排师" },
+      "avatar": "avatars/opc-team-lead.png",
+      "role": "lead"
+    },
+    {
+      "id": "opc-resource-auditor",
+      "name": { "en": "Gupan", "zh": "顾盘" },
+      "profession": { "en": "Resource Auditor", "zh": "资源盘点师" },
+      "avatar": "avatars/opc-resource-auditor.png",
+      "role": "member"
+    },
+    {
+      "id": "opc-niche-strategist",
+      "name": { "en": "Linji", "zh": "林利基" },
+      "profession": { "en": "Niche Strategist", "zh": "利基定位师" },
+      "avatar": "avatars/opc-niche-strategist.png",
+      "role": "member"
+    },
+    {
+      "id": "opc-value-designer",
+      "name": { "en": "Yanzhi", "zh": "言之" },
+      "profession": { "en": "Value Proposition Designer", "zh": "价值主张设计师" },
+      "avatar": "avatars/opc-value-designer.png",
+      "role": "member"
+    },
+    {
+      "id": "opc-model-architect",
+      "name": { "en": "Mofang", "zh": "墨方" },
+      "profession": { "en": "Business Model Architect", "zh": "商业模式架构师" },
+      "avatar": "avatars/opc-model-architect.png",
+      "role": "member"
+    },
+    {
+      "id": "opc-mvp-designer",
+      "name": { "en": "Yanzhen", "zh": "验真" },
+      "profession": { "en": "MVP Experiment Designer", "zh": "MVP实验设计师" },
+      "avatar": "avatars/opc-mvp-designer.png",
+      "role": "member"
+    },
+    {
+      "id": "opc-conversion-designer",
+      "name": { "en": "Bihuan", "zh": "闭环" },
+      "profession": { "en": "Conversion Path Designer", "zh": "转化路径设计师" },
+      "avatar": "avatars/opc-conversion-designer.png",
+      "role": "member"
+    },
+    {
+      "id": "opc-asset-strategist",
+      "name": { "en": "Chenmo", "zh": "沉墨" },
+      "profession": { "en": "Asset Compounding Strategist", "zh": "资产沉淀师" },
+      "avatar": "avatars/opc-asset-strategist.png",
+      "role": "member"
+    },
+    {
+      "id": "opc-dashboard-reviewer",
+      "name": { "en": "Fuming", "zh": "复明" },
+      "profession": { "en": "Operations Reviewer", "zh": "经营复盘师" },
+      "avatar": "avatars/opc-dashboard-reviewer.png",
+      "role": "member"
+    }
+  ]
+}

@@ -1,0 +1,6 @@
+{
+  "schemaVersion": "1.0",
+  "description": "绝对化命令词（A 类）清单；完整机读词表见 s2-quality-machine-lexicon.json",
+  "terms": ["必须", "务必", "一定", "绝不能", "无论如何"],
+  "canonicalSource": "s2-quality-machine-lexicon.json"
+}

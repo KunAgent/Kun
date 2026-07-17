@@ -1,0 +1,12 @@
+{
+  "shortcutId": "shortcut.ops-boost",
+  "industry": "local_lifestyle",
+  "goal": "use WorkBuddy to turn a weekly content plan into a 3-day pilot packet",
+  "deliverables": [
+    "supplementCard",
+    "workbuddyCapabilityMap",
+    "humanAiTaskTable",
+    "pilotPacket",
+    "singleNextStepCta"
+  ]
+}

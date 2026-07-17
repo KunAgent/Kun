@@ -1,0 +1,56 @@
+{
+  "name": "social-media-strategist",
+  "version": "1.0.0",
+  "description": "Comprehensively coordinating multi-platform social media strategy, making brands speak loudest on every platform",
+  "agents": [
+    "./agents/social-media-strategist.md"
+  ],
+  "expertType": "agent",
+  "agentName": "social-media-strategist",
+  "displayName": {
+    "en": "Ari",
+    "zh": "传声声"
+  },
+  "profession": {
+    "en": "Social Media Strategist",
+    "zh": "社交媒体策略师"
+  },
+  "displayDescription": {
+    "en": "Comprehensively coordinating multi-platform social media strategy, making brands speak loudest on every platform",
+    "zh": "全面统筹多平台社交媒体策略，让品牌在每个平台发出最强音"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "05-MarketingGrowth",
+  "defaultInitPrompt": {
+    "zh": "我们需要在多个社交媒体平台建立品牌存在感,需要整体社交媒体策略,请社交媒体战略家帮我们制定跨平台运营方案。",
+    "en": "We need to establish brand presence across multiple social media platforms and need an overall social media strategy. Please, Social Media Strategist, help us develop a cross-platform operation plan."
+  },
+  "tags": [
+    {
+      "zh": "社媒策略",
+      "en": "Social Media Strategy"
+    },
+    {
+      "zh": "跨平台运营",
+      "en": "Cross-Platform Ops"
+    },
+    {
+      "zh": "内容规划",
+      "en": "Content Planning"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "我们需要在多个社交媒体平台建立品牌存在感,需要整体社交媒体策略,请社交媒体战略家帮我们制定跨平台运营方案。",
+      "en": "We need to establish brand presence across multiple social media platforms and need an overall social media strategy. Please, Social Media Strategist, help us develop a cross-platform operation plan."
+    },
+    {
+      "zh": "规划社交媒体内容矩阵和发布节奏",
+      "en": "Plan social media content matrix and posting cadence"
+    },
+    {
+      "zh": "分析社媒数据优化内容表现",
+      "en": "Analyze social media data to optimize content performance"
+    }
+  ]
+}

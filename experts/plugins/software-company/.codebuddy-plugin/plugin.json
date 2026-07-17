@@ -1,0 +1,53 @@
+{
+  "name": "software-company",
+  "version": "1.1.0",
+  "description": "Software Development Team - Optimized multi-agent SOP workflow for fast software delivery",
+  "expertType": "team",
+  "agentName": "software-team-lead",
+  "teamInfo": {
+    "leadAgent": "software-team-lead",
+    "memberAgents": [
+      "software-product-manager",
+      "software-architect",
+      "software-engineer",
+      "software-qa-engineer"
+    ]
+  },
+  "members": [
+    {
+      "id": "software-team-lead",
+      "name": { "en": "Qi", "zh": "齐活林" },
+      "profession": { "en": "Delivery Director", "zh": "交付总监" },
+      "avatar": "avatars/software-team-lead.png",
+      "role": "lead"
+    },
+    {
+      "id": "software-product-manager",
+      "name": { "en": "Xu", "zh": "许清楚" },
+      "profession": { "en": "Product Manager", "zh": "产品经理" },
+      "avatar": "avatars/software-product-manager.png",
+      "role": "member"
+    },
+    {
+      "id": "software-architect",
+      "name": { "en": "Gao", "zh": "高见远" },
+      "profession": { "en": "Software Architect", "zh": "架构师" },
+      "avatar": "avatars/software-architect.png",
+      "role": "member"
+    },
+    {
+      "id": "software-engineer",
+      "name": { "en": "Kou", "zh": "寇豆码" },
+      "profession": { "en": "Software Engineer", "zh": "工程师" },
+      "avatar": "avatars/software-engineer.png",
+      "role": "member"
+    },
+    {
+      "id": "software-qa-engineer",
+      "name": { "en": "Yan", "zh": "严过关" },
+      "profession": { "en": "QA Engineer", "zh": "QA工程师" },
+      "avatar": "avatars/software-qa-engineer.png",
+      "role": "member"
+    }
+  ]
+}

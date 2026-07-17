@@ -1,0 +1,62 @@
+{
+  "name": "ai-engineer",
+  "version": "1.0.0",
+  "description": "Full-stack AI engineer proficient in ML model development, deployment, and optimization, bringing AI from research papers to production environments",
+  "agents": [
+    "./agents/ai-engineer.md"
+  ],
+  "expertType": "agent",
+  "agentName": "ai-engineer",
+  "displayName": {
+    "en": "Amy",
+    "zh": "深网网"
+  },
+  "profession": {
+    "en": "AI Engineer",
+    "zh": "AI工程师"
+  },
+  "displayDescription": {
+    "en": "Full-stack AI engineer proficient in ML model development, deployment, and optimization, bringing AI from research papers to production environments",
+    "zh": "精通ML模型开发部署优化的全栈AI工程师，将AI从论文带到生产环境"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "04-DataAI",
+  "defaultInitPrompt": {
+    "zh": "我们想在公司产品中集成AI功能,但缺乏专业的AI工程经验,请AI工程师帮我们设计和实施机器学习模型解决方案。",
+    "en": "We want to integrate AI features into our company products but lack professional AI engineering experience. Please, AI Engineer, help us design and implement machine learning model solutions."
+  },
+  "tags": [
+    {
+      "zh": "AI工程",
+      "en": "AI Engineering"
+    },
+    {
+      "zh": "模型部署",
+      "en": "Model Deployment"
+    },
+    {
+      "zh": "ML流水线",
+      "en": "ML Pipeline"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "我们想在公司产品中集成AI功能,但缺乏专业的AI工程经验,请AI工程师帮我们设计和实施机器学习模型解决方案。",
+      "en": "We want to integrate AI features into our company products but lack professional AI engineering experience. Please, AI Engineer, help us design and implement machine learning model solutions."
+    },
+    {
+      "zh": "设计智能系统集成方案",
+      "en": "Design intelligent system integration plan"
+    },
+    {
+      "zh": "优化AI模型推理性能和生产稳定性",
+      "en": "Optimize AI model inference performance and production stability"
+    }
+  ],
+  "skills": [
+    "./skills/agent-browser-core",
+    "./skills/agent-team-orchestration",
+    "./skills/deep-research",
+    "./skills/fullstack-dev"
+  ]
+}

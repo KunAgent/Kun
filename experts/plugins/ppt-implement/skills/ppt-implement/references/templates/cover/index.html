@@ -1,0 +1,374 @@
+
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PPT封面模板库 - Pure Tailwind</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="../unified-styles.css" />
+    <style>
+      html,
+      body {
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+      }
+      .tpl-item {
+        padding: 8px 12px;
+        cursor: pointer;
+        border-bottom: 1px solid #e5e5e5;
+        font-size: 14px;
+        transition: background-color 0.2s;
+      }
+      .tpl-item:hover {
+        background-color: #f5f5f5;
+      }
+      .tpl-item.active {
+        background-color: #1890ff;
+        color: white;
+        font-weight: 500;
+      }
+      .tpl-item {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+      .tpl-item .copy-btn {
+        padding: 2px 6px;
+        font-size: 12px;
+        background: #e8e8e8;
+        border: none;
+        border-radius: 3px;
+        cursor: pointer;
+      }
+      .tpl-item.active .copy-btn {
+        background: rgba(255,255,255,0.3);
+        color: white;
+      }
+      .tpl-item .copy-btn:hover {
+        background: #d9d9d9;
+      }
+      .tpl-item.active .copy-btn:hover {
+        background: rgba(255,255,255,0.5);
+      }
+      .loading {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        height: 100%;
+        font-size: 18px;
+        color: #666;
+      }
+      .error {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        height: 100%;
+        font-size: 16px;
+        color: #ff4d4f;
+      }
+    </style>
+  </head>
+  <body style="background: #fff">
+    <div style="display: flex; padding: 10px">
+      <div style="width: 220px;height: 100vh;overflow-y: auto;border-right: 1px solid #000;" id="tplList">
+        <!-- JS自动填充tpl文件列表 -->
+      </div>
+      <div style="flex: 1;display: flex;justify-content: center;align-items: center;" id="previewArea"></div>
+    </div>
+
+    <script>
+      // **************** 核心配置 ****************
+      // 1. 配置需要预览的tpl文件列表（按实际文件名修改）
+            const TPL_FILES = [
+        // 简约风格 minimalist (001-005, 087-096, 137-139)
+        "minimalist/001.tpl",
+        "minimalist/002.tpl",
+        "minimalist/003.tpl",
+        "minimalist/004.tpl",
+        "minimalist/005.tpl",
+        // 中国风格 chinese (006-010, 097-106, 140-142)
+        "chinese/006.tpl",
+        "chinese/007.tpl",
+        "chinese/008.tpl",
+        "chinese/009.tpl",
+        "chinese/010.tpl",
+        // 卡通风格 cartoon (011-015, 107-116, 143-145)
+        "cartoon/011.tpl",
+        "cartoon/012.tpl",
+        "cartoon/013.tpl",
+        "cartoon/014.tpl",
+        "cartoon/015.tpl",
+        // 手绘风格 hand-drawn (016-020, 146-148)
+        "hand-drawn/016.tpl",
+        "hand-drawn/017.tpl",
+        "hand-drawn/018.tpl",
+        "hand-drawn/019.tpl",
+        "hand-drawn/020.tpl",
+        // 文艺风格 literary (021-025, 155-157)
+        "literary/021.tpl",
+        "literary/022.tpl",
+        "literary/023.tpl",
+        "literary/024.tpl",
+        "literary/025.tpl",
+        // 扁平风格 flat (026-030, 067-076, 152-154)
+        "flat/026.tpl",
+        "flat/027.tpl",
+        "flat/028.tpl",
+        "flat/029.tpl",
+        "flat/030.tpl",
+        // 黑金风格 black-gold (031-035, 077-086, 158-160)
+        "black-gold/031.tpl",
+        "black-gold/032.tpl",
+        "black-gold/033.tpl",
+        "black-gold/034.tpl",
+        "black-gold/035.tpl",
+        // 科技风格 tech (036-040, 046-056)
+        "tech/036.tpl",
+        "tech/037.tpl",
+        "tech/038.tpl",
+        "tech/039.tpl",
+        "tech/040.tpl",
+        // 商务风格 business (041-045, 057-066)
+        "business/041.tpl",
+        "business/042.tpl",
+        "business/043.tpl",
+        "business/044.tpl",
+        "business/045.tpl",
+        // 科技风格续 tech (046-056)
+        "tech/046.tpl",
+        "tech/047.tpl",
+        "tech/048.tpl",
+        "tech/049.tpl",
+        "tech/050.tpl",
+        "tech/051.tpl",
+        "tech/052.tpl",
+        "tech/053.tpl",
+        "tech/054.tpl",
+        "tech/055.tpl",
+        "tech/056.tpl",
+        // 商务风格续 business (057-066)
+        "business/057.tpl",
+        "business/058.tpl",
+        "business/059.tpl",
+        "business/060.tpl",
+        "business/061.tpl",
+        "business/062.tpl",
+        "business/063.tpl",
+        "business/064.tpl",
+        "business/065.tpl",
+        "business/066.tpl",
+        // 扁平风格续 flat (067-076)
+        "flat/067.tpl",
+        "flat/068.tpl",
+        "flat/069.tpl",
+        "flat/070.tpl",
+        "flat/071.tpl",
+        "flat/072.tpl",
+        "flat/073.tpl",
+        "flat/074.tpl",
+        "flat/075.tpl",
+        "flat/076.tpl",
+        // 黑金风格续 black-gold (077-086)
+        "black-gold/077.tpl",
+        "black-gold/078.tpl",
+        "black-gold/079.tpl",
+        "black-gold/080.tpl",
+        "black-gold/081.tpl",
+        "black-gold/082.tpl",
+        "black-gold/083.tpl",
+        "black-gold/084.tpl",
+        "black-gold/085.tpl",
+        "black-gold/086.tpl",
+        // 简约风格续 minimalist (087-096)
+        "minimalist/087.tpl",
+        "minimalist/088.tpl",
+        "minimalist/089.tpl",
+        "minimalist/090.tpl",
+        "minimalist/091.tpl",
+        "minimalist/092.tpl",
+        "minimalist/093.tpl",
+        "minimalist/094.tpl",
+        "minimalist/095.tpl",
+        "minimalist/096.tpl",
+        // 中国风格续 chinese (097-106)
+        "chinese/097.tpl",
+        "chinese/098.tpl",
+        "chinese/099.tpl",
+        "chinese/100.tpl",
+        "chinese/101.tpl",
+        "chinese/102.tpl",
+        "chinese/103.tpl",
+        "chinese/104.tpl",
+        "chinese/105.tpl",
+        "chinese/106.tpl",
+        // 卡通风格续 cartoon (107-116)
+        "cartoon/107.tpl",
+        "cartoon/108.tpl",
+        "cartoon/109.tpl",
+        "cartoon/110.tpl",
+        "cartoon/111.tpl",
+        "cartoon/112.tpl",
+        "cartoon/113.tpl",
+        "cartoon/114.tpl",
+        "cartoon/115.tpl",
+        "cartoon/116.tpl",
+        // 简约风格续 minimalist (137-139)
+        "minimalist/137.tpl",
+        "minimalist/138.tpl",
+        "minimalist/139.tpl",
+        // 中国风格续 chinese (140-142)
+        "chinese/140.tpl",
+        "chinese/141.tpl",
+        "chinese/142.tpl",
+        // 卡通风格续 cartoon (143-145)
+        "cartoon/143.tpl",
+        "cartoon/144.tpl",
+        "cartoon/145.tpl",
+        // 手绘风格续 hand-drawn (146-148)
+        "hand-drawn/146.tpl",
+        "hand-drawn/147.tpl",
+        "hand-drawn/148.tpl",
+        // 几何风格 geometric (149-151)
+        "geometric/149.tpl",
+        "geometric/150.tpl",
+        "geometric/151.tpl",
+        // 扁平风格续 flat (152-154)
+        "flat/152.tpl",
+        "flat/153.tpl",
+        "flat/154.tpl",
+        // 文艺风格续 literary (155-157)
+        "literary/155.tpl",
+        "literary/156.tpl",
+        "literary/157.tpl",
+        // 黑金风格续 black-gold (158-160)
+        "black-gold/158.tpl",
+        "black-gold/159.tpl",
+        "black-gold/160.tpl",
+        // 新增tpl文件直接在这里添加即可
+      ];
+     
+      // **************** 核心逻辑 ****************
+      const tplListEl = document.getElementById("tplList");
+      const previewAreaEl = document.getElementById("previewArea");
+      let activeTpl = "";
+      let currentIndex = 0;
+
+      // 初始化：渲染tpl文件列表
+      function initTplList() {
+        TPL_FILES.forEach((filename, index) => {
+          const item = document.createElement("div");
+          item.className = "tpl-item";
+          item.dataset.file = filename;
+          item.dataset.index = index;
+          
+          // 文件名文本
+          const nameSpan = document.createElement("span");
+          nameSpan.textContent = filename;
+          item.appendChild(nameSpan);
+          
+          // 复制按钮
+          const copyBtn = document.createElement("button");
+          copyBtn.className = "copy-btn";
+          copyBtn.textContent = "复制";
+          copyBtn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            navigator.clipboard.writeText('cover/' + filename).then(() => {
+              copyBtn.textContent = "已复制";
+              setTimeout(() => { copyBtn.textContent = "复制"; }, 1000);
+            });
+          });
+          item.appendChild(copyBtn);
+          
+          // 点击切换预览文件
+          item.addEventListener("click", () => {
+            selectTplByIndex(index);
+          });
+          tplListEl.appendChild(item);
+        });
+        
+        // 默认加载第一个模板
+        if (TPL_FILES.length > 0) {
+          selectTplByIndex(0);
+        }
+      }
+
+      // 通过索引选择模板
+      function selectTplByIndex(index) {
+        if (index < 0 || index >= TPL_FILES.length) return;
+        
+        currentIndex = index;
+        const filename = TPL_FILES[index];
+        
+        // 切换选中样式
+        document
+          .querySelectorAll(".tpl-item")
+          .forEach((el) => el.classList.remove("active"));
+        
+        const items = document.querySelectorAll(".tpl-item");
+        items[index].classList.add("active");
+        
+        // 滚动到可见区域
+        items[index].scrollIntoView({ block: "nearest", behavior: "smooth" });
+        
+        // 加载并预览文件
+        loadAndPreviewTpl(filename);
+      }
+
+      // 加载tpl文件并预览
+      function loadAndPreviewTpl(filename) {
+        if (activeTpl === filename) return;
+        activeTpl = filename;
+
+        // 显示加载状态
+        previewAreaEl.innerHTML = '<div class="loading">正在加载文件...</div>';
+
+        // 读取tpl文件（注意：本地运行需开简易服务器，否则会跨域）
+        fetch(`./${filename}`)
+          .then((response) => {
+            if (!response.ok)
+              throw new Error(`文件加载失败：${response.status}`);
+            return response.text();
+          })
+          .then((tplContent) => {
+            // 包裹基础HTML骨架
+            const fullHtml = tplContent.replace("{{FILENAME}}", filename);
+            // 预览区域展示完整HTML（两种方式可选）
+            // 方式1：直接渲染HTML（可看到最终效果）
+            previewAreaEl.innerHTML = fullHtml;
+            // 方式2：展示HTML源码（方便查看结构，注释掉方式1，打开方式2）
+            // previewAreaEl.innerHTML = `<pre>${escapeHtml(fullHtml)}</pre>`;
+          })
+          .catch((error) => {
+            previewAreaEl.innerHTML = `<div class="error">${error.message}</div>`;
+            console.error("加载TPL文件出错：", error);
+          });
+      }
+
+      // 辅助函数：转义HTML字符（用于展示源码）
+      function escapeHtml(str) {
+        return str
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;")
+          .replace(/'/g, "&#039;");
+      }
+
+      // 初始化
+      initTplList();
+      
+      // 键盘事件：支持上下键切换模板
+      document.addEventListener("keydown", (e) => {
+        if (e.key === "ArrowUp") {
+          e.preventDefault();
+          selectTplByIndex(currentIndex - 1);
+        } else if (e.key === "ArrowDown") {
+          e.preventDefault();
+          selectTplByIndex(currentIndex + 1);
+        }
+      });
+    </script>
+  </body>
+</html>

@@ -1,0 +1,61 @@
+{
+  "name": "trend-researcher",
+  "version": "1.0.0",
+  "description": "Continuously tracking industry and technology trends, providing forward-looking insights for product strategy",
+  "agents": [
+    "./agents/trend-researcher.md"
+  ],
+  "expertType": "agent",
+  "agentName": "trend-researcher",
+  "displayName": {
+    "en": "Zara",
+    "zh": "风向标"
+  },
+  "profession": {
+    "en": "Trend Researcher",
+    "zh": "行业趋势专家"
+  },
+  "displayDescription": {
+    "en": "Continuously tracking industry and technology trends, providing forward-looking insights for product strategy",
+    "zh": "持续追踪行业和技术趋势，为产品战略提供前瞻性洞察"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "04-DataAI",
+  "defaultInitPrompt": {
+    "zh": "我们想了解行业趋势和竞争态势,为产品决策提供数据支持,请趋势研究员帮我们进行市场趋势分析。",
+    "en": "We want to understand industry trends and competitive dynamics to provide data support for product decisions. Please, Trend Researcher, help us conduct market trend analysis."
+  },
+  "tags": [
+    {
+      "zh": "趋势研究",
+      "en": "Trend Research"
+    },
+    {
+      "zh": "市场情报",
+      "en": "Market Intelligence"
+    },
+    {
+      "zh": "机会识别",
+      "en": "Opportunity ID"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "我们想了解行业趋势和竞争态势,为产品决策提供数据支持,请趋势研究员帮我们进行市场趋势分析。",
+      "en": "We want to understand industry trends and competitive dynamics to provide data support for product decisions. Please, Trend Researcher, help us conduct market trend analysis."
+    },
+    {
+      "zh": "撰写市场趋势分析报告",
+      "en": "Write a market trend analysis report"
+    },
+    {
+      "zh": "识别新兴机会和用户需求变化",
+      "en": "Identify emerging opportunities and user demand shifts"
+    }
+  ],
+  "skills": [
+    "./skills/browser-use",
+    "./skills/ima-skills",
+    "./skills/market-researcher"
+  ]
+}

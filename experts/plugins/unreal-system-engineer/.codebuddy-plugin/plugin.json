@@ -1,0 +1,56 @@
+{
+  "name": "unreal-system-engineer",
+  "version": "1.0.0",
+  "description": "Expert in C++/Blueprint and Nanite/Lumen",
+  "agents": [
+    "./agents/unreal-system-engineer.md"
+  ],
+  "expertType": "agent",
+  "agentName": "unreal-system-engineer",
+  "displayName": {
+    "en": "Wade",
+    "zh": "虚幻通"
+  },
+  "profession": {
+    "en": "Unreal System Engineer",
+    "zh": "Unreal系统工程师"
+  },
+  "displayDescription": {
+    "en": "Expert in C++/Blueprint and Nanite/Lumen",
+    "zh": "精通C++/Blueprint和Nanite/Lumen"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "03-GameSpatial",
+  "defaultInitPrompt": {
+    "zh": "我们的虚幻游戏需要系统层面的开发支持,请虚幻系统工程师帮我们实现游戏系统。",
+    "en": "Our Unreal game needs system-level development support. Please, Unreal System Engineer, help us implement game systems."
+  },
+  "tags": [
+    {
+      "zh": "UE系统工程",
+      "en": "UE System Engineering"
+    },
+    {
+      "zh": "性能优化",
+      "en": "Performance Optimization"
+    },
+    {
+      "zh": "混合架构",
+      "en": "Hybrid Architecture"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "我们的虚幻游戏需要系统层面的开发支持,请虚幻系统工程师帮我们实现游戏系统。",
+      "en": "Our Unreal game needs system-level development support. Please, Unreal System Engineer, help us implement game systems."
+    },
+    {
+      "zh": "优化Nanite/Lumen渲染性能",
+      "en": "Optimize Nanite/Lumen rendering performance"
+    },
+    {
+      "zh": "搭建Gameplay Ability System游戏系统",
+      "en": "Build Gameplay Ability System game systems"
+    }
+  ]
+}

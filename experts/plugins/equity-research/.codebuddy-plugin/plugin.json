@@ -1,0 +1,34 @@
+{
+  "name": "equity-research",
+  "version": "2.0.0",
+  "description": "Comprehensive equity research toolkit: earnings analysis, initiating coverage, DCF/comps valuation, long-short pitches, investment memos, event-driven analysis, portfolio risk management, and full research workflows",
+  "description_zh": "全面的股票研究工具集：财报分析、首次覆盖报告、DCF/可比估值建模、多空推介、投资备忘录、事件驱动分析、组合风险管理，覆盖完整研究工作流。",
+  "author": {
+    "name": "CodeBuddy Teams"
+  },
+  "homepage": "",
+  "license": "",
+  "skills": [
+    "./skills/catalyst-calendar",
+    "./skills/earnings-analysis",
+    "./skills/earnings-preview",
+    "./skills/idea-generation",
+    "./skills/initiating-coverage",
+    "./skills/model-update",
+    "./skills/morning-note",
+    "./skills/sector-overview",
+    "./skills/thesis-tracker",
+    "./skills/comps-valuation",
+    "./skills/dcf-model-builder",
+    "./skills/long-short-pitch",
+    "./skills/memo-builder",
+    "./skills/company-tearsheet",
+    "./skills/event-scenario-analyzer",
+    "./skills/portfolio-risk"
+  ],
+  "expertType": "agent",
+  "agentName": "equity-research-expert",
+  "agents": [
+    "./agents/equity-research-expert.md"
+  ]
+}

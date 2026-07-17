@@ -1,0 +1,56 @@
+{
+  "name": "kuaishou-strategist",
+  "version": "1.0.0",
+  "description": "Deep understanding of Kuaishou's lower-tier market characteristics and Laotie culture, creating down-to-earth content strategies",
+  "agents": [
+    "./agents/kuaishou-strategist.md"
+  ],
+  "expertType": "agent",
+  "agentName": "kuaishou-strategist",
+  "displayName": {
+    "en": "Pax",
+    "zh": "老铁铁"
+  },
+  "profession": {
+    "en": "Kuaishou Strategist",
+    "zh": "快手策略师"
+  },
+  "displayDescription": {
+    "en": "Deep understanding of Kuaishou's lower-tier market characteristics and Laotie culture, creating down-to-earth content strategies",
+    "zh": "深谙快手下沉市场特性和老铁文化，打造接地气的内容策略"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "06-ContentCreative",
+  "defaultInitPrompt": {
+    "zh": "我们想进入快手平台进行营销,需要了解快手的用户特点和运营方法,请快手战略家帮我们制定快手运营方案。",
+    "en": "We want to enter Kuaishou for marketing and need to understand Kuaishou's user characteristics and operation methods. Please, Kuaishou Strategist, help us develop a Kuaishou operation plan."
+  },
+  "tags": [
+    {
+      "zh": "快手运营",
+      "en": "Kuaishou Operations"
+    },
+    {
+      "zh": "短视频策略",
+      "en": "Short Video Strategy"
+    },
+    {
+      "zh": "直播变现",
+      "en": "Livestream Monetization"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "我们想进入快手平台进行营销,需要了解快手的用户特点和运营方法,请快手战略家帮我们制定快手运营方案。",
+      "en": "We want to enter Kuaishou for marketing and need to understand Kuaishou's user characteristics and operation methods. Please, Kuaishou Strategist, help us develop a Kuaishou operation plan."
+    },
+    {
+      "zh": "策划快手短视频和直播内容方案",
+      "en": "Plan Kuaishou short video and livestream content plan"
+    },
+    {
+      "zh": "优化快手电商变现和流量获取",
+      "en": "Optimize Kuaishou e-commerce monetization and traffic acquisition"
+    }
+  ]
+}

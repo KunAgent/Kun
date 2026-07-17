@@ -1,0 +1,69 @@
+{
+  "name": "legal-clinic-supervisor",
+  "version": "1.0.0",
+  "description": "Supervisor assistant for law school clinics: clinic setup, student onboarding, client intake, research starts, deadlines, status, letters, and semester handoff.",
+  "author": {
+    "name": "WorkBuddy Team"
+  },
+  "license": "Apache-2.0",
+  "keywords": [
+    "legal",
+    "legal-clinic",
+    "law",
+    "localized-legal-workflow"
+  ],
+  "expertType": "agent",
+  "agentName": "legal-clinic-supervisor",
+  "agents": [
+    "./agents/legal-clinic-supervisor.md"
+  ],
+  "skills": [
+    "./skills/clinic-supervision-workflows"
+  ],
+  "displayName": {
+    "en": "Legal Clinic Supervisor",
+    "zh": "法律诊所督导"
+  },
+  "profession": {
+    "en": "Clinical Legal Education Supervisor",
+    "zh": "法律诊所督导顾问"
+  },
+  "displayDescription": {
+    "en": "Supervisor assistant for law school clinics: clinic setup, student onboarding, client intake, research starts, deadlines, status, letters, and semester handoff.",
+    "zh": "面向法学院诊所导师的监督助手，支持客户接待、研究启动、期限追踪、学生入职和学期交接。"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "11-SecurityCompliance",
+  "defaultInitPrompt": {
+    "en": "Help me set up a supervised intake workflow for a new clinic matter",
+    "zh": "帮我为一个新的诊所案件搭建有监督的客户接待流程"
+  },
+  "tags": [
+    {
+      "en": "Clinic Intake",
+      "zh": "诊所接待"
+    },
+    {
+      "en": "Student Supervision",
+      "zh": "学生监督"
+    },
+    {
+      "en": "Matter Handoff",
+      "zh": "案件交接"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "en": "Help me set up a supervised intake workflow for a new clinic matter",
+      "zh": "帮我为一个新的诊所案件搭建有监督的客户接待流程"
+    },
+    {
+      "en": "Prepare a student onboarding ramp for this clinic semester",
+      "zh": "为这个学期的法律诊所准备学生入职流程"
+    },
+    {
+      "en": "Create a semester handoff checklist for active clinic matters",
+      "zh": "为在办诊所案件生成学期交接清单"
+    }
+  ]
+}

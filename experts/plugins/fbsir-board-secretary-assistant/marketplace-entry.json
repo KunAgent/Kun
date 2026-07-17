@@ -1,0 +1,72 @@
+{
+  "name": "fbsir-board-secretary-assistant",
+  "version": "2.1.0",
+  "source": "./plugins/fbsir-board-secretary-assistant",
+  "leadAgent": "fbsir-board-secretary-assistant",
+  "invocationHint": "single-agent-direct",
+  "targetMarketplace": "experts",
+  "targetDistributionSurface": "workbuddy_expert_center",
+  "finalListingNameZh": "董秘助手",
+  "localEquivalentTest": {
+    "marketplace": "my-experts",
+    "entrySurface": "my_expert",
+    "purposeZh": "仅用于当前工作区安装与入口配置，不代表最终上架路径。"
+  },
+  "enableSettingKey": "fbsir-board-secretary-assistant@my_experts_marketplace",
+  "reviewBoundary": "This package is a local-equivalent WorkBuddy expert-center review candidate. Its primary baseline is no-connector first value inside the expert package itself. Optional service-side followthrough may enhance observation later, but package upload readiness does not prove official listing, natural same-binding closure, or payment closure.",
+  "firstValuePromise": {
+    "contractPath": "contracts/first-value-contract.json",
+    "connectorRequiredForFirstValue": false,
+    "mustDeliverBeforeOffer": true,
+    "requiredVisibleSections": [
+      "task_identification",
+      "material_gap_check",
+      "risk_boundary",
+      "human_review_role",
+      "single_next_action",
+      "stop_condition"
+    ]
+  },
+  "humanReviewBoundary": {
+    "contractPath": "contracts/governance-boundary.json",
+    "manualReviewRequired": true,
+    "automaticLegalConclusionAllowed": false,
+    "automaticDisclosureDecisionAllowed": false,
+    "automaticPublishingAllowed": false
+  },
+  "connectorPolicy": {
+    "connectorRequiredForFirstValue": false,
+    "optionalEnhancementOnly": true,
+    "newConnectorRequired": false,
+    "doNotAssumeHostRuntimeUpgrade": true
+  },
+  "serviceTractionUpgrade": {
+    "contractPath": "contracts/service-traction-upgrade-contract.json",
+    "priority": "current_highest_package_workstream",
+    "connectorRequired": false,
+    "productFlowMustNotReadConnectorState": true,
+    "visibleGapPolicy": "show_missing_fields_without_blocking_first_value",
+    "waiterLifecycleBoundary": "receipt_handoff_only_no_package_runtime_fix_claim",
+    "fallbackWhenToolsUnavailable": "complete_first_value_in_chat_before_any_optional_tool_prompt"
+  },
+  "listingTrustProfile": {
+    "reviewPackageBundledLegalDocs": false,
+    "reviewPackageExcludedDocs": [
+      "PRIVACY.md",
+      "SECURITY.md",
+      "TERMS.md"
+    ],
+    "reviewPackageBoundaryNote": "Current review packaging excludes supplementary root docs copied from the historical source package and keeps no-connector first value as the package baseline.",
+    "processedDataTypes": [
+      "announcement_draft",
+      "roadshow_qa",
+      "investor_communication_draft",
+      "authorized_context"
+    ],
+    "storedDataTypes": [
+      "package_docs_only",
+      "review_reports_only"
+    ],
+    "thirdPartySharing": "not_by_package_default"
+  }
+}

@@ -1,0 +1,625 @@
+{
+  "schemaVersion": "fbs.board-secretary-assistant.service-provider-control-contract.v1",
+  "packageName": "fbsir-board-secretary-assistant",
+  "allianceId": "workbuddy-listed-board-secretary-service-provider-red-team-alliance-20260621",
+  "boundary": {
+    "reviewOnly": true,
+    "serviceProvidersAreResourcesNotEndorsedPartners": true,
+    "responsibilityOutsourcingAllowed": false,
+    "automaticPublishingAllowed": false,
+    "automaticLegalConclusionAllowed": false,
+    "publicDisclosureAllowed": false,
+    "publishReady": false,
+    "manualReviewRequired": true,
+    "dataProcessingRequiresSeparateAuthorization": true
+  },
+  "allowedUseModes": [
+    "adversarial_resource",
+    "tool_source",
+    "evidence_source",
+    "simulation_resource"
+  ],
+  "forbiddenUseModes": [
+    "auto_publish",
+    "legal_conclusion",
+    "responsibility_outsourcing",
+    "approval_owner",
+    "publish_agent"
+  ],
+  "providers": [
+    {
+      "providerId": "sse_one_stop_ir",
+      "providerName": "上交所一网通办-投资者关系",
+      "category": "official_platform",
+      "credibility": "high",
+      "canJoinBoardSecretaryCampAs": [
+        "official_disclosure_and_ir_anchor"
+      ],
+      "mappedFamilies": [
+        "RT-F03",
+        "RT-F04",
+        "RT-F05"
+      ],
+      "humanReviewOwner": "board_secretary_or_named_internal_owner",
+      "canPublish": false,
+      "canMakeLegalConclusion": false,
+      "canOutsourceResponsibility": false,
+      "manualReviewRequired": true
+    },
+    {
+      "providerId": "sse_e_interactive",
+      "providerName": "上证e互动",
+      "category": "official_investor_interaction",
+      "credibility": "high",
+      "canJoinBoardSecretaryCampAs": [
+        "official_disclosure_and_ir_anchor",
+        "investor_question_pressure_source"
+      ],
+      "mappedFamilies": [
+        "RT-F01",
+        "RT-F03",
+        "RT-F05"
+      ],
+      "humanReviewOwner": "board_secretary_or_named_internal_owner",
+      "canPublish": false,
+      "canMakeLegalConclusion": false,
+      "canOutsourceResponsibility": false,
+      "manualReviewRequired": true
+    },
+    {
+      "providerId": "sse_one_stop_disclosure",
+      "providerName": "上交所一网通办-信息披露",
+      "category": "official_disclosure_workflow",
+      "credibility": "high",
+      "canJoinBoardSecretaryCampAs": [
+        "official_disclosure_and_ir_anchor",
+        "announcement_and_data_verification_tool"
+      ],
+      "mappedFamilies": [
+        "RT-F04",
+        "RT-F05",
+        "RT-F06"
+      ],
+      "humanReviewOwner": "board_secretary_or_named_internal_owner",
+      "canPublish": false,
+      "canMakeLegalConclusion": false,
+      "canOutsourceResponsibility": false,
+      "manualReviewRequired": true
+    },
+    {
+      "providerId": "sse_company_portrait",
+      "providerName": "上交所公司画像系统",
+      "category": "official_supervision_tech",
+      "credibility": "high",
+      "canJoinBoardSecretaryCampAs": [
+        "announcement_and_data_verification_tool"
+      ],
+      "mappedFamilies": [
+        "RT-F05",
+        "RT-F06"
+      ],
+      "humanReviewOwner": "board_secretary_or_named_internal_owner",
+      "canPublish": false,
+      "canMakeLegalConclusion": false,
+      "canOutsourceResponsibility": false,
+      "manualReviewRequired": true
+    },
+    {
+      "providerId": "szse_irm_cninfo",
+      "providerName": "深交所互动易",
+      "category": "official_investor_interaction",
+      "credibility": "high",
+      "canJoinBoardSecretaryCampAs": [
+        "official_disclosure_and_ir_anchor",
+        "investor_question_pressure_source"
+      ],
+      "mappedFamilies": [
+        "RT-F01",
+        "RT-F03",
+        "RT-F05"
+      ],
+      "humanReviewOwner": "board_secretary_or_named_internal_owner",
+      "canPublish": false,
+      "canMakeLegalConclusion": false,
+      "canOutsourceResponsibility": false,
+      "manualReviewRequired": true
+    },
+    {
+      "providerId": "cninfo_webapi",
+      "providerName": "深证信数据服务平台 CNINFO WebAPI",
+      "category": "official_data_api",
+      "credibility": "high",
+      "canJoinBoardSecretaryCampAs": [
+        "announcement_and_data_verification_tool"
+      ],
+      "mappedFamilies": [
+        "RT-F02",
+        "RT-F05",
+        "RT-F06"
+      ],
+      "humanReviewOwner": "board_secretary_or_named_internal_owner",
+      "canPublish": false,
+      "canMakeLegalConclusion": false,
+      "canOutsourceResponsibility": false,
+      "manualReviewRequired": true
+    },
+    {
+      "providerId": "cninfo_portal",
+      "providerName": "巨潮资讯",
+      "category": "official_disclosure_portal",
+      "credibility": "high",
+      "canJoinBoardSecretaryCampAs": [
+        "announcement_and_data_verification_tool"
+      ],
+      "mappedFamilies": [
+        "RT-F02",
+        "RT-F05",
+        "RT-F06"
+      ],
+      "humanReviewOwner": "board_secretary_or_named_internal_owner",
+      "canPublish": false,
+      "canMakeLegalConclusion": false,
+      "canOutsourceResponsibility": false,
+      "manualReviewRequired": true
+    },
+    {
+      "providerId": "panorama_ir_platform",
+      "providerName": "全景路演投资者关系互动平台",
+      "category": "ir_roadshow_platform",
+      "credibility": "medium",
+      "canJoinBoardSecretaryCampAs": [
+        "investor_question_pressure_source",
+        "ir_workflow_simulation_tool"
+      ],
+      "mappedFamilies": [
+        "RT-F03",
+        "RT-F04",
+        "RT-F07"
+      ],
+      "humanReviewOwner": "board_secretary_or_named_internal_owner",
+      "canPublish": false,
+      "canMakeLegalConclusion": false,
+      "canOutsourceResponsibility": false,
+      "manualReviewRequired": true
+    },
+    {
+      "providerId": "roadshowchina",
+      "providerName": "路演中",
+      "category": "ir_roadshow_platform",
+      "credibility": "medium",
+      "canJoinBoardSecretaryCampAs": [
+        "ir_workflow_simulation_tool",
+        "investor_question_pressure_source"
+      ],
+      "mappedFamilies": [
+        "RT-F03",
+        "RT-F04",
+        "RT-F06"
+      ],
+      "humanReviewOwner": "board_secretary_or_named_internal_owner",
+      "canPublish": false,
+      "canMakeLegalConclusion": false,
+      "canOutsourceResponsibility": false,
+      "manualReviewRequired": true
+    },
+    {
+      "providerId": "easy_board",
+      "providerName": "易董",
+      "category": "board_office_saas",
+      "credibility": "medium",
+      "canJoinBoardSecretaryCampAs": [
+        "board_office_workflow_tool",
+        "compliance_knowledge_resource"
+      ],
+      "mappedFamilies": [
+        "RT-F02",
+        "RT-F04",
+        "RT-F06"
+      ],
+      "humanReviewOwner": "board_secretary_or_named_internal_owner",
+      "canPublish": false,
+      "canMakeLegalConclusion": false,
+      "canOutsourceResponsibility": false,
+      "manualReviewRequired": true
+    },
+    {
+      "providerId": "ths_i_board_secretary",
+      "providerName": "同花顺i董秘/董秘助手",
+      "category": "board_office_saas",
+      "credibility": "high",
+      "canJoinBoardSecretaryCampAs": [
+        "board_office_workflow_tool",
+        "compliance_knowledge_resource"
+      ],
+      "mappedFamilies": [
+        "RT-F04",
+        "RT-F05",
+        "RT-F06"
+      ],
+      "humanReviewOwner": "board_secretary_or_named_internal_owner",
+      "canPublish": false,
+      "canMakeLegalConclusion": false,
+      "canOutsourceResponsibility": false,
+      "manualReviewRequired": true
+    },
+    {
+      "providerId": "jindongmi_jointown",
+      "providerName": "九州通金董秘全周期工作管理系统",
+      "category": "board_office_workflow_system",
+      "credibility": "medium",
+      "canJoinBoardSecretaryCampAs": [
+        "board_office_workflow_tool",
+        "domestic_best_practice_anchor"
+      ],
+      "mappedFamilies": [
+        "RT-F04",
+        "RT-F06",
+        "RT-F07"
+      ],
+      "humanReviewOwner": "board_secretary_or_named_internal_owner",
+      "canPublish": false,
+      "canMakeLegalConclusion": false,
+      "canOutsourceResponsibility": false,
+      "manualReviewRequired": true
+    },
+    {
+      "providerId": "trs_wangcha",
+      "providerName": "拓尔思网察企业版/舆情监测",
+      "category": "sentiment_and_osint_tool",
+      "credibility": "medium",
+      "canJoinBoardSecretaryCampAs": [
+        "sentiment_and_public_opinion_tool"
+      ],
+      "mappedFamilies": [
+        "RT-F02",
+        "RT-F05",
+        "RT-F07"
+      ],
+      "humanReviewOwner": "board_secretary_or_named_internal_owner",
+      "canPublish": false,
+      "canMakeLegalConclusion": false,
+      "canOutsourceResponsibility": false,
+      "manualReviewRequired": true
+    },
+    {
+      "providerId": "esgai_report_generator",
+      "providerName": "ESGAI报告智能生成器",
+      "category": "esg_reporting_tool",
+      "credibility": "medium",
+      "canJoinBoardSecretaryCampAs": [
+        "esg_and_governance_tool"
+      ],
+      "mappedFamilies": [
+        "RT-F02",
+        "RT-F05",
+        "RT-F06"
+      ],
+      "humanReviewOwner": "board_secretary_or_named_internal_owner",
+      "canPublish": false,
+      "canMakeLegalConclusion": false,
+      "canOutsourceResponsibility": false,
+      "manualReviewRequired": true
+    },
+    {
+      "providerId": "esgcloud_jingniu",
+      "providerName": "ESG Cloud鲸牛ESG数字员工",
+      "category": "esg_reporting_tool",
+      "credibility": "medium",
+      "canJoinBoardSecretaryCampAs": [
+        "esg_and_governance_tool"
+      ],
+      "mappedFamilies": [
+        "RT-F03",
+        "RT-F05",
+        "RT-F06"
+      ],
+      "humanReviewOwner": "board_secretary_or_named_internal_owner",
+      "canPublish": false,
+      "canMakeLegalConclusion": false,
+      "canOutsourceResponsibility": false,
+      "manualReviewRequired": true
+    },
+    {
+      "providerId": "qingyue_epmap",
+      "providerName": "青悦AI辅助ESG报告撰写工具",
+      "category": "esg_reporting_tool",
+      "credibility": "medium",
+      "canJoinBoardSecretaryCampAs": [
+        "esg_and_governance_tool"
+      ],
+      "mappedFamilies": [
+        "RT-F05",
+        "RT-F06"
+      ],
+      "humanReviewOwner": "board_secretary_or_named_internal_owner",
+      "canPublish": false,
+      "canMakeLegalConclusion": false,
+      "canOutsourceResponsibility": false,
+      "manualReviewRequired": true
+    },
+    {
+      "providerId": "haoshanghao_wecom_ai_query",
+      "providerName": "好上好企业微信AI查询实践",
+      "category": "internal_workflow_practice",
+      "credibility": "high",
+      "canJoinBoardSecretaryCampAs": [
+        "internal_data_permission_test_anchor"
+      ],
+      "mappedFamilies": [
+        "RT-F03",
+        "RT-F04",
+        "RT-F06"
+      ],
+      "humanReviewOwner": "board_secretary_or_named_internal_owner",
+      "canPublish": false,
+      "canMakeLegalConclusion": false,
+      "canOutsourceResponsibility": false,
+      "manualReviewRequired": true
+    },
+    {
+      "providerId": "nanwei_form_assistant",
+      "providerName": "南威软件填报助手实践",
+      "category": "form_and_process_ai_tool",
+      "credibility": "high",
+      "canJoinBoardSecretaryCampAs": [
+        "form_validation_tool_anchor"
+      ],
+      "mappedFamilies": [
+        "RT-F04",
+        "RT-F05",
+        "RT-F06"
+      ],
+      "humanReviewOwner": "board_secretary_or_named_internal_owner",
+      "canPublish": false,
+      "canMakeLegalConclusion": false,
+      "canOutsourceResponsibility": false,
+      "manualReviewRequired": true
+    },
+    {
+      "providerId": "chongqing_bank_triple_disclosure_check",
+      "providerName": "重庆银行公告校验三重检验实践",
+      "category": "announcement_review_practice",
+      "credibility": "high",
+      "canJoinBoardSecretaryCampAs": [
+        "announcement_and_data_verification_tool",
+        "domestic_best_practice_anchor"
+      ],
+      "mappedFamilies": [
+        "RT-F04",
+        "RT-F05",
+        "RT-F06"
+      ],
+      "humanReviewOwner": "board_secretary_or_named_internal_owner",
+      "canPublish": false,
+      "canMakeLegalConclusion": false,
+      "canOutsourceResponsibility": false,
+      "manualReviewRequired": true
+    },
+    {
+      "providerId": "cnopendata_sse_ir_dataset",
+      "providerName": "上证e互动投资者问答数据表",
+      "category": "third_party_dataset",
+      "credibility": "medium",
+      "canJoinBoardSecretaryCampAs": [
+        "investor_question_pressure_source"
+      ],
+      "mappedFamilies": [
+        "RT-F02",
+        "RT-F05",
+        "RT-F07"
+      ],
+      "humanReviewOwner": "board_secretary_or_named_internal_owner",
+      "canPublish": false,
+      "canMakeLegalConclusion": false,
+      "canOutsourceResponsibility": false,
+      "manualReviewRequired": true
+    },
+    {
+      "providerId": "sscc_fintech",
+      "providerName": "深圳证券通信金融科技创新业务",
+      "category": "financial_infrastructure_provider",
+      "credibility": "medium",
+      "canJoinBoardSecretaryCampAs": [
+        "infrastructure_and_governance_anchor"
+      ],
+      "mappedFamilies": [
+        "RT-F04",
+        "RT-F06"
+      ],
+      "humanReviewOwner": "board_secretary_or_named_internal_owner",
+      "canPublish": false,
+      "canMakeLegalConclusion": false,
+      "canOutsourceResponsibility": false,
+      "manualReviewRequired": true
+    },
+    {
+      "providerId": "wind_financial_terminal",
+      "providerName": "Wind金融终端与数据服务",
+      "category": "financial_data_terminal",
+      "credibility": "high",
+      "canJoinBoardSecretaryCampAs": [
+        "announcement_and_data_verification_tool"
+      ],
+      "mappedFamilies": [
+        "RT-F05",
+        "RT-F06"
+      ],
+      "humanReviewOwner": "board_secretary_or_named_internal_owner",
+      "canPublish": false,
+      "canMakeLegalConclusion": false,
+      "canOutsourceResponsibility": false,
+      "manualReviewRequired": true
+    },
+    {
+      "providerId": "eastmoney_choice",
+      "providerName": "东方财富Choice",
+      "category": "financial_data_terminal",
+      "credibility": "high",
+      "canJoinBoardSecretaryCampAs": [
+        "announcement_and_data_verification_tool",
+        "sentiment_and_public_opinion_tool"
+      ],
+      "mappedFamilies": [
+        "RT-F02",
+        "RT-F05",
+        "RT-F07"
+      ],
+      "humanReviewOwner": "board_secretary_or_named_internal_owner",
+      "canPublish": false,
+      "canMakeLegalConclusion": false,
+      "canOutsourceResponsibility": false,
+      "manualReviewRequired": true
+    },
+    {
+      "providerId": "ths_ifind",
+      "providerName": "同花顺iFinD",
+      "category": "financial_data_terminal",
+      "credibility": "high",
+      "canJoinBoardSecretaryCampAs": [
+        "announcement_and_data_verification_tool",
+        "sentiment_and_public_opinion_tool",
+        "esg_and_governance_tool"
+      ],
+      "mappedFamilies": [
+        "RT-F03",
+        "RT-F05",
+        "RT-F06"
+      ],
+      "humanReviewOwner": "board_secretary_or_named_internal_owner",
+      "canPublish": false,
+      "canMakeLegalConclusion": false,
+      "canOutsourceResponsibility": false,
+      "manualReviewRequired": true
+    },
+    {
+      "providerId": "datayes",
+      "providerName": "通联数据",
+      "category": "financial_data_api",
+      "credibility": "high",
+      "canJoinBoardSecretaryCampAs": [
+        "announcement_and_data_verification_tool"
+      ],
+      "mappedFamilies": [
+        "RT-F02",
+        "RT-F05",
+        "RT-F06"
+      ],
+      "humanReviewOwner": "board_secretary_or_named_internal_owner",
+      "canPublish": false,
+      "canMakeLegalConclusion": false,
+      "canOutsourceResponsibility": false,
+      "manualReviewRequired": true
+    },
+    {
+      "providerId": "syntao_green_finance_star",
+      "providerName": "商道融绿STαR ESG",
+      "category": "esg_rating_and_data",
+      "credibility": "medium",
+      "canJoinBoardSecretaryCampAs": [
+        "esg_and_governance_tool"
+      ],
+      "mappedFamilies": [
+        "RT-F05",
+        "RT-F06"
+      ],
+      "humanReviewOwner": "board_secretary_or_named_internal_owner",
+      "canPublish": false,
+      "canMakeLegalConclusion": false,
+      "canOutsourceResponsibility": false,
+      "manualReviewRequired": true
+    },
+    {
+      "providerId": "china_securities_index_esg",
+      "providerName": "中证指数数据与ESG服务",
+      "category": "index_and_esg_data",
+      "credibility": "high",
+      "canJoinBoardSecretaryCampAs": [
+        "announcement_and_data_verification_tool",
+        "esg_and_governance_tool"
+      ],
+      "mappedFamilies": [
+        "RT-F05",
+        "RT-F06"
+      ],
+      "humanReviewOwner": "board_secretary_or_named_internal_owner",
+      "canPublish": false,
+      "canMakeLegalConclusion": false,
+      "canOutsourceResponsibility": false,
+      "manualReviewRequired": true
+    },
+    {
+      "providerId": "pkulaw",
+      "providerName": "北大法宝",
+      "category": "legal_research_database",
+      "credibility": "high",
+      "canJoinBoardSecretaryCampAs": [
+        "compliance_knowledge_resource"
+      ],
+      "mappedFamilies": [
+        "RT-F05",
+        "RT-F06"
+      ],
+      "humanReviewOwner": "board_secretary_or_named_internal_owner",
+      "canPublish": false,
+      "canMakeLegalConclusion": false,
+      "canOutsourceResponsibility": false,
+      "manualReviewRequired": true
+    },
+    {
+      "providerId": "wkinfo",
+      "providerName": "威科先行",
+      "category": "legal_and_tax_research_database",
+      "credibility": "high",
+      "canJoinBoardSecretaryCampAs": [
+        "compliance_knowledge_resource"
+      ],
+      "mappedFamilies": [
+        "RT-F05",
+        "RT-F06"
+      ],
+      "humanReviewOwner": "board_secretary_or_named_internal_owner",
+      "canPublish": false,
+      "canMakeLegalConclusion": false,
+      "canOutsourceResponsibility": false,
+      "manualReviewRequired": true
+    },
+    {
+      "providerId": "qcc",
+      "providerName": "企查查",
+      "category": "business_registry_and_risk_data",
+      "credibility": "medium",
+      "canJoinBoardSecretaryCampAs": [
+        "announcement_and_data_verification_tool"
+      ],
+      "mappedFamilies": [
+        "RT-F03",
+        "RT-F05",
+        "RT-F06"
+      ],
+      "humanReviewOwner": "board_secretary_or_named_internal_owner",
+      "canPublish": false,
+      "canMakeLegalConclusion": false,
+      "canOutsourceResponsibility": false,
+      "manualReviewRequired": true
+    },
+    {
+      "providerId": "qixin",
+      "providerName": "启信宝",
+      "category": "business_registry_and_risk_data",
+      "credibility": "medium",
+      "canJoinBoardSecretaryCampAs": [
+        "announcement_and_data_verification_tool"
+      ],
+      "mappedFamilies": [
+        "RT-F03",
+        "RT-F05",
+        "RT-F06"
+      ],
+      "humanReviewOwner": "board_secretary_or_named_internal_owner",
+      "canPublish": false,
+      "canMakeLegalConclusion": false,
+      "canOutsourceResponsibility": false,
+      "manualReviewRequired": true
+    }
+  ]
+}

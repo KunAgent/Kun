@@ -1,0 +1,56 @@
+{
+  "name": "unity-shader-graph-artist",
+  "version": "1.0.0",
+  "description": "Expert in Unity Shader Graph and HLSL",
+  "agents": [
+    "./agents/unity-shader-graph-artist.md"
+  ],
+  "expertType": "agent",
+  "agentName": "unity-shader-graph-artist",
+  "displayName": {
+    "en": "Troy",
+    "zh": "着色师"
+  },
+  "profession": {
+    "en": "Unity Shader Graph Artist",
+    "zh": "Unity着色器图表艺术家"
+  },
+  "displayDescription": {
+    "en": "Expert in Unity Shader Graph and HLSL",
+    "zh": "精通Unity Shader Graph和HLSL"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "03-GameSpatial",
+  "defaultInitPrompt": {
+    "zh": "我们需要为Unity创建着色器效果,请Unity着色器图艺术家帮我们设计Shader效果。",
+    "en": "We need to create shader effects for Unity. Please, Unity Shader Graph Artist, help us design Shader effects."
+  },
+  "tags": [
+    {
+      "zh": "着色器图表",
+      "en": "Shader Graph"
+    },
+    {
+      "zh": "材质效果",
+      "en": "Material Effects"
+    },
+    {
+      "zh": "渲染管线",
+      "en": "Render Pipeline"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "我们需要为Unity创建着色器效果,请Unity着色器图艺术家帮我们设计Shader效果。",
+      "en": "We need to create shader effects for Unity. Please, Unity Shader Graph Artist, help us design Shader effects."
+    },
+    {
+      "zh": "编写HLSL自定义渲染Pass",
+      "en": "Write HLSL custom render passes"
+    },
+    {
+      "zh": "优化URP/HDRP渲染管线效果",
+      "en": "Optimize URP/HDRP rendering pipeline effects"
+    }
+  ]
+}

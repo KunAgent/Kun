@@ -1,0 +1,124 @@
+#!/usr/bin/env node
+
+/**
+ * CloudStudio 配置文件合并工具
+ * 
+ * 用于合并 .cloudstudio TOML 配置文件
+ * 合并规则：覆盖同名应用（基于 app.name 字段）
+ * 
+ * Usage: node merge-cloudstudio.js <current-file> <template-file> <output-file>
+ */
+
+import { readFileSync, writeFileSync, existsSync } from 'fs';
+import { TOMLParser } from './toml-parser.js';
+
+/**
+ * 合并两个 CloudStudio 配置对象
+ * @param {Object} current - 当前项目的配置
+ * @param {Object} template - 模板提供的配置
+ * @returns {Object} 合并后的配置
+ */
+function mergeCloudStudioConfig(current, template) {
+  // 如果当前配置为空,直接使用模板
+  if (!current || Object.keys(current).length === 0) {
+    return template;
+  }
+
+  // 如果模板为空,保留当前配置
+  if (!template || Object.keys(template).length === 0) {
+    return current;
+  }
+
+  const result = { ...current };
+
+  // 处理 app 数组的合并
+  if (template.app && Array.isArray(template.app)) {
+    if (!result.app || !Array.isArray(result.app)) {
+      // 当前配置没有 app 数组,直接使用模板
+      result.app = template.app;
+    } else {
+      // 创建 name 到应用对象的映射
+      const currentAppsMap = new Map();
+      result.app.forEach(app => {
+        if (app.name) {
+          currentAppsMap.set(app.name, app);
+        }
+      });
+
+      // 合并模板中的应用
+      template.app.forEach(templateApp => {
+        if (templateApp.name) {
+          if (currentAppsMap.has(templateApp.name)) {
+            // 存在同名应用,覆盖
+            const index = result.app.findIndex(app => app.name === templateApp.name);
+            result.app[index] = templateApp;
+            console.log(`  ✓ Overriding app: ${templateApp.name}`);
+          } else {
+            // 新应用,添加
+            result.app.push(templateApp);
+            console.log(`  ✓ Adding app: ${templateApp.name}`);
+          }
+        }
+      });
+    }
+  }
+
+  // 处理其他顶级字段（如果有的话）
+  // 简单覆盖策略
+  for (const [key, value] of Object.entries(template)) {
+    if (key !== 'app') {
+      result[key] = value;
+    }
+  }
+
+  return result;
+}
+
+/**
+ * 主函数
+ */
+function main() {
+  const args = process.argv.slice(2);
+
+  if (args.length !== 3) {
+    console.error('Usage: node merge-cloudstudio.js <current-file> <template-file> <output-file>');
+    process.exit(1);
+  }
+
+  const [currentFile, templateFile, outputFile] = args;
+
+  console.log('📝 Merging .cloudstudio configurations...');
+
+  // 读取当前配置
+  let currentConfig = {};
+  if (existsSync(currentFile)) {
+    console.log(`  Reading current config from: ${currentFile}`);
+    const currentContent = readFileSync(currentFile, 'utf-8');
+    currentConfig = TOMLParser.parse(currentContent);
+  } else {
+    console.log('  No existing .cloudstudio file found');
+  }
+
+  // 读取模板配置
+  let templateConfig = {};
+  if (existsSync(templateFile)) {
+    console.log(`  Reading template config from: ${templateFile}`);
+    const templateContent = readFileSync(templateFile, 'utf-8');
+    templateConfig = TOMLParser.parse(templateContent);
+  } else {
+    console.log('  No template .cloudstudio file found');
+  }
+
+  // 合并配置
+  const mergedConfig = mergeCloudStudioConfig(currentConfig, templateConfig);
+
+  // 序列化并写入输出文件
+  const outputContent = TOMLParser.stringify(mergedConfig);
+  writeFileSync(outputFile, outputContent, 'utf-8');
+
+  console.log(`✅ Merged configuration written to: ${outputFile}`);
+  console.log(`   Total apps: ${mergedConfig.app ? mergedConfig.app.length : 0}`);
+}
+
+// 运行主函数
+main();

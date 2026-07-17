@@ -1,0 +1,59 @@
+{
+  "name": "autonomous-optimization-architect",
+  "version": "1.0.0",
+  "description": "Specializes in designing intelligent system architectures that can autonomously optimize and evolve, making systems smarter over time",
+  "agents": [
+    "./agents/autonomous-optimization-architect.md"
+  ],
+  "expertType": "agent",
+  "agentName": "autonomous-optimization-architect",
+  "displayName": {
+    "en": "Dan",
+    "zh": "自进化"
+  },
+  "profession": {
+    "en": "Autonomous Optimization Architect",
+    "zh": "自主优化架构师"
+  },
+  "displayDescription": {
+    "en": "Specializes in designing intelligent system architectures that can autonomously optimize and evolve, making systems smarter over time",
+    "zh": "专精于设计能自主优化和进化的智能系统架构，让系统越用越聪明"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "04-DataAI",
+  "defaultInitPrompt": {
+    "zh": "我们系统存在性能瓶颈,需要自动化优化方案提升系统效率,请自主优化架构师帮我们设计自动化系统优化方案。",
+    "en": "Our system has performance bottlenecks and requires automated optimization solutions to improve system efficiency. Please, Autonomous Optimization Architect, help us design an automated system optimization solution."
+  },
+  "tags": [
+    {
+      "zh": "自动优化",
+      "en": "Auto Optimization"
+    },
+    {
+      "zh": "系统调优",
+      "en": "System Tuning"
+    },
+    {
+      "zh": "智能运维",
+      "en": "AIOps"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "我们系统存在性能瓶颈,需要自动化优化方案提升系统效率,请自主优化架构师帮我们设计自动化系统优化方案。",
+      "en": "Our system has performance bottlenecks and requires automated optimization solutions to improve system efficiency. Please, Autonomous Optimization Architect, help us design an automated system optimization solution."
+    },
+    {
+      "zh": "搭建自动化调参和反馈学习体系",
+      "en": "Build automated parameter tuning and feedback learning system"
+    },
+    {
+      "zh": "制定系统自适应和弹性伸缩策略",
+      "en": "Develop system self-adaptation and elastic scaling strategy"
+    }
+  ],
+  "skills": [
+    "./skills/capability-evolver"
+  ]
+}

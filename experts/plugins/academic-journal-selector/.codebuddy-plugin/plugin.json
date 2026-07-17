@@ -1,0 +1,156 @@
+{
+  "name": "academic-journal-selector",
+  "version": "3.0.0",
+  "description": "5-person academic journal selection team v3.0 — dual-pipeline (CN/EN) with 4-layer evidence (L1 rejection/L2 citation fingerprint/L3 multi-dimensional matching/L4 semantic embedding), keyword hotness assessment, paradigm identification, and on-demand peer review simulation.",
+  "author": {
+    "name": "权恒之",
+    "email": "hengzhi@example.com"
+  },
+  "expertType": "team",
+  "agentName": "academic-journal-selector-team-lead",
+  "teamInfo": {
+    "leadAgent": "academic-journal-selector-team-lead",
+    "memberAgents": [
+      "cn-pipeline-scout",
+      "cn-pipeline-matcher",
+      "en-pipeline-scout",
+      "en-pipeline-matcher",
+      "paper-reviewer"
+    ]
+  },
+  "agents": [
+    "./agents/academic-journal-selector-team-lead.md",
+    "./agents/cn-pipeline-scout.md",
+    "./agents/cn-pipeline-matcher.md",
+    "./agents/en-pipeline-scout.md",
+    "./agents/en-pipeline-matcher.md",
+    "./agents/paper-reviewer.md"
+  ],
+  "displayName": {
+    "en": "Academic Journal Advisor v3.0",
+    "zh": "学术选刊顾问团 v3.0"
+  },
+  "profession": {
+    "en": "Academic Journal Advisor v3.0",
+    "zh": "学术选刊顾问团 v3.0"
+  },
+  "displayDescription": {
+    "en": "5-person journal selection team with 4-layer evidence system: search+screening+fingerprint+semantic matching for Chinese core and SCI/SSCI journals, tiered submission strategy.",
+    "zh": "学术选刊专家团，并行双管道架构，中文刊和外文刊各自独立分析学科匹配、期刊情报与安全检测，输出冲稳保分层投稿方案。"
+  },
+  "avatar": "avatars/team.png",
+  "categoryId": "04-DataAI",
+  "defaultInitPrompt": {
+    "zh": "我写了一篇关于[主题]的论文，目标[中文普通/中文核心/SCI/SSCI]期刊，摘要：[粘贴摘要]，全文：[请上传]。请帮我推荐合适的投稿期刊，并按冲-稳-保三档制定投稿方案。",
+    "en": "I wrote a paper on [topic], targeting [Chinese core / SCI / SSCI] journals. Here is the abstract: [paste abstract]. Full paper: [please upload]. Please recommend suitable journals and tell me the estimated acceptance probability percentage for each recommended journal."
+  },
+  "tags": [
+    {
+      "en": "Journal Selection",
+      "zh": "选刊投稿"
+    },
+    {
+      "en": "SCI/SSCI Analysis",
+      "zh": "SCI/SSCI分析"
+    },
+    {
+      "en": "Submission Strategy",
+      "zh": "投稿策略"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "en": "I wrote a paper on [topic], targeting [Chinese general / Chinese core / SCI / SSCI] journals. Here is the abstract: [paste abstract]. Full paper: [please upload]. Please recommend suitable journals and tell me the estimated acceptance probability percentage for each recommended journal.",
+      "zh": "我写了一篇关于[主题]的论文，目标[中文普通/中文核心/SCI/SSCI]期刊，摘要：[粘贴摘要]，全文：[请上传]。请帮我推荐合适的投稿期刊，并按冲-稳-保三档制定投稿方案。"
+    },
+    {
+      "en": "My paper is at [level]. Please create a tiered SCI/SSCI submission plan (aspiration-stable-safety) with safety screening (CAS warning + self-citation rate) and Chinese scholar friendliness analysis.",
+      "zh": "我的论文质量属于[层次]，请为我制定SCI/SSCI'冲-稳-保'投稿方案，含期刊安全检测（预警+自引率）和中国学者友好度分析"
+    },
+    {
+      "en": "Please simulate a peer review for my paper targeting [journal name], identifying potential weaknesses and revision suggestions before submission.",
+      "zh": "请模拟[目标期刊]的同行评审，帮我预判审稿人可能提出的问题和改稿建议"
+    }
+  ],
+  "members": [
+    {
+      "id": "academic-journal-selector-team-lead",
+      "name": {
+        "en": "Zhen Kanming",
+        "zh": "甄刊明"
+      },
+      "profession": {
+        "en": "Editorial Director",
+        "zh": "选刊主编"
+      },
+      "avatar": "avatars/team-lead.png",
+      "role": "lead"
+    },
+    {
+      "id": "cn-pipeline-scout",
+      "name": {
+        "en": "Kan Tan",
+        "zh": "刊探"
+      },
+      "profession": {
+        "en": "Journal Scout",
+        "zh": "中文刊猎手"
+      },
+      "avatar": "avatars/cn-pipeline-scout.png",
+      "role": "member"
+    },
+    {
+      "id": "cn-pipeline-matcher",
+      "name": {
+        "en": "Kan Ping",
+        "zh": "刊评"
+      },
+      "profession": {
+        "en": "Journal Matcher & Strategist",
+        "zh": "中文刊匹配师"
+      },
+      "avatar": "avatars/cn-pipeline-matcher.png",
+      "role": "member"
+    },
+    {
+      "id": "en-pipeline-scout",
+      "name": {
+        "en": "Kan Sou",
+        "zh": "刊搜"
+      },
+      "profession": {
+        "en": "International Journal Scout",
+        "zh": "外文刊猎手"
+      },
+      "avatar": "avatars/en-pipeline-scout.png",
+      "role": "member"
+    },
+    {
+      "id": "en-pipeline-matcher",
+      "name": {
+        "en": "Kan Ce",
+        "zh": "刊策"
+      },
+      "profession": {
+        "en": "International Journal Strategist",
+        "zh": "外文刊匹配师"
+      },
+      "avatar": "avatars/en-pipeline-matcher.png",
+      "role": "member"
+    },
+    {
+      "id": "paper-reviewer",
+      "name": {
+        "en": "Shen Yan",
+        "zh": "审言"
+      },
+      "profession": {
+        "en": "Peer Review Simulation Expert",
+        "zh": "评审模拟专家"
+      },
+      "avatar": "avatars/paper-reviewer.png",
+      "role": "member"
+    }
+  ],
+  "plugin": "academic-journal-selector"
+}

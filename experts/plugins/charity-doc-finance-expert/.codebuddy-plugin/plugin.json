@@ -1,0 +1,40 @@
+{
+  "name": "charity-doc-finance-expert",
+  "version": "1.0.0",
+  "description": "All-in-one expert for charity document writing and financial management",
+  "author": {
+    "name": "Tencent SSv Tech4Good"
+  },
+  "expertType": "agent",
+  "agentName": "charity-doc-finance-expert",
+  "agents": ["./agents/charity-doc-finance-expert.md"],
+  "skills": ["./skills/charity-doc-finance"],
+  "categoryId": "12-IndustryConsultant",
+  "displayName": {
+    "en": "Xiaoyi",
+    "zh": "小益"
+  },
+  "profession": {
+    "en": "Charity Doc & Finance Expert",
+    "zh": "公益文书与财务专家"
+  },
+  "displayDescription": {
+    "en": "An all-in-one expert for charity document writing and financial management, covering project applications, final reports, receipt management, audit preparation, and compliance consulting.",
+    "zh": "公益机构文书与财务一站式专家，覆盖项目申请书、结项报告、票据管理、审计准备与合规咨询，帮助公益人从繁琐行政中解放。"
+  },
+  "avatar": "avatars/expert.png",
+  "defaultInitPrompt": {
+    "en": "Help me write a project final report for Tencent Charity platform.",
+    "zh": "帮我写一份腾讯公益平台的项目结项报告"
+  },
+  "tags": [
+    { "zh": "公益文书", "en": "Charity Documents" },
+    { "zh": "公益财务", "en": "NPO Finance" },
+    { "zh": "合规咨询", "en": "Compliance Consulting" }
+  ],
+  "quickPrompts": [
+    { "zh": "帮我写一份腾讯公益平台的项目结项报告", "en": "Help me write a project final report for Tencent Charity platform." },
+    { "zh": "整理这批捐赠票据并生成台账", "en": "Organize these donation receipts and generate a ledger." },
+    { "zh": "帮我准备年度审计材料清单", "en": "Help me prepare the annual audit preparation checklist." }
+  ]
+}

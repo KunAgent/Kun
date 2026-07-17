@@ -1,0 +1,59 @@
+{
+  "name": "tool-evaluation-expert",
+  "version": "1.0.0",
+  "description": "Systematically evaluating and recommending the best tools for teams, avoiding wasted time on wrong tools",
+  "agents": [
+    "./agents/tool-evaluation-expert.md"
+  ],
+  "expertType": "agent",
+  "agentName": "tool-evaluation-expert",
+  "displayName": {
+    "en": "Morgan",
+    "zh": "选品品"
+  },
+  "profession": {
+    "en": "Tool Evaluation Expert",
+    "zh": "工具评估专家"
+  },
+  "displayDescription": {
+    "en": "Systematically evaluating and recommending the best tools for teams, avoiding wasted time on wrong tools",
+    "zh": "系统化评估推荐最适合团队的工具，避免浪费时间在错误工具上"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "10-ProjectQuality",
+  "defaultInitPrompt": {
+    "zh": "我们想引入新的测试工具,需要专业的选型评估,请工具评估专家帮我们进行工具选型和评估。",
+    "en": "We want to introduce new testing tools and need professional selection and evaluation. Please, Tool Evaluation Expert, help us conduct tool selection and evaluation."
+  },
+  "tags": [
+    {
+      "zh": "工具评估",
+      "en": "Tool Evaluation"
+    },
+    {
+      "zh": "选型对比",
+      "en": "Tool Comparison"
+    },
+    {
+      "zh": "技术选型",
+      "en": "Tech Selection"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "我们想引入新的测试工具,需要专业的选型评估,请工具评估专家帮我们进行工具选型和评估。",
+      "en": "We want to introduce new testing tools and need professional selection and evaluation. Please, Tool Evaluation Expert, help us conduct tool selection and evaluation."
+    },
+    {
+      "zh": "制定工具采购决策和ROI评估方案",
+      "en": "Develop tool procurement decision and ROI evaluation plan"
+    },
+    {
+      "zh": "设计工具集成和迁移方案",
+      "en": "Design tool integration and migration plan"
+    }
+  ],
+  "skills": [
+    "./skills/deep-research"
+  ]
+}

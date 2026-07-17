@@ -1,0 +1,441 @@
+{
+  "version": "1.0",
+  "description": "要素式文书模板索引，104个模板按文书类型分组",
+  "total": 104,
+  "templates": {
+    "刑事自诉状": [
+      {
+        "filename": "刑事自诉状-侮辱案.docx",
+        "case_type": "侮辱案"
+      },
+      {
+        "filename": "刑事自诉状-拒不执行判决裁定案.docx",
+        "case_type": "拒不执行判决裁定案"
+      },
+      {
+        "filename": "刑事自诉状-诽谤案.docx",
+        "case_type": "诽谤案"
+      },
+      {
+        "filename": "刑事自诉状-重婚案.docx",
+        "case_type": "重婚案"
+      }
+    ],
+    "刑事自诉答辩状": [
+      {
+        "filename": "刑事自诉答辩状-侮辱案.docx",
+        "case_type": "侮辱案"
+      },
+      {
+        "filename": "刑事自诉答辩状-拒不执行判决裁定案.docx",
+        "case_type": "拒不执行判决裁定案"
+      },
+      {
+        "filename": "刑事自诉答辩状-诽谤案.docx",
+        "case_type": "诽谤案"
+      },
+      {
+        "filename": "刑事自诉答辩状-重婚案.docx",
+        "case_type": "重婚案"
+      }
+    ],
+    "国家赔偿申请书": [
+      {
+        "filename": "国家赔偿申请书-刑事改判无罪赔偿.docx",
+        "case_type": "刑事改判无罪赔偿"
+      },
+      {
+        "filename": "国家赔偿申请书-怠于履行监管职责致伤致死赔偿.docx",
+        "case_type": "怠于履行监管职责致伤致死赔偿"
+      },
+      {
+        "filename": "国家赔偿申请书-违法刑事拘留赔偿.docx",
+        "case_type": "违法刑事拘留赔偿"
+      },
+      {
+        "filename": "国家赔偿申请书-错误执行赔偿.docx",
+        "case_type": "错误执行赔偿"
+      }
+    ],
+    "国家赔偿答辩状": [
+      {
+        "filename": "国家赔偿答辩状-刑事改判无罪赔偿.docx",
+        "case_type": "刑事改判无罪赔偿"
+      },
+      {
+        "filename": "国家赔偿答辩状-怠于履行监管职责致伤致死赔偿.docx",
+        "case_type": "怠于履行监管职责致伤致死赔偿"
+      },
+      {
+        "filename": "国家赔偿答辩状-违法刑事拘留赔偿.docx",
+        "case_type": "违法刑事拘留赔偿"
+      },
+      {
+        "filename": "国家赔偿答辩状-错误执行赔偿.docx",
+        "case_type": "错误执行赔偿"
+      }
+    ],
+    "民事答辩状": [
+      {
+        "filename": "民事答辩状-不正当竞争纠纷.docx",
+        "case_type": "不正当竞争纠纷"
+      },
+      {
+        "filename": "民事答辩状-买卖合同纠纷.docx",
+        "case_type": "买卖合同纠纷"
+      },
+      {
+        "filename": "民事答辩状-人身保险合同纠纷.docx",
+        "case_type": "人身保险合同纠纷"
+      },
+      {
+        "filename": "民事答辩状-侵害发明专利权纠纷.docx",
+        "case_type": "侵害发明专利权纠纷"
+      },
+      {
+        "filename": "民事答辩状-侵害商业秘密纠纷.docx",
+        "case_type": "侵害商业秘密纠纷"
+      },
+      {
+        "filename": "民事答辩状-侵害商标权纠纷.docx",
+        "case_type": "侵害商标权纠纷"
+      },
+      {
+        "filename": "民事答辩状-侵害外观设计专利权纠纷.docx",
+        "case_type": "侵害外观设计专利权纠纷"
+      },
+      {
+        "filename": "民事答辩状-侵害植物新品种权纠纷.docx",
+        "case_type": "侵害植物新品种权纠纷"
+      },
+      {
+        "filename": "民事答辩状-侵害著作权及邻接权纠纷.docx",
+        "case_type": "侵害著作权及邻接权纠纷"
+      },
+      {
+        "filename": "民事答辩状-保证保险合同纠纷.docx",
+        "case_type": "保证保险合同纠纷"
+      },
+      {
+        "filename": "民事答辩状-信用卡纠纷.docx",
+        "case_type": "信用卡纠纷"
+      },
+      {
+        "filename": "民事答辩状-劳动争议纠纷.docx",
+        "case_type": "劳动争议纠纷"
+      },
+      {
+        "filename": "民事答辩状-垄断纠纷.docx",
+        "case_type": "垄断纠纷"
+      },
+      {
+        "filename": "民事答辩状-建设工程施工合同纠纷.docx",
+        "case_type": "建设工程施工合同纠纷"
+      },
+      {
+        "filename": "民事答辩状-房屋买卖合同纠纷.docx",
+        "case_type": "房屋买卖合同纠纷"
+      },
+      {
+        "filename": "民事答辩状-房屋租赁合同纠纷.docx",
+        "case_type": "房屋租赁合同纠纷"
+      },
+      {
+        "filename": "民事答辩状-技术合同纠纷.docx",
+        "case_type": "技术合同纠纷"
+      },
+      {
+        "filename": "民事答辩状-机动车交通事故责任纠纷.docx",
+        "case_type": "机动车交通事故责任纠纷"
+      },
+      {
+        "filename": "民事答辩状-民间借贷纠纷.docx",
+        "case_type": "民间借贷纠纷"
+      },
+      {
+        "filename": "民事答辩状-海上、通海水域人身损害责任纠纷.docx",
+        "case_type": "海上、通海水域人身损害责任纠纷"
+      },
+      {
+        "filename": "民事答辩状-海上、通海水域货运代理合同纠纷.docx",
+        "case_type": "海上、通海水域货运代理合同纠纷"
+      },
+      {
+        "filename": "民事答辩状-物业服务合同纠纷.docx",
+        "case_type": "物业服务合同纠纷"
+      },
+      {
+        "filename": "民事答辩状-环境污染民事公益诉讼.docx",
+        "case_type": "环境污染民事公益诉讼"
+      },
+      {
+        "filename": "民事答辩状-生态环境损害赔偿诉讼.docx",
+        "case_type": "生态环境损害赔偿诉讼"
+      },
+      {
+        "filename": "民事答辩状-生态破坏民事公益诉讼.docx",
+        "case_type": "生态破坏民事公益诉讼"
+      },
+      {
+        "filename": "民事答辩状-离婚纠纷.docx",
+        "case_type": "离婚纠纷"
+      },
+      {
+        "filename": "民事答辩状-船员劳务合同纠纷.docx",
+        "case_type": "船员劳务合同纠纷"
+      },
+      {
+        "filename": "民事答辩状-船舶碰撞损害责任纠纷.docx",
+        "case_type": "船舶碰撞损害责任纠纷"
+      },
+      {
+        "filename": "民事答辩状-融资租赁合同纠纷.docx",
+        "case_type": "融资租赁合同纠纷"
+      },
+      {
+        "filename": "民事答辩状-证券虚假陈述责任纠纷.docx",
+        "case_type": "证券虚假陈述责任纠纷"
+      },
+      {
+        "filename": "民事答辩状-财产损失保险合同纠纷.docx",
+        "case_type": "财产损失保险合同纠纷"
+      },
+      {
+        "filename": "民事答辩状-责任保险合同纠纷.docx",
+        "case_type": "责任保险合同纠纷"
+      },
+      {
+        "filename": "民事答辩状-金融借款合同纠纷.docx",
+        "case_type": "金融借款合同纠纷"
+      }
+    ],
+    "民事起诉状": [
+      {
+        "filename": "民事起诉状-不正当竞争纠纷.docx",
+        "case_type": "不正当竞争纠纷"
+      },
+      {
+        "filename": "民事起诉状-买卖合同纠纷.docx",
+        "case_type": "买卖合同纠纷"
+      },
+      {
+        "filename": "民事起诉状-人身保险合同纠纷.docx",
+        "case_type": "人身保险合同纠纷"
+      },
+      {
+        "filename": "民事起诉状-侵害发明专利权纠纷.docx",
+        "case_type": "侵害发明专利权纠纷"
+      },
+      {
+        "filename": "民事起诉状-侵害商业秘密纠纷.docx",
+        "case_type": "侵害商业秘密纠纷"
+      },
+      {
+        "filename": "民事起诉状-侵害商标权纠纷.docx",
+        "case_type": "侵害商标权纠纷"
+      },
+      {
+        "filename": "民事起诉状-侵害外观设计专利权纠纷.docx",
+        "case_type": "侵害外观设计专利权纠纷"
+      },
+      {
+        "filename": "民事起诉状-侵害植物新品种权纠纷.docx",
+        "case_type": "侵害植物新品种权纠纷"
+      },
+      {
+        "filename": "民事起诉状-侵害著作权及邻接权纠纷.docx",
+        "case_type": "侵害著作权及邻接权纠纷"
+      },
+      {
+        "filename": "民事起诉状-保证保险合同纠纷.docx",
+        "case_type": "保证保险合同纠纷"
+      },
+      {
+        "filename": "民事起诉状-信用卡纠纷.docx",
+        "case_type": "信用卡纠纷"
+      },
+      {
+        "filename": "民事起诉状-劳动争议纠纷.docx",
+        "case_type": "劳动争议纠纷"
+      },
+      {
+        "filename": "民事起诉状-垄断纠纷.docx",
+        "case_type": "垄断纠纷"
+      },
+      {
+        "filename": "民事起诉状-建设工程施工合同纠纷.docx",
+        "case_type": "建设工程施工合同纠纷"
+      },
+      {
+        "filename": "民事起诉状-房屋买卖合同纠纷.docx",
+        "case_type": "房屋买卖合同纠纷"
+      },
+      {
+        "filename": "民事起诉状-房屋租赁合同纠纷.docx",
+        "case_type": "房屋租赁合同纠纷"
+      },
+      {
+        "filename": "民事起诉状-技术合同纠纷.docx",
+        "case_type": "技术合同纠纷"
+      },
+      {
+        "filename": "民事起诉状-机动车交通事故责任纠纷.docx",
+        "case_type": "机动车交通事故责任纠纷"
+      },
+      {
+        "filename": "民事起诉状-民间借贷纠纷.docx",
+        "case_type": "民间借贷纠纷"
+      },
+      {
+        "filename": "民事起诉状-海上、通海水域人身损害责任纠纷.docx",
+        "case_type": "海上、通海水域人身损害责任纠纷"
+      },
+      {
+        "filename": "民事起诉状-海上、通海水域货运代理合同纠纷.docx",
+        "case_type": "海上、通海水域货运代理合同纠纷"
+      },
+      {
+        "filename": "民事起诉状-物业服务合同纠纷.docx",
+        "case_type": "物业服务合同纠纷"
+      },
+      {
+        "filename": "民事起诉状-环境污染民事公益诉讼.docx",
+        "case_type": "环境污染民事公益诉讼"
+      },
+      {
+        "filename": "民事起诉状-生态环境损害赔偿诉讼.docx",
+        "case_type": "生态环境损害赔偿诉讼"
+      },
+      {
+        "filename": "民事起诉状-生态破坏民事公益诉讼.docx",
+        "case_type": "生态破坏民事公益诉讼"
+      },
+      {
+        "filename": "民事起诉状-离婚纠纷.docx",
+        "case_type": "离婚纠纷"
+      },
+      {
+        "filename": "民事起诉状-船员劳务合同纠纷.docx",
+        "case_type": "船员劳务合同纠纷"
+      },
+      {
+        "filename": "民事起诉状-船舶碰撞损害责任纠纷.docx",
+        "case_type": "船舶碰撞损害责任纠纷"
+      },
+      {
+        "filename": "民事起诉状-融资租赁合同纠纷.docx",
+        "case_type": "融资租赁合同纠纷"
+      },
+      {
+        "filename": "民事起诉状-证券虚假陈述责任纠纷.docx",
+        "case_type": "证券虚假陈述责任纠纷"
+      },
+      {
+        "filename": "民事起诉状-财产损失保险合同纠纷.docx",
+        "case_type": "财产损失保险合同纠纷"
+      },
+      {
+        "filename": "民事起诉状-责任保险合同纠纷.docx",
+        "case_type": "责任保险合同纠纷"
+      },
+      {
+        "filename": "民事起诉状-金融借款合同纠纷.docx",
+        "case_type": "金融借款合同纠纷"
+      }
+    ],
+    "第三人意见陈述书": [
+      {
+        "filename": "第三人意见陈述书-专利无效行政纠纷.docx",
+        "case_type": "专利无效行政纠纷"
+      },
+      {
+        "filename": "第三人意见陈述书-商标撤销复审行政纠纷.docx",
+        "case_type": "商标撤销复审行政纠纷"
+      },
+      {
+        "filename": "第三人意见陈述书-商标无效行政纠纷.docx",
+        "case_type": "商标无效行政纠纷"
+      }
+    ],
+    "行政答辩状": [
+      {
+        "filename": "行政答辩状-商标申请驳回复审纠纷.docx",
+        "case_type": "商标申请驳回复审纠纷"
+      },
+      {
+        "filename": "行政答辩状-通用.docx",
+        "case_type": "通用"
+      }
+    ],
+    "行政起诉状": [
+      {
+        "filename": "行政起诉状-不履行法定职责.docx",
+        "case_type": "不履行法定职责"
+      },
+      {
+        "filename": "行政起诉状-专利无效行政纠纷.docx",
+        "case_type": "专利无效行政纠纷"
+      },
+      {
+        "filename": "行政起诉状-专利申请驳回复审行政纠纷.docx",
+        "case_type": "专利申请驳回复审行政纠纷"
+      },
+      {
+        "filename": "行政起诉状-商标撤销复审行政纠纷.docx",
+        "case_type": "商标撤销复审行政纠纷"
+      },
+      {
+        "filename": "行政起诉状-商标无效行政纠纷.docx",
+        "case_type": "商标无效行政纠纷"
+      },
+      {
+        "filename": "行政起诉状-商标申请驳回复审纠纷.docx",
+        "case_type": "商标申请驳回复审纠纷"
+      },
+      {
+        "filename": "行政起诉状-国有土地上房屋征收决定.docx",
+        "case_type": "国有土地上房屋征收决定"
+      },
+      {
+        "filename": "行政起诉状-垄断纠纷.docx",
+        "case_type": "垄断纠纷"
+      },
+      {
+        "filename": "行政起诉状-工伤保险资格或者待遇认定.docx",
+        "case_type": "工伤保险资格或者待遇认定"
+      },
+      {
+        "filename": "行政起诉状-政府信息公开.docx",
+        "case_type": "政府信息公开"
+      },
+      {
+        "filename": "行政起诉状-行政协议.docx",
+        "case_type": "行政协议"
+      },
+      {
+        "filename": "行政起诉状-行政处罚.docx",
+        "case_type": "行政处罚"
+      },
+      {
+        "filename": "行政起诉状-行政复议.docx",
+        "case_type": "行政复议"
+      },
+      {
+        "filename": "行政起诉状-行政强制执行.docx",
+        "case_type": "行政强制执行"
+      },
+      {
+        "filename": "行政起诉状-行政补偿.docx",
+        "case_type": "行政补偿"
+      },
+      {
+        "filename": "行政起诉状-行政许可.docx",
+        "case_type": "行政许可"
+      },
+      {
+        "filename": "行政起诉状-行政赔偿.docx",
+        "case_type": "行政赔偿"
+      }
+    ]
+  }
+}

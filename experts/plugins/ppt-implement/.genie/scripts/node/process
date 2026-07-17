@@ -1,0 +1,1602 @@
+#!/usr/bin/env node
+
+import {createServer, request as _request} from 'http';
+import {existsSync, mkdirSync, unlinkSync, createWriteStream, appendFileSync, readFileSync, writeFileSync} from 'fs';
+import {join, resolve} from 'path';
+import {spawn, execSync} from 'child_process';
+import {createHash} from 'crypto';
+import {TOMLParser} from './toml-parser.js';
+
+// ==================== Environment Detection & Strategy Pattern ====================
+
+/**
+ * 配置策略基类
+ */
+class ConfigStrategy {
+  /**
+   * 获取策略名称
+   * @returns {string}
+   */
+  getName() {
+    throw new Error('getName() must be implemented');
+  }
+
+  /**
+   * 检测是否适用当前环境
+   * @returns {boolean}
+   */
+  isApplicable() {
+    throw new Error('isApplicable() must be implemented');
+  }
+
+  /**
+   * 更新配置
+   * @param {Object} _params - 配置参数 {name, cmd, cwd, port}
+   * @returns {Promise<void>}
+   */
+  async updateConfig(_params) {
+    throw new Error('updateConfig() must be implemented');
+  }
+}
+
+/**
+ * 本地模式策略 - 写入 .cloudstudio 文件
+ */
+class LocalStrategy extends ConfigStrategy {
+  getName() {
+    return 'local';
+  }
+
+  isApplicable() {
+    // 默认策略，总是可用
+    return true;
+  }
+
+  async updateConfig(params) {
+    try {
+      // 读取现有配置
+      const config = readCloudStudioConfig();
+
+      // 确保 app 数组存在
+      if (!config.app) {
+        config.app = [];
+      }
+
+      // 构建新的应用配置
+      const newApp = {
+        name: params.name,
+        cmd: params.cmd,  // cmd 保持原样，不做任何修改
+        autoRun: true
+      };
+
+      if (params.port) {
+        newApp.port = params.port;
+      }
+
+      // 查找是否存在同名应用
+      const existingIndex = config.app.findIndex(app => app.name === params.name);
+
+      if (existingIndex >= 0) {
+        config.app[existingIndex] = newApp;
+      } else {
+        config.app.push(newApp);
+      }
+
+      // 写入配置文件
+      writeCloudStudioConfig(config);
+    } catch (error) {
+      console.error(`Warning: Failed to update .cloudstudio file: ${error.message}`);
+    }
+  }
+}
+
+/**
+ * CloudStudio 模式策略 - 发送到 CloudStudio API
+ */
+class CloudStudioStrategy extends ConfigStrategy {
+  constructor() {
+    super();
+    this.apiEndpoint = 'http://127.0.0.1:6531/replaceCloudStudioConfig';
+    this.timeout = 5000;
+  }
+
+  getName() {
+    return 'cloudstudio';
+  }
+
+  isApplicable() {
+    // 检测 CloudStudio Sandbox 环境标识文件
+    return existsSync('/run/cloudstudio/space.yaml');
+  }
+
+  async updateConfig(params) {
+    // 构建应用配置
+    const appConfig = {
+      name: params.name,
+      cmd: params.cmd  // cmd 保持原样，不做任何修改
+    };
+
+    if (params.port) {
+      appConfig.port = params.port;
+    }
+
+    // 构建请求体
+    const requestBody = JSON.stringify({
+      app: [appConfig],
+      restart: true
+    });
+
+    // 发送 HTTP 请求
+    return new Promise((resolve, reject) => {
+      const options = {
+        hostname: '127.0.0.1',
+        port: 6531,
+        path: '/replaceCloudStudioConfig',
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Content-Length': Buffer.byteLength(requestBody)
+        },
+        timeout: this.timeout
+      };
+
+      const req = _request(options, (res) => {
+        let responseData = '';
+
+        res.on('data', (chunk) => {
+          responseData += chunk.toString();
+        });
+
+        res.on('end', () => {
+          if (res.statusCode >= 200 && res.statusCode < 300) {
+            console.log(`[CloudStudio Mode] Configuration sent to API successfully`);
+            resolve();
+          } else {
+            reject(new Error(`CloudStudio API returned status ${res.statusCode}: ${responseData}`));
+          }
+        });
+      });
+
+      req.on('error', (error) => {
+        reject(new Error(`Failed to send configuration to CloudStudio API: ${error.message}`));
+      });
+
+      req.on('timeout', () => {
+        req.destroy();
+        reject(new Error('Request to CloudStudio API timed out'));
+      });
+
+      req.write(requestBody);
+      req.end();
+    });
+  }
+}
+
+/**
+ * 策略管理器
+ */
+class StrategyManager {
+  constructor() {
+    this.strategies = [
+      new CloudStudioStrategy(),
+      new LocalStrategy() // LocalStrategy 作为默认策略放在最后
+    ];
+  }
+
+  /**
+   * 获取当前适用的策略
+   * @returns {ConfigStrategy}
+   */
+  getCurrentStrategy() {
+    for (const strategy of this.strategies) {
+      if (strategy.isApplicable()) {
+        return strategy;
+      }
+    }
+    // 不应该到达这里，因为 LocalStrategy 总是可用
+    return this.strategies[this.strategies.length - 1];
+  }
+
+  /**
+   * 注册新策略
+   * @param {ConfigStrategy} strategy
+   */
+  registerStrategy(strategy) {
+    // 在 LocalStrategy 之前插入
+    this.strategies.splice(this.strategies.length - 1, 0, strategy);
+  }
+}
+
+// 全局策略管理器实例
+const strategyManager = new StrategyManager();
+
+/**
+ * 获取当前运行模式
+ * @returns {string}
+ */
+function getRunMode() {
+  return strategyManager.getCurrentStrategy().getName();
+}
+
+// ==================== CloudStudio Config Management ====================
+
+/**
+ * 获取 .cloudstudio 文件路径
+ * @returns {string} .cloudstudio 文件的绝对路径
+ */
+function getCloudStudioPath() {
+  return join(process.cwd(), '.cloudstudio');
+}
+
+/**
+ * 读取 .cloudstudio 配置文件
+ * @returns {Object} 解析后的配置对象，如果文件不存在或解析失败则返回空对象
+ */
+function readCloudStudioConfig() {
+  const configPath = getCloudStudioPath();
+
+  try {
+    if (!existsSync(configPath)) {
+      return {};
+    }
+
+    const content = readFileSync(configPath, 'utf-8');
+    return TOMLParser.parse(content);
+  } catch (error) {
+    console.error(`Warning: Failed to read .cloudstudio file: ${error.message}`);
+    return {};
+  }
+}
+
+/**
+ * 写入 .cloudstudio 配置文件
+ * @param {Object} config - 配置对象
+ */
+function writeCloudStudioConfig(config) {
+  const configPath = getCloudStudioPath();
+
+  try {
+    const content = TOMLParser.stringify(config);
+    writeFileSync(configPath, content, 'utf-8');
+  } catch (error) {
+    console.error(`Warning: Failed to write .cloudstudio file: ${error.message}`);
+  }
+}
+
+/**
+ * 从 .cloudstudio 文件读取应用配置
+ * @param {string} configFile - 配置文件路径（可选）
+ * @param {string} appName - 应用名称（可选）
+ * @returns {Object|Array} 如果指定了 appName 返回单个应用配置，否则返回所有应用配置数组
+ */
+function readAppConfigFromCloudStudio(configFile = null, appName = null) {
+  const configPath = configFile || getCloudStudioPath();
+
+  if (!existsSync(configPath)) {
+    return appName ? null : [];
+  }
+
+  try {
+    const content = readFileSync(configPath, 'utf-8');
+    const config = TOMLParser.parse(content);
+
+    if (!config.app || !Array.isArray(config.app)) {
+      return appName ? null : [];
+    }
+
+    if (appName) {
+      // 查找指定名称的应用
+      return config.app.find(app => app.name === appName) || null;
+    }
+
+    // 返回所有应用配置
+    return config.app;
+  } catch (error) {
+    console.error(`Warning: Failed to read config file: ${error.message}`);
+    return appName ? null : [];
+  }
+}
+
+
+// ==================== Process Management ====================
+
+// 生成项目唯一标识符（基于项目路径）
+function getProjectId(projectPath) {
+  const absolutePath = resolve(projectPath);
+  const hash = createHash('md5').update(absolutePath).digest('hex').slice(0, 8);
+  return hash;
+}
+
+/**
+ * 检查进程是否存在
+ * @param {number} pid - 进程ID
+ * @returns {boolean}
+ */
+function isProcessRunning(pid) {
+  try {
+    // 发送信号 0 不会杀死进程，但如果进程不存在会抛出异常
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return false;
+  }
+}
+
+/**
+ * 等待进程退出
+ * @param {number} pid - 进程ID
+ * @param {number} timeout - 超时时间（毫秒），默认 5000
+ * @param {number} interval - 检查间隔（毫秒），默认 50
+ * @returns {Promise<boolean>} 是否成功退出
+ */
+async function waitForProcessExit(pid, timeout = 5000, interval = 50) {
+  const startTime = Date.now();
+  
+  while (Date.now() - startTime < timeout) {
+    if (!isProcessRunning(pid)) {
+      return true;
+    }
+    await new Promise(resolve => setTimeout(resolve, interval));
+  }
+  
+  return !isProcessRunning(pid);
+}
+
+/**
+ * 递归杀死进程及其所有子进程（同步收集，异步等待）
+ * @param {number} pid - 进程ID
+ * @param {string} signal - 信号类型，默认 SIGTERM
+ * @param {number} timeout - 等待超时时间（毫秒），默认 5000
+ * @returns {Promise<boolean>} 是否成功停止所有进程
+ */
+async function killProcessTree(pid, signal = 'SIGTERM', timeout = 5000) {
+  const allPids = [];
+  
+  // 递归收集所有子进程 PID
+  function collectChildPids(parentPid) {
+    try {
+      if (process.platform === 'win32') {
+        // Windows: 使用 wmic 查找子进程
+        try {
+          const output = execSync(`wmic process where (ParentProcessId=${parentPid}) get ProcessId`, {encoding: 'utf-8'});
+          const children = output.split('\n')
+            .map(line => line.trim())
+            .filter(line => /^\d+$/.test(line))
+            .map(p => parseInt(p, 10));
+          
+          for (const childPid of children) {
+            collectChildPids(childPid);
+            allPids.push(childPid);
+          }
+        } catch (error) {
+          // 没有子进程或命令失败
+        }
+      } else {
+        // Unix/Linux/Mac: 使用 pgrep 查找子进程
+        try {
+          const children = execSync(`pgrep -P ${parentPid}`, {encoding: 'utf-8'})
+            .trim()
+            .split('\n')
+            .filter(p => p)
+            .map(p => parseInt(p, 10));
+          
+          for (const childPid of children) {
+            collectChildPids(childPid);
+            allPids.push(childPid);
+          }
+        } catch (error) {
+          // 没有子进程或 pgrep 命令失败
+        }
+      }
+    } catch (error) {
+      // 忽略错误
+    }
+  }
+  
+  try {
+    // 收集所有子进程（从叶子节点到根节点的顺序）
+    collectChildPids(pid);
+    // 添加主进程
+    allPids.push(pid);
+    
+    if (process.platform === 'win32') {
+      // Windows: 使用 taskkill 命令杀死进程树
+      try {
+        execSync(`taskkill /pid ${pid} /T /F`, {stdio: 'ignore'});
+      } catch (error) {
+        // 进程可能已经不存在
+      }
+      // 等待所有进程退出
+      const exitPromises = allPids.map(p => waitForProcessExit(p, timeout));
+      const results = await Promise.all(exitPromises);
+      return results.every(r => r);
+    } else {
+      // Unix/Linux/Mac: 向所有进程发送信号
+      for (const p of allPids) {
+        try {
+          process.kill(p, signal);
+        } catch (error) {
+          // 进程可能已经不存在
+        }
+      }
+      
+      // 等待所有进程退出
+      const exitPromises = allPids.map(p => waitForProcessExit(p, timeout));
+      const results = await Promise.all(exitPromises);
+      const allExited = results.every(r => r);
+      
+      // 如果使用 SIGTERM 后还有进程存活，尝试 SIGKILL
+      if (!allExited && signal !== 'SIGKILL') {
+        const remainingPids = allPids.filter(p => isProcessRunning(p));
+        for (const p of remainingPids) {
+          try {
+            process.kill(p, 'SIGKILL');
+          } catch (error) {
+            // 进程可能已经不存在
+          }
+        }
+        // 再次等待
+        const killResults = await Promise.all(remainingPids.map(p => waitForProcessExit(p, 2000)));
+        return killResults.every(r => r);
+      }
+      
+      return allExited;
+    }
+  } catch (error) {
+    console.error(`Failed to kill process tree for PID ${pid}:`, error.message);
+    return false;
+  }
+}
+
+// 获取默认运行目录（基于当前工作目录）
+function getDefaultRunDir() {
+  const cwd = process.cwd();
+  const projectId = getProjectId(cwd);
+  return `/tmp/process_manager/${projectId}`;
+}
+
+// 解析命令行参数
+function parseArgs() {
+  const args = process.argv.slice(2);
+  const config = {
+    isServer: false,
+    runDir: getDefaultRunDir(), // 使用项目特定的运行目录
+    command: null,
+    params: {}
+  };
+
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    if (arg === 'start-server') {
+      config.isServer = true;
+    } else if (arg === '--run-dir' && args[i + 1]) {
+      config.runDir = args[i + 1];
+      i++;
+    } else if (arg === 'start') {
+      config.command = 'start';
+
+      // 首先解析所有选项参数
+      config.params.restart = false;
+      config.params.cwd = process.cwd();
+      config.params.port = null;
+      config.params.shell = null;
+      config.params.configFile = null;
+      let nameIndex = -1;
+
+      // 从 start 后面开始查找参数
+      for (let j = i + 1; j < args.length; j++) {
+        if (args[j] === '--restart') {
+          config.params.restart = true;
+        } else if (args[j] === '--cwd' && args[j + 1] && args[j + 1] !== '--') {
+          // 将相对路径转换为绝对路径
+          config.params.cwd = resolve(args[j + 1]);
+          j++; // 跳过 cwd 的值
+        } else if (args[j] === '--port' && args[j + 1] && args[j + 1] !== '--') {
+          // 解析端口参数
+          const portValue = parseInt(args[j + 1], 10);
+          if (!isNaN(portValue) && portValue >= 1 && portValue < 60000) {
+            config.params.port = portValue;
+          }
+          j++; // 跳过 port 的值
+        } else if ((args[j] === '--from' || args[j] === '-f') && args[j + 1] && args[j + 1] !== '--') {
+          // 解析配置文件路径参数
+          config.params.configFile = resolve(args[j + 1]);
+          j++; // 跳过 config file 的值
+        } else if (args[j] === '--shell' && args[j + 1] && args[j + 1] !== '--') {
+          // 解析 shell 参数
+          const shellValue = args[j + 1];
+          if (shellValue === 'true') {
+            config.params.shell = true;
+          } else if (shellValue === 'null' || shellValue === 'false') {
+            config.params.shell = null;
+          } else {
+            // 指定的 shell 路径
+            config.params.shell = shellValue;
+          }
+          j++; // 跳过 shell 的值
+        } else if (!args[j].startsWith('--') && args[j] !== '-f') {
+          // 找到第一个不是选项的参数,这就是进程名
+          nameIndex = j;
+        } else if (args[j] === '--') {
+          // 遇到分隔符,停止查找
+          break;
+        }
+      }
+
+      // 设置进程名
+      if (nameIndex !== -1) {
+        config.params.name = args[nameIndex];
+      }
+
+      // 查找 -- 分隔符
+      const separatorIndex = args.indexOf('--', i + 1);
+      if (separatorIndex !== -1) {
+        // 如果指定了 shell 参数，-- 后面只能有一个字符串
+        if (config.params.shell) {
+          const cmdParts = args.slice(separatorIndex + 1);
+          if (cmdParts.length === 0) {
+            config.params.cmd = '';
+          } else if (cmdParts.length === 1) {
+            config.params.cmd = cmdParts[0];
+          } else {
+            // 多个参数时报错
+            console.error('Error: When --shell is specified, only one command string is allowed after --');
+            console.error(`Example: ${process.argv[1].split('/').pop()} start myapp --shell true -- "npm run dev && echo done"`);
+            process.exit(1);
+          }
+        } else {
+          // 没有指定 shell，使用数组存储命令
+          config.params.cmd = args.slice(separatorIndex + 1);
+        }
+      } else {
+        config.params.cmd = config.params.shell !== undefined ? '' : [];
+      }
+      break;
+    } else if (arg === 'restart') {
+      config.command = 'restart';
+      config.params.configFile = null;
+
+      // 查找 --from/-f 参数
+      for (let j = i + 1; j < args.length; j++) {
+        if ((args[j] === '--from' || args[j] === '-f') && args[j + 1]) {
+          config.params.configFile = resolve(args[j + 1]);
+          j++;
+        } else if (!args[j].startsWith('--') && args[j] !== '-f') {
+          config.params.name = args[j];
+        }
+      }
+      break;
+    } else if (arg === 'stop') {
+      config.command = 'stop';
+      config.params.configFile = null;
+
+      // 查找 --from/-f 参数
+      for (let j = i + 1; j < args.length; j++) {
+        if ((args[j] === '--from' || args[j] === '-f') && args[j + 1]) {
+          config.params.configFile = resolve(args[j + 1]);
+          j++;
+        } else if (!args[j].startsWith('--') && args[j] !== '-f') {
+          config.params.name = args[j];
+        }
+      }
+      break;
+    } else if (arg === 'logs' && args[i + 1]) {
+      config.command = 'logs';
+      config.params.name = args[i + 1];
+      // 检查是否有 --lines 参数
+      if (args[i + 2] === '--lines' && args[i + 3]) {
+        config.params.lines = parseInt(args[i + 3]);
+      }
+      break;
+    } else if (arg === 'list') {
+      config.command = 'list';
+      break;
+    } else if (arg === 'stop-server') {
+      config.command = 'stop-server';
+      config.params.force = false;
+      // 检查是否有 --force 参数
+      if (args[i + 1] === '--force') {
+        config.params.force = true;
+      }
+      break;
+    }
+  }
+
+  return config;
+}
+
+// 服务端类
+class ProcessManager {
+  constructor(runDir) {
+    this.runDir = runDir;
+    this.socketPath = join(runDir, 'pm.sock');
+    this.processes = new Map(); // name -> { process, logFile, startTime, restartCount }
+    this.server = null;
+
+    // 确保运行目录存在
+    if (!existsSync(runDir)) {
+      mkdirSync(runDir, {recursive: true});
+    }
+  }
+
+  start() {
+    // 检查 socket 文件是否存在且可连接
+    if (existsSync(this.socketPath)) {
+      // 尝试连接到现有服务器
+      const testRequest = JSON.stringify({command: 'list', params: {}});
+      const options = {
+        socketPath: this.socketPath,
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Content-Length': Buffer.byteLength(testRequest)
+        }
+      };
+
+      const req = _request(options, () => {
+        const projectPath = process.cwd();
+        const projectId = getProjectId(projectPath);
+        console.log('Process manager server is already running');
+        console.log(`Project: ${projectPath}`);
+        console.log(`Project ID: ${projectId}`);
+        console.log(`Socket: ${this.socketPath}`);
+        console.log(`Run directory: ${this.runDir}`);
+        process.exit(0);
+      });
+
+      req.on('error', () => {
+        // 连接失败，说明 socket 文件是残留的，删除它并启动新服务器
+        unlinkSync(this.socketPath);
+        this.startServer();
+      });
+
+      req.write(testRequest);
+      req.end();
+    } else {
+      this.startServer();
+    }
+  }
+
+  startServer() {
+    this.server = createServer((req, res) => {
+      let body = '';
+
+      req.on('data', chunk => {
+        body += chunk.toString();
+      });
+
+      req.on('end', async () => {
+        try {
+          const request = JSON.parse(body);
+          await this.handleRequest(request, res);
+        } catch (error) {
+          this.sendResponse(res, 500, {error: error.message});
+        }
+      });
+    });
+
+    this.server.listen(this.socketPath, () => {
+      const projectPath = process.cwd();
+      const projectId = getProjectId(projectPath);
+      console.log(`Process manager server started`);
+      console.log(`Project: ${projectPath}`);
+      console.log(`Project ID: ${projectId}`);
+      console.log(`Socket: ${this.socketPath}`);
+      console.log(`Run directory: ${this.runDir}`);
+    });
+
+    // 优雅退出
+    process.on('SIGINT', async () => {
+      console.log('\nShutting down process manager...');
+      await this.stopAll();
+      this.server.close(() => {
+        if (existsSync(this.socketPath)) {
+          unlinkSync(this.socketPath);
+        }
+        process.exit(0);
+      });
+    });
+  }
+
+  async handleRequest(request, res) {
+    const {command, params} = request;
+
+    switch (command) {
+      case 'start':
+        await this.startProcesses(params.apps, res);
+        break;
+      case 'restart':
+        await this.restartProcesses(params.names, res);
+        break;
+      case 'stop':
+        await this.stopProcesses(params.names, res);
+        break;
+      case 'logs':
+        this.getLogs(params.name, params.lines, res);
+        break;
+      case 'list':
+        this.listProcesses(res);
+        break;
+      case 'stop-server':
+        this.stopServer(params.force, res);
+        break;
+      default:
+        this.sendResponse(res, 400, {error: 'Unknown command'});
+    }
+  }
+
+  /**
+   * 批量启动进程
+   * @param {Array} apps - 应用配置数组 [{name, cmd, cwd, port, shell, restart}, ...]
+   * @param {Object} res - HTTP 响应对象
+   */
+  async startProcesses(apps, res) {
+    const results = [];
+
+    for (const app of apps) {
+      const {name, cmd, cwd, port, shell, restart, skipConfigUpdate} = app;
+
+      // 忽略名为 'host' 的应用
+      if (name === 'host') {
+        console.log(`Skipping reserved app name: ${name}`);
+        continue;
+      }
+
+      try {
+        // 如果需要重启且进程已存在
+        if (restart && this.processes.has(name)) {
+          const processInfo = this.processes.get(name);
+          const pid = processInfo.process.pid;
+          
+          // 使用 killProcessTree 递归杀死进程树，同步等待
+          await killProcessTree(pid, 'SIGTERM');
+          
+          // 关闭日志流
+          if (processInfo.logStream) {
+            processInfo.logStream.end();
+          }
+          
+          this.processes.delete(name);
+        }
+
+        // 启动进程（使用同步方式以便捕获结果）
+        const result = await this.startProcessAsync(name, cmd, cwd, port, shell, 0, skipConfigUpdate);
+        results.push({
+          name,
+          success: true,
+          message: `Process '${name}' started`,
+          pid: result.pid
+        });
+      } catch (error) {
+        results.push({
+          name,
+          success: false,
+          error: error.message
+        });
+      }
+    }
+
+    this.sendResponse(res, 200, {
+      success: true,
+      results
+    });
+  }
+
+  /**
+   * 批量重启进程
+   * @param {Array} names - 进程名称数组
+   * @param {Object} res - HTTP 响应对象
+   */
+  async restartProcesses(names, res) {
+    const results = [];
+
+    for (const name of names) {
+      // 忽略名为 'host' 的应用
+      if (name === 'host') {
+        console.log(`Skipping reserved app name: ${name}`);
+        continue;
+      }
+
+      const processInfo = this.processes.get(name);
+      if (!processInfo) {
+        results.push({
+          name,
+          success: false,
+          error: `Process '${name}' not found`
+        });
+        continue;
+      }
+
+      try {
+        const {cmd, cwd, port, shell, restartCount} = processInfo;
+        const pid = processInfo.process.pid;
+        
+        // 停止旧进程（使用 killProcessTree），同步等待
+        await killProcessTree(pid, 'SIGTERM');
+        
+        // 关闭日志流
+        if (processInfo.logStream) {
+          processInfo.logStream.end();
+        }
+        
+        this.processes.delete(name);
+        
+        // 重新启动（从 .cloudstudio 重启的进程也要跳过配置更新）
+        const result = await this.startProcessAsync(name, cmd, cwd, port, shell, restartCount + 1, true);
+        
+        results.push({
+          name,
+          success: true,
+          message: `Process '${name}' restarted`,
+          pid: result.pid,
+          restartCount: restartCount + 1
+        });
+      } catch (error) {
+        results.push({
+          name,
+          success: false,
+          error: error.message
+        });
+      }
+    }
+
+    this.sendResponse(res, 200, {
+      success: true,
+      results
+    });
+  }
+
+  /**
+   * 批量停止进程
+   * @param {Array} names - 进程名称数组
+   * @param {Object} res - HTTP 响应对象
+   */
+  async stopProcesses(names, res) {
+    const results = [];
+
+    for (const name of names) {
+      // 忽略名为 'host' 的应用
+      if (name === 'host') {
+        console.log(`Skipping reserved app name: ${name}`);
+        continue;
+      }
+
+      const processInfo = this.processes.get(name);
+      if (!processInfo) {
+        results.push({
+          name,
+          success: false,
+          error: `Process '${name}' not found`
+        });
+        continue;
+      }
+
+      try {
+        const pid = processInfo.process.pid;
+        
+        // 使用 killProcessTree 递归杀死进程树，同步等待进程退出
+        const killed = await killProcessTree(pid, 'SIGTERM');
+        
+        // 关闭日志流
+        if (processInfo.logStream) {
+          processInfo.logStream.end();
+        }
+        
+        this.processes.delete(name);
+        results.push({
+          name,
+          success: true,
+          message: killed ? `Process '${name}' stopped` : `Process '${name}' stopped (force killed)`
+        });
+      } catch (error) {
+        results.push({
+          name,
+          success: false,
+          error: error.message
+        });
+      }
+    }
+
+    this.sendResponse(res, 200, {
+      success: true,
+      results
+    });
+  }
+
+  /**
+   * 异步启动进程（用于批量操作）
+   * @returns {Promise<{pid: number}>}
+   */
+  startProcessAsync(name, cmd, cwd = null, port = null, shell = undefined, restartCount = 0, skipConfigUpdate = false) {
+    return new Promise((resolve, reject) => {
+      if (this.processes.has(name)) {
+        reject(new Error(`Process '${name}' already exists`));
+        return;
+      }
+
+      // 验证命令格式
+      if (shell) {
+        if (typeof cmd !== 'string' || cmd.length === 0) {
+          reject(new Error('Command must be a non-empty string when shell is specified'));
+          return;
+        }
+      } else {
+        if (!Array.isArray(cmd) || cmd.length === 0) {
+          reject(new Error('Command must be a non-empty array when shell is not specified'));
+          return;
+        }
+      }
+
+      const logFile = join(this.runDir, `${name}.log`);
+      const logStream = createWriteStream(logFile, {flags: 'w'});
+
+      const spawnOptions = {
+        detached: false,
+        stdio: ['ignore', 'pipe', 'pipe'],
+        env: process.env
+      };
+
+      if (cwd) {
+        spawnOptions.cwd = cwd;
+      }
+
+      if (shell) {
+        spawnOptions.shell = shell;
+      }
+
+      // 在 Unix 系统上，使用进程组以便能够杀死所有子进程
+      // 这对于 shell 命令特别重要（如 "cd dir && npm run dev"）
+      if (process.platform !== 'win32') {
+        // 创建新的进程组，以便能够杀死整个进程树
+        // 注意：这里我们不使用 detached: true，因为那会让进程在父进程退出后继续运行
+        // 而是在 spawn 后立即设置进程组
+      }
+
+      let child;
+      if (shell) {
+        child = spawn(cmd, [], spawnOptions);
+      } else {
+        const [command, ...cmdArgs] = cmd;
+        child = spawn(command, cmdArgs, spawnOptions);
+      }
+
+      child.stdout.pipe(logStream);
+      child.stderr.pipe(logStream);
+
+      child.on('exit', (code, signal) => {
+        const timestamp = new Date().toISOString();
+        const exitMsg = `[${timestamp}] Process exited with code ${code}, signal ${signal}\n`;
+        logStream.write(exitMsg);
+        logStream.end();
+        this.processes.delete(name);
+      });
+
+      child.on('error', (error) => {
+        const timestamp = new Date().toISOString();
+        const errorMsg = `[${timestamp}] Process error: ${error.message}\n`;
+        logStream.write(errorMsg);
+        logStream.end();
+        reject(error);
+      });
+
+      this.processes.set(name, {
+        process: child,
+        logFile,
+        logStream,
+        cmd,
+        cwd,
+        port,
+        shell,
+        startTime: Date.now(),
+        restartCount
+      });
+
+      const timestamp = new Date().toISOString();
+      const cmdDisplay = shell !== undefined ? cmd : cmd.join(' ');
+      const cwdInfo = cwd ? ` (cwd: ${cwd})` : '';
+      const startMsg = `[${timestamp}] Process started: ${cmdDisplay}${cwdInfo}\n`;
+      logStream.write(startMsg);
+
+      // 只有在非 skipConfigUpdate 模式下才更新配置
+      // 从 .cloudstudio 启动的进程不需要更新配置文件
+      if (!skipConfigUpdate) {
+        const strategy = strategyManager.getCurrentStrategy();
+        strategy.updateConfig({
+          name,
+          cmd,
+          cwd,
+          port
+        }).catch(error => {
+          console.error(`Warning: ${error.message}`);
+        });
+      }
+
+      resolve({ pid: child.pid });
+    });
+  }
+
+  getLogs(name, lines, res) {
+    const logFile = join(this.runDir, `${name}.log`);
+
+    if (!existsSync(logFile)) {
+      this.sendResponse(res, 404, {error: `Log file for '${name}' not found`});
+      return;
+    }
+
+    try {
+      const content = readFileSync(logFile, 'utf-8');
+      let logs = content;
+
+      if (lines && lines > 0) {
+        const allLines = content.split('\n');
+        const lastLines = allLines.slice(-lines);
+        logs = lastLines.join('\n');
+      }
+
+      this.sendResponse(res, 200, {
+        success: true,
+        logs
+      });
+    } catch (error) {
+      this.sendResponse(res, 500, {error: error.message});
+    }
+  }
+
+  listProcesses(res) {
+    const list = [];
+    for (const [name, info] of this.processes.entries()) {
+      const uptime = Math.floor((Date.now() - info.startTime) / 1000);
+      const item = {
+        name,
+        pid: info.process.pid,
+        cmd: typeof info.cmd === 'string' ? info.cmd : info.cmd.join(' '),
+        uptime: `${uptime}s`,
+        restartCount: info.restartCount
+      };
+      if (info.cwd) {
+        item.cwd = info.cwd;
+      }
+      if (info.port) {
+        item.port = info.port;
+      }
+      list.push(item);
+    }
+
+    this.sendResponse(res, 200, {
+      success: true,
+      processes: list
+    });
+  }
+
+  async stopAll() {
+    const stopPromises = [];
+    
+    for (const [name, info] of this.processes.entries()) {
+      console.log(`Stopping process: ${name}`);
+      const pid = info.process.pid;
+      
+      // 收集所有停止操作的 Promise
+      stopPromises.push(
+        killProcessTree(pid, 'SIGTERM').then(() => {
+          // 关闭日志流
+          if (info.logStream) {
+            info.logStream.end();
+          }
+        })
+      );
+    }
+    
+    // 等待所有进程停止
+    await Promise.all(stopPromises);
+    this.processes.clear();
+  }
+
+  stopServer(force, res) {
+    console.log('Received stop-server command');
+
+    // 检查是否有运行中的进程
+    const runningProcessCount = this.processes.size;
+
+    if (runningProcessCount > 0 && !force) {
+      // 有进程在运行且未使用 --force 参数，拒绝停止
+      const processList = Array.from(this.processes.keys()).join(', ');
+      this.sendResponse(res, 400, {
+        success: false,
+        error: `Cannot stop server: ${runningProcessCount} process(es) still running: ${processList}`,
+        hint: 'Use --force to stop all processes and shut down server',
+        runningProcesses: runningProcessCount
+      });
+      return;
+    }
+
+    // 先响应客户端
+    const message = force && runningProcessCount > 0
+      ? `Stopping ${runningProcessCount} process(es) and shutting down server...`
+      : 'Server shutting down...';
+
+    this.sendResponse(res, 200, {
+      success: true,
+      message
+    });
+
+    // 延迟执行关闭操作，确保响应已发送
+    setTimeout(async () => {
+      console.log('Shutting down process manager...');
+      if (this.processes.size > 0) {
+        console.log(`Stopping ${this.processes.size} running process(es)...`);
+      }
+      await this.stopAll();
+      this.server.close(() => {
+        if (existsSync(this.socketPath)) {
+          unlinkSync(this.socketPath);
+        }
+        console.log('Server stopped');
+        process.exit(0);
+      });
+    }, 100);
+  }
+
+  sendResponse(res, statusCode, data) {
+    res.writeHead(statusCode, {'Content-Type': 'application/json'});
+    res.end(JSON.stringify(data));
+  }
+}
+
+// 客户端类
+class ProcessManagerClient {
+  constructor(runDir) {
+    this.socketPath = join(runDir, 'pm.sock');
+    this.runDir = runDir;
+  }
+
+  async ensureServerRunning() {
+    // 如果 socket 文件不存在,启动服务器
+    if (!existsSync(this.socketPath)) {
+      const projectPath = process.cwd();
+      const projectId = getProjectId(projectPath);
+      console.log('Process manager server is not running, starting it...');
+      console.log(`Project: ${projectPath} (ID: ${projectId})`);
+      await this.startServer();
+      // 等待服务器启动完成
+      await this.waitForServer();
+      return;
+    }
+
+    // socket 文件存在,测试连接
+    try {
+      await this.testConnection();
+    } catch (error) {
+      // 连接失败,删除残留的 socket 文件并重新启动
+      console.log('Found stale socket file, restarting server...');
+      unlinkSync(this.socketPath);
+      await this.startServer();
+      await this.waitForServer();
+    }
+  }
+
+  async testConnection() {
+    return new Promise((resolve, reject) => {
+      const request = JSON.stringify({command: 'list', params: {}});
+      const options = {
+        socketPath: this.socketPath,
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Content-Length': Buffer.byteLength(request)
+        },
+        timeout: 1000
+      };
+
+      const req = _request(options, (res) => {
+        res.resume(); // 消费响应数据
+        resolve();
+      });
+
+      req.on('error', reject);
+      req.on('timeout', () => {
+        req.destroy();
+        reject(new Error('Connection timeout'));
+      });
+
+      req.write(request);
+      req.end();
+    });
+  }
+
+  async startServer() {
+    const scriptPath = process.argv[1];
+    const serverArgs = ['start-server', '--run-dir', this.runDir];
+
+    // 使用 detached 模式启动服务器,让它独立运行
+    const child = spawn(process.execPath, [scriptPath, ...serverArgs], {
+      detached: true,
+      stdio: 'ignore',
+      env: process.env
+    });
+
+    // 分离子进程,让它在后台运行
+    child.unref();
+  }
+
+  async waitForServer(maxAttempts = 10, intervalMs = 200) {
+    for (let i = 0; i < maxAttempts; i++) {
+      if (existsSync(this.socketPath)) {
+        try {
+          await this.testConnection();
+          console.log('Process manager server started successfully');
+          return;
+        } catch (error) {
+          // 继续等待
+        }
+      }
+      await new Promise(resolve => setTimeout(resolve, intervalMs));
+    }
+    throw new Error('Failed to start process manager server');
+  }
+
+  async sendCommand(command, params = {}) {
+    return new Promise((resolve, reject) => {
+      if (!existsSync(this.socketPath)) {
+        reject(new Error('Process manager server is not running'));
+        return;
+      }
+
+      const request = JSON.stringify({command, params});
+
+      const options = {
+        socketPath: this.socketPath,
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Content-Length': Buffer.byteLength(request)
+        }
+      };
+
+      const req = _request(options, (res) => {
+        let body = '';
+        res.on('data', chunk => {
+          body += chunk.toString();
+        });
+
+        res.on('end', () => {
+          try {
+            const response = JSON.parse(body);
+            if (res.statusCode === 200) {
+              resolve(response);
+            } else {
+              reject(new Error(response.error || 'Unknown error'));
+            }
+          } catch (error) {
+            reject(error);
+          }
+        });
+      });
+
+      req.on('error', reject);
+      req.write(request);
+      req.end();
+    });
+  }
+
+  /**
+   * 处理从 .cloudstudio 文件启动/重启/停止应用的逻辑
+   * @param {string} command - 'start' | 'restart' | 'stop'
+   * @param {Object} params - { name, configFile }
+   */
+  async handleCloudStudioCommand(command, params) {
+    const {name, configFile} = params;
+
+    if (!name) {
+      // 没有指定应用名，批量操作所有应用
+      const apps = readAppConfigFromCloudStudio(configFile);
+
+      if (apps.length === 0) {
+        const configPath = configFile || getCloudStudioPath();
+        throw new Error(`No applications found in ${configPath}`);
+      }
+
+      // 过滤掉名为 'host' 的应用
+      const filteredApps = apps.filter(app => app.name !== 'host');
+      
+      if (filteredApps.length === 0) {
+        console.log('No applications to process (all apps are reserved names)');
+        return;
+      }
+
+      console.log(`Found ${filteredApps.length} application(s) in configuration file`);
+
+      if (command === 'stop') {
+        // 批量停止
+        const names = filteredApps.filter(app => app.name).map(app => app.name);
+        const response = await this.sendCommand('stop', {names});
+        
+        console.log('\nBatch stop results:');
+        response.results.forEach(result => {
+          if (result.success) {
+            console.log(`  ✓ ${result.name}: ${result.message}`);
+          } else {
+            console.error(`  ✗ ${result.name}: ${result.error}`);
+          }
+        });
+      } else if (command === 'restart') {
+        // 批量重启
+        const names = filteredApps.filter(app => app.name).map(app => app.name);
+        const response = await this.sendCommand('restart', {names});
+        
+        console.log('\nBatch restart results:');
+        response.results.forEach(result => {
+          if (result.success) {
+            console.log(`  ✓ ${result.name}: ${result.message} (PID: ${result.pid})`);
+          } else {
+            console.error(`  ✗ ${result.name}: ${result.error}`);
+          }
+        });
+      } else {
+        // 批量启动
+        const appConfigs = [];
+        
+        for (const app of filteredApps) {
+          if (!app.name) {
+            console.warn('Warning: Skipping application without name');
+            continue;
+          }
+
+          // cmd 保持原样，cwd 使用当前工作目录
+          const cmd = app.cmd;
+          const shell = typeof cmd === 'string' ? true : null;
+          
+          appConfigs.push({
+            name: app.name,
+            cmd,
+            cwd: process.cwd(),  // 使用当前工作目录
+            port: app.port || null,
+            shell,
+            restart: true,  // 总是使用 restart 模式
+            skipConfigUpdate: true  // 从 .cloudstudio 启动，不需要更新配置文件
+          });
+        }
+
+        const response = await this.sendCommand('start', {apps: appConfigs});
+        
+        console.log('\nBatch start results:');
+        response.results.forEach(result => {
+          if (result.success) {
+            console.log(`  ✓ ${result.name}: ${result.message} (PID: ${result.pid})`);
+          } else {
+            console.error(`  ✗ ${result.name}: ${result.error}`);
+          }
+        });
+      }
+    } else {
+      // 指定了应用名
+      
+      // 检查是否是保留名称
+      if (name === 'host') {
+        console.log(`Skipping reserved app name: ${name}`);
+        return;
+      }
+
+      const appConfig = readAppConfigFromCloudStudio(configFile, name);
+
+      if (!appConfig) {
+        const configPath = configFile || getCloudStudioPath();
+        throw new Error(`Application '${name}' not found in ${configPath}`);
+      }
+
+      if (command === 'stop') {
+        return await this.sendCommand('stop', {names: [name]});
+      } else if (command === 'restart') {
+        return await this.sendCommand('restart', {names: [name]});
+      } else {
+        // cmd 保持原样
+        const cmd = appConfig.cmd;
+        const shell = typeof cmd === 'string' ? true : null;
+
+        if (!cmd || (typeof cmd === 'string' && cmd.length === 0) || (Array.isArray(cmd) && cmd.length === 0)) {
+          throw new Error(`Invalid command for application '${name}'`);
+        }
+
+        const apps = [{
+          name,
+          cmd,
+          restart: true,
+          cwd: process.cwd(),  // 使用当前工作目录
+          port: appConfig.port || null,
+          shell,
+          skipConfigUpdate: true  // 从 .cloudstudio 启动，不需要更新配置文件
+        }];
+
+        return await this.sendCommand('start', {apps});
+      }
+    }
+  }
+}
+
+// 主函数
+async function main() {
+  const config = parseArgs();
+
+  if (config.isServer) {
+    // 服务端模式
+    const manager = new ProcessManager(config.runDir);
+    manager.start();
+  } else if (config.command) {
+    // 客户端模式
+    const client = new ProcessManagerClient(config.runDir);
+
+    try {
+      // 确保服务器正在运行 (自动启动)
+      await client.ensureServerRunning();
+
+      // 处理 start/restart/stop 命令的特殊逻辑
+      if (['start', 'restart', 'stop'].includes(config.command)) {
+        const {name, cmd} = config.params;
+
+        // 如果没有指定项目名或命令，尝试从 .cloudstudio 读取
+        if (!name || (config.command === 'start' && (
+          (typeof cmd === 'string' && cmd.length === 0) ||
+          (Array.isArray(cmd) && cmd.length === 0)
+        ))) {
+          await client.handleCloudStudioCommand(config.command, config.params);
+          return;
+        }
+
+        // 命令行直接指定的单个应用，转换为数组格式
+        if (config.command === 'start') {
+          const apps = [{
+            name: config.params.name,
+            cmd: config.params.cmd,
+            cwd: config.params.cwd,
+            port: config.params.port,
+            shell: config.params.shell,
+            restart: config.params.restart
+          }];
+          const response = await client.sendCommand('start', {apps});
+          
+          // 单个应用的结果处理
+          if (response.results && response.results.length > 0) {
+            const result = response.results[0];
+            if (result.success) {
+              console.log(result.message);
+              if (result.pid) {
+                console.log(`PID: ${result.pid}`);
+              }
+            } else {
+              throw new Error(result.error);
+            }
+          }
+          return;
+        } else if (config.command === 'restart') {
+          const response = await client.sendCommand('restart', {names: [config.params.name]});
+          
+          // 单个应用的结果处理
+          if (response.results && response.results.length > 0) {
+            const result = response.results[0];
+            if (result.success) {
+              console.log(result.message);
+              if (result.pid) {
+                console.log(`PID: ${result.pid}`);
+              }
+            } else {
+              throw new Error(result.error);
+            }
+          }
+          return;
+        } else if (config.command === 'stop') {
+          const response = await client.sendCommand('stop', {names: [config.params.name]});
+          
+          // 单个应用的结果处理
+          if (response.results && response.results.length > 0) {
+            const result = response.results[0];
+            if (result.success) {
+              console.log(result.message);
+            } else {
+              throw new Error(result.error);
+            }
+          }
+          return;
+        }
+      }
+
+      const response = await client.sendCommand(config.command, config.params);
+
+      if (config.command === 'logs') {
+        console.log(response.logs);
+      } else if (config.command === 'list') {
+        console.log('Running processes:');
+        if (response.processes.length === 0) {
+          console.log('  (none)');
+        } else {
+          response.processes.forEach(proc => {
+            console.log(`  ${proc.name} (PID: ${proc.pid}, Uptime: ${proc.uptime}, Restarts: ${proc.restartCount})`);
+            console.log(`    Command: ${proc.cmd}`);
+            if (proc.cwd) {
+              console.log(`    CWD: ${proc.cwd}`);
+            }
+            if (proc.port) {
+              console.log(`    Port: ${proc.port}`);
+            }
+          });
+        }
+      } else if (config.command === 'stop-server') {
+        console.log(response.message);
+      }
+    } catch (error) {
+      console.error('Error:', error.message);
+      process.exit(1);
+    }
+  } else {
+    // 显示帮助信息
+    const scriptName = process.argv[1].split('/').pop();
+    const projectPath = process.cwd();
+    const projectId = getProjectId(projectPath);
+    const defaultRunDir = getDefaultRunDir();
+    const runMode = getRunMode();
+
+    console.log('Node.js Process Manager\n');
+    console.log('Current Project:');
+    console.log(`  Path: ${projectPath}`);
+    console.log(`  ID: ${projectId}`);
+    console.log(`  Run Directory: ${defaultRunDir}`);
+    console.log(`  Run Mode: ${runMode}${runMode === 'cloudstudio' ? ' (CloudStudio Sandbox)' : ''}\n`);
+    console.log('Usage:');
+    console.log('  Server mode:');
+    console.log(`    ${scriptName} start-server [--run-dir <dir>]`);
+    console.log('');
+    console.log('  Client mode:');
+    console.log(`    ${scriptName} start [<name>] [--restart] [--cwd <dir>] [--port <port>] [--shell <shell>] [--from|-f <config-file>] [-- <command> [args...]]`);
+    console.log(`    ${scriptName} restart [<name>] [--from|-f <config-file>]`);
+    console.log(`    ${scriptName} stop [<name>] [--from|-f <config-file>]`);
+    console.log(`    ${scriptName} logs <name> [--lines <n>]`);
+    console.log(`    ${scriptName} list`);
+    console.log(`    ${scriptName} stop-server [--force]`);
+    console.log('');
+    console.log('Options:');
+    console.log(`  --run-dir <dir>       Specify run directory (default: project-specific directory)`);
+    console.log('  --restart             Restart process if it already exists (only for start command)');
+    console.log('  --cwd <dir>           Set working directory for the process (only for start command)');
+    console.log('  --port <port>         Specify service port (1-59999, only for start command)');
+    console.log('  --shell <shell>       Specify shell for spawn: true, null, or shell path (only for start command)');
+    console.log('  --from, -f <file>     Read configuration from specified .cloudstudio file (default: ./.cloudstudio)');
+    console.log('  --lines <n>           Show last n lines of logs');
+    console.log('  --force               Force stop all processes and shut down server (only for stop-server command)');
+    console.log('');
+    console.log('Examples:');
+    console.log(`  # Start with explicit command`);
+    console.log(`  ${scriptName} start myapp -- npm run dev`);
+    console.log(`  ${scriptName} start myapp --restart -- npm run dev`);
+    console.log(`  ${scriptName} start web --cwd /path/to/project --port 3000 -- npm start`);
+    console.log(`  ${scriptName} start frontend --cwd frontend --port 3000 --restart -- npm run dev`);
+    console.log(`  ${scriptName} start myapp --shell true -- "npm run dev && echo done"`);
+    console.log(`  ${scriptName} start myapp --shell /bin/bash -- "source .env && npm start"`);
+    console.log('');
+    console.log(`  # Start/restart/stop from .cloudstudio file`);
+    console.log(`  ${scriptName} start                    # Start all apps from .cloudstudio`);
+    console.log(`  ${scriptName} start frontend           # Start specific app from .cloudstudio`);
+    console.log(`  ${scriptName} start -f custom.toml     # Start all apps from custom file`);
+    console.log(`  ${scriptName} restart                  # Restart all apps from .cloudstudio`);
+    console.log(`  ${scriptName} restart backend          # Restart specific app`);
+    console.log(`  ${scriptName} stop                     # Stop all apps from .cloudstudio`);
+    console.log(`  ${scriptName} stop frontend            # Stop specific app`);
+    console.log('');
+    console.log(`  # Other commands`);
+    console.log(`  ${scriptName} restart myapp`);
+    console.log(`  ${scriptName} logs myapp --lines 100`);
+    console.log(`  ${scriptName} stop-server`);
+    console.log(`  ${scriptName} stop-server --force`);
+    console.log('');
+    console.log('Run Modes:');
+    console.log('  local       - Configuration saved to .cloudstudio file');
+    console.log('  cloudstudio - Configuration sent to CloudStudio API (http://127.0.0.1:6531)');
+    console.log('');
+    console.log('Notes:');
+    console.log('  - When --shell is specified, only ONE command string is allowed after --');
+    console.log('  - Quote the command string if it contains spaces or special shell characters');
+    console.log('  - Without --shell, commands are passed as separate arguments after --');
+  }
+}
+
+main().catch(error => {
+  console.error('Fatal error:', error);
+  process.exit(1);
+});

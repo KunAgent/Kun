@@ -1,0 +1,13 @@
+{
+  "accounts": [
+    {
+      "label": "my-360-account",
+      "username": "YOUR_360_LOGIN_USERNAME",
+      "password": "YOUR_360_LOGIN_PASSWORD",
+      "apiKey": "YOUR_360_API_KEY",
+      "apiSecret": "YOUR_360_API_SECRET",
+      "enabled": true,
+      "note": "在360点睛后台-工具中心-API管理获取apiKey/apiSecret"
+    }
+  ]
+}

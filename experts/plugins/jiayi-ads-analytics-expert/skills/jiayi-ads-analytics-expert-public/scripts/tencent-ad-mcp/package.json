@@ -1,0 +1,36 @@
+{
+  "name": "tencent-ad-mcp",
+  "version": "0.1.0",
+  "description": "MCP server for Tencent Ads Marketing API (腾讯广告 MCP 服务)",
+  "type": "module",
+  "bin": {
+    "tencent-ad-mcp": "dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsx src/index.ts",
+    "generate": "tsx scripts/generate-tools.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "files": [
+    "dist"
+  ],
+  "keywords": [
+    "mcp",
+    "tencent-ads",
+    "marketing-api",
+    "腾讯广告"
+  ],
+  "author": "andyleimc-source",
+  "license": "Apache-2.0",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@types/node": "^25.5.0",
+    "tsx": "^4.21.0",
+    "typescript": "^6.0.2"
+  }
+}

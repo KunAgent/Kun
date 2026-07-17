@@ -1,0 +1,140 @@
+{
+  "schemaVersion": "long_manuscript.template_dimensions.v1",
+  "version": "1.0.0",
+  "dimensions": [
+    {
+      "dimensionId": "document_archetype",
+      "required": true,
+      "values": [
+        {
+          "valueId": "novel_fiction",
+          "aliases": ["novel", "fiction", "story", "plot", "character", "小说", "故事", "人物"]
+        },
+        {
+          "valueId": "academic_monograph",
+          "aliases": ["academic", "thesis", "dissertation", "citation", "research paper", "学术", "论文", "专著", "文献"]
+        },
+        {
+          "valueId": "whitepaper_report",
+          "aliases": ["whitepaper", "report", "industry report", "research handbook", "白皮书", "报告", "行业研究"]
+        },
+        {
+          "valueId": "manual_handbook",
+          "aliases": ["manual", "handbook", "playbook", "process", "runbook", "手册", "指南", "SOP", "流程"]
+        },
+        {
+          "valueId": "official_document",
+          "aliases": ["official", "policy", "notice", "regulation", "formal memo", "公文", "政策", "通知", "规范"]
+        },
+        {
+          "valueId": "social_content_article",
+          "aliases": ["article", "公众号", "social article", "content article", "新媒体", "长文"]
+        },
+        {
+          "valueId": "commercial_marketing_copy",
+          "aliases": ["marketing", "brand", "sales", "landing", "campaign", "商业文案", "营销", "转化"]
+        },
+        {
+          "valueId": "exam_essay",
+          "aliases": ["exam", "essay", "score", "rubric", "应试", "作文", "评分"]
+        },
+        {
+          "valueId": "generic_longform",
+          "aliases": ["longform", "manuscript", "book", "long document", "长文档", "手稿", "书稿"]
+        }
+      ]
+    },
+    {
+      "dimensionId": "source_maturity",
+      "required": true,
+      "values": [
+        {
+          "valueId": "idea_only",
+          "aliases": ["idea only", "vague idea", "just an idea", "只有想法", "还没材料"]
+        },
+        {
+          "valueId": "outline_ready",
+          "aliases": ["outline", "toc", "目录", "大纲", "提纲"]
+        },
+        {
+          "valueId": "fragmented_notes",
+          "aliases": ["notes", "fragments", "interview notes", "碎片素材", "笔记", "访谈摘要"]
+        },
+        {
+          "valueId": "source_pack_ready",
+          "aliases": ["source pack", "research pack", "transcript", "资料包", "素材包", "研究资料"]
+        },
+        {
+          "valueId": "active_draft",
+          "aliases": ["draft", "chapter draft", "in progress", "草稿", "初稿", "正在写"]
+        },
+        {
+          "valueId": "mature_draft",
+          "aliases": ["final draft", "finished draft", "almost done", "成稿", "完稿", "收口"]
+        }
+      ]
+    },
+    {
+      "dimensionId": "delivery_stage",
+      "required": true,
+      "values": [
+        { "valueId": "intake", "aliases": ["intake", "collect", "盘点", "整理素材"] },
+        { "valueId": "first_value", "aliases": ["first value", "starter", "首值", "起稿"] },
+        { "valueId": "expand", "aliases": ["expand", "continue chapter", "续写", "扩写"] },
+        { "valueId": "revise", "aliases": ["revise", "rewrite", "repair", "修改", "重写", "修订"] },
+        { "valueId": "review", "aliases": ["review", "quality check", "审查", "校对", "质检"] },
+        { "valueId": "finish", "aliases": ["finish", "finalize", "交付", "收口", "定稿"] },
+        { "valueId": "repurpose", "aliases": ["repurpose", "adapt", "改编", "拆条", "分发"] },
+        { "valueId": "distribute", "aliases": ["publish", "distribution", "发布", "渠道"] }
+      ]
+    },
+    {
+      "dimensionId": "reader_and_use_context",
+      "required": true,
+      "values": [
+        { "valueId": "mass_readers", "aliases": ["general readers", "大众", "普通读者"] },
+        { "valueId": "creator_audience", "aliases": ["creator", "content team", "创作者", "内容团队"] },
+        { "valueId": "academic_review", "aliases": ["reviewer", "committee", "审稿", "答辩", "学术评审"] },
+        { "valueId": "executive_decision", "aliases": ["executive", "founder", "management", "高管", "创始人", "决策层"] },
+        { "valueId": "internal_ops", "aliases": ["operations", "internal team", "内部团队", "运营", "执行"] },
+        { "valueId": "public_sector", "aliases": ["government", "public sector", "监管", "政务", "公共部门"] },
+        { "valueId": "brand_conversion", "aliases": ["brand", "prospect", "buyer", "品牌", "客户", "转化"] }
+      ]
+    },
+    {
+      "dimensionId": "evidence_and_compliance_mode",
+      "required": true,
+      "values": [
+        {
+          "valueId": "offline_required",
+          "aliases": ["offline", "no connector", "离线", "无需联网", "直接起稿"]
+        },
+        {
+          "valueId": "network_optional_after_first_value",
+          "aliases": ["optional research", "补证", "联网增强", "首值后联网"]
+        },
+        {
+          "valueId": "network_required_for_claim_upgrade_only",
+          "aliases": ["claim upgrade", "current facts", "citation safe", "待核实", "引用安全", "当前政策"]
+        }
+      ]
+    },
+    {
+      "dimensionId": "post_draft_lane",
+      "required": true,
+      "values": [
+        { "valueId": "continue_chapter", "aliases": ["continue", "next chapter", "继续写", "续写"] },
+        { "valueId": "revise_structure", "aliases": ["structure", "restructure", "改结构", "重构"] },
+        { "valueId": "format_export", "aliases": ["format", "export", "排版", "导出"] },
+        { "valueId": "de_ai_polish", "aliases": ["de-ai", "humanize", "去 ai 味", "润色"] },
+        { "valueId": "rewrite_localize", "aliases": ["localize", "rewrite", "本地化", "改写"] },
+        { "valueId": "organize_materials", "aliases": ["organize materials", "source inventory", "整理素材", "归档"] },
+        { "valueId": "repurpose_channels", "aliases": ["repurpose", "channel", "拆条", "改编"] },
+        { "valueId": "distribution_plan", "aliases": ["distribution", "publish plan", "发布计划", "渠道策略"] },
+        { "valueId": "summary_pack", "aliases": ["summary", "digest", "摘要包", "总结"] },
+        { "valueId": "visual_brief", "aliases": ["visual", "cover", "illustration", "视觉 brief", "封面"] },
+        { "valueId": "save_handoff", "aliases": ["handoff", "save progress", "交接", "保存进度"] }
+      ]
+    }
+  ]
+}

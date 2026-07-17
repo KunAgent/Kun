@@ -1,0 +1,1179 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>我的流程 · 简报</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+  :root {
+    --color-bg: #f5f6f8;
+    --color-surface: #ffffff;
+    --color-surface-alt: #fafbfc;
+    --color-border: #e5e7eb;
+    --color-border-strong: #d1d5db;
+
+    --color-text-primary: #111827;
+    --color-text-secondary: #4b5563;
+    --color-text-tertiary: #9ca3af;
+
+    --color-brand: #2563eb;
+    --color-brand-soft: #eff6ff;
+
+    /* 状态：已启用-绿，未发布-灰，已停用-红浅 */
+    --color-active: #059669;
+    --color-active-bg: #ecfdf5;
+    --color-active-border: #a7f3d0;
+
+    --color-draft: #6b7280;
+    --color-draft-bg: #f3f4f6;
+    --color-draft-border: #d1d5db;
+
+    --color-disabled: #b45309;
+    --color-disabled-bg: #fef3c7;
+    --color-disabled-border: #fcd34d;
+
+    /* 公开/私有 */
+    --color-public: #2563eb;
+    --color-private: #7c3aed;
+
+    /* 分类色板（4 大分类对应饼图） */
+    --c-product: #2563eb;   /* 产商品库 - 蓝 */
+    --c-billing: #059669;   /* 计费平台 - 绿 */
+    --c-portal:  #d97706;   /* 官网平台 - 橙 */
+    --c-other:   #7c3aed;   /* 其他      - 紫 */
+
+    --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px;
+    --sp-5: 20px; --sp-6: 24px; --sp-8: 32px; --sp-10: 40px;
+
+    --r-sm: 6px; --r-md: 8px; --r-lg: 12px; --r-xl: 16px;
+
+    --shadow-sm: 0 1px 2px rgba(17,24,39,0.04);
+    --shadow-md: 0 2px 8px rgba(17,24,39,0.06);
+    --shadow-lg: 0 8px 24px rgba(17,24,39,0.08);
+
+    --font-sans: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", "Segoe UI", sans-serif;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: var(--font-sans);
+    background: var(--color-bg);
+    color: var(--color-text-primary);
+    font-size: 14px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .page {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: var(--sp-8) var(--sp-6);
+  }
+
+  /* ========== Page Header ========== */
+  .page-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: var(--sp-6);
+    flex-wrap: wrap;
+    gap: var(--sp-3);
+  }
+  .page-title {
+    font-size: 22px;
+    font-weight: 600;
+    color: var(--color-text-primary);
+    margin: 0 0 var(--sp-2);
+    letter-spacing: 0.2px;
+  }
+  .page-subtitle {
+    font-size: 13px;
+    color: var(--color-text-tertiary);
+    margin: 0;
+  }
+  .page-header-actions {
+    display: flex;
+    gap: var(--sp-2);
+  }
+  .sort-control {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--sp-2);
+    padding: 6px 12px;
+    border-radius: var(--r-sm);
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    font-size: 12px;
+    color: var(--color-text-secondary);
+  }
+  .sort-control .sort-key { color: var(--color-text-primary); font-weight: 500; }
+
+  /* ========== Overview ========== */
+  .overview {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: var(--sp-4);
+    margin-bottom: var(--sp-6);
+  }
+  .stat-card {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--r-lg);
+    padding: var(--sp-5) var(--sp-6);
+    box-shadow: var(--shadow-sm);
+  }
+  .stat-label {
+    font-size: 13px;
+    color: var(--color-text-secondary);
+    margin-bottom: var(--sp-2);
+  }
+  .stat-value {
+    font-size: 28px;
+    font-weight: 600;
+    color: var(--color-text-primary);
+    line-height: 1.2;
+  }
+  .stat-value.is-active   { color: var(--color-active); }
+  .stat-value.is-draft    { color: var(--color-draft); }
+  .stat-value.is-disabled { color: var(--color-disabled); }
+  .stat-trend {
+    font-size: 12px;
+    color: var(--color-text-tertiary);
+    margin-top: var(--sp-1);
+  }
+  .stat-trend.up { color: var(--color-active); }
+  .stat-trend.down { color: var(--color-disabled); }
+
+  /* ========== Stats Panel (饼图 + TOP 榜) ========== */
+  .stats-panel {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--sp-4);
+    margin-bottom: var(--sp-8);
+  }
+  .panel-card {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--r-lg);
+    padding: var(--sp-5);
+    box-shadow: var(--shadow-sm);
+  }
+  .panel-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: var(--sp-4);
+  }
+  .panel-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--color-text-primary);
+    margin: 0;
+  }
+  .panel-sub {
+    font-size: 12px;
+    color: var(--color-text-tertiary);
+  }
+
+  /* 饼图布局 */
+  .pie-wrap {
+    display: grid;
+    grid-template-columns: 180px 1fr;
+    gap: var(--sp-4);
+    align-items: center;
+  }
+  .pie-canvas-box {
+    position: relative;
+    width: 180px;
+    height: 180px;
+  }
+  .pie-canvas-box canvas { width: 100% !important; height: 100% !important; }
+  .pie-center {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+    pointer-events: none;
+  }
+  .pie-center .pc-num {
+    font-size: 22px;
+    font-weight: 600;
+    color: var(--color-text-primary);
+    line-height: 1.2;
+  }
+  .pie-center .pc-label {
+    font-size: 11px;
+    color: var(--color-text-tertiary);
+  }
+
+  .pie-legend {
+    display: grid;
+    gap: 6px;
+    font-size: 12px;
+  }
+  .legend-row {
+    display: grid;
+    grid-template-columns: 12px 1fr auto auto;
+    align-items: center;
+    gap: var(--sp-2);
+    padding: 4px 6px;
+    border-radius: var(--r-sm);
+  }
+  .legend-row:hover { background: var(--color-surface-alt); }
+  .legend-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 2px;
+  }
+  .legend-name { color: var(--color-text-primary); }
+  .legend-val { color: var(--color-text-secondary); font-weight: 500; }
+  .legend-pct { color: var(--color-text-tertiary); }
+
+  /* TOP 榜 */
+  .top-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-2);
+  }
+  .top-row {
+    display: grid;
+    grid-template-columns: 22px 1fr auto;
+    align-items: center;
+    gap: var(--sp-3);
+    padding: 6px 0;
+  }
+  .top-rank {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: var(--color-surface-alt);
+    color: var(--color-text-secondary);
+    font-size: 12px;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--color-border);
+  }
+  .top-row:nth-child(1) .top-rank { background: var(--color-brand); color: #fff; border-color: var(--color-brand); }
+  .top-row:nth-child(2) .top-rank { background: #93c5fd; color: #1e3a8a; border-color: #93c5fd; }
+  .top-row:nth-child(3) .top-rank { background: #c7d2fe; color: #3730a3; border-color: #c7d2fe; }
+
+  .top-bar {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+  }
+  .top-bar-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--sp-2);
+    font-size: 13px;
+  }
+  .top-bar-name {
+    color: var(--color-text-primary);
+    font-weight: 500;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .top-bar-cat {
+    font-size: 11px;
+    color: var(--color-text-tertiary);
+    margin-left: 6px;
+  }
+  .top-bar-track {
+    height: 6px;
+    background: var(--color-surface-alt);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+  .top-bar-fill {
+    height: 100%;
+    background: var(--color-brand);
+    border-radius: 3px;
+  }
+  .top-row:nth-child(2) .top-bar-fill { background: #60a5fa; }
+  .top-row:nth-child(3) .top-bar-fill { background: #93c5fd; }
+  .top-row:nth-child(n+4) .top-bar-fill { background: #c7d2fe; }
+  .top-count {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--color-text-primary);
+    white-space: nowrap;
+  }
+  .top-count .unit {
+    font-size: 11px;
+    color: var(--color-text-tertiary);
+    font-weight: 400;
+    margin-left: 2px;
+  }
+
+  /* ========== Section ========== */
+  .section { margin-bottom: var(--sp-8); }
+  .section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: var(--sp-4);
+    padding-bottom: var(--sp-3);
+    border-bottom: 1px solid var(--color-border);
+  }
+  .section-title {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-3);
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--color-text-primary);
+    margin: 0;
+  }
+  .section-count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 22px;
+    height: 22px;
+    padding: 0 8px;
+    border-radius: 11px;
+    font-size: 12px;
+    font-weight: 500;
+    background: var(--color-surface-alt);
+    color: var(--color-text-secondary);
+    border: 1px solid var(--color-border);
+  }
+  .section-bar {
+    width: 3px;
+    height: 16px;
+    border-radius: 2px;
+    background: var(--color-text-tertiary);
+  }
+  .section-bar.is-active   { background: var(--color-active); }
+  .section-bar.is-draft    { background: var(--color-draft); }
+  .section-bar.is-disabled { background: var(--color-disabled); }
+
+  /* ========== Card Grid (流程卡片) ========== */
+  .card-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--sp-3);
+  }
+
+  /* ========== Flow Card ========== */
+  .flow-card {
+    position: relative;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--r-lg);
+    padding: var(--sp-4) var(--sp-5);
+    box-shadow: var(--shadow-sm);
+    transition: box-shadow 0.18s ease, transform 0.18s ease, border-color 0.18s ease;
+    overflow: hidden;
+  }
+  .flow-card::before {
+    content: "";
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 3px;
+    background: var(--color-text-tertiary);
+  }
+  .flow-card.is-active::before   { background: var(--color-active); }
+  .flow-card.is-draft::before    { background: var(--color-draft); }
+  .flow-card.is-disabled::before { background: var(--color-disabled); }
+  .flow-card:hover {
+    box-shadow: var(--shadow-md);
+    border-color: var(--color-border-strong);
+    transform: translateY(-1px);
+  }
+
+  .card-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--sp-3);
+    margin-bottom: var(--sp-2);
+  }
+  .card-title-wrap { flex: 1; min-width: 0; }
+  .card-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--color-text-primary);
+    line-height: 1.45;
+    margin: 0;
+    word-break: break-all;
+    text-decoration: none;
+    transition: color 0.18s ease;
+  }
+  .card-title:hover { color: var(--color-brand); }
+
+  .card-id {
+    font-size: 11px;
+    color: var(--color-text-tertiary);
+    margin-top: 2px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+
+  /* badges */
+  .badge-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    align-items: flex-end;
+    flex-shrink: 0;
+  }
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 1.5;
+    white-space: nowrap;
+    border: 1px solid transparent;
+  }
+  .badge::before {
+    content: "";
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: currentColor;
+  }
+  .badge.is-active {
+    color: var(--color-active);
+    background: var(--color-active-bg);
+    border-color: var(--color-active-border);
+  }
+  .badge.is-draft {
+    color: var(--color-draft);
+    background: var(--color-draft-bg);
+    border-color: var(--color-draft-border);
+  }
+  .badge.is-disabled {
+    color: var(--color-disabled);
+    background: var(--color-disabled-bg);
+    border-color: var(--color-disabled-border);
+  }
+  .tag {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 11px;
+    font-weight: 500;
+    line-height: 1.5;
+  }
+  .tag.is-public {
+    color: var(--color-public);
+    background: var(--color-brand-soft);
+    border: 1px solid #bfdbfe;
+  }
+  .tag.is-private {
+    color: var(--color-private);
+    background: #f5f3ff;
+    border: 1px solid #ddd6fe;
+  }
+  .tag.is-sub {
+    color: var(--color-text-secondary);
+    background: var(--color-surface-alt);
+    border: 1px solid var(--color-border);
+  }
+
+  /* card meta（分类/时间） */
+  .card-meta-row {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--sp-2);
+    font-size: 12px;
+    color: var(--color-text-tertiary);
+    margin-bottom: var(--sp-3);
+  }
+  .meta-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 8px;
+    border-radius: 4px;
+    background: var(--color-surface-alt);
+    border: 1px solid var(--color-border);
+    color: var(--color-text-secondary);
+  }
+  .meta-pill .cat-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+  }
+  .card-meta-row .sep::before {
+    content: "·";
+    margin: 0 2px;
+    color: var(--color-text-tertiary);
+  }
+
+  /* card stats grid */
+  .card-stats {
+    margin-top: var(--sp-2);
+    padding-top: var(--sp-3);
+    border-top: 1px dashed var(--color-border);
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--sp-3);
+  }
+  .stat-cell {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .stat-cell-label {
+    font-size: 11px;
+    color: var(--color-text-tertiary);
+  }
+  .stat-cell-value {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--color-text-primary);
+    line-height: 1.3;
+  }
+  .stat-cell-value .unit {
+    font-size: 11px;
+    font-weight: 400;
+    color: var(--color-text-tertiary);
+    margin-left: 2px;
+  }
+  .stat-cell-value.muted { color: var(--color-text-tertiary); font-weight: 500; }
+
+  /* card foot */
+  .card-foot {
+    margin-top: var(--sp-3);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 12px;
+    color: var(--color-text-tertiary);
+  }
+  .link-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 13px;
+    color: var(--color-brand);
+    text-decoration: none;
+    padding: 4px 10px;
+    border-radius: var(--r-sm);
+    transition: background 0.18s ease;
+  }
+  .link-btn:hover { background: var(--color-brand-soft); }
+  .link-btn::after {
+    content: "›";
+    font-size: 16px;
+    line-height: 1;
+    transform: translateY(-1px);
+  }
+
+  /* ========== Responsive ========== */
+  @media (max-width: 900px) {
+    .stats-panel { grid-template-columns: 1fr; }
+    .pie-wrap { grid-template-columns: 1fr; }
+    .pie-canvas-box { margin: 0 auto; }
+  }
+  @media (max-width: 768px) {
+    .overview { grid-template-columns: repeat(2, 1fr); }
+    .card-grid { grid-template-columns: 1fr; }
+    .page { padding: var(--sp-5) var(--sp-4); }
+  }
+</style>
+</head>
+<body>
+  <div class="page">
+
+    <!-- Page Header -->
+    <header class="page-header">
+      <div>
+        <h1 class="page-title">我的流程</h1>
+        <p class="page-subtitle">您当前管理 14 个流程 · 数据更新于 2026-05-20 14:04</p>
+      </div>
+      <div class="page-header-actions">
+        <span class="sort-control">排序 · <span class="sort-key">最近更新时间</span></span>
+      </div>
+    </header>
+
+    <!-- Overview Stats -->
+    <section class="overview">
+      <div class="stat-card">
+        <div class="stat-label">流程总数</div>
+        <div class="stat-value">14</div>
+        <div class="stat-trend">本月新增 2 个</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">已启用</div>
+        <div class="stat-value is-active">9</div>
+        <div class="stat-trend up">较上月 +1</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">未发布</div>
+        <div class="stat-value is-draft">3</div>
+        <div class="stat-trend">含 1 个准备发布</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">累计发起量</div>
+        <div class="stat-value">2,847</div>
+        <div class="stat-trend up">本月 +312</div>
+      </div>
+    </section>
+
+    <!-- Stats Panel: 饼图 + TOP -->
+    <section class="stats-panel">
+
+      <!-- 分类饼图 -->
+      <div class="panel-card">
+        <div class="panel-head">
+          <h3 class="panel-title">流程分类分布</h3>
+          <span class="panel-sub">按流程数量</span>
+        </div>
+        <div class="pie-wrap">
+          <div class="pie-canvas-box">
+            <canvas id="categoryPie"></canvas>
+            <div class="pie-center">
+              <div class="pc-num">14</div>
+              <div class="pc-label">流程总数</div>
+            </div>
+          </div>
+          <div class="pie-legend" id="legendBox"></div>
+        </div>
+      </div>
+
+      <!-- 发起量 TOP -->
+      <div class="panel-card">
+        <div class="panel-head">
+          <h3 class="panel-title">发起量 TOP 5</h3>
+          <span class="panel-sub">近 30 天</span>
+        </div>
+        <div class="top-list" id="topList">
+          <!-- JS 注入 -->
+        </div>
+      </div>
+    </section>
+
+    <!-- Section: 已启用 -->
+    <section class="section">
+      <div class="section-header">
+        <h2 class="section-title">
+          <span class="section-bar is-active"></span>
+          已启用
+          <span class="section-count">9</span>
+        </h2>
+      </div>
+
+      <div class="card-grid">
+
+        <!-- Card 1 -->
+        <article class="flow-card is-active">
+          <div class="card-head">
+            <div class="card-title-wrap">
+              <a href="#" class="card-title">商品 SKU 上架审批</a>
+              <div class="card-id">FN-PROD-001</div>
+            </div>
+            <div class="badge-stack">
+              <span class="badge is-active">已启用</span>
+              <span class="tag is-public">公开</span>
+            </div>
+          </div>
+          <div class="card-meta-row">
+            <span class="meta-pill"><span class="cat-dot" style="background: var(--c-product)"></span>产商品库</span>
+            <span class="tag is-sub">含 2 个子流程</span>
+          </div>
+          <div class="card-stats">
+            <div class="stat-cell">
+              <span class="stat-cell-label">累计发起量</span>
+              <span class="stat-cell-value">628<span class="unit">次</span></span>
+            </div>
+            <div class="stat-cell">
+              <span class="stat-cell-label">创建时间</span>
+              <span class="stat-cell-value muted" style="font-size:13px">2024-08-12</span>
+            </div>
+            <div class="stat-cell">
+              <span class="stat-cell-label">最近更新</span>
+              <span class="stat-cell-value muted" style="font-size:13px">2026-05-19</span>
+            </div>
+          </div>
+          <div class="card-foot">
+            <span>本月发起 92 次</span>
+            <a class="link-btn" href="#">流程主页</a>
+          </div>
+        </article>
+
+        <!-- Card 2 -->
+        <article class="flow-card is-active">
+          <div class="card-head">
+            <div class="card-title-wrap">
+              <a href="#" class="card-title">计费规则变更申请</a>
+              <div class="card-id">FN-BILL-007</div>
+            </div>
+            <div class="badge-stack">
+              <span class="badge is-active">已启用</span>
+              <span class="tag is-public">公开</span>
+            </div>
+          </div>
+          <div class="card-meta-row">
+            <span class="meta-pill"><span class="cat-dot" style="background: var(--c-billing)"></span>计费平台</span>
+            <span class="tag is-sub">含 1 个子流程</span>
+          </div>
+          <div class="card-stats">
+            <div class="stat-cell">
+              <span class="stat-cell-label">累计发起量</span>
+              <span class="stat-cell-value">412<span class="unit">次</span></span>
+            </div>
+            <div class="stat-cell">
+              <span class="stat-cell-label">创建时间</span>
+              <span class="stat-cell-value muted" style="font-size:13px">2024-11-05</span>
+            </div>
+            <div class="stat-cell">
+              <span class="stat-cell-label">最近更新</span>
+              <span class="stat-cell-value muted" style="font-size:13px">2026-05-18</span>
+            </div>
+          </div>
+          <div class="card-foot">
+            <span>本月发起 58 次</span>
+            <a class="link-btn" href="#">流程主页</a>
+          </div>
+        </article>
+
+        <!-- Card 3 -->
+        <article class="flow-card is-active">
+          <div class="card-head">
+            <div class="card-title-wrap">
+              <a href="#" class="card-title">官网内容发布</a>
+              <div class="card-id">FN-PORTAL-013</div>
+            </div>
+            <div class="badge-stack">
+              <span class="badge is-active">已启用</span>
+              <span class="tag is-public">公开</span>
+            </div>
+          </div>
+          <div class="card-meta-row">
+            <span class="meta-pill"><span class="cat-dot" style="background: var(--c-portal)"></span>官网平台</span>
+            <span class="tag is-sub">含 3 个子流程</span>
+          </div>
+          <div class="card-stats">
+            <div class="stat-cell">
+              <span class="stat-cell-label">累计发起量</span>
+              <span class="stat-cell-value">851<span class="unit">次</span></span>
+            </div>
+            <div class="stat-cell">
+              <span class="stat-cell-label">创建时间</span>
+              <span class="stat-cell-value muted" style="font-size:13px">2024-06-20</span>
+            </div>
+            <div class="stat-cell">
+              <span class="stat-cell-label">最近更新</span>
+              <span class="stat-cell-value muted" style="font-size:13px">2026-05-15</span>
+            </div>
+          </div>
+          <div class="card-foot">
+            <span>本月发起 124 次</span>
+            <a class="link-btn" href="#">流程主页</a>
+          </div>
+        </article>
+
+        <!-- Card 4 -->
+        <article class="flow-card is-active">
+          <div class="card-head">
+            <div class="card-title-wrap">
+              <a href="#" class="card-title">商品价格调整</a>
+              <div class="card-id">FN-PROD-022</div>
+            </div>
+            <div class="badge-stack">
+              <span class="badge is-active">已启用</span>
+              <span class="tag is-private">内部</span>
+            </div>
+          </div>
+          <div class="card-meta-row">
+            <span class="meta-pill"><span class="cat-dot" style="background: var(--c-product)"></span>产商品库</span>
+          </div>
+          <div class="card-stats">
+            <div class="stat-cell">
+              <span class="stat-cell-label">累计发起量</span>
+              <span class="stat-cell-value">183<span class="unit">次</span></span>
+            </div>
+            <div class="stat-cell">
+              <span class="stat-cell-label">创建时间</span>
+              <span class="stat-cell-value muted" style="font-size:13px">2025-02-14</span>
+            </div>
+            <div class="stat-cell">
+              <span class="stat-cell-label">最近更新</span>
+              <span class="stat-cell-value muted" style="font-size:13px">2026-05-12</span>
+            </div>
+          </div>
+          <div class="card-foot">
+            <span>本月发起 24 次</span>
+            <a class="link-btn" href="#">流程主页</a>
+          </div>
+        </article>
+
+        <!-- Card 5 -->
+        <article class="flow-card is-active">
+          <div class="card-head">
+            <div class="card-title-wrap">
+              <a href="#" class="card-title">计费账单冲正</a>
+              <div class="card-id">FN-BILL-014</div>
+            </div>
+            <div class="badge-stack">
+              <span class="badge is-active">已启用</span>
+              <span class="tag is-private">内部</span>
+            </div>
+          </div>
+          <div class="card-meta-row">
+            <span class="meta-pill"><span class="cat-dot" style="background: var(--c-billing)"></span>计费平台</span>
+            <span class="tag is-sub">含 2 个子流程</span>
+          </div>
+          <div class="card-stats">
+            <div class="stat-cell">
+              <span class="stat-cell-label">累计发起量</span>
+              <span class="stat-cell-value">96<span class="unit">次</span></span>
+            </div>
+            <div class="stat-cell">
+              <span class="stat-cell-label">创建时间</span>
+              <span class="stat-cell-value muted" style="font-size:13px">2025-01-08</span>
+            </div>
+            <div class="stat-cell">
+              <span class="stat-cell-label">最近更新</span>
+              <span class="stat-cell-value muted" style="font-size:13px">2026-05-08</span>
+            </div>
+          </div>
+          <div class="card-foot">
+            <span>本月发起 14 次</span>
+            <a class="link-btn" href="#">流程主页</a>
+          </div>
+        </article>
+
+        <!-- Card 6 -->
+        <article class="flow-card is-active">
+          <div class="card-head">
+            <div class="card-title-wrap">
+              <a href="#" class="card-title">官网 Banner 更新</a>
+              <div class="card-id">FN-PORTAL-018</div>
+            </div>
+            <div class="badge-stack">
+              <span class="badge is-active">已启用</span>
+              <span class="tag is-public">公开</span>
+            </div>
+          </div>
+          <div class="card-meta-row">
+            <span class="meta-pill"><span class="cat-dot" style="background: var(--c-portal)"></span>官网平台</span>
+          </div>
+          <div class="card-stats">
+            <div class="stat-cell">
+              <span class="stat-cell-label">累计发起量</span>
+              <span class="stat-cell-value">347<span class="unit">次</span></span>
+            </div>
+            <div class="stat-cell">
+              <span class="stat-cell-label">创建时间</span>
+              <span class="stat-cell-value muted" style="font-size:13px">2024-09-22</span>
+            </div>
+            <div class="stat-cell">
+              <span class="stat-cell-label">最近更新</span>
+              <span class="stat-cell-value muted" style="font-size:13px">2026-05-04</span>
+            </div>
+          </div>
+          <div class="card-foot">
+            <span>本月发起 38 次</span>
+            <a class="link-btn" href="#">流程主页</a>
+          </div>
+        </article>
+
+      </div>
+    </section>
+
+    <!-- Section: 未发布 -->
+    <section class="section">
+      <div class="section-header">
+        <h2 class="section-title">
+          <span class="section-bar is-draft"></span>
+          未发布
+          <span class="section-count">3</span>
+        </h2>
+      </div>
+
+      <div class="card-grid">
+
+        <article class="flow-card is-draft">
+          <div class="card-head">
+            <div class="card-title-wrap">
+              <a href="#" class="card-title">商品下架审批 V2</a>
+              <div class="card-id">FN-PROD-031</div>
+            </div>
+            <div class="badge-stack">
+              <span class="badge is-draft">未发布</span>
+              <span class="tag is-private">内部</span>
+            </div>
+          </div>
+          <div class="card-meta-row">
+            <span class="meta-pill"><span class="cat-dot" style="background: var(--c-product)"></span>产商品库</span>
+          </div>
+          <div class="card-stats">
+            <div class="stat-cell">
+              <span class="stat-cell-label">累计发起量</span>
+              <span class="stat-cell-value muted">—</span>
+            </div>
+            <div class="stat-cell">
+              <span class="stat-cell-label">创建时间</span>
+              <span class="stat-cell-value muted" style="font-size:13px">2026-05-15</span>
+            </div>
+            <div class="stat-cell">
+              <span class="stat-cell-label">最近更新</span>
+              <span class="stat-cell-value muted" style="font-size:13px">2026-05-19</span>
+            </div>
+          </div>
+          <div class="card-foot">
+            <span>草稿状态 · 待发布</span>
+            <a class="link-btn" href="#">前往编辑</a>
+          </div>
+        </article>
+
+        <article class="flow-card is-draft">
+          <div class="card-head">
+            <div class="card-title-wrap">
+              <a href="#" class="card-title">计费方案审批</a>
+              <div class="card-id">FN-BILL-029</div>
+            </div>
+            <div class="badge-stack">
+              <span class="badge is-draft">未发布</span>
+              <span class="tag is-public">公开</span>
+            </div>
+          </div>
+          <div class="card-meta-row">
+            <span class="meta-pill"><span class="cat-dot" style="background: var(--c-billing)"></span>计费平台</span>
+          </div>
+          <div class="card-stats">
+            <div class="stat-cell">
+              <span class="stat-cell-label">累计发起量</span>
+              <span class="stat-cell-value muted">—</span>
+            </div>
+            <div class="stat-cell">
+              <span class="stat-cell-label">创建时间</span>
+              <span class="stat-cell-value muted" style="font-size:13px">2026-05-10</span>
+            </div>
+            <div class="stat-cell">
+              <span class="stat-cell-label">最近更新</span>
+              <span class="stat-cell-value muted" style="font-size:13px">2026-05-17</span>
+            </div>
+          </div>
+          <div class="card-foot">
+            <span>草稿状态 · 设计中</span>
+            <a class="link-btn" href="#">前往编辑</a>
+          </div>
+        </article>
+
+        <article class="flow-card is-draft">
+          <div class="card-head">
+            <div class="card-title-wrap">
+              <a href="#" class="card-title">外部访客邀请</a>
+              <div class="card-id">FN-OTHER-040</div>
+            </div>
+            <div class="badge-stack">
+              <span class="badge is-draft">未发布</span>
+              <span class="tag is-public">公开</span>
+            </div>
+          </div>
+          <div class="card-meta-row">
+            <span class="meta-pill"><span class="cat-dot" style="background: var(--c-other)"></span>其他</span>
+          </div>
+          <div class="card-stats">
+            <div class="stat-cell">
+              <span class="stat-cell-label">累计发起量</span>
+              <span class="stat-cell-value muted">—</span>
+            </div>
+            <div class="stat-cell">
+              <span class="stat-cell-label">创建时间</span>
+              <span class="stat-cell-value muted" style="font-size:13px">2026-04-28</span>
+            </div>
+            <div class="stat-cell">
+              <span class="stat-cell-label">最近更新</span>
+              <span class="stat-cell-value muted" style="font-size:13px">2026-05-11</span>
+            </div>
+          </div>
+          <div class="card-foot">
+            <span>草稿状态 · 评审中</span>
+            <a class="link-btn" href="#">前往编辑</a>
+          </div>
+        </article>
+
+      </div>
+    </section>
+
+    <!-- Section: 已停用 -->
+    <section class="section">
+      <div class="section-header">
+        <h2 class="section-title">
+          <span class="section-bar is-disabled"></span>
+          已停用
+          <span class="section-count">2</span>
+        </h2>
+      </div>
+
+      <div class="card-grid">
+
+        <article class="flow-card is-disabled">
+          <div class="card-head">
+            <div class="card-title-wrap">
+              <a href="#" class="card-title">老版商品上架 V1</a>
+              <div class="card-id">FN-PROD-000</div>
+            </div>
+            <div class="badge-stack">
+              <span class="badge is-disabled">已停用</span>
+              <span class="tag is-public">公开</span>
+            </div>
+          </div>
+          <div class="card-meta-row">
+            <span class="meta-pill"><span class="cat-dot" style="background: var(--c-product)"></span>产商品库</span>
+          </div>
+          <div class="card-stats">
+            <div class="stat-cell">
+              <span class="stat-cell-label">历史发起量</span>
+              <span class="stat-cell-value">2,134<span class="unit">次</span></span>
+            </div>
+            <div class="stat-cell">
+              <span class="stat-cell-label">创建时间</span>
+              <span class="stat-cell-value muted" style="font-size:13px">2023-04-10</span>
+            </div>
+            <div class="stat-cell">
+              <span class="stat-cell-label">停用时间</span>
+              <span class="stat-cell-value muted" style="font-size:13px">2024-08-12</span>
+            </div>
+          </div>
+          <div class="card-foot">
+            <span>已被 FN-PROD-001 替代</span>
+            <a class="link-btn" href="#">查看历史</a>
+          </div>
+        </article>
+
+        <article class="flow-card is-disabled">
+          <div class="card-head">
+            <div class="card-title-wrap">
+              <a href="#" class="card-title">官网活动专题报备</a>
+              <div class="card-id">FN-PORTAL-019</div>
+            </div>
+            <div class="badge-stack">
+              <span class="badge is-disabled">已停用</span>
+              <span class="tag is-private">内部</span>
+            </div>
+          </div>
+          <div class="card-meta-row">
+            <span class="meta-pill"><span class="cat-dot" style="background: var(--c-portal)"></span>官网平台</span>
+          </div>
+          <div class="card-stats">
+            <div class="stat-cell">
+              <span class="stat-cell-label">历史发起量</span>
+              <span class="stat-cell-value">76<span class="unit">次</span></span>
+            </div>
+            <div class="stat-cell">
+              <span class="stat-cell-label">创建时间</span>
+              <span class="stat-cell-value muted" style="font-size:13px">2024-03-21</span>
+            </div>
+            <div class="stat-cell">
+              <span class="stat-cell-label">停用时间</span>
+              <span class="stat-cell-value muted" style="font-size:13px">2026-03-30</span>
+            </div>
+          </div>
+          <div class="card-foot">
+            <span>业务下线</span>
+            <a class="link-btn" href="#">查看历史</a>
+          </div>
+        </article>
+
+      </div>
+    </section>
+
+  </div>
+
+<script>
+  // ========== Data ==========
+  // 14 个流程的分类分布：产商品库 4 / 计费平台 3 / 官网平台 4 / 其他 3
+  const categoryData = [
+    { name: '产商品库', value: 4, color: getCss('--c-product') },
+    { name: '官网平台', value: 4, color: getCss('--c-portal') },
+    { name: '计费平台', value: 3, color: getCss('--c-billing') },
+    { name: '其他',     value: 3, color: getCss('--c-other') },
+  ];
+
+  const topData = [
+    { name: '官网内容发布',     category: '官网平台', count: 124 },
+    { name: '商品 SKU 上架审批', category: '产商品库', count: 92 },
+    { name: '计费规则变更申请',  category: '计费平台', count: 58 },
+    { name: '官网 Banner 更新',  category: '官网平台', count: 38 },
+    { name: '商品价格调整',      category: '产商品库', count: 24 },
+  ];
+
+  function getCss(varName) {
+    return getComputedStyle(document.documentElement).getPropertyValue(varName).trim();
+  }
+
+  // ========== Pie Chart ==========
+  const pieCtx = document.getElementById('categoryPie');
+  const totalCat = categoryData.reduce((s, x) => s + x.value, 0);
+  new Chart(pieCtx, {
+    type: 'doughnut',
+    data: {
+      labels: categoryData.map(d => d.name),
+      datasets: [{
+        data: categoryData.map(d => d.value),
+        backgroundColor: categoryData.map(d => d.color),
+        borderColor: '#ffffff',
+        borderWidth: 2,
+        hoverOffset: 6,
+      }]
+    },
+    options: {
+      cutout: '64%',
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: (ctx) => {
+              const v = ctx.parsed;
+              const pct = ((v / totalCat) * 100).toFixed(1);
+              return `${ctx.label}: ${v} 个 (${pct}%)`;
+            }
+          }
+        }
+      },
+      animation: { animateRotate: true, duration: 600 },
+      maintainAspectRatio: false,
+    }
+  });
+
+  // Pie 图例
+  const legendBox = document.getElementById('legendBox');
+  legendBox.innerHTML = categoryData.map(d => {
+    const pct = ((d.value / totalCat) * 100).toFixed(0);
+    return `<div class="legend-row">
+      <span class="legend-dot" style="background:${d.color}"></span>
+      <span class="legend-name">${d.name}</span>
+      <span class="legend-val">${d.value} 个</span>
+      <span class="legend-pct">${pct}%</span>
+    </div>`;
+  }).join('');
+
+  // ========== TOP List ==========
+  const topListEl = document.getElementById('topList');
+  const maxCount = Math.max(...topData.map(d => d.count));
+  topListEl.innerHTML = topData.map((d, i) => {
+    const w = (d.count / maxCount * 100).toFixed(1);
+    return `<div class="top-row">
+      <span class="top-rank">${i + 1}</span>
+      <div class="top-bar">
+        <div class="top-bar-head">
+          <span class="top-bar-name">${d.name}<span class="top-bar-cat">· ${d.category}</span></span>
+        </div>
+        <div class="top-bar-track"><div class="top-bar-fill" style="width:${w}%"></div></div>
+      </div>
+      <span class="top-count">${d.count}<span class="unit">次</span></span>
+    </div>`;
+  }).join('');
+</script>
+</body>
+</html>

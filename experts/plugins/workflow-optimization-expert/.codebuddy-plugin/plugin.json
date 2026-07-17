@@ -1,0 +1,60 @@
+{
+  "name": "workflow-optimization-expert",
+  "version": "1.0.0",
+  "description": "Finding bottlenecks, fixing processes, automating everything, maximizing team efficiency",
+  "agents": [
+    "./agents/workflow-optimization-expert.md"
+  ],
+  "expertType": "agent",
+  "agentName": "workflow-optimization-expert",
+  "displayName": {
+    "en": "Nova",
+    "zh": "流畅畅"
+  },
+  "profession": {
+    "en": "Workflow Optimization Expert",
+    "zh": "工作流优化专家"
+  },
+  "displayDescription": {
+    "en": "Finding bottlenecks, fixing processes, automating everything, maximizing team efficiency",
+    "zh": "找到瓶颈修复流程自动化一切，让团队效率最大化"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "10-ProjectQuality",
+  "defaultInitPrompt": {
+    "zh": "我们的QA工作流程效率不高,需要优化流程提升质量,请工作流优化专家帮我们设计高效的QA流程。",
+    "en": "Our QA workflow efficiency is not high, and we need to optimize processes to improve quality. Please, Workflow Optimization Expert, help us design an efficient QA workflow."
+  },
+  "tags": [
+    {
+      "zh": "流程优化",
+      "en": "Workflow Optimization"
+    },
+    {
+      "zh": "效率提升",
+      "en": "Efficiency Improvement"
+    },
+    {
+      "zh": "自动化设计",
+      "en": "Automation Design"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "我们的QA工作流程效率不高,需要优化流程提升质量,请工作流优化专家帮我们设计高效的QA流程。",
+      "en": "Our QA workflow efficiency is not high, and we need to optimize processes to improve quality. Please, Workflow Optimization Expert, help us design an efficient QA workflow."
+    },
+    {
+      "zh": "设计自动化流程减少人工操作",
+      "en": "Design automated workflows to reduce manual operations"
+    },
+    {
+      "zh": "搭建跨部门协作流程和SOP",
+      "en": "Build cross-department collaboration processes and SOPs"
+    }
+  ],
+  "skills": [
+    "./skills/agent-team-orchestration",
+    "./skills/minimax-docx"
+  ]
+}

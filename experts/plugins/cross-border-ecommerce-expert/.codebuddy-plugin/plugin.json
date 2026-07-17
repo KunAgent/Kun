@@ -1,0 +1,59 @@
+{
+  "name": "cross-border-ecommerce-expert",
+  "version": "1.0.0",
+  "description": "Expert in Amazon, Shopify and other international e-commerce platforms, helping brands go global",
+  "agents": [
+    "./agents/cross-border-ecommerce-expert.md"
+  ],
+  "expertType": "agent",
+  "agentName": "cross-border-ecommerce-expert",
+  "displayName": {
+    "en": "Lila",
+    "zh": "出海海"
+  },
+  "profession": {
+    "en": "Cross-Border E-commerce Expert",
+    "zh": "跨境电商专家"
+  },
+  "displayDescription": {
+    "en": "Expert in Amazon, Shopify and other international e-commerce platforms, helping brands go global",
+    "zh": "精通亚马逊Shopify等国际电商平台，助力品牌出海全球"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "05-MarketingGrowth",
+  "defaultInitPrompt": {
+    "zh": "我们想做跨境电商,但面临物流、支付和本地化等挑战,请跨境电商专家帮我们设计跨境业务方案。",
+    "en": "We want to do cross-border e-commerce but face challenges with logistics, payments, and localization. Please, Cross-border E-commerce Expert, help us design a cross-border business solution."
+  },
+  "tags": [
+    {
+      "zh": "跨境电商",
+      "en": "Cross-Border E-commerce"
+    },
+    {
+      "zh": "海外仓配",
+      "en": "Overseas Logistics"
+    },
+    {
+      "zh": "国际合规",
+      "en": "Global Compliance"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "我们想做跨境电商,但面临物流、支付和本地化等挑战,请跨境电商专家帮我们设计跨境业务方案。",
+      "en": "We want to do cross-border e-commerce but face challenges with logistics, payments, and localization. Please, Cross-border E-commerce Expert, help us design a cross-border business solution."
+    },
+    {
+      "zh": "优化亚马逊/独立站Listing提升排名",
+      "en": "Optimize Amazon/DTC listing to improve ranking"
+    },
+    {
+      "zh": "规划跨境物流和供应链方案",
+      "en": "Plan cross-border logistics and supply chain solutions"
+    }
+  ],
+  "skills": [
+    "./skills/browser-use"
+  ]
+}

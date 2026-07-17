@@ -1,0 +1,277 @@
+{
+  "schemaVersion": "long_manuscript.scene_blueprints.v1",
+  "version": "1.0.0",
+  "blueprints": [
+    {
+      "blueprintId": "generic_bootstrap_first_value",
+      "summary": "Default long-form first value when the user goal is broad but the materials are enough to leave intake.",
+      "dimensionMatch": {
+        "document_archetype": ["generic_longform", "social_content_article", "commercial_marketing_copy"],
+        "source_maturity": ["idea_only", "outline_ready", "fragmented_notes", "source_pack_ready"],
+        "delivery_stage": ["intake", "first_value", "expand"]
+      },
+      "evidenceMode": "offline_required",
+      "dispatchMode": "offline_first",
+      "moduleIds": [
+        "judgement_core",
+        "scene_match",
+        "chapter_route",
+        "sample_opening",
+        "risk_split",
+        "material_activation",
+        "quality_quick_summary",
+        "continuation_progress",
+        "resume_prompt",
+        "finishing_lane_selector",
+        "service_coordination_hints",
+        "host_action_envelope"
+      ],
+      "continuationBranches": ["continue_chapter", "revise_structure", "organize_materials"],
+      "closedLoopNodes": ["intent_aggregation", "scene_recognition", "strategy_dispatch"]
+    },
+    {
+      "blueprintId": "novel_opening_route",
+      "summary": "Story-led opening route for fiction manuscripts.",
+      "dimensionMatch": {
+        "document_archetype": ["novel_fiction"],
+        "source_maturity": ["idea_only", "outline_ready", "fragmented_notes", "active_draft"],
+        "delivery_stage": ["first_value", "expand", "revise"]
+      },
+      "evidenceMode": "offline_required",
+      "dispatchMode": "offline_first",
+      "moduleIds": [
+        "judgement_core",
+        "scene_match",
+        "chapter_route",
+        "sample_opening",
+        "risk_split",
+        "material_activation",
+        "quality_quick_summary",
+        "continuation_progress",
+        "resume_prompt",
+        "finishing_lane_selector",
+        "service_coordination_hints",
+        "host_action_envelope"
+      ],
+      "continuationBranches": ["continue_chapter", "revise_structure", "de_ai_polish"],
+      "closedLoopNodes": ["intent_aggregation", "scene_recognition", "strategy_dispatch"]
+    },
+    {
+      "blueprintId": "academic_argument_scaffold",
+      "summary": "Thesis-first route that separates draft progress from citation-safe claim upgrades.",
+      "dimensionMatch": {
+        "document_archetype": ["academic_monograph"],
+        "source_maturity": ["outline_ready", "source_pack_ready", "active_draft"],
+        "delivery_stage": ["first_value", "expand", "revise", "review"]
+      },
+      "evidenceMode": "network_required_for_claim_upgrade_only",
+      "dispatchMode": "offline_first_claim_upgrade_later",
+      "moduleIds": [
+        "judgement_core",
+        "scene_match",
+        "chapter_route",
+        "sample_opening",
+        "risk_split",
+        "material_activation",
+        "claim_ledger",
+        "evidence_gap_map",
+        "quality_quick_summary",
+        "continuation_progress",
+        "resume_prompt",
+        "finishing_lane_selector",
+        "service_coordination_hints",
+        "host_action_envelope"
+      ],
+      "continuationBranches": ["continue_chapter", "revise_structure", "rewrite_localize"],
+      "networkEscalationTriggers": ["current_citations", "external_evidence_gap", "claim_upgrade_request"],
+      "closedLoopNodes": ["intent_aggregation", "scene_recognition", "strategy_dispatch"]
+    },
+    {
+      "blueprintId": "whitepaper_evidence_route",
+      "summary": "Evidence-structured route for whitepapers, reports, and industry handbooks.",
+      "dimensionMatch": {
+        "document_archetype": ["whitepaper_report"],
+        "source_maturity": ["outline_ready", "source_pack_ready", "active_draft"],
+        "delivery_stage": ["first_value", "expand", "revise", "review"]
+      },
+      "evidenceMode": "network_required_for_claim_upgrade_only",
+      "dispatchMode": "offline_first_claim_upgrade_later",
+      "moduleIds": [
+        "judgement_core",
+        "scene_match",
+        "chapter_route",
+        "sample_opening",
+        "risk_split",
+        "material_activation",
+        "claim_ledger",
+        "evidence_gap_map",
+        "quality_quick_summary",
+        "continuation_progress",
+        "resume_prompt",
+        "finishing_lane_selector",
+        "project_template_handoff",
+        "content_operations_handoff",
+        "service_coordination_hints",
+        "host_action_envelope"
+      ],
+      "continuationBranches": ["continue_chapter", "revise_structure", "summary_pack"],
+      "networkEscalationTriggers": ["current_data_request", "named_case_request", "chart_or_benchmark_request"],
+      "closedLoopNodes": ["intent_aggregation", "scene_recognition", "strategy_dispatch"]
+    },
+    {
+      "blueprintId": "handbook_process_route",
+      "summary": "Checklist-ready route for SOPs, playbooks, and operational handbooks.",
+      "dimensionMatch": {
+        "document_archetype": ["manual_handbook"],
+        "source_maturity": ["outline_ready", "fragmented_notes", "source_pack_ready", "active_draft"],
+        "delivery_stage": ["first_value", "expand", "revise", "finish"]
+      },
+      "evidenceMode": "network_optional_after_first_value",
+      "dispatchMode": "offline_first",
+      "moduleIds": [
+        "judgement_core",
+        "scene_match",
+        "chapter_route",
+        "sample_opening",
+        "risk_split",
+        "material_activation",
+        "quality_quick_summary",
+        "continuation_progress",
+        "resume_prompt",
+        "finishing_lane_selector",
+        "project_template_handoff",
+        "service_coordination_hints",
+        "host_action_envelope"
+      ],
+      "continuationBranches": ["continue_chapter", "format_export", "organize_materials"],
+      "closedLoopNodes": ["intent_aggregation", "scene_recognition", "strategy_dispatch"]
+    },
+    {
+      "blueprintId": "official_document_rule_safe_route",
+      "summary": "Rule-safe route for formal notices, policies, and official long documents.",
+      "dimensionMatch": {
+        "document_archetype": ["official_document"],
+        "source_maturity": ["outline_ready", "source_pack_ready", "active_draft"],
+        "delivery_stage": ["first_value", "revise", "review", "finish"]
+      },
+      "evidenceMode": "network_required_for_claim_upgrade_only",
+      "dispatchMode": "offline_first_claim_upgrade_later",
+      "moduleIds": [
+        "judgement_core",
+        "scene_match",
+        "chapter_route",
+        "risk_split",
+        "material_activation",
+        "claim_ledger",
+        "evidence_gap_map",
+        "quality_quick_summary",
+        "continuation_progress",
+        "resume_prompt",
+        "finishing_lane_selector",
+        "service_coordination_hints",
+        "host_action_envelope"
+      ],
+      "continuationBranches": ["revise_structure", "rewrite_localize", "format_export"],
+      "networkEscalationTriggers": ["current_policy_request", "public_notice_request", "regulatory_wording_request"],
+      "closedLoopNodes": ["intent_aggregation", "scene_recognition", "strategy_dispatch"]
+    },
+    {
+      "blueprintId": "draft_rescue_structure_repair",
+      "summary": "Rescue route when the user already has a weak or drifting draft.",
+      "dimensionMatch": {
+        "document_archetype": ["generic_longform", "whitepaper_report", "manual_handbook", "social_content_article"],
+        "source_maturity": ["active_draft"],
+        "delivery_stage": ["revise", "review"]
+      },
+      "evidenceMode": "offline_required",
+      "dispatchMode": "offline_first",
+      "moduleIds": [
+        "judgement_core",
+        "scene_match",
+        "risk_split",
+        "quality_quick_summary",
+        "continuation_progress",
+        "resume_prompt",
+        "finishing_lane_selector",
+        "service_coordination_hints",
+        "host_action_envelope"
+      ],
+      "continuationBranches": ["revise_structure", "de_ai_polish", "rewrite_localize"],
+      "closedLoopNodes": ["intent_aggregation", "scene_recognition", "strategy_dispatch"]
+    },
+    {
+      "blueprintId": "claim_ledger_evidence_hardening",
+      "summary": "Fact-status-first route when the user needs claims separated from prose and evidence upgraded later.",
+      "dimensionMatch": {
+        "document_archetype": ["academic_monograph", "whitepaper_report", "official_document", "generic_longform"],
+        "source_maturity": ["source_pack_ready", "active_draft", "mature_draft"],
+        "delivery_stage": ["revise", "review", "finish"]
+      },
+      "evidenceMode": "network_required_for_claim_upgrade_only",
+      "dispatchMode": "offline_first_claim_upgrade_later",
+      "moduleIds": [
+        "judgement_core",
+        "claim_ledger",
+        "evidence_gap_map",
+        "risk_split",
+        "quality_quick_summary",
+        "continuation_progress",
+        "resume_prompt",
+        "service_coordination_hints",
+        "host_action_envelope"
+      ],
+      "continuationBranches": ["revise_structure", "format_export", "save_handoff"],
+      "networkEscalationTriggers": ["upgrade_claim_status", "verify_external_fact", "cite_named_source"],
+      "closedLoopNodes": ["benefit_signal", "intent_aggregation", "scene_recognition", "strategy_dispatch"]
+    },
+    {
+      "blueprintId": "post_draft_finish_pack",
+      "summary": "Post-draft pack for export, de-AI polish, and delivery readiness.",
+      "dimensionMatch": {
+        "document_archetype": ["generic_longform", "manual_handbook", "social_content_article", "commercial_marketing_copy"],
+        "source_maturity": ["mature_draft"],
+        "delivery_stage": ["review", "finish"]
+      },
+      "evidenceMode": "offline_required",
+      "dispatchMode": "offline_first",
+      "moduleIds": [
+        "judgement_core",
+        "risk_split",
+        "quality_quick_summary",
+        "continuation_progress",
+        "resume_prompt",
+        "finishing_lane_selector",
+        "project_template_handoff",
+        "service_coordination_hints",
+        "host_action_envelope"
+      ],
+      "continuationBranches": ["format_export", "de_ai_polish", "save_handoff"],
+      "closedLoopNodes": ["strategy_dispatch"]
+    },
+    {
+      "blueprintId": "channel_repurpose_pack",
+      "summary": "Repurpose and distribution route once a manuscript is usable enough for channel adaptation.",
+      "dimensionMatch": {
+        "document_archetype": ["whitepaper_report", "social_content_article", "commercial_marketing_copy", "generic_longform"],
+        "source_maturity": ["active_draft", "mature_draft"],
+        "delivery_stage": ["finish", "repurpose", "distribute"]
+      },
+      "evidenceMode": "network_optional_after_first_value",
+      "dispatchMode": "offline_first",
+      "moduleIds": [
+        "judgement_core",
+        "quality_quick_summary",
+        "continuation_progress",
+        "resume_prompt",
+        "finishing_lane_selector",
+        "project_template_handoff",
+        "content_operations_handoff",
+        "entitlement_followthrough",
+        "service_coordination_hints",
+        "host_action_envelope"
+      ],
+      "continuationBranches": ["repurpose_channels", "distribution_plan", "visual_brief"],
+      "closedLoopNodes": ["benefit_signal", "strategy_dispatch"]
+    }
+  ]
+}

@@ -1,0 +1,27 @@
+{
+  "name": "private-equity",
+  "version": "1.0.0",
+  "description": "Private equity deal sourcing and workflow tools: company discovery, CRM integration, and founder outreach",
+  "description_zh": "私募股权工具，支持 Deal Sourcing、项目筛选、尽调清单、IC Memo、单位经济学分析和投后管理。",
+  "author": {
+    "name": "CodeBuddy Teams"
+  },
+  "homepage": "",
+  "license": "",
+  "skills": [
+    "./skills/dd-checklist",
+    "./skills/dd-meeting-prep",
+    "./skills/deal-screening",
+    "./skills/deal-sourcing",
+    "./skills/ic-memo",
+    "./skills/portfolio-monitoring",
+    "./skills/returns-analysis",
+    "./skills/unit-economics",
+    "./skills/value-creation-plan"
+  ],
+  "expertType": "agent",
+  "agentName": "private-equity-expert",
+  "agents": [
+    "./agents/private-equity-expert.md"
+  ]
+}

@@ -1,0 +1,306 @@
+{
+  "name": "long-manuscript-expert",
+  "version": "1.0.1",
+  "description": "Long-form manuscript expert for turning outlines, transcripts, old drafts, and fragmented materials into structured long documents.",
+  "author": {
+    "name": "FBSir",
+    "email": "unique@u3w.com"
+  },
+  "license": "MIT",
+  "expertType": "agent",
+  "agentName": "long-manuscript-expert",
+  "agents": [
+    "./agents/long-manuscript-expert.md"
+  ],
+  "skills": [
+    "./skills/long-manuscript-core"
+  ],
+  "displayName": {
+    "en": "Long Manuscript Expert",
+    "zh": "长文档手稿专家"
+  },
+  "profession": {
+    "en": "Long-form Manuscript Writing Advisor",
+    "zh": "长文档写作与改稿专家"
+  },
+  "displayDescription": {
+    "en": "Transforms outlines, interviews, old drafts, and scattered materials into structured long-form manuscripts with chapter planning, expansion, and pre-delivery quality checks.",
+    "zh": "擅长把提纲、访谈、旧稿和零散素材整理成长文档手稿，完成结构规划、章节扩写和交付前质检。"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "06-ContentCreative",
+  "defaultInitPrompt": {
+    "zh": "请先判断这份材料更适合哪种长文档场景，再给我一张可继续推进的手稿判断卡：包含目录、章节任务、第一章开头、今天就能继续的下一步，以及下次回来可直接使用的续写口令。",
+    "en": "First identify which long-form document scene fits these materials best, then give me a manuscript starter card with the outline, chapter tasks, the opening of chapter one, the single next step I can do today, and a reusable resume prompt for the next session."
+  },
+  "tags": [
+    {
+      "en": "Outline Structuring",
+      "zh": "提纲成稿"
+    },
+    {
+      "en": "Chapter Expansion",
+      "zh": "章节扩写"
+    },
+    {
+      "en": "Draft Finishing",
+      "zh": "成稿收口"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "en": "First identify which long-form document scene fits these materials best, then give me a manuscript starter card with the outline, chapter tasks, the opening of chapter one, the single next step I can do today, and a reusable resume prompt for the next session.",
+      "zh": "请先判断这份材料更适合哪种长文档场景，再给我一张可继续推进的手稿判断卡：包含目录、章节任务、第一章开头、今天就能继续的下一步，以及下次回来可直接使用的续写口令。"
+    },
+    {
+      "en": "Continue this manuscript from the current chapter and tell me the next two writing steps after this section.",
+      "zh": "请从当前章节继续扩写，并告诉我写完这一节后最应该继续的两个步骤。"
+    },
+    {
+      "en": "Polish this finished draft for layout, export readiness, and de-AI tone without changing the core meaning.",
+      "zh": "请在不改变核心意思的前提下，帮我把这份成稿做排版导出准备，并降低 AI 味。"
+    }
+  ],
+  "runtimeContract": {
+    "schema": "long-manuscript-expert-runtime-contract/v1",
+    "version": "1.0.1",
+    "operatingContract": "contracts/long-manuscript-expert-operating-contract.json",
+    "operatingModes": [
+      "independent_expert",
+      "long_form_manuscript_planning",
+      "chapter_expansion",
+      "draft_quality_review",
+      "self_contained_no_connector"
+    ],
+    "entryPromptCode": "wb_qp_startup_ip_asset",
+    "entryId": "startup-ip-card",
+    "expertEntryId": "bookwriter_skill",
+    "intentFamily": "writing",
+    "assetType": "bookwriter_brief_card",
+    "connectorAssumedAvailable": false,
+    "compatibleToolSurface": "none_required",
+    "sameBindingRequiredForClosure": true,
+    "serviceSideDecisionOnly": true,
+    "hostCommercialDecisionAllowed": false,
+    "requiredInterfaces": [
+      "starterPrompt",
+      "starterResource",
+      "noConnectorActionContract",
+      "opsEnvelope",
+      "hostActionEnvelope",
+      "serviceClosureReport",
+      "hostDirectiveReceipt",
+      "resultCard",
+      "valueEvent"
+    ],
+    "serviceClosureSchema": "contracts/service-side-closure-report.schema.json",
+    "noConnectorActionContract": "contracts/no-connector-action-contract.json",
+    "noConnectorFirstValueRequired": true,
+    "machineReadableActionEnvelopeRequired": true,
+    "userVisibleActionEnvelopeDefault": false,
+    "hostMetadataChannelPreferred": true,
+    "visibleActionEnvelopeRequiresExplicitDebugRequest": true,
+    "workspaceWriteRequiresExplicitUserRequest": true,
+    "planModeBeforeFirstValueAllowed": false,
+    "defaultFirstValueSurface": "chat_response_only",
+    "userInputLanguagePriority": true,
+    "workbuddyAiChinesePromptMustStayChinese": true,
+    "headlessPermissionPromptNotACompletionSignal": true,
+    "visibleHostLabelContract": {
+      "allowedLabels": [
+        "WorkBuddy",
+        "WorkBuddyAI",
+        "Not explicitly exposed"
+      ],
+      "exactValueRequired": true,
+      "allowUnknownWhenSignalsWeak": true,
+      "mixedLabelsForbidden": [
+        "WorkBuddy / CodeBuddy CLI Agent",
+        "WorkBuddy desktop",
+        "WorkBuddy (中文环境)",
+        "WorkBuddyAI desktop"
+      ],
+      "storageNamespacesAreNotHostLabels": true,
+      "conflictPriorityOrder": [
+        "product_identity",
+        "current_session_path",
+        "host_namespace",
+        "runtime_identity",
+        "injected_bootstrap_or_memory_paths"
+      ],
+      "currentHostSignals": {
+        "WORKBUDDY": [
+          "product_identity=WorkBuddy",
+          "current_session_path=<WORKBUDDY_SESSION_PATH>",
+          "host_namespace=.workbuddy"
+        ],
+        "WORKBUDDY_AI": [
+          "product_identity=WorkBuddy AI",
+          "current_session_path=<WORKBUDDYAI_SESSION_PATH>",
+          "host_namespace=.workbuddy-ai",
+          "host_key=WORKBUDDY_AI"
+        ]
+      }
+    }
+  },
+  "distributionSurface": {
+    "target": "workbuddy_expert_center",
+    "targetMarketplace": "experts",
+    "targetDisplayNameZh": "长文档手稿专家",
+    "localEquivalentTestSurface": "my-experts",
+    "localEquivalentTestOnly": true,
+    "localEquivalentPurposeZh": "仅用于当前工作区 my-experts 等效测试，不代表最终上架已通过。"
+  },
+  "plugin": "long-manuscript-expert",
+  "entryMatrix": [
+    {
+      "entryId": "startup-ip-card",
+      "entryPromptCode": "wb_qp_startup_ip_asset",
+      "intentFamily": "writing",
+      "profileSegments": [
+        "creator",
+        "founder",
+        "operator",
+        "researcher"
+      ],
+      "assetType": "bookwriter_brief_card",
+      "servicePackCode": "fbss.bookwriter.seven_day.v1",
+      "scenePackId": "bookwriter"
+    }
+  ],
+  "capabilityFamilies": [
+    "long_form_manuscript",
+    "content_operations_companion"
+  ],
+  "sceneTemplates": [
+    "novel_fiction",
+    "academic_monograph",
+    "whitepaper_report",
+    "manual_handbook",
+    "official_document",
+    "social_content_article",
+    "commercial_marketing_copy",
+    "exam_essay",
+    "generic_longform"
+  ],
+  "workflowLanes": [
+    "outline",
+    "expand",
+    "revise",
+    "review",
+    "finish"
+  ],
+  "postDraftLanes": [
+    "continue_chapter",
+    "revise_structure",
+    "format_export",
+    "de_ai_polish",
+    "rewrite_localize",
+    "organize_materials",
+    "repurpose_channels",
+    "distribution_plan",
+    "summary_pack",
+    "visual_brief",
+    "save_handoff"
+  ],
+  "qualityGateLayers": [
+    "S",
+    "P",
+    "C",
+    "B",
+    "G"
+  ],
+  "projectTemplateCompatibility": {
+    "workbuddyProjectTemplates": [
+      {
+        "templateId": "content-operations",
+        "templateTitleKey": "collab.list.template.contentOperations.title",
+        "activationStage": "finish_or_repurpose",
+        "connectorIds": [
+          "tdocs-app",
+          "notion"
+        ],
+        "skillIds": [
+          "skill_2053081490234478592",
+          "skill_2053081498548994048",
+          "skill_2053082894098632704",
+          "skill_2053082421296758784",
+          "skill_2053082097175687168"
+        ],
+        "expertIds": [
+          "ex_54wQJnvLntjd",
+          "ex_nQs4rsKUgK67",
+          "ex_nchiDpT84L9o",
+          "ex_fCXVIhFkOfnh",
+          "ex_FbY5nlWTqDod"
+        ],
+        "projectSelectionIsProductCredit": false
+      }
+    ]
+  },
+  "responseLanguagePolicy": {
+    "defaultByHostType": {
+      "WORKBUDDY": "zh-Hans",
+      "WORKBUDDY_AI": "en"
+    },
+    "userInputLanguagePriority": true,
+    "mirrorExplicitUserLanguage": true,
+    "chineseWhenPromptContainsChinese": true,
+    "englishWhenPromptIsPrimarilyEnglish": true,
+    "defaultWhenUserLanguageAmbiguousByHostType": {
+      "WORKBUDDY": "zh-Hans",
+      "WORKBUDDY_AI": "en"
+    },
+    "bilingualOnlyOnExplicitRequest": true,
+    "workbuddyAiChinesePromptMustStayChinese": true
+  },
+  "connectorIntegration": {
+    "connectorSource": "fbs-connector",
+    "assumedAvailable": false,
+    "compatibleToolSurface": false,
+    "observationOnly": true,
+    "packageCapabilityDependsOnConnector": false
+  },
+  "noConnectorInteraction": {
+    "contract": "contracts/no-connector-action-contract.json",
+    "firstValueDeliverables": [
+      "manuscript_judgement_card",
+      "scene_template_match",
+      "chapter_route_map",
+      "sample_opening",
+      "revision_risk_list",
+      "material_activation_signals",
+      "quality_quick_summary",
+      "service_coordination_hints",
+      "continuation_progress_card",
+      "next_session_resume_prompt",
+      "finishing_lane_options",
+      "project_template_activation_hints",
+      "content_operations_handoff"
+    ],
+    "actionEnvelopeRequired": true,
+    "sideEffectClass": "read_only"
+  },
+  "guardrails": {
+    "noAutomaticProductCreditClaim": true,
+    "probeRowsDiagnosticOnly": true,
+    "localMyExpertsIsEquivalentOnly": true,
+    "preserveInternalDebugSurfacesWithoutUserVisibleLeakage": true
+  },
+  "workspaceWritePolicy": {
+    "workspaceWriteRequiresExplicitUserRequest": true,
+    "planModeBeforeFirstValueAllowed": false,
+    "defaultFirstValueSurface": "chat_response_only",
+    "forbiddenImplicitActions": [
+      "auto_create_task",
+      "auto_write_plan_file",
+      "auto_scan_workspace_without_user_material_path",
+      "auto_write_memory",
+      "auto_create_workspace_memory",
+      "auto_write_cross_host_memory",
+      "use_workbuddy_namespace_in_workbuddy_ai",
+      "auto_use_file_or_shell_tools_before_first_value",
+      "wait_for_permission_without_user_visible_first_value"
+    ]
+  }
+}

@@ -1,0 +1,213 @@
+{
+  "name": "enterprise-legal-team",
+  "version": "1.0.0",
+  "description": "Enterprise legal team for contracts, transactions, employment, privacy, product, regulatory, AI governance, and IP workflows.",
+  "author": {
+    "name": "WorkBuddy Team"
+  },
+  "license": "Apache-2.0",
+  "keywords": [
+    "legal",
+    "in-house counsel",
+    "contracts",
+    "privacy",
+    "compliance",
+    "localized-legal-workflow"
+  ],
+  "expertType": "team",
+  "agentName": "enterprise-legal-lead",
+  "teamInfo": {
+    "leadAgent": "enterprise-legal-lead",
+    "memberAgents": [
+      "commercial-contracts-counsel",
+      "corporate-ma-counsel",
+      "employment-law-counsel",
+      "privacy-data-counsel",
+      "product-legal-counsel",
+      "regulatory-compliance-counsel",
+      "ai-governance-counsel",
+      "ip-portfolio-counsel"
+    ]
+  },
+  "agents": [
+    "./agents/enterprise-legal-lead.md",
+    "./agents/commercial-contracts-counsel.md",
+    "./agents/corporate-ma-counsel.md",
+    "./agents/employment-law-counsel.md",
+    "./agents/privacy-data-counsel.md",
+    "./agents/product-legal-counsel.md",
+    "./agents/regulatory-compliance-counsel.md",
+    "./agents/ai-governance-counsel.md",
+    "./agents/ip-portfolio-counsel.md"
+  ],
+  "skills": [
+    "./skills/enterprise-legal-workflows",
+    "./skills/china-legal-research",
+    "./skills/china-compliance-toolkit"
+  ],
+  "displayName": {
+    "en": "Enterprise Legal Team",
+    "zh": "企业法务专家团"
+  },
+  "profession": {
+    "en": "Enterprise Legal Team",
+    "zh": "企业法务专家团"
+  },
+  "displayDescription": {
+    "en": "Multi-role legal team for in-house counsel: contracts, M&A, employment, privacy, product, regulatory, AI governance, and IP triage.",
+    "zh": "面向企业法务的多角色专家团，覆盖合同、交易、隐私、产品、监管、AI 治理、雇佣与知识产权分诊。"
+  },
+  "avatar": "avatars/team.png",
+  "categoryId": "11-SecurityCompliance",
+  "defaultInitPrompt": {
+    "en": "Help me triage this cross-functional legal issue and route it to the right legal experts",
+    "zh": "帮我分诊这个跨职能法律问题，并交给合适的法务专家分析"
+  },
+  "tags": [
+    {
+      "en": "In-House Legal",
+      "zh": "企业法务"
+    },
+    {
+      "en": "Contracts & Transactions",
+      "zh": "合同与交易"
+    },
+    {
+      "en": "Compliance Triage",
+      "zh": "合规分诊"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "en": "Help me triage this cross-functional legal issue and route it to the right legal experts",
+      "zh": "帮我分诊这个跨职能法律问题，并交给合适的法务专家分析"
+    },
+    {
+      "en": "Review this AI vendor deal across contracts, privacy, AI governance, and IP risk",
+      "zh": "从合同、隐私、AI治理和知识产权角度审查这个 AI 供应商交易"
+    },
+    {
+      "en": "Assess this product launch for legal, privacy, regulatory, and marketing claims risk",
+      "zh": "评估这个产品发布的法务、隐私、监管和营销声明风险"
+    }
+  ],
+  "members": [
+    {
+      "id": "enterprise-legal-lead",
+      "name": {
+        "en": "Fa",
+        "zh": "法衡中"
+      },
+      "profession": {
+        "en": "Enterprise Legal Workflow Director",
+        "zh": "企业法务协同总监"
+      },
+      "avatar": "avatars/enterprise-legal-lead.png",
+      "role": "lead"
+    },
+    {
+      "id": "commercial-contracts-counsel",
+      "name": {
+        "en": "He",
+        "zh": "何同慎"
+      },
+      "profession": {
+        "en": "Commercial Contracts Counsel",
+        "zh": "商业合同顾问"
+      },
+      "avatar": "avatars/commercial-contracts-counsel.png",
+      "role": "member"
+    },
+    {
+      "id": "corporate-ma-counsel",
+      "name": {
+        "en": "Mei",
+        "zh": "梅谨成"
+      },
+      "profession": {
+        "en": "Corporate and M&A Counsel",
+        "zh": "公司与并购顾问"
+      },
+      "avatar": "avatars/corporate-ma-counsel.png",
+      "role": "member"
+    },
+    {
+      "id": "employment-law-counsel",
+      "name": {
+        "en": "Gu",
+        "zh": "顾劳清"
+      },
+      "profession": {
+        "en": "Employment Counsel",
+        "zh": "雇佣法务顾问"
+      },
+      "avatar": "avatars/employment-law-counsel.png",
+      "role": "member"
+    },
+    {
+      "id": "privacy-data-counsel",
+      "name": {
+        "en": "Yin",
+        "zh": "尹数安"
+      },
+      "profession": {
+        "en": "Privacy and Data Counsel",
+        "zh": "隐私数据顾问"
+      },
+      "avatar": "avatars/privacy-data-counsel.png",
+      "role": "member"
+    },
+    {
+      "id": "product-legal-counsel",
+      "name": {
+        "en": "Chen",
+        "zh": "陈品安"
+      },
+      "profession": {
+        "en": "Product Legal Counsel",
+        "zh": "产品法务顾问"
+      },
+      "avatar": "avatars/product-legal-counsel.png",
+      "role": "member"
+    },
+    {
+      "id": "regulatory-compliance-counsel",
+      "name": {
+        "en": "Gui",
+        "zh": "桂循章"
+      },
+      "profession": {
+        "en": "Regulatory Compliance Counsel",
+        "zh": "监管合规顾问"
+      },
+      "avatar": "avatars/regulatory-compliance-counsel.png",
+      "role": "member"
+    },
+    {
+      "id": "ai-governance-counsel",
+      "name": {
+        "en": "Ai",
+        "zh": "艾治明"
+      },
+      "profession": {
+        "en": "AI Governance Counsel",
+        "zh": "AI 治理顾问"
+      },
+      "avatar": "avatars/ai-governance-counsel.png",
+      "role": "member"
+    },
+    {
+      "id": "ip-portfolio-counsel",
+      "name": {
+        "en": "Wu",
+        "zh": "伍权衡"
+      },
+      "profession": {
+        "en": "IP Portfolio Counsel",
+        "zh": "知识产权顾问"
+      },
+      "avatar": "avatars/ip-portfolio-counsel.png",
+      "role": "member"
+    }
+  ]
+}

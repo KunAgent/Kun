@@ -1,0 +1,111 @@
+[
+    {
+      "term_regex": "revenue\\s*(vs|/|和)\\s*cumulative[\\s_]*revenue",
+      "info": "`revenue` 是期间增量（该日/周/月新增）；`cumulative_revenue` 是运行累计（截至该日期累计）。常见坑：在 `_uid` 表里 `cumulative_*` 是每个平台各自累计，不能直接 `MAX(cumulative_revenue)` 当作双平台累计；应先按 platform 取 MAX 再外层 SUM。"
+    },
+    {
+      "term_regex": "cumulative[\\s_]*revenue",
+      "info": "`cumulative_revenue`：运行累计（截至该日期累计）。在 Sensortower `_uid` 表里它是每个平台各自累计，不能直接跨平台 `MAX` 视为总累计；需要先按 platform 取 MAX，再外层 SUM。"
+    },
+    {
+      "term_regex": "这一周",
+      "info": "2024-01-14这一周，指的是2024-01-14到2024-01-20这一周。"
+    },
+    {
+      "term_regex": "直播时长",
+      "info": "`airtime_hours`：直播时长。"
+    },
+    {
+      "term_regex": "观看时长",
+      "info": "`hours_watched`：观看时长。"
+    },
+    {
+      "term_regex": "(?<![a-z0-9])revenue(?![a-z0-9])",
+      "info": "`revenue`：期间增量（该日/周/月新增）。在 `_uid` 表里通常是按 platform 分行的增量，跨平台合计可 `SUM(revenue)` 并避免按 platform 分组（如果你要 iOS+Android 总量）。"
+    },
+    {
+      "term_regex": "premium\\s*game|买断",
+      "info": "“买断 / premium game”口径：优先按游戏明细表的商业模式筛选 `business_model = 'Buy to Play'`，并加上 `price > 0`（若查询涉及价格/免费与否）。"
+    },
+    {
+      "term_regex": "(?<![a-z0-9])IAP(?![a-z0-9])|内购",
+      "info": "IAP（内购变现）口径：在可用的游戏品类/变现字段里，按 `genre = 'IAP'`（或等价字段）标注；若用户问“排行榜/Top”，默认按收入口径（`revenue` / grossing）排序。"
+    },
+    {
+      "term_regex": "(?<![a-z0-9])IAA(?![a-z0-9])|广告变现",
+      "info": "IAA（广告变现）口径：移动端以广告变现为主；若用户问“排行榜/Top”，默认按活跃口径（`active_users` / `dau` / `mau`，视粒度）排序，而不是收入。"
+    },
+    {
+      "term_regex": "Looter\\s*S(h)?ooter|刷宝射击|刷子射击",
+      "info": "Looter Shooter：在 Steam/PC 侧常可用 Steam tag/genre 识别（按 Steam 的 `genre` tag 过滤或匹配）。"
+    },
+    {
+      "term_regex": "2消|二消|match[- ]?2|two[- ]?match|pair[- ]?match",
+      "info": "2消 / Match-2 / Two-Match / Pair-Match：指“同色/同形两两配对消除”的消除玩法（区别于 Match-3 三消）。用于品类筛选时，优先走 genre/tag/关键词匹配，并在答案中说明是玩法分类而非官方字段。"
+    },
+    {
+      "term_regex": "二合(游戏|玩法)?|合二为一|merge[- ]?(2|game|games)?|合成(游戏|玩法)?|合并(游戏|玩法)?",
+      "info": "二合 / Merge / 合成 / 合并：指“两个同级物品合二为一升级”的合成/合并玩法（区别于 Match-2 “二消”是配对消除——二合是合并升级，二消是配对清除）。代表作：2048、合成大西瓜（Suika Game）、Merge Dragons、Travel Town、Gossip Harbor。用于品类筛选时，优先走 genre/tag/关键词匹配，并在答案中说明是玩法分类而非官方字段。"
+    },
+    {
+      "term_regex": "friendslop|friend\\s*slop|友情烂游|朋友乐",
+      "info": "Friendslop / 友情烂游 / 朋友乐：社交/好友驱动的廉价（多为 indie）联机派对游戏，**核心卖点是和朋友一起玩造成的混乱社交体验**，而不是深度玩法或精致画面。代表作：Lethal Company / PEAK / Among Us。**当作 soft genre / theme tag** 来用（通过关键词/Steam tag 近似匹配），**不是硬性 taxonomy 字段**——明确这是社区品类称呼。"
+    },
+    {
+      "term_regex": "创新休闲",
+      "info": "“创新休闲”参考对照组（用于举例/类比，而非严格可过滤字段）：Fall Guys / Eggy Party / Royal Match / Identity V / Brawl Stars。"
+    },
+    {
+      "term_regex": "hyper\\s*casual|超休闲|\\b休闲\\b",
+      "info": "hyper casual / 超休闲 / 休闲：若用户问“Top/最火/排行”且未指定指标，移动端默认按活跃（`active_users` / `dau`）排序更符合行业习惯；如用户明确要收入则按 revenue。"
+    },
+    {
+      "term_regex": "series|系列",
+      "info": "“系列/series”查询流程：先用游戏明细/ID 表把“系列名”解析为具体游戏列表（可能多版本/多平台），再对这些游戏批量拉指标（必要时先映射到 `unified_id/edition_id/combined_id`）。"
+    },
+    {
+      "term_regex": "最火\\s*\\(?(PC|Steam)\\)?|hottest\\s*\\(?(pc|steam)\\)?",
+      "info": "“最火(PC)”默认口径：同时给两份榜单/合并口径——(1) Top 10 by PCU；(2) Top 10 by Revenue。若只能取到其中一个指标，需要在答案里说明数据缺口。"
+    },
+    {
+      "term_regex": "new\\s*game|新游",
+      "info": "“新游/new game”默认时间窗：mobile 侧发布 1-3 个月内；PC/Console 侧发布 1-6 个月内。实际实现需基于 `release_time/release_date` 过滤，并在答案里注明默认窗。"
+    },
+    {
+      "term_regex": "latest|current|最新|当前|recent|past|最近|近期",
+      "info": "时间词默认规则：(1) `latest / current / 最新` → 单点快照（尽量取最新可用日期）；(2) `recent / past / 最近 / 近期` 用于**历史/已完成数据** → 30 天窗口（monthly 指标默认 6 个月窗口）；(3) `recent / 最近` 用于**即将到来 / 未发布 / 已排期**事件 → 窗口应**包含未来时间**，不要硬缩到过去。如用户明确给了时间范围则以用户为准。"
+    },
+    {
+      "term_regex": "留存|retention|次留|次日留存",
+      "info": "留存 / retention 默认口径：未指定具体天数时，默认返回 **D1（次留）+ D7** 两个口径。若用户写“次留 / next_day retention”但未明确 D1 还是 D2，**保留原词 `next_day(次留)` 不要擅自解析**，由下游/口径表决定。"
+    },
+    {
+      "term_regex": "(?<![a-z0-9])ccu(?![a-z0-9])|在线人数|online\\s*users?|同时在线",
+      "info": "CCU / 在线 / online users 默认口径：未做其它限定时，同时返回 (1) **实时** CCU 与 (2) **近 30 天 ACU**。**Steam PC 真·实时**：`scripts/fetch_steam_ccu.py`（Steam API）；数仓近实时 T-0 → `pconsole_*_cid.spider_steam_pcu`（`segment IS NULL`）；**不要用 `alinea_pcu` 当实时**。详见 references/steam-ccu.md。历史/昨日 PCU 可用 Alinea。单点 CCU 易误导，须配 ACU 趋势。CCV = 直播间观众（Streamhatchet），勿与 PCU 混用。"
+    },
+    {
+      "term_regex": "(?<![a-z0-9])ccv(?![a-z0-9])|peak\\s*concurrent\\s*viewers?|观众峰值|峰值观众",
+      "info": "CCV / peak concurrent viewers / 观众峰值：**流媒体（Twitch / YouTube）峰值并发观众数**，数据源 = **Streamhatchet** 表。**不要与 PCU / CCU 混用**——PCU/CCU 是游戏内并发玩家，CCV 是直播间观众。"
+    },
+    {
+      "term_regex": "市场规模|market\\s*size|细分市场|游戏市场的?规模",
+      "info": "市场规模 / market size 默认口径：未指定平台 / 品类时，按 **全平台合计**（mobile + PC + console），同时返回 **player 数 + revenue** 两个指标。优先用整合宽表（`pconsole_*_cid` + sensortower），避免单一来源切片。"
+    },
+    {
+      "term_regex": "playstation",
+      "info": "若只说 `playstation` 未限定版本 → **先查该游戏的 available_platforms**（`common.app_detail` 或 `pconsole_*_cid.detailed_platform`），然后返回该游戏**所有可用 PS 平台**的数据，而不是只挑一个。Xbox（360 / One / Series）同理。"
+    },
+    {
+      "term_regex": "同类型|相同类型|similar\\s*games?",
+      "info": "同类型游戏 / 相同类型 → 读作 **Similar Games**：用 genre / tag / 相似度查找（不要按名称字符串模糊匹配）。可用游戏明细表里的 `iegg_genre` / Steam tag，或专门的 similar-games 关系表。"
+    },
+    {
+      "term_regex": "steam\\s*demo",
+      "info": "Steam Demo / Steam Demo Rank：Steam 商店里 **游戏 demo 试玩版** 的热度榜单，与正式版的 Top Sellers / Wishlisted 等是独立榜单。需要使用联网查询，目前无法直接查询。"
+    },
+    {
+      "term_regex": "对比|竞品|(?<![a-z])competitors?(?![a-z])",
+      "info": "对比 / competitor / 竞品 查询纪律：**所有目标游戏 + 所有目标指标在一条 SQL 内拉齐**（用 `WHERE combined_id IN (...)` 或 `app_id IN (...)`），不要每个游戏单独一次 SQL 串行查；并配合 same-source 原则（同一指标尽量来自同一来源表）。"
+    }
+]
+

@@ -1,0 +1,61 @@
+{
+  "name": "jira-workflow-admin",
+  "version": "1.0.0",
+  "description": "Expert in Jira configuration and agile workflow design, making tools truly serve team efficiency",
+  "agents": [
+    "./agents/jira-workflow-admin.md"
+  ],
+  "expertType": "agent",
+  "agentName": "jira-workflow-admin",
+  "displayName": {
+    "en": "Briar",
+    "zh": "看板达"
+  },
+  "profession": {
+    "en": "Jira Workflow Admin",
+    "zh": "Jira工作流管理员"
+  },
+  "displayDescription": {
+    "en": "Expert in Jira configuration and agile workflow design, making tools truly serve team efficiency",
+    "zh": "精通Jira配置和敏捷工作流设计，让工具真正服务于团队效率"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "10-ProjectQuality",
+  "defaultInitPrompt": {
+    "zh": "我们的Jira工作流程不够优化,影响团队协作效率,请Jira工作流管理员帮我们优化Jira配置。",
+    "en": "Our Jira workflow is not optimized enough, affecting team collaboration efficiency. Please, Jira Workflow Admin, help us optimize our Jira configuration."
+  },
+  "tags": [
+    {
+      "zh": "Jira管理",
+      "en": "Jira Admin"
+    },
+    {
+      "zh": "工作流配置",
+      "en": "Workflow Config"
+    },
+    {
+      "zh": "项目模板",
+      "en": "Project Templates"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "我们的Jira工作流程不够优化,影响团队协作效率,请Jira工作流管理员帮我们优化Jira配置。",
+      "en": "Our Jira workflow is not optimized enough, affecting team collaboration efficiency. Please, Jira Workflow Admin, help us optimize our Jira configuration."
+    },
+    {
+      "zh": "搭建Jira自动化规则和通知体系",
+      "en": "Build Jira automation rules and notification system"
+    },
+    {
+      "zh": "制定Jira项目模板和字段规范",
+      "en": "Develop Jira project templates and field standards"
+    }
+  ],
+  "skills": [
+    "./skills/cloudq",
+    "./skills/deep-research",
+    "./skills/github"
+  ]
+}

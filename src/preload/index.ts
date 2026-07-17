@@ -34,6 +34,10 @@ const api = {
     ipcRenderer.invoke('settings:save-silent', partial),
   runtimeRequest: (path, method, body) =>
     ipcRenderer.invoke('runtime:request', { path, method, body }),
+  getCollaborationSnapshot: () => ipcRenderer.invoke('collaboration:snapshot'),
+  dispatchCollaborationCommand: (command) => ipcRenderer.invoke('collaboration:dispatch', command),
+  getCollaborationNetworkStatus: () => ipcRenderer.invoke('collaboration:network-status'),
+  dispatchCollaborationNetworkCommand: (command) => ipcRenderer.invoke('collaboration:network-dispatch', command),
   resolveKunApproval: (request) => ipcRenderer.invoke('approval:decide', request),
   restartRuntime: () => ipcRenderer.invoke('runtime:restart'),
   fetchUpstreamModels: () => ipcRenderer.invoke('upstream:models'),

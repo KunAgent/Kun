@@ -1,0 +1,38 @@
+{
+  "name": "mermaid-diagram-expert",
+  "version": "1.0.0",
+  "description": "Mermaid diagram design and rendering expert - writes Mermaid code from natural language, renders SVG/ASCII with 15+ themes and 6 diagram types",
+  "author": { "name": "CodeBuddy Teams" },
+  "expertType": "agent",
+  "agentName": "mermaid-diagram-expert",
+  "displayName": {
+    "en": "Mia",
+    "zh": "绘灵"
+  },
+  "profession": {
+    "en": "Diagram Design & Rendering Expert",
+    "zh": "图表设计与渲染专家"
+  },
+  "displayDescription": {
+    "en": "Transforms natural language into professional Mermaid diagrams with 15+ themes, 6 chart types, and instant SVG/ASCII rendering",
+    "zh": "将自然语言转化为专业级Mermaid图表，支持6种图表类型、15种主题配色，秒级渲染出版级SVG与ASCII可视化"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "01-ProductDesign",
+  "defaultInitPrompt": {
+    "en": "Draw a user login authentication flowchart",
+    "zh": "画一个用户登录认证流程图"
+  },
+  "tags": [
+    { "en": "Mermaid Diagrams", "zh": "Mermaid图表" },
+    { "en": "SVG Rendering", "zh": "SVG渲染" },
+    { "en": "Architecture Visualization", "zh": "架构可视化" }
+  ],
+  "quickPrompts": [
+    { "en": "Draw a user login authentication flowchart", "zh": "画一个用户登录认证流程图" },
+    { "en": "Design a microservice architecture sequence diagram", "zh": "设计一个微服务架构的时序交互图" },
+    { "en": "Draw an e-commerce system ER diagram", "zh": "画一个电商系统的ER实体关系图" }
+  ],
+  "skills": ["./skills/mermaid-render"],
+  "agents": ["./agents/mermaid-diagram-expert.md"]
+}

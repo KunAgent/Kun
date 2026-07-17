@@ -1,0 +1,72 @@
+{
+  "name": "yunzhi-qa-assistant",
+  "version": "1.3.0",
+  "description": "Tencent Yunzhi knowledge base Q&A expert powered by semantic embedding search with query rewriting and citation-grounded answers (refuses to answer when KB has no hits, no web fallback)",
+  "author": {
+    "name": "noelwang",
+    "email": "noelwang@tencent.com"
+  },
+  "expertType": "agent",
+  "agentName": "yunzhi-qa-assistant",
+  "agents": [
+    "./agents/yunzhi-qa-assistant.md"
+  ],
+  "skills": [
+    "./skills/yunzhi-qa"
+  ],
+  "displayName": {
+    "en": "Tencent Yunzhi",
+    "zh": "腾讯云知（乐享）"
+  },
+  "profession": {
+    "en": "Tencent Cloud Knowledge Q&A Expert",
+    "zh": "腾讯云知识问答专家"
+  },
+  "displayDescription": {
+    "en": "A retrieval-augmented Q&A expert powered by the Tencent Yunzhi (Lexiang) knowledge base. Performs multi-path parallel semantic vector retrieval through the Lexiang MCP, and generates structured answers grounded in the retrieved results.",
+    "zh": "基于腾讯云知（乐享）平台的检索增强问答专家。调用乐享 MCP 的语义向量检索多路并行召回；基于检索结果生成结构化回答；"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "13-TencentZone",
+  "defaultInitPrompt": {
+    "zh": "你好！我是腾讯云知识问答专家。我会基于你绑定的乐享知识库进行语义检索，给出带引用、带原文链接的精准回答。请直接告诉我你想查的问题（例如：「WorkBuddy售前介绍资料」「腾讯云在海外金融行业的客户案例有哪些」），我会先帮你做查询改写，再并行召回，最后整理结构化答案。",
+    "en": "Hi! I am your Tencent Yunzhi Knowledge Q&A Expert. I run semantic search over your bound Lexiang knowledge base, with query rewriting and citation-grounded answers. Just ask me anything (e.g., 'WorkBuddy pre-sales introduction materials', 'Tencent Cloud overseas financial industry customer cases'), and I will rewrite, retrieve, and summarize."
+  },
+  "tags": [
+    {
+      "en": "YunZhi",
+      "zh": "腾讯云知"
+    },
+    {
+      "en": "Knowledge Base",
+      "zh": "知识库"
+    },
+    {
+      "en": "Semantic Search",
+      "zh": "语义检索"
+    },
+    {
+      "en": "RAG",
+      "zh": "检索增强"
+    },
+    {
+      "en": "Lexiang",
+      "zh": "腾讯乐享"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "en": "WorkBuddy pre-sales introduction materials",
+      "zh": "WorkBuddy售前介绍资料"
+    },
+    {
+      "en": "Tencent Cloud overseas financial industry customer cases",
+      "zh": "腾讯云在海外金融行业的客户案例有哪些"
+    },
+    {
+      "en": "Tencent Cloud Agent Development Platform competitive advantages over rival products",
+      "zh": "腾讯云智能体开发平台相比竞对产品有哪些优势?"
+    }
+  ],
+  "plugin": "yunzhi-qa-assistant"
+}

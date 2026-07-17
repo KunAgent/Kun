@@ -1,0 +1,27 @@
+{
+  "schemaVersion": "1.0",
+  "contractId": "liuxue-yanxue-review-orchestration-contract",
+  "contractVersion": "26.6.30.1",
+  "reviewGoal": "Prepare a high-quality WorkBuddy review package for 福帮手（FBSir）留学研学专家.",
+  "requiredGates": [
+    "package_file_set_gate",
+    "brand_and_product_identity_gate",
+    "service_route_signature_gate",
+    "intelligent_ops_closed_loop_gate",
+    "no_connector_dependency_gate",
+    "non_official_surface_boundary_gate",
+    "mojibake_gate",
+    "final_review_package_integrity_gate"
+  ],
+  "submissionBoundary": {
+    "officialListedPackage": "experts",
+    "nonOfficialEquivalentSignalsMustNotCountAsNaturalTraffic": true,
+    "externalReleaseToolchainRequired": true
+  },
+  "serviceSideFollowup": {
+    "mustPreserveUnknownAttribution": true,
+    "mustObserveNaturalTrafficAfterListing": true,
+    "mustClassifyLebaoAndIntentEvents": true,
+    "mustRequireSameBindingBeforeProductCredit": true
+  }
+}

@@ -1,0 +1,59 @@
+{
+  "name": "agent-orchestrator",
+  "version": "1.0.0",
+  "description": "Expert in multi-agent system orchestration and coordination, enabling AI teams to collaborate efficiently",
+  "agents": [
+    "./agents/agent-orchestrator.md"
+  ],
+  "expertType": "agent",
+  "agentName": "agent-orchestrator",
+  "displayName": {
+    "en": "Demi",
+    "zh": "调度达"
+  },
+  "profession": {
+    "en": "Agent Orchestrator",
+    "zh": "智能体编排师"
+  },
+  "displayDescription": {
+    "en": "Expert in multi-agent system orchestration and coordination, enabling AI teams to collaborate efficiently",
+    "zh": "精通多智能体系统的编排和协调，让AI团队高效协作"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "10-ProjectQuality",
+  "defaultInitPrompt": {
+    "zh": "我们有多个AI代理需要协同工作,需要智能编排系统,请代理编排者帮我们设计代理协同方案。",
+    "en": "We have multiple AI agents that need to work together and require an intelligent orchestration system. Please, Agent Orchestrator, help us design an agent collaboration solution."
+  },
+  "tags": [
+    {
+      "zh": "流程编排",
+      "en": "Pipeline Orchestration"
+    },
+    {
+      "zh": "开发工作流",
+      "en": "Dev Workflow"
+    },
+    {
+      "zh": "自动化调度",
+      "en": "Auto Scheduling"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "我们有多个AI代理需要协同工作,需要智能编排系统,请代理编排者帮我们设计代理协同方案。",
+      "en": "We have multiple AI agents that need to work together and require an intelligent orchestration system. Please, Agent Orchestrator, help us design an agent collaboration solution."
+    },
+    {
+      "zh": "设计Agent工作流和任务分配方案",
+      "en": "Design agent workflows and task assignment plan"
+    },
+    {
+      "zh": "优化Agent通信和协调效率",
+      "en": "Optimize agent communication and coordination efficiency"
+    }
+  ],
+  "skills": [
+    "./skills/github"
+  ]
+}

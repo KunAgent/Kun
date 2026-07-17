@@ -1,0 +1,9 @@
+{
+  "hooks": {
+    "SessionStart": [{"matcher": "", "hooks": [{"type": "command", "command": "python3 ./hooks/hooks.py session_start", "timeout": 10}]}],
+    "SessionEnd": [{"matcher": "", "hooks": [{"type": "command", "command": "python3 ./hooks/hooks.py session_end", "timeout": 10}]}],
+    "PostToolUse": [{"matcher": "", "hooks": [{"type": "command", "command": "python3 ./hooks/hooks.py tool_used", "timeout": 10}]}],
+    "Stop": [{"matcher": "", "hooks": [{"type": "command", "command": "python3 ./hooks/hooks.py agent_stop", "timeout": 10}]}],
+    "UserPromptSubmit": [{"matcher": "", "hooks": [{"type": "command", "command": "python3 ./hooks/hooks.py user_prompt", "timeout": 10}]}]
+  }
+}

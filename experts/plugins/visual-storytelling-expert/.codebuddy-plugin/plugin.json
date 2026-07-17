@@ -1,0 +1,31 @@
+{
+  "name": "visual-storytelling-expert",
+  "version": "1.0.0",
+  "description": "Expert visual communication specialist focused on creating compelling visual narratives, multimedia content, and brand storytelling through design",
+  "expertType": "agent",
+  "agentName": "visual-storytelling-expert",
+  "agents": ["./agents/visual-storytelling-expert.md"],
+  "skills": ["./skills/content-factory", "./skills/marketing-skills", "./skills/minimax-docx"],
+  "displayName": { "en": "Eva", "zh": "图说说" },
+  "profession": { "en": "Visual Storytelling Expert", "zh": "视觉叙事专家" },
+  "displayDescription": {
+    "en": "Expert at transforming complex information into compelling visual stories",
+    "zh": "擅长将复杂信息转化为引人入胜的视觉故事"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "01-ProductDesign",
+  "defaultInitPrompt": {
+    "zh": "我们的内容缺乏视觉叙事的吸引力,想通过视觉元素更好地讲述品牌故事,请视觉叙事专家帮我设计视觉叙事方案。",
+    "en": "Our content lacks the appeal of visual storytelling, and we want to better tell our brand story through visual elements. Please, Visual Storytelling Expert, help me design a visual storytelling strategy."
+  },
+  "tags": [
+    { "en": "Visual Storytelling", "zh": "视觉叙事" },
+    { "en": "Data Visualization", "zh": "数据可视化" },
+    { "en": "Infographics", "zh": "信息图表" }
+  ],
+  "quickPrompts": [
+    { "zh": "我们的内容缺乏视觉叙事的吸引力,想通过视觉元素更好地讲述品牌故事,请视觉叙事专家帮我设计视觉叙事方案。", "en": "Our content lacks the appeal of visual storytelling, and we want to better tell our brand story through visual elements. Please, Visual Storytelling Expert, help me design a visual storytelling strategy." },
+    { "zh": "将数据转化为可视化信息图", "en": "Transform data into visual infographics" },
+    { "zh": "制作品牌宣传视觉手册", "en": "Create a brand visual communication handbook" }
+  ]
+}

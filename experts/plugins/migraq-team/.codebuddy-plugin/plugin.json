@@ -1,0 +1,174 @@
+{
+  "name": "migraq-team",
+  "version": "1.1.2",
+  "description": "Tencent Cloud migration expert team for end-to-end cloud migration services",
+  "author": {
+    "name": "MigraQ Team",
+    "email": "leobhao@tencent.com"
+  },
+  "expertType": "team",
+  "agentName": "migraq-team-lead",
+  "teamInfo": {
+    "leadAgent": "migraq-team-lead",
+    "memberAgents": [
+      "product-expert",
+      "landing-zone-expert",
+      "cloud-architect",
+      "delivery-engineer",
+      "ops-engineer",
+      "fde-engineer"
+    ]
+  },
+  "agents": [
+    "./agents/migraq-team-lead.md",
+    "./agents/product-expert.md",
+    "./agents/landing-zone-expert.md",
+    "./agents/cloud-architect.md",
+    "./agents/delivery-engineer.md",
+    "./agents/ops-engineer.md",
+    "./agents/fde-engineer.md"
+  ],
+  "skills": [
+    "./skills/migraq"
+  ],
+  "displayName": {
+    "en": "Tencent Cloud Migration Team",
+    "zh": "腾讯云上云迁移专家团"
+  },
+  "profession": {
+    "en": "Tencent Cloud Migration Team",
+    "zh": "腾讯云上云迁移专家团"
+  },
+  "displayDescription": {
+    "en": "A team of 7 cloud migration specialists covering solution design, product selection, Landing Zone, architecture, delivery, operations and FDE deployment.",
+    "zh": "7位专家协作完成上云迁移：产品选型、Landing Zone、架构设计、交付实施、运维与FDE部署"
+  },
+  "avatar": "avatars/team.png",
+  "categoryId": "02-Engineering",
+  "defaultInitPrompt": {
+    "en": "Help me plan an end-to-end migration from Alibaba Cloud to Tencent Cloud",
+    "zh": "帮我规划从阿里云整体迁移到腾讯云的方案"
+  },
+  "tags": [
+    {
+      "en": "Cloud Migration",
+      "zh": "云迁移"
+    },
+    {
+      "en": "Solution Design",
+      "zh": "方案设计"
+    },
+    {
+      "en": "Landing Zone",
+      "zh": "Landing Zone"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "en": "Help me plan an end-to-end migration from Alibaba Cloud to Tencent Cloud",
+      "zh": "帮我规划从阿里云整体迁移到腾讯云的方案"
+    },
+    {
+      "en": "Design a Landing Zone for my multi-account cloud environment",
+      "zh": "帮我设计多账号云环境的 Landing Zone"
+    },
+    {
+      "en": "Assess migration risks and create a delivery timeline",
+      "zh": "评估迁移风险并制定交付时间表"
+    }
+  ],
+  "members": [
+    {
+      "id": "migraq-team-lead",
+      "name": {
+        "en": "Solution Architect",
+        "zh": "解决方案专家"
+      },
+      "profession": {
+        "en": "Chief Solution Architect",
+        "zh": "首席解决方案专家"
+      },
+      "avatar": "avatars/team-lead.png",
+      "role": "lead"
+    },
+    {
+      "id": "product-expert",
+      "name": {
+        "en": "Product Expert",
+        "zh": "腾讯云产品专家"
+      },
+      "profession": {
+        "en": "Tencent Cloud Product Expert",
+        "zh": "腾讯云产品专家"
+      },
+      "avatar": "avatars/product-expert.png",
+      "role": "member"
+    },
+    {
+      "id": "landing-zone-expert",
+      "name": {
+        "en": "Landing Zone Expert",
+        "zh": "Landing Zone 专家"
+      },
+      "profession": {
+        "en": "Landing Zone Specialist",
+        "zh": "Landing Zone 专家"
+      },
+      "avatar": "avatars/landing-zone-expert.png",
+      "role": "member"
+    },
+    {
+      "id": "cloud-architect",
+      "name": {
+        "en": "Cloud Architect",
+        "zh": "上云架构师"
+      },
+      "profession": {
+        "en": "Cloud Migration Architect",
+        "zh": "上云架构师"
+      },
+      "avatar": "avatars/cloud-architect.png",
+      "role": "member"
+    },
+    {
+      "id": "delivery-engineer",
+      "name": {
+        "en": "Delivery Engineer",
+        "zh": "交付工程师"
+      },
+      "profession": {
+        "en": "Migration Delivery Engineer",
+        "zh": "迁移交付工程师"
+      },
+      "avatar": "avatars/delivery-engineer.png",
+      "role": "member"
+    },
+    {
+      "id": "ops-engineer",
+      "name": {
+        "en": "Ops Engineer",
+        "zh": "运维工程师"
+      },
+      "profession": {
+        "en": "Cloud Operations Engineer",
+        "zh": "云运维工程师"
+      },
+      "avatar": "avatars/ops-engineer.png",
+      "role": "member"
+    },
+    {
+      "id": "fde-engineer",
+      "name": {
+        "en": "FDE Engineer",
+        "zh": "FDE 前置部署工程师"
+      },
+      "profession": {
+        "en": "FDE Pre-deployment Engineer",
+        "zh": "FDE 前置部署工程师"
+      },
+      "avatar": "avatars/fde-engineer.png",
+      "role": "member"
+    }
+  ],
+  "plugin": "migraq-team"
+}

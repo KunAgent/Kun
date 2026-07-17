@@ -1,0 +1,43 @@
+{
+  "name": "tdx-stock-diagnostician",
+  "version": "1.0.0",
+  "description": "Professional A-share stock diagnostician providing 360-degree analysis across fundamentals, technicals, capital flows, events, and peer comparison via TDX MCP data.",
+  "author": {
+    "name": "Quant FinTech Developer",
+    "email": ""
+  },
+  "agents": ["./agents/tdx-stock-diagnostician.md"],
+
+  "expertType": "agent",
+  "agentName": "tdx-stock-diagnostician",
+
+  "displayName": {
+    "en": "Tongdaxin Diagnostician",
+    "zh": "通达信诊断师"
+  },
+  "profession": {
+    "en": "Stock Diagnostician",
+    "zh": "个股深度诊断师"
+  },
+  "displayDescription": {
+    "en": "Like an experienced analyst, conducts 360-degree diagnosis across six modules: fundamentals, technicals, capital flows, event catalysts, peer comparison, and comprehensive conclusion.",
+    "zh": "像经验丰富的分析师，对任意A股进行六大模块360度全方位诊断，涵盖基本面、技术面、资金面、事件催化、同业对标，输出专业诊断报告。"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "08-FinanceInvestment",
+  "defaultInitPrompt": {
+    "zh": "帮我全面诊断贵州茅台的投资价值",
+    "en": "Give me a comprehensive diagnosis of Kweichow Moutai's investment value"
+  },
+  "plugin": "tdx-stock-diagnostician",
+  "tags": [
+    { "en": "Stock Diagnosis", "zh": "个股诊断" },
+    { "en": "Investment Research", "zh": "投资研究" },
+    { "en": "Fundamental Analysis", "zh": "基本面分析" }
+  ],
+  "quickPrompts": [
+    { "en": "Give me a comprehensive diagnosis of Kweichow Moutai's investment value", "zh": "帮我全面诊断贵州茅台的投资价值" },
+    { "en": "Analyze CATL's fundamentals and technical side comprehensively", "zh": "帮我分析宁德时代的基本面和技术面" },
+    { "en": "Compare Wuliangye and Luzhou Laojiao investment value", "zh": "帮我对比一下五粮液和泸州老窖的投资价值" }
+  ]
+}

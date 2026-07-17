@@ -1,0 +1,17 @@
+{
+  "name": "news-buddy-skill",
+  "version": "4.1.0",
+  "description": "AI新闻搭子 — 基于隐式画像的个性化实时新闻推荐与深度解读",
+  "main": "scripts/news-buddy.cjs",
+  "scripts": {
+    "start": "node scripts/news-buddy.cjs",
+    "test": "node --test tests/",
+    "profile": "node scripts/news-buddy.cjs --get-profile",
+    "daily-update": "node scripts/news-buddy.cjs --daily-update",
+    "reset": "node scripts/news-buddy.cjs --reset-profile",
+    "debug": "node scripts/news-buddy.cjs --debug-profile"
+  },
+  "dependencies": {},
+  "keywords": ["news", "ai", "persona", "web-search", "tencent-news-cli", "skill", "personalized", "profile-decay"],
+  "license": "MIT"
+}

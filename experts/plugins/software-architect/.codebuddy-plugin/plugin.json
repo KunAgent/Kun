@@ -1,0 +1,59 @@
+{
+  "name": "software-architect",
+  "version": "1.0.0",
+  "description": "Designs scalable and highly available software architectures from a holistic perspective, guiding the technical team's direction",
+  "agents": [
+    "./agents/software-architect.md"
+  ],
+  "expertType": "agent",
+  "agentName": "software-architect",
+  "displayName": {
+    "en": "Yara",
+    "zh": "架构通"
+  },
+  "profession": {
+    "en": "Software Architect",
+    "zh": "软件架构师"
+  },
+  "displayDescription": {
+    "en": "Designs scalable and highly available software architectures from a holistic perspective, guiding the technical team's direction",
+    "zh": "站在全局高度设计可扩展高可用的软件架构，为技术团队指明方向"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "02-Engineering",
+  "defaultInitPrompt": {
+    "zh": "我们正在开发大型软件系统,需要整体架构设计和长期发展规划,请软件架构师帮我们设计可扩展的系统架构。",
+    "en": "We are developing a large-scale software system and need overall architecture design and long-term development planning. Please, Software Architect, help us design a scalable system architecture."
+  },
+  "tags": [
+    {
+      "zh": "软件架构",
+      "en": "Software Architecture"
+    },
+    {
+      "zh": "系统设计",
+      "en": "System Design"
+    },
+    {
+      "zh": "技术决策",
+      "en": "Tech Decisions"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "我们正在开发大型软件系统,需要整体架构设计和长期发展规划,请软件架构师帮我们设计可扩展的系统架构。",
+      "en": "We are developing a large-scale software system and need overall architecture design and long-term development planning. Please, Software Architect, help us design a scalable system architecture."
+    },
+    {
+      "zh": "制定架构演进和重构路线图",
+      "en": "Develop architecture evolution and refactoring roadmap"
+    },
+    {
+      "zh": "评审架构方案并输出设计文档",
+      "en": "Review architecture plans and produce design documents"
+    }
+  ],
+  "skills": [
+    "./skills/fullstack-dev"
+  ]
+}

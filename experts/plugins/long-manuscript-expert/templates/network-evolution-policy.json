@@ -1,0 +1,128 @@
+{
+  "schemaVersion": "long_manuscript.network_evolution_policy.v1",
+  "version": "1.0.0",
+  "defaultMode": "offline_first",
+  "evidenceModes": [
+    {
+      "modeId": "offline_required",
+      "description": "First value must be fully deliverable from user material and current dialogue."
+    },
+    {
+      "modeId": "network_optional_after_first_value",
+      "description": "The expert delivers first value first, then offers research-assisted followthrough."
+    },
+    {
+      "modeId": "network_required_for_claim_upgrade_only",
+      "description": "Drafting may proceed offline, but high-confidence claim upgrades require external verification."
+    }
+  ],
+  "closedLoopNodes": [
+    {
+      "nodeId": "benefit_signal",
+      "displayNameZh": "乐包掉落/权益状态",
+      "inputFields": ["benefitSource", "creditsState", "claimState", "lebaoPackId"],
+      "eventTypes": ["entitlement_gate_checked", "credits_balance_seen", "continued_use_completed"],
+      "toolSurfaces": ["lebao_status", "lebao_claim", "lebao_drop"],
+      "boundary": "continued_use_or_entitlement_signal_only"
+    },
+    {
+      "nodeId": "intent_aggregation",
+      "displayNameZh": "意图归集",
+      "inputFields": ["intentFamily", "profileSegment", "requestSource", "semanticSource"],
+      "boundary": "low_confidence_requires_fallback"
+    },
+    {
+      "nodeId": "scene_recognition",
+      "displayNameZh": "场景识别",
+      "inputFields": ["entryId", "entryPromptCode", "scenePackId", "assetType", "scenarioFocus"],
+      "boundary": "template_facility_plus_scene_pack_signature"
+    },
+    {
+      "nodeId": "strategy_dispatch",
+      "displayNameZh": "策略下发",
+      "inputFields": ["hostActionEnvelope", "serviceCoordinationHints", "nextActionToolArguments", "followthroughContract"],
+      "boundary": "metadata_preferred_user_visible_result_separate"
+    }
+  ],
+  "dispatchPolicies": [
+    {
+      "policyId": "offline_first_dispatch",
+      "evidenceMode": "offline_required",
+      "strategy": "deliver_first_value_now"
+    },
+    {
+      "policyId": "research_assisted_followthrough",
+      "evidenceMode": "network_optional_after_first_value",
+      "strategy": "deliver_first_value_then_offer_research_branch"
+    },
+    {
+      "policyId": "claim_upgrade_gate",
+      "evidenceMode": "network_required_for_claim_upgrade_only",
+      "strategy": "keep_claim_ledger_until_verified"
+    }
+  ],
+  "escalationTriggers": [
+    {
+      "triggerId": "current_external_fact",
+      "keywords": ["latest", "current", "today", "最新", "当前", "政策", "法规", "数据"],
+      "evidenceMode": "network_required_for_claim_upgrade_only"
+    },
+    {
+      "triggerId": "citation_safe_request",
+      "keywords": ["citation", "reference", "文献", "引用", "出处"],
+      "evidenceMode": "network_required_for_claim_upgrade_only"
+    },
+    {
+      "triggerId": "market_localization",
+      "keywords": ["localize", "overseas", "cross market", "本地化", "海外", "跨境"],
+      "evidenceMode": "network_optional_after_first_value"
+    }
+  ],
+  "sourcePolicy": {
+    "preferPrimarySources": true,
+    "labelEvidenceLayer": true,
+    "keepHostMetadataOutOfOrdinaryProse": true,
+    "doNotReplaceFirstValueWithResearchPlan": true
+  },
+  "hostPolicy": {
+    "mirrorUserLanguageFirst": true,
+    "namespaceIsolationRequired": true,
+    "workbuddy": {
+      "defaultLanguageWhenAmbiguous": "zh-Hans"
+    },
+    "workbuddy_ai": {
+      "defaultLanguageWhenAmbiguous": "en",
+      "chinesePromptMustRemainChinese": true
+    }
+  },
+  "upgradeLoop": {
+    "samplingInputs": [
+      "representative_scenarios",
+      "negative_fixtures",
+      "fresh_short_host_samples",
+      "strong_signature_natural_rows",
+      "official_entry_reverify"
+    ],
+    "upgradeUnits": [
+      "template_module",
+      "scene_blueprint",
+      "evidence_rule",
+      "negative_fixture",
+      "host_guardrail_copy"
+    ],
+    "rollbackTriggers": [
+      "no_connector_first_value_failed",
+      "host_self_report_mismatch",
+      "metadata_leaked_to_user_visible_prose",
+      "claim_upgraded_without_verification",
+      "entry_surface_only_credit_pollution"
+    ],
+    "acceptanceGates": [
+      "offline_first_value_gate",
+      "dual_host_identity_gate",
+      "evidence_mode_gate",
+      "service_same_binding_gate",
+      "official_entry_separate_gate"
+    ]
+  }
+}

@@ -1,0 +1,134 @@
+{
+  "schemaVersion": "1.0",
+  "contractId": "liuxue-yanxue-service-forward-fields",
+  "contractVersion": "26.6.30.1",
+  "purpose": "Declare the minimum desensitized fields needed for product attribution, lebao intent aggregation, and service-driven host traction.",
+  "routeSignature": {
+    "required": true,
+    "fields": {
+      "brandZh": "福帮手",
+      "brandEn": "FBSir",
+      "productNameZh": "留学研学专家",
+      "productId": "liuxue-yanxue-expert",
+      "serviceProductId": "workbuddy_liuxue_yanxue_expert",
+      "entryId": "liuxue-yanxue-dual-track",
+      "entrySurface": "workbuddy_expert_center",
+      "expertEntryId": "liuxue-yanxue-expert",
+      "entryPromptCode": "wb_qp_liuxue_yanxue_dual_track_48h",
+      "defaultPromptId": "fbss_liuxue_yanxue_dual_track_start",
+      "cardActionId": "fbss_liuxue_yanxue_dual_track_start",
+      "channelTrack": "study_abroad_study_tour",
+      "intentFamily": "international_education_planning",
+      "profileSegment": "family_decision",
+      "packCode": "fbs.liuxue_yanxue.dual_track.v1",
+      "scenePackId": "liuxue_yanxue_dual_track",
+      "routeCode": "route.liuxue_yanxue.dual_track",
+      "assetType": "study-abroad-study-tour-card"
+    }
+  },
+  "independentClientIdentity": {
+    "requiredWhenAvailable": true,
+    "identitySubject": "independent_client",
+    "allowedFields": [
+      "clientHash",
+      "installHash",
+      "hostClientIdHash",
+      "sessionBindingId",
+      "chainFingerprint",
+      "platform",
+      "hostVersion",
+      "packageVersion"
+    ],
+    "forbiddenFields": [
+      "phone",
+      "email",
+      "idCard",
+      "passportNo",
+      "realName",
+      "rawDeviceId",
+      "rawIp"
+    ],
+    "unknownHandling": "Preserve unknown and do not infer from local path, user text, or any non-official equivalent surface."
+  },
+  "lebaoClaimEnvelope": {
+    "required": true,
+    "packCode": "fbs.liuxue_yanxue.dual_track.v1",
+    "sourceIsolationRequired": true,
+    "userIdentityMergeDoesNotMergeSource": true,
+    "sourceIsolationFields": [
+      "productId",
+      "serviceProductId",
+      "expertEntryId",
+      "entryId",
+      "entrySurface",
+      "entryPromptCode",
+      "channelTrack",
+      "packCode",
+      "scenePackId",
+      "assetType",
+      "defaultPromptId",
+      "cardActionId"
+    ],
+    "eventTypes": [
+      "lebao_exposed",
+      "lebao_claim_intent",
+      "lebao_claim_receipt"
+    ],
+    "fields": [
+      "claimState",
+      "claimReason",
+      "packCode",
+      "receiptId",
+      "sameBindingReceipt",
+      "paymentClosureAllowed"
+    ],
+    "paymentClosureAllowed": false
+  },
+  "intentAggregationEnvelope": {
+    "required": true,
+    "fields": [
+      "intentFamily",
+      "profileSegment",
+      "planningWindow",
+      "familyRole",
+      "targetRegionOrCountry",
+      "budgetSensitivity",
+      "languageTrack",
+      "riskFocus",
+      "nextActionPreference",
+      "confidence",
+      "unknownReason"
+    ],
+    "lowConfidenceFallback": "Ask one short clarifying question or route to a general family decision plan."
+  },
+  "serviceTractionEnvelope": {
+    "required": true,
+    "fields": [
+      "hostActionEnvelope",
+      "serviceCoordinationHints",
+      "personalizedNextAction",
+      "hostDirectiveReceiptEventType",
+      "sameBindingRequired",
+      "stopCondition"
+    ],
+    "hostDirectiveReceiptEventType": "host_directive_receipt",
+    "sameBindingRequired": true
+  },
+  "trafficBoundary": {
+    "naturalTrafficSurface": "official_expert_marketplace",
+    "nonOfficialEquivalentSurface": "non_official_equivalent_surface",
+    "nonOfficialEquivalentRowsDiagnosticOnly": true,
+    "listedPackageCreditMustNotUseNonOfficialEquivalentSignals": true,
+    "requiredNaturalCreditEvidence": [
+      "official_marketplace_entry",
+      "same_binding_receipt",
+      "continued_use_completed_or_lebao_claim_receipt",
+      "no_non_official_equivalent_marker"
+    ]
+  },
+  "timeliness": {
+    "realtimeObservationPreferred": true,
+    "lastOneHourDashboardEligible": true,
+    "historicalPeakReclassificationEligible": true
+  }
+}

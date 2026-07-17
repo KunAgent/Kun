@@ -1,0 +1,194 @@
+{
+  "name": "fbsir-board-secretary-assistant",
+  "version": "2.1.0",
+  "description": "WorkBuddy expert for board secretary compliance red-team review of disclosure, roadshow, IR Q&A, announcements, and investor communication material.",
+  "author": {
+    "name": "FBSir",
+    "email": "unique@u3w.com"
+  },
+  "agents": [
+    "./agents/fbsir-board-secretary-assistant.md"
+  ],
+  "skills": [
+    "./skills/board-secretary-compliance-red-team"
+  ],
+  "homepage": "https://api2.u3w.com/fbss/",
+  "license": "MIT",
+  "expertType": "agent",
+  "agentName": "fbsir-board-secretary-assistant",
+  "runtimeContract": {
+    "schema": "fbsir-board-secretary-assistant-runtime-contract/v1",
+    "version": "2.1.0",
+    "operatingContract": "contracts/board-secretary-assistant-operating-contract.json",
+    "operatingModes": [
+      "independent_expert",
+      "compliance_red_team",
+      "review_pack_handoff",
+      "no_connector_first_value"
+    ],
+    "connectorToolChain": [
+      "skill_whoami",
+      "fbs_scene_pack_query",
+      "skill_consume"
+    ],
+    "entryPromptCode": "wb_fbsir_board_secretary_compliance_red_team",
+    "entryId": "board-secretary-compliance-red-team",
+    "expertEntryId": "fbsir-board-secretary-assistant",
+    "intentFamily": "board_secretary_ir_workflow",
+    "assetType": "compliance-red-team-card",
+    "connectorAssumedAvailable": false,
+    "connectorRequired": false,
+    "packageCapabilityDependsOnConnector": false,
+    "networkEnhancementOptional": true,
+    "optionalEnhancementOnly": true,
+    "connectorPromptSuppressionExpected": true,
+    "compatibleToolSurface": "no_connector_primary_service_observation_external",
+    "offerId": "board_secretary_compliance_review_pack_v1",
+    "firstValueContract": "contracts/first-value-contract.json",
+    "humanReviewBoundaryContract": "contracts/governance-boundary.json",
+    "serviceForwardFieldsContract": "contracts/service-forward-fields.json",
+    "serviceTractionUpgradeContract": "contracts/service-traction-upgrade-contract.json",
+    "sameBindingRequiredForFirstValue": false,
+    "sameBindingRequiredForClosure": true,
+    "noConnectorFirstValue": {
+      "firstValueDoesNotRequireConnector": true,
+      "serviceToolOptionalEnhancementOnly": true,
+      "doNotAssumeHostRuntimeUpgrade": true
+    },
+    "serviceSideDecisionOnly": true,
+    "hostCommercialDecisionAllowed": false,
+    "automaticLegalConclusionAllowed": false,
+    "priorityScope": [
+      "P0",
+      "P1",
+      "P2"
+    ],
+    "requiredInterfaces": [
+      "opsEnvelope",
+      "hostActionEnvelope",
+      "resultCard",
+      "valueEvent",
+      "commercialEvent",
+      "deliveryTask",
+      "deliveryTaskboard",
+      "hostCapabilityRequest",
+      "opsBoard",
+      "regulatorySourceRegistry",
+      "scenarioExpansion",
+      "personalizationProfile"
+    ],
+    "optionalInterfaces": [
+      "serviceFollowthroughPlan",
+      "valueEvent"
+    ],
+    "hostAuthorizedContextRequired": true,
+    "serviceSideScenarioExpansionRequired": true,
+    "defaultFirstValueSurface": "chat_response_only"
+  },
+  "distributionSurface": {
+    "target": "workbuddy_expert_center",
+    "targetMarketplace": "experts",
+    "targetDisplayNameZh": "董秘助手",
+    "localEquivalentTestSurface": "my-experts",
+    "localEquivalentTestOnly": true,
+    "localEquivalentPurposeZh": "仅用于当前工作区安装与入口配置，不代表最终上架路径。"
+  },
+  "displayName": {
+    "en": "Board Secretary Assistant",
+    "zh": "董秘助手"
+  },
+  "profession": {
+    "en": "Board Secretary Assistant",
+    "zh": "董秘助手"
+  },
+  "displayDescription": {
+    "en": "Runs a compliance red-team review before disclosure, roadshow, IR Q&A, announcement, or investor communication material is used externally.",
+    "zh": "面向公告、路演、投资者问答、互动回复和沟通稿，在对外使用前做合规红队审查并给出审批下一步。"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "11-SecurityCompliance",
+  "defaultInitPrompt": {
+    "en": "Review this roadshow Q&A as a compliance red team and flag nonpublic-information, selective-disclosure, and forward-looking risk.",
+    "zh": "请对这段路演问答做合规红队审查，重点挑出内幕信息、选择性披露和前瞻性表述风险。"
+  },
+  "plugin": "fbsir-board-secretary-assistant",
+  "tags": [
+    {
+      "en": "Disclosure Compliance",
+      "zh": "信息披露合规"
+    },
+    {
+      "en": "Investor Relations",
+      "zh": "投资者关系"
+    },
+    {
+      "en": "Compliance Red Team",
+      "zh": "合规红队"
+    }
+  ],
+  "entryMatrix": [
+    {
+      "entryId": "board-secretary-compliance-red-team",
+      "entryPromptCode": "wb_fbsir_board_secretary_compliance_red_team",
+      "intentFamily": "board_secretary_ir_workflow",
+      "profileSegments": [
+        "board_secretary",
+        "securities_rep",
+        "ir_director",
+        "cfo_office"
+      ],
+      "assetType": "compliance-red-team-card",
+      "servicePackCode": "fbss.board_secretary.compliance_red_team.v1",
+      "scenePackId": "board-secretary-compliance-red-team",
+      "priorityScope": [
+        "P0",
+        "P1",
+        "P2"
+      ],
+      "requiredInterfaces": [
+        "hostCapabilityRequest",
+        "deliveryTaskboard",
+        "opsBoard",
+        "regulatorySourceRegistry",
+        "scenarioExpansion",
+        "personalizationProfile"
+      ]
+    }
+  ],
+  "quickPrompts": [
+    {
+      "en": "Review this roadshow Q&A as a compliance red team and flag nonpublic-information, selective-disclosure, and forward-looking risk.",
+      "zh": "请对这段路演问答做合规红队审查，重点挑出内幕信息、选择性披露和前瞻性表述风险。"
+    },
+    {
+      "en": "Check this announcement draft for evidence gaps, problematic fragments, and externally safer wording.",
+      "zh": "请检查这份公告草稿的补证缺口、问题片段和更稳妥的对外表述。"
+    },
+    {
+      "en": "Turn this investor communication draft into a red-team card and approval handoff checklist.",
+      "zh": "请把这份投资者沟通稿整理成合规红队卡和审批交接清单。"
+    }
+  ],
+  "serviceObservationBoundary": {
+    "connectorPublicName": "福帮手人机协同连接器",
+    "connectorSource": "fbs-connector",
+    "integrationMode": "external_service_observation_only_no_package_mcp_metadata",
+    "newConnectorRequired": false,
+    "connectorRequiredForFirstValue": false,
+    "optionalEnhancementOnly": true
+  },
+  "guardrails": {
+    "noAutomaticDisclosureDecision": true,
+    "noAutomaticLegalConclusion": true,
+    "noAutomaticPublishing": true,
+    "hostRendersServiceDecisionOnly": true,
+    "offerAfterFirstValueOnly": true
+  },
+  "reviewPackageVersionLabel": "2.1",
+  "reviewPackageBoundary": {
+    "generatedForReviewOnly": true,
+    "localEquivalentEvidenceOnly": true,
+    "officialReplacementClaimAllowed": false,
+    "naturalBusinessClosureClaimAllowed": false
+  }
+}

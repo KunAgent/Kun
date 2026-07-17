@@ -1,0 +1,1059 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>自主技能优化系统</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --accent: #D4532B;
+    --black: #111111;
+    --dark: #1a1a1a;
+    --mid: #666666;
+    --light: #999999;
+    --border: #d0d0d0;
+    --bg: #fafafa;
+    --white: #ffffff;
+    --col: calc((100% - 11 * 24px) / 12);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Inter', -apple-system, sans-serif;
+    background: var(--bg);
+    color: var(--black);
+    font-size: 15px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 48px;
+  }
+
+  /* ═══════ HERO ═══════ */
+  .hero {
+    padding: 120px 0 80px;
+    border-bottom: 1px solid var(--black);
+  }
+
+  .hero-label {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 32px;
+  }
+
+  .hero h1 {
+    font-size: 88px;
+    font-weight: 900;
+    line-height: 0.95;
+    letter-spacing: -3px;
+    margin-bottom: 40px;
+    max-width: 900px;
+  }
+
+  .hero-subtitle {
+    font-size: 20px;
+    font-weight: 400;
+    color: var(--mid);
+    line-height: 1.5;
+    max-width: 640px;
+    margin-bottom: 56px;
+  }
+
+  .hero-subtitle strong {
+    color: var(--black);
+    font-weight: 600;
+  }
+
+  .hero-quote {
+    border-left: 3px solid var(--accent);
+    padding: 20px 0 20px 24px;
+    max-width: 600px;
+  }
+
+  .hero-quote p {
+    font-size: 16px;
+    font-weight: 400;
+    font-style: italic;
+    color: var(--dark);
+    line-height: 1.7;
+  }
+
+  .hero-quote cite {
+    display: block;
+    margin-top: 12px;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    font-style: normal;
+    color: var(--light);
+  }
+
+  /* ═══════ SECTION HEADERS ═══════ */
+  .section {
+    padding: 80px 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .section:last-child {
+    border-bottom: none;
+  }
+
+  .section-num {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    color: var(--accent);
+    margin-bottom: 16px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .section-title {
+    font-size: 48px;
+    font-weight: 800;
+    line-height: 1.05;
+    letter-spacing: -1.5px;
+    margin-bottom: 16px;
+  }
+
+  .section-lead {
+    font-size: 17px;
+    color: var(--mid);
+    max-width: 560px;
+    line-height: 1.6;
+    margin-bottom: 48px;
+  }
+
+  /* ═══════ PRINCIPLES ═══════ */
+  .principles-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0;
+  }
+
+  .principle {
+    padding: 32px 32px 32px 0;
+    border-top: 1px solid var(--border);
+  }
+
+  .principle:nth-child(even) {
+    padding-left: 32px;
+    border-left: 1px solid var(--border);
+  }
+
+  .principle:nth-child(1),
+  .principle:nth-child(2) {
+    border-top: 1px solid var(--black);
+  }
+
+  .principle-num {
+    font-size: 36px;
+    font-weight: 800;
+    color: var(--accent);
+    margin-bottom: 12px;
+    line-height: 1;
+  }
+
+  .principle h3 {
+    font-size: 18px;
+    font-weight: 700;
+    margin-bottom: 8px;
+    letter-spacing: -0.3px;
+  }
+
+  .principle p {
+    font-size: 14px;
+    color: var(--mid);
+    line-height: 1.6;
+  }
+
+  .principle--full {
+    grid-column: 1 / -1;
+    padding-left: 0;
+    border-left: none;
+  }
+
+  /* ═══════ RUBRIC ═══════ */
+  .rubric-header {
+    display: flex;
+    gap: 48px;
+    margin-bottom: 48px;
+  }
+
+  .rubric-stat {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+  }
+
+  .rubric-stat-num {
+    font-size: 64px;
+    font-weight: 900;
+    line-height: 1;
+    letter-spacing: -2px;
+  }
+
+  .rubric-stat-num--accent {
+    color: var(--accent);
+  }
+
+  .rubric-stat-label {
+    font-size: 13px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: var(--mid);
+  }
+
+  .rubric-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 40px;
+  }
+
+  .rubric-table caption {
+    text-align: left;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 2.5px;
+    text-transform: uppercase;
+    color: var(--light);
+    padding-bottom: 16px;
+  }
+
+  .rubric-table th {
+    text-align: left;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--light);
+    padding: 12px 16px 12px 0;
+    border-bottom: 2px solid var(--black);
+  }
+
+  .rubric-table td {
+    padding: 14px 16px 14px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 14px;
+    vertical-align: top;
+  }
+
+  .rubric-table tr:last-child td {
+    border-bottom: none;
+  }
+
+  .rubric-table .dim-num {
+    font-weight: 700;
+    color: var(--accent);
+    font-variant-numeric: tabular-nums;
+    width: 36px;
+  }
+
+  .rubric-table .dim-name {
+    font-weight: 600;
+    white-space: nowrap;
+  }
+
+  .rubric-table .dim-weight {
+    font-weight: 800;
+    font-size: 20px;
+    font-variant-numeric: tabular-nums;
+    text-align: center;
+    width: 60px;
+    color: var(--dark);
+  }
+
+  .rubric-table .dim-desc {
+    color: var(--mid);
+    line-height: 1.5;
+  }
+
+  /* ═══════ PHASES ═══════ */
+  .phases {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+
+  .phase {
+    display: grid;
+    grid-template-columns: 160px 1fr;
+    gap: 40px;
+    padding: 40px 0;
+    border-top: 1px solid var(--border);
+  }
+
+  .phase:first-child {
+    border-top: 1px solid var(--black);
+  }
+
+  .phase-id {
+    font-size: 48px;
+    font-weight: 900;
+    color: var(--accent);
+    line-height: 1;
+    letter-spacing: -1px;
+  }
+
+  .phase-id span {
+    display: block;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--light);
+    margin-top: 8px;
+  }
+
+  .phase-body h3 {
+    font-size: 22px;
+    font-weight: 700;
+    margin-bottom: 12px;
+    letter-spacing: -0.3px;
+  }
+
+  .phase-body p {
+    font-size: 14px;
+    color: var(--mid);
+    line-height: 1.6;
+    margin-bottom: 16px;
+    max-width: 560px;
+  }
+
+  .phase-steps {
+    list-style: none;
+    counter-reset: step;
+  }
+
+  .phase-steps li {
+    counter-increment: step;
+    padding: 8px 0 8px 32px;
+    position: relative;
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--dark);
+  }
+
+  .phase-steps li::before {
+    content: counter(step);
+    position: absolute;
+    left: 0;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--accent);
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    top: 9px;
+  }
+
+  /* ═══════ RATCHET ═══════ */
+  .ratchet-viz {
+    display: flex;
+    align-items: flex-end;
+    gap: 0;
+    padding: 48px 0;
+    position: relative;
+  }
+
+  .ratchet-viz::before {
+    content: '';
+    position: absolute;
+    bottom: 48px;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: var(--border);
+  }
+
+  .ratchet-step {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    position: relative;
+  }
+
+  .ratchet-bar {
+    width: 80px;
+    background: var(--black);
+    position: relative;
+    z-index: 1;
+  }
+
+  .ratchet-bar--revert {
+    background: none;
+    border: 2px solid var(--border);
+  }
+
+  .ratchet-score {
+    font-size: 36px;
+    font-weight: 900;
+    margin-bottom: 8px;
+    letter-spacing: -1px;
+    line-height: 1;
+  }
+
+  .ratchet-score--revert {
+    color: var(--light);
+    text-decoration: line-through;
+    text-decoration-color: var(--accent);
+    text-decoration-thickness: 2px;
+  }
+
+  .ratchet-label {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    margin-top: 12px;
+    padding: 4px 10px;
+  }
+
+  .ratchet-label--keep {
+    background: var(--black);
+    color: var(--white);
+  }
+
+  .ratchet-label--revert {
+    background: none;
+    border: 1px solid var(--accent);
+    color: var(--accent);
+  }
+
+  .ratchet-label--baseline {
+    background: var(--accent);
+    color: var(--white);
+  }
+
+  .ratchet-arrow {
+    position: absolute;
+    top: 50%;
+    right: -12px;
+    width: 24px;
+    height: 2px;
+    background: var(--border);
+    z-index: 2;
+  }
+
+  .ratchet-arrow::after {
+    content: '';
+    position: absolute;
+    right: -1px;
+    top: -4px;
+    border: solid var(--border);
+    border-width: 0 2px 2px 0;
+    padding: 3px;
+    transform: rotate(-45deg);
+  }
+
+  .ratchet-round {
+    font-size: 12px;
+    color: var(--light);
+    margin-top: 8px;
+    font-weight: 500;
+  }
+
+  /* ═══════ COMPARISON ═══════ */
+  .comparison {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0;
+  }
+
+  .comparison-col {
+    padding: 40px;
+    border: 1px solid var(--border);
+  }
+
+  .comparison-col:first-child {
+    border-right: none;
+  }
+
+  .comparison-col--highlight {
+    background: var(--black);
+    color: var(--white);
+    border-color: var(--black);
+  }
+
+  .comparison-tag {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-bottom: 16px;
+  }
+
+  .comparison-col:first-child .comparison-tag {
+    color: var(--light);
+  }
+
+  .comparison-col--highlight .comparison-tag {
+    color: var(--accent);
+  }
+
+  .comparison-col h3 {
+    font-size: 24px;
+    font-weight: 800;
+    margin-bottom: 20px;
+    letter-spacing: -0.5px;
+  }
+
+  .comparison-list {
+    list-style: none;
+  }
+
+  .comparison-list li {
+    padding: 10px 0;
+    font-size: 14px;
+    line-height: 1.5;
+    border-bottom: 1px solid;
+  }
+
+  .comparison-col:first-child .comparison-list li {
+    border-color: var(--border);
+    color: var(--mid);
+  }
+
+  .comparison-col--highlight .comparison-list li {
+    border-color: #333;
+    color: #ccc;
+  }
+
+  .comparison-list li:last-child {
+    border-bottom: none;
+  }
+
+  .comparison-list li strong {
+    color: var(--black);
+  }
+
+  .comparison-col--highlight .comparison-list li strong {
+    color: var(--white);
+  }
+
+  .check-icon {
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    margin-right: 8px;
+    vertical-align: middle;
+    position: relative;
+    top: -1px;
+  }
+
+  /* ═══════ MAPPING TABLE ═══════ */
+  .mapping-table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  .mapping-table th {
+    text-align: left;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    padding: 16px 24px 16px 0;
+    border-bottom: 2px solid var(--black);
+  }
+
+  .mapping-table th:first-child {
+    color: var(--light);
+  }
+
+  .mapping-table th:nth-child(2) {
+    color: var(--accent);
+  }
+
+  .mapping-table th:last-child {
+    color: var(--light);
+  }
+
+  .mapping-table td {
+    padding: 16px 24px 16px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 14px;
+    vertical-align: top;
+  }
+
+  .mapping-table td:first-child {
+    font-weight: 600;
+    color: var(--dark);
+    white-space: nowrap;
+  }
+
+  .mapping-table td:nth-child(2) {
+    font-weight: 600;
+    color: var(--black);
+  }
+
+  .mapping-table td:last-child {
+    color: var(--mid);
+    line-height: 1.5;
+  }
+
+  .mapping-arrow {
+    display: inline-block;
+    color: var(--accent);
+    font-weight: 400;
+    margin: 0 4px;
+  }
+
+  /* ═══════ FOOTER ═══════ */
+  .footer {
+    padding: 48px 0;
+    border-top: 1px solid var(--black);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .footer-left {
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--light);
+  }
+
+  .footer-right {
+    font-size: 12px;
+    color: var(--light);
+  }
+
+  /* ═══════ RESPONSIVE ═══════ */
+  @media (max-width: 768px) {
+    .container { padding: 0 24px; }
+    .hero { padding: 64px 0 48px; }
+    .hero h1 { font-size: 48px; letter-spacing: -1.5px; }
+    .hero-subtitle { font-size: 17px; }
+    .section { padding: 48px 0; }
+    .section-title { font-size: 32px; }
+    .principles-grid { grid-template-columns: 1fr; }
+    .principle:nth-child(even) { padding-left: 0; border-left: none; }
+    .principle:nth-child(2) { border-top: 1px solid var(--border); }
+    .phase { grid-template-columns: 1fr; gap: 16px; }
+    .comparison { grid-template-columns: 1fr; }
+    .comparison-col:first-child { border-right: 1px solid var(--border); border-bottom: none; }
+    .ratchet-viz { flex-wrap: wrap; gap: 24px; }
+    .ratchet-step { flex: none; width: calc(33% - 16px); }
+    .rubric-stat-num { font-size: 48px; }
+    .mapping-table td:first-child { white-space: normal; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════ HERO ═══════════════════════════ -->
+<div class="container">
+  <section class="hero">
+    <div class="hero-label">自主技能优化系统</div>
+    <h1>Auto Skill<br>Optimizer</h1>
+    <p class="hero-subtitle">
+      <strong>评估</strong> &rarr; <strong>改进</strong> &rarr; <strong>实测验证</strong> &rarr; <strong>人类确认</strong> &rarr; <strong>保留或回滚</strong>
+    </p>
+    <div class="hero-quote">
+      <p>「autoresearch 的核心想法很简单：让系统自主运行实验，评估结果，只保留有效的改进。一个只能向前转的棘轮。」</p>
+      <cite>Andrej Karpathy &mdash; 谈自主实验循环</cite>
+    </div>
+  </section>
+</div>
+
+<!-- ═══════════════════════════ 01 PRINCIPLES ═══════════════════════════ -->
+<div class="container">
+  <section class="section">
+    <div class="section-num">01</div>
+    <h2 class="section-title">核心原则</h2>
+    <p class="section-lead">五条规则，防止优化器偏移方向、自我刷分或引入退化。</p>
+
+    <div class="principles-grid">
+      <div class="principle">
+        <div class="principle-num">01</div>
+        <h3>单一可编辑资产</h3>
+        <p>每轮优化只针对一个 SKILL.md 文件。一次修改，一次测量，一次决策。不做跨文件编辑，避免归因模糊。</p>
+      </div>
+      <div class="principle">
+        <div class="principle-num">02</div>
+        <h3>双重评估</h3>
+        <p>静态结构分析捕捉格式和完整性问题。实测执行捕捉行为退化。两者缺一不可。</p>
+      </div>
+      <div class="principle">
+        <div class="principle-num">03</div>
+        <h3>棘轮机制</h3>
+        <p>提升总分的改进被 commit。降低分数的修改自动 revert。分数只能上升或持平，永远不会下降。</p>
+      </div>
+      <div class="principle">
+        <div class="principle-num">04</div>
+        <h3>独立评分</h3>
+        <p>编辑 Skill 的 Agent 永远不为自己打分。由独立的子 Agent 评估输出质量，防止自我表扬偏差。</p>
+      </div>
+      <div class="principle principle--full">
+        <div class="principle-num">05</div>
+        <h3>人在回路</h3>
+        <p>每个 Skill 的优化循环完成后，系统暂停。向人类展示 diff 摘要、分数变化和测试输出对比。没有明确确认，任何改动都不会生效。</p>
+      </div>
+    </div>
+  </section>
+</div>
+
+<!-- ═══════════════════════════ 02 RUBRIC ═══════════════════════════ -->
+<div class="container">
+  <section class="section">
+    <div class="section-num">02</div>
+    <h2 class="section-title">8维度<br>评估体系</h2>
+    <p class="section-lead">100分评估体系。结构维度捕捉你能看到的问题，效果维度捕捉只有运行时才能感知的问题。</p>
+
+    <div class="rubric-header">
+      <div class="rubric-stat">
+        <div class="rubric-stat-num">60</div>
+        <div class="rubric-stat-label">结构<br>分值</div>
+      </div>
+      <div class="rubric-stat">
+        <div class="rubric-stat-num rubric-stat-num--accent">40</div>
+        <div class="rubric-stat-label">效果<br>分值</div>
+      </div>
+    </div>
+
+    <table class="rubric-table">
+      <caption>结构维度 &mdash; 静态分析</caption>
+      <thead>
+        <tr>
+          <th style="width:36px">#</th>
+          <th style="width:180px">维度</th>
+          <th style="width:60px">权重</th>
+          <th>评分标准</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="dim-num">1</td>
+          <td class="dim-name">Frontmatter质量</td>
+          <td class="dim-weight">8</td>
+          <td class="dim-desc">名称正确，描述包含功能/触发条件/使用场景，不超过1024字符</td>
+        </tr>
+        <tr>
+          <td class="dim-num">2</td>
+          <td class="dim-name">工作流清晰度</td>
+          <td class="dim-weight">15</td>
+          <td class="dim-desc">步骤有编号、可执行，每步都有明确的输入/输出</td>
+        </tr>
+        <tr>
+          <td class="dim-num">3</td>
+          <td class="dim-name">边界条件覆盖</td>
+          <td class="dim-weight">10</td>
+          <td class="dim-desc">错误处理、降级方案、常见故障恢复</td>
+        </tr>
+        <tr>
+          <td class="dim-num">4</td>
+          <td class="dim-name">检查点设计</td>
+          <td class="dim-weight">7</td>
+          <td class="dim-desc">关键决策前需用户确认，防止自主失控</td>
+        </tr>
+        <tr>
+          <td class="dim-num">5</td>
+          <td class="dim-name">指令具体性</td>
+          <td class="dim-weight">15</td>
+          <td class="dim-desc">无歧义，具体的参数/格式/示例，可直接执行</td>
+        </tr>
+        <tr>
+          <td class="dim-num">6</td>
+          <td class="dim-name">资源整合度</td>
+          <td class="dim-weight">5</td>
+          <td class="dim-desc">所有引用的脚本/资产路径存在且可访问</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <table class="rubric-table">
+      <caption>效果维度 &mdash; 需要实测</caption>
+      <thead>
+        <tr>
+          <th style="width:36px">#</th>
+          <th style="width:180px">维度</th>
+          <th style="width:60px">权重</th>
+          <th>评分标准</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="dim-num">7</td>
+          <td class="dim-name">整体架构</td>
+          <td class="dim-weight">15</td>
+          <td class="dim-desc">层次清晰，无冗余或遗漏，符合生态系统约定</td>
+        </tr>
+        <tr>
+          <td class="dim-num">8</td>
+          <td class="dim-name">实测表现</td>
+          <td class="dim-weight">25</td>
+          <td class="dim-desc">运行2-3个测试提示词，对比启用 Skill 和 baseline 的输出质量</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+</div>
+
+<!-- ═══════════════════════════ 03 PHASES ═══════════════════════════ -->
+<div class="container">
+  <section class="section">
+    <div class="section-num">03</div>
+    <h2 class="section-title">优化循环</h2>
+    <p class="section-lead">从初始化到最终报告的五个阶段。系统在每个阶段内自主运行，但在阶段之间暂停等待人类审查。</p>
+
+    <div class="phases">
+      <div class="phase">
+        <div class="phase-id">
+          0
+          <span>初始化</span>
+        </div>
+        <div class="phase-body">
+          <h3>范围与分支设置</h3>
+          <p>确定优化范围，创建版本控制基础设施，加载历史记录。</p>
+          <ol class="phase-steps">
+            <li>确认范围：全部 Skill 还是用户指定子集</li>
+            <li>扫描 .claude/skills/*/SKILL.md 获取目标列表</li>
+            <li>创建 git 分支：auto-optimize/YYYYMMDD-HHMM</li>
+            <li>初始化或加载 results.tsv 用于历史追踪</li>
+          </ol>
+        </div>
+      </div>
+
+      <div class="phase">
+        <div class="phase-id">
+          0.5
+          <span>设计</span>
+        </div>
+        <div class="phase-body">
+          <h3>测试提示词工程</h3>
+          <p>在任何评分之前，先设计用于衡量效果的测试提示词。没有好的测试，优化器就是盲飞。</p>
+          <ol class="phase-steps">
+            <li>阅读每个 SKILL.md，理解其声明的能力</li>
+            <li>为每个 Skill 设计2-3个提示词：一个正常路径，一个模糊场景</li>
+            <li>保存到每个 Skill 目录下的 test-prompts.json</li>
+            <li>在继续之前，将所有测试提示词提交人类审批</li>
+          </ol>
+        </div>
+      </div>
+
+      <div class="phase">
+        <div class="phase-id">
+          1
+          <span>基线</span>
+        </div>
+        <div class="phase-body">
+          <h3>全维度评分</h3>
+          <p>为每个 Skill 建立起始分数。结构评分由主 Agent 完成，效果评分由独立子 Agent 完成。</p>
+          <ol class="phase-steps">
+            <li>阅读 SKILL.md，为维度1-7评分并附理由</li>
+            <li>启动子 Agent：分别在启用和未启用 Skill 的情况下运行测试提示词</li>
+            <li>对比输出，为维度8评分（如子 Agent 不可用则标记 dry_run）</li>
+            <li>计算加权总分，记录到 results.tsv</li>
+            <li>展示评分卡，暂停等待人类确认</li>
+          </ol>
+        </div>
+      </div>
+
+      <div class="phase">
+        <div class="phase-id">
+          2
+          <span>优化</span>
+        </div>
+        <div class="phase-body">
+          <h3>Hill-Climbing 循环</h3>
+          <p>按分数从低到高处理 Skill。每轮：诊断最弱维度，提出一个针对性修复，执行，重新评分，做出决定。</p>
+          <ol class="phase-steps">
+            <li>找出该 Skill 得分最低的维度</li>
+            <li>生成一项具体改进（改什么，为什么改，预期分数变化）</li>
+            <li>编辑 SKILL.md，用结构化消息 git commit</li>
+            <li>重新评分：结构由主 Agent，效果由独立子 Agent</li>
+            <li>新分 > 旧分：保留。否则：git revert，进入下一个 Skill</li>
+            <li>每个 Skill 完成后：展示 diff + 分数变化，等待人类确认</li>
+          </ol>
+        </div>
+      </div>
+
+      <div class="phase">
+        <div class="phase-id">
+          3
+          <span>报告</span>
+        </div>
+        <div class="phase-body">
+          <h3>总结与指标</h3>
+          <p>将所有结果汇总为最终优化报告，包含优化前后分数、实验次数和关键改进。</p>
+          <ol class="phase-steps">
+            <li>统计总实验次数、保留次数、回滚次数和测试模式</li>
+            <li>生成每个 Skill 的优化前后分数对比表</li>
+            <li>列出影响最大的改进及其对应维度</li>
+            <li>归档 results.tsv 供未来 baseline 参考</li>
+          </ol>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<!-- ═══════════════════════════ 04 RATCHET ═══════════════════════════ -->
+<div class="container">
+  <section class="section">
+    <div class="section-num">04</div>
+    <h2 class="section-title">棘轮机制</h2>
+    <p class="section-lead">分数只能上升。每轮要么改进 Skill，要么干净地回滚。不会随时间积累局部退化。</p>
+
+    <div class="ratchet-viz">
+      <div class="ratchet-step">
+        <div class="ratchet-score">72</div>
+        <div style="height:144px" class="ratchet-bar"></div>
+        <div class="ratchet-label ratchet-label--baseline">基线</div>
+        <div class="ratchet-round">轮次 0</div>
+        <div class="ratchet-arrow"></div>
+      </div>
+      <div class="ratchet-step">
+        <div class="ratchet-score">78</div>
+        <div style="height:156px" class="ratchet-bar"></div>
+        <div class="ratchet-label ratchet-label--keep">保留</div>
+        <div class="ratchet-round">轮次 1</div>
+        <div class="ratchet-arrow"></div>
+      </div>
+      <div class="ratchet-step">
+        <div class="ratchet-score ratchet-score--revert">75</div>
+        <div style="height:150px" class="ratchet-bar ratchet-bar--revert"></div>
+        <div class="ratchet-label ratchet-label--revert">回滚</div>
+        <div class="ratchet-round">轮次 2</div>
+        <div class="ratchet-arrow"></div>
+      </div>
+      <div class="ratchet-step">
+        <div class="ratchet-score">84</div>
+        <div style="height:168px" class="ratchet-bar"></div>
+        <div class="ratchet-label ratchet-label--keep">Keep</div>
+        <div class="ratchet-round">轮次 3</div>
+        <div class="ratchet-arrow"></div>
+      </div>
+      <div class="ratchet-step">
+        <div class="ratchet-score">87</div>
+        <div style="height:174px" class="ratchet-bar"></div>
+        <div class="ratchet-label ratchet-label--keep">Keep</div>
+        <div class="ratchet-round">轮次 4</div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<!-- ═══════════════════════════ 05 COMPARISON ═══════════════════════════ -->
+<div class="container">
+  <section class="section">
+    <div class="section-num">05</div>
+    <h2 class="section-title">为什么需要<br>双重评估</h2>
+    <p class="section-lead">单看结构无法判断 Skill 是否真正好用。单看效果无法判断它为何失败。</p>
+
+    <div class="comparison">
+      <div class="comparison-col">
+        <div class="comparison-tag">传统方法</div>
+        <h3>纯结构审查</h3>
+        <ul class="comparison-list">
+          <li>检查 frontmatter 是否存在且格式正确</li>
+          <li>验证步骤是否有编号和描述</li>
+          <li>确认文件路径和引用是否有效</li>
+          <li>无法检测 Skill 是否<strong>真正提升了</strong>输出质量</li>
+          <li>无法检测<strong>看似正确</strong>实则产生差结果的误导性指令</li>
+          <li>无法检测<strong>弊大于利</strong>的过度约束</li>
+        </ul>
+      </div>
+      <div class="comparison-col comparison-col--highlight">
+        <div class="comparison-tag">Auto Skill Optimizer</div>
+        <h3>双重评估</h3>
+        <ul class="comparison-list">
+          <li><strong>结构评分</strong>捕捉格式、完整性和可读性问题</li>
+          <li><strong>实测执行</strong>揭示真实场景下的行为影响</li>
+          <li><strong>基线对比</strong>衡量 Skill 是增值还是减值</li>
+          <li><strong>独立子 Agent</strong>防止自我表扬的评分偏差</li>
+          <li><strong>测试提示词设计</strong>确保评估针对真实用户场景</li>
+          <li><strong>Dry-run 降级</strong>在实测不可用时提供覆盖</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+</div>
+
+<!-- ═══════════════════════════ 06 MAPPING ═══════════════════════════ -->
+<div class="container">
+  <section class="section">
+    <div class="section-num">06</div>
+    <h2 class="section-title">概念映射</h2>
+    <p class="section-lead">autoresearch 的核心抽象如何转化为 Skill 优化。同一台机器，不同的领域。</p>
+
+    <table class="mapping-table">
+      <thead>
+        <tr>
+          <th style="width:220px">Autoresearch</th>
+          <th style="width:220px">Skill Optimizer</th>
+          <th>实现细节</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>研究论文草稿</td>
+          <td>SKILL.md 文件</td>
+          <td>唯一的可编辑产物。所有改进都表现为对这一个文件的编辑。</td>
+        </tr>
+        <tr>
+          <td>评估指标</td>
+          <td>8维度评估体系</td>
+          <td>跨结构（60分）和效果（40分）的加权评分，总计100分。</td>
+        </tr>
+        <tr>
+          <td>实验循环</td>
+          <td>阶段2 hill-climbing</td>
+          <td>诊断最弱维度，提出修复，执行，重新评分，保留或回滚。每个 Skill 最多3轮。</td>
+        </tr>
+        <tr>
+          <td>版本控制</td>
+          <td>Git 分支 + revert</td>
+          <td>每次编辑都是一次 commit。退化通过 revert（新 commit）回滚。完整审计记录。</td>
+        </tr>
+        <tr>
+          <td>自动化评估</td>
+          <td>子 Agent 测试执行</td>
+          <td>独立 Agent 分别在启用和未启用 Skill 的情况下运行测试提示词，对比输出质量。</td>
+        </tr>
+        <tr>
+          <td>人类审查关卡</td>
+          <td>阶段转换暂停</td>
+          <td>系统在基线评分后和每个 Skill 优化后暂停。展示 diff + 分数变化。</td>
+        </tr>
+        <tr>
+          <td>探索 vs 利用</td>
+          <td>阶段2.5探索性重写</td>
+          <td>当 hill-climbing 停滞（连续2次在第1轮就中断），提出完整的结构重写。</td>
+        </tr>
+        <tr>
+          <td>实验日志</td>
+          <td>results.tsv</td>
+          <td>带时间戳的记录：commit 哈希、Skill 名称、新旧分数、保留/回滚状态、评估模式。</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+</div>
+
+<!-- ═══════════════════════════ FOOTER ═══════════════════════════ -->
+<div class="container">
+  <footer class="footer">
+    <div class="footer-left">Auto Skill Optimizer</div>
+    <div class="footer-right">灵感源自 Karpathy autoresearch &mdash; 为 Claude Code Skill 生态而建</div>
+  </footer>
+</div>
+
+</body>
+</html>

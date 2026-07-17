@@ -1,0 +1,55 @@
+{
+  "schemaVersion": "1.0",
+  "contractId": "industry_scene_researcher_service_closure_gate_v230",
+  "packageName": "fbsir-industry-scene-researcher",
+  "packageVersion": "2.3.0",
+  "purpose": "Separate host-local first value, service intent reporting, and real service consume into distinct closure layers and receipts.",
+  "eventLayers": [
+    "host_local",
+    "service_intent_report",
+    "service_consume"
+  ],
+  "firstValueClosureSource": "host_local",
+  "serviceIntentClosureSource": "service_intent_report",
+  "serviceConsumeClosureSource": "service_consume",
+  "consumeRequiresRealToolOrBackendEvent": true,
+  "sameBindingRequiredForNaturalClosure": true,
+  "optionalEnhancementCanSourceConsume": true,
+  "currentWindowNaturalCreditRequires": [
+    "sameBindingWhoamiObserved",
+    "sameBindingScenePackObserved",
+    "sameBindingConsumeObserved"
+  ],
+  "requiredReceipts": {
+    "hostLocal": [
+      "fivePartBundleDelivered",
+      "singleNextStepCtaPresent",
+      "firstValueObserved"
+    ],
+    "serviceIntentReport": [
+      "selectedWorkflowGap",
+      "evidenceStrength",
+      "requestSource",
+      "packCode",
+      "scenePackId",
+      "highestValueGapIsHypothesis"
+    ],
+    "serviceConsume": [
+      "sameBindingWhoamiObserved",
+      "sameBindingScenePackObserved",
+      "sameBindingConsumeObserved",
+      "continuedUseCompletedObserved",
+      "serviceTraceRowCount"
+    ]
+  },
+  "forbiddenClosureEvidence": [
+    "tool_visibility_only",
+    "connector_status_only",
+    "present_files",
+    "file_write",
+    "browser_preview_opened",
+    "pdf_generated",
+    "task_update",
+    "memory_update"
+  ]
+}

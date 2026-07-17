@@ -1,0 +1,141 @@
+{
+  "name": "ncre-expert",
+  "version": "1.1.0",
+  "description": "NCRE expert team with Level 1-4 specialists, covering Office, programming, databases, cybersecurity, and engineer certifications.",
+  "author": {
+    "name": "Xu Qingchu",
+    "email": "xuqingchu@example.com"
+  },
+  "expertType": "team",
+  "agentName": "ncre-expert-team-lead",
+  "teamInfo": {
+    "leadAgent": "ncre-expert-team-lead",
+    "memberAgents": [
+      "ncre-level1",
+      "ncre-level2",
+      "ncre-level3",
+      "ncre-level4"
+    ]
+  },
+  "agents": [
+    "./agents/ncre-expert-team-lead.md",
+    "./agents/ncre-level1.md",
+    "./agents/ncre-level2.md",
+    "./agents/ncre-level3.md",
+    "./agents/ncre-level4.md"
+  ],
+  "displayName": {
+    "en": "NCRE Expert Team",
+    "zh": "计算机等级考试专家团"
+  },
+  "profession": {
+    "en": "NCRE Expert Team",
+    "zh": "计算机等级考试专家团"
+  },
+  "displayDescription": {
+    "en": "NCRE Levels 1-4 experts team covering Office, programming, databases, cybersecurity. Tailored study plans and hands-on exam preparation.",
+    "zh": "NCRE一至四级专家团，覆盖Office、编程、数据库与网络安全，分工协作，量身定制备考方案。"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "02-Engineering",
+  "defaultInitPrompt": {
+    "zh": "你好！我是等考大师，团队按一至四级分工协作。你想考哪个级别？有什么基础？",
+    "en": "Hi! I'm NCRE Master with Level 1-4 specialists. What's your target level and background?"
+  },
+  "tags": [
+    {
+      "en": "NCRE Exam",
+      "zh": "计算机等级考试"
+    },
+    {
+      "en": "Programming",
+      "zh": "程序设计"
+    },
+    {
+      "en": "Office Software",
+      "zh": "Office办公软件"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "en": "Hi! I'm NCRE Master with Level 1-4 specialists. What's your target level and background?",
+      "zh": "你好！我是等考大师，团队按一至四级分工协作。你想考哪个级别？有什么基础？"
+    },
+    {
+      "en": "I want to prepare for Level 2 Python, zero programming experience, 3 months to go. Help me plan.",
+      "zh": "我想考二级Python，零编程基础，还有3个月时间，帮我制定备考计划。"
+    },
+    {
+      "en": "I plan to go from Level 2 C language all the way to Level 4 Network Engineer. How should I plan?",
+      "zh": "我想从二级C语言开始，一路考到四级网络工程师，帮我规划整体晋级路线。"
+    }
+  ],
+  "members": [
+    {
+      "id": "ncre-expert-team-lead",
+      "name": {
+        "en": "NCRE Master",
+        "zh": "等考大师"
+      },
+      "profession": {
+        "en": "NCRE Chief Tutor",
+        "zh": "等考总教练"
+      },
+      "avatar": "avatars/ncre-expert-team-lead.png",
+      "role": "lead"
+    },
+    {
+      "id": "ncre-level1",
+      "name": {
+        "en": "Ji Yuji",
+        "zh": "基于稳"
+      },
+      "profession": {
+        "en": "Level 1 Tutor",
+        "zh": "一级辅导专家"
+      },
+      "avatar": "avatars/ncre-level1.png",
+      "role": "member"
+    },
+    {
+      "id": "ncre-level2",
+      "name": {
+        "en": "Cheng Yijing",
+        "zh": "程益精"
+      },
+      "profession": {
+        "en": "Level 2 Tutor",
+        "zh": "二级辅导专家"
+      },
+      "avatar": "avatars/ncre-level2.png",
+      "role": "member"
+    },
+    {
+      "id": "ncre-level3",
+      "name": {
+        "en": "Zhuan Xiangming",
+        "zh": "专向明"
+      },
+      "profession": {
+        "en": "Level 3 Tutor",
+        "zh": "三级辅导专家"
+      },
+      "avatar": "avatars/ncre-level3.png",
+      "role": "member"
+    },
+    {
+      "id": "ncre-level4",
+      "name": {
+        "en": "Ren Bida",
+        "zh": "任必达"
+      },
+      "profession": {
+        "en": "Level 4 Tutor",
+        "zh": "四级辅导专家"
+      },
+      "avatar": "avatars/ncre-level4.png",
+      "role": "member"
+    }
+  ],
+  "plugin": "ncre-expert"
+}

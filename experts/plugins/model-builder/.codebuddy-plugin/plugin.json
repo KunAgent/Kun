@@ -1,0 +1,69 @@
+{
+  "name": "model-builder",
+  "version": "0.1.0",
+  "description": "Builds DCF, LBO, three-statement, and trading-comps models live in Excel from ticker and assumption set.",
+  "author": {
+    "name": "Anthropic FSI"
+  },
+  "expertType": "agent",
+  "agentName": "model-builder",
+  "agents": [
+    "./agents/model-builder.md"
+  ],
+  "skills": [
+    "./skills/dcf-model",
+    "./skills/lbo-model",
+    "./skills/3-statement-model",
+    "./skills/comps-analysis",
+    "./skills/audit-xls",
+    "./skills/xlsx-author",
+    "./skills/neodata-financial-search",
+    "./skills/westock"
+  ],
+  "displayName": {
+    "en": "Model Builder",
+    "zh": "莫百炼"
+  },
+  "profession": {
+    "en": "Financial Modeling Specialist",
+    "zh": "财务建模师"
+  },
+  "displayDescription": {
+    "en": "Financial modeling specialist who builds institutional-quality DCF, LBO, three-statement, and trading-comps models in Excel, fully audited and linked.",
+    "zh": "专业财务建模师,在 Excel 中从零搭建 DCF、LBO、三张表模型与可比公司估值,公式全链接、可追溯、机构级品控。"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "08-FinanceInvestment",
+  "defaultInitPrompt": {
+    "en": "Please build a clean DCF model for AAPL with 5-year projection, terminal value, WACC, and a sensitivity table on exit multiple vs. WACC.",
+    "zh": "请帮宁德时代搭一套干净的 DCF 模型:5 年明晰期、终值、WACC,再附退出倍数 vs WACC 的敏感性表。"
+  },
+  "tags": [
+    {
+      "en": "DCF Model",
+      "zh": "DCF 估值"
+    },
+    {
+      "en": "LBO Model",
+      "zh": "杠杆收购模型"
+    },
+    {
+      "en": "Three-Statement Model",
+      "zh": "三张表模型"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "en": "Please build a clean DCF model for AAPL with 5-year projection, terminal value, WACC, and a sensitivity table on exit multiple vs. WACC.",
+      "zh": "请帮宁德时代搭一套干净的 DCF 模型:5 年明晰期、终值、WACC,再附退出倍数 vs WACC 的敏感性表。"
+    },
+    {
+      "en": "Build me a quick LBO on a $500M EBITDA target at 10x with 6x senior + 2x sub — what's the equity IRR at base case?",
+      "zh": "给一家 EBITDA 5 亿元、10x 进入估值、6x 优先+2x 夹层杠杆的境内并购标的跑一版 LBO,基准情景下股权 IRR 是多少。"
+    },
+    {
+      "en": "Populate this 3-statement model template for TSMC with the last 3 years of financials and a 5-year projection.",
+      "zh": "用这份三张表模板把台积电近 3 年实际和 5 年预测填进去,形成可联动的完整模型。"
+    }
+  ]
+}

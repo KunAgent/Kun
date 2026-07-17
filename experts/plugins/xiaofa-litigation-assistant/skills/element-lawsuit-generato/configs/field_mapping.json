@@ -1,0 +1,102 @@
+{
+  "description": "通用字段映射规则：定义从文书中提取的信息到模板字段的映射关系",
+  "version": "1.0",
+  "common_fields": {
+    "plaintiff_natural_person": {
+      "label_patterns": ["原告", "原告（自然人）", "起诉人", "自诉人", "赔偿请求人"],
+      "sub_fields": {
+        "姓名": {"patterns": ["姓名：", "姓名:"], "after_label": true},
+        "性别": {"patterns": ["性别：", "性别:"], "checkbox": true, "options": ["男", "女"]},
+        "出生日期": {"patterns": ["出生日期：", "出生日期:", "出生年月"], "after_label": true},
+        "民族": {"patterns": ["民族：", "民族:"], "after_label": true},
+        "工作单位": {"patterns": ["工作单位：", "工作单位:"], "after_label": true},
+        "职务": {"patterns": ["职务：", "职务:"], "after_label": true},
+        "联系电话": {"patterns": ["联系电话：", "联系电话:", "电话：", "电话:"], "after_label": true},
+        "住所地": {"patterns": ["住所地（户籍所在地）：", "住所地：", "户籍所在地"], "after_label": true},
+        "经常居住地": {"patterns": ["经常居住地：", "经常居住地:"], "after_label": true},
+        "证件类型": {"patterns": ["证件类型：", "证件类型:"], "after_label": true},
+        "证件号码": {"patterns": ["证件号码：", "证件号码:", "身份证号", "身份证号码"], "after_label": true}
+      }
+    },
+    "plaintiff_legal_person": {
+      "label_patterns": ["原告（法人、非法人组织）", "原告（法人）"],
+      "sub_fields": {
+        "名称": {"patterns": ["名称：", "名称:"], "after_label": true},
+        "住所地": {"patterns": ["住所地（主要办事机构所在地）：", "住所地："], "after_label": true},
+        "注册地": {"patterns": ["注册地", "登记地"], "after_label": true},
+        "法定代表人": {"patterns": ["法定代表人", "负责人"], "after_label": true},
+        "职务": {"patterns": ["职务：", "职务:"], "after_label": true},
+        "联系电话": {"patterns": ["联系电话：", "联系电话:"], "after_label": true},
+        "统一社会信用代码": {"patterns": ["统一社会信用代码：", "统一社会信用代码:"], "after_label": true},
+        "类型": {"patterns": ["类型：", "类型:"], "checkbox": true, "options": ["有限责任公司", "股份有限公司", "上市公司", "其他企业法人", "事业单位", "社会团体", "基金会", "社会服务机构", "机关法人", "农村集体经济组织法人", "城镇农村的合作经济组织法人", "基层群众性自治组织法人", "个人独资企业", "合伙企业", "不具有法人资格的专业服务机构"]},
+        "所有制性质": {"patterns": ["所有制性质"], "checkbox": true, "options": ["国有", "民营", "其他"]}
+      }
+    },
+    "defendant_natural_person": {
+      "label_patterns": ["被告", "被告（自然人）", "被起诉人", "被告人", "赔偿义务机关"],
+      "sub_fields": {
+        "姓名": {"patterns": ["姓名：", "姓名:"], "after_label": true},
+        "性别": {"patterns": ["性别：", "性别:"], "checkbox": true, "options": ["男", "女"]},
+        "出生日期": {"patterns": ["出生日期：", "出生日期:"], "after_label": true},
+        "民族": {"patterns": ["民族：", "民族:"], "after_label": true},
+        "工作单位": {"patterns": ["工作单位：", "工作单位:"], "after_label": true},
+        "职务": {"patterns": ["职务：", "职务:"], "after_label": true},
+        "联系电话": {"patterns": ["联系电话：", "联系电话:"], "after_label": true},
+        "住所地": {"patterns": ["住所地（户籍所在地）：", "住所地："], "after_label": true},
+        "经常居住地": {"patterns": ["经常居住地：", "经常居住地:"], "after_label": true},
+        "证件类型": {"patterns": ["证件类型：", "证件类型:"], "after_label": true},
+        "证件号码": {"patterns": ["证件号码：", "证件号码:"], "after_label": true}
+      }
+    },
+    "defendant_legal_person": {
+      "label_patterns": ["被告（法人、非法人组织）", "被告（法人）"],
+      "sub_fields": {
+        "名称": {"patterns": ["名称：", "名称:"], "after_label": true},
+        "住所地": {"patterns": ["住所地（主要办事机构所在地）：", "住所地："], "after_label": true},
+        "注册地": {"patterns": ["注册地", "登记地"], "after_label": true},
+        "法定代表人": {"patterns": ["法定代表人", "负责人"], "after_label": true},
+        "职务": {"patterns": ["职务：", "职务:"], "after_label": true},
+        "联系电话": {"patterns": ["联系电话：", "联系电话:"], "after_label": true},
+        "类型": {"patterns": ["类型：", "类型:"], "checkbox": true},
+        "所有制性质": {"patterns": ["所有制性质"], "checkbox": true}
+      }
+    },
+    "agent": {
+      "label_patterns": ["委托诉讼代理人"],
+      "sub_fields": {
+        "有无": {"patterns": ["有□", "无□"], "checkbox": true, "options": ["有", "无"]},
+        "姓名": {"patterns": ["姓名：", "姓名:"], "after_label": true},
+        "单位": {"patterns": ["单位：", "单位:"], "after_label": true},
+        "职务": {"patterns": ["职务：", "职务:"], "after_label": true},
+        "联系电话": {"patterns": ["联系电话：", "联系电话:"], "after_label": true},
+        "代理权限": {"patterns": ["代理权限：", "代理权限:"], "checkbox": true, "options": ["一般授权", "特别授权", "无"]}
+      }
+    },
+    "third_person": {
+      "label_patterns": ["第三人"],
+      "sub_fields": {
+        "姓名": {"patterns": ["姓名：", "姓名:"], "after_label": true},
+        "性别": {"patterns": ["性别：", "性别:"], "checkbox": true, "options": ["男", "女"]},
+        "出生日期": {"patterns": ["出生日期：", "出生日期:"], "after_label": true},
+        "住所地": {"patterns": ["住所地"], "after_label": true},
+        "证件号码": {"patterns": ["证件号码"], "after_label": true}
+      }
+    }
+  },
+  "signature_fields": {
+    "具状人": {"patterns": ["具状人（签字、盖章）：", "具状人："], "after_label": true},
+    "日期": {"patterns": ["日期：", "日期:"], "after_label": true}
+  },
+  "checkbox_mapping": {
+    "checked_markers": ["☑", "☐", "√", "✓", "✔", "是", "有"],
+    "unchecked_markers": ["□"],
+    "replacement_char": "☑"
+  },
+  "field_extraction_patterns": {
+    "phone": "(?:联系电话|电话|联系方式)[：:]\\s*([0-9\\-]+)",
+    "id_number": "(?:身份证|证件号码|身份证号)[：:]\\s*([0-9Xx]+)",
+    "amount": "(?:金额|本金|利息|费用|总额|赔偿|补偿)[：:]?\\s*([0-9,.]+)\\s*元",
+    "date": "(\\d{4})\\s*年\\s*(\\d{1,2})\\s*月\\s*(\\d{1,2})\\s*日",
+    "address": "(?:住所|地址|住址|所在地)[：:]\\s*(.+?)(?=\\s*(?:联系电话|证件|电话|民族|$))"
+  }
+}

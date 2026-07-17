@@ -1,0 +1,200 @@
+{
+  "$schema": "fbs-runtime-hints-v1",
+  "version": "2.1.2",
+  "session": {
+    "skillMdReReadInSession": false,
+    "resumeCardFreshnessHours": 24,
+    "memoryBriefFreshnessHours": 48,
+    "_note": "与 fbs-team-lead / intake-and-routing 对齐：恢复卡 24h、记忆摘要 48h 为不同工件的新鲜度策略，非文档冲突"
+  },
+  "promptLayerCache": {
+    "enabled": true,
+    "layers": ["platform-hints", "skill-runtime-hints", "scene-pack-coordinate", "session-delta"],
+    "invalidateWhen": ["scene-pack-changed", "host-capability-refresh", "skill-version-bump", "book-root-switch"],
+    "firstResponseJsonPath": "firstResponseContext.promptLayerCacheContract",
+    "_note": "对齐 Hermes 分层提示构建：稳定层缓存 + 会话增量层实时拼接，减少首屏漂移"
+  },
+  "channelSessionDefaults": {
+    "recursionLimit": 100,
+    "intakeEnforceRequiredDefault": true,
+    "subagentOrWorkerTasksDefault": false,
+    "defaultIntakeFast": true,
+    "thinkingHintsInAgentContextDefault": true,
+    "_note": "企微/飞书/WorkBuddy 可按用户会话覆盖；未覆盖则使用此处默认（对齐外部 harness 的 channels.session 思路）"
+  },
+  "subTaskContract": {
+    "contractVersion": "1",
+    "documentationRelativePath": "references/05-ops/fbs-subtask-contract.md",
+    "defaultTimeoutSeconds": 900,
+    "maxConcurrentHints": 3,
+    "firstResponseJsonPath": "firstResponseContext.subTaskDecompositionContract",
+    "_note": "宿主长任务 worker 与 intake 机读对齐；非沙箱隔离声明"
+  },
+  "executionSafety": {
+    "integrationDocRelative": "references/06-plugin/workbuddy-host-integration.md",
+    "integrationSectionAnchor": "执行与安全边界",
+    "userVisiblePrinciplesZh": [
+      "技能包脚本在用户信任的书稿根目录下读写与执行约定命令；不等于操作系统级沙箱隔离。",
+      "勿在未鉴权网络或公网暴露具备任意读写/命令执行能力的宿主入口。"
+    ],
+    "_note": "终端用户可见原则摘要；完整说明见 integrationDocRelative 对应章节"
+  },
+  "s3": {
+    "maxFilesModifiedPerTurn": 2,
+    "serialEdits": true,
+    "visibilityBeforeEdit": true,
+    "maxParallelExpansionChapters": 3,
+    "recommendedParallelExpansionChapters": 2,
+    "syncChapterStatusAfterExpansionGate": true,
+    "_expansionNote": "WorkBuddy 2026-04-14 复盘：宿主侧并行扩写 agent 不得超过 maxParallelExpansionChapters；扩写门禁通过后由 expansion-gate 刷新 chapter-status 字数列"
+  },
+  "search": {
+    "preflightContractPath": "references/05-ops/search-preflight-contract.json"
+  },
+  "compliance": {
+    "requireIntakeRouterBeforeWork": true,
+    "requireSessionExitOnStop": true,
+    "standardExitUserMessageField": "session-exit JSON 的 userMessage，须原样或等价复述给用户",
+    "_note": "与 audit-skill-runtime-2026-04-13 对齐：仅注入 SKILL 上下文不等于已执行脚本"
+  },
+  "hostMemory": {
+    "operations": ["create", "update", "delete"],
+    "updateRequiresId": true,
+    "deleteOnUserContradiction": true,
+    "authoritativeBookState": ".fbs/smart-memory/ 与 session-exit 落盘",
+    "_note": "宿主系统级记忆与书稿目录真值并行；冲突以用户最新陈述 + .fbs 写盘为准"
+  },
+  "userExperience": {
+    "rulesCenter": "references/01-core/ux-optimization-rules.md",
+    "dialogLayer": "references/03-product/07-ux-design.md",
+    "agentPlaybook": "references/05-ops/ux-agent-playbook.md",
+    "maxNextActions": 3,
+    "primaryUserGoal": "writing",
+    "interactionMode": "writing-first",
+    "recoveryCardLines": 4,
+    "qualityFeedbackStyle": "achievement-oriented",
+    "visibleTechActionNarration": {
+      "beforeAction": "我会先做一个必要的后台处理，并说明原因与对写作的价值；处理完成后立即回到你的写作任务。",
+      "inProgress": "处理中（通常几十秒内完成）。这样做是为了减少后续中断、误报或重复操作。",
+      "afterSuccess": "处理完成，写作环境更稳定了。我们继续推进你的书稿。",
+      "afterFallback": "处理未完全成功，但写作主流程可继续。我会给你最短替代路径，并尽量不打断创作节奏。"
+    },
+    "forbidUserFacingTerms": ["Tier", "调度层", "内部模块代号"],
+    "_note": "对用户只说功能中文名；技术探测信息仅供 Agent 内部使用"
+  },
+  "antiStall": {
+    "intakeFastFlag": "--fast",
+    "scenePackTimeoutMsEnv": "FBS_SCENE_PACK_TIMEOUT_MS",
+    "defaultScenePackTimeoutMs": 15000,
+    "hostMemoryMaxFiles": 24,
+    "hostMemoryMaxCharsPerFile": 98304,
+    "longTaskProgressHintSec": 30,
+    "guide": "references/05-ops/anti-stall-guide.md"
+  },
+  "performanceUx": {
+    "performanceDoc": "references/05-ops/fbs-performance-ux.md",
+    "userValueHeadlineZh": "把长文档写稳、校好，并能按阶段交付。",
+    "userValueBulletsZh": [
+      "一条链：定大纲 → 写章节 → 分层质检 → 导出",
+      "书稿根内真值在 .fbs/，续写不掉线",
+      "默认快速开场；完整场景包仅在需要时再深度加载"
+    ],
+    "fileGrowthReportMaxAgeHours": 48,
+    "fileGrowthSoftSingleMb": 5,
+    "fileGrowthSoftTotalMb": 40,
+    "fileGrowthHardSingleMb": 8,
+    "fileGrowthHardTotalMb": 64,
+    "excludeAuditJsonlFromGrowthTrack": true,
+    "stallPreventionUserHintJsonPath": "firstResponseContext.stallPreventionUserHint",
+    "userValueSnapshotJsonPath": "firstResponseContext.userValueSnapshot",
+    "_note": "防卡顿软阈值 + 用户价值显性化；与 file-growth-guard v1.1 对齐"
+  },
+  "cognitiveAsset": {
+    "strategyDoc": "references/05-ops/cognitive-asset-threeization.md",
+    "userValueOneLinerZh": "AI时代的书，应作为可进化、可分发、可增值的认知资产来运营。",
+    "threeizationZh": ["可进化", "可分发", "可增值"],
+    "commercialEngineZh": ["场景包", "乐包", "离线-在线会员"],
+    "firstResponseJsonPath": "firstResponseContext.cognitiveAssetSnapshot",
+    "_note": "愿景口径与入口 JSON 对齐：用于首响价值提示、文档承诺与商业化机制统一；与 strategiesABC（真值/宿主/演进）及 gates 分工见 strategyDoc §6——三化为叙事坐标，门禁为合格性坐标"
+  },
+  "orchestration": {
+    "strategyDoc": "references/05-ops/agent-task-strategy.md",
+    "multiAgentSyncDoc": "references/05-ops/multi-agent-horizontal-sync.md",
+    "qualityFirst": true,
+    "defaultWritingMode": "serial-single-writer",
+    "signalDrivenAdjustment": true,
+    "_note": "单智能体多任务 / 多智能体：风格一致、防断链、质量优先下的弹性调度"
+  },
+  "strategiesABC": {
+    "A": "真值契约：memory-layer-matrix.md、collect-host-diagnostics、intake firstResponseContext",
+    "B": "宿主增益：Teams 对齐、.workbuddy/memory 退出镜像、二进制登记注入 host-capability",
+    "C": "演进：emit-upgrade-summary、lexicon-governance、propose-lexicon-refresh",
+    "docMatrix": "references/01-core/memory-layer-matrix.md"
+  },
+  "scriptBridge": {
+    "primaryCli": "scripts/fbs-cli-bridge.mjs",
+    "matrixDoc": "references/01-core/skill-cli-bridge-matrix.md",
+    "nonMcpNote": "检索前置合同、企微场景包、乐包等长链路能力保持 Skill+脚本+CLI，不拆 MCP Server"
+  },
+  "trace": {
+    "schemaPath": "references/05-ops/fbs-trace-events.schema.json",
+    "auditRelativeDir": ".fbs/audit",
+    "_note": "JSONL 轨迹，见 fbs-continuous-improvement.md"
+  },
+  "bookIndex": {
+    "snippetRelativePath": ".fbs/index/book-snippet.json",
+    "registryNote": "用户目录 ~/.workbuddy/fbs-book-projects.json"
+  },
+  "evolutionGate": {
+    "scriptsManifest": "scripts/generated/scripts-manifest.json",
+    "improvementDoc": "references/05-ops/fbs-continuous-improvement.md"
+  },
+  "contextCompression": {
+    "policyDoc": "references/05-ops/fbs-context-compression.md",
+    "scenePackCoordinateDoc": "references/01-core/information-ownership-and-arbitration.md",
+    "_note": "双轨语境见 policyDoc §双轨；场景包单坐标与记忆仲裁见 scenePackCoordinateDoc"
+  },
+  "auxiliaryTasks": {
+    "tasksDoc": "references/05-ops/fbs-auxiliary-tasks.md"
+  },
+  "hostPresentation": {
+    "integrationDoc": "references/06-plugin/workbuddy-host-integration.md",
+    "userFacingOneLinerJsonPath": "firstResponseContext.userFacingOneLiner",
+    "techActionNarrationJsonPath": "firstResponseContext.userVisibleTechActionNarration",
+    "blockedDecisionHintJsonPath": "firstResponseContext.blockedDecisionHint",
+    "primaryOptionsHintJsonPath": "firstResponseContext.openingGuidance.primaryOptionsHint",
+    "maintenanceSecondaryOptionsHintJsonPath": "firstResponseContext.maintenanceSecondaryOptionsHint",
+    "actionSelectionPolicyJsonPath": "firstResponseContext.actionSelectionPolicy",
+    "dangerousOperationPolicyJsonPath": "firstResponseContext.dangerousOperationPolicy",
+    "clarifyContractsJsonPath": "firstResponseContext.clarifyContracts",
+    "entryOutputProfilesJsonPath": "firstResponseContext.entryOutputProfiles",
+    "actionGoalImpactJsonPath": "actions[].goalImpact",
+    "healthUserHintJsonPath": "firstResponseContext.healthUserHint",
+    "runtimeHealthMatrixJsonPath": "runtime.healthMatrix",
+    "hostKpiSignalsJsonPath": "runtime.hostKpiSignals",
+    "channelSessionDefaultsJsonPath": "skillRuntimeHints.channelSessionDefaults",
+    "promptLayerCacheJsonPath": "firstResponseContext.promptLayerCacheContract",
+    "subTaskContractJsonPath": "skillRuntimeHints.subTaskContract",
+    "executionSafetyJsonPath": "skillRuntimeHints.executionSafety",
+    "subTaskDecompositionContractJsonPath": "firstResponseContext.subTaskDecompositionContract",
+    "stallPreventionUserHintJsonPath": "firstResponseContext.stallPreventionUserHint",
+    "userValueSnapshotJsonPath": "firstResponseContext.userValueSnapshot",
+    "cognitiveAssetSnapshotJsonPath": "firstResponseContext.cognitiveAssetSnapshot",
+    "versionObservabilityJsonPath": "firstResponseContext.versionObservability",
+    "bookQualityConclusionJsonPath": "bookQualityConclusion",
+    "showHealthHintWhenDegradedOnly": true,
+    "maxPrimaryActionsInChat": 3,
+    "hideFullSkillAndIntakeJsonFromUserChat": true,
+    "listDirFbsOnlyOnDemand": true,
+    "_note": "宿主默认只在对话区展示 userFacingOneLiner + 最多3个动作；当 runtime.healthMatrix.overallSeverity != healthy 时可追加 healthUserHint 一行。完整 intake JSON 与 SKILL 全文不进主对话流；编排/自检用语（如按版本规范、JSON 输出、不重复读文件）不得与用户气泡混排"
+  },
+  "gates": {
+    "severityDoc": "references/02-quality/writing-phase-alert-tiers.md",
+    "expansionDoc": "references/01-core/s3-expansion-phase.md",
+    "refinementDoc": "references/01-core/s3-refinement-phase.md",
+    "searchPolicy": "references/05-ops/search-policy.json",
+    "truthMatrix": "references/05-ops/fbs-source-of-truth-matrix.md",
+    "optimizationRoadmapSpec": "references/05-ops/fbs-optimization-roadmap-spec.md",
+    "_note": "Blocker/Warning 分级叙述与扩写/精修门禁的机读索引；脚本门禁以各 CLI 退出码为准"
+  }
+}

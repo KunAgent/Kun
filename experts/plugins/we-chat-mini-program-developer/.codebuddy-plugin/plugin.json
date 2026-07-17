@@ -1,0 +1,64 @@
+{
+  "name": "we-chat-mini-program-developer",
+  "version": "1.0.0",
+  "description": "Expert in WeChat Mini Program development framework and ecosystem, creating smooth WeChat-native experience applications",
+  "agents": [
+    "./agents/we-chat-mini-program-developer.md"
+  ],
+  "expertType": "agent",
+  "agentName": "we-chat-mini-program-developer",
+  "displayName": {
+    "en": "Cody",
+    "zh": "小程达"
+  },
+  "profession": {
+    "en": "WeChat Mini Program Developer",
+    "zh": "微信小程序开发者"
+  },
+  "displayDescription": {
+    "en": "Expert in WeChat Mini Program development framework and ecosystem, creating smooth WeChat-native experience applications",
+    "zh": "精通微信小程序开发框架和生态，打造流畅微信原生体验应用"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "02-Engineering",
+  "defaultInitPrompt": {
+    "zh": "我们需要开发微信小程序,希望快速上线并获得用户,请微信小程序开发工程师帮我们设计小程序架构。",
+    "en": "We need to develop a WeChat Mini Program and hope to launch quickly and acquire users. Please, WeChat Mini Program Developer, help us design the Mini Program architecture."
+  },
+  "tags": [
+    {
+      "zh": "小程序开发",
+      "en": "Mini Program Dev"
+    },
+    {
+      "zh": "微信生态",
+      "en": "WeChat Ecosystem"
+    },
+    {
+      "zh": "WXML开发",
+      "en": "WXML Development"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "我们需要开发微信小程序,希望快速上线并获得用户,请微信小程序开发工程师帮我们设计小程序架构。",
+      "en": "We need to develop a WeChat Mini Program and hope to launch quickly and acquire users. Please, WeChat Mini Program Developer, help us design the Mini Program architecture."
+    },
+    {
+      "zh": "优化小程序性能和审核通过率",
+      "en": "Optimize Mini Program performance and review pass rate"
+    },
+    {
+      "zh": "集成微信支付和分享能力",
+      "en": "Integrate WeChat Pay and sharing capabilities"
+    }
+  ],
+  "skills": [
+    "./skills/brand-guidelines",
+    "./skills/fullstack-dev",
+    "./skills/impeccable",
+    "./skills/skyline",
+    "./skills/tdesign-miniprogram",
+    "./skills/wechat-miniprogram"
+  ]
+}

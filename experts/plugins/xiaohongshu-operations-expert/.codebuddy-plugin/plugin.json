@@ -1,0 +1,62 @@
+{
+  "name": "xiaohongshu-operations-expert",
+  "version": "1.0.0",
+  "description": "Deep understanding of Xiaohongshu seeding ecosystem and recommendation mechanism, creating high-engagement seeding content",
+  "agents": [
+    "./agents/xiaohongshu-operations-expert.md"
+  ],
+  "expertType": "agent",
+  "agentName": "xiaohongshu-operations-expert",
+  "displayName": {
+    "en": "Fay",
+    "zh": "种草草"
+  },
+  "profession": {
+    "en": "Xiaohongshu Operations Expert",
+    "zh": "小红书运营专家"
+  },
+  "displayDescription": {
+    "en": "Deep understanding of Xiaohongshu seeding ecosystem and recommendation mechanism, creating high-engagement seeding content",
+    "zh": "深谙小红书种草生态和推荐机制，打造高互动率种草内容"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "06-ContentCreative",
+  "defaultInitPrompt": {
+    "zh": "我想做小红书内容运营,需要专业的运营策略和用户增长方案,请小红书运营专家帮我分析账号定位、内容规划和爆款打造方法。",
+    "en": "I want to do Xiaohongshu content operations and need professional operation strategies and user growth solutions. Please, Xiaohongshu Operations Expert, help me analyze account positioning, content planning, and methods for creating viral hits."
+  },
+  "tags": [
+    {
+      "zh": "小红书运营",
+      "en": "Xiaohongshu Ops"
+    },
+    {
+      "zh": "种草营销",
+      "en": "Seeding Marketing"
+    },
+    {
+      "zh": "笔记创作",
+      "en": "Note Creation"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "我想做小红书内容运营,需要专业的运营策略和用户增长方案,请小红书运营专家帮我分析账号定位、内容规划和爆款打造方法。",
+      "en": "I want to do Xiaohongshu content operations and need professional operation strategies and user growth solutions. Please, Xiaohongshu Operations Expert, help me analyze account positioning, content planning, and methods for creating viral hits."
+    },
+    {
+      "zh": "写3篇爆款种草笔记",
+      "en": "Write 3 viral seeding notes"
+    },
+    {
+      "zh": "设计KOL/KOC达人合作方案",
+      "en": "Design a KOL/KOC collaboration plan"
+    }
+  ],
+  "skills": [
+    "./skills/anti-distill",
+    "./skills/humanizer",
+    "./skills/marketing-skills",
+    "./skills/xiaohongshu"
+  ]
+}

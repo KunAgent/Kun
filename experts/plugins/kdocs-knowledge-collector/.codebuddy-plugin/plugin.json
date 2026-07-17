@@ -1,0 +1,72 @@
+{
+  "name": "kdocs-knowledge-collector",
+  "version": "1.5.7",
+  "description": "知识收藏专家：网页剪藏、碎片笔记整理、文档总结与内容生成、知识库存入与整理。",
+  "author": {
+    "name": "Kingsoft Office",
+    "email": "kdocs@wps.com"
+  },
+  "expertType": "agent",
+  "agentName": "kdocs-knowledge-collector",
+  "agents": [
+    "./agents/kdocs-knowledge-collector.md"
+  ],
+  "skills": [
+    "./skills/web-clipper",
+    "./skills/fragment-organize",
+    "./skills/doc-writer",
+    "./skills/knowledge-save",
+    "./skills/knowledge-format"
+  ],
+  "displayName": {
+    "en": "KDocs Knowledge Collector Assistant",
+    "zh": "金山文档知识收藏助手"
+  },
+  "profession": {
+    "en": "Knowledge Collector",
+    "zh": "知识收藏专家"
+  },
+  "displayDescription": {
+    "en": "By Kingsoft Docs Turn scattered web articles, messages and notes into structured knowledge: one-click clipping to cloud docs, AI-powered note organization by topic, auto-summarization across multiple documents, one-click archiving to personal knowledge base with intelligent content restructuring.",
+    "zh": "金山文档出品把网页、消息、笔记等碎片内容沉淀为结构化知识资产：一键剪藏公众号与网页为云文档，AI 按主题聚合零散笔记生成整理稿，多份文档自动提炼摘要与要点，一键归档到个人知识库并智能整理已有内容。"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "06-ContentCreative",
+  "defaultInitPrompt": {
+    "zh": "你好，我是知识收藏专家。把链接、笔记或者文档列表发给我，我帮你剪藏、整理或总结。",
+    "en": "Hi, I am the Knowledge Collector. Send me links, notes, or a list of docs and I'll clip, organize or summarize them for you."
+  },
+  "tags": [
+    {
+      "en": "Web Clipping",
+      "zh": "网页剪藏"
+    },
+    {
+      "en": "Document Summary",
+      "zh": "文档总结"
+    },
+    {
+      "en": "Knowledge Management",
+      "zh": "知识管理"
+    },
+    {
+      "en": "Knowledge Base Archive",
+      "zh": "知识库归档"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "en": "Organize these scattered notes: AI trends, quarterly report due, new feature plan, competitor analysis, Agent is the future",
+      "zh": "帮我整理一下这些碎片笔记：\n- AI大模型趋势\n- 下周要交季报\n- 新功能上线计划\n- 竞品分析要做\n- Agent是未来方向"
+    },
+    {
+      "en": "Save this WeChat article to Kdocs https://mp.weixin.qq.com/s/example123",
+      "zh": "帮我保存这篇公众号文章到金山文档 https://mp.weixin.qq.com/s/example123"
+    },
+    {
+      "en": "Combine Q1 Summary and Q2 Plan into a half-year work report",
+      "zh": "帮我把「Q1总结」和「Q2计划」这两份文档汇总，生成一份半年度工作报告"
+    }
+  ],
+  "plugin": "kdocs-knowledge-collector"
+}

@@ -1,0 +1,27 @@
+{
+  "name": "financial-analysis",
+  "version": "1.0.0",
+  "description": "Core financial modeling and analysis tools: DCF, comps, LBO, 3-statement models, competitive analysis, and deck QC",
+  "description_zh": "金融分析核心工具，支持 DCF 估值、可比公司分析、LBO 模型、三张表模型、竞争格局分析和 PPT 质检。",
+  "author": {
+    "name": "CodeBuddy Teams"
+  },
+  "homepage": "",
+  "license": "",
+  "skills": [
+    "./skills/3-statements",
+    "./skills/check-deck",
+    "./skills/check-model",
+    "./skills/competitive-analysis",
+    "./skills/comps-analysis",
+    "./skills/dcf-model",
+    "./skills/lbo-model",
+    "./skills/ppt-template-creator",
+    "./skills/skill-creator"
+  ],
+  "expertType": "agent",
+  "agentName": "financial-modeling-expert",
+  "agents": [
+    "./agents/financial-modeling-expert.md"
+  ]
+}

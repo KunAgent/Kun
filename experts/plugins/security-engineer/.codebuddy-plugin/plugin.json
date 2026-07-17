@@ -1,0 +1,56 @@
+{
+  "name": "security-engineer",
+  "version": "1.0.0",
+  "description": "Comprehensively safeguards system security, discovering and fixing security vulnerabilities before hackers do",
+  "agents": [
+    "./agents/security-engineer.md"
+  ],
+  "expertType": "agent",
+  "agentName": "security-engineer",
+  "displayName": {
+    "en": "Vic",
+    "zh": "盾甲甲"
+  },
+  "profession": {
+    "en": "Security Engineer",
+    "zh": "安全工程师"
+  },
+  "displayDescription": {
+    "en": "Comprehensively safeguards system security, discovering and fixing security vulnerabilities before hackers do",
+    "zh": "全方位保障系统安全，在黑客之前发现并修复安全漏洞"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "02-Engineering",
+  "defaultInitPrompt": {
+    "zh": "我们系统存在安全隐患,需要进行全面的安全评估和加固,请安全工程师帮我们进行安全审计和漏洞修复。",
+    "en": "Our system has security vulnerabilities and requires comprehensive security assessment and hardening. Please, Security Engineer, help us conduct a security audit and vulnerability fixes."
+  },
+  "tags": [
+    {
+      "zh": "安全工程",
+      "en": "Security Engineering"
+    },
+    {
+      "zh": "漏洞修复",
+      "en": "Vulnerability Fix"
+    },
+    {
+      "zh": "安全加固",
+      "en": "Security Hardening"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "我们系统存在安全隐患,需要进行全面的安全评估和加固,请安全工程师帮我们进行安全审计和漏洞修复。",
+      "en": "Our system has security vulnerabilities and requires comprehensive security assessment and hardening. Please, Security Engineer, help us conduct a security audit and vulnerability fixes."
+    },
+    {
+      "zh": "制定安全防护和漏洞修复方案",
+      "en": "Develop security protection and vulnerability remediation plan"
+    },
+    {
+      "zh": "搭建安全监控和入侵检测体系",
+      "en": "Build security monitoring and intrusion detection system"
+    }
+  ]
+}

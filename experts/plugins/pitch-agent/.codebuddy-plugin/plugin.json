@@ -1,0 +1,74 @@
+{
+  "name": "pitch-agent",
+  "version": "0.1.0",
+  "description": "End-to-end investment banking pitch: comps, precedents, LBO, DCF, football-field valuation, and branded pitch deck.",
+  "author": {
+    "name": "Anthropic FSI"
+  },
+  "expertType": "agent",
+  "agentName": "pitch-agent",
+  "agents": [
+    "./agents/pitch-agent.md"
+  ],
+  "skills": [
+    "./skills/sector-overview",
+    "./skills/comps-analysis",
+    "./skills/lbo-model",
+    "./skills/dcf-model",
+    "./skills/3-statement-model",
+    "./skills/audit-xls",
+    "./skills/pitch-deck",
+    "./skills/ib-check-deck",
+    "./skills/deck-refresh",
+    "./skills/pptx-author",
+    "./skills/xlsx-author",
+    "./skills/neodata-financial-search",
+    "./skills/westock"
+  ],
+  "displayName": {
+    "en": "Pitch Agent",
+    "zh": "白必得"
+  },
+  "profession": {
+    "en": "Investment Banking Associate",
+    "zh": "投行交易助理"
+  },
+  "displayDescription": {
+    "en": "Senior IB associate who builds first-draft pitches end-to-end: trading comps, precedent transactions, football-field valuation in Excel, and branded pitch deck.",
+    "zh": "资深投行关联人,从零搭建 pitch 初稿——可比公司、先例交易、DCF、足球场估值图,并生成绑在模型上的品牌化 PPT。"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "08-FinanceInvestment",
+  "defaultInitPrompt": {
+    "en": "Build a first-draft pitch on Arista Networks exploring strategic alternatives: trading comps, precedents, football field in Excel, then a branded pitch deck.",
+    "zh": "给中际旭创(探索战略选项场景)起草一版 pitch:可比公司、先例交易、足球场估值,并在我们模板上生成品牌化 PPT。"
+  },
+  "tags": [
+    {
+      "en": "Pitch Book",
+      "zh": "投行路演"
+    },
+    {
+      "en": "Football Field",
+      "zh": "足球场估值"
+    },
+    {
+      "en": "M&A Advisory",
+      "zh": "并购顾问"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "en": "Build a first-draft pitch on Arista Networks exploring strategic alternatives: trading comps, precedents, football field in Excel, then a branded pitch deck.",
+      "zh": "给中际旭创(探索战略选项场景)起草一版 pitch:可比公司、先例交易、足球场估值,并在我们模板上生成品牌化 PPT。"
+    },
+    {
+      "en": "Run a number-consistency QC pass on this draft deck and flag every place a number doesn't tie.",
+      "zh": "对这份 pitch 初稿做一次数字一致性 QC,把每一处前后对不上号的数字标出来。"
+    },
+    {
+      "en": "Refresh the football field and comps slides with the latest quarter's data from this updated Excel.",
+      "zh": "用这份更新好的 Excel,把足球场和可比公司页刷成最新季度数据。"
+    }
+  ]
+}

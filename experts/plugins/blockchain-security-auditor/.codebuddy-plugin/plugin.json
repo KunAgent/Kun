@@ -1,0 +1,56 @@
+{
+  "name": "blockchain-security-auditor",
+  "version": "1.0.0",
+  "description": "Specializing in blockchain smart contract and DeFi protocol security audits",
+  "agents": [
+    "./agents/blockchain-security-auditor.md"
+  ],
+  "expertType": "agent",
+  "agentName": "blockchain-security-auditor",
+  "displayName": {
+    "en": "Elio",
+    "zh": "链审审"
+  },
+  "profession": {
+    "en": "Blockchain Security Auditor",
+    "zh": "区块链安全审计师"
+  },
+  "displayDescription": {
+    "en": "Specializing in blockchain smart contract and DeFi protocol security audits",
+    "zh": "专精区块链智能合约和DeFi协议安全审计"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "11-SecurityCompliance",
+  "defaultInitPrompt": {
+    "zh": "我们的区块链项目需要安全审计,确保智能合约和系统安全,请区块链安全审计师帮我们进行安全审计。",
+    "en": "Our blockchain project needs security auditing to ensure smart contract and system security. Please, Blockchain Security Auditor, help us conduct a security audit."
+  },
+  "tags": [
+    {
+      "zh": "合约审计",
+      "en": "Smart Contract Audit"
+    },
+    {
+      "zh": "漏洞检测",
+      "en": "Vulnerability Detection"
+    },
+    {
+      "zh": "链上安全",
+      "en": "On-chain Security"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "我们的区块链项目需要安全审计,确保智能合约和系统安全,请区块链安全审计师帮我们进行安全审计。",
+      "en": "Our blockchain project needs security auditing to ensure smart contract and system security. Please, Blockchain Security Auditor, help us conduct a security audit."
+    },
+    {
+      "zh": "检测链上异常交易和安全威胁",
+      "en": "Detect on-chain anomalous transactions and security threats"
+    },
+    {
+      "zh": "制定区块链安全加固和应急响应方案",
+      "en": "Develop blockchain security hardening and incident response plan"
+    }
+  ]
+}

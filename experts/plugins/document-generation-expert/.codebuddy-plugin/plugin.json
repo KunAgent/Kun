@@ -1,0 +1,60 @@
+{
+  "name": "document-generation-expert",
+  "version": "1.0.0",
+  "description": "Automating generation of various business documents, greatly improving document creation efficiency",
+  "agents": [
+    "./agents/document-generation-expert.md"
+  ],
+  "expertType": "agent",
+  "agentName": "document-generation-expert",
+  "displayName": {
+    "en": "Lark",
+    "zh": "文档达"
+  },
+  "profession": {
+    "en": "Document Generation Expert",
+    "zh": "文档生成专家"
+  },
+  "displayDescription": {
+    "en": "Automating generation of various business documents, greatly improving document creation efficiency",
+    "zh": "自动化生成各类业务文档，大幅提升文档创建效率"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "10-ProjectQuality",
+  "defaultInitPrompt": {
+    "zh": "我们需要自动化生成各类文档,提升效率,请文档生成专家帮我们设计文档自动化方案。",
+    "en": "We need to automate the generation of various documents to improve efficiency. Please, Document Generation Expert, help us design a document automation solution."
+  },
+  "tags": [
+    {
+      "zh": "文档生成",
+      "en": "Document Generation"
+    },
+    {
+      "zh": "模板定制",
+      "en": "Template Customization"
+    },
+    {
+      "zh": "批量输出",
+      "en": "Batch Output"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "我们需要自动化生成各类文档,提升效率,请文档生成专家帮我们设计文档自动化方案。",
+      "en": "We need to automate the generation of various documents to improve efficiency. Please, Document Generation Expert, help us design a document automation solution."
+    },
+    {
+      "zh": "根据需求自动撰写技术文档",
+      "en": "Auto-generate technical documentation from requirements"
+    },
+    {
+      "zh": "批量生成业务报告和汇总文档",
+      "en": "Batch generate business reports and summary documents"
+    }
+  ],
+  "skills": [
+    "./skills/anti-distill",
+    "./skills/minimax-docx"
+  ]
+}

@@ -1,0 +1,56 @@
+{
+  "name": "identity-graph-operator",
+  "version": "1.0.0",
+  "description": "Building and maintaining user identity graph systems, enabling cross-platform identity recognition",
+  "agents": [
+    "./agents/identity-graph-operator.md"
+  ],
+  "expertType": "agent",
+  "agentName": "identity-graph-operator",
+  "displayName": {
+    "en": "Opal",
+    "zh": "识图图"
+  },
+  "profession": {
+    "en": "Identity Graph Operator",
+    "zh": "身份图谱运营师"
+  },
+  "displayDescription": {
+    "en": "Building and maintaining user identity graph systems, enabling cross-platform identity recognition",
+    "zh": "构建维护用户身份图谱系统，实现跨平台身份识别"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "05-MarketingGrowth",
+  "defaultInitPrompt": {
+    "zh": "我们想构建用户身份图谱,实现精准的用户识别,请身份图谱运营者帮我们设计身份图谱系统。",
+    "en": "We want to build a user identity graph to achieve precise user identification. Please, Identity Graph Operator, help us design an identity graph system."
+  },
+  "tags": [
+    {
+      "zh": "身份图谱",
+      "en": "Identity Graph"
+    },
+    {
+      "zh": "实体解析",
+      "en": "Entity Resolution"
+    },
+    {
+      "zh": "数据关联",
+      "en": "Data Linkage"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "我们想构建用户身份图谱,实现精准的用户识别,请身份图谱运营者帮我们设计身份图谱系统。",
+      "en": "We want to build a user identity graph to achieve precise user identification. Please, Identity Graph Operator, help us design an identity graph system."
+    },
+    {
+      "zh": "设计跨设备跨渠道身份关联方案",
+      "en": "Design cross-device cross-channel identity linking plan"
+    },
+    {
+      "zh": "优化身份解析精度和隐私合规",
+      "en": "Optimize identity resolution accuracy and privacy compliance"
+    }
+  ]
+}

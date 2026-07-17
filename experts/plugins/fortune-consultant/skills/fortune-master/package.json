@@ -1,0 +1,61 @@
+{
+  "name": "fortune-master-ultimate",
+  "version": "1.1.2",
+  "description": "命理全能 Skill — 八字、紫微斗数、奇门遁甲、梅花易数、六爻、合婚风水，支持每日运程推送（通过 OpenClaw 运行时投递，无直接外部网络调用）。All-in-one Chinese astrology: BaZi, ZiWei, QiMen, I Ching, daily fortune via OpenClaw runtime.",
+  "keywords": [
+    "算命",
+    "八字",
+    "今日运势",
+    "每日运程",
+    "紫微斗数",
+    "奇门遁甲",
+    "梅花易数",
+    "六爻",
+    "占卜",
+    "合婚",
+    "风水",
+    "命理",
+    "fortune telling",
+    "BaZi",
+    "daily horoscope",
+    "ZiWei",
+    "divination",
+    "Chinese astrology"
+  ],
+  "author": "MingLi Mentor Team",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "scripts": {
+    "daily": "node scripts/daily-fortune.js",
+    "register": "node scripts/register.js",
+    "ziwei": "node scripts/ziwei.js",
+    "marriage": "node scripts/marriage.js",
+    "meihua": "node scripts/meihua.js",
+    "liuyao": "node scripts/liuyao.js",
+    "qimen": "node scripts/qimen.js",
+    "fengshui": "node scripts/fengshui.js",
+    "zhuanshi": "node scripts/zhuanshi.js",
+    "profile": "node scripts/profile.js",
+    "publish": "bash scripts/publish.sh"
+  },
+  "directories": {
+    "scripts": "scripts",
+    "data": "data"
+  },
+  "files": [
+    "SKILL.md",
+    "README.md",
+    "_meta.json",
+    "scripts/",
+    "references/",
+    "data/profiles/template.json",
+    "liuyao/"
+  ],
+  "private": false,
+  "dependencies": {
+    "iztro": "^2.5.8"
+  },
+  "displayName": "命理大师"
+}

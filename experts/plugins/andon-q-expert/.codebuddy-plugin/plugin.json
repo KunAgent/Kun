@@ -1,0 +1,64 @@
+{
+  "name": "andon-q-expert",
+  "version": "2.0.4",
+  "description": "Tencent Cloud intelligent customer service — product consulting, troubleshooting, and service reports across the full product line.",
+  "author": {
+    "name": "AndonQ Team",
+    "email": "andonq@tencent.com"
+  },
+  "expertType": "agent",
+  "agentName": "andon-q-expert",
+  "agents": [
+    "./agents/andon-q-expert.md"
+  ],
+  "skills": [
+    "./skills/andonq"
+  ],
+  "displayName": {
+    "en": "AndonQ",
+    "zh": "AndonQ"
+  },
+  "profession": {
+    "en": "Tencent Cloud Intelligent Customer Service",
+    "zh": "腾讯云智能客服"
+  },
+  "displayDescription": {
+    "en": "An intelligent customer service assistant with deep expertise across the full Tencent Cloud product line, providing multi-dimensional services including product consulting, troubleshooting, and service reports.",
+    "zh": "精通腾讯云全线产品，提供产品咨询、故障排查、服务报告等多维度服务的技术专家。"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "13-TencentZone",
+  "defaultInitPrompt": {
+    "zh": "腾讯云轻量应用服务器如何部署 OpenClaw 并安装 Skills？",
+    "en": "How do I deploy OpenClaw and install Skills on Tencent Cloud Lighthouse?"
+  },
+  "tags": [
+    {
+      "en": "Cloud Product Consulting",
+      "zh": "云产品咨询"
+    },
+    {
+      "en": "Cloud Product Troubleshooting",
+      "zh": "云产品排障"
+    },
+    {
+      "en": "Service Reports",
+      "zh": "服务报告"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "en": "How do I deploy OpenClaw and install Skills on Tencent Cloud Lighthouse?",
+      "zh": "腾讯云轻量应用服务器如何部署 OpenClaw 并安装 Skills？"
+    },
+    {
+      "en": "How is Tencent Cloud SMS service billed?",
+      "zh": "腾讯云短信服务如何计费？"
+    },
+    {
+      "en": "Does CLB support instance changes or cross-VPC usage?",
+      "zh": "CLB 支持更改或跨 VPC 使用吗？"
+    }
+  ],
+  "plugin": "andon-q-expert"
+}

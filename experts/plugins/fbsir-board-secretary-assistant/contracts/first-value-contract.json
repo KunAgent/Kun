@@ -1,0 +1,144 @@
+{
+  "schemaVersion": "fbs.boardSecretary.firstValueContract.v1",
+  "packageName": "fbsir-board-secretary-assistant",
+  "packageVersion": "2.1.0",
+  "contractVersion": "2026-06-22",
+  "sourceDemandIds": [
+    "BSA-PKG-001"
+  ],
+  "priority": "must_include",
+  "positioning": "Deliver a review-safe first-turn board secretary compliance red-team card before any paid offer or second-turn followthrough is required.",
+  "connectorPolicy": {
+    "connectorRequiredForFirstValue": false,
+    "serviceToolOptionalEnhancementOnly": true,
+    "doNotAssumeHostRuntimeUpgrade": true
+  },
+  "inputFields": [
+    "materialType",
+    "userRole",
+    "reviewGoal",
+    "providedExcerptOrDocumentHint",
+    "publicEvidenceAvailable",
+    "knownConstraints",
+    "desiredExternalUse"
+  ],
+  "firstValueBundle": {
+    "requiredOutputSections": [
+      "task_identification",
+      "material_gap_check",
+      "risk_boundary",
+      "human_review_role",
+      "single_next_action",
+      "stop_condition"
+    ],
+    "defaultAssetType": "compliance-red-team-card",
+    "minimumUsableWithoutConnector": true,
+    "mustPrecedeOffer": true
+  },
+  "firstTurnResultCard": {
+    "requiredFields": [
+      "taskIdentification",
+      "materialType",
+      "riskLevel",
+      "triggerTypes",
+      "evidenceMatched",
+      "problematicFragments",
+      "missingEvidence",
+      "rewriteSuggestion",
+      "humanReviewBoundary",
+      "approvalNextStep",
+      "singleNextAction",
+      "stopCondition",
+      "auditFields"
+    ]
+  },
+  "userVisiblePresentationPolicy": {
+    "hideInternalToolingByDefault": true,
+    "defaultLanguage": "zh-CN",
+    "allowedStatusPhrasesZh": [
+      "我已开始按董秘合规流程初筛材料。",
+      "已形成首版风险卡，供人工复核。",
+      "已整理出下一步复核清单和补证要求。",
+      "请补充公开披露依据或授权上下文后再进入下一步。"
+    ],
+    "recommendedSectionsZh": [
+      "初步判断",
+      "主要风险",
+      "需要补充的依据",
+      "建议改写",
+      "人工复核下一步"
+    ],
+    "forbiddenUserVisibleTerms": [
+      "skill_whoami",
+      "fbs_scene_pack_query",
+      "skill_consume",
+      "actionEnvelope",
+      "toolArguments",
+      "first_value_completed",
+      "continued_use_completed",
+      "trace",
+      "binding",
+      "consume",
+      "MCP",
+      "connector"
+    ],
+    "technicalDiagnosticsAllowedOnlyWhenUserAsks": true
+  },
+  "continuationHooks": {
+    "defaultCtaId": "paste_or_authorize_material_for_review",
+    "defaultCtaLabelZh": "粘贴或授权待复核材料",
+    "intendedEvent": "first_value_completed_then_optional_followthrough",
+    "continuedUseNotRequiredForFirstValue": true
+  },
+  "humanAiHandoff": {
+    "aiRole": "identify gaps, risk triggers, safer wording, and next review step",
+    "humanRole": "make disclosure, legal, approval, and publication decisions",
+    "manualReviewRequiredWhen": [
+      "high_risk_language",
+      "missing_public_evidence",
+      "nonpublic_information_risk",
+      "selective_disclosure_risk",
+      "forward_looking_statement_risk",
+      "user_requests_publication_or_legal_conclusion"
+    ]
+  },
+  "signatureFields": [
+    "productId",
+    "packCode",
+    "entryId",
+    "entryPromptCode",
+    "scenePackId",
+    "assetType",
+    "requestSource"
+  ],
+  "acceptanceMetrics": [
+    "first_value_completed",
+    "first_value_without_connector",
+    "manual_review_boundary_visible",
+    "offer_not_shown_before_first_value",
+    "no_natural_closure_overclaim"
+  ],
+  "forbiddenOverclaims": [
+    "same_binding_completed",
+    "continued_use_completed",
+    "skill_consume_completed",
+    "lebao_claim_completed",
+    "lebao_activation_completed",
+    "lebao_payment_closure_completed",
+    "paid_conversion_completed",
+    "legal_opinion_completed",
+    "disclosure_safe_to_publish",
+    "host_runtime_upgrade_completed"
+  ],
+  "stopConditions": [
+    "No source material or excerpt is available.",
+    "The user asks for final legal, regulatory, disclosure, or publication approval.",
+    "The answer would require nonpublic information that the user has not provided or authorized."
+  ],
+  "reviewPackageBoundary": {
+    "contractKind": "first_value_contract",
+    "generatedForReviewOnly": true,
+    "hostRuntimeUpgradeAssumed": false,
+    "naturalClosureClaimAllowed": false
+  }
+}

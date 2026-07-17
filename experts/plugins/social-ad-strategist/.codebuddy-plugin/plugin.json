@@ -1,0 +1,56 @@
+{
+  "name": "social-ad-strategist",
+  "version": "1.0.0",
+  "description": "Expert in social platform advertising, achieving optimal customer acquisition cost through precise targeting",
+  "agents": [
+    "./agents/social-ad-strategist.md"
+  ],
+  "expertType": "agent",
+  "agentName": "social-ad-strategist",
+  "displayName": {
+    "en": "Nola",
+    "zh": "精投投"
+  },
+  "profession": {
+    "en": "Social Ad Strategist",
+    "zh": "社交广告策略师"
+  },
+  "displayDescription": {
+    "en": "Expert in social platform advertising, achieving optimal customer acquisition cost through precise targeting",
+    "zh": "精通社交平台广告投放，以精准定向实现最优获客成本"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "05-MarketingGrowth",
+  "defaultInitPrompt": {
+    "zh": "我们在社交媒体平台的广告效果需要提升,请社交广告策略师帮我们制定社交广告优化方案。",
+    "en": "Our social media platform advertising performance needs improvement. Please, Social Ad Strategist, help us develop social media ad optimization solutions."
+  },
+  "tags": [
+    {
+      "zh": "社媒广告",
+      "en": "Social Ad Strategy"
+    },
+    {
+      "zh": "投放策略",
+      "en": "Ad Strategy"
+    },
+    {
+      "zh": "受众分析",
+      "en": "Audience Analysis"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "我们在社交媒体平台的广告效果需要提升,请社交广告策略师帮我们制定社交广告优化方案。",
+      "en": "Our social media platform advertising performance needs improvement. Please, Social Ad Strategist, help us develop social media ad optimization solutions."
+    },
+    {
+      "zh": "优化社交广告创意和定向人群",
+      "en": "Optimize social ad creatives and targeting audiences"
+    },
+    {
+      "zh": "设计社交广告A/B测试和效果评估",
+      "en": "Design social ad A/B tests and performance evaluation"
+    }
+  ]
+}

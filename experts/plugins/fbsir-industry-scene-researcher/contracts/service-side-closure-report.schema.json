@@ -1,0 +1,383 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Industry Scene Researcher Service Closure Report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "status",
+    "source",
+    "identity",
+    "firstValue",
+    "continuation",
+    "benefitBoundary",
+    "hostSteering",
+    "serviceForwardCompatibility"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "1.0"
+    },
+    "status": {
+      "enum": [
+        "no_connector_first_value_ready",
+        "service_followthrough_optional",
+        "service_followthrough_same_binding_ready",
+        "service_closure_warn"
+      ]
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mode",
+        "connectorRequired",
+        "naturalClosureClaimed"
+      ],
+      "properties": {
+        "mode": {
+          "enum": [
+            "model_only_no_connector",
+            "optional_connector_enhancement"
+          ]
+        },
+        "connectorRequired": {
+          "const": false
+        },
+        "naturalClosureClaimed": {
+          "const": false
+        }
+      }
+    },
+    "identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mode",
+        "sameBindingRequired",
+        "anonymousUserCodeHash",
+        "serverBindingId",
+        "chainFingerprint"
+      ],
+      "properties": {
+        "mode": {
+          "const": "anonymous_first_delayed_identify"
+        },
+        "sameBindingRequired": {
+          "const": true
+        },
+        "anonymousUserCodeHash": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "serverBindingId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "chainFingerprint": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "firstValue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "entryId",
+        "expertEntryId",
+        "packCode",
+        "assetType",
+        "firstValueEventType",
+        "deliverables"
+      ],
+      "properties": {
+        "entryId": {
+          "const": "genius-industry-scene-researcher"
+        },
+        "expertEntryId": {
+          "const": "fbsir-industry-scene-researcher"
+        },
+        "packCode": {
+          "const": "fbss.industry.action.v1"
+        },
+        "assetType": {
+          "const": "industry-scene-supplement-card"
+        },
+        "firstValueEventType": {
+          "const": "first_value_completed"
+        },
+        "deliverables": {
+          "type": "array",
+          "minItems": 5,
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "continuation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "continuedUseEventType",
+        "continuedUseGate",
+        "singleNextStepCta",
+        "hostActionEnvelopeTool"
+      ],
+      "properties": {
+        "continuedUseEventType": {
+          "const": "continued_use_completed"
+        },
+        "continuedUseGate": {
+          "const": "three_day_pilot_packet_or_project_action_packet"
+        },
+        "singleNextStepCta": {
+          "const": "生成 3 天试点项目包"
+        },
+        "hostActionEnvelopeTool": {
+          "const": "industry_scene_generate_shortcut_playbook"
+        }
+      }
+    },
+    "benefitBoundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "unlockNotBefore",
+        "claimTool",
+        "paymentClosureAllowed",
+        "productCreditClaimed"
+      ],
+      "properties": {
+        "unlockNotBefore": {
+          "const": "continued_use_completed"
+        },
+        "claimTool": {
+          "const": "lebao_claim"
+        },
+        "paymentClosureAllowed": {
+          "const": false
+        },
+        "productCreditClaimed": {
+          "const": false
+        }
+      }
+    },
+    "hostSteering": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "hostActionEnvelopeVisibleByDefault",
+        "hostMetadataChannelPreferred",
+        "workspaceWriteRequiresExplicitUserRequest",
+        "projectTemplateSelectionIsProductCredit"
+      ],
+      "properties": {
+        "hostActionEnvelopeVisibleByDefault": {
+          "const": false
+        },
+        "hostMetadataChannelPreferred": {
+          "const": true
+        },
+        "workspaceWriteRequiresExplicitUserRequest": {
+          "const": true
+        },
+        "projectTemplateSelectionIsProductCredit": {
+          "const": false
+        }
+      }
+    },
+    "serviceForwardCompatibility": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "runtimeDependency",
+        "connectorRequired",
+        "benefitState",
+        "intentHint",
+        "sceneHint",
+        "dispatchHint",
+        "feedbackEvolution"
+      ],
+      "properties": {
+        "runtimeDependency": {
+          "const": false
+        },
+        "connectorRequired": {
+          "const": false
+        },
+        "benefitState": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "unlockNotBefore",
+            "claimState",
+            "paymentClosureAllowed",
+            "productCreditClaimed"
+          ],
+          "properties": {
+            "unlockNotBefore": {
+              "const": "continued_use_completed"
+            },
+            "claimState": {
+              "type": "string"
+            },
+            "paymentClosureAllowed": {
+              "const": false
+            },
+            "productCreditClaimed": {
+              "const": false
+            }
+          }
+        },
+        "intentHint": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "intentFamily",
+            "aggregationMode",
+            "stableIdentityWriteNotBefore"
+          ],
+          "properties": {
+            "intentFamily": {
+              "type": "string"
+            },
+            "aggregationMode": {
+              "const": "anonymous_intent_hint"
+            },
+            "stableIdentityWriteNotBefore": {
+              "const": "continued_use_completed"
+            }
+          }
+        },
+        "sceneHint": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "industryScene",
+            "selectedWorkflowGap",
+            "packCode",
+            "assetType"
+          ],
+          "properties": {
+            "industryScene": {
+              "type": "string"
+            },
+            "selectedWorkflowGap": {
+              "type": "string"
+            },
+            "packCode": {
+              "const": "fbss.industry.action.v1"
+            },
+            "assetType": {
+              "const": "industry-scene-supplement-card"
+            }
+          }
+        },
+        "dispatchHint": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "hostActionEnvelopeTool",
+            "successorAction",
+            "sideEffectClass",
+            "workspaceWriteRequiresExplicitUserRequest"
+          ],
+          "properties": {
+            "hostActionEnvelopeTool": {
+              "const": "industry_scene_generate_shortcut_playbook"
+            },
+            "successorAction": {
+              "const": "industry_scene_generate_pilot_packet"
+            },
+            "sideEffectClass": {
+              "const": "read_only"
+            },
+            "workspaceWriteRequiresExplicitUserRequest": {
+              "const": true
+            }
+          }
+        },
+        "feedbackEvolution": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "promotionMode",
+            "promotionRequiresNaturalTraffic",
+            "probeRowsDiagnosticOnly",
+            "paymentClosureAllowed",
+            "networkEvolutionRequiresManualReview"
+          ],
+          "properties": {
+            "promotionMode": {
+              "const": "observe_then_promote"
+            },
+            "requiredNaturalSignals": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "promotionRequiresNaturalTraffic": {
+              "const": true
+            },
+            "probeRowsDiagnosticOnly": {
+              "const": true
+            },
+            "paymentClosureAllowed": {
+              "const": false
+            },
+            "networkEvolutionRequiresManualReview": {
+              "const": true
+            }
+          }
+        }
+      }
+    },
+    "optionalEnhancement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "connectorSurfaceDeclared",
+        "hostLoaded",
+        "sameBindingNaturalClosureClaimed"
+      ],
+      "properties": {
+        "connectorSurfaceDeclared": {
+          "type": "boolean"
+        },
+        "hostLoaded": {
+          "type": "boolean"
+        },
+        "sameBindingNaturalClosureClaimed": {
+          "const": false
+        },
+        "whoamiToolName": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "scenePackToolName": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "consumeToolName": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    }
+  }
+}

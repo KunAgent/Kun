@@ -1,0 +1,65 @@
+{
+    "id": "slate",
+    "name": "石板灰",
+    "description": "低调沉稳的灰色主题，商务专业，适合技术审计报告",
+    "style": "tdesign",
+    "header_gradient": "linear-gradient(135deg, #2F3542 0%, #57606F 100%)",
+    "primary": "#2F3542",
+    "primary_light": "#DFE4EA",
+    "bg": "#F1F2F6",
+    "card_bg": "#FFFFFF",
+    "card_title_bar": "#2F3542",
+    "high_risk": "#E34D59",
+    "medium_risk": "#ED7B2F",
+    "healthy": "#0ABF5B",
+    "text_primary": "#2F3542",
+    "text_secondary": "#747D8C",
+    "stat_bg": "#F1F2F6",
+    "border": "#DFE4EA",
+    "score_excellent": "#0ABF5B",
+    "score_good": "#2BA471",
+    "score_warning": "#ED7B2F",
+    "score_danger": "#E34D59",
+    "score_thresholds": {
+        "excellent": 90,
+        "good": 80,
+        "warning": 70,
+        "danger": 0
+    },
+    "risk_thresholds": {
+        "high_risk_alert": 10,
+        "medium_risk_alert": 30,
+        "healthy_ratio_good": 80
+    },
+    "layout": {
+        "width": 440,
+        "card_radius": 12,
+        "card_padding": 16,
+        "card_gap": 12,
+        "header_padding": "20px 16px",
+        "font_size_title": 18,
+        "font_size_body": 12,
+        "font_size_small": 11,
+        "font_size_score": 48
+    },
+    "chart": {
+        "width": 380,
+        "height": 180,
+        "bar_radius": 2,
+        "line_width": 2,
+        "dot_radius": 3
+    },
+    "modules_order": [
+        "header",
+        "arch_preview",
+        "score",
+        "resource_overview",
+        "risk_stats",
+        "risk_trend",
+        "product_top",
+        "five_dimensions",
+        "risk_detail",
+        "ai_summary",
+        "footer"
+    ]
+}

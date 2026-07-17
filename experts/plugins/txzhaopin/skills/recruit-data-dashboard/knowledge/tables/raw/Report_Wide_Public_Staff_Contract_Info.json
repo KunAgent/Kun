@@ -1,0 +1,593 @@
+{
+  "table_code" : "catalog_dos_da_mcp.hrdw.Report_Wide_Public_Staff_Contract_Info",
+  "table_name" : "合同明细表",
+  "version" : 9,
+  "table_desc" : "定位：全部员工的所有合同的全量明细信息（包含所有合同状态：有效、有效（改签）、终止、解除等完整生命周期）\n唯一标识：该表以\"员工合同id\"(contract_id)作为唯一标识，每一份合同对应一行数据，一个员工可以有多份合同记录（包括新签、续签、改签等不同类型的合同）\n主要内容包含以下几大部分内容：\n1、员工基本信息（员工ID、姓名、账号名、员工类型、员工子类型、员工状态等）\n2、员工当前组织信息（组织名称、组织全路径等）\n3、员工当前职级信息（专业职级、管理职级、海外job band等）\n4、合同详细信息（合同主体、合同主体所在地、合同类型、合同状态、合同起止日期、首次签署预计结束日期、合同时长、合同签署原因及子原因、合同签署类型、合同注册地、合同描述、合同改签标签、异地合同标签、是否无固定期限合同等）\n5、合同签署时的历史快照信息（签署时的管理主体、员工类型、员工子类型、工作地、入职日期、司龄起算日期、司龄、签署次数等）\n\n主要用途：\n1、查询某员工的所有合同列表，了解每份合同的详细信息（主体、类型、状态、起止日期等）；\n2、查询某员工当前有效合同的到期时间，用于合同续签提醒或到期预警；\n3、统计某组织下合同即将到期的员工数量，支撑续签计划；\n4、按合同类型（聘用合同、实习协议等）或合同签署类型（入职新签、续签、改签等）进行统计分析；\n5、查询某组织无固定期限合同的员工明细；\n6、分析合同主体分布情况； \n\n不支持的场景：\n不支持查询合同改签前后的对比信息（如改签前合同主体是什么），此类需求应使用合同改签信息宽表；\n不支持查询员工的入职/离职/调动等非合同类异动流水，此类需求应使用人员变动信息宽表；\n不支持查询合同签署或续签的审批流程状态（如审批中、待审批等流程信息）；\n\n能回答的典型问题：\n某员工一共签过几份合同；\n某员工当前有效合同的到期时间是什么时候；\nA部门有多少人的合同将在未来3个月内到期；\nA部门有哪些员工是无固定期限合同；\nA部门目前有多少份有效的聘用合同和实习协议；\n某组织今年入职新签合同的员工有多少人；\n某员工的合同首次签署日期和预计到期日期是什么；\nA部门近1年续签合同的员工有哪些\n\n优先场景：\n查询员工合同的全量明细信息，了解每份合同的主体、类型、状态\n合同到期预警分析，查询指定时间段内即将到期的合同及对应员工；",
+  "write_sql_background" : "",
+  "find_column_background" : "",
+  "columns" : [ {
+    "column_code" : "staff_id8",
+    "column_name" : "员工ID",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "staff_combined_name",
+    "column_name" : "中英文名",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "staff_display_name",
+    "column_name" : "中文名",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "staff_account_name",
+    "column_name" : "英文名",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "org_full_name",
+    "column_name" : "组织架构",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "staff_type_name",
+    "column_name" : "员工类型",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "staff_subtype_name",
+    "column_name" : "员工子类型",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "manage_unit_name",
+    "column_name" : "管理主体",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "inaugural_date",
+    "column_name" : "入职日期",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "contract_begin_date",
+    "column_name" : "开始日期",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "contract_end_date",
+    "column_name" : "预计结束日期",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "contract_end_date_fact",
+    "column_name" : "实际结束日期",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "contract_duration",
+    "column_name" : "合同年限",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "contract_type_name",
+    "column_name" : "合同类型",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "contract_status_name",
+    "column_name" : "合同状态",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "contract_indefinitely_flag_desc",
+    "column_name" : "是否无固定期限",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "contract_sign_type_name",
+    "column_name" : "合同更新类型",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "contract_sign_reason_name",
+    "column_name" : "合同更新原因",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "contract_desc",
+    "column_name" : "合同备注",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "work_location_name",
+    "column_name" : "工作地",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "contract_company_name",
+    "column_name" : "合同主体",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "contract_company_location_name",
+    "column_name" : "合同地",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "nationality_name",
+    "column_name" : "员工国籍",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "staff_combined_name",
+    "column_name" : "员工中英文名",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "contract_signing_staff_combined_name",
+    "column_name" : "合同签约时员工中英文名",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "staff_account_name",
+    "column_name" : "英文名",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "staff_display_name",
+    "column_name" : "中文名",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "staff_id8",
+    "column_name" : "员工ID",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "hr_status_name",
+    "column_name" : "当前员工状态",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "manage_unit_name",
+    "column_name" : "当前管理主体",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "manage_unit_type_name",
+    "column_name" : "当前管理主体类型",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "staff_type_name",
+    "column_name" : "员工类型",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "staff_subtype_name",
+    "column_name" : "员工子类型",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "org_name",
+    "column_name" : "组织名称",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "org_full_name",
+    "column_name" : "组织全路径",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "org_id8",
+    "column_name" : "组织ID",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "staff_card_number",
+    "column_name" : "工卡号",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "work_location_name",
+    "column_name" : "工作地",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "inaugural_date",
+    "column_name" : "入职日期",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "seniority_begin_date",
+    "column_name" : "公司资历日期",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "pro_position_level_name",
+    "column_name" : "专业职级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "manager_level_name",
+    "column_name" : "管理职级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "overseas_job_bind_name",
+    "column_name" : "Band",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "overseas_nhs_pilot_flag",
+    "column_name" : "If NHS Pilot",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "contract_id",
+    "column_name" : "合同编号",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "contract_type_name",
+    "column_name" : "合同类型",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "contract_status_name",
+    "column_name" : "合同状态",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "contract_sign_cnt",
+    "column_name" : "合同签署次数",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "contract_begin_date",
+    "column_name" : "合同开始日期",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "contract_first_sign_end_date",
+    "column_name" : "合同预计结束日期（初始）",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "contract_end_date",
+    "column_name" : "合同预计结束日期（有效）",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "contract_end_date_fact",
+    "column_name" : "合同结束日期",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "contract_duration",
+    "column_name" : "合同年限",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "update_time",
+    "column_name" : "合同更新日期",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "contract_sign_reason_name",
+    "column_name" : "合同更新原因",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "contract_sign_type_name",
+    "column_name" : "合同更新类型",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "contract_desc",
+    "column_name" : "合同更新备注",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "contract_signing_manage_unit_name",
+    "column_name" : "合同签约时管理主体",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "contract_signing_manage_unit_type_name",
+    "column_name" : "合同签约时管理主体类型",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "contract_signing_staff_type_name",
+    "column_name" : "合同签约时员工类型",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "contract_signing_staff_subtype_name",
+    "column_name" : "合同签约时员工子类型",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "contract_signing_work_location_name",
+    "column_name" : "合同签约时工作地",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "contract_signing_inaugural_date",
+    "column_name" : "合同签约时入职日期",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "contract_signing_seniority_begin_date",
+    "column_name" : "合同签约时公司资历日期",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "contract_signing_seniority_duration",
+    "column_name" : "合同签约时司龄",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "contract_resignation_label",
+    "column_name" : "改签标签",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "contract_remote_label",
+    "column_name" : "是否异地合同",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "contract_company_location_name",
+    "column_name" : "合同地",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "contract_sign_subreason_name",
+    "column_name" : "合同更新子原因",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "contract_company_name",
+    "column_name" : "合同主体",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "contract_company_id",
+    "column_name" : "合同主体ID",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "contract_registed_location_full_name",
+    "column_name" : "合同主体注册地",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "current_contract_company_name",
+    "column_name" : "当前合同主体",
+    "column_type" : "VARCHAR",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  } ]
+}

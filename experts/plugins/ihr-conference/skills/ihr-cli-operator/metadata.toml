@@ -1,0 +1,10 @@
+id = "ihr-cli-operator"
+version = "0.1.0"
+audience = "customer-facing"
+status = "draft"
+depends_on = []
+recommended_after = []
+entrypoint = true
+display_name = "iHR CLI 操作器"
+source_archive = "ihr-cli-operator.zip"
+source_root = "ihr-cli-operator"

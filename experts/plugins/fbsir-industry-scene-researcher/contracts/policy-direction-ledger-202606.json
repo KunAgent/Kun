@@ -1,0 +1,437 @@
+{
+  "schemaVersion": "1.0",
+  "ledgerId": "industry_scene_researcher_policy_direction_ledger_202606",
+  "generatedAt": "2026-06-19T00:00:00+08:00",
+  "policyWindow": {
+    "primaryTriggerDate": "2026-06-18",
+    "recentPolicyStart": "2026-01-01",
+    "recentPolicyEnd": "2026-06-19",
+    "freshnessDays": 14,
+    "timezone": "Asia/Shanghai"
+  },
+  "primaryTriggerSourceId": "ai-consumption-20260618",
+  "requiredEvidenceFields": [
+    "sourceId",
+    "sourceTitle",
+    "sourceUrl",
+    "publisher",
+    "publishedAt",
+    "retrievedAt",
+    "sourceType",
+    "evidenceStrength",
+    "clientUseStatus",
+    "claim",
+    "policySignals",
+    "scenarioFamilies",
+    "workflowGapHints",
+    "riskBoundaries"
+  ],
+  "ledgerRows": [
+    {
+      "sourceId": "ai-consumption-20260618",
+      "sourceTitle": "商务部等8部门关于加快“人工智能+消费”发展的实施意见",
+      "sourceUrl": "https://www.news.cn/fortune/20260618/4bea2d9aa6e84b8db0d145ee3afbeb8e/c.html",
+      "publisher": "商务部等8部门",
+      "sourcePublisherObserved": "新华网，来源标注：商务部网站",
+      "publishedAt": "2026-06-18",
+      "documentDate": "2026-06-09",
+      "retrievedAt": "2026-06-19",
+      "sourceType": "authoritative_repost",
+      "evidenceStrength": "authoritative_repost",
+      "clientUseStatus": "internal_reference_only",
+      "claim": "AI+消费政策直接指向商品消费、服务消费、商业创新、场景开放清单、典型案例和智能体应用创新。",
+      "policySignals": [
+        "AI+商品消费",
+        "AI+服务消费",
+        "AI+商业创新",
+        "AI+消费应用开放清单",
+        "典型案例遴选",
+        "消费领域应用中试基地",
+        "智能体应用创新"
+      ],
+      "scenarioFamilies": [
+        "consumer_service",
+        "retail_ecommerce",
+        "logistics_delivery",
+        "elderly_care",
+        "culture_tourism",
+        "education",
+        "smart_home"
+      ],
+      "workflowGapHints": [
+        "门店和电商运营全流程AI化",
+        "智能客服、推荐、质检、营销和直播辅助",
+        "居家、养老、文旅、住宿餐饮服务标准化和个性化交付",
+        "物流履约、无人配送和末端服务试点"
+      ],
+      "riskBoundaries": [
+        "消费者信息保护",
+        "网络安全、数据安全、内容安全",
+        "跨行业跨品牌互联互通和标准认证"
+      ],
+      "primaryUrlReviewStatus": "primary_ministry_url_should_be_locked_before_customer_citation"
+    },
+    {
+      "sourceId": "ai-manufacturing-20260107",
+      "sourceTitle": "工业和信息化部等八部门关于印发《“人工智能+制造”专项行动实施意见》的通知",
+      "sourceUrl": "https://www.nda.gov.cn/sjj/zwgk/zcfb/0112/20260107214358696030895_pc.html",
+      "publisher": "工业和信息化部等八部门",
+      "publishedAt": "2026-01-07",
+      "retrievedAt": "2026-06-19",
+      "sourceType": "official_doc",
+      "evidenceStrength": "official_doc",
+      "clientUseStatus": "internal_reference_only",
+      "claim": "AI+制造政策强调场景牵引、市场主导、安全可靠和制造业智能化升级。",
+      "policySignals": [
+        "AI+制造",
+        "场景牵引",
+        "人工智能产业化",
+        "产业智能化",
+        "安全可靠"
+      ],
+      "scenarioFamilies": [
+        "manufacturing",
+        "quality_inspection",
+        "equipment_maintenance",
+        "supply_chain",
+        "rd_design",
+        "industrial_knowledge"
+      ],
+      "workflowGapHints": [
+        "研发设计和仿真方案生成",
+        "生产计划、质量检测和设备巡检",
+        "供应链协同和采购需求识别",
+        "制造现场经验沉淀为作业指导和培训材料"
+      ],
+      "riskBoundaries": [
+        "工业数据安全",
+        "模型可靠性和生产安全",
+        "人机协同审批边界"
+      ]
+    },
+    {
+      "sourceId": "ai-education-20260410",
+      "sourceTitle": "教育部等五部门关于印发《“人工智能+教育”行动计划》的通知",
+      "sourceUrl": "https://www.moe.gov.cn/srcsite/A16/s3342/202604/t20260410_1433240.html",
+      "publisher": "教育部等五部门",
+      "publishedAt": "2026-04-10",
+      "retrievedAt": "2026-06-19",
+      "sourceType": "official_doc",
+      "evidenceStrength": "official_doc",
+      "clientUseStatus": "internal_reference_only",
+      "claim": "AI+教育政策指向课堂、教师、学习助手、教育治理和安全等场景的系统化应用。",
+      "policySignals": [
+        "AI+教育",
+        "智慧课堂",
+        "教师智能助手",
+        "学习助手",
+        "教育大模型",
+        "教育治理"
+      ],
+      "scenarioFamilies": [
+        "education",
+        "teacher_enablement",
+        "training",
+        "knowledge_distillation",
+        "governance"
+      ],
+      "workflowGapHints": [
+        "课程材料到教学活动包",
+        "教师备课、作业反馈和学生分层辅导",
+        "培训机构课程运营和学习跟进",
+        "教学案例沉淀为可复用模板"
+      ],
+      "riskBoundaries": [
+        "未成年人保护",
+        "教育公平",
+        "内容安全和教师最终决策"
+      ]
+    },
+    {
+      "sourceId": "ai-bidding-20260210",
+      "sourceTitle": "关于加快招标投标领域人工智能推广应用的实施意见",
+      "sourceUrl": "https://www.ndrc.gov.cn/xxgk/zcfb/tz/202602/t20260210_1403680.html",
+      "publisher": "国家发展改革委等部门",
+      "publishedAt": "2026-02-10",
+      "retrievedAt": "2026-06-19",
+      "sourceType": "official_doc",
+      "evidenceStrength": "official_doc",
+      "clientUseStatus": "internal_reference_only",
+      "claim": "招标投标AI政策覆盖招标、投标、开评标、定标、现场管理和监管全流程20类场景。",
+      "policySignals": [
+        "招标文件编制",
+        "投标合规自查",
+        "智能辅助评标",
+        "围串标识别",
+        "投诉处理",
+        "全过程见证"
+      ],
+      "scenarioFamilies": [
+        "procurement",
+        "compliance_review",
+        "document_quality",
+        "risk_detection",
+        "governance"
+      ],
+      "workflowGapHints": [
+        "招投标文件合规体检",
+        "投标材料响应性比对",
+        "合同和评标报告核验",
+        "异常行为线索归集和投诉处理初审"
+      ],
+      "riskBoundaries": [
+        "公平公正和可追溯",
+        "专家和监管主体最终判断",
+        "违法违规线索不能由模型直接定性"
+      ]
+    },
+    {
+      "sourceId": "agent-standard-20260508",
+      "sourceTitle": "智能体规范应用与创新发展实施意见",
+      "sourceUrl": "https://www.cac.gov.cn/2026-05/08/c_1779979789523320.htm",
+      "publisher": "中央网信办等部门",
+      "publishedAt": "2026-05-08",
+      "retrievedAt": "2026-06-19",
+      "sourceType": "official_doc",
+      "evidenceStrength": "official_doc",
+      "clientUseStatus": "internal_reference_only",
+      "claim": "智能体政策同时强调创新应用、可信可靠、安全规范和典型场景建设。",
+      "policySignals": [
+        "智能体规范应用",
+        "创新发展",
+        "可信可靠",
+        "安全规范",
+        "典型场景"
+      ],
+      "scenarioFamilies": [
+        "agent_workflow",
+        "scientific_research",
+        "industry",
+        "consumer_service",
+        "public_service",
+        "governance"
+      ],
+      "workflowGapHints": [
+        "多步骤任务拆解和人机协作交接",
+        "企业内部助手从问答走向执行前准备",
+        "面向客户服务和运营的智能体边界设计",
+        "安全审核和日志留痕"
+      ],
+      "riskBoundaries": [
+        "用户知情和授权",
+        "内容、数据和模型安全",
+        "高风险动作需人工确认"
+      ]
+    },
+    {
+      "sourceId": "high-quality-datasets-20260608",
+      "sourceTitle": "关于推进行业高质量数据集建设行动的实施方案",
+      "sourceUrl": "https://www.nda.gov.cn/sjj/zwgk/tzgg/0608/20260608172117399715004_pc.html",
+      "publisher": "国家数据局",
+      "publishedAt": "2026-06-08",
+      "documentDate": "2026-06-03",
+      "retrievedAt": "2026-06-19",
+      "sourceType": "official_doc",
+      "evidenceStrength": "official_doc",
+      "clientUseStatus": "internal_reference_only",
+      "claim": "行业高质量数据集政策提出场景牵引数据、数据驱动模型、模型赋能应用、应用创造价值的数据飞轮。",
+      "policySignals": [
+        "行业高质量数据集",
+        "AI-Ready",
+        "场景牵引数据",
+        "数据驱动模型",
+        "应用创造价值",
+        "人机协同标注"
+      ],
+      "scenarioFamilies": [
+        "data_readiness",
+        "knowledge_graph",
+        "expert_annotation",
+        "model_evaluation",
+        "industry_dataset"
+      ],
+      "workflowGapHints": [
+        "从业务材料盘点到数据资源清单",
+        "行业专家标注和质检协同",
+        "知识库、知识图谱和案例库建设",
+        "试点应用反馈反哺数据集迭代"
+      ],
+      "riskBoundaries": [
+        "数据权益和授权",
+        "敏感数据保护",
+        "数据偏见、污染和泄露防范"
+      ]
+    },
+    {
+      "sourceId": "data-elements-competition-20260427",
+      "sourceTitle": "关于举办2026年“数据要素×”大赛的通知",
+      "sourceUrl": "https://www.nda.gov.cn/sjj/zwgk/tzgg/0427/20260427215820802616908_pc.html",
+      "publisher": "国家数据局等部门",
+      "publishedAt": "2026-04-27",
+      "retrievedAt": "2026-06-19",
+      "sourceType": "official_doc",
+      "evidenceStrength": "official_doc",
+      "clientUseStatus": "internal_reference_only",
+      "claim": "数据要素×大赛提供16个行业赛道和数据基础设施赛道，可作为行业场景优先级和案例征集方向参考。",
+      "policySignals": [
+        "数据要素×",
+        "16个行业赛道",
+        "数据基础设施赛道",
+        "供需对接",
+        "数据市场化价值化"
+      ],
+      "scenarioFamilies": [
+        "industry_opportunity_scan",
+        "data_productization",
+        "case_collection",
+        "public_service",
+        "go_to_market"
+      ],
+      "workflowGapHints": [
+        "围绕赛道做行业场景候选池",
+        "将客户资料转成参赛方案或试点申报材料",
+        "用数据价值链拆解企业AI切入点",
+        "供需对接材料和案例包装"
+      ],
+      "riskBoundaries": [
+        "参赛资料真实性和合法性",
+        "信用和合规要求",
+        "不能把赛事入围当成业务效果证明"
+      ]
+    },
+    {
+      "sourceId": "ai-ict-20260610",
+      "sourceTitle": "“人工智能+信息通信”创新发展实施意见（2026—2028年）",
+      "sourceUrl": "https://tech.chinadaily.com.cn/a/202606/17/WS6a31f78aa310d709c2fb87cc.html",
+      "publisher": "工业和信息化部",
+      "publishedAt": "2026-06-17",
+      "documentDate": "2026-06-03",
+      "retrievedAt": "2026-06-19",
+      "sourceType": "authoritative_repost",
+      "evidenceStrength": "authoritative_repost",
+      "clientUseStatus": "internal_reference_only",
+      "claim": "AI+信息通信政策指向网络自智、算网底座、网络大模型、智能体和高价值典型场景。",
+      "policySignals": [
+        "网络高等级自智",
+        "网络规划自动生成",
+        "网络施工智能质检",
+        "网络大模型",
+        "多智能体协同",
+        "智能体互联网"
+      ],
+      "scenarioFamilies": [
+        "telecom",
+        "network_operations",
+        "infrastructure",
+        "quality_inspection",
+        "agent_workflow"
+      ],
+      "workflowGapHints": [
+        "网络运维和质检材料自动归集",
+        "施工验收和故障处理知识库",
+        "运营商客户体验和服务工单智能分流",
+        "算网资源和行业客户需求匹配"
+      ],
+      "riskBoundaries": [
+        "官方原文URL需补锁后再对客引用",
+        "网络安全和关键基础设施安全",
+        "自动规划和施工质检需要人工验收"
+      ],
+      "primaryUrlReviewStatus": "official_miit_url_not_yet_locked"
+    },
+    {
+      "sourceId": "state-council-ai-plus-20250827",
+      "sourceTitle": "国务院关于深入实施“人工智能+”行动的意见",
+      "sourceUrl": "https://www.mee.gov.cn/zcwj/gwywj/202508/t20250827_1126207.shtml",
+      "publisher": "国务院",
+      "publishedAt": "2025-08-27",
+      "retrievedAt": "2026-06-19",
+      "sourceType": "authoritative_repost",
+      "evidenceStrength": "authoritative_repost",
+      "clientUseStatus": "internal_reference_only",
+      "policyWindowRole": "foundation_reference",
+      "claim": "国务院AI+行动意见是2026年各部委专项政策的共同上位依据。",
+      "policySignals": [
+        "人工智能+",
+        "科学技术",
+        "产业发展",
+        "消费提质",
+        "民生福祉",
+        "治理能力",
+        "全球合作"
+      ],
+      "scenarioFamilies": [
+        "foundation_reference",
+        "industry",
+        "consumer_service",
+        "public_service",
+        "governance"
+      ],
+      "workflowGapHints": [
+        "把专项政策映射到行业、角色、数据和三天试点",
+        "避免只复述宏观方向",
+        "用场景牵引识别最小可验证工作流缺口"
+      ],
+      "riskBoundaries": [
+        "上位政策不能替代行业落地证据",
+        "不能直接证明企业预算、数据或组织就绪",
+        "客户引用前需核验中国政府网原始页面"
+      ]
+    }
+  ],
+  "directionThemes": [
+    {
+      "themeId": "scenario_open_list_and_pilot_base",
+      "appliesTo": [
+        "consumer_service",
+        "retail_ecommerce",
+        "logistics_delivery",
+        "culture_tourism"
+      ],
+      "defaultOutput": "policy_fit_matrix_plus_three_day_pilot_packet",
+      "firstWorkflowQuestion": "哪个真实门店、平台、景区、机构或服务网点能在3天内验证一个AI工作流缺口"
+    },
+    {
+      "themeId": "data_flywheel_and_ai_ready_dataset",
+      "appliesTo": [
+        "data_readiness",
+        "manufacturing",
+        "education",
+        "procurement",
+        "industry_dataset"
+      ],
+      "defaultOutput": "data_resource_inventory_plus_human_ai_task_table",
+      "firstWorkflowQuestion": "哪些现有材料可以先被整理成可标注、可质检、可复用的数据资产"
+    },
+    {
+      "themeId": "agent_workflow_with_human_boundary",
+      "appliesTo": [
+        "agent_workflow",
+        "consumer_service",
+        "education",
+        "telecom",
+        "governance"
+      ],
+      "defaultOutput": "agent_action_boundary_card_plus_day1_acceptance",
+      "firstWorkflowQuestion": "智能体负责准备、归集和草拟，哪个动作必须由人确认后才外发或执行"
+    },
+    {
+      "themeId": "compliance_and_review_as_workflow_gap",
+      "appliesTo": [
+        "procurement",
+        "compliance_review",
+        "document_quality",
+        "risk_detection"
+      ],
+      "defaultOutput": "review_checklist_plus_exception_ledger",
+      "firstWorkflowQuestion": "哪个文档、流程或材料最适合先做AI体检、响应性比对或异常提示"
+    }
+  ],
+  "noConnectorBoundary": {
+    "firstValueDoesNotRequireLivePolicyFetch": true,
+    "ledgerUse": "seed_policy_direction_mapping_only",
+    "primaryUrlRequiredBeforeCustomerCitation": true,
+    "serviceConsumeClaimedByLedger": false,
+    "connectorRequiredByLedger": false
+  }
+}

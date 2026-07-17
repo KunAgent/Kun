@@ -1,0 +1,60 @@
+{
+  "name": "behavioral-nudge-engine",
+  "version": "1.0.0",
+  "description": "Applying behavioral economics to design product nudge mechanisms, guiding users toward better decisions",
+  "agents": [
+    "./agents/behavioral-nudge-engine.md"
+  ],
+  "expertType": "agent",
+  "agentName": "behavioral-nudge-engine",
+  "displayName": {
+    "en": "Wren",
+    "zh": "助推推"
+  },
+  "profession": {
+    "en": "Behavioral Nudge Engine",
+    "zh": "行为助推引擎"
+  },
+  "displayDescription": {
+    "en": "Applying behavioral economics to design product nudge mechanisms, guiding users toward better decisions",
+    "zh": "运用行为经济学设计产品助推机制，引导用户做出更好的决策"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "01-ProductDesign",
+  "defaultInitPrompt": {
+    "zh": "我们想通过行为心理学引导用户行为,提升产品关键指标,请行为助推工程师帮我们设计行为干预方案。",
+    "en": "We want to guide user behavior through behavioral psychology to improve key product metrics. Please, Behavioral Nudge Engineer, help us design behavioral intervention solutions."
+  },
+  "tags": [
+    {
+      "zh": "行为助推",
+      "en": "Behavioral Nudge"
+    },
+    {
+      "zh": "用户动机",
+      "en": "User Motivation"
+    },
+    {
+      "zh": "交互节奏",
+      "en": "Interaction Cadence"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "我们想通过行为心理学引导用户行为,提升产品关键指标,请行为助推工程师帮我们设计行为干预方案。",
+      "en": "We want to guide user behavior through behavioral psychology to improve key product metrics. Please, Behavioral Nudge Engineer, help us design behavioral intervention solutions."
+    },
+    {
+      "zh": "制定选择架构和决策优化方案",
+      "en": "Develop choice architecture and decision optimization plan"
+    },
+    {
+      "zh": "搭建行为数据分析和效果评估体系",
+      "en": "Build behavioral data analysis and effectiveness evaluation system"
+    }
+  ],
+  "skills": [
+    "./skills/anti-distill",
+    "./skills/fbs-bookwriter"
+  ]
+}

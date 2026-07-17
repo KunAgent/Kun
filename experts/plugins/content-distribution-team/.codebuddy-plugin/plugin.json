@@ -1,0 +1,99 @@
+{
+  "name": "content-distribution-team",
+  "version": "1.0.0",
+  "description": "Multi-platform content distribution team covering 13+ global social media platforms with publishing rules, scheduling, analytics, account management, and automated publishing via MCP",
+  "author": {
+    "name": "CodeBuddy Teams"
+  },
+  "expertType": "team",
+  "agentName": "content-distribution-team-lead",
+  "teamInfo": {
+    "leadAgent": "content-distribution-team-lead",
+    "memberAgents": [
+      "domestic-platform-expert",
+      "international-platform-expert",
+      "scheduling-specialist",
+      "distribution-analyst"
+    ]
+  },
+  "agents": [
+    "./agents/content-distribution-team-lead.md",
+    "./agents/domestic-platform-expert.md",
+    "./agents/international-platform-expert.md",
+    "./agents/scheduling-specialist.md",
+    "./agents/distribution-analyst.md"
+  ],
+  "skills": [
+    "./skills/multi-platform-distribution",
+    "./skills/xiaohongshu",
+    "./skills/libtv-skill",
+    "./skills/humanizer",
+    "./skills/wechat-article-search",
+    "./skills/mp-draft-push"
+  ],
+  "displayName": {
+    "en": "Content Distribution Team",
+    "zh": "全域内容分发专家团"
+  },
+  "profession": {
+    "en": "Content Distribution Team",
+    "zh": "全域内容分发专家团"
+  },
+  "displayDescription": {
+    "en": "One-stop multi-platform content distribution solution covering 12+ global social media platforms with scheduling, analytics and optimization.",
+    "zh": "一站式多平台内容分发方案，覆盖12+全球社交媒体平台，提供发布规则适配、排期管理、批量发布编排和跨平台数据分析能力"
+  },
+  "avatar": "avatars/team.png",
+  "categoryId": "06-ContentCreative",
+  "defaultInitPrompt": {
+    "en": "Help me create a multi-platform content distribution plan",
+    "zh": "帮我制定一个多平台内容分发方案"
+  },
+  "tags": [
+    { "en": "Multi-Platform Distribution", "zh": "多平台分发" },
+    { "en": "Content Scheduling", "zh": "排期管理" },
+    { "en": "Cross-Platform Analytics", "zh": "跨平台数据分析" }
+  ],
+  "quickPrompts": [
+    { "en": "Help me create a multi-platform content distribution plan", "zh": "帮我制定一个多平台内容分发方案" },
+    { "en": "Create a weekly content publishing schedule for me", "zh": "为我制定一周的内容发布排期计划" },
+    { "en": "Analyze my cross-platform publishing performance", "zh": "分析我各平台的发布数据表现" }
+  ],
+  "members": [
+    {
+      "id": "content-distribution-team-lead",
+      "name": { "en": "Atlas", "zh": "安拓" },
+      "profession": { "en": "Distribution Strategist", "zh": "分发策略师" },
+      "avatar": "avatars/content-distribution-team-lead.png",
+      "role": "lead"
+    },
+    {
+      "id": "domestic-platform-expert",
+      "name": { "en": "Ruby", "zh": "晓红" },
+      "profession": { "en": "Domestic Platform Expert", "zh": "国内平台专家" },
+      "avatar": "avatars/domestic-platform-expert.png",
+      "role": "member"
+    },
+    {
+      "id": "international-platform-expert",
+      "name": { "en": "Glow", "zh": "格罗" },
+      "profession": { "en": "International Platform Expert", "zh": "国际平台专家" },
+      "avatar": "avatars/international-platform-expert.png",
+      "role": "member"
+    },
+    {
+      "id": "scheduling-specialist",
+      "name": { "en": "Calendar", "zh": "凯历" },
+      "profession": { "en": "Scheduling Specialist", "zh": "排期运营专家" },
+      "avatar": "avatars/scheduling-specialist.png",
+      "role": "member"
+    },
+    {
+      "id": "distribution-analyst",
+      "name": { "en": "Davis", "zh": "达维" },
+      "profession": { "en": "Distribution Analyst", "zh": "分发数据分析师" },
+      "avatar": "avatars/distribution-analyst.png",
+      "role": "member"
+    }
+  ]
+}

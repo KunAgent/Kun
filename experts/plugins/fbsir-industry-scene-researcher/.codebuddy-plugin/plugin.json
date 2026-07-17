@@ -1,0 +1,233 @@
+{
+    "name":  "fbsir-industry-scene-researcher",
+    "version":  "2.3.0",
+    "description":  "Industry-scene shortcut expert for turning a fuzzy industry goal into a WorkBuddy executable human-AI playbook.",
+    "author":  {
+                   "name":  "FBSir",
+                   "email":  "unique@u3w.com"
+               },
+    "agents":  [
+                   "./agents/fbsir-industry-scene-researcher.md"
+               ],
+    "skills":  [
+                   "./skills/industry-scene-service-recording"
+               ],
+    "license":  "MIT",
+    "expertType":  "agent",
+    "agentName":  "fbsir-industry-scene-researcher",
+    "runtimeContract":  {
+                            "schema":  "industry-scene-researcher-runtime-contract/v2",
+                            "version":  "2.3.0",
+                            "operatingContract":  "contracts/industry-scene-researcher-operating-contract.json",
+                            "operatingModes":  [
+                                                   "independent_expert",
+                                                   "self_contained_no_connector",
+                                                   "project_action_packet",
+                                                   "parallel_research_mode"
+                                               ],
+                            "entryPromptCode":  "wb_sp_genius_industry_scene_researcher",
+                            "entryId":  "genius-industry-scene-researcher",
+                            "expertEntryId":  "fbsir-industry-scene-researcher",
+                            "intentFamily":  "genius_partner",
+                            "assetType":  "industry-scene-supplement-card",
+                            "connectorAssumedAvailable":  false,
+                            "packageCapabilityDependsOnConnector":  false,
+                            "networkEnhancementOptional":  true,
+                            "compatibleToolSurface":  "self_contained_primary_connector_decoupled",
+                            "sameBindingRequiredForClosure":  true,
+                            "serviceSideDecisionOnly":  true,
+                            "hostCommercialDecisionAllowed":  false,
+                            "requiredInterfaces":  [
+                                                       "starterPrompt",
+                                                       "starterResource",
+                                                       "firstValueContract",
+                                                       "hostActionEnvelope",
+                                                       "followthroughContract",
+                                                       "resultCard"
+                                                   ],
+                            "optionalInterfaces":  [
+                                                       "serviceFollowthroughPlan",
+                                                       "valueEvent"
+                                                   ],
+                            "workspaceWriteRequiresExplicitUserRequest":  true,
+                            "planModeBeforeFirstValueAllowed":  false,
+                            "defaultFirstValueSurface":  "chat_response_only"
+                        },
+    "distributionSurface":  {
+                                "target":  "workbuddy_expert_center",
+                                "targetMarketplace":  "experts",
+                                "targetDisplayNameZh":  "行业场景研究员",
+                                "localEquivalentTestSurface":  "my-experts",
+                                "localEquivalentTestOnly":  true,
+                                "localEquivalentPurposeZh":  "仅用于本地等效测试和服务协议验证，不代表最终上架已通过。"
+                            },
+    "displayName":  {
+                        "en":  "Industry Scene Researcher",
+                        "zh":  "行业场景研究员"
+                    },
+    "profession":  {
+                       "en":  "Industry Scene Researcher",
+                       "zh":  "行业场景研究员"
+                   },
+    "displayDescription":  {
+                               "en":  "Finds one practical workflow gap in an industry scene and turns it into a supplement card, 3-day action plan, and project packet.",
+                               "zh":  "围绕一个行业场景定位关键工作流缺口，并交付补位卡、3天行动计划、项目动作执行包和下一步建议。"
+                           },
+    "avatar":  "avatars/expert.png",
+    "categoryId":  "12-IndustryConsultant",
+    "defaultInitPrompt":  {
+                              "zh":  "我在【行业】做【角色】，当前目标是【目标】。请先找出 3 个最值得 AI 补位的工作流缺口，选出最高价值的 1 个，并给我一张场景补位卡和唯一下一步。",
+                              "en":  "I work in [industry] as [role], and my current goal is [goal]. Find three workflow gaps worth AI support, choose the single highest-value one, then give me a supplement card and one next step."
+                          },
+    "starterSet":  [
+                       {
+                           "starterId":  "quick_judgement",
+                           "starterType":  "quick_judgement",
+                           "scenarioFamily":  "policy_to_scene_mapping",
+                           "primaryCta":  "生成 3 天试点项目包"
+                       },
+                       {
+                           "starterId":  "material_to_output",
+                           "starterType":  "material_to_output",
+                           "scenarioFamily":  "research_packet_generation",
+                           "primaryCta":  "生成证据增强版场景补位卡"
+                       },
+                       {
+                           "starterId":  "continue_action",
+                           "starterType":  "continue_action",
+                           "scenarioFamily":  "owner_receipt_and_compare",
+                           "primaryCta":  "现在执行 Day 1"
+                       }
+                   ],
+    "entryMatrix":  [
+                        {
+                            "entryId":  "genius-industry-scene-researcher",
+                            "entryPromptCode":  "wb_sp_genius_industry_scene_researcher",
+                            "intentFamily":  "genius_partner",
+                            "profileSegments":  [
+                                                    "operator",
+                                                    "consultant",
+                                                    "founder",
+                                                    "brand_owner"
+                                                ],
+                            "assetType":  "industry-scene-supplement-card",
+                            "servicePackCode":  "fbss.industry.action.v1",
+                            "scenePackId":  "industry-workflow-gap"
+                        }
+                    ],
+    "capabilityFamilies":  [
+                               "industry_scene_research",
+                               "workbuddy_shortcut_orchestration",
+                               "service_followthrough_guidance"
+                           ],
+    "sceneTemplates":  [
+                           "shortcut.workflow-gap",
+                           "shortcut.opportunity-scan",
+                           "shortcut.ops-boost",
+                           "shortcut.client-proposal",
+                           "shortcut.sales-enable",
+                           "shortcut.knowledge-distill",
+                           "shortcut.meeting-to-action",
+                           "shortcut.legacy-ai-entry"
+                       ],
+    "workflowLanes":  [
+                          "diagnose",
+                          "score",
+                          "orchestrate",
+                          "pilot",
+                          "continue"
+                      ],
+    "projectMechanism":  {
+                             "defaultProjectTemplateId":  "content-operations",
+                             "projectSelectionIsProductCredit":  false,
+                             "activationStage":  "pilot_or_continue",
+                             "connectorRequirements":  [
+                                                           {
+                                                               "id":  "tdocs-app",
+                                                               "name":  "Tencent Docs"
+                                                           },
+                                                           {
+                                                               "id":  "notion",
+                                                               "name":  "Notion"
+                                                           }
+                                                       ],
+                             "adjacentSkills":  [
+                                                    "image-analysis",
+                                                    "document-generation",
+                                                    "task-management",
+                                                    "knowledge-distillation"
+                                                ],
+                             "adjacentExperts":  [
+                                                     "industry-scene-researcher",
+                                                     "content-operations",
+                                                     "customer-proposal",
+                                                     "project-manager"
+                                                 ],
+                             "hostSteeringContextFields":  [
+                                                               "workbuddyProjectId",
+                                                               "workbuddyProjectTemplate",
+                                                               "anonymousUserCodeHash",
+                                                               "serverBindingId",
+                                                               "chainFingerprint",
+                                                               "intentBucket",
+                                                               "lebaoPackId"
+                                                           ]
+                         },
+    "qualityGateLayers":  [
+                              "F",
+                              "C",
+                              "H",
+                              "S"
+                          ],
+    "guardrails":  {
+                       "noAutomaticProductCreditClaim":  true,
+                       "probeRowsDiagnosticOnly":  true,
+                       "localMyExpertsIsEquivalentOnly":  true,
+                       "lebaoRequiresContinuedUse":  true,
+                       "sameBindingConsumeIsNotContinuedUse":  true
+                   },
+    "workspaceWritePolicy":  {
+                                 "workspaceWriteRequiresExplicitUserRequest":  true,
+                                 "planModeBeforeFirstValueAllowed":  false,
+                                 "defaultFirstValueSurface":  "chat_response_only",
+                                 "forbiddenImplicitActions":  [
+                                                                  "auto_create_task",
+                                                                  "auto_write_plan_file",
+                                                                  "auto_write_memory",
+                                                                  "auto_create_workspace_memory",
+                                                                  "auto_use_file_or_shell_tools_before_first_value",
+                                                                  "auto_open_company_level_escalation"
+                                                              ]
+                             },
+    "tags":  [
+                 {
+                     "en":  "Industry Research",
+                     "zh":  "行业调研"
+                 },
+                 {
+                     "en":  "Workflow Gap",
+                     "zh":  "流程补位"
+                 },
+                 {
+                     "en":  "Action Packet",
+                     "zh":  "行动包"
+                 }
+             ],
+    "quickPrompts":  [
+                         {
+                             "starterId":  "quick_judgement",
+                             "en":  "I work in [industry] as [role], and my current goal is [goal]. Find three workflow gaps worth AI support, choose the single highest-value one, then give me a supplement card and one next step.",
+                             "zh":  "我在【行业】做【角色】，当前目标是【目标】。请先找出 3 个最值得 AI 补位的工作流缺口，选出最高价值的 1 个，并给我一张场景补位卡和唯一下一步。"
+                         },
+                         {
+                             "starterId":  "material_to_output",
+                             "en":  "Here are my industry/customer/competitor/policy/project materials: [paste materials]. Score the candidate gaps, mark evidence and confidence, then turn the best one into a 3-day pilot packet.",
+                             "zh":  "下面是我的行业/客户/竞品/政策/项目材料：【粘贴材料】。请先做候选缺口评分，标清证据与置信度，再把最高价值场景整理成 3 天试点行动包。"
+                         },
+                         {
+                             "starterId":  "continue_action",
+                             "en":  "Continue from the previous industry-scene judgement. Turn the chosen gap into a team-executable Day 1 plan, with owners, inputs, outputs, acceptance, and one CTA.",
+                             "zh":  "请基于上一轮行业场景判断继续推进，把已选缺口拆成团队今天能执行的 Day 1 行动清单，写清负责人、输入、输出、验收和唯一 CTA。"
+                         }
+                     ]
+}

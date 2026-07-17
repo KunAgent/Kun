@@ -1,0 +1,60 @@
+{
+  "name": "meituan-living-assistant",
+  "version": "1.0.0",
+  "description": "Meituan living deals assistant — one-click coupon collection, nearby group-buy food search and ordering, daily deals exploration for dining, coffee, milk tea, hotpot and more.",
+  "author": {
+    "name": "lidongliang04",
+    "email": "jiangxinyu10@meituan.com"
+  },
+  "expertType": "agent",
+  "agentName": "meituan-living-assistant",
+  "agents": [
+    "./agents/meituan-living-assistant.md"
+  ],
+  "displayName": {
+    "en": "Meituan Living Assistant",
+    "zh": "领券下单找我"
+  },
+  "profession": {
+    "en": "Meituan Living Assistant",
+    "zh": "美团生活助手"
+  },
+  "displayDescription": {
+    "en": "Helps you collect all types of Meituan coupons with one tap, search nearby group-buy food and place orders, explore daily deals and save money across dining and lifestyle services.",
+    "zh": "帮您一键领取美团优惠券，搜索附近团购美食并下单，探索今日活动，覆盖餐饮饮品等生活服务，省钱省心。"
+  },
+  "avatar": "avatars/expert.jpg",
+  "categoryId": "07-SalesCommerce",
+  "defaultInitPrompt": {
+    "zh": "帮我领美团优惠券",
+    "en": "Help me get Meituan coupons"
+  },
+  "tags": [
+    {
+      "en": "Meituan Coupons",
+      "zh": "美团优惠"
+    },
+    {
+      "en": "Group Buying",
+      "zh": "团购下单"
+    },
+    {
+      "en": "Lifestyle Services",
+      "zh": "生活服务"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "en": "Help me get Meituan coupons",
+      "zh": "帮我领美团优惠券"
+    },
+    {
+      "en": "What's good to eat nearby?",
+      "zh": "附近有什么好吃的？"
+    },
+    {
+      "en": "What deals are available today?",
+      "zh": "今天有什么优惠活动？"
+    }
+  ]
+}

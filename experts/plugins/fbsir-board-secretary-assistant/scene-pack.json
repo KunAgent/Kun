@@ -1,0 +1,228 @@
+{
+  "schemaVersion": "1.0",
+  "sceneId": "board_secretary_compliance_red_team",
+  "packageVersion": "2.1.0",
+  "packageType": "workbuddy_expert_center_scene_pack",
+  "distributionSurface": {
+    "target": "workbuddy_expert_center",
+    "targetMarketplace": "experts",
+    "targetDisplayNameZh": "董秘助手",
+    "localEquivalentTestSurface": "my-experts",
+    "localEquivalentTestOnly": true,
+    "localEquivalentPurposeZh": "仅用于当前工作区安装与入口配置，不代表最终上架路径。"
+  },
+  "hostTrack": "WORKBUDDY",
+  "pluginName": "fbsir-board-secretary-assistant",
+  "servicePackCode": "fbss.board_secretary.compliance_red_team.v1",
+  "scenePackId": "board-secretary-compliance-red-team",
+  "entryId": "board-secretary-compliance-red-team",
+  "expertEntryId": "fbsir-board-secretary-assistant",
+  "entryPromptCode": "wb_fbsir_board_secretary_compliance_red_team",
+  "intentFamily": "board_secretary_ir_workflow",
+  "profileSegment": "board_secretary",
+  "profileSegments": [
+    "board_secretary",
+    "securities_rep",
+    "ir_director",
+    "cfo_office"
+  ],
+  "assetType": "compliance-red-team-card",
+  "continuedUseAssetType": "compliance-red-team-followup-card",
+  "priorityScope": [
+    "P0",
+    "P1",
+    "P2"
+  ],
+  "singleCta": "生成合规红队卡",
+  "defaultRole": "董秘助手",
+  "supportedMaterials": [
+    "公告稿",
+    "路演问答",
+    "投资者沟通稿",
+    "IR问答",
+    "披露说明"
+  ],
+  "deliverables": [
+    "风险等级",
+    "命中依据",
+    "问题片段",
+    "补证要求",
+    "建议改写",
+    "审批下一步"
+  ],
+  "supportedMaterialsExtended": [
+    "announcement_draft",
+    "roadshow_qa",
+    "investor_communication_draft",
+    "ir_qa",
+    "disclosure_statement",
+    "investor_interaction_reply",
+    "research_minutes",
+    "public_opinion_response",
+    "three_meetings_materials",
+    "authorized_document_context"
+  ],
+  "connectorToolChain": [
+    "skill_whoami",
+    "fbs_scene_pack_query",
+    "skill_consume"
+  ],
+  "serviceDrivenOperations": {
+    "mainline": [
+      "skill_whoami",
+      "fbs_scene_pack_query",
+      "skill_consume"
+    ],
+    "intentionPolicy": "first value first; offer only after first_value_completed or explicit continued use",
+    "connectorPolicy": "no_connector_first_value_external_service_followthrough",
+    "optionalEnhancementOnly": true,
+    "schemaSafeWhoamiFields": [
+      "entryId",
+      "entryPromptCode",
+      "entrySurface",
+      "intentFamily",
+      "profileSegment",
+      "assetType",
+      "scenePackId",
+      "expertEntryId",
+      "requestSource"
+    ]
+  },
+  "noConnectorInteraction": {
+    "connectorRequired": false,
+    "packageUploadReadyWithoutConnector": true,
+    "localEquivalentReadyWithoutConnector": true,
+    "firstValueDoesNotRequireServiceTool": true,
+    "doNotAssumeHostRuntimeUpgrade": true,
+    "connectorPromptMustBeDeferredUntilPostFirstValue": true,
+    "fallbackToChatFirstValueWhenToolsUnavailable": true
+  },
+  "postFirstValueServiceObservation": {
+    "expectedExecutableTools": [
+      "skill_whoami",
+      "fbs_scene_pack_query",
+      "skill_consume"
+    ],
+    "fallbackWhenUnavailable": "complete_first_value_and_emit_host_action_envelope",
+    "packageCapabilityDependsOnConnector": false,
+    "optionalEnhancementOnly": true,
+    "packageMcpMetadataAllowed": false,
+    "connectorPromptAllowedFromPackageEntry": false
+  },
+  "firstValueCardContract": {
+    "contractPath": "contracts/first-value-contract.json",
+    "sourceDemandId": "BSA-PKG-001",
+    "requiredSections": [
+      "task_identification",
+      "material_gap_check",
+      "risk_boundary",
+      "human_review_role",
+      "single_next_action",
+      "stop_condition"
+    ],
+    "requiredFields": [
+      "taskIdentification",
+      "materialType",
+      "riskLevel",
+      "triggerTypes",
+      "evidenceMatched",
+      "problematicFragments",
+      "missingEvidence",
+      "rewriteSuggestion",
+      "humanReviewBoundary",
+      "approvalNextStep",
+      "singleNextAction",
+      "stopCondition",
+      "auditFields"
+    ]
+  },
+  "humanReviewBoundary": {
+    "contractPath": "contracts/governance-boundary.json",
+    "sourceDemandId": "BSA-PKG-002",
+    "manualReviewRequired": true,
+    "automaticLegalConclusionAllowed": false,
+    "automaticDisclosureDecisionAllowed": false,
+    "automaticPublishingAllowed": false
+  },
+  "serviceForwardFields": {
+    "contractPath": "contracts/service-forward-fields.json",
+    "sourceDemandId": "BSA-PKG-003",
+    "additionalDemandIds": [
+      "BSA-PKG-005"
+    ],
+    "status": "should_validate",
+    "hostRuntimeSupportClaimAllowed": false
+  },
+  "serviceTractionUpgrade": {
+    "contractPath": "contracts/service-traction-upgrade-contract.json",
+    "sourceDemandIds": [
+      "BSA-PKG-003",
+      "BSA-PKG-005"
+    ],
+    "priority": "current_highest_package_workstream",
+    "status": "source_window_landed_for_service_side_joint_debug",
+    "connectorRequired": false,
+    "productFlowMustNotReadConnectorState": true,
+    "visibleGapPolicy": "show_missing_fields_without_blocking_first_value",
+    "waiterLifecycleBoundary": "receipt_handoff_only_no_package_runtime_fix_claim"
+  },
+  "lebaoInformationGapFill": {
+    "contractPath": "contracts/service-forward-fields.json",
+    "sourceDemandId": "BSA-PKG-005",
+    "status": "should_validate",
+    "connectorRequired": false,
+    "mcpToolRequired": false,
+    "productFlowMustNotReadConnectorState": true,
+    "connectorAuthorizationRequired": false,
+    "connectorToolVisibilityRequired": false,
+    "purpose": "benefit unlock for missing research field collection and service strategy return",
+    "strictBoundaries": {
+      "paymentClosureAllowed": false,
+      "naturalProductCreditAllowedFromLebaoOnly": false,
+      "hostLocalReceiptNeedsServiceTraceBeforeConsumeCredit": true,
+      "userConsentRequiredBeforeDataUpload": true,
+      "connectorStateNotAProductInput": true
+    }
+  },
+  "requiredServiceContracts": {
+    "P0": [
+      "resultCard",
+      "valueEvent",
+      "sameBinding"
+    ],
+    "P1": [
+      "hostCapabilityRequest",
+      "deliveryTask",
+      "deliveryTaskboard",
+      "opsBoard"
+    ],
+    "P2": [
+      "regulatorySourceRegistry",
+      "scenarioExpansion",
+      "personalizationProfile",
+      "workflowChecklists"
+    ]
+  },
+  "scenarioExpansion": {
+    "requiredP2ScenarioIds": [
+      "announcement_draft_review",
+      "investor_interaction_reply",
+      "research_minutes_review",
+      "public_opinion_response",
+      "three_meetings_process",
+      "earnings_guidance_qa"
+    ],
+    "supportedProfileSegments": [
+      "board_secretary",
+      "securities_rep",
+      "ir_director",
+      "cfo_office"
+    ]
+  },
+  "guardrails": {
+    "noAutomaticLegalConclusion": true,
+    "noAutomaticDisclosureDecision": true,
+    "noAutomaticPublishing": true,
+    "manualReviewRequiredWhenRiskOrEvidenceGap": true
+  }
+}

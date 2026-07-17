@@ -33,6 +33,7 @@ import { configureAppIdentity } from './app-identity'
 import { shouldStartHidden, syncLoginItemSettings } from './desktop-behavior'
 import { resolveLogDirectory, resolveNamedPreloadPath, resolvePreloadPath } from './main-paths'
 import { runLegacyKunDataMigration } from './legacy-data-migration'
+import { registerLocalCollaborationIpc } from './collaboration/register-local-collaboration-ipc'
 import { LegacyProviderSettingsMigrationCoordinator } from './legacy-provider-settings-migration'
 import {
   applyKunRuntimePatch,
@@ -1717,6 +1718,13 @@ app.whenReady().then(async () => {
     loadGuiUpdaterModule,
     resolveLogDirectory: () => resolveLogDirectory(app),
     logError
+  })
+  registerLocalCollaborationIpc({
+    runtimeRequest: async (path, init) => {
+      const settings = await store.load()
+      return runtimeRequest(settings, path, init)
+    },
+    getWorkspaceRoot: async () => (await store.load()).workspaceRoot
   })
   const extensionIpcOptions: RegisterExtensionIpcHandlersOptions = {
     getMainWindow: () => mainWindow,

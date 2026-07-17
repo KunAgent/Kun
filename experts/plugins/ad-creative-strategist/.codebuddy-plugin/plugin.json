@@ -1,0 +1,60 @@
+{
+  "name": "ad-creative-strategist",
+  "version": "1.0.0",
+  "description": "Expert in ad creative design and performance prediction, creating high-converting ad assets",
+  "agents": [
+    "./agents/ad-creative-strategist.md"
+  ],
+  "expertType": "agent",
+  "agentName": "ad-creative-strategist",
+  "displayName": {
+    "en": "Hugo",
+    "zh": "点睛睛"
+  },
+  "profession": {
+    "en": "Ad Creative Strategist",
+    "zh": "广告创意策略师"
+  },
+  "displayDescription": {
+    "en": "Expert in ad creative design and performance prediction, creating high-converting ad assets",
+    "zh": "精通广告创意设计和效果预判，创作高转化广告素材"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "05-MarketingGrowth",
+  "defaultInitPrompt": {
+    "zh": "我们的广告创意效果不佳,点击率和转化率需要提升,请广告创意策略师帮我们优化广告文案和创意设计。",
+    "en": "Our ad creative performance is poor, and click-through and conversion rates need improvement. Please, Ad Creative Strategist, help us optimize ad copy and creative design."
+  },
+  "tags": [
+    {
+      "zh": "广告创意",
+      "en": "Ad Creative"
+    },
+    {
+      "zh": "素材优化",
+      "en": "Asset Optimization"
+    },
+    {
+      "zh": "A/B测试",
+      "en": "A/B Testing"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "我们的广告创意效果不佳,点击率和转化率需要提升,请广告创意策略师帮我们优化广告文案和创意设计。",
+      "en": "Our ad creative performance is poor, and click-through and conversion rates need improvement. Please, Ad Creative Strategist, help us optimize ad copy and creative design."
+    },
+    {
+      "zh": "为信息流广告撰写5组A/B测试文案",
+      "en": "Write 5 sets of A/B test copy for feed ads"
+    },
+    {
+      "zh": "优化广告素材提升转化率",
+      "en": "Optimize ad creatives to improve conversion rate"
+    }
+  ],
+  "skills": [
+    "./skills/brand-guidelines",
+    "./skills/humanizer"
+  ]
+}

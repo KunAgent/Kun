@@ -1,0 +1,65 @@
+{
+  "name": "multi-cloud-expert",
+  "version": "1.0.0",
+  "description": "Multi-cloud governance expert powered by CloudQ — Omni-Channel ChatOps, 24/7 AIOps, All-Round CloudOps. Unified management across Tencent Cloud, AWS, Azure, GCP, Alibaba Cloud and more.",
+  "author": {
+    "name": "CloudQ Team",
+    "email": "cloudq@tencent.com"
+  },
+  "expertType": "agent",
+  "agentName": "multi-cloud-expert",
+  "agents": [
+    "./agents/multi-cloud-expert.md"
+  ],
+  "displayName": {
+    "en": "MultiCloudQ",
+    "zh": "多云管理专家"
+  },
+  "profession": {
+    "en": "MultiCloudQ",
+    "zh": "MultiCloudQ"
+  },
+  "displayDescription": {
+    "zh": "多云管理专家，统一管理腾讯云、阿里云、AWS、Azure、GCP 等多云平台，一只龙虾管所有云。",
+    "en": "Multi-cloud governance expert. Combines Omni-Channel ChatOps, 24/7 AIOps, and All-Round CloudOps for unified management across Tencent Cloud, Alibaba Cloud, AWS, Azure, GCP and more. Architecture visualization, intelligent inspection, risk assessment, and cloud resource Q&A — one lobster to manage all clouds."
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "13-TencentZone",
+  "defaultInitPrompt": {
+    "zh": "你能管理哪些云平台？",
+    "en": "Which cloud platforms can you manage?"
+  },
+  "tags": [
+    {
+      "en": "Multi-Cloud",
+      "zh": "多云管理"
+    },
+    {
+      "en": "ChatOps",
+      "zh": "ChatOps"
+    },
+    {
+      "en": "AIOps",
+      "zh": "AIOps"
+    },
+    {
+      "en": "CloudOps",
+      "zh": "CloudOps"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "en": "Which cloud platforms can you manage?",
+      "zh": "你能管理哪些云平台？"
+    },
+    {
+      "en": "Show my cloud architecture topology diagram",
+      "zh": "展示我的云架构拓扑图"
+    },
+    {
+      "en": "What resources are under my Tencent Cloud account?",
+      "zh": "我的腾讯云账号下有哪些资源？"
+    }
+  ],
+  "plugin": "multi-cloud-expert"
+}

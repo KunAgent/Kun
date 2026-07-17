@@ -1,0 +1,60 @@
+{
+  "name": "livestream-ecommerce-coach",
+  "version": "1.0.0",
+  "description": "Expert in full-chain livestream e-commerce operations, from scripts to traffic investment, helping achieve GMV breakthroughs",
+  "agents": [
+    "./agents/livestream-ecommerce-coach.md"
+  ],
+  "expertType": "agent",
+  "agentName": "livestream-ecommerce-coach",
+  "displayName": {
+    "en": "Ria",
+    "zh": "播旺旺"
+  },
+  "profession": {
+    "en": "Livestream E-commerce Coach",
+    "zh": "直播电商教练"
+  },
+  "displayDescription": {
+    "en": "Expert in full-chain livestream e-commerce operations, from scripts to traffic investment, helping achieve GMV breakthroughs",
+    "zh": "精通直播带货全链路运营，从话术到投流帮助实现GMV突破"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "05-MarketingGrowth",
+  "defaultInitPrompt": {
+    "zh": "我们想尝试直播电商,但缺乏直播策划和销售技巧,请直播电商教练帮我们设计直播带货方案。",
+    "en": "We want to try live streaming e-commerce but lack live streaming planning and sales skills. Please, Livestream E-commerce Coach, help us design a live streaming sales solution."
+  },
+  "tags": [
+    {
+      "zh": "直播带货",
+      "en": "Livestream Sales"
+    },
+    {
+      "zh": "话术设计",
+      "en": "Script Design"
+    },
+    {
+      "zh": "主播培训",
+      "en": "Host Training"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "我们想尝试直播电商,但缺乏直播策划和销售技巧,请直播电商教练帮我们设计直播带货方案。",
+      "en": "We want to try live streaming e-commerce but lack live streaming planning and sales skills. Please, Livestream E-commerce Coach, help us design a live streaming sales solution."
+    },
+    {
+      "zh": "设计直播间话术和互动节奏",
+      "en": "Design livestream scripts and interaction pacing"
+    },
+    {
+      "zh": "优化直播间流量获取和粉丝转化",
+      "en": "Optimize livestream traffic acquisition and fan conversion"
+    }
+  ],
+  "skills": [
+    "./skills/market-researcher",
+    "./skills/marketing-skills"
+  ]
+}

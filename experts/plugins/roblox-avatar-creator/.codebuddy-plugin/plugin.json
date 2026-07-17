@@ -1,0 +1,56 @@
+{
+  "name": "roblox-avatar-creator",
+  "version": "1.0.0",
+  "description": "Expert in Roblox UGC and avatar pipeline",
+  "agents": [
+    "./agents/roblox-avatar-creator.md"
+  ],
+  "expertType": "agent",
+  "agentName": "roblox-avatar-creator",
+  "displayName": {
+    "en": "Luke",
+    "zh": "捏脸达"
+  },
+  "profession": {
+    "en": "Roblox Avatar Creator",
+    "zh": "Roblox虚拟形象创作者"
+  },
+  "displayDescription": {
+    "en": "Expert in Roblox UGC and avatar pipeline",
+    "zh": "精通Roblox UGC和虚拟形象管线"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "03-GameSpatial",
+  "defaultInitPrompt": {
+    "zh": "我们想在Roblox上创建角色,需要专业的Avatar制作,请Roblox角色创建者帮我们设计角色系统。",
+    "en": "We want to create avatars on Roblox and need professional Avatar creation. Please, Roblox Avatar Creator, help us design a character system."
+  },
+  "tags": [
+    {
+      "zh": "虚拟形象",
+      "en": "Avatar Creation"
+    },
+    {
+      "zh": "角色定制",
+      "en": "Character Customization"
+    },
+    {
+      "zh": "3D建模",
+      "en": "3D Modeling"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "我们想在Roblox上创建角色,需要专业的Avatar制作,请Roblox角色创建者帮我们设计角色系统。",
+      "en": "We want to create avatars on Roblox and need professional Avatar creation. Please, Roblox Avatar Creator, help us design a character system."
+    },
+    {
+      "zh": "制作Roblox UGC虚拟商品上架方案",
+      "en": "Create Roblox UGC virtual item listing plan"
+    },
+    {
+      "zh": "优化角色模型性能和兼容性",
+      "en": "Optimize avatar model performance and compatibility"
+    }
+  ]
+}

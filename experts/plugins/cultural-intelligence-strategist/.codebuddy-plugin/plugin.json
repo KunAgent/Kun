@@ -1,0 +1,56 @@
+{
+  "name": "cultural-intelligence-strategist",
+  "version": "1.0.0",
+  "description": "Helping brands establish cultural sensitivity in globalization processes",
+  "agents": [
+    "./agents/cultural-intelligence-strategist.md"
+  ],
+  "expertType": "agent",
+  "agentName": "cultural-intelligence-strategist",
+  "displayName": {
+    "en": "Hazel",
+    "zh": "知文文"
+  },
+  "profession": {
+    "en": "Cultural Intelligence Strategist",
+    "zh": "文化智能策略师"
+  },
+  "displayDescription": {
+    "en": "Helping brands establish cultural sensitivity in globalization processes",
+    "zh": "帮助品牌建立全球化过程中的文化敏感度"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "05-MarketingGrowth",
+  "defaultInitPrompt": {
+    "zh": "我们的业务涉及多文化环境,需要文化智能策略,请文化智能战略家帮我们制定跨文化管理方案。",
+    "en": "Our business involves multicultural environments and needs cultural intelligence strategies. Please, Cultural Intelligence Strategist, help us develop cross-cultural management solutions."
+  },
+  "tags": [
+    {
+      "zh": "文化智能",
+      "en": "Cultural Intelligence"
+    },
+    {
+      "zh": "全球适配",
+      "en": "Global Adaptation"
+    },
+    {
+      "zh": "包容策略",
+      "en": "Inclusion Strategy"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "我们的业务涉及多文化环境,需要文化智能策略,请文化智能战略家帮我们制定跨文化管理方案。",
+      "en": "Our business involves multicultural environments and needs cultural intelligence strategies. Please, Cultural Intelligence Strategist, help us develop cross-cultural management solutions."
+    },
+    {
+      "zh": "进行文化差异分析和适应性评估",
+      "en": "Conduct cultural difference analysis and adaptability assessment"
+    },
+    {
+      "zh": "设计全球化品牌传播方案",
+      "en": "Design global brand communication plan"
+    }
+  ]
+}

@@ -1,0 +1,63 @@
+{
+  "name": "proposal-strategist",
+  "version": "1.0.0",
+  "description": "Expert in sales proposals and solution design, transforming value into irresistible business cases",
+  "agents": [
+    "./agents/proposal-strategist.md"
+  ],
+  "expertType": "agent",
+  "agentName": "proposal-strategist",
+  "displayName": {
+    "en": "Tatum",
+    "zh": "策必中"
+  },
+  "profession": {
+    "en": "Proposal Strategist",
+    "zh": "方案策划师"
+  },
+  "displayDescription": {
+    "en": "Expert in sales proposals and solution design, transforming value into irresistible business cases",
+    "zh": "精通销售提案和方案设计，将价值转化为无法拒绝的商业论证"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "07-SalesCommerce",
+  "defaultInitPrompt": {
+    "zh": "我们的销售提案说服力不足,中标率有待提高,请提案策略师帮我们设计更有效的销售提案。",
+    "en": "Our sales proposals lack persuasiveness and win rates need improvement. Please, Proposal Strategist, help us design more effective sales proposals."
+  },
+  "tags": [
+    {
+      "zh": "方案撰写",
+      "en": "Proposal Writing"
+    },
+    {
+      "zh": "投标策略",
+      "en": "Bid Strategy"
+    },
+    {
+      "zh": "RFP响应",
+      "en": "RFP Response"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "我们的销售提案说服力不足,中标率有待提高,请提案策略师帮我们设计更有效的销售提案。",
+      "en": "Our sales proposals lack persuasiveness and win rates need improvement. Please, Proposal Strategist, help us design more effective sales proposals."
+    },
+    {
+      "zh": "制定招投标响应策略和亮点提炼",
+      "en": "Develop bid response strategy and highlight key differentiators"
+    },
+    {
+      "zh": "优化方案呈现逻辑和说服力",
+      "en": "Optimize proposal presentation logic and persuasiveness"
+    }
+  ],
+  "skills": [
+    "./skills/anti-distill",
+    "./skills/browser-use",
+    "./skills/market-researcher",
+    "./skills/marketing-skills",
+    "./skills/minimax-docx"
+  ]
+}

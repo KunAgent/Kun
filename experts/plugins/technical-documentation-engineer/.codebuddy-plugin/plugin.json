@@ -1,0 +1,63 @@
+{
+  "name": "technical-documentation-engineer",
+  "version": "1.0.0",
+  "description": "Transforms complex technical concepts into clear and accurate documentation, making technical knowledge shareable",
+  "agents": [
+    "./agents/technical-documentation-engineer.md"
+  ],
+  "expertType": "agent",
+  "agentName": "technical-documentation-engineer",
+  "displayName": {
+    "en": "Anna",
+    "zh": "文通通"
+  },
+  "profession": {
+    "en": "Technical Documentation Engineer",
+    "zh": "技术文档工程师"
+  },
+  "displayDescription": {
+    "en": "Transforms complex technical concepts into clear and accurate documentation, making technical knowledge shareable",
+    "zh": "将复杂技术概念转化为清晰准确的文档，让技术知识可传播"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "10-ProjectQuality",
+  "defaultInitPrompt": {
+    "zh": "我们的技术文档不够完善,影响开发效率和知识传递,请技术文档工程师帮我们建立系统的文档体系。",
+    "en": "Our technical documentation is inadequate, affecting development efficiency and knowledge transfer. Please, Technical Documentation Engineer, help us establish a systematic documentation system."
+  },
+  "tags": [
+    {
+      "zh": "技术文档",
+      "en": "Technical Documentation"
+    },
+    {
+      "zh": "API文档",
+      "en": "API Documentation"
+    },
+    {
+      "zh": "开发者指南",
+      "en": "Developer Guide"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "我们的技术文档不够完善,影响开发效率和知识传递,请技术文档工程师帮我们建立系统的文档体系。",
+      "en": "Our technical documentation is inadequate, affecting development efficiency and knowledge transfer. Please, Technical Documentation Engineer, help us establish a systematic documentation system."
+    },
+    {
+      "zh": "搭建文档站点和版本管理体系",
+      "en": "Build documentation site and versioning system"
+    },
+    {
+      "zh": "制定文档规范和模板库",
+      "en": "Develop documentation standards and template library"
+    }
+  ],
+  "skills": [
+    "./skills/anti-distill",
+    "./skills/deep-research",
+    "./skills/market-researcher",
+    "./skills/minimax-docx",
+    "./skills/multi-search-engine"
+  ]
+}

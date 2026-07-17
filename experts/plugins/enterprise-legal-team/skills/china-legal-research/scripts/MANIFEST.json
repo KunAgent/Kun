@@ -1,0 +1,22 @@
+{
+  "version": "1.2.0",
+  "files": [
+    "SKILL.md",
+    "README.md",
+    "CHANGELOG.md",
+    "scripts/yd_search.py",
+    "scripts/updater.py",
+    "scripts/.env.example",
+    "references/01-law-vector-search.md",
+    "references/02-law-keyword-search.md",
+    "references/03-law-detail.md",
+    "references/04-case-semantic-search.md",
+    "references/05-case-keyword-search.md",
+    "references/06-case-keyword-search-authority.md",
+    "references/07-case-detail.md",
+    "references/08-regulation-search.md",
+    "references/09-regulation-detail.md",
+    "references/10-enterprise-search.md",
+    "references/11-enterprise-detail.md"
+  ]
+}

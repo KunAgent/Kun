@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>命理流派导航 · 1987-10-16 未时</title>
+<style>
+  :root {
+    --bg: #0f0c0a;
+    --card: rgba(255, 255, 255, 0.04);
+    --border: rgba(255, 255, 255, 0.12);
+    --ink: #e8e4d8;
+    --ink-soft: #a8a098;
+    --ink-dim: #6a6258;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: "PingFang SC", "Hiragino Sans GB", "STKaiti", serif;
+    min-height: 100vh;
+    line-height: 1.7;
+    background-image:
+      radial-gradient(circle at 20% 20%, rgba(168, 144, 255, 0.06), transparent 40%),
+      radial-gradient(circle at 80% 30%, rgba(200, 166, 74, 0.06), transparent 40%),
+      radial-gradient(circle at 30% 80%, rgba(184, 52, 30, 0.05), transparent 40%),
+      radial-gradient(circle at 70% 70%, rgba(104, 144, 168, 0.06), transparent 40%);
+  }
+  .container { max-width: 1100px; margin: 0 auto; padding: 60px 24px 80px; }
+
+  .header {
+    text-align: center;
+    margin-bottom: 48px;
+    padding-bottom: 28px;
+    border-bottom: 1px solid var(--border);
+  }
+  .header h1 {
+    font-size: 34px;
+    letter-spacing: 10px;
+    color: var(--ink);
+    font-weight: 300;
+    margin-bottom: 10px;
+  }
+  .header .subtitle { color: var(--ink-soft); letter-spacing: 4px; font-size: 14px; }
+  .header .meta { color: var(--ink-dim); font-size: 12px; margin-top: 12px; letter-spacing: 2px; }
+
+  .intro {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 24px 32px;
+    margin-bottom: 40px;
+  }
+  .intro p { font-size: 14px; color: var(--ink-soft); margin-bottom: 6px; }
+  .intro p strong { color: var(--ink); }
+
+  .school-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 18px;
+  }
+  @media (max-width: 720px) {
+    .school-grid { grid-template-columns: 1fr; }
+    .header h1 { font-size: 22px; letter-spacing: 4px; }
+  }
+
+  .school-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 24px 26px;
+    position: relative;
+    overflow: hidden;
+    transition: all 0.3s;
+    text-decoration: none;
+    color: var(--ink);
+    display: block;
+  }
+  .school-card:hover {
+    transform: translateY(-3px);
+    border-color: var(--theme, #aaa);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+  }
+  .school-card::before {
+    content: "";
+    position: absolute;
+    top: 0; left: 0;
+    width: 4px; height: 100%;
+    background: var(--theme, #aaa);
+  }
+  .school-card .idx {
+    font-size: 12px;
+    color: var(--theme, #aaa);
+    letter-spacing: 2px;
+    margin-bottom: 6px;
+  }
+  .school-card h3 {
+    font-size: 20px;
+    letter-spacing: 4px;
+    margin-bottom: 10px;
+    color: var(--ink);
+    font-weight: 500;
+  }
+  .school-card .en {
+    color: var(--ink-dim);
+    font-size: 11px;
+    letter-spacing: 2px;
+    margin-bottom: 14px;
+  }
+  .school-card .desc { color: var(--ink-soft); font-size: 13px; line-height: 1.7; margin-bottom: 12px; }
+  .school-card .tags { margin-top: 10px; }
+  .school-card .tag {
+    display: inline-block;
+    font-size: 11px;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin: 2px 3px 2px 0;
+    background: var(--tag-bg, rgba(255,255,255,0.05));
+    color: var(--theme, #aaa);
+    border: 1px solid var(--theme, rgba(255,255,255,0.2));
+  }
+
+  /* Themes per school */
+  .zwds { --theme: #a890ff; --tag-bg: rgba(168, 144, 255, 0.1); }
+  .liuyao { --theme: #d44a30; --tag-bg: rgba(212, 74, 48, 0.1); }
+  .tieban { --theme: #c69838; --tag-bg: rgba(198, 152, 56, 0.1); }
+  .qimen { --theme: #c8a64a; --tag-bg: rgba(200, 166, 74, 0.1); }
+  .heluo { --theme: #8a9eb0; --tag-bg: rgba(138, 158, 176, 0.1); }
+  .bazi { --theme: #d4af6e; --tag-bg: rgba(212, 175, 110, 0.1); }
+
+  .footer-note {
+    margin-top: 40px;
+    text-align: center;
+    color: var(--ink-dim);
+    font-size: 12px;
+    letter-spacing: 1px;
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <div class="header">
+    <h1>命 理 流 派 全 览</h1>
+    <div class="subtitle">CHINESE METAPHYSICS · SIX SCHOOLS</div>
+    <div class="meta">阳历 1987-10-16 14:00 · 女命 · 农历丁卯年八月廿四未时</div>
+  </div>
+
+  <div class="intro">
+    <p>中国传统命理自古"<strong>派别林立而理通一源</strong>"——都基于阴阳五行干支八卦，但视角、入手点、推演方法差异显著。</p>
+    <p>下方六大主流派别，均以您的同一出生时间为样本各自演绎一遍。每家看到的"您"都不完全相同，合起来才是立体的命盘视图。</p>
+  </div>
+
+  <div class="school-grid">
+
+    <a href="/Users/laurentzhou/WorkBuddy/2026-05-12-task-47/八字命盘-1987-10-16.html" class="school-card bazi">
+      <div class="idx">00 · 基础盘 · 黑金古典风</div>
+      <h3>子平八字</h3>
+      <div class="en">BAZI · FOUR PILLARS</div>
+      <div class="desc">以"日主戊土"为中心，论十神、格局、喜忌、大运流年。当代最主流的个人命理方法，适合看一生整体节奏与近期运势。</div>
+      <div class="tags">
+        <span class="tag">五行旺衰</span><span class="tag">十神格局</span><span class="tag">大运流年</span>
+      </div>
+    </a>
+
+    <a href="/Users/laurentzhou/WorkBuddy/2026-05-12-task-47/命理流派可视化/01-紫微斗数.html" class="school-card zwds">
+      <div class="idx">01 · 星象盘 · 深夜星空风</div>
+      <h3>紫微斗数</h3>
+      <div class="en">ZIWEI DOUSHU</div>
+      <div class="desc">以"紫微"为首的 14 主星 + 12 宫位 + 四化飞星，构成 12 宫星象命盘。像一张"人生地图"，每个宫位对应一个人生面向。</div>
+      <div class="tags">
+        <span class="tag">十四主星</span><span class="tag">十二宫</span><span class="tag">四化飞星</span>
+      </div>
+    </a>
+
+    <a href="/Users/laurentzhou/WorkBuddy/2026-05-12-task-47/命理流派可视化/02-京房纳甲六爻.html" class="school-card liuyao">
+      <div class="idx">02 · 卦爻盘 · 竹简朱砂风</div>
+      <h3>京房纳甲（六爻）</h3>
+      <div class="en">JINGFANG · SIX YAOS</div>
+      <div class="desc">汉代京房创制，以本卦+变卦+六亲+世应为断验核心。擅长"就事论事"——问具体事的来龙去脉与走向。</div>
+      <div class="tags">
+        <span class="tag">本卦变卦</span><span class="tag">六亲配置</span><span class="tag">动爻世应</span>
+      </div>
+    </a>
+
+    <a href="/Users/laurentzhou/WorkBuddy/2026-05-12-task-47/命理流派可视化/03-铁板神数.html" class="school-card tieban">
+      <div class="idx">03 · 条文盘 · 古籍线装风</div>
+      <h3>铁板神数</h3>
+      <div class="en">TIEBAN SHENSHU</div>
+      <div class="desc">邵雍流派，以八字+六亲信息查定"万年考数"，用条文断命。近古占术的巅峰，擅长家族、六亲、关键事件定位。</div>
+      <div class="tags">
+        <span class="tag">万年考数</span><span class="tag">条文定盘</span><span class="tag">六亲批注</span>
+      </div>
+    </a>
+
+    <a href="/Users/laurentzhou/WorkBuddy/2026-05-12-task-47/命理流派可视化/04-奇门遁甲.html" class="school-card qimen">
+      <div class="idx">04 · 时空盘 · 暗金罗盘风</div>
+      <h3>奇门遁甲</h3>
+      <div class="en">QIMEN DUNJIA</div>
+      <div class="desc">号称"帝王之学"。用九宫八门九星八神三奇六仪构建"时空场"，擅长择时、定方位、解决具体难题。看的是"场"而非"命"。</div>
+      <div class="tags">
+        <span class="tag">九宫八门</span><span class="tag">三奇六仪</span><span class="tag">值符值使</span>
+      </div>
+    </a>
+
+    <a href="/Users/laurentzhou/WorkBuddy/2026-05-12-task-47/命理流派可视化/05-河洛理数.html" class="school-card heluo">
+      <div class="idx">05 · 数理盘 · 素纸水墨风</div>
+      <h3>河洛理数</h3>
+      <div class="en">HE LUO LI SHU</div>
+      <div class="desc">邵康节心法。以干支化数起先后天卦，用卦爻象推演命运。最具哲理气息，追求"数中见道"，重在义理而非细节。</div>
+      <div class="tags">
+        <span class="tag">先后天数</span><span class="tag">体用卦</span><span class="tag">邵子心法</span>
+      </div>
+    </a>
+
+  </div>
+
+  <div class="footer-note">
+    点击卡片打开对应流派命盘　·　每个流派一套独立视觉系统　·　同一个你，五种视角
+  </div>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,64 @@
+{
+  "name": "tianyu-marketing-guardian",
+  "version": "1.0.0",
+  "description": "Tencent Cloud Tianyu marketing-protection expert: guards every campaign across tourism, retail, token-airdrop, healthcare-booking and more, auto-monitoring, gap-checking and tuning strategies so every yuan reaches real users.",
+  "author": {
+    "name": "tencent-cloud-rce",
+    "email": "tommyttan@tencent.com"
+  },
+  "expertType": "agent",
+  "agentName": "tianyu-marketing-guardian",
+  "agents": [
+    "./agents/tianyu-marketing-guardian.md"
+  ],
+  "skills": [
+    "./skills/tencent-rce-skill"
+  ],
+  "displayName": {
+    "en": "Tianyu Marketing Guardian",
+    "zh": "天御营销保护"
+  },
+  "profession": {
+    "en": "Tencent Cloud Tianyu Marketing-Protection Expert",
+    "zh": "腾讯云天御营销保护专家"
+  },
+  "displayDescription": {
+    "en": "Guards every marketing campaign across tourism, retail, Token airdrops and healthcare booking — auto-monitoring, plugging leaks and tuning strategies to protect your budget.",
+    "zh": "替您守护每一场营销活动，在文旅、零售、Token、医疗挂号等场景自动盯活动、查漏召、调策略护预算。"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "13-TencentZone",
+  "defaultInitPrompt": {
+    "zh": "我有一场新的营销活动要上线，帮我做风控接入和策略准备",
+    "en": "I'm launching a new marketing campaign — help me set up risk control and tune strategies"
+  },
+  "tags": [
+    {
+      "en": "Anti-Fraud Marketing",
+      "zh": "营销反欺诈"
+    },
+    {
+      "en": "Anti-Scalper",
+      "zh": "防黄牛刷单"
+    },
+    {
+      "en": "Real-time Strategy",
+      "zh": "实时策略"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "en": "I'm launching a new marketing campaign — help me set up risk control and tune strategies",
+      "zh": "我有一场新的营销活动要上线，帮我做风控接入和策略准备"
+    },
+    {
+      "en": "Pull the last 7 days hit-rate of campaign EventId=xxxx and find the leaks",
+      "zh": "拉一下活动 EventId=xxxx 最近 7 天的命中情况，找一下漏召"
+    },
+    {
+      "en": "Anti-scalper strategy on my tourism ticket campaign is too aggressive — help me tune it",
+      "zh": "我文旅票务活动的防黄牛策略误伤偏高，帮我调一下"
+    }
+  ],
+  "plugin": "tianyu-marketing-guardian"
+}

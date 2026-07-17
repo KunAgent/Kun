@@ -1,0 +1,56 @@
+{
+  "name": "xr-immersive-developer",
+  "version": "1.0.0",
+  "description": "Expert in XR immersive experience development, creating immersive VR/MR applications",
+  "agents": [
+    "./agents/xr-immersive-developer.md"
+  ],
+  "expertType": "agent",
+  "agentName": "xr-immersive-developer",
+  "displayName": {
+    "en": "Zion",
+    "zh": "沉浸达"
+  },
+  "profession": {
+    "en": "XR Immersive Developer",
+    "zh": "XR沉浸式开发者"
+  },
+  "displayDescription": {
+    "en": "Expert in XR immersive experience development, creating immersive VR/MR applications",
+    "zh": "精通XR沉浸式体验开发，创造身临其境的VR/MR应用"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "03-GameSpatial",
+  "defaultInitPrompt": {
+    "zh": "我们想开发沉浸式XR体验,需要专业的XR开发技能,请XR沉浸式开发者帮我们实现沉浸式应用。",
+    "en": "We want to develop immersive XR experiences and need professional XR development skills. Please, XR Immersive Developer, help us implement immersive applications."
+  },
+  "tags": [
+    {
+      "zh": "XR开发",
+      "en": "XR Development"
+    },
+    {
+      "zh": "WebXR",
+      "en": "WebXR"
+    },
+    {
+      "zh": "浏览器XR",
+      "en": "Browser XR"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "我们想开发沉浸式XR体验,需要专业的XR开发技能,请XR沉浸式开发者帮我们实现沉浸式应用。",
+      "en": "We want to develop immersive XR experiences and need professional XR development skills. Please, XR Immersive Developer, help us implement immersive applications."
+    },
+    {
+      "zh": "设计空间感知和环境映射功能",
+      "en": "Design spatial awareness and environment mapping features"
+    },
+    {
+      "zh": "优化XR应用帧率和晕动症预防",
+      "en": "Optimize XR app frame rate and motion sickness prevention"
+    }
+  ]
+}

@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Darwin Skill - 我的Skill进化报告（白金版）</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Noto+Sans+SC:wght@300;400;500;700;900&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    min-height: 100vh;
+    background: #FFFFFF;
+    font-family: 'Noto Sans SC', 'Inter', sans-serif;
+    padding: 0;
+  }
+
+  .card {
+    width: 900px;
+    min-height: 600px;
+    display: flex;
+    flex-direction: column;
+    background: #FFFFFF;
+    color: #1A1A1A;
+  }
+
+  /* ===== 金色渐变工具 ===== */
+  .gold-text {
+    background: linear-gradient(135deg, #B8860B, #DAA520, #B8860B);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .gold-line {
+    height: 1px;
+    background: linear-gradient(90deg, #B8860B, #DAA520, #B8860B);
+    width: 100%;
+  }
+
+  /* ===== 1. 顶部极简品牌 ===== */
+  .top-bar {
+    padding: 32px 56px 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .top-brand {
+    font-size: 13px;
+    font-weight: 500;
+    color: #CCCCCC;
+    font-family: 'Inter', sans-serif;
+    letter-spacing: 0.06em;
+  }
+  .top-date {
+    font-size: 13px;
+    font-weight: 400;
+    color: #CCCCCC;
+    font-family: 'Inter', sans-serif;
+  }
+  .top-line {
+    margin: 20px 56px 0;
+  }
+
+  /* ===== 2. 核心成就区 ===== */
+  .hero {
+    padding: 56px 56px 0;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+  }
+  .hero-subtitle {
+    font-size: 16px;
+    font-weight: 400;
+    color: #999999;
+    letter-spacing: 0.12em;
+  }
+  .hero-skill-name {
+    font-size: 48px;
+    font-weight: 900;
+    color: #1A1A1A;
+    line-height: 1.15;
+    letter-spacing: -0.02em;
+  }
+
+  /* 超大分数显示 */
+  .score-display {
+    display: flex;
+    align-items: baseline;
+    justify-content: center;
+    gap: 16px;
+    margin-top: 8px;
+  }
+  .score-from {
+    font-size: 80px;
+    font-weight: 300;
+    font-family: 'Inter', sans-serif;
+    color: #E8E8E8;
+    line-height: 1;
+    letter-spacing: -0.04em;
+  }
+  .score-arrow {
+    display: inline-block;
+    width: 48px;
+    height: 2px;
+    background: linear-gradient(90deg, #B8860B, #DAA520);
+    position: relative;
+    top: -30px;
+  }
+  .score-arrow::after {
+    content: '';
+    position: absolute;
+    right: -2px;
+    top: -5px;
+    width: 0;
+    height: 0;
+    border-left: 10px solid #DAA520;
+    border-top: 6px solid transparent;
+    border-bottom: 6px solid transparent;
+  }
+  .score-to {
+    font-size: 128px;
+    font-weight: 900;
+    font-family: 'Inter', sans-serif;
+    color: #1A1A1A;
+    line-height: 1;
+    letter-spacing: -0.05em;
+  }
+
+  .delta-display {
+    display: inline-block;
+    font-size: 48px;
+    font-weight: 900;
+    font-family: 'Inter', sans-serif;
+    letter-spacing: -0.02em;
+    background: linear-gradient(135deg, #B8860B, #DAA520, #B8860B);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-top: 8px;
+  }
+
+  /* ===== 3. 金色分割线 ===== */
+  .divider {
+    margin: 36px 56px 0;
+  }
+
+  /* ===== 4. 最大突破区 ===== */
+  .breakthrough {
+    padding: 40px 56px 0;
+    text-align: left;
+  }
+  .breakthrough-label {
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    margin-bottom: 12px;
+    background: linear-gradient(135deg, #B8860B, #DAA520);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .breakthrough-dim {
+    font-size: 36px;
+    font-weight: 900;
+    color: #1A1A1A;
+    margin-bottom: 8px;
+    letter-spacing: -0.01em;
+  }
+  .breakthrough-score-row {
+    display: flex;
+    align-items: baseline;
+    gap: 14px;
+    margin-bottom: 12px;
+  }
+  .breakthrough-from {
+    font-size: 48px;
+    font-weight: 300;
+    font-family: 'Inter', sans-serif;
+    color: #E0E0E0;
+    line-height: 1;
+  }
+  .breakthrough-mini-arrow {
+    display: inline-block;
+    width: 32px;
+    height: 2px;
+    background: linear-gradient(90deg, #B8860B, #DAA520);
+    position: relative;
+    top: -16px;
+  }
+  .breakthrough-mini-arrow::after {
+    content: '';
+    position: absolute;
+    right: -1px;
+    top: -4px;
+    width: 0;
+    height: 0;
+    border-left: 8px solid #DAA520;
+    border-top: 5px solid transparent;
+    border-bottom: 5px solid transparent;
+  }
+  .breakthrough-to {
+    font-size: 64px;
+    font-weight: 900;
+    font-family: 'Inter', sans-serif;
+    color: #1A1A1A;
+    line-height: 1;
+  }
+  .breakthrough-pct {
+    font-size: 20px;
+    font-weight: 700;
+    font-family: 'Inter', sans-serif;
+    margin-left: 4px;
+    background: linear-gradient(135deg, #B8860B, #DAA520);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .breakthrough-story {
+    font-size: 15px;
+    font-weight: 400;
+    color: #999999;
+    line-height: 1.6;
+    margin-top: 4px;
+  }
+
+  /* ===== 5. 维度网格 ===== */
+  .dims {
+    padding: 40px 56px 0;
+    text-align: left;
+  }
+  .dims-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0;
+  }
+  .dim-cell {
+    padding: 20px 16px;
+    border-bottom: 1px solid #F0F0F0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  /* 右边框：每行前3个有 */
+  .dim-cell:nth-child(4n+1),
+  .dim-cell:nth-child(4n+2),
+  .dim-cell:nth-child(4n+3) {
+    border-right: 1px solid #F0F0F0;
+  }
+  /* 最后一行去掉底边框 */
+  .dim-cell:nth-child(n+5) {
+    border-bottom: none;
+  }
+  .dim-name {
+    font-size: 12px;
+    font-weight: 500;
+    color: #999999;
+    letter-spacing: 0.04em;
+  }
+  .dim-score-row {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+  }
+  .dim-score {
+    font-size: 32px;
+    font-weight: 900;
+    font-family: 'Inter', sans-serif;
+    color: #1A1A1A;
+    line-height: 1.1;
+    letter-spacing: -0.03em;
+  }
+  .dim-delta {
+    font-size: 13px;
+    font-weight: 700;
+    font-family: 'Inter', sans-serif;
+    background: linear-gradient(135deg, #B8860B, #DAA520);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  /* ===== 6. 底部 ===== */
+  .footer-line {
+    margin: 48px 56px 0;
+  }
+  .footer {
+    padding: 20px 56px 32px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .footer-left {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+  .footer-brand {
+    font-size: 14px;
+    font-weight: 600;
+    color: #CCCCCC;
+    font-family: 'Inter', sans-serif;
+    letter-spacing: 0.04em;
+  }
+  .footer-brand .dot {
+    background: linear-gradient(135deg, #B8860B, #DAA520);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .footer-slogan {
+    font-size: 12px;
+    font-weight: 400;
+    color: #CCCCCC;
+  }
+  .footer-url {
+    font-size: 12px;
+    font-weight: 400;
+    color: #CCCCCC;
+    font-family: 'Inter', sans-serif;
+  }
+</style>
+</head>
+<body>
+
+<div class="card">
+
+  <!-- 1. 顶部极简品牌 -->
+  <div class="top-bar">
+    <div class="top-brand">Darwin.skill</div>
+    <div class="top-date" data-field="date">2026.04.14</div>
+  </div>
+  <div class="gold-line top-line"></div>
+
+  <!-- 2. 核心成就区 -->
+  <div class="hero">
+    <div class="hero-subtitle">我的Skill进化报告</div>
+    <div class="hero-skill-name" data-field="skill-name">审校降AI味</div>
+    <div class="score-display">
+      <span class="score-from" data-field="score-before">72</span>
+      <span class="score-arrow"></span>
+      <span class="score-to" data-field="score-after">87</span>
+    </div>
+    <div class="delta-display" data-field="score-delta">+15</div>
+  </div>
+
+  <!-- 3. 金色分割线 -->
+  <div class="gold-line divider"></div>
+
+  <!-- 4. 最大突破 -->
+  <div class="breakthrough">
+    <div class="breakthrough-label">最大突破</div>
+    <div class="breakthrough-dim" data-field="top1-name">指令精度</div>
+    <div class="breakthrough-score-row">
+      <span class="breakthrough-from" data-field="top1-from">5</span>
+      <span class="breakthrough-mini-arrow"></span>
+      <span class="breakthrough-to" data-field="top1-to">9</span>
+      <span class="breakthrough-pct" data-field="top1-pct">+80%</span>
+    </div>
+    <div class="breakthrough-story" data-field="top1-story">从模糊指令到精确可执行，指令精度翻了将近一倍</div>
+  </div>
+
+  <!-- 5. 维度网格 -->
+  <div class="dims">
+    <div class="dims-grid">
+      <div class="dim-cell">
+        <div class="dim-name">元数据</div>
+        <div class="dim-score-row">
+          <span class="dim-score">8</span>
+          <span class="dim-delta">&#9650; +2</span>
+        </div>
+      </div>
+      <div class="dim-cell">
+        <div class="dim-name">工作流</div>
+        <div class="dim-score-row">
+          <span class="dim-score">8</span>
+          <span class="dim-delta">&#9650; +3</span>
+        </div>
+      </div>
+      <div class="dim-cell">
+        <div class="dim-name">边界覆盖</div>
+        <div class="dim-score-row">
+          <span class="dim-score">7</span>
+          <span class="dim-delta">&#9650; +3</span>
+        </div>
+      </div>
+      <div class="dim-cell">
+        <div class="dim-name">检查点</div>
+        <div class="dim-score-row">
+          <span class="dim-score">7</span>
+          <span class="dim-delta">&#9650; +1</span>
+        </div>
+      </div>
+      <div class="dim-cell">
+        <div class="dim-name">指令精度</div>
+        <div class="dim-score-row">
+          <span class="dim-score">9</span>
+          <span class="dim-delta">&#9650; +4</span>
+        </div>
+      </div>
+      <div class="dim-cell">
+        <div class="dim-name">资源整合</div>
+        <div class="dim-score-row">
+          <span class="dim-score">8</span>
+          <span class="dim-delta">&#9650; +1</span>
+        </div>
+      </div>
+      <div class="dim-cell">
+        <div class="dim-name">整体架构</div>
+        <div class="dim-score-row">
+          <span class="dim-score">8</span>
+          <span class="dim-delta">&#9650; +2</span>
+        </div>
+      </div>
+      <div class="dim-cell">
+        <div class="dim-name">实测表现</div>
+        <div class="dim-score-row">
+          <span class="dim-score">8</span>
+          <span class="dim-delta">&#9650; +3</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 6. 底部 -->
+  <div class="gold-line footer-line"></div>
+  <div class="footer">
+    <div class="footer-left">
+      <div class="footer-brand">Darwin<span class="dot">.</span>skill</div>
+      <div class="footer-slogan">像训练模型一样进化你的Skills</div>
+    </div>
+    <div class="footer-url">github.com/alchaincyf/darwin-skill</div>
+  </div>
+
+</div>
+
+</body>
+</html>

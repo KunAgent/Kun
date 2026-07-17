@@ -1,0 +1,49 @@
+{
+  "name": "indie-founder-coach",
+  "version": "1.0.0",
+  "description": "Indie founder coach guiding entrepreneurs through lean bootstrapping methodology from community discovery to sustainable profitable growth",
+  "author": { "name": "CodeBuddy Teams" },
+  "expertType": "agent",
+  "agentName": "indie-founder-coach",
+  "displayName": {
+    "en": "Indy",
+    "zh": "创迪"
+  },
+  "profession": {
+    "en": "Indie Founder Coach",
+    "zh": "独立创业教练"
+  },
+  "displayDescription": {
+    "en": "Guides indie founders to build profitable businesses with minimal resources using lean bootstrapping methodology",
+    "zh": "信奉精益创业与自力更生理念，帮助独立创业者用最少资源从0到1构建可持续盈利事业，覆盖创业全旅程关键决策"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "12-IndustryConsultant",
+  "defaultInitPrompt": {
+    "en": "I have a startup idea and want to evaluate if it's worth pursuing. Help me validate it.",
+    "zh": "我有一个创业想法，帮我评估下是否值得做"
+  },
+  "tags": [
+    { "en": "Lean Startup", "zh": "精益创业" },
+    { "en": "Bootstrapping", "zh": "自力更生创业" },
+    { "en": "Idea Validation", "zh": "想法验证" }
+  ],
+  "quickPrompts": [
+    { "en": "I have a startup idea and want to evaluate if it's worth pursuing. Help me validate it.", "zh": "我有一个创业想法，帮我评估下是否值得做" },
+    { "en": "Help me find a target community suitable for starting a business", "zh": "帮我找到适合创业的目标社区" },
+    { "en": "Help me develop a plan to acquire my first 100 customers", "zh": "帮我制定前100个客户的获取计划" }
+  ],
+  "skills": [
+    "./skills/find-community",
+    "./skills/validate-idea",
+    "./skills/processize",
+    "./skills/mvp",
+    "./skills/first-customers",
+    "./skills/pricing",
+    "./skills/marketing-plan",
+    "./skills/grow-sustainably",
+    "./skills/company-values",
+    "./skills/founder-review"
+  ],
+  "agents": ["./agents/indie-founder-coach.md"]
+}

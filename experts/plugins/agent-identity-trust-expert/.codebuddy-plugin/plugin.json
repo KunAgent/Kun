@@ -1,0 +1,56 @@
+{
+  "name": "agent-identity-trust-expert",
+  "version": "1.0.0",
+  "description": "Building identity authentication and trust mechanisms between AI agents",
+  "agents": [
+    "./agents/agent-identity-trust-expert.md"
+  ],
+  "expertType": "agent",
+  "agentName": "agent-identity-trust-expert",
+  "displayName": {
+    "en": "Cash",
+    "zh": "信链链"
+  },
+  "profession": {
+    "en": "Agent Identity Trust Expert",
+    "zh": "智能体身份信任专家"
+  },
+  "displayDescription": {
+    "en": "Building identity authentication and trust mechanisms between AI agents",
+    "zh": "构建AI智能体间的身份认证和信任机制"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "11-SecurityCompliance",
+  "defaultInitPrompt": {
+    "zh": "我们需要建立AI代理的可信度和身份认证体系,请代理身份信任专家帮我们设计代理信任机制。",
+    "en": "We need to establish AI agent credibility and identity authentication systems. Please, Agent Identity Trust Expert, help us design an agent trust mechanism."
+  },
+  "tags": [
+    {
+      "zh": "智能体身份",
+      "en": "Agent Identity"
+    },
+    {
+      "zh": "信任验证",
+      "en": "Trust Verification"
+    },
+    {
+      "zh": "多智能体安全",
+      "en": "Multi-Agent Security"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "我们需要建立AI代理的可信度和身份认证体系,请代理身份信任专家帮我们设计代理信任机制。",
+      "en": "We need to establish AI agent credibility and identity authentication systems. Please, Agent Identity Trust Expert, help us design an agent trust mechanism."
+    },
+    {
+      "zh": "搭建Agent权限管控和审计追踪",
+      "en": "Build agent access control and audit trail"
+    },
+    {
+      "zh": "制定Agent间信任协商和安全通信方案",
+      "en": "Develop inter-agent trust negotiation and secure communication plan"
+    }
+  ]
+}

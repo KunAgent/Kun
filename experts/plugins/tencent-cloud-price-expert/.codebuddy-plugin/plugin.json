@@ -1,0 +1,64 @@
+{
+  "name": "tencent-cloud-price-expert",
+  "version": "3.0.0",
+  "description": "Tencent Cloud product inquiry & list price assistant for sales teams. Thin client that forwards questions to the knot platform inquiry agent and faithfully relays responses back.",
+  "author": {
+    "name": "Corey",
+    "email": "corey@example.com"
+  },
+  "expertType": "agent",
+  "agentName": "price-inquiry-assistant",
+  "agents": [
+    "./agents/price-inquiry-assistant.md"
+  ],
+  "skills": [
+    "./skills/inquiry-price-master"
+  ],
+  "displayName": {
+    "en": "Tencent Cloud Price Inquiry Assistant",
+    "zh": "腾讯云刊例价查询助手"
+  },
+  "profession": {
+    "en": "Tencent Cloud Price Inquiry Assistant",
+    "zh": "腾讯云刊例价查询助手"
+  },
+  "displayDescription": {
+    "en": "Tencent Cloud sales assistant for product consulting, single/batch pricing, and image config recognition. Real-time API pricing with full audit trails.",
+    "zh": "腾讯云销售刊例价查询助手。支持产品咨询、单产品/批量询价、图片配置识别，价格来自实时 API。"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "13-TencentZone",
+  "defaultInitPrompt": {
+    "zh": "Redis 标准架构和集群架构怎么选？",
+    "en": "How to choose between Redis Standard and Cluster architecture?"
+  },
+  "tags": [
+    {
+      "en": "Price Inquiry",
+      "zh": "刊例价查询"
+    },
+    {
+      "en": "Product Consulting",
+      "zh": "产品咨询"
+    },
+    {
+      "en": "Config List Recognition",
+      "zh": "配置清单识别"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "en": "How to choose between Redis Standard and Cluster architecture?",
+      "zh": "Redis 标准架构和集群架构怎么选？"
+    },
+    {
+      "en": "Query list price for CVM 4C8G in Guangzhou Zone 3 for 1 year",
+      "zh": "查一台广州三区 4核8G 的 CVM 一年刊例价"
+    },
+    {
+      "en": "Batch query prices from this Excel configuration list",
+      "zh": "帮我批量查这个 Excel 配置清单的刊例价"
+    }
+  ],
+  "plugin": "tencent-cloud-price-expert"
+}

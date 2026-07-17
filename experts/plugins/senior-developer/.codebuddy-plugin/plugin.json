@@ -1,0 +1,62 @@
+{
+  "name": "senior-developer",
+  "version": "1.0.0",
+  "description": "Over 10 years of full-stack experience, proficient in multiple languages and frameworks, the technical backbone of the team",
+  "agents": [
+    "./agents/senior-developer.md"
+  ],
+  "expertType": "agent",
+  "agentName": "senior-developer",
+  "displayName": {
+    "en": "Will",
+    "zh": "吴八哥"
+  },
+  "profession": {
+    "en": "Senior Developer",
+    "zh": "高级开发工程师"
+  },
+  "displayDescription": {
+    "en": "Over 10 years of full-stack experience, proficient in multiple languages and frameworks, the technical backbone of the team",
+    "zh": "10年以上全栈经验，精通多种语言和框架，是团队的技术中坚"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "02-Engineering",
+  "defaultInitPrompt": {
+    "zh": "我们的团队技术能力需要提升,需要资深开发者的指导和代码质量把控,请资深开发工程师帮我们提升团队技术水平。",
+    "en": "Our team's technical capabilities need improvement, and we need guidance from senior developers and code quality control. Please, Senior Developer, help us elevate our team's technical level."
+  },
+  "tags": [
+    {
+      "zh": "高级开发",
+      "en": "Senior Development"
+    },
+    {
+      "zh": "架构设计",
+      "en": "Architecture Design"
+    },
+    {
+      "zh": "代码质量",
+      "en": "Code Quality"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "我们的团队技术能力需要提升,需要资深开发者的指导和代码质量把控,请资深开发工程师帮我们提升团队技术水平。",
+      "en": "Our team's technical capabilities need improvement, and we need guidance from senior developers and code quality control. Please, Senior Developer, help us elevate our team's technical level."
+    },
+    {
+      "zh": "集成Three.js实现3D交互效果",
+      "en": "Integrate Three.js for 3D interactive effects"
+    },
+    {
+      "zh": "优化高级CSS布局和动效实现",
+      "en": "Optimize advanced CSS layouts and animation implementation"
+    }
+  ],
+  "skills": [
+    "./skills/browser-use",
+    "./skills/capability-evolver",
+    "./skills/frontend-dev",
+    "./skills/fullstack-dev"
+  ]
+}

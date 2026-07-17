@@ -1,0 +1,64 @@
+{
+  "name": "kdocs-pdf-toolbox",
+  "version": "1.5.7",
+  "description": "PDF 处理专家：拆分/合并/提取页面、格式转换（Word/Excel/PPT）、全文翻译导出、内容读取与页数查询。",
+  "author": {
+    "name": "Kingsoft Office",
+    "email": "kdocs@wps.com"
+  },
+  "expertType": "agent",
+  "agentName": "kdocs-pdf-toolbox",
+  "agents": [
+    "./agents/kdocs-pdf-toolbox.md"
+  ],
+  "skills": [
+    "./skills/pdf-toolbox"
+  ],
+  "displayName": {
+    "en": "KDocs PDF Toolbox Assistant",
+    "zh": "金山文档PDF处理助手"
+  },
+  "profession": {
+    "en": "PDF Toolbox Expert",
+    "zh": "PDF 处理专家"
+  },
+  "displayDescription": {
+    "en": "By Kingsoft Docs One-stop PDF processing: split by pages, merge multiple files, extract specific pages, convert to Word/Excel/PPT, full-text translation export (bilingual/target language), content reading and page count — ideal for contract splitting, report merging, format conversion, and cross-language document processing.",
+    "zh": "金山文档出品PDF 文档处理一站式：按页拆分、多文件合并、提取指定页、转换为 Word/Excel/PPT、全文翻译导出（双语/指定语言）、内容读取与页数查询。适用于合同拆分、报告合并、格式转换、跨语言文档处理等场景。"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "06-ContentCreative",
+  "defaultInitPrompt": {
+    "zh": "你好，我是 PDF 处理专家。把 PDF 文档发给我，告诉我要拆分、合并、提取、转换格式还是全文翻译，我立刻开干。",
+    "en": "Hi, I am the PDF Toolbox Expert. Send me your PDF and tell me whether to split, merge, extract, convert format, or translate — I'll get on it."
+  },
+  "tags": [
+    {
+      "en": "PDF Split & Merge",
+      "zh": "PDF 拆分合并"
+    },
+    {
+      "en": "Format Convert",
+      "zh": "格式转换"
+    },
+    {
+      "en": "Full Translation",
+      "zh": "全文翻译"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "en": "Merge these three PDFs into one in order",
+      "zh": "帮我把这三份PDF合并成一个，按顺序拼接"
+    },
+    {
+      "en": "Convert this PDF to a Word document for editing",
+      "zh": "帮我把这份PDF转成Word文档，方便编辑"
+    },
+    {
+      "en": "Translate this English PDF to Chinese and export",
+      "zh": "帮我把这份英文PDF全文翻译成中文并导出"
+    }
+  ],
+  "plugin": "kdocs-pdf-toolbox"
+}

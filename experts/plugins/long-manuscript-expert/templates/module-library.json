@@ -1,0 +1,153 @@
+{
+  "schemaVersion": "long_manuscript.module_library.v1",
+  "version": "1.0.0",
+  "modules": [
+    {
+      "moduleId": "judgement_core",
+      "category": "starter_core",
+      "slot": "current_judgement",
+      "requiredInFirstValue": true,
+      "stageScopes": ["intake", "first_value", "expand", "revise", "review"],
+      "outputs": ["manuscript_judgement_card"],
+      "closedLoopRole": "intent_to_scene_bridge"
+    },
+    {
+      "moduleId": "scene_match",
+      "category": "starter_core",
+      "slot": "scene_template_match",
+      "requiredInFirstValue": true,
+      "stageScopes": ["intake", "first_value"],
+      "outputs": ["scene_template_match"],
+      "closedLoopRole": "scene_recognition"
+    },
+    {
+      "moduleId": "chapter_route",
+      "category": "starter_core",
+      "slot": "chapter_route_map",
+      "requiredInFirstValue": true,
+      "stageScopes": ["first_value", "expand", "revise"],
+      "outputs": ["chapter_route_map"],
+      "closedLoopRole": "strategy_dispatch"
+    },
+    {
+      "moduleId": "sample_opening",
+      "category": "starter_core",
+      "slot": "sample_opening",
+      "requiredInFirstValue": true,
+      "stageScopes": ["first_value", "expand"],
+      "outputs": ["sample_opening"]
+    },
+    {
+      "moduleId": "risk_split",
+      "category": "quality",
+      "slot": "risks_and_missing_material",
+      "requiredInFirstValue": true,
+      "stageScopes": ["first_value", "revise", "review"],
+      "outputs": ["revision_risk_list"]
+    },
+    {
+      "moduleId": "material_activation",
+      "category": "workflow",
+      "slot": "material_activation_signals",
+      "requiredInFirstValue": true,
+      "stageScopes": ["intake", "first_value"],
+      "outputs": ["material_activation_signals"]
+    },
+    {
+      "moduleId": "quality_quick_summary",
+      "category": "quality",
+      "slot": "quality_quick_summary",
+      "requiredInFirstValue": true,
+      "stageScopes": ["first_value", "expand", "revise", "review", "finish"],
+      "outputs": ["quality_quick_summary"]
+    },
+    {
+      "moduleId": "continuation_progress",
+      "category": "continuation",
+      "slot": "continuation_progress_card",
+      "requiredInFirstValue": true,
+      "stageScopes": ["first_value", "expand", "revise", "finish", "repurpose"],
+      "outputs": ["continuation_progress_card"],
+      "closedLoopRole": "strategy_dispatch"
+    },
+    {
+      "moduleId": "resume_prompt",
+      "category": "continuation",
+      "slot": "next_session_resume_prompt",
+      "requiredInFirstValue": true,
+      "stageScopes": ["first_value", "expand", "revise", "finish", "repurpose"],
+      "outputs": ["next_session_resume_prompt"]
+    },
+    {
+      "moduleId": "finishing_lane_selector",
+      "category": "finishing",
+      "slot": "finishing_lane_options",
+      "requiredInFirstValue": true,
+      "stageScopes": ["first_value", "review", "finish", "repurpose"],
+      "outputs": ["finishing_lane_options"]
+    },
+    {
+      "moduleId": "claim_ledger",
+      "category": "evidence",
+      "slot": "claim_ledger",
+      "requiredInFirstValue": false,
+      "stageScopes": ["revise", "review", "finish"],
+      "outputs": ["claim_ledger"],
+      "closedLoopRole": "claim_upgrade_boundary"
+    },
+    {
+      "moduleId": "evidence_gap_map",
+      "category": "evidence",
+      "slot": "evidence_gap_map",
+      "requiredInFirstValue": false,
+      "stageScopes": ["first_value", "revise", "review"],
+      "outputs": ["evidence_gap_map"]
+    },
+    {
+      "moduleId": "service_coordination_hints",
+      "category": "debug_orchestration",
+      "slot": "service_coordination_hints",
+      "requiredInFirstValue": true,
+      "metadataPreferred": true,
+      "stageScopes": ["first_value", "expand", "finish", "repurpose"],
+      "outputs": ["service_coordination_hints"],
+      "closedLoopRole": "strategy_dispatch"
+    },
+    {
+      "moduleId": "host_action_envelope",
+      "category": "debug_orchestration",
+      "slot": "host_action_envelope",
+      "requiredInFirstValue": true,
+      "metadataPreferred": true,
+      "stageScopes": ["first_value", "expand", "finish", "repurpose"],
+      "outputs": ["hostActionEnvelope"],
+      "closedLoopRole": "strategy_dispatch"
+    },
+    {
+      "moduleId": "project_template_handoff",
+      "category": "handoff",
+      "slot": "project_template_activation_hints",
+      "requiredInFirstValue": false,
+      "stageScopes": ["finish", "repurpose", "distribute"],
+      "outputs": ["project_template_activation_hints"]
+    },
+    {
+      "moduleId": "content_operations_handoff",
+      "category": "handoff",
+      "slot": "content_operations_handoff",
+      "requiredInFirstValue": false,
+      "stageScopes": ["finish", "repurpose", "distribute"],
+      "outputs": ["content_operations_handoff"]
+    },
+    {
+      "moduleId": "entitlement_followthrough",
+      "category": "benefit_followthrough",
+      "slot": "benefit_followthrough",
+      "requiredInFirstValue": false,
+      "metadataPreferred": true,
+      "stageScopes": ["finish", "repurpose", "distribute"],
+      "outputs": ["benefit_state_guardrail"],
+      "closedLoopRole": "benefit_signal"
+    }
+  ]
+}

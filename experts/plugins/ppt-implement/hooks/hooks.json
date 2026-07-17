@@ -1,0 +1,52 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CODEBUDDY_PLUGIN_ROOT}/skills/ppt-implement/scripts/set-env.js\" \"${CODEBUDDY_PLUGIN_ROOT}\" \"${CODEBUDDY_PROJECT_DIR}\" \"SessionStart\"",
+            "timeout": 10000
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Skill",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CODEBUDDY_PLUGIN_ROOT}/skills/ppt-implement/scripts/setup-project.js\" \"${CODEBUDDY_PLUGIN_ROOT}\" \"${CODEBUDDY_PROJECT_DIR}\""
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CODEBUDDY_PLUGIN_ROOT}/skills/ppt-implement/scripts/post-slide.js\" \"${CODEBUDDY_PLUGIN_ROOT}\" \"${CODEBUDDY_PROJECT_DIR}\""
+          }
+        ]
+      }
+    ],
+
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CODEBUDDY_PLUGIN_ROOT}/skills/ppt-implement/scripts/screenshot-cover.js\" \"${CODEBUDDY_PLUGIN_ROOT}\" \"${CODEBUDDY_PROJECT_DIR}\" > /dev/null 2>&1"
+          },
+          {
+            "type": "command",
+            "command": "node \"${CODEBUDDY_PLUGIN_ROOT}/skills/ppt-implement/scripts/export-ppt.js\" \"${CODEBUDDY_PLUGIN_ROOT}\" \"${CODEBUDDY_PROJECT_DIR}\" > /dev/null 2>&1"
+          }
+        ]
+      }
+    ]
+  }
+}

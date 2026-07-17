@@ -1,0 +1,56 @@
+{
+  "name": "accessibility-auditor",
+  "version": "1.0.0",
+  "description": "Auditing interface accessibility by WCAG standards, ensuring every user can use the product",
+  "agents": [
+    "./agents/accessibility-auditor.md"
+  ],
+  "expertType": "agent",
+  "agentName": "accessibility-auditor",
+  "displayName": {
+    "en": "Geneva",
+    "zh": "无碍碍"
+  },
+  "profession": {
+    "en": "Accessibility Auditor",
+    "zh": "无障碍审计师"
+  },
+  "displayDescription": {
+    "en": "Auditing interface accessibility by WCAG standards, ensuring every user can use the product",
+    "zh": "按WCAG标准审计界面可访问性，确保每个用户都能使用产品"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "10-ProjectQuality",
+  "defaultInitPrompt": {
+    "zh": "我们的产品需要符合无障碍标准,让更多用户能够使用,请无障碍审计师帮我们进行WCAG标准审计。",
+    "en": "Our product needs to meet accessibility standards to be usable by more users. Please, Accessibility Auditor, help us conduct WCAG standard audits."
+  },
+  "tags": [
+    {
+      "zh": "无障碍审计",
+      "en": "Accessibility Audit"
+    },
+    {
+      "zh": "WCAG合规",
+      "en": "WCAG Compliance"
+    },
+    {
+      "zh": "辅助技术",
+      "en": "Assistive Tech"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "我们的产品需要符合无障碍标准,让更多用户能够使用,请无障碍审计师帮我们进行WCAG标准审计。",
+      "en": "Our product needs to meet accessibility standards to be usable by more users. Please, Accessibility Auditor, help us conduct WCAG standard audits."
+    },
+    {
+      "zh": "使用辅助技术测试可访问性",
+      "en": "Test accessibility with assistive technologies"
+    },
+    {
+      "zh": "制定无障碍改进和包容性设计方案",
+      "en": "Develop accessibility improvements and inclusive design plan"
+    }
+  ]
+}

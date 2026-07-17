@@ -1,0 +1,78 @@
+{
+  "name": "contract-expert",
+  "version": "1.1.0",
+  "description": "An end-to-end Chinese contract expert that interviews the user to clarify intent, deconstructs the deal structure and commercial logic, identifies contract types and review points, retrieves supporting statutes and precedents, and delivers scenario-adapted drafting, review, negotiation and lifecycle-management outputs with risk annotations and effectiveness verification. Its review engine integrates a professional review mode with built-in formal/substantive playbooks, an eight-step per-rule action, an impact×probability grading matrix, and three deliverables (Excel + Markdown report + Word annotations).",
+  "author": {
+    "name": "WorkBuddy User",
+    "email": "expert@workbuddy.local"
+  },
+  "agents": [
+    "./agents/contract-expert.md"
+  ],
+  "skills": [
+    "./skills/contract-scenario-router",
+    "./skills/contract-intake",
+    "./skills/contract-standards-ingest",
+    "./skills/contract-legal-research",
+    "./skills/contract-drafting-engine",
+    "./skills/contract-review-engine",
+    "./skills/contract-lifecycle-advisor",
+    "./skills/contract-output-formatter"
+  ],
+  "dependencies": {
+    "connectors": [
+      "pkulaw",
+      "qcc-company"
+    ]
+  },
+  "expertType": "agent",
+  "agentName": "contract-expert",
+  "displayName": {
+    "en": "He",
+    "zh": "何同守"
+  },
+  "profession": {
+    "en": "Contract Risk Advisor",
+    "zh": "合同风控顾问"
+  },
+  "displayDescription": {
+    "en": "An end-to-end contract expert that clarifies intent through interviews, deconstructs deal structure, identifies review points, and delivers scenario-adapted drafting, review, negotiation and lifecycle outputs. Its professional review mode outputs an Excel risk list, a Markdown report, and a Word-annotated contract.",
+    "zh": "覆盖合同起草、审查、谈判、背景评估与全生命周期管理；专业审查模式一键产出风险清单、审查报告与批注稿。"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "11-SecurityCompliance",
+  "defaultInitPrompt": {
+    "zh": "我有一个网店合作需求：我方（甲方）出品牌商标和素材授权，对方（乙方）据此设计周边并开网店售卖，这个合作合同该怎么写？",
+    "en": "I have an online-store collaboration: my side (Party A) provides the brand, trademark and material license; the other side (Party B) designs derivatives and runs an online shop. How should this contract be drafted?"
+  },
+  "plugin": "contract-expert",
+  "tags": [
+    {
+      "en": "Contract Drafting",
+      "zh": "合同起草拟制"
+    },
+    {
+      "en": "Review & Risk Control",
+      "zh": "合同审查风控"
+    },
+    {
+      "en": "Deal Structure & Negotiation",
+      "zh": "交易结构与谈判"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "en": "I have an online-store collaboration: my side (Party A) provides the brand, trademark and material license; the other side (Party B) designs derivatives and runs an online shop. How should this contract be drafted?",
+      "zh": "我有一个网店合作需求：我方（甲方）出品牌商标和素材授权，对方（乙方）据此设计周边并开网店售卖，这个合作合同该怎么写？"
+    },
+    {
+      "en": "Review this contract from Party A's standpoint and output a full review report — Excel risk list, a risk report, and a Word-annotated version.",
+      "zh": "站在甲方立场审一遍这份合同，并出一份完整审查报告：Excel 风险清单 + 风险报告 + Word 批注稿"
+    },
+    {
+      "en": "We want to commission a food factory to make a batch of mooncake gift boxes with our company logo. What key points should we focus on in this deal?",
+      "zh": "我们想委托一家食品加工企业订制一批带我们公司logo的月饼礼盒，这个合作里应该重点关注哪些要点？"
+    }
+  ],
+  "sharedBy": "howeli"
+}

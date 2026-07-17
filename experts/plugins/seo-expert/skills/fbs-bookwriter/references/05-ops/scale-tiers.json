@@ -1,0 +1,42 @@
+{
+  "$schema": "fbs-scale-tiers-v1",
+  "version": "1.0.0",
+  "description": "全书规模单一真源：写作策略档位（目标字数+章数）与成稿字符分卷档位（xl-project-init）。SKILL.md、large-scale-book-strategy、scripts 引用本文件。",
+  "skillWritingStrategy": {
+    "comment": "与 SKILL.md「规模与质检策略」一致；resolveSkillStrategyTier 取「按字数档位」与「按章数档位」的较高档，避免单维低估。",
+    "byTargetWords": {
+      "S_max": 50000,
+      "M_max": 500000,
+      "L_max": 2000000
+    },
+    "byPlannedChapters": {
+      "S_max": 10,
+      "M_max": 50,
+      "L_max": 150
+    },
+    "policyByTier": {
+      "S": "全量精检",
+      "M": "Panorama → Deep",
+      "L": "Panorama + 高风险抽样精检",
+      "XL": "分卷 / 分目录批次执行"
+    }
+  },
+  "volumeCharacterThresholds": {
+    "comment": "xl-project-init 统计书稿根下全部 .md 字符总数后的分档；字母与 skill 档位同名，语义为本仓库成稿体量（非仅计划目标）。",
+    "M_min": 50000,
+    "L_min": 500000,
+    "XL_min": 2000000
+  },
+  "volumeSplitTargetCharsPerVolume": {
+    "comment": "buildVolumes 目标卷大小；与档位联动。",
+    "M": 80000,
+    "L": 150000,
+    "XL": 300000
+  },
+  "manuscriptMagnitude": {
+    "comment": "正文 workflow 中 M1/M2/M3 与 skill 档位对照（见 large-scale-book-strategy.md）",
+    "M1": { "maxWords": 50000, "mapsToSkillTierHint": "S" },
+    "M2": { "minWords": 50000, "maxWords": 100000, "mapsToSkillTierHint": "M" },
+    "M3": { "minWords": 100000, "mapsToSkillTierHint": "L 或 XL", "note": "须叠加章节数、会议纪要 ×M3-QC 门禁" }
+  }
+}

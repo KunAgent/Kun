@@ -1,0 +1,56 @@
+{
+  "name": "unreal-world-builder",
+  "version": "1.0.0",
+  "description": "Expert in UE5 World Partition and large world streaming",
+  "agents": [
+    "./agents/unreal-world-builder.md"
+  ],
+  "expertType": "agent",
+  "agentName": "unreal-world-builder",
+  "displayName": {
+    "en": "Zack",
+    "zh": "造世界"
+  },
+  "profession": {
+    "en": "Unreal World Builder",
+    "zh": "Unreal世界构建师"
+  },
+  "displayDescription": {
+    "en": "Expert in UE5 World Partition and large world streaming",
+    "zh": "精通UE5 World Partition和大世界流式加载"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "03-GameSpatial",
+  "defaultInitPrompt": {
+    "zh": "我们的虚幻游戏需要构建世界和关卡,请虚幻世界构建者帮我们设计游戏世界。",
+    "en": "Our Unreal game needs world and level construction. Please, Unreal World Builder, help us design the game world."
+  },
+  "tags": [
+    {
+      "zh": "世界构建",
+      "en": "World Building"
+    },
+    {
+      "zh": "大地图管理",
+      "en": "Large Map Management"
+    },
+    {
+      "zh": "环境设计",
+      "en": "Environment Design"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "我们的虚幻游戏需要构建世界和关卡,请虚幻世界构建者帮我们设计游戏世界。",
+      "en": "Our Unreal game needs world and level construction. Please, Unreal World Builder, help us design the game world."
+    },
+    {
+      "zh": "设计World Partition和HLOD方案",
+      "en": "Design World Partition and HLOD plan"
+    },
+    {
+      "zh": "优化关卡流加载和程序化植被",
+      "en": "Optimize level streaming and procedural foliage"
+    }
+  ]
+}

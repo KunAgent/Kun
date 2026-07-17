@@ -1,0 +1,66 @@
+{
+  "name": "tiderider-sentiment",
+  "version": "1.0.0",
+  "description": "Game sentiment analysis expert powered by BigQuery, specializing in player review mining, topic attribution, and version-level trend analysis",
+  "author": {
+    "name": "TideRider Team",
+    "email": "tiderider@example.com"
+  },
+  "expertType": "agent",
+  "agentName": "tiderider-analyst",
+  "agents": [
+    "./agents/tiderider-analyst.md"
+  ],
+  "skills": [
+    "./skills/bigquery-sentiment",
+    "./skills/steam-deep-analysis"
+  ],
+  "displayName": {
+    "en": "TideRider",
+    "zh": "TideRider"
+  },
+  "profession": {
+    "en": "Game Sentiment Analyst",
+    "zh": "游戏舆情分析师"
+  },
+  "displayDescription": {
+    "en": "Game sentiment analyst via BigQuery: anomaly detection, topic attribution, trend reports.",
+    "zh": "游戏舆情分析：异动归因、话题提取、趋势报告，基于BigQuery多平台数据。"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "13-TencentZone",
+  "defaultInitPrompt": {
+    "zh": "帮我分析一下这款游戏最近一周的舆情",
+    "en": "Analyze the sentiment of this game over the past week"
+  },
+  "tags": [
+    {
+      "en": "Game Sentiment",
+      "zh": "游戏舆情"
+    },
+    {
+      "en": "Player Analysis",
+      "zh": "玩家分析"
+    },
+    {
+      "en": "BigQuery",
+      "zh": "数据智能"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "en": "Analyze the sentiment of this game over the past week",
+      "zh": "帮我分析一下这款游戏最近一周的舆情"
+    },
+    {
+      "en": "Compare sentiment across game versions",
+      "zh": "帮我对比不同版本的舆情变化"
+    },
+    {
+      "en": "Deep-dive into player playtime segments",
+      "zh": "做一个玩家游玩时长分段的深度分析"
+    }
+  ],
+  "plugin": "tiderider-sentiment",
+  "dependencies": {}
+}

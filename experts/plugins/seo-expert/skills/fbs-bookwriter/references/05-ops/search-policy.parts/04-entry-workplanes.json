@@ -1,0 +1,101 @@
+{
+  "entryWorkplanes": {
+    "description": "入口双工作面合同（2.0.2 批准稿）：先用日常语言完成起步分流，再进入书稿工作面。",
+    "enabled": true,
+    "wp1": {
+      "id": "WP1",
+      "name": "起步工作面",
+      "esmState": "INTAKE",
+      "userFacingActions": [
+        "先整理现有材料",
+        "先明确主题",
+        "先一起找方向"
+      ],
+      "firstSentenceForbiddenTerms": [
+        "虚拟书房",
+        "路径A",
+        "路径B",
+        "路径C",
+        "S0",
+        "S0-B"
+      ],
+      "internalRoutes": [
+        "路径A",
+        "路径B",
+        "路径C"
+      ],
+      "contract": "首句先说用户动作，再在第二句按需补充内部术语"
+    },
+    "wp2": {
+      "id": "WP2",
+      "name": "书稿工作面",
+      "activationCondition": "已锁定路径并完成搜索前置合同宣告",
+      "firstUsableWorkspaceDirs": [
+        ".fbs",
+        "deliverables",
+        "releases"
+      ],
+      "stateFiles": [
+        ".fbs/esm-state.md",
+        ".fbs/规范执行状态.md",
+        ".fbs/chapter-status.md"
+      ],
+      "contract": "对用户先说明当前工作区已就绪，资料/进度/交付都在这里，再按需介绍虚拟书房"
+    }
+  },
+  "searchPreflightContract": {
+    "description": "搜索前置合同：进入调研或章节前置检索前，必须先向用户说明本轮检索的目的、范围、后续动作与离线降级方案。",
+    "enabled": true,
+    "requiredFields": [
+      "whyNow",
+      "searchScope",
+      "nextStepAfterSearch",
+      "offlineFallback"
+    ],
+    "mustAnnounceBeforeStages": [
+      "S0",
+      "S1",
+      "S2",
+      "S3",
+      "S5",
+      "S6"
+    ],
+    "mustAnnounceBeforeChapterSearch": true,
+    "blockedIfMissingAnnouncement": true,
+    "defaultUserFacingTemplate": "我先查一下{searchScope}，看看{whyNow}；查完就进入{nextStepAfterSearch}。如果现在不能联网，我会直接告诉你，不会静默跳过。"
+  },
+  "workspaceGovernance": {
+    "description": "workspace 级状态/治理边界：书稿相关真值只落在当前 bookRoot 下的三层目录，artifact 与宿主记忆不可替代。",
+    "enabled": true,
+    "projectTruthDirs": [
+      ".fbs",
+      "deliverables",
+      "releases"
+    ],
+    "projectTruthStateFiles": [
+      ".fbs/esm-state.md",
+      ".fbs/规范执行状态.md",
+      ".fbs/chapter-status.md"
+    ],
+    "artifactBoundary": "brain/<conversation-id>/ 仅用于过程性 artifact，不得充当项目真值",
+    "readOnlyContextSources": [
+      ".workbuddy/memory",
+      "宿主对话摘要",
+      "artifact 文档"
+    ],
+    "userVisiblePreference": [
+      "deliverables",
+      "releases"
+    ],
+    "firstUsableWorkspace": {
+      "id": "WP2",
+      "requiredDirs": [
+        ".fbs",
+        "deliverables",
+        "releases"
+      ],
+      "successSignal": "三层目录已存在且可继续写入/交付/发布准备",
+      "mustExplainToUser": "资料、进度和交付都已进入当前工作区"
+    }
+  }
+}

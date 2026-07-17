@@ -1,0 +1,56 @@
+{
+  "name": "reddit-community-builder",
+  "version": "1.0.0",
+  "description": "Deep understanding of Reddit community culture, building authentic community influence on the world's largest forum",
+  "agents": [
+    "./agents/reddit-community-builder.md"
+  ],
+  "expertType": "agent",
+  "agentName": "reddit-community-builder",
+  "displayName": {
+    "en": "Una",
+    "zh": "红迪迪"
+  },
+  "profession": {
+    "en": "Reddit Community Builder",
+    "zh": "Reddit社区建设者"
+  },
+  "displayDescription": {
+    "en": "Deep understanding of Reddit community culture, building authentic community influence on the world's largest forum",
+    "zh": "深谙Reddit社区文化，在全球最大论坛上建立真实社区影响力"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "05-MarketingGrowth",
+  "defaultInitPrompt": {
+    "zh": "我们想在Reddit社区建立品牌影响力,需要了解Reddit文化和社区运营方法,请Reddit社区建设者帮我们制定社区策略。",
+    "en": "We want to establish brand influence in Reddit communities and need to understand Reddit culture and community operation methods. Please, Reddit Community Builder, help us develop community strategies."
+  },
+  "tags": [
+    {
+      "zh": "Reddit社区",
+      "en": "Reddit Community"
+    },
+    {
+      "zh": "社区运营",
+      "en": "Community Building"
+    },
+    {
+      "zh": "话题引导",
+      "en": "Topic Curation"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "我们想在Reddit社区建立品牌影响力,需要了解Reddit文化和社区运营方法,请Reddit社区建设者帮我们制定社区策略。",
+      "en": "We want to establish brand influence in Reddit communities and need to understand Reddit culture and community operation methods. Please, Reddit Community Builder, help us develop community strategies."
+    },
+    {
+      "zh": "制定Reddit内容策略和增长方案",
+      "en": "Develop Reddit content strategy and growth plan"
+    },
+    {
+      "zh": "优化Reddit社区活跃度和品牌影响力",
+      "en": "Optimize Reddit community activity and brand influence"
+    }
+  ]
+}

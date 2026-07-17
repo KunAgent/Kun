@@ -1,0 +1,56 @@
+{
+  "name": "linked-in-content-creator",
+  "version": "1.0.0",
+  "description": "Expert in LinkedIn professional social platform content strategy, helping establish thought leadership",
+  "agents": [
+    "./agents/linked-in-content-creator.md"
+  ],
+  "expertType": "agent",
+  "agentName": "linked-in-content-creator",
+  "displayName": {
+    "en": "Quinn",
+    "zh": "领英达"
+  },
+  "profession": {
+    "en": "LinkedIn Content Creator",
+    "zh": "LinkedIn内容创作者"
+  },
+  "displayDescription": {
+    "en": "Expert in LinkedIn professional social platform content strategy, helping establish thought leadership",
+    "zh": "精通LinkedIn专业社交平台内容策略，帮助建立思想领袖地位"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "05-MarketingGrowth",
+  "defaultInitPrompt": {
+    "zh": "我们想在LinkedIn建立专业品牌形象,吸引B端客户和人才,请LinkedIn内容创作者帮我们制定职场内容策略。",
+    "en": "We want to establish a professional brand image on LinkedIn to attract B2B clients and talent. Please, LinkedIn Content Creator, help us develop professional content strategies."
+  },
+  "tags": [
+    {
+      "zh": "职场内容",
+      "en": "Professional Content"
+    },
+    {
+      "zh": "领英创作",
+      "en": "LinkedIn Creation"
+    },
+    {
+      "zh": "个人品牌",
+      "en": "Personal Branding"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "我们想在LinkedIn建立专业品牌形象,吸引B端客户和人才,请LinkedIn内容创作者帮我们制定职场内容策略。",
+      "en": "We want to establish a professional brand image on LinkedIn to attract B2B clients and talent. Please, LinkedIn Content Creator, help us develop professional content strategies."
+    },
+    {
+      "zh": "撰写LinkedIn行业洞察长文",
+      "en": "Write LinkedIn industry insight articles"
+    },
+    {
+      "zh": "优化LinkedIn内容触达和互动率",
+      "en": "Optimize LinkedIn content reach and engagement rate"
+    }
+  ]
+}

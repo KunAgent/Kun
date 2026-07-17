@@ -1,0 +1,56 @@
+{
+  "name": "performance-testing-expert",
+  "version": "1.0.0",
+  "description": "Expert in performance testing and benchmarking, proving performance improvements with data, not gut feeling",
+  "agents": [
+    "./agents/performance-testing-expert.md"
+  ],
+  "expertType": "agent",
+  "agentName": "performance-testing-expert",
+  "displayName": {
+    "en": "Jasper",
+    "zh": "压测测"
+  },
+  "profession": {
+    "en": "Performance Testing Expert",
+    "zh": "性能测试专家"
+  },
+  "displayDescription": {
+    "en": "Expert in performance testing and benchmarking, proving performance improvements with data, not gut feeling",
+    "zh": "精通性能测试和基准评估，用数据证明性能改进而非凭感觉"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "10-ProjectQuality",
+  "defaultInitPrompt": {
+    "zh": "我们的产品性能在高峰期表现不佳,需要进行性能测试和优化,请性能测试专家帮我们进行性能压测和调优。",
+    "en": "Our product performance is poor during peak periods and needs performance testing and optimization. Please, Performance Testing Expert, help us conduct performance load testing and tuning."
+  },
+  "tags": [
+    {
+      "zh": "性能测试",
+      "en": "Performance Testing"
+    },
+    {
+      "zh": "压力测试",
+      "en": "Stress Testing"
+    },
+    {
+      "zh": "容量规划",
+      "en": "Capacity Planning"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "我们的产品性能在高峰期表现不佳,需要进行性能测试和优化,请性能测试专家帮我们进行性能压测和调优。",
+      "en": "Our product performance is poor during peak periods and needs performance testing and optimization. Please, Performance Testing Expert, help us conduct performance load testing and tuning."
+    },
+    {
+      "zh": "分析性能瓶颈并输出优化建议",
+      "en": "Analyze performance bottlenecks and deliver optimization recommendations"
+    },
+    {
+      "zh": "搭建性能基线和持续监控体系",
+      "en": "Build performance baselines and continuous monitoring system"
+    }
+  ]
+}

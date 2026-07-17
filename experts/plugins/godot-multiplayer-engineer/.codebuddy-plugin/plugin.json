@@ -1,0 +1,56 @@
+{
+  "name": "godot-multiplayer-engineer",
+  "version": "1.0.0",
+  "description": "Expert in Godot 4 MultiplayerAPI and network replication",
+  "agents": [
+    "./agents/godot-multiplayer-engineer.md"
+  ],
+  "expertType": "agent",
+  "agentName": "godot-multiplayer-engineer",
+  "displayName": {
+    "en": "Faith",
+    "zh": "联网达"
+  },
+  "profession": {
+    "en": "Godot Multiplayer Engineer",
+    "zh": "Godot多人联机工程师"
+  },
+  "displayDescription": {
+    "en": "Expert in Godot 4 MultiplayerAPI and network replication",
+    "zh": "精通Godot 4 MultiplayerAPI和网络复制"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "03-GameSpatial",
+  "defaultInitPrompt": {
+    "zh": "我们的Godot游戏需要多人在线功能,请Godot多人工程师帮我们实现多人网络系统。",
+    "en": "Our Godot game needs multiplayer online functionality. Please, Godot Multiplayer Engineer, help us implement a multiplayer network system."
+  },
+  "tags": [
+    {
+      "zh": "Godot多人",
+      "en": "Godot Multiplayer"
+    },
+    {
+      "zh": "网络同步",
+      "en": "Network Sync"
+    },
+    {
+      "zh": "服务端开发",
+      "en": "Server Dev"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "我们的Godot游戏需要多人在线功能,请Godot多人工程师帮我们实现多人网络系统。",
+      "en": "Our Godot game needs multiplayer online functionality. Please, Godot Multiplayer Engineer, help us implement a multiplayer network system."
+    },
+    {
+      "zh": "设计MultiplayerAPI场景复制和RPC方案",
+      "en": "Design MultiplayerAPI scene replication and RPC plan"
+    },
+    {
+      "zh": "优化ENet/WebRTC传输和权威模型",
+      "en": "Optimize ENet/WebRTC transport and authority models"
+    }
+  ]
+}

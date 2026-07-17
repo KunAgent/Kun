@@ -1,0 +1,61 @@
+{
+  "name": "douyin-strategist",
+  "version": "1.0.0",
+  "description": "Expert in Douyin algorithm and content ecosystem, creating viral short videos and achieving commercial monetization",
+  "agents": [
+    "./agents/douyin-strategist.md"
+  ],
+  "expertType": "agent",
+  "agentName": "douyin-strategist",
+  "displayName": {
+    "en": "Maya",
+    "zh": "斗音音"
+  },
+  "profession": {
+    "en": "Douyin Strategist",
+    "zh": "抖音策略师"
+  },
+  "displayDescription": {
+    "en": "Expert in Douyin algorithm and content ecosystem, creating viral short videos and achieving commercial monetization",
+    "zh": "精通抖音算法和内容生态，打造短视频爆款并实现商业化变现"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "06-ContentCreative",
+  "defaultInitPrompt": {
+    "zh": "我们想在抖音上建立品牌账号并实现快速增长,请抖音战略家帮我们制定抖音运营和内容策略。",
+    "en": "We want to establish a brand account on Douyin and achieve rapid growth. Please, Douyin Strategist, help us develop Douyin operation and content strategies."
+  },
+  "tags": [
+    {
+      "zh": "抖音运营",
+      "en": "Douyin Operations"
+    },
+    {
+      "zh": "短视频策略",
+      "en": "Short Video Strategy"
+    },
+    {
+      "zh": "流量变现",
+      "en": "Traffic Monetization"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "我们想在抖音上建立品牌账号并实现快速增长,请抖音战略家帮我们制定抖音运营和内容策略。",
+      "en": "We want to establish a brand account on Douyin and achieve rapid growth. Please, Douyin Strategist, help us develop Douyin operation and content strategies."
+    },
+    {
+      "zh": "写3个爆款短视频脚本",
+      "en": "Write 3 viral short video scripts"
+    },
+    {
+      "zh": "设计抖音直播带货全流程方案",
+      "en": "Design a complete Douyin livestream sales plan"
+    }
+  ],
+  "skills": [
+    "./skills/anti-distill",
+    "./skills/humanizer",
+    "./skills/remotion-video-toolkit"
+  ]
+}

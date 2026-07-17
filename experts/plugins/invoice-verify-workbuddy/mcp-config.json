@@ -1,0 +1,28 @@
+{
+  "BAIWANG_OCR_STANDARD_URL": {
+    "url": "${BAIWANG_OCR_STANDARD_URL}",
+    "mcpId": "NEW_MCP"
+  },
+  "BAIWANG_INVOICE_RECOGNIZE_VERIFY_URL": {
+    "url": "${BAIWANG_INVOICE_RECOGNIZE_VERIFY_URL}",
+    "mcpId": "NEW_MCP"
+  },
+  "BAIWANG_COUNTERPARTY_RISK_URL": {
+    "url": "${BAIWANG_COUNTERPARTY_RISK_URL}",
+    "mcpId": "NEW_MCP"
+  },
+  "oss": {
+    "accessKey": "${OSS_ACCESS_KEY}",
+    "secretKey": "${OSS_SECRET_KEY}",
+    "bucketName": "${OSS_BUCKET_NAME}",
+    "bucketDomain": "${OSS_BUCKET_DOMAIN}",
+    "endpoint": "${OSS_ENDPOINT}",
+    "prefix": "${OSS_PREFIX}"
+  },
+  "platform": {
+    "taxNo": "${PLATFORM_TAXNO}"
+  },
+  "imageRecogcollect": {
+    "userAccount": "${BAIWANG_IMAGE_RECOGCOLLECT_USER_ACCOUNT}"
+  }
+}

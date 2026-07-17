@@ -1,0 +1,237 @@
+# Plugin Bus Provider Registry v3.2
+# FBS（福帮手 FBS-BookWriter）× WorkBuddy / CodeBuddy 双通道宿主整合
+#
+# ============================================================
+# 【当前通道说明（重要）】
+# 源仓库采用 WorkBuddy / CodeBuddy 双通道分轨：
+#   - `.codebuddy-plugin/plugin.json` → `codebuddy/channel-manifest.json`
+#   - WorkBuddy 审核包 → `workbuddy/channel-manifest.json`
+# 宿主真值统一来自 `scripts/host-capability-detect.mjs` 输出的快照。
+#
+# 三层 Provider 获取优先级：
+#   Tier1: WorkBuddy 本地技能市场（仅 WorkBuddy 环境可用）
+#          路径: ~/.workbuddy/skills-marketplace/skills/
+#   Tier2: 宿主插件（pptx/pdf/docx/xlsx/playwright-cli/find-skills；两平台通用）
+#          路径: ~/.workbuddy/skills/ 或宿主插件目录
+#   Tier3: 远程发现（按需）
+#
+# 运行时平台检测（启动时执行，PowerShell）：
+#   $isWorkBuddy = Test-Path "$env:USERPROFILE\.workbuddy\skills-marketplace"
+#   $isWorkBuddy = true  → host = "workbuddy"，继续探测 Tier1 / Tier2
+#   $isWorkBuddy = false → host = "codebuddy-or-script-only"，优先 Tier2 / fallback
+# ============================================================
+#
+# 校验日期：2026-04-12（WorkBuddy 环境实测）
+# 已确认存在于 WorkBuddy 本地市场的 Tier1 技能：
+#   deep-research, citation-manager, minimax-docx, minimax-pdf, multi-search-engine,
+#   content-ops, agent-team-orchestration, content-factory, deck-generator,
+#   notebooklm-studio, web-search-exa, wechat-article-search, nano-pdf,
+#   autoresearch, content-repurposer, humanizer, pptx-generator
+#   注意：minimax-xlsx 不在本地市场，xlsx 只有 Tier2（插件）
+#   维护约束：该清单需与 `workbuddy/channel-manifest.json` 的 `tier1.preferredSkills` 保持一一对应。
+#
+# 【源码树 vs 市场】`humanizer`、`pptx-generator` 等 id 可能仅出现在用户本机
+# `~/.workbuddy/skills-marketplace/skills/<id>/`，不要求出现在本仓库 `.codebuddy/skills/`。
+# `minimax-xlsx` 若存在于仓库，为可选快照；权威路由仍以本文件中 xlsx Tier2 说明为准。
+# 详见：references/06-plugin/tier1-marketplace-faq.md
+
+
+
+providers:
+
+  # ===== S0 情报收集 =====
+
+  deep-research:
+    display_name: 深度调研引擎
+    description: 结构化深度调研工作流（/research→/research-deep→/research-report），S0主引擎
+    tier1: deep-research           # WorkBuddy 本地市场: ~/.workbuddy/skills-marketplace/skills/deep-research
+    tier2: playwright-cli           # CodeBuddy/WorkBuddy 插件（宿主通用）
+    provides: [s0-deep-web-scrape, s0-academic-db-fill, s0-web-screenshot, s0-research-report]
+    fallback: web_search_only
+    priority: 0
+    write_boundary: ["material-library-fulltext/", "material-library-archive/"]
+    activation_hint: "用户说'深度搜索'/'调研'/'L2级别'/'L3级别'时自动启用"
+
+  multi-search:
+    display_name: 多引擎聚合搜索（17引擎）
+    description: 8国内+9国际，百度/必应/360/搜狗/微信/今日头条/集思录+Google/DuckDuckGo/Brave/Yahoo等，无需API
+    tier1: multi-search-engine      # WorkBuddy 本地市场: ~/.workbuddy/skills-marketplace/skills/multi-search-engine
+    tier2: web_search               # 宿主内置（两平台均可用）
+    tier3: web-search-exa           # Exa神经语义搜索（WorkBuddy 本地市场）
+    provides: [s0-multi-engine-search, s0-wolfram-knowledge, s0-chinese-market-search]
+    fallback: single_engine_only
+    priority: 0
+    write_boundary: ["material-library-fulltext/"]
+    activation_hint: "中文书稿自动启用；涉及中国市场/中文资料时必用"
+
+  wechat-search:
+    display_name: 微信公众号搜索
+    description: 搜索公众号文章（标题/摘要/发布时间/来源/链接），中文资讯补充
+    tier1: wechat-article-search    # WorkBuddy 本地市场（腾讯生态，仅 WorkBuddy 国内版有）
+    host_availability:
+      workbuddy: tier1              # WorkBuddy 国内版：可用
+      codebuddy_cn: tier1_if_available  # CodeBuddy 国内版：可能可用（待验证）
+      codebuddy_intl: unavailable   # CodeBuddy 国际版：不可用（无微信生态）
+    provides: [s0-wechat-articles]
+    fallback: skip
+    priority: 2
+    write_boundary: ["material-library-wechat/"]
+    activation_hint: "书稿主题为中国市场/中文读者时自动建议；CodeBuddy 国际版跳过"
+
+  pdf-literature:
+    display_name: PDF文献引擎（印刷级）
+    description: minimax-pdf三管线(CREATE/FILL/REFORMAT)，token设计系统，印刷级PDF
+    tier1: minimax-pdf              # WorkBuddy 本地市场: ~/.workbuddy/skills-marketplace/skills/minimax-pdf
+    tier2: pdf                      # CodeBuddy/WorkBuddy 插件（宿主通用）
+    tier3: nano-pdf                 # WorkBuddy 本地市场（自然语言指令编辑PDF）
+    provides: [s0-pdf-extract, s5-pdf-delivery, s5-pdf-watermark, s5-pdf-revision]
+    fallback: skip_pdf
+    priority: 1
+    write_boundary: ["material-library-pdf-extracted/", "deliverables/pdf/"]
+
+  citation-provider:
+    display_name: 学术引用管理器（Crossref）
+    description: Crossref API获取真实元数据，APA/MLA/Chicago/GB-T 7714/IEEE/Harvard多格式
+    tier1: citation-manager         # WorkBuddy 本地市场: ~/.workbuddy/skills-marketplace/skills/citation-manager
+    provides: [s0-citation-fetch, s3-citation-format, s5-reference-list, s3-in-text-citation]
+    fallback: manual_citation
+    priority: 1
+    write_boundary: ["references/citations/"]
+    activation_hint: "学术类书籍/白皮书/研究报告自动建议启用"
+
+  # ===== S1/S4 数据与质检 =====
+
+  xlsx-data:
+    display_name: Excel数据引擎
+    description: S1规划表/S4质检仪表盘/S6索引表（注：WorkBuddy本地市场无minimax-xlsx，xlsx仅有Tier2）
+    tier1: null                     # ⚠️ WorkBuddy 本地市场无专用 xlsx 技能（已确认）
+    tier2: xlsx                     # CodeBuddy/WorkBuddy 插件（宿主通用，唯一 Excel 方案）
+    provides: [s1-planning-sheet, s4-qc-dashboard, s6-index-table, s6-data-report]
+    fallback: md_table_only
+    priority: 1
+    write_boundary: ["deliverables/xlsx/", ".fbs/qc-dashboards/"]
+
+  quality-panel:
+    display_name: 专家质量面板（90+分）
+    description: content-ops自动组建专家评审团，递归迭代至90分+，最多3轮
+    tier1: content-ops              # WorkBuddy 本地市场: ~/.workbuddy/skills-marketplace/skills/content-ops
+    provides: [s4-expert-review, s5-content-polish, s4-score-gate]
+    fallback: fbs_builtin_qc_only
+    priority: 1
+    write_boundary: [".fbs/qc-output/"]
+    activation_hint: "S4质检阶段可选增强；章节需要第三方评审时使用"
+
+  # ===== S2/S5 交付 =====
+
+  docx-delivery:
+    display_name: Word交付引擎（OpenXML级）
+    description: minimax-docx三管线(新建/填充/模板+XSD校验)，GB/T 9704-2012国标公文格式
+    tier1: minimax-docx             # WorkBuddy 本地市场: ~/.workbuddy/skills-marketplace/skills/minimax-docx
+    tier2: docx                     # CodeBuddy/WorkBuddy 插件（宿主通用）
+    provides: [s5-docx-export, s4-docx-review, s6-whitepaper, s5-formal-doc]
+    fallback: md_html_only
+    priority: 0
+    write_boundary: ["deliverables/docx/"]
+
+  pptx-delivery:
+    display_name: PPT转化引擎（AI图片）
+    description: deck-generator，Imagen 4.0图片+Google Slides API，完整幻灯片生成
+    tier1: deck-generator           # WorkBuddy 本地市场: ~/.workbuddy/skills-marketplace/skills/deck-generator
+    tier1_alt: pptx-generator       # WorkBuddy 本地市场备选（通用PPT，deck-generator降级）
+    tier2: pptx                     # CodeBuddy/WorkBuddy 插件（宿主通用）
+    provides: [s2-outline-present, s5-pptx-summary, s6-training-course, s6-knowledge-cards]
+    fallback: md_outline_only
+    priority: 2
+    write_boundary: ["deliverables/pptx/"]
+
+  # ===== S6 内容转化 =====
+
+  content-transform:
+    display_name: 内容多格式转化工厂
+    description: content-factory五角色Agent(Writer/Remixer/Editor/Scriptwriter/HeadlineMachine)，一份素材→多种格式
+    tier1: content-factory          # WorkBuddy 本地市场: ~/.workbuddy/skills-marketplace/skills/content-factory
+    tier2: content-repurposer       # WorkBuddy 本地市场（长文→社交片段，也可作为 tier1 降级）
+    provides: [s6-social-media, s6-marketing-copy, s6-video-script, s6-newsletter]
+    fallback: no_transform
+    priority: 3
+    write_boundary: ["deliverables/social/", "deliverables/marketing/"]
+
+  learning-products:
+    display_name: 学习产品生成器（NotebookLM）
+    description: notebooklm-studio，9种学习产物：播客/视频/测验/抽认卡/思维导图/幻灯片/信息图/数据表
+    tier1: notebooklm-studio        # WorkBuddy 本地市场: ~/.workbuddy/skills-marketplace/skills/notebooklm-studio
+    provides: [s6-podcast, s6-quiz, s6-flashcard, s6-mindmap, s6-slide-deck]
+    fallback: skip
+    priority: 3
+    write_boundary: ["deliverables/learning/"]
+    activation_hint: "教育/知识付费类书籍S6延伸必备"
+
+  copy-optimizer:
+    display_name: 文案优化器（进化算法）
+    description: autoresearch Karpathy式50+变体+5专家评分+进化迭代，书名/营销文案优化
+    tier1: autoresearch             # WorkBuddy 本地市场: ~/.workbuddy/skills-marketplace/skills/autoresearch
+    provides: [s6-title-ab-test, s6-cover-copy, s6-blurb-optimize]
+    fallback: skip
+    priority: 3
+    write_boundary: ["deliverables/copy/"]
+
+  # ===== 编排与扩展 =====
+
+  humanizer:
+    display_name: 去AI味增强器
+    description: 补充FBS内置ai-pattern-lexicon.json，进行更深度的AI痕迹消除处理
+    tier1: humanizer                # WorkBuddy 本地市场: ~/.workbuddy/skills-marketplace/skills/humanizer
+    host_availability:
+      workbuddy: tier1
+      codebuddy: unavailable        # CodeBuddy 无此技能，使用 FBS 内置 AI-scan 兜底
+    provides: [s4-ai-pattern-reduction]
+    fallback: fbs_builtin_ai_scan   # FBS 内置 ai-pattern-lexicon.json 检测
+    priority: 2
+    write_boundary: []              # 只读分析，不写文件
+
+  team-orchestration:
+    display_name: 多Agent编排增强器
+    description: agent-team-orchestration，角色定义/任务流转/交接协议/质量门禁
+    tier1: agent-team-orchestration # WorkBuddy 本地市场: ~/.workbuddy/skills-marketplace/skills/agent-team-orchestration
+    provides: [orchestration-enhancement, task-lifecycle, handoff-protocol]
+    fallback: fbs_native_orchestration
+    priority: 2
+    write_boundary: []
+
+  skill-discovery:
+    display_name: 技能发现器
+    description: find-skills动态发现新技能（本地市场→Vercel Skills→ClawHub）
+    tier2: find-skills              # CodeBuddy/WorkBuddy 插件（宿主通用）
+    tier3: clawhub_fallback         # npx clawhub search/install（两平台均可）
+    provides: [dynamic-scene-pack, capability-extension]
+    fallback: builtin_packs_only
+    priority: 3
+    write_boundary: []
+
+dispatch:
+  default_mode: "try_available"          # try_available | required | optional
+  core_providers: [deep-research, multi-search, docx-delivery]
+  failure_policy: "graceful"             # graceful | strict
+  local_market_first: true                # WorkBuddy 环境：始终先检查 Tier1 本地市场
+  auto_copy_from_marketplace: false       # 当前通道不再依赖复制激活，统一以宿主快照为准
+  marketplace_path: "~/.workbuddy/skills-marketplace/skills"  # WorkBuddy 本地市场
+  installed_skills_path: "~/.workbuddy/skills"                # WorkBuddy 已启用插件
+  platform_detection:
+    workbuddy_marker: "$env:USERPROFILE\\.workbuddy\\skills-marketplace"
+    detection_logic: |
+      if (Test-Path workbuddy_marker) → host = "workbuddy" → 继续探测 Tier1 / Tier2
+      else → host = "codebuddy-or-script-only" → 优先 Tier2，再回退内置能力
+    channel_strategy: "dual-channel"
+    tier1_scope: "workbuddy-only"
+
+
+
+# 各S阶段Provider调度速查
+stage_dispatch:
+  s0: [deep-research, multi-search, citation-provider, wechat-search, pdf-literature]
+  s1: [xlsx-data]
+  s2: [pptx-delivery]
+  s3: [citation-provider, xlsx-data, pdf-literature]
+  s4: [quality-panel, xlsx-data, docx-delivery]
+  s5: [docx-delivery, pdf-literature, pptx-delivery, xlsx-data]
+  s6: [content-transform, learning-products, copy-optimizer, pptx-delivery, docx-delivery]

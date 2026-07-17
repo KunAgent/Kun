@@ -1,0 +1,1543 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "name": "workflow.search-policy",
+  "description": "联网检索强制策略：与 SKILL.md、references/01-core/section-3-workflow.md 对齐；四支柱深化见 references/05-ops/web-search-strategy-deep.md",
+  "version": "2.1.2",
+  "mandatoryWebSearchStages": [
+    "S0",
+    "S1",
+    "S2",
+    "S3",
+    "S5",
+    "S6"
+  ],
+  "conditionalWebSearchStages": [
+    "S2.5"
+  ],
+  "topicLock": {
+    "description": "主题锁定机制：防止上下文跳变",
+    "enabled": true,
+    "requiredFields": [
+      "topic",
+      "lockedAt",
+      "confirmedByUser"
+    ],
+    "s0Output": {
+      "mustInclude": [
+        "**主题**：{topic}"
+      ],
+      "position": "首行",
+      "conceptDefinitionPolicy": "s0Output 中若出现用户自定义新概念（非行业通用词汇），须在简报内显式定义：格式「**概念定义**：{概念名}＝{简明定义（≤30字）}」；未定义则阻断进入 S1（s0ConceptGate）。"
+    },
+    "s0ConceptGate": {
+      "enabled": true,
+      "description": "新概念首现门禁：S0 简报包含用户自定义概念时，须在简报内给出显式定义；缺失则阻断进入 S1",
+      "blockCondition": "s0Output 存在未定义的自定义新概念（用户话术中明确出现但非行业通用词汇）",
+      "blockMessage": "⚠️ 检测到新概念「{概念名}」尚无显式定义，请在 S0 简报补充「**概念定义**：{概念名}＝{简明定义}」后再进入 S1。",
+      "exampleConcepts": [
+        "智能资产",
+        "可进化内容",
+        "数字灵魂",
+        "知识孪生"
+      ]
+    },
+    "driftDetection": {
+      "enabled": true,
+      "triggerOn": [
+        "用户说确认",
+        "读取历史文件",
+        "阶段切换"
+      ],
+      "actionOnDrift": "ASK_CONFIRMATION"
+    }
+  },
+  "userMemoryIntegration": {
+    "description": "WorkBuddy 用户记忆桥接层：仅负责把宿主侧用户档案整理为本书可读摘要，不直接充当智能记忆内核。",
+    "versionNote": "此层依赖宿主可选脚本；以 opt-in CLI 输出与人工确认为准，未随包提供时允许跳过。",
+    "mode": "opt_in",
+    "integrationRole": "host-optional-bridge",
+    "orchestratorCli": "init-project-memory.mjs",
+    "requireExplicitBookRootForWrite": true,
+    "maxBytesPerFile": 32768,
+    "maxTotalDigestChars": 12000,
+    "workspaceMemory": {
+      "relativeDir": ".workbuddy/memory",
+      "preferFilenames": [
+        "MEMORY.md"
+      ],
+      "includeDateLogsMax": 3
+    },
+    "userProfileDir": {
+      "relativeToUserHome": ".workbuddy",
+      "preferFilenames": [
+        "USER.md",
+        "BOOTSTRAP.md",
+        "IDENTITY.md",
+        "SOUL.md"
+      ]
+    },
+    "injectIntoBookAs": ".fbs/workbuddy-memory-digest.json",
+    "mustPassGatesBeforeUse": [
+      "topicConsistencyGate",
+      "C0-4"
+    ],
+    "cliEntry": "workbuddy-memory-digest.mjs"
+  },
+  "environmentSnapshot": {
+    "description": "本书侧环境指纹桥接层：记录路径存在性与 search-policy 版本，不写入记忆内容 hash。",
+    "versionNote": "此层同样依赖宿主可选脚本；缺失时允许跳过，不影响智能记忆主链。",
+    "mode": "opt_in",
+    "integrationRole": "host-optional-bridge",
+    "orchestratorCli": "init-project-memory.mjs",
+    "relativeOutputFile": ".fbs/workbuddy-environment.json",
+    "cliEntry": "workbuddy-environment-snapshot.mjs"
+  },
+  "entryWorkplanes": {
+    "description": "入口双工作面合同（2.0.2 批准稿）：先用日常语言完成起步分流，再进入书稿工作面。",
+    "enabled": true,
+    "wp1": {
+      "id": "WP1",
+      "name": "起步工作面",
+      "esmState": "INTAKE",
+      "userFacingActions": [
+        "先整理现有材料",
+        "先明确主题",
+        "先一起找方向"
+      ],
+      "firstSentenceForbiddenTerms": [
+        "虚拟书房",
+        "路径A",
+        "路径B",
+        "路径C",
+        "S0",
+        "S0-B"
+      ],
+      "internalRoutes": [
+        "路径A",
+        "路径B",
+        "路径C"
+      ],
+      "contract": "首句先说用户动作，再在第二句按需补充内部术语"
+    },
+    "wp2": {
+      "id": "WP2",
+      "name": "书稿工作面",
+      "activationCondition": "已锁定路径并完成搜索前置合同宣告",
+      "firstUsableWorkspaceDirs": [
+        ".fbs",
+        "deliverables",
+        "releases"
+      ],
+      "stateFiles": [
+        ".fbs/esm-state.md",
+        ".fbs/规范执行状态.md",
+        ".fbs/chapter-status.md"
+      ],
+      "contract": "对用户先说明当前工作区已就绪，资料/进度/交付都在这里，再按需介绍虚拟书房"
+    }
+  },
+  "searchPreflightContract": {
+    "description": "搜索前置合同：进入调研或章节前置检索前，必须先向用户说明本轮检索的目的、范围、后续动作与离线降级方案。",
+    "enabled": true,
+    "requiredFields": [
+      "whyNow",
+      "searchScope",
+      "nextStepAfterSearch",
+      "offlineFallback"
+    ],
+    "mustAnnounceBeforeStages": [
+      "S0",
+      "S1",
+      "S2",
+      "S3",
+      "S5",
+      "S6"
+    ],
+    "mustAnnounceBeforeChapterSearch": true,
+    "blockedIfMissingAnnouncement": true,
+    "defaultUserFacingTemplate": "我先查一下{searchScope}，看看{whyNow}；查完就进入{nextStepAfterSearch}。如果现在不能联网，我会直接告诉你，不会静默跳过。"
+  },
+  "workspaceGovernance": {
+    "description": "workspace 级状态/治理边界：书稿相关真值只落在当前 bookRoot 下的三层目录，artifact 与宿主记忆不可替代。",
+    "enabled": true,
+    "projectTruthDirs": [
+      ".fbs",
+      "deliverables",
+      "releases"
+    ],
+    "projectTruthStateFiles": [
+      ".fbs/esm-state.md",
+      ".fbs/规范执行状态.md",
+      ".fbs/chapter-status.md"
+    ],
+    "artifactBoundary": "brain/<conversation-id>/ 仅用于过程性 artifact，不得充当项目真值",
+    "readOnlyContextSources": [
+      ".workbuddy/memory",
+      "宿主对话摘要",
+      "artifact 文档"
+    ],
+    "userVisiblePreference": [
+      "deliverables",
+      "releases"
+    ],
+    "firstUsableWorkspace": {
+      "id": "WP2",
+      "requiredDirs": [
+        ".fbs",
+        "deliverables",
+        "releases"
+      ],
+      "successSignal": "三层目录已存在且可继续写入/交付/发布准备",
+      "mustExplainToUser": "资料、进度和交付都已进入当前工作区"
+    }
+  },
+  "s5FinalReviewNotes": "S5 终审：对拟发布的事实句、统计数据与引用进行按需 WebSearch/WebFetch 复核；与 SKILL.md §0 联网规范一致",
+  "smartMemory": {
+    "description": "智能记忆主链：以 smart-memory-core.mjs 为核心真值，smart-memory-natural.mjs 为自然语言入口。",
+    "versionNote": "核心引擎负责数据结构与确定性动作；自然语言入口负责用户口语命令；宿主桥接通过 userMemoryIntegration / environmentSnapshot 接入。",
+    "enabled": true,
+    "profileIsolation": true,
+    "learningRate": 0.1,
+    "memoryRetentionDays": 90,
+    "maxMemorySize": "10MB",
+    "profileId": null,
+    "entryLayers": {
+      "coreCliEntry": "smart-memory-core.mjs",
+      "naturalCliEntry": "smart-memory-natural.mjs",
+      "projectInitCli": "init-project-memory.mjs",
+      "hostOptionalBridges": [
+        "workbuddy-memory-digest.mjs",
+        "workbuddy-environment-snapshot.mjs"
+      ]
+    },
+    "architecture": {
+      "userProfileLayer": {
+        "description": "用户画像层（隔离）：只存储原始用户信息",
+        "features": [
+          "basicInfo",
+          "workContext",
+          "preferences",
+          "history"
+        ],
+        "readOnly": true,
+        "source": "workbuddy://USER.md,IDENTITY.md,SOUL.md",
+        "isolation": true
+      },
+      "learnedFeaturesLayer": {
+        "description": "学习特征层（代码实现）：存储代码提取的特征",
+        "features": [
+          "vocabulary",
+          "sentenceStructure",
+          "tone",
+          "formatting",
+          "rhetorical"
+        ],
+        "updateMode": "incremental",
+        "cliEntry": "smart-memory-core.mjs"
+      },
+      "applicationLayer": {
+        "description": "应用层（适配引擎）：根据学习特征进行内容适配",
+        "adapters": [
+          "vocabulary",
+          "sentenceStructure",
+          "tone",
+          "formatting"
+        ],
+        "adaptationMode": "balanced",
+        "dataFlow": "unidirectional"
+      },
+      "organizationLayer": {
+        "description": "整理分析层（WorkBuddy适应性）：监控变化、里程碑管理",
+        "features": [
+          "workbuddyMonitoring",
+          "milestoneManagement",
+          "dataCleanup"
+        ],
+        "workbuddyDir": "~/.workbuddy",
+        "adaptationStrategy": "automatic"
+      }
+    },
+    "resetMechanism": {
+      "description": "重置机制：支持软重置、硬重置、完全重置",
+      "types": [
+        "soft",
+        "hard",
+        "full"
+      ],
+      "soft": "清空学习特征，保留用户画像",
+      "hard": "清空学习特征 + 应用层配置",
+      "full": "清空所有数据",
+      "cliEntry": "smart-memory-core.mjs"
+    },
+    "decouplingMechanism": {
+      "description": "脱钩机制：支持临时脱钩、永久脱钩",
+      "types": [
+        "temporary",
+        "permanent"
+      ],
+      "temporary": "禁用应用层适配，自动恢复（默认1小时）",
+      "permanent": "删除学习特征，永久禁用个性化",
+      "autoRestoreAfter": 1,
+      "cliEntry": "smart-memory-core.mjs"
+    },
+    "applicationBoundaries": {
+      "description": "应用边界：防止过度适配、保护特定内容类型",
+      "maxAdaptationIntensity": 0.5,
+      "minAdaptationFrequency": 0.1,
+      "protectedContentTypes": [
+        "code",
+        "technical",
+        "legal"
+      ],
+      "memorySizeLimit": "10MB",
+      "cliEntry": "smart-memory-core.mjs"
+    },
+    "workbuddyAdaptation": {
+      "description": "WorkBuddy 升级适应性：定期分析变化，自动适配建议",
+      "monitoredFiles": [
+        "USER.md",
+        "IDENTITY.md",
+        "SOUL.md",
+        "memory/",
+        "memery/"
+      ],
+      "analysisInterval": "weekly",
+      "autoTrigger": true,
+      "milestoneAutoCreate": true,
+      "cliEntry": "smart-memory-core.mjs"
+    },
+    "cliEntry": "smart-memory-core.mjs",
+    "naturalCliEntry": "smart-memory-natural.mjs",
+    "naturalInterface": true,
+    "adjacentModules": {
+      "description": "与智能记忆强相关但不与内核同级的能力模块",
+      "modules": [
+        {
+          "name": "style-learning",
+          "cliEntry": "style-learning.mjs",
+          "role": "从历史文本学习风格，可向 learnedFeatures 层写入输入"
+        },
+        {
+          "name": "session-state",
+          "cliEntry": "session-state-manager.mjs",
+          "role": "跨会话状态恢复，不替代智能记忆真值结构"
+        },
+        {
+          "name": "template-recommendation",
+          "cliEntry": "template-recommender.mjs",
+          "role": "基于历史偏好推荐模板，不直接定义记忆底层结构"
+        },
+        {
+          "name": "workbuddy-user-profile-bridge",
+          "cliEntry": "workbuddy-user-profile-bridge.mjs",
+          "role": "读取宿主画像，供 intake / 个性化适配参考"
+        },
+        {
+          "name": "exa-search-enhancement",
+          "cliEntry": "exa-search-enhancer.mjs",
+          "role": "提供语义搜索增强，与智能记忆协作但不属于内核"
+        }
+      ]
+    },
+    "supportedCommands": [
+      "重置记忆 / 重新开始 / 清空学习",
+      "查看风格 / 显示记忆状态 / 我的写作特征",
+      "脱离个性化 / 与个性脱钩 / 断开个性化",
+      "恢复个性化 / 重新启用 / 恢复适配",
+      "查看学习历史 / 学习记录 / 特征统计",
+      "检查边界 / 应用边界 / 适配强度",
+      "WorkBuddy分析 / 整理分析 / 升级适配"
+    ]
+  },
+  "selfEnhancementEvolution": {
+    "description": "v2.0.1 新增自增强进化机制：通过联网搜索获取方法论知识，实现Skill能力的持续渐进式进化",
+    "versionNote": "实现去AI味、质检、创意选题、风格微调、内容资产化、会议角色智能设计等核心能力的自进化",
+    "enabled": true,
+    "evolutionEngine": "scripts/self-enhancement-evolution.mjs",
+    "knowledgeFetcher": "scripts/knowledge-fetcher.mjs",
+    "evolutionDomains": {
+      "deAIFlavor": {
+        "name": "去AI味方法论",
+        "description": "通过自然化表达、情感注入、语气调整等手段消除AI写作痕迹",
+        "capabilityModule": "de-aiflavor-enhancer"
+      },
+      "qualityCheck": {
+        "name": "质检优化方法论",
+        "description": "提升内容质量检查的准确性和覆盖面",
+        "capabilityModule": "quality-check-enhancer"
+      },
+      "creativeTopic": {
+        "name": "创意选题方法论",
+        "description": "创新性选题和角度挖掘的方法",
+        "capabilityModule": "creative-topic-enhancer"
+      },
+      "styleAdjustment": {
+        "name": "风格微调方法论",
+        "description": "根据目标风格和用户偏好进行精细化风格调整",
+        "capabilityModule": "style-adjustment-enhancer"
+      },
+      "contentAssetization": {
+        "name": "内容资产化方法论",
+        "description": "将内容转化为可复用、可交易的资产的方法",
+        "capabilityModule": "content-assetization-enhancer"
+      },
+      "meetingRoleDesign": {
+        "name": "会议角色智能设计",
+        "description": "根据会议目的和参与者特点设计最优角色配置",
+        "capabilityModule": "meeting-role-enhancer"
+      }
+    },
+    "evolutionTriggers": {
+      "timeBased": {
+        "enabled": true,
+        "intervalDays": 30
+      },
+      "usageBased": {
+        "enabled": true,
+        "thresholdOperations": 100
+      },
+      "performanceBased": {
+        "enabled": true,
+        "qualityDropThreshold": 0.1,
+        "userComplaintThreshold": 3
+      },
+      "manualTrigger": {
+        "enabled": true,
+        "requireConfirmation": true
+      }
+    },
+    "safetyMechanisms": {
+      "preEvolutionChecks": {
+        "versionCompatibility": true,
+        "resourceAvailability": true,
+        "networkStability": true,
+        "backupCurrent": true
+      },
+      "evolutionLimits": {
+        "maxDomainsPerRun": 1,
+        "maxKnowledgePoints": 5,
+        "maxModulesPerMonth": 2,
+        "rollbackDays": 7
+      },
+      "qualityValidation": {
+        "enabled": true,
+        "minSearchResults": 3,
+        "relevanceThreshold": 0.7,
+        "authorityCheck": true,
+        "duplicateDetection": true,
+        "harmfulContentCheck": true
+      },
+      "rollbackMechanism": {
+        "enabled": true,
+        "automaticRollback": true,
+        "manualRollback": true,
+        "maxRollbackVersions": 3
+      }
+    },
+    "userControl": {
+      "authorizationMode": "explicit",
+      "notification": {
+        "preEvolution": true,
+        "progressUpdates": true,
+        "postEvolution": true,
+        "rollbackAvailable": true
+      },
+      "userControls": {
+        "approveEvolution": true,
+        "rejectEvolution": true,
+        "pauseEvolution": true,
+        "rollbackEvolution": true,
+        "viewDetails": true,
+        "customizeScope": true
+      },
+      "transparency": {
+        "showSearchResults": true,
+        "showMethodology": true,
+        "showChanges": true,
+        "showImpact": true,
+        "showTesting": true,
+        "showRollbackOption": true
+      }
+    },
+    "knowledgeManagement": {
+      "knowledgeBasePath": ".fbs/evolution-knowledge/",
+      "knowledgeStructure": {
+        "domains": {},
+        "methodologies": {},
+        "bestPractices": {},
+        "expertInsights": {},
+        "evolutionHistory": []
+      },
+      "updateStrategy": {
+        "incremental": true,
+        "mergeConflicts": "prefer_new",
+        "pruneObsolete": true,
+        "obsoleteDays": 365
+      }
+    },
+    "naturalLanguageCommands": [
+      "检查进化状态 / 进化进度 / 能力更新情况",
+      "触发进化 / 开始能力提升 / 升级方法论",
+      "查看方法论知识 / 获取最新技巧 / 学习最佳实践",
+      "回滚进化 / 撤销更新 / 恢复之前的版本",
+      "暂停进化 / 停止自动更新 / 暂停能力提升"
+    ]
+  },
+  "chapterWriting": {
+    "description": "每一章进入成文前至少完成一轮主题相关检索并记录检索意图",
+    "minQueriesPerChapter": 2,
+    "requireL2EvidencePerChapter": true,
+    "l2EvidenceNote": "章节核心事实至少包含 1 条 L2/L3（一手页面/交叉验证）证据；仅有 L1 搜索摘要不得视为完成。",
+    "notes": "由宿主（CodeBuddy / WorkBuddy 等）执行 WebSearch/WebFetch；编排层应记录每章检索次数以供门禁校验。检索结论须**嵌入正文或数据来源索引**：凡写入正文的具体事实/数字/分省数据，须在句旁脚注、括注或「本章数据来源索引」可回溯，禁止仅有章末「检索执行记录」块而正文仍无出处（对齐 Skill 待改进 M6 / B2-B′）。",
+    "genreCheckPolicy": {
+      "description": "按书籍体裁动态调整章前最低检索次数：不同体裁的事实核查密度差异显著，统一使用 minQueriesPerChapter=2 对历史/学术类书籍严重不足",
+      "overrides": [
+        {
+          "genre": "历史/家族史/考证类",
+          "matchKeywords": [
+            "家族史",
+            "通史",
+            "考证",
+            "史料",
+            "古籍",
+            "历史"
+          ],
+          "minQueriesPerChapter": 4,
+          "note": "历史类每章涉及多典籍来源与多处争议事实，最低4次检索；其中至少1次须针对具体年份/人物/事件做精确查证"
+        },
+        {
+          "genre": "学术/白皮书/研究报告类",
+          "matchKeywords": [
+            "白皮书",
+            "研究报告",
+            "行业报告",
+            "学术",
+            "论文"
+          ],
+          "minQueriesPerChapter": 3,
+          "note": "学术类每章须有≥1次数据时效性验证检索"
+        },
+        {
+          "genre": "商业/手册/指南类",
+          "matchKeywords": [
+            "手册",
+            "指南",
+            "实战",
+            "教程",
+            "入门"
+          ],
+          "minQueriesPerChapter": 2,
+          "note": "商业类维持默认值；若章节涉及具体工具/政策数据，自动触发补检"
+        },
+        {
+          "genre": "B级体裁（报道/深度稿/专题/长文）",
+          "matchKeywords": [
+            "报道",
+            "深度稿",
+            "特稿",
+            "专题",
+            "调查报道",
+            "长文",
+            "新闻"
+          ],
+          "minQueriesPerChapter": 2,
+          "s0Override": {
+            "description": "B级体裁走S0-lite（轻量调研），S0阶段检索总轮次上限8轮（vs A级14轮）",
+            "s0TotalMaxQueries": 8,
+            "note": "S0-lite：时间戳(1)+国内竞品(2)+海外竞品(1)+读者分析(2)+变现路径(2)=8轮；维度门禁仍要求4维度各≥1轮"
+          },
+          "note": "B级体裁章前检索维持默认2次；S0走轻量调研，不走14轮完整S0"
+        }
+      ],
+      "fallback": "无体裁匹配时使用 minQueriesPerChapter 全局默认值",
+      "detectionTiming": "S1 定位确认后，由模型根据风格档案和书名关键词自动判断体裁并写入 .fbs/project-config.json 的 genreTag 字段；后续每章门禁以该字段为准"
+    },
+    "markdownEvidenceHeadings": [
+      "检索记录",
+      "检索与来源",
+      "检索摘要",
+      "联网检索摘要",
+      "检索",
+      "检索执行情况",
+      "检索执行记录",
+      "本章数据来源索引",
+      "关键数据来源索引",
+      "数据来源索引"
+    ],
+    "parallelProjectBootstrap": "node scripts/init-fbs-multiagent-artifacts.mjs --book-root <本书根>（生成 .fbs/chapter-status.md、search-ledger.jsonl 等）"
+  },
+  "searchPurposeLayers": {
+    "description": "联网搜索目的分层策略（v2.0）：L1-L5 五层，各层触发时机与输出格式不同；L1-L2 为原有层次（已有 s0ParallelQueries/chapterWriting 覆盖），L3-L5 为 v2.0 新增",
+    "L1_factCheck": {
+      "purpose": "事实核查",
+      "trigger": "正文事实置信度<0.8 或内容类型触发（factAnnotationProtocol）",
+      "grade": "A/B/C",
+      "note": "已由 autoSearchOnUncertainty 覆盖，本层描述作为分层索引"
+    },
+    "L2_competitorScan": {
+      "purpose": "竞品扫描（同类书/内容产品）",
+      "trigger": "S0 调研阶段",
+      "grade": "A",
+      "note": "已由 s0ParallelQueries.competitorDomestic/Overseas 覆盖，本层描述作为分层索引"
+    },
+    "L3_workIntel": {
+      "purpose": "作品情报（同类作品六维深度解读）",
+      "trigger": "S0-B 作品情报站（有原料或有主题时触发）",
+      "grade": "A/B",
+      "outputFormat": "六维情报表（主题内核/结构策略/叙事风格/读者假设/留白与空缺/可借鉴手法）+ 风格试笔片段（200字）",
+      "ledgerDimension": "workIntel",
+      "note": "优先 WebFetch 豆瓣/亚马逊评论区、作者采访、出版社页；JS渲染页退回RSS摘要"
+    },
+    "L4_frontierSensing": {
+      "purpose": "前沿感知（主题领域最新进展）",
+      "trigger": "S1 主题定位后 + 每章前置检索（A级体裁必做）",
+      "grade": "A",
+      "outputFormat": "时间线摘要（近6个月 → 近3年主要进展）+ 是否影响本书论点判断",
+      "ledgerDimension": "frontierSensing",
+      "note": "须配合 temporalAccuracy 策略，year参数运行时动态注入；摘要写入对应章节 writing-notes"
+    },
+    "L5_readerLanguage": {
+      "purpose": "读者语言感知（目标读者真实讨论与词汇）",
+      "trigger": "S0 读者分析阶段（与 readerAnalysis 维度并行）",
+      "grade": "A/B",
+      "outputFormat": "读者词汇表（≥20个高频词）+ 读者关切清单（≥10条）+ 词汇禁忌清单（读者反感表述 ≥5条）",
+      "outputFile": ".fbs/reader-language.md",
+      "searchTargets": [
+        "知乎问答",
+        "微博讨论",
+        "豆瓣书评",
+        "小红书",
+        "B站评论区（如适用）",
+        "亚马逊中文评论"
+      ],
+      "ledgerDimension": "readerLanguage",
+      "note": "读者会（sessionProtocols.readerSession）必须加载 .fbs/reader-language.md 作为基础认知；AI模拟读者须以该文件词汇为优先参照"
+    }
+  },
+  "s0WorkIntelPolicy": {
+    "description": "S0-B 作品情报站执行规范（v2.0）：对同类作品进行六维深度解读，用他人成果点燃写作灵感",
+    "enabled": true,
+    "trigger": "S0 调研阶段，有原料（路径A）或有主题（路径B/C）时自动激活",
+    "minWorks": 2,
+    "maxWorks": 4,
+    "parallelAgents": true,
+    "parallelAgentsNote": "当 minWorks≥2 时，建议启动多 Agent 并行，每个 Agent 负责一部作品的六维解读，汇总后由主编输出对比报告",
+    "requiredDimensions": [
+      "主题内核（核心论点/核心叙事是什么，一句话）",
+      "结构策略（全书如何组织，章节逻辑是什么）",
+      "叙事风格（写法特征：论证/故事/案例/数据密度）",
+      "读者假设（作者预设读者是谁，默认知识水平）",
+      "留白与空缺（作品没覆盖但本书可以填补的方向）",
+      "可借鉴手法（结构/开篇/收尾/图表/引言等具体手法）"
+    ],
+    "styleDraftRequired": true,
+    "styleDraftNote": "每部参考作品完成六维解读后，须产出一段200字以内的「风格试笔」——用该作品的口吻和结构写本书的某个段落，用于感受风格差异",
+    "summaryReportRequired": true,
+    "summaryReportNote": "全部作品解读完成后，输出「作品情报汇总对比报告」：四象限对比（主题内核×叙事风格）+ 可借鉴手法清单 + 本书差异化方向建议（≥3条）",
+    "outputFile": ".fbs/work-intelligence.md",
+    "ledgerDimension": "workIntel",
+    "overseasPriority": "优先纳入1部以上海外（英文/日文/其他语种）同类作品，用于发现国内同类书未覆盖的视角和手法"
+  },
+  "sessionProtocols": {
+    "description": "会议机制编排规范（v2.0）：四种会议，自动触发，详细规范见 references/01-core/session-protocols.md",
+    "specFile": "references/01-core/session-protocols.md",
+    "sessions": {
+      "creativeSession": {
+        "name": "创意会",
+        "trigger": "S1 主题定位前（路径B/C必须，路径A可选）",
+        "purpose": "发散选题角度，防止框架锁定效应",
+        "minAgents": 3,
+        "roles": [
+          "激进派（打破常规的角度）",
+          "守序派（最可行最稳妥的角度）",
+          "读者派（目标读者最想看的角度）"
+        ],
+        "phases": [
+          "发散（各角色独立提案，禁止互相评价）",
+          "收束（选出1-2个最有潜力的，说明理由）"
+        ],
+        "outputFile": ".fbs/sessions/creative-session.md"
+      },
+      "readerSession": {
+        "name": "读者会",
+        "trigger": "S2 目录完成后（所有体裁，A级必须）",
+        "purpose": "以读者视角检验目录与核心论点是否成立",
+        "minAgents": 3,
+        "roles": [
+          "新手读者（第一次接触本主题）",
+          "有基础读者（有一定了解但非专家）",
+          "挑剔读者（专业背景，要求很高）"
+        ],
+        "requiredContext": [
+          ".fbs/reader-language.md（若存在则必须加载）"
+        ],
+        "outputFile": ".fbs/sessions/reader-session.md"
+      },
+      "adversarialSession": {
+        "name": "对抗会",
+        "trigger": "核心论断首次出现时（S1锁定核心主张后）",
+        "purpose": "用对抗性论证加固核心论断，找到可接受的最强表述",
+        "minAgents": 3,
+        "roles": [
+          "支持者（给出最强支撑论据）",
+          "反对者（给出最严苛反驳）",
+          "综合者（在两方之间找到最强可接受表述）"
+        ],
+        "outputFile": ".fbs/sessions/adversarial-session.md"
+      },
+      "reviewSession": {
+        "name": "评审会",
+        "trigger": "S5 终审前（A级必须）",
+        "purpose": "多角度专业评审，发现内容盲区",
+        "minAgents": 3,
+        "roles": [
+          "内容专家（领域知识准确性）",
+          "表达专家（可读性与传播力）",
+          "怀疑论者（核心论点是否成立）"
+        ],
+        "issueGrades": {
+          "P0": "必须修改，否则阻断发布",
+          "P1": "强烈建议修改",
+          "P2": "可选优化"
+        },
+        "psychologicalContract": "评审前确认用户期望的反馈强度：发现问题优先 / 均衡 / 确认亮点优先",
+        "outputFile": ".fbs/sessions/review-session.md"
+      }
+    },
+    "sessionBriefFormat": {
+      "description": "会议简报格式：≤500字，统一上下文，控制token消耗",
+      "requiredFields": [
+        "书名/主题（≤20字）",
+        "核心主张（≤25字）",
+        "目标读者（≤15字）",
+        "当前阶段",
+        "本次会议目标（≤30字）",
+        "禁止讨论的范围（防止跑题）"
+      ],
+      "prohibition": "禁止在会议简报中重新粘贴大段书稿正文；须由参与Agent读取对应文件"
+    },
+    "sessionSummaryFile": {
+      "path": ".fbs/sessions-summary.md",
+      "description": "所有会议关键决策汇聚一处，用户只看这一个文件即可了解所有会议结论",
+      "format": "每次会议后追加：会议类型 | 时间 | 核心决策（≤3条）| 待执行事项"
+    }
+  },
+  "s0ParallelQueries": {
+    "competitorDomestic": 3,
+    "competitorOverseas": 3,
+    "readerAnalysis": 4,
+    "monetization": 4
+  },
+  "s0ParallelQueriesExecution": {
+    "description": "S0 调研执行规范（v1.7.2 补充）：防止维度缺口在调研结束时才被发现",
+    "startupAnnouncement": "S0 调研启动时须在对话中宣告计划：「S0 调研启动：时间戳(1)+国内竞品(3)+海外竞品(3)+读者分析(4)+变现路径(4)=14轮」",
+    "progressTracking": "每轮检索完成后须输出一行进度：「S0进度 [{维度}第{N}/{规定N}轮] 已达标：{列表} | 待补：{列表}」",
+    "buildS0QueriesYearParam": "SearchBundle.buildS0Queries 的 year 参数须由调用方在运行时动态传入（来自 temporalAccuracy.s0TimestampQuery 检索结果），不得使用硬编码固定值；year 参数未传入时，默认使用当前日历年（由运行环境动态获取），禁止回退到训练截止年份附近的固定值。"
+  },
+  "s0ParallelQueriesSemantics": "与 section-3-workflow.md「主体内涵锚定」一致：competitor* 轮次检索**内容竞品**（同类书/白皮书/深度长文/付费内容等可替代本稿者），非默认扫主题产业链上的商业产品；monetization* 轮次检索**本书/本稿**的变现与分发路径。行业规模/融资仅作简报「市场背景」，不得顶替上述默认列。",
+  "s0DimensionCompleteness": {
+    "description": "S0 维度完整性门禁（P0）：防止调研方向性偏差——仅做主题产业研究而跳过内容竞品与读者分析",
+    "enabled": true,
+    "requiredDimensions": [
+      {
+        "dimension": "内容竞品（国内）",
+        "minQueries": 1,
+        "key": "competitorDomestic",
+        "note": "须检索同类书/白皮书/深度长文等可替代本稿的内容产品，非商业产品清单"
+      },
+      {
+        "dimension": "内容竞品（海外）",
+        "minQueries": 1,
+        "key": "competitorOverseas",
+        "note": "须检索海外同类内容产品（英文/其他语种）"
+      },
+      {
+        "dimension": "读者分析",
+        "minQueries": 1,
+        "key": "readerAnalysis",
+        "note": "须检索目标读者画像、阅读痛点、当前在看什么"
+      },
+      {
+        "dimension": "变现路径",
+        "minQueries": 1,
+        "key": "monetization",
+        "note": "须检索本书/本稿的分发与变现方式"
+      }
+    ],
+    "ledgerDimensionTag": "每轮 S0 检索须在 search-ledger.jsonl 的 s0Dimension 字段标注所属维度（competitorDomestic/competitorOverseas/readerAnalysis/monetization/timestampCheck/other）；允许短码见 s0DimensionCanonical.shortToLong，归一化 CLI：scripts/normalize-ledger-dimensions.mjs；未标注维度的检索不计入维度门禁校验。",
+    "blockCondition": "任一 requiredDimensions 维度的 minQueries 未达到时，阻断进入 S1；输出缺失维度清单和补搜建议。",
+    "blockMessage": "⚠️ S0 维度检索不完整，以下维度尚未达标：{缺失维度列表}。请补充对应检索后再进入 S1。",
+    "dimensionVsPanSearchNote": "仅检索「主题产业链/行业规模/融资动态」属于「泛调研」，不满足任何 requiredDimensions 维度的要求；须将检索方向明确对准内容竞品与读者分析。"
+  },
+  "qualityGate": {
+    "scoringVersion": "10-point-equal-layers-v1",
+    "minOverallScore": 7.5,
+    "weakPassFloor": 7,
+    "minSLayerScore": 7.5,
+    "minSLayerScoreNote": "S层 10 分制建议通过线；对应 quality-check.md 与 metrics.md 当前口径",
+    "minPLayerScore": 7.5,
+    "minPLayerScoreNote": "P层 10 分制建议通过线",
+    "minCLayerScore": 7.5,
+    "minCLayerScoreNote": "C层 10 分制建议通过线",
+    "minBLayerScore": 6.7,
+    "minBLayerScoreNote": "B层 10 分制建议通过线（6 条规则至少通过 4 条）",
+    "s3MinSLayerScore": 8.3,
+    "s3MinSCCombinedScore": 16,
+    "s3GateNote": "S3 验收加严：S层建议 ≥ 8.3，且 S+C 合计 ≥ 16。",
+    "aiContrastMax": 8,
+    "aiAdverbMax": 12,
+    "aiAdverbMaxNote": "A类程度副词每千字上限（次/千字）；超出触发 AI_FLAVOR_OVERUSE 告警",
+    "minAnchorCoverage": 0.5,
+    "minRhythmCv": 0.3,
+    "requireBookLevelC0": true,
+    "requireBookLevelC0Note": "S5 前须完成全书级 C0 总账校验（book-level-consistency.md）；与 p0-cli-map.md K-1/K-2 对齐",
+    "emDashPerThousandWarnAbove": 1,
+    "emDashPerThousandBlockAbove": 3
+  },
+  "qualityPanoramaExecution": {
+    "description": "全景质检执行策略（WorkBuddy侧性能优化）：轻量握手、增量优先、阶段串行、可见性优先",
+    "lightweightHandshake": true,
+    "reuseContextBeforeRead": true,
+    "defaultMode": "incremental",
+    "incrementalCli": "scripts/quality-audit-incremental.mjs",
+    "panoramaCli": "scripts/quality-panorama-orchestrator.mjs",
+    "incrementalSinceHours": 72,
+    "incrementalMaxFiles": 30,
+    "stages": [
+      "S",
+      "P",
+      "C",
+      "B"
+    ],
+    "runStageSerially": true,
+    "allowParallelInSameStage": false,
+    "subTaskTimeoutMinutes": 15,
+    "subTaskMaxTurns": 12,
+    "subTaskMaxRetries": 1,
+    "heartbeatSeconds": 15,
+    "largeScopeConfirmationThreshold": 50,
+    "confirmFlag": "--confirm-large-scan",
+    "progressSnapshotFile": ".fbs/scan-progress.json",
+    "scanLockFile": ".fbs/scan-lock.json",
+    "historyResultDir": ".workbuddy/memory",
+    "xlBatchThreshold": 120,
+    "xlBatchStrategy": "group",
+    "progressReportOnStart": true,
+    "progressReportTemplate": "我先扫{stageLabel}（{scope}），大概需要 {etaMinutes} 分钟；超过 {timeoutMinutes} 分钟会把已完成部分告诉你。",
+    "progressHeartbeatTemplate": "还在扫，已处理 {processedFiles} 个文件，当前位置：{currentFile}…",
+    "stageTransitionTemplate": "{prevStageLabel}扫完了，接着看{nextStageLabel}。",
+    "fallbackWhenInterrupted": "已完成部分：{completedScope}。剩余范围：{remainingScope}。建议下一步：{nextStep}。"
+  },
+  "qualityAuditProfiles": {
+    "description": "quality-auditor-lite 文档分级阈值（可配置，脚本默认读取本节）",
+    "thresholds": {
+      "core": {
+        "s3RatioMax": 22,
+        "s6SemicolonDensityMax": 4.5,
+        "p1MaxIssues": 1,
+        "p2MinRatio": 0.1,
+        "b0MaxDuplicates": 1,
+        "b2MinDensity": 1
+      },
+      "ops": {
+        "s3RatioMax": 26,
+        "s6SemicolonDensityMax": 5.5,
+        "p1MaxIssues": 2,
+        "p2MinRatio": 0.05,
+        "b0MaxDuplicates": 2,
+        "b2MinDensity": 1.1
+      },
+      "ledger": {
+        "s3RatioMax": 35,
+        "s6SemicolonDensityMax": 7,
+        "p1MaxIssues": 4,
+        "p2MinRatio": 0,
+        "b0MaxDuplicates": 999,
+        "b2MinDensity": 0.8
+      },
+      "standard": {
+        "s3RatioMax": 28,
+        "s6SemicolonDensityMax": 5.5,
+        "p1MaxIssues": 2,
+        "p2MinRatio": 0.05,
+        "b0MaxDuplicates": 2,
+        "b2MinDensity": 1.1
+      }
+    }
+  },
+  "searchAccessPolicy": {
+    "s0MaxConcurrentQueries": 2,
+    "singlePageTimeoutMs": 15000,
+    "blockOnTimeoutInCurrentRun": true,
+    "dailyTimeoutLimitPerDomain": 3,
+    "blockDaysAfterDailyLimit": 7,
+    "persistentBlocklistFile": ".fbs/domain-blocklist.json",
+    "effectiveEndpointStrategy": {
+      "description": "搜索引擎端点选择策略（P0）：主流搜索引擎（Bing/百度/搜狗等）的 HTML 页面多为 JS 渲染，Invoke-WebRequest/WebFetch 常返回空壳，必须使用有效端点，禁止使用 HTML 默认端点。",
+      "priority": "P0",
+      "rootCause": "2026-04-01 实测确认：Bing HTML端点返回0字节有效内容；Bing RSS端点返回完整标题+摘要+链接，命中36氪/CCTV/人民日报等权威来源。",
+      "preferredEndpoints": [
+        {
+          "engine": "Bing",
+          "htmlEndpoint_FORBIDDEN": "https://www.bing.com/search?q={query}&mkt=zh-CN",
+          "rssEndpoint_USE_THIS": "https://www.bing.com/search?q={query}&format=rss&mkt=zh-CN",
+          "note": "RSS端点返回XML，每条含title/description(~200字摘要)/link/pubDate，可直接解析。中文查询须URL编码。"
+        },
+        {
+          "engine": "直接WebFetch（静态页）",
+          "applicableSites": [
+            "news.cctv.com",
+            "people.com.cn",
+            "xinhuanet.com",
+            "gov.cn",
+            "wikipedia.org（英文）",
+            "学术PDF直链",
+            "GitHub README"
+          ],
+          "note": "静态渲染页可直接WebFetch获取正文；JS渲染站（知乎/微信/淘宝等）不适用，退回RSS摘要。"
+        },
+        {
+          "engine": "百度",
+          "rssEndpoint": "https://www.baidu.com/s?wd={query}&rn=10",
+          "note": "百度无标准RSS端点；UseBasicParsing可提取部分摘要文本，质量低于Bing RSS，作为备用。"
+        }
+      ],
+      "bashTemplate": "Invoke-WebRequest -Uri 'https://www.bing.com/search?q={URL编码查询词}&format=rss&mkt=zh-CN' -UseBasicParsing -TimeoutSec 15 | Select-Object -ExpandProperty Content | Select-String -Pattern '<title>|<description>' | Select-Object -First 20",
+      "failureDetection": "若响应内容含 '<!DOCTYPE html>' 且不含 '<item>' 标签，判定为JS渲染空壳，须立即切换RSS端点重试，禁止将空壳内容计为有效检索。",
+      "fallbackProtocol": "RSS端点超时或返回空 → 记录ledger ok=false reason=js-rendered-shell → 向用户说明「检索引擎返回空，已切换RSS端点重试」→ 仍失败则标注模型知识来源，禁止静默继续"
+    },
+    "rateLimitGuard": {
+      "description": "WorkBuddy / 宿主平台限流保护（Error Code 14003 too many requests）",
+      "minIntervalBetweenQueriesMs": 3000,
+      "backoffOnRateLimitMs": 10000,
+      "maxRetriesOnRateLimit": 2,
+      "s0BurstCap": 2,
+      "note": "s0BurstCap 限制 S0 单轮同时发出的 WebSearch 请求数；超出时串行补齐；与 s0MaxConcurrentQueries 取较小值生效。检测到 14003 / too-many-requests 时须 backoffOnRateLimitMs 后再重试，最多 maxRetriesOnRateLimit 次；仍失败则跳过本条查询并记录 ledger kind=search ok=false reason=rate_limit。"
+    },
+    "maxBlockedDomains": {
+      "description": "域名黑名单数量上限（A8/RL-1）：防止无人值守时全部优质来源被累积封禁",
+      "value": 20,
+      "note": "当 .fbs/domain-blocklist.json 中封禁域名数超过此值时，自动按封禁截止时间从早到晚排序，解封最早到期者；确保始终有不低于（可用域名总数 - maxBlockedDomains）的来源可访问。"
+    }
+  },
+  "rateBudget": {
+    "description": "全局限流预算追踪（A5/RC-1）：跨章累积 QPS 触发次数感知，防止无人值守时进入「每章都在退避」的慢速螺旋",
+    "enabled": true,
+    "persistFile": ".fbs/rate-budget.json",
+    "alertThreshold": {
+      "rateLimitRate": 0.3,
+      "note": "当本会话 rateLimitRate（累计限流次数/累计检索次数）超过 0.3 时，模型须向用户输出告警并建议降低并发或延长间隔；禁止静默继续高频检索"
+    },
+    "autoActions": {
+      "onRateLimitRateAbove0_3": "warn_user_and_reduce_concurrency",
+      "onRateLimitRateAbove0_6": "pause_batch_search_and_notify_user",
+      "note": "onRateLimitRateAbove0_6 触发时须暂停编级批量预检索（若正在进行），向用户说明「检索成功率过低，建议等待 1–2 分钟后重试或降低本轮检索总量」"
+    }
+  },
+  "batchSearchBudget": {
+    "description": "编级预检索（M2 §4.4）分批上限与心跳约束（A2/D2）：防止 M2 单编大量串行检索无可见进度",
+    "maxQueriesPerBatch": 6,
+    "heartbeatIntervalQueries": 3,
+    "heartbeatNote": "编级预检索每完成 heartbeatIntervalQueries 条检索，须向用户输出一行可见进度（如「编级预检索进行中：第 3/12 条，已用时 Xs」）；总检索数超过 maxQueriesPerBatch 时须分批执行，批间可向用户汇报阶段进展。",
+    "batchPauseMs": 3000,
+    "note": "每批次完成后等待 batchPauseMs 毫秒再开始下一批，降低累积限流压力"
+  },
+  "materialGatherBudget": {
+    "description": "S0 素材搜集预算：与 project-config.materialGatherNotesMaxChars、material-inventory 对齐，防无限补素材与 token 浪费",
+    "incrementalAfterSufficientOnly": true,
+    "incrementalNote": "materialSufficiency 已达「充足」或 team-lead 已判定达标后，新增入库须登记为「增量条」并简述缺口编号；禁止无登记的大规模同主题重检。",
+    "optionalNotesCharCapPerProjectField": "materialGatherNotesMaxChars",
+    "optionalNotesCharCapNote": "material-inventory.md 累计字符超过 project-config 上限时为 Warning；扩预算须用户确认并写入 quality-constraints 或 sessions-summary"
+  },
+  "postFreezeSearchLimits": {
+    "description": "大纲/Brief 冻结后同章检索防重复：降低漂移与重复 token",
+    "enabled": true,
+    "maxSameTopicQueriesPerChapter": 3,
+    "topicFingerprintNote": "同一检索主题（规范化 query 去空白小写）在单章 ledger 中超过 maxSameTopicQueriesPerChapter 次时须 Warning，并优先复用 material-library 已入库条目",
+    "searchLedgerFile": ".fbs/search-ledger.jsonl"
+  },
+  "expansionS35": {
+    "description": "S3.5 扩写阶段机读约束（WorkBuddy 2026-04-14 复盘）",
+    "planFile": ".fbs/expansion-plan.md",
+    "maxParallelChapters": 2,
+    "forbidCodeExplorerForBody": true,
+    "wordVerifyCli": "scripts/expansion-word-verify.mjs",
+    "minRatioVsTarget": 0.9,
+    "singleRoundMaxGrowthRatio": 0.5,
+    "requireChapterStatusAfterEachChapter": true,
+    "authoritativeDoc": "references/01-core/s3-expansion-phase.md"
+  },
+  "writingNotes": {
+    "enabled": true,
+    "dir": ".fbs/writing-notes",
+    "filePattern": "{chapterId}.writing-notes.md",
+    "briefFilePattern": "{chapterId}.brief.md",
+    "chapterClosureTemplate": ".fbs/writing-notes/_chapter-closure-template.md",
+    "chapterClosureRequired": false,
+    "chapterClosureNote": "每章初稿结束后建议填写章末工作记忆；required=false 时门禁仅 Warning，不阻断流水线"
+  },
+  "briefLifecycleGate": {
+    "description": "Chapter Brief 生命周期门禁（P0）：避免“已落盘但未使用”",
+    "enabled": true,
+    "mustPresentInDialogBeforeWrite": true,
+    "mustInjectIntoWriterTask": true,
+    "requiredWriterContextFiles": [
+      ".fbs/writing-notes/{chapterId}.brief.md",
+      ".fbs/book-context-brief.md",
+      ".fbs/术语锁定记录.md"
+    ],
+    "acceptanceRule": "Brief 未对话呈现或未注入 writer 任务描述，则该章不得开始写作"
+  },
+  "heartbeatEscalation": {
+    "description": "多成员心跳升级处置（P0）：从规则告知升级为可执行巡检",
+    "enabled": true,
+    "warnAfterMs": 120000,
+    "pingAfterMs": 300000,
+    "shutdownAfterMs": 600000,
+    "criticalAfterMs": 900000,
+    "forceTerminateAfterShutdownMs": 30000,
+    "actions": {
+      "warn": "输出预警并标记成员状态",
+      "ping": "发送催更消息",
+      "shutdown": "发送 shutdown_request",
+      "forceTerminate": "超过 shutdown_request 阈值后强制终止并改派"
+    },
+    "monitorCli": "scripts/heartbeat-monitor.mjs"
+  },
+  "chapterAcceptanceGate": {
+    "description": "章节验收门槛（P1）：防止低字数稿件被误判为完成",
+    "enabled": true,
+    "minWordRatioVsBriefExpected": 0.8,
+    "maxWordRatioVsBriefExpected": 1.2,
+    "rejectIfBelowMinRatio": true,
+    "warnIfAboveMaxRatio": true,
+    "acceptanceCli": "scripts/verify-chapter-status-truth.mjs"
+  },
+  "materialLibrary": {
+    "description": "虚拟书房素材库：统一存放作者提供素材、搜索存盘素材、模型知识兜底（带标注）三类来源",
+    "libraryFile": ".fbs/material-library.md",
+    "allowedSourceTypes": [
+      "用户提供",
+      "WebSearch",
+      "WebFetch",
+      "模型知识（需标注）"
+    ],
+    "allowedMaterialTypes": [
+      "案例",
+      "数据",
+      "引言",
+      "故事",
+      "图表描述",
+      "政策摘要",
+      "其他"
+    ],
+    "modelKnowledgeTag": "〔模型知识，未经外部检索核实〕",
+    "modelKnowledgeProtocol": "启用条件：用户明确同意（如「可以用你的知识补充，但需标注」）；启用后每个来源为「模型知识」的素材点及正文段落末尾须附 modelKnowledgeTag；禁止在未经用户同意时静默使用模型知识填充"
+  },
+  "materialSufficiency": {
+    "description": "素材充分度评估基准：用于 S0-E 虚拟书房初始化和 S2.5 素材盘点卡的充分度评级",
+    "_unit_note": "recommended 和 criticalBelow 均为素材条数（items），非字数。部分文档将相同数值描述为'万字内容'属历史措辞，以本字段 unit=items 为准。",
+    "thresholds": [
+      {
+        "maxWords": 100000,
+        "label": "5–10万字",
+        "recommended": 30,
+        "criticalBelow": 10,
+        "unit": "items"
+      },
+      {
+        "maxWords": 300000,
+        "label": "10–30万字",
+        "recommended": 80,
+        "criticalBelow": 25,
+        "unit": "items"
+      },
+      {
+        "maxWords": 1000000,
+        "label": "30–100万字",
+        "recommended": 200,
+        "criticalBelow": 60,
+        "unit": "items"
+      },
+      {
+        "maxWords": 9999999,
+        "label": ">100万字",
+        "recommended": 500,
+        "criticalBelow": 150,
+        "unit": "items"
+      }
+    ],
+    "ratingLabels": {
+      "sufficient": "充足 ✅",
+      "low": "偏少 ⚠️",
+      "critical": "严重不足 ❌"
+    },
+    "perChapterBaseline": {
+      "materialsPerThousandWords": 3,
+      "note": "每 1000 字正文约需 3–5 个素材支撑点（数据/案例/引言/故事）；该值用于按章估算素材缺口"
+    },
+    "s25BlockOnCritical": true,
+    "s25BlockNote": "S2.5 素材盘点卡评级为「严重不足 ❌」时，阻断进入 S3；须先通过联网搜索入库/用户提供/明确启用模型知识兜底协议后解除阻断"
+  },
+  "autoMaterialArchive": {
+    "description": "搜索素材自动存盘机制：S0/S3 每次检索后，将高质量结果自动归档为待取用素材",
+    "enabled": true,
+    "triggerCondition": "每次 WebSearch/WebFetch 结果中出现符合以下任一条件的内容：含具体数字/比例/年份、含可引用的人物直接表述、含真实案例描述（有时间/地点/主体）、来自 high-quality-domains.json 中的域名",
+    "archiveToLedger": true,
+    "ledgerKind": "material",
+    "archiveToLibrary": true,
+    "libraryFile": ".fbs/material-library.md",
+    "defaultMaterialStatus": "待取用",
+    "maxSummaryLengthPerItem": 200,
+    "perChapterArchiveNote": "每章检索完成后，模型须检查本章未取用的高质量检索片段（qualityScore≥4），将其追加至素材库并标注适用章节范围，供后续章节取用，避免每章重复检索同类素材"
+  },
+  "materialTracking": {
+    "description": "素材取用机制（G2）：对检索结果进行状态标记，防止「检索到但未取用」和「重复检索相同素材」两类浪费",
+    "enabled": true,
+    "ledgerFile": ".fbs/search-ledger.jsonl",
+    "statusField": "materialStatus",
+    "allowedStatus": [
+      "待取用",
+      "已取用",
+      "部分取用",
+      "放弃"
+    ],
+    "statusNote": {
+      "待取用": "已检索入账，尚未在正文中引用",
+      "已取用": "已在正文中完整引用（含来源标注）",
+      "部分取用": "仅引用部分数据点，剩余内容在后续章节中备用",
+      "放弃": "已评估为质量不足/时效过期/与本章论点不符，不再引用"
+    },
+    "updateTiming": "章内自审卡「素材取用核查」检查时，对本章引用的 ledger 条目同步更新 materialStatus；S5 终审时，可通过汇总 status=「待取用」的条目发现「已检索但未使用的高质量素材」并决定是否补入正文",
+    "auditNote": "S5 时扫描 ledger 中 materialStatus=「待取用」且 qualityScore≥4 的条目，可作为「遗漏高质量素材」告警，建议补录或显式标注为「放弃（原因）」"
+  },
+  "temporalAccuracy": {
+    "description": "时效准确性约束：确保时间戳与年份标签基于检索事实，禁止使用模型内置过时知识",
+    "requireTimestampSearchAtS0": true,
+    "timestampSearchNote": "S0 启动后第一个动作须用 WebSearch 查询当前日期（如「今天是几月几日」「当前年月」），将结果写入调研简报「时间基准」行，后续所有阶段的日期引用以此为准；禁止使用模型内置知识推断当前年份。",
+    "forbidBareYearWithoutSource": true,
+    "yearLabelPolicy": "search_before_write",
+    "yearLabelNote": "凡正文中出现「202X年」「近年来」「当前」「最新」等时效性表述，须先执行 WebSearch 取得来源后再写入；若未检索则须标注「（待核实年份）」，禁止模型以训练截止日期前的记忆自动补入年份标签。禁止将模型未检索确认的年份包装成「最新数据」写入正文。",
+    "s0TimestampQuery": "获取当前日期的标准查询词：「今天日期」「当前年月日」「今天是哪年哪月哪日」；结果应写入 [S0] 调研简报「时间基准：YYYY年MM月DD日（来源：WebSearch）」。",
+    "hardcodeYearDetection": {
+      "description": "硬编码年份拦截（P0）：防止模型以训练数据印记自动补入具体年份",
+      "enabled": true,
+      "triggerPatterns": [
+        "2020",
+        "2021",
+        "2022",
+        "2023",
+        "2024",
+        "2025"
+      ],
+      "action": "拦截并要求来源确认：凡检索 query 或正文中出现4位数字年份标签，须先完成 WebSearch 来源验证，否则标注「（年份待核实）」；禁止将训练截止日期前的年份以「最新」「当前」等时效词包装后写入。",
+      "exceptionNote": "若年份为用户显式提供的历史研究截止日期（如「截至2023年」）或 S0 时间戳检索已核实，须在正文中标注来源；不得以「最新」「当前」等时效词包装历史截止年份。",
+      "queryForbiddenNote": "检索 query 中禁止使用具体4位数字年份作为前缀或后缀（如「AI应用 2024」「2025 市场报告」），须改用 suggestedSuffixes 中的相对时效词（如「AI应用 最新」）；若确实需要年份范围，须由调用方在运行时动态注入，不得硬编码。",
+      "quarterForbiddenNote": "正文中出现季度表述（Q1/Q2/Q3/Q4）时须补充具体月份范围（如「Q1（1月–3月）」），不得仅写季度而不注明月份范围；否则视为时间精度不足，须标注「〔季度范围，具体月份待核实〕」。"
+    }
+  },
+  "searchEnhancement": {
+    "description": "搜索增强策略：自增强、疑难自动补检、优质源发现——提升检索质量的四类机制",
+    "freshKeywordInjection": {
+      "enabled": true,
+      "note": "每轮检索 query 中应包含时效性限定词，防止搜索引擎返回多年前的过期内容；S3 章前检索尤应如此。实际年份须在运行时动态注入（代码层：`year || new Date().getFullYear()`），禁止在 query 中硬编码训练截止年份或使用具体4位数字年份作为标签前缀（如「2024」「2025」）。检索 query 年份注入示例：传入 year=当前年份（由 temporalAccuracy.s0TimestampQuery 核实）而非硬编码固定值。",
+      "suggestedSuffixes": [
+        "最新",
+        "最近发布",
+        "近三年",
+        "当前"
+      ],
+      "forbiddenSuffixes": [
+        "2020",
+        "2021",
+        "2022",
+        "2023",
+        "2024",
+        "2025"
+      ],
+      "forbiddenSuffixesNote": "suggestedSuffixes（相对时效词）与 forbiddenSuffixes（绝对年份词）为对立集合；任何 query 不得将两侧词汇混用；若确需使用具体年份，须通过 dynamicYearNote 的运行时注入机制，且须有 S0 时间戳检索作为来源依据，不得直接硬编码。",
+      "dynamicYearNote": "「当前年份」后缀（如「2026年」）须由调用方在运行时动态拼接，不在此列表硬编码固定年份；参见 SearchBundle.buildS0Queries 的 year 参数注入机制。"
+    },
+    "selfImprovingStrategy": {
+      "enabled": true,
+      "mandatory": true,
+      "note": "检索结束后，模型【必须】评估本轮结果的信息密度与来源权威性（此为强制动作，非建议）：若发现高质量来源出现新子域或专题词，应基于这些新词生成下一轮优化 query；将有效 query 变形和无效 query 原因记录到 `.fbs/search-ledger.jsonl`（kind=search，含 `queryOptimization` 字段），供后续章节自动参考。每轮 S0/S3 检索结束时，须在对话中输出一行自评结论：「本轮检索自评：[质量评级 高/中/低]，[是否发现新专题词：是/否]，[下轮优化方向：...]」",
+      "ledgerField": "queryOptimization",
+      "mandatoryOutputTemplate": "本轮检索自评：质量[高/中/低]｜新专题词[有：{词}／无]｜下轮优化[{方向或「无需优化」}]",
+      "triggerCondition": "每轮 S0/S3 检索结束后强制触发（不再仅限于「出现新专题词」时触发）",
+      "gateNote": "S3 章前检索完成后，写入 Chapter Brief 前须先完成本轮自评，自评结论写入 .fbs/writing-notes/{chapterId}.writing-notes.md"
+    },
+    "autoSearchOnUncertainty": {
+      "enabled": true,
+      "mandatory": true,
+      "triggerKeywords": [
+        "不确定",
+        "可能",
+        "大约",
+        "据说",
+        "印象中",
+        "记忆中",
+        "似乎",
+        "应该是",
+        "我认为",
+        "估计",
+        "好像"
+      ],
+      "note": "模型在生成正文时，一旦内心评估该句事实置信度低于 0.8（或措辞中含上述不确定词），须【立即暂停写入】并触发 WebSearch 补充检索后再续写；不得以「可能」「大约」等模糊词掩盖未经验证的事实，更不得用「（数据待补充）」占位后忘记补齐。【说出前先核实原则】：任何以「根据XXX文件的YYY条款」开头的规范引用陈述，必须先完成文件核实动作，确认条文存在且表述准确，再输出结论；禁止先说结论再核实，禁止捏造或合并不存在的条款名称。",
+      "verifyBeforeCiteProtocol": "引用规范条文前的强制核实流程：(1) 打开被引用文件；(2) 确认条文存在且表述与引用一致；(3) 在引用时标注文件名与行号（如「见 search-policy.json 第247行」）；(4) 若找不到对应条文，须说「我找不到该表述，让我核实后再回答」，禁止凭记忆重构条文。",
+      "fallbackIfSearchFails": "标注「（数据待核实，来源：[检索失败]）」并在章末「检索执行记录」中注明，禁止静默写入推测值。",
+      "pendingVerificationTracking": "遇到不确定内容时，若检索暂时无法执行，须写入 .fbs/writing-notes/pending-verification.md（或 .pending-verification.md；见 p0AutomationIndex）；使用 - [ ] 勾选格式；S5 前运行 scripts/audit-pending-verification.mjs --enforce 或人工清零。",
+      "factAnnotationProtocol": {
+        "description": "事实标注协议（v1.8.0，P0）：将触发条件从隐性「置信度判断」改为显式「内容类型驱动」，消除模型可绕过的漏洞",
+        "triggerByContentType": true,
+        "triggerTypes": [
+          {
+            "type": "具体数字/比例",
+            "examples": [
+              "市占率78.4%",
+              "14.5万用户",
+              "增长23%"
+            ],
+            "action": "先检索后写入，或标注 〔来源：{来源名}〕 或 〔来源：待核实〕"
+          },
+          {
+            "type": "绝对化陈述",
+            "examples": [
+              "全球最大",
+              "行业第一",
+              "唯一支持",
+              "完全无法"
+            ],
+            "action": "先检索取得来源后写入，或标注 〔来源：待核实〕"
+          },
+          {
+            "type": "具体年月日/产品版本",
+            "examples": [
+              "2025年3月",
+              "v2.4于2025年11月发布"
+            ],
+            "action": "须有 search-ledger.jsonl 中 yearSourceConfirmed=true 条目，否则标注 〔时间待核实〕"
+          },
+          {
+            "type": "季度表述",
+            "examples": [
+              "2025年Q1",
+              "2026年Q3"
+            ],
+            "action": "须补充具体月份范围（如「Q1（1月–3月）」），否则标注 〔季度范围，具体月份待核实〕"
+          }
+        ],
+        "annotationFormats": {
+          "有来源": "〔来源：{来源名/URL}〕",
+          "无来源": "〔来源：待核实〕",
+          "模型知识": "〔模型知识，未经外部检索核实〕",
+          "时间待核实": "〔时间待核实〕",
+          "季度模糊": "〔季度范围，具体月份待核实〕"
+        },
+        "fastCorrectionTemplate": "我刚才写入的「{内容}」未经检索核实——是我疏漏了。正确做法是先检索或标注〔来源：待核实〕。",
+        "note": "此协议不废除 triggerKeywords 机制，两者并行生效；内容类型触发优先级 ≥ 触发词触发"
+      }
+    },
+    "sourceQualityTracking": {
+      "enabled": true,
+      "preferredSourceTypes": [
+        "官方文档",
+        "政府/监管机构官网",
+        "学术论文（已发表）",
+        "权威机构报告（头部智库/行业协会）",
+        "一手调研数据（原始来源）"
+      ],
+      "avoidSourceTypes": [
+        "未注明日期的个人博客",
+        "内容农场聚合站",
+        "二手转载且无原始链接"
+      ],
+      "qualitySignals": [
+        "域名权威性",
+        "发布日期明确",
+        "作者机构可查",
+        "数据可追溯原始来源"
+      ],
+      "highQualityDomainLedger": ".fbs/high-quality-domains.json",
+      "note": "每当检索到评分≥4（满分5）的高质量域名（官方/权威/一手数据），应将其追加写入 `.fbs/high-quality-domains.json`（字段：domain, firstSeenAt, sourceType, qualityScore），后续同主题章节优先向该域名发起 WebFetch；遇到来源质量存疑时须向用户说明并请求确认是否采信。"
+    },
+    "searchSourceDiscovery": {
+      "enabled": true,
+      "note": "S0 检索完成后，模型应汇总本次检索中发现的高质量信息源（≥3 条），在 [S0] 调研简报末尾附「本书推荐信息源」表（格式：来源名称 | URL | 擅长领域 | 质量等级），后续成文优先从该表取材；发现新优质源时随时补录。",
+      "outputSection": "本书推荐信息源",
+      "minSourcesAtS0": 3
+    }
+  },
+  "esmExecutionTracking": {
+    "description": "ESM 执行状态追踪（v1.8.0 审计升级）：项目级状态文件 + CLI 落盘，跨会话可回溯、可验证",
+    "enabled": true,
+    "trackingFile": ".fbs/规范执行状态.md",
+    "machineReadableStateFile": ".fbs/esm-state.md",
+    "cliEntry": "scripts/fbs-record-esm-transition.mjs",
+    "cliExample": "node scripts/fbs-record-esm-transition.mjs --book-root <本书根> --from IDLE --to INTAKE --reason \"用户触发\" [--genre A]",
+    "trackingFileTemplate": "## ESM 执行状态\n- 当前状态：{IDLE/INTAKE/RESEARCH/PLAN/WRITE/REVIEW/WRITE_MORE/DELIVER}\n- 上次宣告：{YYYY-MM-DD HH:MM} {旧状态} → {新状态}\n- 已完成动作：{动作列表}\n- 待执行：{下一必做动作}\n\n## P0 自查单\n- [ ] 时间戳检索已执行\n- [ ] 主题已锁定（首行含 **主题**）\n- [ ] S0维度门禁已通过（4维度达标）\n- [ ] 每轮检索已登记 search-ledger.jsonl\n- [ ] 每轮检索后已输出自评结论\n\n## 规范缺口预警\n{⚠️ 本轮对话发现的规范执行缺口，格式：[缺口描述] [触发来源] [建议修复]}",
+    "updateTiming": "每次状态切换时：① 对话内输出状态宣告；② 有 Node 时运行 cliEntry 写入 esm-state.md 与 规范执行状态.md「切换日志」",
+    "crossSessionBenefit": "模型重启后可 Read .fbs/esm-state.md 与 .fbs/规范执行状态.md 回溯执行状态",
+    "note": "v1.8.0 综合审计：建议在 S2→S3 前必须完成虚拟书房三层底座构建（含本追踪文件）；进入 S3 前宜运行 scripts/s3-start-gate.mjs（见质量门禁实证要求）"
+  },
+  "esmAnnouncementAtomicity": {
+    "description": "ESM 状态宣告原子化约束（v1.7.2 新增，P0）",
+    "enabled": true,
+    "requirement": "状态切换宣告须与 ESM 自检结论合并为同一次对话输出：包含(1)旧→新状态；(2)转换原因；(3)ESM自检出口；(4)下一步必做动作",
+    "anomalyForceRollback": "状态=WRITE 但无 Brief 文件 → 强制阻断 WRITE + 强制输出回退宣告：「[强制回退] WRITE → PLAN · 原因：Brief缺失 · 必做：先输出 Chapter Brief」；禁止仅输出「建议回退」提示",
+    "auditNote": "审计时以宣告是否出现在对话文本中作为状态切换已发生的唯一可验证依据；无宣告=状态切换未执行=P0违规"
+  },
+  "termConsistencyTracking": {
+    "description": "术语一致性追踪（v1.8.0，P0）：将 s0ConceptGate 的静态门禁扩展为 S2/S3/S4 全程动态哨兵",
+    "enabled": true,
+    "trackingFile": ".fbs/术语锁定记录.md",
+    "trackingFileTemplate": "# 术语锁定记录\n\n## 锁定期术语\n| 术语 | 标准写法 | 首次定义位置 | 锁定时间 | 确认状态 |\n|------|---------|------------|---------|--------|\n\n## 禁用变体\n| 禁用变体 | 建议替换 | 原因 |\n|---------|---------|------|\n\n## 替换记录\n（追加模式：时间 | 原表述 | 替换为 | 章节）",
+    "createTiming": "S0 简报包含「新概念定义」节后立即创建；无新概念则按需创建",
+    "chapterBriefIntegration": "每章 Chapter Brief 必须包含「锁定期术语核查」节：查询 .fbs/术语锁定记录.md，扫描本章草稿中的近似词，发现变体时立即输出纠正提示",
+    "nearSynonymDetection": "当用户输入或正文中出现与已锁定术语相似的表述时，输出：「⚠️ 检测到近似表述「{变体}」，建议替换为已锁定术语「{标准}」」",
+    "ledgerIntegration": "术语替换记录同步写入 search-ledger.jsonl：{\"kind\":\"term-change\",\"from\":\"{变体}\",\"to\":\"{标准}\",\"chapter\":\"{章节ID}\",\"timestamp\":\"{ISO}\"}",
+    "s5AuditNote": "S5 终审时须核验 .fbs/术语锁定记录.md 中「禁用变体」是否在全书正文中仍有出现；可配合 CLI：node scripts/audit-term-consistency.mjs --book-root <书稿根目录>"
+  },
+  "yearSourceLedger": {
+    "description": "年份来源台账（v1.8.0，P0）：将时间标签核实结果显式化为可审计的账本字段，消除 hardcodeYearDetection 的「规范有触发但执行无验证」问题",
+    "enabled": true,
+    "ledgerField": "yearSourceConfirmed",
+    "ledgerFieldType": "boolean",
+    "ledgerFieldNote": "每条 search-ledger.jsonl 记录若涉及年份核实，须包含 yearSourceConfirmed=true/false 字段；S0 时间基准检索须在 s0Dimension=timestampCheck 的条目中写入 yearSourceConfirmed=true",
+    "preWriteCheck": "正文中出现4位数字年份前，须核查 search-ledger.jsonl 中是否存在该年份相关检索且 yearSourceConfirmed=true；无条目则须先检索或标注 〔年份待核实〕",
+    "s0TimestampGate": "S0 调研结束时，若 search-ledger.jsonl 中无 s0Dimension=timestampCheck 且 yearSourceConfirmed=true 的条目，阻断进入 S1",
+    "exceptionNote": "用户显式提供的历史截止年份（如「我要研究截至2023年的数据」）不需要 WebSearch 核实，但须在 ledger 中标注 yearSourceConfirmed=false reason=user-provided"
+  },
+  "p0AutomationIndex": {
+    "description": "P0 规则与可执行 CLI/工件对照（综合审计 P1-2）；维护时须与 p0-cli-map.md 同步",
+    "markdownMap": "references/05-ops/p0-cli-map.md",
+    "s3StartGateCli": "scripts/s3-start-gate.mjs",
+    "s3GuardCli": "scripts/s3-guard.mjs",
+    "standardExecutionChainCli": "scripts/standard-execution-chain.mjs",
+    "p0AuditBundleCli": "scripts/run-p0-audits.mjs",
+    "pendingVerificationCli": "scripts/audit-pending-verification.mjs",
+    "pendingVerificationNote": "清单路径优先 .fbs/writing-notes/pending-verification.md，兼容 .fbs/writing-notes/.pending-verification.md；由 init-fbs-multiagent-artifacts 创建模板",
+    "s3GateIntegratedAudits": [
+      "audit-temporal-accuracy.mjs --scan-book-s3",
+      "audit-term-consistency.mjs --scan-book-s3",
+      "audit-query-optimization.mjs（有成稿 [S3]*.md 且 search-ledger.jsonl 存在时由 s3-start-gate 默认调用；默认警告）"
+    ],
+    "ledgerDimensionNormalizeCli": "scripts/normalize-ledger-dimensions.mjs",
+    "queryOptimizationAuditCli": "scripts/audit-query-optimization.mjs",
+    "multiagentOrchestratorCli": "scripts/multiagent-orchestrator.mjs",
+    "multiagentOrchestratorNote": "多智能体编排器 CLI",
+    "brokenLinkAuditCli": "scripts/audit-broken-links.mjs",
+    "uxFlowGuardCli": "scripts/ux-flow-guard.mjs"
+  },
+  "s0DimensionCanonical": {
+    "description": "S0 检索账本 s0Dimension 短码与规范长键（P2）；供 normalize-ledger-dimensions.mjs 与人工台账对齐",
+    "allowedLongKeys": [
+      "competitorDomestic",
+      "competitorOverseas",
+      "readerAnalysis",
+      "monetization",
+      "timestampCheck",
+      "workIntel",
+      "frontierSensing",
+      "readerLanguage",
+      "other"
+    ],
+    "shortToLong": {
+      "cd": "competitorDomestic",
+      "co": "competitorOverseas",
+      "ra": "readerAnalysis",
+      "mo": "monetization",
+      "ts": "timestampCheck",
+      "wi": "workIntel",
+      "fs": "frontierSensing",
+      "rl": "readerLanguage",
+      "ot": "other"
+    }
+  },
+  "queryOptimizationAudit": {
+    "description": "检索自评字段 queryOptimization 机读审计（P2）；对齐 searchEnhancement.selfImprovingStrategy",
+    "enabled": true,
+    "fieldName": "queryOptimization",
+    "skipWhenOkFalse": true,
+    "note": "kind=search 且 ok!==false 时须含非空 queryOptimization；CLI：scripts/audit-query-optimization.mjs [--enforce]"
+  },
+  "timeAnchorPreflight": {
+    "description": "时效检索前强制建立时间锚（P0）",
+    "enabled": true,
+    "priority": "P0",
+    "mandatoryBeforeStages": [
+      "S0",
+      "S1",
+      "S2",
+      "S3",
+      "S5",
+      "S6"
+    ],
+    "anchorQuery": [
+      "今天日期",
+      "当前年月日",
+      "今天是哪年哪月哪日"
+    ],
+    "cnSourcePriority": [
+      "people.com.cn",
+      "xinhuanet.com",
+      "gov.cn",
+      "cctv.com"
+    ],
+    "fallbackToHostTime": true,
+    "forbidModelInternalTime": true,
+    "anchorFile": ".fbs/time-anchor.json",
+    "anchorTTLMinutes": 60,
+    "note": "时间锚仅用于短期检索状态，不写入长期记忆"
+  },
+  "queryVariantPolicy": {
+    "description": "每轮检索至少生成多变体 query，避免单表达困锁",
+    "enabled": true,
+    "minVariantsPerRequest": 3,
+    "variantTypes": [
+      "relative_time",
+      "site_scoped",
+      "semantic_cn"
+    ],
+    "optionalVariantTypes": [
+      "history_vs_latest_split"
+    ],
+    "forbidHardcodedYearTokens": true,
+    "relativeTimeTokens": [
+      "最新",
+      "当前",
+      "近三年",
+      "最近发布"
+    ]
+  },
+  "cnSourceRoutingPolicy": {
+    "description": "中文环境优先来源路由（P0）",
+    "enabled": true,
+    "defaultRoute": "cn_first",
+    "intentRoutes": {
+      "fact": [
+        "gov.cn",
+        "people.com.cn",
+        "xinhuanet.com",
+        "cctv.com"
+      ],
+      "version": [
+        "developers.weixin.qq.com",
+        "cloud.tencent.com",
+        "github.com",
+        "gitee.com"
+      ],
+      "method": [
+        "36kr.com",
+        "huxiu.com",
+        "cloud.tencent.com/developer",
+        "alibabacloud.com/help/zh"
+      ],
+      "readerLanguage": [
+        "zhihu.com",
+        "xiaohongshu.com",
+        "douban.com",
+        "bilibili.com"
+      ],
+      "academic": [
+        "arxiv.org",
+        "scholar.google.com",
+        "paper.sciencedirect.com"
+      ],
+      "timestamp": [
+        "people.com.cn",
+        "xinhuanet.com",
+        "gov.cn"
+      ]
+    },
+    "jsHeavySites": [
+      "zhihu.com",
+      "xiaohongshu.com",
+      "mp.weixin.qq.com"
+    ],
+    "jsHeavyFallback": "summary_first_then_site_query",
+    "allowGlobalFallbackWhenCnInsufficient": true
+  },
+  "reflectiveRepairPolicy": {
+    "description": "纠错触发后优先补检，不直接改写",
+    "enabled": true,
+    "triggerSignals": [
+      "时效词出现",
+      "版本号/发布日期/政策日期/统计数字出现",
+      "模型不确定表达",
+      "用户要求方法更新",
+      "截止年份回声检测"
+    ],
+    "repairFlow": [
+      "criticize_answer",
+      "mark_outdated_fragments",
+      "classify_fact_or_method",
+      "plan_research_queries",
+      "run_cn_first_search",
+      "evaluate_with_judge",
+      "rewrite_impacted_fragments_only",
+      "annotate_evidence"
+    ]
+  },
+  "memoryWritebackPolicy": {
+    "description": "检索结果分层写回（短期/项目/长期）",
+    "enabled": true,
+    "layers": {
+      "shortTermState": {
+        "stores": [
+          "time_anchor",
+          "current_retrieval_context",
+          "temporary_version_window"
+        ],
+        "destination": [
+          ".fbs/time-anchor.json",
+          "session_state"
+        ],
+        "ttl": "minutes_to_hours",
+        "neverWriteToLongTerm": true
+      },
+      "projectRetrievalState": {
+        "stores": [
+          "search_ledger",
+          "chapter_verified_facts",
+          "pending_verification_items",
+          "source_routing_decisions"
+        ],
+        "destination": [
+          ".fbs/search-ledger.jsonl",
+          ".fbs/material-library.md",
+          ".fbs/writing-notes/pending-verification.md"
+        ],
+        "ttl": "project_lifecycle"
+      },
+      "longTermCapabilityState": {
+        "stores": [
+          "stable_query_templates",
+          "high_quality_cn_domains",
+          "judge_scoring_experience",
+          "query_rewrite_patterns"
+        ],
+        "destination": [
+          ".fbs/evolution-knowledge/",
+          "host_memory_capability_profile"
+        ],
+        "ttl": "cross_project",
+        "note": "仅沉淀检索策略经验，不沉淀临时事实"
+      }
+    }
+  },
+  "executionChainIndex": {
+    "description": "联网检索统一执行链",
+    "steps": [
+      "1.timeAnchorPreflight",
+      "2.searchPreflightContract",
+      "3.cnSourceRoutingPolicy",
+      "4.queryVariantPolicy",
+      "5.searchAccessPolicy.effectiveEndpointStrategy",
+      "6.retrievalEvaluator(JUDGE)",
+      "7.reflectiveRepairPolicy(on_trigger)",
+      "8.memoryWritebackPolicy",
+      "9.searchEnhancement.selfImprovingStrategy"
+    ]
+  }
+}

@@ -1,0 +1,56 @@
+{
+  "name": "vision-os-spatial-engineer",
+  "version": "1.0.0",
+  "description": "Expert in visionOS platform development, building Apple Vision Pro spatial applications",
+  "agents": [
+    "./agents/vision-os-spatial-engineer.md"
+  ],
+  "expertType": "agent",
+  "agentName": "vision-os-spatial-engineer",
+  "displayName": {
+    "en": "Xerxes",
+    "zh": "空间通"
+  },
+  "profession": {
+    "en": "visionOS Spatial Engineer",
+    "zh": "visionOS空间工程师"
+  },
+  "displayDescription": {
+    "en": "Expert in visionOS platform development, building Apple Vision Pro spatial applications",
+    "zh": "精通visionOS平台开发，打造Apple Vision Pro空间应用"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "03-GameSpatial",
+  "defaultInitPrompt": {
+    "zh": "我们想为visionOS开发空间计算应用,需要原生空间界面设计,请visionOS空间工程师帮我们设计空间应用。",
+    "en": "We want to develop spatial computing applications for visionOS and need native spatial interface design. Please, visionOS Spatial Engineer, help us design spatial applications."
+  },
+  "tags": [
+    {
+      "zh": "visionOS开发",
+      "en": "visionOS Development"
+    },
+    {
+      "zh": "空间界面",
+      "en": "Spatial Interface"
+    },
+    {
+      "zh": "SwiftUI",
+      "en": "SwiftUI"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "我们想为visionOS开发空间计算应用,需要原生空间界面设计,请visionOS空间工程师帮我们设计空间应用。",
+      "en": "We want to develop spatial computing applications for visionOS and need native spatial interface design. Please, visionOS Spatial Engineer, help us design spatial applications."
+    },
+    {
+      "zh": "设计空间UI交互和手势操作方案",
+      "en": "Design spatial UI interaction and gesture control plan"
+    },
+    {
+      "zh": "优化visionOS渲染性能和3D体验",
+      "en": "Optimize visionOS rendering performance and 3D experience"
+    }
+  ]
+}

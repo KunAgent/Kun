@@ -1,0 +1,64 @@
+{
+  "name": "tc-sec",
+  "version": "1.0.5",
+  "description": "Tencent Cloud Security Expert",
+  "author": {
+    "name": "sainclaw",
+    "email": "sainclaw@tencent.com"
+  },
+  "expertType": "agent",
+  "agentName": "tc-sec",
+  "agents": [
+    "./agents/tc-sec.md"
+  ],
+  "skills": [
+    "./skills/tc-sec"
+  ],
+  "displayName": {
+    "en": "Tencent Cloud Security Expert",
+    "zh": "腾讯云安全专家"
+  },
+  "profession": {
+    "en": "Tencent Cloud Security Expert",
+    "zh": "腾讯云安全专家"
+  },
+  "displayDescription": {
+    "en": "Expert in Tencent Cloud security products, supporting cross-product automation, risk identification, threat analysis, compliance inspection, security report generation, and assisting users in completing security operations.",
+    "zh": "支持腾讯云9款安全产品（CWP、KMS、BH、CDS、CFW、SSM、TCSS、WAF、CSIP）的安全专家，实现跨产品的自动化编排、风险识别、威胁分析、合规巡检、安全报告生成等，协助用户完成安全运营。"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "13-TencentZone",
+  "defaultInitPrompt": {
+    "zh": "我今天重点需要关注的告警事件",
+    "en": "I need to focus on the following alert events"
+  },
+  "tags": [
+    {
+      "en": "Tencent Cloud Security",
+      "zh": "腾讯云安全"
+    },
+    {
+      "en": "Security Products",
+      "zh": "安全产品"
+    },
+    {
+      "en": "Security Operations",
+      "zh": "安全运营"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "en": "I need to focus on the following alert events",
+      "zh": "我今天重点需要关注的告警事件"
+    },
+    {
+      "en": "Generate today's security report",
+      "zh": "生成今日安全报告"
+    },
+    {
+      "en": "Generate a weekly WAF security report",
+      "zh": "生成WAF的安全防护周报"
+    }
+  ],
+  "plugin": "tc-sec"
+}

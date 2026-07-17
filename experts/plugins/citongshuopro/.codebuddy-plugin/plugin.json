@@ -1,0 +1,88 @@
+{
+  "name": "citongshuopro",
+  "version": "1.0.0",
+  "description": "刺桐说社群嘉宾团 - 将投资问题智能路由到4位专业嘉宾，模拟真实投资社群运作模式",
+  "author": {
+    "name": "杜哥学量化",
+    "email": ""
+  },
+  "agents": [
+    "./agents/citongshuopro-team-lead.md",
+    "./agents/zhanglaoshi.md",
+    "./agents/jiazong.md",
+    "./agents/littlestar.md",
+    "./agents/gy.md"
+  ],
+  "expertType": "team",
+  "agentName": "citongshuopro-team-lead",
+  "teamInfo": {
+    "leadAgent": "citongshuopro-team-lead",
+    "memberAgents": ["zhanglaoshi", "jiazong", "littlestar", "gy"]
+  },
+  "displayName": {
+    "en": "Citong Talk Pro",
+    "zh": "刺桐说Pro-投资社群嘉宾团"
+  },
+  "profession": {
+    "en": "Citong Talk Pro",
+    "zh": "刺桐说Pro-投资社群嘉宾团"
+  },
+  "displayDescription": {
+    "en": "Multi-agent investment research system simulating real investment community, with digital twins of community guests providing 24/7 advisory.",
+    "zh": "模拟真实投资社群运作模式的多智能体投研系统，已接入社群嘉宾数字分身，可7*24为您提供投资咨询服务。"
+  },
+  "avatar": "avatars/citongshuopro.png",
+  "categoryId": "08-FinanceInvestment",
+  "defaultInitPrompt": {
+    "zh": "复盘目前的A股市场",
+    "en": "Review the current A-share market"
+  },
+  "plugin": "citongshuopro",
+  "tags": [
+    {"en": "Market Trends", "zh": "市场趋势分析"},
+    {"en": "Sector Analysis", "zh": "行业板块分析"},
+    {"en": "Investment Research", "zh": "股票投研分析"}
+  ],
+  "quickPrompts": [
+    {"en": "Review the current A-share market", "zh": "复盘目前的A股市场"},
+    {"en": "Which sectors are worth watching?", "zh": "目前值得关注的行业"},
+    {"en": "Analyze currently popular stocks", "zh": "分析目前热门的股票"}
+  ],
+  "members": [
+    {
+      "id": "citongshuopro-team-lead",
+      "name": {"en": "Citong Talk", "zh": "刺桐说"},
+      "profession": {"en": "Community Admin", "zh": "社群管理员"},
+      "avatar": "avatars/citongshuopro-team-lead.png",
+      "role": "lead"
+    },
+    {
+      "id": "zhanglaoshi",
+      "name": {"en": "Teacher Zhang", "zh": "张老师"},
+      "profession": {"en": "Value Investing Expert", "zh": "价值投资专家"},
+      "avatar": "avatars/zhanglaoshi.png",
+      "role": "member"
+    },
+    {
+      "id": "jiazong",
+      "name": {"en": "Jia Zong", "zh": "佳总"},
+      "profession": {"en": "Trend Following Expert", "zh": "趋势跟踪专家"},
+      "avatar": "avatars/jiazong.png",
+      "role": "member"
+    },
+    {
+      "id": "littlestar",
+      "name": {"en": "LittleStar", "zh": "LittleStar"},
+      "profession": {"en": "Momentum Short-term Expert", "zh": "游资短线专家"},
+      "avatar": "avatars/littlestar.png",
+      "role": "member"
+    },
+    {
+      "id": "gy",
+      "name": {"en": "GY", "zh": "GY"},
+      "profession": {"en": "Macro Hedge Expert", "zh": "宏观对冲专家"},
+      "avatar": "avatars/gy.png",
+      "role": "member"
+    }
+  ]
+}

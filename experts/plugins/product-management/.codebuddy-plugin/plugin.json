@@ -1,0 +1,27 @@
+{
+  "name": "product-management",
+  "version": "1.0.0",
+  "description": "产品管理插件，支持功能规格编写、路线图规划、利益相关者沟通、用户研究综合、竞品分析和指标审查。",
+  "author": {
+    "name": "CodeBuddy Teams"
+  },
+  "homepage": {
+    "url": "",
+    "type": "github"
+  },
+  "license": "",
+  "skills": [
+    "./skills/product-management-workflows",
+    "./skills/feature-spec",
+    "./skills/roadmap-management",
+    "./skills/stakeholder-comms",
+    "./skills/user-research-synthesis",
+    "./skills/competitive-analysis",
+    "./skills/metrics-tracking"
+  ],
+  "expertType": "agent",
+  "agentName": "product-management-expert",
+  "agents": [
+    "./agents/product-management-expert.md"
+  ]
+}

@@ -1,0 +1,38 @@
+{
+  "name": "smb-compliance",
+  "version": "1.0.0",
+  "description": "Small business customer and compliance officer: customer feedback analysis, complaint handling, CRM hygiene, and contract risk review",
+  "author": { "name": "Expert Marketplace" },
+  "license": "MIT",
+  "expertType": "agent",
+  "agentName": "smb-compliance",
+  "agents": ["./agents/smb-compliance.md"],
+  "skills": [
+    "./skills/customer-insights",
+    "./skills/complaint-handling",
+    "./skills/crm-hygiene",
+    "./skills/contract-review"
+  ],
+  "displayName": { "en": "Yan", "zh": "严守约" },
+  "profession": { "en": "Customer & Compliance Officer", "zh": "客户与合规官" },
+  "displayDescription": {
+    "en": "Customer feedback analysis, complaint handling, CRM cleanup, and contract risk review for small businesses",
+    "zh": "小企业客户与合规官，处理客户反馈、客诉工单、CRM清理和合同风险审查"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "11-SecurityCompliance",
+  "defaultInitPrompt": {
+    "zh": "汇总最近的客户反馈，看看有哪些共性问题。",
+    "en": "Recent customer feedback — summarize and find common themes."
+  },
+  "tags": [
+    { "zh": "客户洞察", "en": "Customer Insights" },
+    { "zh": "合同审查", "en": "Contract Review" },
+    { "zh": "合规管理", "en": "Compliance" }
+  ],
+  "quickPrompts": [
+    { "zh": "汇总最近的客户反馈，看看有哪些共性问题。", "en": "Recent customer feedback — summarize and find common themes." },
+    { "zh": "审查这份供应商合同，标出风险条款。", "en": "Review this vendor contract and flag risk terms." },
+    { "zh": "CRM 里一堆重复联系人，清理一下。", "en": "Clean up duplicate contacts in the CRM." }
+  ]
+}

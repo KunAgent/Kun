@@ -1,0 +1,1 @@
+使用方式： 解压后，运行 python scripts/decode_apikey.py settings.json 即可还原 appkey 为明文，使专家团正常运行。

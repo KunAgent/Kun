@@ -65,7 +65,7 @@ import { ERRORS } from './runtime-error.js'
 import type { ServerRuntime } from './server-runtime.js'
 import { registerExtensionManagementRoutes } from './extensions.js'
 import { registerExtensionPublicRoutes } from './extension-public.js'
-import { registerExtensionRoutes } from '../seam/index.js' // EXT-SEAM
+import { registerExtensionRoutes } from '../../seam/index.js' // EXT-SEAM: Fixed import path
 
 /**
  * Build the full router used by the HTTP server. The router exposes:

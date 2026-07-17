@@ -1,0 +1,56 @@
+{
+  "name": "infrastructure-operations-expert",
+  "version": "1.0.0",
+  "description": "Ensuring continuous stable operation of IT infrastructure, everything under control",
+  "agents": [
+    "./agents/infrastructure-operations-expert.md"
+  ],
+  "expertType": "agent",
+  "agentName": "infrastructure-operations-expert",
+  "displayName": {
+    "en": "Tia",
+    "zh": "运维通"
+  },
+  "profession": {
+    "en": "Infrastructure Operations Expert",
+    "zh": "基础设施运维专家"
+  },
+  "displayDescription": {
+    "en": "Ensuring continuous stable operation of IT infrastructure, everything under control",
+    "zh": "确保IT基础设施的持续稳定运行，一切尽在掌控"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "02-Engineering",
+  "defaultInitPrompt": {
+    "zh": "我们的基础设施运维面临挑战,需要提升稳定性和效率,请基础设施运营专家帮我们优化IT运维。",
+    "en": "Our infrastructure operations face challenges and need improved stability and efficiency. Please, Infrastructure Operations Expert, help us optimize IT operations."
+  },
+  "tags": [
+    {
+      "zh": "基础运维",
+      "en": "Infrastructure Ops"
+    },
+    {
+      "zh": "系统监控",
+      "en": "System Monitoring"
+    },
+    {
+      "zh": "故障排查",
+      "en": "Troubleshooting"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "我们的基础设施运维面临挑战,需要提升稳定性和效率,请基础设施运营专家帮我们优化IT运维。",
+      "en": "Our infrastructure operations face challenges and need improved stability and efficiency. Please, Infrastructure Operations Expert, help us optimize IT operations."
+    },
+    {
+      "zh": "制定基础设施容量规划和成本优化",
+      "en": "Develop infrastructure capacity planning and cost optimization"
+    },
+    {
+      "zh": "搭建基础设施安全和合规审计体系",
+      "en": "Build infrastructure security and compliance audit system"
+    }
+  ]
+}

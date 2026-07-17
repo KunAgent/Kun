@@ -1,0 +1,178 @@
+/**
+ * PPT模板统一样式文件
+ * 
+ * 本文件合并了所有HTML模板中的自定义CSS样式
+ * 
+ * 来源文件：
+ * 1. title-styles-collection-tailwind.html (行号: 8-39)
+ * 2. decorative-elements-tailwind.html (行号: 8-39)
+ * 3. cover-templates-tailwind.html (行号: 8-78)
+ */
+
+/* ========================================
+   来自 title-styles-collection-tailwind.html
+   ======================================== */
+
+/* 手绘风格下划线效果 */
+.hand-drawn::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: -8px;
+    height: 3px;
+    background: linear-gradient(90deg, 
+        transparent 0%, 
+        #6b7280 2%, 
+        #6b7280 98%, 
+        transparent 100%
+    );
+    border-radius: 2px;
+    opacity: 0.6;
+}
+
+/* 几何风格背景图案 */
+.geometric-bg {
+    background-image: 
+        linear-gradient(45deg, #8b5cf6 25%, transparent 25%),
+        linear-gradient(-45deg, #8b5cf6 25%, transparent 25%),
+        linear-gradient(45deg, transparent 75%, #8b5cf6 75%),
+        linear-gradient(-45deg, transparent 75%, #8b5cf6 75%);
+    background-size: 20px 20px;
+    background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+    opacity: 0.1;
+}
+
+/* 六边形裁剪路径 */
+.clip-path-hexagon {
+    clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+}
+
+/* ========================================
+   来自 decorative-elements-tailwind.html
+   ======================================== */
+
+/* 类别标签样式 */
+.category-label {
+    font-size: 11px;
+    color: #6b7280;
+    text-transform: uppercase;
+    font-weight: 600;
+    margin-top: 15px;
+    margin-bottom: 15px;
+    padding-left: 5px;
+    border-left: 3px solid #3b82f6;
+}
+
+/* 元素网格布局 */
+.elements-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: 20px;
+}
+
+/* 单个元素容器样式 */
+.element-item {
+    aspect-ratio: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #f9fafb;
+    border-radius: 12px;
+    border: 1px solid #e5e7eb;
+    padding: 15px;
+    transition: all 0.3s;
+}
+
+/* 元素容器悬停效果 */
+.element-item:hover {
+    transform: scale(1.05);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
+/* ========================================
+   来自 cover-templates-tailwind.html
+   ======================================== */
+
+/* 全局字体和背景 */
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    min-height: 100vh;
+}
+
+/* 容器最大宽度 */
+.container {
+    max-width: 1400px;
+}
+
+/* 页面标题渐变文字效果 */
+.page-title {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+/* 风格分区样式 */
+.style-section {
+    background: white;
+    border-radius: 16px;
+    padding: 40px;
+    margin-bottom: 40px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+}
+
+/* 风格标题样式 */
+.style-header {
+    font-size: 28px;
+    font-weight: bold;
+    margin-bottom: 30px;
+    padding-bottom: 15px;
+    border-bottom: 3px solid #e5e7eb;
+    color: #1f2937;
+}
+
+/* ========================================
+   通用工具类
+   ======================================== */
+
+/* 响应式16:9容器 */
+.aspect-ratio-16-9 {
+    position: relative;
+    width: 100%;
+    padding-bottom: 56.25%;
+}
+
+.aspect-ratio-16-9-content {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+}
+
+/* 卡片悬停效果 */
+.hover-lift {
+    transition: all 0.3s ease;
+}
+
+.hover-lift:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 30px rgba(0,0,0,0.15);
+}
+
+/* 渐变文字效果 */
+.gradient-text {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+/* 毛玻璃效果 */
+.glass-effect {
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}

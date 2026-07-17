@@ -1,0 +1,65 @@
+{
+  "name": "ppt-creation-expert",
+  "version": "1.0.0",
+  "description": "An AI presentation expert that creates general-purpose and customer-facing solution PPTs.",
+  "author": {
+    "name": "WorkBuddy",
+    "email": "workbuddy@tencent.com"
+  },
+  "expertType": "agent",
+  "agentName": "ppt-creator",
+  "agents": [
+    "./agents/ppt-creator.md"
+  ],
+  "skills": [
+    "./skills/guided-ppt-creation-workflow",
+    "./skills/solution-ppt-generator-v3"
+  ],
+  "displayName": {
+    "en": "PPT Creation Expert",
+    "zh": "腾讯云知（乐享）"
+  },
+  "profession": {
+    "en": "Presentation Designer",
+    "zh": "腾讯云PPT制作专家"
+  },
+  "displayDescription": {
+    "en": "A PPT expert that clarifies needs via a quick form then generates polished slides. Covers two scenarios: guided workflow for any topic, and customer-facing solution decks with deep research.",
+    "zh": "基于腾讯云知平台的PPT制作专家。通过表单快速澄清需求后直接生成演示文稿，支持通用主题与面客方案"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "13-TencentZone",
+  "defaultInitPrompt": {
+    "zh": "帮我生成一份智慧医疗行业的面客解决方案 PPT",
+    "en": "Help me make a PPT about AI Agents"
+  },
+  "tags": [
+    {
+      "en": "PPT Generation",
+      "zh": "PPT 生成"
+    },
+    {
+      "en": "Solution Deck",
+      "zh": "解决方案"
+    },
+    {
+      "en": "Presentation Design",
+      "zh": "演示设计"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "en": "Help me make a PPT about AI Agents",
+      "zh": "帮我生成一份智慧医疗行业的面客解决方案 PPT"
+    },
+    {
+      "en": "Generate a customer-facing solution deck for the smart healthcare industry",
+      "zh": "帮我制作一份乐享产品介绍 PPT"
+    },
+    {
+      "en": "Turn this document into a presentation",
+      "zh": "把这份文档做成 PPT"
+    }
+  ],
+  "plugin": "ppt-creation-expert"
+}

@@ -1,0 +1,548 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>六爻起卦 · 腾讯 offer 去留 · 2026-05-12</title>
+<style>
+  :root {
+    --bg: #15110c;
+    --paper: #1c1812;
+    --paper-soft: #251f17;
+    --ink: #d8c8a8;
+    --ink-bright: #f0e0b8;
+    --vermilion: #b8341e;
+    --vermilion-bright: #d44a30;
+    --bronze: #8a6c3a;
+    --jade: #5a8a6a;
+    --jade-bright: #7ab08c;
+    --dim: #7a6e5a;
+    --gold: #c69838;
+    --border: rgba(216, 200, 168, 0.18);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: "STKaiti", "KaiTi", "PingFang SC", "Hiragino Sans GB", serif;
+    line-height: 1.8;
+    min-height: 100vh;
+    background-image:
+      repeating-linear-gradient(90deg, transparent 0, transparent 38px, rgba(216, 200, 168, 0.02) 38px, rgba(216, 200, 168, 0.02) 39px),
+      radial-gradient(circle at 30% 20%, rgba(184, 52, 30, 0.06), transparent 50%),
+      linear-gradient(180deg, #15110c 0%, #0d0a06 100%);
+  }
+  .container { max-width: 1040px; margin: 0 auto; padding: 48px 24px 80px; }
+
+  .header {
+    text-align: center;
+    margin-bottom: 32px;
+    padding-bottom: 24px;
+    border-bottom: 1px double var(--border);
+  }
+  .header::before {
+    content: "☳ ☷";
+    display: block;
+    font-size: 32px;
+    color: var(--vermilion);
+    letter-spacing: 20px;
+    margin-bottom: 12px;
+  }
+  .header h1 {
+    font-size: 32px;
+    color: var(--ink-bright);
+    letter-spacing: 12px;
+    font-weight: 500;
+    margin-bottom: 8px;
+  }
+  .header .seal {
+    display: inline-block;
+    background: var(--vermilion);
+    color: #fff;
+    padding: 4px 12px;
+    font-size: 13px;
+    letter-spacing: 4px;
+    border-radius: 2px;
+    margin: 8px 4px;
+    font-weight: bold;
+  }
+  .header .meta { color: var(--dim); font-size: 12px; margin-top: 14px; letter-spacing: 2px; }
+
+  /* Question card */
+  .question-card {
+    background: var(--paper);
+    border: 1px solid var(--border);
+    border-left: 4px solid var(--vermilion);
+    padding: 20px 26px;
+    margin-bottom: 28px;
+    border-radius: 2px;
+  }
+  .question-card .label {
+    color: var(--vermilion-bright);
+    font-size: 12px;
+    letter-spacing: 3px;
+    margin-bottom: 6px;
+  }
+  .question-card .question {
+    color: var(--ink-bright);
+    font-size: 18px;
+    letter-spacing: 2px;
+    font-weight: 500;
+  }
+  .question-card .calc {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px dashed var(--border);
+    font-size: 12px;
+    color: var(--dim);
+  }
+  .question-card .calc span { color: var(--bronze); margin-right: 12px; }
+
+  /* Main hexagram */
+  .gua-container {
+    display: grid;
+    grid-template-columns: 1fr 320px 1fr;
+    gap: 24px;
+    align-items: start;
+    margin-bottom: 36px;
+    padding: 28px;
+    background: var(--paper);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    position: relative;
+  }
+  @media (max-width: 820px) {
+    .gua-container { grid-template-columns: 1fr; gap: 16px; }
+  }
+  .gua-side { padding: 0 8px; }
+  .gua-side h4 {
+    color: var(--vermilion-bright);
+    margin-bottom: 10px;
+    letter-spacing: 3px;
+    font-size: 14px;
+    font-weight: 500;
+    text-align: center;
+    padding-bottom: 8px;
+    border-bottom: 1px dashed var(--border);
+  }
+  .gua-side .meta-line {
+    font-size: 12.5px;
+    color: var(--ink);
+    margin-bottom: 5px;
+    display: flex;
+    justify-content: space-between;
+  }
+  .gua-side .meta-line span { color: var(--bronze); }
+  .gua-side .meta-line b { color: var(--ink-bright); font-weight: 500; }
+
+  .gua-center { text-align: center; }
+  .gua-name {
+    font-size: 26px;
+    color: var(--ink-bright);
+    letter-spacing: 8px;
+    margin-bottom: 6px;
+    text-indent: 8px;
+  }
+  .gua-symbol {
+    color: var(--vermilion-bright);
+    font-size: 14px;
+    margin-bottom: 18px;
+    letter-spacing: 4px;
+  }
+  .lines {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin: 18px 0;
+  }
+  .line-row {
+    display: grid;
+    grid-template-columns: 90px 130px 60px;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+  }
+  .line-meta { color: var(--ink); text-align: left; line-height: 1.4; }
+  .line-meta strong { color: var(--ink-bright); display: block; font-size: 12.5px; }
+  .line-meta .six-info { color: var(--bronze); display: block; font-size: 10px; letter-spacing: 1px;}
+  .line-yao {
+    height: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+  }
+  .yao {
+    height: 8px;
+    display: inline-block;
+    background: var(--ink);
+    border-radius: 1px;
+  }
+  .yao.yang { width: 110px; }
+  .yao.yin { width: 48px; box-shadow: 64px 0 0 var(--ink); }
+  .line-row.changing .yao { background: var(--vermilion); }
+  .line-row.changing .yao.yin { box-shadow: 64px 0 0 var(--vermilion); }
+  .line-row.changing .line-yao::after {
+    content: "◯";
+    color: var(--vermilion);
+    font-size: 14px;
+    position: absolute;
+    right: -22px;
+    font-weight: bold;
+  }
+  .line-tag {
+    color: var(--bronze);
+    font-size: 11px;
+    letter-spacing: 1px;
+    text-align: right;
+  }
+  .line-tag.shi { color: var(--jade-bright); }
+  .line-tag.ying { color: var(--vermilion); }
+
+  /* Sections */
+  .section { margin-bottom: 30px; }
+  .section-title {
+    font-size: 17px;
+    color: var(--vermilion-bright);
+    letter-spacing: 6px;
+    margin-bottom: 16px;
+    padding-left: 14px;
+    border-left: 3px solid var(--vermilion);
+  }
+  .section-title small { color: var(--dim); font-size: 11px; margin-left: 12px; letter-spacing: 1px; }
+
+  .scroll-card {
+    background: var(--paper);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--bronze);
+    border-radius: 2px;
+    padding: 22px 28px;
+    margin-bottom: 14px;
+  }
+  .scroll-card.v { border-left-color: var(--vermilion); }
+  .scroll-card.j { border-left-color: var(--jade); }
+  .scroll-card h3 {
+    color: var(--ink-bright);
+    font-weight: 500;
+    margin-bottom: 12px;
+    letter-spacing: 2px;
+    font-size: 16px;
+  }
+  .scroll-card p { color: var(--ink); margin-bottom: 8px; font-size: 14px; }
+  .scroll-card .yao-quote {
+    color: var(--vermilion-bright);
+    border-left: 2px solid var(--vermilion);
+    padding-left: 12px;
+    margin: 10px 0;
+    font-style: italic;
+    letter-spacing: 1px;
+    font-size: 14px;
+  }
+  .scroll-card .em { color: var(--ink-bright); font-weight: 500; }
+  .scroll-card .hot { color: var(--vermilion-bright); font-weight: 500; }
+  .scroll-card .good { color: var(--jade-bright); font-weight: 500; }
+
+  /* Verdict */
+  .verdict-box {
+    background: linear-gradient(135deg, rgba(184, 52, 30, 0.12), rgba(198, 152, 56, 0.06));
+    border: 1.5px solid var(--vermilion);
+    border-radius: 4px;
+    padding: 24px 32px;
+    margin-bottom: 24px;
+    text-align: center;
+  }
+  .verdict-box .label {
+    color: var(--vermilion-bright);
+    letter-spacing: 6px;
+    font-size: 13px;
+    margin-bottom: 12px;
+  }
+  .verdict-box .answer {
+    color: var(--ink-bright);
+    font-size: 28px;
+    letter-spacing: 8px;
+    font-weight: 600;
+    margin-bottom: 10px;
+    text-indent: 8px;
+  }
+  .verdict-box .nuance {
+    color: var(--bronze);
+    font-size: 13px;
+    letter-spacing: 2px;
+  }
+
+  /* Dimensions */
+  .dim-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 14px;
+  }
+  @media (max-width: 720px) {
+    .dim-grid { grid-template-columns: 1fr; }
+  }
+  .dim-card {
+    background: var(--paper);
+    border: 1px solid var(--border);
+    border-top: 3px solid var(--bronze);
+    padding: 16px 20px;
+    border-radius: 2px;
+  }
+  .dim-card.good { border-top-color: var(--jade); }
+  .dim-card.warn { border-top-color: var(--vermilion); }
+  .dim-card h4 {
+    color: var(--ink-bright);
+    letter-spacing: 2px;
+    font-size: 14px;
+    margin-bottom: 8px;
+    font-weight: 500;
+    display: flex;
+    justify-content: space-between;
+  }
+  .dim-card h4 .score {
+    background: var(--bronze);
+    color: #fff;
+    font-size: 10px;
+    padding: 2px 8px;
+    border-radius: 8px;
+    letter-spacing: 1px;
+  }
+  .dim-card.good h4 .score { background: var(--jade); }
+  .dim-card.warn h4 .score { background: var(--vermilion); }
+  .dim-card p { color: var(--ink); font-size: 13px; line-height: 1.8; }
+
+  .disclaimer {
+    margin-top: 40px;
+    padding: 14px 20px;
+    background: rgba(184, 52, 30, 0.06);
+    border: 1px dashed var(--vermilion);
+    border-radius: 2px;
+    font-size: 12px;
+    color: var(--dim);
+  }
+
+  @media (max-width: 720px) {
+    .header h1 { font-size: 22px; letter-spacing: 6px; }
+    .yao.yang { width: 80px; }
+    .yao.yin { width: 32px; box-shadow: 48px 0 0 var(--ink); }
+    .line-row.changing .yao.yin { box-shadow: 48px 0 0 var(--vermilion); }
+    .line-row { grid-template-columns: 70px 100px 50px; }
+    .verdict-box .answer { font-size: 20px; letter-spacing: 4px; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <div class="header">
+    <h1>六 爻 起 卦</h1>
+    <span class="seal">京房纳甲</span>
+    <span class="seal">摇卦占问</span>
+    <div class="meta">起卦时间：2026-05-12 20:45（壬午月 · 时空起卦法）</div>
+  </div>
+
+  <!-- Question -->
+  <div class="question-card">
+    <div class="label">占　问</div>
+    <div class="question">要不要接腾讯的 offer？</div>
+    <div class="calc">
+      <span>起卦法</span>三钱掷地法 · 六爻<br/>
+      <span>掷得</span>阴 · 阳 · <b style="color: var(--vermilion-bright);">阳动</b> · 阴 · <b style="color: var(--vermilion-bright);">阴动</b> · 阳
+    </div>
+  </div>
+
+  <!-- Main hexagram -->
+  <div class="gua-container">
+
+    <div class="gua-side">
+      <h4>本卦 · 现状</h4>
+      <div class="meta-line"><span>上卦</span><b>震 ☳ 为雷</b></div>
+      <div class="meta-line"><span>下卦</span><b>坤 ☷ 为地</b></div>
+      <div class="meta-line"><span>卦序</span><b>第 16 豫</b></div>
+      <div class="meta-line"><span>卦宫</span><b>震宫第二卦</b></div>
+      <div class="meta-line"><span>世应</span><b>世三爻 · 应上爻</b></div>
+      <div class="meta-line"><span>用神</span><b>官鬼（工作）</b></div>
+      <div class="meta-line"><span>动爻</span><b>三爻 + 五爻</b></div>
+      <div class="meta-line"><span>月建</span><b>午火</b></div>
+      <div class="meta-line"><span>日辰</span><b>壬午</b></div>
+    </div>
+
+    <div class="gua-center">
+      <div class="gua-name">雷 地 豫</div>
+      <div class="gua-symbol">☳ 震 上 · ☷ 坤 下</div>
+      <div class="lines">
+        <div class="line-row">
+          <div class="line-meta"><strong>上六</strong><span class="six-info">戌土 · 妻财</span></div>
+          <div class="line-yao"><span class="yao yin"></span></div>
+          <div class="line-tag ying">应</div>
+        </div>
+        <div class="line-row changing">
+          <div class="line-meta"><strong>六五</strong><span class="six-info">申金 · 官鬼 ☆</span></div>
+          <div class="line-yao"><span class="yao yin"></span></div>
+          <div class="line-tag">动爻</div>
+        </div>
+        <div class="line-row">
+          <div class="line-meta"><strong>九四</strong><span class="six-info">午火 · 子孙</span></div>
+          <div class="line-yao"><span class="yao yang"></span></div>
+          <div class="line-tag">　</div>
+        </div>
+        <div class="line-row changing">
+          <div class="line-meta"><strong>九三</strong><span class="six-info">卯木 · 兄弟 ☆</span></div>
+          <div class="line-yao"><span class="yao yang"></span></div>
+          <div class="line-tag shi">世</div>
+        </div>
+        <div class="line-row">
+          <div class="line-meta"><strong>六二</strong><span class="six-info">巳火 · 子孙</span></div>
+          <div class="line-yao"><span class="yao yin"></span></div>
+          <div class="line-tag">　</div>
+        </div>
+        <div class="line-row">
+          <div class="line-meta"><strong>初六</strong><span class="six-info">未土 · 妻财</span></div>
+          <div class="line-yao"><span class="yao yin"></span></div>
+          <div class="line-tag">　</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="gua-side">
+      <h4>变卦 · 走向</h4>
+      <div class="meta-line"><span>变出</span><b>泽风大过</b></div>
+      <div class="meta-line"><span>上卦</span><b>兑 ☱ 为泽</b></div>
+      <div class="meta-line"><span>下卦</span><b>巽 ☴ 为风</b></div>
+      <div class="meta-line"><span>变爻</span><b>九三 → 六三</b><br/></div>
+      <div class="meta-line"><span></span><b>六五 → 九五</b></div>
+      <div class="meta-line"><span>变意</span><b>栋挠之象</b></div>
+      <div class="meta-line"><span>互卦</span><b>水山蹇</b></div>
+      <div class="meta-line"><span>综卦</span><b>谦</b></div>
+      <div class="meta-line"><span>象传</span><b>独立不惧</b></div>
+    </div>
+  </div>
+
+  <!-- Verdict -->
+  <div class="verdict-box">
+    <div class="label">卦 象 定 论</div>
+    <div class="answer">可 接 · 但 要 看 条 件</div>
+    <div class="nuance">豫卦利建侯行师 · 变大过需防过劳 · 非清静之选</div>
+  </div>
+
+  <!-- Body hexagram -->
+  <div class="section">
+    <div class="section-title">本 卦 · 雷 地 豫 <small>CURRENT HEXAGRAM</small></div>
+    <div class="scroll-card v">
+      <h3>✦ 雷地豫 · 卦辞</h3>
+      <p class="yao-quote">"豫：利建侯行师。" —《周易·豫卦》</p>
+      <p>豫卦上震（雷，动）下坤（地，顺）——雷出地奋，万物响应。<span class="em">"豫"本义是"安乐、预备"</span>，卦辞直白点出这是一个<span class="hot">"适合加入大军团、打大仗"的卦</span>——利建侯（立山头）、利行师（带队伍）。</p>
+      <p>对您的问题来说，这个卦象<span class="em">非常应景</span>——腾讯正是典型的"大军团"，豫卦出现，等于问卜者已经准备好要"归入一个有声势的组织"，天道也响应此动。</p>
+      <p>但是——豫卦最核心的警示是<span class="hot">"过豫则溺"</span>，安乐过头会沉沦。所以卦象虽利，但对您个人而言<span class="em">关键不在去不去，而在去了之后别被"大平台的安稳"消磨</span>。</p>
+    </div>
+  </div>
+
+  <!-- Liuqin analysis -->
+  <div class="section">
+    <div class="section-title">六 亲 与 用 神 <small>SIX RELATIVES</small></div>
+    <div class="scroll-card">
+      <h3>✦ 用神：官鬼申金（六五爻，动爻）</h3>
+      <p>占工作职位——<span class="em">用神取官鬼</span>。本卦六五爻官鬼申金坐于尊位（五爻为君位）——<span class="good">这是核心吉兆之一</span>。</p>
+      <p>· <span class="em">用神得位</span>：官鬼落五爻，等于 offer 的职位级别/含金量配得上大平台，非"打杂岗"<br/>
+      · <span class="em">用神发动</span>：六五爻动——事情会<span class="hot">实质推进</span>，不是纸上谈兵<br/>
+      · <span class="em">月建午火克申金</span>：壬午月火克金——<span class="hot">近期会有压力面谈、反复谈判</span>，offer 谈判期不会太顺利<br/>
+      · <span class="em">日辰壬午同样克申</span>：今天下 offer 或签字，条件谈得不理想</p>
+    </div>
+    <div class="scroll-card j">
+      <h3>✦ 世爻：兄弟卯木（九三爻，动爻）</h3>
+      <p>世爻代表您自己。<span class="em">世爻兄弟卯木动</span>——兄弟主"同行、同事、竞争者、也主破财"。这一爻动说明：</p>
+      <p>· 您内心正处于<span class="em">"与同行朋友比较"</span>的状态（是不是别人去了更好？是不是这个 offer 值得？）<br/>
+      · 兄弟动会<span class="hot">"劫财"</span>——去了之后可能薪资谈判不到理想价位，或者福利细节要打折扣<br/>
+      · 但世爻卯木<span class="good">得月建午火相生</span>（木生火逆推有回馈）——您个人的<span class="em">底气和能量状态是足的</span>，是卯木有根的状态去谈判</p>
+    </div>
+    <div class="scroll-card">
+      <h3>✦ 应爻：妻财戌土（上六爻）</h3>
+      <p>应爻代表"对方/腾讯"。<span class="em">应爻坐妻财戌土</span>——对方对您的主要吸引力来自<span class="em">"钱、资源、平台"</span>（妻财），而不是情怀或长期培养（那应该是父母爻）。</p>
+      <p>· 应爻不动——<span class="em">腾讯方面心意稳定</span>，给 offer 不是忽悠<br/>
+      · 戌土为火库——<span class="hot">钱给得不会一步到位</span>，可能有签字费/股票延期/期权分批<br/>
+      · 应爻与世爻相距两位——<span class="em">双方在"拉锯距离"</span>，不是一拍即合，但也不是天各一方</p>
+    </div>
+  </div>
+
+  <!-- Changing lines -->
+  <div class="section">
+    <div class="section-title">动 爻 深 读 <small>CHANGING LINES</small></div>
+    <div class="scroll-card v">
+      <h3>✦ 九三动 — 世爻动，主"自己的态度在变"</h3>
+      <p class="yao-quote">"九三：盱豫，悔；迟有悔。"</p>
+      <p>九三爻辞——<span class="hot">"左右张望地看着（上面的安乐），会后悔；犹豫太久也会后悔"</span>。这是豫卦里最关键的告诫爻，直指您当下的状态：</p>
+      <p>· <span class="em">"盱豫"</span>——眼睛盯着上面（大平台、高职位），心里痒痒——这是您内心的真实状态<br/>
+      · <span class="em">"迟有悔"</span>——拖着不做决定，同样会后悔<br/>
+      · 爻辞提示：<span class="hot">要么痛快接，要么痛快拒；最怕拖拖拉拉、既贪且怕</span></p>
+      <p>九三动变六三——从阳变阴，从震卦变兑卦（泽）——<span class="em">态度从"主动动"变成"被动喜"</span>，意味着如果您犹豫太久，最终可能是被对方的节奏推着走，反而丢了主动权。</p>
+    </div>
+    <div class="scroll-card v">
+      <h3>✦ 六五动 — 用神动，主"offer 本身也在变"</h3>
+      <p class="yao-quote">"六五：贞疾，恒不死。"</p>
+      <p>六五爻辞——<span class="hot">"持续受困但不致命"</span>。这一爻是君位，代表 offer 这件事本身的走向：</p>
+      <p>· <span class="em">"贞疾"</span>——offer 的某些条件是"慢性病灶"——可能是岗位定义模糊、可能是上级关系复杂、可能是业务线前景不明<br/>
+      · <span class="em">"恒不死"</span>——不是致命问题，入职后还能调整，不会立刻崩盘<br/>
+      · 动变九五（泽风大过上爻）——从阴变阳，<span class="hot">意味着入职后您会主动承担大责任</span>（阳爻在君位）</p>
+      <p class="yao-quote" style="color: var(--jade-bright); border-left-color: var(--jade);">合读：这是一份"有长期潜力但短期磨合期较长"的 offer——不是一来就能风光的 slot，需要沉得住气。</p>
+    </div>
+  </div>
+
+  <!-- Changed hexagram -->
+  <div class="section">
+    <div class="section-title">变 卦 · 泽 风 大 过 <small>FUTURE STATE</small></div>
+    <div class="scroll-card v">
+      <h3>✦ 泽风大过 · "栋挠之象"</h3>
+      <p class="yao-quote">"大过：栋挠，利有攸往，亨。" —《周易·大过卦》</p>
+      <p>变卦为<span class="hot">大过</span>——字面"大的经过、大担负"，象传"泽灭木"（水淹过树）。这一卦的意象非常直接：<span class="em">您如果入职，将面临大担当、大承重、栋梁式角色</span>。</p>
+      <p>· <span class="good">好消息</span>："利有攸往，亨"——这条路是走得通的，最终是亨通之局<br/>
+      · <span class="hot">警示</span>："栋挠"——栋梁被压弯，提示<span class="em">压力会超出常规</span>，工作强度、责任范围、决策难度都会明显高于预期<br/>
+      · <span class="em">核心忠告</span>：大过卦象传说"独立不惧，遁世无闷"——意思是<span class="good">扛得住孤独和压力的人能在这一卦里成事</span>，反之则被淹没</p>
+      <p class="yao-quote">互卦为<span style="color: var(--vermilion);">水山蹇</span>（跛脚难行）——中途会遇到一段明显的"走不动"时期，需要"利见大人"（找靠山/导师）才能过关。</p>
+    </div>
+  </div>
+
+  <!-- Dimension breakdown -->
+  <div class="section">
+    <div class="section-title">多 维 度 判 断 <small>BREAKDOWN</small></div>
+    <div class="dim-grid">
+      <div class="dim-card good">
+        <h4>💼 职位含金量 <span class="score">较好</span></h4>
+        <p>用神官鬼在君位五爻，级别/权责/平台都是正品，不是"挂名岗"。这份 offer 的天花板和资源配置是够的。</p>
+      </div>
+      <div class="dim-card warn">
+        <h4>💰 薪资谈判 <span class="score">打折</span></h4>
+        <p>月建日辰火克申金，兄弟爻动劫财——HR 谈判期会比较磨，初步给到的数字大概率是"基础版"，要主动反复谈才能拿到理想值。</p>
+      </div>
+      <div class="dim-card warn">
+        <h4>⚡ 工作强度 <span class="score">高压</span></h4>
+        <p>变卦大过"栋挠"——这是强度卦。996/007 或大责任承担概率高，如果您当前身体或家庭状态不稳，这一点需要提前掂量。</p>
+      </div>
+      <div class="dim-card good">
+        <h4>🎯 长期发展 <span class="score">可期</span></h4>
+        <p>大过卦"利有攸往，亨"——撑过前 1-2 年栋梁承重期，后面是通达之局。这不是短线跳槽，而是中长期事业选择。</p>
+      </div>
+      <div class="dim-card">
+        <h4>👥 人际环境 <span class="score">中</span></h4>
+        <p>世爻兄弟动——同事圈有竞争、有比较，但不至于敌对。需要主动经营关系，特别是和直属上级（应爻所在方位）。</p>
+      </div>
+      <div class="dim-card warn">
+        <h4>⏰ 决策时机 <span class="score">别拖</span></h4>
+        <p>九三爻辞"迟有悔"——拖拉会失去主动权。建议<span style="color: var(--vermilion-bright)">2 周内决定</span>，超过一月则易生变数。</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Action -->
+  <div class="scroll-card j" style="border-left-width: 4px;">
+    <h3>✦ 三句话行动建议</h3>
+    <p>① <span class="em">方向上："可接"</span>——大平台 + 君位岗 + 长期亨通，符合中长期事业发展。但<span class="hot">必须有"栋梁承重"的心理准备</span>。</p>
+    <p>② <span class="em">谈判上：主动压价谈细节</span>——兄弟动劫财+月日克用神，初始 offer 大概率保守。把薪资、股票、岗位权限、汇报线全部<span class="hot">反复磨一轮</span>，不要接第一版。</p>
+    <p>③ <span class="em">心态上：别被"大公司光环"冲昏</span>——豫卦核心警示"过豫则溺"，大过卦核心警示"栋挠压身"。进去之后<span class="hot">保持清醒、找到导师（互卦蹇：利见大人）、做好 18-24 个月的硬扛准备</span>。</p>
+  </div>
+
+  <div class="disclaimer">
+    ⚠️ 本回复由 AI 生成。本卦采用三钱掷地法随机起卦，于 2026-05-12 20:45（壬午月壬午日）占得。六爻断卦为传统占术的方向性参考，不构成医疗、法律、财务或职业投资建议；最终决策请结合客观因素（薪资、团队、业务前景、家庭）综合判断。
+  </div>
+
+</div>
+</body>
+</html>

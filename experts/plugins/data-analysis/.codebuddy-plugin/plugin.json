@@ -1,0 +1,23 @@
+{
+  "name": "data-analysis",
+  "description": "Data analysis plugin with Excel spreadsheet creation, editing, and analysis capabilities. Supports formulas, formatting, data analysis, and visualization. Also includes WeChat article search via Sogou for high-quality Chinese content retrieval.",
+  "version": "1.0.0",
+  "author": {
+    "name": "CodeBuddy",
+    "email": ""
+  },
+  "homepage": {
+    "url": "",
+    "type": "github"
+  },
+  "license": "Proprietary",
+  "skills": [
+    "./skills/xlsx",
+    "./skills/wechat-article-search"
+  ],
+  "expertType": "agent",
+  "agentName": "data-analysis-expert",
+  "agents": [
+    "./agents/data-analysis-expert.md"
+  ]
+}

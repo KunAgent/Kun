@@ -1,0 +1,59 @@
+{
+  "name": "fbsir-industry-scene-researcher",
+  "version": "2.3.0",
+  "source": "./plugins/fbsir-industry-scene-researcher",
+  "leadAgent": "fbsir-industry-scene-researcher",
+  "invocationHint": "single-agent-direct",
+  "targetMarketplace": "experts",
+  "targetDistributionSurface": "workbuddy_expert_center",
+  "finalListingNameZh": "行业场景研究员",
+  "finalListingNameEn": "Industry Scene Researcher",
+  "localEquivalentTest": {
+    "marketplace": "my-experts",
+    "entrySurface": "my_expert",
+    "purposeZh": "仅用于当前工作区安装与入口配置，不代表最终上架路径。",
+    "purposeEn": "Used only for current-workspace installation and local-equivalent verification. It does not represent the final listing path."
+  },
+  "localEquivalentBiasGuard": {
+    "officialMarketplaceRemainsAuthoritative": "experts",
+    "officialDistributionSurfaceRemainsAuthoritative": "workbuddy_expert_center",
+    "localEquivalentMarketplaceIsTestOnly": "my-experts",
+    "localEquivalentEntrySurfaceIsTestOnly": "my_expert",
+    "futureOfficialEntryReverifyRequired": true
+  },
+  "reviewBoundary": "This package is a local-equivalent WorkBuddy expert-center candidate. Its primary baseline is no-connector first value inside the expert package itself. Service-side observation and followthrough must remain outside bundled MCP metadata, and package upload readiness must not ship mcpServers, .mcp.json, or host-tool-exposure declarations that can trigger a connector prompt.",
+  "contractProfile": {
+    "firstValueContract": "contracts/first-value-contract.json",
+    "connectorDecouplingGate": "contracts/connector-decoupling-gate.json",
+    "serviceClosureGate": "contracts/service-closure-gate.json",
+    "serviceObservabilityContract": "contracts/service-observability-contract.json",
+    "reviewOrchestrationContract": "contracts/review-orchestration-contract.json"
+  },
+  "listingTrustProfile": {
+    "supportDoc": "contracts/review-orchestration-contract.json",
+    "testingDoc": "references/quality/verification-gates.md",
+    "supportUrl": "https://api2.u3w.com/fbss/",
+    "reviewPackageBundledLegalDocs": false,
+    "reviewPackageExcludedDocs": [
+      "PRIVACY.md",
+      "SECURITY.md",
+      "TERMS.md"
+    ],
+    "reviewPackageBoundaryNote": "Current local-equivalent review packaging excludes bundled privacy, security, and terms docs while keeping runtime, support, and verification evidence in-package.",
+    "processedDataTypes": [
+      "industry_goal",
+      "role_context",
+      "project_context",
+      "uploaded_materials",
+      "playbook_outputs"
+    ],
+    "storedDataTypes": [
+      "package_docs_only",
+      "review_reports_only"
+    ],
+    "thirdPartySharing": "not_by_package_default",
+    "officialEntryAvailabilityReport": "docs/INDUSTRY-SCENE-RESEARCHER-OFFICIAL-ENTRY-AVAILABILITY-20260621.md",
+    "listingTrustAuditReport": "docs/INDUSTRY-SCENE-RESEARCHER-UPLOAD-READINESS-20260618.md",
+    "submissionReviewReport": "docs/INDUSTRY-SCENE-RESEARCHER-V210-SUBMISSION-REVIEW-NOTE.md"
+  }
+}

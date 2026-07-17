@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{PPT_TITLE}}</title>
+    <!-- Font imports (dynamically inserted based on configuration) -->
+    <!-- {{FONT_IMPORTS}} -->
+    <style>
+        :root {
+            --primary-color: {{PRIMARY_COLOR}};
+            --accent-color-1: {{ACCENT_COLOR_1}};
+            --accent-color-2: {{ACCENT_COLOR_2}};
+            --neutral-color: {{NEUTRAL_COLOR}};
+            --slide-background: {{SLIDE_BACKGROUND}};
+            --font-title: {{FONT_TITLE}};
+            --font-body: {{FONT_BODY}};
+        }
+    </style>
+    <style>
+        .nav-btn, .page-indicator {
+            display: none;
+        }
+    </style>
+    <script>
+        // # 禁止修改
+        window.slideDataMap = new Map();
+    </script>
+</head>
+<body>
+    <!-- PPT 容器 -->
+    <div class="ppt-container">
+        <div class="ppt-viewport" id="ppt-viewport">
+            <!-- 幻灯片将由 JavaScript 动态插入 -->
+        </div>
+    </div>
+    
+    <!-- 导航按钮 -->
+    <button class="nav-btn nav-btn-prev" id="prevBtn" aria-label="上一页">
+        ←
+    </button>
+    <button class="nav-btn nav-btn-next" id="nextBtn" aria-label="下一页">
+        →
+    </button>
+    
+    <!-- 进度条 -->
+    <div class="progress-bar">
+        <div class="progress-bar-fill" id="progressBarFill"></div>
+    </div>
+    
+    <!-- 页码指示器 -->
+    <div class="page-indicator" id="pageIndicator">
+        1 / 1
+    </div>
+    
+    <!-- Vite Main Entry -->
+    <script type="module" src="/src/main.js"></script>
+
+    <!--  开始加载slide-N.js区域 -->
+    <!-- <script type="module" src="/src/slides/slide-{N}.js"></script> -->
+    <!--  结束加载slide-N.js区域 -->
+</body>
+</html>

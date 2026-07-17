@@ -1,0 +1,99 @@
+{
+  "name": "ai-data-copilot",
+  "version": "1.0.0",
+  "description": "AI-native agentic data analysis team with autonomous SQL generation, code execution, RAG knowledge retrieval, and multi-source data insight capabilities",
+  "author": {
+    "name": "WorkBuddy Team",
+    "email": "team@workbuddy.ai"
+  },
+  "agents": [
+    "./agents/copilot-team-lead.md",
+    "./agents/sql-analyst.md",
+    "./agents/data-scientist.md",
+    "./agents/knowledge-researcher.md",
+    "./agents/dashboard-designer.md",
+    "./agents/report-composer.md"
+  ],
+  "skills": ["./skills/data-analysis-engine"],
+
+  "expertType": "team",
+  "agentName": "copilot-team-lead",
+  "teamInfo": {
+    "leadAgent": "copilot-team-lead",
+    "memberAgents": ["sql-analyst", "data-scientist", "knowledge-researcher", "dashboard-designer", "report-composer"]
+  },
+
+  "displayName": {
+    "en": "AI Data Copilot",
+    "zh": "智数分析专家团"
+  },
+  "profession": {
+    "en": "AI Data Copilot",
+    "zh": "智数分析专家团"
+  },
+  "displayDescription": {
+    "en": "A 6-member AI-native data analysis team with natural language to SQL, Python data science, RAG knowledge QA, interactive dashboards, and professional report generation.",
+    "zh": "6人AI数据分析团队，擅长自然语言转SQL、Python建模、RAG知识问答、仪表盘可视化与报告生成"
+  },
+  "avatar": "avatars/team.png",
+  "categoryId": "04-DataAI",
+  "defaultInitPrompt": {
+    "zh": "分析这个CSV文件，生成一份包含关键指标和可视化图表的数据画像报告",
+    "en": "Analyze this CSV file and generate a profiling report with key metrics and visualizations"
+  },
+  "plugin": "ai-data-copilot",
+  "tags": [
+    { "en": "Data Analysis", "zh": "数据分析" },
+    { "en": "SQL Generation", "zh": "SQL生成" },
+    { "en": "Report Generation", "zh": "报告生成" }
+  ],
+  "quickPrompts": [
+    { "en": "Analyze this CSV file and generate a profiling report with key metrics and visualizations", "zh": "分析这个CSV文件，生成一份包含关键指标和可视化图表的数据画像报告" },
+    { "en": "Connect to my database and write SQL to answer: what are the top 10 customers by revenue this quarter?", "zh": "连接我的数据库，用SQL回答：本季度营收前10的客户是哪些？" },
+    { "en": "Read the uploaded documents and create a knowledge-based analysis report with data-driven insights", "zh": "阅读上传的文档，结合数据驱动的洞察生成一份知识分析报告" }
+  ],
+  "members": [
+    {
+      "id": "copilot-team-lead",
+      "name": { "en": "Nova", "zh": "诺亚" },
+      "profession": { "en": "Chief Data Orchestrator", "zh": "首席数据编排师" },
+      "avatar": "avatars/copilot-team-lead.png",
+      "role": "lead"
+    },
+    {
+      "id": "sql-analyst",
+      "name": { "en": "Quinn", "zh": "秦逸" },
+      "profession": { "en": "SQL Query Architect", "zh": "SQL查询架构师" },
+      "avatar": "avatars/sql-analyst.png",
+      "role": "member"
+    },
+    {
+      "id": "data-scientist",
+      "name": { "en": "Sage", "zh": "赛奇" },
+      "profession": { "en": "Data Science Engineer", "zh": "数据科学工程师" },
+      "avatar": "avatars/data-scientist.png",
+      "role": "member"
+    },
+    {
+      "id": "knowledge-researcher",
+      "name": { "en": "Rika", "zh": "瑞卡" },
+      "profession": { "en": "Knowledge Retrieval Specialist", "zh": "知识检索专家" },
+      "avatar": "avatars/knowledge-researcher.png",
+      "role": "member"
+    },
+    {
+      "id": "dashboard-designer",
+      "name": { "en": "Dash", "zh": "达仕" },
+      "profession": { "en": "Visual Analytics Designer", "zh": "可视化分析设计师" },
+      "avatar": "avatars/dashboard-designer.png",
+      "role": "member"
+    },
+    {
+      "id": "report-composer",
+      "name": { "en": "Rex", "zh": "若溪" },
+      "profession": { "en": "Insight Report Composer", "zh": "洞察报告撰写师" },
+      "avatar": "avatars/report-composer.png",
+      "role": "member"
+    }
+  ]
+}

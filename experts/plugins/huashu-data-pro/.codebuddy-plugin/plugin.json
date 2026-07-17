@@ -1,0 +1,126 @@
+{
+  "name": "huashu-data-pro",
+  "version": "1.0.1",
+  "description": "Local-first data analysis expert team for One Person Companies. Three subagents (trend / structure / anomaly) analyze your spreadsheet in parallel and deliver three-format reports (HTML / XLSX / PPTX) without any cloud upload.",
+  "author": {
+    "name": "陈云飞 (花叔 / Alchain)",
+    "email": "alchaincyf3@gmail.com"
+  },
+  "expertType": "team",
+  "agentName": "huashu-data-pro-team-lead",
+  "teamInfo": {
+    "leadAgent": "huashu-data-pro-team-lead",
+    "memberAgents": [
+      "trend-analyst",
+      "structure-analyst",
+      "anomaly-analyst"
+    ]
+  },
+  "agents": [
+    "./agents/huashu-data-pro-team-lead.md",
+    "./agents/trend-analyst.md",
+    "./agents/structure-analyst.md",
+    "./agents/anomaly-analyst.md"
+  ],
+  "displayName": {
+    "zh": "花叔数据分析专家团",
+    "en": "Huashu Data Analysis Team"
+  },
+  "profession": {
+    "zh": "花叔数据分析专家团",
+    "en": "Huashu Data Analysis Team"
+  },
+  "displayDescription": {
+    "zh": "「一人公司」本地数据分析专家团。一份 Excel 进，趋势 / 结构 / 异常三专家并行分析，交付网页、Excel、PPT 三格式报告，数据不出本地。",
+    "en": "Local data analysis team for One Person Companies. Three experts (Trend / Structure / Anomaly) analyze in parallel and deliver HTML / XLSX / PPTX reports without any cloud upload."
+  },
+  "avatar": "avatars/lead.png",
+  "categoryId": "04-DataAI",
+  "defaultInitPrompt": {
+    "zh": "分析这份财务表，三种格式的报告都要：finance.xlsx",
+    "en": "Analyze finance.xlsx and deliver reports in all three formats."
+  },
+  "tags": [
+    {
+      "zh": "数据分析",
+      "en": "Data Analysis"
+    },
+    {
+      "zh": "本地推理",
+      "en": "Local Inference"
+    },
+    {
+      "zh": "多专家并行",
+      "en": "Multi-Expert Parallel"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "分析这份财务表，三种格式的报告都要：finance.xlsx",
+      "en": "Analyze finance.xlsx and deliver reports in all three formats."
+    },
+    {
+      "zh": "看一下这份订单数据的结构和异常：orders.xlsx",
+      "en": "Examine orders.xlsx for structural patterns and anomalies."
+    },
+    {
+      "zh": "我想看薪资数据近半年的趋势走向：payroll.xlsx",
+      "en": "Show me the half-year trend in payroll.xlsx."
+    }
+  ],
+  "members": [
+    {
+      "id": "huashu-data-pro-team-lead",
+      "name": {
+        "zh": "主理人",
+        "en": "Lead"
+      },
+      "profession": {
+        "zh": "数据洞察总监",
+        "en": "Data Insight Director"
+      },
+      "avatar": "avatars/lead.png",
+      "role": "lead"
+    },
+    {
+      "id": "trend-analyst",
+      "name": {
+        "zh": "趋势分析师",
+        "en": "Trend Analyst"
+      },
+      "profession": {
+        "zh": "时间序列与拐点识别",
+        "en": "Time-Series & Inflection Detection"
+      },
+      "avatar": "avatars/trend-analyst.png",
+      "role": "member"
+    },
+    {
+      "id": "structure-analyst",
+      "name": {
+        "zh": "结构分析师",
+        "en": "Structure Analyst"
+      },
+      "profession": {
+        "zh": "多表交叉与构成拆解",
+        "en": "Cross-Table Joining & Composition Analysis"
+      },
+      "avatar": "avatars/structure-analyst.png",
+      "role": "member"
+    },
+    {
+      "id": "anomaly-analyst",
+      "name": {
+        "zh": "异常侦察员",
+        "en": "Anomaly Detector"
+      },
+      "profession": {
+        "zh": "离群点扫描与风险标记",
+        "en": "Outlier Scanning & Risk Flagging"
+      },
+      "avatar": "avatars/anomaly-analyst.png",
+      "role": "member"
+    }
+  ],
+  "plugin": "huashu-data-pro"
+}

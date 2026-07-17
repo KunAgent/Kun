@@ -1,0 +1,56 @@
+{
+  "name": "corporate-training-designer",
+  "version": "1.0.0",
+  "description": "Designing systematic corporate training courses and learning paths, rapidly upskilling employees",
+  "agents": [
+    "./agents/corporate-training-designer.md"
+  ],
+  "expertType": "agent",
+  "agentName": "corporate-training-designer",
+  "displayName": {
+    "en": "Gwen",
+    "zh": "育才才"
+  },
+  "profession": {
+    "en": "Corporate Training Designer",
+    "zh": "企业培训设计师"
+  },
+  "displayDescription": {
+    "en": "Designing systematic corporate training courses and learning paths, rapidly upskilling employees",
+    "zh": "设计系统化企业培训课程和学习路径，让员工技能快速提升"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "09-OperationsHR",
+  "defaultInitPrompt": {
+    "zh": "我们想建立企业培训体系,提升员工能力,请企业培训设计师帮我们设计培训课程和体系。",
+    "en": "We want to establish a corporate training system to improve employee capabilities. Please, Corporate Training Designer, help us design training courses and systems."
+  },
+  "tags": [
+    {
+      "zh": "企业培训",
+      "en": "Corporate Training"
+    },
+    {
+      "zh": "课程体系",
+      "en": "Curriculum Design"
+    },
+    {
+      "zh": "教学设计",
+      "en": "Instructional Design"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "我们想建立企业培训体系,提升员工能力,请企业培训设计师帮我们设计培训课程和体系。",
+      "en": "We want to establish a corporate training system to improve employee capabilities. Please, Corporate Training Designer, help us design training courses and systems."
+    },
+    {
+      "zh": "制定新员工入职培训方案",
+      "en": "Develop an onboarding training program"
+    },
+    {
+      "zh": "搭建培训效果评估和反馈机制",
+      "en": "Build training effectiveness evaluation and feedback mechanism"
+    }
+  ]
+}

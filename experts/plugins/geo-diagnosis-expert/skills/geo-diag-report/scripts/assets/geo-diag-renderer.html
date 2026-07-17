@@ -1,0 +1,2152 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GEO诊断报告</title>
+<style>
+/* ===== CSS Variables ===== */
+:root {
+  --dr-primary: #0d9488;
+  --dr-primary-light: #f0fdfa;
+  --dr-primary-border: #99f6e4;
+  --dr-success: #059669;
+  --dr-success-light: #f0fdf4;
+  --dr-success-border: #a7f3d0;
+  --dr-warning: #d97706;
+  --dr-warning-light: #fffbeb;
+  --dr-warning-border: #fde68a;
+  --dr-danger: #dc2626;
+  --dr-danger-light: #fef2f2;
+  --dr-danger-border: #fecaca;
+  --dr-info: #3b82f6;
+  --dr-info-light: #eff6ff;
+  --dr-info-border: #bfdbfe;
+  --dr-purple: #8b5cf6;
+  --dr-purple-light: #f5f3ff;
+  --dr-sky: #0ea5e9;
+  --dr-sky-light: #f0f9ff;
+  --dr-bg-page: #f7f8fa;
+  --dr-bg-card: #fff;
+  --dr-bg-subtle: #f8fafc;
+  --dr-border: #e5e7eb;
+  --dr-border-light: #e8edf8;
+  --dr-border-subtle: #f1f5f9;
+  --dr-text-primary: #0f172a;
+  --dr-text-secondary: #334155;
+  --dr-text-muted: #475569;
+  --dr-text-tertiary: #64748b;
+  --dr-text-placeholder: #94a3b8;
+  --dr-text-disabled: #cbd5e1;
+  --dr-orange: #f97316;
+  --dr-orange-light: #fff7ed;
+  --dr-bg-bar-track: #e2e8f0;
+  --dr-purple-border: #ddd6fe;
+  --dr-sky-border: #bae6fd;
+  --dr-radius-xs: 4px;
+  --dr-radius-sm: 6px;
+  --dr-radius-md: 8px;
+  --dr-radius-lg: 10px;
+  --dr-radius-xl: 14px;
+  --dr-radius-2xl: 16px;
+}
+
+/* ===== Reset & Base ===== */
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+  background: var(--dr-bg-page);
+  color: var(--dr-text-secondary);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  scroll-behavior: smooth;
+}
+:focus-visible {
+  outline: 2px solid var(--dr-primary);
+  outline-offset: 2px;
+}
+
+/* ===== Page Layout ===== */
+.dr-page {
+  min-height: 100vh;
+  padding: 0 0 48px;
+  background: var(--dr-bg-page);
+}
+.dr-content {
+  width: min(1080px, calc(100% - 64px));
+  padding-top: 28px;
+  margin: 0 auto;
+}
+
+/* ===== Hero Section ===== */
+.dr-hero {
+  position: relative;
+  padding: 48px 40px 40px;
+  margin-bottom: 28px;
+  overflow: hidden;
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%);
+  border-radius: var(--dr-radius-2xl);
+}
+.dr-hero__body {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  gap: 36px;
+  align-items: center;
+  justify-content: space-between;
+}
+.dr-hero__main {
+  flex: 1;
+  min-width: 0;
+}
+.dr-hero__badge-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+.dr-hero__badge {
+  padding: 4px 14px;
+  font-size: 12px;
+  font-weight: 500;
+  border-radius: 999px;
+  letter-spacing: 0.02em;
+}
+.dr-hero__badge--category {
+  color: #99f6e4;
+  background: rgb(255 255 255 / 8%);
+  border: 1px solid rgb(255 255 255 / 12%);
+}
+.dr-hero__badge--report {
+  color: #a5b4fc;
+  background: rgb(99 102 241 / 15%);
+  border: 1px solid rgb(99 102 241 / 20%);
+}
+.dr-hero__title {
+  margin: 0;
+  font-size: 36px;
+  font-weight: 700;
+  line-height: 1.15;
+  color: #fff;
+  letter-spacing: -0.02em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dr-hero__title-accent {
+  background: linear-gradient(135deg, #14b8a6, #06b6d4);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.dr-hero__subtitle {
+  margin-top: 8px;
+  font-size: 16px;
+  font-weight: 400;
+  color: #94a3b8;
+  line-height: 1.5;
+}
+.dr-hero__meta {
+  margin-top: 20px;
+  display: flex;
+  gap: 20px;
+  align-items: center;
+}
+.dr-hero__date {
+  font-size: 13px;
+  color: rgb(148 163 184 / 70%);
+}
+.dr-hero__divider-dot {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: rgb(148 163 184 / 40%);
+}
+.dr-hero__engine {
+  font-size: 13px;
+  color: rgb(148 163 184 / 70%);
+}
+.dr-hero__score-group {
+  display: flex;
+  flex-shrink: 0;
+  gap: 20px;
+  align-items: center;
+}
+.dr-hero__score-ring {
+  position: relative;
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.dr-hero__score-ring svg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 120px;
+  height: 120px;
+  transform: rotate(-90deg);
+}
+.dr-hero__score-ring-bg {
+  fill: none;
+  stroke: #334155;
+  stroke-width: 8;
+}
+.dr-hero__score-ring-fill {
+  fill: none;
+  stroke-width: 8;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.6s ease;
+}
+.dr-hero__score-inner { text-align: center; }
+.dr-hero__score-value {
+  font-size: 36px;
+  font-weight: 700;
+  line-height: 1;
+}
+.dr-hero__score-unit {
+  margin-top: 4px;
+  font-size: 13px;
+  color: #64748b;
+}
+.dr-hero__grade-badge {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: center;
+  padding: 14px 22px;
+  border: 1px solid;
+  border-radius: var(--dr-radius-lg);
+  background: rgb(255 255 255 / 4%);
+  backdrop-filter: blur(8px);
+}
+.dr-hero__grade-label {
+  font-size: 11px;
+  color: #94a3b8;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.dr-hero__grade-value {
+  font-size: 30px;
+  font-weight: 700;
+  line-height: 1;
+}
+.dr-hero__grade-desc {
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+/* ===== Section ===== */
+.dr-section {
+  padding: 32px 32px;
+  margin-bottom: 20px;
+  background: var(--dr-bg-card);
+  border: 1px solid var(--dr-border);
+  border-radius: var(--dr-radius-xl);
+  box-shadow: 0 1px 4px rgb(0 0 0 / 4%);
+}
+.dr-section__header {
+  display: flex;
+  gap: 14px;
+  align-items: baseline;
+  margin-bottom: 24px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--dr-border-subtle);
+}
+.dr-section__num {
+  flex-shrink: 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--dr-primary);
+  letter-spacing: 0.04em;
+  background: var(--dr-primary-light);
+  padding: 2px 8px;
+  border-radius: var(--dr-radius-xs);
+}
+.dr-section__title-group { flex: 1; }
+.dr-section__title {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--dr-text-primary);
+}
+.dr-section__subtitle {
+  margin: 6px 0 0;
+  font-size: 14px;
+  color: var(--dr-text-tertiary);
+}
+
+/* ===== 01 Overview ===== */
+.stage-overview__stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.stage-overview__stat-card {
+  padding: 16px 14px;
+  text-align: center;
+  background: var(--dr-bg-subtle);
+  border: 1px solid var(--dr-border-light);
+  border-radius: var(--dr-radius-sm);
+}
+.stage-overview__stat-card--score { background: var(--dr-bg-card); border-left: 3px solid var(--dr-primary); }
+.stage-overview__stat-card--highlight { background: var(--dr-bg-card); border-left: 3px solid var(--dr-success); }
+.stage-overview__stat-card--risk { background: var(--dr-bg-card); border-left: 3px solid var(--dr-warning); }
+.stage-overview__stat-value { font-size: 24px; font-weight: 700; color: var(--dr-text-primary); }
+.stage-overview__stat-card--score .stage-overview__stat-value { color: var(--dr-primary); }
+.stage-overview__stat-card--highlight .stage-overview__stat-value { color: var(--dr-success); }
+.stage-overview__stat-card--risk .stage-overview__stat-value { color: var(--dr-warning); }
+.stage-overview__stat-label { margin-top: 2px; font-size: 12px; color: var(--dr-text-muted); }
+.stage-overview__summary {
+  display: flex;
+  gap: 12px;
+  padding: 12px 14px;
+  background: var(--dr-bg-subtle);
+  border: 1px solid var(--dr-border);
+  border-radius: var(--dr-radius-sm);
+}
+.stage-overview__summary-icon {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  font-size: 14px;
+  color: var(--dr-primary);
+  background: var(--dr-primary-light);
+  border-radius: var(--dr-radius-sm);
+}
+.stage-overview__summary-text { font-size: 13px; line-height: 1.7; color: var(--dr-text-secondary); white-space: pre-wrap; }
+.stage-overview__section { margin-top: 20px; }
+.stage-overview__section-title {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin-bottom: 8px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--dr-success);
+}
+.stage-overview__section-title--risk { color: var(--dr-warning); }
+.stage-overview__list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  border: 1px solid var(--dr-border-light);
+  border-radius: var(--dr-radius-sm);
+  overflow: hidden;
+}
+.stage-overview__list-item {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  padding: 8px 12px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--dr-text-secondary);
+  border-bottom: 1px solid var(--dr-border-subtle);
+}
+.stage-overview__list-item:last-child { border-bottom: none; }
+.stage-overview__list-item--highlight { background: var(--dr-success-light); }
+.stage-overview__list-item--risk { background: var(--dr-warning-light); }
+.stage-overview__list-item { transition: background 0.15s; }
+.stage-overview__list-item:hover { background: var(--dr-bg-subtle); }
+.stage-overview__list-icon { flex-shrink: 0; margin-top: 2px; font-size: 13px; }
+.stage-overview__list-item--highlight .stage-overview__list-icon { color: var(--dr-success); }
+.stage-overview__list-item--risk .stage-overview__list-icon { color: #f59e0b; }
+
+/* ===== 02 AIVO Score ===== */
+.stage-aivo__hero {
+  display: flex;
+  gap: 28px;
+  align-items: center;
+  padding: 20px;
+  background: var(--dr-bg-subtle);
+  border: 1px solid var(--dr-border);
+  border-radius: var(--dr-radius-lg);
+  overflow: visible;
+}
+.stage-aivo__score-inner { text-align: center; }
+.stage-aivo__score-value { font-size: 28px; font-weight: 700; line-height: 1; }
+.stage-aivo__score-unit { margin-top: 2px; font-size: 12px; color: var(--dr-text-placeholder); }
+.stage-aivo__hero-info { flex: 1; }
+.stage-aivo__level-tag { padding: 4px 16px; font-size: 14px; }
+.stage-aivo__commentary { margin-top: 12px; font-size: 14px; line-height: 1.7; color: var(--dr-text-muted); }
+.stage-aivo__benchmark {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin-top: 12px;
+  padding: 8px 14px;
+  font-size: 13px;
+  background: rgb(255 255 255 / 60%);
+  border-radius: var(--dr-radius-md);
+}
+.stage-aivo__benchmark-label { color: var(--dr-text-tertiary); }
+.stage-aivo__benchmark-value { font-weight: 700; color: var(--dr-primary); }
+.stage-aivo__benchmark-rank { color: var(--dr-text-muted); }
+.stage-aivo__benchmark-rank strong { color: var(--dr-success); }
+.stage-aivo__dimensions { margin-top: 24px; }
+.stage-aivo__dimensions-title { margin-bottom: 16px; font-size: 15px; font-weight: 700; color: var(--dr-text-primary); }
+.stage-aivo__dimension-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 14px;
+}
+.stage-aivo__dimension-card {
+  padding: 16px;
+  background: var(--dr-bg-card);
+  border: 1px solid var(--dr-border-light);
+  border-left: 3px solid var(--dim-color);
+  border-radius: var(--dr-radius-md);
+}
+.stage-aivo__dimension-score { display: flex; gap: 8px; align-items: baseline; margin-bottom: 4px; }
+.stage-aivo__dimension-num { font-size: 22px; font-weight: 700; color: var(--dim-color); }
+.stage-aivo__dimension-weight { font-size: 12px; font-weight: 600; color: var(--dr-text-placeholder); }
+.stage-aivo__dimension-name { margin-bottom: 6px; font-size: 14px; font-weight: 600; color: var(--dr-text-primary); }
+.stage-aivo__dimension-comment { margin-bottom: 10px; font-size: 12px; line-height: 1.6; color: var(--dr-text-tertiary); }
+
+/* ===== 03 User Profile ===== */
+.stage-user-profile { display: flex; flex-wrap: wrap; gap: 24px; }
+.stage-up__radar-section {
+  width: 100%;
+  padding: 24px;
+  background: var(--dr-bg-subtle);
+  border: 1px solid var(--dr-border);
+  border-radius: var(--dr-radius-lg);
+  box-sizing: border-box;
+  overflow: visible;
+}
+.stage-up__section-title { margin-bottom: 16px; font-size: 15px; font-weight: 700; color: var(--dr-text-primary); }
+.stage-up__radar-row { display: flex; gap: 24px; align-items: flex-start; }
+.stage-up__radar-chart-wrap { flex-shrink: 0; width: 220px; max-width: 100%; overflow: visible; }
+.stage-up__dimension-list {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.stage-up__dim-item { display: flex; gap: 8px; align-items: center; }
+.stage-up__dim-label { width: 72px; font-size: 13px; color: var(--dr-text-muted); text-align: right; white-space: nowrap; }
+.stage-up__dim-bar { flex: 1; height: 8px; background: var(--dr-bg-bar-track); border-radius: var(--dr-radius-xs); overflow: hidden; }
+.stage-up__dim-fill { height: 100%; border-radius: 4px; transition: width 0.3s; }
+.stage-up__dim-value { width: 28px; font-size: 14px; font-weight: 700; color: var(--dr-primary); }
+.stage-up__groups { flex: 1; min-width: 260px; }
+.stage-up__groups-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; }
+.stage-up__group-card { padding: 18px; background: var(--dr-bg-card); border: 1px solid var(--dr-border-light); border-radius: var(--dr-radius-md); }
+.stage-up__group-highlight { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; font-size: 15px; font-weight: 700; color: var(--dr-text-primary); }
+.stage-up__group-index {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #fff;
+  background: var(--dr-primary);
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.stage-up__group-profile, .stage-up__group-scenario { margin-bottom: 8px; font-size: 13px; line-height: 1.7; color: var(--dr-text-muted); }
+.stage-up__group-profile strong, .stage-up__group-scenario strong { color: var(--dr-text-primary); }
+.stage-up__questions-label { margin-bottom: 6px; font-size: 12px; font-weight: 600; color: var(--dr-text-tertiary); }
+.stage-up__questions-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.stage-up__question-tag {
+  max-width: 240px;
+  overflow: hidden;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 2px 8px;
+  border-radius: var(--dr-radius-sm);
+  color: var(--dr-primary);
+  background: var(--dr-primary-light);
+  border: 1px solid var(--dr-primary-border);
+}
+
+/* ===== 04 AI Search ===== */
+.stage-ais__stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 24px; }
+.stage-ais__stat-card {
+  padding: 20px 16px;
+  text-align: center;
+  background: var(--dr-bg-subtle);
+  border: 1px solid var(--dr-border-light);
+  border-radius: var(--dr-radius-md);
+}
+.stage-ais__stat-card--primary { background: var(--dr-bg-card); border-left: 3px solid var(--dr-primary); }
+.stage-ais__stat-value { font-size: 26px; font-weight: 700; color: var(--dr-text-primary); }
+.stage-ais__stat-card--primary .stage-ais__stat-value { color: var(--dr-primary); }
+.stage-ais__stat-unit { font-size: 14px; font-weight: 600; }
+.stage-ais__stat-label { margin-top: 4px; font-size: 12px; color: var(--dr-text-tertiary); }
+.stage-ais__section { margin-top: 24px; }
+.stage-ais__section-title { display: flex; gap: 8px; align-items: center; margin-bottom: 16px; font-size: 15px; font-weight: 700; color: var(--dr-text-primary); }
+.stage-ais__section-count { margin-left: auto; font-size: 12px; font-weight: 500; color: var(--dr-text-placeholder); }
+.stage-ais__platform-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; }
+.stage-ais__platform-card { padding: 16px; background: var(--dr-danger-light); border: 1px solid var(--dr-danger-border); border-radius: var(--dr-radius-md); }
+.stage-ais__platform-card--mentioned { background: var(--dr-success-light); border-color: var(--dr-success-border); }
+.stage-ais__platform-header { display: flex; gap: 8px; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.stage-ais__platform-name { font-size: 14px; font-weight: 700; color: var(--dr-text-primary); }
+.stage-ais__platform-tag { font-size: 11px; font-weight: 600; border-radius: var(--dr-radius-sm); padding: 2px 8px; background: var(--dr-bg-subtle); color: var(--dr-text-tertiary); }
+.stage-ais__platform-metrics { display: flex; gap: 12px; font-size: 12px; color: var(--dr-text-tertiary); }
+.stage-ais__platform-metrics strong { color: var(--dr-text-primary); }
+.stage-ais__question-table { border: 1px solid var(--dr-border-light); border-radius: var(--dr-radius-md); overflow: hidden; }
+.stage-ais__qtable-head {
+  display: flex;
+  gap: 0;
+  padding: 10px 16px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--dr-text-tertiary);
+  background: var(--dr-bg-subtle);
+  border-bottom: 1px solid var(--dr-border-light);
+}
+.stage-ais__qtable-row {
+  display: flex;
+  gap: 0;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--dr-border-subtle);
+  transition: background 0.15s;
+}
+.stage-ais__qtable-row:last-child { border-bottom: none; }
+.stage-ais__qtable-row:hover { background: var(--dr-bg-subtle); }
+.stage-ais__qtable-col--question { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; }
+.stage-ais__qtable-col--platforms { flex-shrink: 0; width: 180px; display: flex; align-items: center; justify-content: flex-end; }
+.stage-ais__q-text { font-size: 13px; font-weight: 600; color: var(--dr-text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex-shrink: 0; max-width: 50%; }
+.stage-ais__q-highlight { font-size: 11px; color: var(--dr-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0; }
+.stage-ais__q-mentions { display: flex; flex-wrap: wrap; gap: 4px; justify-content: flex-end; }
+.stage-ais__q-mention-dot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  height: 20px;
+  padding: 0 4px;
+  font-size: 10px;
+  font-weight: 600;
+  border-radius: 4px;
+}
+.stage-ais__q-mention-dot--yes { color: var(--dr-success); background: var(--dr-success-light); border: 1px solid var(--dr-success-border); }
+.stage-ais__q-mention-dot--no { color: var(--dr-text-tertiary); background: var(--dr-bg-subtle); border: 1px solid var(--dr-bg-bar-track); }
+
+/* ===== 05 Infra Eval ===== */
+.stage-infra__grid { display: flex; flex-direction: column; gap: 16px; }
+.stage-infra__card { overflow: hidden; background: var(--dr-bg-card); border: 1px solid var(--dr-border-light); border-radius: var(--dr-radius-md); }
+.stage-infra__card--site { border-left: 3px solid var(--dr-primary); }
+.stage-infra__card-header {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 14px 16px;
+  background: var(--dr-bg-subtle);
+  border-bottom: 1px solid var(--dr-border-subtle);
+}
+.stage-infra__card-icon { display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; font-size: 16px; border-radius: var(--dr-radius-md); }
+.stage-infra__card-icon--site { color: var(--dr-primary); background: var(--dr-primary-light); }
+.stage-infra__card-icon--media { color: var(--dr-sky); background: var(--dr-sky-light); }
+.stage-infra__card-icon--auth { color: var(--dr-purple); background: var(--dr-purple-light); }
+.stage-infra__card-title { flex: 1; font-size: 14px; font-weight: 700; color: var(--dr-text-primary); }
+.stage-infra__card-body { display: flex; flex-direction: column; gap: 12px; padding: 16px; }
+.stage-infra__banner { overflow: hidden; border-radius: var(--dr-radius-md); }
+.stage-infra__banner-img { display: block; width: 100%; max-height: 200px; object-fit: cover; border-radius: var(--dr-radius-md); }
+.stage-infra__logo-row { display: flex; align-items: center; }
+.stage-infra__logo-img { width: 48px; height: 48px; object-fit: contain; border-radius: var(--dr-radius-md); background: var(--dr-bg-subtle); }
+.stage-infra__field { display: flex; gap: 12px; align-items: center; font-size: 14px; }
+.stage-infra__label { flex-shrink: 0; min-width: 48px; font-weight: 600; color: var(--dr-text-tertiary); }
+.stage-infra__link { color: var(--dr-primary); word-break: break-all; text-decoration: none; }
+.stage-infra__link:hover { text-decoration: underline; }
+.stage-infra__score-bar { display: flex; flex: 1; gap: 12px; align-items: center; }
+.stage-infra__score-track { flex: 1; height: 8px; background: var(--dr-bg-bar-track); border-radius: var(--dr-radius-xs); overflow: hidden; }
+.stage-infra__score-fill { height: 100%; border-radius: 4px; transition: width 0.3s; }
+.stage-infra__score-num { flex-shrink: 0; font-size: 14px; font-weight: 700; }
+.stage-infra__summary { font-size: 13px; line-height: 1.7; color: var(--dr-text-muted); }
+.stage-infra__tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.stage-infra__tag { border-radius: var(--dr-radius-sm); }
+.stage-infra__media-item { display: flex; gap: 8px; align-items: center; padding: 4px 0; font-size: 13px; }
+
+/* ===== 06 Competitor ===== */
+.stage-comp__chart-section { margin-bottom: 24px; padding: 20px; background: var(--dr-bg-subtle); border: 1px solid var(--dr-border); border-radius: var(--dr-radius-lg); }
+.stage-comp__chart-section .dr-hbar-chart { width: 100%; max-width: 480px; }
+.stage-comp__section { margin-top: 24px; }
+.stage-comp__section-title { display: flex; gap: 8px; align-items: center; margin-bottom: 16px; font-size: 15px; font-weight: 700; color: var(--dr-text-primary); }
+.stage-comp__compare-table { margin-bottom: 20px; border: 1px solid var(--dr-border-light); border-radius: var(--dr-radius-md); overflow: hidden; }
+.stage-comp__ctable-head {
+  display: flex;
+  gap: 0;
+  padding: 10px 16px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--dr-text-tertiary);
+  background: var(--dr-bg-subtle);
+  border-bottom: 1px solid var(--dr-border-light);
+}
+.stage-comp__ctable-row { display: flex; gap: 0; padding: 12px 16px; border-bottom: 1px solid var(--dr-border-subtle); transition: background 0.15s; }
+.stage-comp__ctable-row:last-child { border-bottom: none; }
+.stage-comp__ctable-row:hover { background: var(--dr-bg-subtle); }
+.stage-comp__ctable-col--name { flex: 0 0 100px; min-width: 72px; display: flex; gap: 8px; align-items: center; }
+.stage-comp__ctable-col--dim { flex-shrink: 0; width: 80px; display: flex; align-items: center; justify-content: center; font-size: 13px; color: var(--dr-text-secondary); }
+.stage-comp__ctable-col--wide { flex: 1; min-width: 140px; justify-content: flex-start; flex-wrap: wrap; }
+.stage-comp__ctable-rank {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #fff;
+  background: var(--dr-primary);
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.stage-comp__ctable-name { font-size: 13px; font-weight: 700; color: var(--dr-text-primary); }
+.stage-comp__ctable-score { font-size: 16px; font-weight: 700; }
+.stage-comp__ctable-tag { font-size: 10px; border-radius: 4px; }
+.stage-comp__ctable-features { display: flex; flex-wrap: wrap; gap: 3px; justify-content: center; }
+.stage-comp__ctable-chip { display: inline-block; padding: 1px 6px; font-size: 11px; line-height: 18px; border-radius: 4px; white-space: nowrap; }
+.stage-comp__ctable-chip--blue { color: var(--dr-info); background: var(--dr-info-light); border: 1px solid var(--dr-info-border); }
+.stage-comp__ctable-chip--green { color: var(--dr-success); background: var(--dr-success-light); border: 1px solid var(--dr-success-border); }
+.stage-comp__ctable-chip--red { color: var(--dr-danger); background: var(--dr-danger-light); border: 1px solid var(--dr-danger-border); }
+.stage-comp__position-text { padding: 16px 20px; font-size: 14px; line-height: 1.7; color: var(--dr-text-secondary); background: var(--dr-bg-subtle); border: 1px solid var(--dr-border-light); border-radius: var(--dr-radius-md); }
+
+/* Competitor Advantage Logic */
+.stage-comp__advantage { margin-top: 24px; }
+.stage-comp__advantage-title { display: flex; gap: 8px; align-items: center; margin-bottom: 16px; font-size: 15px; font-weight: 700; color: var(--dr-text-primary); }
+.stage-comp__advantage-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; }
+.stage-comp__advantage-card { padding: 16px; background: var(--dr-bg-card); border: 1px solid var(--dr-border-light); border-radius: var(--dr-radius-lg); transition: transform 0.2s ease, box-shadow 0.2s ease; }
+.stage-comp__advantage-card:hover { transform: translateY(-2px); box-shadow: 0 4px 16px rgb(15 23 42 / 8%); }
+.stage-comp__advantage-card--brand { background: linear-gradient(135deg, var(--dr-primary-light) 0%, #f0fdfa 100%); border-color: var(--dr-primary-border); border-top: 3px solid var(--dr-primary); }
+.stage-comp__advantage-card--competitor { border-top: 3px solid var(--dr-border); }
+.stage-comp__advantage-card--competitor:hover { border-top-color: var(--dr-warning); }
+.stage-comp__advantage-header { display: flex; gap: 10px; align-items: center; margin-bottom: 12px; }
+.stage-comp__advantage-badge { display: inline-flex; align-items: center; justify-content: center; padding: 2px 10px; font-size: 11px; font-weight: 700; border-radius: 999px; }
+.stage-comp__advantage-badge--brand { color: var(--dr-primary); background: rgb(13 148 136 / 12%); }
+.stage-comp__advantage-badge--competitor { color: var(--dr-text-tertiary); background: var(--dr-bg-subtle); }
+.stage-comp__advantage-name { font-size: 15px; font-weight: 700; color: var(--dr-text-primary); }
+.stage-comp__advantage-score { margin-left: auto; font-size: 18px; font-weight: 700; }
+.stage-comp__advantage-list { display: flex; flex-direction: column; gap: 6px; }
+.stage-comp__advantage-item { display: flex; gap: 6px; align-items: flex-start; font-size: 13px; line-height: 1.5; color: var(--dr-text-muted); }
+.stage-comp__advantage-icon { flex-shrink: 0; margin-top: 3px; font-size: 10px; }
+.stage-comp__advantage-item--strength .stage-comp__advantage-icon { color: var(--dr-success); }
+.stage-comp__advantage-item--weakness .stage-comp__advantage-icon { color: var(--dr-danger); }
+.stage-comp__advantage-item--strength { color: var(--dr-text-secondary); }
+.stage-comp__advantage-item--weakness { color: var(--dr-text-tertiary); }
+.stage-comp__advantage-vs { display: flex; gap: 8px; align-items: center; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--dr-border-subtle); font-size: 12px; color: var(--dr-text-placeholder); }
+.stage-comp__advantage-vs-arrow { color: var(--dr-primary); font-weight: 700; }
+
+/* ===== 07 GEO Effect ===== */
+.stage-geo__stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 24px; }
+.stage-geo__stat-card { padding: 16px 14px; text-align: center; background: var(--dr-bg-subtle); border: 1px solid var(--dr-border-light); border-radius: var(--dr-radius-md); }
+.stage-geo__stat-card--highlight { background: var(--dr-bg-card); border-left: 3px solid var(--dr-primary); }
+.stage-geo__stat-value { font-size: 26px; font-weight: 700; color: var(--dr-text-primary); }
+.stage-geo__stat-card--highlight .stage-geo__stat-value { color: var(--dr-primary); }
+.stage-geo__stat-unit { font-size: 14px; font-weight: 600; }
+.stage-geo__stat-label { margin-top: 4px; font-size: 12px; color: var(--dr-text-tertiary); }
+.stage-geo__stat-hint { margin-top: 2px; font-size: 10px; color: var(--dr-text-placeholder); }
+.stage-geo__section { margin-top: 24px; }
+.stage-geo__section-title { display: flex; gap: 8px; align-items: center; margin-bottom: 16px; font-size: 15px; font-weight: 700; color: var(--dr-text-primary); }
+.stage-geo__chart-row { display: flex; gap: 20px; align-items: center; }
+.stage-geo__breakdown-list { flex: 1; display: flex; flex-direction: column; gap: 10px; }
+.stage-geo__breakdown-item { display: flex; gap: 12px; align-items: center; }
+.stage-geo__breakdown-name { width: 80px; font-size: 13px; font-weight: 600; color: var(--dr-text-secondary); }
+.stage-geo__breakdown-bar { flex: 1; height: 8px; overflow: hidden; background: var(--dr-border-subtle); border-radius: 999px; }
+.stage-geo__breakdown-fill { height: 100%; background: linear-gradient(90deg, var(--dr-primary), #2dd4bf); border-radius: 999px; transition: width 0.6s ease; }
+.stage-geo__breakdown-rate { width: 60px; font-size: 14px; font-weight: 700; color: var(--dr-primary); text-align: right; }
+
+/* ===== 08 Sentiment ===== */
+.stage-sentiment__top-row { display: flex; gap: 16px; align-items: stretch; margin-bottom: 16px; }
+.stage-sentiment__indicators { display: flex; flex: 1; gap: 12px; }
+.stage-sentiment__indicator {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex: 1;
+  padding: 12px 14px;
+  background: var(--dr-bg-subtle);
+  border: 1px solid var(--dr-border-light);
+  border-radius: var(--dr-radius-md);
+}
+.stage-sentiment__indicator-icon { display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; font-size: 16px; border-radius: var(--dr-radius-sm); flex-shrink: 0; }
+.stage-sentiment__indicator-icon--up { color: var(--dr-success); background: var(--dr-success-light); }
+.stage-sentiment__indicator-icon--stable { color: var(--dr-text-tertiary); background: var(--dr-bg-subtle); }
+.stage-sentiment__indicator-icon--down { color: var(--dr-danger); background: var(--dr-danger-light); }
+.stage-sentiment__indicator-content { min-width: 0; }
+.stage-sentiment__indicator-label { font-size: 11px; color: var(--dr-text-tertiary); }
+.stage-sentiment__indicator-value { font-size: 16px; font-weight: 700; color: var(--dr-text-primary); }
+.stage-sentiment__mini-chart { flex-shrink: 0; width: 120px; max-width: 100%; padding: 10px; background: var(--dr-bg-subtle); border: 1px solid var(--dr-border-light); border-radius: var(--dr-radius-md); box-sizing: border-box; overflow: visible; }
+.stage-sentiment__drivers { display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px; }
+.stage-sentiment__driver-group { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.stage-sentiment__driver-title { display: inline-flex; gap: 4px; align-items: center; font-size: 13px; font-weight: 600; flex-shrink: 0; }
+.stage-sentiment__driver-title--positive { color: var(--dr-success); }
+.stage-sentiment__driver-title--negative { color: var(--dr-danger); }
+.stage-sentiment__driver-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.stage-sentiment__driver-tag { display: inline-block; padding: 2px 10px; font-size: 12px; line-height: 1.6; border-radius: 4px; }
+.stage-sentiment__driver-tag--positive { color: var(--dr-success); background: var(--dr-success-light); border: 1px solid var(--dr-success-border); }
+.stage-sentiment__driver-tag--negative { color: var(--dr-danger); background: var(--dr-danger-light); border: 1px solid var(--dr-danger-border); }
+.stage-sentiment__section { margin-top: 20px; }
+.stage-sentiment__section-title { display: flex; gap: 6px; align-items: center; margin-bottom: 10px; font-size: 14px; font-weight: 700; color: var(--dr-text-primary); }
+.stage-sentiment__section-count { margin-left: auto; font-size: 12px; font-weight: 400; color: var(--dr-text-placeholder); }
+.stage-sentiment__issue-list { display: flex; flex-direction: column; gap: 0; border: 1px solid var(--dr-border-light); border-radius: var(--dr-radius-sm); overflow: hidden; }
+.stage-sentiment__issue-row { display: flex; gap: 8px; align-items: center; padding: 8px 12px; font-size: 13px; border-bottom: 1px solid var(--dr-border-subtle); transition: background 0.15s; }
+.stage-sentiment__issue-row:last-child { border-bottom: none; }
+.stage-sentiment__issue-row:hover { background: var(--dr-bg-subtle); }
+.stage-sentiment__issue-tag { font-size: 11px; border-radius: 4px; flex-shrink: 0; line-height: 1; padding: 2px 6px; }
+.stage-sentiment__issue-text { flex: 1; min-width: 0; color: var(--dr-text-secondary); line-height: 1.5; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.stage-sentiment__issue-source { flex-shrink: 0; font-size: 11px; color: var(--dr-text-placeholder); }
+.stage-sentiment__suggestion-list { margin: 0; padding: 0; padding-left: 20px; list-style: none; counter-reset: suggestion; }
+.stage-sentiment__suggestion-item { position: relative; padding: 6px 0; font-size: 13px; line-height: 1.6; color: var(--dr-text-secondary); counter-increment: suggestion; }
+.stage-sentiment__suggestion-item::before {
+  position: absolute;
+  left: -20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--dr-primary);
+  background: var(--dr-primary-light);
+  border-radius: 4px;
+  content: counter(suggestion);
+}
+
+/* ===== 09 Suggestion ===== */
+.sg-section { margin-bottom: 28px; }
+.sg-section__header { display: flex; gap: 12px; align-items: center; margin-bottom: 20px; }
+.sg-section__icon-wrap { display: flex; flex-shrink: 0; align-items: center; justify-content: center; width: 40px; height: 40px; font-size: 18px; border-radius: var(--dr-radius-md); }
+.sg-section__icon-wrap--projection { color: var(--dr-success); background: var(--dr-success-light); border: 1px solid var(--dr-success-border); }
+.sg-section__icon-wrap--dims { color: var(--dr-primary); background: var(--dr-primary-light); border: 1px solid var(--dr-primary-border); }
+.sg-section__icon-wrap--quickwin { color: var(--dr-warning); background: var(--dr-warning-light); border: 1px solid var(--dr-warning-border); }
+.sg-section__icon-wrap--actions { color: var(--dr-danger); background: var(--dr-danger-light); border: 1px solid var(--dr-danger-border); }
+.sg-section__icon-wrap--roadmap { color: var(--dr-info); background: var(--dr-info-light); border: 1px solid var(--dr-info-border); }
+.sg-section__icon-wrap--longterm { color: var(--dr-purple); background: var(--dr-purple-light); border: 1px solid var(--dr-purple-border); }
+.sg-section__title { font-size: 16px; font-weight: 700; color: var(--dr-text-primary); }
+.sg-section__subtitle { margin-top: 2px; font-size: 14px; color: var(--dr-text-tertiary); }
+.sg-projection { padding: 20px; background: linear-gradient(135deg, var(--dr-success-light) 0%, #f0fdf4 50%, var(--dr-info-light) 100%); border: 1px solid var(--dr-success-border); border-radius: var(--dr-radius-lg); }
+.sg-projection__header { display: flex; gap: 24px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+.sg-projection__title-group { display: flex; gap: 12px; align-items: center; }
+.sg-projection__score-compare { display: flex; gap: 16px; align-items: center; }
+.sg-projection__score-item { text-align: center; }
+.sg-projection__score-label { margin-bottom: 4px; font-size: 12px; font-weight: 600; color: var(--dr-text-tertiary); }
+.sg-projection__score-value { font-size: 32px; font-weight: 700; line-height: 1; }
+.sg-projection__arrow { display: flex; flex-direction: column; gap: 2px; align-items: center; font-size: 20px; color: var(--dr-text-placeholder); }
+.sg-projection__delta { font-size: 14px; font-weight: 700; }
+.sg-projection__dims { display: flex; flex-direction: column; gap: 12px; margin-top: 20px; }
+.sg-projection__dim-bar { display: flex; gap: 12px; align-items: center; }
+.sg-projection__dim-label { flex-shrink: 0; width: 80px; font-size: 13px; font-weight: 600; color: var(--dr-text-secondary); }
+.sg-projection__dim-track { position: relative; flex: 1; height: 8px; overflow: hidden; background: var(--dr-border-subtle); border-radius: 4px; }
+.sg-projection__dim-fill { position: absolute; top: 0; left: 0; height: 100%; border-radius: 4px; transition: width 0.6s ease; }
+.sg-projection__dim-fill--current { z-index: 2; }
+.sg-projection__dim-fill--projected { z-index: 1; }
+.sg-projection__dim-nums { flex-shrink: 0; display: flex; gap: 4px; align-items: center; font-size: 13px; font-weight: 700; }
+.sg-projection__dim-arrow { color: var(--dr-text-placeholder); font-weight: 400; }
+.sg-dims__grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 14px; }
+.sg-dims__card { padding: 16px; background: var(--dr-bg-card); border: 1px solid var(--dr-border-light); border-top: 3px solid var(--dim-accent); border-radius: var(--dr-radius-lg); transition: box-shadow 0.2s ease; }
+.sg-dims__card:hover { box-shadow: 0 4px 16px rgb(15 23 42 / 8%); }
+.sg-dims__card-header { display: flex; gap: 8px; align-items: center; margin-bottom: 14px; }
+.sg-dims__card-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.sg-dims__card-name { font-size: 14px; font-weight: 700; color: var(--dr-text-primary); }
+.sg-dims__card-scores { display: flex; gap: 8px; align-items: center; margin-bottom: 14px; }
+.sg-dims__card-current, .sg-dims__card-projected { display: flex; flex-direction: column; gap: 2px; }
+.sg-dims__card-score-num { font-size: 22px; font-weight: 700; line-height: 1; }
+.sg-dims__card-score-label { font-size: 11px; color: var(--dr-text-placeholder); }
+.sg-dims__card-arrow { font-size: 16px; color: var(--dr-text-disabled); }
+.sg-dims__card-delta { margin-left: auto; font-size: 16px; font-weight: 700; }
+.sg-dims__card-actions { display: flex; flex-direction: column; gap: 4px; padding-top: 12px; border-top: 1px solid var(--dr-border-subtle); }
+.sg-dims__card-action { display: flex; gap: 6px; align-items: flex-start; font-size: 12px; line-height: 1.5; color: var(--dr-text-tertiary); }
+.sg-dims__card-action-icon { flex-shrink: 0; margin-top: 3px; font-size: 10px; color: var(--dr-text-placeholder); }
+.sg-quickwins__grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; }
+.sg-quickwins__card { position: relative; padding: 16px; background: linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%); border: 1px solid var(--dr-warning-border); border-radius: var(--dr-radius-lg); transition: transform 0.15s ease, box-shadow 0.15s ease; }
+.sg-quickwins__card:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgb(245 158 11 / 15%); }
+.sg-quickwins__card-badge { display: inline-block; padding: 2px 10px; margin-bottom: 10px; font-size: 11px; font-weight: 700; color: #92400e; background: rgb(245 158 11 / 20%); border-radius: 999px; }
+.sg-quickwins__card-title { margin-bottom: 6px; font-size: 15px; font-weight: 700; color: var(--dr-text-primary); line-height: 1.4; }
+.sg-quickwins__card-desc { margin-bottom: 10px; font-size: 13px; line-height: 1.6; color: var(--dr-text-tertiary); }
+.sg-quickwins__card-meta { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 10px; }
+.sg-quickwins__card-tag { padding: 2px 8px; font-size: 11px; font-weight: 600; border-radius: var(--dr-radius-sm); }
+.sg-quickwins__card-timeline { display: flex; gap: 4px; align-items: center; padding: 2px 8px; font-size: 11px; color: var(--dr-text-tertiary); background: rgb(255 255 255 / 60%); border-radius: var(--dr-radius-sm); }
+.sg-quickwins__card-impact { padding: 2px 8px; font-size: 11px; font-weight: 700; color: var(--dr-success); background: var(--dr-success-light); border-radius: var(--dr-radius-sm); }
+.sg-quickwins__card-steps { display: flex; flex-direction: column; gap: 4px; padding-top: 10px; border-top: 1px solid rgb(245 158 11 / 20%); }
+.sg-quickwins__step { display: flex; gap: 6px; align-items: flex-start; font-size: 12px; line-height: 1.5; color: #78350f; }
+.sg-quickwins__step-icon { flex-shrink: 0; margin-top: 3px; font-size: 10px; color: var(--dr-warning); }
+.sg-actions__priority-bar { margin-bottom: 20px; padding: 14px 16px; background: var(--dr-bg-subtle); border: 1px solid var(--dr-border-light); border-radius: var(--dr-radius-md); }
+.sg-actions__priority-track { display: flex; height: 8px; overflow: hidden; border-radius: 4px; }
+.sg-actions__priority-seg { transition: width 0.3s; }
+.sg-actions__priority-seg--urgent { background: var(--dr-danger); }
+.sg-actions__priority-seg--high { background: var(--dr-orange); }
+.sg-actions__priority-seg--medium { background: var(--dr-warning); }
+.sg-actions__priority-seg--low { background: var(--dr-success); }
+.sg-actions__priority-legend { display: flex; flex-wrap: wrap; gap: 16px; margin-top: 10px; font-size: 12px; color: var(--dr-text-tertiary); }
+.sg-actions__legend-item { display: flex; gap: 4px; align-items: center; }
+.sg-actions__legend-dot { display: inline-block; width: 8px; height: 8px; border-radius: 2px; }
+.sg-actions__legend-dot--urgent { background: var(--dr-danger); }
+.sg-actions__legend-dot--high { background: var(--dr-orange); }
+.sg-actions__legend-dot--medium { background: var(--dr-warning); }
+.sg-actions__legend-dot--low { background: var(--dr-success); }
+.sg-actions__list { display: flex; flex-direction: column; gap: 10px; }
+.sg-action-card { border-left: 4px solid; border-radius: var(--dr-radius-md); overflow: hidden; transition: box-shadow 0.15s ease; }
+.sg-action-card:hover { box-shadow: 0 2px 12px rgb(15 23 42 / 6%); }
+.sg-action-card--urgent { background: var(--dr-danger-light); border-left-color: var(--dr-danger); }
+.sg-action-card--medium { background: var(--dr-warning-light); border-left-color: var(--dr-warning); }
+.sg-action-card--low { background: var(--dr-success-light); border-left-color: var(--dr-success); }
+.sg-action-card__header { display: flex; gap: 10px; align-items: center; padding: 14px 16px; }
+.sg-action-card__step { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; font-size: 12px; font-weight: 700; color: #fff; background: var(--dr-primary); border-radius: 50%; flex-shrink: 0; }
+.sg-action-card__meta { display: flex; gap: 6px; align-items: center; flex-shrink: 0; }
+.sg-action-card__priority-tag { font-size: 11px; border-radius: var(--dr-radius-sm); }
+.sg-action-card__dim-tag { padding: 1px 8px; font-size: 11px; font-weight: 600; border: 1px solid; border-radius: var(--dr-radius-sm); white-space: nowrap; }
+.sg-action-card__title { flex: 1; min-width: 0; font-size: 14px; font-weight: 700; color: var(--dr-text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sg-action-card__badges { display: flex; gap: 6px; flex-shrink: 0; }
+.sg-action-card__badge { padding: 2px 8px; font-size: 11px; font-weight: 600; border-radius: var(--dr-radius-sm); white-space: nowrap; }
+.sg-action-card__badge--impact { color: #fff; }
+.sg-action-card__badge--impact.high { background: var(--dr-danger); }
+.sg-action-card__badge--impact.medium { background: var(--dr-warning); }
+.sg-action-card__badge--impact.low { background: var(--dr-text-tertiary); }
+.sg-action-card__badge--effort { background: var(--dr-border-subtle); color: var(--dr-text-muted); }
+.sg-action-card__badge--effort.quick_win { background: var(--dr-success-light); color: var(--dr-success); }
+.sg-action-card__badge--effort.moderate { background: var(--dr-info-light); color: var(--dr-info); }
+.sg-action-card__badge--effort.heavy { background: var(--dr-danger-light); color: var(--dr-danger); }
+.sg-action-card__badge--score { background: var(--dr-primary-light); color: var(--dr-primary); }
+.sg-action-card__detail { padding: 0 16px 16px 52px; }
+.sg-action-card__desc { font-size: 13px; line-height: 1.7; color: var(--dr-text-muted); }
+.sg-action-card__timeline-tag { display: inline-flex; gap: 4px; align-items: center; margin-top: 8px; padding: 3px 10px; font-size: 12px; color: var(--dr-text-muted); background: var(--dr-border-subtle); border-radius: var(--dr-radius-sm); }
+.sg-action-card__evidence { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-top: 10px; }
+.sg-action-card__evidence-label { font-size: 12px; font-weight: 600; color: var(--dr-text-placeholder); }
+.sg-action-card__evidence-tag { padding: 2px 8px; font-size: 11px; font-weight: 600; color: var(--dr-primary); background: var(--dr-primary-light); border-radius: var(--dr-radius-sm); }
+.sg-action-card__steps { margin-top: 12px; }
+.sg-action-card__steps-label { margin-bottom: 6px; font-size: 12px; font-weight: 700; color: var(--dr-primary); }
+.sg-action-card__step-item { display: flex; gap: 6px; align-items: flex-start; padding: 3px 0; font-size: 13px; line-height: 1.5; color: var(--dr-text-muted); }
+.sg-action-card__step-icon { flex-shrink: 0; margin-top: 3px; font-size: 10px; color: var(--dr-primary); }
+.sg-roadmap__timeline { display: flex; gap: 0; align-items: flex-start; }
+.sg-roadmap__phase { flex: 1; min-width: 0; }
+.sg-roadmap__phase-connector { width: 32px; height: 2px; margin: 20px -16px 0; background: linear-gradient(90deg, var(--dr-primary-border), var(--dr-info-border)); flex-shrink: 0; }
+.sg-roadmap__phase-header { display: flex; gap: 10px; align-items: center; margin-bottom: 14px; }
+.sg-roadmap__phase-badge { display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; font-size: 13px; font-weight: 700; color: #fff; border-radius: var(--dr-radius-lg); flex-shrink: 0; }
+.sg-roadmap__phase--0 .sg-roadmap__phase-badge { background: var(--dr-danger); }
+.sg-roadmap__phase--1 .sg-roadmap__phase-badge { background: var(--dr-warning); }
+.sg-roadmap__phase--2 .sg-roadmap__phase-badge { background: var(--dr-success); }
+.sg-roadmap__phase-title { font-size: 14px; font-weight: 700; color: var(--dr-text-primary); }
+.sg-roadmap__phase-timeline { font-size: 12px; color: var(--dr-text-placeholder); }
+.sg-roadmap__phase-items { display: flex; flex-direction: column; gap: 6px; padding: 14px; background: var(--dr-bg-subtle); border: 1px solid var(--dr-border-light); border-radius: var(--dr-radius-md); }
+.sg-roadmap__item { display: flex; gap: 8px; align-items: flex-start; font-size: 13px; line-height: 1.5; color: var(--dr-text-muted); }
+.sg-roadmap__item-dot { flex-shrink: 0; width: 6px; height: 6px; margin-top: 7px; background: var(--dr-text-placeholder); border-radius: 50%; }
+.sg-roadmap__phase--0 .sg-roadmap__item-dot { background: var(--dr-danger); }
+.sg-roadmap__phase--1 .sg-roadmap__item-dot { background: var(--dr-warning); }
+.sg-roadmap__phase--2 .sg-roadmap__item-dot { background: var(--dr-success); }
+.sg-longterm__list { display: flex; flex-direction: column; gap: 8px; }
+.sg-longterm__item { display: flex; gap: 12px; align-items: center; padding: 12px 16px; background: var(--dr-bg-subtle); border: 1px solid var(--dr-border-light); border-radius: var(--dr-radius-md); transition: border-color 0.15s ease; }
+.sg-longterm__item:hover { border-color: var(--dr-primary-border); }
+.sg-longterm__num { flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; font-size: 12px; font-weight: 700; color: var(--dr-primary); background: var(--dr-primary-light); border-radius: 50%; }
+.sg-longterm__content { flex: 1; min-width: 0; }
+.sg-longterm__text-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.sg-longterm__text { font-size: 14px; line-height: 1.5; color: var(--dr-text-secondary); }
+.sg-longterm__timeline { display: inline-block; padding: 1px 8px; font-size: 11px; color: var(--dr-primary); background: var(--dr-primary-light); border-radius: 999px; white-space: nowrap; }
+.sg-summary { display: flex; gap: 16px; padding: 24px; background: var(--dr-bg-subtle); border: 1px solid var(--dr-border); border-radius: var(--dr-radius-lg); }
+.sg-summary__icon-wrap { display: flex; flex-shrink: 0; align-items: center; justify-content: center; width: 44px; height: 44px; font-size: 20px; color: var(--dr-primary); background: var(--dr-bg-card); border-radius: var(--dr-radius-md); }
+.sg-summary__label { margin-bottom: 6px; font-size: 13px; font-weight: 700; color: var(--dr-primary); }
+.sg-summary__text { font-size: 14px; line-height: 1.8; color: var(--dr-text-secondary); }
+
+/* ===== Executive Summary ===== */
+.dr-summary {
+  padding: 24px 28px;
+  margin-bottom: 20px;
+  background: var(--dr-bg-card);
+  border: 1px solid var(--dr-border);
+  border-left: 4px solid var(--dr-primary);
+  border-radius: var(--dr-radius-xl);
+  box-shadow: 0 1px 4px rgb(0 0 0 / 4%);
+}
+.dr-summary__title { margin: 0 0 20px; font-size: 18px; font-weight: 600; color: var(--dr-text-primary); }
+.dr-summary__grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; }
+.dr-summary__item { display: flex; gap: 12px; align-items: flex-start; padding: 14px 18px; border-radius: var(--dr-radius-lg); }
+.dr-summary__item--positive { background: var(--dr-success-light); border: 1px solid var(--dr-success-border); }
+.dr-summary__item--negative { background: var(--dr-danger-light); border: 1px solid var(--dr-danger-border); }
+.dr-summary__item--action { background: var(--dr-primary-light); border: 1px solid var(--dr-primary-border); }
+.dr-summary__icon { flex-shrink: 0; width: 26px; height: 26px; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; border-radius: 999px; }
+.dr-summary__item--positive .dr-summary__icon { color: var(--dr-success); background: var(--dr-success-light); }
+.dr-summary__item--negative .dr-summary__icon { color: var(--dr-danger); background: var(--dr-danger-light); }
+.dr-summary__item--action .dr-summary__icon { color: var(--dr-primary); background: var(--dr-primary-light); }
+.dr-summary__text { font-size: 14px; line-height: 1.6; color: var(--dr-text-secondary); }
+
+/* ===== Report Footer ===== */
+.dr-footer { margin-top: 40px; }
+.dr-footer__divider { height: 1px; margin-bottom: 28px; background: linear-gradient(90deg, transparent, var(--dr-border) 20%, var(--dr-border) 80%, transparent); }
+.dr-footer__content { display: flex; flex-direction: column; gap: 16px; padding: 0 8px; }
+.dr-footer__block { padding: 14px 18px; background: var(--dr-bg-subtle); border-radius: var(--dr-radius-lg); }
+.dr-footer__title { margin-bottom: 6px; font-size: 13px; font-weight: 600; color: var(--dr-text-muted); }
+.dr-footer__text { font-size: 13px; line-height: 1.8; color: var(--dr-text-tertiary); }
+.dr-footer__meta { display: flex; gap: 24px; padding-top: 14px; font-size: 12px; color: var(--dr-text-placeholder); }
+
+/* ===== Right-side Floating Navigation ===== */
+.dr-side-nav {
+  position: fixed;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding: 8px 5px 8px 6px;
+  background: rgb(255 255 255 / 92%);
+  border: 1px solid var(--dr-border-light);
+  border-radius: var(--dr-radius-xl);
+  box-shadow: 0 2px 16px rgb(15 23 42 / 8%);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+.dr-side-nav__item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  padding: 4px 8px 4px 4px;
+  text-decoration: none;
+  border-radius: var(--dr-radius-md);
+  transition: background 0.15s;
+  white-space: nowrap;
+}
+.dr-side-nav__item:hover {
+  background: var(--dr-primary-light);
+}
+.dr-side-nav__item--active {
+  background: var(--dr-primary-light);
+}
+.dr-side-nav__num {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--dr-text-placeholder);
+  border-radius: 6px;
+  transition: all 0.2s;
+  user-select: none;
+}
+.dr-side-nav__item:hover .dr-side-nav__num {
+  color: var(--dr-primary);
+  background: rgb(13 148 136 / 10%);
+}
+.dr-side-nav__item--active .dr-side-nav__num {
+  color: #fff;
+  background: var(--dr-primary);
+}
+.dr-side-nav__label {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--dr-text-tertiary);
+  transition: color 0.15s, font-weight 0.15s;
+  line-height: 1;
+}
+.dr-side-nav__item:hover .dr-side-nav__label {
+  color: var(--dr-text-secondary);
+}
+.dr-side-nav__item--active .dr-side-nav__label {
+  color: var(--dr-primary);
+  font-weight: 700;
+}
+.dr-side-nav__divider {
+  width: 20px;
+  height: 1px;
+  background: var(--dr-border-subtle);
+  margin: 2px 0 2px 4px;
+  flex-shrink: 0;
+}
+
+/* ===== SVG Chart Styles ===== */
+.dr-radar-chart {
+  display: block;
+  width: 100%;
+  margin: 0 auto;
+}
+.dr-radar-chart__grid { fill: none; stroke: var(--dr-bg-bar-track); stroke-width: 1; }
+.dr-radar-chart__axis { stroke: var(--dr-bg-bar-track); stroke-width: 1; }
+.dr-radar-chart__area { transition: opacity 0.3s; }
+.dr-radar-chart__area:hover { opacity: 0.85 !important; }
+.dr-radar-chart__dot { transition: r 0.2s; }
+.dr-radar-chart__dot:hover { r: 6; }
+.dr-radar-chart__label { font-size: 12px; fill: var(--dr-text-muted); font-weight: 600; }
+
+.dr-donut-chart { display: block; width: 100%; margin: 0 auto; }
+.dr-donut-chart__center-text { font-size: 16px; font-weight: 700; fill: var(--dr-text-primary); }
+.dr-donut-chart__center-label { font-size: 10px; fill: var(--dr-text-tertiary); }
+
+.dr-hbar-chart { display: block; width: 100%; }
+.dr-hbar-chart__bar-bg { fill: var(--dr-border-subtle); rx: 4; }
+.dr-hbar-chart__bar-fill { rx: 4; transition: width 0.6s ease; }
+.dr-hbar-chart__label { font-size: 12px; fill: var(--dr-text-secondary); font-weight: 600; }
+.dr-hbar-chart__value { font-size: 12px; fill: var(--dr-text-primary); font-weight: 700; }
+
+/* ===== Entrance Animations (disabled) ===== */
+.dr-section {
+  opacity: 1;
+  transform: none;
+}
+.dr-hero {
+  opacity: 1;
+  transform: none;
+}
+.dr-summary {
+  opacity: 1;
+  transform: none;
+}
+
+/* ===== Hero Gradient Animation ===== */
+.dr-hero__gradient-anim {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 40%, #0f172a 60%, #1e293b 100%);
+  background-size: 300% 300%;
+  animation: heroGradient 8s ease infinite;
+  border-radius: inherit;
+}
+@keyframes heroGradient {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+/* ===== Card Hover Effects ===== */
+.stage-overview__stat-card:hover,
+.stage-aivo__dimension-card:hover,
+.stage-up__group-card:hover,
+.stage-ais__platform-card:hover,
+.stage-infra__card:hover,
+.stage-geo__stat-card:hover,
+.stage-sentiment__indicator:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgb(15 23 42 / 8%);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.stage-overview__stat-card,
+.stage-aivo__dimension-card,
+.stage-up__group-card,
+.stage-ais__platform-card,
+.stage-infra__card,
+.stage-geo__stat-card,
+.stage-sentiment__indicator {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+/* ===== Responsive ===== */
+@media (max-width: 992px) {
+  .dr-side-nav { display: none; }
+  .dr-content { width: calc(100% - 32px); padding-right: 0; }
+  .dr-hero__body { flex-direction: column; text-align: center; }
+  .dr-hero__title { font-size: 26px; text-align: center; }
+  .dr-hero__badge-row { justify-content: center; }
+  .dr-hero__meta { justify-content: center; }
+  .dr-hero__score-group { justify-content: center; }
+  .stage-overview__stats { grid-template-columns: repeat(2, 1fr); }
+  .stage-geo__stats { grid-template-columns: repeat(2, 1fr); }
+  .stage-comp__compare-table { overflow-x: auto; }
+  .sg-roadmap__timeline { flex-wrap: wrap; }
+  .sg-roadmap__phase { min-width: 200px; }
+}
+@media (max-width: 768px) {
+  .dr-page { padding-top: 0; }
+  .dr-content { width: calc(100% - 24px); }
+  .dr-hero { padding: 36px 20px; }
+  .dr-hero__title { font-size: 24px; }
+  .dr-hero__subtitle { font-size: 16px; }
+  .dr-section { padding: 24px 18px; }
+  .stage-overview__stats { grid-template-columns: 1fr; }
+  .stage-ais__stats { grid-template-columns: 1fr; }
+  .stage-ais__platform-grid { grid-template-columns: 1fr; }
+  .stage-ais__qtable-col--platforms { width: 120px; }
+  .stage-aivo__hero { flex-direction: column; }
+  .stage-up__radar-section { width: 100%; }
+  .stage-up__radar-row { flex-direction: column; align-items: center; }
+  .stage-up__radar-chart-wrap { width: 100%; max-width: 240px; }
+  .stage-up__dimension-list { grid-template-columns: 1fr; }
+  .stage-up__groups { min-width: 0; }
+  .stage-geo__stats { grid-template-columns: repeat(2, 1fr); }
+  .stage-geo__chart-row { flex-direction: column; }
+  .stage-sentiment__top-row { flex-direction: column; }
+  .stage-sentiment__indicators { flex-direction: column; }
+  .stage-sentiment__mini-chart { width: 100%; }
+  .sg-projection__header { flex-direction: column; align-items: flex-start; }
+  .sg-dims__grid { grid-template-columns: 1fr; }
+  .sg-quickwins__grid { grid-template-columns: 1fr; }
+  .sg-roadmap__timeline { flex-direction: column; }
+  .sg-roadmap__phase-connector { width: 2px; height: 24px; margin: 0 0 0 17px; background: linear-gradient(180deg, var(--dr-primary-border), var(--dr-info-border)); }
+  .stage-comp__compare-table { overflow-x: auto; }
+  .stage-comp__ctable-col--dim { width: 80px; }
+}
+@media print {
+  body { background: #fff !important; }
+  .dr-side-nav { display: none !important; }
+  .dr-page { min-height: auto !important; padding: 0 !important; background: #fff !important; }
+  .dr-content { width: 100% !important; max-width: 100% !important; padding: 0 !important; }
+  .dr-hero { background: var(--dr-bg-subtle) !important; color: var(--dr-text-primary) !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+  .dr-hero__title, .dr-hero__subtitle { color: var(--dr-text-primary) !important; }
+  .dr-hero__date { color: var(--dr-text-tertiary) !important; }
+  .dr-section { page-break-inside: avoid; break-inside: avoid; border: 1px solid var(--dr-bg-bar-track) !important; box-shadow: none !important; opacity: 1 !important; transform: none !important; }
+  .dr-hero { opacity: 1 !important; transform: none !important; }
+  .dr-summary { opacity: 1 !important; transform: none !important; }
+  .dr-footer { page-break-inside: avoid; }
+}
+</style>
+</head>
+<body>
+<div class="dr-page">
+<nav class="dr-side-nav" id="side-nav"></nav>
+<div class="dr-content">
+  <div id="hero-section"></div>
+  <div id="section-overview"></div>
+  <div id="section-aivo"></div>
+  <div id="section-profile"></div>
+  <div id="section-search"></div>
+  <div id="section-infra"></div>
+  <div id="section-competitor"></div>
+  <div id="section-geo"></div>
+  <div id="section-sentiment"></div>
+  <div id="section-suggestion"></div>
+  <div id="executive-summary"></div>
+  <div id="report-footer"></div>
+</div>
+</div>
+
+<script id="report-data" type="application/json">{}</script>
+<script>
+(function() {
+  'use strict';
+
+  // ===== Utilities =====
+  function esc(s) { if (s == null) return ''; return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+  function getColor(score) {
+    if (score >= 90) return '#059669';
+    if (score >= 75) return '#0d9488';
+    if (score >= 60) return '#d97706';
+    return '#dc2626';
+  }
+  function getGrade(score) {
+    if (score >= 90) return '优秀';
+    if (score >= 75) return '良好';
+    if (score >= 60) return '一般';
+    return '较差';
+  }
+  function getGradeInfo(grade) {
+    var map = {
+      '优秀': { color: '#059669', bg: '#f0fdf4', label: 'A' },
+      '良好': { color: '#0d9488', bg: '#f0fdfa', label: 'B' },
+      '一般': { color: '#d97706', bg: '#fffbeb', label: 'C' },
+      '较差': { color: '#dc2626', bg: '#fef2f2', label: 'D' }
+    };
+    return map[grade] || map['一般'];
+  }
+  function getMentionColor(rate) {
+    if (rate >= 0.5) return '#059669';
+    if (rate >= 0.25) return '#d97706';
+    return '#dc2626';
+  }
+  function getThreatInfo(level) {
+    var map = {
+      'high': { color: '#dc2626', bg: '#fef2f2', label: '高威胁' },
+      'medium': { color: '#d97706', bg: '#fffbeb', label: '中威胁' },
+      'low': { color: '#059669', bg: '#f0fdf4', label: '低威胁' }
+    };
+    return map[level] || map['medium'];
+  }
+  function getPriorityInfo(priority) {
+    var map = {
+      'high': { color: 'var(--dr-orange)', bg: 'var(--dr-orange-light)', label: 'P1高优', cls: 'urgent' },
+      'medium': { color: 'var(--dr-warning)', bg: 'var(--dr-warning-light)', label: 'P2中等', cls: 'medium' },
+      'low': { color: 'var(--dr-success)', bg: 'var(--dr-success-light)', label: 'P3建议', cls: 'low' }
+    };
+    return map[priority] || map['medium'];
+  }
+  function fmtRate(r) { return (r * 100).toFixed(1); }
+  /* circumference calculated inline per chart */
+
+  var DIM_COLORS = {
+    'AI_SEARCH_VISIBILITY': '#6366f1',
+    'INFRA_COMPLETENESS': '#06b6d4',
+    'COMPETITIVE_ADVANTAGE': '#f59e0b',
+    'SENTIMENT_HEALTH': 'var(--dr-success)'
+  };
+  var DIM_NAMES = {
+    'AI_SEARCH_VISIBILITY': 'AI搜索可见性',
+    'INFRA_COMPLETENESS': '基建完善度',
+    'COMPETITIVE_ADVANTAGE': '竞品对比优势',
+    'SENTIMENT_HEALTH': '舆情健康度'
+  };
+
+  // ===== SVG Chart Helpers =====
+
+  /**
+   * 生成雷达图SVG
+   * @param {Array} labels - 维度标签数组
+   * @param {Array} values - 维度值数组(0-100)
+   * @param {Array} colors - 维度颜色数组
+   * @param {number} size - SVG尺寸
+   * @param {string} fillColor - 填充颜色
+   * @returns {string} SVG HTML字符串
+   */
+  function renderRadarChart(labels, values, colors, size, fillColor) {
+    size = size || 260;
+    fillColor = fillColor || 'rgb(13 148 136 / 18%)';
+    var cx = size / 2;
+    var cy = size / 2;
+    var maxR = size / 2 - 70;
+    var n = labels.length;
+    if (n < 3) return '';
+
+    function angle(i) { return (Math.PI * 2 * i / n) - Math.PI / 2; }
+    function point(i, r) {
+      var a = angle(i);
+      return { x: cx + r * Math.cos(a), y: cy + r * Math.sin(a) };
+    }
+
+    var svg = '<svg class="dr-radar-chart" viewBox="0 0 ' + size + ' ' + size + '">';
+
+    // Grid rings (3 levels)
+    for (var level = 1; level <= 3; level++) {
+      var r = maxR * level / 3;
+      var pts = [];
+      for (var i = 0; i < n; i++) {
+        var p = point(i, r);
+        pts.push(p.x.toFixed(1) + ',' + p.y.toFixed(1));
+      }
+      svg += '<polygon class="dr-radar-chart__grid" points="' + pts.join(' ') + '"/>';
+    }
+
+    // Axis lines
+    for (var i = 0; i < n; i++) {
+      var p = point(i, maxR);
+      svg += '<line class="dr-radar-chart__axis" x1="' + cx + '" y1="' + cy + '" x2="' + p.x.toFixed(1) + '" y2="' + p.y.toFixed(1) + '"/>';
+    }
+
+    // Data area
+    var dataPts = [];
+    for (var i = 0; i < n; i++) {
+      var v = Math.max(0, Math.min(100, values[i] || 0));
+      var r = maxR * v / 100;
+      var p = point(i, r);
+      dataPts.push(p.x.toFixed(1) + ',' + p.y.toFixed(1));
+    }
+    svg += '<polygon class="dr-radar-chart__area" points="' + dataPts.join(' ') + '" fill="' + fillColor + '" stroke="' + (colors[0] || 'var(--dr-primary)') + '" stroke-width="2"/>';
+
+    // Data dots
+    for (var i = 0; i < n; i++) {
+      var v = Math.max(0, Math.min(100, values[i] || 0));
+      var r = maxR * v / 100;
+      var p = point(i, r);
+      svg += '<circle class="dr-radar-chart__dot" cx="' + p.x.toFixed(1) + '" cy="' + p.y.toFixed(1) + '" r="4" fill="' + (colors[i] || '#6366f1') + '" stroke="#fff" stroke-width="1.5"/>';
+    }
+
+    // Labels
+    for (var i = 0; i < n; i++) {
+      var p = point(i, maxR + 22);
+      var anchor = 'middle';
+      var dx = 0;
+      var dy = 0;
+      var a = angle(i);
+      if (Math.abs(Math.cos(a)) > 0.3) {
+        dx = Math.cos(a) > 0 ? 4 : -4;
+        anchor = Math.cos(a) > 0 ? 'start' : 'end';
+      }
+      if (Math.sin(a) < -0.5) dy = -4;
+      if (Math.sin(a) > 0.5) dy = 6;
+      svg += '<text class="dr-radar-chart__label" x="' + (p.x + dx).toFixed(1) + '" y="' + (p.y + dy).toFixed(1) + '" text-anchor="' + anchor + '">' + esc(labels[i]) + '</text>';
+    }
+
+    svg += '</svg>';
+    return svg;
+  }
+
+  /**
+   * 生成环形图SVG
+   * @param {number} positive - 正面比例(0-1)
+   * @param {number} negative - 负面比例(0-1)
+   * @param {number} neutral - 中性比例(0-1)
+   * @param {number} size - SVG尺寸
+   * @returns {string} SVG HTML字符串
+   */
+  function renderDonutChart(positive, negative, neutral, size) {
+    // 兼容0-100整数和0-1小数两种输入
+    if (positive > 1 || negative > 1 || neutral > 1) {
+      positive = positive / 100; negative = negative / 100; neutral = neutral / 100;
+    }
+    size = size || 140;
+    var cx = size / 2;
+    var cy = size / 2;
+    var outerR = size / 2 - 4;
+    var innerR = outerR * 0.62;
+    var C = 2 * Math.PI * outerR;
+
+    var segments = [
+      { value: positive, color: '#059669' },
+      { value: neutral, color: '#94a3b8' },
+      { value: negative, color: '#dc2626' }
+    ];
+
+    var svg = '<svg class="dr-donut-chart" viewBox="0 0 ' + size + ' ' + size + '">';
+
+    // Background ring
+    svg += '<circle cx="' + cx + '" cy="' + cy + '" r="' + outerR + '" fill="none" stroke="#f1f5f9" stroke-width="' + (outerR - innerR) + '"/>';
+
+    // Segments
+    var offset = 0;
+    segments.forEach(function(seg) {
+      if (seg.value <= 0) return;
+      var dashLen = C * seg.value;
+      var dashOffset = C * offset;
+      svg += '<circle cx="' + cx + '" cy="' + cy + '" r="' + outerR + '" fill="none" stroke="' + seg.color + '" stroke-width="' + (outerR - innerR) + '" stroke-dasharray="' + dashLen.toFixed(2) + ' ' + (C - dashLen).toFixed(2) + '" stroke-dashoffset="' + (-dashOffset).toFixed(2) + '" transform="rotate(-90 ' + cx + ' ' + cy + ')"/>';
+      offset += seg.value;
+    });
+
+    // Center text
+    var mainPct = Math.round(positive * 100);
+    svg += '<text class="dr-donut-chart__center-text" x="' + cx + '" y="' + (cy - 2) + '" text-anchor="middle" dominant-baseline="central">' + Math.min(mainPct, 100) + '%</text>';
+    svg += '<text class="dr-donut-chart__center-label" x="' + cx + '" y="' + (cy + 14) + '" text-anchor="middle">正面</text>';
+
+    svg += '</svg>';
+    return svg;
+  }
+
+  /**
+   * 生成水平柱状图SVG
+   * @param {Array} items - [{name, value, color}]
+   * @param {number} width - SVG宽度
+   * @param {number} barHeight - 柱高
+   * @returns {string} SVG HTML字符串
+   */
+  function renderHBarChart(items, width, barHeight) {
+    width = width || 520;
+    barHeight = barHeight || 28;
+    var gap = 12;
+    var labelW = 80;
+    var valueW = 40;
+    var chartW = width - labelW - valueW - 16;
+    var h = items.length * (barHeight + gap) - gap + 8;
+    var maxVal = 0;
+    items.forEach(function(it) { if (it.value > maxVal) maxVal = it.value; });
+    if (maxVal === 0) maxVal = 100;
+
+    var svg = '<svg class="dr-hbar-chart" viewBox="0 0 ' + width + ' ' + h + '">';
+
+    items.forEach(function(it, idx) {
+      var y = idx * (barHeight + gap) + 4;
+      var barW = Math.max(2, chartW * (it.value / maxVal));
+
+      // Label
+      svg += '<text class="dr-hbar-chart__label" x="' + (labelW - 8) + '" y="' + (y + barHeight / 2 + 4) + '" text-anchor="end">' + esc(it.name) + '</text>';
+
+      // Bar background
+      svg += '<rect class="dr-hbar-chart__bar-bg" x="' + labelW + '" y="' + y + '" width="' + chartW + '" height="' + barHeight + '" rx="4"/>';
+
+      // Bar fill
+      svg += '<rect class="dr-hbar-chart__bar-fill" x="' + labelW + '" y="' + y + '" width="' + barW + '" height="' + barHeight + '" fill="' + it.color + '"/>';
+
+      // Value
+      svg += '<text class="dr-hbar-chart__value" x="' + (labelW + chartW + 8) + '" y="' + (y + barHeight / 2 + 4) + '">' + it.value + '</text>';
+    });
+
+    svg += '</svg>';
+    return svg;
+  }
+
+  // ===== Hero =====
+  function renderHero(d) {
+    var s = d.stages || {};
+    var aivo = s.AIVO_SCORE || {};
+    var ov = s.OVERVIEW || {};
+    var score = aivo.totalScore || ov.score || 0;
+    var grade = aivo.level || getGrade(score);
+    var gi = getGradeInfo(grade);
+    var sc = getColor(score);
+    var brand = d.brand || '';
+    var cat = d.category || '';
+    var date = new Date().toISOString().slice(0, 10);
+
+    return '<section class="dr-hero"><div class="dr-hero__gradient-anim"></div><div class="dr-hero__body">' +
+      '<div class="dr-hero__main">' +
+      '<div class="dr-hero__badge-row">' +
+      '<span class="dr-hero__badge dr-hero__badge--category">' + esc(cat) + '</span>' +
+      '<span class="dr-hero__badge dr-hero__badge--report">GEO 诊断报告</span></div>' +
+      '<h1 class="dr-hero__title"><span class="dr-hero__title-accent">' + esc(brand) + '</span></h1>' +
+      '<div class="dr-hero__subtitle">AI 搜索可见性综合评估 · 四维诊断模型</div>' +
+      '<div class="dr-hero__meta">' +
+      '<span class="dr-hero__date">' + date + '</span>' +
+      '<span class="dr-hero__divider-dot"></span>' +
+      '<span class="dr-hero__engine">AIVO v3.0</span></div></div>' +
+      '<div class="dr-hero__score-group"><div class="dr-hero__score-ring">' +
+      '<svg viewBox="0 0 120 120"><circle class="dr-hero__score-ring-bg" cx="60" cy="60" r="52"></circle>' +
+      '<circle class="dr-hero__score-ring-fill" cx="60" cy="60" r="52" stroke="' + sc + '" stroke-dasharray="' + (2 * Math.PI * 52).toFixed(2) + '" stroke-dashoffset="' + (2 * Math.PI * 52 * (1 - score / 100)).toFixed(2) + '"></circle></svg>' +
+      '<div class="dr-hero__score-inner"><div class="dr-hero__score-value" style="color:' + sc + ';">' + score + '</div><div class="dr-hero__score-unit">/100</div></div></div>' +
+      '<div class="dr-hero__grade-badge" style="border-color:' + gi.color + ';">' +
+      '<div class="dr-hero__grade-label">综合评级</div>' +
+      '<div class="dr-hero__grade-value" style="color:' + gi.color + ';">' + esc(grade) + '</div>' +
+      '<div class="dr-hero__grade-desc">' + gi.label + '</div></div></div></div></section>';
+  }
+
+  // ===== 01 Overview =====
+  function renderOverview(d) {
+    var ov = (d.stages || {}).OVERVIEW || {};
+    var score = ov.score || 0;
+    var hl = (ov.highlights || []).slice(0, 5);
+    var risks = (ov.risks || []).slice(0, 5);
+    var summary = ov.summary || '';
+
+    var h = '<section id="section-overview" class="dr-section"><div class="dr-section__header">' +
+      '<div class="dr-section__num">01</div><div class="dr-section__title-group"><h2 class="dr-section__title">诊断概览</h2>' +
+      '<p class="dr-section__subtitle">核心发现与风险提示</p></div></div>';
+
+    h += '<div class="stage-overview__stats">' +
+      '<div class="stage-overview__stat-card stage-overview__stat-card--score"><div class="stage-overview__stat-value">' + score + '</div><div class="stage-overview__stat-label">综合评分</div></div>' +
+      '<div class="stage-overview__stat-card stage-overview__stat-card--highlight"><div class="stage-overview__stat-value">' + hl.length + '</div><div class="stage-overview__stat-label">关键发现</div></div>' +
+      '<div class="stage-overview__stat-card stage-overview__stat-card--risk"><div class="stage-overview__stat-value">' + risks.length + '</div><div class="stage-overview__stat-label">风险提示</div></div></div>';
+
+    if (summary) {
+      h += '<div class="stage-overview__summary"><div class="stage-overview__summary-icon">&#128161;</div><div class="stage-overview__summary-text">' + esc(summary) + '</div></div>';
+    }
+
+    if (hl.length) {
+      h += '<div class="stage-overview__section"><div class="stage-overview__section-title">&#10022; 关键发现</div><div class="stage-overview__list">';
+      hl.forEach(function(item) {
+        h += '<div class="stage-overview__list-item stage-overview__list-item--highlight"><span class="stage-overview__list-icon">&#10003;</span><span>' + esc(item) + '</span></div>';
+      });
+      h += '</div></div>';
+    }
+
+    if (risks.length) {
+      h += '<div class="stage-overview__section"><div class="stage-overview__section-title stage-overview__section-title--risk">&#9888; 风险提示</div><div class="stage-overview__list">';
+      risks.forEach(function(item) {
+        h += '<div class="stage-overview__list-item stage-overview__list-item--risk"><span class="stage-overview__list-icon">!</span><span>' + esc(item) + '</span></div>';
+      });
+      h += '</div></div>';
+    }
+
+    h += '</section>';
+    return h;
+  }
+
+  // ===== 02 AIVO Score =====
+  function renderAivoScore(d) {
+    var aivo = (d.stages || {}).AIVO_SCORE || {};
+    var score = aivo.totalScore || 0;
+    var grade = aivo.level || getGrade(score);
+    var gi = getGradeInfo(grade);
+    var sc = getColor(score);
+    var commentary = aivo.commentary || '';
+    var benchmark = aivo.industryBenchmark || 0;
+    var rank = aivo.industryRankPercentile || 0;
+    var dims = (aivo.dimensions || []).slice(0, 4);
+
+    var h = '<section id="section-aivo" class="dr-section"><div class="dr-section__header">' +
+      '<div class="dr-section__num">02</div><div class="dr-section__title-group"><h2 class="dr-section__title">AIVO评分</h2>' +
+      '<p class="dr-section__subtitle">四维评分模型</p></div></div>';
+
+    h += '<div class="stage-aivo__hero">';
+
+    // Radar chart for AIVO dimensions
+    if (dims.length >= 3) {
+      var aivoLabels = dims.map(function(dim) { return dim.name || DIM_NAMES[dim.code] || dim.code; });
+      var aivoValues = dims.map(function(dim) { return dim.score || 0; });
+      var aivoColors = dims.map(function(dim) { return DIM_COLORS[dim.code] || '#6366f1'; });
+      h += '<div style="flex-shrink:0;width:200px;max-width:100%;overflow:visible;">' + renderRadarChart(aivoLabels, aivoValues, aivoColors, 200, 'rgb(13 148 136 / 15%)') + '</div>';
+    }
+
+    h += '<div class="stage-aivo__score-inner">' +
+      '<div class="stage-aivo__score-value" style="color:' + sc + ';">' + score + '</div>' +
+      '<div class="stage-aivo__score-unit">/100</div></div><div class="stage-aivo__hero-info">' +
+      '<span class="stage-aivo__level-tag" style="background:' + gi.bg + ';color:' + gi.color + ';border:1px solid ' + gi.color + ';">' + esc(grade) + '</span>' +
+      '<div class="stage-aivo__commentary">' + esc(commentary) + '</div>';
+
+    if (benchmark) {
+      h += '<div class="stage-aivo__benchmark"><span class="stage-aivo__benchmark-label">行业均值</span>' +
+        '<span class="stage-aivo__benchmark-value">' + benchmark + '</span>' +
+        '<span class="stage-aivo__benchmark-rank">超越 <strong>' + rank + '%</strong> 品牌</span></div>';
+    }
+    h += '</div></div>';
+
+    if (dims.length) {
+      h += '<div class="stage-aivo__dimensions"><div class="stage-aivo__dimensions-title">维度拆解</div><div class="stage-aivo__dimension-grid">';
+      dims.forEach(function(dim) {
+        var dc = DIM_COLORS[dim.code] || '#6366f1';
+        h += '<div class="stage-aivo__dimension-card" style="--dim-color:' + dc + ';">' +
+          '<div class="stage-aivo__dimension-score"><span class="stage-aivo__dimension-num">' + (dim.score || 0) + '</span>' +
+          '<span class="stage-aivo__dimension-weight">权重' + Math.round((dim.weight || 0.25) * 100) + '%</span></div>' +
+          '<div class="stage-aivo__dimension-name">' + esc(dim.name || DIM_NAMES[dim.code] || dim.code) + '</div>' +
+          '<div class="stage-aivo__dimension-comment">' + esc(dim.comment || '') + '</div></div>';
+      });
+      h += '</div></div>';
+    }
+
+    h += '</section>';
+    return h;
+  }
+
+  // ===== 03 User Profile =====
+  function renderUserProfile(d) {
+    var up = (d.stages || {}).USER_PROFILE || {};
+    var dims = up.profileDimensions || [];
+    var groups = (up.groups || []).slice(0, 5);
+    var dimColors = ['#6366f1', '#06b6d4', '#f59e0b', '#10b981', '#8b5cf6'];
+
+    var h = '<section id="section-profile" class="dr-section"><div class="dr-section__header">' +
+      '<div class="dr-section__num">03</div><div class="dr-section__title-group"><h2 class="dr-section__title">用户画像</h2>' +
+      '<p class="dr-section__subtitle">搜索意图与场景分析</p></div></div>';
+
+    h += '<div class="stage-user-profile"><div class="stage-up__radar-section"><div class="stage-up__section-title">画像维度</div>' +
+      '<div class="stage-up__radar-row">';
+
+    // SVG Radar chart for profile dimensions
+    if (dims.length >= 3) {
+      var profLabels = dims.map(function(dim) { return dim.label || ''; });
+      var profValues = dims.map(function(dim) { return dim.value || 0; });
+      var profColors = dims.map(function(dim, i) { return dimColors[i % dimColors.length]; });
+      h += '<div class="stage-up__radar-chart-wrap">' + renderRadarChart(profLabels, profValues, profColors, 220, 'rgb(13 148 136 / 15%)') + '</div>';
+    }
+
+    // Keep the dimension list as a supplementary view
+    h += '<div class="stage-up__dimension-list">';
+    dims.forEach(function(dim, i) {
+      var dc = dimColors[i % dimColors.length];
+      h += '<div class="stage-up__dim-item"><span class="stage-up__dim-label">' + esc(dim.label) + '</span>' +
+        '<div class="stage-up__dim-bar"><div class="stage-up__dim-fill" style="width:' + (dim.value || 0) + '%;background:' + dc + ';"></div></div>' +
+        '<span class="stage-up__dim-value">' + (dim.value || 0) + '</span></div>';
+    });
+    h += '</div></div></div>';
+
+    h += '<div class="stage-up__groups"><div class="stage-up__section-title">搜索场景分析</div><div class="stage-up__groups-grid">';
+    groups.forEach(function(g, idx) {
+      h += '<div class="stage-up__group-card"><div class="stage-up__group-highlight">' +
+        '<span class="stage-up__group-index">' + (idx + 1) + '</span><span>' + esc(g.highlight) + '</span></div>' +
+        '<div class="stage-up__group-profile"><strong>核心人群：</strong>' + esc(g.userProfile) + '</div>' +
+        '<div class="stage-up__group-scenario"><strong>搜索场景：</strong>' + esc(g.scenario) + '</div>';
+      if (g.questions && g.questions.length) {
+        h += '<div class="stage-up__questions-label">典型搜索问题</div><div class="stage-up__questions-tags">';
+        g.questions.forEach(function(q) {
+          h += '<span class="stage-up__question-tag">' + esc(q) + '</span>';
+        });
+        h += '</div>';
+      }
+      h += '</div>';
+    });
+    h += '</div></div></div></section>';
+    return h;
+  }
+
+  // ===== 04 AI Search =====
+  function renderAiSearch(d) {
+    var ais = (d.stages || {}).AI_SEARCH || {};
+    var totalQ = ais.totalQuestions || 0;
+    var pr = ais.platformResults || {};
+    var qd = (ais.questionDetails || []).slice(0, 5);
+    var overallMentioned = 0;
+    Object.keys(pr).forEach(function(k) { overallMentioned += (pr[k].mentioned || 0); });
+    var overallRate = totalQ > 0 ? overallMentioned / (totalQ * Object.keys(pr).length) : 0;
+
+    var h = '<section id="section-search" class="dr-section"><div class="dr-section__header">' +
+      '<div class="dr-section__num">04</div><div class="dr-section__title-group"><h2 class="dr-section__title">搜索可见性</h2>' +
+      '<p class="dr-section__subtitle">各平台品牌提及情况</p></div></div>';
+
+    h += '<div class="stage-ais__stats">' +
+      '<div class="stage-ais__stat-card stage-ais__stat-card--primary"><div class="stage-ais__stat-value">' + totalQ + '</div><div class="stage-ais__stat-label">总查询</div></div>' +
+      '<div class="stage-ais__stat-card"><div class="stage-ais__stat-value">' + overallMentioned + '</div><div class="stage-ais__stat-label">提及次数</div></div>' +
+      '<div class="stage-ais__stat-card"><div class="stage-ais__stat-value" style="color:' + getMentionColor(overallRate) + ';">' + fmtRate(overallRate) + '%</div><div class="stage-ais__stat-label">提及率</div></div></div>';
+
+    // Platform grid
+    var platformNames = { '1': 'DeepSeek', '2': '豆包', '3': '元宝', '4': '通义千问', '5': '文心一言', '6': '纳米搜索', '7': 'Kimi', '8': '智谱清言' };
+    h += '<div class="stage-ais__section"><div class="stage-ais__section-title">各平台提及情况</div><div class="stage-ais__platform-grid">';
+    Object.keys(pr).forEach(function(code) {
+      var p = pr[code];
+      var mentioned = (p.mentionRate || 0) >= 0.5;
+      h += '<div class="stage-ais__platform-card' + (mentioned ? ' stage-ais__platform-card--mentioned' : '') + '">' +
+        '<div class="stage-ais__platform-header"><span class="stage-ais__platform-name">' + esc(platformNames[code] || ('平台' + code)) + '</span>' +
+        '<span class="stage-ais__platform-tag">' + fmtRate(p.mentionRate || 0) + '%</span></div>' +
+        '<div class="stage-ais__platform-metrics"><span>查询 <strong>' + (p.totalQueries || 0) + '</strong></span>' +
+        '<span>提及 <strong>' + (p.mentioned || 0) + '</strong></span></div></div>';
+    });
+    h += '</div></div>';
+
+    // Question table
+    if (qd.length) {
+      h += '<div class="stage-ais__section"><div class="stage-ais__section-title">问题提及明细 <span class="stage-ais__section-count">共' + qd.length + '条</span></div>' +
+        '<div class="stage-ais__question-table"><div class="stage-ais__qtable-head">' +
+        '<div class="stage-ais__qtable-col--question">问题</div><div class="stage-ais__qtable-col--platforms">平台提及</div></div>';
+      qd.forEach(function(q) {
+        h += '<div class="stage-ais__qtable-row"><div class="stage-ais__qtable-col--question">' +
+          '<span class="stage-ais__q-text">' + esc(q.question) + '</span>' +
+          '<span class="stage-ais__q-highlight">' + esc(q.highlight || '') + '</span></div>' +
+          '<div class="stage-ais__qtable-col--platforms"><div class="stage-ais__q-mentions">';
+        var pm = q.platformMentions || {};
+        Object.keys(pm).forEach(function(code) {
+          var m = pm[code];
+          var yes = m.mentioned;
+          var short = (platformNames[code] || 'P' + code).charAt(0);
+          h += '<span class="stage-ais__q-mention-dot ' + (yes ? 'stage-ais__q-mention-dot--yes' : 'stage-ais__q-mention-dot--no') + '">' + short + '</span>';
+        });
+        h += '</div></div></div>';
+      });
+      h += '</div></div>';
+    }
+
+    h += '</section>';
+    return h;
+  }
+
+  // ===== 05 Infra Eval =====
+  function renderInfraEval(d) {
+    var infra = (d.stages || {}).INFRA_EVAL || {};
+    var site = infra.officialSite || {};
+    var self = infra.selfMedia || {};
+    var auth = infra.authoritativeMedia || {};
+
+    var h = '<section id="section-infra" class="dr-section"><div class="dr-section__header">' +
+      '<div class="dr-section__num">05</div><div class="dr-section__title-group"><h2 class="dr-section__title">基建评估</h2>' +
+      '<p class="dr-section__subtitle">数字基建现状评估</p></div></div><div class="stage-infra__grid">';
+
+    // Official site
+    var siteScore = site.score || 0;
+    var siteSc = getColor(siteScore);
+    h += '<div class="stage-infra__card stage-infra__card--site"><div class="stage-infra__card-header">' +
+      '<div class="stage-infra__card-icon stage-infra__card-icon--site">&#127760;</div>' +
+      '<div class="stage-infra__card-title">官网评估</div></div><div class="stage-infra__card-body">';
+    if (site.url) {
+      h += '<div class="stage-infra__field"><span class="stage-infra__label">网址</span><a class="stage-infra__link" href="' + esc(site.url) + '">' + esc(site.url) + '</a></div>';
+    }
+    h += '<div class="stage-infra__field"><span class="stage-infra__label">评分</span><div class="stage-infra__score-bar">' +
+      '<div class="stage-infra__score-track"><div class="stage-infra__score-fill" style="width:' + siteScore + '%;background:' + siteSc + ';"></div></div>' +
+      '<span class="stage-infra__score-num" style="color:' + siteSc + ';">' + siteScore + '</span></div></div>';
+    if (site.summary) h += '<div class="stage-infra__summary">' + esc(site.summary) + '</div>';
+    h += '</div></div>';
+
+    // Self media
+    h += '<div class="stage-infra__card"><div class="stage-infra__card-header">' +
+      '<div class="stage-infra__card-icon stage-infra__card-icon--media">&#128241;</div>' +
+      '<div class="stage-infra__card-title">自媒体矩阵</div><span class="stage-infra__tag">' + (self.totalCount || 0) + '条</span></div>' +
+      '<div class="stage-infra__card-body"><div class="stage-infra__tags">';
+    var pb = self.platformBreakdown || {};
+    Object.keys(pb).forEach(function(p) {
+      h += '<span class="stage-infra__tag" style="padding:2px 8px;font-size:11px;background:var(--dr-sky-light);color:var(--dr-sky);border:1px solid #bae6fd;border-radius:var(--dr-radius-sm);">' + esc(p) + ' ' + pb[p] + '</span>';
+    });
+    h += '</div></div></div>';
+
+    // Authoritative media
+    h += '<div class="stage-infra__card"><div class="stage-infra__card-header">' +
+      '<div class="stage-infra__card-icon stage-infra__card-icon--auth">&#128240;</div>' +
+      '<div class="stage-infra__card-title">权威媒体背书</div><span class="stage-infra__tag">' + (auth.totalCount || 0) + '条</span></div>' +
+      '<div class="stage-infra__card-body"><div class="stage-infra__tags">';
+    var ab = auth.platformBreakdown || {};
+    Object.keys(ab).forEach(function(p) {
+      h += '<span class="stage-infra__tag" style="padding:2px 8px;font-size:11px;background:var(--dr-purple-light);color:var(--dr-purple);border:1px solid #ddd6fe;border-radius:var(--dr-radius-sm);">' + esc(p) + ' ' + ab[p] + '</span>';
+    });
+    h += '</div></div></div></div></section>';
+    return h;
+  }
+
+  // ===== 06 Competitor =====
+  function renderCompetitor(d) {
+    var comp = (d.stages || {}).COMPETITOR || {};
+    var competitors = (comp.competitors || []).slice(0, 5);
+    var position = comp.marketPosition || '';
+    var brandName = d.brand || '本品牌';
+    var brandScore = (d.stages || {}).AIVO_SCORE ? ((d.stages || {}).AIVO_SCORE).totalScore || 0 : 0;
+
+    var h = '<section id="section-competitor" class="dr-section"><div class="dr-section__header">' +
+      '<div class="dr-section__num">06</div><div class="dr-section__title-group"><h2 class="dr-section__title">竞品分析</h2>' +
+      '<p class="dr-section__subtitle">竞品可见度对比与威胁评估</p></div></div>';
+
+    if (competitors.length) {
+      // Horizontal bar chart for competitor visibility
+      var barItems = [];
+      competitors.forEach(function(c) {
+        barItems.push({ name: c.name || '', value: c.geoScore || 0, color: '#94a3b8' });
+      });
+      barItems.unshift({ name: brandName, value: brandScore, color: 'var(--dr-primary)' });
+
+      h += '<div class="stage-comp__chart-section"><div class="stage-comp__section-title">可见度对比</div>' +
+        renderHBarChart(barItems, 520, 28) + '</div>';
+
+      h += '<div class="stage-comp__section"><div class="stage-comp__section-title">竞品详情</div>' +
+        '<div class="stage-comp__compare-table"><div class="stage-comp__ctable-head">' +
+        '<div class="stage-comp__ctable-col--name">品牌</div><div class="stage-comp__ctable-col--dim">可见度</div>' +
+        '<div class="stage-comp__ctable-col--dim">市场份额</div><div class="stage-comp__ctable-col--dim">威胁等级</div>' +
+        '<div class="stage-comp__ctable-col--wide">产品特点</div></div>';
+      competitors.forEach(function(c, i) {
+        var ti = getThreatInfo(c.threatLevel);
+        var geoSc = getColor(c.geoScore || 0);
+        h += '<div class="stage-comp__ctable-row"><div class="stage-comp__ctable-col--name">' +
+          '<span class="stage-comp__ctable-rank">' + (i + 1) + '</span>' +
+          '<span class="stage-comp__ctable-name">' + esc(c.name) + '</span></div>' +
+          '<div class="stage-comp__ctable-col--dim"><span class="stage-comp__ctable-score" style="color:' + geoSc + ';">' + (c.geoScore || 0) + '</span></div>' +
+          '<div class="stage-comp__ctable-col--dim">' + (c.marketShare || 0) + '%</div>' +
+          '<div class="stage-comp__ctable-col--dim"><span class="stage-comp__ctable-tag" style="background:' + ti.bg + ';color:' + ti.color + ';padding:2px 8px;font-size:11px;border-radius:4px;">' + ti.label + '</span></div>' +
+          '<div class="stage-comp__ctable-col--wide"><div class="stage-comp__ctable-features">';
+        (c.productFeatures || []).forEach(function(f) {
+          h += '<span class="stage-comp__ctable-chip stage-comp__ctable-chip--blue">' + esc(f) + '</span>';
+        });
+        h += '</div></div></div>';
+      });
+      h += '</div></div>';
+
+      // Advantage Logic section
+      h += '<div class="stage-comp__advantage"><div class="stage-comp__advantage-title">优势逻辑</div>' +
+        '<div class="stage-comp__advantage-grid">';
+
+      // Brand card
+      var brandStrengths = comp.brandStrengths || [];
+      var brandWeaknesses = comp.brandWeaknesses || [];
+      if (!brandStrengths.length && !brandWeaknesses.length) {
+        // Auto-generate from AIVO dimensions
+        var dims = ((d.stages || {}).AIVO_SCORE || {}).dimensions || [];
+        dims.forEach(function(dim) {
+          var s = dim.score || 0;
+          if (s >= 70) brandStrengths.push(dim.name + '表现优秀（' + s + '分）');
+          else if (s < 50) brandWeaknesses.push(dim.name + '有待提升（' + s + '分）');
+        });
+      }
+      h += '<div class="stage-comp__advantage-card stage-comp__advantage-card--brand">' +
+        '<div class="stage-comp__advantage-header">' +
+        '<span class="stage-comp__advantage-badge stage-comp__advantage-badge--brand">本品牌</span>' +
+        '<span class="stage-comp__advantage-name">' + esc(brandName) + '</span>' +
+        '<span class="stage-comp__advantage-score" style="color:' + getColor(brandScore) + ';">' + brandScore + '</span></div>' +
+        '<div class="stage-comp__advantage-list">';
+      brandStrengths.forEach(function(s) {
+        h += '<div class="stage-comp__advantage-item stage-comp__advantage-item--strength">' +
+          '<span class="stage-comp__advantage-icon">&#9650;</span><span>' + esc(s) + '</span></div>';
+      });
+      brandWeaknesses.forEach(function(w) {
+        h += '<div class="stage-comp__advantage-item stage-comp__advantage-item--weakness">' +
+          '<span class="stage-comp__advantage-icon">&#9660;</span><span>' + esc(w) + '</span></div>';
+      });
+      h += '</div></div>';
+
+      // Competitor cards
+      competitors.slice(0, 3).forEach(function(c) {
+        var diff = brandScore - (c.geoScore || 0);
+        var diffText = diff > 0 ? '领先 ' + diff + ' 分' : (diff < 0 ? '落后 ' + Math.abs(diff) + ' 分' : '持平');
+        var diffColor = diff >= 0 ? 'var(--dr-success)' : 'var(--dr-danger)';
+        h += '<div class="stage-comp__advantage-card stage-comp__advantage-card--competitor">' +
+          '<div class="stage-comp__advantage-header">' +
+          '<span class="stage-comp__advantage-badge stage-comp__advantage-badge--competitor">竞品</span>' +
+          '<span class="stage-comp__advantage-name">' + esc(c.name) + '</span>' +
+          '<span class="stage-comp__advantage-score" style="color:' + getColor(c.geoScore || 0) + ';">' + (c.geoScore || 0) + '</span></div>' +
+          '<div class="stage-comp__advantage-list">';
+        (c.productFeatures || []).forEach(function(f) {
+          h += '<div class="stage-comp__advantage-item stage-comp__advantage-item--strength">' +
+            '<span class="stage-comp__advantage-icon">&#9650;</span><span>' + esc(f) + '</span></div>';
+        });
+        (c.weaknesses || []).forEach(function(w) {
+          h += '<div class="stage-comp__advantage-item stage-comp__advantage-item--weakness">' +
+            '<span class="stage-comp__advantage-icon">&#9660;</span><span>' + esc(w) + '</span></div>';
+        });
+        h += '</div>' +
+          '<div class="stage-comp__advantage-vs">' +
+          '<span>vs ' + esc(brandName) + '</span>' +
+          '<span class="stage-comp__advantage-vs-arrow" style="color:' + diffColor + ';">' + diffText + '</span></div></div>';
+      });
+
+      h += '</div></div>';
+    }
+
+    if (position) {
+      h += '<div class="stage-comp__position" style="margin-top:24px;"><div class="stage-comp__section-title">市场定位</div>' +
+        '<p class="stage-comp__position-text">' + esc(position) + '</p></div>';
+    }
+
+    h += '</section>';
+    return h;
+  }
+
+  // ===== 07 GEO Effect =====
+  function renderGeoEffect(d) {
+    var geo = (d.stages || {}).GEO_EFFECT || {};
+    var ov = geo.overview || {};
+    var breakdown = (geo.platformBreakdown || []).slice(0, 8);
+
+    var h = '<section id="section-geo" class="dr-section"><div class="dr-section__header">' +
+      '<div class="dr-section__num">07</div><div class="dr-section__title-group"><h2 class="dr-section__title">收录效果</h2>' +
+      '<p class="dr-section__subtitle">收录与提及率统计</p></div></div>';
+
+    h += '<div class="stage-geo__stats">' +
+      '<div class="stage-geo__stat-card stage-geo__stat-card--highlight"><div class="stage-geo__stat-value">' + (ov.scenarioCount || 0) + '</div><div class="stage-geo__stat-label">搜索场景</div></div>' +
+      '<div class="stage-geo__stat-card"><div class="stage-geo__stat-value">' + (ov.questionCount || 0) + '</div><div class="stage-geo__stat-label">测试问题</div></div>' +
+      '<div class="stage-geo__stat-card"><div class="stage-geo__stat-value">' + (ov.mentionedCount || 0) + '</div><div class="stage-geo__stat-label">品牌提及</div></div>' +
+      '<div class="stage-geo__stat-card"><div class="stage-geo__stat-value" style="color:' + getMentionColor(ov.mentionRate || 0) + ';">' + fmtRate(ov.mentionRate || 0) + '%</div><div class="stage-geo__stat-label">提及率</div></div></div>';
+
+    if (breakdown.length) {
+      h += '<div class="stage-geo__section"><div class="stage-geo__section-title">各平台提及分布</div><div class="stage-geo__chart-row"><div class="stage-geo__breakdown-list">';
+      breakdown.forEach(function(b) {
+        var rate = b.rate || 0;
+        h += '<div class="stage-geo__breakdown-item"><span class="stage-geo__breakdown-name">' + esc(b.platformName) + '</span>' +
+          '<div class="stage-geo__breakdown-bar"><div class="stage-geo__breakdown-fill" style="width:' + (rate * 100) + '%;"></div></div>' +
+          '<span class="stage-geo__breakdown-rate">' + fmtRate(rate) + '%</span></div>';
+      });
+      h += '</div></div></div>';
+    }
+
+    h += '</section>';
+    return h;
+  }
+
+  // ===== 08 Sentiment =====
+  function renderSentiment(d) {
+    var sen = (d.stages || {}).SENTIMENT || {};
+    var summary = sen.summary || {};
+    var riskLevel = summary.riskLevel || sen.riskLevel || '低风险';
+    var trend = summary.trendDirection || sen.trendDirection || 'stable';
+    var dist = sen.sentimentDistribution || {};
+    var drivers = sen.keyDrivers || {};
+    var issues = (sen.issues || []).slice(0, 5);
+    var suggestions = (sen.suggestions || []).slice(0, 5);
+    var negRate = summary.overallNegativeRate || 0;
+
+    var trendMap = { 'up': { cls: 'up', emoji: '&#128200;' }, 'stable': { cls: 'stable', emoji: '&#10145;' }, 'down': { cls: 'down', emoji: '&#128201;' } };
+    var trendInfo = trendMap[trend] || trendMap['stable'];
+
+    var h = '<section id="section-sentiment" class="dr-section"><div class="dr-section__header">' +
+      '<div class="dr-section__num">08</div><div class="dr-section__title-group"><h2 class="dr-section__title">舆情分析</h2>' +
+      '<p class="dr-section__subtitle">口碑评价与风险预警</p></div></div>';
+
+    h += '<div class="stage-sentiment__top-row"><div class="stage-sentiment__indicators">' +
+      '<div class="stage-sentiment__indicator"><div class="stage-sentiment__indicator-icon stage-sentiment__indicator-icon--' + trendInfo.cls + '">' + trendInfo.emoji + '</div>' +
+      '<div class="stage-sentiment__indicator-content"><div class="stage-sentiment__indicator-label">风险等级</div><div class="stage-sentiment__indicator-value">' + esc(riskLevel) + '</div></div></div>' +
+      '<div class="stage-sentiment__indicator"><div class="stage-sentiment__indicator-icon stage-sentiment__indicator-icon--' + trendInfo.cls + '">' + trendInfo.emoji + '</div>' +
+      '<div class="stage-sentiment__indicator-content"><div class="stage-sentiment__indicator-label">舆情趋势</div><div class="stage-sentiment__indicator-value">' + esc(trend === 'up' ? '上升' : trend === 'down' ? '下降' : '平稳') + '</div></div></div></div>' +
+      '<div class="stage-sentiment__mini-chart">' + renderDonutChart(dist.positive || 0, dist.negative || 0, dist.neutral || 0, 120) + '</div></div>';
+
+    // Drivers
+    if (drivers.positive || drivers.negative) {
+      h += '<div class="stage-sentiment__drivers">';
+      if (drivers.positive && drivers.positive.length) {
+        h += '<div class="stage-sentiment__driver-group"><span class="stage-sentiment__driver-title stage-sentiment__driver-title--positive">&#10022; 正面口碑</span><div class="stage-sentiment__driver-tags">';
+        drivers.positive.forEach(function(k) { h += '<span class="stage-sentiment__driver-tag stage-sentiment__driver-tag--positive">' + esc(k) + '</span>'; });
+        h += '</div></div>';
+      }
+      if (drivers.negative && drivers.negative.length) {
+        h += '<div class="stage-sentiment__driver-group"><span class="stage-sentiment__driver-title stage-sentiment__driver-title--negative">&#10022; 负面口碑</span><div class="stage-sentiment__driver-tags">';
+        drivers.negative.forEach(function(k) { h += '<span class="stage-sentiment__driver-tag stage-sentiment__driver-tag--negative">' + esc(k) + '</span>'; });
+        h += '</div></div>';
+      }
+      h += '</div>';
+    }
+
+    // Issues
+    if (issues.length) {
+      h += '<div class="stage-sentiment__section"><div class="stage-sentiment__section-title">舆情问题 <span class="stage-sentiment__section-count">共' + issues.length + '条</span></div>' +
+        '<div class="stage-sentiment__issue-list">';
+      issues.forEach(function(issue) {
+        var isNeg = issue.sentiment === '负面';
+        h += '<div class="stage-sentiment__issue-row">' +
+          '<span class="stage-sentiment__issue-tag" style="background:' + (isNeg ? '#fef2f2' : '#f0fdf4') + ';color:' + (isNeg ? '#dc2626' : '#059669') + ';">' + esc(issue.sentiment || '中性') + '</span>' +
+          '<span class="stage-sentiment__issue-text">' + esc(issue.content) + '</span>' +
+          '<span class="stage-sentiment__issue-source">' + esc(issue.source || '') + '</span></div>';
+      });
+      h += '</div></div>';
+    }
+
+    // Suggestions
+    if (suggestions.length) {
+      h += '<div class="stage-sentiment__section"><div class="stage-sentiment__section-title">应对建议</div><ol class="stage-sentiment__suggestion-list">';
+      suggestions.forEach(function(s) { h += '<li class="stage-sentiment__suggestion-item">' + esc(s) + '</li>'; });
+      h += '</ol></div>';
+    }
+
+    h += '</section>';
+    return h;
+  }
+
+  // ===== 09 Suggestion =====
+  function renderSuggestion(d) {
+    var sug = (d.stages || {}).SUGGESTION || {};
+    var proj = sug.scoreProjection || {};
+    var quickWins = (sug.quickWins || []).slice(0, 3);
+    var actions = (sug.priorityActions || sug.suggestions || []).slice(0, 5);
+    var roadmap = sug.roadmap || [];
+    var summary = sug.summary || '';
+    var dimSummary = sug.dimensionSummary || [];
+    var longTerm = sug.longTermSuggestions || [];
+
+    var h = '<section id="section-suggestion" class="dr-section"><div class="dr-section__header">' +
+      '<div class="dr-section__num">09</div><div class="dr-section__title-group"><h2 class="dr-section__title">综合建议</h2>' +
+      '<p class="dr-section__subtitle">优化建议与行动路线</p></div></div>';
+
+    // Score projection
+    var curScore = proj.currentScore || 0;
+    var projScore = proj.projectedScore || 0;
+    var delta = projScore - curScore;
+    var curSc = getColor(curScore);
+
+    h += '<div class="sg-section sg-projection"><div class="sg-projection__header">' +
+      '<div class="sg-projection__title-group"><div class="sg-section__icon-wrap sg-section__icon-wrap--projection">&#128200;</div><div>' +
+      '<div class="sg-section__title">AIVO分数预测</div><div class="sg-section__subtitle">执行优化建议后的预期提升</div></div></div>' +
+      '<div class="sg-projection__score-compare"><div class="sg-projection__score-item"><div class="sg-projection__score-label">当前</div>' +
+      '<div class="sg-projection__score-value" style="color:' + curSc + ';">' + curScore + '</div></div>' +
+      '<div class="sg-projection__arrow">&rarr;</div><div class="sg-projection__score-item"><div class="sg-projection__score-label">预测</div>' +
+      '<div class="sg-projection__score-value" style="color:var(--dr-success);">' + projScore + '</div></div>' +
+      '<div class="sg-projection__delta" style="color:var(--dr-success);">(+' + delta + ')</div></div></div>';
+
+    if (dimSummary.length) {
+      h += '<div class="sg-projection__dims">';
+      var dimColorMap = { 'visibility': '#6366f1', 'content': '#06b6d4', 'authority': 'var(--dr-success)', 'engagement': '#f59e0b' };
+      var dimLabelMap = { 'visibility': '搜索可见度', 'content': '内容适配度', 'authority': '权威性', 'engagement': '用户参与度' };
+      dimSummary.forEach(function(ds) {
+        var dc = dimColorMap[ds.dimension] || '#6366f1';
+        var dl = dimLabelMap[ds.dimension] || ds.dimension;
+        var cur = ds.currentScore || 0;
+        var pro = ds.projectedScore || 0;
+        h += '<div class="sg-projection__dim-bar"><span class="sg-projection__dim-label">' + esc(dl) + '</span>' +
+          '<div class="sg-projection__dim-track"><div class="sg-projection__dim-fill sg-projection__dim-fill--current" style="width:' + cur + '%;background:' + dc + ';opacity:0.3;"></div>' +
+          '<div class="sg-projection__dim-fill sg-projection__dim-fill--projected" style="width:' + pro + '%;background:' + dc + ';"></div></div>' +
+          '<div class="sg-projection__dim-nums"><span style="color:' + dc + ';">' + cur + '</span>' +
+          '<span class="sg-projection__dim-arrow">&rarr;</span><span style="color:var(--dr-success);">' + pro + '</span></div></div>';
+      });
+      h += '</div>';
+    }
+    h += '</div>';
+
+    // Quick Wins
+    if (quickWins.length) {
+      h += '<div class="sg-section"><div class="sg-section__header"><div class="sg-section__icon-wrap sg-section__icon-wrap--quickwin">&#9889;</div><div>' +
+        '<div class="sg-section__title">快速赢利点</div><div class="sg-section__subtitle">低成本高收益的即时优化</div></div></div>' +
+        '<div class="sg-quickwins__grid">';
+      quickWins.forEach(function(qw) {
+        h += '<div class="sg-quickwins__card"><span class="sg-quickwins__card-badge">Quick Win</span>' +
+          '<div class="sg-quickwins__card-title">' + esc(qw.title) + '</div>' +
+          '<div class="sg-quickwins__card-desc">' + esc(qw.description) + '</div>' +
+          '<div class="sg-quickwins__card-meta"><span class="sg-quickwins__card-timeline">&#9201; ' + esc(qw.timeline || '') + '</span>' +
+          '<span class="sg-quickwins__card-impact">+' + (qw.expectedImprovement || 0) + '分</span></div>';
+        if (qw.nextSteps && qw.nextSteps.length) {
+          h += '<div class="sg-quickwins__card-steps">';
+          qw.nextSteps.forEach(function(s) { h += '<div class="sg-quickwins__step"><span class="sg-quickwins__step-icon">&#9656;</span><span>' + esc(s) + '</span></div>'; });
+          h += '</div>';
+        }
+        h += '</div>';
+      });
+      h += '</div></div>';
+    }
+
+    // Priority Actions
+    if (actions.length) {
+      h += '<div class="sg-section"><div class="sg-section__header"><div class="sg-section__icon-wrap sg-section__icon-wrap--actions">&#127919;</div><div>' +
+        '<div class="sg-section__title">优先行动建议</div><div class="sg-section__subtitle">按优先级排序的优化行动</div></div></div>';
+
+      // Priority bar
+      var counts = { high: 0, medium: 0, low: 0 };
+      actions.forEach(function(a) { counts[a.priority] = (counts[a.priority] || 0) + 1; });
+      var total = actions.length || 1;
+      h += '<div class="sg-actions__priority-bar"><div class="sg-actions__priority-track">' +
+        '<div class="sg-actions__priority-seg sg-actions__priority-seg--urgent" style="width:' + ((counts.high || 0) / total * 100) + '%;"></div>' +
+        '<div class="sg-actions__priority-seg sg-actions__priority-seg--high" style="width:0%;"></div>' +
+        '<div class="sg-actions__priority-seg sg-actions__priority-seg--medium" style="width:' + ((counts.medium || 0) / total * 100) + '%;"></div>' +
+        '<div class="sg-actions__priority-seg sg-actions__priority-seg--low" style="width:' + ((counts.low || 0) / total * 100) + '%;"></div></div>' +
+        '<div class="sg-actions__priority-legend">' +
+        '<span class="sg-actions__legend-item"><span class="sg-actions__legend-dot sg-actions__legend-dot--urgent"></span>紧急</span>' +
+        '<span class="sg-actions__legend-item"><span class="sg-actions__legend-dot sg-actions__legend-dot--high"></span>高优</span>' +
+        '<span class="sg-actions__legend-item"><span class="sg-actions__legend-dot sg-actions__legend-dot--medium"></span>中等</span>' +
+        '<span class="sg-actions__legend-item"><span class="sg-actions__legend-dot sg-actions__legend-dot--low"></span>建议</span></div></div>';
+
+      h += '<div class="sg-actions__list">';
+      actions.forEach(function(a, idx) {
+        var pi = getPriorityInfo(a.priority);
+        var impactCls = a.impactLevel || 'medium';
+        var effortCls = a.effortLevel || 'moderate';
+        h += '<div class="sg-action-card sg-action-card--' + pi.cls + '">' +
+          '<div class="sg-action-card__header"><span class="sg-action-card__step">' + (idx + 1) + '</span>' +
+          '<div class="sg-action-card__meta"><span class="sg-action-card__priority-tag" style="background:' + pi.bg + ';color:' + pi.color + ';">' + pi.label + '</span></div>' +
+          '<span class="sg-action-card__title">' + esc(a.title) + '</span>' +
+          '<div class="sg-action-card__badges">' +
+          '<span class="sg-action-card__badge sg-action-card__badge--impact ' + impactCls + '">+' + (a.expectedImprovement || 0) + '分</span>' +
+          '<span class="sg-action-card__badge sg-action-card__badge--effort ' + effortCls + '">' + esc(a.effortLevel || '') + '</span></div></div>' +
+          '<div class="sg-action-card__detail"><div class="sg-action-card__desc">' + esc(a.description) + '</div>' +
+          '<div class="sg-action-card__timeline-tag">&#9201; ' + esc(a.timeline || '') + '</div></div></div>';
+      });
+      h += '</div></div>';
+    }
+
+    // Roadmap
+    if (roadmap.length) {
+      h += '<div class="sg-section"><div class="sg-section__header"><div class="sg-section__icon-wrap sg-section__icon-wrap--roadmap">&#128506;</div><div>' +
+        '<div class="sg-section__title">实施路线图</div><div class="sg-section__subtitle">分阶段优化路径</div></div></div>' +
+        '<div class="sg-roadmap__timeline">';
+      roadmap.forEach(function(phase, idx) {
+        if (idx > 0) h += '<div class="sg-roadmap__phase-connector"></div>';
+        h += '<div class="sg-roadmap__phase sg-roadmap__phase--' + idx + '"><div class="sg-roadmap__phase-header">' +
+          '<span class="sg-roadmap__phase-badge">' + (idx + 1) + '</span><div>' +
+          '<div class="sg-roadmap__phase-title">' + esc(phase.title) + '</div>' +
+          '<div class="sg-roadmap__phase-timeline">' + esc(phase.timeline || '') + '</div></div></div>' +
+          '<div class="sg-roadmap__phase-items">';
+        (phase.items || []).forEach(function(item) {
+          h += '<div class="sg-roadmap__item"><span class="sg-roadmap__item-dot"></span><span>' + esc(item) + '</span></div>';
+        });
+        h += '</div></div>';
+      });
+      h += '</div></div>';
+    }
+
+    // Summary
+    if (summary) {
+      h += '<div class="sg-section"><div class="sg-summary"><div class="sg-summary__icon-wrap">&#128172;</div><div>' +
+        '<div class="sg-summary__label">综合评语</div><div class="sg-summary__text">' + esc(summary) + '</div></div></div></div>';
+    }
+
+    h += '</section>';
+    return h;
+  }
+
+  // ===== Executive Summary =====
+  function renderSummary(d) {
+    var ov = (d.stages || {}).OVERVIEW || {};
+    var sug = (d.stages || {}).SUGGESTION || {};
+    var highlights = (ov.highlights || []).slice(0, 2);
+    var risks = (ov.risks || []).slice(0, 2);
+    var actions = (sug.quickWins || []).slice(0, 2);
+    if (!actions.length) actions = (sug.priorityActions || []).slice(0, 2);
+
+    var items = [];
+    highlights.forEach(function(h) { items.push({ type: 'positive', icon: '&#10003;', text: h }); });
+    risks.forEach(function(r) { items.push({ type: 'negative', icon: '&#9888;', text: r }); });
+    actions.forEach(function(a) { items.push({ type: 'action', icon: '&rarr;', text: a.title || a }); });
+
+    var h = '<div class="dr-summary"><h3 class="dr-summary__title">执行摘要</h3><div class="dr-summary__grid">';
+    items.forEach(function(item) {
+      h += '<div class="dr-summary__item dr-summary__item--' + item.type + '">' +
+        '<span class="dr-summary__icon">' + item.icon + '</span>' +
+        '<span class="dr-summary__text">' + esc(item.text) + '</span></div>';
+    });
+    h += '</div></div>';
+    return h;
+  }
+
+  // ===== Footer =====
+  function renderFooter(d) {
+    var date = new Date().toISOString().slice(0, 10);
+    return '<section class="dr-footer"><div class="dr-footer__divider"></div><div class="dr-footer__content">' +
+      '<div class="dr-footer__block"><div class="dr-footer__title">评估方法</div>' +
+      '<div class="dr-footer__text">基于AIVO四维评分模型（AI可见性 + 内容适配度 + 权威性 + 用户参与度），对品牌在AI搜索场景中的可见度进行量化评估。三轮流水线驱动，9章节完整诊断。</div></div>' +
+      '<div class="dr-footer__meta"><span>生成时间：' + date + '</span><span>评估引擎：GEO AIVO v3.0</span></div></div></section>';
+  }
+
+  // ===== Main =====
+  function init() {
+    var dataEl = document.getElementById('report-data');
+    if (!dataEl) return;
+    var raw = dataEl.textContent;
+    if (!raw || raw.trim() === '{}') {
+      document.querySelector('.dr-content').innerHTML = '<div style="text-align:center;padding:80px 20px;color:var(--dr-text-placeholder);"><div style="font-size:48px;margin-bottom:16px;">&#128202;</div><div style="font-size:18px;font-weight:600;color:var(--dr-text-secondary);">暂无诊断数据</div><div style="font-size:14px;margin-top:8px;">请确认报告数据已正确加载</div></div>';
+      return;
+    }
+    var d;
+    try { d = JSON.parse(raw); } catch(e) { console.error('Failed to parse report data', e); return; }
+
+    document.title = (d.brand || '') + ' · ' + (d.category || '') + ' GEO诊断报告';
+
+    var sections = [
+      ['hero-section', renderHero],
+      ['section-overview', renderOverview],
+      ['section-aivo', renderAivoScore],
+      ['section-profile', renderUserProfile],
+      ['section-search', renderAiSearch],
+      ['section-infra', renderInfraEval],
+      ['section-competitor', renderCompetitor],
+      ['section-geo', renderGeoEffect],
+      ['section-sentiment', renderSentiment],
+      ['section-suggestion', renderSuggestion],
+      ['executive-summary', renderSummary],
+      ['report-footer', renderFooter]
+    ];
+
+    sections.forEach(function(pair) {
+      var el = document.getElementById(pair[0]);
+      if (el) {
+        try { el.innerHTML = pair[1](d); } catch(e) { console.error('Render error for ' + pair[0], e); }
+      }
+    });
+
+    // ===== Build Side Navigation =====
+    var navSections = [
+      { id: 'section-overview', num: '01', label: '诊断概览' },
+      { id: 'section-aivo', num: '02', label: 'AIVO评分' },
+      { id: 'section-profile', num: '03', label: '用户画像' },
+      { id: 'section-search', num: '04', label: '搜索可见性' },
+      { id: 'section-infra', num: '05', label: '基建评估' },
+      { id: 'section-competitor', num: '06', label: '竞品分析' },
+      { id: 'section-geo', num: '07', label: '收录效果' },
+      { id: 'section-sentiment', num: '08', label: '舆情分析' },
+      { id: 'section-suggestion', num: '09', label: '综合建议' }
+    ];
+
+    var sideNav = document.getElementById('side-nav');
+    if (sideNav) {
+      var navHtml = '';
+      navSections.forEach(function(sec, idx) {
+        if (idx > 0) navHtml += '<div class="dr-side-nav__divider"></div>';
+        navHtml += '<a class="dr-side-nav__item" data-target="' + sec.id + '">' +
+          '<span class="dr-side-nav__num">' + sec.num + '</span>' +
+          '<span class="dr-side-nav__label">' + esc(sec.label) + '</span></a>';
+      });
+      sideNav.innerHTML = navHtml;
+
+      // Click to scroll
+      sideNav.addEventListener('click', function(e) {
+        var item = e.target.closest('.dr-side-nav__item');
+        if (!item) return;
+        var targetId = item.getAttribute('data-target');
+        var targetEl = document.getElementById(targetId);
+        if (targetEl) {
+          targetEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      });
+    }
+
+    // ===== IntersectionObserver for side nav highlighting & entrance animations =====
+    var navItems = sideNav ? sideNav.querySelectorAll('.dr-side-nav__item') : [];
+    var activeNavIdx = -1;
+
+    function setActiveNav(idx) {
+      if (idx === activeNavIdx) return;
+      activeNavIdx = idx;
+      navItems.forEach(function(ni, i) {
+        if (i === idx) {
+          ni.classList.add('dr-side-nav__item--active');
+        } else {
+          ni.classList.remove('dr-side-nav__item--active');
+        }
+      });
+    }
+
+    // Observe sections for nav highlighting
+    var navObserver = new IntersectionObserver(function(entries) {
+      entries.forEach(function(entry) {
+        if (entry.isIntersecting) {
+          var secId = entry.target.id;
+          var idx = navSections.findIndex(function(s) { return s.id === secId; });
+          if (idx >= 0) setActiveNav(idx);
+        }
+      });
+    }, { rootMargin: '-20% 0px -60% 0px', threshold: 0 });
+
+    navSections.forEach(function(sec) {
+      var el = document.getElementById(sec.id);
+      if (el) navObserver.observe(el);
+    });
+
+    // Set first nav item active by default
+    setActiveNav(0);
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
+})();
+</script>
+</body>
+</html>

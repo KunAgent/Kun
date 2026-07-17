@@ -1,0 +1,599 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>紫微斗数命盘 · 1987-10-16 未时</title>
+<style>
+  :root {
+    --bg: #0a0e2a;
+    --bg-deep: #050719;
+    --card: rgba(120, 100, 200, 0.08);
+    --card-active: rgba(180, 150, 255, 0.18);
+    --border: rgba(180, 150, 255, 0.25);
+    --silver: #c8c4ee;
+    --silver-bright: #e8e4ff;
+    --purple: #a890ff;
+    --purple-deep: #6a52c8;
+    --gold: #ffd66e;
+    --rose: #ff8eb8;
+    --cyan: #6ee0d6;
+    --green: #7ee090;
+    --dim: #6c6a96;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--silver);
+    font-family: "PingFang SC", "Hiragino Sans GB", "STKaiti", serif;
+    line-height: 1.7;
+    min-height: 100vh;
+    background-image:
+      radial-gradient(2px 2px at 20% 30%, #fff, transparent),
+      radial-gradient(2px 2px at 60% 70%, #fff8, transparent),
+      radial-gradient(1px 1px at 50% 50%, #fff6, transparent),
+      radial-gradient(1px 1px at 80% 10%, #fff8, transparent),
+      radial-gradient(2px 2px at 90% 60%, #fff5, transparent),
+      radial-gradient(1px 1px at 33% 80%, #fff8, transparent),
+      radial-gradient(circle at 30% 20%, rgba(168, 144, 255, 0.15), transparent 50%),
+      radial-gradient(circle at 70% 80%, rgba(110, 224, 214, 0.1), transparent 50%),
+      linear-gradient(180deg, #0a0e2a 0%, #050719 100%);
+    background-size: 250px 250px, 300px 300px, 200px 200px, 350px 350px, 280px 280px, 220px 220px, 100% 100%, 100% 100%, 100% 100%;
+  }
+  .container { max-width: 1240px; margin: 0 auto; padding: 48px 24px 80px; }
+  .header { text-align: center; margin-bottom: 28px; }
+  .header::before { content: "✦"; display: block; font-size: 32px; color: var(--purple); margin-bottom: 10px; }
+  .header h1 {
+    font-size: 30px;
+    color: var(--silver-bright);
+    letter-spacing: 8px;
+    font-weight: 300;
+    text-shadow: 0 0 20px rgba(168, 144, 255, 0.5);
+  }
+  .header .subtitle { color: var(--purple); letter-spacing: 4px; margin-top: 8px; font-size: 14px; }
+  .header .meta { color: var(--dim); font-size: 12px; margin-top: 12px; letter-spacing: 2px; }
+
+  /* 12-Palace Grid */
+  .palace-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    grid-template-rows: repeat(4, 1fr);
+    gap: 4px;
+    aspect-ratio: 1.05 / 1;
+    margin-bottom: 36px;
+  }
+  .palace {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 8px 6px;
+    font-size: 10.5px;
+    position: relative;
+    overflow: hidden;
+    transition: all 0.3s;
+  }
+  .palace:hover { background: var(--card-active); border-color: var(--purple); }
+  .palace.life {
+    border: 1.5px solid var(--gold);
+    background: rgba(255, 214, 110, 0.1);
+    box-shadow: inset 0 0 10px rgba(255, 214, 110, 0.05);
+  }
+  .palace.life .pname::after {
+    content: "命宫";
+    display: inline-block;
+    background: var(--gold);
+    color: #050719;
+    font-size: 9px;
+    padding: 1px 6px;
+    border-radius: 6px;
+    letter-spacing: 1px;
+    margin-left: 8px;
+    vertical-align: middle;
+    font-weight: normal;
+  }
+  .palace.body-palace .pname::after {
+    content: "身宫";
+    display: inline-block;
+    background: var(--cyan);
+    color: #050719;
+    font-size: 9px;
+    padding: 1px 6px;
+    border-radius: 6px;
+    letter-spacing: 1px;
+    margin-left: 8px;
+    vertical-align: middle;
+    font-weight: normal;
+  }
+  .palace.daxian {
+    border: 1.5px dashed var(--rose);
+  }
+  .palace.daxian .pname::after {
+    content: "大限";
+    display: inline-block;
+    background: var(--rose);
+    color: #050719;
+    font-size: 9px;
+    padding: 1px 6px;
+    border-radius: 6px;
+    letter-spacing: 1px;
+    margin-left: 8px;
+    vertical-align: middle;
+    font-weight: normal;
+  }
+  .palace.liunian {
+    border: 1.5px solid var(--green);
+    box-shadow: 0 0 15px rgba(126, 224, 144, 0.15);
+  }
+  .palace.liunian .pname::after {
+    content: "2026 流年";
+    display: inline-block;
+    background: var(--green);
+    color: #050719;
+    font-size: 9px;
+    padding: 1px 6px;
+    border-radius: 6px;
+    letter-spacing: 1px;
+    margin-left: 8px;
+    vertical-align: middle;
+    font-weight: normal;
+  }
+  /* 若同时有大限+流年/命身等多标签，自动换行 */
+  .palace .pname {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px;
+    padding-right: 4px !important;
+  }
+
+  .palace .pname {
+    color: var(--silver-bright);
+    font-size: 11.5px;
+    margin-bottom: 4px;
+    letter-spacing: 1px;
+    border-bottom: 1px dashed var(--border);
+    padding-bottom: 3px;
+    padding-right: 36px;
+  }
+  .palace .star { display: block; margin: 1px 0; line-height: 1.4; }
+  .star.major { color: var(--silver-bright); font-size: 11.5px; font-weight: 500; }
+  .star.minor { color: var(--cyan); font-size: 10.5px; }
+  .star.minor::before { content: "·"; color: var(--dim); margin-right: 2px; }
+  .star.tiny { color: var(--dim); font-size: 9.5px; }
+  .star .hua {
+    display: inline-block;
+    font-size: 8px;
+    padding: 0 3px;
+    border-radius: 3px;
+    margin-left: 2px;
+    vertical-align: middle;
+  }
+  .hua-lu { background: var(--gold); color: #050719; }
+  .hua-quan { background: var(--rose); color: #050719; }
+  .hua-ke { background: var(--cyan); color: #050719; }
+  .hua-ji { background: #888; color: #050719; }
+
+  .palace .footer-row {
+    position: absolute;
+    bottom: 4px;
+    left: 6px;
+    right: 6px;
+    display: flex;
+    justify-content: space-between;
+    font-size: 9.5px;
+  }
+  .palace .age { color: var(--dim); }
+  .palace .branch { color: var(--purple); letter-spacing: 1px; }
+
+  /* Center info */
+  .center {
+    grid-column: 2 / 4;
+    grid-row: 2 / 4;
+    background: linear-gradient(135deg, rgba(168, 144, 255, 0.1), rgba(110, 224, 214, 0.05));
+    border: 1px solid var(--purple);
+    border-radius: 8px;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    text-align: center;
+  }
+  .center .title {
+    color: var(--silver-bright);
+    font-size: 18px;
+    letter-spacing: 4px;
+    margin-bottom: 12px;
+    text-shadow: 0 0 10px var(--purple);
+  }
+  .center .info-line {
+    color: var(--silver);
+    font-size: 12px;
+    margin: 3px 0;
+    letter-spacing: 1px;
+  }
+  .center .info-line span { color: var(--gold); }
+  .center .hua-row {
+    margin-top: 14px;
+    padding-top: 12px;
+    border-top: 1px dashed var(--border);
+    font-size: 11px;
+  }
+  .center .hua-row b { color: var(--silver-bright); margin: 0 4px; }
+
+  /* Sections */
+  .section { margin-bottom: 28px; }
+  .section-title {
+    font-size: 18px;
+    color: var(--silver-bright);
+    letter-spacing: 4px;
+    margin-bottom: 18px;
+    padding-left: 14px;
+    border-left: 2px solid var(--purple);
+  }
+  .section-title small { font-size: 12px; color: var(--dim); margin-left: 12px; letter-spacing: 1px; }
+
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 20px 24px;
+    margin-bottom: 14px;
+    backdrop-filter: blur(6px);
+  }
+  .card h3 { color: var(--purple); font-weight: 500; margin-bottom: 10px; letter-spacing: 1px; }
+  .card p { color: var(--silver); margin-bottom: 6px; font-size: 14px; }
+  .card .quote { color: var(--gold); border-left: 2px solid var(--gold); padding-left: 12px; margin: 10px 0; font-style: normal; }
+
+  /* Three-square table */
+  .triple {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+  }
+  .triple-cell {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 12px 10px;
+    text-align: center;
+  }
+  .triple-cell .tag {
+    color: var(--gold);
+    font-size: 10px;
+    letter-spacing: 2px;
+    margin-bottom: 4px;
+  }
+  .triple-cell .pname { color: var(--silver-bright); font-size: 13px; margin-bottom: 4px; }
+  .triple-cell .stars { color: var(--silver); font-size: 12px; }
+  .triple-cell .stars .none { color: var(--dim); font-size: 11px; }
+
+  /* Daxian timeline */
+  .dx-grid {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 6px;
+  }
+  .dx-cell {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px 6px;
+    text-align: center;
+    font-size: 11px;
+    transition: all 0.3s;
+  }
+  .dx-cell:hover { border-color: var(--purple); background: var(--card-active); }
+  .dx-cell.current { border-color: var(--rose); background: rgba(255, 142, 184, 0.12); }
+  .dx-cell .age-range {
+    color: var(--gold);
+    font-size: 11px;
+    letter-spacing: 1px;
+    margin-bottom: 4px;
+  }
+  .dx-cell.current .age-range { color: var(--rose); }
+  .dx-cell .dx-pname { color: var(--silver-bright); font-size: 12px; margin-bottom: 3px; }
+  .dx-cell .dx-stars { color: var(--silver); font-size: 11px; line-height: 1.4; }
+  .dx-cell .dx-stars .none { color: var(--dim); }
+
+  /* 4 Hua row */
+  .hua-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+  }
+  .hua-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px;
+    text-align: center;
+  }
+  .hua-card .hua-name { font-size: 22px; margin-bottom: 6px; font-weight: 500; }
+  .hua-card.lu .hua-name { color: var(--gold); }
+  .hua-card.quan .hua-name { color: var(--rose); }
+  .hua-card.ke .hua-name { color: var(--cyan); }
+  .hua-card.ji .hua-name { color: #b8b4c8; }
+  .hua-card .hua-target { color: var(--silver-bright); font-size: 14px; margin-bottom: 6px; }
+  .hua-card .hua-where { color: var(--dim); font-size: 11px; }
+
+  .disclaimer {
+    margin-top: 50px;
+    padding: 16px 22px;
+    background: rgba(168, 144, 255, 0.05);
+    border: 1px dashed var(--purple);
+    border-radius: 6px;
+    font-size: 12px;
+    color: var(--dim);
+  }
+
+  @media (max-width: 720px) {
+    .palace-grid { font-size: 9px; }
+    .palace { padding: 4px 3px; }
+    .star.major { font-size: 10px; }
+    .star.minor { font-size: 9px; }
+    .center .title { font-size: 14px; letter-spacing: 2px; }
+    .header h1 { font-size: 22px; letter-spacing: 4px; }
+    .triple, .hua-grid { grid-template-columns: repeat(2, 1fr); }
+    .dx-grid { grid-template-columns: repeat(3, 1fr); }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <div class="header">
+    <h1>紫 微 斗 数</h1>
+    <div class="subtitle">CHINESE ASTROLOGY · ZIWEI DOUSHU</div>
+    <div class="meta">阳历 1987-10-16 14:00 · 女命 · 农历丁卯年八月廿四未时</div>
+  </div>
+
+  <!-- 12-Palace Layout -->
+  <div class="palace-grid">
+
+    <!-- Row 1: 巳午未申 -->
+    <div class="palace daxian">
+      <div class="pname">田宅宫</div>
+      <span class="star tiny">无主星</span>
+      <span class="star minor">铃星</span>
+      <span class="star minor">陀罗</span>
+      <span class="star minor">天马</span>
+      <span class="star tiny">天才·天厨·孤辰</span>
+      <span class="star tiny">蜚廉·破碎</span>
+      <div class="footer-row"><span class="age">34-43</span><span class="branch">乙巳</span></div>
+    </div>
+    <div class="palace liunian">
+      <div class="pname">官禄宫</div>
+      <span class="star major">天机<span class="hua hua-quan">权</span></span>
+      <span class="star minor">地劫</span>
+      <span class="star minor">禄存</span>
+      <span class="star tiny">天喜</span>
+      <div class="footer-row"><span class="age">44-53</span><span class="branch">丙午</span></div>
+    </div>
+    <div class="palace">
+      <div class="pname">交友宫</div>
+      <span class="star major">紫微</span>
+      <span class="star major">破军</span>
+      <span class="star minor">擎羊</span>
+      <span class="star tiny">龙池·凤阁·天寿</span>
+      <span class="star tiny">华盖·天月·天伤</span>
+      <div class="footer-row"><span class="age">54-63</span><span class="branch">丁未</span></div>
+    </div>
+    <div class="palace">
+      <div class="pname">迁移宫</div>
+      <span class="star tiny">无主星</span>
+      <span class="star tiny">天姚·月德</span>
+      <div class="footer-row"><span class="age">64-73</span><span class="branch">戊申</span></div>
+    </div>
+
+    <!-- Row 2: 辰 [center] 酉 -->
+    <div class="palace body-palace">
+      <div class="pname">福德宫</div>
+      <span class="star major">太阳</span>
+      <span class="star minor">火星</span>
+      <span class="star minor">地空</span>
+      <span class="star tiny">八座·天空·天刑</span>
+      <div class="footer-row"><span class="age">24-33</span><span class="branch">甲辰</span></div>
+    </div>
+
+    <div class="center">
+      <div class="title">紫 微 在 未</div>
+      <div class="info-line">五行局：<span>金四局</span></div>
+      <div class="info-line">命宫干支：<span>壬寅</span></div>
+      <div class="info-line">身宫：<span>福德宫（甲辰）</span></div>
+      <div class="info-line">命主星：<span>天同 · 天梁</span></div>
+      <div class="info-line">2026 流年：<span>官禄宫 丙午</span></div>
+      <div class="info-line">小限位：<span>财帛宫 庚戌</span></div>
+      <div class="hua-row">
+        2026 四化：<b style="color: var(--gold)">天同·禄</b>·<b style="color: var(--rose)">天机·权</b>·<b style="color: var(--cyan)">文昌·科</b>·<b style="color: #b8b4c8">廉贞·忌</b>
+      </div>
+    </div>
+
+    <div class="palace">
+      <div class="pname">疾厄宫</div>
+      <span class="star major">天府</span>
+      <span class="star minor">天钺</span>
+      <span class="star tiny">天贵·封诰</span>
+      <span class="star tiny">天虚·天使</span>
+      <div class="footer-row"><span class="age">74-83</span><span class="branch">己酉</span></div>
+    </div>
+
+    <!-- Row 3: 卯 [center continues] 戌 -->
+    <div class="palace">
+      <div class="pname">父母宫</div>
+      <span class="star major">武曲</span>
+      <span class="star major">七杀</span>
+      <span class="star minor">右弼</span>
+      <span class="star minor">文昌<span class="hua hua-ke">科</span></span>
+      <span class="star tiny">空亡·天哭</span>
+      <div class="footer-row"><span class="age">14-23</span><span class="branch">癸卯</span></div>
+    </div>
+
+    <div class="palace">
+      <div class="pname">财帛宫 <span style="color: var(--rose); font-size: 9px;">小限</span></div>
+      <span class="star major">太阴</span>
+      <span class="star tiny">三台</span>
+      <div class="footer-row"><span class="age">84-93</span><span class="branch">庚戌</span></div>
+    </div>
+
+    <!-- Row 4: 寅丑子亥 -->
+    <div class="palace life">
+      <div class="pname">命　宫</div>
+      <span class="star major">天同<span class="hua hua-lu">禄</span></span>
+      <span class="star major">天梁</span>
+      <span class="star tiny">解神·天官·截路</span>
+      <div class="footer-row"><span class="age">4-13</span><span class="branch">壬寅</span></div>
+    </div>
+    <div class="palace">
+      <div class="pname">兄弟宫</div>
+      <span class="star major">天相</span>
+      <span class="star tiny">恩光·台辅·寡宿</span>
+      <div class="footer-row"><span class="age">114-123</span><span class="branch">癸丑</span></div>
+    </div>
+    <div class="palace">
+      <div class="pname">夫妻宫</div>
+      <span class="star major">巨门</span>
+      <span class="star tiny">红鸾·咸池</span>
+      <span class="star tiny">天德·阴煞</span>
+      <div class="footer-row"><span class="age">104-113</span><span class="branch">壬子</span></div>
+    </div>
+    <div class="palace">
+      <div class="pname">子女宫</div>
+      <span class="star major">廉贞<span class="hua hua-ji">忌</span></span>
+      <span class="star major">贪狼</span>
+      <span class="star minor">左辅</span>
+      <span class="star minor">文曲</span>
+      <span class="star minor">天魁</span>
+      <span class="star tiny">天巫·天福·旬空</span>
+      <div class="footer-row"><span class="age">94-103</span><span class="branch">辛亥</span></div>
+    </div>
+
+  </div>
+
+  <!-- 命宫三方四正 -->
+  <div class="section">
+    <div class="section-title">命宫三方四正 <small>LIFE PALACE TRIPLET</small></div>
+    <div class="triple">
+      <div class="triple-cell" style="border-color: var(--gold);">
+        <div class="tag">本　宫</div>
+        <div class="pname">命宫 · 壬寅</div>
+        <div class="stars">天同 · 天梁</div>
+      </div>
+      <div class="triple-cell">
+        <div class="tag">三方一</div>
+        <div class="pname">官禄 · 丙午</div>
+        <div class="stars">天机</div>
+      </div>
+      <div class="triple-cell">
+        <div class="tag">三方二</div>
+        <div class="pname">财帛 · 庚戌</div>
+        <div class="stars">太阴</div>
+      </div>
+      <div class="triple-cell">
+        <div class="tag">对　宫</div>
+        <div class="pname">迁移 · 戊申</div>
+        <div class="stars"><span class="none">无主星 · 借宫看</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2026 四化 -->
+  <div class="section">
+    <div class="section-title">2026 流年四化 <small>FOUR TRANSFORMATIONS · 丙干</small></div>
+    <div class="hua-grid">
+      <div class="hua-card lu">
+        <div class="hua-name">禄</div>
+        <div class="hua-target">天 同</div>
+        <div class="hua-where">入命宫 — 福禄入命</div>
+      </div>
+      <div class="hua-card quan">
+        <div class="hua-name">权</div>
+        <div class="hua-target">天 机</div>
+        <div class="hua-where">入官禄 — 权柄落事业</div>
+      </div>
+      <div class="hua-card ke">
+        <div class="hua-name">科</div>
+        <div class="hua-target">文 昌</div>
+        <div class="hua-where">入父母 — 文书名声</div>
+      </div>
+      <div class="hua-card ji">
+        <div class="hua-name">忌</div>
+        <div class="hua-target">廉 贞</div>
+        <div class="hua-where">入子女 — 子女/创作压力</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 大限 -->
+  <div class="section">
+    <div class="section-title">大限十二阶段 <small>DECADE FORTUNE · 4 起运</small></div>
+    <div class="dx-grid">
+      <div class="dx-cell"><div class="age-range">4-13</div><div class="dx-pname">命宫</div><div class="dx-stars">天同·天梁</div></div>
+      <div class="dx-cell"><div class="age-range">14-23</div><div class="dx-pname">父母</div><div class="dx-stars">武曲·七杀</div></div>
+      <div class="dx-cell"><div class="age-range">24-33</div><div class="dx-pname">福德</div><div class="dx-stars">太阳</div></div>
+      <div class="dx-cell current"><div class="age-range">34-43 当行</div><div class="dx-pname">田宅</div><div class="dx-stars"><span class="none">无主星</span><br/>铃陀马</div></div>
+      <div class="dx-cell"><div class="age-range">44-53</div><div class="dx-pname">官禄</div><div class="dx-stars">天机</div></div>
+      <div class="dx-cell"><div class="age-range">54-63</div><div class="dx-pname">交友</div><div class="dx-stars">紫微·破军</div></div>
+      <div class="dx-cell"><div class="age-range">64-73</div><div class="dx-pname">迁移</div><div class="dx-stars"><span class="none">无主星</span></div></div>
+      <div class="dx-cell"><div class="age-range">74-83</div><div class="dx-pname">疾厄</div><div class="dx-stars">天府</div></div>
+      <div class="dx-cell"><div class="age-range">84-93</div><div class="dx-pname">财帛</div><div class="dx-stars">太阴</div></div>
+      <div class="dx-cell"><div class="age-range">94-103</div><div class="dx-pname">子女</div><div class="dx-stars">廉贞·贪狼</div></div>
+      <div class="dx-cell"><div class="age-range">104-113</div><div class="dx-pname">夫妻</div><div class="dx-stars">巨门</div></div>
+      <div class="dx-cell"><div class="age-range">114-123</div><div class="dx-pname">兄弟</div><div class="dx-stars">天相</div></div>
+    </div>
+  </div>
+
+  <!-- 解读 -->
+  <div class="section">
+    <div class="section-title">命格解读 <small>READING</small></div>
+    <div class="card">
+      <h3>✦ 命宫坐天同·天梁（壬寅） — "机月同梁格"变体</h3>
+      <p>命宫主星<strong style="color: var(--silver-bright);">天同 + 天梁</strong>同坐——这是"机月同梁格"的核心组合之一。天同为福星，主温和、知足、人缘好；天梁为荫星，主庇荫、稳重、长辈缘。两星同宫——<strong style="color: var(--gold);">性情温润、处事不急、能在体制/专业领域获稳定发展</strong>。</p>
+      <p class="quote">天同主"小确幸"易满足；天梁主"老成持重"。优势是稳，劣势是"缺一把火"——容易在舒适区里消磨进取心。命宫坐寅，得寅木生火（天同火星），格局有亮点但需主动激发。</p>
+    </div>
+    <div class="card">
+      <h3>✦ 三方四正：天机+太阴拱命，对宫迁移空</h3>
+      <p>官禄宫天机——<strong style="color: var(--silver-bright);">动星管事业</strong>，工作内容多变、需要持续学习、适合策划/研究/产品/分析类职业；财帛宫太阴——<strong style="color: var(--silver-bright);">柔财、暗财</strong>，主细水长流型收入、不善强求横财，适合稳定型/积蓄型理财。</p>
+      <p>对宫迁移宫无主星——借宫论命，意味着外出、搬迁、跨界这件事本身没有强烈定数，<strong style="color: var(--gold);">动不动看自己</strong>，借力官禄天机有冲动的一面，但本宫无星亦显示外出"出名不易"。</p>
+    </div>
+    <div class="card">
+      <h3>✦ 身宫落福德 — 后天重在"内在状态"</h3>
+      <p>身宫落于福德宫（甲辰，太阳+火星+地空）——<strong style="color: var(--silver-bright);">命主一生最关键的修炼场是"内心质量"</strong>。太阳坐辰为光辉之体但临火星地空——情绪起伏明显、思虑深、易陷入"想太多"。这个组合提示：</p>
+      <p>· <strong>优势</strong>：眼界宽、有理想、慈悲心强<br/>
+      · <strong>挑战</strong>：内耗大、易精神疲倦、容易"为他人操心"<br/>
+      · <strong>修法</strong>：减少不必要的自我审判，把"想"转为"做"</p>
+    </div>
+    <div class="card">
+      <h3>✦ 当行大限：田宅宫（34-43，乙巳） — "无主星 + 铃陀马"</h3>
+      <p>当前正值田宅大限——<strong style="color: var(--rose);">这是一个"不稳定的稳定"阶段</strong>。无主星意味着这十年没有固定剧本，任何事都可能发生大变化；铃星+陀罗+天马同宫——<strong style="color: var(--silver-bright);">易动迁、易换居、易换资产配置</strong>。</p>
+      <p>关键提示：</p>
+      <p>· 这十年与"住所、不动产、家庭格局"相关的变动会比上半生更密集<br/>
+      · 天马星动——可能涉及搬家、装修、跨城置业，甚至移居<br/>
+      · 铃陀坐田宅——居住稳定性需要主动经营，否则容易被外因牵动<br/>
+      · 财帛太阴对照——这十年的财富变化与"家"高度绑定</p>
+    </div>
+    <div class="card">
+      <h3>✦ 2026 流年：官禄宫被引动，四化全部到位</h3>
+      <p>2026 年流年命宫飞到<strong style="color: var(--green);">官禄宫（丙午）</strong>——<strong style="color: var(--silver-bright);">这是一个"事业年"</strong>。同时丙年四化全部触发到关键位：</p>
+      <p>· <strong style="color: var(--gold);">天同化禄入本命命宫</strong>——福禄落入主位，是个全年最重要的福音信号<br/>
+      · <strong style="color: var(--rose);">天机化权入流年命宫</strong>——事业有"被赋权"的机会，决策权增加<br/>
+      · <strong style="color: var(--cyan);">文昌化科入父母宫</strong>——文书、名声、长辈资源加持<br/>
+      · <strong style="color: #b8b4c8;">廉贞化忌入子女宫</strong>——子女、合作伙伴、创作项目易有压力或纠葛</p>
+      <p class="quote">综合判断：2026 是"事业进阶 + 名声加持 + 内心自洽"的年份，但需要在"创作/合作/子女议题"上特别留心。</p>
+    </div>
+  </div>
+
+  <!-- 三句话总结 -->
+  <div class="card" style="background: rgba(168, 144, 255, 0.08); border-color: var(--purple);">
+    <h3>✦ 三句话总结</h3>
+    <p>① <strong style="color: var(--silver-bright);">您是"机月同梁"格 — 福禄之命</strong>。命宫天同天梁，主温润和缓，福气在"细水长流"里，非"风风火火"型。</p>
+    <p>② <strong style="color: var(--silver-bright);">当前是"田宅大限"+ "事业流年"的叠加期</strong>。家与事业两条线同时启动——34-43 的人生主题是"为家立基业"。</p>
+    <p>③ <strong style="color: var(--silver-bright);">2026 是少有的"四化全到位"的好年份</strong>——禄入命、权入业、科入贵——大胆向前推进事业，唯一要小心的是创作/合作/子女议题的廉贞忌。</p>
+  </div>
+
+  <div class="disclaimer">
+    ⚠️ 本回复由 AI 生成，命盘结论属传统命理研究与咨询辅助，仅供方向性参考，不构成医疗、法律、投资建议；命理是参考，不是定数。
+  </div>
+
+</div>
+</body>
+</html>

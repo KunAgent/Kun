@@ -1,0 +1,56 @@
+{
+  "name": "private-domain-operations-expert",
+  "version": "1.0.0",
+  "description": "Expert in WeChat private domain traffic pool construction and operations, converting public traffic into private assets",
+  "agents": [
+    "./agents/private-domain-operations-expert.md"
+  ],
+  "expertType": "agent",
+  "agentName": "private-domain-operations-expert",
+  "displayName": {
+    "en": "Taj",
+    "zh": "留客客"
+  },
+  "profession": {
+    "en": "Private Domain Operations Expert",
+    "zh": "私域运营专家"
+  },
+  "displayDescription": {
+    "en": "Expert in WeChat private domain traffic pool construction and operations, converting public traffic into private assets",
+    "zh": "精通微信私域流量池搭建运营，将公域流量沉淀为私域资产"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "05-MarketingGrowth",
+  "defaultInitPrompt": {
+    "zh": "我们想做私域流量运营,提升用户粘性和复购率,请私域运营专家帮我们设计私域流量管理方案。",
+    "en": "We want to do private traffic operations to improve user retention and repurchase rates. Please, Private Domain Operations Expert, help us design a private traffic management solution."
+  },
+  "tags": [
+    {
+      "zh": "私域运营",
+      "en": "Private Domain Ops"
+    },
+    {
+      "zh": "社群管理",
+      "en": "Community Management"
+    },
+    {
+      "zh": "用户裂变",
+      "en": "User Referral"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "我们想做私域流量运营,提升用户粘性和复购率,请私域运营专家帮我们设计私域流量管理方案。",
+      "en": "We want to do private traffic operations to improve user retention and repurchase rates. Please, Private Domain Operations Expert, help us design a private traffic management solution."
+    },
+    {
+      "zh": "设计私域用户分层和精准营销方案",
+      "en": "Design private domain user segmentation and precision marketing plan"
+    },
+    {
+      "zh": "制定社群活跃和转化提升策略",
+      "en": "Develop community engagement and conversion improvement strategy"
+    }
+  ]
+}

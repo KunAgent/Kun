@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="32px" height="32px" viewBox="0 0 32 32" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+    <!-- Generator: Sketch 52.6 (67491) - http://www.bohemiancoding.com/sketch -->
+    <title>腾讯微服务平台-32px</title>
+    <desc>Created with Sketch.</desc>
+    <g id="腾讯微服务平台-32px" stroke="none" stroke-width="1" fill="none" fill-rule="evenodd">
+        <rect id="Rectangle-Copy" fill="#0052D9" opacity="0" x="0" y="0" width="32" height="32"></rect>
+        <g id="Group" transform="translate(8.000000, 8.000000)" fill="#0052D9">
+            <circle id="Oval" cx="8" cy="1.5" r="1.5"></circle>
+            <circle id="Oval" cx="8" cy="14.5" r="1.5"></circle>
+            <path d="M7.29716205,12.100151 C6.60053266,12.303834 6.02985845,12.8026046 5.72960137,13.4520009 L8.8817842e-15,9.54545455 L8,5 L16,9.54545455 L10.2703986,13.4520009 C9.97014155,12.8026046 9.39946734,12.303834 8.70283795,12.100151 L12.223257,9.6998653 L8,7.30028744 L3.77674297,9.6998653 L7.29716205,12.100151 Z" id="Combined-Shape" fill-rule="nonzero"></path>
+            <path d="M7.0776493,3.82435034 L3.77674297,5.6998653 L8,8.57935874 L12.223257,5.6998653 L8.9223507,3.82435034 C9.58886419,3.55963794 10.1145504,3.01653778 10.355887,2.33857215 L16,5.54545455 L8,11 L5.32907052e-15,5.54545455 L5.64411302,2.33857215 C5.88544961,3.01653778 6.41113581,3.55963794 7.0776493,3.82435034 Z" id="Combined-Shape" fill-rule="nonzero"></path>
+        </g>
+        <path d="M26,30 L6,30 L2,26 L2,21 L2,6 L6,2 L30,2 L30,4 L7,4 L4,7 L4,21 L4,25 L7,28 L25,28 L28,25 L28,7 L30,7 L30,26 L26,30 Z" id="Combined-Shape" fill="#0052D9"></path>
+    </g>
+</svg>

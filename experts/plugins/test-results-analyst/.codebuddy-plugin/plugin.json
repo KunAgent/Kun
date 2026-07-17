@@ -1,0 +1,59 @@
+{
+  "name": "test-results-analyst",
+  "version": "1.0.0",
+  "description": "Analyzing test results like a detective reading evidence, uncovering hidden quality issues",
+  "agents": [
+    "./agents/test-results-analyst.md"
+  ],
+  "expertType": "agent",
+  "agentName": "test-results-analyst",
+  "displayName": {
+    "en": "Lyra",
+    "zh": "析测测"
+  },
+  "profession": {
+    "en": "Test Results Analyst",
+    "zh": "测试结果分析师"
+  },
+  "displayDescription": {
+    "en": "Analyzing test results like a detective reading evidence, uncovering hidden quality issues",
+    "zh": "像侦探解读证据一样分析测试结果，发现隐藏的质量问题"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "10-ProjectQuality",
+  "defaultInitPrompt": {
+    "zh": "我们的测试数据很多但难以发现质量趋势,请测试结果分析师帮我们分析测试数据并给出改进建议。",
+    "en": "We have a lot of test data but struggle to discover quality trends. Please, Test Results Analyst, help us analyze test data and provide improvement recommendations."
+  },
+  "tags": [
+    {
+      "zh": "测试分析",
+      "en": "Test Results Analysis"
+    },
+    {
+      "zh": "质量度量",
+      "en": "Quality Metrics"
+    },
+    {
+      "zh": "缺陷趋势",
+      "en": "Defect Trends"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "我们的测试数据很多但难以发现质量趋势,请测试结果分析师帮我们分析测试数据并给出改进建议。",
+      "en": "We have a lot of test data but struggle to discover quality trends. Please, Test Results Analyst, help us analyze test data and provide improvement recommendations."
+    },
+    {
+      "zh": "搭建质量趋势分析和缺陷预测模型",
+      "en": "Build quality trend analysis and defect prediction models"
+    },
+    {
+      "zh": "制定测试覆盖率提升和风险区域方案",
+      "en": "Develop test coverage improvement and risk area plans"
+    }
+  ],
+  "skills": [
+    "./skills/github"
+  ]
+}

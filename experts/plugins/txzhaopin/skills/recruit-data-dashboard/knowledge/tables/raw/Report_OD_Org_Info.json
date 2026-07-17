@@ -1,0 +1,513 @@
+{
+  "table_code" : "catalog_dos_da_mcp.hrdw.Report_OD_Org_Info",
+  "table_name" : "OD-组织机构信息",
+  "version" : 9,
+  "table_desc" : "该报表以组织视角，覆盖了全公司当前生效的实体组织和虚拟组织描述信息等。\n包含到期组织数据，但不包含已撤销组织数据。",
+  "write_sql_background" : "",
+  "find_column_background" : "",
+  "columns" : [ {
+    "column_code" : "org_full_name_en",
+    "column_name" : "组织机构全路径英文名",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "org_manager_unit_name_cn",
+    "column_name" : "组织管理主体",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "is_nhs_pilot_org",
+    "column_name" : "所属组织是否为试点体系",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "org_manage_unit_type_name",
+    "column_name" : "组织所属管理主体类型",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "as_of_date",
+    "column_name" : "当前统计日期",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "org_id",
+    "column_name" : "组织ID",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "org_name_cn",
+    "column_name" : "组织名称",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "org_name_en",
+    "column_name" : "组织英文名称",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "org_level_name_cn",
+    "column_name" : "组织架构层级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "org_type_name",
+    "column_name" : "组织类型",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "sublevel_name_cn",
+    "column_name" : "组织层级补充描述",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "subtype_name_cn",
+    "column_name" : "虚拟组织类别",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "responsibility",
+    "column_name" : "组织职责",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "begin_date",
+    "column_name" : "组织成立日期",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "create_duration",
+    "column_name" : "组织成立时长（年）",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "estimate_revoke_date",
+    "column_name" : "预计撤销日期",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "is_expire",
+    "column_name" : "是否到期",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "update_time",
+    "column_name" : "组织机构信息更新日期",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "cvp_staff_name_display",
+    "column_name" : "组织所属CVP",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "svp_staff_name_display",
+    "column_name" : "组织所属SVP",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "incharge_staff_name_display",
+    "column_name" : "组织负责人",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "incharge_manager_level_name_cn",
+    "column_name" : "管理职级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "incharge_career_level_name_cn",
+    "column_name" : "专业职级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "is_mainpost_in_org",
+    "column_name" : "主岗是否在该组织",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "non_normative_type_name",
+    "column_name" : "组织负责人不规范类型",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "bp_staff_name_list",
+    "column_name" : "组织BP",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "secretary_staff_name_display",
+    "column_name" : "组织秘书",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "org_full_name_cn",
+    "column_name" : "组织全路径",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "lv01_name_cn",
+    "column_name" : "一级组织",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "lv01_type_name_cn",
+    "column_name" : "一级组织架构层级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "lv01_staff_name_display",
+    "column_name" : "一级组织负责人",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "lv02_name_cn",
+    "column_name" : "二级组织",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "lv02_type_name_cn",
+    "column_name" : "二级组织架构层级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "lv02_staff_name_display",
+    "column_name" : "二级组织负责人",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "lv03_name_cn",
+    "column_name" : "三级组织",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "lv03_type_name_cn",
+    "column_name" : "三级组织架构层级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "lv03_staff_name_display",
+    "column_name" : "三级组织负责人",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "lv04_name_cn",
+    "column_name" : "四级组织",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "lv04_type_name_cn",
+    "column_name" : "四级组织架构层级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "lv04_staff_name_display",
+    "column_name" : "四级组织负责人",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "lv05_name_cn",
+    "column_name" : "五级组织",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "lv05_type_name_cn",
+    "column_name" : "五级组织架构层级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "lv05_staff_name_display",
+    "column_name" : "五级组织负责人",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "lv06_name_cn",
+    "column_name" : "六级组织",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "lv06_type_name_cn",
+    "column_name" : "六级组织架构层级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "lv06_staff_name_display",
+    "column_name" : "六级组织负责人",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "lv07_name_cn",
+    "column_name" : "七级组织",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "lv07_type_name_cn",
+    "column_name" : "七级组织架构层级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "lv07_staff_name_display",
+    "column_name" : "七级组织负责人",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "lv08_name_cn",
+    "column_name" : "八级组织",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "lv08_type_name_cn",
+    "column_name" : "八级组织架构层级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "lv08_staff_name_display",
+    "column_name" : "八级组织负责人",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "lv09_name_cn",
+    "column_name" : "九级组织",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "lv09_type_name_cn",
+    "column_name" : "九级组织架构层级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "lv09_staff_name_display",
+    "column_name" : "九级组织负责人",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "is_terminal_org",
+    "column_name" : "是否为末端组织",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "level",
+    "column_name" : "组织层级数",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "bg_name_cn",
+    "column_name" : "BG",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "line_name_cn",
+    "column_name" : "线",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "dept_name_cn",
+    "column_name" : "部门",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "center_name_cn",
+    "column_name" : "中心",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "team_name_cn",
+    "column_name" : "组",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "incharge_begin_date",
+    "column_name" : "担任组织负责人岗位日期",
+    "column_type" : "varchar",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  } ]
+}

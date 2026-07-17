@@ -1,0 +1,18 @@
+{
+  "name": "finance-data",
+  "version": "1.0.0",
+  "description": "金融数据检索插件，通过自然语言自动查找并调用 209 个金融数据 API 接口，涵盖股票、指数、期货、债券、基金、宏观经济等 15 大类数据。",
+  "author": {
+    "name": "CodeBuddy Teams"
+  },
+  "homepage": {
+    "url": "",
+    "type": "github"
+  },
+  "license": "",
+  "expertType": "agent",
+  "agentName": "finance-data-expert",
+  "agents": [
+    "./agents/finance-data-expert.md"
+  ]
+}

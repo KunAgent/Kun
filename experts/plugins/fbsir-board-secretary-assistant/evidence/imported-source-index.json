@@ -1,0 +1,402 @@
+{
+  "indexId": "workbuddy-listed-board-imported-source-index-20260621",
+  "schemaVersion": "workbuddy.listed_board_imported_source_index.v1",
+  "generatedAt": "2026-06-21T08:12:04.666Z",
+  "currentServiceRelease": "20260621-150653",
+  "sourceEvidenceRelease": "20260620-135113",
+  "productId": "workbuddy_board_secretary_assistant",
+  "displayNameZh": "董秘助手",
+  "scope": "listed_board_explicit_imported_source_index",
+  "status": "explicit_imported_source_index_ready_waiting_unfreeze",
+  "boundary": {
+    "productsCurrentlyListed": true,
+    "packageCodeFrozen": true,
+    "hostCodeFrozen": true,
+    "recordOnly": true,
+    "repoPackageSourceImported": false,
+    "explicitImportedSourceIndexOnly": true,
+    "notMarketplaceRuntimeTruth": true,
+    "notOfficialReplacementProof": true,
+    "notNaturalBusinessClosureProof": true
+  },
+  "currentTruth": {
+    "topPerformanceLeverageProduct": "workbuddy_board_secretary_assistant",
+    "nextHighestPerformanceGoal": "board_clean_credit_scale",
+    "boardImportReadiness": null,
+    "listedProductTruthAnchorStatus": "canonical_temp_candidate_selected_validation_contract_ready"
+  },
+  "repoTruthState": {
+    "repoPackagePath": "REPO_TARGET_PACKAGE_ROOT",
+    "repoPackageExists": false,
+    "creationAllowedNow": false,
+    "explicitImportedSourceIndexSatisfiesRecordOnlyOption": true,
+    "currentMode": "repo_package_truth_missing_but_explicit_imported_source_index_present"
+  },
+  "canonicalCandidate": {
+    "path": "TEMP_CANONICAL_CANDIDATE_ROOT",
+    "selectionReason": [
+      "Earliest deterministic temp snapshot among the four consistent candidates.",
+      "All key package files present except package.json.",
+      "Used as the first readable source for ship-manifest, operating contract, scene-pack, and plugin metadata in this round."
+    ],
+    "keyFields": {
+      "packageName": "fbsir-board-secretary-assistant",
+      "packageVersion": "0.1.0",
+      "targetMarketplace": "experts",
+      "targetDistributionSurface": "workbuddy_expert_center",
+      "finalListingNameZh": "董秘助手",
+      "entryId": "board-secretary-compliance-red-team",
+      "expertEntryId": "fbsir-board-secretary-assistant",
+      "entryPromptCode": "wb_fbsir_board_secretary_compliance_red_team",
+      "intentFamily": "board_secretary_ir_workflow",
+      "assetType": "compliance-red-team-card",
+      "offerId": "board_secretary_compliance_review_pack_v1"
+    },
+    "missingFiles": [
+      "package.json"
+    ],
+    "stableHashesAcrossCandidates": [
+      {
+        "file": "ship-manifest.json",
+        "sha256": "256605E2C957D5369E18A8B85621BD04268CE8AA12928CEB9DBD88ECD546300E"
+      },
+      {
+        "file": "scene-pack.json",
+        "sha256": "3F15654DE934AC678F5BA767A81B19E7686794B818560AFE53F064C480961FC4"
+      },
+      {
+        "file": "marketplace-entry.json",
+        "sha256": "A050E2E20B5322C870793C22C5BFCCEF6DF7031890A1CA0E0D01C31BD72A2324"
+      },
+      {
+        "file": "contracts/board-secretary-assistant-operating-contract.json",
+        "sha256": "19A5E11F34846959CA20D87A8A5FE036436245F9FFD0869554E856F79374C748"
+      }
+    ]
+  },
+  "sourceChain": {
+    "hostTruthIndex": "data/workbuddy-listed-product-host-package-truth-source-index-20260620.json",
+    "decisionPacket": "data/workbuddy-listed-board-temp-source-import-decision-packet-20260620.json",
+    "consistencyAudit": "data/workbuddy-listed-board-temp-source-import-consistency-audit-20260620.json",
+    "preparationPacket": "data/workbuddy-listed-board-temp-source-import-preparation-packet-20260620.json",
+    "importValidationContract": "data/workbuddy-listed-board-import-validation-contract-20260620.json"
+  },
+  "packageJsonReconstruction": {
+    "pluginManifestParity": {
+      "workbuddyAndCodebuddyPluginJsonSame": true,
+      "authoritativeManifest": ".workbuddy-plugin/plugin.json"
+    },
+    "provenFields": {
+      "name": {
+        "value": "fbsir-board-secretary-assistant",
+        "sources": [
+          ".workbuddy-plugin/plugin.json"
+        ]
+      },
+      "version": {
+        "value": "0.1.0",
+        "sources": [
+          ".workbuddy-plugin/plugin.json",
+          "ship-manifest.json#package.version",
+          "scene-pack.json#packageVersion",
+          "contracts/board-secretary-assistant-operating-contract.json#packageVersion"
+        ]
+      },
+      "description": {
+        "value": "WorkBuddy expert for board secretary compliance red-team review of disclosure, roadshow, IR Q&A, announcements, and investor communication material.",
+        "sources": [
+          ".workbuddy-plugin/plugin.json"
+        ]
+      },
+      "author": {
+        "value": {
+          "name": "FBSir",
+          "email": ""
+        },
+        "sources": [
+          ".workbuddy-plugin/plugin.json"
+        ]
+      },
+      "homepage": {
+        "value": "https://api2.u3w.com/fbss/",
+        "sources": [
+          ".workbuddy-plugin/plugin.json"
+        ]
+      },
+      "license": {
+        "value": "MIT",
+        "sources": [
+          ".workbuddy-plugin/plugin.json"
+        ]
+      }
+    },
+    "inferredFields": {
+      "private": {
+        "value": true,
+        "basis": "Matches the current repo package convention used by packages/fbsir-industry-scene-researcher/package.json.",
+        "confidence": "medium"
+      },
+      "type": {
+        "value": "module",
+        "basis": "Matches the current repo package convention used by packages/fbsir-industry-scene-researcher/package.json.",
+        "confidence": "medium"
+      }
+    },
+    "crossChecks": {
+      "pluginNameMatchesShipManifest": true,
+      "versionMatchesAcrossCoreFiles": true,
+      "entryPromptCodeMatchesAcrossFiles": true,
+      "expertEntryIdMatchesAcrossFiles": true,
+      "assetTypeMatchesAcrossFiles": true
+    },
+    "manualDecisionRequiredFields": [
+      "private",
+      "type"
+    ],
+    "candidateRepoPackageJson": {
+      "name": "fbsir-board-secretary-assistant",
+      "version": "0.1.0",
+      "private": true,
+      "type": "module",
+      "description": "WorkBuddy expert for board secretary compliance red-team review of disclosure, roadshow, IR Q&A, announcements, and investor communication material."
+    }
+  },
+  "importPreparation": {
+    "directImportFileCount": 12,
+    "referenceOnlyFileCount": 2,
+    "reconstructedFileCount": 1,
+    "directImportMap": [
+      {
+        "source": "TEMP_CANONICAL_CANDIDATE_ROOT\\ship-manifest.json",
+        "target": "REPO_TARGET_PACKAGE_ROOT\\ship-manifest.json",
+        "mode": "direct_copy"
+      },
+      {
+        "source": "TEMP_CANONICAL_CANDIDATE_ROOT\\scene-pack.json",
+        "target": "REPO_TARGET_PACKAGE_ROOT\\scene-pack.json",
+        "mode": "direct_copy"
+      },
+      {
+        "source": "TEMP_CANONICAL_CANDIDATE_ROOT\\marketplace-entry.json",
+        "target": "REPO_TARGET_PACKAGE_ROOT\\marketplace-entry.json",
+        "mode": "direct_copy"
+      },
+      {
+        "source": "TEMP_CANONICAL_CANDIDATE_ROOT\\contracts\\board-secretary-assistant-operating-contract.json",
+        "target": "REPO_TARGET_PACKAGE_ROOT\\contracts\\board-secretary-assistant-operating-contract.json",
+        "mode": "direct_copy"
+      },
+      {
+        "source": "TEMP_CANONICAL_CANDIDATE_ROOT\\agents\\fbsir-board-secretary-assistant.md",
+        "target": "REPO_TARGET_PACKAGE_ROOT\\agents\\fbsir-board-secretary-assistant.md",
+        "mode": "direct_copy"
+      },
+      {
+        "source": "TEMP_CANONICAL_CANDIDATE_ROOT\\skills\\board-secretary-compliance-red-team\\SKILL.md",
+        "target": "REPO_TARGET_PACKAGE_ROOT\\skills\\board-secretary-compliance-red-team\\SKILL.md",
+        "mode": "direct_copy"
+      },
+      {
+        "source": "TEMP_CANONICAL_CANDIDATE_ROOT\\skills\\board-secretary-compliance-red-team\\SKILL.storefront.md",
+        "target": "REPO_TARGET_PACKAGE_ROOT\\skills\\board-secretary-compliance-red-team\\SKILL.storefront.md",
+        "mode": "direct_copy"
+      },
+      {
+        "source": "TEMP_CANONICAL_CANDIDATE_ROOT\\skills\\board-secretary-compliance-red-team\\skill.yaml",
+        "target": "REPO_TARGET_PACKAGE_ROOT\\skills\\board-secretary-compliance-red-team\\skill.yaml",
+        "mode": "direct_copy"
+      },
+      {
+        "source": "TEMP_CANONICAL_CANDIDATE_ROOT\\README.md",
+        "target": "REPO_TARGET_PACKAGE_ROOT\\README.md",
+        "mode": "direct_copy"
+      },
+      {
+        "source": "TEMP_CANONICAL_CANDIDATE_ROOT\\PRIVACY.md",
+        "target": "REPO_TARGET_PACKAGE_ROOT\\PRIVACY.md",
+        "mode": "direct_copy"
+      },
+      {
+        "source": "TEMP_CANONICAL_CANDIDATE_ROOT\\LICENSE",
+        "target": "REPO_TARGET_PACKAGE_ROOT\\LICENSE",
+        "mode": "direct_copy"
+      },
+      {
+        "source": "TEMP_CANONICAL_CANDIDATE_ROOT\\avatars\\expert.png",
+        "target": "REPO_TARGET_PACKAGE_ROOT\\avatars\\expert.png",
+        "mode": "direct_copy"
+      }
+    ],
+    "referenceOnlyFiles": [
+      {
+        "source": "TEMP_CANONICAL_CANDIDATE_ROOT\\.workbuddy-plugin\\plugin.json",
+        "reason": "authoritative source for package.json reconstruction and plugin metadata cross-check; not intended as repo package file"
+      },
+      {
+        "source": "TEMP_CANONICAL_CANDIDATE_ROOT\\.codebuddy-plugin\\plugin.json",
+        "reason": "parity confirmation for .workbuddy-plugin/plugin.json; not intended as repo package file"
+      }
+    ],
+    "reconstructedFiles": [
+      {
+        "target": "REPO_TARGET_PACKAGE_ROOT\\package.json",
+        "mode": "reconstruct_before_import_complete",
+        "status": "mapped_not_written",
+        "provenFields": [
+          "name",
+          "version",
+          "description",
+          "author",
+          "homepage",
+          "license"
+        ],
+        "inferredFields": [
+          "private",
+          "type"
+        ],
+        "candidateContent": {
+          "name": "fbsir-board-secretary-assistant",
+          "version": "0.1.0",
+          "private": true,
+          "type": "module",
+          "description": "WorkBuddy expert for board secretary compliance red-team review of disclosure, roadshow, IR Q&A, announcements, and investor communication material."
+        }
+      }
+    ],
+    "knownGaps": [
+      {
+        "path": "package.json",
+        "status": "missing_in_all_temp_candidates",
+        "resolution": "reconstruct from plugin manifest and cross-check against ship-manifest, scene-pack, and operating contract"
+      },
+      {
+        "path": "review zip artifact",
+        "status": "not_found_under_candidate_parent_roots",
+        "resolution": "do not rely on a local zip source in this round"
+      }
+    ]
+  },
+  "identityAlignment": {
+    "packageName": "fbsir-board-secretary-assistant",
+    "packageVersion": "0.1.0",
+    "servicePackCode": "fbss.board_secretary.compliance_red_team.v1",
+    "scenePackId": "board-secretary-compliance-red-team",
+    "entryId": "board-secretary-compliance-red-team",
+    "expertEntryId": "fbsir-board-secretary-assistant",
+    "entryPromptCode": "wb_fbsir_board_secretary_compliance_red_team",
+    "intentFamily": "board_secretary_ir_workflow",
+    "assetType": "compliance-red-team-card",
+    "distributionSurface": "workbuddy_expert_center",
+    "offerId": "board_secretary_compliance_review_pack_v1"
+  },
+  "validationContract": {
+    "postImportVerificationCommands": [
+      {
+        "id": "board_preflight_local",
+        "command": "npm.cmd run preflight:api2:local",
+        "purpose": "verify starter semantics and local host-facing contract alignment",
+        "required": true
+      },
+      {
+        "id": "board_preflight_remote",
+        "command": "npm.cmd run preflight:api2",
+        "purpose": "verify remote host-facing contract alignment",
+        "required": true
+      },
+      {
+        "id": "board_action_queue",
+        "command": "npm.cmd run report:service-traction:action-queue",
+        "purpose": "verify board packCode / scenePackId / product signature remains readable in the action queue",
+        "required": true
+      },
+      {
+        "id": "board_priority_alignment",
+        "command": "npm.cmd run report:service-traction:priority-alignment",
+        "purpose": "verify board remains the current performance reference without collapsing industry blocker semantics",
+        "required": true
+      },
+      {
+        "id": "board_product_upgrade_demands",
+        "command": "npm.cmd run report:service-traction:product-upgrade-demands",
+        "purpose": "verify board host-side requirement wording remains aligned to listed-product runtime guard semantics",
+        "required": true
+      },
+      {
+        "id": "board_workbuddy_upgrade_queue",
+        "command": "npm.cmd run report:service-traction:workbuddy-upgrade-demand-queue",
+        "purpose": "verify board upgrade queue still treats board as clean-credit-ready reference and not a closure substitute for other products",
+        "required": true
+      },
+      {
+        "id": "board_host_runtime_consistency",
+        "command": "npm.cmd run report:service-traction:host-runtime-consistency",
+        "purpose": "verify board host runtime remains aligned to expert_center and does not regress to unknown fields",
+        "required": true
+      },
+      {
+        "id": "board_release_candidate_gate",
+        "command": "npm.cmd run gate:api2:release-candidate",
+        "purpose": "verify packaged entry and release truth remain auditable after the board package import",
+        "required": true
+      },
+      {
+        "id": "board_runtime_boundary_gate",
+        "command": "npm.cmd run gate:api2:runtime-boundaries",
+        "purpose": "verify the board line still preserves same-binding whoami -> scene-pack -> consume boundary semantics after package import",
+        "required": true
+      }
+    ],
+    "blockedValidationUntilUnfreezeTouchpoints": [],
+    "resolvedValidationTouchpoints": [
+      {
+        "path": "tools/api2-runtime-boundary-smoke.mjs",
+        "currentState": "board runtime smoke now posts the current listed-product signature and continues to enforce same-binding consume boundaries",
+        "evidence": [
+          "tools/api2-runtime-boundary-smoke.mjs",
+          "reports/api2-runtime-boundary-smoke-latest.json"
+        ],
+        "alignedFields": [
+          "entryPromptCode = wb_fbsir_board_secretary_compliance_red_team",
+          "intentFamily = board_secretary_ir_workflow",
+          "profileSegment = board_secretary",
+          "packCode = fbss.board_secretary.compliance_red_team.v1",
+          "scenePackId = board-secretary-compliance-red-team",
+          "expertEntryId = fbsir-board-secretary-assistant"
+        ]
+      }
+    ],
+    "acceptanceJudgement": {
+      "boardPackageTruthImported": "repo path exists and is explicitly marked as imported from the canonical temp candidate",
+      "identityStillAligned": "service and package signatures remain aligned on packCode / scenePackId / entryPromptCode / expertEntryId / assetType / distributionSurface",
+      "performanceReferenceGuardPreserved": "board stays a listed performance reference without being misreported as broader business closure",
+      "industryBlockerStillSeparated": "industry node-relay version-header blocker remains a separate live blocker"
+    }
+  },
+  "canProve": [
+    "the listed board secretary package no longer depends on ad hoc host-path memory alone because a repo-local imported-source index now anchors the canonical temp candidate and reconstruction chain",
+    "the canonical temp candidate and the other temp roots are consistent on key file hashes",
+    "package.json reconstruction is mapped and bounded without writing the frozen repo package",
+    "post-import validation expectations are explicit before any future unfreeze work"
+  ],
+  "cannotProve": [
+    "that a repo-local board package source has already been imported",
+    "that the official Expert Center package has already been replaced",
+    "that the current host runtime is serving this imported source",
+    "natural same-binding business closure",
+    "production cutover or payment closure"
+  ],
+  "singleNextAction": {
+    "id": "use_explicit_imported_source_index_as_brd_lift_001_anchor",
+    "action": "Keep this imported-source index as the BRD-LIFT-001 evidence anchor during freeze. When package code unfreezes, import the canonical temp candidate, reconstruct package.json with explicit provenance, then run the post-import validation contract.",
+    "stopCondition": "A repo-local board package truth source exists and this index can point at that repo path instead of Temp-only evidence."
+  },
+  "evidencePaths": {
+    "hostTruthIndex": "data/workbuddy-listed-product-host-package-truth-source-index-20260620.json",
+    "decisionPacket": "data/workbuddy-listed-board-temp-source-import-decision-packet-20260620.json",
+    "consistencyAudit": "data/workbuddy-listed-board-temp-source-import-consistency-audit-20260620.json",
+    "preparationPacket": "data/workbuddy-listed-board-temp-source-import-preparation-packet-20260620.json",
+    "importValidationContract": "data/workbuddy-listed-board-import-validation-contract-20260620.json",
+    "totalGoalProgress": "reports/service-traction-total-goal-progress-latest.json",
+    "globalConsistency": "reports/service-traction-global-consistency-insight-latest.json"
+  }
+}

@@ -129,13 +129,16 @@ export class TurnContextResolver {
       input.mode.dedicatedSvgTurn ? SVG_ARTIFACT_ALLOWED_TOOL_NAMES : undefined
     )
     const allowedToolNames = intersectAllowedToolNames(
-      allowedToolNamesWithGuiStateTools(
-        // A dedicated SVG turn must not let an unrelated activated skill hide
-        // its required edit/validate tool family.
-        input.mode.dedicatedSvgTurn ? undefined : skillResolution.allowedToolNames,
-        activeGoalInstruction !== null
+      intersectAllowedToolNames(
+        allowedToolNamesWithGuiStateTools(
+          // A dedicated SVG turn must not let an unrelated activated skill hide
+          // its required edit/validate tool family.
+          input.mode.dedicatedSvgTurn ? undefined : skillResolution.allowedToolNames,
+          activeGoalInstruction !== null
+        ),
+        forcedAllowedToolNames
       ),
-      forcedAllowedToolNames
+      input.turn.allowedToolNames
     )
     const userInputDisabled = input.turn.disableUserInput === true
     const toolDiscoveryContext = createToolDiscoveryContext({

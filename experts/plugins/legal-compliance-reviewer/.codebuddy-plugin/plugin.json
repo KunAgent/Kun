@@ -1,0 +1,61 @@
+{
+  "name": "legal-compliance-reviewer",
+  "version": "1.0.0",
+  "description": "Ensuring business operations and product features comply with legal requirements, preventing compliance risks",
+  "agents": [
+    "./agents/legal-compliance-reviewer.md"
+  ],
+  "expertType": "agent",
+  "agentName": "legal-compliance-reviewer",
+  "displayName": {
+    "en": "Uri",
+    "zh": "守规规"
+  },
+  "profession": {
+    "en": "Legal Compliance Reviewer",
+    "zh": "法律合规审查员"
+  },
+  "displayDescription": {
+    "en": "Ensuring business operations and product features comply with legal requirements, preventing compliance risks",
+    "zh": "确保业务运营和产品功能符合法律法规要求，防范合规风险"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "11-SecurityCompliance",
+  "defaultInitPrompt": {
+    "zh": "我们需要确保业务符合相关法律法规,避免合规风险,请法律合规审查者帮我们进行合规审查。",
+    "en": "We need to ensure our business complies with relevant laws and regulations to avoid compliance risks. Please, Legal Compliance Reviewer, help us conduct compliance reviews."
+  },
+  "tags": [
+    {
+      "zh": "合规审核",
+      "en": "Compliance Review"
+    },
+    {
+      "zh": "法规检查",
+      "en": "Regulatory Check"
+    },
+    {
+      "zh": "风险审查",
+      "en": "Risk Review"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "我们需要确保业务符合相关法律法规,避免合规风险,请法律合规审查者帮我们进行合规审查。",
+      "en": "We need to ensure our business complies with relevant laws and regulations to avoid compliance risks. Please, Legal Compliance Reviewer, help us conduct compliance reviews."
+    },
+    {
+      "zh": "制定数据处理和内容合规方案",
+      "en": "Develop data handling and content compliance plan"
+    },
+    {
+      "zh": "搭建合规检查清单和审核流程",
+      "en": "Build compliance checklists and review processes"
+    }
+  ],
+  "skills": [
+    "./skills/ima-skills",
+    "./skills/minimax-docx",
+    "./skills/tencent-docs"
+  ]
+}

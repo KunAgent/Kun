@@ -5,6 +5,7 @@ import { Sidebar } from '../chat/Sidebar'
 import { WriteSidebar } from '../write/WriteSidebar'
 import type { RegisteredContribution } from '../../extensions/contribution-registry'
 import { ExtensionViewOutlet } from '../../extensions/ControlledContributionSurfaces'
+import { CollaborationSidebar } from '../../collaboration/CollaborationSidebar'
 
 type CodeSidebarProps = ComponentProps<typeof Sidebar>
 
@@ -17,6 +18,7 @@ export type WorkbenchLeftSidebarProps = {
   sidebarView: CodeSidebarProps['activeView']
   connectPhoneSidebarOpen: boolean
   extensionsActive: boolean
+  capabilitiesActive: boolean
   extensionView?: RegisteredContribution<'views.leftSidebar'>
   workspaceRoot?: string
   onCloseExtensionView?: () => void
@@ -39,11 +41,13 @@ export type WorkbenchLeftSidebarProps = {
   onOpenSettings: (section?: SettingsRouteSection) => void
   onOpenPlugins: CodeSidebarProps['onOpenPlugins']
   onOpenExtensions: CodeSidebarProps['onOpenExtensions']
+  onOpenCapabilities: CodeSidebarProps['onOpenCapabilities']
   onToggleTheme: CodeSidebarProps['onToggleTheme']
   onToggleConnectPhone: CodeSidebarProps['onToggleConnectPhone']
   onCodeOpen: CodeSidebarProps['onCodeOpen']
   onWriteOpen: CodeSidebarProps['onWriteOpen']
   onDesignOpen: CodeSidebarProps['onDesignOpen']
+  onCollaborationOpen: CodeSidebarProps['onCollaborationOpen']
   onScheduleOpen: CodeSidebarProps['onScheduleOpen']
   onWorkflowOpen: CodeSidebarProps['onWorkflowOpen']
   onNewConversation: CodeSidebarProps['onNewConversation']
@@ -63,6 +67,7 @@ export function WorkbenchLeftSidebar({
   sidebarView,
   connectPhoneSidebarOpen,
   extensionsActive,
+  capabilitiesActive,
   extensionView,
   workspaceRoot,
   onCloseExtensionView,
@@ -85,11 +90,13 @@ export function WorkbenchLeftSidebar({
   onOpenSettings,
   onOpenPlugins,
   onOpenExtensions,
+  onOpenCapabilities,
   onToggleTheme,
   onToggleConnectPhone,
   onCodeOpen,
   onWriteOpen,
   onDesignOpen,
+  onCollaborationOpen,
   onScheduleOpen,
   onWorkflowOpen,
   onNewConversation,
@@ -105,11 +112,19 @@ export function WorkbenchLeftSidebar({
             workspaceRoot={workspaceRoot}
             onClose={onCloseExtensionView}
           />
+        ) : route === 'collaboration' ? (
+          <CollaborationSidebar
+            onCodeOpen={onCodeOpen}
+            onWriteOpen={onWriteOpen}
+            onDesignOpen={onDesignOpen}
+            onCollaborationOpen={onCollaborationOpen}
+          />
         ) : route === 'design' ? (
           <DesignSidebar
             onCodeOpen={onCodeOpen}
             onWriteOpen={onWriteOpen}
             onDesignOpen={onDesignOpen}
+            onCollaborationOpen={onCollaborationOpen}
             onOpenSettings={onOpenSettings}
             onToggleTheme={onToggleTheme}
           />
@@ -121,6 +136,7 @@ export function WorkbenchLeftSidebar({
               onCodeOpen={onCodeOpen}
               onWriteOpen={onWriteOpen}
               onDesignOpen={onDesignOpen}
+              onCollaborationOpen={onCollaborationOpen}
               onOpenSettings={onOpenSettings}
               onToggleConnectPhone={onToggleConnectPhone}
             />
@@ -133,6 +149,7 @@ export function WorkbenchLeftSidebar({
             connectPhoneSidebarOpen={connectPhoneSidebarOpen}
             pluginsActive={route === 'plugins'}
             extensionsActive={extensionsActive}
+            capabilitiesActive={capabilitiesActive}
             runtimeReady={runtimeReady}
             threadSearch={threadSearch}
             showArchivedThreads={showArchivedThreads}
@@ -150,6 +167,7 @@ export function WorkbenchLeftSidebar({
             onOpenSettings={onOpenSettings}
             onOpenPlugins={onOpenPlugins}
             onOpenExtensions={onOpenExtensions}
+            onOpenCapabilities={onOpenCapabilities}
             onToggleTheme={onToggleTheme}
             focusModeEnabled={focusModeEnabled}
             onFocusModeChange={onFocusModeChange}
@@ -157,6 +175,7 @@ export function WorkbenchLeftSidebar({
             onCodeOpen={onCodeOpen}
             onWriteOpen={onWriteOpen}
             onDesignOpen={onDesignOpen}
+            onCollaborationOpen={onCollaborationOpen}
             onScheduleOpen={onScheduleOpen}
             onWorkflowOpen={onWorkflowOpen}
             onNewConversation={onNewConversation}

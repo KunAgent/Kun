@@ -1,0 +1,21 @@
+{
+  "name": "@kun/collaboration-protocol",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "test": "vitest run --root .",
+    "schema:generate": "npm run build && node ./scripts/generate-schema.mjs",
+    "schema:check": "npm run build && node ./scripts/generate-schema.mjs --check"
+  },
+  "dependencies": {
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.2",
+    "vitest": "^4.1.7"
+  }
+}

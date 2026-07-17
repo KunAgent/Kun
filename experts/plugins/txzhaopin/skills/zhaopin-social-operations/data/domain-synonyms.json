@@ -1,0 +1,18 @@
+{
+  "_comment": "领域/技能同义词词典。用于第 3 轮宽松检索时模型扩展 searchKey。仅作为模型参考，模型可根据实际画像灵活扩展，不必严格取自此表。",
+  "推荐系统": ["推荐算法", "召回", "排序", "CTR", "CVR", "协同过滤", "Embedding", "Exploration", "Bandit", "冷启动", "个性化"],
+  "搜索": ["搜索引擎", "信息检索", "NLP", "Query理解", "相关性", "倒排索引", "ES", "Elasticsearch", "Lucene"],
+  "大模型": ["LLM", "GPT", "Transformer", "BERT", "RLHF", "SFT", "PEFT", "LoRA", "预训练", "微调", "Fine-tuning"],
+  "计算机视觉": ["CV", "图像识别", "目标检测", "OCR", "人脸识别", "图像分割", "YOLO", "ResNet", "Diffusion"],
+  "语音": ["ASR", "TTS", "语音识别", "语音合成", "声纹", "唤醒词"],
+  "广告": ["DSP", "SSP", "RTB", "投放", "归因", "定向", "oCPC", "oCPX", "竞价"],
+  "风控": ["反欺诈", "反洗钱", "黑产", "风控模型", "图神经网络", "GNN", "异常检测", "规则引擎"],
+  "后端": ["Java", "Go", "Golang", "C++", "Python", "微服务", "分布式", "高并发", "Spring", "MySQL", "Redis", "Kafka"],
+  "前端": ["React", "Vue", "TypeScript", "JavaScript", "Node.js", "Webpack", "Vite", "SSR", "小程序", "Flutter"],
+  "客户端": ["iOS", "Android", "Swift", "Kotlin", "Objective-C", "Jetpack", "SwiftUI", "Flutter", "ReactNative"],
+  "数据": ["数据分析", "数据科学", "SQL", "Hive", "Spark", "Flink", "数仓", "ETL", "BI", "Tableau"],
+  "基础架构": ["Kubernetes", "K8s", "Docker", "云原生", "Service Mesh", "Istio", "DevOps", "CI/CD", "监控", "Prometheus"],
+  "游戏": ["Unity", "Unreal", "虚幻", "游戏策划", "数值", "关卡", "系统设计", "战斗", "经济系统", "MMORPG", "MOBA", "SLG"],
+  "产品": ["产品经理", "PM", "PRD", "用户研究", "用户体验", "增长", "AARRR", "留存", "转化"],
+  "区块链": ["Web3", "Solidity", "智能合约", "DeFi", "NFT", "以太坊", "公链"]
+}

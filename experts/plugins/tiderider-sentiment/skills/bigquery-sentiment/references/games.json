@@ -1,0 +1,20 @@
+{
+  "games": [
+    { "name": "NIKKE", "aliases": ["nikke", "胜利女神"], "uid": "uef4312b08dde07820374dd57086ea2fb" },
+    { "name": "DeltaForce", "aliases": ["deltaforce", "三角洲行动", "delta force"], "uid": "e11000000311", "market_focus": "overseas", "exclude_domestic_channels": true },
+    { "name": "Battlefield 6", "aliases": ["bf6", "战地6", "battlefield"], "uid": "e828448942b4fd734c1caa35e6b88ee50" },
+    { "name": "Escape from Tarkov", "aliases": ["eft", "塔科夫", "tarkov"], "uid": "ecbfe9d3f48a2ca00a275c29e94790bc9" },
+    { "name": "Hunt: Showdown", "aliases": ["hunt", "猎杀对决"], "uid": "e0cf810ac49d1445ac51f0731b27e8e5f" },
+    { "name": "GST", "aliases": ["gst", "gangstar"], "uid": "u10000000075" },
+    { "name": "Conan Exiles", "aliases": ["conan", "柯南", "流放者柯南"], "uid": "efc7a5eee1d6ca668931bcebf69198b60" },
+    { "name": "Path of Exile 2", "aliases": ["poe2", "流放之路2", "path of exile"], "uid": "e7f672beaa5fddd166df98bc046ba4bd4" },
+    { "name": "Subway Surfers", "aliases": ["subway", "地铁跑酷"], "uid": "u36542a7ff008ac4ab8440c34b8f02f40" },
+    { "name": "SSC", "aliases": ["ssc"], "uid": "ufb37f2b8aa7a25272e8b9ac632a932dc" },
+    { "name": "Temple Run", "aliases": ["temple run", "神庙逃亡"], "uid": "u352b196545da680dcab20b89c54c7aff" },
+    { "name": "Roblox", "aliases": ["roblox", "罗布乐思"], "uid": "u080032403b0f3d7ce099ec68649d222a" },
+    { "name": "Brawl Stars", "aliases": ["brawl stars", "荒野乱斗"], "uid": "u84eb1af3a729e5d540b6b78073938574" },
+    { "name": "Block Blast", "aliases": ["block blast"], "uid": "ufd0355643f259b1d4c0d6bf9c7248a69" },
+    { "name": "Grand Theft Auto VI", "aliases": ["gta6", "gta 6", "gta vi", "gtavi", "grand theft auto 6", "侠盗猎车手6", "侠盗猎车6"], "uid": "e11000000316" }
+  ],
+  "_note": "此文件由 TideRider 维护，新增游戏时更新此列表"
+}

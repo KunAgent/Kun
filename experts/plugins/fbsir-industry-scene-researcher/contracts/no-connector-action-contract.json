@@ -1,0 +1,904 @@
+{
+  "schemaVersion": "1.0",
+  "contractId": "industry_scene_researcher_no_connector_action_contract_v211",
+  "purpose": "Define the primary machine-readable interaction contract for Industry Scene Researcher without assuming any connector, MCP tool, or service-side runtime is available.",
+  "executionMode": "model_only_no_connector",
+  "connectorRequired": false,
+  "lifecycleStates": [
+    "not_started",
+    "minimum_context_collected",
+    "first_value_completed",
+    "continued_use_ready",
+    "project_package_materialized",
+    "rendered_artifact_ready",
+    "artifact_review_loaded",
+    "day1_execution_ready",
+    "service_intent_reported",
+    "tool_unavailable_fallback"
+  ],
+  "firstAction": "industry_scene_collect_minimum_context",
+  "firstValueAction": "industry_scene_generate_shortcut_playbook",
+  "continueAction": "industry_scene_generate_pilot_packet",
+  "sideEffectClass": "read_only",
+  "approvalState": "not_required",
+  "actionEnvelopeRequired": true,
+  "visibleActionEnvelopeRequiresExplicitDebugRequest": true,
+  "actionEnvelope": {
+    "requiredFields": [
+      "tool",
+      "arguments",
+      "sideEffectClass",
+      "approvalState",
+      "idempotent",
+      "stopCondition",
+      "doneState",
+      "successorAction"
+    ],
+    "publicTranscriptSafe": false,
+    "defaultUserVisible": false,
+    "hostMetadataChannelPreferred": true,
+    "visibleOnlyWhenExplicitlyRequested": true,
+    "privateDebugFieldsAllowed": false
+  },
+  "responseLanguagePolicy": {
+    "defaultByHostType": {
+      "WORKBUDDY": "zh-Hans",
+      "WORKBUDDY_AI": "en"
+    },
+    "userInputLanguagePriority": true,
+    "mirrorExplicitUserLanguage": true,
+    "chineseWhenPromptContainsChinese": true,
+    "englishWhenPromptIsPrimarilyEnglish": true,
+    "bilingualOnlyOnExplicitRequest": true
+  },
+  "responseOrderingPolicy": {
+    "noConnectorFirstValuePrecedence": true,
+    "firstUserVisibleBlockMustBeFivePartBundle": true,
+    "optionalEnhancementDiagnosticsAfterFirstValueOnly": true,
+    "connectorOrServiceDiagnosticsNeverLeadDirectFirstValueReply": true,
+    "serviceRouteMismatchIsPostFirstValueGapOnly": true,
+    "ifUserRequestsDirectFivePieceDoNotPrefaceWithToolStatus": true,
+    "serviceEnhancementAttemptsDoNotDelayFirstValue": true
+  },
+  "connectorDecouplingGate": {
+    "contractPath": "contracts/connector-decoupling-gate.json",
+    "required": true,
+    "connectorRequiredForFirstValue": false,
+    "connectorRequiredForServiceIntentReport": false,
+    "connectorRequiredForReviewReadiness": false,
+    "connectorRequiredForLocalEquivalentReadiness": false
+  },
+  "serviceClosureGate": {
+    "contractPath": "contracts/service-closure-gate.json",
+    "required": true,
+    "firstValueClosureSource": "host_local",
+    "serviceIntentClosureSource": "service_intent_report",
+    "serviceConsumeClosureSource": "service_consume"
+  },
+  "serviceObservabilityContract": {
+    "contractPath": "contracts/service-observability-contract.json",
+    "required": true,
+    "missingFieldsMustRemainVisible": true,
+    "missingFieldsDoNotBlockFirstValue": true,
+    "missingFieldsBlockNaturalClosureClaim": true
+  },
+  "workspaceWritePolicy": {
+    "workspaceWriteRequiresExplicitUserRequest": true,
+    "planModeBeforeFirstValueAllowed": false,
+    "defaultFirstValueSurface": "chat_response_only",
+    "allowedAfterExplicitUserRequest": [
+      "materialize_project_action_packet",
+      "create_task_ledger",
+      "write_project_files",
+      "update_project_memory",
+      "present_project_files"
+    ],
+    "explicitUserRequestExamples": [
+      "生成 3 天试点项目包",
+      "确认三个行业包",
+      "执行 Day 1",
+      "把这个方案落到项目工作区"
+    ],
+    "forbiddenImplicitActions": [
+      "auto_create_task",
+      "auto_write_plan_file",
+      "auto_write_memory",
+      "auto_create_workspace_memory",
+      "auto_use_file_or_shell_tools_before_first_value",
+      "auto_open_company_level_escalation"
+    ]
+  },
+  "workspaceMaterializationPolicy": {
+    "realToolExecutionRequiredBeforeGeneratedClaim": true,
+    "forbidRawToolCallMarkupInUserVisibleText": true,
+    "forbidHtmlCommentsInUserVisibleText": true,
+    "fallbackToChatOnlyWhenWriteToolsUnavailable": true,
+    "generatedClaimRequiresAnyEvidence": [
+      "Write",
+      "Edit",
+      "present_files",
+      "task_created",
+      "artifact_index_entry"
+    ]
+  },
+  "sceneOrchestrationContract": {
+    "coreQuestion": "缺口在哪、谁补、怎么交",
+    "mustNotDegradeToToolCatalog": true,
+    "requiredHandoffGates": [
+      "topic_gate",
+      "go_to_market_gate",
+      "distribution_gate"
+    ],
+    "handoffGateDefinitions": {
+      "topic_gate": "管理层判断做哪个行业、面向谁、解决什么痛点；AI 只提供候选和评分。",
+      "go_to_market_gate": "行业专家判断这话是否说得出去；AI 负责拼素材、出初稿、做去 AI 味。",
+      "distribution_gate": "管理层判断给谁看、走哪个渠道；AI 负责格式转换、归档和复用。"
+    },
+    "allowedAutonomyLevels": [
+      "agent_only",
+      "hybrid",
+      "human_review",
+      "human_only"
+    ],
+    "longManuscriptExpertUsage": "optional_structure_and_quality_engine_only"
+  },
+  "projectActionPacketPolicy": {
+    "materializationRequiresExplicitUserRequest": true,
+    "requiredWorkspaceStructure": [
+      "素材池/",
+      "模板库/",
+      "交付物/",
+      "SOP/",
+      "README.md",
+      "overview.md",
+      "校准检查清单.md",
+      "续作进度卡"
+    ],
+    "requiredStateHints": [
+      "selectedIndustries",
+      "selectedWorkflowGap",
+      "projectPackageMaterialized",
+      "day1ExecutionReady",
+      "artifactPresentedCount"
+    ]
+  },
+  "actionDrivePolicy": {
+    "defaultPostFirstValueQuestion": "现在就执行 Day 1 吗？",
+    "askBeforeActivatingDay1": true,
+    "allowDirectDay1WhenUserExplicitlySignalsActionMode": true,
+    "researchCollectStrategyActionModeRequiresAtLeastOneEvidenceRow": true,
+    "evidenceRowSources": [
+      "web_fetch",
+      "user_provided",
+      "traceable_local_file"
+    ],
+    "fallbackWhenEvidenceRowUnavailable": "keep_citation_gap_list_and_continue_with_user_materials",
+    "forbidEmptyTemplateOnlyActionPackage": true
+  },
+  "highestValueGapEvidenceGate": {
+    "requiredWhen": [
+      "highest_value",
+      "most_worth",
+      "researcher_judgement"
+    ],
+    "maximumCandidateGaps": 3,
+    "minEvidenceRowsForWinner": 1,
+    "allowedEvidenceStrength": [
+      "user_provided",
+      "traceable_local_file",
+      "fetched_primary",
+      "fetched_secondary",
+      "needs_verification"
+    ],
+    "fallbackWhenEvidenceIsWeak": "deliver_first_value_with_citation_gap_and_hypothesis_label",
+    "hypothesisFlagField": "highestValueGapIsHypothesis"
+  },
+  "scenarioMicroSlice": {
+    "requiredBeforeFivePartBundleDecision": true,
+    "requiredFields": [
+      "actor",
+      "moment",
+      "blockedAction",
+      "aiIntervention",
+      "humanDecision",
+      "observableArtifact"
+    ],
+    "allowCondensedFormWhenInputSparse": true
+  },
+  "sourceEvidencePolicy": {
+    "requiredWhenExternalResearchUsed": true,
+    "externalResearchOptionalForFirstValue": true,
+    "fallbackWhenExternalResearchUnavailable": "deliver_first_value_from_user_materials_and_citation_gap_list",
+    "defaultEvidenceLayer": "host_local",
+    "webSearchSummaryIsClientReadyEvidence": false,
+    "clientReadyRequires": [
+      "sourceTitle",
+      "sourceUrl",
+      "retrievedAt",
+      "claim",
+      "evidenceStrength",
+      "clientUseStatus"
+    ],
+    "allowedEvidenceStrength": [
+      "official_doc",
+      "authoritative_repost",
+      "fetched_primary",
+      "fetched_secondary",
+      "user_provided",
+      "search_summary_only",
+      "needs_verification"
+    ],
+    "clientUseStatusValues": [
+      "client_ready",
+      "internal_reference_only",
+      "needs_human_verification"
+    ],
+    "forbiddenClaimsWithoutClientReadyEvidence": [
+      "first_hand_data",
+      "directly_citable",
+      "customer_ready",
+      "audited_source"
+    ],
+    "requiredProjectArtifactsWhenResearchUsed": [
+      "sourceEvidenceLedger",
+      "policyDirectionLedger",
+      "citationGapList",
+      "humanVerificationChecklist"
+    ]
+  },
+  "policyDirectionLedgerPolicy": {
+    "ledgerPath": "contracts/policy-direction-ledger-202606.json",
+    "requiredWhenPolicyDirectionScanUsed": true,
+    "latestPolicyWindowRequired": true,
+    "freshnessDays": 14,
+    "primaryTriggerSourceId": "ai-consumption-20260618",
+    "requiredPolicyWindowFields": [
+      "primaryTriggerDate",
+      "recentPolicyStart",
+      "recentPolicyEnd",
+      "freshnessDays",
+      "timezone"
+    ],
+    "requiredSourceTypes": [
+      "official_doc",
+      "authoritative_repost"
+    ],
+    "requiredEvidenceFields": [
+      "sourceTitle",
+      "sourceUrl",
+      "publisher",
+      "publishedAt",
+      "retrievedAt",
+      "claim",
+      "evidenceStrength",
+      "clientUseStatus",
+      "policySignals",
+      "scenarioFamilies",
+      "workflowGapHints",
+      "riskBoundaries"
+    ],
+    "requiredScenarioFamilies": [
+      "consumer_service",
+      "retail_ecommerce",
+      "manufacturing",
+      "education",
+      "procurement",
+      "agent_workflow",
+      "data_readiness",
+      "telecom"
+    ],
+    "noConnectorBoundary": "Policy direction ledger seeds scenario mapping only and never becomes a connector, service runtime, or live network dependency for first value."
+  },
+  "capabilityScanPolicy": {
+    "internalScanBeforeEnhancementChoice": true,
+    "scanSources": [
+      "tool_search",
+      "skills_directory",
+      "deferred_tools"
+    ],
+    "doNotDumpRawCapabilityScanToUser": true,
+    "enhancementOutputFormat": "capability_to_gap_mapping",
+    "requireUserConfirmationBeforeActivation": true
+  },
+  "outputArtifactLoadingPolicy": {
+    "standardCapability": true,
+    "mustRemainOptionalForFirstValue": true,
+    "activationNotBefore": "project_package_materialized_or_explicit_render_request",
+    "defaultEventLayer": "host_local",
+    "requiredArtifactSet": [
+      "sourceMarkdown",
+      "visualHtml",
+      "distributionPdf",
+      "inlineSummaryCard",
+      "loadedPreview"
+    ],
+    "formatRoles": {
+      "sourceMarkdown": "源文件，便于继续编辑和人工校准。",
+      "visualHtml": "可部署为网页，也可由浏览器打印或转 PDF。",
+      "distributionPdf": "可直接发给客户或内部评审。",
+      "inlineSummaryCard": "WorkBuddy 会话内快速预览关键结论。",
+      "loadedPreview": "通过 present_files、artifact-index、file:// 或浏览器标签自动打开供用户检查。"
+    },
+    "runtimeIsolation": {
+      "dependencyInstallRequiresExplicitUserRequest": true,
+      "preferredRuntimeWorkspace": "host_runtime_or_tool_workspace",
+      "forbidProjectRootPackageJson": true,
+      "forbidNodeModulesInClientDeliverableDir": true
+    },
+    "postRenderValidation": [
+      "fileExists",
+      "artifactIndexOrPresentFilesEntry",
+      "pdfPageCountMatchesClaim",
+      "pdfTextExtractable",
+      "firstPagePreviewReadable",
+      "sourceEvidenceLedgerLinked"
+    ],
+    "forbiddenEvidenceUpgrades": [
+      "present_files_as_service_consume",
+      "browser_preview_as_continued_use",
+      "pdf_generated_as_customer_read"
+    ]
+  },
+  "hostCapabilityPanoramaPolicy": {
+    "standardCapability": true,
+    "mustRemainOptionalForFirstValue": true,
+    "activationWhenUserRequestsMoreHostCapabilities": true,
+    "defaultEventLayer": "host_local",
+    "requiredLayers": [
+      "interaction_enhancement",
+      "content_generation",
+      "automation_orchestration",
+      "research_knowledge",
+      "distribution_deployment",
+      "memory_system"
+    ],
+    "requiredComparisons": [
+      "activated_now",
+      "discovered_not_used",
+      "true_gap"
+    ],
+    "requiredOutputs": [
+      "hostCapabilityPanorama",
+      "activationChoiceCard",
+      "selectedEnhancementRoute",
+      "sideEffectBoundaryNote"
+    ],
+    "choiceFlow": {
+      "askUserQuestionRequired": true,
+      "allowMultiSelect": true,
+      "maxRecommendedOptions": 4,
+      "optionMustMapToBusinessOutcome": true,
+      "doNotActivateBeforeChoice": true
+    },
+    "executionPolicy": {
+      "parallelSelectedRoutesAllowed": true,
+      "continueRemainingRoutesWhenOneUnavailable": true,
+      "recordUnavailableRouteAsHostCapabilityGap": true
+    },
+    "forbiddenPatterns": [
+      "tool_dump_without_ranking",
+      "capabilities_without_business_outcome",
+      "activation_before_user_choice"
+    ],
+    "applicationAttractionGoals": [
+      "make_hidden_host_capabilities_legible",
+      "show_what_is_already_working_vs_what_is_available_next",
+      "translate_tools_into_next_best_business_moves",
+      "increase_continued_use_through_guided_enhancement_choices"
+    ]
+  },
+  "multiAgentResearchPolicy": {
+    "childTaskMustDeclareCoreQuestion": true,
+    "childTaskMustStayOnGapMapping": true,
+    "childTaskMustAvoidProductIntro": true,
+    "mergeFormat": "gap_to_capability_to_action"
+  },
+  "creativeLibraryPolicy": {
+    "standardCapability": true,
+    "mustRemainOptionalForFirstValue": true,
+    "schemaPath": "contracts/industry-scene-creative-library.schema.json",
+    "indexPath": "contracts/industry-scene-creative-library-index.jsonl",
+    "playbookPath": "references/workflows/creative-library-playbook.md",
+    "verificationGatesPath": "references/quality/creative-library-verification-gates.md",
+    "capabilityEvidenceLayers": [
+      "overview_capabilities",
+      "changelog_confirmed_capabilities",
+      "local_observed_combinations"
+    ],
+    "coverageRequired": [
+      "offline",
+      "online",
+      "stakeholder"
+    ],
+    "minimumCards": 20,
+    "requiredContextFields": [
+      "persona_anchor",
+      "timing_pattern",
+      "format_strategy",
+      "evolution_evidence_note"
+    ],
+    "singleNextStepRequired": true,
+    "timingPatternRequired": true,
+    "formatStrategyRequired": true,
+    "evolutionEvidenceNoteRequired": true,
+    "connectorOptionalOnly": true,
+    "assistantAndMiniProgramOptionalOnly": true,
+    "hostLocalPreviewIsNotServiceConsume": true
+  },
+  "visualizationPolicy": {
+    "oneGlanceReadableRequired": true,
+    "maxInterpretationTimeSeconds": 30,
+    "defaultLayout": "horizontal_numbered_flow",
+    "legendSeparatedFromMainFlow": true,
+    "visualsAreSupportNotPrimaryOutput": true
+  },
+  "automationSideEffectPolicy": {
+    "automationCreationRequiresExplicitConfirmation": true,
+    "automationActivationRequiresExplicitConfirmation": true,
+    "defaultCreatedStatus": "PAUSED",
+    "activationNotBefore": "day1_acceptance_passed",
+    "forbiddenImplicitActions": [
+      "auto_create_active_automation",
+      "auto_activate_automation_before_day1_acceptance"
+    ]
+  },
+  "serviceEventLayerPolicy": {
+    "eventLayers": [
+      "host_local",
+      "service_intent_report",
+      "service_consume"
+    ],
+      "hostLocalEvents": [
+      "frontstage_first_value_delivered",
+      "project_package_materialized",
+      "rendered_artifact_ready",
+      "artifact_review_loaded",
+      "host_capability_panorama_rendered",
+      "host_capability_route_selected",
+      "host_capability_route_degraded",
+      "artifact_presented",
+      "task_ledger_completed",
+      "visual_feedback_revised",
+      "day1_execution_ready"
+    ],
+    "serviceIntentEvents": [
+      "anonymous_intent_hint",
+      "intent_reported",
+      "scene_recognized",
+      "strategy_dispatch_requested"
+    ],
+    "serviceConsumeEvents": [
+      "first_value_completed",
+      "continued_use_completed",
+      "explicit_consume"
+    ],
+    "forbiddenClosureEvidence": [
+      "model_text",
+      "present_files",
+      "file_write",
+      "task_update",
+      "memory_update",
+      "browser_preview_opened",
+      "pdf_generated",
+      "paused_automation_created"
+    ],
+    "consumeRequiresRealToolOrBackendEvent": true,
+    "projectPackageMaterializedIsHostLocalOnly": true,
+    "serviceIntentBridgeRequiredAfterFirstValue": true
+  },
+  "misjudgmentGuards": {
+    "doNotTreatZeroServiceAttributionAsFirstValueFailure": true,
+    "doNotTreatSkillManageOmissionAsPackageFailure": true,
+    "skillManageBelongsToHostGovernanceLayer": true,
+    "connectorDisconnectedDoesNotCreateMandatoryPostFirstValueCall": true,
+    "deferredToolAvailabilityDoesNotOverrideOptionalEnhancementBoundary": true,
+    "reportAsDeferredFollowthroughGapOnly": [
+      "service_attribution_missing",
+      "skill_persistence_missing"
+    ]
+  },
+  "runtimeSelfAssessmentPolicy": {
+    "requiredBeforeTechnicalReview": true,
+    "evidenceLayersOrder": [
+      "host_local",
+      "service_intent_report",
+      "service_consume"
+    ],
+    "requiredReviewOutputFields": [
+      "hostLocalVerdict",
+      "serviceIntentVerdict",
+      "serviceConsumeVerdict",
+      "firstValueVerdict",
+      "postFirstValueGaps",
+      "severityDecision",
+      "singleNextAction"
+    ],
+    "firstValueVerdictSource": "five_part_bundle_and_no_connector_contract_only",
+    "severityRules": {
+      "P0": [
+        "missing_required_five_part_bundle",
+        "no_connector_first_value_blocked",
+        "single_next_step_missing",
+        "false_service_consume_or_official_listing_claim",
+        "writes_or_automation_before_user_confirmation"
+      ],
+      "P1": [
+        "service_attribution_missing_after_first_value",
+        "hostActionEnvelope_missing",
+        "SkillManage_persistence_missing",
+        "optional_connector_route_degraded",
+        "day1_evidence_row_missing_in_research_action_mode"
+      ],
+      "P2": [
+        "visual_polish_gap",
+        "creative_library_extension",
+        "source_evidence_needs_verification"
+      ]
+    },
+    "forbidP0Reasons": [
+      "service_attribution_missing",
+      "skill_persistence_missing",
+      "connector_disconnected",
+      "deferred_tool_visible_but_uncalled",
+      "hostActionEnvelope_missing_when_no_metadata_channel"
+    ],
+    "postFirstValueOnlyReasons": [
+      "service_attribution_missing",
+      "skill_persistence_missing",
+      "connector_disconnected",
+      "deferred_tool_visible_but_uncalled",
+      "hostActionEnvelope_missing_when_no_metadata_channel",
+      "optional_connector_route_degraded",
+      "service_route_mismatch"
+    ],
+    "postFirstValueGapsMustRemainDeferred": true
+  },
+  "identityBoundary": {
+    "mode": "anonymous_first_delayed_identify",
+    "anonymousBindingFields": [
+      "anonymousUserCodeHash",
+      "serverBindingId",
+      "chainFingerprint"
+    ],
+    "hostIdentityFields": [
+      "entryId",
+      "entryPromptCode",
+      "entrySurface",
+      "expertEntryId",
+      "productId",
+      "assetType",
+      "intentFamily",
+      "profileSegment",
+      "requestSource"
+    ],
+    "stableIdentityWriteNotBefore": "continued_use_completed",
+    "doNotOverwriteAnonymousHistory": true,
+    "identifiedUserPromotionNotBefore": "service_side_receipt_verified"
+  },
+  "benefitUnlockPolicy": {
+    "benefitStateFields": [
+      "benefitSource",
+      "creditsState",
+      "claimState",
+      "lebaoPackId"
+    ],
+    "unlockEventType": "continued_use_completed",
+    "unlockNotBefore": "continued_use_completed",
+    "claimTool": "lebao_claim",
+    "paymentClosureAllowed": false,
+    "unlockDecisionSource": "service_side_receipt_only",
+    "clientLocalStateIsAdvisoryOnly": true,
+    "requiredStopConditions": [
+      "lebao_claimed_as_payment_closure",
+      "benefit_claimed_before_continued_use_completed"
+    ]
+  },
+  "serviceForwardCompatibility": {
+    "purpose": "Keep benefit, intent, scene, dispatch, and feedback-evolution metadata ready for future service-side traction without making service runtime or connector exposure a package baseline dependency.",
+    "connectorRequired": false,
+    "runtimeDependency": false,
+    "eventLayering": "event_raw_to_event_business_to_event_kpi",
+    "requiredHintFields": [
+      "benefitState",
+      "intentHint",
+      "sceneHint",
+      "dispatchHint",
+      "feedbackEvolution"
+    ],
+    "benefitState": {
+      "unlockNotBefore": "continued_use_completed",
+      "paymentClosureAllowed": false,
+      "productCreditClaimedByPackage": false
+    },
+    "intentHint": {
+      "aggregationMode": "anonymous_intent_hint",
+      "stableIdentityWriteNotBefore": "continued_use_completed"
+    },
+    "sceneHint": {
+      "sceneFieldRequired": true,
+      "mustReferenceSelectedWorkflowGap": true
+    },
+    "dispatchHint": {
+      "hostActionEnvelopeRequired": true,
+      "sideEffectClass": "read_only",
+      "workspaceWriteRequiresExplicitUserRequest": true
+    },
+    "feedbackEvolution": {
+      "promotionMode": "observe_then_promote",
+      "requiredNaturalSignals": [
+        "naturalSampleCount",
+        "firstValueCompleted",
+        "continuedUseCompleted",
+        "naturalSameBindingConsumeCount"
+      ],
+      "promotionRequiresNaturalTraffic": true,
+      "probeRowsDiagnosticOnly": true,
+      "paymentClosureAllowed": false,
+      "networkEvolutionRequiresManualReview": true
+    }
+  },
+  "networkEnhancementPolicy": {
+    "defaultMode": "offline_first",
+    "evidenceModes": [
+      "offline_required",
+      "network_optional_after_first_value",
+      "network_required_for_claim_upgrade_only"
+    ],
+    "triggers": [
+      "user_requests_current_external_facts",
+      "citation_safe_policy_or_case_request",
+      "official_document_current_rule_request",
+      "cross_market_localization_request"
+    ],
+    "doNotReplaceFirstValueWithResearchPlan": true
+  },
+  "connectorUnavailableBehavior": {
+    "completeFirstValueWithoutTool": true,
+    "doNotUseBashFallbackForServiceRecording": true,
+    "doNotClaimServiceWrite": true,
+    "emitHostActionEnvelopeForMetadataOrDebugOnly": true
+  },
+  "actions": [
+    {
+      "state": "not_started",
+      "actionId": "industry_scene_collect_minimum_context",
+      "tool": "industry_scene_collect_minimum_context",
+      "virtualTool": true,
+      "arguments": {
+        "requiredInputs": [
+          "userIndustry",
+          "userRole",
+          "userGoal"
+        ],
+        "optionalInputs": [
+          "userResources",
+          "userConstraints",
+          "providedMaterials",
+          "projectContext"
+        ]
+      },
+      "sideEffectClass": "read_only",
+      "approvalState": "not_required",
+      "idempotent": true,
+      "stopCondition": "User industry, role, and goal are clear enough to score one workflow gap.",
+      "doneState": "minimum_context_collected",
+      "successorAction": "industry_scene_generate_shortcut_playbook"
+    },
+    {
+      "state": "minimum_context_collected",
+      "actionId": "industry_scene_generate_shortcut_playbook",
+      "tool": "industry_scene_generate_shortcut_playbook",
+      "virtualTool": true,
+      "arguments": {
+        "deliverables": [
+          "highestValueGapScorecard",
+          "scenarioMicroSlice",
+          "highestValueGapIsHypothesis",
+          "supplementCard",
+          "workbuddyCapabilityMap",
+          "humanAiTaskTable",
+          "pilotPacket",
+          "singleNextStepCta",
+          "sceneOrchestrationMap",
+          "serviceCoordinationHints",
+          "continuationProgressCard",
+          "nextSessionResumePrompt",
+          "hostActionEnvelope"
+        ],
+        "requiredScoringAxes": [
+          "businessValue",
+          "dataReadiness",
+          "aiFit",
+          "executionReadiness"
+        ],
+        "maximumCandidateGaps": 3
+      },
+      "sideEffectClass": "read_only",
+      "approvalState": "not_required",
+      "idempotent": true,
+      "stopCondition": "User receives a single prioritized workflow gap and the full five-part shortcut playbook bundle.",
+      "doneState": "first_value_completed",
+      "successorAction": "industry_scene_generate_pilot_packet"
+    },
+    {
+      "state": "first_value_completed",
+      "actionId": "industry_scene_generate_pilot_packet",
+      "tool": "industry_scene_generate_pilot_packet",
+      "virtualTool": true,
+      "arguments": {
+        "allowedBranches": [
+          "pilot_execute",
+          "materials_harden",
+          "team_handoff",
+          "project_activate"
+        ],
+        "requiredOutputs": [
+          "threeDayPilotPacket",
+          "projectActionPacketPlan",
+          "updatedHumanAiTaskTable",
+          "continuationProgressCard",
+          "nextSessionResumePrompt",
+          "serviceIntentHint"
+        ]
+      },
+      "sideEffectClass": "read_only",
+      "approvalState": "not_required",
+      "idempotent": true,
+      "stopCondition": "User chooses one concrete continuation branch and receives the corresponding action packet.",
+      "doneState": "continued_use_ready",
+      "successorAction": "industry_scene_report_intent_hint"
+    },
+    {
+      "state": "service_intent_reported",
+      "actionId": "industry_scene_materialize_project_action_packet",
+      "tool": "industry_scene_materialize_project_action_packet",
+      "virtualTool": true,
+      "arguments": {
+        "requiresExplicitUserRequest": true,
+        "requiredOutputs": [
+          "workspaceStructure",
+          "taskBreakdown",
+          "acceptanceCriteria",
+          "sourceMaterialIndex",
+          "sourceEvidenceLedger",
+          "citationGapList",
+          "humanVerificationChecklist",
+          "continuationProgressCard",
+          "nextSessionResumePrompt"
+        ],
+        "defaultWorkspaceStructure": [
+          "素材池/",
+          "模板库/",
+          "交付物/",
+          "SOP/",
+          "README.md",
+          "overview.md"
+        ]
+      },
+      "sideEffectClass": "workspace_write",
+      "approvalState": "explicit_user_requested",
+      "idempotent": false,
+      "stopCondition": "The project action packet is materialized in the WorkBuddy workspace after explicit user confirmation.",
+      "doneState": "project_package_materialized",
+      "successorAction": "industry_scene_execute_day1_or_prepare_automation"
+    },
+    {
+      "state": "project_package_materialized",
+      "actionId": "industry_scene_render_and_load_artifact_set",
+      "tool": "industry_scene_render_and_load_artifact_set",
+      "virtualTool": true,
+      "arguments": {
+        "requiresExplicitUserRequest": true,
+        "eventLayer": "host_local",
+        "requiredOutputs": [
+          "sourceMarkdown",
+          "visualHtml",
+          "distributionPdf",
+          "inlineSummaryCard",
+          "loadedPreview",
+          "renderValidationReport"
+        ],
+        "requiredValidation": [
+          "fileExists",
+          "artifactIndexOrPresentFilesEntry",
+          "pdfPageCountMatchesClaim",
+          "pdfTextExtractable",
+          "firstPagePreviewReadable",
+          "sourceEvidenceLedgerLinked"
+        ]
+      },
+      "sideEffectClass": "workspace_write_and_local_preview",
+      "approvalState": "explicit_user_requested",
+      "idempotent": false,
+      "stopCondition": "The Markdown source, visual HTML, distribution PDF, inline summary, and loaded preview are available with validation evidence.",
+      "doneState": "artifact_review_loaded",
+      "successorAction": "industry_scene_report_intent_hint"
+    },
+    {
+      "state": "project_package_materialized",
+      "actionId": "industry_scene_prepare_automation_plan",
+      "tool": "industry_scene_prepare_automation_plan",
+      "virtualTool": true,
+      "arguments": {
+        "requiresExplicitConfirmationBeforeCreate": true,
+        "defaultCreatedStatus": "PAUSED",
+        "activationNotBefore": "day1_acceptance_passed"
+      },
+      "sideEffectClass": "schedule_side_effect",
+      "approvalState": "explicit_user_requested",
+      "idempotent": false,
+      "stopCondition": "Automation candidates are created only after explicit confirmation and remain PAUSED until Day 1 acceptance.",
+      "doneState": "day1_execution_ready",
+      "successorAction": "industry_scene_report_intent_hint"
+    },
+    {
+      "state": "continued_use_ready",
+      "actionId": "industry_scene_report_intent_hint",
+      "tool": "industry_scene_report_intent_hint",
+      "virtualTool": true,
+      "arguments": {
+        "eventLayer": "service_intent_report",
+        "connectorRequired": false,
+        "requiredFields": [
+          "intentFamily",
+          "selectedWorkflowGap",
+          "highestValueGapIsHypothesis",
+          "evidenceStrength",
+          "packCode",
+          "scenePackId",
+          "requestSource",
+          "selectedIndustries",
+          "projectPackageMaterialized",
+          "day1ExecutionReady",
+          "naturalClosureClaimed",
+          "serviceProductCreditClaimed"
+        ]
+      },
+      "sideEffectClass": "metadata_only",
+      "approvalState": "host_metadata_or_debug_only",
+      "idempotent": true,
+      "stopCondition": "Anonymous intent hints are prepared without claiming service consume or continued use.",
+      "doneState": "service_intent_reported",
+      "successorAction": "industry_scene_materialize_project_action_packet"
+    }
+  ],
+  "hostActionEnvelope": {
+    "requiredFields": [
+      "tool",
+      "arguments",
+      "sideEffectClass",
+      "approvalState",
+      "idempotent",
+      "stopCondition",
+      "doneState",
+      "successorAction"
+    ],
+    "tool": "industry_scene_generate_shortcut_playbook",
+    "arguments": {
+      "recommendedBranch": "pilot_execute",
+      "recommendedOptionCount": 3,
+      "coreQuestion": "缺口在哪、谁补、怎么交",
+      "eventLayer": "host_local",
+      "resumePrompt": "继续把当前工作流缺口推进成 3 天试点项目包，并明确 Day 1 到 Day 3 的负责人、验收标准和唯一下一步。"
+    },
+    "sideEffectClass": "read_only",
+    "approvalState": "not_required",
+    "idempotent": true,
+    "doneState": "first_value_completed",
+    "successorAction": "industry_scene_generate_pilot_packet",
+    "stopCondition": "用户已经收到场景补位卡、WorkBuddy 作战路径、人机混编任务表、3 天试点行动包和唯一下一步 CTA"
+  },
+  "continuedUseRequiredBeforeLebao": true,
+  "requiredDeliverables": [
+    "supplementCard",
+    "workbuddyCapabilityMap",
+    "humanAiTaskTable",
+    "pilotPacket",
+    "singleNextStepCta",
+    "sceneOrchestrationMap",
+    "serviceCoordinationHints",
+    "continuationProgressCard",
+    "nextSessionResumePrompt",
+    "hostActionEnvelope"
+  ]
+}

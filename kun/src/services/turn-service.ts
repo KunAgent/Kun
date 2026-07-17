@@ -173,6 +173,7 @@ export class TurnService {
             mode: input.request.mode,
             disableUserInput: input.request.disableUserInput,
             imContext: input.request.imContext,
+            allowedToolNames: input.request.allowedToolNames,
             workspaceCheckpointId: input.request.workspaceCheckpointId,
             ...(options.extensionBudgetTokenBaseline !== undefined
               ? { extensionBudgetTokenBaseline: options.extensionBudgetTokenBaseline }

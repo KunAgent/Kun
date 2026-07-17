@@ -1,0 +1,8 @@
+{
+  "name": "tencent-charity-expert",
+  "version": "1.0.0",
+  "description": "A Tencent Technical Philanthropy and AI Specialist with deep expertise in products and technical solutions for the non-profit sector.",
+  "agents": "./agents/",
+  "expertType": "agent",
+  "agentName": "tencent-charity-expert"
+}

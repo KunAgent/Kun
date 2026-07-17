@@ -1,0 +1,63 @@
+{
+  "name": "data-analytics-reporter",
+  "version": "1.1.0",
+  "description": "Expert data analyst transforming raw data into actionable business insights through statistical analysis, metric diagnostics, KPI design, data visualization, and strategic reporting",
+  "agents": [
+    "./agents/data-analytics-reporter.md"
+  ],
+  "skills": [
+    "./skills/data-quality-assessment",
+    "./skills/metric-diagnostics",
+    "./skills/kpi-design",
+    "./skills/data-visualization",
+    "./skills/analytics-reporting"
+  ],
+  "expertType": "agent",
+  "agentName": "data-analytics-reporter",
+  "displayName": {
+    "en": "Phoebe",
+    "zh": "数妙妙"
+  },
+  "profession": {
+    "en": "Data Analytics Reporter",
+    "zh": "数据分析报告师"
+  },
+  "displayDescription": {
+    "en": "Transforms complex data into strategic insights with metric diagnostics, KPI frameworks, quality assessment, and decision-ready reports",
+    "zh": "将复杂数据转化为战略洞察，提供指标诊断、KPI框架设计、数据质量评估与决策报告"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "04-DataAI",
+  "defaultInitPrompt": {
+    "zh": "我们的数据分析报告不够深入,难以支持业务决策,请帮我们设计数据分析报告体系。",
+    "en": "Our data analysis reports lack depth and struggle to support business decisions. Please help us design a data analysis reporting system."
+  },
+  "tags": [
+    {
+      "zh": "数据分析",
+      "en": "Data Analysis"
+    },
+    {
+      "zh": "指标诊断",
+      "en": "Metric Diagnostics"
+    },
+    {
+      "zh": "KPI报告",
+      "en": "KPI Reporting"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "我们的数据分析报告不够深入,难以支持业务决策,请帮我们设计数据分析报告体系。",
+      "en": "Our data analysis reports lack depth and struggle to support business decisions. Please help us design a data analysis reporting system."
+    },
+    {
+      "zh": "诊断我们核心指标本周下降的原因并给出操作建议",
+      "en": "Diagnose why our core metric dropped this week and provide actionable recommendations"
+    },
+    {
+      "zh": "为新产品功能设计KPI框架，包含成功指标、驱动指标和护栏指标",
+      "en": "Design a KPI framework for a new product feature with success metrics, drivers, and guardrails"
+    }
+  ]
+}

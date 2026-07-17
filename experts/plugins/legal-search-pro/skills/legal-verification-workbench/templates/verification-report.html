@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>__TITLE__</title>
+<style>
+:root{
+  --bg:#f5f7fa; --panel:#ffffff; --ink:#1f2733; --muted:#6b7787; --line:#e3e8ef;
+  --brand:#2b4a6f; --brand-soft:#eef3f9;
+  /* Objective traceability labels — NOT a correctness verdict.
+     associated=蓝青(中性溯源)  weak=黄(提示核对)  unverified=灰(中性待查) */
+  --assoc:#2563b0; --assoc-bg:#e8f0fb; --assoc-line:#bcd4f0;
+  --warn:#c98a00; --warn-bg:#fdf4e0; --warn-line:#f0dca6;
+  --todo:#6b7787; --todo-bg:#eef1f5; --todo-line:#d4dae2;
+  --hl:#fff3b0;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;height:100%}
+body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",Segoe UI,sans-serif;
+  background:var(--bg);color:var(--ink);font-size:15px;line-height:1.7;
+  height:100vh;display:flex;flex-direction:column;overflow:hidden}
+header.report-head{flex:0 0 auto;background:var(--brand);color:#fff;padding:16px 26px}
+header.report-head h1{margin:0;font-size:19px;font-weight:600}
+header.report-head .sub{margin-top:6px;font-size:12.5px;color:#cdd9e8}
+.notice{flex:0 0 auto;background:#fff8e6;border-bottom:1px solid #f0dca6;color:#7a5a00;font-size:12.5px;padding:9px 26px;line-height:1.6}
+.toolbar{flex:0 0 auto;display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:10px 26px;background:var(--panel);border-bottom:1px solid var(--line)}
+.toolbar .grp{display:flex;gap:8px;align-items:center}
+.toolbar .sep{width:1px;align-self:stretch;background:var(--line);margin:0 4px}
+.toolbar .lbl{font-size:11.5px;color:var(--muted);margin-right:2px}
+.toolbar button{font:inherit;font-size:12.5px;padding:5px 12px;border:1px solid var(--line);background:#fff;color:var(--ink);
+  border-radius:20px;cursor:pointer}
+.toolbar button:hover{border-color:var(--brand);color:var(--brand)}
+.toolbar button.active{background:var(--brand);color:#fff;border-color:var(--brand)}
+.toolbar .exp{background:var(--brand-soft);border-color:var(--brand-soft);color:var(--brand);font-weight:600}
+.toolbar .exp:hover{background:#dde9f6}
+.stats{flex:0 0 auto;display:flex;flex-wrap:wrap;gap:10px;padding:12px 26px;background:var(--panel);border-bottom:1px solid var(--line)}
+.stat{background:var(--brand-soft);border:1px solid var(--line);border-radius:10px;padding:7px 13px;min-width:90px}
+.stat .n{font-size:19px;font-weight:700;color:var(--brand)}
+.stat .l{font-size:11.5px;color:var(--muted)}
+.stat.assoc .n{color:var(--assoc)} .stat.warn .n{color:var(--warn)} .stat.todo .n{color:var(--todo)}
+
+/* ---- two independent scroll columns ---- */
+.layout{flex:1 1 auto;min-height:0;display:flex;overflow:hidden}
+.col{overflow-y:auto;overflow-x:hidden;padding:20px 26px}
+.col.answer{flex:1 1 auto;border-right:1px solid var(--line);background:#fff}
+.col.side{flex:0 0 420px;width:420px;background:var(--panel);padding:0 26px 20px}
+@media(max-width:900px){
+  .layout{flex-direction:column;overflow:auto}
+  .col{overflow:visible}
+  .col.answer{border-right:none;border-bottom:1px solid var(--line)}
+  .col.side{flex:1 1 auto;width:auto}
+}
+.col h2{font-size:13px;color:var(--muted);font-weight:600;margin:0 0 14px;letter-spacing:.02em}
+
+/* ---- rendered markdown answer ---- */
+.answer-body{font-size:15px}
+.answer-body h1,.answer-body h2,.answer-body h3,.answer-body h4,.answer-body h5,.answer-body h6{line-height:1.4;margin:20px 0 10px;font-weight:700;color:#1a2330}
+.answer-body h1{font-size:21px;border-bottom:2px solid var(--line);padding-bottom:6px}
+.answer-body h2{font-size:18px;border-bottom:1px solid var(--line);padding-bottom:4px}
+.answer-body h3{font-size:16px}
+.answer-body h4{font-size:14.5px}
+.answer-body h5,.answer-body h6{font-size:13.5px;color:var(--muted)}
+.answer-body p{margin:0 0 12px}
+.answer-body ul,.answer-body ol{margin:0 0 12px;padding-left:26px}
+.answer-body li{margin:4px 0}
+.answer-body blockquote{margin:0 0 12px;padding:6px 14px;border-left:3px solid var(--brand);background:var(--brand-soft);color:#33414f;border-radius:0 8px 8px 0}
+.answer-body code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:13px;background:#f0f2f5;padding:1px 5px;border-radius:4px}
+.answer-body pre{background:#1f2733;color:#e6edf3;padding:12px 14px;border-radius:8px;overflow:auto;margin:0 0 12px}
+.answer-body pre code{background:none;color:inherit;padding:0}
+.answer-body a{color:var(--assoc);text-decoration:none}
+.answer-body a:hover{text-decoration:underline}
+.answer-body hr{border:none;border-top:1px solid var(--line);margin:18px 0}
+.answer-body table{border-collapse:collapse;width:100%;margin:0 0 14px;font-size:13.5px}
+.answer-body th,.answer-body td{border:1px solid var(--line);padding:7px 10px;text-align:left;vertical-align:top}
+.answer-body th{background:var(--brand-soft);font-weight:700;color:#1a2330}
+.answer-body tr:nth-child(even) td{background:#fafbfc}
+.answer-body strong{font-weight:700}
+
+/* ---- verification highlight (overlay only) ---- */
+.vp{border-radius:4px;padding:0 2px;cursor:pointer;border-bottom:2px solid transparent;transition:background .15s}
+.vp.associated{background:var(--assoc-bg);border-color:var(--assoc-line)}
+.vp.weak{background:var(--warn-bg);border-color:var(--warn-line)}
+.vp.unverified{background:var(--todo-bg);border-color:var(--todo-line);text-decoration:underline dotted var(--todo)}
+.vp:hover{filter:brightness(.96)}
+.vp.active{outline:2px solid var(--brand);outline-offset:1px}
+.badge{display:inline-block;font-size:10px;font-weight:700;vertical-align:super;margin-left:1px;padding:0 4px;border-radius:6px}
+.badge.associated{background:var(--assoc);color:#fff}
+.badge.weak{background:var(--warn);color:#fff}
+.badge.unverified{background:var(--todo);color:#fff}
+
+/* ---- evidence panel ---- */
+.tabs{display:flex;gap:6px;position:sticky;top:0;z-index:6;background:var(--panel);
+  /* mask from the panel edge, but keep buttons vertically centered inside the sticky bar */
+  margin:0 -26px 12px;padding:0 26px;min-height:64px;align-items:center;
+  box-shadow:0 10px 14px -12px rgba(20,40,70,.22)}
+.tabs button{font:inherit;font-size:12.5px;padding:4px 12px;border:1px solid var(--line);background:#fff;border-radius:8px;cursor:pointer}
+.tabs button.active{background:var(--brand);color:#fff;border-color:var(--brand)}
+.ev-empty{color:var(--muted);font-size:13px;padding:20px;text-align:center;border:1px dashed var(--line);border-radius:10px}
+.ev-card{border:1px solid var(--line);border-radius:12px;overflow:hidden;margin-bottom:14px}
+.ev-card .ev-top{padding:12px 14px;border-bottom:1px solid var(--line)}
+.ev-status{display:inline-block;font-size:11px;font-weight:700;padding:2px 9px;border-radius:20px}
+.ev-status.associated{background:var(--assoc-bg);color:var(--assoc)}
+.ev-status.weak{background:var(--warn-bg);color:var(--warn)}
+.ev-status.unverified{background:var(--todo-bg);color:var(--todo)}
+.ev-type{font-size:11.5px;color:var(--muted);margin-left:8px}
+.ev-claim{font-size:13.5px;margin:8px 0 0;color:var(--ink)}
+.ev-src{padding:10px 14px}
+.ev-src .src-title{font-size:12.5px;font-weight:600;color:var(--brand);cursor:pointer}
+.ev-src .src-title:hover{text-decoration:underline}
+.ev-quote{font-size:12.5px;color:#33414f;background:var(--brand-soft);border-left:3px solid var(--brand);
+  padding:8px 10px;margin-top:8px;border-radius:0 8px 8px 0;white-space:pre-wrap}
+.ev-actions{display:flex;gap:8px;padding:0 14px 12px;flex-wrap:wrap}
+.ev-actions button{font:inherit;font-size:11.5px;padding:4px 10px;border:1px solid var(--line);background:#fff;border-radius:8px;cursor:pointer}
+.ev-cands{padding:6px 14px 12px;font-size:11.5px;color:var(--muted)}
+.ev-cands .cand{padding:4px 0;border-top:1px dashed var(--line);cursor:pointer}
+.ev-cands .cand:hover{color:var(--brand)}
+
+/* ---- sources tab ---- */
+.src-list .src-block{border:1px solid var(--line);border-radius:12px;margin-bottom:16px;overflow:hidden}
+.src-block .src-head{padding:10px 14px;background:#fafbfc;border-bottom:1px solid var(--line);font-size:13px;font-weight:600}
+.src-head .tag{font-size:10.5px;font-weight:600;padding:1px 7px;border-radius:10px;margin-left:6px;background:var(--brand-soft);color:var(--brand)}
+.src-head .tag.bad{background:var(--warn-bg);color:var(--warn)}
+.src-paras{padding:6px 14px}
+.source-paragraph{font-size:13px;padding:6px 8px;margin:2px 0;border-radius:6px;white-space:pre-wrap}
+.source-paragraph .pn{color:var(--muted);font-size:11px;margin-right:6px}
+.source-paragraph.citation-highlight-active{background:var(--hl);box-shadow:0 0 0 2px #f0d000 inset}
+.source-paragraph.citation-highlight-fading{transition:background 1.6s ease}
+
+.foot{flex:0 0 auto;padding:10px 26px;font-size:11px;color:var(--muted);background:var(--panel);border-top:1px solid var(--line);max-height:84px;overflow:auto}
+.hidden{display:none !important}
+
+/* ---- print / PDF: clean copy, no verification overlay ---- */
+#print-appendix{display:none}
+@media print{
+  html,body{height:auto;overflow:visible;display:block}
+  header.report-head,.notice,.toolbar,.stats,.col.side,.foot{display:none !important}
+  .layout{display:block;overflow:visible}
+  .col.answer{flex:none;width:auto;border:none;overflow:visible;padding:0}
+  .col.answer>h2{display:none}
+  .vp{background:none !important;border:none !important;text-decoration:none !important;padding:0;color:inherit}
+  .badge{display:none !important}
+  #print-appendix{display:block;margin-top:24px;page-break-before:always}
+  #print-appendix h2{font-size:16px;border-bottom:1px solid #999;padding-bottom:4px}
+  #print-appendix table{border-collapse:collapse;width:100%;font-size:11.5px}
+  #print-appendix th,#print-appendix td{border:1px solid #999;padding:5px 7px;text-align:left;vertical-align:top}
+  #print-appendix th{background:#eee}
+}
+</style>
+</head>
+<body>
+<header class="report-head">
+  <h1>__TITLE__</h1>
+  <div class="sub">__SUBTITLE__</div>
+</header>
+<div class="notice">核验标签用于将本报告的内容与检索到的法律依据原文建立关联，帮助您更便捷地核验依据；它<strong>不代表 AI 的输出与核验结果 100% 准确</strong>。<strong style="color:#2563b0">已关联</strong>=已找到对应依据原文；<strong style="color:#c98a00">弱关联</strong>=语义相关或条号待核对；<strong style="color:#6b7787">待核验</strong>=暂未匹配到可溯源依据。点击正文中的高亮处，即可查看其关联的依据原文。</div>
+<div class="toolbar">
+  <div class="grp">
+    <span class="lbl">高亮筛选</span>
+    <button data-filter="all" class="active">全部</button>
+    <button data-filter="associated">仅已关联</button>
+    <button data-filter="weak">仅弱关联</button>
+    <button data-filter="unverified">仅待核验</button>
+    <button id="toggle-hl">关闭高亮</button>
+  </div>
+  <div class="sep"></div>
+  <div class="grp">
+    <button class="exp" id="exp-word">导出 Word（不含标签）</button>
+    <button class="exp" id="exp-excel">导出 Excel（依据清单）</button>
+    <button class="exp" id="exp-pdf">导出 PDF / 打印</button>
+  </div>
+</div>
+<div class="stats" id="stats"></div>
+<div class="layout">
+  <div class="col answer">
+    <div class="answer-body" id="answer"></div>
+  </div>
+  <div class="col side">
+    <div class="tabs">
+      <button data-tab="evidence" class="active">关联依据</button>
+      <button data-tab="sources">来源资料库</button>
+    </div>
+    <div id="tab-evidence">
+      <div class="ev-empty">点击左侧带颜色的语句，这里显示它所关联的依据来源段落，供你点击溯源、自行核验。</div>
+    </div>
+    <div id="tab-sources" class="src-list hidden"></div>
+  </div>
+</div>
+<div class="foot">__FOOTER__</div>
+
+<!-- print-only clean appendix; populated by JS -->
+<div id="print-appendix"></div>
+
+<script type="application/json" id="verification-data">__DATA__</script>
+<script>
+(function(){
+  const DATA = JSON.parse(document.getElementById('verification-data').textContent);
+  const matchByPoint = {};
+  DATA.matches.forEach(m=>{ matchByPoint[m.pointId]=m; });
+  const sourceById = {};
+  DATA.sources.forEach(s=>{ sourceById[s.sourceId]=s; });
+  // Objective labels — NOT a correctness verdict.
+  const STATUS_LABEL={associated:'已关联',weak:'弱关联',unverified:'待核验'};
+  function labelOf(m){ return m && (m.label||m.status||'unverified'); }
+  function esc(t){return String(t==null?'':t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+  function escAttr(t){return esc(t).replace(/"/g,'&quot;');}
+  function stripParaNo(t){return String(t==null?'':t).replace(/^\s*\[?P\d+\]?\s*/, '').trim();}
+
+  /* ============================================================
+   *  Minimal, dependency-free Markdown renderer (offline-safe).
+   *  Supports: ATX headings, fenced code, blockquote, hr, tables,
+   *  ordered/unordered lists (nesting by indent), paragraphs, and
+   *  inline: code, bold, italic, strikethrough, links.
+   *  Returns clean HTML string (NO verification overlay).
+   * ============================================================ */
+  function inlineMd(text){
+    // text is raw (unescaped). Protect code spans first.
+    const codes=[];
+    let s=text.replace(/`([^`]+)`/g,(m,c)=>{codes.push(c);return '\u0000C'+(codes.length-1)+'\u0000';});
+    s=esc(s);
+    // links [text](url)
+    s=s.replace(/\[([^\]]+)\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g,(m,t,u)=>{
+      const safe=/^(https?:|mailto:|file:|#|\/)/i.test(u)?u:'#';
+      return '<a href="'+escAttr(safe)+'" target="_blank" rel="noopener">'+t+'</a>';
+    });
+    // bold then italic then strike
+    s=s.replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>')
+       .replace(/__([^_]+)__/g,'<strong>$1</strong>')
+       .replace(/(^|[^*])\*([^*\n]+)\*/g,'$1<em>$2</em>')
+       .replace(/(^|[^_])_([^_\n]+)_/g,'$1<em>$2</em>')
+       .replace(/~~([^~]+)~~/g,'<del>$1</del>');
+    // restore code spans
+    s=s.replace(/\u0000C(\d+)\u0000/g,(m,i)=>'<code>'+esc(codes[+i])+'</code>');
+    return s;
+  }
+
+  function renderMarkdown(md){
+    const lines=String(md||'').replace(/\r\n?/g,'\n').split('\n');
+    let html='', i=0;
+    const isBlank=(l)=>!l||!l.trim();
+    while(i<lines.length){
+      let line=lines[i];
+      // fenced code
+      const fence=line.match(/^\s*```(.*)$/);
+      if(fence){
+        let buf=[]; i++;
+        while(i<lines.length && !/^\s*```/.test(lines[i])){buf.push(lines[i]);i++;}
+        i++; // skip closing fence
+        html+='<pre><code>'+esc(buf.join('\n'))+'</code></pre>';
+        continue;
+      }
+      // blank
+      if(isBlank(line)){i++;continue;}
+      // heading
+      const h=line.match(/^(#{1,6})\s+(.*)$/);
+      if(h){html+='<h'+h[1].length+'>'+inlineMd(h[2].trim())+'</h'+h[1].length+'>';i++;continue;}
+      // hr
+      if(/^\s*(-{3,}|\*{3,}|_{3,})\s*$/.test(line)){html+='<hr/>';i++;continue;}
+      // table: current line has |, next line is a separator row
+      if(line.indexOf('|')>=0 && i+1<lines.length && /^\s*\|?[\s:|-]+\|[\s:|-]*$/.test(lines[i+1]) && /-/.test(lines[i+1])){
+        const splitRow=(r)=>{
+          let t=r.trim().replace(/^\|/,'').replace(/\|$/,'');
+          return t.split('|').map(c=>c.trim());
+        };
+        const header=splitRow(line);
+        i+=2; // skip header + separator
+        let body=[];
+        while(i<lines.length && lines[i].indexOf('|')>=0 && !isBlank(lines[i])){
+          body.push(splitRow(lines[i]));i++;
+        }
+        html+='<table><thead><tr>'+header.map(c=>'<th>'+inlineMd(c)+'</th>').join('')+'</tr></thead><tbody>'+
+          body.map(row=>'<tr>'+header.map((_,ci)=>'<td>'+inlineMd(row[ci]||'')+'</td>').join('')+'</tr>').join('')+
+          '</tbody></table>';
+        continue;
+      }
+      // blockquote
+      if(/^\s*>/.test(line)){
+        let buf=[];
+        while(i<lines.length && /^\s*>/.test(lines[i])){buf.push(lines[i].replace(/^\s*>\s?/,''));i++;}
+        html+='<blockquote>'+renderMarkdown(buf.join('\n'))+'</blockquote>';
+        continue;
+      }
+      // list (ordered or unordered), supports one level of nesting by indent
+      if(/^\s*([-*+]|\d+\.)\s+/.test(line)){
+        const ordered=/^\s*\d+\.\s+/.test(line);
+        const tag=ordered?'ol':'ul';
+        let out='<'+tag+'>';
+        let pendingNest=null;
+        while(i<lines.length && (/^\s*([-*+]|\d+\.)\s+/.test(lines[i]) || (/^\s{2,}\S/.test(lines[i]) && !isBlank(lines[i])))){
+          const m=lines[i].match(/^(\s*)([-*+]|\d+\.)\s+(.*)$/);
+          if(m){
+            const indent=m[1].length;
+            const content=m[3];
+            if(indent>=2){
+              // nested item: attach to last li (simple one-level)
+              pendingNest=pendingNest||[];
+              pendingNest.push(content);
+              i++;
+              continue;
+            }
+            if(pendingNest){out+='<ul>'+pendingNest.map(c=>'<li>'+inlineMd(c)+'</li>').join('')+'</ul>';pendingNest=null;}
+            out+='<li>'+inlineMd(content);
+            // peek nested continuation handled next loop
+            out+='</li>';
+            i++;
+          } else { i++; }
+        }
+        if(pendingNest){out+='<ul>'+pendingNest.map(c=>'<li>'+inlineMd(c)+'</li>').join('')+'</ul>';}
+        out+='</'+tag+'>';
+        html+=out;
+        continue;
+      }
+      // paragraph: gather consecutive non-blank, non-structural lines
+      let buf=[line];i++;
+      while(i<lines.length && !isBlank(lines[i])
+            && !/^(#{1,6})\s+/.test(lines[i])
+            && !/^\s*```/.test(lines[i])
+            && !/^\s*>/.test(lines[i])
+            && !/^\s*([-*+]|\d+\.)\s+/.test(lines[i])
+            && !/^\s*(-{3,}|\*{3,}|_{3,})\s*$/.test(lines[i])
+            && !(lines[i].indexOf('|')>=0 && i+1<lines.length && /^\s*\|?[\s:|-]+\|[\s:|-]*$/.test(lines[i+1]))){
+        buf.push(lines[i]);i++;
+      }
+      html+='<p>'+inlineMd(buf.join(' '))+'</p>';
+    }
+    return html;
+  }
+
+  // ---- clean (export) answer html ----
+  const cleanAnswerHTML = renderMarkdown(DATA.answerText);
+
+  // ---- render answer with markdown + clickable verify points overlay ----
+  const answerEl=document.getElementById('answer');
+  answerEl.innerHTML = cleanAnswerHTML;
+
+  // inject highlights by walking text nodes and wrapping snippet occurrences.
+  function wrapNeedle(root, needle, pointId, cls){
+    if(!needle) return false;
+    const walker=document.createTreeWalker(root,NodeFilter.SHOW_TEXT,{
+      acceptNode:(n)=>{
+        if(n.parentNode && n.parentNode.closest && n.parentNode.closest('.vp')) return NodeFilter.FILTER_REJECT;
+        return n.nodeValue.indexOf(needle)>=0?NodeFilter.FILTER_ACCEPT:NodeFilter.FILTER_SKIP;
+      }
+    });
+    const node=walker.nextNode();
+    if(!node) return false;
+    const idx=node.nodeValue.indexOf(needle);
+    const before=node.nodeValue.slice(0,idx);
+    const after=node.nodeValue.slice(idx+needle.length);
+    const span=document.createElement('span');
+    span.className='vp '+cls;
+    span.setAttribute('data-point-id',pointId);
+    span.textContent=needle;
+    const badge=document.createElement('span');
+    badge.className='badge '+cls;
+    badge.textContent=STATUS_LABEL[cls];
+    span.appendChild(badge);
+    const frag=document.createDocumentFragment();
+    if(before) frag.appendChild(document.createTextNode(before));
+    frag.appendChild(span);
+    if(after) frag.appendChild(document.createTextNode(after));
+    node.parentNode.replaceChild(frag,node);
+    return true;
+  }
+
+  // order: by answer line, then longer snippet first (so nested short ones don't pre-consume)
+  const orderedPoints=DATA.points.slice().sort((a,b)=>{
+    const la=a.answerParagraphIndex||0, lb=b.answerParagraphIndex||0;
+    if(la!==lb) return la-lb;
+    return ((b.snippet||b.text||'').length)-((a.snippet||a.text||'').length);
+  });
+  // strip markdown emphasis/code markers — the rendered DOM text no longer has them,
+  // so a raw snippet like "**第五条**" must be cleaned to "第五条" to match a text node.
+  function stripMd(t){return String(t||'').replace(/\*\*/g,'').replace(/__/g,'').replace(/(^|[^*])\*([^*]+)\*/g,'$1$2').replace(/(^|[^_])_([^_]+)_/g,'$1$2').replace(/`/g,'').replace(/~~/g,'').trim();}
+  orderedPoints.forEach(pt=>{
+    const m=matchByPoint[pt.pointId]; if(!m) return;
+    const cls=labelOf(m);
+    const candidates=[];
+    const sn=(pt.snippet||'').trim();
+    if(sn && sn.length>=2){candidates.push(sn); if(stripMd(sn)!==sn) candidates.push(stripMd(sn));}
+    const tx=(pt.text||'').trim();
+    if(tx){candidates.push(tx); if(stripMd(tx)!==tx) candidates.push(stripMd(tx));}
+    for(const needle of candidates){ if(wrapNeedle(answerEl,needle,pt.pointId,cls)) break; }
+  });
+
+  // ---- render stats ----
+  // The matching engine may create internal verification points that are not actually rendered
+  // as visible highlights (e.g. duplicated rule-extracted fragments, snippets that do not occur
+  // after Markdown rendering). Header stats must reflect what the user can see and click.
+  function computeVisibleStats(){
+    const ids=[...new Set(Array.from(document.querySelectorAll('.vp')).map(v=>v.dataset.pointId).filter(Boolean))];
+    const out={points:ids.length,associated:0,weak:0,unverified:0,statuteHits:0,caseHits:0};
+    ids.forEach(id=>{
+      const m=matchByPoint[id]||{}; const lab=labelOf(m);
+      if(lab==='associated')out.associated++; else if(lab==='weak')out.weak++; else out.unverified++;
+      if(lab!=='unverified'&&m.type==='statute_article')out.statuteHits++;
+      if(lab!=='unverified'&&m.type==='case_ref')out.caseHits++;
+    });
+    return out;
+  }
+  const s=computeVisibleStats();
+  document.getElementById('stats').innerHTML=[
+    ['关联语句',s.points,''],['已关联',s.associated||0,'assoc'],['弱关联',s.weak||0,'warn'],
+    ['待核验',s.unverified||0,'todo'],['法条溯源',s.statuteHits||0,''],['案例溯源',s.caseHits||0,''],
+    ['来源资料',DATA.sources.length,'']
+  ].map(([l,n,c])=>`<div class="stat ${c}"><div class="n">${n}</div><div class="l">${l}</div></div>`).join('');
+
+  // ---- render sources ----
+  const srcEl=document.getElementById('tab-sources');
+  DATA.sources.forEach(src=>{
+    const block=document.createElement('div');block.className='src-block';
+    const incomplete=src.status==='不完整';
+    block.innerHTML=`<div class="src-head" id="srcblock-${src.sourceId}">${esc(src.title)}
+      <span class="tag">${esc(src.sourceType)}</span>
+      <span class="tag ${incomplete?'bad':''}">${esc(src.status)}</span>
+      ${src.url?`<span class="tag">有链接</span>`:''}</div>`;
+    const paras=document.createElement('div');paras.className='src-paras';
+    (src.paragraphs||[]).forEach(pp=>{
+      const pe=document.createElement('p');
+      pe.className='source-paragraph';
+      pe.id=`source-${src.sourceId}-P${pp.paragraphIndex}`;
+      pe.setAttribute('data-source-id',src.sourceId);
+      pe.setAttribute('data-paragraph','P'+pp.paragraphIndex);
+      pe.innerHTML=esc(pp.text);
+      paras.appendChild(pe);
+    });
+    block.appendChild(paras);srcEl.appendChild(block);
+  });
+
+  // ---- evidence panel ----
+  const evEl=document.getElementById('tab-evidence');
+  function showEvidence(pointId){
+    const m=matchByPoint[pointId];const pt=DATA.points.find(p=>p.pointId===pointId);
+    document.querySelectorAll('.vp.active').forEach(e=>e.classList.remove('active'));
+    document.querySelectorAll('.vp[data-point-id="'+pointId+'"]').forEach(e=>e.classList.add('active'));
+    // reset side scroll so freshly shown card is in view
+    document.querySelector('.col.side').scrollTop=0;
+    if(!m){evEl.innerHTML='<div class="ev-empty">无数据</div>';return;}
+    const lab=labelOf(m);
+    const cite=m.citations&&m.citations[0];
+    let html=`<div class="ev-card"><div class="ev-top">
+      <span class="ev-status ${lab}">${STATUS_LABEL[lab]}</span>
+      <div class="ev-claim">${esc(pt?pt.text:'')}</div></div>`;
+    if(cite&&cite.paragraphRange){
+      html+=`<div class="ev-src"><div class="src-title" data-jump="${cite.sourceId}|${(cite.paragraphIds[0]||'').split(':').pop()||''}">
+        ${esc(cite.sourceTitle)}</div>
+        <div class="ev-quote">${esc(stripParaNo(cite.quotedText))}</div></div>`;
+      html+=`<div class="ev-actions">
+        <button data-copy="${escAttr((cite.quotedText||''))}">复制原文</button>
+        <button data-jumpbtn="${cite.sourceId}|${(cite.paragraphIds[0]||'').split(':').pop()||''}">跳到来源原文</button>
+        ${(()=>{const src=sourceById[cite.sourceId];return src&&src.url?`<button onclick="window.open('${escAttr(src.url)}','_blank')">打开链接</button>`:'';})()}
+        </div>`;
+    } else if(cite){
+      html+=`<div class="ev-src"><div class="src-title">${esc(cite.sourceTitle||'')}</div>
+        <div class="ev-quote" style="border-color:var(--warn);background:var(--warn-bg)">${esc(m.note||cite.reason||'')}</div></div>`;
+    } else {
+      html+=`<div class="ev-src"><div class="ev-quote" style="border-color:var(--todo);background:var(--todo-bg)">
+        ${esc(m.note||'本次资料中暂无可直接溯源的依据，请自行查证——这不表示该表述有误。')}</div></div>`;
+    }
+    if(m.candidates&&m.candidates.length){
+      html+='<div class="ev-cands"><div style="font-weight:600;color:var(--ink)">可能相关的其他来源：</div>'+
+        m.candidates.map(c=>`<div class="cand" data-jump="${c.paragraphId.split(':')[0]}|${c.paragraphId.split(':').pop().replace('P','')}">${esc(c.sourceTitle.slice(0,18))} ${esc(stripParaNo(c.preview))}</div>`).join('')+'</div>';
+    }
+    html+='</div>';
+    evEl.innerHTML=html;
+  }
+
+  function jumpTo(sourceId,pIdx){
+    activateTab('sources');
+    const el=document.getElementById(`source-${sourceId}-P${pIdx}`)||document.getElementById('srcblock-'+sourceId);
+    if(!el)return;
+    document.querySelectorAll('.citation-highlight-active').forEach(e=>e.classList.remove('citation-highlight-active','citation-highlight-fading'));
+    el.scrollIntoView({behavior:'smooth',block:'center'});
+    el.classList.add('citation-highlight-active');
+    setTimeout(()=>el.classList.add('citation-highlight-fading'),3000);
+    setTimeout(()=>el.classList.remove('citation-highlight-active','citation-highlight-fading'),5200);
+  }
+
+  // ---- tabs ----
+  function activateTab(name){
+    document.querySelectorAll('.tabs button').forEach(b=>b.classList.toggle('active',b.dataset.tab===name));
+    document.getElementById('tab-evidence').classList.toggle('hidden',name!=='evidence');
+    document.getElementById('tab-sources').classList.toggle('hidden',name!=='sources');
+  }
+  document.querySelectorAll('.tabs button').forEach(b=>b.addEventListener('click',()=>activateTab(b.dataset.tab)));
+
+  // ---- filters ----
+  document.querySelectorAll('.toolbar button[data-filter]').forEach(b=>b.addEventListener('click',()=>{
+    document.querySelectorAll('.toolbar button[data-filter]').forEach(x=>x.classList.remove('active'));
+    b.classList.add('active');
+    const f=b.dataset.filter;
+    document.querySelectorAll('.vp').forEach(vp=>{
+      const m=matchByPoint[vp.dataset.pointId];
+      vp.style.opacity=(f==='all'||(m&&labelOf(m)===f))?'1':'0.25';
+    });
+  }));
+  // toggle highlight overlay on/off (see raw original output)
+  let hlOn=true;
+  document.getElementById('toggle-hl').addEventListener('click',function(){
+    hlOn=!hlOn;
+    document.body.classList.toggle('no-hl',!hlOn);
+    document.querySelectorAll('.vp').forEach(vp=>{
+      vp.style.background=hlOn?'':'transparent';
+      vp.style.borderColor=hlOn?'':'transparent';
+      vp.style.textDecoration=hlOn?'':'none';
+    });
+    document.querySelectorAll('.badge').forEach(b=>b.style.display=hlOn?'':'none');
+    this.textContent=hlOn?'关闭高亮':'开启高亮';
+  });
+
+  // ---- delegated clicks ----
+  document.addEventListener('click',e=>{
+    const vp=e.target.closest('.vp');if(vp){activateTab('evidence');showEvidence(vp.dataset.pointId);return;}
+    const jump=e.target.closest('[data-jump]');if(jump){const[sid,pi]=jump.dataset.jump.split('|');jumpTo(sid,pi);return;}
+    const jb=e.target.closest('[data-jumpbtn]');if(jb){const[sid,pi]=jb.dataset.jumpbtn.split('|');jumpTo(sid,pi);return;}
+    const cp=e.target.closest('[data-copy]');if(cp){navigator.clipboard&&navigator.clipboard.writeText(cp.dataset.copy);cp.textContent='已复制';setTimeout(()=>cp.textContent='复制原文',1200);return;}
+  });
+
+  /* ============================================================
+   *  Reference appendix (引用依据清单) + Export (Word / Excel / PDF)
+   *  Exported content carries NO verification labels.
+   * ============================================================ */
+  const TYPE_CN={statute_article:'法规条文',case_ref:'案例/案号',regulatory_doc:'监管文件',legal_claim:'法律判断',conclusion:'结论',viewpoint:'观点',factual_claim:'事实/数据'};
+  function buildReferences(){
+    const rows=[]; const seen=new Set();
+    DATA.points.forEach(pt=>{
+      const m=matchByPoint[pt.pointId];
+      const cite=m&&m.citations&&m.citations[0];
+      const nt=pt.normalizedTarget||{};
+      const name=(cite&&cite.sourceTitle)||nt.title||'';
+      const locator=nt.articleNo||nt.caseNo||(cite&&cite.paragraphRange)||'';
+      const isRef=['statute_article','case_ref','regulatory_doc'].indexOf(pt.type)>=0;
+      if(!isRef && !name) return;            // only carry real legal references into appendix
+      if(!name && !locator) return;
+      const src=cite?sourceById[cite.sourceId]:null;
+      const key=name+'|'+locator;
+      if(seen.has(key)) return; seen.add(key);
+      rows.push({
+        type:TYPE_CN[pt.type]||pt.type,
+        name:name||'（未指明来源）',
+        locator:locator||'—',
+        status:(src&&src.status)||'',
+        claim:(pt.text||'').replace(/\s+/g,' ').slice(0,120),
+        url:(src&&src.url)||''
+      });
+    });
+    return rows;
+  }
+  const REFS=buildReferences();
+
+  function appendixHTML(forExcel){
+    if(!REFS.length) return '<p>本次回答未引用可列举的法规/条款/案例。</p>';
+    const head=['序号','类型','名称（法规/案例）','条款/案号','效力状态','关联论断','来源链接'];
+    const rows=REFS.map((r,i)=>`<tr><td>${i+1}</td><td>${esc(r.type)}</td><td>${esc(r.name)}</td><td>${esc(r.locator)}</td><td>${esc(r.status)}</td><td>${esc(r.claim)}</td><td>${esc(r.url)}</td></tr>`).join('');
+    return `<table border="1" cellspacing="0" cellpadding="4"><thead><tr>${head.map(h=>'<th>'+esc(h)+'</th>').join('')}</tr></thead><tbody>${rows}</tbody></table>`;
+  }
+
+  // populate print appendix
+  document.getElementById('print-appendix').innerHTML='<h2>附：引用法规 / 条款 / 案例清单</h2>'+appendixHTML(false)+
+    '<p style="font-size:11px;color:#666;margin-top:10px">本清单由溯源核验记录自动生成，仅供查阅，不构成正式法律意见。</p>';
+
+  function download(filename,content,mime){
+    const blob=new Blob(['\ufeff',content],{type:mime});
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(blob);a.download=filename;
+    document.body.appendChild(a);a.click();
+    setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},500);
+  }
+
+  const docTitle=(DATA.query?('法律意见 - '+DATA.query.slice(0,30)):'法律意见');
+
+  // Word: clean answer (markdown formatting kept, no verification overlay) + appendix
+  document.getElementById('exp-word').addEventListener('click',()=>{
+    const styles=`<style>
+      body{font-family:"PingFang SC","Microsoft YaHei",SimSun,serif;font-size:14px;line-height:1.8;color:#000}
+      h1{font-size:20px}h2{font-size:17px}h3{font-size:15px}
+      table{border-collapse:collapse;width:100%}th,td{border:1px solid #888;padding:5px 8px;text-align:left;vertical-align:top}
+      th{background:#eee}blockquote{border-left:3px solid #888;margin:0;padding:4px 12px;color:#333}
+      code{font-family:Consolas,monospace;background:#f0f0f0;padding:1px 4px}
+      pre{background:#f5f5f5;padding:10px;border:1px solid #ddd}
+    </style>`;
+    const html='<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns="http://www.w3.org/TR/REC-html40">'+
+      '<head><meta charset="utf-8">'+styles+'</head><body>'+
+      cleanAnswerHTML+
+      '<br/><hr/><h2>附：引用法规 / 条款 / 案例清单</h2>'+appendixHTML(false)+
+      '<p style="font-size:11px;color:#666">本文由法律检索专家生成，引用清单由溯源核验记录自动生成，仅供查阅，不构成正式法律意见。</p>'+
+      '</body></html>';
+    download(docTitle+'.doc',html,'application/msword');
+  });
+
+  // Excel: reference list only (依据清单)
+  document.getElementById('exp-excel').addEventListener('click',()=>{
+    const html='<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">'+
+      '<head><meta charset="utf-8"><!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet><x:Name>引用依据清单</x:Name><x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions></x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]--></head>'+
+      '<body>'+appendixHTML(true)+'</body></html>';
+    download('引用依据清单.xls',html,'application/vnd.ms-excel');
+  });
+
+  // PDF: print (print CSS hides verification UI, shows clean answer + appendix)
+  document.getElementById('exp-pdf').addEventListener('click',()=>{ window.print(); });
+
+})();
+</script>
+</body>
+</html>

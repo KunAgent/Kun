@@ -1,0 +1,143 @@
+{
+  "id": "fbs-bookwriter",
+  "_plugin_id_note": "`id` 是稳定内部标识，供脚本/元数据索引长期引用；SKILL.md 中的 `plugin-id`（当前为 `fbs-bookwriter-v212`）是随版本变化的发布包标识，主要用于市场包名、审核产物与宿主展示。两者指向同一技能，但职责不同，不应误判为两个独立插件。",
+  "name": "fbs-bookwriter",
+  "version": "2.1.2",
+  "displayName": "福帮手：高质量长文档手稿工具链",
+  "description": "福帮手出品 | 高质量长文档手稿工具链：书籍、手册、白皮书、行业指南、长篇报道、深度专题；支持联网查证（宿主允许时启用，离线自动降级）、S/P/C/B 分层审校、中文排版与 MD/HTML 交付。触发词：福帮手、福帮手写书skill、福帮手写书、写书、出书、写长篇、写手册、写白皮书、写行业指南、协作写书、定大纲、写章节、封面、插图、排版构建、导出、去AI味、质量自检、图文书、写报道、写深度稿、写特稿、写专题、写调查报道、写长文、激活原料、原料盘点、整理素材。\n\n【数据说明】书稿全程保存到用户本地磁盘，不上传任何服务器。场景包规则文件从配置服务拉取，不含书稿内容。",
+  "author": "悟空共创（杭州）智能科技有限公司（FBS-BookWriter 出品方）",
+  "homepage": "https://fbs-bookwriter.u3w.com/",
+  "license": "MIT",
+  "engines": {
+    "workbuddy": ">=1.1",
+    "codebuddy": ">=1.0",
+    "node": ">=18"
+  },
+  "permissions": {
+    "network": [
+      "pack.fbs.u3w.com",
+      "api.u3w.com"
+    ],
+    "network_reason": "拉取场景包规则文件更新；U3W 会员身份验证（T2）；外部检索能力由宿主 web_search 提供",
+    "bash": true,
+    "bash_reason": "执行本地构建脚本（build.mjs / verify-expected-artifacts.mjs / host-capability-detect.mjs / release-feedback-bridge.mjs）"
+  },
+  "capabilities": {
+    "scene_packs": true,
+    "scene_pack_hot_update": true,
+    "local_disk_output": true,
+    "offline_mode": true,
+    "fbs_points": true,
+    "user_tiers": [
+      "T0",
+      "T1",
+      "T2",
+      "T3"
+    ],
+    "workbuddy_resume_first": true,
+    "workbuddy_profile_bridge": true,
+    "workbuddy_market_routing": true,
+    "codebuddy_plugin_routing": true,
+    "organization_feedback_bridge": true,
+    "wecom_docs": false,
+    "wecom_spreadsheets": "readonly",
+    "script_cli_bridge": "scripts/fbs-cli-bridge.mjs",
+    "script_cli_bridge_doc": "references/01-core/skill-cli-bridge-matrix.md"
+  },
+  "scene_packs": {
+    "builtin": [
+      "general"
+    ],
+    "_builtin_note": "general 即 references/scene-packs/general.md，随 Skill 分发，无需授权码",
+    "available": [
+      "genealogy",
+      "consultant",
+      "ghostwriter",
+      "training",
+      "personal-book",
+      "whitepaper",
+      "report"
+    ],
+    "_available_note": "与 SKILL.md scene-packs 字段对齐；7个增强场景会先自动识别为候选体裁，完成在线校验或满足对应门槛后启用增强规则；未满足条件时明确回退 general。",
+    "config_source": "scene-packs/enterprise.json",
+    "_config_source_note": "仓库内与正式打包产物中均包含 `scene-packs/enterprise.json`；该文件是企业配置模板，不是运行时用户数据。",
+    "rules_dir": ".fbs/rules/",
+    "update_check_interval_hours": 24
+  },
+  "user_data": {
+    "_note": "以下路径为运行时 .fbs/ 目录下的用户数据。scene-packs/credits-ledger.json 为另一套独立的乐包积分体系，与本字段无关。",
+    "points_file": ".fbs/points.json",
+    "user_file": ".fbs/user.json",
+    "packs_dir": ".fbs/packs/",
+    "pending_activation": ".fbs/pending-activation.json",
+    "org_feedback_dir": ".fbs/org-feedback"
+  },
+  "distribution": {
+    "channels": [
+      "workbuddy-marketplace",
+      "codebuddy-plugin"
+    ],
+    "default_channel": "workbuddy-marketplace",
+    "channel_manifests": {
+      "workbuddy-marketplace": "workbuddy/channel-manifest.json",
+      "codebuddy-plugin": "codebuddy/channel-manifest.json"
+    },
+    "plugin_metadata": ".codebuddy-plugin/plugin.json",
+    "agents_dir": ".codebuddy/agents",
+    "providers_registry": ".codebuddy/providers/provider-registry.yml",
+    "feedback_bridge": "scripts/release-feedback-bridge.mjs",
+    "enterprise_config_file": "scene-packs/enterprise.json"
+  },
+  "keywords": [
+    "福帮手",
+    "福帮手写书skill",
+    "福帮手写书",
+    "写书",
+    "出书",
+    "写长篇",
+    "写手册",
+    "写白皮书",
+    "写行业指南",
+    "协作写书",
+    "定大纲",
+    "写章节",
+    "封面",
+    "插图",
+    "排版构建",
+    "导出",
+    "去AI味",
+    "质量自检",
+    "图文书",
+    "写报道",
+    "写深度稿",
+    "写特稿",
+    "写专题",
+    "写调查报道",
+    "写长文",
+    "激活原料",
+    "原料盘点",
+    "整理素材",
+    "workbuddy",
+    "codebuddy",
+    "whitepaper",
+    "白皮书",
+    "长文档",
+    "场景包",
+    "book",
+    "report",
+    "AI写作",
+    "长文档生成",
+    "人机协作",
+    "行业指南",
+    "产品手册",
+    "调查报告",
+    "S/P/C/B质检",
+    "分层审校",
+    "智能记忆",
+    "长文档工具链",
+    "组织反馈回流",
+    "3万字以上",
+    "手稿工具",
+    "高质量写作"
+  ]
+}

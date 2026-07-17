@@ -1,0 +1,199 @@
+{
+  "temporalAccuracy": {
+    "description": "时效准确性约束：确保时间戳与年份标签基于检索事实，禁止使用模型内置过时知识",
+    "requireTimestampSearchAtS0": true,
+    "timestampSearchNote": "S0 启动后第一个动作须用 WebSearch 查询当前日期（如「今天是几月几日」「当前年月」），将结果写入调研简报「时间基准」行，后续所有阶段的日期引用以此为准；禁止使用模型内置知识推断当前年份。",
+    "forbidBareYearWithoutSource": true,
+    "yearLabelPolicy": "search_before_write",
+    "yearLabelNote": "凡正文中出现「202X年」「近年来」「当前」「最新」等时效性表述，须先执行 WebSearch 取得来源后再写入；若未检索则须标注「（待核实年份）」，禁止模型以训练截止日期前的记忆自动补入年份标签。禁止将模型未检索确认的年份包装成「最新数据」写入正文。",
+    "s0TimestampQuery": "获取当前日期的标准查询词：「今天日期」「当前年月日」「今天是哪年哪月哪日」；结果应写入 [S0] 调研简报「时间基准：YYYY年MM月DD日（来源：WebSearch）」。",
+    "hardcodeYearDetection": {
+      "description": "硬编码年份拦截（P0）：防止模型以训练数据印记自动补入具体年份",
+      "enabled": true,
+      "triggerPatterns": [
+        "2020",
+        "2021",
+        "2022",
+        "2023",
+        "2024",
+        "2025"
+      ],
+      "action": "拦截并要求来源确认：凡检索 query 或正文中出现4位数字年份标签，须先完成 WebSearch 来源验证，否则标注「（年份待核实）」；禁止将训练截止日期前的年份以「最新」「当前」等时效词包装后写入。",
+      "exceptionNote": "若年份为用户显式提供的历史研究截止日期（如「截至2023年」）或 S0 时间戳检索已核实，须在正文中标注来源；不得以「最新」「当前」等时效词包装历史截止年份。",
+      "queryForbiddenNote": "检索 query 中禁止使用具体4位数字年份作为前缀或后缀（如「AI应用 2024」「2025 市场报告」），须改用 suggestedSuffixes 中的相对时效词（如「AI应用 最新」）；若确实需要年份范围，须由调用方在运行时动态注入，不得硬编码。",
+      "quarterForbiddenNote": "正文中出现季度表述（Q1/Q2/Q3/Q4）时须补充具体月份范围（如「Q1（1月–3月）」），不得仅写季度而不注明月份范围；否则视为时间精度不足，须标注「〔季度范围，具体月份待核实〕」。"
+    }
+  },
+  "searchEnhancement": {
+    "description": "搜索增强策略：自增强、疑难自动补检、优质源发现——提升检索质量的四类机制",
+    "freshKeywordInjection": {
+      "enabled": true,
+      "note": "每轮检索 query 中应包含时效性限定词，防止搜索引擎返回多年前的过期内容；S3 章前检索尤应如此。实际年份须在运行时动态注入（代码层：`year || new Date().getFullYear()`），禁止在 query 中硬编码训练截止年份或使用具体4位数字年份作为标签前缀（如「2024」「2025」）。检索 query 年份注入示例：传入 year=当前年份（由 temporalAccuracy.s0TimestampQuery 核实）而非硬编码固定值。",
+      "suggestedSuffixes": [
+        "最新",
+        "最近发布",
+        "近三年",
+        "当前"
+      ],
+      "forbiddenSuffixes": [
+        "2020",
+        "2021",
+        "2022",
+        "2023",
+        "2024",
+        "2025"
+      ],
+      "forbiddenSuffixesNote": "suggestedSuffixes（相对时效词）与 forbiddenSuffixes（绝对年份词）为对立集合；任何 query 不得将两侧词汇混用；若确需使用具体年份，须通过 dynamicYearNote 的运行时注入机制，且须有 S0 时间戳检索作为来源依据，不得直接硬编码。",
+      "dynamicYearNote": "「当前年份」后缀（如「2026年」）须由调用方在运行时动态拼接，不在此列表硬编码固定年份；参见 SearchBundle.buildS0Queries 的 year 参数注入机制。"
+    },
+    "selfImprovingStrategy": {
+      "enabled": true,
+      "mandatory": true,
+      "note": "检索结束后，模型【必须】评估本轮结果的信息密度与来源权威性（此为强制动作，非建议）：若发现高质量来源出现新子域或专题词，应基于这些新词生成下一轮优化 query；将有效 query 变形和无效 query 原因记录到 `.fbs/search-ledger.jsonl`（kind=search，含 `queryOptimization` 字段），供后续章节自动参考。每轮 S0/S3 检索结束时，须在对话中输出一行自评结论：「本轮检索自评：[质量评级 高/中/低]，[是否发现新专题词：是/否]，[下轮优化方向：...]」",
+      "ledgerField": "queryOptimization",
+      "mandatoryOutputTemplate": "本轮检索自评：质量[高/中/低]｜新专题词[有：{词}／无]｜下轮优化[{方向或「无需优化」}]",
+      "triggerCondition": "每轮 S0/S3 检索结束后强制触发（不再仅限于「出现新专题词」时触发）",
+      "gateNote": "S3 章前检索完成后，写入 Chapter Brief 前须先完成本轮自评，自评结论写入 .fbs/writing-notes/{chapterId}.writing-notes.md"
+    },
+    "autoSearchOnUncertainty": {
+      "enabled": true,
+      "mandatory": true,
+      "triggerKeywords": [
+        "不确定",
+        "可能",
+        "大约",
+        "据说",
+        "印象中",
+        "记忆中",
+        "似乎",
+        "应该是",
+        "我认为",
+        "估计",
+        "好像"
+      ],
+      "note": "模型在生成正文时，一旦内心评估该句事实置信度低于 0.8（或措辞中含上述不确定词），须【立即暂停写入】并触发 WebSearch 补充检索后再续写；不得以「可能」「大约」等模糊词掩盖未经验证的事实，更不得用「（数据待补充）」占位后忘记补齐。【说出前先核实原则】：任何以「根据XXX文件的YYY条款」开头的规范引用陈述，必须先完成文件核实动作，确认条文存在且表述准确，再输出结论；禁止先说结论再核实，禁止捏造或合并不存在的条款名称。",
+      "verifyBeforeCiteProtocol": "引用规范条文前的强制核实流程：(1) 打开被引用文件；(2) 确认条文存在且表述与引用一致；(3) 在引用时标注文件名与行号（如「见 search-policy.json 第247行」）；(4) 若找不到对应条文，须说「我找不到该表述，让我核实后再回答」，禁止凭记忆重构条文。",
+      "fallbackIfSearchFails": "标注「（数据待核实，来源：[检索失败]）」并在章末「检索执行记录」中注明，禁止静默写入推测值。",
+      "pendingVerificationTracking": "遇到不确定内容时，若检索暂时无法执行，须写入 .fbs/writing-notes/pending-verification.md（或 .pending-verification.md；见 p0AutomationIndex）；使用 - [ ] 勾选格式；S5 前运行 scripts/audit-pending-verification.mjs --enforce 或人工清零。",
+      "factAnnotationProtocol": {
+        "description": "事实标注协议（v1.8.0，P0）：将触发条件从隐性「置信度判断」改为显式「内容类型驱动」，消除模型可绕过的漏洞",
+        "triggerByContentType": true,
+        "triggerTypes": [
+          {
+            "type": "具体数字/比例",
+            "examples": [
+              "市占率78.4%",
+              "14.5万用户",
+              "增长23%"
+            ],
+            "action": "先检索后写入，或标注 〔来源：{来源名}〕 或 〔来源：待核实〕"
+          },
+          {
+            "type": "绝对化陈述",
+            "examples": [
+              "全球最大",
+              "行业第一",
+              "唯一支持",
+              "完全无法"
+            ],
+            "action": "先检索取得来源后写入，或标注 〔来源：待核实〕"
+          },
+          {
+            "type": "具体年月日/产品版本",
+            "examples": [
+              "2025年3月",
+              "v2.4于2025年11月发布"
+            ],
+            "action": "须有 search-ledger.jsonl 中 yearSourceConfirmed=true 条目，否则标注 〔时间待核实〕"
+          },
+          {
+            "type": "季度表述",
+            "examples": [
+              "2025年Q1",
+              "2026年Q3"
+            ],
+            "action": "须补充具体月份范围（如「Q1（1月–3月）」），否则标注 〔季度范围，具体月份待核实〕"
+          }
+        ],
+        "annotationFormats": {
+          "有来源": "〔来源：{来源名/URL}〕",
+          "无来源": "〔来源：待核实〕",
+          "模型知识": "〔模型知识，未经外部检索核实〕",
+          "时间待核实": "〔时间待核实〕",
+          "季度模糊": "〔季度范围，具体月份待核实〕"
+        },
+        "fastCorrectionTemplate": "我刚才写入的「{内容}」未经检索核实——是我疏漏了。正确做法是先检索或标注〔来源：待核实〕。",
+        "note": "此协议不废除 triggerKeywords 机制，两者并行生效；内容类型触发优先级 ≥ 触发词触发"
+      }
+    },
+    "sourceQualityTracking": {
+      "enabled": true,
+      "preferredSourceTypes": [
+        "官方文档",
+        "政府/监管机构官网",
+        "学术论文（已发表）",
+        "权威机构报告（头部智库/行业协会）",
+        "一手调研数据（原始来源）"
+      ],
+      "avoidSourceTypes": [
+        "未注明日期的个人博客",
+        "内容农场聚合站",
+        "二手转载且无原始链接"
+      ],
+      "qualitySignals": [
+        "域名权威性",
+        "发布日期明确",
+        "作者机构可查",
+        "数据可追溯原始来源"
+      ],
+      "highQualityDomainLedger": ".fbs/high-quality-domains.json",
+      "note": "每当检索到评分≥4（满分5）的高质量域名（官方/权威/一手数据），应将其追加写入 `.fbs/high-quality-domains.json`（字段：domain, firstSeenAt, sourceType, qualityScore），后续同主题章节优先向该域名发起 WebFetch；遇到来源质量存疑时须向用户说明并请求确认是否采信。"
+    },
+    "searchSourceDiscovery": {
+      "enabled": true,
+      "note": "S0 检索完成后，模型应汇总本次检索中发现的高质量信息源（≥3 条），在 [S0] 调研简报末尾附「本书推荐信息源」表（格式：来源名称 | URL | 擅长领域 | 质量等级），后续成文优先从该表取材；发现新优质源时随时补录。",
+      "outputSection": "本书推荐信息源",
+      "minSourcesAtS0": 3
+    }
+  },
+  "esmExecutionTracking": {
+    "description": "ESM 执行状态追踪（v1.8.0 审计升级）：项目级状态文件 + CLI 落盘，跨会话可回溯、可验证",
+    "enabled": true,
+    "trackingFile": ".fbs/规范执行状态.md",
+    "machineReadableStateFile": ".fbs/esm-state.md",
+    "cliEntry": "scripts/fbs-record-esm-transition.mjs",
+    "cliExample": "node scripts/fbs-record-esm-transition.mjs --book-root <本书根> --from IDLE --to INTAKE --reason \"用户触发\" [--genre A]",
+    "trackingFileTemplate": "## ESM 执行状态\n- 当前状态：{IDLE/INTAKE/RESEARCH/PLAN/WRITE/REVIEW/WRITE_MORE/DELIVER}\n- 上次宣告：{YYYY-MM-DD HH:MM} {旧状态} → {新状态}\n- 已完成动作：{动作列表}\n- 待执行：{下一必做动作}\n\n## P0 自查单\n- [ ] 时间戳检索已执行\n- [ ] 主题已锁定（首行含 **主题**）\n- [ ] S0维度门禁已通过（4维度达标）\n- [ ] 每轮检索已登记 search-ledger.jsonl\n- [ ] 每轮检索后已输出自评结论\n\n## 规范缺口预警\n{⚠️ 本轮对话发现的规范执行缺口，格式：[缺口描述] [触发来源] [建议修复]}",
+    "updateTiming": "每次状态切换时：① 对话内输出状态宣告；② 有 Node 时运行 cliEntry 写入 esm-state.md 与 规范执行状态.md「切换日志」",
+    "crossSessionBenefit": "模型重启后可 Read .fbs/esm-state.md 与 .fbs/规范执行状态.md 回溯执行状态",
+    "note": "v1.8.0 综合审计：建议在 S2→S3 前必须完成虚拟书房三层底座构建（含本追踪文件）；进入 S3 前宜运行 scripts/s3-start-gate.mjs（见质量门禁实证要求）"
+  },
+  "esmAnnouncementAtomicity": {
+    "description": "ESM 状态宣告原子化约束（v1.7.2 新增，P0）",
+    "enabled": true,
+    "requirement": "状态切换宣告须与 ESM 自检结论合并为同一次对话输出：包含(1)旧→新状态；(2)转换原因；(3)ESM自检出口；(4)下一步必做动作",
+    "anomalyForceRollback": "状态=WRITE 但无 Brief 文件 → 强制阻断 WRITE + 强制输出回退宣告：「[强制回退] WRITE → PLAN · 原因：Brief缺失 · 必做：先输出 Chapter Brief」；禁止仅输出「建议回退」提示",
+    "auditNote": "审计时以宣告是否出现在对话文本中作为状态切换已发生的唯一可验证依据；无宣告=状态切换未执行=P0违规"
+  },
+  "termConsistencyTracking": {
+    "description": "术语一致性追踪（v1.8.0，P0）：将 s0ConceptGate 的静态门禁扩展为 S2/S3/S4 全程动态哨兵",
+    "enabled": true,
+    "trackingFile": ".fbs/术语锁定记录.md",
+    "trackingFileTemplate": "# 术语锁定记录\n\n## 锁定期术语\n| 术语 | 标准写法 | 首次定义位置 | 锁定时间 | 确认状态 |\n|------|---------|------------|---------|--------|\n\n## 禁用变体\n| 禁用变体 | 建议替换 | 原因 |\n|---------|---------|------|\n\n## 替换记录\n（追加模式：时间 | 原表述 | 替换为 | 章节）",
+    "createTiming": "S0 简报包含「新概念定义」节后立即创建；无新概念则按需创建",
+    "chapterBriefIntegration": "每章 Chapter Brief 必须包含「锁定期术语核查」节：查询 .fbs/术语锁定记录.md，扫描本章草稿中的近似词，发现变体时立即输出纠正提示",
+    "nearSynonymDetection": "当用户输入或正文中出现与已锁定术语相似的表述时，输出：「⚠️ 检测到近似表述「{变体}」，建议替换为已锁定术语「{标准}」」",
+    "ledgerIntegration": "术语替换记录同步写入 search-ledger.jsonl：{\"kind\":\"term-change\",\"from\":\"{变体}\",\"to\":\"{标准}\",\"chapter\":\"{章节ID}\",\"timestamp\":\"{ISO}\"}",
+    "s5AuditNote": "S5 终审时须核验 .fbs/术语锁定记录.md 中「禁用变体」是否在全书正文中仍有出现；可配合 CLI：node scripts/audit-term-consistency.mjs --book-root <书稿根目录>"
+  },
+  "yearSourceLedger": {
+    "description": "年份来源台账（v1.8.0，P0）：将时间标签核实结果显式化为可审计的账本字段，消除 hardcodeYearDetection 的「规范有触发但执行无验证」问题",
+    "enabled": true,
+    "ledgerField": "yearSourceConfirmed",
+    "ledgerFieldType": "boolean",
+    "ledgerFieldNote": "每条 search-ledger.jsonl 记录若涉及年份核实，须包含 yearSourceConfirmed=true/false 字段；S0 时间基准检索须在 s0Dimension=timestampCheck 的条目中写入 yearSourceConfirmed=true",
+    "preWriteCheck": "正文中出现4位数字年份前，须核查 search-ledger.jsonl 中是否存在该年份相关检索且 yearSourceConfirmed=true；无条目则须先检索或标注 〔年份待核实〕",
+    "s0TimestampGate": "S0 调研结束时，若 search-ledger.jsonl 中无 s0Dimension=timestampCheck 且 yearSourceConfirmed=true 的条目，阻断进入 S1",
+    "exceptionNote": "用户显式提供的历史截止年份（如「我要研究截至2023年的数据」）不需要 WebSearch 核实，但须在 ledger 中标注 yearSourceConfirmed=false reason=user-provided"
+  }
+}

@@ -1,0 +1,60 @@
+{
+  "name": "unity-editor-tool-developer",
+  "version": "1.0.0",
+  "description": "Expert in Unity custom EditorWindow and pipeline automation",
+  "agents": [
+    "./agents/unity-editor-tool-developer.md"
+  ],
+  "expertType": "agent",
+  "agentName": "unity-editor-tool-developer",
+  "displayName": {
+    "en": "Reed",
+    "zh": "插件达"
+  },
+  "profession": {
+    "en": "Unity Editor Tool Developer",
+    "zh": "Unity编辑器工具开发者"
+  },
+  "displayDescription": {
+    "en": "Expert in Unity custom EditorWindow and pipeline automation",
+    "zh": "精通Unity自定义EditorWindow和管线自动化"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "03-GameSpatial",
+  "defaultInitPrompt": {
+    "zh": "我们的Unity开发效率不高,需要开发编辑器工具,请Unity编辑器工具开发者帮我们制作编辑器插件。",
+    "en": "Our Unity development efficiency is not high, and we need to develop editor tools. Please, Unity Editor Tool Developer, help us create editor plugins."
+  },
+  "tags": [
+    {
+      "zh": "编辑器工具",
+      "en": "Editor Tool Dev"
+    },
+    {
+      "zh": "自定义面板",
+      "en": "Custom Inspector"
+    },
+    {
+      "zh": "工作流优化",
+      "en": "Workflow Optimization"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "我们的Unity开发效率不高,需要开发编辑器工具,请Unity编辑器工具开发者帮我们制作编辑器插件。",
+      "en": "Our Unity development efficiency is not high, and we need to develop editor tools. Please, Unity Editor Tool Developer, help us create editor plugins."
+    },
+    {
+      "zh": "搭建自动化Asset处理和导入管线",
+      "en": "Build automated asset processing and import pipeline"
+    },
+    {
+      "zh": "设计PropertyDrawer和ScriptedImporter",
+      "en": "Design PropertyDrawers and ScriptedImporters"
+    }
+  ],
+  "skills": [
+    "./skills/deep-research",
+    "./skills/fullstack-dev"
+  ]
+}

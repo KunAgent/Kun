@@ -1,5 +1,6 @@
 {
   "appName": "Kun",
+  "collaboration": "Collaboration",
   "runtimeStatusRestarting": "Kun is restarting automatically…",
   "runtimeStatusRestartingAttempt": "Kun is restarting automatically (attempt {{attempt}}/{{max}})…",
   "runtimeStatusCrashed": "Kun exited unexpectedly; recovering…",

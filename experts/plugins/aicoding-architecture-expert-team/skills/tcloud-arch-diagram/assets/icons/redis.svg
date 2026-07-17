@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="32px" height="32px" viewBox="0 0 32 32" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+    <!-- Generator: Sketch 52.6 (67491) - http://www.bohemiancoding.com/sketch -->
+    <title>云数据库 Redis-32px</title>
+    <desc>Created with Sketch.</desc>
+    <g id="云数据库-Redis-32px" stroke="none" stroke-width="1" fill="none" fill-rule="evenodd">
+        <rect id="Rectangle-Copy" fill="#0052D9" opacity="0" x="0" y="0" width="32" height="32"></rect>
+        <path d="M4,25 L4,18.8 C5.8,19.9 8.7,20.7 12.1,21 L12.1,19 C7.5,18.7 4,17.5 4,16.1 L4,9.8 C6.1,11.1 9.8,12 14,12 C18.2,12 21.9,11.1 24,9.8 L24,13.5 L26,14.4 L26,7 C26,4.2 20.6,2 14,2 C7.4,2 2,4.2 2,7 L2,25 C2,27.8 7.4,30 14,30 C14.6,30 15.1,30 15.7,29.9 L12.1,27.9 C7.5,27.7 4,26.5 4,25 Z M14.1,4 C19.7,4 24.1,5.3 24.1,7 C24.1,8.7 19.2,10 14.1,10 C8.6,10 4.1,8.7 4.1,7 C4.1,5.3 8.5,4 14.1,4 Z M30,19.5 L30,19 L22,15 L14,18.9 L14,21.2 L22,25.1 L30,21.1 L30,19.5 Z M22,22.9 L16.3,20.1 L22,17.3 L27.7,20.1 L22,22.9 Z M22,27.7 L14,24 L14,26.3 L22,30 L30,26 L30,23.7 L22,27.7 Z" id="Shape" fill="#0052D9"></path>
+    </g>
+</svg>

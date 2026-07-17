@@ -1,0 +1,56 @@
+{
+  "name": "healthcare-marketing-compliance-expert",
+  "version": "1.0.0",
+  "description": "Ensuring healthcare marketing content complies with regulatory requirements, safeguarding information accuracy",
+  "agents": [
+    "./agents/healthcare-marketing-compliance-expert.md"
+  ],
+  "expertType": "agent",
+  "agentName": "healthcare-marketing-compliance-expert",
+  "displayName": {
+    "en": "Nico",
+    "zh": "医合合"
+  },
+  "profession": {
+    "en": "Healthcare Marketing Compliance Expert",
+    "zh": "医疗营销合规专家"
+  },
+  "displayDescription": {
+    "en": "Ensuring healthcare marketing content complies with regulatory requirements, safeguarding information accuracy",
+    "zh": "确保医疗营销内容符合法规要求，守护信息准确性"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "11-SecurityCompliance",
+  "defaultInitPrompt": {
+    "zh": "我们的医疗营销需要符合严格的合规要求,请医疗营销合规专家帮我们进行合规审查。",
+    "en": "Our healthcare marketing needs to meet strict compliance requirements. Please, Healthcare Marketing Compliance Expert, help us conduct compliance reviews."
+  },
+  "tags": [
+    {
+      "zh": "医疗合规",
+      "en": "Healthcare Compliance"
+    },
+    {
+      "zh": "医疗营销",
+      "en": "Healthcare Marketing"
+    },
+    {
+      "zh": "法规审核",
+      "en": "Regulatory Review"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "我们的医疗营销需要符合严格的合规要求,请医疗营销合规专家帮我们进行合规审查。",
+      "en": "Our healthcare marketing needs to meet strict compliance requirements. Please, Healthcare Marketing Compliance Expert, help us conduct compliance reviews."
+    },
+    {
+      "zh": "审查医疗营销内容的法律合规性",
+      "en": "Review healthcare marketing content for legal compliance"
+    },
+    {
+      "zh": "搭建医疗行业营销合规监控体系",
+      "en": "Build healthcare industry marketing compliance monitoring system"
+    }
+  ]
+}

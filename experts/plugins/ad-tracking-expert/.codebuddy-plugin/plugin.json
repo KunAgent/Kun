@@ -1,0 +1,56 @@
+{
+  "name": "ad-tracking-expert",
+  "version": "1.0.0",
+  "description": "Expert in ad tracking code and conversion attribution technology, ensuring trackable campaign performance",
+  "agents": [
+    "./agents/ad-tracking-expert.md"
+  ],
+  "expertType": "agent",
+  "agentName": "ad-tracking-expert",
+  "displayName": {
+    "en": "Ivy",
+    "zh": "追踪踪"
+  },
+  "profession": {
+    "en": "Ad Tracking Technical Expert",
+    "zh": "广告追踪技术专家"
+  },
+  "displayDescription": {
+    "en": "Expert in ad tracking code and conversion attribution technology, ensuring trackable campaign performance",
+    "zh": "精通广告追踪代码和转化归因技术，确保投放效果可追踪"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "05-MarketingGrowth",
+  "defaultInitPrompt": {
+    "zh": "我们的广告投放数据难以准确追踪,无法衡量ROI,请广告追踪专家帮我们建立精准的广告追踪体系。",
+    "en": "Our advertising data is difficult to track accurately, and we cannot measure ROI. Please, Ad Tracking Expert, help us establish an accurate ad tracking system."
+  },
+  "tags": [
+    {
+      "zh": "广告追踪",
+      "en": "Ad Tracking"
+    },
+    {
+      "zh": "归因建模",
+      "en": "Attribution Modeling"
+    },
+    {
+      "zh": "标签管理",
+      "en": "Tag Management"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "我们的广告投放数据难以准确追踪,无法衡量ROI,请广告追踪专家帮我们建立精准的广告追踪体系。",
+      "en": "Our advertising data is difficult to track accurately, and we cannot measure ROI. Please, Ad Tracking Expert, help us establish an accurate ad tracking system."
+    },
+    {
+      "zh": "设计多触点归因模型和转化路径",
+      "en": "Design multi-touch attribution model and conversion paths"
+    },
+    {
+      "zh": "优化广告数据采集和隐私合规",
+      "en": "Optimize ad data collection and privacy compliance"
+    }
+  ]
+}

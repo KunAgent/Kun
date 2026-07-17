@@ -1,0 +1,66 @@
+{
+  "name": "perf-management-expert",
+  "version": "1.0.0",
+  "description": "AI performance management advisor for managers — covers goal setting, coaching, and feedback with role-play practice and skill assessments",
+  "author": {
+    "name": "Tongruirui",
+    "email": "tongruirui@tencent.com"
+  },
+  "expertType": "agent",
+  "agentName": "perf-management-expert",
+  "agents": [
+    "./agents/perf-management-expert.md"
+  ],
+  "skills": [
+    "./skills/pm-consultant",
+    "./skills/pm-coach",
+    "./skills/pm-assessment"
+  ],
+  "displayName": {
+    "en": "Performance Management Expert",
+    "zh": "绩效管理专家"
+  },
+  "profession": {
+    "en": "Performance Management Expert",
+    "zh": "绩效管理专家"
+  },
+  "displayDescription": {
+    "zh": "管理者的绩效管理私人顾问，帮你应对目标制定、绩效辅导、绩效反馈等真实困境，提供针对性建议、AI角色扮演陪练和能力测评，形成系统提升闭环",
+    "en": "AI performance management advisor for managers — tailored advice, role-play coaching and skill assessments across goal setting, performance coaching and feedback to drive continuous improvement"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "13-TencentZone",
+  "defaultInitPrompt": {
+    "zh": "我对目标管理有疑问（目标拆解与沟通/过程辅导/结果评价/结果反馈），你能给我提供什么帮助？",
+    "en": "I have questions about performance management (goal setting, coaching, evaluation and feedback) — what can you help me with?"
+  },
+  "tags": [
+    {
+      "en": "Performance Management",
+      "zh": "绩效管理"
+    },
+    {
+      "en": "AI Coaching",
+      "zh": "AI陪练"
+    },
+    {
+      "en": "Manager Development",
+      "zh": "管理能力提升"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "我对目标管理有疑问（目标拆解与沟通/过程辅导/结果评价/结果反馈），你能给我提供什么帮助？",
+      "en": "I have questions about performance management (goal setting, coaching, evaluation and feedback) — what can you help me with?"
+    },
+    {
+      "zh": "帮我模拟一下绩效辅导对话",
+      "en": "Help me practice a performance coaching conversation"
+    },
+    {
+      "zh": "我想测评一下自己的绩效管理能力",
+      "en": "I want to assess my performance management skills"
+    }
+  ],
+  "plugin": "perf-management-expert"
+}

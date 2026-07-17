@@ -1,0 +1,19 @@
+{
+  "name": "fbsir-board-secretary-assistant",
+  "version": "2.1.0",
+  "private": true,
+  "type": "module",
+  "description": "WorkBuddy expert for board secretary compliance red-team review of disclosure, roadshow, IR Q&A, announcements, and investor communication material.",
+  "author": {
+    "name": "FBSir",
+    "email": "unique@u3w.com"
+  },
+  "homepage": "https://api2.u3w.com/fbss/",
+  "license": "MIT",
+  "reviewPackageBoundary": {
+    "basedOnCurrentWorkBuddyListedPackage": true,
+    "generatedForReviewOnly": true,
+    "modifiesRunningListedPackage": false,
+    "packageCodeFrozenInRepository": true
+  }
+}

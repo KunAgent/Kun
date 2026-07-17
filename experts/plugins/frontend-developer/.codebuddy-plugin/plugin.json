@@ -1,0 +1,64 @@
+{
+  "name": "frontend-developer",
+  "version": "1.0.0",
+  "description": "Expert in modern web technologies and mainstream frameworks, building responsive high-performance web applications with pixel-perfect precision",
+  "agents": [
+    "./agents/frontend-developer.md"
+  ],
+  "expertType": "agent",
+  "agentName": "frontend-developer",
+  "displayName": {
+    "en": "Paul",
+    "zh": "像素匠"
+  },
+  "profession": {
+    "en": "Frontend Developer",
+    "zh": "前端开发工程师"
+  },
+  "displayDescription": {
+    "en": "Expert in modern web technologies and mainstream frameworks, building responsive high-performance web applications with pixel-perfect precision",
+    "zh": "精通现代Web技术和主流框架，以像素级精度构建响应式高性能Web应用"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "02-Engineering",
+  "defaultInitPrompt": {
+    "zh": "我们的前端界面需要开发,要求响应式设计和良好的用户交互体验,请前端开发工程师帮我们实现前端功能。",
+    "en": "Our frontend interface needs development with requirements for responsive design and good user interaction experience. Please, Frontend Developer, help us implement frontend features."
+  },
+  "tags": [
+    {
+      "zh": "前端开发",
+      "en": "Frontend Dev"
+    },
+    {
+      "zh": "页面交互",
+      "en": "Page Interaction"
+    },
+    {
+      "zh": "组件开发",
+      "en": "Component Dev"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "我们的前端界面需要开发,要求响应式设计和良好的用户交互体验,请前端开发工程师帮我们实现前端功能。",
+      "en": "Our frontend interface needs development with requirements for responsive design and good user interaction experience. Please, Frontend Developer, help us implement frontend features."
+    },
+    {
+      "zh": "优化前端性能和首屏加载速度",
+      "en": "Optimize frontend performance and first-screen load speed"
+    },
+    {
+      "zh": "实现复杂UI组件和交互效果",
+      "en": "Implement complex UI components and interaction effects"
+    }
+  ],
+  "skills": [
+    "./skills/brand-guidelines",
+    "./skills/browser-use",
+    "./skills/frontend-dev",
+    "./skills/fullstack-dev",
+    "./skills/github",
+    "./skills/impeccable"
+  ]
+}

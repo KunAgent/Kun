@@ -1,0 +1,16 @@
+{
+  "name": "google-ads-mcp",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@isteam/google-ads-mcp": "^1.0.1"
+  }
+}

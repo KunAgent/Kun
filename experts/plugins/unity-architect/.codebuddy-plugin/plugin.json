@@ -1,0 +1,56 @@
+{
+  "name": "unity-architect",
+  "version": "1.0.0",
+  "description": "Expert in ScriptableObjects and decoupled system design",
+  "agents": [
+    "./agents/unity-architect.md"
+  ],
+  "expertType": "agent",
+  "agentName": "unity-architect",
+  "displayName": {
+    "en": "Page",
+    "zh": "解耦达"
+  },
+  "profession": {
+    "en": "Unity Architect",
+    "zh": "Unity架构师"
+  },
+  "displayDescription": {
+    "en": "Expert in ScriptableObjects and decoupled system design",
+    "zh": "精通ScriptableObjects和解耦系统设计"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "03-GameSpatial",
+  "defaultInitPrompt": {
+    "zh": "我们的Unity项目需要重构,避免代码耦合和维护困难,请Unity架构师帮我们设计解耦的架构方案。",
+    "en": "Our Unity project needs refactoring to avoid code coupling and maintenance difficulties. Please, Unity Architect, help us design a decoupled architecture solution."
+  },
+  "tags": [
+    {
+      "zh": "Unity架构",
+      "en": "Unity Architecture"
+    },
+    {
+      "zh": "模块化设计",
+      "en": "Modular Design"
+    },
+    {
+      "zh": "组件解耦",
+      "en": "Component Decoupling"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "我们的Unity项目需要重构,避免代码耦合和维护困难,请Unity架构师帮我们设计解耦的架构方案。",
+      "en": "Our Unity project needs refactoring to avoid code coupling and maintenance difficulties. Please, Unity Architect, help us design a decoupled architecture solution."
+    },
+    {
+      "zh": "搭建ScriptableObject数据驱动系统",
+      "en": "Build ScriptableObject data-driven systems"
+    },
+    {
+      "zh": "制定Unity项目规范和组件设计模式",
+      "en": "Develop Unity project standards and component design patterns"
+    }
+  ]
+}

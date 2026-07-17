@@ -1,0 +1,60 @@
+{
+  "name": "china-ecommerce-operations-expert",
+  "version": "1.0.0",
+  "description": "Expert in Tmall, JD.com, Pinduoduo platform operations, handling everything from product selection to bestseller creation",
+  "agents": [
+    "./agents/china-ecommerce-operations-expert.md"
+  ],
+  "expertType": "agent",
+  "agentName": "china-ecommerce-operations-expert",
+  "displayName": {
+    "en": "Jude",
+    "zh": "卖得好"
+  },
+  "profession": {
+    "en": "China E-commerce Operations Expert",
+    "zh": "中国电商运营专家"
+  },
+  "displayDescription": {
+    "en": "Expert in Tmall, JD.com, Pinduoduo platform operations, handling everything from product selection to bestseller creation",
+    "zh": "精通天猫京东拼多多等平台运营，从选品到爆款一站式操盘"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "05-MarketingGrowth",
+  "defaultInitPrompt": {
+    "zh": "我们想在中国电商平台运营,需要了解本土化运营策略,请中国电商运营专家帮我们制定电商运营计划。",
+    "en": "We want to operate on Chinese e-commerce platforms and need to understand localized operation strategies. Please, China E-commerce Operations Expert, help us develop an e-commerce operation plan."
+  },
+  "tags": [
+    {
+      "zh": "电商运营",
+      "en": "E-commerce Ops"
+    },
+    {
+      "zh": "店铺管理",
+      "en": "Store Management"
+    },
+    {
+      "zh": "大促策划",
+      "en": "Campaign Planning"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "我们想在中国电商平台运营,需要了解本土化运营策略,请中国电商运营专家帮我们制定电商运营计划。",
+      "en": "We want to operate on Chinese e-commerce platforms and need to understand localized operation strategies. Please, China E-commerce Operations Expert, help us develop an e-commerce operation plan."
+    },
+    {
+      "zh": "策划大促活动完整方案",
+      "en": "Plan a complete mega-sale campaign"
+    },
+    {
+      "zh": "制定店铺用户分层运营策略",
+      "en": "Develop a customer segmentation and tiered operation strategy"
+    }
+  ],
+  "skills": [
+    "./skills/market-researcher",
+    "./skills/multi-search-engine"
+  ]
+}

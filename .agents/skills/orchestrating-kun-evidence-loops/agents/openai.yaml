@@ -1,0 +1,4 @@
+interface:
+  display_name: "Kun 对证循环编排"
+  short_description: "用 Kun 编排 Claude Code 与 Codex 的独立实现审查循环"
+  default_prompt: "Use $orchestrating-kun-evidence-loops to run a Kun-led implementation and independent review loop for this change."

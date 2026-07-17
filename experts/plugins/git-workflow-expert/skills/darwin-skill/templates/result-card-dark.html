@@ -1,0 +1,698 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Darwin Skill - 暗夜成就</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Noto+Sans+SC:wght@400;500;700;900&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    min-height: 100vh;
+    background: #0D0D0F;
+    font-family: 'Noto Sans SC', 'Inter', sans-serif;
+    padding: 0;
+  }
+
+  .card {
+    width: 900px;
+    min-height: 600px;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    background: #0D0D0F;
+    color: #FFFFFF;
+    overflow: hidden;
+  }
+
+  /* ===== 全局光效底层 ===== */
+  .card::before {
+    content: '';
+    position: absolute;
+    top: 80px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 600px;
+    height: 600px;
+    background: radial-gradient(circle, rgba(232,89,12,0.12) 0%, rgba(232,89,12,0.04) 35%, transparent 70%);
+    pointer-events: none;
+    z-index: 0;
+  }
+  .card > * {
+    position: relative;
+    z-index: 1;
+  }
+
+  /* ===== 1. 顶部品牌条 ===== */
+  .brand-bar {
+    padding: 24px 48px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+  }
+  .brand-name {
+    font-size: 22px;
+    font-weight: 800;
+    color: #fff;
+    letter-spacing: 0.02em;
+    font-family: 'Inter', 'Noto Sans SC', sans-serif;
+  }
+  .brand-name .dot { color: #E8590C; }
+  .brand-date {
+    font-size: 15px;
+    font-weight: 500;
+    color: #555;
+    font-family: 'Inter', sans-serif;
+  }
+
+  /* ===== 2. 成就徽章区（视觉焦点） ===== */
+  .achievement-section {
+    padding: 36px 48px 24px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    position: relative;
+  }
+
+  /* 徽章容器 */
+  .badge-container {
+    position: relative;
+    width: 220px;
+    height: 220px;
+    margin-bottom: 20px;
+  }
+
+  /* 外圈光晕 */
+  .badge-container::before {
+    content: '';
+    position: absolute;
+    top: -30px;
+    left: -30px;
+    right: -30px;
+    bottom: -30px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(232,89,12,0.25) 0%, rgba(255,107,53,0.08) 50%, transparent 75%);
+    pointer-events: none;
+  }
+
+  .badge-svg {
+    width: 240px;
+    height: 240px;
+    filter: drop-shadow(0 0 30px rgba(232,89,12,0.35)) drop-shadow(0 0 60px rgba(232,89,12,0.15));
+  }
+
+  .badge-ring-bg {
+    fill: none;
+    stroke: rgba(255,255,255,0.06);
+    stroke-width: 14;
+  }
+  .badge-ring-glow {
+    fill: none;
+    stroke: url(#darkOrangeGradient);
+    stroke-width: 16;
+    stroke-linecap: round;
+    /* 周长 = 2 * PI * 85 ≈ 534, 87% → dashoffset = 534 * 0.13 ≈ 69 */
+    stroke-dasharray: 534;
+    stroke-dashoffset: 69;
+    transform: rotate(-90deg);
+    transform-origin: center;
+  }
+  .badge-ring-track {
+    fill: none;
+    stroke: rgba(255,255,255,0.03);
+    stroke-width: 14;
+    stroke-dasharray: 6 6;
+  }
+
+  .badge-center {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+  }
+  .badge-score {
+    font-size: 80px;
+    font-weight: 900;
+    color: #FFFFFF;
+    line-height: 1;
+    font-family: 'Inter', sans-serif;
+    letter-spacing: -0.04em;
+    text-shadow: 0 0 40px rgba(232,89,12,0.4);
+  }
+  .badge-max {
+    font-size: 22px;
+    font-weight: 600;
+    color: #555;
+    font-family: 'Inter', sans-serif;
+    margin-left: 2px;
+  }
+  .badge-label {
+    font-size: 13px;
+    font-weight: 600;
+    color: #666;
+    margin-top: 4px;
+    letter-spacing: 0.1em;
+  }
+
+  .achievement-title {
+    font-size: 30px;
+    font-weight: 900;
+    line-height: 1.3;
+    color: #FFFFFF;
+    margin-bottom: 6px;
+  }
+  .achievement-skill {
+    color: #FF6B35;
+    text-shadow: 0 0 20px rgba(232,89,12,0.3);
+  }
+  .achievement-subtitle {
+    font-size: 15px;
+    color: #555;
+    font-weight: 500;
+    font-family: 'Inter', sans-serif;
+  }
+
+  /* ===== 3. 经验条区 ===== */
+  .xp-section {
+    padding: 28px 48px 32px;
+  }
+  .xp-bar-wrapper {
+    background: rgba(255,255,255,0.04);
+    border-radius: 16px;
+    padding: 24px 28px;
+  }
+  .xp-labels {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 14px;
+  }
+  .xp-old {
+    font-size: 20px;
+    font-weight: 500;
+    color: #555;
+    font-family: 'Inter', sans-serif;
+    text-decoration: line-through;
+    text-decoration-color: #444;
+  }
+  .xp-new {
+    font-size: 28px;
+    font-weight: 900;
+    color: #FFFFFF;
+    font-family: 'Inter', sans-serif;
+  }
+  .xp-track {
+    position: relative;
+    width: 100%;
+    height: 20px;
+    background: rgba(255,255,255,0.06);
+    border-radius: 10px;
+    overflow: visible;
+  }
+  .xp-fill {
+    height: 100%;
+    width: 87%;
+    background: linear-gradient(90deg, #E8590C 0%, #FF6B35 100%);
+    border-radius: 10px;
+    box-shadow: 0 0 20px rgba(232,89,12,0.4), 0 0 6px rgba(232,89,12,0.6);
+    position: relative;
+  }
+  .xp-delta-badge {
+    position: absolute;
+    top: -32px;
+    right: -8px;
+    background: linear-gradient(135deg, #E8590C, #FF6B35);
+    color: #fff;
+    font-size: 16px;
+    font-weight: 800;
+    font-family: 'Inter', sans-serif;
+    padding: 4px 14px;
+    border-radius: 8px;
+    box-shadow: 0 4px 16px rgba(232,89,12,0.4);
+    white-space: nowrap;
+  }
+  .xp-delta-badge::after {
+    content: '';
+    position: absolute;
+    bottom: -5px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 0;
+    height: 0;
+    border-left: 6px solid transparent;
+    border-right: 6px solid transparent;
+    border-top: 6px solid #FF6B35;
+  }
+
+  /* ===== 4. 最大突破卡片 ===== */
+  .breakthrough-section {
+    padding: 0 48px 20px;
+  }
+  .breakthrough-card {
+    position: relative;
+    border-radius: 16px;
+    padding: 28px 32px;
+    background: rgba(255,255,255,0.03);
+    overflow: hidden;
+  }
+  /* 渐变边框效果 */
+  .breakthrough-card::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: 16px;
+    padding: 2px;
+    background: linear-gradient(135deg, #E8590C 0%, #FF6B35 40%, rgba(255,107,53,0.2) 100%);
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    pointer-events: none;
+  }
+  .breakthrough-label {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    color: #FF6B35;
+    margin-bottom: 12px;
+    text-transform: uppercase;
+  }
+  .breakthrough-content {
+    display: flex;
+    align-items: center;
+    gap: 24px;
+  }
+  .breakthrough-scores {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    flex-shrink: 0;
+  }
+  .bt-from {
+    font-size: 36px;
+    font-weight: 400;
+    color: #444;
+    font-family: 'Inter', sans-serif;
+    text-decoration: line-through;
+    text-decoration-color: #444;
+  }
+  .bt-arrow {
+    font-size: 20px;
+    color: #555;
+  }
+  .bt-to {
+    font-size: 52px;
+    font-weight: 900;
+    font-family: 'Inter', sans-serif;
+    color: #FF6B35;
+    line-height: 1;
+    text-shadow: 0 0 24px rgba(232,89,12,0.3);
+  }
+  .bt-pct {
+    font-size: 16px;
+    font-weight: 800;
+    font-family: 'Inter', sans-serif;
+    color: #4ADE80;
+    margin-left: 4px;
+  }
+  .breakthrough-text {
+    flex: 1;
+  }
+  .bt-dim-name {
+    font-size: 22px;
+    font-weight: 800;
+    color: #fff;
+    margin-bottom: 4px;
+  }
+  .bt-story {
+    font-size: 15px;
+    font-weight: 500;
+    color: #777;
+    line-height: 1.5;
+  }
+
+  /* ===== 5. 维度网格 2x4 ===== */
+  .dims-section {
+    padding: 0 48px 16px;
+  }
+  .dims-header {
+    font-size: 13px;
+    font-weight: 700;
+    color: #555;
+    letter-spacing: 0.1em;
+    margin-bottom: 16px;
+    text-transform: uppercase;
+  }
+  .dims-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+  }
+  .dim-cell {
+    background: rgba(255,255,255,0.04);
+    border-radius: 12px;
+    padding: 16px 12px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    position: relative;
+    border: 1px solid rgba(255,255,255,0.04);
+  }
+  .dim-cell.hot {
+    background: rgba(232,89,12,0.08);
+    border: 1px solid rgba(232,89,12,0.2);
+    box-shadow: 0 0 20px rgba(232,89,12,0.1);
+  }
+  .dim-cell.warm {
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.06);
+  }
+  .dim-name {
+    font-size: 12px;
+    font-weight: 700;
+    color: #666;
+    text-align: center;
+    white-space: nowrap;
+  }
+  .dim-cell.hot .dim-name {
+    color: #888;
+  }
+  .dim-score-row {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+  }
+  .dim-old-score {
+    font-size: 14px;
+    font-weight: 500;
+    color: #444;
+    font-family: 'Inter', sans-serif;
+    text-decoration: line-through;
+    text-decoration-color: #444;
+  }
+  .dim-score {
+    font-size: 30px;
+    font-weight: 900;
+    font-family: 'Inter', sans-serif;
+    color: #FFFFFF;
+    line-height: 1;
+  }
+  .dim-cell.hot .dim-score {
+    color: #FF6B35;
+    text-shadow: 0 0 12px rgba(232,89,12,0.3);
+  }
+  .dim-arrow {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 800;
+    font-family: 'Inter', sans-serif;
+    padding: 2px 8px;
+    border-radius: 6px;
+    line-height: 1;
+  }
+  .dim-arrow.up-big {
+    background: rgba(232,89,12,0.9);
+    color: #fff;
+    box-shadow: 0 0 8px rgba(232,89,12,0.3);
+  }
+  .dim-arrow.up-mid {
+    background: rgba(232,89,12,0.2);
+    color: #FF6B35;
+  }
+  .dim-arrow.up-small {
+    background: rgba(74,222,128,0.12);
+    color: #4ADE80;
+  }
+
+  /* ===== 6. 改进摘要 ===== */
+  .summary-section {
+    padding: 0 48px 32px;
+  }
+  .summary-header {
+    font-size: 13px;
+    font-weight: 700;
+    color: #555;
+    letter-spacing: 0.1em;
+    margin-bottom: 14px;
+    text-transform: uppercase;
+  }
+  .summary-items {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .summary-item {
+    font-size: 15px;
+    font-weight: 500;
+    color: #888;
+    line-height: 1.6;
+    padding-left: 20px;
+    position: relative;
+  }
+  .summary-item::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 9px;
+    width: 8px;
+    height: 8px;
+    background: #E8590C;
+    border-radius: 50%;
+    box-shadow: 0 0 8px rgba(232,89,12,0.5);
+  }
+
+  /* ===== 7. 底部品牌条 ===== */
+  .footer {
+    margin-top: auto;
+    padding: 28px 48px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-top: 1px solid rgba(255,255,255,0.06);
+  }
+  .footer-left {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .footer-brand {
+    font-size: 20px;
+    font-weight: 800;
+    color: #fff;
+    font-family: 'Inter', 'Noto Sans SC', sans-serif;
+  }
+  .footer-brand .dot { color: #E8590C; }
+  .footer-slogan {
+    font-size: 14px;
+    color: #444;
+    font-weight: 500;
+  }
+  .footer-right {
+    text-align: right;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .footer-url {
+    font-size: 14px;
+    color: #555;
+    font-family: 'Inter', monospace;
+    font-weight: 600;
+  }
+  .footer-by {
+    font-size: 13px;
+    color: #444;
+  }
+</style>
+</head>
+<body>
+
+<div class="card">
+
+  <!-- 1. 顶部品牌条 -->
+  <div class="brand-bar">
+    <div class="brand-name">Darwin<span class="dot">.</span>skill</div>
+    <div class="brand-date" data-field="date">2026.04.14</div>
+  </div>
+
+  <!-- 2. 成就徽章区 -->
+  <div class="achievement-section">
+    <div class="badge-container">
+      <svg class="badge-svg" viewBox="0 0 200 200">
+        <defs>
+          <linearGradient id="darkOrangeGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#E8590C"/>
+            <stop offset="100%" stop-color="#FF6B35"/>
+          </linearGradient>
+          <filter id="glow">
+            <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+            <feMerge>
+              <feMergeNode in="coloredBlur"/>
+              <feMergeNode in="SourceGraphic"/>
+            </feMerge>
+          </filter>
+        </defs>
+        <!-- 底层虚线轨道 -->
+        <circle cx="100" cy="100" r="85" class="badge-ring-track"/>
+        <!-- 背景环 -->
+        <circle cx="100" cy="100" r="85" class="badge-ring-bg"/>
+        <!-- 发光进度环 -->
+        <circle cx="100" cy="100" r="85" class="badge-ring-glow" filter="url(#glow)"/>
+      </svg>
+      <div class="badge-center">
+        <div>
+          <span class="badge-score" data-field="score-after">87</span><span class="badge-max">/100</span>
+        </div>
+        <div class="badge-label">质量总分</div>
+      </div>
+    </div>
+
+    <div class="achievement-title">
+      我的Skill进化报告<br>
+      <span class="achievement-skill" data-field="skill-name">审校降AI味</span>
+    </div>
+    <div class="achievement-subtitle" data-field="skill-id">huashu-proofreading</div>
+  </div>
+
+  <!-- 3. 经验条 -->
+  <div class="xp-section">
+    <div class="xp-bar-wrapper">
+      <div class="xp-labels">
+        <span class="xp-old" data-field="score-before">72</span>
+        <span class="xp-new" data-field="score-after-2">87</span>
+      </div>
+      <div class="xp-track">
+        <div class="xp-fill">
+          <div class="xp-delta-badge" data-field="score-delta">+15</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 4. 最大突破 -->
+  <div class="breakthrough-section">
+    <div class="breakthrough-card">
+      <div class="breakthrough-label">最大突破</div>
+      <div class="breakthrough-content">
+        <div class="breakthrough-scores">
+          <span class="bt-from" data-field="top1-from">5</span>
+          <span class="bt-arrow">&rarr;</span>
+          <span class="bt-to" data-field="top1-to">9</span>
+          <span class="bt-pct" data-field="top1-pct">+80%</span>
+        </div>
+        <div class="breakthrough-text">
+          <div class="bt-dim-name" data-field="top1-name">指令精度</div>
+          <div class="bt-story" data-field="top1-story">从模糊指令到精确可执行，指令精度翻了将近一倍</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 5. 八维度网格 -->
+  <div class="dims-section">
+    <div class="dims-header">八维度全景</div>
+    <div class="dims-grid">
+      <div class="dim-cell warm">
+        <div class="dim-name">元数据</div>
+        <div class="dim-score-row">
+          <span class="dim-old-score">6</span>
+          <span class="dim-score">8</span>
+        </div>
+        <span class="dim-arrow up-mid">+2</span>
+      </div>
+      <div class="dim-cell hot">
+        <div class="dim-name">工作流</div>
+        <div class="dim-score-row">
+          <span class="dim-old-score">5</span>
+          <span class="dim-score">8</span>
+        </div>
+        <span class="dim-arrow up-big">+3</span>
+      </div>
+      <div class="dim-cell hot">
+        <div class="dim-name">边界覆盖</div>
+        <div class="dim-score-row">
+          <span class="dim-old-score">4</span>
+          <span class="dim-score">7</span>
+        </div>
+        <span class="dim-arrow up-big">+3</span>
+      </div>
+      <div class="dim-cell">
+        <div class="dim-name">检查点</div>
+        <div class="dim-score-row">
+          <span class="dim-old-score">6</span>
+          <span class="dim-score">7</span>
+        </div>
+        <span class="dim-arrow up-small">+1</span>
+      </div>
+      <div class="dim-cell hot">
+        <div class="dim-name">指令精度</div>
+        <div class="dim-score-row">
+          <span class="dim-old-score">5</span>
+          <span class="dim-score">9</span>
+        </div>
+        <span class="dim-arrow up-big">+4</span>
+      </div>
+      <div class="dim-cell">
+        <div class="dim-name">资源整合</div>
+        <div class="dim-score-row">
+          <span class="dim-old-score">7</span>
+          <span class="dim-score">8</span>
+        </div>
+        <span class="dim-arrow up-small">+1</span>
+      </div>
+      <div class="dim-cell warm">
+        <div class="dim-name">整体架构</div>
+        <div class="dim-score-row">
+          <span class="dim-old-score">6</span>
+          <span class="dim-score">8</span>
+        </div>
+        <span class="dim-arrow up-mid">+2</span>
+      </div>
+      <div class="dim-cell hot">
+        <div class="dim-name">实测表现</div>
+        <div class="dim-score-row">
+          <span class="dim-old-score">5</span>
+          <span class="dim-score">8</span>
+        </div>
+        <span class="dim-arrow up-big">+3</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 6. 改进摘要 -->
+  <div class="summary-section">
+    <div class="summary-header">关键改进</div>
+    <div class="summary-items">
+      <div class="summary-item" data-field="improve-1">补充异常处理fallback路径，边界覆盖从4飙升到7</div>
+      <div class="summary-item" data-field="improve-2">工作流重组为线性可执行步骤，每步可验证</div>
+      <div class="summary-item" data-field="improve-3">测试prompt覆盖率从60%提升到95%，实测表现大幅进化</div>
+    </div>
+  </div>
+
+  <!-- 7. 底部品牌条 -->
+  <div class="footer">
+    <div class="footer-left">
+      <div class="footer-brand">Darwin<span class="dot">.</span>skill</div>
+      <div class="footer-slogan">像训练模型一样进化你的Skills</div>
+    </div>
+    <div class="footer-right">
+      <div class="footer-url">github.com/alchaincyf/darwin-skill</div>
+      <div class="footer-by">by 花叔</div>
+    </div>
+  </div>
+
+</div>
+
+</body>
+</html>

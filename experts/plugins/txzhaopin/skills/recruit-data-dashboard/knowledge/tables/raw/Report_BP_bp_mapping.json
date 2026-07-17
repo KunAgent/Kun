@@ -1,0 +1,113 @@
+{
+  "table_code" : "catalog_dos_da_mcp.hrdw.Report_BP_bp_mapping",
+  "table_name" : "BP关系链报表",
+  "version" : 9,
+  "table_desc" : "定位：记录HRBP（人力资源业务伙伴）与其服务的业务组织之间的关系映射，一般用于查看BP在支持哪些组织，或者对应的组织有哪些人以什么方式在支持，如ABP、HRBP、BP管理者。\n控权：列权限为整表授权，行权限控权维度为组织。\n唯一标识：该表以\"BP员工ID\"(bp_staff_id)+\"BP支持的组织ID\"(bp_support_org_id)+\"角色ID\"(role_id)作为复合唯一标识，每条记录代表一个BP在特定角色下对特定组织的服务关系；一个BP可以同时服务多个组织，一个组织也可能有多个BP服务\n主要包含以下几大部分内容：\n1、BP基础信息（BP员工ID、BP英文名、BP员工全名）\n2、BP服务关系（BP支持的组织ID/名称/全路径/全路径中文名、服务角色ID/名称）\n3、BP上级信息（BP直接上级员工ID/英文名/全名、BP上级支持的组织信息）\n4、服务时效信息（BP服务生效时间、BP服务失效时间、BP有效状态、BP服务时长） \n\n主要用途：\n1、查询某组织当前的BP是谁（名字、联系方式）；\n2、查询某BP负责服务哪些组织；\n3、查询BP的服务时长和服务历史（何时开始/结束服务某组织）；\n4、分析BP负责多少个组织；\n5、查询某角色类型的BP信息（如某BP担任的具体角色）\n\n不支持的场景：\n不支持查询BP的个人信息（如职级、组织归属等），此类需求应结合员工信息宽表； \n不支持查询员工与BP之间的个人对应关系，本表记录的是BP与组织的关系（而非BP与个人员工的关系）\n\n能回答的典型问题：\nA部门当前的BP是谁；\n某BP目前服务哪些部门；\nA部门的BP是什么时候开始服务的；\n某BP的服务状态是否仍然有效；\nA部门历史上换过几任BP；\n某BP的上级是谁，上级负责哪个组织；\n某组织有几个BP，各自负责什么角色；\n某BP的服务时长是多少；\n服务A部门下所有组织的BP名单\n\n优先场景：\n查询某组织当前有效的BP信息（名字+角色）；\n查询某BP当前服务的所有组织列表；\n查询某组织的BP服务历史\n",
+  "write_sql_background" : "1、一个组织可能有多个BP（不同角色），返回多行；统计某组织的BP人数时使用COUNT(DISTINCT bp_staff_id)；\n2、一个BP可能服务多个组织，查询某BP服务的所有组织时，通过BP员工ID = '目标BP员工ID' 或 BP员工英文名 = '目标BP英文名' 过滤；\n3、BP服务时长（effect_duration）记录的是截至当前的服务天数或实际服务天数",
+  "find_column_background" : "常用过滤字段\n-BP员工ID\n-BP员工英文名\n-BP支持的组织ID\n-BP有效状态 \n-角色中文名 \n\n常用分析维度字段:\n- BP信息: bp_rtx_name(BP英文名/RTX名、BP员工全名、角色名称\n- 服务组织: BP支持的组织ID、BP支持的组织名称、BP支持的组织全路径中文名\n- 服务时效: BP服务生效时间、BP服务失效时间、BP有效状态、BP服务时长\n- BP上级: BP直接上级员工ID、BP上级英文名、BP上级全名、BP上级支持的组织全路径\n\n",
+  "columns" : [ {
+    "column_code" : "bp_staff_id",
+    "column_name" : "BP员工ID",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "bp_staff_name",
+    "column_name" : "BP中英文名",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "bp_support_org_id",
+    "column_name" : "BP支持组织ID",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "bp_support_org_name",
+    "column_name" : "BP支持组织名称",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "bp_support_org_full_name",
+    "column_name" : "BP支持组织全称",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "role_name",
+    "column_name" : "BP角色",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "leader_staff_name",
+    "column_name" : "BP关系链上级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "leader_support_org_name",
+    "column_name" : "BP管理者支持组织名称",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "leader_support_org_full_name",
+    "column_name" : "BP管理者支持组织全称",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "effect_duration",
+    "column_name" : "服务时长",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "effect_start_date",
+    "column_name" : "开始日期",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "effect_end_date",
+    "column_name" : "结束日期",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "effect_status",
+    "column_name" : "服务状态",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  } ]
+}

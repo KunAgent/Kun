@@ -1,0 +1,88 @@
+{
+  "schemaVersion": "1.0",
+  "package": {
+    "name": "liuxue-yanxue-expert",
+    "version": "26.6.30.1",
+    "brandZh": "福帮手",
+    "brandEn": "FBSir",
+    "productNameZh": "留学研学专家",
+    "sourceBaseVersion": "26.6.29.1"
+  },
+  "serviceRoute": {
+    "productId": "liuxue-yanxue-expert",
+    "serviceProductId": "workbuddy_liuxue_yanxue_expert",
+    "entryId": "liuxue-yanxue-dual-track",
+    "entrySurface": "workbuddy_expert_center",
+    "expertEntryId": "liuxue-yanxue-expert",
+    "entryPromptCode": "wb_qp_liuxue_yanxue_dual_track_48h",
+    "defaultPromptId": "fbss_liuxue_yanxue_dual_track_start",
+    "cardActionId": "fbss_liuxue_yanxue_dual_track_start",
+    "channelTrack": "study_abroad_study_tour",
+    "intentFamily": "international_education_planning",
+    "profileSegment": "family_decision",
+    "packCode": "fbs.liuxue_yanxue.dual_track.v1",
+    "scenePackId": "liuxue_yanxue_dual_track",
+    "routeCode": "route.liuxue_yanxue.dual_track",
+    "assetType": "study-abroad-study-tour-card"
+  },
+  "closedLoopImplementation": {
+    "serviceModule": "src/fbss-lebao-closed-loop.js",
+    "serviceModuleScope": "service_side_repo_only_not_packaged",
+    "serviceStarterAlias": "fbss_liuxue_yanxue_dual_track_start",
+    "protocolVersion": "fbss.lebaoClaimProtocol.v1",
+    "identityResolutionVersion": "fbss.desensitizedIdentityResolution.v1",
+    "identityCanMergeAcrossProducts": true,
+    "lebaoSourceMustRemainSeparated": true,
+    "thirdPartyForgedClickMustDryRun": true,
+    "replayProtection": "idempotency_key_and_15_minute_click_window",
+    "naturalWriteRequires": [
+      "natural traffic class",
+      "non-synthetic input",
+      "claim state eligible",
+      "same-binding continued_use_completed or verified host click receipt"
+    ]
+  },
+  "contracts": [
+    "contracts/liuxue-yanxue-operating-contract.json",
+    "contracts/first-value-contract.json",
+    "contracts/no-connector-action-contract.json",
+    "contracts/service-forward-fields.json",
+    "contracts/service-side-closure-report.schema.json",
+    "contracts/review-orchestration-contract.json"
+  ],
+  "sourceFiles": [
+    ".codebuddy-plugin/plugin.json",
+    "README.md",
+    "agents/liuxue-yanxue-expert.md",
+    "avatars/liuxue-yanxue-expert.png",
+    "contracts/liuxue-yanxue-operating-contract.json",
+    "contracts/first-value-contract.json",
+    "contracts/no-connector-action-contract.json",
+    "contracts/service-forward-fields.json",
+    "contracts/service-side-closure-report.schema.json",
+    "contracts/review-orchestration-contract.json",
+    "marketplace-entry.json",
+    "PRIVACY.md",
+    "SECURITY.md",
+    "TERMS.md",
+    "TESTING.md",
+    "references/first-value-contract.md",
+    "references/regression-dialogues.md",
+    "references/review-boundary.md",
+    "references/scenario-fixtures.md",
+    "scene-pack.json",
+    "ship-manifest.json"
+  ],
+  "boundaries": {
+    "connectorRequired": false,
+    "packageCapabilityDependsOnConnector": false,
+    "nonOfficialEquivalentRowsDiagnosticOnly": true,
+    "naturalCreditRequiresSameBinding": true,
+    "paymentClosureAllowed": false
+  },
+  "submissionNotes": {
+    "listedRuntimeSurface": "official_expert_marketplace",
+    "nonOfficialEquivalentSurfaceExcludedFromNaturalCredit": true,
+    "externalReleaseToolchainOwnsAuditAndValidation": true
+  }
+}

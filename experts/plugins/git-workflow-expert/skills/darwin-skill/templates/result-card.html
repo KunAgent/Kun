@@ -1,0 +1,616 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Darwin Skill - 我的Skill进化报告</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Noto+Sans+SC:wght@400;500;700;900&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    min-height: 100vh;
+    background: #FAFAF5;
+    font-family: 'Noto Sans SC', 'Inter', sans-serif;
+    padding: 0;
+  }
+
+  .card {
+    width: 900px;
+    min-height: 600px;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    background: #FAFAF5;
+    color: #1A1A1A;
+  }
+
+  /* ===== 1. 顶部品牌条 ===== */
+  .brand-bar {
+    background: #1A1A1A;
+    padding: 24px 48px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .brand-name {
+    font-size: 22px;
+    font-weight: 800;
+    color: #fff;
+    letter-spacing: 0.02em;
+    font-family: 'Inter', 'Noto Sans SC', sans-serif;
+  }
+  .brand-name .dot { color: #E8590C; }
+  .brand-date {
+    font-size: 15px;
+    font-weight: 500;
+    color: #888;
+    font-family: 'Inter', sans-serif;
+  }
+
+  /* ===== 2. 核心成就区 ===== */
+  .hero-section {
+    padding: 40px 48px 36px;
+    display: flex;
+    align-items: center;
+    gap: 48px;
+    background: linear-gradient(180deg, #FAFAF5 0%, #F5F0E8 100%);
+    position: relative;
+  }
+
+  /* SVG圆环 */
+  .ring-container {
+    flex-shrink: 0;
+    width: 280px;
+    height: 280px;
+    position: relative;
+  }
+  .ring-bg {
+    fill: none;
+    stroke: #E8E0D4;
+    stroke-width: 16;
+    stroke-dasharray: 8 8;
+  }
+  .ring-progress {
+    fill: none;
+    stroke: url(#orangeGradient);
+    stroke-width: 18;
+    stroke-linecap: round;
+    stroke-dasharray: 534;
+    stroke-dashoffset: 69;
+    transform: rotate(-90deg);
+    transform-origin: center;
+    filter: drop-shadow(0 2px 8px rgba(232,89,12,0.3));
+  }
+  .ring-center {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+  }
+  .ring-score {
+    font-size: 88px;
+    font-weight: 900;
+    color: #1A1A1A;
+    line-height: 1;
+    font-family: 'Inter', sans-serif;
+    letter-spacing: -0.04em;
+  }
+  .ring-max {
+    font-size: 24px;
+    font-weight: 600;
+    color: #B0A898;
+    font-family: 'Inter', sans-serif;
+    margin-left: 2px;
+  }
+  .ring-label {
+    font-size: 14px;
+    font-weight: 600;
+    color: #999;
+    margin-top: 4px;
+    letter-spacing: 0.08em;
+  }
+
+  /* 右侧文字区 */
+  .hero-text {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  .hero-title {
+    font-size: 32px;
+    font-weight: 900;
+    line-height: 1.25;
+    color: #1A1A1A;
+  }
+  .hero-skill-name {
+    color: #E8590C;
+  }
+  .hero-journey {
+    font-size: 18px;
+    font-weight: 500;
+    color: #666;
+    line-height: 1.5;
+  }
+  .hero-journey strong {
+    color: #1A1A1A;
+    font-weight: 700;
+  }
+  .delta-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: #E8590C;
+    color: #fff;
+    padding: 10px 28px;
+    border-radius: 12px;
+    font-size: 42px;
+    font-weight: 900;
+    font-family: 'Inter', sans-serif;
+    letter-spacing: -0.02em;
+    width: fit-content;
+    box-shadow: 0 4px 16px rgba(232,89,12,0.3);
+  }
+  .delta-badge-label {
+    font-size: 16px;
+    font-weight: 700;
+    opacity: 0.9;
+    font-family: 'Noto Sans SC', sans-serif;
+    letter-spacing: 0;
+  }
+
+  /* ===== 3. 最大突破区 ===== */
+  .breakthrough-section {
+    padding: 0 48px;
+    display: flex;
+    gap: 20px;
+  }
+  .breakthrough-card {
+    flex: 1;
+    border-radius: 16px;
+    padding: 28px 28px 24px;
+    position: relative;
+    overflow: hidden;
+  }
+  .breakthrough-card.primary {
+    background: linear-gradient(135deg, #E8590C 0%, #FF8A4C 100%);
+    color: #fff;
+    flex: 1.2;
+  }
+  .breakthrough-card.secondary {
+    background: #F0EAE0;
+    color: #1A1A1A;
+    border: 2px solid #E0D8CC;
+  }
+  .breakthrough-label {
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    margin-bottom: 12px;
+    text-transform: uppercase;
+  }
+  .breakthrough-card.primary .breakthrough-label {
+    color: rgba(255,255,255,0.75);
+  }
+  .breakthrough-card.secondary .breakthrough-label {
+    color: #999;
+  }
+  .breakthrough-dim {
+    font-size: 24px;
+    font-weight: 900;
+    margin-bottom: 6px;
+  }
+  .breakthrough-score-row {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+  .breakthrough-from {
+    font-size: 36px;
+    font-weight: 400;
+    opacity: 0.5;
+    font-family: 'Inter', sans-serif;
+    text-decoration: line-through;
+    text-decoration-thickness: 2px;
+  }
+  .breakthrough-arrow {
+    font-size: 20px;
+    opacity: 0.5;
+  }
+  .breakthrough-to {
+    font-size: 52px;
+    font-weight: 900;
+    font-family: 'Inter', sans-serif;
+    line-height: 1;
+  }
+  .breakthrough-card.secondary .breakthrough-to {
+    color: #E8590C;
+  }
+  .breakthrough-pct {
+    font-size: 18px;
+    font-weight: 700;
+    font-family: 'Inter', sans-serif;
+  }
+  .breakthrough-card.primary .breakthrough-pct {
+    color: rgba(255,255,255,0.85);
+  }
+  .breakthrough-card.secondary .breakthrough-pct {
+    color: #2B8A3E;
+  }
+  .breakthrough-story {
+    font-size: 15px;
+    font-weight: 500;
+    line-height: 1.5;
+    margin-top: 8px;
+  }
+  .breakthrough-card.primary .breakthrough-story {
+    color: rgba(255,255,255,0.9);
+  }
+  .breakthrough-card.secondary .breakthrough-story {
+    color: #666;
+  }
+
+  /* ===== 4. 全维度速览 ===== */
+  .dims-section {
+    padding: 32px 48px 0;
+  }
+  .dims-header {
+    font-size: 15px;
+    font-weight: 700;
+    color: #999;
+    letter-spacing: 0.08em;
+    margin-bottom: 18px;
+  }
+  .dims-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+  }
+  .dim-cell {
+    background: #F0EBE3;
+    border-radius: 12px;
+    padding: 16px 14px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    position: relative;
+    transition: background 0.2s;
+  }
+  .dim-cell.hot {
+    background: #FFF0E6;
+    border: 2px solid rgba(232,89,12,0.2);
+  }
+  .dim-cell.warm {
+    background: #F5EEE4;
+  }
+  .dim-name {
+    font-size: 13px;
+    font-weight: 700;
+    color: #888;
+    text-align: center;
+    white-space: nowrap;
+  }
+  .dim-score-row {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+  }
+  .dim-score {
+    font-size: 32px;
+    font-weight: 900;
+    font-family: 'Inter', sans-serif;
+    color: #1A1A1A;
+    line-height: 1;
+  }
+  .dim-cell.hot .dim-score {
+    color: #E8590C;
+  }
+  .dim-old-score {
+    font-size: 15px;
+    font-weight: 500;
+    color: #BBB;
+    font-family: 'Inter', sans-serif;
+    text-decoration: line-through;
+    text-decoration-color: #CCC;
+  }
+  .dim-arrow {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 800;
+    font-family: 'Inter', sans-serif;
+    padding: 2px 8px;
+    border-radius: 6px;
+    line-height: 1;
+  }
+  .dim-arrow.up-big {
+    background: #E8590C;
+    color: #fff;
+  }
+  .dim-arrow.up-mid {
+    background: rgba(232,89,12,0.15);
+    color: #E8590C;
+  }
+  .dim-arrow.up-small {
+    background: rgba(43,138,62,0.1);
+    color: #2B8A3E;
+  }
+
+  /* ===== 5. 改进摘要 ===== */
+  .summary-section {
+    padding: 28px 48px 0;
+  }
+  .summary-header {
+    font-size: 15px;
+    font-weight: 700;
+    color: #999;
+    letter-spacing: 0.08em;
+    margin-bottom: 14px;
+  }
+  .summary-items {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .summary-item {
+    font-size: 15px;
+    font-weight: 500;
+    color: #555;
+    line-height: 1.6;
+    padding-left: 20px;
+    position: relative;
+  }
+  .summary-item::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 9px;
+    width: 8px;
+    height: 8px;
+    background: #E8590C;
+    border-radius: 50%;
+  }
+
+  /* ===== 6. 底部品牌区 ===== */
+  .footer {
+    margin-top: auto;
+    background: #1A1A1A;
+    padding: 28px 48px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .footer-left {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .footer-brand {
+    font-size: 20px;
+    font-weight: 800;
+    color: #fff;
+    font-family: 'Inter', 'Noto Sans SC', sans-serif;
+  }
+  .footer-brand .dot { color: #E8590C; }
+  .footer-slogan {
+    font-size: 14px;
+    color: #777;
+    font-weight: 500;
+  }
+  .footer-right {
+    text-align: right;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .footer-url {
+    font-size: 14px;
+    color: #aaa;
+    font-family: 'Inter', monospace;
+    font-weight: 600;
+  }
+  .footer-by {
+    font-size: 13px;
+    color: #666;
+  }
+
+  /* 装饰性纹理 */
+  .card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 400px;
+    height: 400px;
+    background: radial-gradient(circle at top right, rgba(232,89,12,0.04) 0%, transparent 70%);
+    pointer-events: none;
+    z-index: 0;
+  }
+  .card > * {
+    position: relative;
+    z-index: 1;
+  }
+</style>
+</head>
+<body>
+
+<div class="card">
+
+  <!-- 1. 顶部品牌条 -->
+  <div class="brand-bar">
+    <div class="brand-name">Darwin<span class="dot">.</span>skill</div>
+    <div class="brand-date" data-field="date">2026.04.14</div>
+  </div>
+
+  <!-- 2. 核心成就区 -->
+  <div class="hero-section">
+    <div class="ring-container">
+      <svg viewBox="0 0 200 200" width="280" height="280">
+        <defs>
+          <linearGradient id="orangeGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#E8590C"/>
+            <stop offset="100%" stop-color="#FF8A4C"/>
+          </linearGradient>
+        </defs>
+        <!-- 背景虚线环 -->
+        <circle cx="100" cy="100" r="85" class="ring-bg"/>
+        <!-- 进度弧 -->
+        <circle cx="100" cy="100" r="85" class="ring-progress"/>
+      </svg>
+      <div class="ring-center">
+        <div>
+          <span class="ring-score" data-field="score-after">87</span><span class="ring-max">/100</span>
+        </div>
+        <div class="ring-label">质量总分</div>
+      </div>
+    </div>
+
+    <div class="hero-text">
+      <div class="hero-title">
+        我的Skill进化报告<br>
+        <span class="hero-skill-name" data-field="skill-name">审校降AI味</span>
+      </div>
+      <div class="hero-journey">
+        从 <strong data-field="score-before">72</strong> 分进化到 <strong>87</strong> 分<br>
+        <span style="color:#999;font-size:14px;" data-field="skill-id">huashu-proofreading</span>
+      </div>
+      <div class="delta-badge">
+        <span data-field="score-delta">+15</span>
+        <span class="delta-badge-label">分</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3. 最大突破区 -->
+  <div class="breakthrough-section">
+    <div class="breakthrough-card primary">
+      <div class="breakthrough-label">最大突破</div>
+      <div class="breakthrough-dim" data-field="top1-name">指令精度</div>
+      <div class="breakthrough-score-row">
+        <span class="breakthrough-from" data-field="top1-from">5</span>
+        <span class="breakthrough-arrow">&rarr;</span>
+        <span class="breakthrough-to" data-field="top1-to">9</span>
+      </div>
+      <div class="breakthrough-pct" data-field="top1-pct">+80%</div>
+      <div class="breakthrough-story" data-field="top1-story">从模糊指令到精确可执行，指令精度翻了将近一倍</div>
+    </div>
+    <div class="breakthrough-card secondary">
+      <div class="breakthrough-label">第二突破</div>
+      <div class="breakthrough-dim" data-field="top2-name">工作流清晰度</div>
+      <div class="breakthrough-score-row">
+        <span class="breakthrough-from" data-field="top2-from">5</span>
+        <span class="breakthrough-arrow">&rarr;</span>
+        <span class="breakthrough-to" data-field="top2-to">8</span>
+      </div>
+      <div class="breakthrough-pct" data-field="top2-pct">+60%</div>
+      <div class="breakthrough-story" data-field="top2-story">线性可执行步骤，每步都有明确检查点</div>
+    </div>
+  </div>
+
+  <!-- 4. 全维度速览 -->
+  <div class="dims-section">
+    <div class="dims-header">八维度全景</div>
+    <div class="dims-grid">
+      <div class="dim-cell warm">
+        <div class="dim-name">元数据</div>
+        <div class="dim-score-row">
+          <span class="dim-old-score">6</span>
+          <span class="dim-score">8</span>
+        </div>
+        <span class="dim-arrow up-mid">+2</span>
+      </div>
+      <div class="dim-cell hot">
+        <div class="dim-name">工作流</div>
+        <div class="dim-score-row">
+          <span class="dim-old-score">5</span>
+          <span class="dim-score">8</span>
+        </div>
+        <span class="dim-arrow up-big">+3</span>
+      </div>
+      <div class="dim-cell hot">
+        <div class="dim-name">边界覆盖</div>
+        <div class="dim-score-row">
+          <span class="dim-old-score">4</span>
+          <span class="dim-score">7</span>
+        </div>
+        <span class="dim-arrow up-big">+3</span>
+      </div>
+      <div class="dim-cell">
+        <div class="dim-name">检查点</div>
+        <div class="dim-score-row">
+          <span class="dim-old-score">6</span>
+          <span class="dim-score">7</span>
+        </div>
+        <span class="dim-arrow up-small">+1</span>
+      </div>
+      <div class="dim-cell hot">
+        <div class="dim-name">指令精度</div>
+        <div class="dim-score-row">
+          <span class="dim-old-score">5</span>
+          <span class="dim-score">9</span>
+        </div>
+        <span class="dim-arrow up-big">+4</span>
+      </div>
+      <div class="dim-cell">
+        <div class="dim-name">资源整合</div>
+        <div class="dim-score-row">
+          <span class="dim-old-score">7</span>
+          <span class="dim-score">8</span>
+        </div>
+        <span class="dim-arrow up-small">+1</span>
+      </div>
+      <div class="dim-cell warm">
+        <div class="dim-name">整体架构</div>
+        <div class="dim-score-row">
+          <span class="dim-old-score">6</span>
+          <span class="dim-score">8</span>
+        </div>
+        <span class="dim-arrow up-mid">+2</span>
+      </div>
+      <div class="dim-cell hot">
+        <div class="dim-name">实测表现</div>
+        <div class="dim-score-row">
+          <span class="dim-old-score">5</span>
+          <span class="dim-score">8</span>
+        </div>
+        <span class="dim-arrow up-big">+3</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 5. 改进摘要 -->
+  <div class="summary-section">
+    <div class="summary-header">关键改进</div>
+    <div class="summary-items">
+      <div class="summary-item" data-field="improve-1">补充异常处理fallback路径，边界覆盖从4飙升到7</div>
+      <div class="summary-item" data-field="improve-2">工作流重组为线性可执行步骤，每步可验证</div>
+      <div class="summary-item" data-field="improve-3">测试prompt覆盖率从60%提升到95%，实测表现大幅进化</div>
+    </div>
+  </div>
+
+  <!-- 6. 底部品牌区 -->
+  <div class="footer">
+    <div class="footer-left">
+      <div class="footer-brand">Darwin<span class="dot">.</span>skill</div>
+      <div class="footer-slogan">像训练模型一样进化你的Skills</div>
+    </div>
+    <div class="footer-right">
+      <div class="footer-url">github.com/alchaincyf/darwin-skill</div>
+      <div class="footer-by">by 花叔</div>
+    </div>
+  </div>
+
+</div>
+
+</body>
+</html>

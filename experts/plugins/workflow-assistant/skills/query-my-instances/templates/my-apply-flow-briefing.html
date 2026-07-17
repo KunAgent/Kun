@@ -1,0 +1,815 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>我发起的流程单 · 简报</title>
+<style>
+  :root {
+    /* Color tokens */
+    --color-bg: #f5f6f8;
+    --color-surface: #ffffff;
+    --color-surface-alt: #fafbfc;
+    --color-border: #e5e7eb;
+    --color-border-strong: #d1d5db;
+
+    --color-text-primary: #111827;
+    --color-text-secondary: #4b5563;
+    --color-text-tertiary: #9ca3af;
+
+    --color-brand: #2563eb;
+    --color-brand-soft: #eff6ff;
+
+    /* Status: 进行中 */
+    --color-running: #2563eb;
+    --color-running-bg: #eff6ff;
+    --color-running-border: #bfdbfe;
+
+    /* Status: 已结束 */
+    --color-done: #059669;
+    --color-done-bg: #ecfdf5;
+    --color-done-border: #a7f3d0;
+
+    /* Status: 已撤单 */
+    --color-cancel: #6b7280;
+    --color-cancel-bg: #f3f4f6;
+    --color-cancel-border: #d1d5db;
+
+    /* Spacing */
+    --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px;
+    --sp-5: 20px; --sp-6: 24px; --sp-8: 32px; --sp-10: 40px;
+
+    /* Radius */
+    --r-sm: 6px; --r-md: 8px; --r-lg: 12px; --r-xl: 16px;
+
+    /* Shadow */
+    --shadow-sm: 0 1px 2px rgba(17,24,39,0.04);
+    --shadow-md: 0 2px 8px rgba(17,24,39,0.06);
+    --shadow-lg: 0 8px 24px rgba(17,24,39,0.08);
+
+    /* Font */
+    --font-sans: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", "Segoe UI", sans-serif;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: var(--font-sans);
+    background: var(--color-bg);
+    color: var(--color-text-primary);
+    font-size: 14px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .page {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: var(--sp-8) var(--sp-6);
+  }
+
+  /* ========== Page Header ========== */
+  .page-header {
+    margin-bottom: var(--sp-6);
+  }
+  .page-title {
+    font-size: 22px;
+    font-weight: 600;
+    color: var(--color-text-primary);
+    margin: 0 0 var(--sp-2);
+    letter-spacing: 0.2px;
+  }
+  .page-subtitle {
+    font-size: 13px;
+    color: var(--color-text-tertiary);
+    margin: 0;
+  }
+
+  /* ========== Overview Bar (v1 风格) ========== */
+  .overview {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: var(--sp-4);
+    margin-bottom: var(--sp-8);
+  }
+  .stat-card {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--r-lg);
+    padding: var(--sp-5) var(--sp-6);
+    box-shadow: var(--shadow-sm);
+  }
+  .stat-label {
+    font-size: 13px;
+    color: var(--color-text-secondary);
+    margin-bottom: var(--sp-2);
+  }
+  .stat-value {
+    font-size: 28px;
+    font-weight: 600;
+    color: var(--color-text-primary);
+    line-height: 1.2;
+  }
+  .stat-value.is-running { color: var(--color-running); }
+  .stat-value.is-done    { color: var(--color-done); }
+  .stat-value.is-cancel  { color: var(--color-cancel); }
+
+  /* ========== Section ========== */
+  .section {
+    margin-bottom: var(--sp-8);
+  }
+  .section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: var(--sp-4);
+    padding-bottom: var(--sp-3);
+    border-bottom: 1px solid var(--color-border);
+  }
+  .section-title {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-3);
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--color-text-primary);
+    margin: 0;
+  }
+  .section-count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 22px;
+    height: 22px;
+    padding: 0 8px;
+    border-radius: 11px;
+    font-size: 12px;
+    font-weight: 500;
+    background: var(--color-surface-alt);
+    color: var(--color-text-secondary);
+    border: 1px solid var(--color-border);
+  }
+  .section-bar {
+    width: 3px;
+    height: 16px;
+    border-radius: 2px;
+    background: var(--color-text-tertiary);
+  }
+  .section-bar.is-running { background: var(--color-running); }
+  .section-bar.is-done    { background: var(--color-done); }
+  .section-bar.is-cancel  { background: var(--color-cancel); }
+
+  /* ========== Card Grid (进行中) ========== */
+  .card-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--sp-3);
+  }
+
+  /* ========== Flow Card (v1 风格 - 进行中, 紧凑版) ========== */
+  .flow-card {
+    position: relative;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--r-lg);
+    padding: var(--sp-4) var(--sp-5);
+    box-shadow: var(--shadow-sm);
+    transition: box-shadow 0.18s ease, transform 0.18s ease, border-color 0.18s ease;
+    overflow: hidden;
+  }
+  .flow-card::before {
+    content: "";
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 3px;
+    background: var(--color-running);
+  }
+  .flow-card:hover {
+    box-shadow: var(--shadow-md);
+    border-color: var(--color-border-strong);
+    transform: translateY(-1px);
+  }
+
+  .card-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--sp-3);
+    margin-bottom: var(--sp-2);
+  }
+  .card-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--color-text-primary);
+    line-height: 1.45;
+    margin: 0;
+    word-break: break-all;
+    text-decoration: none;
+    transition: color 0.18s ease;
+  }
+  .card-title:hover { color: var(--color-brand); }
+  .card-title .flow-prefix {
+    color: var(--color-brand);
+    font-weight: 600;
+  }
+
+  /* status badge */
+  .badge {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 1.5;
+    white-space: nowrap;
+    border: 1px solid transparent;
+  }
+  .badge::before {
+    content: "";
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: currentColor;
+  }
+  .badge.is-running {
+    color: var(--color-running);
+    background: var(--color-running-bg);
+    border-color: var(--color-running-border);
+  }
+  .badge.is-done {
+    color: var(--color-done);
+    background: var(--color-done-bg);
+    border-color: var(--color-done-border);
+  }
+  .badge.is-cancel {
+    color: var(--color-cancel);
+    background: var(--color-cancel-bg);
+    border-color: var(--color-cancel-border);
+  }
+
+  /* meta list (v1 风格 - 简洁键值对, 紧凑) */
+  .meta-list {
+    margin-top: var(--sp-2);
+    padding-top: var(--sp-2);
+    border-top: 1px dashed var(--color-border);
+    display: grid;
+    gap: 4px;
+  }
+  .meta-row {
+    display: grid;
+    grid-template-columns: 70px 1fr;
+    gap: var(--sp-3);
+    font-size: 13px;
+    line-height: 1.5;
+  }
+  .meta-key {
+    color: var(--color-text-tertiary);
+    flex-shrink: 0;
+  }
+  .meta-val {
+    color: var(--color-text-secondary);
+    word-break: break-all;
+  }
+  .meta-val.is-strong {
+    color: var(--color-text-primary);
+    font-weight: 500;
+  }
+
+  /* 多节点支持：节点条目（紧凑版） */
+  .node-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .node-stack-item {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-2);
+    flex-wrap: wrap;
+    line-height: 1.5;
+  }
+  .node-stack-item .node-name {
+    color: var(--color-text-primary);
+    font-weight: 500;
+  }
+  .node-stack-item .node-handler {
+    color: var(--color-text-secondary);
+  }
+  .node-stack-item .node-handler::before {
+    content: "·";
+    margin: 0 6px;
+    color: var(--color-text-tertiary);
+  }
+
+  /* card footer link (紧凑) */
+  .card-foot {
+    margin-top: var(--sp-3);
+    display: flex;
+    justify-content: flex-end;
+  }
+  .link-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 13px;
+    color: var(--color-brand);
+    text-decoration: none;
+    padding: 4px 10px;
+    border-radius: var(--r-sm);
+    transition: background 0.18s ease;
+  }
+  .link-btn:hover { background: var(--color-brand-soft); }
+  .link-btn::after {
+    content: "›";
+    font-size: 16px;
+    line-height: 1;
+    transform: translateY(-1px);
+  }
+
+  /* ========== Compact List (v2 风格 - 已结束/已撤单) ========== */
+  .compact-list {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--r-lg);
+    box-shadow: var(--shadow-sm);
+    overflow: hidden;
+  }
+  .compact-row {
+    display: grid;
+    grid-template-columns: 1fr auto auto;
+    align-items: center;
+    gap: var(--sp-4);
+    padding: var(--sp-3) var(--sp-5);
+    border-bottom: 1px solid var(--color-border);
+    text-decoration: none;
+    color: inherit;
+    transition: background 0.15s ease;
+  }
+  .compact-row:last-child { border-bottom: none; }
+  .compact-row:hover { background: var(--color-surface-alt); }
+
+  .compact-title {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--color-text-primary);
+    line-height: 1.5;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .compact-title .flow-prefix {
+    color: var(--color-brand);
+    font-weight: 600;
+  }
+  .compact-time {
+    font-size: 12px;
+    color: var(--color-text-tertiary);
+    white-space: nowrap;
+  }
+
+  .compact-foot {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--sp-3) var(--sp-5);
+    background: var(--color-surface-alt);
+    border-top: 1px solid var(--color-border);
+    font-size: 13px;
+  }
+  .compact-foot-tip {
+    color: var(--color-text-tertiary);
+  }
+
+  /* ========== Flow Aggregation Section ========== */
+  .flow-group {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--r-lg);
+    padding: var(--sp-5) var(--sp-6);
+    margin-bottom: var(--sp-4);
+    box-shadow: var(--shadow-sm);
+  }
+  .flow-group-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: var(--sp-3);
+    margin-bottom: var(--sp-4);
+    padding-bottom: var(--sp-3);
+    border-bottom: 1px solid var(--color-border);
+  }
+  .flow-group-title {
+    display: flex;
+    align-items: center;
+    gap: var(--sp-3);
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--color-text-primary);
+    margin: 0;
+  }
+  .flow-group-title .count-tag {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--color-brand);
+    background: var(--color-brand-soft);
+  }
+
+  .flow-group-body {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: var(--sp-4);
+  }
+  .info-cell {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-1);
+  }
+  .info-cell-label {
+    font-size: 12px;
+    color: var(--color-text-tertiary);
+  }
+  .info-cell-value {
+    font-size: 14px;
+    color: var(--color-text-primary);
+    font-weight: 500;
+    word-break: break-all;
+  }
+
+  .admin-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--sp-2);
+  }
+  .admin-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: 14px;
+    font-size: 12px;
+    background: var(--color-surface-alt);
+    border: 1px solid var(--color-border);
+    color: var(--color-text-secondary);
+  }
+  .admin-chip .avatar {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: var(--color-brand);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 500;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* ========== Responsive ========== */
+  @media (max-width: 768px) {
+    .overview { grid-template-columns: repeat(2, 1fr); }
+    .card-grid { grid-template-columns: 1fr; }
+    .page { padding: var(--sp-5) var(--sp-4); }
+    .compact-row {
+      grid-template-columns: 1fr;
+      gap: var(--sp-1);
+    }
+  }
+</style>
+</head>
+<body>
+  <div class="page">
+
+    <!-- Page Header -->
+    <header class="page-header">
+      <h1 class="page-title">我发起的流程单</h1>
+      <p class="page-subtitle">本周共发起 22 条流程单 · 数据更新于 2026-05-18 19:37</p>
+    </header>
+
+    <!-- Overview Stats (v1 风格) -->
+    <section class="overview">
+      <div class="stat-card">
+        <div class="stat-label">流程单总数</div>
+        <div class="stat-value">22</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">进行中</div>
+        <div class="stat-value is-running">5</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">已结束</div>
+        <div class="stat-value is-done">14</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">已撤单</div>
+        <div class="stat-value is-cancel">3</div>
+      </div>
+    </section>
+
+    <!-- Section: 进行中 (v1 简洁风格 + 多节点支持) -->
+    <section class="section">
+      <div class="section-header">
+        <h2 class="section-title">
+          <span class="section-bar is-running"></span>
+          进行中
+          <span class="section-count">5</span>
+        </h2>
+      </div>
+
+      <div class="card-grid">
+
+        <!-- Card 1: 单节点（最常见情况） -->
+        <article class="flow-card">
+          <div class="card-head">
+            <a href="#" class="card-title"><span class="flow-prefix">[费用报销申请]</span>5 月差旅 · 深圳-北京</a>
+            <span class="badge is-running">进行中</span>
+          </div>
+          <div class="meta-list">
+            <div class="meta-row"><span class="meta-key">发起时间</span><span class="meta-val">2026-05-15 10:24</span></div>
+            <div class="meta-row"><span class="meta-key">当前节点</span><span class="meta-val is-strong">部门负责人审批</span></div>
+            <div class="meta-row"><span class="meta-key">当前处理人</span><span class="meta-val">张伟</span></div>
+          </div>
+          <div class="card-foot"><a class="link-btn" href="#">查看详情</a></div>
+        </article>
+
+        <!-- Card 2: 多节点（并行/会签） -->
+        <article class="flow-card">
+          <div class="card-head">
+            <a href="#" class="card-title"><span class="flow-prefix">[合同审批]</span>××咨询服务合同 V2</a>
+            <span class="badge is-running">进行中</span>
+          </div>
+          <div class="meta-list">
+            <div class="meta-row">
+              <span class="meta-key">发起时间</span>
+              <span class="meta-val">2026-05-10 11:48</span>
+            </div>
+            <div class="meta-row">
+              <span class="meta-key">当前节点</span>
+              <span class="meta-val">
+                <div class="node-stack">
+                  <div class="node-stack-item">
+                    <span class="node-name">法务审核</span>
+                    <span class="node-handler">刘思雨</span>
+                  </div>
+                  <div class="node-stack-item">
+                    <span class="node-name">财务审核</span>
+                    <span class="node-handler">李娜、周敏</span>
+                  </div>
+                </div>
+              </span>
+            </div>
+          </div>
+          <div class="card-foot"><a class="link-btn" href="#">查看详情</a></div>
+        </article>
+
+        <!-- Card 3: 多节点（会签） -->
+        <article class="flow-card">
+          <div class="card-head">
+            <a href="#" class="card-title"><span class="flow-prefix">[采购申请]</span>研发部显示器采购 27 寸 ×4</a>
+            <span class="badge is-running">进行中</span>
+          </div>
+          <div class="meta-list">
+            <div class="meta-row">
+              <span class="meta-key">发起时间</span>
+              <span class="meta-val">2026-05-12 09:30</span>
+            </div>
+            <div class="meta-row">
+              <span class="meta-key">当前节点</span>
+              <span class="meta-val">
+                <div class="node-stack">
+                  <div class="node-stack-item">
+                    <span class="node-name">采购部询价</span>
+                    <span class="node-handler">陈晨</span>
+                  </div>
+                  <div class="node-stack-item">
+                    <span class="node-name">资产管理员核验</span>
+                    <span class="node-handler">郑萌</span>
+                  </div>
+                </div>
+              </span>
+            </div>
+          </div>
+          <div class="card-foot"><a class="link-btn" href="#">查看详情</a></div>
+        </article>
+
+        <!-- Card 4: 单节点 -->
+        <article class="flow-card">
+          <div class="card-head">
+            <a href="#" class="card-title"><span class="flow-prefix">[请假申请]</span>调休 0.5 天 · 5/20 下午</a>
+            <span class="badge is-running">进行中</span>
+          </div>
+          <div class="meta-list">
+            <div class="meta-row"><span class="meta-key">发起时间</span><span class="meta-val">2026-05-18 14:11</span></div>
+            <div class="meta-row"><span class="meta-key">当前节点</span><span class="meta-val is-strong">直属主管审批</span></div>
+            <div class="meta-row"><span class="meta-key">当前处理人</span><span class="meta-val">王浩</span></div>
+          </div>
+          <div class="card-foot"><a class="link-btn" href="#">查看详情</a></div>
+        </article>
+
+        <!-- Card 5: 单节点 -->
+        <article class="flow-card">
+          <div class="card-head">
+            <a href="#" class="card-title"><span class="flow-prefix">[费用报销申请]</span>客户拜访打车费</a>
+            <span class="badge is-running">进行中</span>
+          </div>
+          <div class="meta-list">
+            <div class="meta-row"><span class="meta-key">发起时间</span><span class="meta-val">2026-05-14 18:02</span></div>
+            <div class="meta-row"><span class="meta-key">当前节点</span><span class="meta-val is-strong">财务复核</span></div>
+            <div class="meta-row"><span class="meta-key">当前处理人</span><span class="meta-val">李娜</span></div>
+          </div>
+          <div class="card-foot"><a class="link-btn" href="#">查看详情</a></div>
+        </article>
+
+      </div>
+    </section>
+
+    <!-- Section: 已结束 (v2 紧凑风格 + 折叠) -->
+    <section class="section">
+      <div class="section-header">
+        <h2 class="section-title">
+          <span class="section-bar is-done"></span>
+          已结束
+          <span class="section-count">14</span>
+        </h2>
+      </div>
+
+      <div class="compact-list">
+        <a class="compact-row" href="#">
+          <span class="compact-title"><span class="flow-prefix">[费用报销申请]</span> 4 月团建餐费</span>
+          <span class="badge is-done">已结束</span>
+          <span class="compact-time">2026-04-28 16:20</span>
+        </a>
+        <a class="compact-row" href="#">
+          <span class="compact-title"><span class="flow-prefix">[请假申请]</span> 事假 1 天 · 5/06</span>
+          <span class="badge is-done">已结束</span>
+          <span class="compact-time">2026-05-04 17:30</span>
+        </a>
+        <a class="compact-row" href="#">
+          <span class="compact-title"><span class="flow-prefix">[采购申请]</span> 办公耗材季度补给</span>
+          <span class="badge is-done">已结束</span>
+          <span class="compact-time">2026-04-22 09:55</span>
+        </a>
+        <a class="compact-row" href="#">
+          <span class="compact-title"><span class="flow-prefix">[费用报销申请]</span> 3 月通讯补贴</span>
+          <span class="badge is-done">已结束</span>
+          <span class="compact-time">2026-04-02 10:08</span>
+        </a>
+        <a class="compact-row" href="#">
+          <span class="compact-title"><span class="flow-prefix">[出差申请]</span> 上海客户现场支持 3 天</span>
+          <span class="badge is-done">已结束</span>
+          <span class="compact-time">2026-03-28 14:42</span>
+        </a>
+
+        <div class="compact-foot">
+          <span class="compact-foot-tip">仅展示最近 5 条，共 14 条已结束流程单</span>
+          <a class="link-btn" href="#">查看全部</a>
+        </div>
+      </div>
+    </section>
+
+    <!-- Section: 已撤单 (v2 紧凑风格) -->
+    <section class="section">
+      <div class="section-header">
+        <h2 class="section-title">
+          <span class="section-bar is-cancel"></span>
+          已撤单
+          <span class="section-count">3</span>
+        </h2>
+      </div>
+
+      <div class="compact-list">
+        <a class="compact-row" href="#">
+          <span class="compact-title"><span class="flow-prefix">[采购申请]</span> 临时会议室白板采购</span>
+          <span class="badge is-cancel">已撤单</span>
+          <span class="compact-time">2026-05-08 14:50</span>
+        </a>
+        <a class="compact-row" href="#">
+          <span class="compact-title"><span class="flow-prefix">[费用报销申请]</span> 误提交 · 2 月份打车费</span>
+          <span class="badge is-cancel">已撤单</span>
+          <span class="compact-time">2026-04-15 11:18</span>
+        </a>
+        <a class="compact-row" href="#">
+          <span class="compact-title"><span class="flow-prefix">[合同审批]</span> 旧版条款 · 已重新提交</span>
+          <span class="badge is-cancel">已撤单</span>
+          <span class="compact-time">2026-03-19 09:33</span>
+        </a>
+      </div>
+    </section>
+
+    <!-- Section: Flow Aggregation -->
+    <section class="section">
+      <div class="section-header">
+        <h2 class="section-title">
+          <span class="section-bar"></span>
+          高频流程聚合
+          <span class="section-count">3</span>
+        </h2>
+        <span class="page-subtitle">您在 3 个流程下提交了多条流程单，可联系流程管理员获取支持</span>
+      </div>
+
+      <!-- Flow Group 1 -->
+      <div class="flow-group">
+        <div class="flow-group-head">
+          <h3 class="flow-group-title">
+            费用报销申请
+            <span class="count-tag">已发起 7 条</span>
+          </h3>
+          <a class="link-btn" href="#">前往流程主页</a>
+        </div>
+        <div class="flow-group-body">
+          <div class="info-cell">
+            <span class="info-cell-label">所属业务域</span>
+            <span class="info-cell-value">财务-费用类</span>
+          </div>
+          <div class="info-cell">
+            <span class="info-cell-label">流程编码</span>
+            <span class="info-cell-value">FN-EXP-001</span>
+          </div>
+          <div class="info-cell">
+            <span class="info-cell-label">流程版本</span>
+            <span class="info-cell-value">v2.4 · 2026-03-12 发布</span>
+          </div>
+          <div class="info-cell">
+            <span class="info-cell-label">流程管理员</span>
+            <div class="admin-list">
+              <span class="admin-chip"><span class="avatar">王</span>王思琪</span>
+              <span class="admin-chip"><span class="avatar">陈</span>陈雨晨</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Flow Group 2 -->
+      <div class="flow-group">
+        <div class="flow-group-head">
+          <h3 class="flow-group-title">
+            采购申请
+            <span class="count-tag">已发起 4 条</span>
+          </h3>
+          <a class="link-btn" href="#">前往流程主页</a>
+        </div>
+        <div class="flow-group-body">
+          <div class="info-cell">
+            <span class="info-cell-label">所属业务域</span>
+            <span class="info-cell-value">行政-采购类</span>
+          </div>
+          <div class="info-cell">
+            <span class="info-cell-label">流程编码</span>
+            <span class="info-cell-value">FN-PUR-007</span>
+          </div>
+          <div class="info-cell">
+            <span class="info-cell-label">流程版本</span>
+            <span class="info-cell-value">v1.8 · 2026-01-09 发布</span>
+          </div>
+          <div class="info-cell">
+            <span class="info-cell-label">流程管理员</span>
+            <div class="admin-list">
+              <span class="admin-chip"><span class="avatar">李</span>李建国</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Flow Group 3 -->
+      <div class="flow-group">
+        <div class="flow-group-head">
+          <h3 class="flow-group-title">
+            请假申请
+            <span class="count-tag">已发起 3 条</span>
+          </h3>
+          <a class="link-btn" href="#">前往流程主页</a>
+        </div>
+        <div class="flow-group-body">
+          <div class="info-cell">
+            <span class="info-cell-label">所属业务域</span>
+            <span class="info-cell-value">人事-考勤类</span>
+          </div>
+          <div class="info-cell">
+            <span class="info-cell-label">流程编码</span>
+            <span class="info-cell-value">FN-HR-013</span>
+          </div>
+          <div class="info-cell">
+            <span class="info-cell-label">流程版本</span>
+            <span class="info-cell-value">v3.0 · 2026-04-20 发布</span>
+          </div>
+          <div class="info-cell">
+            <span class="info-cell-label">流程管理员</span>
+            <div class="admin-list">
+              <span class="admin-chip"><span class="avatar">赵</span>赵敏</span>
+              <span class="admin-chip"><span class="avatar">孙</span>孙浩然</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </div>
+</body>
+</html>

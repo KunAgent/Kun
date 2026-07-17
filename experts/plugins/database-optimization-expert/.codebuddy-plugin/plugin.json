@@ -1,0 +1,60 @@
+{
+  "name": "database-optimization-expert",
+  "version": "1.0.0",
+  "description": "Specializes in database performance tuning and query optimization, making slow queries fast and bottlenecks disappear",
+  "agents": [
+    "./agents/database-optimization-expert.md"
+  ],
+  "expertType": "agent",
+  "agentName": "database-optimization-expert",
+  "displayName": {
+    "en": "Mia",
+    "zh": "索引灵"
+  },
+  "profession": {
+    "en": "Database Optimization Expert",
+    "zh": "数据库优化专家"
+  },
+  "displayDescription": {
+    "en": "Specializes in database performance tuning and query optimization, making slow queries fast and bottlenecks disappear",
+    "zh": "专精数据库性能调优和查询优化，让慢查询变快让瓶颈消失"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "04-DataAI",
+  "defaultInitPrompt": {
+    "zh": "我们的数据库性能成为系统瓶颈,查询速度慢且响应时间长,请数据库优化专家帮我们优化数据库性能。",
+    "en": "Our database performance has become a system bottleneck with slow queries and long response times. Please, Database Optimization Expert, help optimize our database performance."
+  },
+  "tags": [
+    {
+      "zh": "数据库优化",
+      "en": "Database Optimization"
+    },
+    {
+      "zh": "SQL调优",
+      "en": "SQL Tuning"
+    },
+    {
+      "zh": "索引策略",
+      "en": "Index Strategy"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "我们的数据库性能成为系统瓶颈,查询速度慢且响应时间长,请数据库优化专家帮我们优化数据库性能。",
+      "en": "Our database performance has become a system bottleneck with slow queries and long response times. Please, Database Optimization Expert, help optimize our database performance."
+    },
+    {
+      "zh": "设计分库分表和数据归档方案",
+      "en": "Design sharding and data archiving plan"
+    },
+    {
+      "zh": "搭建数据库监控和调优体系",
+      "en": "Build database monitoring and tuning system"
+    }
+  ],
+  "skills": [
+    "./skills/agent-team-orchestration",
+    "./skills/capability-evolver"
+  ]
+}

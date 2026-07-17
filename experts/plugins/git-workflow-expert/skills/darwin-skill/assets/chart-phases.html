@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Optimization Lifecycle</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    width: 1200px;
+    height: 400px;
+    background: #111111;
+    font-family: 'Inter', -apple-system, sans-serif;
+    overflow: hidden;
+    position: relative;
+  }
+
+  .top-label {
+    position: absolute;
+    top: 28px;
+    left: 44px;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.18em;
+    color: #D4532B;
+    text-transform: uppercase;
+  }
+
+  /* Center row: phases + arrows */
+  .row {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    display: flex;
+    align-items: center;
+    gap: 0;
+  }
+
+  /* === Phase boxes === */
+  .phase {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    flex-shrink: 0;
+  }
+
+  .phase-num {
+    font-weight: 900;
+    line-height: 1;
+  }
+
+  .phase-name {
+    font-weight: 600;
+    text-align: center;
+    line-height: 1.3;
+  }
+
+  /* Regular dark */
+  .p-dark {
+    background: #1D1D1D;
+    border: 1px solid #2D2D2D;
+    width: 130px;
+    height: 130px;
+  }
+  .p-dark .phase-num {
+    font-size: 38px;
+    color: #FFFFFF;
+    margin-bottom: 10px;
+  }
+  .p-dark .phase-name {
+    font-size: 13px;
+    color: #888888;
+  }
+
+  /* White */
+  .p-white {
+    background: #FFFFFF;
+    border: 1px solid #DDDDDD;
+    width: 130px;
+    height: 130px;
+  }
+  .p-white .phase-num {
+    font-size: 38px;
+    color: #111111;
+    margin-bottom: 10px;
+  }
+  .p-white .phase-name {
+    font-size: 13px;
+    color: #555555;
+  }
+
+  /* Core - Phase 2 */
+  .p-core {
+    background: #D4532B;
+    border: 2px solid #E06035;
+    width: 196px;
+    height: 196px;
+    box-shadow: 0 0 50px rgba(212, 83, 43, 0.4), 0 0 16px rgba(212, 83, 43, 0.25);
+  }
+  .p-core .phase-num {
+    font-size: 56px;
+    color: #FFFFFF;
+    margin-bottom: 12px;
+  }
+  .p-core .phase-name {
+    font-size: 15px;
+    font-weight: 700;
+    color: rgba(255,255,255,0.93);
+  }
+
+  /* === Connector === */
+  .connector {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 72px;
+    flex-shrink: 0;
+    position: relative;
+  }
+
+  .conn-label {
+    font-size: 9.5px;
+    color: #505050;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    white-space: nowrap;
+    margin-bottom: 9px;
+  }
+
+  .arrow {
+    display: flex;
+    align-items: center;
+    width: 100%;
+  }
+
+  .arrow-line {
+    flex: 1;
+    height: 2px;
+    background: #D4532B;
+  }
+
+  .arrow-head {
+    width: 0;
+    height: 0;
+    border-top: 5px solid transparent;
+    border-bottom: 5px solid transparent;
+    border-left: 9px solid #D4532B;
+  }
+</style>
+</head>
+<body>
+
+  <div class="top-label">OPTIMIZATION LIFECYCLE</div>
+
+  <div class="row">
+
+    <div class="phase p-dark">
+      <div class="phase-num">0</div>
+      <div class="phase-name">初始化</div>
+    </div>
+
+    <div class="connector">
+      <div class="conn-label">人类确认</div>
+      <div class="arrow">
+        <div class="arrow-line"></div>
+        <div class="arrow-head"></div>
+      </div>
+    </div>
+
+    <div class="phase p-dark">
+      <div class="phase-num">0.5</div>
+      <div class="phase-name">测试设计</div>
+    </div>
+
+    <div class="connector">
+      <div class="conn-label">人类确认</div>
+      <div class="arrow">
+        <div class="arrow-line"></div>
+        <div class="arrow-head"></div>
+      </div>
+    </div>
+
+    <div class="phase p-white">
+      <div class="phase-num">1</div>
+      <div class="phase-name">基线评估</div>
+    </div>
+
+    <div class="connector">
+      <div class="conn-label">人类确认</div>
+      <div class="arrow">
+        <div class="arrow-line"></div>
+        <div class="arrow-head"></div>
+      </div>
+    </div>
+
+    <div class="phase p-core">
+      <div class="phase-num">2</div>
+      <div class="phase-name">优化循环</div>
+    </div>
+
+    <div class="connector">
+      <div class="conn-label">人类确认</div>
+      <div class="arrow">
+        <div class="arrow-line"></div>
+        <div class="arrow-head"></div>
+      </div>
+    </div>
+
+    <div class="phase p-dark">
+      <div class="phase-num">3</div>
+      <div class="phase-name">汇总报告</div>
+    </div>
+
+  </div>
+
+</body>
+</html>

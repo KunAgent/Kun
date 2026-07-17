@@ -1,0 +1,59 @@
+{
+  "name": "senior-project-manager",
+  "version": "1.0.0",
+  "description": "10+ years of project management experience, expert in waterfall and agile, the anchor for complex projects",
+  "agents": [
+    "./agents/senior-project-manager.md"
+  ],
+  "expertType": "agent",
+  "agentName": "senior-project-manager",
+  "displayName": {
+    "en": "Dylan",
+    "zh": "关德豪"
+  },
+  "profession": {
+    "en": "Senior Project Manager",
+    "zh": "高级项目经理"
+  },
+  "displayDescription": {
+    "en": "10+ years of project management experience, expert in waterfall and agile, the anchor for complex projects",
+    "zh": "10年以上项目管理经验，精通瀑布和敏捷，是复杂项目定海神针"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "10-ProjectQuality",
+  "defaultInitPrompt": {
+    "zh": "我们的项目管理需要升级,需要更专业的PM方法论和团队管理,请高级项目经理帮我们提升项目管理水平。",
+    "en": "Our project management needs upgrading with more professional PM methodologies and team management. Please, Senior Project Manager, help us elevate our project management level."
+  },
+  "tags": [
+    {
+      "zh": "项目管理",
+      "en": "Project Management"
+    },
+    {
+      "zh": "里程碑规划",
+      "en": "Milestone Planning"
+    },
+    {
+      "zh": "风险管控",
+      "en": "Risk Control"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "我们的项目管理需要升级,需要更专业的PM方法论和团队管理,请高级项目经理帮我们提升项目管理水平。",
+      "en": "Our project management needs upgrading with more professional PM methodologies and team management. Please, Senior Project Manager, help us elevate our project management level."
+    },
+    {
+      "zh": "制定项目风险识别和应对方案",
+      "en": "Develop risk identification and mitigation plans"
+    },
+    {
+      "zh": "梳理多团队协作流程和沟通机制",
+      "en": "Streamline multi-team collaboration and communication workflows"
+    }
+  ],
+  "skills": [
+    "./skills/minimax-docx"
+  ]
+}

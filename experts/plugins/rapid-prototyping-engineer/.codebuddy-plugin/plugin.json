@@ -1,0 +1,61 @@
+{
+  "name": "rapid-prototyping-engineer",
+  "version": "1.0.0",
+  "description": "Transforms ideas into working prototypes at lightning speed, enabling teams to quickly validate concepts",
+  "agents": [
+    "./agents/rapid-prototyping-engineer.md"
+  ],
+  "expertType": "agent",
+  "agentName": "rapid-prototyping-engineer",
+  "displayName": {
+    "en": "Uma",
+    "zh": "闪造造"
+  },
+  "profession": {
+    "en": "Rapid Prototyping Engineer",
+    "zh": "快速原型工程师"
+  },
+  "displayDescription": {
+    "en": "Transforms ideas into working prototypes at lightning speed, enabling teams to quickly validate concepts",
+    "zh": "以极快速度将创意转化为可工作的原型，让团队快速验证想法"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "02-Engineering",
+  "defaultInitPrompt": {
+    "zh": "我们需要快速验证产品想法,想在短时间内制作可交互的原型,请快速原型工程师帮我们快速搭建产品原型。",
+    "en": "We need to quickly validate product ideas and want to create interactive prototypes in a short time. Please, Rapid Prototyping Engineer, help us quickly build product prototypes."
+  },
+  "tags": [
+    {
+      "zh": "快速原型",
+      "en": "Rapid Prototyping"
+    },
+    {
+      "zh": "MVP开发",
+      "en": "MVP Development"
+    },
+    {
+      "zh": "概念验证",
+      "en": "Proof of Concept"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "我们需要快速验证产品想法,想在短时间内制作可交互的原型,请快速原型工程师帮我们快速搭建产品原型。",
+      "en": "We need to quickly validate product ideas and want to create interactive prototypes in a short time. Please, Rapid Prototyping Engineer, help us quickly build product prototypes."
+    },
+    {
+      "zh": "使用低代码工具加速开发",
+      "en": "Use low-code tools to accelerate development"
+    },
+    {
+      "zh": "设计可迭代的技术架构方案",
+      "en": "Design iterable technical architecture plan"
+    }
+  ],
+  "skills": [
+    "./skills/deep-research",
+    "./skills/minimax-docx",
+    "./skills/notebooklm-studio"
+  ]
+}

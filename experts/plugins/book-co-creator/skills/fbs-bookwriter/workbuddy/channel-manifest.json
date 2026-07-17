@@ -1,0 +1,106 @@
+{
+  "$schema": "fbs-workbuddy-channel-v1",
+  "channel": "workbuddy-marketplace",
+  "skill": {
+    "id": "fbs-bookwriter",
+    "name": "fbs-bookwriter",
+    "displayName": "福帮手：高质量长文档手稿工具链",
+    "version": "2.1.2"
+  },
+  "entry": {
+    "resumeFirst": true,
+    "hostCapability": "scripts/host-capability-detect.mjs",
+    "intakeRouter": "scripts/intake-router.mjs",
+    "presentationConsumer": "scripts/host-consume-presentation.mjs",
+    "sessionSnapshot": "scripts/workbuddy-session-snapshot.mjs",
+    "profileBridge": "scripts/workbuddy-user-profile-bridge.mjs",
+    "feedbackBridge": "scripts/release-feedback-bridge.mjs"
+  },
+  "scriptBridge": {
+    "primaryCli": "scripts/fbs-cli-bridge.mjs",
+    "documentation": "references/01-core/skill-cli-bridge-matrix.md",
+    "enginesRef": "_plugin_meta.json#engines",
+    "integrationNote": "长链路能力（检索前置合同、企微只读场景包、乐包）仅通过 Skill 内脚本与 CLI 联动，不单独暴露 MCP。",
+    "categories": {
+      "searchPreflight": {
+        "script": "scripts/record-search-preflight.mjs",
+        "contract": "references/05-ops/search-preflight-contract.json"
+      },
+      "scenePackWecom": {
+        "adminCli": "scripts/wecom/scene-pack-admin.mjs",
+        "loader": "scripts/wecom/scene-pack-loader.mjs",
+        "spreadsheetMode": "readonly"
+      },
+      "creditsLedger": {
+        "library": "scripts/wecom/lib/credits-ledger.mjs",
+        "balanceCli": "scripts/fbs-cli-bridge.mjs credits balance"
+      },
+      "lifecycle": {
+        "intake": "scripts/intake-router.mjs",
+        "sessionExit": "scripts/session-exit.mjs"
+      }
+    }
+  },
+  "hostDetection": {
+    "homeDir": "~/.workbuddy",
+    "settings": "~/.workbuddy/settings.json",
+    "skillsMarketplace": "~/.workbuddy/skills-marketplace/skills",
+    "installedPlugins": "~/.workbuddy/skills",
+    "capabilityCache": ".fbs/host-capability.json"
+  },
+  "tier1": {
+    "required": false,
+    "preferredSkills": [
+      "deep-research",
+      "multi-search-engine",
+      "citation-manager",
+      "minimax-docx",
+      "minimax-pdf",
+      "content-ops",
+      "deck-generator",
+      "pptx-generator",
+      "content-factory",
+      "content-repurposer",
+      "notebooklm-studio",
+      "autoresearch",
+      "humanizer",
+      "web-search-exa",
+      "wechat-article-search",
+      "nano-pdf",
+      "agent-team-orchestration"
+    ]
+  },
+  "tier2": {
+    "requiredPlugins": [
+      "pptx",
+      "pdf",
+      "docx",
+      "xlsx",
+      "playwright-cli",
+      "find-skills"
+    ],
+    "xlsxNote": "WorkBuddy 本地市场无 minimax-xlsx，Excel 能力仅走 xlsx 插件。"
+  },
+  "agents": {
+    "dir": ".codebuddy/agents",
+    "default": "fbs-team-lead"
+  },
+  "pluginMetadata": {
+    "file": ".codebuddy-plugin/plugin.json",
+    "providers": ".codebuddy/providers/provider-registry.yml"
+  },
+  "workflows": {
+    "resumeCard": ".fbs/workbuddy-resume.json",
+    "chapterLedger": ".fbs/chapter-status.md",
+    "memoryBrief": ".fbs/smart-memory/session-resume-brief.md",
+    "deliverablesDir": "deliverables",
+    "releasesDir": "releases",
+    "orgFeedbackDir": ".fbs/org-feedback"
+  },
+  "distribution": {
+    "primaryPackage": "dist/fbs-bookwriter-v212-workbuddy.zip",
+    "reviewNote": "releases/workbuddy-review-v2.1.2.md",
+    "meta": "_plugin_meta.json",
+    "companionPackage": "dist/fbs-bookwriter-v212-codebuddy.zip"
+  }
+}

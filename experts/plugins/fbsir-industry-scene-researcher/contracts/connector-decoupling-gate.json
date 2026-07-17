@@ -1,0 +1,46 @@
+{
+  "schemaVersion": "1.0",
+  "contractId": "industry_scene_researcher_connector_decoupling_gate_v230",
+  "packageName": "fbsir-industry-scene-researcher",
+  "packageVersion": "2.3.0",
+  "purpose": "Keep first value, service intent reporting, review readiness, and local-equivalent readiness independent from connector or MCP state while preserving optional service followthrough.",
+  "appliesTo": [
+    "first_value",
+    "service_intent_report",
+    "review_readiness",
+    "local_equivalent_readiness",
+    "launch_gate",
+    "product_closure"
+  ],
+  "connectorRequiredForFirstValue": false,
+  "connectorRequiredForServiceIntentReport": false,
+  "connectorRequiredForReviewReadiness": false,
+  "connectorRequiredForLocalEquivalentReadiness": false,
+  "packageCapabilityDependsOnConnector": false,
+  "productFlowMustNotReadConnectorState": true,
+  "connectorAuthorizationRequired": false,
+  "connectorToolVisibilityRequired": false,
+  "connectorMcpStateRequired": false,
+  "connectorDisconnectedDoesNotLowerFirstValueVerdict": true,
+  "hostVisiblePermissionGateIsSeparateFromConnectorFailure": true,
+  "optionalEnhancementOnly": true,
+  "entitlementStateMayBeCollectedWithoutConnector": true,
+  "unlockDecisionMustComeFromServiceTruth": true,
+  "optionalToolChain": [
+    "service_observe_binding",
+    "service_observe_context",
+    "service_record_result"
+  ],
+  "allowedDiagnosticUses": [
+    "tool_exposure_probe",
+    "same_binding_followthrough_validation",
+    "service_intent_gap_explanation"
+  ],
+  "forbiddenInferences": [
+    "connector_connected_means_product_ready",
+    "connector_disconnected_means_first_value_failed",
+    "connector_disconnected_means_service_intent_blocked",
+    "tool_visibility_only_means_service_consume_completed",
+    "mcp_state_only_means_review_readiness_failed"
+  ]
+}

@@ -1,0 +1,56 @@
+{
+  "name": "lsp-index-engineer",
+  "version": "1.0.0",
+  "description": "Expert in Language Server Protocol and code indexing technologies",
+  "agents": [
+    "./agents/lsp-index-engineer.md"
+  ],
+  "expertType": "agent",
+  "agentName": "lsp-index-engineer",
+  "displayName": {
+    "en": "Priya",
+    "zh": "索引引"
+  },
+  "profession": {
+    "en": "LSP Index Engineer",
+    "zh": "LSP索引工程师"
+  },
+  "displayDescription": {
+    "en": "Expert in Language Server Protocol and code indexing technologies",
+    "zh": "精通语言服务器协议和代码索引技术"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "02-Engineering",
+  "defaultInitPrompt": {
+    "zh": "我们需要构建语言服务提供商的索引系统,请LSP索引工程师帮我们设计索引架构。",
+    "en": "We need to build a Language Service Provider indexing system. Please, LSP Index Engineer, help us design the indexing architecture."
+  },
+  "tags": [
+    {
+      "zh": "语言服务",
+      "en": "Language Server"
+    },
+    {
+      "zh": "代码索引",
+      "en": "Code Indexing"
+    },
+    {
+      "zh": "智能补全",
+      "en": "Intelligent Completion"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "我们需要构建语言服务提供商的索引系统,请LSP索引工程师帮我们设计索引架构。",
+      "en": "We need to build a Language Service Provider indexing system. Please, LSP Index Engineer, help us design the indexing architecture."
+    },
+    {
+      "zh": "设计代码索引和符号解析方案",
+      "en": "Design code indexing and symbol resolution plan"
+    },
+    {
+      "zh": "优化LSP性能和跨语言支持",
+      "en": "Optimize LSP performance and cross-language support"
+    }
+  ]
+}

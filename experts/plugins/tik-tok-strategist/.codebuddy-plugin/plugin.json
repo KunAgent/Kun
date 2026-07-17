@@ -1,0 +1,59 @@
+{
+  "name": "tik-tok-strategist",
+  "version": "1.0.0",
+  "description": "Expert in TikTok algorithm and overseas short-video ecosystem, helping brands go viral on global platforms",
+  "agents": [
+    "./agents/tik-tok-strategist.md"
+  ],
+  "expertType": "agent",
+  "agentName": "tik-tok-strategist",
+  "displayName": {
+    "en": "Bea",
+    "zh": "拓刻刻"
+  },
+  "profession": {
+    "en": "TikTok Strategist",
+    "zh": "TikTok策略师"
+  },
+  "displayDescription": {
+    "en": "Expert in TikTok algorithm and overseas short-video ecosystem, helping brands go viral on global platforms",
+    "zh": "精通TikTok算法和海外短视频生态，帮助品牌在全球平台爆发"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "06-ContentCreative",
+  "defaultInitPrompt": {
+    "zh": "我们想在TikTok上实现病毒式传播,需要专业的TikTok内容策略,请TikTok战略家帮我们制定爆款内容计划。",
+    "en": "We want to achieve viral growth on TikTok and need professional TikTok content strategies. Please, TikTok Strategist, help us develop a viral content plan."
+  },
+  "tags": [
+    {
+      "zh": "TikTok策略",
+      "en": "TikTok Strategy"
+    },
+    {
+      "zh": "海外短视频",
+      "en": "Overseas Short Video"
+    },
+    {
+      "zh": "全球营销",
+      "en": "Global Marketing"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "我们想在TikTok上实现病毒式传播,需要专业的TikTok内容策略,请TikTok战略家帮我们制定爆款内容计划。",
+      "en": "We want to achieve viral growth on TikTok and need professional TikTok content strategies. Please, TikTok Strategist, help us develop a viral content plan."
+    },
+    {
+      "zh": "策划TikTok爆款短视频和挑战赛",
+      "en": "Plan viral TikTok short videos and hashtag challenges"
+    },
+    {
+      "zh": "优化TikTok算法推荐和商业变现",
+      "en": "Optimize TikTok algorithm reach and monetization"
+    }
+  ],
+  "skills": [
+    "./skills/libtv-skill"
+  ]
+}

@@ -1,0 +1,56 @@
+{
+  "name": "game-audio-engineer",
+  "version": "1.0.0",
+  "description": "Expert in FMOD/Wwise integration and spatial audio, bringing game sounds to life",
+  "agents": [
+    "./agents/game-audio-engineer.md"
+  ],
+  "expertType": "agent",
+  "agentName": "game-audio-engineer",
+  "displayName": {
+    "en": "Carl",
+    "zh": "音效效"
+  },
+  "profession": {
+    "en": "Game Audio Engineer",
+    "zh": "游戏音频工程师"
+  },
+  "displayDescription": {
+    "en": "Expert in FMOD/Wwise integration and spatial audio, bringing game sounds to life",
+    "zh": "精通FMOD/Wwise集成和空间音频，让游戏声音栩栩如生"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "03-GameSpatial",
+  "defaultInitPrompt": {
+    "zh": "我们的游戏需要专业的音频设计和音效制作,请游戏音频工程师帮我们设计游戏音频系统。",
+    "en": "Our game needs professional audio design and sound effects production. Please, Game Audio Engineer, help us design a game audio system."
+  },
+  "tags": [
+    {
+      "zh": "游戏音频",
+      "en": "Game Audio"
+    },
+    {
+      "zh": "音效设计",
+      "en": "Sound Design"
+    },
+    {
+      "zh": "空间音频",
+      "en": "Spatial Audio"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "我们的游戏需要专业的音频设计和音效制作,请游戏音频工程师帮我们设计游戏音频系统。",
+      "en": "Our game needs professional audio design and sound effects production. Please, Game Audio Engineer, help us design a game audio system."
+    },
+    {
+      "zh": "设计自适应音乐和空间音效系统",
+      "en": "Design adaptive music and spatial audio systems"
+    },
+    {
+      "zh": "优化音频性能预算和内存管理",
+      "en": "Optimize audio performance budgeting and memory management"
+    }
+  ]
+}

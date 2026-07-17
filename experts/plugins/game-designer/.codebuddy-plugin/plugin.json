@@ -1,0 +1,62 @@
+{
+  "name": "game-designer",
+  "version": "1.0.0",
+  "description": "Expert in game systems and mechanics design, building gameplay through loops, levers, and psychology",
+  "agents": [
+    "./agents/game-designer.md"
+  ],
+  "expertType": "agent",
+  "agentName": "game-designer",
+  "displayName": {
+    "en": "Dale",
+    "zh": "玩法师"
+  },
+  "profession": {
+    "en": "Game Designer",
+    "zh": "游戏设计师"
+  },
+  "displayDescription": {
+    "en": "Expert in game systems and mechanics design, building gameplay through loops, levers, and psychology",
+    "zh": "精通游戏系统和机制设计，用循环杠杆和心理构建玩法"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "03-GameSpatial",
+  "defaultInitPrompt": {
+    "zh": "我们需要设计好玩的游戏机制和系统,请游戏设计师帮我们设计游戏玩法和平衡性。",
+    "en": "We need to design fun game mechanics and systems. Please, Game Designer, help us design game gameplay and balance."
+  },
+  "tags": [
+    {
+      "zh": "游戏设计",
+      "en": "Game Design"
+    },
+    {
+      "zh": "玩法策划",
+      "en": "Gameplay Design"
+    },
+    {
+      "zh": "游戏系统",
+      "en": "Game Systems"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "我们需要设计好玩的游戏机制和系统,请游戏设计师帮我们设计游戏玩法和平衡性。",
+      "en": "We need to design fun game mechanics and systems. Please, Game Designer, help us design game gameplay and balance."
+    },
+    {
+      "zh": "制定游戏数值体系和平衡方案",
+      "en": "Develop game numerical systems and balance plan"
+    },
+    {
+      "zh": "撰写游戏设计文档GDD",
+      "en": "Write a Game Design Document (GDD)"
+    }
+  ],
+  "skills": [
+    "./skills/android-native-dev",
+    "./skills/anti-distill",
+    "./skills/impeccable",
+    "./skills/wechat-miniprogram"
+  ]
+}

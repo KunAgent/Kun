@@ -1,0 +1,74 @@
+{
+  "name": "legal-search-pro",
+  "version": "1.0.0",
+  "description": "An advanced Chinese-law retrieval expert that routes intent to scenario, executes multi-layer statute and case-law retrieval with effectiveness verification, and produces structured, source-verified reports; heavyweight outputs must use the verification workbench HTML template.",
+  "author": {
+    "name": "WorkBuddy User",
+    "email": "expert@workbuddy.local"
+  },
+  "agents": [
+    "./agents/legal-search-pro.md"
+  ],
+  "skills": [
+    "./skills/legal-scenario-router",
+    "./skills/legal-search-engine",
+    "./skills/case-retrieval",
+    "./skills/legal-output-formatter",
+    "./skills/legal-verification-workbench"
+  ],
+  "dependencies": {
+    "connectors": [
+      "pkulaw"
+    ]
+  },
+  "expertType": "agent",
+  "agentName": "legal-search-pro",
+  "displayName": {
+    "en": "LexFinder Pro",
+    "zh": "法检 Pro"
+  },
+  "profession": {
+    "en": "Legal Retrieval Expert",
+    "zh": "法律检索专家"
+  },
+  "displayDescription": {
+    "en": "An advanced legal retrieval expert that identifies search intent, performs multi-layer statute and case-law retrieval with effectiveness verification, and delivers scenario-adapted output with interactive HTML traceability.",
+    "zh": "识别检索意图与场景，按法源位阶检索法规与类案，验证效力评估相似度，适配14种输出可溯源报告。"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "11-SecurityCompliance",
+  "defaultInitPrompt": {
+    "zh": "我被公司口头辞退，入职半年没签书面劳动合同，能主张哪些赔偿？要法律依据加类案",
+    "en": "I was verbally fired and never signed a written labor contract in my first six months. What compensation can I claim? Include statutes and similar cases."
+  },
+  "plugin": "legal-search-pro",
+  "tags": [
+    {
+      "en": "Statute & Case Search",
+      "zh": "法规类案检索"
+    },
+    {
+      "en": "Validity Verification",
+      "zh": "效力核验溯源"
+    },
+    {
+      "en": "Compliance Compilation",
+      "zh": "合规依据汇编"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "en": "I was verbally fired and never signed a written labor contract in my first six months. What compensation can I claim? Include statutes and similar cases.",
+      "zh": "我被公司口头辞退，入职半年没签书面劳动合同，能主张哪些赔偿？要法律依据加类案"
+    },
+    {
+      "en": "Is Article 94 of the old Contract Law still valid? Which current article replaces it?",
+      "zh": "对方引用的《合同法》第94条还有效吗，现在对应哪一条"
+    },
+    {
+      "en": "What compliance regulations apply to opening a bubble tea shop? Compile by effectiveness hierarchy.",
+      "zh": "开一家奶茶店涉及哪些合规法律法规和监管规则？请按效力层级汇编"
+    }
+  ],
+  "sharedBy": "howeli"
+}

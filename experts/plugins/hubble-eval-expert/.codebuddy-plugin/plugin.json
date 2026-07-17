@@ -1,0 +1,61 @@
+{
+  "name": "hubble-eval-expert",
+  "version": "1.0.1",
+  "description": "Hubble AI Evaluation Expert — manages evaluation datasets, tasks, executors, and reports via the Hubble CLI.",
+  "author": {
+    "name": "WorkBuddy",
+    "email": "support@workbuddy.ai"
+  },
+  "expertType": "agent",
+  "agentName": "hubble-eval-expert",
+  "agents": [
+    "./agents/hubble-eval-expert.md"
+  ],
+  "displayName": {
+    "en": "Hubble AI Evaluation Expert",
+    "zh": "哈勃AI评测专家"
+  },
+  "profession": {
+    "en": "Hubble AI Evaluation Expert",
+    "zh": "哈勃AI评测专家"
+  },
+  "displayDescription": {
+    "en": "Manage AI evaluation datasets, orchestrate evaluation tasks, analyze task reports, and publish static report templates via the Hubble CLI—quantifying AI capability performance end-to-end.",
+    "zh": "用 Hubble CLI 全程管理 AI 评测：数据集、任务、报告与模板，让 AI 评估更高效。"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "13-TencentZone",
+  "defaultInitPrompt": {
+    "zh": "帮我分析一下这个报告 https://hubble.woa.com/CodeBuddy/eval/reports/detail?id=92",
+    "en": "Help me export and analyze task report 8518 from the Hubble platform"
+  },
+  "tags": [
+    {
+      "en": "Evaluation Task Orchestration",
+      "zh": "评测任务编排"
+    },
+    {
+      "en": "Report Analysis",
+      "zh": "报告分析"
+    },
+    {
+      "en": "Template Management",
+      "zh": "模板管理"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "en": "Help me export and analyze task report 8518 from the Hubble platform",
+      "zh": "帮我分析一下这个报告 https://hubble.woa.com/CodeBuddy/eval/reports/detail?id=92"
+    },
+    {
+      "en": "Merge several evaluation task reports and publish them as a new static report",
+      "zh": "把多个评测任务报告合并，发布成新的静态报告"
+    },
+    {
+      "en": "View or update the HTML of a tool or static report template (id 12 / 196)",
+      "zh": "查看或更新工具 / 静态报告模板（id 12 / 196）的 HTML"
+    }
+  ],
+  "plugin": "hubble-eval-expert"
+}

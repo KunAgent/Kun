@@ -1,0 +1,264 @@
+{
+  "name": "industry-sre-team",
+  "version": "1.0.0",
+  "description": "Tencent Cloud Industry SRE Team — 12 vertical SRE experts covering gaming, retail, education, finance, mobility, internet, e-commerce, healthcare, manufacturing, live-streaming, social-IM, and SaaS, performing five-dimensional inspections (security, reliability, performance, cost, service limits) driven by CloudQ Smart Advisor.",
+  "author": {
+    "name": "Lonnie Hu",
+    "email": "lonniehu@tencent.com"
+  },
+  "expertType": "team",
+  "agentName": "industry-sre-team-lead",
+  "teamInfo": {
+    "leadAgent": "industry-sre-team-lead",
+    "memberAgents": [
+      "game-sre",
+      "retail-sre",
+      "education-sre",
+      "finance-sre",
+      "mobility-sre",
+      "internet-sre",
+      "ecommerce-sre",
+      "healthcare-sre",
+      "manufacturing-sre",
+      "live-sre",
+      "social-im-sre",
+      "saas-sre"
+    ]
+  },
+  "agents": [
+    "./agents/industry-sre-team-lead.md",
+    "./agents/game-sre.md",
+    "./agents/retail-sre.md",
+    "./agents/education-sre.md",
+    "./agents/finance-sre.md",
+    "./agents/mobility-sre.md",
+    "./agents/internet-sre.md",
+    "./agents/ecommerce-sre.md",
+    "./agents/healthcare-sre.md",
+    "./agents/manufacturing-sre.md",
+    "./agents/live-sre.md",
+    "./agents/social-im-sre.md",
+    "./agents/saas-sre.md"
+  ],
+  "skills": [
+    "./skills/cloudq"
+  ],
+  "displayName": {
+    "en": "Tencent Cloud Industry SRE",
+    "zh": "腾讯云行业 SRE"
+  },
+  "profession": {
+    "en": "Tencent Cloud Industry SRE",
+    "zh": "腾讯云行业SRE"
+  },
+  "displayDescription": {
+    "en": "12 industry-vertical SRE experts covering gaming, retail, education, finance, mobility, internet, e-commerce, healthcare, manufacturing, live-streaming, social-IM, and SaaS. Unified five-dimensional inspection framework (security, reliability, performance, cost, service limits) powered by CloudQ Smart Advisor, delivering actionable governance recommendations aligned with each industry's real operational rhythm.",
+    "zh": "12 位行业 SRE 按游戏、零售、教育、金融、出行、互联网、电商、医疗、工业制造、直播、社交通信、SaaS 十二行业做五维巡检，由 CloudQ 智能顾问驱动，输出可对照可执行的治理建议。"
+  },
+  "avatar": "avatars/team.png",
+  "categoryId": "02-Engineering",
+  "defaultInitPrompt": {
+    "zh": "下周开服预估峰值同时在线人数 50w，做一次开服前架构Check。",
+    "en": "We're launching a new server next week with an estimated peak concurrent users of 500K. Run a pre-launch architecture check."
+  },
+  "tags": [
+    {
+      "en": "SRE",
+      "zh": "SRE"
+    },
+    {
+      "en": "Cloud Inspection",
+      "zh": "云巡检"
+    },
+    {
+      "en": "Architecture Governance",
+      "zh": "架构治理"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "en": "We're launching a new server next week with an estimated peak concurrent users of 500K. Run a pre-launch architecture check.",
+      "zh": "下周开服预估峰值同时在线人数 50w，做一次开服前架构Check。"
+    },
+    {
+      "en": "Last month's bill increased month-over-month. Analyze idle resources and billing model.",
+      "zh": "上个月账单环比涨了，从闲置资源和计费方式两个角度盘一盘。"
+    },
+    {
+      "en": "List service quotas approaching limits, ranked by risk level.",
+      "zh": "接近上限的服务配额清单，按风险高低排个序。"
+    }
+  ],
+  "members": [
+    {
+      "id": "industry-sre-team-lead",
+      "name": {
+        "en": "Chief SRE",
+        "zh": "腾讯云首席 SRE"
+      },
+      "profession": {
+        "en": "Chief SRE",
+        "zh": "首席 SRE"
+      },
+      "avatar": "avatars/industry-sre-team-lead.png",
+      "role": "lead"
+    },
+    {
+      "id": "game-sre",
+      "name": {
+        "en": "Gaming SRE",
+        "zh": "游戏行业 SRE"
+      },
+      "profession": {
+        "en": "Gaming Industry SRE Expert",
+        "zh": "游戏行业 SRE 专家"
+      },
+      "avatar": "avatars/game-sre.png",
+      "role": "member"
+    },
+    {
+      "id": "retail-sre",
+      "name": {
+        "en": "Retail SRE",
+        "zh": "零售行业 SRE"
+      },
+      "profession": {
+        "en": "Retail Industry SRE Expert",
+        "zh": "零售行业 SRE 专家"
+      },
+      "avatar": "avatars/retail-sre.png",
+      "role": "member"
+    },
+    {
+      "id": "education-sre",
+      "name": {
+        "en": "Education SRE",
+        "zh": "教育行业 SRE"
+      },
+      "profession": {
+        "en": "Education Industry SRE Expert",
+        "zh": "教育行业 SRE 专家"
+      },
+      "avatar": "avatars/education-sre.png",
+      "role": "member"
+    },
+    {
+      "id": "finance-sre",
+      "name": {
+        "en": "Finance SRE",
+        "zh": "金融行业 SRE"
+      },
+      "profession": {
+        "en": "Finance Industry SRE Expert",
+        "zh": "金融行业 SRE 专家"
+      },
+      "avatar": "avatars/finance-sre.png",
+      "role": "member"
+    },
+    {
+      "id": "mobility-sre",
+      "name": {
+        "en": "Mobility SRE",
+        "zh": "出行行业 SRE"
+      },
+      "profession": {
+        "en": "Mobility Industry SRE Expert",
+        "zh": "出行行业 SRE 专家"
+      },
+      "avatar": "avatars/mobility-sre.png",
+      "role": "member"
+    },
+    {
+      "id": "internet-sre",
+      "name": {
+        "en": "Internet SRE",
+        "zh": "互联网行业 SRE"
+      },
+      "profession": {
+        "en": "Internet Industry SRE Expert",
+        "zh": "泛互联网行业 SRE 专家"
+      },
+      "avatar": "avatars/internet-sre.png",
+      "role": "member"
+    },
+    {
+      "id": "ecommerce-sre",
+      "name": {
+        "en": "E-commerce SRE",
+        "zh": "电商行业 SRE"
+      },
+      "profession": {
+        "en": "E-commerce Industry SRE Expert",
+        "zh": "电商行业 SRE 专家"
+      },
+      "avatar": "avatars/ecommerce-sre.png",
+      "role": "member"
+    },
+    {
+      "id": "healthcare-sre",
+      "name": {
+        "en": "Healthcare SRE",
+        "zh": "医疗行业 SRE"
+      },
+      "profession": {
+        "en": "Healthcare Industry SRE Expert",
+        "zh": "医疗健康行业 SRE 专家"
+      },
+      "avatar": "avatars/healthcare-sre.png",
+      "role": "member"
+    },
+    {
+      "id": "manufacturing-sre",
+      "name": {
+        "en": "Manufacturing SRE",
+        "zh": "工业制造行业 SRE"
+      },
+      "profession": {
+        "en": "Manufacturing Industry SRE Expert",
+        "zh": "工业制造行业 SRE 专家"
+      },
+      "avatar": "avatars/manufacturing-sre.png",
+      "role": "member"
+    },
+    {
+      "id": "live-sre",
+      "name": {
+        "en": "Live-streaming SRE",
+        "zh": "直播行业 SRE"
+      },
+      "profession": {
+        "en": "Live-streaming Industry SRE Expert",
+        "zh": "文娱直播行业 SRE 专家"
+      },
+      "avatar": "avatars/live-sre.png",
+      "role": "member"
+    },
+    {
+      "id": "social-im-sre",
+      "name": {
+        "en": "Social & IM SRE",
+        "zh": "社交通信行业 SRE"
+      },
+      "profession": {
+        "en": "Social & Communication Industry SRE Expert",
+        "zh": "社交通信行业 SRE 专家"
+      },
+      "avatar": "avatars/social-im-sre.png",
+      "role": "member"
+    },
+    {
+      "id": "saas-sre",
+      "name": {
+        "en": "SaaS SRE",
+        "zh": "SaaS 行业 SRE"
+      },
+      "profession": {
+        "en": "SaaS Industry SRE Expert",
+        "zh": "企业 SaaS 行业 SRE 专家"
+      },
+      "avatar": "avatars/saas-sre.png",
+      "role": "member"
+    }
+  ],
+  "plugin": "industry-sre-team"
+}

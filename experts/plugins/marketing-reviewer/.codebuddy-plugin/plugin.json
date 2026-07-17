@@ -1,0 +1,53 @@
+{
+  "name": "marketing-reviewer",
+  "version": "1.0.0",
+  "description": "Marketing copy compliance reviewer: 9 dimensions, 34 rules, outputs risk-graded Excel and visual HTML report.",
+  "author": {
+    "name": "LegalBuddy",
+    "email": ""
+  },
+  "agents": ["./agents/marketing-reviewer.md"],
+  "skills": ["./skills/marketing-review"],
+
+  "expertType": "agent",
+  "agentName": "marketing-reviewer",
+
+  "displayName": {
+    "en": "Vera",
+    "zh": "营文稳"
+  },
+  "profession": {
+    "en": "Marketing Copy Compliance Reviewer",
+    "zh": "营销文案审查官"
+  },
+  "displayDescription": {
+    "en": "Scans marketing copy with 9 dimensions and 34 rules, flags ad-law and privacy risks, outputs graded Excel and HTML report.",
+    "zh": "9维度34条规则扫描营销文案，定位广告法与隐私合规风险，输出分级Excel与HTML审查报告。"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "11-SecurityCompliance",
+  "defaultInitPrompt": {
+    "zh": "请帮我审查这份营销文案的合规性，识别法律风险并提供修改建议。",
+    "en": "Please help me review this marketing copy for compliance, identify legal risks, and provide modification suggestions."
+  },
+  "plugin": "marketing-reviewer",
+  "tags": [
+    { "en": "Marketing Compliance", "zh": "营销合规" },
+    { "en": "Copy Review", "zh": "文案审查" },
+    { "en": "Advertising Law", "zh": "广告法" }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "请帮我审查这份营销文案的合规性，识别法律风险并提供修改建议。",
+      "en": "Please help me review this marketing copy for compliance, identify legal risks, and provide modification suggestions."
+    },
+    {
+      "zh": "审查这份活动文案是否有奖品设置和概率公示方面的合规问题",
+      "en": "Check this activity copy for prize setup and probability disclosure compliance issues"
+    },
+    {
+      "zh": "检查这份打折促销文案的价格标示是否合规",
+      "en": "Check if the price labeling in this promotional copy is compliant"
+    }
+  ]
+}

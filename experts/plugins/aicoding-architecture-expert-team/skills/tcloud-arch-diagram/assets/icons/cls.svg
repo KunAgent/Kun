@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="32px" height="32px" viewBox="0 0 32 32" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+    <!-- Generator: Sketch 52.6 (67491) - http://www.bohemiancoding.com/sketch -->
+    <title>日志服务-32px</title>
+    <desc>Created with Sketch.</desc>
+    <g id="日志服务-32px" stroke="none" stroke-width="1" fill="none" fill-rule="evenodd">
+        <rect id="Rectangle-Copy" fill="#0052D9" opacity="0" x="0" y="0" width="32" height="32"></rect>
+        <g id="Group" transform="translate(2.000000, 0.000000)" fill="#0052D9" fill-rule="nonzero">
+            <polygon id="XMLID_62_" points="8.1 10 20.1 10 20.1 12 8.1 12"></polygon>
+            <rect id="XMLID_16_" x="8" y="14" width="12" height="2"></rect>
+            <rect id="XMLID_10_" x="8" y="19" width="4" height="2"></rect>
+            <g id="XMLID_12_" transform="translate(13.000000, 17.000000)">
+                <polygon id="XMLID_11_" points="2.3 5.8 0.1 2.8 1.8 1.5 2.8 3 5.7 1 5.7 1 6.4 0.5 9 3.9 7.3 5 5.9 3.2"></polygon>
+            </g>
+            <polygon id="XMLID_65_" points="26 22.9 14 29.7 2 22.9 2 9.2 14 2.3 26 9.2 26 9.2 28 8 14 0 0 8 0 24 14 32 28 24 28 12 26 13.2"></polygon>
+        </g>
+    </g>
+</svg>

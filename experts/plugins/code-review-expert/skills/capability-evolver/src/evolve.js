@@ -1,0 +1,2175 @@
+const fs = require('fs');
+const path = require('path');
+const os = require('os');
+const { execSync } = require('child_process');
+const { getRepoRoot, getWorkspaceRoot, getMemoryDir, getSessionScope } = require('./gep/paths');
+const { extractSignals } = require('./gep/signals');
+const {
+  loadGenes,
+  loadCapsules,
+  readAllEvents,
+  getLastEventId,
+  readRecentFailedCapsules,
+  ensureAssetFiles,
+} = require('./gep/assetStore');
+const { selectGeneAndCapsule } = require('./gep/selector');
+const { buildGepPrompt, buildReusePrompt, buildHubMatchedBlock } = require('./gep/prompt');
+const { hubSearch } = require('./gep/hubSearch');
+const { logAssetCall } = require('./gep/assetCallLog');
+const { buildCandidatePreviews } = require('./gep/candidateEval');
+const memoryAdapter = require('./gep/memoryGraphAdapter');
+const {
+  getAdvice: getMemoryAdvice,
+  recordSignalSnapshot,
+  recordHypothesis,
+  recordAttempt,
+  recordOutcome: recordOutcomeFromState,
+  memoryGraphPath,
+} = memoryAdapter;
+const { readStateForSolidify, writeStateForSolidify } = require('./gep/solidify');
+const { fetchTasks, selectBestTask, claimTask, taskToSignals, taskToSignalsWithPrivacy, claimWorkerTask, estimateCommitmentDeadline, detectPrivacyTask } = require('./gep/taskReceiver');
+const { generateQuestions } = require('./gep/questionGenerator');
+const { buildMutation, isHighRiskMutationAllowed } = require('./gep/mutation');
+const { selectPersonalityForRun } = require('./gep/personality');
+const { clip, writePromptArtifact, renderSessionsSpawnCall } = require('./gep/bridge');
+const { getEvolutionDir } = require('./gep/paths');
+const { shouldReflect, buildReflectionContext, recordReflection, buildSuggestedMutations } = require('./gep/reflection');
+const { loadNarrativeSummary } = require('./gep/narrativeMemory');
+const { maybeReportIssue } = require('./gep/issueReporter');
+const { resolveStrategy } = require('./gep/strategy');
+const { expandSignals } = require('./gep/learningSignals');
+const { captureLocalState } = require('./gep/localStateAwareness');
+
+const REPO_ROOT = getRepoRoot();
+
+// Verbose logging helper. Checks EVOLVER_VERBOSE env const (set by --verbose flag in index.js).
+function verbose() {
+  if (String(process.env.EVOLVER_VERBOSE || '').toLowerCase() !== 'true') return;
+  const args = Array.prototype.slice.call(arguments);
+  args.unshift('[Verbose]');
+  console.log.apply(console, args);
+}
+
+// Idle-cycle gating: track last Hub fetch to avoid redundant API calls during saturation.
+// When evolver is saturated (no actionable signals), Hub calls are throttled to at most
+// once per EVOLVER_IDLE_FETCH_INTERVAL_MS (default 30 min) instead of every cycle.
+let _lastHubFetchMs = 0;
+
+function shouldSkipHubCalls(signals) {
+  if (!Array.isArray(signals)) return false;
+  const saturationIndicators = ['force_steady_state', 'evolution_saturation', 'empty_cycle_loop_detected'];
+  let hasSaturation = false;
+  for (let si = 0; si < saturationIndicators.length; si++) {
+    if (signals.indexOf(saturationIndicators[si]) !== -1) { hasSaturation = true; break; }
+  }
+  if (!hasSaturation) return false;
+
+  const actionablePatterns = [
+    'log_error', 'recurring_error', 'capability_gap', 'perf_bottleneck',
+    'external_task', 'bounty_task', 'overdue_task', 'urgent',
+    'unsupported_input_type',
+  ];
+  for (let ai = 0; ai < signals.length; ai++) {
+    const s = signals[ai];
+    if (actionablePatterns.indexOf(s) !== -1) return false;
+    if (s.indexOf('errsig:') === 0) return false;
+    if (s.indexOf('user_feature_request:') === 0 && s.length > 21) return false;
+    if (s.indexOf('user_improvement_suggestion:') === 0 && s.length > 28) return false;
+  }
+  return true;
+}
+
+// Load environment variables from repo root
+try {
+  require('dotenv').config({ path: path.join(REPO_ROOT, '.env'), quiet: true });
+} catch (e) {
+  // dotenv might not be installed or .env missing, proceed gracefully
+}
+
+// Configuration from CLI flags or Env
+const ARGS = process.argv.slice(2);
+const IS_REVIEW_MODE = ARGS.includes('--review');
+const IS_DRY_RUN = ARGS.includes('--dry-run');
+const IS_RANDOM_DRIFT = ARGS.includes('--drift') || String(process.env.RANDOM_DRIFT || '').toLowerCase() === 'true';
+
+// Default Configuration
+const MEMORY_DIR = getMemoryDir();
+const AGENT_NAME = process.env.AGENT_NAME || 'main';
+const AGENT_SESSIONS_DIR = path.join(os.homedir(), `.openclaw/agents/${AGENT_NAME}/sessions`);
+const CURSOR_TRANSCRIPTS_DIR = process.env.EVOLVER_CURSOR_TRANSCRIPTS_DIR || '';
+const SESSION_SOURCE = (process.env.EVOLVER_SESSION_SOURCE || 'auto').toLowerCase();
+const TODAY_LOG = path.join(MEMORY_DIR, new Date().toISOString().split('T')[0] + '.md');
+
+// Ensure memory directory exists so state/cache writes work.
+try {
+  if (!fs.existsSync(MEMORY_DIR)) fs.mkdirSync(MEMORY_DIR, { recursive: true });
+} catch (e) {
+  console.warn('[Evolver] Failed to create MEMORY_DIR (may cause downstream errors):', e && e.message || e);
+}
+
+function formatSessionLog(jsonlContent) {
+  const result = [];
+  const lines = jsonlContent.split('\n');
+  let lastLine = '';
+  let repeatCount = 0;
+
+  const flushRepeats = () => {
+    if (repeatCount > 0) {
+      result.push(`   ... [Repeated ${repeatCount} times] ...`);
+      repeatCount = 0;
+    }
+  };
+
+  function extractContentArray(arr) {
+    if (!Array.isArray(arr)) return '';
+    return arr.map(c => {
+      if (c.type === 'text' || c.type === 'input_text' || c.type === 'output_text')
+        return c.text || '';
+      if (c.type === 'tool_use' || c.type === 'toolCall' || c.type === 'function_call')
+        return `[TOOL: ${c.name || 'unknown'}]`;
+      if (c.type === 'tool_result')
+        return c.is_error ? `[TOOL ERROR] ${String(c.content || '').slice(0, 200)}` : '';
+      if (c.type === 'thinking') return '';
+      return '';
+    }).filter(Boolean).join(' ');
+  }
+
+  function extractContent(data) {
+    const msg = data.message || {};
+    const raw = msg.content || data.content;
+    if (Array.isArray(raw)) return extractContentArray(raw);
+    if (typeof raw === 'string') return raw;
+    return '';
+  }
+
+  for (const line of lines) {
+    if (!line.trim()) continue;
+    try {
+      const data = JSON.parse(line);
+      let entry = '';
+
+      // --- Agent format detection ---
+      // Claude Code: top-level type is 'user'|'assistant'
+      const isClaudeCode = data.type === 'user' || data.type === 'assistant';
+      // OpenClaw: type='message' wrapping message object (exclude toolResult)
+      const isOpenClaw = data.type === 'message' && data.message
+        && data.message.role !== 'toolResult';
+      // Cursor: top-level 'role' without 'type', with 'message' object
+      const isCursor = !data.type && data.role && data.message;
+      // Codex CLI: item events from rollout JSONL
+      const isCodexItem = (data.type === 'item.added' || data.type === 'item.completed') && data.item;
+      // Manus API: type ends with _message or is tool_used
+      const isManus = data.type === 'user_message' || data.type === 'assistant_message';
+      const isManusToolUsed = data.type === 'tool_used';
+      // Tool results (Claude Code / OpenClaw)
+      const isToolResult = data.type === 'tool_result'
+        || (data.message && data.message.role === 'toolResult');
+      if (isClaudeCode || isOpenClaw || isCursor) {
+        const role = (
+          (data.message && data.message.role) || data.role || data.type || 'unknown'
+        ).toUpperCase();
+        let content = extractContent(data);
+
+        if (data.message && data.message.errorMessage) {
+          const errMsg = typeof data.message.errorMessage === 'string'
+            ? data.message.errorMessage
+            : JSON.stringify(data.message.errorMessage);
+          content = `[LLM ERROR] ${errMsg.replace(/\n+/g, ' ').slice(0, 300)}`;
+        }
+
+        if (content.trim() === 'HEARTBEAT_OK') continue;
+        if (content.includes('NO_REPLY') && !(data.message && data.message.errorMessage)) continue;
+        if (data.isMeta) continue;
+
+        content = content.replace(/\n+/g, ' ').slice(0, 300);
+        if (content.trim()) {
+          entry = `**${role}**: ${content}`;
+        }
+
+      } else if (isCodexItem) {
+        const item = data.item;
+        if (item.type === 'message') {
+          const role = (item.role || 'unknown').toUpperCase();
+          const content = Array.isArray(item.content)
+            ? extractContentArray(item.content)
+            : (typeof item.content === 'string' ? item.content : '');
+          if (content.trim()) {
+            entry = `**${role}**: ${content.replace(/\n+/g, ' ').slice(0, 300)}`;
+          }
+        } else if (item.type === 'function_call') {
+          entry = `[TOOL: ${item.name || item.call_id || 'unknown'}]`;
+        } else if (item.type === 'function_call_output') {
+          const out = (item.output || '').replace(/\n+/g, ' ').slice(0, 200);
+          if (out.trim() && !(out.length < 50 && (out.includes('success') || out.includes('done')))) {
+            entry = `[TOOL RESULT] ${out}${(item.output || '').length > 200 ? '...' : ''}`;
+          }
+        }
+
+      } else if (isManus) {
+        const payload = data[data.type] || {};
+        const role = data.type === 'user_message' ? 'USER' : 'ASSISTANT';
+        const content = (typeof payload.content === 'string' ? payload.content : '')
+          .replace(/\n+/g, ' ').slice(0, 300);
+        if (content.trim()) {
+          entry = `**${role}**: ${content}`;
+        }
+
+      } else if (isManusToolUsed) {
+        const tool = data.tool_used || {};
+        entry = `[TOOL: ${tool.name || 'unknown'}]`;
+
+      } else if (isToolResult) {
+        let resContent = '';
+        if (data.tool_result) {
+          resContent = data.tool_result.output || JSON.stringify(data.tool_result);
+        }
+        if (data.content) {
+          resContent = typeof data.content === 'string'
+            ? data.content : JSON.stringify(data.content);
+        }
+        if (resContent.length < 50 && (resContent.includes('success') || resContent.includes('done'))) continue;
+        if (resContent.trim() === '' || resContent === '{}') continue;
+
+        const preview = resContent.replace(/\n+/g, ' ').slice(0, 200);
+        entry = `[TOOL RESULT] ${preview}${resContent.length > 200 ? '...' : ''}`;
+      }
+
+      if (entry) {
+        if (entry === lastLine) {
+          repeatCount++;
+        } else {
+          flushRepeats();
+          result.push(entry);
+          lastLine = entry;
+        }
+      }
+    } catch (e) {
+      continue;
+    }
+  }
+  flushRepeats();
+  return result.join('\n');
+}
+
+function formatCursorTranscript(raw) {
+  const lines = raw.split('\n');
+  const result = [];
+  let skipUntilNextBlock = false;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const trimmed = line.trim();
+
+    // Keep user messages and assistant text responses
+    if (trimmed === 'user:' || trimmed.startsWith('A:')) {
+      skipUntilNextBlock = false;
+      result.push(trimmed);
+      continue;
+    }
+
+    // Tool call lines: keep as compact markers, skip their parameter block
+    if (trimmed.startsWith('[Tool call]')) {
+      skipUntilNextBlock = true;
+      result.push(`[Tool call] ${trimmed.replace('[Tool call]', '').trim()}`);
+      continue;
+    }
+
+    // Tool result markers: skip their content (usually large and noisy)
+    if (trimmed.startsWith('[Tool result]')) {
+      skipUntilNextBlock = true;
+      continue;
+    }
+
+    if (skipUntilNextBlock) continue;
+
+    // Keep user query content and assistant text (skip XML tags like <user_query>)
+    if (trimmed.startsWith('<') && trimmed.endsWith('>')) continue;
+    if (trimmed) {
+      result.push(trimmed.slice(0, 300));
+    }
+  }
+
+  return result.join('\n');
+}
+
+function collectTranscriptFiles(dir, maxDepth) {
+  const results = [];
+  function walk(d, depth) {
+    if (depth > maxDepth) return;
+    let entries;
+    try { entries = fs.readdirSync(d, { withFileTypes: true }); } catch { return; }
+    for (const ent of entries) {
+      if (ent.isFile() && (ent.name.endsWith('.jsonl') || ent.name.endsWith('.txt'))) {
+        const fp = path.join(d, ent.name);
+        try {
+          const st = fs.statSync(fp);
+          results.push({ path: fp, name: ent.name, time: st.mtime.getTime(), size: st.size });
+        } catch { /* skip unreadable */ }
+      } else if (ent.isDirectory() && ent.name !== 'subagents' && ent.name !== 'node_modules') {
+        walk(path.join(d, ent.name), depth + 1);
+      }
+    }
+  }
+  walk(dir, 0);
+  return results;
+}
+
+function readCursorTranscripts() {
+  if (!CURSOR_TRANSCRIPTS_DIR) return '';
+  try {
+    if (!fs.existsSync(CURSOR_TRANSCRIPTS_DIR)) return '';
+
+    const now = Date.now();
+    const ACTIVE_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
+    const TARGET_BYTES = 120000;
+    const PER_FILE_BYTES = 20000;
+    const RECENCY_GUARD_MS = 30 * 1000;
+
+    let files = collectTranscriptFiles(CURSOR_TRANSCRIPTS_DIR, 3)
+      .filter(f => (now - f.time) < ACTIVE_WINDOW_MS)
+      .sort((a, b) => b.time - a.time);
+
+    if (files.length === 0) return '';
+
+    if (files.length > 1 && (now - files[0].time) < RECENCY_GUARD_MS) {
+      files = files.slice(1);
+    }
+
+    const maxFiles = Math.min(files.length, 6);
+    const sections = [];
+    let totalBytes = 0;
+
+    for (let i = 0; i < maxFiles && totalBytes < TARGET_BYTES; i++) {
+      const f = files[i];
+      const bytesLeft = TARGET_BYTES - totalBytes;
+      const readSize = Math.min(PER_FILE_BYTES, bytesLeft);
+      const raw = readRecentLog(f.path, readSize);
+      if (raw.trim() && !raw.startsWith('[MISSING]')) {
+        const isJsonl = f.name.endsWith('.jsonl');
+        const formatted = isJsonl ? formatSessionLog(raw) : formatCursorTranscript(raw);
+        if (formatted.trim()) {
+          const label = isJsonl ? 'SESSION' : 'CURSOR SESSION';
+          sections.push(`--- ${label} (${f.name}) ---\n${formatted}`);
+          totalBytes += formatted.length;
+        }
+      }
+    }
+
+    return sections.join('\n\n');
+  } catch (e) {
+    console.warn(`[CursorTranscripts] Read failed: ${e.message}`);
+    return '';
+  }
+}
+
+function readOpenClawSessions() {
+  try {
+    if (!fs.existsSync(AGENT_SESSIONS_DIR)) return '';
+    const now = Date.now();
+    const ACTIVE_WINDOW_MS = 24 * 60 * 60 * 1000;
+    const TARGET_BYTES = 120000;
+    const PER_SESSION_BYTES = 20000;
+
+    const sessionScope = getSessionScope();
+
+    let files = fs
+      .readdirSync(AGENT_SESSIONS_DIR)
+      .filter(f => f.endsWith('.jsonl') && !f.includes('.lock'))
+      .map(f => {
+        try {
+          const st = fs.statSync(path.join(AGENT_SESSIONS_DIR, f));
+          return { name: f, time: st.mtime.getTime(), size: st.size };
+        } catch (e) {
+          return null;
+        }
+      })
+      .filter(f => f && (now - f.time) < ACTIVE_WINDOW_MS)
+      .sort((a, b) => b.time - a.time);
+
+    if (files.length === 0) return '';
+
+    let nonEvolverFiles = files.filter(f => !f.name.startsWith('evolver_hand_'));
+
+    if (sessionScope && nonEvolverFiles.length > 0) {
+      const scopeLower = sessionScope.toLowerCase();
+      const scopedFiles = nonEvolverFiles.filter(f => f.name.toLowerCase().includes(scopeLower));
+      if (scopedFiles.length > 0) {
+        nonEvolverFiles = scopedFiles;
+        console.log(`[SessionScope] Filtered to ${scopedFiles.length} session(s) matching scope "${sessionScope}".`);
+      } else {
+        console.log(`[SessionScope] No sessions match scope "${sessionScope}". Using all ${nonEvolverFiles.length} session(s) (fallback).`);
+      }
+    }
+
+    const activeFiles = nonEvolverFiles.length > 0 ? nonEvolverFiles : files.slice(0, 1);
+    const maxSessions = Math.min(activeFiles.length, 6);
+    const sections = [];
+    let totalBytes = 0;
+
+    for (let i = 0; i < maxSessions && totalBytes < TARGET_BYTES; i++) {
+      const f = activeFiles[i];
+      const bytesLeft = TARGET_BYTES - totalBytes;
+      const readSize = Math.min(PER_SESSION_BYTES, bytesLeft);
+      const raw = readRecentLog(path.join(AGENT_SESSIONS_DIR, f.name), readSize);
+      const formatted = formatSessionLog(raw);
+      if (formatted.trim()) {
+        sections.push(`--- SESSION (${f.name}) ---\n${formatted}`);
+        totalBytes += formatted.length;
+      }
+    }
+
+    return sections.join('\n\n');
+  } catch (e) {
+    console.warn(`[OpenClawSessions] Read failed: ${e.message}`);
+    return '';
+  }
+}
+
+function readRealSessionLog() {
+  try {
+    // SESSION_SOURCE controls which transcript source to use:
+    //   'auto'     = OpenClaw primary, Cursor/Codex/Manus fallback (backward compat)
+    //   'cursor'   = Cursor/Codex/Manus transcripts only (skip OpenClaw)
+    //   'openclaw' = OpenClaw sessions only (explicit)
+    //   'merge'    = combine both sources, newest sections first
+
+    if (SESSION_SOURCE === 'cursor') {
+      const content = readCursorTranscripts();
+      if (content) return content;
+      return '[NO SESSION LOGS FOUND]';
+    }
+
+    if (SESSION_SOURCE === 'openclaw') {
+      const content = readOpenClawSessions();
+      if (content) return content;
+      return '[NO SESSION LOGS FOUND]';
+    }
+
+    if (SESSION_SOURCE === 'merge') {
+      const ocContent = readOpenClawSessions();
+      const cursorContent = readCursorTranscripts();
+      if (ocContent && cursorContent) {
+        return ocContent + '\n\n' + cursorContent;
+      }
+      return ocContent || cursorContent || '[NO SESSION LOGS FOUND]';
+    }
+
+    // 'auto' (default): OpenClaw primary, Cursor fallback
+    const ocContent = readOpenClawSessions();
+    if (ocContent) return ocContent;
+
+    const cursorContent = readCursorTranscripts();
+    if (cursorContent) {
+      console.log('[SessionFallback] Using Cursor agent-transcripts as session source.');
+      return cursorContent;
+    }
+
+    return '[NO SESSION LOGS FOUND]';
+  } catch (e) {
+    return `[ERROR READING SESSION LOGS: ${e.message}]`;
+  }
+}
+
+function readRecentLog(filePath, size = 10000) {
+  try {
+    if (!fs.existsSync(filePath)) return `[MISSING] ${filePath}`;
+    const stats = fs.statSync(filePath);
+    const start = Math.max(0, stats.size - size);
+    const buffer = Buffer.alloc(stats.size - start);
+    const fd = fs.openSync(filePath, 'r');
+    fs.readSync(fd, buffer, 0, buffer.length, start);
+    fs.closeSync(fd);
+    return buffer.toString('utf8');
+  } catch (e) {
+    return `[ERROR READING ${filePath}: ${e.message}]`;
+  }
+}
+
+function computeAdaptiveStrategyPolicy(opts) {
+  const recentEvents = Array.isArray(opts && opts.recentEvents) ? opts.recentEvents : [];
+  const selectedGene = opts && opts.selectedGene ? opts.selectedGene : null;
+  const signals = Array.isArray(opts && opts.signals) ? opts.signals : [];
+  const baseStrategy = resolveStrategy({ signals: signals });
+
+  const tail = recentEvents.slice(-8);
+  let repairStreak = 0;
+  for (let i = tail.length - 1; i >= 0; i--) {
+    if (tail[i] && tail[i].intent === 'repair') repairStreak++;
+    else break;
+  }
+  let failureStreak = 0;
+  for (let i = tail.length - 1; i >= 0; i--) {
+    if (tail[i] && tail[i].outcome && tail[i].outcome.status === 'failed') failureStreak++;
+    else break;
+  }
+
+  const antiPatterns = selectedGene && Array.isArray(selectedGene.anti_patterns) ? selectedGene.anti_patterns.slice(-5) : [];
+  const learningHistory = selectedGene && Array.isArray(selectedGene.learning_history) ? selectedGene.learning_history.slice(-6) : [];
+  const signalTags = new Set(expandSignals(signals, ''));
+  const overlappingAntiPatterns = antiPatterns.filter(function (ap) {
+    return ap && Array.isArray(ap.learning_signals) && ap.learning_signals.some(function (tag) {
+      return signalTags.has(String(tag));
+    });
+  });
+  const hardFailures = overlappingAntiPatterns.filter(function (ap) { return ap && ap.mode === 'hard'; }).length;
+  const softFailures = overlappingAntiPatterns.filter(function (ap) { return ap && ap.mode !== 'hard'; }).length;
+  const recentSuccesses = learningHistory.filter(function (x) { return x && x.outcome === 'success'; }).length;
+
+  const stagnation = signals.includes('stable_success_plateau') ||
+    signals.includes('evolution_saturation') ||
+    signals.includes('empty_cycle_loop_detected') ||
+    failureStreak >= 3 ||
+    repairStreak >= 3;
+
+  const forceInnovate = stagnation && !signals.includes('log_error');
+  const highRiskGene = hardFailures >= 1 || (softFailures >= 2 && recentSuccesses === 0);
+  const cautiousExecution = highRiskGene || failureStreak >= 2;
+
+  let blastRadiusMaxFiles = selectedGene && selectedGene.constraints && Number.isFinite(Number(selectedGene.constraints.max_files))
+    ? Number(selectedGene.constraints.max_files)
+    : 12;
+  if (cautiousExecution) blastRadiusMaxFiles = Math.max(2, Math.min(blastRadiusMaxFiles, 6));
+  else if (forceInnovate) blastRadiusMaxFiles = Math.max(3, Math.min(blastRadiusMaxFiles, 10));
+
+  const directives = [];
+  directives.push('Base strategy: ' + baseStrategy.label + ' (' + baseStrategy.description + ')');
+  if (forceInnovate) directives.push('Force strategy shift: prefer innovate over repeating repair/optimize.');
+  if (highRiskGene) directives.push('Selected gene is high risk for current signals; keep blast radius narrow and prefer smallest viable change.');
+  if (failureStreak >= 2) directives.push('Recent failure streak detected; avoid repeating recent failed approach.');
+  directives.push('Target max files for this cycle: ' + blastRadiusMaxFiles + '.');
+
+  return {
+    name: baseStrategy.name,
+    label: baseStrategy.label,
+    description: baseStrategy.description,
+    forceInnovate: forceInnovate,
+    cautiousExecution: cautiousExecution,
+    highRiskGene: highRiskGene,
+    repairStreak: repairStreak,
+    failureStreak: failureStreak,
+    blastRadiusMaxFiles: blastRadiusMaxFiles,
+    directives: directives,
+  };
+}
+
+function checkSystemHealth() {
+  const report = [];
+  try {
+    // Uptime & Node Version
+    const uptime = (os.uptime() / 3600).toFixed(1);
+    report.push(`Uptime: ${uptime}h`);
+    report.push(`Node: ${process.version}`);
+
+    // Memory Usage (RSS)
+    const mem = process.memoryUsage();
+    const rssMb = (mem.rss / 1024 / 1024).toFixed(1);
+    report.push(`Agent RSS: ${rssMb}MB`);
+
+    // Optimization: Use native Node.js fs.statfsSync instead of spawning 'df'
+    if (fs.statfsSync) {
+      const stats = fs.statfsSync('/');
+      const total = stats.blocks * stats.bsize;
+      const free = stats.bfree * stats.bsize;
+      const used = total - free;
+      const freeGb = (free / 1024 / 1024 / 1024).toFixed(1);
+      const usedPercent = Math.round((used / total) * 100);
+      report.push(`Disk: ${usedPercent}% (${freeGb}G free)`);
+    }
+  } catch (e) {}
+
+  try {
+    if (process.platform === 'win32') {
+      const wmic = execSync('tasklist /FI "IMAGENAME eq node.exe" /NH', {
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'ignore'],
+        timeout: 3000,
+        windowsHide: true,
+      });
+      const count = wmic.split('\n').filter(l => l.trim() && !l.includes('INFO:')).length;
+      report.push(`Node Processes: ${count}`);
+    } else {
+      try {
+        const pgrep = execSync('pgrep -c node', {
+          encoding: 'utf8',
+          stdio: ['ignore', 'pipe', 'ignore'],
+          timeout: 2000,
+        });
+        report.push(`Node Processes: ${pgrep.trim()}`);
+      } catch (e) {
+        const ps = execSync('ps aux | grep node | grep -v grep | wc -l', {
+          encoding: 'utf8',
+          stdio: ['ignore', 'pipe', 'ignore'],
+          timeout: 2000,
+        });
+        report.push(`Node Processes: ${ps.trim()}`);
+      }
+    }
+  } catch (e) {}
+
+  // Integration Health Checks (Env Vars)
+  try {
+    const issues = [];
+
+    // Generic Integration Status Check (Decoupled)
+    if (process.env.INTEGRATION_STATUS_CMD) {
+      try {
+        const status = execSync(process.env.INTEGRATION_STATUS_CMD, {
+          encoding: 'utf8',
+          stdio: ['ignore', 'pipe', 'ignore'],
+          timeout: 2000,
+          windowsHide: true,
+        });
+        if (status.trim()) issues.push(status.trim());
+      } catch (e) {}
+    }
+
+    if (issues.length > 0) {
+      report.push(`Integrations: ${issues.join(', ')}`);
+    } else {
+      report.push('Integrations: Nominal');
+    }
+  } catch (e) {}
+
+  return report.length ? report.join(' | ') : 'Health Check Unavailable';
+}
+
+function getMutationDirective(logContent) {
+  // Signal hints derived from recent logs.
+  const errorMatches = logContent.match(/\[ERROR|Error:|Exception:|FAIL|Failed|"isError":true/gi) || [];
+  const errorCount = errorMatches.length;
+  const isUnstable = errorCount > 2;
+  const recommendedIntent = isUnstable ? 'repair' : 'optimize';
+
+  return `
+[Signal Hints]
+- recent_error_count: ${errorCount}
+- stability: ${isUnstable ? 'unstable' : 'stable'}
+- recommended_intent: ${recommendedIntent}
+`;
+}
+
+const STATE_FILE = path.join(getEvolutionDir(), 'evolution_state.json');
+const DORMANT_HYPOTHESIS_FILE = path.join(getEvolutionDir(), 'dormant_hypothesis.json');
+const DORMANT_TTL_MS = 3600 * 1000;
+
+function writeDormantHypothesis(data) {
+  try {
+    const dir = getEvolutionDir();
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    const obj = Object.assign({}, data, { created_at: new Date().toISOString(), ttl_ms: DORMANT_TTL_MS });
+    const tmp = DORMANT_HYPOTHESIS_FILE + '.tmp';
+    fs.writeFileSync(tmp, JSON.stringify(obj, null, 2) + '\n', 'utf8');
+    fs.renameSync(tmp, DORMANT_HYPOTHESIS_FILE);
+    console.log('[DormantHypothesis] Saved partial state before backoff: ' + (data.backoff_reason || 'unknown'));
+  } catch (e) {
+    console.log('[DormantHypothesis] Write failed (non-fatal): ' + (e && e.message ? e.message : e));
+  }
+}
+
+function readDormantHypothesis() {
+  try {
+    if (!fs.existsSync(DORMANT_HYPOTHESIS_FILE)) return null;
+    const raw = fs.readFileSync(DORMANT_HYPOTHESIS_FILE, 'utf8');
+    if (!raw.trim()) return null;
+    const obj = JSON.parse(raw);
+    const createdAt = obj.created_at ? new Date(obj.created_at).getTime() : 0;
+    const ttl = Number.isFinite(Number(obj.ttl_ms)) ? Number(obj.ttl_ms) : DORMANT_TTL_MS;
+    if (Date.now() - createdAt > ttl) {
+      clearDormantHypothesis();
+      console.log('[DormantHypothesis] Expired (age: ' + Math.round((Date.now() - createdAt) / 1000) + 's). Discarded.');
+      return null;
+    }
+    return obj;
+  } catch (e) {
+    return null;
+  }
+}
+
+function clearDormantHypothesis() {
+  try {
+    if (fs.existsSync(DORMANT_HYPOTHESIS_FILE)) fs.unlinkSync(DORMANT_HYPOTHESIS_FILE);
+  } catch (e) {}
+}
+// Read MEMORY.md and USER.md from the WORKSPACE root (not the evolver plugin dir).
+// This avoids symlink breakage if the target file is temporarily deleted.
+const WORKSPACE_ROOT = getWorkspaceRoot();
+const ROOT_MEMORY = path.join(WORKSPACE_ROOT, 'MEMORY.md');
+const DIR_MEMORY = path.join(MEMORY_DIR, 'MEMORY.md');
+const MEMORY_FILE = fs.existsSync(ROOT_MEMORY) ? ROOT_MEMORY : (fs.existsSync(DIR_MEMORY) ? DIR_MEMORY : ROOT_MEMORY);
+const USER_FILE = path.join(WORKSPACE_ROOT, 'USER.md');
+
+function readMemorySnippet() {
+  try {
+    // Session scope isolation: when a scope is active, prefer scoped MEMORY.md
+    // at memory/scopes/<scope>/MEMORY.md. Falls back to global MEMORY.md if
+    // scoped file doesn't exist (common: scoped MEMORY.md created on first evolution).
+    const scope = getSessionScope();
+    let memFile = MEMORY_FILE;
+    if (scope) {
+      const scopedMemory = path.join(MEMORY_DIR, 'scopes', scope, 'MEMORY.md');
+      if (fs.existsSync(scopedMemory)) {
+        memFile = scopedMemory;
+        console.log(`[SessionScope] Reading scoped MEMORY.md for "${scope}".`);
+      } else {
+        // First run with scope: global MEMORY.md will be used, but note it.
+        console.log(`[SessionScope] No scoped MEMORY.md for "${scope}". Using global MEMORY.md.`);
+      }
+    }
+    if (!fs.existsSync(memFile)) return '[MEMORY.md MISSING]';
+    const content = fs.readFileSync(memFile, 'utf8');
+    // Optimization: Increased limit from 2000 to 50000 for modern context windows
+    return content.length > 50000
+      ? content.slice(0, 50000) + `\n... [TRUNCATED: ${content.length - 50000} chars remaining]`
+      : content;
+  } catch (e) {
+    return '[ERROR READING MEMORY.md]';
+  }
+}
+
+function readUserSnippet() {
+  try {
+    if (!fs.existsSync(USER_FILE)) return '[USER.md MISSING]';
+    return fs.readFileSync(USER_FILE, 'utf8');
+  } catch (e) {
+    return '[ERROR READING USER.md]';
+  }
+}
+
+function getNextCycleId() {
+  let state = { cycleCount: 0, lastRun: 0 };
+  try {
+    if (fs.existsSync(STATE_FILE)) {
+      state = JSON.parse(fs.readFileSync(STATE_FILE, 'utf8'));
+    }
+  } catch (e) {
+    console.warn('[Evolve] Failed to read state file:', e && e.message || e);
+  }
+
+  state.cycleCount = (state.cycleCount || 0) + 1;
+  state.lastRun = Date.now();
+
+  try {
+    fs.writeFileSync(STATE_FILE, JSON.stringify(state, null, 2));
+  } catch (e) {
+    console.warn('[Evolve] Failed to write state file:', e && e.message || e);
+  }
+
+  return String(state.cycleCount).padStart(4, '0');
+}
+
+function performMaintenance() {
+  // Auto-update check (rate-limited, non-fatal).
+  checkAndAutoUpdate();
+
+  try {
+    if (!fs.existsSync(AGENT_SESSIONS_DIR)) return;
+
+    const files = fs.readdirSync(AGENT_SESSIONS_DIR).filter(f => f.endsWith('.jsonl'));
+
+    // Clean up evolver's own hand sessions immediately.
+    // These are single-use executor sessions that must not accumulate,
+    // otherwise they pollute the agent's context and starve user conversations.
+    const evolverFiles = files.filter(f => f.startsWith('evolver_hand_'));
+    for (const f of evolverFiles) {
+      try {
+        fs.unlinkSync(path.join(AGENT_SESSIONS_DIR, f));
+      } catch (_) {}
+    }
+    if (evolverFiles.length > 0) {
+      console.log(`[Maintenance] Cleaned ${evolverFiles.length} evolver hand session(s).`);
+    }
+
+    // Archive old non-evolver sessions when count exceeds threshold.
+    const remaining = files.length - evolverFiles.length;
+    if (remaining < 100) return;
+
+    console.log(`[Maintenance] Found ${remaining} session logs. Archiving old ones...`);
+
+    const ARCHIVE_DIR = path.join(AGENT_SESSIONS_DIR, 'archive');
+    if (!fs.existsSync(ARCHIVE_DIR)) fs.mkdirSync(ARCHIVE_DIR, { recursive: true });
+
+    const fileStats = files
+      .filter(f => !f.startsWith('evolver_hand_'))
+      .map(f => {
+        try {
+          return { name: f, time: fs.statSync(path.join(AGENT_SESSIONS_DIR, f)).mtime.getTime() };
+        } catch (e) {
+          return null;
+        }
+      })
+      .filter(Boolean)
+      .sort((a, b) => a.time - b.time);
+
+    const toArchive = fileStats.slice(0, fileStats.length - 50);
+
+    for (const file of toArchive) {
+      const oldPath = path.join(AGENT_SESSIONS_DIR, file.name);
+      const newPath = path.join(ARCHIVE_DIR, file.name);
+      fs.renameSync(oldPath, newPath);
+    }
+    if (toArchive.length > 0) {
+      console.log(`[Maintenance] Archived ${toArchive.length} logs to ${ARCHIVE_DIR}`);
+    }
+  } catch (e) {
+    console.error(`[Maintenance] Error: ${e.message}`);
+  }
+}
+
+// --- Auto-update: check for newer versions of evolver and wrapper on ClawHub ---
+function checkAndAutoUpdate() {
+  try {
+    // Read config: default autoUpdate = true
+    const configPath = path.join(os.homedir(), '.openclaw', 'openclaw.json');
+    let autoUpdate = true;
+    let intervalHours = 6;
+    try {
+      if (fs.existsSync(configPath)) {
+        const cfg = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+        if (cfg.evolver && cfg.evolver.autoUpdate === false) autoUpdate = false;
+        if (cfg.evolver && Number.isFinite(Number(cfg.evolver.autoUpdateIntervalHours))) {
+          intervalHours = Number(cfg.evolver.autoUpdateIntervalHours);
+        }
+      }
+    } catch (_) {}
+
+    if (!autoUpdate) return;
+
+    // Rate limit: only check once per interval
+    const stateFile = path.join(MEMORY_DIR, 'evolver_update_check.json');
+    const now = Date.now();
+    const intervalMs = intervalHours * 60 * 60 * 1000;
+    try {
+      if (fs.existsSync(stateFile)) {
+        const state = JSON.parse(fs.readFileSync(stateFile, 'utf8'));
+        if (state.lastCheckedAt && (now - new Date(state.lastCheckedAt).getTime()) < intervalMs) {
+          return; // Too soon, skip
+        }
+      }
+    } catch (_) {}
+
+    let clawhubBin = null;
+    const whichCmd = process.platform === 'win32' ? 'where clawhub' : 'which clawhub';
+    const candidates = ['clawhub', path.join(os.homedir(), '.npm-global/bin/clawhub'), '/usr/local/bin/clawhub'];
+    for (const c of candidates) {
+      try {
+        if (c === 'clawhub') {
+          execSync(whichCmd, { stdio: 'ignore', timeout: 3000, windowsHide: true });
+          clawhubBin = 'clawhub';
+          break;
+        }
+        if (fs.existsSync(c)) { clawhubBin = c; break; }
+      } catch (_) {}
+    }
+    if (!clawhubBin) return; // No clawhub CLI available
+
+    // Update evolver and feishu-evolver-wrapper
+    const slugs = ['evolver', 'feishu-evolver-wrapper'];
+    let updated = false;
+    for (const slug of slugs) {
+      try {
+        const out = execSync(`${clawhubBin} update ${slug} --force`, {
+          encoding: 'utf8',
+          stdio: ['ignore', 'pipe', 'pipe'],
+          timeout: 30000,
+          cwd: path.resolve(REPO_ROOT, '..'),
+          windowsHide: true,
+        });
+        if (out && !out.includes('already up to date') && !out.includes('not installed')) {
+          console.log(`[AutoUpdate] ${slug}: ${out.trim().split('\n').pop()}`);
+          updated = true;
+        }
+      } catch (e) {
+        // Non-fatal: update failure should never block evolution
+      }
+    }
+
+    // Write state
+    try {
+      const stateData = {
+        lastCheckedAt: new Date(now).toISOString(),
+        updated,
+      };
+      fs.writeFileSync(stateFile, JSON.stringify(stateData, null, 2) + '\n');
+    } catch (_) {}
+
+    if (updated) {
+      console.log('[AutoUpdate] Skills updated. Changes will take effect on next wrapper restart.');
+    }
+  } catch (e) {
+    // Entire auto-update is non-fatal
+    console.log(`[AutoUpdate] Check failed (non-fatal): ${e.message}`);
+  }
+}
+
+function sleepMs(ms) {
+  const t = Number(ms);
+  const n = Number.isFinite(t) ? Math.max(0, t) : 0;
+  return new Promise(resolve => setTimeout(resolve, n));
+}
+
+// Check system load average via os.loadavg().
+// Returns { load1m, load5m, load15m }. Used for load-aware throttling.
+function getSystemLoad() {
+  try {
+    const loadavg = os.loadavg();
+    return { load1m: loadavg[0], load5m: loadavg[1], load15m: loadavg[2] };
+  } catch (e) {
+    return { load1m: 0, load5m: 0, load15m: 0 };
+  }
+}
+
+// Calculate intelligent default load threshold based on CPU cores
+// Rule of thumb:
+// - Single-core: 0.8-1.0 (use 0.9)
+// - Multi-core: cores x 0.8-1.0 (use 0.9)
+// - Production: reserve 20% headroom for burst traffic
+function getDefaultLoadMax() {
+  const cpuCount = os.cpus().length;
+  if (cpuCount === 1) {
+    return 0.9;
+  } else {
+    return cpuCount * 0.9;
+  }
+}
+
+// Check how many agent sessions are actively being processed (modified in the last N minutes).
+// Counts across both OpenClaw sessions and Cursor/Codex/Manus transcripts.
+function getRecentActiveSessionCount(windowMs) {
+  let count = 0;
+  const now = Date.now();
+  const w = Number.isFinite(windowMs) ? windowMs : 10 * 60 * 1000;
+
+  try {
+    if (fs.existsSync(AGENT_SESSIONS_DIR)) {
+      count += fs.readdirSync(AGENT_SESSIONS_DIR)
+        .filter(f => f.endsWith('.jsonl') && !f.includes('.lock') && !f.startsWith('evolver_hand_'))
+        .filter(f => {
+          try { return (now - fs.statSync(path.join(AGENT_SESSIONS_DIR, f)).mtimeMs) < w; } catch (_) { return false; }
+        }).length;
+    }
+  } catch (_) {}
+
+  try {
+    if (CURSOR_TRANSCRIPTS_DIR && fs.existsSync(CURSOR_TRANSCRIPTS_DIR)) {
+      const transcriptFiles = collectTranscriptFiles(CURSOR_TRANSCRIPTS_DIR, 3);
+      count += transcriptFiles.filter(f => (now - f.time) < w).length;
+    }
+  } catch (_) {}
+
+  return count;
+}
+
+function determineBridgeEnabled() {
+  const bridgeExplicit = process.env.EVOLVE_BRIDGE;
+  if (bridgeExplicit !== undefined && bridgeExplicit !== '') {
+    return String(bridgeExplicit).toLowerCase() !== 'false';
+  }
+  return Boolean(process.env.OPENCLAW_WORKSPACE);
+}
+
+// Pre-flight safeguards: race detection, queue limits, system load, loop gating.
+// Returns { abort: true } if the cycle should be skipped, otherwise { abort: false }.
+async function runPreflightChecks(bridgeEnabled, loopMode) {
+  // SAFEGUARD: If another evolver Hand Agent is already running, back off.
+  if (process.platform !== 'win32') {
+    try {
+      const _psRace = require('child_process').execSync(
+        'ps aux | grep "evolver_hand_" | grep -v grep',
+        { encoding: 'utf8', timeout: 5000, stdio: ['ignore', 'pipe', 'ignore'] }
+      ).trim();
+      if (_psRace && _psRace.length > 0) {
+        console.log('[Evolver] Another evolver Hand Agent is already running. Yielding this cycle.');
+        return { abort: true };
+      }
+    } catch (_) {}
+  }
+
+  // SAFEGUARD: If the agent has too many active user sessions, back off.
+  const QUEUE_MAX = Number.parseInt(process.env.EVOLVE_AGENT_QUEUE_MAX || '10', 10);
+  const QUEUE_BACKOFF_MS = Number.parseInt(process.env.EVOLVE_AGENT_QUEUE_BACKOFF_MS || '60000', 10);
+  const activeUserSessions = getRecentActiveSessionCount(10 * 60 * 1000);
+  if (activeUserSessions > QUEUE_MAX) {
+    console.log(`[Evolver] Agent has ${activeUserSessions} active user sessions (max ${QUEUE_MAX}). Backing off ${QUEUE_BACKOFF_MS}ms to avoid starving user conversations.`);
+    writeDormantHypothesis({ backoff_reason: 'active_sessions_exceeded', active_sessions: activeUserSessions, queue_max: QUEUE_MAX });
+    await sleepMs(QUEUE_BACKOFF_MS);
+    return { abort: true };
+  }
+
+  // SAFEGUARD: System load awareness.
+  const LOAD_MAX = parseFloat(process.env.EVOLVE_LOAD_MAX || String(getDefaultLoadMax()));
+  const sysLoad = getSystemLoad();
+  if (sysLoad.load1m > LOAD_MAX) {
+    console.log(`[Evolver] System load ${sysLoad.load1m.toFixed(2)} exceeds max ${LOAD_MAX.toFixed(1)} (auto-calculated for ${os.cpus().length} cores). Backing off ${QUEUE_BACKOFF_MS}ms.`);
+    writeDormantHypothesis({ backoff_reason: 'system_load_exceeded', system_load: { load1m: sysLoad.load1m, load5m: sysLoad.load5m, load15m: sysLoad.load15m }, load_max: LOAD_MAX, cpu_cores: os.cpus().length });
+    await sleepMs(QUEUE_BACKOFF_MS);
+    return { abort: true };
+  }
+
+  // Loop gating: do not start a new cycle until the previous one is solidified.
+  if (bridgeEnabled && loopMode) {
+    try {
+      const st = readStateForSolidify();
+      const lastRun = st && st.last_run ? st.last_run : null;
+      const lastSolid = st && st.last_solidify ? st.last_solidify : null;
+      if (lastRun && lastRun.run_id) {
+        const pending = !lastSolid || !lastSolid.run_id || String(lastSolid.run_id) !== String(lastRun.run_id);
+        if (pending) {
+          writeDormantHypothesis({ backoff_reason: 'loop_gating_pending_solidify', signals: lastRun && Array.isArray(lastRun.signals) ? lastRun.signals : [], selected_gene_id: lastRun && lastRun.selected_gene_id ? lastRun.selected_gene_id : null, mutation: lastRun && lastRun.mutation ? lastRun.mutation : null, personality_state: lastRun && lastRun.personality_state ? lastRun.personality_state : null, run_id: lastRun.run_id });
+          const raw = process.env.EVOLVE_PENDING_SLEEP_MS || process.env.EVOLVE_MIN_INTERVAL || '120000';
+          const n = parseInt(String(raw), 10);
+          const waitMs = Number.isFinite(n) ? Math.max(0, n) : 120000;
+          await sleepMs(waitMs);
+          return { abort: true };
+        }
+      }
+    } catch (e) {
+      // If we cannot read state, proceed (fail open) to avoid deadlock.
+    }
+  }
+
+  return { abort: false };
+}
+
+// Repair loop circuit breaker: detect stuck repair->fail->repair cycles.
+function checkRepairLoopCircuitBreaker() {
+  const threshold = require('./config').REPAIR_LOOP_THRESHOLD;
+  try {
+    const allEvents = readAllEvents();
+    const recent = Array.isArray(allEvents) ? allEvents.slice(-threshold) : [];
+    if (recent.length >= threshold) {
+      const allRepairFailed = recent.every(e =>
+        e && e.intent === 'repair' &&
+        e.outcome && e.outcome.status === 'failed'
+      );
+      if (allRepairFailed) {
+        const geneIds = recent.map(e => (e.genes_used && e.genes_used[0]) || 'unknown');
+        const sameGene = geneIds.every(id => id === geneIds[0]);
+        console.warn(`[CircuitBreaker] Detected ${threshold} consecutive failed repairs${sameGene ? ` (gene: ${geneIds[0]})` : ''}. Forcing innovation intent to break the loop.`);
+        process.env.FORCE_INNOVATION = 'true';
+      }
+    }
+  } catch (e) {
+    console.error(`[CircuitBreaker] Check failed (non-fatal): ${e.message}`);
+  }
+}
+
+async function run() {
+  const bridgeEnabled = determineBridgeEnabled();
+  const loopMode = ARGS.includes('--loop') || ARGS.includes('--mad-dog') || String(process.env.EVOLVE_LOOP || '').toLowerCase() === 'true';
+
+  const preflight = await runPreflightChecks(bridgeEnabled, loopMode);
+  if (preflight.abort) return;
+
+  // Reset per-cycle env flags to prevent state leaking between cycles.
+  // In --loop mode, process.env persists across cycles. The circuit breaker
+  // below will re-set FORCE_INNOVATION if the condition still holds.
+  // CWD Recovery: If the working directory was deleted during a previous cycle
+  // (e.g., by git reset/restore or directory removal), process.cwd() throws
+  // ENOENT and ALL subsequent operations fail. Recover by chdir to REPO_ROOT.
+  try {
+    process.cwd();
+  } catch (e) {
+    if (e && e.code === 'ENOENT') {
+      console.warn('[Evolver] CWD lost (ENOENT). Recovering to REPO_ROOT: ' + REPO_ROOT);
+      try { process.chdir(REPO_ROOT); } catch (e2) {
+        console.error('[Evolver] CWD recovery failed: ' + (e2 && e2.message ? e2.message : e2));
+        throw e;
+      }
+    } else {
+      throw e;
+    }
+  }
+
+  delete process.env.FORCE_INNOVATION;
+
+  // SAFEGUARD: Git repository check.
+  // Solidify, rollback, and blast radius all depend on git. Without a git repo
+  // these operations silently produce empty results, leading to data loss.
+  try {
+    execSync('git rev-parse --git-dir', { cwd: REPO_ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 5000 });
+  } catch (_) {
+    console.error('[Evolver] FATAL: Not a git repository (' + REPO_ROOT + ').');
+    console.error('[Evolver] Evolver requires git for rollback, blast radius calculation, and solidify.');
+    console.error('[Evolver] Run "git init && git add -A && git commit -m init" in your project root, then try again.');
+    process.exitCode = 1;
+    return;
+  }
+
+  const dormantHypothesis = readDormantHypothesis();
+  if (dormantHypothesis) {
+    console.log('[DormantHypothesis] Recovered partial state from previous backoff: ' + (dormantHypothesis.backoff_reason || 'unknown'));
+    clearDormantHypothesis();
+  }
+
+  const startTime = Date.now();
+  verbose('--- evolve.run() start ---');
+  verbose('Config: EVOLVE_STRATEGY=' + (process.env.EVOLVE_STRATEGY || '(default)') + ' EVOLVE_BRIDGE=' + (process.env.EVOLVE_BRIDGE || '(default)') + ' EVOLVE_LOOP=' + (process.env.EVOLVE_LOOP || 'false'));
+  verbose('Config: EVOLVER_IDLE_FETCH_INTERVAL_MS=' + (process.env.EVOLVER_IDLE_FETCH_INTERVAL_MS || '(default 1800000)') + ' RANDOM_DRIFT=' + (process.env.RANDOM_DRIFT || 'false'));
+  console.log('Scanning session logs...');
+
+  // Ensure all GEP asset files exist before any operation.
+  // This prevents "No such file or directory" errors when external tools
+  // (grep, cat, etc.) reference optional append-only files like genes.jsonl.
+  try { ensureAssetFiles(); } catch (e) {
+    console.error(`[AssetInit] ensureAssetFiles failed (non-fatal): ${e.message}`);
+  }
+
+  // Maintenance: Clean up old logs to keep directory scan fast
+  if (!IS_DRY_RUN) {
+    performMaintenance();
+  } else {
+    console.log('[Maintenance] Skipped (dry-run mode).');
+  }
+
+  checkRepairLoopCircuitBreaker();
+
+  const recentMasterLog = readRealSessionLog();
+  const todayLog = readRecentLog(TODAY_LOG);
+  const memorySnippet = readMemorySnippet();
+  const userSnippet = readUserSnippet();
+
+  const cycleNum = getNextCycleId();
+  const cycleId = `Cycle #${cycleNum}`;
+
+  // 2. Detect Workspace State & Local Overrides
+  // Logic: Default to generic reporting (message)
+  let fileList = '';
+  const skillsDir = path.join(REPO_ROOT, 'skills');
+
+  // Default Reporting: Use generic `message` tool or `process.env.EVOLVE_REPORT_CMD` if set.
+  // This removes the hardcoded dependency on 'feishu-card' from the core logic.
+  let reportingDirective = `Report requirement:
+  - Use \`message\` tool.
+  - Title: Evolution ${cycleId}
+  - Status: [SUCCESS]
+  - Changes: Detail exactly what was improved.`;
+
+  // Wrapper Injection Point: The wrapper can inject a custom reporting directive via ENV.
+  if (process.env.EVOLVE_REPORT_DIRECTIVE) {
+    reportingDirective = process.env.EVOLVE_REPORT_DIRECTIVE.replace('__CYCLE_ID__', cycleId);
+  } else if (process.env.EVOLVE_REPORT_CMD) {
+    reportingDirective = `Report requirement (custom):
+  - Execute the custom report command:
+    \`\`\`
+    ${process.env.EVOLVE_REPORT_CMD.replace('__CYCLE_ID__', cycleId)}
+    \`\`\`
+  - Ensure you pass the status and action details.`;
+  }
+
+  // Handle Review Mode Flag (--review)
+  if (IS_REVIEW_MODE) {
+    reportingDirective +=
+      '\n  - REVIEW PAUSE: After generating the fix but BEFORE applying significant edits, ask the user for confirmation.';
+  }
+
+  const SKILLS_CACHE_FILE = path.join(MEMORY_DIR, 'skills_list_cache.json');
+
+  try {
+    if (fs.existsSync(skillsDir)) {
+      // Check cache validity (mtime of skills folder vs cache file)
+      let useCache = false;
+      const dirStats = fs.statSync(skillsDir);
+      if (fs.existsSync(SKILLS_CACHE_FILE)) {
+        const cacheStats = fs.statSync(SKILLS_CACHE_FILE);
+        const CACHE_TTL = 1000 * 60 * 60 * 6; // 6 Hours
+        const isFresh = Date.now() - cacheStats.mtimeMs < CACHE_TTL;
+
+        // Use cache if it's fresh AND newer than the directory (structure change)
+        if (isFresh && cacheStats.mtimeMs > dirStats.mtimeMs) {
+          try {
+            const cached = JSON.parse(fs.readFileSync(SKILLS_CACHE_FILE, 'utf8'));
+            fileList = cached.list;
+            useCache = true;
+          } catch (e) {}
+        }
+      }
+
+      if (!useCache) {
+        const skills = fs
+          .readdirSync(skillsDir, { withFileTypes: true })
+          .filter(dirent => dirent.isDirectory())
+          .map(dirent => {
+            const name = dirent.name;
+            let desc = 'No description';
+            try {
+              const pkg = require(path.join(skillsDir, name, 'package.json'));
+              if (pkg.description) desc = pkg.description.slice(0, 100) + (pkg.description.length > 100 ? '...' : '');
+            } catch (e) {
+              try {
+                const skillMdPath = path.join(skillsDir, name, 'SKILL.md');
+                if (fs.existsSync(skillMdPath)) {
+                  const skillMd = fs.readFileSync(skillMdPath, 'utf8');
+                  // Strategy 1: YAML Frontmatter (description: ...)
+                  const yamlMatch = skillMd.match(/^description:\s*(.*)$/m);
+                  if (yamlMatch) {
+                    desc = yamlMatch[1].trim();
+                  } else {
+                    // Strategy 2: First non-header, non-empty line
+                    const lines = skillMd.split('\n');
+                    for (const line of lines) {
+                      const trimmed = line.trim();
+                      if (
+                        trimmed &&
+                        !trimmed.startsWith('#') &&
+                        !trimmed.startsWith('---') &&
+                        !trimmed.startsWith('```')
+                      ) {
+                        desc = trimmed;
+                        break;
+                      }
+                    }
+                  }
+                  if (desc.length > 100) desc = desc.slice(0, 100) + '...';
+                }
+              } catch (e2) {}
+            }
+            return `- **${name}**: ${desc}`;
+          });
+        fileList = skills.join('\n');
+
+        // Write cache
+        try {
+          fs.writeFileSync(SKILLS_CACHE_FILE, JSON.stringify({ list: fileList }, null, 2));
+        } catch (e) {}
+      }
+    }
+  } catch (e) {
+    fileList = `Error listing skills: ${e.message}`;
+  }
+
+  const mutationDirective = getMutationDirective(recentMasterLog);
+  const healthReport = checkSystemHealth();
+
+  // Feature: Mood Awareness (Mode E - Personalization)
+  let moodStatus = 'Mood: Unknown';
+  try {
+    const moodFile = path.join(MEMORY_DIR, 'mood.json');
+    if (fs.existsSync(moodFile)) {
+      const moodData = JSON.parse(fs.readFileSync(moodFile, 'utf8'));
+      moodStatus = `Mood: ${moodData.current_mood || 'Neutral'} (Intensity: ${moodData.intensity || 0})`;
+    }
+  } catch (e) {}
+
+  const scanTime = Date.now() - startTime;
+  const memorySize = fs.existsSync(MEMORY_FILE) ? fs.statSync(MEMORY_FILE).size : 0;
+
+  let syncDirective = 'Workspace sync: optional/disabled in this environment.';
+
+  // Check for git-sync skill availability
+  const hasGitSync = fs.existsSync(path.join(skillsDir, 'git-sync'));
+  if (hasGitSync) {
+    syncDirective = 'Workspace sync: run skills/git-sync/sync.sh "Evolution: Workspace Sync"';
+  }
+
+  let localStateSummary = '';
+  try {
+    localStateSummary = captureLocalState();
+  } catch (e) {
+    console.warn('[LocalState] Capture failed (non-fatal): ' + (e && e.message ? e.message : e));
+    localStateSummary = '(local state capture unavailable)';
+  }
+
+  const genes = loadGenes();
+  const capsules = loadCapsules();
+  const recentEvents = (() => {
+    try {
+      const all = readAllEvents();
+      return Array.isArray(all) ? all.filter(e => e && e.type === 'EvolutionEvent').slice(-80) : [];
+    } catch (e) {
+      return [];
+    }
+  })();
+  const signals = extractSignals({
+    recentSessionTranscript: recentMasterLog,
+    todayLog,
+    memorySnippet,
+    userSnippet,
+    recentEvents,
+  });
+
+  verbose('Signals extracted (' + signals.length + '):', signals.join(', '));
+  verbose('Recent events: ' + recentEvents.length + ', session log size: ' + recentMasterLog.length + ' chars');
+
+  if (dormantHypothesis && Array.isArray(dormantHypothesis.signals) && dormantHypothesis.signals.length > 0) {
+    const dormantSignals = dormantHypothesis.signals;
+    let injected = 0;
+    for (let dsi = 0; dsi < dormantSignals.length; dsi++) {
+      if (!signals.includes(dormantSignals[dsi])) {
+        signals.push(dormantSignals[dsi]);
+        injected++;
+      }
+    }
+    if (injected > 0) {
+      console.log('[DormantHypothesis] Injected ' + injected + ' signal(s) from previous interrupted cycle.');
+    }
+  }
+
+  // --- Idle-cycle gating: skip Hub API calls during saturation to save credits ---
+  let _idleFetchInterval = parseInt(String(process.env.EVOLVER_IDLE_FETCH_INTERVAL_MS || ''), 10);
+  if (!Number.isFinite(_idleFetchInterval) || _idleFetchInterval <= 0) _idleFetchInterval = 600000;
+  let skipHubCalls = false;
+
+  if (shouldSkipHubCalls(signals)) {
+    const _elapsed = Date.now() - _lastHubFetchMs;
+    if (_lastHubFetchMs > 0 && _elapsed < _idleFetchInterval) {
+      skipHubCalls = true;
+      console.log('[IdleGating] Saturated with no actionable signals. Skipping Hub API calls (last fetch ' + Math.round(_elapsed / 1000) + 's ago, threshold ' + Math.round(_idleFetchInterval / 1000) + 's).');
+    } else {
+      console.log('[IdleGating] Saturated but fetch interval elapsed (' + Math.round((Date.now() - _lastHubFetchMs) / 1000) + 's). Performing periodic Hub check.');
+    }
+  }
+
+  // Inject retry context from previous validation failure.
+  try {
+    var solidifyState = readStateForSolidify();
+    if (solidifyState && solidifyState.last_validation_failure) {
+      var lvf = solidifyState.last_validation_failure;
+      signals.push('retry_error_context');
+      if (lvf.cmd) signals.push('retry_cmd:' + String(lvf.cmd).slice(0, 80));
+      if (lvf.stderr) signals.push('retry_stderr:' + String(lvf.stderr).slice(0, 120));
+      console.log('[RetryContext] Injected validation failure context from previous solidify (retries=' + (lvf.retries_attempted || 0) + ').');
+    }
+  } catch (_) {}
+
+  // Curriculum engine: generate progressive evolution targets.
+  try {
+    var { generateCurriculumSignals } = require('./gep/curriculum');
+    var { getNoveltyHint: _getNoveltyHintEarly, getCapabilityGaps: _getCapGapsEarly } = require('./gep/a2aProtocol');
+    var earlyCapGaps = [];
+    try { earlyCapGaps = _getCapGapsEarly() || []; } catch (_) {}
+    var memGraphPath = require('./gep/memoryGraph').memoryGraphPath ? require('./gep/memoryGraph').memoryGraphPath() : '';
+    var curriculumSignals = generateCurriculumSignals({
+      capabilityGaps: earlyCapGaps,
+      memoryGraphPath: memGraphPath,
+      personality: {},
+    });
+    for (var ci = 0; ci < curriculumSignals.length; ci++) {
+      if (!signals.includes(curriculumSignals[ci])) {
+        signals.push(curriculumSignals[ci]);
+      }
+    }
+    if (curriculumSignals.length > 0) {
+      console.log('[Curriculum] Injected ' + curriculumSignals.length + ' curriculum target(s).');
+    }
+  } catch (e) {
+    console.log('[Curriculum] Failed (non-fatal): ' + (e && e.message ? e.message : e));
+  }
+
+  // --- Hub Task Auto-Claim (with proactive questions) ---
+  // Generate questions from current context, piggyback them on the fetch call,
+  // then pick the best task and auto-claim it.
+  let activeTask = null;
+  let proactiveQuestions = [];
+  if (!skipHubCalls) {
+    try {
+      proactiveQuestions = generateQuestions({
+        signals,
+        recentEvents,
+        sessionTranscript: recentMasterLog,
+        memorySnippet: memorySnippet,
+      });
+      if (proactiveQuestions.length > 0) {
+        console.log(`[QuestionGenerator] Generated ${proactiveQuestions.length} proactive question(s).`);
+      }
+    } catch (e) {
+      console.log(`[QuestionGenerator] Generation failed (non-fatal): ${e.message}`);
+    }
+
+    // --- Auto GitHub Issue Reporter ---
+    // When persistent failures are detected, file an issue to the upstream repo
+    // with sanitized logs and environment info.
+    try {
+      await maybeReportIssue({
+        signals,
+        recentEvents,
+        sessionLog: recentMasterLog,
+      });
+    } catch (e) {
+      console.log(`[IssueReporter] Check failed (non-fatal): ${e.message}`);
+    }
+  }
+
+  // LessonL: lessons received from Hub during fetch
+  let hubLessons = [];
+
+  if (!skipHubCalls) {
+    _lastHubFetchMs = Date.now();
+    try {
+      const fetchResult = await fetchTasks({ questions: proactiveQuestions });
+      const hubTasks = fetchResult.tasks || [];
+
+      if (fetchResult.questions_created && fetchResult.questions_created.length > 0) {
+        const created = fetchResult.questions_created.filter(function(q) { return !q.error; });
+        const failed = fetchResult.questions_created.filter(function(q) { return q.error; });
+        if (created.length > 0) {
+          console.log(`[QuestionGenerator] Hub accepted ${created.length} question(s) as bounties.`);
+        }
+        if (failed.length > 0) {
+          console.log(`[QuestionGenerator] Hub rejected ${failed.length} question(s): ${failed.map(function(q) { return q.error; }).join(', ')}`);
+        }
+      }
+
+      // LessonL: capture relevant lessons from Hub
+      if (Array.isArray(fetchResult.relevant_lessons) && fetchResult.relevant_lessons.length > 0) {
+        hubLessons = fetchResult.relevant_lessons;
+        console.log(`[LessonBank] Received ${hubLessons.length} lesson(s) from ecosystem.`);
+      }
+
+      if (hubTasks.length > 0) {
+        let taskMemoryEvents = [];
+        try {
+          const { tryReadMemoryGraphEvents } = require('./gep/memoryGraph');
+          taskMemoryEvents = tryReadMemoryGraphEvents(1000);
+        } catch (e) {
+          console.warn('[TaskReceiver] MemoryGraph read failed (task selection proceeds without history):', e && e.message || e);
+        }
+        const best = selectBestTask(hubTasks, taskMemoryEvents);
+        if (best) {
+          const alreadyClaimed = best.status === 'claimed';
+          let claimed = alreadyClaimed;
+          if (!alreadyClaimed) {
+            const commitDeadline = estimateCommitmentDeadline(best);
+            claimed = await claimTask(best.id || best.task_id, commitDeadline ? { commitment_deadline: commitDeadline } : undefined);
+            if (claimed && commitDeadline) {
+              best._commitment_deadline = commitDeadline;
+              console.log(`[Commitment] Deadline set: ${commitDeadline}`);
+            }
+          }
+          if (claimed) {
+            activeTask = best;
+            const taskSignals = taskToSignalsWithPrivacy(best);
+            for (const sig of taskSignals) {
+              if (!signals.includes(sig)) signals.unshift(sig);
+            }
+            console.log(`[TaskReceiver] ${alreadyClaimed ? 'Resuming' : 'Claimed'} task: "${best.title || best.id}" (${taskSignals.length} signals injected)`);
+          }
+        }
+      }
+    } catch (e) {
+      console.log(`[TaskReceiver] Fetch/claim failed (non-fatal): ${e.message}`);
+    }
+  }
+
+  // --- Commitment: check for overdue tasks from heartbeat ---
+  // If Hub reported overdue tasks, prioritize resuming them by injecting their
+  // signals at the front. This does not change activeTask selection (the overdue
+  // task should already be claimed/active from a previous cycle).
+  try {
+    const { consumeOverdueTasks } = require('./gep/a2aProtocol');
+    const overdueTasks = consumeOverdueTasks();
+    if (overdueTasks.length > 0) {
+      for (const ot of overdueTasks) {
+        const otId = ot.task_id || ot.id;
+        if (activeTask && (activeTask.id === otId || activeTask.task_id === otId)) {
+          console.warn(`[Commitment] Active task "${activeTask.title || otId}" is OVERDUE -- prioritizing completion.`);
+          signals.unshift('overdue_task', 'urgent');
+          break;
+        }
+      }
+    }
+  } catch (e) {
+    console.warn('[Commitment] Overdue task check failed (non-fatal):', e && e.message || e);
+  }
+
+  // --- Hub Events: process pending high-priority events from /a2a/events/poll ---
+  // Fetched automatically when heartbeat returns has_pending_events: true.
+  // Injects event-specific signals and stores event context for LLM awareness.
+  try {
+    const { consumeHubEvents } = require('./gep/a2aProtocol');
+    const hubEvents = consumeHubEvents();
+    if (hubEvents.length > 0) {
+      const HUB_EVENT_SIGNALS = {
+        // ── 对话 ──────────────────────────────────────────────────────
+        dialog_message:                ['dialog', 'respond_required'],
+
+        // ── 议会 / 治理 ───────────────────────────────────────────────
+        council_invite:                ['council', 'governance', 'respond_required'],
+        council_second_request:        ['council', 'governance', 'second_request', 'respond_required'],
+        council_vote:                  ['council', 'vote', 'governance', 'respond_required'],
+        council_community_vote:        ['council', 'community_vote', 'governance', 'respond_required'],
+        council_decision:              ['council', 'decision', 'governance'],
+        council_decision_notification: ['council', 'governance'],
+
+        // ── 审议 / 辩论 ───────────────────────────────────────────────
+        deliberation_invite:           ['deliberation', 'governance', 'respond_required'],
+        deliberation_challenge:        ['deliberation', 'challenge', 'respond_required'],
+        deliberation_next_round:       ['deliberation', 'next_round', 'respond_required'],
+        deliberation_completed:        ['deliberation', 'governance'],
+
+        // ── 协作 / 会话 ───────────────────────────────────────────────
+        collaboration_invite:          ['collaboration', 'respond_required'],
+        session_message:               ['collaboration', 'dialog', 'respond_required'],
+        session_nudge:                 ['collaboration', 'idle_warning'],
+        task_board_update:             ['collaboration', 'task_update'],
+
+        // ── 任务 / 工作池 ─────────────────────────────────────────────
+        task_available:                ['task', 'work_available'],
+        work_assigned:                 ['task', 'work_assigned'],
+        swarm_subtask_available:       ['swarm', 'task', 'work_available'],
+        swarm_aggregation_available:   ['swarm', 'aggregation', 'work_available'],
+        diverge_task_assigned:         ['swarm', 'task', 'work_assigned'],
+        pipeline_step_assigned:        ['pipeline', 'task', 'work_assigned'],
+        organism_work:                 ['organism', 'task', 'work_assigned'],
+
+        // ── 蜂群 PDRI 角色事件 ──────────────────────────────────────
+        swarm_plan_available:          ['swarm', 'planner', 'work_available'],
+        swarm_build_available:         ['swarm', 'builder', 'work_available'],
+        swarm_review_available:        ['swarm', 'reviewer', 'work_available', 'respond_required'],
+        swarm_aggregate_available:     ['swarm', 'aggregator', 'work_available'],
+        swarm_rework_required:         ['swarm', 'rework', 'iterate'],
+        subtask_failover:              ['swarm', 'failover', 'urgent'],
+        team_formed:                   ['swarm', 'team', 'collaboration'],
+        team_dissolved:                ['swarm', 'team'],
+
+        // ── 隐私计算 ────────────────────────────────────────────────
+        privacy_task_ready:            ['privacy', 'sealed_tool', 'work_available'],
+        privacy_result_available:      ['privacy', 'result'],
+
+        // ── 评审 / 赏金 ───────────────────────────────────────────────
+        bounty_review_requested:       ['review', 'bounty', 'respond_required'],
+        peer_review_request:           ['review', 'swarm', 'respond_required'],
+        supplement_request:            ['supplement', 'respond_required'],
+
+        // ── 成长 / 知识 ───────────────────────────────────────────────
+        evolution_circle_formed:       ['evolution_circle', 'collaboration'],
+        knowledge_update:              ['knowledge'],
+        topic_notification:            ['topic', 'knowledge'],
+        reflection_prompt:             ['reflection'],
+
+        // ── 系统 ──────────────────────────────────────────────────────
+        task_overdue:                  ['overdue_task', 'urgent'],
+      };
+      for (const ev of hubEvents) {
+        const evSignals = HUB_EVENT_SIGNALS[ev.type] || ['hub_event'];
+        for (const sig of evSignals) {
+          if (!signals.includes(sig)) signals.unshift(sig);
+        }
+        console.log('[HubEvents] Event: ' + ev.type +
+          (ev.payload && ev.payload.deliberation_id ? ' (deliberation: ' + ev.payload.deliberation_id + ')' : '') +
+          ' → signals: ' + evSignals.join(', '));
+      }
+      // Store events in evidencefor LLM context on next evolve pass
+      if (!global._pendingHubEventContext) global._pendingHubEventContext = [];
+      global._pendingHubEventContext.push(...hubEvents);
+    }
+  } catch (e) {
+    console.warn('[HubEvents] Processing failed (non-fatal):', e && e.message || e);
+  }
+
+  // --- Worker Pool: select task from heartbeat available_work (deferred claim) ---
+  // Only remember the best task and inject its signals; actual claim+complete
+  // happens atomically in solidify.js after a successful evolution cycle.
+  if (!activeTask && process.env.WORKER_ENABLED === '1') {
+    try {
+      const { consumeAvailableWork } = require('./gep/a2aProtocol');
+      const workerTasks = consumeAvailableWork();
+      if (workerTasks.length > 0) {
+        let taskMemoryEvents = [];
+        try {
+          const { tryReadMemoryGraphEvents } = require('./gep/memoryGraph');
+          taskMemoryEvents = tryReadMemoryGraphEvents(1000);
+        } catch (e) {
+          console.warn('[WorkerPool] MemoryGraph read failed (task selection proceeds without history):', e && e.message || e);
+        }
+        const best = selectBestTask(workerTasks, taskMemoryEvents);
+        if (best) {
+          activeTask = best;
+          activeTask._worker_pending = true;
+          const taskSignals = taskToSignalsWithPrivacy(best);
+          for (const sig of taskSignals) {
+            if (!signals.includes(sig)) signals.unshift(sig);
+          }
+          console.log(`[WorkerPool] Selected worker task (deferred claim): "${best.title || best.id}" (${taskSignals.length} signals injected)`);
+        }
+      }
+    } catch (e) {
+      console.log(`[WorkerPool] Task selection failed (non-fatal): ${e.message}`);
+    }
+  }
+
+  const recentErrorMatches = recentMasterLog.match(/\[ERROR|Error:|Exception:|FAIL|Failed|"isError":true/gi) || [];
+  const recentErrorCount = recentErrorMatches.length;
+
+  const evidence = {
+    // Keep short; do not store full transcripts in the graph.
+    recent_session_tail: String(recentMasterLog || '').slice(-6000),
+    today_log_tail: String(todayLog || '').slice(-2500),
+  };
+
+  // Inject pending hub events into evidence so LLM sees them in context
+  if (global._pendingHubEventContext && global._pendingHubEventContext.length > 0) {
+    evidence.hub_events = global._pendingHubEventContext.splice(0, 10);
+  }
+
+  const sessionScope = getSessionScope();
+  const observations = {
+    agent: AGENT_NAME,
+    session_scope: sessionScope || null,
+    drift_enabled: IS_RANDOM_DRIFT,
+    review_mode: IS_REVIEW_MODE,
+    dry_run: IS_DRY_RUN,
+    system_health: healthReport,
+    mood: moodStatus,
+    scan_ms: scanTime,
+    memory_size_bytes: memorySize,
+    recent_error_count: recentErrorCount,
+    node: process.version,
+    platform: process.platform,
+    cwd: process.cwd(),
+    evidence,
+  };
+
+  if (sessionScope) {
+    console.log(`[SessionScope] Active scope: "${sessionScope}". Evolution state and memory graph are isolated.`);
+  }
+
+  // Memory Graph: close last action with an inferred outcome (append-only graph, mutable state).
+  try {
+    recordOutcomeFromState({ signals, observations });
+  } catch (e) {
+    // If we can't read/write memory graph, refuse to evolve (no "memoryless evolution").
+    console.error(`[MemoryGraph] Outcome write failed: ${e.message}`);
+    console.error(`[MemoryGraph] Refusing to evolve without causal memory. Target: ${memoryGraphPath()}`);
+    throw new Error(`MemoryGraph Outcome write failed: ${e.message}`);
+  }
+
+  // Memory Graph: record current signals as a first-class node. If this fails, refuse to evolve.
+  try {
+    recordSignalSnapshot({ signals, observations });
+  } catch (e) {
+    console.error(`[MemoryGraph] Signal snapshot write failed: ${e.message}`);
+    console.error(`[MemoryGraph] Refusing to evolve without causal memory. Target: ${memoryGraphPath()}`);
+    throw new Error(`MemoryGraph Signal snapshot write failed: ${e.message}`);
+  }
+
+  // Capability candidates: extract, persist, and build previews.
+  const { capabilityCandidatesPreview, externalCandidatesPreview } = buildCandidatePreviews({
+    signals,
+    recentSessionTranscript: recentMasterLog,
+  });
+
+  // Search-First Evolution: query Hub for reusable solutions before local reasoning.
+  // When problem-class signals are present, lower the threshold and extend timeout
+  // to maximize the chance of finding an ecosystem-proven solution (EvoMap-First).
+  let hubHit = null;
+  if (!skipHubCalls) {
+    try {
+      const problemSignals = ['log_error', 'recurring_error', 'capability_gap', 'perf_bottleneck', 'test_failure', 'deployment_issue'];
+      const hasProblemSignal = Array.isArray(signals) && signals.some(function (s) {
+        for (var pi = 0; pi < problemSignals.length; pi++) {
+          if (s === problemSignals[pi] || (typeof s === 'string' && s.startsWith('errsig:'))) return true;
+        }
+        return false;
+      });
+      const hubSearchOpts = hasProblemSignal
+        ? { timeoutMs: 12000, threshold: 0.55 }
+        : { timeoutMs: 8000 };
+      if (hasProblemSignal) {
+        console.log('[EvoMap-First] Problem signals detected -- expanding Hub search (threshold=0.55, timeout=12s).');
+      }
+      hubHit = await hubSearch(signals, hubSearchOpts);
+      if (hubHit && hubHit.hit) {
+        console.log(`[SearchFirst] Hub hit: asset=${hubHit.asset_id}, score=${hubHit.score}, mode=${hubHit.mode}`);
+      } else {
+        console.log(`[SearchFirst] No hub match (reason: ${hubHit && hubHit.reason ? hubHit.reason : 'unknown'}). Proceeding with local evolution.`);
+      }
+    } catch (e) {
+      console.log(`[SearchFirst] Hub search failed (non-fatal): ${e.message}`);
+      hubHit = { hit: false, reason: 'exception' };
+    }
+  } else {
+    hubHit = { hit: false, reason: 'idle_skip' };
+    console.log('[IdleGating] hubSearch skipped (idle cycle).');
+  }
+
+  // Memory Graph reasoning: prefer high-confidence paths, suppress known low-success paths (unless drift is explicit).
+  let memoryAdvice = null;
+  try {
+    memoryAdvice = getMemoryAdvice({ signals, genes, driftEnabled: IS_RANDOM_DRIFT });
+  } catch (e) {
+    console.error(`[MemoryGraph] Read failed: ${e.message}`);
+    console.error(`[MemoryGraph] Refusing to evolve without causal memory. Target: ${memoryGraphPath()}`);
+    throw new Error(`MemoryGraph Read failed: ${e.message}`);
+  }
+
+  // Reflection Phase: periodically pause to assess evolution strategy.
+  try {
+    const cycleState = fs.existsSync(STATE_FILE) ? JSON.parse(fs.readFileSync(STATE_FILE, 'utf8')) : {};
+    const cycleCount = cycleState.cycleCount || 0;
+    if (shouldReflect({ cycleCount, recentEvents })) {
+      const narrativeSummary = loadNarrativeSummary(3000);
+      const reflectionCtx = buildReflectionContext({
+        recentEvents,
+        signals,
+        memoryAdvice,
+        narrative: narrativeSummary,
+      });
+      recordReflection({
+        cycle_count: cycleCount,
+        signals_snapshot: signals.slice(0, 20),
+        preferred_gene: memoryAdvice && memoryAdvice.preferredGeneId ? memoryAdvice.preferredGeneId : null,
+        banned_genes: memoryAdvice && Array.isArray(memoryAdvice.bannedGeneIds) ? memoryAdvice.bannedGeneIds : [],
+        context_preview: reflectionCtx.slice(0, 1000),
+        suggested_mutations: buildSuggestedMutations(signals),
+      });
+      console.log(`[Reflection] Strategic reflection recorded at cycle ${cycleCount}.`);
+    }
+  } catch (e) {
+    console.log('[Reflection] Failed (non-fatal): ' + (e && e.message ? e.message : e));
+  }
+
+  let recentFailedCapsules = [];
+  try {
+    recentFailedCapsules = readRecentFailedCapsules(50);
+  } catch (e) {
+    console.log('[FailedCapsules] Read failed (non-fatal): ' + e.message);
+  }
+
+  // Heartbeat hints: novelty score and capability gaps for diversity-directed drift
+  let heartbeatNovelty = null;
+  let heartbeatCapGaps = [];
+  try {
+    const { getNoveltyHint, getCapabilityGaps: getCapGaps } = require('./gep/a2aProtocol');
+    heartbeatNovelty = getNoveltyHint();
+    heartbeatCapGaps = getCapGaps() || [];
+  } catch (e) {}
+
+  const { selectedGene, capsuleCandidates, selector } = selectGeneAndCapsule({
+    genes,
+    capsules,
+    signals,
+    memoryAdvice,
+    driftEnabled: IS_RANDOM_DRIFT,
+    failedCapsules: recentFailedCapsules,
+    capabilityGaps: heartbeatCapGaps,
+    noveltyScore: heartbeatNovelty && Number.isFinite(heartbeatNovelty.score) ? heartbeatNovelty.score : null,
+  });
+
+  const selectedBy = memoryAdvice && memoryAdvice.preferredGeneId ? 'memory_graph+selector' : 'selector';
+  const capsulesUsed = Array.isArray(capsuleCandidates)
+    ? capsuleCandidates.map(c => (c && c.id ? String(c.id) : null)).filter(Boolean)
+    : [];
+  const selectedCapsuleId = capsulesUsed.length ? capsulesUsed[0] : null;
+  const strategyPolicy = computeAdaptiveStrategyPolicy({
+    recentEvents,
+    selectedGene,
+    signals,
+  });
+
+  verbose('Gene selection: gene=' + (selectedGene ? selectedGene.id : '(none)') + ' capsule=' + (selectedCapsuleId || '(none)') + ' selectedBy=' + selectedBy + ' selector=' + (selector || '(none)'));
+  verbose('Strategy policy: name=' + strategyPolicy.name + ' forceInnovate=' + strategyPolicy.forceInnovate + ' cautious=' + strategyPolicy.cautiousExecution + ' maxFiles=' + strategyPolicy.blastRadiusMaxFiles);
+  if (memoryAdvice) {
+    verbose('Memory advice: preferred=' + (memoryAdvice.preferredGeneId || '(none)') + ' banned=[' + (Array.isArray(memoryAdvice.bannedGeneIds) ? memoryAdvice.bannedGeneIds.join(',') : '') + ']');
+  }
+
+  // Personality selection (natural selection + small mutation when triggered).
+  // This state is persisted in MEMORY_DIR and is treated as an evolution control surface (not role-play).
+  const personalitySelection = selectPersonalityForRun({
+    driftEnabled: IS_RANDOM_DRIFT,
+    signals,
+    recentEvents,
+  });
+  const personalityState = personalitySelection && personalitySelection.personality_state ? personalitySelection.personality_state : null;
+
+  // Mutation object is mandatory for every evolution run.
+  const tail = Array.isArray(recentEvents) ? recentEvents.slice(-6) : [];
+  const tailOutcomes = tail
+    .map(e => (e && e.outcome && e.outcome.status ? String(e.outcome.status) : null))
+    .filter(Boolean);
+  const stableSuccess = tailOutcomes.length >= 6 && tailOutcomes.every(s => s === 'success');
+  const tailAvgScore =
+    tail.length > 0
+      ? tail.reduce((acc, e) => acc + (e && e.outcome && Number.isFinite(Number(e.outcome.score)) ? Number(e.outcome.score) : 0), 0) /
+        tail.length
+      : 0;
+  const innovationPressure =
+    !IS_RANDOM_DRIFT &&
+    personalityState &&
+    Number.isFinite(Number(personalityState.creativity)) &&
+    Number(personalityState.creativity) >= 0.75 &&
+    stableSuccess &&
+    tailAvgScore >= 0.7;
+  const forceInnovation =
+    String(process.env.FORCE_INNOVATION || process.env.EVOLVE_FORCE_INNOVATION || '').toLowerCase() === 'true';
+  const mutationInnovateMode = !!IS_RANDOM_DRIFT || !!innovationPressure || !!forceInnovation || !!strategyPolicy.forceInnovate;
+  const mutationSignals = innovationPressure ? [...(Array.isArray(signals) ? signals : []), 'stable_success_plateau'] : signals;
+  const mutationSignalsEffective = (forceInnovation || strategyPolicy.forceInnovate)
+    ? [...(Array.isArray(mutationSignals) ? mutationSignals : []), 'force_innovation']
+    : mutationSignals;
+
+  const allowHighRisk =
+    !!IS_RANDOM_DRIFT &&
+    !!personalitySelection &&
+    !!personalitySelection.personality_known &&
+    personalityState &&
+    isHighRiskMutationAllowed(personalityState) &&
+    Number(personalityState.rigor) >= 0.8 &&
+    Number(personalityState.risk_tolerance) <= 0.3 &&
+    !(Array.isArray(signals) && signals.includes('log_error'));
+  const mutation = buildMutation({
+    signals: mutationSignalsEffective,
+    selectedGene,
+    driftEnabled: mutationInnovateMode,
+    personalityState,
+    allowHighRisk,
+  });
+
+  verbose('Mutation: category=' + (mutation && mutation.category || '?') + ' risk=' + (mutation && mutation.risk_level || '?') + ' innovateMode=' + mutationInnovateMode + ' forceInnovation=' + forceInnovation + ' allowHighRisk=' + allowHighRisk);
+  verbose('Hub: hubHit=' + (hubHit && hubHit.hit ? 'true (score=' + hubHit.score + ' mode=' + hubHit.mode + ')' : 'false (' + (hubHit && hubHit.reason || 'unknown') + ')'));
+
+  // Memory Graph: record hypothesis bridging Signal -> Action. If this fails, refuse to evolve.
+  let hypothesisId = null;
+  try {
+    const hyp = recordHypothesis({
+      signals,
+      mutation,
+      personality_state: personalityState,
+      selectedGene,
+      selector,
+      driftEnabled: mutationInnovateMode,
+      selectedBy,
+      capsulesUsed,
+      observations,
+    });
+    hypothesisId = hyp && hyp.hypothesisId ? hyp.hypothesisId : null;
+  } catch (e) {
+    console.error(`[MemoryGraph] Hypothesis write failed: ${e.message}`);
+    console.error(`[MemoryGraph] Refusing to evolve without causal memory. Target: ${memoryGraphPath()}`);
+    throw new Error(`MemoryGraph Hypothesis write failed: ${e.message}`);
+  }
+
+  // Memory Graph: record the chosen causal path for this run. If this fails, refuse to output a mutation prompt.
+  try {
+    recordAttempt({
+      signals,
+      mutation,
+      personality_state: personalityState,
+      selectedGene,
+      selector,
+      driftEnabled: mutationInnovateMode,
+      selectedBy,
+      hypothesisId,
+      capsulesUsed,
+      observations,
+    });
+  } catch (e) {
+    console.error(`[MemoryGraph] Attempt write failed: ${e.message}`);
+    console.error(`[MemoryGraph] Refusing to evolve without causal memory. Target: ${memoryGraphPath()}`);
+    throw new Error(`MemoryGraph Attempt write failed: ${e.message}`);
+  }
+
+  // Solidify state: capture minimal, auditable context for post-patch validation + asset write.
+  // This enforces strict protocol closure after patch application.
+  try {
+    const runId = `run_${Date.now()}`;
+    const parentEventId = getLastEventId();
+
+    // Baseline snapshot (before any edits).
+    let baselineUntracked = [];
+    let baselineHead = null;
+    try {
+      const out = execSync('git ls-files --others --exclude-standard', {
+        cwd: REPO_ROOT,
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'ignore'],
+        timeout: 4000,
+        windowsHide: true,
+      });
+      baselineUntracked = String(out)
+        .split('\n')
+        .map(l => l.trim())
+        .filter(Boolean);
+    } catch (e) {
+      console.warn('[SolidifyState] Failed to read baseline untracked files:', e && e.message || e);
+    }
+
+    try {
+      const out = execSync('git rev-parse HEAD', {
+        cwd: REPO_ROOT,
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'ignore'],
+        timeout: 4000,
+        windowsHide: true,
+      });
+      baselineHead = String(out || '').trim() || null;
+    } catch (e) {
+      console.warn('[SolidifyState] Failed to read git HEAD:', e && e.message || e);
+    }
+
+    const maxFiles = strategyPolicy && Number.isFinite(Number(strategyPolicy.blastRadiusMaxFiles))
+      ? Number(strategyPolicy.blastRadiusMaxFiles)
+      : (
+        selectedGene && selectedGene.constraints && Number.isFinite(Number(selectedGene.constraints.max_files))
+          ? Number(selectedGene.constraints.max_files)
+          : 12
+      );
+    const blastRadiusEstimate = {
+      files: Number.isFinite(maxFiles) && maxFiles > 0 ? maxFiles : 0,
+      lines: Number.isFinite(maxFiles) && maxFiles > 0 ? Math.round(maxFiles * 80) : 0,
+    };
+
+    // Merge into existing state to preserve last_solidify (do not wipe it).
+    const prevState = readStateForSolidify();
+    prevState.last_run = {
+        run_id: runId,
+        created_at: new Date().toISOString(),
+        parent_event_id: parentEventId || null,
+        selected_gene_id: selectedGene && selectedGene.id ? selectedGene.id : null,
+        selected_capsule_id: selectedCapsuleId,
+        selector: selector || null,
+        signals: Array.isArray(signals) ? signals : [],
+        mutation: mutation || null,
+        mutation_id: mutation && mutation.id ? mutation.id : null,
+        personality_state: personalityState || null,
+        personality_key: personalitySelection && personalitySelection.personality_key ? personalitySelection.personality_key : null,
+        personality_known: !!(personalitySelection && personalitySelection.personality_known),
+        personality_mutations:
+          personalitySelection && Array.isArray(personalitySelection.personality_mutations)
+            ? personalitySelection.personality_mutations
+            : [],
+        drift: !!IS_RANDOM_DRIFT,
+        selected_by: selectedBy,
+        source_type: hubHit && hubHit.hit ? (hubHit.mode === 'direct' ? 'reused' : 'reference') : 'generated',
+        reused_asset_id: hubHit && hubHit.hit ? (hubHit.asset_id || null) : null,
+        reused_source_node: hubHit && hubHit.hit ? (hubHit.source_node_id || null) : null,
+        reused_chain_id: hubHit && hubHit.hit ? (hubHit.chain_id || null) : null,
+        baseline_untracked: baselineUntracked,
+        baseline_git_head: baselineHead,
+        blast_radius_estimate: blastRadiusEstimate,
+        strategy_policy: strategyPolicy,
+        active_task_id: activeTask ? (activeTask.id || activeTask.task_id || null) : null,
+        active_task_title: activeTask ? (activeTask.title || null) : null,
+        worker_assignment_id: activeTask ? (activeTask._worker_assignment_id || null) : null,
+        worker_pending: activeTask ? (activeTask._worker_pending || false) : false,
+        commitment_deadline: activeTask ? (activeTask._commitment_deadline || null) : null,
+        applied_lessons: hubLessons.map(function(l) { return l.lesson_id; }).filter(Boolean),
+        hub_lessons: hubLessons,
+      };
+    writeStateForSolidify(prevState);
+
+    if (hubHit && hubHit.hit) {
+      const assetAction = hubHit.mode === 'direct' ? 'asset_reuse' : 'asset_reference';
+      logAssetCall({
+        run_id: runId,
+        action: assetAction,
+        asset_id: hubHit.asset_id || null,
+        asset_type: hubHit.match && hubHit.match.type ? hubHit.match.type : null,
+        source_node_id: hubHit.source_node_id || null,
+        chain_id: hubHit.chain_id || null,
+        score: hubHit.score || null,
+        mode: hubHit.mode,
+        signals: Array.isArray(signals) ? signals : [],
+        extra: {
+          selected_gene_id: selectedGene && selectedGene.id ? selectedGene.id : null,
+          task_id: activeTask ? (activeTask.id || activeTask.task_id || null) : null,
+        },
+      });
+    }
+  } catch (e) {
+    console.error(`[SolidifyState] Write failed: ${e.message}`);
+  }
+
+  if (skipHubCalls) {
+    console.log('[IdleGating] Idle cycle complete. Prompt generation and bridge spawning skipped.');
+    return;
+  }
+
+  const genesPreview = `\`\`\`json\n${JSON.stringify(genes.slice(0, 6), null, 2)}\n\`\`\``;
+  const capsulesPreview = `\`\`\`json\n${JSON.stringify(capsules.slice(-3), null, 2)}\n\`\`\``;
+
+  const reviewNote = IS_REVIEW_MODE
+    ? 'Review mode: before significant edits, pause and ask the user for confirmation.'
+    : 'Review mode: disabled.';
+
+  // Build recent evolution history summary for context injection
+  const recentHistorySummary = (() => {
+    if (!recentEvents || recentEvents.length === 0) return '(no prior evolution events)';
+    const last8 = recentEvents.slice(-8);
+    const lines = last8.map((evt, idx) => {
+      const sigs = Array.isArray(evt.signals) ? evt.signals.slice(0, 3).join(', ') : '?';
+      const gene = Array.isArray(evt.genes_used) && evt.genes_used.length ? evt.genes_used[0] : 'none';
+      const outcome = evt.outcome && evt.outcome.status ? evt.outcome.status : '?';
+      const ts = evt.meta && evt.meta.at ? evt.meta.at : (evt.id || '');
+      return `  ${idx + 1}. [${evt.intent || '?'}] signals=[${sigs}] gene=${gene} outcome=${outcome} @${ts}`;
+    });
+    return lines.join('\n');
+  })();
+
+  const context = `
+Runtime state:
+- System health: ${healthReport}
+- Agent state: ${moodStatus}
+- Scan duration: ${scanTime}ms
+- Memory size: ${memorySize} bytes
+- Skills available (if any):
+${fileList || '[skills directory not found]'}
+
+Local State (ALREADY CONFIGURED -- do NOT duplicate):
+${localStateSummary}
+
+Notes:
+- ${reviewNote}
+- ${reportingDirective}
+- ${syncDirective}
+
+Recent Evolution History (last 8 cycles -- DO NOT repeat the same intent+signal+gene):
+${recentHistorySummary}
+IMPORTANT: If you see 3+ consecutive "repair" cycles with the same gene, you MUST switch to "innovate" intent.
+${(() => {
+  // Compute consecutive failure count from recent events for context injection
+  let cfc = 0;
+  const evts = Array.isArray(recentEvents) ? recentEvents : [];
+  for (let i = evts.length - 1; i >= 0; i--) {
+    if (evts[i] && evts[i].outcome && evts[i].outcome.status === 'failed') cfc++;
+    else break;
+  }
+  if (cfc >= 3) {
+    return `\nFAILURE STREAK WARNING: The last ${cfc} cycles ALL FAILED. You MUST change your approach.\n- Do NOT repeat the same gene/strategy. Pick a completely different approach.\n- If the error is external (API down, binary missing), mark as FAILED and move on.\n- Prefer a minimal safe innovate cycle over yet another failing repair.`;
+  }
+  return '';
+})()}
+
+External candidates (A2A receive zone; staged only, never execute directly):
+${externalCandidatesPreview}
+
+Global memory (MEMORY.md):
+\`\`\`
+${memorySnippet}
+\`\`\`
+
+User registry (USER.md):
+\`\`\`
+${userSnippet}
+\`\`\`
+
+Recent memory snippet:
+\`\`\`
+${todayLog.slice(-3000)}
+\`\`\`
+
+Recent session transcript:
+\`\`\`
+${recentMasterLog}
+\`\`\`
+
+Mutation directive:
+${mutationDirective}
+`.trim();
+
+  // Build the prompt: in direct-reuse mode, use a minimal reuse prompt.
+  // In reference mode (or no hit), use the full GEP prompt with hub match injected.
+  const isDirectReuse = hubHit && hubHit.hit && hubHit.mode === 'direct';
+  const hubMatchedBlock = hubHit && hubHit.hit && hubHit.mode === 'reference'
+    ? buildHubMatchedBlock({ capsule: hubHit.match })
+    : null;
+
+  const prompt = isDirectReuse
+    ? buildReusePrompt({
+        capsule: hubHit.match,
+        signals,
+        nowIso: new Date().toISOString(),
+      })
+    : buildGepPrompt({
+        nowIso: new Date().toISOString(),
+        context,
+        signals,
+        selector,
+        parentEventId: getLastEventId(),
+        selectedGene,
+        capsuleCandidates,
+        genesPreview,
+        capsulesPreview,
+        capabilityCandidatesPreview,
+        externalCandidatesPreview,
+        hubMatchedBlock,
+        strategyPolicy,
+        failedCapsules: recentFailedCapsules,
+        hubLessons,
+      });
+
+  // Optional: emit a compact thought process block for wrappers (noise-controlled).
+  const emitThought = String(process.env.EVOLVE_EMIT_THOUGHT_PROCESS || '').toLowerCase() === 'true';
+  if (emitThought) {
+    const s = Array.isArray(signals) ? signals : [];
+    const thought = [
+      `cycle_id: ${cycleId}`,
+      `signals_count: ${s.length}`,
+      `signals: ${s.slice(0, 12).join(', ')}${s.length > 12 ? ' ...' : ''}`,
+      `selected_gene: ${selectedGene && selectedGene.id ? String(selectedGene.id) : '(none)'}`,
+      `selected_capsule: ${selectedCapsuleId ? String(selectedCapsuleId) : '(none)'}`,
+      `mutation_category: ${mutation && mutation.category ? String(mutation.category) : '(none)'}`,
+      `force_innovation: ${forceInnovation ? 'true' : 'false'}`,
+      `source_type: ${hubHit && hubHit.hit ? (isDirectReuse ? 'reused' : 'reference') : 'generated'}`,
+      `hub_reuse_mode: ${isDirectReuse ? 'direct' : hubMatchedBlock ? 'reference' : 'none'}`,
+    ].join('\n');
+    console.log(`[THOUGHT_PROCESS]\n${thought}\n[/THOUGHT_PROCESS]`);
+  }
+
+  const printPrompt = String(process.env.EVOLVE_PRINT_PROMPT || '').toLowerCase() === 'true';
+
+  // Default behavior (v1.4.1+): "execute-by-default" by bridging prompt -> sub-agent via sessions_spawn.
+  // This project is the Brain; the Hand is a spawned executor agent. Wrappers can disable bridging with EVOLVE_BRIDGE=false.
+  if (bridgeEnabled) {
+    // Reuse the run_id stored in the solidify state when possible.
+    let runId = `run_${Date.now()}`;
+    try {
+      const st = readStateForSolidify();
+      if (st && st.last_run && st.last_run.run_id) runId = String(st.last_run.run_id);
+    } catch (e) {}
+    let artifact = null;
+    try {
+      artifact = writePromptArtifact({
+        memoryDir: getEvolutionDir(),
+        cycleId,
+        runId,
+        prompt,
+        meta: {
+          agent: AGENT_NAME,
+          drift_enabled: IS_RANDOM_DRIFT,
+          review_mode: IS_REVIEW_MODE,
+          dry_run: IS_DRY_RUN,
+          mutation_id: mutation && mutation.id ? mutation.id : null,
+          personality_key: personalitySelection && personalitySelection.personality_key ? personalitySelection.personality_key : null,
+        },
+      });
+    } catch (e) {
+      artifact = null;
+    }
+
+    const executorTask = [
+      'You are the executor (the Hand).',
+      'Your job is to apply a safe, minimal patch in this repo following the attached GEP protocol prompt.',
+      artifact && artifact.promptPath ? `Prompt file: ${artifact.promptPath}` : 'Prompt file: (unavailable)',
+      '',
+      'After applying changes and validations, you MUST run:',
+      '  node index.js solidify',
+      '',
+      'Loop chaining (only if you are running in loop mode): after solidify succeeds, print a sessions_spawn call to start the next loop run with a short delay.',
+      'Example:',
+      'sessions_spawn({ task: "exec: node skills/feishu-evolver-wrapper/lifecycle.js ensure", agentId: "main", cleanup: "delete", label: "gep_loop_next" })',
+      '',
+      'GEP protocol prompt (may be truncated here; prefer the prompt file if provided):',
+      clip(prompt, 24000),
+    ].join('\n');
+
+    const spawn = renderSessionsSpawnCall({
+      task: executorTask,
+      agentId: AGENT_NAME,
+      cleanup: 'delete',
+      label: `gep_bridge_${cycleNum}`,
+    });
+
+    console.log('\n[BRIDGE ENABLED] Spawning executor agent via sessions_spawn.');
+    console.log(spawn);
+    if (printPrompt) {
+      console.log('\n[PROMPT OUTPUT] (EVOLVE_PRINT_PROMPT=true)');
+      console.log(prompt);
+    }
+  } else {
+    console.log(prompt);
+    console.log('\n[SOLIDIFY REQUIRED] After applying the patch and validations, run: node index.js solidify');
+  }
+}
+
+module.exports = { run, computeAdaptiveStrategyPolicy, shouldSkipHubCalls, verbose, determineBridgeEnabled, formatSessionLog, formatCursorTranscript };
+

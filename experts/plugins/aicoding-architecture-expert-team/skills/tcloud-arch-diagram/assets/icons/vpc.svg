@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="32px" height="32px" viewBox="0 0 32 32" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+    <!-- Generator: Sketch 52.6 (67491) - http://www.bohemiancoding.com/sketch -->
+    <title>私有网络-32px</title>
+    <desc>Created with Sketch.</desc>
+    <g id="私有网络-32px" stroke="none" stroke-width="1" fill="none" fill-rule="evenodd">
+        <rect id="Rectangle-Copy" fill="#0052D9" opacity="0" x="0" y="0" width="32" height="32"></rect>
+        <g id="Group" fill="#0052D9">
+            <path d="M16.5,7 C13.5084576,7 11.0833333,9.38781467 11.0833333,12.3333333 L11.0833333,13.4 L10,13.4 L10,23 L23,23 L23,13.4 L21.9166667,13.4 L21.9166667,12.3333333 C21.9166667,9.38781467 19.4915424,7 16.5,7 Z M13.25,12 C13.25,10.3431458 14.7050746,9 16.5,9 C18.2949254,9 19.75,10.3431458 19.75,12 L19.75,13 L13.25,13 L13.25,12 Z M21,21 L12,21 L12,15 L21,15 L21,21 Z" id="_复合路径_" fill-rule="nonzero"></path>
+            <rect id="Rectangle-2" x="10" y="13" width="13" height="1"></rect>
+            <path d="M31.7193022,13.0004945 L29.6779284,13.0004945 C28.3047737,6.70988283 22.7024129,2 16,2 C8.2680135,2 2,8.2680135 2,16 C2,23.7319865 8.2680135,30 16,30 C23.0527724,30 28.8874794,24.7848417 29.8581515,18.0004945 L31.8761508,18.0004945 C30.8917351,25.8928783 24.1590649,32 16,32 C7.163444,32 -2.0250468e-13,24.836556 -2.0250468e-13,16 C-2.0250468e-13,7.163444 7.163444,0 16,0 C23.8113418,0 30.3152783,5.59766728 31.7193022,13.0004945 Z" id="Combined-Shape" fill-rule="nonzero"></path>
+        </g>
+    </g>
+</svg>

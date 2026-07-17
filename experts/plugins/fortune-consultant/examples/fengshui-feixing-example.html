@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>玄空飞星 · 南位书房 · 2026 流年</title>
+<style>
+  :root {
+    --bg: #0f1a1a;
+    --bg-deep: #07100f;
+    --panel: rgba(100, 180, 170, 0.08);
+    --panel-soft: rgba(100, 180, 170, 0.04);
+    --border: rgba(180, 210, 190, 0.2);
+    --border-bright: rgba(220, 200, 130, 0.5);
+    --jade: #6dcbbf;
+    --jade-bright: #8ee0d4;
+    --gold: #e0b555;
+    --gold-bright: #f0d080;
+    --red: #d85848;
+    --red-soft: #e88476;
+    --ink: #d8d4b8;
+    --ink-soft: #a8a488;
+    --dim: #6a6e68;
+    --bg-good: rgba(109, 203, 191, 0.1);
+    --bg-bad: rgba(216, 88, 72, 0.08);
+    --bg-mid: rgba(224, 181, 85, 0.08);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: "PingFang SC", "Hiragino Sans GB", "STKaiti", serif;
+    line-height: 1.75;
+    min-height: 100vh;
+    background-image:
+      radial-gradient(circle at 50% 20%, rgba(224, 181, 85, 0.08), transparent 50%),
+      radial-gradient(circle at 20% 80%, rgba(109, 203, 191, 0.06), transparent 50%),
+      linear-gradient(135deg, #0f1a1a 0%, #07100f 100%);
+  }
+  .container { max-width: 1100px; margin: 0 auto; padding: 48px 24px 80px; }
+
+  .header { text-align: center; margin-bottom: 28px; }
+  .header::before {
+    content: "☷ ☰ ☳";
+    display: block;
+    color: var(--gold);
+    font-size: 18px;
+    letter-spacing: 12px;
+    margin-bottom: 14px;
+  }
+  .header h1 {
+    font-size: 30px;
+    color: var(--gold-bright);
+    letter-spacing: 10px;
+    font-weight: 400;
+    text-shadow: 0 0 14px rgba(224, 181, 85, 0.3);
+    margin-bottom: 6px;
+  }
+  .header .subtitle { color: var(--jade); letter-spacing: 4px; font-size: 13px; }
+  .header .meta { color: var(--dim); font-size: 12px; margin-top: 12px; letter-spacing: 2px; }
+
+  /* Info bar */
+  .info-bar {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+    margin-bottom: 28px;
+    background: var(--panel-soft);
+    padding: 14px 18px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+  }
+  .info-cell { text-align: center; }
+  .info-cell .label { color: var(--dim); font-size: 11px; letter-spacing: 2px; margin-bottom: 4px; }
+  .info-cell .value { color: var(--gold-bright); font-size: 13px; letter-spacing: 1px; font-weight: 500; }
+  @media (max-width: 720px) {
+    .info-bar { grid-template-columns: repeat(2, 1fr); }
+  }
+
+  /* Floor plan */
+  .layout-wrap {
+    background: var(--panel-soft);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 24px;
+    margin-bottom: 28px;
+  }
+  .layout-wrap h2 {
+    color: var(--gold-bright);
+    letter-spacing: 4px;
+    font-size: 15px;
+    margin-bottom: 4px;
+    text-align: center;
+    font-weight: 500;
+  }
+  .layout-wrap .sub {
+    text-align: center;
+    color: var(--dim);
+    font-size: 11px;
+    letter-spacing: 2px;
+    margin-bottom: 18px;
+  }
+  .compass-info {
+    display: flex;
+    justify-content: space-between;
+    color: var(--jade);
+    font-size: 11px;
+    margin-bottom: 6px;
+    padding: 0 4px;
+    letter-spacing: 2px;
+  }
+  .compass-info.bottom { color: var(--gold); }
+  .nine-palace {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+    aspect-ratio: 1 / 1;
+    max-width: 720px;
+    margin: 0 auto;
+  }
+  .cell {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 12px 10px;
+    position: relative;
+    transition: all 0.3s;
+  }
+  .cell:hover { background: rgba(100, 180, 170, 0.15); }
+  .cell.good { background: var(--bg-good); border-color: var(--jade); }
+  .cell.bad { background: var(--bg-bad); border-color: var(--red); }
+  .cell.mid { background: var(--bg-mid); border-color: var(--gold); }
+  .cell.study {
+    border: 2px solid var(--gold);
+    background: linear-gradient(135deg, rgba(224, 181, 85, 0.18), rgba(109, 203, 191, 0.1));
+    box-shadow: 0 0 20px rgba(224, 181, 85, 0.2);
+  }
+  .cell .direction {
+    font-size: 11px;
+    color: var(--dim);
+    letter-spacing: 2px;
+    margin-bottom: 4px;
+  }
+  .cell .palace {
+    color: var(--gold-bright);
+    font-size: 16px;
+    letter-spacing: 3px;
+    margin-bottom: 8px;
+    font-weight: 500;
+  }
+  .cell.center .palace { color: var(--jade-bright); }
+  .star-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 11px;
+    color: var(--ink);
+    margin: 3px 0;
+    padding: 2px 6px;
+    border-radius: 2px;
+  }
+  .star-row .label { color: var(--dim); font-size: 9px; letter-spacing: 1px; }
+  .star-row .num {
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: 1px;
+  }
+  .star-row .name { color: var(--ink-soft); font-size: 10px; margin-left: 4px; }
+  .n-good { color: var(--jade-bright); }
+  .n-bad { color: var(--red-soft); }
+  .n-mid { color: var(--gold-bright); }
+  .cell .tag {
+    position: absolute;
+    top: -8px;
+    right: 8px;
+    padding: 2px 8px;
+    border-radius: 8px;
+    font-size: 10px;
+    letter-spacing: 2px;
+    background: var(--gold);
+    color: #0f1a1a;
+    font-weight: 500;
+  }
+  .cell .verdict {
+    margin-top: 6px;
+    padding-top: 6px;
+    border-top: 1px dashed var(--border);
+    font-size: 10px;
+    color: var(--ink-soft);
+    line-height: 1.5;
+  }
+
+  /* Study focus */
+  .focus {
+    background: linear-gradient(135deg, rgba(224, 181, 85, 0.1), rgba(109, 203, 191, 0.06));
+    border: 1.5px solid var(--gold);
+    border-radius: 8px;
+    padding: 28px 32px;
+    margin-bottom: 28px;
+  }
+  .focus h2 {
+    color: var(--gold-bright);
+    letter-spacing: 6px;
+    margin-bottom: 16px;
+    font-size: 20px;
+    font-weight: 500;
+    text-align: center;
+  }
+  .focus h2::before, .focus h2::after {
+    content: "✦";
+    color: var(--jade);
+    margin: 0 12px;
+    font-size: 14px;
+  }
+  .focus-grid {
+    display: grid;
+    grid-template-columns: 180px 1fr;
+    gap: 24px;
+    align-items: center;
+  }
+  @media (max-width: 720px) {
+    .focus-grid { grid-template-columns: 1fr; }
+  }
+  .focus-score {
+    text-align: center;
+    padding: 20px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+  }
+  .focus-score .rating {
+    font-size: 36px;
+    color: var(--jade-bright);
+    font-weight: 500;
+    letter-spacing: 2px;
+  }
+  .focus-score .stars {
+    color: var(--gold);
+    font-size: 16px;
+    letter-spacing: 4px;
+    margin: 6px 0;
+  }
+  .focus-score .label {
+    color: var(--dim);
+    font-size: 11px;
+    letter-spacing: 2px;
+  }
+  .focus-detail p { color: var(--ink); font-size: 14px; margin-bottom: 6px; line-height: 1.8; }
+  .focus-detail .highlight { color: var(--gold-bright); font-weight: 500; }
+  .focus-detail .warn { color: var(--red-soft); }
+
+  /* Section */
+  .section { margin-bottom: 28px; }
+  .section-title {
+    font-size: 17px;
+    color: var(--gold-bright);
+    letter-spacing: 5px;
+    margin-bottom: 18px;
+    padding-left: 14px;
+    border-left: 3px solid var(--gold);
+  }
+  .section-title small { color: var(--dim); font-size: 11px; margin-left: 12px; letter-spacing: 1px; }
+
+  .advice-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 14px;
+  }
+  @media (max-width: 720px) {
+    .advice-grid { grid-template-columns: 1fr; }
+  }
+  .advice {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 18px 22px;
+    border-top: 3px solid var(--jade);
+  }
+  .advice.warn { border-top-color: var(--red); }
+  .advice.gold { border-top-color: var(--gold); }
+  .advice h4 {
+    color: var(--gold-bright);
+    letter-spacing: 3px;
+    font-size: 14px;
+    margin-bottom: 10px;
+    font-weight: 500;
+  }
+  .advice p { color: var(--ink); font-size: 13px; line-height: 1.8; }
+  .advice ul { padding-left: 20px; margin-top: 6px; }
+  .advice li { color: var(--ink); font-size: 13px; margin-bottom: 4px; }
+
+  .lookup-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+    background: var(--panel-soft);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+  }
+  .lookup-table th, .lookup-table td {
+    padding: 10px 14px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+  }
+  .lookup-table th {
+    background: rgba(224, 181, 85, 0.08);
+    color: var(--gold-bright);
+    letter-spacing: 2px;
+    font-weight: 500;
+  }
+  .lookup-table tr.study-row {
+    background: rgba(224, 181, 85, 0.1);
+  }
+  .lookup-table tr.study-row td { color: var(--gold-bright); font-weight: 500; }
+  .lookup-table tr:last-child td { border-bottom: none; }
+  .lookup-table .good { color: var(--jade-bright); }
+  .lookup-table .bad { color: var(--red-soft); }
+  .lookup-table .mid { color: var(--gold-bright); }
+
+  .disclaimer {
+    margin-top: 50px;
+    padding: 14px 20px;
+    background: rgba(216, 88, 72, 0.05);
+    border: 1px dashed var(--red);
+    border-radius: 4px;
+    font-size: 12px;
+    color: var(--dim);
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <div class="header">
+    <h1>玄 空 飞 星</h1>
+    <div class="subtitle">FLYING STAR FENG SHUI · STUDY ROOM</div>
+    <div class="meta">坐子山午向 · 八运宅 · 书房位南 · 2026 丙午流年</div>
+  </div>
+
+  <!-- Info bar -->
+  <div class="info-bar">
+    <div class="info-cell"><div class="label">坐向</div><div class="value">坐北朝南（子山午向）</div></div>
+    <div class="info-cell"><div class="label">入宅年份</div><div class="value">2020 · 八运</div></div>
+    <div class="info-cell"><div class="label">当前运</div><div class="value">九运（2024-2043）</div></div>
+    <div class="info-cell"><div class="label">流年入中</div><div class="value">九紫右弼（2026）</div></div>
+  </div>
+
+  <!-- Floor plan -->
+  <div class="layout-wrap">
+    <h2>全 屋 九 宫 飞 星 盘</h2>
+    <div class="sub">格式 — 山星 / 向星 / 2026 流年 （以三元运+2026 丙午年）</div>
+    <div class="compass-info">
+      <span>西北 · 乾</span><span>北 · 坎（坐山）</span><span>东北 · 艮</span>
+    </div>
+    <div class="nine-palace">
+      <!-- Top row: NW N NE -->
+      <div class="cell good">
+        <div class="direction">西北 · 乾</div>
+        <div class="palace">6 / 1</div>
+        <div class="star-row"><span class="label">山</span><span class="num n-good">6</span><span class="name">武曲·金</span></div>
+        <div class="star-row"><span class="label">向</span><span class="num n-good">1</span><span class="name">贪狼·水</span></div>
+        <div class="star-row"><span class="label">年</span><span class="num n-bad">3</span><span class="name">禄存·碧</span></div>
+        <div class="verdict">金白水清 · 年星冲口舌</div>
+      </div>
+      <div class="cell bad">
+        <div class="direction">北 · 坎（坐）</div>
+        <div class="palace">4 / 3</div>
+        <div class="star-row"><span class="label">山</span><span class="num n-mid">4</span><span class="name">文曲·木</span></div>
+        <div class="star-row"><span class="label">向</span><span class="num n-bad">3</span><span class="name">禄存·碧</span></div>
+        <div class="star-row"><span class="label">年</span><span class="num n-good">8</span><span class="name">左辅·白</span></div>
+        <div class="verdict">斗牛煞 · 年星八白稍化</div>
+      </div>
+      <div class="cell mid">
+        <div class="direction">东北 · 艮</div>
+        <div class="palace">9 / 7</div>
+        <div class="star-row"><span class="label">山</span><span class="num n-good">9</span><span class="name">右弼·紫</span></div>
+        <div class="star-row"><span class="label">向</span><span class="num n-bad">7</span><span class="name">破军·赤</span></div>
+        <div class="star-row"><span class="label">年</span><span class="num n-good">1</span><span class="name">贪狼·白</span></div>
+        <div class="verdict">火金相战 · 年一白增桃花</div>
+      </div>
+
+      <!-- Middle row: W C E -->
+      <div class="cell bad">
+        <div class="direction">西 · 兑</div>
+        <div class="palace">1 / 6</div>
+        <div class="star-row"><span class="label">山</span><span class="num n-good">1</span><span class="name">贪狼·水</span></div>
+        <div class="star-row"><span class="label">向</span><span class="num n-good">6</span><span class="name">武曲·金</span></div>
+        <div class="star-row"><span class="label">年</span><span class="num n-bad">2</span><span class="name">巨门·黑</span></div>
+        <div class="verdict">本盘吉 · 但 2026 年二黑压制</div>
+      </div>
+      <div class="cell center mid">
+        <div class="direction">中 · 太极</div>
+        <div class="palace">8 / 8</div>
+        <div class="star-row"><span class="label">山</span><span class="num n-mid">8</span><span class="name">左辅·白</span></div>
+        <div class="star-row"><span class="label">向</span><span class="num n-mid">8</span><span class="name">左辅·白</span></div>
+        <div class="star-row"><span class="label">年</span><span class="num n-good">4</span><span class="name">文曲·绿</span></div>
+        <div class="verdict">双八已退气 · 四绿入中助文</div>
+      </div>
+      <div class="cell bad">
+        <div class="direction">东 · 震</div>
+        <div class="palace">2 / 5</div>
+        <div class="star-row"><span class="label">山</span><span class="num n-bad">2</span><span class="name">巨门·黑</span></div>
+        <div class="star-row"><span class="label">向</span><span class="num n-bad">5</span><span class="name">廉贞·黄</span></div>
+        <div class="star-row"><span class="label">年</span><span class="num n-good">6</span><span class="name">武曲·白</span></div>
+        <div class="verdict">二黑+五黄重症位 · 切勿动土</div>
+      </div>
+
+      <!-- Bottom row: SW S SE -->
+      <div class="cell bad">
+        <div class="direction">西南 · 坤</div>
+        <div class="palace">5 / 2</div>
+        <div class="star-row"><span class="label">山</span><span class="num n-bad">5</span><span class="name">廉贞·黄</span></div>
+        <div class="star-row"><span class="label">向</span><span class="num n-bad">2</span><span class="name">巨门·黑</span></div>
+        <div class="star-row"><span class="label">年</span><span class="num n-bad">7</span><span class="name">破军·赤</span></div>
+        <div class="verdict">五黄二黑同宫 · 全屋最凶位</div>
+      </div>
+      <div class="cell study">
+        <div class="tag">书房</div>
+        <div class="direction">南 · 离（向首）</div>
+        <div class="palace">3 / 4</div>
+        <div class="star-row"><span class="label">山</span><span class="num n-mid">3</span><span class="name">禄存·碧</span></div>
+        <div class="star-row"><span class="label">向</span><span class="num n-good">4</span><span class="name">文曲·绿</span></div>
+        <div class="star-row"><span class="label">年</span><span class="num n-good">9</span><span class="name">右弼·紫</span></div>
+        <div class="verdict">四绿文昌 + 九紫当运 · 读书上选</div>
+      </div>
+      <div class="cell mid">
+        <div class="direction">东南 · 巽</div>
+        <div class="palace">7 / 9</div>
+        <div class="star-row"><span class="label">山</span><span class="num n-bad">7</span><span class="name">破军·赤</span></div>
+        <div class="star-row"><span class="label">向</span><span class="num n-good">9</span><span class="name">右弼·紫</span></div>
+        <div class="star-row"><span class="label">年</span><span class="num n-bad">5</span><span class="name">廉贞·黄</span></div>
+        <div class="verdict">九紫后天文昌 · 年五黄需避</div>
+      </div>
+    </div>
+    <div class="compass-info bottom" style="margin-top: 6px;">
+      <span>西南 · 坤</span><span>南 · 离（向）</span><span>东南 · 巽</span>
+    </div>
+  </div>
+
+  <!-- Focus on study -->
+  <div class="focus">
+    <h2>书 房 专 项 · 南 离 宫</h2>
+    <div class="focus-grid">
+      <div class="focus-score">
+        <div class="rating">★★★★★</div>
+        <div class="stars">优 · 9.2/10</div>
+        <div class="label">三元综合评分</div>
+      </div>
+      <div class="focus-detail">
+        <p><span class="highlight">南位书房是全屋最合适的选择之一。</span> 向星 4 绿文曲（主文昌、智慧、考试、写作），配合 2026 流年入驻 9 紫右弼（当运旺星 + 喜庆光明），形成"四九同宫 · 青云得路"的经典读书佳格。</p>
+        <p>山星 3 碧稍显刚躁，但被向星 4 绿所洩、被流年 9 紫所化——整体为<span class="highlight">"洩中带生"</span>格局，利思考、利创作、利持续专注型工作。</p>
+        <p>⚠️ <span class="warn">唯一警示</span>：南方属火，夏季或 2026 农历四五月火气最旺时，易出现心浮气躁、眼干失眠——需用水色物件调和。</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Layout advice -->
+  <div class="section">
+    <div class="section-title">书 房 布 置 建 议 <small>LAYOUT TIPS</small></div>
+    <div class="advice-grid">
+      <div class="advice gold">
+        <h4>✦ 书桌朝向</h4>
+        <p>首选 <span style="color: var(--gold-bright)">面朝东或面朝北</span>——背南坐、面北看，应"水火既济"之局。</p>
+        <ul>
+          <li>避免直接面朝窗户（南窗阳气过盛，易眼累）</li>
+          <li>避免背对门，取"有靠山"之势</li>
+          <li>书桌左前方可摆常用物，取"青龙得用"</li>
+        </ul>
+      </div>
+      <div class="advice">
+        <h4>✦ 催旺文昌（催四绿九紫）</h4>
+        <p>书房西北角 / 书桌左前方摆放：</p>
+        <ul>
+          <li>🌿 <span style="color: var(--jade-bright)">4 枝富贵竹</span>（对应四绿木数）</li>
+          <li>🖊️ 一支<span style="color: var(--jade-bright)">毛笔或钢笔竖立</span>——文昌笔</li>
+          <li>📗 <span style="color: var(--jade-bright)">绿色/青色书档</span>（木能旺四绿）</li>
+          <li>💡 一盏<span style="color: var(--gold-bright)">紫色或暖黄色台灯</span>（火生土，助九紫）</li>
+        </ul>
+      </div>
+      <div class="advice warn">
+        <h4>✦ 需要避忌的布置</h4>
+        <ul>
+          <li>❌ 不要在书房南墙挂<span style="color: var(--red-soft)">大红色画/大幅火焰图</span>——火上加火</li>
+          <li>❌ 少用大面积红色窗帘、沙发</li>
+          <li>❌ 电脑主机不要塞在书桌正下方（火气下压）</li>
+          <li>❌ 不要把书房与厨房相邻的墙打通（双火）</li>
+          <li>❌ 香薰、烛台、壁炉等明火类物件不要常点</li>
+        </ul>
+      </div>
+      <div class="advice">
+        <h4>✦ 调和火气（喜水喜木）</h4>
+        <ul>
+          <li>💧 书桌上摆一个<span style="color: var(--jade-bright)">小鱼缸（1-3 尾鱼）</span>或静水盆</li>
+          <li>🪵 以<span style="color: var(--jade-bright)">原木色桌椅</span>为主，减少金属光面</li>
+          <li>🌿 窗前放 <span style="color: var(--jade-bright)">1-2 盆阔叶绿植</span>（发财树、琴叶榕）</li>
+          <li>🎨 主色调用<span style="color: var(--jade-bright)">青绿 + 米白</span>，降低红橙黄饱和度</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2026 Month alerts -->
+  <div class="section">
+    <div class="section-title">2026 流月提醒 <small>MONTHLY WATCH · 南离宫</small></div>
+    <table class="lookup-table">
+      <thead>
+        <tr><th>农历月</th><th>入南位月星</th><th>组合</th><th>提示</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>正月（寅月）</td><td>6 白武曲</td><td class="good">4·9·6</td><td class="good">文昌 + 当运 + 贵人 — 年初最佳启动期</td></tr>
+        <tr><td>三月（辰月）</td><td>4 绿文曲</td><td class="good">4·9·4</td><td class="good">文昌叠加 — 写作/考试/重要项目推进</td></tr>
+        <tr><td>五月（午月）</td><td>2 黑病符</td><td class="bad">4·9·2</td><td class="bad">火旺 + 病符 — 少熬夜，避免焦虑决策</td></tr>
+        <tr><td>七月（申月）</td><td>9 紫右弼</td><td class="mid">4·9·9</td><td class="mid">火太旺 — 避免重大发言、情绪激辩</td></tr>
+        <tr><td>九月（戌月）</td><td>7 赤破军</td><td class="bad">4·9·7</td><td class="bad">口舌官非 — 不签合同、不发表争议内容</td></tr>
+        <tr><td>十一月（子月）</td><td>5 黄廉贞</td><td class="bad">4·9·5</td><td class="bad">病符叠加 — 眼、心、血压多留心</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- All rooms comparison -->
+  <div class="section">
+    <div class="section-title">全 屋 九 宫 速 查 <small>ALL ROOMS</small></div>
+    <table class="lookup-table">
+      <thead>
+        <tr><th>方位</th><th>宫位</th><th>星盘</th><th>2026</th><th>评级</th><th>建议用途</th></tr>
+      </thead>
+      <tbody>
+        <tr class="study-row"><td>南</td><td>离（向首）</td><td>3/4</td><td>9 右弼</td><td class="good">⭐ 优</td><td>✅ <strong>书房（现在的选择）</strong>、客厅</td></tr>
+        <tr><td>西北</td><td>乾</td><td>6/1</td><td>3 禄存</td><td class="good">良</td><td>主卧、主人房</td></tr>
+        <tr><td>西</td><td>兑</td><td>1/6</td><td>2 巨门</td><td class="mid">中</td><td>次卧、储物（2026 流年注意健康）</td></tr>
+        <tr><td>东北</td><td>艮</td><td>9/7</td><td>1 贪狼</td><td class="mid">中</td><td>小孩房、次要生活区</td></tr>
+        <tr><td>中宫</td><td>太极</td><td>8/8</td><td>4 文曲</td><td class="mid">中</td><td>客厅、过道（忌落床）</td></tr>
+        <tr><td>东南</td><td>巽</td><td>7/9</td><td>5 廉贞</td><td class="bad">2026 暂凶</td><td>2026 避免长留，可做阳台/露台</td></tr>
+        <tr><td>北</td><td>坎（坐）</td><td>4/3</td><td>8 左辅</td><td class="bad">差</td><td>卫生间、厨房较合适</td></tr>
+        <tr><td>东</td><td>震</td><td>2/5</td><td>6 武曲</td><td class="bad">差</td><td>忌主要起居，2026 切勿动土</td></tr>
+        <tr><td>西南</td><td>坤</td><td>5/2</td><td>7 破军</td><td class="bad">最凶</td><td>全屋最忌位，仅作储物</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Summary -->
+  <div class="focus" style="border-color: var(--jade);">
+    <h2>三 句 话 总 结</h2>
+    <div class="focus-detail">
+      <p>① <span class="highlight">您书房选得好。</span> 南位 = 离宫 = 4/9 文昌格，配 2026 年九紫入驻——这是读书、创作、考证、专业进修的顶级位置。</p>
+      <p>② <span class="highlight">简单三件事催旺即可。</span> 四枝富贵竹 + 一支竖立文昌笔 + 一盏暖光台灯，花小钱办大事。</p>
+      <p>③ <span class="highlight">火旺需要水木调和。</span> 原木家具、青绿主色调、一小盆静水 —— 别被"南方主火"这件事拖累了南位本来的好文昌气。</p>
+    </div>
+  </div>
+
+  <div class="disclaimer">
+    ⚠️ 本回复由 AI 生成。风水结论属传统玄空派推演，综合三元运（八运宅盘 + 九运流年）与 2026 流年紫白计算。仅作方向性参考，实际布置请结合具体户型、采光、家庭成员命卦综合判断；不构成建筑、装修、投资建议。
+  </div>
+
+</div>
+</body>
+</html>

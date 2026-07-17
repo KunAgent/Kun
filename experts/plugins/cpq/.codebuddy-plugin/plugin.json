@@ -1,0 +1,77 @@
+{
+  "name": "cpq",
+  "version": "0.1.36",
+  "description": "CPQ quote assistant for Tencent Cloud sales — query, build, discount and submit cloud quotations.",
+  "author": {
+    "name": "hawkewang",
+    "email": "hawkewang@tencent.com"
+  },
+  "expertType": "agent",
+  "agentName": "cpq-expert",
+  "agents": [
+    "./agents/cpq-expert.md"
+  ],
+  "skills": [
+    "./skills/cpq",
+    "./skills/cloud-mapping",
+    "./skills/cloud-mapping-intl",
+    "./skills/migraq",
+    "./skills/tencent-cloud-pricing",
+    "./skills/tencent-cloud-product-mapping",
+    "./skills/xlsx-manipulation",
+    "./skills/docx-manipulation",
+    "./skills/pptx-manipulation",
+    "./skills/pdf-extraction",
+    "./skills/jq-json-processing",
+    "./skills/inquiry-price-parallel",
+    "./skills/feedback",
+    "./skills/command-auth"
+  ],
+  "displayName": {
+    "en": "CPQ Quote Expert",
+    "zh": "CPQ 报价专家"
+  },
+  "profession": {
+    "en": "Tencent Cloud Sales Quotation Advisor",
+    "zh": "腾讯云客户报价专业顾问"
+  },
+  "displayDescription": {
+    "en": "Generate Tencent Cloud quotations and Panshi CPQ configuration sheets from multi-source data — supports Excel/PDF/screenshots, helping frontline sales with product selection, pricing, discounting and proposal delivery.",
+    "zh": "基于多源数据生成腾讯云报价及磐石CPQ配置单，覆盖选品、询价、折扣配置与交付全流程。"
+  },
+  "avatar": "avatars/cpq.png",
+  "categoryId": "13-TencentZone",
+  "defaultInitPrompt": {
+    "zh": "把我这份腾讯云报价配置单Excel 转成 CPQ 单并提交",
+    "en": "Convert my Tencent Cloud quote Excel into a CPQ quote and submit it"
+  },
+  "tags": [
+    {
+      "en": "Cross-Cloud Benchmark Pricing",
+      "zh": "跨云对标询价"
+    },
+    {
+      "en": "Order-Level Discount Allocation",
+      "zh": "整单折扣分配"
+    },
+    {
+      "en": "CPQ Quote Delivery",
+      "zh": "CPQ 单交付"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "en": "Convert my Tencent Cloud quote Excel into a CPQ quote and submit it",
+      "zh": "把我这份腾讯云报价配置单Excel 转成 CPQ 单并提交"
+    },
+    {
+      "en": "Benchmark this competitor billing PDF and generate a Tencent Cloud product selection with list prices",
+      "zh": "这份友商账单PDF，帮我对标生成腾讯云选品方案并给出刊例价"
+    },
+    {
+      "en": "Convert this customer purchase list screenshot into a CPQ quote with discounts applied",
+      "zh": "客户发了采购清单截图，转成 CPQ 配置单并配好折扣"
+    }
+  ],
+  "plugin": "cpq"
+}

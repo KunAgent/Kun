@@ -1,6 +1,7 @@
 import { lazy, Suspense, type ComponentProps, type ReactElement, type ReactNode } from 'react'
 import { WorkbenchDesignStage } from './WorkbenchDesignStage'
 import { WorkbenchConversationStage, type WorkbenchConversationStageProps } from './WorkbenchConversationStage'
+import { CollaborationStage } from '../../collaboration/CollaborationStage'
 
 const PluginMarketplaceView = lazy(() =>
   import('../PluginMarketplaceView').then((module) => ({ default: module.PluginMarketplaceView }))
@@ -20,6 +21,11 @@ const WriteWorkspaceView = lazy(() =>
 const ExtensionManagementCenter = lazy(() =>
   import('../../extensions/ExtensionManagementCenter').then((module) => ({
     default: module.ExtensionManagementCenter
+  }))
+)
+const ExtensionFeaturesView = lazy(() =>
+  import('../../seam/ExtensionFeaturesView').then((module) => ({
+    default: module.ExtensionFeaturesView
   }))
 )
 
@@ -74,7 +80,13 @@ export function WorkbenchStageRouter({
         route === 'plugins' ? 'px-0' : ''
       }`}
     >
-      {route === 'extensions' ? (
+      {route === 'collaboration' ? (
+        <CollaborationStage />
+      ) : route === 'capabilities' ? (
+        <Suspense fallback={<div className="h-full bg-ds-main" />}>
+          <ExtensionFeaturesView />
+        </Suspense>
+      ) : route === 'extensions' ? (
         <Suspense fallback={<div className="h-full bg-ds-main" />}>
           <ExtensionManagementCenter
             leftSidebarCollapsed={leftSidebarCollapsed}

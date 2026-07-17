@@ -1,0 +1,64 @@
+{
+  "name": "fbs-bookwriter",
+  "version": "2.1.2",
+  "description": "福帮手出品 | 高质量长文档手稿工具链：书籍、手册、白皮书、行业指南、长篇报道、深度专题；支持联网查证（宿主允许时启用，离线自动降级）、S/P/C/B 分层审校、中文排版与 MD/HTML 交付。触发词：福帮手、福帮手写书skill、福帮手写书、写书、出书、写长篇、写手册、写白皮书、写行业指南、协作写书、定大纲、写章节、封面、插图、排版构建、导出、去AI味、质量自检、图文书、写报道、写深度稿、写特稿、写专题、写调查报道、写长文、激活原料、原料盘点、整理素材。",
+  "author": {
+    "name": "悟空共创（杭州）智能科技有限公司",
+    "email": "dev@u3w.com"
+  },
+  "homepage": "https://fbs-bookwriter.u3w.com/",
+  "repository": "https://github.com/u3w-ai/fbs-bookwriter",
+  "license": "MIT",
+  "keywords": [
+    "福帮手", "福帮手写书skill", "福帮手写书", "写书", "出书", "写长篇",
+    "写手册", "写白皮书", "写行业指南", "协作写书", "定大纲", "写章节",
+    "封面", "插图", "排版构建", "导出", "去AI味", "质量自检",
+    "图文书", "写报道", "写深度稿", "写特稿", "写专题", "写调查报道",
+    "写长文", "激活原料", "原料盘点", "整理素材", "白皮书", "book",
+    "whitepaper", "长文档", "AI写作", "行业指南", "产品手册", "调查报告",
+    "人机协作", "场景包", "知识生产", "manuscript", "long-document", "content-quality",
+    "codebuddy"
+  ],
+  "category": "writing",
+  "skills": [
+    {
+      "name": "fbs-bookwriter",
+      "description": "福帮手出品 | 高质量长文档手稿工具链：书籍、手册、白皮书、行业指南、长篇报道、深度专题；支持联网查证（宿主允许时启用，离线自动降级）、S/P/C/B 分层审校、中文排版与 MD/HTML 交付。触发词：福帮手、福帮手写书skill、福帮手写书、写书、出书、写长篇、写手册、写白皮书、写行业指南、协作写书、定大纲、写章节、封面、插图、排版构建、导出、去AI味、质量自检、图文书、写报道、写深度稿、写特稿、写专题、写调查报道、写长文、激活原料、原料盘点、整理素材"
+    }
+  ],
+  "agents": [
+    {
+      "name": "fbs-team-lead",
+      "description": "FBS 总协调 Agent，负责宿主能力探测、阶段编排、恢复入口和交付路由"
+    },
+    {
+      "name": "fbs-researcher",
+      "description": "FBS 情报研究 Agent，负责调研、检索与证据沉淀"
+    },
+    {
+      "name": "fbs-writer",
+      "description": "FBS 长文档写作 Agent，按 Chapter Brief 完成章节内容生成，执行 S 层自检"
+    },
+    {
+      "name": "fbs-reviewer-p",
+      "description": "FBS P 层审校 Agent，对段级问题驱动、对话支撑、对称排比与注水执行审查"
+    },
+    {
+      "name": "fbs-reviewer-c",
+      "description": "FBS C 层审校 Agent，对章级表态、结尾行动、结构起伏与数据具体性执行审查"
+    },
+    {
+      "name": "fbs-reviewer-b",
+      "description": "FBS B 层审校 Agent，对篇级编号、标题、节奏、结构雷同与全局节奏执行审查"
+    }
+  ],
+  "settings": {
+    "defaultAgent": "fbs-team-lead",
+    "channelManifest": "codebuddy/channel-manifest.json"
+  },
+  "distribution": {
+    "channels": ["workbuddy-marketplace", "codebuddy-plugin"],
+    "primaryChannel": "workbuddy-marketplace"
+  }
+
+}

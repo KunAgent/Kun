@@ -62,6 +62,7 @@ export type WorkbenchNavigationController = {
   openCodeMode: () => void
   openPluginsView: () => void
   openExtensionsView: () => void
+  openCapabilitiesView: () => void
   openScheduleView: () => void
   openThread: (id: string) => void
   openWorkflowView: () => void
@@ -219,6 +220,11 @@ export function useWorkbenchNavigationController({
     setRoute('extensions')
   }, [setConnectPhoneSidebarOpen, setRoute])
 
+  const openCapabilitiesView = useCallback((): void => {
+    setConnectPhoneSidebarOpen(false)
+    setRoute('capabilities')
+  }, [setConnectPhoneSidebarOpen, setRoute])
+
   const openScheduleView = useCallback((): void => {
     setConnectPhoneSidebarOpen(false)
     openSchedule()
@@ -302,6 +308,7 @@ export function useWorkbenchNavigationController({
     openCodeMode,
     openPluginsView,
     openExtensionsView,
+    openCapabilitiesView,
     openScheduleView,
     openThread,
     openWorkflowView,

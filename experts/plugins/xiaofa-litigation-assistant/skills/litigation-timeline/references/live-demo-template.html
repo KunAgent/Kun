@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>示例案件 — 案件时间轴</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:'PingFang SC','Microsoft YaHei',sans-serif; background:#f8f7f4; padding:32px; display:flex; justify-content:center; }
+.card { background:#fff; border-radius:12px; padding:36px 40px; max-width:800px; width:100%; box-shadow:0 1px 3px rgba(0,0,0,0.06); }
+.title { font-size:18px; font-weight:600; color:#26215C; text-align:center; margin-bottom:4px; }
+.subtitle { font-size:12px; color:#888; text-align:center; margin-bottom:20px; }
+.line { height:0.5px; background:#E8E6DD; margin:0 0 20px; }
+
+.tl { position:relative; display:flex; gap:16px; }
+.tl-left { width:55px; flex-shrink:0; position:relative; }
+.tl-left::after { content:''; position:absolute; left:20px; top:8px; bottom:0; width:1.5px; background:#D3D1C7; }
+.tl-right { flex:1; display:flex; flex-direction:column; gap:0; }
+
+.event { display:flex; align-items:flex-start; position:relative; padding-bottom:16px; }
+.event:last-child { padding-bottom:0; }
+.event-dot { width:12px; height:12px; border-radius:50%; flex-shrink:0; margin-top:2px; z-index:1; position:relative; }
+.dot-green { background:#639922; }
+.dot-coral { background:#D85A30; }
+.dot-blue { background:#378ADD; }
+.dot-purple { background:#7F77DD; }
+.event-body { margin-left:14px; flex:1; min-width:0; }
+.event-date { font-size:11px; color:#888; margin-bottom:2px; }
+.event-text { font-size:13px; color:#1a1a1a; font-weight:500; line-height:1.4; }
+.event-detail { font-size:11px; color:#666; margin-top:1px; }
+
+.stage { padding:1px 0 0 0; }
+.stage-label { font-size:10px; font-weight:600; color:#5F5E5A; letter-spacing:0.5px; padding:4px 8px; border-radius:3px; display:inline-block; margin-bottom:8px; }
+.stage-label.loan { background:#EAF3DE; color:#27500A; }
+.stage-label.breach { background:#FAECE7; color:#712B13; }
+.stage-label.legal { background:#E6F1FB; color:#0C447C; }
+.stage-label.verdict { background:#EEEDFE; color:#3C3489; }
+
+.panel { background:#f8f7f4; border-radius:8px; padding:16px 20px; margin-top:16px; }
+.panel-title { font-size:11px; font-weight:600; color:#5F5E5A; margin-bottom:10px; }
+
+.data-row { display:flex; justify-content:space-between; padding:5px 0; font-size:13px; }
+.data-label { color:#888; }
+.data-val { font-weight:600; color:#26215C; }
+
+.legend { margin-top:20px; display:flex; gap:16px; font-size:11px; color:#888; flex-wrap:wrap; }
+.legend-item { display:flex; align-items:center; gap:5px; }
+.legend-dot { width:10px; height:10px; border-radius:2px; }
+
+.footer { margin-top:16px; font-size:10px; color:#B4B2A9; text-align:right; }
+</style>
+</head>
+<body>
+<div class="card">
+
+<div class="title">示例案件 — 时间轴图谱</div>
+<div class="subtitle">案号：（示例）| 案由：示例纠纷 | 标的：示例金额</div>
+<div class="line"></div>
+
+<div class="tl">
+  <div class="tl-left">
+    <div style="position:relative;top:0;font-size:10px;color:#888">2024<br>上半年</div>
+    <div style="position:relative;top:100px;font-size:10px;color:#888">2024<br>下半年</div>
+    <div style="position:relative;top:220px;font-size:10px;color:#888">2025年</div>
+    <div style="position:relative;top:320px;font-size:10px;color:#888">2026年</div>
+  </div>
+  <div class="tl-right">
+
+<div class="stage">
+<div class="stage-label loan">履约期</div>
+
+<div class="event">
+  <div class="event-dot dot-green"></div>
+  <div class="event-body">
+    <div class="event-date">2024.XX.XX</div>
+    <div class="event-text">合同签署</div>
+    <div class="event-detail">示例事件说明文字</div>
+  </div>
+</div>
+
+<div class="event">
+  <div class="event-dot dot-green"></div>
+  <div class="event-body">
+    <div class="event-date">2024.XX.XX</div>
+    <div class="event-text">付款/交付</div>
+    <div class="event-detail">示例事件说明文字</div>
+  </div>
+</div>
+</div>
+
+<div class="stage">
+<div class="stage-label breach">违约期</div>
+
+<div class="event">
+  <div class="event-dot dot-coral"></div>
+  <div class="event-body">
+    <div class="event-date">2024.XX.XX</div>
+    <div class="event-text">违约发生</div>
+    <div class="event-detail">示例事件说明文字</div>
+  </div>
+</div>
+</div>
+
+<div class="stage">
+<div class="stage-label legal">准备期</div>
+
+<div class="event">
+  <div class="event-dot dot-blue"></div>
+  <div class="event-body">
+    <div class="event-date">2025.XX.XX</div>
+    <div class="event-text">催收/协商</div>
+    <div class="event-detail">示例事件说明文字</div>
+  </div>
+</div>
+</div>
+
+<div class="stage">
+<div class="stage-label verdict">诉讼期</div>
+
+<div class="event">
+  <div class="event-dot dot-purple"></div>
+  <div class="event-body">
+    <div class="event-date">2026.XX.XX</div>
+    <div class="event-text">立案/开庭/判决</div>
+    <div class="event-detail">示例事件说明文字</div>
+  </div>
+</div>
+</div>
+
+  </div>
+</div>
+
+<div class="line" style="margin-top:16px;"></div>
+
+<div class="panel">
+<div class="panel-title">关键数据（示例）</div>
+<div class="data-row"><span class="data-label">示例项目</span><span class="data-val">示例数值</span></div>
+<div class="data-row"><span class="data-label">示例项目</span><span class="data-val">示例数值</span></div>
+</div>
+
+<div class="legend">
+  <div class="legend-item"><div class="legend-dot" style="background:#EAF3DE;border:1px solid #97C459;"></div> 履约期</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#FAECE7;border:1px solid #F0997B;"></div> 违约期</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#E6F1FB;border:1px solid #85B7EB;"></div> 准备期</div>
+  <div class="legend-item"><div class="legend-dot" style="background:#EEEDFE;border:1px solid #AFA9EC;"></div> 诉讼期</div>
+</div>
+
+<div class="footer">生成：示例时间 · AI自动生成 · 仅供演示</div>
+
+</div>
+</body>
+</html>

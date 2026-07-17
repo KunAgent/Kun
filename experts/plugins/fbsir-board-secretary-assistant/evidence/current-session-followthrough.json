@@ -1,0 +1,104 @@
+{
+  "schemaVersion": "fbs.board-secretary-assistant.current-session-followthrough-evidence.v1",
+  "sourceReportId": "board_secretary_assistant_current_session_followthrough_diagnose_latest",
+  "observedAt": "2026-06-25T15:53:10.453Z",
+  "hostPreset": "workbuddy",
+  "sessionId": "376e6aab-a533-4fd6-807d-a4e51a754ecf",
+  "status": "current_session_first_value_and_continued_use_proved",
+  "selectionBoundary": {
+    "selectedIsLatestOverall": true,
+    "latestOverallStatus": "current_session_first_value_and_continued_use_proved"
+  },
+  "packageIdentity": {
+    "entryIds": [
+      "board-secretary-compliance-red-team"
+    ],
+    "entrySurfaces": [
+      "expert_center"
+    ],
+    "entryPromptCodes": [
+      "wb_fbsir_board_secretary_compliance_red_team"
+    ],
+    "intentFamilies": [
+      "board_secretary_ir_workflow"
+    ],
+    "clientFamilies": [],
+    "clientVersions": [],
+    "requestSources": [
+      "workbuddy"
+    ],
+    "packCodes": [
+      "fbss.board_secretary.compliance_red_team.v1"
+    ],
+    "assetTypes": [
+      "compliance-red-team-card",
+      "compliance-red-team-followup-card"
+    ]
+  },
+  "sessionProgress": {
+    "targetMatched": true,
+    "matchedTargetTokens": [
+      "board-secretary-compliance-red-team",
+      "board_secretary_ir_workflow",
+      "compliance-red-team-card",
+      "fbsir-board-secretary-assistant",
+      "fbss.board_secretary.compliance_red_team.v1",
+      "wb_fbsir_board_secretary_compliance_red_team"
+    ],
+    "userMessageCount": 2,
+    "assistantMessageCount": 9,
+    "contentFollowthroughObserved": false,
+    "genericToolNames": [
+      "Edit",
+      "Read",
+      "ToolSearch",
+      "Write",
+      "present_files",
+      "read_me",
+      "show_widget"
+    ]
+  },
+  "serviceEventSummary": {
+    "serviceTraceRowCount": 6,
+    "serviceToolNames": [
+      "fbs_scene_pack_query",
+      "skill_consume",
+      "skill_whoami"
+    ],
+    "eventTypes": [
+      "continued_use_completed",
+      "first_value_completed"
+    ],
+    "firstValueObserved": true,
+    "explicitContinuedUseObserved": true,
+    "sameBindingSingleBindingId": true,
+    "bindingCount": 1,
+    "anonymousIdentityCount": 1,
+    "priorSpineObservedTrueCount": 0
+  },
+  "deliverables": {
+    "internalReviewMarkdownCreated": false,
+    "internalReviewFiles": [],
+    "memoryNoteCreated": true,
+    "memoryNotes": [
+      ".workbuddy/memory/2026-06-22.md"
+    ],
+    "presentedFiles": []
+  },
+  "boundary": {
+    "sameConversationContentFollowthroughObserved": false,
+    "firstValueCompletedObserved": true,
+    "explicitContinuedUseCompletedObserved": true,
+    "officialExpertCenterReplacementProved": false,
+    "naturalBusinessClosureProved": false
+  },
+  "reviewUseBoundary": {
+    "useMode": "record_only_current_session_evidence",
+    "manualReviewRequired": true,
+    "notBusinessClosureProof": true,
+    "notOfficialReplacementProof": true,
+    "notProductionCutoverProof": true,
+    "note": "Use this evidence to prove the current manual host-session path and its conservative boundary only."
+  },
+  "conclusion": "The selected real host session proves package-matching first-value and explicit continued-use service events in the same session."
+}

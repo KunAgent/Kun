@@ -1,0 +1,72 @@
+{
+  "name": "sales-battle-team",
+  "version": "1.0.0",
+  "description": "Sales battle team with account researcher, outreach strategist, competitive intel analyst, and sales forecast analyst for end-to-end sales support",
+  "author": {
+    "name": "Expert Marketplace"
+  },
+  "agents": "./agents/",
+
+  "expertType": "team",
+  "agentName": "sales-director",
+  "teamInfo": {
+    "leadAgent": "sales-director",
+    "memberAgents": ["account-researcher", "outreach-strategist", "competitive-intel", "sales-forecaster"]
+  },
+
+  "displayName": {
+    "en": "Sales Battle Team",
+    "zh": "销售作战团队"
+  },
+  "profession": {
+    "en": "Sales Operations & Intelligence",
+    "zh": "销售运营与情报"
+  },
+  "displayDescription": {
+    "en": "A team of 4 sales specialists led by a Sales Director: Account Researcher (company/prospect intel), Outreach Strategist (email drafting/call prep), Competitive Intel Analyst (win/loss analysis/battle cards), and Sales Forecaster (pipeline review/forecasting). Covers the full sales cycle from research to close.",
+    "zh": "由销售总监领导的 4 人销售专家团队：客户研究员（公司/潜客情报）、外联策略师（邮件起草/电话准备）、竞争情报分析师（赢单/丢单分析/Battle Card）和销售预测分析师（Pipeline 评审/预测）。覆盖从研究到成交的完整销售周期。"
+  },
+  "avatar": "avatars/team.png",
+  "categoryId": "07-SalesCommerce",
+  "defaultInitPrompt": {
+    "en": "Research a prospect account / Prepare for my sales call / Review my pipeline forecast",
+    "zh": "研究一个潜在客户 / 为我的销售电话做准备 / 评审我的销售漏斗预测"
+  },
+  "members": [
+    {
+      "id": "sales-director",
+      "name": {"en": "Ying", "zh": "应必达"},
+      "profession": {"en": "Win Advisor", "zh": "赢单顾问"},
+      "avatar": "avatars/team-lead.png",
+      "role": "lead"
+    },
+    {
+      "id": "account-researcher",
+      "name": {"en": "Scout", "zh": "探客"},
+      "profession": {"en": "Account Researcher", "zh": "客户研究员"},
+      "avatar": "avatars/account-researcher.png",
+      "role": "member"
+    },
+    {
+      "id": "outreach-strategist",
+      "name": {"en": "Reach", "zh": "联达"},
+      "profession": {"en": "Outreach Strategist", "zh": "外联策略师"},
+      "avatar": "avatars/outreach-strategist.png",
+      "role": "member"
+    },
+    {
+      "id": "competitive-intel",
+      "name": {"en": "Intel", "zh": "竞情"},
+      "profession": {"en": "Competitive Intel Analyst", "zh": "竞争情报分析师"},
+      "avatar": "avatars/competitive-intel.png",
+      "role": "member"
+    },
+    {
+      "id": "sales-forecaster",
+      "name": {"en": "Forecast", "zh": "预析"},
+      "profession": {"en": "Sales Forecast Analyst", "zh": "销售预测分析师"},
+      "avatar": "avatars/sales-forecaster.png",
+      "role": "member"
+    }
+  ]
+}

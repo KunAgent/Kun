@@ -1,0 +1,80 @@
+{
+  "_version": "2.0",
+  "sheets": {
+    "meta": {
+      "columns": [
+        { "name": "version", "type": 1 },
+        { "name": "label", "type": 1 },
+        { "name": "genre", "type": 1 },
+        { "name": "updated_at", "type": 1 }
+      ]
+    },
+    "init": {
+      "columns": [
+        { "name": "init_id", "type": 1 },
+        { "name": "genre", "type": 1 },
+        { "name": "question", "type": 1 },
+        { "name": "required", "type": 7 },
+        { "name": "order", "type": 3 },
+        { "name": "source", "type": 1 },
+        { "name": "enabled", "type": 7 }
+      ]
+    },
+    "outline": {
+      "columns": [
+        { "name": "tpl_id", "type": 1 },
+        { "name": "genre", "type": 1 },
+        { "name": "order", "type": 3 },
+        { "name": "name", "type": 1 },
+        { "name": "word_min", "type": 3 },
+        { "name": "word_max", "type": 3 },
+        { "name": "required_elements", "type": 1 },
+        { "name": "source", "type": 1 },
+        { "name": "enabled", "type": 7 }
+      ]
+    },
+    "quality": {
+      "columns": [
+        { "name": "rule_id", "type": 1 },
+        { "name": "genre", "type": 1 },
+        { "name": "stage", "type": 1 },
+        { "name": "layer", "type": 1 },
+        { "name": "level", "type": 1 },
+        { "name": "content", "type": 1 },
+        { "name": "source", "type": 1 },
+        { "name": "enabled", "type": 7 }
+      ]
+    },
+    "search": {
+      "columns": [
+        { "name": "search_id", "type": 1 },
+        { "name": "genre", "type": 1 },
+        { "name": "stage", "type": 1 },
+        { "name": "max_per_chapter", "type": 3 },
+        { "name": "preferred_sources", "type": 1 },
+        { "name": "required_sources", "type": 1 },
+        { "name": "source", "type": 1 },
+        { "name": "enabled", "type": 7 }
+      ]
+    },
+    "visual": {
+      "columns": [
+        { "name": "visual_id", "type": 1 },
+        { "name": "genre", "type": 1 },
+        { "name": "chart_type", "type": 1 },
+        { "name": "trigger", "type": 1 },
+        { "name": "description", "type": 1 },
+        { "name": "source", "type": 1 },
+        { "name": "enabled", "type": 7 }
+      ]
+    },
+    "entitlement": {
+      "columns": [
+        { "name": "genre", "type": 1 },
+        { "name": "credits_required", "type": 3 },
+        { "name": "trial_allowed", "type": 7 },
+        { "name": "enterprise_only", "type": 7 }
+      ]
+    }
+  }
+}

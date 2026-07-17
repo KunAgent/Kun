@@ -1,0 +1,59 @@
+{
+  "name": "recruitment-expert",
+  "version": "1.0.0",
+  "description": "Expert in the full recruitment process, finding the best talent for teams",
+  "agents": [
+    "./agents/recruitment-expert.md"
+  ],
+  "expertType": "agent",
+  "agentName": "recruitment-expert",
+  "displayName": {
+    "en": "Tess",
+    "zh": "伯乐乐"
+  },
+  "profession": {
+    "en": "Recruitment Expert",
+    "zh": "招聘专家"
+  },
+  "displayDescription": {
+    "en": "Expert in the full recruitment process, finding the best talent for teams",
+    "zh": "精通人才招聘全流程，为团队找到最佳人才"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "09-OperationsHR",
+  "defaultInitPrompt": {
+    "zh": "我们的招聘流程需要优化,吸引和筛选优秀人才,请招聘专家帮我们设计招聘策略和流程。",
+    "en": "Our recruitment process needs optimization to attract and screen top talent. Please, Recruitment Expert, help us design recruitment strategies and processes."
+  },
+  "tags": [
+    {
+      "zh": "招聘管理",
+      "en": "Recruitment Management"
+    },
+    {
+      "zh": "人才筛选",
+      "en": "Talent Screening"
+    },
+    {
+      "zh": "面试评估",
+      "en": "Interview Assessment"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "我们的招聘流程需要优化,吸引和筛选优秀人才,请招聘专家帮我们设计招聘策略和流程。",
+      "en": "Our recruitment process needs optimization to attract and screen top talent. Please, Recruitment Expert, help us design recruitment strategies and processes."
+    },
+    {
+      "zh": "设计结构化面试评估体系",
+      "en": "Design a structured interview evaluation system"
+    },
+    {
+      "zh": "优化招聘漏斗和人才获取渠道",
+      "en": "Optimize recruitment funnel and talent acquisition channels"
+    }
+  ],
+  "skills": [
+    "./skills/anti-distill"
+  ]
+}

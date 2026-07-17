@@ -1,0 +1,537 @@
+{
+  "recruit-entry-cnt": {
+    "name_zh": "入职数",
+    "aliases": [
+      "社招入职数",
+      "入职人次",
+      "entry count"
+    ],
+    "type": "atomic",
+    "business_node": "入职",
+    "data_source": "`T_FLOW`",
+    "depends_on": [],
+    "card_file": "knowledge/metrics/atomic/recruit-social/entry-count.md"
+  },
+  "recruit-start-intv-cnt": {
+    "name_zh": "1. 发起面试数",
+    "aliases": [
+      "发起面试人次",
+      "started interview count"
+    ],
+    "type": "atomic",
+    "business_node": "发起面试",
+    "data_source": "`T_FLOW`",
+    "depends_on": [],
+    "card_file": "knowledge/metrics/atomic/recruit-social/interview-count.md"
+  },
+  "recruit-dept-professional-intv-cnt": {
+    "name_zh": "2. 部门内专业面试通过数",
+    "aliases": [
+      "部门内面试通过数",
+      "dept professional pass count"
+    ],
+    "type": "atomic",
+    "business_node": "部门内专业面试",
+    "data_source": "`T_FLOW`",
+    "depends_on": [],
+    "card_file": "knowledge/metrics/atomic/recruit-social/interview-count.md"
+  },
+  "recruit-cf-intv-cnt": {
+    "name_zh": "3. 通道面委面试通过数",
+    "aliases": [
+      "通道面试通过数",
+      "面委面试通过数",
+      "cf pass count"
+    ],
+    "type": "atomic",
+    "business_node": "通道面委面试",
+    "data_source": null,
+    "depends_on": [],
+    "card_file": "knowledge/metrics/atomic/recruit-social/interview-count.md"
+  },
+  "recruit-dm-intv-cnt": {
+    "name_zh": "4. 用人决策面试通过数",
+    "aliases": [
+      "DM 面试通过数",
+      "decision maker pass count"
+    ],
+    "type": "atomic",
+    "business_node": "用人决策面试",
+    "data_source": null,
+    "depends_on": [],
+    "card_file": "knowledge/metrics/atomic/recruit-social/interview-count.md"
+  },
+  "recruit-hr-intv-cnt": {
+    "name_zh": "5. HR 资格面试通过数",
+    "aliases": [
+      "HR 资面通过数",
+      "HR 面试通过数",
+      "HR资格面试通过数",
+      "hr 资格面试通过数",
+      "hr资格面试通过数"
+    ],
+    "type": "atomic",
+    "business_node": "HR 资格面试",
+    "data_source": null,
+    "depends_on": [],
+    "card_file": "knowledge/metrics/atomic/recruit-social/interview-count.md"
+  },
+  "recruit-start-dept-professional-intv-cnt": {
+    "name_zh": "6. 发起部门内专业面试数",
+    "aliases": [],
+    "type": "atomic",
+    "business_node": "部门内专业面试",
+    "data_source": null,
+    "depends_on": [],
+    "card_file": "knowledge/metrics/atomic/recruit-social/interview-count.md"
+  },
+  "recruit-start-dept-professional-intv-no-submit-cnt": {
+    "name_zh": "7. 发起部门内专业面试未提交数",
+    "aliases": [],
+    "type": "atomic",
+    "business_node": "部门内专业面试",
+    "data_source": null,
+    "depends_on": [],
+    "card_file": "knowledge/metrics/atomic/recruit-social/interview-count.md"
+  },
+  "recruit-start-cf-intv-cnt": {
+    "name_zh": "8. 发起通道面委面试数",
+    "aliases": [],
+    "type": "atomic",
+    "business_node": null,
+    "data_source": null,
+    "depends_on": [],
+    "card_file": "knowledge/metrics/atomic/recruit-social/interview-count.md"
+  },
+  "recruit-start-cf-intv-no-submit-cnt": {
+    "name_zh": "9. 发起通道面委面试未提交数",
+    "aliases": [],
+    "type": "atomic",
+    "business_node": null,
+    "data_source": null,
+    "depends_on": [],
+    "card_file": "knowledge/metrics/atomic/recruit-social/interview-count.md"
+  },
+  "recruit-start-dm-intv-cnt": {
+    "name_zh": "10. 发起用人决策面试数",
+    "aliases": [
+      "发起决策者面试数",
+      "发起用人决策者面试数",
+      "发起用人决策面试数"
+    ],
+    "type": "atomic",
+    "business_node": null,
+    "data_source": null,
+    "depends_on": [],
+    "card_file": "knowledge/metrics/atomic/recruit-social/interview-count.md"
+  },
+  "recruit-start-dm-intv-no-submit-cnt": {
+    "name_zh": "11. 发起用人决策面试未提交数",
+    "aliases": [
+      "发起用人决策者面试未提交数",
+      "发起用人决策面试未提交数"
+    ],
+    "type": "atomic",
+    "business_node": null,
+    "data_source": null,
+    "depends_on": [],
+    "card_file": "knowledge/metrics/atomic/recruit-social/interview-count.md"
+  },
+  "recruit-start-hr-intv-cnt": {
+    "name_zh": "12. 发起 HR 资格面试数",
+    "aliases": [
+      "发起 hr 资格面试数",
+      "发起HR资格面试数",
+      "发起hr资格面试数"
+    ],
+    "type": "atomic",
+    "business_node": null,
+    "data_source": null,
+    "depends_on": [],
+    "card_file": "knowledge/metrics/atomic/recruit-social/interview-count.md"
+  },
+  "recruit-start-hr-intv-no-submit-cnt": {
+    "name_zh": "13. 发起 HR 资格面试未提交数",
+    "aliases": [
+      "发起HR资格面试未提交数",
+      "发起hr资格面试未提交数"
+    ],
+    "type": "atomic",
+    "business_node": null,
+    "data_source": null,
+    "depends_on": [],
+    "card_file": "knowledge/metrics/atomic/recruit-social/interview-count.md"
+  },
+  "recruit-hr-salary-negotiation-pass-cnt": {
+    "name_zh": "1. 薪资谈判通过数",
+    "aliases": [
+      "HR 薪谈通过数",
+      "薪谈通过数",
+      "salary negotiation pass count"
+    ],
+    "type": "atomic",
+    "business_node": "HR 薪资谈判",
+    "data_source": "`T_FLOW`",
+    "depends_on": [],
+    "card_file": "knowledge/metrics/atomic/recruit-social/salary-negotiation-count.md"
+  },
+  "recruit-start-hr-salary-negotiation-cnt": {
+    "name_zh": "2. 发起薪资谈判数",
+    "aliases": [],
+    "type": "atomic",
+    "business_node": null,
+    "data_source": null,
+    "depends_on": [],
+    "card_file": "knowledge/metrics/atomic/recruit-social/salary-negotiation-count.md"
+  },
+  "recruit-start-hr-salary-negotiation-no-submit-cnt": {
+    "name_zh": "3. 发起薪资谈判未提交数",
+    "aliases": [],
+    "type": "atomic",
+    "business_node": null,
+    "data_source": null,
+    "depends_on": [],
+    "card_file": "knowledge/metrics/atomic/recruit-social/salary-negotiation-count.md"
+  },
+  "recruit-turndown-cnt": {
+    "name_zh": "1. 口头 turndown",
+    "aliases": [
+      "turndown",
+      "口头 turndown",
+      "口头turndown",
+      "口头放弃"
+    ],
+    "type": "atomic",
+    "business_node": "放弃/拒绝 → 薪谈阶段",
+    "data_source": null,
+    "depends_on": [],
+    "card_file": "knowledge/metrics/atomic/recruit-social/giveup-count.md"
+  },
+  "recruit-offer-giveup-cnt": {
+    "name_zh": "2. 拒绝 offer",
+    "aliases": [
+      "offer giveup count",
+      "offer 放弃",
+      "拒offer",
+      "拒绝 offer",
+      "拒绝offer",
+      "放弃 offer"
+    ],
+    "type": "atomic",
+    "business_node": "放弃/拒绝 → offer 后",
+    "data_source": null,
+    "depends_on": [],
+    "card_file": "knowledge/metrics/atomic/recruit-social/giveup-count.md"
+  },
+  "recruit-offer-approval-cnt": {
+    "name_zh": "1. offer 审批中人数",
+    "aliases": [
+      "offer 审批中",
+      "offer approval count"
+    ],
+    "type": "atomic（v3.0 废弃）",
+    "business_node": "Offer 审批",
+    "data_source": null,
+    "depends_on": [],
+    "card_file": "knowledge/metrics/atomic/recruit-social/offer-count.md"
+  },
+  "recruit-start-offer-approval-cnt": {
+    "name_zh": "2. 发起 offer 审批人数",
+    "aliases": [
+      "发起 offer 审批人数",
+      "发起offer审批人数"
+    ],
+    "type": "atomic",
+    "business_node": null,
+    "data_source": null,
+    "depends_on": [],
+    "card_file": "knowledge/metrics/atomic/recruit-social/offer-count.md"
+  },
+  "recruit-offer-approval-no-submit-cnt": {
+    "name_zh": "3. offer 审批中未审批人数",
+    "aliases": [
+      "offer 审批中未审批人数",
+      "offer审批中未审批人数"
+    ],
+    "type": "atomic",
+    "business_node": null,
+    "data_source": null,
+    "depends_on": [],
+    "card_file": "knowledge/metrics/atomic/recruit-social/offer-count.md"
+  },
+  "recruit-send-offer-cnt": {
+    "name_zh": "4. 发送 offer 数",
+    "aliases": [
+      "send offer count",
+      "发 offer 数",
+      "发出 offer 数",
+      "发送offer数"
+    ],
+    "type": "atomic",
+    "business_node": "发送 Offer",
+    "data_source": null,
+    "depends_on": [],
+    "card_file": "knowledge/metrics/atomic/recruit-social/offer-count.md"
+  },
+  "recruit-resume-assess-intv-cnt": {
+    "name_zh": "1. 有简历评估面试数",
+    "aliases": [
+      "渠道发起面试数",
+      "resume assess interview count"
+    ],
+    "type": "atomic",
+    "business_node": "简历评估 → 发起面试",
+    "data_source": "`T_FLOW`",
+    "depends_on": [],
+    "card_file": "knowledge/metrics/atomic/recruit-social/resume-assess-count.md"
+  },
+  "recruit-channel-resume-assess-cnt": {
+    "name_zh": "2. 渠道收到评估数",
+    "aliases": [
+      "**渠道收到简历数**（v3.0 别名）",
+      "简历评估到达数",
+      "评估收到数",
+      "channel resume assess count"
+    ],
+    "type": "atomic",
+    "business_node": "简历评估",
+    "data_source": "`T_ASSESS` = `Report_Recruit_Resume_Assessment`",
+    "depends_on": [],
+    "card_file": "knowledge/metrics/atomic/recruit-social/resume-assess-count.md"
+  },
+  "recruit-channel-resume-not-assessed-cnt": {
+    "name_zh": "3. 渠道收到简历未评估数",
+    "aliases": [
+      "评估中",
+      "未评估的简历数"
+    ],
+    "type": "atomic",
+    "business_node": "简历评估",
+    "data_source": "`T_ASSESS` = `Report_Recruit_Resume_Assessment`",
+    "depends_on": [],
+    "card_file": "knowledge/metrics/atomic/recruit-social/resume-assess-count.md"
+  },
+  "recruit-avg-recruit-days": {
+    "name_zh": "社招平均招聘天数",
+    "aliases": [
+      "平均招聘周期",
+      "avg recruit days"
+    ],
+    "type": "composite（平均）",
+    "business_node": "需求与岗位（端到端时长）",
+    "data_source": "`T_FLOW` JOIN `T_POST`",
+    "depends_on": [],
+    "card_file": "knowledge/metrics/composite/recruit-social/avg-recruit-days.md"
+  },
+  "recruit-channel-start-interview-rate": {
+    "name_zh": "1. 渠道发起面试率",
+    "aliases": [],
+    "type": "composite（比率）",
+    "business_node": "简历评估 → 发起面试",
+    "data_source": "依赖原子，跨表（T_ASSESS + T_FLOW）",
+    "depends_on": [],
+    "card_file": "knowledge/metrics/composite/recruit-social/funnel-rates.md"
+  },
+  "recruit-dept-professional-intv-rate": {
+    "name_zh": "2. 部门内面试通过率",
+    "aliases": [],
+    "type": "composite（比率）",
+    "business_node": "部门内专业面试",
+    "data_source": null,
+    "depends_on": [],
+    "card_file": "knowledge/metrics/composite/recruit-social/funnel-rates.md"
+  },
+  "recruit-cf-intv-rate": {
+    "name_zh": "3. 通道面委面试通过率",
+    "aliases": [],
+    "type": "composite",
+    "business_node": "通道面委面试",
+    "data_source": null,
+    "depends_on": [],
+    "card_file": "knowledge/metrics/composite/recruit-social/funnel-rates.md"
+  },
+  "recruit-dm-intv-rate": {
+    "name_zh": "4. 用人决策面试通过率",
+    "aliases": [],
+    "type": "composite",
+    "business_node": "用人决策面试",
+    "data_source": null,
+    "depends_on": [],
+    "card_file": "knowledge/metrics/composite/recruit-social/funnel-rates.md"
+  },
+  "recruit-hr-intv-rate": {
+    "name_zh": "5. HR 资格面试通过率",
+    "aliases": [
+      "HR资格面试通过率",
+      "hr 资格面试通过率",
+      "hr资格面试通过率"
+    ],
+    "type": "composite",
+    "business_node": "HR 资格面试",
+    "data_source": null,
+    "depends_on": [],
+    "card_file": "knowledge/metrics/composite/recruit-social/funnel-rates.md"
+  },
+  "recruit-hr-salary-negotiation-rate": {
+    "name_zh": "6. HR 薪资谈判通过率",
+    "aliases": [
+      "HR薪资谈判通过率",
+      "hr薪资谈判通过率"
+    ],
+    "type": "composite",
+    "business_node": "HR 薪资谈判",
+    "data_source": null,
+    "depends_on": [],
+    "card_file": "knowledge/metrics/composite/recruit-social/funnel-rates.md"
+  },
+  "recruit-offer-approval-rate": {
+    "name_zh": "7. 进入 offer 审批率",
+    "aliases": [],
+    "type": "composite（v3.0 废弃）",
+    "business_node": "Offer 审批",
+    "data_source": null,
+    "depends_on": [],
+    "card_file": "knowledge/metrics/composite/recruit-social/funnel-rates.md"
+  },
+  "recruit-send-offer-rate": {
+    "name_zh": "8. 发送 offer 率",
+    "aliases": [
+      "发 offer 率",
+      "发送offer率"
+    ],
+    "type": "composite",
+    "business_node": "发送 Offer",
+    "data_source": null,
+    "depends_on": [],
+    "card_file": "knowledge/metrics/composite/recruit-social/funnel-rates.md"
+  },
+  "recruit-entry-rate": {
+    "name_zh": "9. 入职率",
+    "aliases": [
+      "社招入职率"
+    ],
+    "type": "composite",
+    "business_node": "入职",
+    "data_source": null,
+    "depends_on": [],
+    "card_file": "knowledge/metrics/composite/recruit-social/funnel-rates.md"
+  },
+  "recruit-total-post-count": {
+    "name_zh": "总需求数",
+    "aliases": [
+      "总岗位数",
+      "需求总量"
+    ],
+    "type": "composite（加法）",
+    "business_node": "需求与岗位",
+    "data_source": null,
+    "depends_on": [],
+    "card_file": "knowledge/metrics/composite/recruit-social/total-demand.md"
+  },
+  "recruit-on-going-post-count": {
+    "name_zh": "在招需求数",
+    "aliases": [
+      "在招岗位数",
+      "在招需求",
+      "ongoing posts",
+      "在招职位数"
+    ],
+    "type": "derived（含子查询）",
+    "business_node": "需求与岗位",
+    "data_source": "`T_POST` LEFT JOIN (`T_FLOW` 子查询)",
+    "depends_on": [],
+    "card_file": "knowledge/metrics/derived/recruit-social/on-going-post.md"
+  },
+  "recruit-flow-active-count": {
+    "name_zh": "1. 社招流程中总人数（除简历评估）",
+    "aliases": [
+      "流程中(不含简历评估)",
+      "社招流程中(不含简历评估)",
+      "社招流程中除简历评估",
+      "社招流程中（不含简历评估）"
+    ],
+    "type": "derived（时点快照）",
+    "business_node": "流程状态快照",
+    "data_source": null,
+    "depends_on": [],
+    "card_file": "knowledge/metrics/derived/recruit-social/snapshot-stages.md"
+  },
+  "recruit-flow-evaluating-count": {
+    "name_zh": "2. 评估中",
+    "aliases": [],
+    "type": "derived",
+    "business_node": null,
+    "data_source": null,
+    "depends_on": [],
+    "card_file": "knowledge/metrics/derived/recruit-social/snapshot-stages.md"
+  },
+  "recruit-flow-interviewing-count": {
+    "name_zh": "3. 面试中",
+    "aliases": [],
+    "type": "derived",
+    "business_node": null,
+    "data_source": null,
+    "depends_on": [],
+    "card_file": "knowledge/metrics/derived/recruit-social/snapshot-stages.md"
+  },
+  "recruit-flow-offer-stage-count": {
+    "name_zh": "4. offer 中",
+    "aliases": [
+      "offer 中",
+      "offer 阶段人数",
+      "offer中",
+      "offer中人数"
+    ],
+    "type": "derived",
+    "business_node": null,
+    "data_source": null,
+    "depends_on": [],
+    "card_file": "knowledge/metrics/derived/recruit-social/snapshot-stages.md"
+  },
+  "recruit-flow-onboarding-count": {
+    "name_zh": "5. 入职中/调动中",
+    "aliases": [],
+    "type": "derived",
+    "business_node": null,
+    "data_source": null,
+    "depends_on": [],
+    "card_file": "knowledge/metrics/derived/recruit-social/snapshot-stages.md"
+  },
+  "recruit-flow-total-count": {
+    "name_zh": "6. 社招流程中总人数",
+    "aliases": [
+      "流程中总人数"
+    ],
+    "type": "derived（合计派生）",
+    "business_node": "流程状态快照（合计版，含简历评估）",
+    "data_source": null,
+    "depends_on": [],
+    "card_file": "knowledge/metrics/derived/recruit-social/snapshot-stages.md"
+  },
+  "recruit-finish-post-onboard-cnt": {
+    "name_zh": "1. 已完成需求数（入职）",
+    "aliases": [
+      "已入职完成需求",
+      "已完成需求-入职数",
+      "社招已完成需求数入职",
+      "社招已完成需求数（入职）"
+    ],
+    "type": "derived（多分支计数）",
+    "business_node": "需求与岗位 → 入职",
+    "data_source": "`T_FLOW`",
+    "depends_on": [],
+    "card_file": "knowledge/metrics/derived/recruit-social/finished-demand.md"
+  },
+  "recruit-finish-post-offer-cnt": {
+    "name_zh": "2. 已完成需求数（offer）",
+    "aliases": [
+      "社招已完成需求数offer",
+      "社招已完成需求数（offer）"
+    ],
+    "type": "derived",
+    "business_node": "需求与岗位 → 发送 offer",
+    "data_source": "`T_FLOW`",
+    "depends_on": [],
+    "card_file": "knowledge/metrics/derived/recruit-social/finished-demand.md"
+  }
+}

@@ -1,0 +1,80 @@
+{
+  "topicLock": {
+    "description": "主题锁定机制：防止上下文跳变",
+    "enabled": true,
+    "requiredFields": [
+      "topic",
+      "lockedAt",
+      "confirmedByUser"
+    ],
+    "s0Output": {
+      "mustInclude": [
+        "**主题**：{topic}"
+      ],
+      "position": "首行",
+      "conceptDefinitionPolicy": "s0Output 中若出现用户自定义新概念（非行业通用词汇），须在简报内显式定义：格式「**概念定义**：{概念名}＝{简明定义（≤30字）}」；未定义则阻断进入 S1（s0ConceptGate）。"
+    },
+    "s0ConceptGate": {
+      "enabled": true,
+      "description": "新概念首现门禁：S0 简报包含用户自定义概念时，须在简报内给出显式定义；缺失则阻断进入 S1",
+      "blockCondition": "s0Output 存在未定义的自定义新概念（用户话术中明确出现但非行业通用词汇）",
+      "blockMessage": "⚠️ 检测到新概念「{概念名}」尚无显式定义，请在 S0 简报补充「**概念定义**：{概念名}＝{简明定义}」后再进入 S1。",
+      "exampleConcepts": [
+        "智能资产",
+        "可进化内容",
+        "数字灵魂",
+        "知识孪生"
+      ]
+    },
+    "driftDetection": {
+      "enabled": true,
+      "triggerOn": [
+        "用户说确认",
+        "读取历史文件",
+        "阶段切换"
+      ],
+      "actionOnDrift": "ASK_CONFIRMATION"
+    }
+  },
+  "userMemoryIntegration": {
+    "description": "WorkBuddy 用户记忆桥接层：仅负责把宿主侧用户档案整理为本书可读摘要，不直接充当智能记忆内核。",
+    "versionNote": "此层依赖宿主可选脚本；以 opt-in CLI 输出与人工确认为准，未随包提供时允许跳过。",
+    "mode": "opt_in",
+    "integrationRole": "host-optional-bridge",
+    "orchestratorCli": "init-project-memory.mjs",
+    "requireExplicitBookRootForWrite": true,
+    "maxBytesPerFile": 32768,
+    "maxTotalDigestChars": 12000,
+    "workspaceMemory": {
+      "relativeDir": ".workbuddy/memory",
+      "preferFilenames": [
+        "MEMORY.md"
+      ],
+      "includeDateLogsMax": 3
+    },
+    "userProfileDir": {
+      "relativeToUserHome": ".workbuddy",
+      "preferFilenames": [
+        "USER.md",
+        "BOOTSTRAP.md",
+        "IDENTITY.md",
+        "SOUL.md"
+      ]
+    },
+    "injectIntoBookAs": ".fbs/workbuddy-memory-digest.json",
+    "mustPassGatesBeforeUse": [
+      "topicConsistencyGate",
+      "C0-4"
+    ],
+    "cliEntry": "workbuddy-memory-digest.mjs"
+  },
+  "environmentSnapshot": {
+    "description": "本书侧环境指纹桥接层：记录路径存在性与 search-policy 版本，不写入记忆内容 hash。",
+    "versionNote": "此层同样依赖宿主可选脚本；缺失时允许跳过，不影响智能记忆主链。",
+    "mode": "opt_in",
+    "integrationRole": "host-optional-bridge",
+    "orchestratorCli": "init-project-memory.mjs",
+    "relativeOutputFile": ".fbs/workbuddy-environment.json",
+    "cliEntry": "workbuddy-environment-snapshot.mjs"
+  }
+}

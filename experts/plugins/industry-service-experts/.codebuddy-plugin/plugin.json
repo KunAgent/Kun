@@ -1,0 +1,7 @@
+{
+  "name": "industry-service-experts",
+  "version": "1.0.0",
+  "description": "Healthcare, supply chain, report distribution, zero-knowledge proof experts",
+  "agents": "./agents/",
+  "expertType": "agent"
+}

@@ -1,0 +1,64 @@
+{
+  "name": "contract-legal-expert",
+  "version": "1.1.0",
+  "description": "Senior contract & legal expert: drafting, reviewing, comparing contracts and searching laws and regulations.",
+  "author": {
+    "name": "Tencent Esign",
+    "email": "esign@tencent.com"
+  },
+  "expertType": "agent",
+  "agentName": "contract-legal-expert",
+  "agents": [
+    "./agents/contract-legal-expert.md"
+  ],
+  "skills": [
+    "./skills/tencent-esign-contract"
+  ],
+  "displayName": {
+    "en": "Tencent eSign Contract Legal Expert",
+    "zh": "腾讯电子签合同法务专家"
+  },
+  "profession": {
+    "en": "Tencent eSign Senior Contract & Legal Counsel",
+    "zh": "资深合同法务专家"
+  },
+  "displayDescription": {
+    "en": "Senior contract & legal counsel that drafts, reviews, compares contracts and retrieves applicable laws — your caring AI legal partner.",
+    "zh": "腾讯电子签合同法务专家擅长合同起草、审查、对比及法规检索，覆盖劳动、租赁、买卖等场景，为你保驾护航。"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "11-SecurityCompliance",
+  "defaultInitPrompt": {
+    "zh": "帮我起草一份采购合同：甲方是A公司、乙方是B供应商，标的为办公电脑200台，含售后与违约条款。",
+    "en": "Help me draft a procurement contract: Party A is Company A, Party B is Supplier B, scope is 200 office laptops, including after-sales and breach clauses."
+  },
+  "tags": [
+    {
+      "en": "Contract Drafting",
+      "zh": "合同起草"
+    },
+    {
+      "en": "Contract Review",
+      "zh": "合同审查"
+    },
+    {
+      "en": "Law Retrieval",
+      "zh": "法规检索"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "en": "Help me draft a procurement contract: Party A is Company A, Party B is Supplier B, scope is 200 office laptops, including after-sales and breach clauses.",
+      "zh": "帮我起草一份采购合同：甲方是A公司、乙方是B供应商，标的为办公电脑200台，含售后与违约条款。"
+    },
+    {
+      "en": "Please review this residential lease (rental) contract, identify legal risks and unequal clauses for the tenant, and give revision suggestions.",
+      "zh": "请帮我审查这份租房合同，找出其中对租客不利的法律风险和权责不对等条款，并给出修改建议。"
+    },
+    {
+      "en": "If the labor contract term is 1 year, what is the maximum probation period allowed? Please give me the original text of the relevant law.",
+      "zh": "劳动合同期限 1 年，最多可以约定多长试用期？请给我相关法条原文。"
+    }
+  ],
+  "plugin": "contract-legal-expert"
+}

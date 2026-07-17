@@ -1,0 +1,56 @@
+{
+  "name": "xr-interface-architect",
+  "version": "1.0.0",
+  "description": "Designing user interface architecture in XR environments, making 3D spatial interaction intuitive and natural",
+  "agents": [
+    "./agents/xr-interface-architect.md"
+  ],
+  "expertType": "agent",
+  "agentName": "xr-interface-architect",
+  "displayName": {
+    "en": "Ace",
+    "zh": "空间界"
+  },
+  "profession": {
+    "en": "XR Interface Architect",
+    "zh": "XR界面架构师"
+  },
+  "displayDescription": {
+    "en": "Designing user interface architecture in XR environments, making 3D spatial interaction intuitive and natural",
+    "zh": "设计XR环境中的用户界面架构，让3D空间交互直观自然"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "03-GameSpatial",
+  "defaultInitPrompt": {
+    "zh": "我们的XR界面需要重新设计架构,提升用户体验,请XR界面架构师帮我们设计XR界面架构。",
+    "en": "Our XR interface needs architectural redesign to improve user experience. Please, XR Interface Architect, help us design the XR interface architecture."
+  },
+  "tags": [
+    {
+      "zh": "XR界面",
+      "en": "XR Interface"
+    },
+    {
+      "zh": "空间交互",
+      "en": "Spatial Interaction"
+    },
+    {
+      "zh": "沉浸式设计",
+      "en": "Immersive Design"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "我们的XR界面需要重新设计架构,提升用户体验,请XR界面架构师帮我们设计XR界面架构。",
+      "en": "Our XR interface needs architectural redesign to improve user experience. Please, XR Interface Architect, help us design the XR interface architecture."
+    },
+    {
+      "zh": "制定XR设计规范和可用性标准",
+      "en": "Develop XR design guidelines and usability standards"
+    },
+    {
+      "zh": "搭建XR组件库和设计系统",
+      "en": "Build XR component library and design system"
+    }
+  ]
+}

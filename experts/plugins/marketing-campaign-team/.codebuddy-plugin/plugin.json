@@ -1,0 +1,72 @@
+{
+  "name": "marketing-campaign-team",
+  "version": "1.0.0",
+  "description": "Marketing campaign team with content creator, campaign planner, SEO expert, and competitive analyst for full-spectrum marketing operations",
+  "author": {
+    "name": "Expert Marketplace"
+  },
+  "agents": "./agents/",
+
+  "expertType": "team",
+  "agentName": "marketing-director",
+  "teamInfo": {
+    "leadAgent": "marketing-director",
+    "memberAgents": ["content-creator", "campaign-planner", "seo-expert", "brand-analyst"]
+  },
+
+  "displayName": {
+    "en": "Marketing Campaign Team",
+    "zh": "营销战役团队"
+  },
+  "profession": {
+    "en": "Marketing Campaign & Content",
+    "zh": "营销战役与内容"
+  },
+  "displayDescription": {
+    "en": "A team of 4 marketing specialists led by a Marketing Director: Content Creator (blog posts/email/social media/brand voice), Campaign Planner (campaign strategy/audience/channels/budget), SEO Expert (technical audit/content optimization/performance analytics), and Brand Analyst (competitive positioning/brand review). Covers the full marketing lifecycle.",
+    "zh": "由营销总监领导的 4 人营销专家团队：内容创作者（博客/邮件/社媒/品牌声音）、活动策划师（战役策略/受众/渠道/预算）、SEO 专家（技术审计/内容优化/效果分析）和品牌分析师（竞品定位/品牌审核）。覆盖完整营销生命周期。"
+  },
+  "avatar": "avatars/team.png",
+  "categoryId": "05-MarketingGrowth",
+  "defaultInitPrompt": {
+    "en": "Plan a marketing campaign / Draft content for our product launch / Audit our SEO",
+    "zh": "策划一场营销战役 / 为产品发布起草内容 / 审计我们的 SEO"
+  },
+  "members": [
+    {
+      "id": "marketing-director",
+      "name": {"en": "Jiang", "zh": "江增量"},
+      "profession": {"en": "Growth Operator", "zh": "增长操盘手"},
+      "avatar": "avatars/team-lead.png",
+      "role": "lead"
+    },
+    {
+      "id": "content-creator",
+      "name": {"en": "Pen", "zh": "笔达"},
+      "profession": {"en": "Content Creator", "zh": "内容创作者"},
+      "avatar": "avatars/content-creator.png",
+      "role": "member"
+    },
+    {
+      "id": "campaign-planner",
+      "name": {"en": "Camp", "zh": "策略"},
+      "profession": {"en": "Campaign Planner", "zh": "活动策划师"},
+      "avatar": "avatars/campaign-planner.png",
+      "role": "member"
+    },
+    {
+      "id": "seo-expert",
+      "name": {"en": "Opti", "zh": "优搜"},
+      "profession": {"en": "SEO Expert", "zh": "SEO 专家"},
+      "avatar": "avatars/seo-expert.png",
+      "role": "member"
+    },
+    {
+      "id": "brand-analyst",
+      "name": {"en": "Brandi", "zh": "品析"},
+      "profession": {"en": "Brand Analyst", "zh": "品牌分析师"},
+      "avatar": "avatars/brand-analyst.png",
+      "role": "member"
+    }
+  ]
+}

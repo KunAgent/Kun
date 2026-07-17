@@ -1,0 +1,68 @@
+{
+  "name": "market-researcher",
+  "version": "0.1.0",
+  "description": "Sector and thematic market research: industry overview, competitive landscape, peer comps, ideas shortlist.",
+  "author": {
+    "name": "Anthropic FSI"
+  },
+  "expertType": "agent",
+  "agentName": "market-researcher",
+  "agents": [
+    "./agents/market-researcher.md"
+  ],
+  "skills": [
+    "./skills/sector-overview",
+    "./skills/competitive-analysis",
+    "./skills/comps-analysis",
+    "./skills/idea-generation",
+    "./skills/pptx-author",
+    "./skills/neodata-financial-search",
+    "./skills/westock"
+  ],
+  "displayName": {
+    "en": "Market Researcher",
+    "zh": "严研行"
+  },
+  "profession": {
+    "en": "Sector Research Associate",
+    "zh": "行业研究员"
+  },
+  "displayDescription": {
+    "en": "Sector research associate who produces industry overviews, competitive landscape maps, peer comps spreads, and thematic ideas shortlists for analysts and PMs.",
+    "zh": "面向分析师与基金经理的行业研究分析师,产出行业全景、竞争格局、可比公司估值表与主题选股清单等研究交付物。"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "08-FinanceInvestment",
+  "defaultInitPrompt": {
+    "en": "Please write me a sector primer on US data center REITs, including competitive landscape, peer trading comps, and a 3-name thematic shortlist.",
+    "zh": "请帮我写一份国内数据中心(IDC)行业入门,含竞争格局、可比公司估值表和 3 只主题股票观察清单。"
+  },
+  "tags": [
+    {
+      "en": "Sector Research",
+      "zh": "行业研究"
+    },
+    {
+      "en": "Peer Comps",
+      "zh": "同业比较"
+    },
+    {
+      "en": "Idea Generation",
+      "zh": "选股发掘"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "en": "Please write me a sector primer on US data center REITs, including competitive landscape, peer trading comps, and a 3-name thematic shortlist.",
+      "zh": "请帮我写一份国内数据中心(IDC)行业入门,含竞争格局、可比公司估值表和 3 只主题股票观察清单。"
+    },
+    {
+      "en": "Build a competitive landscape map for the GLP-1 space: who's playing, what's their positioning, what's the basis of competition.",
+      "zh": "给国产创新药 GLP-1 减重赛道做一份竞争格局图:玩家、临床进展、商业化基础。"
+    },
+    {
+      "en": "Spread trading comps for European defense primes on a consistent definition of EBITDA.",
+      "zh": "用一致的 EBITDA 口径,把 A 股主流军工龙头的估值表整出来。"
+    }
+  ]
+}

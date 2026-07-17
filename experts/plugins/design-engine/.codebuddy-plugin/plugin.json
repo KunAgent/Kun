@@ -1,0 +1,87 @@
+{
+  "name": "design-engine",
+  "version": "1.0.0",
+  "description": "AI-powered design prototype team - transforms ideas into brand-grade design outputs with 71 design systems",
+  "author": { "name": "CodeBuddy Teams" },
+  "expertType": "team",
+  "agentName": "design-engine-team-lead",
+  "teamInfo": {
+    "leadAgent": "design-engine-team-lead",
+    "memberAgents": [
+      "discovery-analyst",
+      "design-system-expert",
+      "prototype-builder",
+      "critique-reviewer",
+      "export-specialist"
+    ]
+  },
+  "agents": [
+    "./agents/design-engine-team-lead.md",
+    "./agents/discovery-analyst.md",
+    "./agents/design-system-expert.md",
+    "./agents/prototype-builder.md",
+    "./agents/critique-reviewer.md",
+    "./agents/export-specialist.md"
+  ],
+  "skills": [
+    "./skills/design-systems",
+    "./skills/quality-review",
+    "./skills/prototype-templates"
+  ],
+  "displayName": { "en": "Design Prototype Team", "zh": "设计原型专家团" },
+  "profession": { "en": "Design Prototype Team", "zh": "设计原型专家团" },
+  "displayDescription": {
+    "en": "6-role AI design team covering the full workflow from requirement discovery to brand-grade prototype delivery, with 71 built-in design systems",
+    "zh": "6 角色 AI 设计团队，覆盖从需求发现到品牌级原型交付的完整工作流，内置 71 套设计系统"
+  },
+  "avatar": "avatars/team.png",
+  "categoryId": "01-ProductDesign",
+  "defaultInitPrompt": {
+    "en": "Tell me what you'd like to design — a landing page, dashboard, mobile app, or anything else. I'll guide you through the process.",
+    "zh": "告诉我你想设计什么——落地页、仪表盘、移动端应用或其他任何东西，我会引导你完成整个流程。"
+  },
+  "members": [
+    {
+      "id": "design-engine-team-lead",
+      "name": { "en": "Hua", "zh": "画统筹" },
+      "profession": { "en": "Design Orchestrator", "zh": "设计编排师" },
+      "avatar": "avatars/design-engine-team-lead.png",
+      "role": "lead"
+    },
+    {
+      "id": "discovery-analyst",
+      "name": { "en": "Xu", "zh": "许明需" },
+      "profession": { "en": "Requirement Discovery Analyst", "zh": "需求发现分析师" },
+      "avatar": "avatars/discovery-analyst.png",
+      "role": "member"
+    },
+    {
+      "id": "design-system-expert",
+      "name": { "en": "Cai", "zh": "彩格调" },
+      "profession": { "en": "Design System Expert", "zh": "设计系统专家" },
+      "avatar": "avatars/design-system-expert.png",
+      "role": "member"
+    },
+    {
+      "id": "prototype-builder",
+      "name": { "en": "Zhu", "zh": "筑原型" },
+      "profession": { "en": "Prototype Builder", "zh": "原型构建师" },
+      "avatar": "avatars/prototype-builder.png",
+      "role": "member"
+    },
+    {
+      "id": "critique-reviewer",
+      "name": { "en": "Yan", "zh": "严过审" },
+      "profession": { "en": "Quality Critique Reviewer", "zh": "质量审查官" },
+      "avatar": "avatars/critique-reviewer.png",
+      "role": "member"
+    },
+    {
+      "id": "export-specialist",
+      "name": { "en": "Jiao", "zh": "交付达" },
+      "profession": { "en": "Export & Delivery Specialist", "zh": "导出交付专家" },
+      "avatar": "avatars/export-specialist.png",
+      "role": "member"
+    }
+  ]
+}

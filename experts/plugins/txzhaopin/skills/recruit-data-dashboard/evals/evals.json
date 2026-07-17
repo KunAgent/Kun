@@ -1,0 +1,47 @@
+{
+  "skill_name": "Recruit_data_dashboard",
+  "skill_path": ".",
+  "knowledge_base_path": "./knowledge",
+  "evals": [
+    {
+      "id": 0,
+      "name": "A_single_value_entry_count",
+      "type": "A 单值",
+      "prompt": "今年5月集团本部社招入职多少人",
+      "expected_output": "一个具体数字 + 口径说明（时间窗 2026-05-01~2026-05-31、manager_unit_name_cn=腾讯集团本部、国家=中国、按 hire_date、是否含活水 flow_id=5）",
+      "files": []
+    },
+    {
+      "id": 1,
+      "name": "B_multi_compare_dept_funnel_rates",
+      "type": "B 多指标对比",
+      "prompt": "对比 2026Q1 集团本部下运营管理部和技术运营部的社招漏斗各环节通过率",
+      "expected_output": "markdown 表格，行=各漏斗环节（部门内/通道面委/用人决策/HR资格/HR薪资谈判/发送offer/入职），列=运营管理部、技术运营部、差异（pp），底部一句结论。部门用 recruit_post_org_full_name LIKE '%XX%' 过滤；口径明确说明是否包含活水（flow_id=5）",
+      "files": []
+    },
+    {
+      "id": 2,
+      "name": "C_funnel_trend_by_month",
+      "type": "C 漏斗/趋势",
+      "prompt": "近半年集团本部社招面试到入职的转化漏斗，按月画出来",
+      "expected_output": "markdown 表格（行=月份，列=漏斗各环节人数）+ 整体漏斗 ascii 图 + 趋势观察；口径必须明确说明是否包含活水（flow_id=5）",
+      "files": []
+    },
+    {
+      "id": 3,
+      "name": "E_attribution_offer_accept_drop",
+      "type": "E 归因",
+      "prompt": "为啥这个月集团本部的 offer 接受率掉得这么厉害",
+      "expected_output": "现象描述（数字对比）+ 2-3 个候选假设（按可能性排序）+ 数据支撑 + 追问建议；口径必须明确说明是否包含活水（flow_id=5）",
+      "files": []
+    },
+    {
+      "id": 4,
+      "name": "D_dashboard_department_overview",
+      "type": "D 总览",
+      "prompt": "帮我看一下运营管理部的需求进展情况",
+      "expected_output": "4 卡片块（A 需求概况 / B 漏斗数量 / C 漏斗率 / D 流程快照），组织模糊匹配 LIKE '%运营管理部%'，套 recipes/card-A-demand-overview.md 模板；口径必须明确说明是否包含活水（flow_id=5）",
+      "files": []
+    }
+  ]
+}

@@ -1,0 +1,260 @@
+{
+  "name": "liuxue-yanxue-expert",
+  "version": "1.1.0",
+  "description": "福帮手（FBSir）留学研学专家，为家庭提供高考窗口、留学、研学、语言路径和顾问转接前的首轮规划。",
+  "author": {
+    "name": "福帮手",
+    "email": "unique@u3w.com"
+  },
+  "expertType": "agent",
+  "agentName": "liuxue-yanxue-expert",
+  "agents": [
+    "./agents/liuxue-yanxue-expert.md"
+  ],
+  "displayName": {
+    "en": "FBSir",
+    "zh": "福帮手"
+  },
+  "profession": {
+    "en": "Study Abroad and Study Tour Expert",
+    "zh": "留学研学专家"
+  },
+  "displayDescription": {
+    "en": "Builds a first-value study abroad and study tour plan for families, with risk boundaries and next actions.",
+    "zh": "面向家庭生成留学研学首轮规划，兼顾高考窗口、预算风险、路径备选与后续承接行动建议。"
+  },
+  "avatar": "avatars/liuxue-yanxue-expert.png",
+  "categoryId": "12-IndustryConsultant",
+  "defaultInitPrompt": {
+    "zh": "我家孩子正在高考志愿或留学研学选择窗口，帮我用 48 小时做一份国内志愿、留学和研学的风险备选方案。",
+    "en": "My family is choosing between Gaokao options, study abroad, and study tours. Build a 48-hour dual-track fallback plan for us."
+  },
+  "tags": [
+    {
+      "en": "Study Abroad",
+      "zh": "留学规划"
+    },
+    {
+      "en": "Study Tour",
+      "zh": "研学规划"
+    },
+    {
+      "en": "Gaokao Window",
+      "zh": "高考窗口"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "我家孩子正在高考志愿或留学研学选择窗口，帮我用 48 小时做一份国内志愿、留学和研学的风险备选方案。",
+      "en": "My family is choosing between Gaokao options, study abroad, and study tours. Build a 48-hour dual-track fallback plan for us."
+    },
+    {
+      "zh": "孩子英语一般，但想探索西班牙、意大利、德国等小语种国家，请帮我判断路径和 90 天准备清单。",
+      "en": "My child has average English and wants to explore Spain, Italy, Germany, or other language-track options. Build a path and 90-day checklist."
+    },
+    {
+      "zh": "我们预算有限，想先去马来西亚或泰国研学，再决定是否本科出国，请给我安全、费用和成果反馈方案。",
+      "en": "We have a limited budget and want to try Malaysia or Thailand study tours before deciding on overseas undergraduate study. Plan safety, cost, and outcomes."
+    }
+  ],
+  "brand": {
+    "zh": "福帮手",
+    "en": "FBSir"
+  },
+  "runtimeContract": {
+    "schema": "fbsir-liuxue-yanxue-expert-runtime-contract/v1",
+    "version": "26.6.30.1",
+    "operatingContract": "contracts/liuxue-yanxue-operating-contract.json",
+    "productId": "liuxue-yanxue-expert",
+    "serviceProductId": "workbuddy_liuxue_yanxue_expert",
+    "entryPromptCode": "wb_qp_liuxue_yanxue_dual_track_48h",
+    "defaultPromptId": "fbss_liuxue_yanxue_dual_track_start",
+    "cardActionId": "fbss_liuxue_yanxue_dual_track_start",
+    "entryId": "liuxue-yanxue-dual-track",
+    "entrySurface": "workbuddy_expert_center",
+    "expertEntryId": "liuxue-yanxue-expert",
+    "channelTrack": "study_abroad_study_tour",
+    "intentFamily": "international_education_planning",
+    "profileSegment": "family_decision",
+    "packCode": "fbs.liuxue_yanxue.dual_track.v1",
+    "scenePackId": "liuxue_yanxue_dual_track",
+    "routeCode": "route.liuxue_yanxue.dual_track",
+    "assetType": "study-abroad-study-tour-card",
+    "continueAssetType": "study-abroad-study-tour-continue-card",
+    "connectorAssumedAvailable": false,
+    "connectorRequired": false,
+    "packageCapabilityDependsOnConnector": false,
+    "networkEnhancementOptional": true,
+    "optionalEnhancementOnly": true,
+    "connectorPromptSuppressionExpected": true,
+    "sameBindingRequiredForFirstValue": false,
+    "sameBindingRequiredForClosure": true,
+    "serviceSideDecisionOnly": true,
+    "hostCommercialDecisionAllowed": false,
+    "machineReadableActionEnvelopeRequired": true,
+    "hostMetadataChannelPreferred": true,
+    "defaultFirstValueSurface": "chat_response_only",
+    "workspaceWriteRequiresExplicitUserRequest": true,
+    "firstValueContract": "contracts/first-value-contract.json",
+    "noConnectorActionContract": "contracts/no-connector-action-contract.json",
+    "serviceForwardFieldsContract": "contracts/service-forward-fields.json",
+    "serviceClosureSchema": "contracts/service-side-closure-report.schema.json",
+    "requiredInterfaces": [
+      "starterPrompt",
+      "opsEnvelope",
+      "hostActionEnvelope",
+      "serviceCoordinationHints",
+      "resultCard",
+      "valueEvent",
+      "deliveryTask",
+      "hostCapabilityRequest",
+      "opsBoard",
+      "scenarioExpansion",
+      "personalizationProfile",
+      "regulatorySourceRegistry",
+      "desensitizedClientIdentity",
+      "lebaoClaimEnvelope",
+      "intentAggregationEnvelope",
+      "serviceTractionEnvelope",
+      "personalizedHostDirective"
+    ],
+    "serviceCoordinationHints": {
+      "attributionFieldsMustTravelTogether": true,
+      "sameBindingReceiptRequiredBeforeUnlock": true,
+      "hostActionEnvelopeRequiredForTraction": true,
+      "unknownAttributionMustRemainUnknown": true
+    },
+    "intelligentOpsClosedLoop": {
+      "maturityTarget": "best_in_class_among_fbsir_experts",
+      "naturalTrafficFirst": true,
+      "fullChainObservable": true,
+      "clientIdentitySubject": "independent_client",
+      "desensitizedIdentityRequired": true,
+      "allowedIdentityFields": [
+        "clientHash",
+        "installHash",
+        "hostClientIdHash",
+        "sessionBindingId",
+        "chainFingerprint",
+        "platform",
+        "hostVersion",
+        "packageVersion"
+      ],
+      "forbiddenIdentityFields": [
+        "phone",
+        "email",
+        "idCard",
+        "passportNo",
+        "realName",
+        "rawDeviceId"
+      ],
+      "lebaoUnlockAndIntentCapture": {
+        "claimEncouragementAllowed": true,
+        "claimRequiresUserVisibleProgressReason": true,
+        "claimMustNotLookLikePayment": true,
+        "requiredEvents": [
+          "lebao_exposed",
+          "lebao_claim_intent",
+          "lebao_claim_receipt",
+          "intent_aggregated",
+          "host_directive_receipt"
+        ],
+        "claimablePackCode": "fbs.liuxue_yanxue.dual_track.v1",
+        "intentCollectionFields": [
+          "intentFamily",
+          "profileSegment",
+          "scenarioFocus",
+          "planningWindow",
+          "budgetSensitivity",
+          "riskFocus",
+          "nextActionPreference"
+        ]
+      },
+      "serviceDrivenHostTraction": {
+        "serviceCanRecommendHostBehavior": true,
+        "hostMustRenderDecision": true,
+        "hostActionEnvelopeRequired": true,
+        "personalizationGoal": "千人千面的下一步建议和宿主能力激活",
+        "conversionGoal": "提升用户体验并激活宿主侧能力价值",
+        "requiredFeedbackEvents": [
+          "first_value_completed",
+          "continued_use_completed",
+          "host_directive_receipt",
+          "personalized_next_action_rendered",
+          "lebao_claim_receipt"
+        ]
+      }
+    }
+  },
+  "distributionSurface": {
+    "host": "WorkBuddy",
+    "targetMarketplace": "experts",
+    "targetDisplayNameZh": "留学研学专家",
+    "targetDisplayNameEn": "Study Abroad and Study Tour Expert",
+    "listedProductSurface": "official_expert_marketplace",
+    "listedProductMustCarryOfficialSurfaceSignature": true,
+    "nonOfficialSurfaceCreditForbidden": true
+  },
+  "entryMatrix": [
+    {
+      "entryId": "liuxue-yanxue-dual-track",
+      "entrySurface": "workbuddy_expert_center",
+      "expertEntryId": "liuxue-yanxue-expert",
+      "entryPromptCode": "wb_qp_liuxue_yanxue_dual_track_48h",
+      "defaultPromptId": "fbss_liuxue_yanxue_dual_track_start",
+      "cardActionId": "fbss_liuxue_yanxue_dual_track_start",
+      "productId": "liuxue-yanxue-expert",
+      "serviceProductId": "workbuddy_liuxue_yanxue_expert",
+      "channelTrack": "study_abroad_study_tour",
+      "intentFamily": "international_education_planning",
+      "profileSegment": "family_decision",
+      "packCode": "fbs.liuxue_yanxue.dual_track.v1",
+      "scenePackId": "liuxue_yanxue_dual_track",
+      "routeCode": "route.liuxue_yanxue.dual_track",
+      "assetType": "study-abroad-study-tour-card",
+      "priorityScope": "global_product_priority_eligible",
+      "connectorRequired": false
+    }
+  ],
+  "serviceObservationBoundary": {
+    "listedPackageAttributionMustUse": [
+      "productId",
+      "serviceProductId",
+      "entryId",
+      "expertEntryId",
+      "entryPromptCode",
+      "defaultPromptId",
+      "cardActionId",
+      "channelTrack",
+      "intentFamily",
+      "profileSegment",
+      "packCode",
+      "scenePackId",
+      "routeCode"
+    ],
+    "nonOfficialEquivalentSignalsMustStaySeparate": true,
+    "unknownAttributionPolicy": "keep_unknown_until_source_field_is_observed",
+    "connectorSurfacePackaged": false
+  },
+  "noConnectorInteraction": {
+    "connectorRequired": false,
+    "connectorReferenceAllowed": false,
+    "actionEnvelopeRequired": true,
+    "sideEffectClass": "read_only_first_value",
+    "workspaceWriteRequiresExplicitUserRequest": true
+  },
+  "guardrails": {
+    "visibleJsonForbidden": true,
+    "internalIdVisibleForbidden": true,
+    "lebaoAsPaymentForbidden": true,
+    "admissionVisaSafetyGuaranteeForbidden": true,
+    "mustSayDraftNotGuarantee": true,
+    "minorTravelHumanReviewRequired": true
+  },
+  "workspaceWritePolicy": {
+    "default": "chat_only",
+    "writeRequiresExplicitUserRequest": true,
+    "firstValueWritesFiles": false
+  },
+  "plugin": "liuxue-yanxue-expert"
+}

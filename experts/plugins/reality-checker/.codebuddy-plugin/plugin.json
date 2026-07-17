@@ -1,0 +1,56 @@
+{
+  "name": "reality-checker",
+  "version": "1.0.0",
+  "description": "Defaulting to everything needing more evidence, requiring overwhelming proof to approve production readiness",
+  "agents": [
+    "./agents/reality-checker.md"
+  ],
+  "expertType": "agent",
+  "agentName": "reality-checker",
+  "displayName": {
+    "en": "Koa",
+    "zh": "验真真"
+  },
+  "profession": {
+    "en": "Reality Checker",
+    "zh": "现实检查员"
+  },
+  "displayDescription": {
+    "en": "Defaulting to everything needing more evidence, requiring overwhelming proof to approve production readiness",
+    "zh": "默认认为一切需要更多证据，需要压倒性证据才批准生产就绪"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "10-ProjectQuality",
+  "defaultInitPrompt": {
+    "zh": "我们的产品上线前需要进行全面的现实检验,发现潜在问题,请现实检查者帮我们进行上线前质量审查。",
+    "en": "Our products need comprehensive reality checks before launch to discover potential issues. Please, Reality Checker, help us conduct pre-launch quality reviews."
+  },
+  "tags": [
+    {
+      "zh": "事实核查",
+      "en": "Reality Checking"
+    },
+    {
+      "zh": "数据验证",
+      "en": "Data Validation"
+    },
+    {
+      "zh": "逻辑审查",
+      "en": "Logic Review"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "我们的产品上线前需要进行全面的现实检验,发现潜在问题,请现实检查者帮我们进行上线前质量审查。",
+      "en": "Our products need comprehensive reality checks before launch to discover potential issues. Please, Reality Checker, help us conduct pre-launch quality reviews."
+    },
+    {
+      "zh": "进行事实核查和信源追溯",
+      "en": "Conduct fact-checking and source verification"
+    },
+    {
+      "zh": "识别AI幻觉和虚假信息",
+      "en": "Identify AI hallucinations and misinformation"
+    }
+  ]
+}

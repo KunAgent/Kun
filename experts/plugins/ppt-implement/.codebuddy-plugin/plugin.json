@@ -1,0 +1,26 @@
+{
+  "name": "ppt-implement",
+  "version": "1.0.13",
+  "description": "智能 PPT 生成助手，一键将您的想法转化为精美演示文稿",
+  "author": {
+    "name": "rackeyyang",
+    "email": "rackeyyang@tencent.com"
+  },
+  "homepage": "",
+  "repository": "",
+  "keywords": [
+    "ppt-implement",
+    "ppt"
+  ],
+  "category": "tool",
+  "commands": [],
+  "agents": [
+    "./agents/ppt-creation-expert.md"
+  ],
+  "skills": [
+    "./skills/ppt-implement"
+  ],
+  "hooks": "./hooks/hooks.json",
+  "expertType": "agent",
+  "agentName": "ppt-creation-expert"
+}

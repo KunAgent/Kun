@@ -1,0 +1,60 @@
+{
+  "name": "executive-summary-generator",
+  "version": "1.0.0",
+  "description": "Condensing lengthy reports into executive-digestible summaries, saving every minute",
+  "agents": [
+    "./agents/executive-summary-generator.md"
+  ],
+  "expertType": "agent",
+  "agentName": "executive-summary-generator",
+  "displayName": {
+    "en": "Remy",
+    "zh": "简明明"
+  },
+  "profession": {
+    "en": "Executive Summary Generator",
+    "zh": "战略报告顾问"
+  },
+  "displayDescription": {
+    "en": "Condensing lengthy reports into executive-digestible summaries, saving every minute",
+    "zh": "将冗长报告浓缩为高管可快速消化的精华摘要，节省每分钟"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "10-ProjectQuality",
+  "defaultInitPrompt": {
+    "zh": "我们需要为管理层准备高质量的业务总结报告,请执行摘要生成器帮我们提炼关键信息。",
+    "en": "We need to prepare high-quality business summary reports for management. Please, Executive Summary Generator, help us distill key information."
+  },
+  "tags": [
+    {
+      "zh": "执行摘要",
+      "en": "Executive Summary"
+    },
+    {
+      "zh": "战略报告",
+      "en": "Strategic Report"
+    },
+    {
+      "zh": "决策简报",
+      "en": "Decision Brief"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "我们需要为管理层准备高质量的业务总结报告,请执行摘要生成器帮我们提炼关键信息。",
+      "en": "We need to prepare high-quality business summary reports for management. Please, Executive Summary Generator, help us distill key information."
+    },
+    {
+      "zh": "为商业计划书撰写高管摘要",
+      "en": "Write an executive summary for a business plan"
+    },
+    {
+      "zh": "汇总多份文件生成决策简报",
+      "en": "Synthesize multiple documents into a decision brief"
+    }
+  ],
+  "skills": [
+    "./skills/multi-search-engine",
+    "./skills/wechat-article-search"
+  ]
+}

@@ -1,0 +1,6 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "name": "workflow.search-policy",
+  "description": "联网检索强制策略：与 SKILL.md、references/01-core/section-3-workflow.md 对齐；四支柱深化见 references/05-ops/web-search-strategy-deep.md",
+  "version": "2.1.2"
+}

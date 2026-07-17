@@ -1,0 +1,2345 @@
+{
+  "table_code" : "catalog_dos_data_analysis_mcp_2.hrdw.Report_Wide_Public_Staff_Info",
+  "table_name" : "员工信息宽表（最新T-1数据版）",
+  "version" : 9,
+  "table_desc" : "定位：聚合所有员工T-1日期下最新状态的各类信息\n唯一标识：该表以“员工ID”作为唯一标识，每个员工对应一行数据\n包含内容：员工所在组织信息/岗位/专业及管理任职信息、汇报链及上级信息、入职/离职/管理任命等关键职涯节点发生时间、当前合同信息、当前派驻情况、近4个评估周期的绩效/梯队/九宫格评估结果、兼岗情况信息、试用期评估结果信息、管理者/专家/导师/讲师/面试官等身份信息、年龄/工龄/司龄/管理年限/专业年限/岗位任职年限等基础时长统计、近2次教育经历、近2次工作经历、户籍/婚姻/联系方式/亲属/证件/银行卡等个人隐私信息、职场电话邮箱等办公信息、安居/公租房等福利使用情况、假期等\n主要用途：\n1、查询在职员工当前现状，如查询具备某些特征的具体人员明细或人员数量；\n2、基于某些特征对在职员工进行横向对比分析，如对比不同组织的专业员工、管理者结构；\n3、查询或分析已离职人员离职前及在职时的各类信息\n优先场景：\n查询当前或未明确查询时间的员工信息；\n查询2年内的绩效/梯队结果（即近四个评估周期的评估结果）\n结合入职日期、进入BG/部门日期等时间维度圈定人群，查看绩效、梯队评估结果；\n未提及明确时间段的可基于员工当前现状查询的异动信息，如专业职级停留时长、管理职级停留时长、入职时间、离职时间；\n员工职级晋升失败累计次数统计；\n员工当前职涯转正情况；\nL0管理者入职、离职情况",
+  "write_sql_background" : "1、绩效、梯队周期背景知识：公司统一的评估考核周期一年两次，H1、H2节点各一次，分别对应评估结束日期6月30日、12月31日，近1年评估情况可追溯近1次、近2次评估结果，近2年可追溯4次考核；本表可基于当前日期追溯近4个周期绩效结果；员工在一个考核周期内在职3个月以上方可参与考核，如询问员工入职时的首次考核结果，可根据入职时间和评估结束日期判断应选择查询哪一段绩效结果；\n2、如询问需要近x次评估结果，为避免理解歧义，可将近1次到近X次记录都返回\n3、如询问绩效的连续多周期表现，如连续高绩效或低绩效，需使用AND条件查询多次绩效等级\n4、秘书人群查询：专业通道”（pro_position_genus_name）为 “秘书类－SE”的人群",
+  "find_column_background" : "必选字段:员工ID,管理主体,员工状态,员工类型,员工组织全路径,员工组织名称",
+  "columns" : [ {
+    "column_code" : "staff_id8",
+    "column_name" : "员工ID",
+    "column_type" : "bigint",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "统计人数必选，员工唯一标识，该表的主键字段",
+    "column_group" : "员工账号信息"
+  }, {
+    "column_code" : "staff_combined_name",
+    "column_name" : "员工中英文名",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "zhangsan(张三)",
+    "column_use" : "识别员工是谁的最基础字段，输出员工明细数据必选，查询单个人信息时，如数据格式为中英文名，必选，where条件用LIKE '%中英文名关键词%'",
+    "column_group" : "员工账号信息"
+  }, {
+    "column_code" : "staff_display_name",
+    "column_name" : "员工中文名",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "通过中文名查询指定员工信息时必选，where条件用LIKE '%中文名关键词%'",
+    "column_group" : "员工账号信息"
+  }, {
+    "column_code" : "staff_display_name_effect_date",
+    "column_name" : "员工中文名生效日期",
+    "column_type" : "datetime",
+    "column_format" : "yyyy-mm-dd",
+    "sample" : "2025-09-30,2025-10-01",
+    "column_use" : "",
+    "column_group" : "员工账号信息"
+  }, {
+    "column_code" : "staff_account_name",
+    "column_name" : "员工英文名",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "通过英文名查询指定员工信息时必选，LIKE '%英文名关键词%'",
+    "column_group" : "员工账号信息"
+  }, {
+    "column_code" : "staff_account_name_effect_date",
+    "column_name" : "员工英文名生效日期",
+    "column_type" : "datetime",
+    "column_format" : "yyyy-mm-dd",
+    "sample" : "2025-09-30,2025-10-01",
+    "column_use" : "",
+    "column_group" : "员工账号信息"
+  }, {
+    "column_code" : "staff_card_number",
+    "column_name" : "工卡号",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "员工账号信息"
+  }, {
+    "column_code" : "manage_unit_type_name",
+    "column_name" : "管理主体类型",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "集团本部,全资-直管,投资公司",
+    "column_use" : "",
+    "column_group" : "用工管理信息"
+  }, {
+    "column_code" : "manage_unit_name",
+    "column_name" : "管理主体",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "腾讯集团本部",
+    "column_use" : "",
+    "column_group" : "用工管理信息"
+  }, {
+    "column_code" : "staff_type_name",
+    "column_name" : "员工类型",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "正式,顾问,外包,合作伙伴",
+    "column_use" : "",
+    "column_group" : "用工管理信息"
+  }, {
+    "column_code" : "staff_subtype_name",
+    "column_name" : "员工子类型",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "正式聘用制,应届实习生,项目实习生,毕业生",
+    "column_use" : "",
+    "column_group" : "用工管理信息"
+  }, {
+    "column_code" : "employment_classification_name",
+    "column_name" : "用工分类",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "集团正式员工,非集团正式用工",
+    "column_use" : "可识别员工是否为\"集团正式员工\"",
+    "column_group" : "用工管理信息"
+  }, {
+    "column_code" : "employment_type_name",
+    "column_name" : "用工类型",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "集团本部正式,集团本部学生,集团直管子公司用工,集团本部人力服务外包",
+    "column_use" : "\"用工分类\"的子级字段，主要是对\"非集团正式用工\"进一步分类",
+    "column_group" : "用工管理信息"
+  }, {
+    "column_code" : "employment_subtype_name",
+    "column_name" : "用工子类型",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "集团直管子公司正式,集团直管子公司学生",
+    "column_use" : "\"用工类型\"的子级字段，主要是对\"集团直管子公司用工\"进一步分类",
+    "column_group" : "用工管理信息"
+  }, {
+    "column_code" : "hr_status_name",
+    "column_name" : "员工状态",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "在职,离职",
+    "column_use" : "用于识别员工在指定统计时间是否在职",
+    "column_group" : ""
+  }, {
+    "column_code" : "recruit_type_name",
+    "column_name" : "招聘类型",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "校园招聘,社会招聘",
+    "column_use" : "员工入职时写入，用于识别员工在特定职涯周期内的招聘来源是社会招聘还是校园招聘",
+    "column_group" : "员工职涯周期关键节点信息-入职"
+  }, {
+    "column_code" : "inaugural_date",
+    "column_name" : "入职入场日期",
+    "column_type" : "datetime",
+    "column_format" : "yyyy-mm-dd",
+    "sample" : "2025-09-30,2025-10-01",
+    "column_use" : "一段职涯周期的起点日期，从这个日期开始，员工状态变更为\"在职\"",
+    "column_group" : "员工职涯周期关键节点信息-入职"
+  }, {
+    "column_code" : "rehire_flag_desc",
+    "column_name" : "是否回流入职",
+    "column_type" : "bigint",
+    "column_format" : "",
+    "sample" : "是,否",
+    "column_use" : "用于识别员工是否为再次入职本公司的员工",
+    "column_group" : "员工职涯周期关键节点信息-入职"
+  }, {
+    "column_code" : "formal_date",
+    "column_name" : "转正日期",
+    "column_type" : "datetime",
+    "column_format" : "yyyy-mm-dd",
+    "sample" : "2025-09-30,2025-10-01",
+    "column_use" : "",
+    "column_group" : "员工职涯周期关键节点信息-试用期"
+  }, {
+    "column_code" : "fact_formal_flag_desc",
+    "column_name" : "是否事实转正",
+    "column_type" : "int",
+    "column_format" : "",
+    "sample" : "是,否",
+    "column_use" : "用于识别员工在某段职涯周期内是否通过转正",
+    "column_group" : "员工职涯周期关键节点信息-试用期"
+  }, {
+    "column_code" : "probation_termination_flag_desc",
+    "column_name" : "流程中止类型",
+    "column_type" : "int",
+    "column_format" : "",
+    "sample" : "是,否",
+    "column_use" : "",
+    "column_group" : "员工职涯周期关键节点信息-试用期"
+  }, {
+    "column_code" : "fact_dimission_flag_desc",
+    "column_name" : "是否事实离职",
+    "column_type" : "int",
+    "column_format" : "",
+    "sample" : "是,否",
+    "column_use" : "",
+    "column_group" : "员工职涯周期关键节点信息-离职"
+  }, {
+    "column_code" : "dimission_date",
+    "column_name" : "离职日期",
+    "column_type" : "datetime",
+    "column_format" : "yyyy-mm-dd",
+    "sample" : "2025-09-30,2025-10-01",
+    "column_use" : "此日期是\"员工状态\"为\"在职\"的最后一天，通常是\"离职生效日期\"的前1天",
+    "column_group" : "员工职涯周期关键节点信息-离职"
+  }, {
+    "column_code" : "dimission_effect_date",
+    "column_name" : "离职生效日期",
+    "column_type" : "datetime",
+    "column_format" : "yyyy-mm-dd",
+    "sample" : "2025-09-30,2025-10-01",
+    "column_use" : "一段职涯周期的起点日期，从这个日期开始，\"员工状态\"变更为\"离职\"",
+    "column_group" : "员工职涯周期关键节点信息-离职"
+  }, {
+    "column_code" : "dimission_type_name",
+    "column_name" : "离职类型",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "主动类型,被动离职,法定离职,转聘",
+    "column_use" : "识别员工是主动离职or被动离职",
+    "column_group" : "员工职涯周期关键节点信息-离职"
+  }, {
+    "column_code" : "seniority_begin_date",
+    "column_name" : "公司资历日期",
+    "column_type" : "datetime",
+    "column_format" : "yyyy-mm-dd",
+    "sample" : "2025-09-30,2025-10-01",
+    "column_use" : "公司资历日期原则上等同于员工正式入职日期，但针对并购或特殊场景需要延续员工历史工作年限的，会按需调整其公司资历日期，用于计算员工在本单位工龄开始时间。",
+    "column_group" : "司龄统计信息"
+  }, {
+    "column_code" : "seniority_duration",
+    "column_name" : "司龄",
+    "column_type" : "decimal",
+    "column_format" : "",
+    "sample" : "9.26",
+    "column_use" : "",
+    "column_group" : "司龄统计信息"
+  }, {
+    "column_code" : "seniority_duration_range",
+    "column_name" : "司龄区间",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "1年以下,1-3年,3-5年,5-10年,10-15年,15年以上",
+    "column_use" : "用于统计特定组织范围内的员工司龄分布情况",
+    "column_group" : "司龄统计信息"
+  }, {
+    "column_code" : "age",
+    "column_name" : "年龄",
+    "column_type" : "decimal",
+    "column_format" : "",
+    "sample" : "36.86",
+    "column_use" : "",
+    "column_group" : "年龄统计信息"
+  }, {
+    "column_code" : "age_range",
+    "column_name" : "年龄区间",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "26岁以下,26-28岁,28-30岁,30-32岁,32-35岁,35-40岁,40-45岁,45岁以上",
+    "column_use" : "用于统计特定组织范围内的员工年龄分布情况",
+    "column_group" : "年龄统计信息"
+  }, {
+    "column_code" : "work_begin_date",
+    "column_name" : "首次工作日期",
+    "column_type" : "datetime",
+    "column_format" : "yyyy-mm-dd",
+    "sample" : "2025-09-30,2025-10-01",
+    "column_use" : "可用于计算工龄",
+    "column_group" : "工龄统计信息"
+  }, {
+    "column_code" : "work_duration",
+    "column_name" : "工龄",
+    "column_type" : "decimal",
+    "column_format" : "",
+    "sample" : "15.25",
+    "column_use" : "",
+    "column_group" : "工龄统计信息"
+  }, {
+    "column_code" : "work_duration_range",
+    "column_name" : "工龄区间",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "1年以下,1-3年,3-5年,5-10年,10-15年,15年以上",
+    "column_use" : "可用于统计特定组织范围内的员工工龄分布情况",
+    "column_group" : "工龄统计信息"
+  }, {
+    "column_code" : "work_location_full_name",
+    "column_name" : "工作地全路径",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "办公地点及联系信息"
+  }, {
+    "column_code" : "work_location_region_name",
+    "column_name" : "工作地（大区）",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "办公地点及联系信息"
+  }, {
+    "column_code" : "work_location_country_name",
+    "column_name" : "工作地（国家）",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "办公地点及联系信息"
+  }, {
+    "column_code" : "work_location_name",
+    "column_name" : "工作地（城市）",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "办公地点及联系信息"
+  }, {
+    "column_code" : "office_building_name",
+    "column_name" : "办公大厦",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "滨海大厦,北京总部,讯美科技大厦",
+    "column_use" : "",
+    "column_group" : "办公地点及联系信息"
+  }, {
+    "column_code" : "office_seat_number",
+    "column_name" : "办公座位号",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "办公地点及联系信息"
+  }, {
+    "column_code" : "work_phone_extension_number",
+    "column_name" : "座机分机号",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "办公地点及联系信息"
+  }, {
+    "column_code" : "work_email",
+    "column_name" : "工作邮箱",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "办公地点及联系信息"
+  }, {
+    "column_code" : "email_group",
+    "column_name" : "邮件组",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "办公地点及联系信息"
+  }, {
+    "column_code" : "nationality_name",
+    "column_name" : "国籍",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "中国",
+    "column_use" : "",
+    "column_group" : "员工个人信息"
+  }, {
+    "column_code" : "ethnic_name",
+    "column_name" : "民族",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "汉族,回族,壮族",
+    "column_use" : "",
+    "column_group" : "员工个人信息"
+  }, {
+    "column_code" : "gender_name",
+    "column_name" : "性别",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "男,女",
+    "column_use" : "",
+    "column_group" : "员工个人信息"
+  }, {
+    "column_code" : "hukou_province_city_name",
+    "column_name" : "户口所在省市",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "员工个人信息"
+  }, {
+    "column_code" : "hukou_province_name",
+    "column_name" : "户口所在地省",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "员工个人信息"
+  }, {
+    "column_code" : "hukou_city_name",
+    "column_name" : "户口所在地市",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "员工个人信息"
+  }, {
+    "column_code" : "native_province_city",
+    "column_name" : "籍贯省市",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "员工个人信息"
+  }, {
+    "column_code" : "native_province",
+    "column_name" : "籍贯-省",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "员工个人信息"
+  }, {
+    "column_code" : "native_city",
+    "column_name" : "籍贯-市",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "员工个人信息"
+  }, {
+    "column_code" : "clothes_size_name",
+    "column_name" : "衣服尺码",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "男装M 170/84A,女装S 155-160/80A",
+    "column_use" : "",
+    "column_group" : "员工个人信息"
+  }, {
+    "column_code" : "pro_position_clan_name",
+    "column_name" : "族",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "技术族（TE）,产品/项目族（PD）",
+    "column_use" : "",
+    "column_group" : "专业员工任职信息"
+  }, {
+    "column_code" : "pro_position_genus_name",
+    "column_name" : "专业通道",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "技术运营类－TO,技术研究类－TRH,技术研发类－TRD",
+    "column_use" : "",
+    "column_group" : "专业员工任职信息"
+  }, {
+    "column_code" : "pro_position_name",
+    "column_name" : "专业职位",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "应用开发,角色设计,应用解决方案",
+    "column_use" : "可基于专业关键词模糊查询员工",
+    "column_group" : "专业员工任职信息"
+  }, {
+    "column_code" : "pro_position_level_name",
+    "column_name" : "专业职级",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "T9,D10,S12",
+    "column_use" : "由代表职族的字母和职级等级数字组成，如S12，表示专业族（SC）12级，此字段不是数值，可以使用=、IN等条件，不可以使用>、<",
+    "column_group" : "专业员工任职信息"
+  }, {
+    "column_code" : "pro_position_level_num",
+    "column_name" : "专业职级-数字",
+    "column_type" : "bigint",
+    "column_format" : "",
+    "sample" : "5,6,11,12",
+    "column_use" : "由专业职级去掉族前缀字母的数字构成，进行特定层级专业员工查询及分布统计必需字段，如查9级员工，必需用此字段，默认区间：4-5、6-8、9-11、12及以上",
+    "column_group" : "专业员工任职信息"
+  }, {
+    "column_code" : "pro_position_level_begin_date",
+    "column_name" : "专业职级开始时间",
+    "column_type" : "datetime",
+    "column_format" : "yyyy-mm-dd",
+    "sample" : "2025-09-30,2025-10-01",
+    "column_use" : "",
+    "column_group" : "专业员工任职信息"
+  }, {
+    "column_code" : "pro_position_level_duration",
+    "column_name" : "专业职级停留时长(年)",
+    "column_type" : "decimal",
+    "column_format" : "",
+    "sample" : "3.67",
+    "column_use" : "可用于计算专业职级停留时长平均值或时长区间分布统计，时长区间默认可用：1年以下,1-3年,3-5年,5-10年,10-15年,15年以上",
+    "column_group" : "专业员工任职信息"
+  }, {
+    "column_code" : "overseas_nhs_pilot_flag_desc",
+    "column_name" : "If NHS Pilot",
+    "column_type" : "int",
+    "column_format" : "",
+    "sample" : "是,否",
+    "column_use" : "用于识别员工是否归属海外体系",
+    "column_group" : ""
+  }, {
+    "column_code" : "overseas_job_bind_name",
+    "column_name" : "职务级别 Band",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "Entry,Professional,Senior,Prinipal,Distinguished",
+    "column_use" : "",
+    "column_group" : "海外体系职级信息"
+  }, {
+    "column_code" : "overseas_job_category_name",
+    "column_name" : "职务种类 Job Category",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "Tencent Global",
+    "column_use" : "",
+    "column_group" : "海外体系职级信息"
+  }, {
+    "column_code" : "overseas_job_family_group_name",
+    "column_name" : "通道 Job Family Group",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "Programming, Technology & IT",
+    "column_use" : "",
+    "column_group" : "海外体系职级信息"
+  }, {
+    "column_code" : "overseas_job_family_name",
+    "column_name" : "职务系列 Job Family",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "Software Engineering & Programming",
+    "column_use" : "",
+    "column_group" : "海外体系职级信息"
+  }, {
+    "column_code" : "inaugural_manager_level_name",
+    "column_name" : "本次入职时管理职级",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "L1-1,L1-2,L2-1,L2-2,L2-3,L3-1,L3-2,L3-3",
+    "column_use" : "",
+    "column_group" : "管理者任职信息"
+  }, {
+    "column_code" : "manager_level_name",
+    "column_name" : "管理职级",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "L1-1,L1-2,L2-1,L2-2,L2-3,L3-1,L3-2,L3-3",
+    "column_use" : "",
+    "column_group" : "管理者任职信息"
+  }, {
+    "column_code" : "have_manager_level_flag_desc",
+    "column_name" : "是否有管理者职级",
+    "column_type" : "int",
+    "column_format" : "",
+    "sample" : "是,否",
+    "column_use" : "基于是否有管理职级判定员工是否为管理者",
+    "column_group" : "管理者任职信息"
+  }, {
+    "column_code" : "have_subee_flag_desc",
+    "column_name" : "是否有主岗汇报下级",
+    "column_type" : "int",
+    "column_format" : "",
+    "sample" : "是,否",
+    "column_use" : "基于主岗汇报链关系识别员工是否有下级，仅统计集团正式下属，不含外包子公司下属员工",
+    "column_group" : "管理者任职信息"
+  }, {
+    "column_code" : "manager_source_name",
+    "column_name" : "干部来源",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "外部引入,内部培养",
+    "column_use" : "用于识别成为管理者的节点是“入职”(外部引入)or“晋升”(内部培养)",
+    "column_group" : "管理者任职信息"
+  }, {
+    "column_code" : "overseas_people_manager_flag_desc",
+    "column_name" : "If People Manager",
+    "column_type" : "int",
+    "column_format" : "",
+    "sample" : "是,否",
+    "column_use" : "",
+    "column_group" : "管理者任职信息"
+  }, {
+    "column_code" : "first_manager_appoint_date",
+    "column_name" : "首次任命为管理者日期",
+    "column_type" : "datetime",
+    "column_format" : "yyyy-mm-dd",
+    "sample" : "2025-09-30,2025-10-01",
+    "column_use" : "",
+    "column_group" : "管理者任职信息"
+  }, {
+    "column_code" : "first_manager_level_name",
+    "column_name" : "管理职级(首次任命时)",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "管理者任职信息"
+  }, {
+    "column_code" : "manager_level_duration",
+    "column_name" : "管理职级停留时长(年)",
+    "column_type" : "decimal",
+    "column_format" : "",
+    "sample" : "3.67",
+    "column_use" : "可用于计算管理职级停留时长平均值或时长区间分布统计，时长区间默认可用：1年以下,1-3年,3-5年,5-10年,10-15年,15年以上",
+    "column_group" : "管理者任职信息"
+  }, {
+    "column_code" : "direct_main_post_subee_num",
+    "column_name" : "本人直接下属员工数",
+    "column_type" : "bigint",
+    "column_format" : "",
+    "sample" : "3,20",
+    "column_use" : "直接管幅查询计算必选，仅统计集团正式下属，不含外包子公司下属员工",
+    "column_group" : "管理者任职信息"
+  }, {
+    "column_code" : "direct_subee_num",
+    "column_name" : "本人直接下属员工数（含兼岗）",
+    "column_type" : "bigint",
+    "column_format" : "",
+    "sample" : "5,10",
+    "column_use" : "仅统计集团正式下属员工，不含外包子公司下属员工",
+    "column_group" : "管理者任职信息"
+  }, {
+    "column_code" : "all_main_post_subee_num",
+    "column_name" : "本人下属员工总数",
+    "column_type" : "bigint",
+    "column_format" : "",
+    "sample" : "0,15",
+    "column_use" : "综合管幅查询计算必选，仅统计集团正式下属，不含外包子公司下属员工",
+    "column_group" : "管理者任职信息"
+  }, {
+    "column_code" : "all_subee_num",
+    "column_name" : "本人下属员工总数（含兼岗）",
+    "column_type" : "bigint",
+    "column_format" : "",
+    "sample" : "20200.0",
+    "column_use" : "仅统计集团正式下属，不含外包子公司下属员工",
+    "column_group" : "管理者任职信息"
+  }, {
+    "column_code" : "direct_manage_org_name",
+    "column_name" : "直接管理组织",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "管理者任职信息"
+  }, {
+    "column_code" : "indirect_manage_org_name",
+    "column_name" : "间接管理组织",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "管理者任职信息"
+  }, {
+    "column_code" : "org_full_name",
+    "column_name" : "员工组织全路径",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "查询组织时优先使用",
+    "column_group" : "员工所在组织信息"
+  }, {
+    "column_code" : "org_name",
+    "column_name" : "员工组织名称",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "员工所在组织信息"
+  }, {
+    "column_code" : "bg_name",
+    "column_name" : "BG",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "员工所在组织信息"
+  }, {
+    "column_code" : "line_name",
+    "column_name" : "线",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "员工所在组织信息"
+  }, {
+    "column_code" : "dept_name",
+    "column_name" : "部门",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "员工所在组织信息"
+  }, {
+    "column_code" : "center_name",
+    "column_name" : "中心",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "员工所在组织信息"
+  }, {
+    "column_code" : "team_name",
+    "column_name" : "组",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "员工所在组织信息"
+  }, {
+    "column_code" : "entry_bg_date",
+    "column_name" : "进入BG日期",
+    "column_type" : "datetime",
+    "column_format" : "yyyy-mm-dd",
+    "sample" : "2025-09-30,2025-10-01",
+    "column_use" : "",
+    "column_group" : "员工所在组织信息"
+  }, {
+    "column_code" : "entry_bg_duration",
+    "column_name" : "进入BG时长",
+    "column_type" : "decimal",
+    "column_format" : "",
+    "sample" : "3.67",
+    "column_use" : "可用于计算进入BG时长平均值或时长区间分布统计，时长区间默认可用：1年以下,1-3年,3-5年,5-10年,10-15年,15年以上",
+    "column_group" : "员工所在组织信息"
+  }, {
+    "column_code" : "post_name",
+    "column_name" : "员工岗位名称",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "平台开发组员工,产品一组员工",
+    "column_use" : "",
+    "column_group" : "员工主岗任职信息"
+  }, {
+    "column_code" : "post_begin_date",
+    "column_name" : "承担主岗日期",
+    "column_type" : "datetime",
+    "column_format" : "yyyy-mm-dd",
+    "sample" : "2025-09-30,2025-10-01",
+    "column_use" : "",
+    "column_group" : "员工主岗任职信息"
+  }, {
+    "column_code" : "post_duration",
+    "column_name" : "承担主岗时长（年）",
+    "column_type" : "decimal",
+    "column_format" : "",
+    "sample" : "3.67",
+    "column_use" : "可用于计算承担岗位时长平均值或时长区间分布统计，时长区间默认可用：1年以下,1-3年,3-5年,5-10年,10-15年,15年以上",
+    "column_group" : "员工主岗任职信息"
+  }, {
+    "column_code" : "post_sponsor_flag_desc",
+    "column_name" : "是否组织负责人岗位",
+    "column_type" : "int",
+    "column_format" : "",
+    "sample" : "是,否",
+    "column_use" : "",
+    "column_group" : "员工主岗任职信息"
+  }, {
+    "column_code" : "org_name_en",
+    "column_name" : "组织英文名",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "员工所在组织的其他属性信息"
+  }, {
+    "column_code" : "virtual_org_subtype_name",
+    "column_name" : "虚拟组织类别",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "员工所在组织的其他属性信息"
+  }, {
+    "column_code" : "org_sublevel_name",
+    "column_name" : "组织层级补充描述",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "员工所在组织的其他属性信息"
+  }, {
+    "column_code" : "org_level_name",
+    "column_name" : "组织架构层级",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "10 公司,20 系统,30 子公司,40 线,50 部门,60 中心,70 小组",
+    "column_use" : "",
+    "column_group" : "员工所在组织的其他属性信息"
+  }, {
+    "column_code" : "org_type_name",
+    "column_name" : "组织类型",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "实体组织,虚拟组织",
+    "column_use" : "",
+    "column_group" : "员工所在组织的其他属性信息"
+  }, {
+    "column_code" : "leaf_node_org_flag_desc",
+    "column_name" : "是否为末端组织",
+    "column_type" : "int",
+    "column_format" : "",
+    "sample" : "是,否",
+    "column_use" : "",
+    "column_group" : "员工所在组织的其他属性信息"
+  }, {
+    "column_code" : "bp_staff_combined_name_list",
+    "column_name" : "组织BP",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "员工所在组织的其他属性信息"
+  }, {
+    "column_code" : "org_secretary_staff_combined_name",
+    "column_name" : "组织秘书",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "员工所在组织的其他属性信息"
+  }, {
+    "column_code" : "org_head_staff_combined_name",
+    "column_name" : "组织负责人",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "员工所在组织的其他属性信息"
+  }, {
+    "column_code" : "org_head_post_name",
+    "column_name" : "组织负责人岗位名称",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "员工所在组织的其他属性信息"
+  }, {
+    "column_code" : "org_cvp_staff_combined_name",
+    "column_name" : "组织所属CVP",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "识别组织归属哪个CVP级别的管理者的管辖范围",
+    "column_group" : "员工所在组织的其他属性信息"
+  }, {
+    "column_code" : "org_svp_staff_combined_name",
+    "column_name" : "组织所属SVP",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "识别组织归属哪个SVP级别的管理者的管辖范围",
+    "column_group" : "员工所在组织的其他属性信息"
+  }, {
+    "column_code" : "oversea_org_flag_desc",
+    "column_name" : "所属组织是否为试点体系",
+    "column_type" : "int",
+    "column_format" : "",
+    "sample" : "是,否",
+    "column_use" : "识别某个组织是否为海外体系",
+    "column_group" : "员工所在组织的其他属性信息"
+  }, {
+    "column_code" : "leader_staff_combined_name",
+    "column_name" : "主岗直接上级中英文名",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "员工主岗直接上级信息"
+  }, {
+    "column_code" : "leader_post_name",
+    "column_name" : "主岗直接上级岗位名称",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "员工主岗直接上级信息"
+  }, {
+    "column_code" : "ex_post_cnt",
+    "column_name" : "兼岗数量",
+    "column_type" : "bigint",
+    "column_format" : "",
+    "sample" : "2.0",
+    "column_use" : "",
+    "column_group" : "员工兼岗信息"
+  }, {
+    "column_code" : "ex_post_name_list",
+    "column_name" : "兼岗岗位名称",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "员工兼岗信息"
+  }, {
+    "column_code" : "ex_post_leader_cnt",
+    "column_name" : "兼岗直接上级数量",
+    "column_type" : "bigint",
+    "column_format" : "",
+    "sample" : "3.0",
+    "column_use" : "",
+    "column_group" : "员工兼岗信息"
+  }, {
+    "column_code" : "ex_post_leader_staff_combined_name_list",
+    "column_name" : "兼岗直接上级",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "员工兼岗信息"
+  }, {
+    "column_code" : "station_flag_desc",
+    "column_name" : "是否派驻中",
+    "column_type" : "int",
+    "column_format" : "",
+    "sample" : "是,否",
+    "column_use" : "",
+    "column_group" : "员工派驻信息"
+  }, {
+    "column_code" : "station_location_full_name",
+    "column_name" : "派驻地全路径",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "员工派驻信息"
+  }, {
+    "column_code" : "station_status_name",
+    "column_name" : "派驻状态",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "开始派驻,继续派驻,结束派驻（正常返回）,结束派驻（提前返回）,结束派驻（离职）,结束派驻（正常本地化）,结束派驻（提前本地化）",
+    "column_use" : "",
+    "column_group" : "员工派驻信息"
+  }, {
+    "column_code" : "station_begin_date",
+    "column_name" : "开始派驻日期",
+    "column_type" : "datetime",
+    "column_format" : "yyyy-mm-dd",
+    "sample" : "2025-09-30,2025-10-01",
+    "column_use" : "",
+    "column_group" : "员工派驻信息"
+  }, {
+    "column_code" : "station_end_date",
+    "column_name" : "预计结束派驻日期",
+    "column_type" : "datetime",
+    "column_format" : "yyyy-mm-dd",
+    "sample" : "2025-09-30,2025-10-01",
+    "column_use" : "",
+    "column_group" : "员工派驻信息"
+  }, {
+    "column_code" : "station_type_name",
+    "column_name" : "派驻类型",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "跨境派驻,境内派驻",
+    "column_use" : "",
+    "column_group" : "员工派驻信息"
+  }, {
+    "column_code" : "station_subtype_name",
+    "column_name" : "派驻子类型",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "大陆转或派非大陆,非大陆转或派大陆,非大陆互转或派,大陆境内派驻,非大陆境内派驻",
+    "column_use" : "",
+    "column_group" : "员工派驻信息"
+  }, {
+    "column_code" : "station_from_org_full_name",
+    "column_name" : "派出组织全路径",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "员工派驻信息"
+  }, {
+    "column_code" : "station_to_org_full_name",
+    "column_name" : "派入组织全路径",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "员工派驻信息"
+  }, {
+    "column_code" : "highest_education_level_name",
+    "column_name" : "最高学历",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "本科,硕士研究生,博士研究生",
+    "column_use" : "",
+    "column_group" : "员工最高学历信息"
+  }, {
+    "column_code" : "highest_education_school",
+    "column_name" : "最高学历毕业院校",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "员工最高学历信息"
+  }, {
+    "column_code" : "highest_education_school_province",
+    "column_name" : "最高学历学校所在省",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "员工最高学历信息"
+  }, {
+    "column_code" : "highest_education_school_city",
+    "column_name" : "最高学历学校所在市",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "员工最高学历信息"
+  }, {
+    "column_code" : "highest_education_major",
+    "column_name" : "最高学历专业",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "员工最高学历信息"
+  }, {
+    "column_code" : "latest01_education_school",
+    "column_name" : "最新1次教育经历毕业院校",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "最近2段教育经历"
+  }, {
+    "column_code" : "latest01_education_major",
+    "column_name" : "最新1次教育经历专业",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "最近2段教育经历"
+  }, {
+    "column_code" : "latest01_education_level_name",
+    "column_name" : "最新1次教育经历学历",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "本科,硕士研究生,博士研究生",
+    "column_use" : "",
+    "column_group" : "最近2段教育经历"
+  }, {
+    "column_code" : "latest01_education_end_date",
+    "column_name" : "最新1次教育经历结束时间",
+    "column_type" : "datetime",
+    "column_format" : "yyyy-mm-dd",
+    "sample" : "2025-09-30,2025-10-01",
+    "column_use" : "",
+    "column_group" : "最近2段教育经历"
+  }, {
+    "column_code" : "latest01_education_begin_date",
+    "column_name" : "最新1次教育经历开始时间",
+    "column_type" : "datetime",
+    "column_format" : "yyyy-mm-dd",
+    "sample" : "2025-09-30,2025-10-01",
+    "column_use" : "",
+    "column_group" : "最近2段教育经历"
+  }, {
+    "column_code" : "latest01_education_degree_name",
+    "column_name" : "最新1次教育经历学位",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "最近2段教育经历"
+  }, {
+    "column_code" : "latest02_education_school",
+    "column_name" : "最新2次教育经历毕业院校",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "最近2段教育经历"
+  }, {
+    "column_code" : "latest02_education_major",
+    "column_name" : "最新2次教育经历专业",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "最近2段教育经历"
+  }, {
+    "column_code" : "latest02_education_level_name",
+    "column_name" : "最新2次教育经历学历",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "本科,硕士研究生,博士研究生",
+    "column_use" : "",
+    "column_group" : "最近2段教育经历"
+  }, {
+    "column_code" : "latest02_education_end_date",
+    "column_name" : "最新2次教育经历结束时间",
+    "column_type" : "datetime",
+    "column_format" : "yyyy-mm-dd",
+    "sample" : "2025-09-30,2025-10-01",
+    "column_use" : "",
+    "column_group" : "最近2段教育经历"
+  }, {
+    "column_code" : "latest02_education_begin_date",
+    "column_name" : "最新2次教育经历开始时间",
+    "column_type" : "datetime",
+    "column_format" : "yyyy-mm-dd",
+    "sample" : "2025-09-30,2025-10-01",
+    "column_use" : "",
+    "column_group" : "最近2段教育经历"
+  }, {
+    "column_code" : "latest02_education_degree_name",
+    "column_name" : "最新2次教育经历学位",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "最近2段教育经历"
+  }, {
+    "column_code" : "housing_loan_status_name",
+    "column_name" : "安居贷状态",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "住房福利使用情况"
+  }, {
+    "column_code" : "prh_checkin_status_name",
+    "column_name" : "公租房入住状态",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "住房福利使用情况"
+  }, {
+    "column_code" : "contract_begin_date",
+    "column_name" : "合同开始日期",
+    "column_type" : "datetime",
+    "column_format" : "yyyy-mm-dd",
+    "sample" : "2025-09-30,2025-10-01",
+    "column_use" : "",
+    "column_group" : "员工合同信息"
+  }, {
+    "column_code" : "contract_end_date_fact",
+    "column_name" : "合同实际结束日期",
+    "column_type" : "datetime",
+    "column_format" : "yyyy-mm-dd",
+    "sample" : "2025-09-30,2025-10-01",
+    "column_use" : "",
+    "column_group" : "员工合同信息"
+  }, {
+    "column_code" : "contract_first_sign_end_date",
+    "column_name" : "合同预计结束日期(初始)",
+    "column_type" : "datetime",
+    "column_format" : "yyyy-mm-dd",
+    "sample" : "2025-09-30,2025-10-01",
+    "column_use" : "",
+    "column_group" : "员工合同信息"
+  }, {
+    "column_code" : "contract_end_date",
+    "column_name" : "合同预计结束日期(有效)",
+    "column_type" : "datetime",
+    "column_format" : "yyyy-mm-dd",
+    "sample" : "2025-09-30,2025-10-01",
+    "column_use" : "1、识别合同即将到期或需要续签合同的员工，如x天内即将到期或X天内需要完成续签，即合同预计结束日期(有效)在当前至未来X天区间； 2、识别合同已过期，如合同过期X天未续签的员工，即合同预计结束日期(有效)在当前-X天至当天区间",
+    "column_group" : "员工合同信息"
+  }, {
+    "column_code" : "contract_duration",
+    "column_name" : "合同年限",
+    "column_type" : "decimal",
+    "column_format" : "",
+    "sample" : "2.86",
+    "column_use" : "",
+    "column_group" : "员工合同信息"
+  }, {
+    "column_code" : "contract_indefinitely_flag_desc",
+    "column_name" : "是否为无固定期限合同",
+    "column_type" : "int",
+    "column_format" : "",
+    "sample" : "是,否",
+    "column_use" : "识别员工合同是否为无固定期限合同必选字段",
+    "column_group" : "员工合同信息"
+  }, {
+    "column_code" : "contract_status_name",
+    "column_name" : "合同状态",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "有效,有效(改签),无效,解除,终止",
+    "column_use" : "",
+    "column_group" : "员工合同信息"
+  }, {
+    "column_code" : "nonlocal_contract_flag_desc",
+    "column_name" : "是否异地合同",
+    "column_type" : "int",
+    "column_format" : "",
+    "sample" : "是,否",
+    "column_use" : "",
+    "column_group" : "员工合同信息"
+  }, {
+    "column_code" : "expert_from_manager_flag_desc",
+    "column_name" : "专家_是否管理转专业",
+    "column_type" : "int",
+    "column_format" : "",
+    "sample" : "是,否",
+    "column_use" : "用于识别专家是否是从管理者身份转为专家身份，即从管理发展体系转到专业体系",
+    "column_group" : ""
+  }, {
+    "column_code" : "expert_from_manager_effect_date",
+    "column_name" : "专家_管理转专业异动日期",
+    "column_type" : "datetime",
+    "column_format" : "yyyy-mm-dd",
+    "sample" : "2025-09-30,2025-10-01",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "lecturer_flag_desc",
+    "column_name" : "是否讲师",
+    "column_type" : "int",
+    "column_format" : "",
+    "sample" : "是,否",
+    "column_use" : "用于识别员工是否为公司认证讲师",
+    "column_group" : "讲师身份及认证信息"
+  }, {
+    "column_code" : "first_lecturer_approve_time",
+    "column_name" : "初次认证时间",
+    "column_type" : "datetime",
+    "column_format" : "yyyy-mm-dd",
+    "sample" : "2025-09-30,2025-10-01",
+    "column_use" : "",
+    "column_group" : "讲师身份及认证信息"
+  }, {
+    "column_code" : "lecturer_level_name",
+    "column_name" : "讲师级别",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "初级,中级,高级,特聘",
+    "column_use" : "",
+    "column_group" : "讲师身份及认证信息"
+  }, {
+    "column_code" : "current_lecturer_level_time",
+    "column_name" : "当前级别认证时间",
+    "column_type" : "datetime",
+    "column_format" : "yyyy-mm-dd",
+    "sample" : "2025-09-30,2025-10-01",
+    "column_use" : "",
+    "column_group" : "讲师身份及认证信息"
+  }, {
+    "column_code" : "lecturer_status_name",
+    "column_name" : "讲师授课状态",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "活跃,不活跃,出库",
+    "column_use" : "用于了解讲师授课的活跃度",
+    "column_group" : "讲师身份及认证信息"
+  }, {
+    "column_code" : "mentor_staff_combined_name",
+    "column_name" : "导师中英文名",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "员工的导师"
+  }, {
+    "column_code" : "interviewer_flag_desc",
+    "column_name" : "是否面试官",
+    "column_type" : "int",
+    "column_format" : "",
+    "sample" : "是,否",
+    "column_use" : "用于识别员工是否为已通过认证有面试官权限的人",
+    "column_group" : ""
+  }, {
+    "column_code" : "recruit_channel_name",
+    "column_name" : "招聘渠道",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "猎头,伯乐,媒体",
+    "column_use" : "",
+    "column_group" : "招聘流程信息"
+  }, {
+    "column_code" : "recommend_staff_name",
+    "column_name" : "推荐者",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "招聘流程信息"
+  }, {
+    "column_code" : "recruit_source_case_id",
+    "column_name" : "招聘CASEID",
+    "column_type" : "VARCHAR",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "可作为外键，查询员工关联的招聘流程信息",
+    "column_group" : "招聘流程信息"
+  }, {
+    "column_code" : "recruit_manager_staff_name",
+    "column_name" : "招聘经理",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "招聘流程信息"
+  }, {
+    "column_code" : "subsidiary_position_name",
+    "column_name" : "其他职位",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "用于查询全资子公司员工职位",
+    "column_group" : "子公司员工任职信息"
+  }, {
+    "column_code" : "subsidiary_position_level_name",
+    "column_name" : "其他职级",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "用于查询全资子公司员工职级",
+    "column_group" : "子公司员工任职信息"
+  }, {
+    "column_code" : "management_authority_org_full_name",
+    "column_name" : "管理归属组织",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "指子公司组织及人员在集团侧的管理归属组织",
+    "column_group" : "子公司员工任职信息"
+  }, {
+    "column_code" : "outsourcing_type_name",
+    "column_name" : "外包类型",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "人力服务外包,项目外包全员服务类,项目外包特殊申请V帐号,人力服务外包驻场,人力服务外包备份",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "home_address_zip",
+    "column_name" : "家庭地址邮编",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "员工个人信息-联系方式"
+  }, {
+    "column_code" : "primary_identity_issuing_authority",
+    "column_name" : "证件签发机关",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "员工个人信息-证件信息"
+  }, {
+    "column_code" : "primary_identity_begin_date",
+    "column_name" : "证件有效开始日期",
+    "column_type" : "datetime",
+    "column_format" : "yyyy-mm-dd",
+    "sample" : "2025-09-30,2025-10-01",
+    "column_use" : "",
+    "column_group" : "员工个人信息-证件信息"
+  }, {
+    "column_code" : "primary_identity_end_date",
+    "column_name" : "证件有效结束日期",
+    "column_type" : "datetime",
+    "column_format" : "yyyy-mm-dd",
+    "sample" : "2025-09-30,2025-10-01",
+    "column_use" : "",
+    "column_group" : "员工个人信息-证件信息"
+  }, {
+    "column_code" : "entry_dept_date",
+    "column_name" : "进入部门日期",
+    "column_type" : "datetime",
+    "column_format" : "yyyy-mm-dd",
+    "sample" : "2025-09-30,2025-10-01",
+    "column_use" : "",
+    "column_group" : "员工主岗任职信息"
+  }, {
+    "column_code" : "entry_dept_duration",
+    "column_name" : "进入部门时长",
+    "column_type" : "decimal",
+    "column_format" : "",
+    "sample" : "3.67",
+    "column_use" : "可用于计算进入部门时长平均值或时长区间分布统计，时长区间默认可用：1年以下,1-3年,3-5年,5-10年,10-15年,15年以上",
+    "column_group" : "员工主岗任职信息"
+  }, {
+    "column_code" : "post_id8",
+    "column_name" : "员工岗位ID",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "员工主岗任职信息"
+  }, {
+    "column_code" : "org_full_id8",
+    "column_name" : "员工组织ID全路径",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "员工所在组织信息"
+  }, {
+    "column_code" : "org_id8",
+    "column_name" : "员工组织ID",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "员工所在组织信息"
+  }, {
+    "column_code" : "org_secretary_staff_id8",
+    "column_name" : "组织秘书员工ID",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "员工所在组织的其他属性信息"
+  }, {
+    "column_code" : "org_head_staff_id8",
+    "column_name" : "组织负责人ID",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "员工所在组织的其他属性信息"
+  }, {
+    "column_code" : "org_head_post_id8",
+    "column_name" : "组织负责人岗位ID",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "员工所在组织的其他属性信息"
+  }, {
+    "column_code" : "org_cvp_staff_id8",
+    "column_name" : "组织所属CVP员工ID",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "员工所在组织的其他属性信息"
+  }, {
+    "column_code" : "org_svp_staff_id8",
+    "column_name" : "组织所属SVP员工ID",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "员工所在组织的其他属性信息"
+  }, {
+    "column_code" : "leader_staff_id8",
+    "column_name" : "主岗直接上级员工ID",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "员工主岗直接上级信息"
+  }, {
+    "column_code" : "leader_post_id8",
+    "column_name" : "主岗直接上级岗位ID",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "员工主岗直接上级信息"
+  }, {
+    "column_code" : "mentor_staff_id8",
+    "column_name" : "导师员工ID",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "员工的导师"
+  }, {
+    "column_code" : "political_identity_name",
+    "column_name" : "政治面貌",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "political_identity_location",
+    "column_name" : "党员关系所在地",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "contract_type_name",
+    "column_name" : "合同类型",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "员工合同信息"
+  }, {
+    "column_code" : "recruit_year",
+    "column_name" : "招聘年份",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "仅25年起的校园招聘有此数据，其他为空值",
+    "column_group" : "招聘流程信息"
+  }, {
+    "column_code" : "level02_org_name",
+    "column_name" : "一级组织",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "员工所在组织的其他属性信息"
+  }, {
+    "column_code" : "level02_org_level_name",
+    "column_name" : "一级组织架构层级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "员工所在组织的其他属性信息"
+  }, {
+    "column_code" : "level03_org_name",
+    "column_name" : "二级组织",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "员工所在组织的其他属性信息"
+  }, {
+    "column_code" : "level03_org_level_name",
+    "column_name" : "二级组织架构层级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "员工所在组织的其他属性信息"
+  }, {
+    "column_code" : "level04_org_name",
+    "column_name" : "三级组织",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "员工所在组织的其他属性信息"
+  }, {
+    "column_code" : "level04_org_level_name",
+    "column_name" : "三级组织架构层级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "员工所在组织的其他属性信息"
+  }, {
+    "column_code" : "level05_org_name",
+    "column_name" : "四级组织",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "员工所在组织的其他属性信息"
+  }, {
+    "column_code" : "level05_org_level_name",
+    "column_name" : "四级组织架构层级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "员工所在组织的其他属性信息"
+  }, {
+    "column_code" : "level06_org_name",
+    "column_name" : "五级组织",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "员工所在组织的其他属性信息"
+  }, {
+    "column_code" : "level06_org_level_name",
+    "column_name" : "五级组织架构层级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "员工所在组织的其他属性信息"
+  }, {
+    "column_code" : "level07_org_name",
+    "column_name" : "六级组织",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "员工所在组织的其他属性信息"
+  }, {
+    "column_code" : "level07_org_level_name",
+    "column_name" : "六级组织架构层级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "员工所在组织的其他属性信息"
+  }, {
+    "column_code" : "level08_org_name",
+    "column_name" : "七级组织",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "员工所在组织的其他属性信息"
+  }, {
+    "column_code" : "level08_org_level_name",
+    "column_name" : "七级组织架构层级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "员工所在组织的其他属性信息"
+  }, {
+    "column_code" : "level09_org_name",
+    "column_name" : "八级组织",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "员工所在组织的其他属性信息"
+  }, {
+    "column_code" : "level09_org_level_name",
+    "column_name" : "八级组织架构层级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "员工所在组织的其他属性信息"
+  }, {
+    "column_code" : "level10_org_name",
+    "column_name" : "九级组织",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "员工所在组织的其他属性信息"
+  }, {
+    "column_code" : "level10_org_level_name",
+    "column_name" : "九级组织架构层级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "员工所在组织的其他属性信息"
+  }, {
+    "column_code" : "manager_level_11_last_begin_date",
+    "column_name" : "L1-1最近一次任命日期",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "管理者任职信息"
+  }, {
+    "column_code" : "manager_level_11_last_duration",
+    "column_name" : "L1-1最近一次停留时长（年）",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "管理者任职信息"
+  }, {
+    "column_code" : "manager_level_12_last_begin_date",
+    "column_name" : "L1-2最近一次任命日期",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "管理者任职信息"
+  }, {
+    "column_code" : "manager_level_12_last_duration",
+    "column_name" : "L1-2最近一次停留时长（年）",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "管理者任职信息"
+  }, {
+    "column_code" : "manager_level_21_last_begin_date",
+    "column_name" : "L2-1最近一次任命日期",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "管理者任职信息"
+  }, {
+    "column_code" : "manager_level_21_last_duration",
+    "column_name" : "L2-1最近一次停留时长（年）",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "管理者任职信息"
+  }, {
+    "column_code" : "manager_level_22_last_begin_date",
+    "column_name" : "L2-2最近一次任命日期",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "管理者任职信息"
+  }, {
+    "column_code" : "manager_level_22_last_duration",
+    "column_name" : "L2-2最近一次停留时长（年）",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "管理者任职信息"
+  }, {
+    "column_code" : "manager_level_23_last_begin_date",
+    "column_name" : "L2-3最近一次任命日期",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "管理者任职信息"
+  }, {
+    "column_code" : "manager_level_23_last_duration",
+    "column_name" : "L2-3最近一次停留时长（年）",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "管理者任职信息"
+  }, {
+    "column_code" : "manager_level_31_last_begin_date",
+    "column_name" : "L3-1最近一次任命日期",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "管理者任职信息"
+  }, {
+    "column_code" : "manager_level_31_last_duration",
+    "column_name" : "L3-1最近一次停留时长（年）",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "管理者任职信息"
+  }, {
+    "column_code" : "manager_level_32_last_begin_date",
+    "column_name" : "L3-2最近一次任命日期",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "管理者任职信息"
+  }, {
+    "column_code" : "manager_level_32_last_duration",
+    "column_name" : "L3-2最近一次停留时长（年）",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "管理者任职信息"
+  }, {
+    "column_code" : "manager_level_33_last_begin_date",
+    "column_name" : "L3-3最近一次任命日期",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "管理者任职信息"
+  }, {
+    "column_code" : "manager_level_33_last_duration",
+    "column_name" : "L3-3最近一次停留时长（年）",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "管理者任职信息"
+  }, {
+    "column_code" : "manager_level_4_last_begin_date",
+    "column_name" : "L4最近一次任命日期",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "管理者任职信息"
+  }, {
+    "column_code" : "manager_level_4_last_duration",
+    "column_name" : "L4最近一次停留时长（年）",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "管理者任职信息"
+  }, {
+    "column_code" : "manager_level_5_last_begin_date",
+    "column_name" : "L5最近一次任命日期",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "管理者任职信息"
+  }, {
+    "column_code" : "manager_level_5_last_duration",
+    "column_name" : "L5最近一次停留时长（年）",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "管理者任职信息"
+  }, {
+    "column_code" : "manager_level_6_last_begin_date",
+    "column_name" : "L6最近一次任命日期",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "管理者任职信息"
+  }, {
+    "column_code" : "manager_level_6_last_duration",
+    "column_name" : "L6最近一次停留时长（年）",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "管理者任职信息"
+  }, {
+    "column_code" : "pro_position_level_04_last_duration",
+    "column_name" : "专业职级4级停留时间",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "专业员工任职信息"
+  }, {
+    "column_code" : "pro_position_level_05_last_duration",
+    "column_name" : "专业职级5级停留时间",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "专业员工任职信息"
+  }, {
+    "column_code" : "pro_position_level_06_last_duration",
+    "column_name" : "专业职级6级停留时间",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "专业员工任职信息"
+  }, {
+    "column_code" : "pro_position_level_07_last_duration",
+    "column_name" : "专业职级7级停留时间",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "专业员工任职信息"
+  }, {
+    "column_code" : "pro_position_level_08_last_duration",
+    "column_name" : "专业职级8级停留时间",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "专业员工任职信息"
+  }, {
+    "column_code" : "pro_position_level_09_last_duration",
+    "column_name" : "专业职级9级停留时间",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "专业员工任职信息"
+  }, {
+    "column_code" : "pro_position_level_10_last_duration",
+    "column_name" : "专业职级10级停留时间",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "专业员工任职信息"
+  }, {
+    "column_code" : "pro_position_level_11_last_duration",
+    "column_name" : "专业职级11级停留时间",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "专业员工任职信息"
+  }, {
+    "column_code" : "pro_position_level_12_last_duration",
+    "column_name" : "专业职级12级停留时间",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "专业员工任职信息"
+  }, {
+    "column_code" : "pro_position_level_13_last_duration",
+    "column_name" : "专业职级13级停留时间",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "专业员工任职信息"
+  }, {
+    "column_code" : "pro_position_level_14_last_duration",
+    "column_name" : "专业职级14级停留时间",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "专业员工任职信息"
+  }, {
+    "column_code" : "pro_position_level_15_last_duration",
+    "column_name" : "专业职级15级停留时间",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "专业员工任职信息"
+  }, {
+    "column_code" : "pro_position_level_16_last_duration",
+    "column_name" : "专业职级16级停留时间",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "专业员工任职信息"
+  }, {
+    "column_code" : "pro_position_level_17_last_duration",
+    "column_name" : "专业职级17级停留时间",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "专业员工任职信息"
+  }, {
+    "column_code" : "expected_graduated_date",
+    "column_name" : "预计毕业时间",
+    "column_type" : "DATETIME",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "contribution_qualification_flag_desc",
+    "column_name" : "专业公共贡献是否满足晋级要求",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "latest01_work_record_company",
+    "column_name" : "上一家雇主名称",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "latest01_work_record_org",
+    "column_name" : "上一家雇主部门",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "latest01_work_record_position",
+    "column_name" : "上一家雇主职位",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "latest01_work_record_begin_date",
+    "column_name" : "上一家雇主开始时间",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "latest01_work_record_end_date",
+    "column_name" : "上一家雇主结束时间",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "latest02_work_record_company",
+    "column_name" : "上二家雇主名称",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "latest02_work_record_org",
+    "column_name" : "上二家雇主部门",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "latest02_work_record_position",
+    "column_name" : "上二家雇主职位",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "latest02_work_record_begin_date",
+    "column_name" : "上二家雇主开始时间",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "latest02_work_record_end_date",
+    "column_name" : "上二家雇主结束时间",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "annual_leave_usable_days",
+    "column_name" : "可申请年假(含预支)",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "housing_loan_balance",
+    "column_name" : "安居贷余额",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "prh_waiting_ranking",
+    "column_name" : "轮候库排名",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "provident_fund_location_name",
+    "column_name" : "社保地",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "probation_termination_memo",
+    "column_name" : "中止原因",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "contract_company_name",
+    "column_name" : "合同主体",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "contract_company_location_name",
+    "column_name" : "合同地",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "pro_position_level_promote_fail_cnt",
+    "column_name" : "职级申报晋升失败次数",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "latest01_assess_period_end_date",
+    "column_name" : "近1次评估周期结束时间",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "latest01_assess_period_name",
+    "column_name" : "近1次评估周期名称",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "latest01_performance_result_name",
+    "column_name" : "近1次绩效等级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "latest01_custom_performance_result_name",
+    "column_name" : "近1次绩效子档位",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "latest01_achievement_performance_result_name",
+    "column_name" : "近1次业绩评级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "latest01_behavior_performance_result_name",
+    "column_name" : "近1次管理/行为评级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "latest01_performance_assessment",
+    "column_name" : "近1次上级评语",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "latest02_assess_period_end_date",
+    "column_name" : "近2次评估周期结束时间",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "latest02_assess_period_name",
+    "column_name" : "近2次评估周期名称",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "latest02_performance_result_name",
+    "column_name" : "近2次绩效等级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "latest02_custom_performance_result_name",
+    "column_name" : "近2次绩效子档位",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "latest02_achievement_performance_result_name",
+    "column_name" : "近2次业绩评级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "latest02_behavior_performance_result_name",
+    "column_name" : "近2次管理/行为评级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "latest02_performance_assessment",
+    "column_name" : "近2次上级评语",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "latest03_assess_period_end_date",
+    "column_name" : "近3次评估周期结束时间",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "latest03_assess_period_name",
+    "column_name" : "近3次评估周期名称",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "latest03_performance_result_name",
+    "column_name" : "近3次绩效等级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "latest03_custom_performance_result_name",
+    "column_name" : "近3次绩效子档位",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "latest03_achievement_performance_result_name",
+    "column_name" : "近3次业绩评级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "latest03_behavior_performance_result_name",
+    "column_name" : "近3次管理/行为评级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "latest03_performance_assessment",
+    "column_name" : "近3次上级评语",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "latest04_assess_period_end_date",
+    "column_name" : "近4次评估周期结束时间",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "latest04_assess_period_name",
+    "column_name" : "近4次评估周期名称",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "latest04_performance_result_name",
+    "column_name" : "近4次绩效等级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "latest04_custom_performance_result_name",
+    "column_name" : "近4次绩效子档位",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "latest04_achievement_performance_result_name",
+    "column_name" : "近4次业绩评级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "latest04_behavior_performance_result_name",
+    "column_name" : "近4次管理/行为评级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "latest04_performance_assessment",
+    "column_name" : "近4次上级评语",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "young_manager_type_name",
+    "column_name" : "当前是否青年干部",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "prh_waiting_points",
+    "column_name" : "轮候库积分",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "expert_flag_desc",
+    "column_name" : "是否为专家",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "real_birthday_type_name",
+    "column_name" : "生日关怀日历类型",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "real_birthday_sensitive_flag_desc",
+    "column_name" : "生日关怀日期保密",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  } ]
+}

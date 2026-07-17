@@ -1,0 +1,249 @@
+{
+  "table_code" : "catalog_dos_da_mcp.hrdw.Report_HC_Management",
+  "table_name" : "编制宽表",
+  "version" : 9,
+  "table_desc" : "定位：记录集团各管理主体、组织、各用工类型下的编制预算及编制使用情况\n包含内容：管理维度（SubjectId、管理主体、员工子类型）、组织信息（组织全路径/ID全路径、BG/线/部门/中心/组/区域、是否本级/试点组织）、编制数据（总HC、HC定额、借用HC、校招HC借贷）、在岗人数（控编）、待流入明细（总计、待入职/社招校招已预约/已签约待入职、待调入）、待流出明细（总计、待离职、待调出）、剩余HC\n主要用途：\n1、查看各组织的编制使用情况和剩余HC；\n2、分析编制预算的执行情况\"",
+  "write_sql_background" : "1、本表为日切片表，“切片日期”为必选字段，且需默认为：当前日期-1\n2、查询某个组织的总hc数、剩余hc、hc定额等数据时，默认查询条件：\"是否本级组织\":否;\"管理主体\":全部;\"区域\":全部;\"员工子类型\":正式聘用制，将组织作为动态参数传入查询即可",
+  "find_column_background" : "",
+  "columns" : [ {
+    "column_code" : "subject_id",
+    "column_name" : "SubjectId",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "manage_unit_name",
+    "column_name" : "管理主体",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "staff_subtype_name",
+    "column_name" : "员工子类型",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "org_full_name",
+    "column_name" : "组织全路径",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "org_full_id8",
+    "column_name" : "组织ID全路径",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "self_flag",
+    "column_name" : "是否本级组织",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "bg_name",
+    "column_name" : "BG",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "line_name",
+    "column_name" : "线",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "dept_name",
+    "column_name" : "部门",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "center_name",
+    "column_name" : "中心",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "org_name",
+    "column_name" : "组",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "region_type_name",
+    "column_name" : "区域",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "hc_sum_num",
+    "column_name" : "总HC",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "hc_quotas_num",
+    "column_name" : "HC定额",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "hc_relevant_num",
+    "column_name" : "其中-借用HC",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "hc_loan_num",
+    "column_name" : "校招-HC借贷",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "hc_used_num",
+    "column_name" : "在岗人数（控编）",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "to_be_flow_in_num",
+    "column_name" : "待流入_总计",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "to_be_inaugural_num",
+    "column_name" : "待入职人数",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "to_be_inaugural_recruit_appointment_num",
+    "column_name" : "社招已预约待入职",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "to_be_inaugural_campus_appointment_num",
+    "column_name" : "校招已预约待入职",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "to_be_transfer_in_num",
+    "column_name" : "待调入",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "to_be_flow_out_num",
+    "column_name" : "待流出_总计",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "to_be_dimission_num",
+    "column_name" : "待离职",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "to_be_transfer_out_num",
+    "column_name" : "待调出",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "remain_hc_num",
+    "column_name" : "剩余HC",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "org_nhf_pilot_flag",
+    "column_name" : "是否试点组织",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "to_be_inaugural_recruit_offer_num",
+    "column_name" : "社招已收offer待入职",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "to_be_inaugural_campus_sign_num",
+    "column_name" : "校招已签约待入职",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "p_dt",
+    "column_name" : "切片日期",
+    "column_type" : "date",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  } ]
+}

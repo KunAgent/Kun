@@ -1,0 +1,489 @@
+{
+  "table_code" : "catalog_dos_da_mcp.hrdw.Report_Recruit_Resume_Assessment",
+  "table_name" : "社招简历评估宽表",
+  "version" : 9,
+  "table_desc" : "定位： 以社招简历评估环节为核心视角，记录通过各招聘渠道进入的候选人简历在评估阶段的处理状态和结果，聚焦于简历从到达到评估通过/放弃/超时的全过程，用于渠道效果分析和简历评估效率监控。\n\n唯一标识： 以 flow_main_id（主流程ID）+ candidate_id（候选人ID）作为复合唯一标识，每条简历评估记录对应一行数据。\n\n主要包含以下几大部分内容（摘要）：\n候选人基础信息（候选人ID/姓名）\n招聘岗位与组织信息（岗位ID/名称、BG/部门/组织/归属组织/组织全路径、管理主体）\n流程基础信息（主流程ID、流程类型、流程创建/结束时间、流程状态、当前环节）\n招聘经理信息（招聘经理ID/姓名）\n渠道信息（渠道ID/名称/父渠道/全路径/类型）\n职位通道信息（职位族/职位类/专业职级/管理职级）\n工作地信息（招聘工作地、国家）\n简历评估状态与结果（最近处理时间、评估到达时间、是否通过、是否放弃、是否超时）\n保密标识\n主要用途：\n\n统计各渠道简历投递数量和评估转化率；\n分析简历评估阶段的处理效率（评估中/已完成/超时未处理）；\n监控简历评估积压情况（process_time为null的表示仍在评估中）；\n按BG/部门/组织/工作地/渠道/职位等维度对比渠道效果；\n评估各渠道简历质量（通过率、放弃率、超时率）；\n能回答的典型问题：\n各渠道本月投递的简历数量和通过率分别是多少？\n各部门简历评估的平均处理时长是多少？\n哪个渠道的简历超时率最高？\nA部门本季度通过各渠道收到多少份简历，通过/放弃/超时的比例分别是多少？",
+  "write_sql_background" : "",
+  "find_column_background" : "",
+  "columns" : [ {
+    "column_code" : "audit_create_time",
+    "column_name" : "审计时间戳",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "ETL数据写入时的系统时间戳，用于数据版本追踪",
+    "column_group" : ""
+  }, {
+    "column_code" : "candidate_id",
+    "column_name" : "候选人ID",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "候选人唯一标识ID",
+    "column_group" : ""
+  }, {
+    "column_code" : "candidate_name",
+    "column_name" : "候选人名称",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "候选人姓名",
+    "column_group" : ""
+  }, {
+    "column_code" : "post_id",
+    "column_name" : "招聘岗位ID",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "招聘岗位ID，用于关联岗位信息",
+    "column_group" : ""
+  }, {
+    "column_code" : "post_name_cn",
+    "column_name" : "招聘岗位名称",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "招聘岗位中文名称，用于前端展示和模糊搜索",
+    "column_group" : ""
+  }, {
+    "column_code" : "recruit_post_bg_id",
+    "column_name" : "招聘岗位所属BG ID",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "招聘岗位所属BG ID",
+    "column_group" : ""
+  }, {
+    "column_code" : "recruit_post_bg_name",
+    "column_name" : "招聘岗位所属BG名称",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "招聘岗位所属BG名称",
+    "column_group" : ""
+  }, {
+    "column_code" : "recruit_post_dept_id",
+    "column_name" : "招聘岗位所属部门ID",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "招聘岗位所属部门ID",
+    "column_group" : ""
+  }, {
+    "column_code" : "recruit_post_dept_name_cn",
+    "column_name" : "招聘岗位所属部门名称",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "招聘岗位所属部门名称",
+    "column_group" : ""
+  }, {
+    "column_code" : "recruit_post_org_id",
+    "column_name" : "招聘岗位所属组织ID",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "招聘岗位所属组织ID",
+    "column_group" : ""
+  }, {
+    "column_code" : "recruit_post_org_name_cn",
+    "column_name" : "招聘岗位所属组织名称",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "招聘岗位所属组织名称",
+    "column_group" : ""
+  }, {
+    "column_code" : "recruit_post_org_full_path",
+    "column_name" : "招聘岗位所属组织ID全路径",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "招聘岗位所属组织ID全路径，用于按组织范围筛选（like '%org_id%'）",
+    "column_group" : ""
+  }, {
+    "column_code" : "recruit_post_org_full_name",
+    "column_name" : "招聘岗位所属组织全路径",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "招聘岗位所属组织中文名全路径",
+    "column_group" : ""
+  }, {
+    "column_code" : "manager_unit_id",
+    "column_name" : "招聘岗位所属管理主体ID",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "管理主体ID，用于按管理主体筛选数据",
+    "column_group" : ""
+  }, {
+    "column_code" : "manager_unit_name_cn",
+    "column_name" : "招聘岗位所属管理主体名称",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "管理主体名称",
+    "column_group" : ""
+  }, {
+    "column_code" : "staff_type_id",
+    "column_name" : "员工类型ID",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "员工类型ID，2=正式员工，固定筛选条件",
+    "column_group" : ""
+  }, {
+    "column_code" : "staff_type_name_cn",
+    "column_name" : "员工类型名称",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "员工类型名称",
+    "column_group" : ""
+  }, {
+    "column_code" : "flow_main_id",
+    "column_name" : "社招简历评估环节流程ID",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "主流程ID，关联候选人的面试流程",
+    "column_group" : ""
+  }, {
+    "column_code" : "flow_id",
+    "column_name" : "流程类型ID",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "流程类型：3=社招面试，5=活水。固定筛选flow_id=3",
+    "column_group" : ""
+  }, {
+    "column_code" : "flow_name",
+    "column_name" : "流程类型名称",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "流程类型名称",
+    "column_group" : ""
+  }, {
+    "column_code" : "flow_create_time",
+    "column_name" : "流程创建时间",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "流程创建时间，用于按时间范围筛选渠道简历(< end_date+1)",
+    "column_group" : ""
+  }, {
+    "column_code" : "flow_end_time",
+    "column_name" : "流程结束时间",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "流程结束时间，用于判断流程是否仍有效(>= begin_date)",
+    "column_group" : ""
+  }, {
+    "column_code" : "state_id",
+    "column_name" : "简历评估类型ID",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "流程状态ID",
+    "column_group" : ""
+  }, {
+    "column_code" : "state_name",
+    "column_name" : "简历评估类型名称",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "流程状态名称",
+    "column_group" : ""
+  }, {
+    "column_code" : "recruit_owner_id",
+    "column_name" : "招聘经理员工ID",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "招聘经理ID，用于按招聘经理筛选",
+    "column_group" : ""
+  }, {
+    "column_code" : "recruit_owner",
+    "column_name" : "招聘经理",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "招聘经理姓名",
+    "column_group" : ""
+  }, {
+    "column_code" : "step_id",
+    "column_name" : "当前环节ID",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "当前环节ID",
+    "column_group" : ""
+  }, {
+    "column_code" : "step_name",
+    "column_name" : "当前环节名称",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "当前环节名称",
+    "column_group" : ""
+  }, {
+    "column_code" : "recruit_post_belong_org_id",
+    "column_name" : "岗位归属最小组织id",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "归属组织ID（通常为中心/小组级别）",
+    "column_group" : ""
+  }, {
+    "column_code" : "recruit_post_belong_org_name",
+    "column_name" : "岗位归属最小组织名称",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "归属组织名称",
+    "column_group" : ""
+  }, {
+    "column_code" : "recruit_post_belong_org_full_name",
+    "column_name" : "岗位归属最小组织全路径",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "归属组织全名",
+    "column_group" : ""
+  }, {
+    "column_code" : "recruit_post_belong_org_full_path",
+    "column_name" : "岗位归属最小组织ID全路径",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "归属组织ID全路径，用于按组织范围筛选",
+    "column_group" : ""
+  }, {
+    "column_code" : "estimate_level_name",
+    "column_name" : "岗位专业职级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "预估管理职级",
+    "column_group" : ""
+  }, {
+    "column_code" : "init_manager_level_name",
+    "column_name" : "岗位管理职级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "初定管理职级（社招系统）",
+    "column_group" : ""
+  }, {
+    "column_code" : "mapping_position_guid",
+    "column_name" : "岗位专业职位GUID",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "专业职位GUID（社招系统）",
+    "column_group" : ""
+  }, {
+    "column_code" : "mapping_position_id",
+    "column_name" : "岗位专业职位ID",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "专业职位ID（社招系统），用于按职位筛选",
+    "column_group" : ""
+  }, {
+    "column_code" : "mapping_position_name",
+    "column_name" : "岗位专业职位名称",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "职位名称（社招系统）",
+    "column_group" : ""
+  }, {
+    "column_code" : "position_clan_id",
+    "column_name" : "岗位职族id",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "职位族ID",
+    "column_group" : ""
+  }, {
+    "column_code" : "position_clan_code",
+    "column_name" : "岗位职族CODE",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "职位族编码",
+    "column_group" : ""
+  }, {
+    "column_code" : "position_clan_name",
+    "column_name" : "岗位职族名称",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "职位族名称",
+    "column_group" : ""
+  }, {
+    "column_code" : "position_genus_id",
+    "column_name" : "岗位专业通道ID",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "职位类ID",
+    "column_group" : ""
+  }, {
+    "column_code" : "position_genus_code",
+    "column_name" : "岗位专业通道CODE",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "职位类编码",
+    "column_group" : ""
+  }, {
+    "column_code" : "position_genus_name",
+    "column_name" : "岗位专业通道名称",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "职位类名称",
+    "column_group" : ""
+  }, {
+    "column_code" : "channel_id",
+    "column_name" : "付费渠道ID（三级）",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "渠道ID，用于按渠道筛选",
+    "column_group" : ""
+  }, {
+    "column_code" : "channel_name",
+    "column_name" : "付费渠道（三级）",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "渠道名称",
+    "column_group" : ""
+  }, {
+    "column_code" : "channel_parent_id",
+    "column_name" : "付费渠道ID（二级）",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "父渠道ID",
+    "column_group" : ""
+  }, {
+    "column_code" : "channel_parent_name",
+    "column_name" : "付费渠道（二级）",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "父渠道名称",
+    "column_group" : ""
+  }, {
+    "column_code" : "channel_full_name",
+    "column_name" : "付费渠道全路径",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "渠道名称全路径",
+    "column_group" : ""
+  }, {
+    "column_code" : "channel_full_path",
+    "column_name" : "渠道Id全路径",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "渠道ID全路径，用于按渠道层级筛选（like '%channel_id%'）",
+    "column_group" : ""
+  }, {
+    "column_code" : "channel_type",
+    "column_name" : "付费渠道ID全路径",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "渠道类型",
+    "column_group" : ""
+  }, {
+    "column_code" : "recruit_location_id",
+    "column_name" : "招聘工作地ID",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "招聘地点ID，用于按工作地筛选",
+    "column_group" : ""
+  }, {
+    "column_code" : "recruit_location_name",
+    "column_name" : "招聘工作地名称",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "招聘地点名称",
+    "column_group" : ""
+  }, {
+    "column_code" : "location_country_id",
+    "column_name" : "招聘岗位国家ID",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "工作地国家id",
+    "column_group" : ""
+  }, {
+    "column_code" : "location_country_name",
+    "column_name" : "招聘岗位国家名称",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "国家名称",
+    "column_group" : ""
+  }, {
+    "column_code" : "process_time",
+    "column_name" : "简历评估完成时间",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "简历评估处理时间，null表示仍在评估中，用于统计评估中简历数",
+    "column_group" : ""
+  }, {
+    "column_code" : "arrive_time",
+    "column_name" : "简历评估到达时间",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "简历到达评估环节的时间，用于ct002子查询判断评估中状态",
+    "column_group" : ""
+  }, {
+    "column_code" : "is_pass",
+    "column_name" : "是否通过简历评估",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "是否通过",
+    "column_group" : ""
+  }, {
+    "column_code" : "is_giveup",
+    "column_name" : "是否放弃简历评估（不含超时放弃）",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "是否放弃",
+    "column_group" : ""
+  }, {
+    "column_code" : "is_timeout",
+    "column_name" : "是否超时放弃",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "是否超时（0/1），用于统计超时未处理的简历数",
+    "column_group" : ""
+  }, {
+    "column_code" : "is_secret_post",
+    "column_name" : "是否保密岗位",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "是否保密岗位",
+    "column_group" : ""
+  } ]
+}

@@ -1,0 +1,59 @@
+{
+  "name": "financial-tracker",
+  "version": "1.0.0",
+  "description": "Precisely tracking project and business financial data, ensuring every transaction is clear and transparent",
+  "agents": [
+    "./agents/financial-tracker.md"
+  ],
+  "expertType": "agent",
+  "agentName": "financial-tracker",
+  "displayName": {
+    "en": "Silas",
+    "zh": "账清清"
+  },
+  "profession": {
+    "en": "Financial Tracker",
+    "zh": "财务追踪师"
+  },
+  "displayDescription": {
+    "en": "Precisely tracking project and business financial data, ensuring every transaction is clear and transparent",
+    "zh": "精准追踪项目和业务的财务数据，确保每笔收支清晰透明"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "08-FinanceInvestment",
+  "defaultInitPrompt": {
+    "zh": "我们的财务数据管理混乱,需要更好的财务追踪和预算管理,请财务追踪者帮我们建立财务管理体系。",
+    "en": "Our financial data management is chaotic, and we need better financial tracking and budget management. Please, Financial Tracker, help us establish a financial management system."
+  },
+  "tags": [
+    {
+      "zh": "财务追踪",
+      "en": "Financial Tracking"
+    },
+    {
+      "zh": "预算监控",
+      "en": "Budget Monitoring"
+    },
+    {
+      "zh": "现金流管理",
+      "en": "Cash Flow Management"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "我们的财务数据管理混乱,需要更好的财务追踪和预算管理,请财务追踪者帮我们建立财务管理体系。",
+      "en": "Our financial data management is chaotic, and we need better financial tracking and budget management. Please, Financial Tracker, help us establish a financial management system."
+    },
+    {
+      "zh": "制定月度/季度财务收支分析报告",
+      "en": "Create monthly/quarterly financial income and expenditure analysis report"
+    },
+    {
+      "zh": "设计费用管控和预算跟踪方案",
+      "en": "Design expense control and budget tracking plan"
+    }
+  ],
+  "skills": [
+    "./skills/finance-ops"
+  ]
+}

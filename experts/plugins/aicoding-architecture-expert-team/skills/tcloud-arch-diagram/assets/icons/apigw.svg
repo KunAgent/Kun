@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="32px" height="32px" viewBox="0 0 32 32" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+    <!-- Generator: Sketch 52.6 (67491) - http://www.bohemiancoding.com/sketch -->
+    <title>API网关-32px</title>
+    <desc>Created with Sketch.</desc>
+    <g id="API网关-32px" stroke="none" stroke-width="1" fill="none" fill-rule="evenodd">
+        <rect id="Rectangle-Copy" fill="#0052D9" opacity="0" x="0" y="0" width="32" height="32"></rect>
+        <g id="Group" fill="#0052D9" fill-rule="nonzero">
+            <g id="Group-10" transform="translate(8.000000, 7.000000)">
+                <rect id="Rectangle-path" x="0.074" y="4" width="16" height="2"></rect>
+                <rect id="Rectangle-path" x="0.074" y="15" width="16" height="2"></rect>
+                <rect id="Rectangle-path" x="0.074" y="4" width="2" height="3"></rect>
+                <rect id="Rectangle-path" x="0.074" y="14" width="2" height="3"></rect>
+                <rect id="Rectangle-path" x="14.074" y="14" width="2" height="3"></rect>
+                <rect id="Rectangle-path" x="14.074" y="4" width="2" height="3"></rect>
+                <rect id="Rectangle-path" x="3.074" y="0" width="2" height="4"></rect>
+                <rect id="Rectangle-path" x="11.074" y="0" width="2" height="4"></rect>
+            </g>
+            <rect id="Rectangle-path" x="9.074" y="15" width="2" height="5"></rect>
+            <rect id="Rectangle-path" x="12.074" y="15" width="2" height="5"></rect>
+            <rect id="Rectangle-path" x="10.074" y="15" width="3" height="1"></rect>
+            <rect id="Rectangle-path" x="10.074" y="17" width="3" height="1"></rect>
+            <rect id="Rectangle-path" x="16.074" y="15" width="4" height="1"></rect>
+            <rect id="Rectangle-path" x="15.074" y="17" width="4" height="1"></rect>
+            <rect id="Rectangle-path" x="15.074" y="15" width="2" height="5"></rect>
+            <rect id="Rectangle-path" x="18.074" y="15" width="2" height="3"></rect>
+            <rect id="Rectangle-path" x="21.074" y="15" width="2" height="5"></rect>
+            <path d="M31.7193022,13.0004945 L29.6779284,13.0004945 C28.3047737,6.70988283 22.7024129,2 16,2 C8.2680135,2 2,8.2680135 2,16 C2,23.7319865 8.2680135,30 16,30 C23.0527724,30 28.8874794,24.7848417 29.8581515,18.0004945 L31.8761508,18.0004945 C30.8917351,25.8928783 24.1590649,32 16,32 C7.163444,32 -2.0250468e-13,24.836556 -2.0250468e-13,16 C-2.0250468e-13,7.163444 7.163444,0 16,0 C23.8113418,0 30.3152783,5.59766728 31.7193022,13.0004945 Z" id="Combined-Shape"></path>
+        </g>
+    </g>
+</svg>

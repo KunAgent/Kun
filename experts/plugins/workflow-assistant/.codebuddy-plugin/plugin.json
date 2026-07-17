@@ -1,0 +1,74 @@
+{
+  "name": "workflow-assistant",
+  "version": "3.0.0",
+  "description": "A full-featured workflow expert covering workflow design (query list, view canvas) and workflow instance operations (query todos, query my applications, inspect details, query related instances). Powered by huijin-workflow MCP with 6 independent skills.",
+  "author": {
+    "name": "jamesye",
+    "email": "jamesye@tencent.com"
+  },
+  "expertType": "agent",
+  "agentName": "workflow-assistant",
+  "agents": [
+    "./agents/workflow-assistant.md"
+  ],
+  "skills": [
+    "./skills/query-workflow-list",
+    "./skills/query-workflow-detail",
+    "./skills/query-todo-instances",
+    "./skills/query-my-instances",
+    "./skills/query-instance-detail",
+    "./skills/query-workflow-related-instances"
+  ],
+  "displayName": {
+    "en": "Workflow Orchestration Expert",
+    "zh": "流程编排专家"
+  },
+  "profession": {
+    "en": "Workflow Orchestration Expert",
+    "zh": "流程编排专家"
+  },
+  "displayDescription": {
+    "en": "Huijin one-stop workflow orchestration expert. Handles workflow design (query list, view canvas) and workflow instance operations (query todos, query my applications, inspect details, query related instances). Smart disambiguation, precise platform links. Powered by huijin-workflow MCP.",
+    "zh": "汇金一站式流程编排专家，覆盖流程设计与流程单操作，智能识别用户意图，精准推送链接。"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "09-OperationsHR",
+  "defaultInitPrompt": {
+    "zh": "查询我待办的流程单列表",
+    "en": "Query my pending workflow to-do list"
+  },
+  "tags": [
+    {
+      "en": "Workflow Design",
+      "zh": "流程设计"
+    },
+    {
+      "en": "Workflow Management",
+      "zh": "流程管理"
+    },
+    {
+      "en": "Workflow Instance",
+      "zh": "流程单"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "en": "Query my pending workflow to-do list",
+      "zh": "查询我待办的流程单列表"
+    },
+    {
+      "en": "Query the workflow list I manage",
+      "zh": "查询我管理的流程列表"
+    },
+    {
+      "en": "Show details of workflow instance T2026051400014945",
+      "zh": "查看流程单 T2026051400014945 的详情和审批进度"
+    }
+  ],
+  "mcpServers": "./.mcp.json",
+  "nickname": {
+    "en": "Fluent Flow",
+    "zh": "流畅畅"
+  },
+  "plugin": "workflow-assistant"
+}

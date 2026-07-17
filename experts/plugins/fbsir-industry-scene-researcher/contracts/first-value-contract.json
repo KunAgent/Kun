@@ -1,0 +1,165 @@
+{
+  "schemaVersion": "1.0",
+  "contractId": "industry_scene_researcher_first_value_contract_v21",
+  "positioning": "把模糊行业目标拆成 WorkBuddy 可执行的人机混编捷径指南。",
+  "starterSet": [
+    {
+      "starterId": "quick_judgement",
+      "starterType": "quick_judgement",
+      "trigger": "用户只有行业、角色、目标或一句模糊需求。",
+      "requiredSlots": [
+        "userIndustry",
+        "userRole",
+        "userGoal"
+      ],
+      "firstValueDelta": "给 1 到 3 个候选缺口并只选 1 个最高价值主缺口。"
+    },
+    {
+      "starterId": "material_to_output",
+      "starterType": "material_to_output",
+      "trigger": "用户粘贴行业、客户、竞品、政策、会议或项目材料。",
+      "requiredSlots": [
+        "providedMaterials",
+        "userGoal",
+        "expectedOutputFormat"
+      ],
+      "firstValueDelta": "先做证据行和候选缺口评分，再生成 3 天试点包。"
+    },
+    {
+      "starterId": "continue_action",
+      "starterType": "continue_action",
+      "trigger": "用户要求继续上一轮判断、落地执行、汇报老板或推进 Day 1。",
+      "requiredSlots": [
+        "previousDecision",
+        "chosenGap",
+        "timeWindow"
+      ],
+      "firstValueDelta": "把已选缺口推进为 Day 1 行动清单或一页汇报卡。"
+    }
+  ],
+  "inputFields": [
+    "userIndustry",
+    "userRole",
+    "userGoal",
+    "userResources",
+    "userConstraints",
+    "providedMaterials",
+    "projectContext"
+  ],
+  "requiredOutputs": [
+    "supplementCard",
+    "workbuddyCapabilityMap",
+    "humanAiTaskTable",
+    "pilotPacket",
+    "singleNextStepCta"
+  ],
+  "primaryCta": "生成 3 天试点项目包",
+  "defaultFollowupQuestion": "现在就执行 Day 1 吗？",
+  "starterRoutingPolicy": {
+    "mustInferStarterWhenUserSelectsQuickPrompt": true,
+    "sparseInputFallbackStarterId": "quick_judgement",
+    "materialInputStarterId": "material_to_output",
+    "continuationInputStarterId": "continue_action",
+    "finalReplyMustStillKeepSingleCta": true
+  },
+  "researchActionModeRequiresAtLeastOneEvidenceRow": true,
+  "forbidCapabilityCatalogAsPrimaryOutput": true,
+  "continuationHooks": [
+    "continued_use_completed",
+    "intent_reported",
+    "explicit_consume"
+  ],
+  "acceptanceMetrics": [
+    "firstValueCompleted",
+    "fivePartBundleDelivered",
+    "singleNextStepCtaPresent",
+    "day1ActionReady",
+    "fileOutputs"
+  ],
+  "postFirstValueObservationMetrics": [
+    "continuedUseCompleted",
+    "explicitConsume",
+    "returningUsers"
+  ],
+  "metricBoundary": {
+    "firstValueAcceptanceDoesNotRequireServiceConsume": true,
+    "continuedUseCompletedIsPostFirstValueObservation": true,
+    "explicitConsumeIsPostFirstValueObservation": true,
+    "returningUsersIsPostFirstValueObservation": true
+  },
+  "responseOrderingPolicy": {
+    "noConnectorFirstValuePrecedence": true,
+    "firstUserVisibleBlockMustBeFivePartBundle": true,
+    "optionalEnhancementDiagnosticsAfterFirstValueOnly": true,
+    "connectorOrServiceDiagnosticsNeverLeadDirectFirstValueReply": true,
+    "serviceRouteMismatchIsPostFirstValueGapOnly": true,
+    "ifUserRequestsDirectFivePieceDoNotPrefaceWithToolStatus": true,
+    "serviceEnhancementAttemptsDoNotDelayFirstValue": true
+  },
+  "highestValueGapEvidenceGate": {
+    "requiredWhen": [
+      "highest_value",
+      "most_worth",
+      "researcher_judgement"
+    ],
+    "maximumCandidateGaps": 3,
+    "minEvidenceRowsForWinner": 1,
+    "allowedEvidenceStrength": [
+      "user_provided",
+      "traceable_local_file",
+      "fetched_primary",
+      "fetched_secondary",
+      "needs_verification"
+    ],
+    "fallbackWhenEvidenceIsWeak": "deliver_first_value_with_citation_gap_and_hypothesis_label",
+    "hypothesisFlagField": "highestValueGapIsHypothesis"
+  },
+  "scenarioMicroSlice": {
+    "requiredBeforeFivePartBundleDecision": true,
+    "requiredFields": [
+      "actor",
+      "moment",
+      "blockedAction",
+      "aiIntervention",
+      "humanDecision",
+      "observableArtifact"
+    ],
+    "allowCondensedFormWhenInputSparse": true
+  },
+  "signatureFields": [
+    "starterId",
+    "starterType",
+    "productId",
+    "packCode",
+    "entryId",
+    "entryPromptCode",
+    "expertEntryId",
+    "assetType",
+    "requestSource",
+    "hostPatchVersion",
+    "versionKey"
+  ],
+  "observabilityFields": [
+    "starterId",
+    "starterType",
+    "scenarioFamily",
+    "requestSource",
+    "clientEdition",
+    "distributionChannel",
+    "buildChannel",
+    "locale",
+    "expertVersion",
+    "firstValueCompleted",
+    "continuedUseCompleted"
+  ],
+  "forbiddenOverclaims": [
+    "do_not_claim_local_equivalent_as_official_listing",
+    "do_not_claim_same_binding_consume_as_continued_use",
+    "do_not_claim_lebao_as_payment_or_revenue_closure"
+  ],
+  "firstValueEvidenceBoundary": {
+    "highestValueGapMayBeHypothesisWhenEvidenceWeak": true,
+    "citationGapListAllowed": true,
+    "serviceIntentReportMayExistBeforeServiceConsume": true
+  }
+}

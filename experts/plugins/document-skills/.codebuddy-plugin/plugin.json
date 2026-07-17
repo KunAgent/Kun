@@ -1,0 +1,25 @@
+{
+  "name": "document-skills",
+  "version": "1.0.0",
+  "description": "Collection of document processing suite including Excel, Word, PowerPoint, and PDF capabilities",
+  "author": {
+    "name": "CodeBuddy Teams",
+    "email": ""
+  },
+  "homepage": {
+    "url": "",
+    "type": "github"
+  },
+  "license": "",
+  "skills": [
+    "./skills/xlsx",
+    "./skills/docx",
+    "./skills/pptx",
+    "./skills/pdf"
+  ],
+  "expertType": "agent",
+  "agentName": "document-processing-expert",
+  "agents": [
+    "./agents/document-processing-expert.md"
+  ]
+}

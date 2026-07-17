@@ -1,0 +1,63 @@
+{
+  "name": "content-creator",
+  "version": "1.0.0",
+  "description": "Skilled at creating engaging multi-platform content, delivering brand stories to target audiences",
+  "agents": [
+    "./agents/content-creator.md"
+  ],
+  "expertType": "agent",
+  "agentName": "content-creator",
+  "displayName": {
+    "en": "Kai",
+    "zh": "文爆爆"
+  },
+  "profession": {
+    "en": "Content Creator",
+    "zh": "内容创作专家"
+  },
+  "displayDescription": {
+    "en": "Skilled at creating engaging multi-platform content, delivering brand stories to target audiences",
+    "zh": "擅长创作引人入胜的多平台内容，让品牌故事触达目标受众"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "06-ContentCreative",
+  "defaultInitPrompt": {
+    "zh": "我们需要持续创作优质内容来吸引目标用户,但缺乏系统的内容规划,请内容创作专家帮我们制定内容策略。",
+    "en": "We need to consistently create high-quality content to attract our target audience, but we lack systematic content planning. Please, Content Creator, help us develop a content strategy."
+  },
+  "tags": [
+    {
+      "zh": "内容策略",
+      "en": "Content Strategy"
+    },
+    {
+      "zh": "多平台创作",
+      "en": "Multi-Platform Creation"
+    },
+    {
+      "zh": "品牌叙事",
+      "en": "Brand Storytelling"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "我们需要持续创作优质内容来吸引目标用户,但缺乏系统的内容规划,请内容创作专家帮我们制定内容策略。",
+      "en": "We need to consistently create high-quality content to attract our target audience, but we lack systematic content planning. Please, Content Creator, help us develop a content strategy."
+    },
+    {
+      "zh": "撰写一篇品牌故事型深度长文",
+      "en": "Write a brand storytelling long-form article"
+    },
+    {
+      "zh": "将现有内容改写适配5个社交媒体平台",
+      "en": "Repurpose existing content for 5 social media platforms"
+    }
+  ],
+  "skills": [
+    "./skills/anti-distill",
+    "./skills/humanizer",
+    "./skills/minimax-docx",
+    "./skills/novel-writer",
+    "./skills/novel-writing"
+  ]
+}

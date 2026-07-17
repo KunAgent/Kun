@@ -1,0 +1,60 @@
+{
+  "name": "feedback-synthesis-analyst",
+  "version": "1.0.0",
+  "description": "Extracting valuable insights from massive user feedback, transforming user voice into improvement directions",
+  "agents": [
+    "./agents/feedback-synthesis-analyst.md"
+  ],
+  "expertType": "agent",
+  "agentName": "feedback-synthesis-analyst",
+  "displayName": {
+    "en": "Xavi",
+    "zh": "听声声"
+  },
+  "profession": {
+    "en": "Feedback Synthesis Analyst",
+    "zh": "反馈综合分析师"
+  },
+  "displayDescription": {
+    "en": "Extracting valuable insights from massive user feedback, transforming user voice into improvement directions",
+    "zh": "从海量用户反馈中提炼有价值洞察，将用户声音转化为改进方向"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "01-ProductDesign",
+  "defaultInitPrompt": {
+    "zh": "我们收集了大量用户反馈但难以提炼有效洞察,请反馈综合分析师帮我们从反馈中发现产品改进机会。",
+    "en": "We have collected a lot of user feedback but struggle to extract valuable insights. Please, Feedback Synthesis Analyst, help us discover product improvement opportunities from the feedback."
+  },
+  "tags": [
+    {
+      "zh": "反馈分析",
+      "en": "Feedback Synthesis"
+    },
+    {
+      "zh": "用户声音",
+      "en": "Voice of Customer"
+    },
+    {
+      "zh": "洞察提炼",
+      "en": "Insight Extraction"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "我们收集了大量用户反馈但难以提炼有效洞察,请反馈综合分析师帮我们从反馈中发现产品改进机会。",
+      "en": "We have collected a lot of user feedback but struggle to extract valuable insights. Please, Feedback Synthesis Analyst, help us discover product improvement opportunities from the feedback."
+    },
+    {
+      "zh": "搭建反馈分类和优先级评估框架",
+      "en": "Build feedback classification and priority evaluation framework"
+    },
+    {
+      "zh": "输出可执行的产品改进建议",
+      "en": "Deliver actionable product improvement recommendations"
+    }
+  ],
+  "skills": [
+    "./skills/fbs-bookwriter",
+    "./skills/market-researcher"
+  ]
+}

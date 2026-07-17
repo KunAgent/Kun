@@ -1,0 +1,105 @@
+{
+  "name": "openspec-doc-team",
+  "version": "1.1.0",
+  "description": "Professional document generation team: 4 roles (lead editor + researcher + generator + auditor) orchestrate a 6-phase workflow to produce enterprise-grade long documents (construction design specs, technical proposals, bid documents, maintenance manuals, API docs).",
+  "author": {
+    "name": "Expert Marketplace"
+  },
+  "license": "MIT",
+  "keywords": [
+    "document-generation",
+    "long-document",
+    "enterprise-docs",
+    "spec-writing",
+    "compliance-audit",
+    "agent-team"
+  ],
+  "expertType": "team",
+  "agentName": "doc-team-lead",
+  "agents": [
+    "./agents/doc-team-lead.md",
+    "./agents/doc-researcher.md",
+    "./agents/doc-generator.md",
+    "./agents/doc-auditor.md"
+  ],
+  "teamInfo": {
+    "leadAgent": "doc-team-lead",
+    "memberAgents": [
+      "doc-researcher",
+      "doc-generator",
+      "doc-auditor"
+    ]
+  },
+  "displayName": {
+    "en": "Professional Document Generation Team",
+    "zh": "专业文档生成团队"
+  },
+  "profession": {
+    "en": "Enterprise-grade long document writing workshop",
+    "zh": "企业级长文档生成工坊"
+  },
+  "displayDescription": {
+    "en": "4 roles collaborate across 6 phases (requirement analysis → retrieval → generation → audit loop → assembly → delivery) to produce compliance-ready long documents: construction design specs, technical proposals, bid docs, maintenance manuals, API/system docs, and more.",
+    "zh": "4 位专业角色分 6 阶段协作完成企业级长文档生成：需求分析 → 知识检索 → 内容生成 → 质量审核（循环）→ 整合汇编 → 交付输出。适用于施工图设计说明、技术方案、招投标文件、维修手册、API/系统文档等场景。"
+  },
+  "avatar": "avatars/team.png",
+  "categoryId": "10-ProjectQuality",
+  "defaultInitPrompt": {
+    "en": "Generate an architectural construction drawing design specification for me",
+    "zh": "帮我生成一份建筑施工图设计说明"
+  },
+  "members": [
+    {
+      "id": "doc-team-lead",
+      "name": {
+        "en": "Zhang",
+        "zh": "章成文"
+      },
+      "profession": {
+        "en": "Editor-in-Chief",
+        "zh": "总编辑"
+      },
+      "avatar": "avatars/doc-team-lead.png",
+      "role": "lead"
+    },
+    {
+      "id": "doc-researcher",
+      "name": {
+        "en": "Su",
+        "zh": "苏寻源"
+      },
+      "profession": {
+        "en": "Document Researcher",
+        "zh": "文献检索员"
+      },
+      "avatar": "avatars/doc-researcher.png",
+      "role": "member"
+    },
+    {
+      "id": "doc-generator",
+      "name": {
+        "en": "Zhi",
+        "zh": "支笔生"
+      },
+      "profession": {
+        "en": "Content Generator",
+        "zh": "内容生成员"
+      },
+      "avatar": "avatars/doc-generator.png",
+      "role": "member"
+    },
+    {
+      "id": "doc-auditor",
+      "name": {
+        "en": "Yan",
+        "zh": "严审之"
+      },
+      "profession": {
+        "en": "Quality Auditor",
+        "zh": "质量审核员"
+      },
+      "avatar": "avatars/doc-auditor.png",
+      "role": "member"
+    }
+  ]
+}

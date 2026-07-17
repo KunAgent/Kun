@@ -1,0 +1,116 @@
+{
+  "name": "databrain-datalab-analyst",
+  "display_name": "Datalab 报表/知识库兜底分析",
+  "description": "**databrain-dashboard-service 的兜底/补充 skill**，不是经分指标查询入口。仅在以下场景启用：(1) 用户直接给了 Datalab 报表 URL/dashboard_id/`报表id@图表id`；(2) dashboard-service 已尝试且明确失败（unsupported / 空数据 / 找不到 cube）；(3) game_code 以 `gst` 开头且需要 Knot 业务知识库做归因/异常/最佳实践归纳。**白名单游戏的常规指标查询必须先走 databrain-dashboard-service**；非白名单游戏指标走 databrain-intelligence。Markdown 排版由 databrain-summarize 收尾，本 skill 只对数据正确性负责。",
+  "version": "3.11.0",
+  "author": "Datalab Team",
+  "category": "数据分析",
+  "entrypoint": {
+    "script": "scripts/call_api.py",
+    "description": "统一 API 入口，用法: python scripts/call_api.py <action> [参数]",
+    "quick_start": "python scripts/call_api.py full_report --dashboard_id <id> --question <问题>"
+  },
+  "tags": ["兜底", "Dashboard 兜底", "知识库", "知识检索", "指标归因", "异常分析", "报表查询", "数据分析"],
+  "permissions": ["网络访问权限"],
+  "scenario": "platform_service",
+  "scripts": {
+    "call_api": {
+      "path": "scripts/call_api.py",
+      "description": "统一 API 调用脚本，Agent 必须通过此脚本调用所有 Datalab API",
+      "requires": ["requests"],
+      "actions": [
+        "report_log", "search_game", "dashboard_list", "dashboard_search",
+        "dashboard_overview", "chart_data", "dashboard_data", "full_report"
+      ]
+    }
+  },
+  "env_vars": {
+    "DATABRAIN_TOKEN": {
+      "required": true,
+      "description": "认证 token 原始值（不含 Bearer 前缀），由上层服务动态传入"
+    },
+    "DATABRAIN_HOST": {
+      "required": true,
+      "description": "API 主机地址，由上层服务动态传入"
+    },
+    "DATABRAIN_DISPLAY_HOST": {
+      "required": true,
+      "description": "系统链接展示域名"
+    }
+  },
+  "apis": [
+    {
+      "name": "knot_mcp_search",
+      "type": "mcp",
+      "server": "knot",
+      "description": "通过 Knot MCP 知识库进行语义检索"
+    },
+    {
+      "name": "report_log",
+      "endpoint": "/api/v1/permission/operationLog",
+      "method": "POST",
+      "description": "Agent 内部日志上报（静默调用，不要向用户提及）"
+    },
+    {
+      "name": "search_game",
+      "endpoint": "/api/v1/datalab/skill/search_game",
+      "method": "POST",
+      "description": "业务名称模糊搜索 → game_code（**兜底用**：react agent 链路下默认从 `agent_context.dashboard_game_code_and_filters` 取 game_code，禁止主动调本接口；仅在上下文缺 game_code 且用户没给报表 URL/ID 时兜底）"
+    },
+    {
+      "name": "dashboard_list",
+      "endpoint": "/api/v1/datalab/skill/dashboard_list",
+      "method": "POST",
+      "description": "查询业务下的报表列表"
+    },
+    {
+      "name": "dashboard_search",
+      "endpoint": "/api/v1/datalab/skill/dashboard_search",
+      "method": "POST",
+      "description": "按关键词搜索报表"
+    },
+    {
+      "name": "dashboard_overview",
+      "endpoint": "/api/v1/datalab/skill/dashboard_overview",
+      "method": "POST",
+      "description": "获取报表结构（图表列表 + 筛选器），必须在获取数据前先调用"
+    },
+    {
+      "name": "chart_data",
+      "endpoint": "/api/v1/datalab/skill/chart_data",
+      "method": "POST",
+      "description": "查询单个图表数据（支持筛选 + 聚合）"
+    },
+    {
+      "name": "dashboard_data",
+      "endpoint": "/api/v1/datalab/skill/dashboard_data",
+      "method": "POST",
+      "description": "一次性获取所有图表数据（全部分析首选，服务端并发）"
+    }
+  ],
+  "knowledge_sources": {
+    "local_references": {
+      "path": "references/",
+      "description": "本地静态知识文件（指标字典、图表类型、筛选操作符、术语表）",
+      "files": [
+        "chart_data_mapping.md",
+        "metrics_dictionary.md",
+        "chart_types.md",
+        "filter_operations.md",
+        "business_glossary.md",
+        "common_issues.md",
+        "output_example.md"
+      ]
+    },
+    "knot_knowledge_base": {
+      "uuid": "feb87d08f0ef480d9019caaf3b630451",
+      "url": "https://knot.woa.com/knowledge/detail/feb87d08f0ef480d9019caaf3b630451",
+      "description": "Knot 平台托管的 Datalab 业务知识库（产品文档、分析模板、FAQ、基准数据）"
+    }
+  },
+  "capabilities": {
+    "knowledge_retrieval": "通过 Knot MCP 知识库检索业务知识、归因方法论、行业基准",
+    "data_query": "通过 Datalab 报表接口获取真实数据（Dashboard 概览、图表数据）",
+    "integrated_analysis": "知识+数据融合分析，提供深度洞察而非简单复述"
+  }
+}

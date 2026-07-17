@@ -1,0 +1,1481 @@
+{
+  "table_code" : "catalog_dos_da_mcp.hrdw.Report_Wide_Public_Staff_Transfer_Info",
+  "table_name" : "调动信息宽表",
+  "version" : 9,
+  "table_desc" : "定位：本报表涵盖所有异动场景类型为“调动”的业务数据，包含境内调动及跨境调动两类情况，数据范围包括调动流程中及流程已完成的所有相关业务信息。\n唯一标识：该表以\"异动ID\"(move_id)作为唯一标识，每次调动操作对应一行数据，一个员工可以有多条调动记录；同一次调动在同一日期内若有多条记录，由move_date_seq（异动日期序号）区分\n主要包含以下几大部分内容：\n1、员工基础信息（员工ID、姓名、员工类型、员工状态、当前管理主体、工作地、合同信息等） \n2、员工个人属性（国籍、性别、出生日期、婚姻状况、最高学历、入职日期、司龄起算日期等） \n3、调动核心信息（异动ID、异动流程单号、异动生效日期、调动场景子类型/描述、调动原因、流程状态、发起人、发起时间、流程审批完成时间）\n4、调动特征标识（是否跨BG/线/部门/中心/组调动、是否活水、截止本次个人意愿调动次数）\n5、调动时的人员快照（司龄、工龄、年龄、岗位停留时长、专业职级停留时长、管理职级停留时长、近4次绩效结果）\n6、调动前信息（调动前组织/岗位/职级/管理主体/工作地/直接上级/专业通道等）\n7、调动后信息（调动后组织/岗位/职级/管理主体/工作地/直接上级/合同主体/用工分类等）\n8、交接信息（是否启用工作交接/资产交接及交接人）、调入BP/调出BP的异动原因及分析\n\n不支持的场景：\n不支持查询晋升、降级、身份转换等非\"调动\"类型的异动流水，此类需求应使用人员变动信息宽表；\n不支持查询员工当前的组织/职级现状，此类需求应使用员工信息宽表；\n不支持查询合同改签流水，此类需求应使用合同改签宽表；\n不支持查询派驻流水，此类需求应使用员工派驻宽表；\n不支持查询入职/离职流水（有对应的入职信息宽表） \n\n能回答的典型问题：\n某员工历史上调动了几次，每次从哪个部门调到哪个部门；\nA部门近1年流入了多少员工，来自哪些BG；\nA部门近1年流出了多少员工，去了哪些BG；\n今年发生跨BG调动的员工有多少人；\nA部门今年的活水（内部流动）情况； \nA部门近1年调动时近1次绩效Outstanding的员工有多少；\n某员工调动时的专业职级停留时长是多少；\nA部门今年发生个人意愿调动的员工有哪些；\n某员工调动前后工作地发生了哪些变化\n优先场景：\n\n按调动类型（跨BG/跨部门/活水）分析人员流动规律；",
+  "write_sql_background" : "1、统计调动人数时，使用COUNT(DISTINCT staff_id)去重；统计调动次数时，使用COUNT(move_id)；\n2、查询指定时间段的调动记录时，使用move_date（异动生效日期）作为时间过滤，格式为'YYYY-MM-DD'；\n3、同一员工同一天若有多条异动记录，由move_date_seq区分顺序，数值越小越早发生\n4、绩效周期背景：公司统一的评估考核周期一年两次，H1评估对应6月30日，H2评估对应12月31日；本表记录的是异动发生时最近4次绩效结果",
+  "find_column_background" : "常用过滤字段\n- 员工状态\n- 员工类型\n- 管理主体\n- 流程状态\n- 异动场景类型\n- 是否活水\n- 是否跨BG调动\n- 是否跨部门调动\n\n常用分析维度字段:\n- 调动核心: (异动ID、异动生效日期、异动子场景类型、异动原因类型、异动原因、\n- 调动前信息: 调动前组织全路径、调动前专业职级、调动前管理职级、调动前工作地、调动前BG、调动前部门\n- 调动后信息: 调动后组织全路径、调动后专业职级、调动后管理职级、调动后工作地、调动后BG、调动后部门\n- 调动特征: 是否跨BG、是否跨部门、是否活水、\n- 异动时快照: 调动时司龄、调动时工龄、调动时年龄、调动时岗位停留时长、调动时专业职级停留时长、调动时管理职级停留时长\n- 绩效快照:近1次绩效等级、近2次绩效等级等",
+  "columns" : [ {
+    "column_code" : "staff_id8",
+    "column_name" : "员工ID",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "staff_combined_name",
+    "column_name" : "中英文名",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "staff_display_name",
+    "column_name" : "中文名",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "staff_account_name",
+    "column_name" : "英文名",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "org_full_name",
+    "column_name" : "组织架构",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "work_location_full_name",
+    "column_name" : "工作地",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "post_name",
+    "column_name" : "岗位",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "subsidiary_position_name",
+    "column_name" : "子公司专业职位",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "subsidiary_position_level_name",
+    "column_name" : "子公司专业职级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "subsidiary_manager_flag_desc",
+    "column_name" : "是否子公司管理者",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "subsidiary_manager_position_name",
+    "column_name" : "子公司管理职位",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "subsidiary_manager_level_name",
+    "column_name" : "子公司管理职级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "from_org_full_name",
+    "column_name" : "异动前组织架构",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "from_work_location_full_name",
+    "column_name" : "异动前工作地",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "from_post_name",
+    "column_name" : "异动前所属岗位",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "from_leader_staff_combined_name",
+    "column_name" : "异动前直接上级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "from_leader_post_name",
+    "column_name" : "异动前直接上级岗位",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "from_subsidiary_position_name",
+    "column_name" : "异动前子公司专业职位",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "from_subsidiary_position_level_name",
+    "column_name" : "异动前子公司专业职级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "from_subsidiary_manager_flag_desc",
+    "column_name" : "异动前是否子公司管理者",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "from_subsidiary_manager_position_name",
+    "column_name" : "异动前子公司管理职位",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "from_subsidiary_manager_level_name",
+    "column_name" : "异动前子公司管理职级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "inaugural_date",
+    "column_name" : "入职日期",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "move_date",
+    "column_name" : "异动生效时间",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "staff_type_name",
+    "column_name" : "员工类型",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "staff_subtype_name",
+    "column_name" : "员工子类型",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "manage_unit_name",
+    "column_name" : "管理主体",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "move_type_name",
+    "column_name" : "异动类型",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "move_reason_name",
+    "column_name" : "异动原因",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "to_org_full_name",
+    "column_name" : "异动后组织架构",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "to_work_location_full_name",
+    "column_name" : "异动后工作地",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "to_post_name",
+    "column_name" : "异动后所属岗位",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "to_leader_staff_combined_name",
+    "column_name" : "异动后直接上级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "to_leader_post_name",
+    "column_name" : "异动后直接上级岗位",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "to_subsidiary_position_name",
+    "column_name" : "异动后子公司专业职位",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "to_subsidiary_position_level_name",
+    "column_name" : "异动后子公司专业职级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "to_subsidiary_manager_flag_desc",
+    "column_name" : "异动后是否子公司管理者",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "to_subsidiary_manager_position_name",
+    "column_name" : "异动后子公司管理职位",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "to_subsidiary_manager_level_name",
+    "column_name" : "异动后子公司管理职级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "staff_id8",
+    "column_name" : "员工ID",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "staff_combined_name",
+    "column_name" : "员工中英文名",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "hr_status_name",
+    "column_name" : "员工状态",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "manage_unit_name",
+    "column_name" : "管理主体",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "staff_type_name",
+    "column_name" : "员工类型",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "staff_subtype_name",
+    "column_name" : "员工子类型",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "work_location_name",
+    "column_name" : "工作地",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "contract_type_name",
+    "column_name" : "合同类型",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "pro_position_level_name",
+    "column_name" : "专业职级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "manager_level_name",
+    "column_name" : "管理职级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "manager_source_name",
+    "column_name" : "干部来源",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "work_begin_date",
+    "column_name" : "首次工作日期",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "seniority_begin_date",
+    "column_name" : "公司资历日期",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "inaugural_date",
+    "column_name" : "最近一次入职日期",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "latest_dimission_date",
+    "column_name" : "最近一次离职日期",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "latest_dimission_effect_date",
+    "column_name" : "最近一次离职生效日期",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "recruit_type_name",
+    "column_name" : "招聘类型",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "recruit_type_id",
+    "column_name" : "招聘类型ID",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "nationality_name",
+    "column_name" : "国籍",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "gender_name",
+    "column_name" : "性别",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "highest_education_school",
+    "column_name" : "学校",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "highest_education_level_name",
+    "column_name" : "学历",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "highest_education_major",
+    "column_name" : "专业",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "org_full_name",
+    "column_name" : "组织全路径",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "bg_name",
+    "column_name" : "当前BG",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "dept_name",
+    "column_name" : "当前部门",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "center_name",
+    "column_name" : "当前中心",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "entry_bg_date",
+    "column_name" : "当前BG开始日期",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "entry_dept_date",
+    "column_name" : "当前部门开始日期",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "entry_center_date",
+    "column_name" : "当前中心开始日期",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "post_name",
+    "column_name" : "当前岗位名称",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "post_begin_date",
+    "column_name" : "当前岗位开始日期",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "staff_move_flow_id",
+    "column_name" : "异动流程单号",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "initiator_staff_combined_name",
+    "column_name" : "单据发起人",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "initiator_date",
+    "column_name" : "单据发起时间",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "state_name",
+    "column_name" : "流程状态",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "current_step",
+    "column_name" : "当前环节",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "current_step_handler_staff_combined_name",
+    "column_name" : "当前环节处理人",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "move_date",
+    "column_name" : "异动生效日期",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "expect_move_date",
+    "column_name" : "预计异动开始时间",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "move_limited_date",
+    "column_name" : "限定最晚异动时间",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "move_type_name",
+    "column_name" : "异动场景类型",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "move_subtype_name",
+    "column_name" : "异动子场景类型",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "move_subtype2_name",
+    "column_name" : "异动子场景描述",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "huoshui_flag,huoshui_flag_desc",
+    "column_name" : "是否活水",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "recruit_manager_staff_combined_name",
+    "column_name" : "招聘经理（活水）",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "move_reason_name",
+    "column_name" : "异动原因类型",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "move_subreason_name",
+    "column_name" : "异动原因",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "to_move_reason_name",
+    "column_name" : "异动原因类型（调入bp）",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "from_move_reason_name",
+    "column_name" : "异动原因类型（调出bp）",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "to_move_subreason_name",
+    "column_name" : "异动原因（调入bp）",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "from_move_subreason_name",
+    "column_name" : "异动原因（调出bp）",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "to_move_analyze",
+    "column_name" : "异动分析（调入bp）",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "from_move_analyze",
+    "column_name" : "异动分析（调出bp）",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "offline_consensus_flag_desc",
+    "column_name" : "是否完成线下协商",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "work_handover_flag_desc",
+    "column_name" : "是否启动工作交接人交接",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "work_handover_staff_combined_name",
+    "column_name" : "工作交接人",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "assets_handover_flag_desc",
+    "column_name" : "是否启用资产交接",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "assets_handover_staff_combined_name",
+    "column_name" : "资产交接人",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "initiative_transfer_cnt",
+    "column_name" : "截止该次调动时个人意愿调动次数",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "cross_bg_flag_desc",
+    "column_name" : "是否跨BG调动",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "cross_line_flag_desc",
+    "column_name" : "是否跨线调动",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "cross_dept_flag_desc",
+    "column_name" : "是否跨部门调动",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "cross_center_flag_desc",
+    "column_name" : "是否跨中心调动",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "cross_team_flag_desc",
+    "column_name" : "是否跨组调动",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "seniority_duration",
+    "column_name" : "调动时司龄",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "seniority_duration_range",
+    "column_name" : "调动时司龄区间",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "work_duration",
+    "column_name" : "调动时工龄",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "work_duration_range",
+    "column_name" : "调动时工龄区间",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "age",
+    "column_name" : "调动时年龄",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "age_range",
+    "column_name" : "调动时年龄区间",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "to_post_duration",
+    "column_name" : "调动时岗位的停留时长",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "to_pro_position_level_begin_date",
+    "column_name" : "调动时专业职级开始时间",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "to_pro_position_level_duration",
+    "column_name" : "调动时专业职级停留时长（年）",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "to_manager_level_duration",
+    "column_name" : "调动时管理职级停留时长（年）",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "from_manage_unit_type_name",
+    "column_name" : "调动前管理主体类型",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "from_manage_unit_name",
+    "column_name" : "调动前管理主体",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "from_staff_type_name",
+    "column_name" : "调动前员工类型",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "from_staff_subtype_name",
+    "column_name" : "调动前员工子类型",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "from_org_id8",
+    "column_name" : "调动前组织ID",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "from_org_full_id8",
+    "column_name" : "调动前组织ID全路径",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "from_org_full_name",
+    "column_name" : "调动前所属组织全路径",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "from_work_location_name",
+    "column_name" : "调动前工作地",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "from_pro_position_level_name",
+    "column_name" : "调动前专业职级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "from_manager_level_name",
+    "column_name" : "调动前管理职级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "from_overseas_job_bind_name",
+    "column_name" : "调动前Band",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "from_overseas_job_family_name",
+    "column_name" : "调动前Job Family",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "from_overseas_job_family_group_name",
+    "column_name" : "调动前Job Family Group",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "from_overseas_nhs_pilot_flag_desc",
+    "column_name" : "调动前If NHS Pilot",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "from_bg_name",
+    "column_name" : "调动前BG",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "from_line_name",
+    "column_name" : "调动前线",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "from_dept_name",
+    "column_name" : "调动前部门",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "from_center_name",
+    "column_name" : "调动前中心",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "from_team_name",
+    "column_name" : "调动前组",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "from_pro_position_clan_name",
+    "column_name" : "调动前族",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "from_pro_position_genus_name",
+    "column_name" : "调动前专业通道",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "from_pro_position_name",
+    "column_name" : "调动前专业职位",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "from_leader_staff_id8",
+    "column_name" : "调动前直接上级ID",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "from_leader_staff_combined_name",
+    "column_name" : "调动前直接上级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "from_leader_post_name",
+    "column_name" : "调动前直接上级岗位",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "from_post_name",
+    "column_name" : "调动前岗位",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "from_post_id8",
+    "column_name" : "调动前岗位ID",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "to_manage_unit_type_name",
+    "column_name" : "调动后管理主体类型",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "to_manage_unit_name",
+    "column_name" : "调动后管理主体",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "to_staff_type_name",
+    "column_name" : "调动后员工类型",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "to_staff_subtype_name",
+    "column_name" : "调动后员工子类型",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "to_org_id8",
+    "column_name" : "调动后组织ID",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "to_org_full_id8",
+    "column_name" : "调动后组织ID全路径",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "to_org_full_name",
+    "column_name" : "调动后所属组织全路径",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "to_work_location_name",
+    "column_name" : "调动后工作地",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "to_pro_position_level_name",
+    "column_name" : "调动后专业职级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "to_manager_level_name",
+    "column_name" : "调动后管理职级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "to_overseas_job_bind_name",
+    "column_name" : "调动后Band",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "to_overseas_job_family_name",
+    "column_name" : "调动后Job Family",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "to_overseas_job_family_group_name",
+    "column_name" : "调动后Job Family Group",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "to_overseas_nhs_pilot_flag_desc",
+    "column_name" : "调动后If NHS Pilot",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "to_bg_name",
+    "column_name" : "调动后BG",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "to_line_name",
+    "column_name" : "调动后线",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "to_dept_name",
+    "column_name" : "调动后部门",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "to_center_name",
+    "column_name" : "调动后中心",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "to_team_name",
+    "column_name" : "调动后组",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "to_pro_position_clan_name",
+    "column_name" : "调动后族",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "to_pro_position_genus_name",
+    "column_name" : "调动后专业通道",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "to_pro_position_name",
+    "column_name" : "调动后专业职位",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "to_leader_staff_id8",
+    "column_name" : "调动后直接上级ID",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "to_leader_staff_combined_name",
+    "column_name" : "调动后直接上级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "to_leader_post_name",
+    "column_name" : "调动后直接上级岗位",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "to_post_name",
+    "column_name" : "调动后岗位",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "to_post_id8",
+    "column_name" : "调动后岗位ID",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "contract_company_name",
+    "column_name" : "合同主体",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "contract_company_location_name",
+    "column_name" : "合同地",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "huoshui_form_id",
+    "column_name" : "活水流程表单ID",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "talent_flag_desc",
+    "column_name" : "调动时是否在梯队",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "latest01_assess_period_name",
+    "column_name" : "调动时上1次评估周期",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "latest01_performance_result_name",
+    "column_name" : "调动时上1次绩效等级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "latest01_custom_performance_result_name",
+    "column_name" : "调动时上1次绩效子档位",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "latest02_assess_period_name",
+    "column_name" : "调动时上2次评估周期",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "latest02_performance_result_name",
+    "column_name" : "调动时上2次绩效等级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "latest02_custom_performance_result_name",
+    "column_name" : "调动时上2次绩效子档位",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "latest03_assess_period_name",
+    "column_name" : "调动时上3次评估周期",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "latest03_performance_result_name",
+    "column_name" : "调动时上3次绩效等级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "latest04_assess_period_name",
+    "column_name" : "调动时上4次评估周期",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "latest04_performance_result_name",
+    "column_name" : "调动时上4次绩效等级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "to_contract_company_name",
+    "column_name" : "调动时合同主体",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "to_contract_company_location_name",
+    "column_name" : "调动时合同地",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  } ]
+}

@@ -1,0 +1,382 @@
+{
+  "name": "fbsir-super-partner-group",
+  "version": "1.3.0",
+  "description": "福帮手超级合伙人专家团：把战略、运营、增长和 AI 试点问题，收敛成用户能立刻执行的经营结果卡。",
+  "author": {
+    "name": "FBSir",
+    "email": "unique@u3w.com"
+  },
+  "license": "MIT",
+  "expertType": "team",
+  "agentName": "fbsir-super-partner-lead",
+  "teamInfo": {
+    "leadAgent": "fbsir-super-partner-lead",
+    "memberAgents": [
+      "strategy-partner-laosun",
+      "ops-partner-laozhu",
+      "growth-partner-laosha",
+      "product-partner-xiaobai"
+    ]
+  },
+  "agents": [
+    "./agents/fbsir-super-partner-lead.md",
+    "./agents/strategy-partner-laosun.md",
+    "./agents/ops-partner-laozhu.md",
+    "./agents/growth-partner-laosha.md",
+    "./agents/product-partner-xiaobai.md"
+  ],
+  "skills": [
+    "./skills/super-partner-core"
+  ],
+  "displayName": {
+    "en": "FBSir Super Partners",
+    "zh": "福帮手超级合伙人"
+  },
+  "profession": {
+    "en": "FBSir Super Partners",
+    "zh": "福帮手超级合伙人"
+  },
+  "displayDescription": {
+    "en": "A virtual cofounder team that identifies whether strategy, operations, growth, or an AI pilot is the next bottleneck, then turns it into one traceable result card and one practical next step.",
+    "zh": "虚拟合伙人团队，判断公司下一步该解决战略、运营、增长还是AI试点，给出可执行结果卡和唯一下一步。"
+  },
+  "avatar": "avatars/team-v3.png",
+  "categoryId": "12-IndustryConsultant",
+  "defaultInitPrompt": {
+    "zh": "请以福帮手超级合伙人的身份，先判断我现在最需要解决的是战略、运营、增长还是 AI 试点问题，再给我一张今天就能执行的结果卡：包含判断、原因、暂时别做什么和唯一下一步。",
+    "en": "Act as the FBSir super partner team. First identify whether I most need strategy, operations, growth, or AI adoption help, then give me one portable result card with the judgment, why now, what not to do yet, and one next step."
+  },
+  "tags": [
+    {
+      "en": "Super Partner",
+      "zh": "超级合伙人"
+    },
+    {
+      "en": "Business Ops",
+      "zh": "经营协同"
+    },
+    {
+      "en": "AI Delivery",
+      "zh": "智能化交付"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "请以福帮手超级合伙人的身份，先判断我现在最需要解决的是战略、运营、增长还是 AI 试点问题，再给我一张今天就能执行的结果卡：包含判断、原因、暂时别做什么和唯一下一步。",
+      "en": "Act as the FBSir super partner team. First identify whether I most need strategy, operations, growth, or AI adoption help, then give me one portable result card with the judgment, why now, what not to do yet, and one next step."
+    },
+    {
+      "zh": "我们团队事情很多但推进很慢，或者刚拿到乐包想继续推进，请先帮我找出最大的执行堵点，并给我一张本周能落地的推进行动卡或能力继续卡。",
+      "en": "Our team has too many moving pieces and execution is slow, or we just unlocked a new capability and need the next move. Find the main bottleneck first and give me one action card I can use this week."
+    },
+    {
+      "zh": "我想用 AI 和数据改造业务，但不想空谈技术。请给我一个七天内可验证的试点卡。",
+      "en": "I want to use AI and data to improve the business without abstract technology talk. Give me one seven-day pilot card."
+    }
+  ],
+  "members": [
+    {
+      "id": "fbsir-super-partner-lead",
+      "displayName": {
+        "en": "Tang Lao",
+        "zh": "唐老"
+      },
+      "name": {
+        "en": "Orchestration And State Control",
+        "zh": "统筹调度与状态管理"
+      },
+      "profession": {
+        "en": "Chief Orchestrator",
+        "zh": "调度与收口合伙人"
+      },
+      "avatar": "avatars/tanglao-v3.png",
+      "role": "lead",
+      "primaryCapabilityClusterId": "C1",
+      "adjacentCapabilityClusterIds": [
+        "C2",
+        "C3"
+      ],
+      "foundationTraitIds": [
+        "T1",
+        "T2",
+        "T3",
+        "T4",
+        "T5",
+        "T6",
+        "T7"
+      ]
+    },
+    {
+      "id": "strategy-partner-laosun",
+      "displayName": {
+        "en": "Lao Sun",
+        "zh": "老孙"
+      },
+      "name": {
+        "en": "Strategy And Opportunity",
+        "zh": "战略机会判断"
+      },
+      "profession": {
+        "en": "Strategy And Opportunity Partner",
+        "zh": "战略机会合伙人"
+      },
+      "avatar": "avatars/laosun-v3.png",
+      "role": "member",
+      "primaryCapabilityClusterId": "C2",
+      "adjacentCapabilityClusterIds": [
+        "C1",
+        "C4"
+      ],
+      "foundationTraitIds": [
+        "T1",
+        "T2",
+        "T3",
+        "T4",
+        "T5",
+        "T6",
+        "T7"
+      ]
+    },
+    {
+      "id": "ops-partner-laozhu",
+      "displayName": {
+        "en": "Lao Zhu",
+        "zh": "老朱"
+      },
+      "name": {
+        "en": "Organization And Operations",
+        "zh": "组织运营推进"
+      },
+      "profession": {
+        "en": "Organization And Operations Partner",
+        "zh": "组织运营合伙人"
+      },
+      "avatar": "avatars/laozhu-v3.png",
+      "role": "member",
+      "primaryCapabilityClusterId": "C3",
+      "adjacentCapabilityClusterIds": [
+        "C1",
+        "C5"
+      ],
+      "foundationTraitIds": [
+        "T1",
+        "T2",
+        "T3",
+        "T4",
+        "T5",
+        "T6",
+        "T7"
+      ]
+    },
+    {
+      "id": "growth-partner-laosha",
+      "displayName": {
+        "en": "Lao Sha",
+        "zh": "老沙"
+      },
+      "name": {
+        "en": "Growth And Commercialization",
+        "zh": "增长与商业化"
+      },
+      "profession": {
+        "en": "Growth And Commercialization Partner",
+        "zh": "增长商业化合伙人"
+      },
+      "avatar": "avatars/laosha-v3.png",
+      "role": "member",
+      "primaryCapabilityClusterId": "C4",
+      "adjacentCapabilityClusterIds": [
+        "C1",
+        "C2"
+      ],
+      "foundationTraitIds": [
+        "T1",
+        "T2",
+        "T3",
+        "T4",
+        "T5",
+        "T6",
+        "T7"
+      ]
+    },
+    {
+      "id": "product-partner-xiaobai",
+      "displayName": {
+        "en": "Xiao Bai",
+        "zh": "小白"
+      },
+      "name": {
+        "en": "Product And Intelligence",
+        "zh": "产品与智能化"
+      },
+      "profession": {
+        "en": "Product And Intelligence Partner",
+        "zh": "产品智能化合伙人"
+      },
+      "avatar": "avatars/xiaobai-v3.png",
+      "role": "member",
+      "primaryCapabilityClusterId": "C5",
+      "adjacentCapabilityClusterIds": [
+        "C1",
+        "C3",
+        "C6"
+      ],
+      "foundationTraitIds": [
+        "T1",
+        "T2",
+        "T3",
+        "T4",
+        "T5",
+        "T6",
+        "T7"
+      ]
+    }
+  ],
+  "bundleVersion": "1.3.0",
+  "planningTargetVersion": "1.3.0",
+  "memberPresentationMode": "role_surface",
+  "runtimeContract": {
+    "schema": "fbsir-super-partner-runtime-contract/v1",
+    "version": "1.3.0",
+    "requiredStatusFields": [
+      "expert_loaded",
+      "lead_agent",
+      "team_mode",
+      "member_id",
+      "capability_id",
+      "unlock_state",
+      "connectorCallTrace",
+      "versionAlignment",
+      "degradeReason"
+    ],
+    "teamModeValues": [
+      "first_value_card",
+      "lean_diagnosis",
+      "single_member",
+      "multi_member_workshop",
+      "genius_partner_draft"
+    ],
+    "unlockStates": [
+      "locked",
+      "preview",
+      "unlocked",
+      "expired"
+    ]
+  },
+  "capabilityClusters": [
+    {
+      "capabilityClusterId": "C1",
+      "memberId": "fbsir-super-partner-lead",
+      "summary": "统筹调度与状态管理"
+    },
+    {
+      "capabilityClusterId": "C2",
+      "memberId": "strategy-partner-laosun",
+      "summary": "战略机会判断"
+    },
+    {
+      "capabilityClusterId": "C3",
+      "memberId": "ops-partner-laozhu",
+      "summary": "组织运营推进"
+    },
+    {
+      "capabilityClusterId": "C4",
+      "memberId": "growth-partner-laosha",
+      "summary": "增长与商业化"
+    },
+    {
+      "capabilityClusterId": "C5",
+      "memberId": "product-partner-xiaobai",
+      "summary": "产品与智能化"
+    },
+    {
+      "capabilityClusterId": "C6",
+      "memberId": "product-partner-xiaobai",
+      "summary": "天才合伙人工厂"
+    }
+  ],
+  "plugin": "fbsir-super-partner-group",
+  "entryMatrix": [
+    {
+      "entryId": "company-next-step",
+      "entryPromptCode": "wb_sp_company_next_step",
+      "entrySurface": "primary_entry",
+      "scenePackId": "general",
+      "assetType": "strategy-decision-card",
+      "zh": "公司下一步",
+      "firstDeliverable": "方向判断卡 + 唯一下一步"
+    },
+    {
+      "entryId": "ops-rhythm",
+      "entryPromptCode": "wb_sp_ops_rhythm",
+      "entrySurface": "primary_entry",
+      "scenePackId": "enterprise-diagnosis",
+      "assetType": "operations-rhythm-card",
+      "zh": "组织运营",
+      "firstDeliverable": "执行堵点卡 + 推进行动"
+    },
+    {
+      "entryId": "growth-commercial",
+      "entryPromptCode": "wb_sp_growth_commercial",
+      "entrySurface": "primary_entry",
+      "scenePackId": "enterprise-diagnosis",
+      "assetType": "growth-commercial-card",
+      "zh": "增长商业化",
+      "firstDeliverable": "增长漏斗卡 + 首个卖点"
+    },
+    {
+      "entryId": "ai-pilot",
+      "entryPromptCode": "wb_sp_ai_pilot",
+      "entrySurface": "primary_entry",
+      "scenePackId": "general",
+      "assetType": "ai-pilot-card",
+      "zh": "AI 试点",
+      "firstDeliverable": "AI 试点卡 + 七天验证动作"
+    },
+    {
+      "entryId": "genius-partner-draft",
+      "entryPromptCode": "wb_sp_genius_partner_draft",
+      "entrySurface": "extended_entry",
+      "scenePackId": "general",
+      "assetType": "genius-partner-draft-card",
+      "zh": "天才合伙人草案",
+      "firstDeliverable": "行业合伙人草案"
+    },
+    {
+      "entryId": "lebao-activation",
+      "entryPromptCode": "wb_sp_lebao_activation",
+      "entrySurface": "extended_entry",
+      "scenePackId": "general",
+      "assetType": "lebao-unlock-card",
+      "zh": "乐包激活",
+      "firstDeliverable": "能力解锁卡 + 继续行动"
+    }
+  ],
+  "runtimeModes": [
+    {
+      "id": "first_value_card",
+      "zh": "首次价值卡",
+      "trigger": "cold_start_or_short_problem"
+    },
+    {
+      "id": "lean_diagnosis",
+      "zh": "精简诊断",
+      "trigger": "clear_problem_but_not_workshop"
+    },
+    {
+      "id": "single_member",
+      "zh": "单成员深度处理",
+      "trigger": "single_cluster_problem"
+    },
+    {
+      "id": "multi_member_workshop",
+      "zh": "多成员协同工作坊",
+      "trigger": "explicit_complex_problem"
+    },
+    {
+      "id": "genius_partner_draft",
+      "zh": "天才合伙人草案",
+      "trigger": "industry_or_long_term_specialization"
+    }
+  ]
+}

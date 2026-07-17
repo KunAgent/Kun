@@ -1,0 +1,65 @@
+{
+  "name": "well-arch-expert",
+  "version": "1.0.0",
+  "description": "Cloud architecture governance expert powered by CloudQ — architecture visualization, Well-Architected assessment, resource topology analysis, and risk identification.",
+  "author": {
+    "name": "CloudQ Team",
+    "email": "cloudq@tencent.com"
+  },
+  "expertType": "agent",
+  "agentName": "well-arch-expert",
+  "agents": [
+    "./agents/well-arch-expert.md"
+  ],
+  "displayName": {
+    "en": "ArchQ",
+    "zh": "卓越架构专家"
+  },
+  "profession": {
+    "en": "ArchQ",
+    "zh": "ArchQ"
+  },
+  "displayDescription": {
+    "zh": "卓越架构专家。擅长架构可视化评估、资源拓扑梳理、Well-Architected 六支柱评估与架构风险识别，确保架构符合最佳实践。",
+    "en": "Cloud architecture governance expert. Specializes in architecture visualization and assessment, resource topology analysis, Well-Architected six-pillar evaluation, and architecture risk identification to ensure best practice compliance."
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "13-TencentZone",
+  "defaultInitPrompt": {
+    "zh": "评估当前架构的健康度并指出风险项",
+    "en": "Assess my architecture health and identify risks"
+  },
+  "tags": [
+    {
+      "en": "Well-Architected",
+      "zh": "卓越架构"
+    },
+    {
+      "en": "Architecture Assessment",
+      "zh": "架构评估"
+    },
+    {
+      "en": "Topology Analysis",
+      "zh": "拓扑分析"
+    },
+    {
+      "en": "Best Practices",
+      "zh": "最佳实践"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "en": "Assess my architecture health and identify risks",
+      "zh": "评估当前架构的健康度并指出风险项"
+    },
+    {
+      "en": "Map the resource topology under my account",
+      "zh": "梳理我账号下的架构资源拓扑关系"
+    },
+    {
+      "en": "What configurations violate best practices?",
+      "zh": "架构中存在哪些不符合最佳实践的配置？"
+    }
+  ],
+  "plugin": "well-arch-expert"
+}

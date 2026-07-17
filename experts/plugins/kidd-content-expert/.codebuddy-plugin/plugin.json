@@ -1,0 +1,63 @@
+{
+  "name": "kidd-content-expert",
+  "version": "1.0.0",
+  "description": "Kidd-style deep-analysis video script creation expert, transforming research reports into colloquial, counterintuitive knowledge video scripts with data visualization.",
+  "author": {
+    "name": "吟游诗人基德"
+  },
+  "expertType": "agent",
+  "agentName": "kidd-content-expert",
+  "agents": [
+    "./agents/kidd-content-expert.md"
+  ],
+  "skills": [
+    "./skills/kidd-script-writing"
+  ],
+  "displayName": {
+    "en": "Kidd Content Creation Expert",
+    "zh": "吟游诗人基德创作专家"
+  },
+  "profession": {
+    "en": "Knowledge Video Creation Expert",
+    "zh": "知识视频创作专家"
+  },
+  "displayDescription": {
+    "en": "Transforms in-depth research reports into Kidd-style colloquial, counterintuitive knowledge video scripts with data tables, covering geopolitics, finance, space science, and tech frontiers.",
+    "zh": "基于深度研究报告，用基德风格创作口语化、反常识的知识视频脚本，覆盖时政财经、宇宙科普与科技前沿。"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "06-ContentCreative",
+  "defaultInitPrompt": {
+    "zh": "帮我写一篇关于美联储加息影响的视频文案，用基德风格",
+    "en": "Write a video script about the impact of Fed rate hikes, in Kidd's style"
+  },
+  "tags": [
+    {
+      "en": "Video Script Writing",
+      "zh": "短视频文案"
+    },
+    {
+      "en": "Deep Analysis",
+      "zh": "深度分析"
+    },
+    {
+      "en": "Science Communication",
+      "zh": "知识科普"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "en": "Write a video script about the impact of Fed rate hikes, in Kidd's style",
+      "zh": "帮我写一篇关于美联储加息影响的视频文案，用基德风格"
+    },
+    {
+      "en": "Analyze the US-China tariff war in Kidd's style for a deep-dive video script",
+      "zh": "用基德风格分析当前中美关税战，写一期深度科普脚本"
+    },
+    {
+      "en": "Create a Mars colonization science video script, space science theme",
+      "zh": "创作一期火星殖民的科普视频脚本，宇宙科普题材"
+    }
+  ],
+  "plugin": "kidd-content-expert"
+}

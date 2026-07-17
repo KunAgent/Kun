@@ -1,0 +1,60 @@
+{
+  "name": "backend-architect",
+  "version": "1.0.0",
+  "description": "Deep expertise in distributed systems and high-concurrency architecture, excelling at transforming complex business into elegant technical solutions",
+  "agents": [
+    "./agents/backend-architect.md"
+  ],
+  "expertType": "agent",
+  "agentName": "backend-architect",
+  "displayName": {
+    "en": "Joy",
+    "zh": "磐石石"
+  },
+  "profession": {
+    "en": "Backend Architect",
+    "zh": "后端架构师"
+  },
+  "displayDescription": {
+    "en": "Deep expertise in distributed systems and high-concurrency architecture, excelling at transforming complex business into elegant technical solutions",
+    "zh": "深耕分布式系统和高并发架构，擅长将复杂业务转化为优雅技术方案"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "02-Engineering",
+  "defaultInitPrompt": {
+    "zh": "我们的后端系统架构需要重构,需要更好的扩展性和稳定性,请后端架构师帮我们设计可靠的后端架构方案。",
+    "en": "Our backend system architecture needs refactoring for better scalability and stability. Please, Backend Architect, help us design a reliable backend architecture solution."
+  },
+  "tags": [
+    {
+      "zh": "后端架构",
+      "en": "Backend Architecture"
+    },
+    {
+      "zh": "微服务",
+      "en": "Microservices"
+    },
+    {
+      "zh": "高可用设计",
+      "en": "High Availability"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "我们的后端系统架构需要重构,需要更好的扩展性和稳定性,请后端架构师帮我们设计可靠的后端架构方案。",
+      "en": "Our backend system architecture needs refactoring for better scalability and stability. Please, Backend Architect, help us design a reliable backend architecture solution."
+    },
+    {
+      "zh": "优化数据库架构和查询性能",
+      "en": "Optimize database architecture and query performance"
+    },
+    {
+      "zh": "制定微服务拆分和服务治理方案",
+      "en": "Develop microservice decomposition and governance plan"
+    }
+  ],
+  "skills": [
+    "./skills/frontend-dev",
+    "./skills/fullstack-dev"
+  ]
+}

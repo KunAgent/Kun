@@ -1,0 +1,56 @@
+{
+  "name": "paid-media-auditor",
+  "version": "1.0.0",
+  "description": "Deep auditing of advertising data and budget allocation to identify wasted ad spend",
+  "agents": [
+    "./agents/paid-media-auditor.md"
+  ],
+  "expertType": "agent",
+  "agentName": "paid-media-auditor",
+  "displayName": {
+    "en": "Jace",
+    "zh": "查账账"
+  },
+  "profession": {
+    "en": "Paid Media Auditor",
+    "zh": "付费媒体审计师"
+  },
+  "displayDescription": {
+    "en": "Deep auditing of advertising data and budget allocation to identify wasted ad spend",
+    "zh": "深度审计广告投放数据和预算分配，找出被浪费的广告费"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "05-MarketingGrowth",
+  "defaultInitPrompt": {
+    "zh": "我们的广告投放预算使用效率不高,需要审计现有投放策略,请付费媒体审计师帮我们分析投放效果。",
+    "en": "Our ad spend budget efficiency is not high, and we need to audit our current advertising strategies. Please, Paid Media Auditor, help us analyze advertising effectiveness."
+  },
+  "tags": [
+    {
+      "zh": "投放审计",
+      "en": "Media Audit"
+    },
+    {
+      "zh": "费用核查",
+      "en": "Spend Verification"
+    },
+    {
+      "zh": "效果审计",
+      "en": "Performance Audit"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "我们的广告投放预算使用效率不高,需要审计现有投放策略,请付费媒体审计师帮我们分析投放效果。",
+      "en": "Our ad spend budget efficiency is not high, and we need to audit our current advertising strategies. Please, Paid Media Auditor, help us analyze advertising effectiveness."
+    },
+    {
+      "zh": "分析广告浪费和优化空间",
+      "en": "Analyze ad waste and optimization opportunities"
+    },
+    {
+      "zh": "输出广告投放审计报告和改进建议",
+      "en": "Deliver ad spend audit report and improvement recommendations"
+    }
+  ]
+}

@@ -1,0 +1,48 @@
+{
+  "writingNotes": {
+    "enabled": true,
+    "dir": ".fbs/writing-notes",
+    "filePattern": "{chapterId}.writing-notes.md",
+    "briefFilePattern": "{chapterId}.brief.md",
+    "chapterClosureTemplate": ".fbs/writing-notes/_chapter-closure-template.md",
+    "chapterClosureRequired": false,
+    "chapterClosureNote": "每章初稿结束后建议填写章末工作记忆；required=false 时门禁仅 Warning，不阻断流水线"
+  },
+  "briefLifecycleGate": {
+    "description": "Chapter Brief 生命周期门禁（P0）：避免“已落盘但未使用”",
+    "enabled": true,
+    "mustPresentInDialogBeforeWrite": true,
+    "mustInjectIntoWriterTask": true,
+    "requiredWriterContextFiles": [
+      ".fbs/writing-notes/{chapterId}.brief.md",
+      ".fbs/book-context-brief.md",
+      ".fbs/术语锁定记录.md"
+    ],
+    "acceptanceRule": "Brief 未对话呈现或未注入 writer 任务描述，则该章不得开始写作"
+  },
+  "heartbeatEscalation": {
+    "description": "多成员心跳升级处置（P0）：从规则告知升级为可执行巡检",
+    "enabled": true,
+    "warnAfterMs": 120000,
+    "pingAfterMs": 300000,
+    "shutdownAfterMs": 600000,
+    "criticalAfterMs": 900000,
+    "forceTerminateAfterShutdownMs": 30000,
+    "actions": {
+      "warn": "输出预警并标记成员状态",
+      "ping": "发送催更消息",
+      "shutdown": "发送 shutdown_request",
+      "forceTerminate": "超过 shutdown_request 阈值后强制终止并改派"
+    },
+    "monitorCli": "scripts/heartbeat-monitor.mjs"
+  },
+  "chapterAcceptanceGate": {
+    "description": "章节验收门槛（P1）：防止低字数稿件被误判为完成",
+    "enabled": true,
+    "minWordRatioVsBriefExpected": 0.8,
+    "maxWordRatioVsBriefExpected": 1.2,
+    "rejectIfBelowMinRatio": true,
+    "warnIfAboveMaxRatio": true,
+    "acceptanceCli": "scripts/verify-chapter-status-truth.mjs"
+  }
+}

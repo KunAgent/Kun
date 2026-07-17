@@ -1,0 +1,64 @@
+{
+  "name": "geo-diagnosis-expert",
+  "version": "1.0.0",
+  "description": "Brand GEO visibility diagnosis expert. Runs a 4-stage pipeline covering brand profiling, infrastructure evaluation, AI platform presence, sentiment analysis, AIVO scoring and actionable optimization recommendations.",
+  "author": {
+    "name": "WorkBuddy",
+    "email": ""
+  },
+  "expertType": "agent",
+  "agentName": "geo-diagnosis-expert",
+  "agents": [
+    "./agents/geo-diagnosis-expert.md"
+  ],
+  "skills": [
+    "./skills/geo-diag-report"
+  ],
+  "displayName": {
+    "en": "Cang He",
+    "zh": "苍何"
+  },
+  "profession": {
+    "en": "Brand GEO Visibility Analyst",
+    "zh": "品牌 GEO 可见度诊断师"
+  },
+  "displayDescription": {
+    "en": "Specializes in diagnosing brand GEO visibility across AI platforms. Runs a 4-stage pipeline: brand profiling, infrastructure evaluation, AI search presence analysis, and AIVO scoring with actionable recommendations.",
+    "zh": "品牌 GEO 可见度诊断专家，覆盖基建评估、AI 平台收录、竞品对标、舆情分析，输出 AIVO 评分报告。"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "05-MarketingGrowth",
+  "defaultInitPrompt": {
+    "zh": "帮我诊断一个品牌的 GEO 可见度",
+    "en": "Help me diagnose a brand's GEO visibility"
+  },
+  "tags": [
+    {
+      "en": "GEO Diagnosis",
+      "zh": "GEO 诊断"
+    },
+    {
+      "en": "AI Search Visibility",
+      "zh": "AI 搜索可见度"
+    },
+    {
+      "en": "Brand Analytics",
+      "zh": "品牌分析"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "en": "Help me diagnose a brand's GEO visibility",
+      "zh": "帮我诊断一个品牌的 GEO 可见度"
+    },
+    {
+      "en": "Run a full GEO diagnosis for my brand and output an AIVO report",
+      "zh": "对我的品牌做完整 GEO 诊断，输出 AIVO 评分报告"
+    },
+    {
+      "en": "Compare my brand's GEO visibility against competitors",
+      "zh": "对比分析我的品牌和竞品在 AI 搜索中的曝光差距"
+    }
+  ],
+  "plugin": "geo-diagnosis-expert"
+}

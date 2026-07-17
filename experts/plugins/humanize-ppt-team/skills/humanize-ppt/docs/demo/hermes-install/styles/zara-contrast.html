@@ -1,0 +1,46 @@
+<!doctype html><html lang='zh-CN'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>把 Hermes 装成一个真正能干活的 Agent · zara-contrast</title>
+<style>
+:root{--bg:#fafafa;--fg:#111111;--accent:#ff4d00;--font:Inter,-apple-system,BlinkMacSystemFont,'PingFang SC',sans-serif;}
+*{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--font);overflow:hidden} .slide{display:none;width:100vw;height:100vh;padding:7vh 8vw;position:relative} .slide.active{display:block} .kicker{color:var(--accent);font-weight:700;letter-spacing:.08em;text-transform:uppercase} h1{font-size:clamp(42px,7vw,104px);line-height:1.02;margin:5vh 0 3vh;max-width:1100px} .message{font-size:clamp(22px,2.6vw,38px);line-height:1.35;max-width:980px} ul{font-size:clamp(18px,1.6vw,28px);line-height:1.6;max-width:1000px;margin-top:5vh} .footer{position:absolute;left:8vw;bottom:5vh;color:var(--accent)} .nav{position:fixed;right:24px;bottom:20px;font:16px system-ui;color:var(--fg);opacity:.7}
+</style></head><body>
+
+<section class='slide' id='S01'>
+  <div class='kicker'>风格探索 / Zara Contrast · hook</div>
+  <h1>把 Hermes 装成一个真正能干活的 Agent</h1>
+  <p class='message'>AI 工具每天都在更新，但真正的问题不是功能有没有。</p>
+  <ul><li>AI 工具每天都在更新，但真正的问题不是功能有没有。</li><li>很多人以为安装一个 AI Agent 只是跑一行命令。真正卡住他们的，其实不是安装包，而是安装之后不知道下一步怎么把模型、工具、Skill、网关和长期记忆串起来。</li></ul>
+  <div class='footer'>S01 / Humanize PPT V0.1</div>
+</section>
+<section class='slide' id='S02'>
+  <div class='kicker'>风格探索 / Zara Contrast · conflict</div>
+  <h1>如果直接把资料塞进 PPT，模型噪音会进入页面</h1>
+  <p class='message'>如果直接把资料塞进 PPT，模型噪音会进入页面。</p>
+  <ul><li>如果直接把资料塞进 PPT，模型噪音会进入页面。</li><li>Hermes 的安装可以先用官方脚本完成：`curl -fsSL https://raw.githubusercontent.com/NousResearch/hermes-age</li></ul>
+  <div class='footer'>S02 / Humanize PPT V0.1</div>
+</section>
+<section class='slide' id='S03'>
+  <div class='kicker'>风格探索 / Zara Contrast · method</div>
+  <h1>Humanize PPT 先用 AST 把资料变成观众路径</h1>
+  <p class='message'>Humanize PPT 先用 AST 把资料变成观众路径。</p>
+  <ul><li>Humanize PPT 先用 AST 把资料变成观众路径。</li><li>第一轮不要追求把所有平台都接上。先完成最小闭环：能在命令行里打开 Hermes，能用 `hermes doctor` 检查依赖，能用 `hermes skills list` 看见</li></ul>
+  <div class='footer'>S03 / Humanize PPT V0.1</div>
+</section>
+<section class='slide' id='S04'>
+  <div class='kicker'>风格探索 / Zara Contrast · proof</div>
+  <h1>同一份资料可以走中文稳定、风格探索、演讲增强、上线交付</h1>
+  <p class='message'>同一份资料可以走中文稳定、风格探索、演讲增强、上线交付。</p>
+  <ul><li>同一份资料可以走中文稳定、风格探索、演讲增强、上线交付。</li><li>如果要把 Hermes 变成日常入口，再进入第二层：配置 Gateway，把飞书、Telegram、Discord 或其他消息平台接进来。这里要强调，聊天入口只是入口，真正的价值是</li></ul>
+  <div class='footer'>S04 / Humanize PPT V0.1</div>
+</section>
+<section class='slide' id='S05'>
+  <div class='kicker'>风格探索 / Zara Contrast · takeaway</div>
+  <h1>先定内容，再定风格；先出 PPT，再加演讲</h1>
+  <p class='message'>先定内容，再定风格；先出 PPT，再加演讲。</p>
+  <ul><li>先定内容，再定风格；先出 PPT，再加演讲。</li><li>最后把安装说明讲成一个工作流，而不是命令清单：安装只是第一步，配置模型是第二步，打开工具是第三步，安装 Skill 是第四步，接入消息平台和定时任务才是把 Hermes 变成个人工</li></ul>
+  <div class='footer'>S05 / Humanize PPT V0.1</div>
+</section>
+<div class='nav'>← / → 翻页</div>
+<script>
+const slides=[...document.querySelectorAll('.slide')];let i=Number(new URLSearchParams(location.search).get('slide')||0);function show(n){i=Math.max(0,Math.min(slides.length-1,n));slides.forEach((s,k)=>s.classList.toggle('active',k===i));location.hash='slide-'+(i+1);window.parent&&window.parent.postMessage({type:'humanize-slide',index:i,total:slides.length},'*')}
+document.addEventListener('keydown',e=>{if(e.key==='ArrowRight'||e.key===' ')show(i+1);if(e.key==='ArrowLeft')show(i-1)});show(i);
+</script></body></html>

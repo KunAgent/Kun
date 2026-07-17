@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>营销文案审查报告 - {{REPORT_TITLE}}</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: #f0f2f5;
+    color: #333;
+    line-height: 1.7;
+    padding: 40px 20px;
+  }
+  .container { max-width: 960px; margin: 0 auto; }
+
+  /* Header */
+  .header {
+    background: linear-gradient(135deg, #1a237e 0%, #283593 100%);
+    color: #fff;
+    padding: 36px 40px;
+    border-radius: 12px 12px 0 0;
+  }
+  .header h1 { font-size: 24px; font-weight: 700; margin-bottom: 8px; }
+  .header .meta { font-size: 13px; opacity: 0.8; }
+  .header .meta span { margin-right: 20px; }
+
+  /* Stats Cards - 3 cards: high / medium / low */
+  .stats-row {
+    display: flex;
+    gap: 16px;
+    padding: 24px 40px;
+    background: #fff;
+    border-bottom: 1px solid #e8e8e8;
+  }
+  .stat-card {
+    flex: 1;
+    text-align: center;
+    padding: 20px 12px;
+    border-radius: 8px;
+  }
+  .stat-card .num { font-size: 36px; font-weight: 800; line-height: 1.2; }
+  .stat-card .label { font-size: 13px; color: #888; margin-top: 4px; }
+  .stat-card.high { background: #ffebee; }
+  .stat-card.high .num { color: #c62828; }
+  .stat-card.medium { background: #fff3e0; }
+  .stat-card.medium .num { color: #e65100; }
+  .stat-card.low { background: #fffde7; }
+  .stat-card.low .num { color: #f9a825; }
+  .stat-card.empty { background: #f5f5f5; color: #bbb; }
+
+  /* Section */
+  .section {
+    background: #fff;
+    margin-top: 16px;
+    padding: 32px 40px;
+    border-radius: 8px;
+  }
+  .section-title {
+    font-size: 18px;
+    font-weight: 700;
+    color: #1a237e;
+    margin-bottom: 20px;
+    padding-left: 12px;
+    border-left: 4px solid #1a237e;
+  }
+  .section-empty {
+    text-align: center;
+    padding: 40px 20px;
+    color: #aaa;
+    font-size: 14px;
+  }
+
+  /* Item Card */
+  .item-card {
+    border-radius: 8px;
+    margin-bottom: 16px;
+    overflow: hidden;
+    border: 1px solid #e8e8e8;
+  }
+  .item-card.high { border-left: 4px solid #c62828; }
+  .item-card.medium { border-left: 4px solid #e65100; }
+  .item-card.low { border-left: 4px solid #f9a825; }
+  .item-card .item-header {
+    padding: 12px 20px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .item-card.high .item-header { background: #fff5f5; }
+  .item-card.medium .item-header { background: #fffaf5; }
+  .item-card.low .item-header { background: #fffef5; }
+  .item-card .item-tag {
+    font-size: 11px;
+    padding: 2px 10px;
+    border-radius: 10px;
+    font-weight: 600;
+  }
+  .item-card.high .item-tag { background: #c62828; color: #fff; }
+  .item-card.medium .item-tag { background: #e65100; color: #fff; }
+  .item-card.low .item-tag { background: #f9a825; color: #fff; }
+  .item-card .item-dim { font-size: 14px; font-weight: 600; color: #333; }
+  .item-card .item-body { padding: 16px 20px; }
+  .item-card .item-point {
+    font-size: 13px;
+    font-weight: 600;
+    color: #555;
+    margin-bottom: 8px;
+  }
+  .item-card .item-quote {
+    background: #f9f9f9;
+    border-left: 3px solid #ddd;
+    padding: 8px 12px;
+    font-size: 13px;
+    color: #666;
+    margin: 8px 0;
+    border-radius: 0 4px 4px 0;
+  }
+  .item-card.high .item-quote { border-left-color: #c62828; background: #fff8f8; }
+  .item-card.medium .item-quote { border-left-color: #e65100; background: #fffaf5; }
+  .item-card.low .item-quote { border-left-color: #f9a825; background: #fffef5; }
+  .item-card .item-desc {
+    font-size: 13px;
+    color: #555;
+    margin: 8px 0;
+  }
+  .item-card .item-suggestion {
+    background: #f0f9eb;
+    border-radius: 6px;
+    padding: 10px 14px;
+    font-size: 13px;
+    color: #2e7d32;
+    margin-top: 8px;
+  }
+
+  /* Footer */
+  .footer {
+    margin-top: 16px;
+    padding: 20px 40px;
+    background: #fff;
+    border-radius: 8px;
+    font-size: 12px;
+    color: #999;
+  }
+  .footer .disclaimer {
+    padding: 10px 14px;
+    background: #fffbe6;
+    border: 1px solid #ffe58f;
+    border-radius: 6px;
+    color: #8a6d3b;
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- Header -->
+  <div class="header">
+    <h1>营销文案审查报告</h1>
+    <div class="meta">
+      <span>文案主题：{{REPORT_TITLE}}</span>
+      <span>审查时间：{{REVIEW_DATE}}</span>
+    </div>
+  </div>
+
+  <!-- Stats Cards: high / medium / low -->
+  <div class="stats-row">
+    <div class="stat-card high">
+      <div class="num">{{HIGH_COUNT}}</div>
+      <div class="label">高风险</div>
+    </div>
+    <div class="stat-card medium">
+      <div class="num">{{MEDIUM_COUNT}}</div>
+      <div class="label">中风险</div>
+    </div>
+    <div class="stat-card low">
+      <div class="num">{{LOW_COUNT}}</div>
+      <div class="label">低风险</div>
+    </div>
+  </div>
+
+  <!-- High Risk Items -->
+  <div class="section">
+    <div class="section-title">🔴 高风险</div>
+    {{HIGH_SECTION}}
+  </div>
+
+  <!-- Medium Risk Items -->
+  <div class="section">
+    <div class="section-title">🟠 中风险</div>
+    {{MEDIUM_SECTION}}
+  </div>
+
+  <!-- Low Risk Items -->
+  <div class="section">
+    <div class="section-title">🟡 低风险</div>
+    {{LOW_SECTION}}
+  </div>
+
+  <!-- Footer -->
+  <div class="footer">
+    <div class="disclaimer">
+      ⚠️ 本审查结果仅供参考，不构成法律建议，应在被依赖前由合格的法律专业人员复核确认。
+    </div>
+  </div>
+
+</div>
+</body>
+</html>

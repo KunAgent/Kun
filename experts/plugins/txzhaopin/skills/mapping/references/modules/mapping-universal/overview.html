@@ -1,0 +1,288 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>mapping-universal · 通用招聘 Mapping Skill</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, "PingFang SC", sans-serif; background: #0f1419; color: #e6e9ef; line-height: 1.65; padding: 0; }
+  .container { max-width: 1100px; margin: 0 auto; padding: 30px; }
+
+  .hero {
+    background: linear-gradient(135deg, #1c2332 0%, #242c3d 100%);
+    border: 1px solid #3a4352; border-radius: 12px;
+    padding: 40px 36px; margin-bottom: 30px;
+    box-shadow: 0 8px 28px rgba(0,0,0,0.4);
+  }
+  .hero h1 { color: #ff8c42; font-size: 32px; margin-bottom: 12px; }
+  .hero .subtitle { font-size: 16px; color: #8b92a0; margin-bottom: 20px; }
+  .hero .tagline {
+    background: rgba(255,140,66,0.08); border-left: 4px solid #ff8c42;
+    padding: 14px 18px; border-radius: 4px; font-size: 15px;
+    color: #e6e9ef; margin-top: 20px;
+  }
+  .hero .badges { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 16px; }
+  .hero .badge {
+    font-size: 12px; padding: 4px 12px; border-radius: 3px;
+    background: #2d3440; color: #ffab6b;
+  }
+
+  .section-title {
+    font-size: 22px; color: #ff8c42; margin: 40px 0 18px 0;
+    display: flex; align-items: center; gap: 10px;
+  }
+
+  .card-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
+  .card {
+    background: rgba(28,35,50,0.6); border: 1px solid #2d3440; border-radius: 10px;
+    padding: 20px;
+  }
+  .card h3 { color: #ffab6b; font-size: 16px; margin-bottom: 10px; }
+  .card p { font-size: 13px; color: #d3d8e0; line-height: 1.7; margin-bottom: 10px; }
+  .card .card-meta { font-size: 11px; color: #8b92a0; }
+
+  .flow {
+    background: rgba(28,35,50,0.4); border-radius: 10px; padding: 24px;
+    display: flex; flex-direction: column; gap: 12px;
+  }
+  .flow-step {
+    display: flex; align-items: flex-start; gap: 14px;
+    padding: 14px; background: rgba(15,20,25,0.5); border-radius: 8px;
+    border-left: 3px solid #ff8c42;
+  }
+  .flow-step .num {
+    background: #ff8c42; color: #0f1419; width: 30px; height: 30px;
+    border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    font-weight: 700; flex-shrink: 0;
+  }
+  .flow-step h4 { color: #fff; font-size: 15px; margin-bottom: 4px; }
+  .flow-step p { font-size: 12px; color: #8b92a0; }
+
+  .output-preview {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px;
+    margin-top: 16px;
+  }
+  .output-card {
+    background: rgba(255,140,66,0.04); border: 1px dashed #3a4352; border-radius: 8px;
+    padding: 14px; font-size: 12px;
+  }
+  .output-card .oc-title { color: #ffab6b; font-weight: 600; margin-bottom: 6px; }
+  .output-card .oc-desc { color: #d3d8e0; line-height: 1.6; }
+
+  table {
+    width: 100%; border-collapse: collapse; font-size: 13px;
+    background: rgba(28,35,50,0.4); border-radius: 8px; overflow: hidden;
+    margin-top: 10px;
+  }
+  th, td { padding: 10px 14px; text-align: left; border-bottom: 1px solid #2d3440; }
+  th { background: #1c2332; color: #ff8c42; }
+  td { color: #d3d8e0; }
+
+  .cta {
+    background: linear-gradient(135deg, #ff8c42 0%, #ff5a4a 100%);
+    color: #0f1419; padding: 20px 24px; border-radius: 10px;
+    text-align: center; margin-top: 30px; font-weight: 600;
+  }
+  .cta h3 { font-size: 18px; margin-bottom: 8px; color: #0f1419; }
+  .cta code {
+    background: rgba(15,20,25,0.3); padding: 3px 8px; border-radius: 3px;
+    font-family: Menlo, monospace; font-size: 13px; color: #0f1419;
+  }
+
+  .footer {
+    text-align: center; margin-top: 40px; padding: 20px 0;
+    font-size: 12px; color: #5a6270; border-top: 1px solid #2d3440;
+  }
+</style>
+</head>
+<body>
+
+<div class="container">
+
+  <!-- Hero -->
+  <div class="hero">
+    <h1>🧭 mapping-universal</h1>
+    <div class="subtitle">通用招聘 Mapping Skill · v1.0.0 · 2026-04-28</div>
+    <div class="tagline">
+      招聘经理一句话，Skill 自动对齐画像 → 并行挖掘 → 生成 5 段式 HTML 报告。
+      覆盖 4 大业务线（投资 / 研发 / 产品 / 运营），单次 60-90 分钟，成本 ¥0。
+    </div>
+    <div class="badges">
+      <span class="badge">🎯 4 业务线</span>
+      <span class="badge">📋 5 问对齐</span>
+      <span class="badge">🔍 P0/P1/P2 分层调度</span>
+      <span class="badge">📊 5 段式输出</span>
+      <span class="badge">🛡️ 反幻觉纪律</span>
+      <span class="badge">🔗 与 Karpathy 三件套集成</span>
+    </div>
+  </div>
+
+  <!-- 核心流程 -->
+  <div class="section-title">🔄 核心工作流（6 阶段）</div>
+  <div class="flow">
+    <div class="flow-step">
+      <div class="num">1</div>
+      <div>
+        <h4>画像对齐（固定 5 问）</h4>
+        <p>业务线 / 岗位层级 / 目标公司 / 关键硬技能 / 挖掘深度 — 30 秒完成</p>
+      </div>
+    </div>
+    <div class="flow-step">
+      <div class="num">2</div>
+      <div>
+        <h4>业务线分流 + 加载画像模板</h4>
+        <p>自动加载对应的 Title 词典 / 薪酬基准 / 渠道路由</p>
+      </div>
+    </div>
+    <div class="flow-step">
+      <div class="num">3</div>
+      <div>
+        <h4>并行挖掘（调度底层 Skill 池）</h4>
+        <p>LinkedIn / GitHub / 官网 / 知乎 / 公众号 / 媒体 Deal 署名 等 8+ 渠道同时跑</p>
+      </div>
+    </div>
+    <div class="flow-step">
+      <div class="num">4</div>
+      <div>
+        <h4>归一化 + 打标（v3.1 JSON Schema）</h4>
+        <p>每人按层级打标：Top / Senior / Mid / Junior，附来源 URL（严守 no-hallucination）</p>
+      </div>
+    </div>
+    <div class="flow-step">
+      <div class="num">5</div>
+      <div>
+        <h4>生成 5 段式 HTML 报告</h4>
+        <p>组织架构图 + 人选详情 + 横向对比 + 水下挖掘 + Alumni 追踪</p>
+      </div>
+    </div>
+    <div class="flow-step">
+      <div class="num">6</div>
+      <div>
+        <h4>交付 + 沉淀（触发 wiki-evolver）</h4>
+        <p>询问是否把关键人物写入 talent-pool 知识库，让 Wiki 自我生长</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- 4 大业务线 -->
+  <div class="section-title">🎯 覆盖的 4 大业务线</div>
+  <div class="card-grid">
+    <div class="card">
+      <h3>📈 投资 Investment</h3>
+      <p>VC / PE / 投行 IBD / 二级 / CVC 全覆盖</p>
+      <div class="card-meta">10 个细分赛道 / 5 层 Title 词典 / 完整薪酬基准</div>
+    </div>
+    <div class="card">
+      <h3>💻 研发工程 Engineering</h3>
+      <p>后端 / 前端 / 移动 / 算法 / AI/ML / 数据 / 安全</p>
+      <div class="card-meta">独有招式：GitHub + arXiv 论文反查</div>
+    </div>
+    <div class="card">
+      <h3>🎯 产品 Product</h3>
+      <p>C 端 / B 端 SaaS / AI 原生 / 出海 / 增长</p>
+      <div class="card-meta">独有招式：公众号 + 即刻 + Product Hunt</div>
+    </div>
+    <div class="card">
+      <h3>📣 运营 Operations</h3>
+      <p>内容 / 用户 / 增长 / 商业化 / 海外 / 数据</p>
+      <div class="card-meta">独有招式：小红书 KOL + 案例库署名</div>
+    </div>
+    <div class="card" style="border-style: dashed; opacity: 0.85;">
+      <h3>🧩 其他（Fallback）</h3>
+      <p>法务 / 财务 / HR / BD / 设计 等 · 走通用模板 + 追加 3 个澄清问题</p>
+      <div class="card-meta">未来 v1.1 将拆分独立模板</div>
+    </div>
+  </div>
+
+  <!-- 5 段式输出 -->
+  <div class="section-title">📊 最终输出：5 段式 HTML 报告</div>
+  <div class="output-preview">
+    <div class="output-card">
+      <div class="oc-title">§1 组织架构图</div>
+      <div class="oc-desc">分层树状图 · 可缩放拖拽 · Top/Senior/Mid/Junior 四色分层</div>
+    </div>
+    <div class="output-card">
+      <div class="oc-title">§2 人选详情</div>
+      <div class="oc-desc">每人 1 张卡片 · 履历 + 教育 + Lead 项目 + 来源 URL</div>
+    </div>
+    <div class="output-card">
+      <div class="oc-title">§3 横向对比</div>
+      <div class="oc-desc">3-5 家 Peer 团队规模 / 薪酬 / 特点矩阵对标</div>
+    </div>
+    <div class="output-card">
+      <div class="oc-title">§4 水下挖掘</div>
+      <div class="oc-desc">3-5 条立即可执行的挖人建议（渠道 + 关键词 + 预期人数 + 优先级）</div>
+    </div>
+    <div class="output-card">
+      <div class="oc-title">§5 Alumni 追踪</div>
+      <div class="oc-desc">已离职关键人物去向 · 可引荐 / 可做情报源</div>
+    </div>
+  </div>
+
+  <!-- 预期效果 -->
+  <div class="section-title">📈 预期效果（实测数据）</div>
+  <table>
+    <thead><tr><th>指标</th><th>传统方式</th><th>用 mapping-universal</th><th>提升</th></tr></thead>
+    <tbody>
+      <tr><td>单公司挖掘耗时</td><td>3-5 天</td><td><b>60-90 分钟</b></td><td>🚀 60-80 倍</td></tr>
+      <tr><td>单次挖掘成本</td><td>¥5 万（外包猎头）</td><td><b>¥0</b>（公开渠道）</td><td>🚀 无穷大</td></tr>
+      <tr><td>新人上手时间</td><td>3-5 天培训</td><td><b>30 分钟</b></td><td>🚀 10+ 倍</td></tr>
+      <tr><td>产出标准化</td><td>每人格式不同</td><td><b>统一 JSON + HTML</b></td><td>🚀 可复用</td></tr>
+      <tr><td>知识沉淀</td><td>一次性产物</td><td><b>本地 Wiki 持续生长</b></td><td>🚀 指数级</td></tr>
+    </tbody>
+  </table>
+
+  <!-- 使用场景 -->
+  <div class="section-title">🎬 典型使用场景</div>
+  <div class="card-grid">
+    <div class="card">
+      <h3>场景 1：标准流程</h3>
+      <p>"帮我挖字节推荐算法团队" → Skill 自动 5 问对齐 → 并行挖掘 → 60 分钟交付 HTML</p>
+    </div>
+    <div class="card">
+      <h3>场景 2：多公司对比</h3>
+      <p>"对比字节 / 阿里 / 快手推荐算法" → § 3 横向对比变成主段</p>
+    </div>
+    <div class="card">
+      <h3>场景 3：继承知识库</h3>
+      <p>先查 talent-pool 已有信息 → 增量补充新情报</p>
+    </div>
+    <div class="card">
+      <h3>场景 4：轻量快速</h3>
+      <p>"15 分钟扫一下字节数据平台" → 只跑 P0 + 只输出 § 1 + § 4</p>
+    </div>
+  </div>
+
+  <!-- 触发语 -->
+  <div class="section-title">🎬 触发短语（给招聘经理看）</div>
+  <div class="card">
+    <p>说以下任一句话即可启动 Skill：</p>
+    <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px;">
+      <span class="badge" style="background: rgba(255,140,66,0.15); color: #ffab6b; padding: 6px 12px; border-radius: 4px; font-size: 12px;">帮我挖XX公司的团队</span>
+      <span class="badge" style="background: rgba(255,140,66,0.15); color: #ffab6b; padding: 6px 12px; border-radius: 4px; font-size: 12px;">做一份XX的招聘mapping</span>
+      <span class="badge" style="background: rgba(255,140,66,0.15); color: #ffab6b; padding: 6px 12px; border-radius: 4px; font-size: 12px;">XX公司组织架构</span>
+      <span class="badge" style="background: rgba(255,140,66,0.15); color: #ffab6b; padding: 6px 12px; border-radius: 4px; font-size: 12px;">挖XX的算法团队</span>
+      <span class="badge" style="background: rgba(255,140,66,0.15); color: #ffab6b; padding: 6px 12px; border-radius: 4px; font-size: 12px;">挖XX的产品经理</span>
+      <span class="badge" style="background: rgba(255,140,66,0.15); color: #ffab6b; padding: 6px 12px; border-radius: 4px; font-size: 12px;">XX公司水下人选</span>
+      <span class="badge" style="background: rgba(255,140,66,0.15); color: #ffab6b; padding: 6px 12px; border-radius: 4px; font-size: 12px;">招聘mapping</span>
+      <span class="badge" style="background: rgba(255,140,66,0.15); color: #ffab6b; padding: 6px 12px; border-radius: 4px; font-size: 12px;">org mapping</span>
+    </div>
+  </div>
+
+  <!-- CTA -->
+  <div class="cta">
+    <h3>🚀 安装方式</h3>
+    <code>cp -R mapping-universal ~/.codebuddy/skills/</code>
+    <div style="margin-top: 12px; font-size: 13px;">重启 IDE 后自动识别 · 详情见 README.md</div>
+  </div>
+
+  <!-- Footer -->
+  <div class="footer">
+    mapping-universal v1.0.0 · 遵守 no-hallucination meta-rule<br>
+    Generated on 2026-04-28
+  </div>
+
+</div>
+
+</body>
+</html>

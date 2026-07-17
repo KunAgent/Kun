@@ -1,0 +1,56 @@
+{
+  "name": "app-store-optimization-expert",
+  "version": "1.0.0",
+  "description": "Expert in App Store and Google Play search ranking algorithms, making apps stand out",
+  "agents": [
+    "./agents/app-store-optimization-expert.md"
+  ],
+  "expertType": "agent",
+  "agentName": "app-store-optimization-expert",
+  "displayName": {
+    "en": "Ella",
+    "zh": "榜上上"
+  },
+  "profession": {
+    "en": "App Store Optimization Expert",
+    "zh": "应用商店优化专家"
+  },
+  "displayDescription": {
+    "en": "Expert in App Store and Google Play search ranking algorithms, making apps stand out",
+    "zh": "精通App Store和Google Play搜索排名算法，让应用脱颖而出"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "05-MarketingGrowth",
+  "defaultInitPrompt": {
+    "zh": "我们的应用在应用商店的排名靠后,下载量不理想,请应用商店优化专家帮我们提升ASO效果。",
+    "en": "Our app ranks poorly in app stores, and download volumes are not ideal. Please, App Store Optimization Expert, help us improve our ASO performance."
+  },
+  "tags": [
+    {
+      "zh": "ASO优化",
+      "en": "ASO Optimization"
+    },
+    {
+      "zh": "应用市场",
+      "en": "App Store"
+    },
+    {
+      "zh": "下载转化",
+      "en": "Download Conversion"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "我们的应用在应用商店的排名靠后,下载量不理想,请应用商店优化专家帮我们提升ASO效果。",
+      "en": "Our app ranks poorly in app stores, and download volumes are not ideal. Please, App Store Optimization Expert, help us improve our ASO performance."
+    },
+    {
+      "zh": "提升应用下载转化率和评分",
+      "en": "Improve app download conversion rate and ratings"
+    },
+    {
+      "zh": "设计ASO关键词策略和元数据优化",
+      "en": "Design ASO keyword strategy and metadata optimization"
+    }
+  ]
+}

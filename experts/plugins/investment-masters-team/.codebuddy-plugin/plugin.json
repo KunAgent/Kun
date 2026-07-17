@@ -1,0 +1,369 @@
+{
+  "name": "investment-masters-team",
+  "version": "1.0.0",
+  "description": "AI Hedge Fund team: 19 legendary/professional investment analysts analyze in parallel, followed by risk management and portfolio decision — voting-based signal aggregation for comprehensive multi-perspective analysis",
+  "author": {
+    "name": "CodeBuddy Teams"
+  },
+  "agents": [
+    "./agents/hedge-fund-lead.md",
+    "./agents/oracle-of-omaha.md",
+    "./agents/charlie-munger.md",
+    "./agents/magellan-captain.md",
+    "./agents/the-big-short.md",
+    "./agents/black-swan-prophet.md",
+    "./agents/mama-wood.md",
+    "./agents/ben-graham.md",
+    "./agents/wall-street-activist.md",
+    "./agents/macro-king.md",
+    "./agents/dhandho-master.md",
+    "./agents/phil-fisher.md",
+    "./agents/dean-of-valuation.md",
+    "./agents/rakesh-jhunjhunwala.md",
+    "./agents/fundamentals-analyst.md",
+    "./agents/technicals-analyst.md",
+    "./agents/valuation-analyst.md",
+    "./agents/sentiment-analyst.md",
+    "./agents/growth-analyst.md",
+    "./agents/news-sentiment-analyst.md",
+    "./agents/risk-manager.md",
+    "./agents/portfolio-manager.md"
+  ],
+  "skills": [
+    "./skills/neodata-financial-search"
+  ],
+  "expertType": "team",
+  "agentName": "hedge-fund-lead",
+  "teamInfo": {
+    "leadAgent": "hedge-fund-lead",
+    "memberAgents": [
+      "oracle-of-omaha",
+      "charlie-munger",
+      "magellan-captain",
+      "the-big-short",
+      "black-swan-prophet",
+      "mama-wood",
+      "ben-graham",
+      "wall-street-activist",
+      "macro-king",
+      "dhandho-master",
+      "phil-fisher",
+      "dean-of-valuation",
+      "rakesh-jhunjhunwala",
+      "fundamentals-analyst",
+      "technicals-analyst",
+      "valuation-analyst",
+      "sentiment-analyst",
+      "growth-analyst",
+      "news-sentiment-analyst",
+      "risk-manager",
+      "portfolio-manager"
+    ]
+  },
+  "displayName": {
+    "en": "Investment Masters Team",
+    "zh": "投资大师专家团"
+  },
+  "profession": {
+    "en": "AI Hedge Fund Multi-Master Investment Analysis Team",
+    "zh": "AI对冲基金多大师投资分析专家团"
+  },
+  "displayDescription": {
+    "en": "19 investment analysts (13 legendary investors + 6 professional analysts) analyze in parallel, followed by risk management and portfolio decision, delivering multi-perspective investment analysis via voting-based signal aggregation",
+    "zh": "13位传奇投资哲学家 + 6位专业分析师并行分析，风险管理师评估约束，投资组合经理信号聚合投票，多角度投资分析参考"
+  },
+  "avatar": "avatars/team.png",
+  "categoryId": "08-FinanceInvestment",
+  "defaultInitPrompt": {
+    "zh": "帮我从多位投资大师的视角分析下腾讯的基本面和估值",
+    "en": "Help me analyze Tencent's fundamentals and valuation from multiple investment masters' perspectives"
+  },
+  "members": [
+    {
+      "id": "hedge-fund-lead",
+      "name": {
+        "en": "He",
+        "zh": "贺知衡"
+      },
+      "profession": {
+        "en": "Fund Manager",
+        "zh": "基金经理"
+      },
+      "avatar": "avatars/hedge-fund-lead.png",
+      "role": "lead"
+    },
+    {
+      "id": "oracle-of-omaha",
+      "name": {
+        "en": "Oracle of Omaha",
+        "zh": "奥马哈先知"
+      },
+      "profession": {
+        "en": "Value Investor",
+        "zh": "价值投资大师"
+      },
+      "avatar": "avatars/oracle-of-omaha.png",
+      "role": "member"
+    },
+    {
+      "id": "charlie-munger",
+      "name": {
+        "en": "Charlie Munger",
+        "zh": "查理·芒格"
+      },
+      "profession": {
+        "en": "Rational Thinker",
+        "zh": "理性思维大师"
+      },
+      "avatar": "avatars/charlie-munger.png",
+      "role": "member"
+    },
+    {
+      "id": "magellan-captain",
+      "name": {
+        "en": "Magellan Captain",
+        "zh": "麦哲伦舵手"
+      },
+      "profession": {
+        "en": "GARP Investor",
+        "zh": "GARP成长投资大师"
+      },
+      "avatar": "avatars/magellan-captain.png",
+      "role": "member"
+    },
+    {
+      "id": "the-big-short",
+      "name": {
+        "en": "The Big Short",
+        "zh": "大空头"
+      },
+      "profession": {
+        "en": "Deep Value Contrarian",
+        "zh": "深度价值逆向投资大师"
+      },
+      "avatar": "avatars/the-big-short.png",
+      "role": "member"
+    },
+    {
+      "id": "black-swan-prophet",
+      "name": {
+        "en": "Black Swan Prophet",
+        "zh": "黑天鹅之父"
+      },
+      "profession": {
+        "en": "Antifragile Analyst",
+        "zh": "反脆弱分析大师"
+      },
+      "avatar": "avatars/black-swan-prophet.png",
+      "role": "member"
+    },
+    {
+      "id": "mama-wood",
+      "name": {
+        "en": "Mama Wood",
+        "zh": "木头姐"
+      },
+      "profession": {
+        "en": "Disruptive Innovation Investor",
+        "zh": "颠覆性创新投资大师"
+      },
+      "avatar": "avatars/mama-wood.png",
+      "role": "member"
+    },
+    {
+      "id": "ben-graham",
+      "name": {
+        "en": "Ben Graham",
+        "zh": "本杰明·格雷厄姆"
+      },
+      "profession": {
+        "en": "Father of Value Investing",
+        "zh": "价值投资之父"
+      },
+      "avatar": "avatars/ben-graham.png",
+      "role": "member"
+    },
+    {
+      "id": "wall-street-activist",
+      "name": {
+        "en": "Wall Street Activist",
+        "zh": "华尔街斗牛士"
+      },
+      "profession": {
+        "en": "Activist Investor",
+        "zh": "激进主义投资大师"
+      },
+      "avatar": "avatars/wall-street-activist.png",
+      "role": "member"
+    },
+    {
+      "id": "macro-king",
+      "name": {
+        "en": "Macro King",
+        "zh": "宏观之王"
+      },
+      "profession": {
+        "en": "Macro Investor",
+        "zh": "宏观投资大师"
+      },
+      "avatar": "avatars/macro-king.png",
+      "role": "member"
+    },
+    {
+      "id": "dhandho-master",
+      "name": {
+        "en": "Dhandho Master",
+        "zh": "Dhandho掌门"
+      },
+      "profession": {
+        "en": "Dhandho Investor",
+        "zh": "Dhandho投资大师"
+      },
+      "avatar": "avatars/dhandho-master.png",
+      "role": "member"
+    },
+    {
+      "id": "phil-fisher",
+      "name": {
+        "en": "Phil Fisher",
+        "zh": "菲利普·费雪"
+      },
+      "profession": {
+        "en": "Growth Stock Master",
+        "zh": "成长股投资大师"
+      },
+      "avatar": "avatars/phil-fisher.png",
+      "role": "member"
+    },
+    {
+      "id": "dean-of-valuation",
+      "name": {
+        "en": "Ge",
+        "zh": "葛衡量"
+      },
+      "profession": {
+        "en": "Valuation Dean",
+        "zh": "估值教父"
+      },
+      "avatar": "avatars/dean-of-valuation.png",
+      "role": "member"
+    },
+    {
+      "id": "rakesh-jhunjhunwala",
+      "name": {
+        "en": "Rakesh Jhunjhunwala",
+        "zh": "拉凯什·金君瓦拉"
+      },
+      "profession": {
+        "en": "Emerging Market Bull",
+        "zh": "新兴市场成长投资大师"
+      },
+      "avatar": "avatars/rakesh-jhunjhunwala.png",
+      "role": "member"
+    },
+    {
+      "id": "fundamentals-analyst",
+      "name": {
+        "en": "Ji",
+        "zh": "季本实"
+      },
+      "profession": {
+        "en": "Fundamentals Analyst",
+        "zh": "基本面分析师"
+      },
+      "avatar": "avatars/fundamentals-analyst.png",
+      "role": "member"
+    },
+    {
+      "id": "technicals-analyst",
+      "name": {
+        "en": "Tu",
+        "zh": "涂一线"
+      },
+      "profession": {
+        "en": "Technical Analyst",
+        "zh": "技术面分析师"
+      },
+      "avatar": "avatars/technicals-analyst.png",
+      "role": "member"
+    },
+    {
+      "id": "valuation-analyst",
+      "name": {
+        "en": "Gu",
+        "zh": "谷衡值"
+      },
+      "profession": {
+        "en": "Valuation Analyst",
+        "zh": "估值分析师"
+      },
+      "avatar": "avatars/valuation-analyst.png",
+      "role": "member"
+    },
+    {
+      "id": "sentiment-analyst",
+      "name": {
+        "en": "Mo",
+        "zh": "莫慌言"
+      },
+      "profession": {
+        "en": "Sentiment Analyst",
+        "zh": "情绪分析师"
+      },
+      "avatar": "avatars/sentiment-analyst.png",
+      "role": "member"
+    },
+    {
+      "id": "growth-analyst",
+      "name": {
+        "en": "Cheng",
+        "zh": "成长青"
+      },
+      "profession": {
+        "en": "Growth Analyst",
+        "zh": "成长分析师"
+      },
+      "avatar": "avatars/growth-analyst.png",
+      "role": "member"
+    },
+    {
+      "id": "news-sentiment-analyst",
+      "name": {
+        "en": "Wen",
+        "zh": "闻风声"
+      },
+      "profession": {
+        "en": "News Sentiment Analyst",
+        "zh": "新闻情绪分析师"
+      },
+      "avatar": "avatars/news-sentiment-analyst.png",
+      "role": "member"
+    },
+    {
+      "id": "risk-manager",
+      "name": {
+        "en": "Yan",
+        "zh": "严控风"
+      },
+      "profession": {
+        "en": "Risk Manager",
+        "zh": "风险管理师"
+      },
+      "avatar": "avatars/risk-manager.png",
+      "role": "member"
+    },
+    {
+      "id": "portfolio-manager",
+      "name": {
+        "en": "Pei",
+        "zh": "裴持衡"
+      },
+      "profession": {
+        "en": "Portfolio Manager",
+        "zh": "投资组合经理"
+      },
+      "avatar": "avatars/portfolio-manager.png",
+      "role": "member"
+    }
+  ]
+}

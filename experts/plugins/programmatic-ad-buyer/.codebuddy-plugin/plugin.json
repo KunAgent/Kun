@@ -1,0 +1,56 @@
+{
+  "name": "programmatic-ad-buyer",
+  "version": "1.0.0",
+  "description": "Expert in programmatic ad buying and DSP platforms, achieving large-scale precision targeting through algorithms",
+  "agents": [
+    "./agents/programmatic-ad-buyer.md"
+  ],
+  "expertType": "agent",
+  "agentName": "programmatic-ad-buyer",
+  "displayName": {
+    "en": "Luna",
+    "zh": "算法投"
+  },
+  "profession": {
+    "en": "Programmatic Ad Buyer",
+    "zh": "程序化广告买手"
+  },
+  "displayDescription": {
+    "en": "Expert in programmatic ad buying and DSP platforms, achieving large-scale precision targeting through algorithms",
+    "zh": "精通程序化广告购买和DSP平台，通过算法实现大规模精准投放"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "05-MarketingGrowth",
+  "defaultInitPrompt": {
+    "zh": "我们想尝试程序化广告投放,需要专业的DSP和RTB操作经验,请程序化广告买家帮我们设计程序化投放策略。",
+    "en": "We want to try programmatic advertising and need professional DSP and RTB operation experience. Please, Programmatic Ad Buyer, help us design programmatic advertising strategies."
+  },
+  "tags": [
+    {
+      "zh": "程序化购买",
+      "en": "Programmatic Buying"
+    },
+    {
+      "zh": "RTB竞价",
+      "en": "RTB Bidding"
+    },
+    {
+      "zh": "广告交易",
+      "en": "Ad Exchange"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "我们想尝试程序化广告投放,需要专业的DSP和RTB操作经验,请程序化广告买家帮我们设计程序化投放策略。",
+      "en": "We want to try programmatic advertising and need professional DSP and RTB operation experience. Please, Programmatic Ad Buyer, help us design programmatic advertising strategies."
+    },
+    {
+      "zh": "设计DSP/SSP集成和受众定向方案",
+      "en": "Design DSP/SSP integration and audience targeting plan"
+    },
+    {
+      "zh": "优化程序化广告效果和成本效率",
+      "en": "Optimize programmatic ad performance and cost efficiency"
+    }
+  ]
+}

@@ -1,0 +1,22 @@
+# ── Core (hooks, entity-resolver, intelligence, datalab, gallery) ─────────────
+requests==2.32.3
+httpx==0.28.1
+
+# ── Dashboard / Opinion / MGMT skill runtime ─────────────────────────────────
+openai-agents==0.2.9
+pydantic==2.11.3
+loguru==0.7.3
+pandas==2.2.3
+numpy==2.2.4
+aiohttp==3.11.16
+openpyxl==3.1.5
+
+# ── Opinion BigQuery client (import-time dependency; creds via service config) ─
+google-cloud-bigquery==3.31.0
+
+# ── Analysis (local scripts + databrain-analysis sandbox) ─────────────────────
+scipy==1.15.2
+statsmodels==0.14.4
+matplotlib==3.10.1
+seaborn==0.13.2
+shap==0.47.2

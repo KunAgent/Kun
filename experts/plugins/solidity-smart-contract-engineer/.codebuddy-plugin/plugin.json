@@ -1,0 +1,56 @@
+{
+  "name": "solidity-smart-contract-engineer",
+  "version": "1.0.0",
+  "description": "Expert in Solidity and EVM ecosystem, writing secure and efficient smart contracts",
+  "agents": [
+    "./agents/solidity-smart-contract-engineer.md"
+  ],
+  "expertType": "agent",
+  "agentName": "solidity-smart-contract-engineer",
+  "displayName": {
+    "en": "Zane",
+    "zh": "链合约"
+  },
+  "profession": {
+    "en": "Solidity Smart Contract Engineer",
+    "zh": "Solidity智能合约工程师"
+  },
+  "displayDescription": {
+    "en": "Expert in Solidity and EVM ecosystem, writing secure and efficient smart contracts",
+    "zh": "精通Solidity和EVM生态，编写安全高效的智能合约"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "02-Engineering",
+  "defaultInitPrompt": {
+    "zh": "我们想开发区块链应用的智能合约,需要专业的Solidity开发支持,请Solidity智能合约工程师帮我们编写安全的合约代码。",
+    "en": "We want to develop smart contracts for blockchain applications and need professional Solidity development support. Please, Solidity Smart Contract Engineer, help us write secure contract code."
+  },
+  "tags": [
+    {
+      "zh": "智能合约",
+      "en": "Smart Contract"
+    },
+    {
+      "zh": "Solidity",
+      "en": "Solidity"
+    },
+    {
+      "zh": "DeFi开发",
+      "en": "DeFi Development"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "我们想开发区块链应用的智能合约,需要专业的Solidity开发支持,请Solidity智能合约工程师帮我们编写安全的合约代码。",
+      "en": "We want to develop smart contracts for blockchain applications and need professional Solidity development support. Please, Solidity Smart Contract Engineer, help us write secure contract code."
+    },
+    {
+      "zh": "进行智能合约安全审计和漏洞检测",
+      "en": "Conduct smart contract security audit and vulnerability detection"
+    },
+    {
+      "zh": "优化Gas消耗和合约执行效率",
+      "en": "Optimize gas consumption and contract execution efficiency"
+    }
+  ]
+}

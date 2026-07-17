@@ -1,0 +1,31 @@
+{
+  "name": "ai-image-prompt-engineer",
+  "version": "1.0.0",
+  "description": "Expert photography prompt engineer specializing in crafting detailed, evocative prompts for AI image generation",
+  "expertType": "agent",
+  "agentName": "ai-image-prompt-engineer",
+  "agents": ["./agents/ai-image-prompt-engineer.md"],
+  "skills": ["./skills/canvas-design"],
+  "displayName": { "en": "Alex", "zh": "画令令" },
+  "profession": { "en": "AI Image Prompt Engineer", "zh": "AI图像提示词工程师" },
+  "displayDescription": {
+    "en": "Master of AI image generation language codes, transforming abstract visual concepts into precise prompts",
+    "zh": "精通AI图像生成的语言密码，将抽象视觉概念转化为精准提示词"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "01-ProductDesign",
+  "defaultInitPrompt": {
+    "zh": "我需要用AI生成专业级的摄影图片,但不知道如何编写精确的提示词,请图像提示词工程师帮我设计能产生惊艳效果的详细提示词。",
+    "en": "I need to generate professional-grade photography images using AI, but I'm unsure how to write precise prompts. Please, AI Image Prompt Engineer, help me design detailed prompts that will produce stunning visual effects."
+  },
+  "tags": [
+    { "en": "AI Image Generation", "zh": "AI绘画" },
+    { "en": "Prompt Engineering", "zh": "提示词工程" },
+    { "en": "Visual Creation", "zh": "视觉创作" }
+  ],
+  "quickPrompts": [
+    { "zh": "我需要用AI生成专业级的摄影图片,但不知道如何编写精确的提示词,请图像提示词工程师帮我设计能产生惊艳效果的详细提示词。", "en": "I need to generate professional-grade photography images using AI, but I'm unsure how to write precise prompts. Please, AI Image Prompt Engineer, help me design detailed prompts that will produce stunning visual effects." },
+    { "zh": "设计一套品牌视觉风格的AI绘画提示词", "en": "Design AI image prompts for brand visual style" },
+    { "zh": "将文字描述转化为精准的AI绘画指令", "en": "Convert text descriptions into precise AI image prompts" }
+  ]
+}

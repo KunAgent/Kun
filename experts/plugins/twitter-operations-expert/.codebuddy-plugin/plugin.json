@@ -1,0 +1,56 @@
+{
+  "name": "twitter-operations-expert",
+  "version": "1.0.0",
+  "description": "Expert in Twitter/X platform engagement strategy and topic operations, putting brands at the center of global conversations",
+  "agents": [
+    "./agents/twitter-operations-expert.md"
+  ],
+  "expertType": "agent",
+  "agentName": "twitter-operations-expert",
+  "displayName": {
+    "en": "Cole",
+    "zh": "推文文"
+  },
+  "profession": {
+    "en": "Twitter Operations Expert",
+    "zh": "Twitter运营专家"
+  },
+  "displayDescription": {
+    "en": "Expert in Twitter/X platform engagement strategy and topic operations, putting brands at the center of global conversations",
+    "zh": "精通Twitter/X平台互动策略和话题运营，让品牌占据全球对话"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "06-ContentCreative",
+  "defaultInitPrompt": {
+    "zh": "我们想在Twitter上提升品牌影响力和用户互动,请Twitter运营专家帮我们制定Twitter运营策略。",
+    "en": "We want to improve brand influence and user engagement on Twitter. Please, Twitter Operations Expert, help us develop Twitter operation strategies."
+  },
+  "tags": [
+    {
+      "zh": "推特运营",
+      "en": "Twitter Operations"
+    },
+    {
+      "zh": "实时互动",
+      "en": "Real-time Engagement"
+    },
+    {
+      "zh": "话题营销",
+      "en": "Topic Marketing"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "我们想在Twitter上提升品牌影响力和用户互动,请Twitter运营专家帮我们制定Twitter运营策略。",
+      "en": "We want to improve brand influence and user engagement on Twitter. Please, Twitter Operations Expert, help us develop Twitter operation strategies."
+    },
+    {
+      "zh": "撰写高互动率的推文和话题策划",
+      "en": "Write high-engagement tweets and plan hashtag campaigns"
+    },
+    {
+      "zh": "优化Twitter内容触达和影响力",
+      "en": "Optimize Twitter content reach and influence"
+    }
+  ]
+}

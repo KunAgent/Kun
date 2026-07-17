@@ -1,0 +1,26 @@
+{
+  "schemaVersion": "1.0",
+  "plugin": "liuxue-yanxue-expert",
+  "version": "26.6.30.1",
+  "brand": {
+    "zh": "福帮手",
+    "en": "FBSir"
+  },
+  "displayName": {
+    "zh": "福帮手",
+    "en": "FBSir"
+  },
+  "marketplace": "experts",
+  "categoryId": "12-IndustryConsultant",
+  "categoryRationaleZh": "定位为家庭升学与留学研学路径规划入口，更接近咨询型专家而非单一教学工具。",
+  "entryPromptCode": "wb_qp_liuxue_yanxue_dual_track_48h",
+  "defaultPromptId": "fbss_liuxue_yanxue_dual_track_start",
+  "serviceProductId": "workbuddy_liuxue_yanxue_expert",
+  "packCode": "fbs.liuxue_yanxue.dual_track.v1",
+  "scenePackId": "liuxue_yanxue_dual_track",
+  "connectorRequired": false,
+  "releaseBoundary": {
+    "listedPackageSurface": "experts",
+    "nonOfficialEquivalentSignalsMustNotCountAsNaturalTraffic": true
+  }
+}

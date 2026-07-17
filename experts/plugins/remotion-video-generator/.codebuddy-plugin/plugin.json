@@ -1,0 +1,29 @@
+{
+  "name": "remotion-video-generator",
+  "version": "1.0.0",
+  "description": "Automatically generates beautiful videos using Remotion. Detects video creation requests, creates storyboards, handles environment setup, and outputs MP4 files with minimal user intervention. Supports explainer videos, product demos, social media content, and presentations.",
+  "author": {
+    "name": "CodeBuddy Plugin Creator",
+    "email": "plugins@codebuddy.dev"
+  },
+  "keywords": [
+    "remotion",
+    "video",
+    "animation",
+    "content-creation",
+    "react"
+  ],
+  "skills": [
+    "./skills/video-generator",
+    "./skills/scene-planner",
+    "./skills/environment-setup",
+    "./skills/remotion-best-practices",
+    "./skills/lucide-icons",
+    "./skills/bgm-library"
+  ],
+  "expertType": "agent",
+  "agentName": "remotion-video-expert",
+  "agents": [
+    "./agents/remotion-video-expert.md"
+  ]
+}

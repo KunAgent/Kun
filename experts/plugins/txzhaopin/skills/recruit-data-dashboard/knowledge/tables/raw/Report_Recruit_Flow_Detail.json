@@ -1,0 +1,1593 @@
+{
+  "table_code" : "catalog_dos_da_mcp.hrdw.Report_Recruit_Flow_Detail",
+  "table_name" : "社招面试全流程宽表",
+  "version" : 9,
+  "table_desc" : "定位： 以社招/活水面试流程为核心视角，记录候选人从简历评估、发起面试、各面试环节、Offer审批、薪资谈判、到最终入职（或放弃）的完整招聘链路明细数据，覆盖社招面试（flow_id=3）和活水流程（flow_id=5）两类场景。\n\n唯一标识： 以 flow_main_id（主流程ID）作为唯一标识，每个面试流程对应一行数据。\n\n主要包含以下几大部分内容（摘要）：\n\n流程基础信息（流程类型、流程创建/结束时间、当前环节ID/名称、流程状态等）\n面试各环节通过状态与时间（部门内专业面试、通道/面委面试、用人决策面试、HR资格面试的发起/通过/待办未提交状态及处理时间）\nOffer与薪资谈判信息（Offer审批通过状态、审批开始时间、薪资谈判发起/通过/放弃、发出offer、接受offer及各环节时间）\n活水专属流程信息（调出/调入部门审批、手续确认、调动完成、预计调动日期、简历评估、员工申请/录用确认等环节状态及时间）\n各阶段放弃信息（面试阶段放弃、Offer审批中放弃、入职阶段放弃、拒绝offer、活水各审批放弃，区分超时退库与主动放弃）\n招聘岗位与组织信息（岗位ID/名称、BG/部门/组织/组织全路径、管理主体、员工类型、工作地等）\n候选人与招聘经理信息（候选人ID/姓名、招聘经理ID/姓名/管理主体、简历来源渠道）\n渠道信息（渠道ID/名称/父渠道/全路径/类型）\n职位通道信息（职位族/职位类/专业职级/管理职级等）\n入职信息（入职组织/BG/线/部门/中心等完整组织信息、入职时间）\n活水调入/调出组织信息（调入/调出组织ID/名称/全路径/BG/部门、调入/调出职级/职位）\n保密标识与当量系数\n主要用途：\n\n追踪社招/活水候选人在招聘全流程中各环节的推进状态和耗时；\n分析各面试环节的转化率与漏斗（发起→通过→下一环节）；\n统计各阶段放弃率（面试放弃、Offer放弃、入职放弃）及原因分类（超时退库vs主动放弃）；\n分析Offer发放与接受情况、薪资谈判成功率；\n按组织/BG/部门/工作地/渠道/职位等维度进行招聘效率对比；\n活水流程的专项分析（调出/调入审批、调动完成情况）；\n能回答的典型问题：\n\nA部门社招从发起面试到入职的平均周期是多少天？\n各BG本季度社招面试通过率和Offer接受率分别是多少？\n哪个环节的候选人流失最严重（面试阶段/Offer阶段/入职阶段）？\n各渠道简历的最终入职转化率对比如何？\n活水流程中调出部门审批通过率和平均审批时长是多少？\n本月有多少候选人在薪资谈判阶段放弃？\n各部门Offer发出后被拒绝的比例是多少？\n超时退库占放弃总数的比例是多少？",
+  "write_sql_background" : "",
+  "find_column_background" : "",
+  "columns" : [ {
+    "column_code" : "audit_create_time",
+    "column_name" : "审计时间戳",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "ETL数据写入时的系统时间戳，用于数据版本追踪",
+    "column_group" : ""
+  }, {
+    "column_code" : "flow_main_id",
+    "column_name" : "流程ID",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "面试流程的唯一标识ID，关联候选人从投递到入职的完整招聘链路",
+    "column_group" : ""
+  }, {
+    "column_code" : "flow_id",
+    "column_name" : "流程类型ID",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "区分流程类型：3=社招面试，5=活水流程。用于筛选社招/活水场景",
+    "column_group" : ""
+  }, {
+    "column_code" : "flow_name",
+    "column_name" : "流程类型名称",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "流程类型的中文描述名称，用于前端展示",
+    "column_group" : ""
+  }, {
+    "column_code" : "candidate_id",
+    "column_name" : "候选人ID",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "候选人唯一标识ID，用于关联候选人信息",
+    "column_group" : ""
+  }, {
+    "column_code" : "candidate_name",
+    "column_name" : "候选人名称",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "候选人姓名",
+    "column_group" : ""
+  }, {
+    "column_code" : "post_id",
+    "column_name" : "招聘岗位ID",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "招聘岗位ID，用于关联岗位信息和按岗位维度聚合",
+    "column_group" : ""
+  }, {
+    "column_code" : "post_name_cn",
+    "column_name" : "招聘岗位名称",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "招聘岗位中文名称，用于前端展示和岗位名称模糊搜索",
+    "column_group" : ""
+  }, {
+    "column_code" : "recruit_owner_id",
+    "column_name" : "招聘经理员工ID",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "招聘经理ID，用于按招聘经理维度筛选和聚合",
+    "column_group" : ""
+  }, {
+    "column_code" : "recruit_post_bg_id",
+    "column_name" : "招聘岗位所属BG ID",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "招聘岗位bgid",
+    "column_group" : ""
+  }, {
+    "column_code" : "recruit_post_bg_name",
+    "column_name" : "招聘岗位所属BG名称",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "招聘岗位bg名称",
+    "column_group" : ""
+  }, {
+    "column_code" : "recruit_post_dept_id",
+    "column_name" : "招聘岗位所属部门ID",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "招聘岗位部门id",
+    "column_group" : ""
+  }, {
+    "column_code" : "recruit_post_dept_name_cn",
+    "column_name" : "招聘岗位所属部门名称",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "招聘岗位部门名称",
+    "column_group" : ""
+  }, {
+    "column_code" : "recruit_post_org_id",
+    "column_name" : "招聘岗位所属组织ID",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "招聘岗位所属组织ID",
+    "column_group" : ""
+  }, {
+    "column_code" : "recruit_post_org_name_cn",
+    "column_name" : "招聘岗位所属组织名称",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "招聘岗位组织名称",
+    "column_group" : ""
+  }, {
+    "column_code" : "recruit_post_org_full_path",
+    "column_name" : "招聘岗位所属组织ID全路径",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "招聘岗位所属组织ID全路径，用于按组织范围筛选",
+    "column_group" : ""
+  }, {
+    "column_code" : "recruit_post_org_full_name",
+    "column_name" : "招聘岗位所属组织全路径",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "招聘岗位组织全路径",
+    "column_group" : ""
+  }, {
+    "column_code" : "manager_unit_id",
+    "column_name" : "招聘岗位所属管理主体ID",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "管理主体ID，用于按管理主体筛选数据",
+    "column_group" : ""
+  }, {
+    "column_code" : "manager_unit_name_cn",
+    "column_name" : "招聘岗位所属管理主体名称",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "管理主体名称",
+    "column_group" : ""
+  }, {
+    "column_code" : "location_country_id",
+    "column_name" : "招聘岗位国家ID",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "工作地国家id",
+    "column_group" : ""
+  }, {
+    "column_code" : "location_country_name",
+    "column_name" : "招聘岗位国家名称",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "国家名称，固定筛选条件like '%中国%'限定境内招聘",
+    "column_group" : ""
+  }, {
+    "column_code" : "recruit_location_id",
+    "column_name" : "招聘工作地ID",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "招聘地点ID，用于按工作地筛选",
+    "column_group" : ""
+  }, {
+    "column_code" : "recruit_location_name",
+    "column_name" : "招聘工作地名称",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "招聘地点名称",
+    "column_group" : ""
+  }, {
+    "column_code" : "staff_type_id",
+    "column_name" : "员工类型ID",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "员工类型ID，2=正式员工，用于固定筛选条件",
+    "column_group" : ""
+  }, {
+    "column_code" : "staff_type_name_cn",
+    "column_name" : "员工类型名称",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "员工类型名称",
+    "column_group" : ""
+  }, {
+    "column_code" : "flow_create_time",
+    "column_name" : "流程创建时间",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "面试流程创建的时间，标记候选人进入面试的起始时间点",
+    "column_group" : ""
+  }, {
+    "column_code" : "flow_end_time",
+    "column_name" : "流程结束时间",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "流程结束时间（入职/放弃/淘汰），用于判断流程是否仍在进行中",
+    "column_group" : ""
+  }, {
+    "column_code" : "step_id",
+    "column_name" : "面试环节id",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "候选人当前所在的面试环节编号，用于判断面试进展阶段",
+    "column_group" : ""
+  }, {
+    "column_code" : "step_name",
+    "column_name" : "最新环节名称",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "当前环节的中文名称，用于前端展示",
+    "column_group" : ""
+  }, {
+    "column_code" : "arrive_time",
+    "column_name" : "最新环节到达时间",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "候选人到达当前环节的时间，用于计算各环节停留时长",
+    "column_group" : ""
+  }, {
+    "column_code" : "process_time",
+    "column_name" : "最新环节处理时间",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "当前环节被处理（通过/拒绝）的时间，用于计算处理效率",
+    "column_group" : ""
+  }, {
+    "column_code" : "is_resume_assess",
+    "column_name" : "是否发起简历评估",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "是否有简历评估（0/1），用于统计有简历评估面试数",
+    "column_group" : ""
+  }, {
+    "column_code" : "is_resume_assessing",
+    "column_name" : "是否简历评估中",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "是否简历评估中",
+    "column_group" : ""
+  }, {
+    "column_code" : "resume_assess_flow_main_id",
+    "column_name" : "社招简历评估环节流程ID",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "简历评估中流程id",
+    "column_group" : ""
+  }, {
+    "column_code" : "resume_assess_arrive_time",
+    "column_name" : "社招简历评估开始时间",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "简历评估收到简历时间",
+    "column_group" : ""
+  }, {
+    "column_code" : "resume_assess_process_time",
+    "column_name" : "社招简历评估结束时间",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "简历评估评估结束时间",
+    "column_group" : ""
+  }, {
+    "column_code" : "is_start_intv",
+    "column_name" : "是否发起面试",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "标识是否已发起面试（0/1），用于统计发起面试数",
+    "column_group" : ""
+  }, {
+    "column_code" : "start_intv_time",
+    "column_name" : "发起面试时间",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "发起面试的时间点，用于按时间范围统计发起面试数量",
+    "column_group" : ""
+  }, {
+    "column_code" : "is_start_dept_professional_intv",
+    "column_name" : "是否发起部门内专业面试",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "是否发起部门内专业面试（0/1），用于统计发起部门面试数",
+    "column_group" : ""
+  }, {
+    "column_code" : "is_dept_professional_intv_no_submit",
+    "column_name" : "是否部门内专业面试中",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "部门内专业面试待办是否未提交（0/1），用于计算通过率时排除未提交数",
+    "column_group" : ""
+  }, {
+    "column_code" : "is_dept_professional_intv",
+    "column_name" : "是否通过部门内专业面试",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "是否通过部门内专业面试（0/1），用于统计部门面试通过数",
+    "column_group" : ""
+  }, {
+    "column_code" : "start_dept_professional_intv_time",
+    "column_name" : "部门内专业面试开始时间",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "发起部门内专业面试时间",
+    "column_group" : ""
+  }, {
+    "column_code" : "dept_professional_intv_time",
+    "column_name" : "部门内专业面试通过时间",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "部门内专业面试的处理时间，用于按时间范围筛选通过记录",
+    "column_group" : ""
+  }, {
+    "column_code" : "is_start_dm_intv",
+    "column_name" : "是否发起用人决策者面试",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "是否发起用人决策面试（0/1），用于统计发起用人决策面试数",
+    "column_group" : ""
+  }, {
+    "column_code" : "is_dm_intv_no_submit",
+    "column_name" : "是否用人决策面试中",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "用人决策面试待办是否未提交（0/1），用于计算通过率时排除未提交数",
+    "column_group" : ""
+  }, {
+    "column_code" : "is_dm_intv",
+    "column_name" : "是否通过用人决策面试",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "是否通过用人决策面试（0/1），用于统计用人决策面试通过数",
+    "column_group" : ""
+  }, {
+    "column_code" : "start_dm_intv_time",
+    "column_name" : "用人决策者面试开始时间",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "发起用人决策面试时间",
+    "column_group" : ""
+  }, {
+    "column_code" : "dm_intv_time",
+    "column_name" : "用人决策者面试通过时间",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "用人决策者面试的处理时间，用于按时间范围筛选通过记录",
+    "column_group" : ""
+  }, {
+    "column_code" : "is_start_cf_intv",
+    "column_name" : "是否发起通道/面委面试",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "是否发起通道面委面试（0/1），用于统计发起通道面委面试数",
+    "column_group" : ""
+  }, {
+    "column_code" : "is_cf_intv_no_submit",
+    "column_name" : "是否通道/面委面试中",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "通道/面委面试待办是否未提交（0/1），用于计算通过率时排除未提交数",
+    "column_group" : ""
+  }, {
+    "column_code" : "is_cf_intv",
+    "column_name" : "是否通过通道/面委面试",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "是否通过通道/面委面试（0/1），用于统计通道面委面试通过数",
+    "column_group" : ""
+  }, {
+    "column_code" : "start_cf_intv_time",
+    "column_name" : "通道/面委面试开始时间",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "发起通道面委面试时间",
+    "column_group" : ""
+  }, {
+    "column_code" : "cf_intv_time",
+    "column_name" : "通道/面委会面试通过时间",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "通道/面委面试的处理时间，用于按时间范围筛选通过记录",
+    "column_group" : ""
+  }, {
+    "column_code" : "is_start_hr_intv",
+    "column_name" : "是否发起HR资格面试",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "是否发起HR资格面试（0/1），用于统计发起HR面试数",
+    "column_group" : ""
+  }, {
+    "column_code" : "is_hr_intv_no_submit",
+    "column_name" : "是否HR资格面试中",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "HR资格面试待办是否未提交（0/1），用于计算通过率时排除未提交数",
+    "column_group" : ""
+  }, {
+    "column_code" : "is_hr_intv",
+    "column_name" : "是否通过HR资格面试",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "是否通过HR资格面试（0/1），用于统计HR资格面试通过数",
+    "column_group" : ""
+  }, {
+    "column_code" : "start_hr_intv_time",
+    "column_name" : "HR资格面试开始时间",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "发起HR资格面试的时间，用于按时间范围筛选",
+    "column_group" : ""
+  }, {
+    "column_code" : "hr_intv_time",
+    "column_name" : "HR资格面试通过时间",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "HR资格面试通过时间，用于按时间范围筛选通过记录",
+    "column_group" : ""
+  }, {
+    "column_code" : "hr_intv_giveup_time",
+    "column_name" : "HR资格面试放弃时间",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "发起HR资格面试放弃时间",
+    "column_group" : ""
+  }, {
+    "column_code" : "is_hr_salary_negotiation",
+    "column_name" : "是否进入HR薪资谈判",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "是否通过发起薪资谈判（0/1），用于统计发起薪资谈判数",
+    "column_group" : ""
+  }, {
+    "column_code" : "is_hr_salary_negotiation_no_submit",
+    "column_name" : "是否HR薪资谈判中",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "发起薪资谈判是否未提交（0/1），用于计算HR薪资谈判通过率时排除",
+    "column_group" : ""
+  }, {
+    "column_code" : "hr_salary_negotiation_arrive_time",
+    "column_name" : "HR薪资谈判环节到达时间",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "薪资谈判到达时间，用于判断面试中与offer中的边界",
+    "column_group" : ""
+  }, {
+    "column_code" : "start_hr_salary_negotiation_time",
+    "column_name" : "HR薪资谈判开始时间",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "发起薪资谈判的开始时间，用于按时间范围统计",
+    "column_group" : ""
+  }, {
+    "column_code" : "hr_salary_negotiation_process_time",
+    "column_name" : "HR薪资谈判结束时间",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "薪资谈判处理时间，用于口头turndown的时间筛选",
+    "column_group" : ""
+  }, {
+    "column_code" : "hr_salary_negotiation_time",
+    "column_name" : "HR薪资谈判通过时间",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "薪资谈判通过时间，用于按时间范围筛选薪资谈判通过记录",
+    "column_group" : ""
+  }, {
+    "column_code" : "hr_salary_negotiation_giveup_time",
+    "column_name" : "HR薪资谈判放弃时间",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "薪资谈判放弃时间，用于标记候选人在薪谈环节放弃",
+    "column_group" : ""
+  }, {
+    "column_code" : "is_know_salary_data",
+    "column_name" : "是否了解候选人薪酬数据",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "是否知晓薪资数据（0/1），口头turndown判断辅助条件",
+    "column_group" : ""
+  }, {
+    "column_code" : "hr_salary_negotiation_state",
+    "column_name" : "hr薪资谈判状态",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "薪资谈判状态（通过/放弃），用于判断口头turndown",
+    "column_group" : ""
+  }, {
+    "column_code" : "is_offer_approval",
+    "column_name" : "是否进入OFFER审批阶段",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "是否Offer审批通过（0/1），用于统计offer审批中人数",
+    "column_group" : ""
+  }, {
+    "column_code" : "is_offer_approval_no_submit",
+    "column_name" : "是否OFFER审批中",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "Offer审批中待办是否未提交（0/1），用于计算发送offer率时排除未审批数",
+    "column_group" : ""
+  }, {
+    "column_code" : "start_offer_approval_time",
+    "column_name" : "Offer审批开始时间",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "Offer审批开始时间，用于按时间范围筛选offer审批记录",
+    "column_group" : ""
+  }, {
+    "column_code" : "offer_approval_time",
+    "column_name" : "OFFER审批结束时间",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "Offer审批通过时间",
+    "column_group" : ""
+  }, {
+    "column_code" : "is_offer_approval_pass",
+    "column_name" : "是否OFFER审批通过",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "是否审批通过",
+    "column_group" : ""
+  }, {
+    "column_code" : "start_send_offer_time",
+    "column_name" : "发送OFFER环节开始时间",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "开始发送offer时间",
+    "column_group" : ""
+  }, {
+    "column_code" : "is_send_offer",
+    "column_name" : "是否发送offer",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "是否已发出offer（0/1），用于统计发送offer数",
+    "column_group" : ""
+  }, {
+    "column_code" : "send_offer_time",
+    "column_name" : "发送offer时间",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "发出offer的时间，用于按时间范围筛选及计算入职中状态",
+    "column_group" : ""
+  }, {
+    "column_code" : "start_take_offer_time",
+    "column_name" : "等待OFFER答复环节开始时间",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "活水简历评估结束时间",
+    "column_group" : ""
+  }, {
+    "column_code" : "is_take_offer",
+    "column_name" : "是否接受offer",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "是否接受offer（0/1），用于统计已完成需求数(offer)",
+    "column_group" : ""
+  }, {
+    "column_code" : "take_offer_time",
+    "column_name" : "接受offer时间",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "接受offer的时间，用于按时间范围筛选offer接受记录",
+    "column_group" : ""
+  }, {
+    "column_code" : "is_offer_giveup",
+    "column_name" : "是否拒绝offer",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "是否拒绝offer（0/1），用于统计拒绝offer数",
+    "column_group" : ""
+  }, {
+    "column_code" : "offer_giveup_time",
+    "column_name" : "拒绝offer时间",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "拒绝offer的时间，用于按时间范围筛选",
+    "column_group" : ""
+  }, {
+    "column_code" : "is_interview_giveup",
+    "column_name" : "是否面试阶段放弃（含超时放弃）",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "是否面试阶段放弃（0/1），用于统计面试阶段流失",
+    "column_group" : ""
+  }, {
+    "column_code" : "is_interview_giveup_no_time_out",
+    "column_name" : "是否面试阶段放弃（不含超时放弃）",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "是否面试阶段放弃（不含超时退库），区分主动放弃与被动超时",
+    "column_group" : ""
+  }, {
+    "column_code" : "is_interview_giveup_time_out",
+    "column_name" : "是否面试阶段超时放弃",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "是否面试阶段超时退库&放弃，标识超时导致的流失",
+    "column_group" : ""
+  }, {
+    "column_code" : "is_offer_approval_giveup",
+    "column_name" : "是否offer审批阶段放弃(含超时放弃)",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "是否offer审批中放弃（0/1），统计审批阶段流失",
+    "column_group" : ""
+  }, {
+    "column_code" : "is_offer_approval_giveup_no_time_out",
+    "column_name" : "是否offer审批阶段放弃（不含超时放弃）",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "是否offer审批中放弃（不含超时退库）",
+    "column_group" : ""
+  }, {
+    "column_code" : "is_offer_approval_giveup_time_out",
+    "column_name" : "是否offer审批阶段超时放弃",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "是否offer审批中超时退库&放弃",
+    "column_group" : ""
+  }, {
+    "column_code" : "is_entry_giveup",
+    "column_name" : "是否入职阶段放弃（含超时放弃）",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "入职阶段是否放弃（0/1），统计入职阶段流失",
+    "column_group" : ""
+  }, {
+    "column_code" : "is_entry_giveup_no_time_out",
+    "column_name" : "是否入职阶段放弃（不含超时放弃）",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "入职阶段放弃（不含超时退库）",
+    "column_group" : ""
+  }, {
+    "column_code" : "is_entry_giveup_time_out",
+    "column_name" : "是否入职阶段超时放弃",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "入职阶段超时退库&放弃",
+    "column_group" : ""
+  }, {
+    "column_code" : "assign_post_id",
+    "column_name" : "安排岗位ID",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "安排岗位ID，活水场景下候选人最终安排的岗位",
+    "column_group" : ""
+  }, {
+    "column_code" : "assign_post_name",
+    "column_name" : "安排岗位名称",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "安排岗位名称",
+    "column_group" : ""
+  }, {
+    "column_code" : "huoshui_enroll_date",
+    "column_name" : "预计调动日期（活水）",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "预计调动日期（活水系统-一级审批中填写）",
+    "column_group" : ""
+  }, {
+    "column_code" : "is_entry",
+    "column_name" : "是否入职",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "是否入职（0/1），用于统计入职数和已完成需求数(入职)",
+    "column_group" : ""
+  }, {
+    "column_code" : "hire_date",
+    "column_name" : "入职时间",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "入职时间，用于按时间范围筛选入职记录及计算平均招聘天数",
+    "column_group" : ""
+  }, {
+    "column_code" : "state_id",
+    "column_name" : "招聘流程状态ID",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "流程状态ID，用于判断流程是否有效（5,6=社招放弃状态，11=活水放弃状态）",
+    "column_group" : ""
+  }, {
+    "column_code" : "state_name",
+    "column_name" : "招聘流程状态",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "流程状态名称",
+    "column_group" : ""
+  }, {
+    "column_code" : "is_secret_post",
+    "column_name" : "是否保密岗位",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "是否保密岗位（0/1），保密岗位不对非授权人展示",
+    "column_group" : ""
+  }, {
+    "column_code" : "is_secret_flow",
+    "column_name" : "是否保密流程",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "是否保密流程（0/1），保密流程不对非授权人展示",
+    "column_group" : ""
+  }, {
+    "column_code" : "channel_text",
+    "column_name" : "推荐渠道全路径",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "渠道",
+    "column_group" : ""
+  }, {
+    "column_code" : "setting_dept_id",
+    "column_name" : "安排岗位所属部门ID",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "安排岗位的部门id",
+    "column_group" : ""
+  }, {
+    "column_code" : "recruit_post_org_id_cb",
+    "column_name" : "招聘岗位所属组织ID",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "招聘组织id（归属中心与岗位组织合并）",
+    "column_group" : ""
+  }, {
+    "column_code" : "estimate_level_name",
+    "column_name" : "岗位专业职级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "预估专业职级",
+    "column_group" : ""
+  }, {
+    "column_code" : "init_manager_level_name",
+    "column_name" : "岗位管理职级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "初定管理职级（社招系统）",
+    "column_group" : ""
+  }, {
+    "column_code" : "mapping_position_guid",
+    "column_name" : "岗位专业职位GUID",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "专业职位guid（社招系统）",
+    "column_group" : ""
+  }, {
+    "column_code" : "mapping_position_id",
+    "column_name" : "岗位专业职位ID",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "专业职位ID（社招系统），用于按职位筛选",
+    "column_group" : ""
+  }, {
+    "column_code" : "mapping_position_name",
+    "column_name" : "岗位专业职位名称",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "专业职位名称",
+    "column_group" : ""
+  }, {
+    "column_code" : "position_clan_id",
+    "column_name" : "岗位职族id",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "职位族id（社招系统）",
+    "column_group" : ""
+  }, {
+    "column_code" : "position_clan_code",
+    "column_name" : "岗位职族CODE",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "职位族code（社招系统）",
+    "column_group" : ""
+  }, {
+    "column_code" : "position_clan_name",
+    "column_name" : "岗位职族名称",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "职位族名称（社招系统）",
+    "column_group" : ""
+  }, {
+    "column_code" : "position_genus_id",
+    "column_name" : "岗位专业通道ID",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "职位类id（社招系统）",
+    "column_group" : ""
+  }, {
+    "column_code" : "position_genus_code",
+    "column_name" : "岗位专业通道CODE",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "职位类code（社招系统）",
+    "column_group" : ""
+  }, {
+    "column_code" : "position_genus_name",
+    "column_name" : "岗位专业通道名称",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "职位类名称（社招系统）",
+    "column_group" : ""
+  }, {
+    "column_code" : "user_channel",
+    "column_name" : "简历来源渠道ID",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "简历来源渠道ID",
+    "column_group" : ""
+  }, {
+    "column_code" : "user_channel_name",
+    "column_name" : "简历来源渠道名称",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "简历来源渠道名称",
+    "column_group" : ""
+  }, {
+    "column_code" : "channel_type",
+    "column_name" : "渠道类型ID",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "渠道类型",
+    "column_group" : ""
+  }, {
+    "column_code" : "channel_full_name",
+    "column_name" : "付费渠道全路径",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "渠道全称",
+    "column_group" : ""
+  }, {
+    "column_code" : "channel_parent_name",
+    "column_name" : "付费渠道（二级）",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "父渠道名称",
+    "column_group" : ""
+  }, {
+    "column_code" : "channel_name",
+    "column_name" : "付费渠道（三级）",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "渠道名称",
+    "column_group" : ""
+  }, {
+    "column_code" : "channel_full_path",
+    "column_name" : "付费渠道ID全路径",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "渠道Id全路径",
+    "column_group" : ""
+  }, {
+    "column_code" : "channel_parent_id",
+    "column_name" : "付费渠道ID（二级）",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "父渠道Id",
+    "column_group" : ""
+  }, {
+    "column_code" : "channel_id",
+    "column_name" : "付费渠道ID（三级）",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "渠道Id",
+    "column_group" : ""
+  }, {
+    "column_code" : "form_estimate_level_name",
+    "column_name" : "面试流程专业职级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "面试流程专业职级",
+    "column_group" : ""
+  }, {
+    "column_code" : "form_init_manager_level_name",
+    "column_name" : "面试流程管理职级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "面试流程管理职级",
+    "column_group" : ""
+  }, {
+    "column_code" : "form_mapping_position_guid",
+    "column_name" : "面试流程职位GUID",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "面试流程职位guid",
+    "column_group" : ""
+  }, {
+    "column_code" : "form_mapping_position_id",
+    "column_name" : "面试流程职位ID",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "职位ID（来自岗位表），用于岗位/招聘经理维度的职位筛选",
+    "column_group" : ""
+  }, {
+    "column_code" : "form_mapping_position_name",
+    "column_name" : "面试流程专业职位",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "面试流程职位name",
+    "column_group" : ""
+  }, {
+    "column_code" : "hire_org_id",
+    "column_name" : "入职组织ID",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "入职组织id",
+    "column_group" : ""
+  }, {
+    "column_code" : "hire_org_name",
+    "column_name" : "入职组织名称",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "入职组织",
+    "column_group" : ""
+  }, {
+    "column_code" : "hire_org_full_path",
+    "column_name" : "入职组织ID全路径",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "入职组织id全路径",
+    "column_group" : ""
+  }, {
+    "column_code" : "hire_org_full_name",
+    "column_name" : "入职组织全路径",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "入职组织全名",
+    "column_group" : ""
+  }, {
+    "column_code" : "hire_org_type_id",
+    "column_name" : "入职组织类型ID",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "入职组织类型id",
+    "column_group" : ""
+  }, {
+    "column_code" : "hire_org_type_name",
+    "column_name" : "入职组织类型名称",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "入职组织类型",
+    "column_group" : ""
+  }, {
+    "column_code" : "hire_bg_id",
+    "column_name" : "入职BG ID",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "入职的BG id",
+    "column_group" : ""
+  }, {
+    "column_code" : "hire_bg_name",
+    "column_name" : "入职BG名称",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "入职的BG",
+    "column_group" : ""
+  }, {
+    "column_code" : "hire_line_id",
+    "column_name" : "入职线ID",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "入职的线id",
+    "column_group" : ""
+  }, {
+    "column_code" : "hire_line_name",
+    "column_name" : "入职线名称",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "入职的线",
+    "column_group" : ""
+  }, {
+    "column_code" : "hire_dept_id",
+    "column_name" : "入职部门ID",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "入职的部门id",
+    "column_group" : ""
+  }, {
+    "column_code" : "hire_dept_name",
+    "column_name" : "入职部门名称",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "入职的部门",
+    "column_group" : ""
+  }, {
+    "column_code" : "hire_center_id",
+    "column_name" : "入职中心ID",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "入职的中心id",
+    "column_group" : ""
+  }, {
+    "column_code" : "hire_center_name",
+    "column_name" : "入职中心名称",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "入职的中心",
+    "column_group" : ""
+  }, {
+    "column_code" : "hire_org_parent_id",
+    "column_name" : "入职组织上级组织ID",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "入职组织父id",
+    "column_group" : ""
+  }, {
+    "column_code" : "hire_org_parent_name",
+    "column_name" : "入职组织上级组织名称",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "入职组织父组织name",
+    "column_group" : ""
+  }, {
+    "column_code" : "recruit_owner",
+    "column_name" : "招聘经理",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "招聘经理姓名",
+    "column_group" : ""
+  }, {
+    "column_code" : "equivalent_coefficient",
+    "column_name" : "当量系数",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "当量系数，用于加权统计人力当量",
+    "column_group" : ""
+  }, {
+    "column_code" : "recruit_owner_manager_unit_id",
+    "column_name" : "招聘经理所属管理主体ID",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "招聘经理管理主体ID",
+    "column_group" : ""
+  }, {
+    "column_code" : "staff_name_display",
+    "column_name" : "活水员工中英文名",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "员工姓名（脱敏展示用）",
+    "column_group" : ""
+  }, {
+    "column_code" : "huoshui_staff_apply_time",
+    "column_name" : "活水员工申请时间",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "活水员工申请时间",
+    "column_group" : ""
+  }, {
+    "column_code" : "is_huoshui_resume_assess",
+    "column_name" : "是否完成活水简历评估",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "是否活水简历评估",
+    "column_group" : ""
+  }, {
+    "column_code" : "start_huoshui_resume_assess_time",
+    "column_name" : "活水简历评估开始时间",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "活水简历评估开始时间，用于判断评估中状态",
+    "column_group" : ""
+  }, {
+    "column_code" : "huoshui_resume_assess_time",
+    "column_name" : "活水简历评估结束时间",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "活水简历评估完成时间，用于判断评估中状态的结束",
+    "column_group" : ""
+  }, {
+    "column_code" : "huoshui_start_intv_time",
+    "column_name" : "活水发起面试时间",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "活水开始面试时间，用于判断活水流程的面试中状态",
+    "column_group" : ""
+  }, {
+    "column_code" : "is_huoshui_out_first_approval",
+    "column_name" : "是否通过活水调出部门直接上级审批",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "是否通过活水调出部门直接上级审批（0/1），活水流程节点标识",
+    "column_group" : ""
+  }, {
+    "column_code" : "is_huoshui_out_first_approval_giveup",
+    "column_name" : "是否放弃活水调出部门直接上级审批",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "活水调出部门直接上级审批是否放弃",
+    "column_group" : ""
+  }, {
+    "column_code" : "start_huoshui_out_first_approval_time",
+    "column_name" : "活水调出部门直接上级审批开始时间",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "活水调出部门直接上级审批开始时间，用于计算活水offer中状态",
+    "column_group" : ""
+  }, {
+    "column_code" : "huoshui_out_first_approval_time",
+    "column_name" : "活水调出部门直接上级审批通过时间",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "活水调出部门直接上级审批通过时间，用于判断活水入职中状态",
+    "column_group" : ""
+  }, {
+    "column_code" : "is_huoshui_in_first_approval",
+    "column_name" : "是否通过活水调入部门直接上级审批",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "是否通过活水调入部门直接上级审批（0/1）",
+    "column_group" : ""
+  }, {
+    "column_code" : "is_huoshui_in_first_approval_giveup",
+    "column_name" : "是否放弃活水调入部门直接上级审批",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "活水调入部门直接上级审批是否放弃",
+    "column_group" : ""
+  }, {
+    "column_code" : "start_huoshui_in_first_approval_time",
+    "column_name" : "活水调入部门直接上级审批开始时间",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "活水调入部门直接上级审批开始时间",
+    "column_group" : ""
+  }, {
+    "column_code" : "huoshui_in_first_approval_time",
+    "column_name" : "活水调入部门直接上级审批通过时间",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "活水调入部门直接上级审批通过时间",
+    "column_group" : ""
+  }, {
+    "column_code" : "is_huoshui_in_dept_approval",
+    "column_name" : "是否通过活水调入部门负责人审批",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "是否通过活水调入部门负责人审批（0/1），活水流程关键节点",
+    "column_group" : ""
+  }, {
+    "column_code" : "is_huoshui_in_dept_approval_giveup",
+    "column_name" : "是否放弃活水调入部门负责人审批",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "活水调入部门负责人审批是否放弃",
+    "column_group" : ""
+  }, {
+    "column_code" : "start_huoshui_in_dept_approval_time",
+    "column_name" : "活水调入部门负责人审批开始时间",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "活水调入部门负责人审批开始时间",
+    "column_group" : ""
+  }, {
+    "column_code" : "huoshui_in_dept_approval_time",
+    "column_name" : "活水调入部门负责人审批通过时间",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "活水调入部门负责人审批通过时间，用于判断活水已完成offer状态",
+    "column_group" : ""
+  }, {
+    "column_code" : "huoshui_giveup_time",
+    "column_name" : "活水拒绝offer时间",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "活水放弃时间，用于统计拒绝offer(活水场景)",
+    "column_group" : ""
+  }, {
+    "column_code" : "huoshui_take_offer_time",
+    "column_name" : "活水接受offer时间",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "活水接受时间",
+    "column_group" : ""
+  }, {
+    "column_code" : "huoshui_hire_arrive_time",
+    "column_name" : "活水录用确认到达时间",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "活水录用确认到达时间，用于判断活水offer中状态的结束",
+    "column_group" : ""
+  }, {
+    "column_code" : "huoshui_hire_process_time",
+    "column_name" : "活水录用确认完成时间",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "活水录用确认完成时间",
+    "column_group" : ""
+  }, {
+    "column_code" : "start_huoshui_procedures_time",
+    "column_name" : "活水调动中环节开始时间",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "活水手续确认环节开始时间",
+    "column_group" : ""
+  }, {
+    "column_code" : "is_huoshui_procedures",
+    "column_name" : "是否通过活水调动环节",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "是否通过活水手续确认环节（0/1）",
+    "column_group" : ""
+  }, {
+    "column_code" : "is_huoshui_procedures_giveup",
+    "column_name" : "是否放弃活水调动环节",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "活水手续确认环节是否放弃",
+    "column_group" : ""
+  }, {
+    "column_code" : "huoshui_procedures_time",
+    "column_name" : "通过活水调动环节时间",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "活水手续确认环节通过时间",
+    "column_group" : ""
+  }, {
+    "column_code" : "is_huoshui_move_done",
+    "column_name" : "是否完成活水调动",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "是否活水完成调动（0/1），标识活水流程完结",
+    "column_group" : ""
+  }, {
+    "column_code" : "huoshui_transfer_date",
+    "column_name" : "活水调动日期",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "活水实际调动日期，用于统计已完成需求数(入职)及计算招聘天数",
+    "column_group" : ""
+  }, {
+    "column_code" : "out_career_level_name_cn",
+    "column_name" : "活水前专业职级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "调出专业职级中文名称",
+    "column_group" : ""
+  }, {
+    "column_code" : "in_career_level_name_cn",
+    "column_name" : "活水后专业职级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "调入专业职级中文名称",
+    "column_group" : ""
+  }, {
+    "column_code" : "out_manager_level_name_cn",
+    "column_name" : "活水前管理职级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "调出管理级别中文名称",
+    "column_group" : ""
+  }, {
+    "column_code" : "in_manager_level_name_cn",
+    "column_name" : "活水后管理职级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "调入管理级别中文名称",
+    "column_group" : ""
+  }, {
+    "column_code" : "out_position_name_cn",
+    "column_name" : "活水前专业职位",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "调出职位中文名称",
+    "column_group" : ""
+  }, {
+    "column_code" : "in_position_name_cn",
+    "column_name" : "活水后专业职位",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "调入职位中文名称",
+    "column_group" : ""
+  }, {
+    "column_code" : "in_org_id",
+    "column_name" : "调入末级组织ID",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "活水调入组织机构ID",
+    "column_group" : ""
+  }, {
+    "column_code" : "in_org_name_cn",
+    "column_name" : "调入末级组织名称",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "活水调入组织机构中文名",
+    "column_group" : ""
+  }, {
+    "column_code" : "in_org_full_name_cn",
+    "column_name" : "调入组织全路径",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "活水调入组织机构中文名全路径",
+    "column_group" : ""
+  }, {
+    "column_code" : "in_org_full_path",
+    "column_name" : "调入组织ID全路径",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "活水调入组织机构ID全路径",
+    "column_group" : ""
+  }, {
+    "column_code" : "in_bg_id",
+    "column_name" : "调入BGID",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "活水调入BG ID",
+    "column_group" : ""
+  }, {
+    "column_code" : "in_bg_name_cn",
+    "column_name" : "调入BG名称",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "活水调入BG中文名",
+    "column_group" : ""
+  }, {
+    "column_code" : "in_dept_id",
+    "column_name" : "调入部门ID",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "活水调入部门ID",
+    "column_group" : ""
+  }, {
+    "column_code" : "in_dept_name_cn",
+    "column_name" : "调入部门中文名",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "活水调入部门中文名",
+    "column_group" : ""
+  }, {
+    "column_code" : "out_org_id",
+    "column_name" : "调出末级组织ID",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "活水调出组织机构ID",
+    "column_group" : ""
+  }, {
+    "column_code" : "out_org_name_cn",
+    "column_name" : "调出末级组织名称",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "活水调出组织机构中文名",
+    "column_group" : ""
+  }, {
+    "column_code" : "out_org_full_name_cn",
+    "column_name" : "调出组织全路径",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "活水调出组织机构中文名全路径",
+    "column_group" : ""
+  }, {
+    "column_code" : "out_org_full_path",
+    "column_name" : "调出组织ID全路径",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "活水调出组织机构ID全路径",
+    "column_group" : ""
+  }, {
+    "column_code" : "huoshui_out_org_full_path",
+    "column_name" : "活水前组织ID全路径",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "活水调出组织全路径id",
+    "column_group" : ""
+  }, {
+    "column_code" : "huoshui_out_org_full_name",
+    "column_name" : "活水前组织全路径",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "活水调出组织全路径名称",
+    "column_group" : ""
+  }, {
+    "column_code" : "out_bg_id",
+    "column_name" : "调出BGID",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "活水调出BG ID",
+    "column_group" : ""
+  }, {
+    "column_code" : "out_bg_name_cn",
+    "column_name" : "调出BG名称",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "活水调出BG中文名",
+    "column_group" : ""
+  }, {
+    "column_code" : "out_dept_id",
+    "column_name" : "调出部门ID",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "活水调出部门ID",
+    "column_group" : ""
+  }, {
+    "column_code" : "out_dept_name_cn",
+    "column_name" : "调出部门中文名",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "活水调出部门中文名",
+    "column_group" : ""
+  } ]
+}

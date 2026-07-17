@@ -1,0 +1,56 @@
+{
+  "name": "carousel-content-growth-expert",
+  "version": "1.0.0",
+  "description": "Specialized in designing high-engagement carousel content, driving social platform user engagement and growth",
+  "agents": [
+    "./agents/carousel-content-growth-expert.md"
+  ],
+  "expertType": "agent",
+  "agentName": "carousel-content-growth-expert",
+  "displayName": {
+    "en": "Ian",
+    "zh": "翻页页"
+  },
+  "profession": {
+    "en": "Carousel Content Growth Expert",
+    "zh": "轮播内容增长专家"
+  },
+  "displayDescription": {
+    "en": "Specialized in designing high-engagement carousel content, driving social platform user engagement and growth",
+    "zh": "专精设计高互动率轮播图内容，驱动社交平台用户参与和增长"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "05-MarketingGrowth",
+  "defaultInitPrompt": {
+    "zh": "我们想在社交媒体做图文内容营销,需要专业的轮播内容策略,请轮播内容增长专家帮我们设计图文内容方案。",
+    "en": "We want to do carousel content marketing on social media and need professional carousel content strategies. Please, Carousel Content Growth Expert, help us design carousel content solutions."
+  },
+  "tags": [
+    {
+      "zh": "轮播内容",
+      "en": "Carousel Content"
+    },
+    {
+      "zh": "社媒增长",
+      "en": "Social Growth"
+    },
+    {
+      "zh": "爆款图文",
+      "en": "Viral Visuals"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "我们想在社交媒体做图文内容营销,需要专业的轮播内容策略,请轮播内容增长专家帮我们设计图文内容方案。",
+      "en": "We want to do carousel content marketing on social media and need professional carousel content strategies. Please, Carousel Content Growth Expert, help us design carousel content solutions."
+    },
+    {
+      "zh": "制作LinkedIn/Instagram轮播图文",
+      "en": "Create LinkedIn/Instagram carousel posts"
+    },
+    {
+      "zh": "优化轮播内容转化和粉丝获取",
+      "en": "Optimize carousel content conversion and follower acquisition"
+    }
+  ]
+}

@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="32px" height="32px" viewBox="0 0 32 32" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+    <!-- Generator: Sketch 52.6 (67491) - http://www.bohemiancoding.com/sketch -->
+    <title>分布式数据库 TDSQL-32px</title>
+    <desc>Created with Sketch.</desc>
+    <g id="分布式数据库-TDSQL-32px" stroke="none" stroke-width="1" fill="none" fill-rule="evenodd">
+        <rect id="Rectangle-Copy" fill="#0052D9" opacity="0" x="0" y="0" width="32" height="32"></rect>
+        <g id="Group" transform="translate(2.000000, 2.000000)" fill="#0052D9" fill-rule="nonzero">
+            <circle id="Oval" cx="20" cy="21" r="2"></circle>
+            <path d="M20,12 L12,16.5 L12,25.5 L20,30 L28,25.5 L28,16.5 L20,12 Z M14,24.3 L14,17.6 L20,14.2 L24.9,17 L22.8,18.2 C23.3,18.7 23.6,19.3 23.8,19.9 L25.9,18.7 L25.9,23.2 L23.8,22 C23.6,22.7 23.3,23.3 22.8,23.7 L24.9,24.9 L20,27.7 L14,24.3 Z" id="Shape"></path>
+            <path d="M14,23.2 L14,24.3 L15.0554352,24.9185638 L17.2,23.7 C16.7,23.2 16.4,22.6 16.2,22 L14,23.2 Z" id="Shape"></path>
+            <path d="M17.1,18.2 L15,17 L13.840404,17.3838143 L14,18.8 L16.1,20 C16.3,19.3 16.7,18.7 17.1,18.2 Z" id="Shape"></path>
+            <path d="M10.3,26 C5.6,25.7 2,24.5 2,23 L9.05941988e-14,23 C9.05941988e-14,25.5 4.5,27.6 10.3,27.9 L10.3,27 L10.3,26 Z" id="Shape"></path>
+            <path d="M22,9.6 L24,10.7 L24,5 C24,2.2 18.6,0 12,0 C5.4,0 0,2.2 0,5 L0,23 L2,23 L2,16.8 C3.9,18 6.9,18.8 10.3,19 L10.3,17 C5.6,16.7 2,15.5 2,14 L2,7.8 C4.1,9.1 7.8,10 12,10 C16.2,10 19.9,9.1 22,7.8 L22,9.6 Z M12,8 C6.5,8 2,6.7 2,5 C2,3.3 6.5,2 12,2 C17.5,2 22,3.3 22,5 C22,6.7 17.5,8 12,8 Z" id="Shape"></path>
+        </g>
+    </g>
+</svg>

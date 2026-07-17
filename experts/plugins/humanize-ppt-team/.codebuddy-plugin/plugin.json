@@ -1,0 +1,186 @@
+{
+  "name": "humanize-ppt-team",
+  "version": "0.2.0",
+  "description": "Humanize PPT WorkBuddy Team Agent: AST outline first, then one Skill per Agent for HTML PPT generation, video/motion, presenter mode, deploy/export, and QA.",
+  "author": {
+    "name": "卡尔的AI沃茨",
+    "email": "carl@goodcase.ai"
+  },
+  "expertType": "team",
+  "agentName": "humanize-ppt-team-lead",
+  "teamInfo": {
+    "leadAgent": "humanize-ppt-team-lead",
+    "memberAgents": [
+      "outline-director",
+      "guizang-renderer",
+      "frontend-slides-renderer",
+      "video-motion-agent",
+      "html-ppt-presenter",
+      "qa"
+    ]
+  },
+  "agents": [
+    "./agents/humanize-ppt-team-lead.md",
+    "./agents/outline-director.md",
+    "./agents/guizang-renderer.md",
+    "./agents/frontend-slides-renderer.md",
+    "./agents/video-motion-agent.md",
+    "./agents/html-ppt-presenter.md",
+    "./agents/qa.md"
+  ],
+  "skills": [
+    "./skills/humanize-ppt",
+    "./skills/guizang-ppt-skill",
+    "./skills/frontend-slides",
+    "./skills/remotion-video-toolkit",
+    "./skills/html-ppt"
+  ],
+  "displayName": {
+    "en": "Humanize PPT Team",
+    "zh": "卡尔的人感PPT专家团"
+  },
+  "profession": {
+    "en": "Presentation Planning, Production, Video, Presenter and Delivery Team",
+    "zh": "PPT大纲、生成、视频、演示与交付专家团"
+  },
+  "displayDescription": {
+    "zh": "把原始资料梳理成人感PPT大纲，调度HTML生成、演讲模式、视频动效与交付质检，形成可演示成果。",
+    "en": "Turns raw material into a human-centered deck outline, then routes HTML slides, presenter mode, motion and delivery QA."
+  },
+  "avatar": "avatars/team.png",
+  "categoryId": "06-ContentCreative",
+  "defaultInitPrompt": {
+    "zh": "帮我把这份资料完整做成一套人感PPT：先出大纲，再生成HTML PPT，加演讲模式、视频动效位，并给出上线/导出方案。",
+    "en": "Turn this material into a complete human-centered deck: outline first, then HTML slides, presenter mode, video/motion slots, and deploy/export plan."
+  },
+  "tags": [
+    {
+      "en": "Presentation",
+      "zh": "PPT"
+    },
+    {
+      "en": "Team Agent",
+      "zh": "专家团"
+    },
+    {
+      "en": "HTML Slides",
+      "zh": "HTML PPT"
+    },
+    {
+      "en": "Video",
+      "zh": "视频动效"
+    },
+    {
+      "en": "Presenter Mode",
+      "zh": "演讲模式"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "帮我把这份资料完整做成一套人感PPT：先出大纲，再生成HTML PPT，加演讲模式、视频动效位，并给出上线/导出方案。",
+      "en": "Turn this material into a complete human-centered deck: outline first, then HTML slides, presenter mode, video/motion slots, and deploy/export plan."
+    },
+    {
+      "en": "Create deck + presenter mode + video slots",
+      "zh": "生成PPT并加演讲模式和视频动效位"
+    },
+    {
+      "en": "Review a deck delivery package",
+      "zh": "检查PPT交付包是否可上线可演示"
+    }
+  ],
+  "members": [
+    {
+      "id": "humanize-ppt-team-lead",
+      "name": {
+        "en": "Lead",
+        "zh": "主理人"
+      },
+      "profession": {
+        "en": "Team Lead & Orchestrator",
+        "zh": "主理人与调度官"
+      },
+      "avatar": "avatars/humanize-ppt-team-lead.png",
+      "role": "lead"
+    },
+    {
+      "id": "outline-director",
+      "name": {
+        "en": "Aster",
+        "zh": "大纲导演"
+      },
+      "profession": {
+        "en": "AST Outline Director / humanize-ppt",
+        "zh": "AST大纲导演 / humanize-ppt"
+      },
+      "avatar": "avatars/outline-director.png",
+      "role": "member"
+    },
+    {
+      "id": "guizang-renderer",
+      "name": {
+        "en": "Gui",
+        "zh": "归藏生成师"
+      },
+      "profession": {
+        "en": "Stable Chinese HTML Deck / guizang-ppt-skill",
+        "zh": "中文稳定版HTML PPT / guizang-ppt-skill"
+      },
+      "avatar": "avatars/guizang-renderer.png",
+      "role": "member"
+    },
+    {
+      "id": "frontend-slides-renderer",
+      "name": {
+        "en": "Zara",
+        "zh": "风格探索生成师"
+      },
+      "profession": {
+        "en": "Style Exploration & Deployable HTML Slides / frontend-slides",
+        "zh": "风格探索与可上线HTML Slides / frontend-slides"
+      },
+      "avatar": "avatars/frontend-slides-renderer.png",
+      "role": "member"
+    },
+    {
+      "id": "video-motion-agent",
+      "name": {
+        "en": "Vera",
+        "zh": "视频动效师"
+      },
+      "profession": {
+        "en": "Video and Motion / remotion-video-toolkit",
+        "zh": "视频与动效 / remotion-video-toolkit"
+      },
+      "avatar": "avatars/video-motion-agent.png",
+      "role": "member"
+    },
+    {
+      "id": "html-ppt-presenter",
+      "name": {
+        "en": "Noah",
+        "zh": "演讲增强师"
+      },
+      "profession": {
+        "en": "Presenter Mode / html-ppt",
+        "zh": "演讲模式 / html-ppt"
+      },
+      "avatar": "avatars/html-ppt-presenter.png",
+      "role": "member"
+    },
+    {
+      "id": "qa",
+      "name": {
+        "en": "Quinn",
+        "zh": "质检官"
+      },
+      "profession": {
+        "en": "Delivery QA / no Skill",
+        "zh": "交付质检 / 无Skill"
+      },
+      "avatar": "avatars/qa.png",
+      "role": "member"
+    }
+  ],
+  "plugin": "humanize-ppt-team"
+}

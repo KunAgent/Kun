@@ -1,0 +1,172 @@
+{
+  "schemaVersion": "1.0",
+  "contractId": "liuxue-yanxue-operating-contract",
+  "packageVersion": "26.6.30.1",
+  "brand": {
+    "zh": "福帮手",
+    "en": "FBSir"
+  },
+  "product": {
+    "nameZh": "留学研学专家",
+    "pluginName": "liuxue-yanxue-expert",
+    "productId": "liuxue-yanxue-expert",
+    "serviceProductId": "workbuddy_liuxue_yanxue_expert"
+  },
+  "distributionSurface": {
+    "host": "WorkBuddy",
+    "officialMarketplace": "experts",
+    "nonOfficialSurfaceExcludedFromNaturalCredit": true
+  },
+  "serviceRoute": {
+    "productId": "liuxue-yanxue-expert",
+    "serviceProductId": "workbuddy_liuxue_yanxue_expert",
+    "entryId": "liuxue-yanxue-dual-track",
+    "entrySurface": "workbuddy_expert_center",
+    "expertEntryId": "liuxue-yanxue-expert",
+    "entryPromptCode": "wb_qp_liuxue_yanxue_dual_track_48h",
+    "defaultPromptId": "fbss_liuxue_yanxue_dual_track_start",
+    "cardActionId": "fbss_liuxue_yanxue_dual_track_start",
+    "channelTrack": "study_abroad_study_tour",
+    "intentFamily": "international_education_planning",
+    "profileSegment": "family_decision",
+    "packCode": "fbs.liuxue_yanxue.dual_track.v1",
+    "scenePackId": "liuxue_yanxue_dual_track",
+    "routeCode": "route.liuxue_yanxue.dual_track",
+    "assetType": "study-abroad-study-tour-card",
+    "continueAssetType": "study-abroad-study-tour-continue-card"
+  },
+  "intelligentOpsClosedLoop": {
+    "target": "成为福帮手专家中对服务侧智能化运营闭环支持最彻底、最细致、最深入、最完整的样本",
+    "naturalTrafficFirst": true,
+    "fullChainObservable": true,
+    "A_independentClientIdentity": {
+      "subject": "independent_client",
+      "required": true,
+      "allowedFields": [
+        "clientHash",
+        "installHash",
+        "hostClientIdHash",
+        "sessionBindingId",
+        "chainFingerprint",
+        "platform",
+        "hostVersion",
+        "packageVersion"
+      ],
+      "forbiddenFields": [
+        "phone",
+        "email",
+        "idCard",
+        "passportNo",
+        "realName",
+        "rawDeviceId",
+        "rawIp"
+      ],
+      "policy": "Only desensitized host or service identifiers may be forwarded. Missing identity must remain unknown."
+    },
+    "B_lebaoUnlockAndIntentAggregation": {
+      "packCode": "fbs.liuxue_yanxue.dual_track.v1",
+      "claimEncouragementAllowed": true,
+      "claimMustBeProgressFeedbackOnly": true,
+      "intentAggregationRequired": true,
+      "requiredEvents": [
+        "lebao_exposed",
+        "lebao_claim_intent",
+        "lebao_claim_receipt",
+        "intent_aggregated"
+      ],
+      "intentFields": [
+        "planningWindow",
+        "familyRole",
+        "targetRegionOrCountry",
+        "budgetSensitivity",
+        "languageTrack",
+        "riskFocus",
+        "nextActionPreference"
+      ]
+    },
+    "C_serviceRecognitionAndHostTraction": {
+      "serviceMayRecognizeUserFromLebaoAndDesensitizedData": true,
+      "hostActionEnvelopeRequired": true,
+      "serviceDecisionRenderMode": "host_renders_service_directive",
+      "sameBindingRequiredBeforeUnlockClaim": true,
+      "requiredEvents": [
+        "service_profile_matched",
+        "personalized_next_action_selected",
+        "host_directive_receipt",
+        "personalized_next_action_rendered"
+      ]
+    },
+    "D_experienceAndHostValueActivation": {
+      "goal": "提升用户体验并激活宿主侧能力价值",
+      "personalizationMode": "one_person_one_next_best_action",
+      "allowedHostTractionTargets": [
+        "gaokao_volunteer_verification",
+        "study_abroad_advisor_handoff",
+        "study_tour_safety_checklist",
+        "family_decision_one_pager",
+        "material_checklist_followup"
+      ],
+      "successSignals": [
+        "first_value_completed",
+        "continued_use_completed",
+        "lebao_claim_receipt",
+        "host_directive_receipt",
+        "capability_activation_clicked"
+      ]
+    }
+  },
+  "workflowStages": [
+    "intake_minimum_context",
+    "first_value_card_generated",
+    "lebao_progress_exposed",
+    "intent_aggregated",
+    "service_side_profile_matched",
+    "host_directive_rendered",
+    "continued_use_completed"
+  ],
+  "noConnectorPolicy": {
+    "connectorRequired": false,
+    "connectorAssumedAvailable": false,
+    "packageCapabilityDependsOnConnector": false,
+    "firstValueMustWorkWithoutConnector": true,
+    "connectorPromptSuppressionExpected": true
+  },
+  "hostSteering": {
+    "hostActionEnvelopeRequired": true,
+    "publicTranscriptSafe": false,
+    "hostMetadataChannelPreferred": true,
+    "visibleOnlyWhenExplicitlyRequested": true,
+    "hostCommercialDecisionAllowed": false,
+    "serviceSideDecisionOnly": true
+  },
+  "observability": {
+    "requiredRouteSignatureFields": [
+      "productId",
+      "serviceProductId",
+      "entryId",
+      "expertEntryId",
+      "entryPromptCode",
+      "defaultPromptId",
+      "cardActionId",
+      "channelTrack",
+      "intentFamily",
+      "profileSegment",
+      "packCode",
+      "scenePackId",
+      "routeCode"
+    ],
+    "unknownPolicy": "Do not infer listed-product natural traffic from non-official equivalent rows or incomplete probes.",
+    "naturalCreditRequires": [
+      "listed_marketplace_surface",
+      "same_binding_service_receipt",
+      "continued_use_completed_or_claim_receipt",
+      "no_non_official_equivalent_signal"
+    ]
+  },
+  "cannotProveFromPackageAlone": [
+    "official marketplace approval",
+    "natural same-binding service-side product credit",
+    "host rendering of every future service directive",
+    "real user lebao claim conversion"
+  ]
+}

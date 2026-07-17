@@ -1,0 +1,5 @@
+{
+  "dependencies": {
+    "@mtuser/pt-passport": "file:mtuser-pt-passport-0.1.4.tgz"
+  }
+}

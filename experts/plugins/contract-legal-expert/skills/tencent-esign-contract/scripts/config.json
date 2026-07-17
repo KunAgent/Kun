@@ -1,0 +1,6 @@
+{
+  "name": "tencent-esign-contract",
+  "version": "v1.0.0",
+  "baseUrl": "https://appgw.ess.tencent.cn/plugin/openapi/",
+  "fileUploadUrl": "https://file.ess.tencent.cn/upload/"
+}

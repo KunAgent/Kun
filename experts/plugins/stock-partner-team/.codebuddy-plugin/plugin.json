@@ -1,0 +1,127 @@
+{
+  "name": "stock-partner-team",
+  "version": "1.0.0",
+  "description": "6 stock market experts collaborate as an agent team for stock market information analysis and discussion",
+  "author": {
+    "name": "jensonli",
+    "email": "jensonli@tencent.com"
+  },
+  "agents": [
+    "./agents/stock-partner-lead.md",
+    "./agents/industry-strategist.md",
+    "./agents/signal-chief.md",
+    "./agents/valuation-analyst.md",
+    "./agents/contrarian-investor.md",
+    "./agents/fundamental-researcher.md",
+    "./agents/shortterm-surfer.md"
+  ],
+  "skills": [
+    "./skills/westock-data",
+    "./skills/westock-tool",
+    "./skills/md-to-html"
+  ],
+
+  "expertType": "team",
+  "agentName": "stock-partner-lead",
+  "teamInfo": {
+    "leadAgent": "stock-partner-lead",
+    "memberAgents": [
+      "industry-strategist",
+      "signal-chief",
+      "valuation-analyst",
+      "contrarian-investor",
+      "fundamental-researcher",
+      "shortterm-surfer"
+    ]
+  },
+
+  "displayName": {
+    "en": "Tencent WeStock Equity Research Team",
+    "zh": "腾讯自选股股票投研专家团"
+  },
+  "profession": {
+    "en": "Tencent WeStock Equity Research Team",
+    "zh": "腾讯自选股股票投研专家团"
+  },
+  "displayDescription": {
+    "en": "Distilled real-world experience of six veteran stock investors, covering industry strategy, signal hunting, valuation analysis, contrarian entry, fundamentals research, and short-term trading — multi-angle analysis references grounded in real-time data.",
+    "zh": "蒸馏了六位真实的炒股大神的实战经验，涵盖产业策略、信号捕捉、估值评估、抄底布局、基本面研究、短线交易六大视角，基于真实数据各抒己见，提供多角度分析参考。"
+  },
+  "avatar": "avatars/team.png",
+  "categoryId": "08-FinanceInvestment",
+  "tags": [
+    { "zh": "产业研判", "en": "Industry Assessment" },
+    { "zh": "估值定价", "en": "Valuation Pricing" },
+    { "zh": "资金风向", "en": "Capital Flow Direction" },
+    { "zh": "短线节奏", "en": "Short-term Rhythm" }
+  ],
+  "defaultInitPrompt": {
+    "zh": "算力 VS 人形机器人，2026 下半年到底该押哪条主线？",
+    "en": "Compute power vs. humanoid robots — which is the main theme to bet on in H2 2026?"
+  },
+  "quickPrompts": [
+    {
+      "zh": "算力 VS 人形机器人，2026 下半年到底该押哪条主线？",
+      "en": "Compute power vs. humanoid robots — which is the main theme to bet on in H2 2026?"
+    },
+    {
+      "zh": "兆易创新、寒武纪这波都翻倍了，现在追是上车还是接盘？",
+      "en": "GigaDevice and Cambricon have both doubled — is buying now catching the train or holding the bag?"
+    },
+    {
+      "zh": "创业板创 10 年新高，A 股是大牛市起点还是该开始落袋？",
+      "en": "ChiNext hits a 10-year high — is A-share at the start of a bull market, or time to take profits?"
+    }
+  ],
+  "members": [
+    {
+      "id": "stock-partner-lead",
+      "name": { "en": "Yuan", "zh": "圆汇众" },
+      "profession": { "en": "Research Editor", "zh": "投研主编" },
+      "avatar": "avatars/stock-partner-lead.png",
+      "role": "lead"
+    },
+    {
+      "id": "industry-strategist",
+      "name": { "en": "Xing", "zh": "星望远" },
+      "profession": { "en": "Industry Strategist", "zh": "产业策略师" },
+      "avatar": "avatars/industry-strategist.png",
+      "role": "member"
+    },
+    {
+      "id": "signal-chief",
+      "name": { "en": "Zhou", "zh": "洲四方" },
+      "profession": { "en": "Signal Chief", "zh": "信号派首席" },
+      "avatar": "avatars/signal-chief.png",
+      "role": "member"
+    },
+    {
+      "id": "valuation-analyst",
+      "name": { "en": "Wen", "zh": "文衡价" },
+      "profession": { "en": "Valuation Analyst", "zh": "估值分析师" },
+      "avatar": "avatars/valuation-analyst.png",
+      "role": "member"
+    },
+    {
+      "id": "contrarian-investor",
+      "name": { "en": "Kun", "zh": "坤候底" },
+      "profession": { "en": "Contrarian Investor", "zh": "逆向投资人" },
+      "avatar": "avatars/contrarian-investor.png",
+      "role": "member"
+    },
+    {
+      "id": "fundamental-researcher",
+      "name": { "en": "Zhao", "zh": "钊审财" },
+      "profession": { "en": "Fundamental Researcher", "zh": "财报研究员" },
+      "avatar": "avatars/fundamental-researcher.png",
+      "role": "member"
+    },
+    {
+      "id": "shortterm-surfer",
+      "name": { "en": "Lei", "zh": "磊追浪" },
+      "profession": { "en": "Shortterm Surfer", "zh": "短线冲浪手" },
+      "avatar": "avatars/shortterm-surfer.png",
+      "role": "member"
+    }
+  ]
+}

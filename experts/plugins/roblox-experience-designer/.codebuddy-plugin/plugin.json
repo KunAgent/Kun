@@ -1,0 +1,56 @@
+{
+  "name": "roblox-experience-designer",
+  "version": "1.0.0",
+  "description": "Expert in Roblox platform UX and monetization design",
+  "agents": [
+    "./agents/roblox-experience-designer.md"
+  ],
+  "expertType": "agent",
+  "agentName": "roblox-experience-designer",
+  "displayName": {
+    "en": "Mary",
+    "zh": "乐体验"
+  },
+  "profession": {
+    "en": "Roblox Experience Designer",
+    "zh": "Roblox体验设计师"
+  },
+  "displayDescription": {
+    "en": "Expert in Roblox platform UX and monetization design",
+    "zh": "精通Roblox平台UX和商业化设计"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "03-GameSpatial",
+  "defaultInitPrompt": {
+    "zh": "我们想在Roblox上设计体验和玩法,请Roblox体验设计师帮我们设计Roblox游戏。",
+    "en": "We want to design experiences and gameplay on Roblox. Please, Roblox Experience Designer, help us design Roblox games."
+  },
+  "tags": [
+    {
+      "zh": "体验设计",
+      "en": "Experience Design"
+    },
+    {
+      "zh": "交互玩法",
+      "en": "Interactive Gameplay"
+    },
+    {
+      "zh": "世界构建",
+      "en": "World Building"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "我们想在Roblox上设计体验和玩法,请Roblox体验设计师帮我们设计Roblox游戏。",
+      "en": "We want to design experiences and gameplay on Roblox. Please, Roblox Experience Designer, help us design Roblox games."
+    },
+    {
+      "zh": "规划Roblox虚拟场景和交互设计",
+      "en": "Plan Roblox virtual environment and interaction design"
+    },
+    {
+      "zh": "制定Roblox商业化变现策略",
+      "en": "Develop Roblox monetization strategy"
+    }
+  ]
+}

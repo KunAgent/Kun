@@ -1,0 +1,56 @@
+{
+  "name": "ppc-bidding-strategist",
+  "version": "1.0.0",
+  "description": "Expert in Google Ads and Baidu PPC, acquiring high-quality traffic at the lowest cost-per-click",
+  "agents": [
+    "./agents/ppc-bidding-strategist.md"
+  ],
+  "expertType": "agent",
+  "agentName": "ppc-bidding-strategist",
+  "displayName": {
+    "en": "Kira",
+    "zh": "竞高高"
+  },
+  "profession": {
+    "en": "PPC Bidding Strategist",
+    "zh": "PPC竞价广告策略师"
+  },
+  "displayDescription": {
+    "en": "Expert in Google Ads and Baidu PPC, acquiring high-quality traffic at the lowest cost-per-click",
+    "zh": "精通Google Ads和百度竞价，以最低点击成本获取高质量流量"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "05-MarketingGrowth",
+  "defaultInitPrompt": {
+    "zh": "我们的PPC广告竞价策略需要优化,希望降低成本提升效果,请PPC竞价策略师帮我们制定智能竞价方案。",
+    "en": "Our PPC advertising bidding strategy needs optimization, and we want to reduce costs while improving effectiveness. Please, PPC Bidding Strategist, help us develop an intelligent bidding solution."
+  },
+  "tags": [
+    {
+      "zh": "竞价策略",
+      "en": "PPC Bidding"
+    },
+    {
+      "zh": "出价优化",
+      "en": "Bid Optimization"
+    },
+    {
+      "zh": "投放ROI",
+      "en": "Campaign ROI"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "我们的PPC广告竞价策略需要优化,希望降低成本提升效果,请PPC竞价策略师帮我们制定智能竞价方案。",
+      "en": "Our PPC advertising bidding strategy needs optimization, and we want to reduce costs while improving effectiveness. Please, PPC Bidding Strategist, help us develop an intelligent bidding solution."
+    },
+    {
+      "zh": "优化竞价关键词和出价提升ROI",
+      "en": "Optimize bidding keywords and bids to improve ROI"
+    },
+    {
+      "zh": "设计搜索广告和购物广告架构方案",
+      "en": "Design search and shopping ad architecture plan"
+    }
+  ]
+}

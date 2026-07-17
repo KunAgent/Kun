@@ -1,0 +1,117 @@
+{
+  "_privacy": {
+    "storage": "local-only (data/profiles/<userId>.json); never uploaded",
+    "retention": "kept until the user explicitly deletes it",
+    "userControls": {
+      "view":   "node scripts/profile.js show <userId>",
+      "list":   "node scripts/profile.js list",
+      "edit":   "node scripts/profile.js save <userId> <field> <value>",
+      "delete": "node scripts/profile.js delete <userId>",
+      "disablePush": "node scripts/push-toggle.js off <userId>"
+    },
+    "note": "All fields below are OPTIONAL. Leave family members empty unless you actually want cross-chart analysis. interactionLog can be cleared at any time by editing this file."
+  },
+  "userId": "{{userId}}",
+  "name": "{{姓名}}",
+  "profile": {
+    "birthDate": "{{出生日期，如 1990-01-01}}",
+    "birthTime": "{{出生时间，如 14:30}}",
+    "birthPlace": "{{出生地，如 上海}}",
+    "gender": "{{男/女}}",
+    "lunarBirth": "",
+    "timezone": "Asia/Shanghai"
+  },
+  "bazi": {
+    "year": "",
+    "month": "",
+    "day": "",
+    "hour": "",
+    "dayStem": "",
+    "zodiac": "",
+    "dayEmpty": [],
+    "yearEmpty": [],
+    "sect": "晚子时",
+    "source": "pending"
+  },
+  "ziwei": {
+    "mingGong": "",
+    "mingZhu": "",
+    "patterns": [],
+    "source": "pending"
+  },
+  "language": "zh",
+  "preferences": {
+    "pushMorning": true,
+    "pushEvening": false,
+    "morningTime": "07:00",
+    "eveningTime": "20:00",
+    "channels": ["openclaw"],
+    "focusAreas": ["事业", "财运", "健康"],
+    "riskTolerance": "中等"
+  },
+  "family": {
+    "spouse": {
+      "name": "",
+      "profile": {
+        "birthDate": "待录入",
+        "birthTime": "待录入",
+        "birthPlace": "",
+        "gender": "",
+        "lunarBirth": ""
+      },
+      "bazi": {
+        "year": "",
+        "month": "",
+        "day": "",
+        "hour": "",
+        "source": "pending"
+      }
+    },
+    "father": {
+      "name": "父亲",
+      "profile": {
+        "birthDate": "待录入",
+        "birthTime": "待录入",
+        "birthPlace": "",
+        "gender": "男"
+      },
+      "bazi": {
+        "year": "",
+        "month": "",
+        "day": "",
+        "hour": "",
+        "source": "pending"
+      }
+    },
+    "mother": {
+      "name": "母亲",
+      "profile": {
+        "birthDate": "待录入",
+        "birthTime": "待录入",
+        "birthPlace": "",
+        "gender": "女"
+      },
+      "bazi": {
+        "year": "",
+        "month": "",
+        "day": "",
+        "hour": "",
+        "source": "pending"
+      }
+    },
+    "children": []
+  },
+  "settings": {
+    "defaultSect": 1,
+    "lunarCalendar": true,
+    "notifications": {
+      "dailyFortune": true,
+      "riskAlert": true,
+      "weeklySummary": false
+    }
+  },
+  "interactionLog": [],
+  "lastPushDate": "",
+  "createdAt": "{{注册日期}}",
+  "updatedAt": "{{更新日期}}"
+}

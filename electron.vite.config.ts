@@ -38,7 +38,9 @@ export default defineConfig({
       }
     },
     server: {
-      host: '127.0.0.1'
+      host: '127.0.0.1',
+      port: 5179,          // 改成你想要的端口
+      strictPort: true     // 端口被占用时直接报错，而不是自动 +1
     },
     plugins: [react()]
   }

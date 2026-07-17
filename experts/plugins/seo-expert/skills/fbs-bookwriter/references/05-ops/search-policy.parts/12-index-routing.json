@@ -1,0 +1,234 @@
+{
+  "p0AutomationIndex": {
+    "description": "P0 规则与可执行 CLI/工件对照（综合审计 P1-2）；维护时须与 p0-cli-map.md 同步",
+    "markdownMap": "references/05-ops/p0-cli-map.md",
+    "s3StartGateCli": "scripts/s3-start-gate.mjs",
+    "s3GuardCli": "scripts/s3-guard.mjs",
+    "standardExecutionChainCli": "scripts/standard-execution-chain.mjs",
+    "p0AuditBundleCli": "scripts/run-p0-audits.mjs",
+    "pendingVerificationCli": "scripts/audit-pending-verification.mjs",
+    "pendingVerificationNote": "清单路径优先 .fbs/writing-notes/pending-verification.md，兼容 .fbs/writing-notes/.pending-verification.md；由 init-fbs-multiagent-artifacts 创建模板",
+    "s3GateIntegratedAudits": [
+      "audit-temporal-accuracy.mjs --scan-book-s3",
+      "audit-term-consistency.mjs --scan-book-s3",
+      "audit-query-optimization.mjs（有成稿 [S3]*.md 且 search-ledger.jsonl 存在时由 s3-start-gate 默认调用；默认警告）"
+    ],
+    "ledgerDimensionNormalizeCli": "scripts/normalize-ledger-dimensions.mjs",
+    "queryOptimizationAuditCli": "scripts/audit-query-optimization.mjs",
+    "multiagentOrchestratorCli": "scripts/multiagent-orchestrator.mjs",
+    "multiagentOrchestratorNote": "多智能体编排器 CLI",
+    "brokenLinkAuditCli": "scripts/audit-broken-links.mjs",
+    "uxFlowGuardCli": "scripts/ux-flow-guard.mjs"
+  },
+  "s0DimensionCanonical": {
+    "description": "S0 检索账本 s0Dimension 短码与规范长键（P2）；供 normalize-ledger-dimensions.mjs 与人工台账对齐",
+    "allowedLongKeys": [
+      "competitorDomestic",
+      "competitorOverseas",
+      "readerAnalysis",
+      "monetization",
+      "timestampCheck",
+      "workIntel",
+      "frontierSensing",
+      "readerLanguage",
+      "other"
+    ],
+    "shortToLong": {
+      "cd": "competitorDomestic",
+      "co": "competitorOverseas",
+      "ra": "readerAnalysis",
+      "mo": "monetization",
+      "ts": "timestampCheck",
+      "wi": "workIntel",
+      "fs": "frontierSensing",
+      "rl": "readerLanguage",
+      "ot": "other"
+    }
+  },
+  "queryOptimizationAudit": {
+    "description": "检索自评字段 queryOptimization 机读审计（P2）；对齐 searchEnhancement.selfImprovingStrategy",
+    "enabled": true,
+    "fieldName": "queryOptimization",
+    "skipWhenOkFalse": true,
+    "note": "kind=search 且 ok!==false 时须含非空 queryOptimization；CLI：scripts/audit-query-optimization.mjs [--enforce]"
+  },
+  "timeAnchorPreflight": {
+    "description": "时效检索前强制建立时间锚（P0）",
+    "enabled": true,
+    "priority": "P0",
+    "mandatoryBeforeStages": [
+      "S0",
+      "S1",
+      "S2",
+      "S3",
+      "S5",
+      "S6"
+    ],
+    "anchorQuery": [
+      "今天日期",
+      "当前年月日",
+      "今天是哪年哪月哪日"
+    ],
+    "cnSourcePriority": [
+      "people.com.cn",
+      "xinhuanet.com",
+      "gov.cn",
+      "cctv.com"
+    ],
+    "fallbackToHostTime": true,
+    "forbidModelInternalTime": true,
+    "anchorFile": ".fbs/time-anchor.json",
+    "anchorTTLMinutes": 60,
+    "note": "时间锚仅用于短期检索状态，不写入长期记忆"
+  },
+  "queryVariantPolicy": {
+    "description": "每轮检索至少生成多变体 query，避免单表达困锁",
+    "enabled": true,
+    "minVariantsPerRequest": 3,
+    "variantTypes": [
+      "relative_time",
+      "site_scoped",
+      "semantic_cn"
+    ],
+    "optionalVariantTypes": [
+      "history_vs_latest_split"
+    ],
+    "forbidHardcodedYearTokens": true,
+    "relativeTimeTokens": [
+      "最新",
+      "当前",
+      "近三年",
+      "最近发布"
+    ]
+  },
+  "cnSourceRoutingPolicy": {
+    "description": "中文环境优先来源路由（P0）",
+    "enabled": true,
+    "defaultRoute": "cn_first",
+    "intentRoutes": {
+      "fact": [
+        "gov.cn",
+        "people.com.cn",
+        "xinhuanet.com",
+        "cctv.com"
+      ],
+      "version": [
+        "developers.weixin.qq.com",
+        "cloud.tencent.com",
+        "github.com",
+        "gitee.com"
+      ],
+      "method": [
+        "36kr.com",
+        "huxiu.com",
+        "cloud.tencent.com/developer",
+        "alibabacloud.com/help/zh"
+      ],
+      "readerLanguage": [
+        "zhihu.com",
+        "xiaohongshu.com",
+        "douban.com",
+        "bilibili.com"
+      ],
+      "academic": [
+        "arxiv.org",
+        "scholar.google.com",
+        "paper.sciencedirect.com"
+      ],
+      "timestamp": [
+        "people.com.cn",
+        "xinhuanet.com",
+        "gov.cn"
+      ]
+    },
+    "jsHeavySites": [
+      "zhihu.com",
+      "xiaohongshu.com",
+      "mp.weixin.qq.com"
+    ],
+    "jsHeavyFallback": "summary_first_then_site_query",
+    "allowGlobalFallbackWhenCnInsufficient": true
+  },
+  "reflectiveRepairPolicy": {
+    "description": "纠错触发后优先补检，不直接改写",
+    "enabled": true,
+    "triggerSignals": [
+      "时效词出现",
+      "版本号/发布日期/政策日期/统计数字出现",
+      "模型不确定表达",
+      "用户要求方法更新",
+      "截止年份回声检测"
+    ],
+    "repairFlow": [
+      "criticize_answer",
+      "mark_outdated_fragments",
+      "classify_fact_or_method",
+      "plan_research_queries",
+      "run_cn_first_search",
+      "evaluate_with_judge",
+      "rewrite_impacted_fragments_only",
+      "annotate_evidence"
+    ]
+  },
+  "memoryWritebackPolicy": {
+    "description": "检索结果分层写回（短期/项目/长期）",
+    "enabled": true,
+    "layers": {
+      "shortTermState": {
+        "stores": [
+          "time_anchor",
+          "current_retrieval_context",
+          "temporary_version_window"
+        ],
+        "destination": [
+          ".fbs/time-anchor.json",
+          "session_state"
+        ],
+        "ttl": "minutes_to_hours",
+        "neverWriteToLongTerm": true
+      },
+      "projectRetrievalState": {
+        "stores": [
+          "search_ledger",
+          "chapter_verified_facts",
+          "pending_verification_items",
+          "source_routing_decisions"
+        ],
+        "destination": [
+          ".fbs/search-ledger.jsonl",
+          ".fbs/material-library.md",
+          ".fbs/writing-notes/pending-verification.md"
+        ],
+        "ttl": "project_lifecycle"
+      },
+      "longTermCapabilityState": {
+        "stores": [
+          "stable_query_templates",
+          "high_quality_cn_domains",
+          "judge_scoring_experience",
+          "query_rewrite_patterns"
+        ],
+        "destination": [
+          ".fbs/evolution-knowledge/",
+          "host_memory_capability_profile"
+        ],
+        "ttl": "cross_project",
+        "note": "仅沉淀检索策略经验，不沉淀临时事实"
+      }
+    }
+  },
+  "executionChainIndex": {
+    "description": "联网检索统一执行链",
+    "steps": [
+      "1.timeAnchorPreflight",
+      "2.searchPreflightContract",
+      "3.cnSourceRoutingPolicy",
+      "4.queryVariantPolicy",
+      "5.searchAccessPolicy.effectiveEndpointStrategy",
+      "6.retrievalEvaluator(JUDGE)",
+      "7.reflectiveRepairPolicy(on_trigger)",
+      "8.memoryWritebackPolicy",
+      "9.searchEnhancement.selfImprovingStrategy"
+    ]
+  }
+}

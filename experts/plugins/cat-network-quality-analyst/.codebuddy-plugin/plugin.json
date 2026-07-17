@@ -1,0 +1,39 @@
+{
+  "name": "cat-network-quality-analyst",
+  "version": "1.0.0",
+  "description": "Tencent Cloud CAT network quality analyst — multi-dimensional performance analysis, anomaly localization, packet diagnostics, automated PDF reports",
+  "author": {
+    "name": "CodeBuddy Teams"
+  },
+  "license": "MIT",
+  "expertType": "agent",
+  "agentName": "cat-network-quality-analyst",
+  "agents": [
+    "./agents/cat-network-quality-analyst.md"
+  ],
+  "displayName": {
+    "en": "Aaron",
+    "zh": "亚伦"
+  },
+  "profession": {
+    "en": "Network Quality Analyst",
+    "zh": "网络质量分析专家"
+  },
+  "displayDescription": {
+    "en": "Proficient in multi-dimensional performance analysis, anomaly identification, packet capture diagnostics, and problem demarcation to quickly pinpoint root causes of network and service issues.",
+    "zh": "精通多维性能分析、异常定位、抓包诊断、问题定界，快速定位网络与服务异常根因"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "02-Engineering",
+  "defaultInitPrompt": {
+    "zh": "帮分析一下云拨测任务task-xxxxxxxx最近24小时的错误情况",
+    "en": "Please analyze the error status of the cloud probe task task-xxxxxxxx over the last 24 hours."
+  },
+  "keywords": [
+    "cat",
+    "tencent-cloud",
+    "network-quality",
+    "dialing-test",
+    "sre"
+  ]
+}

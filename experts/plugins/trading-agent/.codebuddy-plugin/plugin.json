@@ -1,0 +1,162 @@
+{
+  "name": "trading-agent",
+  "version": "1.0.0",
+  "description": "Trading analysis team — 13 specialized roles collaborate across 5 phases to deliver BUY/SELL/HOLD recommendations for A-share, HK and US stocks with actionable plans",
+  "author": {
+    "name": "Expert Marketplace"
+  },
+  "license": "MIT",
+  "expertType": "team",
+  "agentName": "trading-team-lead",
+  "teamInfo": {
+    "leadAgent": "trading-team-lead",
+    "memberAgents": [
+      "market-analyst",
+      "fundamentals-analyst",
+      "news-analyst",
+      "sentiment-analyst",
+      "bull-researcher",
+      "bear-researcher",
+      "research-manager",
+      "trader",
+      "aggressive-risk-analyst",
+      "conservative-risk-analyst",
+      "neutral-risk-analyst",
+      "risk-manager"
+    ]
+  },
+  "agents": [
+    "./agents/trading-team-lead.md",
+    "./agents/market-analyst.md",
+    "./agents/fundamentals-analyst.md",
+    "./agents/news-analyst.md",
+    "./agents/sentiment-analyst.md",
+    "./agents/bull-researcher.md",
+    "./agents/bear-researcher.md",
+    "./agents/research-manager.md",
+    "./agents/trader.md",
+    "./agents/aggressive-risk-analyst.md",
+    "./agents/conservative-risk-analyst.md",
+    "./agents/neutral-risk-analyst.md",
+    "./agents/risk-manager.md"
+  ],
+  "displayName": {
+    "en": "Trading Analysis Team",
+    "zh": "交易分析团队"
+  },
+  "profession": {
+    "en": "Trading Analysis Team",
+    "zh": "交易分析团队"
+  },
+  "displayDescription": {
+    "en": "13 specialized roles collaborate across 5 phases: technical, fundamental, news & sentiment analysis → bull-bear debate → trading decision → 3-way risk assessment → final report, delivering BUY/SELL/HOLD recommendations with actionable plans",
+    "zh": "13位专业角色分5阶段协作完成投资分析：技术面、基本面、新闻面、情绪面数据采集 → 多空辩论 → 交易决策 → 三方风险评估 → 最终报告，输出 BUY/SELL/HOLD 建议及完整操作方案"
+  },
+  "avatar": "avatars/team.png",
+  "categoryId": "08-FinanceInvestment",
+  "defaultInitPrompt": {
+    "zh": "帮我分析下茅台该不该买",
+    "en": "Should I buy Maotai? Please analyze."
+  },
+  "members": [
+    {
+      "id": "trading-team-lead",
+      "name": { "en": "He", "zh": "何执舟" },
+      "profession": { "en": "Chief Strategist", "zh": "首席策略官" },
+      "avatar": "avatars/team-lead.png",
+      "role": "lead"
+    },
+    {
+      "id": "market-analyst",
+      "name": { "en": "Tu", "zh": "涂一线" },
+      "profession": { "en": "Technical Analyst", "zh": "技术分析师" },
+      "avatar": "avatars/market-analyst.png",
+      "role": "member"
+    },
+    {
+      "id": "fundamentals-analyst",
+      "name": { "en": "Ji", "zh": "季本实" },
+      "profession": { "en": "Fundamentals Analyst", "zh": "基本面分析师" },
+      "avatar": "avatars/fundamentals-analyst.png",
+      "role": "member"
+    },
+    {
+      "id": "news-analyst",
+      "name": { "en": "Wen", "zh": "闻一新" },
+      "profession": { "en": "News Analyst", "zh": "新闻分析师" },
+      "avatar": "avatars/news-analyst.png",
+      "role": "member"
+    },
+    {
+      "id": "sentiment-analyst",
+      "name": { "en": "Mo", "zh": "莫慌言" },
+      "profession": { "en": "Sentiment Analyst", "zh": "情绪分析师" },
+      "avatar": "avatars/sentiment-analyst.png",
+      "role": "member"
+    },
+    {
+      "id": "bull-researcher",
+      "name": { "en": "Niu", "zh": "牛正阳" },
+      "profession": { "en": "Bull Researcher", "zh": "多头研究员" },
+      "avatar": "avatars/bull-researcher.png",
+      "role": "member"
+    },
+    {
+      "id": "bear-researcher",
+      "name": { "en": "Xiong", "zh": "熊正寒" },
+      "profession": { "en": "Bear Researcher", "zh": "空头研究员" },
+      "avatar": "avatars/bear-researcher.png",
+      "role": "member"
+    },
+    {
+      "id": "research-manager",
+      "name": { "en": "Cai", "zh": "蔡定锋" },
+      "profession": { "en": "Research Manager", "zh": "研究主管" },
+      "avatar": "avatars/research-manager.png",
+      "role": "member"
+    },
+    {
+      "id": "trader",
+      "name": { "en": "Cheng", "zh": "程交远" },
+      "profession": { "en": "Trader", "zh": "交易员" },
+      "avatar": "avatars/trader.png",
+      "role": "member"
+    },
+    {
+      "id": "aggressive-risk-analyst",
+      "name": { "en": "Gan", "zh": "甘为先" },
+      "profession": { "en": "Aggressive Risk Analyst", "zh": "激进风险分析师" },
+      "avatar": "avatars/aggressive-risk-analyst.png",
+      "role": "member"
+    },
+    {
+      "id": "conservative-risk-analyst",
+      "name": { "en": "Shen", "zh": "沈行远" },
+      "profession": { "en": "Conservative Risk Analyst", "zh": "保守风险分析师" },
+      "avatar": "avatars/conservative-risk-analyst.png",
+      "role": "member"
+    },
+    {
+      "id": "neutral-risk-analyst",
+      "name": { "en": "Zhong", "zh": "钟允平" },
+      "profession": { "en": "Neutral Risk Analyst", "zh": "中性风险分析师" },
+      "avatar": "avatars/neutral-risk-analyst.png",
+      "role": "member"
+    },
+    {
+      "id": "risk-manager",
+      "name": { "en": "Yan", "zh": "严控风" },
+      "profession": { "en": "Risk Manager", "zh": "风险主管" },
+      "avatar": "avatars/risk-manager.png",
+      "role": "member"
+    }
+  ],
+  "keywords": [
+    "trading",
+    "stock-analysis",
+    "investment",
+    "a-share",
+    "risk-assessment",
+    "bull-bear-debate"
+  ]
+}

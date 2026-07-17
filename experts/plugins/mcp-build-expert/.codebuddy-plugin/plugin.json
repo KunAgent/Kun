@@ -1,0 +1,56 @@
+{
+  "name": "mcp-build-expert",
+  "version": "1.0.0",
+  "description": "Expert in Model Context Protocol design and implementation",
+  "agents": [
+    "./agents/mcp-build-expert.md"
+  ],
+  "expertType": "agent",
+  "agentName": "mcp-build-expert",
+  "displayName": {
+    "en": "Rex",
+    "zh": "协议通"
+  },
+  "profession": {
+    "en": "MCP Build Expert",
+    "zh": "MCP构建专家"
+  },
+  "displayDescription": {
+    "en": "Expert in Model Context Protocol design and implementation",
+    "zh": "精通Model Context Protocol设计实现"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "02-Engineering",
+  "defaultInitPrompt": {
+    "zh": "我们想构建MCP(Model Context Protocol)应用,需要专业的MCP开发经验,请MCP构建专家帮我们设计MCP应用。",
+    "en": "We want to build MCP (Model Context Protocol) applications and need professional MCP development experience. Please, MCP Build Expert, help us design MCP applications."
+  },
+  "tags": [
+    {
+      "zh": "MCP构建",
+      "en": "MCP Building"
+    },
+    {
+      "zh": "协议开发",
+      "en": "Protocol Dev"
+    },
+    {
+      "zh": "工具集成",
+      "en": "Tool Integration"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "我们想构建MCP(Model Context Protocol)应用,需要专业的MCP开发经验,请MCP构建专家帮我们设计MCP应用。",
+      "en": "We want to build MCP (Model Context Protocol) applications and need professional MCP development experience. Please, MCP Build Expert, help us design MCP applications."
+    },
+    {
+      "zh": "设计MCP服务架构和安全方案",
+      "en": "Design MCP service architecture and security plan"
+    },
+    {
+      "zh": "搭建MCP工具测试和部署流程",
+      "en": "Build MCP tool testing and deployment pipeline"
+    }
+  ]
+}

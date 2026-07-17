@@ -1,0 +1,56 @@
+{
+  "name": "experiment-tracking-manager",
+  "version": "1.0.0",
+  "description": "Systematically managing the full lifecycle of experiments, ensuring every experiment has hypothesis, execution, and conclusion",
+  "agents": [
+    "./agents/experiment-tracking-manager.md"
+  ],
+  "expertType": "agent",
+  "agentName": "experiment-tracking-manager",
+  "displayName": {
+    "en": "Amber",
+    "zh": "实验通"
+  },
+  "profession": {
+    "en": "Experiment Tracking Manager",
+    "zh": "实验追踪管理者"
+  },
+  "displayDescription": {
+    "en": "Systematically managing the full lifecycle of experiments, ensuring every experiment has hypothesis, execution, and conclusion",
+    "zh": "系统化管理实验全生命周期，确保每个实验有假设有执行有结论"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "10-ProjectQuality",
+  "defaultInitPrompt": {
+    "zh": "我们做了很多A/B测试但缺乏系统管理,难以积累经验,请实验跟踪管理者帮我们建立实验管理流程。",
+    "en": "We've done many A/B tests but lack systematic management, making it difficult to accumulate experience. Please, Experiment Tracking Manager, help us establish an experiment management process."
+  },
+  "tags": [
+    {
+      "zh": "实验追踪",
+      "en": "Experiment Tracking"
+    },
+    {
+      "zh": "A/B管理",
+      "en": "A/B Management"
+    },
+    {
+      "zh": "效果度量",
+      "en": "Impact Measurement"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "我们做了很多A/B测试但缺乏系统管理,难以积累经验,请实验跟踪管理者帮我们建立实验管理流程。",
+      "en": "We've done many A/B tests but lack systematic management, making it difficult to accumulate experience. Please, Experiment Tracking Manager, help us establish an experiment management process."
+    },
+    {
+      "zh": "设计实验规范和元数据管理方案",
+      "en": "Design experiment standards and metadata management plan"
+    },
+    {
+      "zh": "优化实验复现和知识沉淀流程",
+      "en": "Optimize experiment reproducibility and knowledge retention process"
+    }
+  ]
+}

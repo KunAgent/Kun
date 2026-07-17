@@ -1,0 +1,1617 @@
+{
+  "table_code" : "catalog_dos_da_mcp.hrdw.Report_Wide_Public_Staff_Change_Record",
+  "table_name" : "人员变动信息宽表",
+  "version" : 9,
+  "table_desc" : "定位：聚合所有员工全职涯发生过的雇佣（入职）、调动（含因活水产生的调动记录）、专业职级升降、专业通道/职位变化、管理职级升降免、离职等异动流程产生的变动记录\n\n唯一标识：该表以\"业务流程单号\"+\"异动场景类型(异动)\"作为复合的唯一标识，每个异动流程会产生一个或多个异动类型记录\n\n包含内容：\n一行变动记录的要素包含：员工当前的基本任职情况、异动发生的场景类型、异动生效的时间、异动产生的组织/岗位/汇报关系/专业任职/管理任职等信息的前后变化、异动发生时员工的年龄/工龄/司龄/管理年限/专业年限等信息，以及描述异动变化的特征标签，如基于异动前后的组织变化标识“是否跨部门调动”等\n\n主要用途：\n1、查询一定时间段内，特定异动类型发生的人次数、人员明细或分析其结构特征；\n2、对特定异动类型发生的数量、结构特征做横向对比，如对比不同组织的人员流入、流出情况；\n3、对特定异动类型发生的数量、结构特征做纵向对比，如分析同一组织在不同时间点的流入、流出变化；\n\n不支持的场景：\n在职人数的统计；\n流程发起、进行中的人次数，如入职、离职、调动、派驻流程中的人次数，发起了专业晋升、管理升降免的人次数；\n发起了流程但流程中止的人次数，如发起了晋升但晋升失败的人次数；\n无活水流程数据，只能记录活水成功并完成调动人次数；\n无社招、校招招聘流程数据，不能对招聘过程（含进度、周期、转化率、效率等）进行统计分析；\n无法在异动类型为入职的记录中进行绩效、盘点、职级停留时长分析\nL0管理者入职、离职情况\n\n能回答的典型问题：\nA部门近半年入职的校招生有哪些，人数多少；\nA部门近1年晋升为专家的人有哪些，晋升前的职级停留时间平均多长；\nA部门近1年能下的干部有哪些，哪些从管理者转为专家；\nA部门近半年调入的员工中，调入时近1次绩效为outstand的人有哪些\nA部门近一年入职/调入/调出/离职/流入/流出人数按月变化趋势；\nA部门和B部门相比，今年管理及专业晋升的人数对比；",
+  "write_sql_background" : "1、原始异动记录统计的是人次数，如果需统计人数，需用\"员工ID\"(staff_id)去重\n2、异动类型分析逻辑：\n查询入职、离职、调入、调出、专业变化（专业职级升降）、管理变化（管理职级升降免）等特定类型异动情况时，通常必需使用“异动场景类型(异动)”、“异动生效日期”作为where条件，如入职记录对应\"异动场景类型(异动)\":[\"雇佣\"]，202509入职记录对应\"异动生效日期\":BETWEEN '2025-09-01' AND '2025-09-30'；\n意图中无明确异动时间时，可默认异动周期为“今年”\n3、异动前、异动后信息使用，以组织信息为例：\nA组织的入职、离职、专业变化、管理变化记录，where条件：to_org_full_name LIKE 'A组织' ；\n从A组织调入B组织的人，where条件：from_org_full_name LIKE'A组织' AND to_org_full_name LIKE 'B组织' \n调动、异动整体情况，未明确异动类型，where条件：“from_org_full_name = 'A组织' OR \"to_org_full_name = 'A组织';\n4、入职、离职交叉应用\n1）查询一定时期内入职的人在一定时间范围内是否离职：用\"异动场景类型\"=\"入职\"”&“异动生效日期”=\"入职时间段\"圈定入职人群，然后用“最近一次离职生效日期”确定“离职时间段”\n2）查询一定时期内离职的人是否是在一定时间范围内入职的：用\"异动场景类型\"=\"离职\"”&“异动生效日期”=\"离职时间段\"圈定离职人群，然后用“最近一次入职生效日期”确定“入职时间段”\n5、专业职级、管理职级平均停留分析通常分别对应异动子场景类型为“专业晋升”、“管理晋升”的异动记录\n6、绩效、梯队评估\n1）绩效梯队评估周期：一年有两个评估周期，H1、H2各1，如问异动时近1年的绩效表现，则覆盖近1次、近2次两个周期\n2）如询问需要近x次结果，为避免理解歧义，可将近1次到近X次记录都返回",
+  "find_column_background" : "必选字段:员工ID",
+  "columns" : [ {
+    "column_code" : "staff_id8",
+    "column_name" : "员工ID",
+    "column_type" : "bigint",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "统计人数必选",
+    "column_group" : "员工账号信息"
+  }, {
+    "column_code" : "staff_combined_name",
+    "column_name" : "员工中英文名",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "zhangsan(张三)",
+    "column_use" : "识别员工是谁的最基础字段，输出员工明细数据必选，查询单个人信息时，如数据格式为中英文名，必选，建议where条件用like",
+    "column_group" : "员工账号信息"
+  }, {
+    "column_code" : "hr_status_name",
+    "column_name" : "员工状态",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "在职,离职",
+    "column_use" : "查询员工明细必需",
+    "column_group" : ""
+  }, {
+    "column_code" : "manage_unit_name",
+    "column_name" : "管理主体",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "腾讯集团本部",
+    "column_use" : "",
+    "column_group" : "用工管理信息"
+  }, {
+    "column_code" : "staff_type_name",
+    "column_name" : "员工类型",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "正式,顾问,外包,合作伙伴",
+    "column_use" : "",
+    "column_group" : "用工管理信息"
+  }, {
+    "column_code" : "staff_subtype_name",
+    "column_name" : "员工子类型",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "正式聘用制,毕业生,实习生,荣誉顾问,长期顾问",
+    "column_use" : "",
+    "column_group" : "用工管理信息"
+  }, {
+    "column_code" : "work_location_full_name",
+    "column_name" : "工作地全路径",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "办公地点及联系信息"
+  }, {
+    "column_code" : "work_location_name",
+    "column_name" : "工作地（城市）",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "办公地点及联系信息"
+  }, {
+    "column_code" : "contract_type_name",
+    "column_name" : "合同类型",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "聘用合同,劳务合同,项目合同",
+    "column_use" : "",
+    "column_group" : "员工当前基础信息"
+  }, {
+    "column_code" : "pro_position_level_name",
+    "column_name" : "专业职级",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "T9,D10,S12",
+    "column_use" : "由代表职族的字母和职级等级数字组成，如S12，表示专业族（SC）12级，此字段不是数值，可以使用=、IN等条件，不可以使用>、<",
+    "column_group" : "专业员工任职信息"
+  }, {
+    "column_code" : "manager_level_name",
+    "column_name" : "管理职级",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "L1-1,L1-2,L2-1,L2-2,L2-3,L3-1,L3-2,L3-3",
+    "column_use" : "",
+    "column_group" : "管理者任职信息"
+  }, {
+    "column_code" : "manager_source_name",
+    "column_name" : "干部来源",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "外部引入,内部培养",
+    "column_use" : "用于识别成为管理者的节点是“入职”(外部引入)or“晋升”(内部培养)",
+    "column_group" : "管理者任职信息"
+  }, {
+    "column_code" : "overseas_nhs_pilot_flag_desc",
+    "column_name" : "If NHS Pilot",
+    "column_type" : "int",
+    "column_format" : "",
+    "sample" : "是,否",
+    "column_use" : "",
+    "column_group" : "员工当前基础信息"
+  }, {
+    "column_code" : "overseas_people_manager_flag_desc",
+    "column_name" : "If People Manager",
+    "column_type" : "int",
+    "column_format" : "",
+    "sample" : "是,否",
+    "column_use" : "",
+    "column_group" : "管理者任职信息"
+  }, {
+    "column_code" : "recruit_type_name",
+    "column_name" : "招聘类型",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "校园招聘,社会招聘",
+    "column_use" : "用于识别员工入职时是校招还是社招",
+    "column_group" : "员工最近职涯周期关键节点信息-入职"
+  }, {
+    "column_code" : "inaugural_date",
+    "column_name" : "最近一次入职日期",
+    "column_type" : "datetime",
+    "column_format" : "yyyy-mm-dd",
+    "sample" : "2025-09-30,2025-10-01",
+    "column_use" : "",
+    "column_group" : "员工最近职涯周期关键节点信息-入职"
+  }, {
+    "column_code" : "seniority_begin_date",
+    "column_name" : "公司资历日期",
+    "column_type" : "datetime",
+    "column_format" : "yyyy-mm-dd",
+    "sample" : "2025-09-30,2025-10-01",
+    "column_use" : "",
+    "column_group" : "司龄统计信息"
+  }, {
+    "column_code" : "formal_date",
+    "column_name" : "转正日期",
+    "column_type" : "datetime",
+    "column_format" : "yyyy-mm-dd",
+    "sample" : "2025-09-30,2025-10-01",
+    "column_use" : "",
+    "column_group" : "员工最近职涯周期关键节点信息-试用期"
+  }, {
+    "column_code" : "dimission_date",
+    "column_name" : "最近一次离职日期",
+    "column_type" : "datetime",
+    "column_format" : "yyyy-mm-dd",
+    "sample" : "2025-09-30,2025-10-01",
+    "column_use" : "",
+    "column_group" : "员工最近职涯周期关键节点信息-离职"
+  }, {
+    "column_code" : "dimission_effect_date",
+    "column_name" : "最近一次离职生效日期",
+    "column_type" : "datetime",
+    "column_format" : "yyyy-mm-dd",
+    "sample" : "2025-09-30,2025-10-01",
+    "column_use" : "",
+    "column_group" : "员工最近职涯周期关键节点信息-离职"
+  }, {
+    "column_code" : "work_begin_date",
+    "column_name" : "首次工作日期",
+    "column_type" : "datetime",
+    "column_format" : "yyyy-mm-dd",
+    "sample" : "2025-09-30,2025-10-01",
+    "column_use" : "",
+    "column_group" : "工龄统计信息"
+  }, {
+    "column_code" : "nationality_name",
+    "column_name" : "国籍",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "中国",
+    "column_use" : "",
+    "column_group" : "员工个人信息"
+  }, {
+    "column_code" : "gender_name",
+    "column_name" : "性别",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "男,女",
+    "column_use" : "",
+    "column_group" : "员工个人信息"
+  }, {
+    "column_code" : "highest_education_school",
+    "column_name" : "最高教育经历毕业院校",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "员工最高学历信息"
+  }, {
+    "column_code" : "highest_education_major",
+    "column_name" : "最高教育经历专业",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "员工最高学历信息"
+  }, {
+    "column_code" : "highest_education_level_name",
+    "column_name" : "最高教育经历学历",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "本科,硕士研究生,博士研究生",
+    "column_use" : "",
+    "column_group" : "员工最高学历信息"
+  }, {
+    "column_code" : "org_full_name",
+    "column_name" : "员工组织全路径",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "员工所在组织信息"
+  }, {
+    "column_code" : "org_name",
+    "column_name" : "员工组织名称",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "员工所在组织信息"
+  }, {
+    "column_code" : "org_level_name",
+    "column_name" : "组织架构层级",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "10 公司,20 系统,30 子公司,40 线,50 部门,60 中心,70 小组",
+    "column_use" : "",
+    "column_group" : "员工所在组织的其他属性信息"
+  }, {
+    "column_code" : "org_type_name",
+    "column_name" : "组织类型",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "实体组织,虚拟组织",
+    "column_use" : "",
+    "column_group" : "员工所在组织的其他属性信息"
+  }, {
+    "column_code" : "bg_name",
+    "column_name" : "BG",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "员工所在组织信息"
+  }, {
+    "column_code" : "line_name",
+    "column_name" : "线",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "员工所在组织信息"
+  }, {
+    "column_code" : "dept_name",
+    "column_name" : "部门",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "员工所在组织信息"
+  }, {
+    "column_code" : "center_name",
+    "column_name" : "中心",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "员工所在组织信息"
+  }, {
+    "column_code" : "team_name",
+    "column_name" : "组",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "员工所在组织信息"
+  }, {
+    "column_code" : "move_source_case_id",
+    "column_name" : "业务流程单号（入离调）",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "异动流程记录-基础信息"
+  }, {
+    "column_code" : "move_type_name",
+    "column_name" : "异动场景类型(异动)",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "雇佣,离职,调动,管理变化,专业变化,NJS Change",
+    "column_use" : "查询入职、离职等单一异动类型时，对多异动类型进行分布统计时，此字段必选",
+    "column_group" : "异动流程记录-基础信息"
+  }, {
+    "column_code" : "move_subtype_name",
+    "column_name" : "异动子场景类型(异动)",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "首次加入,再次加入,转聘加入,主动离职,被动离职,法定离职,境内调动,跨境调动,专业晋升,专业降职,通道职位变更,管理新任,管理晋升,管理降职,管理免职,管理职级切换,",
+    "column_use" : "\"异动场景类型(异动)\"的子级字段，可用于识别专业变化异动具体类型，包括晋升、降职、通道职位变化；识别管理变化异动具体类型，包括新任、晋升、降级、免职等",
+    "column_group" : "异动流程记录-基础信息"
+  }, {
+    "column_code" : "move_subtype2_name",
+    "column_name" : "异动子场景描述(异动)",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "校园招聘入职,社会招聘入职,投资并购入职,员工类型转换入职,管理主体转换入职,大陆境内调动,非大陆境内调动,",
+    "column_use" : "\"异动子场景类型(异动)\"的子级字段，主要用于进一步细分入职类型和调动类型",
+    "column_group" : "异动流程记录-基础信息"
+  }, {
+    "column_code" : "move_date",
+    "column_name" : "异动生效日期",
+    "column_type" : "datetime",
+    "column_format" : "yyyy-mm-dd",
+    "sample" : "2025-09-30,2025-10-01",
+    "column_use" : "本表必选字段，即各类异动流程完成生效的日期，如异动场景类型为“调动”，则异动生效日期即为调动生效日期，如异动场景类型为离职，则异动生效日期为离职生效日期",
+    "column_group" : "异动流程记录-基础信息"
+  }, {
+    "column_code" : "move_reason_name",
+    "column_name" : "异动原因类型",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "个人意愿,组织意愿",
+    "column_use" : "",
+    "column_group" : "异动流程记录-基础信息"
+  }, {
+    "column_code" : "inaugural_type_name",
+    "column_name" : "入职入场场景类型",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "首次加入,再次加入,转聘加入",
+    "column_use" : "",
+    "column_group" : "异动流程记录-入职"
+  }, {
+    "column_code" : "inaugural_type_desc_name",
+    "column_name" : "入职入场子场景描述",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "异动流程记录-入职"
+  }, {
+    "column_code" : "inaugural_subtype_name",
+    "column_name" : "入职入场场景类型的级联字段",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "异动流程记录-入职"
+  }, {
+    "column_code" : "rehire_flag_desc",
+    "column_name" : "是否回流入职",
+    "column_type" : "bigint",
+    "column_format" : "",
+    "sample" : "是,否",
+    "column_use" : "",
+    "column_group" : "员工最近职涯周期关键节点信息-入职"
+  }, {
+    "column_code" : "expected_graduated_date",
+    "column_name" : "预计毕业时间",
+    "column_type" : "datetime",
+    "column_format" : "yyyy-mm-dd",
+    "sample" : "2025-09-30,2025-10-01",
+    "column_use" : "",
+    "column_group" : "异动流程记录-入职"
+  }, {
+    "column_code" : "inaugural_manager_level_name",
+    "column_name" : "本次入职时管理职级",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "L1-1,L1-2,L2-1,L2-2,L2-3,L3-1,L3-2,L3-3",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "dimission_type_name",
+    "column_name" : "离职类型",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "主动类型,被动离职,法定离职,转聘",
+    "column_use" : "识别员工是主动离职or被动离职",
+    "column_group" : "员工最近职涯周期关键节点信息-离职"
+  }, {
+    "column_code" : "recruit_source_case_id",
+    "column_name" : "招聘CaseID",
+    "column_type" : "bigint",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "招聘流程信息"
+  }, {
+    "column_code" : "recruit_manager_staff_name",
+    "column_name" : "招聘经理",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "招聘流程信息"
+  }, {
+    "column_code" : "recruit_channel_name",
+    "column_name" : "招聘渠道",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "猎头,伯乐,媒体",
+    "column_use" : "",
+    "column_group" : "招聘流程信息"
+  }, {
+    "column_code" : "huoshui_flag_desc",
+    "column_name" : "是否活水",
+    "column_type" : "int",
+    "column_format" : "",
+    "sample" : "是,否",
+    "column_use" : "仅在“异动场景类型”为“调动”时可用，识别调动流程是否有前置发生活水流程，不用于识别活水流程状态",
+    "column_group" : "异动关联的其他业务流程-调动前置的活水流程信息"
+  }, {
+    "column_code" : "offline_consensus_flag_desc",
+    "column_name" : "是否完成线下协商",
+    "column_type" : "int",
+    "column_format" : "",
+    "sample" : "是,否",
+    "column_use" : "",
+    "column_group" : "异动关联的其他业务流程-调动前置的活水流程信息"
+  }, {
+    "column_code" : "cross_bg_flag_desc",
+    "column_name" : "是否跨BG调动",
+    "column_type" : "int",
+    "column_format" : "",
+    "sample" : "是,否",
+    "column_use" : "",
+    "column_group" : "调动前后员工所在组织变化跨度"
+  }, {
+    "column_code" : "cross_line_flag_desc",
+    "column_name" : "是否跨线调动",
+    "column_type" : "int",
+    "column_format" : "",
+    "sample" : "是,否",
+    "column_use" : "",
+    "column_group" : "调动前后员工所在组织变化跨度"
+  }, {
+    "column_code" : "cross_dept_flag_desc",
+    "column_name" : "是否跨部门调动",
+    "column_type" : "int",
+    "column_format" : "",
+    "sample" : "是,否",
+    "column_use" : "",
+    "column_group" : "调动前后员工所在组织变化跨度"
+  }, {
+    "column_code" : "cross_center_flag_desc",
+    "column_name" : "是否跨中心调动",
+    "column_type" : "int",
+    "column_format" : "",
+    "sample" : "是,否",
+    "column_use" : "",
+    "column_group" : "调动前后员工所在组织变化跨度"
+  }, {
+    "column_code" : "cross_team_flag_desc",
+    "column_name" : "是否跨组调动",
+    "column_type" : "int",
+    "column_format" : "",
+    "sample" : "是,否",
+    "column_use" : "",
+    "column_group" : "调动前后员工所在组织变化跨度"
+  }, {
+    "column_code" : "to_hr_status_name",
+    "column_name" : "异动后员工状态",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "在职,离职",
+    "column_use" : "",
+    "column_group" : "异动生效后的变动结果"
+  }, {
+    "column_code" : "to_manage_unit_type_name",
+    "column_name" : "异动后管理主体类型",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "集团本部,全资-直管,投资公司",
+    "column_use" : "",
+    "column_group" : "异动生效后的变动结果"
+  }, {
+    "column_code" : "to_manage_unit_name",
+    "column_name" : "异动后管理主体",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "腾讯集团本部",
+    "column_use" : "",
+    "column_group" : "异动生效后的变动结果"
+  }, {
+    "column_code" : "to_staff_type_name",
+    "column_name" : "异动后员工类型",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "正式,顾问,外包,合作伙伴",
+    "column_use" : "",
+    "column_group" : "异动生效后的变动结果"
+  }, {
+    "column_code" : "to_staff_subtype_name",
+    "column_name" : "异动后员工子类型",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "正式聘用制,毕业生,实习生,荣誉顾问,长期顾问",
+    "column_use" : "",
+    "column_group" : "异动生效后的变动结果"
+  }, {
+    "column_code" : "to_pro_position_clan_name",
+    "column_name" : "异动后族",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "技术族（TE）,产品/项目族（PD）",
+    "column_use" : "",
+    "column_group" : "异动生效后的变动结果"
+  }, {
+    "column_code" : "to_pro_position_genus_name",
+    "column_name" : "异动后专业通道",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "技术运营类－TO,技术研究类－TRH,技术研发类－TRD",
+    "column_use" : "",
+    "column_group" : "异动生效后的变动结果"
+  }, {
+    "column_code" : "to_pro_position_name",
+    "column_name" : "异动后专业职位",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "异动生效后的变动结果"
+  }, {
+    "column_code" : "to_pro_position_level_name",
+    "column_name" : "异动后专业职级",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "T9,D10,S12",
+    "column_use" : "由代表职族的字母和职级等级数字组成，如S12，表示专业族（SC）12级，此字段不是数值，可以使用=、IN等条件，不可以使用>、<",
+    "column_group" : "异动生效后的变动结果"
+  }, {
+    "column_code" : "to_pro_position_level_num",
+    "column_name" : "异动后专业职级-数字",
+    "column_type" : "bigint",
+    "column_format" : "",
+    "sample" : "5,7,9,10,16",
+    "column_use" : "由专业职级去掉族前缀字母的数字构成，进行特定层级专业员工查询及分布统计必需字段，如查9级员工，必需用此字段，默认区间：4-5、6-8、9-11、12及以上",
+    "column_group" : "异动生效后的变动结果"
+  }, {
+    "column_code" : "to_pro_position_level_begin_date",
+    "column_name" : "异动后专业职级开始时间",
+    "column_type" : "datetime",
+    "column_format" : "yyyy-mm-dd",
+    "sample" : "2025-09-30,2025-10-01",
+    "column_use" : "",
+    "column_group" : "异动生效后的变动结果"
+  }, {
+    "column_code" : "to_inaugural_manager_level_name",
+    "column_name" : "异动后本次入职时管理职级",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "L1-1,L1-2,L2-1,L2-2,L2-3,L3-1,L3-2,L3-3",
+    "column_use" : "",
+    "column_group" : "异动生效后的变动结果"
+  }, {
+    "column_code" : "to_manager_level_name",
+    "column_name" : "异动后管理职级",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "L1-1,L1-2,L2-1,L2-2,L2-3,L3-1,L3-2,L3-3",
+    "column_use" : "",
+    "column_group" : "异动生效后的变动结果"
+  }, {
+    "column_code" : "to_fact_dimission_flag_desc",
+    "column_name" : "异动后是否事实离职",
+    "column_type" : "int",
+    "column_format" : "",
+    "sample" : "是,否",
+    "column_use" : "",
+    "column_group" : "异动生效后的变动结果"
+  }, {
+    "column_code" : "to_work_location_full_name",
+    "column_name" : "异动后工作地全路径",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "异动生效后的变动结果"
+  }, {
+    "column_code" : "to_work_location_name",
+    "column_name" : "异动后工作地（城市）",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "异动生效后的变动结果"
+  }, {
+    "column_code" : "to_post_name",
+    "column_name" : "异动后岗位名称",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "异动生效后的变动结果"
+  }, {
+    "column_code" : "to_org_full_name",
+    "column_name" : "异动后组织全路径",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "异动生效后的变动结果"
+  }, {
+    "column_code" : "to_org_name",
+    "column_name" : "异动后组织名称",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "异动生效后的变动结果"
+  }, {
+    "column_code" : "to_org_name_en",
+    "column_name" : "异动后组织英文名",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "异动生效后的变动结果"
+  }, {
+    "column_code" : "to_org_subtype_name",
+    "column_name" : "异动后虚拟组织类别",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "异动生效后的变动结果"
+  }, {
+    "column_code" : "to_org_sublevel_name",
+    "column_name" : "异动后组织层级补充描述",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "直管中心,直管组",
+    "column_use" : "",
+    "column_group" : "异动生效后的变动结果"
+  }, {
+    "column_code" : "to_org_level_name",
+    "column_name" : "异动后组织架构层级",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "10 公司,20 系统,30 子公司,40 线,50 部门,60 中心,70 小组",
+    "column_use" : "",
+    "column_group" : "异动生效后的变动结果"
+  }, {
+    "column_code" : "to_org_type_name",
+    "column_name" : "异动后组织类型",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "实体组织,虚拟组织",
+    "column_use" : "",
+    "column_group" : "异动生效后的变动结果"
+  }, {
+    "column_code" : "to_bg_name",
+    "column_name" : "异动后BG",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "异动生效后的变动结果"
+  }, {
+    "column_code" : "to_line_name",
+    "column_name" : "异动后线",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "异动生效后的变动结果"
+  }, {
+    "column_code" : "to_dept_name",
+    "column_name" : "异动后部门",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "异动生效后的变动结果"
+  }, {
+    "column_code" : "to_center_name",
+    "column_name" : "异动后中心",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "异动生效后的变动结果"
+  }, {
+    "column_code" : "to_team_name",
+    "column_name" : "异动后组",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "异动生效后的变动结果"
+  }, {
+    "column_code" : "to_leader_staff_combined_name",
+    "column_name" : "异动后直接上级",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "异动生效后的变动结果"
+  }, {
+    "column_code" : "to_leader_post_name",
+    "column_name" : "异动后直接上级岗位名称",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "异动生效后的变动结果"
+  }, {
+    "column_code" : "to_overseas_nhf_pilot_flag_desc",
+    "column_name" : "异动后If NHS Pilot",
+    "column_type" : "int",
+    "column_format" : "",
+    "sample" : "是,否",
+    "column_use" : "",
+    "column_group" : "异动生效后的变动结果"
+  }, {
+    "column_code" : "to_overseas_people_manager_flag_desc",
+    "column_name" : "异动后If People Manager",
+    "column_type" : "int",
+    "column_format" : "",
+    "sample" : "是,否",
+    "column_use" : "",
+    "column_group" : "异动生效后的变动结果"
+  }, {
+    "column_code" : "from_hr_status_name",
+    "column_name" : "异动前员工状态",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "在职,离职",
+    "column_use" : "",
+    "column_group" : "异动生效前的信息"
+  }, {
+    "column_code" : "from_manage_unit_type_name",
+    "column_name" : "异动前管理主体类型",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "集团本部,全资-直管,投资公司",
+    "column_use" : "",
+    "column_group" : "异动生效前的信息"
+  }, {
+    "column_code" : "from_manage_unit_name",
+    "column_name" : "异动前管理主体",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "腾讯集团本部",
+    "column_use" : "",
+    "column_group" : "异动生效前的信息"
+  }, {
+    "column_code" : "from_staff_type_name",
+    "column_name" : "异动前员工类型",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "正式,顾问,外包,合作伙伴",
+    "column_use" : "",
+    "column_group" : "异动生效前的信息"
+  }, {
+    "column_code" : "from_staff_subtype_name",
+    "column_name" : "异动前员工子类型",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "正式聘用制,毕业生,实习生,荣誉顾问,长期顾问",
+    "column_use" : "",
+    "column_group" : "异动生效前的信息"
+  }, {
+    "column_code" : "from_pro_position_clan_name",
+    "column_name" : "异动前族",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "技术族（TE）,产品/项目族（PD）",
+    "column_use" : "",
+    "column_group" : "异动生效前的信息"
+  }, {
+    "column_code" : "from_pro_position_genus_name",
+    "column_name" : "异动前专业通道",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "技术运营类－TO,技术研究类－TRH,技术研发类－TRD",
+    "column_use" : "",
+    "column_group" : "异动生效前的信息"
+  }, {
+    "column_code" : "from_pro_position_name",
+    "column_name" : "异动前专业职位",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "异动生效前的信息"
+  }, {
+    "column_code" : "from_pro_position_level_name",
+    "column_name" : "异动前专业职级",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "T9,D10,S12",
+    "column_use" : "由代表职族的字母和职级等级数字组成，如S12，表示专业族（SC）12级，此字段不是数值，可以使用=、IN等条件，不可以使用>、<",
+    "column_group" : "异动生效前的信息"
+  }, {
+    "column_code" : "from_pro_position_level_num",
+    "column_name" : "异动前专业职级-数字",
+    "column_type" : "bigint",
+    "column_format" : "",
+    "sample" : "5,7,9,10,16",
+    "column_use" : "由专业职级去掉族前缀字母的数字构成，进行特定层级专业员工查询及分布统计必需字段，如查9级员工，必需用此字段，默认区间：4-5、6-8、9-11、12及以上",
+    "column_group" : "异动生效前的信息"
+  }, {
+    "column_code" : "from_pro_position_level_begin_date",
+    "column_name" : "异动前专业职级开始时间",
+    "column_type" : "datetime",
+    "column_format" : "yyyy-mm-dd",
+    "sample" : "2025-09-30,2025-10-01",
+    "column_use" : "",
+    "column_group" : "异动生效前的信息"
+  }, {
+    "column_code" : "from_inaugural_manager_level_name",
+    "column_name" : "异动前本次入职时管理职级",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "L1-1,L1-2,L2-1,L2-2,L2-3,L3-1,L3-2,L3-3",
+    "column_use" : "",
+    "column_group" : "异动生效前的信息"
+  }, {
+    "column_code" : "from_manager_level_name",
+    "column_name" : "异动前管理职级",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "L1-1,L1-2,L2-1,L2-2,L2-3,L3-1,L3-2,L3-3",
+    "column_use" : "",
+    "column_group" : "异动生效前的信息"
+  }, {
+    "column_code" : "from_fact_dimission_flag_desc",
+    "column_name" : "异动前是否事实离职",
+    "column_type" : "bigint",
+    "column_format" : "",
+    "sample" : "是,否",
+    "column_use" : "",
+    "column_group" : "异动生效前的信息"
+  }, {
+    "column_code" : "from_work_location_full_name",
+    "column_name" : "异动前工作地全路径",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "异动生效前的信息"
+  }, {
+    "column_code" : "from_work_location_name",
+    "column_name" : "异动前工作地（城市）",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "异动生效前的信息"
+  }, {
+    "column_code" : "from_post_name",
+    "column_name" : "异动前岗位名称",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "异动生效前的信息"
+  }, {
+    "column_code" : "from_org_full_name",
+    "column_name" : "异动前组织全路径",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "异动生效前的信息"
+  }, {
+    "column_code" : "from_org_name",
+    "column_name" : "异动前组织名称",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "异动生效前的信息"
+  }, {
+    "column_code" : "from_org_name_en",
+    "column_name" : "异动前组织英文名",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "异动生效前的信息"
+  }, {
+    "column_code" : "from_org_subtype_name",
+    "column_name" : "异动前虚拟组织类别",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "异动生效前的信息"
+  }, {
+    "column_code" : "from_org_sublevel_name",
+    "column_name" : "异动前组织层级补充描述",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "直管中心,直管组",
+    "column_use" : "",
+    "column_group" : "异动生效前的信息"
+  }, {
+    "column_code" : "from_org_level_name",
+    "column_name" : "异动前组织架构层级",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "10 公司,20 系统,30 子公司,40 线,50 部门,60 中心,70 小组",
+    "column_use" : "",
+    "column_group" : "异动生效前的信息"
+  }, {
+    "column_code" : "from_org_type_name",
+    "column_name" : "异动前组织类型",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "实体组织,虚拟组织",
+    "column_use" : "",
+    "column_group" : "异动生效前的信息"
+  }, {
+    "column_code" : "from_bg_name",
+    "column_name" : "异动前BG",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "异动生效前的信息"
+  }, {
+    "column_code" : "from_line_name",
+    "column_name" : "异动前线",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "异动生效前的信息"
+  }, {
+    "column_code" : "from_dept_name",
+    "column_name" : "异动前部门",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "异动生效前的信息"
+  }, {
+    "column_code" : "from_center_name",
+    "column_name" : "异动前中心",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "异动生效前的信息"
+  }, {
+    "column_code" : "from_team_name",
+    "column_name" : "异动前组",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "异动生效前的信息"
+  }, {
+    "column_code" : "from_leader_staff_combined_name",
+    "column_name" : "异动前直接上级",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "异动生效前的信息"
+  }, {
+    "column_code" : "from_leader_post_name",
+    "column_name" : "异动前直接上级岗位名称",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "异动生效前的信息"
+  }, {
+    "column_code" : "from_overseas_nhf_pilot_flag_desc",
+    "column_name" : "异动前If NHS Pilot",
+    "column_type" : "int",
+    "column_format" : "",
+    "sample" : "是,否",
+    "column_use" : "",
+    "column_group" : "异动生效前的信息"
+  }, {
+    "column_code" : "from_overseas_people_manager_flag_desc",
+    "column_name" : "异动前If People Manager",
+    "column_type" : "int",
+    "column_format" : "",
+    "sample" : "是,否",
+    "column_use" : "",
+    "column_group" : "异动生效前的信息"
+  }, {
+    "column_code" : "pro_position_level_duration",
+    "column_name" : "异动前专业职级停留时长(年)",
+    "column_type" : "decimal",
+    "column_format" : "",
+    "sample" : "3.67",
+    "column_use" : "可用于计算异动时专业职级停留时长平均值或时长区间分布统计，时长区间默认可用：1年以下,1-3年,3-5年,5-10年,10-15年,15年以上",
+    "column_group" : "异动生效前的信息"
+  }, {
+    "column_code" : "from_manager_level_duration",
+    "column_name" : "异动前管理职级停留时长(年)",
+    "column_type" : "decimal",
+    "column_format" : "",
+    "sample" : "3.67",
+    "column_use" : "可用于计算异动时管理职级停留时长平均值或时长区间分布统计，时长区间默认可用：1年以下,1-3年,3-5年,5-10年,10-15年,15年以上",
+    "column_group" : "异动生效前的信息"
+  }, {
+    "column_code" : "age",
+    "column_name" : "异动时年龄",
+    "column_type" : "decimal",
+    "column_format" : "",
+    "sample" : "36.86",
+    "column_use" : "",
+    "column_group" : "异动发生时年龄统计信息"
+  }, {
+    "column_code" : "seniority_duration",
+    "column_name" : "异动时司龄",
+    "column_type" : "decimal",
+    "column_format" : "",
+    "sample" : "9.26",
+    "column_use" : "",
+    "column_group" : "异动发生时司龄统计信息"
+  }, {
+    "column_code" : "work_duration",
+    "column_name" : "异动时工龄",
+    "column_type" : "decimal",
+    "column_format" : "",
+    "sample" : "15.25",
+    "column_use" : "",
+    "column_group" : "异动发生时工龄统计信息"
+  }, {
+    "column_code" : "age_range",
+    "column_name" : "异动时年龄区间",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "26岁以下,26-28岁,28-30岁,30-32岁,32-35岁,35-40岁,40-45岁,45岁以上",
+    "column_use" : "",
+    "column_group" : "异动发生时年龄统计信息"
+  }, {
+    "column_code" : "seniority_duration_range",
+    "column_name" : "异动时司龄区间",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "1年以下,1-3年,3-5年,5-10年,10-15年,15年以上",
+    "column_use" : "",
+    "column_group" : "异动发生时司龄统计信息"
+  }, {
+    "column_code" : "work_duration_range",
+    "column_name" : "异动时工龄区间",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "1年以下,1-3年,3-5年,5-10年,10-15年,15年以上",
+    "column_use" : "",
+    "column_group" : "异动发生时工龄统计信息"
+  }, {
+    "column_code" : "to_contract_type_name",
+    "column_name" : "异动时合同类型",
+    "column_type" : "string",
+    "column_format" : "",
+    "sample" : "聘用合同,劳务合同,项目合同",
+    "column_use" : "",
+    "column_group" : "截至异动生效时的合同信息"
+  }, {
+    "column_code" : "from_post_duration",
+    "column_name" : "异动前岗位停留时长",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "异动生效前的信息"
+  }, {
+    "column_code" : "org_full_id8",
+    "column_name" : "员工组织ID全路径",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "org_id8",
+    "column_name" : "员工组织ID",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "to_post_id8",
+    "column_name" : "异动后岗位ID",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "异动生效后的变动结果"
+  }, {
+    "column_code" : "to_org_full_id8",
+    "column_name" : "异动后组织ID全路径",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "异动生效后的变动结果"
+  }, {
+    "column_code" : "to_org_id8",
+    "column_name" : "异动后组织ID",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "异动生效后的变动结果"
+  }, {
+    "column_code" : "to_leader_staff_id8",
+    "column_name" : "异动后直接上级ID",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "异动生效后的变动结果"
+  }, {
+    "column_code" : "to_leader_post_id8",
+    "column_name" : "异动后直接上级岗位ID",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "异动生效后的变动结果"
+  }, {
+    "column_code" : "from_post_id8",
+    "column_name" : "异动前岗位ID",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "异动生效前的信息"
+  }, {
+    "column_code" : "from_org_full_id8",
+    "column_name" : "异动前组织ID全路径",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "异动生效前的信息"
+  }, {
+    "column_code" : "from_org_id8",
+    "column_name" : "异动前组织ID",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "异动生效前的信息"
+  }, {
+    "column_code" : "from_leader_staff_id8",
+    "column_name" : "异动前直接上级ID",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "异动生效前的信息"
+  }, {
+    "column_code" : "from_leader_post_id8",
+    "column_name" : "异动前直接上级岗位ID",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "异动生效前的信息"
+  }, {
+    "column_code" : "manager_quit_flag_desc",
+    "column_name" : "是否干部降免离",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "异动记录类型标签"
+  }, {
+    "column_code" : "org_post_change_type_name",
+    "column_name" : "是否发生组织与岗位调整",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "异动记录类型标签"
+  }, {
+    "column_code" : "report_line_change_flag_desc",
+    "column_name" : "是否汇报关系修改",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "异动记录类型标签"
+  }, {
+    "column_code" : "manager_change_flag_desc",
+    "column_name" : "是否属于干部异动",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "异动记录类型标签"
+  }, {
+    "column_code" : "to_inaugural_date",
+    "column_name" : "该段经历入职日期",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "员工异动发生时对应职涯周期关键节点信息-入职"
+  }, {
+    "column_code" : "to_dimission_date",
+    "column_name" : "该段经历离职日期",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "员工异动发生时对应职涯周期关键节点信息-离职"
+  }, {
+    "column_code" : "to_recruit_type_name",
+    "column_name" : "该段经历招聘类型",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "员工异动发生时对应职涯周期关键节点信息-入职"
+  }, {
+    "column_code" : "to_manager_source_name",
+    "column_name" : "该段经历干部来源",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "员工异动发生时对应职涯周期关键节点信息-入职"
+  }, {
+    "column_code" : "from_manage_scale",
+    "column_name" : "异动前管理幅度",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "异动生效前的信息"
+  }, {
+    "column_code" : "to_manage_scale",
+    "column_name" : "异动后管理幅度",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "异动生效后的变动结果"
+  }, {
+    "column_code" : "cross_org_type_name",
+    "column_name" : "跨组织调动类型（汇总）",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : "调动前后员工所在组织变化跨度"
+  }, {
+    "column_code" : "move_staff_combined_name",
+    "column_name" : "异动时员工中英文名",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "contract_company_name",
+    "column_name" : "合同主体",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "contract_company_location_name",
+    "column_name" : "合同地",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "to_contract_company_name",
+    "column_name" : "异动时合同主体",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "to_contract_company_location_name",
+    "column_name" : "异动时合同地",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "talent_flag_desc",
+    "column_name" : "异动时是否在梯队",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "huoshui_form_id",
+    "column_name" : "活水流程表单ID",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "latest01_assess_period_end_date",
+    "column_name" : "异动时近1次评估周期结束时间",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "latest01_assess_period_name",
+    "column_name" : "异动时近1次评估周期名称",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "latest01_performance_result_name",
+    "column_name" : "异动时近1次绩效等级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "latest01_custom_performance_result_name",
+    "column_name" : "异动时近1次绩效子档位",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "latest01_achievement_performance_result_name",
+    "column_name" : "异动时近1次业绩评级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "latest01_behavior_performance_result_name",
+    "column_name" : "异动时近1次管理/行为评级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "latest01_performance_assessment",
+    "column_name" : "异动时近1次上级评语",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "latest02_assess_period_end_date",
+    "column_name" : "异动时近2次评估周期结束时间",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "latest02_assess_period_name",
+    "column_name" : "异动时近2次评估周期名称",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "latest02_performance_result_name",
+    "column_name" : "异动时近2次绩效等级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "latest02_custom_performance_result_name",
+    "column_name" : "异动时近2次绩效子档位",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "latest02_achievement_performance_result_name",
+    "column_name" : "异动时近2次业绩评级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "latest02_behavior_performance_result_name",
+    "column_name" : "异动时近2次管理/行为评级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "latest02_performance_assessment",
+    "column_name" : "异动时近2次上级评语",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "latest03_assess_period_end_date",
+    "column_name" : "异动时近3次评估周期结束时间",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "latest03_assess_period_name",
+    "column_name" : "异动时近3次评估周期名称",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "latest03_performance_result_name",
+    "column_name" : "异动时近3次绩效等级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "latest03_custom_performance_result_name",
+    "column_name" : "异动时近3次绩效子档位",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "latest03_achievement_performance_result_name",
+    "column_name" : "异动时近3次业绩评级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "latest03_behavior_performance_result_name",
+    "column_name" : "异动时近3次管理/行为评级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "latest03_performance_assessment",
+    "column_name" : "异动时近3次上级评语",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "latest04_assess_period_end_date",
+    "column_name" : "异动时近4次评估周期结束时间",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "latest04_assess_period_name",
+    "column_name" : "异动时近4次评估周期名称",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "latest04_performance_result_name",
+    "column_name" : "异动时近4次绩效等级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "latest04_custom_performance_result_name",
+    "column_name" : "异动时近4次绩效子档位",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "latest04_achievement_performance_result_name",
+    "column_name" : "异动时近4次业绩评级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "latest04_behavior_performance_result_name",
+    "column_name" : "异动时近4次管理/行为评级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "latest04_performance_assessment",
+    "column_name" : "异动时近4次上级评语",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "young_manager_type_name",
+    "column_name" : "去年底是否为青年干部",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "manager_quit_type_name",
+    "column_name" : "退出类型",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "manager_down_flag_desc",
+    "column_name" : "近期是否曾被能下",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "manager_down_effect_year",
+    "column_name" : "能下归属周期",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "manager_down_effective_date",
+    "column_name" : "能下生效日期",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "manager_quit_effect_date",
+    "column_name" : "退出生效日期",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "manager_quit_effect_year",
+    "column_name" : "退出归属周期",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "dimission_subreason_name",
+    "column_name" : "主要离职原因",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "dimission_active_flag_desc",
+    "column_name" : "是否组织激活",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  } ]
+}

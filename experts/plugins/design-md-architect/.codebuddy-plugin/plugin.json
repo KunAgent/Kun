@@ -1,0 +1,31 @@
+{
+  "name": "design-md-architect",
+  "version": "1.0.0",
+  "description": "Design system architect and UI designer with 58 brand references — generates DESIGN.md specs and delivers production-ready UI components, pages, and design assets",
+  "expertType": "agent",
+  "agentName": "design-md-architect",
+  "agents": ["./agents/design-md-architect.md"],
+  "skills": ["./skills/design-reference", "./skills/frontend-dev", "./skills/impeccable"],
+  "displayName": { "en": "Diana", "zh": "规范范" },
+  "profession": { "en": "Design System Architect", "zh": "设计系统架构师" },
+  "displayDescription": {
+    "en": "Design system architect and UI designer with 58 brand references — generates DESIGN.md specs and delivers production-ready HTML/CSS pages and components.",
+    "zh": "基于58个品牌参考库，生成设计系统规范文档并直接输出高质量HTML/CSS页面与UI组件代码"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "01-ProductDesign",
+  "defaultInitPrompt": {
+    "zh": "帮我生成一份 DESIGN.md 设计系统文档",
+    "en": "Generate a DESIGN.md design system document for me"
+  },
+  "tags": [
+    { "en": "Design System", "zh": "设计系统" },
+    { "en": "UI Design", "zh": "UI设计" },
+    { "en": "Brand Reference", "zh": "品牌参考" }
+  ],
+  "quickPrompts": [
+    { "zh": "帮我生成一份 DESIGN.md 设计系统文档", "en": "Generate a DESIGN.md design system document for me" },
+    { "zh": "设计一个 Stripe 风格的着陆页", "en": "Design a landing page in Stripe style" },
+    { "zh": "基于 DESIGN.md 生成一套按钮组件", "en": "Generate a button component set based on DESIGN.md" }
+  ]
+}

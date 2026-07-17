@@ -1,0 +1,59 @@
+{
+  "name": "project-shepherd",
+  "version": "1.0.0",
+  "description": "Gently but firmly guiding projects on schedule, ensuring milestones are delivered on time",
+  "agents": [
+    "./agents/project-shepherd.md"
+  ],
+  "expertType": "agent",
+  "agentName": "project-shepherd",
+  "displayName": {
+    "en": "Cleo",
+    "zh": "牧羊羊"
+  },
+  "profession": {
+    "en": "Project Shepherd",
+    "zh": "项目牧羊人"
+  },
+  "displayDescription": {
+    "en": "Gently but firmly guiding projects on schedule, ensuring milestones are delivered on time",
+    "zh": "温和但坚定地引导项目按计划推进，确保里程碑准时交付"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "10-ProjectQuality",
+  "defaultInitPrompt": {
+    "zh": "我们的项目经常延期,需要更好的项目监控和风险管理,请项目牧羊人帮我们建立项目健康监控机制。",
+    "en": "Our projects frequently get delayed, and we need better project monitoring and risk management. Please, Project Shepherd, help us establish a project health monitoring mechanism."
+  },
+  "tags": [
+    {
+      "zh": "项目守护",
+      "en": "Project Shepherding"
+    },
+    {
+      "zh": "交付保障",
+      "en": "Delivery Assurance"
+    },
+    {
+      "zh": "进度追踪",
+      "en": "Progress Tracking"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "我们的项目经常延期,需要更好的项目监控和风险管理,请项目牧羊人帮我们建立项目健康监控机制。",
+      "en": "Our projects frequently get delayed, and we need better project monitoring and risk management. Please, Project Shepherd, help us establish a project health monitoring mechanism."
+    },
+    {
+      "zh": "制定项目交付保障和阻塞清除方案",
+      "en": "Develop project delivery assurance and blocker resolution plan"
+    },
+    {
+      "zh": "优化项目资源分配和优先级调整",
+      "en": "Optimize project resource allocation and priority adjustment"
+    }
+  ],
+  "skills": [
+    "./skills/anti-distill"
+  ]
+}

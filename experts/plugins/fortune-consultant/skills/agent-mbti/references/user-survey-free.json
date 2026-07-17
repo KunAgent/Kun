@@ -1,0 +1,64 @@
+{
+  "meta": {
+    "version": "1.0.0",
+    "name": "用户需求问卷 - 免费版",
+    "description": "4 题核心问卷，快速了解用户对 Agent 的期望",
+    "totalQuestions": 4,
+    "tier": "free"
+  },
+  "questions": [
+    {
+      "id": "U1",
+      "dimension": "E_I",
+      "question": "你希望 Agent 在互动中表现得？",
+      "options": [
+        {"value": "A", "label": "主动积极，经常提供建议和汇报", "score": {"E": 2}},
+        {"value": "B", "label": "适度主动，在需要时提供见解", "score": {"E": 1}},
+        {"value": "C", "label": "安静专注，等待我的指令再行动", "score": {"I": 2}}
+      ]
+    },
+    {
+      "id": "U2",
+      "dimension": "S_N",
+      "question": "你更希望 Agent 提供的信息风格是？",
+      "options": [
+        {"value": "A", "label": "具体的细节和数据，实用可执行", "score": {"S": 2}},
+        {"value": "B", "label": "兼顾细节和全局视角", "score": {"S": 1, "N": 1}},
+        {"value": "C", "label": "高层次的洞察和创意建议", "score": {"N": 2}}
+      ]
+    },
+    {
+      "id": "U3",
+      "dimension": "T_F",
+      "question": "当 Agent 给你建议时，你更希望它？",
+      "options": [
+        {"value": "A", "label": "直接指出问题，客观分析利弊", "score": {"T": 2}},
+        {"value": "B", "label": "兼顾事实和感受，措辞得体", "score": {"T": 1, "F": 1}},
+        {"value": "C", "label": "先理解我的感受，再给出建议", "score": {"F": 2}}
+      ]
+    },
+    {
+      "id": "U4",
+      "dimension": "J_P",
+      "question": "对于复杂任务，你希望 Agent？",
+      "options": [
+        {"value": "A", "label": "先制定清晰的计划再执行", "score": {"J": 2}},
+        {"value": "B", "label": "有大致方向，执行中灵活调整", "score": {"J": 1, "P": 1}},
+        {"value": "C", "label": "快速开始，边做边看", "score": {"P": 2}}
+      ]
+    }
+  ],
+  "scoring": {
+    "method": "累加各维度得分，确定 desiredType",
+    "typeMapping": {
+      "E_I": "E得分 > I得分 → E，否则 → I",
+      "S_N": "S得分 > N得分 → S，否则 → N",
+      "T_F": "T得分 > F得分 → T，否则 → F",
+      "J_P": "J得分 > P得分 → J，否则 → P"
+    }
+  },
+  "output": {
+    "desiredType": "4 字母类型代码",
+    "dimensionPreferences": "各维度偏好强度"
+  }
+}

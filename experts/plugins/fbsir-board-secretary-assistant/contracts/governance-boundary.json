@@ -1,0 +1,74 @@
+{
+  "schemaVersion": "fbs.boardSecretary.governanceBoundary.v1",
+  "packageName": "fbsir-board-secretary-assistant",
+  "packageVersion": "2.1.0",
+  "contractVersion": "2026-06-22",
+  "sourceDemandIds": [
+    "BSA-PKG-002"
+  ],
+  "priority": "must_include",
+  "manualReviewRequired": true,
+  "aiAllowedActions": [
+    "classify_material_type",
+    "identify_public_evidence_gaps",
+    "flag_risk_triggers",
+    "quote_or_summarize_user_provided_fragments",
+    "draft_safer_wording_for_human_review",
+    "produce_approval_handoff_checklist"
+  ],
+  "humanReservedActions": [
+    "legal_opinion",
+    "regulatory_conclusion",
+    "disclosure_decision",
+    "external_publication",
+    "board_or_management_approval",
+    "paid_service_or_commercial_commitment"
+  ],
+  "forbiddenStatements": [
+    "can_publish_directly",
+    "already_compliant",
+    "regulator_approved",
+    "legal_opinion_replaced",
+    "automatic_disclosure_allowed",
+    "host_runtime_upgrade_completed",
+    "official_listing_replaced"
+  ],
+  "requiredVisibleBoundary": {
+    "firstTurn": true,
+    "marketplaceEntry": true,
+    "agentInstruction": true,
+    "operatingContract": true,
+    "scenePack": true
+  },
+  "riskEscalationRules": [
+    {
+      "riskClass": "nonpublic_information",
+      "requiredAction": "mark_manual_review_required_and_request_public_evidence"
+    },
+    {
+      "riskClass": "selective_disclosure",
+      "requiredAction": "mark_manual_review_required_and_request_uniform_external_disclosure_basis"
+    },
+    {
+      "riskClass": "forward_looking_statement",
+      "requiredAction": "mark_manual_review_required_and_request_cautionary_language"
+    },
+    {
+      "riskClass": "missing_material",
+      "requiredAction": "ask_user_to_paste_excerpt_or_authorize_context"
+    }
+  ],
+  "reviewReadinessChecks": [
+    "manual_review_boundary_visible",
+    "automatic_legal_conclusion_forbidden",
+    "automatic_disclosure_decision_forbidden",
+    "automatic_publishing_forbidden",
+    "human_reserved_actions_declared"
+  ],
+  "reviewPackageBoundary": {
+    "contractKind": "governance_boundary",
+    "generatedForReviewOnly": true,
+    "hostRuntimeUpgradeAssumed": false,
+    "naturalClosureClaimAllowed": false
+  }
+}

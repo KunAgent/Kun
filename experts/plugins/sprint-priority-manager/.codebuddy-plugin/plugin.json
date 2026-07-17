@@ -1,0 +1,60 @@
+{
+  "name": "sprint-priority-manager",
+  "version": "1.0.0",
+  "description": "Making optimal priority decisions within limited iteration cycles, ensuring Sprint delivers maximum value",
+  "agents": [
+    "./agents/sprint-priority-manager.md"
+  ],
+  "expertType": "agent",
+  "agentName": "sprint-priority-manager",
+  "displayName": {
+    "en": "Yuri",
+    "zh": "排序序"
+  },
+  "profession": {
+    "en": "Sprint Priority Manager",
+    "zh": "迭代优先级管理者"
+  },
+  "displayDescription": {
+    "en": "Making optimal priority decisions within limited iteration cycles, ensuring Sprint delivers maximum value",
+    "zh": "在有限迭代周期内做出最优优先级决策，确保Sprint交付最大价值"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "01-ProductDesign",
+  "defaultInitPrompt": {
+    "zh": "我们的冲刺优先级经常调整,导致团队效率低下,请冲刺优先级管理者帮我们制定科学的需求优先级管理方法。",
+    "en": "Our sprint priorities frequently change, causing low team efficiency. Please, Sprint Priority Manager, help us develop a scientific requirement priority management method."
+  },
+  "tags": [
+    {
+      "zh": "迭代优先级",
+      "en": "Sprint Priority"
+    },
+    {
+      "zh": "需求排序",
+      "en": "Backlog Ranking"
+    },
+    {
+      "zh": "敏捷管理",
+      "en": "Agile Management"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "我们的冲刺优先级经常调整,导致团队效率低下,请冲刺优先级管理者帮我们制定科学的需求优先级管理方法。",
+      "en": "Our sprint priorities frequently change, causing low team efficiency. Please, Sprint Priority Manager, help us develop a scientific requirement priority management method."
+    },
+    {
+      "zh": "制定需求拆分和故事点估算方案",
+      "en": "Develop requirement breakdown and story point estimation plan"
+    },
+    {
+      "zh": "优化迭代交付效率和风险管控",
+      "en": "Optimize sprint delivery efficiency and risk control"
+    }
+  ],
+  "skills": [
+    "./skills/anti-distill",
+    "./skills/frontend-dev"
+  ]
+}

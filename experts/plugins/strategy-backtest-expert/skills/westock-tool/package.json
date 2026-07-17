@@ -1,0 +1,12 @@
+{
+  "name": "westock-tool",
+  "version": "1.0.0",
+  "description": "选股工具库 - 提供条件选股、高级筛选、预设选股、个股事实查询等量化分析能力",
+  "type": "module",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "bin": {
+    "westock-tool": "./scripts/index.js"
+  }
+}

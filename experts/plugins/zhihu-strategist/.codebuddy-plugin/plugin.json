@@ -1,0 +1,56 @@
+{
+  "name": "zhihu-strategist",
+  "version": "1.0.0",
+  "description": "Expert in Zhihu recommendation mechanism and knowledge marketing strategy, building authority through high-quality answers",
+  "agents": [
+    "./agents/zhihu-strategist.md"
+  ],
+  "expertType": "agent",
+  "agentName": "zhihu-strategist",
+  "displayName": {
+    "en": "Gia",
+    "zh": "答有道"
+  },
+  "profession": {
+    "en": "Zhihu Strategist",
+    "zh": "知乎策略师"
+  },
+  "displayDescription": {
+    "en": "Expert in Zhihu recommendation mechanism and knowledge marketing strategy, building authority through high-quality answers",
+    "zh": "精通知乎推荐机制和知识营销策略，通过高质量回答建立权威"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "06-ContentCreative",
+  "defaultInitPrompt": {
+    "zh": "我们想在知乎建立专业权威形象,通过优质回答吸引目标用户,请知乎战略家帮我们制定知乎内容策略。",
+    "en": "We want to establish a professional and authoritative image on Zhihu and attract target users with high-quality answers. Please, Zhihu Strategist, help us develop Zhihu content strategies."
+  },
+  "tags": [
+    {
+      "zh": "知乎策略",
+      "en": "Zhihu Strategy"
+    },
+    {
+      "zh": "知识领导力",
+      "en": "Thought Leadership"
+    },
+    {
+      "zh": "专业问答",
+      "en": "Expert Q&A"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "我们想在知乎建立专业权威形象,通过优质回答吸引目标用户,请知乎战略家帮我们制定知乎内容策略。",
+      "en": "We want to establish a professional and authoritative image on Zhihu and attract target users with high-quality answers. Please, Zhihu Strategist, help us develop Zhihu content strategies."
+    },
+    {
+      "zh": "撰写高质量知乎回答和专栏文章",
+      "en": "Write high-quality Zhihu answers and column articles"
+    },
+    {
+      "zh": "优化知乎内容曝光和品牌建设",
+      "en": "Optimize Zhihu content visibility and brand building"
+    }
+  ]
+}

@@ -1,0 +1,115 @@
+{
+  "name": "ai-content-creator-team",
+  "version": "1.0.0",
+  "description": "AI-powered multimodal content production team covering creative strategy, copywriting, video generation, image creation, smart editing, and content adaptation",
+  "author": {
+    "name": "CodeBuddy Teams"
+  },
+  "agents": [
+    "./agents/ai-content-creator-team-lead.md",
+    "./agents/creative-strategist.md",
+    "./agents/copywriter.md",
+    "./agents/video-generator.md",
+    "./agents/image-creator.md",
+    "./agents/video-editor.md",
+    "./agents/content-adapter.md"
+  ],
+  "skills": [
+    "./skills/ai-content-production"
+  ],
+
+  "expertType": "team",
+  "agentName": "ai-content-creator-team-lead",
+  "teamInfo": {
+    "leadAgent": "ai-content-creator-team-lead",
+    "memberAgents": [
+      "creative-strategist",
+      "copywriter",
+      "video-generator",
+      "image-creator",
+      "video-editor",
+      "content-adapter"
+    ]
+  },
+
+  "displayName": {
+    "en": "Content Creator Team",
+    "zh": "内容创作专家团"
+  },
+  "profession": {
+    "en": "Content Creator Team",
+    "zh": "内容创作专家团"
+  },
+  "_note_profession": "Team 型 profession 与 displayName 保持一致（规范要求）",
+  "displayDescription": {
+    "en": "AI-driven multimodal content production team providing end-to-end creative solutions from strategy to delivery, covering positioning, moodboard, ad direction, copywriting, video generation, image creation, generative polish, and content adaptation.",
+    "zh": "AI驱动的多模态内容生产团队，从创意策划到成品交付全覆盖，涵盖品牌定位、情绪板、广告方向、文案创作、视频生成、图片设计、精修合成和素材改编。"
+  },
+  "avatar": "avatars/team.png",
+  "categoryId": "06-ContentCreative",
+  "defaultInitPrompt": {
+    "en": "Help me define the brand visual direction for my new product and create a moodboard",
+    "zh": "帮我确定新产品的品牌视觉方向，做一个情绪板"
+  },
+  "tags": [
+    { "en": "Creative Strategy", "zh": "创意策划" },
+    { "en": "AI Video & Image", "zh": "AI视频与图片" },
+    { "en": "Generative Polish", "zh": "精修合成" }
+  ],
+  "quickPrompts": [
+    { "en": "Help me define the brand visual direction for my new product and create a moodboard", "zh": "帮我确定新产品的品牌视觉方向，做一个情绪板" },
+    { "en": "Help me generate a 15-second product promotional short video with AI", "zh": "帮我用 AI 生成一段 15 秒的产品宣传短视频" },
+    { "en": "Generate a set of Xiaohongshu-style lifestyle images with matching copy for my new product launch", "zh": "为我的新品上市生成一组小红书风格的种草图文，包含配图和文案" }
+  ],
+  "members": [
+    {
+      "id": "ai-content-creator-team-lead",
+      "name": { "en": "Soren", "zh": "司远" },
+      "profession": { "en": "Creative Director", "zh": "创意总监" },
+      "avatar": "avatars/ai-content-creator-team-lead.png",
+      "role": "lead"
+    },
+    {
+      "id": "creative-strategist",
+      "name": { "en": "Celine", "zh": "策凌" },
+      "profession": { "en": "Creative Strategist", "zh": "创意策划师" },
+      "avatar": "avatars/creative-strategist.png",
+      "role": "member"
+    },
+    {
+      "id": "copywriter",
+      "name": { "en": "Penn", "zh": "笔澜" },
+      "profession": { "en": "Copywriter", "zh": "文案创作专家" },
+      "avatar": "avatars/copywriter.png",
+      "role": "member"
+    },
+    {
+      "id": "video-generator",
+      "name": { "en": "Veo", "zh": "维欧" },
+      "profession": { "en": "Video Generation Expert", "zh": "视频生成专家" },
+      "avatar": "avatars/video-generator.png",
+      "role": "member"
+    },
+    {
+      "id": "image-creator",
+      "name": { "en": "Percy", "zh": "珀西" },
+      "profession": { "en": "Image & Text Creator", "zh": "图文创作专家" },
+      "avatar": "avatars/image-creator.png",
+      "role": "member"
+    },
+    {
+      "id": "video-editor",
+      "name": { "en": "Clip", "zh": "柯立" },
+      "profession": { "en": "Video Editing Expert", "zh": "视频编辑专家" },
+      "avatar": "avatars/video-editor.png",
+      "role": "member"
+    },
+    {
+      "id": "content-adapter",
+      "name": { "en": "Ada", "zh": "艾达" },
+      "profession": { "en": "Content Adaptation Expert", "zh": "素材改编专家" },
+      "avatar": "avatars/content-adapter.png",
+      "role": "member"
+    }
+  ]
+}

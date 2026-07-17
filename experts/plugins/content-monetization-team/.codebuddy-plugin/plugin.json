@@ -1,0 +1,104 @@
+{
+  "name": "content-monetization-team",
+  "version": "1.0.0",
+  "description": "Content monetization team — 5 specialists collaborate to deliver comprehensive commercialization strategies covering CPS affiliate, CPE/CPM ads, marketplace operations, and revenue optimization",
+  "author": {
+    "name": "Expert Marketplace"
+  },
+  "license": "MIT",
+  "expertType": "team",
+  "agentName": "content-monetization-team-lead",
+  "teamInfo": {
+    "leadAgent": "content-monetization-team-lead",
+    "memberAgents": [
+      "cps-specialist",
+      "cpe-cpm-expert",
+      "marketplace-operator",
+      "revenue-analyst"
+    ]
+  },
+  "agents": [
+    "./agents/content-monetization-team-lead.md",
+    "./agents/cps-specialist.md",
+    "./agents/cpe-cpm-expert.md",
+    "./agents/marketplace-operator.md",
+    "./agents/revenue-analyst.md"
+  ],
+  "skills": [
+    "./skills/content-monetization-ops"
+  ],
+  "displayName": {
+    "en": "Content Monetization Team",
+    "zh": "内容变现商业化专家团"
+  },
+  "profession": {
+    "en": "Content Monetization Team",
+    "zh": "内容变现商业化专家团"
+  },
+  "displayDescription": {
+    "en": "5 specialists collaborate on CPS affiliate commissions, CPE/CPM performance ads, creator-brand marketplace matching, and revenue analysis to maximize content monetization ROI",
+    "zh": "5人专家团协作覆盖CPS带货分佣、CPE/CPM效果广告、创作者-品牌交易撮合与收益分析，助力内容创作者和品牌方实现商业化价值最大化"
+  },
+  "avatar": "avatars/team.png",
+  "categoryId": "05-MarketingGrowth",
+  "defaultInitPrompt": {
+    "zh": "帮我设计一套适合我账号的内容变现方案",
+    "en": "Help me design a content monetization plan suitable for my account"
+  },
+  "members": [
+    {
+      "id": "content-monetization-team-lead",
+      "name": { "en": "Finley", "zh": "芬利" },
+      "profession": { "en": "Monetization Strategist", "zh": "商业化策略师" },
+      "avatar": "avatars/content-monetization-team-lead.png",
+      "role": "lead"
+    },
+    {
+      "id": "cps-specialist",
+      "name": { "en": "Seller", "zh": "赛勒" },
+      "profession": { "en": "CPS Commission Expert", "zh": "CPS 佣金专家" },
+      "avatar": "avatars/cps-specialist.png",
+      "role": "member"
+    },
+    {
+      "id": "cpe-cpm-expert",
+      "name": { "en": "Effect", "zh": "艾菲" },
+      "profession": { "en": "CPE/CPM Performance Expert", "zh": "效果广告专家" },
+      "avatar": "avatars/cpe-cpm-expert.png",
+      "role": "member"
+    },
+    {
+      "id": "marketplace-operator",
+      "name": { "en": "Match", "zh": "麦奇" },
+      "profession": { "en": "Business Collaboration Advisor", "zh": "商务合作顾问" },
+      "avatar": "avatars/marketplace-operator.png",
+      "role": "member"
+    },
+    {
+      "id": "revenue-analyst",
+      "name": { "en": "Profit", "zh": "普罗" },
+      "profession": { "en": "Revenue Analyst", "zh": "收益分析师" },
+      "avatar": "avatars/revenue-analyst.png",
+      "role": "member"
+    }
+  ],
+  "tags": [
+    { "en": "Content Monetization", "zh": "内容变现" },
+    { "en": "CPS/CPE/CPM", "zh": "CPS/CPE/CPM" },
+    { "en": "Creator Commerce", "zh": "创作者商业化" }
+  ],
+  "quickPrompts": [
+    { "en": "Help me design a content monetization plan suitable for my account", "zh": "帮我设计一套适合我账号的内容变现方案" },
+    { "en": "Analyze which billing model (CPS/CPE/CPM) best fits my follower size", "zh": "分析哪种结算模式（CPS/CPE/CPM）最适合我当前的粉丝体量" },
+    { "en": "Help me evaluate if this brand promotion task offers reasonable returns", "zh": "帮我评估这个品牌推广任务的收益是否合理" }
+  ],
+  "keywords": [
+    "content-monetization",
+    "cps",
+    "cpe",
+    "cpm",
+    "affiliate",
+    "creator-economy",
+    "marketplace"
+  ]
+}

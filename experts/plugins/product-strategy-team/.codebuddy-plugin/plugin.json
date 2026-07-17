@@ -1,0 +1,79 @@
+{
+  "name": "product-strategy-team",
+  "version": "1.0.0",
+  "description": "Product strategy team with requirement analyst, user researcher, competitive analyst, data analyst, and roadmap planner working together on product management workflows",
+  "author": {
+    "name": "Expert Marketplace"
+  },
+  "agents": "./agents/",
+
+  "expertType": "team",
+  "agentName": "product-director",
+  "teamInfo": {
+    "leadAgent": "product-director",
+    "memberAgents": ["requirement-analyst", "user-researcher", "competitive-analyst", "data-analyst", "roadmap-planner"]
+  },
+
+  "displayName": {
+    "en": "Product Strategy Team",
+    "zh": "产品战略团队"
+  },
+  "profession": {
+    "en": "Product Strategy & Management",
+    "zh": "产品战略与管理"
+  },
+  "displayDescription": {
+    "en": "A team of 5 product specialists led by a Product Director: Requirement Analyst (PRD/feature spec writing), User Researcher (research synthesis), Competitive Analyst (competitive intelligence), Data Analyst (metrics tracking), and Roadmap Planner (roadmap management/sprint planning). Covers the full product lifecycle from ideation to launch.",
+    "zh": "由产品总监领导的 5 人产品专家团队：需求分析师（PRD/功能规格书）、用户研究员（调研综合分析）、竞品分析师（竞争情报）、数据分析师（指标追踪）和路线图规划师（路线图管理/迭代规划）。覆盖从构思到上线的完整产品生命周期。"
+  },
+  "avatar": "avatars/team.png",
+  "categoryId": "01-ProductDesign",
+  "defaultInitPrompt": {
+    "en": "Help me write a feature spec / Do a competitive analysis / Plan our product roadmap",
+    "zh": "帮我写一份功能规格书 / 做一次竞品分析 / 规划产品路线图"
+  },
+  "members": [
+    {
+      "id": "product-director",
+      "name": {"en": "Fang", "zh": "方向明"},
+      "profession": {"en": "Product Helmsman", "zh": "产品舵手"},
+      "avatar": "avatars/team-lead.png",
+      "role": "lead"
+    },
+    {
+      "id": "requirement-analyst",
+      "name": {"en": "Specky", "zh": "析客"},
+      "profession": {"en": "Requirement Analyst", "zh": "需求分析师"},
+      "avatar": "avatars/requirement-analyst.png",
+      "role": "member"
+    },
+    {
+      "id": "user-researcher",
+      "name": {"en": "Reese", "zh": "瑞思"},
+      "profession": {"en": "User Researcher", "zh": "用户研究员"},
+      "avatar": "avatars/user-researcher.png",
+      "role": "member"
+    },
+    {
+      "id": "competitive-analyst",
+      "name": {"en": "Compa", "zh": "竞析"},
+      "profession": {"en": "Competitive Analyst", "zh": "竞品分析师"},
+      "avatar": "avatars/competitive-analyst.png",
+      "role": "member"
+    },
+    {
+      "id": "data-analyst",
+      "name": {"en": "Metric", "zh": "数析"},
+      "profession": {"en": "Data Analyst", "zh": "数据分析师"},
+      "avatar": "avatars/data-analyst.png",
+      "role": "member"
+    },
+    {
+      "id": "roadmap-planner",
+      "name": {"en": "Roadie", "zh": "路径"},
+      "profession": {"en": "Roadmap Planner", "zh": "路线图规划师"},
+      "avatar": "avatars/roadmap-planner.png",
+      "role": "member"
+    }
+  ]
+}

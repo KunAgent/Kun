@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Humanize PPT Slide Plan",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "required": [
+      "slide_id",
+      "role",
+      "title",
+      "message",
+      "speaker_intent"
+    ],
+    "properties": {
+      "slide_id": {
+        "type": "string"
+      },
+      "role": {
+        "type": "string"
+      },
+      "title": {
+        "type": "string"
+      },
+      "message": {
+        "type": "string"
+      },
+      "visible_content": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "speaker_intent": {
+        "type": "string"
+      },
+      "asset_need": {
+        "type": "string"
+      },
+      "recommended_renderer": {
+        "type": "string"
+      }
+    }
+  }
+}

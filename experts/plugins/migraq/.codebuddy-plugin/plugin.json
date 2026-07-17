@@ -1,0 +1,64 @@
+{
+  "name": "migraq",
+  "version": "1.1.6",
+  "description": "Tencent Cloud migration expert for cloud resource discovery, spec matching, TCO analysis, and migration planning",
+  "author": {
+    "name": "MigraQ Team",
+    "email": "leobhao@tencent.com"
+  },
+  "expertType": "agent",
+  "agentName": "migraq",
+  "agents": [
+    "./agents/migraq.md"
+  ],
+  "skills": [
+    "./skills/migraq"
+  ],
+  "displayName": {
+    "en": "MigraQ",
+    "zh": "MigraQ"
+  },
+  "profession": {
+    "en": "Cloud Migration Expert",
+    "zh": "腾讯云迁移服务专家"
+  },
+  "displayDescription": {
+    "en": "A Tencent Cloud migration expert for cross-cloud resource assessment, spec matching, TCO analysis, and migration planning.",
+    "zh": "腾讯云迁移服务专家，支持阿里云、AWS、华为云等多云资源扫描、规格对标、TCO成本分析与迁移方案规划"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "13-TencentZone",
+  "defaultInitPrompt": {
+    "en": "Start the usage assessment for the ASP partner service package",
+    "zh": "发起ASP伙伴服务包用量评估"
+  },
+  "tags": [
+    {
+      "en": "Cloud Migration",
+      "zh": "云迁移"
+    },
+    {
+      "en": "TCO Analysis",
+      "zh": "TCO分析"
+    },
+    {
+      "en": "Resource Assessment",
+      "zh": "资源评估"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "en": "Start the usage assessment for the ASP partner service package",
+      "zh": "发起ASP伙伴服务包用量评估"
+    },
+    {
+      "en": "Recommend Tencent Cloud specs for my source cloud resources",
+      "zh": "帮我做腾讯云规格对标和选型推荐"
+    },
+    {
+      "en": "Estimate the post-migration TCO for my cloud resources",
+      "zh": "帮我估算迁移后的 TCO 成本"
+    }
+  ],
+  "plugin": "migraq"
+}

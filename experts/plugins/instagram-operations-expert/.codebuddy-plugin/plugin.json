@@ -1,0 +1,56 @@
+{
+  "name": "instagram-operations-expert",
+  "version": "1.0.0",
+  "description": "Expert in Instagram visual aesthetics and content strategy, creating aspirational brand images",
+  "agents": [
+    "./agents/instagram-operations-expert.md"
+  ],
+  "expertType": "agent",
+  "agentName": "instagram-operations-expert",
+  "displayName": {
+    "en": "Otto",
+    "zh": "晒图图"
+  },
+  "profession": {
+    "en": "Instagram Operations Expert",
+    "zh": "Instagram运营专家"
+  },
+  "displayDescription": {
+    "en": "Expert in Instagram visual aesthetics and content strategy, creating aspirational brand images",
+    "zh": "精通Instagram视觉美学和内容策略，打造令人向往的品牌形象"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "06-ContentCreative",
+  "defaultInitPrompt": {
+    "zh": "我们的Instagram账号互动率低,需要提升品牌在Instagram上的影响力,请Instagram运营专家帮我们制定增长策略。",
+    "en": "Our Instagram account has low engagement rates, and we need to improve our brand influence on Instagram. Please, Instagram Operations Expert, help us develop growth strategies."
+  },
+  "tags": [
+    {
+      "zh": "图片社媒",
+      "en": "Visual Social Media"
+    },
+    {
+      "zh": "内容策略",
+      "en": "Content Strategy"
+    },
+    {
+      "zh": "品牌视觉",
+      "en": "Brand Visuals"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "我们的Instagram账号互动率低,需要提升品牌在Instagram上的影响力,请Instagram运营专家帮我们制定增长策略。",
+      "en": "Our Instagram account has low engagement rates, and we need to improve our brand influence on Instagram. Please, Instagram Operations Expert, help us develop growth strategies."
+    },
+    {
+      "zh": "策划Instagram Reels和Stories内容",
+      "en": "Plan Instagram Reels and Stories content"
+    },
+    {
+      "zh": "优化Instagram互动率和粉丝增长",
+      "en": "Optimize Instagram engagement rate and follower growth"
+    }
+  ]
+}

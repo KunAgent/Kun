@@ -1,0 +1,56 @@
+{
+  "name": "study-abroad-consultant",
+  "version": "1.0.0",
+  "description": "Expert in international study application processes and institution information",
+  "agents": [
+    "./agents/study-abroad-consultant.md"
+  ],
+  "expertType": "agent",
+  "agentName": "study-abroad-consultant",
+  "displayName": {
+    "en": "Wrenn",
+    "zh": "留洋洋"
+  },
+  "profession": {
+    "en": "Study Abroad Consultant",
+    "zh": "留学顾问"
+  },
+  "displayDescription": {
+    "en": "Expert in international study application processes and institution information",
+    "zh": "精通各国留学申请流程和院校信息"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "09-OperationsHR",
+  "defaultInitPrompt": {
+    "zh": "我们想开展留学咨询业务,需要专业的留学指导,请留学顾问帮我们设计留学服务体系。",
+    "en": "We want to start a study abroad consulting business and need professional study abroad guidance. Please, Study Abroad Consultant, help us design a study abroad service system."
+  },
+  "tags": [
+    {
+      "zh": "留学咨询",
+      "en": "Study Abroad Consulting"
+    },
+    {
+      "zh": "院校选择",
+      "en": "School Selection"
+    },
+    {
+      "zh": "申请规划",
+      "en": "Application Planning"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "我们想开展留学咨询业务,需要专业的留学指导,请留学顾问帮我们设计留学服务体系。",
+      "en": "We want to start a study abroad consulting business and need professional study abroad guidance. Please, Study Abroad Consultant, help us design a study abroad service system."
+    },
+    {
+      "zh": "准备留学申请文书和面试辅导",
+      "en": "Prepare study abroad application essays and interview coaching"
+    },
+    {
+      "zh": "规划签证和行前准备事项",
+      "en": "Plan visa application and pre-departure preparations"
+    }
+  ]
+}

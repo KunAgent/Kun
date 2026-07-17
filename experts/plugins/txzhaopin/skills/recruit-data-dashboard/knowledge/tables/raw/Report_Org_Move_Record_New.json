@@ -1,0 +1,609 @@
+{
+  "table_code" : "catalog_dos_da_mcp.hrdw.Report_Org_Move_Record_New",
+  "table_name" : "组织异动记录表（新）",
+  "version" : 9,
+  "table_desc" : "记录组织架构发生变更的全量流水明细，涵盖组织的新建、撤销、组织更改名、挂靠变更、负责人变更等各类组织异动事件，包含异动前后的完整组织信息对比\n主要包含以下几大部分内容：\n1、组织基础信息（组织ID、组织类型、组织成立日期、当前组织名称及全路径）\n2、组织CVP/SVP/BP信息（CVP/SVP员工信息、BP员工列表）\n3、异动基本信息（异动日期、异动状态、异动类型）\n4、异动前组织详情（父级组织、组织名称及全路径、组织层级/子层级、虚拟组织类型、组织负责人及其职级、组织秘书、组织结束日期、组织职责、组织9层拆解） \n5、异动前关键层级（异动前BG/线/部门/中心/组）\n6、异动后组织详情（对应的全套异动后字段）\n7、异动后关键层级（异动后BG/线/部门/中心/组）\n\n主要用途：\n1、查询某组织的历史变更记录，了解组织名称、归属（父级组织）的变更历史；\n2、查询某时间段内发生的组织新建、撤销情况；\n3、查询组织改名记录（from_org_name → to_org_name）；\n4、查询组织挂靠变更记录（异动前后父级组织发生变化）；\n5、查询组织负责人变更历史；\n6、分析某BG/部门下的组织架构演变情况；\n\n不支持的场景：\n不支持查询组织下员工的人数/结构信息，此类需求应使用员工信息宽表\n\n能回答的典型问题：\nA部门近2年发生了哪些组织架构变更；\n某组织的历史名称变更记录是什么；\n今年新成立了哪些部门或组；\n今年撤销的组织有哪些；\nA组织何时从B部门迁移到C部门；\n某组织的负责人历史变更记录；\n近1年发生组织改名的情况有哪些；\n某BG下今年新建了多少个组；\n\n优先场景：\n查询指定组织的历史变更流水（改名、挂靠迁移、撤销等）；\n查询指定时间段内的组织新建/撤销情况；\n分析组织架构调整前后的父级组织变化\n",
+  "write_sql_background" : "1、查询指定时间段内的组织异动记录，使用 org_move_date 作为时间过滤，格式为'YYYY-MM-DD'；\n2、查询组织改名时，除了判断组织类型是改名外，还要注意 from_org_name != to_org_name；\n3、查询挂靠变更（组织从一个父级迁到另一个父级）时，除了判断组织类型，可对比 from_parent_org_name 和 to_parent_org_name；\n4、org_name/org_full_name 字段采用\"优先取异动后（to），若无则取异动前（from）\"的逻辑，是该组织异动后新的名称；\n5、统计组织异动次数时使用COUNT(org_move_id)，统计涉及的组织数时使用COUNT(DISTINCT org_id)",
+  "find_column_background" : "常用过滤字段\n- org_id(组织ID)\n- org_move_id(组织异动ID)\n- 组织异动类型 \n- 组织异动状态  \n常用分析维度字段\n-异动基本: 组织异动ID、组织异动日期、组织异动类型、组织异动状态\n-组织信息: 组织ID、组织全路径、组织层级、组织成立日期\n-异动前: 异动前组织名称)、异动前组织全路径、异动前层级、异动前负责人、异动前BG、异动前部门\n-异动后: 异动后组织名称)、异动后组织全路径、异动后层级、异动后负责人、异动后BG、异动后部门\n\n",
+  "columns" : [ {
+    "column_code" : "org_id8",
+    "column_name" : "组织ID",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "org_name",
+    "column_name" : "组织名称",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "org_full_id8",
+    "column_name" : "组织ID全路径",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "org_full_name",
+    "column_name" : "组织全路径",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "org_level_name_short",
+    "column_name" : "组织架构层级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "org_type_name",
+    "column_name" : "组织类型",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "org_sublevel_name",
+    "column_name" : "是否直管中心",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "org_begin_date",
+    "column_name" : "组织成立日期",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "org_cvp_combined_name",
+    "column_name" : "当前组织所属CVP",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "org_svp_combined_name",
+    "column_name" : "当前组织所属SVP",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "org_bp_combined_name_list",
+    "column_name" : "当前组织BP",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "org_move_type_name",
+    "column_name" : "组织异动类型",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "org_move_date",
+    "column_name" : "组织异动日期",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "from_org_name",
+    "column_name" : "异动前组织名称",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "from_org_full_name",
+    "column_name" : "异动前组织全路径",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "from_level01_org_name",
+    "column_name" : "异动前一级组织",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "from_level01_org_level_name",
+    "column_name" : "异动前一级组织架构层级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "from_level02_org_name",
+    "column_name" : "异动前二级组织",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "from_level02_org_level_name",
+    "column_name" : "异动前二级组织架构层级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "from_level03_org_name",
+    "column_name" : "异动前三级组织",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "from_level03_org_level_name",
+    "column_name" : "异动前三级组织架构层级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "from_level04_org_name",
+    "column_name" : "异动前四级组织",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "from_level04_org_level_name",
+    "column_name" : "异动前四级组织架构层级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "from_level05_org_name",
+    "column_name" : "异动前五级组织",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "from_level05_org_level_name",
+    "column_name" : "异动前五级组织架构层级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "from_level06_org_name",
+    "column_name" : "异动前六级组织",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "from_level06_org_level_name",
+    "column_name" : "异动前六级组织架构层级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "from_level07_org_name",
+    "column_name" : "异动前七级组织",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "from_level07_org_level_name",
+    "column_name" : "异动前七级组织架构层级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "from_level08_org_name",
+    "column_name" : "异动前八级组织",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "from_level08_org_level_name",
+    "column_name" : "异动前八级组织架构层级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "from_level09_org_name",
+    "column_name" : "异动前九级组织",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "from_level09_org_level_name",
+    "column_name" : "异动前九级组织架构层级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "from_bg_name",
+    "column_name" : "异动前BG",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "from_line_name",
+    "column_name" : "异动前线",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "from_dept_name",
+    "column_name" : "异动前部门",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "from_center_name",
+    "column_name" : "异动前中心",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "from_team_name",
+    "column_name" : "异动前组",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "from_org_head_staff_combined_name",
+    "column_name" : "异动前组织负责人",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "from_org_head_manager_level_name",
+    "column_name" : "异动前组织负责人管理职级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "from_org_head_pro_position_level_name",
+    "column_name" : "异动前组织负责人专业职级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "from_org_responsibility",
+    "column_name" : "异动前组织职责",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "from_virtual_org_type_name",
+    "column_name" : "异动前虚拟组织类别",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "to_org_name",
+    "column_name" : "异动后组织名称",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "to_org_full_name",
+    "column_name" : "异动后组织全路径",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "to_level01_org_name",
+    "column_name" : "异动后一级组织",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "to_level01_org_level_name",
+    "column_name" : "异动后一级组织架构层级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "to_level02_org_name",
+    "column_name" : "异动后二级组织",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "to_level02_org_level_name",
+    "column_name" : "异动后二级组织架构层级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "to_level03_org_name",
+    "column_name" : "异动后三级组织",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "to_level03_org_level_name",
+    "column_name" : "异动后三级组织架构层级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "to_level04_org_name",
+    "column_name" : "异动后四级组织",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "to_level04_org_level_name",
+    "column_name" : "异动后四级组织架构层级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "to_level05_org_name",
+    "column_name" : "异动后五级组织",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "to_level05_org_level_name",
+    "column_name" : "异动后五级组织架构层级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "to_level06_org_name",
+    "column_name" : "异动后六级组织",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "to_level06_org_level_name",
+    "column_name" : "异动后六级组织架构层级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "to_level07_org_name",
+    "column_name" : "异动后七级组织",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "to_level07_org_level_name",
+    "column_name" : "异动后七级组织架构层级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "to_level08_org_name",
+    "column_name" : "异动后八级组织",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "to_level08_org_level_name",
+    "column_name" : "异动后八级组织架构层级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "to_level09_org_name",
+    "column_name" : "异动后九级组织",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "to_level09_org_level_name",
+    "column_name" : "异动后九级组织架构层级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "to_bg_name",
+    "column_name" : "异动后BG",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "to_line_name",
+    "column_name" : "异动后线",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "to_dept_name",
+    "column_name" : "异动后部门",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "to_center_name",
+    "column_name" : "异动后中心",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "to_team_name",
+    "column_name" : "异动后组",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "to_org_head_staff_combined_name",
+    "column_name" : "异动后组织负责人",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "to_org_head_manager_level_name",
+    "column_name" : "异动后组织负责人管理职级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "to_org_head_pro_position_level_name",
+    "column_name" : "异动后组织负责人专业职级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "to_org_responsibility",
+    "column_name" : "异动后组织职责",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "to_virtual_org_type_name",
+    "column_name" : "异动后虚拟组织类别",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "to_secretary_staff_combined_name",
+    "column_name" : "异动后组织秘书",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "data_source_name",
+    "column_name" : "组织异动数据来源",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  } ]
+}

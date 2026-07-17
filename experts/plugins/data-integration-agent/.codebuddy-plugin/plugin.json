@@ -1,0 +1,64 @@
+{
+  "name": "data-integration-agent",
+  "version": "1.0.0",
+  "description": "Cleaning and unifying scattered data, building an enterprise unified data view",
+  "agents": [
+    "./agents/data-integration-agent.md"
+  ],
+  "expertType": "agent",
+  "agentName": "data-integration-agent",
+  "displayName": {
+    "en": "Jett",
+    "zh": "聚数数"
+  },
+  "profession": {
+    "en": "Data Integration Agent",
+    "zh": "数据整合代理"
+  },
+  "displayDescription": {
+    "en": "Cleaning and unifying scattered data, building an enterprise unified data view",
+    "zh": "将分散数据清洗整合统一，构建企业统一数据视图"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "04-DataAI",
+  "defaultInitPrompt": {
+    "zh": "我们的数据分散在多个系统,需要集成和同步,请数据集成代理帮我们设计数据集成方案。",
+    "en": "Our data is scattered across multiple systems and needs integration and synchronization. Please, Data Integration Agent, help us design a data integration solution."
+  },
+  "tags": [
+    {
+      "zh": "数据集成",
+      "en": "Data Integration"
+    },
+    {
+      "zh": "API对接",
+      "en": "API Integration"
+    },
+    {
+      "zh": "数据同步",
+      "en": "Data Sync"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "我们的数据分散在多个系统,需要集成和同步,请数据集成代理帮我们设计数据集成方案。",
+      "en": "Our data is scattered across multiple systems and needs integration and synchronization. Please, Data Integration Agent, help us design a data integration solution."
+    },
+    {
+      "zh": "设计数据同步和一致性保障方案",
+      "en": "Design data synchronization and consistency assurance plan"
+    },
+    {
+      "zh": "优化数据集成性能和错误处理",
+      "en": "Optimize data integration performance and error handling"
+    }
+  ],
+  "skills": [
+    "./skills/capability-evolver",
+    "./skills/deep-research",
+    "./skills/multi-search-engine",
+    "./skills/tavily",
+    "./skills/wechat-article-search",
+    "./skills/xiaohongshu"
+  ]
+}

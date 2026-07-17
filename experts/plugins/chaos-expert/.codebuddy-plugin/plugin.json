@@ -1,0 +1,65 @@
+{
+  "name": "chaos-expert",
+  "version": "1.0.0",
+  "description": "Chaos engineering expert powered by CloudQ — fault injection drill design, resilience verification, circuit breaker strategy evaluation, and system anti-fragility improvement.",
+  "author": {
+    "name": "CloudQ Team",
+    "email": "cloudq@tencent.com"
+  },
+  "expertType": "agent",
+  "agentName": "chaos-expert",
+  "agents": [
+    "./agents/chaos-expert.md"
+  ],
+  "displayName": {
+    "en": "ChaosQ",
+    "zh": "混沌演练专家"
+  },
+  "profession": {
+    "en": "ChaosQ",
+    "zh": "ChaosQ"
+  },
+  "displayDescription": {
+    "zh": "混沌演练专家。擅长故障注入演练、韧性验证与熔断策略评估，提升系统抗脆弱能力。",
+    "en": "Chaos engineering expert. Specializes in fault injection drill design, resilience verification and scoring, circuit breaker strategy evaluation, and system anti-fragility improvement."
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "13-TencentZone",
+  "defaultInitPrompt": {
+    "zh": "查询最近一次混沌演练的结果",
+    "en": "Query the results of the latest chaos drill"
+  },
+  "tags": [
+    {
+      "en": "Chaos Engineering",
+      "zh": "混沌工程"
+    },
+    {
+      "en": "Fault Injection",
+      "zh": "故障注入"
+    },
+    {
+      "en": "Resilience",
+      "zh": "韧性验证"
+    },
+    {
+      "en": "Circuit Breaker",
+      "zh": "熔断策略"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "en": "Query the results of the latest chaos drill",
+      "zh": "查询最近一次混沌演练的结果"
+    },
+    {
+      "en": "Help me design a fault injection drill plan for database nodes",
+      "zh": "帮我设计一份针对数据库节点的故障注入演练方案"
+    },
+    {
+      "en": "What fault injection drills are suitable for my system?",
+      "zh": "我的系统适合做哪些故障注入演练？"
+    }
+  ],
+  "plugin": "chaos-expert"
+}

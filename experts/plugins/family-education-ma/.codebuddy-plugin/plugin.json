@@ -1,0 +1,67 @@
+{
+  "name": "family-education-ma",
+  "version": "1.0.0",
+  "description": "Family education expert based on Ma Ying's 8-year practice at Tencent Minor Protection Camp, providing professional parent counseling on parent-child communication, screen addiction, and family growth",
+  "author": {
+    "name": "腾讯未成年人保护营地",
+    "email": "minors-protection@tencent.com"
+  },
+  "expertType": "agent",
+  "agentName": "family-education-ma",
+  "agents": [
+    "./agents/family-education-ma.md"
+  ],
+  "skills": [
+    "./skills/family-education-expert",
+    "./skills/res-family-intervention",
+    "./skills/risk-assessment-referral",
+    "./skills/outreach-communication"
+  ],
+  "displayName": {
+    "en": "Ma Ying",
+    "zh": "马滢老师"
+  },
+  "profession": {
+    "en": "Family Education Counselor",
+    "zh": "家庭教育专家"
+  },
+  "displayDescription": {
+    "en": "8-year frontline family education expert from Tencent Minor Protection Camp, specializing in parent-child communication, screen addiction intervention, and family growth counseling",
+    "zh": "腾讯未保营地8年一线实践，融合三大循证体系，为家长提供亲子沟通、沉迷干预、家庭成长咨询"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "12-IndustryConsultant",
+  "defaultInitPrompt": {
+    "zh": "孩子沉迷手机游戏，亲子关系紧张怎么办？",
+    "en": "My child is addicted to mobile games and our relationship is strained, what should I do?"
+  },
+  "tags": [
+    {
+      "en": "Parent-Child Communication",
+      "zh": "亲子沟通"
+    },
+    {
+      "en": "Screen Addiction Intervention",
+      "zh": "网络沉迷干预"
+    },
+    {
+      "en": "Family Growth Coaching",
+      "zh": "家庭成长辅导"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "en": "My child is addicted to mobile games and our relationship is strained, what should I do?",
+      "zh": "孩子沉迷手机游戏，亲子关系紧张怎么办？"
+    },
+    {
+      "en": "My child shuts the door and won't talk, every conversation turns into a fight. How can we communicate?",
+      "zh": "孩子关门不说话，一聊就吵，怎么沟通？"
+    },
+    {
+      "en": "I have parenting anxiety and my spouse and I disagree on how to raise our child. What should we do?",
+      "zh": "育儿焦虑，夫妻教育不一致，怎么办？"
+    }
+  ],
+  "plugin": "family-education-ma"
+}

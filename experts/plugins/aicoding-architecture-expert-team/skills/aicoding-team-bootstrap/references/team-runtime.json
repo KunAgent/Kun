@@ -1,0 +1,98 @@
+{
+  "team": {
+    "name": "AICoding 架构 Team",
+    "version": "1.0.0",
+    "description": "基于五份 AICoding 架构设计模板的多 Agent 协作团队，含逐阶段人工审核"
+  },
+  "core_roles": [
+    {
+      "id": "aicoding-architecture-expert-team-lead",
+      "type": "coordinator",
+      "model": "reasoning",
+      "skills": ["aicoding-team-bootstrap"],
+      "description": "主理人 — 任务拆解、依赖维护、逐阶段人工审核、术语统一、合稿交付"
+    },
+    {
+      "id": "business-architect",
+      "type": "domain",
+      "model": "default",
+      "skills": ["diagrams-generator"],
+      "description": "业务架构负责人 — 输出 高层架构设计.md（含内嵌业务架构图）",
+      "output": "高层架构设计.md"
+    },
+    {
+      "id": "system-architect",
+      "type": "domain",
+      "model": "default",
+      "skills": ["diagrams-generator"],
+      "description": "系统架构负责人 — 输出 系统设计.md（含系统上下文图、模块图、时序图）",
+      "output": "系统设计.md"
+    },
+    {
+      "id": "platform-architect",
+      "type": "domain",
+      "model": "default",
+      "skills": ["CloudQ", "tcloud-arch-diagram", "diagrams-generator"],
+      "description": "部署架构负责人 — 输出 部署设计.md（含云资源现状核对与内嵌部署拓扑）",
+      "output": "部署设计.md"
+    },
+    {
+      "id": "security-architect",
+      "type": "domain",
+      "model": "default",
+      "skills": ["diagrams-generator"],
+      "description": "安全架构负责人 — 输出 安全设计.md（含信任边界图与数据流图）",
+      "output": "安全设计.md"
+    },
+    {
+      "id": "product-story-designer",
+      "type": "domain",
+      "model": "default",
+      "skills": ["diagrams-generator"],
+      "description": "用户故事负责人 — 输出 UserStory.md（按需含流程泳道图/角色交互图）",
+      "output": "UserStory.md"
+    }
+  ],
+  "enhanced_roles": [
+    {
+      "id": "knowledge-ingest-engineer",
+      "type": "enhanced",
+      "model": "lite",
+      "skills": ["docx", "pdf", "pptx", "xlsx"],
+      "trigger": "存在需要被归一化整理的原始资料",
+      "description": "知识摄入工程师 — 解析原始资料为结构化输入",
+      "output": "material_digest.md"
+    },
+    {
+      "id": "research-analyst",
+      "type": "enhanced",
+      "model": "lite",
+      "skills": ["tech-research-advisor"],
+      "trigger": "G1 通过后默认进入；仅用户明确批准时可跳过",
+      "description": "研究分析师 — 为业务架构提供证据链",
+      "output": "research_report.md"
+    }
+  ],
+  "templates": [
+    "material_digest.md",
+    "research_report.md",
+    "高层架构设计.md",
+    "系统设计.md",
+    "部署设计.md",
+    "安全设计.md",
+    "UserStory.md"
+  ],
+  "paths": {
+    "processOutputDir": ".workbuddy/output/",
+    "archiveDir": "delivery/"
+  },
+  "stage_gates": [
+    { "id": "G0", "name": "启动确认", "condition": "Team 创建完成，运行时决策、模板映射、Owner 与输出路径已明确" },
+    { "id": "G1", "name": "资料摘要审核", "condition": "material_digest.md 通过自动校验与人工审核" },
+    { "id": "G2", "name": "调研报告审核", "condition": "research_report.md 通过自动校验与人工审核，或用户明确批准跳过 research" },
+    { "id": "G3", "name": "高层架构审核", "condition": "高层架构设计通过自动校验及人工审核" },
+    { "id": "G4", "name": "系统设计 + UserStory 审核", "condition": "系统设计和 UserStory 均通过自动校验及人工审核" },
+    { "id": "G5", "name": "部署 + 安全审核", "condition": "部署设计和安全设计均通过自动校验及人工审核" },
+    { "id": "G6", "name": "全量交付审核", "condition": "术语统一、引用一致、冲突裁决完成，并经人工确认允许归档" }
+  ]
+}

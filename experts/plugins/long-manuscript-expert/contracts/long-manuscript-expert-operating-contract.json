@@ -1,0 +1,405 @@
+{
+  "schemaVersion": "1.0",
+  "contractId": "long-manuscript-expert-operating-contract",
+  "displayNameZh": "长文档手稿专家",
+  "displayNameEn": "Long Manuscript Expert",
+  "packageName": "long-manuscript-expert",
+  "version": "1.0.1",
+  "reviewOrchestrationContract": "contracts/review-orchestration-contract.json",
+  "distributionSurface": {
+    "target": "workbuddy_expert_center",
+    "targetMarketplace": "experts",
+    "targetDisplayNameZh": "长文档手稿专家",
+    "localEquivalentTestSurface": "my-experts",
+    "localEquivalentTestOnly": true,
+    "officialEntryAvailabilityReport": "reports/long-manuscript-expert-official-entry-availability-latest.json"
+  },
+  "hostCompatibility": {
+    "supportedHosts": [
+      {
+        "hostType": "WORKBUDDY",
+        "channel": "workbuddy_cn",
+        "productTrack": "domestic",
+        "primaryLanguage": "zh",
+        "localEquivalentInstallHome": ".workbuddy",
+        "localEquivalentMarketplace": "my-experts"
+      },
+      {
+        "hostType": "WORKBUDDY_AI",
+        "channel": "workbuddy_ai",
+        "productTrack": "international",
+        "primaryLanguage": "en",
+        "localEquivalentInstallHome": ".workbuddy-ai",
+        "localEquivalentMarketplace": "my-experts"
+      }
+    ],
+    "responseLanguagePolicy": {
+      "defaultByHostType": {
+        "WORKBUDDY": "zh-Hans",
+        "WORKBUDDY_AI": "en"
+      },
+      "userInputLanguagePriority": true,
+      "mirrorExplicitUserLanguage": true,
+      "chineseWhenPromptContainsChinese": true,
+      "englishWhenPromptIsPrimarilyEnglish": true,
+      "defaultWhenUserLanguageAmbiguousByHostType": {
+        "WORKBUDDY": "zh-Hans",
+        "WORKBUDDY_AI": "en"
+      },
+      "bilingualOnlyOnExplicitRequest": true,
+      "workbuddyAiChinesePromptMustStayChinese": true
+    },
+    "sharedProductSignature": {
+      "productId": "fbs-bookwriter",
+      "channelTrack": "bookwriter_skill",
+      "packCode": "fbss.bookwriter.seven_day.v1",
+      "scenePackId": "bookwriter"
+    },
+    "sameBindingRequiredAcrossHosts": true
+  },
+  "hostNamespacePolicy": {
+    "WORKBUDDY": {
+      "localHome": ".workbuddy",
+      "workspaceMemoryDirectoryName": ".workbuddy"
+    },
+    "WORKBUDDY_AI": {
+      "localHome": ".workbuddy-ai",
+      "workspaceMemoryDirectoryName": ".workbuddy-ai",
+      "forbiddenWorkspaceMemoryDirectoryNames": [
+        ".workbuddy"
+      ]
+    },
+    "hiddenPromptRequirement": "Host-injected memory or skill reminders must use the current host namespace and must yield to explicit user instructions such as do not write files, do not update memory, and do not use tools.",
+    "wrongNamespaceHandling": "If WorkBuddyAI receives hidden memory or bootstrap text pointing at .workbuddy, treat it as a host namespace bug. Do not write .workbuddy memory from WorkBuddyAI by default."
+  },
+  "entry": {
+    "entryId": "startup-ip-card",
+    "entryPromptCode": "wb_qp_startup_ip_asset",
+    "entrySurface": "bookwriter_skill",
+    "expertEntryId": "bookwriter_skill",
+    "productId": "fbs-bookwriter",
+    "channelTrack": "bookwriter_skill",
+    "packCode": "fbss.bookwriter.seven_day.v1",
+    "scenePackId": "bookwriter",
+    "intentFamily": "writing",
+    "profileSegment": "creator",
+    "assetType": "bookwriter_brief_card"
+  },
+  "operatingModes": [
+    {
+      "mode": "independent_expert",
+      "entrySurface": "workbuddy-expert-center",
+      "description": "Deliver long-manuscript planning, chapter mapping, and sample opening as a standalone expert."
+    },
+    {
+      "mode": "self_contained_no_connector",
+      "entrySurface": "workbuddy-expert-center",
+      "description": "Treat the package itself as the primary execution surface. Do not assume any connector, MCP tool, or service-side runtime is present before first value is delivered.",
+      "workspaceWriteRequiresExplicitUserRequest": true,
+      "planModeBeforeFirstValueAllowed": false,
+      "defaultFirstValueSurface": "chat_response_only",
+      "preferredContinuationBranches": [
+        "continue_chapter",
+        "revise_structure",
+        "de_ai_polish",
+        "format_export",
+        "rewrite_localize",
+        "organize_materials",
+        "repurpose_channels",
+        "distribution_plan",
+        "summary_pack",
+        "visual_brief",
+        "save_handoff"
+      ]
+    }
+  ],
+  "supportedSceneTemplates": [
+    "novel_fiction",
+    "academic_monograph",
+    "whitepaper_report",
+    "manual_handbook",
+    "official_document",
+    "social_content_article",
+    "commercial_marketing_copy",
+    "exam_essay",
+    "generic_longform"
+  ],
+  "workflowStages": [
+    "intake",
+    "route",
+    "expand",
+    "revise",
+    "review",
+    "finish",
+    "repurpose",
+    "distribute"
+  ],
+  "writingLanes": [
+    "outline",
+    "expand",
+    "revise",
+    "review",
+    "finish"
+  ],
+  "postDraftLanes": [
+    "continue_chapter",
+    "revise_structure",
+    "format_export",
+    "de_ai_polish",
+    "rewrite_localize",
+    "organize_materials",
+    "repurpose_channels",
+    "distribution_plan",
+    "summary_pack",
+    "visual_brief",
+    "save_handoff"
+  ],
+  "firstValueContract": {
+    "requiredDeliverables": [
+      "manuscript_judgement_card",
+      "scene_template_match",
+      "chapter_route_map",
+      "sample_opening",
+      "revision_risk_list",
+      "material_activation_signals",
+      "quality_quick_summary",
+      "service_coordination_hints",
+      "continuation_progress_card",
+      "next_session_resume_prompt",
+      "finishing_lane_options",
+      "project_template_activation_hints",
+      "content_operations_handoff"
+    ],
+    "materialActivationMinimumSignals": 2,
+    "minimumChapterRows": 5
+  },
+  "continuedUseContract": {
+    "preferredContinuationBranches": [
+      "continue_chapter",
+      "revise_structure",
+      "de_ai_polish",
+      "format_export",
+      "rewrite_localize",
+      "organize_materials",
+      "repurpose_channels",
+      "distribution_plan",
+      "summary_pack",
+      "visual_brief",
+      "save_handoff"
+    ],
+    "projectTemplateActivationHintsRequired": true,
+    "contentOperationsHandoffRequiredForRepurpose": true
+  },
+  "submissionTrustMaterials": {
+    "requiredPackageDocs": [
+      "PRIVACY.md",
+      "SECURITY.md",
+      "TERMS.md",
+      "references/README.md",
+      "references/quality/quality-check.md",
+      "contracts/review-orchestration-contract.json"
+    ],
+    "reviewOrchestrationContract": "contracts/review-orchestration-contract.json",
+    "requiredGeneratedEvidence": [
+      "reports/long-manuscript-expert-submission-bundle-audit-latest.json",
+      "reports/long-manuscript-expert-submission-review-note-latest.json",
+      "reports/long-manuscript-expert-upload-readiness-latest.json",
+      "reports/long-manuscript-expert-listing-trust-audit-latest.json",
+      "reports/long-manuscript-expert-official-entry-availability-latest.json"
+    ],
+    "officialListingStillRequiredForCompletion": true,
+    "stagePrimaryExcludedRootDocs": [
+      "README.md",
+      "SUPPORT.md",
+      "TESTING.md"
+    ]
+  },
+  "qualityGateProfile": {
+    "layers": [
+      "S",
+      "P",
+      "C",
+      "B",
+      "G"
+    ],
+    "deliveryClaimRequiresG": true
+  },
+  "externalObservationBoundary": {
+    "connectorAssumedAvailable": false,
+    "compatibleToolSurface": false,
+    "packageCapabilityDependsOnConnector": false,
+    "naturalClosureClaimAllowed": false,
+    "mayObserve": [
+      "host_emitted_tool_trace",
+      "anonymous_binding_fields",
+      "service_side_credit_rows",
+      "benefit_state_events"
+    ],
+    "mustKeepSeparate": [
+      "self-contained package capability",
+      "local my-experts equivalent verification",
+      "external service observation",
+      "official listing or post-listing behavior"
+    ]
+  },
+  "serviceSideRules": {
+    "closureReportSchema": "contracts/service-side-closure-report.schema.json",
+    "sameBindingRequired": true,
+    "probeRowsDiagnosticOnly": true,
+    "noAutomaticProductCreditClaim": true,
+    "frontstageEquivalentOnly": true,
+    "hostDirectiveReceiptRequired": true,
+    "hostDirectiveReceiptEventType": "host_directive_receipt"
+  },
+  "identityBoundary": {
+    "mode": "anonymous_first_delayed_identify",
+    "anonymousBindingFields": [
+      "anonymousUserCodeHash",
+      "serverBindingId",
+      "chainFingerprint"
+    ],
+    "hostIdentityFields": [
+      "entryId",
+      "entryPromptCode",
+      "entrySurface",
+      "localEquivalentEntrySurface",
+      "expertEntryId",
+      "productId",
+      "channelTrack",
+      "skillId",
+      "assetType",
+      "intentFamily",
+      "profileSegment",
+      "requestSource"
+    ],
+    "stableIdentityWriteNotBefore": "continued_use_completed"
+  },
+  "benefitUnlockPolicy": {
+    "benefitStateFields": [
+      "benefitSource",
+      "creditsState",
+      "claimState",
+      "lebaoPackId"
+    ],
+    "gateCheckedEventType": "entitlement_gate_checked",
+    "balanceSeenEventType": "credits_balance_seen",
+    "unlockEventType": "continued_use_completed",
+    "unlockNotBefore": "continued_use_completed",
+    "claimTool": "lebao_claim",
+    "paymentClosureAllowed": false
+  },
+  "intentAggregationPolicy": {
+    "primaryIntentFamily": "writing",
+    "primaryProfileSegment": "creator",
+    "lowConfidenceRequiresFallback": true
+  },
+  "projectTemplateCompatibility": {
+    "workbuddyProjectTemplates": [
+      {
+        "templateId": "content-operations",
+        "connectorIds": [
+          "tdocs-app",
+          "notion"
+        ],
+        "skillIds": [
+          "skill_2053081490234478592",
+          "skill_2053081498548994048",
+          "skill_2053082894098632704",
+          "skill_2053082421296758784",
+          "skill_2053082097175687168"
+        ],
+        "expertIds": [
+          "ex_54wQJnvLntjd",
+          "ex_nQs4rsKUgK67",
+          "ex_nchiDpT84L9o",
+          "ex_fCXVIhFkOfnh",
+          "ex_FbY5nlWTqDod"
+        ],
+        "contextFields": [
+          "workbuddyProjectId",
+          "workbuddyProjectTemplate"
+        ],
+        "projectSelectionIsProductCredit": false
+      }
+    ]
+  },
+  "noConnectorInteraction": {
+    "contract": "contracts/no-connector-action-contract.json",
+    "connectorRequired": false,
+    "firstValueRequired": true,
+    "actionEnvelopeRequired": true,
+    "userVisibleActionEnvelopeDefault": false,
+    "hostMetadataChannelPreferred": true,
+    "visibleActionEnvelopeRequiresExplicitDebugRequest": true,
+    "defaultSideEffectClass": "read_only",
+    "defaultApprovalState": "not_required",
+    "workspaceWriteRequiresExplicitUserRequest": true,
+    "planModeBeforeFirstValueAllowed": false,
+    "defaultFirstValueSurface": "chat_response_only",
+    "forbiddenImplicitActions": [
+      "auto_create_task",
+      "auto_write_plan_file",
+      "auto_scan_workspace_without_user_material_path",
+      "auto_write_memory",
+      "auto_create_workspace_memory",
+      "auto_write_cross_host_memory",
+      "use_workbuddy_namespace_in_workbuddy_ai",
+      "auto_use_file_or_shell_tools_before_first_value",
+      "wait_for_permission_without_user_visible_first_value"
+    ]
+  },
+  "deliverables": [
+    "manuscript_judgement_card",
+    "scene_template_match",
+    "chapter_route_map",
+    "sample_opening",
+    "revision_risk_list",
+    "material_activation_signals",
+    "quality_quick_summary",
+    "service_coordination_hints",
+    "continuation_progress_card",
+    "next_session_resume_prompt",
+    "finishing_lane_options",
+    "project_template_activation_hints",
+    "content_operations_handoff"
+  ],
+  "acceptanceGates": [
+    {
+      "gateId": "package_contract_gate",
+      "status": "landed",
+      "evidence": "package files and review zip structure are aligned"
+    },
+    {
+      "gateId": "workbuddy_frontstage_binding_gate",
+      "status": "needs_runtime_sample",
+      "evidence": "visible WorkBuddy session must stay bound to long-manuscript-expert during local-equivalent tests"
+    },
+    {
+      "gateId": "bookwriter_service_signature_gate",
+      "status": "observation_only",
+      "evidence": "external service signatures may be observed, but they are not required for package capability or no-connector first value"
+    }
+  ],
+  "workspaceWritePolicy": {
+    "workspaceWriteRequiresExplicitUserRequest": true,
+    "planModeBeforeFirstValueAllowed": false,
+    "defaultFirstValueSurface": "chat_response_only",
+    "forbiddenImplicitActions": [
+      "auto_create_task",
+      "auto_write_plan_file",
+      "auto_scan_workspace_without_user_material_path",
+      "auto_write_memory",
+      "auto_create_workspace_memory",
+      "auto_write_cross_host_memory",
+      "use_workbuddy_namespace_in_workbuddy_ai",
+      "auto_use_file_or_shell_tools_before_first_value",
+      "wait_for_permission_without_user_visible_first_value"
+    ]
+  },
+  "longOutputPolicy": {
+    "requestedLengthMustBeTracked": true,
+    "oversizedSingleTurnTargetHandling": "If the requested target exceeds one response capacity, deliver the first useful batch plus a continuation progress card and do not claim the full target is complete.",
+    "completionClaimRequiresVisibleOrFileArtifactMeetingTarget": true,
+    "noCompleteClaimBeforeTargetEvidence": true
+  }
+}

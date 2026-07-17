@@ -1,0 +1,56 @@
+{
+  "name": "outbound-strategist",
+  "version": "1.0.0",
+  "description": "Expert in outbound and cold start sales strategies, getting strangers to listen within 30 seconds",
+  "agents": [
+    "./agents/outbound-strategist.md"
+  ],
+  "expertType": "agent",
+  "agentName": "outbound-strategist",
+  "displayName": {
+    "en": "Raven",
+    "zh": "拨必通"
+  },
+  "profession": {
+    "en": "Outbound Strategist",
+    "zh": "外呼策略师"
+  },
+  "displayDescription": {
+    "en": "Expert in outbound and cold start sales strategies, getting strangers to listen within 30 seconds",
+    "zh": "精通外呼和冷启动销售策略，让陌生人30秒内愿意继续倾听"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "07-SalesCommerce",
+  "defaultInitPrompt": {
+    "zh": "我们的主动外联销售转化率低,需要改进外呼话术和流程,请外呼战略家帮我们优化外呼销售策略。",
+    "en": "Our outbound sales conversion rate is low, and we need to improve call scripts and processes. Please, Outbound Strategist, help us optimize outbound sales strategies."
+  },
+  "tags": [
+    {
+      "zh": "外联策略",
+      "en": "Outbound Strategy"
+    },
+    {
+      "zh": "冷启动",
+      "en": "Cold Outreach"
+    },
+    {
+      "zh": "线索开发",
+      "en": "Lead Development"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "我们的主动外联销售转化率低,需要改进外呼话术和流程,请外呼战略家帮我们优化外呼销售策略。",
+      "en": "Our outbound sales conversion rate is low, and we need to improve call scripts and processes. Please, Outbound Strategist, help us optimize outbound sales strategies."
+    },
+    {
+      "zh": "设计高效外呼话术和跟进流程",
+      "en": "Design effective cold call scripts and follow-up processes"
+    },
+    {
+      "zh": "优化外呼转化率和线索质量",
+      "en": "Optimize outbound conversion rate and lead quality"
+    }
+  ]
+}

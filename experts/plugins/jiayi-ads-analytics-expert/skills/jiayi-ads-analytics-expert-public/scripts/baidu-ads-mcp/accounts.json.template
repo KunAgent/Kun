@@ -1,0 +1,19 @@
+{
+  "apps": {
+    "app1": {
+      "appId": "YOUR_BAIDU_APP_ID",
+      "secretKey": "YOUR_BAIDU_SECRET_KEY",
+      "note": "在 dev2.baidu.com 商业开发者中心创建的应用"
+    }
+  },
+  "accounts": [
+    {
+      "name": "my-account-1",
+      "userId": 0,
+      "appId": "YOUR_BAIDU_APP_ID",
+      "accessToken": "",
+      "refreshToken": "",
+      "note": "在百度营销后台-账户中心查看userId"
+    }
+  ]
+}

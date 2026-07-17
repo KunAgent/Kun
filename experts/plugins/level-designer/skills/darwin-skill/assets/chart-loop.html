@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>达尔文.skill - Core Loop</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    width: 1200px;
+    height: 500px;
+    background: #111111;
+    overflow: hidden;
+    font-family: 'Inter', sans-serif;
+  }
+</style>
+</head>
+<body>
+<svg width="1200" height="500" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- Arrow markers -->
+    <marker id="arr-orange" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#D4532B"/>
+    </marker>
+    <marker id="arr-green" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#2B8A3E"/>
+    </marker>
+    <marker id="arr-red" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#C92A2A"/>
+    </marker>
+    <marker id="arr-orange-up" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#D4532B"/>
+    </marker>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1200" height="500" fill="#111111"/>
+
+  <!-- CORE LOOP label -->
+  <text x="48" y="50" fill="#D4532B" font-family="Inter, sans-serif" font-size="11" font-weight="700" letter-spacing="3">CORE LOOP</text>
+
+  <!--
+    Layout plan (y-center = 200):
+    Block width = 120, height = 70
+    Gap between blocks = 36 (arrow)
+    Decision diamond: center at x=750, size 90×90
+
+    Blocks horizontal positions (left edge):
+    B1 EVALUATE:  x=48,  center=108
+    B2 IMPROVE:   x=228, center=288
+    B3 VALIDATE:  x=408, center=468
+    B4 CONFIRM:   x=588, center=648
+    Diamond:      center=790
+    YES block:    x=958, center=1018  (top, y=145)
+    NO block:     x=958, center=1018  (bottom, y=255)
+
+    All vertical center: y=200
+    YES block center y = 160
+    NO block center y = 260
+  -->
+
+  <!-- ======================== -->
+  <!-- MAIN PROCESS BLOCKS      -->
+  <!-- ======================== -->
+
+  <!-- B1: EVALUATE -->
+  <rect x="48" y="165" width="124" height="70" fill="#FFFFFF"/>
+  <text x="110" y="196" fill="#111111" font-family="Inter, sans-serif" font-size="13" font-weight="800" text-anchor="middle">EVALUATE</text>
+  <text x="110" y="213" fill="#555555" font-family="Inter, sans-serif" font-size="10" font-weight="600" text-anchor="middle">评估当前技能</text>
+
+  <!-- Arrow B1→B2 -->
+  <line x1="172" y1="200" x2="204" y2="200" stroke="#D4532B" stroke-width="2" marker-end="url(#arr-orange)"/>
+
+  <!-- B2: IMPROVE -->
+  <rect x="210" y="165" width="124" height="70" fill="#FFFFFF"/>
+  <text x="272" y="196" fill="#111111" font-family="Inter, sans-serif" font-size="13" font-weight="800" text-anchor="middle">IMPROVE</text>
+  <text x="272" y="213" fill="#555555" font-family="Inter, sans-serif" font-size="10" font-weight="600" text-anchor="middle">生成改进方案</text>
+
+  <!-- Arrow B2→B3 -->
+  <line x1="334" y1="200" x2="366" y2="200" stroke="#D4532B" stroke-width="2" marker-end="url(#arr-orange)"/>
+
+  <!-- B3: VALIDATE -->
+  <rect x="372" y="165" width="124" height="70" fill="#FFFFFF"/>
+  <text x="434" y="196" fill="#111111" font-family="Inter, sans-serif" font-size="13" font-weight="800" text-anchor="middle">VALIDATE</text>
+  <text x="434" y="213" fill="#555555" font-family="Inter, sans-serif" font-size="10" font-weight="600" text-anchor="middle">实测验证效果</text>
+
+  <!-- Arrow B3→B4 -->
+  <line x1="496" y1="200" x2="528" y2="200" stroke="#D4532B" stroke-width="2" marker-end="url(#arr-orange)"/>
+
+  <!-- B4: CONFIRM -->
+  <rect x="534" y="165" width="124" height="70" fill="#FFFFFF"/>
+  <text x="596" y="196" fill="#111111" font-family="Inter, sans-serif" font-size="13" font-weight="800" text-anchor="middle">CONFIRM</text>
+  <text x="596" y="213" fill="#555555" font-family="Inter, sans-serif" font-size="10" font-weight="600" text-anchor="middle">人类确认结果</text>
+
+  <!-- Arrow B4→Diamond -->
+  <line x1="658" y1="200" x2="698" y2="200" stroke="#D4532B" stroke-width="2" marker-end="url(#arr-orange)"/>
+
+  <!-- ======================== -->
+  <!-- DECISION DIAMOND         -->
+  <!-- center: 790, 200         -->
+  <!-- size: 96×80              -->
+  <!-- ======================== -->
+  <polygon points="790,152 838,200 790,248 742,200" fill="#D4532B"/>
+  <text x="790" y="196" fill="#FFFFFF" font-family="Inter, sans-serif" font-size="12" font-weight="800" text-anchor="middle">SCORE</text>
+  <text x="790" y="212" fill="#FFFFFF" font-family="Inter, sans-serif" font-size="12" font-weight="800" text-anchor="middle">UP?</text>
+
+  <!-- ======================== -->
+  <!-- YES PATH (top branch)    -->
+  <!-- ======================== -->
+
+  <!-- YES PATH: diamond top → up → right to YES block -->
+  <!-- Diamond top point: 790, 152 -->
+  <path d="M790,152 L790,120 L954,120"
+        stroke="#2B8A3E" stroke-width="2" fill="none" marker-end="url(#arr-green)"/>
+
+  <!-- YES label -->
+  <text x="860" y="113" fill="#2B8A3E" font-family="Inter, sans-serif" font-size="10" font-weight="700" letter-spacing="1" text-anchor="middle">YES</text>
+
+  <!-- YES result block: KEEP / git commit -->
+  <rect x="960" y="85" width="130" height="70" fill="#2B8A3E"/>
+  <text x="1025" y="115" fill="#FFFFFF" font-family="Inter, sans-serif" font-size="13" font-weight="800" text-anchor="middle">KEEP</text>
+  <text x="1025" y="133" fill="rgba(255,255,255,0.75)" font-family="Inter, sans-serif" font-size="10" font-weight="600" text-anchor="middle">git commit</text>
+
+  <!-- ======================== -->
+  <!-- NO PATH (bottom branch)  -->
+  <!-- ======================== -->
+
+  <!-- NO PATH: diamond bottom → down → right to NO block -->
+  <!-- Diamond bottom point: 790, 248 -->
+  <path d="M790,248 L790,280 L954,280"
+        stroke="#C92A2A" stroke-width="2" fill="none" marker-end="url(#arr-red)"/>
+
+  <!-- NO label -->
+  <text x="860" y="298" fill="#C92A2A" font-family="Inter, sans-serif" font-size="10" font-weight="700" letter-spacing="1" text-anchor="middle">NO</text>
+
+  <!-- NO result block: REVERT / git revert -->
+  <rect x="960" y="245" width="130" height="70" fill="#C92A2A"/>
+  <text x="1025" y="275" fill="#FFFFFF" font-family="Inter, sans-serif" font-size="13" font-weight="800" text-anchor="middle">REVERT</text>
+  <text x="1025" y="293" fill="rgba(255,255,255,0.75)" font-family="Inter, sans-serif" font-size="10" font-weight="600" text-anchor="middle">git revert</text>
+
+  <!-- ======================== -->
+  <!-- LOOP BACK ARROW          -->
+  <!-- from KEEP/REVERT → back to EVALUATE -->
+  <!-- ======================== -->
+
+  <!-- From right side of YES block (1090, 120) → right to 1155 → down to 420 → left to 48 → up to 200 (B1 left) -->
+  <path d="M1090,120 L1155,120 L1155,420 L48,420 L48,235"
+        stroke="#D4532B" stroke-width="2" fill="none" stroke-dasharray="6,4"/>
+
+  <!-- Also from NO block right → join same vertical -->
+  <path d="M1090,280 L1155,280"
+        stroke="#D4532B" stroke-width="2" fill="none" stroke-dasharray="6,4"/>
+
+  <!-- Arrow head pointing up at B1 left -->
+  <polygon points="42,236 54,236 48,222" fill="#D4532B"/>
+
+  <!-- LOOP BACK label along bottom -->
+  <text x="590" y="448" fill="#444444" font-family="Inter, sans-serif" font-size="11" font-weight="600" text-anchor="middle" letter-spacing="3">LOOP BACK</text>
+
+  <!-- ======================== -->
+  <!-- STEP NUMBERS             -->
+  <!-- ======================== -->
+  <text x="48" y="158" fill="#D4532B" font-family="Inter, sans-serif" font-size="10" font-weight="700">01</text>
+  <text x="210" y="158" fill="#D4532B" font-family="Inter, sans-serif" font-size="10" font-weight="700">02</text>
+  <text x="372" y="158" fill="#D4532B" font-family="Inter, sans-serif" font-size="10" font-weight="700">03</text>
+  <text x="534" y="158" fill="#D4532B" font-family="Inter, sans-serif" font-size="10" font-weight="700">04</text>
+  <text x="762" y="145" fill="#D4532B" font-family="Inter, sans-serif" font-size="10" font-weight="700" opacity="0.9">05</text>
+
+  <!-- ======================== -->
+  <!-- SUBTITLE TEXT            -->
+  <!-- ======================== -->
+  <text x="48" y="476" fill="#333333" font-family="Inter, sans-serif" font-size="10" font-weight="600" letter-spacing="1">达尔文.skill</text>
+  <text x="1152" y="476" fill="#333333" font-family="Inter, sans-serif" font-size="10" font-weight="600" text-anchor="end" letter-spacing="1">CONTINUOUS IMPROVEMENT ENGINE</text>
+
+</svg>
+</body>
+</html>

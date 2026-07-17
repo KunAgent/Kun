@@ -1,0 +1,64 @@
+{
+  "name": "sales-coach",
+  "version": "1.1.0",
+  "description": "Full-stack sales coaching: rep development, meeting prep, deal strategy, business cases, competitive intelligence, call coaching, and pipeline management through Socratic methodology",
+  "agents": [
+    "./agents/sales-coach.md"
+  ],
+  "expertType": "agent",
+  "agentName": "sales-coach",
+  "displayName": {
+    "en": "Ula",
+    "zh": "单必成"
+  },
+  "profession": {
+    "en": "Sales Coach",
+    "zh": "销售教练"
+  },
+  "displayDescription": {
+    "en": "Full-stack sales coaching: from rep development to deal execution — meeting prep, deal strategy, business cases, competitive intelligence, and call coaching",
+    "zh": "全栈销售教练：从能力培养到实战执行——会议准备、交易策略、商业案例、竞品分析、通话复盘，用苏格拉底式提问驱动"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "07-SalesCommerce",
+  "defaultInitPrompt": {
+    "zh": "帮我为明天的客户会议做准备，我需要一份完整的会前简报和应对策略。",
+    "en": "Help me prepare for tomorrow's customer meeting — I need a complete pre-meeting brief and strategy."
+  },
+  "tags": [
+    {
+      "zh": "销售教练",
+      "en": "Sales Coaching"
+    },
+    {
+      "zh": "交易策略",
+      "en": "Deal Strategy"
+    },
+    {
+      "zh": "竞品分析",
+      "en": "Competitive Intel"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "帮我为明天的客户会议做准备，我需要一份完整的会前简报和应对策略。",
+      "en": "Help me prepare for tomorrow's customer meeting — I need a complete pre-meeting brief and strategy."
+    },
+    {
+      "zh": "为我的交易构建完整策略包，包括采购委员会图谱和风险评估",
+      "en": "Build a complete deal strategy pack with buying committee map and risk assessment"
+    },
+    {
+      "zh": "帮我复盘刚才的客户通话，给出教练反馈和跟进邮件",
+      "en": "Debrief my recent customer call — give me coaching feedback and draft the follow-up email"
+    }
+  ],
+  "skills": [
+    "./skills/prepare-meeting",
+    "./skills/deal-strategy",
+    "./skills/business-case",
+    "./skills/competitive-brief",
+    "./skills/call-debrief",
+    "./skills/anti-distill"
+  ]
+}

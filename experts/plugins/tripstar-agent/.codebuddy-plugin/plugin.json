@@ -1,0 +1,93 @@
+{
+  "name": "tripstar-agent",
+  "version": "1.2.1",
+  "description": "AI travel concierge powered by 9 integrated skills: day-by-day itinerary planning, international/domestic flight search, 12306 train booking, Airbnb/Fliggy hotels, live flight tracking, aviation weather, visa & currency helper, trip memory, and on-the-go Meituan coupons",
+  "author": {
+    "name": "johanzheng",
+    "email": "johanzheng@tencent.com"
+  },
+  "license": "MIT",
+  "keywords": [
+    "travel",
+    "itinerary",
+    "trip-planner",
+    "tourism",
+    "flight-search",
+    "hotel-booking",
+    "12306",
+    "train",
+    "airbnb",
+    "flight-tracking",
+    "aviation-weather",
+    "visa",
+    "coupon",
+    "agent"
+  ],
+  "agents": [
+    "./agents/trip-planner.md"
+  ],
+  "skills": [
+    "./skills/flyai",
+    "./skills/flights-search",
+    "./skills/12306-train-assistant",
+    "./skills/airbnb",
+    "./skills/flight-tracker",
+    "./skills/aviation-weather",
+    "./skills/globepilot-ai-agent-2",
+    "./skills/travel-planning",
+    "./skills/meituan-coupon-workbuddy"
+  ],
+  "expertType": "agent",
+  "agentName": "trip-planner",
+  "displayName": {
+    "en": "Leo",
+    "zh": "路小鲜"
+  },
+  "profession": {
+    "en": "Travel Guide Concierge",
+    "zh": "旅游攻略管家"
+  },
+  "displayDescription": {
+    "en": "Leo (路小鲜) is your all-in-one AI travel concierge backed by 9 integrated skills. Beyond crafting day-by-day itineraries, he can search real-time flights (Google Flights + Fliggy), book China Railway 12306 trains, find Airbnb/hotel rooms, track live flights via OpenSky Network, pull METAR/TAF aviation weather, provide visa/currency/cultural tips for overseas trips, and grab Meituan coupons at the dining/lodging/ticket moments — so every trip saves time, avoids pitfalls and spends smarter.",
+    "zh": "AI 旅行管家『路小鲜』（英文名 Leo），9 大专业技能加持的一站式旅行助手。除了输出分日行程、天气、预算与预约清单，还能：用 Google Flights / 飞猪 MCP 查国际国内机票，用 12306 余票/中转/下单工具订高铁，用 Airbnb 搜索找民宿，用 OpenSky 实时追踪航班动态，提供飞行气象（METAR/TAF），给出出境签证/货币/文化贴士，并在餐饮/酒店/门票环节顺手领美团红包。让每一次出行真正做到省时间、避坑、花得值。"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "12-IndustryConsultant",
+  "defaultInitPrompt": {
+    "zh": "我想去北京玩3天，2个人，预算5000元，帮我规划一份完整行程",
+    "en": "Plan a 3-day Beijing trip for 2 people with a budget of 5000 CNY"
+  },
+  "plugin": "tripstar-agent",
+  "tags": [
+    {
+      "en": "Itinerary Planning",
+      "zh": "行程规划"
+    },
+    {
+      "en": "Flight & Hotel Search",
+      "zh": "机票酒店搜索"
+    },
+    {
+      "en": "Meituan Coupons",
+      "zh": "美团优惠券"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "en": "Plan a 5-day Yunnan trip for my family",
+      "zh": "帮我规划一家三口云南5日游"
+    },
+    {
+      "en": "Find me the cheapest flight from Shanghai to Tokyo next month",
+      "zh": "下个月上海飞东京最便宜的机票找一找"
+    },
+    {
+      "en": "Book a high-speed train from Beijing to Shanghai tomorrow",
+      "zh": "帮我查明天北京到上海的高铁余票并下单"
+    },
+    {
+      "en": "7-day Japan cherry blossom itinerary with visa tips",
+      "zh": "4月去日本赏樱，7天行程怎么安排，顺便告诉我签证怎么办"
+    }
+  ]
+}

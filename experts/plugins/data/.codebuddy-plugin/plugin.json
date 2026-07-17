@@ -1,0 +1,29 @@
+{
+  "name": "data",
+  "version": "1.0.0",
+  "description": "数据分析插件，支持 SQL 查询、数据探索、可视化、仪表板构建和洞察生成。包含完整的数据分析工作流程和最佳实践。",
+  "author": {
+    "name": "CodeBuddy Teams",
+    "email": ""
+  },
+  "homepage": {
+    "url": "",
+    "type": "github"
+  },
+  "license": "",
+  "skills": [
+    "./skills/data-analysis-workflows",
+    "./skills/data-context-extractor",
+    "./skills/data-exploration",
+    "./skills/data-validation",
+    "./skills/data-visualization",
+    "./skills/interactive-dashboard-builder",
+    "./skills/sql-queries",
+    "./skills/statistical-analysis"
+  ],
+  "expertType": "agent",
+  "agentName": "data-exploration-expert",
+  "agents": [
+    "./agents/data-exploration-expert.md"
+  ]
+}

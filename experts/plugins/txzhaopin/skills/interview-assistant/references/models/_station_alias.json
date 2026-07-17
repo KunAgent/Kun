@@ -1,0 +1,52 @@
+{
+  "_comment": "岗位中文名 → 文件名 code 的别名表。HR 可在此自定义/扩展。AI 路由器读这个文件做模糊匹配。",
+  "_format": "中文岗位名（含子串） → 英文/拼音 code（用于文件名 {bg}-{station}-{recruitType}.md）",
+  "_examples": "若候选人 stationTxt='后台开发 - 服务端架构师'，会通过子串匹配命中 '后台开发' → 'backend'",
+
+  "后台开发": "backend",
+  "后端开发": "backend",
+  "服务端": "backend",
+  "服务端开发": "backend",
+  "Server": "backend",
+
+  "前端开发": "frontend",
+  "Web 前端": "frontend",
+  "Web前端": "frontend",
+
+  "客户端开发": "client",
+  "iOS 开发": "ios",
+  "Android 开发": "android",
+
+  "游戏策划": "gameplan",
+  "系统策划": "gameplan",
+  "数值策划": "gameplan",
+  "玩法策划": "gameplan",
+
+  "用户研究": "userresearch",
+  "用研": "userresearch",
+
+  "产品经理": "productmgr",
+  "产品策划": "productmgr",
+
+  "运营": "operation",
+  "内容运营": "content-operation",
+
+  "测试": "qa",
+  "测试开发": "qa",
+
+  "数据分析": "dataanalyst",
+  "数据科学": "dataanalyst",
+
+  "算法": "algo",
+  "机器学习": "algo",
+  "AI 研究员": "ai-researcher",
+  "AI研究员": "ai-researcher",
+
+  "HR": "hr",
+  "招聘": "recruiter",
+  "HRBP": "hrbp",
+
+  "法务": "legal",
+  "财务": "finance",
+  "审计": "audit"
+}

@@ -1,0 +1,31 @@
+{
+  "name": "user-experience-architect",
+  "version": "1.0.0",
+  "description": "Technical architecture and UX specialist who provides developers with solid foundations, CSS systems, and clear implementation guidance",
+  "expertType": "agent",
+  "agentName": "user-experience-architect",
+  "agents": ["./agents/user-experience-architect.md"],
+  "skills": ["./skills/browser-use"],
+  "displayName": { "en": "Tom", "zh": "体验达" },
+  "profession": { "en": "User Experience Architect", "zh": "用户体验架构师" },
+  "displayDescription": {
+    "en": "Providing developers with solid technical foundations and CSS systems, bridging design and development",
+    "zh": "为开发者提供坚实的技术基础和CSS系统，是设计与开发之间的桥梁"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "01-ProductDesign",
+  "defaultInitPrompt": {
+    "zh": "我们的产品架构需要重新梳理,用户体验流程存在断点,请用户体验架构师帮我设计更流畅的用户体验架构。",
+    "en": "Our product architecture needs restructuring, and there are breakpoints in the user experience flow. Please, User Experience Architect, help me design a smoother user experience architecture."
+  },
+  "tags": [
+    { "en": "Information Architecture", "zh": "信息架构" },
+    { "en": "User Journey", "zh": "用户旅程" },
+    { "en": "UX Strategy", "zh": "体验策略" }
+  ],
+  "quickPrompts": [
+    { "zh": "我们的产品架构需要重新梳理,用户体验流程存在断点,请用户体验架构师帮我设计更流畅的用户体验架构。", "en": "Our product architecture needs restructuring, and there are breakpoints in the user experience flow. Please, User Experience Architect, help me design a smoother user experience architecture." },
+    { "zh": "设计用户旅程地图和交互方案", "en": "Design user journey maps and interaction solutions" },
+    { "zh": "制定用户体验优化和测试计划", "en": "Develop UX optimization and testing plans" }
+  ]
+}

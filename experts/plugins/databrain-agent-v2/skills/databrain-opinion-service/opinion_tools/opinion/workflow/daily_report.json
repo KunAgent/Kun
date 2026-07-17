@@ -1,0 +1,554 @@
+{
+    "workflow_name": "daily_report",
+    "description": "Steam平台日报数据收集和分析",
+    "steps": [
+        {
+            "step_id": 0,
+            "step_name": "game_daily_update",
+            "description": "游戏更新和新闻收集",
+            "agent": "Opinions Agent",
+            "tool_calls": [
+                {
+                    "function": {
+                        "name": "read_data",
+                        "arguments": {
+                            "query": {
+                                "measures": [
+                                    "news.views"
+                                ],
+                                "dimensions": [
+                                    "news.title",
+                                    "news.content"
+                                ],
+                                "timeDimensions": [
+                                    {
+                                        "dimension": "news.date",
+                                        "dateRange": [
+                                            "{start_time}",
+                                            "{end_time}"
+                                        ]
+                                    }
+                                ],
+                                "filters": [
+                                    {
+                                        "member": "news.game_id",
+                                        "operator": "equals",
+                                        "values": [
+                                            "{game_id}"
+                                        ]
+                                    }
+                                ],
+                                "order": {
+                                    "news.views": "desc"
+                                },
+                                "limit": 5
+                            }
+                        }
+                    },
+                    "expected_output": "游戏新闻",
+                    "metrics_collected": [
+                        "News"
+                    ]
+                }
+            ]
+        },
+        {
+            "step_id": 1,
+            "step_name": "steam_overview_period",
+            "description": "Steam平台选定时间Overview",
+            "agent": "Opinions Agent",
+            "tool_calls": [
+                {
+                    "function": {
+                        "name": "read_data",
+                        "arguments": {
+                            "query": {
+                                "measures": [
+                                    "feeds.game_store_reviews",
+                                    "feeds.steam_recommend_mentions",
+                                    "feeds.steam_unrecommend_mentions",
+                                    "feeds.steam_recommend_rate"
+                                ],
+                                "dimensions": [],
+                                "timeDimensions": [
+                                    {
+                                        "dimension": "feeds.date",
+                                        "dateRange": [
+                                            "{start_time}",
+                                            "{end_time}"
+                                        ]
+                                    }
+                                ],
+                                "filters": [
+                                    {
+                                        "member": "feeds.game_id",
+                                        "operator": "equals",
+                                        "values": [
+                                            "{game_id}"
+                                        ]
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                    "expected_output": "Steam平台选定时间Overview",
+                    "metrics_collected": [
+                        "Total Reviews - 24H",
+                        "Positive Reviews - 24H",
+                        "Negative Reviews - 24H",
+                        "Positive Rate - 24H"
+                    ]
+                }
+            ]
+        },
+        {
+            "step_id": 2,
+            "step_name": "steam_overview_lifetime",
+            "description": "Steam平台生命周期概览",
+            "agent": "Opinions Agent",
+            "tool_calls": [
+                {
+                    "function": {
+                        "name": "read_data",
+                        "arguments": {
+                            "query": {
+                                "measures": [
+                                    "steam_score.all_reviews_count",
+                                    "steam_score.positive_reviews_count",
+                                    "steam_score.all_reviews_positive_rate"
+                                ],
+                                "dimensions": [],
+                                "timeDimensions": [
+                                    {
+                                        "dimension": "steam_score.date",
+                                        "granularity": "day",
+                                        "dateRange": [
+                                            "{end_time}",
+                                            "{end_time}"
+                                        ]
+                                    }
+                                ],
+                                "filters": [
+                                    {
+                                        "member": "steam_score.game_id",
+                                        "operator": "equals",
+                                        "values": [
+                                            "{game_id}"
+                                        ]
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                    "expected_output": "Steam 生命周期概览数据",
+                    "metrics_collected": [
+                        "Total Reviews - Lifetime",
+                        "Positive Reviews - Lifetime",
+                        "Negative Reviews - Lifetime (calculated: all_reviews_count - positive_reviews_count)",
+                        "Positive Rate - Lifetime"
+                    ]
+                }
+            ]
+        },
+        {
+            "step_id": 3,
+            "step_name": "steam_overview_by_hours",
+            "description": "Steam平台按小时数据",
+            "agent": "Opinions Agent",
+            "tool_calls": [
+                {
+                    "function": {
+                        "name": "read_data",
+                        "arguments": {
+                            "query": {
+                                "measures": [
+                                    "feeds.steam_recommend_mentions",
+                                    "feeds.steam_unrecommend_mentions",
+                                    "feeds.steam_recommend_rate"
+                                ],
+                                "dimensions": [],
+                                "timeDimensions": [
+                                    {
+                                        "dimension": "feeds.date",
+                                        "granularity": "hour",
+                                        "dateRange": [
+                                            "{start_time}",
+                                            "{end_time}"
+                                        ]
+                                    }
+                                ],
+                                "filters": [
+                                    {
+                                        "member": "feeds.game_id",
+                                        "operator": "equals",
+                                        "values": [
+                                            "{game_id}"
+                                        ]
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                    "expected_output": "Steam平台按小时数据",
+                    "metrics_collected": [
+                        "Recommend Reviews - By Hours 24 hours",
+                        "Unrecommend Reviews - By Hours 24 hours",
+                        "Recommend Rate - By Hours 24 hours"
+                    ]
+                }
+            ]
+        },       
+        {            
+            "step_id": 4,
+            "step_name": "steam_overview_by_day",
+            "description": "Steam平台14天按天数据收集",
+            "agent": "Opinions Agent",
+            "tool_calls": [
+                {
+                    "function": {
+                        "name": "read_data",
+                        "arguments": {
+                            "query": {
+                                "measures": [
+                                    "feeds.steam_recommend_mentions",
+                                    "feeds.steam_unrecommend_mentions",
+                                    "feeds.steam_recommend_rate"
+                                ],
+                                "dimensions": [],
+                                "timeDimensions": [
+                                    {
+                                        "dimension": "feeds.date",
+                                        "granularity": "day",
+                                        "dateRange": ["请计算{end_time}-14天", "{end_time}"]
+                                    }
+                                ],
+                                "filters": [
+                                    {
+                                        "member": "feeds.game_id",
+                                        "operator": "equals",
+                                        "values": [
+                                            "{game_id}"
+                                        ]
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                    "expected_output": "Steam平台14天数据",
+                    "metrics_collected": [
+                        "Positive Reviews - By Day 14 days",
+                        "Negative Reviews - By Day 14 days",
+                        "Positive Rate - By Day 14 days"
+                    ]
+                }
+            ]
+        },
+        {
+            "step_id": 5,
+            "step_name": "steam_reviews_topics",
+            "description": "Steam平台评论话题分析",
+            "agent": "Opinions Agent",
+            "tool_calls": [
+                {
+                    "function": {
+                        "name": "opinion_summary_tool",
+                        "arguments": {
+                            "start_time": "{start_time}",
+                            "end_time": "{end_time}",
+                            "sentiment_type": "total",
+                            "channel_type": "game_store",
+                            "date_type": "daily",
+                            "edition_unified_id": "{game_id}",
+                            "entity_type": "pc",
+                            "id_type": "edition_id"
+                        }
+                    },
+                    "expected_output": "Steam 评论话题分析",
+                    "metrics_collected": [
+                        "Topic Summary - By Topics",
+                        "number of reviews - By Topics",
+                        "percentage - By Topics"
+                    ]
+                }
+            ]
+        },
+        {
+            "step_id": 6,
+            "step_name": "steam_by_language",
+            "description": "Steam平台按语言分类数据收集",
+            "agent": "Opinions Agent",
+            "tool_calls": [
+                {
+                    "function": {
+                        "name": "read_data",
+                        "arguments": {
+                            "query": {
+                                "measures": [
+                                    "feeds.game_store_reviews",
+                                    "feeds.steam_recommend_mentions",
+                                    "feeds.steam_unrecommend_mentions",
+                                    "feeds.steam_recommend_rate"
+                                ],
+                                "dimensions": [
+                                    "feeds.language_en"
+                                ],
+                                "timeDimensions": [
+                                    {
+                                        "dimension": "feeds.date",
+                                        "granularity": "day",
+                                        "dateRange": ["{start_time}", "{end_time}"]
+                                    }
+                                ],
+                                "filters": [
+                                    {
+                                        "member": "feeds.game_id",
+                                        "operator": "equals",
+                                        "values": [
+                                            "{game_id}"
+                                        ]
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                    "expected_output": "Steam 按语言分类数据",
+                    "metrics_collected": [
+                        "Total Reviews - Period - By Language",
+                        "Positive Reviews - Period - By Language",
+                        "Negative Reviews - Period - By Language",
+                        "Positive Rate - Period - By Language"
+                    ]
+                }
+            ]
+        },
+        {
+            "step_id": 8,
+            "step_name": "social_media_period",
+            "description": "社交媒体所选时间数据",
+            "agent": "Opinions Agent",
+            "tool_calls": [
+                {
+                    "function": {
+                        "name": "read_data",
+                        "arguments": {
+                            "query": {
+                                "measures": [
+                                    "feeds.mentions",
+                                    "feeds.avg_sentiment",
+                                    "feeds.positive_rate",
+                                    "feeds.negative_rate"
+                                ],
+                                "dimensions": [],
+                                "timeDimensions": [
+                                    {
+                                        "dimension": "feeds.date",
+                                        "dateRange": ["{start_time}", "{end_time}"]
+                                    }
+                                ],
+                                "filters": [
+                                    {
+                                        "member": "feeds.game_id",
+                                        "operator": "equals",
+                                        "values": [
+                                            "{game_id}"
+                                        ]
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                    "expected_output": "社交媒体所选时间数据",
+                    "metrics_collected": [
+                        "Mentions",
+                        "Sentiment",
+                        "Positive Rate",
+                        "Negative Rate"
+                    ]
+                }
+            ]
+        },
+        {
+            "step_id": 9,
+            "step_name": "social_media_lifetime",
+            "description": "社交媒体14天生命周期数据收集",
+            "agent": "Opinions Agent",
+            "tool_calls": [
+                {
+                    "function": {
+                        "name": "read_data",
+                        "arguments": {
+                            "query": {
+                                "measures": [
+                                    "feeds.mentions",
+                                    "feeds.avg_sentiment",
+                                    "feeds.positive_rate",
+                                    "feeds.negative_rate"
+                                ],
+                                "dimensions": [],
+                                "timeDimensions": [
+                                    {
+                                        "dimension": "feeds.date",
+                                        "granularity": "day",
+                                        "dateRange": ["请计算{end_time}-14天", "{end_time}"]
+                                    }
+                                ],
+                                "filters": [
+                                    {
+                                        "member": "feeds.game_id",
+                                        "operator": "equals",
+                                        "values": [
+                                            "{game_id}"
+                                        ]
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                    "expected_output": "社交媒体14天生命周期数据",
+                    "metrics_collected": [
+                        "Mentions - 14 days",
+                        "Sentiment - 14 days",
+                        "Positive Rate - 14 days",
+                        "Negative Rate - 14 days"
+                    ]
+                }
+            ]
+        },
+        {
+            "step_id": 10,
+            "step_name": "social_media_reviews_topics",
+            "description": "社交媒体评论话题分析",
+            "agent": "Opinions Agent",
+            "tool_calls": [
+                {
+                    "function": {
+                        "name": "opinion_summary_tool",
+                        "arguments": {
+                            "start_time": "{start_time}",
+                            "end_time": "{end_time}",
+                            "sentiment_type": "total",
+                            "channel_type": "social",
+                            "date_type": "daily",
+                            "edition_unified_id": "{game_id}",
+                            "entity_type": "pc",
+                            "id_type": "edition_id"
+                        }
+                    },
+                    "expected_output": "社交媒体评论话题分析",
+                    "metrics_collected": [
+                        "Topic Summary - By Topics",
+                        "number of reviews - By Topics",
+                        "percentage - By Topics"
+                    ]
+                }
+            ]
+        },
+        {
+            "step_id": 11,
+            "step_name": "community_channel",
+            "description": "社区按渠道分类数据收集",
+            "agent": "Opinions Agent",
+            "tool_calls": [
+                {
+                    "function": {
+                        "name": "read_data",
+                        "arguments": {
+                            "query": {
+                                "measures": [
+                                    "feeds.mentions",
+                                    "feeds.avg_sentiment",
+                                    "feeds.positive_rate",
+                                    "feeds.negative_rate"
+                                ],
+                                "dimensions": [
+                                    "feeds.channel_display_name"
+                                ],
+                                "timeDimensions": [
+                                    {
+                                        "dimension": "feeds.date",
+                                        "dateRange": ["{start_time}", "{end_time}"]
+                                    }
+                                ],
+                                "filters": [
+                                    {
+                                        "member": "feeds.game_id",
+                                        "operator": "equals",
+                                        "values": [
+                                            "{game_id}"
+                                        ]
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                    "expected_output": "社区按渠道分类数据",
+                    "metrics_collected": [
+                        "Mentions - Period By Channel",
+                        "Sentiment - Period By Channel",
+                        "Positive Rate - Period By Channel",
+                        "Negative Rate - Period By Channel"
+                    ]
+                }
+            ]
+        },
+        {
+            "step_id": 12,
+            "step_name": "community_language",
+            "description": "社区按语言分类数据收集",
+            "agent": "Opinions Agent",
+            "tool_calls": [
+                {
+                    "function": {
+                        "name": "read_data",
+                        "arguments": {
+                            "query": {
+                                "measures": [
+                                    "feeds.mentions",
+                                    "feeds.avg_sentiment",
+                                    "feeds.positive_rate",
+                                    "feeds.negative_rate"
+                                ],
+                                "dimensions": [
+                                    "feeds.language_en"
+                                ],
+                                "timeDimensions": [
+                                    {
+                                        "dimension": "feeds.date",
+                                        "dateRange": ["{start_time}", "{end_time}"]
+                                    }
+                                ],
+                                "filters": [
+                                    {
+                                        "member": "feeds.game_id",
+                                        "operator": "equals",
+                                        "values": [
+                                            "{game_id}"
+                                        ]
+                                    }
+                                ]
+                            }
+                        }
+                    },
+                    "expected_output": "社区按语言分类数据",
+                    "metrics_collected": [
+                        "Mentions - Period By Language",
+                        "Sentiment - Period By Language",
+                        "Positive Rate - Period By Language",
+                        "Negative Rate - Period By Language"
+                    ]
+                }
+            ]
+        }
+    ],
+    "execution_config": {
+        "execution_mode": "parallel",
+        "retry_policy": {
+            "max_retries": 3,
+            "retry_delay": "1s"
+        },
+        "timeout": "600s",
+        "deterministic": true,
+        "cache_results": true
+    },
+    "report_template": "# Opinion Daily Report - {game_name}\n\n请根据以下收集到的数据，严格按照以下模板格式生成专业的舆情日报：\n\n## 数据来源\n- Agent执行结果: {all_results}\n- 数据查询结果: {bidata}\n\n# Opinion Daily Report\n请根据以下收集到的数据，按照以下模板格式生成专业的舆情日报：\n\n## 报告模板格式\n\n### Steam\n#### Overview\n{{Summary}}\n请基于Steam相关数据生成概述，包括整体评价趋势、用户反馈概况等。\n\n#### 数据表格\n| Time Period | Total Reviews | Positive Reviews | Negative Reviews | Positive Rate |\n|-------------|---------------|------------------|------------------|---------------|\n| SelectPeriod       | [数据]        | [数据]           | [数据]           | [数据]         |\n| Lifetime    | [数据]        | [数据]           | [数据]           | [数据]         |\n\n#### 趋势图表\n**Last 24H Hourly Trend - Stacked Bar Chart with Line Chart**\n- positive reviews / negative reviews / positive rate\n\n**Daily Trend since Launch Stacked Bar Chart with Line Chart**\n- positive reviews / negative reviews / positive rate\n\n#### Steam Reviews Topics\n**Top 5 Positive Topics with Examples**\n- Topic P1 (number of reviews, percentage)\n  - Example Reviews\n    - Example A\n    - Example B\n    - Example C\n    - Example D\n    - Example E\n- Topic P2 (number of reviews, percentage)\n- Topic P3 (number of reviews, percentage)\n- Topic P4 (number of reviews, percentage)\n- Topic P5 (number of reviews, percentage)\n\n**Top 5 Negative Topics with Examples**\n- Topic N1 (number of reviews, percentage)\n  - Example Reviews\n    - Example F\n    - Example G\n    - Example H\n    - Example I\n    - Example J\n- Topic N2 (number of reviews, percentage)\n- Topic N3 (number of reviews, percentage)\n- Topic N4 (number of reviews, percentage)\n- Topic N5 (number of reviews, percentage)\n\n### Social Media\n#### Overview\n{{Summary}}\n请基于社交媒体相关数据生成概述。\n\n#### 数据表格\n| Time Period | Mentions | Sentiment | Negative Reviews | Positive Rate |\n|-------------|----------|-----------|------------------|---------------|\n| Today       | [数据]   | [数据]    | [数据]           | [数据]         |\n| Yesterday   | [数据]   | [数据]    | [数据]           | [数据]         |\n\n#### Key Topics\n**Top 5 Positive Topics with Examples (total Mentions: [数据], [百分比])**\n- Topic P1 (number of reviews, percentage)\n  - Example Reviews\n    - Example A\n    - Example B\n    - Example C\n    - Example D\n    - Example E\n- Topic P2 (number of reviews, percentage)\n- Topic P3 (number of reviews, percentage)\n- Topic P4 (number of reviews, percentage)\n- Topic P5 (number of reviews, percentage)\n\n**Top 5 Negative Topics with Examples**\n- Topic N1 (number of reviews, percentage)\n  - Example Reviews\n    - Example F\n    - Example G\n    - Example H\n    - Example I\n    - Example J\n- Topic N2 (number of reviews, percentage)\n- Topic N3 (number of reviews, percentage)\n- Topic N4 (number of reviews, percentage)\n- Topic N5 (number of reviews, percentage)\n\n### Community Data Highlights\n#### Channel Distribution\n| Channel | Total Mentions | Avg Sentiment | Positive% | Negative% |\n|---------|----------------|-----------|-----------|-----------|\n| [渠道1] | [数据]         | [数据]    | [数据]    | [数据]    |\n| [渠道2] | [数据]         | [数据]    | [数据]    | [数据]    |\n| ...     | ...            | ...       | ...       | ...       |\n\n#### Language Distribution\n| Language | Total Mentions | Avg Sentiment |  Positive% | Negative% |\n|----------|----------------|------------|-----------|-----------|\n| [语言1]  | [数据]         | [数据]     | [数据]    | [数据]    |\n| [语言2]  | [数据]         | [数据]     | [数据]    | [数据]    |\n| ...      | ...            | ...        | ...       | ...       |\n\n## 重要要求：\n1. 按照上述模板格式输出，不要添加额外的内容\n2. 从提供的数据中提取相应的数值填入表格\n3. 如果某些数据未获取，禁止编造或生成数据\n4. 确保所有数据都基于实际收集到的信息\n5. 保持专业的报告语调\n6. 使用Markdown格式输出，确保表格和列表格式正确\n\n请开始生成报告："
+}

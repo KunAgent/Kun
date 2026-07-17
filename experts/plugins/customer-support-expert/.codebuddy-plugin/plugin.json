@@ -1,0 +1,59 @@
+{
+  "name": "customer-support-expert",
+  "version": "1.0.0",
+  "description": "Transforming every frustrated user interaction into loyal advocacy, creating reputation through excellent service",
+  "agents": [
+    "./agents/customer-support-expert.md"
+  ],
+  "expertType": "agent",
+  "agentName": "customer-support-expert",
+  "displayName": {
+    "en": "Olin",
+    "zh": "暖心心"
+  },
+  "profession": {
+    "en": "Customer Support Expert",
+    "zh": "客户支持专家"
+  },
+  "displayDescription": {
+    "en": "Transforming every frustrated user interaction into loyal advocacy, creating reputation through excellent service",
+    "zh": "将每次沮丧的用户互动转化为忠实拥护者，用卓越服务创口碑"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "09-OperationsHR",
+  "defaultInitPrompt": {
+    "zh": "我们的客户服务质量参差不齐,需要建立标准化的客户服务体系,请客户支持专家帮我们制定客户服务标准。",
+    "en": "Our customer service quality varies and we need to establish a standardized customer service system. Please, Customer Support Expert, help us develop customer service standards."
+  },
+  "tags": [
+    {
+      "zh": "客户服务",
+      "en": "Customer Support"
+    },
+    {
+      "zh": "工单处理",
+      "en": "Ticket Handling"
+    },
+    {
+      "zh": "服务质量",
+      "en": "Service Quality"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "我们的客户服务质量参差不齐,需要建立标准化的客户服务体系,请客户支持专家帮我们制定客户服务标准。",
+      "en": "Our customer service quality varies and we need to establish a standardized customer service system. Please, Customer Support Expert, help us develop customer service standards."
+    },
+    {
+      "zh": "设计智能客服话术和常见问题库",
+      "en": "Design smart customer service scripts and FAQ knowledge base"
+    },
+    {
+      "zh": "制定客户满意度提升和投诉处理方案",
+      "en": "Develop customer satisfaction improvement and complaint handling plan"
+    }
+  ],
+  "skills": [
+    "./skills/market-researcher"
+  ]
+}

@@ -1,0 +1,50 @@
+{
+  "name": "chuangye-manor",
+  "version": "1.1.0",
+  "description": "A startup coach based on Lin Zhenggang's methodology, helping entrepreneurs make right choices, sequencing, and actions.",
+  "author": {
+    "name": "QClaw",
+    "email": "contact@6fenyi.com"
+  },
+  "agents": ["./agents/chuangye-manor.md"],
+  "skills": [
+    "./skills/manor-host",
+    "./skills/manor-judge",
+    "./skills/knowledge-sequence",
+    "./skills/knowledge-gtm",
+    "./skills/knowledge-business",
+    "./skills/knowledge-org",
+    "./skills/knowledge-growth",
+    "./skills/commitment-tracker"
+  ],
+  "expertType": "agent",
+  "agentName": "chuangye-manor",
+  "displayName": {
+    "en": "Lin Zhenggang",
+    "zh": "林正刚"
+  },
+  "profession": {
+    "en": "Entrepreneurship Partner",
+    "zh": "创业伙伴"
+  },
+  "displayDescription": {
+    "en": "Based on Lin Zhenggang's methodology, helps entrepreneurs guard the Customer→GTM→Model→People→Execution sequence, spot bottlenecks with pinpoint clarity, and push toward concrete action.",
+    "zh": "基于林正刚体系，帮创业者守住客户→GTM→模型→人→执行顺序，识别卡点、一语道破、追问到行动。"
+  },
+  "avatar": "avatars/expert.jpg",
+  "categoryId": "12-IndustryConsultant",
+  "defaultInitPrompt": {
+    "zh": "我最近很忙，但感觉没结果",
+    "en": "I've been very busy lately, but it doesn't feel like it's leading anywhere."
+  },
+  "tags": [
+    { "en": "Startup Judgment", "zh": "创业判断" },
+    { "en": "GTM Execution", "zh": "GTM落地" },
+    { "en": "Customer Mindset", "zh": "客户心法" }
+  ],
+  "quickPrompts": [
+    { "en": "I've been very busy lately, but it doesn't feel like it's leading anywhere.", "zh": "我最近很忙，但感觉没结果" },
+    { "en": "I'm afraid to meet customers and scared of rejection.", "zh": "我不敢见客户，怕被拒绝" },
+    { "en": "Help me judge whether my current startup sequence is right.", "zh": "帮我判断一下我现在的创业顺序" }
+  ]
+}

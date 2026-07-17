@@ -1,0 +1,1025 @@
+{
+  "schemaVersion": "fbs.board-secretary-assistant.service-provider-evidence-index.v1",
+  "packageName": "fbsir-board-secretary-assistant",
+  "allianceId": "workbuddy-listed-board-secretary-service-provider-red-team-alliance-20260621",
+  "boundary": {
+    "reviewOnly": true,
+    "serviceProvidersAreResourcesNotEndorsedPartners": true,
+    "modifiesRunningListedPackage": false,
+    "responsibilityOutsourcingAllowed": false,
+    "automaticPublishingAllowed": false,
+    "automaticLegalConclusionAllowed": false,
+    "publicDisclosureAllowed": false,
+    "publishReady": false,
+    "manualReviewRequired": true,
+    "dataProcessingRequiresSeparateAuthorization": true
+  },
+  "providers": [
+    {
+      "providerId": "sse_one_stop_ir",
+      "providerName": "上交所一网通办-投资者关系",
+      "category": "official_platform",
+      "sourceType": "official",
+      "url": "https://one.sse.com.cn/list/tzzgx/",
+      "credibility": "high",
+      "capabilities": [
+        "e互动交流",
+        "上市公司发布",
+        "投资者关系栏目建设",
+        "路演申请",
+        "股东会投票统计"
+      ],
+      "canJoinBoardSecretaryCampAs": [
+        "official_disclosure_and_ir_anchor"
+      ],
+      "redTeamUses": [
+        "核验IR输出是否回到官方互动和路演边界",
+        "检查AI问答是否越过法定披露渠道",
+        "模拟多渠道口径一致性测试"
+      ],
+      "riskBoundaries": [
+        "不替代上市公司正式公告",
+        "不证明AI输出可直接对外发布",
+        "只作为公开渠道和流程边界锚点"
+      ],
+      "mappedFamilies": [
+        "RT-F03",
+        "RT-F04",
+        "RT-F05"
+      ]
+    },
+    {
+      "providerId": "sse_e_interactive",
+      "providerName": "上证e互动",
+      "category": "official_investor_interaction",
+      "sourceType": "official",
+      "url": "https://sns.sseinfo.com/",
+      "credibility": "high",
+      "capabilities": [
+        "投资者与上市公司互动问答",
+        "上市公司发布文件",
+        "公开互动记录"
+      ],
+      "canJoinBoardSecretaryCampAs": [
+        "official_disclosure_and_ir_anchor",
+        "investor_question_pressure_source"
+      ],
+      "redTeamUses": [
+        "抽取投资者高压问题模拟互动问答红队",
+        "检查热点概念、财务解释、商誉减值类问题是否触发人工复核",
+        "对比AI回复与既有公开回复是否口径漂移"
+      ],
+      "riskBoundaries": [
+        "不得通过互动问答披露未公开重大信息",
+        "不得将平台问答扩展为投资建议",
+        "不得替代正式公告"
+      ],
+      "mappedFamilies": [
+        "RT-F01",
+        "RT-F03",
+        "RT-F05"
+      ]
+    },
+    {
+      "providerId": "sse_one_stop_disclosure",
+      "providerName": "上交所一网通办-信息披露",
+      "category": "official_disclosure_workflow",
+      "sourceType": "official",
+      "url": "https://one.sse.com.cn/list/",
+      "credibility": "high",
+      "capabilities": [
+        "信息披露文件",
+        "定期报告预约及变更",
+        "候选董秘资格备案",
+        "其他文件报送"
+      ],
+      "canJoinBoardSecretaryCampAs": [
+        "official_disclosure_and_ir_anchor",
+        "announcement_and_data_verification_tool"
+      ],
+      "redTeamUses": [
+        "检查公告生成流程是否遗漏附件、备查文件或预约节点",
+        "验证候选董秘、信披文件和正式报送边界",
+        "测试AI是否把审稿误执行为报送"
+      ],
+      "riskBoundaries": [
+        "不允许AI自动报送",
+        "不允许AI代签或代备案",
+        "必须保留人工责任链"
+      ],
+      "mappedFamilies": [
+        "RT-F04",
+        "RT-F05",
+        "RT-F06"
+      ]
+    },
+    {
+      "providerId": "sse_company_portrait",
+      "providerName": "上交所公司画像系统",
+      "category": "official_supervision_tech",
+      "sourceType": "official_media",
+      "url": "https://www.sse.com.cn/aboutus/mediacenter/hotandd/c/c_20190902_4909086.shtml",
+      "credibility": "high",
+      "capabilities": [
+        "公告自动审查",
+        "财报风险画像",
+        "招股说明书风险识别",
+        "监管辅助预警"
+      ],
+      "canJoinBoardSecretaryCampAs": [
+        "announcement_and_data_verification_tool"
+      ],
+      "redTeamUses": [
+        "模拟交易所视角的财务异常和披露风险复核",
+        "检查AI输出是否缺少异常解释链",
+        "设计误报/漏报复核用例"
+      ],
+      "riskBoundaries": [
+        "监管科技信号不能替代上市公司自查和人工复核",
+        "风险画像不能被写成确定违法结论"
+      ],
+      "mappedFamilies": [
+        "RT-F05",
+        "RT-F06"
+      ]
+    },
+    {
+      "providerId": "szse_irm_cninfo",
+      "providerName": "深交所互动易",
+      "category": "official_investor_interaction",
+      "sourceType": "official",
+      "url": "https://irm.cninfo.com.cn/",
+      "credibility": "high",
+      "capabilities": [
+        "投资者提问",
+        "公司公告",
+        "云访谈",
+        "调研活动"
+      ],
+      "canJoinBoardSecretaryCampAs": [
+        "official_disclosure_and_ir_anchor",
+        "investor_question_pressure_source"
+      ],
+      "redTeamUses": [
+        "构造互动易热点问答压力测试",
+        "检查提前披露、误导性承诺和股价引导风险",
+        "核对回复是否引用已披露事实"
+      ],
+      "riskBoundaries": [
+        "互动平台回复不得先于指定媒体披露重大信息",
+        "不能用互动问答替代公告",
+        "不能承诺未来股价或业绩"
+      ],
+      "mappedFamilies": [
+        "RT-F01",
+        "RT-F03",
+        "RT-F05"
+      ]
+    },
+    {
+      "providerId": "cninfo_webapi",
+      "providerName": "深证信数据服务平台 CNINFO WebAPI",
+      "category": "official_data_api",
+      "sourceType": "official",
+      "url": "https://webapi.cninfo.com.cn/",
+      "credibility": "high",
+      "capabilities": [
+        "上市公司数据",
+        "基金数据",
+        "债券数据",
+        "公告接口",
+        "主题数据服务"
+      ],
+      "canJoinBoardSecretaryCampAs": [
+        "announcement_and_data_verification_tool"
+      ],
+      "redTeamUses": [
+        "公告事实核验",
+        "历史公告时间戳锁定",
+        "跨源一致性检查",
+        "测试旧数据误用和接口混淆"
+      ],
+      "riskBoundaries": [
+        "接口数据需要记录查询时间和来源",
+        "不得把接口摘要当成法律结论",
+        "数据授权需单独确认"
+      ],
+      "mappedFamilies": [
+        "RT-F02",
+        "RT-F05",
+        "RT-F06"
+      ]
+    },
+    {
+      "providerId": "cninfo_portal",
+      "providerName": "巨潮资讯",
+      "category": "official_disclosure_portal",
+      "sourceType": "official",
+      "url": "https://www.cninfo.com.cn/",
+      "credibility": "high",
+      "capabilities": [
+        "深市公告",
+        "沪市公告",
+        "北交所公告",
+        "公告检索"
+      ],
+      "canJoinBoardSecretaryCampAs": [
+        "announcement_and_data_verification_tool"
+      ],
+      "redTeamUses": [
+        "核验公告是否已正式披露",
+        "测试AI是否引用旧公告或错板块公告",
+        "检查公告口径一致性"
+      ],
+      "riskBoundaries": [
+        "公开公告不等于可推导未披露结论",
+        "公告检索结果必须带日期和证券代码"
+      ],
+      "mappedFamilies": [
+        "RT-F02",
+        "RT-F05",
+        "RT-F06"
+      ]
+    },
+    {
+      "providerId": "panorama_ir_platform",
+      "providerName": "全景路演投资者关系互动平台",
+      "category": "ir_roadshow_platform",
+      "sourceType": "service_provider",
+      "url": "https://wxly.p5w.net/ir.html",
+      "credibility": "medium",
+      "capabilities": [
+        "上市公司问答聚合",
+        "互动记录查询",
+        "投资者服务"
+      ],
+      "canJoinBoardSecretaryCampAs": [
+        "investor_question_pressure_source",
+        "ir_workflow_simulation_tool"
+      ],
+      "redTeamUses": [
+        "模拟业绩说明会和投资者高频问答",
+        "检查旧口径误复用",
+        "测试批量问答风险分级"
+      ],
+      "riskBoundaries": [
+        "服务商平台不等同交易所法定披露渠道",
+        "历史问答必须版本化",
+        "投资者画像和触达需遵守隐私边界"
+      ],
+      "mappedFamilies": [
+        "RT-F03",
+        "RT-F04",
+        "RT-F07"
+      ]
+    },
+    {
+      "providerId": "roadshowchina",
+      "providerName": "路演中",
+      "category": "ir_roadshow_platform",
+      "sourceType": "service_provider",
+      "url": "https://www.roadshowchina.cn/About/histories.html",
+      "credibility": "medium",
+      "capabilities": [
+        "线上线下一体化路演",
+        "投资者匹配",
+        "跨境路演",
+        "路演活动组织"
+      ],
+      "canJoinBoardSecretaryCampAs": [
+        "ir_workflow_simulation_tool",
+        "investor_question_pressure_source"
+      ],
+      "redTeamUses": [
+        "模拟定向路演中的选择性披露风险",
+        "测试投资者画像和定向触达合规",
+        "检查跨境路演口径一致性"
+      ],
+      "riskBoundaries": [
+        "不得把精准触达扩展成差别披露",
+        "跨境材料需单独审查",
+        "投资者数据使用需授权"
+      ],
+      "mappedFamilies": [
+        "RT-F03",
+        "RT-F04",
+        "RT-F06"
+      ]
+    },
+    {
+      "providerId": "easy_board",
+      "providerName": "易董",
+      "category": "board_office_saas",
+      "sourceType": "service_provider",
+      "url": "https://www.easy-board.cn/",
+      "credibility": "medium",
+      "capabilities": [
+        "合规智库",
+        "董办流程管理",
+        "AI综合服务",
+        "数据隔离和安全防护"
+      ],
+      "canJoinBoardSecretaryCampAs": [
+        "board_office_workflow_tool",
+        "compliance_knowledge_resource"
+      ],
+      "redTeamUses": [
+        "对照董办SaaS能力检查场景覆盖缺口",
+        "模拟合规知识库引用污染",
+        "测试流程、模板、留痕和权限边界"
+      ],
+      "riskBoundaries": [
+        "服务商知识库不能替代官方规则",
+        "私有空间和数据隔离需单独审计",
+        "AI综合服务输出仍需人工复核"
+      ],
+      "mappedFamilies": [
+        "RT-F02",
+        "RT-F04",
+        "RT-F06"
+      ]
+    },
+    {
+      "providerId": "ths_i_board_secretary",
+      "providerName": "同花顺i董秘/董秘助手",
+      "category": "board_office_saas",
+      "sourceType": "listed_company_disclosure",
+      "url": "https://money.finance.sina.com.cn/corp/view/vCB_AllBulletinDetail.php?id=10408576&stockid=300033",
+      "credibility": "high",
+      "capabilities": [
+        "信息披露辅助",
+        "投资者关系管理",
+        "合规业务流程辅助",
+        "事前资料查询",
+        "事中系统化管理",
+        "事后智能化分析"
+      ],
+      "canJoinBoardSecretaryCampAs": [
+        "board_office_workflow_tool",
+        "compliance_knowledge_resource"
+      ],
+      "redTeamUses": [
+        "验证董秘助手同类能力覆盖",
+        "设计生成内容幻觉和错误引用测试",
+        "检查越权取数和自动签发风险"
+      ],
+      "riskBoundaries": [
+        "上市公司年报披露只能证明服务商能力表述",
+        "不能证明本审核包已实现同等能力",
+        "任何输出不得自动签发"
+      ],
+      "mappedFamilies": [
+        "RT-F04",
+        "RT-F05",
+        "RT-F06"
+      ]
+    },
+    {
+      "providerId": "jindongmi_jointown",
+      "providerName": "九州通金董秘全周期工作管理系统",
+      "category": "board_office_workflow_system",
+      "sourceType": "domestic_practice_signal",
+      "url": "https://stcn.com/article/detail/1657260.html",
+      "credibility": "medium",
+      "capabilities": [
+        "任务规划",
+        "进度督导",
+        "协作通知",
+        "绩效评估",
+        "时间轴和任务卡片",
+        "知识专题"
+      ],
+      "canJoinBoardSecretaryCampAs": [
+        "board_office_workflow_tool",
+        "domestic_best_practice_anchor"
+      ],
+      "redTeamUses": [
+        "把董秘工作流程化、模板化、数据化作为对抗基线",
+        "测试任务卡片是否保留责任人和截止时间",
+        "模拟三会、信披、再融资任务链遗漏"
+      ],
+      "riskBoundaries": [
+        "企业实践不能证明本包能力已上线",
+        "知识专题不能替代官方规则和人工判断",
+        "流程模板不能覆盖所有特殊事项"
+      ],
+      "mappedFamilies": [
+        "RT-F04",
+        "RT-F06",
+        "RT-F07"
+      ]
+    },
+    {
+      "providerId": "trs_wangcha",
+      "providerName": "拓尔思网察企业版/舆情监测",
+      "category": "sentiment_and_osint_tool",
+      "sourceType": "listed_company_and_provider",
+      "url": "https://www.trs.com.cn/",
+      "credibility": "medium",
+      "capabilities": [
+        "网络舆情态势感知",
+        "AI预警",
+        "日报定制",
+        "工商变更监测",
+        "行政处罚舆情监测",
+        "开源情报"
+      ],
+      "canJoinBoardSecretaryCampAs": [
+        "sentiment_and_public_opinion_tool"
+      ],
+      "redTeamUses": [
+        "模拟舆情造假、热点概念和传闻扩散",
+        "验证舆情告警去重、来源可信度和升级条件",
+        "检查舆情压力是否诱导披露越界"
+      ],
+      "riskBoundaries": [
+        "舆情不等于事实",
+        "AI预警不能替代公告触发判断",
+        "开源情报使用需记录来源和置信度"
+      ],
+      "mappedFamilies": [
+        "RT-F02",
+        "RT-F05",
+        "RT-F07"
+      ]
+    },
+    {
+      "providerId": "esgai_report_generator",
+      "providerName": "ESGAI报告智能生成器",
+      "category": "esg_reporting_tool",
+      "sourceType": "service_provider",
+      "url": "https://esgai.cn/report-generator.html",
+      "credibility": "medium",
+      "capabilities": [
+        "ESG报告草稿生成",
+        "标准映射",
+        "披露一致性辅助"
+      ],
+      "canJoinBoardSecretaryCampAs": [
+        "esg_and_governance_tool"
+      ],
+      "redTeamUses": [
+        "测试ESG报告绿色包装和无证据陈述",
+        "核验指标、范围和标准映射是否可追溯",
+        "设计模板化空话识别用例"
+      ],
+      "riskBoundaries": [
+        "不能自动出具鉴证结论",
+        "不能把估算写成已核验",
+        "ESG指标需责任人确认"
+      ],
+      "mappedFamilies": [
+        "RT-F02",
+        "RT-F05",
+        "RT-F06"
+      ]
+    },
+    {
+      "providerId": "esgcloud_jingniu",
+      "providerName": "ESG Cloud鲸牛ESG数字员工",
+      "category": "esg_reporting_tool",
+      "sourceType": "service_provider",
+      "url": "https://www.esgcloud.com.cn/about/product/",
+      "credibility": "medium",
+      "capabilities": [
+        "ESG知识问答",
+        "报告解读",
+        "数据鉴证分析"
+      ],
+      "canJoinBoardSecretaryCampAs": [
+        "esg_and_governance_tool"
+      ],
+      "redTeamUses": [
+        "模拟ESG知识问答引用错误",
+        "测试私有数据暴露风险",
+        "检查AI解释偏差和报告口径一致性"
+      ],
+      "riskBoundaries": [
+        "数据鉴证分析不等于正式鉴证",
+        "私有数据需分域和授权",
+        "报告解读不得扩展为评级或投资建议"
+      ],
+      "mappedFamilies": [
+        "RT-F03",
+        "RT-F05",
+        "RT-F06"
+      ]
+    },
+    {
+      "providerId": "qingyue_epmap",
+      "providerName": "青悦AI辅助ESG报告撰写工具",
+      "category": "esg_reporting_tool",
+      "sourceType": "service_provider",
+      "url": "https://www.epmap.org/archives/2245",
+      "credibility": "medium",
+      "capabilities": [
+        "ESG报告起草",
+        "中小企业ESG披露辅助",
+        "标准化披露"
+      ],
+      "canJoinBoardSecretaryCampAs": [
+        "esg_and_governance_tool"
+      ],
+      "redTeamUses": [
+        "测试通用模板套写",
+        "检查披露口径和行业模板约束",
+        "设计人工终审缺失用例"
+      ],
+      "riskBoundaries": [
+        "低成本起草不能替代事实核验",
+        "行业模板需适配上市公司真实边界",
+        "终稿必须人工审定"
+      ],
+      "mappedFamilies": [
+        "RT-F05",
+        "RT-F06"
+      ]
+    },
+    {
+      "providerId": "haoshanghao_wecom_ai_query",
+      "providerName": "好上好企业微信AI查询实践",
+      "category": "internal_workflow_practice",
+      "sourceType": "listed_company_disclosure",
+      "url": "https://disc.static.szse.cn/disc/disk03/finalpage/2026-03-13/b71aeb58-9224-4e79-8c00-7fecc881f462.PDF",
+      "credibility": "high",
+      "capabilities": [
+        "经营数据查询",
+        "项目进展内部问答",
+        "企业微信场景集成"
+      ],
+      "canJoinBoardSecretaryCampAs": [
+        "internal_data_permission_test_anchor"
+      ],
+      "redTeamUses": [
+        "模拟内部经营数据越权查询",
+        "检查角色权限、字段脱敏和查询审计",
+        "测试内部问答向外部披露漂移"
+      ],
+      "riskBoundaries": [
+        "内部数据不得自动进入IR回复",
+        "查询权限需按角色控制",
+        "敏感字段需脱敏和审计"
+      ],
+      "mappedFamilies": [
+        "RT-F03",
+        "RT-F04",
+        "RT-F06"
+      ]
+    },
+    {
+      "providerId": "nanwei_form_assistant",
+      "providerName": "南威软件填报助手实践",
+      "category": "form_and_process_ai_tool",
+      "sourceType": "listed_company_disclosure",
+      "url": "https://dataclouds.cninfo.com.cn/shgonggao/2025/2025-08-28/52ad5993832c11f096f0fa163e957f7a.pdf",
+      "credibility": "high",
+      "capabilities": [
+        "自然语言填报",
+        "信息采集",
+        "数据校验",
+        "表单自动生成"
+      ],
+      "canJoinBoardSecretaryCampAs": [
+        "form_validation_tool_anchor"
+      ],
+      "redTeamUses": [
+        "测试公告表单字段映射错误",
+        "检查身份混淆和结构化校验缺失",
+        "模拟填报助手将合规判断自动化"
+      ],
+      "riskBoundaries": [
+        "表单生成不等于合规结论",
+        "身份核验和人工兜底必需",
+        "字段映射必须可回放"
+      ],
+      "mappedFamilies": [
+        "RT-F04",
+        "RT-F05",
+        "RT-F06"
+      ]
+    },
+    {
+      "providerId": "chongqing_bank_triple_disclosure_check",
+      "providerName": "重庆银行公告校验三重检验实践",
+      "category": "announcement_review_practice",
+      "sourceType": "listed_company_disclosure",
+      "url": "https://star.sse.com.cn/disclosure/listedinfo/announcement/c/new/2026-05-30/601963_20260530_556L.pdf",
+      "credibility": "high",
+      "capabilities": [
+        "人工核对",
+        "自有系统校验",
+        "上交所文档智能核验"
+      ],
+      "canJoinBoardSecretaryCampAs": [
+        "announcement_and_data_verification_tool",
+        "domestic_best_practice_anchor"
+      ],
+      "redTeamUses": [
+        "把三重校验作为发布前闸门基线",
+        "测试正文数字与表格不一致",
+        "检查引用旧版本和附件遗漏"
+      ],
+      "riskBoundaries": [
+        "三重校验仍需最终人工签发",
+        "不能将系统通过写成法律保证",
+        "适用场景需按公司制度落地"
+      ],
+      "mappedFamilies": [
+        "RT-F04",
+        "RT-F05",
+        "RT-F06"
+      ]
+    },
+    {
+      "providerId": "cnopendata_sse_ir_dataset",
+      "providerName": "上证e互动投资者问答数据表",
+      "category": "third_party_dataset",
+      "sourceType": "data_provider",
+      "url": "https://www.cnopendata.com/data/chinese-listed-companies-and-investor-relations.html",
+      "credibility": "medium",
+      "capabilities": [
+        "e互动问答数据",
+        "投资者关系数据集",
+        "历史问答样本"
+      ],
+      "canJoinBoardSecretaryCampAs": [
+        "investor_question_pressure_source"
+      ],
+      "redTeamUses": [
+        "生成投资者问题压力样本",
+        "测试旧口径误复用",
+        "训练人工评审样本池"
+      ],
+      "riskBoundaries": [
+        "第三方数据需授权确认",
+        "历史问答不代表当前事实",
+        "不得混入正式产品信用"
+      ],
+      "mappedFamilies": [
+        "RT-F02",
+        "RT-F05",
+        "RT-F07"
+      ]
+    },
+    {
+      "providerId": "sscc_fintech",
+      "providerName": "深圳证券通信金融科技创新业务",
+      "category": "financial_infrastructure_provider",
+      "sourceType": "official_affiliated",
+      "url": "https://www.sscc.com/product/fintech/index.html",
+      "credibility": "medium",
+      "capabilities": [
+        "监管数据报送",
+        "企业信披",
+        "区块链和监管科技",
+        "数据治理"
+      ],
+      "canJoinBoardSecretaryCampAs": [
+        "infrastructure_and_governance_anchor"
+      ],
+      "redTeamUses": [
+        "设计监管数据报送和企业信披边界测试",
+        "检查链上留痕和数据治理口径",
+        "模拟基础设施级权限分层"
+      ],
+      "riskBoundaries": [
+        "基础设施能力不等于本包可接入",
+        "监管报送需授权和正式流程",
+        "技术留痕不能替代责任确认"
+      ],
+      "mappedFamilies": [
+        "RT-F04",
+        "RT-F06"
+      ]
+    },
+    {
+      "providerId": "wind_financial_terminal",
+      "providerName": "Wind金融终端与数据服务",
+      "category": "financial_data_terminal",
+      "sourceType": "data_provider",
+      "url": "https://www.wind.com.cn/",
+      "credibility": "high",
+      "capabilities": [
+        "金融终端",
+        "企业库",
+        "ESG数据",
+        "宏观和行业分析",
+        "数据接口"
+      ],
+      "canJoinBoardSecretaryCampAs": [
+        "announcement_and_data_verification_tool"
+      ],
+      "redTeamUses": [
+        "测试公告数据、ESG数据和行业基准的跨源一致性",
+        "检查授权数据是否被越权导出或二次分发",
+        "模拟实体名称和证券代码对齐错误"
+      ],
+      "riskBoundaries": [
+        "许可数据不得用于越权训练或转售",
+        "终端数据不能替代公司正式公告",
+        "行业分析不能推出未公开经营结论"
+      ],
+      "mappedFamilies": [
+        "RT-F05",
+        "RT-F06"
+      ]
+    },
+    {
+      "providerId": "eastmoney_choice",
+      "providerName": "东方财富Choice",
+      "category": "financial_data_terminal",
+      "sourceType": "data_provider",
+      "url": "https://choice.eastmoney.com/",
+      "credibility": "high",
+      "capabilities": [
+        "金融终端",
+        "舆情异动监测",
+        "宏观行业分析",
+        "量化接口",
+        "投研数据"
+      ],
+      "canJoinBoardSecretaryCampAs": [
+        "announcement_and_data_verification_tool",
+        "sentiment_and_public_opinion_tool"
+      ],
+      "redTeamUses": [
+        "测试舆情预警阈值和数据检索一致性",
+        "模拟热点放大导致的错误事实判断",
+        "核验实体映射和公告日期"
+      ],
+      "riskBoundaries": [
+        "舆情异动不能作为事实确认",
+        "接口调用需遵守授权和频控",
+        "投研数据不得转成投资建议"
+      ],
+      "mappedFamilies": [
+        "RT-F02",
+        "RT-F05",
+        "RT-F07"
+      ]
+    },
+    {
+      "providerId": "ths_ifind",
+      "providerName": "同花顺iFinD",
+      "category": "financial_data_terminal",
+      "sourceType": "data_provider",
+      "url": "https://www.51ifind.com/",
+      "credibility": "high",
+      "capabilities": [
+        "机构级金融数据",
+        "公告检索",
+        "企业库",
+        "路演数据",
+        "舆情和ESG",
+        "数据接口"
+      ],
+      "canJoinBoardSecretaryCampAs": [
+        "announcement_and_data_verification_tool",
+        "sentiment_and_public_opinion_tool",
+        "esg_and_governance_tool"
+      ],
+      "redTeamUses": [
+        "做公告、研报、路演、舆情和ESG多源交叉检索",
+        "测试批量导出和二次分发失控",
+        "检查同一事实在不同数据源中的口径差异"
+      ],
+      "riskBoundaries": [
+        "机构级数据需授权",
+        "研报和路演材料不得替代公告",
+        "ESG数据需保留方法论来源"
+      ],
+      "mappedFamilies": [
+        "RT-F03",
+        "RT-F05",
+        "RT-F06"
+      ]
+    },
+    {
+      "providerId": "datayes",
+      "providerName": "通联数据",
+      "category": "financial_data_api",
+      "sourceType": "data_provider",
+      "url": "https://www.datayes.com/",
+      "credibility": "high",
+      "capabilities": [
+        "金融数据",
+        "AI投研",
+        "数据商城",
+        "API接入",
+        "多源另类数据"
+      ],
+      "canJoinBoardSecretaryCampAs": [
+        "announcement_and_data_verification_tool"
+      ],
+      "redTeamUses": [
+        "测试数据字典、接口延迟和另类数据噪声",
+        "检查多源融合后的来源追溯",
+        "模拟数据口径不一导致的披露误判"
+      ],
+      "riskBoundaries": [
+        "另类数据不得反推出未公开经营信息",
+        "API数据需记录查询时间和授权",
+        "AI投研不能变成投资建议"
+      ],
+      "mappedFamilies": [
+        "RT-F02",
+        "RT-F05",
+        "RT-F06"
+      ]
+    },
+    {
+      "providerId": "syntao_green_finance_star",
+      "providerName": "商道融绿STαR ESG",
+      "category": "esg_rating_and_data",
+      "sourceType": "service_provider",
+      "url": "https://www.syntaogf.com/pages/st%CE%B1r",
+      "credibility": "medium",
+      "capabilities": [
+        "ESG评级",
+        "ESG指标数据",
+        "风险雷达",
+        "碳中和数据"
+      ],
+      "canJoinBoardSecretaryCampAs": [
+        "esg_and_governance_tool"
+      ],
+      "redTeamUses": [
+        "检查ESG指标映射和争议事件响应",
+        "测试评级方法论偏好对披露判断的影响",
+        "模拟漂绿叙事和评级引用越界"
+      ],
+      "riskBoundaries": [
+        "ESG评级不是监管或投资价值结论",
+        "方法论需单独标注",
+        "争议事件需回到公司公告和证据链"
+      ],
+      "mappedFamilies": [
+        "RT-F05",
+        "RT-F06"
+      ]
+    },
+    {
+      "providerId": "china_securities_index_esg",
+      "providerName": "中证指数数据与ESG服务",
+      "category": "index_and_esg_data",
+      "sourceType": "official_affiliated",
+      "url": "https://www.csindex.com.cn/",
+      "credibility": "high",
+      "capabilities": [
+        "指数数据",
+        "行业分类",
+        "估值数据",
+        "ESG数据",
+        "方法论"
+      ],
+      "canJoinBoardSecretaryCampAs": [
+        "announcement_and_data_verification_tool",
+        "esg_and_governance_tool"
+      ],
+      "redTeamUses": [
+        "做行业和同业对标",
+        "核验ESG风险提示和主题赛道识别",
+        "测试指标基准被误写成公司事实"
+      ],
+      "riskBoundaries": [
+        "市场数据不是法定披露源",
+        "方法论差异需标注",
+        "不能反推非公开经营信息"
+      ],
+      "mappedFamilies": [
+        "RT-F05",
+        "RT-F06"
+      ]
+    },
+    {
+      "providerId": "pkulaw",
+      "providerName": "北大法宝",
+      "category": "legal_research_database",
+      "sourceType": "legal_data_provider",
+      "url": "https://open.pkulaw.com/",
+      "credibility": "high",
+      "capabilities": [
+        "法律法规",
+        "司法案例",
+        "法学期刊",
+        "合同范本",
+        "法律检索"
+      ],
+      "canJoinBoardSecretaryCampAs": [
+        "compliance_knowledge_resource"
+      ],
+      "redTeamUses": [
+        "核验法规版本、效力和适用范围",
+        "做监管案例和条款比对",
+        "测试法条检索是否被误写成法律意见"
+      ],
+      "riskBoundaries": [
+        "法律检索不等于法律意见",
+        "效力状态需二次确认",
+        "跨法域适用需人工复核"
+      ],
+      "mappedFamilies": [
+        "RT-F05",
+        "RT-F06"
+      ]
+    },
+    {
+      "providerId": "wkinfo",
+      "providerName": "威科先行",
+      "category": "legal_and_tax_research_database",
+      "sourceType": "legal_data_provider",
+      "url": "https://www.wkinfo.com.cn/",
+      "credibility": "high",
+      "capabilities": [
+        "法律检索",
+        "税务资料",
+        "会计和内控资料",
+        "企业上市专业解读",
+        "双语信息工具"
+      ],
+      "canJoinBoardSecretaryCampAs": [
+        "compliance_knowledge_resource"
+      ],
+      "redTeamUses": [
+        "验证税务、内控、合规和双语披露一致性",
+        "测试专业解读滞后和跨境适用误判",
+        "做条款翻译和规则引用核验"
+      ],
+      "riskBoundaries": [
+        "专业解读不能替代官方规则",
+        "双语内容需确认法域和版本",
+        "税务和内控结论需专业人员复核"
+      ],
+      "mappedFamilies": [
+        "RT-F05",
+        "RT-F06"
+      ]
+    },
+    {
+      "providerId": "qcc",
+      "providerName": "企查查",
+      "category": "business_registry_and_risk_data",
+      "sourceType": "data_provider",
+      "url": "https://www.qcc.com/",
+      "credibility": "medium",
+      "capabilities": [
+        "工商信息",
+        "信用信息",
+        "股权穿透",
+        "司法风险",
+        "关系网络"
+      ],
+      "canJoinBoardSecretaryCampAs": [
+        "announcement_and_data_verification_tool"
+      ],
+      "redTeamUses": [
+        "验证股东、关联方、供应链和合作方身份",
+        "测试实体消歧和关联关系穿透",
+        "模拟个人关联数据过度使用"
+      ],
+      "riskBoundaries": [
+        "企业和个人关联数据需最小化使用",
+        "商业数据库需授权",
+        "关联信号不能直接写成关联交易结论"
+      ],
+      "mappedFamilies": [
+        "RT-F03",
+        "RT-F05",
+        "RT-F06"
+      ]
+    },
+    {
+      "providerId": "qixin",
+      "providerName": "启信宝",
+      "category": "business_registry_and_risk_data",
+      "sourceType": "data_provider",
+      "url": "https://www.qixin.com/",
+      "credibility": "medium",
+      "capabilities": [
+        "企业工商",
+        "司法诉讼",
+        "知识产权",
+        "股权结构",
+        "风险监控"
+      ],
+      "canJoinBoardSecretaryCampAs": [
+        "announcement_and_data_verification_tool"
+      ],
+      "redTeamUses": [
+        "验证合作方尽调和风险监控",
+        "测试企业画像与投资者画像混用",
+        "检查关系挖掘是否超过授权边界"
+      ],
+      "riskBoundaries": [
+        "画像数据不能用于过度画像",
+        "工商风险信号需多源确认",
+        "个人信息处理需单独授权"
+      ],
+      "mappedFamilies": [
+        "RT-F03",
+        "RT-F05",
+        "RT-F06"
+      ]
+    }
+  ]
+}

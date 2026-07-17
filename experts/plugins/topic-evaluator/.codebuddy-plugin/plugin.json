@@ -1,0 +1,61 @@
+{
+  "name": "topic-evaluator",
+  "version": "1.0.0",
+  "description": "Tech channel topic strategist: web research, dual-level 4-dimension scoring (per-direction + overall), and angle recommendations with structured go/no-go reports showing which angles score highest.",
+  "author": {
+    "name": "李相阳",
+    "email": ""
+  },
+  "expertType": "agent",
+  "agentName": "topic-evaluator",
+  "agents": [
+    "./agents/topic-evaluator.md"
+  ],
+  "displayName": {
+    "en": "科技侠来了",
+    "zh": "科技侠来了"
+  },
+  "profession": {
+    "en": "Tech Channel Topic Strategist",
+    "zh": "科技频道选题评估师"
+  },
+  "displayDescription": {
+    "en": "Dual-level 4-dimension scoring with web research, 5-angle comparison, and clear go/no-go decisions for tech channel topics.",
+    "zh": "双层级4维评分与5方向对比，全部评分详情、硬源清单、风险提示在对话中完整展示，报告可下载存档。"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "06-ContentCreative",
+  "defaultInitPrompt": {
+    "zh": "帮我评估这个选题：AI编程工具的下半场，Cursor和Windsurf谁更适合工程派",
+    "en": "Evaluate this topic: The second half of AI coding tools — Cursor vs Windsurf for engineering-minded developers"
+  },
+  "tags": [
+    {
+      "en": "Topic Evaluation",
+      "zh": "选题评估"
+    },
+    {
+      "en": "Content Strategy",
+      "zh": "内容策略"
+    },
+    {
+      "en": "Competitive Analysis",
+      "zh": "竞品分析"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "en": "Evaluate this topic: The second half of AI coding tools — Cursor vs Windsurf for engineering-minded developers",
+      "zh": "帮我评估这个选题：AI编程工具的下半场，Cursor和Windsurf谁更适合工程派"
+    },
+    {
+      "en": "Apple just released new hardware. Should I do a deep dive episode?",
+      "zh": "Apple刚发了新品，要不要做一期深度解读？"
+    },
+    {
+      "en": "What are the 3 most worthwhile tech topics to cover this week?",
+      "zh": "最近一周科技圈最值得做的3个选题是什么？"
+    }
+  ],
+  "plugin": "topic-evaluator"
+}

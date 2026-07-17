@@ -1,0 +1,117 @@
+{
+  "schemaVersion": "fbs.boardSecretary.serviceForwardFields.v1",
+  "packageName": "fbsir-board-secretary-assistant",
+  "packageVersion": "2.1.0",
+  "contractVersion": "2026-06-22",
+  "sourceDemandIds": [
+    "BSA-PKG-003",
+    "BSA-PKG-005"
+  ],
+  "priority": "should_validate",
+  "status": "field_contract_landed_for_2_1_service_traction_test_package",
+  "doNotAssumeHostRuntimeUpgrade": true,
+  "hostRuntimeSupportClaimAllowed": false,
+  "requiredForwardFields": [
+    "entrySurface",
+    "entryPromptCode",
+    "entryId",
+    "expertEntryId",
+    "scenePackId",
+    "assetType",
+    "packCode",
+    "requestSource",
+    "approvalOwner",
+    "approvalNextStep",
+    "nextActionId",
+    "manualReviewRequired",
+    "boundaryFlags"
+  ],
+  "receiptFields": [
+    "firstValueObserved",
+    "serviceTraceRowCount",
+    "joinedTransportCount",
+    "followthroughPromptTransportStatus",
+    "missingForwardFields",
+    "visibleGapCount",
+    "lebaoClaimState",
+    "lebaoActivationState",
+    "lebaoDataUploaded",
+    "serviceStrategyReturned",
+    "strategyDispatchId",
+    "serviceSideNeedId",
+    "waiterLifecycleValidationStatus",
+    "internalLaunchGateDecision"
+  ],
+  "lebaoInformationGapFill": {
+    "sourceDemandId": "BSA-PKG-005",
+    "priority": "should_validate",
+    "connectorRequired": false,
+    "mcpToolRequired": false,
+    "connectorDecoupledGate": {
+      "appliesTo": [
+        "lebao_claim",
+        "lebao_activation",
+        "gap_data_upload",
+        "service_strategy_return"
+      ],
+      "productFlowMustNotReadConnectorState": true,
+      "connectorAuthorizationRequired": false,
+      "connectorToolVisibilityRequired": false
+    },
+    "purpose": "Use benefit unlock as an incentive to collect missing user-research fields and return a service-side traction strategy.",
+    "templatePath": [
+      "benefit_signal",
+      "intent_aggregation",
+      "scene_recognition",
+      "strategy_dispatch",
+      "feedback_evolution"
+    ],
+    "requiredReceiptFields": [
+      "anonymousUserCodeHash",
+      "serverBindingId_or_hostLocalReceiptId",
+      "entrySurface",
+      "expertEntryId",
+      "packCode",
+      "scenePackId",
+      "missingFieldIds",
+      "consentState",
+      "lebaoClaimState",
+      "lebaoActivationState",
+      "serviceStrategyReturned",
+      "strategyDispatchId"
+    ],
+    "strictBoundaries": {
+      "paymentClosureAllowed": false,
+      "naturalProductCreditAllowedFromLebaoOnly": false,
+      "hostLocalReceiptNeedsServiceTraceBeforeConsumeCredit": true,
+      "userConsentRequiredBeforeDataUpload": true,
+      "connectorStateNotAProductInput": true
+    }
+  },
+  "serviceTractionUpgradeContract": {
+    "contractPath": "contracts/service-traction-upgrade-contract.json",
+    "priority": "current_highest_package_workstream",
+    "status": "source_window_landed_for_service_side_joint_debug",
+    "purpose": "Coordinate package-side first value, Lebao gap fill, service strategy return, and validation receipts for the service-side user research system.",
+    "waiterLifecycleBoundary": "Package accepts waiter repair receipts as validation input but does not claim package-side host runtime repair."
+  },
+  "gapVisualizationPolicy": {
+    "missingFieldsMustRemainVisible": true,
+    "missingFieldsDoNotBlockFirstValue": true,
+    "missingFieldsDoBlockHostRuntimeSupportClaim": true
+  },
+  "promotionRule": {
+    "mayPromoteToMustIncludeAfter": [
+      "formal_or_equivalent_field_receipt_observed",
+      "missingForwardFields_is_empty",
+      "serviceTraceRowCount_gt_0_for_official_or_equivalent_board_secretary_entry"
+    ],
+    "untilThen": "keep_as_should_validate"
+  },
+  "reviewPackageBoundary": {
+    "contractKind": "service_forward_fields",
+    "generatedForReviewOnly": true,
+    "hostRuntimeUpgradeAssumed": false,
+    "naturalClosureClaimAllowed": false
+  }
+}

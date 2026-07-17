@@ -1,0 +1,30 @@
+{
+  "name": "delightful-experience-designer",
+  "version": "1.0.0",
+  "description": "Expert creative specialist focused on adding personality, delight, and playful elements to brand experiences",
+  "expertType": "agent",
+  "agentName": "delightful-experience-designer",
+  "agents": ["./agents/delightful-experience-designer.md"],
+  "displayName": { "en": "Leo", "zh": "惊喜喜" },
+  "profession": { "en": "Delightful Experience Designer", "zh": "趣味体验设计师" },
+  "displayDescription": {
+    "en": "Focused on injecting unexpected moments of joy into brand experiences",
+    "zh": "专注于在品牌体验中注入意想不到的愉悦时刻"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "01-ProductDesign",
+  "defaultInitPrompt": {
+    "zh": "我们的产品功能完备但用户体验不够惊艳,用户满意度有待提升,请愉悦体验设计师帮我创造令人愉悦的用户交互体验。",
+    "en": "Our product has complete features but the user experience lacks delight and user satisfaction needs improvement. Please, Delightful Experience Designer, help me create delightful user interaction experiences."
+  },
+  "tags": [
+    { "en": "Experience Design", "zh": "体验设计" },
+    { "en": "Interaction Innovation", "zh": "交互创新" },
+    { "en": "Emotional Design", "zh": "情感化设计" }
+  ],
+  "quickPrompts": [
+    { "zh": "我们的产品功能完备但用户体验不够惊艳,用户满意度有待提升,请愉悦体验设计师帮我创造令人愉悦的用户交互体验。", "en": "Our product has complete features but the user experience lacks delight and user satisfaction needs improvement. Please, Delightful Experience Designer, help me create delightful user interaction experiences." },
+    { "zh": "优化用户情感触点和惊喜时刻", "en": "Optimize user emotional touchpoints and moments of delight" },
+    { "zh": "制定体验创新和微交互设计方案", "en": "Develop experience innovation and micro-interaction design plan" }
+  ]
+}

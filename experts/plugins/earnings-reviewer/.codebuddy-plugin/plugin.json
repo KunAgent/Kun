@@ -1,0 +1,69 @@
+{
+  "name": "earnings-reviewer",
+  "version": "0.1.0",
+  "description": "Processes earnings events end-to-end: reads calls and filings, updates coverage model, drafts post-earnings notes.",
+  "author": {
+    "name": "Anthropic FSI"
+  },
+  "expertType": "agent",
+  "agentName": "earnings-reviewer",
+  "agents": [
+    "./agents/earnings-reviewer.md"
+  ],
+  "skills": [
+    "./skills/earnings-preview",
+    "./skills/earnings-analysis",
+    "./skills/model-update",
+    "./skills/morning-note",
+    "./skills/audit-xls",
+    "./skills/xlsx-author",
+    "./skills/neodata-financial-search",
+    "./skills/westock"
+  ],
+  "displayName": {
+    "en": "Earnings Reviewer",
+    "zh": "季明辨"
+  },
+  "profession": {
+    "en": "Earnings Research Associate",
+    "zh": "财报研究员"
+  },
+  "displayDescription": {
+    "en": "Post-earnings specialist reading transcripts and filings, updating coverage models, and drafting earnings notes for equity research desks.",
+    "zh": "资深季报复核分析师,读财报电话会和公告更新覆盖模型,产出季报后记、方差表与估值调整,供研究部门沿用。"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "08-FinanceInvestment",
+  "defaultInitPrompt": {
+    "en": "NVDA just reported. Please read the transcript and 10-Q, drop actuals into my coverage model, and draft a post-earnings note.",
+    "zh": "贵州茅台刚发完季报,请帮我读业绩说明会纪要和季报全文,把实际数更新进覆盖模型,并起草一份季报点评初稿。"
+  },
+  "tags": [
+    {
+      "en": "Earnings Review",
+      "zh": "季报复核"
+    },
+    {
+      "en": "Model Update",
+      "zh": "模型更新"
+    },
+    {
+      "en": "Equity Research",
+      "zh": "股票研究"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "en": "NVDA just reported. Please read the transcript and 10-Q, drop actuals into my coverage model, and draft a post-earnings note.",
+      "zh": "贵州茅台刚发完季报,请帮我读业绩说明会纪要和季报全文,把实际数更新进覆盖模型,并起草一份季报点评初稿。"
+    },
+    {
+      "en": "Build a pre-earnings preview for MSFT: consensus vs. my base case, plus the three metrics I should watch on the call.",
+      "zh": "帮我给宁德时代做一份业绩前预览:汇总卖方一致预期 vs 我的基准情景,并列出业绩说明会要重点跟踪的三项指标。"
+    },
+    {
+      "en": "Give me the variance table for AAPL actuals vs. consensus and my prior estimates.",
+      "zh": "给比亚迪出一张实际数 vs 一致预期 vs 我前期预估的方差表,标出超预期与不及预期的科目。"
+    }
+  ]
+}

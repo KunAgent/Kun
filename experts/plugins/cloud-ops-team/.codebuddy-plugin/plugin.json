@@ -1,0 +1,89 @@
+{
+  "name": "cloud-ops-team",
+  "version": "1.0.1",
+  "description": "A Tencent Cloud operations expert team combining multi-cloud unified governance, ITSM ticket management, and cloud migration planning.",
+  "author": {
+    "name": "Cloud Ops Team",
+    "email": "lonniehu@tencent.com"
+  },
+  "agents": [
+    "./agents/cloud-ops-team-lead.md",
+    "./agents/cloud-q.md",
+    "./agents/andon-q.md",
+    "./agents/migra-q.md"
+  ],
+  "skills": [
+    "./skills/cloudq",
+    "./skills/andonq",
+    "./skills/migraq"
+  ],
+
+  "expertType": "team",
+  "agentName": "cloud-ops-team-lead",
+  "teamInfo": {
+    "leadAgent": "cloud-ops-team-lead",
+    "memberAgents": ["cloud-q", "andon-q", "migra-q"]
+  },
+
+  "displayName": {
+    "en": "Cloud Ops Team",
+    "zh": "腾讯云技术支持"
+  },
+  "profession": {
+    "en": "Tencent Cloud Full-Stack Operations Team",
+    "zh": "腾讯云技术支持"
+  },
+  "displayDescription": {
+    "en": "An expert team of three specialists — CloudQ for multi-cloud unified governance and architecture visualization, AndonQ for ITSM ticket management and smart Q&A, and MigraQ for cross-cloud migration planning and TCO analysis. Together they deliver end-to-end Tencent Cloud operations services from migration to daily management.",
+    "zh": "三位专家组成的运维团队 — CloudQ 负责多云统一治理与架构可视化，AndonQ 负责工单管理与智能问答，MigraQ 负责跨云迁移规划与 TCO 分析。从迁移上云到日常运维，提供端到端的腾讯云运维服务。"
+  },
+  "avatar": "avatars/team.png",
+  "categoryId": "02-Engineering",
+  "defaultInitPrompt": {
+    "zh": "你好！我是腾讯云技术支持的首席技术支持官。我的团队由三位专家组成：CloudQ（售前售中 DevOps）、AndonQ（售后服务）和 MigraQ（上云迁移）。无论是架构咨询、售后工单还是云迁移，我们都能为你提供专业服务。请告诉我你需要什么帮助？",
+    "en": "Hello! I'm the Chief Technical Support Officer of Tencent Cloud Technical Support. My team consists of three experts: CloudQ (pre-sales & in-sales DevOps), AndonQ (after-sales service), and MigraQ (cloud migration). Whether it's architecture consulting, after-sales tickets, or cloud migration, we're here to help. What can I do for you?"
+  },
+  "plugin": "cloud-ops-team",
+  "tags": [
+    { "en": "Cloud Operations", "zh": "云运维" },
+    { "en": "Multi-Cloud Governance", "zh": "多云治理" },
+    { "en": "Cloud Migration", "zh": "云迁移" },
+    { "en": "ITSM Ticket", "zh": "工单管理" },
+    { "en": "Architecture Visualization", "zh": "架构可视化" }
+  ],
+  "quickPrompts": [
+    { "en": "What risks do our cloud resources have?", "zh": "我们的云资源有哪些风险" },
+    { "en": "How do I deploy OpenClaw and install Skills on Tencent Cloud Lighthouse?", "zh": "腾讯云轻量应用服务器如何部署 OpenClaw 并安装 Skills？" },
+    { "en": "Plan a migration from AWS to Tencent Cloud", "zh": "规划从 AWS 迁移到腾讯云的方案" }
+  ],
+  "members": [
+    {
+      "id": "cloud-ops-team-lead",
+      "name": { "en": "Chief Technical Support Officer", "zh": "首席技术支持官" },
+      "profession": { "en": "Chief Technical Support Officer", "zh": "首席技术支持官" },
+      "avatar": "avatars/cloud-ops-team-lead.png",
+      "role": "lead"
+    },
+    {
+      "id": "cloud-q",
+      "name": { "en": "CloudQ", "zh": "CloudQ" },
+      "profession": { "en": "Multi-Cloud Governance Expert", "zh": "DevOps专家" },
+      "avatar": "avatars/cloud-q.png",
+      "role": "member"
+    },
+    {
+      "id": "andon-q",
+      "name": { "en": "AndonQ", "zh": "AndonQ" },
+      "profession": { "en": "ITSM & Smart Q&A Expert", "zh": "售后服务专家" },
+      "avatar": "avatars/andon-q.png",
+      "role": "member"
+    },
+    {
+      "id": "migra-q",
+      "name": { "en": "MigraQ", "zh": "MigraQ" },
+      "profession": { "en": "Cloud Migration Expert", "zh": "上云迁移专家" },
+      "avatar": "avatars/migra-q.png",
+      "role": "member"
+    }
+  ]
+}

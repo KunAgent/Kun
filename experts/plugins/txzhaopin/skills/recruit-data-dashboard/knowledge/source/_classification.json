@@ -1,0 +1,316 @@
+{
+  "atomic": [
+    {
+      "name": "口头turndown",
+      "card": "社招需求进展(环节时间)",
+      "src": "Report_Recruit_Flow_Detail",
+      "node": "放弃/拒绝",
+      "kind": "atomic"
+    },
+    {
+      "name": "拒绝offer",
+      "card": "社招需求进展(环节时间)",
+      "src": "Report_Recruit_Flow_Detail",
+      "node": "放弃/拒绝",
+      "kind": "atomic"
+    },
+    {
+      "name": "发起面试数",
+      "card": "社招环节统计(按数量)",
+      "src": "Report_Recruit_Flow_Detail",
+      "node": "发起面试",
+      "kind": "atomic"
+    },
+    {
+      "name": "部门内专业面试通过数",
+      "card": "社招环节统计(按数量)",
+      "src": "Report_Recruit_Flow_Detail",
+      "node": "部门内专业面试",
+      "kind": "atomic"
+    },
+    {
+      "name": "通道面委面试通过数",
+      "card": "社招环节统计(按数量)",
+      "src": "Report_Recruit_Flow_Detail",
+      "node": "通道面委面试",
+      "kind": "atomic"
+    },
+    {
+      "name": "用人决策面试通过数",
+      "card": "社招环节统计(按数量)",
+      "src": "Report_Recruit_Flow_Detail",
+      "node": "用人决策面试",
+      "kind": "atomic"
+    },
+    {
+      "name": "HR资格面试通过数",
+      "card": "社招环节统计(按数量)",
+      "src": "Report_Recruit_Flow_Detail",
+      "node": "HR 资格面试",
+      "kind": "atomic"
+    },
+    {
+      "name": "offer审批中人数",
+      "card": "社招环节统计(按数量)",
+      "src": "Report_Recruit_Flow_Detail",
+      "node": "Offer 审批",
+      "kind": "atomic"
+    },
+    {
+      "name": "薪资谈判通过数",
+      "card": "社招环节统计(按数量)",
+      "src": "Report_Recruit_Flow_Detail",
+      "node": "HR 薪资谈判",
+      "kind": "atomic"
+    },
+    {
+      "name": "发送offer数",
+      "card": "社招环节统计(按数量)",
+      "src": "Report_Recruit_Flow_Detail",
+      "node": "发送 Offer",
+      "kind": "atomic"
+    },
+    {
+      "name": "入职数",
+      "card": "社招环节统计(按数量)",
+      "src": "Report_Recruit_Flow_Detail",
+      "node": "入职",
+      "kind": "atomic"
+    },
+    {
+      "name": "有简历评估面试数",
+      "card": "社招环节统计(按数量)",
+      "src": "Report_Recruit_Flow_Detail",
+      "node": "简历评估",
+      "kind": "atomic"
+    },
+    {
+      "name": "渠道收到评估数",
+      "card": "社招环节统计(按数量)",
+      "src": "Report_Recruit_Resume_Assessment",
+      "node": "简历评估",
+      "kind": "atomic"
+    },
+    {
+      "name": "发起部门内专业面试数",
+      "card": "社招环节统计(辅助指标)",
+      "src": "Report_Recruit_Flow_Detail",
+      "node": "部门内专业面试",
+      "kind": "atomic"
+    },
+    {
+      "name": "发起部门内专业面试未提交数",
+      "card": "社招环节统计(辅助指标)",
+      "src": "Report_Recruit_Flow_Detail",
+      "node": "部门内专业面试",
+      "kind": "atomic"
+    },
+    {
+      "name": "发起通道面委面试数",
+      "card": "社招环节统计(辅助指标)",
+      "src": "Report_Recruit_Flow_Detail",
+      "node": "通道面委面试",
+      "kind": "atomic"
+    },
+    {
+      "name": "发起通道面委面试未提交数",
+      "card": "社招环节统计(辅助指标)",
+      "src": "Report_Recruit_Flow_Detail",
+      "node": "通道面委面试",
+      "kind": "atomic"
+    },
+    {
+      "name": "发起用人决策者面试未提交数",
+      "card": "社招环节统计(辅助指标)",
+      "src": "Report_Recruit_Flow_Detail",
+      "node": "用人决策面试",
+      "kind": "atomic"
+    },
+    {
+      "name": "发起用人决策者面试数",
+      "card": "社招环节统计(辅助指标)",
+      "src": "Report_Recruit_Flow_Detail",
+      "node": "用人决策面试",
+      "kind": "atomic"
+    },
+    {
+      "name": "发起hr资格面试数",
+      "card": "社招环节统计(辅助指标)",
+      "src": "Report_Recruit_Flow_Detail",
+      "node": "HR 资格面试",
+      "kind": "atomic"
+    },
+    {
+      "name": "发起hr资格面试未提交数",
+      "card": "社招环节统计(辅助指标)",
+      "src": "Report_Recruit_Flow_Detail",
+      "node": "HR 资格面试",
+      "kind": "atomic"
+    },
+    {
+      "name": "发起薪资谈判数",
+      "card": "社招环节统计(辅助指标)",
+      "src": "Report_Recruit_Flow_Detail",
+      "node": "HR 薪资谈判",
+      "kind": "atomic"
+    },
+    {
+      "name": "发起薪资谈判未提交数",
+      "card": "社招环节统计(辅助指标)",
+      "src": "Report_Recruit_Flow_Detail",
+      "node": "HR 薪资谈判",
+      "kind": "atomic"
+    },
+    {
+      "name": "发起offer审批人数",
+      "card": "社招环节统计(辅助指标)",
+      "src": "Report_Recruit_Flow_Detail",
+      "node": "Offer 审批",
+      "kind": "atomic"
+    },
+    {
+      "name": "offer审批中未审批人数",
+      "card": "社招环节统计(辅助指标)",
+      "src": "Report_Recruit_Flow_Detail",
+      "node": "Offer 审批",
+      "kind": "atomic"
+    }
+  ],
+  "composite": [
+    {
+      "name": "总需求数",
+      "card": "社招需求进展(环节时间)",
+      "src": "Report_Position_Management_Recruitment_P_I_Daily_Slice",
+      "node": "需求与岗位",
+      "kind": "composite"
+    },
+    {
+      "name": "平均招聘天数",
+      "card": "社招需求进展(环节时间)",
+      "src": "Report_Recruit_Flow_Detail",
+      "node": "需求与岗位",
+      "kind": "composite"
+    },
+    {
+      "name": "渠道发起面试率",
+      "card": "社招环节统计(按占比)",
+      "src": "Report_Recruit_Resume_Assessment",
+      "node": "发起面试",
+      "kind": "composite"
+    },
+    {
+      "name": "部门内面试通过率",
+      "card": "社招环节统计(按占比)",
+      "src": "Report_Recruit_Flow_Detail",
+      "node": "部门内专业面试",
+      "kind": "composite"
+    },
+    {
+      "name": "通道面委面试通过率",
+      "card": "社招环节统计(按占比)",
+      "src": "Report_Recruit_Flow_Detail",
+      "node": "通道面委面试",
+      "kind": "composite"
+    },
+    {
+      "name": "用人决策面试通过率",
+      "card": "社招环节统计(按占比)",
+      "src": "Report_Recruit_Flow_Detail",
+      "node": "用人决策面试",
+      "kind": "composite"
+    },
+    {
+      "name": "HR资格面试通过率",
+      "card": "社招环节统计(按占比)",
+      "src": "Report_Recruit_Flow_Detail",
+      "node": "HR 资格面试",
+      "kind": "composite"
+    },
+    {
+      "name": "HR薪资谈判通过率",
+      "card": "社招环节统计(按占比)",
+      "src": "Report_Recruit_Flow_Detail",
+      "node": "HR 薪资谈判",
+      "kind": "composite"
+    },
+    {
+      "name": "进入offer审批率",
+      "card": "社招环节统计(按占比)",
+      "src": "Report_Recruit_Flow_Detail",
+      "node": "Offer 审批",
+      "kind": "composite"
+    },
+    {
+      "name": "发送offer率",
+      "card": "社招环节统计(按占比)",
+      "src": "Report_Recruit_Flow_Detail",
+      "node": "发送 Offer",
+      "kind": "composite"
+    },
+    {
+      "name": "入职率",
+      "card": "社招环节统计(按占比)",
+      "src": "Report_Recruit_Flow_Detail",
+      "node": "入职",
+      "kind": "composite"
+    }
+  ],
+  "derived": [
+    {
+      "name": "在招需求数",
+      "card": "社招需求进展(环节时间)",
+      "src": "Report_Position_Management_Recruitment_P_I_Daily_Slice",
+      "node": "需求与岗位",
+      "kind": "derived"
+    },
+    {
+      "name": "已完成需求数入职",
+      "card": "社招需求进展(环节时间)",
+      "src": "Report_Recruit_Flow_Detail",
+      "node": "需求与岗位",
+      "kind": "derived"
+    },
+    {
+      "name": "已完成需求数offer",
+      "card": "社招需求进展(环节时间)",
+      "src": "Report_Recruit_Flow_Detail",
+      "node": "需求与岗位",
+      "kind": "derived"
+    },
+    {
+      "name": "评估中",
+      "card": "社招需求进展(环节时间)",
+      "src": "Report_Recruit_Flow_Detail",
+      "node": "流程状态快照",
+      "kind": "derived"
+    },
+    {
+      "name": "面试中",
+      "card": "社招需求进展(环节时间)",
+      "src": "Report_Recruit_Flow_Detail",
+      "node": "流程状态快照",
+      "kind": "derived"
+    },
+    {
+      "name": "offer中",
+      "card": "社招需求进展(环节时间)",
+      "src": "Report_Recruit_Flow_Detail",
+      "node": "流程状态快照",
+      "kind": "derived"
+    },
+    {
+      "name": "入职中/调动中",
+      "card": "社招需求进展(环节时间)",
+      "src": "Report_Recruit_Flow_Detail",
+      "node": "入职/调动中",
+      "kind": "derived"
+    },
+    {
+      "name": "全部流程中(除简历评估)",
+      "card": "社招需求进展(环节时间)",
+      "src": "Report_Recruit_Flow_Detail",
+      "node": "流程状态快照",
+      "kind": "atomic"
+    }
+  ]
+}

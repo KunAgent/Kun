@@ -1,0 +1,321 @@
+{
+  "table_code" : "catalog_dos_da_mcp.hrdw.Report_StaffStation",
+  "table_name" : "派驻记录表",
+  "version" : 9,
+  "table_desc" : "定位：本报表涵盖所有中国大陆境内派驻场景中的派驻流水明细，包含每次派驻的派出/派入信息及派驻状态(包括派驻中及派驻结束)\n唯一标识：该表以\"派驻异动ID\"(move_id)作为唯一标识，每次派驻操作对应一行数据，一个员工可以有多条派驻记录\n主要包含以下几大部分内容（摘要）：\n1、员工基础信息（员工ID、姓名、当前管理主体、员工类型、员工状态、当前合同主体及合同地、工作地、当前职级等）\n2、员工当前组织信息（当前组织全路径、BG/线/部门/中心/组等各层级组织）\n3、派驻核心信息（派驻类型、派驻子类型、派驻原因、派驻子原因、派驻状态、是否派驻中、是否发放派驻津贴、派驻开始日期、预计结束日期、实际结束日期）\n4、派驻前（派出）信息（派出工作地、派出组织、派出岗位、派出直接上级）\n5、派驻后（派入）信息（派入派驻地、派入组织、派入岗位、派入直接上级、派入管理主体、派入员工类型、派入合同地）\n\n主要用途：\n1、查询某员工当前或历史的派驻记录，了解派驻地、派驻时间及派驻原因；\n2、统计某组织下当前处于派驻状态（派驻中）的员工明细；\n3、按派驻类型维度统计派驻分布；\n4、查询某时间段内发生派驻的员工，分析派驻前后的工作地变化；\n5、查询是否发放派驻津贴的员工明细； \n\n不支持的场景：\n不支持查询员工其他类型的人员异动（调动、晋升、离职等），此类需求应使用人员调动宽表；\n不支持查询派驻审批流程状态（如审批中、待审批等流程中信息）\n\n能回答的典型问题：\nA部门当前有多少员工处于派驻状态；\n某员工的历史派驻记录有哪些；\n派驻到北京的员工目前来自哪些部门；\n当前正在发放派驻津贴的员工有哪些；\nA部门派驻到B部门的员工明细；\nA部门近半年派驻到期（实际结束日期已过）的员工有哪些；\n派驻时长超过6个月的员工有哪些；\n\n优先场景：\n查询当前处于派驻中的员工明细及派驻地信息；\n按派驻类型/原因分析派驻分布；\n查询指定组织的派驻派入/派出人员情况",
+  "write_sql_background" : "1、计派驻人数时，使用COUNT(DISTINCT staff_id)去重，同一员工可能有多次派驻记录；统计派驻次数时，使用COUNT(move_id)；\n2、组织过滤通常使用org_full_name进行LIKE模糊匹配（当前所在组织）；若查询派出组织使用station_from_org_full_name，查询派入组织使用station_to_org_full_name\n3、",
+  "find_column_background" : "常用过滤字段\n- 员工ID\n- 管理主体\n- 员工状态名称\n- 员工类型\n- 组织全路径\n- 是否派驻中\n- 是否发放派驻津贴 \n- 派驻状态 \n\n常用分析维度字段:\n- 派驻核心信息: 派驻类型、派驻原因、派驻状态、是否派驻中\n- 派驻时间: 派驻开始日期、预计派驻结束日期、实际派驻结束日期\n- 派驻地信息: 派驻前/派出工作地、派驻后/派入派驻地名称\n- 派出组织: 派出组织机构全名、派出岗位名\n- 派入组织: 派入组织机构全名、派入岗位名\n- 派驻津贴: 是否发放派驻津贴\n- 员工信息: 员工中英文名、专业职级、管理职级",
+  "columns" : [ {
+    "column_code" : "station_subreason_name",
+    "column_name" : "派驻原因",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "staff_id8",
+    "column_name" : "员工ID",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "staff_combined_name",
+    "column_name" : "员工中英文名",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "hr_status_name",
+    "column_name" : "员工状态",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "manage_unit_name",
+    "column_name" : "当前管理主体",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "staff_type_name",
+    "column_name" : "当前员工类型",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "staff_subtype_name",
+    "column_name" : "当前员工子类型",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "work_location_name",
+    "column_name" : "当前工作地",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "contract_type_name",
+    "column_name" : "当前合同类型",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "pro_position_level_name",
+    "column_name" : "当前专业职级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "manager_level_name",
+    "column_name" : "当前管理职级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "org_full_name",
+    "column_name" : "当前组织全路径",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "bg_name",
+    "column_name" : "当前BG",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "dept_name",
+    "column_name" : "当前部门",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "line_name",
+    "column_name" : "当前线",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "center_name",
+    "column_name" : "当前中心",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "pro_position_clan_name",
+    "column_name" : "当前族",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "pro_position_genus_name",
+    "column_name" : "当前专业通道",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "pro_position_name",
+    "column_name" : "当前专业职位",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "station_type_name",
+    "column_name" : "派驻类型",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "station_subtype_name",
+    "column_name" : "派驻子类型",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "station_from_work_location_name",
+    "column_name" : "派出工作地",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "station_to_location_name",
+    "column_name" : "派驻地",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "station_status_name",
+    "column_name" : "派驻状态",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "station_flag_desc",
+    "column_name" : "是否派驻中",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "station_begin_date",
+    "column_name" : "开始派驻日期",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "station_end_date",
+    "column_name" : "预计结束派驻日期",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "station_end_date_fact",
+    "column_name" : "实际结束派驻日期",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "station_allowance_fee_flag_desc",
+    "column_name" : "是否发放派驻津贴",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "station_from_org_name",
+    "column_name" : "派出组织全路径",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "station_from_post_name",
+    "column_name" : "派出岗位名称",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "station_from_leader_staff_combined_name",
+    "column_name" : "派出直接上级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "station_from_leader_post_name",
+    "column_name" : "派出直接上级岗位",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "station_to_org_full_name",
+    "column_name" : "派入组织全路径",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "station_to_post_name",
+    "column_name" : "派入岗位名称",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "station_to_leader_staff_combined_name",
+    "column_name" : "派入直接上级",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "station_to_leader_post_name",
+    "column_name" : "派入直接上级岗位",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "contract_subject_name",
+    "column_name" : "当前合同主体",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  }, {
+    "column_code" : "contract_company_location_name",
+    "column_name" : "当前合同主体所在地",
+    "column_type" : "",
+    "column_format" : "",
+    "sample" : "",
+    "column_use" : "",
+    "column_group" : ""
+  } ]
+}

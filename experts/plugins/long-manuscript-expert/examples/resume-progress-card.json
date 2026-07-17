@@ -1,0 +1,15 @@
+{
+  "cardType": "resume_progress_card",
+  "documentType": "whitepaper_report",
+  "bookTitle": "AI+HR Industry Whitepaper",
+  "currentStage": "first_value_completed",
+  "wordCount": 12800,
+  "chapterCount": 8,
+  "completedCount": 3,
+  "resumeHint": "Progress is saved. Next time, say continue plus the target chapter or finishing step.",
+  "nextOptions": [
+    "Continue the next chapter",
+    "Run de-AI polish and quality review",
+    "Run format and export precheck"
+  ]
+}

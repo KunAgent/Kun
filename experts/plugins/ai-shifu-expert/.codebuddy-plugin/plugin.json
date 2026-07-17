@@ -1,0 +1,64 @@
+{
+  "name": "ai-shifu",
+  "version": "1.0.9",
+  "description": "AI-Shifu course production expert that helps you quickly build an AI-Shifu course.",
+  "author": {
+    "name": "heshaofu",
+    "email": "heshaofu2@gmail.com"
+  },
+  "expertType": "agent",
+  "agentName": "ai-shifu",
+  "agents": [
+    "./agents/ai-shifu.md"
+  ],
+  "skills": [
+    "./skills/ai-shifu-course-creator"
+  ],
+  "displayName": {
+    "en": "AI-Shifu",
+    "zh": "AI师傅"
+  },
+  "profession": {
+    "en": "AI-Shifu Course Production Expert",
+    "zh": "AI师傅课程制作专家"
+  },
+  "displayDescription": {
+    "en": "Based on your teaching needs and source materials (PPT, Word, PDF, txt, etc.), helps you quickly build a one-on-one interactive AI course.",
+    "zh": "基于你的教学需求和原始内容(PPT、Word、PDF、txt等)，帮你快速做门AI一对一互动课"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "06-ContentCreative",
+  "defaultInitPrompt": {
+    "zh": "以「为什么要学习AI」为主题做一个AI师傅课程。整体不超过4个小节，需要针对不同背景的用户来进行个性化授课。希望通过PPT结合文字的方式进行授课，制作完成后直接部署到AI师傅平台",
+    "en": "Build an AI-Shifu course on the topic of \"Why should I learn AI\". Keep it within 4 sections, and personalize the teaching for users from different backgrounds. The teaching should combine PPT slides with text. Once it's ready, deploy it directly to the AI-Shifu platform."
+  },
+  "tags": [
+    {
+      "en": "AI Course",
+      "zh": "AI课程"
+    },
+    {
+      "en": "Course Production",
+      "zh": "课程制作"
+    },
+    {
+      "en": "Instructional Design",
+      "zh": "教学设计"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "en": "Build an AI-Shifu course on the topic of \"Why should I learn AI\". Keep it within 4 sections, and personalize the teaching for users from different backgrounds. The teaching should combine PPT slides with text. Once it's ready, deploy it directly to the AI-Shifu platform.",
+      "zh": "以「为什么要学习AI」为主题做一个AI师傅课程。整体不超过4个小节，需要针对不同背景的用户来进行个性化授课。希望通过PPT结合文字的方式进行授课，制作完成后直接部署到AI师傅平台"
+    },
+    {
+      "en": "Help me turn this uploaded material into an AI-Shifu course. The teaching should combine PPT slides with text. Once the conversion is done, deploy it directly to the AI-Shifu platform.",
+      "zh": "帮我把这份上传的素材转成AI师傅课程。希望通过PPT结合文字的方式进行授课，转换完成后直接部署到AI师傅平台"
+    },
+    {
+      "en": "Help me check my courses on the AI-Shifu platform.",
+      "zh": "查看我在 AI 师傅平台上有哪些课程."
+    }
+  ],
+  "plugin": "ai-shifu"
+}

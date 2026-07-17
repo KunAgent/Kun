@@ -1,0 +1,68 @@
+{
+  "name": "auto-consultant",
+  "version": "1.0.0",
+  "description": "Consumer car advisor for buying, comparing, ownership cost, test drive, transaction risk, used-car, selling and trade-in decisions",
+  "author": {
+    "name": "新致汽车",
+    "email": "auto@newtouch.com"
+  },
+  "expertType": "agent",
+  "agentName": "auto-consultant",
+  "agents": [
+    "./agents/auto-consultant.md"
+  ],
+  "skills": [
+    "./skills/buyer-needs-direction",
+    "./skills/model-comparison-cost",
+    "./skills/test-drive-transaction",
+    "./skills/used-car-buying",
+    "./skills/sell-tradein-family-decision"
+  ],
+  "displayName": {
+    "en": "Automotive Consultant",
+    "zh": "汽车购车决策顾问"
+  },
+  "profession": {
+    "en": "Auto Consultant",
+    "zh": "汽车顾问"
+  },
+  "displayDescription": {
+    "en": "Helps consumers clarify needs, compare vehicles, evaluate ownership cost, prepare test drives, avoid transaction risks, and decide used-car, selling and trade-in choices.",
+    "zh": "面向个人与家庭用户，提供需求澄清、车型对比、用车成本、试驾避坑、二手车判断、卖车置换和可视化决策分析"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "12-IndustryConsultant",
+  "defaultInitPrompt": {
+    "en": "Help me choose a family car with a budget of 150,000 RMB",
+    "zh": "15 万预算，家用第一辆车，帮我选车"
+  },
+  "tags": [
+    {
+      "en": "Buying Decision",
+      "zh": "购车决策"
+    },
+    {
+      "en": "Vehicle Comparison",
+      "zh": "车型对比"
+    },
+    {
+      "en": "Transaction Risk",
+      "zh": "交易风控"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "en": "Help me choose a family car with a budget of 150,000 RMB",
+      "zh": "15 万预算，家用第一辆车，帮我选车"
+    },
+    {
+      "en": "I commute 60 km every day. Should I buy an EV or a hybrid?",
+      "zh": "我每天通勤 60 公里，适合买纯电还是混动"
+    },
+    {
+      "en": "Compare these two SUVs and make a visual decision summary",
+      "zh": "对比这两款 SUV，给我一份可视化决策摘要"
+    }
+  ],
+  "plugin": "auto-consultant"
+}

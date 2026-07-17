@@ -1,0 +1,186 @@
+{
+  "name": "mvp-dev-expert-team",
+  "version": "1.0.0",
+  "description": "A 7-expert full-stack MVP development team led by Delivery Director Hao. Process: user speaks one idea → AI-driven requirement mining → 3 experts research in parallel with shared memory pool → PRD + Architecture + UIUX documents → user confirms once → Spec auto-generated → parallel frontend-backend development with auto lint-test-fix loops → layered QA testing → one-click deploy. Anti-AI-template design enforcement (no purple gradients, no emoji icons, Lucide only, SuperDev-class design tokens). Ships a production-ready MVP. One user interaction point. Everything else automated.",
+  "author": {
+    "name": "weiyou",
+    "email": ""
+  },
+  "agents": [
+    "./agents/mvp-dev-expert-team-team-lead.md",
+    "./agents/pm.md",
+    "./agents/designer.md",
+    "./agents/architect.md",
+    "./agents/frontend.md",
+    "./agents/backend.md",
+    "./agents/qa.md",
+    "./agents/devops.md"
+  ],
+  "expertType": "team",
+  "agentName": "mvp-dev-expert-team-team-lead",
+  "teamInfo": {
+    "leadAgent": "mvp-dev-expert-team-team-lead",
+    "memberAgents": [
+      "pm",
+      "designer",
+      "architect",
+      "frontend",
+      "backend",
+      "qa",
+      "devops"
+    ]
+  },
+  "displayName": {
+    "en": "MVP Dev Expert Team",
+    "zh": "MVP开发专家团"
+  },
+  "profession": {
+    "en": "MVP Dev Expert Team",
+    "zh": "MVP开发专家团"
+  },
+  "displayDescription": {
+    "en": "One sentence to product: AI-driven full-stack MVP team with 7 experts, from research to Spec to parallel dev+auto-fix to deploy. One confirmation, everything else automated.",
+    "zh": "7位专家AI驱动全流程MVP开发：需求挖掘→竞品调研→三文档→Spec锁定→前后端并行开发自检→测试部署，用户一次确认即交付成品"
+  },
+  "avatar": "avatars/team.png",
+  "categoryId": "02-Engineering",
+  "defaultInitPrompt": {
+    "zh": "我想从零做一个团队协作工具",
+    "en": "I want to build a team collaboration tool from scratch"
+  },
+  "plugin": "mvp-dev-expert-team",
+  "tags": [
+    {
+      "en": "MVP Development",
+      "zh": "MVP开发"
+    },
+    {
+      "en": "Full-Stack",
+      "zh": "全栈开发"
+    },
+    {
+      "en": "Rapid Prototyping",
+      "zh": "快速原型"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "en": "I want to build a team collaboration tool from scratch",
+      "zh": "我想从零做一个团队协作工具"
+    },
+    {
+      "en": "Help me develop an e-commerce mini program",
+      "zh": "帮我开发一个电商小程序"
+    },
+    {
+      "en": "I have a product idea, help me turn it into an MVP",
+      "zh": "我有个产品想法，帮我做成MVP"
+    }
+  ],
+  "members": [
+    {
+      "id": "mvp-dev-expert-team-team-lead",
+      "profession": {
+        "en": "Delivery Director",
+        "zh": "交付总监"
+      },
+      "avatar": "avatars/mvp-dev-expert-team-team-lead.png",
+      "role": "lead",
+      "name": {
+        "en": "Hao Jiaofu",
+        "zh": "郝交付"
+      }
+    },
+    {
+      "id": "pm",
+      "profession": {
+        "en": "Product Manager",
+        "zh": "产品经理"
+      },
+      "avatar": "avatars/pm.png",
+      "role": "member",
+      "name": {
+        "en": "Xu Qingchu",
+        "zh": "许清楚"
+      }
+    },
+    {
+      "id": "designer",
+      "profession": {
+        "en": "Design Director",
+        "zh": "设计总监"
+      },
+      "avatar": "avatars/designer.png",
+      "role": "member",
+      "name": {
+        "en": "Yan Haokan",
+        "zh": "颜好看"
+      }
+    },
+    {
+      "id": "architect",
+      "profession": {
+        "en": "Chief Architect",
+        "zh": "首席架构师"
+      },
+      "avatar": "avatars/architect.png",
+      "role": "member",
+      "name": {
+        "en": "Gao Jianyuan",
+        "zh": "高见远"
+      }
+    },
+    {
+      "id": "frontend",
+      "profession": {
+        "en": "Frontend Lead",
+        "zh": "前端主程"
+      },
+      "avatar": "avatars/frontend.png",
+      "role": "member",
+      "name": {
+        "en": "Jia Simin",
+        "zh": "贾思敏"
+      }
+    },
+    {
+      "id": "backend",
+      "profession": {
+        "en": "Backend Lead",
+        "zh": "后端主程"
+      },
+      "avatar": "avatars/backend.png",
+      "role": "member",
+      "name": {
+        "en": "Bei Luoqi",
+        "zh": "贝洛奇"
+      }
+    },
+    {
+      "id": "qa",
+      "profession": {
+        "en": "QA Lead",
+        "zh": "质量主管"
+      },
+      "avatar": "avatars/qa.png",
+      "role": "member",
+      "name": {
+        "en": "Yan Guoguan",
+        "zh": "严过关"
+      }
+    },
+    {
+      "id": "devops",
+      "profession": {
+        "en": "DevOps Engineer",
+        "zh": "运维工程师"
+      },
+      "avatar": "avatars/devops.png",
+      "role": "member",
+      "name": {
+        "en": "Bu Dangji",
+        "zh": "卜宕机"
+      }
+    }
+  ]
+}

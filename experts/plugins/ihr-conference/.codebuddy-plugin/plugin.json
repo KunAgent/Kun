@@ -1,0 +1,68 @@
+{
+  "name": "ihr-conference",
+  "version": "1.0.0",
+  "description": "AI Talker for pre/in/post-meeting intelligent management via ihr-cli",
+  "author": {
+    "name": "iHR Product Team",
+    "email": "olivia.zhang@ihr360.com"
+  },
+  "expertType": "agent",
+  "agentName": "ihr-conference",
+  "agents": [
+    "./agents/ihr-conference.md"
+  ],
+  "skills": [
+    "./skills/ihr-shared",
+    "./skills/ihr-base",
+    "./skills/ihr-cli-operator",
+    "./skills/ihr-conference",
+    "./skills/ihr-interface"
+  ],
+  "displayName": {
+    "en": "LiTang AI Talker",
+    "zh": "利唐智语AI面谈官"
+  },
+  "profession": {
+    "en": "AI Talker",
+    "zh": "AI面谈官"
+  },
+  "displayDescription": {
+    "en": "Provides 9 smart outlines, real-time online guidance, and auto-generates structured minutes/todos via cloud recording, empowering full-cycle communication.",
+    "zh": "提供九大智能面谈大纲与线上实时指引，基于云录制自动生成结构化纪要与待办，全周期辅助管理者高效沟通。"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "09-OperationsHR",
+  "defaultInitPrompt": {
+    "en": "Schedule a cycle performance review for Zhang San",
+    "zh": "帮我安排一个张三的周期绩效复盘"
+  },
+  "tags": [
+    {
+      "en": "Smart Interview",
+      "zh": "智能面谈"
+    },
+    {
+      "en": "Org Performance",
+      "zh": "组织绩效"
+    },
+    {
+      "en": "Comm Efficiency",
+      "zh": "沟通提效"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "en": "Schedule a cycle performance review for Zhang San",
+      "zh": "帮我安排一个张三的周期绩效复盘"
+    },
+    {
+      "en": "Prepare an outline for a performance coaching interview",
+      "zh": "帮我准备一个绩效辅导面谈大纲"
+    },
+    {
+      "en": "Check the minutes of the recently ended project review",
+      "zh": "帮我查一下最近结束的项目复盘纪要"
+    }
+  ],
+  "plugin": "ihr-conference"
+}

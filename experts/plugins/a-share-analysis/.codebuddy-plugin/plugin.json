@@ -1,0 +1,160 @@
+{
+  "name": "a-share-analysis",
+  "version": "1.0.0",
+  "description": "A-share research team — 8 specialists with workflow orchestration covering macro, market reading, stock research, valuation, industry chain, money flow, and risk diagnosis",
+  "author": {
+    "name": "CodeBuddy Teams"
+  },
+  "agents": [
+    "./agents/a-share-advisor.md",
+    "./agents/macro-strategist.md",
+    "./agents/market-reader.md",
+    "./agents/stock-researcher.md",
+    "./agents/valuation-pricer.md",
+    "./agents/industry-mapper.md",
+    "./agents/money-tracker.md",
+    "./agents/risk-doctor.md"
+  ],
+  "skills": [
+    "./skills/westock",
+    "./skills/neodata-financial-search"
+  ],
+  "expertType": "team",
+  "agentName": "a-share-advisor",
+  "teamInfo": {
+    "leadAgent": "a-share-advisor",
+    "memberAgents": [
+      "macro-strategist",
+      "market-reader",
+      "stock-researcher",
+      "valuation-pricer",
+      "industry-mapper",
+      "money-tracker",
+      "risk-doctor"
+    ]
+  },
+  "displayName": {
+    "en": "A-Share Research Team",
+    "zh": "A股研究团队"
+  },
+  "profession": {
+    "en": "A-Share Full-Chain Research Team",
+    "zh": "A股全链路研究团队"
+  },
+  "displayDescription": {
+    "en": "8 research specialists with multi-step workflow orchestration — covering macro strategy, market reading, stock deep-dive, valuation pricing, industry chain mapping, smart money tracking, and risk diagnosis",
+    "zh": "8位研究专家支持多步骤工作流编排，覆盖宏观策略、盘面解读、个股深度、估值定价、产业链映射、资金追踪、风险诊断"
+  },
+  "avatar": "avatars/team.png",
+  "categoryId": "08-FinanceInvestment",
+  "defaultInitPrompt": {
+    "zh": "帮我梳理下宁德时代的基本面和估值情况",
+    "en": "Help me review CATL's fundamentals and valuation."
+  },
+  "members": [
+    {
+      "id": "a-share-advisor",
+      "name": {
+        "en": "Gu",
+        "zh": "古见远"
+      },
+      "profession": {
+        "en": "Research Director",
+        "zh": "研究总监"
+      },
+      "avatar": "avatars/a-share-advisor.png",
+      "role": "lead"
+    },
+    {
+      "id": "macro-strategist",
+      "name": {
+        "en": "Hong",
+        "zh": "洪远见"
+      },
+      "profession": {
+        "en": "Macro Strategist",
+        "zh": "宏观策略师"
+      },
+      "avatar": "avatars/macro-strategist.png",
+      "role": "member"
+    },
+    {
+      "id": "market-reader",
+      "name": {
+        "en": "Pan",
+        "zh": "潘明哲"
+      },
+      "profession": {
+        "en": "Market Reader",
+        "zh": "市场解读师"
+      },
+      "avatar": "avatars/market-reader.png",
+      "role": "member"
+    },
+    {
+      "id": "stock-researcher",
+      "name": {
+        "en": "Yan",
+        "zh": "颜一深"
+      },
+      "profession": {
+        "en": "Stock Researcher",
+        "zh": "个股研究员"
+      },
+      "avatar": "avatars/stock-researcher.png",
+      "role": "member"
+    },
+    {
+      "id": "valuation-pricer",
+      "name": {
+        "en": "Jia",
+        "zh": "贾不贵"
+      },
+      "profession": {
+        "en": "Valuation Pricer",
+        "zh": "估值定价师"
+      },
+      "avatar": "avatars/valuation-pricer.png",
+      "role": "member"
+    },
+    {
+      "id": "industry-mapper",
+      "name": {
+        "en": "Lian",
+        "zh": "连拓远"
+      },
+      "profession": {
+        "en": "Industry Chain Analyst",
+        "zh": "产业链分析师"
+      },
+      "avatar": "avatars/industry-mapper.png",
+      "role": "member"
+    },
+    {
+      "id": "money-tracker",
+      "name": {
+        "en": "Jin",
+        "zh": "金向北"
+      },
+      "profession": {
+        "en": "Money Flow Analyst",
+        "zh": "资金行为分析师"
+      },
+      "avatar": "avatars/money-tracker.png",
+      "role": "member"
+    },
+    {
+      "id": "risk-doctor",
+      "name": {
+        "en": "Fang",
+        "zh": "方有安"
+      },
+      "profession": {
+        "en": "Risk Doctor",
+        "zh": "风险诊断师"
+      },
+      "avatar": "avatars/risk-doctor.png",
+      "role": "member"
+    }
+  ]
+}

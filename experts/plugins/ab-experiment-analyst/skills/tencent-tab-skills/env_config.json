@@ -1,0 +1,21 @@
+{
+  "env": "tab.woa.com",
+  "auth": "oauth2",
+  "business_code": "1311",
+  "skills_base_url": "http://skills.tab.woa.com/api/skills",
+  "tabauth": {
+    "environments": {
+      "tab.woa.com": "http://mcp.tab.woa.com/data_infra/mcp"
+    }
+  },
+  "oauth2": {
+    "environments": {
+      "tab.woa.com": "https://tab.mcp.it.woa.com/data_infra/mcp",
+      "tab.wxpay.woa.com": "https://wxpay-tab.mcp.it.woa.com/data_infra/mcp",
+      "fittab.woa.com": "https://fit-tab.mcp.it.woa.com/data_infra/mcp"
+    },
+    "base_url": "https://iam.it.woa.com",
+    "client_id": "public_mcp_client",
+    "resource": ""
+  }
+}

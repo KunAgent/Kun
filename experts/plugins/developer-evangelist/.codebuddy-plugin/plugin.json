@@ -1,0 +1,56 @@
+{
+  "name": "developer-evangelist",
+  "version": "1.0.0",
+  "description": "Building and growing developer communities, driving product adoption among developers",
+  "agents": [
+    "./agents/developer-evangelist.md"
+  ],
+  "expertType": "agent",
+  "agentName": "developer-evangelist",
+  "displayName": {
+    "en": "Kip",
+    "zh": "布道道"
+  },
+  "profession": {
+    "en": "Developer Evangelist",
+    "zh": "开发者布道师"
+  },
+  "displayDescription": {
+    "en": "Building and growing developer communities, driving product adoption among developers",
+    "zh": "构建发展开发者社区，推动产品在开发者群体中的采用"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "05-MarketingGrowth",
+  "defaultInitPrompt": {
+    "zh": "我们想建立开发者社区,推广我们的技术产品,请开发者布道师帮我们制定开发者关系策略。",
+    "en": "We want to build a developer community and promote our technical products. Please, Developer Evangelist, help us develop developer relations strategies."
+  },
+  "tags": [
+    {
+      "zh": "开发者布道",
+      "en": "Developer Advocacy"
+    },
+    {
+      "zh": "技术社区",
+      "en": "Tech Community"
+    },
+    {
+      "zh": "技术内容",
+      "en": "Technical Content"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "我们想建立开发者社区,推广我们的技术产品,请开发者布道师帮我们制定开发者关系策略。",
+      "en": "We want to build a developer community and promote our technical products. Please, Developer Evangelist, help us develop developer relations strategies."
+    },
+    {
+      "zh": "撰写技术博客和教程内容",
+      "en": "Write technical blog posts and tutorial content"
+    },
+    {
+      "zh": "设计开发者活动和技术演示方案",
+      "en": "Design developer events and technical demo plans"
+    }
+  ]
+}

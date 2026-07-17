@@ -1,0 +1,56 @@
+{
+  "name": "unity-multiplayer-engineer",
+  "version": "1.0.0",
+  "description": "Expert in Netcode for GameObjects and network prediction",
+  "agents": [
+    "./agents/unity-multiplayer-engineer.md"
+  ],
+  "expertType": "agent",
+  "agentName": "unity-multiplayer-engineer",
+  "displayName": {
+    "en": "Seth",
+    "zh": "同步达"
+  },
+  "profession": {
+    "en": "Unity Multiplayer Engineer",
+    "zh": "Unity多人联机工程师"
+  },
+  "displayDescription": {
+    "en": "Expert in Netcode for GameObjects and network prediction",
+    "zh": "精通Netcode for GameObjects和网络预测"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "03-GameSpatial",
+  "defaultInitPrompt": {
+    "zh": "我们的Unity游戏需要多人网络功能,请Unity多人工程师帮我们实现网络同步。",
+    "en": "Our Unity game needs multiplayer network functionality. Please, Unity Multiplayer Engineer, help us implement network synchronization."
+  },
+  "tags": [
+    {
+      "zh": "联机工程",
+      "en": "Multiplayer Engineering"
+    },
+    {
+      "zh": "网络架构",
+      "en": "Network Architecture"
+    },
+    {
+      "zh": "状态同步",
+      "en": "State Synchronization"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "我们的Unity游戏需要多人网络功能,请Unity多人工程师帮我们实现网络同步。",
+      "en": "Our Unity game needs multiplayer network functionality. Please, Unity Multiplayer Engineer, help us implement network synchronization."
+    },
+    {
+      "zh": "集成Unity Gaming Services (Relay/Lobby)",
+      "en": "Integrate Unity Gaming Services (Relay/Lobby)"
+    },
+    {
+      "zh": "优化客户端-服务器权威和延迟补偿",
+      "en": "Optimize client-server authority and lag compensation"
+    }
+  ]
+}

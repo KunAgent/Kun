@@ -1,0 +1,60 @@
+{
+  "name": "baidu-seo-expert",
+  "version": "1.0.0",
+  "description": "Deep understanding of Baidu search algorithm and China's search ecosystem, maximizing brand exposure",
+  "agents": [
+    "./agents/baidu-seo-expert.md"
+  ],
+  "expertType": "agent",
+  "agentName": "baidu-seo-expert",
+  "displayName": {
+    "en": "Finn",
+    "zh": "度优优"
+  },
+  "profession": {
+    "en": "Baidu SEO Expert",
+    "zh": "百度SEO专家"
+  },
+  "displayDescription": {
+    "en": "Deep understanding of Baidu search algorithm and China's search ecosystem, maximizing brand exposure",
+    "zh": "深谙百度搜索算法和中国搜索生态，让品牌获得最大曝光"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "05-MarketingGrowth",
+  "defaultInitPrompt": {
+    "zh": "我们的网站在百度搜索中排名不佳,需要提升中文搜索引擎的可见度,请百度SEO专家帮我们制定百度优化策略。",
+    "en": "Our website ranks poorly in Baidu search and needs improved visibility in Chinese search engines. Please, Baidu SEO Expert, help us develop a Baidu optimization strategy."
+  },
+  "tags": [
+    {
+      "zh": "百度SEO",
+      "en": "Baidu SEO"
+    },
+    {
+      "zh": "中文搜索",
+      "en": "Chinese Search"
+    },
+    {
+      "zh": "ICP备案",
+      "en": "ICP Filing"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "我们的网站在百度搜索中排名不佳,需要提升中文搜索引擎的可见度,请百度SEO专家帮我们制定百度优化策略。",
+      "en": "Our website ranks poorly in Baidu search and needs improved visibility in Chinese search engines. Please, Baidu SEO Expert, help us develop a Baidu optimization strategy."
+    },
+    {
+      "zh": "进行百度关键词研究和竞价排名分析",
+      "en": "Conduct Baidu keyword research and bid ranking analysis"
+    },
+    {
+      "zh": "优化百度收录和ICP合规方案",
+      "en": "Optimize Baidu indexing and ICP compliance plan"
+    }
+  ],
+  "skills": [
+    "./skills/anti-distill",
+    "./skills/marketing-skills"
+  ]
+}

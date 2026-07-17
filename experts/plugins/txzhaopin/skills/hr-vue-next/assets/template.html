@@ -1,0 +1,1105 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HR系统表格页面</title>
+  
+  <!-- Vue3 核心 -->
+  <script src="https://cdn.jsdelivr.net/npm/vue@3.4.15/dist/vue.global.prod.js"></script>
+  
+  <!-- 工具库 -->
+  <script src="https://cdn.jsdelivr.net/npm/lodash@4.17.21/lodash.min.js"></script>
+  
+  <!-- TDesign CSS -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/tdesign-vue-next@1.9.7/dist/tdesign.min.css">
+  
+  <!-- TDesign JS -->
+  <script src="https://cdn.jsdelivr.net/npm/tdesign-vue-next@1.9.7/dist/tdesign.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/tdesign-icons-vue-next@0.2.4/dist/index.js"></script>
+  
+  <!-- 4. 引入 HR Vue Next CSS (CDN) -->
+  <link rel="stylesheet" href="https://cdn.m.tencent.com/hr-web/hr-vue-next.min.css">
+  
+  <!-- 5. 引入 HR Vue Next JS (CDN) -->
+  <script src="https://cdn.m.tencent.com/hr-web/hr-vue-next.min.js"></script>
+
+  <style>
+    body {
+      margin: 0;
+    }
+    .root-container {
+      background-color: #f3f3f3;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+    }
+    .root-container .top-box {
+      flex-shrink: 0;
+    }
+    .root-container .content-box {
+      display: flex;
+      flex: 1;
+      min-height: 0;
+    }
+    .root-container .aside-box {
+      flex-shrink: 0;
+    }
+    .root-container .body-box {
+      min-width: 1184px;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      padding: 12px;
+      overflow-y: auto;
+    }
+    .root-container .body-inner-box {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      background-color: #fff;
+    }
+    .root-container .sub-menu-boxm,
+    .root-container .footer-box {
+      flex-shrink: 0;
+    }
+    .root-container .sub-menu-box {
+      padding: 0px 16px;
+      background-color: #fff;
+    }
+    .root-container .body {
+      padding: 0px 16px;
+      flex: 1;
+      min-height: 530px;
+      display: flex;
+      flex-direction: column;
+      background-color: #fff;
+    }
+    .root-container .table-wrapper {
+      flex: 1;
+      min-height: 400px;
+    }
+
+    /* SmartCollapsibleForm 样式 */
+    .smart-collapsible-form {
+      width: 100%;
+    }
+    .form-items-wrapper {
+      width: 100%;
+    }
+    .form-line {
+      width: 100%;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: flex-start;
+    }
+    .form-line .dynamic-form-item {
+      margin-top: 12px;
+      margin-right: 24px;
+      flex: 0 0 auto;
+      transition: opacity 0.2s ease;
+    }
+    .form-actions-wrapper {
+      width: auto;
+      display: flex;
+      justify-content: flex-end;
+      margin-top: 12px;
+      flex-shrink: 0;
+      margin-left: auto;
+    }
+    .form-actions {
+      display: flex;
+      align-items: center;
+    }
+    .collapse-button {
+      color: #125fff;
+    }
+    .reset-btn,
+    .submit-btn {
+      margin-left: 8px;
+    }
+
+    /* BaseTable 样式 */
+    .table-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 12px 0px;
+    }
+    .header-left {
+      display: flex;
+      align-items: center;
+      flex: 1;
+      min-width: 0;
+      color: #00000099;
+      text-align: center;
+      font-family: 'PingFang SC';
+      font-size: 14px;
+      font-style: normal;
+      font-weight: 400;
+      line-height: 22px;
+    }
+    .header-right {
+      display: flex;
+      align-items: center;
+      flex-shrink: 0;
+    }
+    .table-title {
+      margin-left: 5px;
+    }
+    .line {
+      width: 1px;
+      height: 14px;
+      background: #e7e7e7;
+      margin-left: 8px;
+      margin-right: 8px;
+    }
+    .table-summary {
+      font-size: 14px;
+      color: rgba(0, 0, 0, 0.6);
+    }
+    .table-summary .table-count {
+      color: #125fff;
+    }
+    .selected-info {
+      color: rgba(0, 0, 0, 0.6);
+      text-align: center;
+      font-family: 'PingFang SC';
+      font-size: 14px;
+      font-style: normal;
+      font-weight: 400;
+      line-height: 22px;
+    }
+    .selected-count {
+      color: #125fff;
+    }
+    .batch-operations {
+      display: flex;
+      align-items: center;
+    }
+    .batch-delete-btn,
+    .batch-cancel-btn {
+      margin-left: 8px;
+    }
+
+    /* 全局样式 */
+    .hr-table-filtering-diy-root-container .t-tabs__nav-container.t-is-top::after {
+      height: 0px;
+    }
+    .hr-base-table-diy-root-wrapper .t-table__header th {
+      font-family: 'PingFang SC';
+      font-size: 14px;
+      font-style: normal;
+      font-weight: 600;
+      color: rgba(0, 0, 0, 0.9);
+      background-color: #f3f3f3;
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div class="root-container hr-table-filtering-diy-root-container">
+      <div class="top-box">
+        <hr-page-header :menu-list="menuList" logo-name="HR系统名称" :avatar-props="{ username: 'cxyxhhuang(黄鑫杰)' }"></hr-page-header>
+      </div>
+      <div class="content-box">
+        <div class="aside-box">
+          <t-menu :collapsed="collapsed">
+            <div v-for="asideMenuItem in asideMenuList" :key="asideMenuItem.value">
+              <t-submenu v-if="asideMenuItem.children?.length" :value="asideMenuItem.value" :title="asideMenuItem.title">
+                <template #icon>
+                  <t-icon name="setting-1"></t-icon>
+                </template>
+                <div v-for="menuItem in asideMenuItem.children" :key="menuItem.value">
+                  <t-submenu v-if="menuItem.children?.length" :value="menuItem.value">
+                    <template #title>
+                      <span>{{ menuItem.title }}</span>
+                    </template>
+                    <t-menu-item v-for="submenuItem in menuItem.children" :value="submenuItem.value">
+                      <span>{{ submenuItem.title }}</span>
+                    </t-menu-item>
+                  </t-submenu>
+                  <t-menu-item v-else :value="menuItem.value">
+                    <span>{{ menuItem.title }}</span>
+                  </t-menu-item>
+                </div>
+              </t-submenu>
+              <t-menu-item v-else :value="asideMenuItem.value">
+                <template #icon>
+                  <t-icon name="setting-1"></t-icon>
+                </template>
+                {{ asideMenuItem.title }}
+              </t-menu-item>
+            </div>
+            <template #operations>
+              <t-button variant="text" shape="square" @click="changeCollapsed">
+                <template #icon><t-icon name="view-list"></t-icon></template>
+              </t-button>
+            </template>
+          </t-menu>
+        </div>
+        <div class="body-box">
+          <div class="body-inner-box">
+            <div class="sub-menu-box">
+              <t-tabs :value="value" @change="handlerChange">
+                <t-tab-panel v-for="item in tabList" :value="item.value" :label="item.label"></t-tab-panel>
+              </t-tabs>
+            </div>
+            <div class="body">
+              <!-- SmartCollapsibleForm 组件内容 -->
+              <div class="smart-collapsible-form" ref="formContainerRef">
+                <t-form
+                  ref="formRef"
+                  :data="formData"
+                  class="collaps-form-container"
+                  layout="inline"
+                  :colon="false"
+                  @submit="handleSubmit"
+                  @reset="handleReset"
+                >
+                  <div class="form-items-wrapper">
+                    <!-- 所有表单项都在一个容器里 -->
+                    <div class="form-line">
+                      <t-form-item
+                        v-for="(field, index) in formFields"
+                        :key="field.name"
+                        ref="formItemRefs"
+                        :label="field.label"
+                        :label-width="field.labelWidth"
+                        :name="field.name"
+                        :rules="field.rules"
+                        class="dynamic-form-item"
+                        :style="{ visibility: shouldHideItem(index) ? 'hidden' : 'visible' }"
+                      >
+                        <component
+                          :is="getComponentByType(field.type)"
+                          v-model="formData[field.name]"
+                          v-bind="field.props"
+                          :placeholder="field.placeholder"
+                          :disabled="field.disabled"
+                          clearable
+                        ></component>
+                      </t-form-item>
+                      <!-- 操作区：总是在最后 -->
+                      <div class="form-actions-wrapper">
+                        <div class="form-actions">
+                          <!-- 只有需要折叠时才显示展开收起按钮 -->
+                          <t-button
+                            v-if="needsCollapse"
+                            theme="default"
+                            variant="text"
+                            @click="toggleCollapse"
+                            class="collapse-button"
+                          >
+                            <template #icon>
+                              <chevron-down-icon v-if="isCollapsed"></chevron-down-icon>
+                              <chevron-up-icon v-else></chevron-up-icon>
+                            </template>
+                            {{ isCollapsed ? '展开' : '收起' }}
+                          </t-button>
+
+                          <t-button class="reset-btn" theme="default" variant="outline" type="reset">重置</t-button>
+                          <t-button class="submit-btn" theme="primary" type="submit">查询</t-button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </t-form>
+              </div>
+
+              <div class="table-wrapper">
+                <!-- BaseTable 组件内容 -->
+                <div class="base-table-wrapper hr-base-table-diy-root-wrapper">
+                  <!-- 表格头部 -->
+                  <div class="table-header">
+                    <div class="header-left">
+                      <setting-1-icon :fill-color="'transparent'" :stroke-color="'currentColor'" :stroke-width="2"></setting-1-icon>
+                      <div class="table-title">设置表头</div>
+                      <div class="line"></div>
+                      <div class="table-summary">
+                        共查询到 <span class="table-count">{{ paginationConfig.total }}</span> 条数据
+                      </div>
+                    </div>
+                    <div class="header-right">
+                      <div class="batch-operations">
+                        <t-button
+                          v-if="!showBatchOperations"
+                          theme="default"
+                          variant="outline"
+                          @click="toggleBatchOperations"
+                        >
+                          批量删除
+                        </t-button>
+                        <template v-else>
+                          <div class="selected-info">
+                            已选择 <span class="selected-count">{{ selectedRowKeys.length }}</span> 个
+                          </div>
+                          <t-button
+                            theme="default"
+                            variant="outline"
+                            class="batch-delete-btn"
+                            :disabled="selectedRowKeys.length === 0"
+                            @click="handleBatchDelete"
+                          >
+                            删除
+                          </t-button>
+                          <t-button
+                            theme="default"
+                            variant="outline"
+                            class="batch-cancel-btn"
+                            @click="toggleBatchOperations"
+                          >
+                            取消
+                          </t-button>
+                        </template>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="table-content">
+                    <t-table
+                      :data="tableData"
+                      :columns="tableColumns"
+                      :filter-row="null"
+                      row-key="id"
+                      :loading="tableLoading"
+                      :pagination="paginationConfig"
+                      :selected-row-keys="selectedRowKeys"
+                      @select-change="handleTableSelectChange"
+                      @page-change="handlePageChange"
+                      @sort-change="handleSortChange"
+                      @filter-change="handleFilterChange"
+                      hover
+                      size="medium"
+                    >
+                      <!-- 自定义列渲染 -->
+                      <template #status="{ row }">
+                        <t-tag :theme="getStatusTheme(row.status)" variant="light">
+                          {{ getStatusText(row.status) }}
+                        </t-tag>
+                      </template>
+
+                      <!-- 操作列根据批量操作状态显示不同内容 -->
+                      <template #operation="{ row, rowIndex }">
+                        <t-button theme="primary" variant="text" @click="handleEdit(row, rowIndex)"> 编辑 </t-button>
+                      </template>
+                    </t-table>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="footer-box">
+            <hr-page-footer></hr-page-footer>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // 资源加载检测和错误处理
+    function checkResourceLoading() {
+      if (typeof Vue === 'undefined') {
+        console.error('Vue未加载，请检查CDN连接');
+        return false;
+      }
+      if (typeof TDesign === 'undefined') {
+        console.error('TDesign未加载，请检查CDN连接');
+        return false;
+      }
+      if (typeof HrVueNext === 'undefined') {
+        console.error('HrVueNext未加载，请检查本地文件路径');
+        return false;
+      }
+      return true;
+    }
+
+    // 等待所有资源加载完成
+    window.addEventListener('load', function() {
+      if (!checkResourceLoading()) {
+        return;
+      }
+
+      const { createApp, ref, reactive, computed, watch, onMounted, onUnmounted, nextTick } = Vue;
+      const { MessagePlugin, DialogPlugin } = TDesign;
+      const { ChevronDownIcon, ChevronUpIcon, Setting1Icon } = TDesignIconVueNext;
+
+      const app = createApp({
+        components: {
+          // 注册TDesign组件
+          't-menu': TDesign.Menu,
+          't-submenu': TDesign.Submenu,
+          't-menu-item': TDesign.MenuItem,
+          't-button': TDesign.Button,
+          't-icon': TDesign.Icon,
+          't-tabs': TDesign.Tabs,
+          't-tab-panel': TDesign.TabPanel,
+          't-form': TDesign.Form,
+          't-form-item': TDesign.FormItem,
+          't-input': TDesign.Input,
+          't-select': TDesign.Select,
+          't-date-picker': TDesign.DatePicker,
+          't-table': TDesign.Table,
+          't-tag': TDesign.Tag,
+          
+          // 注册TDesign图标组件
+          'chevron-down-icon': ChevronDownIcon,
+          'chevron-up-icon': ChevronUpIcon,
+          'setting-1-icon': Setting1Icon,
+          
+          // 注册hr-vue-next组件
+          'hr-page-header': HrVueNext.HrPageHeader,
+          'hr-page-footer': HrVueNext.HrPageFooter,
+          'hr-unit-selector': HrVueNext.HrUnitSelector,
+          'hr-staff-selector': HrVueNext.HrStaffSelector,
+          'hr-dict-selector': HrVueNext.HrDictSelector,
+        },
+        setup() {
+          const collapsed = ref(false);
+
+          // SmartCollapsibleForm 相关响应式数据
+          const formContainerRef = ref();
+          const formItemRefs = ref([]);
+          const isCollapsed = ref(true); // 默认折叠状态
+          const needsCollapse = ref(false); // 是否需要折叠
+          const visibleCount = ref(1); // 可见的表单项数量
+
+          const resizeObserver = ref();
+
+          // 判断某个表单项是否应该隐藏
+          const shouldHideItem = (index) => {
+            return needsCollapse.value && isCollapsed.value && index >= visibleCount.value;
+          };
+
+          // 获取组件类型
+          const getComponentByType = (type) => {
+            const componentMap = {
+              input: TDesign.Input,
+              select: TDesign.Select,
+              date: TDesign.DatePicker,
+              textarea: TDesign.Input,
+              'hr-unit-selector': HrVueNext.HrUnitSelector,
+              'hr-staff-selector': HrVueNext.HrStaffSelector,
+              'hr-dict-selector': HrVueNext.HrDictSelector,
+            };
+            return componentMap[type] || TDesign.Input;
+          };
+
+          // 计算布局 - 核心逻辑
+          const calculateLayout = () => {
+            if (!formContainerRef.value || formItemRefs.value.length === 0) {
+              return;
+            }
+            const containerRect = formContainerRef.value.getBoundingClientRect();
+            const availableWidth = containerRect.width;
+
+            // 计算每个表单项的宽度
+            const itemWidths = [];
+            for (const itemRef of formItemRefs.value) {
+              if (itemRef && itemRef.$el) {
+                const rect = itemRef.$el.getBoundingClientRect();
+                itemWidths.push(rect.width);
+              }
+            }
+
+            // 计算第一行能放下多少个表单项
+            let totalWidth = 0;
+            let visibleItems = 0;
+            const GAP = 24; // 表单项间距（每个item的右边距）
+
+            for (let i = 0; i < itemWidths.length; i++) {
+              const itemWidth = itemWidths[i];
+              // 每个item都有右边距，所以每次都要加GAP
+              const neededWidth = totalWidth + itemWidth + GAP;
+
+              if (neededWidth <= availableWidth) {
+                totalWidth = neededWidth;
+                visibleItems++;
+              } else {
+                break;
+              }
+            }
+
+            // 判断是否需要折叠
+            const shouldCollapse = visibleItems < formFields.length;
+            needsCollapse.value = shouldCollapse;
+            visibleCount.value = Math.max(1, visibleItems); // 至少显示1个
+
+            // 如果不需要折叠，确保是展开状态
+            if (!shouldCollapse && isCollapsed.value) {
+              isCollapsed.value = false;
+            }
+          };
+
+          const toggleCollapse = () => {
+            isCollapsed.value = !isCollapsed.value;
+          };
+
+          // 表单字段配置
+          const formFields = [
+            {
+              name: 'username',
+              label: '员工',
+              type: 'hr-staff-selector',
+              props: {
+                style: { width: '300px' },
+                multiple: false,
+                filterable: true,
+                clearable: true,
+                showAvatar: true,
+                showStaffNo: true,
+              },
+              placeholder: '请选择员工',
+            },
+            {
+              name: 'org',
+              label: '组织',
+              type: 'hr-unit-selector',
+              props: {
+                style: { width: '300px' },
+                multiple: false,
+                filterable: true,
+                clearable: true,
+                showPath: false,
+              },
+              placeholder: '请选择组织',
+            },
+            {
+              name: 'dictType57',
+              label: '基础字典',
+              type: 'hr-dict-selector',
+              props: {
+                style: { width: '210px' },
+                type: '57',
+                filterable: true,
+                clearable: true,
+                onChange: (val) => {
+                  console.log('基础字典选择器 change:', val);
+                },
+              },
+              placeholder: '请选择',
+            },
+          ];
+
+          // 表单数据
+          const formData = reactive({
+            username: '',
+            realname: '',
+            department: '',
+            position: '',
+            status: '',
+            joinDate: '',
+            phone: '',
+            email: '',
+            dictType57: '',
+          });
+
+          const asideMenuList = [
+            {
+              title: '组织与员工',
+              value: '0',
+              children: [
+                {
+                  title: '组织选择器',
+                  value: '0-1',
+                },
+                {
+                  title: '员工选择器',
+                  value: '0-2',
+                },
+                {
+                  title: '岗位选择器',
+                  value: '0-3',
+                },
+              ],
+            },
+            {
+              title: '基础字典选择器',
+              value: '1',
+            },
+            {
+              title: '地址与位置',
+              value: '2',
+            },
+            {
+              title: '公司与组织架构',
+              value: '3',
+            },
+            {
+              title: '职位与职级',
+              value: '4',
+            },
+          ];
+
+          const menuList = ref([
+            { text: '首页' },
+            { text: '基础选择器类' },
+            { text: '规范页面布局类' },
+            { text: '组件后端服务类' },
+          ]);
+
+          const tabList = ref([
+            { value: '页签一', label: '页签一' },
+            { value: '页签二', label: '页签二' },
+            { value: '页签三', label: '页签三' },
+          ]);
+
+          const value = ref('页签一');
+          const handlerChange = (newValue) => {
+            value.value = newValue;
+          };
+
+          const changeCollapsed = () => {
+            collapsed.value = !collapsed.value;
+          };
+
+          // 表格相关数据
+          const tableData = ref([]);
+          const tableLoading = ref(false);
+          const currentPage = ref(1);
+          const pageSize = ref(10);
+          const total = ref(0);
+
+          // BaseTable 相关响应式数据
+          const selectedRowKeys = ref([]);
+          const showBatchOperations = ref(false);
+
+          // 排序相关状态
+          const sortInfo = ref({
+            sortBy: '',
+            descending: false,
+          });
+
+          // 默认列配置
+          const defaultColumns = [
+            {
+              colKey: 'id',
+              title: 'ID',
+              width: 80,
+            },
+            {
+              colKey: 'name',
+              title: '姓名',
+              width: 120,
+            },
+            {
+              colKey: 'department',
+              title: '部门',
+              filter: {
+                type: 'multiple',
+                list: [
+                  { label: '技术部', value: '技术部' },
+                  { label: '产品部', value: '产品部' },
+                  { label: '设计部', value: '设计部' },
+                ],
+                showConfirmAndReset: true,
+              },
+              width: 150,
+            },
+            {
+              colKey: 'position',
+              title: '职位',
+              width: 140,
+            },
+            {
+              colKey: 'email',
+              title: '邮箱',
+              width: 200,
+            },
+            {
+              colKey: 'phone',
+              title: '电话',
+              width: 150,
+            },
+            {
+              colKey: 'status',
+              title: '状态',
+              width: 100,
+              align: 'center',
+            },
+            {
+              colKey: 'createTime',
+              title: '创建时间',
+              width: 180,
+              sorter: true,
+            },
+            {
+              colKey: 'lastLogin',
+              title: '最后登录',
+              width: 180,
+              sorter: true,
+            },
+            {
+              colKey: 'operation',
+              title: '操作',
+              width: 150,
+              align: 'center',
+            },
+          ];
+
+          // 动态计算表格列配置
+          const tableColumns = computed(() => {
+            const multipleCol = showBatchOperations.value
+              ? [
+                  {
+                    colKey: 'row-select',
+                    type: 'multiple',
+                    width: 60,
+                    align: 'center',
+                  },
+                ]
+              : [];
+            const baseColumns = [...multipleCol, ...defaultColumns];
+            return baseColumns.map((col) => {
+              if (col.colKey === 'operation') {
+                return {
+                  ...col,
+                  title: showBatchOperations.value ? '操作' : '管理',
+                };
+              }
+              return col;
+            });
+          });
+
+          // 分页配置
+          const paginationConfig = computed(() => ({
+            current: currentPage.value,
+            pageSize: pageSize.value,
+            total: total.value,
+            showJumper: true,
+            showSizeChanger: true,
+            pageSizeOptions: [10, 20, 50, 100],
+          }));
+
+          // 状态相关方法
+          const getStatusTheme = (status) => {
+            const themeMap = {
+              active: 'success',
+              inactive: 'danger',
+              pending: 'warning',
+            };
+            return themeMap[status] || 'success';
+          };
+
+          const getStatusText = (status) => {
+            const textMap = {
+              active: '激活',
+              inactive: '禁用',
+              pending: '待审核',
+            };
+            return textMap[status] || status;
+          };
+
+          const handleEdit = (row, rowIndex) => {
+            console.log('handleEdit', row, rowIndex);
+          };
+
+          // 批量操作相关方法
+          const toggleBatchOperations = () => {
+            showBatchOperations.value = !showBatchOperations.value;
+            // 退出批量操作模式时清空选中项
+            if (!showBatchOperations.value) {
+              selectedRowKeys.value = [];
+            }
+          };
+
+          const handleBatchDelete = () => {
+            if (selectedRowKeys.value.length === 0) {
+              MessagePlugin.warning('请先选择要删除的数据');
+              return;
+            }
+
+            const confirmDia = DialogPlugin.confirm({
+              header: '批量删除确认',
+              body: `确定要删除以下 ${selectedRowKeys.value.length} 条数据吗？`,
+              confirmBtn: '确定删除',
+              cancelBtn: '取消',
+              onConfirm: () => {
+                MessagePlugin.success(`成功删除 ${selectedRowKeys.value.length} 条数据`);
+                selectedRowKeys.value = [];
+                confirmDia.hide();
+                // 重新加载数据
+                loadData();
+              },
+            });
+          };
+
+          // 表格事件处理
+          const handleTableSelectChange = (value, options) => {
+            selectedRowKeys.value = value;
+          };
+
+          const handleSortChange = (data) => {
+            // 处理取消排序的情况（data可能为null或undefined）
+            if (!data || !data.sortBy) {
+              sortInfo.value = {
+                sortBy: '',
+                descending: false,
+              };
+              // 重新加载数据以恢复原始顺序
+              loadData();
+              return;
+            }
+
+            sortInfo.value = {
+              sortBy: data.sortBy,
+              descending: data.descending || false,
+            };
+
+            // 本地排序处理
+            if (sortInfo.value.sortBy) {
+              sortTableData();
+            }
+          };
+
+          // 本地排序方法
+          const sortTableData = () => {
+            if (!sortInfo.value.sortBy) return;
+
+            const { sortBy, descending } = sortInfo.value;
+
+            const sortedData = [...tableData.value].sort((a, b) => {
+              let aVal = a[sortBy];
+              let bVal = b[sortBy];
+
+              // 处理日期时间排序
+              if (sortBy.includes('Time') || sortBy === 'lastLogin') {
+                aVal = new Date(aVal).getTime();
+                bVal = new Date(bVal).getTime();
+              }
+              // 处理id和电话等数字字符串排序
+              else if (sortBy === 'id' || sortBy === 'phone' || (typeof aVal === 'string' && /^\d+$/.test(aVal))) {
+                // 提取数字部分进行比较
+                const aNum = parseInt(aVal, 10) || 0;
+                const bNum = parseInt(bVal, 10) || 0;
+                if (aNum < bNum) return descending ? 1 : -1;
+                if (aNum > bNum) return descending ? -1 : 1;
+                return 0;
+              }
+              // 处理纯数字排序
+              else if (typeof aVal === 'number' && typeof bVal === 'number') {
+                if (aVal < bVal) return descending ? 1 : -1;
+                if (aVal > bVal) return descending ? -1 : 1;
+                return 0;
+              }
+              // 处理字符串排序（用户名等）
+              else if (typeof aVal === 'string' && typeof bVal === 'string') {
+                aVal = aVal.toLowerCase();
+                bVal = bVal.toLowerCase();
+
+                // 对于包含数字的字符串（如"用户10" vs "用户2"），提取数字进行比较
+                const aNumMatch = aVal.match(/(\d+)/);
+                const bNumMatch = bVal.match(/(\d+)/);
+
+                if (aNumMatch && bNumMatch && aNumMatch[0] && bNumMatch[0]) {
+                  const aNum = parseInt(aNumMatch[0], 10);
+                  const bNum = parseInt(bNumMatch[0], 10);
+                  const aPrefix = aVal.substring(0, aVal.indexOf(aNumMatch[0]));
+                  const bPrefix = bVal.substring(0, bVal.indexOf(bNumMatch[0]));
+
+                  // 先比较前缀是否相同
+                  if (aPrefix === bPrefix) {
+                    // 前缀相同，按数字比较
+                    if (aNum < bNum) return descending ? 1 : -1;
+                    if (aNum > bNum) return descending ? -1 : 1;
+                    return 0;
+                  }
+                }
+
+                // 普通字符串比较
+                if (aVal < bVal) return descending ? 1 : -1;
+                if (aVal > bVal) return descending ? -1 : 1;
+                return 0;
+              }
+
+              // 其他情况按字符串处理
+              aVal = String(aVal).toLowerCase();
+              bVal = String(bVal).toLowerCase();
+              if (aVal < bVal) return descending ? 1 : -1;
+              if (aVal > bVal) return descending ? -1 : 1;
+              return 0;
+            });
+
+            tableData.value = sortedData;
+          };
+
+          // 生成模拟数据
+          const generateMockData = () => {
+            const departments = ['技术部', '产品部', '设计部', '运营部', '市场部', '人事部', '财务部', '法务部'];
+            const positions = [
+              '前端工程师',
+              '后端工程师',
+              '产品经理',
+              'UI设计师',
+              '运营专员',
+              '市场经理',
+              '人事专员',
+              '财务专员',
+              '法务专员',
+              '技术总监',
+              '产品总监',
+              '设计总监',
+            ];
+            const statuses = ['active', 'inactive', 'pending'];
+            const data = [];
+            for (let i = 1; i <= 200; i++) {
+              data.push({
+                id: `1000${i}`,
+                name: `用户${i}`,
+                department: departments[Math.floor(Math.random() * departments.length)],
+                position: positions[Math.floor(Math.random() * positions.length)],
+                email: `user${i}@example.com`,
+                phone: `138${String(Math.floor(Math.random() * 100000000)).padStart(8, '0')}`,
+                status: statuses[Math.floor(Math.random() * statuses.length)],
+                createTime: `2024-12-${String(Math.floor(Math.random() * 28) + 1).padStart(2, '0')} ${String(
+                  Math.floor(Math.random() * 24),
+                ).padStart(2, '0')}:${String(Math.floor(Math.random() * 60)).padStart(2, '0')}`,
+                lastLogin: `2024-12-${String(Math.floor(Math.random() * 28) + 1).padStart(2, '0')} ${String(
+                  Math.floor(Math.random() * 24),
+                ).padStart(2, '0')}:${String(Math.floor(Math.random() * 60)).padStart(2, '0')}`,
+              });
+            }
+            return data;
+          };
+
+          // 表单事件处理
+          const handleSubmit = (data) => {
+            MessagePlugin.success('查询成功！');
+            loadData();
+          };
+
+          const handleReset = () => {
+            MessagePlugin.info('已重置查询条件');
+            loadData();
+          };
+
+          const handlePageChange = (pageInfo) => {
+            currentPage.value = pageInfo.current;
+            pageSize.value = pageInfo.pageSize;
+            loadData();
+          };
+
+          // 筛选处理
+          const handleFilterChange = (filters) => {
+            currentFilters.value = {
+              department: filters.department || [],
+              status: filters.status || [],
+            };
+            // 重置到第一页并重新加载数据
+            currentPage.value = 1;
+            loadData();
+          };
+
+          // 筛选条件
+          const currentFilters = ref({});
+
+          // 加载数据
+          const loadData = () => {
+            tableLoading.value = true;
+
+            // 模拟异步加载
+            setTimeout(() => {
+              let allData = generateMockData();
+
+              // 应用筛选条件 - 支持多选
+              if (currentFilters.value.department && currentFilters.value.department.length > 0) {
+                allData = allData.filter((item) => currentFilters.value.department.includes(item.department));
+              }
+              if (currentFilters.value.status && currentFilters.value.status.length > 0) {
+                allData = allData.filter((item) => currentFilters.value.status.includes(item.status));
+              }
+
+              total.value = allData.length;
+
+              // 分页逻辑
+              const start = (currentPage.value - 1) * pageSize.value;
+              const end = start + pageSize.value;
+              tableData.value = allData.slice(start, end);
+
+              tableLoading.value = false;
+            }, 500);
+          };
+
+          // 使用lodash的debounce函数
+          const debouncedCalculateLayout = window._.debounce(() => {
+            calculateLayout();
+          }, 100);
+
+          // 生命周期
+          onMounted(() => {
+            // 初始计算
+            nextTick(() => {
+              setTimeout(() => {
+                calculateLayout();
+              }, 100);
+            });
+
+            // 监听尺寸变化
+            resizeObserver.value = new ResizeObserver(debouncedCalculateLayout);
+
+            if (formContainerRef.value) {
+              resizeObserver.value.observe(formContainerRef.value);
+            }
+          });
+
+          onUnmounted(() => {
+            if (resizeObserver.value) {
+              resizeObserver.value.disconnect();
+            }
+          });
+
+          // 初始化数据
+          loadData();
+
+          return {
+            collapsed,
+            formContainerRef,
+            formItemRefs,
+            isCollapsed,
+            needsCollapse,
+            visibleCount,
+            shouldHideItem,
+            getComponentByType,
+            toggleCollapse,
+            formFields,
+            formData,
+            asideMenuList,
+            menuList,
+            tabList,
+            value,
+            handlerChange,
+            changeCollapsed,
+            tableData,
+            tableLoading,
+            currentPage,
+            pageSize,
+            total,
+            selectedRowKeys,
+            showBatchOperations,
+            sortInfo,
+            defaultColumns,
+            tableColumns,
+            paginationConfig,
+            getStatusTheme,
+            getStatusText,
+            handleEdit,
+            toggleBatchOperations,
+            handleBatchDelete,
+            handleTableSelectChange,
+            handleSortChange,
+            handleSubmit,
+            handleReset,
+            handlePageChange,
+            handleFilterChange,
+            currentFilters,
+            loadData,
+          };
+        }
+      });
+
+      app.mount('#app');
+    });
+  </script>
+</body>
+</html>

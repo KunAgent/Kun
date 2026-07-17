@@ -1,0 +1,64 @@
+{
+  "name": "multi-cloud-management-expert",
+  "version": "1.7.0",
+  "description": "Tencent Cloud DevOps expert — unified multi-cloud governance, architecture visualization, intelligent inspection, and AIOps decision-making powered by Tencent Cloud Smart Advisor (CloudQ).",
+  "author": {
+    "name": "CloudQ Team",
+    "email": "cloudq@tencent.com"
+  },
+  "expertType": "agent",
+  "agentName": "multi-cloud-management-expert",
+  "agents": [
+    "./agents/multi-cloud-management-expert.md"
+  ],
+  "skills": [
+    "./skills/cloudq"
+  ],
+  "displayName": {
+    "en": "CloudQ",
+    "zh": "CloudQ"
+  },
+  "profession": {
+    "en": "Tencent Cloud DevOps Expert",
+    "zh": "腾讯云DevOps专家"
+  },
+  "displayDescription": {
+    "en": "Master of multi-cloud architecture governance, architecture visualization, intelligent inspection, cloud cost optimization and risk assessment across Tencent Cloud, Alibaba Cloud, AWS and more. One expert to manage all clouds.",
+    "zh": "精通腾讯云、阿里云、AWS等多云架构治理、架构可视化、智能巡检、云成本优化和风险评估，一个专家管理所有云。"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "13-TencentZone",
+  "defaultInitPrompt": {
+    "zh": "我们的云资源有哪些风险",
+    "en": "What risks exist in our cloud resources?"
+  },
+  "tags": [
+    {
+      "en": "Multi-Cloud Governance",
+      "zh": "多云治理"
+    },
+    {
+      "en": "AIOps Inspection",
+      "zh": "AI 智能巡检"
+    },
+    {
+      "en": "Architecture Visualization",
+      "zh": "架构可视化"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "en": "What risks exist in our cloud resources?",
+      "zh": "我们的云资源有哪些风险"
+    },
+    {
+      "en": "Run a deep inspection on my cloud architecture and provide architecture optimization and proactive governance recommendations",
+      "zh": "对我的云架构进行深度巡检，并提供架构优化与主动治理方案"
+    },
+    {
+      "en": "Find idle resources across my Tencent Cloud account and recommend FinOps optimizations",
+      "zh": "盘点我账号下的闲置云资源并给出 FinOps 优化建议"
+    }
+  ],
+  "plugin": "multi-cloud-management-expert"
+}

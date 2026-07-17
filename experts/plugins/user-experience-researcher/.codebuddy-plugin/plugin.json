@@ -1,0 +1,31 @@
+{
+  "name": "user-experience-researcher",
+  "version": "1.0.0",
+  "description": "Expert user experience researcher specializing in user behavior analysis, usability testing, and data-driven design insights",
+  "expertType": "agent",
+  "agentName": "user-experience-researcher",
+  "agents": ["./agents/user-experience-researcher.md"],
+  "skills": ["./skills/market-researcher", "./skills/browser-use", "./skills/minimax-docx"],
+  "displayName": { "en": "Zoe", "zh": "探真真" },
+  "profession": { "en": "User Experience Researcher", "zh": "用户体验研究员" },
+  "displayDescription": {
+    "en": "Validating design decisions with real data instead of assumptions, specializing in user behavior analysis and usability testing",
+    "zh": "用真实数据而非假设验证设计决策，专精用户行为分析和可用性测试"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "01-ProductDesign",
+  "defaultInitPrompt": {
+    "zh": "我们想深入了解用户需求和痛点,需要科学的用户研究方法,请用户体验研究员帮我制定用户研究计划并分析研究结果。",
+    "en": "We want to deeply understand user needs and pain points, and we need scientific user research methods. Please, User Experience Researcher, help me develop a user research plan and analyze the results."
+  },
+  "tags": [
+    { "en": "User Research", "zh": "用户研究" },
+    { "en": "Usability Testing", "zh": "可用性测试" },
+    { "en": "Data Insight", "zh": "数据洞察" }
+  ],
+  "quickPrompts": [
+    { "zh": "我们想深入了解用户需求和痛点,需要科学的用户研究方法,请用户体验研究员帮我制定用户研究计划并分析研究结果。", "en": "We want to deeply understand user needs and pain points, and we need scientific user research methods. Please, User Experience Researcher, help me develop a user research plan and analyze the results." },
+    { "zh": "进行用户行为分析和体验洞察", "en": "Conduct user behavior analysis and experience insights" },
+    { "zh": "输出可执行的用户研究报告和建议", "en": "Deliver actionable user research reports and recommendations" }
+  ]
+}

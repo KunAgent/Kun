@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>奇门遁甲 · 1987-10-16 未时</title>
+<style>
+  :root {
+    --bg: #0a1410;
+    --bg-deep: #050a08;
+    --panel: rgba(60, 90, 70, 0.12);
+    --panel-soft: rgba(60, 90, 70, 0.06);
+    --border: rgba(180, 200, 150, 0.2);
+    --border-bright: rgba(220, 200, 130, 0.5);
+    --jade: #6db088;
+    --jade-bright: #8ed4a8;
+    --gold: #c8a64a;
+    --gold-bright: #ead080;
+    --copper: #b8804a;
+    --crimson: #c84838;
+    --ink: #d8d4b8;
+    --ink-soft: #a8a488;
+    --dim: #6a6850;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: "STKaiti", "KaiTi", "PingFang SC", serif;
+    line-height: 1.7;
+    min-height: 100vh;
+    background-image:
+      radial-gradient(circle at 50% 30%, rgba(200, 166, 74, 0.08), transparent 60%),
+      radial-gradient(circle at 30% 80%, rgba(109, 176, 136, 0.06), transparent 50%),
+      linear-gradient(135deg, #0a1410 0%, #050a08 100%);
+  }
+  .container { max-width: 1100px; margin: 0 auto; padding: 48px 24px 80px; }
+
+  .header { text-align: center; margin-bottom: 36px; }
+  .header::before {
+    content: "✦";
+    display: block;
+    color: var(--gold);
+    font-size: 28px;
+    margin-bottom: 8px;
+  }
+  .header h1 {
+    font-size: 32px;
+    color: var(--gold-bright);
+    letter-spacing: 12px;
+    font-weight: 400;
+    text-shadow: 0 0 16px rgba(200, 166, 74, 0.4);
+    margin-bottom: 8px;
+  }
+  .header .subtitle { color: var(--jade); letter-spacing: 4px; font-size: 13px; margin-bottom: 4px; }
+  .header .meta { color: var(--dim); font-size: 12px; margin-top: 10px; letter-spacing: 2px; }
+
+  /* Top info bar */
+  .info-bar {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+    margin-bottom: 32px;
+    background: var(--panel-soft);
+    padding: 16px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+  }
+  .info-cell { text-align: center; padding: 6px 4px; }
+  .info-cell .label { color: var(--dim); font-size: 11px; letter-spacing: 2px; margin-bottom: 4px; }
+  .info-cell .value { color: var(--gold-bright); font-size: 14px; letter-spacing: 2px; font-weight: 500; }
+
+  /* 9-Palace Plate */
+  .plate-wrapper {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 28px;
+    margin-bottom: 36px;
+    align-items: start;
+  }
+  @media (max-width: 920px) {
+    .plate-wrapper { grid-template-columns: 1fr; }
+  }
+  .nine-palace {
+    aspect-ratio: 1 / 1;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    grid-template-rows: repeat(3, 1fr);
+    gap: 4px;
+    background: var(--panel-soft);
+    padding: 8px;
+    border: 2px solid var(--gold);
+    border-radius: 4px;
+    position: relative;
+  }
+  .nine-palace::before {
+    content: "九 宫 罗 盘";
+    position: absolute;
+    top: -28px;
+    left: 50%;
+    transform: translateX(-50%);
+    color: var(--gold);
+    font-size: 13px;
+    letter-spacing: 6px;
+    background: var(--bg);
+    padding: 0 8px;
+  }
+  .palace-cell {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    padding: 10px 8px;
+    font-size: 11px;
+    text-align: center;
+    position: relative;
+    transition: all 0.3s;
+  }
+  .palace-cell:hover { border-color: var(--gold); background: rgba(200, 166, 74, 0.08); }
+  .palace-cell.center {
+    background: rgba(200, 166, 74, 0.06);
+    border-color: var(--copper);
+  }
+  .palace-cell.use {
+    border-color: var(--gold);
+    box-shadow: inset 0 0 0 1px var(--gold);
+    background: rgba(200, 166, 74, 0.1);
+  }
+  .palace-cell .pos {
+    position: absolute;
+    top: 4px;
+    right: 6px;
+    color: var(--copper);
+    font-size: 10px;
+    letter-spacing: 1px;
+  }
+  .palace-cell .number {
+    position: absolute;
+    top: 4px;
+    left: 6px;
+    color: var(--copper);
+    font-size: 10px;
+  }
+  .palace-cell .star {
+    color: var(--jade-bright);
+    font-size: 13px;
+    margin-bottom: 2px;
+    margin-top: 12px;
+    letter-spacing: 1px;
+  }
+  .palace-cell .door {
+    color: var(--gold-bright);
+    font-size: 13px;
+    margin-bottom: 2px;
+    letter-spacing: 1px;
+  }
+  .palace-cell .god {
+    color: #d49db8;
+    font-size: 11px;
+    margin-bottom: 2px;
+  }
+  .palace-cell .qi {
+    color: var(--ink-soft);
+    font-size: 11px;
+    margin: 2px 0;
+    letter-spacing: 1px;
+  }
+  .palace-cell .qi .top { color: var(--gold); }
+  .palace-cell .qi .bottom { color: var(--ink); }
+  .palace-cell.use::after {
+    content: "用";
+    position: absolute;
+    bottom: 2px;
+    right: 4px;
+    color: var(--crimson);
+    font-size: 10px;
+    background: rgba(200, 70, 56, 0.15);
+    padding: 0 4px;
+    border-radius: 2px;
+    letter-spacing: 1px;
+  }
+
+  /* Legend */
+  .legend {
+    background: var(--panel-soft);
+    border: 1px solid var(--border);
+    padding: 18px 22px;
+    border-radius: 4px;
+  }
+  .legend h3 {
+    color: var(--gold-bright);
+    font-size: 15px;
+    letter-spacing: 4px;
+    margin-bottom: 14px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+    font-weight: 500;
+  }
+  .legend-row {
+    display: flex;
+    margin-bottom: 8px;
+    font-size: 12px;
+    align-items: baseline;
+    gap: 8px;
+  }
+  .legend-row .key {
+    color: var(--gold);
+    width: 70px;
+    flex-shrink: 0;
+    letter-spacing: 1px;
+  }
+  .legend-row .val { color: var(--ink); }
+
+  /* Section */
+  .section { margin-bottom: 32px; }
+  .section-title {
+    font-size: 18px;
+    color: var(--gold-bright);
+    letter-spacing: 6px;
+    margin-bottom: 18px;
+    padding-left: 14px;
+    border-left: 2px solid var(--gold);
+  }
+  .section-title small { color: var(--dim); font-size: 11px; margin-left: 12px; letter-spacing: 1px; }
+
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 22px 26px;
+    margin-bottom: 14px;
+  }
+  .card h3 {
+    color: var(--jade-bright);
+    font-weight: 500;
+    margin-bottom: 12px;
+    letter-spacing: 2px;
+    font-size: 15px;
+  }
+  .card p { color: var(--ink); font-size: 14px; margin-bottom: 8px; }
+  .card .quote { color: var(--gold); border-left: 2px solid var(--gold); padding-left: 12px; margin: 10px 0; }
+
+  .layer-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+  }
+  .layer-card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-top: 3px solid var(--jade);
+    border-radius: 4px;
+    padding: 16px 18px;
+  }
+  .layer-card.gold { border-top-color: var(--gold); }
+  .layer-card.copper { border-top-color: var(--copper); }
+  .layer-card.crimson { border-top-color: var(--crimson); }
+  .layer-card h4 {
+    color: var(--gold-bright);
+    font-size: 14px;
+    margin-bottom: 8px;
+    letter-spacing: 3px;
+    font-weight: 500;
+  }
+  .layer-card p { color: var(--ink); font-size: 13px; line-height: 1.7; }
+
+  /* Direction guide */
+  .direction-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+  }
+  .dir-cell {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 12px 10px;
+    text-align: center;
+    font-size: 12px;
+  }
+  .dir-cell .dir-name { color: var(--gold-bright); font-size: 14px; margin-bottom: 4px; letter-spacing: 2px; }
+  .dir-cell .dir-tag { display: inline-block; padding: 1px 8px; border-radius: 8px; font-size: 10px; margin-top: 4px; }
+  .dir-cell.good { border-color: var(--jade); }
+  .dir-cell.good .dir-tag { background: rgba(109, 176, 136, 0.2); color: var(--jade-bright); }
+  .dir-cell.bad { border-color: var(--crimson); }
+  .dir-cell.bad .dir-tag { background: rgba(200, 70, 56, 0.18); color: #e89080; }
+  .dir-cell.neutral .dir-tag { background: rgba(200, 166, 74, 0.15); color: var(--gold); }
+  .dir-cell .dir-desc { color: var(--ink-soft); font-size: 11px; margin-top: 6px; line-height: 1.5; }
+
+  .disclaimer {
+    margin-top: 50px;
+    padding: 14px 20px;
+    background: rgba(200, 70, 56, 0.05);
+    border: 1px dashed var(--crimson);
+    border-radius: 4px;
+    font-size: 12px;
+    color: var(--dim);
+  }
+
+  @media (max-width: 720px) {
+    .header h1 { font-size: 22px; letter-spacing: 6px; }
+    .info-bar { grid-template-columns: repeat(2, 1fr); }
+    .palace-cell { font-size: 9px; padding: 4px 2px; }
+    .palace-cell .star, .palace-cell .door { font-size: 10px; }
+    .layer-grid, .direction-grid { grid-template-columns: 1fr 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <div class="header">
+    <h1>奇 门 遁 甲</h1>
+    <div class="subtitle">QIMEN DUNJIA · 时空场域命盘</div>
+    <div class="meta">阳历 1987-10-16 未时 · 女命 · 转盘飞宫起例</div>
+  </div>
+
+  <!-- Top info -->
+  <div class="info-bar">
+    <div class="info-cell"><div class="label">节气</div><div class="value">寒露下元</div></div>
+    <div class="info-cell"><div class="label">阴阳遁</div><div class="value">阴遁六局</div></div>
+    <div class="info-cell"><div class="label">值符</div><div class="value">天心星</div></div>
+    <div class="info-cell"><div class="label">值使</div><div class="value">开门</div></div>
+    <div class="info-cell"><div class="label">旬首</div><div class="value">甲午辛</div></div>
+    <div class="info-cell"><div class="label">日干</div><div class="value">戊（命主）</div></div>
+    <div class="info-cell"><div class="label">时干</div><div class="value">己</div></div>
+    <div class="info-cell"><div class="label">用神</div><div class="value">日干戊</div></div>
+  </div>
+
+  <!-- Plate + Legend -->
+  <div class="plate-wrapper">
+    <div class="nine-palace">
+      <!-- 巽4 -->
+      <div class="palace-cell">
+        <span class="number">四</span><span class="pos">巽</span>
+        <div class="star">天辅</div>
+        <div class="door">杜门</div>
+        <div class="god">六合</div>
+        <div class="qi"><span class="top">乙</span> · <span class="bottom">壬</span></div>
+      </div>
+      <!-- 离9 -->
+      <div class="palace-cell">
+        <span class="number">九</span><span class="pos">离</span>
+        <div class="star">天英</div>
+        <div class="door">景门</div>
+        <div class="god">太阴</div>
+        <div class="qi"><span class="top">丙</span> · <span class="bottom">丁</span></div>
+      </div>
+      <!-- 坤2 -->
+      <div class="palace-cell use">
+        <span class="number">二</span><span class="pos">坤</span>
+        <div class="star">天芮</div>
+        <div class="door">死门</div>
+        <div class="god">螣蛇</div>
+        <div class="qi"><span class="top">戊</span> · <span class="bottom">己</span></div>
+      </div>
+      <!-- 震3 -->
+      <div class="palace-cell">
+        <span class="number">三</span><span class="pos">震</span>
+        <div class="star">天冲</div>
+        <div class="door">伤门</div>
+        <div class="god">勾陈</div>
+        <div class="qi"><span class="top">癸</span> · <span class="bottom">庚</span></div>
+      </div>
+      <!-- 中5 -->
+      <div class="palace-cell center">
+        <span class="number">五</span><span class="pos">中</span>
+        <div class="star">天禽</div>
+        <div class="door">—</div>
+        <div class="god">—</div>
+        <div class="qi"><span class="top">辛</span> · <span class="bottom">寄坤</span></div>
+      </div>
+      <!-- 兑7 -->
+      <div class="palace-cell">
+        <span class="number">七</span><span class="pos">兑</span>
+        <div class="star">天柱</div>
+        <div class="door">惊门</div>
+        <div class="god">朱雀</div>
+        <div class="qi"><span class="top">丁</span> · <span class="bottom">丙</span></div>
+      </div>
+      <!-- 艮8 -->
+      <div class="palace-cell">
+        <span class="number">八</span><span class="pos">艮</span>
+        <div class="star">天任</div>
+        <div class="door">生门</div>
+        <div class="god">九地</div>
+        <div class="qi"><span class="top">庚</span> · <span class="bottom">癸</span></div>
+      </div>
+      <!-- 坎1 -->
+      <div class="palace-cell">
+        <span class="number">一</span><span class="pos">坎</span>
+        <div class="star">天蓬</div>
+        <div class="door">休门</div>
+        <div class="god">九天</div>
+        <div class="qi"><span class="top">壬</span> · <span class="bottom">乙</span></div>
+      </div>
+      <!-- 乾6 -->
+      <div class="palace-cell">
+        <span class="number">六</span><span class="pos">乾</span>
+        <div class="star">天心</div>
+        <div class="door">开门</div>
+        <div class="god">值符</div>
+        <div class="qi"><span class="top">己</span> · <span class="bottom">戊</span></div>
+      </div>
+    </div>
+
+    <div class="legend">
+      <h3>盘 面 元 素</h3>
+      <div class="legend-row"><span class="key">九 星</span><span class="val">蓬任冲辅英芮柱心禽 — 主性情、思维与禀赋</span></div>
+      <div class="legend-row"><span class="key">八 门</span><span class="val">休生伤杜景死惊开 — 主行止、机会与状态</span></div>
+      <div class="legend-row"><span class="key">八 神</span><span class="val">值符腾蛇太阴六合白虎玄武九地九天 — 主神煞气场</span></div>
+      <div class="legend-row"><span class="key">三 奇</span><span class="val">乙丙丁 — 日月星精，主吉助</span></div>
+      <div class="legend-row"><span class="key">六 仪</span><span class="val">戊己庚辛壬癸 — 旬首所遁，主体象</span></div>
+      <div class="legend-row"><span class="key">用 神</span><span class="val">日干戊落坤宫 — <span style="color: var(--crimson);">天芮死门螣蛇</span></span></div>
+      <div class="legend-row"><span class="key">体 用</span><span class="val">戊为命主，落坤——主居中守正，但临死门——警示静中藏危</span></div>
+    </div>
+  </div>
+
+  <!-- Pattern -->
+  <div class="section">
+    <div class="section-title">局 象 总 断 <small>OVERALL READING</small></div>
+    <div class="card">
+      <h3>✦ 用神戊土落坤宫 — "得位失门"</h3>
+      <p>命主用神戊土，落于坤二宫——<strong style="color: var(--gold-bright);">得本位</strong>，土归土地，根深蒂固。然落处临"天芮+死门+螣蛇"——这是奇门盘中较为静止凝滞的组合。</p>
+      <p class="quote">"芮主病忧，死门主静止终结，螣蛇主缠绕牵挂。" 表面看是凶象组合，实则提示——<strong style="color: var(--ink);">命主天性容易长期投入某事不易转身</strong>，专注是优势，但易陷"不愿放下"之困。</p>
+    </div>
+    <div class="card">
+      <h3>✦ 值符天心落乾宫 — 高人在西北</h3>
+      <p>值符（盘中"指挥官"）落乾六——<strong style="color: var(--gold-bright);">权柄、长辈、贵人居于西北方位</strong>。乾宫又坐"开门"——开门主开拓、新生、官方机会。命主一生的大贵人、关键决策机会，多自西北方向、年长权威或政府/大机构来。</p>
+    </div>
+    <div class="card">
+      <h3>✦ 三奇格局 — 乙奇在巽，丙奇在离，丁奇在兑</h3>
+      <p>乙奇（日精）入巽宫——文书、桃花、贵人临文；丙奇（月精）入离宫得地——光明、声誉、表达力强；丁奇（星精）入兑——口舌、谋略、暗助。</p>
+      <p class="quote">三奇全部得位，主"<strong style="color: var(--jade-bright);">福、禄、寿"三才齐备</strong>，可化解用神临死门之滞——这是格局中最大的"翻盘点"。</p>
+    </div>
+  </div>
+
+  <!-- Layers -->
+  <div class="section">
+    <div class="section-title">四 层 解 读 <small>FOUR LAYERS</small></div>
+    <div class="layer-grid">
+      <div class="layer-card">
+        <h4>★ 天 盘（机遇层）</h4>
+        <p>天心值符 + 开门——开拓性的机会会以"被点名"的方式到来。倾向于从既有体系内被识别、被推举，而非自我颠覆式开拓。</p>
+      </div>
+      <div class="layer-card gold">
+        <h4>★ 地 盘（根基层）</h4>
+        <p>戊己同坤——根基扎实、家底厚重。一生不愁基本盘，但需警惕"过度求稳"反而错过窗口。</p>
+      </div>
+      <div class="layer-card copper">
+        <h4>★ 人 盘（行动层）</h4>
+        <p>值使开门在乾——决策权与执行点错位。命主行动时，关键拍板要靠"高位之人"，自己是参谋者位。</p>
+      </div>
+      <div class="layer-card crimson">
+        <h4>★ 神 盘（心象层）</h4>
+        <p>螣蛇临用神——内心多缠绕、放不下；九天在坎、九地在艮——一明一暗的两个情绪极。养心是终身功课。</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Direction -->
+  <div class="section">
+    <div class="section-title">方 位 利 弊 <small>DIRECTIONS</small></div>
+    <div class="direction-grid">
+      <div class="dir-cell good">
+        <div class="dir-name">乾 · 西北</div>
+        <div class="dir-tag">大吉</div>
+        <div class="dir-desc">值符开门<br/>求职、谈判、问贵人</div>
+      </div>
+      <div class="dir-cell good">
+        <div class="dir-name">艮 · 东北</div>
+        <div class="dir-tag">吉</div>
+        <div class="dir-desc">天任生门九地<br/>置业、积累、求稳</div>
+      </div>
+      <div class="dir-cell neutral">
+        <div class="dir-name">离 · 正南</div>
+        <div class="dir-tag">中吉</div>
+        <div class="dir-desc">丙奇景门太阴<br/>展示、考试、文书</div>
+      </div>
+      <div class="dir-cell neutral">
+        <div class="dir-name">坎 · 正北</div>
+        <div class="dir-tag">中</div>
+        <div class="dir-desc">休门九天<br/>休养、规划、静思</div>
+      </div>
+      <div class="dir-cell bad">
+        <div class="dir-name">坤 · 西南</div>
+        <div class="dir-tag">凶</div>
+        <div class="dir-desc">死门螣蛇<br/>本位忌动、宜守</div>
+      </div>
+      <div class="dir-cell bad">
+        <div class="dir-name">兑 · 正西</div>
+        <div class="dir-tag">小凶</div>
+        <div class="dir-desc">惊门朱雀<br/>口舌是非、勿争辩</div>
+      </div>
+      <div class="dir-cell bad">
+        <div class="dir-name">震 · 正东</div>
+        <div class="dir-tag">小凶</div>
+        <div class="dir-desc">伤门勾陈<br/>纠纷、合同纠葛</div>
+      </div>
+      <div class="dir-cell neutral">
+        <div class="dir-name">巽 · 东南</div>
+        <div class="dir-tag">中</div>
+        <div class="dir-desc">乙奇杜门六合<br/>谋密、文桃花</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Summary -->
+  <div class="card" style="background: rgba(200, 166, 74, 0.06); border-color: var(--gold);">
+    <h3>✦ 三句话用法</h3>
+    <p>① <strong style="color: var(--gold-bright);">大事朝西北跑</strong>——求职、求贵、谈判、问长辈，乾宫值符开门最为有力。</p>
+    <p>② <strong style="color: var(--gold-bright);">用神临死门，不可"硬磕"</strong>——遇阻先撤再迂回，比正面冲刷有效。</p>
+    <p>③ <strong style="color: var(--gold-bright);">三奇得位是您底牌</strong>——文书、声誉、人脉是三张王牌，分别在巽、离、兑。</p>
+  </div>
+
+  <div class="disclaimer">
+    ⚠️ 本奇门盘按"时家奇门转盘飞宫"原则推演，节气与值符值使为示意性配置，不代表精确万年历计算。仅供方向性参考，不构成医疗、法律、财务或投资建议。
+  </div>
+
+</div>
+</body>
+</html>

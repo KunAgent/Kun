@@ -1,0 +1,8 @@
+{
+  "name": "tencent-security-expert",
+  "version": "1.0.0",
+  "description": "With years of deep expertise in Tencent security, providing services including threat modeling, vulnerability assessment, secure code review, architecture design, incident response, and security consulting",
+  "agents": "./agents/",
+  "expertType": "agent",
+  "agentName": "tencent-security-expert"
+}

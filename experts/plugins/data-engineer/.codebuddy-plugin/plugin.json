@@ -1,0 +1,56 @@
+{
+  "name": "data-engineer",
+  "version": "1.0.0",
+  "description": "Builds efficient and reliable data pipelines and ETL processes, ensuring data flows smoothly from source to insight",
+  "agents": [
+    "./agents/data-engineer.md"
+  ],
+  "expertType": "agent",
+  "agentName": "data-engineer",
+  "displayName": {
+    "en": "Lily",
+    "zh": "管道通"
+  },
+  "profession": {
+    "en": "Data Engineer",
+    "zh": "数据工程师"
+  },
+  "displayDescription": {
+    "en": "Builds efficient and reliable data pipelines and ETL processes, ensuring data flows smoothly from source to insight",
+    "zh": "构建高效可靠的数据管道和ETL流程，让数据从源头到洞察畅通无阻"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "04-DataAI",
+  "defaultInitPrompt": {
+    "zh": "我们的数据管道需要优化,数据质量和处理效率有待提升,请数据工程师帮我们设计高效的数据工程解决方案。",
+    "en": "Our data pipeline needs optimization, and data quality and processing efficiency need improvement. Please, Data Engineer, help us design an efficient data engineering solution."
+  },
+  "tags": [
+    {
+      "zh": "数据工程",
+      "en": "Data Engineering"
+    },
+    {
+      "zh": "ETL架构",
+      "en": "ETL Architecture"
+    },
+    {
+      "zh": "数据管道",
+      "en": "Data Pipeline"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "我们的数据管道需要优化,数据质量和处理效率有待提升,请数据工程师帮我们设计高效的数据工程解决方案。",
+      "en": "Our data pipeline needs optimization, and data quality and processing efficiency need improvement. Please, Data Engineer, help us design an efficient data engineering solution."
+    },
+    {
+      "zh": "设计数据湖和数据仓库架构",
+      "en": "Design data lake and data warehouse architecture"
+    },
+    {
+      "zh": "优化数据质量和血缘追踪体系",
+      "en": "Optimize data quality and lineage tracking system"
+    }
+  ]
+}

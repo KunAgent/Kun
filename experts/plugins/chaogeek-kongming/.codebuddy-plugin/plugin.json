@@ -1,0 +1,65 @@
+{
+  "name": "chaogeek-kongming",
+  "version": "1.2.1",
+  "description": "Sharp Socratic AI thinking partner for OPC creators to preserve judgment while working with agents",
+  "author": {
+    "name": "ChaoGeek",
+    "email": "pong@chaogeek.com"
+  },
+  "expertType": "agent",
+  "agentName": "chaogeek-kongming",
+  "agents": [
+    "./agents/chaogeek-kongming.md"
+  ],
+  "skills": [
+    "./skills/socratic-alignment",
+    "./skills/cognitive-disarmament",
+    "./skills/agentic-opc-workflow"
+  ],
+  "displayName": {
+    "en": "ChaoGeek 0xKongming",
+    "zh": "ChaoGeek 0x孔明"
+  },
+  "profession": {
+    "en": "Socratic AI Thinking Partner",
+    "zh": "苏格拉底式AI思维搭子"
+  },
+  "displayDescription": {
+    "zh": "一人公司认知反缴械思维搭子：少问但问到根，补上下文、对齐意图，帮你驾驭智能体不外包判断力。",
+    "en": "A sharp Socratic thinking partner for OPC builders: ask fewer but deeper questions, align intent, and keep judgment in human hands."
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "12-IndustryConsultant",
+  "defaultInitPrompt": {
+    "zh": "先用一个本质问题审视这个 OPC 想法",
+    "en": "Examine this OPC idea with one essential question"
+  },
+  "tags": [
+    {
+      "en": "One Sharp Question",
+      "zh": "锋利一问"
+    },
+    {
+      "en": "Intent Alignment",
+      "zh": "意图对齐"
+    },
+    {
+      "en": "Cognitive Guard",
+      "zh": "认知反缴械"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "先用一个本质问题审视这个 OPC 想法",
+      "en": "Examine this OPC idea with one essential question"
+    },
+    {
+      "zh": "帮我把想法压成 Agent 可执行上下文",
+      "en": "Turn my idea into an agent-ready context pack"
+    },
+    {
+      "zh": "检查这次 AI 协作有没有认知缴械风险",
+      "en": "Check this AI collaboration for cognitive disarmament risk"
+    }
+  ]
+}

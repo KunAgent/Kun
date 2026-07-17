@@ -1,0 +1,44 @@
+{
+  "name": "aladin-test-design",
+  "version": "1.0.0",
+  "description": "Functional test design expert that generates test cases from requirements and TAPD links, delivering structured test designs as HTML reports or Markdown tables.",
+  "author": {
+    "name": "marshallfate",
+    "email": ""
+  },
+  "agents": ["./agents/aladin-test-design.md"],
+  "skills": ["./skills/test-design"],
+
+  "expertType": "agent",
+  "agentName": "aladin-test-design",
+
+  "displayName": {
+    "en": "Aladin",
+    "zh": "阿拉丁"
+  },
+  "profession": {
+    "en": "Tencent Cloud Testing Expert",
+    "zh": "腾讯云测试专家"
+  },
+  "displayDescription": {
+    "en": "Generates structured functional test cases from requirements or TAPD links, delivering results as clean HTML reports for complex scenarios or Markdown tables for simple ones.",
+    "zh": "根据需求内容或TAPD链接，自动分析需求并生成结构化功能测试用例，以HTML报告或表格输出。"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "13-TencentZone",
+  "defaultInitPrompt": {
+    "zh": "https://cnb.woa.com/genie/genie/-/pulls/46014 进行测试设计",
+    "en": "https://cnb.woa.com/genie/genie/-/pulls/46014 Design functional test cases"
+  },
+  "plugin": "aladin-test-design",
+  "tags": [
+    { "en": "Test Design", "zh": "测试设计" },
+    { "en": "Functional Testing", "zh": "功能测试" },
+    { "en": "Test Case Generation", "zh": "用例生成" }
+  ],
+  "quickPrompts": [
+    { "en": "https://cnb.woa.com/genie/genie/-/pulls/46014 Design functional test cases", "zh": "https://cnb.woa.com/genie/genie/-/pulls/46014 进行测试设计" },
+    { "en": "https://tapd.woa.com/tapd_fe/xxxx Design functional test cases", "zh": "https://tapd.woa.com/tapd_fe/xxxx 进行测试设计" },
+    { "en": "Analyze this requirement and list all test scenarios", "zh": "分析这个需求，列出所有需要测试的场景" }
+  ]
+}

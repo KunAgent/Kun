@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="32px" height="32px" viewBox="0 0 32 32" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+    <!-- Generator: Sketch 52.6 (67491) - http://www.bohemiancoding.com/sketch -->
+    <title>专线接入-32px</title>
+    <desc>Created with Sketch.</desc>
+    <g id="专线接入-32px" stroke="none" stroke-width="1" fill="none" fill-rule="evenodd">
+        <rect id="Rectangle-Copy" fill="#0052D9" opacity="0" x="0" y="0" width="32" height="32"></rect>
+        <g id="Group" fill="#0052D9" fill-rule="nonzero">
+            <circle id="XMLID_385_" cx="16" cy="24" r="2"></circle>
+            <circle id="XMLID_386_" cx="16" cy="8" r="2"></circle>
+            <rect id="XMLID_387_" transform="translate(16.000000, 11.000000) rotate(-90.000000) translate(-16.000000, -11.000000) " x="14" y="10" width="4" height="2"></rect>
+            <rect id="XMLID_388_" transform="translate(16.000000, 21.000000) rotate(-90.000000) translate(-16.000000, -21.000000) " x="14" y="20" width="4" height="2"></rect>
+            <circle id="XMLID_389_" cx="23" cy="16" r="1"></circle>
+            <circle id="XMLID_390_" cx="9" cy="16" r="1"></circle>
+            <g id="XMLID_391_" transform="translate(9.000000, 15.000000)">
+                <rect id="XMLID_392_" x="0" y="0" width="14" height="2"></rect>
+            </g>
+            <g id="XMLID_393_" transform="translate(15.000000, 8.000000)">
+                <polygon id="XMLID_395_" transform="translate(4.474450, 4.475050) rotate(-45.000000) translate(-4.474450, -4.475050) " points="3.47652675 -0.438988576 5.47237325 -0.438988576 5.47237325 9.38908858 3.47652675 9.38908858"></polygon>
+            </g>
+            <g id="XMLID_396_" transform="translate(8.000000, 15.000000)">
+                <polygon id="XMLID_397_" transform="translate(4.234545, 4.254545) rotate(-45.000000) translate(-4.234545, -4.254545) " points="3.23455459 -0.349363613 5.23453541 -0.349363613 5.23453541 8.85845361 3.23455459 8.85845361"></polygon>
+            </g>
+            <path d="M31.7193022,13.0004945 L29.6779284,13.0004945 C28.3047737,6.70988283 22.7024129,2 16,2 C8.2680135,2 2,8.2680135 2,16 C2,23.7319865 8.2680135,30 16,30 C23.0527724,30 28.8874794,24.7848417 29.8581515,18.0004945 L31.8761508,18.0004945 C30.8917351,25.8928783 24.1590649,32 16,32 C7.163444,32 -2.0250468e-13,24.836556 -2.0250468e-13,16 C-2.0250468e-13,7.163444 7.163444,0 16,0 C23.8113418,0 30.3152783,5.59766728 31.7193022,13.0004945 Z" id="Combined-Shape"></path>
+        </g>
+    </g>
+</svg>

@@ -1,0 +1,209 @@
+{
+  "schemaVersion": "1.0",
+  "sceneId": "liuxue_yanxue_dual_track",
+  "packageVersion": "26.6.30.1",
+  "packageType": "workbuddy_expert_center_scene_pack",
+  "brand": {
+    "zh": "福帮手",
+    "en": "FBSir"
+  },
+  "distributionSurface": {
+    "target": "workbuddy_expert_center",
+    "targetMarketplace": "experts",
+    "targetDisplayNameZh": "福帮手",
+    "targetDisplayNameEn": "FBSir",
+    "nonOfficialSurfaceCreditForbidden": true
+  },
+  "pluginName": "liuxue-yanxue-expert",
+  "productNameZh": "留学研学专家",
+  "productId": "liuxue-yanxue-expert",
+  "serviceProductId": "workbuddy_liuxue_yanxue_expert",
+  "packCode": "fbs.liuxue_yanxue.dual_track.v1",
+  "servicePackCode": "fbs.liuxue_yanxue.dual_track.v1",
+  "scenePackId": "liuxue_yanxue_dual_track",
+  "routeCode": "route.liuxue_yanxue.dual_track",
+  "entryId": "liuxue-yanxue-dual-track",
+  "entrySurface": "workbuddy_expert_center",
+  "expertEntryId": "liuxue-yanxue-expert",
+  "entryPromptCode": "wb_qp_liuxue_yanxue_dual_track_48h",
+  "defaultPromptId": "fbss_liuxue_yanxue_dual_track_start",
+  "cardActionId": "fbss_liuxue_yanxue_dual_track_start",
+  "channelTrack": "study_abroad_study_tour",
+  "intentFamily": "international_education_planning",
+  "profileSegment": "family_decision",
+  "profileSegments": [
+    "family_decision",
+    "parent",
+    "student",
+    "gaokao_family"
+  ],
+  "assetType": "study-abroad-study-tour-card",
+  "continuedUseAssetType": "study-abroad-study-tour-continue-card",
+  "deliverables": [
+    "current_window_judgement",
+    "two_or_three_paths",
+    "family_one_pager",
+    "student_action_card",
+    "lebao_progress_and_next_step",
+    "service_coordination_hints"
+  ],
+  "firstValueContract": {
+    "contract": "contracts/first-value-contract.json",
+    "requiredDeliverables": [
+      "current_window_judgement",
+      "two_or_three_paths",
+      "family_one_pager",
+      "student_action_card",
+      "lebao_progress_and_next_step"
+    ],
+    "singleNextStepRequired": true,
+    "connectorRequired": false
+  },
+  "lebaoClaimProtocol": {
+    "protocolVersion": "fbss.lebaoClaimProtocol.v1",
+    "contract": "contracts/service-forward-fields.json",
+    "sourceIsolationRequired": true,
+    "userIdentityMergeDoesNotMergeSource": true,
+    "requiredSourceFields": [
+      "productId",
+      "serviceProductId",
+      "expertEntryId",
+      "entryId",
+      "entrySurface",
+      "entryPromptCode",
+      "channelTrack",
+      "packCode",
+      "scenePackId",
+      "assetType",
+      "defaultPromptId",
+      "cardActionId"
+    ],
+    "hostClickReceipt": {
+      "requiredForDirectNaturalClaim": true,
+      "requiredFields": [
+        "claimNonce",
+        "claimIssuedAt",
+        "claimExpiresAt",
+        "claimSignature",
+        "idempotencyKey",
+        "clientHash or anonymousUserCodeHash",
+        "serverBindingId",
+        "productId",
+        "expertEntryId",
+        "channelTrack",
+        "packCode",
+        "scenePackId"
+      ],
+      "maxReplayWindowSeconds": 900,
+      "fallbackNaturalGate": "same_binding_continued_use_completed"
+    },
+    "antiForgery": {
+      "thirdPartyForgedClickMustDryRun": true,
+      "duplicateMustReturnExistingReport": true,
+      "paymentClosureAllowed": false
+    }
+  },
+  "identityResolution": {
+    "schemaVersion": "fbss.desensitizedIdentityResolution.v1",
+    "subject": "independent_client",
+    "identityCanMergeAcrossProducts": true,
+    "lebaoSourceMustRemainSeparated": true,
+    "allowedFields": [
+      "clientHash",
+      "installHash",
+      "hostClientIdHash",
+      "anonymousUserCodeHash",
+      "serverBindingId",
+      "sessionBindingId",
+      "chainFingerprint",
+      "platform",
+      "hostVersion",
+      "packageVersion"
+    ],
+    "forbiddenFields": [
+      "phone",
+      "email",
+      "idCard",
+      "passportNo",
+      "realName",
+      "rawDeviceId",
+      "rawIp"
+    ]
+  },
+  "noConnectorActionContract": {
+    "contract": "contracts/no-connector-action-contract.json",
+    "firstAction": "liuxue_collect_minimum_context",
+    "firstValueAction": "liuxue_generate_first_value_card",
+    "continueAction": "liuxue_offer_lebao_claim_or_next_action",
+    "actionEnvelopeRequired": true,
+    "userVisibleActionEnvelopeDefault": false,
+    "hostMetadataChannelPreferred": true,
+    "sideEffectClass": "read_only"
+  },
+  "externalObservationBoundary": {
+    "connectorAssumedAvailable": false,
+    "connectorRequired": false,
+    "connectorSurfacePackaged": false,
+    "packageCapabilityDependsOnConnector": false,
+    "unlockNotBefore": "continued_use_completed",
+    "paymentClosureAllowed": false,
+    "nonOfficialEquivalentSurfaceExcludedFromNaturalCredit": true
+  },
+  "evolutionClosedLoop": {
+    "naturalTrafficFirst": true,
+    "fullChainObservable": true,
+    "stages": [
+      {
+        "stageId": "independent_client_identity",
+        "sourceFields": [
+          "clientHash",
+          "anonymousUserCodeHash",
+          "serverBindingId",
+          "chainFingerprint"
+        ]
+      },
+      {
+        "stageId": "lebao_claim_and_intent",
+        "sourceFields": [
+          "packCode",
+          "claimState",
+          "intentFamily",
+          "profileSegment",
+          "planningWindow",
+          "riskFocus"
+        ]
+      },
+      {
+        "stageId": "service_recognition",
+        "sourceFields": [
+          "identityResolution",
+          "lebaoSource",
+          "intentAggregationEnvelope"
+        ]
+      },
+      {
+        "stageId": "host_traction",
+        "sourceFields": [
+          "hostActionEnvelope",
+          "serviceCoordinationHints",
+          "host_directive_receipt"
+        ]
+      }
+    ],
+    "feedbackSignals": [
+      "first_value_completed",
+      "continued_use_completed",
+      "lebao_claim_receipt",
+      "intent_aggregated",
+      "host_directive_receipt",
+      "personalized_next_action_rendered"
+    ]
+  },
+  "guardrails": {
+    "probeRowsDiagnosticOnly": true,
+    "sameBindingRequiredForNaturalClosure": true,
+    "nonOfficialEquivalentSurfaceExcludedFromNaturalCredit": true,
+    "lebaoSourceIsolationRequired": true,
+    "userIdentityMergeDoesNotMergeSource": true
+  }
+}

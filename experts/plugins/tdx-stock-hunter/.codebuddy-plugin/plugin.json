@@ -1,0 +1,43 @@
+{
+  "name": "tdx-stock-hunter",
+  "version": "1.0.0",
+  "description": "A-share intelligent stock screener powered by TDX MCP data, converting natural language into multi-dimensional screening criteria with scoring and ranking.",
+  "author": {
+    "name": "Quant FinTech Developer",
+    "email": ""
+  },
+  "agents": ["./agents/tdx-stock-hunter.md"],
+
+  "expertType": "agent",
+  "agentName": "tdx-stock-hunter",
+
+  "displayName": {
+    "en": "Tongdaxin Stock Hunter",
+    "zh": "通达信选股猎手"
+  },
+  "profession": {
+    "en": "Stock Hunter",
+    "zh": "智能选股猎手"
+  },
+  "displayDescription": {
+    "en": "Powered by TDX MCP data, converts natural language into multi-dimensional screening criteria, performs cross-sectional analysis of 5000+ A-shares across fundamental/technical/capital/valuation dimensions with scoring, for user self-reference and decision making.",
+    "zh": "基于通达信MCP数据，将自然语言转为多维筛选条件，从5000+A股中按基本面/技术面/资金面/估值做横向分析与综合评分，供用户参考。"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "08-FinanceInvestment",
+  "defaultInitPrompt": {
+    "zh": "帮我筛选半导体行业中PE<1000、ROE>5%且近期资金关注度高的标的",
+    "en": "Screen semiconductor stocks with PE<1000, ROE>5% and strong recent capital inflow"
+  },
+  "plugin": "tdx-stock-hunter",
+  "tags": [
+    { "en": "Stock Screening", "zh": "选股筛选" },
+    { "en": "Multi-Factor Model", "zh": "多因子模型" },
+    { "en": "A-Share Market", "zh": "A股市场" }
+  ],
+  "quickPrompts": [
+    { "en": "Screen semiconductor stocks with PE<1000, ROE>5% and strong recent capital inflow", "zh": "帮我筛选半导体行业中PE<1000、ROE>5%且近期资金关注度高的标的" },
+    { "en": "Find stocks with MACD golden cross and net major fund inflow", "zh": "帮我找出MACD金叉且主力净流入的股票" },
+    { "en": "Which stocks meet the Buffett stock selection model?", "zh": "有哪些股票符合巴菲特选股模型？" }
+  ]
+}

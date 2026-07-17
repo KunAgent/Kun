@@ -1,0 +1,61 @@
+{
+  "name": "growth-hacker",
+  "version": "1.0.0",
+  "description": "Using data-driven experimental methodology to find untapped growth channels, achieving exponential growth",
+  "agents": [
+    "./agents/growth-hacker.md"
+  ],
+  "expertType": "agent",
+  "agentName": "growth-hacker",
+  "displayName": {
+    "en": "Nia",
+    "zh": "裂变变"
+  },
+  "profession": {
+    "en": "Growth Hacker",
+    "zh": "增长黑客"
+  },
+  "displayDescription": {
+    "en": "Using data-driven experimental methodology to find untapped growth channels, achieving exponential growth",
+    "zh": "用数据驱动的实验方法论找到未开发的增长渠道，实现指数级增长"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "05-MarketingGrowth",
+  "defaultInitPrompt": {
+    "zh": "我们的用户增长缓慢,需要创新的增长黑客方法来快速提升用户量,请增长黑客帮我们设计增长实验和裂变方案。",
+    "en": "Our user growth is slow, and we need innovative growth hacking methods to quickly increase user numbers. Please, Growth Hacker, help us design growth experiments and viral referral solutions."
+  },
+  "tags": [
+    {
+      "zh": "增长黑客",
+      "en": "Growth Hacking"
+    },
+    {
+      "zh": "裂变实验",
+      "en": "Viral Experiment"
+    },
+    {
+      "zh": "转化优化",
+      "en": "Conversion Optimization"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "我们的用户增长缓慢,需要创新的增长黑客方法来快速提升用户量,请增长黑客帮我们设计增长实验和裂变方案。",
+      "en": "Our user growth is slow, and we need innovative growth hacking methods to quickly increase user numbers. Please, Growth Hacker, help us design growth experiments and viral referral solutions."
+    },
+    {
+      "zh": "规划新用户引导A/B测试方案",
+      "en": "Plan an onboarding A/B test experiment"
+    },
+    {
+      "zh": "制定用户7日/30日留存提升策略",
+      "en": "Develop a Day-7/Day-30 retention improvement strategy"
+    }
+  ],
+  "skills": [
+    "./skills/ima-skills",
+    "./skills/market-researcher",
+    "./skills/marketing-skills"
+  ]
+}

@@ -1,0 +1,126 @@
+{
+  "name": "chatlaw-team",
+  "version": "1.0.0",
+  "description": "Chinese legal consultation team with 6 specialized roles collaborating across 4 phases from information gathering to consultation report",
+  "author": {
+    "name": "WorkBuddy Team"
+  },
+  "agents": [
+    "./agents/chatlaw-team-lead.md",
+    "./agents/info-intake.md",
+    "./agents/legal-research.md",
+    "./agents/case-precedent.md",
+    "./agents/advice-writer.md",
+    "./agents/report-finalizer.md"
+  ],
+  "expertType": "team",
+  "agentName": "chatlaw-team-lead",
+  "teamInfo": {
+    "leadAgent": "chatlaw-team-lead",
+    "memberAgents": [
+      "info-intake",
+      "legal-research",
+      "case-precedent",
+      "advice-writer",
+      "report-finalizer"
+    ]
+  },
+  "displayName": {
+    "en": "ChatLaw Team",
+    "zh": "中文法律咨询团"
+  },
+  "profession": {
+    "en": "Chinese Legal Consultation Team",
+    "zh": "中文法律咨询团"
+  },
+  "displayDescription": {
+    "en": "Case intake, statute research, precedent analysis, and advice drafting—delivering professional legal consultation reports for civil, marriage, contract, and labor cases.",
+    "zh": "案情采集、法条研究、判例分析、建议撰写，为民事、婚姻、合同、劳动等高频场景出具专业法律咨询报告。"
+  },
+  "avatar": "avatars/team.png",
+  "categoryId": "11-SecurityCompliance",
+  "defaultInitPrompt": {
+    "zh": "我们要离婚，请帮我做一份法律咨询报告",
+    "en": "We are getting divorced. Please help me prepare a legal consultation report."
+  },
+  "members": [
+    {
+      "id": "chatlaw-team-lead",
+      "name": {
+        "en": "Lin Lawyer",
+        "zh": "林律师"
+      },
+      "profession": {
+        "en": "Chief Legal Counsel",
+        "zh": "首席法律顾问"
+      },
+      "avatar": "avatars/chatlaw-team-lead.png",
+      "role": "lead"
+    },
+    {
+      "id": "info-intake",
+      "name": {
+        "en": "Iris",
+        "zh": "方助理"
+      },
+      "profession": {
+        "en": "Case Information Intake Specialist",
+        "zh": "案情采集专员"
+      },
+      "avatar": "avatars/info-intake.png",
+      "role": "member"
+    },
+    {
+      "id": "legal-research",
+      "name": {
+        "en": "Rex",
+        "zh": "周法官"
+      },
+      "profession": {
+        "en": "Legal Statute Researcher",
+        "zh": "法条研究员"
+      },
+      "avatar": "avatars/legal-research.png",
+      "role": "member"
+    },
+    {
+      "id": "case-precedent",
+      "name": {
+        "en": "Cara",
+        "zh": "沈判官"
+      },
+      "profession": {
+        "en": "Case Precedent Analyst",
+        "zh": "判例分析师"
+      },
+      "avatar": "avatars/case-precedent.png",
+      "role": "member"
+    },
+    {
+      "id": "advice-writer",
+      "name": {
+        "en": "Adam",
+        "zh": "钱顾问"
+      },
+      "profession": {
+        "en": "Legal Advice Writer",
+        "zh": "法律建议撰写师"
+      },
+      "avatar": "avatars/advice-writer.png",
+      "role": "member"
+    },
+    {
+      "id": "report-finalizer",
+      "name": {
+        "en": "Fiona",
+        "zh": "苏文书"
+      },
+      "profession": {
+        "en": "Consultation Report Finalizer",
+        "zh": "咨询报告终稿师"
+      },
+      "avatar": "avatars/report-finalizer.png",
+      "role": "member"
+    }
+  ]
+}

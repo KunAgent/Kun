@@ -1,0 +1,63 @@
+{
+  "name": "code-review-expert",
+  "version": "1.0.0",
+  "description": "Examines every line of code with eagle-eye standards, intercepting defects before they reach production",
+  "agents": [
+    "./agents/code-review-expert.md"
+  ],
+  "expertType": "agent",
+  "agentName": "code-review-expert",
+  "displayName": {
+    "en": "Kim",
+    "zh": "火眼眼"
+  },
+  "profession": {
+    "en": "Code Review Expert",
+    "zh": "代码审查专家"
+  },
+  "displayDescription": {
+    "en": "Examines every line of code with eagle-eye standards, intercepting defects before they reach production",
+    "zh": "以鹰眼标准检查每行代码，在缺陷到达生产环境之前将其拦截"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "02-Engineering",
+  "defaultInitPrompt": {
+    "zh": "我们的代码质量参差不齐,需要建立系统的代码审查机制,请代码审查专家帮我们制定代码审查标准和流程。",
+    "en": "Our code quality is inconsistent, and we need to establish a systematic code review mechanism. Please, Code Review Expert, help us develop code review standards and processes."
+  },
+  "tags": [
+    {
+      "zh": "代码审查",
+      "en": "Code Review"
+    },
+    {
+      "zh": "质量把关",
+      "en": "Quality Gate"
+    },
+    {
+      "zh": "最佳实践",
+      "en": "Best Practices"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "我们的代码质量参差不齐,需要建立系统的代码审查机制,请代码审查专家帮我们制定代码审查标准和流程。",
+      "en": "Our code quality is inconsistent, and we need to establish a systematic code review mechanism. Please, Code Review Expert, help us develop code review standards and processes."
+    },
+    {
+      "zh": "识别代码中的性能瓶颈和潜在Bug",
+      "en": "Identify performance bottlenecks and potential bugs in code"
+    },
+    {
+      "zh": "制定代码规范和Review检查清单",
+      "en": "Develop coding standards and review checklists"
+    }
+  ],
+  "skills": [
+    "./skills/capability-evolver",
+    "./skills/frontend-dev",
+    "./skills/fullstack-dev",
+    "./skills/github",
+    "./skills/impeccable"
+  ]
+}

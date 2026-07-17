@@ -1,0 +1,159 @@
+{
+  "name": "promo-creator-team",
+  "version": "1.0.0",
+  "description": "6 specialized roles collaborate across 6 phases for end-to-end product promo video production",
+  "author": {
+    "name": "kangarooking",
+    "email": "kangarookingluohm@gmail.com"
+  },
+  "expertType": "team",
+  "agentName": "promo-team-lead",
+  "teamInfo": {
+    "leadAgent": "promo-team-lead",
+    "memberAgents": [
+      "brief-strategist",
+      "storyboard-artist",
+      "asset-producer",
+      "video-editor",
+      "music-director"
+    ]
+  },
+  "agents": [
+    "./agents/promo-team-lead.md",
+    "./agents/brief-strategist.md",
+    "./agents/storyboard-artist.md",
+    "./agents/asset-producer.md",
+    "./agents/video-editor.md",
+    "./agents/music-director.md"
+  ],
+  "skills": [
+    "./skills/bgm-prompting"
+  ],
+  "displayName": {
+    "en": "Promo Creator Team",
+    "zh": "袋鼠帝宣传片创作团队"
+  },
+  "profession": {
+    "en": "Promo Creator Team",
+    "zh": "宣传片创作团队"
+  },
+  "displayDescription": {
+    "en": "6 specialized roles collaborate across 6 phases: brief, storyboard, assets, HyperFrames editing, BGM design and delivery, producing publish-ready 60-90s product promo videos from URLs or descriptions",
+    "zh": "6位专业角色分6阶段协作完成产品宣传片全流程制作：创意简报、逐镜头分镜、素材生产、HyperFrames剪辑合成、BGM设计与交付，从产品URL到可发布的60-90秒宣传片MP4"
+  },
+  "avatar": "avatars/team.png",
+  "categoryId": "06-ContentCreative",
+  "defaultInitPrompt": {
+    "zh": "帮我做一支产品宣传片",
+    "en": "Create a product promo video for me"
+  },
+  "tags": [
+    {
+      "en": "Promo Video",
+      "zh": "宣传片"
+    },
+    {
+      "en": "Video Production",
+      "zh": "视频制作"
+    },
+    {
+      "en": "Product Launch",
+      "zh": "产品发布"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "en": "Create a product promo video for me",
+      "zh": "帮我做一支产品宣传片"
+    },
+    {
+      "en": "Make a 60s launch video for my GitHub project",
+      "zh": "给我的GitHub项目做一支60秒发布视频"
+    },
+    {
+      "en": "Design BGM for my product demo video",
+      "zh": "为我的产品演示视频设计配乐"
+    }
+  ],
+  "members": [
+    {
+      "id": "promo-team-lead",
+      "name": {
+        "en": "Max",
+        "zh": "Max"
+      },
+      "profession": {
+        "en": "Executive Producer",
+        "zh": "制片人"
+      },
+      "avatar": "avatars/promo-team-lead.png",
+      "role": "lead"
+    },
+    {
+      "id": "brief-strategist",
+      "name": {
+        "en": "Bella",
+        "zh": "Bella"
+      },
+      "profession": {
+        "en": "Creative Strategist",
+        "zh": "创意策略师"
+      },
+      "avatar": "avatars/brief-strategist.png",
+      "role": "member"
+    },
+    {
+      "id": "storyboard-artist",
+      "name": {
+        "en": "Sean",
+        "zh": "Sean"
+      },
+      "profession": {
+        "en": "Storyboard Artist",
+        "zh": "分镜师"
+      },
+      "avatar": "avatars/storyboard-artist.png",
+      "role": "member"
+    },
+    {
+      "id": "asset-producer",
+      "name": {
+        "en": "Ada",
+        "zh": "Ada"
+      },
+      "profession": {
+        "en": "Asset Producer",
+        "zh": "素材制作人"
+      },
+      "avatar": "avatars/asset-producer.png",
+      "role": "member"
+    },
+    {
+      "id": "video-editor",
+      "name": {
+        "en": "Ethan",
+        "zh": "Ethan"
+      },
+      "profession": {
+        "en": "Video Editor & Motion Designer",
+        "zh": "剪辑师兼动效师"
+      },
+      "avatar": "avatars/video-editor.png",
+      "role": "member"
+    },
+    {
+      "id": "music-director",
+      "name": {
+        "en": "Melody",
+        "zh": "Melody"
+      },
+      "profession": {
+        "en": "Music Director",
+        "zh": "音乐总监"
+      },
+      "avatar": "avatars/music-director.png",
+      "role": "member"
+    }
+  ],
+  "plugin": "promo-creator-team"
+}

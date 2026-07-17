@@ -2,6 +2,7 @@ import type { ReactElement } from 'react'
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
+  BrainCircuit,
   Clock3,
   FileQuestion,
   Focus,
@@ -44,6 +45,7 @@ type Props = {
   connectPhoneSidebarOpen: boolean
   pluginsActive: boolean
   extensionsActive: boolean
+  capabilitiesActive: boolean
   runtimeReady: boolean
   threadSearch: string
   showArchivedThreads: boolean
@@ -61,6 +63,7 @@ type Props = {
   onOpenSettings: (section?: SettingsRouteSection) => void
   onOpenPlugins: () => void
   onOpenExtensions: () => void
+  onOpenCapabilities: () => void
   onToggleTheme: () => void
   focusModeEnabled: boolean
   onFocusModeChange: (enabled: boolean) => void
@@ -68,6 +71,7 @@ type Props = {
   onCodeOpen: () => void
   onWriteOpen: () => void
   onDesignOpen: () => void
+  onCollaborationOpen: () => void
   onScheduleOpen: () => void
   onWorkflowOpen: () => void
   onNewConversation: () => void
@@ -80,6 +84,7 @@ export function Sidebar({
   connectPhoneSidebarOpen,
   pluginsActive,
   extensionsActive,
+  capabilitiesActive,
   runtimeReady,
   threadSearch,
   showArchivedThreads,
@@ -97,6 +102,7 @@ export function Sidebar({
   onOpenSettings,
   onOpenPlugins,
   onOpenExtensions,
+  onOpenCapabilities,
   onToggleTheme,
   focusModeEnabled,
   onFocusModeChange,
@@ -104,6 +110,7 @@ export function Sidebar({
   onCodeOpen,
   onWriteOpen,
   onDesignOpen,
+  onCollaborationOpen,
   onScheduleOpen,
   onWorkflowOpen,
   onNewConversation
@@ -202,6 +209,7 @@ export function Sidebar({
           onCodeOpen={onCodeOpen}
           onWriteOpen={onWriteOpen}
           onDesignOpen={onDesignOpen}
+          onCollaborationOpen={onCollaborationOpen}
         />
 
         {activeView !== 'claw' && activeView !== 'schedule' && activeView !== 'workflow' ? (
@@ -243,6 +251,12 @@ export function Sidebar({
           label={i18n.language.toLowerCase().startsWith('zh') ? '扩展' : 'Extensions'}
           onClick={onOpenExtensions}
           active={extensionsActive}
+        />
+        <SidebarCommandRow
+          icon={<BrainCircuit className="h-4 w-4" strokeWidth={1.75} />}
+          label={i18n.language.toLowerCase().startsWith('zh') ? '智能体能力' : 'Agent capabilities'}
+          onClick={onOpenCapabilities}
+          active={capabilitiesActive}
         />
         <SidebarCommandRow
           icon={<Clock3 className="h-4 w-4" strokeWidth={1.75} />}

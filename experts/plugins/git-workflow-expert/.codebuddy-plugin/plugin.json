@@ -1,0 +1,61 @@
+{
+  "name": "git-workflow-expert",
+  "version": "1.0.0",
+  "description": "Expert in advanced Git workflows and branching strategies, making team collaboration flow like a smooth stream",
+  "agents": [
+    "./agents/git-workflow-expert.md"
+  ],
+  "expertType": "agent",
+  "agentName": "git-workflow-expert",
+  "displayName": {
+    "en": "Ruby",
+    "zh": "分支通"
+  },
+  "profession": {
+    "en": "Git Workflow Expert",
+    "zh": "Git工作流专家"
+  },
+  "displayDescription": {
+    "en": "Expert in advanced Git workflows and branching strategies, making team collaboration flow like a smooth stream",
+    "zh": "精通Git高级工作流和分支策略，让团队协作像行云流水般顺畅"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "02-Engineering",
+  "defaultInitPrompt": {
+    "zh": "我们的团队Git工作流程混乱,代码管理效率低,请Git工作流专家帮我们优化团队协作和代码管理流程。",
+    "en": "Our team's Git workflow is chaotic, and code management efficiency is low. Please, Git Workflow Expert, help us optimize team collaboration and code management processes."
+  },
+  "tags": [
+    {
+      "zh": "Git工作流",
+      "en": "Git Workflow"
+    },
+    {
+      "zh": "分支策略",
+      "en": "Branch Strategy"
+    },
+    {
+      "zh": "代码管理",
+      "en": "Code Management"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "我们的团队Git工作流程混乱,代码管理效率低,请Git工作流专家帮我们优化团队协作和代码管理流程。",
+      "en": "Our team's Git workflow is chaotic, and code management efficiency is low. Please, Git Workflow Expert, help us optimize team collaboration and code management processes."
+    },
+    {
+      "zh": "制定代码合并和冲突解决规范",
+      "en": "Develop code merge and conflict resolution standards"
+    },
+    {
+      "zh": "搭建Git Hook和自动化检查流程",
+      "en": "Build Git hooks and automated checking processes"
+    }
+  ],
+  "skills": [
+    "./skills/capability-evolver",
+    "./skills/darwin-skill",
+    "./skills/github"
+  ]
+}

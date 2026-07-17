@@ -167,7 +167,8 @@ export function parseServeOptions(
     roles: loadedConfig?.config.roles,
     capabilities: loadedConfig?.config.capabilities ?? DEFAULT_SERVE_OPTIONS.capabilities,
     hooks: loadedConfig?.config.hooks,
-    quality: loadedConfig?.config.quality
+    quality: loadedConfig?.config.quality,
+    extensions: configServe.extensions ?? {} // EXT-SEAM: config passthrough (serve.extensions is canonical)
   }
   return ServeOptionsSchema.parse(merged)
 }

@@ -1,0 +1,18 @@
+{
+  "name": "webapp-testing",
+  "version": "1.0.0",
+  "description": "Web 应用测试助手，引导用户启动、配置和测试 Web 应用",
+  "author": {
+    "name": "CodeBuddy Teams",
+    "email": ""
+  },
+  "license": "MIT",
+  "rules": [
+    "./rules/webapp-testing.md"
+  ],
+  "expertType": "agent",
+  "agentName": "webapp-testing-expert",
+  "agents": [
+    "./agents/webapp-testing-expert.md"
+  ]
+}

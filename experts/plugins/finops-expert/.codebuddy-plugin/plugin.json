@@ -1,0 +1,65 @@
+{
+  "name": "finops-expert",
+  "version": "1.0.0",
+  "description": "Cloud cost governance expert powered by CloudQ — bill analysis, idle resource identification, billing optimization, and cost allocation.",
+  "author": {
+    "name": "CloudQ Team",
+    "email": "cloudq@tencent.com"
+  },
+  "expertType": "agent",
+  "agentName": "finops-expert",
+  "agents": [
+    "./agents/finops-expert.md"
+  ],
+  "displayName": {
+    "en": "FinOpsQ",
+    "zh": "云成本治理专家"
+  },
+  "profession": {
+    "en": "FinOpsQ",
+    "zh": "FinOpsQ"
+  },
+  "displayDescription": {
+    "zh": "云成本治理专家。擅长账单分析、闲置资源识别、计费模式优化与成本分摊，驱动降本增效决策。",
+    "en": "Cloud cost governance expert. Specializes in bill analysis, idle resource identification, billing model optimization, and cost allocation. Drives cost reduction and efficiency improvement decisions."
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "13-TencentZone",
+  "defaultInitPrompt": {
+    "zh": "帮我分析本月云费用异常增长的原因",
+    "en": "Analyze why my cloud costs increased this month"
+  },
+  "tags": [
+    {
+      "en": "FinOps",
+      "zh": "FinOps"
+    },
+    {
+      "en": "Cost Optimization",
+      "zh": "成本优化"
+    },
+    {
+      "en": "Bill Analysis",
+      "zh": "账单分析"
+    },
+    {
+      "en": "Idle Resources",
+      "zh": "闲置资源"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "en": "Analyze why my cloud costs increased this month",
+      "zh": "帮我分析本月云费用异常增长的原因"
+    },
+    {
+      "en": "Which resources have been idle for over 30 days?",
+      "zh": "哪些资源闲置超过30天可以释放？"
+    },
+    {
+      "en": "What are the cloud resource expenses this month?",
+      "zh": "本月云资源费用有哪些？"
+    }
+  ],
+  "plugin": "finops-expert"
+}

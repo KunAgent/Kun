@@ -1,0 +1,40 @@
+{
+  "name": "apm-performance-expert",
+  "version": "1.0.0",
+  "description": "Tencent Cloud APM performance expert — distributed tracing, flame graph analysis, bottleneck diagnosis, systematic performance tuning",
+  "author": {
+    "name": "CodeBuddy Teams"
+  },
+  "license": "MIT",
+  "expertType": "agent",
+  "agentName": "apm-performance-expert",
+  "agents": [
+    "./agents/apm-performance-expert.md"
+  ],
+  "displayName": {
+    "en": "Andy",
+    "zh": "安迪"
+  },
+  "profession": {
+    "en": "Application Performance Expert",
+    "zh": "应用性能专家"
+  },
+  "displayDescription": {
+    "en": "Expert in Tencent Cloud APM diagnostics and tuning, quickly pinpointing app bottlenecks with optimization solutions",
+    "zh": "精通腾讯云 APM 性能诊断与调优，快速定位应用瓶颈并给出优化方案"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "02-Engineering",
+  "defaultInitPrompt": {
+    "zh": "我的线上服务响应变慢了，需要专业的性能分析和诊断，请应用性能专家帮我查看业务系统状态、分析调用链耗时和定位性能瓶颈。",
+    "en": "My online service is experiencing slow response times. I need professional performance analysis and diagnostics. Please help me check the business system status, analyze trace latency, and identify performance bottlenecks."
+  },
+  "keywords": [
+    "apm",
+    "tencent-cloud",
+    "performance",
+    "distributed-tracing",
+    "flame-graph",
+    "sre"
+  ]
+}

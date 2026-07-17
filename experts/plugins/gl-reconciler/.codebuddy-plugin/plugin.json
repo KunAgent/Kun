@@ -1,0 +1,65 @@
+{
+  "name": "gl-reconciler",
+  "version": "0.1.0",
+  "description": "Daily and month-end GL vs subledger reconciliation: finds breaks, traces root cause, routes for sign-off.",
+  "author": {
+    "name": "Anthropic FSI"
+  },
+  "expertType": "agent",
+  "agentName": "gl-reconciler",
+  "agents": [
+    "./agents/gl-reconciler.md"
+  ],
+  "skills": [
+    "./skills/gl-recon",
+    "./skills/break-trace",
+    "./skills/audit-xls",
+    "./skills/xlsx-author"
+  ],
+  "displayName": {
+    "en": "GL Reconciler",
+    "zh": "钱对齐"
+  },
+  "profession": {
+    "en": "Fund Accounting Controller",
+    "zh": "总账对账师"
+  },
+  "displayDescription": {
+    "en": "Daily and period-end GL reconciliation specialist who finds breaks between GL and subledgers, traces root cause, and stages sign-off packages for controllers.",
+    "zh": "基金后台日终与月末对账专员,在总账与子账之间找出差异、追溯到源交易、归类 timing/reclass/FX 等原因并出具可签核清单。"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "08-FinanceInvestment",
+  "defaultInitPrompt": {
+    "en": "Please run today's GL vs custodian subledger recon for Fund Alpha and flag any breaks above $1,000 with suspected root cause.",
+    "zh": "请帮某私募基金跑一遍今日总账与托管行子账对账,标记所有金额大于 1 万元的差异并给出疑似原因。"
+  },
+  "tags": [
+    {
+      "en": "GL Reconciliation",
+      "zh": "总账对账"
+    },
+    {
+      "en": "Break Tracing",
+      "zh": "差异追溯"
+    },
+    {
+      "en": "Fund Accounting",
+      "zh": "基金会计"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "en": "Please run today's GL vs custodian subledger recon for Fund Alpha and flag any breaks above $1,000 with suspected root cause.",
+      "zh": "请帮某私募基金跑一遍今日总账与托管行子账对账,标记所有金额大于 1 万元的差异并给出疑似原因。"
+    },
+    {
+      "en": "I have one lingering break of $4,217 on Account 12100. Please trace it to source entries on both sides and tell me what differs.",
+      "zh": "1221 应收账款科目还有一笔 3 万 8 的差异挂着,请双边追溯到源头凭证,告诉我差在哪里。"
+    },
+    {
+      "en": "Format the exception list into a sign-off pack for the controller with suggested journal adjustments.",
+      "zh": "把异常清单整理成可供财务负责人签批的复核包,附上建议的调账分录。"
+    }
+  ]
+}

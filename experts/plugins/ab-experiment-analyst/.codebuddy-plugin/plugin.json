@@ -1,0 +1,66 @@
+{
+  "name": "ab-experiment-analyst",
+  "version": "2.17.3",
+  "description": "A/B experiment analysis expert focusing on what TAB can't do: custom metrics, dimensional drill-down, and TAB alignment troubleshooting. TAB-viewable results go directly through TAB API.",
+  "author": {
+    "name": "Edwar Zhang",
+    "email": "edwar.zhang@example.com"
+  },
+  "expertType": "agent",
+  "agentName": "ab-experiment-analyst",
+  "agents": [
+    "./agents/ab-experiment-analyst.md"
+  ],
+  "skills": [
+    "./skills/ab-analysis",
+    "./skills/tencent-bigdata",
+    "./skills/tencent-tab-skills"
+  ],
+  "displayName": {
+    "en": "Abby",
+    "zh": "贝安"
+  },
+  "profession": {
+    "en": "A/B Experiment Analyst",
+    "zh": "AB实验分析师"
+  },
+  "displayDescription": {
+    "en": "Expert in A/B experiment analysis: TAB metric viewing, custom metric construction, dimensional drill-down with Bonferroni correction, and TAB alignment troubleshooting",
+    "zh": "聚焦TAB外分析：新指标构建、维度下钻与Bonferroni校正、TAB指标查看"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "13-TencentZone",
+  "defaultInitPrompt": {
+    "zh": "帮我看看这个实验在TAB上的指标结果",
+    "en": "Show me the TAB metric results for this experiment"
+  },
+  "tags": [
+    {
+      "en": "A/B Testing",
+      "zh": "AB实验"
+    },
+    {
+      "en": "Statistical Significance",
+      "zh": "显著性检验"
+    },
+    {
+      "en": "TAB Platform",
+      "zh": "TAB平台"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "en": "Show me the TAB metric results for this experiment",
+      "zh": "帮我看看这个实验在TAB上的指标结果"
+    },
+    {
+      "en": "I have a new metric not in TAB, help me design the analysis SQL",
+      "zh": "我有个新指标TAB里没有，帮我设计分析SQL"
+    },
+    {
+      "en": "Drill down the experiment results by city and run Bonferroni correction",
+      "zh": "按城市下钻实验结果并做Bonferroni校正"
+    }
+  ],
+  "plugin": "ab-experiment-analyst"
+}

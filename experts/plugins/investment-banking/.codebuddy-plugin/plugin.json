@@ -1,0 +1,40 @@
+{
+  "name": "investment-banking",
+  "version": "2.0.0",
+  "description": "Full-spectrum investment banking expert: deal materials, valuation modeling, capital markets, due diligence, restructuring, and transaction execution",
+  "description_zh": "全能投资银行专家：交易材料制作、估值建模、资本市场融资、买方尽调、重组分析、交易执行全流程",
+  "author": {
+    "name": "CodeBuddy Teams"
+  },
+  "homepage": "",
+  "license": "",
+  "skills": [
+    "./skills/buyer-list",
+    "./skills/cim-builder",
+    "./skills/datapack-builder",
+    "./skills/deal-tracker",
+    "./skills/merger-model",
+    "./skills/pitch-deck",
+    "./skills/process-letter",
+    "./skills/strip-profile",
+    "./skills/teaser",
+    "./skills/comps-valuation",
+    "./skills/dcf-model",
+    "./skills/lbo-model",
+    "./skills/three-statement-model",
+    "./skills/capital-markets",
+    "./skills/cim-teardown",
+    "./skills/company-tearsheet",
+    "./skills/private-credit",
+    "./skills/restructuring",
+    "./skills/memo-builder",
+    "./skills/meeting-prep",
+    "./skills/model-audit",
+    "./skills/scenario-sensitivity"
+  ],
+  "expertType": "agent",
+  "agentName": "investment-banking-expert",
+  "agents": [
+    "./agents/investment-banking-expert.md"
+  ]
+}

@@ -1,0 +1,24 @@
+{
+  "name": "@claude-code-plugins-plus/design-to-code",
+  "version": "1.0.0",
+  "description": "Convert Figma designs and screenshots to code components (React, Svelte, Vue)",
+  "type": "module",
+  "main": "./dist/servers/design-converter.js",
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest"
+  },
+  "keywords": ["mcp", "figma", "design", "code-generation", "components", "a11y"],
+  "author": { "name": "Intent Solutions", "url": "https://intentsolutions.io" },
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^0.7.0",
+    "zod": "^3.23.0",
+    "zod-to-json-schema": "^3.23.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.21",
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0"
+  }
+}

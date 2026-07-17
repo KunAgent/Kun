@@ -1,0 +1,39 @@
+{
+  "name": "smb-finance",
+  "version": "1.0.0",
+  "description": "Small business finance steward: cash flow forecasting, invoice chasing, margin analysis, month-end close, and tax preparation",
+  "author": { "name": "Expert Marketplace" },
+  "license": "MIT",
+  "expertType": "agent",
+  "agentName": "smb-finance",
+  "agents": ["./agents/smb-finance.md"],
+  "skills": [
+    "./skills/cash-flow",
+    "./skills/invoice-chase",
+    "./skills/margin-analysis",
+    "./skills/month-end-close",
+    "./skills/tax-preparation"
+  ],
+  "displayName": { "en": "Qian", "zh": "钱守通" },
+  "profession": { "en": "Finance Steward", "zh": "财务管家" },
+  "displayDescription": {
+    "en": "Cash flow forecasting, invoice chasing, margin analysis, month-end close, and tax prep for small businesses",
+    "zh": "小企业财务管家，一站式搞定现金流预测、逾期追款、毛利分析、月结对账和税务准备"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "08-FinanceInvestment",
+  "defaultInitPrompt": {
+    "zh": "未来 8 周的现金流预测，看看工资能不能发出来。",
+    "en": "Forecast cash flow for the next 8 weeks and check if we can make payroll."
+  },
+  "tags": [
+    { "zh": "现金流", "en": "Cash Flow" },
+    { "zh": "财务分析", "en": "Financial Analysis" },
+    { "zh": "税务准备", "en": "Tax Prep" }
+  ],
+  "quickPrompts": [
+    { "zh": "未来 8 周的现金流预测，看看工资能不能发出来。", "en": "Forecast cash flow for the next 8 weeks and check if we can make payroll." },
+    { "zh": "分析各产品线毛利率，看哪些该涨价、哪些该砍掉。", "en": "Analyze margins by product line — which to raise, which to cut." },
+    { "zh": "整理税务材料，准备交接给会计师。", "en": "Organize tax documents for the accountant handoff." }
+  ]
+}

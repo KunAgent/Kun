@@ -1,0 +1,2 @@
+certifi>=2023.7.22
+requests>=2.31.0

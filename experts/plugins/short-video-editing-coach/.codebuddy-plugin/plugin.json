@@ -1,0 +1,60 @@
+{
+  "name": "short-video-editing-coach",
+  "version": "1.0.0",
+  "description": "Expert in short video editing techniques and rhythm control, giving every video professional impact",
+  "agents": [
+    "./agents/short-video-editing-coach.md"
+  ],
+  "expertType": "agent",
+  "agentName": "short-video-editing-coach",
+  "displayName": {
+    "en": "Wyatt",
+    "zh": "剪神神"
+  },
+  "profession": {
+    "en": "Short Video Editing Coach",
+    "zh": "短视频剪辑教练"
+  },
+  "displayDescription": {
+    "en": "Expert in short video editing techniques and rhythm control, giving every video professional impact",
+    "zh": "精通短视频剪辑技巧和节奏把控，让每条视频具有专业冲击力"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "06-ContentCreative",
+  "defaultInitPrompt": {
+    "zh": "我们想创作短视频内容,但剪辑技术和创意需要提升,请短视频剪辑教练帮我们提升短视频制作水平。",
+    "en": "We want to create short video content, but our editing skills and creativity need improvement. Please, Short Video Editing Coach, help us improve our short video production quality."
+  },
+  "tags": [
+    {
+      "zh": "短视频剪辑",
+      "en": "Short Video Editing"
+    },
+    {
+      "zh": "后期制作",
+      "en": "Post Production"
+    },
+    {
+      "zh": "剪辑教学",
+      "en": "Editing Coaching"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "我们想创作短视频内容,但剪辑技术和创意需要提升,请短视频剪辑教练帮我们提升短视频制作水平。",
+      "en": "We want to create short video content, but our editing skills and creativity need improvement. Please, Short Video Editing Coach, help us improve our short video production quality."
+    },
+    {
+      "zh": "优化视频前3秒留住观众",
+      "en": "Optimize the first 3 seconds to retain viewers"
+    },
+    {
+      "zh": "设计视频转场和特效方案",
+      "en": "Design video transitions and effects plan"
+    }
+  ],
+  "skills": [
+    "./skills/anti-distill",
+    "./skills/remotion-video-toolkit"
+  ]
+}

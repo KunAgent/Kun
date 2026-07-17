@@ -1,0 +1,34 @@
+{
+  "name": "design-to-code",
+  "version": "1.0.0",
+  "description": "将 Figma 设计和截图转换为生产就绪的代码组件，内置无障碍性支持。",
+  "author": {
+    "name": "CodeBuddy Teams"
+  },
+  "homepage": {
+    "url": "",
+    "type": "github"
+  },
+  "license": "MIT",
+  "keywords": [
+    "figma",
+    "design",
+    "code-generation",
+    "react",
+    "svelte",
+    "vue",
+    "a11y",
+    "mcp"
+  ],
+  "mcp": {
+    "server": "servers/design-converter.ts"
+  },
+  "skills": [
+    "./skills/design-to-code-workflows"
+  ],
+  "expertType": "agent",
+  "agentName": "design-to-code-expert",
+  "agents": [
+    "./agents/design-to-code-expert.md"
+  ]
+}

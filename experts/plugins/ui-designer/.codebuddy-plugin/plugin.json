@@ -1,0 +1,31 @@
+{
+  "name": "ui-designer",
+  "version": "1.0.0",
+  "description": "Expert UI designer specializing in visual design systems, component libraries, and pixel-perfect interface creation",
+  "expertType": "agent",
+  "agentName": "ui-designer",
+  "agents": ["./agents/ui-designer.md"],
+  "skills": ["./skills/impeccable", "./skills/frontend-dev", "./skills/browser-use"],
+  "displayName": { "en": "Sam", "zh": "像素君" },
+  "profession": { "en": "UI Designer", "zh": "UI设计师" },
+  "displayDescription": {
+    "en": "Expert in design systems and component libraries, pursuing pixel-perfect accessible user interfaces",
+    "zh": "精通设计系统和组件库，追求像素级完美，打造无障碍用户界面"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "01-ProductDesign",
+  "defaultInitPrompt": {
+    "zh": "我们需要设计一个全新的用户界面,要求既美观又易用,请UI设计师帮我创建符合用户习惯的界面设计方案。",
+    "en": "We need to design a brand new user interface that is both beautiful and easy to use. Please, UI Designer, help me create an interface design that aligns with user habits."
+  },
+  "tags": [
+    { "en": "UI Design", "zh": "UI设计" },
+    { "en": "Component Library", "zh": "组件库" },
+    { "en": "Interface Standards", "zh": "界面规范" }
+  ],
+  "quickPrompts": [
+    { "zh": "我们需要设计一个全新的用户界面,要求既美观又易用,请UI设计师帮我创建符合用户习惯的界面设计方案。", "en": "We need to design a brand new user interface that is both beautiful and easy to use. Please, UI Designer, help me create an interface design that aligns with user habits." },
+    { "zh": "为产品搭建完整设计规范系统", "en": "Build a complete design system for the product" },
+    { "zh": "评审现有UI设计并提出优化方案", "en": "Review existing UI design and propose optimizations" }
+  ]
+}

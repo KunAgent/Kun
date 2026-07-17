@@ -1,0 +1,136 @@
+{
+  "name": "edgeone-makers-experts",
+  "version": "1.0.0",
+  "description": "Makers development team - orchestrates full-stack web development and deployment on EdgeOne Makers: Edge Functions, Cloud Functions (Node.js/Go/Python), Middleware, KV Storage, and fast deployment",
+  "author": {
+    "name": "EdgeOne Makers Team",
+    "email": "vincentlli@tencent.com"
+  },
+  "expertType": "team",
+  "agentName": "edgeone-makers-team-lead",
+  "teamInfo": {
+    "leadAgent": "edgeone-makers-team-lead",
+    "memberAgents": [
+      "frontend-specialist",
+      "backend-specialist",
+      "agent-specialist"
+    ]
+  },
+  "agents": [
+    "./agents/edgeone-makers-team-lead.md",
+    "./agents/frontend-specialist.md",
+    "./agents/backend-specialist.md",
+    "./agents/agent-specialist.md"
+  ],
+  "skills": [
+    "./skills/makers-deploy",
+    "./skills/makers-agents",
+    "./skills/makers-edge-functions",
+    "./skills/makers-cloud-functions",
+    "./skills/makers-middleware",
+    "./skills/makers-storage",
+    "./skills/makers-recipes",
+    "./skills/makers-cli"
+  ],
+  "displayName": {
+    "en": "Makers Dev Team",
+    "zh": "Makers 开发专家团"
+  },
+  "profession": {
+    "en": "Makers Dev Team",
+    "zh": "Makers 开发专家团"
+  },
+  "displayDescription": {
+    "en": "Build and deploy web apps on EdgeOne Makers — covering frontend, serverless backends (Edge/Cloud Functions), AI Agents (DeepAgents, LangGraph, Claude SDK, OpenAI Agents, CrewAI), and fast deployment to a global CDN",
+    "zh": "在 EdgeOne Makers 上构建并部署 Web 应用 —— 涵盖前端页面、Serverless 后端（边缘函数/云函数）、AI Agent 开发（DeepAgents、LangGraph、Claude SDK、OpenAI Agents、CrewAI）及快速部署到全球加速网络"
+  },
+  "avatar": "avatars/team.png",
+  "categoryId": "13-TencentZone",
+  "defaultInitPrompt": {
+    "zh": "用 React + 图表库做一个深色主题数据可视化 Dashboard 单页应用并部署",
+    "en": "Build a dark-themed data visualization Dashboard SPA with React + Charts and deploy it"
+  },
+  "tags": [
+    {
+      "en": "Web Dev",
+      "zh": "Web 开发"
+    },
+    {
+      "en": "AI Agent",
+      "zh": "AI Agent"
+    },
+    {
+      "en": "Serverless",
+      "zh": "Serverless"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "en": "Build a dark-themed data visualization Dashboard SPA with React + Charts and deploy it",
+      "zh": "用 React + 图表库做一个深色主题数据可视化 Dashboard 单页应用并部署"
+    },
+    {
+      "en": "Build an AI chatbot Agent and deploy it",
+      "zh": "帮我搭建一个 AI 对话 Agent 并部署"
+    },
+    {
+      "en": "Build a photo gallery with Next.js + Blob storage and deploy it",
+      "zh": "用 Next.js + Blob 存储做一个图片相册应用并部署"
+    }
+  ],
+  "members": [
+    {
+      "id": "edgeone-makers-team-lead",
+      "name": {
+        "en": "Qi",
+        "zh": "齐上线"
+      },
+      "profession": {
+        "en": "One-Stop Delivery Director",
+        "zh": "一站式交付总监"
+      },
+      "avatar": "avatars/edgeone-makers-team-lead.png",
+      "role": "lead"
+    },
+    {
+      "id": "frontend-specialist",
+      "name": {
+        "en": "Pei",
+        "zh": "裴知页"
+      },
+      "profession": {
+        "en": "Frontend Engineer",
+        "zh": "前端工程师"
+      },
+      "avatar": "avatars/frontend-specialist.png",
+      "role": "member"
+    },
+    {
+      "id": "backend-specialist",
+      "name": {
+        "en": "Fan",
+        "zh": "范云申"
+      },
+      "profession": {
+        "en": "Backend Engineer",
+        "zh": "后端工程师"
+      },
+      "avatar": "avatars/backend-specialist.png",
+      "role": "member"
+    },
+    {
+      "id": "agent-specialist",
+      "name": {
+        "en": "Zhi",
+        "zh": "智行远"
+      },
+      "profession": {
+        "en": "AI Agent Engineer",
+        "zh": "AI Agent 工程师"
+      },
+      "avatar": "avatars/agent-specialist.png",
+      "role": "member"
+    }
+  ],
+  "plugin": "edgeone-makers-experts"
+}

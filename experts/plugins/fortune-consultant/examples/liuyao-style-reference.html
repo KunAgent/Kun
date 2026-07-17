@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>京房纳甲 · 六爻卦象 · 1987-10-16 未时</title>
+<style>
+  :root {
+    --bg: #15110c;
+    --paper: #1c1812;
+    --paper-soft: #251f17;
+    --bamboo: #2a2218;
+    --ink: #d8c8a8;
+    --ink-bright: #f0e0b8;
+    --vermilion: #b8341e;
+    --vermilion-bright: #d44a30;
+    --bronze: #8a6c3a;
+    --jade: #5a8a6a;
+    --dim: #7a6e5a;
+    --border: rgba(216, 200, 168, 0.18);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: "PingFang SC", "Hiragino Sans GB", "STKaiti", "KaiTi", serif;
+    line-height: 1.8;
+    min-height: 100vh;
+    background-image:
+      repeating-linear-gradient(90deg, transparent 0, transparent 38px, rgba(216, 200, 168, 0.02) 38px, rgba(216, 200, 168, 0.02) 39px),
+      radial-gradient(circle at 30% 20%, rgba(184, 52, 30, 0.06), transparent 50%),
+      linear-gradient(180deg, #15110c 0%, #0d0a06 100%);
+  }
+  .container { max-width: 1000px; margin: 0 auto; padding: 48px 24px 80px; }
+
+  .header {
+    text-align: center;
+    margin-bottom: 36px;
+    padding-bottom: 28px;
+    border-bottom: 1px double var(--border);
+  }
+  .header::before {
+    content: "☳";
+    display: block;
+    font-size: 40px;
+    color: var(--vermilion);
+    margin-bottom: 10px;
+  }
+  .header h1 {
+    font-size: 32px;
+    color: var(--ink-bright);
+    letter-spacing: 12px;
+    font-weight: 500;
+    margin-bottom: 8px;
+  }
+  .header .seal {
+    display: inline-block;
+    background: var(--vermilion);
+    color: #fff;
+    padding: 4px 12px;
+    font-size: 13px;
+    letter-spacing: 4px;
+    border-radius: 2px;
+    margin: 8px 4px;
+    font-weight: bold;
+  }
+  .header .meta { color: var(--dim); font-size: 12px; margin-top: 12px; letter-spacing: 2px; }
+
+  /* Hexagram */
+  .gua-container {
+    display: grid;
+    grid-template-columns: 1fr 320px 1fr;
+    gap: 24px;
+    align-items: center;
+    margin-bottom: 40px;
+    padding: 30px;
+    background: var(--paper);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    position: relative;
+  }
+  .gua-container::before, .gua-container::after {
+    content: "";
+    position: absolute;
+    top: 12px; bottom: 12px;
+    width: 1px;
+    background: var(--border);
+  }
+  .gua-container::before { left: 12px; }
+  .gua-container::after { right: 12px; }
+  .gua-side { padding: 0 12px; }
+  .gua-side h4 { color: var(--vermilion-bright); margin-bottom: 6px; letter-spacing: 2px; font-size: 13px; font-weight: 500; }
+  .gua-side .meta-line { font-size: 12px; color: var(--ink); margin-bottom: 4px; }
+  .gua-side .meta-line span { color: var(--bronze); margin-right: 6px; }
+
+  .gua-center { text-align: center; }
+  .gua-name {
+    font-size: 26px;
+    color: var(--ink-bright);
+    letter-spacing: 6px;
+    margin-bottom: 6px;
+  }
+  .gua-symbol {
+    color: var(--vermilion-bright);
+    font-size: 14px;
+    margin-bottom: 18px;
+    letter-spacing: 4px;
+  }
+  .lines {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin: 18px 0;
+  }
+  .line-row {
+    display: grid;
+    grid-template-columns: 80px 130px 80px;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+  }
+  .line-meta { color: var(--ink); text-align: left; }
+  .line-meta strong { color: var(--ink-bright); }
+  .line-meta .six-info { color: var(--bronze); display: block; font-size: 10px; margin-top: 2px; letter-spacing: 1px;}
+  .line-yao {
+    height: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .yao {
+    height: 8px;
+    display: inline-block;
+    background: var(--ink);
+    border-radius: 1px;
+  }
+  .yao.yang { width: 110px; }
+  .yao.yin { width: 48px; box-shadow: 64px 0 0 var(--ink); }
+  .line-row.changing .yao { background: var(--vermilion); box-shadow: 64px 0 0 var(--vermilion); }
+  .line-row.changing .yao.yang { box-shadow: none; background: var(--vermilion); }
+  .line-tag {
+    color: var(--bronze);
+    font-size: 11px;
+    letter-spacing: 1px;
+    text-align: right;
+  }
+  .line-tag.shi { color: var(--jade); }
+  .line-tag.ying { color: var(--vermilion); }
+
+  /* Sections */
+  .section { margin-bottom: 32px; }
+  .section-title {
+    font-size: 18px;
+    color: var(--vermilion-bright);
+    letter-spacing: 6px;
+    margin-bottom: 18px;
+    padding-left: 14px;
+    border-left: 3px solid var(--vermilion);
+  }
+  .section-title small { color: var(--dim); font-size: 11px; margin-left: 12px; letter-spacing: 1px; }
+
+  .scroll-card {
+    background: var(--paper);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--vermilion);
+    border-radius: 2px;
+    padding: 22px 28px;
+    margin-bottom: 14px;
+    position: relative;
+  }
+  .scroll-card h3 {
+    color: var(--ink-bright);
+    font-weight: 500;
+    margin-bottom: 12px;
+    letter-spacing: 2px;
+    font-size: 16px;
+  }
+  .scroll-card p { color: var(--ink); margin-bottom: 8px; font-size: 14px; }
+  .scroll-card .yao-quote {
+    color: var(--vermilion-bright);
+    border-left: 2px solid var(--vermilion);
+    padding-left: 12px;
+    margin: 10px 0;
+    font-style: italic;
+    letter-spacing: 1px;
+  }
+
+  .relations {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+  }
+  .rel {
+    background: var(--paper-soft);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 14px 16px;
+  }
+  .rel h4 { color: var(--vermilion-bright); font-size: 13px; letter-spacing: 2px; margin-bottom: 6px; font-weight: 500; }
+  .rel p { color: var(--ink); font-size: 13px; }
+
+  .domain-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 14px;
+  }
+  .domain {
+    background: var(--paper);
+    border: 1px solid var(--border);
+    border-top: 3px solid var(--bronze);
+    border-radius: 2px;
+    padding: 18px;
+  }
+  .domain h4 { color: var(--ink-bright); font-size: 14px; margin-bottom: 8px; letter-spacing: 2px; font-weight: 500; }
+  .domain p { color: var(--ink); font-size: 13px; line-height: 1.7; }
+
+  .disclaimer {
+    margin-top: 50px;
+    padding: 16px 22px;
+    background: rgba(184, 52, 30, 0.06);
+    border: 1px dashed var(--vermilion);
+    border-radius: 2px;
+    font-size: 12px;
+    color: var(--dim);
+  }
+
+  @media (max-width: 720px) {
+    .gua-container { grid-template-columns: 1fr; gap: 16px; }
+    .header h1 { font-size: 24px; letter-spacing: 6px; }
+    .domain-grid, .relations { grid-template-columns: 1fr; }
+    .yao.yang { width: 80px; }
+    .yao.yin { width: 32px; box-shadow: 48px 0 0 var(--ink); }
+    .line-row { grid-template-columns: 60px 100px 60px; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <div class="header">
+    <h1>京 房 纳 甲</h1>
+    <span class="seal">六爻</span>
+    <span class="seal">卦象</span>
+    <span class="seal">体用</span>
+    <div class="meta">阳历 1987-10-16 未时 · 女命 · 时家起卦法</div>
+  </div>
+
+  <!-- Hexagram main -->
+  <div class="gua-container">
+    <div class="gua-side">
+      <h4>本卦</h4>
+      <div class="meta-line"><span>外卦</span>艮为山</div>
+      <div class="meta-line"><span>内卦</span>巽为风</div>
+      <div class="meta-line"><span>卦宫</span>艮宫</div>
+      <div class="meta-line"><span>世应</span>世六四 应初六</div>
+      <div class="meta-line"><span>用神</span>官鬼丙寅木</div>
+      <div class="meta-line"><span>月建</span>戌月</div>
+      <div class="meta-line"><span>日辰</span>戊戌</div>
+    </div>
+
+    <div class="gua-center">
+      <div class="gua-name">山 风 蛊</div>
+      <div class="gua-symbol">☶ 上 · 巽 ☴ 下</div>
+      <div class="lines">
+        <div class="line-row">
+          <div class="line-meta"><strong>上九</strong><span class="six-info">寅木 · 父母</span></div>
+          <div class="line-yao"><span class="yao yang"></span></div>
+          <div class="line-tag">　</div>
+        </div>
+        <div class="line-row">
+          <div class="line-meta"><strong>六五</strong><span class="six-info">子水 · 妻财</span></div>
+          <div class="line-yao"><span class="yao yin"></span></div>
+          <div class="line-tag">　</div>
+        </div>
+        <div class="line-row">
+          <div class="line-meta"><strong>六四</strong><span class="six-info">戌土 · 兄弟</span></div>
+          <div class="line-yao"><span class="yao yin"></span></div>
+          <div class="line-tag shi">世</div>
+        </div>
+        <div class="line-row changing">
+          <div class="line-meta"><strong>九三</strong><span class="six-info">酉金 · 子孙 ☆</span></div>
+          <div class="line-yao"><span class="yao yang"></span></div>
+          <div class="line-tag">动爻</div>
+        </div>
+        <div class="line-row">
+          <div class="line-meta"><strong>九二</strong><span class="six-info">亥水 · 妻财</span></div>
+          <div class="line-yao"><span class="yao yang"></span></div>
+          <div class="line-tag">　</div>
+        </div>
+        <div class="line-row">
+          <div class="line-meta"><strong>初六</strong><span class="six-info">丑土 · 兄弟</span></div>
+          <div class="line-yao"><span class="yao yin"></span></div>
+          <div class="line-tag ying">应</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="gua-side">
+      <h4>变卦</h4>
+      <div class="meta-line"><span>变出</span>山水蒙</div>
+      <div class="meta-line"><span>外卦</span>艮为山</div>
+      <div class="meta-line"><span>内卦</span>坎为水</div>
+      <div class="meta-line"><span>动爻</span>九三 → 六三</div>
+      <div class="meta-line"><span>象意</span>风转水流，治病为要</div>
+      <div class="meta-line"><span>互卦</span>归妹</div>
+      <div class="meta-line"><span>错卦</span>随</div>
+    </div>
+  </div>
+
+  <!-- Verdict -->
+  <div class="section">
+    <div class="section-title">卦 辞 卦 象 <small>HEXAGRAM</small></div>
+    <div class="scroll-card">
+      <h3>✦ 山风蛊 · 卦辞</h3>
+      <p class="yao-quote">"蛊：元亨，利涉大川。先甲三日，后甲三日。"</p>
+      <p>"蛊"字象皿中虫——意为陈年积弊、需要整顿。但卦辞却说"元亨"——为什么？因为<strong style="color: var(--vermilion-bright);">看清问题、下手整治，本身就是大吉</strong>。象传："蛊，刚上而柔下，巽而止，蛊。" 上艮止、下巽顺——表面平静，底下早已暗流涌动，正是需要"治蛊"之时。</p>
+      <p>对您当前阶段而言，这个卦象明确指出：<strong style="color: var(--ink-bright);">人生进入"清理旧账、整顿格局"的阶段</strong>——可能是工作中的积弊、家庭中的隐性问题、或自身长期忽略的健康/情绪议题。"利涉大川"——只要敢于面对，前途反而宽阔。</p>
+    </div>
+  </div>
+
+  <!-- Six Relatives -->
+  <div class="section">
+    <div class="section-title">六 亲 配 置 <small>SIX RELATIVES · 艮宫纳甲</small></div>
+    <div class="relations">
+      <div class="rel">
+        <h4>父母 寅木（上九）</h4>
+        <p>主文书、合同、长辈、知识。寅木旺于年柱卯木，<strong style="color: var(--ink-bright);">父母星得力</strong>——文书运、学习运良好。</p>
+      </div>
+      <div class="rel">
+        <h4>妻财 子水/亥水（五、二爻）</h4>
+        <p>财星双现，但戌月囚水——<strong style="color: var(--vermilion-bright);">财源不绝但需克制</strong>，亥水临空亡之边，须防钱财进出。</p>
+      </div>
+      <div class="rel">
+        <h4>兄弟 戌土/丑土（四、初爻）</h4>
+        <p>世爻坐戌土兄弟——身心皆与同辈、合伙人深度绑定。戌月戌日临世，旺极反需提防过刚。</p>
+      </div>
+      <div class="rel">
+        <h4>子孙 酉金（三爻 · 动爻）</h4>
+        <p><strong style="color: var(--vermilion-bright);">关键动爻</strong>。子孙为福德、解忧、才华、子女。酉金动而有力，主"以才华化解困局"——但动爻变为水，需提防"过度耗泄"。</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Changing line -->
+  <div class="section">
+    <div class="section-title">动 爻 解 析 <small>CHANGING LINE · 九三</small></div>
+    <div class="scroll-card">
+      <h3>✦ 九三爻辞</h3>
+      <p class="yao-quote">"九三：干父之蛊，小有悔，无大咎。"</p>
+      <p>九三本卦"干父之蛊"——<strong style="color: var(--vermilion-bright);">主动整治长辈遗留的旧问题</strong>，过程或有小波折，但无大祸。这一爻动，意味着您当前正处于"主动收拾局面"的状态，不论是家庭事务、工作交接、还是自我成长上未完成的功课。</p>
+      <p>动而变水（蒙卦三爻）——<strong style="color: var(--ink-bright);">蒙卦象意：启发、教育、正本清源</strong>。变卦提示：清理过程中要有"教学相长"的耐心，急不得，亦不可放任。</p>
+    </div>
+  </div>
+
+  <!-- Domains -->
+  <div class="section">
+    <div class="section-title">分 项 断 验 <small>DOMAIN READINGS</small></div>
+    <div class="domain-grid">
+      <div class="domain">
+        <h4>事 业</h4>
+        <p>蛊卦主"治"，世爻临戌兄弟旺——团队/同辈支撑足，但需主动整顿低效环节。子孙酉金动，专业才华是您的破局武器，宜走专家路线。</p>
+      </div>
+      <div class="domain">
+        <h4>财 运</h4>
+        <p>财星双显但月囚——<strong style="color: var(--vermilion-bright);">看得见摸不全</strong>。宜守不宜攻，先清理负债与隐性支出，再谈进取。亥水财星半空亡，警惕短期投机。</p>
+      </div>
+      <div class="domain">
+        <h4>感 情</h4>
+        <p>用神官鬼寅木在上九——夫位高悬。世应中隔——<strong style="color: var(--ink-bright);">感情中隐性问题需直面</strong>。已有伴侣者，沟通比沉默有用；单身者，缘在"共同治蛊"的人。</p>
+      </div>
+      <div class="domain">
+        <h4>健 康</h4>
+        <p>蛊为虫病、积疾——肝胆、脾胃、妇科系统的<strong style="color: var(--vermilion-bright);">慢性小病要主动处理</strong>。子孙酉金动主"医药得力"——及时就医则吉。</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Summary -->
+  <div class="scroll-card" style="border-left-color: var(--bronze);">
+    <h3>✦ 三句话总断</h3>
+    <p>① <strong style="color: var(--ink-bright);">现阶段是"治蛊期"</strong>——把过去几年累积的小问题集中处理掉，能换来下一轮"元亨"。</p>
+    <p>② <strong style="color: var(--ink-bright);">动爻在三，宜动不宜静</strong>——主动出击优于被动等待，但要"小心翼翼地动"。</p>
+    <p>③ <strong style="color: var(--ink-bright);">借才华破局</strong>——子孙酉金为您的护身符，专业能力是这一阶段最靠得住的资本。</p>
+  </div>
+
+  <div class="disclaimer">
+    ⚠️ 本卦为时家起卦法（年月日时干支配合）演示性排卦，意在展示六爻流派的视觉与解读逻辑。命卦之事虚实兼参，仅供方向性参考，不构成医疗、法律、财务或投资建议。
+  </div>
+
+</div>
+</body>
+</html>

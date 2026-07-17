@@ -1,0 +1,67 @@
+{
+  "name": "valuation-reviewer",
+  "version": "0.1.0",
+  "description": "Ingests GP valuation packages, runs valuation template, stages LP reporting for sign-off.",
+  "author": {
+    "name": "Anthropic FSI"
+  },
+  "expertType": "agent",
+  "agentName": "valuation-reviewer",
+  "agents": [
+    "./agents/valuation-reviewer.md"
+  ],
+  "skills": [
+    "./skills/returns-analysis",
+    "./skills/portfolio-monitoring",
+    "./skills/ic-memo",
+    "./skills/xlsx-author",
+    "./skills/neodata-financial-search",
+    "./skills/westock"
+  ],
+  "displayName": {
+    "en": "Valuation Reviewer",
+    "zh": "顾估衡"
+  },
+  "profession": {
+    "en": "Valuation Review Manager",
+    "zh": "组合估值主管"
+  },
+  "displayDescription": {
+    "en": "Fund-accounting lead who reviews portfolio-company valuation packages, runs fund's valuation template, and stages LP reporting for IR sign-off.",
+    "zh": "PE/VC 基金组合估值主管,收 GP 估值包、跑标准估值模板、算基金 NAV 与 LP 分配、出 LP 报告草稿交投资者关系签核。"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "08-FinanceInvestment",
+  "defaultInitPrompt": {
+    "en": "Please review this GP valuation package for our Q1 close: run each portco through our template, compute fund NAV and LP allocations, and stage the LP reporting pack.",
+    "zh": "请审核这份 Q1 关账的 GP 估值包:每家被投按我们模板重估一遍,计算基金 NAV 与 LP 份额分配,并整理 LP 报告草稿。"
+  },
+  "tags": [
+    {
+      "en": "Portfolio Valuation",
+      "zh": "组合估值"
+    },
+    {
+      "en": "NAV Computation",
+      "zh": "净值计算"
+    },
+    {
+      "en": "LP Reporting",
+      "zh": "LP 报告"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "en": "Please review this GP valuation package for our Q1 close: run each portco through our template, compute fund NAV and LP allocations, and stage the LP reporting pack.",
+      "zh": "请审核这份 Q1 关账的 GP 估值包:每家被投按我们模板重估一遍,计算基金 NAV 与 LP 份额分配,并整理 LP 报告草稿。"
+    },
+    {
+      "en": "Build me a returns sensitivity table on a potential add-on: entry multiple vs exit multiple vs hold period.",
+      "zh": "给一笔拟追加投资做一张收益敏感性表:进入倍数 vs 退出倍数 vs 持有期。"
+    },
+    {
+      "en": "Extract KPI variance vs budget from this monthly package and flag covenant compliance issues.",
+      "zh": "从这份被投月度资料中提炼 KPI 对预算差异,并标记契约合规风险点。"
+    }
+  ]
+}

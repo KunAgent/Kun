@@ -1,0 +1,288 @@
+{
+  "chapterWriting": {
+    "description": "每一章进入成文前至少完成一轮主题相关检索并记录检索意图",
+    "minQueriesPerChapter": 2,
+    "requireL2EvidencePerChapter": true,
+    "l2EvidenceNote": "章节核心事实至少包含 1 条 L2/L3（一手页面/交叉验证）证据；仅有 L1 搜索摘要不得视为完成。",
+    "notes": "由宿主（CodeBuddy / WorkBuddy 等）执行 WebSearch/WebFetch；编排层应记录每章检索次数以供门禁校验。检索结论须**嵌入正文或数据来源索引**：凡写入正文的具体事实/数字/分省数据，须在句旁脚注、括注或「本章数据来源索引」可回溯，禁止仅有章末「检索执行记录」块而正文仍无出处（对齐 Skill 待改进 M6 / B2-B′）。",
+    "genreCheckPolicy": {
+      "description": "按书籍体裁动态调整章前最低检索次数：不同体裁的事实核查密度差异显著，统一使用 minQueriesPerChapter=2 对历史/学术类书籍严重不足",
+      "overrides": [
+        {
+          "genre": "历史/家族史/考证类",
+          "matchKeywords": [
+            "家族史",
+            "通史",
+            "考证",
+            "史料",
+            "古籍",
+            "历史"
+          ],
+          "minQueriesPerChapter": 4,
+          "note": "历史类每章涉及多典籍来源与多处争议事实，最低4次检索；其中至少1次须针对具体年份/人物/事件做精确查证"
+        },
+        {
+          "genre": "学术/白皮书/研究报告类",
+          "matchKeywords": [
+            "白皮书",
+            "研究报告",
+            "行业报告",
+            "学术",
+            "论文"
+          ],
+          "minQueriesPerChapter": 3,
+          "note": "学术类每章须有≥1次数据时效性验证检索"
+        },
+        {
+          "genre": "商业/手册/指南类",
+          "matchKeywords": [
+            "手册",
+            "指南",
+            "实战",
+            "教程",
+            "入门"
+          ],
+          "minQueriesPerChapter": 2,
+          "note": "商业类维持默认值；若章节涉及具体工具/政策数据，自动触发补检"
+        },
+        {
+          "genre": "B级体裁（报道/深度稿/专题/长文）",
+          "matchKeywords": [
+            "报道",
+            "深度稿",
+            "特稿",
+            "专题",
+            "调查报道",
+            "长文",
+            "新闻"
+          ],
+          "minQueriesPerChapter": 2,
+          "s0Override": {
+            "description": "B级体裁走S0-lite（轻量调研），S0阶段检索总轮次上限8轮（vs A级14轮）",
+            "s0TotalMaxQueries": 8,
+            "note": "S0-lite：时间戳(1)+国内竞品(2)+海外竞品(1)+读者分析(2)+变现路径(2)=8轮；维度门禁仍要求4维度各≥1轮"
+          },
+          "note": "B级体裁章前检索维持默认2次；S0走轻量调研，不走14轮完整S0"
+        }
+      ],
+      "fallback": "无体裁匹配时使用 minQueriesPerChapter 全局默认值",
+      "detectionTiming": "S1 定位确认后，由模型根据风格档案和书名关键词自动判断体裁并写入 .fbs/project-config.json 的 genreTag 字段；后续每章门禁以该字段为准"
+    },
+    "markdownEvidenceHeadings": [
+      "检索记录",
+      "检索与来源",
+      "检索摘要",
+      "联网检索摘要",
+      "检索",
+      "检索执行情况",
+      "检索执行记录",
+      "本章数据来源索引",
+      "关键数据来源索引",
+      "数据来源索引"
+    ],
+    "parallelProjectBootstrap": "node scripts/init-fbs-multiagent-artifacts.mjs --book-root <本书根>（生成 .fbs/chapter-status.md、search-ledger.jsonl 等）"
+  },
+  "searchPurposeLayers": {
+    "description": "联网搜索目的分层策略（v2.0）：L1-L5 五层，各层触发时机与输出格式不同；L1-L2 为原有层次（已有 s0ParallelQueries/chapterWriting 覆盖），L3-L5 为 v2.0 新增",
+    "L1_factCheck": {
+      "purpose": "事实核查",
+      "trigger": "正文事实置信度<0.8 或内容类型触发（factAnnotationProtocol）",
+      "grade": "A/B/C",
+      "note": "已由 autoSearchOnUncertainty 覆盖，本层描述作为分层索引"
+    },
+    "L2_competitorScan": {
+      "purpose": "竞品扫描（同类书/内容产品）",
+      "trigger": "S0 调研阶段",
+      "grade": "A",
+      "note": "已由 s0ParallelQueries.competitorDomestic/Overseas 覆盖，本层描述作为分层索引"
+    },
+    "L3_workIntel": {
+      "purpose": "作品情报（同类作品六维深度解读）",
+      "trigger": "S0-B 作品情报站（有原料或有主题时触发）",
+      "grade": "A/B",
+      "outputFormat": "六维情报表（主题内核/结构策略/叙事风格/读者假设/留白与空缺/可借鉴手法）+ 风格试笔片段（200字）",
+      "ledgerDimension": "workIntel",
+      "note": "优先 WebFetch 豆瓣/亚马逊评论区、作者采访、出版社页；JS渲染页退回RSS摘要"
+    },
+    "L4_frontierSensing": {
+      "purpose": "前沿感知（主题领域最新进展）",
+      "trigger": "S1 主题定位后 + 每章前置检索（A级体裁必做）",
+      "grade": "A",
+      "outputFormat": "时间线摘要（近6个月 → 近3年主要进展）+ 是否影响本书论点判断",
+      "ledgerDimension": "frontierSensing",
+      "note": "须配合 temporalAccuracy 策略，year参数运行时动态注入；摘要写入对应章节 writing-notes"
+    },
+    "L5_readerLanguage": {
+      "purpose": "读者语言感知（目标读者真实讨论与词汇）",
+      "trigger": "S0 读者分析阶段（与 readerAnalysis 维度并行）",
+      "grade": "A/B",
+      "outputFormat": "读者词汇表（≥20个高频词）+ 读者关切清单（≥10条）+ 词汇禁忌清单（读者反感表述 ≥5条）",
+      "outputFile": ".fbs/reader-language.md",
+      "searchTargets": [
+        "知乎问答",
+        "微博讨论",
+        "豆瓣书评",
+        "小红书",
+        "B站评论区（如适用）",
+        "亚马逊中文评论"
+      ],
+      "ledgerDimension": "readerLanguage",
+      "note": "读者会（sessionProtocols.readerSession）必须加载 .fbs/reader-language.md 作为基础认知；AI模拟读者须以该文件词汇为优先参照"
+    }
+  },
+  "s0WorkIntelPolicy": {
+    "description": "S0-B 作品情报站执行规范（v2.0）：对同类作品进行六维深度解读，用他人成果点燃写作灵感",
+    "enabled": true,
+    "trigger": "S0 调研阶段，有原料（路径A）或有主题（路径B/C）时自动激活",
+    "minWorks": 2,
+    "maxWorks": 4,
+    "parallelAgents": true,
+    "parallelAgentsNote": "当 minWorks≥2 时，建议启动多 Agent 并行，每个 Agent 负责一部作品的六维解读，汇总后由主编输出对比报告",
+    "requiredDimensions": [
+      "主题内核（核心论点/核心叙事是什么，一句话）",
+      "结构策略（全书如何组织，章节逻辑是什么）",
+      "叙事风格（写法特征：论证/故事/案例/数据密度）",
+      "读者假设（作者预设读者是谁，默认知识水平）",
+      "留白与空缺（作品没覆盖但本书可以填补的方向）",
+      "可借鉴手法（结构/开篇/收尾/图表/引言等具体手法）"
+    ],
+    "styleDraftRequired": true,
+    "styleDraftNote": "每部参考作品完成六维解读后，须产出一段200字以内的「风格试笔」——用该作品的口吻和结构写本书的某个段落，用于感受风格差异",
+    "summaryReportRequired": true,
+    "summaryReportNote": "全部作品解读完成后，输出「作品情报汇总对比报告」：四象限对比（主题内核×叙事风格）+ 可借鉴手法清单 + 本书差异化方向建议（≥3条）",
+    "outputFile": ".fbs/work-intelligence.md",
+    "ledgerDimension": "workIntel",
+    "overseasPriority": "优先纳入1部以上海外（英文/日文/其他语种）同类作品，用于发现国内同类书未覆盖的视角和手法"
+  },
+  "sessionProtocols": {
+    "description": "会议机制编排规范（v2.0）：四种会议，自动触发，详细规范见 references/01-core/session-protocols.md",
+    "specFile": "references/01-core/session-protocols.md",
+    "sessions": {
+      "creativeSession": {
+        "name": "创意会",
+        "trigger": "S1 主题定位前（路径B/C必须，路径A可选）",
+        "purpose": "发散选题角度，防止框架锁定效应",
+        "minAgents": 3,
+        "roles": [
+          "激进派（打破常规的角度）",
+          "守序派（最可行最稳妥的角度）",
+          "读者派（目标读者最想看的角度）"
+        ],
+        "phases": [
+          "发散（各角色独立提案，禁止互相评价）",
+          "收束（选出1-2个最有潜力的，说明理由）"
+        ],
+        "outputFile": ".fbs/sessions/creative-session.md"
+      },
+      "readerSession": {
+        "name": "读者会",
+        "trigger": "S2 目录完成后（所有体裁，A级必须）",
+        "purpose": "以读者视角检验目录与核心论点是否成立",
+        "minAgents": 3,
+        "roles": [
+          "新手读者（第一次接触本主题）",
+          "有基础读者（有一定了解但非专家）",
+          "挑剔读者（专业背景，要求很高）"
+        ],
+        "requiredContext": [
+          ".fbs/reader-language.md（若存在则必须加载）"
+        ],
+        "outputFile": ".fbs/sessions/reader-session.md"
+      },
+      "adversarialSession": {
+        "name": "对抗会",
+        "trigger": "核心论断首次出现时（S1锁定核心主张后）",
+        "purpose": "用对抗性论证加固核心论断，找到可接受的最强表述",
+        "minAgents": 3,
+        "roles": [
+          "支持者（给出最强支撑论据）",
+          "反对者（给出最严苛反驳）",
+          "综合者（在两方之间找到最强可接受表述）"
+        ],
+        "outputFile": ".fbs/sessions/adversarial-session.md"
+      },
+      "reviewSession": {
+        "name": "评审会",
+        "trigger": "S5 终审前（A级必须）",
+        "purpose": "多角度专业评审，发现内容盲区",
+        "minAgents": 3,
+        "roles": [
+          "内容专家（领域知识准确性）",
+          "表达专家（可读性与传播力）",
+          "怀疑论者（核心论点是否成立）"
+        ],
+        "issueGrades": {
+          "P0": "必须修改，否则阻断发布",
+          "P1": "强烈建议修改",
+          "P2": "可选优化"
+        },
+        "psychologicalContract": "评审前确认用户期望的反馈强度：发现问题优先 / 均衡 / 确认亮点优先",
+        "outputFile": ".fbs/sessions/review-session.md"
+      }
+    },
+    "sessionBriefFormat": {
+      "description": "会议简报格式：≤500字，统一上下文，控制token消耗",
+      "requiredFields": [
+        "书名/主题（≤20字）",
+        "核心主张（≤25字）",
+        "目标读者（≤15字）",
+        "当前阶段",
+        "本次会议目标（≤30字）",
+        "禁止讨论的范围（防止跑题）"
+      ],
+      "prohibition": "禁止在会议简报中重新粘贴大段书稿正文；须由参与Agent读取对应文件"
+    },
+    "sessionSummaryFile": {
+      "path": ".fbs/sessions-summary.md",
+      "description": "所有会议关键决策汇聚一处，用户只看这一个文件即可了解所有会议结论",
+      "format": "每次会议后追加：会议类型 | 时间 | 核心决策（≤3条）| 待执行事项"
+    }
+  },
+  "s0ParallelQueries": {
+    "competitorDomestic": 3,
+    "competitorOverseas": 3,
+    "readerAnalysis": 4,
+    "monetization": 4
+  },
+  "s0ParallelQueriesExecution": {
+    "description": "S0 调研执行规范（v1.7.2 补充）：防止维度缺口在调研结束时才被发现",
+    "startupAnnouncement": "S0 调研启动时须在对话中宣告计划：「S0 调研启动：时间戳(1)+国内竞品(3)+海外竞品(3)+读者分析(4)+变现路径(4)=14轮」",
+    "progressTracking": "每轮检索完成后须输出一行进度：「S0进度 [{维度}第{N}/{规定N}轮] 已达标：{列表} | 待补：{列表}」",
+    "buildS0QueriesYearParam": "SearchBundle.buildS0Queries 的 year 参数须由调用方在运行时动态传入（来自 temporalAccuracy.s0TimestampQuery 检索结果），不得使用硬编码固定值；year 参数未传入时，默认使用当前日历年（由运行环境动态获取），禁止回退到训练截止年份附近的固定值。"
+  },
+  "s0ParallelQueriesSemantics": "与 section-3-workflow.md「主体内涵锚定」一致：competitor* 轮次检索**内容竞品**（同类书/白皮书/深度长文/付费内容等可替代本稿者），非默认扫主题产业链上的商业产品；monetization* 轮次检索**本书/本稿**的变现与分发路径。行业规模/融资仅作简报「市场背景」，不得顶替上述默认列。",
+  "s0DimensionCompleteness": {
+    "description": "S0 维度完整性门禁（P0）：防止调研方向性偏差——仅做主题产业研究而跳过内容竞品与读者分析",
+    "enabled": true,
+    "requiredDimensions": [
+      {
+        "dimension": "内容竞品（国内）",
+        "minQueries": 1,
+        "key": "competitorDomestic",
+        "note": "须检索同类书/白皮书/深度长文等可替代本稿的内容产品，非商业产品清单"
+      },
+      {
+        "dimension": "内容竞品（海外）",
+        "minQueries": 1,
+        "key": "competitorOverseas",
+        "note": "须检索海外同类内容产品（英文/其他语种）"
+      },
+      {
+        "dimension": "读者分析",
+        "minQueries": 1,
+        "key": "readerAnalysis",
+        "note": "须检索目标读者画像、阅读痛点、当前在看什么"
+      },
+      {
+        "dimension": "变现路径",
+        "minQueries": 1,
+        "key": "monetization",
+        "note": "须检索本书/本稿的分发与变现方式"
+      }
+    ],
+    "ledgerDimensionTag": "每轮 S0 检索须在 search-ledger.jsonl 的 s0Dimension 字段标注所属维度（competitorDomestic/competitorOverseas/readerAnalysis/monetization/timestampCheck/other）；允许短码见 s0DimensionCanonical.shortToLong，归一化 CLI：scripts/normalize-ledger-dimensions.mjs；未标注维度的检索不计入维度门禁校验。",
+    "blockCondition": "任一 requiredDimensions 维度的 minQueries 未达到时，阻断进入 S1；输出缺失维度清单和补搜建议。",
+    "blockMessage": "⚠️ S0 维度检索不完整，以下维度尚未达标：{缺失维度列表}。请补充对应检索后再进入 S1。",
+    "dimensionVsPanSearchNote": "仅检索「主题产业链/行业规模/融资动态」属于「泛调研」，不满足任何 requiredDimensions 维度的要求；须将检索方向明确对准内容竞品与读者分析。"
+  }
+}

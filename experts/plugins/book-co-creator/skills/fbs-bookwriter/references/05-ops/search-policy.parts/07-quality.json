@@ -1,0 +1,98 @@
+{
+  "qualityGate": {
+    "scoringVersion": "10-point-equal-layers-v1",
+    "minOverallScore": 7.5,
+    "weakPassFloor": 7,
+    "minSLayerScore": 7.5,
+    "minSLayerScoreNote": "S层 10 分制建议通过线；对应 quality-check.md 与 metrics.md 当前口径",
+    "minPLayerScore": 7.5,
+    "minPLayerScoreNote": "P层 10 分制建议通过线",
+    "minCLayerScore": 7.5,
+    "minCLayerScoreNote": "C层 10 分制建议通过线",
+    "minBLayerScore": 6.7,
+    "minBLayerScoreNote": "B层 10 分制建议通过线（6 条规则至少通过 4 条）",
+    "s3MinSLayerScore": 8.3,
+    "s3MinSCCombinedScore": 16,
+    "s3GateNote": "S3 验收加严：S层建议 ≥ 8.3，且 S+C 合计 ≥ 16。",
+    "aiContrastMax": 8,
+    "aiAdverbMax": 12,
+    "aiAdverbMaxNote": "A类程度副词每千字上限（次/千字）；超出触发 AI_FLAVOR_OVERUSE 告警",
+    "minAnchorCoverage": 0.5,
+    "minRhythmCv": 0.3,
+    "requireBookLevelC0": true,
+    "requireBookLevelC0Note": "S5 前须完成全书级 C0 总账校验（book-level-consistency.md）；与 p0-cli-map.md K-1/K-2 对齐",
+    "emDashPerThousandWarnAbove": 1,
+    "emDashPerThousandBlockAbove": 3
+  },
+  "qualityPanoramaExecution": {
+    "description": "全景质检执行策略（WorkBuddy侧性能优化）：轻量握手、增量优先、阶段串行、可见性优先",
+    "lightweightHandshake": true,
+    "reuseContextBeforeRead": true,
+    "defaultMode": "incremental",
+    "incrementalCli": "scripts/quality-audit-incremental.mjs",
+    "panoramaCli": "scripts/quality-panorama-orchestrator.mjs",
+    "incrementalSinceHours": 72,
+    "incrementalMaxFiles": 30,
+    "stages": [
+      "S",
+      "P",
+      "C",
+      "B"
+    ],
+    "runStageSerially": true,
+    "allowParallelInSameStage": false,
+    "subTaskTimeoutMinutes": 15,
+    "subTaskMaxTurns": 12,
+    "subTaskMaxRetries": 1,
+    "heartbeatSeconds": 15,
+    "largeScopeConfirmationThreshold": 50,
+    "confirmFlag": "--confirm-large-scan",
+    "progressSnapshotFile": ".fbs/scan-progress.json",
+    "scanLockFile": ".fbs/scan-lock.json",
+    "historyResultDir": ".workbuddy/memory",
+    "xlBatchThreshold": 120,
+    "xlBatchStrategy": "group",
+    "progressReportOnStart": true,
+    "progressReportTemplate": "我先扫{stageLabel}（{scope}），大概需要 {etaMinutes} 分钟；超过 {timeoutMinutes} 分钟会把已完成部分告诉你。",
+    "progressHeartbeatTemplate": "还在扫，已处理 {processedFiles} 个文件，当前位置：{currentFile}…",
+    "stageTransitionTemplate": "{prevStageLabel}扫完了，接着看{nextStageLabel}。",
+    "fallbackWhenInterrupted": "已完成部分：{completedScope}。剩余范围：{remainingScope}。建议下一步：{nextStep}。"
+  },
+  "qualityAuditProfiles": {
+    "description": "quality-auditor-lite 文档分级阈值（可配置，脚本默认读取本节）",
+    "thresholds": {
+      "core": {
+        "s3RatioMax": 22,
+        "s6SemicolonDensityMax": 4.5,
+        "p1MaxIssues": 1,
+        "p2MinRatio": 0.1,
+        "b0MaxDuplicates": 1,
+        "b2MinDensity": 1
+      },
+      "ops": {
+        "s3RatioMax": 26,
+        "s6SemicolonDensityMax": 5.5,
+        "p1MaxIssues": 2,
+        "p2MinRatio": 0.05,
+        "b0MaxDuplicates": 2,
+        "b2MinDensity": 1.1
+      },
+      "ledger": {
+        "s3RatioMax": 35,
+        "s6SemicolonDensityMax": 7,
+        "p1MaxIssues": 4,
+        "p2MinRatio": 0,
+        "b0MaxDuplicates": 999,
+        "b2MinDensity": 0.8
+      },
+      "standard": {
+        "s3RatioMax": 28,
+        "s6SemicolonDensityMax": 5.5,
+        "p1MaxIssues": 2,
+        "p2MinRatio": 0.05,
+        "b0MaxDuplicates": 2,
+        "b2MinDensity": 1.1
+      }
+    }
+  }
+}

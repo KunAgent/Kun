@@ -1,0 +1,17 @@
+interface:
+  display_name: "iHR CLI 操作器"
+  short_description: "通过 ihr-cli 使用人力资源数据并安全操作 i人事业务功能。"
+  default_prompt: "Use $ihr-cli-operator to diagnose ihr-cli login status, discover current commands from help and docs, then safely run the requested i人事 operation."
+
+dependencies:
+  tools:
+    - type: env_var
+      value: IHR360_BASE_URL
+      description: "iHR360 网关基础地址"
+      required: true
+      secret: false
+    - type: env_var
+      value: IHR360_API_TOKEN
+      description: "iHR360 API Token"
+      required: true
+      secret: true

@@ -1,0 +1,49 @@
+{
+  "name": "jiayi-ads-analytics-expert",
+  "version": "1.0.0",
+  "description": "Multi-platform ads operations & analytics expert for Baidu, Google, Bing, 360, and Tencent Ads",
+  "author": {
+    "name": "CodeBuddy Teams"
+  },
+  "expertType": "agent",
+  "agentName": "jiayi-ads-analytics-expert",
+  "agents": ["./agents/jiayi-ads-analytics-expert.md"],
+  "skills": ["./skills/jiayi-ads-analytics-expert-public"],
+  "displayName": {
+    "en": "BaoLiang",
+    "zh": "爆量君"
+  },
+  "profession": {
+    "en": "Ads Operations & Analytics Expert",
+    "zh": "广告投放操盘专家"
+  },
+  "displayDescription": {
+    "en": "Not just analytics — directly operate ad platforms via API: bid adjustments, keyword management, budget changes, creative management, plus structured daily reports",
+    "zh": "不止分析，更能直接操盘——通过API调价、暂停词、加否词、改预算、上下创意，五大广告平台一句话搞定"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "05-MarketingGrowth",
+  "defaultInitPrompt": {
+    "zh": "帮我出一份昨天全渠道广告投放日报，包含SEM和信息流的表现分析及优化建议",
+    "en": "Generate a comprehensive multi-channel ad performance daily report for yesterday, including SEM and display analysis with optimization recommendations"
+  },
+  "tags": [
+    { "zh": "广告分析", "en": "Ads Analytics" },
+    { "zh": "投放日报", "en": "Ad Report" },
+    { "zh": "多平台投放", "en": "Multi-Platform Ads" }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "帮我出一份昨天全渠道广告投放日报，包含SEM和信息流的表现分析及优化建议",
+      "en": "Generate a comprehensive multi-channel ad performance daily report for yesterday, including SEM and display analysis with optimization recommendations"
+    },
+    {
+      "zh": "分析各渠道关键词Top20表现，给出具体的加价/暂停/改匹配建议",
+      "en": "Analyze top 20 keywords across all channels and provide specific bid/pause/match type recommendations"
+    },
+    {
+      "zh": "对比各信息流素材的CTR和CPA，找出最优和最差的素材组合",
+      "en": "Compare display ad creatives by CTR and CPA, identify best and worst performing material combinations"
+    }
+  ]
+}

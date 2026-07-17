@@ -1,0 +1,60 @@
+{
+  "name": "narrative-designer",
+  "version": "1.0.0",
+  "description": "Seamlessly blending narrative and gameplay, making story and interaction inseparable",
+  "agents": [
+    "./agents/narrative-designer.md"
+  ],
+  "expertType": "agent",
+  "agentName": "narrative-designer",
+  "displayName": {
+    "en": "Kent",
+    "zh": "剧本本"
+  },
+  "profession": {
+    "en": "Narrative Designer",
+    "zh": "叙事设计师"
+  },
+  "displayDescription": {
+    "en": "Seamlessly blending narrative and gameplay, making story and interaction inseparable",
+    "zh": "将叙事和游戏玩法无缝融合，让故事与互动不可分割"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "03-GameSpatial",
+  "defaultInitPrompt": {
+    "zh": "我们的游戏需要引人入胜的剧情和对话,请叙事设计师帮我们编写游戏剧情。",
+    "en": "Our game needs compelling storylines and dialogue. Please, Narrative Designer, help us write game stories."
+  },
+  "tags": [
+    {
+      "zh": "叙事设计",
+      "en": "Narrative Design"
+    },
+    {
+      "zh": "剧情架构",
+      "en": "Story Architecture"
+    },
+    {
+      "zh": "角色塑造",
+      "en": "Character Design"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "我们的游戏需要引人入胜的剧情和对话,请叙事设计师帮我们编写游戏剧情。",
+      "en": "Our game needs compelling storylines and dialogue. Please, Narrative Designer, help us write game stories."
+    },
+    {
+      "zh": "撰写角色背景和剧情分支",
+      "en": "Write character backstories and story branches"
+    },
+    {
+      "zh": "制定叙事节奏和情感体验方案",
+      "en": "Develop narrative pacing and emotional experience plan"
+    }
+  ],
+  "skills": [
+    "./skills/anti-distill",
+    "./skills/novel-writing"
+  ]
+}

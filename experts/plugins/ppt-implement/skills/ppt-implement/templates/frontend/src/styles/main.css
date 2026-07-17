@@ -1,0 +1,189 @@
+/* Font imports are dynamically added in index.html based on fontTitle/fontBody configuration */
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: var(--font-body, 'Noto Sans SC, sans-serif');
+    overflow: hidden;
+    background: #fff;
+}
+
+/* Font family utility classes */
+.font-title {
+    font-family: var(--font-title, 'Noto Sans SC', sans-serif);
+}
+
+.font-body {
+    font-family: var(--font-body, 'Noto Sans SC', sans-serif);
+}
+
+/* Color utility classes (based on CSS variables from index.html) */
+.text-primary { color: var(--primary-color); }
+.text-accent-1 { color: var(--accent-color-1); }
+.text-accent-2 { color: var(--accent-color-2); }
+.text-neutral { color: var(--neutral-color); }
+
+.bg-primary { background-color: var(--primary-color); }
+.bg-accent-1 { background-color: var(--accent-color-1); }
+.bg-accent-2 { background-color: var(--accent-color-2); }
+.bg-neutral { background-color: var(--neutral-color); }
+
+/* Slide background - supports color, image, or gradient via CSS variable */
+.slide-bg {
+    background: var(--slide-background);
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+}
+
+.border-primary { border-color: var(--primary-color); }
+.border-accent-1 { border-color: var(--accent-color-1); }
+.border-accent-2 { border-color: var(--accent-color-2); }
+
+/* PPT 容器：16:9 (1440x810px) */
+.ppt-container {
+    width: 100vw;
+    height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #1a1a1a;
+    overflow: hidden;
+    position: relative;
+}
+
+.ppt-viewport {
+    width: 1440px;
+    height: 810px;
+    position: relative;
+    background: #fff;
+    box-shadow: 0 10px 50px rgba(0, 0, 0, 0.5);
+    overflow: visible;
+    transform-origin: center center;
+    flex-shrink: 0;
+}
+
+.ppt-viewport > .slide {
+    visibility: hidden;
+}
+
+/* 幻灯片 */
+.slide {
+    width: 1440px;
+    height: 810px;
+    position: absolute;
+    top: 0;
+    left: 0;
+    opacity: 0;
+    transition: opacity 0.5s ease, visibility 0s 0.5s;
+}
+
+.slide.active {
+    opacity: 1;
+    visibility: visible;
+    transition: opacity 0.5s ease, visibility 0s;
+}
+
+/* 导航按钮 */
+.nav-btn {
+    position: fixed;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 60px;
+    height: 60px;
+    background: rgba(255, 255, 255, 0.9);
+    border: none;
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    color: #333;
+    z-index: 1000;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.nav-btn:hover {
+    background: #fff;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+    transform: translateY(-50%) scale(1.1);
+}
+
+.nav-btn:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+}
+
+.nav-btn:disabled:hover {
+    transform: translateY(-50%) scale(1);
+}
+
+.nav-btn-prev {
+    left: 40px;
+}
+
+.nav-btn-next {
+    right: 40px;
+}
+
+/* 进度条 */
+.progress-bar {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 4px;
+    background: rgba(255, 255, 255, 0.2);
+    z-index: 1000;
+}
+
+.progress-bar-fill {
+    height: 100%;
+    background: var(--primary-color, #3B82F6);
+    transition: width 0.3s ease;
+}
+
+/* 页码指示器 */
+.page-indicator {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0, 0, 0, 0.7);
+    color: #fff;
+    padding: 8px 16px;
+    border-radius: 20px;
+    font-size: 14px;
+    z-index: 1000;
+    display: block;
+}
+
+/* 键盘导航提示 */
+.keyboard-hint {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    background: rgba(0, 0, 0, 0.7);
+    color: #fff;
+    padding: 10px 15px;
+    border-radius: 8px;
+    font-size: 12px;
+    z-index: 1000;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.keyboard-hint.show {
+    opacity: 1;
+}

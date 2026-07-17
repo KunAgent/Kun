@@ -1,0 +1,100 @@
+{
+  "name": "tax-compliance-team",
+  "version": "1.0.0",
+  "description": "Enterprise tax compliance team - full lifecycle financial and tax compliance management for Chinese businesses",
+  "author": { "name": "CodeBuddy Teams" },
+  "keywords": ["tax", "compliance", "accounting", "VAT", "financial-reporting", "audit", "chinese-tax"],
+  "expertType": "team",
+  "agentName": "tax-compliance-team-lead",
+  "teamInfo": {
+    "leadAgent": "tax-compliance-team-lead",
+    "memberAgents": [
+      "invoice-processor",
+      "voucher-accountant",
+      "financial-reporter",
+      "tax-filing-specialist",
+      "compliance-auditor"
+    ]
+  },
+  "agents": [
+    "./agents/tax-compliance-team-lead.md",
+    "./agents/invoice-processor.md",
+    "./agents/voucher-accountant.md",
+    "./agents/financial-reporter.md",
+    "./agents/tax-filing-specialist.md",
+    "./agents/compliance-auditor.md"
+  ],
+  "skills": ["./skills/tax-compliance-engine"],
+  "displayName": {
+    "en": "Tax Compliance Team",
+    "zh": "财税合规专家团"
+  },
+  "profession": {
+    "en": "Tax Compliance Team",
+    "zh": "财税合规专家团"
+  },
+  "displayDescription": {
+    "en": "Full lifecycle enterprise financial and tax compliance management covering invoicing, bookkeeping, reporting, filing, and audit",
+    "zh": "覆盖票据处理、记账核算、报表编制、税务申报、合规审计五大环节的企业财税合规全链路管理专家团"
+  },
+  "avatar": "avatars/team.png",
+  "categoryId": "11-SecurityCompliance",
+  "defaultInitPrompt": {
+    "en": "Help me perform a monthly tax compliance check for my company",
+    "zh": "帮我执行本月的企业财税合规检查"
+  },
+  "tags": [
+    { "en": "Tax Compliance", "zh": "税务合规" },
+    { "en": "Financial Accounting", "zh": "财务核算" },
+    { "en": "Compliance Audit", "zh": "合规审计" }
+  ],
+  "quickPrompts": [
+    { "en": "Help me perform a monthly tax compliance check for my company", "zh": "帮我执行本月的企业财税合规检查" },
+    { "en": "Calculate VAT and corporate income tax for this quarter", "zh": "计算本季度增值税和企业所得税" },
+    { "en": "Compile financial statements and analyze fiscal health", "zh": "编制财务报表并分析财务健康状况" }
+  ],
+  "members": [
+    {
+      "id": "tax-compliance-team-lead",
+      "name": { "en": "Qian", "zh": "钱合规" },
+      "profession": { "en": "Chief Tax Compliance Officer", "zh": "首席财税合规官" },
+      "avatar": "avatars/tax-compliance-team-lead.png",
+      "role": "lead"
+    },
+    {
+      "id": "invoice-processor",
+      "name": { "en": "Piao Li", "zh": "李票务" },
+      "profession": { "en": "Invoice Processing Specialist", "zh": "发票处理专员" },
+      "avatar": "avatars/invoice-processor.png",
+      "role": "member"
+    },
+    {
+      "id": "voucher-accountant",
+      "name": { "en": "Ji Zhang", "zh": "张记账" },
+      "profession": { "en": "Voucher & Ledger Accountant", "zh": "凭证与账簿会计师" },
+      "avatar": "avatars/voucher-accountant.png",
+      "role": "member"
+    },
+    {
+      "id": "financial-reporter",
+      "name": { "en": "Bao Wang", "zh": "王报表" },
+      "profession": { "en": "Financial Statement Analyst", "zh": "财务报表分析师" },
+      "avatar": "avatars/financial-reporter.png",
+      "role": "member"
+    },
+    {
+      "id": "tax-filing-specialist",
+      "name": { "en": "Shen Sun", "zh": "孙申报" },
+      "profession": { "en": "Tax Filing Specialist", "zh": "税务申报专员" },
+      "avatar": "avatars/tax-filing-specialist.png",
+      "role": "member"
+    },
+    {
+      "id": "compliance-auditor",
+      "name": { "en": "Shen Zhao", "zh": "赵审计" },
+      "profession": { "en": "Compliance Auditor", "zh": "合规审计师" },
+      "avatar": "avatars/compliance-auditor.png",
+      "role": "member"
+    }
+  ]
+}

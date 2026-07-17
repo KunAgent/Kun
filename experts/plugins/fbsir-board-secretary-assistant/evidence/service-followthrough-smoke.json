@@ -1,0 +1,50 @@
+{
+  "schemaVersion": "fbs.board-secretary-assistant.service-followthrough-smoke-evidence.v1",
+  "generatedAt": "2026-06-27T00:08:01.486Z",
+  "status": "service_followthrough_probe_ready_with_expert_center_service_evidence",
+  "contractCoverage": {
+    "status": "ready",
+    "hostCount": 2,
+    "readyHostCount": 2,
+    "failedChecksByHost": []
+  },
+  "boundary": {
+    "mode": "service_side_controlled_same_binding_probe",
+    "trafficGroup": "probe",
+    "trafficClass": "service_probe",
+    "sampleClass": "board_secretary_service_followthrough_probe",
+    "writesLocalProbeStateOnly": true,
+    "createsHostSession": false,
+    "readsHostFrontstage": false,
+    "naturalClosureClaimed": false,
+    "serviceProductCreditClaimed": false,
+    "paymentClosureClaimed": false
+  },
+  "hosts": [
+    {
+      "hostPreset": "workbuddy",
+      "hostLabel": "WorkBuddy",
+      "currentSignatureOk": true,
+      "sameBindingOk": true,
+      "continuedUseObserved": true,
+      "contractReady": true,
+      "failedChecks": []
+    },
+    {
+      "hostPreset": "workbuddy_ai",
+      "hostLabel": "WorkBuddyAI",
+      "currentSignatureOk": true,
+      "sameBindingOk": true,
+      "continuedUseObserved": true,
+      "contractReady": true,
+      "failedChecks": []
+    }
+  ],
+  "conclusion": "Both WorkBuddy and WorkBuddyAI host profiles can complete an expert_center-style whoami -> scene-pack -> first_value_completed -> continued_use_completed chain on one same-binding service probe. This proves API2-side board service bridge readiness only; it does not prove real host-session closure or official listing replacement.",
+  "reviewUseBoundary": {
+    "useMode": "service_side_joint_debug_contract_evidence",
+    "naturalClosureClaimed": false,
+    "officialReplacementClaimed": false,
+    "paymentClosureClaimed": false
+  }
+}

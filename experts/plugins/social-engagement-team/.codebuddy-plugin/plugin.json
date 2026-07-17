@@ -1,0 +1,94 @@
+{
+  "name": "social-engagement-team",
+  "version": "1.0.0",
+  "description": "Social media engagement automation and growth strategy team focusing on safe interaction automation, AI comment operations, signal mining, and brand monitoring",
+  "author": {
+    "name": "CodeBuddy Teams"
+  },
+  "expertType": "team",
+  "agentName": "social-engagement-team-lead",
+  "teamInfo": {
+    "leadAgent": "social-engagement-team-lead",
+    "memberAgents": [
+      "interaction-automator",
+      "ai-comment-specialist",
+      "signal-miner",
+      "brand-monitor"
+    ]
+  },
+  "agents": [
+    "./agents/social-engagement-team-lead.md",
+    "./agents/interaction-automator.md",
+    "./agents/ai-comment-specialist.md",
+    "./agents/signal-miner.md",
+    "./agents/brand-monitor.md"
+  ],
+  "skills": [
+    "./skills/social-engagement-ops"
+  ],
+  "displayName": {
+    "en": "Social Engagement Growth Team",
+    "zh": "社媒互动增长专家团"
+  },
+  "profession": {
+    "en": "Social Engagement Growth Team",
+    "zh": "社媒互动增长专家团"
+  },
+  "displayDescription": {
+    "en": "Safe and efficient social media engagement growth through interaction automation, AI comment operations, signal mining, and brand monitoring across 14+ platforms.",
+    "zh": "通过智能化互动自动化、AI评论运营、高转化信号挖掘和品牌舆情监控，安全高效提升社交媒体互动效果，覆盖14+全球主流平台"
+  },
+  "avatar": "avatars/team.png",
+  "categoryId": "05-MarketingGrowth",
+  "defaultInitPrompt": {
+    "en": "Help me create a safe and effective social media engagement growth strategy",
+    "zh": "帮我制定一套安全高效的社媒互动增长策略"
+  },
+  "tags": [
+    { "en": "Interaction Automation", "zh": "互动自动化" },
+    { "en": "AI Comment Operations", "zh": "AI评论运营" },
+    { "en": "Brand Monitoring", "zh": "品牌舆情监控" }
+  ],
+  "quickPrompts": [
+    { "en": "Help me create a safe and effective social media engagement growth strategy", "zh": "帮我制定一套安全高效的社媒互动增长策略" },
+    { "en": "Analyze comments on my account to find users with purchase intent", "zh": "分析我账号下的评论，找出有购买意向的用户" },
+    { "en": "Monitor competitor brand mentions and discussion hotspots across platforms", "zh": "监控竞品品牌在各平台的声量和讨论热点" }
+  ],
+  "members": [
+    {
+      "id": "social-engagement-team-lead",
+      "name": { "en": "Growth", "zh": "格罗斯" },
+      "profession": { "en": "Engagement Strategist", "zh": "增长策略师" },
+      "avatar": "avatars/social-engagement-team-lead.png",
+      "role": "lead"
+    },
+    {
+      "id": "interaction-automator",
+      "name": { "en": "Bot", "zh": "柏特" },
+      "profession": { "en": "Interaction Automation Expert", "zh": "自动化互动专家" },
+      "avatar": "avatars/interaction-automator.png",
+      "role": "member"
+    },
+    {
+      "id": "ai-comment-specialist",
+      "name": { "en": "Reply", "zh": "瑞普" },
+      "profession": { "en": "AI Comment Specialist", "zh": "AI评论运营专家" },
+      "avatar": "avatars/ai-comment-specialist.png",
+      "role": "member"
+    },
+    {
+      "id": "signal-miner",
+      "name": { "en": "Mine", "zh": "麦恩" },
+      "profession": { "en": "Signal Mining Expert", "zh": "信号挖掘专家" },
+      "avatar": "avatars/signal-miner.png",
+      "role": "member"
+    },
+    {
+      "id": "brand-monitor",
+      "name": { "en": "Watch", "zh": "沃奇" },
+      "profession": { "en": "Brand Monitor Expert", "zh": "品牌监控专家" },
+      "avatar": "avatars/brand-monitor.png",
+      "role": "member"
+    }
+  ]
+}

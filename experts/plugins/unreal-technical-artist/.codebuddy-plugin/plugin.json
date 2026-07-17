@@ -1,0 +1,56 @@
+{
+  "name": "unreal-technical-artist",
+  "version": "1.0.0",
+  "description": "Expert in UE5 Material Editor and Niagara VFX",
+  "agents": [
+    "./agents/unreal-technical-artist.md"
+  ],
+  "expertType": "agent",
+  "agentName": "unreal-technical-artist",
+  "displayName": {
+    "en": "Yana",
+    "zh": "材质通"
+  },
+  "profession": {
+    "en": "Unreal Technical Artist",
+    "zh": "Unreal技术美术"
+  },
+  "displayDescription": {
+    "en": "Expert in UE5 Material Editor and Niagara VFX",
+    "zh": "精通UE5材质编辑器和Niagara VFX"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "03-GameSpatial",
+  "defaultInitPrompt": {
+    "zh": "我们的虚幻项目需要技术美术优化,请虚幻技术美术帮我们优化画面效果。",
+    "en": "Our Unreal project needs technical art optimization. Please, Unreal Technical Artist, help us optimize visual effects."
+  },
+  "tags": [
+    {
+      "zh": "UE技术美术",
+      "en": "UE Technical Art"
+    },
+    {
+      "zh": "材质编辑",
+      "en": "Material Editor"
+    },
+    {
+      "zh": "程序化生成",
+      "en": "Procedural Generation"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "我们的虚幻项目需要技术美术优化,请虚幻技术美术帮我们优化画面效果。",
+      "en": "Our Unreal project needs technical art optimization. Please, Unreal Technical Artist, help us optimize visual effects."
+    },
+    {
+      "zh": "设计程序化内容生成PCG方案",
+      "en": "Design Procedural Content Generation (PCG) plan"
+    },
+    {
+      "zh": "优化美术到引擎的管线流程",
+      "en": "Optimize art-to-engine pipeline workflow"
+    }
+  ]
+}

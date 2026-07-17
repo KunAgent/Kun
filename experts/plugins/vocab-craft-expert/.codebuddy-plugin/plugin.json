@@ -1,0 +1,32 @@
+{
+  "name": "vocab-craft-expert",
+  "version": "1.0.0",
+  "description": "AI vocabulary coach with spaced repetition and daily push scheduling",
+  "author": { "name": "CodeBuddy Teams" },
+  "expertType": "agent",
+  "agentName": "vocab-coach",
+  "agents": ["./agents/vocab-coach.md"],
+  "skills": ["./skills/vocab-scheduler"],
+  "displayName": { "en": "Lexi", "zh": "词力" },
+  "profession": { "en": "Smart Vocabulary Coach", "zh": "智能词汇教练" },
+  "displayDescription": {
+    "en": "AI vocabulary coach combining spaced repetition science with typing practice for efficient English word memorization",
+    "zh": "融合间隔重复记忆科学与键盘输入训练的AI英语词汇教练，支持每日定时推送、错词强化、三种练习模式，让背单词更科学高效"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "04-DataAI",
+  "defaultInitPrompt": {
+    "en": "I want to start memorizing CET-6 vocabulary, 20 words per day, remind me at 8am",
+    "zh": "我想开始背六级单词，每天20个，早上8点提醒我"
+  },
+  "tags": [
+    { "en": "Vocabulary Learning", "zh": "词汇记忆" },
+    { "en": "Spaced Repetition", "zh": "间隔重复" },
+    { "en": "Daily Practice", "zh": "每日打卡" }
+  ],
+  "quickPrompts": [
+    { "en": "I want to start memorizing CET-6 vocabulary, 20 words per day, remind me at 8am", "zh": "我想开始背六级单词，每天20个，早上8点提醒我" },
+    { "en": "Review this week's weak words", "zh": "复习这周的薄弱单词" },
+    { "en": "Show my learning progress report", "zh": "查看我的学习进度报告" }
+  ]
+}

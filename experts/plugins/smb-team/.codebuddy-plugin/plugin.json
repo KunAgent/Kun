@@ -1,0 +1,79 @@
+{
+  "name": "smb-team",
+  "version": "1.0.0",
+  "description": "Small business operations team: 4 domain experts (finance, revenue, compliance, operations) orchestrated by a business general manager for comprehensive business management",
+  "author": { "name": "Expert Marketplace" },
+  "license": "MIT",
+  "expertType": "team",
+  "agentName": "smb-team-lead",
+  "teamInfo": {
+    "leadAgent": "smb-team-lead",
+    "memberAgents": ["smb-finance-member", "smb-revenue-member", "smb-compliance-member", "smb-ops-member"]
+  },
+  "agents": [
+    "./agents/smb-team-lead.md",
+    "./agents/smb-finance-member.md",
+    "./agents/smb-revenue-member.md",
+    "./agents/smb-compliance-member.md",
+    "./agents/smb-ops-member.md"
+  ],
+  "displayName": { "en": "Small Business Team", "zh": "小企业经营团队" },
+  "profession": { "en": "Business General Manager", "zh": "经营总管" },
+  "displayDescription": {
+    "en": "4 domain experts orchestrated by a business GM: finance, revenue growth, customer compliance, and operations — covering every aspect of small business management",
+    "zh": "经营总管调度四位领域专家，覆盖财务、营收、客户合规和运营，小企业管理一站搞定"
+  },
+  "avatar": "avatars/team.png",
+  "categoryId": "12-IndustryConsultant",
+  "defaultInitPrompt": {
+    "zh": "本月经营复盘：现金流、销售进展、客户满意度、团队状态。",
+    "en": "Monthly business review: cash flow, sales, customer satisfaction, team status."
+  },
+  "members": [
+    {
+      "id": "smb-team-lead",
+      "name": { "en": "Quan", "zh": "全管事" },
+      "profession": { "en": "Business General Manager", "zh": "经营总管" },
+      "avatar": "avatars/team-lead.png",
+      "role": "lead"
+    },
+    {
+      "id": "smb-finance-member",
+      "name": { "en": "Qian", "zh": "钱守通" },
+      "profession": { "en": "Finance Steward", "zh": "财务管家" },
+      "avatar": "avatars/smb-finance-member.png",
+      "role": "member"
+    },
+    {
+      "id": "smb-revenue-member",
+      "name": { "en": "Zhen", "zh": "甄客来" },
+      "profession": { "en": "Revenue Growth Driver", "zh": "营收增长师" },
+      "avatar": "avatars/smb-revenue-member.png",
+      "role": "member"
+    },
+    {
+      "id": "smb-compliance-member",
+      "name": { "en": "Yan", "zh": "严守约" },
+      "profession": { "en": "Customer & Compliance Officer", "zh": "客户与合规官" },
+      "avatar": "avatars/smb-compliance-member.png",
+      "role": "member"
+    },
+    {
+      "id": "smb-ops-member",
+      "name": { "en": "Bi", "zh": "毕运营" },
+      "profession": { "en": "Operations Manager", "zh": "组织运营师" },
+      "avatar": "avatars/smb-ops-member.png",
+      "role": "member"
+    }
+  ],
+  "tags": [
+    { "zh": "小企业管理", "en": "Small Business" },
+    { "zh": "经营管理", "en": "Business Operations" },
+    { "zh": "多角色协作", "en": "Multi-Role Collaboration" }
+  ],
+  "quickPrompts": [
+    { "zh": "本月经营复盘：现金流、销售进展、客户满意度、团队状态。", "en": "Monthly business review: cash flow, sales, customer satisfaction, team status." },
+    { "zh": "工资快发了但现金可能不够，评估一下缺口和对策。", "en": "Payroll is coming but cash might be tight — assess the gap and suggest actions." },
+    { "zh": "看下全盘业务健康：哪些该重点投入、哪些该收缩。", "en": "Full business health check: where to invest, where to pull back." }
+  ]
+}

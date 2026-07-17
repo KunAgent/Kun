@@ -1,0 +1,64 @@
+{
+  "name": "statement-auditor",
+  "version": "0.1.0",
+  "description": "Audits pre-generated LP statements against fund NAV pack before distribution.",
+  "author": {
+    "name": "Anthropic FSI"
+  },
+  "expertType": "agent",
+  "agentName": "statement-auditor",
+  "agents": [
+    "./agents/statement-auditor.md"
+  ],
+  "skills": [
+    "./skills/nav-tieout",
+    "./skills/audit-xls",
+    "./skills/xlsx-author"
+  ],
+  "displayName": {
+    "en": "Statement Auditor",
+    "zh": "审细明"
+  },
+  "profession": {
+    "en": "LP Statement Auditor",
+    "zh": "LP 报表审核师"
+  },
+  "displayDescription": {
+    "en": "Final set of eyes on LP capital-account statements: ties balances and allocations to fund NAV pack, flags discrepancies before distribution.",
+    "zh": "LP 资本账户报表最后把关人,按基金 NAV 反算每条项目、对齐分配与管理费,发差前形成签核建议与异常清单。"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "08-FinanceInvestment",
+  "defaultInitPrompt": {
+    "en": "Please audit this batch of Q1 LP capital account statements against the Fund Beta NAV pack and produce a sign-off sheet with exceptions.",
+    "zh": "请用某人民币基金 Q1 NAV 包审核这批 LP 资本账户报表,出具含异常清单的复核签批表。"
+  },
+  "tags": [
+    {
+      "en": "LP Statement Audit",
+      "zh": "LP 报表审核"
+    },
+    {
+      "en": "NAV Tie-out",
+      "zh": "净值对账"
+    },
+    {
+      "en": "Fund Accounting",
+      "zh": "基金会计"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "en": "Please audit this batch of Q1 LP capital account statements against the Fund Beta NAV pack and produce a sign-off sheet with exceptions.",
+      "zh": "请用某人民币基金 Q1 NAV 包审核这批 LP 资本账户报表,出具含异常清单的复核签批表。"
+    },
+    {
+      "en": "Tie one specific LP's ending capital back to the NAV pack line-by-line and tell me if anything is off.",
+      "zh": "把某位特定 LP 的期末资本账户按行还原到 NAV 包,看有没有对不上号的项目。"
+    },
+    {
+      "en": "Flag any statement where management fees or carried interest allocation doesn't match the fund waterfall.",
+      "zh": "把任何管理费或业绩报酬(carry)与瀑布分配规则对不上的 LP 报表都标出来。"
+    }
+  ]
+}

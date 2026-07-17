@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="32px" height="32px" viewBox="0 0 32 32" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+    <!-- Generator: Sketch 52.6 (67491) - http://www.bohemiancoding.com/sketch -->
+    <title>无服务器云函数-32px</title>
+    <desc>Created with Sketch.</desc>
+    <g id="无服务器云函数-32px" stroke="none" stroke-width="1" fill="none" fill-rule="evenodd">
+        <rect id="Rectangle-Copy" fill="#0052D9" opacity="0" x="0" y="0" width="32" height="32"></rect>
+        <g id="Group" fill="#0052D9">
+            <path d="M31.7193022,13.0004945 L29.6779284,13.0004945 C28.3047737,6.70988283 22.7024129,2 16,2 C8.2680135,2 2,8.2680135 2,16 C2,23.7319865 8.2680135,30 16,30 C23.0527724,30 28.8874794,24.7848417 29.8581515,18.0004945 L31.8761508,18.0004945 C30.8917351,25.8928783 24.1590649,32 16,32 C7.163444,32 -2.0250468e-13,24.836556 -2.0250468e-13,16 C-2.0250468e-13,7.163444 7.163444,0 16,0 C23.8113418,0 30.3152783,5.59766728 31.7193022,13.0004945 Z" id="Combined-Shape" fill-rule="nonzero"></path>
+            <polygon id="Shape" points="22 12 24 12 24 20 22 20"></polygon>
+            <polygon id="Shape" points="8 18 13 21 13 23 8 20"></polygon>
+            <polygon id="Shape" points="8 14 13 11 13 9 8 12"></polygon>
+            <polygon id="Shape" points="8 12 10 12 10 20 8 20"></polygon>
+            <polygon id="Shape" points="24 20 19 23 19 21 24 18"></polygon>
+            <polygon id="Shape" points="24 12 19 9 19 11 24 14"></polygon>
+            <polygon id="Shape" fill-rule="nonzero" points="16 19 14 19 16 13 18 13"></polygon>
+        </g>
+    </g>
+</svg>

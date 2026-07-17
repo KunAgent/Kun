@@ -363,7 +363,9 @@ export async function createKunServeRuntime(
   const modelClient = new MultiProviderModelClient(
     buildModelClientRouterInput(activeOptions, modelCapabilities, llmDebug)
   )
-  // EXT-SEAM: model clients (Stage 0 no-op, Stage 3+ will register MoA)
+  // EXT-SEAM: model clients. The initial registration here is a no-op until
+  // extension services initialize (moaConfigAdapter is set during
+  // initializeExtensionServices below), after which we register explicitly.
   registerExtensionModelClients(modelClient)
   const replaceRoutedModelClients = (): void => {
     const next = buildModelClientRouterInput(activeOptions, modelCapabilities, llmDebug)
@@ -371,6 +373,10 @@ export async function createKunServeRuntime(
       next.providers.set(providerId, client)
     }
     modelClient.replace(next)
+    // EXT-SEAM: replace() rebuilds the provider map from scratch, dropping the
+    // seam-registered providers (e.g. the MoA dispatcher). Re-register them so
+    // config hot-reload never silently disables MoA routing.
+    registerExtensionModelClients(modelClient)
   }
   const stopExtensionModelListener = extensionModelProviders.onDidChange(replaceRoutedModelClients)
   const hasMcpOAuth = Object.values(activeOptions.capabilities?.mcp?.servers ?? {}).some((server) =>
@@ -1120,11 +1126,15 @@ export async function createKunServeRuntime(
 	      insecure: activeOptions.insecure,
 	      allocateSeq,
 	      nowIso,
-	      runTurn: () => undefined,
-	      info: () => ({ host: '', port: 0, dataDir: '', model: '', approvalPolicy: 'none', sandboxMode: 'inherit', tokenEconomyMode: false, insecure: false, startedAt: '', pid: 0, memoryUsage: { rssBytes: 0, peakRssBytes: 0, heapUsedBytes: 0, heapTotalBytes: 0, externalBytes: 0 }, capabilities: {} as any, extensions: { enabled: true, apiVersions: [], manifestVersions: [], packageRoot: '', dataRoot: '' } }),
+	      runTurn: runAgentTurn,
+	      defaultModel: activeOptions.model,
+	      info: () => ({ dataDir: activeOptions.dataDir }) as any,
 	      applyConfig: async () => ({ ok: true })
 	    } as any as ServerRuntime
 	  )
+	  // EXT-SEAM: now that extension services are initialized (moaConfigAdapter set),
+	  // register their model clients (e.g. the MoA dispatcher under providerId='moa').
+	  registerExtensionModelClients(modelClient)
 	  let applyConfigQueue: Promise<RuntimeConfigApplyResponse> = Promise.resolve({ ok: true })
 	  const applyConfig = (request: RuntimeConfigApplyRequest): Promise<RuntimeConfigApplyResponse> => {
 	    const task = applyConfigQueue

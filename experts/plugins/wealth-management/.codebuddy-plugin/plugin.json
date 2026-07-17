@@ -1,0 +1,24 @@
+{
+  "name": "wealth-management",
+  "version": "1.0.0",
+  "description": "Wealth management and financial advisory tools: client reviews, financial planning, portfolio analysis, and client reporting",
+  "description_zh": "财富管理与理财顾问工具，支持客户回顾、财务规划、投资组合再平衡、税损收割和投资提案。",
+  "author": {
+    "name": "CodeBuddy Teams"
+  },
+  "homepage": "",
+  "license": "",
+  "skills": [
+    "./skills/client-report",
+    "./skills/client-review",
+    "./skills/financial-plan",
+    "./skills/investment-proposal",
+    "./skills/portfolio-rebalance",
+    "./skills/tax-loss-harvesting"
+  ],
+  "expertType": "agent",
+  "agentName": "wealth-management-expert",
+  "agents": [
+    "./agents/wealth-management-expert.md"
+  ]
+}

@@ -1,0 +1,42 @@
+{
+  "name": "lunar-birthday-reminder",
+  "version": "0.9.0",
+  "description": "农历生日提醒系统 v0.9.0 - 基于专业库的农历计算参考系统 for OpenClaw",
+  "main": "SKILL.md",
+  "scripts": {
+    "test": "python scripts/simple_validator.py",
+    "validate": "python scripts/validate_lunar.py",
+    "calculate": "python scripts/lunar_calculator.py"
+  },
+  "keywords": [
+    "lunar",
+    "calendar",
+    "chinese",
+    "农历",
+    "阴历",
+    "openclaw",
+    "skill",
+    "ai"
+  ],
+  "author": "夏暮辞青",
+  "license": "MIT",
+  "dependencies": {
+    "lunardate": "^0.2.0",
+    "cnlunar": "^2.3.0"
+  },
+  "devDependencies": {},
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourusername/lunar-birthday-reminder.git"
+  },
+  "bugs": {
+    "url": "https://github.com/yourusername/lunar-birthday-reminder/issues"
+  },
+  "homepage": "https://github.com/yourusername/lunar-birthday-reminder#readme",
+  "openclaw": {
+    "skill": true,
+    "category": "tools",
+    "tags": ["lunar", "calendar", "chinese", "utility"],
+    "minVersion": "1.0.0"
+  }
+}

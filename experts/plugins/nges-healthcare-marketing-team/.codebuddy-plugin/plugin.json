@@ -1,0 +1,131 @@
+{
+  "name": "nges-healthcare-marketing-team",
+  "version": "1.0.0",
+  "description": "Tencent Health NGES Pharmaceutical Marketing Expert Team — a coordinator-led team integrating HCP Insight, Interactive Medical Case, and Healthcare Compliance experts for pharma marketing intelligence.",
+  "author": {
+    "name": "Tencent Healthcare NGES Team",
+    "email": ""
+  },
+  "expertType": "team",
+  "agentName": "nges-team-lead",
+  "teamInfo": {
+    "leadAgent": "nges-team-lead",
+    "memberAgents": [
+      "hcp-insight-expert",
+      "interactive-medical-case-expert",
+      "nges-healthcare-compliance-lite"
+    ]
+  },
+  "agents": [
+    "./agents/nges-team-lead.md",
+    "./agents/hcp-insight-expert.md",
+    "./agents/interactive-medical-case-expert.md",
+    "./agents/nges-healthcare-compliance-lite.md"
+  ],
+  "skills": [
+    "./skills/hcp-insight",
+    "./skills/interactive-medical-case",
+    "./skills/regulations"
+  ],
+  "displayName": {
+    "en": "Pharmaceutical Marketing Intelligence Team (Powered by Tencent Healthcare NGES)",
+    "zh": "腾讯健康NGES医药营销专家团"
+  },
+  "profession": {
+    "en": "Pharmaceutical Marketing Intelligence Team (Powered by Tencent Healthcare NGES)",
+    "zh": "腾讯健康NGES医药营销专家团"
+  },
+  "displayDescription": {
+    "en": "A pharmaceutical marketing expert team coordinated by a Marketing Intelligence Coordinator, integrating HCP insight, interactive medical case generation, and compliance review — covering the full workflow from customer intelligence to content creation to compliance detection. The enterprise edition provides full capabilities. Visit [NGES Official Website](https://nges.tencent.com/) to learn more.",
+    "zh": "由医药营销智能协调官统一调度的医药营销专家团，一期整合HCP客户洞察、互动病例生成、合规审核三大能力，覆盖从客户情报分析到内容生产到合规检测的全流程。企业版提供完整功能，访问 [NGES 官网](https://nges.tencent.com/) 了解更多。"
+  },
+  "avatar": "avatars/team.png",
+  "categoryId": "13-TencentZone",
+  "defaultInitPrompt": {
+    "zh": "明天要去见协和肿瘤科张教授，帮我做一个拜访前的准备分析",
+    "en": "Help me analyze the academic profile of Dr. Zhang at Peking Union Oncology for a pre-visit briefing."
+  },
+  "tags": [
+    {
+      "en": "HCP Insight",
+      "zh": "HCP洞察"
+    },
+    {
+      "en": "Interactive Case",
+      "zh": "互动病例"
+    },
+    {
+      "en": "Compliance Review",
+      "zh": "合规审核"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "en": "Help me analyze the academic profile of Dr. Zhang at Peking Union Oncology for a pre-visit briefing.",
+      "zh": "明天要去见协和肿瘤科张教授，帮我做一个拜访前的准备分析"
+    },
+    {
+      "en": "Turn this clinical guideline into an interactive H5 case for physician learning.",
+      "zh": "我有一篇诊疗指南文章，帮我生成一个可互动的病例"
+    },
+    {
+      "en": "Review this promotional content for healthcare marketing compliance issues.",
+      "zh": "帮我审核这段推广内容是否合规"
+    }
+  ],
+  "members": [
+    {
+      "id": "nges-team-lead",
+      "name": {
+        "en": "NGES Team Lead",
+        "zh": "专家团主理人"
+      },
+      "profession": {
+        "en": "Pharmaceutical Marketing Intelligence Coordinator",
+        "zh": "医药营销智能协调官"
+      },
+      "avatar": "avatars/nges-team-lead.png",
+      "role": "lead"
+    },
+    {
+      "id": "hcp-insight-expert",
+      "name": {
+        "en": "Tencent Health NGES HCP Insight Expert",
+        "zh": "腾讯健康NGES HCP客户洞察专家"
+      },
+      "profession": {
+        "en": "Pharma HCP Insight Expert (Powered by Tencent Healthcare NGES 客户洞察智能体)",
+        "zh": "医药HCP洞察"
+      },
+      "avatar": "avatars/hcp-insight-expert.png",
+      "role": "member"
+    },
+    {
+      "id": "interactive-medical-case-expert",
+      "name": {
+        "en": "Interactive Medical Case Expert",
+        "zh": "腾讯健康NGES互动病例专家"
+      },
+      "profession": {
+        "en": "Interactive Medical Case Expert (Powered by Tencent Healthcare NGES 互动病例生成智能体)",
+        "zh": "医学互动病例生成"
+      },
+      "avatar": "avatars/interactive-medical-case-expert.png",
+      "role": "member"
+    },
+    {
+      "id": "nges-healthcare-compliance-lite",
+      "name": {
+        "en": "Healthcare Compliance Expert",
+        "zh": "腾讯健康NGES合规专家"
+      },
+      "profession": {
+        "en": "Healthcare Marketing Compliance Expert (Powered by Tencent Healthcare NGES 合规安全检测智能体)",
+        "zh": "医疗营销合规审核"
+      },
+      "avatar": "avatars/nges-healthcare-compliance-lite.png",
+      "role": "member"
+    }
+  ],
+  "plugin": "nges-healthcare-marketing-team"
+}

@@ -1,0 +1,113 @@
+{
+  "name": "ket-prep-team",
+  "version": "1.0.0",
+  "description": "A top-tier KET exam prep team for young learners, covering full-cycle preparation from baseline assessment to exam day simulation.",
+  "author": {
+    "name": "AI 科学局",
+    "email": ""
+  },
+  "agents": [
+    "./agents/ket-prep-team-team-lead.md",
+    "./agents/ket-strategist.md",
+    "./agents/ket-foundation-builder.md",
+    "./agents/ket-input-master.md",
+    "./agents/ket-output-coach.md",
+    "./agents/ket-tactician.md"
+  ],
+
+  "expertType": "team",
+  "agentName": "ket-prep-team-team-lead",
+  "teamInfo": {
+    "leadAgent": "ket-prep-team-team-lead",
+    "memberAgents": [
+      "ket-strategist",
+      "ket-foundation-builder",
+      "ket-input-master",
+      "ket-output-coach",
+      "ket-tactician"
+    ]
+  },
+
+  "displayName": {
+    "en": "KET Prep Dream Team",
+    "zh": "KET备考专家团"
+  },
+  "profession": {
+    "en": "KET Prep Dream Team",
+    "zh": "KET备考专家团"
+  },
+  "displayDescription": {
+    "en": "A team of certified Cambridge examiners and senior young-learner educators delivering full-cycle KET prep: diagnostic assessment, vocabulary & grammar foundations, all four skills training, and full mock exam simulation.",
+    "zh": "剑桥认证考官领衔，为小学生提供KET全流程备考：学情测评、词汇语法地基、听说读写专项提分、考前冲刺模考，助力Merit（优秀）/Distinction（卓越）达标。"
+  },
+  "avatar": "avatars/team.png",
+  "categoryId": "12-IndustryConsultant",
+  "defaultInitPrompt": {
+    "zh": "你好！请帮我评估孩子的英语现状，并制定一份KET备考计划。",
+    "en": "Hi! Please help me assess my child's current English level and create a KET study plan."
+  },
+  "plugin": "ket-prep-team",
+  "tags": [
+    { "en": "KET / A2 Exam", "zh": "KET考试备考" },
+    { "en": "Young Learner English", "zh": "少儿英语教学" },
+    { "en": "Cambridge ESOL", "zh": "剑桥英语考评" }
+  ],
+  "quickPrompts": [
+    {
+      "en": "Hi! Please help me assess my child's current English level and create a KET study plan.",
+      "zh": "你好！请帮我评估孩子的英语现状，并制定一份KET备考计划。"
+    },
+    {
+      "en": "My child struggles with KET listening traps and writing prompts. What's the best way to improve?",
+      "zh": "孩子在KET听力陷阱题和写作提示点覆盖上总是失分，怎么针对性提升？"
+    },
+    {
+      "en": "We have 3 months until the KET exam. Please give us a sprint plan for the final stage.",
+      "zh": "距离KET考试还有3个月，请给我们制定一份考前冲刺计划。"
+    }
+  ],
+  "members": [
+    {
+      "id": "ket-prep-team-team-lead",
+      "name": { "en": "Kay Quanpai", "zh": "柯全排" },
+      "profession": { "en": "Chief KET Prep Director", "zh": "KET备考总督导" },
+      "avatar": "avatars/ket-prep-team-team-lead.png",
+      "role": "lead"
+    },
+    {
+      "id": "ket-strategist",
+      "name": { "en": "Ce Zhunheng", "zh": "策准衡" },
+      "profession": { "en": "Assessment & Strategy Specialist", "zh": "首席规划与测评师" },
+      "avatar": "avatars/ket-strategist.png",
+      "role": "member"
+    },
+    {
+      "id": "ket-foundation-builder",
+      "name": { "en": "Ji Jichu", "zh": "纪基础" },
+      "profession": { "en": "Vocabulary & Grammar Foundation Expert", "zh": "词汇与语法基石专家" },
+      "avatar": "avatars/ket-foundation-builder.png",
+      "role": "member"
+    },
+    {
+      "id": "ket-input-master",
+      "name": { "en": "Wen Tingru", "zh": "闻听入" },
+      "profession": { "en": "Listening & Reading Input Mentor", "zh": "听阅输入导师" },
+      "avatar": "avatars/ket-input-master.png",
+      "role": "member"
+    },
+    {
+      "id": "ket-output-coach",
+      "name": { "en": "Yan Shucheng", "zh": "言书成" },
+      "profession": { "en": "Speaking & Writing Output Coach", "zh": "口笔输出导师" },
+      "avatar": "avatars/ket-output-coach.png",
+      "role": "member"
+    },
+    {
+      "id": "ket-tactician",
+      "name": { "en": "Lin Shizhang", "zh": "临试章" },
+      "profession": { "en": "Exam Tactics & Mindset Coach", "zh": "心态与实战辅导员" },
+      "avatar": "avatars/ket-tactician.png",
+      "role": "member"
+    }
+  ]
+}

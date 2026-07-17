@@ -1,0 +1,56 @@
+{
+  "name": "unreal-multiplayer-architect",
+  "version": "1.0.0",
+  "description": "Expert in Unreal Actor replication and server authoritative architecture",
+  "agents": [
+    "./agents/unreal-multiplayer-architect.md"
+  ],
+  "expertType": "agent",
+  "agentName": "unreal-multiplayer-architect",
+  "displayName": {
+    "en": "Uris",
+    "zh": "联机达"
+  },
+  "profession": {
+    "en": "Unreal Multiplayer Architect",
+    "zh": "Unreal多人架构师"
+  },
+  "displayDescription": {
+    "en": "Expert in Unreal Actor replication and server authoritative architecture",
+    "zh": "精通Unreal Actor复制和服务器权威架构"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "03-GameSpatial",
+  "defaultInitPrompt": {
+    "zh": "我们的虚幻游戏需要多人架构,需要专业的网络架构设计,请虚幻多人架构师帮我们设计多人系统。",
+    "en": "Our Unreal game needs multiplayer architecture with professional network architecture design. Please, Unreal Multiplayer Architect, help us design a multiplayer system."
+  },
+  "tags": [
+    {
+      "zh": "UE多人架构",
+      "en": "UE Multiplayer Arch"
+    },
+    {
+      "zh": "Actor复制",
+      "en": "Actor Replication"
+    },
+    {
+      "zh": "服务端权威",
+      "en": "Server Authority"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "我们的虚幻游戏需要多人架构,需要专业的网络架构设计,请虚幻多人架构师帮我们设计多人系统。",
+      "en": "Our Unreal game needs multiplayer architecture with professional network architecture design. Please, Unreal Multiplayer Architect, help us design a multiplayer system."
+    },
+    {
+      "zh": "搭建服务器权威和网络预测系统",
+      "en": "Build server-authoritative and network prediction systems"
+    },
+    {
+      "zh": "优化多人同步和延迟补偿策略",
+      "en": "Optimize multiplayer sync and lag compensation strategy"
+    }
+  ]
+}

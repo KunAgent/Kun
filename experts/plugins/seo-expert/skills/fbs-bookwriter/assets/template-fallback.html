@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>FBS-BookWriter 降级 HTML 模板</title>
+  <style>
+    :root {
+      --c-main: #2C5F7C;
+      --c-text: #222;
+      --c-muted: #666;
+      --c-border: #d9e2ea;
+      --c-bg: #f7fafc;
+      --max-width: 860px;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Source Han Serif SC", "Noto Serif CJK SC", "Songti SC", "SimSun", serif;
+      color: var(--c-text);
+      background: var(--c-bg);
+      line-height: 1.85;
+    }
+    .page {
+      max-width: var(--max-width);
+      margin: 32px auto;
+      background: #fff;
+      padding: 48px 56px;
+      border: 1px solid var(--c-border);
+      box-shadow: 0 12px 30px rgba(44, 95, 124, 0.08);
+    }
+    .meta {
+      margin-bottom: 24px;
+      padding-bottom: 16px;
+      border-bottom: 3px solid var(--c-main);
+    }
+    .meta h1 {
+      margin: 0 0 8px;
+      font-size: 30px;
+      color: var(--c-main);
+    }
+    .meta p {
+      margin: 0;
+      color: var(--c-muted);
+      text-indent: 0;
+    }
+    main p {
+      margin: 0 0 0.95em;
+      text-indent: 2em;
+      text-align: justify;
+    }
+    h2, h3 {
+      margin: 1.5em 0 0.75em;
+      color: var(--c-main);
+      text-indent: 0;
+    }
+    blockquote {
+      margin: 1.2em 0;
+      padding: 0.8em 1.2em;
+      border-left: 4px solid var(--c-main);
+      background: #f3f8fb;
+    }
+    code, pre {
+      font-family: "Cascadia Code", "Consolas", monospace;
+    }
+    pre {
+      overflow: auto;
+      padding: 14px 16px;
+      background: #0f172a;
+      color: #f8fafc;
+      border-radius: 8px;
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header class="meta">
+      <h1>FBS-BookWriter 降级交付模板</h1>
+      <p>适用于无 Node 环境或正式构建失败时的 D2 诚实降级交付。</p>
+    </header>
+    <main>
+{{content}}
+    </main>
+  </div>
+</body>
+</html>

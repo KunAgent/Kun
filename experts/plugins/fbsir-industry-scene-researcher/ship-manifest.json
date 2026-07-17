@@ -1,0 +1,89 @@
+{
+  "package": {
+    "name": "fbsir-industry-scene-researcher",
+    "version": "2.3.0",
+    "distributionSurface": "workbuddy_expert_center",
+    "localEquivalentTestSurface": "my-experts",
+    "additionalContracts": [
+      "contracts/connector-decoupling-gate.json",
+      "contracts/service-closure-gate.json",
+      "contracts/service-observability-contract.json"
+    ]
+  },
+  "functionalScope": {
+    "capabilityFamilies": [
+      "industry_scene_research",
+      "workbuddy_shortcut_orchestration",
+      "service_followthrough_guidance"
+    ],
+    "firstValueDeliverables": [
+      "supplementCard",
+      "workbuddyCapabilityMap",
+      "humanAiTaskTable",
+      "pilotPacket",
+      "singleNextStepCta"
+    ],
+    "shortcutIds": [
+      "shortcut.workflow-gap",
+      "shortcut.opportunity-scan",
+      "shortcut.policy-direction-scan",
+      "shortcut.ops-boost",
+      "shortcut.client-proposal",
+      "shortcut.sales-enable",
+      "shortcut.knowledge-distill",
+      "shortcut.meeting-to-action",
+      "shortcut.legacy-ai-entry",
+      "shortcut.creative-library"
+    ]
+  },
+  "reviewBoundary": {
+    "packageOnlyProof": "This package proves package structure, no-connector first-value readiness, and local-equivalent review readiness. It does not prove official listing, natural same-binding closure, or payment closure.",
+    "connectorDecouplingProof": "This package must not ship a bundled connector surface. Any future service-side observation or followthrough route must stay outside the user-facing package baseline and outside the first-value path.",
+    "naturalClosureRequires": [
+      "same_binding",
+      "service_observe_binding",
+      "service_observe_context",
+      "service_record_result"
+    ],
+    "continuedUseGate": "continued_use_completed must be observed before any lebao unlock or feedback claim is treated as valid.",
+    "officialListingStillRequired": true
+  },
+  "localEquivalentBiasGuard": {
+    "targetMarketplaceForRuntimeTruth": "experts",
+    "targetDistributionSurfaceForRuntimeTruth": "workbuddy_expert_center",
+    "localEquivalentMarketplaceIsTestOnly": "my-experts",
+    "localEquivalentEvidenceLabel": "test_state_only",
+    "futureOfficialEntryReverifyRequired": true
+  },
+  "connectorDecouplingGate": {
+    "contractPath": "contracts/connector-decoupling-gate.json",
+    "connectorRequiredForFirstValue": false,
+    "connectorRequiredForServiceIntentReport": false,
+    "connectorRequiredForReviewReadiness": false,
+    "connectorRequiredForLocalEquivalentReadiness": false
+  },
+  "serviceClosureGate": {
+    "contractPath": "contracts/service-closure-gate.json",
+    "firstValueClosureSource": "host_local",
+    "serviceIntentClosureSource": "service_intent_report",
+    "serviceConsumeClosureSource": "service_consume"
+  },
+  "serviceForwardCompatibility": {
+    "closureSchema": "contracts/service-side-closure-report.schema.json",
+    "observabilityContract": "contracts/service-observability-contract.json",
+    "identityMode": "anonymous_first_delayed_identify",
+    "connectorRequired": false,
+    "optionalEnhancementOnly": true,
+    "entitlementTruthSource": "service_side_receipt_only",
+    "eventLayering": "event_raw_to_event_business_to_event_kpi",
+    "unlockNotBefore": "continued_use_completed"
+  },
+  "assetProvenance": {
+    "avatar": {
+      "path": "avatars/expert.png",
+      "sourceNote": "avatars/README.md",
+      "sourceType": "local_generated_placeholder",
+      "thirdPartyAssetIncluded": false
+    }
+  }
+}

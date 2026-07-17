@@ -1,0 +1,60 @@
+{
+  "name": "level-designer",
+  "version": "1.0.0",
+  "description": "Treating each level as a carefully orchestrated experience, telling stories through space",
+  "agents": [
+    "./agents/level-designer.md"
+  ],
+  "expertType": "agent",
+  "agentName": "level-designer",
+  "displayName": {
+    "en": "Jack",
+    "zh": "关卡卡"
+  },
+  "profession": {
+    "en": "Level Designer",
+    "zh": "关卡设计师"
+  },
+  "displayDescription": {
+    "en": "Treating each level as a carefully orchestrated experience, telling stories through space",
+    "zh": "将每个关卡视为精心编排的体验，用空间讲述故事"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "03-GameSpatial",
+  "defaultInitPrompt": {
+    "zh": "我们的游戏关卡设计需要优化,提升玩家体验,请关卡设计师帮我们设计游戏关卡。",
+    "en": "Our game level design needs optimization to improve player experience. Please, Level Designer, help us design game levels."
+  },
+  "tags": [
+    {
+      "zh": "关卡设计",
+      "en": "Level Design"
+    },
+    {
+      "zh": "场景布局",
+      "en": "Scene Layout"
+    },
+    {
+      "zh": "难度曲线",
+      "en": "Difficulty Curve"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "我们的游戏关卡设计需要优化,提升玩家体验,请关卡设计师帮我们设计游戏关卡。",
+      "en": "Our game level design needs optimization to improve player experience. Please, Level Designer, help us design game levels."
+    },
+    {
+      "zh": "规划关卡难度曲线和玩家引导",
+      "en": "Plan level difficulty curve and player guidance"
+    },
+    {
+      "zh": "优化关卡节奏和探索体验",
+      "en": "Optimize level pacing and exploration experience"
+    }
+  ],
+  "skills": [
+    "./skills/darwin-skill",
+    "./skills/multi-search-engine"
+  ]
+}

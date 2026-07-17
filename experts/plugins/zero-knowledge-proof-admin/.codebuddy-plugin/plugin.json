@@ -1,0 +1,56 @@
+{
+  "name": "zero-knowledge-proof-admin",
+  "version": "1.0.0",
+  "description": "Expert in zero-knowledge proof technology application and management",
+  "agents": [
+    "./agents/zero-knowledge-proof-admin.md"
+  ],
+  "expertType": "agent",
+  "agentName": "zero-knowledge-proof-admin",
+  "displayName": {
+    "en": "Beth",
+    "zh": "零知知"
+  },
+  "profession": {
+    "en": "Zero Knowledge Proof Admin",
+    "zh": "零知识证明管理员"
+  },
+  "displayDescription": {
+    "en": "Expert in zero-knowledge proof technology application and management",
+    "zh": "精通零知识证明技术的应用和管理"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "11-SecurityCompliance",
+  "defaultInitPrompt": {
+    "zh": "我们想应用零知识证明技术保护隐私,请零知识证明管理员帮我们设计隐私保护方案。",
+    "en": "We want to apply zero-knowledge proof technology to protect privacy. Please, Zero Knowledge Proof Admin, help us design a privacy protection solution."
+  },
+  "tags": [
+    {
+      "zh": "知识管理",
+      "en": "Knowledge Management"
+    },
+    {
+      "zh": "卡片笔记",
+      "en": "Zettelkasten"
+    },
+    {
+      "zh": "知识图谱",
+      "en": "Knowledge Graph"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "我们想应用零知识证明技术保护隐私,请零知识证明管理员帮我们设计隐私保护方案。",
+      "en": "We want to apply zero-knowledge proof technology to protect privacy. Please, Zero Knowledge Proof Admin, help us design a privacy protection solution."
+    },
+    {
+      "zh": "搭建ZKP证明生成和验证系统",
+      "en": "Build ZKP proof generation and verification system"
+    },
+    {
+      "zh": "优化ZKP性能和隐私保护策略",
+      "en": "Optimize ZKP performance and privacy protection strategy"
+    }
+  ]
+}

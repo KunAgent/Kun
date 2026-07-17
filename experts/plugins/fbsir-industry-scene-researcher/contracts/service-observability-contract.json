@@ -1,0 +1,99 @@
+{
+  "schemaVersion": "1.0",
+  "contractId": "industry_scene_researcher_service_observability_contract_v230",
+  "packageName": "fbsir-industry-scene-researcher",
+  "packageVersion": "2.3.0",
+  "purpose": "Define the forward fields and receipts required to observe current-window natural traffic quality, version debt, and same-binding progress.",
+  "identityMode": "anonymous_first_delayed_identify",
+  "anonymousFirstBridge": {
+    "stableAnonymousFields": [
+      "anonymousUserCodeHash",
+      "chainFingerprint",
+      "serverBindingId"
+    ],
+    "identifiedFieldsPromotedAfter": [
+      "continued_use_completed",
+      "service_side_receipt_verified"
+    ],
+    "doNotOverwriteAnonymousHistory": true
+  },
+  "requiredForwardFields": [
+    "entrySurface",
+    "entryPromptCode",
+    "entryId",
+    "expertEntryId",
+    "packCode",
+    "scenePackId",
+    "assetType",
+    "requestSource",
+    "hostPatchVersion",
+    "versionKey",
+    "profileSegment",
+    "intentFamily",
+    "selectedWorkflowGap",
+    "evidenceStrength"
+  ],
+  "requiredCurrentWindowReceiptFields": [
+    "firstValueObserved",
+    "serviceIntentReported",
+    "sameBindingWhoamiObserved",
+    "sameBindingScenePackObserved",
+    "sameBindingConsumeObserved",
+    "continuedUseCompletedObserved",
+    "missingForwardFields",
+    "missingFieldIds",
+    "serviceTraceRowCount"
+  ],
+  "entitlementTruth": {
+    "unlockDecisionSource": "service_side_receipt_only",
+    "clientLocalStateIsAdvisoryOnly": true,
+    "requiredFields": [
+      "benefitSource",
+      "creditsState",
+      "claimState",
+      "unlockDecisionSource"
+    ]
+  },
+  "eventLayering": {
+    "rawLayer": "event_raw",
+    "businessLayer": "event_business",
+    "kpiLayer": "event_kpi",
+    "promotionOrder": [
+      "event_raw",
+      "event_business",
+      "event_kpi"
+    ]
+  },
+  "sameBindingReceiptFields": [
+    "bindingKey",
+    "chainFingerprint",
+    "serverBindingId",
+    "anonymousUserCodeHash"
+  ],
+  "versionDebtFields": [
+    "requestSource",
+    "hostPatchVersion",
+    "versionKey"
+  ],
+  "missingFieldsMustRemainVisible": true,
+  "missingFieldsDoNotBlockFirstValue": true,
+  "missingFieldsBlockNaturalClosureClaim": true,
+  "eventLayerReceipts": {
+    "host_local": [
+      "firstValueObserved",
+      "fivePartBundleDelivered",
+      "singleNextStepCtaPresent"
+    ],
+    "service_intent_report": [
+      "serviceIntentReported",
+      "selectedWorkflowGap",
+      "evidenceStrength"
+    ],
+    "service_consume": [
+      "sameBindingWhoamiObserved",
+      "sameBindingScenePackObserved",
+      "sameBindingConsumeObserved",
+      "continuedUseCompletedObserved"
+    ]
+  }
+}

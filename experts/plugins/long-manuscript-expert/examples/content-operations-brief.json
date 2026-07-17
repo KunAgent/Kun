@@ -1,0 +1,64 @@
+{
+  "projectTemplateActivationHints": {
+    "recommendedTemplateId": "content-operations",
+    "activationStage": "finish_or_repurpose",
+    "requiredConnectors": [
+      {
+        "id": "tdocs-app",
+        "name": "Tencent Docs"
+      },
+      {
+        "id": "notion",
+        "name": "Notion"
+      }
+    ],
+    "suggestedExperts": [
+      {
+        "id": "ex_nchiDpT84L9o",
+        "name": "Content Creator"
+      },
+      {
+        "id": "ex_fCXVIhFkOfnh",
+        "name": "Social Media Strategist"
+      }
+    ],
+    "suggestedSkills": [
+      {
+        "id": "skill_2053081490234478592",
+        "name": "Content Factory"
+      },
+      {
+        "id": "skill_2053081498548994048",
+        "name": "Content Distribution"
+      }
+    ],
+    "hostSteeringContextFields": [
+      "workbuddyProjectId",
+      "workbuddyProjectTemplate"
+    ]
+  },
+  "contentOperationsHandoff": {
+    "channelTargets": [
+      "wechat_official_account",
+      "xiaohongshu",
+      "douyin",
+      "social_media"
+    ],
+    "summaryAssets": [
+      "executive_summary",
+      "chapter_digest",
+      "quote_cards"
+    ],
+    "distributionChecklist": [
+      "lock manuscript promise",
+      "finish de-ai polish before channel rewrite",
+      "pick channel cadence",
+      "store source draft in connected workspace"
+    ],
+    "visualBriefTargets": [
+      "cover_brief",
+      "header_image_brief",
+      "social_card_brief"
+    ]
+  }
+}

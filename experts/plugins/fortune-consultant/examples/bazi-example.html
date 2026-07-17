@@ -1,0 +1,649 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>八字命盘 · 丁卯年 庚戌月 戊戌日 己未时</title>
+<style>
+  :root {
+    --bg: #0e0b08;
+    --bg-card: rgba(255, 248, 230, 0.04);
+    --bg-card-hover: rgba(255, 248, 230, 0.08);
+    --border: rgba(212, 175, 110, 0.25);
+    --border-strong: rgba(212, 175, 110, 0.55);
+    --gold: #d4af6e;
+    --gold-bright: #f3d99c;
+    --ink: #ece4d3;
+    --ink-soft: #b8ad95;
+    --ink-dim: #877d6a;
+    --red: #c44a3c;
+    --green: #6b9a5c;
+    --blue: #4a7a9c;
+    --purple: #8a6aa8;
+    --shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "STSong", serif;
+    line-height: 1.7;
+    min-height: 100vh;
+    background-image:
+      radial-gradient(circle at 20% 10%, rgba(212, 175, 110, 0.06), transparent 40%),
+      radial-gradient(circle at 80% 80%, rgba(138, 106, 168, 0.05), transparent 40%);
+  }
+  .container { max-width: 1100px; margin: 0 auto; padding: 48px 24px 80px; }
+  /* Header */
+  .header {
+    text-align: center;
+    padding-bottom: 32px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 40px;
+    position: relative;
+  }
+  .header::before {
+    content: "☯";
+    display: block;
+    font-size: 44px;
+    color: var(--gold);
+    margin-bottom: 12px;
+    opacity: 0.7;
+  }
+  .header h1 {
+    font-size: 32px;
+    font-weight: 500;
+    letter-spacing: 8px;
+    color: var(--gold-bright);
+    margin-bottom: 8px;
+  }
+  .header .subtitle {
+    color: var(--ink-soft);
+    font-size: 14px;
+    letter-spacing: 4px;
+  }
+  .header .meta {
+    margin-top: 16px;
+    font-size: 13px;
+    color: var(--ink-dim);
+  }
+  /* Section */
+  .section {
+    margin-bottom: 48px;
+  }
+  .section-title {
+    font-size: 20px;
+    color: var(--gold-bright);
+    font-weight: 500;
+    margin-bottom: 24px;
+    padding-left: 14px;
+    border-left: 3px solid var(--gold);
+    letter-spacing: 2px;
+  }
+  .section-title small {
+    font-size: 13px;
+    color: var(--ink-dim);
+    margin-left: 12px;
+    letter-spacing: 1px;
+    font-weight: normal;
+  }
+  /* Bazi grid */
+  .bazi-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+  .pillar {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 18px 12px;
+    text-align: center;
+    transition: all 0.3s;
+    position: relative;
+  }
+  .pillar:hover {
+    background: var(--bg-card-hover);
+    border-color: var(--border-strong);
+    transform: translateY(-2px);
+  }
+  .pillar.day { border-color: var(--gold); background: rgba(212, 175, 110, 0.08); }
+  .pillar.day::after {
+    content: "日主";
+    position: absolute;
+    top: -10px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--gold);
+    color: #0e0b08;
+    font-size: 11px;
+    padding: 2px 10px;
+    border-radius: 10px;
+    letter-spacing: 1px;
+  }
+  .pillar-label {
+    font-size: 12px;
+    color: var(--ink-dim);
+    letter-spacing: 2px;
+    margin-bottom: 12px;
+  }
+  .pillar-stem, .pillar-branch {
+    font-size: 30px;
+    font-weight: 500;
+    color: var(--gold-bright);
+    margin: 4px 0;
+    line-height: 1.2;
+  }
+  .pillar-tag {
+    display: inline-block;
+    font-size: 11px;
+    color: var(--ink-soft);
+    margin: 2px 1px;
+    padding: 1px 6px;
+    border-radius: 8px;
+    background: rgba(255, 248, 230, 0.05);
+  }
+  .pillar-meta {
+    font-size: 11px;
+    color: var(--ink-dim);
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px dashed var(--border);
+  }
+  .hidden-stems {
+    margin-top: 8px;
+    font-size: 11px;
+    color: var(--ink-soft);
+    line-height: 1.5;
+  }
+  /* Five elements bar */
+  .elements {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 12px;
+    margin-top: 20px;
+  }
+  .element-cell {
+    text-align: center;
+    padding: 14px 8px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--bg-card);
+  }
+  .element-cell .el-name { font-size: 13px; color: var(--ink-soft); margin-bottom: 6px; letter-spacing: 1px; }
+  .element-cell .el-count { font-size: 22px; font-weight: 500; }
+  .el-wood { color: #6b9a5c; }
+  .el-fire { color: #c44a3c; }
+  .el-earth { color: #c69b5e; }
+  .el-metal { color: #b0a89a; }
+  .el-water { color: #4a7a9c; }
+  /* Cards */
+  .card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 24px;
+    margin-bottom: 16px;
+  }
+  .card h3 {
+    font-size: 16px;
+    color: var(--gold-bright);
+    margin-bottom: 12px;
+    letter-spacing: 1px;
+    font-weight: 500;
+  }
+  .card p { color: var(--ink); margin-bottom: 8px; }
+  .card .lead {
+    font-size: 15px;
+    color: var(--gold);
+    border-left: 2px solid var(--gold);
+    padding-left: 12px;
+    margin: 12px 0;
+    font-style: normal;
+  }
+  /* Domain cards */
+  .domain-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 16px;
+  }
+  .domain {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px;
+    transition: all 0.3s;
+  }
+  .domain:hover {
+    background: var(--bg-card-hover);
+    border-color: var(--border-strong);
+  }
+  .domain h4 {
+    font-size: 15px;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--gold-bright);
+    font-weight: 500;
+  }
+  .domain h4 .icon { font-size: 18px; }
+  .domain p { font-size: 14px; color: var(--ink-soft); line-height: 1.7; }
+  /* Year tabs */
+  .year-tabs {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 20px;
+    border-bottom: 1px solid var(--border);
+  }
+  .year-tab {
+    padding: 10px 20px;
+    cursor: pointer;
+    color: var(--ink-dim);
+    border-bottom: 2px solid transparent;
+    transition: all 0.2s;
+    font-size: 14px;
+    letter-spacing: 1px;
+  }
+  .year-tab:hover { color: var(--ink); }
+  .year-tab.active {
+    color: var(--gold-bright);
+    border-bottom-color: var(--gold);
+  }
+  .year-pane { display: none; }
+  .year-pane.active { display: block; }
+  /* Timeline */
+  .timeline {
+    position: relative;
+    padding-left: 28px;
+  }
+  .timeline::before {
+    content: "";
+    position: absolute;
+    left: 8px;
+    top: 6px;
+    bottom: 6px;
+    width: 1px;
+    background: var(--border);
+  }
+  .timeline-item {
+    position: relative;
+    margin-bottom: 18px;
+    padding: 12px 16px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+  }
+  .timeline-item::before {
+    content: "";
+    position: absolute;
+    left: -24px;
+    top: 18px;
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: var(--gold);
+    box-shadow: 0 0 0 3px rgba(212, 175, 110, 0.2);
+  }
+  .timeline-item.hot::before { background: var(--red); box-shadow: 0 0 0 3px rgba(196, 74, 60, 0.25); }
+  .timeline-item.good::before { background: var(--green); box-shadow: 0 0 0 3px rgba(107, 154, 92, 0.25); }
+  .timeline-item.warn::before { background: var(--purple); box-shadow: 0 0 0 3px rgba(138, 106, 168, 0.25); }
+  .timeline-month {
+    font-size: 13px;
+    color: var(--gold);
+    letter-spacing: 1px;
+    margin-bottom: 4px;
+  }
+  .timeline-pillar {
+    font-size: 15px;
+    color: var(--gold-bright);
+    margin-bottom: 4px;
+  }
+  .timeline-tag {
+    display: inline-block;
+    font-size: 11px;
+    padding: 1px 8px;
+    border-radius: 10px;
+    margin-right: 6px;
+    background: rgba(212, 175, 110, 0.12);
+    color: var(--gold);
+  }
+  .timeline-tag.hot { background: rgba(196, 74, 60, 0.18); color: #e87a6c; }
+  .timeline-tag.good { background: rgba(107, 154, 92, 0.18); color: #94c283; }
+  .timeline-tag.warn { background: rgba(138, 106, 168, 0.18); color: #b496d4; }
+  .timeline-desc {
+    font-size: 13px;
+    color: var(--ink-soft);
+    margin-top: 4px;
+  }
+  /* Decade fortune table */
+  .dayun-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 8px;
+  }
+  .dayun-cell {
+    text-align: center;
+    padding: 12px 6px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--bg-card);
+    font-size: 12px;
+    color: var(--ink-soft);
+  }
+  .dayun-cell.current {
+    border-color: var(--gold);
+    background: rgba(212, 175, 110, 0.12);
+    color: var(--gold-bright);
+  }
+  .dayun-cell .dy-pillar {
+    font-size: 17px;
+    color: var(--gold-bright);
+    margin-bottom: 4px;
+    letter-spacing: 2px;
+  }
+  .dayun-cell.current .dy-pillar { color: var(--gold); }
+  .dayun-cell .dy-age { color: var(--ink-dim); font-size: 11px; }
+  /* Suggestions */
+  .suggestion-list {
+    list-style: none;
+    counter-reset: sug;
+  }
+  .suggestion-list li {
+    counter-increment: sug;
+    padding: 12px 16px 12px 48px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    margin-bottom: 10px;
+    position: relative;
+    color: var(--ink);
+    font-size: 14px;
+    line-height: 1.7;
+  }
+  .suggestion-list li::before {
+    content: counter(sug, decimal-leading-zero);
+    position: absolute;
+    left: 14px;
+    top: 12px;
+    color: var(--gold);
+    font-size: 14px;
+    font-weight: 500;
+    letter-spacing: 1px;
+  }
+  /* Disclaimer */
+  .disclaimer {
+    margin-top: 56px;
+    padding: 18px 24px;
+    border-radius: 8px;
+    background: rgba(196, 74, 60, 0.06);
+    border: 1px dashed rgba(196, 74, 60, 0.3);
+    font-size: 12px;
+    color: var(--ink-dim);
+    line-height: 1.7;
+  }
+  /* Mobile */
+  @media (max-width: 720px) {
+    .container { padding: 32px 16px 60px; }
+    .header h1 { font-size: 22px; letter-spacing: 4px; }
+    .bazi-grid { grid-template-columns: repeat(2, 1fr); }
+    .pillar-stem, .pillar-branch { font-size: 24px; }
+    .domain-grid { grid-template-columns: 1fr; }
+    .dayun-grid { grid-template-columns: repeat(2, 1fr); }
+    .elements { grid-template-columns: repeat(5, 1fr); gap: 4px; }
+    .element-cell { padding: 8px 2px; }
+    .element-cell .el-count { font-size: 16px; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- Header -->
+  <div class="header">
+    <h1>八字命盘解析</h1>
+    <div class="subtitle">丁卯 · 庚戌 · 戊戌 · 己未</div>
+    <div class="meta">阳历 1987 年 10 月 16 日 14:00 · 女命 · 生肖兔 · 农历丁卯年八月廿四</div>
+  </div>
+
+  <!-- Section 1: Four Pillars -->
+  <div class="section">
+    <div class="section-title">四柱排盘 <small>FOUR PILLARS</small></div>
+    <div class="bazi-grid">
+      <div class="pillar">
+        <div class="pillar-label">年 柱</div>
+        <div class="pillar-stem">丁</div>
+        <div class="pillar-branch">卯</div>
+        <div>
+          <span class="pillar-tag">正印</span>
+          <span class="pillar-tag">正官</span>
+        </div>
+        <div class="pillar-meta">炉中火 · 沐浴</div>
+        <div class="hidden-stems">藏干：乙（正官）</div>
+      </div>
+      <div class="pillar">
+        <div class="pillar-label">月 柱</div>
+        <div class="pillar-stem">庚</div>
+        <div class="pillar-branch">戌</div>
+        <div>
+          <span class="pillar-tag">食神</span>
+          <span class="pillar-tag">比肩</span>
+        </div>
+        <div class="pillar-meta">钗钏金 · 墓</div>
+        <div class="hidden-stems">藏干：戊辛丁</div>
+      </div>
+      <div class="pillar day">
+        <div class="pillar-label">日 柱</div>
+        <div class="pillar-stem">戊</div>
+        <div class="pillar-branch">戌</div>
+        <div>
+          <span class="pillar-tag">日主</span>
+          <span class="pillar-tag">比肩</span>
+        </div>
+        <div class="pillar-meta">平地木 · 墓</div>
+        <div class="hidden-stems">藏干：戊辛丁</div>
+      </div>
+      <div class="pillar">
+        <div class="pillar-label">时 柱</div>
+        <div class="pillar-stem">己</div>
+        <div class="pillar-branch">未</div>
+        <div>
+          <span class="pillar-tag">劫财</span>
+          <span class="pillar-tag">劫财</span>
+        </div>
+        <div class="pillar-meta">天上火 · 衰</div>
+        <div class="hidden-stems">藏干：己丁乙</div>
+      </div>
+    </div>
+
+    <div class="elements">
+      <div class="element-cell"><div class="el-name">木</div><div class="el-count el-wood">2</div></div>
+      <div class="element-cell"><div class="el-name">火</div><div class="el-count el-fire">2</div></div>
+      <div class="element-cell"><div class="el-name">土</div><div class="el-count el-earth">5</div></div>
+      <div class="element-cell"><div class="el-name">金</div><div class="el-count el-metal">1</div></div>
+      <div class="element-cell"><div class="el-name">水</div><div class="el-count el-water">0</div></div>
+    </div>
+  </div>
+
+  <!-- Section 2: Core -->
+  <div class="section">
+    <div class="section-title">命格核心 <small>CORE PATTERN</small></div>
+    <div class="card">
+      <h3>土厚如山，需要疏泄</h3>
+      <p>戊土日主，地支戌戌未三土叠加，天干戊己比劫并透——<strong style="color: var(--gold-bright)">身极旺</strong>。年支卯木正官是唯一的"制土"力量，但卯戌合×2，正官被合化；月干庚金食神是唯一的"泄土"出口，这是您才华和表达力的源头；年干丁火正印生土，让本就厚的土更厚。</p>
+      <div class="lead">喜用：金（食伤泄秀）、水（财星耗身）｜忌：火（印生身）、土（比劫帮身）</div>
+      <p style="color: var(--gold); margin-top: 12px;">📜 一句话命格：山岳之土，厚重笃实，但过刚易折。需要金来雕刻、水来滋润，方能成器。</p>
+    </div>
+  </div>
+
+  <!-- Section 3: Decade Fortune -->
+  <div class="section">
+    <div class="section-title">大运流转 <small>DECADE FORTUNE · 起运 9 岁</small></div>
+    <div class="dayun-grid">
+      <div class="dayun-cell"><div class="dy-pillar">辛亥</div><div>伤官</div><div class="dy-age">9-18</div></div>
+      <div class="dayun-cell"><div class="dy-pillar">壬子</div><div>偏财</div><div class="dy-age">19-28</div></div>
+      <div class="dayun-cell"><div class="dy-pillar">癸丑</div><div>正财</div><div class="dy-age">29-38</div></div>
+      <div class="dayun-cell current"><div class="dy-pillar">甲寅</div><div>七杀 · 当前</div><div class="dy-age">39-48</div></div>
+      <div class="dayun-cell"><div class="dy-pillar">乙卯</div><div>正官</div><div class="dy-age">49-58</div></div>
+      <div class="dayun-cell"><div class="dy-pillar">丙辰</div><div>偏印</div><div class="dy-age">59-68</div></div>
+      <div class="dayun-cell"><div class="dy-pillar">丁巳</div><div>正印</div><div class="dy-age">69-78</div></div>
+      <div class="dayun-cell"><div class="dy-pillar">戊午</div><div>比肩</div><div class="dy-age">79-88</div></div>
+      <div class="dayun-cell"><div class="dy-pillar">己未</div><div>劫财</div><div class="dy-age">89-98</div></div>
+      <div class="dayun-cell"><div class="dy-pillar">庚申</div><div>食神</div><div class="dy-age">99-108</div></div>
+    </div>
+    <div class="card" style="margin-top: 20px;">
+      <h3>当前大运：甲寅（2025–2034）— 七杀十年，人生变局</h3>
+      <p>七杀透干，对身旺之人来说反为<strong style="color: var(--gold-bright)">喜用</strong>——给厚土一个"被逼着成长"的力。寅木坐支有根，挑战和机会都是实打实的；寅戌半合火，杀印相生，压力中有贵人化解。</p>
+      <p class="lead">这十年是您从"安稳期"走向"变革期"的关键阶段。升职、转行、搬家、重大决策大概率密集发生。身旺扛得住杀，反而是建功立业之运。</p>
+    </div>
+  </div>
+
+  <!-- Section 4: Year Switch -->
+  <div class="section">
+    <div class="section-title">流年深读 <small>2025 / 2026</small></div>
+    <div class="year-tabs">
+      <div class="year-tab active" data-year="2025">2025 · 乙巳 · 正官年</div>
+      <div class="year-tab" data-year="2026">2026 · 丙午 · 偏印年</div>
+    </div>
+
+    <div class="year-pane active" id="pane-2025">
+      <div class="card">
+        <h3>乙巳年 — 规矩与机遇并存</h3>
+        <p>天干乙木正官透出，主名誉、规则、提携；地支巳火偏印，藏丙庚戊。<strong style="color: var(--gold)">乙庚合金</strong>——正官合食神，工作上的规矩反而激发创造力。神煞：禄神、驿马、亡神。</p>
+      </div>
+      <div class="domain-grid">
+        <div class="domain">
+          <h4><span class="icon">💼</span> 事 业</h4>
+          <p>容易遇到给予正式名分的机会——升职、加头衔、被领导看重。但偏印暗生身，行动力要跟上想得多的脑袋。驿马动，出差或岗位变动概率大。</p>
+        </div>
+        <div class="domain">
+          <h4><span class="icon">💰</span> 财 运</h4>
+          <p>财星不显，整体稳中有进，不会暴富。适合积攒资源、铺路，不适合赌博式投资。看流月窗口期出手。</p>
+        </div>
+        <div class="domain">
+          <h4><span class="icon">💕</span> 感 情</h4>
+          <p>女命正官透干，正缘星亮起，异性缘提升。但卯戌合火把官星合走——有人对你好但你不一定看得上，或条件不错总差一口气。</p>
+        </div>
+        <div class="domain">
+          <h4><span class="icon">🏥</span> 健 康</h4>
+          <p>巳火偏印 + 厚土，注意脾胃消化与皮肤湿热。驿马 + 亡神，出行注意安全，尤其农历四五月（辛巳、壬午月）。</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="year-pane" id="pane-2026">
+      <div class="card">
+        <h3>丙午年 — 印星大年，火炎土燥需防水</h3>
+        <p>天干丙火偏印，主学习、灵感、长辈、文书；地支午火，藏丁己。<strong style="color: var(--gold)">午未合火 + 戌午半合×2</strong>——印星合入日主与时柱，学习运、贵人运旺，但火多土焦。神煞：天德、月德、羊刃、将星。</p>
+      </div>
+      <div class="domain-grid">
+        <div class="domain">
+          <h4><span class="icon">💼</span> 事 业</h4>
+          <p>偏印主非传统路径，可能接触新领域、新方法、新知识，灵感爆发。但印多身更旺，容易陷入"学而不做"。将星入命，有领导力展示的机会，天德月德双贵人，大事有托底。</p>
+        </div>
+        <div class="domain">
+          <h4><span class="icon">💰</span> 财 运</h4>
+          <p>火旺克金，泄秀受制——赚钱的思路容易卡壳，或有想法执行跟不上。水（财）全年偏弱，不宜冒进。下半年金水渐旺（农历七八月），财运转好。</p>
+        </div>
+        <div class="domain">
+          <h4><span class="icon">💕</span> 感 情</h4>
+          <p>午为戊土桃花位，印星合入夫妻宫——可能通过长辈介绍或文化场合认识对象。但印旺化官，感情中容易太理性、太讲条件，反而错过真缘。</p>
+        </div>
+        <div class="domain">
+          <h4><span class="icon">🏥</span> 健 康</h4>
+          <p><strong style="color: var(--red)">火最旺、土最燥</strong>之年——心血管、血压、眼睛、皮肤皆需注意。羊刃在午，防刀伤烫伤。多喝水、少熬夜，农历五月（甲午月）尤其留心。</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Section 5: Key Months Timeline -->
+  <div class="section">
+    <div class="section-title">近期关键月份 <small>2025.05 — 2026.12</small></div>
+    <div class="timeline">
+      <div class="timeline-item">
+        <div class="timeline-month">2025.05 – 06</div>
+        <div class="timeline-pillar">辛巳月 · 伤官+偏印</div>
+        <div><span class="timeline-tag warn">谨言</span></div>
+        <div class="timeline-desc">伤官见偏印，口舌是非多，创意也多，发言出手前三思。</div>
+      </div>
+      <div class="timeline-item good">
+        <div class="timeline-month">2025.06 – 07</div>
+        <div class="timeline-pillar">壬午月 · 偏财+印劫</div>
+        <div><span class="timeline-tag good">最佳窗口</span><span class="timeline-tag good">财运</span><span class="timeline-tag good">桃花</span></div>
+        <div class="timeline-desc">丁壬合官，未巳午三会火局——上半年最好的月份，重要决策和表白此时落子。</div>
+      </div>
+      <div class="timeline-item">
+        <div class="timeline-month">2025.08 – 09</div>
+        <div class="timeline-pillar">甲申月 · 七杀+食神</div>
+        <div><span class="timeline-tag">机遇+变数</span></div>
+        <div class="timeline-desc">巳申合水又刑破，杀印相生但好事多磨。事业上有大动作机会，需做好预案。</div>
+      </div>
+      <div class="timeline-item warn">
+        <div class="timeline-month">2025.09 – 10</div>
+        <div class="timeline-pillar">乙酉月 · 正官+伤官</div>
+        <div><span class="timeline-tag warn">变动</span></div>
+        <div class="timeline-desc">卯酉冲年柱，变动大——出行、搬家、岗位调整、感情冲击均可能。</div>
+      </div>
+      <div class="timeline-item hot">
+        <div class="timeline-month">2025.11 – 12</div>
+        <div class="timeline-pillar">丁亥月 · 正印+偏财</div>
+        <div><span class="timeline-tag hot">关键转折</span><span class="timeline-tag">三合木</span></div>
+        <div class="timeline-desc">卯未亥三合官星大旺，事业贵人到位；但巳亥冲大运，天克地冲——大事件月，提前准备或避其锋。</div>
+      </div>
+      <div class="timeline-item good">
+        <div class="timeline-month">2026.05 – 06</div>
+        <div class="timeline-pillar">癸巳月 · 正财+偏印</div>
+        <div><span class="timeline-tag good">财来</span></div>
+        <div class="timeline-desc">戊癸合财——日主合入财星，赚得到也花得快，注意现金流管理。</div>
+      </div>
+      <div class="timeline-item hot">
+        <div class="timeline-month">2026.06 – 07</div>
+        <div class="timeline-pillar">甲午月 · 七杀+印劫</div>
+        <div><span class="timeline-tag hot">突破</span><span class="timeline-tag warn">压力</span></div>
+        <div class="timeline-desc">双合时柱，事业有重大突破；但午午自刑——压力与成就并存的月份。</div>
+      </div>
+      <div class="timeline-item warn">
+        <div class="timeline-month">2026.10 – 11</div>
+        <div class="timeline-pillar">戊戌月 · 比肩+比肩</div>
+        <div><span class="timeline-tag warn">伏吟</span><span class="timeline-tag warn">守</span></div>
+        <div class="timeline-desc">伏吟日柱，情绪低落、阻力增多，宜守不宜攻，把战略性动作延后。</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Section 6: Suggestions -->
+  <div class="section">
+    <div class="section-title">操作建议 <small>ACTION ITEMS</small></div>
+    <ul class="suggestion-list">
+      <li><strong style="color: var(--gold-bright);">拥抱七杀大运</strong>——甲寅十年不是让你躺平的，主动迎接挑战、争取更大的舞台，身旺扛得住。</li>
+      <li><strong style="color: var(--gold-bright);">2025 重点</strong>——抓住乙庚合金的机遇期，尤其农历六月壬午月，是全年能量最顺畅的窗口。</li>
+      <li><strong style="color: var(--gold-bright);">2026 重点</strong>——上半年多学习铺垫，下半年金水旺时再发力；丙午火旺，防晒防燥，养好身体。</li>
+      <li><strong style="color: var(--gold-bright);">感情节奏</strong>——乙巳年别太挑；丙午年印旺合入，通过熟人圈+文化圈识缘最有效。</li>
+      <li><strong style="color: var(--gold-bright);">健康守护</strong>——脾胃是终身弱项，少食生冷；丙午年特别注意心血管和眼睛，定期体检。</li>
+      <li><strong style="color: var(--gold-bright);">关键月避险</strong>——2025.11（丁亥）巳亥冲大运，重大决策提前 1 个月布置，或推迟到 12 月戊子。</li>
+    </ul>
+  </div>
+
+  <!-- Disclaimer -->
+  <div class="disclaimer">
+    ⚠️ 以上为玄学体系的传统解读与象征推演，仅供参考。本回复由 AI 生成，不构成医疗、法律、财务或投资建议；命理是参考，不是定数。涉及健康、法律、重大财务决策请咨询相应专业人士。
+  </div>
+
+</div>
+
+<script>
+  // Year tabs
+  document.querySelectorAll('.year-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      const year = tab.dataset.year;
+      document.querySelectorAll('.year-tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.year-pane').forEach(p => p.classList.remove('active'));
+      tab.classList.add('active');
+      document.getElementById('pane-' + year).classList.add('active');
+    });
+  });
+</script>
+</body>
+</html>

@@ -1,0 +1,59 @@
+{
+  "name": "incident-response-commander",
+  "version": "1.0.0",
+  "description": "Calmly commands teams to quickly locate, handle, and recover during system failures, the ultimate firefighting captain",
+  "agents": [
+    "./agents/incident-response-commander.md"
+  ],
+  "expertType": "agent",
+  "agentName": "incident-response-commander",
+  "displayName": {
+    "en": "Sara",
+    "zh": "救火队"
+  },
+  "profession": {
+    "en": "Incident Response Commander",
+    "zh": "事故响应指挥官"
+  },
+  "displayDescription": {
+    "en": "Calmly commands teams to quickly locate, handle, and recover during system failures, the ultimate firefighting captain",
+    "zh": "系统故障时冷静指挥团队快速定位处理和恢复，是终极救火队长"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "02-Engineering",
+  "defaultInitPrompt": {
+    "zh": "我们经常遇到生产事故,需要建立标准化的应急响应机制,请事故响应指挥官帮我们制定事故处理流程。",
+    "en": "We frequently encounter production incidents and need to establish a standardized emergency response mechanism. Please, Incident Response Commander, help us develop an incident handling process."
+  },
+  "tags": [
+    {
+      "zh": "应急指挥",
+      "en": "Incident Command"
+    },
+    {
+      "zh": "安全响应",
+      "en": "Security Response"
+    },
+    {
+      "zh": "事件协调",
+      "en": "Event Coordination"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "我们经常遇到生产事故,需要建立标准化的应急响应机制,请事故响应指挥官帮我们制定事故处理流程。",
+      "en": "We frequently encounter production incidents and need to establish a standardized emergency response mechanism. Please, Incident Response Commander, help us develop an incident handling process."
+    },
+    {
+      "zh": "搭建故障通报和复盘体系",
+      "en": "Build incident communication and post-mortem system"
+    },
+    {
+      "zh": "设计故障预案和演练方案",
+      "en": "Design incident contingency plans and drill exercises"
+    }
+  ],
+  "skills": [
+    "./skills/minimax-docx"
+  ]
+}

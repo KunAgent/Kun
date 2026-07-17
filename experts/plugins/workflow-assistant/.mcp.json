@@ -1,0 +1,20 @@
+{
+  "mcpServers": {
+    "huijin-workflow": {
+      "url": "https://huijin-workflow.mcp.it.woa.com",
+      "x-workbuddy": {
+        "displayName": {
+          "zh": "汇金工作流 MCP",
+          "en": "Huijin Workflow MCP"
+        },
+        "description": {
+          "zh": "汇金审批工作流管理，支持查询流程、发起流程单、查看流程详情与任务进度、撤回流程单。",
+          "en": "Huijin approval workflow management — discover, create, track, and revoke workflow instances."
+        },
+        "auth": {
+          "type": "oauth"
+        }
+      }
+    }
+  }
+}

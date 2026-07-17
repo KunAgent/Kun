@@ -1,0 +1,235 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://u3w.com/fbs/schemas/long-manuscript-expert/service-side-closure-report.schema.json",
+  "title": "Long Manuscript Expert Service-Side Closure Report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "status",
+    "source",
+    "identity",
+    "serviceRoute",
+    "activationChecklist",
+    "followUpBranch",
+    "productCreditBoundary",
+    "hostSteering"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "1.0"
+    },
+    "status": {
+      "enum": [
+        "service_starter_ready_followthrough_required",
+        "service_starter_warn"
+      ]
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "tool",
+        "trafficGroup",
+        "sampleClass",
+        "naturalClosureClaimed"
+      ],
+      "properties": {
+        "tool": {
+          "const": "fbss_bookwriter_start"
+        },
+        "trafficGroup": {
+          "type": "string"
+        },
+        "sampleClass": {
+          "type": "string"
+        },
+        "naturalClosureClaimed": {
+          "const": false
+        }
+      }
+    },
+    "identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mode",
+        "sameBindingRequired",
+        "anonymousUserCodeHash",
+        "serverBindingId",
+        "chainFingerprint"
+      ],
+      "properties": {
+        "mode": {
+          "const": "anonymous_first_delayed_identify"
+        },
+        "sameBindingRequired": {
+          "const": true
+        },
+        "anonymousUserCodeHash": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "serverBindingId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "chainFingerprint": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "serviceRoute": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "productId",
+        "channelTrack",
+        "skillId",
+        "packCode",
+        "scenePackId",
+        "entryId",
+        "entrySurface",
+        "entryPromptCode",
+        "expertEntryId"
+      ],
+      "properties": {
+        "productId": {
+          "const": "fbs-bookwriter"
+        },
+        "channelTrack": {
+          "const": "bookwriter_skill"
+        },
+        "skillId": {
+          "const": "skill_2053083113738002432"
+        },
+        "packCode": {
+          "const": "fbss.bookwriter.seven_day.v1"
+        },
+        "scenePackId": {
+          "const": "bookwriter"
+        },
+        "entryId": {
+          "type": "string"
+        },
+        "entrySurface": {
+          "const": "bookwriter_skill"
+        },
+        "entryPromptCode": {
+          "type": "string"
+        },
+        "expertEntryId": {
+          "const": "bookwriter_skill"
+        }
+      }
+    },
+    "activationChecklist": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "currentMilestone",
+        "sameBindingRequired",
+        "valueCreditRequiresConsume",
+        "nextTool",
+        "stopCondition"
+      ],
+      "properties": {
+        "currentMilestone": {
+          "const": "first_value_ready_followthrough_required"
+        },
+        "sameBindingRequired": {
+          "const": true
+        },
+        "valueCreditRequiresConsume": {
+          "const": true
+        },
+        "nextTool": {
+          "const": "skill_consume"
+        },
+        "stopCondition": {
+          "const": "continued_use_completed"
+        }
+      }
+    },
+    "followUpBranch": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "branch",
+        "sameBindingRequired",
+        "requiredEventType",
+        "nextTool",
+        "productCreditBoundary"
+      ],
+      "properties": {
+        "branch": {
+          "const": "same_binding_consume_followthrough"
+        },
+        "sameBindingRequired": {
+          "const": true
+        },
+        "requiredEventType": {
+          "const": "continued_use_completed"
+        },
+        "nextTool": {
+          "const": "skill_consume"
+        },
+        "productCreditBoundary": {
+          "const": "natural_product_credit_requires_skill_consume_first_value_and_continued_use"
+        }
+      }
+    },
+    "productCreditBoundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "valueCreditRequiresConsume",
+        "probeRowsDiagnosticOnly",
+        "productCreditClaimed",
+        "naturalClosureClaimed"
+      ],
+      "properties": {
+        "valueCreditRequiresConsume": {
+          "const": true
+        },
+        "probeRowsDiagnosticOnly": {
+          "const": true
+        },
+        "productCreditClaimed": {
+          "const": false
+        },
+        "naturalClosureClaimed": {
+          "const": false
+        }
+      }
+    },
+    "hostSteering": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "nextAction",
+        "hostDirectiveReceiptEventType",
+        "projectTemplateSelectionIsProductCredit"
+      ],
+      "properties": {
+        "nextAction": {
+          "type": "string",
+          "minLength": 1
+        },
+        "hostDirectiveReceiptEventType": {
+          "const": "host_directive_receipt"
+        },
+        "projectTemplateSelectionIsProductCredit": {
+          "const": false
+        }
+      }
+    }
+  }
+}

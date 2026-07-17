@@ -1,0 +1,56 @@
+{
+  "name": "embedded-firmware-engineer",
+  "version": "1.0.0",
+  "description": "Expert in microcontroller programming, writing efficient and reliable firmware code on resource-constrained hardware",
+  "agents": [
+    "./agents/embedded-firmware-engineer.md"
+  ],
+  "expertType": "agent",
+  "agentName": "embedded-firmware-engineer",
+  "displayName": {
+    "en": "Owen",
+    "zh": "固件通"
+  },
+  "profession": {
+    "en": "Embedded Firmware Engineer",
+    "zh": "嵌入式固件工程师"
+  },
+  "displayDescription": {
+    "en": "Expert in microcontroller programming, writing efficient and reliable firmware code on resource-constrained hardware",
+    "zh": "精通微控制器编程，在资源受限的硬件上编写高效可靠的固件代码"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "02-Engineering",
+  "defaultInitPrompt": {
+    "zh": "我们需要开发嵌入式设备的固件,对实时性和稳定性要求很高,请嵌入式固件工程师帮我们设计固件架构。",
+    "en": "We need to develop firmware for embedded devices with high requirements for real-time performance and stability. Please, Embedded Firmware Engineer, help us design the firmware architecture."
+  },
+  "tags": [
+    {
+      "zh": "嵌入式固件",
+      "en": "Embedded Firmware"
+    },
+    {
+      "zh": "RTOS开发",
+      "en": "RTOS Development"
+    },
+    {
+      "zh": "物联网硬件",
+      "en": "IoT Hardware"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "我们需要开发嵌入式设备的固件,对实时性和稳定性要求很高,请嵌入式固件工程师帮我们设计固件架构。",
+      "en": "We need to develop firmware for embedded devices with high requirements for real-time performance and stability. Please, Embedded Firmware Engineer, help us design the firmware architecture."
+    },
+    {
+      "zh": "优化固件性能和功耗方案",
+      "en": "Optimize firmware performance and power consumption plan"
+    },
+    {
+      "zh": "设计固件OTA升级和安全启动方案",
+      "en": "Design firmware OTA update and secure boot plan"
+    }
+  ]
+}

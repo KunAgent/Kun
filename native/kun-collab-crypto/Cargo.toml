@@ -1,0 +1,31 @@
+[package]
+name = "kun-collab-crypto"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+aes-gcm = "0.10.3"
+base64 = "0.22.1"
+napi = { version = "3.1.4", default-features = false, features = ["napi8"] }
+napi-derive = "3.1.0"
+openmls = { version = "0.8.1", features = ["openmls_rust_crypto"] }
+openmls_basic_credential = { version = "0.5.0", features = ["test-utils"] }
+openmls_memory_storage = { version = "0.5.0", features = ["test-utils"] }
+openmls_rust_crypto = "0.5.1"
+openmls_traits = "0.5.0"
+rand = "0.9.2"
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.145"
+sha2 = "0.10.9"
+thiserror = "2.0.17"
+tls_codec = "0.4.2"
+zeroize = "1.8.2"
+
+[build-dependencies]
+napi-build = "2.2.3"
+
+[dev-dependencies]
+hex = "0.4.3"

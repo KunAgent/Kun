@@ -1,0 +1,56 @@
+{
+  "name": "evidence-collector",
+  "version": "1.0.0",
+  "description": "Never letting any issue without screenshot evidence slip by, using visual proof to ensure defects have nowhere to hide",
+  "agents": [
+    "./agents/evidence-collector.md"
+  ],
+  "expertType": "agent",
+  "agentName": "evidence-collector",
+  "displayName": {
+    "en": "Indigo",
+    "zh": "截图图"
+  },
+  "profession": {
+    "en": "Evidence Collector",
+    "zh": "证据收集员"
+  },
+  "displayDescription": {
+    "en": "Never letting any issue without screenshot evidence slip by, using visual proof to ensure defects have nowhere to hide",
+    "zh": "不放过任何没有截图证据的问题，用视觉证据确保缺陷无处遁形"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "10-ProjectQuality",
+  "defaultInitPrompt": {
+    "zh": "我们的产品发布需要收集质量证据,保证发布质量,请证据收集者帮我们建立质量证据收集体系。",
+    "en": "Our product releases need quality evidence collection to ensure release quality. Please, Evidence Collector, help us establish a quality evidence collection system."
+  },
+  "tags": [
+    {
+      "zh": "证据收集",
+      "en": "Evidence Collection"
+    },
+    {
+      "zh": "截图取证",
+      "en": "Screenshot Evidence"
+    },
+    {
+      "zh": "缺陷定位",
+      "en": "Defect Localization"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "我们的产品发布需要收集质量证据,保证发布质量,请证据收集者帮我们建立质量证据收集体系。",
+      "en": "Our product releases need quality evidence collection to ensure release quality. Please, Evidence Collector, help us establish a quality evidence collection system."
+    },
+    {
+      "zh": "编写可复现的Bug报告",
+      "en": "Write reproducible bug reports"
+    },
+    {
+      "zh": "收集测试证据和验证修复结果",
+      "en": "Collect test evidence and verify fix results"
+    }
+  ]
+}

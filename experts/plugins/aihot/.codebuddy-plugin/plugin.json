@@ -1,0 +1,32 @@
+{
+  "name": "aihot",
+  "version": "1.0.0",
+  "description": "AI HOT daily briefing expert: curated AI models, products, industry news and papers, auto-formatted as a Chinese briefing, no API key needed.",
+  "author": { "name": "数字生命卡兹克" },
+  "agents": ["./agents/aihot.md"],
+  "skills": ["./skills/aihot"],
+  "expertType": "agent",
+  "agentName": "aihot",
+  "displayName": { "en": "Kazik", "zh": "数字生命卡兹克" },
+  "profession": { "en": "AI News Briefing Expert", "zh": "资讯速递专家" },
+  "displayDescription": {
+    "en": "One-line access to today's curated AI news — models, products, industry, papers, auto-formatted as a Chinese briefing, no API key needed.",
+    "zh": "一句话查到每天精选的 AI 模型/产品/行业/论文动态，自动整理成中文简报，免配置免登录。"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "04-DataAI",
+  "defaultInitPrompt": {
+    "zh": "今天 AI 圈有什么新动态？",
+    "en": "What's new in AI today?"
+  },
+  "tags": [
+    { "en": "AI News", "zh": "AI 资讯" },
+    { "en": "Daily Briefing", "zh": "每日简报" },
+    { "en": "AI Industry", "zh": "AI 行业动态" }
+  ],
+  "quickPrompts": [
+    { "en": "What's new in AI today?", "zh": "今天 AI 圈有什么新动态？" },
+    { "en": "Show me the latest AI daily report", "zh": "看一下最新的 AI 日报" },
+    { "en": "What has OpenAI released recently?", "zh": "OpenAI 最近发布了什么？" }
+  ]
+}

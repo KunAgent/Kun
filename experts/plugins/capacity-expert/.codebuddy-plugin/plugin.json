@@ -1,0 +1,65 @@
+{
+  "name": "capacity-expert",
+  "version": "1.0.0",
+  "description": "Resource capacity planning expert powered by CloudQ — water level monitoring, capacity forecasting, elastic scaling strategy, and resource bottleneck prevention.",
+  "author": {
+    "name": "CloudQ Team",
+    "email": "cloudq@tencent.com"
+  },
+  "expertType": "agent",
+  "agentName": "capacity-expert",
+  "agents": [
+    "./agents/capacity-expert.md"
+  ],
+  "displayName": {
+    "en": "CapacityQ",
+    "zh": "容量规划专家"
+  },
+  "profession": {
+    "en": "CapacityQ",
+    "zh": "CapacityQ"
+  },
+  "displayDescription": {
+    "zh": "容量规划专家。擅长水位监控、容量预测与弹性伸缩策略制定，防止资源瓶颈与浪费。",
+    "en": "Resource capacity planning expert. Specializes in resource water level monitoring, capacity forecasting, elastic scaling strategy design, and preventing resource bottlenecks and waste."
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "13-TencentZone",
+  "defaultInitPrompt": {
+    "zh": "当前各集群资源水位是否正常？",
+    "en": "Are the resource water levels of each cluster normal?"
+  },
+  "tags": [
+    {
+      "en": "Capacity Planning",
+      "zh": "容量规划"
+    },
+    {
+      "en": "Elastic Scaling",
+      "zh": "弹性伸缩"
+    },
+    {
+      "en": "Water Level",
+      "zh": "水位监控"
+    },
+    {
+      "en": "Resource Optimization",
+      "zh": "资源优化"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "en": "Are the resource water levels of each cluster normal?",
+      "zh": "当前各集群资源水位是否正常？"
+    },
+    {
+      "en": "How much capacity to prepare for the upcoming promotion?",
+      "zh": "即将到来的大促需要准备多少容量？"
+    },
+    {
+      "en": "Which resources have been low-load and can be downsized?",
+      "zh": "哪些资源长期低负载可以缩容？"
+    }
+  ],
+  "plugin": "capacity-expert"
+}

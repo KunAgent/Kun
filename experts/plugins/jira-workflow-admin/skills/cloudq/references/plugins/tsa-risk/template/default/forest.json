@@ -1,0 +1,65 @@
+{
+    "id": "forest",
+    "name": "森林绿",
+    "description": "清新自然的绿色主题，柔和舒适，适合日常巡检阅读",
+    "style": "tdesign",
+    "header_gradient": "linear-gradient(135deg, #056334 0%, #0ABF5B 100%)",
+    "primary": "#056334",
+    "primary_light": "#D4F5E0",
+    "bg": "#F3FAF6",
+    "card_bg": "#FFFFFF",
+    "card_title_bar": "#056334",
+    "high_risk": "#D9304E",
+    "medium_risk": "#CF8D1A",
+    "healthy": "#0ABF5B",
+    "text_primary": "#1A3D2B",
+    "text_secondary": "#6B8F7D",
+    "stat_bg": "#EFF8F3",
+    "border": "#D4EDDF",
+    "score_excellent": "#0ABF5B",
+    "score_good": "#2BA471",
+    "score_warning": "#CF8D1A",
+    "score_danger": "#D9304E",
+    "score_thresholds": {
+        "excellent": 90,
+        "good": 80,
+        "warning": 70,
+        "danger": 0
+    },
+    "risk_thresholds": {
+        "high_risk_alert": 10,
+        "medium_risk_alert": 30,
+        "healthy_ratio_good": 80
+    },
+    "layout": {
+        "width": 440,
+        "card_radius": 12,
+        "card_padding": 16,
+        "card_gap": 12,
+        "header_padding": "20px 16px",
+        "font_size_title": 18,
+        "font_size_body": 12,
+        "font_size_small": 11,
+        "font_size_score": 48
+    },
+    "chart": {
+        "width": 380,
+        "height": 180,
+        "bar_radius": 2,
+        "line_width": 2,
+        "dot_radius": 3
+    },
+    "modules_order": [
+        "header",
+        "arch_preview",
+        "score",
+        "resource_overview",
+        "risk_stats",
+        "risk_trend",
+        "product_top",
+        "five_dimensions",
+        "risk_detail",
+        "ai_summary",
+        "footer"
+    ]
+}

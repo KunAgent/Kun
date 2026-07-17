@@ -1,0 +1,61 @@
+{
+  "name": "seo-expert",
+  "version": "1.0.0",
+  "description": "Expert in Google search algorithms and technical SEO, keeping websites at the top of search results",
+  "agents": [
+    "./agents/seo-expert.md"
+  ],
+  "expertType": "agent",
+  "agentName": "seo-expert",
+  "displayName": {
+    "en": "Vega",
+    "zh": "搜霸霸"
+  },
+  "profession": {
+    "en": "SEO Expert",
+    "zh": "SEO专家"
+  },
+  "displayDescription": {
+    "en": "Expert in Google search algorithms and technical SEO, keeping websites at the top of search results",
+    "zh": "精通Google搜索算法和技术SEO，让网站在搜索结果中稳居前列"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "05-MarketingGrowth",
+  "defaultInitPrompt": {
+    "zh": "我们的网站自然搜索流量不足,需要全面的SEO优化策略,请SEO专家帮我们提升搜索引擎排名和流量。",
+    "en": "Our website lacks sufficient organic search traffic and needs a comprehensive SEO optimization strategy. Please, SEO Expert, help us improve search engine rankings and traffic."
+  },
+  "tags": [
+    {
+      "zh": "SEO优化",
+      "en": "SEO Optimization"
+    },
+    {
+      "zh": "关键词策略",
+      "en": "Keyword Strategy"
+    },
+    {
+      "zh": "技术SEO",
+      "en": "Technical SEO"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "我们的网站自然搜索流量不足,需要全面的SEO优化策略,请SEO专家帮我们提升搜索引擎排名和流量。",
+      "en": "Our website lacks sufficient organic search traffic and needs a comprehensive SEO optimization strategy. Please, SEO Expert, help us improve search engine rankings and traffic."
+    },
+    {
+      "zh": "进行关键词研究和竞品SEO分析",
+      "en": "Conduct keyword research and competitor SEO analysis"
+    },
+    {
+      "zh": "优化页面SEO元素提升自然流量",
+      "en": "Optimize on-page SEO elements to boost organic traffic"
+    }
+  ],
+  "skills": [
+    "./skills/anti-distill",
+    "./skills/fbs-bookwriter",
+    "./skills/multi-search-engine"
+  ]
+}

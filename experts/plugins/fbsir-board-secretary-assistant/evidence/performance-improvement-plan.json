@@ -1,0 +1,62 @@
+{
+  "schemaVersion": "fbs.board-secretary-assistant.performance-improvement-plan-review.v1",
+  "generatedAt": "2026-06-22T16:41:25.207Z",
+  "status": "performance_improvement_plan_ready",
+  "currentBaseline": {
+    "reviewPackageStatus": "officially_listed_post_listing_runtime_reverify_pending",
+    "currentServiceRelease": "20260622-162643",
+    "currentSessionStatus": "current_session_first_value_and_continued_use_proved",
+    "currentSessionContinuedUseVisible": true,
+    "submissionReviewSubmitted": true,
+    "officialListingConfirmed": true,
+    "postListingRuntimeReverifyStatus": "official_listing_confirmed_runtime_reverify_in_progress",
+    "postSubmitAuditPassCount": 27,
+    "overallPercentEstimate": 48,
+    "topPerformanceLeverageProduct": "workbuddy_board_secretary_assistant",
+    "mainWritableEngineeringGap": "B4-refresh-dag-and-event-model-hardening",
+    "cleanCreditStatus": "clean_credit_ready",
+    "jointDebugOverallStatus": "ready_with_warnings"
+  },
+  "improvementChecklistSummary": {
+    "total": 10,
+    "p0": 6,
+    "p1": 3,
+    "p2": 1
+  },
+  "topP0Items": [
+    {
+      "itemId": "BRD-PERF-001",
+      "title": "真实宿主 continued-use 可见化",
+      "focus": "宿主能力挖掘 + 经营闭环",
+      "executionSurface": "service_side_writable_now_plus_host_runtime_future_receipt"
+    },
+    {
+      "itemId": "BRD-PERF-002",
+      "title": "宿主生命周期与前台回执机器化",
+      "focus": "宿主能力挖掘",
+      "executionSurface": "service_side_record_only_now_plus_host_runtime_future_receipt"
+    },
+    {
+      "itemId": "BRD-PERF-003",
+      "title": "单一步骤动作包进入运行时合同",
+      "focus": "宿主能力挖掘 + 智能化运营承接",
+      "executionSurface": "service_side_writable_now_and_package_touchpoint_after_unfreeze"
+    },
+    {
+      "itemId": "BRD-PERF-004",
+      "title": "披露预检工作台与审批证据块",
+      "focus": "智能化运营需求",
+      "executionSurface": "record_only_now_and_package_touchpoint_after_unfreeze"
+    },
+    {
+      "itemId": "BRD-PERF-005",
+      "title": "董秘线 cohort 与运营指标稳定字段",
+      "focus": "智能化运营需求",
+      "executionSurface": "service_side_writable_now"
+    }
+  ],
+  "singleNextAction": {
+    "id": "board_2_0_service_side_conversion_hardening",
+    "action": "Keep the board lane on red-team first value, same-binding continued-use visibility, manual-review handoff, and delivery-event measurement before any freeze-lift package expansion."
+  }
+}

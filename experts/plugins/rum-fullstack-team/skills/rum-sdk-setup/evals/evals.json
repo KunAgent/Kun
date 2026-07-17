@@ -1,0 +1,557 @@
+{
+  "skill_name": "rum-sdk-setup",
+  "skill_path": "",
+  "evals": [
+    {
+      "id": "eval_01_react_vite_integration",
+      "name": "React Vite 项目从零接入",
+      "description": "测试 Skill 能否正确检测 React + Vite 项目并生成完整的接入代码。用户在 prompt 中已提供端、框架和上报 ID，Skill 应从中提取信息并确认，而非重复询问全部三项。",
+      "prompt": "帮我在这个 React + Vite 项目里接入腾讯云 RUM，上报 ID 是 pGUVFTCZyew12345，需要开启接口测速和资源测速，这是一个 SPA 项目",
+      "expected_behavior": [
+        "执行步骤 0：从用户消息中提取接入端（Web）、框架（React + Vite）、上报 ID（pGUVFTCZyew12345），仅对缺失项追问",
+        "运行 detect_project.py 检测项目类型",
+        "检测到项目是 React + Vite，与用户确认的信息一致",
+        "安装 aegis-web-sdk 依赖（锁定大版本）",
+        "创建独立的 aegis.ts 文件，而非直接修改 main.tsx",
+        "在 main.tsx 头部添加 import",
+        "初始化配置包含 id、reportApiSpeed、reportAssetSpeed、spa、hostUrl",
+        "提供验证步骤和回滚说明"
+      ],
+      "assertions": {
+        "step0_confirmation": [
+          "MUST extract platform/framework/reportId from user message",
+          "MUST NOT ask user for info already provided in prompt",
+          "MAY briefly confirm extracted info before proceeding"
+        ],
+        "safety": [
+          "MUST NOT write any SecretId/SecretKey into frontend code",
+          "MUST check if SDK is already integrated before making changes",
+          "MUST read target files before modifying them"
+        ],
+        "code_quality": [
+          "MUST create a separate aegis.ts file (not inline in entry file)",
+          "Entry file modification MUST be minimal (only one import line)",
+          "npm install MUST lock major version",
+          "MUST include hostUrl in configuration",
+          "MUST set spa: true for SPA projects"
+        ],
+        "output_quality": [
+          "MUST provide verification steps (DevTools → Network → search report domain)",
+          "MUST provide rollback instructions (which files to delete, which lines to remove)",
+          "MUST list all files created/modified"
+        ]
+      }
+    },
+    {
+      "id": "eval_02_vue3_with_error_handler",
+      "name": "Vue 3 项目接入（含 errorHandler 配置）",
+      "description": "测试 Skill 能否正确处理 Vue 3 的特殊接入需求（必须配置 errorHandler）。用户已提供框架和上报 ID。",
+      "prompt": "我有一个 Vue 3 + Vite 项目，需要接入腾讯云前端监控，上报 ID 是 pGUVFTCZyew67890",
+      "expected_behavior": [
+        "执行步骤 0：从消息提取接入端（Web）、框架（Vue 3 + Vite）、上报 ID，仅对缺失项追问",
+        "检测到 Vue 3 项目",
+        "安装 aegis-web-sdk",
+        "创建 aegis.ts 文件，包含 Aegis 初始化和 errorHandler 配置",
+        "在 main.ts 中调用 setupRum(app)",
+        "明确说明为什么需要配置 errorHandler（Vue 会拦截组件内错误）"
+      ],
+      "assertions": {
+        "step0_confirmation": [
+          "MUST extract platform/framework/reportId from user message",
+          "MUST NOT ask user for info already provided in prompt"
+        ],
+        "framework_specific": [
+          "MUST configure app.config.errorHandler for Vue 3",
+          "errorHandler MUST call aegis.error(err) to forward errors",
+          "errorHandler SHOULD also call console.error to preserve dev experience",
+          "MUST integrate with createApp flow (before app.mount)"
+        ],
+        "safety": [
+          "MUST check for existing aegis integration",
+          "MUST NOT inline large code blocks in main.ts"
+        ]
+      }
+    },
+    {
+      "id": "eval_03_custom_reporting",
+      "name": "添加自定义事件上报",
+      "description": "测试 Skill 能否帮助用户配置自定义事件上报和测速上报（已接入项目，步骤 0 不触发）",
+      "prompt": "我的项目已经接入了 RUM SDK，现在需要在用户点击购买按钮时上报一个自定义事件，并且记录从点击到支付完成的耗时",
+      "expected_behavior": [
+        "检测到项目已接入 SDK（不重复安装）",
+        "不执行步骤 0（非从零接入场景）",
+        "使用 aegis.reportEvent 上报点击事件",
+        "使用 aegis.time/timeEnd 或 aegis.reportTime 上报支付耗时",
+        "提供完整的代码示例，包含错误处理"
+      ],
+      "assertions": {
+        "behavior": [
+          "MUST detect existing SDK integration and NOT reinstall",
+          "MUST NOT trigger step 0 full confirmation for existing integration",
+          "MUST use reportEvent for the click event",
+          "MUST use time/timeEnd or reportTime for duration tracking",
+          "MUST include error handling in the payment flow example"
+        ]
+      }
+    },
+    {
+      "id": "eval_04_nextjs_ssr_safety",
+      "name": "Next.js 项目接入（SSR 安全处理）",
+      "description": "测试 Skill 能否正确处理 Next.js App Router 的 SSR 环境，避免服务端初始化 SDK",
+      "prompt": "帮我在 Next.js 14 (App Router) 项目中接入腾讯云 RUM，上报 ID 是 pGUVFTCZyewabc123",
+      "expected_behavior": [
+        "执行步骤 0：从消息提取接入端（Web）、框架（Next.js 14 App Router）、上报 ID，仅对缺失项追问",
+        "检测到 Next.js App Router 项目",
+        "使用 'use client' 标记客户端代码",
+        "使用 typeof window !== 'undefined' 判断环境",
+        "创建客户端组件或使用 useEffect",
+        "在 layout.tsx 中引入"
+      ],
+      "assertions": {
+        "step0_confirmation": [
+          "MUST extract platform/framework/reportId from user message",
+          "MUST NOT ask user for info already provided in prompt"
+        ],
+        "ssr_safety": [
+          "MUST include 'use client' directive",
+          "MUST check typeof window !== 'undefined' before SDK init",
+          "MUST NOT import SDK at top level of server components",
+          "SHOULD use dynamic import or useEffect for client-only execution"
+        ]
+      }
+    },
+    {
+      "id": "eval_05_security_rejection",
+      "name": "安全拒绝：用户误传 SecretKey",
+      "description": "测试 Skill 能否正确识别并拒绝用户误将 AKSK 当作上报 ID。步骤 0 应拒绝此 ID 并要求正确 ID。",
+      "prompt": "帮我接入 RUM SDK，ID 是 AKIDxxxxxxxxxxxxxxxxxxxxxxxx",
+      "expected_behavior": [
+        "执行步骤 0：识别出 AKID 开头的字符串是 SecretId 而非上报 ID",
+        "拒绝将此值写入前端代码",
+        "警告用户这是云 API 密钥，不能暴露在前端",
+        "引导用户去 RUM 控制台获取正确的上报 ID",
+        "同时询问接入端和框架（用户未提供）"
+      ],
+      "assertions": {
+        "security": [
+          "MUST reject AKID-prefixed strings as report ID",
+          "MUST warn user about SecretId/SecretKey exposure risk",
+          "MUST NOT write the AKID value into any frontend file",
+          "MUST guide user to RUM console for correct report ID"
+        ],
+        "step0_confirmation": [
+          "MUST also ask for platform and framework (not provided in prompt)",
+          "MUST block progress until valid report ID is provided"
+        ]
+      }
+    },
+    {
+      "id": "eval_06_miniprogram_wechat",
+      "name": "微信小程序接入",
+      "description": "测试 Skill 能否正确处理微信小程序项目，使用 aegis-mp-sdk 而非 aegis-web-sdk",
+      "prompt": "帮我在这个微信小程序项目中接入腾讯云前端监控，上报 ID 是 pGUVFTCZyewmp001",
+      "expected_behavior": [
+        "执行步骤 0：从消息提取接入端（微信小程序）、上报 ID，追问开发框架（原生/Taro）",
+        "检测到微信小程序项目",
+        "选择 aegis-mp-sdk（不是 aegis-web-sdk）",
+        "在 app.js 中初始化",
+        "提醒配置安全域名",
+        "提供验证步骤和回滚说明"
+      ],
+      "assertions": {
+        "step0_confirmation": [
+          "MUST extract platform (miniprogram) and reportId from user message",
+          "SHOULD ask for framework if not clear (native MP vs Taro)"
+        ],
+        "platform_specific": [
+          "MUST use aegis-mp-sdk, NOT aegis-web-sdk",
+          "MUST remind user to add report domain to request allowlist",
+          "MUST initialize in app.js or app.ts"
+        ]
+      }
+    },
+    {
+      "id": "eval_07_react_native",
+      "name": "React Native 项目接入",
+      "description": "测试 Skill 能否正确处理 React Native 项目，包括页面流转监控的导航库集成",
+      "prompt": "帮我在这个 React Native + React Navigation v5 项目中接入腾讯云 RUM，上报 ID 是 pGUVFTCZyewrn001",
+      "expected_behavior": [
+        "执行步骤 0：从消息提取接入端（React Native）、框架（React Navigation v5）、上报 ID",
+        "检测到 React Native 项目",
+        "选择 aegis-rn-sdk",
+        "使用 createReactNavigationIntegration 集成导航",
+        "设置 spa: true 开启页面流转",
+        "提供验证步骤和回滚说明"
+      ],
+      "assertions": {
+        "step0_confirmation": [
+          "MUST extract platform/framework/reportId from user message",
+          "MUST NOT ask user for info already provided in prompt"
+        ],
+        "platform_specific": [
+          "MUST use aegis-rn-sdk",
+          "MUST set spa: true for page view tracking",
+          "MUST use createReactNavigationIntegration for React Navigation v5+",
+          "MUST explain that RN requires explicit route change reporting"
+        ]
+      }
+    },
+    {
+      "id": "eval_08_retcode_handler",
+      "name": "配置 API 错误码自定义判定",
+      "description": "测试 Skill 能否帮助用户配置 retCodeHandler 自定义返回码判定逻辑（已接入项目，步骤 0 不触发）",
+      "prompt": "我们的后端接口返回格式是 {\"status\": 200, \"data\": ...}，status=200 表示成功，其他都是错误。RUM 默认的 retcode 判定不适用，帮我配置自定义的错误码判定",
+      "expected_behavior": [
+        "理解用户的接口返回格式（status=200 为成功）",
+        "生成 api.retCodeHandler 配置代码",
+        "retCodeHandler 中正确解析 body.status 而非 body.code",
+        "包含 try-catch 防止 JSON.parse 失败",
+        "说明修改位置"
+      ],
+      "assertions": {
+        "code_correctness": [
+          "retCodeHandler MUST check body.status !== 200 (not body.code !== 0)",
+          "MUST include try-catch around JSON.parse",
+          "MUST return { isErr, code } object format",
+          "SHOULD explain what retCodeHandler does and why default doesn't work"
+        ]
+      }
+    },
+    {
+      "id": "eval_09_multi_env",
+      "name": "多环境区分上报",
+      "description": "测试 Skill 能否帮助用户配置开发环境不上报、线上环境才上报的逻辑（已接入项目）",
+      "prompt": "我们有开发、测试、预发、生产四个环境，只想在生产环境上报数据到 RUM，其他环境不上报。帮我配置",
+      "expected_behavior": [
+        "使用 env 参数区分环境",
+        "使用 beforeRequest 钩子在非生产环境拦截上报",
+        "或者使用条件判断只在生产环境初始化 Aegis",
+        "提供至少两种方案让用户选择",
+        "说明每种方案的优缺点"
+      ],
+      "assertions": {
+        "implementation": [
+          "MUST use env parameter OR beforeRequest hook OR conditional init",
+          "MUST correctly distinguish production from other environments",
+          "SHOULD provide more than one approach",
+          "MUST explain tradeoffs"
+        ]
+      }
+    },
+    {
+      "id": "eval_10_troubleshooting",
+      "name": "接入后数据不上报排障",
+      "description": "测试 Skill 能否引导用户排查接入后数据不上报的问题（排障场景，步骤 0 不触发）",
+      "prompt": "我按照文档接入了 RUM SDK，但是 RUM 控制台上看不到任何数据，Network 里也看不到上报请求，帮我排查",
+      "expected_behavior": [
+        "按照排障指南逐步排查",
+        "检查 id 是否正确",
+        "检查 hostUrl 是否匹配地域",
+        "检查 SDK 是否正确加载",
+        "检查是否被 beforeRequest 拦截",
+        "检查是否在 SSR 环境中初始化",
+        "检查是否被熔断销毁",
+        "提供快速触发测试错误的代码",
+        "不修改用户代码，只给排查建议"
+      ],
+      "assertions": {
+        "diagnostic": [
+          "MUST check id correctness as first step",
+          "MUST check hostUrl matches region",
+          "MUST check SDK loading order",
+          "MUST check fuse/circuit-breaker status (Aegis.instances)",
+          "MUST provide test error trigger code",
+          "MUST NOT modify user code without identifying the problem first"
+        ]
+      }
+    },
+    {
+      "id": "eval_12_composite_project",
+      "name": "复合项目识别与主动询问",
+      "description": "测试 Skill 面对复合项目（如 PHP 后端 + Web + 小程序）时，能否正确识别并主动询问用户要接入哪个端，而非自动选择。",
+      "prompt": "帮我在 /path/to/crmeb-demo 项目里接入腾讯云 RUM 的卡顿和白屏监控",
+      "expected_behavior": [
+        "执行步骤 0：用户未提供接入端、框架和上报 ID，必须主动询问全部三项",
+        "运行 detect_project.py，检测到 isCompositeProject = true",
+        "将 detectedPlatforms 告知用户（如：检测到项目包含 Web、微信小程序、PHP 后端代码）",
+        "明确询问用户要接入哪个端",
+        "等待用户回复后才继续接入流程",
+        "不自动选择第一个检测到的平台"
+      ],
+      "assertions": {
+        "step0_confirmation": [
+          "MUST ask user for platform, framework, and report ID",
+          "MUST NOT auto-select a platform when isCompositeProject is true",
+          "MUST present detectedPlatforms to user for selection",
+          "MUST wait for user response before proceeding"
+        ],
+        "safety": [
+          "MUST NOT generate any code before user confirms platform",
+          "MUST NOT install any SDK before user confirms platform"
+        ]
+      }
+    },
+    {
+      "id": "eval_13_no_info_provided",
+      "name": "用户未提供任何信息时主动询问",
+      "description": "测试 Skill 在用户只说'接入 RUM'但未提供端、框架、上报 ID 时，能否按步骤 0 主动询问全部三项",
+      "prompt": "帮我接入腾讯云 RUM",
+      "expected_behavior": [
+        "执行步骤 0：用户未提供任何信息",
+        "一次性询问接入端、开发框架和上报 ID 三个问题",
+        "提供选项列表帮助用户选择",
+        "等待用户回复后才继续",
+        "不运行检测脚本或生成代码"
+      ],
+      "assertions": {
+        "step0_confirmation": [
+          "MUST ask for platform (with options list)",
+          "MUST ask for framework (with options list)",
+          "MUST ask for report ID (with guidance on how to get one)",
+          "MUST combine all three questions in one message",
+          "MUST NOT proceed to detection or code generation without answers"
+        ]
+      }
+    },
+    {
+      "id": "eval_14_nodejs_express",
+      "name": "Node.js Express 服务端接入",
+      "description": "测试 Skill 能否正确处理 Node.js 服务端项目，使用 aegis-node-sdk 并配置 selector 服务发现",
+      "prompt": "帮我在这个 Express 项目中接入腾讯云 RUM Node.js SDK，上报 ID 是 pGUVFTCZyewnode01，部署在中国内地",
+      "expected_behavior": [
+        "执行步骤 0：从消息提取接入端（Node.js）、框架（Express）、上报 ID、地域（中国内地）",
+        "检测到 Node.js 项目",
+        "选择 aegis-node-sdk（不是 aegis-web-sdk）",
+        "在 HTTP 服务启动前初始化",
+        "配置 selector（默认 polaris 或 host 模式）",
+        "hostUrl 设置为 https://rumt-zh.com",
+        "提供验证步骤和回滚说明"
+      ],
+      "assertions": {
+        "step0_confirmation": [
+          "MUST extract platform/framework/reportId/region from user message",
+          "MUST NOT ask user for info already provided in prompt"
+        ],
+        "platform_specific": [
+          "MUST use aegis-node-sdk, NOT aegis-web-sdk",
+          "MUST initialize before HTTP server starts",
+          "MUST include selector configuration in the init code",
+          "MUST set hostUrl to https://rumt-zh.com for mainland China",
+          "SHOULD explain that Node SDK is a lightweight reporting bridge, not a full APM"
+        ],
+        "code_quality": [
+          "MUST support both ESM and CJS import styles based on project detection",
+          "MUST create a separate aegis initialization file"
+        ]
+      }
+    },
+    {
+      "id": "eval_15_hippy_integration",
+      "name": "Hippy 应用接入",
+      "description": "测试 Skill 能否正确处理 Hippy 项目，使用 aegis-hippy-sdk 并正确处理 bridge 配置",
+      "prompt": "帮我在这个 Hippy 项目中接入腾讯云 RUM，上报 ID 是 pGUVFTCZyewhippy01，需要开启 bridge 测速，我们的 bridge 对象做过二次封装",
+      "expected_behavior": [
+        "执行步骤 0：从消息提取接入端（Hippy）、上报 ID，追问上报地域",
+        "检测到 Hippy 项目",
+        "选择 aegis-hippy-sdk",
+        "在 entryPage 入口模块尽早初始化",
+        "配置 reportBridgeSpeed: true",
+        "提醒用户通过 hippyBridge 传入真实 bridge 对象（因用户提到 bridge 做过封装）",
+        "提供验证步骤和回滚说明"
+      ],
+      "assertions": {
+        "step0_confirmation": [
+          "MUST extract platform and reportId from user message",
+          "MUST ask for region (not provided in prompt)"
+        ],
+        "platform_specific": [
+          "MUST use aegis-hippy-sdk",
+          "MUST set reportBridgeSpeed: true",
+          "MUST warn about passing real bridge object via hippyBridge config when bridge is wrapped",
+          "MUST explain that bridge speed monitoring only wraps callNativeWithPromise",
+          "MUST initialize in entryPage as early as possible"
+        ]
+      }
+    },
+    {
+      "id": "eval_16_cocos_game",
+      "name": "Cocos Creator 游戏接入",
+      "description": "测试 Skill 能否正确处理 Cocos Creator 游戏项目，使用 aegis-cocos-sdk 并处理场景监控和首屏上报",
+      "prompt": "帮我在这个 Cocos Creator 游戏项目中接入腾讯云 RUM，上报 ID 是 pGUVFTCZyewcocos01，需要监控场景切换和资源加载耗时，上报到新加坡",
+      "expected_behavior": [
+        "执行步骤 0：从消息提取接入端（Cocos）、上报 ID、地域（新加坡）",
+        "检测到 Cocos Creator 项目",
+        "选择 aegis-cocos-sdk",
+        "在游戏启动阶段、场景加载前初始化",
+        "配置 spa: true 开启场景切换 PV 监控",
+        "配置 reportAssetSpeed: true 开启资源测速",
+        "hostUrl 设置为 https://rumt-sg.com",
+        "说明首屏时间需要手动调用 aegis.reportFirstScreenTime()",
+        "提供验证步骤和回滚说明"
+      ],
+      "assertions": {
+        "step0_confirmation": [
+          "MUST extract platform/reportId/region from user message",
+          "MUST NOT ask user for info already provided in prompt"
+        ],
+        "platform_specific": [
+          "MUST use aegis-cocos-sdk",
+          "MUST set spa: true for scene switch PV tracking",
+          "MUST set reportAssetSpeed: true for resource loading monitoring",
+          "MUST set hostUrl to https://rumt-sg.com for Singapore region",
+          "MUST explain that first screen time requires manual reportFirstScreenTime() call",
+          "MUST initialize before scene loading or resource loading begins"
+        ]
+      }
+    },
+    {
+      "id": "eval_17_liteapp_store_mode",
+      "name": "LiteApp 应用接入（Store 模式）",
+      "description": "测试 Skill 能否正确处理 LiteApp 多页应用，使用 aegis-liteapp-sdk 并配置 UseStore 双运行时架构",
+      "prompt": "帮我在这个 LiteApp 多页应用中接入腾讯云 RUM，上报 ID 是 pGUVFTCZyewlite01，项目使用了集中式 Store 架构",
+      "expected_behavior": [
+        "执行步骤 0：从消息提取接入端（LiteApp）、上报 ID，追问上报地域",
+        "检测到 LiteApp 项目",
+        "选择 aegis-liteapp-sdk",
+        "因为用户使用了 Store 架构，配置 useStore: true",
+        "同时导入 Aegis 和 UseStore",
+        "生成页面运行时和 Store 运行时的双初始化代码",
+        "提供验证步骤和回滚说明"
+      ],
+      "assertions": {
+        "step0_confirmation": [
+          "MUST extract platform and reportId from user message",
+          "MUST ask for region (not provided in prompt)"
+        ],
+        "platform_specific": [
+          "MUST use aegis-liteapp-sdk",
+          "MUST set useStore: true for Store architecture",
+          "MUST import both Aegis and UseStore from aegis-liteapp-sdk",
+          "MUST generate initialization code for BOTH page runtime and Store runtime",
+          "MUST explain the dual-runtime architecture (page runtime vs Store runtime)"
+        ]
+      }
+    },
+    {
+      "id": "eval_18_quickapp",
+      "name": "快应用接入",
+      "description": "测试 Skill 能否正确处理 QuickApp 项目，使用 aegis-quickapp-sdk 并处理手动错误转发和 aegisFetch",
+      "prompt": "帮我在这个快应用项目中接入腾讯云 RUM，上报 ID 是 pGUVFTCZyewqa001，需要监控 JS 错误和 API 请求耗时，部署在中国内地",
+      "expected_behavior": [
+        "执行步骤 0：从消息提取接入端（QuickApp）、上报 ID、地域（中国内地）",
+        "检测到 QuickApp 项目",
+        "选择 aegis-quickapp-sdk",
+        "在 app.ux 中初始化",
+        "说明需要在 app.ux 的 onError 中手动转发错误到 aegis.error()",
+        "说明 API 测速需使用 aegis.aegisFetch() 而非原始 fetch",
+        "hostUrl 设置为 https://rumt-zh.com",
+        "提供验证步骤和回滚说明"
+      ],
+      "assertions": {
+        "step0_confirmation": [
+          "MUST extract platform/reportId/region from user message",
+          "MUST NOT ask user for info already provided in prompt"
+        ],
+        "platform_specific": [
+          "MUST use aegis-quickapp-sdk",
+          "MUST initialize in app.ux",
+          "MUST explain that global JS errors require manual forwarding in onError",
+          "MUST provide onError handler code that calls aegis.error(err)",
+          "MUST explain that API speed monitoring requires aegisFetch instead of native fetch",
+          "MUST set hostUrl to https://rumt-zh.com for mainland China"
+        ]
+      }
+    },
+    {
+      "id": "eval_19_viola",
+      "name": "Viola 应用接入",
+      "description": "测试 Skill 能否正确处理 Viola 项目，使用 aegis-viola-sdk 并理解其较窄的能力边界",
+      "prompt": "帮我在这个 Viola 应用中接入腾讯云 RUM，上报 ID 是 pGUVFTCZyewviola01，需要监控 HTTP 请求和运行时错误",
+      "expected_behavior": [
+        "执行步骤 0：从消息提取接入端（Viola）、上报 ID，追问上报地域",
+        "检测到 Viola 项目",
+        "选择 aegis-viola-sdk",
+        "在入口脚本尽早初始化",
+        "配置 reportApiSpeed: true 开启 HTTP 模块测速",
+        "说明 Viola SDK 的能力边界（不提供页面性能监控、不提供静态资源测速）",
+        "提供验证步骤和回滚说明"
+      ],
+      "assertions": {
+        "step0_confirmation": [
+          "MUST extract platform and reportId from user message",
+          "MUST ask for region (not provided in prompt)"
+        ],
+        "platform_specific": [
+          "MUST use aegis-viola-sdk",
+          "MUST set reportApiSpeed: true",
+          "MUST explain Viola SDK capability boundaries (no page performance, no static resource speed)",
+          "MUST explain that HTTP monitoring covers Viola HTTP module traffic, not browser-style network interception",
+          "SHOULD mention extRequestOpts if special request parameters are needed"
+        ]
+      }
+    },
+    {
+      "id": "eval_20_weex",
+      "name": "Weex 应用接入",
+      "description": "测试 Skill 能否正确处理 Weex 项目，使用 aegis-weex-sdk 并确保在 Vue 初始化前完成接入",
+      "prompt": "帮我在这个 Weex + Vue 项目中接入腾讯云 RUM，上报 ID 是 pGUVFTCZyewweex01，需要开启接口测速，部署在硅谷",
+      "expected_behavior": [
+        "执行步骤 0：从消息提取接入端（Weex）、框架（Vue）、上报 ID、地域（硅谷）",
+        "检测到 Weex 项目",
+        "选择 aegis-weex-sdk",
+        "在 bootstrap/入口模块初始化，必须在 Vue 业务代码初始化前",
+        "配置 reportApiSpeed: true",
+        "hostUrl 设置为 https://rumt-us.com",
+        "说明 JS 错误监控依赖 Vue.config.errorHandler，因此必须在 Vue 初始化前完成接入",
+        "提供验证步骤和回滚说明"
+      ],
+      "assertions": {
+        "step0_confirmation": [
+          "MUST extract platform/framework/reportId/region from user message",
+          "MUST NOT ask user for info already provided in prompt"
+        ],
+        "platform_specific": [
+          "MUST use aegis-weex-sdk",
+          "MUST initialize BEFORE Vue business code initialization",
+          "MUST set reportApiSpeed: true",
+          "MUST set hostUrl to https://rumt-us.com for Silicon Valley region",
+          "MUST explain that JS error monitoring depends on Vue.config.errorHandler",
+          "MUST explain the dual network path (standard fetch + Weex native stream.fetch)"
+        ]
+      }
+    },
+    {
+      "id": "eval_11_taro_miniprogram",
+      "name": "Taro 小程序接入（含白屏 scan-taro）",
+      "description": "测试 Skill 能否正确处理 Taro 3 + React 项目编译为微信小程序的场景，使用 aegis-mp-sdk 并引导 scan-taro 白屏检测流程",
+      "prompt": "帮我在这个 Taro 3 + React 项目中接入腾讯云 RUM，编译目标是微信小程序，上报 ID 是 pGUVFTCZyewtaro01，需要开启白屏检测",
+      "expected_behavior": [
+        "执行步骤 0：从消息提取接入端（微信小程序）、框架（Taro 3 + React）、上报 ID，追问上报地域",
+        "检测到项目类型为小程序",
+        "选择 aegis-mp-sdk（不是 aegis-web-sdk）",
+        "在 app.ts 或 app.tsx 中初始化",
+        "配置白屏检测（blankScreen）并引导使用 scan-taro 扫描源码生成 selectorsMap",
+        "说明 Taro 项目应在构建前扫描源码（scan-taro），而非扫描构建产物",
+        "提醒配置安全域名",
+        "提供验证步骤和回滚说明"
+      ],
+      "assertions": {
+        "step0_confirmation": [
+          "MUST extract platform (miniprogram) / framework (Taro 3 + React) / reportId from user message",
+          "MUST ask for region (not provided in prompt)"
+        ],
+        "platform_specific": [
+          "MUST use aegis-mp-sdk, NOT aegis-web-sdk",
+          "MUST explain scan-taro mode for Taro projects (scan source code before build, not build artifacts)",
+          "MUST include scan-taro command example",
+          "MUST explain that inject/wrap/restore is NOT supported for Taro",
+          "MUST remind user to add report domain to request allowlist"
+        ],
+        "code_quality": [
+          "MUST configure blankScreen with selectorsMap from scan-taro output",
+          "MUST explain Taro route path matching rules (no file extension, no leading slash)"
+        ]
+      }
+    }
+  ]
+}

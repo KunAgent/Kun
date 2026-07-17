@@ -1,0 +1,12 @@
+{
+  "name": "fbs.abbreviation-audit-lexicon",
+  "version": "1.0.0",
+  "description": "C0-2 专项审计用：易多义缩写等条目清单，供 quality-check / book-level-consistency 引用；quality-auditor 等脚本只读此文件，不在代码中写死具体缩写。",
+  "entries": [
+    {
+      "abbrev": "OPC",
+      "ambiguousMeanings": ["One-Person Company", "Other People's Capital"],
+      "note": "同书内须单一释义；维护者可在此追加更多条目。"
+    }
+  ]
+}

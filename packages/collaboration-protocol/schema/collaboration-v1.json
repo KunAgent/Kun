@@ -1,0 +1,604 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "clientFrame": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "version": {
+              "type": "number",
+              "const": 1
+            },
+            "kind": {
+              "type": "string",
+              "const": "handshake"
+            },
+            "clientId": {
+              "$ref": "#/$defs/__schema0"
+            },
+            "supportedVersions": {
+              "minItems": 1,
+              "maxItems": 8,
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/__schema1"
+              }
+            },
+            "featureFlags": {
+              "default": [],
+              "maxItems": 64,
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/__schema0"
+              }
+            }
+          },
+          "required": [
+            "version",
+            "kind",
+            "clientId",
+            "supportedVersions",
+            "featureFlags"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "version": {
+              "type": "number",
+              "const": 1
+            },
+            "kind": {
+              "type": "string",
+              "const": "auth"
+            },
+            "memberId": {
+              "$ref": "#/$defs/__schema0"
+            },
+            "deviceId": {
+              "$ref": "#/$defs/__schema0"
+            },
+            "credential": {
+              "maxLength": 16384,
+              "$ref": "#/$defs/__schema2"
+            },
+            "challengeSignature": {
+              "maxLength": 16384,
+              "$ref": "#/$defs/__schema2"
+            }
+          },
+          "required": [
+            "version",
+            "kind",
+            "memberId",
+            "deviceId",
+            "credential",
+            "challengeSignature"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "version": {
+              "type": "number",
+              "const": 1
+            },
+            "kind": {
+              "type": "string",
+              "const": "command"
+            },
+            "commandId": {
+              "$ref": "#/$defs/__schema0"
+            },
+            "meetingId": {
+              "$ref": "#/$defs/__schema0"
+            },
+            "expectedVersion": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "payload": {
+              "$ref": "#/$defs/__schema3"
+            }
+          },
+          "required": [
+            "version",
+            "kind",
+            "commandId",
+            "meetingId",
+            "expectedVersion",
+            "payload"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "version": {
+              "type": "number",
+              "const": 1
+            },
+            "kind": {
+              "type": "string",
+              "const": "ack"
+            },
+            "meetingId": {
+              "$ref": "#/$defs/__schema0"
+            },
+            "sequence": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "checkpointDigest": {
+              "$ref": "#/$defs/__schema8"
+            }
+          },
+          "required": [
+            "version",
+            "kind",
+            "meetingId",
+            "sequence",
+            "checkpointDigest"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "version": {
+              "type": "number",
+              "const": 1
+            },
+            "kind": {
+              "type": "string",
+              "const": "presence"
+            },
+            "meetingId": {
+              "$ref": "#/$defs/__schema0"
+            },
+            "status": {
+              "type": "string",
+              "enum": [
+                "online",
+                "away",
+                "offline"
+              ]
+            },
+            "sponsorTaskIds": {
+              "default": [],
+              "maxItems": 256,
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/__schema0"
+              }
+            }
+          },
+          "required": [
+            "version",
+            "kind",
+            "meetingId",
+            "status",
+            "sponsorTaskIds"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "serverEvent": {
+      "type": "object",
+      "properties": {
+        "version": {
+          "type": "number",
+          "const": 1
+        },
+        "kind": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^(meeting_|human_task_|employee_invocation_|delivery_)[a-z0-9_]+$"
+        },
+        "meetingId": {
+          "$ref": "#/$defs/__schema0"
+        },
+        "sequence": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "epoch": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "payload": {
+          "$ref": "#/$defs/__schema3"
+        },
+        "receipt": {
+          "type": "object",
+          "properties": {
+            "commandId": {
+              "$ref": "#/$defs/__schema0"
+            },
+            "meetingId": {
+              "$ref": "#/$defs/__schema0"
+            },
+            "sequence": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 9007199254740991
+            },
+            "acceptedAt": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+            },
+            "serverInstanceId": {
+              "$ref": "#/$defs/__schema0"
+            },
+            "signature": {
+              "maxLength": 16384,
+              "$ref": "#/$defs/__schema2"
+            }
+          },
+          "required": [
+            "commandId",
+            "meetingId",
+            "sequence",
+            "acceptedAt",
+            "serverInstanceId",
+            "signature"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "version",
+        "kind",
+        "meetingId",
+        "sequence",
+        "epoch",
+        "payload",
+        "receipt"
+      ],
+      "additionalProperties": false
+    },
+    "invitation": {
+      "type": "object",
+      "properties": {
+        "version": {
+          "type": "number",
+          "const": 1
+        },
+        "invitationId": {
+          "$ref": "#/$defs/__schema0"
+        },
+        "serverUrl": {
+          "type": "string",
+          "format": "uri"
+        },
+        "serverInstanceId": {
+          "$ref": "#/$defs/__schema0"
+        },
+        "spkiSha256": {
+          "$ref": "#/$defs/__schema8"
+        },
+        "meetingId": {
+          "$ref": "#/$defs/__schema0"
+        },
+        "oneTimeCredential": {
+          "maxLength": 16384,
+          "$ref": "#/$defs/__schema2"
+        },
+        "expiresAt": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z))$"
+        },
+        "inviterMemberId": {
+          "$ref": "#/$defs/__schema0"
+        },
+        "welcome": {
+          "$ref": "#/$defs/__schema3"
+        }
+      },
+      "required": [
+        "version",
+        "invitationId",
+        "serverUrl",
+        "serverInstanceId",
+        "spkiSha256",
+        "meetingId",
+        "oneTimeCredential",
+        "expiresAt"
+      ],
+      "additionalProperties": false
+    },
+    "snapshot": {
+      "type": "object",
+      "properties": {
+        "version": {
+          "$ref": "#/$defs/__schema12"
+        },
+        "meetingId": {
+          "$ref": "#/$defs/__schema0"
+        },
+        "fromSequence": {
+          "$ref": "#/$defs/__schema13"
+        },
+        "throughSequence": {
+          "$ref": "#/$defs/__schema14"
+        },
+        "epoch": {
+          "$ref": "#/$defs/__schema15"
+        },
+        "checkpointDigest": {
+          "$ref": "#/$defs/__schema8"
+        },
+        "payload": {
+          "$ref": "#/$defs/__schema3"
+        },
+        "signature": {
+          "$ref": "#/$defs/__schema16"
+        }
+      },
+      "required": [
+        "version",
+        "meetingId",
+        "fromSequence",
+        "throughSequence",
+        "epoch",
+        "checkpointDigest",
+        "payload",
+        "signature"
+      ],
+      "additionalProperties": false
+    },
+    "blob": {
+      "type": "object",
+      "properties": {
+        "version": {
+          "type": "number",
+          "const": 1
+        },
+        "blobId": {
+          "$ref": "#/$defs/__schema0"
+        },
+        "meetingId": {
+          "$ref": "#/$defs/__schema0"
+        },
+        "totalBytes": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 104857600
+        },
+        "chunkBytes": {
+          "type": "integer",
+          "minimum": 65536,
+          "maximum": 4194304
+        },
+        "chunkCount": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 1600
+        },
+        "ciphertextSha256": {
+          "$ref": "#/$defs/__schema8"
+        },
+        "encryptedContentKey": {
+          "$ref": "#/$defs/__schema3"
+        },
+        "signature": {
+          "maxLength": 16384,
+          "$ref": "#/$defs/__schema2"
+        }
+      },
+      "required": [
+        "version",
+        "blobId",
+        "meetingId",
+        "totalBytes",
+        "chunkBytes",
+        "chunkCount",
+        "ciphertextSha256",
+        "encryptedContentKey",
+        "signature"
+      ],
+      "additionalProperties": false
+    },
+    "error": {
+      "type": "object",
+      "properties": {
+        "version": {
+          "type": "number",
+          "const": 1
+        },
+        "kind": {
+          "type": "string",
+          "const": "error"
+        },
+        "code": {
+          "type": "string",
+          "enum": [
+            "unsupported_version",
+            "authentication_failed",
+            "forbidden",
+            "conflict",
+            "rate_limited",
+            "quota_exceeded",
+            "payload_too_large",
+            "history_inconsistent",
+            "invitation_invalid",
+            "invitation_consumed",
+            "server_identity_changed",
+            "internal_error"
+          ]
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "requestId": {
+          "$ref": "#/$defs/__schema0"
+        },
+        "retryable": {
+          "type": "boolean"
+        },
+        "retryAfterMs": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 86400000
+        },
+        "currentVersion": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "version",
+        "kind",
+        "code",
+        "message",
+        "retryable"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "clientFrame",
+    "serverEvent",
+    "invitation",
+    "snapshot",
+    "blob",
+    "error"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "__schema0": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9._:-]+$"
+    },
+    "__schema1": {
+      "type": "integer",
+      "exclusiveMinimum": 0,
+      "maximum": 9007199254740991
+    },
+    "__schema2": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[A-Za-z0-9+/_-]+={0,2}$"
+    },
+    "__schema3": {
+      "type": "object",
+      "properties": {
+        "algorithm": {
+          "$ref": "#/$defs/__schema4"
+        },
+        "ciphertext": {
+          "$ref": "#/$defs/__schema5"
+        },
+        "contentType": {
+          "$ref": "#/$defs/__schema6"
+        },
+        "plaintextBytes": {
+          "$ref": "#/$defs/__schema7"
+        },
+        "sha256": {
+          "$ref": "#/$defs/__schema8"
+        },
+        "epoch": {
+          "$ref": "#/$defs/__schema9"
+        },
+        "generation": {
+          "$ref": "#/$defs/__schema10"
+        },
+        "nonce": {
+          "$ref": "#/$defs/__schema11"
+        }
+      },
+      "required": [
+        "algorithm",
+        "ciphertext",
+        "contentType",
+        "plaintextBytes",
+        "sha256"
+      ],
+      "additionalProperties": false
+    },
+    "__schema4": {
+      "type": "string",
+      "enum": [
+        "mls",
+        "task-key",
+        "hpke",
+        "delivery-key"
+      ]
+    },
+    "__schema5": {
+      "maxLength": 1398104,
+      "$ref": "#/$defs/__schema2"
+    },
+    "__schema6": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "__schema7": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 104857600
+    },
+    "__schema8": {
+      "type": "string",
+      "minLength": 64,
+      "maxLength": 64,
+      "pattern": "^[a-f0-9]+$"
+    },
+    "__schema9": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "__schema10": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "__schema11": {
+      "maxLength": 128,
+      "$ref": "#/$defs/__schema2"
+    },
+    "__schema12": {
+      "type": "number",
+      "const": 1
+    },
+    "__schema13": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "__schema14": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "__schema15": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "__schema16": {
+      "maxLength": 16384,
+      "$ref": "#/$defs/__schema2"
+    }
+  }
+}

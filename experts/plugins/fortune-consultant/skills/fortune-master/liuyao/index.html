@@ -1,0 +1,1097 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>雪儿解卦 · 六爻易经</title>
+  <!-- Fonts: uses local system CJK calligraphy fonts (STKaiti/KaiTi) as fallback.
+       To enable Google Fonts (Ma Shan Zheng / ZCOOL XiaoWei), uncomment the lines below.
+       Note: uncommenting will cause external network requests to fonts.googleapis.com.
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Ma+Shan+Zheng&family=ZCOOL+XiaoWei&display=swap" rel="stylesheet">
+  -->
+  <style>
+    :root {
+      --ink: #1a1025;
+      --ink2: #3a2a55;
+      --purple: #7a5aaa;
+      --silver: #c8c0e0;
+      --mist: rgba(230,225,250,0.55);
+      --gold: #c8a840;
+    }
+    * { margin:0; padding:0; box-sizing:border-box; }
+
+    body {
+      min-height: 100vh;
+      background: #f8f6ff;
+      font-family: 'Ma Shan Zheng', 'ZCOOL XiaoWei', 'STKaiti', 'KaiTi', serif;
+      color: var(--ink);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      overflow-x: hidden;
+      position: relative;
+    }
+
+    /* ══ 天宫背景 ══ */
+    .sky-bg {
+      position: fixed;
+      inset: 0;
+      background:
+        radial-gradient(ellipse 80% 50% at 50% 0%, rgba(220,215,250,0.7) 0%, transparent 60%),
+        radial-gradient(ellipse 60% 40% at 20% 80%, rgba(200,210,240,0.4) 0%, transparent 50%),
+        radial-gradient(ellipse 50% 30% at 80% 70%, rgba(215,205,245,0.35) 0%, transparent 50%),
+        linear-gradient(180deg, #eeeaff 0%, #f5f2ff 35%, #faf8ff 70%, #f0eeff 100%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* ══ 流动云雾层 ══ */
+    .clouds-layer {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 1;
+      overflow: hidden;
+    }
+
+    /* SVG 云丝 */
+    .cloud-svg {
+      position: absolute;
+      opacity: 0;
+      animation: driftCloud linear infinite;
+    }
+
+    @keyframes driftCloud {
+      0%   { transform: translateX(0) translateY(0) scaleY(1); opacity: 0; }
+      8%   { opacity: var(--op, 0.55); }
+      90%  { opacity: var(--op, 0.55); }
+      100% { transform: translateX(var(--dx, 120vw)) translateY(var(--dy, 0px)) scaleY(var(--sy,1)); opacity: 0; }
+    }
+
+    /* 飞散仙气粒子 */
+    .mist-particle {
+      position: fixed;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(200,190,255,0.6), transparent);
+      pointer-events: none;
+      z-index: 1;
+      animation: floatMist linear infinite;
+    }
+    @keyframes floatMist {
+      0%   { transform: translate(0,0) scale(1); opacity: 0; }
+      15%  { opacity: 0.4; }
+      85%  { opacity: 0.25; }
+      100% { transform: translate(var(--mx,30px), var(--my,-80px)) scale(0.4); opacity: 0; }
+    }
+
+    /* ══ 主容器 ══ */
+    .container {
+      position: relative;
+      z-index: 2;
+      width: 100%;
+      max-width: 700px;
+      padding: 0 22px 90px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 24px;
+    }
+
+    /* ══ 顶部仙气线 ══ */
+    .top-ornament {
+      width: 100%;
+      text-align: center;
+      padding: 18px 0 0;
+      position: relative;
+    }
+    .top-ornament svg { width: 100%; height: 28px; }
+
+    /* ══ 雪儿 Banner ══ */
+    .xueer-banner {
+      width: 100%;
+      background: rgba(255,253,255,0.75);
+      backdrop-filter: blur(12px);
+      border-radius: 28px;
+      padding: 22px 26px 18px;
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      border: 1px solid rgba(180,160,220,0.4);
+      box-shadow:
+        0 2px 24px rgba(140,100,200,0.1),
+        inset 0 1px 0 rgba(255,255,255,0.9);
+      position: relative;
+      overflow: hidden;
+    }
+    /* 内部光晕 */
+    .xueer-banner::before {
+      content: '';
+      position: absolute;
+      top: -30%; left: -10%; right: -10%; bottom: -30%;
+      background: radial-gradient(ellipse 60% 60% at 60% 50%, rgba(180,160,240,0.12), transparent);
+      pointer-events: none;
+    }
+
+    .xueer-avatar {
+      width: 90px; height: 90px;
+      border-radius: 50%;
+      border: 2px solid rgba(160,130,210,0.5);
+      box-shadow:
+        0 0 0 5px rgba(160,130,210,0.12),
+        0 4px 20px rgba(120,80,180,0.25),
+        0 0 30px rgba(160,130,210,0.2);
+      object-fit: cover;
+      flex-shrink: 0;
+    }
+    .xueer-avatar-fb {
+      width: 90px; height: 90px;
+      border-radius: 50%;
+      border: 2px solid rgba(160,130,210,0.5);
+      background: linear-gradient(135deg, #1a1228, #2a1845);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 2.6rem; flex-shrink: 0;
+    }
+
+    .xueer-intro { flex: 1; position: relative; z-index: 1; }
+    .xueer-name {
+      font-family: 'Ma Shan Zheng', serif;
+      font-size: 1.9rem;
+      color: var(--ink2);
+      letter-spacing: 0.4em;
+    }
+    .xueer-name sub {
+      font-size: 0.6rem;
+      color: var(--purple);
+      letter-spacing: 0.18em;
+      vertical-align: middle;
+      margin-left: 6px;
+    }
+    .xueer-role {
+      font-size: 0.78rem;
+      color: var(--purple);
+      letter-spacing: 0.18em;
+      margin-top: 4px;
+      opacity: 0.85;
+    }
+    .xueer-quote {
+      margin-top: 10px;
+      font-family: 'Ma Shan Zheng', serif;
+      font-size: 0.95rem;
+      color: var(--ink2);
+      line-height: 1.75;
+      border-left: 2px solid rgba(160,130,210,0.45);
+      padding-left: 10px;
+      letter-spacing: 0.06em;
+    }
+
+    /* ══ 卡片通用 ══ */
+    .card {
+      width: 100%;
+      background: rgba(255,253,255,0.78);
+      backdrop-filter: blur(10px);
+      border-radius: 22px;
+      border: 1px solid rgba(180,160,220,0.35);
+      box-shadow: 0 2px 20px rgba(120,80,180,0.08), inset 0 1px 0 rgba(255,255,255,0.85);
+      padding: 18px 20px;
+      position: relative;
+    }
+
+    /* ══ 问题输入 ══ */
+    .question-card label {
+      display: block;
+      font-family: 'Ma Shan Zheng', serif;
+      font-size: 0.9rem;
+      color: var(--purple);
+      margin-bottom: 8px;
+      letter-spacing: 0.18em;
+    }
+    .question-card textarea {
+      width: 100%; background: transparent;
+      border: none; outline: none;
+      color: var(--ink);
+      font-family: 'Ma Shan Zheng', serif;
+      font-size: 1.05rem;
+      resize: none; line-height: 1.8; min-height: 54px;
+      letter-spacing: 0.06em;
+    }
+    .question-card textarea::placeholder { color: rgba(160,140,200,0.5); font-size: 0.92rem; }
+
+    /* 角落符文装饰 */
+    .card-corner {
+      position: absolute;
+      font-size: 0.7rem;
+      color: rgba(160,130,210,0.35);
+      letter-spacing: 2px;
+    }
+    .card-corner.tl { top: 8px; left: 10px; }
+    .card-corner.tr { top: 8px; right: 10px; }
+    .card-corner.bl { bottom: 8px; left: 10px; }
+    .card-corner.br { bottom: 8px; right: 10px; }
+
+    /* ══ 六爻轨迹 ══ */
+    .yao-track-wrap {
+      width: 100%;
+    }
+    .yao-track-label {
+      font-family: 'Ma Shan Zheng', serif;
+      font-size: 0.78rem; color: var(--purple);
+      margin-bottom: 10px; letter-spacing: 0.2em;
+      text-align: center;
+    }
+    .yao-track {
+      display: flex; gap: 6px;
+      align-items: flex-end;
+      justify-content: space-around;
+    }
+    .yao-slot { display: flex; flex-direction: column; align-items: center; gap: 5px; }
+    .yao-num {
+      font-family: 'Ma Shan Zheng', serif;
+      font-size: 0.65rem; color: #ccc; letter-spacing: 0.05em;
+    }
+    .yao-num.done { color: var(--purple); }
+    .yao-bar-wrap { display: flex; flex-direction: column; gap: 3px; }
+    .yao-line-yang {
+      width: 38px; height: 6px;
+      border-radius: 3px;
+      background: linear-gradient(90deg, #c8a840, #e8c860);
+      box-shadow: 0 1px 0 #9a7820, 0 0 6px rgba(200,168,64,0.3);
+    }
+    .yao-line-yin { display: flex; gap: 5px; }
+    .yao-line-yin span {
+      width: 15px; height: 6px; border-radius: 3px;
+      background: linear-gradient(90deg, #8a6acc, #aa8aee);
+      box-shadow: 0 1px 0 #5a3a9a;
+    }
+    .yao-placeholder { width: 38px; height: 6px; border-radius: 3px; background: #e0daf0; }
+
+    /* ══ 树叶舞台 ══ */
+    .leaves-stage {
+      width: 100%;
+      min-height: 200px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 16px;
+      padding: 26px 16px 18px;
+      position: relative;
+    }
+
+    .leaves-row {
+      display: flex; gap: 40px;
+      justify-content: center; align-items: flex-end;
+    }
+    .leaf-unit { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+
+    /* 3D翻转 */
+    .leaf-3d-wrap { perspective: 700px; width: 110px; height: 155px; }
+    .leaf-3d-inner {
+      width: 100%; height: 100%;
+      position: relative; transform-style: preserve-3d;
+    }
+    .leaf-3d-inner.flipping {
+      animation: inkLeafSpin 2.2s cubic-bezier(0.3,0,0.7,1) forwards;
+    }
+    @keyframes inkLeafSpin {
+      0%   { transform: rotateY(0deg) rotate(var(--tilt,0deg)); }
+      20%  { transform: rotateY(360deg) rotate(calc(var(--tilt,0deg)+8deg)); }
+      40%  { transform: rotateY(700deg) rotate(var(--tilt,0deg)); }
+      60%  { transform: rotateY(880deg) rotate(calc(var(--tilt,0deg)-6deg)); }
+      82%  { transform: rotateY(960deg) rotate(var(--tilt,0deg)); }
+      95%  { transform: rotateY(calc(var(--final-rotation,0deg)+10deg)) rotate(var(--tilt,0deg)); }
+      100% { transform: rotateY(var(--final-rotation,0deg)) rotate(var(--tilt,0deg)); }
+    }
+    .leaf-face {
+      position: absolute; inset: 0;
+      backface-visibility: hidden;
+      -webkit-backface-visibility: hidden;
+      background: transparent;
+    }
+    .leaf-face.back-face { transform: rotateY(180deg); }
+
+    /* 叶片标签：已隐藏（正反面颜色区分即可） */
+    .leaf-tag { display: none; }
+
+    /* 轮次提示 */
+    .round-hint {
+      font-family: 'Ma Shan Zheng', serif;
+      font-size: 0.9rem; color: var(--purple);
+      letter-spacing: 0.22em; text-align: center;
+    }
+
+    /* ══ 摇卦按钮 ══ */
+    .btn-shake {
+      padding: 12px 54px;
+      font-family: 'Ma Shan Zheng', serif;
+      font-size: 1.15rem;
+      letter-spacing: 0.4em;
+      color: #fff;
+      background: linear-gradient(135deg, #3a2a6a 0%, #6a4aaa 50%, #3a2a6a 100%);
+      border: 1px solid rgba(160,130,210,0.5);
+      border-radius: 50px;
+      cursor: pointer;
+      box-shadow:
+        0 4px 0 #1a0a4a,
+        0 8px 24px rgba(80,40,140,0.3),
+        inset 0 1px 0 rgba(255,255,255,0.2);
+      transition: all 0.15s;
+      position: relative;
+      overflow: hidden;
+    }
+    .btn-shake::before {
+      content: '';
+      position: absolute; inset: 0;
+      background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.08) 50%, transparent 100%);
+      border-radius: inherit;
+    }
+    .btn-shake:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 0 #1a0a4a, 0 12px 32px rgba(80,40,140,0.4), inset 0 1px 0 rgba(255,255,255,0.2);
+    }
+    .btn-shake:active { transform: translateY(3px); box-shadow: 0 1px 0 #1a0a4a; }
+    .btn-shake:disabled {
+      background: linear-gradient(135deg, #bbb, #ccc);
+      border-color: #aaa;
+      box-shadow: 0 4px 0 #999;
+      cursor: not-allowed; transform: none;
+    }
+
+    /* ══ API配置 ══ */
+    .api-config {
+      width: 100%;
+      background: rgba(255,255,240,0.7);
+      border: 1px dashed rgba(200,168,64,0.4);
+      border-radius: 14px;
+      padding: 11px 15px;
+      backdrop-filter: blur(6px);
+    }
+    .api-config summary {
+      font-family: 'Ma Shan Zheng', serif;
+      cursor: pointer; font-size: 0.8rem;
+      color: #8a7830; letter-spacing: 0.12em; user-select: none;
+    }
+    .api-config .cfg-row {
+      display: flex; gap: 8px; align-items: center;
+      margin-top: 10px; flex-wrap: wrap;
+    }
+    .api-config label {
+      font-family: 'Ma Shan Zheng', serif;
+      font-size: 0.75rem; color: #7a7850; white-space: nowrap;
+    }
+    .api-config input, .api-config select {
+      flex: 1; min-width: 120px;
+      padding: 5px 10px;
+      border: 1px solid rgba(200,168,64,0.4);
+      border-radius: 8px;
+      font-family: 'Ma Shan Zheng', serif;
+      font-size: 0.8rem;
+      background: rgba(255,255,255,0.8);
+      outline: none;
+    }
+    .api-config input:focus, .api-config select:focus { border-color: var(--purple); }
+
+    /* ══ 结果卡片 ══ */
+    .result-card { display: none; }
+    .result-card.visible { display: block; }
+
+    /* 雪儿气泡 */
+    .xueer-speech {
+      display: flex; gap: 14px; align-items: flex-start;
+      margin-bottom: 20px;
+      background: rgba(245,240,255,0.85);
+      border-radius: 20px;
+      border: 1px solid rgba(160,130,210,0.3);
+      padding: 14px 16px;
+      box-shadow: 0 2px 16px rgba(120,80,180,0.08);
+      backdrop-filter: blur(8px);
+    }
+    .speech-avatar {
+      width: 46px; height: 46px;
+      border-radius: 50%;
+      border: 1.5px solid rgba(160,130,210,0.5);
+      object-fit: cover; flex-shrink: 0;
+      box-shadow: 0 0 12px rgba(140,100,200,0.3);
+    }
+    .speech-bubble-body { flex: 1; }
+    .speech-name {
+      font-family: 'Ma Shan Zheng', serif;
+      font-size: 0.7rem; color: var(--purple);
+      letter-spacing: 0.2em; margin-bottom: 4px;
+    }
+    .speech-text {
+      font-family: 'Ma Shan Zheng', serif;
+      font-size: 0.92rem; color: var(--ink2);
+      line-height: 1.8; letter-spacing: 0.06em;
+    }
+
+    /* 卦图 */
+    .gua-diagram {
+      display: flex; justify-content: center;
+      gap: 32px; margin: 6px 0 18px;
+    }
+    .gua-part { display: flex; flex-direction: column; align-items: center; gap: 5px; }
+    .gua-part-label {
+      font-family: 'Ma Shan Zheng', serif;
+      font-size: 0.65rem; color: var(--purple); letter-spacing: 0.12em;
+    }
+    .gua-lines-block { display: flex; flex-direction: column-reverse; gap: 5px; }
+    .gua-l-yang {
+      width: 46px; height: 8px; border-radius: 4px;
+      background: linear-gradient(90deg, #c8a840, #e8c860);
+      box-shadow: 0 1px 0 #9a7820, 0 0 8px rgba(200,168,64,0.35);
+    }
+    .gua-l-yin { display: flex; gap: 6px; }
+    .gua-l-yin span {
+      width: 18px; height: 8px; border-radius: 4px;
+      background: linear-gradient(90deg, #7a5acc, #9a7aee);
+      box-shadow: 0 1px 0 #4a2a9a;
+    }
+    .gua-sym {
+      font-size: 1.8rem; color: var(--purple);
+      text-shadow: 0 0 12px rgba(120,80,180,0.3);
+    }
+    .gua-name-sm {
+      font-family: 'Ma Shan Zheng', serif;
+      font-size: 0.8rem; color: var(--ink2); letter-spacing: 0.12em;
+    }
+    .gua-center-label {
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center; gap: 7px;
+    }
+    .gua-full-name {
+      font-family: 'Ma Shan Zheng', serif;
+      font-size: 1.3rem; color: var(--ink2); letter-spacing: 0.25em;
+    }
+    .gua-question-sm {
+      font-family: 'Ma Shan Zheng', serif;
+      font-size: 0.72rem; color: var(--purple); letter-spacing: 0.08em;
+    }
+
+    /* 分割线 */
+    .divider-ink {
+      width: 100%; height: 20px;
+      background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='600' height='20'%3E%3Cpath d='M0,10 Q60,4 120,10 Q180,16 240,10 Q300,4 360,10 Q420,16 480,10 Q540,4 600,10' stroke='rgba(160,130,200,0.35)' stroke-width='1.5' fill='none'/%3E%3Ccircle cx='300' cy='10' r='3' fill='rgba(160,130,200,0.35)'/%3E%3Ccircle cx='120' cy='10' r='2' fill='rgba(160,130,200,0.25)'/%3E%3Ccircle cx='480' cy='10' r='2' fill='rgba(160,130,200,0.25)'/%3E%3C/svg%3E") no-repeat center / 100% 100%;
+      margin: 8px 0;
+    }
+
+    /* 解卦正文 */
+    .interp-body {
+      font-family: 'Ma Shan Zheng', serif;
+      font-size: 0.95rem; line-height: 2; color: var(--ink);
+      letter-spacing: 0.05em;
+    }
+    .interp-body h2 {
+      font-size: 1.05rem; color: var(--ink2);
+      letter-spacing: 0.3em; margin-bottom: 10px;
+      display: flex; align-items: center; gap: 8px;
+    }
+    #streamOutput {
+      white-space: pre-wrap;
+      font-family: 'Ma Shan Zheng', serif;
+      font-size: 0.94rem; line-height: 2;
+      color: var(--ink); letter-spacing: 0.05em;
+    }
+    .loading-wrap {
+      display: flex; align-items: center; gap: 10px;
+      font-family: 'Ma Shan Zheng', serif;
+      color: var(--purple); font-size: 0.85rem;
+      letter-spacing: 0.15em; margin: 8px 0;
+    }
+    .dot-spin {
+      width: 18px; height: 18px;
+      border: 2px solid rgba(160,130,210,0.3);
+      border-top-color: var(--purple);
+      border-radius: 50%;
+      animation: spin 0.9s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .btn-reset {
+      margin-top: 18px; display: block; width: 100%;
+      padding: 10px;
+      font-family: 'Ma Shan Zheng', serif;
+      font-size: 0.9rem; letter-spacing: 0.28em;
+      color: var(--purple);
+      background: rgba(255,253,255,0.8);
+      border: 1px solid rgba(160,130,210,0.35);
+      border-radius: 50px; cursor: pointer;
+      transition: all 0.15s;
+      box-shadow: 0 2px 12px rgba(120,80,180,0.08);
+      backdrop-filter: blur(6px);
+    }
+    .btn-reset:hover { background: rgba(245,240,255,0.95); }
+
+    /* ══ 飘散符文粒子 ══ */
+    .float-rune {
+      position: fixed; pointer-events: none;
+      font-family: 'Ma Shan Zheng', serif;
+      font-size: 1rem; color: var(--purple);
+      z-index: 10;
+      animation: runeFloat 2.4s ease-out forwards;
+    }
+    @keyframes runeFloat {
+      0%   { opacity: 0.9; transform: translate(0,0) scale(1) rotate(0deg); }
+      100% { opacity: 0; transform: translate(var(--rx,20px), var(--ry,-100px)) scale(0.4) rotate(40deg); }
+    }
+  </style>
+</head>
+<body>
+
+<!-- 天宫背景 -->
+<div class="sky-bg"></div>
+
+<!-- 云雾层 (JS 动态生成) -->
+<div class="clouds-layer" id="cloudsLayer"></div>
+
+<div class="container">
+
+  <!-- 顶部仙气纹 -->
+  <div class="top-ornament">
+    <svg viewBox="0 0 700 28" xmlns="http://www.w3.org/2000/svg">
+      <path d="M0,14 Q87,4 175,14 Q262,24 350,14 Q437,4 525,14 Q612,24 700,14"
+        stroke="rgba(160,130,210,0.3)" stroke-width="1.2" fill="none"/>
+      <path d="M0,18 Q87,8 175,18 Q262,28 350,18 Q437,8 525,18 Q612,28 700,18"
+        stroke="rgba(160,130,210,0.15)" stroke-width="0.8" fill="none"/>
+      <circle cx="350" cy="14" r="4" fill="rgba(160,130,210,0.35)"/>
+      <circle cx="175" cy="14" r="2.5" fill="rgba(160,130,210,0.25)"/>
+      <circle cx="525" cy="14" r="2.5" fill="rgba(160,130,210,0.25)"/>
+      <text x="350" y="14" text-anchor="middle" dominant-baseline="middle"
+        font-family="serif" font-size="10" fill="rgba(120,90,180,0.4)" letter-spacing="18">
+        ☽ ☯ ✦ ☾
+      </text>
+    </svg>
+  </div>
+
+  <!-- 雪儿 Banner -->
+  <div class="xueer-banner">
+    <img class="xueer-avatar" id="xueerAvatar"
+      src="/Users/apple/Documents/雪儿/雪儿头像.jpg"
+      onerror="this.style.display='none';document.getElementById('avatarFb').style.display='flex'"
+      alt="雪儿"/>
+    <div class="xueer-avatar-fb" id="avatarFb" style="display:none">🐱</div>
+    <div class="xueer-intro">
+      <div class="xueer-name">雪 儿 <sub>六爻 · 易经解惑</sub></div>
+      <div class="xueer-role">玄猫 · 通晓天机 · 易理传承</div>
+      <div class="xueer-quote">
+        「这位仙家，天机不可尽泄，<br>然诚心所至，卦自有言。」
+      </div>
+    </div>
+  </div>
+
+  <!-- API配置 -->
+  <details class="api-config card" id="apiConfig">
+    <summary>⚙ 大模型配置（雪儿借天机推演，展开设置）</summary>
+    <div class="cfg-row">
+      <label>API Key：</label>
+      <!-- NOTE: value is entered by the user at runtime, stored only in browser localStorage; no key is bundled in this file. -->
+      <input type="password" id="apiKey" placeholder="请粘贴您自己的 API Key" autocomplete="off"/>
+    </div>
+    <div class="cfg-row">
+      <label>接口地址：</label>
+      <input type="text" id="apiBase" value="https://api.openai.com/v1"/>
+    </div>
+    <div class="cfg-row">
+      <label>模型：</label>
+      <select id="apiModel">
+        <option value="gpt-4o">GPT-4o</option>
+        <option value="gpt-4o-mini">GPT-4o-mini</option>
+        <option value="claude-3-5-sonnet-20241022">Claude 3.5 Sonnet</option>
+        <option value="deepseek-chat">DeepSeek Chat</option>
+        <option value="custom">自定义</option>
+      </select>
+    </div>
+    <div class="cfg-row" id="customModelRow" style="display:none">
+      <label>自定义模型：</label>
+      <input type="text" id="customModel" placeholder="model-name"/>
+    </div>
+  </details>
+
+  <!-- 问题输入 -->
+  <div class="card question-card">
+    <div class="card-corner tl">☽</div>
+    <div class="card-corner tr">✦</div>
+    <div class="card-corner bl">✧</div>
+    <div class="card-corner br">☾</div>
+    <label>仙家，请诚心写下所问之事</label>
+    <textarea id="questionInput" rows="2"
+      placeholder="如：近期事业是否顺遂？此次合作可否为之？"></textarea>
+  </div>
+
+  <!-- 六爻轨迹 -->
+  <div class="card yao-track-wrap">
+    <div class="yao-track-label">六爻记录 · 初爻至上爻</div>
+    <div class="yao-track" id="yaoTrack"></div>
+  </div>
+
+  <!-- 树叶舞台 -->
+  <div class="card leaves-stage">
+    <div class="leaves-row" id="leavesRow">
+      <div class="leaf-unit">
+        <div class="leaf-3d-wrap"><div class="leaf-3d-inner" id="leaf0" style="--tilt:-8deg">
+          <div class="leaf-face front-face" id="lf0"></div>
+          <div class="leaf-face back-face"  id="lb0"></div>
+        </div></div>
+        <div class="leaf-tag" id="ltag0"></div>
+      </div>
+      <div class="leaf-unit">
+        <div class="leaf-3d-wrap"><div class="leaf-3d-inner" id="leaf1" style="--tilt:0deg">
+          <div class="leaf-face front-face" id="lf1"></div>
+          <div class="leaf-face back-face"  id="lb1"></div>
+        </div></div>
+        <div class="leaf-tag" id="ltag1"></div>
+      </div>
+      <div class="leaf-unit">
+        <div class="leaf-3d-wrap"><div class="leaf-3d-inner" id="leaf2" style="--tilt:7deg">
+          <div class="leaf-face front-face" id="lf2"></div>
+          <div class="leaf-face back-face"  id="lb2"></div>
+        </div></div>
+        <div class="leaf-tag" id="ltag2"></div>
+      </div>
+    </div>
+    <div class="round-hint" id="roundHint">☽ 仙家，请点击「摇卦」开始第一爻</div>
+  </div>
+
+  <button class="btn-shake" id="shakeBtn" onclick="shakeLeaves()">摇 卦</button>
+
+  <!-- 结果卡 -->
+  <div class="card result-card" id="resultCard">
+    <!-- 雪儿气泡 -->
+    <div class="xueer-speech">
+      <img class="speech-avatar"
+        src="/Users/apple/Documents/雪儿/雪儿头像.jpg"
+        onerror="this.textContent='🐱';this.style.fontSize='1.6rem'"
+        alt=""/>
+      <div class="speech-bubble-body">
+        <div class="speech-name">雪 儿</div>
+        <div class="speech-text" id="speechText">
+          仙家已摇六爻，卦象已成。且待雪儿观天地之机，为仙家细细道来……
+        </div>
+      </div>
+    </div>
+
+    <!-- 卦图 -->
+    <div class="gua-diagram" id="guaDiagram"></div>
+    <div class="divider-ink"></div>
+
+    <!-- 解卦正文 -->
+    <div class="interp-body">
+      <h2>雪儿为仙家解卦</h2>
+      <div class="loading-wrap" id="loadingWrap">
+        <div class="dot-spin"></div>
+        <span>雪儿正在推演天机，稍候片刻……</span>
+      </div>
+      <div id="streamOutput"></div>
+    </div>
+
+    <button class="btn-reset" onclick="resetAll()">🌙 重新起卦</button>
+  </div>
+
+  <!-- 底部仙气纹 -->
+  <div style="width:100%;padding-bottom:8px">
+    <svg viewBox="0 0 700 20" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:20px">
+      <path d="M0,10 Q175,2 350,10 Q525,18 700,10"
+        stroke="rgba(160,130,210,0.2)" stroke-width="1" fill="none"/>
+    </svg>
+  </div>
+
+</div>
+
+<script>
+/* ═══════════════════════════════════════════════
+   图片枫叶：正面用净如姐提供的水墨图，反面灰度版
+═══════════════════════════════════════════════ */
+
+// 三片叶子用同一张图，但各自有细微旋转差异（已在 CSS --tilt 处理）
+function makeInkLeafFront(i) {
+  const tilts = [-5, 0, 6];
+  return `<img src="maple_front.png" style="
+    width:100%; height:100%;
+    object-fit:cover;
+    display:block;
+    mix-blend-mode:normal;
+    background:transparent;
+    transform: rotate(${tilts[i]}deg);
+    transform-origin: center center;
+    filter: drop-shadow(0 6px 16px rgba(40,60,20,0.35));
+  " draggable="false"/>`;
+}
+
+function makeInkLeafBack(i) {
+  const tilts = [-5, 0, 6];
+  return `<img src="maple_back.png" style="
+    width:100%; height:100%;
+    object-fit:cover;
+    display:block;
+    background:transparent;
+    transform: rotate(${tilts[i]}deg);
+    transform-origin: center center;
+    filter: drop-shadow(0 6px 14px rgba(20,20,20,0.38));
+  " draggable="false"/>`;
+}
+
+function initLeaves() {
+  for(let i=0;i<3;i++){
+    document.getElementById('lf'+i).innerHTML = makeInkLeafFront(i);
+    document.getElementById('lb'+i).innerHTML = makeInkLeafBack(i);
+  }
+}
+
+/* ═══════════════════════════════════════════════
+   天宫云雾系统
+═══════════════════════════════════════════════ */
+function createClouds() {
+  const layer = document.getElementById('cloudsLayer');
+
+  // 云丝 SVG 形状集合
+  const cloudShapes = [
+    // 长飘带云
+    (w,h) => `<path d="M0,${h*0.5} Q${w*0.15},${h*0.1} ${w*0.3},${h*0.5} Q${w*0.5},${h*0.9} ${w*0.7},${h*0.5} Q${w*0.85},${h*0.15} ${w},${h*0.5}" stroke="rgba(220,215,255,VAR_OP)" stroke-width="${h*0.35}" fill="none" stroke-linecap="round"/>`,
+    // 积层云团
+    (w,h) => `<ellipse cx="${w*0.3}" cy="${h*0.5}" rx="${w*0.3}" ry="${h*0.45}" fill="rgba(230,225,255,VAR_OP)"/>
+      <ellipse cx="${w*0.6}" cy="${h*0.4}" rx="${w*0.25}" ry="${h*0.35}" fill="rgba(225,220,252,VAR_OP)"/>
+      <ellipse cx="${w*0.8}" cy="${h*0.55}" rx="${w*0.2}" ry="${h*0.3}" fill="rgba(220,215,250,VAR_OP)"/>`,
+    // 丝缕云
+    (w,h) => `<path d="M0,${h*0.3} Q${w*0.2},${h*0.6} ${w*0.4},${h*0.3} Q${w*0.6},0 ${w*0.8},${h*0.4} Q${w*0.9},${h*0.6} ${w},${h*0.3}" stroke="rgba(215,208,250,VAR_OP)" stroke-width="${h*0.25}" fill="none" stroke-linecap="round"/>
+      <path d="M${w*0.1},${h*0.7} Q${w*0.35},${h*0.4} ${w*0.55},${h*0.7} Q${w*0.75},${h*0.95} ${w},${h*0.65}" stroke="rgba(210,205,248,VAR_OP)" stroke-width="${h*0.18}" fill="none" stroke-linecap="round"/>`,
+    // 散云
+    (w,h) => `<ellipse cx="${w*0.2}" cy="${h*0.5}" rx="${w*0.18}" ry="${h*0.4}" fill="rgba(228,222,255,VAR_OP)"/>
+      <ellipse cx="${w*0.5}" cy="${h*0.45}" rx="${w*0.22}" ry="${h*0.42}" fill="rgba(232,226,255,VAR_OP)"/>
+      <ellipse cx="${w*0.78}" cy="${h*0.55}" rx="${w*0.2}" ry="${h*0.38}" fill="rgba(225,219,252,VAR_OP)"/>`,
+    // 横卷云（祥云感）
+    (w,h) => `<path d="M0,${h*0.6} C${w*0.1},${h*0.1} ${w*0.25},${h*0.1} ${w*0.35},${h*0.5} C${w*0.45},${h*0.9} ${w*0.55},${h*0.9} ${w*0.65},${h*0.5} C${w*0.75},${h*0.1} ${w*0.88},${h*0.15} ${w},${h*0.55}" stroke="rgba(218,210,250,VAR_OP)" stroke-width="${h*0.3}" fill="none" stroke-linecap="round" stroke-linejoin="round"/>`,
+  ];
+
+  // 生成多层云（从右往左 & 从左往右）
+  const configs = [
+    // { fromRight, top%, width, height, speed(s), opacity, delay(s), verticalDrift }
+    { fr:true,  top:4,  w:260, h:40, spd:55, op:0.45, dl:0,  dy:-8,  shape:0 },
+    { fr:false, top:8,  w:180, h:28, spd:70, op:0.35, dl:8,  dy:5,   shape:2 },
+    { fr:true,  top:14, w:320, h:55, spd:80, op:0.3,  dl:3,  dy:-5,  shape:4 },
+    { fr:false, top:20, w:140, h:35, spd:50, op:0.4,  dl:15, dy:10,  shape:1 },
+    { fr:true,  top:28, w:200, h:45, spd:65, op:0.28, dl:22, dy:-6,  shape:3 },
+    { fr:false, top:35, w:280, h:50, spd:90, op:0.22, dl:5,  dy:8,   shape:0 },
+    { fr:true,  top:42, w:160, h:32, spd:60, op:0.32, dl:30, dy:-4,  shape:2 },
+    { fr:false, top:52, w:220, h:42, spd:75, op:0.25, dl:12, dy:6,   shape:4 },
+    { fr:true,  top:60, w:300, h:58, spd:95, op:0.2,  dl:40, dy:-7,  shape:1 },
+    { fr:false, top:68, w:170, h:38, spd:55, op:0.35, dl:18, dy:5,   shape:3 },
+    { fr:true,  top:75, w:240, h:48, spd:85, op:0.24, dl:28, dy:-3,  shape:0 },
+    { fr:false, top:82, w:190, h:40, spd:68, op:0.3,  dl:45, dy:9,   shape:2 },
+    { fr:true,  top:90, w:150, h:30, spd:52, op:0.38, dl:6,  dy:-5,  shape:4 },
+    // 前景大云（更朦胧）
+    { fr:true,  top:10, w:420, h:80, spd:120,op:0.18, dl:20, dy:-10, shape:4 },
+    { fr:false, top:55, w:380, h:75, spd:100,op:0.16, dl:50, dy:12,  shape:1 },
+  ];
+
+  configs.forEach(cfg => {
+    const el = document.createElementNS('http://www.w3.org/2000/svg','svg');
+    el.setAttribute('viewBox', `0 0 ${cfg.w} ${cfg.h}`);
+    el.style.cssText = `
+      position:absolute;
+      width:${cfg.w}px; height:${cfg.h}px;
+      top:${cfg.top}%;
+      left:${cfg.fr ? '100vw' : `-${cfg.w}px`};
+      --op:${cfg.op};
+      --dx:${cfg.fr ? `-${cfg.w + 100}vw` : `calc(100vw + ${cfg.w}px)`};
+      --dy:${cfg.dy}px;
+      --sy:1;
+    `;
+    el.className = 'cloud-svg';
+    el.style.animationDuration = cfg.spd + 's';
+    el.style.animationDelay = cfg.dl + 's';
+
+    const svgContent = cloudShapes[cfg.shape](cfg.w, cfg.h)
+      .replace(/VAR_OP/g, cfg.op);
+    el.innerHTML = svgContent;
+    layer.appendChild(el);
+  });
+
+  // 漂浮仙气粒子
+  for(let i=0;i<18;i++){
+    const p = document.createElement('div');
+    p.className = 'mist-particle';
+    const sz = 40 + Math.random()*80;
+    p.style.cssText = `
+      width:${sz}px; height:${sz*0.6}px;
+      left:${Math.random()*95}%;
+      top:${Math.random()*90}%;
+      --mx:${(Math.random()-0.5)*60}px;
+      --my:${-40-Math.random()*60}px;
+      animation-duration:${12+Math.random()*20}s;
+      animation-delay:${Math.random()*18}s;
+    `;
+    layer.appendChild(p);
+  }
+}
+
+/* ═══════════════════════════════════════════════
+   六爻轨迹
+═══════════════════════════════════════════════ */
+const YAO_NAMES = ['初','二','三','四','五','上'];
+let currentRound=0, yaoResults=[], isAnimating=false;
+
+function initTrack() {
+  const track = document.getElementById('yaoTrack');
+  track.innerHTML = '';
+  for(let i=0;i<6;i++){
+    const slot = document.createElement('div');
+    slot.className='yao-slot'; slot.id='ys'+i;
+    slot.innerHTML=`<div class="yao-bar-wrap"><div class="yao-placeholder"></div></div>
+      <div class="yao-num" id="yn${i}">${YAO_NAMES[i]}爻</div>`;
+    track.appendChild(slot);
+  }
+}
+function updateTrack(idx,isYang) {
+  const wrap=document.querySelector(`#ys${idx} .yao-bar-wrap`);
+  document.getElementById('yn'+idx).classList.add('done');
+  wrap.innerHTML=isYang
+    ?`<div class="yao-line-yang"></div>`
+    :`<div class="yao-line-yin"><span></span><span></span></div>`;
+}
+
+/* ═══════════════════════════════════════════════
+   摇卦
+═══════════════════════════════════════════════ */
+function shakeLeaves(){
+  if(isAnimating||currentRound>=6) return;
+  isAnimating=true;
+  document.getElementById('shakeBtn').disabled=true;
+
+  const leafR=[Math.random()<0.5,Math.random()<0.5,Math.random()<0.5];
+  const isYang=leafR.filter(Boolean).length>=2;
+
+  for(let i=0;i<3;i++){
+    const inner=document.getElementById('leaf'+i);
+    inner.style.setProperty('--final-rotation', leafR[i]?'0deg':'180deg');
+    inner.classList.remove('flipping');
+    void inner.offsetWidth;
+    inner.classList.add('flipping');
+    document.getElementById('ltag'+i).textContent='';
+    document.getElementById('ltag'+i).className='leaf-tag';
+  }
+
+  setTimeout(()=>{
+    for(let i=0;i<3;i++){
+      const tag=document.getElementById('ltag'+i);
+      tag.textContent='';
+      tag.className='leaf-tag '+(leafR[i]?'yang':'yin');
+    }
+    yaoResults.push(isYang);
+    updateTrack(currentRound,isYang);
+    currentRound++;
+    spawnRunes();
+
+    if(currentRound<6){
+      document.getElementById('roundHint').textContent=
+        `✦ 第${currentRound}爻已落 · 仙家，请继续第${currentRound+1}爻`;
+      document.getElementById('shakeBtn').disabled=false;
+    } else {
+      document.getElementById('roundHint').textContent='☯ 六爻已成，雪儿观天机……';
+      document.getElementById('shakeBtn').disabled=true;
+      setTimeout(showResult,800);
+    }
+    isAnimating=false;
+  },2300);
+}
+
+function spawnRunes(){
+  const syms=['☯','☽','✦','卦','爻','☾','✧','易','机'];
+  for(let i=0;i<7;i++){
+    const el=document.createElement('div');
+    el.className='float-rune';
+    el.textContent=syms[Math.floor(Math.random()*syms.length)];
+    el.style.left=(10+Math.random()*80)+'%';
+    el.style.top=(20+Math.random()*45)+'%';
+    el.style.setProperty('--rx',(Math.random()-0.5)*60+'px');
+    el.style.setProperty('--ry',(-60-Math.random()*80)+'px');
+    el.style.animationDelay=(Math.random()*0.5)+'s';
+    el.style.opacity=0.6+Math.random()*0.4;
+    document.body.appendChild(el);
+    setTimeout(()=>el.remove(),2800);
+  }
+}
+
+/* ═══════════════════════════════════════════════
+   八卦数据
+═══════════════════════════════════════════════ */
+const BAGUA={
+  '111':{name:'乾',sym:'☰',nature:'天',attr:'健'},
+  '011':{name:'兑',sym:'☱',nature:'泽',attr:'悦'},
+  '101':{name:'离',sym:'☲',nature:'火',attr:'丽'},
+  '001':{name:'震',sym:'☳',nature:'雷',attr:'动'},
+  '110':{name:'巽',sym:'☴',nature:'风',attr:'入'},
+  '010':{name:'坎',sym:'☵',nature:'水',attr:'陷'},
+  '100':{name:'艮',sym:'☶',nature:'山',attr:'止'},
+  '000':{name:'坤',sym:'☷',nature:'地',attr:'顺'},
+};
+function getGuaInfo(yao6){
+  const lk=yao6.slice(0,3).map(y=>y?'1':'0').join('');
+  const uk=yao6.slice(3,6).map(y=>y?'1':'0').join('');
+  return{lower:BAGUA[lk]||{name:'?',sym:'?',nature:'?',attr:'?'},
+         upper:BAGUA[uk]||{name:'?',sym:'?',nature:'?',attr:'?'},yao6};
+}
+
+/* ═══════════════════════════════════════════════
+   展示结果
+═══════════════════════════════════════════════ */
+function showResult(){
+  const card=document.getElementById('resultCard');
+  card.classList.add('visible');
+  setTimeout(()=>card.scrollIntoView({behavior:'smooth',block:'start'}),120);
+  const info=getGuaInfo(yaoResults);
+  const q=document.getElementById('questionInput').value.trim();
+  renderDiagram(info,q);
+  document.getElementById('speechText').textContent=
+    (q?`仙家所问「${q}」，`:'')
+    +`六爻已落，上${info.upper.name}下${info.lower.name}，卦象已现。雪儿这便为仙家细细道来……`;
+  callLLM(info,q);
+}
+
+function renderDiagram(info,q){
+  const lh=yao3=>yao3.map(y=>y
+    ?`<div class="gua-l-yang"></div>`
+    :`<div class="gua-l-yin"><span></span><span></span></div>`
+  ).join('');
+  document.getElementById('guaDiagram').innerHTML=`
+    <div class="gua-part">
+      <div class="gua-part-label">上卦</div>
+      <div class="gua-lines-block">${lh([info.yao6[3],info.yao6[4],info.yao6[5]])}</div>
+      <div class="gua-sym">${info.upper.sym}</div>
+      <div class="gua-name-sm">${info.upper.name}·${info.upper.nature}</div>
+    </div>
+    <div class="gua-center-label">
+      <div class="gua-full-name">${info.upper.name}${info.lower.name===info.upper.name?'为'+info.upper.nature:''}卦</div>
+      ${q?`<div class="gua-question-sm">「${q}」</div>`:''}
+    </div>
+    <div class="gua-part">
+      <div class="gua-part-label">下卦</div>
+      <div class="gua-lines-block">${lh([info.yao6[0],info.yao6[1],info.yao6[2]])}</div>
+      <div class="gua-sym">${info.lower.sym}</div>
+      <div class="gua-name-sm">${info.lower.name}·${info.lower.nature}</div>
+    </div>`;
+}
+
+/* ═══════════════════════════════════════════════
+   大模型解卦（雪儿口吻，流式输出）
+═══════════════════════════════════════════════ */
+async function callLLM(info,question){
+  const userCred=document.getElementById('apiKey').value.trim();
+  const apiBase=document.getElementById('apiBase').value.trim().replace(/\/$/,'');
+  const modelSel=document.getElementById('apiModel').value;
+  const model=modelSel==='custom'?document.getElementById('customModel').value.trim():modelSel;
+  const yaoStr=info.yao6.map((y,i)=>`${['初','二','三','四','五','上'][i]}爻：${y?'阳':'阴'}`).join('，');
+
+  const sys=`你是"雪儿"--一只精通易经六爻的玄猫，清冷俊俏，言简意深，学究天人。你以古典文雅的口吻为求卦者解卦。
+
+人设要求：
+- 称呼求卦者为"仙家"
+- 偶尔以"雪儿"自称
+- 语气端庄古雅，带一丝清冷神秘，绝不说废话，每句都有分量
+- 用白话解释古文，让现代人能懂，但保留文言的意境美
+- 输出纯文字，不要Markdown标题符号，可用【】标段落，语气要有书法的流动感`;
+
+  const usr=`卦象：上卦${info.upper.name}（${info.upper.nature}·${info.upper.attr}），下卦${info.lower.name}（${info.lower.nature}·${info.lower.attr}）
+六爻详情：${yaoStr}
+仙家所问：${question||'（未言明，请作整体运势之解）'}
+
+请以雪儿口吻，依次解说：【卦名与卦辞】【象辞义理】【卦象总论（结合仙家所问）】【问事·感情·事业·财运·健康各方指引】【结语一句】`;
+
+  const loading=document.getElementById('loadingWrap');
+  const out=document.getElementById('streamOutput');
+  out.textContent='';
+
+  if(!userCred){
+    loading.style.display='none';
+    out.innerHTML=offlineFallback(info,question);
+    return;
+  }
+  try{
+    const headers={'Content-Type':'application/json','Authorization':`Bearer ${userCred}`};
+    const resp=await fetch(`${apiBase}/chat/completions`,{
+      method:'POST',
+      headers:headers,
+      body:JSON.stringify({model,stream:true,
+        messages:[{role:'system',content:sys},{role:'user',content:usr}],
+        temperature:0.75,max_tokens:1800})
+    });
+    if(!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    loading.style.display='none';
+    const reader=resp.body.getReader();
+    const dec=new TextDecoder();
+    let buf='';
+    while(true){
+      const{done,value}=await reader.read();
+      if(done) break;
+      buf+=dec.decode(value,{stream:true});
+      const lines=buf.split('\n'); buf=lines.pop();
+      for(const l of lines){
+        const t=l.trim();
+        if(!t||t==='data: [DONE]') continue;
+        if(t.startsWith('data: ')){
+          try{ const d=JSON.parse(t.slice(6)).choices?.[0]?.delta?.content||'';
+            out.textContent+=d; out.scrollIntoView({block:'end'}); }catch(e){}
+        }
+      }
+    }
+    document.getElementById('speechText').textContent=
+      '雪儿已为仙家推演完毕。天机已明，余者，皆在仙家一念之间。';
+  }catch(err){
+    loading.style.display='none';
+    out.innerHTML=`<span style="color:#9a5050;font-size:0.82rem">✦ 雪儿与天机的连接出了差错（${err.message}）\n以下为雪儿记忆中的卦义：</span>\n\n`
+      +offlineFallback(info,question);
+  }
+}
+
+function offlineFallback(info,question){
+  const q=question?`仙家所问「${question}」，`:'';
+  const ys=info.yao6.map((y,i)=>`${['初','二','三','四','五','上'][i]}爻${y?'阳':'阴'}`).join(' · ');
+  return `这位仙家，${q}六爻落定如下：\n${ys}\n\n`
++`【卦象之义】\n上卦为${info.upper.name}（${info.upper.nature}），性${info.upper.attr}；下卦为${info.lower.name}（${info.lower.nature}），性${info.lower.attr}。\n`
++`上${info.upper.nature}下${info.lower.nature}，${
+  info.upper.attr==='健'?'刚健进取，天道自强，宜乘势而为，持续努力。':
+  info.upper.attr==='顺'?'柔顺承载，厚德载物，宜配合辅助，以柔克刚。':
+  info.upper.attr==='悦'?'和悦处世，泽润万物，宜广结善缘，以喜悦待人。':
+  info.upper.attr==='丽'?'光明附丽，才华出众，宜借势发光，有所依附。':
+  info.upper.attr==='动'?'雷霆震动，当机立断，宜把握时机，积极行动。':
+  info.upper.attr==='陷'?'险陷重重，守正渡险，宜持诚待时，不可冒进。':
+  info.upper.attr==='止'?'知止而安，静中生机，宜守分安命，静思笃行。':
+  info.upper.attr==='入'?'随风渗透，以柔克刚，宜谦逊而入，顺势而为。':
+  '顺应变化，守中持正，审时度势。'
+}\n\n`
++`✦ 配置大模型 API，可得雪儿完整精准的六爻解读。\n天机不可尽泄，仙家之路，终究要仙家自己走。`;
+}
+
+/* ═══════════════════════════════════════════════
+   重置
+═══════════════════════════════════════════════ */
+function resetAll(){
+  currentRound=0;yaoResults=[];isAnimating=false;
+  document.getElementById('shakeBtn').disabled=false;
+  document.getElementById('roundHint').textContent='☽ 仙家，请点击「摇卦」开始第一爻';
+  document.getElementById('resultCard').classList.remove('visible');
+  document.getElementById('streamOutput').textContent='';
+  document.getElementById('loadingWrap').style.display='flex';
+  document.getElementById('speechText').textContent='仙家已摇六爻，卦象已成。且待雪儿观天地之机，为仙家细细道来……';
+  for(let i=0;i<3;i++){
+    const inner=document.getElementById('leaf'+i);
+    inner.classList.remove('flipping');
+    inner.style.setProperty('--final-rotation','0deg');
+    document.getElementById('ltag'+i).textContent='';
+    document.getElementById('ltag'+i).className='leaf-tag';
+  }
+  initTrack();
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+
+document.getElementById('apiModel').addEventListener('change',function(){
+  document.getElementById('customModelRow').style.display=this.value==='custom'?'flex':'none';
+});
+
+/* ═══════════════════════════════════════════════
+   启动
+═══════════════════════════════════════════════ */
+createClouds();
+initLeaves();
+initTrack();
+</script>
+</body>
+</html>

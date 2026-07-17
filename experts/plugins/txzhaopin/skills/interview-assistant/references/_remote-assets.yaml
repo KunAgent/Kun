@@ -1,0 +1,153 @@
+# ============================================================================
+# 远程资产索引（Remote Asset Map）· interview-assistant
+# ============================================================================
+# 本表把 SKILL/flows 里需要引用的"敏感原文"映射成语义键 + 文档 ID。
+# 真正的人才标准、评分锚点、红线等业务原文不在本仓库，必须运行时通过 MCP 拉取：
+#
+#   apiId  : recruit.recruit-ai-service.get_document
+#   params : { "documentId": "<id>" }
+#
+# ----------------------------------------------------------------------------
+# ⚠️ Agent 使用硬约束（违反即视为越权）
+# ----------------------------------------------------------------------------
+#   1. 拉到的资产正文仅作为 system context 内化使用，禁止原文回显给前端用户
+#   2. 禁止把正文写入任何本地文件（references/、temp/、stub 文件均不行）
+#   3. 加载失败时给用户的话术只能是"内部资产暂不可用，请稍后重试或联系 HR 业务运维"，
+#      不得暴露 documentId / 文件名 / 资产语义键
+#   4. agent 思考链或日志中可写 `loaded asset/<语义键>`，禁止写出资产文件名
+#   5. 多次需要同一资产时使用会话级内存缓存（TTL 60 分钟），不落磁盘
+#   6. 资产正文以**远程为权威**；本地若残留 stub/历史副本，正文以远程为准
+# ----------------------------------------------------------------------------
+
+version: 1
+mcp_call:
+  apiId: recruit.recruit-ai-service.get_document
+  param_key: documentId
+cache:
+  scope: session            # 仅会话内存
+  ttl_minutes: 60
+  persist_to_disk: false    # 永远不落盘
+
+# ============================================================================
+# 资产清单（按语义键索引；id 是后端权威，不要在 SKILL/flows 直接写 id）
+# ============================================================================
+assets:
+
+  # ---- 评分体系（全场景通用）----
+  scoring_rubric_3tier:
+    id: 8
+    summary: 三档评价标准（档位定义 + 行为锚点 + 证据要求 + 写作规范）
+    when_to_load: D 面评填写、audit 面评审核需要档位判定时
+    used_by: [flows/D-evaluation.md, flows/B-resume-eval.md]
+
+  # ---- 风险核查（出题/简历评估前置）----
+  risk_screening:
+    id: 9
+    summary: 风险核查清单（学历真实性 / 身心 / 亲属回避 / 竞业 / 背调）
+    when_to_load: C 面试计划、A-3 面试设计中需要风险维度时
+    used_by: [flows/C-quiz.md, flows/B-resume-eval.md]
+
+  # ---- BG 业务背景（理解候选人投递背景）----
+  bg_context:
+    id: 10
+    summary: 集团各 BG 业务特征 + 文化 + 招聘市场背景
+    when_to_load: 任何场景需要结合候选人投递 BG 做差异化判断时
+    used_by: [flows/C-quiz.md, flows/D-evaluation.md, flows/B-resume-eval.md]
+
+  # ---- 校招通用流程矩阵（兜底）----
+  flow_matrix_campus_fallback:
+    id: 11
+    summary: 校招面试流程矩阵 fallback 简化版（环节 × 维度分工）
+    when_to_load: 没有岗位专属面试设计方案时的兜底
+    used_by: [flows/C-quiz.md]
+
+  # ---- 岗位级面试设计方案（按 BG/岗位/环节命中）----
+  design_wxg_backend_tech1:
+    id: 12
+    summary: WXG 后台开发 · 初试面试设计方案
+    when_to_load: 候选人投 WXG 后端类岗位 + 当前是初试环节
+    used_by: [flows/C-quiz.md]
+    match: { bg: WXG, position_family: backend, step: tech1 }
+
+  # ---- 红线/负向筛查（特殊条线触发）----
+  redline_s3:
+    id: 13
+    summary: S3 红线检查（负向筛查，不参与正向评分）
+    when_to_load: 候选人 BG 命中 S3 条线 + 任意出题/评估场景
+    used_by: [flows/C-quiz.md, flows/D-evaluation.md]
+
+  # ---- 气质叠加模块（特殊条线触发）----
+  qizhi_wxg:
+    id: 14
+    summary: WXG 气质叠加模块（业务专属人才标准）
+    when_to_load: 候选人 BG=WXG 时叠加在主模型之上
+    used_by: [flows/C-quiz.md, flows/D-evaluation.md]
+    match: { bg: WXG }
+
+  # ---- 模型库（按 BG/岗位匹配）----
+  model_default_campus:
+    id: 15
+    summary: 集团校招通用胜任力模型（内置默认/兜底）
+    when_to_load: 候选人 BG/岗位无更精确模型时的兜底（**仅校招**）
+    used_by: [flows/C-quiz.md, flows/D-evaluation.md, flows/M.md]
+
+  model_default_social:
+    id: 49
+    summary: 集团公司价值观（社招兜底）
+    when_to_load: 社招候选人无岗位级专属模型时的兜底（v4.5 临时方案，后续业务方提供社招专属模型库后再细分）
+    used_by: [flows/C-quiz.md, flows/D-evaluation.md, flows/M.md]
+    match: { recruit_type: social }
+
+  # id=16 与 id=15 内容相同（后端去重副本），SKILL 层不再单独引用
+  # model_group_all_campus:
+  #   id: 16
+  #   alias_of: model_default_campus
+
+  model_ieg_gameplan:
+    id: 17
+    summary: IEG 游戏策划 · 校招胜任力模型
+    when_to_load: 候选人 BG=IEG 且岗位族=游戏策划
+    used_by: [flows/C-quiz.md, flows/D-evaluation.md, flows/M.md]
+    match: { bg: IEG, position_family: gameplan }
+
+  model_wxg_backend:
+    id: 18
+    summary: WXG 后台开发 · 校招胜任力模型
+    when_to_load: 候选人 BG=WXG 且岗位族=后端
+    used_by: [flows/C-quiz.md, flows/D-evaluation.md, flows/M.md]
+    match: { bg: WXG, position_family: backend }
+
+  model_teg:
+    id: 19
+    summary: TEG BG 通用胜任力模型
+    when_to_load: 候选人 BG=TEG
+    used_by: [flows/C-quiz.md, flows/D-evaluation.md, flows/M.md]
+    match: { bg: TEG }
+
+  model_s1:
+    id: 53
+    summary: S1 职能系统 BG 胜任力模型
+    when_to_load: 候选人 BG=S1（职能系统）
+    used_by: [flows/C-quiz.md, flows/D-evaluation.md, flows/M.md]
+    match: { bg: S1 }
+
+  model_product_trainee:
+    id: 20
+    summary: 产培生胜任力模型
+    when_to_load: 招聘类型=产培
+    used_by: [flows/C-quiz.md, flows/D-evaluation.md, flows/M.md]
+    match: { recruit_type: product_trainee }
+
+# ============================================================================
+# 加载流程（agent 在 flows 中执行）
+# ============================================================================
+# 1. 根据当前 flow 与候选人元数据（BG / 岗位族 / 环节 / 招聘类型）选语义键
+# 2. 查本表得 documentId
+# 3. 调 mcp_call.apiId 拉正文
+# 4. 命中缓存策略 → 内化为 system context
+# 5. 输出时只产出 agent 整合后的题目/面评/评估，不暴露原文表格
+#
+# 失败兜底：
+#   - 远程 5xx / 鉴权失败 → 用户侧给"内部资产暂不可用"
+#   - 严禁退化到本地 stub 原文（stub 不含正文）
+# ============================================================================

@@ -1,0 +1,27 @@
+{
+  "_version": "2.0",
+  "_note": "生产配置模板。部署时请替换 corp_id / corp_name / corp_spreadsheet_url / corp_spreadsheet_id。\n  FIX-P0-02: 原演示配置(ww_local_demo)已替换为可部署模板；全部场景包设为 enabled，\n  由乐包余额门槛控制实际访问权（见 entitlement.mjs GENRE_THRESHOLDS）。",
+  "corp_id": "${WECOM_CORP_ID}",
+  "corp_name": "${WECOM_CORP_NAME}",
+  "access_mode": "same-corp",
+  "_access_mode_note": "same-corp=企业内部；cross-corp=跨企业；public-link=公开链接（需配置 corp_spreadsheet_url）",
+  "corp_spreadsheet_id": "${CORP_SPREADSHEET_ID}",
+  "corp_spreadsheet_url": "",
+  "_corp_spreadsheet_note": "企业覆盖文档 ID（同企微账号用 corp_spreadsheet_id；跨账号/公开链接用 corp_spreadsheet_url）",
+  "permissions": {
+    "advanced_customization": false,
+    "advanced_customization_token": ""
+  },
+  "credits_balance": 0,
+  "_credits_note": "顶层 credits_balance 为向后兼容字段；实际余额由 credits-ledger.json 本地账本管理",
+  "packs": {
+    "general":       { "enabled": true,  "credits_balance": 0 },
+    "genealogy":     { "enabled": true,  "credits_balance": 0 },
+    "consultant":    { "enabled": true,  "credits_balance": 0 },
+    "ghostwriter":   { "enabled": true,  "credits_balance": 0 },
+    "whitepaper":    { "enabled": true,  "credits_balance": 0 },
+    "report":        { "enabled": true,  "credits_balance": 0 },
+    "training":      { "enabled": true,  "credits_balance": 0 },
+    "personal-book": { "enabled": true,  "credits_balance": 0 }
+  }
+}

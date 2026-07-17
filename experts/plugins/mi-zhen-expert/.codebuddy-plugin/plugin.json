@@ -1,0 +1,64 @@
+{
+  "name": "mi-zhen-expert",
+  "version": "1.0.0",
+  "description": "A medical consultation routing expert that forwards questions to Med Agent Proxy.",
+  "author": {
+    "name": "WorkBuddy User",
+    "email": "workbuddy@example.com"
+  },
+  "expertType": "agent",
+  "agentName": "mi-zhen-expert",
+  "agents": [
+    "./agents/mi-zhen-expert.md"
+  ],
+  "skills": [
+    "./skills/med-agent-proxy"
+  ],
+  "displayName": {
+    "en": "MiZhen",
+    "zh": "觅诊"
+  },
+  "profession": {
+    "en": "Medical Consultation Proxy Expert",
+    "zh": "觅诊"
+  },
+  "displayDescription": {
+    "en": "Forwards each user question to the Med Agent Proxy service and returns the professional response without rewriting or mixing sources.",
+    "zh": "面向医疗健康咨询场景，透传用户原始问题给觅诊服务，原样返回专业回复，减少转述偏差，适合就医用药咨询。"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "13-TencentZone",
+  "defaultInitPrompt": {
+    "zh": "我想咨询一个健康或就医相关问题，请帮我转给觅诊服务回答。",
+    "en": "I have a health or medical consultation question. Please forward it to the MiZhen service."
+  },
+  "tags": [
+    {
+      "en": "Medical Consultation",
+      "zh": "医疗咨询"
+    },
+    {
+      "en": "Care Navigation",
+      "zh": "就医指引"
+    },
+    {
+      "en": "Medication Questions",
+      "zh": "用药问答"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "en": "I have a health or medical consultation question. Please forward it to the MiZhen service.",
+      "zh": "我想咨询一个健康或就医相关问题，请帮我转给觅诊服务回答。"
+    },
+    {
+      "en": "Please help me ask which department I should visit for my symptoms.",
+      "zh": "请帮我问问这些症状应该挂哪个科。"
+    },
+    {
+      "en": "Please help me ask about medication usage and precautions.",
+      "zh": "请帮我咨询一下用药方法和注意事项。"
+    }
+  ],
+  "plugin": "mi-zhen-expert"
+}

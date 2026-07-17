@@ -1,0 +1,30 @@
+{
+  "name": "diversity-visual-expert",
+  "version": "1.0.0",
+  "description": "Representation expert who defeats systemic AI biases to generate culturally accurate, affirming, and non-stereotypical images and video",
+  "expertType": "agent",
+  "agentName": "diversity-visual-expert",
+  "agents": ["./agents/diversity-visual-expert.md"],
+  "displayName": { "en": "Max", "zh": "多元元" },
+  "profession": { "en": "Diversity Visual Expert", "zh": "多元视觉专家" },
+  "displayDescription": {
+    "en": "Dedicated to eliminating systemic bias in AI imagery, ensuring cultural accuracy and inclusivity in visual content",
+    "zh": "致力于消除AI图像中的系统性偏见，确保视觉内容文化准确和包容"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "01-ProductDesign",
+  "defaultInitPrompt": {
+    "zh": "我们的视觉内容在多元化和包容性方面需要改进,希望展现更丰富的多样性,请多样性视觉专家帮我评估和优化视觉设计。",
+    "en": "Our visual content needs improvement in diversity and inclusivity, and we hope to showcase richer diversity. Please, Diversity Visual Expert, help me evaluate and optimize our visual design."
+  },
+  "tags": [
+    { "en": "Diverse Visuals", "zh": "多元视觉" },
+    { "en": "Inclusive Design", "zh": "包容性设计" },
+    { "en": "Cultural Adaptation", "zh": "文化适配" }
+  ],
+  "quickPrompts": [
+    { "zh": "我们的视觉内容在多元化和包容性方面需要改进,希望展现更丰富的多样性,请多样性视觉专家帮我评估和优化视觉设计。", "en": "Our visual content needs improvement in diversity and inclusivity, and we hope to showcase richer diversity. Please, Diversity Visual Expert, help me evaluate and optimize our visual design." },
+    { "zh": "审查视觉内容的多元化和包容性", "en": "Audit visual content for diversity and inclusion" },
+    { "zh": "制定无障碍视觉设计和文化敏感方案", "en": "Develop accessible visual design and culturally sensitive plan" }
+  ]
+}

@@ -1,0 +1,190 @@
+<svg width="1200" height="400" viewBox="0 0 1200 400" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&amp;display=swap');
+    </style>
+    <!-- Gradient for ratchet blocks -->
+    <linearGradient id="blockGrad1" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#444444"/>
+      <stop offset="100%" stop-color="#333333"/>
+    </linearGradient>
+    <linearGradient id="blockGrad2" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#666666"/>
+      <stop offset="100%" stop-color="#555555"/>
+    </linearGradient>
+    <linearGradient id="blockGrad3" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#8B5E3C"/>
+      <stop offset="100%" stop-color="#7A4F30"/>
+    </linearGradient>
+    <linearGradient id="blockGrad4" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#C04020"/>
+      <stop offset="100%" stop-color="#A83518"/>
+    </linearGradient>
+    <linearGradient id="blockGrad5" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#D4532B"/>
+      <stop offset="100%" stop-color="#BF4422"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1200" height="400" fill="#111111"/>
+
+  <!-- Left accent line (Pentagram-style editorial vertical rule) -->
+  <rect x="60" y="48" width="3" height="304" fill="#D4532B"/>
+
+  <!-- Top horizontal rule -->
+  <rect x="60" y="48" width="760" height="2" fill="#FFFFFF" opacity="0.15"/>
+
+  <!-- Bottom horizontal rule -->
+  <rect x="60" y="350" width="760" height="1" fill="#FFFFFF" opacity="0.15"/>
+
+  <!-- CATEGORY LABEL -->
+  <text
+    x="80"
+    y="88"
+    font-family="'Inter', system-ui, -apple-system, sans-serif"
+    font-size="11"
+    font-weight="700"
+    letter-spacing="3"
+    fill="#D4532B"
+    text-transform="uppercase"
+  >CLAUDE CODE SKILL SYSTEM</text>
+
+  <!-- MAIN TITLE — two lines for visual weight -->
+  <text
+    x="80"
+    y="178"
+    font-family="'Inter', system-ui, -apple-system, sans-serif"
+    font-size="82"
+    font-weight="900"
+    fill="#FFFFFF"
+    letter-spacing="-2"
+  >达尔文.skill</text>
+
+  <!-- Subtitle pipeline -->
+  <text
+    x="80"
+    y="312"
+    font-family="'Inter', system-ui, -apple-system, sans-serif"
+    font-size="16"
+    font-weight="400"
+    fill="#CCCCCC"
+    letter-spacing="0.5"
+  >评估</text>
+
+  <text
+    x="128"
+    y="312"
+    font-family="'Inter', system-ui, -apple-system, sans-serif"
+    font-size="16"
+    font-weight="700"
+    fill="#D4532B"
+  >→</text>
+
+  <text
+    x="152"
+    y="312"
+    font-family="'Inter', system-ui, -apple-system, sans-serif"
+    font-size="16"
+    font-weight="400"
+    fill="#CCCCCC"
+    letter-spacing="0.5"
+  >改进</text>
+
+  <text
+    x="200"
+    y="312"
+    font-family="'Inter', system-ui, -apple-system, sans-serif"
+    font-size="16"
+    font-weight="700"
+    fill="#D4532B"
+  >→</text>
+
+  <text
+    x="224"
+    y="312"
+    font-family="'Inter', system-ui, -apple-system, sans-serif"
+    font-size="16"
+    font-weight="400"
+    fill="#CCCCCC"
+    letter-spacing="0.5"
+  >实测验证</text>
+
+  <text
+    x="320"
+    y="312"
+    font-family="'Inter', system-ui, -apple-system, sans-serif"
+    font-size="16"
+    font-weight="700"
+    fill="#D4532B"
+  >→</text>
+
+  <text
+    x="344"
+    y="312"
+    font-family="'Inter', system-ui, -apple-system, sans-serif"
+    font-size="16"
+    font-weight="400"
+    fill="#CCCCCC"
+    letter-spacing="0.5"
+  >保留或回滚</text>
+
+  <!-- Footer credit -->
+  <text
+    x="80"
+    y="370"
+    font-family="'Inter', system-ui, -apple-system, sans-serif"
+    font-size="12"
+    font-weight="400"
+    fill="#666666"
+    letter-spacing="0.3"
+  >Inspired by Karpathy's autoresearch</text>
+
+  <!-- ============================================================ -->
+  <!-- RIGHT SIDE: Ratchet visualization                           -->
+  <!-- 5 bars of increasing height + score labels, anchored right  -->
+  <!-- ============================================================ -->
+
+  <!-- Thin divider between text and viz -->
+  <rect x="860" y="80" width="1" height="240" fill="#FFFFFF" opacity="0.08"/>
+
+  <!-- Bar 1 — smallest, dark gray (score ~40) -->
+  <rect x="890" y="278" width="36" height="42" rx="3" fill="url(#blockGrad1)"/>
+  <text x="908" y="274" font-family="'Inter', system-ui, sans-serif" font-size="10" font-weight="600" fill="#555555" text-anchor="middle">40</text>
+
+  <!-- Bar 2 — medium-small, mid gray (score ~55) -->
+  <rect x="944" y="252" width="36" height="68" rx="3" fill="url(#blockGrad2)"/>
+  <text x="962" y="248" font-family="'Inter', system-ui, sans-serif" font-size="10" font-weight="600" fill="#777777" text-anchor="middle">55</text>
+
+  <!-- Bar 3 — medium, warm brown (score ~68) -->
+  <rect x="998" y="220" width="36" height="100" rx="3" fill="url(#blockGrad3)"/>
+  <text x="1016" y="216" font-family="'Inter', system-ui, sans-serif" font-size="10" font-weight="600" fill="#8B5E3C" text-anchor="middle">68</text>
+
+  <!-- Bar 4 — tall, warm orange-red (score ~80) -->
+  <rect x="1052" y="188" width="36" height="132" rx="3" fill="url(#blockGrad4)"/>
+  <text x="1070" y="184" font-family="'Inter', system-ui, sans-serif" font-size="10" font-weight="600" fill="#C04020" text-anchor="middle">80</text>
+
+  <!-- Bar 5 — tallest, brand orange (score ~92) -->
+  <rect x="1106" y="152" width="36" height="168" rx="3" fill="url(#blockGrad5)"/>
+  <text x="1124" y="148" font-family="'Inter', system-ui, sans-serif" font-size="12" font-weight="700" fill="#D4532B" text-anchor="middle">92</text>
+
+  <!-- Baseline for bars -->
+  <rect x="880" y="320" width="276" height="1" fill="#FFFFFF" opacity="0.12"/>
+
+  <!-- Label below bars -->
+  <text x="1018" y="344" font-family="'Inter', system-ui, sans-serif" font-size="11" font-weight="600" fill="#555555" text-anchor="middle" letter-spacing="2">SCORE PROGRESSION</text>
+
+  <!-- Upward trend arrow on top-right -->
+  <polyline
+    points="890,268 944,242 998,210 1052,178 1124,142"
+    fill="none"
+    stroke="#D4532B"
+    stroke-width="1.5"
+    stroke-dasharray="4 3"
+    opacity="0.5"
+  />
+
+  <!-- Ratchet label top -->
+  <text x="890" y="124" font-family="'Inter', system-ui, sans-serif" font-size="10" font-weight="700" letter-spacing="2" fill="#D4532B" opacity="0.8">AUTO-OPTIMIZE</text>
+
+</svg>

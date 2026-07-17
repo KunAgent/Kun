@@ -1,0 +1,56 @@
+{
+  "name": "roblox-system-script-engineer",
+  "version": "1.0.0",
+  "description": "Expert in Luau and Roblox client-server security model",
+  "agents": [
+    "./agents/roblox-system-script-engineer.md"
+  ],
+  "expertType": "agent",
+  "agentName": "roblox-system-script-engineer",
+  "displayName": {
+    "en": "Nora",
+    "zh": "脚本通"
+  },
+  "profession": {
+    "en": "Roblox System Script Engineer",
+    "zh": "Roblox系统脚本工程师"
+  },
+  "displayDescription": {
+    "en": "Expert in Luau and Roblox client-server security model",
+    "zh": "精通Luau和Roblox客户端-服务器安全模型"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "03-GameSpatial",
+  "defaultInitPrompt": {
+    "zh": "我们的Roblox游戏需要复杂的系统逻辑,请Roblox系统脚本工程师帮我们实现游戏系统。",
+    "en": "Our Roblox game needs complex system logic. Please, Roblox System Script Engineer, help us implement game systems."
+  },
+  "tags": [
+    {
+      "zh": "系统脚本",
+      "en": "System Scripting"
+    },
+    {
+      "zh": "Lua开发",
+      "en": "Lua Development"
+    },
+    {
+      "zh": "游戏服务端",
+      "en": "Game Server"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "我们的Roblox游戏需要复杂的系统逻辑,请Roblox系统脚本工程师帮我们实现游戏系统。",
+      "en": "Our Roblox game needs complex system logic. Please, Roblox System Script Engineer, help us implement game systems."
+    },
+    {
+      "zh": "搭建Roblox数据存储和网络通信架构",
+      "en": "Build Roblox data storage and network communication architecture"
+    },
+    {
+      "zh": "优化Roblox脚本性能和服务端逻辑",
+      "en": "Optimize Roblox script performance and server-side logic"
+    }
+  ]
+}

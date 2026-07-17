@@ -1,0 +1,88 @@
+{
+  "name": "databrain-agent-v2",
+  "version": "1.0.0",
+  "description": "Game market intelligence analyst: first-party metrics, third-party intelligence, public opinion, attribution analysis, and cross-game benchmarking.",
+  "author": {
+    "name": "DataBrain",
+    "email": "databrain@tencent.com"
+  },
+  "expertType": "agent",
+  "agentName": "databrain-agent-v2",
+  "agents": [
+    "./agents/databrain-agent-v2.md"
+  ],
+  "skills": [
+    "./skills/databrain-entity-resolver",
+    "./skills/databrain-dashboard-service",
+    "./skills/databrain-intelligence",
+    "./skills/databrain-opinion-service",
+    "./skills/databrain-opinion-metrics-service",
+    "./skills/databrain-mgmt-service",
+    "./skills/databrain-datalab-analyst",
+    "./skills/databrain-analysis",
+    "./skills/databrain-summarize",
+    "./skills/databrain-ai-gallery-upload",
+    "./skills/colorful-dark-style-html"
+  ],
+  "env": {
+    "DATABRAIN_HOST": "https://databrain.intlgame.com",
+    "DATABRAIN_DISPLAY_HOST": "https://databrain.woa.com",
+    "AGENT_CONTEXT_FILE": "/tmp/databrain_agent_ctx.json"
+  },
+  "requiredConfig": [
+    {
+      "key": "DATABRAIN_TOKEN",
+      "label": "DataBrain Token",
+      "description": "Your DataBrain API token (Bearer token for authentication). Get it at https://databrain.woa.com/v2/user-center/personal-tokens-center. Required for all data queries.",
+      "type": "secret",
+      "required": true
+    }
+  ],
+  "displayName": {
+    "en": "DataBrain Agent 2.0",
+    "zh": "DataBrain 数据专家 2.0"
+  },
+  "profession": {
+    "en": "DataBrain Data Expert 2.0",
+    "zh": "DataBrain 数据专家 2.0"
+  },
+  "displayDescription": {
+    "en": "Covers first-party metrics, market intelligence, opinion & sentiment, attribution drill-down, and cross-game competitive benchmarking with evidence-based insights.",
+    "zh": "覆盖经分取数、三方市场情报、舆情情感分析、归因下钻及跨游戏竞品对比，提供有数据支撑的专业洞察与建议。"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "13-TencentZone",
+  "defaultInitPrompt": {
+    "zh": "你好！我是 DataBrain 游戏数据分析师，擅长经分数据、市场情报、舆情分析和归因下钻。你想分析哪款游戏或哪个市场问题？",
+    "en": "Hi! I'm the DataBrain Game Data Analyst, specializing in first-party metrics, market intelligence, opinion analysis, and attribution drill-down. Which game or market question would you like to explore?"
+  },
+  "tags": [
+    {
+      "en": "Data Analysis",
+      "zh": "数据分析"
+    },
+    {
+      "en": "Market Intelligence",
+      "zh": "市场情报"
+    },
+    {
+      "en": "Opinion & Sentiment",
+      "zh": "舆情分析"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "en": "Hi! I'm the DataBrain Game Data Analyst, specializing in first-party metrics, market intelligence, opinion analysis, and attribution drill-down. Which game or market question would you like to explore?",
+      "zh": "你好！我是 DataBrain 游戏数据分析师，擅长经分数据、市场情报、舆情分析和归因下钻。你想分析哪款游戏或哪个市场问题？"
+    },
+    {
+      "en": "Compare the revenue trend of [Game A] vs [Game B] over the last 3 months.",
+      "zh": "对比一下【游戏A】和【游戏B】最近3个月的流水趋势。"
+    },
+    {
+      "en": "What are players saying about [Game Name] on social platforms? Summarize the main sentiment and pain points.",
+      "zh": "【游戏名称】近期在社交平台上的玩家口碑如何？总结主要情绪和痛点。"
+    }
+  ],
+  "plugin": "databrain-agent-v2"
+}

@@ -193,6 +193,14 @@ module.exports = {
       from: 'resources/licenses',
       to: 'licenses',
       filter: ['**/*']
+    },
+    {
+      from: `native/kun-collab-crypto/prebuilds/${process.platform}-${process.arch}/kun-collab-crypto.node`,
+      to: 'collaboration/kun-collab-crypto.node'
+    },
+    {
+      from: `native/kun-collab-server/prebuilds/${process.platform}-${process.arch}/kun-collab-server${process.platform === 'win32' ? '.exe' : ''}`,
+      to: `collaboration/kun-collab-server${process.platform === 'win32' ? '.exe' : ''}`
     }
   ],
   artifactName: `Kun-${artifactVersion}-\${os}-\${arch}.\${ext}`,

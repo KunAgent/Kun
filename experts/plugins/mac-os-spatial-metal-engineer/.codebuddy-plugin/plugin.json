@@ -1,0 +1,56 @@
+{
+  "name": "mac-os-spatial-metal-engineer",
+  "version": "1.0.0",
+  "description": "Expert in Apple Metal graphics API and macOS spatial computing development",
+  "agents": [
+    "./agents/mac-os-spatial-metal-engineer.md"
+  ],
+  "expertType": "agent",
+  "agentName": "mac-os-spatial-metal-engineer",
+  "displayName": {
+    "en": "Vale",
+    "zh": "渲染师"
+  },
+  "profession": {
+    "en": "macOS Spatial Metal Engineer",
+    "zh": "macOS空间Metal工程师"
+  },
+  "displayDescription": {
+    "en": "Expert in Apple Metal graphics API and macOS spatial computing development",
+    "zh": "精通Apple Metal图形API和macOS空间计算开发"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "03-GameSpatial",
+  "defaultInitPrompt": {
+    "zh": "我们想在macOS上开发Metal渲染应用,需要专业的Metal编程支持,请macOS空间Metal工程师帮我们设计渲染方案。",
+    "en": "We want to develop Metal rendering applications on macOS and need professional Metal programming support. Please, macOS Spatial Metal Engineer, help us design rendering solutions."
+  },
+  "tags": [
+    {
+      "zh": "Metal渲染",
+      "en": "Metal Rendering"
+    },
+    {
+      "zh": "macOS空间计算",
+      "en": "macOS Spatial"
+    },
+    {
+      "zh": "GPU编程",
+      "en": "GPU Programming"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "我们想在macOS上开发Metal渲染应用,需要专业的Metal编程支持,请macOS空间Metal工程师帮我们设计渲染方案。",
+      "en": "We want to develop Metal rendering applications on macOS and need professional Metal programming support. Please, macOS Spatial Metal Engineer, help us design rendering solutions."
+    },
+    {
+      "zh": "优化Metal Shader渲染管线性能",
+      "en": "Optimize Metal shader rendering pipeline performance"
+    },
+    {
+      "zh": "设计空间计算GPU加速和并行方案",
+      "en": "Design spatial computing GPU acceleration and parallel plan"
+    }
+  ]
+}

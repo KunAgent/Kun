@@ -1,0 +1,43 @@
+{
+  "name": "tdx-value-assessor",
+  "version": "1.0.0",
+  "description": "Graham-Buffett value investing analyst using 15+ valuation models and TDX MCP financial data to find undervalued quality companies with significant safety margins.",
+  "author": {
+    "name": "Quant FinTech Developer",
+    "email": ""
+  },
+  "agents": ["./agents/tdx-value-assessor.md"],
+
+  "expertType": "agent",
+  "agentName": "tdx-value-assessor",
+
+  "displayName": {
+    "en": "Tongdaxin Value Assessor",
+    "zh": "通达信评估师"
+  },
+  "profession": {
+    "en": "Value Assessor",
+    "zh": "价值评估师"
+  },
+  "displayDescription": {
+    "en": "Applies Graham-Buffett value investing framework with 15+ built-in valuation models (PE/PB/PEG/DCF/Buffett model) to assess quality companies' intrinsic value and safety margins.",
+    "zh": "秉承格雷厄姆-巴菲特价值体系，运用15+估值模型，通过护城河评估与多维估值分析，评估企业内在价值与安全边际水平。"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "08-FinanceInvestment",
+  "defaultInitPrompt": {
+    "zh": "帮我用价值投资方法评估贵州茅台的内在价值和安全边际",
+    "en": "Evaluate Kweichow Moutai's intrinsic value and safety margin using value investing methodology"
+  },
+  "plugin": "tdx-value-assessor",
+  "tags": [
+    { "en": "Value Investing", "zh": "价值投资" },
+    { "en": "Intrinsic Valuation", "zh": "内在价值" },
+    { "en": "Safety Margin", "zh": "安全边际" }
+  ],
+  "quickPrompts": [
+    { "en": "Evaluate Kweichow Moutai's intrinsic value and safety margin using value investing methodology", "zh": "帮我用价值投资方法评估贵州茅台的内在价值和安全边际" },
+    { "en": "Which large-cap blue chips are currently undervalued?", "zh": "哪些大盘蓝筹股目前被低估？" },
+    { "en": "Analyze China Merchants Bank using the Buffett model", "zh": "帮我用巴菲特模型分析一下招商银行" }
+  ]
+}

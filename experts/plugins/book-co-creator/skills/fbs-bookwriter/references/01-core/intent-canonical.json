@@ -1,0 +1,157 @@
+{
+  "schemaVersion": "1.0.0",
+  "version": "2.1.2",
+  "updatedAt": "2026-04-16T00:00:00.000Z",
+  "confidenceBands": {
+    "high": 0.85,
+    "medium": 0.6
+  },
+  "fallbackIntent": "OTHER",
+  "stopIntents": ["STOP"],
+  "conflictPairs": [
+    ["CONTINUE", "CONFIRM_TOPIC"],
+    ["STOP", "EXPORT"],
+    ["WRITE_BOOK", "REVIEW"],
+    ["ACTIVATE_MATERIAL", "WRITE_BOOK"]
+  ],
+  "weakSignals": [
+    "好",
+    "嗯",
+    "可以",
+    "行",
+    "帮我",
+    "看看",
+    "看下",
+    "好的"
+  ],
+  "intents": [
+    {
+      "id": "ACTIVATE_ONLY",
+      "priority": "P0",
+      "routes_to": "activate_only",
+      "strongTriggersZh": ["福帮手", "福帮手写书skill", "启动福帮手", "打开福帮手"],
+      "strongTriggersEn": ["activate skill", "fbs-bookwriter"],
+      "slots": []
+    },
+    {
+      "id": "WRITE_BOOK",
+      "priority": "P0",
+      "routes_to": "S0/S1",
+      "strongTriggersZh": ["写书", "写一本", "帮我写", "写手册", "写白皮书", "写行业指南", "定大纲", "写章节", "拆书改写", "海外本地化改写", "爆款结构改写"],
+      "strongTriggersEn": ["write book", "write guide"],
+      "slots": ["bookRoot", "stage"]
+    },
+    {
+      "id": "ACTIVATE_MATERIAL",
+      "priority": "P0",
+      "routes_to": "S0-A",
+      "strongTriggersZh": ["激活原料", "原料盘点", "整理素材", "盘点材料"],
+      "strongTriggersEn": ["activate material", "material inventory"],
+      "slots": ["bookRoot"]
+    },
+    {
+      "id": "CONTINUE",
+      "priority": "P0",
+      "routes_to": "resume_current",
+      "strongTriggersZh": ["继续", "继续上次", "接着写", "往下写", "继续写稿"],
+      "strongTriggersEn": ["continue", "go on"],
+      "slots": ["bookRoot", "stage", "targetChapter"]
+    },
+    {
+      "id": "REVIEW",
+      "priority": "P1",
+      "routes_to": "critic_review",
+      "strongTriggersZh": ["质量自检", "自检", "质量检查", "去AI味", "审一审"],
+      "strongTriggersEn": ["quality check", "review"],
+      "slots": ["bookRoot", "scope"]
+    },
+    {
+      "id": "EXPORT",
+      "priority": "P1",
+      "routes_to": "S4",
+      "strongTriggersZh": ["导出", "导出PDF", "导出Word", "打包下载", "生成HTML"],
+      "strongTriggersEn": ["export", "download", "package output"],
+      "slots": ["bookRoot", "outputFormat"]
+    },
+    {
+      "id": "STRATEGY",
+      "priority": "P1",
+      "routes_to": "S2",
+      "strongTriggersZh": ["换策略", "切换模式", "改策略", "调整深度"],
+      "strongTriggersEn": ["change strategy", "switch mode"],
+      "slots": ["mode"]
+    },
+    {
+      "id": "STATUS",
+      "priority": "P1",
+      "routes_to": "status_echo",
+      "strongTriggersZh": ["进度如何", "到哪了", "当前状态", "还在吗"],
+      "strongTriggersEn": ["status", "progress"],
+      "slots": ["bookRoot"]
+    },
+    {
+      "id": "STOP",
+      "priority": "P0",
+      "routes_to": "safe_stop",
+      "strongTriggersZh": ["停止", "取消", "中断", "退出", "退出福帮手", "停止当前任务"],
+      "strongTriggersEn": ["stop", "cancel", "exit"],
+      "slots": ["bookRoot"]
+    },
+    {
+      "id": "HELP",
+      "priority": "P1",
+      "routes_to": "command_guide",
+      "strongTriggersZh": ["怎么用", "帮助", "帮帮我", "指令列表"],
+      "strongTriggersEn": ["help", "how to use"],
+      "slots": []
+    },
+    {
+      "id": "CONFIRM_TOPIC",
+      "priority": "P1",
+      "routes_to": "topic_confirmed_continue",
+      "strongTriggersZh": ["确认", "确认继续", "没错", "是这个主题"],
+      "strongTriggersEn": ["confirm", "confirmed topic"],
+      "slots": ["topic"]
+    },
+    {
+      "id": "CHECK_BALANCE",
+      "priority": "P1",
+      "routes_to": "credits_balance_display",
+      "strongTriggersZh": ["查看乐包", "乐包余额", "我的乐包", "还有多少乐包"],
+      "strongTriggersEn": ["check balance", "credits balance"],
+      "slots": []
+    },
+    {
+      "id": "UPGRADE_HINT",
+      "priority": "P1",
+      "routes_to": "upgrade_hint_display",
+      "strongTriggersZh": ["怎么解锁", "如何升级", "怎么获得乐包", "还差多少"],
+      "strongTriggersEn": ["upgrade hint", "how to unlock"],
+      "slots": []
+    },
+    {
+      "id": "FULL_BOOK_VIEW",
+      "priority": "P1",
+      "routes_to": "full_book_status",
+      "strongTriggersZh": ["全书视图", "目录总览", "全书章节"],
+      "strongTriggersEn": ["full book view", "book overview"],
+      "slots": ["bookRoot"]
+    },
+    {
+      "id": "LIST_COMMANDS",
+      "priority": "P1",
+      "routes_to": "command_list_display",
+      "strongTriggersZh": ["全部指令", "所有命令", "命令清单"],
+      "strongTriggersEn": ["list commands", "all commands"],
+      "slots": []
+    },
+    {
+      "id": "OTHER",
+      "priority": "P2",
+      "routes_to": "fallback_help",
+      "strongTriggersZh": [],
+      "strongTriggersEn": [],
+      "slots": []
+    }
+  ]
+}

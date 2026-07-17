@@ -1,0 +1,478 @@
+{
+  "schemaVersion": "1.0",
+  "sceneId": "genius_partner_industry_scene_researcher_v230",
+  "packageVersion": "2.3.0",
+  "packageType": "workbuddy_expert_center_scene_pack",
+  "distributionSurface": {
+    "target": "workbuddy_expert_center",
+    "targetMarketplace": "experts",
+    "targetDisplayNameZh": "行业场景研究员",
+    "targetDisplayNameEn": "Industry Scene Researcher",
+    "localEquivalentTestSurface": "my-experts",
+    "localEquivalentTestOnly": true
+  },
+  "pluginName": "fbsir-industry-scene-researcher",
+  "packCode": "fbss.industry.action.v1",
+  "servicePackCode": "fbss.industry.action.v1",
+  "scenePackId": "industry-workflow-gap",
+  "entryId": "genius-industry-scene-researcher",
+  "expertEntryId": "fbsir-industry-scene-researcher",
+  "entryPromptCode": "wb_sp_genius_industry_scene_researcher",
+  "intentFamily": "genius_partner",
+  "profileSegment": "team_operator",
+  "profileSegments": [
+    "operator",
+    "consultant",
+    "founder",
+    "brand_owner"
+  ],
+  "assetType": "industry-scene-supplement-card",
+  "continuedUseAssetType": "industry-scene-project-action-packet",
+  "deliverables": [
+    "supplementCard",
+    "workbuddyCapabilityMap",
+    "humanAiTaskTable",
+    "pilotPacket",
+    "singleNextStepCta"
+  ],
+  "singleCta": "生成 3 天试点项目包",
+  "starterSet": [
+    {
+      "starterId": "quick_judgement",
+      "starterType": "quick_judgement",
+      "labelZh": "快速判断",
+      "inputSlots": [
+        "userIndustry",
+        "userRole",
+        "userGoal",
+        "userConstraints"
+      ],
+      "firstValueFocus": "从模糊目标中选出一个最高价值工作流缺口，并给场景补位卡和唯一下一步。",
+      "primaryCta": "生成 3 天试点项目包"
+    },
+    {
+      "starterId": "material_to_output",
+      "starterType": "material_to_output",
+      "labelZh": "资料转成果",
+      "inputSlots": [
+        "providedMaterials",
+        "sourceRefs",
+        "userGoal",
+        "expectedOutputFormat"
+      ],
+      "firstValueFocus": "把用户材料转成证据行、候选缺口评分和可执行 3 天试点包。",
+      "primaryCta": "生成证据增强版场景补位卡"
+    },
+    {
+      "starterId": "continue_action",
+      "starterType": "continue_action",
+      "labelZh": "继续推进",
+      "inputSlots": [
+        "previousDecision",
+        "chosenGap",
+        "owner",
+        "timeWindow"
+      ],
+      "firstValueFocus": "把上一轮已选缺口推进为 Day 1 行动清单或一页汇报卡。",
+      "primaryCta": "现在执行 Day 1"
+    }
+  ],
+  "shortcutCatalog": [
+    {
+      "shortcutId": "shortcut.workflow-gap",
+      "labelZh": "工作流缺口",
+      "primaryGoal": "把高胜率缺口从补位卡推进到动作包",
+      "primaryCta": "生成 3 天试点项目包"
+    },
+    {
+      "shortcutId": "shortcut.opportunity-scan",
+      "labelZh": "机会扫描",
+      "primaryGoal": "优先级排序 AI 场景"
+    },
+    {
+      "shortcutId": "shortcut.policy-direction-scan",
+      "labelZh": "鏀跨瓥鏂瑰悜鏄犲皠",
+      "primaryGoal": "鎶婃渶鏂伴儴濮旀斂绛栨柟鍚戞槧灏勬垚琛屼笟鍦烘櫙缂哄彛涓庤瘯鐐瑰寘",
+      "primaryCta": "鐢熸垚鏀跨瓥鏂瑰悜鍦烘櫙鏄犲皠鍗?",
+      "policyDirectionLedger": "contracts/policy-direction-ledger-202606.json",
+      "latestPolicyWindow": "2026-01-01/2026-06-19",
+      "freshnessDays": 14
+    },
+    {
+      "shortcutId": "shortcut.ops-boost",
+      "labelZh": "运营提效",
+      "primaryGoal": "将行业运营问题拆成 WorkBuddy 可执行路径"
+    },
+    {
+      "shortcutId": "shortcut.client-proposal",
+      "labelZh": "客户方案",
+      "primaryGoal": "输出可复用的行业项目包"
+    },
+    {
+      "shortcutId": "shortcut.sales-enable",
+      "labelZh": "销售赋能",
+      "primaryGoal": "把客户资料转成跟进动作"
+    },
+    {
+      "shortcutId": "shortcut.knowledge-distill",
+      "labelZh": "知识沉淀",
+      "primaryGoal": "把行业经验沉淀成模板和技能"
+    },
+    {
+      "shortcutId": "shortcut.meeting-to-action",
+      "labelZh": "会议到行动",
+      "primaryGoal": "把会议语义转成任务板"
+    },
+    {
+      "shortcutId": "shortcut.legacy-ai-entry",
+      "labelZh": "旧业务 AI 切入",
+      "primaryGoal": "为传统业务设计低风险 AI 试点"
+    },
+    {
+      "shortcutId": "shortcut.creative-library",
+      "labelZh": "应用创意库",
+      "primaryGoal": "为线下、线上和利益相关者交流场景快速匹配高绩效 WorkBuddy 使用策略",
+      "primaryCta": "选择一个高绩效场景卡并生成动作包"
+    }
+  ],
+  "creativeLibrary": {
+    "schema": "contracts/industry-scene-creative-library.schema.json",
+    "index": "contracts/industry-scene-creative-library-index.jsonl",
+    "playbook": "references/workflows/creative-library-playbook.md",
+    "verificationGates": "references/quality/creative-library-verification-gates.md",
+    "sampleSeed": "examples/industry-scene-creative-library-samples.json",
+    "capabilityEvidenceLayers": [
+      "overview_capabilities",
+      "changelog_confirmed_capabilities",
+      "local_observed_combinations"
+    ],
+    "coverage": [
+      "offline",
+      "online",
+      "stakeholder"
+    ],
+    "requiredContextFields": [
+      "persona_anchor",
+      "timing_pattern",
+      "format_strategy",
+      "evolution_evidence_note"
+    ],
+    "timingPatternRequired": true,
+    "formatStrategyRequired": true,
+    "evolutionEvidenceNoteRequired": true,
+    "highValueEnhancementFamilies": [
+      "artifact_loading_loop",
+      "host_capability_panorama",
+      "assistant_remote_optional",
+      "mini_program_push_optional",
+      "automation_paused",
+      "expert_packaging_optional",
+      "cloud_deploy_optional"
+    ],
+    "firstValueBoundary": "no_connector_first_value",
+    "finalCardMustKeepSingleNextStep": true
+  },
+  "firstValueContract": {
+    "starterPromptSet": [
+      "quick_judgement",
+      "material_to_output",
+      "continue_action"
+    ],
+    "inputFields": [
+      "userIndustry",
+      "userRole",
+      "userGoal",
+      "userResources",
+      "userConstraints",
+      "providedMaterials",
+      "projectContext"
+    ],
+    "requiredDeliverables": [
+      "supplementCard",
+      "workbuddyCapabilityMap",
+      "humanAiTaskTable",
+      "pilotPacket",
+      "singleNextStepCta"
+    ],
+    "primaryCta": "生成 3 天试点项目包",
+    "defaultFollowupQuestion": "现在就执行 Day 1 吗？",
+    "starterRoutingPolicy": {
+      "quick_judgement": "input_sparse_or_cold_start",
+      "material_to_output": "user_supplies_materials_or_policy_context",
+      "continue_action": "previous_scene_judgement_or_user_requests_execution"
+    },
+    "observabilityFields": [
+      "starterId",
+      "starterType",
+      "entryId",
+      "entryPromptCode",
+      "scenarioFamily",
+      "requestSource",
+      "clientEdition",
+      "distributionChannel",
+      "buildChannel",
+      "locale",
+      "expertVersion"
+    ],
+    "researchActionModeRequiresAtLeastOneEvidenceRow": true,
+    "forbidCapabilityCatalogAsPrimaryOutput": true,
+    "continuationHooks": [
+      "continued_use_completed",
+      "intent_reported",
+      "explicit_consume"
+    ],
+    "acceptanceMetrics": [
+      "firstValueCompleted",
+      "fivePartBundleDelivered",
+      "singleNextStepCtaPresent",
+      "day1ActionReady",
+      "fileOutputs"
+    ],
+    "postFirstValueObservationMetrics": [
+      "continuedUseCompleted",
+      "explicitConsume",
+      "returningUsers"
+    ],
+    "metricBoundary": {
+      "firstValueAcceptanceDoesNotRequireServiceConsume": true,
+      "continuedUseCompletedIsPostFirstValueObservation": true,
+      "explicitConsumeIsPostFirstValueObservation": true,
+      "returningUsersIsPostFirstValueObservation": true
+    },
+    "responseOrderingPolicy": {
+      "noConnectorFirstValuePrecedence": true,
+      "firstUserVisibleBlockMustBeFivePartBundle": true,
+      "optionalEnhancementDiagnosticsAfterFirstValueOnly": true,
+      "connectorOrServiceDiagnosticsNeverLeadDirectFirstValueReply": true,
+      "serviceRouteMismatchIsPostFirstValueGapOnly": true,
+      "ifUserRequestsDirectFivePieceDoNotPrefaceWithToolStatus": true,
+      "serviceEnhancementAttemptsDoNotDelayFirstValue": true
+    },
+    "signatureFields": [
+      "productId",
+      "packCode",
+      "entryId",
+      "entryPromptCode",
+      "expertEntryId",
+      "assetType",
+      "requestSource",
+      "hostPatchVersion",
+      "versionKey"
+    ],
+    "capabilityMapFields": [
+      "experts",
+      "skills",
+      "automations",
+      "subagents",
+      "projectTemplate"
+    ]
+  },
+  "noConnectorInteraction": {
+    "contract": "contracts/no-connector-action-contract.json",
+    "connectorRequired": false,
+    "firstValueSurface": "chat_response_only",
+    "userVisibleActionEnvelopeDefault": false,
+    "hostMetadataChannelPreferred": true,
+    "visibleActionEnvelopeRequiresExplicitDebugRequest": true,
+    "workspaceMaterializationPolicy": {
+      "realToolExecutionRequiredBeforeGeneratedClaim": true,
+      "forbidRawToolCallMarkupInUserVisibleText": true,
+      "forbidHtmlCommentsInUserVisibleText": true,
+      "fallbackToChatOnlyWhenWriteToolsUnavailable": true
+    }
+  },
+  "connectorDecouplingGate": {
+    "contract": "contracts/connector-decoupling-gate.json",
+    "connectorRequiredForFirstValue": false,
+    "connectorRequiredForServiceIntentReport": false,
+    "connectorRequiredForReviewReadiness": false,
+    "connectorRequiredForLocalEquivalentReadiness": false
+  },
+  "serviceClosureGate": {
+    "contract": "contracts/service-closure-gate.json",
+    "firstValueClosureSource": "host_local",
+    "serviceIntentClosureSource": "service_intent_report",
+    "serviceConsumeClosureSource": "service_consume",
+    "sameBindingRequiredForNaturalClosure": true
+  },
+  "serviceObservabilityContract": {
+    "contract": "contracts/service-observability-contract.json",
+    "missingFieldsMustRemainVisible": true,
+    "missingFieldsDoNotBlockFirstValue": true,
+    "missingFieldsBlockNaturalClosureClaim": true
+  },
+  "humanAiHandoff": {
+    "requiredColumns": [
+      "step",
+      "executor",
+      "decider",
+      "handoffArtifact",
+      "autonomyLevel",
+      "escalationRule"
+    ],
+    "autonomyLevels": [
+      "agent_only",
+      "hybrid",
+      "human_review",
+      "human_only"
+    ],
+    "verificationGates": [
+      "human_review_before_external_write",
+      "continued_use_gate_before_lebao_unlock",
+      "same_binding_gate_before_credit_claim"
+    ]
+  },
+  "projectContextFields": [
+    "workbuddyProjectId",
+    "workbuddyProjectTemplate",
+    "anonymousUserCodeHash",
+    "serverBindingId",
+    "chainFingerprint"
+  ],
+  "requiredServiceContracts": {
+    "P0": [
+      "resultCard",
+      "valueEvent",
+      "sameBinding"
+    ],
+    "P1": [
+      "hostActionEnvelope",
+      "nextActionToolArguments",
+      "followthroughContract"
+    ],
+    "P2": [
+      "intentReport",
+      "lebaoUnlockPlan"
+    ]
+  },
+  "requiredServiceContractRefs": {
+    "P0": [
+      {
+        "name": "resultCard",
+        "contract": "contracts/first-value-contract.json"
+      },
+      {
+        "name": "valueEvent",
+        "contract": "contracts/service-closure-gate.json"
+      },
+      {
+        "name": "sameBinding",
+        "contract": "contracts/service-observability-contract.json"
+      }
+    ],
+    "P1": [
+      {
+        "name": "hostActionEnvelope",
+        "contract": "contracts/no-connector-action-contract.json"
+      },
+      {
+        "name": "nextActionToolArguments",
+        "contract": "contracts/no-connector-action-contract.json"
+      },
+      {
+        "name": "followthroughContract",
+        "contract": "contracts/service-closure-gate.json"
+      }
+    ],
+    "P2": [
+      {
+        "name": "intentReport",
+        "contract": "contracts/service-observability-contract.json"
+      },
+      {
+        "name": "lebaoUnlockPlan",
+        "contract": "contracts/no-connector-action-contract.json"
+      }
+    ]
+  },
+  "runtimeSelfAssessmentPolicy": {
+    "requiredBeforeTechnicalReview": true,
+    "evidenceLayersOrder": [
+      "host_local",
+      "service_intent_report",
+      "service_consume"
+    ],
+    "firstValueVerdictSource": "five_part_bundle_and_no_connector_contract_only",
+    "P0OnlyFor": [
+      "missing_required_five_part_bundle",
+      "no_connector_first_value_blocked",
+      "single_next_step_missing",
+      "false_service_consume_or_official_listing_claim",
+      "writes_or_automation_before_user_confirmation"
+    ],
+    "deferredOrP1Only": [
+      "service_attribution_missing_after_first_value",
+      "SkillManage_persistence_missing",
+      "connector_disconnected",
+      "deferred_tool_visible_but_uncalled",
+      "hostActionEnvelope_missing",
+      "service_route_mismatch"
+    ],
+    "postFirstValueOnlyReasons": [
+      "service_attribution_missing",
+      "skill_persistence_missing",
+      "connector_disconnected",
+      "deferred_tool_visible_but_uncalled",
+      "hostActionEnvelope_missing_when_no_metadata_channel",
+      "optional_connector_route_degraded",
+      "service_route_mismatch"
+    ],
+    "postFirstValueGapsMustRemainDeferred": true
+  },
+  "externalObservationBoundary": {
+    "connectorAssumedAvailable": false,
+    "compatibleToolSurface": "connector_decoupled_package_boundary",
+    "packageCapabilityDependsOnConnector": false,
+    "connectorSurfacePackaged": false,
+    "connectorPromptAllowedInPrimaryFlow": false,
+    "unlockNotBefore": "continued_use_completed",
+    "paymentClosureAllowed": false,
+    "projectPackageMaterializedIsHostLocalOnly": true,
+    "benefitStateFields": [
+      "benefitSource",
+      "creditsState",
+      "claimState",
+      "lebaoPackId",
+      "intentBucket"
+    ],
+    "sameBindingConsumeIsNotContinuedUse": true
+  },
+  "contractLinks": {
+    "firstValueContract": "contracts/first-value-contract.json",
+    "noConnectorActionContract": "contracts/no-connector-action-contract.json",
+    "connectorDecouplingGate": "contracts/connector-decoupling-gate.json",
+    "serviceClosureGate": "contracts/service-closure-gate.json",
+    "serviceObservabilityContract": "contracts/service-observability-contract.json",
+    "reviewOrchestrationContract": "contracts/review-orchestration-contract.json"
+  },
+  "projectTemplateCompatibility": {
+    "workbuddyProjectTemplates": [
+      {
+        "templateId": "content-operations",
+        "activationStage": "pilot_or_continue",
+        "connectorRequirements": [
+          {
+            "id": "tdocs-app",
+            "name": "Tencent Docs"
+          },
+          {
+            "id": "notion",
+            "name": "Notion"
+          }
+        ],
+        "projectSelectionIsProductCredit": false
+      }
+    ]
+  },
+  "policyDirectionLedger": {
+    "path": "contracts/policy-direction-ledger-202606.json",
+    "ledgerId": "industry_scene_researcher_policy_direction_ledger_202606",
+    "primaryTriggerSourceId": "ai-consumption-20260618",
+    "latestPolicyWindow": "2026-01-01/2026-06-19",
+    "freshnessDays": 14,
+    "firstValueRequiresLiveFetch": false,
+    "connectorRequired": false,
+    "serviceConsumeClaimed": false,
+    "customerCitationRequiresPrimaryUrlReview": true
+  }
+}

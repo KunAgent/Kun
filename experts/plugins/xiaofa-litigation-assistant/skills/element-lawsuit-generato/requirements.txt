@@ -1,0 +1,4 @@
+python-docx>=0.8.11
+PyMuPDF>=1.23.0
+Pillow>=10.0.0
+pytesseract>=0.3.10

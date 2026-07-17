@@ -1,0 +1,151 @@
+{
+  "schemaVersion": "long_manuscript.representative_scenarios.v1",
+  "version": "1.0.0",
+  "scenarios": [
+    {
+      "scenarioId": "wb_cn_whitepaper_first_value",
+      "hostType": "WORKBUDDY",
+      "promptLanguage": "zh-Hans",
+      "networkAvailability": "available",
+      "input": {
+        "userPrompt": "请把 6 份客户访谈、3 篇旧文章和一份产品资料整理成行业白皮书，先给出目录、章节任务和第一章开头。",
+        "targetReader": "企业创始人和市场负责人"
+      },
+      "expected": {
+        "document_archetype": "whitepaper_report",
+        "source_maturity": "source_pack_ready",
+        "delivery_stage": "first_value",
+        "evidence_and_compliance_mode": "network_required_for_claim_upgrade_only",
+        "blueprintId": "whitepaper_evidence_route",
+        "dispatchMode": "offline_first_claim_upgrade_later"
+      }
+    },
+    {
+      "scenarioId": "wbai_zh_novel_outline",
+      "hostType": "WORKBUDDY_AI",
+      "promptLanguage": "zh-Hans",
+      "networkAvailability": "offline_only",
+      "input": {
+        "userPrompt": "我有一个科幻小说大纲，想先写第一章开头并确定后续章节路线。",
+        "targetReader": "大众读者"
+      },
+      "expected": {
+        "document_archetype": "novel_fiction",
+        "source_maturity": "outline_ready",
+        "delivery_stage": "first_value",
+        "evidence_and_compliance_mode": "offline_required",
+        "blueprintId": "novel_opening_route",
+        "dispatchMode": "offline_first"
+      }
+    },
+    {
+      "scenarioId": "wbai_en_academic_claim_upgrade",
+      "hostType": "WORKBUDDY_AI",
+      "promptLanguage": "en",
+      "networkAvailability": "available",
+      "input": {
+        "userPrompt": "Turn these thesis notes into a chaptered monograph outline, and mark which claims need citation-safe verification before publication.",
+        "targetReader": "academic review committee"
+      },
+      "expected": {
+        "document_archetype": "academic_monograph",
+        "source_maturity": "fragmented_notes",
+        "delivery_stage": "review",
+        "evidence_and_compliance_mode": "network_required_for_claim_upgrade_only",
+        "blueprintId": "academic_argument_scaffold",
+        "dispatchMode": "offline_first_claim_upgrade_later"
+      }
+    },
+    {
+      "scenarioId": "wb_cn_manual_repair",
+      "hostType": "WORKBUDDY",
+      "promptLanguage": "zh-Hans",
+      "networkAvailability": "offline_only",
+      "input": {
+        "userPrompt": "这是一份已经写到一半的运营手册，但章节顺序混乱，请帮我重构结构并给出继续补写的顺序。",
+        "targetReader": "内部运营团队"
+      },
+      "expected": {
+        "document_archetype": "manual_handbook",
+        "source_maturity": "active_draft",
+        "delivery_stage": "revise",
+        "evidence_and_compliance_mode": "network_optional_after_first_value",
+        "blueprintId": "draft_rescue_structure_repair",
+        "dispatchMode": "offline_first"
+      }
+    },
+    {
+      "scenarioId": "wb_cn_post_draft_de_ai",
+      "hostType": "WORKBUDDY",
+      "promptLanguage": "zh-Hans",
+      "networkAvailability": "offline_only",
+      "input": {
+        "userPrompt": "成稿已经有了，帮我做去 AI 味、排版导出检查和交付前质检。",
+        "targetReader": "客户交付"
+      },
+      "expected": {
+        "document_archetype": "generic_longform",
+        "source_maturity": "mature_draft",
+        "delivery_stage": "finish",
+        "evidence_and_compliance_mode": "offline_required",
+        "blueprintId": "post_draft_finish_pack",
+        "dispatchMode": "offline_first"
+      }
+    },
+    {
+      "scenarioId": "wbai_zh_official_policy_current",
+      "hostType": "WORKBUDDY_AI",
+      "promptLanguage": "zh-Hans",
+      "networkAvailability": "available",
+      "input": {
+        "userPrompt": "请按当前政策口径写一份正式通知草案，并标出哪些条款必须联网核实后才能定稿。",
+        "targetReader": "公共部门和正式外部对象"
+      },
+      "expected": {
+        "document_archetype": "official_document",
+        "source_maturity": "fragmented_notes",
+        "delivery_stage": "first_value",
+        "evidence_and_compliance_mode": "network_required_for_claim_upgrade_only",
+        "blueprintId": "official_document_rule_safe_route",
+        "dispatchMode": "offline_first_claim_upgrade_later"
+      }
+    },
+    {
+      "scenarioId": "wb_cn_claim_ledger_no_network",
+      "hostType": "WORKBUDDY",
+      "promptLanguage": "zh-Hans",
+      "networkAvailability": "offline_only",
+      "input": {
+        "userPrompt": "继续这份白皮书，但先按 claim ledger 梳理断言状态，不要把推测写成已证实事实。",
+        "targetReader": "企业决策层"
+      },
+      "expected": {
+        "document_archetype": "whitepaper_report",
+        "source_maturity": "active_draft",
+        "delivery_stage": "review",
+        "evidence_and_compliance_mode": "network_required_for_claim_upgrade_only",
+        "blueprintId": "claim_ledger_evidence_hardening",
+        "dispatchMode": "offline_first_claim_upgrade_later",
+        "requiredWarnings": ["downgrade_claims_without_network"]
+      }
+    },
+    {
+      "scenarioId": "wb_cn_repurpose_distribution",
+      "hostType": "WORKBUDDY",
+      "promptLanguage": "zh-Hans",
+      "networkAvailability": "available",
+      "input": {
+        "userPrompt": "这份长文已经可用了，帮我拆成公众号、小红书和汇报摘要包，并给出发布节奏。",
+        "targetReader": "内容运营团队"
+      },
+      "expected": {
+        "document_archetype": "social_content_article",
+        "source_maturity": "mature_draft",
+        "delivery_stage": "repurpose",
+        "evidence_and_compliance_mode": "network_optional_after_first_value",
+        "blueprintId": "channel_repurpose_pack",
+        "dispatchMode": "offline_first"
+      }
+    }
+  ]
+}

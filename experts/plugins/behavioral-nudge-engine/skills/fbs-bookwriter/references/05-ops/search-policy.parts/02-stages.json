@@ -1,0 +1,13 @@
+{
+  "mandatoryWebSearchStages": [
+    "S0",
+    "S1",
+    "S2",
+    "S3",
+    "S5",
+    "S6"
+  ],
+  "conditionalWebSearchStages": [
+    "S2.5"
+  ]
+}

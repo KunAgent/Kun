@@ -1,0 +1,197 @@
+{
+  "name": "aicoding-architecture-expert-team",
+  "version": "1.0.0",
+  "description": "A multi-role architecture expert team that turns project inputs into staged AICoding architecture deliverables.",
+  "author": {
+    "name": "WorkBuddy",
+    "email": "noreply@workbuddy.local"
+  },
+  "expertType": "team",
+  "agentName": "aicoding-architecture-expert-team-lead",
+  "teamInfo": {
+    "leadAgent": "aicoding-architecture-expert-team-lead",
+    "memberAgents": [
+      "business-architect",
+      "system-architect",
+      "platform-architect",
+      "security-architect",
+      "product-story-designer",
+      "knowledge-ingest-engineer",
+      "research-analyst"
+    ]
+  },
+  "agents": [
+    "./agents/aicoding-architecture-expert-team-lead.md",
+    "./agents/business-architect.md",
+    "./agents/system-architect.md",
+    "./agents/platform-architect.md",
+    "./agents/security-architect.md",
+    "./agents/product-story-designer.md",
+    "./agents/knowledge-ingest-engineer.md",
+    "./agents/research-analyst.md"
+  ],
+  "skills": [
+    "./skills/aicoding-team-bootstrap",
+    "./skills/CloudQ",
+    "./skills/tcloud-arch-diagram",
+    "./skills/diagrams-generator",
+    "./skills/tech-research-advisor",
+    "./skills/docx",
+    "./skills/pdf",
+    "./skills/pptx",
+    "./skills/xlsx"
+  ],
+  "displayName": {
+    "en": "AICoding Architecture Expert Team",
+    "zh": "AICoding 架构专家团"
+  },
+  "profession": {
+    "en": "AICoding Architecture Expert Team",
+    "zh": "AICoding 架构专家团"
+  },
+  "displayDescription": {
+    "en": "Coordinates intake, research, business, system, platform, security and story design specialists to deliver a full architecture package.",
+    "zh": "面向复杂系统架构设计，协同完成资料摄入、调研、业务、系统、部署、安全与用户故事全流程交付。"
+  },
+  "avatar": "avatars/team.jpg",
+  "categoryId": "02-Engineering",
+  "defaultInitPrompt": {
+    "zh": "启动 AICoding 架构专家团，基于我的项目背景和资料生成完整架构方案。",
+    "en": "Start the AICoding Architecture Expert Team and generate a complete architecture package from my project context and materials."
+  },
+  "tags": [
+    {
+      "en": "Architecture Design",
+      "zh": "架构设计"
+    },
+    {
+      "en": "Document Delivery",
+      "zh": "文档交付"
+    },
+    {
+      "en": "Expert Collaboration",
+      "zh": "专家协作"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "启动 AICoding 架构专家团，基于我的项目背景和资料生成完整架构方案。",
+      "en": "Start the AICoding Architecture Expert Team and generate a complete architecture package from my project context and materials."
+    },
+    {
+      "zh": "请先解析我提供的资料，再给出架构设计的分阶段产出计划。",
+      "en": "Parse my materials first, then give me the staged architecture delivery plan."
+    },
+    {
+      "zh": "针对当前系统，输出高层架构、系统设计、部署设计、安全设计和 UserStory。",
+      "en": "For the current system, produce high-level architecture, system design, deployment design, security design, and UserStory."
+    }
+  ],
+  "members": [
+    {
+      "id": "aicoding-architecture-expert-team-lead",
+      "displayName": {
+        "en": "Qi",
+        "zh": "齐构成"
+      },
+      "profession": {
+        "en": "Architecture Delivery Director",
+        "zh": "架构交付总监"
+      },
+      "avatar": "avatars/aicoding-architecture-expert-team-lead.jpg",
+      "role": "lead"
+    },
+    {
+      "id": "business-architect",
+      "displayName": {
+        "en": "Xu",
+        "zh": "许边界"
+      },
+      "profession": {
+        "en": "Business Architect",
+        "zh": "业务架构师"
+      },
+      "avatar": "avatars/business-architect.jpg",
+      "role": "member"
+    },
+    {
+      "id": "system-architect",
+      "displayName": {
+        "en": "Gao",
+        "zh": "高见远"
+      },
+      "profession": {
+        "en": "System Architect",
+        "zh": "系统架构师"
+      },
+      "avatar": "avatars/system-architect.jpg",
+      "role": "member"
+    },
+    {
+      "id": "platform-architect",
+      "displayName": {
+        "en": "Bi",
+        "zh": "毕落地"
+      },
+      "profession": {
+        "en": "Platform Architect",
+        "zh": "部署架构师"
+      },
+      "avatar": "avatars/platform-architect.jpg",
+      "role": "member"
+    },
+    {
+      "id": "security-architect",
+      "displayName": {
+        "en": "Yan",
+        "zh": "严守正"
+      },
+      "profession": {
+        "en": "Security Architect",
+        "zh": "安全架构师"
+      },
+      "avatar": "avatars/security-architect.jpg",
+      "role": "member"
+    },
+    {
+      "id": "product-story-designer",
+      "displayName": {
+        "en": "Gu",
+        "zh": "顾全景"
+      },
+      "profession": {
+        "en": "Product Story Designer",
+        "zh": "产品故事师"
+      },
+      "avatar": "avatars/product-story-designer.jpg",
+      "role": "member"
+    },
+    {
+      "id": "knowledge-ingest-engineer",
+      "displayName": {
+        "en": "Wen",
+        "zh": "闻资料"
+      },
+      "profession": {
+        "en": "Knowledge Ingestion Engineer",
+        "zh": "知识摄入工程师"
+      },
+      "avatar": "avatars/knowledge-ingest-engineer.jpg",
+      "role": "member"
+    },
+    {
+      "id": "research-analyst",
+      "displayName": {
+        "en": "Cha",
+        "zh": "查有据"
+      },
+      "profession": {
+        "en": "Research Analyst",
+        "zh": "研究分析师"
+      },
+      "avatar": "avatars/research-analyst.jpg",
+      "role": "member"
+    }
+  ],
+  "plugin": "aicoding-architecture-expert-team"
+}

@@ -1,0 +1,184 @@
+{
+  "schema": "workbuddy.expert.shipManifest.v1",
+  "generatedAt": "2026-06-12T14:37:36.639Z",
+  "package": {
+    "name": "fbsir-board-secretary-assistant",
+    "version": "2.1.0",
+    "sourceDir": "packages/fbsir-board-secretary-assistant",
+    "wrappedZipBasename": "fbsir-board-secretary-assistant-review.zip",
+    "reviewPackageTimestamp": "2026-06-12T18:00:00+08:00",
+    "operatingContract": "contracts/board-secretary-assistant-operating-contract.json",
+    "scenePack": "scene-pack.json",
+    "leadAgent": "agents/fbsir-board-secretary-assistant.md",
+    "additionalContracts": [
+      "contracts/first-value-contract.json",
+      "contracts/governance-boundary.json",
+      "contracts/service-forward-fields.json",
+      "contracts/service-traction-upgrade-contract.json"
+    ]
+  },
+  "listing": {
+    "finalListingTarget": "workbuddy_expert_center",
+    "finalMarketplace": "experts",
+    "finalListingNameZh": "董秘助手",
+    "categoryId": "11-SecurityCompliance",
+    "defaultInitPromptZh": "请对这段路演问答做合规红队审查，重点挑出内幕信息、选择性披露和前瞻性表述风险。",
+    "quickPromptCount": 3
+  },
+  "distributionSurface": {
+    "finalListingTarget": "workbuddy_expert_center",
+    "finalMarketplace": "experts",
+    "finalListingNameZh": "董秘助手",
+    "localEquivalentTestSurface": "my-experts",
+    "localEquivalentEntrySurface": "my_expert"
+  },
+  "functionalScope": {
+    "primaryScenario": "compliance_red_team",
+    "supportedMaterials": [
+      "公告稿",
+      "路演问答",
+      "投资者沟通稿",
+      "IR问答",
+      "披露说明"
+    ],
+    "deliverables": [
+      "风险等级",
+      "命中依据",
+      "问题片段",
+      "补证要求",
+      "建议改写",
+      "审批下一步"
+    ],
+    "connectorToolChain": [
+      "skill_whoami",
+      "fbs_scene_pack_query",
+      "skill_consume"
+    ],
+    "resultCardAssetType": "compliance-red-team-card",
+    "offerId": "board_secretary_compliance_review_pack_v1",
+    "priorityScope": [
+      "P0",
+      "P1",
+      "P2"
+    ],
+    "supportedMaterialsExtended": [
+      "announcement_draft",
+      "roadshow_qa",
+      "investor_communication_draft",
+      "ir_qa",
+      "disclosure_statement",
+      "investor_interaction_reply",
+      "research_minutes",
+      "public_opinion_response",
+      "three_meetings_materials",
+      "authorized_document_context"
+    ],
+    "deliverablesExtended": [
+      "risk_level",
+      "evidence_matched",
+      "problematic_fragments",
+      "missing_evidence",
+      "rewrite_suggestion",
+      "approval_next_step",
+      "host_capability_request",
+      "delivery_taskboard",
+      "ops_board",
+      "scenario_expansion",
+      "personalization_profile"
+    ],
+    "requiredInterfaces": [
+      "opsEnvelope",
+      "hostActionEnvelope",
+      "resultCard",
+      "valueEvent",
+      "commercialEvent",
+      "deliveryTask",
+      "deliveryTaskboard",
+      "hostCapabilityRequest",
+      "opsBoard",
+      "regulatorySourceRegistry",
+      "scenarioExpansion",
+      "personalizationProfile"
+    ],
+    "requiredP2Scenarios": [
+      "announcement_draft_review",
+      "investor_interaction_reply",
+      "research_minutes_review",
+      "public_opinion_response",
+      "three_meetings_process",
+      "earnings_guidance_qa"
+    ],
+    "supportedProfileSegments": [
+      "board_secretary",
+      "securities_rep",
+      "ir_director",
+      "cfo_office"
+    ]
+  },
+  "entryContract": {
+    "entryPromptCode": "wb_fbsir_board_secretary_compliance_red_team",
+    "entryId": "board-secretary-compliance-red-team",
+    "expertEntryId": "fbsir-board-secretary-assistant",
+    "intentFamily": "board_secretary_ir_workflow",
+    "assetType": "compliance-red-team-card",
+    "offerId": "board_secretary_compliance_review_pack_v1"
+  },
+  "userExperience": {
+    "firstActionZh": "粘贴或选择待审查材料，先生成一张合规红队卡。",
+    "primaryOutputZh": "一张包含风险等级、依据、补证要求、建议改写和审批下一步的风险卡。",
+    "followupModes": [
+      "补证",
+      "改写",
+      "人工复核"
+    ]
+  },
+  "guardrails": {
+    "noAutomaticLegalConclusion": true,
+    "noAutomaticDisclosureDecision": true,
+    "noAutomaticPublishing": true,
+    "hostRendersServiceDecisionOnly": true,
+    "localMyExpertsIsEquivalentOnly": true,
+    "manualReviewRequired": true,
+    "hostRuntimeUpgradeAssumed": false
+  },
+  "reviewBoundary": {
+    "packageOnlyProof": "This package proves package structure, no-connector first-value readiness, and local-equivalent review readiness. It does not prove official listing, natural same-binding closure, or payment closure.",
+    "connectorDecouplingProof": "The package must not ship .mcp.json, mcpServers, or host-tool-exposure metadata. Service observation stays outside the package entry metadata and cannot trigger a connector prompt.",
+    "officialListingStillRequired": true,
+    "naturalClosureClaimAllowed": false
+  },
+  "postFirstValueServiceObservation": {
+    "expectedExecutableTools": [
+      "skill_whoami",
+      "fbs_scene_pack_query",
+      "skill_consume"
+    ],
+    "fallbackWhenUnavailable": "complete_first_value_and_emit_host_action_envelope",
+    "optionalEnhancementOnly": true,
+    "packageMcpMetadataAllowed": false,
+    "connectorPromptAllowedFromPackageEntry": false
+  },
+  "serviceForwardCompatibility": {
+    "contractPath": "contracts/service-forward-fields.json",
+    "connectorRequired": false,
+    "optionalEnhancementOnly": true,
+    "status": "should_validate",
+    "unlockNotBefore": "continued_use_completed"
+  },
+  "serviceTractionUpgrade": {
+    "contractPath": "contracts/service-traction-upgrade-contract.json",
+    "priority": "current_highest_package_workstream",
+    "status": "source_window_landed_for_service_side_joint_debug",
+    "connectorRequired": false,
+    "productFlowMustNotReadConnectorState": true,
+    "visibleGapPolicy": "show_missing_fields_without_blocking_first_value",
+    "waiterLifecycleBoundary": "receipt_handoff_only_no_package_runtime_fix_claim"
+  },
+  "excludedFromSubmission": [
+    "supplementary_readme",
+    "supplementary_support",
+    "test_process_artifacts",
+    "audit_process_artifacts",
+    "local_runtime_evidence"
+  ]
+}

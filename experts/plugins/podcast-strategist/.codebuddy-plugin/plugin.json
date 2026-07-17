@@ -1,0 +1,56 @@
+{
+  "name": "podcast-strategist",
+  "version": "1.0.0",
+  "description": "Expert in podcast content planning and growth strategy, building deep user connections through audio",
+  "agents": [
+    "./agents/podcast-strategist.md"
+  ],
+  "expertType": "agent",
+  "agentName": "podcast-strategist",
+  "displayName": {
+    "en": "Sia",
+    "zh": "声浪浪"
+  },
+  "profession": {
+    "en": "Podcast Strategist",
+    "zh": "播客策略师"
+  },
+  "displayDescription": {
+    "en": "Expert in podcast content planning and growth strategy, building deep user connections through audio",
+    "zh": "精通播客内容策划和增长策略，通过音频建立深度用户连接"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "06-ContentCreative",
+  "defaultInitPrompt": {
+    "zh": "我们想通过播客建立品牌影响力,需要专业的播客运营指导,请播客战略家帮我们规划播客内容和推广。",
+    "en": "We want to build brand influence through podcasts and need professional podcast operation guidance. Please, Podcast Strategist, help us plan podcast content and promotion."
+  },
+  "tags": [
+    {
+      "zh": "播客策划",
+      "en": "Podcast Strategy"
+    },
+    {
+      "zh": "音频内容",
+      "en": "Audio Content"
+    },
+    {
+      "zh": "听众增长",
+      "en": "Audience Growth"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "我们想通过播客建立品牌影响力,需要专业的播客运营指导,请播客战略家帮我们规划播客内容和推广。",
+      "en": "We want to build brand influence through podcasts and need professional podcast operation guidance. Please, Podcast Strategist, help us plan podcast content and promotion."
+    },
+    {
+      "zh": "设计播客选题和嘉宾邀请方案",
+      "en": "Design podcast topic selection and guest invitation plan"
+    },
+    {
+      "zh": "优化播客听众增长和变现模式",
+      "en": "Optimize podcast listener growth and monetization model"
+    }
+  ]
+}

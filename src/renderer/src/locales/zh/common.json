@@ -1,5 +1,6 @@
 {
   "appName": "Kun",
+  "collaboration": "协作",
   "runtimeStatusRestarting": "Kun 正在自动重启…",
   "runtimeStatusRestartingAttempt": "Kun 正在自动重启(第 {{attempt}}/{{max}} 次)…",
   "runtimeStatusCrashed": "Kun 意外退出,正在自动恢复…",

@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process'
-import { mkdtemp, readFile, readdir, rm } from 'node:fs/promises'
+import { mkdtemp, readFile, readdir, rm, symlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, extname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -12,9 +12,22 @@ const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../.
 
 afterEach(async () => {
   await Promise.all(
-    temporaryDirectories.splice(0).map((directory) => rm(directory, { recursive: true, force: true }))
+    temporaryDirectories.splice(0).map(removeTemporaryDirectory)
   )
-})
+}, 30_000)
+
+async function removeTemporaryDirectory(directory: string): Promise<void> {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      await rm(directory, { recursive: true, force: true })
+      return
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code
+      if (process.platform !== 'win32' || !['EBUSY', 'EPERM'].includes(code ?? '') || attempt >= 20) throw error
+      await new Promise((resolve) => setTimeout(resolve, 250))
+    }
+  }
+}
 
 describe('create-kun-extension', () => {
   it.each([
@@ -73,7 +86,7 @@ describe('create-kun-extension', () => {
   })
 
   it('builds a framework-neutral Webview with browser-resolvable bundled assets', async () => {
-    const parent = await mkdtemp(join(repositoryRoot, '.kun-scaffold-build-'))
+    const parent = await mkdtemp(join(tmpdir(), 'kun-scaffold-build-'))
     temporaryDirectories.push(parent)
     const targetDirectory = join(parent, 'browser-app')
     await scaffoldExtension({
@@ -83,6 +96,7 @@ describe('create-kun-extension', () => {
       displayName: 'Browser App',
       template: 'webview'
     })
+    await symlink(join(repositoryRoot, 'node_modules'), join(targetDirectory, 'node_modules'), 'junction')
 
     const npmCli = process.env.npm_execpath
     if (!npmCli) throw new Error('npm_execpath is required to test the generated project')

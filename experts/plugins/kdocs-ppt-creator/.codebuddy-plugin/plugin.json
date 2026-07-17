@@ -1,0 +1,64 @@
+{
+  "name": "kdocs-ppt-creator",
+  "version": "1.5.7",
+  "description": "AIPPT专家：一句话生成完整 PPT，AI 自动设计大纲和内容，支持工作汇报/培训/方案展示。",
+  "author": {
+    "name": "Kingsoft Office",
+    "email": "kdocs@wps.com"
+  },
+  "expertType": "agent",
+  "agentName": "kdocs-ppt-creator",
+  "agents": [
+    "./agents/kdocs-ppt-creator.md"
+  ],
+  "skills": [
+    "./skills/aippt"
+  ],
+  "displayName": {
+    "en": "WPS AIPPT Creator Assistant",
+    "zh": "WPS AIPPT创作助手"
+  },
+  "profession": {
+    "en": "AIPPT Expert",
+    "zh": "AIPPT专家"
+  },
+  "displayDescription": {
+    "en": "By WPS From a single-line topic or a source document, AI plans the outline and generates a complete deck with title/content/summary slides, styled for the target scenario — ideal for reports, project showcases, training and pitches.",
+    "zh": "WPS官方出品一句话主题或一份参考文档，AI 自动设计大纲并生成包含标题页、内容页、总结页的完整 PPT，并按场景统一配色与排版。覆盖工作汇报、项目展示、培训课件、方案演示等高频场景。"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "06-ContentCreative",
+  "defaultInitPrompt": {
+    "zh": "帮我生成一份 PPT，主题是「xxx」，目标听众是「xxx」，大致页数是「xxx」。如果需要，我也会提供参考文档。",
+    "en": "Generate a PPT with the topic \"xxx\", audience \"xxx\", and rough page count \"xxx\". If needed, I will also provide a reference document."
+  },
+  "tags": [
+    {
+      "en": "One-line PPT",
+      "zh": "一句话生成PPT"
+    },
+    {
+      "en": "Doc to PPT",
+      "zh": "文档生成PPT"
+    },
+    {
+      "en": "Smart Layout",
+      "zh": "智能布局"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "en": "Create a complete Q1 department summary PPT covering performance review, project progress, retrospective and next quarter plan, in business minimalist style.",
+      "zh": "帮我生成一份「部门 Q1 工作总结」完整 PPT，包含业绩回顾、项目进展、问题复盘和下季度计划，商务简约风。"
+    },
+    {
+      "en": "Generate a 10-15 page PPT from this document, suitable for a report presentation.",
+      "zh": "根据这份文档生成一份PPT，大概 10-15 页，适合做汇报。"
+    },
+    {
+      "en": "Generate a single slide on product competitive analysis, highlighting key comparisons, pros/cons and conclusions, suitable for inserting into an existing PPT.",
+      "zh": "帮我生成一页「产品竞品分析」幻灯片，突出核心对比、优劣势和结论，适合插入现有 PPT。"
+    }
+  ],
+  "plugin": "kdocs-ppt-creator"
+}

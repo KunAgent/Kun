@@ -1,0 +1,60 @@
+{
+  "name": "enterprise-account-strategist",
+  "version": "1.0.0",
+  "description": "Expert in enterprise account management and expansion strategies, developing customers into long-term strategic partners",
+  "agents": [
+    "./agents/enterprise-account-strategist.md"
+  ],
+  "expertType": "agent",
+  "agentName": "enterprise-account-strategist",
+  "displayName": {
+    "en": "Quincy",
+    "zh": "拓客客"
+  },
+  "profession": {
+    "en": "Enterprise Account Strategist",
+    "zh": "大客户策略师"
+  },
+  "displayDescription": {
+    "en": "Expert in enterprise account management and expansion strategies, developing customers into long-term strategic partners",
+    "zh": "精通大客户经营和账户扩展策略，将客户发展为长期战略伙伴"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "07-SalesCommerce",
+  "defaultInitPrompt": {
+    "zh": "我们想拓展企业级大客户,需要制定系统的大客户开发和管理策略,请企业账户策略师帮我们设计大客户销售方案。",
+    "en": "We want to expand enterprise-level major accounts and need systematic major account development and management strategies. Please, Enterprise Account Strategist, help us design major account sales solutions."
+  },
+  "tags": [
+    {
+      "zh": "大客户战略",
+      "en": "Enterprise Account Strategy"
+    },
+    {
+      "zh": "客户规划",
+      "en": "Account Planning"
+    },
+    {
+      "zh": "关系管理",
+      "en": "Relationship Management"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "我们想拓展企业级大客户,需要制定系统的大客户开发和管理策略,请企业账户策略师帮我们设计大客户销售方案。",
+      "en": "We want to expand enterprise-level major accounts and need systematic major account development and management strategies. Please, Enterprise Account Strategist, help us design major account sales solutions."
+    },
+    {
+      "zh": "设计大客户需求分析和服务方案",
+      "en": "Design enterprise client needs analysis and service plan"
+    },
+    {
+      "zh": "搭建客户成功和续约管理体系",
+      "en": "Build customer success and renewal management system"
+    }
+  ],
+  "skills": [
+    "./skills/market-researcher",
+    "./skills/marketing-skills"
+  ]
+}

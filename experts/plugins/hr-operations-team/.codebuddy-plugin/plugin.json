@@ -1,0 +1,72 @@
+{
+  "name": "hr-operations-team",
+  "version": "1.0.0",
+  "description": "HR operations team with recruiter, compensation analyst, org development consultant, and HR operations specialist for comprehensive people management",
+  "author": {
+    "name": "Expert Marketplace"
+  },
+  "agents": "./agents/",
+
+  "expertType": "team",
+  "agentName": "hr-director",
+  "teamInfo": {
+    "leadAgent": "hr-director",
+    "memberAgents": ["recruiter", "comp-analyst", "org-developer", "hr-ops"]
+  },
+
+  "displayName": {
+    "en": "HR Operations Team",
+    "zh": "HR 运营团队"
+  },
+  "profession": {
+    "en": "People Operations & HR Management",
+    "zh": "人力运营与HR管理"
+  },
+  "displayDescription": {
+    "en": "A team of 4 HR specialists led by an HR Director: Recruiter (pipeline/interview prep/offer drafting), Compensation Analyst (benchmarking/band analysis/equity modeling), Org Development Consultant (org planning/performance review/people analytics), and HR Ops Specialist (onboarding/policy/compliance). Covers the full employee lifecycle.",
+    "zh": "由 HR 总监领导的 4 人人力资源专家团队：招聘专家（招聘漏斗/面试设计/Offer 起草）、薪酬分析师（市场对标/薪酬带分析/股权建模）、组织发展顾问（组织规划/绩效评估/人员分析）和 HR 运营专员（入职引导/政策查询/合规）。覆盖完整的员工生命周期。"
+  },
+  "avatar": "avatars/team.png",
+  "categoryId": "09-OperationsHR",
+  "defaultInitPrompt": {
+    "en": "Help me design an interview plan / Draft an offer letter / Plan our org structure",
+    "zh": "帮我设计面试方案 / 起草 Offer / 规划组织架构"
+  },
+  "members": [
+    {
+      "id": "hr-director",
+      "name": {"en": "Ren", "zh": "任贤达"},
+      "profession": {"en": "HR Director", "zh": "人事总监"},
+      "avatar": "avatars/team-lead.png",
+      "role": "lead"
+    },
+    {
+      "id": "recruiter",
+      "name": {"en": "Hunter", "zh": "猎达"},
+      "profession": {"en": "Recruiter", "zh": "招聘专家"},
+      "avatar": "avatars/recruiter.png",
+      "role": "member"
+    },
+    {
+      "id": "comp-analyst",
+      "name": {"en": "Payla", "zh": "薪析"},
+      "profession": {"en": "Compensation Analyst", "zh": "薪酬分析师"},
+      "avatar": "avatars/comp-analyst.png",
+      "role": "member"
+    },
+    {
+      "id": "org-developer",
+      "name": {"en": "Orga", "zh": "组织"},
+      "profession": {"en": "Org Development Consultant", "zh": "组织发展顾问"},
+      "avatar": "avatars/org-developer.png",
+      "role": "member"
+    },
+    {
+      "id": "hr-ops",
+      "name": {"en": "Onboard", "zh": "入职"},
+      "profession": {"en": "HR Ops Specialist", "zh": "HR 运营专员"},
+      "avatar": "avatars/hr-ops.png",
+      "role": "member"
+    }
+  ]
+}

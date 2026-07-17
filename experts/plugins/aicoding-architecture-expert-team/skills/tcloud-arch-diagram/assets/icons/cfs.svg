@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="32px" height="32px" viewBox="0 0 32 32" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+    <!-- Generator: Sketch 52.6 (67491) - http://www.bohemiancoding.com/sketch -->
+    <title>文件存储-32px</title>
+    <desc>Created with Sketch.</desc>
+    <g id="文件存储-32px" stroke="none" stroke-width="1" fill="none" fill-rule="evenodd">
+        <rect id="Rectangle-Copy" fill="#0052D9" opacity="0" x="0" y="0" width="32" height="32"></rect>
+        <g id="Group" transform="translate(2.000000, 0.000000)" fill="#0052D9" fill-rule="nonzero">
+            <polygon id="XMLID_136_" points="20.3 14.8 14.7 17.8 10.7 15.6 9.1 14.8 6.9 16 14.7 20.3 22.5 16"></polygon>
+            <polygon id="XMLID_111_" points="14.7 24 6.9 19.8 9.1 18.5 10.7 19.4 14.7 21.6 20.3 18.5 22.5 19.8"></polygon>
+            <path d="M14.7,8 L7,12.2 L14.7,16.4 L22.4,12.2 L14.7,8 Z M11.3,12.2 L14.7,10.3 L18.1,12.2 L14.7,14.1 L11.3,12.2 Z" id="XMLID_90_"></path>
+            <polygon id="XMLID_1_" points="26.7 22.9 14.7 29.7 2.7 22.9 2.7 9.2 14.7 2.3 26.7 9.2 26.7 9.2 28.7 8 14.7 0 0.7 8 0.7 24 14.7 32 28.7 24 28.7 12 26.7 13.2"></polygon>
+        </g>
+    </g>
+</svg>

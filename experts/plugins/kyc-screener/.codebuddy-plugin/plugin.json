@@ -1,0 +1,64 @@
+{
+  "name": "kyc-screener",
+  "version": "0.1.0",
+  "description": "Parses onboarding docs, runs KYC/AML rules engine, screens against sanctions and PEP lists, flags gaps.",
+  "author": {
+    "name": "Anthropic FSI"
+  },
+  "expertType": "agent",
+  "agentName": "kyc-screener",
+  "agents": [
+    "./agents/kyc-screener.md"
+  ],
+  "skills": [
+    "./skills/kyc-doc-parse",
+    "./skills/kyc-rules",
+    "./skills/xlsx-author"
+  ],
+  "displayName": {
+    "en": "KYC Screener",
+    "zh": "查本源"
+  },
+  "profession": {
+    "en": "KYC/AML Screening Analyst",
+    "zh": "客户合规官"
+  },
+  "displayDescription": {
+    "en": "Client onboarding analyst who parses KYC packets, applies firm rules, screens sanctions/PEP lists, and stages escalation packs for compliance sign-off.",
+    "zh": "客户准入合规分析师,解析 KYC 材料、跑规则引擎、比对制裁与 PEP 名单,并按风险等级形成可交合规签核的升级包。"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "11-SecurityCompliance",
+  "defaultInitPrompt": {
+    "en": "Here's an onboarding packet for a new Cayman SPV. Please extract the entity file, run the KYC rules, screen sanctions/PEP, and prepare an escalation pack.",
+    "zh": "这是一份新开户的境内私募基金管理人材料包,请解析出实体档案、跑 KYC 规则引擎、筛查制裁与 PEP 名单,并整理一份风险升级包。"
+  },
+  "tags": [
+    {
+      "en": "KYC Screening",
+      "zh": "KYC 筛查"
+    },
+    {
+      "en": "AML Compliance",
+      "zh": "反洗钱"
+    },
+    {
+      "en": "Client Onboarding",
+      "zh": "客户准入"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "en": "Here's an onboarding packet for a new Cayman SPV. Please extract the entity file, run the KYC rules, screen sanctions/PEP, and prepare an escalation pack.",
+      "zh": "这是一份新开户的境内私募基金管理人材料包,请解析出实体档案、跑 KYC 规则引擎、筛查制裁与 PEP 名单,并整理一份风险升级包。"
+    },
+    {
+      "en": "For this parsed record, apply our firm's high-risk-jurisdiction rules and tell me which documents are missing or expired.",
+      "zh": "用公司现行规则对这份解析好的客户档案做高风险地区与高风险行业审查,告诉我哪些证照文件缺失或已过期。"
+    },
+    {
+      "en": "Prepare a risk rating recommendation with the evidence trail for the compliance committee.",
+      "zh": "给合规委员会准备一份风险评级建议,附上每项规则命中的证据链条与佐证材料。"
+    }
+  ]
+}

@@ -1,0 +1,65 @@
+{
+  "name": "inspection-expert",
+  "version": "1.0.0",
+  "description": "Cloud resource inspection expert powered by CloudQ — five-dimension inspection, high-risk scanning, remediation guidance, and proactive risk discovery.",
+  "author": {
+    "name": "CloudQ Team",
+    "email": "cloudq@tencent.com"
+  },
+  "expertType": "agent",
+  "agentName": "inspection-expert",
+  "agents": [
+    "./agents/inspection-expert.md"
+  ],
+  "displayName": {
+    "en": "InspectQ",
+    "zh": "云资源巡检专家"
+  },
+  "profession": {
+    "en": "InspectQ",
+    "zh": "InspectQ"
+  },
+  "displayDescription": {
+    "zh": "云资源巡检专家。覆盖五维巡检（安全、性能、可靠性、成本、合规）、高危风险扫描与优先级处置、巡检趋势分析与可视化报告生成，主动发现潜在隐患，防患于未然。",
+    "en": "Cloud resource inspection expert. Covers five-dimension inspection (security, performance, reliability, cost, compliance), high-risk scanning and prioritized remediation, inspection trend analysis, and visual report generation. Proactively discovers hidden risks before they become incidents."
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "13-TencentZone",
+  "defaultInitPrompt": {
+    "zh": "对我的云资源发起一次全量巡检",
+    "en": "Run a full inspection on my cloud resources"
+  },
+  "tags": [
+    {
+      "en": "Cloud Inspection",
+      "zh": "云巡检"
+    },
+    {
+      "en": "Risk Scanning",
+      "zh": "风险扫描"
+    },
+    {
+      "en": "Security Compliance",
+      "zh": "安全合规"
+    },
+    {
+      "en": "Proactive Ops",
+      "zh": "主动运维"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "en": "Run a full inspection on my cloud resources",
+      "zh": "对我的云资源发起一次全量巡检"
+    },
+    {
+      "en": "What high-risk items need immediate attention?",
+      "zh": "当前有哪些高危风险需要立即处理？"
+    },
+    {
+      "en": "What issues were found in the last inspection?",
+      "zh": "上次巡检发现了哪些问题？"
+    }
+  ],
+  "plugin": "inspection-expert"
+}

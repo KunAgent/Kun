@@ -1,0 +1,56 @@
+{
+  "name": "xr-cockpit-interaction-expert",
+  "version": "1.0.0",
+  "description": "Specializing in cockpit-style interaction design in XR environments",
+  "agents": [
+    "./agents/xr-cockpit-interaction-expert.md"
+  ],
+  "expertType": "agent",
+  "agentName": "xr-cockpit-interaction-expert",
+  "displayName": {
+    "en": "Yvaine",
+    "zh": "座舱师"
+  },
+  "profession": {
+    "en": "XR Cockpit Interaction Expert",
+    "zh": "XR座舱交互专家"
+  },
+  "displayDescription": {
+    "en": "Specializing in cockpit-style interaction design in XR environments",
+    "zh": "专精XR环境下的座舱式交互设计"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "03-GameSpatial",
+  "defaultInitPrompt": {
+    "zh": "我们想为XR设备开发驾驶舱交互界面,需要专业的交互设计经验,请XR驾驶舱交互专家帮我们设计交互方案。",
+    "en": "We want to develop cockpit interaction interfaces for XR devices and need professional interaction design experience. Please, XR Cockpit Interaction Expert, help us design interaction solutions."
+  },
+  "tags": [
+    {
+      "zh": "座舱交互",
+      "en": "Cockpit Interaction"
+    },
+    {
+      "zh": "XR控制",
+      "en": "XR Controls"
+    },
+    {
+      "zh": "沉浸操控",
+      "en": "Immersive Control"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "我们想为XR设备开发驾驶舱交互界面,需要专业的交互设计经验,请XR驾驶舱交互专家帮我们设计交互方案。",
+      "en": "We want to develop cockpit interaction interfaces for XR devices and need professional interaction design experience. Please, XR Cockpit Interaction Expert, help us design interaction solutions."
+    },
+    {
+      "zh": "制定车载AR-HUD界面和信息架构",
+      "en": "Develop in-vehicle AR-HUD interface and information architecture"
+    },
+    {
+      "zh": "优化座舱多模态交互和安全性",
+      "en": "Optimize cockpit multi-modal interaction and safety"
+    }
+  ]
+}

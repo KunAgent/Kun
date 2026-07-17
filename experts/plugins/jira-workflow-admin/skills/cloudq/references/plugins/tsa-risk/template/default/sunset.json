@@ -1,0 +1,65 @@
+{
+    "id": "sunset",
+    "name": "日落橙",
+    "description": "温暖活力的橙色主题，视觉冲击力强，适合演示汇报场景",
+    "style": "tdesign",
+    "header_gradient": "linear-gradient(135deg, #D94F00 0%, #FF8C00 100%)",
+    "primary": "#D94F00",
+    "primary_light": "#FFEAD4",
+    "bg": "#FFF9F5",
+    "card_bg": "#FFFFFF",
+    "card_title_bar": "#D94F00",
+    "high_risk": "#CC2929",
+    "medium_risk": "#E68A00",
+    "healthy": "#2BA471",
+    "text_primary": "#3D2800",
+    "text_secondary": "#9E7A5A",
+    "stat_bg": "#FFF5EB",
+    "border": "#FFE8D4",
+    "score_excellent": "#2BA471",
+    "score_good": "#0ABF5B",
+    "score_warning": "#E68A00",
+    "score_danger": "#CC2929",
+    "score_thresholds": {
+        "excellent": 90,
+        "good": 80,
+        "warning": 70,
+        "danger": 0
+    },
+    "risk_thresholds": {
+        "high_risk_alert": 10,
+        "medium_risk_alert": 30,
+        "healthy_ratio_good": 80
+    },
+    "layout": {
+        "width": 440,
+        "card_radius": 12,
+        "card_padding": 16,
+        "card_gap": 12,
+        "header_padding": "20px 16px",
+        "font_size_title": 18,
+        "font_size_body": 12,
+        "font_size_small": 11,
+        "font_size_score": 48
+    },
+    "chart": {
+        "width": 380,
+        "height": 180,
+        "bar_radius": 2,
+        "line_width": 2,
+        "dot_radius": 3
+    },
+    "modules_order": [
+        "header",
+        "arch_preview",
+        "score",
+        "resource_overview",
+        "risk_stats",
+        "risk_trend",
+        "product_top",
+        "five_dimensions",
+        "risk_detail",
+        "ai_summary",
+        "footer"
+    ]
+}

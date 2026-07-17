@@ -1,0 +1,59 @@
+{
+  "name": "deal-strategist",
+  "version": "1.0.0",
+  "description": "Expert in complex deal strategy formulation and execution, helping sales teams win major deals",
+  "agents": [
+    "./agents/deal-strategist.md"
+  ],
+  "expertType": "agent",
+  "agentName": "deal-strategist",
+  "displayName": {
+    "en": "Orion",
+    "zh": "赢单单"
+  },
+  "profession": {
+    "en": "Deal Strategist",
+    "zh": "交易策略师"
+  },
+  "displayDescription": {
+    "en": "Expert in complex deal strategy formulation and execution, helping sales teams win major deals",
+    "zh": "精通复杂交易策略制定和推进，帮助销售团队赢得大单"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "07-SalesCommerce",
+  "defaultInitPrompt": {
+    "zh": "我们有一笔重要的大单即将成交,但谈判进入僵局,请交易策略师帮我们制定成交策略。",
+    "en": "We have an important major deal nearing completion, but negotiations have reached an impasse. Please, Deal Strategist, help us develop a closing strategy."
+  },
+  "tags": [
+    {
+      "zh": "成交策略",
+      "en": "Deal Strategy"
+    },
+    {
+      "zh": "商务谈判",
+      "en": "Negotiation"
+    },
+    {
+      "zh": "赢单分析",
+      "en": "Win Analysis"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "我们有一笔重要的大单即将成交,但谈判进入僵局,请交易策略师帮我们制定成交策略。",
+      "en": "We have an important major deal nearing completion, but negotiations have reached an impasse. Please, Deal Strategist, help us develop a closing strategy."
+    },
+    {
+      "zh": "分析决策链和关键影响人",
+      "en": "Analyze decision chain and key influencers"
+    },
+    {
+      "zh": "设计差异化方案提升中标率",
+      "en": "Design differentiated proposals to improve win rate"
+    }
+  ],
+  "skills": [
+    "./skills/stock-analysis"
+  ]
+}

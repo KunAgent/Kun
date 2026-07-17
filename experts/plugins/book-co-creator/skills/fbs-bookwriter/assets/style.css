@@ -1,0 +1,454 @@
+/*
+ * FBS-BookWriter 排版样式
+ *
+ * 构建脚本 (build.mjs) 内联此文件，并用配置中的颜色替换 CSS 变量。
+ * 规范来源：references/03-product/06-typography.md
+ */
+
+/* ════════════════════════════════════════
+   §0  CSS 变量（构建时动态注入）
+   ════════════════════════════════════════ */
+:root {
+  /* 主题色 — build.mjs 用 book.color / book.lightBg 等替换 */
+  --c-main:      #2C5F7C;
+  --c-gold:      #D4A843;
+  --c-lightbg:   #F4F7FA;
+  --c-accentbg:  #E3EDF4;
+
+  /* 字族 — 覆盖 Win/Mac/Linux */
+  --fn-hei:  "Source Han Sans SC","Noto Sans CJK SC","Microsoft YaHei","SimHei",sans-serif;
+  --fn-song: "Source Han Serif SC","Noto Serif CJK SC","SimSun","宋体",serif;
+  --fn-kai:  "KaiTi","STKaiti","楷体",serif;
+
+  /* 版面密度（默认：标准） */
+  --line-height: 1.8;
+  --para-gap:    8px;
+}
+
+/* ════════════════════════════════════════
+   §1  页面 & 全局
+   ════════════════════════════════════════ */
+@page {
+  size: A4;
+  margin: 25mm 20mm;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: var(--fn-song);
+  font-size: 10.5pt;
+  line-height: var(--line-height);
+  color: #222;
+  background: #fff;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ════════════════════════════════════════
+   §2  排版铁律（中文标准，不可违反）
+   ════════════════════════════════════════ */
+
+/* —— 段落：全部 2em 缩进 + 两端对齐 —— */
+p {
+  text-indent: 2em;
+  text-align: justify;
+  margin-bottom: var(--para-gap);
+}
+
+/* —— h1：左对齐 / 无字间距 / 下边框 / 自动分页 —— */
+h1 {
+  font-family: var(--fn-hei);
+  font-size: 24pt;
+  font-weight: 700;
+  text-align: left;
+  letter-spacing: 0;
+  color: var(--c-main);
+  border-bottom: 3px solid var(--c-main);
+  padding-bottom: 10px;
+  margin: 0 0 20px 0;
+  page-break-before: always;
+}
+/* 第一个 h1（封面/前言）不分页 */
+h1:first-of-type { page-break-before: auto; }
+
+/* —— h2：左侧色条 —— */
+h2 {
+  font-family: var(--fn-hei);
+  font-size: 17pt;
+  font-weight: 600;
+  color: var(--c-main);
+  border-left: 4px solid var(--c-main);
+  padding-left: 10px;
+  margin: 28px 0 14px 0;
+}
+
+/* —— h3 / h4 —— */
+h3 {
+  font-family: var(--fn-hei);
+  font-size: 13pt;
+  font-weight: 600;
+  color: #333;
+  margin: 20px 0 10px 0;
+}
+h4 {
+  font-family: var(--fn-hei);
+  font-size: 11pt;
+  font-weight: 600;
+  color: #555;
+  margin: 16px 0 8px 0;
+}
+
+/* ════════════════════════════════════════
+   §3  语义元素
+   ════════════════════════════════════════ */
+
+/* —— 金句 —— */
+p.jinqu {
+  font-family: var(--fn-kai);
+  font-size: 11pt;
+  color: var(--c-main);
+  text-align: justify;
+  text-indent: 2em;
+  border-left: 3px solid var(--c-gold);
+  background: var(--c-accentbg);
+  border-radius: 0 4px 4px 0;
+  padding: 12px 16px;
+  margin: 16px 0;
+}
+
+/* —— 题引（h1 紧接的第一段） —— */
+p.epigraph {
+  font-family: var(--fn-kai);
+  font-size: 11pt;
+  color: #666;
+  text-align: justify;
+  text-indent: 2em;
+  border-bottom: 1px solid rgba(44,95,124,0.13);
+  padding-bottom: 12px;
+  margin-bottom: 18px;
+}
+
+/* —— 章尾过渡 —— */
+p.chapter-next {
+  font-family: var(--fn-kai);
+  font-size: 9.5pt;
+  color: #999;
+  text-align: right;
+  text-indent: 0;
+  margin-top: 24px;
+}
+
+/* —— CTA 提示框 —— */
+.cta-box {
+  background: linear-gradient(135deg, var(--c-accentbg), var(--c-lightbg));
+  border-left: 5px solid var(--c-gold);
+  border-radius: 6px;
+  padding: 16px 20px;
+  margin: 20px 0;
+}
+.cta-box p { text-indent: 0; }
+
+/* —— 流程块 —— */
+.flow-block {
+  background: var(--c-accentbg);
+  border-left: 4px solid var(--c-main);
+  border-radius: 6px;
+  font-family: var(--fn-hei);
+  font-size: 10pt;
+  white-space: pre-wrap;
+  padding: 16px;
+  margin: 16px 0;
+}
+
+/* —— 清单 —— */
+ul.checklist {
+  list-style: none;
+  padding-left: 0;
+}
+ul.checklist li {
+  position: relative;
+  padding-left: 26px;
+  margin-bottom: 6px;
+}
+ul.checklist li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 4px;
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--c-main);
+  border-radius: 3px;
+}
+
+/* ════════════════════════════════════════
+   §4  表格
+   ════════════════════════════════════════ */
+table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 16px 0;
+  font-size: 10pt;
+}
+th, td {
+  border: 1px solid #ddd;
+  padding: 8px 10px;
+  text-align: left;
+}
+th {
+  font-family: var(--fn-hei);
+  background: var(--c-lightbg);
+  color: var(--c-main);
+  font-weight: 600;
+}
+tr:nth-child(even) td { background: #fafafa; }
+
+/* ════════════════════════════════════════
+   §5  代码块 & 引用
+   ════════════════════════════════════════ */
+pre {
+  background: #f5f5f5;
+  border-left: 3px solid var(--c-main);
+  padding: 14px 16px;
+  margin: 14px 0;
+  overflow-x: auto;
+  font-size: 9.5pt;
+  line-height: 1.5;
+  border-radius: 4px;
+}
+code {
+  font-family: "Cascadia Code","Fira Code","Source Code Pro",monospace;
+  font-size: 9pt;
+  background: #f0f0f0;
+  padding: 1px 4px;
+  border-radius: 3px;
+}
+pre code { background: none; padding: 0; }
+
+blockquote {
+  border-left: 3px solid var(--c-gold);
+  color: #555;
+  padding: 8px 16px;
+  margin: 14px 0;
+  font-style: normal;
+}
+blockquote p { text-indent: 0; }
+
+/* ════════════════════════════════════════
+   §6  列表
+   ════════════════════════════════════════ */
+ul, ol {
+  padding-left: 2em;
+  margin: 10px 0;
+}
+li { margin-bottom: 4px; }
+
+/* ════════════════════════════════════════
+   §7  图表 & 图注
+   ════════════════════════════════════════ */
+.figure {
+  text-align: center;
+  margin: 20px 0;
+}
+.figure svg { max-width: 100%; }
+.figure-caption {
+  font-size: 9pt;
+  color: #888;
+  margin-top: 6px;
+}
+
+/* ════════════════════════════════════════
+   §7b 插图 & Mermaid（visual.md 配套）
+   ════════════════════════════════════════ */
+
+/* —— 插图容器 —— */
+.illustration {
+  text-align: center;
+  margin: 20px auto;
+  max-width: 90%;
+}
+.illustration img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 4px;
+}
+.illustration-caption {
+  font-size: 9pt;
+  color: #888;
+  margin-top: 6px;
+  text-indent: 0;
+}
+
+/* —— 章首插图 —— */
+.chapter-header-illust {
+  text-align: center;
+  margin: 0 auto 16px auto;
+}
+.chapter-header-illust img {
+  max-height: 200px;
+  width: auto;
+  border-radius: 4px;
+}
+
+/* —— 插图占位（无实际图片时） —— */
+.illustration-placeholder {
+  border: 2px dashed #ccc;
+  background: #f9f9f9;
+  border-radius: 6px;
+  padding: 24px 16px;
+  text-align: center;
+  color: #999;
+  font-size: 9.5pt;
+  margin: 20px auto;
+  max-width: 90%;
+}
+.illustration-placeholder .prompt-hint {
+  font-size: 8.5pt;
+  color: #bbb;
+  margin-top: 8px;
+  font-family: var(--fn-kai);
+}
+
+/* —— Mermaid 容器 —— */
+.mermaid-container {
+  text-align: center;
+  margin: 20px auto;
+  max-width: 100%;
+  overflow-x: auto;
+}
+.mermaid-container svg {
+  max-width: 100%;
+  height: auto;
+}
+
+/* —— Mermaid 源码（PDF模式隐藏，HTML预览可切换） —— */
+.mermaid-code {
+  display: none;
+}
+.mermaid-code.show {
+  display: block;
+  background: #f5f5f5;
+  border-left: 3px solid var(--c-main);
+  padding: 14px 16px;
+  margin: 14px 0;
+  font-size: 9pt;
+  border-radius: 4px;
+}
+
+/* ════════════════════════════════════════
+   §8  封面 & 版权页 & 目录（构建脚本生成的结构）
+   ════════════════════════════════════════ */
+
+/* 封面 */
+.cover-page {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  page-break-after: always;
+  text-align: center;
+}
+.cover-page h1 {
+  border-bottom: none;
+  text-align: center;
+  font-size: 36pt;
+  page-break-before: auto;
+  margin-bottom: 12px;
+}
+.cover-page .subtitle {
+  font-family: var(--fn-kai);
+  font-size: 14pt;
+  color: #666;
+  margin-bottom: 40px;
+}
+.cover-page .author {
+  font-family: var(--fn-hei);
+  font-size: 12pt;
+  color: #888;
+}
+.cover-page .brand {
+  font-size: 9pt;
+  color: #bbb;
+  margin-top: 60px;
+}
+
+/* 版权页 */
+.copyright-page {
+  font-size: 9pt;
+  color: #888;
+  line-height: 1.6;
+  page-break-after: always;
+  padding-top: 60vh;
+}
+.copyright-page p { text-indent: 0; margin-bottom: 6px; }
+
+/* 目录 */
+.toc-page { page-break-after: always; }
+.toc-page h1 { page-break-before: auto; }
+.toc-page ul { list-style: none; padding-left: 0; }
+.toc-page li {
+  border-bottom: 1px dotted #ddd;
+  padding: 4px 0;
+}
+.toc-page li a {
+  color: var(--c-main);
+  text-decoration: none;
+}
+.toc-page li.toc-h2 { padding-left: 2em; font-size: 9.5pt; }
+
+/* ════════════════════════════════════════
+   §8.5  脚注（markdown-it-footnote，build.mjs v2.3+）
+   ════════════════════════════════════════ */
+.footnote-ref a,
+sup.footnote-ref a {
+  font-size: 0.75em;
+  color: var(--c-main);
+  text-decoration: none;
+}
+.footnotes {
+  margin-top: 2em;
+  padding-top: 1em;
+  border-top: 1px solid #ddd;
+  font-size: 9.5pt;
+}
+.footnotes ol { padding-left: 1.5em; }
+.footnote-backref { margin-left: 0.25em; }
+
+/* ════════════════════════════════════════
+   §9  密度变体（构建脚本按 density 注入）
+   ════════════════════════════════════════ */
+.density-compact {
+  --line-height: 1.5;
+  --para-gap: 4px;
+}
+.density-loose {
+  --line-height: 2.2;
+  --para-gap: 16px;
+}
+
+/* ════════════════════════════════════════
+   §10  打印 / PDF 微调
+   ════════════════════════════════════════ */
+@media print {
+  body { font-size: 10.5pt; }
+  h1 { page-break-before: always; }
+  h1:first-of-type { page-break-before: auto; }
+  table, pre, .flow-block, .figure, blockquote, .cta-box { page-break-inside: avoid; }
+  .illustration, .mermaid-container, .mermaid { page-break-inside: avoid; }
+  .illustration-placeholder { border-color: #ddd; background: #fafafa; }
+  .mermaid-code { display: none !important; }
+  a { color: var(--c-main); text-decoration: none; }
+  a::after { content: none; } /* PDF 不显示链接 URL */
+}
+
+/* ════════════════════════════════════════
+   §11  数据保鲜表（二级水印位置）
+   ════════════════════════════════════════ */
+.freshness-table th { font-size: 9pt; }
+.freshness-table td { font-size: 9pt; }
+.freshness-table .verify-mark {
+  color: var(--c-main);
+  font-weight: 600;
+}

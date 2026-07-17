@@ -1,0 +1,31 @@
+{
+  "name": "brand-guardian",
+  "version": "1.0.0",
+  "description": "Expert brand strategist and guardian specializing in brand identity development, consistency maintenance, and strategic brand positioning",
+  "expertType": "agent",
+  "agentName": "brand-guardian",
+  "agents": ["./agents/brand-guardian.md"],
+  "skills": ["./skills/brand-guidelines", "./skills/humanizer"],
+  "displayName": { "en": "Ben", "zh": "盾卫卫" },
+  "profession": { "en": "Brand Strategist", "zh": "品牌策略师" },
+  "displayDescription": {
+    "en": "15 years of brand strategy experience, the ultimate defender of brand consistency",
+    "zh": "15年品牌战略经验，守护品牌一致性的终极捍卫者"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "05-MarketingGrowth",
+  "defaultInitPrompt": {
+    "zh": "我们公司的品牌形象在不同渠道中不够统一,需要建立一致的品牌声音和视觉规范,请品牌守护者帮我制定品牌一致性策略。",
+    "en": "Our company's brand image lacks consistency across different channels. We need to establish a unified brand voice and visual guidelines. Please, Brand Guardian, help me develop a brand consistency strategy."
+  },
+  "tags": [
+    { "en": "Brand Strategy", "zh": "品牌策略" },
+    { "en": "Brand Consistency", "zh": "品牌一致性" },
+    { "en": "Visual Identity", "zh": "视觉识别" }
+  ],
+  "quickPrompts": [
+    { "zh": "我们公司的品牌形象在不同渠道中不够统一,需要建立一致的品牌声音和视觉规范,请品牌守护者帮我制定品牌一致性策略。", "en": "Our company's brand image lacks consistency across different channels. We need to establish a unified brand voice and visual guidelines. Please, Brand Guardian, help me develop a brand consistency strategy." },
+    { "zh": "搭建品牌故事和叙事框架", "en": "Build a brand story and narrative framework" },
+    { "zh": "审查品牌跨渠道一致性问题", "en": "Audit brand consistency across channels" }
+  ]
+}

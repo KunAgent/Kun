@@ -1,0 +1,65 @@
+{
+    "id": "coral",
+    "name": "珊瑚粉",
+    "description": "柔和温馨的粉色主题，视觉友好，适合团队内部分享",
+    "style": "tdesign",
+    "header_gradient": "linear-gradient(135deg, #C24B6B 0%, #F08080 100%)",
+    "primary": "#C24B6B",
+    "primary_light": "#FFE0E8",
+    "bg": "#FFF5F7",
+    "card_bg": "#FFFFFF",
+    "card_title_bar": "#C24B6B",
+    "high_risk": "#D92550",
+    "medium_risk": "#E07B35",
+    "healthy": "#27AE60",
+    "text_primary": "#3D1F2B",
+    "text_secondary": "#A08090",
+    "stat_bg": "#FFF0F3",
+    "border": "#FFDDE5",
+    "score_excellent": "#27AE60",
+    "score_good": "#2BA471",
+    "score_warning": "#E07B35",
+    "score_danger": "#D92550",
+    "score_thresholds": {
+        "excellent": 90,
+        "good": 80,
+        "warning": 70,
+        "danger": 0
+    },
+    "risk_thresholds": {
+        "high_risk_alert": 10,
+        "medium_risk_alert": 30,
+        "healthy_ratio_good": 80
+    },
+    "layout": {
+        "width": 440,
+        "card_radius": 12,
+        "card_padding": 16,
+        "card_gap": 12,
+        "header_padding": "20px 16px",
+        "font_size_title": 18,
+        "font_size_body": 12,
+        "font_size_small": 11,
+        "font_size_score": 48
+    },
+    "chart": {
+        "width": 380,
+        "height": 180,
+        "bar_radius": 2,
+        "line_width": 2,
+        "dot_radius": 3
+    },
+    "modules_order": [
+        "header",
+        "arch_preview",
+        "score",
+        "resource_overview",
+        "risk_stats",
+        "risk_trend",
+        "product_top",
+        "five_dimensions",
+        "risk_detail",
+        "ai_summary",
+        "footer"
+    ]
+}

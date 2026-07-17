@@ -1,0 +1,126 @@
+{
+  "schemaVersion": "1.0",
+  "contractId": "liuxue-yanxue-no-connector-action-contract",
+  "contractVersion": "26.6.30.1",
+  "executionMode": "model_only_no_connector",
+  "connectorRequired": false,
+  "packageCapabilityDependsOnConnector": false,
+  "actionEnvelope": {
+    "requiredFields": [
+      "actionId",
+      "arguments",
+      "sideEffectClass",
+      "approvalState",
+      "idempotent",
+      "stopCondition",
+      "doneState",
+      "successorAction"
+    ],
+    "publicTranscriptSafe": false,
+    "defaultUserVisible": false,
+    "hostMetadataChannelPreferred": true
+  },
+  "identityBoundary": {
+    "mode": "desensitized_independent_client",
+    "stableIdentityWriteNotBefore": "continued_use_completed",
+    "forbiddenPrimaryIdentityFieldsBeforeBinding": [
+      "phone",
+      "email",
+      "idCard",
+      "passportNo",
+      "realName",
+      "rawDeviceId"
+    ]
+  },
+  "benefitUnlockPolicy": {
+    "packCode": "fbs.liuxue_yanxue.dual_track.v1",
+    "claimTool": "lebao_claim",
+    "unlockEventType": "continued_use_completed",
+    "unlockNotBefore": "continued_use_completed",
+    "paymentClosureAllowed": false,
+    "claimStateValues": [
+      "not_exposed",
+      "exposed",
+      "claim_intended",
+      "receipt_confirmed",
+      "unknown"
+    ]
+  },
+  "actions": [
+    {
+      "state": "not_started",
+      "actionId": "liuxue_collect_minimum_context",
+      "virtualTool": true,
+      "arguments": {
+        "requiredInputs": [
+          "studentGradeOrAge",
+          "currentDecisionWindow",
+          "targetDirectionOrUnknown",
+          "familyConstraint"
+        ]
+      },
+      "sideEffectClass": "read_only",
+      "approvalState": "not_required",
+      "idempotent": true,
+      "stopCondition": "Minimum family planning context is clear or explicitly unknown.",
+      "doneState": "minimum_context_ready",
+      "successorAction": "liuxue_generate_first_value_card"
+    },
+    {
+      "state": "minimum_context_ready",
+      "actionId": "liuxue_generate_first_value_card",
+      "virtualTool": true,
+      "arguments": {
+        "requiredOutputs": [
+          "current_window_judgement",
+          "two_or_three_paths",
+          "family_one_pager",
+          "student_action_card",
+          "lebao_progress_and_next_step"
+        ]
+      },
+      "sideEffectClass": "read_only",
+      "approvalState": "not_required",
+      "idempotent": true,
+      "stopCondition": "User receives a first-value planning card and one next step.",
+      "doneState": "first_value_completed",
+      "successorAction": "liuxue_offer_lebao_claim_or_next_action"
+    },
+    {
+      "state": "first_value_completed",
+      "actionId": "liuxue_offer_lebao_claim_or_next_action",
+      "virtualTool": true,
+      "arguments": {
+        "packCode": "fbs.liuxue_yanxue.dual_track.v1",
+        "allowedNextActions": [
+          "gaokao_volunteer_verification",
+          "study_abroad_advisor_handoff",
+          "study_tour_safety_checklist",
+          "family_decision_one_pager",
+          "material_checklist_followup"
+        ]
+      },
+      "sideEffectClass": "read_only",
+      "approvalState": "not_required",
+      "idempotent": true,
+      "stopCondition": "Lebao progress or next action is framed without payment claims.",
+      "doneState": "continued_use_ready",
+      "successorAction": "liuxue_generate_followup_plan"
+    },
+    {
+      "state": "continued_use_ready",
+      "actionId": "liuxue_generate_followup_plan",
+      "virtualTool": true,
+      "arguments": {
+        "requiresSameBindingReceiptForUnlockClaim": true,
+        "output": "one_person_one_next_best_action"
+      },
+      "sideEffectClass": "read_only",
+      "approvalState": "not_required",
+      "idempotent": true,
+      "stopCondition": "User receives a personalized next step or a clear unknown-state fallback.",
+      "doneState": "continued_use_completed",
+      "successorAction": "liuxue_offer_lebao_claim_or_next_action"
+    }
+  ]
+}

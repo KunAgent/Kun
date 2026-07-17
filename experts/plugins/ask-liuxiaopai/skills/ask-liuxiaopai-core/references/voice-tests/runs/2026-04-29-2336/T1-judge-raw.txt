@@ -1,0 +1,50 @@
+
+```json
+{
+  "test_id": "T1",
+  "r1": "pass",
+  "r2": "fail",
+  "r3": "na",
+  ...
+  "r14": "pass"
+}
+```
+
+每个 r1-r14 字段值只能是 `"pass"` / `"fail"` / `"na"` 三个之一。
+
+## 总分计算
+
+```python
+# 不算 N/A，只算 pass + fail
+pass_count = sum(1 for r in rubrics if r == "pass")
+fail_count = sum(1 for r in rubrics if r == "fail")
+total = pass_count + fail_count
+pass_rate = pass_count / total if total > 0 else 0
+
+# 单题判定
+if pass_count >= 10:
+    test_passed = True
+elif pass_count + (na_count // 2) >= 10:  # N/A 不全算 fail
+    test_passed = "borderline"
+else:
+    test_passed = False
+```
+
+**单题 pass**：≥ 10/12 实际计分条目通过
+**总 pass**：8 道题 ≥ 6 道 pass
+
+---
+
+## drift 检测
+
+如果同一条 rubric 在**连续 3 次跑**都 fail（across multiple tests），那是真问题——必须改 SKILL.md，不是改 rubric。
+
+如果某条 rubric **从来没人 fail**（连续 3 次跑全 pass），说明该 rubric 没区分度——考虑替换。
+
+只输出 JSON，不要 prose。
+
+codex
+{"test_id":"T1","r1":"pass","r2":"pass","r3":"fail","r4":"fail","r5":"pass","r6":"pass","r7":"fail","r8":"na","r9":"na","r10":"fail","r11":"pass","r12":"pass","r13":"fail","r14":"fail"}
+tokens used
+23,297
+{"test_id":"T1","r1":"pass","r2":"pass","r3":"fail","r4":"fail","r5":"pass","r6":"pass","r7":"fail","r8":"na","r9":"na","r10":"fail","r11":"pass","r12":"pass","r13":"fail","r14":"fail"}

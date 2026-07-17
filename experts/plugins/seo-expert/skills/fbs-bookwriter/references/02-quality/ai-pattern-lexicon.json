@@ -1,0 +1,278 @@
+{
+  "version": "2.1.0",
+  "updatedAt": "2026-04-11",
+  "description": "AI 写作特征模式词库。供 B 层审查员（fbs-reviewer-b）和 quality-auditor-lite.mjs 使用。",
+  "notes": "riskLevel: high=强烈建议修改, medium=建议修改, low=酌情处理。每章 aiTasteScore ≤3 为通过目标。",
+  "patterns": [
+    {
+      "id": "AI-P01",
+      "name": "首段点题式开头",
+      "description": "文章/段落以「本文将...」「本章将...」「我们将...」开头，直接陈述将要讲什么",
+      "triggers": ["本文将", "本章将", "我们将", "本节将", "接下来将"],
+      "riskLevel": "high",
+      "suggestion": "改为直接陈述核心观点或以场景/问题引入",
+      "thresholds": { "maxOccurrences": 1, "per": "chapter" }
+    },
+    {
+      "id": "AI-P02",
+      "name": "总-分-总结构标配",
+      "description": "每段开头一句总领，结尾一句总结，中间三点并列，形成机械的三明治结构",
+      "triggers": ["总的来说", "综上所述", "总体而言", "由此可见", "综合以上"],
+      "riskLevel": "high",
+      "suggestion": "结尾总结句减少到全文1-2次，段落内用转折/递进替代并列",
+      "thresholds": { "maxOccurrences": 2, "per": "chapter" }
+    },
+    {
+      "id": "AI-P03",
+      "name": "过度列举",
+      "description": "连续4个以上「首先/其次/再次/最后」或「第一/第二/第三/第四」并列枚举",
+      "triggers": ["首先", "其次", "再次", "最后", "第一", "第二", "第三", "第四", "第五"],
+      "riskLevel": "high",
+      "suggestion": "将部分并列点合并叙述，或转化为叙事性段落",
+      "thresholds": { "maxConsecutive": 3, "per": "paragraph" }
+    },
+    {
+      "id": "AI-P04",
+      "name": "重要性宣告",
+      "description": "大量使用「X 非常重要」「X 至关重要」「X 不可忽视」等抽象重要性声明，缺少具体论证",
+      "triggers": ["非常重要", "至关重要", "不可忽视", "不容小觑", "举足轻重", "不可或缺"],
+      "riskLevel": "medium",
+      "suggestion": "将「重要」替换为具体后果或数据支撑：「X 导致了 Y」",
+      "thresholds": { "maxOccurrences": 2, "per": "chapter" }
+    },
+    {
+      "id": "AI-P05",
+      "name": "无差别过渡句",
+      "description": "段落间使用「值得注意的是」「需要指出的是」「不得不提的是」等套话过渡",
+      "triggers": ["值得注意的是", "需要指出的是", "不得不提", "有必要指出", "重要的是"],
+      "riskLevel": "medium",
+      "suggestion": "直接开始新段落，或用内容逻辑连接而非过渡套话",
+      "thresholds": { "maxOccurrences": 2, "per": "chapter" }
+    },
+    {
+      "id": "AI-P06",
+      "name": "双向平衡式结论",
+      "description": "每个问题都给出「一方面...另一方面」的骑墙结论，不表明立场",
+      "triggers": ["一方面", "另一方面", "既要...也要", "固然...但是"],
+      "riskLevel": "medium",
+      "suggestion": "在分析利弊后明确给出倾向性结论，避免永远骑墙",
+      "thresholds": { "maxOccurrences": 3, "per": "chapter" }
+    },
+    {
+      "id": "AI-P07",
+      "name": "连续并列长句",
+      "description": "连续4句以上句式相同（「X 是...」「Y 是...」「Z 是...」）形成机械感",
+      "triggers": [],
+      "riskLevel": "high",
+      "suggestion": "打破句式重复，穿插短句、问句或具体细节",
+      "thresholds": { "maxConsecutive": 3, "samePattern": true }
+    },
+    {
+      "id": "AI-P08",
+      "name": "泛化主语",
+      "description": "主语使用「人们」「社会」「企业」「我们」等泛化主体，缺少具体指代",
+      "triggers": ["人们普遍", "社会各界", "很多人认为", "大家都知道", "众所周知"],
+      "riskLevel": "medium",
+      "suggestion": "换为具体的人名、机构名或调查数据",
+      "thresholds": { "maxOccurrences": 3, "per": "chapter" }
+    },
+    {
+      "id": "AI-P09",
+      "name": "连续祈使式标题",
+      "description": "多个小标题都以祈使动词开头（「如何」「学会」「掌握」「了解」「确保」）",
+      "triggers": ["如何", "学会", "掌握", "了解", "确保", "注意"],
+      "riskLevel": "low",
+      "suggestion": "混合使用陈述式、问题式标题",
+      "thresholds": { "maxConsecutive": 3, "inHeadings": true }
+    },
+    {
+      "id": "AI-P10",
+      "name": "结尾展望套语",
+      "description": "章节结尾使用「相信未来...」「期待...」「我们有理由相信...」等展望套话",
+      "triggers": ["相信未来", "期待未来", "有理由相信", "充满信心", "必将", "大有可为"],
+      "riskLevel": "high",
+      "suggestion": "结尾改为具体的下一步行动、悬念或核心观点复述",
+      "thresholds": { "maxOccurrences": 1, "per": "chapter" }
+    },
+    {
+      "id": "AI-P11",
+      "name": "数字罗列无分析",
+      "description": "堆积多个统计数字但不分析其含义或相互关系",
+      "triggers": [],
+      "riskLevel": "medium",
+      "suggestion": "每组数字后加一句解读：「这意味着...」或「对比X年，增幅达...」",
+      "thresholds": { "maxConsecutiveNumbers": 3, "withoutAnalysis": true }
+    },
+    {
+      "id": "AI-P12",
+      "name": "过度使用「通过X实现Y」句式",
+      "description": "大量使用「通过...实现...」「借助...达到...」「利用...提升...」结构",
+      "triggers": ["通过…实现", "借助…达到", "利用…提升", "依托…推进"],
+      "riskLevel": "medium",
+      "suggestion": "直接描述结果：「X 使 Y 提升了 30%」",
+      "thresholds": { "maxOccurrences": 3, "per": "chapter" }
+    },
+    {
+      "id": "AI-P13",
+      "name": "绝对化表述",
+      "description": "未经证实的「唯一」「最」「第一」「100%」等绝对化词语",
+      "triggers": ["唯一", "最好的", "最优的", "最重要的", "最关键的", "百分之百", "完全"],
+      "riskLevel": "high",
+      "suggestion": "加限定语「之一」或给出来源数据",
+      "thresholds": { "maxOccurrences": 2, "per": "chapter" }
+    },
+    {
+      "id": "AI-P14",
+      "name": "大词轰炸",
+      "description": "密集使用「颠覆」「革命」「历史性」「里程碑」等夸张性修饰词",
+      "triggers": ["颠覆性", "革命性", "历史性突破", "里程碑", "划时代", "前所未有"],
+      "riskLevel": "high",
+      "suggestion": "替换为具体描述，如「较行业平均提升了X倍」",
+      "thresholds": { "maxOccurrences": 2, "per": "chapter" }
+    },
+    {
+      "id": "AI-P15",
+      "name": "情感空洞词",
+      "description": "大量使用「令人振奋」「发人深省」「耐人寻味」等空洞情感形容词",
+      "triggers": ["令人振奋", "发人深省", "耐人寻味", "令人深思", "令人感慨", "令人动容"],
+      "riskLevel": "medium",
+      "suggestion": "删除或替换为具体的情感来源描述",
+      "thresholds": { "maxOccurrences": 2, "per": "chapter" }
+    },
+    {
+      "id": "AI-P16",
+      "name": "被动无主句堆积",
+      "description": "大量「被认为」「被证明」「据认为」等无主体被动句",
+      "triggers": ["被认为", "被证明", "据认为", "有观点认为", "有研究表明"],
+      "riskLevel": "medium",
+      "suggestion": "指明主体：「斯坦福大学2024年研究证明...」",
+      "thresholds": { "maxOccurrences": 3, "per": "chapter" }
+    },
+    {
+      "id": "AI-P17",
+      "name": "二元对立简化",
+      "description": "将复杂问题简化为「传统 vs 现代」「国内 vs 国外」等二元对立框架",
+      "triggers": ["传统与现代", "国内外对比", "过去与现在"],
+      "riskLevel": "low",
+      "suggestion": "引入第三维度或更细分的比较框架",
+      "thresholds": { "maxOccurrences": 2, "per": "chapter" }
+    },
+    {
+      "id": "AI-P18",
+      "name": "重复关键词叠加",
+      "description": "300字内同一词汇出现5次以上（不含必要专业术语）",
+      "triggers": [],
+      "riskLevel": "medium",
+      "suggestion": "使用同义词、代词或重构句子",
+      "thresholds": { "maxOccurrences": 4, "per": "300chars" }
+    },
+    {
+      "id": "AI-P19",
+      "name": "过度肯定语气",
+      "description": "频繁使用「当然」「显然」「毫无疑问」「不言而喻」预设读者共识",
+      "triggers": ["当然", "显然", "毫无疑问", "不言而喻", "不用说", "无需赘言"],
+      "riskLevel": "medium",
+      "suggestion": "删除或替换为实际论证",
+      "thresholds": { "maxOccurrences": 3, "per": "chapter" }
+    },
+    {
+      "id": "AI-P20",
+      "name": "连续反问句",
+      "description": "连续3个以上反问句形成修辞堆积",
+      "triggers": ["难道", "岂不是", "不正是", "不就是"],
+      "riskLevel": "low",
+      "suggestion": "最多使用1个反问句，其余改为陈述",
+      "thresholds": { "maxConsecutive": 2 }
+    },
+    {
+      "id": "AI-P21",
+      "name": "大段说明性铺垫",
+      "description": "正文前有超过150字的背景铺垫，才进入核心论点",
+      "triggers": [],
+      "riskLevel": "medium",
+      "suggestion": "核心论点前置，背景信息精简到50字内或移至注脚",
+      "thresholds": { "maxPreambleChars": 150 }
+    },
+    {
+      "id": "AI-P22",
+      "name": "引用名人名言开场",
+      "description": "每章或多个小节开头引用名人名言，形成套路",
+      "triggers": ["曾说", "曾指出", "有言曰", "古语有云", "正如.*所说"],
+      "riskLevel": "low",
+      "suggestion": "减少到全书2-3处，且须与正文内容高度相关",
+      "thresholds": { "maxOccurrences": 2, "per": "chapter" }
+    },
+    {
+      "id": "AI-P23",
+      "name": "机械化问题解答结构",
+      "description": "「什么是X → 为什么X重要 → 如何做X」的机械三段论结构",
+      "triggers": ["什么是", "为什么.*重要", "如何.*做到"],
+      "riskLevel": "medium",
+      "suggestion": "至少有一个维度用叙事或案例替代定义式说明",
+      "thresholds": { "maxOccurrences": 2, "per": "chapter" }
+    },
+    {
+      "id": "AI-P24",
+      "name": "无实质内容的过渡段",
+      "description": "「下面我们来看...」「接下来介绍...」等无实质内容的单句过渡段",
+      "triggers": ["下面我们来看", "接下来介绍", "下面介绍", "接下来我们", "让我们来看"],
+      "riskLevel": "high",
+      "suggestion": "删除过渡句，直接开始下一部分内容",
+      "thresholds": { "maxOccurrences": 2, "per": "chapter" }
+    },
+    {
+      "id": "AI-P25",
+      "name": "口号式收尾",
+      "description": "章节结尾用口号式排比句收尾（「让...更...，让...更...，让...更...」）",
+      "triggers": ["让.*更.*让.*更", "为了.*我们.*为了.*我们"],
+      "riskLevel": "high",
+      "suggestion": "改为具体的行动呼吁或悬念设置",
+      "thresholds": { "maxOccurrences": 1, "per": "chapter" }
+    },
+    {
+      "id": "AI-P26",
+      "name": "概念定义堆砌",
+      "description": "一段内给出3个以上概念的书面定义，形成词典感",
+      "triggers": [],
+      "riskLevel": "medium",
+      "suggestion": "概念定义用场景举例替代，或移至附录",
+      "thresholds": { "maxDefinitions": 2, "per": "paragraph" }
+    },
+    {
+      "id": "AI-P27",
+      "name": "步骤化语气入侵叙事",
+      "description": "在非操作手册类文章中，大量使用「步骤一」「步骤二」或「第一步」「第二步」",
+      "triggers": ["步骤一", "步骤二", "第一步", "第二步", "第三步"],
+      "riskLevel": "low",
+      "suggestion": "叙事性内容改为叙述段落，只在操作手册类章节保留步骤结构",
+      "thresholds": { "maxOccurrences": 1, "per": "chapter", "excludeScenes": ["training", "manual"] }
+    },
+    {
+      "id": "AI-P28",
+      "name": "无来源的数据声明",
+      "description": "给出精确数字（如「提升了37%」「覆盖了12个省份」）但无任何来源标注",
+      "triggers": [],
+      "riskLevel": "high",
+      "suggestion": "数据后标注「[来源]」或「（XX调研，20XX年）」",
+      "thresholds": { "maxUncitedNumbers": 2, "per": "chapter" }
+    },
+    {
+      "id": "AI-P29",
+      "name": "形容词密度过高",
+      "description": "每100字中出现超过8个形容词或副词修饰语",
+      "triggers": [],
+      "riskLevel": "medium",
+      "suggestion": "删除多余修饰词，用名词和动词承载信息量",
+      "thresholds": { "maxAdjectiveDensity": 8, "per": "100chars" }
+    },
+    {
+      "id": "AI-P30",
+      "name": "开头与结尾高度相似",
+      "description": "章节开头段落与结尾段落表达的核心意思高度重复（>60%相似度）",
+      "triggers": [],
+      "riskLevel": "medium",
+      "suggestion": "结尾应推进一步，如提出问题、给出预告或深化洞察",
+      "thresholds": { "maxSimilarity": 0.6, "between": ["opening", "closing"] }
+    }
+  ]
+}

@@ -1,0 +1,37 @@
+{
+  "name": "smb-operations",
+  "version": "1.0.0",
+  "description": "Small business operations manager: hiring and job postings, onboarding setup, and business pulse reporting",
+  "author": { "name": "Expert Marketplace" },
+  "license": "MIT",
+  "expertType": "agent",
+  "agentName": "smb-operations",
+  "agents": ["./agents/smb-operations.md"],
+  "skills": [
+    "./skills/hiring",
+    "./skills/onboarding",
+    "./skills/business-reporting"
+  ],
+  "displayName": { "en": "Bi", "zh": "毕运营" },
+  "profession": { "en": "Operations Manager", "zh": "组织运营师" },
+  "displayDescription": {
+    "en": "Hiring, onboarding, and business pulse reporting for small businesses — keep operations running smoothly",
+    "zh": "小企业组织运营师，负责招聘入职、工具初始化和业务快照，让运营不掉链子"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "09-OperationsHR",
+  "defaultInitPrompt": {
+    "zh": "看一眼业务快照：现金、销售、待办。",
+    "en": "Business pulse: cash, sales, to-dos."
+  },
+  "tags": [
+    { "zh": "招聘入职", "en": "Hiring & Onboarding" },
+    { "zh": "业务快照", "en": "Business Pulse" },
+    { "zh": "运营管理", "en": "Operations" }
+  ],
+  "quickPrompts": [
+    { "zh": "看一眼业务快照：现金、销售、待办。", "en": "Business pulse: cash, sales, to-dos." },
+    { "zh": "写一个产品经理的 JD 和面试题。", "en": "Write a JD and interview questions for a product manager." },
+    { "zh": "周一了，来一份本周重点简报。", "en": "Monday — weekly priorities brief." }
+  ]
+}

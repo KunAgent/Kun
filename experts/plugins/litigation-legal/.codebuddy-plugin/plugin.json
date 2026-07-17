@@ -1,0 +1,70 @@
+{
+  "name": "litigation-legal",
+  "version": "1.0.0",
+  "description": "Litigation support expert for matter intake, portfolio status, chronologies, claim charts, evidence timelines, issue charts, litigation correspondence, deadline tracking, and brief sections.",
+  "author": {
+    "name": "WorkBuddy Team"
+  },
+  "license": "Apache-2.0",
+  "keywords": [
+    "legal",
+    "litigation-legal",
+    "law",
+    "localized-legal-workflow"
+  ],
+  "expertType": "agent",
+  "agentName": "litigation-legal-strategist",
+  "agents": [
+    "./agents/litigation-legal-strategist.md"
+  ],
+  "skills": [
+    "./skills/litigation-workflows",
+    "./skills/china-litigation-toolkit"
+  ],
+  "displayName": {
+    "en": "Litigation Legal Expert",
+    "zh": "诉讼法务专家"
+  },
+  "profession": {
+    "en": "Litigation Support Counsel",
+    "zh": "诉讼支持顾问"
+  },
+  "displayDescription": {
+    "en": "Litigation support expert for matter intake, portfolio status, chronologies, claim charts, evidence timelines, issue charts, litigation correspondence, deadline tracking, and brief sections.",
+    "zh": "面向诉讼律师的案件支持专家，梳理案件、证据、时间线、质证准备、索赔图表和文书草稿。"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "11-SecurityCompliance",
+  "defaultInitPrompt": {
+    "en": "Help me intake this litigation matter and identify deadlines, evidence gaps, and attorney review points",
+    "zh": "帮我受理这个诉讼事项，识别期限、证据缺口和律师审阅点"
+  },
+  "tags": [
+    {
+      "en": "Litigation",
+      "zh": "诉讼支持"
+    },
+    {
+      "en": "Evidence Timeline",
+      "zh": "证据时间线"
+    },
+    {
+      "en": "Drafting Prep",
+      "zh": "文书准备"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "en": "Help me intake this litigation matter and identify deadlines, evidence gaps, and attorney review points",
+      "zh": "帮我受理这个诉讼事项，识别期限、证据缺口和律师审阅点"
+    },
+    {
+      "en": "Build a chronology and issue list from these litigation materials",
+      "zh": "根据这些诉讼材料整理时间线和问题清单"
+    },
+    {
+      "en": "Prepare a witness interview outline with documents and missing facts flagged",
+      "zh": "准备质证提纲，并标出关联文件和缺失事实"
+    }
+  ]
+}

@@ -1,0 +1,56 @@
+{
+  "name": "sales-data-extraction-agent",
+  "version": "1.0.0",
+  "description": "Automatically extracting and organizing sales data from various data sources",
+  "agents": [
+    "./agents/sales-data-extraction-agent.md"
+  ],
+  "expertType": "agent",
+  "agentName": "sales-data-extraction-agent",
+  "displayName": {
+    "en": "Val",
+    "zh": "拉数数"
+  },
+  "profession": {
+    "en": "Sales Data Extraction Agent",
+    "zh": "销售数据提取代理"
+  },
+  "displayDescription": {
+    "en": "Automatically extracting and organizing sales data from various data sources",
+    "zh": "从各类数据源中自动提取整理销售数据"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "04-DataAI",
+  "defaultInitPrompt": {
+    "zh": "我们需要从各种渠道提取销售数据,进行统一分析,请销售数据提取代理帮我们设计数据提取方案。",
+    "en": "We need to extract sales data from various channels for unified analysis. Please, Sales Data Extraction Agent, help us design a data extraction solution."
+  },
+  "tags": [
+    {
+      "zh": "销售数据",
+      "en": "Sales Data"
+    },
+    {
+      "zh": "数据提取",
+      "en": "Data Extraction"
+    },
+    {
+      "zh": "CRM分析",
+      "en": "CRM Analytics"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "我们需要从各种渠道提取销售数据,进行统一分析,请销售数据提取代理帮我们设计数据提取方案。",
+      "en": "We need to extract sales data from various channels for unified analysis. Please, Sales Data Extraction Agent, help us design a data extraction solution."
+    },
+    {
+      "zh": "搭建销售数据自动化报表和看板",
+      "en": "Build automated sales data reports and dashboards"
+    },
+    {
+      "zh": "设计销售数据清洗和标准化方案",
+      "en": "Design sales data cleaning and standardization plan"
+    }
+  ]
+}

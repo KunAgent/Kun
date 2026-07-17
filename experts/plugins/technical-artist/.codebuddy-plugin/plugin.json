@@ -1,0 +1,59 @@
+{
+  "name": "technical-artist",
+  "version": "1.0.0",
+  "description": "Bridging art vision and engine implementation, expert in shaders and VFX",
+  "agents": [
+    "./agents/technical-artist.md"
+  ],
+  "expertType": "agent",
+  "agentName": "technical-artist",
+  "displayName": {
+    "en": "Otis",
+    "zh": "技美美"
+  },
+  "profession": {
+    "en": "Technical Artist",
+    "zh": "技术美术"
+  },
+  "displayDescription": {
+    "en": "Bridging art vision and engine implementation, expert in shaders and VFX",
+    "zh": "在美术愿景与引擎实现之间架起桥梁，精通着色器和VFX"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "03-GameSpatial",
+  "defaultInitPrompt": {
+    "zh": "我们的游戏需要技术美术支持,连接美术和开发的桥梁,请技术美术帮我们优化游戏美术效果。",
+    "en": "Our game needs technical art support to bridge art and development. Please, Technical Artist, help us optimize game art effects."
+  },
+  "tags": [
+    {
+      "zh": "技术美术",
+      "en": "Technical Art"
+    },
+    {
+      "zh": "美术管线",
+      "en": "Art Pipeline"
+    },
+    {
+      "zh": "着色器编写",
+      "en": "Shader Writing"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "我们的游戏需要技术美术支持,连接美术和开发的桥梁,请技术美术帮我们优化游戏美术效果。",
+      "en": "Our game needs technical art support to bridge art and development. Please, Technical Artist, help us optimize game art effects."
+    },
+    {
+      "zh": "优化美术资源性能和质量平衡",
+      "en": "Optimize art asset performance and quality balance"
+    },
+    {
+      "zh": "设计美术工具和自动化脚本",
+      "en": "Design art tools and automation scripts"
+    }
+  ],
+  "skills": [
+    "./skills/nano-banana-pro"
+  ]
+}

@@ -1,0 +1,56 @@
+{
+  "name": "terminal-integration-expert",
+  "version": "1.0.0",
+  "description": "Expert in integrating terminal applications with spatial computing environments",
+  "agents": [
+    "./agents/terminal-integration-expert.md"
+  ],
+  "expertType": "agent",
+  "agentName": "terminal-integration-expert",
+  "displayName": {
+    "en": "Willa",
+    "zh": "终端通"
+  },
+  "profession": {
+    "en": "Terminal Integration Expert",
+    "zh": "终端集成专家"
+  },
+  "displayDescription": {
+    "en": "Expert in integrating terminal applications with spatial computing environments",
+    "zh": "精通终端应用与空间计算环境的集成"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "02-Engineering",
+  "defaultInitPrompt": {
+    "zh": "我们想开发终端集成应用,需要专业的终端交互和开发经验,请终端集成专家帮我们设计终端应用。",
+    "en": "We want to develop terminal integration applications and need professional terminal interaction and development experience. Please, Terminal Integration Expert, help us design terminal applications."
+  },
+  "tags": [
+    {
+      "zh": "终端集成",
+      "en": "Terminal Integration"
+    },
+    {
+      "zh": "CLI工具",
+      "en": "CLI Tools"
+    },
+    {
+      "zh": "命令行开发",
+      "en": "Command Line Dev"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "我们想开发终端集成应用,需要专业的终端交互和开发经验,请终端集成专家帮我们设计终端应用。",
+      "en": "We want to develop terminal integration applications and need professional terminal interaction and development experience. Please, Terminal Integration Expert, help us design terminal applications."
+    },
+    {
+      "zh": "设计跨设备XR交互和协同方案",
+      "en": "Design cross-device XR interaction and collaboration plan"
+    },
+    {
+      "zh": "搭建空间计算外设和传感器对接方案",
+      "en": "Build spatial computing peripheral and sensor integration plan"
+    }
+  ]
+}

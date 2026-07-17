@@ -1,0 +1,34 @@
+{
+  "doc_version": "v1.0",
+  "source": "治理基线《社招统计指标》 (44 项)",
+  "imported_at": "2026-06-07",
+  "default_table_mapping": {
+    "社招面试全流程宽表 Report_Recruit_Flow_Detail": "catalog_dos_da_mcp.hrdw.Report_Recruit_Flow_Detail",
+    "社招简历评估宽表 Report_Recruit_Resume_Assessment": "catalog_dos_da_mcp.hrdw.Report_Recruit_Resume_Assessment",
+    "岗位管理 - 招聘岗位信息": "catalog_dos_da_mcp.hrdw.Report_Position_Management_Recruitment_P_I_Daily_Slice"
+  },
+  "default_business_filters": {
+    "_note": "🔴 2026-06-12 勘误：下列 staff_type_id / flow_id 仅适用 T_FLOW(Report_Recruit_Flow_Detail)；T_ASSESS(Report_Recruit_Resume_Assessment) 不加这两个过滤，仅时间窗+国家，见 t_assess_exception。",
+    "staff_type_id": "2 (仅 T_FLOW；员工类型=正式社招候选人，需通过字典表 dw-api-public-core-personnel-filters-dictionary-staffType 验证)",
+    "flow_id": "3 (仅 T_FLOW；社招面试流程，活水流程为 5)",
+    "location_country_name_like": "%中国%",
+    "t_assess_exception": "Report_Recruit_Resume_Assessment 不加 staff_type_id、不加 flow_id（README 勘误 B），仅 location_country_name LIKE '%中国%' + 时间窗过滤。"
+  },
+  "stripped_permission_filters": [
+    "manager_unit_id=用户当前管理主体",
+    "org_id=用户权限范围内的顶层组织"
+  ],
+  "compliance_note": "依据 hr-starrocks-query-conventions 规则，已剔除 manager_unit_id / org_id 这两个权限控制类条件。StarRocks 已基于身份做行列权限自动控权。",
+  "default_time_window": {
+    "begin_date": "当年 1 月 1 日（YTD）",
+    "end_date": "昨天",
+    "next_date": "end_date + 1 天",
+    "format": "YYYY-MM-DD",
+    "ytd_dynamic_sql": "DATE_FORMAT(CURRENT_DATE, '%Y-01-01')",
+    "yesterday_dynamic_sql": "DATE_SUB(CURRENT_DATE, INTERVAL 1 DAY)"
+  },
+  "default_post_filter": {
+    "is_disabled": "0 (默认只看在招岗位)"
+  },
+  "permission_warning": "⚠️ 该批指标涉及的 Report_Recruit_Flow_Detail / Report_Recruit_Resume_Assessment 表当前账号无权访问，使用前需先申请权限。已通过 get_current_user_data_permission 验证。"
+}

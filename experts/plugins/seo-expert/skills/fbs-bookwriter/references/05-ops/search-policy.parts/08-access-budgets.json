@@ -1,0 +1,104 @@
+{
+  "searchAccessPolicy": {
+    "s0MaxConcurrentQueries": 2,
+    "singlePageTimeoutMs": 15000,
+    "blockOnTimeoutInCurrentRun": true,
+    "dailyTimeoutLimitPerDomain": 3,
+    "blockDaysAfterDailyLimit": 7,
+    "persistentBlocklistFile": ".fbs/domain-blocklist.json",
+    "effectiveEndpointStrategy": {
+      "description": "搜索引擎端点选择策略（P0）：主流搜索引擎（Bing/百度/搜狗等）的 HTML 页面多为 JS 渲染，Invoke-WebRequest/WebFetch 常返回空壳，必须使用有效端点，禁止使用 HTML 默认端点。",
+      "priority": "P0",
+      "rootCause": "2026-04-01 实测确认：Bing HTML端点返回0字节有效内容；Bing RSS端点返回完整标题+摘要+链接，命中36氪/CCTV/人民日报等权威来源。",
+      "preferredEndpoints": [
+        {
+          "engine": "Bing",
+          "htmlEndpoint_FORBIDDEN": "https://www.bing.com/search?q={query}&mkt=zh-CN",
+          "rssEndpoint_USE_THIS": "https://www.bing.com/search?q={query}&format=rss&mkt=zh-CN",
+          "note": "RSS端点返回XML，每条含title/description(~200字摘要)/link/pubDate，可直接解析。中文查询须URL编码。"
+        },
+        {
+          "engine": "直接WebFetch（静态页）",
+          "applicableSites": [
+            "news.cctv.com",
+            "people.com.cn",
+            "xinhuanet.com",
+            "gov.cn",
+            "wikipedia.org（英文）",
+            "学术PDF直链",
+            "GitHub README"
+          ],
+          "note": "静态渲染页可直接WebFetch获取正文；JS渲染站（知乎/微信/淘宝等）不适用，退回RSS摘要。"
+        },
+        {
+          "engine": "百度",
+          "rssEndpoint": "https://www.baidu.com/s?wd={query}&rn=10",
+          "note": "百度无标准RSS端点；UseBasicParsing可提取部分摘要文本，质量低于Bing RSS，作为备用。"
+        }
+      ],
+      "bashTemplate": "Invoke-WebRequest -Uri 'https://www.bing.com/search?q={URL编码查询词}&format=rss&mkt=zh-CN' -UseBasicParsing -TimeoutSec 15 | Select-Object -ExpandProperty Content | Select-String -Pattern '<title>|<description>' | Select-Object -First 20",
+      "failureDetection": "若响应内容含 '<!DOCTYPE html>' 且不含 '<item>' 标签，判定为JS渲染空壳，须立即切换RSS端点重试，禁止将空壳内容计为有效检索。",
+      "fallbackProtocol": "RSS端点超时或返回空 → 记录ledger ok=false reason=js-rendered-shell → 向用户说明「检索引擎返回空，已切换RSS端点重试」→ 仍失败则标注模型知识来源，禁止静默继续"
+    },
+    "rateLimitGuard": {
+      "description": "WorkBuddy / 宿主平台限流保护（Error Code 14003 too many requests）",
+      "minIntervalBetweenQueriesMs": 3000,
+      "backoffOnRateLimitMs": 10000,
+      "maxRetriesOnRateLimit": 2,
+      "s0BurstCap": 2,
+      "note": "s0BurstCap 限制 S0 单轮同时发出的 WebSearch 请求数；超出时串行补齐；与 s0MaxConcurrentQueries 取较小值生效。检测到 14003 / too-many-requests 时须 backoffOnRateLimitMs 后再重试，最多 maxRetriesOnRateLimit 次；仍失败则跳过本条查询并记录 ledger kind=search ok=false reason=rate_limit。"
+    },
+    "maxBlockedDomains": {
+      "description": "域名黑名单数量上限（A8/RL-1）：防止无人值守时全部优质来源被累积封禁",
+      "value": 20,
+      "note": "当 .fbs/domain-blocklist.json 中封禁域名数超过此值时，自动按封禁截止时间从早到晚排序，解封最早到期者；确保始终有不低于（可用域名总数 - maxBlockedDomains）的来源可访问。"
+    }
+  },
+  "rateBudget": {
+    "description": "全局限流预算追踪（A5/RC-1）：跨章累积 QPS 触发次数感知，防止无人值守时进入「每章都在退避」的慢速螺旋",
+    "enabled": true,
+    "persistFile": ".fbs/rate-budget.json",
+    "alertThreshold": {
+      "rateLimitRate": 0.3,
+      "note": "当本会话 rateLimitRate（累计限流次数/累计检索次数）超过 0.3 时，模型须向用户输出告警并建议降低并发或延长间隔；禁止静默继续高频检索"
+    },
+    "autoActions": {
+      "onRateLimitRateAbove0_3": "warn_user_and_reduce_concurrency",
+      "onRateLimitRateAbove0_6": "pause_batch_search_and_notify_user",
+      "note": "onRateLimitRateAbove0_6 触发时须暂停编级批量预检索（若正在进行），向用户说明「检索成功率过低，建议等待 1–2 分钟后重试或降低本轮检索总量」"
+    }
+  },
+  "batchSearchBudget": {
+    "description": "编级预检索（M2 §4.4）分批上限与心跳约束（A2/D2）：防止 M2 单编大量串行检索无可见进度",
+    "maxQueriesPerBatch": 6,
+    "heartbeatIntervalQueries": 3,
+    "heartbeatNote": "编级预检索每完成 heartbeatIntervalQueries 条检索，须向用户输出一行可见进度（如「编级预检索进行中：第 3/12 条，已用时 Xs」）；总检索数超过 maxQueriesPerBatch 时须分批执行，批间可向用户汇报阶段进展。",
+    "batchPauseMs": 3000,
+    "note": "每批次完成后等待 batchPauseMs 毫秒再开始下一批，降低累积限流压力"
+  },
+  "materialGatherBudget": {
+    "description": "S0 素材搜集预算：与 project-config.materialGatherNotesMaxChars、material-inventory 对齐，防无限补素材与 token 浪费",
+    "incrementalAfterSufficientOnly": true,
+    "incrementalNote": "materialSufficiency 已达「充足」或 team-lead 已判定达标后，新增入库须登记为「增量条」并简述缺口编号；禁止无登记的大规模同主题重检。",
+    "optionalNotesCharCapPerProjectField": "materialGatherNotesMaxChars",
+    "optionalNotesCharCapNote": "material-inventory.md 累计字符超过 project-config 上限时为 Warning；扩预算须用户确认并写入 quality-constraints 或 sessions-summary"
+  },
+  "postFreezeSearchLimits": {
+    "description": "大纲/Brief 冻结后同章检索防重复：降低漂移与重复 token",
+    "enabled": true,
+    "maxSameTopicQueriesPerChapter": 3,
+    "topicFingerprintNote": "同一检索主题（规范化 query 去空白小写）在单章 ledger 中超过 maxSameTopicQueriesPerChapter 次时须 Warning，并优先复用 material-library 已入库条目",
+    "searchLedgerFile": ".fbs/search-ledger.jsonl"
+  },
+  "expansionS35": {
+    "description": "S3.5 扩写阶段机读约束（WorkBuddy 2026-04-14 复盘）",
+    "planFile": ".fbs/expansion-plan.md",
+    "maxParallelChapters": 2,
+    "forbidCodeExplorerForBody": true,
+    "wordVerifyCli": "scripts/expansion-word-verify.mjs",
+    "minRatioVsTarget": 0.9,
+    "singleRoundMaxGrowthRatio": 0.5,
+    "requireChapterStatusAfterEachChapter": true,
+    "authoritativeDoc": "references/01-core/s3-expansion-phase.md"
+  }
+}

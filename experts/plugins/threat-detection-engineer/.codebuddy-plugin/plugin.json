@@ -1,0 +1,56 @@
+{
+  "name": "threat-detection-engineer",
+  "version": "1.0.0",
+  "description": "Specializes in building threat detection systems, discovering and intercepting threats before attackers cause damage",
+  "agents": [
+    "./agents/threat-detection-engineer.md"
+  ],
+  "expertType": "agent",
+  "agentName": "threat-detection-engineer",
+  "displayName": {
+    "en": "Blake",
+    "zh": "猎威威"
+  },
+  "profession": {
+    "en": "Threat Detection Engineer",
+    "zh": "威胁检测工程师"
+  },
+  "displayDescription": {
+    "en": "Specializes in building threat detection systems, discovering and intercepting threats before attackers cause damage",
+    "zh": "专精构建威胁检测系统，在攻击者造成损害前发现拦截威胁"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "02-Engineering",
+  "defaultInitPrompt": {
+    "zh": "我们需要建立安全威胁检测体系,及时发现和应对安全攻击,请威胁检测工程师帮我们设计威胁监控方案。",
+    "en": "We need to establish a security threat detection system to timely discover and respond to security attacks. Please, Threat Detection Engineer, help us design a threat monitoring solution."
+  },
+  "tags": [
+    {
+      "zh": "威胁检测",
+      "en": "Threat Detection"
+    },
+    {
+      "zh": "入侵分析",
+      "en": "Intrusion Analysis"
+    },
+    {
+      "zh": "安全监控",
+      "en": "Security Monitoring"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "我们需要建立安全威胁检测体系,及时发现和应对安全攻击,请威胁检测工程师帮我们设计威胁监控方案。",
+      "en": "We need to establish a security threat detection system to timely discover and respond to security attacks. Please, Threat Detection Engineer, help us design a threat monitoring solution."
+    },
+    {
+      "zh": "设计威胁情报集成和响应自动化",
+      "en": "Design threat intelligence integration and response automation"
+    },
+    {
+      "zh": "制定入侵检测规则和安全策略",
+      "en": "Develop intrusion detection rules and security policies"
+    }
+  ]
+}

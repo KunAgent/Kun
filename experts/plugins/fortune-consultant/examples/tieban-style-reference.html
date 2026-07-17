@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>铁板神数 · 1987-10-16 未时</title>
+<style>
+  :root {
+    --bg: #f5ecd6;
+    --paper: #fbf4dc;
+    --paper-old: #efe3c2;
+    --paper-dark: #e0d2ae;
+    --ink: #2a2418;
+    --ink-soft: #4a3f28;
+    --ink-dim: #7a6a48;
+    --vermilion: #a83018;
+    --vermilion-soft: #c44830;
+    --bronze: #8a6824;
+    --gold: #c69838;
+    --line: #b8a878;
+    --line-soft: #d8c898;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: "STKaiti", "KaiTi", "PingFang SC", "Hiragino Sans GB", serif;
+    line-height: 1.9;
+    min-height: 100vh;
+    background-image:
+      repeating-linear-gradient(0deg, transparent 0, transparent 32px, rgba(120, 100, 60, 0.04) 32px, rgba(120, 100, 60, 0.04) 33px),
+      radial-gradient(ellipse at 50% 30%, rgba(255, 240, 200, 0.4), transparent 70%),
+      linear-gradient(180deg, #f5ecd6 0%, #ead8a8 100%);
+  }
+  .container { max-width: 980px; margin: 0 auto; padding: 50px 24px 80px; }
+
+  /* Title plate */
+  .title-plate {
+    text-align: center;
+    margin-bottom: 36px;
+    padding: 32px 24px;
+    background: var(--paper);
+    border: 2px double var(--bronze);
+    position: relative;
+  }
+  .title-plate::before, .title-plate::after {
+    content: "";
+    position: absolute;
+    width: 24px;
+    height: 24px;
+    border: 2px solid var(--vermilion);
+  }
+  .title-plate::before { top: 8px; left: 8px; border-right: none; border-bottom: none; }
+  .title-plate::after { bottom: 8px; right: 8px; border-left: none; border-top: none; }
+  .title-plate h1 {
+    font-size: 38px;
+    color: var(--ink);
+    letter-spacing: 18px;
+    font-weight: 600;
+    margin-bottom: 8px;
+    text-indent: 18px;
+  }
+  .title-plate .seal {
+    display: inline-block;
+    background: var(--vermilion);
+    color: var(--paper);
+    padding: 5px 14px;
+    margin: 6px 4px;
+    font-size: 14px;
+    letter-spacing: 4px;
+    font-weight: 500;
+  }
+  .title-plate .meta {
+    color: var(--ink-soft);
+    font-size: 13px;
+    margin-top: 14px;
+    letter-spacing: 3px;
+  }
+
+  /* Top info table - traditional style */
+  .info-table {
+    width: 100%;
+    background: var(--paper);
+    border: 1.5px solid var(--bronze);
+    border-collapse: collapse;
+    margin-bottom: 32px;
+  }
+  .info-table tr { border-bottom: 1px solid var(--line); }
+  .info-table tr:last-child { border-bottom: none; }
+  .info-table th {
+    background: var(--paper-old);
+    padding: 12px 16px;
+    text-align: right;
+    color: var(--vermilion);
+    font-weight: 500;
+    letter-spacing: 3px;
+    width: 130px;
+    border-right: 1px solid var(--line);
+    font-size: 14px;
+  }
+  .info-table td {
+    padding: 12px 18px;
+    color: var(--ink);
+    letter-spacing: 2px;
+    font-size: 14px;
+  }
+
+  /* Article style */
+  .article {
+    background: var(--paper);
+    border: 1px solid var(--line);
+    padding: 32px 36px;
+    margin-bottom: 24px;
+    position: relative;
+    box-shadow: 2px 2px 0 var(--paper-old);
+  }
+  .article-title {
+    text-align: center;
+    margin-bottom: 22px;
+    padding-bottom: 14px;
+    border-bottom: 1px solid var(--line);
+    color: var(--ink);
+    font-size: 20px;
+    font-weight: 600;
+    letter-spacing: 8px;
+    position: relative;
+  }
+  .article-title::before, .article-title::after {
+    content: "❖";
+    color: var(--vermilion);
+    margin: 0 12px;
+    font-size: 14px;
+    vertical-align: middle;
+  }
+
+  /* Numbered articles - 条目 */
+  .clause {
+    margin-bottom: 18px;
+    padding-left: 56px;
+    position: relative;
+    color: var(--ink);
+    font-size: 15px;
+    line-height: 2;
+  }
+  .clause-num {
+    position: absolute;
+    left: 0;
+    top: 0;
+    color: var(--vermilion);
+    font-weight: 600;
+    background: var(--paper-old);
+    border: 1px solid var(--bronze);
+    width: 44px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    letter-spacing: 1px;
+  }
+  .clause-text {
+    color: var(--ink);
+    margin-bottom: 4px;
+  }
+  .clause-text em {
+    color: var(--vermilion);
+    font-style: normal;
+    font-weight: 500;
+  }
+  .clause-comment {
+    color: var(--ink-dim);
+    font-size: 13px;
+    padding-top: 4px;
+    border-top: 1px dashed var(--line-soft);
+    margin-top: 6px;
+    letter-spacing: 1px;
+  }
+  .clause-comment::before { content: "【批注】"; color: var(--bronze); margin-right: 4px; }
+
+  /* 三限 layout */
+  .three-phase {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    margin: 20px 0;
+  }
+  .phase {
+    background: var(--paper-old);
+    border: 1px solid var(--bronze);
+    padding: 18px;
+    text-align: center;
+  }
+  .phase h4 {
+    color: var(--vermilion);
+    letter-spacing: 4px;
+    margin-bottom: 8px;
+    font-size: 16px;
+    font-weight: 600;
+  }
+  .phase .age-range {
+    color: var(--ink-dim);
+    font-size: 12px;
+    margin-bottom: 8px;
+  }
+  .phase .verdict {
+    color: var(--ink);
+    font-size: 13px;
+    line-height: 1.7;
+    text-align: left;
+  }
+
+  /* Footer */
+  .footer-seal {
+    text-align: center;
+    margin-top: 30px;
+    color: var(--vermilion);
+    letter-spacing: 8px;
+    font-size: 14px;
+  }
+  .footer-seal .red-stamp {
+    display: inline-block;
+    background: var(--vermilion);
+    color: var(--paper);
+    padding: 12px 16px;
+    margin: 0 8px;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 3px;
+    border-radius: 2px;
+    transform: rotate(-3deg);
+  }
+
+  .disclaimer {
+    margin-top: 30px;
+    padding: 14px 20px;
+    background: rgba(168, 48, 24, 0.04);
+    border: 1px dashed var(--vermilion);
+    font-size: 12px;
+    color: var(--ink-dim);
+    text-align: center;
+    letter-spacing: 1px;
+  }
+
+  @media (max-width: 720px) {
+    .title-plate h1 { font-size: 24px; letter-spacing: 8px; }
+    .article { padding: 20px 18px; }
+    .clause { padding-left: 44px; font-size: 14px; }
+    .clause-num { width: 36px; height: 26px; font-size: 11px; }
+    .three-phase { grid-template-columns: 1fr; }
+    .info-table th { width: 90px; padding: 8px; font-size: 12px; }
+    .info-table td { padding: 8px; font-size: 12px; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- Title -->
+  <div class="title-plate">
+    <h1>铁板神数</h1>
+    <span class="seal">考运</span>
+    <span class="seal">定数</span>
+    <span class="seal">六亲</span>
+    <div class="meta">阳历 1987-10-16 未时 · 女命 · 邵雍系条文断验</div>
+  </div>
+
+  <!-- Info -->
+  <table class="info-table">
+    <tr><th>命主性别</th><td>坤造（女）</td></tr>
+    <tr><th>阳历生辰</th><td>1987 年 10 月 16 日 14:00</td></tr>
+    <tr><th>农历生辰</th><td>丁卯年 八月 廿四日 未时</td></tr>
+    <tr><th>四柱八字</th><td>丁卯　庚戌　戊戌　己未</td></tr>
+    <tr><th>命主考数</th><td>父母宫数 1024 · 兄弟宫数 856 · 妻宫数 612 · 子女宫数 379</td></tr>
+    <tr><th>本命定盘</th><td>戊土日元 · 火六局 · 命宫癸酉 · 身宫戊戌</td></tr>
+  </table>
+
+  <!-- Article 1: 主命 -->
+  <div class="article">
+    <div class="article-title">本 命 总 断</div>
+    <div class="clause">
+      <div class="clause-num">壹</div>
+      <div class="clause-text">坤造丁卯，金鸡报晓时，戊土生于戌月，<em>厚土秉令</em>，性如山岳，外柔内刚。</div>
+      <div class="clause-comment">日干戊土坐戌支临墓库，主沉稳深藏，不轻动声色；性情不张扬而内有主见。</div>
+    </div>
+    <div class="clause">
+      <div class="clause-num">贰</div>
+      <div class="clause-text">月透庚金食神泄秀，<em>慧根天授</em>，文章口才两得宜，宜从文教技艺，不宜浊浊营营。</div>
+      <div class="clause-comment">食神是命主才华出口；庚金生于戌月得令，故才华不仅仅是装点，可成事业之资。</div>
+    </div>
+    <div class="clause">
+      <div class="clause-num">叁</div>
+      <div class="clause-text">年支卯木正官被两戌合化为火——<em>官星合身入印</em>，主名声、靠山、文凭三事兼有，但难掌实权。</div>
+      <div class="clause-comment">合官化印——多走专业路线、参谋路线，少走一把手路线则吉。</div>
+    </div>
+    <div class="clause">
+      <div class="clause-num">肆</div>
+      <div class="clause-text">魁罡日生女命——<em>志高貌端，刚毅果决</em>。然魁罡忌冲忌合，须防"刚极易折"。</div>
+      <div class="clause-comment">戊戌日为魁罡之一。女命魁罡多有男儿气概，亦多承担。</div>
+    </div>
+  </div>
+
+  <!-- Article 2: 父母宫 -->
+  <div class="article">
+    <div class="article-title">父 母 妻 宫</div>
+    <div class="clause">
+      <div class="clause-num">伍</div>
+      <div class="clause-text">年柱丁火正印为母，得令于卯木——<em>母氏端慧</em>，于命主早年照拂周到。父星藏卯中乙木，被合稍弱——<em>父亲性情温和</em>，但与命主聚少离多。</div>
+      <div class="clause-comment">印星不弱，是命主基础教养来源。父星偏弱，需主动维系亲情。</div>
+    </div>
+    <div class="clause">
+      <div class="clause-num">陆</div>
+      <div class="clause-text">兄弟宫月柱庚戌——<em>兄弟有助但情薄</em>，往来如金石之交，不黏不离最为合宜。</div>
+      <div class="clause-comment">月柱比劫与食神同柱，与同辈关系是合作型而非情感深绑型。</div>
+    </div>
+    <div class="clause">
+      <div class="clause-num">柒</div>
+      <div class="clause-text">夫宫日支戌土比肩——<em>夫子性情似己</em>，配偶务实、有担当，多与自己同行业或同圈层。然戌未刑——<em>琴瑟有时不调</em>，非大事，乃日常磨合耳。</div>
+      <div class="clause-comment">日时相刑是夫妻宫与子女宫的张力，需修"沉默是金"。</div>
+    </div>
+    <div class="clause">
+      <div class="clause-num">捌</div>
+      <div class="clause-text">子女宫时柱己未——<em>子嗣聪慧</em>，未中乙木为正官，<em>主子女有才有名</em>，但与父母性格颇有分歧。</div>
+      <div class="clause-comment">时柱劫财坐未，子女独立性强，不宜过度管控。</div>
+    </div>
+  </div>
+
+  <!-- 三限 -->
+  <div class="article">
+    <div class="article-title">三 限 概 览</div>
+    <div class="three-phase">
+      <div class="phase">
+        <h4>初限</h4>
+        <div class="age-range">1-28 岁　辛亥·壬子运</div>
+        <div class="verdict">伤官偏财同行——<em>聪明早慧，求学有成</em>。少年得家庭呵护，青年起独立性强，二十出头有一番拓展之机。</div>
+      </div>
+      <div class="phase">
+        <h4>中限</h4>
+        <div class="age-range">29-58 岁　癸丑·甲寅·乙卯运</div>
+        <div class="verdict">财官并进——<em>事业财富皆在此期定型</em>。甲寅七杀大运（39-48）为人生最大变局期，敢破能立。乙卯正官（49-58）守成期。</div>
+      </div>
+      <div class="phase">
+        <h4>晚限</h4>
+        <div class="age-range">59 岁后　丙辰·丁巳运</div>
+        <div class="verdict">印星归位——<em>晚景清和</em>，可享文化养老之福。子女独立、夫妻和睦者，安享天伦；事业有成者多被尊为长者。</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Article 3: 当下 -->
+  <div class="article">
+    <div class="article-title">现 行 大 限 ﹒ 甲 寅</div>
+    <div class="clause">
+      <div class="clause-num">玖</div>
+      <div class="clause-text">三十九至四十八，行甲寅七杀运——<em>七杀加身，有制则贵</em>。命主月透庚金正合制杀之需，故此运多有意外升迁、跨界突破之机。</div>
+      <div class="clause-comment">"杀"非凶神，乃"压力变成动力"之机制；命中有金制杀，七杀反成喜用。</div>
+    </div>
+    <div class="clause">
+      <div class="clause-num">拾</div>
+      <div class="clause-text">寅戌半合火生身——<em>贵人星动</em>，是运中常有"高人指点"之象，宜多请教、多结识。</div>
+      <div class="clause-comment">这十年最大资源是人脉与师长。</div>
+    </div>
+    <div class="clause">
+      <div class="clause-num">拾壹</div>
+      <div class="clause-text">流年乙巳（2025）：<em>正官加身，名分先到</em>，宜接受新的角色、新的责任。下半年农历七八月易有变动。</div>
+      <div class="clause-comment">乙庚合金为关键——工作上的新角色与才华释放挂钩。</div>
+    </div>
+    <div class="clause">
+      <div class="clause-num">拾贰</div>
+      <div class="clause-text">流年丙午（2026）：<em>偏印当令，宜学不宜冲</em>。火炎土燥，养生为先，多近水。</div>
+      <div class="clause-comment">2026 是"修内功"年，少做大决策，多铺底层。</div>
+    </div>
+  </div>
+
+  <!-- Article 4: 嘱辞 -->
+  <div class="article">
+    <div class="article-title">总 结 嘱 辞</div>
+    <div class="clause">
+      <div class="clause-num">拾叁</div>
+      <div class="clause-text">命主八字<em>土厚金清</em>，乃"山中藏玉"之格——不显于外，而内秀其中。一生贵在持守专业，戒在浮躁逐利。</div>
+    </div>
+    <div class="clause">
+      <div class="clause-num">拾肆</div>
+      <div class="clause-text">忌：<em>火多则燥</em>。每逢火旺之年（午年、巳年、丙丁年），尤需养心、防眼、远情绪冲突。</div>
+    </div>
+    <div class="clause">
+      <div class="clause-num">拾伍</div>
+      <div class="clause-text">宜：<em>多近水、近金</em>。颜色尚白银、近水蓝；居所宜临水或居高敞处；饮食清淡，忌油腻。</div>
+    </div>
+    <div class="clause">
+      <div class="clause-num">拾陆</div>
+      <div class="clause-text">命运总论：<em>厚德载物，循序而进。</em> 看似稳，实则在每一次"小变革"中累积大格局。守得住寂寞，自有长久之福。</div>
+    </div>
+  </div>
+
+  <div class="footer-seal">
+    <span class="red-stamp">铁数考定</span>
+    <span class="red-stamp">仅供参鉴</span>
+  </div>
+
+  <div class="disclaimer">
+    ⚠️ 本铁板神数条文为传统格式演示，结合八字基本信息推演，非真本万年考数。仅供方向性参考，不构成医疗、法律、财务或投资建议。
+  </div>
+
+</div>
+</body>
+</html>

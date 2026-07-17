@@ -1,0 +1,56 @@
+{
+  "name": "studio-producer",
+  "version": "1.0.0",
+  "description": "Coordinating the entire process from project initiation to delivery, balancing creativity, budget, and timeline",
+  "agents": [
+    "./agents/studio-producer.md"
+  ],
+  "expertType": "agent",
+  "agentName": "studio-producer",
+  "displayName": {
+    "en": "Felix",
+    "zh": "制片达"
+  },
+  "profession": {
+    "en": "Studio Producer",
+    "zh": "工作室制片人"
+  },
+  "displayDescription": {
+    "en": "Coordinating the entire process from project initiation to delivery, balancing creativity, budget, and timeline",
+    "zh": "统筹项目从立项到交付的全过程，平衡创意预算和时间"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "10-ProjectQuality",
+  "defaultInitPrompt": {
+    "zh": "我们的创意项目需要专业的制片人管理,把控项目质量和进度,请工作室制片人帮我们统筹创意项目管理。",
+    "en": "Our creative projects need professional producer management to control project quality and progress. Please, Studio Producer, help us coordinate creative project management."
+  },
+  "tags": [
+    {
+      "zh": "制作管理",
+      "en": "Production Management"
+    },
+    {
+      "zh": "项目排期",
+      "en": "Project Scheduling"
+    },
+    {
+      "zh": "质量把控",
+      "en": "Quality Control"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "我们的创意项目需要专业的制片人管理,把控项目质量和进度,请工作室制片人帮我们统筹创意项目管理。",
+      "en": "Our creative projects need professional producer management to control project quality and progress. Please, Studio Producer, help us coordinate creative project management."
+    },
+    {
+      "zh": "协调创意团队按时交付高质量作品",
+      "en": "Coordinate creative teams for on-time quality delivery"
+    },
+    {
+      "zh": "优化制作流程和预算管控",
+      "en": "Optimize production process and budget control"
+    }
+  ]
+}

@@ -1,0 +1,74 @@
+{
+  "$schema": "./bin-manifest.schema.json",
+  "$comment": "Single source of truth for CPQ plugin CLI bin entries. Read by build.ts, health-check.mjs, and sync-workbuddy.ts. Do NOT edit bin lists in those files directly — update this file instead.",
+  "entries": [
+    {
+      "name": "cpq",
+      "source": "cpq-command",
+      "entryFile": "cli-entry.js",
+      "healthCheck": true,
+      "group": "cpq-bin"
+    },
+    {
+      "name": "tcloud-price",
+      "source": "cpq-command",
+      "entryFile": "tcloud-price-entry.js",
+      "healthCheck": true,
+      "group": "cpq-bin"
+    },
+    {
+      "name": "command-auth",
+      "source": "cpq-command",
+      "entryFile": "command-auth-entry.js",
+      "healthCheck": true,
+      "group": "cpq-bin"
+    },
+    {
+      "name": "reason",
+      "source": "cpq-command",
+      "entryFile": "reason-entry.js",
+      "healthCheck": true,
+      "group": "reason-bash"
+    },
+    {
+      "name": "oagent",
+      "source": "cpq-command",
+      "entryFile": "oplus-entry.js",
+      "healthCheck": true,
+      "group": "cpq-bin"
+    },
+    {
+      "name": "health-check",
+      "source": "local",
+      "entryFile": "health-check.mjs",
+      "healthCheck": false,
+      "group": "cpq-bin"
+    }
+  ],
+  "healthCheckExtras": {
+    "$comment": "Additional environment checks beyond CLI tools. SSOT for health-check.mjs.",
+    "pythonDeps": [
+      "openpyxl",
+      "requests",
+      "pandas"
+    ],
+    "fileChecks": [],
+    "networkChecks": [
+      {
+        "name": "panshi.woa.com",
+        "host": "panshi.woa.com",
+        "port": 443
+      },
+      {
+        "name": "cpq.woa.com",
+        "host": "cpq.woa.com",
+        "port": 443
+      },
+      {
+        "name": "dev.ba.woa.com",
+        "host": "dev.ba.woa.com",
+        "port": 443
+      }
+    ]
+  }
+}

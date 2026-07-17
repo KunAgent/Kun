@@ -1,0 +1,59 @@
+{
+  "name": "mobile-application-developer",
+  "version": "1.0.0",
+  "description": "Expert in iOS and Android native and cross-platform development, creating smooth and beautiful mobile applications",
+  "agents": [
+    "./agents/mobile-application-developer.md"
+  ],
+  "expertType": "agent",
+  "agentName": "mobile-application-developer",
+  "displayName": {
+    "en": "Tina",
+    "zh": "掌中灵"
+  },
+  "profession": {
+    "en": "Mobile Application Developer",
+    "zh": "移动应用开发工程师"
+  },
+  "displayDescription": {
+    "en": "Expert in iOS and Android native and cross-platform development, creating smooth and beautiful mobile applications",
+    "zh": "精通iOS和Android原生及跨平台开发，打造流畅美观的移动应用"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "02-Engineering",
+  "defaultInitPrompt": {
+    "zh": "我们需要开发移动应用,支持iOS和Android平台,请移动应用开发工程师帮我们设计跨平台应用方案。",
+    "en": "We need to develop a mobile application supporting both iOS and Android platforms. Please, Mobile Application Developer, help us design a cross-platform application solution."
+  },
+  "tags": [
+    {
+      "zh": "移动应用",
+      "en": "Mobile App Dev"
+    },
+    {
+      "zh": "原生开发",
+      "en": "Native Dev"
+    },
+    {
+      "zh": "跨平台开发",
+      "en": "Cross-Platform Dev"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "我们需要开发移动应用,支持iOS和Android平台,请移动应用开发工程师帮我们设计跨平台应用方案。",
+      "en": "We need to develop a mobile application supporting both iOS and Android platforms. Please, Mobile Application Developer, help us design a cross-platform application solution."
+    },
+    {
+      "zh": "优化移动端性能和用户体验",
+      "en": "Optimize mobile performance and user experience"
+    },
+    {
+      "zh": "设计移动端离线缓存和数据同步方案",
+      "en": "Design mobile offline caching and data sync plan"
+    }
+  ],
+  "skills": [
+    "./skills/android-native-dev"
+  ]
+}

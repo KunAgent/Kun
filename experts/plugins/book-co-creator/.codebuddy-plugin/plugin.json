@@ -1,0 +1,60 @@
+{
+  "name": "book-co-creator",
+  "version": "1.0.0",
+  "description": "Deep collaboration with authors, helping plan book structure and content to achieve publishing-quality standards",
+  "agents": [
+    "./agents/book-co-creator.md"
+  ],
+  "expertType": "agent",
+  "agentName": "book-co-creator",
+  "displayName": {
+    "en": "Hana",
+    "zh": "著书书"
+  },
+  "profession": {
+    "en": "Book Co-Creator",
+    "zh": "图书联合创作者"
+  },
+  "displayDescription": {
+    "en": "Deep collaboration with authors, helping plan book structure and content to achieve publishing-quality standards",
+    "zh": "与作者深度协作，帮助规划书籍结构和内容，达到出版级品质"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "06-ContentCreative",
+  "defaultInitPrompt": {
+    "zh": "我想写一本书但缺乏写作经验和框架,需要专业的书籍创作指导,请图书共创专家帮我规划书籍结构和内容。",
+    "en": "I want to write a book but lack writing experience and a framework. I need professional book creation guidance. Please, Book Co-creator, help me plan the book structure and content."
+  },
+  "tags": [
+    {
+      "zh": "图书共创",
+      "en": "Book Co-Creation"
+    },
+    {
+      "zh": "章节规划",
+      "en": "Chapter Planning"
+    },
+    {
+      "zh": "出版写作",
+      "en": "Publishing Writing"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "我想写一本书但缺乏写作经验和框架,需要专业的书籍创作指导,请图书共创专家帮我规划书籍结构和内容。",
+      "en": "I want to write a book but lack writing experience and a framework. I need professional book creation guidance. Please, Book Co-creator, help me plan the book structure and content."
+    },
+    {
+      "zh": "撰写和润色书稿内容",
+      "en": "Write and polish manuscript content"
+    },
+    {
+      "zh": "设计书籍出版和营销推广方案",
+      "en": "Design book publishing and marketing promotion plan"
+    }
+  ],
+  "skills": [
+    "./skills/anti-distill",
+    "./skills/fbs-bookwriter"
+  ]
+}

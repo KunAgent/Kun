@@ -1,0 +1,56 @@
+{
+  "name": "accounts-payable-agent",
+  "version": "1.0.0",
+  "description": "Automating accounts payable processes, ensuring accurate and timely payments",
+  "agents": [
+    "./agents/accounts-payable-agent.md"
+  ],
+  "expertType": "agent",
+  "agentName": "accounts-payable-agent",
+  "displayName": {
+    "en": "Bree",
+    "zh": "付清清"
+  },
+  "profession": {
+    "en": "Accounts Payable Agent",
+    "zh": "应付账款代理"
+  },
+  "displayDescription": {
+    "en": "Automating accounts payable processes, ensuring accurate and timely payments",
+    "zh": "自动化处理应付账款流程，确保付款准确及时"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "08-FinanceInvestment",
+  "defaultInitPrompt": {
+    "zh": "我们的应付账款管理效率低,需要自动化处理流程,请应付账款代理帮我们设计自动化应付账款方案。",
+    "en": "Our accounts payable management efficiency is low, and we need automated processing workflows. Please, Accounts Payable Agent, help us design an automated accounts payable solution."
+  },
+  "tags": [
+    {
+      "zh": "应付账款",
+      "en": "Accounts Payable"
+    },
+    {
+      "zh": "供应商付款",
+      "en": "Vendor Payment"
+    },
+    {
+      "zh": "发票处理",
+      "en": "Invoice Processing"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "我们的应付账款管理效率低,需要自动化处理流程,请应付账款代理帮我们设计自动化应付账款方案。",
+      "en": "Our accounts payable management efficiency is low, and we need automated processing workflows. Please, Accounts Payable Agent, help us design an automated accounts payable solution."
+    },
+    {
+      "zh": "优化付款审批和对账流程",
+      "en": "Optimize payment approval and reconciliation processes"
+    },
+    {
+      "zh": "搭建应付账款监控和异常预警体系",
+      "en": "Build AP monitoring and anomaly alerting system"
+    }
+  ]
+}

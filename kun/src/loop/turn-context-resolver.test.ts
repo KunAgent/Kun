@@ -211,4 +211,38 @@ describe('TurnContextResolver', () => {
     })
     expect(currentMemoryStore.setLastInjected).toHaveBeenCalledWith(['memory_live'])
   })
+
+  it('intersects a turn-scoped tool policy with activated skill tools', async () => {
+    const listTools = vi.fn(async () => [])
+    const scopedTurn = turn({ attachmentIds: [], allowedToolNames: ['read', 'grep'] })
+    const resolver = new TurnContextResolver({
+      toolHost: { listTools },
+      resolveAttachments: async () => ({ imageAttachments: [], textFallbacks: [], documents: [] }),
+      skillRuntime: {
+        resolveTurn: async () => ({
+          activeSkillIds: ['review'],
+          activations: [],
+          instructions: [],
+          injectedBytes: 0,
+          allowedToolNames: ['grep', 'write']
+        })
+      },
+      interactiveToolBridge: { awaitUserInput: async () => ({ status: 'cancelled' }) }
+    })
+
+    await resolver.resolve({
+      threadId: 'thread_1',
+      turnId: 'turn_1',
+      thread: thread(),
+      turn: scopedTurn,
+      history: [],
+      model: 'model_1',
+      modelCapabilities: capabilities(['text']),
+      signal: new AbortController().signal,
+      mode: resolveTurnModeContext({ turn: scopedTurn, workspace: '/workspace', threadMode: 'agent' }),
+      goalNoToolRecoverySteps: 0
+    })
+
+    expect(listTools).toHaveBeenCalledWith(expect.objectContaining({ allowedToolNames: ['grep'] }))
+  })
 })

@@ -137,6 +137,8 @@ export const TurnSchema = z.object({
    * turns.
    */
   imContext: z.boolean().optional(),
+  /** Hard per-turn tool allow-list used by scoped remote and reception executions. */
+  allowedToolNames: z.array(z.string().min(1)).max(256).optional(),
   error: z.string().optional()
 })
 export type Turn = z.infer<typeof TurnSchema>
@@ -196,7 +198,12 @@ export const StartTurnRequest = z.object({
    * True when the turn is handled through an IM bridge. This gates
    * IM-only tool exposure separately from generic headless turns.
    */
-  imContext: z.boolean().optional()
+  imContext: z.boolean().optional(),
+  /** Hard per-turn tool allow-list; an empty list disables all tools. */
+  allowedToolNames: z.array(z.string().min(1)).max(256).refine(
+    (names) => new Set(names).size === names.length,
+    { message: 'allowedToolNames must not contain duplicates' }
+  ).optional()
 })
 export type StartTurnRequest = z.input<typeof StartTurnRequest>
 

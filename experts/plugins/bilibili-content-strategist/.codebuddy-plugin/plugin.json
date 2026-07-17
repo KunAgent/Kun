@@ -1,0 +1,59 @@
+{
+  "name": "bilibili-content-strategist",
+  "version": "1.0.0",
+  "description": "Expert in Bilibili platform ecosystem and young user preferences, crafting high-view video strategies",
+  "agents": [
+    "./agents/bilibili-content-strategist.md"
+  ],
+  "expertType": "agent",
+  "agentName": "bilibili-content-strategist",
+  "displayName": {
+    "en": "Gabe",
+    "zh": "弹幕幕"
+  },
+  "profession": {
+    "en": "Bilibili Content Strategist",
+    "zh": "B站内容策略师"
+  },
+  "displayDescription": {
+    "en": "Expert in Bilibili platform ecosystem and young user preferences, crafting high-view video strategies",
+    "zh": "精通B站平台生态和年轻用户偏好，打造高播放量视频策略"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "06-ContentCreative",
+  "defaultInitPrompt": {
+    "zh": "我们想在B站建立品牌影响力,需要专业的视频内容策略,请B站内容战略家帮我们制定B站运营方案。",
+    "en": "We want to establish brand influence on Bilibili and need professional video content strategies. Please, Bilibili Content Strategist, help us develop a Bilibili operation plan."
+  },
+  "tags": [
+    {
+      "zh": "B站策略",
+      "en": "Bilibili Strategy"
+    },
+    {
+      "zh": "UP主运营",
+      "en": "Creator Growth"
+    },
+    {
+      "zh": "弹幕文化",
+      "en": "Danmaku Culture"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "我们想在B站建立品牌影响力,需要专业的视频内容策略,请B站内容战略家帮我们制定B站运营方案。",
+      "en": "We want to establish brand influence on Bilibili and need professional video content strategies. Please, Bilibili Content Strategist, help us develop a Bilibili operation plan."
+    },
+    {
+      "zh": "策划B站爆款视频选题和脚本",
+      "en": "Plan viral Bilibili video topics and scripts"
+    },
+    {
+      "zh": "优化B站UP主变现和商业合作方案",
+      "en": "Optimize Bilibili creator monetization and brand collaboration plan"
+    }
+  ],
+  "skills": [
+    "./skills/marketing-skills"
+  ]
+}

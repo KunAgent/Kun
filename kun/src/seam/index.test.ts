@@ -8,11 +8,14 @@ describe('seam dispatch functions', () => {
     expect(() => registerExtensionRoutes(router, runtime)).not.toThrow()
   })
 
-  it('initializeExtensionServices returns empty object with no features', async () => {
+  it('initializeExtensionServices returns services from enabled features', async () => {
     const config = {}
     const runtime = {} as any
     const services = await initializeExtensionServices(config, runtime)
-    expect(services).toEqual({})
+
+    // With experts and MoA extensions enabled, services should have both
+    expect(services).toHaveProperty('experts')
+    expect(services).toHaveProperty('moa')
   })
 
   it('emitLoopHook completes with no registered hooks', async () => {

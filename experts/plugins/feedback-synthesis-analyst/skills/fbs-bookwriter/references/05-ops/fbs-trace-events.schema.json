@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://fbs-bookwriter.local/schemas/fbs-trace-event-v1.json",
+  "title": "FBS Trace Event v1",
+  "description": "追加写入 bookRoot/.fbs/audit/trace-*.jsonl 的单行事件（Hermes 式轨迹最小集）",
+  "type": "object",
+  "required": ["v", "ts", "event", "bookRoot"],
+  "properties": {
+    "v": { "const": 1 },
+    "ts": { "type": "string", "format": "date-time" },
+    "event": {
+      "type": "string",
+      "enum": [
+        "intake_router",
+        "session_exit",
+        "search_preflight",
+        "quality_gate_lite",
+        "evolution_propose",
+        "error"
+      ]
+    },
+    "script": { "type": "string" },
+    "exitCode": { "type": "integer" },
+    "skillRoot": { "type": "string" },
+    "bookRoot": { "type": "string" },
+    "payloadSummary": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "message": { "type": "string" }
+  },
+  "additionalProperties": true
+}

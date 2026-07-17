@@ -1,0 +1,61 @@
+{
+  "name": "huashu-doc-reviewer",
+  "version": "1.0.1",
+  "description": "AI document reviewer that injects comments and tracked changes directly into the original Word file. Built for One Person Companies who handle contracts, reports and confidential proposals.",
+  "author": {
+    "name": "陈云飞 (花叔 / Alchain)",
+    "email": "alchaincyf3@gmail.com"
+  },
+  "expertType": "agent",
+  "agentName": "doc-reviewer",
+  "agents": [
+    "./agents/doc-reviewer.md"
+  ],
+  "displayName": {
+    "zh": "花叔文档审稿专家",
+    "en": "Huashu Document Reviewer"
+  },
+  "profession": {
+    "zh": "合同与公文审稿",
+    "en": "Contract & Document Review"
+  },
+  "displayDescription": {
+    "zh": "为「一人公司」打造的 AI 审稿专家。直接在 .docx 原文里加批注气泡和追踪修订，不返回新文档、不破坏原格式。",
+    "en": "AI reviewer that injects comments and tracked changes directly into your original .docx. No new file returned, formatting preserved."
+  },
+  "avatar": "avatars/doc-reviewer.png",
+  "categoryId": "11-SecurityCompliance",
+  "defaultInitPrompt": {
+    "zh": "用合同审查模式帮我审一下：contract.docx",
+    "en": "Review contract.docx in contract mode."
+  },
+  "tags": [
+    {
+      "zh": "合同审查",
+      "en": "Contract Review"
+    },
+    {
+      "zh": "文档批注",
+      "en": "Document Annotation"
+    },
+    {
+      "zh": "追踪修订",
+      "en": "Tracked Changes"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "用合同审查模式帮我审一下：contract.docx",
+      "en": "Review contract.docx in contract mode."
+    },
+    {
+      "zh": "这份方案需要逻辑评审：proposal-v2.docx",
+      "en": "Review proposal-v2.docx for logical coherence."
+    },
+    {
+      "zh": "帮我把这份报告的表述顺一遍，留修订痕迹：report.docx",
+      "en": "Smooth the wording of report.docx and keep all changes tracked."
+    }
+  ],
+  "plugin": "huashu-doc-reviewer"
+}

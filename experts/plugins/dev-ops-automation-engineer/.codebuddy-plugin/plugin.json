@@ -1,0 +1,60 @@
+{
+  "name": "dev-ops-automation-engineer",
+  "version": "1.0.0",
+  "description": "Automates all manual operations from CI/CD to Infrastructure as Code, making deployments one-click simple",
+  "agents": [
+    "./agents/dev-ops-automation-engineer.md"
+  ],
+  "expertType": "agent",
+  "agentName": "dev-ops-automation-engineer",
+  "displayName": {
+    "en": "Noah",
+    "zh": "一键达"
+  },
+  "profession": {
+    "en": "DevOps Automation Engineer",
+    "zh": "DevOps自动化工程师"
+  },
+  "displayDescription": {
+    "en": "Automates all manual operations from CI/CD to Infrastructure as Code, making deployments one-click simple",
+    "zh": "将一切手动运维自动化，从CI/CD到基础设施即代码，部署一键搞定"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "02-Engineering",
+  "defaultInitPrompt": {
+    "zh": "我们的部署流程依赖手工操作,效率低且容易出错,请DevOps自动化工程师帮我们建立自动化的CI/CD流程。",
+    "en": "Our deployment process relies on manual operations, making it inefficient and error-prone. Please, DevOps Automation Engineer, help us establish an automated CI/CD pipeline."
+  },
+  "tags": [
+    {
+      "zh": "DevOps自动化",
+      "en": "DevOps Automation"
+    },
+    {
+      "zh": "基础设施",
+      "en": "Infrastructure"
+    },
+    {
+      "zh": "流水线开发",
+      "en": "Pipeline Dev"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "我们的部署流程依赖手工操作,效率低且容易出错,请DevOps自动化工程师帮我们建立自动化的CI/CD流程。",
+      "en": "Our deployment process relies on manual operations, making it inefficient and error-prone. Please, DevOps Automation Engineer, help us establish an automated CI/CD pipeline."
+    },
+    {
+      "zh": "设计基础设施即代码IaC方案",
+      "en": "Design Infrastructure as Code (IaC) plan"
+    },
+    {
+      "zh": "自动化环境配置和部署流程",
+      "en": "Automate environment provisioning and deployment processes"
+    }
+  ],
+  "skills": [
+    "./skills/agent-browser-core",
+    "./skills/ima-skills"
+  ]
+}

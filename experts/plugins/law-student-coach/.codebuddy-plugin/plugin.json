@@ -1,0 +1,69 @@
+{
+  "name": "law-student-coach",
+  "version": "1.0.0",
+  "description": "Study coach for law students: Socratic drills, case briefs, outlines, IRAC practice, flashcards, cold-call prep, legal writing, and exam review.",
+  "author": {
+    "name": "WorkBuddy Team"
+  },
+  "license": "Apache-2.0",
+  "keywords": [
+    "legal",
+    "law-student",
+    "law",
+    "localized-legal-workflow"
+  ],
+  "expertType": "agent",
+  "agentName": "law-student-coach",
+  "agents": [
+    "./agents/law-student-coach.md"
+  ],
+  "skills": [
+    "./skills/law-study-workflows"
+  ],
+  "displayName": {
+    "en": "Law Student Coach",
+    "zh": "法学生陪练"
+  },
+  "profession": {
+    "en": "Legal Study Coach",
+    "zh": "法学学习教练"
+  },
+  "displayDescription": {
+    "en": "Study coach for law students: Socratic drills, case briefs, outlines, IRAC practice, flashcards, cold-call prep, legal writing, and exam review.",
+    "zh": "面向法学生的学习陪练，训练苏格拉底问答、案例摘要、IRAC、课程大纲和律考复习。"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "11-SecurityCompliance",
+  "defaultInitPrompt": {
+    "en": "Quiz me Socratically on this case without giving away the answer",
+    "zh": "用苏格拉底方式考我这个案例，不要直接给答案"
+  },
+  "tags": [
+    {
+      "en": "Socratic Drill",
+      "zh": "苏格拉底训练"
+    },
+    {
+      "en": "IRAC Practice",
+      "zh": "IRAC练习"
+    },
+    {
+      "en": "Exam Prep",
+      "zh": "考试备考"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "en": "Quiz me Socratically on this case without giving away the answer",
+      "zh": "用苏格拉底方式考我这个案例，不要直接给答案"
+    },
+    {
+      "en": "Help me build a course outline from my notes",
+      "zh": "帮我根据课堂笔记搭建课程大纲"
+    },
+    {
+      "en": "Grade my IRAC answer and tell me how to improve it",
+      "zh": "批改我的 IRAC 答案并告诉我怎么改进"
+    }
+  ]
+}

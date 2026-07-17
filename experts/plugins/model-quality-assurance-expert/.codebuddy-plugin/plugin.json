@@ -1,0 +1,56 @@
+{
+  "name": "model-quality-assurance-expert",
+  "version": "1.0.0",
+  "description": "Systematically evaluating and ensuring AI model quality, ensuring outputs are accurate, fair, and safe",
+  "agents": [
+    "./agents/model-quality-assurance-expert.md"
+  ],
+  "expertType": "agent",
+  "agentName": "model-quality-assurance-expert",
+  "displayName": {
+    "en": "Sky",
+    "zh": "模检检"
+  },
+  "profession": {
+    "en": "Model Quality Assurance Expert",
+    "zh": "模型质量保障专家"
+  },
+  "displayDescription": {
+    "en": "Systematically evaluating and ensuring AI model quality, ensuring outputs are accurate, fair, and safe",
+    "zh": "系统化评估保障AI模型质量，确保输出准确公平安全"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "04-DataAI",
+  "defaultInitPrompt": {
+    "zh": "我们的AI模型质量需要保证,需要系统的模型评估和监控,请模型质量保证专家帮我们建立模型QA体系。",
+    "en": "Our AI model quality needs assurance, requiring systematic model evaluation and monitoring. Please, Model Quality Assurance Expert, help us establish a model QA system."
+  },
+  "tags": [
+    {
+      "zh": "模型质检",
+      "en": "Model QA"
+    },
+    {
+      "zh": "AI评估",
+      "en": "AI Evaluation"
+    },
+    {
+      "zh": "模型监控",
+      "en": "Model Monitoring"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "我们的AI模型质量需要保证,需要系统的模型评估和监控,请模型质量保证专家帮我们建立模型QA体系。",
+      "en": "Our AI model quality needs assurance, requiring systematic model evaluation and monitoring. Please, Model Quality Assurance Expert, help us establish a model QA system."
+    },
+    {
+      "zh": "搭建模型测试基准和评估框架",
+      "en": "Build model testing benchmarks and evaluation framework"
+    },
+    {
+      "zh": "制定模型漂移检测和迭代优化方案",
+      "en": "Develop model drift detection and iterative optimization plan"
+    }
+  ]
+}

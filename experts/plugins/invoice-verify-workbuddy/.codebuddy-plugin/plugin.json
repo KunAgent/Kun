@@ -1,0 +1,144 @@
+{
+  "name": "invoice-verify-workbuddy",
+  "version": "1.0.4",
+  "description": "Intelligent invoice expert team for invoice recognition, tax authority verification, business credit checks, and smart invoice folder archiving across uploaded files, batch spreadsheets, and local folders.",
+  "author": {
+    "name": "百望股份",
+    "email": "market@baiwang.com"
+  },
+  "expertType": "team",
+  "agentName": "invoice-verify-team-lead",
+  "teamInfo": {
+    "leadAgent": "invoice-verify-team-lead",
+    "memberAgents": [
+      "invoice-sorter",
+      "invoice-verifier",
+      "counterparty-risk-analyst",
+      "archivist"
+    ]
+  },
+  "agents": [
+    "./agents/invoice-verify-team-lead.md",
+    "./agents/invoice-sorter.md",
+    "./agents/invoice-verifier.md",
+    "./agents/counterparty-risk-analyst.md",
+    "./agents/archivist.md"
+  ],
+  "skills": [
+    "./skills/invoice-verify"
+  ],
+  "displayName": {
+    "en": "Intelligent Invoice Expert Team",
+    "zh": "智能发票专家团"
+  },
+  "profession": {
+    "en": "Intelligent Invoice Expert Team",
+    "zh": "智能发票专家团"
+  },
+  "displayDescription": {
+    "en": "Five AI experts collaborate across uploaded invoices, batch spreadsheets, or selected local folders to recognize invoices, verify them with tax authority data, check business credit, and archive results automatically.",
+    "zh": "五位AI专家接力协作，通过上传文件、表格或文件夹，完成识别、税局验真、信用核查与归档"
+  },
+  "avatar": "avatars/team.png",
+  "categoryId": "11-SecurityCompliance",
+  "defaultInitPrompt": {
+    "en": "Use Intelligent Invoice Expert Team Check the invoices in a selected local folder",
+    "zh": "使用智能发票专家团帮我核验上传的发票"
+  },
+  "tags": [
+    {
+      "en": "Recognition and Verification",
+      "zh": "识别验真"
+    },
+    {
+      "en": "Business Credit",
+      "zh": "商业信用"
+    },
+    {
+      "en": "Smart Invoice Folder",
+      "zh": "智能票夹"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "en": "Use Intelligent Invoice Expert Team Check the invoices in a selected local folder",
+      "zh": "使用智能发票专家团帮我核验上传的发票"
+    },
+    {
+      "en": "Check the credit status of these suppliers: XX Logistics, XX Trading, XX Technology",
+      "zh": "帮我看看这几个供应商的信用情况：XX物流、XX贸易、XX科技"
+    },
+    {
+      "en": "Verify this invoice batch and check the issuers' credit status",
+      "zh": "这批发票验完顺便查一下开票方的信用状况"
+    }
+  ],
+  "members": [
+    {
+      "id": "invoice-verify-team-lead",
+      "name": {
+        "en": "Chief Expert",
+        "zh": "百晓通"
+      },
+      "profession": {
+        "en": "Intelligent Invoice Chief Expert",
+        "zh": "智能发票首席专家"
+      },
+      "avatar": "avatars/lead.png",
+      "role": "lead"
+    },
+    {
+      "id": "invoice-sorter",
+      "name": {
+        "en": "Recognition",
+        "zh": "百晓甄"
+      },
+      "profession": {
+        "en": "Multimodal Recognition Expert",
+        "zh": "多模态识别专家"
+      },
+      "avatar": "avatars/sorter.png",
+      "role": "member"
+    },
+    {
+      "id": "invoice-verifier",
+      "name": {
+        "en": "Verifier",
+        "zh": "百晓燕"
+      },
+      "profession": {
+        "en": "Invoice Verification Expert",
+        "zh": "发票查验专家"
+      },
+      "avatar": "avatars/verifier.png",
+      "role": "member"
+    },
+    {
+      "id": "counterparty-risk-analyst",
+      "name": {
+        "en": "Credit",
+        "zh": "百晓信"
+      },
+      "profession": {
+        "en": "Business Credit Expert",
+        "zh": "商业信用专家"
+      },
+      "avatar": "avatars/risk.png",
+      "role": "member"
+    },
+    {
+      "id": "archivist",
+      "name": {
+        "en": "Invoice Folder",
+        "zh": "百晓慧"
+      },
+      "profession": {
+        "en": "Enterprise Invoice Folder",
+        "zh": "企业票夹"
+      },
+      "avatar": "avatars/archivist.png",
+      "role": "member"
+    }
+  ],
+  "plugin": "invoice-verify-workbuddy"
+}

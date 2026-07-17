@@ -1,0 +1,514 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+redline-docx —— 合同修订稿生成器（Word 原生修订痕迹 + 批注）
+
+把一份"修订指令 JSON"应用到原始 .docx 上，产出一份带 Word **原生修订痕迹**
+（track changes：字符级 <w:ins> 插入 / <w:del> 删除）以及 **批注气泡**
+（comments：旁批说明修改理由）的修订稿 docx。用户在 Word / WPS 里打开后，
+可以像审阅真人律师改的稿子一样，逐条"接受/拒绝修订"，并在右侧看到批注。
+
+设计原则
+--------
+- **像人一样改，字符级**：不是把整段删掉重写，而是只对真正变化的片段打
+  插入/删除痕迹（基于 difflib 做最小差异），未改动的文字保持原样。
+- **不依赖第三方库**：仅用 Python 标准库（zipfile + xml），避免 python-docx
+  对 track changes / comments 支持不全的问题，直接操作 OOXML。
+- **保留原文档**：只在原 docx 基础上增量修改命中段落，其它内容原样保留。
+
+修订指令 JSON 结构
+------------------
+{
+  "author": "合同专家",                       # 修订人署名（可选，默认"合同专家"）
+  "date":   "2026-06-27T00:00:00Z",            # 修订时间（可选，默认当前）
+  "edits": [
+    {
+      "find":    "应将争议提交被告所在地人民法院裁决",   # 在原文中定位的锚文本（精确子串）
+      "replace": "任何一方均有权向乙方所在地人民法院提起诉讼",  # 改成什么（空串=纯删除）
+      "comment": "“被告所在地”管辖不确定，明确约定有利于争议解决。"  # 旁批理由（可选）
+    },
+    {
+      "find":   "甲方应在3个工作日内完成验收",
+      "insert_after": "（验收期限不少于10个工作日）",   # 在 find 之后插入新文字
+      "comment": "3个工作日过短，建议延长。"
+    },
+    {
+      "anchor": "第七条 违约责任",                # 在某段落之后整段插入新条款
+      "insert_paragraph": "第七条之一 数据安全：乙方应遵守《个人信息保护法》……",
+      "comment": "建议补充数据安全条款。"
+    }
+  ]
+}
+
+每个 edit 支持四种模式（按优先级判断）：
+  1. find + replace        → 字符级替换（diff 出增删，分别打 ins/del 痕迹）
+  2. find + insert_after   → 在锚文本后插入新文字（纯 ins 痕迹）
+  3. find (+ replace="")   → 纯删除（del 痕迹）
+  4. anchor + insert_paragraph → 在锚段落后新增整段（整段 ins 痕迹）
+
+用法
+----
+  redline-docx apply --in 原合同.docx --edits edits.json --out 修订稿.docx
+  redline-docx apply --in 原合同.docx --edits edits.json --out 修订稿.docx --author "张律师"
+  redline-docx verify --in 修订稿.docx      # 检查修订痕迹/批注是否写入成功
+"""
+
+import sys
+import os
+import re
+import json
+import zipfile
+import shutil
+import argparse
+import datetime
+import difflib
+from xml.sax.saxutils import escape
+
+W_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+WORD_NAMESPACES = (
+    'xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" '
+    'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"'
+)
+
+
+def now_iso():
+    return datetime.datetime.now(datetime.timezone.utc).strftime(
+        "%Y-%m-%dT%H:%M:%SZ")
+
+
+# ---------------------------------------------------------------------------
+# docx 读写：直接操作 zip 内的 xml
+# ---------------------------------------------------------------------------
+
+def read_docx_parts(path):
+    """读取 docx 内所有 part，返回 {name: bytes}"""
+    parts = {}
+    with zipfile.ZipFile(path, "r") as z:
+        for name in z.namelist():
+            parts[name] = z.read(name)
+    return parts
+
+
+def write_docx_parts(parts, out_path, order=None):
+    """把 parts 重新打包成 docx"""
+    names = order or list(parts.keys())
+    # [Content_Types].xml 必须在前
+    if "[Content_Types].xml" in names:
+        names.remove("[Content_Types].xml")
+        names.insert(0, "[Content_Types].xml")
+    with zipfile.ZipFile(out_path, "w", zipfile.ZIP_DEFLATED) as z:
+        for name in names:
+            z.writestr(name, parts[name])
+
+
+# ---------------------------------------------------------------------------
+# 段落级文本提取与命中定位
+# ---------------------------------------------------------------------------
+
+PARA_RE = re.compile(r"<w:p\b.*?</w:p>|<w:p\b[^>]*/>", re.DOTALL)
+TEXT_RE = re.compile(r"<w:t\b[^>]*>(.*?)</w:t>", re.DOTALL)
+
+
+def para_plain_text(para_xml):
+    """提取一个 <w:p> 段落的纯文本（拼接所有 <w:t>）"""
+    return "".join(m.group(1) for m in TEXT_RE.finditer(para_xml))
+
+
+def make_run(text, rpr_xml="", kind="normal", author="合同专家", date=None,
+             rev_id=1):
+    """
+    生成一个 run 片段。
+    kind: normal | ins | del
+      normal -> 普通 <w:r><w:t>
+      ins    -> <w:ins><w:r><w:t>             （插入痕迹）
+      del    -> <w:del><w:r><w:delText>       （删除痕迹）
+    """
+    date = date or now_iso()
+    safe = escape(text)
+    # 保留首尾空格
+    space = ' xml:space="preserve"'
+    if kind == "normal":
+        return f"<w:r>{rpr_xml}<w:t{space}>{safe}</w:t></w:r>"
+    if kind == "ins":
+        inner = f"<w:r>{rpr_xml}<w:t{space}>{safe}</w:t></w:r>"
+        return (f'<w:ins w:id="{rev_id}" w:author="{escape(author)}" '
+                f'w:date="{date}">{inner}</w:ins>')
+    if kind == "del":
+        inner = (f"<w:r>{rpr_xml}<w:delText{space}>{safe}</w:delText></w:r>")
+        return (f'<w:del w:id="{rev_id}" w:author="{escape(author)}" '
+                f'w:date="{date}">{inner}</w:del>')
+    raise ValueError(kind)
+
+
+def char_level_runs(old, new, rpr_xml, author, date, rev_counter):
+    """
+    对 old -> new 做字符级 diff，生成 normal/ins/del 混合的 runs。
+    返回 (runs_xml_str, used_rev_ids)
+    """
+    sm = difflib.SequenceMatcher(None, old, new, autojunk=False)
+    out = []
+    for tag, i1, i2, j1, j2 in sm.get_opcodes():
+        if tag == "equal":
+            seg = old[i1:i2]
+            if seg:
+                out.append(make_run(seg, rpr_xml, "normal"))
+        elif tag == "delete":
+            seg = old[i1:i2]
+            if seg:
+                rid = next(rev_counter)
+                out.append(make_run(seg, rpr_xml, "del", author, date, rid))
+        elif tag == "insert":
+            seg = new[j1:j2]
+            if seg:
+                rid = next(rev_counter)
+                out.append(make_run(seg, rpr_xml, "ins", author, date, rid))
+        elif tag == "replace":
+            del_seg = old[i1:i2]
+            ins_seg = new[j1:j2]
+            if del_seg:
+                rid = next(rev_counter)
+                out.append(make_run(del_seg, rpr_xml, "del", author, date, rid))
+            if ins_seg:
+                rid = next(rev_counter)
+                out.append(make_run(ins_seg, rpr_xml, "ins", author, date, rid))
+    return "".join(out)
+
+
+def first_rpr(para_xml):
+    """取段落内第一个 run 的 <w:rPr>，用于让新 run 继承格式（粗体/字号等）"""
+    m = re.search(r"<w:r\b[^>]*>(<w:rPr>.*?</w:rPr>)", para_xml, re.DOTALL)
+    if m:
+        return m.group(1)
+    return ""
+
+
+def comment_marks(comment_id):
+    """生成批注引用三件套：start / reference run / end"""
+    start = f'<w:commentRangeStart w:id="{comment_id}"/>'
+    end = f'<w:commentRangeEnd w:id="{comment_id}"/>'
+    ref = (f'<w:r><w:rPr><w:rStyle w:val="CommentReference"/></w:rPr>'
+           f'<w:commentReference w:id="{comment_id}"/></w:r>')
+    return start, end, ref
+
+
+# ---------------------------------------------------------------------------
+# 核心：把 edits 应用到 document.xml
+# ---------------------------------------------------------------------------
+
+class RevCounter:
+    def __init__(self, start=1000):
+        self.n = start
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        self.n += 1
+        return self.n
+
+
+def apply_edits(document_xml, edits, author, date):
+    """
+    返回 (new_document_xml, comments_list, stats)
+    comments_list: [{"id", "text"}]
+    """
+    rev_counter = RevCounter(1000)
+    comments = []           # 收集所有批注
+    comment_id = [0]        # 自增 id
+    stats = {"applied": 0, "missed": 0, "missed_anchors": []}
+
+    # 找到所有段落的 (start, end, xml)
+    paras = list(PARA_RE.finditer(document_xml))
+    # 用列表保存段落 xml，便于按索引替换
+    para_spans = [(m.start(), m.end()) for m in paras]
+    para_xmls = [document_xml[s:e] for (s, e) in para_spans]
+    plain = [para_plain_text(x) for x in para_xmls]
+
+    # 记录每个段落要做的修改（可能多个 edit 命中同一段）
+    # 我们对每个段落，依次应用其上的 replace/insert_after/delete
+    # anchor+insert_paragraph 则记录"在某段后插入新段落"
+    para_edits = {i: [] for i in range(len(para_xmls))}
+    after_inserts = {i: [] for i in range(len(para_xmls))}  # 段后插入新段落
+
+    def find_para(text):
+        """返回包含 text 的段落索引（第一个），找不到返回 -1"""
+        for i, p in enumerate(plain):
+            if text and text in p:
+                return i
+        return -1
+
+    for edit in edits:
+        find = edit.get("find")
+        anchor = edit.get("anchor")
+        replace = edit.get("replace")
+        insert_after = edit.get("insert_after")
+        insert_paragraph = edit.get("insert_paragraph")
+        comment = edit.get("comment")
+
+        # 模式 4：整段插入
+        if insert_paragraph is not None:
+            key = anchor or find
+            idx = find_para(key) if key else (len(para_xmls) - 1)
+            if idx < 0:
+                stats["missed"] += 1
+                stats["missed_anchors"].append(key)
+                continue
+            after_inserts[idx].append({
+                "text": insert_paragraph,
+                "comment": comment,
+            })
+            stats["applied"] += 1
+            continue
+
+        if not find:
+            stats["missed"] += 1
+            continue
+        idx = find_para(find)
+        if idx < 0:
+            stats["missed"] += 1
+            stats["missed_anchors"].append(find)
+            continue
+
+        if insert_after is not None:
+            # 在 find 锚文本之后插入新文字
+            new_full = plain[idx].replace(find, find + insert_after, 1)
+            para_edits[idx].append({
+                "old": plain[idx], "new": new_full,
+                "comment": comment, "focus": find + insert_after,
+            })
+        else:
+            # find + replace（replace 可能为 ""，即纯删除）
+            rep = replace if replace is not None else ""
+            new_full = plain[idx].replace(find, rep, 1)
+            para_edits[idx].append({
+                "old": plain[idx], "new": new_full,
+                "comment": comment, "focus": rep or find,
+            })
+        # 更新 plain 以便同段多次编辑叠加
+        plain[idx] = para_edits[idx][-1]["new"]
+        stats["applied"] += 1
+
+    # 现在逐段重建 xml
+    new_para_xmls = []
+    for i, pxml in enumerate(para_xmls):
+        edits_here = para_edits[i]
+        inserts_here = after_inserts[i]
+
+        if edits_here:
+            rpr = first_rpr(pxml)
+            old_text = para_plain_text(pxml)
+            new_text = edits_here[-1]["new"]   # 叠加后的最终文本
+            # 生成字符级 runs
+            runs_xml = char_level_runs(old_text, new_text, rpr,
+                                       author, date, rev_counter)
+
+            # 批注：把本段所有 edit 的 comment 合并挂在段落范围上
+            cmarks_start = ""
+            cmarks_end = ""
+            ref_runs = ""
+            for e in edits_here:
+                if e.get("comment"):
+                    comment_id[0] += 1
+                    cid = comment_id[0]
+                    comments.append({"id": cid, "text": e["comment"]})
+                    s, en, ref = comment_marks(cid)
+                    cmarks_start += s
+                    cmarks_end += en
+                    ref_runs += ref
+
+            # 取出段落属性 <w:pPr>（若有），放在最前
+            ppr_m = re.search(r"<w:pPr>.*?</w:pPr>", pxml, re.DOTALL)
+            ppr = ppr_m.group(0) if ppr_m else ""
+
+            new_p = (f"<w:p>{ppr}{cmarks_start}{runs_xml}"
+                     f"{cmarks_end}{ref_runs}</w:p>")
+            new_para_xmls.append(new_p)
+        else:
+            new_para_xmls.append(pxml)
+
+        # 段后插入的新整段
+        for ins in inserts_here:
+            comment_id[0] += 1 if ins.get("comment") else 0
+            cmarks_start = cmarks_end = ref_runs = ""
+            if ins.get("comment"):
+                cid = comment_id[0]
+                comments.append({"id": cid, "text": ins["comment"]})
+                s, en, ref = comment_marks(cid)
+                cmarks_start, cmarks_end, ref_runs = s, en, ref
+            rid = next(rev_counter)
+            run = make_run(ins["text"], "", "ins", author, date, rid)
+            new_p = (f"<w:p>{cmarks_start}{run}{cmarks_end}{ref_runs}</w:p>")
+            new_para_xmls.append(new_p)
+
+    # 重新拼接整个 document.xml：用 new_para_xmls 替换原段落，其它部分保留
+    return rebuild_document(document_xml, para_spans, new_para_xmls), comments, stats
+
+
+def rebuild_document(document_xml, para_spans, new_para_xmls):
+    """按段落跨度，用 new_para_xmls 替换原段落，保留段落之间的内容"""
+    out = []
+    cursor = 0
+    for k, (s, e) in enumerate(para_spans):
+        out.append(document_xml[cursor:s])  # 段落前的内容（含上一段到本段间）
+        out.append(new_para_xmls[k])
+        cursor = e
+    out.append(document_xml[cursor:])
+    return "".join(out)
+
+
+# ---------------------------------------------------------------------------
+# comments part 注入
+# ---------------------------------------------------------------------------
+
+def build_comments_xml(comments, author, date):
+    items = []
+    for c in comments:
+        items.append(
+            f'<w:comment w:id="{c["id"]}" w:author="{escape(author)}" '
+            f'w:date="{date}" w:initials="法">'
+            f'<w:p><w:r><w:t xml:space="preserve">{escape(c["text"])}'
+            f'</w:t></w:r></w:p></w:comment>'
+        )
+    return (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        f'<w:comments {WORD_NAMESPACES}>' + "".join(items) + "</w:comments>"
+    )
+
+
+def ensure_comments_registered(parts):
+    """
+    确保：
+      - [Content_Types].xml 声明 comments part
+      - word/_rels/document.xml.rels 有指向 comments.xml 的关系
+    """
+    # 1. Content_Types
+    ct_name = "[Content_Types].xml"
+    ct = parts[ct_name].decode("utf-8")
+    comments_ct = ('<Override PartName="/word/comments.xml" '
+                   'ContentType="application/vnd.openxmlformats-officedocument'
+                   '.wordprocessingml.comments+xml"/>')
+    if "/word/comments.xml" not in ct:
+        ct = ct.replace("</Types>", comments_ct + "</Types>")
+        parts[ct_name] = ct.encode("utf-8")
+
+    # 2. document.xml.rels
+    rels_name = "word/_rels/document.xml.rels"
+    if rels_name in parts:
+        rels = parts[rels_name].decode("utf-8")
+    else:
+        rels = ('<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+                '<Relationships xmlns="http://schemas.openxmlformats.org/'
+                'package/2006/relationships"></Relationships>')
+    if "comments.xml" not in rels:
+        # 找一个未使用的 rId
+        existing = re.findall(r'Id="(rId\d+)"', rels)
+        n = 1
+        while f"rId{n}" in existing:
+            n += 1
+        rel = (f'<Relationship Id="rId{n}" Type="http://schemas.openxmlformats'
+               f'.org/officeDocument/2006/relationships/comments" '
+               f'Target="comments.xml"/>')
+        rels = rels.replace("</Relationships>", rel + "</Relationships>")
+        parts[rels_name] = rels.encode("utf-8")
+
+
+def enable_track_changes_setting(parts):
+    """在 settings.xml 里不强制开启，但确保修订可见。这里保持文档原样即可，
+    Word 打开会自动显示 ins/del 痕迹。"""
+    return parts
+
+
+# ---------------------------------------------------------------------------
+# 命令
+# ---------------------------------------------------------------------------
+
+def cmd_apply(args):
+    if not os.path.exists(args.infile):
+        print(f"[错误] 找不到输入文件: {args.infile}", file=sys.stderr)
+        return 2
+    with open(args.edits, "r", encoding="utf-8") as f:
+        spec = json.load(f)
+
+    author = args.author or spec.get("author") or "合同专家"
+    date = spec.get("date") or now_iso()
+    edits = spec.get("edits", [])
+    if not edits:
+        print("[错误] edits 为空", file=sys.stderr)
+        return 2
+
+    parts = read_docx_parts(args.infile)
+    doc_name = "word/document.xml"
+    if doc_name not in parts:
+        print("[错误] 不是有效的 docx（缺 document.xml）", file=sys.stderr)
+        return 2
+
+    document_xml = parts[doc_name].decode("utf-8")
+    new_doc, comments, stats = apply_edits(document_xml, edits, author, date)
+    parts[doc_name] = new_doc.encode("utf-8")
+
+    # 写入 comments part
+    if comments:
+        parts["word/comments.xml"] = build_comments_xml(
+            comments, author, date).encode("utf-8")
+        ensure_comments_registered(parts)
+
+    write_docx_parts(parts, args.out)
+
+    print(json.dumps({
+        "ok": True,
+        "out": args.out,
+        "author": author,
+        "edits_applied": stats["applied"],
+        "edits_missed": stats["missed"],
+        "missed_anchors": stats["missed_anchors"],
+        "comments": len(comments),
+    }, ensure_ascii=False, indent=2))
+    if stats["missed"]:
+        print(f"\n[提示] 有 {stats['missed']} 条修订的锚文本未在原文中精确匹配，"
+              f"请检查 find/anchor 是否与原文逐字一致。", file=sys.stderr)
+    return 0
+
+
+def cmd_verify(args):
+    parts = read_docx_parts(args.infile)
+    doc = parts.get("word/document.xml", b"").decode("utf-8", "ignore")
+    ins = doc.count("<w:ins ")
+    dele = doc.count("<w:del ")
+    has_comments = "word/comments.xml" in parts
+    ncomments = 0
+    if has_comments:
+        ncomments = parts["word/comments.xml"].decode(
+            "utf-8", "ignore").count("<w:comment ")
+    print(json.dumps({
+        "ok": True,
+        "insertions": ins,
+        "deletions": dele,
+        "comments_part": has_comments,
+        "comments": ncomments,
+    }, ensure_ascii=False, indent=2))
+    return 0
+
+
+def main():
+    p = argparse.ArgumentParser(
+        prog="redline-docx",
+        description="在原始 docx 上生成 Word 原生修订痕迹 + 批注的合同修订稿")
+    sub = p.add_subparsers(dest="cmd", required=True)
+
+    pa = sub.add_parser("apply", help="应用修订指令，产出修订稿")
+    pa.add_argument("--in", dest="infile", required=True, help="原始合同 docx")
+    pa.add_argument("--edits", required=True, help="修订指令 JSON 文件")
+    pa.add_argument("--out", required=True, help="输出修订稿 docx 路径")
+    pa.add_argument("--author", default=None, help="修订人署名")
+    pa.set_defaults(func=cmd_apply)
+
+    pv = sub.add_parser("verify", help="检查修订稿是否含修订痕迹/批注")
+    pv.add_argument("--in", dest="infile", required=True)
+    pv.set_defaults(func=cmd_verify)
+
+    args = p.parse_args()
+    return args.func(args)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

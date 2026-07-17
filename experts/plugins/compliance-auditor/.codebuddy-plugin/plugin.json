@@ -1,0 +1,63 @@
+{
+  "name": "compliance-auditor",
+  "version": "1.0.0",
+  "description": "Comprehensively auditing enterprise operations compliance, ensuring adherence to industry standards",
+  "agents": [
+    "./agents/compliance-auditor.md"
+  ],
+  "expertType": "agent",
+  "agentName": "compliance-auditor",
+  "displayName": {
+    "en": "Fox",
+    "zh": "合规规"
+  },
+  "profession": {
+    "en": "Compliance Auditor",
+    "zh": "合规审计师"
+  },
+  "displayDescription": {
+    "en": "Comprehensively auditing enterprise operations compliance, ensuring adherence to industry standards",
+    "zh": "全面审计企业运营合规性，确保符合行业标准"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "11-SecurityCompliance",
+  "defaultInitPrompt": {
+    "zh": "我们的业务需要满足复杂的合规要求,需要系统的合规审查,请合规审计师帮我们制定合规检查流程。",
+    "en": "Our business needs to meet complex compliance requirements and requires systematic compliance reviews. Please, Compliance Auditor, help us develop compliance check processes."
+  },
+  "tags": [
+    {
+      "zh": "合规审计",
+      "en": "Compliance Audit"
+    },
+    {
+      "zh": "标准认证",
+      "en": "Standard Certification"
+    },
+    {
+      "zh": "审计报告",
+      "en": "Audit Report"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "我们的业务需要满足复杂的合规要求,需要系统的合规审查,请合规审计师帮我们制定合规检查流程。",
+      "en": "Our business needs to meet complex compliance requirements and requires systematic compliance reviews. Please, Compliance Auditor, help us develop compliance check processes."
+    },
+    {
+      "zh": "制定合规整改和监控方案",
+      "en": "Develop compliance remediation and monitoring plan"
+    },
+    {
+      "zh": "搭建合规管理体系和报告流程",
+      "en": "Build compliance management system and reporting process"
+    }
+  ],
+  "skills": [
+    "./skills/anti-distill",
+    "./skills/deep-research",
+    "./skills/humanizer",
+    "./skills/jiaozhen-factcheck",
+    "./skills/minimax-docx"
+  ]
+}

@@ -1,0 +1,62 @@
+{
+  "name": "government-digital-presales-consultant",
+  "version": "1.0.0",
+  "description": "Expert in government digital transformation needs and procurement processes",
+  "agents": [
+    "./agents/government-digital-presales-consultant.md"
+  ],
+  "expertType": "agent",
+  "agentName": "government-digital-presales-consultant",
+  "displayName": {
+    "en": "Maren",
+    "zh": "政通通"
+  },
+  "profession": {
+    "en": "Government Digital Presales Consultant",
+    "zh": "政府数字化售前顾问"
+  },
+  "displayDescription": {
+    "en": "Expert in government digital transformation needs and procurement processes",
+    "zh": "精通政府数字化转型需求和采购流程"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "07-SalesCommerce",
+  "defaultInitPrompt": {
+    "zh": "我们想拓展政府数字化业务,需要专业的政府项目售前支持,请政府数字化售前顾问帮我们设计政府项目方案。",
+    "en": "We want to expand government digital business and need professional government project presales support. Please, Government Digital Presales Consultant, help us design government project solutions."
+  },
+  "tags": [
+    {
+      "zh": "政务售前",
+      "en": "Gov Presales"
+    },
+    {
+      "zh": "数字政务",
+      "en": "Digital Government"
+    },
+    {
+      "zh": "招投标",
+      "en": "Public Bidding"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "我们想拓展政府数字化业务,需要专业的政府项目售前支持,请政府数字化售前顾问帮我们设计政府项目方案。",
+      "en": "We want to expand government digital business and need professional government project presales support. Please, Government Digital Presales Consultant, help us design government project solutions."
+    },
+    {
+      "zh": "设计政务系统架构和合规方案",
+      "en": "Design government system architecture and compliance plan"
+    },
+    {
+      "zh": "撰写政务项目投标技术方案",
+      "en": "Write government project bidding technical proposal"
+    }
+  ],
+  "skills": [
+    "./skills/anti-distill",
+    "./skills/deep-research",
+    "./skills/ima-skills",
+    "./skills/minimax-docx"
+  ]
+}

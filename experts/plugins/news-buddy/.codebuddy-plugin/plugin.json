@@ -1,0 +1,64 @@
+{
+  "name": "news-buddy",
+  "version": "1.0.0",
+  "description": "A personal news advisor that filters daily headlines through your implicit profile and tells you why each story matters to you and what to do next",
+  "author": {
+    "name": "News Buddy Team",
+    "email": "news-buddy@example.com"
+  },
+  "expertType": "agent",
+  "agentName": "news-buddy",
+  "agents": [
+    "./agents/news-buddy.md"
+  ],
+  "skills": [
+    "./skills/news-buddy"
+  ],
+  "displayName": {
+    "en": "News Buddy",
+    "zh": "懂秘"
+  },
+  "profession": {
+    "en": "News Intelligence Advisor",
+    "zh": "资讯顾问"
+  },
+  "displayDescription": {
+    "en": "Your personal news advisor: curated, profile-aware briefings that tell you why each story matters to you and what to do next.",
+    "zh": "懂你的资讯顾问。基于隐式画像精选新闻，告诉你每条跟你有什么关系、你能做什么，让信息真正为你所用。"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "06-ContentCreative",
+  "defaultInitPrompt": {
+    "zh": "看看今天有什么跟我有关的新闻",
+    "en": "Show me today's news that matters to me"
+  },
+  "tags": [
+    {
+      "en": "Personalized News",
+      "zh": "个性化资讯"
+    },
+    {
+      "en": "Deep Insights",
+      "zh": "深度解读"
+    },
+    {
+      "en": "Actionable Advice",
+      "zh": "行动建议"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "en": "Show me today's news that matters to me",
+      "zh": "看看今天有什么跟我有关的新闻"
+    },
+    {
+      "en": "Expand the first story, I want details",
+      "zh": "展开第 1 条，我想深入了解"
+    },
+    {
+      "en": "Show me a different batch",
+      "zh": "换一批别的新闻"
+    }
+  ],
+  "plugin": "news-buddy"
+}

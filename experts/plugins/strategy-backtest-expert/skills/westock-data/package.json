@@ -1,0 +1,12 @@
+{
+  "name": "westock-data",
+  "version": "1.0.4",
+  "description": "股票数据查询工具库 - 提供A股、港股、美股的实时行情、K线数据和财务数据查询",
+  "type": "module",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "bin": {
+    "westock-data": "./scripts/index.js"
+  }
+}

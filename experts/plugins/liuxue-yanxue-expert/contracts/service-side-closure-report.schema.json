@@ -1,0 +1,277 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://u3w.com/fbs/schemas/liuxue-yanxue-expert/service-side-closure-report.schema.json",
+  "title": "Liuxue Yanxue Expert Service-Side Closure Report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "status",
+    "source",
+    "identity",
+    "serviceRoute",
+    "lebao",
+    "intentAggregation",
+    "hostTraction",
+    "trafficBoundary",
+    "productCreditBoundary"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "1.0"
+    },
+    "status": {
+      "enum": [
+        "first_value_ready_followthrough_required",
+        "lebao_claim_ready_same_binding_required",
+        "service_traction_ready_host_receipt_required",
+        "service_starter_warn"
+      ]
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "tool",
+        "trafficGroup",
+        "sampleClass",
+        "naturalClosureClaimed"
+      ],
+      "properties": {
+        "tool": {
+          "const": "fbss_liuxue_yanxue_dual_track_start"
+        },
+        "trafficGroup": {
+          "type": "string"
+        },
+        "sampleClass": {
+          "type": "string"
+        },
+        "naturalClosureClaimed": {
+          "type": "boolean"
+        }
+      }
+    },
+    "identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mode",
+        "subject",
+        "sameBindingRequired",
+        "clientHash",
+        "sessionBindingId",
+        "chainFingerprint"
+      ],
+      "properties": {
+        "mode": {
+          "const": "desensitized_independent_client"
+        },
+        "subject": {
+          "const": "independent_client"
+        },
+        "sameBindingRequired": {
+          "const": true
+        },
+        "clientHash": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "sessionBindingId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "chainFingerprint": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "serviceRoute": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "productId",
+        "serviceProductId",
+        "entryId",
+        "entrySurface",
+        "entryPromptCode",
+        "expertEntryId",
+        "channelTrack",
+        "intentFamily",
+        "profileSegment",
+        "packCode",
+        "scenePackId",
+        "routeCode"
+      ],
+      "properties": {
+        "productId": {
+          "const": "liuxue-yanxue-expert"
+        },
+        "serviceProductId": {
+          "const": "workbuddy_liuxue_yanxue_expert"
+        },
+        "entryId": {
+          "const": "liuxue-yanxue-dual-track"
+        },
+        "entrySurface": {
+          "const": "workbuddy_expert_center"
+        },
+        "entryPromptCode": {
+          "const": "wb_qp_liuxue_yanxue_dual_track_48h"
+        },
+        "expertEntryId": {
+          "const": "liuxue-yanxue-expert"
+        },
+        "channelTrack": {
+          "const": "study_abroad_study_tour"
+        },
+        "intentFamily": {
+          "const": "international_education_planning"
+        },
+        "profileSegment": {
+          "const": "family_decision"
+        },
+        "packCode": {
+          "const": "fbs.liuxue_yanxue.dual_track.v1"
+        },
+        "scenePackId": {
+          "const": "liuxue_yanxue_dual_track"
+        },
+        "routeCode": {
+          "const": "route.liuxue_yanxue.dual_track"
+        }
+      }
+    },
+    "lebao": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "packCode",
+        "claimState",
+        "paymentClosureAllowed",
+        "sameBindingReceiptRequired"
+      ],
+      "properties": {
+        "packCode": {
+          "const": "fbs.liuxue_yanxue.dual_track.v1"
+        },
+        "claimState": {
+          "enum": [
+            "not_exposed",
+            "exposed",
+            "claim_intended",
+            "receipt_confirmed",
+            "unknown"
+          ]
+        },
+        "paymentClosureAllowed": {
+          "const": false
+        },
+        "sameBindingReceiptRequired": {
+          "const": true
+        }
+      }
+    },
+    "intentAggregation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "intentFamily",
+        "profileSegment",
+        "planningWindow",
+        "confidence"
+      ],
+      "properties": {
+        "intentFamily": {
+          "const": "international_education_planning"
+        },
+        "profileSegment": {
+          "const": "family_decision"
+        },
+        "planningWindow": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "confidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
+      }
+    },
+    "hostTraction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "hostActionEnvelopeRequired",
+        "hostDirectiveReceiptEventType",
+        "personalizedNextAction",
+        "hostRendersServiceDirective"
+      ],
+      "properties": {
+        "hostActionEnvelopeRequired": {
+          "const": true
+        },
+        "hostDirectiveReceiptEventType": {
+          "const": "host_directive_receipt"
+        },
+        "personalizedNextAction": {
+          "type": "string",
+          "minLength": 1
+        },
+        "hostRendersServiceDirective": {
+          "const": true
+        }
+      }
+    },
+    "trafficBoundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "surface",
+        "nonOfficialEquivalentRowsDiagnosticOnly"
+      ],
+      "properties": {
+        "surface": {
+          "enum": [
+            "official_expert_marketplace",
+            "non_official_equivalent_surface",
+            "unknown"
+          ]
+        },
+        "nonOfficialEquivalentRowsDiagnosticOnly": {
+          "const": true
+        }
+      }
+    },
+    "productCreditBoundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sameBindingRequired",
+        "naturalCreditRequiresListedSurface",
+        "productCreditClaimed"
+      ],
+      "properties": {
+        "sameBindingRequired": {
+          "const": true
+        },
+        "naturalCreditRequiresListedSurface": {
+          "const": true
+        },
+        "productCreditClaimed": {
+          "type": "boolean"
+        }
+      }
+    }
+  }
+}

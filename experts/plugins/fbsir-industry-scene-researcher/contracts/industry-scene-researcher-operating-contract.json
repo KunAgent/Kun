@@ -1,0 +1,154 @@
+{
+  "schemaVersion": "1.0",
+  "contractId": "fbsir_industry_scene_researcher_operating_contract_v230",
+  "packageName": "fbsir-industry-scene-researcher",
+  "version": "2.3.0",
+  "displayNameZh": "行业场景研究员",
+  "positioning": {
+    "independentExpert": true,
+    "primarySpecialty": "industry_scene_research_and_shortcut_playbook",
+    "primaryDeliverable": "industry_scene_shortcut_playbook",
+    "defaultGeniusPartner": false,
+    "teamMemberComplement": false,
+    "companyLevelEscalationPolicy": "text_suggestion_only_no_active_invocation"
+  },
+  "distributionSurface": {
+    "target": "workbuddy_expert_center",
+    "targetMarketplace": "experts",
+    "targetDisplayNameZh": "行业场景研究员",
+    "localEquivalentTestSurface": "my-experts",
+    "localEquivalentTestOnly": true
+  },
+  "operatingModes": [
+    {
+      "mode": "independent_expert",
+      "entrySurface": "workbuddy-expert-center",
+      "description": "收敛单个最高价值工作流缺口，交付五件套首值结果。",
+      "requiredOutputFields": [
+        "industryScene",
+        "workflowGap",
+        "supplementCard",
+        "workbuddyCapabilityMap",
+        "humanAiTaskTable",
+        "pilotPacket",
+        "singleNextStepCta"
+      ]
+    },
+    {
+      "mode": "self_contained_no_connector",
+      "entrySurface": "workbuddy-expert-center",
+      "description": "把包本身当作主执行面。首值、续推和项目动作包都不能假设连接器、MCP 工具或服务侧运行时存在。",
+      "workspaceWriteRequiresExplicitUserRequest": true,
+      "planModeBeforeFirstValueAllowed": false,
+      "defaultFirstValueSurface": "chat_response_only",
+      "preferredContinuationBranches": [
+        "pilot_execute",
+        "materials_harden",
+        "team_handoff",
+        "project_activate"
+      ]
+    },
+    {
+      "mode": "project_action_packet",
+      "entrySurface": "workbuddy-project",
+      "description": "把首值卡沉淀为项目动作包、任务拆解和验收标准。",
+      "requiredOutputFields": [
+        "projectContext",
+        "artifactPlan",
+        "taskBreakdown",
+        "acceptanceCriteria",
+        "ownerSuggestion",
+        "serviceFollowthroughPlan"
+      ]
+    },
+    {
+      "mode": "parallel_research_mode",
+      "entrySurface": "workbuddy-project",
+      "description": "并行研究行业案例、WorkBuddy 能力、人机分工和风险边界，再由主智能体收敛成一个当前最优 playbook。",
+      "requiredLanes": [
+        "industry_case_lane",
+        "workbuddy_operator_lane",
+        "human_ai_design_lane",
+        "risk_review_lane"
+      ]
+    }
+  ],
+  "connectorBoundary": {
+    "restBaseUrl": "https://api2.u3w.com/api/fbss",
+    "packageCapabilityDependsOnConnector": false,
+    "packageMustShipConnectorSurface": false,
+    "connectorPromptAllowedInPrimaryFlow": false,
+    "serviceRuntimeOptionalForFirstValue": true,
+    "naturalClosureClaimAllowed": false,
+    "mustKeepSeparate": [
+      "self-contained first value",
+      "connector health",
+      "controlled probe",
+      "visible WorkBuddy session",
+      "same-binding natural closure",
+      "official listing"
+    ]
+  },
+  "noConnectorInteraction": {
+    "contract": "contracts/no-connector-action-contract.json",
+    "connectorRequired": false,
+    "firstValueRequired": true,
+    "actionEnvelopeRequired": true,
+    "userVisibleActionEnvelopeDefault": false,
+    "hostMetadataChannelPreferred": true,
+    "visibleActionEnvelopeRequiresExplicitDebugRequest": true,
+    "defaultSideEffectClass": "read_only",
+    "defaultApprovalState": "not_required",
+    "workspaceWriteRequiresExplicitUserRequest": true,
+    "planModeBeforeFirstValueAllowed": false,
+    "defaultFirstValueSurface": "chat_response_only"
+  },
+  "humanAiHandoffContract": {
+    "requiredColumns": [
+      "step",
+      "executor",
+      "decider",
+      "handoffArtifact",
+      "autonomyLevel",
+      "escalationRule"
+    ],
+    "autonomyLevels": [
+      "agent_only",
+      "hybrid",
+      "human_review",
+      "human_only"
+    ]
+  },
+  "acceptanceGates": [
+    {
+      "gateId": "package_contract_gate",
+      "status": "required",
+      "evidence": "package files, scene pack, contracts and ship manifest are aligned"
+    },
+    {
+      "gateId": "no_connector_contract_gate",
+      "status": "required",
+      "evidence": "self-contained no-connector mode and action contract remain the primary package capability baseline"
+    },
+    {
+      "gateId": "first_value_contract_gate",
+      "status": "required",
+      "evidence": "five-part first value bundle and primary CTA are declared"
+    },
+    {
+      "gateId": "continued_use_gate",
+      "status": "required",
+      "evidence": "continued_use_completed must be reachable before lebao unlock is considered valid"
+    },
+    {
+      "gateId": "optional_connector_observation_gate",
+      "status": "observation_only",
+      "evidence": "connector or MCP traces may be observed, but they do not define package compatibility or review readiness"
+    },
+    {
+      "gateId": "attribution_debt_gate",
+      "status": "required",
+      "evidence": "hostPatchVersion and versionKey debt must remain visible and separately reported"
+    }
+  ]
+}

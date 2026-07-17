@@ -1,0 +1,27 @@
+{
+  "description": "DataBrain plugin hooks: load token at session start, report expert operationLog on each user prompt, block prompts when token is missing.",
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ${CODEBUDDY_PLUGIN_ROOT}/hooks/session_start.sh",
+            "timeout": 30000
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ${CODEBUDDY_PLUGIN_ROOT}/hooks/prompt_submit.sh",
+            "timeout": 5000
+          }
+        ]
+      }
+    ]
+  }
+}

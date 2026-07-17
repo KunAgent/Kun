@@ -1,0 +1,65 @@
+{
+  "name": "sre-expert",
+  "version": "1.0.0",
+  "description": "Site reliability expert powered by CloudQ — root cause reasoning, alert correlation analysis, business process diagnosis, and SLO governance.",
+  "author": {
+    "name": "CloudQ Team",
+    "email": "cloudq@tencent.com"
+  },
+  "expertType": "agent",
+  "agentName": "sre-expert",
+  "agents": [
+    "./agents/sre-expert.md"
+  ],
+  "displayName": {
+    "en": "SREQ",
+    "zh": "站点可靠性专家"
+  },
+  "profession": {
+    "en": "SREQ",
+    "zh": "SREQ"
+  },
+  "displayDescription": {
+    "zh": "站点可靠性专家。擅长故障根因推理、告警关联分析、业务进程诊断与 SLO 治理，通过系统化诊断方法论保障服务持续稳定运行。",
+    "en": "Site reliability expert. Specializes in fault root cause reasoning, alert correlation analysis, business process diagnosis, and SLO governance. Ensures continuous and stable service operation through systematic diagnosis methodology."
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "13-TencentZone",
+  "defaultInitPrompt": {
+    "zh": "业务响应变慢，帮我排查根因",
+    "en": "Service response is slow, help me find the root cause"
+  },
+  "tags": [
+    {
+      "en": "SRE",
+      "zh": "SRE"
+    },
+    {
+      "en": "Fault Diagnosis",
+      "zh": "故障诊断"
+    },
+    {
+      "en": "Alert Analysis",
+      "zh": "告警分析"
+    },
+    {
+      "en": "Reliability",
+      "zh": "可靠性"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "en": "Service response is slow, help me find the root cause",
+      "zh": "业务响应变慢，帮我排查根因"
+    },
+    {
+      "en": "What alert logs have been triggered in the last hour?",
+      "zh": "最近1小时的告警日志有哪些？"
+    },
+    {
+      "en": "Server 5xx error rate spiked, how to handle?",
+      "zh": "服务端5xx错误率突增怎么处理？"
+    }
+  ],
+  "plugin": "sre-expert"
+}

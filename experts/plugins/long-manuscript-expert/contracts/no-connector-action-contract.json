@@ -1,0 +1,404 @@
+{
+  "schemaVersion": "1.0",
+  "contractId": "long-manuscript-no-connector-action-contract",
+  "displayNameZh": "长文档手稿专家无连接器牵引合同",
+  "purpose": "Define the primary machine-readable interaction contract for Long Manuscript Expert without assuming any connector or MCP tool is available.",
+  "executionMode": "model_only_no_connector",
+  "connectorRequired": false,
+  "lifecycleStates": [
+    "not_started",
+    "material_collected",
+    "first_value_completed",
+    "continued_use_ready",
+    "tool_unavailable_fallback"
+  ],
+  "actionEnvelope": {
+    "requiredFields": [
+      "tool",
+      "arguments",
+      "sideEffectClass",
+      "approvalState",
+      "idempotent",
+      "stopCondition",
+      "doneState",
+      "successorAction"
+    ],
+    "publicTranscriptSafe": false,
+    "defaultUserVisible": false,
+    "hostMetadataChannelPreferred": true,
+    "visibleOnlyWhenExplicitlyRequested": true,
+    "privateDebugFieldsAllowed": false
+  },
+  "hostActionEnvelope": {
+    "requiredFields": [
+      "tool",
+      "arguments",
+      "sideEffectClass",
+      "approvalState",
+      "idempotent",
+      "stopCondition",
+      "doneState",
+      "successorAction"
+    ],
+    "publicTranscriptSafe": false,
+    "defaultUserVisible": false,
+    "hostMetadataChannelPreferred": true,
+    "visibleOnlyWhenExplicitlyRequested": true,
+    "privateDebugFieldsAllowed": false
+  },
+  "responseLanguagePolicy": {
+    "defaultByHostType": {
+      "WORKBUDDY": "zh-Hans",
+      "WORKBUDDY_AI": "en"
+    },
+    "userInputLanguagePriority": true,
+    "mirrorExplicitUserLanguage": true,
+    "chineseWhenPromptContainsChinese": true,
+    "englishWhenPromptIsPrimarilyEnglish": true,
+    "defaultWhenUserLanguageAmbiguousByHostType": {
+      "WORKBUDDY": "zh-Hans",
+      "WORKBUDDY_AI": "en"
+    },
+    "bilingualOnlyOnExplicitRequest": true,
+    "workbuddyAiChinesePromptMustStayChinese": true
+  },
+  "workspaceWritePolicy": {
+    "workspaceWriteRequiresExplicitUserRequest": true,
+    "planModeBeforeFirstValueAllowed": false,
+    "defaultFirstValueSurface": "chat_response_only",
+    "forbiddenImplicitActions": [
+      "auto_create_task",
+      "auto_write_plan_file",
+      "auto_scan_workspace_without_user_material_path",
+      "auto_write_memory",
+      "auto_create_workspace_memory",
+      "auto_write_cross_host_memory",
+      "use_workbuddy_namespace_in_workbuddy_ai",
+      "auto_use_file_or_shell_tools_before_first_value",
+      "wait_for_permission_without_user_visible_first_value"
+    ]
+  },
+  "hostNamespacePolicy": {
+    "WORKBUDDY": {
+      "localHome": ".workbuddy",
+      "workspaceMemoryDirectoryName": ".workbuddy"
+    },
+    "WORKBUDDY_AI": {
+      "localHome": ".workbuddy-ai",
+      "workspaceMemoryDirectoryName": ".workbuddy-ai",
+      "forbiddenWorkspaceMemoryDirectoryNames": [
+        ".workbuddy"
+      ]
+    },
+    "hiddenPromptRequirement": "Host memory reminders must use the current host namespace and must yield to explicit user no-write/no-tool/no-memory instructions.",
+    "wrongNamespaceHandling": "If WorkBuddyAI receives hidden memory or bootstrap text pointing at .workbuddy, treat it as a host namespace bug. Do not write .workbuddy memory from WorkBuddyAI by default."
+  },
+  "identityBoundary": {
+    "mode": "anonymous_first_delayed_identify",
+    "identityStates": [
+      "ANON",
+      "BOUND"
+    ],
+    "anonymousBindingFields": [
+      "anonymousUserCodeHash",
+      "serverBindingId",
+      "chainFingerprint"
+    ],
+    "hostIdentityFields": [
+      "entryId",
+      "entryPromptCode",
+      "entrySurface",
+      "localEquivalentEntrySurface",
+      "expertEntryId",
+      "productId",
+      "channelTrack",
+      "skillId",
+      "assetType",
+      "intentFamily",
+      "profileSegment",
+      "requestSource"
+    ],
+    "stableIdentityWriteNotBefore": "continued_use_completed",
+    "forbiddenPrimaryIdentityFieldsBeforeBinding": [
+      "pii_email",
+      "pii_phone",
+      "stable_user_id"
+    ]
+  },
+  "intentAggregationPolicy": {
+    "primaryIntentFamily": "writing",
+    "primaryProfileSegment": "creator",
+    "materialStateSignals": [
+      "material_library",
+      "missing_gaps_split",
+      "draft_lane_ready",
+      "not_only_material_organization"
+    ],
+    "lowConfidenceRequiresFallback": true,
+    "allowedNextBranches": [
+      "continue_chapter",
+      "revise_structure",
+      "de_ai_polish",
+      "format_export",
+      "rewrite_localize",
+      "organize_materials",
+      "repurpose_channels",
+      "distribution_plan",
+      "summary_pack",
+      "visual_brief",
+      "save_handoff"
+    ]
+  },
+  "projectTemplateContext": {
+    "supportedTemplateIds": [
+      "content-operations"
+    ],
+    "contextFields": [
+      "workbuddyProjectId",
+      "workbuddyProjectTemplate"
+    ],
+    "compatibleConnectorIds": [
+      "tdocs-app",
+      "notion"
+    ],
+    "compatibleSkillIds": [
+      "skill_2053081490234478592",
+      "skill_2053081498548994048",
+      "skill_2053082894098632704",
+      "skill_2053082421296758784",
+      "skill_2053082097175687168"
+    ],
+    "compatibleExpertIds": [
+      "ex_54wQJnvLntjd",
+      "ex_nQs4rsKUgK67",
+      "ex_nchiDpT84L9o",
+      "ex_fCXVIhFkOfnh",
+      "ex_FbY5nlWTqDod"
+    ],
+    "projectSelectionIsProductCredit": false
+  },
+  "benefitUnlockPolicy": {
+    "benefitStateFields": [
+      "benefitSource",
+      "creditsState",
+      "claimState",
+      "lebaoPackId"
+    ],
+    "gateCheckedEventType": "entitlement_gate_checked",
+    "balanceSeenEventType": "credits_balance_seen",
+    "unlockEventType": "continued_use_completed",
+    "unlockNotBefore": "continued_use_completed",
+    "claimTool": "lebao_claim",
+    "paymentClosureAllowed": false,
+    "probeRowsDiagnosticOnly": true,
+    "requiredStopConditions": [
+      "lebao_claimed_as_payment_closure",
+      "benefit_claimed_before_same_binding_continued_use"
+    ]
+  },
+  "externalObservationBoundary": {
+    "connectorAssumedAvailable": false,
+    "compatibleToolSurface": false,
+    "serviceExecutionClaim": false,
+    "hostDirectiveReceiptEventType": "host_directive_receipt"
+  },
+  "actions": [
+    {
+      "state": "not_started",
+      "actionId": "long_manuscript_collect_minimum_materials",
+      "tool": "long_manuscript_collect_minimum_materials",
+      "virtualTool": true,
+      "arguments": {
+        "requiredInputs": [
+          "documentGoal",
+          "targetReader",
+          "availableMaterials",
+          "deadlineOrLength"
+        ],
+        "optionalInputs": [
+          "styleSample",
+          "mustKeepSections",
+          "forbiddenTopics"
+        ]
+      },
+      "sideEffectClass": "read_only",
+      "approvalState": "not_required",
+      "idempotent": true,
+      "stopCondition": "Minimum writing goal, reader, source material, and output target are clear.",
+      "doneState": "material_collected",
+      "successorAction": "long_manuscript_generate_first_value"
+    },
+    {
+      "state": "material_collected",
+      "actionId": "long_manuscript_generate_first_value",
+      "tool": "long_manuscript_generate_first_value",
+      "virtualTool": true,
+      "arguments": {
+        "deliverables": [
+          "manuscript_judgement_card",
+          "scene_template_match",
+          "chapter_route_map",
+          "sample_opening",
+          "revision_risk_list",
+          "material_activation_signals",
+          "quality_quick_summary",
+          "service_coordination_hints",
+          "continuation_progress_card",
+          "next_session_resume_prompt",
+          "finishing_lane_options",
+          "project_template_activation_hints",
+          "content_operations_handoff"
+        ],
+        "sceneTemplateIds": [
+          "novel_fiction",
+          "academic_monograph",
+          "whitepaper_report",
+          "manual_handbook",
+          "official_document",
+          "social_content_article",
+          "commercial_marketing_copy",
+          "exam_essay",
+          "generic_longform"
+        ],
+        "materialActivationMinimumSignals": 2,
+        "qualityQuickSummaryFields": [
+          "strongestUsablePart",
+          "highestRiskMissingMaterial",
+          "nextIssue",
+          "nextBranch"
+        ],
+        "projectTemplateActivationRequired": true,
+        "minimumChapterRows": 5,
+        "sampleOpeningTargetWordsZh": "300-800",
+        "sampleOpeningTargetWordsEn": "300-800"
+      },
+      "sideEffectClass": "read_only",
+      "approvalState": "not_required",
+      "idempotent": true,
+      "stopCondition": "User receives a manuscript judgement card, chapter route map, immediately writable passage, and risk list.",
+      "doneState": "first_value_completed",
+      "successorAction": "long_manuscript_continue_or_save"
+    },
+    {
+      "state": "first_value_completed",
+      "actionId": "long_manuscript_continue_or_save",
+      "tool": "long_manuscript_continue_or_save",
+      "virtualTool": true,
+      "arguments": {
+        "branches": [
+          {
+            "branch": "continue_chapter",
+            "when": "user wants more draft text",
+            "nextInput": "chapterId"
+          },
+          {
+            "branch": "revise_structure",
+            "when": "user rejects chapter order or positioning",
+            "nextInput": "revisionFocus"
+          },
+          {
+            "branch": "de_ai_polish",
+            "when": "user wants the draft to feel less AI-written or more natural",
+            "nextInput": "polishStrength"
+          },
+          {
+            "branch": "format_export",
+            "when": "user wants Word or PDF output with better layout",
+            "nextInput": "targetFormat"
+          },
+          {
+            "branch": "rewrite_localize",
+            "when": "user wants the text adapted to another tone, locale, or audience",
+            "nextInput": "targetVoiceOrLocale"
+          },
+          {
+            "branch": "organize_materials",
+            "when": "user still has scattered source material and wants a reusable source pack",
+            "nextInput": "materialInventoryMode"
+          },
+          {
+            "branch": "repurpose_channels",
+            "when": "user wants to turn the manuscript into channel-ready social or publisher content",
+            "nextInput": "targetChannels"
+          },
+          {
+            "branch": "distribution_plan",
+            "when": "user wants a publishing cadence, release order, or channel action checklist",
+            "nextInput": "publishingWindow"
+          },
+          {
+            "branch": "summary_pack",
+            "when": "user wants summaries, digest cards, abstracts, or reusable briefing assets",
+            "nextInput": "summaryFormats"
+          },
+          {
+            "branch": "visual_brief",
+            "when": "user wants a cover, header image, illustration prompt, or social card visual brief",
+            "nextInput": "imageStyleOrUseCase"
+          },
+          {
+            "branch": "save_handoff",
+            "when": "user wants a reusable writing plan",
+            "nextInput": "handoffFormat"
+          }
+        ],
+        "recommendedOptionCount": 3,
+        "noneMetFallback": "Ask for the single chapter, finishing step, or material bundle the user wants to advance next."
+      },
+      "sideEffectClass": "read_only",
+      "approvalState": "not_required",
+      "idempotent": true,
+      "stopCondition": "User chooses continue, revise, save, or no-match fallback.",
+      "doneState": "continued_use_ready",
+      "successorAction": "long_manuscript_generate_next_section"
+    },
+    {
+      "state": "continued_use_ready",
+      "actionId": "long_manuscript_generate_next_section",
+      "tool": "long_manuscript_generate_next_section",
+      "virtualTool": true,
+      "arguments": {
+        "branchRequired": true,
+        "allowedBranches": [
+          "continue_chapter",
+          "revise_structure",
+          "de_ai_polish",
+          "format_export",
+          "rewrite_localize",
+          "organize_materials",
+          "repurpose_channels",
+          "distribution_plan",
+          "summary_pack",
+          "visual_brief",
+          "save_handoff"
+        ],
+        "requiredOutputs": [
+          "next_section_or_finishing_plan",
+          "updated_continuation_progress_card",
+          "resume_prompt"
+        ],
+        "noneMetFallback": "Ask which chapter, revision focus, finishing lane, or handoff format the user wants next."
+      },
+      "sideEffectClass": "read_only",
+      "approvalState": "not_required",
+      "idempotent": true,
+      "stopCondition": "User receives the requested next section or finishing plan plus an updated continuation progress card.",
+      "doneState": "first_value_completed",
+      "successorAction": "long_manuscript_continue_or_save"
+    }
+  ],
+  "cannotProve": [
+    "official WorkBuddy Expert Center listing approval",
+    "remote COS distribution visibility",
+    "natural same-binding service-side product credit",
+    "connector availability",
+    "post-listing official expert-center behavior"
+  ],
+  "contractVersion": "1.0.1",
+  "longOutputPolicy": {
+    "requestedLengthMustBeTracked": true,
+    "oversizedSingleTurnTargetHandling": "If the requested target exceeds one response capacity, deliver the first useful batch plus a continuation progress card and do not claim the full target is complete.",
+    "completionClaimRequiresVisibleOrFileArtifactMeetingTarget": true,
+    "noCompleteClaimBeforeTargetEvidence": true
+  }
+}

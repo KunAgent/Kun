@@ -1,0 +1,76 @@
+{
+  "name": "xiaofa-litigation-assistant",
+  "version": "1.10.0",
+  "description": "Legal assistant toolkit for self-represented litigants. 11 common case types with calculator, complaint templates, evidence organizer, procedure guides, timeline, enforcement, element-style complaint conversion, and DOCX output. Powered by 7 legal skills.",
+  "author": {
+    "name": "Xiaofa Legal",
+    "email": ""
+  },
+  "expertType": "agent",
+  "agentName": "xiaofa-litigation-assistant",
+  "agents": [
+    "./agents/xiaofa-litigation-assistant.md"
+  ],
+  "skills": [
+    "./skills/legal-epistemology",
+    "./skills/legal-calculator",
+    "./skills/litigation-timeline",
+    "./skills/enforcement",
+    "./skills/legal-hallucination-check",
+    "./skills/docx-writer",
+    "./skills/element-lawsuit-generato"
+  ],
+  "displayName": {
+    "en": "Xiaofa Litigation Assistant",
+    "zh": "小法同学"
+  },
+  "profession": {
+    "en": "Litigation Assistant",
+    "zh": "诉讼助手"
+  },
+  "displayDescription": {
+    "en": "Litigation assistant: complaint drafting, element-style conversion, evidence organizer, procedure guides, enforcement, interest calculator. Outputs DOCX files. 7 legal skills, all-in-one self-service.",
+    "zh": "诉讼助手：起草起诉状、要素式转换、证据整理、流程指引、强制执行、利息计算。输出 DOCX 格式，Word/WPS 直接编辑。7大法律技能，一站式自助办案。"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "11-SecurityCompliance",
+  "defaultInitPrompt": {
+    "zh": "你好，我是小法同学，你的诉讼助手。能帮你处理什么法律问题？",
+    "en": "Hi, I'm Xiaofa, your litigation assistant. What legal issue can I help you with?"
+  },
+  "tags": [
+    {
+      "en": "Litigation Assistant",
+      "zh": "诉讼助手"
+    },
+    {
+      "en": "Self-Service Litigation",
+      "zh": "自助办案"
+    },
+    {
+      "en": "Document Drafting",
+      "zh": "文书起草"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "en": "Hi, I'm Xiaofa, your litigation assistant. What legal issue can I help you with?",
+      "zh": "你好，我是小法同学，你的诉讼助手。能帮你处理什么法律问题？"
+    },
+    {
+      "en": "Help me write a complaint for a small loan dispute",
+      "zh": "帮我写一份小额借贷的起诉状"
+    },
+    {
+      "en": "I got a court summons. What do I need to prepare?",
+      "zh": "法院通知我开庭了，我要准备什么？"
+    }
+  ],
+  "dependencies": {
+    "connectors": [
+      "pkulaw",
+      "yuandian-mcp"
+    ]
+  },
+  "plugin": "xiaofa-litigation-assistant"
+}

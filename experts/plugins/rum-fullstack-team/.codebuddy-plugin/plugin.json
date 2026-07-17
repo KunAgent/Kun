@@ -1,0 +1,94 @@
+{
+  "name": "rum-fullstack-team",
+  "version": "1.0.0",
+  "description": "Tencent Cloud RUM full-lifecycle expert team: SDK integration across 10 platforms + data analysis with WebVitals/errors/API/resource diagnostics.",
+  "author": {
+    "name": "Expert Marketplace"
+  },
+  "license": "MIT",
+  "keywords": [
+    "tencent-cloud-rum",
+    "frontend-monitoring",
+    "aegis-sdk",
+    "webvitals",
+    "performance-analysis",
+    "agent-team"
+  ],
+  "expertType": "team",
+  "agentName": "rum-team-lead",
+  "agents": [
+    "./agents/rum-team-lead.md",
+    "./agents/rum-integration-specialist.md",
+    "./agents/rum-performance-analyst.md"
+  ],
+  "skills": [
+    "./skills/rum-sdk-setup",
+    "./skills/tencent-cloud-rum"
+  ],
+  "teamInfo": {
+    "leadAgent": "rum-team-lead",
+    "memberAgents": [
+      "rum-integration-specialist",
+      "rum-performance-analyst"
+    ]
+  },
+  "displayName": {
+    "en": "Tencent Cloud RUM Full-Lifecycle Team",
+    "zh": "腾讯云 RUM 全链路专家团"
+  },
+  "profession": {
+    "en": "Frontend Monitoring End-to-End Workshop",
+    "zh": "前端监控全链路工坊"
+  },
+  "displayDescription": {
+    "en": "3 roles collaborate across the Tencent Cloud RUM lifecycle: the lead routes requests, Aiden integrates the aegis SDK for 10 platforms (Web / mini-programs / React Native / Node.js / Hippy / Cocos / LiteApp / QuickApp / Viola / Weex) with safety checks and rollback plans, and Nova queries RUM metrics to diagnose WebVitals, JS/Promise errors, API latency and slow resources with RUM-APM correlation.",
+    "zh": "3 位专家协作覆盖腾讯云 RUM 完整生命周期：主理人负责路由分派，接入官 Aiden 处理 10 大平台（Web / 小程序 / React Native / Node.js / Hippy / Cocos / LiteApp / QuickApp / Viola / Weex）的 aegis SDK 集成、安全校验与回滚方案，分析师 Nova 查询 RUM 数据并诊断 WebVitals、JS/Promise 异常、接口延迟与慢资源，支持 RUM-APM 链路联动。"
+  },
+  "avatar": "avatars/team.png",
+  "categoryId": "02-Engineering",
+  "defaultInitPrompt": {
+    "en": "Help me integrate Tencent Cloud RUM into my Vue 3 project",
+    "zh": "帮我在这个 Vue 3 项目里接入腾讯云 RUM"
+  },
+  "members": [
+    {
+      "id": "rum-team-lead",
+      "name": {
+        "en": "Lyra",
+        "zh": "莱拉"
+      },
+      "profession": {
+        "en": "Observability Orchestrator",
+        "zh": "可观测性统筹官"
+      },
+      "avatar": "avatars/rum-team-lead.png",
+      "role": "lead"
+    },
+    {
+      "id": "rum-integration-specialist",
+      "name": {
+        "en": "Aiden",
+        "zh": "艾登"
+      },
+      "profession": {
+        "en": "RUM Integration Specialist",
+        "zh": "RUM 接入官"
+      },
+      "avatar": "avatars/rum-integration-specialist.png",
+      "role": "member"
+    },
+    {
+      "id": "rum-performance-analyst",
+      "name": {
+        "en": "Nova",
+        "zh": "诺瓦"
+      },
+      "profession": {
+        "en": "RUM Performance Analyst",
+        "zh": "RUM 性能分析师"
+      },
+      "avatar": "avatars/rum-performance-analyst.png",
+      "role": "member"
+    }
+  ]
+}

@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+<title>10万+爆款选题炼金炉</title>
+<rect width="32" height="32" fill="#1A1A1A" rx="6"/>
+<text x="16" y="6" font-size="3.2" fill="#FFD93D" text-anchor="middle" font-weight="600" font-family="Arial, sans-serif">10w+</text>
+<path d="M10 22 Q10 14 16 10 Q22 14 22 22 Q22 26 16 28 Q10 26 10 22 Z" fill="#FF8A1A"/>
+<path d="M13 22 Q13 17 16 14 Q19 17 19 22 Q19 25 16 26 Q13 25 13 22 Z" fill="#FFD93D"/>
+<path d="M14.5 21 Q14.5 17.5 16 15.5 Q17.5 17.5 17.5 21 Q17.5 22.5 16 23 Q14.5 22.5 14.5 21 Z" fill="#FFFFFF" opacity="0.7"/>
+<rect x="6" y="22" width="20" height="6" rx="1" fill="#5C2C0F"/>
+<rect x="6" y="22" width="20" height="6" rx="1" fill="#3A1B08" opacity="0.4"/>
+<rect x="8" y="20" width="16" height="2" fill="#FFB949"/>
+<rect x="8" y="20" width="16" height="0.8" fill="#FFE38A"/>
+<rect x="9" y="27" width="14" height="0.8" fill="#1F0E04"/>
+<circle cx="9" cy="13" r="0.5" fill="#FFD93D" opacity="0.8"/>
+<circle cx="23" cy="11" r="0.5" fill="#FFB949" opacity="0.8"/>
+</svg>

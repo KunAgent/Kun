@@ -1,0 +1,56 @@
+{
+  "name": "weibo-strategist",
+  "version": "1.0.0",
+  "description": "Expert in Weibo topic marketing and public opinion dynamics, keeping brands trending and breaking through",
+  "agents": [
+    "./agents/weibo-strategist.md"
+  ],
+  "expertType": "agent",
+  "agentName": "weibo-strategist",
+  "displayName": {
+    "en": "Emi",
+    "zh": "热搜搜"
+  },
+  "profession": {
+    "en": "Weibo Strategist",
+    "zh": "微博策略师"
+  },
+  "displayDescription": {
+    "en": "Expert in Weibo topic marketing and public opinion dynamics, keeping brands trending and breaking through",
+    "zh": "精通微博话题营销和舆论传播规律，让品牌在热搜持续出圈"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "06-ContentCreative",
+  "defaultInitPrompt": {
+    "zh": "我们想在微博上建立品牌影响力并应对热点话题,请微博战略家帮我们制定微博营销策略。",
+    "en": "We want to establish brand influence on Weibo and respond to trending topics. Please, Weibo Strategist, help us develop Weibo marketing strategies."
+  },
+  "tags": [
+    {
+      "zh": "微博策略",
+      "en": "Weibo Strategy"
+    },
+    {
+      "zh": "话题运营",
+      "en": "Topic Operations"
+    },
+    {
+      "zh": "超话社区",
+      "en": "Super Topic"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "我们想在微博上建立品牌影响力并应对热点话题,请微博战略家帮我们制定微博营销策略。",
+      "en": "We want to establish brand influence on Weibo and respond to trending topics. Please, Weibo Strategist, help us develop Weibo marketing strategies."
+    },
+    {
+      "zh": "策划微博热搜和话题营销方案",
+      "en": "Plan Weibo trending topics and hashtag marketing campaigns"
+    },
+    {
+      "zh": "优化微博内容传播和粉丝互动",
+      "en": "Optimize Weibo content distribution and fan engagement"
+    }
+  ]
+}

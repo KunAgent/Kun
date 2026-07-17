@@ -1,0 +1,138 @@
+{
+  "name": "video-gen-team",
+  "version": "1.0.0",
+  "description": "AI-powered video content creation team: collect, plan, and produce short videos automatically",
+  "author": {
+    "name": "苍何",
+    "email": "support@workbuddy.cn"
+  },
+  "expertType": "team",
+  "agentName": "video-gen-team-lead",
+  "teamInfo": {
+    "leadAgent": "video-gen-team-lead",
+    "memberAgents": [
+      "ling-reader",
+      "ling-planner",
+      "ling-producer"
+    ]
+  },
+  "agents": [
+    "./agents/video-gen-team-lead.md",
+    "./agents/ling-reader.md",
+    "./agents/ling-planner.md",
+    "./agents/ling-producer.md"
+  ],
+  "skills": [
+    "./skills/video-content-collector",
+    "./skills/video-renderer"
+  ],
+  "displayName": {
+    "en": "VideoGenTeam",
+    "zh": "苍何视频生成团队"
+  },
+  "profession": {
+    "en": "AI Video Creation Team",
+    "zh": "AI视频创作团队"
+  },
+  "displayDescription": {
+    "en": "A three-agent team that automatically creates short videos: Collector gathers AI/tech news, Planner designs scripts and storyboards, Producer renders final MP4 with TTS and subtitles using HyperFrames.",
+    "zh": "三位一体的AI视频创作团队：灵阅负责采集AI/科技热点，灵枢负责策划选题与脚本，灵映负责渲染MP4视频成品（配音+字幕）。全流程自动化，60秒短视频一键生成。"
+  },
+  "avatar": "avatars/team.png",
+  "categoryId": "06-ContentCreative",
+  "defaultInitPrompt": {
+    "zh": "帮我做一期视频，主题是[你的选题]，时长60秒",
+    "en": "Create a 60-second video about [your topic]"
+  },
+  "tags": [
+    {
+      "en": "AI Video",
+      "zh": "AI视频"
+    },
+    {
+      "en": "Content Creation",
+      "zh": "内容创作"
+    },
+    {
+      "en": "Short Video",
+      "zh": "短视频"
+    },
+    {
+      "en": "TTS",
+      "zh": "语音合成"
+    },
+    {
+      "en": "HyperFrames",
+      "zh": "视频渲染"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "en": "Make an AI news weekly video, 60 seconds",
+      "zh": "帮我做一期AI周报视频，60秒左右"
+    },
+    {
+      "en": "Create a tech product review short video",
+      "zh": "做一个科技产品评测短视频"
+    },
+    {
+      "en": "Generate a science popularization video about AI agents",
+      "zh": "生成一期AI Agent科普视频"
+    }
+  ],
+  "members": [
+    {
+      "id": "video-gen-team-lead",
+      "name": {
+        "en": "LingDirector",
+        "zh": "凌导"
+      },
+      "profession": {
+        "en": "Video Team Director",
+        "zh": "视频生成团队主理人"
+      },
+      "avatar": "avatars/video-gen-team-lead.png",
+      "role": "lead"
+    },
+    {
+      "id": "ling-reader",
+      "name": {
+        "en": "LingReader",
+        "zh": "灵阅"
+      },
+      "profession": {
+        "en": "Information Collector",
+        "zh": "信息采集员"
+      },
+      "avatar": "avatars/ling-reader.png",
+      "role": "member"
+    },
+    {
+      "id": "ling-planner",
+      "name": {
+        "en": "LingPlanner",
+        "zh": "灵枢"
+      },
+      "profession": {
+        "en": "Content Planner",
+        "zh": "内容策划师"
+      },
+      "avatar": "avatars/ling-planner.png",
+      "role": "member"
+    },
+    {
+      "id": "ling-producer",
+      "name": {
+        "en": "LingProducer",
+        "zh": "灵映"
+      },
+      "profession": {
+        "en": "Video Producer",
+        "zh": "视频制作师"
+      },
+      "avatar": "avatars/ling-producer.png",
+      "role": "member"
+    }
+  ],
+  "plugin": "video-gen-team"
+}

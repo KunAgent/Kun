@@ -1,0 +1,69 @@
+{
+  "name": "legal-builder-hub",
+  "version": "1.0.0",
+  "description": "Legal skill governance expert for reviewing, auditing, maintaining, and governing legal skills with a trust layer.",
+  "author": {
+    "name": "WorkBuddy Team"
+  },
+  "license": "Apache-2.0",
+  "keywords": [
+    "legal",
+    "legal-builder-hub",
+    "law",
+    "localized-legal-workflow"
+  ],
+  "expertType": "agent",
+  "agentName": "legal-builder-hub",
+  "agents": [
+    "./agents/legal-builder-hub.md"
+  ],
+  "skills": [
+    "./skills/legal-skill-operations"
+  ],
+  "displayName": {
+    "en": "Legal Builder Hub",
+    "zh": "法律技能运营官"
+  },
+  "profession": {
+    "en": "Legal Skill Governance Expert",
+    "zh": "法律技能治理专家"
+  },
+  "displayDescription": {
+    "en": "Legal skill governance expert for reviewing, auditing, maintaining, and governing legal skills with a trust layer.",
+    "zh": "面向法律运营和技能开发者的治理助手，评估技能来源、工具权限、新鲜度、许可证和信任边界。"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "11-SecurityCompliance",
+  "defaultInitPrompt": {
+    "en": "Help me evaluate whether this legal skill is safe, current, and suitable for our environment",
+    "zh": "帮我评估这个法律技能是否安全、可靠，是否适合我们的环境"
+  },
+  "tags": [
+    {
+      "en": "Skill Governance",
+      "zh": "技能治理"
+    },
+    {
+      "en": "Trust Layer",
+      "zh": "信任层"
+    },
+    {
+      "en": "Legal Ops",
+      "zh": "法律运营"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "en": "Help me evaluate whether this legal skill is safe, current, and suitable for our environment",
+      "zh": "帮我评估这个法律技能是否安全、可靠，是否适合我们的环境"
+    },
+    {
+      "en": "Design a review checklist for legal skills before adoption",
+      "zh": "设计法律技能采用前的审查清单"
+    },
+    {
+      "en": "Audit these legal skills for freshness, license, and hidden-risk issues",
+      "zh": "审计这些法律技能的新鲜度、许可证和隐藏风险"
+    }
+  ]
+}

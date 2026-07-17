@@ -1,0 +1,13 @@
+{
+  "version": "2.1.2",
+  "description": "S0/S1/S2 联网检索前须向用户宣告的四要素（与 SKILL.md 搜索前置合同一致）",
+  "fields": {
+    "why": { "label": "为什么查", "required": true },
+    "scope": { "label": "查什么", "required": true },
+    "nextStep": { "label": "查完进哪一步", "required": true },
+    "offlineFallback": { "label": "离线时如何降级", "required": true }
+  },
+  "userVisibleOneLiner": "为什么查：{why}；查什么：{scope}；查完后：{nextStep}；离线时：{offlineFallback}",
+  "ledgerScript": "node scripts/record-search-preflight.mjs",
+  "policyFile": "references/05-ops/search-policy.json"
+}

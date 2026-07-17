@@ -1,0 +1,17 @@
+{
+  "agent": "academic-journal-selector-team-lead",
+  "apiConfig": {
+    "wanfang": {
+      "baseUrl": "https://api.wfdata.com",
+      "authHeader": "X-Ca-AppKey",
+      "authValueEncoded": "NTJfOTdkZWJmYjc3OGI5NGM4MF84YjQ4NGQ=",
+      "_note": "authValueEncoded is base64-encoded; use decode_apikey.py to restore authValue before deployment"
+    },
+    "search": {
+      "baseUrl": "https://api.wfdata.com",
+      "authHeader": "X-Ca-AppKey",
+      "authValueEncoded": "NTJfOTdkZWJmYjc3OGI5NGM4MF84YjQ4NGQ=",
+      "_note": "authValueEncoded is base64-encoded; use decode_apikey.py to restore authValue before deployment"
+    }
+  }
+}

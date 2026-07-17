@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1200">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    width: 1200px;
+    height: 600px;
+    overflow: hidden;
+    background: #111111;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    color: #FFFFFF;
+  }
+
+  .container {
+    width: 1200px;
+    height: 600px;
+    display: flex;
+    flex-direction: column;
+    padding: 44px 56px 36px 56px;
+    position: relative;
+  }
+
+  /* Header */
+  .header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    margin-bottom: 36px;
+  }
+
+  .rubric-label {
+    color: #D4532B;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+  }
+
+  .title {
+    font-size: 26px;
+    font-weight: 900;
+    color: #FFFFFF;
+    margin-top: 8px;
+    letter-spacing: -0.5px;
+  }
+
+  .subtitle {
+    font-size: 13px;
+    color: #666666;
+    margin-top: 4px;
+    font-weight: 400;
+  }
+
+  /* Main content: two columns + divider */
+  .main {
+    flex: 1;
+    display: flex;
+    gap: 0;
+    align-items: stretch;
+  }
+
+  /* Left panel */
+  .panel {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .panel-header {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    margin-bottom: 22px;
+  }
+
+  .panel-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: #666666;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+  }
+
+  .panel-score {
+    font-size: 28px;
+    font-weight: 900;
+    color: #FFFFFF;
+  }
+
+  .panel-score.orange {
+    color: #D4532B;
+  }
+
+  /* Divider */
+  .divider {
+    width: 1px;
+    background: #D4532B;
+    margin: 0 44px;
+    flex-shrink: 0;
+  }
+
+  /* Bar items */
+  .bar-list {
+    display: flex;
+    flex-direction: column;
+    gap: 13px;
+    flex: 1;
+  }
+
+  .bar-item {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+  }
+
+  .bar-meta {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+  }
+
+  .bar-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: #AAAAAA;
+    letter-spacing: 0.3px;
+  }
+
+  .bar-weight {
+    font-size: 22px;
+    font-weight: 900;
+    color: #FFFFFF;
+    line-height: 1;
+  }
+
+  .bar-weight.orange {
+    color: #D4532B;
+    font-size: 28px;
+  }
+
+  .bar-track {
+    width: 100%;
+    height: 6px;
+    background: #222222;
+    position: relative;
+  }
+
+  .bar-fill {
+    height: 100%;
+    background: #CCCCCC;
+    transition: none;
+  }
+
+  .bar-fill.orange {
+    background: linear-gradient(90deg, #D4532B 0%, #FF7A4D 100%);
+  }
+
+  /* Right panel: larger items */
+  .bar-item.large .bar-label {
+    font-size: 13px;
+    color: #AAAAAA;
+  }
+
+  .bar-item.large .bar-track {
+    height: 8px;
+  }
+
+  /* Bottom total */
+  .bottom {
+    margin-top: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    border-top: 1px solid #222222;
+    padding-top: 18px;
+  }
+
+  .total-label {
+    font-size: 13px;
+    font-weight: 700;
+    color: #666666;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+  }
+
+  .total-score {
+    font-size: 38px;
+    font-weight: 900;
+    color: #FFFFFF;
+    line-height: 1;
+  }
+
+  .total-unit {
+    font-size: 13px;
+    color: #666666;
+    font-weight: 600;
+    letter-spacing: 2px;
+  }
+
+  .dot {
+    width: 4px;
+    height: 4px;
+    background: #D4532B;
+    display: inline-block;
+    margin: 0 6px 2px 6px;
+    vertical-align: middle;
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- Header -->
+  <div class="header">
+    <div>
+      <div class="rubric-label">EVALUATION RUBRIC</div>
+      <div class="title">达尔文.skill — 8 维度评估体系</div>
+      <div class="subtitle">Automated quality scoring framework for Claude skill optimization</div>
+    </div>
+  </div>
+
+  <!-- Main -->
+  <div class="main">
+
+    <!-- Left: Structure -->
+    <div class="panel">
+      <div class="panel-header">
+        <div class="panel-title">结构维度</div>
+        <div class="panel-score">60分</div>
+      </div>
+      <div class="bar-list">
+
+        <div class="bar-item">
+          <div class="bar-meta">
+            <span class="bar-label">Frontmatter 质量</span>
+            <span class="bar-weight">8</span>
+          </div>
+          <div class="bar-track">
+            <div class="bar-fill" style="width: calc(8/15*100%)"></div>
+          </div>
+        </div>
+
+        <div class="bar-item">
+          <div class="bar-meta">
+            <span class="bar-label">工作流清晰度</span>
+            <span class="bar-weight">15</span>
+          </div>
+          <div class="bar-track">
+            <div class="bar-fill" style="width: 100%"></div>
+          </div>
+        </div>
+
+        <div class="bar-item">
+          <div class="bar-meta">
+            <span class="bar-label">边界条件覆盖</span>
+            <span class="bar-weight">10</span>
+          </div>
+          <div class="bar-track">
+            <div class="bar-fill" style="width: calc(10/15*100%)"></div>
+          </div>
+        </div>
+
+        <div class="bar-item">
+          <div class="bar-meta">
+            <span class="bar-label">检查点设计</span>
+            <span class="bar-weight">7</span>
+          </div>
+          <div class="bar-track">
+            <div class="bar-fill" style="width: calc(7/15*100%)"></div>
+          </div>
+        </div>
+
+        <div class="bar-item">
+          <div class="bar-meta">
+            <span class="bar-label">指令具体性</span>
+            <span class="bar-weight">15</span>
+          </div>
+          <div class="bar-track">
+            <div class="bar-fill" style="width: 100%"></div>
+          </div>
+        </div>
+
+        <div class="bar-item">
+          <div class="bar-meta">
+            <span class="bar-label">资源整合度</span>
+            <span class="bar-weight">5</span>
+          </div>
+          <div class="bar-track">
+            <div class="bar-fill" style="width: calc(5/15*100%)"></div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Vertical divider -->
+    <div class="divider"></div>
+
+    <!-- Right: Effect -->
+    <div class="panel">
+      <div class="panel-header">
+        <div class="panel-title">效果维度</div>
+        <div class="panel-score orange">40分</div>
+      </div>
+      <div class="bar-list">
+
+        <div class="bar-item large">
+          <div class="bar-meta">
+            <span class="bar-label">整体架构</span>
+            <span class="bar-weight">15</span>
+          </div>
+          <div class="bar-track">
+            <div class="bar-fill" style="width: calc(15/25*100%)"></div>
+          </div>
+        </div>
+
+        <div class="bar-item large" style="margin-top: 12px;">
+          <div class="bar-meta" style="margin-bottom: 2px;">
+            <span class="bar-label" style="color:#D4532B; font-size:14px; font-weight:700; letter-spacing:0.5px;">实测表现</span>
+            <span class="bar-weight orange">25</span>
+          </div>
+          <!-- Accent line above bar -->
+          <div style="width:100%; height:1px; background:#D4532B; opacity:0.25; margin-bottom:6px;"></div>
+          <div class="bar-track" style="height:14px; background:#1A0E0A;">
+            <div class="bar-fill orange" style="width:100%; height:100%;"></div>
+          </div>
+          <div style="font-size:11px; color:#D4532B; margin-top:5px; font-weight:600; letter-spacing:1px;">HIGHEST WEIGHT</div>
+        </div>
+
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Bottom total -->
+  <div class="bottom">
+    <span class="total-label">TOTAL</span>
+    <span class="dot"></span>
+    <span class="total-score">100</span>
+    <span class="total-unit">PTS</span>
+  </div>
+
+</div>
+</body>
+</html>

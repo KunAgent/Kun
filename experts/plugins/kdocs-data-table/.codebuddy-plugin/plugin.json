@@ -1,0 +1,66 @@
+{
+  "name": "kdocs-data-table",
+  "version": "1.5.7",
+  "description": "数据建表专家：接龙转表格、信息收集表生成、表格美化。",
+  "author": {
+    "name": "Kingsoft Office",
+    "email": "kdocs@wps.com"
+  },
+  "expertType": "agent",
+  "agentName": "kdocs-data-table",
+  "agents": [
+    "./agents/kdocs-data-table.md"
+  ],
+  "skills": [
+    "./skills/jielong-table",
+    "./skills/form-generator",
+    "./skills/table-beautify"
+  ],
+  "displayName": {
+    "en": "KDocs Smart Table Assistant",
+    "zh": "金山文档智能建表助手"
+  },
+  "profession": {
+    "en": "Data Table Expert",
+    "zh": "数据建表专家"
+  },
+  "displayDescription": {
+    "en": "By Kingsoft Docs Turn group-chat jielong into structured tables, generate shareable info-collection forms, and beautify spreadsheets with rule enforcement (conditional formatting, data validation dropdowns, and range protection). Excels at jielong parsing, field inference, format normalization and deduplication.",
+    "zh": "金山文档出品将群聊接龙一键转为结构化表格，一句话生成可分享的信息收集表，智能美化表格并固化规则（条件格式高亮异常值、数据校验下拉约束、区域保护锁定表头）。擅长接龙识别、字段推断、格式规范与数据去重。"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "04-DataAI",
+  "defaultInitPrompt": {
+    "zh": "你好，我是数据建表专家。把接龙文本贴给我、告诉我要收集什么信息、或者把待美化的表格发给我，我来帮你整理。",
+    "en": "Hi, I am the Data Table Expert. Paste your jielong text, tell me what info to collect, or share a sheet that needs cleaning up — I'll handle it."
+  },
+  "tags": [
+    {
+      "en": "Jielong to Table",
+      "zh": "接龙转表格"
+    },
+    {
+      "en": "Info Collection Form",
+      "zh": "信息收集表"
+    },
+    {
+      "en": "Smart Sheet",
+      "zh": "智能表格"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "en": "Turn this jielong into a table: 1. Zhang San 2x beef 2. Li Si 1x chicken 3x beef 3. Wang Wu 5x chicken",
+      "zh": "帮我把这段接龙整理成表格：\n1. 张三 2份牛肉\n2. 李四 1份鸡排 3份牛肉\n3. 王五 5份鸡排"
+    },
+    {
+      "en": "Create a class outing sign-up form collecting name, phone, bus needed, and lunch preference",
+      "zh": "帮我做一个班级春游报名表，收集姓名、联系电话、是否需要租车、午餐偏好"
+    },
+    {
+      "en": "Clean up this customer info sheet — some phone formats are inconsistent and some rows are duplicates",
+      "zh": "帮我优化一下这个客户信息表，有些手机号格式不统一，有些行是重复的"
+    }
+  ],
+  "plugin": "kdocs-data-table"
+}

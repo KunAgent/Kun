@@ -1,0 +1,28 @@
+{
+  "name": "modern-webapp",
+  "description": "Modern web application development plugin with React, TypeScript, Vite, Tailwind CSS, shadcn/ui, and comprehensive UI/UX design system. Includes tools for project initialization, design intelligence, icon management, and browser testing.",
+  "version": "1.0.0",
+  "author": {
+    "name": "CodeBuddy",
+    "email": ""
+  },
+  "homepage": {
+    "url": "https://cnb.cool/codebuddy/cbteamsmarketplace",
+    "type": "github"
+  },
+  "license": "Proprietary",
+  "skills": [
+    "./skills/modern-web-app",
+    "./skills/ui-ux-pro-max",
+    "./skills/lucide-icons",
+    "./skills/agent-browser"
+  ],
+  "rules": [
+    "./rules/instruction.md"
+  ],
+  "expertType": "agent",
+  "agentName": "modern-webapp-expert",
+  "agents": [
+    "./agents/modern-webapp-expert.md"
+  ]
+}

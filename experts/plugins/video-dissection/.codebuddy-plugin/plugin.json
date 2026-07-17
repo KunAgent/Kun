@@ -1,0 +1,123 @@
+{
+  "name": "video-dissection",
+  "version": "1.0.0",
+  "description": "Video Dissection team - extract, transcribe, and deeply analyze shooting scripts from Douyin videos",
+  "author": {
+    "name": "苍何",
+    "email": "wn@workbuddy.ai"
+  },
+  "expertType": "team",
+  "agentName": "video-dissection-team-lead",
+  "teamInfo": {
+    "leadAgent": "video-dissection-team-lead",
+    "memberAgents": [
+      "video-extractor",
+      "script-analyst"
+    ]
+  },
+  "agents": [
+    "./agents/video-dissection-team-lead.md",
+    "./agents/video-extractor.md",
+    "./agents/script-analyst.md"
+  ],
+  "skills": [
+    "./skills/douyin-resolver",
+    "./skills/douyin-script-analyzer"
+  ],
+  "displayName": {
+    "en": "Video Dissection",
+    "zh": "苍何视频解剖"
+  },
+  "profession": {
+    "en": "Video Dissection Expert Team",
+    "zh": "视频解剖专家团"
+  },
+  "displayDescription": {
+    "en": "A professional team that deconstructs viral Douyin videos' filming techniques. We extract videos, transcribe scripts, analyze shot types, camera movements, editing rhythm, color grading, and provide actionable tips for replicating successful videos.",
+    "zh": "专业拆解火爆抖音视频拍摄手法的专家团。输入抖音链接，自动提取视频、转录文案、分析景别运镜、剪辑节奏、色调风格，生成完整拍摄脚本拆解文档，并提供可落地的仿拍建议。"
+  },
+  "avatar": "avatars/team.png",
+  "categoryId": "06-ContentCreative",
+  "defaultInitPrompt": {
+    "zh": "你好！我是视频解剖的主理人阿爆。给我一个抖音链接，我来帮你把它的拍摄手法拆得明明白白！",
+    "en": "Hello! I'm the lead of the Video Dissection team. Give me a Douyin link and I'll break down its filming techniques in detail!"
+  },
+  "tags": [
+    {
+      "en": "Video Analysis",
+      "zh": "视频分析"
+    },
+    {
+      "en": "Filming Techniques",
+      "zh": "拍摄手法"
+    },
+    {
+      "en": "Script Deconstruction",
+      "zh": "脚本拆解"
+    },
+    {
+      "en": "Douyin",
+      "zh": "抖音"
+    },
+    {
+      "en": "Content Creation",
+      "zh": "内容创作"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "en": "Deconstruct this Douyin video's filming techniques",
+      "zh": "拆解这个抖音视频的拍摄手法"
+    },
+    {
+      "en": "Analyze the camera movements and shot types of this video",
+      "zh": "分析这个视频的运镜和景别"
+    },
+    {
+      "en": "Generate a shooting script breakdown for this viral video",
+      "zh": "生成这个爆款视频的拍摄脚本拆解"
+    }
+  ],
+  "members": [
+    {
+      "id": "video-dissection-team-lead",
+      "name": {
+        "en": "Bao",
+        "zh": "阿爆"
+      },
+      "profession": {
+        "en": "Team Lead & Video Strategy Director",
+        "zh": "主理人·视频策略总监"
+      },
+      "avatar": "avatars/video-dissection-team-lead.png",
+      "role": "lead"
+    },
+    {
+      "id": "video-extractor",
+      "name": {
+        "en": "Kai",
+        "zh": "小凯"
+      },
+      "profession": {
+        "en": "Video Extraction Engineer",
+        "zh": "视频提取工程师"
+      },
+      "avatar": "avatars/video-extractor.png",
+      "role": "member"
+    },
+    {
+      "id": "script-analyst",
+      "name": {
+        "en": "Miao",
+        "zh": "小淼"
+      },
+      "profession": {
+        "en": "Filming Script Analysis Expert",
+        "zh": "拍摄脚本分析专家"
+      },
+      "avatar": "avatars/script-analyst.png",
+      "role": "member"
+    }
+  ],
+  "plugin": "video-dissection"
+}

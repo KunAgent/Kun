@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>河洛理数 · 1987-10-16 未时</title>
+<style>
+  :root {
+    --bg: #f3eee2;
+    --paper: #faf6e8;
+    --paper-fold: #e8e0c8;
+    --ink: #1a1a1a;
+    --ink-soft: #3a3a3a;
+    --ink-dim: #6e6e6e;
+    --ink-faded: #9a9a9a;
+    --line: #b8b0a0;
+    --line-soft: #d8d0bc;
+    --accent: #2a2a2a;
+    --water: #6890a8;
+    --wash: #8a9eb0;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: "STKaiti", "KaiTi", "PingFang SC", "Hiragino Sans GB", serif;
+    line-height: 2;
+    min-height: 100vh;
+    background-image:
+      radial-gradient(ellipse at 20% 10%, rgba(104, 144, 168, 0.05), transparent 50%),
+      radial-gradient(ellipse at 80% 80%, rgba(184, 176, 160, 0.1), transparent 50%),
+      linear-gradient(180deg, #faf6e8 0%, #ebe4d2 100%);
+  }
+  .container { max-width: 960px; margin: 0 auto; padding: 56px 28px 80px; }
+
+  /* Header */
+  .header {
+    text-align: center;
+    margin-bottom: 48px;
+  }
+  .header .taiji {
+    width: 80px;
+    height: 80px;
+    margin: 0 auto 16px;
+    border-radius: 50%;
+    background: linear-gradient(90deg, #1a1a1a 0%, #1a1a1a 50%, #faf6e8 50%, #faf6e8 100%);
+    position: relative;
+    border: 1px solid var(--ink);
+    overflow: hidden;
+  }
+  .header .taiji::before, .header .taiji::after {
+    content: "";
+    position: absolute;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    left: 20px;
+  }
+  .header .taiji::before {
+    top: 0;
+    background: #faf6e8;
+  }
+  .header .taiji::after {
+    bottom: 0;
+    background: #1a1a1a;
+  }
+  .header .taiji span {
+    position: absolute;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    left: 35px;
+  }
+  .header .taiji span.top { top: 15px; background: #1a1a1a; }
+  .header .taiji span.bottom { bottom: 15px; background: #faf6e8; }
+  .header h1 {
+    font-size: 34px;
+    color: var(--ink);
+    letter-spacing: 12px;
+    font-weight: 400;
+    margin-bottom: 6px;
+    text-indent: 12px;
+  }
+  .header .subtitle { font-size: 14px; color: var(--ink-dim); letter-spacing: 4px; }
+  .header .meta { font-size: 12px; color: var(--ink-faded); margin-top: 12px; letter-spacing: 2px; }
+
+  /* Number plate */
+  .number-plate {
+    background: var(--paper);
+    border: 1px solid var(--line);
+    padding: 32px;
+    margin-bottom: 36px;
+    position: relative;
+  }
+  .number-plate::before {
+    content: "河 · 洛 · 数";
+    position: absolute;
+    top: -12px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--bg);
+    padding: 0 14px;
+    color: var(--ink);
+    letter-spacing: 6px;
+    font-size: 14px;
+  }
+  .num-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 32px;
+  }
+  .num-block { text-align: center; }
+  .num-block h3 {
+    color: var(--ink);
+    letter-spacing: 4px;
+    margin-bottom: 12px;
+    font-size: 16px;
+    font-weight: 500;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--line-soft);
+  }
+  .num-block .formula {
+    font-size: 13px;
+    color: var(--ink-dim);
+    line-height: 2;
+    letter-spacing: 1px;
+  }
+  .num-block .formula b {
+    color: var(--ink);
+    font-weight: 600;
+    margin: 0 3px;
+  }
+  .num-block .total {
+    font-size: 22px;
+    color: var(--ink);
+    margin-top: 14px;
+    letter-spacing: 6px;
+    border-top: 1px dashed var(--line-soft);
+    padding-top: 12px;
+  }
+  .num-block .total b { color: var(--water); font-size: 26px; }
+
+  @media (max-width: 720px) {
+    .num-grid { grid-template-columns: 1fr; gap: 16px; }
+  }
+
+  /* Hexagram block */
+  .hex-block {
+    background: var(--paper);
+    border: 1px solid var(--line);
+    padding: 32px;
+    margin-bottom: 36px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 36px;
+  }
+  @media (max-width: 720px) {
+    .hex-block { grid-template-columns: 1fr; gap: 20px; }
+  }
+  .hex-side h3 {
+    text-align: center;
+    color: var(--ink);
+    margin-bottom: 18px;
+    letter-spacing: 4px;
+    font-weight: 500;
+    font-size: 16px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--line-soft);
+  }
+  .hex-name {
+    text-align: center;
+    font-size: 22px;
+    color: var(--ink);
+    letter-spacing: 8px;
+    margin-bottom: 6px;
+  }
+  .hex-symbol { text-align: center; font-size: 13px; color: var(--ink-dim); margin-bottom: 18px; letter-spacing: 4px; }
+  .hex-lines {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    align-items: center;
+    margin: 16px 0;
+  }
+  .hex-line {
+    height: 8px;
+    background: var(--ink);
+  }
+  .hex-line.yang { width: 130px; }
+  .hex-line.yin {
+    width: 130px;
+    background: linear-gradient(90deg, var(--ink) 0 56px, transparent 56px 74px, var(--ink) 74px 130px);
+  }
+  .hex-info {
+    margin-top: 18px;
+    font-size: 12px;
+    color: var(--ink-soft);
+    letter-spacing: 1px;
+    line-height: 1.9;
+  }
+  .hex-info span { color: var(--ink-dim); margin-right: 6px; }
+
+  /* Section */
+  .section { margin-bottom: 36px; }
+  .section-title {
+    font-size: 18px;
+    color: var(--ink);
+    letter-spacing: 6px;
+    margin-bottom: 18px;
+    text-align: center;
+    position: relative;
+  }
+  .section-title::before, .section-title::after {
+    content: "";
+    display: inline-block;
+    width: 60px;
+    height: 1px;
+    background: var(--line);
+    vertical-align: middle;
+    margin: 0 14px;
+  }
+
+  .scroll {
+    background: var(--paper);
+    border: 1px solid var(--line);
+    padding: 28px 36px;
+    margin-bottom: 18px;
+    position: relative;
+  }
+  .scroll::before, .scroll::after {
+    content: "";
+    position: absolute;
+    left: 0; right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, transparent, var(--paper-fold), transparent);
+  }
+  .scroll::before { top: 0; }
+  .scroll::after { bottom: 0; }
+
+  .scroll h3 {
+    color: var(--ink);
+    font-weight: 500;
+    margin-bottom: 12px;
+    letter-spacing: 3px;
+    font-size: 16px;
+  }
+  .scroll p { color: var(--ink-soft); font-size: 14.5px; margin-bottom: 8px; line-height: 2; }
+  .scroll .verse {
+    color: var(--water);
+    text-align: center;
+    font-size: 16px;
+    letter-spacing: 4px;
+    margin: 14px 0;
+    padding: 12px;
+    border-top: 1px dashed var(--line-soft);
+    border-bottom: 1px dashed var(--line-soft);
+  }
+  .scroll .em { color: var(--ink); font-weight: 500; }
+
+  .yao-list { margin-top: 14px; }
+  .yao-item {
+    padding: 12px 0 12px 28px;
+    border-bottom: 1px dashed var(--line-soft);
+    position: relative;
+    font-size: 14px;
+    color: var(--ink-soft);
+  }
+  .yao-item:last-child { border-bottom: none; }
+  .yao-item::before {
+    content: attr(data-yao);
+    position: absolute;
+    left: 0;
+    top: 12px;
+    color: var(--water);
+    font-weight: 500;
+    letter-spacing: 1px;
+  }
+  .yao-item strong { color: var(--ink); margin-right: 6px; }
+
+  /* 五行藏数 */
+  .wuxing-row {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 10px;
+    margin: 16px 0;
+  }
+  .wx-cell {
+    text-align: center;
+    background: var(--paper-fold);
+    border: 1px solid var(--line-soft);
+    padding: 12px 6px;
+  }
+  .wx-cell .name { color: var(--ink); font-size: 14px; letter-spacing: 2px; }
+  .wx-cell .val { color: var(--water); font-size: 22px; font-weight: 500; margin-top: 4px; }
+
+  .disclaimer {
+    margin-top: 40px;
+    padding: 14px 20px;
+    background: rgba(104, 144, 168, 0.06);
+    border-left: 3px solid var(--water);
+    font-size: 12px;
+    color: var(--ink-dim);
+    letter-spacing: 1px;
+  }
+
+  @media (max-width: 720px) {
+    .header h1 { font-size: 22px; letter-spacing: 6px; }
+    .container { padding: 32px 16px 60px; }
+    .scroll { padding: 18px 16px; }
+    .wuxing-row { grid-template-columns: repeat(5, 1fr); gap: 4px; }
+    .wx-cell { padding: 8px 2px; }
+    .wx-cell .val { font-size: 16px; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- Header -->
+  <div class="header">
+    <div class="taiji"><span class="top"></span><span class="bottom"></span></div>
+    <h1>河洛理数</h1>
+    <div class="subtitle">HE LUO LI SHU · 先后天卦演命</div>
+    <div class="meta">阳历 1987-10-16 未时 · 女命 · 邵康节心法</div>
+  </div>
+
+  <!-- Number plate -->
+  <div class="number-plate">
+    <div class="num-grid">
+      <div class="num-block">
+        <h3>先 天 数 — 体</h3>
+        <div class="formula">
+          年 丁 4 + 卯 4 = <b>8</b><br/>
+          月 庚 9 + 戌 5 = <b>14</b><br/>
+          日 戊 5 + 戌 5 = <b>10</b><br/>
+          时 己 10 + 未 8 = <b>18</b>
+        </div>
+        <div class="total">合数 <b>50</b> 大衍之数</div>
+      </div>
+      <div class="num-block">
+        <h3>后 天 数 — 用</h3>
+        <div class="formula">
+          天数（奇）：4+9+5+10 = <b>28</b><br/>
+          地数（偶）：4+5+5+8 = <b>22</b><br/>
+          天地之和 = <b>50</b><br/>
+          其用 = 50 − 1 = <b>49</b>
+        </div>
+        <div class="total">动爻位 <b>四九</b> 主"明而能止"</div>
+      </div>
+    </div>
+    <div class="wuxing-row">
+      <div class="wx-cell"><div class="name">水</div><div class="val">0</div></div>
+      <div class="wx-cell"><div class="name">火</div><div class="val">2</div></div>
+      <div class="wx-cell"><div class="name">木</div><div class="val">2</div></div>
+      <div class="wx-cell"><div class="name">金</div><div class="val">1</div></div>
+      <div class="wx-cell"><div class="name">土</div><div class="val">5</div></div>
+    </div>
+  </div>
+
+  <!-- Hexagrams: 体 / 用 -->
+  <div class="hex-block">
+    <div class="hex-side">
+      <h3>体卦 · 立命之象</h3>
+      <div class="hex-name">山 火 贲</div>
+      <div class="hex-symbol">☶ 艮 上 · ☲ 离 下</div>
+      <div class="hex-lines">
+        <div class="hex-line yang"></div>
+        <div class="hex-line yin"></div>
+        <div class="hex-line yin"></div>
+        <div class="hex-line yang"></div>
+        <div class="hex-line yin"></div>
+        <div class="hex-line yang"></div>
+      </div>
+      <div class="hex-info">
+        <p><span>卦序</span>第 22</p>
+        <p><span>主旨</span>文饰光华，止于至善</p>
+        <p><span>象传</span>山下有火，文明以止</p>
+        <p><span>立命</span>外止内明，温润君子之象</p>
+      </div>
+    </div>
+    <div class="hex-side">
+      <h3>用卦 · 行事之象</h3>
+      <div class="hex-name">水 雷 屯</div>
+      <div class="hex-symbol">☵ 坎 上 · ☳ 震 下</div>
+      <div class="hex-lines">
+        <div class="hex-line yin"></div>
+        <div class="hex-line yang"></div>
+        <div class="hex-line yin"></div>
+        <div class="hex-line yin"></div>
+        <div class="hex-line yin"></div>
+        <div class="hex-line yang"></div>
+      </div>
+      <div class="hex-info">
+        <p><span>卦序</span>第 3</p>
+        <p><span>主旨</span>初生维艰，磐桓利建</p>
+        <p><span>象传</span>云雷屯，君子以经纶</p>
+        <p><span>行事</span>逢难需稳，立纲于始</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Body interpretation -->
+  <div class="section">
+    <div class="section-title">体卦解 · 山火贲</div>
+    <div class="scroll">
+      <h3>立命之象 — 文明以止</h3>
+      <p class="verse">"贲，亨。小利有攸往。" —《周易·贲卦》</p>
+      <p>贲卦上山下火，山中有光。山有止象，火有明象——<span class="em">止于该止之处，明于该明之事</span>，是为君子之文饰。命主<span class="em">外表沉静温雅，内有光华自照</span>，不爱张扬而自有韵致。</p>
+      <p>此卦立命，最忌"过饰"——徒有华美外表而内里空疏。所幸命主内卦为离火，离为目、为心、为智——<span class="em">天生有"看透事物"的能力</span>，故不容易流于表面之美。</p>
+      <p>象传"君子以明庶政，无敢折狱"——立身之道在<span class="em">明察细务、慎用决断</span>。命主一生最适合做"看清局面再下判断"的工作，越是急于裁决越易失手。</p>
+    </div>
+  </div>
+
+  <!-- Use interpretation -->
+  <div class="section">
+    <div class="section-title">用卦解 · 水雷屯</div>
+    <div class="scroll">
+      <h3>行事之象 — 经纶始事</h3>
+      <p class="verse">"屯，元亨利贞。勿用有攸往，利建侯。" —《周易·屯卦》</p>
+      <p>屯为"草木初生，盘曲而出"之象。<span class="em">每一次开始都不轻松</span>，但每一次成功都根基扎实。命主行事的整体节奏：<span class="em">起步慢、铺垫长、爆发稳</span>。</p>
+      <p>"勿用有攸往，利建侯"——不宜远行求成，宜立纲建制于眼前。这一卦提示：<span class="em">把当下的"基本盘"建好，远比追逐远方机会更划算</span>。</p>
+      <p>象传"云雷屯，君子以经纶"。云在上、雷在下，山雨欲来。命主行事时，<span class="em">"看似停滞"恰恰是孕育大局之时</span>——别在等待期里慌乱，那段沉默正在酝酿后面的爆发。</p>
+    </div>
+  </div>
+
+  <!-- 六爻爻辞 -->
+  <div class="section">
+    <div class="section-title">分爻爻辞</div>
+    <div class="scroll">
+      <h3>体卦六爻 · 各主一段人生</h3>
+      <div class="yao-list">
+        <div class="yao-item" data-yao="初九">
+          <strong>贲其趾，舍车而徒。</strong>少年志洁，宁可徒步也不愿坐错车——<span class="em">早年择路谨慎，气节比舒适更重要</span>。
+        </div>
+        <div class="yao-item" data-yao="六二">
+          <strong>贲其须。</strong>装饰胡须——附丽于阳刚之力。<span class="em">青年期需借力贵人或团队</span>，独自难以成势。
+        </div>
+        <div class="yao-item" data-yao="九三">
+          <strong>贲如濡如，永贞吉。</strong>文饰得湿润——<span class="em">中年与他人合作有润泽之吉</span>，但需守正不偏。
+        </div>
+        <div class="yao-item" data-yao="六四">
+          <strong>贲如皤如，白马翰如。匪寇婚媾。</strong>素白不饰，白马奔来——<span class="em">中年某次"看似不利"的际遇，实为良缘良机</span>。
+        </div>
+        <div class="yao-item" data-yao="六五">
+          <strong>贲于丘园，束帛戋戋，吝，终吉。</strong>装饰山林田园，所费虽俭——<span class="em">晚年清贵之福，简朴中见富足</span>。
+        </div>
+        <div class="yao-item" data-yao="上九">
+          <strong>白贲，无咎。</strong>归于素白，不饰而美——<span class="em">最高境界是返璞归真</span>，老来通透自在。
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 行限 -->
+  <div class="section">
+    <div class="section-title">行限节拍</div>
+    <div class="scroll">
+      <h3>河洛行限 — 八卦轮转</h3>
+      <p>河洛理数以"八卦行限"配人生阶段，每限七年（女命起例为先后天数推），命主当下行限于<span class="em">坎卦</span>——主"陷而能通，险中求稳"。</p>
+      <p class="verse">"水洊至，习坎；君子以常德行，习教事。"</p>
+      <p>坎卦行限的核心讯号：<span class="em">习以为常的事情会忽然变难，未曾尝试的事情反而打开</span>。这是一个"换轨道"的限期——硬扛不如顺势，重启不如改写。</p>
+      <p>下一限<span class="em">艮卦</span>（49 岁后）——"艮其止，止其所也"。届时进入沉淀整合期，将前期所学所历融会贯通，进入个人成熟期的稳定输出阶段。</p>
+    </div>
+  </div>
+
+  <!-- 心法 -->
+  <div class="section">
+    <div class="section-title">河洛心法</div>
+    <div class="scroll">
+      <h3>邵子曰</h3>
+      <p class="verse">"知数者贵，知数而不役于数者尤贵。"</p>
+      <p>河洛理数最重"<span class="em">数中见道</span>"——数字是相，道理才是体。命主立命于山火贲、行事于水雷屯——<span class="em">体象是温润止善，用象是经纶起伏</span>。看似两端拉扯，实则相辅相成：</p>
+      <p>· <span class="em">外贲内明</span>——做人讲究分寸，不动声色，但内心有秤<br/>
+      · <span class="em">屯而后通</span>——做事经历屯难铺垫，方得久长之果<br/>
+      · <span class="em">止于至善</span>——不求速成，只求做对、做久、做透</p>
+      <p>河洛 50 之数，命主合数恰为大衍——<span class="em">本是"天命"之数，留一为虚，以应变化</span>。这一"虚"，便是终身需要修的"空"——不要把自己塞得太满，留三分给天意。</p>
+    </div>
+  </div>
+
+  <div class="disclaimer">
+    ⚠️ 本河洛理数命盘按邵子心法演示性推演，先后天数取自八字干支基础值。理数玄微，本意是借数明道，仅供方向性参考，不构成医疗、法律、财务或投资建议。
+  </div>
+
+</div>
+</body>
+</html>

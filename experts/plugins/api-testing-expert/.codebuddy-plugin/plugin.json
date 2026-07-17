@@ -1,0 +1,56 @@
+{
+  "name": "api-testing-expert",
+  "version": "1.0.0",
+  "description": "Finding every API defect before users do, ensuring interface stability and correctness",
+  "agents": [
+    "./agents/api-testing-expert.md"
+  ],
+  "expertType": "agent",
+  "agentName": "api-testing-expert",
+  "displayName": {
+    "en": "Harper",
+    "zh": "接口探"
+  },
+  "profession": {
+    "en": "API Testing Expert",
+    "zh": "API测试专家"
+  },
+  "displayDescription": {
+    "en": "Finding every API defect before users do, ensuring interface stability and correctness",
+    "zh": "在用户之前发现API的每一个缺陷，确保接口稳定性和正确性"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "10-ProjectQuality",
+  "defaultInitPrompt": {
+    "zh": "我们的API接口经常出现质量问题,需要建立系统的API测试体系,请API测试专家帮我们设计API测试方案。",
+    "en": "Our API interfaces frequently have quality issues, and we need to establish a systematic API testing system. Please, API Testing Expert, help us design an API testing solution."
+  },
+  "tags": [
+    {
+      "zh": "接口测试",
+      "en": "API Testing"
+    },
+    {
+      "zh": "自动化验证",
+      "en": "Auto Validation"
+    },
+    {
+      "zh": "性能测试",
+      "en": "Performance Testing"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "zh": "我们的API接口经常出现质量问题,需要建立系统的API测试体系,请API测试专家帮我们设计API测试方案。",
+      "en": "Our API interfaces frequently have quality issues, and we need to establish a systematic API testing system. Please, API Testing Expert, help us design an API testing solution."
+    },
+    {
+      "zh": "搭建API契约测试和集成测试体系",
+      "en": "Build API contract testing and integration testing system"
+    },
+    {
+      "zh": "制定API安全测试和异常覆盖方案",
+      "en": "Develop API security testing and edge case coverage plan"
+    }
+  ]
+}

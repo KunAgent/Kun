@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { useChatStore } from '../store/chat-store'
 import type { RightPanelMode } from './chat/WorkbenchTopBar'
 import { type ComposerReasoningEffort } from './chat/FloatingComposerModelPicker'
+import type { ConversationModeSelection } from './chat/FloatingComposerConversationModePicker'
 import { WorkbenchLeftSidebar } from './workbench/WorkbenchLeftSidebar'
 import { WorkbenchStageRouter } from './workbench/WorkbenchStageRouter'
 import { useWorkbenchComposerCapabilities } from './workbench/useWorkbenchComposerCapabilities'
@@ -99,9 +100,12 @@ export function Workbench(): ReactElement {
   const [input, setInput] = useState('')
   const [useWorktreePool, setUseWorktreePool] = useState(false)
   const [worktreeBranch, setWorktreeBranch] = useState('')
+  const [conversationModeSelection, setConversationModeSelection] =
+    useState<ConversationModeSelection>({ kind: 'normal' })
   const [composerReasoningEffort, setComposerReasoningEffort] =
     useState<ComposerReasoningEffort>('max')
   const [connectPhoneSidebarOpen, setConnectPhoneSidebarOpen] = useState(false)
+  const openCollaborationMode = useCallback(() => setRoute('collaboration'), [setRoute])
   const designDocuments = useDesignWorkspaceStore((s) => s.documents)
   const { focusModeEnabled, runtimeLogPath, toggleTheme, uiModeCameosEnabled, updateFocusMode } =
     useWorkbenchUiRuntime()
@@ -557,11 +561,11 @@ export function Workbench(): ReactElement {
     handleGuiPlanCommand, input, resetClawChannelSession, rightPanelMode, route,
     selectClawChannel, sendMessage, sendPlanTurn, sendSddAssistantPrompt,
     setAttachmentUploadError, setClawChannelModel, setError, setInput, threads, workspaceRoot,
-    appendLocalClawTurn
+    appendLocalClawTurn, conversationModeSelection
   })
 
   const {
-    closeRightPanel, exploreSddRequirementInDesign, openCodeMode, openPluginsView, openExtensionsView, openScheduleView,
+    closeRightPanel, exploreSddRequirementInDesign, openCodeMode, openPluginsView, openExtensionsView, openCapabilitiesView, openScheduleView,
     openThread, openWorkflowView, openWriteMode, pickWriteAssistantWorkspace, sidebarView,
     startNewChat, startNewChatInWorkspace, startNewConversation, startNewWriteAssistantConversation,
     toggleConnectPhone
@@ -585,6 +589,7 @@ export function Workbench(): ReactElement {
     activeSddDraft: Boolean(activeSddDraft), composerFileReferences,
     extraFileMentionCandidates: designDocumentFileMentionCandidates, webAccessAvailable,
     composerExecutionSettings, composerExecutionApplying, composerChangeSummary, runtimeSkills, disabledSkillIds,
+    conversationModeSelection, setConversationModeSelection,
     handlePickAttachments, handlePasteClipboardImage, removeComposerAttachment, addComposerFileReference,
     pickComposerFileReferences, openFileTreeSidePanel, openDesignFileTreeSidePanel,
     removeComposerFileReference, queuedMessages,
@@ -772,6 +777,7 @@ export function Workbench(): ReactElement {
         sidebarView={sidebarView}
         connectPhoneSidebarOpen={connectPhoneSidebarOpen}
         extensionsActive={route === 'extensions'}
+        capabilitiesActive={route === 'capabilities'}
         extensionView={activeExtensionLeftSidebar}
         workspaceRoot={workspaceRoot}
         onCloseExtensionView={() => selectExtensionSurface(null)}
@@ -794,11 +800,13 @@ export function Workbench(): ReactElement {
         onOpenSettings={(section) => openSettings(section)}
         onOpenPlugins={openPluginsView}
         onOpenExtensions={openExtensionsView}
+        onOpenCapabilities={openCapabilitiesView}
         onToggleTheme={toggleTheme}
         onToggleConnectPhone={toggleConnectPhone}
         onCodeOpen={openCodeMode}
         onWriteOpen={openWriteMode}
         onDesignOpen={openDesignMode}
+        onCollaborationOpen={openCollaborationMode}
         onScheduleOpen={openScheduleView}
         onWorkflowOpen={openWorkflowView}
         onNewConversation={startNewConversation}

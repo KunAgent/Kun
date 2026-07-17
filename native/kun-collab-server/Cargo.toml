@@ -1,0 +1,34 @@
+[package]
+name = "kun-collab-server"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+name = "kun_collab_server"
+path = "src/lib.rs"
+
+[[bin]]
+name = "kun-collab-server"
+path = "src/main.rs"
+
+[dependencies]
+axum = "0.8.8"
+axum-server = { version = "0.7.3", features = ["tls-rustls"] }
+base64 = "0.22.1"
+clap = { version = "4.5.54", features = ["derive"] }
+ed25519-dalek = { version = "2.2.0", features = ["rand_core"] }
+rand = "0.8.5"
+rcgen = "0.14.7"
+rusqlite = { version = "0.38.0", features = ["bundled"] }
+rustls = "0.23.36"
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.145"
+sha2 = "0.10.9"
+thiserror = "2.0.17"
+tokio = { version = "1.49.0", features = ["full"] }
+time = { version = "0.3.53", features = ["formatting"] }
+uuid = { version = "1.20.0", features = ["v4", "serde"] }
+
+[dev-dependencies]
+tempfile = "3.24.0"
+tower = { version = "0.5.3", features = ["util"] }

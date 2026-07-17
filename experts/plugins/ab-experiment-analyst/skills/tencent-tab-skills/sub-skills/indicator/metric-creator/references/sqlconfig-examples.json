@@ -1,0 +1,600 @@
+{
+  "_doc": "TAB 指标创建 sqlConfig 参考示例。每个示例对应一种 metric_type，可直接参照结构组装 tab_get_indicator_sql 和 tab_save_indicator 的入参。business_code / metric_id / metric_name 均为占位值，tb_id / exp_table 为真实表 ID 仅供结构参考。",
+  "examples": [
+    {
+      "_comment": "【均值类 metric_type=1】人均行为量 —— inner SUM 求和，outer 分子 Sum(A) / 分母 Count(all_exp_user)",
+      "business_code": "YOUR_BUSINESS_CODE",
+      "metric_id": 100001,
+      "metric_name": "人均_行为名称_指标",
+      "metric_type": 1,
+      "source_table_list": [23682],
+      "exp_table": 23637,
+      "retain_type": "default",
+      "retain_days": 0,
+      "inner_select": [
+        {
+          "tb_id": 23682,
+          "column": "in_back_feed_publish_cnt",
+          "func_name": "Sum",
+          "input_mode": "select",
+          "user_input": "Sum(in_back_feed_publish_cnt)"
+        }
+      ],
+      "inner_where": [
+        {
+          "tb_id": 23682,
+          "column": "",
+          "func_name": "",
+          "input_mode": "input",
+          "user_input": "pgid = 'page_community_personal'"
+        }
+      ],
+      "outer_select": {
+        "nume": {
+          "column": ["A"],
+          "func_name": "Sum",
+          "input_mode": "select",
+          "user_input": "A"
+        },
+        "deno": {
+          "column": [],
+          "func_name": "Count",
+          "input_mode": "select",
+          "user_input": "all_exp_user"
+        }
+      },
+      "outer_where": {},
+      "black_table_list": [],
+      "outliers": {},
+      "multi_action_table_join_mode": "inner",
+      "qid_conf": { "exp_field": "", "action_field": "", "qid_mode": 0 },
+      "delay_window": { "delay_switch": false, "window_interval": 0, "is_within": false, "mode": 0 },
+      "precise_accum": false,
+      "dive_deno_def": false,
+      "quantile": "",
+      "ola_dim_combine": null,
+      "ola_field_combine": {},
+      "ola_biz_limit_sql": ""
+    },
+    {
+      "_comment": "【用户比例类 metric_type=2】渗透率/用户比例 —— outer 分子 Count(A>0) 统计有行为用户数 / 分母 Count(all_exp_user)。inner_where 可用有效曝光等条件过滤",
+      "business_code": "YOUR_BUSINESS_CODE",
+      "metric_id": 100002,
+      "metric_name": "场景名称_行为名称_渗透率",
+      "metric_type": 2,
+      "source_table_list": [24613],
+      "exp_table": 23637,
+      "retain_type": "default",
+      "retain_days": 0,
+      "inner_select": [
+        {
+          "tb_id": 24613,
+          "column": "in_imp_end_effective_cnt",
+          "func_name": "Sum",
+          "input_mode": "select",
+          "user_input": "Sum(in_imp_end_effective_cnt)"
+        }
+      ],
+      "inner_where": [
+        {
+          "tb_id": 24613,
+          "column": "",
+          "func_name": "",
+          "input_mode": "input",
+          "user_input": "area_type = '无目的区' and ztid = '100101'"
+        }
+      ],
+      "outer_select": {
+        "nume": {
+          "column": ["A"],
+          "func_name": "Count",
+          "input_mode": "select",
+          "user_input": "A>0"
+        },
+        "deno": {
+          "column": [],
+          "func_name": "Count",
+          "input_mode": "select",
+          "user_input": "all_exp_user"
+        }
+      },
+      "outer_where": {},
+      "black_table_list": [],
+      "outliers": {},
+      "multi_action_table_join_mode": "inner",
+      "qid_conf": { "exp_field": "", "action_field": "", "qid_mode": 0 },
+      "delay_window": { "delay_switch": false, "window_interval": 0, "is_within": false, "mode": 0 },
+      "precise_accum": false,
+      "dive_deno_def": false,
+      "quantile": "",
+      "ola_dim_combine": null,
+      "ola_field_combine": {},
+      "ola_biz_limit_sql": ""
+    },
+    {
+      "_comment": "【比率类 metric_type=3】CTR/点击率 —— inner 产出 A（点击）B（曝光）两个变量，均用 input 模式自定义 count(distinct if(...))；outer 分子 Sum(A) / 分母 Sum(B)。多字段复杂过滤写入 inner_where",
+      "business_code": "YOUR_BUSINESS_CODE",
+      "metric_id": 100003,
+      "metric_name": "场景名称_内容类型_CTR",
+      "metric_type": 3,
+      "source_table_list": [24613],
+      "exp_table": 23637,
+      "retain_type": "default",
+      "retain_days": 0,
+      "inner_select": [
+        {
+          "tb_id": 24613,
+          "column": "",
+          "func_name": "",
+          "input_mode": "input",
+          "user_input": "count(distinct if(in_clck_cnt>0,e_mid,null))"
+        },
+        {
+          "tb_id": 24613,
+          "column": "",
+          "func_name": "",
+          "input_mode": "input",
+          "user_input": "count(distinct if(in_imp_end_effective_cnt>0,e_mid,null))"
+        }
+      ],
+      "inner_where": [
+        {
+          "tb_id": 24613,
+          "column": "",
+          "func_name": "",
+          "input_mode": "input",
+          "user_input": "pgid='page_home_channel'\nand ztid = '100101'\nand reverse(split_part(reverse(mod_id), '_', 1)) in ('808019')\nand content_form = '8368972'"
+        }
+      ],
+      "outer_select": {
+        "nume": {
+          "column": ["A"],
+          "func_name": "Sum",
+          "input_mode": "select",
+          "user_input": "A"
+        },
+        "deno": {
+          "column": ["B"],
+          "func_name": "Sum",
+          "input_mode": "select",
+          "user_input": "B"
+        }
+      },
+      "outer_where": {},
+      "black_table_list": [],
+      "outliers": {},
+      "multi_action_table_join_mode": "inner",
+      "qid_conf": { "exp_field": "", "action_field": "", "qid_mode": 0 },
+      "delay_window": { "delay_switch": false, "window_interval": 0, "is_within": false },
+      "precise_accum": false,
+      "dive_deno_def": false,
+      "quantile": "",
+      "ola_dim_combine": null,
+      "ola_field_combine": {},
+      "ola_biz_limit_sql": ""
+    },
+    {
+      "_comment": "【用户数据求和类 metric_type=4】总VV/总时长等 —— outer 只有分子 Sum(A)，分母传空结构（不可省略）。inner_where 可用多行复杂条件",
+      "business_code": "YOUR_BUSINESS_CODE",
+      "metric_id": 100004,
+      "metric_name": "场景名称_行为名称_VV总量",
+      "metric_type": 4,
+      "source_table_list": [23775],
+      "exp_table": 23637,
+      "retain_type": "default",
+      "retain_days": 0,
+      "inner_select": [
+        {
+          "tb_id": 23775,
+          "column": "in_vstart_cnt",
+          "func_name": "Sum",
+          "input_mode": "select",
+          "user_input": "Sum(in_vstart_cnt)"
+        }
+      ],
+      "inner_where": [
+        {
+          "tb_id": 23775,
+          "column": "",
+          "func_name": "",
+          "input_mode": "input",
+          "user_input": "find_first_type='search' \nand is_ecological =1\nAND ip_type_new = '123130251'\nAND content_form = '8368972'\nand column_level in ('4','5')\nand ((eco_type is not null) and (eco_type not in ('pi3iq','3e3gq')))"
+        }
+      ],
+      "outer_select": {
+        "nume": {
+          "column": ["A"],
+          "func_name": "Sum",
+          "input_mode": "select",
+          "user_input": "A"
+        },
+        "deno": {
+          "column": [],
+          "input_mode": "input",
+          "user_input": ""
+        }
+      },
+      "outer_where": {},
+      "black_table_list": [],
+      "outliers": {},
+      "multi_action_table_join_mode": "inner",
+      "qid_conf": { "exp_field": "", "action_field": "", "qid_mode": 0 },
+      "delay_window": { "delay_switch": false, "window_interval": 0, "is_within": false },
+      "precise_accum": false,
+      "dive_deno_def": false,
+      "quantile": "",
+      "ola_dim_combine": null,
+      "ola_field_combine": {},
+      "ola_biz_limit_sql": ""
+    },
+    {
+      "_comment": "【用户计数类 metric_type=5】行为UV/有行为人数 —— 与求和类同结构，区别在 outer 分子为 Count(A>0) 统计人数，分母传空结构",
+      "business_code": "YOUR_BUSINESS_CODE",
+      "metric_id": 100005,
+      "metric_name": "场景名称_行为名称_UV",
+      "metric_type": 5,
+      "source_table_list": [23775],
+      "exp_table": 23637,
+      "retain_type": "default",
+      "retain_days": 0,
+      "inner_select": [
+        {
+          "tb_id": 23775,
+          "column": "in_vstart_cnt",
+          "func_name": "Sum",
+          "input_mode": "select",
+          "user_input": "Sum(in_vstart_cnt)"
+        }
+      ],
+      "inner_where": [
+        {
+          "tb_id": 23775,
+          "column": "",
+          "func_name": "",
+          "input_mode": "input",
+          "user_input": "find_first_type='search' \nand is_ecological =1\nAND ip_type_new = '123130251'\nAND content_form = '8368972'\nand column_level in ('4','5')\nand ((eco_type is not null) and (eco_type not in ('pi3iq','3e3gq')))"
+        }
+      ],
+      "outer_select": {
+        "nume": {
+          "column": ["A"],
+          "func_name": "Count",
+          "input_mode": "select",
+          "user_input": "A>0"
+        },
+        "deno": {
+          "column": [],
+          "input_mode": "input",
+          "user_input": ""
+        }
+      },
+      "outer_where": {},
+      "black_table_list": [],
+      "outliers": {},
+      "multi_action_table_join_mode": "inner",
+      "qid_conf": { "exp_field": "", "action_field": "", "qid_mode": 0 },
+      "delay_window": { "delay_switch": false, "window_interval": 0, "is_within": false },
+      "precise_accum": false,
+      "dive_deno_def": false,
+      "quantile": "",
+      "ola_dim_combine": null,
+      "ola_field_combine": {},
+      "ola_biz_limit_sql": ""
+    },
+    {
+      "_comment": "【去重口径留存类 metric_type=6】N日留存率（去重，推荐） —— retain_days 必填（1/3/7/14/30），outer 分子分母均为 Count(A>0)；tab_save_indicator 时 config.cal_info 传 null，tab_get_indicator_sql 时仍需传完整 inner/outer",
+      "business_code": "YOUR_BUSINESS_CODE",
+      "metric_id": 100006,
+      "metric_name": "场景名称_行为名称_N日留存率",
+      "metric_type": 6,
+      "source_table_list": [24742],
+      "exp_table": 23637,
+      "retain_type": "default",
+      "retain_days": 1,
+      "inner_select": [
+        {
+          "tb_id": 24742,
+          "column": "clck_cnt",
+          "func_name": "Sum",
+          "input_mode": "select",
+          "user_input": "Sum(clck_cnt)"
+        }
+      ],
+      "inner_where": [],
+      "outer_select": {
+        "nume": {
+          "column": ["A"],
+          "func_name": "Count",
+          "input_mode": "select",
+          "user_input": "A>0"
+        },
+        "deno": {
+          "column": ["A"],
+          "func_name": "Count",
+          "input_mode": "select",
+          "user_input": "A>0"
+        }
+      },
+      "outer_where": {},
+      "black_table_list": [],
+      "outliers": {},
+      "multi_action_table_join_mode": "inner",
+      "qid_conf": { "exp_field": "", "action_field": "", "qid_mode": 0 },
+      "delay_window": {},
+      "precise_accum": false,
+      "dive_deno_def": false,
+      "quantile": "",
+      "ola_dim_combine": null,
+      "ola_field_combine": {},
+      "ola_biz_limit_sql": ""
+    },
+    {
+      "_comment": "【人均活跃天数类 metric_type=7】NUME_ONLY 类型 —— inner 用 input 模式自定义聚合（如 sum(case when ... then cnt else 0 end)），outer 分子 Sum(A>0)，分母传空结构；平台后端按 uin+ds 分组后自动计算人均天数",
+      "business_code": "YOUR_BUSINESS_CODE",
+      "metric_id": 100007,
+      "metric_name": "场景名称_行为名称_人均活跃天数",
+      "metric_type": 7,
+      "source_table_list": [25551],
+      "exp_table": 23637,
+      "retain_type": "default",
+      "retain_days": 0,
+      "inner_select": [
+        {
+          "tb_id": 25551,
+          "column": "",
+          "func_name": "",
+          "input_mode": "input",
+          "user_input": "sum(case when (eid in ('poster','poster_rlt')        or mod_id in             ('dynamic_filter','type_filter','fixed_filter') ) then in_clck_cnt else 0 end)"
+        }
+      ],
+      "inner_where": [
+        {
+          "tb_id": 25551,
+          "column": "",
+          "func_name": "",
+          "input_mode": "input",
+          "user_input": "pgid = 'page_search_home'"
+        }
+      ],
+      "outer_select": {
+        "nume": {
+          "column": ["A"],
+          "func_name": "Sum",
+          "input_mode": "select",
+          "user_input": "A>0"
+        },
+        "deno": {
+          "column": [],
+          "input_mode": "input",
+          "user_input": ""
+        }
+      },
+      "outer_where": {},
+      "black_table_list": [],
+      "outliers": {},
+      "multi_action_table_join_mode": "inner",
+      "qid_conf": { "exp_field": "", "action_field": "", "qid_mode": 0 },
+      "delay_window": { "delay_switch": false, "window_interval": 0, "is_within": false },
+      "precise_accum": false,
+      "dive_deno_def": false,
+      "quantile": "",
+      "ola_dim_combine": null,
+      "ola_field_combine": {},
+      "ola_biz_limit_sql": ""
+    },
+    {
+      "_comment": "【非去重留存类 metric_type=8】N日留存率（非去重）—— 与去重留存（type=6）结构相同，区别仅在 metric_type=8；retain_days=7 示例",
+      "business_code": "YOUR_BUSINESS_CODE",
+      "metric_id": 100008,
+      "metric_name": "场景名称_行为名称_N日留存率_非去重",
+      "metric_type": 8,
+      "source_table_list": [23671],
+      "exp_table": 23637,
+      "retain_type": "default",
+      "retain_days": 7,
+      "inner_select": [
+        {
+          "tb_id": 23671,
+          "column": "in_pgimp_cnt",
+          "func_name": "Sum",
+          "input_mode": "select",
+          "user_input": "Sum(in_pgimp_cnt)"
+        }
+      ],
+      "inner_where": [
+        {
+          "tb_id": 23671,
+          "column": "",
+          "func_name": "",
+          "input_mode": "input",
+          "user_input": "pgid='page_home_channel' and ztid in ('100173', 'channel_label_second_page')"
+        }
+      ],
+      "outer_select": {
+        "nume": {
+          "column": ["A"],
+          "func_name": "Count",
+          "input_mode": "select",
+          "user_input": "A>0"
+        },
+        "deno": {
+          "column": ["A"],
+          "func_name": "Count",
+          "input_mode": "select",
+          "user_input": "A>0"
+        }
+      },
+      "outer_where": {},
+      "black_table_list": [],
+      "outliers": {},
+      "multi_action_table_join_mode": "inner",
+      "qid_conf": { "exp_field": "", "action_field": "", "qid_mode": 0 },
+      "delay_window": { "delay_switch": false, "window_interval": 0, "is_within": false },
+      "precise_accum": false,
+      "dive_deno_def": false,
+      "quantile": "",
+      "ola_dim_combine": null,
+      "ola_field_combine": {},
+      "ola_biz_limit_sql": ""
+    },
+    {
+      "_comment": "【用户去重分位数类 metric_type=10】P99/P90/P50 去重 —— inner 按用户聚合（1用户1行），outer 分子 Sum(A)，分母传空结构；quantile 为百分数字符串如 '99.00'",
+      "business_code": "YOUR_BUSINESS_CODE",
+      "metric_id": 100009,
+      "metric_name": "人均_收入类指标名称_P99分位数",
+      "metric_type": 10,
+      "source_table_list": [27549],
+      "exp_table": 23637,
+      "retain_type": "default",
+      "retain_days": 0,
+      "inner_select": [
+        {
+          "tb_id": 27549,
+          "column": "",
+          "func_name": "",
+          "input_mode": "input",
+          "user_input": "sum((vipopen_fee+coverpay_fee+paid_gift_gain_fee)/100)"
+        }
+      ],
+      "inner_where": [],
+      "outer_select": {
+        "nume": {
+          "column": ["A"],
+          "func_name": "Sum",
+          "input_mode": "select",
+          "user_input": "A"
+        },
+        "deno": {
+          "column": [],
+          "input_mode": "input",
+          "user_input": ""
+        }
+      },
+      "outer_where": {},
+      "black_table_list": [],
+      "outliers": {},
+      "multi_action_table_join_mode": "inner",
+      "qid_conf": { "exp_field": "", "action_field": "", "qid_mode": 0 },
+      "delay_window": { "delay_switch": false, "window_interval": 0, "is_within": false, "mode": 0 },
+      "precise_accum": false,
+      "dive_deno_def": false,
+      "quantile": "99.00",
+      "ola_dim_combine": null,
+      "ola_field_combine": {},
+      "ola_biz_limit_sql": ""
+    },
+    {
+      "_comment": "【非去重分位数类 metric_type=11】P50/P90 非去重 —— inner func_name 必须为 ''（直接取字段原始值，不聚合，1用户可多行）；outer 分子 func_name 也为 ''，user_input 为 'A'；outer_where 可用于中间变量过滤（如 B>2）",
+      "business_code": "YOUR_BUSINESS_CODE",
+      "metric_id": 100010,
+      "metric_name": "性能指标名称_P90分位数",
+      "metric_type": 11,
+      "source_table_list": [23793],
+      "exp_table": 23637,
+      "retain_type": "default",
+      "retain_days": 0,
+      "inner_select": [
+        {
+          "tb_id": 23793,
+          "column": "dropped_level_one_scroll_count",
+          "func_name": "",
+          "input_mode": "select",
+          "user_input": "dropped_level_one_scroll_count"
+        },
+        {
+          "tb_id": 23793,
+          "column": "fm_fps_count_sum",
+          "func_name": "",
+          "input_mode": "select",
+          "user_input": "fm_fps_count_sum"
+        }
+      ],
+      "inner_where": [
+        {
+          "tb_id": 23793,
+          "column": "",
+          "func_name": "",
+          "input_mode": "input",
+          "user_input": "fm_view_ztid IN (\n  \"RecyclerView#100101\",\n  \"RecyclerView#100113\",\n  \"RecyclerView#100109\",\n  \"RecyclerView#100119\",\n  \"RecyclerView#100150\",\n  \"RecyclerView#100173\",\n  \"RecyclerView#100105\"\n)\nAND dropped_level_one_scroll_count < 10000"
+        }
+      ],
+      "outer_select": {
+        "nume": {
+          "column": ["A"],
+          "func_name": "",
+          "input_mode": "select",
+          "user_input": "A"
+        },
+        "deno": {
+          "column": [],
+          "input_mode": "input",
+          "user_input": ""
+        }
+      },
+      "outer_where": {
+        "tb_id": 23793,
+        "column": ["B"],
+        "func_name": "",
+        "input_mode": "input",
+        "user_input": "B>2"
+      },
+      "black_table_list": [],
+      "outliers": {},
+      "multi_action_table_join_mode": "inner",
+      "qid_conf": { "exp_field": "", "action_field": "", "qid_mode": 0 },
+      "delay_window": { "delay_switch": false, "window_interval": 0, "is_within": false, "mode": 0 },
+      "precise_accum": false,
+      "dive_deno_def": false,
+      "quantile": "50.00",
+      "ola_dim_combine": null,
+      "ola_field_combine": {},
+      "ola_biz_limit_sql": ""
+    },
+    {
+      "_comment": "【秩均值类 metric_type=12】Mann-Whitney U 检验 —— inner Sum 聚合，outer 分子 Sum(A)，分母传空结构；用于收入/广告等需秩次统计的指标",
+      "business_code": "YOUR_BUSINESS_CODE",
+      "metric_id": 100011,
+      "metric_name": "人均_收入类指标名称_秩均值",
+      "metric_type": 12,
+      "source_table_list": [25735],
+      "exp_table": 23637,
+      "retain_type": "default",
+      "retain_days": 0,
+      "inner_select": [
+        {
+          "tb_id": 25735,
+          "column": "ad_vip_inapp_income",
+          "func_name": "Sum",
+          "input_mode": "select",
+          "user_input": "Sum(ad_vip_inapp_income)"
+        }
+      ],
+      "inner_where": [],
+      "outer_select": {
+        "nume": {
+          "column": ["A"],
+          "func_name": "Sum",
+          "input_mode": "select",
+          "user_input": "A"
+        },
+        "deno": {
+          "column": [],
+          "input_mode": "input",
+          "user_input": ""
+        }
+      },
+      "outer_where": {},
+      "black_table_list": [],
+      "outliers": {},
+      "multi_action_table_join_mode": "inner",
+      "qid_conf": { "exp_field": "", "action_field": "", "qid_mode": 0 },
+      "delay_window": { "delay_switch": false, "window_interval": 0, "is_within": false, "mode": 0 },
+      "precise_accum": false,
+      "dive_deno_def": false,
+      "quantile": "",
+      "ola_dim_combine": null,
+      "ola_field_combine": {},
+      "ola_biz_limit_sql": ""
+    }
+  ]
+}

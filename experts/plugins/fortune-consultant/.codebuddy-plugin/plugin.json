@@ -1,0 +1,43 @@
+{
+  "name": "fortune-consultant",
+  "version": "1.0.0",
+  "description": "Fortune Consultant - Chinese traditional calendar and metaphysics tools: BaZi charting, ZiWei Dou Shu, Plum Blossom Yi, Tarot, lunar calendar, and almanac lookup.",
+  "author": { "name": "CodeBuddy Teams" },
+  "agents": ["./agents/fortune-consultant.md"],
+  "skills": [
+    "./skills/fortune-master",
+    "./skills/cantian-bazi",
+    "./skills/ziwei-doushu",
+    "./skills/meihua-yijing",
+    "./skills/tarot-reading",
+    "./skills/lunar-calendar",
+    "./skills/agent-mbti"
+  ],
+  "expertType": "agent",
+  "agentName": "fortune-consultant",
+  "displayName": { "en": "Fortune Analyst", "zh": "运势分析师" },
+  "profession": { "en": "Cyber Fortune Teller", "zh": "赛博神算子" },
+  "displayDescription": {
+    "en": "Traditional Chinese metaphysics reference — BaZi/ZiWei charting, Tarot and Plum Blossom hexagrams, lunar calendar and almanac. Multi-system cross-reference for self-exploration. For entertainment purposes only.",
+    "zh": "传统命理参考工具——八字紫微排盘、塔罗梅花起卦、农历黄历查询，多体系交叉参考，仅供娱乐。"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "12-IndustryConsultant",
+  "defaultInitPrompt": {
+    "zh": "1987年10月16日，下午2点，女。帮我梳理一下近期的八字命盘信息。",
+    "en": "Born 1987-10-16 at 2pm, female. Help me explore my BaZi chart and what it reflects about recent patterns."
+  },
+  "tags": [
+    { "en": "BaZi & ZiWei", "zh": "八字紫微" },
+    { "en": "Tarot & I Ching", "zh": "塔罗易卦" },
+    { "en": "Lunar Calendar", "zh": "农历黄历" }
+  ],
+  "quickPrompts": [
+    { "en": "Born 1987-10-16 at 2pm, female. Help me explore my BaZi chart and what it reflects about recent patterns.", "zh": "1987年10月16日，下午2点，女。帮我梳理一下近期的八字命盘信息。" },
+    { "en": "My home faces south, moved in 2020. Use Flying Stars Feng Shui to check my study room.", "zh": "我家坐北朝南，2020 年入住，飞星看一下我家书房。" },
+    { "en": "Cast a Liu Yao hexagram for me: should I take the Tencent offer?", "zh": "用六爻起一卦：要不要接腾讯的 offer？" },
+    { "en": "Help me explore my BaZi chart and what it reflects about recent patterns.", "zh": "帮我梳理一下近期的八字命盘信息。" },
+    { "en": "Chart my BaZi from 1990-05-15 14:30 and walk me through the decade structure.", "zh": "1990-05-15 14:30 排个八字，梳理一下大运结构。" },
+    { "en": "I have a question on my mind — draw me a three-card Tarot spread for reflection.", "zh": "心里有件事想理清思路，帮我抽三张塔罗做个参考。" }
+  ]
+}

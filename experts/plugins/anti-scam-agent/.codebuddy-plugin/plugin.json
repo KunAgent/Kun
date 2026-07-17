@@ -1,0 +1,64 @@
+{
+  "name": "anti-scam-agent",
+  "version": "1.0.0",
+  "description": "An anti-fraud intelligence agent driven by financial black & grey industry intelligence, covering telecom network fraud, professional debt mules, loan packaging, anti-collection and other common financial black & grey industries. It can analyze, take action and raise alerts, helping institutions achieve more scientific, efficient and sustainable confrontation against black & grey industries.",
+  "author": {
+    "name": "腾讯云天御",
+    "email": "csig_lkfz_deld@tencent.com"
+  },
+  "expertType": "agent",
+  "agentName": "anti-scam-agent",
+  "agents": [
+    "./agents/anti-scam-agent.md"
+  ],
+  "skills": [
+    "./skills/antifraud"
+  ],
+  "displayName": {
+    "en": "Tianyu Financial Anti-Fraud",
+    "zh": "天御金融反诈"
+  },
+  "profession": {
+    "en": "Tianyu Anti-Fraud Analyst",
+    "zh": "腾讯云天御反诈专家"
+  },
+  "displayDescription": {
+    "en": "An anti-fraud intelligent agent driven by financial black & grey industry intelligence, covering telecom network fraud, professional debt mules, loan packaging, anti-collection and other common financial black & grey industries. It can analyze, take action and raise alerts, helping institutions achieve more scientific, efficient and sustainable confrontation against black & grey industries.",
+    "zh": "这是一款由金融黑灰产情报驱动的反诈智能体，覆盖电信网络诈骗、职业背债人、贷款包装、反催收等常见金融黑灰产，能分析、能干活、能告警。帮助机构实现更科学、高效、可持续的黑灰产对抗。"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "13-TencentZone",
+  "defaultInitPrompt": {
+    "zh": "近一个月全国电信诈骗有哪些新型手法？",
+    "en": "What new types of telecom fraud techniques have emerged across the country in the past month?"
+  },
+  "tags": [
+    {
+      "en": "Financial Risk Control",
+      "zh": "金融风控"
+    },
+    {
+      "en": "Anti Telecom Network Fraud",
+      "zh": "反电信网络诈骗"
+    },
+    {
+      "en": "Black & Grey Industry Intelligence Analysis",
+      "zh": "黑灰产情报分析"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "en": "What new types of telecom fraud techniques have emerged across the country in the past month?",
+      "zh": "近一个月全国电信诈骗有哪些新型手法？"
+    },
+    {
+      "en": "What new patterns of fraud-related money laundering have appeared in the past month?",
+      "zh": "近一个月诈骗洗钱有哪些新模式？"
+    },
+    {
+      "en": "What qualification packaging techniques have been commonly used by loan black intermediaries in the past six months?",
+      "zh": "近半年贷款黑中介常用的资质包装手法有哪些？"
+    }
+  ],
+  "plugin": "anti-scam-agent"
+}

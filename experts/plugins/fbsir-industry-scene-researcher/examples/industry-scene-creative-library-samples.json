@@ -1,0 +1,270 @@
+{
+  "schemaVersion": "1.0",
+  "source": "contracts/industry-scene-creative-library-index.jsonl",
+  "sampleCards": [
+    {
+      "card_id": "WB-OFF-002",
+      "title": "展会线索二次跟进引爆",
+      "scene_cluster": "offline",
+      "goal_type": "execute",
+      "target_users": [
+        "销售/市场/客户成功",
+        "顾问/咨询"
+      ],
+      "stakeholders": [
+        "销售经理",
+        "市场活动负责人",
+        "客户代表"
+      ],
+      "trigger_conditions": [
+        "展会结束后线索数超过100",
+        "7天内未完成分层回访"
+      ],
+      "inputs": {
+        "required": [
+          "展会线索表",
+          "展位材料PDF",
+          "现场Q&A记录"
+        ],
+        "optional": [
+          "名片照片",
+          "客户行业标签"
+        ]
+      },
+      "outputs": [
+        "supplementCard",
+        "action_matrix",
+        "visualHtml",
+        "distributionPdf"
+      ],
+      "workbuddy_capabilities": [
+        "local_file_workspace",
+        "artifact_preview",
+        "html_pdf_render",
+        "task_continuation",
+        "present_files"
+      ],
+      "human_machine_boundary": {
+        "workbuddy": "自动分群、提炼价值主张、生成回访动作矩阵。",
+        "human": "确认联系人语气、报价边界和优先级。"
+      },
+      "unique_next_step": "生成3条价值主张A/B话术脚本",
+      "quality_gate_tags": [
+        "first_value_gate",
+        "no_connector_contract_gate",
+        "next_step_gate",
+        "boundary_gate"
+      ],
+      "risk_or_sensitivity": [
+        "联系人隐私不得外发",
+        "报价和承诺必须人工确认",
+        "不声明自动触达已发生"
+      ],
+      "source_evidence": [
+        {
+          "title": "WorkBuddy Create Task",
+          "url": "https://www.codebuddy.cn/docs/workbuddy/Create-Task",
+          "evidence_strength": "official_doc",
+          "client_use_status": "internal_reference_only"
+        },
+        {
+          "title": "WorkBuddy Results",
+          "url": "https://www.codebuddy.cn/docs/workbuddy/Results",
+          "evidence_strength": "official_doc",
+          "client_use_status": "internal_reference_only"
+        }
+      ],
+      "reuse_notes": "可迁移到招商会、行业峰会、渠道大会。",
+      "persona_anchor": "销售/市场/客户成功 / 销售经理",
+      "timing_pattern": "post_meeting",
+      "format_strategy": "会中或评审优先用 HTML/loaded preview 降低理解成本，会后输出 PDF 与责任清单。",
+      "evolution_evidence_note": {
+        "capability_evidence_layers": [
+          "overview_capabilities",
+          "local_observed_combinations"
+        ],
+        "local_observed_pattern": "基于本轮 WorkBuddy 项目中任务、文件、HTML/PDF、预览和 present_files 的组合观察沉淀。",
+        "first_value_boundary": "这些能力用于增强场景卡生成，不作为连接器、服务消费或官方上架证明。"
+      }
+    },
+    {
+      "card_id": "WB-ON-001",
+      "title": "官网转化漏斗下滑修复",
+      "scene_cluster": "online",
+      "goal_type": "diagnose",
+      "target_users": [
+        "销售/市场/客户成功",
+        "开发/数据/产品"
+      ],
+      "stakeholders": [
+        "增长负责人",
+        "产品经理",
+        "法务"
+      ],
+      "trigger_conditions": [
+        "跳出率抬升且咨询转化下降",
+        "有页面快照和漏斗数据"
+      ],
+      "inputs": {
+        "required": [
+          "访问路径快照",
+          "表单字段配置",
+          "转化样本"
+        ],
+        "optional": [
+          "活动页截图",
+          "客服聊天样本"
+        ]
+      },
+      "outputs": [
+        "supplementCard",
+        "visualHtml",
+        "distributionPdf",
+        "inlineSummaryCard"
+      ],
+      "workbuddy_capabilities": [
+        "local_file_workspace",
+        "artifact_preview",
+        "html_pdf_render",
+        "present_files"
+      ],
+      "human_machine_boundary": {
+        "workbuddy": "形成漏斗假设、页面文案和表单减法方案。",
+        "human": "确认上线文案、实验流量和法务边界。"
+      },
+      "unique_next_step": "输出AB实验参数包",
+      "quality_gate_tags": [
+        "first_value_gate",
+        "no_connector_contract_gate",
+        "next_step_gate",
+        "boundary_gate"
+      ],
+      "risk_or_sensitivity": [
+        "上线改动需人工批准",
+        "指标样本需校验口径",
+        "不声明实验已执行"
+      ],
+      "source_evidence": [
+        {
+          "title": "WorkBuddy Results",
+          "url": "https://www.codebuddy.cn/docs/workbuddy/Results",
+          "evidence_strength": "official_doc",
+          "client_use_status": "internal_reference_only"
+        },
+        {
+          "title": "WorkBuddy Changelog",
+          "url": "https://www.codebuddy.cn/docs/workbuddy/Changelog",
+          "evidence_strength": "official_doc",
+          "client_use_status": "internal_reference_only"
+        }
+      ],
+      "reuse_notes": "适合官网、活动页、注册页、咨询页。",
+      "persona_anchor": "销售/市场/客户成功 / 增长负责人",
+      "timing_pattern": "full_cycle",
+      "format_strategy": "管理层先看一页摘要或内联卡，执行层再看 HTML/PDF 动作包，源材料保留在项目工作区便于追溯。",
+      "evolution_evidence_note": {
+        "capability_evidence_layers": [
+          "overview_capabilities",
+          "local_observed_combinations"
+        ],
+        "local_observed_pattern": "基于本轮 WorkBuddy 项目中任务、文件、HTML/PDF、预览和 present_files 的组合观察沉淀。",
+        "first_value_boundary": "这些能力用于增强场景卡生成，不作为连接器、服务消费或官方上架证明。"
+      }
+    },
+    {
+      "card_id": "WB-STK-001",
+      "title": "管理层月度决策会前情报包",
+      "scene_cluster": "stakeholder",
+      "goal_type": "decide",
+      "target_users": [
+        "经营者/管理层",
+        "开发/数据/产品"
+      ],
+      "stakeholders": [
+        "CEO",
+        "业务负责人",
+        "财务负责人"
+      ],
+      "trigger_conditions": [
+        "月例会前3天",
+        "核心指标口径存在分歧"
+      ],
+      "inputs": {
+        "required": [
+          "核心指标定义",
+          "环比表",
+          "跨团队反馈"
+        ],
+        "optional": [
+          "历史会议纪要",
+          "竞品动态"
+        ]
+      },
+      "outputs": [
+        "supplementCard",
+        "continuation_checkpoint_card",
+        "distributionPdf"
+      ],
+      "workbuddy_capabilities": [
+        "local_file_workspace",
+        "artifact_preview",
+        "html_pdf_render",
+        "expert_role"
+      ],
+      "human_machine_boundary": {
+        "workbuddy": "清理指标口径、生成TOP3行动项和风险提示。",
+        "human": "确定最终表述、资源优先级和对外披露范围。"
+      },
+      "unique_next_step": "生成管理层行动项TOP3",
+      "quality_gate_tags": [
+        "first_value_gate",
+        "no_connector_contract_gate",
+        "next_step_gate",
+        "boundary_gate"
+      ],
+      "risk_or_sensitivity": [
+        "战略决策需人工拍板",
+        "财务数据脱敏",
+        "不声明业务闭环完成"
+      ],
+      "source_evidence": [
+        {
+          "title": "WorkBuddy Overview",
+          "url": "https://www.codebuddy.cn/docs/workbuddy/Overview",
+          "evidence_strength": "official_doc",
+          "client_use_status": "internal_reference_only"
+        },
+        {
+          "title": "WorkBuddy Project",
+          "url": "https://www.codebuddy.cn/docs/workbuddy/From-Beginner-to-Expert-Guide/Function-Description/Project",
+          "evidence_strength": "official_doc",
+          "client_use_status": "internal_reference_only"
+        }
+      ],
+      "reuse_notes": "适合经营会、季度复盘、董事会材料准备。",
+      "persona_anchor": "经营者/管理层 / CEO",
+      "timing_pattern": "pre_meeting",
+      "format_strategy": "管理层先看一页摘要或内联卡，执行层再看 HTML/PDF 动作包，源材料保留在项目工作区便于追溯。",
+      "evolution_evidence_note": {
+        "capability_evidence_layers": [
+          "overview_capabilities",
+          "changelog_confirmed_capabilities",
+          "local_observed_combinations"
+        ],
+        "local_observed_pattern": "基于本轮 WorkBuddy 项目中任务、文件、HTML/PDF、预览和 present_files 的组合观察沉淀。",
+        "first_value_boundary": "这些能力用于增强场景卡生成，不作为连接器、服务消费或官方上架证明。"
+      }
+    }
+  ],
+  "capabilityFamiliesCovered": [
+    "natural_language_task",
+    "local_file_workspace",
+    "project_context",
+    "task_continuation",
+    "artifact_preview",
+    "html_pdf_render",
+    "automation_paused",
+    "assistant_remote_optional",
+    "mini_program_push_optional"
+  ]
+}

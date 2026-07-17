@@ -1,0 +1,141 @@
+{
+  "schemaVersion": "1.0",
+  "contractId": "industry_scene_creative_library_schema_v1",
+  "purpose": "Machine-readable schema for WorkBuddy application creative cards used by Industry Scene Researcher.",
+  "format": "jsonl",
+  "requiredFields": [
+    "card_id",
+    "title",
+    "scene_cluster",
+    "goal_type",
+    "target_users",
+    "stakeholders",
+    "trigger_conditions",
+    "inputs",
+    "outputs",
+    "workbuddy_capabilities",
+    "human_machine_boundary",
+    "unique_next_step",
+    "quality_gate_tags",
+    "risk_or_sensitivity",
+    "source_evidence",
+    "persona_anchor",
+    "timing_pattern",
+    "format_strategy",
+    "evolution_evidence_note"
+  ],
+  "recommendedFields": [],
+  "enums": {
+    "scene_cluster": [
+      "offline",
+      "online",
+      "stakeholder"
+    ],
+    "goal_type": [
+      "diagnose",
+      "decide",
+      "execute",
+      "review",
+      "reuse"
+    ],
+    "source_evidence.evidence_strength": [
+      "official_doc",
+      "local_observation",
+      "derived_pattern",
+      "needs_verification"
+    ],
+    "source_evidence.client_use_status": [
+      "client_ready",
+      "internal_reference_only",
+      "needs_human_verification"
+    ],
+    "timing_pattern": [
+      "pre_meeting",
+      "in_meeting",
+      "post_meeting",
+      "full_cycle"
+    ]
+  },
+  "coverageRequirements": {
+    "sceneClusters": [
+      "offline",
+      "online",
+      "stakeholder"
+    ],
+    "minimumCards": 20,
+    "minimumCardsPerCluster": 5,
+    "mustIncludeQualityGateTags": [
+      "first_value_gate",
+      "no_connector_contract_gate",
+      "next_step_gate",
+      "boundary_gate"
+    ]
+  },
+  "fieldRules": {
+    "unique_next_step": {
+      "type": "string",
+      "maxItemsIfArray": 0,
+      "description": "Exactly one next action. Do not use a menu."
+    },
+    "format_strategy": {
+      "type": "string",
+      "description": "Prefer a reader-load-matched format such as one-pager for executives, HTML/PDF for execution, and Markdown for internal collaboration."
+    },
+    "persona_anchor": {
+      "type": "string",
+      "description": "The concrete user persona and stakeholder anchor for selecting the card."
+    },
+    "timing_pattern": {
+      "type": "enum",
+      "description": "The primary moment when the card creates value: pre_meeting, in_meeting, post_meeting, or full_cycle."
+    },
+    "evolution_evidence_note": {
+      "type": "object",
+      "requiredFields": [
+        "capability_evidence_layers",
+        "local_observed_pattern",
+        "first_value_boundary"
+      ],
+      "allowedCapabilityEvidenceLayers": [
+        "overview_capabilities",
+        "changelog_confirmed_capabilities",
+        "local_observed_combinations"
+      ],
+      "description": "Explains which WorkBuddy capability evidence layers support the card and restates the no service-consume boundary."
+    },
+    "workbuddy_capabilities": {
+      "mustMapToBusinessOutcome": true,
+      "allowedCapabilityFamilies": [
+        "natural_language_task",
+        "local_file_workspace",
+        "project_context",
+        "task_continuation",
+        "artifact_preview",
+        "present_files",
+        "html_pdf_render",
+        "image_context",
+        "expert_role",
+        "expert_team",
+        "skill_optional",
+        "inspiration_reuse",
+        "automation_paused",
+        "assistant_remote_optional",
+        "mini_program_push_optional",
+        "connector_optional"
+      ]
+    },
+    "risk_or_sensitivity": {
+      "mustMentionHumanApprovalForExternalCommitment": true,
+      "mustNotClaimServiceConsume": true
+    },
+    "source_evidence": {
+      "minimumItems": 1,
+      "requiredFields": [
+        "title",
+        "url",
+        "evidence_strength",
+        "client_use_status"
+      ]
+    }
+  }
+}

@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>互动病例</title>
+<style>
+  :root{
+    --brand:#2b7cff; --brand-d:#1a63e0; --brand-grad:linear-gradient(135deg,#3a8bff,#6f5bff);
+    --ink:#1a2433; --ink-2:#5b6677; --ink-3:#97a1b0;
+    --line:#e9edf3; --bg:#eef2f7; --card:#ffffff;
+    --ok:#1fb47a; --okbg:#e8f8f1; --warn:#f5871f; --warnbg:#fff3e6;
+    --err:#f0506e; --errbg:#fdeef1;
+    --r:16px; --sh:0 6px 24px rgba(30,50,90,.08);
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;padding:0;}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;
+    background:#d4dae4;color:var(--ink);line-height:1.6;
+    display:flex;justify-content:center;min-height:100vh;
+  }
+  /* 手机外壳 */
+  .phone{
+    width:100%;max-width:420px;background:var(--bg);min-height:100vh;
+    position:relative;display:flex;flex-direction:column;box-shadow:0 0 40px rgba(0,0,0,.12);
+  }
+  /* 顶栏 */
+  .navbar{
+    position:sticky;top:0;z-index:20;background:var(--card);
+    display:flex;align-items:center;justify-content:center;
+    height:48px;border-bottom:1px solid var(--line);font-size:17px;font-weight:600;
+  }
+  .navbar.brand{background:var(--brand-grad);color:#fff;border-bottom:none;}
+  .navbar .back{position:absolute;left:14px;font-size:20px;color:inherit;cursor:pointer;opacity:.85;}
+  .navbar .cap{position:absolute;right:12px;display:flex;gap:4px;align-items:center;
+    background:rgba(0,0,0,.04);border-radius:20px;padding:3px 10px;font-size:13px;color:var(--ink-3);}
+  .navbar.brand .cap{background:rgba(255,255,255,.18);color:#fff;}
+  .scroll{flex:1;overflow-y:auto;padding-bottom:96px;}
+  /* 进度条（题目阶段） */
+  .steps{display:flex;align-items:center;padding:16px 18px 6px;background:var(--card);}
+  .step{display:flex;flex-direction:column;align-items:center;font-size:11px;color:var(--ink-3);flex:0 0 auto;}
+  .step .dot{width:26px;height:26px;border-radius:50%;border:2px solid var(--line);
+    display:flex;align-items:center;justify-content:center;background:#fff;color:var(--ink-3);font-size:12px;margin-bottom:4px;}
+  .step.done .dot{background:var(--brand);border-color:var(--brand);color:#fff;}
+  .step.cur .dot{border-color:var(--brand);color:var(--brand);font-weight:700;}
+  .step.cur{color:var(--brand);font-weight:600;}
+  .step .bar{height:2px;background:var(--line);flex:1;align-self:flex-start;margin-top:13px;}
+  .stepwrap{display:flex;align-items:flex-start;flex:1;}
+  .stepwrap .bar{height:2px;background:var(--line);flex:1;margin-top:13px;}
+  .stepwrap .bar.done{background:var(--brand);}
+  /* 卡片 */
+  .sec{background:var(--card);margin:12px;border-radius:var(--r);padding:18px;box-shadow:var(--sh);}
+  .sec-flat{margin:12px;padding:0 6px;}
+  .h-title{font-size:21px;font-weight:700;line-height:1.4;margin:4px 0 14px;}
+  .badge{display:inline-flex;align-items:center;gap:4px;font-size:12px;color:var(--warn);
+    background:var(--warnbg);border-radius:20px;padding:3px 10px;margin-bottom:12px;}
+  .kv{display:flex;font-size:14px;color:var(--ink-2);margin:5px 0;}
+  .kv .k{color:var(--ink-3);width:78px;flex:0 0 78px;}
+  .label{display:flex;align-items:center;font-size:16px;font-weight:700;margin:2px 0 10px;}
+  .label::before{content:"";width:4px;height:16px;background:var(--brand);border-radius:3px;margin-right:8px;}
+  .p{font-size:15px;color:var(--ink);margin:8px 0;}
+  .muted{color:var(--ink-2);font-size:14px;}
+  .author{display:flex;gap:12px;align-items:flex-start;}
+  .author .ava{width:54px;height:54px;border-radius:10px;background:var(--brand-grad);flex:0 0 54px;
+    display:flex;align-items:center;justify-content:center;color:#fff;font-size:22px;font-weight:700;}
+  .author .nm{font-size:16px;font-weight:700;}
+  .author .meta{font-size:13px;color:var(--ink-3);}
+  .author .bio{font-size:12px;color:var(--ink-3);margin-top:4px;line-height:1.5;}
+  ul.lst{margin:6px 0;padding-left:20px;}
+  ul.lst li{font-size:14px;color:var(--ink);margin:5px 0;}
+  /* 检查表格 */
+  .exam{margin:12px 0;}
+  .exam .nm{font-size:14px;font-weight:600;margin-bottom:6px;color:var(--ink);}
+  table.rep{width:100%;border-collapse:collapse;font-size:12px;}
+  table.rep th,table.rep td{border:1px solid var(--line);padding:5px 6px;text-align:left;}
+  table.rep th{background:#f6f8fb;color:var(--ink-2);font-weight:600;}
+  .imgbox{width:100%;border-radius:10px;overflow:hidden;background:#0c0f14;}
+  .imgbox img{width:100%;display:block;}
+  .imgph{background:#11151c;color:#7c8aa0;font-size:13px;padding:36px 12px;text-align:center;border-radius:10px;}
+  .cap{font-size:12px;color:var(--ink-3);margin-top:6px;text-align:center;}
+  /* 题目选项 */
+  .opt{border:1.5px solid var(--brand);color:var(--brand);background:#fff;border-radius:12px;
+    padding:13px 14px;margin:10px 0;font-size:15px;cursor:pointer;display:flex;gap:8px;
+    align-items:flex-start;transition:.15s;position:relative;}
+  .opt .k{font-weight:700;flex:0 0 auto;}
+  .opt:active{transform:scale(.99);}
+  .opt.sel{background:var(--brand);color:#fff;}
+  .opt .tick{margin-left:auto;font-size:15px;opacity:0;flex:0 0 auto;}
+  .opt.sel .tick{opacity:1;}
+  /* 作答后着色 */
+  .opt.r-correct{border-color:var(--ok);color:var(--ok);background:var(--okbg);}
+  .opt.r-correct.sel{background:var(--ok);color:#fff;}
+  .opt.r-wrong.sel{border-color:var(--err);background:var(--errbg);color:var(--err);}
+  .opt.locked{cursor:default;}
+  .opt-cmt{font-size:13px;background:#f6f8fb;border-radius:0 0 12px 12px;margin:-8px 0 10px;
+    padding:9px 14px;color:var(--ink-2);border:1px solid var(--line);border-top:none;}
+  /* AI 解析框 */
+  .ai{border-radius:14px;overflow:hidden;margin:12px 0;border:1px solid #d9e6ff;}
+  .ai-h{background:var(--brand-grad);color:#fff;padding:11px 14px;font-weight:700;font-size:15px;
+    display:flex;align-items:center;gap:8px;}
+  .ai-h .ic{width:22px;height:22px;border-radius:50%;background:rgba(255,255,255,.25);
+    display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;}
+  .ai-b{background:#f4f8ff;padding:13px 14px;font-size:14px;color:var(--ink-2);}
+  .ai-b .concl{color:var(--ink);font-weight:600;margin-bottom:8px;}
+  .ai-b ul{margin:6px 0;padding-left:18px;}
+  .ai-b li{margin:5px 0;}
+  .cite{font-size:12px;color:var(--brand-d);margin-top:8px;background:#e8f0ff;
+    border-radius:8px;padding:6px 10px;display:inline-block;}
+  /* 卡点提示 */
+  .verdict{border-radius:10px;padding:8px 12px;font-size:13px;font-weight:600;margin:10px 0;}
+  .verdict.ok{background:var(--okbg);color:var(--ok);}
+  .verdict.partial{background:var(--warnbg);color:var(--warn);}
+  .verdict.miss,.verdict.wrong{background:var(--errbg);color:var(--err);}
+  /* 方案分组 */
+  .plan{margin:14px 0;}
+  .plan .g{font-size:15px;font-weight:700;margin:10px 0 6px;}
+  /* 结果汇总 */
+  .res-row{display:flex;justify-content:space-between;align-items:center;
+    padding:11px 0;border-bottom:1px solid var(--line);font-size:14px;}
+  .res-row:last-child{border:none;}
+  .res-row .q{flex:1;color:var(--ink-2);padding-right:10px;}
+  .pill{font-size:12px;font-weight:700;border-radius:20px;padding:3px 10px;flex:0 0 auto;}
+  .pill.ok{background:var(--okbg);color:var(--ok);}
+  .pill.partial{background:var(--warnbg);color:var(--warn);}
+  .pill.miss,.pill.wrong{background:var(--errbg);color:var(--err);}
+  .pill.open{background:#eef1f5;color:var(--ink-3);}
+  .scorebar{background:var(--brand-grad);border-radius:14px;color:#fff;padding:18px;text-align:center;margin-bottom:4px;}
+  .scorebar .big{font-size:34px;font-weight:800;}
+  .scorebar .sub{font-size:13px;opacity:.9;}
+  /* 底部按钮栏 */
+  .footer{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:420px;
+    background:var(--card);border-top:1px solid var(--line);padding:12px 14px;
+    display:flex;gap:10px;z-index:30;}
+  .btn{flex:1;border:none;border-radius:12px;padding:14px;font-size:16px;font-weight:700;cursor:pointer;}
+  .btn.primary{background:var(--brand);color:#fff;}
+  .btn.primary:disabled{background:#b9cdf0;cursor:not-allowed;}
+  .btn.ghost{background:#eef2f8;color:var(--brand);flex:0 0 38%;}
+  .disclaimer{text-align:center;font-size:11px;color:var(--ink-3);padding:8px 16px 4px;}
+  .upgrade{margin:12px 0;border-radius:12px;overflow:hidden;border:1px solid #d9e6ff;}
+  .upgrade-h{background:linear-gradient(135deg,#eef3ff,#e4ecff);padding:14px 16px;font-size:13px;color:var(--brand-d);line-height:1.6;font-weight:600;}
+  .upgrade-b{background:#fff;padding:12px 16px;}
+  .upgrade-b .sub{font-size:13px;color:var(--ink-2);margin-bottom:8px;}
+  .upgrade-b ul{margin:0;padding:0 0 0 4px;list-style:none;}
+  .upgrade-b li{font-size:13px;color:var(--ink);margin:6px 0;display:flex;align-items:flex-start;gap:4px;}
+  .upgrade-b li b{color:var(--ink);}
+  .upgrade-cta{text-align:center;padding:10px 16px 14px;font-size:13px;color:var(--brand-d);}
+  .upgrade-cta a{color:var(--brand-d);text-decoration:none;font-weight:700;}
+  .hidden{display:none!important;}
+  /* 渐入 */
+  @keyframes fade{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:none;}}
+  .fade{animation:fade .28s ease;}
+</style>
+</head>
+<body>
+<div class="phone">
+  <div class="navbar" id="nav"><span class="back" id="back" onclick="CASE.back()">‹</span><span id="navTitle">病历学习</span><span class="cap" id="cap">··· ◉</span></div>
+  <div class="scroll" id="scroll"></div>
+  <div class="footer" id="footer"></div>
+</div>
+
+<script>
+/* ====== 病例数据（构建时注入） ====== */
+const CASE_DATA = __CASE_DATA__;
+
+/* ====== 渲染引擎 ====== */
+const CASE = (function(){
+  const D = CASE_DATA;
+  const Q = D.questions || [];
+  // 视图：cover -> patient -> q0..qN -> summary -> result
+  let view = 'cover';
+  let qi = 0;                       // 当前题号
+  const answers = {};               // {qid: [keys]}
+  const scroll = document.getElementById('scroll');
+  const footer = document.getElementById('footer');
+  const nav = document.getElementById('nav');
+  const navTitle = document.getElementById('navTitle');
+  const back = document.getElementById('back');
+
+  const esc = s => (s==null?'':String(s)).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+  const verdictText = {correct:'✓ 观念正确',ok:'✓ 观念正确',partial:'方向正确，但不够完整',miss:'存在认知盲区（未选全关键项）',wrong:'⚠ 关键卡点，建议重点关注',open:'已记录您的反馈'};
+
+  function mediaHTML(m){
+    if(!m) return '';
+    if(m.type==='table'){
+      let r=(m.rows||[]).map(x=>`<tr><td>${esc(x.item)}</td><td>${esc(x.result)}</td><td>${esc(x.ref)}</td><td>${esc(x.unit)}</td></tr>`).join('');
+      return `<div class="exam"><div class="nm">${esc(m.name||'')}</div><table class="rep"><tr><th>项目</th><th>结果</th><th>参考值</th><th>单位</th></tr>${r}</table>${m.caption?`<div class="cap">${esc(m.caption)}</div>`:''}</div>`;
+    }
+    if(m.type==='image'){
+      const inner = m.imageUrl ? `<div class="imgbox"><img src="${esc(m.imageUrl)}" alt=""></div>` : `<div class="imgph">［${esc(m.name||'影像/检查图')}｜未提供图片］</div>`;
+      return `<div class="exam">${m.name?`<div class="nm">${esc(m.name)}</div>`:''}${inner}${m.caption?`<div class="cap">${esc(m.caption)}</div>`:''}</div>`;
+    }
+    return `<div class="exam">${m.name?`<div class="nm">${esc(m.name)}</div>`:''}<div class="p muted">${esc(m.text)}</div></div>`;
+  }
+
+  function stepsHTML(curIdx){ // curIdx: 0-based 当前题
+    let h='<div class="steps"><div class="stepwrap" style="width:100%">';
+    Q.forEach((q,i)=>{
+      const cls = i<curIdx?'done':(i===curIdx?'cur':'');
+      h+=`<div class="step ${cls}"><div class="dot">${i<curIdx?'✓':(i+1)}</div><span>${esc(q.stage||('第'+(i+1)+'步'))}</span></div>`;
+      if(i<Q.length-1) h+=`<div class="bar ${i<curIdx?'done':''}"></div>`;
+    });
+    return h+'</div></div>';
+  }
+
+  function render(){
+    scroll.scrollTop=0;
+    if(view==='cover') return renderCover();
+    if(view==='patient') return renderPatient();
+    if(view==='q') return renderQuestion();
+    if(view==='summary') return renderSummary();
+    if(view==='result') return renderResult();
+  }
+
+  function setNav(title,brand){ navTitle.textContent=title; nav.className='navbar'+(brand?' brand':''); back.style.visibility = view==='cover'?'hidden':'visible'; }
+
+  function renderCover(){
+    setNav('病历学习',false);
+    const m=D.meta, a=m.author;
+    scroll.innerHTML = `<div class="fade">
+      <div class="sec">
+        <div class="h-title">${esc(m.title)}</div>
+        <div class="badge">◷ 未完成</div>
+        <div class="kv"><span class="k">待办来源</span><span>系统创建</span></div>
+        <div class="kv"><span class="k">创建日期</span><span>${esc(m.createdDate||'')}</span></div>
+        <div class="kv"><span class="k">学习时长</span><span>${esc(m.readingMinutes||5)} 分钟</span></div>
+      </div>
+      <div class="sec"><div class="label">导语</div><div class="p">${esc(m.intro)}</div></div>
+      ${a?`<div class="sec"><div class="label">作者简介</div><div class="author">
+        <div class="ava">${esc((a.name||'医').slice(0,1))}</div>
+        <div><div class="nm">${esc(a.name)}</div>
+        <div class="meta">${esc(a.hospital||'')}${a.department?'  |  '+esc(a.department):''}</div>
+        <div class="bio">${(a.bio||[]).map(esc).join('<br>')}</div></div></div></div>`:''}
+    </div>`;
+    footer.innerHTML = `<button class="btn primary" onclick="CASE.go('patient')">开始学习</button>`;
+  }
+
+  function renderPatient(){
+    setNav('病例学习',false);
+    const p=D.patient;
+    let exams=(p.examinations||[]).map(mediaHTML).join('');
+    scroll.innerHTML = `<div class="fade">
+      <div class="sec">
+        <div class="label">患者信息</div>
+        <div class="kv"><span class="k">基本信息</span><span>${esc(p.basics)}</span></div>
+        ${p.chiefComplaint?`<div class="p"><b>主诉：</b>${esc(p.chiefComplaint)}</div>`:''}
+        ${p.presentIllness?`<div class="p"><b>现病史：</b>${esc(p.presentIllness)}</div>`:''}
+        ${(p.pastHistory&&p.pastHistory.length)?`<div class="p"><b>既往史：</b></div><ul class="lst">${p.pastHistory.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>`:''}
+      </div>
+      ${exams?`<div class="sec"><div class="label">检查 / 检验</div>${exams}</div>`:''}
+    </div>`;
+    footer.innerHTML = `<button class="btn ghost" onclick="CASE.go('cover')">上一步</button><button class="btn primary" onclick="CASE.startQ()">开始接诊</button>`;
+  }
+
+  function renderQuestion(){
+    setNav('病例学习',false);
+    const q=Q[qi];
+    const answered = !!answers[q.id];
+    const sel = answers[q.id]||[];
+    scroll.innerHTML = stepsHTML(qi) + `<div class="fade sec-flat">
+      ${q.media?`<div class="sec" style="margin-left:0;margin-right:0">${mediaHTML(q.media)}</div>`:''}
+      <div class="sec" style="margin-left:0;margin-right:0">
+        <div class="label">${esc(q.stem)}</div>
+        <div class="muted" style="margin:-4px 0 8px">${q.type==='multiple'?'多选题':'单选题'}</div>
+        <div id="opts">${q.options.map(o=>optHTML(q,o,sel,answered)).join('')}</div>
+        ${answered?evidenceHTML(q):''}
+      </div>
+    </div>`;
+    if(!answered){
+      footer.innerHTML = `${qi>0?'<button class="btn ghost" onclick="CASE.prevQ()">上一步</button>':''}<button class="btn primary" id="submit" disabled onclick="CASE.submit()">${q.type==='multiple'?'确定':'提交'}</button>`;
+    }else{
+      const last = qi===Q.length-1;
+      footer.innerHTML = `<button class="btn ghost" onclick="CASE.prevQ()">上一步</button><button class="btn primary" onclick="CASE.nextQ()">${last?'查看方案解析':'下一题'}</button>`;
+    }
+    refreshSubmit();
+  }
+
+  function optHTML(q,o,sel,answered){
+    let cls='opt'; const on=sel.includes(o.key);
+    if(answered){ cls+=' locked';
+      if(o.concept==='correct') cls+=' r-correct'+(on?' sel':'');
+      else if(on && (o.concept==='wrong'||o.concept==='partial'||o.concept==='miss')) cls+=' r-wrong sel';
+      else if(on) cls+=' sel';
+    } else if(on) cls+=' sel';
+    const cmt = (answered && on && o.comment)?`<div class="opt-cmt">${esc(o.comment)}</div>`:'';
+    return `<div class="${cls}" ${answered?'':`onclick="CASE.pick('${o.key}')"`}>
+      <span class="k">${esc(o.key)}.</span><span>${esc(o.text)}</span>
+      <span class="tick">✓</span></div>${cmt}`;
+  }
+
+  function evidenceHTML(q){
+    const e=q.evidence||{}; const v=verdict(q);
+    return `<div class="verdict ${v}">${verdictText[v]||''}</div>
+      <div class="ai"><div class="ai-h"><span class="ic">AI</span>循证解析</div>
+      <div class="ai-b">
+        ${e.conclusion?`<div class="concl">${esc(e.conclusion)}</div>`:''}
+        ${(e.points&&e.points.length)?`<ul>${e.points.map(p=>`<li>${esc(p)}</li>`).join('')}</ul>`:''}
+        ${e.citation?`<div class="cite">📖 ${esc(e.citation)}</div>`:''}
+      </div></div>`;
+  }
+
+  // 判定该题作答结果（用于 verdict / 汇总）
+  function verdict(q){
+    const sel=answers[q.id]||[];
+    const correctKeys=q.options.filter(o=>o.concept==='correct').map(o=>o.key);
+    const onlyOpen = sel.length && sel.every(k=>{const o=q.options.find(x=>x.key===k);return o&&o.concept==='open';});
+    if(onlyOpen) return 'open';
+    const hasWrong = sel.some(k=>{const o=q.options.find(x=>x.key===k);return o&&o.concept==='wrong';});
+    const hasPartial = sel.some(k=>{const o=q.options.find(x=>x.key===k);return o&&o.concept==='partial';});
+    const allCorrect = correctKeys.length>0 && correctKeys.every(k=>sel.includes(k)) && !hasWrong && !hasPartial;
+    if(allCorrect) return 'ok';
+    if(hasWrong) return 'wrong';
+    if(hasPartial) return 'partial';
+    // 选了部分正确项但没选全
+    if(correctKeys.some(k=>sel.includes(k))) return 'miss';
+    return 'wrong';
+  }
+
+  function refreshSubmit(){ const b=document.getElementById('submit'); if(b){ const q=Q[qi]; b.disabled=!(answers._draft&&answers._draft.length);} }
+
+  /* ====== 交互 ====== */
+  const api = {
+    go(v){ view=v; render(); },
+    startQ(){ qi=0; view='q'; answers._draft=[]; render(); },
+    pick(key){
+      const q=Q[qi]; answers._draft=answers._draft||[];
+      if(q.type==='multiple'){
+        const i=answers._draft.indexOf(key);
+        if(i>=0) answers._draft.splice(i,1); else answers._draft.push(key);
+      } else { answers._draft=[key]; }
+      // 重画选项选中态
+      const sel=answers._draft;
+      document.querySelectorAll('#opts .opt').forEach((el,idx)=>{
+        const k=q.options[idx].key; el.classList.toggle('sel',sel.includes(k));
+      });
+      refreshSubmit();
+    },
+    submit(){ const q=Q[qi]; if(!(answers._draft&&answers._draft.length))return;
+      answers[q.id]=answers._draft.slice(); render(); },
+    nextQ(){ if(qi<Q.length-1){qi++;answers._draft=answers[Q[qi].id]?answers[Q[qi].id].slice():[];view='q';} else {view='summary';} render(); },
+    prevQ(){ if(qi>0){ qi--; answers._draft=answers[Q[qi].id]?answers[Q[qi].id].slice():[]; view='q'; } else { view='patient'; } render(); },
+    back(){
+      if(view==='patient') api.go('cover');
+      else if(view==='q'){ if(qi>0){api.prevQ();} else api.go('patient'); }
+      else if(view==='summary'){ qi=Q.length-1; view='q'; render(); }
+      else if(view==='result'){ view='summary'; render(); }
+    },
+    verdict
+  };
+
+  function renderSummary(){
+    setNav('方案解析',true);
+    const s=D.summary||{};
+    let plan=(s.treatmentPlan||[]).map(g=>`<div class="plan"><div class="g">${esc(g.group)}</div><ul class="lst">${(g.items||[]).map(x=>`<li>${esc(x)}</li>`).join('')}</ul></div>`).join('');
+    scroll.innerHTML=`<div class="fade">
+      <div class="ai" style="margin:12px"><div class="ai-h"><span class="ic">AI</span>方案解析</div>
+        <div class="ai-b"><div class="p" style="color:var(--ink-2)">${esc(s.analysis||'')}</div></div></div>
+      ${plan?`<div class="sec"><div class="label">治疗方案</div>${plan}</div>`:''}
+      ${(s.keyTakeaways&&s.keyTakeaways.length)?`<div class="sec"><div class="label">核心要点</div><ul class="lst">${s.keyTakeaways.map(x=>`<li>${esc(x)}</li>`).join('')}</ul></div>`:''}
+    </div>`;
+    footer.innerHTML=`<button class="btn ghost" onclick="CASE.back()">上一步</button><button class="btn primary" onclick="CASE.go('result')">完成 · 查看小结</button>`;
+  }
+
+  // 取该题作答的观念分级（所选选项的最高 grade）
+  function gradeOf(q){
+    const sel=answers[q.id]||[];
+    const gs=sel.map(k=>{const o=q.options.find(x=>x.key===k);return o&&typeof o.grade==='number'?o.grade:null;}).filter(x=>x!=null);
+    return gs.length?Math.max(...gs):null;
+  }
+  const hasGrade = Q.some(q=>(q.options||[]).some(o=>typeof o.grade==='number'));
+
+  function renderResult(){
+    setNav('学习小结',true);
+    let okCnt=0;
+    const rows=Q.map(q=>{ const v=api.verdict(q); if(v==='ok')okCnt++;
+      const map={ok:'观念正确',partial:'方向正确',miss:'存在盲区',wrong:'关键卡点',open:'已反馈'};
+      const g=gradeOf(q);
+      const gtag = g!=null?`<span class="pill" style="background:#eef0fe;color:#534AB7;margin-left:6px">观念 L${g}</span>`:'';
+      return `<div class="res-row"><span class="q">${esc(q.stage||'第'+q.id+'题')}：${esc(q.stem)}</span><span style="display:flex;gap:0;flex:0 0 auto"><span class="pill ${v}">${map[v]}</span>${gtag}</span></div>`;
+    }).join('');
+    const blocks=Q.filter(q=>{const v=api.verdict(q);return v==='wrong'||v==='miss'||v==='partial';}).length;
+    // 观念分级汇总（用于代表跟进 / 观念分级验证）
+    let gradeBlock='';
+    if(hasGrade){
+      const graded=Q.filter(q=>gradeOf(q)!=null);
+      const rowsG=graded.map(q=>{const g=gradeOf(q);
+        return `<div class="res-row"><span class="q">${esc(q.conceptName||q.stage||('观念'+q.id))}</span><span class="pill" style="background:#eef0fe;color:#534AB7">L${g} / 5</span></div>`;}).join('');
+      gradeBlock=`<div class="sec"><div class="label">观念分级</div>${rowsG}<div class="muted" style="margin-top:8px">L1 最低（关键卡点）· L5 最高（观念已夯实）。可用于代表跟进与观念分级验证。</div></div>`;
+    }
+    scroll.innerHTML=`<div class="fade">
+      <div class="sec">
+        <div class="scorebar"><div class="big">${okCnt}/${Q.length}</div><div class="sub">观念正确 · 识别出 ${blocks} 个潜在卡点</div></div>
+      </div>
+      <div class="sec"><div class="label">作答分析</div>${rows}</div>
+      ${gradeBlock}
+      <div class="disclaimer">${esc((D.source&&D.source.disclaimer)||'本内容由 AI 生成，仅供医学专业人士学习参考。')}</div>
+      <div class="upgrade">
+        <div class="upgrade-h">💡 「互动病例专家 ·轻量体验版」帮您快速生成单篇病例。<br>「企业版（Powered by 腾讯健康 NGES）」帮您构建企业级病例生产体系。</div>
+        <div class="upgrade-b">
+          <div class="sub">当您需要的不是单次尝试，而是：</div>
+          <ul>
+            <li>📚 <b>批量生成</b> — 基于企业自有疾病知识库，一键批量产出多科室系列病例课程</li>
+            <li>🔐 <b>权限管控</b> — 多角色协作审核流程，病例内容分级发布与版本管理</li>
+            <li>🔌 <b>系统集成</b> — API 对接现有 CRM、Events 等系统，嵌入线上线下 HCP 继续教育体系</li>
+          </ul>
+        </div>
+        <div class="upgrade-cta">🔗 了解 <a href="https://nges.tencent.com" target="_blank">腾讯 NGES 全功能智能体</a> — 从「试试看」到「用起来」。</div>
+      </div>
+    </div>`;
+    footer.innerHTML=`<button class="btn ghost" onclick="CASE.go('cover')">重新学习</button><button class="btn primary" onclick="alert('可在此对接：获取产品资料 / 生成代表跟进报告')">获取相关资料</button>`;
+  }
+
+  return Object.assign(api,{render,_init(){render();}});
+})();
+CASE._init();
+</script>
+</body>
+</html>

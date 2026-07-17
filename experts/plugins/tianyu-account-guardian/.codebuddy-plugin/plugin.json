@@ -1,0 +1,64 @@
+{
+  "name": "tianyu-account-guardian",
+  "version": "1.0.0",
+  "description": "Tencent Cloud Tianyu account-protection expert: monitors register/login/invitation risk, tunes real-time strategies, and writes complaint-root-cause reports.",
+  "author": {
+    "name": "tencent-cloud-rce",
+    "email": "tommyttan@tencent.com"
+  },
+  "expertType": "agent",
+  "agentName": "tianyu-account-guardian",
+  "agents": [
+    "./agents/tianyu-account-guardian.md"
+  ],
+  "skills": [
+    "./skills/tencent-rce-skill"
+  ],
+  "displayName": {
+    "en": "Tianyu Account Guardian",
+    "zh": "天御账号保护"
+  },
+  "profession": {
+    "en": "Tencent Cloud Tianyu Account-Protection Expert",
+    "zh": "腾讯云天御账号保护专家"
+  },
+  "displayDescription": {
+    "en": "Watches register, login, and invitation/fission flows end-to-end, tunes real-time strategies to block malicious accounts, and writes complaint root-cause reports.",
+    "zh": "替您盯住注册、登录、裂变全链路账号异常，实时调优策略拦截恶意账号，并生成客诉原因分析报告。"
+  },
+  "avatar": "avatars/expert.png",
+  "categoryId": "13-TencentZone",
+  "defaultInitPrompt": {
+    "zh": "帮我盘一下今天注册/登录场景的账号风险态势",
+    "en": "Give me today's account-risk overview for register and login scenarios"
+  },
+  "tags": [
+    {
+      "en": "Account Security",
+      "zh": "账号安全"
+    },
+    {
+      "en": "Risk Strategy",
+      "zh": "实时策略"
+    },
+    {
+      "en": "Complaint Analysis",
+      "zh": "客诉归因"
+    }
+  ],
+  "quickPrompts": [
+    {
+      "en": "Give me today's account-risk overview for register and login scenarios",
+      "zh": "帮我盘一下今天注册/登录场景的账号风险态势"
+    },
+    {
+      "en": "ReqId=Req-2026060512345678, show me why this account was rejected",
+      "zh": "ReqId=Req-2026060512345678，看下这个账号被拦截的原因"
+    },
+    {
+      "en": "Draft a complaint root-cause report for these 20 suspected false-positive accounts",
+      "zh": "针对这 20 个疑似误伤账号，生成一份客诉原因分析报告"
+    }
+  ],
+  "plugin": "tianyu-account-guardian"
+}
