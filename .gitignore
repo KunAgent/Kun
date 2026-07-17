@@ -26,6 +26,10 @@ ref_dir/
 
 ### AL ###
 #Template for AL projects for Dynamics 365 Business Central
+# test data
+.gstack/
+.superpowers/
+native/
 #launch.json folder
 .vscode/
 #Cache folder
