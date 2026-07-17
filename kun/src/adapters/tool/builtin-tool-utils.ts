@@ -784,7 +784,7 @@ export function globToRegExp(pattern: string): RegExp {
   const withWildcards = escaped
     .replace(/\*\*/g, '::DOUBLE_STAR::')
     .replace(/\*/g, '[^/]*')
-    .replace(/\?/g, '.')
+    .replace(/\?/g, '[^/]')
     .replace(/::DOUBLE_STAR::/g, '.*')
   return new RegExp(`^${optionalPrefix ? '(?:.*/)?' : ''}${withWildcards}$`, 'i')
 }

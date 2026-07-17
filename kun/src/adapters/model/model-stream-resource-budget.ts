@@ -164,8 +164,8 @@ export class ModelStreamResourceBudget {
     if (!value) return undefined
     pending.delete(callId)
     this.pendingToolCalls = Math.max(0, this.pendingToolCalls - 1)
-    this.pendingArgumentBytes -= value.argumentBytes
-    this.pendingArgumentFragments -= value.argumentFragments
+    this.pendingArgumentBytes = Math.max(0, this.pendingArgumentBytes - value.argumentBytes)
+    this.pendingArgumentFragments = Math.max(0, this.pendingArgumentFragments - value.argumentFragments)
     return value
   }
 
