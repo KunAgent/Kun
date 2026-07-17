@@ -66,7 +66,8 @@ describe('ShuimoYijingBackdrop', () => {
   it('keeps vertical columns, exact ink levels, and accessibility media rules wired in CSS', async () => {
     const nodeFs = 'node:fs/promises'
     const { readFile } = await import(/* @vite-ignore */ nodeFs)
-    const css = await readFile(new URL('../styles/base-shell.css', import.meta.url), 'utf8')
+    const css = (await readFile(new URL('../styles/base-shell.css', import.meta.url), 'utf8'))
+      .replaceAll('\r\n', '\n')
 
     const scriptRule = readCssRule(css, '.shuimo-yijing-script')
     expect(scriptRule).toContain('flex-direction: column;')

@@ -232,7 +232,7 @@ export class SkillService {
 
   private parseReferences(content: string): Array<{ title: string; url: string }> {
     const references: Array<{ title: string; url: string }> = []
-    const linkRegex = /\[([^\]]+)\]\((https?:\/\/[^\)]+)\)/g
+    const linkRegex = /\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g
     let match: RegExpExecArray | null
 
     while ((match = linkRegex.exec(content)) !== null) {

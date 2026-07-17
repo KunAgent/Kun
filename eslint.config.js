@@ -13,6 +13,11 @@ export default tseslint.config(
       '**/node_modules/**',
       '**/out/**',
       '**/coverage/**',
+      'design/design_libraries/**',
+      'design/runtime-skills/**',
+      'design/skills/**',
+      'experts/plugins/**',
+      'ref_dir/**',
       '.cache/**',
       '.claude/**'
     ]
