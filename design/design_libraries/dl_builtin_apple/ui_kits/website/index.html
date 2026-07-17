@@ -1,0 +1,1001 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Apple Web Kit</title>
+  <link rel="stylesheet" href="../../colors_and_type.css">
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.26.4/babel.min.js"></script>
+  <style>
+    :root {
+      --apple-font: "SF Pro Display", "SF Pro Text", -apple-system, BlinkMacSystemFont, "Helvetica Neue", Helvetica, Arial, sans-serif;
+      --apple-blue: #0071e3;
+      --apple-link: #0066cc;
+      --apple-link-dark: #2997ff;
+      --hairline: rgba(0, 0, 0, 0.08);
+      --hairline-strong: rgba(0, 0, 0, 0.18);
+      --apple-text: #1d1d1f;
+      --apple-text-secondary: #6e6e73;
+      --apple-gray: #f5f5f7;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    body {
+      background: #fff;
+      color: var(--apple-text);
+      font-family: var(--apple-font);
+      font-size: 17px;
+      line-height: 1.47059;
+      letter-spacing: -0.022em;
+      font-weight: 400;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+    .uikit-shell {
+      width: 100%;
+      max-width: 1184px;
+      margin: 0 auto;
+      overflow: hidden;
+    }
+    .uikit-truncate {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .uikit-nowrap {
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .uikit-table-wrap {
+      max-width: 100%;
+      overflow-x: auto;
+      overscroll-behavior-x: contain;
+    }
+    .uikit-responsive-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+    .uikit-main { min-width: 0; }
+    .uikit-toolbar { min-width: 0; }
+    .uikit-action-cell {
+      max-width: 160px;
+      min-width: 0;
+    }
+    .uikit-action {
+      display: inline-flex;
+      max-width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    button, input, select, textarea { font: inherit; color: inherit; }
+    a { color: var(--apple-link); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    /* ============ Global nav ============ */
+    .globalnav {
+      position: sticky;
+      top: 0;
+      z-index: 9999;
+      width: 100%;
+      height: 44px;
+      background: rgba(250, 250, 252, 0.8);
+      -webkit-backdrop-filter: saturate(180%) blur(20px);
+      backdrop-filter: saturate(180%) blur(20px);
+      border-bottom: 1px solid rgba(0, 0, 0, 0.04);
+    }
+    .globalnav-inner {
+      max-width: 1024px;
+      height: 100%;
+      margin: 0 auto;
+      padding: 0 22px;
+      display: flex;
+      align-items: center;
+      gap: 0;
+    }
+    .globalnav-logo {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0 8px;
+      height: 100%;
+      color: rgba(0, 0, 0, 0.8);
+    }
+    .globalnav-logo svg { width: 14px; height: 44px; }
+    .globalnav-list {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 100%;
+    }
+    .globalnav-link {
+      display: inline-flex;
+      align-items: center;
+      height: 100%;
+      padding: 0 10px;
+      font-size: 12px;
+      font-weight: 400;
+      letter-spacing: -0.01em;
+      color: rgba(0, 0, 0, 0.8);
+      cursor: pointer;
+      background: transparent;
+      border: none;
+      transition: opacity 180ms ease;
+    }
+    .globalnav-link:hover { opacity: 0.6; text-decoration: none; }
+    .globalnav-icon {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 36px;
+      height: 100%;
+      color: rgba(0, 0, 0, 0.8);
+      cursor: pointer;
+      background: transparent;
+      border: none;
+      transition: opacity 180ms ease;
+    }
+    .globalnav-icon:hover { opacity: 0.6; }
+
+    /* ============ Common section system ============ */
+    .section {
+      width: 100%;
+      padding: 80px 22px;
+    }
+    .section.gray { background: var(--apple-gray); }
+    .section.dark { background: #000; color: #f5f5f7; }
+    .section.dark .eyebrow { color: rgba(255, 255, 255, 0.7); }
+    .section.dark .copy { color: rgba(255, 255, 255, 0.7); }
+    .section.dark a { color: var(--apple-link-dark); }
+    .container {
+      max-width: 980px;
+      margin: 0 auto;
+    }
+    .container-wide {
+      max-width: 1440px;
+      margin: 0 auto;
+    }
+    .eyebrow {
+      margin: 0 0 8px;
+      font-size: 14px;
+      font-weight: 400;
+      letter-spacing: -0.016em;
+      color: var(--apple-text-secondary);
+    }
+    .display-1 {
+      margin: 0;
+      font-size: 80px;
+      line-height: 1.05;
+      letter-spacing: -0.015em;
+      font-weight: 600;
+      color: inherit;
+    }
+    .display-2 {
+      margin: 0;
+      font-size: 56px;
+      line-height: 1.07;
+      letter-spacing: -0.005em;
+      font-weight: 600;
+      color: inherit;
+    }
+    .display-3 {
+      margin: 0;
+      font-size: 40px;
+      line-height: 1.1;
+      letter-spacing: 0em;
+      font-weight: 600;
+      color: inherit;
+    }
+    .headline {
+      margin: 0;
+      font-size: 28px;
+      line-height: 1.14;
+      letter-spacing: 0.007em;
+      font-weight: 600;
+      color: inherit;
+    }
+    .copy {
+      margin: 16px 0 0;
+      font-size: 21px;
+      line-height: 1.19;
+      letter-spacing: 0.011em;
+      font-weight: 400;
+      color: var(--apple-text-secondary);
+    }
+    .copy-sm {
+      margin: 8px 0 0;
+      font-size: 17px;
+      line-height: 1.47;
+      letter-spacing: -0.022em;
+      color: var(--apple-text-secondary);
+    }
+
+    /* ============ Buttons ============ */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      min-height: 44px;
+      padding: 8px 22px;
+      border-radius: 980px;
+      font-size: 17px;
+      line-height: 1.17645;
+      letter-spacing: -0.022em;
+      font-weight: 400;
+      border: none;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: background-color 180ms ease, color 180ms ease, opacity 180ms ease;
+    }
+    .btn-primary {
+      background: var(--apple-blue);
+      color: #fff;
+    }
+    .btn-primary:hover { background: #0077ed; text-decoration: none; }
+    .btn-secondary {
+      background: transparent;
+      color: var(--apple-blue);
+      border: 1px solid var(--apple-blue);
+    }
+    .btn-secondary:hover { background: var(--apple-blue); color: #fff; text-decoration: none; }
+    .section.dark .btn-secondary {
+      color: var(--apple-link-dark);
+      border-color: var(--apple-link-dark);
+    }
+    .section.dark .btn-secondary:hover {
+      background: var(--apple-link-dark);
+      color: #fff;
+    }
+    .text-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 2px;
+      font-size: 17px;
+      line-height: 1.2;
+      letter-spacing: -0.022em;
+      color: var(--apple-link);
+      cursor: pointer;
+      background: transparent;
+      border: none;
+      padding: 0;
+    }
+    .text-link:hover { text-decoration: underline; }
+    .text-link .icon { width: 13px; height: 13px; transition: transform 180ms ease; }
+    .text-link:hover .icon { transform: translateX(2px); }
+    .section.dark .text-link { color: var(--apple-link-dark); }
+
+    .cta-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 22px;
+      margin-top: 24px;
+    }
+    .cta-row.center { justify-content: center; }
+
+    /* ============ Hero billboard ============ */
+    .hero {
+      width: 100%;
+      padding: 64px 22px 56px;
+      text-align: center;
+      background: #000;
+      color: #f5f5f7;
+    }
+    .hero .eyebrow { color: rgba(255, 255, 255, 0.7); }
+    .hero .copy { color: rgba(255, 255, 255, 0.85); }
+    .hero-visual {
+      margin: 48px auto 0;
+      width: 100%;
+      max-width: 920px;
+      aspect-ratio: 16 / 9;
+      border-radius: 18px;
+      background:
+        radial-gradient(60% 80% at 50% 30%, rgba(0, 140, 255, 0.45), transparent 60%),
+        radial-gradient(80% 100% at 50% 100%, rgba(255, 255, 255, 0.05), transparent 60%),
+        #0a0a0a;
+      display: grid;
+      place-items: center;
+      color: #fff;
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      overflow: hidden;
+    }
+    .hero-visual .icon { width: 96px; height: 96px; opacity: 0.95; }
+
+    /* ============ Bento grid ============ */
+    .bento {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+    }
+    .bento-card {
+      position: relative;
+      padding: 56px 40px;
+      border-radius: 18px;
+      min-height: 580px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      gap: 12px;
+      overflow: hidden;
+      isolation: isolate;
+    }
+    .bento-card.gray { background: var(--apple-gray); color: var(--apple-text); }
+    .bento-card.white { background: #fff; color: var(--apple-text); border: 1px solid var(--hairline); }
+    .bento-card.dark { background: #000; color: #f5f5f7; }
+    .bento-card.dark .copy,
+    .bento-card.dark .eyebrow { color: rgba(255, 255, 255, 0.7); }
+    .bento-card.span-2 { grid-column: span 2; }
+    .bento-card .display-3,
+    .bento-card .headline {
+      max-width: 18ch;
+    }
+    .bento-card .cta-row {
+      margin-top: auto;
+    }
+    .bento-card .product-art {
+      width: 100%;
+      flex: 1;
+      min-height: 200px;
+      display: grid;
+      place-items: center;
+      color: inherit;
+    }
+    .bento-card .product-art .icon {
+      width: 120px;
+      height: 120px;
+      opacity: 0.92;
+      stroke-width: 1;
+    }
+    .bento-card.dark .product-art {
+      background: radial-gradient(70% 60% at 50% 60%, rgba(0, 140, 255, 0.32), transparent 65%);
+    }
+    .bento-card.gray .product-art {
+      background: radial-gradient(70% 60% at 50% 60%, rgba(0, 113, 227, 0.08), transparent 65%);
+    }
+
+    /* ============ Feature stripe ============ */
+    .feature-stripe {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 0;
+      border-radius: 18px;
+      overflow: hidden;
+      background: #fff;
+      border: 1px solid var(--hairline);
+    }
+    .feature-cell {
+      padding: 40px 32px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      border-right: 1px solid var(--hairline);
+    }
+    .feature-cell:last-child { border-right: none; }
+    .feature-cell .icon { width: 40px; height: 40px; color: var(--apple-text); stroke-width: 1.4; }
+    .feature-cell h3 {
+      margin: 8px 0 0;
+      font-size: 19px;
+      line-height: 1.2;
+      letter-spacing: 0.012em;
+      font-weight: 600;
+    }
+    .feature-cell p {
+      margin: 0;
+      font-size: 14px;
+      line-height: 1.43;
+      color: var(--apple-text-secondary);
+      letter-spacing: -0.016em;
+    }
+
+    /* ============ Quick links ============ */
+    .quick-links {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+    }
+    .quick-card {
+      padding: 22px;
+      border-radius: 16px;
+      background: #fff;
+      border: 1px solid var(--hairline);
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      cursor: pointer;
+      transition: transform 180ms ease, box-shadow 180ms ease;
+      text-align: left;
+      color: inherit;
+    }
+    .quick-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 12px 24px -16px rgba(0, 0, 0, 0.18);
+    }
+    .quick-card .icon {
+      width: 28px;
+      height: 28px;
+      color: var(--apple-text);
+      stroke-width: 1.5;
+    }
+    .quick-card h4 {
+      margin: 4px 0 0;
+      font-size: 17px;
+      font-weight: 600;
+      letter-spacing: -0.022em;
+    }
+    .quick-card p {
+      margin: 0;
+      font-size: 13px;
+      color: var(--apple-text-secondary);
+      letter-spacing: -0.016em;
+    }
+
+    /* ============ Promo strip ============ */
+    .promo-strip {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+    }
+    .promo-card {
+      padding: 32px 28px;
+      border-radius: 16px;
+      background: #fff;
+      border: 1px solid var(--hairline);
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .promo-card .promo-icon {
+      width: 36px;
+      height: 36px;
+      color: var(--apple-blue);
+      stroke-width: 1.4;
+    }
+    .promo-card h4 {
+      margin: 4px 0 0;
+      font-size: 19px;
+      letter-spacing: 0.012em;
+      font-weight: 600;
+    }
+    .promo-card p {
+      margin: 0;
+      font-size: 14px;
+      line-height: 1.43;
+      color: var(--apple-text-secondary);
+      letter-spacing: -0.016em;
+    }
+
+    /* ============ Footer ============ */
+    .footer {
+      background: var(--apple-gray);
+      color: var(--apple-text-secondary);
+      font-size: 12px;
+      line-height: 1.33;
+      letter-spacing: -0.01em;
+      padding: 18px 22px 22px;
+    }
+    .footer-inner {
+      max-width: 1024px;
+      margin: 0 auto;
+    }
+    .footer-disclaimer {
+      padding: 18px 0;
+      border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+    }
+    .footer-disclaimer p {
+      margin: 0 0 8px;
+      font-size: 12px;
+      line-height: 1.33;
+    }
+    .footer-disclaimer p:last-child { margin: 0; }
+    .footer-columns {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 24px;
+      padding: 30px 0;
+      border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+    }
+    .footer-col h5 {
+      margin: 0 0 4px;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--apple-text);
+      letter-spacing: -0.01em;
+    }
+    .footer-col ul {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .footer-col a {
+      color: var(--apple-text-secondary);
+      font-size: 12px;
+      line-height: 1.33;
+    }
+    .footer-col a:hover {
+      text-decoration: underline;
+      color: var(--apple-text);
+    }
+    .footer-bottom {
+      padding: 18px 0 0;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px 16px;
+      justify-content: space-between;
+    }
+    .footer-bottom-links {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0 16px;
+    }
+    .footer-bottom-links span {
+      position: relative;
+      padding-right: 16px;
+    }
+    .footer-bottom-links span:not(:last-child)::after {
+      content: "";
+      position: absolute;
+      right: 0;
+      top: 4px;
+      bottom: 4px;
+      width: 1px;
+      background: rgba(0, 0, 0, 0.18);
+    }
+
+    /* ============ Kit chrome ============ */
+    .kit-caption {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.16em;
+      color: var(--apple-text-secondary);
+      padding: 24px 22px 0;
+      max-width: 1024px;
+      margin: 0 auto;
+    }
+
+    /* ============ Responsive ============ */
+    @media (max-width: 832px) {
+      .display-1 { font-size: 56px; }
+      .display-2 { font-size: 40px; }
+      .display-3 { font-size: 32px; }
+      .bento { grid-template-columns: 1fr; }
+      .bento-card.span-2 { grid-column: span 1; }
+      .bento-card { padding: 40px 28px; min-height: 460px; }
+      .feature-stripe { grid-template-columns: 1fr; }
+      .feature-cell { border-right: none; border-bottom: 1px solid var(--hairline); }
+      .feature-cell:last-child { border-bottom: none; }
+      .quick-links { grid-template-columns: repeat(2, 1fr); }
+      .promo-strip { grid-template-columns: 1fr; }
+      .footer-columns { grid-template-columns: repeat(2, 1fr); }
+      .globalnav-list { gap: 4px; overflow-x: auto; }
+      .globalnav-link { padding: 0 8px; font-size: 11px; flex-shrink: 0; }
+    }
+    @media (max-width: 900px) {
+      .uikit-responsive-grid { grid-template-columns: minmax(0, 1fr); }
+      .uikit-table-wrap { overflow-x: auto; }
+    }
+    @media (max-width: 640px) {
+      .uikit-shell { max-width: 100%; }
+      .uikit-nowrap { white-space: nowrap; }
+      .uikit-action-cell { max-width: 100%; }
+    }
+    @media (max-width: 480px) {
+      .section { padding: 56px 16px; }
+      .display-1 { font-size: 44px; }
+      .display-2 { font-size: 32px; }
+      .display-3 { font-size: 26px; }
+      .copy { font-size: 17px; }
+    }
+    .icon { display: inline-block; flex-shrink: 0; }
+  </style>
+</head>
+<body data-layout-guard="uikit-v1">
+  <div id="root"></div>
+  <script type="text/babel">
+    const { useState } = React;
+
+    const ICONS = {
+      "apple": <path d="M16.365 1.43c0 1.14-.493 2.27-1.177 3.08-.744.9-1.99 1.57-2.987 1.57-.12 0-.23-.02-.3-.03-.01-.06-.04-.22-.04-.39 0-1.15.572-2.27 1.206-2.98.804-.94 2.142-1.64 3.248-1.68.03.13.05.28.05.43zm4.565 15.71c-.03-.04-2.94-1.13-2.97-4.43-.03-2.74 2.23-4.06 2.34-4.13-1.27-1.86-3.24-2.12-3.93-2.13-1.66-.17-3.28 1-4.13 1-.86 0-2.18-.99-3.59-.97-1.84.03-3.55 1.07-4.5 2.71-1.93 3.34-.49 8.27 1.37 11 .9 1.34 1.99 2.83 3.4 2.78 1.36-.05 1.88-.88 3.53-.88 1.65 0 2.12.88 3.55.85 1.47-.03 2.4-1.36 3.3-2.7 1.04-1.55 1.46-3.03 1.49-3.1z" />,
+      "search": <><circle cx="11" cy="11" r="8" /><path d="m21 21-4.34-4.34" /></>,
+      "shopping-bag": <><path d="M16 10a4 4 0 0 1-8 0" /><path d="M3.103 6.034h17.794" /><path d="M3.4 5.467a2 2 0 0 0-.4 1.2V20a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6.667a2 2 0 0 0-.4-1.2l-2-2.667A2 2 0 0 0 17 2H7a2 2 0 0 0-1.6.8z" /></>,
+      "chevron-right": <path d="m9 18 6-6-6-6" />,
+      "chevron-down": <path d="m6 9 6 6 6-6" />,
+      "play": <polygon points="6 3 20 12 6 21 6 3" />,
+      "camera": <><path d="M13.997 4a2 2 0 0 1 1.76 1.05l.486.9A2 2 0 0 0 18.003 7H20a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h1.997a2 2 0 0 0 1.759-1.048l.489-.904A2 2 0 0 1 10.004 4z" /><circle cx="12" cy="13" r="3" /></>,
+      "tablet": <><rect width="16" height="20" x="4" y="2" rx="2" ry="2" /><line x1="12" x2="12.01" y1="18" y2="18" /></>,
+      "watch": <><path d="M12 10v2.2l1.6 1" /><path d="m16.13 7.66-.81-4.05a2 2 0 0 0-2-1.61h-2.68a2 2 0 0 0-2 1.61l-.78 4.05" /><path d="m7.88 16.36.8 4a2 2 0 0 0 2 1.61h2.72a2 2 0 0 0 2-1.61l.81-4.05" /><circle cx="12" cy="12" r="6" /></>,
+      "headphones": <path d="M3 14h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7a9 9 0 0 1 18 0v7a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3" />,
+      "monitor": <><rect width="20" height="14" x="2" y="3" rx="2" /><line x1="8" x2="16" y1="21" y2="21" /><line x1="12" x2="12" y1="17" y2="21" /></>,
+      "tv": <><rect x="2" y="7" width="20" height="15" rx="2" ry="2" /><polyline points="17 2 12 7 7 2" /></>,
+      "glasses": <><circle cx="6" cy="15" r="4" /><circle cx="18" cy="15" r="4" /><path d="M14 15a2 2 0 0 0-2-2 2 2 0 0 0-2 2" /><path d="M2.5 13 5 7c.7-1.3 1.4-2 3-2" /><path d="M21.5 13 19 7c-.7-1.3-1.5-2-3-2" /></>,
+      "gift": <><rect x="3" y="8" width="18" height="4" rx="1" /><path d="M12 8v13" /><path d="M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7" /><path d="M7.5 8a2.5 2.5 0 0 1 0-5A4.8 8 0 0 1 12 8a4.8 8 0 0 1 4.5-5 2.5 2.5 0 0 1 0 5" /></>,
+      "package": <><path d="M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z" /><path d="M12 22V12" /><polyline points="3.29 7 12 12 20.71 7" /><path d="m7.5 4.27 9 5.15" /></>,
+      "truck": <><path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2" /><path d="M15 18H9" /><path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14" /><circle cx="17" cy="18" r="2" /><circle cx="7" cy="18" r="2" /></>,
+      "credit-card": <><rect x="2" y="5" width="20" height="14" rx="2" /><line x1="2" x2="22" y1="10" y2="10" /></>,
+      "shield-check": <><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z" /><path d="m9 12 2 2 4-4" /></>,
+      "sparkles": <><path d="M11.017 2.814a1 1 0 0 1 1.966 0l1.051 5.558a2 2 0 0 0 1.594 1.594l5.558 1.051a1 1 0 0 1 0 1.966l-5.558 1.051a2 2 0 0 0-1.594 1.594l-1.051 5.558a1 1 0 0 1-1.966 0l-1.051-5.558a2 2 0 0 0-1.594-1.594l-5.558-1.051a1 1 0 0 1 0-1.966l5.558-1.051a2 2 0 0 0 1.594-1.594z" /><path d="M20 2v4" /><path d="M22 4h-4" /><circle cx="4" cy="20" r="2" /></>,
+      "refresh": <><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" /><path d="M21 3v5h-5" /><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" /><path d="M8 16H3v5" /></>,
+      "map-pin": <><path d="M20 10c0 4.993-5.539 10.193-7.399 11.799a1 1 0 0 1-1.202 0C9.539 20.193 4 14.993 4 10a8 8 0 0 1 16 0" /><circle cx="12" cy="10" r="3" /></>,
+      "globe": <><circle cx="12" cy="12" r="10" /><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20" /><path d="M2 12h20" /></>
+    };
+
+    function Icon({ name, size = 18, strokeWidth = 1.8, ...rest }) {
+      const inner = ICONS[name];
+      if (!inner) return null;
+      const isFilled = name === "apple" || name === "play";
+      return (
+        <svg className="icon"
+          width={size} height={size}
+          viewBox="0 0 24 24"
+          fill={isFilled ? "currentColor" : "none"}
+          stroke={isFilled ? "none" : "currentColor"}
+          strokeWidth={strokeWidth}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+          {...rest}
+        >
+          {inner}
+        </svg>
+      );
+    }
+
+    const navItems = [
+      "Store", "Mac", "iPad", "iPhone", "Watch", "Vision", "AirPods",
+      "TV & Home", "Entertainment", "Accessories", "Support"
+    ];
+
+    const bentoItems = [
+      {
+        kind: "dark",
+        eyebrow: "New",
+        title: "iPhone 15 Pro",
+        copy: "Titanium. So strong. So light. So Pro.",
+        cta1: "Buy",
+        cta2: "Learn more",
+        icon: "camera"
+      },
+      {
+        kind: "gray",
+        eyebrow: "Built for Apple Intelligence",
+        title: "MacBook Air",
+        copy: "Speed of lightness, all day battery.",
+        cta1: "Buy",
+        cta2: "Learn more",
+        icon: "tablet"
+      },
+      {
+        kind: "white",
+        eyebrow: "Apple Watch Series 10",
+        title: "Thinstant classic.",
+        copy: "Bigger display. Slimmer design.",
+        cta1: "Buy",
+        cta2: "Learn more",
+        icon: "watch"
+      },
+      {
+        kind: "dark",
+        eyebrow: "AirPods Pro",
+        title: "Adaptive Audio. Now playing.",
+        copy: "USB-C and a Conversation Awareness mode.",
+        cta1: "Buy",
+        cta2: "Learn more",
+        icon: "headphones"
+      }
+    ];
+
+    const featureCells = [
+      { icon: "truck", title: "Free delivery", copy: "Free shipping on every order, no minimum." },
+      { icon: "credit-card", title: "Apple Card Monthly", copy: "Pay over time at 0% APR with eligible items." },
+      { icon: "shield-check", title: "AppleCare+", copy: "Coverage for accidental damage and battery service." }
+    ];
+
+    const quickCards = [
+      { icon: "monitor", title: "Mac", copy: "Pro chips, all-day battery." },
+      { icon: "tablet", title: "iPad", copy: "Color, light, accuracy." },
+      { icon: "watch", title: "Watch", copy: "Built for fitness." },
+      { icon: "headphones", title: "AirPods", copy: "Spatial Audio that adapts." },
+      { icon: "tv", title: "TV & Home", copy: "Apple TV 4K, HomePod mini." },
+      { icon: "glasses", title: "Vision", copy: "A new spatial computer." },
+      { icon: "gift", title: "Gift Cards", copy: "Anywhere Apple is sold." },
+      { icon: "package", title: "Accessories", copy: "Cases, cables, AirTag." }
+    ];
+
+    const promos = [
+      { icon: "refresh", title: "Apple Trade In", copy: "Get credit toward a new device when you trade in your eligible model." },
+      { icon: "sparkles", title: "Apple Intelligence", copy: "Personal, private, and built into your favorite apps." },
+      { icon: "map-pin", title: "Find your store", copy: "Pickup in store today, or have it delivered." }
+    ];
+
+    const footerColumns = [
+      {
+        h: "Shop and Learn",
+        items: ["Store", "Mac", "iPad", "iPhone", "Watch", "Vision", "AirPods", "TV & Home", "AirTag", "Accessories", "Gift Cards"]
+      },
+      {
+        h: "Apple Wallet",
+        items: ["Wallet", "Apple Card", "Apple Pay", "Apple Cash"]
+      },
+      {
+        h: "Account",
+        items: ["Manage Your Apple ID", "Apple Store Account", "iCloud.com"]
+      },
+      {
+        h: "Apple Store",
+        items: ["Find a Store", "Genius Bar", "Today at Apple", "Apple Camp", "Apple Store App", "Certified Refurbished", "Apple Trade In", "Financing", "Order Status", "Shopping Help"]
+      },
+      {
+        h: "About Apple",
+        items: ["Newsroom", "Apple Leadership", "Career Opportunities", "Investors", "Ethics & Compliance", "Events", "Contact Apple"]
+      }
+    ];
+
+    function GlobalNav() {
+      return (
+        <nav className="globalnav" aria-label="Global">
+          <div className="globalnav-inner">
+            <a className="globalnav-logo" aria-label="Apple" href="#">
+              <Icon name="apple" size={18} />
+            </a>
+            <ul className="globalnav-list">
+              {navItems.map(item => (
+                <li key={item}>
+                  <button className="globalnav-link">{item}</button>
+                </li>
+              ))}
+              <li>
+                <button className="globalnav-icon" aria-label="Search"><Icon name="search" size={15} strokeWidth={1.6} /></button>
+              </li>
+              <li>
+                <button className="globalnav-icon" aria-label="Bag"><Icon name="shopping-bag" size={15} strokeWidth={1.6} /></button>
+              </li>
+            </ul>
+          </div>
+        </nav>
+      );
+    }
+
+    function Hero() {
+      return (
+        <section className="hero">
+          <p className="eyebrow">New</p>
+          <h1 className="display-1">iPhone 15 Pro</h1>
+          <p className="copy" style={{ maxWidth: 720, margin: "8px auto 0" }}>
+            Titanium. So strong. So light. So Pro.
+          </p>
+          <div className="cta-row center">
+            <a className="text-link" href="#" style={{ color: "var(--apple-link-dark)" }}>
+              Learn more <Icon name="chevron-right" size={13} />
+            </a>
+            <a className="text-link" href="#" style={{ color: "var(--apple-link-dark)" }}>
+              Buy <Icon name="chevron-right" size={13} />
+            </a>
+          </div>
+          <div className="hero-visual" aria-hidden="true">
+            <Icon name="camera" size={96} strokeWidth={1.1} />
+          </div>
+        </section>
+      );
+    }
+
+    function SecondaryHero() {
+      return (
+        <section className="section gray">
+          <div className="container" style={{ textAlign: "center" }}>
+            <p className="eyebrow">MacBook Air</p>
+            <h2 className="display-2">Lean. Mean. M3 machine.</h2>
+            <p className="copy" style={{ maxWidth: 720, margin: "12px auto 0" }}>
+              Built for Apple Intelligence. With up to 18 hours of battery life and the power of M3, MacBook Air takes on more than ever.
+            </p>
+            <div className="cta-row center">
+              <a className="text-link" href="#">Learn more <Icon name="chevron-right" size={13} /></a>
+              <a className="text-link" href="#">Buy <Icon name="chevron-right" size={13} /></a>
+            </div>
+            <div style={{
+              marginTop: 56,
+              maxWidth: 920,
+              marginLeft: "auto",
+              marginRight: "auto",
+              aspectRatio: "16 / 9",
+              borderRadius: 18,
+              background: "radial-gradient(60% 70% at 50% 30%, rgba(0,113,227,0.12), transparent 60%), #fff",
+              border: "1px solid var(--hairline)",
+              display: "grid",
+              placeItems: "center",
+              color: "var(--apple-text)"
+            }} aria-hidden="true">
+              <Icon name="tablet" size={108} strokeWidth={1.1} />
+            </div>
+          </div>
+        </section>
+      );
+    }
+
+    function BentoSection() {
+      return (
+        <section className="section">
+          <div className="container-wide" style={{ paddingInline: 22, maxWidth: 1024 }}>
+            <h2 className="display-3" style={{ marginBottom: 24, paddingInline: 8 }}>Get the latest.</h2>
+            <div className="bento">
+              {bentoItems.map((item, i) => (
+                <article className={"bento-card " + item.kind} key={item.title}>
+                  <p className="eyebrow">{item.eyebrow}</p>
+                  <h3 className="display-3">{item.title}</h3>
+                  <p className="copy-sm" style={{ maxWidth: 320 }}>{item.copy}</p>
+                  <div className="cta-row" style={{ marginTop: 4 }}>
+                    <a className="btn btn-primary" href="#">{item.cta1}</a>
+                    <a className="btn btn-secondary" href="#">{item.cta2}</a>
+                  </div>
+                  <div className="product-art" aria-hidden="true">
+                    <Icon name={item.icon} size={120} strokeWidth={1} />
+                  </div>
+                </article>
+              ))}
+            </div>
+          </div>
+        </section>
+      );
+    }
+
+    function FeatureStripe() {
+      return (
+        <section className="section gray" style={{ paddingTop: 0 }}>
+          <div className="container">
+            <div className="feature-stripe">
+              {featureCells.map(cell => (
+                <div className="feature-cell" key={cell.title}>
+                  <Icon name={cell.icon} size={40} strokeWidth={1.4} />
+                  <h3>{cell.title}</h3>
+                  <p>{cell.copy}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+      );
+    }
+
+    function QuickLinks() {
+      return (
+        <section className="section">
+          <div className="container">
+            <h2 className="display-3" style={{ marginBottom: 24 }}>Shop the lineup.</h2>
+            <div className="quick-links">
+              {quickCards.map(card => (
+                <button className="quick-card" key={card.title}>
+                  <Icon name={card.icon} size={28} strokeWidth={1.5} />
+                  <h4>{card.title}</h4>
+                  <p>{card.copy}</p>
+                </button>
+              ))}
+            </div>
+          </div>
+        </section>
+      );
+    }
+
+    function PromoStrip() {
+      return (
+        <section className="section gray">
+          <div className="container">
+            <h2 className="display-3" style={{ marginBottom: 24 }}>Why Apple is the best place to buy.</h2>
+            <div className="promo-strip">
+              {promos.map(p => (
+                <article className="promo-card" key={p.title}>
+                  <Icon name={p.icon} size={36} strokeWidth={1.4} className="promo-icon" />
+                  <h4>{p.title}</h4>
+                  <p>{p.copy}</p>
+                  <a className="text-link" href="#" style={{ marginTop: "auto" }}>
+                    Learn more <Icon name="chevron-right" size={13} />
+                  </a>
+                </article>
+              ))}
+            </div>
+          </div>
+        </section>
+      );
+    }
+
+    function ServicesBillboard() {
+      return (
+        <section className="section dark">
+          <div className="container" style={{ textAlign: "center" }}>
+            <p className="eyebrow">Apple Intelligence</p>
+            <h2 className="display-2">AI for the rest of us.</h2>
+            <p className="copy" style={{ maxWidth: 720, margin: "12px auto 0" }}>
+              Personal. Private. Built deep into your favorite apps. Available with iPhone 15 Pro, iPad, and Mac.
+            </p>
+            <div className="cta-row center">
+              <a className="text-link" href="#">Learn more <Icon name="chevron-right" size={13} /></a>
+              <a className="text-link" href="#"><Icon name="play" size={13} /> Watch the film</a>
+            </div>
+            <div style={{
+              marginTop: 56,
+              maxWidth: 920,
+              marginLeft: "auto",
+              marginRight: "auto",
+              aspectRatio: "16 / 9",
+              borderRadius: 18,
+              background: "radial-gradient(60% 70% at 50% 30%, rgba(0,140,255,0.45), transparent 60%), #0a0a0a",
+              border: "1px solid rgba(255,255,255,0.06)",
+              display: "grid",
+              placeItems: "center",
+              color: "#fff"
+            }} aria-hidden="true">
+              <Icon name="sparkles" size={96} strokeWidth={1.1} />
+            </div>
+          </div>
+        </section>
+      );
+    }
+
+    function Footer() {
+      return (
+        <footer className="footer">
+          <div className="footer-inner">
+            <div className="footer-disclaimer">
+              <p>1. Trade-in values may vary based on the condition and model of your trade-in device. Not all devices are eligible for credit.</p>
+              <p>2. Apple Intelligence is available in beta on iPhone 15 Pro, iPhone 15 Pro Max, and iPad and Mac with M1 and later.</p>
+            </div>
+            <div className="footer-columns">
+              {footerColumns.map(col => (
+                <div className="footer-col" key={col.h}>
+                  <h5>{col.h}</h5>
+                  <ul>
+                    {col.items.map(it => <li key={it}><a href="#">{it}</a></li>)}
+                  </ul>
+                </div>
+              ))}
+            </div>
+            <div className="footer-bottom">
+              <span>Copyright &copy; 2025 Apple Inc. All rights reserved.</span>
+              <div className="footer-bottom-links">
+                <span><a href="#">Privacy Policy</a></span>
+                <span><a href="#">Terms of Use</a></span>
+                <span><a href="#">Sales and Refunds</a></span>
+                <span><a href="#">Legal</a></span>
+                <span><a href="#">Site Map</a></span>
+              </div>
+              <span><Icon name="globe" size={11} strokeWidth={1.5} /> &nbsp;United States</span>
+            </div>
+          </div>
+        </footer>
+      );
+    }
+
+    function App() {
+      return (
+        <>
+          <p className="kit-caption">Apple &middot; web kit</p>
+          <GlobalNav />
+          <Hero />
+          <SecondaryHero />
+          <BentoSection />
+          <FeatureStripe />
+          <QuickLinks />
+          <ServicesBillboard />
+          <PromoStrip />
+          <Footer />
+        </>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+  </script>
+</body>
+</html>

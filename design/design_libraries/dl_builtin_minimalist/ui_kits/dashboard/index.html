@@ -1,0 +1,1371 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <link rel="stylesheet" href="../../colors_and_type.css">
+<link rel="stylesheet" href="../../components.css">
+<meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Minimal Dashboard UI Kit</title>
+    <style>
+      * { box-sizing: border-box; }
+      html, body { margin: 0; min-height: 100%; }
+      body {
+        font-family: var(--font-sans);
+        background: var(--color-surface-muted);
+        color: var(--color-text);
+        -webkit-font-smoothing: antialiased;
+        letter-spacing: var(--tracking-normal);
+      }
+      button, input { font: inherit; }
+      button {
+        border: 0;
+        background: none;
+        color: inherit;
+        cursor: pointer;
+      }
+      button:focus-visible,
+      input:focus-visible {
+        outline: none;
+        box-shadow: 0 0 0 2px var(--background), 0 0 0 4px var(--ring);
+      }
+      .shell {
+        min-height: 100vh;
+        padding: calc(var(--space-4) * 3);
+      }
+      .dashboard-frame {
+        display: grid;
+        grid-template-columns: 232px minmax(0, 1fr);
+        min-height: calc(100vh - calc(var(--space-4) * 9));
+        background: var(--background);
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-md);
+        overflow: hidden;
+      }
+      .sidebar {
+        background: var(--sidebar);
+        color: var(--sidebar-foreground);
+        border-right: 1px solid var(--sidebar-border);
+        padding: calc(var(--space-4) * 4);
+        display: flex;
+        flex-direction: column;
+        gap: calc(var(--space-4) * 4);
+      }
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: calc(var(--space-4) * 2.5);
+        min-width: 0;
+      }
+      .brand-mark {
+        flex-shrink: 0;
+        width: 26px;
+        height: 26px;
+        border-radius: var(--radius-sm);
+        background: var(--sidebar-primary);
+        color: var(--sidebar-primary-foreground);
+        display: grid;
+        place-items: center;
+        font-family: var(--font-serif);
+        font-size: 0.85rem;
+        letter-spacing: -0.02em;
+      }
+      .brand-copy { min-width: 0; }
+      .brand-copy strong {
+        display: block;
+        font-size: 0.875rem;
+        font-weight: 600;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .brand-copy small {
+        display: block;
+        font-size: 0.72rem;
+        line-height: 1.4;
+        margin-top: 2px;
+      }
+      .brand-copy small,
+      .eyebrow,
+      .support,
+      .nav-caption,
+      .table-meta,
+      .kpi-delta,
+      .muted {
+        color: var(--color-text-muted);
+      }
+      .nav-stack,
+      .view-stack {
+        display: flex;
+        flex-direction: column;
+        gap: calc(var(--space-4) * 1.5);
+      }
+      .nav-section-title {
+        font-size: 0.68rem;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        color: var(--color-text-muted);
+        margin-bottom: calc(var(--space-4) * 1.5);
+      }
+      .nav-item {
+        width: 100%;
+        border-radius: var(--radius-sm);
+        padding: calc(var(--space-4) * 2) calc(var(--space-4) * 2.5);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        font-size: 0.875rem;
+        color: var(--color-text);
+        transition: background 180ms ease, color 180ms ease;
+      }
+      .nav-label {
+        display: inline-flex;
+        align-items: center;
+        gap: calc(var(--space-4) * 2);
+      }
+      .nav-label .lucide {
+        flex-shrink: 0;
+        color: var(--color-text-muted);
+        transition: color 180ms ease;
+      }
+      .nav-item:hover { background: var(--sidebar-accent); }
+      .nav-item.active {
+        background: var(--sidebar-primary);
+        color: var(--sidebar-primary-foreground);
+      }
+      .nav-item.active .nav-label .lucide,
+      .nav-item.active .nav-caption {
+        color: var(--sidebar-primary-foreground);
+        opacity: 0.85;
+      }
+      .sidebar-footer {
+        margin-top: auto;
+        padding-top: calc(var(--space-4) * 3.5);
+        border-top: 1px solid var(--sidebar-border);
+        background: transparent;
+      }
+      .sidebar-footer .eyebrow {
+        display: inline-flex;
+        align-items: center;
+        gap: calc(var(--space-4) * 1.25);
+        margin-bottom: calc(var(--space-4) * 1.5);
+      }
+      .sidebar-footer p { margin: calc(var(--space-4) * 1.25) 0 0; line-height: 1.5; font-size: 0.78rem; }
+      .sidebar-footer strong {
+        font-size: 0.84rem;
+        font-weight: 600;
+      }
+      .sidebar-footer strong,
+      .header-title h1,
+      .metric-value,
+      .panel-title h3,
+      .data-row strong,
+      .settings-name,
+      .workspace-title,
+      .insight-number {
+        letter-spacing: var(--tracking-tight);
+      }
+      .main {
+        padding: calc(var(--space-4) * 5);
+        display: flex;
+        flex-direction: column;
+        gap: calc(var(--space-4) * 4);
+      }
+      .topbar {
+        display: flex;
+        flex-direction: column;
+        gap: calc(var(--space-4) * 4);
+        padding-bottom: calc(var(--space-4) * 4);
+        border-bottom: 1px solid var(--color-border);
+      }
+      .utility-bar {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: calc(var(--space-4) * 2);
+      }
+      .header-title { min-width: 0; max-width: 64ch; }
+      .header-title h1 {
+        margin: calc(var(--space-4) * 1.5) 0 calc(var(--space-4) * 1.5) 0;
+        font-size: 1.5rem;
+        font-weight: 600;
+        line-height: 1.2;
+      }
+      .header-title .support {
+        line-height: 1.55;
+        font-size: 0.875rem;
+      }
+      .header-actions {
+        display: flex;
+        align-items: center;
+        gap: calc(var(--space-4) * 2);
+        flex-shrink: 0;
+      }
+      .search {
+        display: flex;
+        align-items: center;
+        gap: calc(var(--space-4) * 2);
+        width: 240px;
+        height: 32px;
+        padding: 0 calc(var(--space-4) * 2.5);
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-sm);
+        background: var(--color-surface);
+        transition: border-color 180ms ease, box-shadow 180ms ease;
+      }
+      .search:focus-within {
+        border-color: var(--ring);
+        box-shadow: 0 0 0 3px var(--brand-subtle);
+      }
+      .search-icon {
+        flex-shrink: 0;
+        color: var(--color-text-muted);
+      }
+      .search input {
+        width: 100%;
+        min-width: 0;
+        border: 0;
+        background: transparent;
+        color: var(--color-text);
+        font-size: 0.8125rem;
+      }
+      .search input::placeholder { color: var(--color-text-muted); }
+      .avatar {
+        flex-shrink: 0;
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        background: var(--primary);
+        color: var(--primary-foreground);
+        display: grid;
+        place-items: center;
+        font-size: 0.7rem;
+        font-weight: 600;
+        letter-spacing: 0.02em;
+      }
+      .btn-row,
+      .pill-row {
+        display: flex;
+        align-items: center;
+        gap: calc(var(--space-4) * 2);
+        flex-wrap: wrap;
+      }
+      .btn {
+        height: 32px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: calc(var(--space-4) * 1.5);
+        white-space: nowrap;
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-sm);
+        padding: 0 calc(var(--space-4) * 3);
+        font-size: 0.8125rem;
+        font-weight: 500;
+        line-height: 1;
+        color: var(--color-text);
+        transition: transform 120ms ease, background 180ms ease, border-color 180ms ease, color 180ms ease, box-shadow 180ms ease;
+      }
+      .btn .lucide { flex-shrink: 0; }
+      .btn:hover { background: var(--accent); }
+      .btn:active { transform: scale(0.98); }
+      .btn.primary {
+        background: var(--color-primary);
+        color: var(--color-primary-foreground);
+        border-color: var(--color-primary);
+      }
+      .btn.primary:hover {
+        background: var(--brand-700);
+        border-color: var(--brand-700);
+      }
+      .btn.secondary {
+        background: var(--color-surface);
+      }
+      .btn.ghost {
+        height: 28px;
+        padding: 0 calc(var(--space-4) * 2);
+        background: transparent;
+        border-color: transparent;
+        color: var(--color-text-muted);
+        font-size: 0.78rem;
+      }
+      .btn.ghost:hover {
+        background: var(--accent);
+        color: var(--color-text);
+      }
+      .btn.icon-only {
+        width: 32px;
+        padding: 0;
+      }
+      .btn.danger {
+        background: var(--color-danger-600);
+        color: var(--destructive-foreground);
+        border-color: var(--color-danger-600);
+      }
+      .view {
+        display: flex;
+        flex-direction: column;
+        gap: calc(var(--space-4) * 4);
+        animation: fadeUp 240ms ease;
+      }
+      @keyframes fadeUp {
+        from { opacity: 0; transform: translateY(8px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+      .metrics-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 0;
+        background: var(--card);
+        color: var(--card-foreground);
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-md);
+        overflow: hidden;
+      }
+      .metric-card {
+        position: relative;
+        padding: calc(var(--space-4) * 4) calc(var(--space-4) * 4);
+        display: flex;
+        flex-direction: column;
+        gap: calc(var(--space-4) * 1.5);
+        min-height: 104px;
+        transition: background 200ms ease;
+      }
+      .metric-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: calc(var(--space-4) * 2);
+      }
+      .metric-trend {
+        color: var(--color-text-muted);
+        flex-shrink: 0;
+      }
+      .metric-card + .metric-card {
+        border-left: 1px solid var(--color-border);
+      }
+      .metric-card:hover { background: var(--muted); }
+      .content-grid {
+        display: grid;
+        grid-template-columns: 1.4fr 1fr;
+        gap: calc(var(--space-4) * 4);
+        align-items: stretch;
+      }
+      .content-grid.equal { grid-template-columns: 1fr 1fr; }
+      .card {
+        background: var(--card);
+        color: var(--card-foreground);
+        border: 1px solid var(--color-border);
+        border-radius: var(--radius-md);
+        padding: calc(var(--space-4) * 4) calc(var(--space-4) * 4);
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        transition: border-color 200ms ease;
+      }
+      .card.flush { padding: 0; }
+      .card.flush > .panel-title {
+        padding: calc(var(--space-4) * 4) calc(var(--space-4) * 4) 0;
+      }
+      .card.flush > .table { padding: 0; }
+      .card:hover { border-color: var(--color-border-strong); }
+      .eyebrow {
+        font-size: 0.68rem;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        font-weight: 500;
+        color: var(--color-text-muted);
+      }
+      .metric-value {
+        font-size: 1.5rem;
+        line-height: 1.1;
+        font-weight: 500;
+        color: var(--color-text);
+      }
+      .kpi-delta { font-size: 0.75rem; }
+      .panel-title,
+      .table-header,
+      .setting-row,
+      .workspace-row,
+      .activity-row,
+      .team-row,
+      .insight-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: calc(var(--space-4) * 3);
+      }
+      .panel-title {
+        margin-bottom: calc(var(--space-4) * 3.5);
+        align-items: flex-start;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+      }
+      .panel-title > div:first-child { min-width: 0; }
+      .panel-title h3,
+      .workspace-title,
+      .settings-name {
+        margin: 0;
+        font-size: 0.875rem;
+        font-weight: 600;
+      }
+      .panel-title .support {
+        margin-top: calc(var(--space-4) * 0.75);
+        font-size: 0.78rem;
+      }
+      .chart-card {
+        display: flex;
+        flex-direction: column;
+      }
+      .chart-card .chart-wrap { flex: 1; }
+      .chart-wrap {
+        display: grid;
+        grid-template-columns: repeat(8, minmax(0, 1fr));
+        align-items: end;
+        gap: calc(var(--space-4) * 2);
+        min-height: 180px;
+        margin-top: calc(var(--space-4) * 4);
+        padding-top: calc(var(--space-4) * 3);
+        border-top: 1px dashed var(--color-border);
+      }
+      .bar-col {
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+        justify-content: flex-end;
+        gap: calc(var(--space-4) * 2);
+        height: 100%;
+      }
+      .bar {
+        width: 100%;
+        border-radius: 4px 4px 0 0;
+        background: linear-gradient(180deg, var(--chart-3), var(--chart-5));
+        transition: opacity 200ms ease;
+      }
+      .bar-col:hover .bar { opacity: 0.85; }
+      .bar-label {
+        text-align: center;
+        font-size: 0.72rem;
+        font-variant-numeric: tabular-nums;
+      }
+      .barH48 { height: 34%; }
+      .barH60 { height: 43%; }
+      .barH72 { height: 51%; }
+      .barH84 { height: 60%; }
+      .barH96 { height: 69%; }
+      .barH108 { height: 77%; }
+      .barH124 { height: 89%; }
+      .barH140 { height: 100%; }
+      .table th,
+      .table td,
+      .small {
+        font-size: 0.8125rem;
+      }
+      .table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+      .table th,
+      .table td {
+        padding: calc(var(--space-4) * 2.5) 0;
+        text-align: left;
+        border-bottom: 1px solid var(--color-border);
+        vertical-align: middle;
+      }
+      .table tbody tr:last-child td { border-bottom: 0; }
+      .table th {
+        color: var(--color-text-muted);
+        font-weight: 500;
+        font-size: 0.7rem;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+      }
+      .table tbody tr.selected { background: var(--brand-subtle); }
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        gap: calc(var(--space-4) * 1.25);
+        padding: calc(var(--space-4) * 0.75) calc(var(--space-4) * 2);
+        border-radius: 999px;
+        border: 1px solid var(--color-border);
+        background: var(--muted);
+        color: var(--color-text-muted);
+        font-size: 0.7rem;
+        font-weight: 500;
+        line-height: 1;
+      }
+      .badge::before {
+        content: "";
+        width: 5px;
+        height: 5px;
+        border-radius: 999px;
+        background: currentColor;
+        opacity: 0.6;
+      }
+      .badge.live {
+        background: var(--color-primary);
+        border-color: var(--color-primary);
+        color: var(--color-primary-foreground);
+      }
+      .badge.warn {
+        background: var(--color-danger-50);
+        border-color: var(--color-danger-200);
+        color: var(--color-danger-700);
+      }
+      .list {
+        display: flex;
+        flex-direction: column;
+      }
+      .list > * + * {
+        border-top: 1px solid var(--color-border);
+      }
+      .data-row,
+      .activity-row,
+      .insight-row,
+      .setting-row,
+      .workspace-row,
+      .team-row {
+        padding: calc(var(--space-4) * 3) 0;
+        background: transparent;
+        border: 0;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: calc(var(--space-4) * 3);
+      }
+      .data-row > div:first-child,
+      .activity-row > div:first-child,
+      .insight-row > div:first-child,
+      .setting-row > div:first-child,
+      .workspace-row > div:first-child,
+      .team-row > div:first-child {
+        min-width: 0;
+        flex: 1;
+      }
+      .data-row strong,
+      .activity-row strong,
+      .insight-row strong,
+      .team-row strong {
+        font-size: 0.875rem;
+        font-weight: 600;
+      }
+      .data-row .small,
+      .activity-row .small,
+      .insight-row .small,
+      .team-row .small,
+      .workspace-row .small,
+      .setting-row .small {
+        font-size: 0.78rem;
+        margin-top: calc(var(--space-4) * 0.5);
+      }
+      .progress {
+        width: 96px;
+        height: 5px;
+        border-radius: 999px;
+        background: var(--color-border);
+        overflow: hidden;
+      }
+      .progress > span {
+        display: block;
+        height: 100%;
+        border-radius: inherit;
+        background: var(--color-primary);
+      }
+      .progress25 > span { width: 25%; }
+      .progress40 > span { width: 40%; }
+      .progress55 > span { width: 55%; }
+      .progress70 > span { width: 70%; }
+      .progress85 > span { width: 85%; }
+      .pill {
+        border: 1px solid var(--color-border);
+        background: var(--color-surface);
+        padding: calc(var(--space-4) * 1.25) calc(var(--space-4) * 2.5);
+        border-radius: 999px;
+        font-size: 0.75rem;
+        font-weight: 500;
+        color: var(--color-text-muted);
+        transition: background 180ms ease, color 180ms ease, border-color 180ms ease;
+      }
+      .pill:hover { color: var(--color-text); }
+      .pill.active {
+        background: var(--color-primary);
+        color: var(--color-primary-foreground);
+        border-color: var(--color-primary);
+      }
+      .split-stat {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        margin-top: calc(var(--space-4) * 4);
+        padding-top: calc(var(--space-4) * 4);
+        border-top: 1px solid var(--color-border);
+      }
+      .split-stat .insight-row {
+        padding: 0 calc(var(--space-4) * 3);
+        border: 0;
+        background: transparent;
+        align-items: flex-start;
+      }
+      .split-stat .insight-row:first-child { padding-left: 0; }
+      .split-stat .insight-row:last-child { padding-right: 0; }
+      .split-stat .insight-row + .insight-row {
+        border-left: 1px solid var(--color-border);
+      }
+      .insight-number {
+        font-size: 1.25rem;
+        margin-bottom: calc(var(--space-4) * 0.5);
+        font-weight: 500;
+        color: var(--color-text);
+      }
+      .toggle {
+        width: 34px;
+        height: 20px;
+        padding: 2px;
+        border-radius: 999px;
+        background: var(--color-border);
+        display: flex;
+        align-items: center;
+        flex-shrink: 0;
+        transition: background 200ms ease, justify-content 200ms ease;
+      }
+      .toggle span {
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+        background: var(--color-surface);
+        box-shadow: var(--shadow-xs);
+        transition: transform 200ms ease;
+      }
+      .toggle.on {
+        justify-content: flex-end;
+        background: var(--color-primary);
+      }
+      .toggle.off {
+        justify-content: flex-start;
+      }
+      .settings-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: calc(var(--space-4) * 4);
+        align-items: stretch;
+      }
+      .settings-grid > .panel-stack {
+        display: grid;
+        grid-template-rows: auto 1fr;
+        gap: calc(var(--space-4) * 4);
+      }
+      .profile-card {
+        display: flex;
+        align-items: center;
+        gap: calc(var(--space-4) * 3);
+      }
+      .profile-avatar {
+        flex-shrink: 0;
+        width: 44px;
+        height: 44px;
+        border-radius: var(--radius-md);
+        background: var(--primary);
+        color: var(--primary-foreground);
+        display: grid;
+        place-items: center;
+        font-size: 0.85rem;
+        font-weight: 600;
+        letter-spacing: 0.02em;
+      }
+      .profile-card { gap: calc(var(--space-4) * 3); }
+      .profile-card > div:not(.profile-avatar) { min-width: 0; }
+      .panel-stack {
+        display: flex;
+        flex-direction: column;
+        gap: calc(var(--space-4) * 4);
+      }
+      .settings-stack {
+        display: flex;
+        flex-direction: column;
+      }
+      .settings-stack > * + * {
+        border-top: 1px solid var(--color-border);
+      }
+      .footnote {
+        margin-top: auto;
+        padding-top: calc(var(--space-4) * 3);
+        color: var(--color-text-muted);
+        font-size: 0.75rem;
+      }
+      @media (max-width: 1180px) {
+        .content-grid,
+        .content-grid.equal,
+        .settings-grid {
+          grid-template-columns: 1fr;
+        }
+        .header-title { max-width: none; }
+        .split-stat { grid-template-columns: 1fr; }
+        .split-stat .insight-row {
+          padding: calc(var(--space-4) * 3) 0;
+        }
+        .split-stat .insight-row + .insight-row {
+          border-left: 0;
+          border-top: 1px solid var(--color-border);
+        }
+      }
+      @media (max-width: 960px) {
+        .dashboard-frame {
+          grid-template-columns: 1fr;
+        }
+        .metrics-grid { grid-template-columns: 1fr 1fr; }
+        .metric-card + .metric-card { border-left: 0; }
+        .metric-card:nth-child(n+2) { border-top: 1px solid var(--color-border); }
+        .metric-card:nth-child(odd) { border-right: 1px solid var(--color-border); }
+        .metric-card:nth-child(2) { border-top: 0; }
+        .sidebar { display: none; }
+        .topbar { gap: calc(var(--space-4) * 3); }
+      }
+      @media (max-width: 640px) {
+        .shell { padding: calc(var(--space-4) * 2); }
+        .main { padding: calc(var(--space-4) * 4); }
+        .metrics-grid { grid-template-columns: 1fr; }
+        .metric-card + .metric-card { border-left: 0; border-top: 1px solid var(--color-border); }
+        .metric-card:nth-child(odd) { border-right: 0; }
+        .metric-card:nth-child(2) { border-top: 1px solid var(--color-border); }
+        .header-actions { width: 100%; flex-wrap: wrap; }
+        .search { width: 100%; }
+        .utility-bar { flex-direction: column; align-items: stretch; }
+      }
+
+      /* ─── UIKit layout guards (validator gates) ─────────────────── */
+      .uikit-shell {
+        width: 100%;
+        max-width: 1184px;
+        margin: 0 auto;
+        overflow: hidden;
+      }
+      .uikit-truncate {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .uikit-nowrap {
+        white-space: nowrap;
+        flex-shrink: 0;
+      }
+      .uikit-table-wrap {
+        max-width: 100%;
+        overflow-x: auto;
+        overscroll-behavior-x: contain;
+      }
+      .uikit-responsive-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
+        gap: calc(var(--space-4) * 4);
+      }
+      .uikit-main { min-width: 0; }
+      .uikit-toolbar { min-width: 0; }
+      .uikit-action-cell { max-width: 160px; }
+      .uikit-action {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .main { min-width: 0; }
+      .utility-bar { min-width: 0; }
+      .header-actions { min-width: 0; }
+      .metrics-grid,
+      .content-grid,
+      .settings-grid { grid-template-columns: repeat(auto-fit, minmax(0, 1fr)); }
+      .metrics-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+      .content-grid { grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); }
+      .content-grid.equal { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+      .settings-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+      @media (max-width: 900px) {
+        .content-grid,
+        .content-grid.equal,
+        .settings-grid { grid-template-columns: minmax(0, 1fr); }
+      }
+    </style>
+  
+<style id="uikit-compat-layout-guard">
+.uikit-shell { width: 100%; max-width: 1184px; margin: 0 auto; overflow: hidden; }
+.uikit-truncate { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.uikit-nowrap { white-space: nowrap; flex-shrink: 0; }
+.uikit-table-wrap { max-width: 100%; overflow-x: auto; overscroll-behavior-x: contain; }
+.uikit-responsive-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(0, 1fr)); gap: 16px; }
+.uikit-main { min-width: 0; }
+.uikit-toolbar { min-width: 0; }
+.uikit-action-cell { max-width: 160px; }
+.uikit-action { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 900px) { .uikit-responsive-grid { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 640px) { .uikit-shell { max-width: 100%; } .uikit-responsive-grid { grid-template-columns: minmax(0, 1fr); } }
+</style>
+</head>
+  <body>
+    <div id="root"></div>
+    <script crossorigin src="https://unpkg.com/react@18.2.0/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18.2.0/umd/react-dom.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/lucide@1.21.0/dist/umd/lucide.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone@7.23.5/babel.min.js"></script>
+    <script type="text/babel" data-presets="react">
+      function Icon({ name, size = 16, strokeWidth = 1.75, className, ...rest }) {
+        const node = window.lucide?.[name];
+        if (!node) return null;
+        return (
+          <svg
+            width={size}
+            height={size}
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={strokeWidth}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className={["lucide", className].filter(Boolean).join(" ")}
+            aria-hidden="true"
+            {...rest}
+          >
+            {node.map(([tag, attrs], i) => React.createElement(tag, { key: i, ...attrs }))}
+          </svg>
+        );
+      }
+
+      const views = [
+        {
+          id: "overview",
+          label: "Overview",
+          icon: "LayoutGrid",
+          caption: "Today",
+          headline: "Operational overview",
+          description: "Track the core metrics, delivery pace, and project health in one quiet workspace."
+        },
+        {
+          id: "analytics",
+          label: "Analytics",
+          icon: "BarChart3",
+          caption: "This week",
+          headline: "Signal and performance",
+          description: "Review retention, campaign impact, and active streams without leaving the main dashboard."
+        },
+        {
+          id: "settings",
+          label: "Settings",
+          icon: "Settings2",
+          caption: "Workspace",
+          headline: "System preferences",
+          description: "Manage profile details, workspace defaults, and notification routing from one tab."
+        }
+      ];
+
+      const overviewMetrics = [
+        { title: "Revenue", value: "$84.2K", delta: "+12.4% vs last week", trend: "up" },
+        { title: "Active users", value: "18.4K", delta: "+1.8K net growth", trend: "up" },
+        { title: "Open tasks", value: "126", delta: "14 require review", trend: "flat" },
+        { title: "Conversion", value: "4.72%", delta: "+0.36 points", trend: "up" }
+      ];
+
+      const chartBars = [
+        { day: "Mon", bar: "barH60" },
+        { day: "Tue", bar: "barH84" },
+        { day: "Wed", bar: "barH72" },
+        { day: "Thu", bar: "barH96" },
+        { day: "Fri", bar: "barH124" },
+        { day: "Sat", bar: "barH108" },
+        { day: "Sun", bar: "barH140" },
+        { day: "Now", bar: "barH96" }
+      ];
+
+      const projectRows = [
+        { name: "Billing refresh", owner: "Nia", status: "Live", value: "$12.8K" },
+        { name: "Usage export", owner: "Theo", status: "Review", value: "$8.1K" },
+        { name: "Access audit", owner: "Mina", status: "Queued", value: "$5.4K" },
+        { name: "Northstar report", owner: "Joel", status: "Live", value: "$17.2K" }
+      ];
+
+      const funnelRows = [
+        { name: "Qualified leads", value: "1,240", progress: "progress85" },
+        { name: "Trial starts", value: "684", progress: "progress55" },
+        { name: "Paid upgrades", value: "214", progress: "progress40" },
+        { name: "Expansion", value: "88", progress: "progress25" }
+      ];
+
+      const activityRows = [
+        { name: "API latency", meta: "Stable for 24h", badge: "Live" },
+        { name: "Email flow", meta: "2 automations updated", badge: "Review" },
+        { name: "Weekly export", meta: "Ready in 12 min", badge: "Queued" },
+        { name: "Fraud checks", meta: "1 incident resolved", badge: "Live" }
+      ];
+
+      const settingsRows = [
+        { name: "Product alerts", detail: "Critical incidents and workflow failures", enabled: true },
+        { name: "Daily summary", detail: "Compact digest at 08:30 local time", enabled: true },
+        { name: "Comment replies", detail: "Notify only for assigned threads", enabled: false },
+        { name: "Billing reminders", detail: "Renewals, invoices, and seats", enabled: true }
+      ];
+
+      const workspaceRows = [
+        { title: "Default view", detail: "Overview with saved metric cards", action: "Edit" },
+        { title: "Data region", detail: "Frankfurt · synchronized every 15 min", action: "Change" },
+        { title: "Export format", detail: "CSV + scheduled PDF snapshot", action: "Adjust" }
+      ];
+
+      function App() {
+        const [activeView, setActiveView] = React.useState("overview");
+        const [activeFilter, setActiveFilter] = React.useState("7d");
+        const [toggles, setToggles] = React.useState({
+          alerts: true,
+          summary: true,
+          replies: false,
+          billing: true
+        });
+
+        const currentView = views.find((view) => view.id === activeView);
+
+        const updateToggle = (key) => {
+          setToggles((prev) => ({ ...prev, [key]: !prev[key] }));
+        };
+
+        return (
+          <div className="shell uikit-shell" data-layout-guard="uikit-v1">
+            <div className="dashboard-frame">
+              <aside className="sidebar" data-component="sidebar">
+                <div className="brand">
+                  <div className="brand-mark">M</div>
+                  <div className="brand-copy">
+                    <strong>Minimal Dashboard</strong>
+                    <small>Calm system for team operations</small>
+                  </div>
+                </div>
+
+                <div className="nav-stack">
+                  <div>
+                    <div className="nav-section-title">Workspace</div>
+                    {views.map((view) => (
+                      <button
+                        key={view.id}
+                        className={`nav-item ${activeView === view.id ? "active" : ""}`}
+                        onClick={() => setActiveView(view.id)}
+                      >
+                        <span className="nav-label">
+                          <Icon name={view.icon} size={15} />
+                          {view.label}
+                        </span>
+                        <span className="nav-caption">{view.caption}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="sidebar-footer">
+                  <div className="eyebrow">
+                    <Icon name="Sparkles" size={12} />
+                    System note
+                  </div>
+                  <strong>Flat surfaces, precise rhythm</strong>
+                  <p className="small muted">
+                    The interface keeps contrast high, spacing tight, and data density easy to scan.
+                  </p>
+                </div>
+              </aside>
+
+              <main className="main">
+                <header className="topbar">
+                  <div className="utility-bar">
+                    <label className="search">
+                      <Icon name="Search" size={14} className="search-icon" />
+                      <input type="text" placeholder="Search reports, teams, or metrics" aria-label="Search" />
+                    </label>
+                    <div className="header-actions">
+                      <button data-component="button" className="btn ghost icon-only" aria-label="Notifications">
+                        <Icon name="Bell" size={15} />
+                      </button>
+                      <button data-component="button" className="btn secondary">
+                        <Icon name="Share2" size={14} />
+                        Share
+                      </button>
+                      <button data-component="button" className="btn primary">
+                        <Icon name="Plus" size={14} />
+                        Create report
+                      </button>
+                      <div className="avatar">AL</div>
+                    </div>
+                  </div>
+                  <div className="header-title">
+                    <div className="eyebrow">{currentView.caption}</div>
+                    <h1>{currentView.headline}</h1>
+                    <div className="support muted">{currentView.description}</div>
+                  </div>
+                </header>
+
+                {activeView === "overview" && (
+                  <section className="view">
+                    <div className="metrics-grid">
+                      {overviewMetrics.map((metric) => (
+                        <div key={metric.title} className="metric-card" data-component="card">
+                          <div className="metric-head">
+                            <div className="eyebrow">{metric.title}</div>
+                            <Icon
+                              name={metric.trend === "up" ? "TrendingUp" : "Minus"}
+                              size={14}
+                              className="metric-trend"
+                            />
+                          </div>
+                          <div className="metric-value">{metric.value}</div>
+                          <div className="kpi-delta muted">{metric.delta}</div>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="content-grid">
+                      <div data-component="card" className="card chart-card">
+                        <div className="panel-title">
+                          <div>
+                            <h3>Revenue pulse</h3>
+                            <div className="support">Eight-point weekly trend with a single accent scale.</div>
+                          </div>
+                          <span className="badge live">Live</span>
+                        </div>
+                        <div className="chart-wrap" data-component="chart">
+                          {chartBars.map((item) => (
+                            <div key={item.day} className="bar-col">
+                              <div className={`bar ${item.bar}`}></div>
+                              <div className="bar-label muted">{item.day}</div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div data-component="card" className="card">
+                        <div className="panel-title">
+                          <div>
+                            <h3>Team queue</h3>
+                            <div className="support">What needs attention in the next review cycle.</div>
+                          </div>
+                          <button data-component="button" className="btn ghost">
+                            View all
+                            <Icon name="ArrowUpRight" size={13} />
+                          </button>
+                        </div>
+                        <div className="list">
+                          <div className="team-row">
+                            <div>
+                              <strong>Nia Foster</strong>
+                              <div className="small muted">Billing refresh · Shipping today</div>
+                            </div>
+                            <span className="badge">Ready</span>
+                          </div>
+                          <div className="team-row">
+                            <div>
+                              <strong>Theo Park</strong>
+                              <div className="small muted">Usage export · Needs review</div>
+                            </div>
+                            <span className="badge warn">Risk</span>
+                          </div>
+                          <div className="team-row">
+                            <div>
+                              <strong>Mina Sol</strong>
+                              <div className="small muted">Access audit · Waiting on legal</div>
+                            </div>
+                            <span className="badge">Queued</span>
+                          </div>
+                          <div className="team-row">
+                            <div>
+                              <strong>Joel Gray</strong>
+                              <div className="small muted">Northstar report · Final polish</div>
+                            </div>
+                            <span className="badge">Final</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div data-component="card" className="card">
+                      <div className="panel-title">
+                        <div>
+                          <h3>Priority projects</h3>
+                          <div className="support">Quietly structured table rows with restrained state accents.</div>
+                        </div>
+                        <div className="table-meta">4 active initiatives</div>
+                      </div>
+                      <div className="uikit-table-wrap">
+                      <table className="table" data-component="table">
+                        <thead>
+                          <tr>
+                            <th>Project</th>
+                            <th>Owner</th>
+                            <th>Status</th>
+                            <th>Value</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {projectRows.map((row, index) => (
+                            <tr key={row.name} className={index === 1 ? "selected" : ""}>
+                              <td><strong>{row.name}</strong></td>
+                              <td>{row.owner}</td>
+                              <td>
+                                <span className={`badge ${row.status === "Live" ? "live" : ""}`}>
+                                  {row.status}
+                                </span>
+                              </td>
+                              <td>{row.value}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                      </div>
+                    </div>
+                  </section>
+                )}
+
+                {activeView === "analytics" && (
+                  <section className="view">
+                    <div data-component="card" className="card">
+                      <div className="panel-title">
+                        <div>
+                          <h3>Acquisition lens</h3>
+                          <div className="support">Switch time windows to compare campaign quality and conversion momentum.</div>
+                        </div>
+                        <div className="pill-row">
+                          {["24h", "7d", "30d"].map((item) => (
+                            <button
+                              key={item}
+                              className={`pill ${activeFilter === item ? "active" : ""}`}
+                              onClick={() => setActiveFilter(item)}
+                            >
+                              {item}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="split-stat">
+                        <div className="insight-row">
+                          <div>
+                            <div className="insight-number">72%</div>
+                            <div className="small muted">Lead quality score</div>
+                          </div>
+                          <span className="badge live">Up</span>
+                        </div>
+                        <div className="insight-row">
+                          <div>
+                            <div className="insight-number">19 min</div>
+                            <div className="small muted">Median first-response</div>
+                          </div>
+                          <span className="badge">Stable</span>
+                        </div>
+                        <div className="insight-row">
+                          <div>
+                            <div className="insight-number">4.3x</div>
+                            <div className="small muted">Pipeline coverage</div>
+                          </div>
+                          <span className="badge">Healthy</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="content-grid equal">
+                      <div data-component="card" className="card">
+                        <div className="panel-title">
+                          <div>
+                            <h3>Conversion funnel</h3>
+                            <div className="support">Representative stages with finite progress classes.</div>
+                          </div>
+                          <button data-component="button" className="btn ghost">
+                            Export
+                            <Icon name="Download" size={13} />
+                          </button>
+                        </div>
+                        <div className="list">
+                          {funnelRows.map((row) => (
+                            <div key={row.name} className="data-row">
+                              <div>
+                                <strong>{row.name}</strong>
+                                <div className="small muted">{row.value}</div>
+                              </div>
+                              <div className={`progress ${row.progress}`}>
+                                <span></span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div data-component="card" className="card">
+                        <div className="panel-title">
+                          <div>
+                            <h3>Signal feed</h3>
+                            <div className="support">A concise stream of platform changes and review points.</div>
+                          </div>
+                          <span className="badge">4 items</span>
+                        </div>
+                        <div className="list">
+                          {activityRows.map((row) => (
+                            <div key={row.name} className="activity-row">
+                              <div>
+                                <strong>{row.name}</strong>
+                                <div className="small muted">{row.meta}</div>
+                              </div>
+                              <span className={`badge ${row.badge === "Live" ? "live" : ""}`}>
+                                {row.badge}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div data-component="card" className="card">
+                      <div className="panel-title">
+                        <div>
+                          <h3>Weekly narrative</h3>
+                          <div className="support">The system is gaining efficiency while keeping activation quality stable.</div>
+                        </div>
+                        <button data-component="button" className="btn secondary">
+                          <Icon name="Copy" size={13} />
+                          Copy summary
+                        </button>
+                      </div>
+                      <div className="list">
+                        <div className="insight-row">
+                          <div>
+                            <strong>Enterprise campaigns outperformed self-serve.</strong>
+                            <div className="small muted">The highest quality traffic came from direct outbound sequences.</div>
+                          </div>
+                          <span className="badge live">Focus</span>
+                        </div>
+                        <div className="insight-row">
+                          <div>
+                            <strong>Conversion softened on weekend traffic.</strong>
+                            <div className="small muted">Review landing density and weekend support coverage.</div>
+                          </div>
+                          <span className="badge">Review</span>
+                        </div>
+                      </div>
+                    </div>
+                  </section>
+                )}
+
+                {activeView === "settings" && (
+                  <section className="view">
+                    <div className="settings-grid">
+                      <div className="panel-stack">
+                        <div data-component="card" className="card">
+                          <div className="panel-title">
+                            <div>
+                              <h3>Profile</h3>
+                              <div className="support">One focused settings tab with identity and role context.</div>
+                            </div>
+                            <button data-component="button" className="btn secondary">
+                              <Icon name="Pencil" size={13} />
+                              Edit profile
+                            </button>
+                          </div>
+                          <div className="profile-card">
+                            <div className="profile-avatar">AL</div>
+                            <div>
+                              <div className="settings-name">Avery Lane</div>
+                              <div className="small muted">Operations lead · Minimal Dashboard</div>
+                              <div className="small muted">avery@minimal.io</div>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div data-component="card" className="card">
+                          <div className="panel-title">
+                            <div>
+                              <h3>Notifications</h3>
+                              <div className="support">Compact toggles for the core routes teams usually tune first.</div>
+                            </div>
+                            <span className="badge">Single tab</span>
+                          </div>
+                          <div className="settings-stack">
+                            {settingsRows.map((row, index) => {
+                              const key = index === 0 ? "alerts" : index === 1 ? "summary" : index === 2 ? "replies" : "billing";
+                              const enabled = toggles[key];
+                              return (
+                                <div key={row.name} className="setting-row">
+                                  <div>
+                                    <div className="settings-name">{row.name}</div>
+                                    <div className="small muted">{row.detail}</div>
+                                  </div>
+                                  <button
+                                    className={`toggle ${enabled ? "on" : "off"}`}
+                                    onClick={() => updateToggle(key)}
+                                    aria-label={`Toggle ${row.name}`}
+                                  >
+                                    <span></span>
+                                  </button>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="panel-stack">
+                        <div data-component="card" className="card">
+                          <div className="panel-title">
+                            <div>
+                              <h3>Workspace defaults</h3>
+                              <div className="support">Settings that shape how every session opens and exports.</div>
+                            </div>
+                            <button data-component="button" className="btn ghost">
+                              Manage
+                              <Icon name="ChevronRight" size={13} />
+                            </button>
+                          </div>
+                          {workspaceRows.map((row) => (
+                            <div key={row.title} className="workspace-row">
+                              <div>
+                                <div className="workspace-title">{row.title}</div>
+                                <div className="small muted">{row.detail}</div>
+                              </div>
+                              <button data-component="button" className="btn secondary">
+                                {row.action}
+                                <Icon name="ChevronRight" size={13} />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+
+                        <div data-component="card" className="card">
+                          <div className="panel-title">
+                            <div>
+                              <h3>Audit summary</h3>
+                              <div className="support">The latest governance snapshot for this workspace.</div>
+                            </div>
+                            <span className="badge live">Synced</span>
+                          </div>
+                          <div className="list">
+                            <div className="insight-row">
+                              <div>
+                                <strong>Role changes</strong>
+                                <div className="small muted">3 updates approved in the last 30 days</div>
+                              </div>
+                              <span className="badge">3</span>
+                            </div>
+                            <div className="insight-row">
+                              <div>
+                                <strong>Data retention</strong>
+                                <div className="small muted">Policy aligned with current export window</div>
+                              </div>
+                              <span className="badge">OK</span>
+                            </div>
+                            <div className="insight-row">
+                              <div>
+                                <strong>Session controls</strong>
+                                <div className="small muted">Two-factor required for admin actions</div>
+                              </div>
+                              <span className="badge live">On</span>
+                            </div>
+                          </div>
+                          <div className="footnote">Last checked 12 minutes ago.</div>
+                        </div>
+                      </div>
+                    </div>
+                  </section>
+                )}
+              </main>
+            </div>
+          </div>
+        );
+      }
+
+      ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+    </script>
+  </body>
+</html>

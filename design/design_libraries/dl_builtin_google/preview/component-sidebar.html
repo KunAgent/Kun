@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Sidebar</title>
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>body{margin:0;padding:12px;background:var(--background);color:var(--foreground);font:14px/1.4 var(--font-sans)}.row{display:flex;gap:8px;align-items:flex-start;flex-wrap:wrap}.label{font:600 10px/1 var(--font-sans);letter-spacing:var(--tracking-normal,.12em);text-transform:uppercase;color:var(--muted-foreground);padding-top:8px;min-width:72px}.divider{margin:10px 0;border:0;border-top:1px solid var(--border)}.sidebar,.rail{background:var(--sidebar);color:var(--sidebar-foreground);border:1px solid var(--sidebar-border);border-radius:calc(var(--radius) + 4px);box-shadow:var(--shadow-sm);display:flex;flex-direction:column}.sidebar{width:236px;padding:12px;gap:10px}.rail{width:76px;padding:10px 8px;gap:8px;align-items:center}.brand,.section,.item,.mini{display:flex;align-items:center;gap:8px}.brand{font-weight:600}.section{font-size:11px;color:var(--muted-foreground);text-transform:uppercase}.item,.mini{border-radius:var(--radius);padding:9px 10px;color:inherit;text-decoration:none}.item{justify-content:space-between}.item:hover,.mini:hover{background:var(--sidebar-accent);color:var(--sidebar-accent-foreground)}.item.active,.mini.active{background:var(--sidebar-primary);color:var(--sidebar-primary-foreground)}.item[aria-disabled=true],.mini[aria-disabled=true]{opacity:.42;pointer-events:none}.icon{width:20px;height:20px;border-radius:999px;background:var(--sidebar-accent);color:var(--sidebar-accent-foreground);display:grid;place-items:center;font-size:11px;font-weight:700;flex:none}.badge{min-width:20px;height:20px;border-radius:999px;background:var(--sidebar-accent);color:var(--sidebar-accent-foreground);display:grid;place-items:center;font-size:11px;padding:0 6px}.mini{width:44px;height:44px;justify-content:center;padding:0}</style>
+</head>
+<body>
+<div class="row"><span class="label">Expanded</span><nav class="sidebar" aria-label="Google sidebar expanded"><div class="brand"><span class="icon">G</span><span>Google</span></div><div class="section">Workspace</div><a class="item" href="#"><span><span class="icon">R</span>Reports</span><span class="badge">8</span></a><a class="item active" href="#"><span><span class="icon">T</span>Team access</span></a><a class="item" href="#" aria-disabled="true"><span><span class="icon">W</span>Workspace</span></a></nav></div>
+<hr class="divider">
+<div class="row"><span class="label">Condensed</span><nav class="rail" aria-label="Google sidebar condensed"><a class="mini" href="#" aria-label="Workspace"><span class="icon">W</span></a><a class="mini active" href="#" aria-label="Reports"><span class="icon">R</span></a><a class="mini" href="#" aria-disabled="true" aria-label="Team access"><span class="icon">T</span></a></nav></div>
+</body>
+</html>

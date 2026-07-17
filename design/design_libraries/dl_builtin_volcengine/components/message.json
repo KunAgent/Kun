@@ -1,0 +1,67 @@
+{
+  "schemaVersion": 2,
+  "slug": "message",
+  "name": "Message",
+  "category": "feedback",
+  "sourceKind": "structured-spec",
+  "confidence": "medium",
+  "semanticTypeCandidates": ["toast", "notification", "global-message", "alert-bar"],
+  "variantDimensions": {
+    "type": ["success", "warning", "error", "info", "loading"],
+    "closable": ["true", "false"]
+  },
+  "representativeVariants": [
+    { "type": "success", "closable": "true" },
+    { "type": "success", "closable": "false" },
+    { "type": "warning", "closable": "true" },
+    { "type": "error", "closable": "true" },
+    { "type": "info", "closable": "true" },
+    { "type": "loading", "closable": "true" }
+  ],
+  "anatomy": ["container", "icon", "content", "close-button"],
+  "structurePatterns": [
+    "Inline-flex row with icon, text content, and optional close button, centered at top of viewport",
+    "All variants share the same container structure, differentiated by icon color"
+  ],
+  "usageHints": [
+    "Container: inline-flex, align-items center, gap 8px, padding 8px 16px",
+    "Background: rgba(246,248,250,0.9) with backdrop-filter blur(10px)",
+    "Border: 0.5px solid var(--color-border, #DDE2E9)",
+    "Border-radius: var(--radius-default, 4px)",
+    "Box-shadow: 0 5px 15px rgba(0,0,0,0.05), 0 15px 35px rgba(0,0,0,0.05)",
+    "Font: var(--font-family) 14px/22px, color var(--color-text-primary, #0C0D0E)",
+    "Icon: 20x20px flex-shrink 0",
+    "Icon colors: success=var(--color-success, #2A814B), warning=var(--color-warning, #FF7D00), error=var(--color-danger, #D7312A), info=var(--color-primary, #1664FF), loading=var(--color-primary, #1664FF)",
+    "Close button: 16x16px, color var(--color-text-secondary, #42464E)",
+    "Loading icon: animation message-spin 1s linear infinite"
+  ],
+  "doNotInvent": ["stacking behavior", "auto-dismiss duration API", "placement options"],
+  "unknowns": ["max-width behavior for long messages", "animation for enter/exit"],
+  "tokensConsumed": [
+    "--color-border",
+    "--radius-default",
+    "--font-family",
+    "--color-text-primary",
+    "--color-text-secondary",
+    "--color-success",
+    "--color-warning",
+    "--color-danger",
+    "--color-primary"
+  ],
+  "domAnatomy": {
+    "root": {
+      "tag": "div",
+      "class": "message message-{type}",
+      "children": [
+        { "tag": "svg", "class": "message-icon" },
+        { "tag": "span", "class": "message-content" },
+        { "tag": "button", "class": "message-close", "optional": true }
+      ]
+    }
+  },
+  "provenance": {
+    "preview": "preview/ui-message.html",
+    "source": "structured-spec",
+    "css": { "file": "ui-message.html", "marker": "inline style" }
+  }
+}

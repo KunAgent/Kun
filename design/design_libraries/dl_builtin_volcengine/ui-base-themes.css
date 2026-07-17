@@ -1,0 +1,48 @@
+/* 可插拔主题覆盖层
+ * 使用方式：在 <html> 上设置 data-theme 属性
+ * 例如：<html data-theme="dark">
+ *
+ * AI 生成代码时无需感知本文件 — 只需引用 tokens.css 中的变量名。
+ * 本文件是运行时上下文，不是生成依赖。
+ */
+
+/* ── 暗色主题 ── */
+[data-theme="dark"] {
+  --color-primary: #3C7EFF;
+  --color-danger: #F76560;
+  --color-success: #27C346;
+  --color-warning: #FF9A2E;
+
+  --color-text-primary: #F6F6F6;
+  --color-text-secondary: #C9CDD4;
+  --color-text-tertiary: #86909C;
+  --color-text-placeholder: #6B7785;
+  --color-text-disabled: #4E5969;
+
+  --color-bg-page: #17171A;
+  --color-bg-card: #232324;
+  --color-bg-hover: #2A2A2B;
+  --color-bg-active: #313132;
+  --color-bg-subtle: #1D1D1F;
+
+  --color-border: #3F3F3F;
+  --color-border-light: #2E2E30;
+  --color-border-hover: #6B7785;
+
+  --color-tag-success-bg: #1A3A2A;
+  --color-tag-warning-bg: #3A2E1A;
+  --color-tag-danger-bg: #3A1A1A;
+  --color-tag-info-bg: #1A2A3A;
+
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.3);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.4);
+  --shadow-lg: 0 8px 24px rgba(0,0,0,0.5);
+}
+
+/* ── 新主题模板（复制此块，改 data-theme 值和变量值即可）── */
+/*
+[data-theme="feishu"] {
+  --color-primary: #3370FF;
+  ...
+}
+*/

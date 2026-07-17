@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>Input 输入框</title>
+  <link rel="stylesheet" href="preview-scaffold.css">
+  <style>
+    .ui-input {
+      box-sizing: border-box;
+      width: 240px;
+      padding: 0 12px;
+      border: none;
+      border-radius: 4px;
+      outline: none;
+      background-color: #FFFFFF;
+      box-shadow: 0 0 0 1px #DDE2E9, 0 1px 1px rgba(0, 0, 0, 0.05);
+      color: #0C0D0E;
+      font-family: "PingFang SC", sans-serif;
+      font-weight: 400;
+      letter-spacing: 0.3px;
+      transition: box-shadow 150ms ease, background-color 150ms ease, color 150ms ease;
+    }
+
+    /* 尺寸 */
+    .input-lg { height: 36px; font-size: 14px; line-height: 22px; }
+    .input-md { height: 32px; font-size: 13px; line-height: 22px; }
+    .input-sm { height: 28px; font-size: 13px; line-height: 20px; }
+    .input-mini { height: 24px; font-size: 12px; line-height: 18px; padding: 0 8px; }
+
+    .ui-input::placeholder {
+      color: #737A87;
+    }
+
+    /* Hover */
+    .ui-input.hover,
+    .ui-input:hover:not(:focus):not(.active):not(.disabled):not(:disabled):not(.input-error):not(.readonly) {
+      box-shadow: 0 0 0 1px rgba(22, 100, 255, 0.8), 0 1px 1px rgba(0, 0, 0, 0.05);
+    }
+
+    /* Focus/Active */
+    .ui-input.active,
+    .ui-input:focus {
+      box-shadow: 0 0 0 1px #1664FF, 0 1px 1px rgba(0, 0, 0, 0.05), 0 0 0 3px rgba(22, 100, 255, 0.3);
+    }
+
+    /* Error */
+    .ui-input.input-error {
+      box-shadow: 0 0 0 1px #F53F3F, 0 1px 1px rgba(0, 0, 0, 0.05);
+    }
+
+    /* Error + Hover */
+    .ui-input.input-error.hover,
+    .ui-input.input-error:hover:not(:focus):not(.active) {
+      box-shadow: 0 0 0 1px #D93F3F, 0 1px 1px rgba(0, 0, 0, 0.05);
+    }
+
+    /* Error + Focus */
+    .ui-input.input-error.active,
+    .ui-input.input-error:focus {
+      box-shadow: 0 0 0 1px #F53F3F, 0 1px 1px rgba(0, 0, 0, 0.05), 0 0 0 3px rgba(245, 63, 63, 0.12);
+    }
+
+    /* Disabled */
+    .ui-input.disabled,
+    .ui-input:disabled {
+      background-color: #F6F8FA;
+      color: #C9CDD4;
+      cursor: not-allowed;
+    }
+
+    .ui-input.disabled::placeholder,
+    .ui-input:disabled::placeholder {
+      color: #C9CDD4;
+    }
+
+    /* Read-only */
+    .ui-input.readonly,
+    .ui-input[readonly] {
+      background-color: #F6F8FA;
+      color: #0C0D0E;
+      cursor: default;
+    }
+
+    /* Error 提示文案 */
+    .input-error-msg {
+      margin-top: 4px;
+      font-size: 12px;
+      line-height: 18px;
+      color: #F53F3F;
+      font-family: "PingFang SC", sans-serif;
+    }
+
+    /* Prefix 图标 */
+    .ui-input.input-prefix {
+      padding-left: 36px;
+      background-image: url("data:image/svg+xml,%3Csvg width='14' height='14' viewBox='0 0 14 14' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Ccircle cx='6' cy='6' r='4.5' stroke='%23737A87' stroke-width='1.2'/%3E%3Cpath d='M9.5 9.5L12 12' stroke='%23737A87' stroke-width='1.2' stroke-linecap='round'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: 12px center;
+    }
+
+    /* Suffix 图标 */
+    .ui-input.input-suffix {
+      padding-right: 36px;
+      background-image: url("data:image/svg+xml,%3Csvg width='14' height='14' viewBox='0 0 14 14' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M3 5L7 9L11 5' stroke='%2342464E' stroke-width='1.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 12px center;
+    }
+
+    /* Prefix + Suffix */
+    .ui-input.input-prefix.input-suffix {
+      padding-right: 36px;
+      background-image:
+        url("data:image/svg+xml,%3Csvg width='14' height='14' viewBox='0 0 14 14' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Ccircle cx='6' cy='6' r='4.5' stroke='%23737A87' stroke-width='1.2'/%3E%3Cpath d='M9.5 9.5L12 12' stroke='%23737A87' stroke-width='1.2' stroke-linecap='round'/%3E%3C/svg%3E"),
+        url("data:image/svg+xml,%3Csvg width='14' height='14' viewBox='0 0 14 14' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M3 5L7 9L11 5' stroke='%2342464E' stroke-width='1.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+      background-repeat: no-repeat, no-repeat;
+      background-position: 12px center, right 12px center;
+    }
+  </style>
+</head>
+<body>
+  <div class="pv-header">
+    <h1>Input 输入框</h1>
+    <p>常规输入框组件，支持多种尺寸、状态、前后缀图标及校验反馈。</p>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">常规（无前后缀）— 尺寸</div>
+    <div class="row">
+      <input class="ui-input input-lg" type="text" placeholder="请输入" data-component="input" data-state="default" data-size="large">
+      <input class="ui-input input-md" type="text" placeholder="请输入" data-component="input" data-state="default" data-size="default">
+      <input class="ui-input input-sm" type="text" placeholder="请输入" data-component="input" data-state="default" data-size="small">
+      <input class="ui-input input-mini" type="text" placeholder="请输入" data-component="input" data-state="default" data-size="mini">
+    </div>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">常规 — 交互状态</div>
+    <div class="row">
+      <input class="ui-input input-md hover" type="text" placeholder="请输入" data-component="input" data-state="hover">
+      <input class="ui-input input-md active" type="text" placeholder="请输入" data-component="input" data-state="active">
+      <input class="ui-input input-md" type="text" value="已填写内容" data-component="input" data-state="default" data-filled="true">
+      <input class="ui-input input-md disabled" type="text" placeholder="请输入" disabled data-component="input" data-state="disabled">
+      <input class="ui-input input-md disabled" type="text" value="禁用内容" disabled data-component="input" data-state="disabled" data-filled="true">
+      <input class="ui-input input-md readonly" type="text" value="只读内容" readonly data-component="input" data-state="readonly">
+    </div>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">常规报错</div>
+    <div class="row">
+      <input class="ui-input input-md input-error" type="text" value="错误内容" data-component="input" data-state="error">
+      <input class="ui-input input-md input-error hover" type="text" value="错误内容" data-component="input" data-state="error-hover">
+      <input class="ui-input input-md input-error active" type="text" value="错误内容" data-component="input" data-state="error-focus">
+    </div>
+    <div class="demo-box">
+      <div data-component="input" data-state="error-with-msg">
+        <input class="ui-input input-md input-error" type="text" value="错误内容">
+        <div class="input-error-msg">请输入正确的内容</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">前缀图标</div>
+    <div class="row">
+      <input class="ui-input input-md input-prefix" type="text" placeholder="请输入" data-component="input" data-state="default" data-prefix="true">
+      <input class="ui-input input-md input-prefix hover" type="text" placeholder="请输入" data-component="input" data-state="hover" data-prefix="true">
+      <input class="ui-input input-md input-prefix active" type="text" placeholder="请输入" data-component="input" data-state="active" data-prefix="true">
+      <input class="ui-input input-md input-prefix input-error" type="text" value="错误内容" data-component="input" data-state="error" data-prefix="true">
+      <input class="ui-input input-md input-prefix disabled" type="text" placeholder="请输入" disabled data-component="input" data-state="disabled" data-prefix="true">
+    </div>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">后缀图标</div>
+    <div class="row">
+      <input class="ui-input input-md input-suffix" type="text" placeholder="请输入" data-component="input" data-state="default" data-suffix="true">
+      <input class="ui-input input-md input-suffix hover" type="text" placeholder="请输入" data-component="input" data-state="hover" data-suffix="true">
+      <input class="ui-input input-md input-suffix active" type="text" placeholder="请输入" data-component="input" data-state="active" data-suffix="true">
+      <input class="ui-input input-md input-suffix input-error" type="text" value="错误内容" data-component="input" data-state="error" data-suffix="true">
+      <input class="ui-input input-md input-suffix disabled" type="text" placeholder="请输入" disabled data-component="input" data-state="disabled" data-suffix="true">
+    </div>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">前缀 + 后缀</div>
+    <div class="row">
+      <input class="ui-input input-md input-prefix input-suffix" type="text" placeholder="请输入" data-component="input" data-state="default" data-prefix="true" data-suffix="true">
+      <input class="ui-input input-md input-prefix input-suffix hover" type="text" placeholder="请输入" data-component="input" data-state="hover" data-prefix="true" data-suffix="true">
+      <input class="ui-input input-md input-prefix input-suffix active" type="text" placeholder="请输入" data-component="input" data-state="active" data-prefix="true" data-suffix="true">
+      <input class="ui-input input-md input-prefix input-suffix input-error" type="text" value="错误内容" data-component="input" data-state="error" data-prefix="true" data-suffix="true">
+      <input class="ui-input input-md input-prefix input-suffix disabled" type="text" placeholder="请输入" disabled data-component="input" data-state="disabled" data-prefix="true" data-suffix="true">
+    </div>
+  </div>
+</body>
+</html>

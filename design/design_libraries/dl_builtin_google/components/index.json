@@ -1,0 +1,56 @@
+{
+  "library": "google",
+  "brandName": "Google",
+  "productType": "dashboard",
+  "kitType": "dashboard",
+  "language": "en",
+  "components": [
+    {
+      "slug": "button",
+      "name": "Button",
+      "category": "action",
+      "variantCount": 9,
+      "keyInsight": "Actions feel crisp and flat, with color carrying emphasis instead of elevation."
+    },
+    {
+      "slug": "card",
+      "name": "Card",
+      "category": "container",
+      "variantCount": 6,
+      "keyInsight": "Cards are low-noise containers that rely on border and tonal contrast more than depth."
+    },
+    {
+      "slug": "table",
+      "name": "Table",
+      "category": "data-display",
+      "variantCount": 4,
+      "keyInsight": "Tables should stay airy despite dense information, using muted text and clear row separators."
+    },
+    {
+      "slug": "chart",
+      "name": "Chart",
+      "category": "data-visualization",
+      "variantCount": 5,
+      "keyInsight": "Charts bring the strongest brand color energy and should contrast against otherwise quiet surfaces."
+    },
+    {
+      "slug": "navigation",
+      "name": "Navigation",
+      "category": "navigation",
+      "variantCount": 4,
+      "keyInsight": "Navigation stays restrained, letting the active state and focused ring do the work."
+    },
+    {
+      "slug": "sidebar",
+      "name": "Sidebar",
+      "category": "navigation",
+      "variantCount": 4,
+      "keyInsight": "The dedicated sidebar palette makes navigation feel like a branded workspace shell, not a generic list."
+    }
+  ],
+  "crossComponentPatterns": [
+    "Use flat surfaces with thin borders before introducing elevation.",
+    "Favor bold primary color for one dominant action per region.",
+    "Support dense dashboard layouts with compact spacing and quiet muted text."
+  ]
+}

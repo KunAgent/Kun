@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Form</title>
+  <link rel="stylesheet" href="../colors_and_type.css" />
+  <link rel="stylesheet" href="../scaffold.css" />
+  <link rel="stylesheet" href="../components.css" />
+  <style>
+    .form { max-width: 520px; }
+    .field { display:flex; flex-direction: column; gap: var(--spacer-6); margin-bottom: var(--spacer-16); }
+    .field__label {
+      font-size: var(--body-sm-font-size); color: var(--text-default);
+      font-weight: var(--font-weight-medium, 500);
+      display: inline-flex; align-items: center; gap: var(--spacer-6);
+    }
+    .field__hint  { font-size: var(--body-xs-font-size); color: var(--text-tertiary); }
+    .field__error { font-size: var(--body-xs-font-size); color: var(--status-error-default); }
+    /* Aligned label-row pattern: icon strictly center-aligned to the text caps. */
+    .lbl-row { display: inline-flex; align-items: center; gap: var(--spacer-6); line-height: 1; }
+    .lbl-row .icon { display: inline-flex; }
+
+    /* @component-css-start */
+    /* ===== Input / Search ===== */
+    .ds-input {
+      display: flex; align-items: center; gap: var(--spacer-8);
+      padding: 0 var(--spacer-12); height: 28px;
+      background: var(--bg-overlay-l1);
+      border: 1px solid var(--border-neutral-l1);
+      border-radius: var(--radius-4);
+      color: var(--text-default);
+      width: 100%;
+      font-size: var(--body-sm-font-size); line-height: 1;
+    }
+    .ds-input:focus-within { border-color: var(--border-brand); background: var(--bg-overlay-l2); }
+    .ds-input input {
+      flex: 1; background: transparent; border: none; outline: none;
+      color: var(--text-default); font: inherit;
+    }
+    .ds-input input::placeholder { color: var(--text-tertiary); }
+    .ds-input__icon { color: var(--icon-secondary); display: inline-flex; }
+    .ds-search { position: relative; }
+
+    /* ===== Select =====
+     * Dropdown indicator is a linear chevron (Lucide-style SVG, 2px stroke) — never a
+     * filled triangle / caret. The svg is inlined as a data-uri using currentColor
+     * stand-in so it inherits via the --icon-tertiary fallback.
+     */
+    .ds-select {
+      width: 100%; height: 28px;
+      padding: 0 var(--spacer-32) 0 var(--spacer-12);
+      background: var(--bg-overlay-l1);
+      background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239aa0aa' stroke-width='2' stroke-linecap='butt' stroke-linejoin='miter'><polyline points='6 9 12 15 18 9'/></svg>");
+      background-repeat: no-repeat;
+      background-position: right var(--spacer-12) center;
+      background-size: 12px 12px;
+      color: var(--text-default);
+      border: 1px solid var(--border-neutral-l1);
+      border-radius: var(--radius-4);
+      appearance: none; -webkit-appearance: none;
+      font: inherit; font-size: var(--body-sm-font-size);
+    }
+    .ds-select:focus { border-color: var(--border-brand); outline: none; }
+
+    /* ===== Textarea ===== */
+    .ds-textarea {
+      width: 100%; min-height: 96px; padding: var(--spacer-8) var(--spacer-12);
+      background: var(--bg-overlay-l1);
+      border: 1px solid var(--border-neutral-l1);
+      border-radius: var(--radius-4);
+      color: var(--text-default);
+      font-family: var(--body-base-font-family);
+      font-size: var(--body-sm-font-size);
+      line-height: var(--body-base-line-height);
+      resize: vertical;
+    }
+    .ds-textarea:focus { outline: none; border-color: var(--border-brand); }
+
+    /* ===== Slider ===== */
+    .ds-slider { -webkit-appearance: none; appearance: none; width: 100%; height: 4px; background: var(--bg-overlay-l3); border-radius: var(--radius-full); outline: none; }
+    .ds-slider::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%; background: var(--text-default); border: 2px solid var(--bg-base-default); box-shadow: 0 0 0 1px var(--border-neutral-l2); cursor: pointer; }
+    .ds-slider::-moz-range-thumb { width: 14px; height: 14px; border-radius: 50%; background: var(--text-default); border: 2px solid var(--bg-base-default); box-shadow: 0 0 0 1px var(--border-neutral-l2); cursor: pointer; }
+
+    /* ===== Checkbox / Radio / Switch ===== */
+    .ds-check, .ds-radio {
+      display: inline-flex; align-items: center; gap: var(--spacer-8);
+      font-size: var(--body-sm-font-size); color: var(--text-default);
+      cursor: pointer; user-select: none;
+    }
+    .ds-check__box {
+      width: 14px; height: 14px;
+      border: 1px solid var(--border-neutral-l2);
+      background: var(--bg-overlay-l1);
+      border-radius: var(--radius-2);
+      display: inline-flex; align-items: center; justify-content: center;
+      color: var(--text-onbrand);
+      transition: background .12s, border-color .12s;
+    }
+    .ds-check input { display: none; }
+    .ds-check input:checked + .ds-check__box {
+      background: var(--bg-brand);
+      border-color: var(--bg-brand);
+    }
+    .ds-check input:checked + .ds-check__box::after {
+      content: ''; width: 8px; height: 4px;
+      border-left: 2px solid var(--text-onbrand);
+      border-bottom: 2px solid var(--text-onbrand);
+      transform: rotate(-45deg) translate(1px, -1px);
+    }
+    .ds-check input:disabled + .ds-check__box { opacity: .5; cursor: not-allowed; }
+
+    .ds-radio__dot {
+      width: 16px; height: 16px;
+      border: 1px solid var(--border-neutral-l2);
+      background: var(--bg-overlay-l1);
+      border-radius: 50%;
+      display: inline-flex; align-items: center; justify-content: center;
+    }
+    .ds-radio input { display: none; }
+    .ds-radio input:checked + .ds-radio__dot {
+      border-color: var(--bg-brand);
+    }
+    .ds-radio input:checked + .ds-radio__dot::after {
+      content: ''; width: 8px; height: 8px; border-radius: 50%;
+      background: var(--bg-brand);
+    }
+
+    .ds-switch {
+      position: relative; display: inline-flex;
+      width: 32px; height: 18px;
+      background: var(--bg-overlay-l3);
+      border: 1px solid var(--border-neutral-l1);
+      border-radius: var(--radius-full);
+      cursor: pointer; transition: background .15s, border-color .15s;
+    }
+    .ds-switch input { display: none; }
+    .ds-switch__thumb {
+      position: absolute; top: 2px; left: 2px;
+      width: 12px; height: 12px;
+      background: var(--text-default);
+      border-radius: 50%;
+      transition: left .15s, background .15s;
+    }
+    .ds-switch input:checked ~ .ds-switch__thumb { left: 16px; background: var(--text-onbrand); }
+    .ds-switch:has(input:checked) {
+      background: var(--bg-brand);
+      border-color: var(--bg-brand);
+    }
+
+    /* Small switch */
+    .ds-switch--sm { width: 26px; height: 14px; }
+    .ds-switch--sm .ds-switch__thumb { width: 10px; height: 10px; }
+    .ds-switch--sm input:checked ~ .ds-switch__thumb { left: 12px; }
+
+    /* Labelled switch row: description on the left, switch on the right */
+    .ds-switch-row {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: var(--spacer-16); padding: var(--spacer-8) 0;
+      max-width: 480px;
+    }
+    .ds-switch-row__text { display: flex; flex-direction: column; gap: var(--spacer-4); }
+    .ds-switch-row__title { font-size: var(--body-sm-font-size); color: var(--text-default); }
+    .ds-switch-row__hint { font-size: var(--body-xs-font-size); color: var(--text-tertiary); }
+    /* @component-css-end */
+  </style>
+</head>
+<body>
+  <div class="pv-header">
+    <h1>Form</h1>
+    <p>The single home for action / selection controls — input, textarea, select, checkbox, radio, switch and form layout.</p>
+  </div>
+
+  <!-- ===== Input ===== -->
+  <div class="pv-section">
+    <div class="pv-section__title">
+      <span class="lbl-row"><img src="../assets/icons/search.svg" width="14" height="14" alt="search" class="icon"><span>Input</span></span>
+    </div>
+    <div class="grid-2" style="max-width:720px;">
+      <div class="ds-input"><input placeholder="Type something..." /></div>
+      <div class="ds-input"><span class="ds-input__icon"><img src="../assets/icons/mail.svg" width="14" height="14" alt="mail" class="icon"></span><input placeholder="email@example.com" /></div>
+      <div class="ds-input"><input value="Filled value" /></div>
+      <div class="ds-input" style="border-color: var(--status-error-default);"><input value="Invalid value" /></div>
+    </div>
+
+    <div style="margin-top: var(--spacer-16);">
+      <div class="ds-input ds-search" style="max-width: 480px;">
+        <span class="ds-input__icon"><img src="../assets/icons/search.svg" width="14" height="14" alt="search" class="icon"></span>
+        <input placeholder="Search docs, components, tokens..." />
+        <span class="ds-kbd">⌘ K</span>
+      </div>
+    </div>
+
+    <div class="stack-12" style="max-width: 480px; margin-top: var(--spacer-16);">
+      <div class="ds-input" style="height:24px; padding:0 var(--spacer-8); font-size: var(--body-xs-font-size);"><input placeholder="Small (24)" /></div>
+      <div class="ds-input"><input placeholder="Default (28)" /></div>
+      <div class="ds-input" style="height:32px; padding:0 var(--spacer-12);"><input placeholder="Medium (32)" /></div>
+    </div>
+  </div>
+
+  <!-- ===== Textarea ===== -->
+  <div class="pv-section">
+    <div class="pv-section__title">
+      <span class="lbl-row"><img src="../assets/icons/list.svg" width="14" height="14" alt="list" class="icon"><span>Textarea</span></span>
+    </div>
+    <textarea class="ds-textarea" style="max-width:720px;" placeholder="Describe your issue...">Our design system helps any agent ship on-brand UI on the first try.</textarea>
+  </div>
+
+  <!-- ===== Select ===== -->
+  <div class="pv-section">
+    <div class="pv-section__title">
+      <span class="lbl-row"><img src="../assets/icons/chevron-down.svg" width="14" height="14" alt="chevron-down" class="icon"><span>Select</span></span>
+    </div>
+
+    <div class="grid-2" style="max-width: 720px;">
+      <div class="field">
+        <label class="field__label">Region</label>
+        <select class="ds-select">
+          <option>United States</option>
+          <option>Singapore</option>
+          <option>Frankfurt</option>
+          <option>Tokyo</option>
+        </select>
+      </div>
+      <div class="field">
+        <label class="field__label">Disabled</label>
+        <select class="ds-select" disabled>
+          <option>Read-only</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="pv-section__sub">Custom dropdown (popover) — for richer items.</div>
+    <div class="row" style="align-items: flex-start;">
+      <button class="ds-btn ds-btn--secondary"><span>Sort by</span><img src="../assets/icons/chevron-down.svg" width="14" height="14" alt="chevron-down" class="icon"></button>
+      <div class="ds-popover" style="margin-left: -120px; margin-top: 36px;">
+        <div class="ds-menu" style="border:none; padding: 0; min-width: 180px;">
+          <div class="ds-menu__item"><span>Most recent</span><img src="../assets/icons/check.d1d3db.svg" width="12" height="12" alt="check" class="icon" style="margin-left:auto;"></div>
+          <div class="ds-menu__item"><span>Most viewed</span></div>
+          <div class="ds-menu__item"><span>Alphabetical</span></div>
+          <div class="ds-menu__divider"></div>
+          <div class="ds-menu__item"><span>Custom order…</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="pv-section__sub" style="margin-top: var(--spacer-24);">Multi-select chips</div>
+    <div class="ds-input" style="height: auto; min-height: 32px; padding: 4px var(--spacer-8); flex-wrap: wrap; gap: 4px; max-width: 480px;">
+      <span class="ds-tag" style="height: 22px;">Design <img src="../assets/icons/x.svg" width="12" height="12" alt="x" class="icon" style="margin-left:6px; cursor:pointer;"></span>
+      <span class="ds-tag" style="height: 22px;">Engineering <img src="../assets/icons/x.svg" width="12" height="12" alt="x" class="icon" style="margin-left:6px; cursor:pointer;"></span>
+      <span class="ds-tag" style="height: 22px;">Marketing <img src="../assets/icons/x.svg" width="12" height="12" alt="x" class="icon" style="margin-left:6px; cursor:pointer;"></span>
+      <input placeholder="Add tag..." />
+    </div>
+  </div>
+
+  <!-- ===== Checkbox ===== -->
+  <div class="pv-section">
+    <div class="pv-section__title">
+      <span class="lbl-row"><img src="../assets/icons/check.svg" width="14" height="14" alt="check" class="icon"><span>Checkbox</span></span>
+    </div>
+    <div class="row">
+      <label class="ds-check"><input type="checkbox" /><span class="ds-check__box"></span>Default</label>
+      <label class="ds-check"><input type="checkbox" checked /><span class="ds-check__box"></span>Checked</label>
+      <label class="ds-check"><input type="checkbox" disabled /><span class="ds-check__box"></span>Disabled</label>
+      <label class="ds-check"><input type="checkbox" disabled checked /><span class="ds-check__box"></span>Disabled checked</label>
+    </div>
+
+    <div class="stack-8" style="margin-top: var(--spacer-16);">
+      <label class="ds-check"><input type="checkbox" checked /><span class="ds-check__box"></span>Email notifications</label>
+      <label class="ds-check"><input type="checkbox" /><span class="ds-check__box"></span>SMS notifications</label>
+      <label class="ds-check"><input type="checkbox" /><span class="ds-check__box"></span>Slack</label>
+    </div>
+  </div>
+
+  <!-- ===== Radio ===== -->
+  <div class="pv-section">
+    <div class="pv-section__title">
+      <span class="lbl-row"><img src="../assets/icons/circle.svg" width="14" height="14" alt="circle" class="icon"><span>Radio</span></span>
+    </div>
+    <div class="stack-8">
+      <label class="ds-radio"><input type="radio" name="plan" /><span class="ds-radio__dot"></span>Free</label>
+      <label class="ds-radio"><input type="radio" name="plan" checked /><span class="ds-radio__dot"></span>Pro <span class="text-tertiary num" style="margin-left:6px;">$29/mo</span></label>
+      <label class="ds-radio"><input type="radio" name="plan" /><span class="ds-radio__dot"></span>Enterprise</label>
+    </div>
+  </div>
+
+  <!-- ===== Switch ===== -->
+  <div class="pv-section">
+    <div class="pv-section__title">
+      <span class="lbl-row"><img src="../assets/icons/zap.svg" width="14" height="14" alt="zap" class="icon"><span>Switch</span></span>
+    </div>
+    <div class="stack-8">
+      <div class="lbl-row" style="gap: var(--spacer-12);"><label class="ds-switch"><input type="checkbox" /><span class="ds-switch__thumb"></span></label><span>Auto-save drafts</span></div>
+      <div class="lbl-row" style="gap: var(--spacer-12);"><label class="ds-switch"><input type="checkbox" checked /><span class="ds-switch__thumb"></span></label><span>Two-factor authentication</span></div>
+    </div>
+  </div>
+
+  <!-- ===== Switch (small + labelled rows) ===== -->
+  <div class="pv-section">
+    <div class="pv-section__title">
+      <span class="lbl-row"><img src="../assets/icons/settings.svg" width="14" height="14" alt="settings" class="icon"><span>Switch — small & labelled rows</span></span>
+    </div>
+    <div class="row" style="margin-bottom: var(--spacer-16);">
+      <label class="ds-switch ds-switch--sm"><input type="checkbox" /><span class="ds-switch__thumb"></span></label>
+      <label class="ds-switch ds-switch--sm"><input type="checkbox" checked /><span class="ds-switch__thumb"></span></label>
+    </div>
+    <div class="stack-8">
+      <div class="ds-switch-row">
+        <div class="ds-switch-row__text">
+          <span class="ds-switch-row__title">Marketing emails</span>
+          <span class="ds-switch-row__hint">Product news, tips and occasional offers.</span>
+        </div>
+        <label class="ds-switch"><input type="checkbox" checked /><span class="ds-switch__thumb"></span></label>
+      </div>
+      <div class="ds-switch-row">
+        <div class="ds-switch-row__text">
+          <span class="ds-switch-row__title">Usage analytics</span>
+          <span class="ds-switch-row__hint">Share anonymous data to help improve Nimbus.</span>
+        </div>
+        <label class="ds-switch"><input type="checkbox" /><span class="ds-switch__thumb"></span></label>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== Form composition ===== -->
+  <div class="pv-section">
+    <div class="pv-section__title">
+      <span class="lbl-row"><img src="../assets/icons/edit.svg" width="14" height="14" alt="edit" class="icon"><span>Form composition</span></span>
+    </div>
+    <form class="form" onsubmit="event.preventDefault();">
+      <div class="field">
+        <label class="field__label">Project name</label>
+        <div class="ds-input"><input placeholder="e.g. Nimbus Web" /></div>
+        <div class="field__hint">The name will be used to generate a URL slug.</div>
+      </div>
+
+      <div class="field">
+        <label class="field__label">Environment</label>
+        <select class="ds-select">
+          <option>Production</option>
+          <option>Staging</option>
+          <option>Development</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label class="field__label">Description</label>
+        <textarea class="ds-textarea" placeholder="Brief description..."></textarea>
+      </div>
+
+      <div class="field">
+        <label class="field__label">Notifications</label>
+        <label class="ds-check"><input type="checkbox" checked /><span class="ds-check__box"></span>Email</label>
+        <label class="ds-check"><input type="checkbox" /><span class="ds-check__box"></span>Slack</label>
+        <label class="ds-check"><input type="checkbox" /><span class="ds-check__box"></span>Webhook</label>
+      </div>
+
+      <div class="field">
+        <label class="field__label">API Key <span class="field__error">· required</span></label>
+        <div class="ds-input" style="border-color: var(--status-error-default);"><input placeholder="sk-..." /></div>
+        <div class="field__error">This field cannot be empty.</div>
+      </div>
+
+      <div class="row" style="justify-content: flex-end;">
+        <button class="ds-btn ds-btn--ghost" type="reset">Cancel</button>
+        <button class="ds-btn ds-btn--primary" type="submit">Save configuration</button>
+      </div>
+    </form>
+  </div>
+
+</body>
+</html>

@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 2,
+  "slug": "breadcrumb",
+  "name": "Breadcrumb",
+  "category": "navigation",
+  "sourceKind": "structured-spec",
+  "confidence": "medium",
+  "semanticTypeCandidates": ["breadcrumb", "path-navigation", "hierarchy-indicator"],
+  "variantDimensions": {
+    "size": ["large", "default"],
+    "itemState": ["default", "current", "disabled"]
+  },
+  "representativeVariants": [
+    { "size": "large", "itemState": "default" },
+    { "size": "default", "itemState": "current" },
+    { "size": "large", "itemState": "disabled" }
+  ],
+  "anatomy": ["container", "item", "separator", "icon"],
+  "structurePatterns": [
+    "Horizontal flex row of breadcrumb items interleaved with separator spans",
+    "Items are anchor or span elements, separator is a > character with horizontal margin",
+    "Supports ellipsis (...) for collapsed middle levels"
+  ],
+  "usageHints": [
+    "Large size: font-size 14px, line-height 22px, separator margin 0 8px",
+    "Default size: font-size 12px, line-height 20px, separator margin 0 4px",
+    "Default item color #737A87, hover turns #1664FF",
+    "Current item color #42464E, font-weight 500, no pointer cursor",
+    "Disabled item color #C7CCD6, pointer-events none",
+    "Separator color #737A87",
+    "Icon size: large 16px, default 14px, margin-right 4px"
+  ],
+  "doNotInvent": ["dropdown menu on breadcrumb item", "breadcrumb with avatar", "custom separator icons"],
+  "unknowns": ["max visible levels before ellipsis", "responsive collapse behavior"],
+  "tokensConsumed": [],
+  "domAnatomy": {
+    "root": {
+      "tag": "nav",
+      "class": "breadcrumb breadcrumb-{size}",
+      "children": [
+        { "tag": "a", "class": "breadcrumb-item" },
+        { "tag": "span", "class": "breadcrumb-separator" },
+        { "tag": "span", "class": "breadcrumb-item current" }
+      ]
+    }
+  },
+  "provenance": {
+    "preview": "preview/ui-breadcrumb.html",
+    "source": "structured-spec",
+    "css": { "file": "ui-breadcrumb.html", "marker": "inline <style>" }
+  }
+}

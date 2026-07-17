@@ -1,0 +1,15 @@
+{
+  "id": "prototype-design",
+  "name": "Prototype Design",
+  "description": "Plan multi-page interactive prototypes from confirmed requirements and selected design-library constraints.",
+  "version": "1.0.0",
+  "entry": "SKILL.md",
+  "triggers": { "commands": [], "promptPatterns": [], "fileTypes": [] },
+  "allowedTools": [],
+  "assets": [
+    "references/page-map-rules.md",
+    "references/visual-quality.md",
+    "references/library-consumption.md"
+  ],
+  "priority": 0
+}

@@ -1,0 +1,49 @@
+{
+  "slug": "card",
+  "name": "Card",
+  "category": "containers",
+  "evidence": "AI-inferred from dashboard preset and source tokens",
+  "anatomy": [
+    "surface",
+    "eyebrow",
+    "title",
+    "supporting text",
+    "meta row"
+  ],
+  "cssVariables": [
+    "card",
+    "card-foreground",
+    "muted",
+    "muted-foreground",
+    "border",
+    "radius",
+    "shadow-md",
+    "font-sans"
+  ],
+  "variantDimensions": {
+    "tone": [
+      "default",
+      "accent",
+      "quiet"
+    ],
+    "elevation": [
+      "flat",
+      "raised",
+      "spotlight"
+    ]
+  },
+  "structures": [
+    {
+      "name": "Default, Raised",
+      "description": "Core insight card with elevated pink-shadow treatment."
+    },
+    {
+      "name": "Accent, Spotlight",
+      "description": "Hero card using accent tint and bold value hierarchy."
+    },
+    {
+      "name": "Quiet, Flat",
+      "description": "Low-noise metadata card for secondary content."
+    }
+  ]
+}

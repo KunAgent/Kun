@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>body{margin:0;padding:12px;background:var(--background);color:var(--foreground);font:14px/1.45 var(--font-sans);letter-spacing:var(--tracking-normal)}.row{display:flex;align-items:flex-start;gap:8px;flex-wrap:wrap;margin-bottom:8px}.label{width:100%;font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--muted-foreground)}.card{width:176px;padding:calc(var(--spacing)*5);border:1px solid var(--border);border-radius:var(--radius);background:var(--card);color:var(--card-foreground);box-shadow:var(--shadow-md);box-sizing:border-box;transition:transform .18s ease,box-shadow .18s ease}.card:hover{transform:translateY(-1px);box-shadow:var(--shadow-lg)}.eyebrow{margin:0 0 6px;font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--muted-foreground)}.title{margin:0 0 6px;font-size:16px;font-weight:700;line-height:1.2}.support{margin:0 0 12px;color:var(--muted-foreground)}.meta{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:12px}.pill{display:inline-flex;align-items:center;min-height:24px;padding:0 calc(var(--spacing)*3);border-radius:999px;background:var(--secondary);color:var(--secondary-foreground);font-weight:600}.value{font-size:20px;font-weight:800;line-height:1;color:var(--foreground)}.accent{background:linear-gradient(180deg,var(--accent),var(--primary));color:var(--accent-foreground);border-color:transparent;box-shadow:var(--shadow-lg)}.accent .eyebrow,.accent .support{color:color-mix(in oklab,var(--accent-foreground) 72%,transparent)}.accent .value{color:var(--accent-foreground)}.accent .pill{background:color-mix(in oklab,var(--accent-foreground) 16%,transparent);color:var(--accent-foreground)}.is-disabled,.is-disabled:hover{background:var(--muted);color:var(--muted-foreground);box-shadow:none;transform:none}.is-disabled .title,.is-disabled .value,.is-disabled .pill{color:inherit}.is-disabled .pill{background:var(--background)}.divider{margin:8px 0;border:0;border-top:1px solid var(--border)}</style>
+</head>
+<body>
+<div class="row">
+<span class="label">Raised</span>
+<article class="card">
+<p class="eyebrow">Campaign</p>
+<h2 class="title">New Capsule Launch</h2>
+<p class="support">Pinned for the Barbie dashboard spotlight with the latest content rollout.</p>
+<div class="meta"><span class="pill">Live now</span><span class="value">84%</span></div>
+</article>
+<article class="card is-disabled" aria-disabled="true">
+<p class="eyebrow">Content</p>
+<h2 class="title">Top Performing Story</h2>
+<p class="support">Review access is paused while the analytics snapshot refreshes.</p>
+<div class="meta"><span class="pill">Locked</span><span class="value">12h</span></div>
+</article>
+</div>
+<hr class="divider">
+<div class="row">
+<span class="label">Spotlight</span>
+<article class="card accent">
+<p class="eyebrow">Growth</p>
+<h2 class="title">Audience Growth</h2>
+<p class="support">A high-visibility trend card for executive dashboard updates.</p>
+<div class="meta"><span class="pill">This week</span><span class="value">+28%</span></div>
+</article>
+<article class="card accent is-disabled" aria-disabled="true">
+<p class="eyebrow">Campaign</p>
+<h2 class="title">New Capsule Launch</h2>
+<p class="support">Spotlight card remains visible, but publishing controls are disabled.</p>
+<div class="meta"><span class="pill">Queued</span><span class="value">09:30</span></div>
+</article>
+</div>
+</body>
+</html>

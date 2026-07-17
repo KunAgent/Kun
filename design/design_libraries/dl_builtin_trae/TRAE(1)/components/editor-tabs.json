@@ -1,0 +1,109 @@
+{
+  "schemaVersion": 2,
+  "slug": "editor-tabs",
+  "name": "Editor Tabs",
+  "category": "navigation",
+  "sourceKind": "structured-spec",
+  "confidence": "high",
+  "semanticTypeCandidates": [
+    "tabs"
+  ],
+  "variantDimensions": {
+    "state": [
+      "default",
+      "hover",
+      "active",
+      "active-hover"
+    ],
+    "tabContent": [
+      "icon+label",
+      "icon+label+close"
+    ]
+  },
+  "representativeVariants": [
+    {
+      "state": "active",
+      "withClose": true,
+      "trailingActions": true
+    }
+  ],
+  "anatomy": [
+    "tab-row",
+    "tab",
+    "active-tab-with-top-indicator",
+    "close-button",
+    "spacer",
+    "trailing-actions"
+  ],
+  "structurePatterns": [
+    "tab row uses layered overlay background (--bg-base-default + --special-bgtabsoverlay)",
+    "active tab gets --bg-base-secondary + 1px inset top border (--icon-default) as the active indicator",
+    "spacer flexes to push trailing icon-button group to the right edge"
+  ],
+  "usageHints": [
+    "Use ONLY for IDE-style file editor tab strips: closable, icon-prefixed file tabs with trailing layout/split/more icon buttons.",
+    "Do NOT use as a content-tab replacement — for content sections (Overview/Activity/Members/Settings) use .ds-tabs.",
+    "Each .ds-editortab is a row-height (40px) flex item with hard right divider; the .ds-editortabs__spacer is what produces the gap between file tabs and the trailing actions."
+  ],
+  "doNotInvent": [
+    "No reorder / drag / pinned-tab affordance defined",
+    "No vertical or scrolling overflow behavior defined"
+  ],
+  "unknowns": [
+    "modified-file dot indicator (currently absent)"
+  ],
+  "tokensConsumed": [
+    "--bg-base-default",
+    "--bg-base-secondary",
+    "--bg-overlay-l1",
+    "--border-neutral-l1",
+    "--icon-default",
+    "--icon-secondary",
+    "--icon-tertiary",
+    "--special-bgtabsoverlay",
+    "--text-default",
+    "--text-secondary"
+  ],
+  "domAnatomy": {
+    "root": {
+      "tag": "div",
+      "class": "ds-editortabs",
+      "children": [
+        {
+          "tag": "span",
+          "class": "ds-editortab is-active",
+          "children": [
+            { "tag": "span", "class": "ic" },
+            { "tag": "span", "text": "filename" },
+            { "tag": "span", "class": "close" }
+          ]
+        },
+        {
+          "tag": "span",
+          "class": "ds-editortab",
+          "children": [
+            { "tag": "span", "class": "ic" },
+            { "tag": "span", "text": "filename" }
+          ]
+        },
+        { "tag": "span", "class": "ds-editortabs__spacer" },
+        {
+          "tag": "span",
+          "class": "ds-editortabs__actions",
+          "children": [
+            { "tag": "button" },
+            { "tag": "button" }
+          ]
+        }
+      ]
+    }
+  },
+  "provenance": {
+    "preview": "preview/component-editor-tabs.html",
+    "source": "previews/editor-tabs.html",
+    "css": {
+      "file": "components.css",
+      "marker": "── Editor Tabs ──"
+    }
+  }
+}

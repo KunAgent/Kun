@@ -1,0 +1,1015 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <link rel="stylesheet" href="../../colors_and_type.css">
+  <link rel="stylesheet" href="../../components.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Claude Design System · Mobile Kit</title>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://unpkg.com/lucide@1.8.0/dist/umd/lucide.min.js"></script>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: calc(var(--spacing) * 7);
+      background: var(--background);
+      color: var(--foreground);
+      font-family: var(--font-serif);
+      letter-spacing: var(--tracking-normal);
+      overflow-x: hidden;
+      -webkit-font-smoothing: antialiased;
+    }
+    button, input { font: inherit; }
+    img { display: block; max-width: 100%; }
+    strong { color: var(--card-foreground); font-weight: 600; }
+    [data-component] {
+      min-width: 0;
+      max-width: 100%;
+      overflow: hidden;
+    }
+    .phone-shell {
+      width: 404px;
+      max-width: 100%;
+      padding: calc(var(--spacing) * 2);
+      border-radius: calc(var(--radius) * 1.6);
+      background: var(--foreground);
+      box-shadow: var(--shadow-2xl);
+    }
+    .phone-frame {
+      min-height: 820px;
+      overflow: hidden;
+      border-radius: calc(var(--radius) * 1.35);
+      background: var(--background);
+      border: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+    }
+    .statusbar {
+      padding: calc(var(--spacing) * 3) calc(var(--spacing) * 4) calc(var(--spacing) * 2);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--muted-foreground);
+      font-family: var(--font-sans);
+      gap: calc(var(--spacing) * 2);
+    }
+    .statusbar-label {
+      flex: 1;
+      padding: 0 calc(var(--spacing) * 2);
+      text-align: center;
+    }
+    .screen {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: calc(var(--spacing) * 4);
+      padding: 0 calc(var(--spacing) * 4) calc(var(--spacing) * 4);
+      overflow: hidden;
+    }
+    .screen-scroll {
+      display: flex;
+      flex-direction: column;
+      gap: calc(var(--spacing) * 4);
+      overflow-y: auto;
+      padding-bottom: calc(var(--spacing) * 3);
+    }
+    .topbar {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: calc(var(--spacing) * 4);
+    }
+    .eyebrow {
+      margin: 0 0 calc(var(--spacing) * 1.25);
+      color: var(--muted-foreground);
+      font-size: 11px;
+      line-height: 1.3;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      font-family: var(--font-serif);
+    }
+    .title {
+      margin: 0;
+      font-size: 30px;
+      line-height: 1.05;
+      font-family: var(--font-display);
+      font-weight: 400;
+      color: var(--card-foreground);
+      text-wrap: balance;
+    }
+    .subtitle {
+      margin: calc(var(--spacing) * 1.25) 0 0;
+      font-size: 14px;
+      line-height: 1.6;
+      color: var(--secondary-foreground);
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: calc(var(--spacing) * 1.25);
+      padding: calc(var(--spacing) * 1.25) calc(var(--spacing) * 2.5);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-full);
+      background: var(--card);
+      color: var(--foreground);
+      font-size: 11px;
+      font-weight: 600;
+      font-family: var(--font-sans);
+      white-space: nowrap;
+      min-width: 0;
+      max-width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      box-shadow: var(--shadow-2xs);
+    }
+    .icon-sm,
+    .icon-md,
+    .nav-icon {
+      flex-shrink: 0;
+      object-fit: contain;
+    }
+    .icon-sm { width: 16px; height: 16px; }
+    .icon-md,
+    .nav-icon { width: 18px; height: 18px; }
+    .icon-button {
+      padding: 0;
+      appearance: none;
+      cursor: pointer;
+    }
+    .ghost-icon {
+      width: 38px;
+      height: 38px;
+      border: 1px solid var(--border);
+      border-radius: calc(var(--radius) * 0.9);
+      background: var(--popover);
+      color: var(--foreground);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: var(--shadow-xs);
+      flex-shrink: 0;
+    }
+    .ghost-icon img,
+    .ghost-icon svg {
+      width: 18px;
+      height: 18px;
+    }
+    .statusbar-right {
+      display: inline-flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: calc(var(--spacing) * 1.5);
+      flex-shrink: 0;
+      min-width: 0;
+    }
+    .statusbar-right svg {
+      width: 14px;
+      height: 14px;
+    }
+    .card,
+    .card-soft,
+    .card-strong {
+      display: grid;
+      gap: calc(var(--spacing) * 3);
+      border-radius: calc(var(--radius) * 1.1);
+      padding: calc(var(--spacing) * 4.5);
+      width: 100%;
+      min-width: 0;
+    }
+    .card {
+      background: var(--popover);
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow-sm);
+    }
+    .card-soft {
+      background: var(--card);
+      border: 1px solid var(--border);
+      box-shadow: none;
+    }
+    .card-strong {
+      background: var(--foreground);
+      color: var(--background);
+      box-shadow: var(--shadow-xl);
+    }
+    .card-strong .eyebrow,
+    .card-strong .subtitle,
+    .card-strong .micro {
+      color: var(--secondary);
+    }
+    .card-strong .section-title,
+    .card-strong strong,
+    .card-strong .metric {
+      color: var(--background);
+    }
+    .card-strong .btn-secondary {
+      background: var(--background);
+      color: var(--foreground);
+      border-color: transparent;
+    }
+    .card-strong .btn-ghost {
+      background: transparent;
+      color: var(--background);
+      border-color: var(--border);
+    }
+    .section-title {
+      margin: 0;
+      font-size: 18px;
+      line-height: 1.25;
+      font-family: var(--font-sans);
+      font-weight: 500;
+      color: var(--card-foreground);
+      text-wrap: balance;
+    }
+    .row {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: calc(var(--spacing) * 3);
+      flex-wrap: wrap;
+    }
+    .row > * { min-width: 0; }
+    .row-header { align-items: flex-start; }
+    .row-progress {
+      align-items: center;
+      flex-wrap: nowrap;
+    }
+    .stack {
+      display: flex;
+      flex-direction: column;
+      gap: calc(var(--spacing) * 3);
+      min-width: 0;
+    }
+    .micro {
+      font-size: 11px;
+      line-height: 1.45;
+      color: var(--secondary-foreground);
+      font-family: var(--font-sans);
+    }
+    .metric {
+      font-size: 30px;
+      line-height: 1;
+      margin: calc(var(--spacing) * 2) 0 calc(var(--spacing) * 1);
+      font-family: var(--font-sans);
+      font-weight: 500;
+      color: var(--card-foreground);
+    }
+    .pill-row {
+      display: grid;
+      gap: calc(var(--spacing) * 2.5);
+    }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-full);
+      padding: calc(var(--spacing) * 2) calc(var(--spacing) * 3.5);
+      background: var(--popover);
+      color: var(--foreground);
+      box-shadow: var(--shadow-2xs);
+      font-weight: 500;
+      width: 100%;
+      min-width: 0;
+      max-width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .pill-primary {
+      background: var(--primary);
+      color: var(--primary-foreground);
+      border-color: transparent;
+    }
+    .button-row {
+      display: flex;
+      gap: calc(var(--spacing) * 2.5);
+      flex-wrap: wrap;
+      min-width: 0;
+    }
+    .btn {
+      min-height: 44px;
+      border: 1px solid transparent;
+      border-radius: calc(var(--radius) * 0.95);
+      padding: 0 calc(var(--spacing) * 4);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: calc(var(--spacing) * 2);
+      font-size: 13px;
+      line-height: 1.2;
+      font-weight: 600;
+      cursor: pointer;
+      box-shadow: var(--shadow-xs);
+      transition: background-color .16s ease, color .16s ease, border-color .16s ease, box-shadow .16s ease;
+      min-width: 0;
+      max-width: 100%;
+    }
+    .button-row .btn { flex: 1 1 152px; }
+    .btn-primary {
+      background: var(--primary);
+      color: var(--primary-foreground);
+      box-shadow: var(--shadow-sm);
+    }
+    .btn-secondary {
+      background: var(--secondary);
+      color: var(--foreground);
+      border-color: var(--border);
+    }
+    .btn-ghost {
+      background: var(--background);
+      color: var(--foreground);
+      border-color: var(--border);
+      box-shadow: none;
+    }
+    .thread {
+      display: flex;
+      flex-direction: column;
+      gap: calc(var(--spacing) * 3);
+    }
+    .message {
+      max-width: 90%;
+      padding: calc(var(--spacing) * 3.5) calc(var(--spacing) * 4);
+      border-radius: calc(var(--radius) * 1.05);
+      line-height: 1.6;
+      box-shadow: var(--shadow-xs);
+      font-size: 14px;
+      display: grid;
+      gap: calc(var(--spacing) * 1.25);
+      min-width: 0;
+    }
+    .message-user {
+      align-self: flex-end;
+      background: var(--primary);
+      color: var(--primary-foreground);
+      border-bottom-right-radius: calc(var(--radius) * 0.35);
+    }
+    .message-assistant {
+      align-self: flex-start;
+      background: var(--popover);
+      color: var(--foreground);
+      border: 1px solid var(--border);
+      border-bottom-left-radius: calc(var(--radius) * 0.35);
+    }
+    .message-meta {
+      font-size: 11px;
+      line-height: 1.3;
+      font-family: var(--font-sans);
+      letter-spacing: 0.01em;
+    }
+    .message-user .message-meta {
+      color: var(--primary-foreground);
+      opacity: 0.78;
+    }
+    .message-assistant .message-meta {
+      color: var(--muted-foreground);
+    }
+    .composer {
+      display: flex;
+      align-items: center;
+      gap: calc(var(--spacing) * 2.5);
+      padding: calc(var(--spacing) * 3);
+      background: var(--popover);
+      border: 1px solid var(--border);
+      border-radius: calc(var(--radius) * 1.1);
+      box-shadow: var(--shadow-2xs);
+      min-width: 0;
+    }
+    .composer-prefix {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      color: var(--muted-foreground);
+    }
+    .composer-prefix img,
+    .composer-prefix svg { width: 16px; height: 16px; }
+    .composer input {
+      flex: 1;
+      min-width: 0;
+      border: none;
+      background: transparent;
+      color: var(--foreground);
+      outline: none;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+    .composer-send img,
+    .composer-send svg { width: 16px; height: 16px; }
+    .spark-grid {
+      display: grid;
+      grid-template-columns: repeat(8, 1fr);
+      gap: calc(var(--spacing) * 2);
+      align-items: end;
+      height: 132px;
+      margin-top: calc(var(--spacing) * 3);
+    }
+    .bar {
+      border-radius: calc(var(--radius) * 0.6) calc(var(--radius) * 0.6) 0 0;
+      background: var(--primary);
+    }
+    .barAlt { background: var(--foreground); }
+    .barSoft { background: var(--muted); }
+    .barLilac { background: var(--border); }
+    .barWarm { background: var(--secondary); }
+    .barH28 { height: 28px; }
+    .barH40 { height: 40px; }
+    .barH56 { height: 56px; }
+    .barH68 { height: 68px; }
+    .barH80 { height: 80px; }
+    .barH92 { height: 92px; }
+    .barH104 { height: 104px; }
+    .barH116 { height: 116px; }
+    .chart-labels {
+      display: grid;
+      grid-template-columns: repeat(8, 1fr);
+      gap: calc(var(--spacing) * 2);
+      margin-top: calc(var(--spacing) * 2);
+      font-size: 10px;
+      color: var(--muted-foreground);
+      text-align: center;
+      font-family: var(--font-mono);
+    }
+    .list {
+      display: flex;
+      flex-direction: column;
+      gap: calc(var(--spacing) * 1);
+    }
+    .list-item {
+      display: flex;
+      justify-content: space-between;
+      gap: calc(var(--spacing) * 3);
+      padding: calc(var(--spacing) * 3.5) 0;
+      border-bottom: 1px solid var(--border);
+      align-items: flex-start;
+      min-width: 0;
+    }
+    .list-item:last-child { border-bottom: none; padding-bottom: 0; }
+    .list-item:first-child { padding-top: 0; }
+    .list-copy {
+      min-width: 0;
+      flex: 1;
+    }
+    .list-copy strong,
+    .list-copy .subtitle {
+      display: block;
+    }
+    .list-trailing {
+      display: flex;
+      justify-content: flex-end;
+      flex-shrink: 0;
+      min-width: 0;
+    }
+    .progress-shell {
+      height: 8px;
+      border-radius: var(--radius-full);
+      background: var(--secondary);
+      overflow: hidden;
+      margin-top: calc(var(--spacing) * 2);
+    }
+    .progress-fill {
+      height: 100%;
+      background: var(--primary);
+      border-radius: var(--radius-full);
+    }
+    .progress32 { width: 32%; }
+    .progress56 { width: 56%; }
+    .progress72 { width: 72%; }
+    .progress88 { width: 88%; }
+    .option {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: calc(var(--spacing) * 3);
+      padding: calc(var(--spacing) * 3.5);
+      border-radius: calc(var(--radius) * 0.9);
+      background: var(--popover);
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow-2xs);
+      width: 100%;
+      min-width: 0;
+    }
+    .option-copy { min-width: 0; flex: 1; }
+    .toggle {
+      width: 42px;
+      height: 24px;
+      border-radius: var(--radius-full);
+      background: var(--secondary);
+      position: relative;
+      flex-shrink: 0;
+    }
+    .toggle::after {
+      content: "";
+      position: absolute;
+      top: 3px;
+      left: 3px;
+      width: 18px;
+      height: 18px;
+      border-radius: var(--radius-full);
+      background: var(--popover);
+      box-shadow: var(--shadow-xs);
+    }
+    .toggle-on { background: var(--primary); }
+    .toggle-on::after { left: 21px; }
+    .bottom-nav {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: calc(var(--spacing) * 2);
+      padding: calc(var(--spacing) * 2.5) calc(var(--spacing) * 3) calc(var(--spacing) * 3);
+      border-top: 1px solid var(--border);
+      background: var(--popover);
+      min-width: 0;
+    }
+    .nav-item {
+      border: 1px solid transparent;
+      background: transparent;
+      color: var(--secondary-foreground);
+      border-radius: calc(var(--radius) * 0.9);
+      padding: calc(var(--spacing) * 2.5) calc(var(--spacing) * 2);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: calc(var(--spacing) * 1);
+      font-size: 11px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background-color .16s ease, color .16s ease, border-color .16s ease, box-shadow .16s ease;
+      min-width: 0;
+    }
+    .nav-item img,
+    .nav-item svg {
+      width: 18px;
+      height: 18px;
+    }
+    .nav-item.active {
+      background: var(--background);
+      color: var(--foreground);
+      border-color: var(--border);
+      box-shadow: var(--shadow-xs);
+    }
+    .nav-label {
+      max-width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .mono { font-family: var(--font-mono); }
+
+    .uikit-shell {
+      width: 100%;
+      max-width: 1184px;
+      margin: 0 auto;
+      overflow: hidden;
+    }
+    .uikit-main,
+    .uikit-toolbar,
+    .screen,
+    .screen-scroll,
+    .topbar,
+    .row,
+    .list-item,
+    .composer {
+      min-width: 0;
+    }
+    .uikit-truncate {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .uikit-nowrap {
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .uikit-responsive-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--uikit-grid-min, 152px)), 1fr));
+      gap: calc(var(--spacing) * 3);
+      min-width: 0;
+      align-items: stretch;
+      grid-auto-rows: 1fr;
+    }
+    .uikit-responsive-grid > * {
+      min-width: 0;
+      height: 100%;
+    }
+    .stats-grid {
+      --uikit-grid-min: 150px;
+      align-items: stretch;
+    }
+    .stat-block {
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      gap: calc(var(--spacing) * 2);
+      height: 100%;
+    }
+    .stat-block .metric,
+    .stat-block .subtitle {
+      margin: 0;
+    }
+    .quick-grid {
+      --uikit-grid-min: 140px;
+      align-items: stretch;
+    }
+    .quick-grid > * {
+      min-width: 0;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    @media (max-width: 900px) {
+      .uikit-responsive-grid {
+        grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--uikit-grid-min, 148px)), 1fr));
+      }
+    }
+    @media (max-width: 640px) {
+      body {
+        padding: calc(var(--spacing) * 3);
+      }
+      .uikit-shell {
+        padding: 0;
+      }
+      .phone-shell {
+        width: 100%;
+        padding: calc(var(--spacing) * 1.5);
+      }
+      .topbar {
+        flex-direction: column;
+        align-items: stretch;
+      }
+      .topbar > .badge,
+      .topbar > .ghost-icon {
+        align-self: flex-start;
+      }
+      .row-header {
+        flex-direction: column;
+        align-items: stretch;
+      }
+      .row-progress {
+        flex-direction: row;
+        align-items: center;
+      }
+      .uikit-responsive-grid {
+        grid-template-columns: minmax(0, 1fr);
+      }
+      .button-row {
+        flex-direction: column;
+      }
+      .button-row .btn {
+        width: 100%;
+        flex-basis: auto;
+      }
+      .composer {
+        flex-wrap: wrap;
+      }
+      .composer .btn {
+        width: 100%;
+      }
+      .list-item,
+      .option {
+        align-items: flex-start;
+      }
+      .bottom-nav {
+        padding: calc(var(--spacing) * 2) calc(var(--spacing) * 3) calc(var(--spacing) * 3);
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+    const { useEffect, useState } = React;
+
+    function HomeScreen() {
+      return (
+        <section className="screen">
+          <div className="topbar">
+            <div className="uikit-main">
+              <p className="eyebrow">Morning session</p>
+              <h1 className="title">Read with Claude</h1>
+              <p className="subtitle">Warm prompts, compact context, and a quiet place to keep the thread moving.</p>
+            </div>
+            <button className="ghost-icon icon-button" type="button" aria-label="Open menu">
+              <i data-lucide="menu" aria-hidden="true"></i>
+            </button>
+          </div>
+
+          <div className="screen-scroll">
+            <div className="card" data-component="card">
+              <div className="row row-header">
+                <div className="uikit-main">
+                  <p className="eyebrow">Today&apos;s note</p>
+                  <h2 className="section-title">Start from a gentle recommendation</h2>
+                </div>
+                <span className="badge uikit-nowrap" data-component="badge">Calm mode</span>
+              </div>
+              <p className="subtitle">Claude keeps the tone bookish and restrained, with room for one clear next step.</p>
+              <div className="button-row">
+                <button className="btn btn-primary" data-component="button">Start a new chat</button>
+                <button className="btn btn-secondary">Open reading list</button>
+              </div>
+            </div>
+
+            <div className="card-soft">
+              <div className="row row-header">
+                <div className="uikit-main">
+                  <p className="eyebrow">Conversation</p>
+                  <h2 className="section-title">Recommendation thread</h2>
+                </div>
+                <span className="micro uikit-nowrap">3 turns saved</span>
+              </div>
+              <div className="thread">
+                <div className="message message-user" data-component="chat-bubble">
+                  <span className="message-meta">You · now</span>
+                  <span>Recommend a writer for light reading.</span>
+                </div>
+                <div className="message message-assistant">
+                  <span className="message-meta">Claude · 1m</span>
+                  <span>Matsuura Yataro is a strong fit for your mood: reflective, spare, and quietly companionable.</span>
+                </div>
+                <div className="message message-user">
+                  <span className="message-meta">You · just now</span>
+                  <span>Could Wang Zengqi work as well?</span>
+                </div>
+                <div className="message message-assistant">
+                  <span className="message-meta">Claude · now</span>
+                  <span>Yes — start with <span className="mono">Ordination</span>. It keeps warmth without becoming sentimental.</span>
+                </div>
+              </div>
+              <div className="composer">
+                <span className="composer-prefix" aria-hidden="true">
+                  <i data-lucide="pen-line"></i>
+                </span>
+                <input data-component="input" value="Ask for another author or a shorter list" readOnly />
+                <button className="btn btn-primary composer-send" type="button">
+                  <i data-lucide="send-horizontal" aria-hidden="true"></i>
+                  <span>Send</span>
+                </button>
+              </div>
+            </div>
+
+            <div className="card">
+              <p className="eyebrow">Quick prompts</p>
+              <div className="pill-row quick-grid uikit-responsive-grid">
+                <button className="pill pill-primary">Light reading</button>
+                <button className="pill">Essayists</button>
+                <button className="pill">Travel notes</button>
+                <button className="pill">Quiet fiction</button>
+              </div>
+            </div>
+          </div>
+        </section>
+      );
+    }
+
+    function LibraryScreen() {
+      return (
+        <section className="screen">
+          <div className="topbar">
+            <div className="uikit-main">
+              <p className="eyebrow">Library rhythm</p>
+              <h1 className="title">Weekly reading pulse</h1>
+              <p className="subtitle">A compact dashboard for sessions, saved notes, and what deserves another pass.</p>
+            </div>
+            <span className="badge uikit-nowrap">8-day arc</span>
+          </div>
+
+          <div className="screen-scroll">
+            <div className="card">
+              <div className="row row-header">
+                <div className="uikit-main">
+                  <p className="eyebrow">Overview</p>
+                  <h2 className="section-title">Quiet momentum</h2>
+                </div>
+                <button className="btn btn-ghost">View tokens</button>
+              </div>
+              <div className="stats-grid uikit-responsive-grid">
+                <div className="stat-block">
+                  <p className="metric">18</p>
+                  <p className="subtitle">Sessions this month</p>
+                </div>
+                <div className="stat-block">
+                  <p className="metric">72%</p>
+                  <p className="subtitle">Notes revisited</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="card-soft">
+              <div className="row row-header">
+                <div className="uikit-main">
+                  <p className="eyebrow">Attention chart</p>
+                  <h2 className="section-title">Where the week felt fullest</h2>
+                </div>
+                <span className="micro uikit-nowrap">8 points</span>
+              </div>
+              <div className="spark-grid">
+                <div className="bar barSoft barH40"></div>
+                <div className="bar barH68"></div>
+                <div className="bar barAlt barH56"></div>
+                <div className="bar barLilac barH92"></div>
+                <div className="bar barWarm barH80"></div>
+                <div className="bar barSoft barH28"></div>
+                <div className="bar barAlt barH104"></div>
+                <div className="bar barH116"></div>
+              </div>
+              <div className="chart-labels">
+                <span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span><span>S</span><span>+</span>
+              </div>
+            </div>
+
+            <div className="card">
+              <div className="row row-header">
+                <div className="uikit-main">
+                  <p className="eyebrow">Saved rows</p>
+                  <h2 className="section-title">Recent reading threads</h2>
+                </div>
+                <span className="badge uikit-nowrap">4 items</span>
+              </div>
+              <div className="list">
+                <div className="list-item">
+                  <div className="list-copy">
+                    <strong className="uikit-truncate">Matsuura Yataro</strong>
+                    <div className="subtitle uikit-truncate">Essayist shortlist</div>
+                  </div>
+                  <div className="list-trailing">
+                    <span className="badge uikit-nowrap">Ready</span>
+                  </div>
+                </div>
+                <div className="list-item">
+                  <div className="list-copy">
+                    <strong className="uikit-truncate">Wang Zengqi</strong>
+                    <div className="subtitle uikit-truncate">Short fiction follow-up</div>
+                  </div>
+                  <div className="list-trailing">
+                    <span className="badge uikit-nowrap">Marked</span>
+                  </div>
+                </div>
+                <div className="list-item">
+                  <div className="list-copy">
+                    <strong className="uikit-truncate">Travel notebooks</strong>
+                    <div className="subtitle uikit-truncate">3 passages clipped</div>
+                  </div>
+                  <div className="list-trailing">
+                    <span className="badge uikit-nowrap">Open</span>
+                  </div>
+                </div>
+                <div className="list-item">
+                  <div className="list-copy">
+                    <strong className="uikit-truncate">Quiet weekends</strong>
+                    <div className="subtitle uikit-truncate">Prompt collection</div>
+                  </div>
+                  <div className="list-trailing">
+                    <span className="badge uikit-nowrap">Draft</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+      );
+    }
+
+    function SettingsScreen() {
+      return (
+        <section className="screen">
+          <div className="topbar">
+            <div className="uikit-main">
+              <p className="eyebrow">Settings</p>
+              <h1 className="title">Editorial preferences</h1>
+              <p className="subtitle">One calm tab for tone, pacing, and the amount of guidance Claude should offer.</p>
+            </div>
+            <button className="ghost-icon icon-button" type="button" aria-label="Open settings detail">
+              <i data-lucide="settings" aria-hidden="true"></i>
+            </button>
+          </div>
+
+          <div className="screen-scroll">
+            <div className="card-strong">
+              <p className="eyebrow">Profile</p>
+              <h2 className="section-title">Reading companion</h2>
+              <p className="subtitle">Make the interface feel like a beautifully typeset book.</p>
+              <div className="button-row">
+                <button className="btn btn-secondary">Tone guide</button>
+                <button className="btn btn-ghost">Continue reading</button>
+              </div>
+            </div>
+
+            <div className="stack">
+              <div className="option">
+                <div className="option-copy">
+                  <strong className="uikit-truncate">Shorter answers</strong>
+                  <div className="subtitle">Keep recommendations concise and specific.</div>
+                </div>
+                <div className="toggle toggle-on"></div>
+              </div>
+              <div className="option">
+                <div className="option-copy">
+                  <strong className="uikit-truncate">Include citations</strong>
+                  <div className="subtitle">Attach source notes when a recommendation feels less familiar.</div>
+                </div>
+                <div className="toggle"></div>
+              </div>
+              <div className="option">
+                <div className="option-copy">
+                  <strong className="uikit-truncate">Reading reminders</strong>
+                  <div className="subtitle">Nudge once, quietly, at the end of the day.</div>
+                </div>
+                <div className="toggle toggle-on"></div>
+              </div>
+            </div>
+
+            <div className="card">
+              <div className="row row-header">
+                <div className="uikit-main">
+                  <p className="eyebrow">Routine</p>
+                  <h2 className="section-title">This week&apos;s balance</h2>
+                </div>
+                <span className="badge uikit-nowrap">Single tab</span>
+              </div>
+              <div className="stack">
+                <div>
+                  <div className="row row-progress"><strong className="uikit-truncate">Morning prompts</strong><span className="micro uikit-nowrap">32%</span></div>
+                  <div className="progress-shell"><div className="progress-fill progress32"></div></div>
+                </div>
+                <div>
+                  <div className="row row-progress"><strong className="uikit-truncate">Saved annotations</strong><span className="micro uikit-nowrap">56%</span></div>
+                  <div className="progress-shell"><div className="progress-fill progress56"></div></div>
+                </div>
+                <div>
+                  <div className="row row-progress"><strong className="uikit-truncate">Revisit queue</strong><span className="micro uikit-nowrap">72%</span></div>
+                  <div className="progress-shell"><div className="progress-fill progress72"></div></div>
+                </div>
+                <div>
+                  <div className="row row-progress"><strong className="uikit-truncate">Calm tone match</strong><span className="micro uikit-nowrap">88%</span></div>
+                  <div className="progress-shell"><div className="progress-fill progress88"></div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+      );
+    }
+
+    function App() {
+      const [screen, setScreen] = useState('home');
+
+      useEffect(() => {
+        if (window.lucide) {
+          window.lucide.createIcons();
+        }
+      }, [screen]);
+
+      return (
+        <div className="uikit-shell" data-layout-guard="uikit-v1">
+          <div className="phone-shell uikit-main">
+            <div className="phone-frame">
+              <div className="statusbar uikit-toolbar">
+                <span>9:41</span>
+                <span className="statusbar-label uikit-truncate">Claude Design System</span>
+                <span className="statusbar-right" aria-label="Signal, Wi-Fi, battery">
+                  <i data-lucide="signal" aria-hidden="true"></i>
+                  <i data-lucide="wifi" aria-hidden="true"></i>
+                  <i data-lucide="battery-full" aria-hidden="true"></i>
+                </span>
+              </div>
+
+              {screen === 'home' && <HomeScreen />}
+              {screen === 'library' && <LibraryScreen />}
+              {screen === 'settings' && <SettingsScreen />}
+
+              <nav className="bottom-nav uikit-toolbar" data-component="navigation">
+                <button className={`nav-item ${screen === 'home' ? 'active' : ''}`} type="button" onClick={() => setScreen('home')}>
+                  <i data-lucide="home" className="nav-icon" aria-hidden="true"></i>
+                  <span className="nav-label">Chat</span>
+                </button>
+                <button className={`nav-item ${screen === 'library' ? 'active' : ''}`} type="button" onClick={() => setScreen('library')}>
+                  <i data-lucide="folder-open" className="nav-icon" aria-hidden="true"></i>
+                  <span className="nav-label">Library</span>
+                </button>
+                <button className={`nav-item ${screen === 'settings' ? 'active' : ''}`} type="button" onClick={() => setScreen('settings')}>
+                  <i data-lucide="settings" className="nav-icon" aria-hidden="true"></i>
+                  <span className="nav-label">Settings</span>
+                </button>
+              </nav>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>

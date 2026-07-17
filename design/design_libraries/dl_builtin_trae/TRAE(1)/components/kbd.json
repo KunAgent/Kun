@@ -1,0 +1,44 @@
+{
+  "schemaVersion": 2,
+  "slug": "kbd",
+  "name": "Kbd",
+  "category": "data-display",
+  "sourceKind": "structured-spec",
+  "confidence": "medium",
+  "semanticTypeCandidates": ["Kbd", "KeyboardKey", "Shortcut"],
+  "variantDimensions": {
+    "form": ["single", "combo"]
+  },
+  "representativeVariants": [
+    { "form": "single" },
+    { "form": "combo" }
+  ],
+  "anatomy": ["key", "combo", "plus-separator"],
+  "structurePatterns": [
+    "single key is a <kbd> element with the .ds-kbd class",
+    "combos wrap multiple keys with a .ds-kbd__plus separator inside .ds-kbd__combo"
+  ],
+  "usageHints": [
+    "use monospace font and a thicker bottom border for a keycap look",
+    "display modifier glyphs (⌘ ⇧ ⌥ ⌃) for mac shortcuts",
+    "compose multi-key shortcuts with a + separator"
+  ],
+  "doNotInvent": ["pressed/active animation", "platform auto-detection"],
+  "unknowns": ["windows/linux key labels", "tooltip integration"],
+  "tokensConsumed": [
+    "--spacer-4", "--spacer-6", "--spacer-16", "--code-editor-font-family",
+    "--body-xs-font-size", "--font-weight-medium", "--text-secondary",
+    "--bg-overlay-l2", "--border-neutral-l2", "--radius-4", "--text-tertiary"
+  ],
+  "domAnatomy": {
+    "root": {
+      "tag": "kbd",
+      "class": "ds-kbd"
+    }
+  },
+  "provenance": {
+    "preview": "preview/component-kbd.html",
+    "source": "structured-spec",
+    "css": { "file": "components.css", "marker": "── Kbd ──" }
+  }
+}

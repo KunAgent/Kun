@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Navigation Preview · Claude Design System</title>
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;padding:clamp(20px,3vw,32px);background:var(--background);color:var(--foreground);font-family:var(--font-serif)}
+.preview{width:min(100%,860px);margin:0 auto;display:grid;gap:clamp(24px,4vw,32px)}
+.section{display:grid;gap:14px}
+.label{display:block;font:600 10px/1.2 var(--font-serif);letter-spacing:.14em;text-transform:uppercase;color:var(--muted-foreground)}
+.row{display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap;padding:clamp(18px,3vw,24px);border:1px solid var(--border);border-radius:calc(var(--radius) + 4px);background:var(--popover);box-shadow:var(--shadow-xs)}
+.tabs,.rail,.bottom-nav{border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-xs)}
+.tabs{display:flex;gap:6px;flex-wrap:wrap;max-width:100%;padding:6px;background:var(--card)}
+.tab,.item,.nav-item{appearance:none;border:1px solid transparent;background:transparent;color:var(--muted-foreground);font:600 13px/1.1 var(--font-sans);cursor:pointer;transition:background-color .16s ease,color .16s ease,border-color .16s ease,box-shadow .16s ease}
+.tab{padding:11px 15px;border-radius:calc(var(--radius) - 6px)}
+.tab:hover,.nav-item:hover{background:var(--popover);color:var(--foreground)}
+.item:hover{background:var(--sidebar-accent);color:var(--foreground)}
+.tab:focus-visible,.item:focus-visible,.nav-item:focus-visible{outline:2px solid var(--ring);outline-offset:2px}
+.tab.active,.nav-item.active{background:var(--popover);color:var(--foreground);border-color:var(--border);box-shadow:var(--shadow-xs)}
+.tab.active{box-shadow:var(--shadow-sm)}
+.tab:disabled,.item:disabled,.nav-item:disabled{cursor:not-allowed;box-shadow:none;background:transparent;color:var(--muted-foreground)}
+.rail{width:236px;max-width:100%;padding:14px;background:var(--sidebar);color:var(--sidebar-foreground)}
+.brand{margin:0 0 12px;font:600 11px/1.2 var(--font-serif);letter-spacing:.14em;text-transform:uppercase;color:var(--sidebar-foreground)}
+.stack{display:grid;gap:8px}
+.item{width:100%;padding:12px 13px;border-radius:calc(var(--radius) - 8px);text-align:left;color:var(--sidebar-foreground);background:transparent}
+.item.active{background:var(--popover);color:var(--foreground);border-color:var(--sidebar-border);box-shadow:var(--shadow-xs)}
+.bottom-nav{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;width:min(100%,420px);padding:8px;background:var(--popover)}
+.nav-item{display:grid;gap:4px;justify-items:center;padding:12px 10px;border-radius:calc(var(--radius) - 6px)}
+@media (max-width:640px){
+  .row{padding:18px}
+  .tabs,.rail,.bottom-nav{width:100%}
+}
+</style>
+</head>
+<body>
+<main class="preview">
+<section class="section">
+<span class="label">Tab Strip</span>
+<div class="row">
+<nav class="tabs" aria-label="Navigation tabs">
+<button class="tab active" type="button">Web</button>
+<button class="tab" type="button">Mobile</button>
+<button class="tab" type="button">Library</button>
+<button class="tab" type="button" disabled>Syncing</button>
+</nav>
+</div>
+</section>
+<section class="section">
+<span class="label">Sidebar List</span>
+<div class="row">
+<aside class="rail" aria-label="Sidebar navigation">
+<p class="brand">Claude Design System</p>
+<div class="stack">
+<button class="item active" type="button">Web</button>
+<button class="item" type="button">Mobile</button>
+<button class="item" type="button">Library</button>
+<button class="item" type="button" disabled>Offline</button>
+</div>
+</aside>
+</div>
+</section>
+<section class="section">
+<span class="label">Bottom Nav</span>
+<div class="row">
+<nav class="bottom-nav" aria-label="Bottom navigation">
+<button class="nav-item active" type="button"><span>✦</span><span>Explore</span></button>
+<button class="nav-item" type="button"><span>▥</span><span>Library</span></button>
+<button class="nav-item" type="button"><span>⚙</span><span>Settings</span></button>
+</nav>
+</div>
+</section>
+</main>
+</body>
+</html>

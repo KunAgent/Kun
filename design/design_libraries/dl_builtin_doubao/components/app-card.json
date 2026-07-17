@@ -1,0 +1,67 @@
+{
+  "slug": "app-card",
+  "name": "App Card",
+  "purpose": "Flexible container for model summaries, task snapshots, metrics, or saved workspace items.",
+  "variantDimensions": {
+    "style": [
+      "default",
+      "accented",
+      "quiet"
+    ],
+    "density": [
+      "compact",
+      "comfortable"
+    ],
+    "media": [
+      "none",
+      "icon",
+      "chart-strip"
+    ]
+  },
+  "structures": [
+    {
+      "name": "Summary Card",
+      "anatomy": [
+        "container",
+        "eyebrow",
+        "title",
+        "meta-row",
+        "supporting-text"
+      ],
+      "notes": "Used for recents, pinned agents, or overview metrics."
+    },
+    {
+      "name": "Accent Card",
+      "anatomy": [
+        "container",
+        "accent-band",
+        "title",
+        "body",
+        "action-row"
+      ],
+      "notes": "Uses the accent family sparingly for highlighted content."
+    },
+    {
+      "name": "Card With Inline Metric",
+      "anatomy": [
+        "container",
+        "title-row",
+        "metric",
+        "delta",
+        "caption"
+      ],
+      "notes": "Supports compact analytics modules."
+    }
+  ],
+  "contentExamples": [
+    "全能写作助手",
+    "识图生成提示词",
+    "高情商回复",
+    "EXCEL大全"
+  ],
+  "interactionNotes": [
+    "Card surfaces should stay quiet; contrast comes from border, typography, and small color cues.",
+    "Avoid deep shadows because the source token system intentionally keeps elevation restrained."
+  ],
+  "category": "content"
+}

@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>File Tree</title>
+  <link rel="stylesheet" href="../colors_and_type.css" />
+  <link rel="stylesheet" href="../scaffold.css" />
+  <link rel="stylesheet" href="../components.css" />
+  <style>
+    /* @component-css-start */
+    /* ===== File Tree ===== */
+    .ds-filetree {
+      width: 260px;
+      padding: var(--spacer-4);
+      background: var(--bg-base-secondary);
+      border: 1px solid var(--border-neutral-l1);
+      border-radius: var(--radius-6);
+      font-size: var(--body-sm-font-size);
+      color: var(--text-default);
+    }
+    .ds-filetree__row {
+      display: flex;
+      align-items: center;
+      gap: var(--spacer-6);
+      height: 26px;
+      padding: 0 var(--spacer-6);
+      padding-left: var(--spacer-6);
+      border-radius: var(--radius-4);
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .ds-filetree__row[data-depth="1"] { padding-left: calc(var(--spacer-6) + 16px); }
+    .ds-filetree__row[data-depth="2"] { padding-left: calc(var(--spacer-6) + 32px); }
+    .ds-filetree__row[data-depth="3"] { padding-left: calc(var(--spacer-6) + 48px); }
+    .ds-filetree__row:hover { background: var(--bg-overlay-l2); }
+    .ds-filetree__row.is-active {
+      background: var(--bg-overlay-l3);
+      color: var(--text-default-hover);
+    }
+    .ds-filetree__chevron {
+      display: inline-flex;
+      width: 14px;
+      height: 14px;
+      flex: 0 0 14px;
+    }
+    .ds-filetree__chevron--leaf { visibility: hidden; }
+    .ds-filetree__label { overflow: hidden; text-overflow: ellipsis; }
+    .ds-filetree__icon--folder { filter: none; }
+    .ds-filetree__icon--ts { color: var(--accent-blue); }
+    .ds-filetree__icon--css { color: var(--code-attribute); }
+    .ds-filetree__icon--json { color: var(--code-constant); }
+    /* @component-css-end */
+  </style>
+</head>
+<body>
+  <div class="pv-header">
+    <h1>File Tree</h1>
+    <p>文件树：多层级行 .ds-filetree__row（data-depth 控制缩进），含展开箭头 chevron、文件/文件夹图标、选中态 .is-active。</p>
+  </div>
+  <div class="pv-section">
+    <div class="pv-section__title">Default</div>
+    <div class="ds-filetree">
+      <div class="ds-filetree__row" data-depth="0">
+        <img src="../assets/icons/chevron-down.svg" width="14" height="14" alt="chevron-down" class="icon ds-filetree__chevron" />
+        <img src="../assets/icons/folder.svg" width="16" height="16" alt="folder" class="icon ds-filetree__icon--folder" />
+        <span class="ds-filetree__label">src</span>
+      </div>
+      <div class="ds-filetree__row" data-depth="1">
+        <img src="../assets/icons/chevron-down.svg" width="14" height="14" alt="chevron-down" class="icon ds-filetree__chevron" />
+        <img src="../assets/icons/folder.svg" width="16" height="16" alt="folder" class="icon ds-filetree__icon--folder" />
+        <span class="ds-filetree__label">components</span>
+      </div>
+      <div class="ds-filetree__row is-active" data-depth="2">
+        <span class="ds-filetree__chevron ds-filetree__chevron--leaf"></span>
+        <img src="../assets/icons/file-text.svg" width="16" height="16" alt="file-text" class="icon ds-filetree__icon--ts" />
+        <span class="ds-filetree__label">Button.tsx</span>
+      </div>
+      <div class="ds-filetree__row" data-depth="2">
+        <span class="ds-filetree__chevron ds-filetree__chevron--leaf"></span>
+        <img src="../assets/icons/file.svg" width="16" height="16" alt="file" class="icon ds-filetree__icon--css" />
+        <span class="ds-filetree__label">Button.module.css</span>
+      </div>
+      <div class="ds-filetree__row" data-depth="1">
+        <img src="../assets/icons/chevron-right.svg" width="14" height="14" alt="chevron-right" class="icon ds-filetree__chevron" />
+        <img src="../assets/icons/folder.svg" width="16" height="16" alt="folder" class="icon ds-filetree__icon--folder" />
+        <span class="ds-filetree__label">hooks</span>
+      </div>
+      <div class="ds-filetree__row" data-depth="0">
+        <span class="ds-filetree__chevron ds-filetree__chevron--leaf"></span>
+        <img src="../assets/icons/file.svg" width="16" height="16" alt="file" class="icon ds-filetree__icon--json" />
+        <span class="ds-filetree__label">package.json</span>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

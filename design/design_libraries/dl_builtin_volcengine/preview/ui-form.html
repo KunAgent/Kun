@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>Form 表单</title>
+  <link rel="stylesheet" href="preview-scaffold.css">
+  <style>
+    /* Reset */
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    /* 页面容器 */
+    .page {
+      max-width: 780px;
+      margin: 0 auto;
+    }
+
+    /* 表单卡片 */
+    .form-card {
+      background: #FFFFFF;
+      border-radius: 8px;
+      padding: 24px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+      margin-bottom: 24px;
+    }
+    .form-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: #0C0D0E;
+      margin-bottom: 24px;
+    }
+
+    /* 表单布局 */
+    .form {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .form-field {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .form-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+
+    /* 标签 */
+    .form-label {
+      font-size: 13px;
+      color: #42464E;
+      font-weight: 500;
+      line-height: 22px;
+    }
+    .required {
+      color: #F53F3F;
+      margin-left: 2px;
+    }
+
+    /* 帮助/错误/成功文本 */
+    .form-help {
+      font-size: 12px;
+      color: #737A87;
+    }
+    .form-error-text {
+      font-size: 12px;
+      color: #F53F3F;
+    }
+    .form-success-text {
+      font-size: 12px;
+      color: #309256;
+    }
+
+    /* Input */
+    .ui-input {
+      box-sizing: border-box;
+      width: 100%;
+      height: 32px;
+      padding: 0 12px;
+      border: none;
+      border-radius: 4px;
+      outline: none;
+      background-color: #FFFFFF;
+      box-shadow: 0 0 0 1px #DDE2E9, 0 1px 1px rgba(0,0,0,0.05);
+      color: #0C0D0E;
+      font-family: "PingFang SC", sans-serif;
+      font-size: 13px;
+      font-weight: 400;
+      line-height: 22px;
+      letter-spacing: 0.3px;
+      transition: box-shadow 150ms ease, background-color 150ms ease;
+    }
+    .ui-input::placeholder { color: #737A87; }
+    .ui-input:focus {
+      box-shadow: 0 0 0 1px #1664FF, 0 1px 1px rgba(0,0,0,0.05), 0 0 0 3px rgba(22,100,255,0.3);
+    }
+    .ui-input.input-error {
+      box-shadow: 0 0 0 1px #F53F3F, 0 1px 1px rgba(0,0,0,0.05), 0 0 0 3px rgba(245,63,63,0.12);
+    }
+    .ui-input.input-success {
+      box-shadow: 0 0 0 1px #2A814B, 0 1px 1px rgba(0,0,0,0.05);
+    }
+    .ui-input:disabled {
+      background-color: #F6F8FA;
+      color: #C9CDD4;
+      cursor: not-allowed;
+    }
+
+    /* Textarea */
+    .ui-textarea {
+      box-sizing: border-box;
+      width: 100%;
+      min-height: 72px;
+      padding: 8px 12px;
+      border: none;
+      border-radius: 4px;
+      outline: none;
+      background-color: #FFFFFF;
+      box-shadow: 0 0 0 1px #DDE2E9, 0 1px 1px rgba(0,0,0,0.05);
+      color: #0C0D0E;
+      font-family: "PingFang SC", sans-serif;
+      font-size: 13px;
+      font-weight: 400;
+      line-height: 22px;
+      letter-spacing: 0.3px;
+      resize: vertical;
+      transition: box-shadow 150ms ease, background-color 150ms ease;
+    }
+    .ui-textarea::placeholder { color: #737A87; }
+    .ui-textarea:focus {
+      box-shadow: 0 0 0 1px #1664FF, 0 1px 1px rgba(0,0,0,0.05), 0 0 0 3px rgba(22,100,255,0.3);
+    }
+
+    /* Select */
+    .ui-select {
+      box-sizing: border-box;
+      width: 100%;
+      height: 32px;
+      padding: 0 32px 0 12px;
+      border: none;
+      border-radius: 4px;
+      outline: none;
+      background-color: #FFFFFF;
+      box-shadow: 0 0 0 1px #DDE2E9, 0 1px 1px rgba(0,0,0,0.05);
+      color: #0C0D0E;
+      font-family: "PingFang SC", sans-serif;
+      font-size: 13px;
+      line-height: 22px;
+      letter-spacing: 0.3px;
+      appearance: none;
+      cursor: pointer;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='none'%3E%3Cpath d='M2.5 4.5L6 8l3.5-3.5' stroke='%23737A87' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 12px center;
+      transition: box-shadow 150ms ease;
+    }
+    .ui-select:focus {
+      box-shadow: 0 0 0 1px #1664FF, 0 1px 1px rgba(0,0,0,0.05), 0 0 0 3px rgba(22,100,255,0.3);
+    }
+
+    /* Button */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      font-family: "PingFang SC", sans-serif;
+      font-weight: 500;
+      letter-spacing: 0.3px;
+      line-height: 22px;
+      border-radius: 4px;
+      border: none;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: background 150ms ease, box-shadow 150ms ease;
+    }
+    .btn-md {
+      height: 32px;
+      padding: 0 16px;
+      font-size: 13px;
+    }
+    .btn-primary {
+      background: #1664FF;
+      color: #FFFFFF;
+    }
+    .btn-primary:hover {
+      background: #4585FF;
+    }
+    .btn-secondary {
+      background: #F6F8FA;
+      color: #42464E;
+      box-shadow: 0 2px 1px rgba(0,0,0,0.08), 0 0 0 1px #DDE2E9;
+    }
+    .btn-secondary:hover {
+      background: #F3F7FF;
+      color: #1664FF;
+      box-shadow: 0 2px 3px rgba(0,0,0,0.15), 0 0 0 1px rgba(22,100,255,0.8);
+    }
+
+    /* Radio */
+    .radio-group {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+    .radio {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      cursor: pointer;
+      font-size: 13px;
+      color: #0C0D0E;
+    }
+    .radio input[type="radio"] {
+      width: 16px;
+      height: 16px;
+      margin: 0;
+      accent-color: #1664FF;
+      cursor: pointer;
+    }
+
+    /* Checkbox */
+    .checkbox-group {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+    .checkbox {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      cursor: pointer;
+      font-size: 13px;
+      color: #0C0D0E;
+    }
+    .checkbox input[type="checkbox"] {
+      width: 16px;
+      height: 16px;
+      margin: 0;
+      accent-color: #1664FF;
+      cursor: pointer;
+      border-radius: 3px;
+    }
+
+    /* Switch */
+    .switch {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      cursor: pointer;
+    }
+    .switch input {
+      position: absolute;
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+    .switch-slider {
+      width: 36px;
+      height: 20px;
+      background: #DDE2E9;
+      border-radius: 10px;
+      position: relative;
+      transition: background 200ms ease;
+    }
+    .switch-slider::after {
+      content: "";
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 16px;
+      height: 16px;
+      background: #FFFFFF;
+      border-radius: 50%;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+      transition: transform 200ms ease;
+    }
+    .switch input:checked + .switch-slider {
+      background: #1664FF;
+    }
+    .switch input:checked + .switch-slider::after {
+      transform: translateX(16px);
+    }
+
+    /* 操作区 */
+    .form-actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 8px;
+    }
+
+    /* 分组 */
+    .form-section {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .form-section-title {
+      font-size: 14px;
+      font-weight: 500;
+      color: #0C0D0E;
+    }
+
+    /* 分割线 */
+    .divider {
+      border: none;
+      border-top: 1px solid #EAEDF1;
+      margin: 8px 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="pv-header">
+    <h1>Form 表单</h1>
+    <p>完整表单布局示例，包含单列、双列、校验态及分组表单。</p>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">单列表单</div>
+    <div class="demo-box">
+      <div class="form-card">
+        <h3 class="form-title">基本信息</h3>
+        <form class="form" data-component="form" onsubmit="return false">
+          <div class="form-field">
+            <label class="form-label">姓名 <span class="required">*</span></label>
+            <input type="text" class="ui-input" data-component="input" placeholder="请输入姓名">
+          </div>
+          <div class="form-field">
+            <label class="form-label">邮箱 <span class="required">*</span></label>
+            <input type="email" class="ui-input" data-component="input" placeholder="请输入邮箱">
+            <span class="form-help">工作邮箱，用于接收通知</span>
+          </div>
+          <div class="form-field">
+            <label class="form-label">部门</label>
+            <select class="ui-select" data-component="select">
+              <option value="" disabled selected>请选择部门</option>
+              <option>技术部</option>
+              <option>产品部</option>
+              <option>设计部</option>
+              <option>市场部</option>
+            </select>
+          </div>
+          <div class="form-field">
+            <label class="form-label">角色</label>
+            <div class="radio-group" data-slot="control">
+              <label class="radio"><input type="radio" name="role" checked><span>管理员</span></label>
+              <label class="radio"><input type="radio" name="role"><span>编辑者</span></label>
+              <label class="radio"><input type="radio" name="role"><span>查看者</span></label>
+            </div>
+          </div>
+          <div class="form-field">
+            <label class="form-label">备注</label>
+            <textarea class="ui-textarea" rows="3" placeholder="请输入备注信息"></textarea>
+          </div>
+          <div class="form-actions" data-slot="actions">
+            <button type="submit" class="btn btn-md btn-primary" data-component="button">提交</button>
+            <button type="button" class="btn btn-md btn-secondary" data-component="button">取消</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">双列表单</div>
+    <div class="demo-box">
+      <div class="form-card">
+        <h3 class="form-title">新建用户</h3>
+        <form class="form" data-component="form" onsubmit="return false">
+          <div class="form-row">
+            <div class="form-field">
+              <label class="form-label">姓名 <span class="required">*</span></label>
+              <input type="text" class="ui-input" data-component="input" placeholder="请输入姓名">
+            </div>
+            <div class="form-field">
+              <label class="form-label">手机号 <span class="required">*</span></label>
+              <input type="tel" class="ui-input" data-component="input" placeholder="请输入手机号">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-field">
+              <label class="form-label">邮箱</label>
+              <input type="email" class="ui-input" data-component="input" placeholder="请输入邮箱">
+            </div>
+            <div class="form-field">
+              <label class="form-label">职位</label>
+              <input type="text" class="ui-input" data-component="input" placeholder="请输入职位">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-field">
+              <label class="form-label">部门</label>
+              <select class="ui-select" data-component="select">
+                <option value="" disabled selected>请选择</option>
+                <option>技术部</option>
+                <option>产品部</option>
+                <option>设计部</option>
+              </select>
+            </div>
+            <div class="form-field">
+              <label class="form-label">入职日期</label>
+              <input type="date" class="ui-input" data-component="input">
+            </div>
+          </div>
+          <div class="form-field">
+            <label class="form-label">权限设置</label>
+            <div class="checkbox-group" data-slot="control">
+              <label class="checkbox"><input type="checkbox" checked><span>查看数据</span></label>
+              <label class="checkbox"><input type="checkbox" checked><span>编辑内容</span></label>
+              <label class="checkbox"><input type="checkbox"><span>管理用户</span></label>
+              <label class="checkbox"><input type="checkbox"><span>系统设置</span></label>
+            </div>
+          </div>
+          <div class="form-actions" data-slot="actions">
+            <button type="submit" class="btn btn-md btn-primary" data-component="button">创建用户</button>
+            <button type="button" class="btn btn-md btn-secondary" data-component="button">取消</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">带校验态的表单</div>
+    <div class="demo-box">
+      <div class="form-card">
+        <h3 class="form-title">账号设置</h3>
+        <form class="form" data-component="form" onsubmit="return false">
+          <div class="form-field">
+            <label class="form-label">用户名 <span class="required">*</span></label>
+            <input type="text" class="ui-input input-error" data-component="input" value="ab">
+            <span class="form-error-text">用户名长度不能少于 3 个字符</span>
+          </div>
+          <div class="form-field">
+            <label class="form-label">密码 <span class="required">*</span></label>
+            <input type="password" class="ui-input input-error" data-component="input" value="123">
+            <span class="form-error-text">密码必须包含大小写字母和数字，长度至少 8 位</span>
+          </div>
+          <div class="form-field">
+            <label class="form-label">邮箱 <span class="required">*</span></label>
+            <input type="email" class="ui-input input-success" data-component="input" value="user@example.com">
+            <span class="form-success-text">邮箱格式正确</span>
+          </div>
+          <div class="form-field">
+            <label class="form-label">启用双因素认证</label>
+            <label class="switch">
+              <input type="checkbox">
+              <span class="switch-slider"></span>
+            </label>
+          </div>
+          <div class="form-actions" data-slot="actions">
+            <button type="submit" class="btn btn-md btn-primary" data-component="button">保存设置</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">分组表单</div>
+    <div class="demo-box">
+      <div class="form-card">
+        <h3 class="form-title">项目配置</h3>
+        <form class="form" data-component="form" onsubmit="return false">
+          <div class="form-section">
+            <h4 class="form-section-title">基本设置</h4>
+            <div class="form-field">
+              <label class="form-label">项目名称 <span class="required">*</span></label>
+              <input type="text" class="ui-input" data-component="input" placeholder="请输入项目名称">
+            </div>
+            <div class="form-field">
+              <label class="form-label">描述</label>
+              <textarea class="ui-textarea" rows="2" placeholder="简要描述项目"></textarea>
+            </div>
+          </div>
+          <hr class="divider">
+          <div class="form-section">
+            <h4 class="form-section-title">高级设置</h4>
+            <div class="form-row">
+              <div class="form-field">
+                <label class="form-label">环境</label>
+                <select class="ui-select" data-component="select">
+                  <option>生产环境</option>
+                  <option>测试环境</option>
+                  <option>开发环境</option>
+                </select>
+              </div>
+              <div class="form-field">
+                <label class="form-label">区域</label>
+                <select class="ui-select" data-component="select">
+                  <option>华北</option>
+                  <option>华东</option>
+                  <option>华南</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-field">
+              <label class="form-label">自动扩容</label>
+              <label class="switch">
+                <input type="checkbox" checked>
+                <span class="switch-slider"></span>
+              </label>
+              <span class="form-help">开启后系统将根据负载自动调整资源</span>
+            </div>
+          </div>
+          <div class="form-actions" data-slot="actions">
+            <button type="submit" class="btn btn-md btn-primary" data-component="button">保存配置</button>
+            <button type="button" class="btn btn-md btn-secondary" data-component="button">重置</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

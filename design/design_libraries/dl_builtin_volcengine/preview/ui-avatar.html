@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>Avatar 头像</title>
+  <link rel="stylesheet" href="preview-scaffold.css">
+  <style>
+    /* ====== AvatarIcon 头像图标 ====== */
+    .avatar-icon {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 50%;
+      font-family: "Roboto", sans-serif;
+      font-weight: 600;
+      white-space: nowrap;
+      overflow: hidden;
+      flex-shrink: 0;
+      box-sizing: border-box;
+    }
+
+    .avatar-icon-mini { width: 16px; height: 16px; font-size: 12px; line-height: 18px; letter-spacing: 0.036px; }
+    .avatar-icon-default { width: 20px; height: 20px; font-size: 12px; line-height: 20px; letter-spacing: 0.036px; }
+    .avatar-icon-medium { width: 24px; height: 24px; font-size: 12px; line-height: 22px; letter-spacing: 0.036px; }
+    .avatar-icon-large { width: 40px; height: 40px; font-size: 16px; line-height: 24px; letter-spacing: 0.048px; }
+
+    .avatar-icon-red { background: #FFECEC; color: #BD2923; }
+    .avatar-icon-beige { background: #FFF3DC; color: #996600; }
+    .avatar-icon-green { background: #E1F6E6; color: #237040; }
+    .avatar-icon-teal { background: #D9F1FF; color: #4091AA; }
+    .avatar-icon-purple { background: #E9DEFF; color: #5B2B82; }
+    .avatar-icon-primary { background: #EBF1FF; color: #1759DD; }
+    .avatar-icon-grey { background: #F1F3F5; color: #42464E; }
+
+    .avatar-icon-bordered { border: 2px solid #FFFFFF; }
+
+    .avatar-icon img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
+
+    /* ====== Avatar 头像组合 ====== */
+    .avatar {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-family: "PingFang SC", "Microsoft YaHei", -apple-system, sans-serif;
+      box-sizing: border-box;
+    }
+
+    .avatar-capsule {
+      background: #FFFFFF;
+      border: 1px solid #EAEDF1;
+      border-radius: 30px;
+      padding-left: 2px;
+      padding-right: 4px;
+      overflow: hidden;
+    }
+
+    .avatar-name { color: #0C0D0E; font-weight: 400; white-space: nowrap; }
+
+    .avatar-mini .avatar-name { font-size: 12px; line-height: 20px; letter-spacing: 0.036px; }
+    .avatar-default .avatar-name { font-size: 13px; line-height: 22px; letter-spacing: 0.039px; }
+    .avatar-medium .avatar-name { font-size: 13px; line-height: 22px; letter-spacing: 0.039px; }
+    .avatar-large .avatar-name { font-size: 14px; line-height: 22px; letter-spacing: 0.042px; }
+
+    .avatar-twoline { align-items: flex-start; }
+    .avatar-twoline .avatar-info { display: flex; flex-direction: column; gap: 0; }
+    .avatar-twoline .avatar-subtitle { font-size: 12px; line-height: 20px; color: #737A87; font-weight: 400; }
+
+    .avatar-editable { position: relative; cursor: pointer; }
+    .avatar-editable .avatar-icon::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      border-radius: 50%;
+      background: rgba(0, 0, 0, 0.4);
+      opacity: 0;
+      transition: opacity 0.2s;
+    }
+    .avatar-editable:hover .avatar-icon::after { opacity: 1; }
+  </style>
+</head>
+<body>
+  <div class="pv-header">
+    <h1>Avatar 头像</h1>
+    <p>头像组件，覆盖 AvatarIcon（7 色 × 4 尺寸）与 Avatar 组合（人员/部门、胶囊模式、双行/可编辑）。</p>
+  </div>
+
+  <!-- ===== AvatarIcon 尺寸 ===== -->
+  <div class="pv-section">
+    <div class="pv-section__title">AvatarIcon 尺寸</div>
+    <div class="pv-section__sub">mini (16px) / default (20px) / medium (24px) / large (40px)</div>
+    <div class="row-16">
+      <span class="avatar-icon avatar-icon-mini avatar-icon-purple" data-component="avatar-icon" data-size="mini" data-color="purple">S</span>
+      <span class="avatar-icon avatar-icon-default avatar-icon-purple" data-component="avatar-icon" data-size="default" data-color="purple">S</span>
+      <span class="avatar-icon avatar-icon-medium avatar-icon-purple" data-component="avatar-icon" data-size="medium" data-color="purple">S</span>
+      <span class="avatar-icon avatar-icon-large avatar-icon-purple" data-component="avatar-icon" data-size="large" data-color="purple">S</span>
+      <span class="avatar-icon avatar-icon-large avatar-icon-red avatar-icon-bordered" data-component="avatar-icon" data-size="large" data-color="red" data-border="true">S</span>
+    </div>
+  </div>
+
+  <!-- ===== AvatarIcon 颜色 ===== -->
+  <div class="pv-section">
+    <div class="pv-section__title">AvatarIcon 颜色</div>
+    <div class="pv-section__sub">7 种语义色：red / beige / green / teal / purple / primary / grey</div>
+    <div class="stack-12">
+      <div class="demo-label">Mini</div>
+      <div class="row">
+        <span class="avatar-icon avatar-icon-mini avatar-icon-red" data-component="avatar-icon" data-size="mini" data-color="red">S</span>
+        <span class="avatar-icon avatar-icon-mini avatar-icon-beige" data-component="avatar-icon" data-size="mini" data-color="beige">S</span>
+        <span class="avatar-icon avatar-icon-mini avatar-icon-green" data-component="avatar-icon" data-size="mini" data-color="green">S</span>
+        <span class="avatar-icon avatar-icon-mini avatar-icon-teal" data-component="avatar-icon" data-size="mini" data-color="teal">S</span>
+        <span class="avatar-icon avatar-icon-mini avatar-icon-purple" data-component="avatar-icon" data-size="mini" data-color="purple">S</span>
+        <span class="avatar-icon avatar-icon-mini avatar-icon-primary" data-component="avatar-icon" data-size="mini" data-color="primary">S</span>
+        <span class="avatar-icon avatar-icon-mini avatar-icon-grey" data-component="avatar-icon" data-size="mini" data-color="grey">S</span>
+      </div>
+      <div class="demo-label">Default</div>
+      <div class="row">
+        <span class="avatar-icon avatar-icon-default avatar-icon-red" data-component="avatar-icon" data-size="default" data-color="red">S</span>
+        <span class="avatar-icon avatar-icon-default avatar-icon-beige" data-component="avatar-icon" data-size="default" data-color="beige">S</span>
+        <span class="avatar-icon avatar-icon-default avatar-icon-green" data-component="avatar-icon" data-size="default" data-color="green">S</span>
+        <span class="avatar-icon avatar-icon-default avatar-icon-teal" data-component="avatar-icon" data-size="default" data-color="teal">S</span>
+        <span class="avatar-icon avatar-icon-default avatar-icon-purple" data-component="avatar-icon" data-size="default" data-color="purple">S</span>
+        <span class="avatar-icon avatar-icon-default avatar-icon-primary" data-component="avatar-icon" data-size="default" data-color="primary">S</span>
+        <span class="avatar-icon avatar-icon-default avatar-icon-grey" data-component="avatar-icon" data-size="default" data-color="grey">S</span>
+      </div>
+      <div class="demo-label">Medium</div>
+      <div class="row">
+        <span class="avatar-icon avatar-icon-medium avatar-icon-red" data-component="avatar-icon" data-size="medium" data-color="red">S</span>
+        <span class="avatar-icon avatar-icon-medium avatar-icon-beige" data-component="avatar-icon" data-size="medium" data-color="beige">S</span>
+        <span class="avatar-icon avatar-icon-medium avatar-icon-green" data-component="avatar-icon" data-size="medium" data-color="green">S</span>
+        <span class="avatar-icon avatar-icon-medium avatar-icon-teal" data-component="avatar-icon" data-size="medium" data-color="teal">S</span>
+        <span class="avatar-icon avatar-icon-medium avatar-icon-purple" data-component="avatar-icon" data-size="medium" data-color="purple">S</span>
+        <span class="avatar-icon avatar-icon-medium avatar-icon-primary" data-component="avatar-icon" data-size="medium" data-color="primary">S</span>
+        <span class="avatar-icon avatar-icon-medium avatar-icon-grey" data-component="avatar-icon" data-size="medium" data-color="grey">S</span>
+      </div>
+      <div class="demo-label">Large</div>
+      <div class="row">
+        <span class="avatar-icon avatar-icon-large avatar-icon-red" data-component="avatar-icon" data-size="large" data-color="red">S</span>
+        <span class="avatar-icon avatar-icon-large avatar-icon-beige" data-component="avatar-icon" data-size="large" data-color="beige">S</span>
+        <span class="avatar-icon avatar-icon-large avatar-icon-green" data-component="avatar-icon" data-size="large" data-color="green">S</span>
+        <span class="avatar-icon avatar-icon-large avatar-icon-teal" data-component="avatar-icon" data-size="large" data-color="teal">S</span>
+        <span class="avatar-icon avatar-icon-large avatar-icon-purple" data-component="avatar-icon" data-size="large" data-color="purple">S</span>
+        <span class="avatar-icon avatar-icon-large avatar-icon-primary" data-component="avatar-icon" data-size="large" data-color="primary">S</span>
+        <span class="avatar-icon avatar-icon-large avatar-icon-grey" data-component="avatar-icon" data-size="large" data-color="grey">S</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== Avatar 人员组合 ===== -->
+  <div class="pv-section">
+    <div class="pv-section__title">Avatar 人员组合</div>
+    <div class="pv-section__sub">AvatarIcon + 姓名文字，支持 4 种尺寸</div>
+    <div class="row-16">
+      <span class="avatar avatar-mini" data-component="avatar" data-size="mini" data-type="person">
+        <span class="avatar-icon avatar-icon-mini avatar-icon-purple">S</span>
+        <span class="avatar-name">宋明</span>
+      </span>
+      <span class="avatar avatar-default" data-component="avatar" data-size="default" data-type="person">
+        <span class="avatar-icon avatar-icon-default avatar-icon-purple">S</span>
+        <span class="avatar-name">宋明</span>
+      </span>
+      <span class="avatar avatar-medium" data-component="avatar" data-size="medium" data-type="person">
+        <span class="avatar-icon avatar-icon-medium avatar-icon-purple">S</span>
+        <span class="avatar-name">宋明</span>
+      </span>
+      <span class="avatar avatar-large" data-component="avatar" data-size="large" data-type="person">
+        <span class="avatar-icon avatar-icon-large avatar-icon-purple">S</span>
+        <span class="avatar-name">宋明</span>
+      </span>
+    </div>
+  </div>
+
+  <!-- ===== 胶囊模式 ===== -->
+  <div class="pv-section">
+    <div class="pv-section__title">胶囊模式 Capsule</div>
+    <div class="pv-section__sub">带边框圆角容器包裹的紧凑形态</div>
+    <div class="stack-12">
+      <div class="demo-label">人员</div>
+      <div class="row">
+        <span class="avatar avatar-mini avatar-capsule" data-component="avatar" data-size="mini" data-type="person" data-capsule="true">
+          <span class="avatar-icon avatar-icon-mini avatar-icon-purple">S</span>
+          <span class="avatar-name">宋明</span>
+        </span>
+        <span class="avatar avatar-default avatar-capsule" data-component="avatar" data-size="default" data-type="person" data-capsule="true">
+          <span class="avatar-icon avatar-icon-default avatar-icon-purple">S</span>
+          <span class="avatar-name">宋明</span>
+        </span>
+        <span class="avatar avatar-medium avatar-capsule" data-component="avatar" data-size="medium" data-type="person" data-capsule="true">
+          <span class="avatar-icon avatar-icon-medium avatar-icon-purple">S</span>
+          <span class="avatar-name">宋明</span>
+        </span>
+      </div>
+      <div class="demo-label">部门</div>
+      <div class="row">
+        <span class="avatar avatar-mini avatar-capsule" data-component="avatar" data-size="mini" data-type="dept" data-capsule="true">
+          <span class="avatar-icon avatar-icon-mini avatar-icon-grey">西</span>
+          <span class="avatar-name">西瓜</span>
+        </span>
+        <span class="avatar avatar-default avatar-capsule" data-component="avatar" data-size="default" data-type="dept" data-capsule="true">
+          <span class="avatar-icon avatar-icon-default avatar-icon-grey">西</span>
+          <span class="avatar-name">西瓜</span>
+        </span>
+        <span class="avatar avatar-medium avatar-capsule" data-component="avatar" data-size="medium" data-type="dept" data-capsule="true">
+          <span class="avatar-icon avatar-icon-medium avatar-icon-grey">西</span>
+          <span class="avatar-name">西瓜</span>
+        </span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== 双行 & 可编辑 ===== -->
+  <div class="pv-section">
+    <div class="pv-section__title">双行模式 & 可编辑</div>
+    <div class="row-16">
+      <span class="avatar avatar-medium avatar-twoline" data-component="avatar" data-size="medium" data-type="person" data-twoline="true">
+        <span class="avatar-icon avatar-icon-medium avatar-icon-purple">S</span>
+        <span class="avatar-info">
+          <span class="avatar-name">宋明</span>
+          <span class="avatar-subtitle">songming@example.com</span>
+        </span>
+      </span>
+      <span class="avatar avatar-large avatar-editable" data-component="avatar" data-size="large" data-type="person" data-state="editable">
+        <span class="avatar-icon avatar-icon-large avatar-icon-purple">S</span>
+        <span class="avatar-name">宋明</span>
+      </span>
+    </div>
+  </div>
+</body>
+</html>

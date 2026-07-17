@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>Segmented Picker 分段选择器</title>
+  <link rel="stylesheet" href="preview-scaffold.css">
+  <style>
+  .segmented-picker {
+    display: inline-flex;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .segmented-picker-item {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 20px;
+    border: none;
+    border-radius: 4px;
+    background: #FFFFFF;
+    box-shadow: 0 0 0 1px #DDE2E9;
+    color: #42464E;
+    font-family: "PingFang SC", sans-serif;
+    font-style: normal;
+    font-weight: 400;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
+  }
+
+  .segmented-picker-item:hover:not(.active):not(.disabled):not([disabled]),
+  .segmented-picker-item.hover {
+    background: #ECEDED;
+  }
+
+  .segmented-picker-item.active {
+    background: #F3F7FF;
+    box-shadow: 0 1px 1px rgba(0, 110, 255, 0), 0 0 0 1px #A2C1FF;
+    color: #1664FF;
+    font-weight: 500;
+  }
+
+  .segmented-picker-item.disabled,
+  .segmented-picker-item[disabled] {
+    color: #737A87;
+    opacity: 0.5;
+    cursor: not-allowed;
+    pointer-events: none;
+  }
+
+  .segmented-picker-lg .segmented-picker-item,
+  .segmented-picker-md .segmented-picker-item,
+  .segmented-picker-sm .segmented-picker-item {
+    width: 94px;
+    font-size: 13px;
+    line-height: 22px;
+    letter-spacing: 0.3px;
+  }
+
+  .segmented-picker-lg .segmented-picker-item { min-height: 36px; }
+  .segmented-picker-md .segmented-picker-item { min-height: 32px; }
+  .segmented-picker-sm .segmented-picker-item { min-height: 28px; }
+
+  .segmented-picker-xs .segmented-picker-item {
+    width: 89px;
+    min-height: 24px;
+    font-size: 12px;
+    line-height: 20px;
+    letter-spacing: 0.3px;
+  }
+  </style>
+</head>
+<body>
+  <div class="pv-header">
+    <h1>Segmented Picker 分段选择器</h1>
+    <p>分段选择器，支持 Large/Default/Small/Mini 四种尺寸，2-8 项可选。</p>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">Large 36px</div>
+    <div class="stack-12">
+      <div class="segmented-picker segmented-picker-lg" data-component="segmented-picker" data-size="large" data-items="2">
+        <button class="segmented-picker-item active" data-state="active">近 1 小时</button>
+        <button class="segmented-picker-item" data-state="default">3 小时</button>
+      </div>
+      <div class="segmented-picker segmented-picker-lg" data-component="segmented-picker" data-size="large" data-items="4">
+        <button class="segmented-picker-item active" data-state="active">近 1 小时</button>
+        <button class="segmented-picker-item" data-state="default">3 小时</button>
+        <button class="segmented-picker-item" data-state="default">12 小时</button>
+        <button class="segmented-picker-item" data-state="default">24 小时</button>
+      </div>
+      <div class="segmented-picker segmented-picker-lg" data-component="segmented-picker" data-size="large" data-items="8">
+        <button class="segmented-picker-item active" data-state="active">近 1 小时</button>
+        <button class="segmented-picker-item" data-state="default">3 小时</button>
+        <button class="segmented-picker-item" data-state="default">12 小时</button>
+        <button class="segmented-picker-item" data-state="default">24 小时</button>
+        <button class="segmented-picker-item" data-state="default">7 天</button>
+        <button class="segmented-picker-item" data-state="default">14 天</button>
+        <button class="segmented-picker-item" data-state="default">30 天</button>
+        <button class="segmented-picker-item" data-state="default">自定义</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">Default 32px</div>
+    <div class="stack-12">
+      <div class="segmented-picker segmented-picker-md" data-component="segmented-picker" data-size="default" data-items="3">
+        <button class="segmented-picker-item active" data-state="active">近 1 小时</button>
+        <button class="segmented-picker-item" data-state="default">3 小时</button>
+        <button class="segmented-picker-item" data-state="default">12 小时</button>
+      </div>
+      <div class="segmented-picker segmented-picker-md" data-component="segmented-picker" data-size="default" data-items="5">
+        <button class="segmented-picker-item active" data-state="active">近 1 小时</button>
+        <button class="segmented-picker-item" data-state="default">3 小时</button>
+        <button class="segmented-picker-item" data-state="default">12 小时</button>
+        <button class="segmented-picker-item" data-state="default">24 小时</button>
+        <button class="segmented-picker-item" data-state="default">7 天</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">Small 28px</div>
+    <div class="stack-12">
+      <div class="segmented-picker segmented-picker-sm" data-component="segmented-picker" data-size="small" data-items="3">
+        <button class="segmented-picker-item active" data-state="active">近 1 小时</button>
+        <button class="segmented-picker-item" data-state="default">3 小时</button>
+        <button class="segmented-picker-item" data-state="default">12 小时</button>
+      </div>
+      <div class="segmented-picker segmented-picker-sm" data-component="segmented-picker" data-size="small" data-items="6">
+        <button class="segmented-picker-item active" data-state="active">近 1 小时</button>
+        <button class="segmented-picker-item" data-state="default">3 小时</button>
+        <button class="segmented-picker-item" data-state="default">12 小时</button>
+        <button class="segmented-picker-item" data-state="default">24 小时</button>
+        <button class="segmented-picker-item" data-state="default">7 天</button>
+        <button class="segmented-picker-item" data-state="default">14 天</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">Mini 24px</div>
+    <div class="stack-12">
+      <div class="segmented-picker segmented-picker-xs" data-component="segmented-picker" data-size="mini" data-items="4">
+        <button class="segmented-picker-item active" data-state="active">近 1 小时</button>
+        <button class="segmented-picker-item" data-state="default">3 小时</button>
+        <button class="segmented-picker-item" data-state="default">12 小时</button>
+        <button class="segmented-picker-item" data-state="default">24 小时</button>
+      </div>
+      <div class="segmented-picker segmented-picker-xs" data-component="segmented-picker" data-size="mini" data-items="7">
+        <button class="segmented-picker-item active" data-state="active">近 1 小时</button>
+        <button class="segmented-picker-item" data-state="default">3 小时</button>
+        <button class="segmented-picker-item" data-state="default">12 小时</button>
+        <button class="segmented-picker-item" data-state="default">24 小时</button>
+        <button class="segmented-picker-item" data-state="default">7 天</button>
+        <button class="segmented-picker-item" data-state="default">14 天</button>
+        <button class="segmented-picker-item" data-state="default">30 天</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">子组件状态</div>
+    <div class="row">
+      <button class="segmented-picker-item" style="min-height:32px;width:94px;font-size:13px;line-height:22px;" data-component="segmented-picker-item" data-state="default">Default</button>
+      <button class="segmented-picker-item active" style="min-height:32px;width:94px;font-size:13px;line-height:22px;" data-component="segmented-picker-item" data-state="active">Active</button>
+      <button class="segmented-picker-item hover" style="min-height:32px;width:94px;font-size:13px;line-height:22px;" data-component="segmented-picker-item" data-state="hover">Hover</button>
+      <button class="segmented-picker-item disabled" disabled style="min-height:32px;width:94px;font-size:13px;line-height:22px;" data-component="segmented-picker-item" data-state="disabled">Disabled</button>
+    </div>
+  </div>
+</body>
+</html>

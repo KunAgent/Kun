@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>Button 按钮</title>
+  <link rel="stylesheet" href="preview-scaffold.css">
+  <style>
+    :root {
+      /* 品牌色 */
+      --primary-6: #1664FF;
+      --primary-hover: #4585FF;
+      --primary-active: #0055FF;
+      --primary-disabled-bg: #A2C1FF;
+
+      /* Danger */
+      --danger-6: #F65159;
+      --danger-hover: #F76B6B;
+      --danger-active: #D93F3F;
+      --danger-disabled-bg: #FDAAAA;
+
+      /* Success */
+      --success-6: #309256;
+      --success-hover: #3DA766;
+      --success-active: #267A45;
+      --success-disabled-bg: #8DD4A4;
+
+      /* Warning */
+      --warning-6: #D08D06;
+      --warning-hover: #E0A020;
+      --warning-active: #B07800;
+      --warning-disabled-bg: #F0D078;
+
+      /* 灰色系 */
+      --bg-white: #FFFFFF;
+      --bg-4: #F6F8FA;
+      --text-2: #42464E;
+      --text-disabled: #A0A8B3;
+      --border-2: #DDE2E9;
+      --border-1: #EAEDF1;
+
+      /* 阴影 */
+      --shadow-blue: 0px 0px 0px 1px #0055FF, 0px 2px 1px 0px rgba(0,0,0,0.15);
+      --shadow-blue-hover: 0px 0px 0px 1px #4585FF, 0px 2px 1px 0px rgba(0,0,0,0.15);
+      --shadow-gray: 0px 0px 0px 1px #DDE2E9, 0px 2px 1px 0px rgba(0,0,0,0.08);
+      --shadow-gray-hover: 0px 0px 0px 1px #C9CDD4, 0px 2px 1px 0px rgba(0,0,0,0.08);
+      --shadow-danger: 0px 0px 0px 1px #D93F3F, 0px 2px 1px 0px rgba(0,0,0,0.15);
+      --shadow-success: 0px 0px 0px 1px #267A45, 0px 2px 1px 0px rgba(0,0,0,0.15);
+      --shadow-warning: 0px 0px 0px 1px #B07800, 0px 2px 1px 0px rgba(0,0,0,0.15);
+    }
+
+    /* 基础 */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      font-family: "PingFang SC", sans-serif;
+      font-weight: 400;
+      letter-spacing: 0.04px;
+      line-height: 22px;
+      border-radius: 4px;
+      border: none;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all 0.2s ease;
+    }
+
+    /* 尺寸 */
+    .btn-lg { height: 36px; padding: 0 16px; font-size: 14px; }
+    .btn-md { height: 32px; padding: 0 16px; font-size: 13px; }
+    .btn-sm { height: 28px; padding: 0 12px; font-size: 13px; }
+    .btn-mini { height: 24px; padding: 0 8px; font-size: 12px; }
+
+    /* Primary 主要 */
+    .btn-primary { background: var(--primary-6); color: #FFFFFF; box-shadow: var(--shadow-blue); }
+    .btn-primary:hover { background: var(--primary-hover); box-shadow: var(--shadow-blue-hover); }
+    .btn-primary:active { background: var(--primary-active); box-shadow: var(--shadow-blue); }
+
+    /* Secondary 次要 */
+    .btn-secondary { background: var(--bg-4); color: var(--text-2); box-shadow: var(--shadow-gray); }
+    .btn-secondary:hover { background: #F3F7FF; color: var(--text-2); box-shadow: 0px 0px 0px 1px rgba(22,100,255,0.8), 0px 2px 1px 0px rgba(0,0,0,0.08); }
+    .btn-secondary:active { background: #E2E5E9; box-shadow: var(--shadow-gray); }
+
+    /* Outline 线框 */
+    .btn-outline { background: var(--bg-white); color: var(--text-2); box-shadow: var(--shadow-gray); }
+    .btn-outline:hover { background: var(--bg-4); box-shadow: var(--shadow-gray-hover); }
+    .btn-outline:active { background: #E8EAED; box-shadow: var(--shadow-gray); }
+
+    /* Text 文本 */
+    .btn-text { background: transparent; color: var(--primary-6); box-shadow: none; }
+    .btn-text:hover { background: rgba(22, 100, 255, 0.06); }
+    .btn-text:active { background: rgba(22, 100, 255, 0.12); }
+
+    /* Icon Only */
+    .btn-icon { width: 32px; height: 32px; padding: 0; background: var(--bg-white); color: var(--text-2); box-shadow: var(--shadow-gray); }
+    .btn-icon:hover { background: var(--bg-4); }
+    .btn-icon:active { background: #E8EAED; }
+    .btn-icon.btn-lg { width: 36px; height: 36px; }
+    .btn-icon.btn-sm { width: 28px; height: 28px; }
+    .btn-icon.btn-mini { width: 24px; height: 24px; }
+
+    /* Danger 危险 */
+    .btn-danger { background: var(--danger-6); color: #FFFFFF; box-shadow: var(--shadow-danger); }
+    .btn-danger:hover { background: var(--danger-hover); }
+    .btn-danger:active { background: var(--danger-active); }
+
+    /* Success 成功 */
+    .btn-success { background: var(--success-6); color: #FFFFFF; box-shadow: var(--shadow-success); }
+    .btn-success:hover { background: var(--success-hover); }
+    .btn-success:active { background: var(--success-active); }
+
+    /* Warning 警告 */
+    .btn-warning { background: var(--warning-6); color: #FFFFFF; box-shadow: var(--shadow-warning); }
+    .btn-warning:hover { background: var(--warning-hover); }
+    .btn-warning:active { background: var(--warning-active); }
+
+    /* Disabled */
+    .btn:disabled, .btn.disabled { cursor: not-allowed; pointer-events: none; }
+    .btn-primary.disabled { background: var(--primary-disabled-bg); box-shadow: 0 0 0 1px var(--primary-disabled-bg); opacity: 0.7; }
+    .btn-secondary.disabled { background: var(--bg-4); color: var(--text-disabled); box-shadow: 0 0 0 1px var(--border-1); }
+    .btn-outline.disabled { background: var(--bg-white); color: var(--text-disabled); box-shadow: 0 0 0 1px var(--border-1); }
+    .btn-text.disabled { color: var(--text-disabled); background: transparent; }
+    .btn-danger.disabled { background: var(--danger-disabled-bg); box-shadow: 0 0 0 1px var(--danger-disabled-bg); opacity: 0.7; }
+    .btn-success.disabled { background: var(--success-disabled-bg); box-shadow: 0 0 0 1px var(--success-disabled-bg); opacity: 0.7; }
+    .btn-warning.disabled { background: var(--warning-disabled-bg); box-shadow: 0 0 0 1px var(--warning-disabled-bg); opacity: 0.7; }
+
+    /* 按钮组 */
+    .btn-group {
+      display: inline-flex;
+      align-items: stretch;
+      border-radius: 4px;
+      overflow: hidden;
+      gap: 1px;
+      background: var(--primary-hover);
+      box-shadow: var(--shadow-blue);
+    }
+    .btn-group .btn { border-radius: 0; box-shadow: none; }
+    .btn-group .btn:first-child { border-radius: 4px 0 0 4px; }
+    .btn-group .btn:last-child { border-radius: 0 4px 4px 0; }
+    .btn-group-secondary { background: var(--border-1); box-shadow: var(--shadow-gray); }
+
+    /* 特殊场景 虚线按钮 */
+    .btn-dashed {
+      background: var(--bg-white);
+      color: var(--primary-6);
+      border: 1px dashed var(--primary-6);
+      box-shadow: none;
+    }
+    .btn-dashed:hover { background: rgba(22, 100, 255, 0.04); }
+  </style>
+</head>
+<body>
+  <div class="pv-header">
+    <h1>Button 按钮</h1>
+    <p>主要、次要、线框、危险、文本等按钮变体，包含多种尺寸和状态。</p>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">Primary 主要按钮</div>
+    <div class="row">
+      <button class="btn btn-primary btn-lg" data-component="button" data-type="primary" data-size="large" data-state="default">按钮名称</button>
+      <button class="btn btn-primary btn-md" data-component="button" data-type="primary" data-size="default" data-state="default">按钮名称</button>
+      <button class="btn btn-primary btn-sm" data-component="button" data-type="primary" data-size="small" data-state="default">按钮名称</button>
+      <button class="btn btn-primary btn-mini" data-component="button" data-type="primary" data-size="mini" data-state="default">按钮名称</button>
+      <button class="btn btn-primary btn-md disabled" disabled data-component="button" data-type="primary" data-size="default" data-state="disabled">按钮名称</button>
+    </div>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">Secondary 次要按钮</div>
+    <div class="row">
+      <button class="btn btn-secondary btn-lg" data-component="button" data-type="secondary" data-size="large" data-state="default">按钮名称</button>
+      <button class="btn btn-secondary btn-md" data-component="button" data-type="secondary" data-size="default" data-state="default">按钮名称</button>
+      <button class="btn btn-secondary btn-sm" data-component="button" data-type="secondary" data-size="small" data-state="default">按钮名称</button>
+      <button class="btn btn-secondary btn-mini" data-component="button" data-type="secondary" data-size="mini" data-state="default">按钮名称</button>
+      <button class="btn btn-secondary btn-md disabled" disabled data-component="button" data-type="secondary" data-size="default" data-state="disabled">按钮名称</button>
+    </div>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">Outline 线框按钮</div>
+    <div class="row">
+      <button class="btn btn-outline btn-lg" data-component="button" data-type="outline" data-size="large" data-state="default">按钮名称</button>
+      <button class="btn btn-outline btn-md" data-component="button" data-type="outline" data-size="default" data-state="default">按钮名称</button>
+      <button class="btn btn-outline btn-sm" data-component="button" data-type="outline" data-size="small" data-state="default">按钮名称</button>
+      <button class="btn btn-outline btn-md disabled" disabled data-component="button" data-type="outline" data-size="default" data-state="disabled">按钮名称</button>
+    </div>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">Text 文本按钮</div>
+    <div class="row">
+      <button class="btn btn-text btn-lg" data-component="button" data-type="text" data-size="large" data-state="default">按钮名称</button>
+      <button class="btn btn-text btn-md" data-component="button" data-type="text" data-size="default" data-state="default">按钮名称</button>
+      <button class="btn btn-text btn-sm" data-component="button" data-type="text" data-size="small" data-state="default">编辑</button>
+      <button class="btn btn-text btn-md disabled" disabled data-component="button" data-type="text" data-size="default" data-state="disabled">按钮名称</button>
+    </div>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">Icon Only 图标按钮</div>
+    <div class="row">
+      <button class="btn btn-icon btn-lg" data-component="button" data-type="icon" data-size="large" data-state="default"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></button>
+      <button class="btn btn-icon btn-md" data-component="button" data-type="icon" data-size="default" data-state="default"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></button>
+      <button class="btn btn-icon btn-sm" data-component="button" data-type="icon" data-size="small" data-state="default"><svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></button>
+      <button class="btn btn-icon btn-mini" data-component="button" data-type="icon" data-size="mini" data-state="default"><svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></button>
+    </div>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">Danger 危险按钮</div>
+    <div class="row">
+      <button class="btn btn-danger btn-lg" data-component="button" data-type="danger" data-size="large" data-state="default">按钮名称</button>
+      <button class="btn btn-danger btn-md" data-component="button" data-type="danger" data-size="default" data-state="default">按钮名称</button>
+      <button class="btn btn-danger btn-sm" data-component="button" data-type="danger" data-size="small" data-state="default">按钮名称</button>
+      <button class="btn btn-danger btn-mini" data-component="button" data-type="danger" data-size="mini" data-state="default">按钮名称</button>
+      <button class="btn btn-danger btn-md disabled" disabled data-component="button" data-type="danger" data-size="default" data-state="disabled">按钮名称</button>
+    </div>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">Success 成功按钮</div>
+    <div class="row">
+      <button class="btn btn-success btn-lg" data-component="button" data-type="success" data-size="large" data-state="default">按钮名称</button>
+      <button class="btn btn-success btn-md" data-component="button" data-type="success" data-size="default" data-state="default">按钮名称</button>
+      <button class="btn btn-success btn-sm" data-component="button" data-type="success" data-size="small" data-state="default">按钮名称</button>
+      <button class="btn btn-success btn-mini" data-component="button" data-type="success" data-size="mini" data-state="default">按钮名称</button>
+      <button class="btn btn-success btn-md disabled" disabled data-component="button" data-type="success" data-size="default" data-state="disabled">按钮名称</button>
+    </div>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">Warning 警告按钮</div>
+    <div class="row">
+      <button class="btn btn-warning btn-lg" data-component="button" data-type="warning" data-size="large" data-state="default">按钮名称</button>
+      <button class="btn btn-warning btn-md" data-component="button" data-type="warning" data-size="default" data-state="default">按钮名称</button>
+      <button class="btn btn-warning btn-sm" data-component="button" data-type="warning" data-size="small" data-state="default">按钮名称</button>
+      <button class="btn btn-warning btn-mini" data-component="button" data-type="warning" data-size="mini" data-state="default">按钮名称</button>
+      <button class="btn btn-warning btn-md disabled" disabled data-component="button" data-type="warning" data-size="default" data-state="disabled">按钮名称</button>
+    </div>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">组合按钮</div>
+    <div class="row">
+      <div class="btn-group" data-component="button" data-type="group-split-primary" data-state="default">
+        <button class="btn btn-primary btn-md"><svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg> Button Title</button>
+        <button class="btn btn-primary btn-md" style="padding:5px 8px"><svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      </div>
+      <div class="btn-group btn-group-secondary" data-component="button" data-type="group-split-secondary" data-state="default">
+        <button class="btn btn-secondary btn-md">Button Title</button>
+        <button class="btn btn-secondary btn-md" style="padding:5px 8px"><svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      </div>
+      <div class="btn-group" data-component="button" data-type="group-steps" data-state="default">
+        <button class="btn btn-primary btn-md">上一步</button>
+        <button class="btn btn-primary btn-md">下一步</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">特殊场景按钮（虚线）</div>
+    <div class="row">
+      <button class="btn btn-dashed btn-md" data-component="button" data-type="dashed" data-size="default" data-state="default"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg> Button Title</button>
+    </div>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">按钮组</div>
+    <div class="row">
+      <div class="btn-group" data-component="button" data-type="button-group" data-variant="primary+secondary">
+        <button class="btn btn-primary btn-md"><svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg> Button Title</button>
+        <button class="btn btn-secondary btn-md">Button Title</button>
+      </div>
+      <div class="btn-group" data-component="button" data-type="button-group" data-variant="primary+outline">
+        <button class="btn btn-primary btn-md"><svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg> Button Title</button>
+        <button class="btn btn-outline btn-md">Button Title</button>
+      </div>
+      <div class="btn-group btn-group-secondary" data-component="button" data-type="button-group" data-variant="secondary+outline">
+        <button class="btn btn-secondary btn-md"><svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg> Button Title</button>
+        <button class="btn btn-outline btn-md">Button Title</button>
+      </div>
+      <div class="btn-group btn-group-secondary" data-component="button" data-type="button-group" data-variant="outline+secondary">
+        <button class="btn btn-outline btn-md"><svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg> Button Title</button>
+        <button class="btn btn-secondary btn-md">Button Title</button>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

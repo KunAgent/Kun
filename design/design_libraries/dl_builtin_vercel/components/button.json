@@ -1,0 +1,68 @@
+{
+  "slug": "button",
+  "name": "Button",
+  "category": "actions",
+  "evidence": "AI-inferred based on developer platform dashboard product type and the source token system.",
+  "keyInsightSeed": "Monochrome actions with a single decisive emphasis tier.",
+  "anatomy": [
+    "label",
+    "leading-icon",
+    "trailing-icon",
+    "focus-ring"
+  ],
+  "variantDimensions": [
+    {
+      "name": "style",
+      "values": [
+        "primary",
+        "secondary",
+        "ghost"
+      ]
+    },
+    {
+      "name": "size",
+      "values": [
+        "sm",
+        "md",
+        "lg"
+      ]
+    },
+    {
+      "name": "state",
+      "values": [
+        "default",
+        "hover",
+        "disabled",
+        "loading"
+      ]
+    }
+  ],
+  "variants": [
+    {
+      "id": "primary-md",
+      "label": "Deploy",
+      "style": "primary",
+      "size": "md",
+      "state": "default"
+    },
+    {
+      "id": "secondary-md",
+      "label": "Preview",
+      "style": "secondary",
+      "size": "md",
+      "state": "default"
+    },
+    {
+      "id": "ghost-sm",
+      "label": "Rollback",
+      "style": "ghost",
+      "size": "sm",
+      "state": "default"
+    }
+  ],
+  "uiCopySamples": [
+    "Deploy",
+    "Preview",
+    "Rollback"
+  ]
+}

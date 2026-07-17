@@ -1,0 +1,103 @@
+{
+  "slug": "table",
+  "name": "Table",
+  "category": "data-display",
+  "evidence": "AI-inferred based on Dashboard product type and structured token semantics from the source CSS.",
+  "anatomy": [
+    "container",
+    "header-row",
+    "body-rows",
+    "status-cell(optional)",
+    "row-action(optional)"
+  ],
+  "variantDimensions": {
+    "density": [
+      "compact",
+      "default",
+      "comfortable"
+    ],
+    "state": [
+      "default",
+      "hover"
+    ],
+    "selection": [
+      "none",
+      "single",
+      "multi"
+    ]
+  },
+  "structures": [
+    {
+      "name": "Roster Table, Default, Comfortable",
+      "description": "Primary listing for members, sessions, or reports.",
+      "elements": [
+        "container",
+        "header-row",
+        "body-rows",
+        "status-cell",
+        "row-action"
+      ],
+      "copyExamples": [
+        "Stage",
+        "Capacity",
+        "Host",
+        "Status"
+      ],
+      "cssVariables": [
+        "card",
+        "foreground",
+        "muted-foreground",
+        "border",
+        "accent",
+        "primary",
+        "radius",
+        "spacing"
+      ]
+    },
+    {
+      "name": "Compact Table, Hover, Default",
+      "description": "Dense internal admin listing with hover affordances.",
+      "elements": [
+        "container",
+        "header-row",
+        "body-rows"
+      ],
+      "copyExamples": [
+        "Check-in",
+        "Capacity",
+        "Lead"
+      ],
+      "cssVariables": [
+        "background",
+        "foreground",
+        "border",
+        "muted",
+        "spacing",
+        "font-sans"
+      ]
+    },
+    {
+      "name": "Selectable Table, Default, Single",
+      "description": "Selection-ready table for moderation or bulk operations.",
+      "elements": [
+        "container",
+        "header-row",
+        "body-rows",
+        "selection-cell"
+      ],
+      "copyExamples": [
+        "Select",
+        "Update",
+        "Assign"
+      ],
+      "cssVariables": [
+        "accent",
+        "ring",
+        "border",
+        "foreground",
+        "radius",
+        "spacing"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Setting row</title>
+  <link rel="stylesheet" href="../colors_and_type.css" />
+  <link rel="stylesheet" href="../scaffold.css" />
+  <link rel="stylesheet" href="../components.css" />
+  <style>
+    /* @component-css-start */
+    /* ===== Setting row ===== */
+    .ds-settingrow {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--spacer-24);
+      padding: var(--spacer-16) var(--spacer-24);
+    }
+    .ds-settingrow__main {
+      display: flex;
+      flex-direction: column;
+      gap: var(--spacer-4);
+      min-width: 0;
+    }
+    .ds-settingrow__title {
+      font-size: var(--body-md-font-size);
+      line-height: var(--body-md-line-height);
+      font-weight: var(--font-weight-medium);
+      color: var(--text-default);
+    }
+    .ds-settingrow__desc {
+      font-size: var(--body-sm-font-size);
+      line-height: var(--body-sm-line-height);
+      color: var(--text-tertiary);
+    }
+    .ds-settingrow__control {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--spacer-8);
+      flex-shrink: 0;
+    }
+
+    /* === Variant A: select === */
+    .ds-settingrow__select {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--spacer-12);
+      min-width: 200px;
+      height: 36px;
+      padding: 0 var(--spacer-12);
+      font-size: var(--body-sm-font-size);
+      font-weight: var(--font-weight-medium);
+      color: var(--text-default);
+      background: var(--bg-overlay-l2);
+      border: 1px solid var(--border-neutral-l2);
+      border-radius: var(--radius-6);
+      cursor: pointer;
+    }
+    .ds-settingrow__select:hover { background: var(--bg-overlay-l3); }
+    .ds-settingrow__select .icon { color: var(--icon-tertiary); flex-shrink: 0; }
+
+    /* === Variant B: button === */
+    .ds-settingrow__btn {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--spacer-6);
+      height: 36px;
+      padding: 0 var(--spacer-16);
+      font-size: var(--body-sm-font-size);
+      font-weight: var(--font-weight-medium);
+      color: var(--text-default);
+      background: var(--bg-overlay-l2);
+      border: 1px solid var(--border-neutral-l2);
+      border-radius: var(--radius-6);
+      cursor: pointer;
+    }
+    .ds-settingrow__btn:hover { background: var(--bg-overlay-l3); }
+    .ds-settingrow__btn .icon { color: var(--icon-tertiary); }
+
+    /* danger text button (e.g. 清除 / Clear) */
+    .ds-settingrow__btn--danger {
+      color: var(--status-error-default);
+    }
+    .ds-settingrow__btn--danger:hover {
+      background: var(--status-error-surface-l1);
+      border-color: var(--status-error-surface-l2);
+    }
+
+    /* === Variant C: select-with-icon (select + trailing icon button) === */
+    .ds-settingrow__iconbtn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 36px;
+      height: 36px;
+      color: var(--icon-secondary);
+      background: transparent;
+      border: 1px solid var(--border-neutral-l2);
+      border-radius: var(--radius-6);
+      cursor: pointer;
+    }
+    .ds-settingrow__iconbtn:hover {
+      background: var(--bg-overlay-l2);
+      color: var(--icon-default);
+    }
+
+    /* === Panel container === */
+    .ds-settingrow__panel {
+      display: flex;
+      flex-direction: column;
+      background: var(--bg-base-secondary);
+      border: 1px solid var(--border-neutral-l1);
+      border-radius: var(--radius-10);
+      overflow: hidden;
+    }
+    .ds-settingrow__panel > .ds-settingrow + .ds-settingrow {
+      border-top: 1px solid var(--border-neutral-l1);
+    }
+
+    /* === Section group label (e.g. 基础设置 / 偏好设置 / 数据管理) === */
+    .ds-settingrow__group {
+      display: flex;
+      flex-direction: column;
+      gap: var(--spacer-12);
+    }
+    .ds-settingrow__group + .ds-settingrow__group {
+      margin-top: var(--spacer-24);
+    }
+    .ds-settingrow__grouplabel {
+      font-size: var(--body-sm-font-size);
+      font-weight: var(--font-weight-medium);
+      color: var(--text-secondary);
+      padding-left: var(--spacer-4);
+    }
+    /* @component-css-end */
+  </style>
+</head>
+<body>
+  <div class="pv-header">
+    <h1>Setting row</h1>
+    <p>配置行：左侧标题 + 描述，右侧控件。三个 control 变体：select / button / select-with-icon。多行堆叠到 .ds-settingrow__panel 中；多个 panel 用 .ds-settingrow__group 分组。</p>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">通用 — Settings panel (full layout)</div>
+
+    <!-- 基础设置 -->
+    <div class="ds-settingrow__group">
+      <span class="ds-settingrow__grouplabel">基础设置</span>
+      <div class="ds-settingrow__panel">
+        <div class="ds-settingrow">
+          <div class="ds-settingrow__main">
+            <span class="ds-settingrow__title">主题</span>
+            <span class="ds-settingrow__desc">选择主题</span>
+          </div>
+          <div class="ds-settingrow__control">
+            <button class="ds-settingrow__select">
+              暗色
+              <img src="../assets/icons/chevron-down.svg" width="16" height="16" alt="" class="icon" />
+            </button>
+          </div>
+        </div>
+        <div class="ds-settingrow">
+          <div class="ds-settingrow__main">
+            <span class="ds-settingrow__title">语言</span>
+            <span class="ds-settingrow__desc">选择您喜欢的按钮标签和应用内其他文本的语言</span>
+          </div>
+          <div class="ds-settingrow__control">
+            <button class="ds-settingrow__select">
+              简体中文
+              <img src="../assets/icons/chevron-down.svg" width="16" height="16" alt="" class="icon" />
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 偏好设置 -->
+    <div class="ds-settingrow__group">
+      <span class="ds-settingrow__grouplabel">偏好设置</span>
+      <div class="ds-settingrow__panel">
+        <div class="ds-settingrow">
+          <div class="ds-settingrow__main">
+            <span class="ds-settingrow__title">Editor 设置</span>
+            <span class="ds-settingrow__desc">Editor 中字体、word-wrap、window 设置等</span>
+          </div>
+          <div class="ds-settingrow__control">
+            <button class="ds-settingrow__btn">去设置</button>
+          </div>
+        </div>
+        <div class="ds-settingrow">
+          <div class="ds-settingrow__main">
+            <span class="ds-settingrow__title">快捷键设置</span>
+            <span class="ds-settingrow__desc">对 IDE 中的各个操作的快捷键进行自定义设置</span>
+          </div>
+          <div class="ds-settingrow__control">
+            <button class="ds-settingrow__select">
+              使用 VS Code 快捷键风格
+              <img src="../assets/icons/chevron-down.svg" width="16" height="16" alt="" class="icon" />
+            </button>
+            <button class="ds-settingrow__iconbtn" aria-label="settings">
+              <img src="../assets/icons/gear.svg" width="16" height="16" alt="" class="icon" />
+            </button>
+          </div>
+        </div>
+        <div class="ds-settingrow">
+          <div class="ds-settingrow__main">
+            <span class="ds-settingrow__title">导入配置</span>
+            <span class="ds-settingrow__desc">导入 VS Code 或 Cursor 中的所有插件、设置、代码片段以及快捷键配置到 TRAE 中。请注意，导入后将覆盖 TRAE 当前配置，且不可恢复</span>
+          </div>
+          <div class="ds-settingrow__control">
+            <button class="ds-settingrow__btn">
+              导入
+              <img src="../assets/icons/chevron-down.svg" width="16" height="16" alt="" class="icon" />
+            </button>
+          </div>
+        </div>
+        <div class="ds-settingrow">
+          <div class="ds-settingrow__main">
+            <span class="ds-settingrow__title">本地链接的默认打开方式</span>
+            <span class="ds-settingrow__desc">点击终端中的本地链接时，是否自动使用内置浏览器打开</span>
+          </div>
+          <div class="ds-settingrow__control">
+            <button class="ds-settingrow__select">
+              内置浏览器
+              <img src="../assets/icons/chevron-down.svg" width="16" height="16" alt="" class="icon" />
+            </button>
+          </div>
+        </div>
+        <div class="ds-settingrow">
+          <div class="ds-settingrow__main">
+            <span class="ds-settingrow__title">Markdown 文件的默认打开方式</span>
+            <span class="ds-settingrow__desc">Markdown 文件将默认用此方式打开</span>
+          </div>
+          <div class="ds-settingrow__control">
+            <button class="ds-settingrow__select">
+              Markdown 预览模式
+              <img src="../assets/icons/chevron-down.svg" width="16" height="16" alt="" class="icon" />
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 数据管理 -->
+    <div class="ds-settingrow__group">
+      <span class="ds-settingrow__grouplabel">数据管理</span>
+      <div class="ds-settingrow__panel">
+        <div class="ds-settingrow">
+          <div class="ds-settingrow__main">
+            <span class="ds-settingrow__title">浏览器数据</span>
+            <span class="ds-settingrow__desc">浏览器中的站点数据（如 Cookies、本地存储等）</span>
+          </div>
+          <div class="ds-settingrow__control">
+            <button class="ds-settingrow__btn ds-settingrow__btn--danger">清除</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">Variants — control types</div>
+    <div class="ds-settingrow__panel">
+      <div class="ds-settingrow">
+        <div class="ds-settingrow__main">
+          <span class="ds-settingrow__title">A · Select</span>
+          <span class="ds-settingrow__desc">下拉选择型控件，最常见</span>
+        </div>
+        <div class="ds-settingrow__control">
+          <button class="ds-settingrow__select">
+            Option
+            <img src="../assets/icons/chevron-down.svg" width="16" height="16" alt="" class="icon" />
+          </button>
+        </div>
+      </div>
+      <div class="ds-settingrow">
+        <div class="ds-settingrow__main">
+          <span class="ds-settingrow__title">B · Button</span>
+          <span class="ds-settingrow__desc">跳转 / 触发动作；支持 danger 文字色变体</span>
+        </div>
+        <div class="ds-settingrow__control">
+          <button class="ds-settingrow__btn">普通按钮</button>
+          <button class="ds-settingrow__btn ds-settingrow__btn--danger">清除</button>
+        </div>
+      </div>
+      <div class="ds-settingrow">
+        <div class="ds-settingrow__main">
+          <span class="ds-settingrow__title">C · Select + Icon</span>
+          <span class="ds-settingrow__desc">下拉选择 + 旁边一个 icon 按钮（次级配置入口）</span>
+        </div>
+        <div class="ds-settingrow__control">
+          <button class="ds-settingrow__select">
+            Option
+            <img src="../assets/icons/chevron-down.svg" width="16" height="16" alt="" class="icon" />
+          </button>
+          <button class="ds-settingrow__iconbtn" aria-label="settings">
+            <img src="../assets/icons/gear.svg" width="16" height="16" alt="" class="icon" />
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

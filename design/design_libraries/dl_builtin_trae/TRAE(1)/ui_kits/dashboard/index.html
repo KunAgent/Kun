@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Nimbus Dashboard Kit</title>
+  <!--
+    DOWNSTREAM CONSUMPTION NOTICE
+    ==============================
+    This file is a SHOWCASE — page-level demo of how Nimbus components compose.
+    It is capped at max-width: 1184px per design-library-creator skill spec.
+
+    DO NOT copy this file's outer .uikit-shell or its grid-template-columns
+    into your real product page — you will get whitespace on canvases > 1184px.
+
+    For real-canvas consumption:
+      1. Use this file ONLY as structural reference (which regions, which components).
+      2. Copy inner region markup from preview/component-*.html.
+      3. Write your own outer grid sized for your actual canvas
+         (100vw / 100% / auto-fit, NOT max-width: 1184).
+      4. Always link colors_and_type.css + components.css.
+
+    See ../../README.md → "Downstream Consumption Guide".
+  -->
+  <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <link rel="stylesheet" href="../../colors_and_type.css">
+  <link rel="stylesheet" href="../../components.css">
+  <style>
+    html, body { background: var(--site-canvas); color: var(--text-default); }
+    body { margin: 0; font-family: var(--code-editor-font-family); }
+
+    /* === UIKit layout guards (HARD CONSTRAINT) === */
+    .uikit-shell {
+      width: 100%;
+      max-width: 1184px;
+      margin: 0 auto;
+      overflow: hidden;
+      padding: var(--spacer-24);
+      box-sizing: border-box;
+    }
+    .uikit-main, .uikit-toolbar { min-width: 0; }
+    .uikit-truncate {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .uikit-nowrap { white-space: nowrap; flex-shrink: 0; }
+    .uikit-table-wrap {
+      max-width: 100%;
+      overflow-x: auto;
+      overscroll-behavior-x: contain;
+    }
+    .uikit-responsive-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: var(--spacer-12);
+      min-width: 0;
+    }
+    .uikit-action-cell {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+      max-width: 160px;
+      overflow: hidden;
+    }
+    .uikit-action {
+      min-width: 0;
+      max-width: 120px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    @media (max-width: 900px) {
+      .uikit-shell { grid-template-columns: minmax(0, 1fr); }
+      .uikit-responsive-grid { grid-template-columns: minmax(0, 1fr); }
+      .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+    @media (max-width: 640px) {
+      .uikit-toolbar { flex-direction: column; align-items: stretch; }
+      .uikit-responsive-grid { grid-template-columns: minmax(0, 1fr); }
+      .stats { grid-template-columns: minmax(0, 1fr); }
+    }
+
+    /* === Page Header === */
+    .dh { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--spacer-24); gap: var(--spacer-12); }
+    .dh__title { font-size: var(--heading-md-font-size); line-height: var(--heading-md-line-height); font-weight: var(--font-weight-strong); color: var(--text-default); letter-spacing: -0.01em; }
+    .dh__sub { color: var(--text-tertiary); font-size: var(--body-sm-font-size); margin-top: 2px; }
+    .dh__actions { display: flex; gap: var(--spacer-8); align-items: center; }
+
+    /* === View tabs (use .ds-tabs from components.css) === */
+    .view-switch { display: flex; gap: var(--spacer-4); margin-bottom: var(--spacer-16); }
+    .view-switch__btn {
+      padding: 6px 12px;
+      background: transparent;
+      border: 1px solid transparent;
+      border-radius: var(--radius-4);
+      color: var(--text-secondary);
+      font-size: var(--body-sm-font-size);
+      font-weight: var(--font-weight-medium);
+      cursor: pointer;
+    }
+    .view-switch__btn:hover { background: var(--bg-overlay-l2); color: var(--text-default); }
+    .view-switch__btn.is-active {
+      background: var(--bg-overlay-l3);
+      color: var(--text-default);
+      border-color: var(--border-neutral-l1);
+    }
+
+    /* === Stats grid === */
+    .stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--spacer-12); margin-bottom: var(--spacer-16); }
+    .stat { background: var(--bg-layout-1); border: 1px solid var(--border-1); border-radius: var(--radius-4); padding: var(--spacer-16); min-width: 0; }
+    .stat__label { color: var(--text-tertiary); font-size: var(--body-xs-font-size); margin-bottom: var(--spacer-8); display: flex; align-items: center; gap: var(--spacer-6); text-transform: uppercase; letter-spacing: 0.06em; }
+    .stat__value { font-family: var(--code-editor-font-family); font-variant-numeric: tabular-nums; font-feature-settings: "tnum" 1, "lnum" 1; font-size: var(--heading-md-font-size); line-height: var(--heading-md-line-height); font-weight: var(--font-weight-strong); color: var(--text-default); letter-spacing: -0.01em; }
+    .stat__delta { margin-top: var(--spacer-6); font-size: var(--body-xs-font-size); color: var(--text-secondary); display: inline-flex; align-items: center; gap: var(--spacer-4); font-variant-numeric: tabular-nums; }
+    .delta-up { color: var(--status-success-default); }
+    .delta-down { color: var(--status-error-default); }
+
+    .num { font-family: var(--code-editor-font-family); font-variant-numeric: tabular-nums; }
+
+    /* === Filter toolbar (page-level wrapper) === */
+    .toolbar {
+      display: flex; align-items: center; gap: var(--spacer-8);
+      padding: var(--spacer-8) var(--spacer-12);
+      background: var(--bg-layout-1);
+      border: 1px solid var(--border-1);
+      border-bottom: none;
+      border-radius: var(--radius-4) var(--radius-4) 0 0;
+      flex-wrap: wrap;
+    }
+    .toolbar__search { flex: 1; min-width: 220px; max-width: 320px; }
+    .toolbar__spacer { flex: 1; }
+
+    /* === Table panel uses .ds-tablepanel from components.css === */
+
+    /* === Generic page chrome === */
+    .text-secondary { color: var(--text-secondary); }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState } = React;
+
+    // Static icon components (one per icon, static src strings)
+    const I = {
+      refresh: (p) => <img src="../../assets/icons/refresh.svg" width={p.s||14} height={p.s||14} alt="refresh" />,
+      download: (p) => <img src="../../assets/icons/download.svg" width={p.s||14} height={p.s||14} alt="download" />,
+      plus: (p) => <img src="../../assets/icons/plus.svg" width={p.s||14} height={p.s||14} alt="plus" />,
+      users: (p) => <img src="../../assets/icons/users.svg" width={p.s||12} height={p.s||12} alt="users" />,
+      dollar: (p) => <img src="../../assets/icons/dollar.svg" width={p.s||12} height={p.s||12} alt="dollar" />,
+      bar: (p) => <img src="../../assets/icons/bar.svg" width={p.s||12} height={p.s||12} alt="bar" />,
+      alert: (p) => <img src="../../assets/icons/alert.svg" width={p.s||12} height={p.s||12} alt="alert" />,
+      tup: (p) => <img src="../../assets/icons/trending-up.svg" width={p.s||12} height={p.s||12} alt="up" />,
+      tdown: (p) => <img src="../../assets/icons/trending-down.svg" width={p.s||12} height={p.s||12} alt="down" />,
+      search: (p) => <img src="../../assets/icons/search.svg" width={p.s||14} height={p.s||14} alt="search" />,
+      filter: (p) => <img src="../../assets/icons/filter.svg" width={p.s||12} height={p.s||12} alt="filter" />,
+      columns: (p) => <img src="../../assets/icons/columns.svg" width={p.s||12} height={p.s||12} alt="columns" />,
+      chevR: (p) => <img src="../../assets/icons/chevron-right.svg" width={p.s||12} height={p.s||12} alt="next" />,
+      chevL: (p) => <img src="../../assets/icons/chevron-right.svg" width={p.s||12} height={p.s||12} alt="prev" style={{transform:'rotate(180deg)'}} />,
+    };
+
+    function PageHeader({ view }) {
+      return (
+        <header className="dh" data-component="page-header">
+          <div>
+            <div className="dh__title">{view === 'overview' ? 'Overview' : 'Analytics'}</div>
+            <div className="dh__sub">Last 30 days · auto-refresh every 5 min</div>
+          </div>
+          <div className="dh__actions" data-component="buttons">
+            <button className="ds-btn ds-btn--tertiary"><I.refresh /><span>Refresh</span></button>
+            <button className="ds-btn ds-btn--secondary"><I.download /><span>Export</span></button>
+            <button className="ds-btn ds-btn--secondary" disabled><I.plus /><span>Schedule</span></button>
+            <button className="ds-btn ds-btn--brand"><img src="../../assets/icons/plus.0c0c0d.svg" width="14" height="14" alt="" className="icon"/><span>New report</span></button>
+          </div>
+        </header>
+      );
+    }
+
+    function Stats({ data }) {
+      return (
+        <section className="stats">
+          {data.map((s, i) => (
+            <div className="stat" data-component="stat-card" key={i}>
+              <div className="stat__label">{s.icon}<span className="uikit-truncate">{s.label}</span></div>
+              <div className="stat__value">{s.value}</div>
+              <div className={"stat__delta " + (s.up ? "delta-up" : "delta-down")}>
+                {s.up ? <I.tup/> : <I.tdown/>}{s.delta}
+              </div>
+            </div>
+          ))}
+        </section>
+      );
+    }
+
+    const ROWS = [
+      {c:'Avery Chen', plan:'Pro Monthly',  amt:'$29.00',    s:'success', sl:'Paid',     country:'US', date:'2026-04-12'},
+      {c:'Mia Patel',  plan:'Team Yearly',  amt:'$240.00',   s:'success', sl:'Paid',     country:'IN', date:'2026-04-12'},
+      {c:'Liam Wong',  plan:'Enterprise',   amt:'$1,200.00', s:'warning', sl:'Pending',  country:'SG', date:'2026-04-11'},
+      {c:'Noah Kim',   plan:'Pro Monthly',  amt:'$29.00',    s:'',        sl:'Refunded', country:'KR', date:'2026-04-10'},
+      {c:'Eva Müller', plan:'Pro Monthly',  amt:'$29.00',    s:'success', sl:'Paid',     country:'DE', date:'2026-04-10'},
+      {c:'Hiro Tanaka',plan:'Team Yearly',  amt:'$240.00',   s:'success', sl:'Paid',     country:'JP', date:'2026-04-09'},
+      {c:'Sara López', plan:'Enterprise',   amt:'$1,200.00', s:'danger',  sl:'Failed',   country:'MX', date:'2026-04-09'},
+      {c:'Olivia Smith',plan:'Pro Monthly', amt:'$29.00',    s:'success', sl:'Paid',     country:'UK', date:'2026-04-08'},
+    ];
+
+    function TablePanel() {
+      return (
+        <section style={{marginBottom:'var(--spacer-16)'}}>
+          <div className="toolbar uikit-toolbar" data-component="forms">
+            <div className="ds-input toolbar__search">
+              <span className="ds-input__icon"><I.search/></span>
+              <input placeholder="Search customer, email, order…" />
+              <span className="ds-kbd">⌘K</span>
+            </div>
+            <select className="ds-select" style={{width:140}}>
+              <option>All status</option><option>Paid</option><option>Pending</option><option>Refunded</option>
+            </select>
+            <select className="ds-select" style={{width:140}}>
+              <option>All plans</option><option>Pro Monthly</option><option>Team Yearly</option><option>Enterprise</option>
+            </select>
+            <select className="ds-select" style={{width:140}}>
+              <option>Last 30 days</option><option>Last 7 days</option><option>This quarter</option>
+            </select>
+            <div className="toolbar__spacer"></div>
+            <div className="ds-btn-group" data-component="buttons">
+              <button className="ds-btn ds-btn--sm ds-btn--secondary"><I.filter/><span>Filter</span></button>
+              <button className="ds-btn ds-btn--sm ds-btn--secondary"><I.columns/><span>Columns</span></button>
+            </div>
+            <button className="ds-btn ds-btn--sm ds-btn--tertiary"><I.download s={12}/><span>CSV</span></button>
+          </div>
+
+          <div className="ds-tablepanel uikit-table-wrap" data-component="table">
+            <table>
+              <thead>
+                <tr>
+                  <th style={{width:28, paddingRight:0}}><label className="ds-check"><input type="checkbox"/><span className="ds-check__box"></span></label></th>
+                  <th>Customer</th><th>Plan</th><th className="num">Amount</th><th>Status</th><th>Country</th><th className="num">Date</th>
+                </tr>
+              </thead>
+              <tbody>
+                {ROWS.map((r,i)=>(
+                  <tr key={i}>
+                    <td><label className="ds-check"><input type="checkbox" defaultChecked={i===0}/><span className="ds-check__box"></span></label></td>
+                    <td><span className="uikit-truncate" style={{maxWidth:160, display:'inline-block'}}>{r.c}</span></td>
+                    <td>{r.plan}</td>
+                    <td className="num">{r.amt}</td>
+                    <td><span className={"ds-tag" + (r.s ? " ds-tag--" + r.s : "")} data-component="tag">{r.sl}</span></td>
+                    <td>{r.country}</td>
+                    <td className="num">{r.date}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <div className="ds-tablepanel__foot">
+              <span>1–8 of <span className="num">248</span></span>
+              <div className="ds-pagination" data-component="pagination">
+                <button className="ds-pagination__item" aria-label="Previous"><I.chevL/></button>
+                <button className="ds-pagination__item is-active num">1</button>
+                <button className="ds-pagination__item num">2</button>
+                <button className="ds-pagination__item num">3</button>
+                <button className="ds-pagination__item" disabled>…</button>
+                <button className="ds-pagination__item num">31</button>
+                <button className="ds-pagination__item" aria-label="Next"><I.chevR/></button>
+              </div>
+            </div>
+          </div>
+        </section>
+      );
+    }
+
+    function App() {
+      const [view, setView] = useState('overview');
+      const overview = [
+        {label:'Active users', value:'128,492', delta:'+12.4%',  up:true,  icon:<I.users/>},
+        {label:'Revenue',      value:'$42,118', delta:'+3.92%',  up:true,  icon:<I.dollar/>},
+        {label:'Conversion',   value:'3.92%',   delta:'−0.41%',  up:false, icon:<I.bar/>},
+        {label:'Errors',       value:'237',     delta:'−18%',    up:false, icon:<I.alert/>},
+      ];
+      const analytics = [
+        {label:'Sessions',     value:'9,482',   delta:'+8.2%',   up:true,  icon:<I.users/>},
+        {label:'Avg duration', value:'4m 12s',  delta:'+1.4%',   up:true,  icon:<I.bar/>},
+        {label:'Bounce rate',  value:'34.7%',   delta:'−2.1%',   up:false, icon:<I.tdown/>},
+        {label:'P95 latency',  value:'142 ms',  delta:'+6 ms',   up:false, icon:<I.alert/>},
+      ];
+      return (
+        <div className="uikit-shell uikit-main" data-layout-guard="uikit-v1">
+          <PageHeader view={view} />
+          <div className="view-switch" role="tablist" data-component="nav-list">
+            <button
+              role="tab"
+              aria-selected={view==='overview'}
+              className={"view-switch__btn" + (view==='overview' ? " is-active" : "")}
+              onClick={() => setView('overview')}
+            >Overview</button>
+            <button
+              role="tab"
+              aria-selected={view==='analytics'}
+              className={"view-switch__btn" + (view==='analytics' ? " is-active" : "")}
+              onClick={() => setView('analytics')}
+            >Analytics</button>
+          </div>
+          <Stats data={view==='overview' ? overview : analytics} />
+          <TablePanel />
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>

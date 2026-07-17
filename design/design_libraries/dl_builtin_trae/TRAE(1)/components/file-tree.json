@@ -1,0 +1,68 @@
+{
+  "schemaVersion": 2,
+  "slug": "file-tree",
+  "name": "File Tree",
+  "category": "data-display",
+  "sourceKind": "structured-spec",
+  "confidence": "medium",
+  "semanticTypeCandidates": ["tree-view", "file-explorer", "list-nav"],
+  "variantDimensions": {
+    "node": ["folder-expanded", "folder-collapsed", "file-leaf"],
+    "state": ["default", "active"]
+  },
+  "representativeVariants": [
+    { "node": "folder-expanded", "state": "default" },
+    { "node": "file-leaf", "state": "active" }
+  ],
+  "anatomy": ["root", "row", "chevron", "chevron--leaf", "icon--folder", "icon--ts", "label"],
+  "structurePatterns": [
+    "stack of rows, indentation driven by data-depth attribute",
+    "each row: chevron + type icon + label",
+    "leaf rows hide chevron via chevron--leaf",
+    "active row highlighted via is-active"
+  ],
+  "usageHints": [
+    "Container uses --bg-base-secondary with --border-neutral-l1 and --radius-6",
+    "Row indent computed from data-depth (16px per level) added to --spacer-6",
+    "Hover --bg-overlay-l2, active row --bg-overlay-l3 with --text-default-hover",
+    "File-type accent colors use --accent-blue / --code-attribute / --code-constant"
+  ],
+  "doNotInvent": ["drag-and-drop", "inline rename input", "context menu"],
+  "unknowns": ["multi-select state", "loading/spinner rows", "git status decorations"],
+  "tokensConsumed": [
+    "--spacer-4", "--spacer-6", "--bg-base-secondary", "--border-neutral-l1", "--radius-6",
+    "--body-sm-font-size", "--text-default", "--radius-4", "--bg-overlay-l2", "--bg-overlay-l3",
+    "--text-default-hover", "--accent-blue", "--code-attribute", "--code-constant"
+  ],
+  "domAnatomy": {
+    "root": {
+      "tag": "div",
+      "class": "ds-filetree",
+      "children": [
+        {
+          "tag": "div",
+          "class": "ds-filetree__row",
+          "children": [
+            { "tag": "img", "class": "icon ds-filetree__chevron" },
+            { "tag": "img", "class": "icon ds-filetree__icon--folder" },
+            { "tag": "span", "class": "ds-filetree__label" }
+          ]
+        },
+        {
+          "tag": "div",
+          "class": "ds-filetree__row is-active",
+          "children": [
+            { "tag": "span", "class": "ds-filetree__chevron ds-filetree__chevron--leaf" },
+            { "tag": "img", "class": "icon ds-filetree__icon--ts" },
+            { "tag": "span", "class": "ds-filetree__label" }
+          ]
+        }
+      ]
+    }
+  },
+  "provenance": {
+    "preview": "preview/component-file-tree.html",
+    "source": "structured-spec",
+    "css": { "file": "components.css", "marker": "── File Tree ──" }
+  }
+}

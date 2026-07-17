@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Product Grid</title>
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>body{margin:0;padding:12px;background:var(--background);color:var(--foreground);font:500 14px/1.4 var(--font-sans)}.row{display:flex;align-items:flex-start;gap:8px;margin-bottom:8px}.label{width:72px;padding-top:6px;color:var(--muted-foreground);font-size:10px;letter-spacing:.12em;text-transform:uppercase;flex:0 0 auto}.grid{display:grid;gap:8px;flex:1}.grid-4{grid-template-columns:repeat(4,minmax(0,1fr))}.grid-2{grid-template-columns:repeat(2,minmax(0,1fr))}.card{display:flex;flex-direction:column;gap:8px;padding:10px;border:1px solid var(--border);border-radius:var(--radius);background:var(--card);color:var(--card-foreground);box-shadow:var(--shadow-xs);transition:border-color .2s ease,transform .2s ease}.card:hover{border-color:var(--primary);transform:translateY(-1px)}.media{aspect-ratio:1;border-radius:calc(var(--radius) - 4px);background:linear-gradient(135deg,var(--secondary),var(--background));border:1px solid var(--border)}.story .media{aspect-ratio:1.25;background:linear-gradient(135deg,var(--foreground),var(--secondary))}.eyebrow{color:var(--muted-foreground);font-size:10px;letter-spacing:.08em;text-transform:uppercase}.title{font-size:15px;line-height:1.25}.price{font-variant-numeric:tabular-nums}.cta{display:inline-flex;align-self:flex-start;padding:7px 10px;border-radius:999px;background:var(--primary);color:var(--primary-foreground);font-size:12px;text-decoration:none}.muted{color:var(--muted-foreground)}.is-disabled{opacity:.55}.divider{margin:10px 0;border:0;border-top:1px solid var(--border)}</style>
+</head>
+<body>
+<div class="row">
+<span class="label">4-up</span>
+<div class="grid grid-4">
+<article class="card"><div class="media"></div><span class="eyebrow">New this season</span><strong class="title">Pinguo Lens Pro</strong><span class="price">From $999</span><a class="cta" href="/">Compare all models</a></article>
+<article class="card"><div class="media"></div><span class="eyebrow">Creator kit</span><strong class="title">Pinguo Air Cam</strong><span class="price">From $749</span><a class="cta" href="/">Build your setup</a></article>
+<article class="card"><div class="media"></div><span class="eyebrow">Studio ready</span><strong class="title">Pinguo Dock One</strong><span class="price">From $299</span><a class="cta" href="/">See accessories</a></article>
+<article class="card is-disabled"><div class="media"></div><span class="eyebrow">Coming soon</span><strong class="title">Pinguo Vision Mini</strong><span class="price muted">Notify me</span><span class="cta">Unavailable</span></article>
+</div>
+</div>
+<hr class="divider">
+<div class="row">
+<span class="label">Story</span>
+<div class="grid grid-2">
+<article class="card story"><div class="media"></div><span class="eyebrow">Consumer imaging product ecosystem</span><strong class="title">Travel light with one camera, one dock, and one cloud-ready edit flow.</strong><span class="price muted">Pinguo Apple picks for weekend shoots</span><a class="cta" href="/">Shop the story</a></article>
+<article class="card story"><div class="media"></div><span class="eyebrow">Compare lineup</span><strong class="title">Choose between compact capture, pro optics, and desktop-grade finishing tools.</strong><span class="price muted">Made for photo-first households</span><a class="cta" href="/">Compare all models</a></article>
+</div>
+</div>
+</body>
+</html>

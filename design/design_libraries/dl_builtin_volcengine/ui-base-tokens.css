@@ -1,0 +1,212 @@
+/* Design Tokens — Volcengine Theme */
+/* 同步自 Figma 源力设计体系（Light）亮色色板 */
+
+:root {
+  /* ══════════════════════════════════════════════
+     色阶体系 — 完整 1-8 色阶
+     1 最浅（背景/hover）→ 8 最深（描边/强调）
+     ══════════════════════════════════════════════ */
+
+  /* ── Primary 品牌色 ── */
+  --primary-1: #F3F7FF;  /* 浅色白底悬浮 */
+  --primary-2: #EBF1FF;  /* Tag背景色 */
+  --primary-3: #97BCFF;  /* 一般禁用 */
+  --primary-4: #6E9FFF;  /* 特殊场景 */
+  --primary-5: #387BFF;  /* 悬浮 */
+  --primary-6: #1664FF;  /* 常规 */
+  --primary-7: #1759DD;  /* 点击 */
+  --primary-8: #114AB9;  /* 描边/深色场景 */
+
+  /* ── Success 成功色 ── */
+  --success-1: #EEF9F1;  /* 浅色背景 */
+  --success-2: #E1F6E6;  /* Tag背景色 */
+  --success-3: #7CCD94;  /* 一般禁用 */
+  --success-4: #5CAE77;  /* 特殊场景 */
+  --success-5: #309256;  /* 悬浮 */
+  --success-6: #2A814B;  /* 常规 */
+  --success-7: #237040;  /* 点击 */
+  --success-8: #1C5E35;  /* 描边 */
+
+  /* ── Warning 警告/提醒色 ── */
+  --warning-1: #FEF8EB;  /* 浅色场景 */
+  --warning-2: #FFF3DC;  /* Tag背景色 */
+  --warning-3: #F9C76D;  /* 一般禁用 */
+  --warning-4: #F0A50F;  /* 特殊场景 */
+  --warning-5: #D08D06;  /* 悬浮 */
+  --warning-6: #BD7E00;  /* 常规 */
+  --warning-7: #996600;  /* 点击 */
+  --warning-8: #7A5200;  /* 描边 */
+
+  /* ── Danger 错误/危险色 ── */
+  --danger-1: #FDF5F5;  /* 浅色场景 */
+  --danger-2: #FFECEC;  /* Tag背景色 */
+  --danger-3: #FFA3A0;  /* 一般禁用 */
+  --danger-4: #FF706D;  /* 特殊场景 */
+  --danger-5: #EE3F38;  /* 悬浮 */
+  --danger-6: #D7312A;  /* 常规 */
+  --danger-7: #BD2923;  /* 点击 */
+  --danger-8: #9F211C;  /* 描边 */
+
+  /* ── Link 链接色 ── */
+  --link-1: #F3F7FF;  /* 浅色场景 */
+  --link-2: #EBF1FF;  /* Tag背景色 */
+  --link-3: #97BCFF;  /* 一般禁用 */
+  --link-4: #6E9FFF;  /* 特殊场景 */
+  --link-5: #387BFF;  /* 悬浮 */
+  --link-6: #1664FF;  /* 常规 */
+  --link-7: #1759DD;  /* 点击 */
+  --link-8: #114AB9;  /* 描边 */
+
+  /* ── Grey 中性灰 ── */
+  --grey-1: #F6F8FA;  /* 按钮底色 */
+  --grey-2: #F6F6F6;  /* 浅色场景 */
+  --grey-3: #ECEDED;  /* 浅色 白底悬浮 */
+  --grey-4: #A0A2A7;  /* 一般禁用 */
+  --grey-5: #676B72;  /* 悬浮 */
+  --grey-6: #41464F;  /* 常规 */
+  --grey-7: #343840;  /* 点击 */
+  --grey-8: #2B303A;  /* tooltip背景 */
+
+  /* ── Teal 青色 ── */
+  --teal-1: #EEF8FF;  /* 浅色白底悬浮 */
+  --teal-2: #E4F3FC;  /* Tag背景色 */
+  --teal-3: #80C5E0;  /* 一般禁用 */
+  --teal-4: #58A8C4;  /* 特殊场景 */
+  --teal-5: #3888A3;  /* 悬浮 */
+  --teal-6: #24758E;  /* 常规 */
+  --teal-7: #076C85;  /* 点击 */
+  --teal-8: #005A70;  /* 描边 */
+
+  /* ── Violet 紫色 ── */
+  --violet-1: #FAF4FF;  /* 浅色白底悬浮 */
+  --violet-2: #F2EAFB;  /* Tag背景色 */
+  --violet-3: #C1A3ED;  /* 一般禁用 */
+  --violet-4: #A285D4;  /* 特殊场景 */
+  --violet-5: #876EB8;  /* 悬浮 */
+  --violet-6: #6E4C9F;  /* 常规 */
+  --violet-7: #603F8E;  /* 点击 */
+  --violet-8: #532D86;  /* 描边 */
+
+  /* ══════════════════════════════════════════════
+     语义化别名 — 组件直接引用这些变量
+     ══════════════════════════════════════════════ */
+
+  /* ── 主题色（语义） ── */
+  --color-primary: var(--primary-6);
+  --color-primary-hover: var(--primary-5);
+  --color-primary-click: var(--primary-7);
+  --color-primary-disabled: var(--primary-3);
+  --color-primary-bg: var(--primary-1);
+  --color-primary-tag-bg: var(--primary-2);
+  --color-danger: var(--danger-6);
+  --color-danger-hover: var(--danger-5);
+  --color-danger-click: var(--danger-7);
+  --color-danger-disabled: var(--danger-3);
+  --color-danger-bg: var(--danger-1);
+  --color-success: var(--success-6);
+  --color-success-hover: var(--success-5);
+  --color-success-click: var(--success-7);
+  --color-success-disabled: var(--success-3);
+  --color-success-bg: var(--success-1);
+  --color-warning: var(--warning-6);
+  --color-warning-hover: var(--warning-5);
+  --color-warning-click: var(--warning-7);
+  --color-warning-disabled: var(--warning-3);
+  --color-warning-bg: var(--warning-1);
+  --color-link: var(--link-6);
+  --color-link-hover: var(--link-5);
+  --color-link-click: var(--link-7);
+
+  /* ── 文本 ── */
+  --color-text-1: #0C0D0E;  /* 强调正文标题 */
+  --color-text-2: #42464E;  /* 次强调正文标题 */
+  --color-text-3: #737A87;  /* 次要信息 */
+  --color-text-4: #C7CCD6;  /* 置灰信息 */
+  --color-white: #FFFFFF;   /* 纯白文字 */
+  /* 语义别名 */
+  --color-text-primary: var(--color-text-1);
+  --color-text-secondary: var(--color-text-2);
+  --color-text-tertiary: var(--color-text-3);
+  --color-text-disabled: var(--color-text-4);
+  --color-text-placeholder: var(--color-text-3);
+
+  /* ── 填充 ── */
+  --color-fill-1: #C7CCD6;  /* 浅/禁用 */
+  --color-fill-2: #737A87;  /* 常规/白底悬浮 */
+  --color-fill-3: #42464E;  /* 深/灰底悬浮 */
+  --color-fill-4: #0C0D0E;  /* 重/特殊场景 */
+  --color-fill-5: #FFFFFF;  /* 纯白填充 */
+  --color-fill-6: #FCFDFE;  /* 嵌套场景专用 */
+  --color-bg-white: #FFFFFF; /* 输入类组件填充 */
+
+  /* ── 背景 ── */
+  --color-bg-1: #FFFFFF;   /* 整体背景色 */
+  --color-bg-2: #FCFDFE;   /* 浅灰底 */
+  --color-bg-3: #FAFBFC;   /* 浅灰色hover */
+  --color-bg-4: #F6F8FA;   /* 深灰底 */
+  --color-bg-5: #F1F3F5;   /* 深灰色选中 */
+  --color-bg-7: #F6F8FA;   /* 侧边导航背景色 */
+  --color-bg-8: #FFFFFF;   /* 浮层背景色 */
+  --color-bg-9: #FFFFFF;   /* 抽屉弹窗背景色 */
+  /* 语义别名 */
+  --color-bg-page: var(--color-bg-4);
+  --color-bg-card: var(--color-bg-1);
+  --color-bg-hover: var(--color-bg-5);
+  --color-bg-active: var(--color-bg-5);
+  --color-bg-subtle: var(--color-bg-4);
+
+  /* ── 智能化背景色 ── */
+  --ai-color-bg-1: #E9DDFF;
+  --ai-color-bg-2: #F9F2FF;
+
+  /* ── 边框 ── */
+  --color-border-2: #EAEDF1;  /* 浅色描边 */
+  --color-border-3: #DDE2E9;  /* 深色描边 */
+  /* 语义别名 */
+  --color-border: var(--color-border-3);
+  --color-border-light: var(--color-border-2);
+  --color-border-hover: var(--grey-5);
+
+  /* ── 标签浅底 ── */
+  --color-tag-success-bg: var(--success-2);
+  --color-tag-warning-bg: var(--warning-2);
+  --color-tag-danger-bg: var(--danger-2);
+  --color-tag-info-bg: var(--link-2);
+
+  /* ── 间距 ── */
+  --spacing-xs: 4px;
+  --spacing-sm: 8px;
+  --spacing-md: 12px;
+  --spacing-lg: 16px;
+  --spacing-xl: 24px;
+  --spacing-xxl: 32px;
+
+  /* ── 圆角 ── */
+  --radius-sm: 2px;
+  --radius-default: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-full: 9999px;
+
+  /* ── 字号 ── */
+  --font-size-xs: 10px;
+  --font-size-sm: 12px;
+  --font-size-md: 13px;
+  --font-size-lg: 14px;
+  --font-size-xl: 16px;
+  --font-size-xxl: 20px;
+  --font-size-title: 24px;
+
+  /* ── 行高 ── */
+  --line-height-tight: 1.2;
+  --line-height-normal: 1.5;
+  --line-height-loose: 1.8;
+
+  /* ── 字体 ── */
+  --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+
+  /* ── 阴影 ── */
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.06);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.08);
+  --shadow-lg: 0 8px 24px rgba(0,0,0,0.12);
+}

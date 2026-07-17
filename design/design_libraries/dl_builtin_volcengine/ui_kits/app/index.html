@@ -1,0 +1,688 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>源力设计系统 · 组件展示</title>
+  <link rel="stylesheet" href="../../colors_and_type.css">
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif;
+      background: var(--bg-page, #F2F6FA);
+      color: var(--text-primary, #1D2129);
+      min-height: 100vh;
+      transition: background 0.3s, color 0.3s;
+    }
+    body.dark {
+      --bg-page: #17171A;
+      --bg-content: #232324;
+      --bg-sidebar: #1E1E1F;
+      --text-primary: #F6F6F6;
+      --text-secondary: #A9AEB8;
+      --border-color: #3A3A3C;
+      --primary: #4080FF;
+      --primary-hover: #5A94FF;
+      --shadow-2: 0 2px 8px rgba(0,0,0,0.4);
+    }
+    :root {
+      --bg-page: #F2F6FA;
+      --bg-content: #FFFFFF;
+      --bg-sidebar: #F6F8FA;
+      --text-primary: #1D2129;
+      --text-secondary: #86909C;
+      --border-color: #E5E6EB;
+      --primary: #1664FF;
+      --primary-hover: #4080FF;
+      --primary-light: #E8F0FF;
+      --success: #00B42A;
+      --warning: #FF7D00;
+      --danger: #F53F3F;
+      --info: #1664FF;
+      --radius-sm: 4px;
+      --radius-md: 8px;
+      --shadow-2: 0 2px 8px rgba(0,0,0,0.08);
+    }
+
+    /* Layout */
+    .yl-header {
+      height: 56px;
+      background: var(--bg-content);
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 24px;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 100;
+      box-shadow: var(--shadow-2);
+    }
+    .yl-header__title { font-size: 16px; font-weight: 600; color: var(--text-primary); }
+    .yl-header__actions { display: flex; align-items: center; gap: 12px; }
+
+    .yl-layout { display: flex; padding-top: 56px; min-height: 100vh; }
+    .yl-sidebar {
+      width: 220px;
+      background: var(--bg-sidebar);
+      border-right: 1px solid var(--border-color);
+      position: fixed;
+      top: 56px;
+      left: 0;
+      bottom: 0;
+      overflow-y: auto;
+      padding: 16px 0;
+    }
+    .yl-sidebar__group { margin-bottom: 8px; }
+    .yl-sidebar__group-title {
+      padding: 8px 20px;
+      font-size: 12px;
+      color: var(--text-secondary);
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+    .yl-sidebar__item {
+      padding: 8px 20px 8px 32px;
+      font-size: 14px;
+      color: var(--text-primary);
+      cursor: pointer;
+      transition: all 0.2s;
+      border-radius: 0;
+    }
+    .yl-sidebar__item:hover { background: var(--primary-light, #E8F0FF); color: var(--primary); }
+    .yl-sidebar__item--active {
+      background: var(--primary-light, #E8F0FF);
+      color: var(--primary);
+      font-weight: 500;
+      border-right: 3px solid var(--primary);
+    }
+
+    .yl-content { margin-left: 220px; flex: 1; padding: 32px; }
+    .yl-section { margin-bottom: 40px; }
+    .yl-section__title {
+      font-size: 20px;
+      font-weight: 600;
+      margin-bottom: 20px;
+      color: var(--text-primary);
+      border-left: 4px solid var(--primary);
+      padding-left: 12px;
+    }
+    .yl-card {
+      background: var(--bg-content);
+      border-radius: var(--radius-md);
+      padding: 24px;
+      margin-bottom: 16px;
+      box-shadow: var(--shadow-2);
+    }
+    .yl-card__title { font-size: 14px; font-weight: 500; margin-bottom: 16px; color: var(--text-secondary); }
+    .yl-card__content { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+
+    /* Button */
+    .yl-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      height: 32px;
+      padding: 0 16px;
+      font-size: 14px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border-color);
+      cursor: pointer;
+      transition: all 0.2s;
+      background: var(--bg-content);
+      color: var(--text-primary);
+    }
+    .yl-btn:hover { border-color: var(--primary); color: var(--primary); }
+    .yl-btn--primary { background: var(--primary); color: #fff; border-color: var(--primary); }
+    .yl-btn--primary:hover { background: var(--primary-hover); border-color: var(--primary-hover); }
+    .yl-btn--text { border: none; background: transparent; color: var(--primary); }
+    .yl-btn--text:hover { background: var(--primary-light); }
+    .yl-btn--disabled { opacity: 0.5; cursor: not-allowed; pointer-events: none; }
+
+    /* Dropdown */
+    .yl-dropdown { position: relative; display: inline-block; }
+    .yl-dropdown__menu {
+      position: absolute;
+      top: 100%;
+      left: 0;
+      margin-top: 4px;
+      background: var(--bg-content);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-sm);
+      box-shadow: var(--shadow-2);
+      min-width: 120px;
+      z-index: 50;
+      padding: 4px 0;
+    }
+    .yl-dropdown__item {
+      padding: 8px 16px;
+      font-size: 14px;
+      cursor: pointer;
+      color: var(--text-primary);
+      transition: background 0.2s;
+    }
+    .yl-dropdown__item:hover { background: var(--primary-light); color: var(--primary); }
+
+    /* Input */
+    .yl-input {
+      height: 32px;
+      padding: 0 12px;
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-sm);
+      font-size: 14px;
+      outline: none;
+      transition: border-color 0.2s;
+      background: var(--bg-content);
+      color: var(--text-primary);
+      width: 200px;
+    }
+    .yl-input:focus { border-color: var(--primary); box-shadow: 0 0 0 2px rgba(22,100,255,0.1); }
+    .yl-input--error { border-color: var(--danger); }
+    .yl-input--disabled { background: var(--bg-page); opacity: 0.6; cursor: not-allowed; }
+
+    /* Select */
+    .yl-select { position: relative; display: inline-block; width: 200px; }
+    .yl-select__trigger {
+      height: 32px;
+      padding: 0 12px;
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-sm);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      cursor: pointer;
+      background: var(--bg-content);
+      font-size: 14px;
+      color: var(--text-primary);
+    }
+    .yl-select__dropdown {
+      position: absolute;
+      top: 100%;
+      left: 0;
+      right: 0;
+      margin-top: 4px;
+      background: var(--bg-content);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-sm);
+      box-shadow: var(--shadow-2);
+      z-index: 50;
+      padding: 4px 0;
+    }
+    .yl-select__option {
+      padding: 8px 12px;
+      cursor: pointer;
+      font-size: 14px;
+      transition: background 0.2s;
+    }
+    .yl-select__option:hover { background: var(--primary-light); color: var(--primary); }
+    .yl-select__option--active { color: var(--primary); font-weight: 500; }
+
+    /* Switch */
+    .yl-switch {
+      width: 40px;
+      height: 22px;
+      border-radius: 11px;
+      background: var(--border-color);
+      position: relative;
+      cursor: pointer;
+      transition: background 0.3s;
+    }
+    .yl-switch--on { background: var(--primary); }
+    .yl-switch__handle {
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: #fff;
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      transition: transform 0.3s;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+    }
+    .yl-switch--on .yl-switch__handle { transform: translateX(18px); }
+
+    /* Table */
+    .yl-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    .yl-table th, .yl-table td {
+      padding: 10px 16px;
+      text-align: left;
+      border-bottom: 1px solid var(--border-color);
+    }
+    .yl-table th { background: var(--bg-page); font-weight: 500; color: var(--text-secondary); }
+    .yl-table tr:hover td { background: var(--primary-light); }
+
+    /* Tag */
+    .yl-tag {
+      display: inline-flex;
+      align-items: center;
+      height: 24px;
+      padding: 0 8px;
+      border-radius: var(--radius-sm);
+      font-size: 12px;
+      font-weight: 500;
+    }
+    .yl-tag--success { background: #E8FFEA; color: var(--success); }
+    .yl-tag--danger { background: #FFECE8; color: var(--danger); }
+    .yl-tag--warning { background: #FFF3E8; color: var(--warning); }
+    .yl-tag--default { background: var(--bg-page); color: var(--text-secondary); }
+    .yl-tag--primary { background: var(--primary-light); color: var(--primary); }
+
+    /* Badge */
+    .yl-badge { position: relative; display: inline-flex; }
+    .yl-badge__content {
+      position: absolute;
+      top: -8px;
+      right: -8px;
+      min-width: 18px;
+      height: 18px;
+      padding: 0 5px;
+      border-radius: 9px;
+      background: var(--danger);
+      color: #fff;
+      font-size: 11px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .yl-badge__dot {
+      position: absolute;
+      top: -3px;
+      right: -3px;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--danger);
+    }
+
+    /* Alert */
+    .yl-alert {
+      padding: 10px 16px;
+      border-radius: var(--radius-sm);
+      font-size: 14px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+    .yl-alert--info { background: #E8F0FF; color: var(--info); border: 1px solid #BEDAFF; }
+    .yl-alert--success { background: #E8FFEA; color: var(--success); border: 1px solid #AFF0B5; }
+    .yl-alert--warning { background: #FFF3E8; color: var(--warning); border: 1px solid #FFD6A5; }
+    .yl-alert--error { background: #FFECE8; color: var(--danger); border: 1px solid #FDC2C2; }
+
+    /* Modal */
+    .yl-modal-mask {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.45);
+      z-index: 200;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .yl-modal {
+      background: var(--bg-content);
+      border-radius: var(--radius-md);
+      width: 420px;
+      padding: 24px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+    }
+    .yl-modal__title { font-size: 16px; font-weight: 600; margin-bottom: 12px; }
+    .yl-modal__body { font-size: 14px; color: var(--text-secondary); margin-bottom: 20px; }
+    .yl-modal__footer { display: flex; justify-content: flex-end; gap: 8px; }
+
+    /* Message */
+    .yl-message {
+      position: fixed;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      padding: 10px 20px;
+      border-radius: var(--radius-sm);
+      font-size: 14px;
+      box-shadow: var(--shadow-2);
+      z-index: 300;
+      animation: yl-message-in 0.3s ease;
+      background: var(--bg-content);
+      border: 1px solid var(--border-color);
+    }
+    .yl-message--success { border-color: var(--success); color: var(--success); }
+    @keyframes yl-message-in { from { opacity: 0; transform: translateX(-50%) translateY(-10px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }
+
+    /* Tabs */
+    .yl-tabs__nav { display: flex; border-bottom: 1px solid var(--border-color); margin-bottom: 16px; }
+    .yl-tabs__item {
+      padding: 8px 16px;
+      font-size: 14px;
+      cursor: pointer;
+      color: var(--text-secondary);
+      border-bottom: 2px solid transparent;
+      transition: all 0.2s;
+    }
+    .yl-tabs__item:hover { color: var(--primary); }
+    .yl-tabs__item--active { color: var(--primary); border-bottom-color: var(--primary); font-weight: 500; }
+    .yl-tabs__content { font-size: 14px; color: var(--text-primary); padding: 8px 0; }
+
+    /* Breadcrumb */
+    .yl-breadcrumb { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+    .yl-breadcrumb__item { color: var(--text-secondary); cursor: pointer; }
+    .yl-breadcrumb__item:hover { color: var(--primary); }
+    .yl-breadcrumb__item--active { color: var(--text-primary); font-weight: 500; cursor: default; }
+    .yl-breadcrumb__sep { color: var(--text-secondary); }
+
+    /* Dark mode toggle */
+    .yl-dark-toggle {
+      width: 32px;
+      height: 32px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border-color);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      background: var(--bg-content);
+      font-size: 16px;
+      transition: all 0.2s;
+    }
+    .yl-dark-toggle:hover { border-color: var(--primary); }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+
+    const categories = [
+      { key: 'action', label: '操作类', items: ['Button', 'Dropdown'] },
+      { key: 'input', label: '数据录入', items: ['Input', 'Select', 'Switch'] },
+      { key: 'display', label: '数据展示', items: ['Table', 'Tag', 'Badge'] },
+      { key: 'feedback', label: '反馈', items: ['Alert', 'Modal', 'Message'] },
+      { key: 'nav', label: '导航', items: ['Tabs', 'Breadcrumb'] },
+    ];
+
+    function App() {
+      const [activeCategory, setActiveCategory] = useState('action');
+      const [isDark, setIsDark] = useState(false);
+
+      useEffect(() => {
+        document.body.classList.toggle('dark', isDark);
+      }, [isDark]);
+
+      return (
+        <>
+          <header className="yl-header">
+            <span className="yl-header__title">源力设计系统 · 组件展示</span>
+            <div className="yl-header__actions">
+              <div className="yl-dark-toggle" onClick={() => setIsDark(!isDark)}>
+                {isDark ? '☀' : '☾'}
+              </div>
+            </div>
+          </header>
+          <div className="yl-layout">
+            <nav className="yl-sidebar">
+              {categories.map(cat => (
+                <div className="yl-sidebar__group" key={cat.key}>
+                  <div className="yl-sidebar__group-title">{cat.label}</div>
+                  {cat.items.map(item => (
+                    <div
+                      key={item}
+                      className={`yl-sidebar__item ${activeCategory === cat.key ? 'yl-sidebar__item--active' : ''}`}
+                      onClick={() => setActiveCategory(cat.key)}
+                    >{item}</div>
+                  ))}
+                </div>
+              ))}
+            </nav>
+            <main className="yl-content">
+              {activeCategory === 'action' && <ActionSection />}
+              {activeCategory === 'input' && <InputSection />}
+              {activeCategory === 'display' && <DisplaySection />}
+              {activeCategory === 'feedback' && <FeedbackSection />}
+              {activeCategory === 'nav' && <NavSection />}
+            </main>
+          </div>
+        </>
+      );
+    }
+
+    function ActionSection() {
+      const [dropOpen, setDropOpen] = useState(false);
+      return (
+        <div className="yl-section">
+          <h2 className="yl-section__title">操作类</h2>
+          <div className="yl-card">
+            <div className="yl-card__title">Button 按钮</div>
+            <div className="yl-card__content">
+              <button className="yl-btn yl-btn--primary">主要按钮</button>
+              <button className="yl-btn">默认按钮</button>
+              <button className="yl-btn yl-btn--text">文字按钮</button>
+              <button className="yl-btn yl-btn--disabled">禁用按钮</button>
+            </div>
+          </div>
+          <div className="yl-card">
+            <div className="yl-card__title">Dropdown 下拉菜单</div>
+            <div className="yl-card__content">
+              <div className="yl-dropdown">
+                <button className="yl-btn" onClick={() => setDropOpen(!dropOpen)}>
+                  点击展开 ▾
+                </button>
+                {dropOpen && (
+                  <div className="yl-dropdown__menu">
+                    <div className="yl-dropdown__item" onClick={() => setDropOpen(false)}>操作一</div>
+                    <div className="yl-dropdown__item" onClick={() => setDropOpen(false)}>操作二</div>
+                    <div className="yl-dropdown__item" onClick={() => setDropOpen(false)}>操作三</div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    function InputSection() {
+      const [switchOn, setSwitchOn] = useState(false);
+      const [selectOpen, setSelectOpen] = useState(false);
+      const [selected, setSelected] = useState('请选择');
+      const options = ['选项一', '选项二', '选项三'];
+
+      return (
+        <div className="yl-section">
+          <h2 className="yl-section__title">数据录入</h2>
+          <div className="yl-card">
+            <div className="yl-card__title">Input 输入框</div>
+            <div className="yl-card__content">
+              <input className="yl-input" placeholder="默认输入框" />
+              <input className="yl-input yl-input--error" placeholder="错误状态" />
+              <input className="yl-input yl-input--disabled" placeholder="禁用状态" disabled />
+            </div>
+          </div>
+          <div className="yl-card">
+            <div className="yl-card__title">Select 选择器</div>
+            <div className="yl-card__content">
+              <div className="yl-select">
+                <div className="yl-select__trigger" onClick={() => setSelectOpen(!selectOpen)}>
+                  <span>{selected}</span><span>▾</span>
+                </div>
+                {selectOpen && (
+                  <div className="yl-select__dropdown">
+                    {options.map(opt => (
+                      <div
+                        key={opt}
+                        className={`yl-select__option ${selected === opt ? 'yl-select__option--active' : ''}`}
+                        onClick={() => { setSelected(opt); setSelectOpen(false); }}
+                      >{opt}</div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+          <div className="yl-card">
+            <div className="yl-card__title">Switch 开关</div>
+            <div className="yl-card__content">
+              <div className={`yl-switch ${switchOn ? 'yl-switch--on' : ''}`} onClick={() => setSwitchOn(!switchOn)}>
+                <div className="yl-switch__handle"></div>
+              </div>
+              <span style={{fontSize:'14px',color:'var(--text-secondary)'}}>{switchOn ? '开启' : '关闭'}</span>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    function DisplaySection() {
+      const tableData = [
+        { id: 1, name: '项目 Alpha', status: 'success' },
+        { id: 2, name: '项目 Beta', status: 'warning' },
+        { id: 3, name: '项目 Gamma', status: 'danger' },
+        { id: 4, name: '项目 Delta', status: 'success' },
+        { id: 5, name: '项目 Epsilon', status: 'default' },
+      ];
+      const statusMap = { success: '成功', warning: '进行中', danger: '失败', default: '默认' };
+
+      return (
+        <div className="yl-section">
+          <h2 className="yl-section__title">数据展示</h2>
+          <div className="yl-card">
+            <div className="yl-card__title">Table 表格</div>
+            <table className="yl-table">
+              <thead><tr><th>序号</th><th>名称</th><th>状态</th></tr></thead>
+              <tbody>
+                {tableData.map(row => (
+                  <tr key={row.id}>
+                    <td>{row.id}</td>
+                    <td>{row.name}</td>
+                    <td><span className={`yl-tag yl-tag--${row.status}`}>{statusMap[row.status]}</span></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="yl-card">
+            <div className="yl-card__title">Tag 标签</div>
+            <div className="yl-card__content">
+              <span className="yl-tag yl-tag--success">成功</span>
+              <span className="yl-tag yl-tag--danger">失败</span>
+              <span className="yl-tag yl-tag--warning">进行中</span>
+              <span className="yl-tag yl-tag--primary">主要</span>
+              <span className="yl-tag yl-tag--default">默认</span>
+            </div>
+          </div>
+          <div className="yl-card">
+            <div className="yl-card__title">Badge 徽标</div>
+            <div className="yl-card__content" style={{gap:'24px'}}>
+              <div className="yl-badge">
+                <button className="yl-btn">消息</button>
+                <span className="yl-badge__content">5</span>
+              </div>
+              <div className="yl-badge">
+                <button className="yl-btn">通知</button>
+                <span className="yl-badge__content">99+</span>
+              </div>
+              <div className="yl-badge">
+                <button className="yl-btn">提醒</button>
+                <span className="yl-badge__dot"></span>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    function FeedbackSection() {
+      const [modalOpen, setModalOpen] = useState(false);
+      const [msg, setMsg] = useState(null);
+
+      const showMessage = () => {
+        setMsg('操作成功！');
+        setTimeout(() => setMsg(null), 2500);
+      };
+
+      return (
+        <div className="yl-section">
+          <h2 className="yl-section__title">反馈</h2>
+          <div className="yl-card">
+            <div className="yl-card__title">Alert 警告提示</div>
+            <div style={{display:'flex',flexDirection:'column',gap:'8px'}}>
+              <div className="yl-alert yl-alert--info">信息提示：这是一条信息说明。</div>
+              <div className="yl-alert yl-alert--success">成功提示：操作已成功完成。</div>
+              <div className="yl-alert yl-alert--warning">警告提示：请注意检查配置。</div>
+              <div className="yl-alert yl-alert--error">错误提示：操作执行失败。</div>
+            </div>
+          </div>
+          <div className="yl-card">
+            <div className="yl-card__title">Modal 对话框</div>
+            <div className="yl-card__content">
+              <button className="yl-btn yl-btn--primary" onClick={() => setModalOpen(true)}>打开弹窗</button>
+            </div>
+            {modalOpen && (
+              <div className="yl-modal-mask" onClick={() => setModalOpen(false)}>
+                <div className="yl-modal" onClick={e => e.stopPropagation()}>
+                  <div className="yl-modal__title">确认操作</div>
+                  <div className="yl-modal__body">确定要执行此操作吗？此操作不可撤销。</div>
+                  <div className="yl-modal__footer">
+                    <button className="yl-btn" onClick={() => setModalOpen(false)}>取消</button>
+                    <button className="yl-btn yl-btn--primary" onClick={() => setModalOpen(false)}>确定</button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+          <div className="yl-card">
+            <div className="yl-card__title">Message 全局提示</div>
+            <div className="yl-card__content">
+              <button className="yl-btn yl-btn--primary" onClick={showMessage}>触发消息</button>
+            </div>
+          </div>
+          {msg && <div className="yl-message yl-message--success">{msg}</div>}
+        </div>
+      );
+    }
+
+    function NavSection() {
+      const [activeTab, setActiveTab] = useState(0);
+      const tabs = ['标签一', '标签二', '标签三'];
+      const tabContents = ['这是标签一的内容区域。', '这是标签二的内容区域。', '这是标签三的内容区域。'];
+
+      return (
+        <div className="yl-section">
+          <h2 className="yl-section__title">导航</h2>
+          <div className="yl-card">
+            <div className="yl-card__title">Tabs 标签页</div>
+            <div className="yl-tabs__nav">
+              {tabs.map((tab, i) => (
+                <div
+                  key={i}
+                  className={`yl-tabs__item ${activeTab === i ? 'yl-tabs__item--active' : ''}`}
+                  onClick={() => setActiveTab(i)}
+                >{tab}</div>
+              ))}
+            </div>
+            <div className="yl-tabs__content">{tabContents[activeTab]}</div>
+          </div>
+          <div className="yl-card">
+            <div className="yl-card__title">Breadcrumb 面包屑</div>
+            <div className="yl-card__content">
+              <div className="yl-breadcrumb">
+                <span className="yl-breadcrumb__item">首页</span>
+                <span className="yl-breadcrumb__sep">/</span>
+                <span className="yl-breadcrumb__item">组件列表</span>
+                <span className="yl-breadcrumb__sep">/</span>
+                <span className="yl-breadcrumb__item yl-breadcrumb__item--active">导航</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
+</body>
+</html>

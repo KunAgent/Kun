@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 2,
+  "slug": "segmented-picker",
+  "name": "Segmented Picker",
+  "category": "data-entry",
+  "sourceKind": "structured-spec",
+  "confidence": "medium",
+  "semanticTypeCandidates": ["segmented-control", "button-group-picker", "toggle-group"],
+  "variantDimensions": {
+    "size": ["large", "default", "small", "mini"],
+    "itemState": ["default", "active", "hover", "disabled"]
+  },
+  "representativeVariants": [
+    { "size": "large", "items": 2 },
+    { "size": "default", "items": 5 },
+    { "size": "small", "items": 3 },
+    { "size": "mini", "items": 4 }
+  ],
+  "anatomy": ["segmented-picker", "segmented-picker-item"],
+  "structurePatterns": [
+    "Inline-flex container with 8px gap holding button items of equal width",
+    "Each item is a button with border-radius 4px and 1px ring border via box-shadow",
+    "Active item gets blue background #F3F7FF with blue ring #A2C1FF and blue text #1664FF"
+  ],
+  "usageHints": [
+    "Size classes: segmented-picker-lg (36px), segmented-picker-md (32px), segmented-picker-sm (28px), segmented-picker-xs (24px)",
+    "Item width is fixed at 94px (lg/md/sm) or 89px (xs)",
+    "Default background #FFFFFF with box-shadow 0 0 0 1px #DDE2E9",
+    "Active state: background #F3F7FF, box-shadow 0 0 0 1px #A2C1FF, color #1664FF, font-weight 500",
+    "Hover state: background #ECEDED",
+    "Disabled state: opacity 0.5, color #737A87, cursor not-allowed",
+    "Font-size 13px for lg/md/sm, 12px for xs"
+  ],
+  "doNotInvent": ["icon-only items", "vertical orientation", "badge on item", "underline indicator"],
+  "unknowns": ["responsive behavior for many items", "overflow scrolling"],
+  "tokensConsumed": [],
+  "domAnatomy": {
+    "root": {
+      "tag": "div",
+      "class": "segmented-picker segmented-picker-{sizeClass}",
+      "children": [
+        { "tag": "button", "class": "segmented-picker-item", "repeat": true },
+        { "tag": "button", "class": "segmented-picker-item active", "note": "selected item" }
+      ]
+    }
+  },
+  "provenance": {
+    "preview": "preview/ui-segmented-picker.html",
+    "source": "structured-spec",
+    "css": { "file": "ui-segmented-picker.html", "marker": "inline <style>" }
+  }
+}

@@ -1,0 +1,65 @@
+{
+  "slug": "search-input",
+  "name": "Search Input",
+  "purpose": "Compact search and filter entry for navigation rails, command bars, and content lists.",
+  "variantDimensions": {
+    "style": [
+      "default",
+      "filled",
+      "toolbar"
+    ],
+    "state": [
+      "idle",
+      "focus",
+      "filled",
+      "disabled",
+      "error"
+    ],
+    "adornment": [
+      "leading-icon",
+      "leading-icon-with-shortcut",
+      "leading-icon-with-clear"
+    ]
+  },
+  "structures": [
+    {
+      "name": "Toolbar Search",
+      "anatomy": [
+        "field",
+        "leading-search-icon",
+        "text-value",
+        "shortcut-chip"
+      ],
+      "notes": "A narrow input used in top bars and utility rows."
+    },
+    {
+      "name": "Panel Filter Input",
+      "anatomy": [
+        "field",
+        "label",
+        "helper-text"
+      ],
+      "notes": "Supports filter panels and quick settings forms."
+    },
+    {
+      "name": "Search With Clear",
+      "anatomy": [
+        "field",
+        "leading-search-icon",
+        "text-value",
+        "clear-button"
+      ],
+      "notes": "Useful when the interface maintains a persistent query."
+    }
+  ],
+  "contentExamples": [
+    "搜索...",
+    "搜索会话",
+    "筛选历史对话"
+  ],
+  "interactionNotes": [
+    "Use the border and input tokens rather than elevation to separate the field from its background.",
+    "The ring token should be the primary focus affordance."
+  ],
+  "category": "form"
+}

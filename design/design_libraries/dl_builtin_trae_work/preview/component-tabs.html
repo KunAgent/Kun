@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Tabs</title>
+  <link rel="stylesheet" href="../colors_and_type.css" />
+  <link rel="stylesheet" href="../scaffold.css" />
+  <link rel="stylesheet" href="../components.css" />
+  <style>
+    /* @component-css-start */
+    /* ===== Tabs ===== */
+    .ds-tabs { display: flex; gap: var(--spacer-24); border-bottom: 1px solid var(--border-neutral-l1); }
+    .ds-tab { display: inline-flex; align-items: center; padding: var(--spacer-12) 0; background: transparent; border: none; color: var(--text-tertiary); cursor: pointer; font: inherit; font-size: var(--body-base-font-size); line-height: var(--body-base-line-height); font-weight: var(--font-weight-medium); position: relative; }
+    .ds-tab:hover { color: var(--text-default); }
+    .ds-tab.is-active { color: var(--text-default); }
+    .ds-tab.is-active::after { content: ''; position: absolute; left: 0; right: 0; bottom: -1px; height: 2px; background: var(--icon-default); }
+    .ds-tab__count,
+    .ds-tab .ds-tag.num { margin-left: var(--spacer-6); min-width: 18px; height: 18px; padding: 0 var(--spacer-6); display: inline-grid; place-items: center; vertical-align: middle; border: none; border-radius: var(--radius-full); background: var(--bg-overlay-l2); color: var(--text-tertiary); font-family: var(--font-family-metric); font-size: var(--body-xs-font-size); line-height: var(--body-xs-line-height); font-weight: var(--body-xs-font-weight); font-variant-numeric: tabular-nums; }
+    /* @component-css-end */
+  </style>
+</head>
+<body>
+  <div class="pv-header">
+    <h1>Tabs</h1>
+    <p>Underline tabs only. Inactive uses <code>--text-tertiary</code>; active uses <code>--text-default</code> with a 2px neutral underline (never brand fill).</p>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">Default</div>
+    <div class="ds-tabs">
+      <button class="ds-tab is-active">Overview</button>
+      <button class="ds-tab">Activity</button>
+      <button class="ds-tab">Members</button>
+      <button class="ds-tab">Settings</button>
+    </div>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">With counts</div>
+    <div class="ds-tabs">
+      <button class="ds-tab is-active">Open <span class="ds-tab__count">12</span></button>
+      <button class="ds-tab">Closed <span class="ds-tab__count">142</span></button>
+      <button class="ds-tab">Drafts <span class="ds-tab__count">3</span></button>
+    </div>
+  </div>
+
+</body>
+</html>

@@ -1,0 +1,62 @@
+{
+  "slug": "sidebar",
+  "name": "Sidebar",
+  "category": "navigation",
+  "variantCount": 6,
+  "primitiveCount": 6,
+  "cssVariables": [
+    "sidebar",
+    "sidebar-foreground",
+    "sidebar-primary",
+    "sidebar-primary-foreground",
+    "sidebar-accent",
+    "sidebar-accent-foreground",
+    "sidebar-border",
+    "sidebar-ring",
+    "space-4",
+    "radius-md"
+  ],
+  "variantDimensions": {
+    "mode": [
+      "default",
+      "compact"
+    ],
+    "state": [
+      "default",
+      "active",
+      "hover"
+    ]
+  },
+  "anatomy": [
+    "frame",
+    "section-label",
+    "nav-item",
+    "active-marker",
+    "footer-item"
+  ],
+  "structures": [
+    {
+      "name": "Default, State=active",
+      "slots": [
+        "section-label",
+        "nav-item",
+        "active-marker"
+      ]
+    },
+    {
+      "name": "Compact, State=default",
+      "slots": [
+        "nav-item"
+      ]
+    },
+    {
+      "name": "Default, State=hover",
+      "slots": [
+        "nav-item",
+        "footer-item"
+      ]
+    }
+  ],
+  "evidence": "Directly inferred from explicit sidebar token family in source CSS.",
+  "keyInsight": "Sidebar is a first-class pattern with its own tonal system, not just a bordered container."
+}

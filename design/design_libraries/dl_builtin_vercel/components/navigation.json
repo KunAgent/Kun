@@ -1,0 +1,54 @@
+{
+  "slug": "navigation",
+  "name": "Navigation",
+  "category": "navigation",
+  "evidence": "AI-inferred based on developer platform dashboard product type and the source token system.",
+  "keyInsightSeed": "Navigation should feel editorial and compact, using contrast shifts instead of bright fills.",
+  "anatomy": [
+    "brand-mark",
+    "primary-links",
+    "workspace-switcher",
+    "utility-actions"
+  ],
+  "variantDimensions": [
+    {
+      "name": "placement",
+      "values": [
+        "topbar",
+        "section-nav"
+      ]
+    },
+    {
+      "name": "state",
+      "values": [
+        "default",
+        "active"
+      ]
+    }
+  ],
+  "variants": [
+    {
+      "id": "topbar",
+      "items": [
+        "Overview",
+        "Deployments",
+        "Observability",
+        "Settings"
+      ]
+    },
+    {
+      "id": "section-nav",
+      "items": [
+        "Usage",
+        "Domains",
+        "Functions"
+      ]
+    }
+  ],
+  "uiCopySamples": [
+    "Overview",
+    "Deployments",
+    "Observability",
+    "Settings"
+  ]
+}

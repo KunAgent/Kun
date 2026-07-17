@@ -1,0 +1,374 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>21th Dashboard Kit</title>
+  <link rel="stylesheet" href="../../colors_and_type.css">
+  <style>
+    *{box-sizing:border-box}html,body{margin:0;min-height:100%;background:var(--background);color:var(--foreground);font-family:var(--font-sans);letter-spacing:var(--tracking-normal)}body{padding:20px}
+    button,input{font:inherit;letter-spacing:inherit}
+    .app{min-height:calc(100vh - 40px);display:grid;grid-template-columns:260px 1fr;background:var(--background);border:1px solid var(--border);box-shadow:var(--shadow-lg)}
+    .app.collapsed{grid-template-columns:86px 1fr}
+    .sidebar{background:var(--sidebar);color:var(--sidebar-foreground);border-right:1px solid var(--sidebar-border);padding:16px;display:grid;grid-template-rows:auto auto 1fr auto;gap:16px}
+    .brand{display:flex;align-items:center;justify-content:space-between;gap:12px}.brand-mark{display:grid;gap:2px}.kicker,.section-label,.tiny{font-size:11px;text-transform:uppercase;color:var(--muted-foreground)}.brand-name{font:700 20px/1 var(--font-sans)}
+    .side-toggle,.ghost-btn,.icon-btn,.nav-btn,.btn,.chip,.switch{border:1px solid transparent;border-radius:var(--radius);transition:transform .14s ease,background-color .14s ease,color .14s ease,box-shadow .14s ease,border-color .14s ease}
+    .side-toggle,.ghost-btn,.icon-btn{background:var(--sidebar-accent);color:var(--sidebar-accent-foreground);box-shadow:var(--shadow-xs);min-height:34px}
+    .side-toggle:hover,.ghost-btn:hover,.icon-btn:hover,.nav-btn:hover,.btn:hover,.chip:hover,.switch:hover{transform:translate(-1px,-1px)}
+    .side-toggle:active,.ghost-btn:active,.icon-btn:active,.nav-btn:active,.btn:active,.chip:active,.switch:active{transform:scale(.97)}
+    .side-toggle:focus-visible,.ghost-btn:focus-visible,.icon-btn:focus-visible,.nav-btn:focus-visible,.btn:focus-visible,.chip:focus-visible,.switch:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+    .collapsed .brand-copy,.collapsed .nav-copy,.collapsed .side-meta,.collapsed .workspace{display:none}
+    .collapsed .brand,.collapsed .nav-btn,.collapsed .sidebar-footer{justify-items:center;justify-content:center}
+    .collapsed .nav-btn{padding-inline:0}
+    .workspace{padding:12px;border:1px solid var(--sidebar-border);background:var(--sidebar-accent);display:grid;gap:4px}
+    .nav{display:grid;gap:8px}.nav-btn{width:100%;display:grid;grid-template-columns:20px 1fr auto;align-items:center;gap:10px;padding:12px;background:transparent;color:inherit;border-color:transparent;text-align:left}.nav-btn.active{background:var(--sidebar-primary);color:var(--sidebar-primary-foreground);box-shadow:var(--shadow-sm)}.nav-badge{padding:2px 8px;background:var(--background);color:var(--foreground);font-size:11px}
+    .main{display:grid;grid-template-rows:auto auto 1fr;min-width:0}
+    .header{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:16px 20px;border-bottom:1px solid var(--border);background:var(--card)}
+    .title-stack{display:grid;gap:4px}.title{margin:0;font:700 28px/1 var(--font-sans)}.subtitle{color:var(--muted-foreground);font-size:13px}
+    .header-tools{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.search{display:flex;align-items:center;gap:8px;min-height:38px;padding:0 12px;background:var(--input);border:1px solid var(--border);box-shadow:var(--shadow-xs)}.search input{border:0;outline:0;background:transparent;color:var(--foreground);width:220px}.avatar{width:38px;height:38px;display:grid;place-items:center;background:var(--primary);color:var(--primary-foreground);border:1px solid var(--ring);box-shadow:var(--shadow-sm);font-weight:700}
+    .toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 20px;border-bottom:1px solid var(--border);background:color-mix(in srgb,var(--card) 65%,transparent)}.toolbar-group{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+    .btn,.chip,.switch{min-height:36px;padding:0 14px;background:var(--muted);color:var(--foreground);box-shadow:var(--shadow-sm);border-color:var(--ring);cursor:pointer}.btn.primary{background:var(--primary);color:var(--primary-foreground);border-color:transparent}.btn.accent{background:var(--accent);color:var(--accent-foreground);border-color:transparent}.btn.destructive{background:var(--destructive);color:var(--destructive-foreground);border-color:transparent}.btn[disabled],.chip[disabled],.switch[aria-checked="mixed"]{opacity:.5;cursor:not-allowed;box-shadow:none;transform:none}
+    .content{padding:20px;display:grid;gap:16px;min-width:0}.view{display:grid;gap:16px;animation:rise .22s ease}
+    .metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}.card{background:var(--card);color:var(--card-foreground);border:1px solid var(--border);box-shadow:var(--shadow);padding:16px;display:grid;gap:8px;min-width:0}.card.selected{border-color:var(--primary);box-shadow:var(--shadow-md)}.eyebrow{font-size:11px;text-transform:uppercase;color:var(--muted-foreground)}.metric-value{font-size:30px;line-height:1}.metric-meta{font-size:12px;font-weight:700}.accent-text{color:var(--chart-1)}.danger-text{color:var(--destructive)}
+    .grid-2{display:grid;grid-template-columns:1.5fr 1fr;gap:16px}.grid-3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
+    .panel-head{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;flex-wrap:wrap}.panel-title{margin:0;font:700 18px/1.1 var(--font-sans)}.panel-sub{font-size:12px;color:var(--muted-foreground)}
+    .bar-chart{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;align-items:end;height:220px;padding-top:18px}.bar-col{display:grid;gap:8px;align-items:end}.bar-stack{display:grid;gap:6px;align-content:end;height:180px}.bar{width:100%;background:var(--chart-1);box-shadow:var(--shadow-xs)}.bar.alt{background:var(--chart-3)}.bar.light{background:var(--chart-5)}.bar-label{text-align:center;font-size:11px;color:var(--muted-foreground)}
+    .spark{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;align-items:end;height:70px}.spark span{display:block;background:var(--chart-2);min-height:16px;box-shadow:var(--shadow-xs)}
+    .list,.table{display:grid;gap:8px}.list-row,.table-row{display:grid;grid-template-columns:1.2fr .8fr .8fr .8fr;gap:12px;align-items:center;padding:10px 12px;border:1px solid var(--border);background:var(--background)}.table-head{font-size:11px;text-transform:uppercase;color:var(--muted-foreground);background:transparent;border:0;padding:0 12px}
+    .status{justify-self:start;padding:3px 8px;background:var(--muted);font-size:11px;border:1px solid var(--border)}.status.good{background:var(--primary);color:var(--primary-foreground);border-color:transparent}.status.watch{background:var(--accent);color:var(--accent-foreground);border-color:transparent}.status.risk{background:var(--destructive);color:var(--destructive-foreground);border-color:transparent}
+    .filters{display:flex;gap:8px;flex-wrap:wrap}.chip.active{background:var(--primary);color:var(--primary-foreground);border-color:transparent}.donut{width:136px;height:136px;border-radius:50%;background:conic-gradient(var(--chart-1) 0 54%,var(--chart-3) 54% 79%,var(--chart-5) 79% 100%);position:relative;box-shadow:var(--shadow-sm)}.donut::after{content:"";position:absolute;inset:24px;background:var(--card);border:1px solid var(--border)}.donut-wrap{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+    .setting-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 0;border-top:1px solid var(--border)}.setting-row:first-of-type{border-top:0}.switch{min-width:92px;justify-content:center}
+    .switch.on{background:var(--primary);color:var(--primary-foreground);border-color:transparent}.switch.warn{background:var(--accent);color:var(--accent-foreground);border-color:transparent}
+    .note{padding:12px;border:1px dashed var(--border);background:var(--muted);font-size:12px;color:var(--muted-foreground)}
+    @keyframes rise{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+    @media (max-width:1100px){.metrics,.grid-3,.grid-2{grid-template-columns:1fr}.app{grid-template-columns:1fr}.sidebar{grid-template-columns:repeat(3,1fr);grid-template-rows:auto auto auto}.collapsed .sidebar{grid-template-columns:1fr}.search input{width:140px}}
+    @media (max-width:720px){body{padding:0}.app{min-height:100vh;border:0;box-shadow:none}.header,.toolbar,.content{padding-inline:14px}.table-row,.list-row{grid-template-columns:1fr 1fr}.nav-btn{grid-template-columns:20px 1fr}}
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script type="text/babel">
+    const { useState, useMemo } = React;
+
+    const views = [
+      { id: "overview", label: "Overview", icon: "◫", badge: "04" },
+      { id: "analytics", label: "Analytics", icon: "▦", badge: "12" },
+      { id: "settings", label: "Settings", icon: "⚙", badge: "03" }
+    ];
+
+    const metrics = [
+      { title: "Signal Volume", value: "47.8K", meta: "+8.4% week over week", footer: "Stable inflow across top regions", tone: "accent-text" },
+      { title: "Weekly Summary", value: "312", meta: "18 actions cleared today", footer: "Focused", selected: true },
+      { title: "Automation Coverage", value: "86%", meta: "14 workflows improved", footer: "Response loops are tightening" },
+      { title: "Incident Watch", value: "3", meta: "Latency breached in two services", footer: "Next review in 12 minutes", tone: "danger-text" }
+    ];
+
+    const accounts = [
+      { name: "Northwind Grid", owner: "A. Stone", health: "Healthy", eta: "09:30 UTC", status: "good" },
+      { name: "Atlas Retail", owner: "J. Kim", health: "Watch", eta: "10:05 UTC", status: "watch" },
+      { name: "Vector Health", owner: "M. Fox", health: "Escalated", eta: "10:20 UTC", status: "risk" },
+      { name: "Signal Forge", owner: "R. Hale", health: "Healthy", eta: "11:10 UTC", status: "good" }
+    ];
+
+    const trend = [72, 88, 64, 94, 110, 84];
+    const stacked = [
+      { label: "W1", a: 48, b: 24, c: 18 },
+      { label: "W2", a: 52, b: 22, c: 16 },
+      { label: "W3", a: 56, b: 28, c: 20 },
+      { label: "W4", a: 62, b: 30, c: 18 },
+      { label: "W5", a: 58, b: 26, c: 16 },
+      { label: "W6", a: 67, b: 34, c: 20 }
+    ];
+
+    const alertQueues = [
+      ["Priority queue", "12 unresolved", "Median review 07m"],
+      ["Automation drift", "4 rules stale", "Tune before Friday"],
+      ["Routing variance", "3 channels noisy", "SMS fallback enabled"]
+    ];
+
+    function App() {
+      const [view, setView] = useState("overview");
+      const [collapsed, setCollapsed] = useState(false);
+      const [range, setRange] = useState("30D");
+      const rangeCopy = useMemo(() => ({
+        "7D": "Fast pulse on live operations",
+        "30D": "Best balance for directional planning",
+        "QTD": "Quarter pace for leadership reporting"
+      }[range]), [range]);
+
+      return (
+        <div className={`app ${collapsed ? "collapsed" : ""}`}>
+          <aside className="sidebar">
+            <div className="brand">
+              <div className="brand-mark">
+                <span className="kicker">21th command</span>
+                <span className="brand-name brand-copy">OPS GRID</span>
+              </div>
+              <button className="side-toggle" onClick={() => setCollapsed(!collapsed)} aria-label="Toggle sidebar">{collapsed ? "→" : "←"}</button>
+            </div>
+            <div className="workspace">
+              <span className="section-label">Workspace</span>
+              <strong className="brand-copy">North America Pulse</strong>
+              <span className="tiny side-meta">Monochrome monitoring shell with electric blue cues</span>
+            </div>
+            <nav className="nav" aria-label="Primary">
+              {views.map(item => (
+                <button key={item.id} className={`nav-btn ${view === item.id ? "active" : ""}`} onClick={() => setView(item.id)}>
+                  <span>{item.icon}</span>
+                  <span className="nav-copy">{item.label}</span>
+                  <span className="nav-badge nav-copy">{item.badge}</span>
+                </button>
+              ))}
+            </nav>
+            <div className="sidebar-footer">
+              <button className="ghost-btn" style={{width:"100%"}}>Pin Report</button>
+            </div>
+          </aside>
+
+          <main className="main">
+            <header className="header">
+              <div className="title-stack">
+                <h1 className="title">{views.find(v => v.id === view).label}</h1>
+                <span className="subtitle">Sharp-edged analytics kit for real product context, not a showcase grid.</span>
+              </div>
+              <div className="header-tools">
+                <label className="search">
+                  <span>⌕</span>
+                  <input type="text" defaultValue="Search accounts" aria-label="Search accounts" />
+                </label>
+                <button className="icon-btn" aria-label="Notifications">!</button>
+                <div className="avatar" aria-label="Current user">AL</div>
+              </div>
+            </header>
+
+            <div className="toolbar">
+              <div className="toolbar-group">
+                <button className="btn primary">Create View</button>
+                <button className="btn">Export CSV</button>
+                <button className="btn accent">Apply Filter</button>
+                <button className="btn destructive" disabled>Delete Batch</button>
+              </div>
+              <span className="tiny">Live sync window: 09:00-18:00 UTC</span>
+            </div>
+
+            <section className="content">
+              {view === "overview" && <OverviewView />}
+              {view === "analytics" && <AnalyticsView range={range} setRange={setRange} rangeCopy={rangeCopy} />}
+              {view === "settings" && <SettingsView />}
+            </section>
+          </main>
+        </div>
+      );
+    }
+
+    function OverviewView() {
+      return (
+        <div className="view">
+          <div className="metrics">
+            {metrics.map((item) => (
+              <article key={item.title} className={`card ${item.selected ? "selected" : ""}`}>
+                <span className="eyebrow">{item.title}</span>
+                <strong className="metric-value">{item.value}</strong>
+                <span className={`metric-meta ${item.tone || ""}`}>{item.meta}</span>
+                <span className="tiny">{item.footer}</span>
+              </article>
+            ))}
+          </div>
+
+          <div className="grid-2">
+            <article className="card">
+              <div className="panel-head">
+                <div>
+                  <h2 className="panel-title">Weekly Summary</h2>
+                  <div className="panel-sub">Blue scale stays inside data elements only.</div>
+                </div>
+                <span className="tiny">Updated 4 min ago</span>
+              </div>
+              <div className="bar-chart" aria-label="Weekly summary chart">
+                {trend.map((value, index) => (
+                  <div className="bar-col" key={index}>
+                    <div className="bar-stack">
+                      <span className="bar light" style={{height: `${Math.max(12, value * 0.3)}px`}} />
+                      <span className="bar" style={{height: `${Math.max(20, value)}px`}} />
+                    </div>
+                    <span className="bar-label">{["Mon","Tue","Wed","Thu","Fri","Sat"][index]}</span>
+                  </div>
+                ))}
+              </div>
+            </article>
+
+            <article className="card">
+              <div className="panel-head">
+                <div>
+                  <h2 className="panel-title">Operational Drift</h2>
+                  <div className="panel-sub">Compact watch list with chart cue reuse.</div>
+                </div>
+              </div>
+              <div className="list">
+                {alertQueues.map(([title, value, note]) => (
+                  <div className="card" key={title} style={{padding:"12px", background:"var(--background)"}}>
+                    <span className="eyebrow">{title}</span>
+                    <strong>{value}</strong>
+                    <span className="tiny">{note}</span>
+                  </div>
+                ))}
+              </div>
+            </article>
+          </div>
+
+          <article className="card">
+            <div className="panel-head">
+              <div>
+                <h2 className="panel-title">Priority Accounts</h2>
+                <div className="panel-sub">Grid-first table with four representative rows.</div>
+              </div>
+              <button className="btn">Review Queue</button>
+            </div>
+            <div className="table">
+              <div className="table-row table-head">
+                <span>Account</span><span>Owner</span><span>Health</span><span>Next checkpoint</span>
+              </div>
+              {accounts.map((row) => (
+                <div className="table-row" key={row.name}>
+                  <strong>{row.name}</strong>
+                  <span>{row.owner}</span>
+                  <span className={`status ${row.status}`}>{row.health}</span>
+                  <span>{row.eta}</span>
+                </div>
+              ))}
+            </div>
+          </article>
+        </div>
+      );
+    }
+
+    function AnalyticsView({ range, setRange, rangeCopy }) {
+      return (
+        <div className="view">
+          <article className="card">
+            <div className="panel-head">
+              <div>
+                <h2 className="panel-title">Signal Volume</h2>
+                <div className="panel-sub">{rangeCopy}</div>
+              </div>
+              <div className="filters">
+                {["7D","30D","QTD"].map(item => (
+                  <button key={item} className={`chip ${range === item ? "active" : ""}`} onClick={() => setRange(item)}>{item}</button>
+                ))}
+              </div>
+            </div>
+            <div className="bar-chart">
+              {stacked.map((item) => (
+                <div className="bar-col" key={item.label}>
+                  <div className="bar-stack">
+                    <span className="bar light" style={{height: `${item.c}px`}} />
+                    <span className="bar alt" style={{height: `${item.b}px`}} />
+                    <span className="bar" style={{height: `${item.a}px`}} />
+                  </div>
+                  <span className="bar-label">{item.label}</span>
+                </div>
+              ))}
+            </div>
+          </article>
+
+          <div className="grid-3">
+            <article className="card">
+              <span className="eyebrow">Response velocity</span>
+              <strong className="metric-value">07m</strong>
+              <div className="spark">{[34,55,42,62,48,67,58].map((h, i) => <span key={i} style={{height:`${h}px`}} />)}</div>
+              <span className="tiny">Median review time remains below target.</span>
+            </article>
+            <article className="card">
+              <span className="eyebrow">Segment mix</span>
+              <div className="donut-wrap">
+                <div className="donut" aria-hidden="true"></div>
+                <div className="list">
+                  <span><strong>54%</strong> Enterprise</span>
+                  <span><strong>25%</strong> Mid-market</span>
+                  <span><strong>21%</strong> Pilot</span>
+                </div>
+              </div>
+            </article>
+            <article className="card selected">
+              <span className="eyebrow">Analyst note</span>
+              <strong>Signal quality is strongest when alerts are grouped by region and owner.</strong>
+              <span className="tiny">Use the 30D range for daily planning and QTD for executive pacing.</span>
+            </article>
+          </div>
+        </div>
+      );
+    }
+
+    function SettingsView() {
+      return (
+        <div className="view">
+          <div className="grid-2">
+            <article className="card">
+              <div className="panel-head">
+                <div>
+                  <h2 className="panel-title">Workflow Guardrails</h2>
+                  <div className="panel-sub">Compact toggles with strong contrast and visible focus.</div>
+                </div>
+              </div>
+              <div className="setting-row">
+                <div>
+                  <strong>Auto-route escalations</strong>
+                  <div className="tiny">Push risk items to the on-call queue after 6 minutes.</div>
+                </div>
+                <button className="switch on" aria-checked="true">Enabled</button>
+              </div>
+              <div className="setting-row">
+                <div>
+                  <strong>Freeze bulk edits</strong>
+                  <div className="tiny">Require a second analyst during peak incident windows.</div>
+                </div>
+                <button className="switch warn" aria-checked="true">Review</button>
+              </div>
+              <div className="setting-row">
+                <div>
+                  <strong>Nightly archive</strong>
+                  <div className="tiny">Archive resolved queues after the export job completes.</div>
+                </div>
+                <button className="switch" aria-checked="false">Off</button>
+              </div>
+            </article>
+
+            <article className="card">
+              <div className="panel-head">
+                <div>
+                  <h2 className="panel-title">Notification Routing</h2>
+                  <div className="panel-sub">Settings stay brand-real and product-oriented.</div>
+                </div>
+                <button className="btn primary">Save Rules</button>
+              </div>
+              <div className="table">
+                <div className="table-row table-head">
+                  <span>Route</span><span>Channel</span><span>Owner</span><span>Status</span>
+                </div>
+                <div className="table-row"><strong>P1 incidents</strong><span>SMS</span><span>Ops lead</span><span className="status good">Live</span></div>
+                <div className="table-row"><strong>Forecast drift</strong><span>Email</span><span>Finance desk</span><span className="status watch">Review</span></div>
+                <div className="table-row"><strong>Archive failures</strong><span>Webhook</span><span>Platform</span><span className="status good">Live</span></div>
+              </div>
+            </article>
+          </div>
+
+          <article className="card">
+            <div className="panel-head">
+              <div>
+                <h2 className="panel-title">Environment Notes</h2>
+                <div className="panel-sub">A small third screen closes the dashboard loop.</div>
+              </div>
+            </div>
+            <div className="note">This kit intentionally uses one consistent light theme, square-first corners, bright borders, offset shadows, and sparse electric blue accents so it stays coherent with the button and card previews.</div>
+          </article>
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+  </script>
+</body>
+</html>

@@ -1,0 +1,102 @@
+{
+  "slug": "sidebar",
+  "name": "Sidebar",
+  "category": "navigation",
+  "evidence": "AI-inferred based on Dashboard product type and structured token semantics from the source CSS.",
+  "anatomy": [
+    "container",
+    "brand-block",
+    "section-label",
+    "nav-list",
+    "active-item",
+    "footer-tools(optional)"
+  ],
+  "variantDimensions": {
+    "state": [
+      "default",
+      "active",
+      "collapsed"
+    ],
+    "density": [
+      "compact",
+      "default"
+    ],
+    "emphasis": [
+      "primary",
+      "accent",
+      "neutral"
+    ]
+  },
+  "structures": [
+    {
+      "name": "Primary Sidebar, Active, Default",
+      "description": "Persistent shell navigation for the dashboard.",
+      "elements": [
+        "container",
+        "brand-block",
+        "nav-list",
+        "active-item",
+        "footer-tools"
+      ],
+      "copyExamples": [
+        "Dashboard",
+        "Check-ins",
+        "Channels",
+        "Settings"
+      ],
+      "cssVariables": [
+        "sidebar",
+        "sidebar-foreground",
+        "sidebar-primary",
+        "sidebar-primary-foreground",
+        "sidebar-border",
+        "sidebar-ring",
+        "radius",
+        "spacing"
+      ]
+    },
+    {
+      "name": "Accent Sidebar, Active, Compact",
+      "description": "Condensed sidebar with stronger accent item states.",
+      "elements": [
+        "container",
+        "section-label",
+        "nav-list",
+        "active-item"
+      ],
+      "copyExamples": [
+        "Schedule",
+        "Crew",
+        "Reports"
+      ],
+      "cssVariables": [
+        "sidebar-accent",
+        "sidebar-accent-foreground",
+        "sidebar-border",
+        "sidebar-ring",
+        "spacing"
+      ]
+    },
+    {
+      "name": "Collapsed Sidebar, Default, Compact",
+      "description": "Icon-first compressed layout for narrow dashboards.",
+      "elements": [
+        "container",
+        "nav-list",
+        "active-item"
+      ],
+      "copyExamples": [
+        "Home",
+        "Team",
+        "Stats"
+      ],
+      "cssVariables": [
+        "sidebar",
+        "sidebar-foreground",
+        "sidebar-primary",
+        "sidebar-border",
+        "spacing"
+      ]
+    }
+  ]
+}

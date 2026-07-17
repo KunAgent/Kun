@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Tag</title>
+  <link rel="stylesheet" href="../colors_and_type.css" />
+  <link rel="stylesheet" href="../scaffold.css" />
+  <link rel="stylesheet" href="../components.css" />
+  <style>
+    /* @component-css-start */
+    /* ===== Tag / Badge ===== */
+    .ds-tag {
+      display: inline-flex; align-items: center;
+      padding: 0 var(--spacer-6); height: 18px;
+      border-radius: var(--radius-2);
+      font-size: var(--body-xs-font-size); line-height: 1;
+      background: var(--bg-overlay-l2); color: var(--text-secondary);
+      border: 1px solid var(--border-neutral-l1);
+    }
+    .ds-tag--brand { background: var(--bg-brand-popup); color: var(--text-brand); }
+    .ds-tag--success { background: var(--status-success-surface-l1); color: var(--status-success-default); }
+    .ds-tag--warning { background: var(--status-warning-surface-l1); color: var(--status-warning-default); }
+    .ds-tag--danger  { background: var(--status-error-surface-l1); color: var(--status-error-default); }
+    /* Count badge: numeric pill for list counts */
+    .ds-tag--count {
+      justify-content: center;
+      min-width: 18px; padding: 0 var(--spacer-6);
+      border-radius: var(--radius-full);
+      background: var(--bg-overlay-l3); color: var(--text-secondary);
+      border: none;
+      font-variant-numeric: tabular-nums;
+    }
+    /* Neutral strong: plan-style emphasis badge */
+    .ds-tag--neutral-strong {
+      background: var(--bg-overlay-l4); color: var(--text-default);
+      border: none; font-weight: var(--font-weight-medium);
+    }
+    /* @component-css-end */
+  </style>
+</head>
+<body>
+  <div class="pv-header">
+    <h1>Tag</h1>
+    <p>Status badges in default, success, warning, danger and brand variants.</p>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">Tags</div>
+    <div class="row">
+      <span class="ds-tag">Default</span>
+      <span class="ds-tag ds-tag--success">Active</span>
+      <span class="ds-tag ds-tag--warning">Pending</span>
+      <span class="ds-tag ds-tag--danger">Failed</span>
+      <span class="ds-tag ds-tag--brand"><span style="width:6px;height:6px;border-radius:50%;background:currentColor;display:inline-block;margin-right:6px;"></span>Live</span>
+    </div>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">Count & plan badges</div>
+    <div class="row">
+      <span class="ds-tag ds-tag--count">12</span>
+      <span class="ds-tag ds-tag--count">3</span>
+      <span class="ds-tag ds-tag--count">99+</span>
+      <span class="ds-tag ds-tag--neutral-strong">Pro</span>
+      <span class="ds-tag ds-tag--neutral-strong">Free</span>
+    </div>
+  </div>
+
+</body>
+</html>

@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Barbie Dashboard UI Kit</title>
+  <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <link rel="stylesheet" href="../../colors_and_type.css">
+  <style>
+    *{box-sizing:border-box}html,body,#root{height:100%}body{margin:0;font-family:var(--font-sans);background:radial-gradient(circle at top right,color-mix(in oklab,var(--accent) 28%,transparent),transparent 34%),linear-gradient(180deg,color-mix(in oklab,var(--background) 88%,var(--secondary)),var(--background));color:var(--foreground)}button,input{font:inherit}button{border:0;background:none}
+    .interactive{transition:background .18s ease,transform .18s ease,box-shadow .18s ease,border-color .18s ease}.interactive:hover{background:color-mix(in oklab,var(--primary) 10%,transparent)}.interactive:focus-visible{outline:2px solid var(--accent);outline-offset:2px}.interactive:active{transform:scale(.97)}.interactive:disabled{opacity:.5;cursor:not-allowed}
+    .shell{min-height:100%}.app{min-height:100%;display:grid;grid-template-columns:248px 1fr;transition:grid-template-columns .28s ease}.app.compact{grid-template-columns:92px 1fr}
+    .sidebar{padding:22px 16px;border-right:1px solid var(--sidebar-border);background:linear-gradient(180deg,color-mix(in oklab,var(--sidebar) 92%,white),var(--sidebar));display:flex;flex-direction:column;gap:18px}
+    .brand{display:flex;align-items:center;gap:12px;padding:8px}.brand-mark{width:42px;height:42px;border-radius:15px;display:grid;place-items:center;background:linear-gradient(135deg,var(--primary),var(--accent));color:var(--primary-foreground);font:700 18px/1 var(--font-serif);box-shadow:var(--shadow-md)}.brand-copy strong{display:block;font-size:15px}.brand-copy span{font-size:12px;color:var(--muted-foreground)}
+    .sidebar-section{display:grid;gap:8px}.section-label{padding:0 10px;font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted-foreground)}
+    .nav-btn,.side-action{width:100%;display:flex;align-items:center;gap:12px;border-radius:calc(var(--radius) - 10px);padding:12px;color:var(--sidebar-foreground);cursor:pointer}.nav-btn.active{background:var(--sidebar-primary);color:var(--sidebar-primary-foreground);box-shadow:var(--shadow)}.nav-btn .dot{width:28px;height:28px;border-radius:12px;display:grid;place-items:center;background:color-mix(in oklab,currentColor 10%,transparent)}
+    .app.compact .brand-copy,.app.compact .section-label,.app.compact .nav-btn span:last-child,.app.compact .side-action span:last-child{display:none}.app.compact .nav-btn,.app.compact .side-action{justify-content:center;padding:12px 8px}
+    .main{padding:24px;display:grid;gap:18px}.topbar{display:flex;justify-content:space-between;align-items:center;gap:16px}.topbar h1{margin:0;font-size:30px;letter-spacing:-.04em}.topbar p{margin:6px 0 0;color:var(--muted-foreground)}
+    .toolbar{display:flex;align-items:center;gap:10px}.search{display:flex;align-items:center;gap:10px;min-width:240px;padding:12px 14px;border:1px solid color-mix(in oklab,var(--border) 72%,var(--background));border-radius:999px;background:color-mix(in oklab,var(--card) 94%,white)}.search input{border:0;outline:0;width:100%;background:transparent;color:inherit}
+    .icon-btn,.avatar,.pill,.primary-btn,.ghost-btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;cursor:pointer}.icon-btn,.avatar{width:44px;height:44px;border-radius:14px;border:1px solid color-mix(in oklab,var(--border) 72%,var(--background));background:color-mix(in oklab,var(--card) 94%,white);position:relative;box-shadow:var(--shadow-xs)}.avatar{font-weight:700;background:linear-gradient(135deg,var(--secondary),var(--background))}
+    .badge{position:absolute;top:6px;right:6px;min-width:16px;height:16px;padding:0 4px;border-radius:999px;background:var(--primary);color:var(--primary-foreground);font-size:10px;display:grid;place-items:center}
+    .filters{display:flex;flex-wrap:wrap;gap:10px}.pill,.primary-btn,.ghost-btn{padding:11px 16px;border-radius:999px;border:1px solid color-mix(in oklab,var(--border) 72%,var(--background));background:color-mix(in oklab,var(--card) 94%,white);color:inherit;box-shadow:var(--shadow-xs)}.pill.active{background:var(--secondary);color:var(--secondary-foreground);border-color:transparent}.primary-btn{background:var(--primary);color:var(--primary-foreground);border-color:transparent}.ghost-btn{background:transparent}
+    .view-shell{position:relative;overflow:hidden}.view{display:grid;gap:18px;animation:enter .28s ease}@keyframes enter{from{opacity:0;transform:translateY(12px) scale(.99)}to{opacity:1;transform:translateY(0) scale(1)}}
+    .hero{display:grid;grid-template-columns:1.5fr 1fr;gap:18px}.card{border:1px solid color-mix(in oklab,var(--border) 72%,var(--background));border-radius:var(--radius);background:color-mix(in oklab,var(--card) 94%,white);padding:18px;box-shadow:var(--shadow-sm)}.card.hero-card{background:linear-gradient(140deg,color-mix(in oklab,var(--accent) 28%,white),transparent 52%),linear-gradient(180deg,color-mix(in oklab,var(--card) 76%,white),var(--card))}
+    .eyebrow{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted-foreground)}.headline{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;margin-top:8px}.headline h2,.card h3{margin:0;letter-spacing:-.03em}.headline h2{font-size:28px;max-width:12ch}.headline p,.list-note,.subtle{margin:0;color:var(--muted-foreground)}
+    .metric-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}.metric-value{margin-top:18px;font-size:34px;font-weight:700;letter-spacing:-.06em}.delta{display:inline-flex;align-items:center;gap:6px;margin-top:8px;padding:6px 10px;border-radius:999px;background:color-mix(in oklab,var(--muted) 82%,var(--background));font-size:12px;color:var(--secondary-foreground)}
+    .section-grid{display:grid;grid-template-columns:1.25fr .95fr;gap:18px}.chart-wrap{display:grid;gap:16px}.bars{display:grid;grid-template-columns:repeat(6,1fr);gap:12px;align-items:end;height:180px;padding-top:18px}.bar{border-radius:18px 18px 8px 8px;box-shadow:var(--shadow-xs);position:relative}.bar small{position:absolute;bottom:-24px;left:50%;transform:translateX(-50%);font-size:11px;color:var(--muted-foreground)}
+    .stack{display:grid;gap:12px}.stack-row{display:grid;grid-template-columns:96px 1fr auto;gap:12px;align-items:center}.track{height:10px;border-radius:999px;background:color-mix(in oklab,var(--muted) 82%,var(--background));overflow:hidden}.fill{height:100%;border-radius:inherit;background:linear-gradient(90deg,var(--chart-2),var(--chart-1))}
+    .table-card{padding:10px 14px}.table-head,.table-row{display:grid;grid-template-columns:1.3fr .8fr .7fr .8fr;gap:12px;align-items:center;padding:14px 10px;border-radius:18px}.table-head{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted-foreground)}.table-row{border-top:1px solid color-mix(in oklab,var(--border) 72%,var(--background))}.table-row:first-of-type{border-top:0}.row-title strong{display:block}.row-title span{font-size:12px;color:var(--muted-foreground)}.chip{display:inline-flex;align-items:center;justify-content:center;padding:7px 10px;border-radius:999px;font-size:12px;background:color-mix(in oklab,var(--muted) 82%,var(--background));color:var(--secondary-foreground)}
+    .spotlight{display:grid;gap:14px}.mini-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.mini{padding:14px;border-radius:22px;background:color-mix(in oklab,var(--muted) 82%,var(--background))}.mini strong{display:block;font-size:20px;letter-spacing:-.03em}
+    .settings{display:grid;grid-template-columns:1.05fr .95fr;gap:18px}.field-list,.story-list{display:grid;gap:12px}.field,.story{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:14px 16px;border-radius:22px;background:color-mix(in oklab,var(--muted) 82%,var(--background))}.switch{width:52px;height:30px;border-radius:999px;padding:4px;background:color-mix(in oklab,var(--muted) 82%,white);display:flex;align-items:center;transition:justify-content .18s ease}.switch.on{justify-content:flex-end;background:color-mix(in oklab,var(--primary) 26%,white)}.switch i{display:block;width:22px;height:22px;border-radius:50%;background:white;box-shadow:var(--shadow-xs)}
+    .editorial{font-family:var(--font-serif);font-size:20px}.footer-actions{margin-top:auto;display:grid;gap:8px}
+    @media (max-width:1080px){.hero,.section-grid,.settings,.metric-grid{grid-template-columns:1fr}.topbar{flex-direction:column;align-items:flex-start}.toolbar{width:100%;flex-wrap:wrap}.search{min-width:unset;flex:1}}
+    @media (max-width:760px){.app,.app.compact{grid-template-columns:1fr}.sidebar{order:2;border-right:0;border-top:1px solid var(--sidebar-border)}.main{padding:18px}.table-head,.table-row{grid-template-columns:1fr 1fr}.table-head div:nth-child(n+3),.table-row div:nth-child(n+3){display:none}}
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+    const views={
+      overview:{title:"Campaign Pulse",subtitle:"A glossy snapshot of launch momentum, content velocity, and regional lift."},
+      analytics:{title:"Audience Growth",subtitle:"Track channel resonance and compare capsule performance across the week."},
+      settings:{title:"Studio Settings",subtitle:"Shape alerts, approvals, and automation rules for every Barbie board."}
+    };
+    const chartScale=["var(--chart-1)","var(--chart-2)","var(--chart-3)","var(--chart-4)","var(--chart-5)"];
+    const campaignRows=[
+      {name:"Dreamhouse Capsule",owner:"North America",status:"Live",roas:"4.9x"},
+      {name:"Pink Carpet Story",owner:"EMEA",status:"Review",roas:"3.8x"},
+      {name:"Collector Drop",owner:"APAC",status:"Boosted",roas:"5.2x"},
+      {name:"Creator Collab",owner:"Digital",status:"Draft",roas:"2.6x"}
+    ];
+    const weeklyBars=[62,88,72,95,84,76];
+    const funnelBars=[46,58,81,74,67,92];
+    const mixes=[
+      {label:"Creator edits",value:74},
+      {label:"Short-form reels",value:61},
+      {label:"Retail moments",value:49},
+      {label:"Editorial email",value:35}
+    ];
+    const stories=[
+      ["Top Performing Story","Collector Drop teaser"],
+      ["Fastest Rising Audience","Gen Alpha style boards"],
+      ["Best Conversion Window","Friday 6:00 PM"]
+    ];
+    function App(){
+      const [view,setView]=React.useState("overview");
+      const [compact,setCompact]=React.useState(false);
+      const [dark,setDark]=React.useState(false);
+      const [focus,setFocus]=React.useState("All regions");
+      const [query,setQuery]=React.useState("");
+      const [alerts,setAlerts]=React.useState(true);
+      const [autoBoost,setAutoBoost]=React.useState(false);
+      const filtered=campaignRows.filter(r=>(r.name+r.owner+r.status).toLowerCase().includes(query.toLowerCase()));
+      return (
+        <div className={`shell ${dark?"dark":""}`}>
+          <div className={`app ${compact?"compact":""}`}>
+            <aside className="sidebar">
+              <div className="brand">
+                <div className="brand-mark">B</div>
+                <div className="brand-copy">
+                  <strong>Barbie Studio</strong>
+                  <span>Dashboard UI kit</span>
+                </div>
+              </div>
+              <div className="sidebar-section">
+                <div className="section-label">Navigate</div>
+                {Object.entries(views).map(([key,val],i)=>(
+                  <button key={key} className={`nav-btn interactive ${view===key?"active":""}`} onClick={()=>setView(key)} aria-pressed={view===key}>
+                    <span className="dot">{["◫","◭","◌"][i]}</span>
+                    <span>{val.title}</span>
+                  </button>
+                ))}
+              </div>
+              <div className="sidebar-section">
+                <div className="section-label">Modes</div>
+                <button className="side-action interactive" onClick={()=>setCompact(!compact)}><span>⇄</span><span>{compact?"Expand rail":"Compact rail"}</span></button>
+                <button className="side-action interactive" onClick={()=>setDark(!dark)}><span>{dark?"☀":"☾"}</span><span>{dark?"Light mode":"Dark mode"}</span></button>
+              </div>
+              <div className="footer-actions">
+                <button className="primary-btn interactive">+ Add to Board</button>
+                <button className="ghost-btn interactive">Share Snapshot</button>
+              </div>
+            </aside>
+            <main className="main">
+              <header className="topbar">
+                <div>
+                  <h1>{views[view].title}</h1>
+                  <p>{views[view].subtitle}</p>
+                </div>
+                <div className="toolbar">
+                  <label className="search interactive">
+                    <span>⌕</span>
+                    <input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Search campaigns" aria-label="Search campaigns" />
+                  </label>
+                  <button className="icon-btn interactive" aria-label="Refresh">↻</button>
+                  <button className="icon-btn interactive" aria-label="Notifications">✦<span className="badge">3</span></button>
+                  <div className="avatar" aria-label="User avatar">B</div>
+                </div>
+              </header>
+              <div className="filters">
+                {["All regions","Gen Alpha","Retail","Digital"].map(item=>(
+                  <button key={item} className={`pill interactive ${focus===item?"active":""}`} onClick={()=>setFocus(item)}>{item}</button>
+                ))}
+              </div>
+              <section className="view-shell">
+                {view==="overview"&&<Overview rows={filtered} />}
+                {view==="analytics"&&<Analytics rows={filtered} focus={focus} />}
+                {view==="settings"&&<Settings alerts={alerts} setAlerts={setAlerts} autoBoost={autoBoost} setAutoBoost={setAutoBoost} />}
+              </section>
+            </main>
+          </div>
+        </div>
+      );
+    }
+    function ChartBars({values,labels,endColor}){
+      return <div className="bars">
+        {values.map((height,index)=>(
+          <div
+            key={labels[index]}
+            className="bar"
+            style={{height:`${height}%`,background:`linear-gradient(180deg,${chartScale[index%chartScale.length]},${endColor})`}}
+          >
+            <small>{labels[index]}</small>
+          </div>
+        ))}
+      </div>;
+    }
+    function Overview({rows}){
+      return <div className="view">
+        <div className="hero">
+          <div className="card hero-card">
+            <div className="eyebrow">New Capsule Launch</div>
+            <div className="headline">
+              <div>
+                <h2>Dreamhouse campaign is pacing above target.</h2>
+                <p className="subtle">Editorial styling, creator content, and retail bursts are landing together in a single rhythm.</p>
+              </div>
+              <button className="primary-btn interactive">Launch recap</button>
+            </div>
+            <div className="metric-grid" style={{marginTop:18}}>
+              <Stat eyebrow="Audience" value="2.4M" delta="+18%" />
+              <Stat eyebrow="Conversion" value="6.8%" delta="+1.2 pts" />
+              <Stat eyebrow="Revenue lift" value="$184K" delta="+22%" />
+            </div>
+          </div>
+          <div className="card spotlight">
+            <div className="eyebrow">Top Performing Story</div>
+            <div className="editorial">“Collector Drop” keeps the highest save rate across all boards.</div>
+            <div className="mini-grid">
+              <Mini title="Save rate" value="38%" note="Up from 29% yesterday" />
+              <Mini title="Launch boards" value="12" note="3 ready for boost" />
+            </div>
+          </div>
+        </div>
+        <div className="section-grid">
+          <div className="card chart-wrap">
+            <div className="headline">
+              <div><div className="eyebrow">Weekly reach</div><h3>Momentum by day</h3></div>
+              <div className="delta">Peak on Thu</div>
+            </div>
+            <ChartBars values={weeklyBars} labels={["Mon","Tue","Wed","Thu","Fri","Sat"]} endColor="var(--primary)" />
+          </div>
+          <div className="card">
+            <div className="eyebrow">Channel mix</div>
+            <h3 style={{marginTop:8}}>Audience composition</h3>
+            <div className="stack" style={{marginTop:18}}>
+              {mixes.map(item=>(
+                <div className="stack-row" key={item.label}>
+                  <div className="list-note">{item.label}</div>
+                  <div className="track"><div className="fill" style={{width:`${item.value}%`}} /></div>
+                  <strong>{item.value}%</strong>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+        <CampaignTable rows={rows} />
+      </div>;
+    }
+    function Analytics({rows,focus}){
+      return <div className="view">
+        <div className="section-grid">
+          <div className="card">
+            <div className="headline">
+              <div><div className="eyebrow">Audience Growth</div><h3>{focus} resonance map</h3></div>
+              <button className="ghost-btn interactive">Export CSV</button>
+            </div>
+            <div className="metric-grid" style={{marginTop:18}}>
+              <Stat eyebrow="Followers" value="892K" delta="+11%" />
+              <Stat eyebrow="Story taps" value="128K" delta="+9%" />
+              <Stat eyebrow="CTR" value="4.3%" delta="+0.6 pts" />
+            </div>
+            <div style={{marginTop:8}}>
+              <ChartBars values={funnelBars} labels={["Edit","Post","Save","Shop","Share","Join"]} endColor="var(--accent)" />
+            </div>
+          </div>
+          <div className="card story-list">
+            <div>
+              <div className="eyebrow">Signal summary</div>
+              <h3 style={{marginTop:8}}>Where attention moves next</h3>
+            </div>
+            {stories.map(([title,note])=>(
+              <div key={title} className="story">
+                <div><strong>{title}</strong><div className="list-note">{note}</div></div>
+                <span className="chip">Live</span>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="card">
+          <div className="headline">
+            <div><div className="eyebrow">Benchmarks</div><h3>Campaign board comparison</h3></div>
+            <div className="delta">Updated 4 min ago</div>
+          </div>
+          <div className="metric-grid" style={{marginTop:18}}>
+            <Mini title="Best ROAS" value="5.2x" note="Collector Drop" />
+            <Mini title="Quickest lift" value="36h" note="Dreamhouse Capsule" />
+            <Mini title="Fresh boards" value="08" note="Need editorial review" />
+          </div>
+        </div>
+        <CampaignTable rows={rows} />
+      </div>;
+    }
+    function Settings({alerts,setAlerts,autoBoost,setAutoBoost}){
+      return <div className="view settings">
+        <div className="card">
+          <div className="eyebrow">Automation</div>
+          <h3 style={{marginTop:8}}>Studio control center</h3>
+          <div className="field-list" style={{marginTop:18}}>
+            <Field title="Launch alerts" note="Notify owners when a board shifts above target." on={alerts} toggle={()=>setAlerts(!alerts)} />
+            <Field title="Auto boost winners" note="Move top stories into paid support after review." on={autoBoost} toggle={()=>setAutoBoost(!autoBoost)} />
+            <div className="field">
+              <div><strong>Approval lane</strong><div className="list-note">Creative lead signs off before publishing.</div></div>
+              <span className="chip">Required</span>
+            </div>
+            <div className="field">
+              <div><strong>Brand voice</strong><div className="list-note">Playful, glossy, confident, editorial.</div></div>
+              <button className="ghost-btn interactive">Edit tone</button>
+            </div>
+          </div>
+        </div>
+        <div className="card">
+          <div className="eyebrow">Publishing rules</div>
+          <h3 style={{marginTop:8}}>Ready for next launch</h3>
+          <div className="mini-grid" style={{marginTop:18}}>
+            <Mini title="Default cadence" value="4 drops" note="Per week" />
+            <Mini title="Review SLA" value="2 hrs" note="Average response" />
+          </div>
+          <div className="story-list" style={{marginTop:18}}>
+            <div className="story"><div><strong>Retail sync</strong><div className="list-note">Live with inventory snapshots.</div></div><span className="chip">Stable</span></div>
+            <div className="story"><div><strong>Influencer intake</strong><div className="list-note">New creators routed to brand review.</div></div><span className="chip">Queue</span></div>
+            <div className="story"><div><strong>Board backup</strong><div className="list-note">Archive at midnight in local time.</div></div><span className="chip">On</span></div>
+          </div>
+          <div style={{display:"flex",gap:10,marginTop:18,flexWrap:"wrap"}}>
+            <button className="primary-btn interactive">Save Changes</button>
+            <button className="ghost-btn interactive" disabled>Pending Review</button>
+          </div>
+        </div>
+      </div>;
+    }
+    function CampaignTable({rows}){
+      return <div className="card table-card">
+        <div className="table-head"><div>Campaign</div><div>Owner</div><div>Status</div><div>ROAS</div></div>
+        {rows.map(row=>(
+          <div key={row.name} className="table-row interactive" tabIndex="0">
+            <div className="row-title"><strong>{row.name}</strong><span>Styled for Barbie boards</span></div>
+            <div>{row.owner}</div>
+            <div><span className="chip">{row.status}</span></div>
+            <div><strong>{row.roas}</strong></div>
+          </div>
+        ))}
+        {!rows.length&&<div className="table-row"><div className="row-title"><strong>No campaigns found</strong><span>Try another search term.</span></div><div></div><div></div><div></div></div>}
+      </div>;
+    }
+    function Stat({eyebrow,value,delta}){return <div className="card"><div className="eyebrow">{eyebrow}</div><div className="metric-value">{value}</div><div className="delta">{delta}</div></div>;}
+    function Mini({title,value,note}){return <div className="mini"><div className="eyebrow">{title}</div><strong>{value}</strong><div className="list-note">{note}</div></div>;}
+    function Field({title,note,on,toggle}){return <div className="field"><div><strong>{title}</strong><div className="list-note">{note}</div></div><button className={`switch interactive ${on?"on":""}`} onClick={toggle} aria-pressed={on}><i /></button></div>;}
+    ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+  </script>
+</body>
+</html>

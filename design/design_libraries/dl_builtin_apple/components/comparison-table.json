@@ -1,0 +1,60 @@
+{
+  "slug": "comparison-table",
+  "name": "Comparison Table",
+  "nameEn": "Comparison Table",
+  "category": "data-display",
+  "summary": "Model comparison cards that translate technical choices into calm visual structure.",
+  "variantCount": 3,
+  "primitiveCount": 2,
+  "variantDimensions": {
+    "columns": [
+      "3",
+      "4"
+    ],
+    "density": [
+      "compact",
+      "default"
+    ],
+    "theme": [
+      "light",
+      "dark"
+    ]
+  },
+  "cssVariables": [
+    "card",
+    "card-foreground",
+    "border",
+    "muted-foreground",
+    "chart-1",
+    "chart-2"
+  ],
+  "uiCopySamples": [
+    "Compare models",
+    "Battery life",
+    "Storage",
+    "Camera system"
+  ],
+  "structurePatterns": [
+    "Side-by-side product cards with strong scanning rhythm",
+    "Specs pair concise labels with icon or metric emphasis"
+  ],
+  "structures": [
+    {
+      "name": "Model Compare Stack",
+      "description": "A comparison shelf of multiple models with price, image, and standout specs.",
+      "anatomy": [
+        "product-image",
+        "model-name",
+        "price",
+        "spec-list",
+        "cta"
+      ],
+      "states": [
+        "default"
+      ],
+      "notes": [
+        "Keep the copy short and highly comparable"
+      ]
+    }
+  ]
+}

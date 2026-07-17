@@ -1,0 +1,83 @@
+{
+  "schemaVersion": 2,
+  "slug": "button",
+  "name": "Button",
+  "category": "general",
+  "sourceKind": "structured-spec",
+  "confidence": "medium",
+  "semanticTypeCandidates": ["button", "action-trigger", "cta"],
+  "variantDimensions": {
+    "variant": ["primary", "secondary", "outline", "text", "icon", "danger", "success", "warning", "dashed"],
+    "size": ["lg", "md", "sm", "mini"],
+    "state": ["default", "hover", "active", "disabled"]
+  },
+  "representativeVariants": [
+    { "variant": "primary", "size": "md", "state": "default" },
+    { "variant": "secondary", "size": "md", "state": "default" },
+    { "variant": "outline", "size": "sm", "state": "default" },
+    { "variant": "text", "size": "md", "state": "default" },
+    { "variant": "danger", "size": "md", "state": "default" },
+    { "variant": "icon", "size": "md", "state": "default" }
+  ],
+  "anatomy": ["button-container", "label-text", "icon-slot", "button-group"],
+  "structurePatterns": [
+    "Inline flex element centered with gap 8px for icon+text combinations",
+    "Button group wraps multiple buttons with shared border-radius and 1px gap"
+  ],
+  "usageHints": [
+    "Size lg: height 36px, padding 0 16px, font-size 14px",
+    "Size md: height 32px, padding 0 16px, font-size 13px",
+    "Size sm: height 28px, padding 0 12px, font-size 13px",
+    "Size mini: height 24px, padding 0 8px, font-size 12px",
+    "Primary: bg var(--primary-6) #1664FF, shadow var(--shadow-blue)",
+    "Secondary: bg var(--bg-4) #F6F8FA, color var(--text-2) #42464E",
+    "Icon-only: square dimensions matching height, padding 0",
+    "Disabled primary: bg var(--primary-disabled-bg) #A2C1FF, opacity 0.7",
+    "Dashed: border 1px dashed var(--primary-6), no box-shadow"
+  ],
+  "doNotInvent": ["loading spinner state", "split button with dropdown", "toggle button"],
+  "unknowns": ["loading state implementation", "focus ring style"],
+  "tokensConsumed": [
+    "--primary-6",
+    "--primary-hover",
+    "--primary-active",
+    "--primary-disabled-bg",
+    "--danger-6",
+    "--danger-hover",
+    "--danger-active",
+    "--danger-disabled-bg",
+    "--success-6",
+    "--success-hover",
+    "--success-active",
+    "--success-disabled-bg",
+    "--warning-6",
+    "--warning-hover",
+    "--warning-active",
+    "--warning-disabled-bg",
+    "--bg-white",
+    "--bg-4",
+    "--text-2",
+    "--text-disabled",
+    "--border-2",
+    "--border-1",
+    "--shadow-blue",
+    "--shadow-blue-hover",
+    "--shadow-gray",
+    "--shadow-gray-hover",
+    "--shadow-danger",
+    "--shadow-success",
+    "--shadow-warning"
+  ],
+  "domAnatomy": {
+    "root": {
+      "tag": "button",
+      "class": "btn btn-{variant} btn-{size}",
+      "children": []
+    }
+  },
+  "provenance": {
+    "preview": "preview/ui-button.html",
+    "source": "structured-spec",
+    "css": { "file": "ui-button.html", "marker": "inline <style>" }
+  }
+}

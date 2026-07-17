@@ -1,0 +1,65 @@
+{
+  "slug": "data-table",
+  "name": "Data Table",
+  "purpose": "Structured tabular view for tasks, sources, model runs, or evaluation results.",
+  "variantDimensions": {
+    "density": [
+      "compact",
+      "comfortable"
+    ],
+    "rowState": [
+      "default",
+      "hover",
+      "selected",
+      "muted"
+    ],
+    "cellType": [
+      "text",
+      "status",
+      "metric",
+      "action"
+    ]
+  },
+  "structures": [
+    {
+      "name": "Basic Table",
+      "anatomy": [
+        "header-row",
+        "data-rows",
+        "status-cell",
+        "action-cell"
+      ],
+      "notes": "The default management table for dashboard surfaces."
+    },
+    {
+      "name": "Metric Table",
+      "anatomy": [
+        "header-row",
+        "metric-cell",
+        "trend-cell",
+        "action-cell"
+      ],
+      "notes": "Used when comparing usage or model performance."
+    },
+    {
+      "name": "Selectable Table",
+      "anatomy": [
+        "selection-cell",
+        "data-cells",
+        "trailing-actions"
+      ],
+      "notes": "Supports batch operations without adding visual weight."
+    }
+  ],
+  "contentExamples": [
+    "智能体运行",
+    "对话量",
+    "运行中",
+    "已完成"
+  ],
+  "interactionNotes": [
+    "Borders and row backgrounds should create structure; avoid heavy zebra treatments.",
+    "Status chips can borrow chart or accent tokens for softer categorization."
+  ],
+  "category": "data-display"
+}

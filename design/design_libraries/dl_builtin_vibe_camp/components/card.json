@@ -1,0 +1,101 @@
+{
+  "slug": "card",
+  "name": "Card",
+  "category": "container",
+  "evidence": "AI-inferred based on Dashboard product type and structured token semantics from the source CSS.",
+  "anatomy": [
+    "container",
+    "eyebrow(optional)",
+    "title",
+    "body",
+    "meta(optional)",
+    "actions(optional)"
+  ],
+  "variantDimensions": {
+    "density": [
+      "compact",
+      "default",
+      "comfortable"
+    ],
+    "emphasis": [
+      "default",
+      "accented",
+      "muted"
+    ],
+    "state": [
+      "default",
+      "selected",
+      "hover"
+    ]
+  },
+  "structures": [
+    {
+      "name": "Summary Card, Default, Comfortable",
+      "description": "High-level KPI or session summary module.",
+      "elements": [
+        "container",
+        "eyebrow",
+        "title",
+        "body",
+        "meta"
+      ],
+      "copyExamples": [
+        "Active Sessions",
+        "Community Pulse",
+        "Peak Attendance"
+      ],
+      "cssVariables": [
+        "card",
+        "card-foreground",
+        "muted-foreground",
+        "border",
+        "radius",
+        "shadow",
+        "spacing"
+      ]
+    },
+    {
+      "name": "Accent Card, Selected, Default",
+      "description": "Highlighted card for featured programs or campaigns.",
+      "elements": [
+        "container",
+        "title",
+        "body",
+        "actions"
+      ],
+      "copyExamples": [
+        "Featured Track",
+        "Priority Update"
+      ],
+      "cssVariables": [
+        "accent",
+        "accent-foreground",
+        "primary",
+        "border",
+        "radius",
+        "spacing"
+      ]
+    },
+    {
+      "name": "Muted Card, Hover, Compact",
+      "description": "Quiet secondary surface for side content or notes.",
+      "elements": [
+        "container",
+        "title",
+        "body"
+      ],
+      "copyExamples": [
+        "Volunteer Notes",
+        "Quiet Hours"
+      ],
+      "cssVariables": [
+        "muted",
+        "foreground",
+        "muted-foreground",
+        "border",
+        "radius",
+        "spacing"
+      ]
+    }
+  ]
+}

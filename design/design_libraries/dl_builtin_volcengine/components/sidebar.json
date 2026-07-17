@@ -1,0 +1,88 @@
+{
+  "schemaVersion": 2,
+  "slug": "sidebar",
+  "name": "Sidebar",
+  "category": "navigation",
+  "sourceKind": "structured-spec",
+  "confidence": "medium",
+  "semanticTypeCandidates": ["side-navigation", "app-sidebar", "nav-panel"],
+  "variantDimensions": {
+    "state": ["expanded", "collapsed"],
+    "itemState": ["default", "hover", "active"]
+  },
+  "representativeVariants": [
+    { "state": "expanded" },
+    { "state": "collapsed" }
+  ],
+  "anatomy": ["sidebar", "sidebar-header", "product-icon", "product-name", "sidebar-menu", "menu-wrapper", "menu-section", "menu-group-block", "group-title", "menu-item", "menu-icon", "menu-text", "menu-chevron", "all-features-btn", "collapse-btn"],
+  "structurePatterns": [
+    "Vertical flex column with product header at top, scrollable menu area in middle, and collapse toggle at bottom",
+    "Menu items are grouped into sections with optional group-title labels",
+    "Each menu-item is a flex row with optional icon, text label, and optional chevron for expandable groups",
+    "All-features button is a special bordered item for navigating to full feature list"
+  ],
+  "usageHints": [
+    "Container width 200px, background var(--bg-7) #F6F8FA",
+    "Menu items height 36px, padding 0 12px, border-radius 4px",
+    "Active item background rgba(22,100,255,0.06) with primary-6 #1664FF text color",
+    "Hover item background rgba(0,0,0,0.04)",
+    "Group title: font-size 12px, color var(--text-3) #80838A",
+    "Menu text: font-size 13px, color var(--text-1) #020814",
+    "Icon size 20x20px; chevron size 12x12px",
+    "Collapse button has border-top 1px solid var(--border-2) #EAEDF1"
+  ],
+  "doNotInvent": ["horizontal mode", "multi-level flyout", "search within sidebar", "drag-to-reorder"],
+  "unknowns": ["collapsed state width", "tooltip on collapsed items", "animation for collapse transition"],
+  "tokensConsumed": ["--text-1", "--text-3", "--bg-7", "--border-2", "--border-3", "--primary-6"],
+  "domAnatomy": {
+    "root": {
+      "tag": "div",
+      "class": "sidebar",
+      "children": [
+        {
+          "tag": "div",
+          "class": "sidebar-header",
+          "children": [
+            { "tag": "div", "class": "product-icon" },
+            { "tag": "span", "class": "product-name" }
+          ]
+        },
+        {
+          "tag": "div",
+          "class": "sidebar-menu",
+          "children": [
+            {
+              "tag": "div",
+              "class": "menu-wrapper",
+              "children": [
+                {
+                  "tag": "div",
+                  "class": "menu-section",
+                  "children": [
+                    { "tag": "div", "class": "group-title", "optional": true },
+                    {
+                      "tag": "div",
+                      "class": "menu-item",
+                      "children": [
+                        { "tag": "div", "class": "menu-icon", "optional": true },
+                        { "tag": "span", "class": "menu-text" },
+                        { "tag": "div", "class": "menu-chevron", "optional": true }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        { "tag": "div", "class": "all-features-btn", "optional": true },
+        { "tag": "div", "class": "collapse-btn" }
+      ]
+    }
+  },
+  "provenance": {
+    "preview": "preview/ui-sidebar.html",
+    "source": "structured-spec",
+    "css": { "file": "ui-sidebar.html", "marker": "inline <style>" }
+  }
+}

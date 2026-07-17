@@ -1,0 +1,54 @@
+{
+  "slug": "sidebar",
+  "name": "Sidebar",
+  "category": "navigation",
+  "evidence": "AI-inferred based on developer platform dashboard product type and the source token system.",
+  "keyInsightSeed": "Sidebar is a soft contextual frame, not a second accent canvas.",
+  "anatomy": [
+    "workspace-name",
+    "section-list",
+    "active-item",
+    "utility-footer"
+  ],
+  "variantDimensions": [
+    {
+      "name": "density",
+      "values": [
+        "compact",
+        "default"
+      ]
+    },
+    {
+      "name": "state",
+      "values": [
+        "default",
+        "active"
+      ]
+    }
+  ],
+  "variants": [
+    {
+      "id": "workspace",
+      "items": [
+        "Projects",
+        "Analytics",
+        "Storage",
+        "Integrations"
+      ]
+    },
+    {
+      "id": "settings",
+      "items": [
+        "Members",
+        "Billing",
+        "Security"
+      ]
+    }
+  ],
+  "uiCopySamples": [
+    "Projects",
+    "Analytics",
+    "Storage",
+    "Integrations"
+  ]
+}

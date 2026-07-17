@@ -1,0 +1,798 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <link rel="stylesheet" href="../../colors_and_type.css">
+  <link rel="stylesheet" href="../../components.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Claude Design System · Web Kit</title>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--background);
+      color: var(--foreground);
+      font-family: var(--font-serif);
+      letter-spacing: var(--tracking-normal);
+      -webkit-font-smoothing: antialiased;
+    }
+    button, input { font: inherit; }
+
+    .app {
+      display: grid;
+      grid-template-columns: 248px minmax(0, 1fr);
+      min-height: 100vh;
+      min-width: 0;
+      align-items: stretch;
+    }
+    .app > * { min-width: 0; }
+
+    /* ---------- sidebar ---------- */
+    .sidebar {
+      background: var(--sidebar);
+      border-right: 1px solid var(--sidebar-border);
+      padding: calc(var(--spacing) * 6) calc(var(--spacing) * 4);
+      width: 248px;
+      min-width: 248px;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      gap: calc(var(--spacing) * 6);
+      position: sticky;
+      top: 0;
+      overflow-y: auto;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: calc(var(--spacing) * 3);
+    }
+    .brand-mark {
+      width: 38px; height: 38px;
+      border-radius: var(--radius-md);
+      background: var(--brand-500);
+      color: #fff;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-family: var(--font-sans);
+      font-weight: 700;
+      font-size: 18px;
+    }
+    .brand-name {
+      font-family: var(--font-display);
+      font-weight: 500;
+      font-size: 17px;
+      letter-spacing: -0.01em;
+      color: var(--sidebar-foreground);
+    }
+    .brand-sub {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      color: var(--muted-foreground);
+      letter-spacing: 0.04em;
+    }
+    .nav-group { display: flex; flex-direction: column; gap: calc(var(--spacing) * 1); }
+    .nav-label {
+      font-family: var(--font-sans);
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.14em;
+      color: var(--muted-foreground);
+      padding: 0 calc(var(--spacing) * 3);
+      margin-bottom: calc(var(--spacing) * 2);
+    }
+    .nav-link {
+      display: flex;
+      align-items: center;
+      gap: calc(var(--spacing) * 3);
+      width: 100%;
+      min-width: 0;
+      padding: calc(var(--spacing) * 2.5) calc(var(--spacing) * 3);
+      border: none;
+      background: transparent;
+      color: var(--sidebar-foreground);
+      font-family: var(--font-sans);
+      font-size: 14px;
+      font-weight: 500;
+      border-radius: var(--radius-md);
+      cursor: pointer;
+      text-align: left;
+      transition: background-color .15s ease, color .15s ease;
+    }
+    .nav-link:hover { background: var(--sidebar-accent); }
+    .nav-link.active { background: var(--brand-100); color: var(--brand-700); }
+    .sidebar-foot { margin-top: auto; }
+    .upsell {
+      border-radius: var(--radius);
+      padding: calc(var(--spacing) * 4);
+      background: var(--brand-600);
+      color: #fff;
+    }
+    .upsell h4 { margin: 0 0 calc(var(--spacing) * 1); font-family: var(--font-sans); font-weight: 600; font-size: 14px; }
+    .upsell p { margin: 0 0 calc(var(--spacing) * 3); font-size: 12.5px; line-height: 1.5; color: rgba(255,255,255,.85); }
+
+    /* ---------- main ---------- */
+    .main { display: flex; flex-direction: column; min-width: 0; width: 100%; }
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: calc(var(--spacing) * 4);
+      padding: calc(var(--spacing) * 5) calc(var(--spacing) * 8);
+      border-bottom: 1px solid var(--border);
+      background: color-mix(in srgb, var(--background) 86%, transparent);
+      backdrop-filter: blur(10px);
+      position: sticky;
+      top: 0;
+      z-index: 4;
+    }
+    .search {
+      display: flex;
+      align-items: center;
+      gap: calc(var(--spacing) * 2);
+      flex: 1;
+      min-width: 0;
+      width: min(440px, 100%);
+      max-width: 440px;
+      padding: calc(var(--spacing) * 2.5) calc(var(--spacing) * 4);
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+    }
+    .search input {
+      flex: 1; border: none; background: transparent; outline: none;
+      color: var(--foreground); font-family: var(--font-sans); font-size: 14px;
+    }
+    .search input::placeholder { color: var(--muted-foreground); }
+    .kbd {
+      font-family: var(--font-mono); font-size: 11px;
+      padding: 2px 7px; border-radius: 6px;
+      background: var(--muted); color: var(--muted-foreground);
+    }
+    .top-actions {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      flex-wrap: wrap;
+      gap: calc(var(--spacing) * 3);
+      min-width: 0;
+    }
+
+    .content {
+      padding: calc(var(--spacing) * 8);
+      display: flex;
+      flex-direction: column;
+      gap: calc(var(--spacing) * 6);
+      max-width: 1180px;
+      width: 100%;
+      min-width: 0;
+    }
+    .page-head {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: flex-end;
+      gap: calc(var(--spacing) * 4);
+    }
+    .topbar > *,
+    .page-head > *,
+    .grid-4 > *,
+    .grid-2 > * { min-width: 0; }
+    .eyebrow {
+      margin: 0 0 calc(var(--spacing) * 2);
+      color: var(--primary);
+      font-family: var(--font-sans);
+      font-size: 11px; font-weight: 600;
+      text-transform: uppercase; letter-spacing: 0.14em;
+    }
+    .h1 {
+      margin: 0;
+      font-family: var(--font-display);
+      font-weight: 400;
+      font-size: 38px;
+      line-height: 1.08;
+      letter-spacing: -0.01em;
+      color: var(--card-foreground);
+    }
+    .lead {
+      margin: calc(var(--spacing) * 3) 0 0;
+      max-width: 560px;
+      font-family: var(--font-serif);
+      font-size: 16px;
+      line-height: 1.6;
+      color: var(--muted-foreground);
+    }
+
+    /* ---------- generic ---------- */
+    .btn {
+      border: none;
+      border-radius: var(--radius-md);
+      padding: calc(var(--spacing) * 2.75) calc(var(--spacing) * 4.5);
+      display: inline-flex; align-items: center; justify-content: center;
+      gap: calc(var(--spacing) * 2);
+      font-family: var(--font-sans); font-size: 14px; font-weight: 500;
+      cursor: pointer;
+      transition: background-color .15s ease;
+    }
+    .btn.primary { background: var(--primary); color: var(--primary-foreground); }
+    .btn.primary:hover { background: var(--brand-600); }
+    .btn.secondary { background: var(--card); color: var(--foreground); border: 1px solid var(--border); }
+    .icon-btn {
+      width: 40px; height: 40px; border-radius: var(--radius-md);
+      border: 1px solid var(--border); background: var(--card); color: var(--foreground);
+      cursor: pointer; font-size: 16px; display: inline-flex; align-items: center; justify-content: center;
+    }
+    .badge {
+      display: inline-flex; align-items: center; gap: calc(var(--spacing)*1);
+      padding: calc(var(--spacing)*1.25) calc(var(--spacing)*3);
+      border-radius: var(--radius-full);
+      font-family: var(--font-sans); font-size: 11px; font-weight: 500;
+      background: var(--secondary); color: var(--secondary-foreground);
+    }
+    .badge.brand { background: var(--brand-100); color: var(--brand-700); }
+    .badge.success { background: var(--success-100); color: var(--success-700); }
+    .badge.has-dot::before { content:""; width:6px; height:6px; border-radius:50%; background: currentColor; display:inline-block; }
+
+    /* ---------- stat cards ---------- */
+    .grid-4 {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr));
+      gap: calc(var(--spacing) * 4);
+      min-width: 0;
+      align-items: stretch;
+    }
+    .stat {
+      background: var(--popover);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: calc(var(--spacing) * 5);
+      min-width: 0;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      gap: calc(var(--spacing) * 4);
+    }
+    .stat .eyebrow { color: var(--muted-foreground); }
+    .stat-main {
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: calc(var(--spacing) * 3);
+      flex: 1;
+    }
+    .stat-value {
+      font-family: var(--font-sans); font-weight: 600;
+      font-size: 30px; letter-spacing: -0.03em; line-height: 1;
+      color: var(--card-foreground);
+      margin: 0;
+      font-variant-numeric: tabular-nums;
+    }
+    .stat-delta {
+      font-family: var(--font-sans);
+      font-size: 12px;
+      font-weight: 500;
+      margin: 0;
+      min-width: 0;
+      font-variant-numeric: tabular-nums;
+    }
+    .delta-up { color: var(--success-600); }
+    .delta-down { color: var(--error); }
+
+    /* ---------- panels ---------- */
+    .grid-2 { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: calc(var(--spacing) * 6); align-items: start; min-width: 0; }
+    .panel {
+      background: var(--popover);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-xl);
+      overflow: hidden;
+      min-width: 0;
+    }
+    .panel-head {
+      display: flex; align-items: center; justify-content: space-between; gap: calc(var(--spacing)*3);
+      padding: calc(var(--spacing) * 5) calc(var(--spacing) * 5) calc(var(--spacing) * 3);
+      min-width: 0;
+    }
+    .panel-title { margin: 0; font-family: var(--font-sans); font-weight: 600; font-size: 17px; letter-spacing: -0.01em; color: var(--card-foreground); }
+    .panel-body { padding: 0 calc(var(--spacing) * 5) calc(var(--spacing) * 5); min-width: 0; }
+
+    /* chart */
+    .chart {
+      display: grid; grid-template-columns: repeat(12, 1fr);
+      gap: calc(var(--spacing) * 2.5); align-items: end;
+      height: 200px; margin-top: calc(var(--spacing) * 2);
+      min-width: 0;
+    }
+    .chart .col { display: flex; flex-direction: column; justify-content: flex-end; gap: 3px; height: 100%; }
+    .chart .seg { border-radius: 5px; background: var(--brand-200); }
+    .chart .seg.top { background: var(--brand-500); border-radius: 5px 5px 3px 3px; }
+    .chart .col span { font-family: var(--font-mono); font-size: 9px; color: var(--muted-foreground); text-align: center; margin-top: 4px; }
+
+    /* table */
+    .data-table { width: 100%; border-collapse: collapse; }
+    .data-table th {
+      text-align: left; font-family: var(--font-sans); font-size: 11px; font-weight: 600;
+      text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted-foreground);
+      padding: calc(var(--spacing)*2) calc(var(--spacing)*3); border-bottom: 1px solid var(--border);
+    }
+    .data-table td {
+      padding: calc(var(--spacing)*3.5) calc(var(--spacing)*3);
+      border-bottom: 1px solid var(--border); font-size: 14px;
+    }
+    .data-table tr:last-child td { border-bottom: none; }
+    .cell-strong { font-family: var(--font-sans); font-weight: 500; color: var(--card-foreground); }
+    .cell-sub { font-size: 12px; color: var(--muted-foreground); }
+    .who { display: flex; align-items: center; gap: calc(var(--spacing)*3); }
+    .who .av {
+      width: 32px; height: 32px; border-radius: 9px; flex-shrink: 0;
+      display: inline-flex; align-items: center; justify-content: center;
+      font-family: var(--font-sans); font-weight: 600; font-size: 13px; color: #fff;
+    }
+
+    /* activity / list */
+    .feed { display: flex; flex-direction: column; gap: calc(var(--spacing) * 4); }
+    .feed-item { display: flex; gap: calc(var(--spacing) * 3); }
+    .feed-dot { width: 10px; height: 10px; border-radius: 50%; margin-top: 5px; flex-shrink: 0; background: var(--brand-500); }
+    .feed-item p { margin: 0; font-family: var(--font-serif); font-size: 14px; line-height: 1.5; color: var(--foreground); }
+    .feed-item time { font-family: var(--font-mono); font-size: 11px; color: var(--muted-foreground); }
+
+    /* conversation thread */
+    .thread { display: flex; flex-direction: column; gap: calc(var(--spacing) * 3); }
+    .message {
+      max-width: 82%;
+      padding: calc(var(--spacing) * 3) calc(var(--spacing) * 4);
+      font-family: var(--font-serif);
+      font-size: 14px;
+      line-height: 1.55;
+    }
+    .message-user {
+      align-self: flex-end;
+      background: var(--brand-500);
+      color: #fff;
+      border-radius: var(--radius-xl) var(--radius-xl) var(--radius-sm) var(--radius-xl);
+    }
+    .message-assistant {
+      align-self: flex-start;
+      background: var(--card);
+      color: var(--card-foreground);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-xl) var(--radius-xl) var(--radius-xl) var(--radius-sm);
+    }
+    .message .mono { font-family: var(--font-mono); font-size: 13px; }
+    .composer {
+      display: flex; align-items: center; gap: calc(var(--spacing) * 2);
+      margin-top: calc(var(--spacing) * 4);
+      padding: calc(var(--spacing) * 2) calc(var(--spacing) * 2) calc(var(--spacing) * 2) calc(var(--spacing) * 4);
+      border: 1px solid var(--border); border-radius: var(--radius-full); background: var(--background);
+    }
+    .composer input { flex: 1; border: none; background: transparent; outline: none; color: var(--foreground); font-family: var(--font-sans); font-size: 14px; }
+    .composer input::placeholder { color: var(--muted-foreground); }
+    .composer .send {
+      width: 38px; height: 38px; flex-shrink: 0; border: none; cursor: pointer;
+      border-radius: var(--radius-full); background: var(--primary); color: var(--primary-foreground);
+      display: inline-flex; align-items: center; justify-content: center;
+    }
+
+    /* form sample */
+    .form-row { display: flex; flex-direction: column; gap: calc(var(--spacing)*2); margin-bottom: calc(var(--spacing)*4); }
+    .form-label { font-family: var(--font-sans); font-size: 12px; font-weight: 500; color: var(--card-foreground); }
+    .field {
+      height: 42px; padding: 0 calc(var(--spacing)*3.5);
+      border: 1px solid var(--border); border-radius: var(--radius-md);
+      background: var(--background); color: var(--foreground);
+      font-family: var(--font-sans); font-size: 14px; outline: none;
+    }
+    .field:focus { border-color: var(--ring); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ring) 16%, transparent); }
+    .seg-control { display: inline-flex; background: var(--muted); border-radius: var(--radius-md); padding: 3px; }
+    .seg-control button {
+      border: none; background: transparent; cursor: pointer;
+      font-family: var(--font-sans); font-size: 13px; font-weight: 500; color: var(--muted-foreground);
+      padding: calc(var(--spacing)*2) calc(var(--spacing)*4); border-radius: var(--radius-sm);
+    }
+    .seg-control button.on { background: var(--popover); color: var(--card-foreground); border: 1px solid var(--border); }
+    /* inline lucide svg icons — inherit currentColor via stroke */
+    .icon {
+      display: inline-block;
+      vertical-align: middle;
+      flex-shrink: 0;
+    }
+
+    /* ---------- uikit layout guards (uikit-v1) ---------- */
+    .uikit-shell { width: 100%; max-width: 1184px; margin: 0 auto; overflow: hidden; }
+    .uikit-main { min-width: 0; }
+    .uikit-toolbar { min-width: 0; }
+    .uikit-truncate { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .uikit-nowrap { white-space: nowrap; flex-shrink: 0; }
+    .uikit-table-wrap { min-width: 0; max-width: 100%; overflow-x: auto; overscroll-behavior-x: contain; }
+    .uikit-responsive-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(0, 1fr)); }
+    .uikit-action-cell { max-width: 160px; }
+    .uikit-action { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    @media (max-width: 900px) {
+      .app { grid-template-columns: 228px minmax(0, 1fr); }
+      .sidebar {
+        width: 228px;
+        min-width: 228px;
+        padding: calc(var(--spacing) * 5) calc(var(--spacing) * 3);
+        gap: calc(var(--spacing) * 5);
+      }
+      .nav-label { padding: 0 calc(var(--spacing) * 2.5); }
+      .nav-link {
+        padding: calc(var(--spacing) * 2.25) calc(var(--spacing) * 2.5);
+        font-size: 13px;
+      }
+      .upsell { padding: calc(var(--spacing) * 3); }
+      .topbar { padding: calc(var(--spacing) * 4) calc(var(--spacing) * 5); }
+      .content { padding: calc(var(--spacing) * 5); }
+      .page-head { grid-template-columns: minmax(0, 1fr); align-items: start; }
+      .uikit-responsive-grid { grid-template-columns: minmax(0, 1fr); }
+      .grid-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .grid-2 { grid-template-columns: minmax(0, 1fr); }
+    }
+    @media (max-width: 640px) {
+      .app { grid-template-columns: 220px minmax(0, 1fr); }
+      .sidebar {
+        width: 220px;
+        min-width: 220px;
+        padding: calc(var(--spacing) * 4) calc(var(--spacing) * 2.5);
+        gap: calc(var(--spacing) * 4);
+      }
+      .brand { gap: calc(var(--spacing) * 2); }
+      .brand-mark { width: 34px; height: 34px; font-size: 16px; }
+      .brand-name { font-size: 15px; }
+      .brand-sub,
+      .nav-label { font-size: 9px; }
+      .nav-link {
+        gap: calc(var(--spacing) * 2);
+        padding: calc(var(--spacing) * 2) calc(var(--spacing) * 2.25);
+        font-size: 12.5px;
+      }
+      .topbar { padding: calc(var(--spacing) * 3) calc(var(--spacing) * 4); }
+      .search { padding: calc(var(--spacing) * 2) calc(var(--spacing) * 3); }
+      .top-actions { gap: calc(var(--spacing) * 2); }
+      .grid-4 { grid-template-columns: minmax(0, 1fr); }
+      .content { padding: calc(var(--spacing) * 4); }
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+    const { useState } = React;
+
+    // Inline Lucide icon paths so icons render with zero external requests (standalone HTML).
+    const ICON_PATHS = {
+      'house': '<path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/><path d="M3 10a2 2 0 0 1 .709-1.528l7-6a2 2 0 0 1 2.582 0l7 6A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
+      'message-circle-more': '<path d="M2.992 16.342a2 2 0 0 1 .094 1.167l-1.065 3.29a1 1 0 0 0 1.236 1.168l3.413-.998a2 2 0 0 1 1.099.092 10 10 0 1 0-4.777-4.719"/><path d="M8 12h.01"/><path d="M12 12h.01"/><path d="M16 12h.01"/>',
+      'folder-open': '<path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"/>',
+      'chart-column': '<path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/>',
+      'user': '<path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>',
+      'settings': '<path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>',
+      'search': '<path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/>',
+      'funnel': '<path d="M10 20a1 1 0 0 0 .553.895l2 1A1 1 0 0 0 14 21v-7a2 2 0 0 1 .517-1.341L21.74 4.67A1 1 0 0 0 21 3H3a1 1 0 0 0-.742 1.67l7.225 7.989A2 2 0 0 1 10 14z"/>',
+      'circle-plus': '<circle cx="12" cy="12" r="10"/><path d="M8 12h8"/><path d="M12 8v8"/>',
+      'send-horizontal': '<path d="M3.714 3.048a.498.498 0 0 0-.683.627l2.843 7.627a2 2 0 0 1 0 1.396l-2.842 7.627a.498.498 0 0 0 .682.627l18-8.5a.5.5 0 0 0 0-.904z"/><path d="M6 12h16"/>',
+    };
+
+    const Icon = ({ name, size = 18, style }) => (
+      <svg
+        className="icon"
+        role="img"
+        aria-label={name}
+        width={size}
+        height={size}
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        style={style}
+        dangerouslySetInnerHTML={{ __html: ICON_PATHS[name] || '' }}
+      />
+    );
+
+    const NAV = {
+      workspace: [
+        { id: 'overview', icon: 'house', label: 'Overview' },
+        { id: 'threads', icon: 'message-circle-more', label: 'Conversations' },
+        { id: 'library', icon: 'folder-open', label: 'Library' },
+        { id: 'insights', icon: 'chart-column', label: 'Insights' },
+      ],
+      account: [
+        { id: 'team', icon: 'user', label: 'Team' },
+        { id: 'settings', icon: 'settings', label: 'Settings' },
+      ],
+    };
+
+    const AVATARS = [
+      { i: 'MY', c: 'var(--brand-500)' },
+      { i: 'WZ', c: 'var(--brand-300)' },
+      { i: 'TN', c: 'var(--brand-700)' },
+      { i: 'QW', c: 'var(--brand-400)' },
+    ];
+
+    function Sidebar({ active, setActive }) {
+      return (
+        <aside className="sidebar">
+          <div className="brand">
+            <div className="brand-mark">C</div>
+            <div>
+              <div className="brand-name">Claude Studio</div>
+              <div className="brand-sub">design-system v2</div>
+            </div>
+          </div>
+
+          <div className="nav-group" data-component="navigation">
+            <div className="nav-label">Workspace</div>
+            {NAV.workspace.map(n => (
+              <button key={n.id} className={`nav-link ${active === n.id ? 'active' : ''}`} onClick={() => setActive(n.id)}>
+                <Icon name={n.icon} size={18} />{n.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="nav-group">
+            <div className="nav-label">Account</div>
+            {NAV.account.map(n => (
+              <button key={n.id} className={`nav-link ${active === n.id ? 'active' : ''}`} onClick={() => setActive(n.id)}>
+                <Icon name={n.icon} size={18} />{n.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="sidebar-foot">
+            <div className="upsell">
+              <h4>Reading mode</h4>
+              <p>Switch to a typeset, distraction-free surface for long threads.</p>
+              <button className="btn secondary" style={{ width: '100%' }}>Enable</button>
+            </div>
+          </div>
+        </aside>
+      );
+    }
+
+    function Topbar() {
+      return (
+        <header className="topbar uikit-toolbar">
+          <div className="search" data-component="input">
+            <Icon name="search" size={16} style={{ color: 'var(--muted-foreground)' }} />
+            <input placeholder="Search conversations, notes, authors…" />
+            <span className="kbd">⌘K</span>
+          </div>
+          <div className="top-actions" data-component="button">
+            <button className="icon-btn"><Icon name="funnel" size={16} /></button>
+            <button className="icon-btn"><Icon name="circle-plus" size={16} /></button>
+            <button className="btn primary">New chat</button>
+          </div>
+        </header>
+      );
+    }
+
+    function Overview() {
+      const stats = [
+        { l: 'Active threads', v: '24', d: '+12%', up: true },
+        { l: 'Notes saved', v: '186', d: '+8%', up: true },
+        { l: 'Avg. response', v: '1.2s', d: '-0.3s', up: true },
+        { l: 'Revisit rate', v: '72%', d: '-4%', up: false },
+      ];
+      const heights = [
+        [40,60],[55,30],[70,40],[90,55],[120,35],[80,60],[150,30],[110,50],[95,45],[130,60],[160,40],[140,55]
+      ];
+      const days = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      return (
+        <>
+          <div className="page-head">
+            <div>
+              <p className="eyebrow">Workspace</p>
+              <h1 className="h1">Good morning, reader</h1>
+              <p className="lead">A calm command center for your conversations with Claude — warm, typeset, and quietly organized.</p>
+            </div>
+            <div style={{ display: 'flex', gap: 'calc(var(--spacing)*3)' }}>
+              <button className="btn secondary">Export</button>
+              <button className="btn primary">Start a session</button>
+            </div>
+          </div>
+
+          <div className="grid-4" data-component="card">
+            {stats.map((s, i) => (
+              <div className="stat" key={i}>
+                <div className="stat-main">
+                  <p className="eyebrow uikit-truncate">{s.l}</p>
+                  <p className="stat-value uikit-nowrap">{s.v}</p>
+                </div>
+                <p className={`stat-delta uikit-truncate ${s.up ? 'delta-up' : 'delta-down'}`}>{s.up ? '↑' : '↓'} {s.d} this month</p>
+              </div>
+            ))}
+          </div>
+
+          <div className="grid-2">
+            <div className="panel">
+              <div className="panel-head">
+                <div>
+                  <h3 className="panel-title">Reading activity</h3>
+                </div>
+                <div className="seg-control">
+                  <button>Week</button>
+                  <button className="on">Month</button>
+                  <button>Year</button>
+                </div>
+              </div>
+              <div className="panel-body">
+                <div className="chart">
+                  {heights.map((h, i) => (
+                    <div className="col" key={i}>
+                      <div className="seg top" style={{ height: h[0] + 'px' }}></div>
+                      <div className="seg" style={{ height: h[1] + 'px' }}></div>
+                      <span>{days[i]}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="panel">
+              <div className="panel-head">
+                <h3 className="panel-title">Recent activity</h3>
+                <span className="badge success has-dot">Live</span>
+              </div>
+              <div className="panel-body">
+                <div className="feed">
+                  <div className="feed-item">
+                    <span className="feed-dot"></span>
+                    <div><p>New thread on <strong>essayists for light reading</strong></p><time>2 min ago</time></div>
+                  </div>
+                  <div className="feed-item">
+                    <span className="feed-dot" style={{ background: 'var(--chart-2)' }}></span>
+                    <div><p>Clipped 3 passages from <strong>travel notebooks</strong></p><time>1 hour ago</time></div>
+                  </div>
+                  <div className="feed-item">
+                    <span className="feed-dot" style={{ background: 'var(--success-500)' }}></span>
+                    <div><p>Marked <strong>Wang Zengqi</strong> as revisit</p><time>Yesterday</time></div>
+                  </div>
+                  <div className="feed-item">
+                    <span className="feed-dot" style={{ background: 'var(--chart-4)' }}></span>
+                    <div><p>Saved prompt collection <strong>Quiet weekends</strong></p><time>2 days ago</time></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="panel">
+            <div className="panel-head">
+              <div>
+                <h3 className="panel-title">Recommendation thread</h3>
+              </div>
+              <span className="badge brand has-dot">Claude</span>
+            </div>
+            <div className="panel-body">
+              <div className="thread" data-component="chat-bubble">
+                <div className="message message-user">Recommend a writer for light reading.</div>
+                <div className="message message-assistant">Matsuura Yataro is a strong fit for your mood: reflective, spare, and quietly companionable.</div>
+                <div className="message message-user">Could Wang Zengqi work as well?</div>
+                <div className="message message-assistant">Yes — start with <span className="mono">Ordination</span>. It keeps warmth without becoming sentimental.</div>
+              </div>
+              <div className="composer">
+                <input placeholder="Ask for another author or a shorter list" />
+                <button className="send"><Icon name="send-horizontal" size={16} /></button>
+              </div>
+            </div>
+          </div>
+
+          <div className="panel">
+            <div className="panel-head">
+              <h3 className="panel-title">Saved threads</h3>
+              <button className="btn secondary">View all</button>
+            </div>
+            <div className="panel-body">
+              <div className="uikit-table-wrap">
+              <table className="data-table">
+                <thead>
+                  <tr><th>Author</th><th>Topic</th><th>Status</th><th className="uikit-action-cell">Updated</th></tr>
+                </thead>
+                <tbody>
+                  {[
+                    { a: 0, name: 'Matsuura Yataro', topic: 'Essayist shortlist', st: ['brand','Ready'], up: '2h ago' },
+                    { a: 1, name: 'Wang Zengqi', topic: 'Short fiction follow-up', st: ['','Marked'], up: '1d ago' },
+                    { a: 2, name: 'Travel notebooks', topic: '3 passages clipped', st: ['success','Open'], up: '3d ago' },
+                    { a: 3, name: 'Quiet weekends', topic: 'Prompt collection', st: ['','Draft'], up: '1w ago' },
+                    { a: 0, name: 'Annie Dillard', topic: 'Nature essays to revisit', st: ['brand','Ready'], up: '1w ago' },
+                    { a: 1, name: 'Bedside poems', topic: 'Short verse rotation', st: ['success','Open'], up: '2w ago' },
+                  ].map((r, i) => (
+                    <tr key={i}>
+                      <td>
+                        <div className="who">
+                          <span className="av" style={{ background: AVATARS[r.a].c }}>{AVATARS[r.a].i}</span>
+                          <span className="cell-strong uikit-truncate">{r.name}</span>
+                        </div>
+                      </td>
+                      <td className="cell-sub">{r.topic}</td>
+                      <td data-component="badge"><span className={`badge ${r.st[0]}`}>{r.st[1]}</span></td>
+                      <td className="cell-sub uikit-action-cell"><span className="uikit-action">{r.up}</span></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              </div>
+            </div>
+          </div>
+        </>
+      );
+    }
+
+    function SettingsView() {
+      return (
+        <>
+          <div className="page-head">
+            <div>
+              <p className="eyebrow">Account</p>
+              <h1 className="h1">Editorial preferences</h1>
+              <p className="lead">Tune tone, pacing, and the amount of guidance Claude offers across the workspace.</p>
+            </div>
+          </div>
+          <div className="grid-2">
+            <div className="panel">
+              <div className="panel-head"><h3 className="panel-title">Profile</h3></div>
+              <div className="panel-body">
+                <div className="form-row">
+                  <label className="form-label">Display name</label>
+                  <input className="field" defaultValue="Quiet Reader" />
+                </div>
+                <div className="form-row">
+                  <label className="form-label">Reply length</label>
+                  <div className="seg-control">
+                    <button className="on">Short</button>
+                    <button>Balanced</button>
+                    <button>Detailed</button>
+                  </div>
+                </div>
+                <div className="form-row">
+                  <label className="form-label">Citations</label>
+                  <input className="field" defaultValue="Attach when unfamiliar" />
+                </div>
+                <button className="btn primary">Save changes</button>
+              </div>
+            </div>
+            <div className="panel">
+              <div className="panel-head"><h3 className="panel-title">Reading surface</h3></div>
+              <div className="panel-body">
+                <p className="lead" style={{ marginTop: 0, fontSize: '14px' }}>Lora sets the body text; Poppins anchors the headings — the same pairing Claude uses across its brand.</p>
+                <div style={{ display:'flex', gap:'calc(var(--spacing)*2)', flexWrap:'wrap', marginTop:'calc(var(--spacing)*4)' }}>
+                  <span className="badge brand">Poppins · headings</span>
+                  <span className="badge">Lora · body</span>
+                  <span className="badge">Geist Mono · code</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </>
+      );
+    }
+
+    function App() {
+      const [active, setActive] = useState('overview');
+      return (
+        <div className="uikit-shell" data-layout-guard="uikit-v1">
+        <div className="app">
+          <Sidebar active={active} setActive={setActive} />
+          <div className="main uikit-main">
+            <Topbar />
+            <div className="content">
+              {active === 'settings' ? <SettingsView /> : <Overview />}
+            </div>
+          </div>
+        </div>
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>

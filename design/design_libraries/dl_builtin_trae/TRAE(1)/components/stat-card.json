@@ -1,0 +1,60 @@
+{
+  "schemaVersion": 2,
+  "slug": "stat-card",
+  "name": "Stat card",
+  "category": "data-display",
+  "sourceKind": "structured-spec",
+  "confidence": "medium",
+  "semanticTypeCandidates": ["KPICard", "MetricCard", "StatTile"],
+  "variantDimensions": {
+    "trend": ["up", "down"]
+  },
+  "representativeVariants": [
+    { "trend": "up" },
+    { "trend": "down" }
+  ],
+  "anatomy": ["label", "value", "delta", "delta-icon", "delta-caption"],
+  "structurePatterns": [
+    "root holds uppercase label, monospace value, and a colored delta row",
+    "delta uses .is-up / .is-down to switch success/error color and direction icon"
+  ],
+  "usageHints": [
+    "use tabular-nums monospace font for the big number",
+    "pair an up/down icon with the percentage change",
+    "group multiple cards in a flex/grid row for a KPI dashboard"
+  ],
+  "doNotInvent": ["sparkline charts inside the card", "interactive drill-down"],
+  "unknowns": ["loading/skeleton state", "comparison period selector"],
+  "tokensConsumed": [
+    "--spacer-4", "--spacer-8", "--spacer-16", "--bg-base-secondary",
+    "--border-neutral-l1", "--radius-10", "--body-xs-font-size",
+    "--body-xs-line-height", "--font-weight-medium", "--text-tertiary",
+    "--code-editor-font-family", "--heading-lg-font-size",
+    "--heading-lg-line-height", "--font-weight-strong", "--text-default",
+    "--body-sm-font-size", "--body-sm-line-height",
+    "--status-success-default", "--status-error-default", "--font-weight-default"
+  ],
+  "domAnatomy": {
+    "root": {
+      "tag": "div",
+      "class": "ds-statcard",
+      "children": [
+        { "tag": "span", "class": "ds-statcard__label" },
+        { "tag": "span", "class": "ds-statcard__value" },
+        {
+          "tag": "span",
+          "class": "ds-statcard__delta is-up",
+          "children": [
+            { "tag": "img", "class": "icon" },
+            { "tag": "span", "class": "ds-statcard__caption" }
+          ]
+        }
+      ]
+    }
+  },
+  "provenance": {
+    "preview": "preview/component-stat-card.html",
+    "source": "structured-spec",
+    "css": { "file": "components.css", "marker": "── Stat card ──" }
+  }
+}

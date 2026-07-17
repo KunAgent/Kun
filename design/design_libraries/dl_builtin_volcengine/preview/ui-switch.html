@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>Switch 开关</title>
+  <link rel="stylesheet" href="preview-scaffold.css">
+  <style>
+    /* 基础 */
+    .switch {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      border: 1px solid #DDE2E9;
+      border-radius: 999px;
+      background: #F6F8FA;
+      cursor: pointer;
+      transition: background 200ms ease, border-color 200ms ease;
+      padding: 0;
+      outline: none;
+      box-sizing: border-box;
+    }
+
+    /* 尺寸 */
+    .switch-md { width: 36px; height: 20px; }
+    .switch-sm { width: 28px; height: 16px; }
+
+    /* 滑块 */
+    .switch-knob {
+      position: absolute;
+      top: 50%;
+      left: 2px;
+      transform: translateY(-50%);
+      background: #FFFFFF;
+      border-radius: 50%;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+      transition: left 200ms ease;
+    }
+    .switch-md .switch-knob { width: 16px; height: 16px; }
+    .switch-sm .switch-knob { width: 12px; height: 12px; }
+
+    /* 已开启 */
+    .switch.checked {
+      background: #1664FF;
+      border-color: #1664FF;
+    }
+    .switch-md.checked .switch-knob { left: 18px; }
+    .switch-sm.checked .switch-knob { left: 14px; }
+
+    /* 悬浮 */
+    .switch:hover:not(.disabled):not(.loading) { background: #ECEDED; border-color: #ECEDED; }
+    .switch.checked:hover:not(.disabled):not(.loading) { background: #4585FF; border-color: #4585FF; }
+
+    /* 禁用 */
+    .switch.disabled { opacity: 0.6; cursor: not-allowed; pointer-events: none; }
+    .switch.checked.disabled { background: #A2C1FF; border-color: #A2C1FF; opacity: 1; }
+
+    /* 加载中 */
+    .switch.loading { pointer-events: none; }
+    .switch.loading .switch-knob::after {
+      content: "";
+      position: absolute;
+      inset: 2px;
+      border: 2px solid transparent;
+      border-top-color: #1664FF;
+      border-radius: 50%;
+      animation: switch-spin 0.6s linear infinite;
+    }
+    @keyframes switch-spin {
+      to { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+  <div class="pv-header">
+    <h1>Switch 开关</h1>
+    <p>切换开关组件，支持默认和小尺寸，包含开启、关闭、禁用和加载状态。</p>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">Default 尺寸 (20px)</div>
+    <div class="row">
+      <button class="switch switch-md" data-component="switch" data-size="default" data-checked="false" data-state="default" role="switch" aria-checked="false"><span class="switch-knob"></span></button>
+      <button class="switch switch-md checked" data-component="switch" data-size="default" data-checked="true" data-state="default" role="switch" aria-checked="true"><span class="switch-knob"></span></button>
+      <button class="switch switch-md disabled" disabled data-component="switch" data-size="default" data-checked="false" data-state="disabled" role="switch" aria-checked="false"><span class="switch-knob"></span></button>
+      <button class="switch switch-md checked disabled" disabled data-component="switch" data-size="default" data-checked="true" data-state="disabled" role="switch" aria-checked="true"><span class="switch-knob"></span></button>
+      <button class="switch switch-md checked loading" data-component="switch" data-size="default" data-checked="true" data-state="loading" role="switch" aria-checked="true"><span class="switch-knob"></span></button>
+    </div>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">Small 尺寸 (16px)</div>
+    <div class="row">
+      <button class="switch switch-sm" data-component="switch" data-size="small" data-checked="false" data-state="default" role="switch" aria-checked="false"><span class="switch-knob"></span></button>
+      <button class="switch switch-sm checked" data-component="switch" data-size="small" data-checked="true" data-state="default" role="switch" aria-checked="true"><span class="switch-knob"></span></button>
+      <button class="switch switch-sm disabled" disabled data-component="switch" data-size="small" data-checked="false" data-state="disabled" role="switch" aria-checked="false"><span class="switch-knob"></span></button>
+      <button class="switch switch-sm checked disabled" disabled data-component="switch" data-size="small" data-checked="true" data-state="disabled" role="switch" aria-checked="true"><span class="switch-knob"></span></button>
+      <button class="switch switch-sm checked loading" data-component="switch" data-size="small" data-checked="true" data-state="loading" role="switch" aria-checked="true"><span class="switch-knob"></span></button>
+    </div>
+  </div>
+</body>
+</html>

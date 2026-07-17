@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Menu</title>
+  <link rel="stylesheet" href="../colors_and_type.css" />
+  <link rel="stylesheet" href="../scaffold.css" />
+  <link rel="stylesheet" href="../components.css" />
+  <style>
+    /* @component-css-start */
+    /* ===== Menu ===== */
+    .ds-menu {
+      background: var(--bg-menu);
+      border: 1px solid var(--border-neutral-l1);
+      border-radius: var(--radius-4);
+      padding: var(--spacer-4);
+      min-width: 180px;
+    }
+    .ds-menu__item {
+      display: flex; align-items: center; gap: var(--spacer-8);
+      padding: var(--spacer-6) var(--spacer-8);
+      border-radius: var(--radius-2);
+      color: var(--text-default);
+      font-size: var(--body-sm-font-size);
+      cursor: pointer;
+    }
+    .ds-menu__item .icon { color: var(--icon-secondary); }
+    .ds-menu__item:hover { background: var(--bg-overlay-l2); }
+    .ds-menu__item--danger { color: var(--status-error-default); }
+    .ds-menu__item--danger .icon { color: var(--status-error-default); }
+    .ds-menu__divider { height: 1px; background: var(--border-neutral-l1); margin: var(--spacer-4) 0; }
+    .ds-menu__shortcut { margin-left: auto; color: var(--text-tertiary); font-size: var(--body-xs-font-size); font-family: var(--code-editor-font-family); }
+    /* @component-css-end */
+  </style>
+</head>
+<body>
+  <div class="pv-header">
+    <h1>Menu</h1>
+    <p>Context menus and sidebar menus. Background <code>--bg-menu</code>, item radius <code>--radius-4</code>, hover <code>--bg-overlay-l2</code>. Destructive items use <code>--status-error-default</code>.</p>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">Context menu</div>
+    <div class="ds-menu" style="max-width: 220px;">
+      <div class="ds-menu__item"><img src="../assets/icons/edit.svg" width="14" height="14" alt="edit" class="icon">Rename<span class="ds-menu__shortcut">⌘E</span></div>
+      <div class="ds-menu__item"><img src="../assets/icons/copy.svg" width="14" height="14" alt="copy" class="icon">Duplicate<span class="ds-menu__shortcut">⌘D</span></div>
+      <div class="ds-menu__item"><img src="../assets/icons/link.svg" width="14" height="14" alt="link" class="icon">Copy link</div>
+      <div class="ds-menu__divider"></div>
+      <div class="ds-menu__item"><img src="../assets/icons/settings.svg" width="14" height="14" alt="settings" class="icon">Settings</div>
+      <div class="ds-menu__item ds-menu__item--danger"><img src="../assets/icons/trash.svg" width="14" height="14" alt="trash" class="icon">Delete</div>
+    </div>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">Sidebar group</div>
+    <nav style="background: var(--bg-menu); border:1px solid var(--border-neutral-l1); border-radius: var(--radius-4); padding: var(--spacer-8); max-width: 240px;">
+      <div style="font-size: var(--body-xs-font-size); color: var(--text-tertiary); padding: var(--spacer-8); text-transform: uppercase; letter-spacing: 0.06em;">Workspace</div>
+      <div class="ds-menu__item"><img src="../assets/icons/dashboard.svg" width="14" height="14" alt="dashboard" class="icon">Overview</div>
+      <div class="ds-menu__item" style="background: var(--bg-overlay-l2);"><img src="../assets/icons/box.svg" width="14" height="14" alt="box" class="icon">Projects<span class="ds-menu__shortcut num">12</span></div>
+      <div class="ds-menu__item"><img src="../assets/icons/users.svg" width="14" height="14" alt="users" class="icon">Members</div>
+      <div class="ds-menu__item"><img src="../assets/icons/key.svg" width="14" height="14" alt="key" class="icon">API keys</div>
+    </nav>
+  </div>
+
+</body>
+</html>

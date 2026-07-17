@@ -1,0 +1,71 @@
+{
+  "schemaVersion": 2,
+  "slug": "tooltip",
+  "name": "Tooltip",
+  "category": "data-display",
+  "sourceKind": "structured-spec",
+  "confidence": "medium",
+  "semanticTypeCandidates": ["popover", "hint", "info-tip", "hover-card"],
+  "variantDimensions": {
+    "placement": ["top", "top-left", "top-right", "bottom", "bottom-left", "bottom-right", "left", "right"]
+  },
+  "representativeVariants": [
+    { "placement": "top" },
+    { "placement": "top-left" },
+    { "placement": "top-right" },
+    { "placement": "bottom" },
+    { "placement": "bottom-left" },
+    { "placement": "bottom-right" },
+    { "placement": "left" },
+    { "placement": "right" }
+  ],
+  "anatomy": ["tooltip-container", "tooltip-bubble", "tooltip-arrow-wrap", "tooltip-arrow"],
+  "structurePatterns": [
+    "Inline-flex container using flex-direction to position bubble and arrow based on placement",
+    "Top placements: column direction with arrow below bubble (arrow-bottom shape)",
+    "Bottom placements: column-reverse direction with arrow above bubble (arrow-top shape)",
+    "Left placement: row direction with arrow-right on the trailing side",
+    "Right placement: row direction with arrow-left on the leading side",
+    "Arrow uses clip-path polygons to form triangular shapes"
+  ],
+  "usageHints": [
+    "Bubble: bg #2B303A, color #FFFFFF, padding 6px 8px, border-radius 4px",
+    "Font: PingFang SC, 12px, weight 400, line-height 20px, letter-spacing 0.3px",
+    "Box-shadow: 0 5px 15px rgba(0,0,0,0.05), 0 15px 35px rgba(0,0,0,0.05)",
+    "Arrow: 12x6px for top/bottom, 6x12px for left/right, same bg color #2B303A",
+    "Arrow wrap padding: 0 12px for top/bottom, 0 for side placements",
+    "Alignment: center for top/bottom/left/right, flex-start for -left, flex-end for -right"
+  ],
+  "doNotInvent": ["rich content tooltips", "interactive tooltips with buttons", "delay/trigger configuration"],
+  "unknowns": ["show/hide animation", "max-width for long text wrapping", "multi-line tooltip"],
+  "tokensConsumed": [
+    "--tooltip-bg-#2B303A",
+    "--tooltip-text-#FFFFFF",
+    "--tooltip-font-size-12px",
+    "--tooltip-padding-6px-8px",
+    "--tooltip-radius-4px"
+  ],
+  "domAnatomy": {
+    "root": {
+      "tag": "div",
+      "class": "tooltip",
+      "attributes": { "data-placement": "{placement}" },
+      "children": [
+        { "tag": "span", "class": "tooltip-bubble" },
+        {
+          "tag": "span",
+          "class": "tooltip-arrow-wrap",
+          "modifiers": ["tooltip-arrow-wrap-side"],
+          "children": [
+            { "tag": "span", "class": "tooltip-arrow tooltip-arrow-{direction}" }
+          ]
+        }
+      ]
+    }
+  },
+  "provenance": {
+    "preview": "preview/ui-tooltip.html",
+    "source": "structured-spec",
+    "css": { "file": "preview/ui-tooltip.html", "marker": "inline <style>" }
+  }
+}

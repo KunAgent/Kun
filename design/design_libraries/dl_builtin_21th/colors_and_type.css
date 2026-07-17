@@ -1,0 +1,281 @@
+/* 21th Design Library Tokens */
+/* Source preserved from uploaded CSS with grouped English comments only. */
+
+/* Tailwind import */
+@import "tailwindcss";
+
+/* Dark variant */
+@custom-variant dark (&:is(.dark *));
+
+/* Light theme tokens */
+:root {
+  /* Surface colors */
+  --background: oklch(0.8328 0.0044 197.0717);
+  --foreground: oklch(0.1776 0 0);
+  --card: oklch(0.8868 0.0022 197.1175);
+  --card-foreground: oklch(0.1776 0 0);
+  --popover: oklch(0.8868 0.0022 197.1175);
+  --popover-foreground: oklch(0.1776 0 0);
+  --primary: oklch(0.1776 0 0);
+  --primary-foreground: oklch(1.0000 0 0);
+  --secondary: oklch(0.1776 0 0);
+  --secondary-foreground: oklch(1.0000 0 0);
+  --muted: oklch(0.8868 0.0022 197.1175);
+  --muted-foreground: oklch(0.6268 0 0);
+  --accent: oklch(0.5011 0.2803 263.8212);
+  --accent-foreground: oklch(1.0000 0 0);
+  --destructive: oklch(0.5787 0.2005 26.1521);
+  --destructive-foreground: oklch(1.0000 0 0);
+  --border: oklch(1.0000 0 0);
+  --input: oklch(1.0000 0 0);
+  --ring: oklch(0 0 0);
+
+  /* Data visualization colors */
+  --chart-1: oklch(0.5012 0.2803 263.8733);
+  --chart-2: oklch(0.5816 0.2280 265.4658);
+  --chart-3: oklch(0.6785 0.1688 267.8633);
+  --chart-4: oklch(0.7653 0.1192 269.2317);
+  --chart-5: oklch(0.8531 0.0721 270.9681);
+
+  /* Sidebar colors */
+  --sidebar: oklch(0.8868 0.0022 197.1175);
+  --sidebar-foreground: oklch(0 0 0);
+  --sidebar-primary: oklch(0 0 0);
+  --sidebar-primary-foreground: oklch(1.0000 0 0);
+  --sidebar-accent: oklch(0.8328 0.0044 197.0717);
+  --sidebar-accent-foreground: oklch(0 0 0);
+  --sidebar-border: oklch(1.0000 0 0);
+  --sidebar-ring: oklch(0 0 0);
+
+  /* Typography tokens */
+  --font-sans: Geist Mono, ui-monospace, monospace;
+  --font-serif: Geist, ui-sans-serif, sans-serif, system-ui;
+  --font-mono: Geist Mono, ui-monospace, monospace;
+
+  /* Radius and shadow primitives */
+  --radius: 0rem;
+  --shadow-x: 2px;
+  --shadow-y: 2px;
+  --shadow-blur: 0px;
+  --shadow-spread: 0px;
+  --shadow-opacity: 1;
+  --shadow-color: oklch(0 0 0);
+  --shadow-2xs: 2px 2px 0px 0px hsl(0 0% 0% / 0.50);
+  --shadow-xs: 2px 2px 0px 0px hsl(0 0% 0% / 0.50);
+  --shadow-sm: 2px 2px 0px 0px hsl(0 0% 0% / 1.00), 2px 1px 2px -1px hsl(0 0% 0% / 1.00);
+  --shadow: 2px 2px 0px 0px hsl(0 0% 0% / 1.00), 2px 1px 2px -1px hsl(0 0% 0% / 1.00);
+  --shadow-md: 2px 2px 0px 0px hsl(0 0% 0% / 1.00), 2px 2px 4px -1px hsl(0 0% 0% / 1.00);
+  --shadow-lg: 2px 2px 0px 0px hsl(0 0% 0% / 1.00), 2px 4px 6px -1px hsl(0 0% 0% / 1.00);
+  --shadow-xl: 2px 2px 0px 0px hsl(0 0% 0% / 1.00), 2px 8px 10px -1px hsl(0 0% 0% / 1.00);
+  --shadow-2xl: 2px 2px 0px 0px hsl(0 0% 0% / 2.50);
+
+  /* Layout and tracking */
+  --tracking-normal: -0.05em;
+  --spacing: 0.25rem;
+}
+
+/* Dark theme tokens */
+.dark {
+  /* Surface colors */
+  --background: oklch(0.1448 0 0);
+  --foreground: oklch(1.0000 0 0);
+  --card: oklch(0.2178 0 0);
+  --card-foreground: oklch(1.0000 0 0);
+  --popover: oklch(0.2178 0 0);
+  --popover-foreground: oklch(1.0000 0 0);
+  --primary: oklch(1.0000 0 0);
+  --primary-foreground: oklch(0 0 0);
+  --secondary: oklch(0.3211 0 0);
+  --secondary-foreground: oklch(1.0000 0 0);
+  --muted: oklch(0.3211 0 0);
+  --muted-foreground: oklch(0.7380 0 0);
+  --accent: oklch(0.2520 0 0);
+  --accent-foreground: oklch(1.0000 0 0);
+  --destructive: oklch(0.6368 0.2078 25.3313);
+  --destructive-foreground: oklch(1.0000 0 0);
+  --border: oklch(0.3211 0 0);
+  --input: oklch(0.2178 0 0);
+  --ring: oklch(0.3211 0 0);
+
+  /* Data visualization colors */
+  --chart-1: oklch(0.7137 0.1434 254.6240);
+  --chart-2: oklch(0.7253 0.1752 349.7607);
+  --chart-3: oklch(0.7729 0.1535 163.2231);
+  --chart-4: oklch(0.8369 0.1644 84.4286);
+  --chart-5: oklch(0.6801 0.1583 276.9349);
+
+  /* Sidebar colors */
+  --sidebar: oklch(0.1448 0 0);
+  --sidebar-foreground: oklch(1.0000 0 0);
+  --sidebar-primary: oklch(1.0000 0 0);
+  --sidebar-primary-foreground: oklch(0 0 0);
+  --sidebar-accent: oklch(0.2520 0 0);
+  --sidebar-accent-foreground: oklch(1.0000 0 0);
+  --sidebar-border: oklch(0.3211 0 0);
+  --sidebar-ring: oklch(0.3211 0 0);
+
+  /* Typography tokens */
+  --font-sans: Geist Mono, ui-monospace, monospace;
+  --font-serif: Geist, ui-sans-serif, sans-serif, system-ui;
+  --font-mono: Geist Mono, ui-monospace, monospace;
+
+  /* Radius and shadow primitives */
+  --radius: 0rem;
+  --shadow-x: 2px;
+  --shadow-y: 2px;
+  --shadow-blur: 0px;
+  --shadow-spread: 0px;
+  --shadow-opacity: 1;
+  --shadow-color: #000000;
+  --shadow-2xs: 2px 2px 0px 0px hsl(0 0% 0% / 0.50);
+  --shadow-xs: 2px 2px 0px 0px hsl(0 0% 0% / 0.50);
+  --shadow-sm: 2px 2px 0px 0px hsl(0 0% 0% / 1.00), 2px 1px 2px -1px hsl(0 0% 0% / 1.00);
+  --shadow: 2px 2px 0px 0px hsl(0 0% 0% / 1.00), 2px 1px 2px -1px hsl(0 0% 0% / 1.00);
+  --shadow-md: 2px 2px 0px 0px hsl(0 0% 0% / 1.00), 2px 2px 4px -1px hsl(0 0% 0% / 1.00);
+  --shadow-lg: 2px 2px 0px 0px hsl(0 0% 0% / 1.00), 2px 4px 6px -1px hsl(0 0% 0% / 1.00);
+  --shadow-xl: 2px 2px 0px 0px hsl(0 0% 0% / 1.00), 2px 8px 10px -1px hsl(0 0% 0% / 1.00);
+  --shadow-2xl: 2px 2px 0px 0px hsl(0 0% 0% / 2.50);
+}
+
+/* Theme inline token mappings */
+@theme inline {
+  /* Color aliases */
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  /* Font aliases */
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
+  --font-serif: var(--font-serif);
+
+  /* Radius aliases */
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+
+  /* Shadow aliases */
+  --shadow-2xs: var(--shadow-2xs);
+  --shadow-xs: var(--shadow-xs);
+  --shadow-sm: var(--shadow-sm);
+  --shadow: var(--shadow);
+  --shadow-md: var(--shadow-md);
+  --shadow-lg: var(--shadow-lg);
+  --shadow-xl: var(--shadow-xl);
+  --shadow-2xl: var(--shadow-2xl);
+
+  /* Tracking aliases */
+  --tracking-tighter: calc(var(--tracking-normal) - 0.05em);
+  --tracking-tight: calc(var(--tracking-normal) - 0.025em);
+  --tracking-normal: var(--tracking-normal);
+  --tracking-wide: calc(var(--tracking-normal) + 0.025em);
+  --tracking-wider: calc(var(--tracking-normal) + 0.05em);
+  --tracking-widest: calc(var(--tracking-normal) + 0.1em);
+}
+
+/* Base layer */
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    letter-spacing: var(--tracking-normal);
+  }
+}
+
+/* Semantic alias layer for component previews */
+:root {
+  /* Surface aliases */
+  --semantic-surface-page: var(--background);
+  --semantic-surface-panel: var(--card);
+  --semantic-surface-overlay: var(--popover);
+  --semantic-surface-muted: var(--muted);
+  --semantic-surface-sidebar: var(--sidebar);
+
+  /* Text aliases */
+  --semantic-text-primary: var(--foreground);
+  --semantic-text-secondary: var(--muted-foreground);
+  --semantic-text-panel: var(--card-foreground);
+  --semantic-text-overlay: var(--popover-foreground);
+  --semantic-text-sidebar: var(--sidebar-foreground);
+  --semantic-text-inverse: var(--primary-foreground);
+
+  /* Brand aliases */
+  --semantic-brand-primary: var(--primary);
+  --semantic-brand-secondary: var(--secondary);
+  --semantic-brand-accent: var(--accent);
+  --semantic-brand-danger: var(--destructive);
+  --semantic-brand-focus: var(--ring);
+
+  /* Border aliases */
+  --semantic-border-default: var(--border);
+  --semantic-border-strong: var(--ring);
+  --semantic-border-panel: var(--sidebar-border);
+  --semantic-border-interactive: var(--input);
+
+  /* Input aliases */
+  --semantic-input-background: var(--input);
+  --semantic-input-foreground: var(--foreground);
+  --semantic-input-placeholder: var(--muted-foreground);
+
+  /* Chart aliases */
+  --semantic-chart-1: var(--chart-1);
+  --semantic-chart-2: var(--chart-2);
+  --semantic-chart-3: var(--chart-3);
+  --semantic-chart-4: var(--chart-4);
+  --semantic-chart-5: var(--chart-5);
+
+  /* Sidebar aliases */
+  --semantic-sidebar-background: var(--sidebar);
+  --semantic-sidebar-foreground: var(--sidebar-foreground);
+  --semantic-sidebar-primary: var(--sidebar-primary);
+  --semantic-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --semantic-sidebar-accent: var(--sidebar-accent);
+  --semantic-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --semantic-sidebar-border: var(--sidebar-border);
+  --semantic-sidebar-ring: var(--sidebar-ring);
+
+  /* Shadow aliases */
+  --semantic-shadow-rest: var(--shadow);
+  --semantic-shadow-sm: var(--shadow-sm);
+  --semantic-shadow-md: var(--shadow-md);
+  --semantic-shadow-lg: var(--shadow-lg);
+
+  /* Radius aliases */
+  --semantic-radius-sm: calc(var(--radius) - 4px);
+  --semantic-radius-md: calc(var(--radius) - 2px);
+  --semantic-radius-lg: var(--radius);
+  --semantic-radius-xl: calc(var(--radius) + 4px);
+}

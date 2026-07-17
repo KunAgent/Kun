@@ -1,0 +1,76 @@
+{
+  "schemaVersion": 2,
+  "slug": "tabs",
+  "name": "Tabs",
+  "category": "navigation",
+  "sourceKind": "structured-spec",
+  "confidence": "medium",
+  "semanticTypeCandidates": ["tab-bar", "tab-panel", "segmented-control"],
+  "variantDimensions": {
+    "type": ["line", "card", "capsule", "button", "othertabs", "vertical"],
+    "size": ["lg", "md", "sm"],
+    "state": ["default", "active", "disabled"],
+    "scrollable": ["true", "false"]
+  },
+  "representativeVariants": [
+    { "type": "line", "size": "md", "state": "active" },
+    { "type": "card", "size": "md", "state": "active" },
+    { "type": "capsule", "size": "md", "state": "active" },
+    { "type": "button", "size": "md", "state": "active" },
+    { "type": "othertabs", "size": "md", "state": "active" },
+    { "type": "vertical", "size": "md", "state": "active" }
+  ],
+  "anatomy": ["tabs-container", "tab-item", "tab-icon", "tab-badge", "tab-count", "scroll-btn", "tabs-wrapper", "extra-content"],
+  "structurePatterns": [
+    "Line: horizontal flex row with bottom border, active item has 2px primary underline",
+    "Card: items with top-rounded border, active card merges into content area with inset top shadow",
+    "Capsule: rounded container with pill-shaped active highlight using primary bg",
+    "Button: bordered container with items getting elevated bg when active",
+    "Othertabs: subtle gray container with slightly elevated active item",
+    "Vertical: column layout with left border indicator on active item",
+    "Scrollable line variant wraps tabs with left/right arrow buttons"
+  ],
+  "usageHints": [
+    "Line tab active: color #1664FF, font-weight 500, 2px underline",
+    "Line tab sizes: lg=36px height/14px font, md=32px/13px, sm=28px/13px",
+    "Card active: white bg, inset top 2px primary shadow, bottom border merges with content",
+    "Capsule active: bg #1664FF, color #FFFFFF",
+    "Button active: bg #FFFFFF with subtle box-shadow",
+    "Vertical active: bg #F3F7FF, left 2px indicator height 16px",
+    "Disabled state: opacity 0.4-0.5, cursor not-allowed",
+    "Hover (non-active): color rgba(22,100,255,0.8) for line/vertical",
+    "Badge component: min-width 16px, bg #F53F3F, white text, border-radius 8px"
+  ],
+  "doNotInvent": ["editable/draggable tabs", "closable tabs beyond what shown", "nested tab panels"],
+  "unknowns": ["animated tab indicator transitions", "keyboard navigation specifics"],
+  "tokensConsumed": [
+    "--color-primary-#1664FF",
+    "--color-text-2-#42464E",
+    "--color-border-#EAEDF1",
+    "--color-bg-5-#F6F8FA",
+    "--color-disabled-#C2C6CC",
+    "--color-danger-#F53F3F"
+  ],
+  "domAnatomy": {
+    "root": {
+      "tag": "div",
+      "class": "tabs-line | tabs-card | tabs-capsule | tabs-button | othertabs | tabs-vertical",
+      "children": [
+        {
+          "tag": "button",
+          "class": "tab-item tab-size-{size}",
+          "children": [
+            { "tag": "span", "class": "tab-icon", "optional": true },
+            { "tag": "span", "class": "tab-badge", "optional": true },
+            { "tag": "span", "class": "tab-count", "optional": true }
+          ]
+        }
+      ]
+    }
+  },
+  "provenance": {
+    "preview": "preview/ui-tabs.html",
+    "source": "structured-spec",
+    "css": { "file": "preview/ui-tabs.html", "marker": "inline <style>" }
+  }
+}

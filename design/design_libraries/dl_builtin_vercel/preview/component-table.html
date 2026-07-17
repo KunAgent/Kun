@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en" class="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>
+  /* Page scaffold — NOT extracted */
+  /* @component-css-start */
+body{margin:0;padding:12px;background:var(--background);color:var(--foreground);font:12px/1.4 var(--font-sans)}.row{display:flex;align-items:flex-start;gap:8px;flex-wrap:wrap;margin-bottom:8px}.label{width:56px;padding-top:10px;color:var(--muted-foreground);font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase}.sheet{min-width:0;flex:1;background:var(--card);color:var(--card-foreground);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-sm);overflow:hidden}.table{width:100%;border-collapse:collapse}.table th,.table td{padding:calc(var(--spacing)*2) calc(var(--spacing)*3);border-bottom:1px solid var(--border);text-align:left;white-space:nowrap}.table th{background:var(--muted);color:var(--muted-foreground);font-size:10px;font-weight:600;letter-spacing:.06em;text-transform:uppercase}.table tr:last-child td{border-bottom:none}.table tbody tr:hover{background:color-mix(in srgb,var(--accent) 10%,transparent)}.selected{background:color-mix(in srgb,var(--accent) 14%,transparent)}.mono{font-family:var(--font-mono)}.pill{display:inline-flex;align-items:center;min-height:20px;padding:0 calc(var(--spacing)*2);border-radius:999px;background:color-mix(in srgb,var(--primary) 14%,var(--background));color:var(--primary);font-size:10px;font-weight:600}.pill.warn{background:color-mix(in srgb,var(--destructive) 12%,var(--background));color:var(--destructive)}.act{padding:0;border:0;background:none;color:var(--accent);font:600 11px/1 var(--font-sans)}.act:disabled{color:var(--muted-foreground)}.compact th,.compact td{padding:calc(var(--spacing)*1.5) calc(var(--spacing)*2.5)}.divider{height:1px;margin:8px 0;border:0;background:var(--border)}
+  /* @component-css-end */
+</style>
+</head>
+<body>
+<div class="row"><span class="label">default</span><div class="sheet"><table class="table"><thead><tr><th>Project</th><th>Status</th><th>Duration</th><th>Region</th><th></th></tr></thead><tbody><tr><td>web-api</td><td><span class="pill">Ready</span></td><td class="mono">2m 14s</td><td>iad1</td><td><button class="act">Inspect</button></td></tr><tr><td>edge-cache</td><td><span class="pill warn">Failed</span></td><td class="mono">47s</td><td>fra1</td><td><button class="act" disabled>Inspect</button></td></tr></tbody></table></div></div>
+<hr class="divider">
+<div class="row"><span class="label">compact</span><div class="sheet"><table class="table compact"><thead><tr><th>Route</th><th>Requests</th><th>Errors</th><th>Latency</th></tr></thead><tbody><tr class="selected"><td>/api/projects</td><td class="mono">18.2K</td><td class="mono">0.08%</td><td class="mono">112ms</td></tr><tr><td>/api/edge</td><td class="mono">6.4K</td><td class="mono">0.21%</td><td class="mono">84ms</td></tr></tbody></table></div></div>
+</body>
+</html>

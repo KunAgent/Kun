@@ -1,0 +1,61 @@
+{
+  "slug": "card",
+  "name": "Card",
+  "category": "surfaces",
+  "variantCount": 6,
+  "primitiveCount": 6,
+  "cssVariables": [
+    "background",
+    "card",
+    "card-foreground",
+    "muted",
+    "border",
+    "radius",
+    "shadow-sm",
+    "space-4"
+  ],
+  "variantDimensions": {
+    "type": [
+      "metric",
+      "detail",
+      "summary"
+    ],
+    "emphasis": [
+      "default",
+      "muted"
+    ]
+  },
+  "anatomy": [
+    "container",
+    "eyebrow",
+    "title",
+    "value",
+    "supporting-text"
+  ],
+  "structures": [
+    {
+      "name": "Metric, Emphasis=default",
+      "slots": [
+        "eyebrow",
+        "value",
+        "supporting-text"
+      ]
+    },
+    {
+      "name": "Detail, Emphasis=muted",
+      "slots": [
+        "title",
+        "supporting-text"
+      ]
+    },
+    {
+      "name": "Summary, Emphasis=default",
+      "slots": [
+        "title",
+        "value"
+      ]
+    }
+  ],
+  "evidence": "AI-inferred from the presence of surface, border, and muted token groups.",
+  "keyInsight": "Cards should read as framed content blocks, relying on border contrast rather than depth."
+}

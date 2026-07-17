@@ -1,0 +1,169 @@
+/* Source: structured-spec */
+:root {
+  
+  /* solo-design consumption aliases: explicit prefix for fill-html-head.mjs */
+  --doubao-background: var(--background, #ffffff);
+  --doubao-foreground: var(--foreground, #0f172a);
+  --doubao-card: var(--card, var(--background));
+  --doubao-card-foreground: var(--card-foreground, var(--foreground));
+  --doubao-popover: var(--popover, var(--card));
+  --doubao-popover-foreground: var(--popover-foreground, var(--card-foreground, var(--foreground)));
+  --doubao-primary: var(--primary, #111827);
+  --doubao-primary-foreground: var(--primary-foreground, #ffffff);
+  --doubao-secondary: var(--secondary, var(--muted, var(--card)));
+  --doubao-secondary-foreground: var(--secondary-foreground, var(--foreground));
+  --doubao-muted: var(--muted, var(--card));
+  --doubao-muted-foreground: var(--muted-foreground, var(--foreground));
+  --doubao-accent: var(--accent, var(--secondary, var(--muted, var(--card))));
+  --doubao-accent-foreground: var(--accent-foreground, var(--foreground));
+  --doubao-destructive: var(--destructive, #ef4444);
+  --doubao-destructive-foreground: var(--destructive-foreground, #ffffff);
+  --doubao-border: var(--border, currentColor);
+  --doubao-input: var(--input, var(--border));
+  --doubao-ring: var(--ring, var(--primary));
+  --doubao-chart-1: var(--chart-1, var(--primary));
+  --doubao-chart-2: var(--chart-2, var(--secondary, var(--primary)));
+  --doubao-chart-3: var(--chart-3, var(--accent, var(--primary)));
+  --doubao-chart-4: var(--chart-4, var(--muted-foreground, var(--foreground)));
+  --doubao-chart-5: var(--chart-5, var(--foreground));
+  --doubao-sidebar: var(--sidebar, var(--background));
+  --doubao-sidebar-foreground: var(--sidebar-foreground, var(--foreground));
+  --doubao-sidebar-primary: var(--sidebar-primary, var(--primary));
+  --doubao-sidebar-primary-foreground: var(--sidebar-primary-foreground, var(--primary-foreground));
+  --doubao-sidebar-accent: var(--sidebar-accent, var(--accent, var(--muted, var(--card))));
+  --doubao-sidebar-accent-foreground: var(--sidebar-accent-foreground, var(--accent-foreground, var(--foreground)));
+
+/* semantic */
+  /* semantic */
+  --background: #ffffff;
+  --foreground: #0e1115;
+  --card: #ffffff;
+  --card-foreground: #0e1115;
+  --popover: #f9f9fa;
+  --popover-foreground: #0e1115;
+
+  /* semantic */
+  --primary: #0065fd;
+  --primary-foreground: #ffffff;
+  --secondary: #eff1f4;
+  --secondary-foreground: #333942;
+  --muted: #eff1f4;
+  --muted-foreground: #7f8d9f;
+  --accent: #e5e9ff;
+  --accent-foreground: #00266b;
+  --destructive: #ef4444;
+  --destructive-foreground: #ffffff;
+  --border: #e7eaef;
+  --input: #e7eaef;
+  --ring: #557fff;
+
+  /* chart */
+  /* chart */
+  --chart-1: #557fff;
+  --chart-2: #0065fd;
+  --chart-3: #0057da;
+  --chart-4: #0043ad;
+  --chart-5: #002e7d;
+  /* sidebar */
+  --sidebar: #eff1f4;
+  --sidebar-foreground: #0e1115;
+  --sidebar-primary: #0065fd;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #d4daff;
+  --sidebar-accent-foreground: #00266b;
+  --sidebar-border: #e7eaef;
+  --sidebar-ring: #0065fd;
+
+  /* Source: structured-spec | Typography tokens */
+  --font-sans: Stack Sans Text, ui-sans-serif, sans-serif, system-ui;
+  --font-serif: Source Serif 4, serif;
+  --font-mono: JetBrains Mono, monospace;
+
+  /* Source: structured-spec | Radius token */
+  --radius: 1.2rem;
+
+  /* Source: structured-spec | Shadow construction tokens */
+  --shadow-x: 0;
+  --shadow-y: 1px;
+  --shadow-blur: 0px;
+  --shadow-spread: 0px;
+  --shadow-opacity: 0;
+  --shadow-color: #0e1115;
+  --shadow-2xs: 0 1px 0px 0px rgb(14 17 21 / 0);
+  --shadow-xs: 0 1px 0px 0px rgb(14 17 21 / 0);
+  --shadow-sm: 0 1px 0px 0px rgb(14 17 21 / 0), 0 1px 2px -1px rgb(14 17 21 / 0);
+  --shadow: 0 1px 0px 0px rgb(14 17 21 / 0), 0 1px 2px -1px rgb(14 17 21 / 0);
+  --shadow-md: 0 1px 0px 0px rgb(14 17 21 / 0), 0 2px 4px -1px rgb(14 17 21 / 0);
+  --shadow-lg: 0 1px 0px 0px rgb(14 17 21 / 0), 0 4px 6px -1px rgb(14 17 21 / 0);
+  --shadow-xl: 0 1px 0px 0px rgb(14 17 21 / 0), 0 8px 10px -1px rgb(14 17 21 / 0);
+  --shadow-2xl: 0 1px 0px 0px rgb(14 17 21 / 0);
+
+  /* Source: structured-spec | Rhythm tokens */
+  --tracking-normal: 0em;
+  --spacing: 0.24rem;
+}
+
+/* Source: structured-spec */
+.dark {
+  /* semantic */
+  --background: #0e1115;
+  --foreground: #eff1f4;
+  --card: #0e1115;
+  --card-foreground: #eff1f4;
+  --popover: #22252a;
+  --popover-foreground: #e5e5e5;
+
+  /* semantic */
+  --primary: #0065fd;
+  --primary-foreground: #ffffff;
+  --secondary: #22252a;
+  --secondary-foreground: #e5e5e5;
+  --muted: #161a20;
+  --muted-foreground: #afbbcb;
+  --accent: #00266b;
+  --accent-foreground: #bfdbfe;
+  --destructive: #ef4444;
+  --destructive-foreground: #ffffff;
+  --border: #333942;
+  --input: #333942;
+  --ring: #00266b;
+
+  /* chart */
+  --chart-1: #60a5fa;
+  --chart-2: #3b82f6;
+  --chart-3: #2563eb;
+  --chart-4: #1d4ed8;
+  --chart-5: #1e40af;
+  --sidebar: #171717;
+  --sidebar-foreground: #e5e5e5;
+  --sidebar-primary: #0065fd;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #00266b;
+  --sidebar-accent-foreground: #bfdbfe;
+  --sidebar-border: #404040;
+  --sidebar-ring: #00266b;
+
+  /* Source: structured-spec | Typography tokens */
+  --font-sans: Stack Sans Text, ui-sans-serif, sans-serif, system-ui;
+  --font-serif: Source Serif 4, serif;
+  --font-mono: JetBrains Mono, monospace;
+
+  /* Source: structured-spec | Radius token */
+  --radius: 1.2rem;
+
+  /* Source: structured-spec | Shadow construction tokens */
+  --shadow-x: 0;
+  --shadow-y: 1px;
+  --shadow-blur: 0px;
+  --shadow-spread: 0px;
+  --shadow-opacity: 0;
+  --shadow-color: #000000;
+  --shadow-2xs: 0 1px 0px 0px rgb(0 0 0 / 0);
+  --shadow-xs: 0 1px 0px 0px rgb(0 0 0 / 0);
+  --shadow-sm: 0 1px 0px 0px rgb(0 0 0 / 0), 0 1px 2px -1px rgb(0 0 0 / 0);
+  --shadow: 0 1px 0px 0px rgb(0 0 0 / 0), 0 1px 2px -1px rgb(0 0 0 / 0);
+  --shadow-md: 0 1px 0px 0px rgb(0 0 0 / 0), 0 2px 4px -1px rgb(0 0 0 / 0);
+  --shadow-lg: 0 1px 0px 0px rgb(0 0 0 / 0), 0 4px 6px -1px rgb(0 0 0 / 0);
+  --shadow-xl: 0 1px 0px 0px rgb(0 0 0 / 0), 0 8px 10px -1px rgb(0 0 0 / 0);
+  --shadow-2xl: 0 1px 0px 0px rgb(0 0 0 / 0);
+}

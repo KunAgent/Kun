@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>Drawer 抽屉</title>
+  <link rel="stylesheet" href="preview-scaffold.css">
+  <style>
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      font-family: "PingFang SC", sans-serif;
+      font-weight: 500;
+      letter-spacing: 0.3px;
+      line-height: 22px;
+      border-radius: 4px;
+      border: none;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: background 150ms ease, box-shadow 150ms ease, color 150ms ease;
+    }
+    .btn-md { height: 32px; padding: 0 16px; font-size: 13px; }
+    .btn-primary { background: #1664FF; color: #FFFFFF; }
+    .btn-primary:hover { background: #387BFF; }
+    .btn-primary:active { background: #0E50D2; }
+    .btn-secondary { background: #F6F8FA; color: #42464E; box-shadow: 0 2px 1px rgba(0,0,0,0.08), 0 0 0 1px #DDE2E9; }
+    .btn-secondary:hover { background: #F3F7FF; color: #1664FF; box-shadow: 0 2px 3px rgba(0,0,0,0.15), 0 0 0 1px rgba(22,100,255,0.8); }
+    .drawer {
+      display: flex;
+      flex-direction: column;
+      background: #FFFFFF;
+      box-shadow: -4px 0 12px rgba(0, 0, 0, 0.08);
+      overflow: hidden;
+      border: 1px solid #DDE2E9;
+      border-radius: 8px;
+    }
+    .drawer-mini { width: 480px; }
+    .drawer-sm   { width: 600px; }
+    .drawer-md   { width: 720px; }
+    .drawer-lg   { width: 100%; max-width: 1080px; }
+    .drawer-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 56px;
+      padding: 0 24px;
+      border-bottom: 1px solid #DDE2E9;
+      flex-shrink: 0;
+    }
+    .drawer-title {
+      font-family: "PingFang SC", sans-serif;
+      font-weight: 500;
+      font-size: 18px;
+      line-height: 26px;
+      letter-spacing: 0.3px;
+      color: #0C0D0E;
+    }
+    .drawer-close {
+      font-size: 20px;
+      color: #737A87;
+      cursor: pointer;
+      width: 32px;
+      height: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 4px;
+      transition: color 150ms ease, background 150ms ease;
+    }
+    .drawer-close:hover {
+      color: #42464E;
+      background: #F6F8FA;
+    }
+    .drawer-body {
+      flex: 1;
+      padding: 24px;
+      overflow-y: auto;
+      min-height: 120px;
+    }
+    .drawer-footer {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 8px;
+      height: 64px;
+      padding: 16px 24px;
+      border-top: 1px solid #DDE2E9;
+      flex-shrink: 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="pv-header">
+    <h1>Drawer 抽屉</h1>
+    <p>从屏幕边缘滑出的浮层面板，用于承载次级操作或详情展示，不打断主流程。</p>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">Mini 迷你 (480px)</div>
+    <div class="stack-12">
+      <div class="drawer drawer-mini" data-component="drawer" data-size="mini">
+        <div class="drawer-header">
+          <span class="drawer-title">标题</span>
+          <span class="drawer-close">&times;</span>
+        </div>
+        <div class="drawer-body">内容区域</div>
+        <div class="drawer-footer">
+          <button class="btn btn-secondary btn-md">取消</button>
+          <button class="btn btn-primary btn-md">确定</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">Small 小 (600px)</div>
+    <div class="stack-12">
+      <div class="drawer drawer-sm" data-component="drawer" data-size="small">
+        <div class="drawer-header">
+          <span class="drawer-title">标题</span>
+          <span class="drawer-close">&times;</span>
+        </div>
+        <div class="drawer-body">内容区域</div>
+        <div class="drawer-footer">
+          <button class="btn btn-secondary btn-md">取消</button>
+          <button class="btn btn-primary btn-md">确定</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">Default 默认 (720px)</div>
+    <div class="stack-12">
+      <div class="drawer drawer-md" data-component="drawer" data-size="default">
+        <div class="drawer-header">
+          <span class="drawer-title">标题</span>
+          <span class="drawer-close">&times;</span>
+        </div>
+        <div class="drawer-body">内容区域</div>
+        <div class="drawer-footer">
+          <button class="btn btn-secondary btn-md">取消</button>
+          <button class="btn btn-primary btn-md">确定</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">Large 大 (1080px)</div>
+    <div class="stack-12">
+      <div class="drawer drawer-lg" data-component="drawer" data-size="large">
+        <div class="drawer-header">
+          <span class="drawer-title">标题</span>
+          <span class="drawer-close">&times;</span>
+        </div>
+        <div class="drawer-body">内容区域</div>
+        <div class="drawer-footer">
+          <button class="btn btn-secondary btn-md">取消</button>
+          <button class="btn btn-primary btn-md">确定</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

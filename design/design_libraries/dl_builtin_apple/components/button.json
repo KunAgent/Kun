@@ -1,0 +1,77 @@
+{
+  "slug": "button",
+  "name": "Button",
+  "nameEn": "Button",
+  "category": "actions",
+  "summary": "Capsule-shaped actions with a restrained Apple-inspired hierarchy.",
+  "variantCount": 6,
+  "primitiveCount": 3,
+  "variantDimensions": {
+    "style": [
+      "primary",
+      "secondary",
+      "text"
+    ],
+    "size": [
+      "40",
+      "48",
+      "56"
+    ],
+    "theme": [
+      "light",
+      "dark"
+    ]
+  },
+  "cssVariables": [
+    "primary",
+    "primary-foreground",
+    "foreground",
+    "muted-foreground",
+    "ring"
+  ],
+  "uiCopySamples": [
+    "Buy now",
+    "Learn more ›",
+    "Shop the latest"
+  ],
+  "structurePatterns": [
+    "Full-pill silhouette with no hard corners",
+    "Primary fill reserved for the main action",
+    "Secondary action stays visually quiet and text-led"
+  ],
+  "structures": [
+    {
+      "name": "Primary CTA",
+      "description": "Filled pill button using the brand blue for single-focus calls to action.",
+      "anatomy": [
+        "container",
+        "label"
+      ],
+      "states": [
+        "default",
+        "hover",
+        "focus"
+      ],
+      "notes": [
+        "Use one dominant CTA per surface",
+        "Keep labels on one line"
+      ]
+    },
+    {
+      "name": "Secondary Link Button",
+      "description": "Text-first secondary action with a trailing chevron-like advance mark.",
+      "anatomy": [
+        "label",
+        "trailing-mark"
+      ],
+      "states": [
+        "default",
+        "hover"
+      ],
+      "notes": [
+        "No ghost outline",
+        "Use for supporting navigation"
+      ]
+    }
+  ]
+}

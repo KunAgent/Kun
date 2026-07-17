@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>Typography 排版字体</title>
+  <link rel="stylesheet" href="preview-scaffold.css">
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&family=Roboto+Mono:wght@400;500&family=DM+Sans:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+/* Specimens */
+.specimens {
+  display: flex;
+  gap: 16px;
+  background: var(--color-bg-4, #F6F8FA);
+  border-radius: 8px;
+  padding: 20px;
+}
+.card {
+  background: #fff;
+  border-radius: 8px;
+  padding: 20px;
+  flex: 1;
+  border: 1px solid var(--color-border-light, #EAEDF1);
+}
+.card-label {
+  font-size: 11px;
+  color: var(--color-text-3, #737A87);
+  font-family: "Roboto Mono", monospace;
+  margin-bottom: 12px;
+  letter-spacing: 0.02em;
+}
+.specimen { letter-spacing: 0.003em; }
+.mono-sample {
+  font-family: "Roboto Mono", monospace;
+  font-weight: 500;
+  font-size: 13px;
+  line-height: 22px;
+  color: var(--color-text-2, #42464E);
+}
+.num-sample {
+  font-family: "Roboto", sans-serif;
+  font-weight: 700;
+  font-size: 36px;
+  line-height: 1;
+  color: var(--color-text-1, #0C0D0E);
+}
+
+/* Scale rows */
+.scale-row {
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--color-border-light, #EAEDF1);
+}
+.scale-row:last-child { border-bottom: none; }
+.meta {
+  min-width: 130px;
+  font-size: 11px;
+  color: var(--color-text-3, #737A87);
+  font-family: "Roboto Mono", monospace;
+}
+.token {
+  min-width: 90px;
+  font-size: 11px;
+  color: var(--color-primary, #1664FF);
+  font-family: "Roboto Mono", monospace;
+  font-weight: 500;
+}
+.sample {
+  color: var(--color-text-2, #42464E);
+  letter-spacing: 0.003em;
+  flex: 1;
+}
+  </style>
+</head>
+<body>
+
+  <div class="pv-header">
+    <h1>Typography 排版字体</h1>
+    <p>系统字体规范与字阶定义，包含中文、拉丁文及等宽字体样本。</p>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">Font Specimens 字体样本</div>
+    <div class="specimens">
+      <div class="card">
+        <div class="card-label">PingFang SC / 微软雅黑 · Chinese body</div>
+        <div class="specimen" style="font-size:24px;font-weight:500;line-height:32px;color:var(--color-text-1)">字体类型</div>
+        <div class="specimen" style="font-size:14px;font-weight:400;line-height:22px;color:var(--color-text-2);margin-top:8px">火山引擎的字体选择为系统自带字体，特殊字体用 Roboto。字体是重要的信息传达元素之一，字体本身的视觉特性和品质影响着信息传递的质量。</div>
+      </div>
+      <div class="card">
+        <div class="card-label">Roboto · Latin / Numeric display</div>
+        <div style="font-family:'Roboto',sans-serif;font-size:24px;font-weight:700;color:var(--color-text-1);line-height:1">Source force</div>
+        <div style="font-family:'Roboto',sans-serif;font-size:13px;font-weight:400;color:var(--color-text-2);margin-top:8px;line-height:22px">shapes all things and stimulates digital vitality</div>
+        <div class="num-sample" style="margin-top:12px">0123456789</div>
+      </div>
+      <div class="card">
+        <div class="card-label">Roboto Mono · Code / Monospace</div>
+        <div class="mono-sample">const primary = "#1664FF";</div>
+        <div class="mono-sample">border-radius: 4px 8px;</div>
+        <div class="mono-sample" style="color:var(--color-primary)">@%…… 0123456789</div>
+        <div style="margin-top:10px;font-size:11px;color:var(--color-text-3);font-family:'Roboto Mono',monospace">等宽字体 — Roboto Mono Medium</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">Heading 标题字阶</div>
+    <div class="stack-16">
+      <div class="scale-row">
+        <div class="token">display-3</div>
+        <div class="meta">32px / 40px · 500</div>
+        <div class="sample" style="font-size:32px;line-height:40px;font-weight:500">源力塑造万物</div>
+      </div>
+      <div class="scale-row">
+        <div class="token">display-2</div>
+        <div class="meta">30px / 38px · 500</div>
+        <div class="sample" style="font-size:30px;line-height:38px;font-weight:500">源力塑造万物</div>
+      </div>
+      <div class="scale-row">
+        <div class="token">display-1</div>
+        <div class="meta">24px / 32px · 500</div>
+        <div class="sample" style="font-size:24px;line-height:32px;font-weight:500">源力塑造万物，激发数字生机</div>
+      </div>
+      <div class="scale-row">
+        <div class="token">title-3</div>
+        <div class="meta">20px / 28px · 500</div>
+        <div class="sample" style="font-size:20px;line-height:28px;font-weight:500">源力塑造万物，激发数字生机</div>
+      </div>
+      <div class="scale-row">
+        <div class="token">title-2</div>
+        <div class="meta">18px / 26px · 500</div>
+        <div class="sample" style="font-size:18px;line-height:26px;font-weight:500">源力塑造万物，激发数字生机</div>
+      </div>
+      <div class="scale-row">
+        <div class="token">title-1</div>
+        <div class="meta">16px / 24px · 500</div>
+        <div class="sample" style="font-size:16px;line-height:24px;font-weight:500">源力塑造万物，激发数字生机</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">Body 正文字阶</div>
+    <div class="stack-16">
+      <div class="scale-row">
+        <div class="token">body-1</div>
+        <div class="meta">13px / 22px · 400</div>
+        <div class="sample" style="font-size:13px;line-height:22px;font-weight:400">火山引擎的字体选择为系统自带字体，字体是重要的信息传达元素之一。</div>
+      </div>
+      <div class="scale-row">
+        <div class="token">body-2</div>
+        <div class="meta">13px / 22px · 500</div>
+        <div class="sample" style="font-size:13px;line-height:22px;font-weight:500">火山引擎的字体选择为系统自带字体，字体是重要的信息传达元素之一。</div>
+      </div>
+      <div class="scale-row">
+        <div class="token">body-3</div>
+        <div class="meta">12px / 20px · 400</div>
+        <div class="sample" style="font-size:12px;line-height:20px;font-weight:400;color:var(--color-text-3)">备注说明文字、标签文字、面包屑 / Annotation, label, breadcrumb text</div>
+      </div>
+    </div>
+  </div>
+
+</body>
+</html>

@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Table Panel</title>
+  <link rel="stylesheet" href="../colors_and_type.css" />
+  <link rel="stylesheet" href="../scaffold.css" />
+  <link rel="stylesheet" href="../components.css" />
+  <style>
+    /* @component-css-start */
+    /* ===== Table Panel ===== */
+    .ds-tablepanel {
+      background: var(--bg-layout-1);
+      border: 1px solid var(--border-1);
+      border-radius: 0 0 var(--radius-4) var(--radius-4);
+      border-top: none;
+      overflow: hidden;
+    }
+    .ds-tablepanel table { width: 100%; border-collapse: collapse; }
+    .ds-tablepanel th, .ds-tablepanel td {
+      padding: var(--spacer-12) var(--spacer-16);
+      border-bottom: 1px solid var(--border-1);
+      font-size: var(--body-sm-font-size);
+      text-align: left;
+    }
+    .ds-tablepanel th {
+      color: var(--text-tertiary);
+      font-weight: var(--font-weight-default);
+      font-size: var(--body-xs-font-size);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      background: var(--bg-overlay-l1);
+    }
+    .ds-tablepanel td { color: var(--text-default); }
+    .ds-tablepanel tr:last-child td { border-bottom: none; }
+    .ds-tablepanel td.num, .ds-tablepanel th.num {
+      text-align: right;
+      font-family: var(--code-editor-font-family);
+      font-variant-numeric: tabular-nums;
+    }
+    .ds-tablepanel__foot {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: var(--spacer-8) var(--spacer-16);
+      border-top: 1px solid var(--border-1);
+      color: var(--text-tertiary);
+      font-size: var(--body-xs-font-size);
+      gap: var(--spacer-12);
+    }
+
+    /* Local-only header bar to demonstrate the "external header above the panel" usage pattern */
+    .pv-tp-header {
+      background: var(--bg-layout-1);
+      border: 1px solid var(--border-1);
+      border-bottom: none;
+      border-radius: var(--radius-4) var(--radius-4) 0 0;
+      padding: var(--spacer-12) var(--spacer-16);
+      display: flex; align-items: center; justify-content: space-between;
+      gap: var(--spacer-12);
+    }
+    .pv-tp-header h3 { margin: 0; font-size: var(--body-md-font-size, 14px); color: var(--text-default); }
+    .pv-tp-header .meta { color: var(--text-tertiary); font-size: var(--body-xs-font-size); }
+    /* @component-css-end */
+  </style>
+</head>
+<body>
+  <div class="pv-header">
+    <h1>Table Panel</h1>
+    <p>Dashboard table container with rounded foot only. Pair it with an external header/toolbar (with its own top-rounded corners) above. Use this when the surrounding card already owns the title; for self-contained tables use <code>.ds-table-wrap</code>.</p>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">Recent activity</div>
+    <div class="pv-tp-header">
+      <h3>Recent activity</h3>
+      <span class="meta">Last 24 hours</span>
+    </div>
+    <div class="ds-tablepanel">
+      <table>
+        <thead>
+          <tr><th>When</th><th>Member</th><th>Action</th><th class="num">Items</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>2 min ago</td><td>Avery Chen</td><td>Published release v3.2.0</td><td class="num">14</td></tr>
+          <tr><td>11 min ago</td><td>Mia Patel</td><td>Reviewed PR #482</td><td class="num">3</td></tr>
+          <tr><td>34 min ago</td><td>Liam Wong</td><td>Created billing report</td><td class="num">1</td></tr>
+          <tr><td>1 hr ago</td><td>Noah Kim</td><td>Invited 4 collaborators</td><td class="num">4</td></tr>
+          <tr><td>2 hr ago</td><td>Sara Ortiz</td><td>Closed incident INC-2317</td><td class="num">1</td></tr>
+          <tr><td>4 hr ago</td><td>Devon Park</td><td>Updated workspace settings</td><td class="num">7</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="ds-tablepanel__foot">
+      <span>Showing 6 of 128 events</span>
+      <span>Updated 30 sec ago</span>
+    </div>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">Top users by usage</div>
+    <div class="pv-tp-header">
+      <h3>Top users</h3>
+      <span class="meta">This month</span>
+    </div>
+    <div class="ds-tablepanel">
+      <table>
+        <thead>
+          <tr><th>Member</th><th>Plan</th><th class="num">Sessions</th><th class="num">Minutes</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Avery Chen</td><td>Owner</td><td class="num">214</td><td class="num">9,318</td></tr>
+          <tr><td>Mia Patel</td><td>Editor</td><td class="num">189</td><td class="num">7,640</td></tr>
+          <tr><td>Liam Wong</td><td>Editor</td><td class="num">142</td><td class="num">5,209</td></tr>
+          <tr><td>Noah Kim</td><td>Viewer</td><td class="num">96</td><td class="num">3,114</td></tr>
+          <tr><td>Sara Ortiz</td><td>Editor</td><td class="num">81</td><td class="num">2,407</td></tr>
+          <tr><td>Devon Park</td><td>Viewer</td><td class="num">52</td><td class="num">1,193</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="ds-tablepanel__foot">
+      <span>Showing top 6 of 32 active members</span>
+      <span>Page 1 / 6</span>
+    </div>
+  </div>
+
+</body>
+</html>

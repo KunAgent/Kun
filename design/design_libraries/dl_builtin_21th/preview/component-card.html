@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>body{margin:0;padding:12px;background:var(--background);color:var(--foreground);font-family:var(--font-sans)}.row{display:flex;gap:calc(var(--spacing)*2);align-items:stretch;flex-wrap:wrap;margin-bottom:8px}.label{width:100%;font-size:11px;line-height:1;letter-spacing:var(--tracking-normal);text-transform:uppercase;color:var(--muted-foreground)}.divider{border:0;border-top:1px solid var(--border);margin:8px 0}.card{min-width:180px;flex:1 1 180px;display:grid;gap:6px;padding:calc(var(--spacing)*4);background:var(--card);color:var(--card-foreground);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow)}.eyebrow,.footer{font-size:12px;color:var(--muted-foreground)}.value{font-size:28px;line-height:1.1}.meta{font-size:12px;font-weight:600}.metric .meta{color:var(--chart-1)}.selected{border-color:var(--primary);box-shadow:var(--shadow-md)}.pill{justify-self:start;padding:2px 8px;border-radius:var(--radius);background:var(--muted);font-size:11px;font-weight:600}.selected .pill{background:var(--primary);color:var(--primary-foreground)}.summary .value{font-size:22px}.alert .meta{color:var(--destructive)}.disabled{background:var(--muted);color:var(--muted-foreground);box-shadow:none}.disabled .value,.disabled .meta{color:var(--muted-foreground)}</style>
+</head>
+<body>
+<div class="row">
+<span class="label">Metric</span>
+<article class="card metric"><span class="eyebrow">Net Flow</span><strong class="value">47.8K</strong><span class="meta">+8.4% week over week</span><span class="footer">Stable inflow across top regions</span></article>
+<article class="card metric selected"><span class="eyebrow">Weekly Summary</span><strong class="value">312</strong><span class="meta">18 actions cleared today</span><span class="pill">Focused</span></article>
+<article class="card metric disabled" aria-disabled="true"><span class="eyebrow">Operations Health</span><strong class="value">--</strong><span class="meta">Sync paused for maintenance</span><span class="footer">Read only until 14:00 UTC</span></article>
+</div>
+<hr class="divider">
+<div class="row">
+<span class="label">Summary</span>
+<article class="card summary"><span class="eyebrow">Weekly Summary</span><strong class="value">86% automation coverage</strong><span class="footer">14 workflows improved from last review</span></article>
+<article class="card alert"><span class="eyebrow">Incident Watch</span><strong class="value">3 open escalations</strong><span class="meta">2 services breached latency threshold</span><span class="footer">Next review in 12 minutes</span></article>
+</div>
+</body>
+</html>

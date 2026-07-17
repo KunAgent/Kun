@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Mobile Bottom Info</title>
+<link rel="stylesheet" href="../colors_and_type.css">
+<script src="https://code.iconify.design/iconify-icon/2.1.0/iconify-icon.min.js"></script>
+<style>
+body{margin:0;padding:12px;background:var(--background);color:var(--foreground);font:400 14px/var(--body-line-height) var(--font-sans)}
+.row{display:flex;align-items:flex-start;gap:8px;flex-wrap:wrap;margin-bottom:8px}
+.label{width:44px;padding-top:4px;color:var(--muted-foreground);font:400 11px/1.2 var(--font-mono);letter-spacing:.12em;text-transform:uppercase}
+/* single bottom readability overlay only (skill §10.3) */
+.stack{width:188px;min-height:118px;padding:12px;box-sizing:border-box;background:linear-gradient(180deg,transparent 35%,rgba(15,15,18,.85));color:var(--on-media);display:flex;flex-direction:column;justify-content:flex-end;gap:8px;border-radius:8px}
+.top{display:flex;align-items:center;gap:10px;font-size:15px;font-weight:600}
+/* Follow = outlined capsule, not solid fill (skill §5.1) */
+.pill{padding:4px 10px;border-radius:999px;border:1px solid rgba(255,255,255,.4);background:transparent;color:var(--on-media);font-size:11px;line-height:1}
+.caption{max-width:80%;font-size:13px;line-height:1.5}
+.long .caption{max-width:100%}
+.hash{color:var(--secondary)}
+.music{display:flex;gap:6px;align-items:center;overflow:hidden;white-space:nowrap;color:rgba(255,255,255,.9);font-size:12px}
+.music iconify-icon{font-size:14px;flex:0 0 auto}
+.track{display:inline-block;min-width:max-content;animation:marquee 18s linear infinite}
+.reduced .track{animation:none}
+.divider{margin:10px 0;border:0;border-top:1px solid var(--muted-foreground);opacity:.25}
+@keyframes marquee{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+@media (prefers-reduced-motion: reduce){.track{animation:none!important}}
+</style>
+</head>
+<body class="dark">
+<div class="row"><span class="label">feed</span><div class="stack"><div class="top"><span>@dance_queen</span><span class="pill">Follow</span></div><div class="caption">When the beat drops <span class="hash">#fyp</span> <span class="hash">#viral</span></div><div class="music"><iconify-icon icon="ph:music-notes-fill"></iconify-icon><span>original sound · dance_queen</span></div></div><div class="stack long"><div class="top"><span>@dance_queen</span><span class="pill">Follow</span></div><div class="caption">When the beat drops and the whole crew hits the same move <span class="hash">#fyp</span> <span class="hash">#viral</span> <span class="hash">#dance</span></div><div class="music"><iconify-icon icon="ph:music-notes-fill"></iconify-icon><span>original sound · dance_queen</span></div></div></div>
+<hr class="divider">
+<div class="row"><span class="label">audio</span><div class="stack"><div class="top"><span>@dance_queen</span><span class="pill">Follow</span></div><div class="caption">When the beat drops <span class="hash">#fyp</span> <span class="hash">#viral</span></div><div class="music"><iconify-icon icon="ph:music-notes-fill"></iconify-icon><div class="marquee" style="overflow:hidden;flex:1"><span class="track">original sound · dance_queen&nbsp;&nbsp;·&nbsp;&nbsp;original sound · dance_queen&nbsp;&nbsp;·&nbsp;&nbsp;</span></div></div></div><div class="stack reduced"><div class="top"><span>@dance_queen</span><span class="pill">Following</span></div><div class="caption">When the beat drops <span class="hash">#fyp</span> <span class="hash">#viral</span></div><div class="music"><iconify-icon icon="ph:music-notes-fill"></iconify-icon><span class="track">original sound · dance_queen</span></div></div></div>
+</body>
+</html>

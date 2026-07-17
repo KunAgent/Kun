@@ -1,0 +1,151 @@
+{
+  "components": [
+    {
+      "slug": "button",
+      "name": "Button",
+      "category": "action",
+      "variantCount": 12,
+      "anatomy": [
+        "container",
+        "label",
+        "leadingIcon?"
+      ],
+      "variantDimensions": {
+        "tone": [
+          "primary",
+          "secondary",
+          "ghost"
+        ],
+        "size": [
+          "md",
+          "lg"
+        ],
+        "state": [
+          "default",
+          "disabled"
+        ]
+      }
+    },
+    {
+      "slug": "card",
+      "name": "Card",
+      "category": "surface",
+      "variantCount": 6,
+      "anatomy": [
+        "container",
+        "header",
+        "title",
+        "value",
+        "meta"
+      ],
+      "variantDimensions": {
+        "type": [
+          "metric",
+          "session",
+          "challenge"
+        ],
+        "emphasis": [
+          "default",
+          "highlighted"
+        ]
+      }
+    },
+    {
+      "slug": "bottom-nav",
+      "name": "Bottom Navigation",
+      "category": "navigation",
+      "variantCount": 4,
+      "anatomy": [
+        "bar",
+        "item",
+        "icon",
+        "label"
+      ],
+      "variantDimensions": {
+        "destination": [
+          "home",
+          "training",
+          "stats",
+          "profile"
+        ],
+        "state": [
+          "active",
+          "inactive"
+        ]
+      }
+    },
+    {
+      "slug": "input",
+      "name": "Input",
+      "category": "form",
+      "variantCount": 6,
+      "anatomy": [
+        "field",
+        "label",
+        "value",
+        "helperText?"
+      ],
+      "variantDimensions": {
+        "type": [
+          "text",
+          "search"
+        ],
+        "state": [
+          "default",
+          "focused",
+          "error"
+        ]
+      }
+    },
+    {
+      "slug": "avatar",
+      "name": "Avatar",
+      "category": "identity",
+      "variantCount": 6,
+      "anatomy": [
+        "frame",
+        "imageOrInitial",
+        "statusDot?"
+      ],
+      "variantDimensions": {
+        "size": [
+          "sm",
+          "md",
+          "lg"
+        ],
+        "state": [
+          "default",
+          "highlighted"
+        ]
+      }
+    },
+    {
+      "slug": "chip",
+      "name": "Chip",
+      "category": "selection",
+      "variantCount": 6,
+      "anatomy": [
+        "container",
+        "label",
+        "icon?"
+      ],
+      "variantDimensions": {
+        "tone": [
+          "neutral",
+          "accent",
+          "secondary"
+        ],
+        "state": [
+          "default",
+          "selected"
+        ]
+      }
+    }
+  ],
+  "crossComponentPatterns": [
+    "Sharp-corner geometry with radius locked to 0px.",
+    "Dark surfaces with a single bright accent per component family.",
+    "Compact spacing built on a 4px base token.",
+    "Display-led typography via Orbitron for labels, stats, and navigation."
+  ]
+}

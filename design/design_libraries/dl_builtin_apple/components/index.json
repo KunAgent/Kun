@@ -1,0 +1,72 @@
+{
+  "brandName": "Pinguo",
+  "brandSlug": "pinguo-apple",
+  "productType": "consumer imaging product ecosystem",
+  "kitType": "app",
+  "components": [
+    {
+      "slug": "button",
+      "name": "Button",
+      "nameEn": "Button",
+      "variantCount": 6,
+      "category": "actions",
+      "summary": "Capsule-shaped actions with a restrained Apple-inspired hierarchy."
+    },
+    {
+      "slug": "card",
+      "name": "Card",
+      "nameEn": "Card",
+      "variantCount": 5,
+      "category": "surfaces",
+      "summary": "Quiet containers defined by border and spacing, not by decoration."
+    },
+    {
+      "slug": "input",
+      "name": "Input",
+      "nameEn": "Input",
+      "variantCount": 4,
+      "category": "forms",
+      "summary": "Simple rounded inputs with readable placeholder contrast and visible focus."
+    },
+    {
+      "slug": "navigation",
+      "name": "Navigation",
+      "nameEn": "Navigation",
+      "variantCount": 5,
+      "category": "navigation",
+      "summary": "Apple-store-like navigation with black top bar and restrained secondary rails."
+    },
+    {
+      "slug": "product-grid",
+      "name": "Product Grid",
+      "nameEn": "Product Grid",
+      "variantCount": 4,
+      "category": "commerce",
+      "summary": "Four-column merchandising matrix with editorial spacing and measured CTA rhythm."
+    },
+    {
+      "slug": "comparison-table",
+      "name": "Comparison Table",
+      "nameEn": "Comparison Table",
+      "variantCount": 3,
+      "category": "data-display",
+      "summary": "Model comparison cards that translate technical choices into calm visual structure."
+    }
+  ],
+  "crossComponentPatterns": [
+    "Whitespace carries hierarchy more than separators or color blocks.",
+    "Rounded-full actions and large radii soften otherwise minimal surfaces.",
+    "Copy stays concise and often uses editorial commerce phrasing.",
+    "Accent color is concentrated in CTA moments rather than background coverage.",
+    "Photography-first layouts keep the UI deferential to content."
+  ],
+  "summary": {
+    "componentCount": 6,
+    "surfaceMood": "restrained, premium, content-first",
+    "platformMix": [
+      "web store",
+      "iOS app",
+      "print materials"
+    ]
+  }
+}

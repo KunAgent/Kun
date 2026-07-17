@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Minimal Dashboard - Button</title>
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>
+  /* Page scaffold — NOT extracted */
+  /* @component-css-start */
+body{margin:0;padding:12px;background:var(--color-surface);color:var(--color-text);font:500 14px/1.4 var(--font-sans);} .row{display:flex;align-items:center;gap:calc(var(--space-4)*2);flex-wrap:wrap;} .label{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--color-text-muted);min-width:88px;} .divider{margin:12px 0;border:0;border-top:1px solid var(--color-border);} .btn{display:inline-flex;align-items:center;justify-content:center;gap:var(--space-4);min-width:0;border:1px solid transparent;border-radius:var(--radius-md);padding:var(--space-4) calc(var(--space-4)*3);font:600 14px/1 var(--font-sans);cursor:pointer;transition:background-color .16s ease,border-color .16s ease,color .16s ease,box-shadow .16s ease;} .btn:focus-visible{outline:2px solid var(--color-primary);outline-offset:2px;} .btn:disabled{cursor:not-allowed;opacity:.5;box-shadow:none;} .primary{background:var(--color-primary);color:var(--color-primary-foreground);box-shadow:var(--shadow-sm);} .primary:hover:not(:disabled),.primary:active:not(:disabled){filter:brightness(.96);} .secondary{background:var(--color-surface);color:var(--color-text);border-color:var(--color-border);} .secondary:hover:not(:disabled),.secondary:active:not(:disabled){background:var(--color-surface-muted);} .ghost{background:transparent;color:var(--color-text);padding:calc(var(--space-4)*.75) calc(var(--space-4)*2.5);} .ghost:hover:not(:disabled),.ghost:active:not(:disabled){background:var(--color-surface-muted);} .danger{background:var(--color-danger-600);color:var(--color-primary-foreground);padding:calc(var(--space-4)*1.25) calc(var(--space-4)*3.5);} .danger:hover:not(:disabled),.danger:active:not(:disabled){filter:brightness(.94);}
+  /* @component-css-end */
+</style>
+</head>
+<body>
+<div class="row"><span class="label">Filled md</span><button class="btn primary">Overview</button><button class="btn primary" disabled>Revenue</button><button class="btn secondary">Active Users</button><button class="btn secondary" disabled>Team</button></div>
+<hr class="divider">
+<div class="row"><span class="label">Quiet mix</span><button class="btn ghost">Settings</button><button class="btn ghost" disabled>Overview</button><button class="btn danger">Revenue</button><button class="btn danger" disabled>Team</button></div>
+</body>
+</html>

@@ -1,0 +1,68 @@
+{
+  "schemaVersion": 2,
+  "slug": "dropdown",
+  "name": "Dropdown",
+  "category": "general",
+  "sourceKind": "structured-spec",
+  "confidence": "medium",
+  "semanticTypeCandidates": ["dropdown-menu", "select-menu", "context-menu", "popover-menu"],
+  "variantDimensions": {
+    "type": ["single", "multi", "cascade"],
+    "variant": ["basic", "with-desc-right", "with-desc-column", "with-divider", "with-icon", "with-search", "with-group"]
+  },
+  "representativeVariants": [
+    { "type": "single", "variant": "basic" },
+    { "type": "single", "variant": "with-desc-right" },
+    { "type": "single", "variant": "with-desc-column" },
+    { "type": "multi", "variant": "basic" },
+    { "type": "multi", "variant": "with-desc" },
+    { "type": "single", "variant": "with-divider" },
+    { "type": "cascade", "variant": "basic" }
+  ],
+  "anatomy": ["container", "item", "item-label", "item-desc", "checkbox", "arrow", "icon", "divider", "group-title", "search"],
+  "structurePatterns": [
+    "Inline-flex column container with 5px padding, rounded 4px, items stacked vertically with 4px gap",
+    "Each item is a flex row with label, optional desc/checkbox/icon/arrow",
+    "Cascade variant uses horizontal flex container (dropdown-cascade) with multiple dropdown panels side by side"
+  ],
+  "usageHints": [
+    "Container: background #FFFFFF, border 1px solid #EAEDF1, border-radius 4px, padding 5px",
+    "Box-shadow: 0px 15px 35px -2px rgba(0,0,0,0.05), 0px 5px 15px rgba(0,0,0,0.05)",
+    "Item: width 228px, padding 5px 12px, border-radius 4px",
+    "Item hover: background #F6F8FA",
+    "Active item label: color #1664FF, font-weight 500",
+    "Disabled item label: color #C7CCD6, cursor not-allowed",
+    "Label: PingFang SC 13px/22px 400 color #0C0D0E",
+    "Description: 12px/20px color #737A87",
+    "Checkbox: 14x14px, border-radius 2px, checked background #1664FF",
+    "Divider: width 228px, height 1px, background #EAEDF1, margin 4px 0"
+  ],
+  "doNotInvent": ["trigger button styling", "positioning logic", "animation"],
+  "unknowns": ["max height and scrolling behavior", "keyboard navigation specifics"],
+  "tokensConsumed": [],
+  "domAnatomy": {
+    "root": {
+      "tag": "div",
+      "class": "dropdown",
+      "children": [
+        {
+          "tag": "div",
+          "class": "dropdown-item",
+          "children": [
+            { "tag": "span", "class": "dropdown-checkbox", "optional": true },
+            { "tag": "span", "class": "dropdown-item-icon", "optional": true },
+            { "tag": "span", "class": "dropdown-item-label" },
+            { "tag": "span", "class": "dropdown-item-desc", "optional": true },
+            { "tag": "span", "class": "dropdown-item-arrow", "optional": true }
+          ]
+        },
+        { "tag": "div", "class": "dropdown-divider", "optional": true }
+      ]
+    }
+  },
+  "provenance": {
+    "preview": "preview/ui-dropdown.html",
+    "source": "structured-spec",
+    "css": { "file": "ui-dropdown.html", "marker": "inline style" }
+  }
+}

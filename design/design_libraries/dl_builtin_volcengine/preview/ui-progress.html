@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>Progress 进度条</title>
+  <link rel="stylesheet" href="preview-scaffold.css">
+  <style>
+    .progress {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      width: 100%;
+      font-family: "PingFang SC", "Microsoft YaHei", -apple-system, sans-serif;
+    }
+    .progress-bar {
+      flex: 1;
+      min-width: 0;
+    }
+    .progress-track {
+      width: 100%;
+      background: #F1F3F5;
+      overflow: hidden;
+    }
+    .progress-fill {
+      height: 100%;
+      border-radius: inherit;
+      transition: width 0.3s ease;
+    }
+    .progress-lg .progress-track   { height: 8px; border-radius: 4px; }
+    .progress-lg .progress-fill    { border-radius: 4px; }
+    .progress-lg .progress-text    { font-size: 14px; }
+    .progress-default .progress-track { height: 4px; border-radius: 2px; }
+    .progress-default .progress-fill  { border-radius: 2px; }
+    .progress-default .progress-text  { font-size: 12px; }
+    .progress-sm .progress-track   { height: 3px; border-radius: 1.5px; }
+    .progress-sm .progress-fill    { border-radius: 1.5px; }
+    .progress-sm .progress-text    { font-size: 12px; }
+    .progress-mini .progress-track { height: 2px; border-radius: 1px; }
+    .progress-mini .progress-fill  { border-radius: 1px; }
+    .progress-mini .progress-text  { display: none; }
+    .progress-normal .progress-fill  { background: #1664FF; }
+    .progress-success .progress-fill { background: #00B42A; }
+    .progress-error .progress-fill   { background: #F53F3F; }
+    .progress-warning .progress-fill { background: #FF7D00; }
+    .progress-text {
+      flex-shrink: 0;
+      color: #42464E;
+      font-weight: 400;
+      white-space: nowrap;
+      min-width: 32px;
+      text-align: right;
+    }
+  </style>
+</head>
+<body>
+  <div class="pv-header">
+    <h1>Progress 进度条</h1>
+    <p>展示操作的当前进度，支持多种尺寸与状态颜色。</p>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">Default 默认尺寸</div>
+    <div class="stack-12">
+      <div class="progress progress-line progress-default progress-normal" data-component="progress" data-size="default" data-status="normal">
+        <div class="progress-bar"><div class="progress-track"><div class="progress-fill" style="width: 30%"></div></div></div>
+        <span class="progress-text">30%</span>
+      </div>
+      <div class="progress progress-line progress-default progress-success" data-component="progress" data-size="default" data-status="success">
+        <div class="progress-bar"><div class="progress-track"><div class="progress-fill" style="width: 100%"></div></div></div>
+        <span class="progress-text">100%</span>
+      </div>
+      <div class="progress progress-line progress-default progress-error" data-component="progress" data-size="default" data-status="error">
+        <div class="progress-bar"><div class="progress-track"><div class="progress-fill" style="width: 50%"></div></div></div>
+        <span class="progress-text">50%</span>
+      </div>
+      <div class="progress progress-line progress-default progress-warning" data-component="progress" data-size="default" data-status="warning">
+        <div class="progress-bar"><div class="progress-track"><div class="progress-fill" style="width: 70%"></div></div></div>
+        <span class="progress-text">70%</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">Large 大尺寸</div>
+    <div class="stack-12">
+      <div class="progress progress-line progress-lg progress-normal" data-component="progress" data-size="lg" data-status="normal">
+        <div class="progress-bar"><div class="progress-track"><div class="progress-fill" style="width: 60%"></div></div></div>
+        <span class="progress-text">60%</span>
+      </div>
+      <div class="progress progress-line progress-lg progress-success" data-component="progress" data-size="lg" data-status="success">
+        <div class="progress-bar"><div class="progress-track"><div class="progress-fill" style="width: 100%"></div></div></div>
+        <span class="progress-text">100%</span>
+      </div>
+      <div class="progress progress-line progress-lg progress-error" data-component="progress" data-size="lg" data-status="error">
+        <div class="progress-bar"><div class="progress-track"><div class="progress-fill" style="width: 40%"></div></div></div>
+        <span class="progress-text">40%</span>
+      </div>
+      <div class="progress progress-line progress-lg progress-warning" data-component="progress" data-size="lg" data-status="warning">
+        <div class="progress-bar"><div class="progress-track"><div class="progress-fill" style="width: 80%"></div></div></div>
+        <span class="progress-text">80%</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">Small 小尺寸</div>
+    <div class="stack-12">
+      <div class="progress progress-line progress-sm progress-normal" data-component="progress" data-size="sm" data-status="normal">
+        <div class="progress-bar"><div class="progress-track"><div class="progress-fill" style="width: 45%"></div></div></div>
+        <span class="progress-text">45%</span>
+      </div>
+      <div class="progress progress-line progress-sm progress-success" data-component="progress" data-size="sm" data-status="success">
+        <div class="progress-bar"><div class="progress-track"><div class="progress-fill" style="width: 100%"></div></div></div>
+        <span class="progress-text">100%</span>
+      </div>
+      <div class="progress progress-line progress-sm progress-error" data-component="progress" data-size="sm" data-status="error">
+        <div class="progress-bar"><div class="progress-track"><div class="progress-fill" style="width: 30%"></div></div></div>
+        <span class="progress-text">30%</span>
+      </div>
+      <div class="progress progress-line progress-sm progress-warning" data-component="progress" data-size="sm" data-status="warning">
+        <div class="progress-bar"><div class="progress-track"><div class="progress-fill" style="width: 90%"></div></div></div>
+        <span class="progress-text">90%</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">Mini 迷你（无文字）</div>
+    <div class="stack-12">
+      <div class="progress progress-line progress-mini progress-normal" data-component="progress" data-size="mini" data-status="normal">
+        <div class="progress-bar"><div class="progress-track"><div class="progress-fill" style="width: 50%"></div></div></div>
+      </div>
+      <div class="progress progress-line progress-mini progress-success" data-component="progress" data-size="mini" data-status="success">
+        <div class="progress-bar"><div class="progress-track"><div class="progress-fill" style="width: 100%"></div></div></div>
+      </div>
+      <div class="progress progress-line progress-mini progress-error" data-component="progress" data-size="mini" data-status="error">
+        <div class="progress-bar"><div class="progress-track"><div class="progress-fill" style="width: 25%"></div></div></div>
+      </div>
+      <div class="progress progress-line progress-mini progress-warning" data-component="progress" data-size="mini" data-status="warning">
+        <div class="progress-bar"><div class="progress-track"><div class="progress-fill" style="width: 75%"></div></div></div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

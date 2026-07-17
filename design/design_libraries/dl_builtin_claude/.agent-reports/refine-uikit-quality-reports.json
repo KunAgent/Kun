@@ -1,0 +1,11 @@
+{
+  "writtenFiles": [
+    "ui_kits/app/quality-report.json",
+    "ui_kits/website/quality-report.json"
+  ],
+  "warnings": [],
+  "stats": {
+    "mode": "minimal-valid-quality-report",
+    "writtenCount": 2
+  }
+}

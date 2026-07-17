@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Status Bar</title>
+  <link rel="stylesheet" href="../colors_and_type.css" />
+  <link rel="stylesheet" href="../scaffold.css" />
+  <link rel="stylesheet" href="../components.css" />
+  <style>
+    /* @component-css-start */
+    /* ===== Status Bar ===== */
+    .ds-statusbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 24px;
+      padding: 0 var(--spacer-8);
+      background: var(--bg-base-secondary);
+      border-top: 1px solid var(--border-neutral-l1);
+      font-size: var(--body-xs-font-size);
+      color: var(--text-secondary);
+    }
+    .ds-statusbar__group {
+      display: flex;
+      align-items: center;
+      gap: var(--spacer-4);
+    }
+    .ds-statusbar__item {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--spacer-6);
+      height: 20px;
+      padding: 0 var(--spacer-6);
+      border-radius: var(--radius-4);
+      color: var(--text-secondary);
+      cursor: pointer;
+    }
+    .ds-statusbar__item:hover {
+      background: var(--bg-overlay-l2);
+      color: var(--text-default);
+    }
+    .ds-statusbar__dot {
+      width: 8px;
+      height: 8px;
+      border-radius: var(--radius-full);
+    }
+    .ds-statusbar__dot--success { background: var(--status-success-default); }
+    .ds-statusbar__dot--warning { background: var(--status-warning-default); }
+    .ds-statusbar__dot--error { background: var(--status-error-default); }
+    /* @component-css-end */
+  </style>
+</head>
+<body>
+  <div class="pv-header">
+    <h1>Status Bar</h1>
+    <p>底部状态栏：左右两组 status-item（图标+文字），含彩色 dot（--status-success/warning/error-default）。背景 --bg-base-secondary。</p>
+  </div>
+  <div class="pv-section">
+    <div class="pv-section__title">Default</div>
+    <div class="ds-statusbar">
+      <div class="ds-statusbar__group">
+        <span class="ds-statusbar__item">
+          <img src="../assets/icons/git.svg" width="12" height="12" alt="git" class="icon" />
+          main
+        </span>
+        <span class="ds-statusbar__item">
+          <span class="ds-statusbar__dot ds-statusbar__dot--success"></span>
+          Synced
+        </span>
+        <span class="ds-statusbar__item">
+          <img src="../assets/icons/check-circle.svg" width="12" height="12" alt="check-circle" class="icon" />
+          0 Errors
+        </span>
+      </div>
+      <div class="ds-statusbar__group">
+        <span class="ds-statusbar__item">Ln 42, Col 16</span>
+        <span class="ds-statusbar__item">Spaces: 2</span>
+        <span class="ds-statusbar__item">UTF-8</span>
+        <span class="ds-statusbar__item">
+          <img src="../assets/icons/code.svg" width="12" height="12" alt="code" class="icon" />
+          TypeScript
+        </span>
+        <span class="ds-statusbar__item">
+          <img src="../assets/icons/bell.svg" width="12" height="12" alt="bell" class="icon" />
+        </span>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

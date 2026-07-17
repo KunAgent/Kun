@@ -1,0 +1,14 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>body{margin:0;padding:12px;background:var(--background);color:var(--foreground);font-family:var(--font-sans)}.row{display:flex;gap:8px;align-items:flex-start;flex-wrap:wrap;margin-bottom:8px}.label{font-size:calc(var(--kicker-size)*1px);letter-spacing:var(--kicker-letter-spacing);text-transform:var(--kicker-text-transform);color:var(--muted-foreground);padding-top:8px;min-width:58px}.sheet{flex:1 1 260px;min-height:72px;padding:10px 14px;background:var(--video-bg);border:1px solid var(--border);display:flex;align-items:flex-start;justify-content:center}.tabs{display:flex;gap:18px;align-items:center}.tab{position:relative;border:0;background:none;padding:0 0 8px;color:color-mix(in srgb,var(--foreground) 70%,transparent);font:400 15px/1.2 var(--font-sans);cursor:pointer;transition:color .18s ease}.tab:hover,.tab:focus-visible{color:var(--secondary);outline:none}.tab.active{color:var(--foreground);font-weight:600}.tab.active::after{content:"";position:absolute;left:0;right:0;bottom:0;height:1px;background:var(--primary)}.tabs[aria-disabled=true] .tab{color:var(--muted-foreground);cursor:not-allowed;transition:none}.tabs[aria-disabled=true] .tab.active::after{background:color-mix(in srgb,var(--foreground) 55%,transparent)}.tabs.reduced .tab{transition:none}.divider{border:0;border-top:1px solid var(--border);margin:8px 0}</style>
+</head>
+<body class="dark">
+<div class="row"><span class="label">DEFAULT</span><div class="sheet"><nav class="tabs" aria-label="Mobile top tabs"><button class="tab" type="button">Following</button><button class="tab active" type="button" aria-current="page">For You</button><button class="tab" type="button">LIVE</button></nav></div><div class="sheet"><nav class="tabs" aria-label="Disabled mobile top tabs" aria-disabled="true"><button class="tab" type="button" disabled>Following</button><button class="tab active" type="button" disabled aria-current="page">For You</button><button class="tab" type="button" disabled>LIVE</button></nav></div></div>
+<hr class="divider">
+<div class="row"><span class="label">REDUCED</span><div class="sheet"><nav class="tabs reduced" aria-label="Reduced motion mobile top tabs"><button class="tab" type="button">Following</button><button class="tab active" type="button" aria-current="page">For You</button><button class="tab" type="button">LIVE</button></nav></div></div>
+</body>
+</html>

@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Notifications</title>
+  <link rel="stylesheet" href="../colors_and_type.css" />
+  <link rel="stylesheet" href="../scaffold.css" />
+  <link rel="stylesheet" href="../components.css" />
+  <style>
+    /* === Notifications matrix (Simple + Complex × Error/Warning/Alert/Information) === */
+    .notif-matrix {
+      display: grid;
+      grid-template-columns: 110px 1fr 1fr;
+      gap: var(--spacer-24) var(--spacer-32);
+      align-items: center;
+    }
+    .notif-row__label {
+      display: inline-flex; align-items: center; justify-content: center;
+      padding: 0 var(--spacer-8); height: 24px;
+      background: var(--bg-overlay-l3); color: var(--text-default);
+      border: 1px solid var(--border-neutral-l1);
+      border-radius: var(--radius-2);
+      font-family: var(--code-editor-font-family);
+      font-size: 11px; line-height: 1;
+    }
+    .notif-col__head {
+      display: inline-flex; align-items: center; justify-content: center;
+      padding: 0 var(--spacer-8); height: 24px;
+      background: var(--bg-overlay-l3); color: var(--text-default);
+      border: 1px solid var(--border-neutral-l1);
+      border-radius: var(--radius-2);
+      font-family: var(--code-editor-font-family);
+      font-size: 11px; line-height: 1;
+    }
+
+    /* === Notification base === */
+    .ds-notif {
+      display: flex; align-items: flex-start;
+      gap: var(--spacer-8);
+      padding: 8px 12px;
+      border: 1px solid var(--border-neutral-l1);
+      background: var(--bg-base-secondary);
+      border-radius: var(--radius-4);
+      color: var(--text-default);
+    }
+    .ds-notif__icon { flex: 0 0 16px; margin-top: 1px; color: var(--icon-default); display: inline-flex; }
+    .ds-notif__body { flex: 1; min-width: 0; }
+    .ds-notif__title {
+      font-family: var(--body-sm-strong-font-family);
+      font-weight: var(--body-sm-strong-font-weight);
+      font-size: var(--body-sm-strong-font-size);
+      line-height: var(--body-sm-strong-line-height);
+      color: var(--text-default);
+    }
+    .ds-notif__text {
+      font-size: var(--body-sm-font-size);
+      line-height: var(--body-sm-line-height);
+      color: var(--text-default);
+    }
+    .ds-notif__desc {
+      font-size: var(--body-sm-font-size);
+      line-height: var(--body-sm-line-height);
+      color: var(--text-secondary);
+      margin-top: 4px;
+    }
+    .ds-notif__actions {
+      display: inline-flex; align-items: center; gap: var(--spacer-6);
+      margin-top: var(--spacer-8);
+    }
+    .ds-notif__close {
+      flex-shrink: 0;
+      width: 16px; height: 16px;
+      display: inline-flex; align-items: center; justify-content: center;
+      background: transparent; border: none; cursor: pointer;
+      color: var(--icon-secondary);
+    }
+    .ds-notif__close:hover { color: var(--icon-default); }
+
+    /* simple variant — single line, action at the end */
+    .ds-notif--simple { align-items: center; padding: 7px 8px 7px 12px; }
+    .ds-notif--simple .ds-notif__text { flex: 1; }
+
+    /* status variants — outline icon color + tinted surface (l1) + tinted border (l2) */
+    .ds-notif--error  { background: var(--status-error-surface-l1);  border-color: var(--status-error-surface-l2); }
+    .ds-notif--error  .ds-notif__icon { color: var(--status-error-default); }
+
+    .ds-notif--warning { background: var(--status-warning-surface-l1); border-color: var(--status-warning-surface-l2); }
+    .ds-notif--warning .ds-notif__icon { color: var(--status-warning-default); }
+
+    .ds-notif--alert { background: var(--status-alert-surface-l1);   border-color: var(--status-alert-surface-l2); }
+    .ds-notif--alert .ds-notif__icon { color: var(--status-alert-default); }
+
+    .ds-notif--info  { background: var(--status-primary-surface-l1); border-color: var(--status-primary-surface-l2); }
+    .ds-notif--info  .ds-notif__icon { color: var(--status-primary-default); }
+
+    /* @component-css-start */
+    /* ===== Alert / Banner ===== */
+    .ds-alert {
+      display: flex; gap: var(--spacer-12);
+      padding: var(--spacer-12) var(--spacer-16);
+      background: var(--bg-base-secondary);
+      border: 1px solid var(--border-neutral-l1);
+      border-radius: var(--radius-4);
+      color: var(--text-default);
+      align-items: flex-start;
+    }
+    .ds-alert__icon { flex-shrink: 0; margin-top: 1px; color: var(--icon-default); display: inline-flex; }
+    .ds-alert--success .ds-alert__icon { color: var(--status-success-default); }
+    .ds-alert--warning .ds-alert__icon { color: var(--status-warning-default); }
+    .ds-alert--danger  .ds-alert__icon { color: var(--status-error-default); }
+    .ds-alert--info    .ds-alert__icon { color: var(--status-primary-default); }
+    .ds-alert__title { font-weight: var(--font-weight-medium, 500); margin-bottom: var(--spacer-4); }
+    .ds-alert__desc { color: var(--text-secondary); font-size: var(--body-sm-font-size); }
+    /* @component-css-end */
+  </style>
+</head>
+<body>
+  <div class="pv-header">
+    <h1>Notifications</h1>
+    <p>Two layouts (Simple, Complex) × four statuses (Error, Warning, Alert, Information). Status is conveyed by an <strong>outline</strong> icon color + tinted surface — never by a filled glyph.</p>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">Variants</div>
+    <div class="notif-matrix">
+      <div></div>
+      <div><span class="notif-col__head">Simple</span></div>
+      <div><span class="notif-col__head">Complex</span></div>
+
+      <!-- Error -->
+      <div><span class="notif-row__label">Error</span></div>
+      <div>
+        <div class="ds-notif ds-notif--simple ds-notif--error">
+          <span class="ds-notif__icon"><img src="../assets/icons/x-circle.svg" width="16" height="16" alt="x-circle" class="icon"></span>
+          <p class="ds-notif__text">Your account is abnormal and operations are restricted.</p>
+          <button class="ds-btn ds-btn--sm ds-btn--tertiary">Button Title</button>
+          <button class="ds-notif__close" aria-label="Dismiss"><img src="../assets/icons/x.svg" width="14" height="14" alt="x" class="icon"></button>
+        </div>
+      </div>
+      <div>
+        <div class="ds-notif ds-notif--error">
+          <span class="ds-notif__icon"><img src="../assets/icons/x-circle.svg" width="16" height="16" alt="x-circle" class="icon"></span>
+          <div class="ds-notif__body">
+            <div class="ds-notif__title">Error</div>
+            <p class="ds-notif__desc">Our system has captured that you have performed illegal operations, so your account has been banned and you will log out.</p>
+            <div class="ds-notif__actions">
+              <button class="ds-btn ds-btn--sm ds-btn--secondary">Button Title</button>
+              <button class="ds-btn ds-btn--sm ds-btn--tertiary">Button Title</button>
+            </div>
+          </div>
+          <button class="ds-notif__close" aria-label="Dismiss"><img src="../assets/icons/x.svg" width="14" height="14" alt="x" class="icon"></button>
+        </div>
+      </div>
+
+      <!-- Warning -->
+      <div><span class="notif-row__label">Warning</span></div>
+      <div>
+        <div class="ds-notif ds-notif--simple ds-notif--warning">
+          <span class="ds-notif__icon"><img src="../assets/icons/alert.svg" width="16" height="16" alt="alert" class="icon"></span>
+          <p class="ds-notif__text">Your account is abnormal and operations are restricted.</p>
+          <button class="ds-btn ds-btn--sm ds-btn--tertiary">Button Title</button>
+          <button class="ds-notif__close" aria-label="Dismiss"><img src="../assets/icons/x.svg" width="14" height="14" alt="x" class="icon"></button>
+        </div>
+      </div>
+      <div>
+        <div class="ds-notif ds-notif--warning">
+          <span class="ds-notif__icon"><img src="../assets/icons/alert.svg" width="16" height="16" alt="alert" class="icon"></span>
+          <div class="ds-notif__body">
+            <div class="ds-notif__title">Warning</div>
+            <p class="ds-notif__desc">Our system has captured that you have performed illegal operations, so your account has been banned and you will log out.</p>
+            <div class="ds-notif__actions">
+              <button class="ds-btn ds-btn--sm ds-btn--secondary">Button Title</button>
+              <button class="ds-btn ds-btn--sm ds-btn--tertiary">Button Title</button>
+            </div>
+          </div>
+          <button class="ds-notif__close" aria-label="Dismiss"><img src="../assets/icons/x.svg" width="14" height="14" alt="x" class="icon"></button>
+        </div>
+      </div>
+
+      <!-- Alert -->
+      <div><span class="notif-row__label">Alert</span></div>
+      <div>
+        <div class="ds-notif ds-notif--simple ds-notif--alert">
+          <span class="ds-notif__icon"><img src="../assets/icons/alert-circle.svg" width="16" height="16" alt="alert-circle" class="icon"></span>
+          <p class="ds-notif__text">Your account is abnormal and operations are restricted.</p>
+          <button class="ds-btn ds-btn--sm ds-btn--tertiary">Button Title</button>
+          <button class="ds-notif__close" aria-label="Dismiss"><img src="../assets/icons/x.svg" width="14" height="14" alt="x" class="icon"></button>
+        </div>
+      </div>
+      <div>
+        <div class="ds-notif ds-notif--alert">
+          <span class="ds-notif__icon"><img src="../assets/icons/alert-circle.svg" width="16" height="16" alt="alert-circle" class="icon"></span>
+          <div class="ds-notif__body">
+            <div class="ds-notif__title">Alert</div>
+            <p class="ds-notif__desc">Our system has captured that you have performed illegal operations, so your account has been banned and you will log out.</p>
+            <div class="ds-notif__actions">
+              <button class="ds-btn ds-btn--sm ds-btn--secondary">Button Title</button>
+              <button class="ds-btn ds-btn--sm ds-btn--tertiary">Button Title</button>
+            </div>
+          </div>
+          <button class="ds-notif__close" aria-label="Dismiss"><img src="../assets/icons/x.svg" width="14" height="14" alt="x" class="icon"></button>
+        </div>
+      </div>
+
+      <!-- Information -->
+      <div><span class="notif-row__label">Information</span></div>
+      <div>
+        <div class="ds-notif ds-notif--simple ds-notif--info">
+          <span class="ds-notif__icon"><img src="../assets/icons/info.svg" width="16" height="16" alt="info" class="icon"></span>
+          <p class="ds-notif__text">Your account is abnormal and operations are restricted.</p>
+          <button class="ds-btn ds-btn--sm ds-btn--tertiary">Button Title</button>
+          <button class="ds-notif__close" aria-label="Dismiss"><img src="../assets/icons/x.svg" width="14" height="14" alt="x" class="icon"></button>
+        </div>
+      </div>
+      <div>
+        <div class="ds-notif ds-notif--info">
+          <span class="ds-notif__icon"><img src="../assets/icons/info.svg" width="16" height="16" alt="info" class="icon"></span>
+          <div class="ds-notif__body">
+            <div class="ds-notif__title">Information</div>
+            <p class="ds-notif__desc">Our system has captured that you have performed illegal operations, so your account has been banned and you will log out.</p>
+            <div class="ds-notif__actions">
+              <button class="ds-btn ds-btn--sm ds-btn--secondary">Button Title</button>
+              <button class="ds-btn ds-btn--sm ds-btn--tertiary">Button Title</button>
+            </div>
+          </div>
+          <button class="ds-notif__close" aria-label="Dismiss"><img src="../assets/icons/x.svg" width="14" height="14" alt="x" class="icon"></button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">Inline alert (within page flow)</div>
+    <p class="pv-section__sub">Use <code>.ds-alert</code> for inline banners that share the page surface — neutral background, status conveyed by icon color only.</p>
+    <div class="stack-12" style="max-width: 720px;">
+      <div class="ds-alert ds-alert--info">
+        <span class="ds-alert__icon"><img src="../assets/icons/info.svg" width="16" height="16" alt="info" class="icon"></span>
+        <div>
+          <div class="ds-alert__title">A new version is available.</div>
+          <div class="ds-alert__desc">Refresh to load the latest tokens and Markdown spec.</div>
+        </div>
+      </div>
+      <div class="ds-alert ds-alert--success">
+        <span class="ds-alert__icon"><img src="../assets/icons/check-circle.svg" width="16" height="16" alt="check-circle" class="icon"></span>
+        <div>
+          <div class="ds-alert__title">Configuration saved</div>
+          <div class="ds-alert__desc">All members will see the new tokens within a minute.</div>
+        </div>
+      </div>
+      <div class="ds-alert ds-alert--warning">
+        <span class="ds-alert__icon"><img src="../assets/icons/alert.svg" width="16" height="16" alt="alert" class="icon"></span>
+        <div>
+          <div class="ds-alert__title">You're approaching your free-tier limit.</div>
+          <div class="ds-alert__desc">Upgrade to keep generating CSS specs.</div>
+        </div>
+      </div>
+      <div class="ds-alert ds-alert--danger">
+        <span class="ds-alert__icon"><img src="../assets/icons/x-circle.svg" width="16" height="16" alt="x-circle" class="icon"></span>
+        <div>
+          <div class="ds-alert__title">Token import failed</div>
+          <div class="ds-alert__desc">Please check the JSON structure and try again.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</body>
+</html>

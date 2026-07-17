@@ -1,0 +1,219 @@
+/* Source: structured-spec */
+/* Brand profile: google / dashboard / clean / analytical / modern */
+/* Theme mode: light-dark */
+/* Alias layer: enabled */
+
+/* Light mode source tokens */
+:root {
+  /* Core surface colors */
+  --background: #ffffff;
+  --foreground: #0e1115;
+  --card: #ffffff;
+  --card-foreground: #0e1115;
+  --popover: #f9f9fa;
+  --popover-foreground: #0e1115;
+
+  /* Semantic action colors */
+  --primary: #4285f4;
+  --primary-foreground: #ffffff;
+  --secondary: #dbeafe;
+  --secondary-foreground: #333942;
+  --muted: #eff1f4;
+  --muted-foreground: #7f8d9f;
+  --accent: #dbeafe;
+  --accent-foreground: #003e8f;
+  --destructive: #ef4444;
+  --destructive-foreground: #ffffff;
+
+  /* Borders, inputs, focus */
+  --border: #ebebeb;
+  --input: #e2e3e4;
+  --ring: #4285f4;
+
+  /* Data visualization */
+  --chart-1: #4285f4;
+  --chart-2: #ea4335;
+  --chart-3: #fbbc05;
+  --chart-4: #0043ad;
+  --chart-5: #34a853;
+
+  /* Sidebar */
+  --sidebar: #f0f6ff;
+  --sidebar-foreground: #0e1115;
+  --sidebar-primary: #4285f4;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #dbeafe;
+  --sidebar-accent-foreground: #003e8f;
+  --sidebar-border: #e7eaef;
+  --sidebar-ring: #4285f4;
+
+  /* Typography */
+  --font-sans: DM Sans, ui-sans-serif, sans-serif, system-ui;
+  --font-serif: DM Sans, ui-sans-serif, sans-serif, system-ui;
+  --font-mono: JetBrains Mono, monospace;
+
+  /* Radius */
+  --radius: 0.5rem;
+
+  /* Shadow primitives */
+  --shadow-x: 0;
+  --shadow-y: 3px;
+  --shadow-blur: 0px;
+  --shadow-spread: 0px;
+  --shadow-opacity: 0;
+  --shadow-color: #0e1115;
+
+  /* Elevation */
+  --shadow-2xs: 0 3px 0px 0px rgba(14, 17, 21, 0);
+  --shadow-xs: 0 3px 0px 0px rgba(14, 17, 21, 0);
+  --shadow-sm: 0 3px 0px 0px rgba(14, 17, 21, 0), 0 1px 2px -1px rgba(14, 17, 21, 0);
+  --shadow: 0 3px 0px 0px rgba(14, 17, 21, 0), 0 1px 2px -1px rgba(14, 17, 21, 0);
+  --shadow-md: 0 3px 0px 0px rgba(14, 17, 21, 0), 0 2px 4px -1px rgba(14, 17, 21, 0);
+  --shadow-lg: 0 3px 0px 0px rgba(14, 17, 21, 0), 0 4px 6px -1px rgba(14, 17, 21, 0);
+  --shadow-xl: 0 3px 0px 0px rgba(14, 17, 21, 0), 0 8px 10px -1px rgba(14, 17, 21, 0);
+  --shadow-2xl: 0 3px 0px 0px rgba(14, 17, 21, 0);
+
+  /* Rhythm */
+  --tracking-normal: 0em;
+  --spacing: 0.24rem;
+}
+
+/* Dark mode source tokens */
+.dark {
+  /* Core surface colors */
+  --background: #161616;
+  --foreground: #eff1f4;
+  --card: #1d1d1c;
+  --card-foreground: #eff1f4;
+  --popover: #2e2e2e;
+  --popover-foreground: #e5e5e5;
+
+  /* Semantic action colors */
+  --primary: #fc2c50;
+  --primary-foreground: #ffffff;
+  --secondary: #383838;
+  --secondary-foreground: #e5e5e5;
+  --muted: #383838;
+  --muted-foreground: #949494;
+  --accent: #4a2026;
+  --accent-foreground: #fc2c50;
+  --destructive: #ef4444;
+  --destructive-foreground: #ffffff;
+
+  /* Borders, inputs, focus */
+  --border: #1d1d1c;
+  --input: #000000;
+  --ring: #ffffff;
+
+  /* Data visualization */
+  --chart-1: #2dccd3;
+  --chart-2: #f1204a;
+  --chart-3: #edbbe8;
+  --chart-4: #fbeb35;
+  --chart-5: #baf6f0;
+
+  /* Sidebar */
+  --sidebar: #171717;
+  --sidebar-foreground: #e5e5e5;
+  --sidebar-primary: #0065fd;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #00266b;
+  --sidebar-accent-foreground: #bfdbfe;
+  --sidebar-border: #404040;
+  --sidebar-ring: #00266b;
+
+  /* Typography */
+  --font-sans: DM Sans, ui-sans-serif, sans-serif, system-ui;
+  --font-serif: DM Sans, ui-sans-serif, sans-serif, system-ui;
+  --font-mono: JetBrains Mono, monospace;
+
+  /* Radius */
+  --radius: 0.5rem;
+
+  /* Shadow primitives */
+  --shadow-x: 0;
+  --shadow-y: 3px;
+  --shadow-blur: 0px;
+  --shadow-spread: 0px;
+  --shadow-opacity: 0;
+  --shadow-color: #000000;
+
+  /* Elevation */
+  --shadow-2xs: 0 3px 0px 0px rgba(0, 0, 0, 0);
+  --shadow-xs: 0 3px 0px 0px rgba(0, 0, 0, 0);
+  --shadow-sm: 0 3px 0px 0px rgba(0, 0, 0, 0), 0 1px 2px -1px rgba(0, 0, 0, 0);
+  --shadow: 0 3px 0px 0px rgba(0, 0, 0, 0), 0 1px 2px -1px rgba(0, 0, 0, 0);
+  --shadow-md: 0 3px 0px 0px rgba(0, 0, 0, 0), 0 2px 4px -1px rgba(0, 0, 0, 0);
+  --shadow-lg: 0 3px 0px 0px rgba(0, 0, 0, 0), 0 4px 6px -1px rgba(0, 0, 0, 0);
+  --shadow-xl: 0 3px 0px 0px rgba(0, 0, 0, 0), 0 8px 10px -1px rgba(0, 0, 0, 0);
+  --shadow-2xl: 0 3px 0px 0px rgba(0, 0, 0, 0);
+}
+
+/* Alias layer */
+@theme inline {
+  /* Color aliases */
+  --google-color-background: var(--background);
+  --google-color-foreground: var(--foreground);
+  --google-color-card: var(--card);
+  --google-color-card-foreground: var(--card-foreground);
+  --google-color-popover: var(--popover);
+  --google-color-popover-foreground: var(--popover-foreground);
+  --google-color-primary: var(--primary);
+  --google-color-primary-foreground: var(--primary-foreground);
+  --google-color-secondary: var(--secondary);
+  --google-color-secondary-foreground: var(--secondary-foreground);
+  --google-color-muted: var(--muted);
+  --google-color-muted-foreground: var(--muted-foreground);
+  --google-color-accent: var(--accent);
+  --google-color-accent-foreground: var(--accent-foreground);
+  --google-color-destructive: var(--destructive);
+  --google-color-destructive-foreground: var(--destructive-foreground);
+  --google-color-border: var(--border);
+  --google-color-input: var(--input);
+  --google-color-ring: var(--ring);
+  --google-color-chart-1: var(--chart-1);
+  --google-color-chart-2: var(--chart-2);
+  --google-color-chart-3: var(--chart-3);
+  --google-color-chart-4: var(--chart-4);
+  --google-color-chart-5: var(--chart-5);
+  --google-color-sidebar: var(--sidebar);
+  --google-color-sidebar-foreground: var(--sidebar-foreground);
+  --google-color-sidebar-primary: var(--sidebar-primary);
+  --google-color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --google-color-sidebar-accent: var(--sidebar-accent);
+  --google-color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --google-color-sidebar-border: var(--sidebar-border);
+  --google-color-sidebar-ring: var(--sidebar-ring);
+
+  /* Typography aliases */
+  --google-font-sans: var(--font-sans);
+  --google-font-serif: var(--font-serif);
+  --google-font-mono: var(--font-mono);
+
+  /* Radius aliases */
+  --google-radius: var(--radius);
+  --google-radius-sm: calc(var(--radius) - 4px);
+  --google-radius-md: calc(var(--radius) - 2px);
+  --google-radius-lg: var(--radius);
+  --google-radius-xl: calc(var(--radius) + 4px);
+
+  /* Shadow aliases */
+  --google-shadow-x: var(--shadow-x);
+  --google-shadow-y: var(--shadow-y);
+  --google-shadow-blur: var(--shadow-blur);
+  --google-shadow-spread: var(--shadow-spread);
+  --google-shadow-opacity: var(--shadow-opacity);
+  --google-shadow-color: var(--shadow-color);
+  --google-shadow-2xs: var(--shadow-2xs);
+  --google-shadow-xs: var(--shadow-xs);
+  --google-shadow-sm: var(--shadow-sm);
+  --google-shadow: var(--shadow);
+  --google-shadow-md: var(--shadow-md);
+  --google-shadow-lg: var(--shadow-lg);
+  --google-shadow-xl: var(--shadow-xl);
+  --google-shadow-2xl: var(--shadow-2xl);
+
+  /* Rhythm aliases */
+  --google-tracking-normal: var(--tracking-normal);
+  --google-spacing: var(--spacing);
+}

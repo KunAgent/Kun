@@ -1,0 +1,77 @@
+{
+  "slug": "navigation",
+  "name": "Navigation",
+  "nameEn": "Navigation",
+  "category": "navigation",
+  "summary": "Apple-store-like navigation with black top bar and restrained secondary rails.",
+  "variantCount": 5,
+  "primitiveCount": 4,
+  "variantDimensions": {
+    "platform": [
+      "web",
+      "mobile"
+    ],
+    "level": [
+      "global",
+      "subnav",
+      "tabbar"
+    ],
+    "theme": [
+      "light",
+      "dark"
+    ]
+  },
+  "cssVariables": [
+    "background",
+    "foreground",
+    "muted-foreground",
+    "border",
+    "sidebar"
+  ],
+  "uiCopySamples": [
+    "Store",
+    "Support",
+    "Explore",
+    "Community"
+  ],
+  "structurePatterns": [
+    "Global nav uses dark surface and compact type",
+    "Secondary rails can scroll horizontally on narrow widths",
+    "Mobile tab bar uses blur and safe-area awareness"
+  ],
+  "structures": [
+    {
+      "name": "Global Web Navigation",
+      "description": "44px dark navigation bar with compact labels and subtle hover clarity.",
+      "anatomy": [
+        "brand",
+        "menu-items",
+        "utility-icons"
+      ],
+      "states": [
+        "default",
+        "hover"
+      ],
+      "notes": [
+        "Avoid oversized logo treatment"
+      ]
+    },
+    {
+      "name": "Mobile Tab Bar",
+      "description": "Blurred bottom tab bar with 4-5 destinations and generous tap areas.",
+      "anatomy": [
+        "tab-item",
+        "icon",
+        "label",
+        "safe-area"
+      ],
+      "states": [
+        "default",
+        "active"
+      ],
+      "notes": [
+        "Minimum hit area 44 by 44 points"
+      ]
+    }
+  ]
+}

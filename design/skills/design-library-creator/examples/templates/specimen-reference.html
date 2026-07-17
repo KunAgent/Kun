@@ -1,0 +1,176 @@
+<!--
+  Specimen Reference Template
+  ===========================
+  This is the "North Star" layout for component preview pages.
+  Phase 3 sub-agents MUST follow this structure when rendering
+  intent-based component previews.
+
+  Key patterns:
+  - .specimen > .header + .stage (mandatory structure)
+  - .specimen has border + radius + overflow:hidden (card container)
+  - .story = one variant group (grid: 92px label + 1fr content)
+  - .story-label stays inside the 92px label column; wrap or ellipsize long labels, never let labels overlap the rail
+  - .story has its own padding + border + radius + background (independent card)
+  - .rail = flex container for component instances (with border + bg)
+  - Structure is normative; token names below are illustrative only.
+    Generated previews MUST replace every var(--name) with names from
+    the current library's colors_and_type.css.
+  - Do not create local CSS variable aliases such as --bd, --rad, --bg2.
+  - Responsive breakpoint at 460px
+  - ALL interactive elements have real :hover/:focus-visible/:disabled pseudo-classes
+  - Button/Tag min-width >= height (no crushed elements)
+  - Text in controls: white-space:nowrap (no wrapping)
+-->
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <link rel="stylesheet" href="../colors_and_type.css">
+  <style>
+  *{margin:0;box-sizing:border-box}
+  .specimen{
+    max-width:100%;
+    margin:0 auto;
+    border:1px solid var(--border-default);
+    border-radius:var(--radius-m, 12px);
+    overflow:hidden;
+    background:var(--bg-base-default, #fff);
+    font-family:var(--font-body);
+  }
+  .header{
+    display:flex;
+    align-items:baseline;
+    justify-content:space-between;
+    padding:var(--spacer-24) var(--spacer-24) var(--spacer-16);
+    border-bottom:1px solid var(--border-subtle);
+  }
+  .header h1{font:var(--heading-lg);color:var(--text-default)}
+  .header .sub{font:var(--body-md);color:var(--text-tertiary);margin-top:var(--spacer-4)}
+  .pill{
+    font:var(--body-xs);
+    color:var(--text-secondary);
+    border:1px solid var(--border-default);
+    border-radius:var(--radius-full);
+    padding:var(--spacer-4) var(--spacer-12);
+    white-space:nowrap;
+  }
+  .stage{
+    display:flex;
+    flex-direction:column;
+    gap:var(--spacer-12);
+    padding:var(--spacer-16);
+    background:var(--bg-base-secondary, #f9fafb);
+  }
+  .story{
+    display:grid;
+    grid-template-columns:92px minmax(0,1fr);
+    align-items:center;
+    gap:var(--spacer-16);
+    padding:var(--spacer-12);
+    border:1px solid var(--border-subtle);
+    border-radius:var(--radius-s, 8px);
+    background:var(--bg-surface, var(--bg-base-default, #fff));
+  }
+  .story-label{
+    font:var(--body-xs);
+    color:var(--text-tertiary);
+    text-transform:uppercase;
+    width:92px;
+    min-width:0;
+    max-width:92px;
+    flex-shrink:0;
+    white-space:normal;
+    overflow:hidden;
+    overflow-wrap:anywhere;
+    line-height:1.25;
+  }
+  .rail{
+    display:flex;
+    min-width:0;
+    gap:var(--spacer-12);
+    flex-wrap:wrap;
+    align-items:center;
+    padding:var(--spacer-8);
+    border:1px solid var(--border-subtle);
+    border-radius:var(--radius-s, 8px);
+    background:var(--bg-base-secondary, var(--bg-base-default, #fafafa));
+  }
+  .divider{border:none;border-top:1px solid var(--border-subtle);margin:var(--spacer-8) 0}
+  /* ---- Component-specific styles (Button example) ---- */
+  .btn{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    gap:var(--spacer-8);
+    border:none;
+    cursor:pointer;
+    font:var(--body-sm);
+    border-radius:var(--radius-xs-6, 6px);
+    padding:var(--spacer-6) var(--spacer-16);
+    min-width:var(--control-height-m, 32px);
+    height:var(--control-height-m, 32px);
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    transition:background .15s, border-color .15s, opacity .15s;
+  }
+  .btn:focus-visible{outline:2px solid currentColor;outline-offset:2px}
+  .btn.brand{background:var(--bg-brand);color:var(--text-white)}
+  .btn.brand:hover{background:var(--bg-brand-hover)}
+  .btn.primary{background:var(--bg-neutral-l1);color:var(--text-default)}
+  .btn.primary:hover{background:var(--bg-neutral-l2)}
+  .btn.secondary{background:transparent;border:1px solid var(--border-neutral-l1);color:var(--text-default)}
+  .btn.secondary:hover{border-color:var(--border-neutral-l2);background:var(--bg-neutral-l1)}
+  .btn.ghost{background:transparent;color:var(--text-secondary)}
+  .btn.ghost:hover{background:var(--bg-neutral-l1)}
+  .btn:disabled,.btn[aria-disabled="true"]{opacity:.4;cursor:not-allowed;pointer-events:none}
+  @media(max-width:460px){
+    .story{grid-template-columns:1fr;gap:var(--spacer-8)}
+    .story-label{width:auto;max-width:none}
+  }
+  </style>
+</head>
+<body>
+<main class="specimen">
+  <header class="header">
+    <div>
+      <h1>Button</h1>
+      <div class="sub">Buttons define hierarchy through variant and density, not through color volume.</div>
+    </div>
+    <span class="pill">6px radius</span>
+  </header>
+  <div class="stage">
+    <section class="story">
+      <span class="story-label">Brand</span>
+      <div class="rail">
+        <button class="btn brand">Generate report</button>
+        <button class="btn brand" disabled>Generate report</button>
+      </div>
+    </section>
+    <section class="story">
+      <span class="story-label">Primary</span>
+      <div class="rail">
+        <button class="btn primary">Save</button>
+        <button class="btn primary" disabled>Save</button>
+      </div>
+    </section>
+    <section class="story">
+      <span class="story-label">Secondary</span>
+      <div class="rail">
+        <button class="btn secondary">Cancel</button>
+        <button class="btn secondary" disabled>Cancel</button>
+      </div>
+    </section>
+    <hr class="divider">
+    <section class="story">
+      <span class="story-label">Ghost</span>
+      <div class="rail">
+        <button class="btn ghost">Settings</button>
+        <button class="btn ghost" disabled>Settings</button>
+      </div>
+    </section>
+  </div>
+</main>
+</body>
+</html>

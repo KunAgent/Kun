@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>Sidebar 侧导航</title>
+  <link rel="stylesheet" href="preview-scaffold.css">
+  <style>
+  :root {
+    --text-1: #020814;
+    --text-3: #80838a;
+    --bg-7: #f6f8fa;
+    --border-2: #eaedf1;
+    --border-3: #dde2e9;
+    --primary-6: #1664FF;
+  }
+
+  /* ═══ 侧导航容器 ═══ */
+  .sidebar {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: space-between;
+    background: var(--bg-7);
+    width: 200px;
+    min-width: 200px;
+    height: 852px;
+    overflow: hidden;
+    flex-shrink: 0;
+  }
+
+  /* ═══ 产品头部 ═══ */
+  .sidebar-header {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    align-self: stretch;
+    column-gap: 6px;
+    padding: 20px 22px;
+  }
+
+  .product-icon {
+    flex-shrink: 0;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .product-icon svg {
+    width: 24px;
+    height: 24px;
+  }
+
+  .product-name {
+    flex-grow: 1;
+    height: 24px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 24px;
+    white-space: nowrap;
+    color: var(--text-1);
+    font-size: 16px;
+    font-weight: 500;
+  }
+
+  /* ═══ 菜单区域 ═══ */
+  .sidebar-menu {
+    display: flex;
+    flex-direction: column;
+    flex-grow: 1;
+    align-items: flex-start;
+    align-self: stretch;
+    overflow-y: auto;
+  }
+
+  .menu-section {
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+    align-items: flex-start;
+    align-self: stretch;
+    padding: 0 12px;
+    row-gap: 4px;
+  }
+
+  /* ═══ 全部功能包裹层 ═══ */
+  .menu-wrapper {
+    display: flex;
+    flex-direction: column;
+    flex-grow: 1;
+    align-items: flex-start;
+    align-self: stretch;
+    row-gap: 12px;
+    overflow-y: auto;
+  }
+
+  /* ═══ 分类标题 ═══ */
+  .group-title {
+    flex-shrink: 0;
+    align-self: stretch;
+    padding: 3px 12px;
+    overflow: hidden;
+    line-height: 20px;
+    letter-spacing: 0.04px;
+    color: var(--text-3);
+    font-size: 12px;
+  }
+
+  /* ═══ 分组块（分类标题 + 项） ═══ */
+  .menu-group-block {
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+    align-items: flex-start;
+    align-self: stretch;
+    row-gap: 4px;
+    border-radius: 4px;
+  }
+
+  /* ═══ 菜单项 ═══ */
+  .menu-item {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    align-self: stretch;
+    column-gap: 8px;
+    padding: 0 12px;
+    height: 36px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+
+  .menu-item.has-arrow { column-gap: 12px; }
+  .menu-item.no-icon { column-gap: 4px; }
+  .menu-item.no-icon.has-arrow { column-gap: 12px; }
+
+  .menu-item:hover { background: rgba(0, 0, 0, 0.04); }
+  .menu-item.active { background: rgba(22, 100, 255, 0.06); }
+  .menu-item.active .menu-text { color: var(--primary-6); }
+  .menu-item.active .menu-icon svg { color: var(--primary-6); }
+
+  .menu-icon {
+    flex-shrink: 0;
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .menu-icon svg {
+    width: 20px;
+    height: 20px;
+    color: var(--text-1);
+  }
+
+  .menu-text {
+    flex-grow: 1;
+    height: 22px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 22px;
+    letter-spacing: 0.04px;
+    white-space: nowrap;
+    color: var(--text-1);
+    font-size: 13px;
+  }
+
+  .menu-chevron {
+    flex-shrink: 0;
+    width: 12px;
+    height: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .menu-chevron svg {
+    width: 12px;
+    height: 12px;
+    color: var(--text-3);
+  }
+
+  /* ═══ 全部功能按钮 ═══ */
+  .all-features-btn {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    align-self: stretch;
+    column-gap: 12px;
+    border: 1px solid var(--border-3);
+    border-radius: 4px;
+    padding: 4px 11px;
+    cursor: pointer;
+    margin: 0 12px;
+    transition: border-color 0.15s;
+  }
+
+  .all-features-btn:hover { border-color: rgba(22, 100, 255, 0.5); }
+
+  .all-features-btn .btn-icon {
+    flex-shrink: 0;
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .all-features-btn .btn-icon svg { width: 20px; height: 20px; }
+
+  .all-features-btn .btn-text {
+    flex-grow: 1;
+    line-height: 22px;
+    letter-spacing: 0.04px;
+    color: var(--text-1);
+    font-size: 13px;
+  }
+
+  .all-features-btn .btn-chevron {
+    flex-shrink: 0;
+    width: 12px;
+    height: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .all-features-btn .btn-chevron svg { width: 12px; height: 12px; color: var(--text-3); }
+
+  /* ═══ 折叠按钮 ═══ */
+  .collapse-btn {
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: flex-start;
+    align-self: stretch;
+    column-gap: 10px;
+    border-top: 1px solid var(--border-2);
+    padding: 11px 24px 12px;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+
+  .collapse-btn:hover { background: rgba(0, 0, 0, 0.04); }
+  .collapse-btn svg { width: 16px; height: 16px; color: var(--text-1); }
+
+  /* ═══ 折叠态 ═══ */
+  .sidebar.collapsed {
+    display: inline-flex;
+    width: auto;
+    min-width: auto;
+  }
+
+  .sidebar.collapsed .sidebar-header { justify-content: center; padding: 20px 22px; }
+
+  .sidebar.collapsed .collapsed-menu {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    align-self: stretch;
+    flex-grow: 1;
+  }
+
+  .sidebar.collapsed .collapsed-item {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 8px 24px;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+
+  .sidebar.collapsed .collapsed-item:hover { background: rgba(0, 0, 0, 0.04); }
+  .sidebar.collapsed .collapsed-item .menu-icon { width: 20px; height: 20px; }
+
+  .collapsed-divider {
+    width: 36px;
+    height: 1px;
+    background: var(--border-2);
+    margin: 14px 12px;
+    flex-shrink: 0;
+  }
+
+  /* ═══ 极简折叠态 ═══ */
+  .sidebar-thin {
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    width: 10px;
+    height: 852px;
+    background: var(--bg-7);
+    border-right: 1px solid var(--border-2);
+    flex-shrink: 0;
+  }
+
+  .expand-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--border-2);
+    border-radius: 0 4px 4px 0;
+    padding: 3px;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+
+  .expand-btn:hover { background: rgba(0, 0, 0, 0.04); }
+  .expand-btn svg { width: 16px; height: 16px; color: var(--text-1); }
+  </style>
+</head>
+<body>
+  <div class="pv-header">
+    <h1>Sidebar 侧导航</h1>
+    <p>左侧导航菜单，支持图标/无图标、箭头展开、全部功能入口、折叠态和极简态等多种变体。</p>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">有图标 + 平铺 (icons-flat)</div>
+    <div class="row">
+      <div class="demo-box">
+        <div class="sidebar" data-component="sidebar" data-variant="icons-flat">
+          <div class="sidebar-header">
+            <span class="product-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="M3 9h18M9 3v18"/></svg></span>
+            <span class="product-name">产品名称</span>
+          </div>
+          <div class="sidebar-menu">
+            <div class="menu-section">
+              <div class="menu-item active">
+                <span class="menu-icon"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 7.5L10 2.5l7 5v8.5a1 1 0 01-1 1H4a1 1 0 01-1-1V7.5z"/><path d="M7.5 17V11h5v6"/></svg></span>
+                <span class="menu-text">一级菜单</span>
+              </div>
+              <div class="menu-group-block">
+                <span class="group-title">分类标题</span>
+                <div class="menu-item">
+                  <span class="menu-icon"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 14.5c1.5-2 3.5-3 5.5-3s4 1 5.5 3"/><path d="M4 11.5c1-1.5 2.5-2.5 4-2.5s3 1 4 2.5"/><path d="M6.5 8.5c.5-1 1.5-1.5 2.5-1.5s2 .5 2.5 1.5"/><circle cx="10" cy="15.5" r="1"/></svg></span>
+                  <span class="menu-text">一级菜单</span>
+                </div>
+              </div>
+              <div class="menu-item">
+                <span class="menu-icon"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 14.5c1.5-2 3.5-3 5.5-3s4 1 5.5 3"/><path d="M4 11.5c1-1.5 2.5-2.5 4-2.5s3 1 4 2.5"/><path d="M6.5 8.5c.5-1 1.5-1.5 2.5-1.5s2 .5 2.5 1.5"/><circle cx="10" cy="15.5" r="1"/></svg></span>
+                <span class="menu-text">一级菜单</span>
+              </div>
+              <div class="menu-item">
+                <span class="menu-icon"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 14.5c1.5-2 3.5-3 5.5-3s4 1 5.5 3"/><path d="M4 11.5c1-1.5 2.5-2.5 4-2.5s3 1 4 2.5"/><path d="M6.5 8.5c.5-1 1.5-1.5 2.5-1.5s2 .5 2.5 1.5"/><circle cx="10" cy="15.5" r="1"/></svg></span>
+                <span class="menu-text">一级菜单</span>
+              </div>
+              <div class="menu-item">
+                <span class="menu-icon"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 14.5c1.5-2 3.5-3 5.5-3s4 1 5.5 3"/><path d="M4 11.5c1-1.5 2.5-2.5 4-2.5s3 1 4 2.5"/><path d="M6.5 8.5c.5-1 1.5-1.5 2.5-1.5s2 .5 2.5 1.5"/><circle cx="10" cy="15.5" r="1"/></svg></span>
+                <span class="menu-text">一级菜单</span>
+              </div>
+              <div class="menu-item">
+                <span class="menu-icon"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 14.5c1.5-2 3.5-3 5.5-3s4 1 5.5 3"/><path d="M4 11.5c1-1.5 2.5-2.5 4-2.5s3 1 4 2.5"/><path d="M6.5 8.5c.5-1 1.5-1.5 2.5-1.5s2 .5 2.5 1.5"/><circle cx="10" cy="15.5" r="1"/></svg></span>
+                <span class="menu-text">一级菜单</span>
+              </div>
+              <div class="menu-item">
+                <span class="menu-icon"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 14.5c1.5-2 3.5-3 5.5-3s4 1 5.5 3"/><path d="M4 11.5c1-1.5 2.5-2.5 4-2.5s3 1 4 2.5"/><path d="M6.5 8.5c.5-1 1.5-1.5 2.5-1.5s2 .5 2.5 1.5"/><circle cx="10" cy="15.5" r="1"/></svg></span>
+                <span class="menu-text">一级菜单</span>
+              </div>
+            </div>
+          </div>
+          <div class="collapse-btn">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 4h12M2 8h12M2 12h12"/></svg>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">有图标 + 全部功能入口 (icons-all-features)</div>
+    <div class="row">
+      <div class="demo-box">
+        <div class="sidebar" data-component="sidebar" data-variant="icons-all-features">
+          <div class="sidebar-header">
+            <span class="product-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="M3 9h18M9 3v18"/></svg></span>
+            <span class="product-name">产品名称</span>
+          </div>
+          <div class="menu-wrapper">
+            <div class="all-features-btn">
+              <span class="btn-icon"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="4" height="4" rx="1"/><rect x="8.5" y="3" width="4" height="4" rx="1"/><rect x="14" y="3" width="4" height="4" rx="1"/><rect x="3" y="8.5" width="4" height="4" rx="1"/><rect x="8.5" y="8.5" width="4" height="4" rx="1"/><rect x="14" y="8.5" width="4" height="4" rx="1"/><rect x="3" y="14" width="4" height="4" rx="1"/><rect x="8.5" y="14" width="4" height="4" rx="1"/><rect x="14" y="14" width="4" height="4" rx="1"/></svg></span>
+              <span class="btn-text">全部功能</span>
+              <span class="btn-chevron"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 2.5L8 6l-3.5 3.5"/></svg></span>
+            </div>
+            <div class="menu-section">
+              <div class="menu-item active">
+                <span class="menu-icon"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 7.5L10 2.5l7 5v8.5a1 1 0 01-1 1H4a1 1 0 01-1-1V7.5z"/><path d="M7.5 17V11h5v6"/></svg></span>
+                <span class="menu-text">一级菜单</span>
+              </div>
+              <div class="menu-group-block">
+                <span class="group-title">分类标题</span>
+                <div class="menu-item">
+                  <span class="menu-icon"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 14.5c1.5-2 3.5-3 5.5-3s4 1 5.5 3"/><path d="M4 11.5c1-1.5 2.5-2.5 4-2.5s3 1 4 2.5"/><path d="M6.5 8.5c.5-1 1.5-1.5 2.5-1.5s2 .5 2.5 1.5"/><circle cx="10" cy="15.5" r="1"/></svg></span>
+                  <span class="menu-text">一级菜单</span>
+                </div>
+              </div>
+              <div class="menu-item">
+                <span class="menu-icon"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 14.5c1.5-2 3.5-3 5.5-3s4 1 5.5 3"/><path d="M4 11.5c1-1.5 2.5-2.5 4-2.5s3 1 4 2.5"/><path d="M6.5 8.5c.5-1 1.5-1.5 2.5-1.5s2 .5 2.5 1.5"/><circle cx="10" cy="15.5" r="1"/></svg></span>
+                <span class="menu-text">一级菜单</span>
+              </div>
+              <div class="menu-item">
+                <span class="menu-icon"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 14.5c1.5-2 3.5-3 5.5-3s4 1 5.5 3"/><path d="M4 11.5c1-1.5 2.5-2.5 4-2.5s3 1 4 2.5"/><path d="M6.5 8.5c.5-1 1.5-1.5 2.5-1.5s2 .5 2.5 1.5"/><circle cx="10" cy="15.5" r="1"/></svg></span>
+                <span class="menu-text">一级菜单</span>
+              </div>
+              <div class="menu-item">
+                <span class="menu-icon"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 14.5c1.5-2 3.5-3 5.5-3s4 1 5.5 3"/><path d="M4 11.5c1-1.5 2.5-2.5 4-2.5s3 1 4 2.5"/><path d="M6.5 8.5c.5-1 1.5-1.5 2.5-1.5s2 .5 2.5 1.5"/><circle cx="10" cy="15.5" r="1"/></svg></span>
+                <span class="menu-text">一级菜单</span>
+              </div>
+              <div class="menu-item">
+                <span class="menu-icon"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 14.5c1.5-2 3.5-3 5.5-3s4 1 5.5 3"/><path d="M4 11.5c1-1.5 2.5-2.5 4-2.5s3 1 4 2.5"/><path d="M6.5 8.5c.5-1 1.5-1.5 2.5-1.5s2 .5 2.5 1.5"/><circle cx="10" cy="15.5" r="1"/></svg></span>
+                <span class="menu-text">一级菜单</span>
+              </div>
+            </div>
+          </div>
+          <div class="collapse-btn">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 4h12M2 8h12M2 12h12"/></svg>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">有图标 + 可展开箭头 (icons-expandable)</div>
+    <div class="row">
+      <div class="demo-box">
+        <div class="sidebar" data-component="sidebar" data-variant="icons-expandable">
+          <div class="sidebar-header">
+            <span class="product-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="M3 9h18M9 3v18"/></svg></span>
+            <span class="product-name">产品名称</span>
+          </div>
+          <div class="sidebar-menu">
+            <div class="menu-section">
+              <div class="menu-item has-arrow active">
+                <span class="menu-icon"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 7.5L10 2.5l7 5v8.5a1 1 0 01-1 1H4a1 1 0 01-1-1V7.5z"/><path d="M7.5 17V11h5v6"/></svg></span>
+                <span class="menu-text">一级菜单</span>
+                <span class="menu-chevron"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4.5L6 7.5L9 4.5"/></svg></span>
+              </div>
+              <div class="menu-group-block">
+                <span class="group-title">分类标题</span>
+                <div class="menu-item has-arrow">
+                  <span class="menu-icon"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 14.5c1.5-2 3.5-3 5.5-3s4 1 5.5 3"/><path d="M4 11.5c1-1.5 2.5-2.5 4-2.5s3 1 4 2.5"/><path d="M6.5 8.5c.5-1 1.5-1.5 2.5-1.5s2 .5 2.5 1.5"/><circle cx="10" cy="15.5" r="1"/></svg></span>
+                  <span class="menu-text">一级菜单</span>
+                  <span class="menu-chevron"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4.5L6 7.5L9 4.5"/></svg></span>
+                </div>
+              </div>
+              <div class="menu-item has-arrow">
+                <span class="menu-icon"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 14.5c1.5-2 3.5-3 5.5-3s4 1 5.5 3"/><path d="M4 11.5c1-1.5 2.5-2.5 4-2.5s3 1 4 2.5"/><path d="M6.5 8.5c.5-1 1.5-1.5 2.5-1.5s2 .5 2.5 1.5"/><circle cx="10" cy="15.5" r="1"/></svg></span>
+                <span class="menu-text">一级菜单</span>
+                <span class="menu-chevron"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4.5L6 7.5L9 4.5"/></svg></span>
+              </div>
+              <div class="menu-item has-arrow">
+                <span class="menu-icon"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 14.5c1.5-2 3.5-3 5.5-3s4 1 5.5 3"/><path d="M4 11.5c1-1.5 2.5-2.5 4-2.5s3 1 4 2.5"/><path d="M6.5 8.5c.5-1 1.5-1.5 2.5-1.5s2 .5 2.5 1.5"/><circle cx="10" cy="15.5" r="1"/></svg></span>
+                <span class="menu-text">一级菜单</span>
+                <span class="menu-chevron"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4.5L6 7.5L9 4.5"/></svg></span>
+              </div>
+              <div class="menu-item has-arrow">
+                <span class="menu-icon"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 14.5c1.5-2 3.5-3 5.5-3s4 1 5.5 3"/><path d="M4 11.5c1-1.5 2.5-2.5 4-2.5s3 1 4 2.5"/><path d="M6.5 8.5c.5-1 1.5-1.5 2.5-1.5s2 .5 2.5 1.5"/><circle cx="10" cy="15.5" r="1"/></svg></span>
+                <span class="menu-text">一级菜单</span>
+                <span class="menu-chevron"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4.5L6 7.5L9 4.5"/></svg></span>
+              </div>
+              <div class="menu-item has-arrow">
+                <span class="menu-icon"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 14.5c1.5-2 3.5-3 5.5-3s4 1 5.5 3"/><path d="M4 11.5c1-1.5 2.5-2.5 4-2.5s3 1 4 2.5"/><path d="M6.5 8.5c.5-1 1.5-1.5 2.5-1.5s2 .5 2.5 1.5"/><circle cx="10" cy="15.5" r="1"/></svg></span>
+                <span class="menu-text">一级菜单</span>
+                <span class="menu-chevron"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4.5L6 7.5L9 4.5"/></svg></span>
+              </div>
+            </div>
+          </div>
+          <div class="collapse-btn">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 4h12M2 8h12M2 12h12"/></svg>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">全部功能 + 可展开箭头 (icons-all-features-expandable)</div>
+    <div class="row">
+      <div class="demo-box">
+        <div class="sidebar" data-component="sidebar" data-variant="icons-all-features-expandable">
+          <div class="sidebar-header">
+            <span class="product-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="M3 9h18M9 3v18"/></svg></span>
+            <span class="product-name">产品名称</span>
+          </div>
+          <div class="menu-wrapper">
+            <div class="all-features-btn">
+              <span class="btn-icon"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="4" height="4" rx="1"/><rect x="8.5" y="3" width="4" height="4" rx="1"/><rect x="14" y="3" width="4" height="4" rx="1"/><rect x="3" y="8.5" width="4" height="4" rx="1"/><rect x="8.5" y="8.5" width="4" height="4" rx="1"/><rect x="14" y="8.5" width="4" height="4" rx="1"/><rect x="3" y="14" width="4" height="4" rx="1"/><rect x="8.5" y="14" width="4" height="4" rx="1"/><rect x="14" y="14" width="4" height="4" rx="1"/></svg></span>
+              <span class="btn-text">全部功能</span>
+              <span class="btn-chevron"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 2.5L8 6l-3.5 3.5"/></svg></span>
+            </div>
+            <div class="menu-section">
+              <div class="menu-item active">
+                <span class="menu-icon"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 7.5L10 2.5l7 5v8.5a1 1 0 01-1 1H4a1 1 0 01-1-1V7.5z"/><path d="M7.5 17V11h5v6"/></svg></span>
+                <span class="menu-text">一级菜单</span>
+              </div>
+              <div class="menu-group-block">
+                <span class="group-title">分类标题</span>
+                <div class="menu-item has-arrow">
+                  <span class="menu-icon"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 14.5c1.5-2 3.5-3 5.5-3s4 1 5.5 3"/><path d="M4 11.5c1-1.5 2.5-2.5 4-2.5s3 1 4 2.5"/><path d="M6.5 8.5c.5-1 1.5-1.5 2.5-1.5s2 .5 2.5 1.5"/><circle cx="10" cy="15.5" r="1"/></svg></span>
+                  <span class="menu-text">一级菜单</span>
+                  <span class="menu-chevron"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4.5L6 7.5L9 4.5"/></svg></span>
+                </div>
+              </div>
+              <div class="menu-item has-arrow">
+                <span class="menu-icon"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 14.5c1.5-2 3.5-3 5.5-3s4 1 5.5 3"/><path d="M4 11.5c1-1.5 2.5-2.5 4-2.5s3 1 4 2.5"/><path d="M6.5 8.5c.5-1 1.5-1.5 2.5-1.5s2 .5 2.5 1.5"/><circle cx="10" cy="15.5" r="1"/></svg></span>
+                <span class="menu-text">一级菜单</span>
+                <span class="menu-chevron"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4.5L6 7.5L9 4.5"/></svg></span>
+              </div>
+              <div class="menu-item has-arrow">
+                <span class="menu-icon"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 14.5c1.5-2 3.5-3 5.5-3s4 1 5.5 3"/><path d="M4 11.5c1-1.5 2.5-2.5 4-2.5s3 1 4 2.5"/><path d="M6.5 8.5c.5-1 1.5-1.5 2.5-1.5s2 .5 2.5 1.5"/><circle cx="10" cy="15.5" r="1"/></svg></span>
+                <span class="menu-text">一级菜单</span>
+                <span class="menu-chevron"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4.5L6 7.5L9 4.5"/></svg></span>
+              </div>
+              <div class="menu-item has-arrow">
+                <span class="menu-icon"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 14.5c1.5-2 3.5-3 5.5-3s4 1 5.5 3"/><path d="M4 11.5c1-1.5 2.5-2.5 4-2.5s3 1 4 2.5"/><path d="M6.5 8.5c.5-1 1.5-1.5 2.5-1.5s2 .5 2.5 1.5"/><circle cx="10" cy="15.5" r="1"/></svg></span>
+                <span class="menu-text">一级菜单</span>
+                <span class="menu-chevron"><svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4.5L6 7.5L9 4.5"/></svg></span>
+              </div>
+            </div>
+          </div>
+          <div class="collapse-btn">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 4h12M2 8h12M2 12h12"/></svg>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">折叠态 (collapsed)</div>
+    <div class="row">
+      <div class="demo-box">
+        <div class="sidebar collapsed" data-component="sidebar" data-variant="collapsed">
+          <div class="sidebar-header">
+            <span class="product-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="M3 9h18M9 3v18"/></svg></span>
+          </div>
+          <div class="collapsed-menu">
+            <div class="collapsed-item">
+              <span class="menu-icon"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 7.5L10 2.5l7 5v8.5a1 1 0 01-1 1H4a1 1 0 01-1-1V7.5z"/><path d="M7.5 17V11h5v6"/></svg></span>
+            </div>
+            <div class="collapsed-item">
+              <span class="menu-icon"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 14.5c1.5-2 3.5-3 5.5-3s4 1 5.5 3"/><path d="M4 11.5c1-1.5 2.5-2.5 4-2.5s3 1 4 2.5"/><path d="M6.5 8.5c.5-1 1.5-1.5 2.5-1.5s2 .5 2.5 1.5"/><circle cx="10" cy="15.5" r="1"/></svg></span>
+            </div>
+            <div class="collapsed-item">
+              <span class="menu-icon"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 14.5c1.5-2 3.5-3 5.5-3s4 1 5.5 3"/><path d="M4 11.5c1-1.5 2.5-2.5 4-2.5s3 1 4 2.5"/><path d="M6.5 8.5c.5-1 1.5-1.5 2.5-1.5s2 .5 2.5 1.5"/><circle cx="10" cy="15.5" r="1"/></svg></span>
+            </div>
+            <div class="collapsed-divider"></div>
+            <div class="collapsed-item">
+              <span class="menu-icon"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 14.5c1.5-2 3.5-3 5.5-3s4 1 5.5 3"/><path d="M4 11.5c1-1.5 2.5-2.5 4-2.5s3 1 4 2.5"/><path d="M6.5 8.5c.5-1 1.5-1.5 2.5-1.5s2 .5 2.5 1.5"/><circle cx="10" cy="15.5" r="1"/></svg></span>
+            </div>
+            <div class="collapsed-item">
+              <span class="menu-icon"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 14.5c1.5-2 3.5-3 5.5-3s4 1 5.5 3"/><path d="M4 11.5c1-1.5 2.5-2.5 4-2.5s3 1 4 2.5"/><path d="M6.5 8.5c.5-1 1.5-1.5 2.5-1.5s2 .5 2.5 1.5"/><circle cx="10" cy="15.5" r="1"/></svg></span>
+            </div>
+          </div>
+          <div class="collapse-btn">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 4h12M2 8h12M2 12h12"/></svg>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">极简折叠态 (thin)</div>
+    <div class="row">
+      <div class="demo-box">
+        <div class="sidebar-thin" data-component="sidebar" data-variant="thin">
+          <div class="expand-btn">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4l4 4-4 4"/></svg>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

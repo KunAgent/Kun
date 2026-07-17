@@ -1,0 +1,66 @@
+{
+  "components": [
+    {
+      "slug": "button",
+      "name": "Button",
+      "category": "action",
+      "variantCount": 27,
+      "keyInsight": "High-contrast calls to action feel tactile because the system pairs a hot primary with a generous 18px radius."
+    },
+    {
+      "slug": "card",
+      "name": "Card",
+      "category": "container",
+      "variantCount": 9,
+      "keyInsight": "Cards are soft and editorial rather than sterile, relying on warm neutrals instead of stark white."
+    },
+    {
+      "slug": "table",
+      "name": "Table",
+      "category": "data-display",
+      "variantCount": 6,
+      "keyInsight": "Data tables stay readable because muted dividers and dark text are balanced against roomy spacing."
+    },
+    {
+      "slug": "chart",
+      "name": "Chart",
+      "category": "data-visualization",
+      "variantCount": 8,
+      "keyInsight": "The chart palette mixes warm neutrals with bright digital accents, giving analytics a more branded personality."
+    },
+    {
+      "slug": "navigation",
+      "name": "Navigation",
+      "category": "navigation",
+      "variantCount": 9,
+      "keyInsight": "Top-level navigation feels sturdy and dark, contrasting against the lighter content canvas."
+    },
+    {
+      "slug": "sidebar",
+      "name": "Sidebar",
+      "category": "navigation",
+      "variantCount": 6,
+      "keyInsight": "Sidebar tokens already exist in the source, so this component becomes a core expression of the system rather than an add-on."
+    }
+  ],
+  "crossComponentPatterns": {
+    "cornerStyle": "A single generous 18px radius shapes cards, buttons, and shell surfaces.",
+    "density": "4px base spacing with roomy internal padding, prioritizing legibility over compact data density.",
+    "surfaceModel": "Warm neutral surfaces pair with dark text in light mode and charcoal panels in dark mode.",
+    "colorRoles": [
+      "background",
+      "card",
+      "primary",
+      "secondary",
+      "accent",
+      "border",
+      "sidebar",
+      "chart"
+    ],
+    "typeSystem": [
+      "Geist",
+      "Playfair Display",
+      "Roboto Mono"
+    ]
+  }
+}

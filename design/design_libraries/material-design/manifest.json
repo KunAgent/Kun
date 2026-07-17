@@ -1,0 +1,15 @@
+{
+  "id": "material-design",
+  "name": "Material Design",
+  "version": "3.0.0",
+  "description": "Google Material Design component library",
+  "author": "Google",
+  "license": "Apache-2.0",
+  "homepage": "https://m3.material.io",
+  "repository": "https://github.com/material-components",
+  "keywords": ["material", "design", "google", "ui-kit"],
+  "categories": ["ui-kits"],
+  "frameworks": ["react", "vue", "angular"],
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "updatedAt": "2026-07-15T00:00:00.000Z"
+}

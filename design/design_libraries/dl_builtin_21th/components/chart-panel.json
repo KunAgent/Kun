@@ -1,0 +1,39 @@
+{
+  "slug": "chart-panel",
+  "name": "Chart Panel",
+  "purpose": "Primary visualization module for trend reading and categorical comparison.",
+  "productContext": "analytics dashboard",
+  "uiCopySamples": [
+    "Signal Volume",
+    "Conversion Drift",
+    "Channel Mix",
+    "Seven-day window"
+  ],
+  "variantDimensions": {
+    "chartType": ["bar", "line", "stacked-bar"],
+    "density": ["compact", "default"],
+    "state": ["default", "highlighted"]
+  },
+  "tokenUsage": [
+    "--card",
+    "--card-foreground",
+    "--muted-foreground",
+    "--border",
+    "--chart-1",
+    "--chart-2",
+    "--chart-3",
+    "--chart-4",
+    "--chart-5"
+  ],
+  "structures": [
+    {
+      "title": "Trend panel",
+      "description": "A restrained chart frame where the blue scale carries the visual emphasis inside a neutral container.",
+      "parts": ["panel header", "legend", "chart area", "axis labels", "summary footer"],
+      "sampleContent": {
+        "headline": "Signal Volume",
+        "body": "Accent color should live inside charts rather than across the page shell."
+      }
+    }
+  ]
+}

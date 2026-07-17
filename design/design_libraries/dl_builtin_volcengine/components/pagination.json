@@ -1,0 +1,79 @@
+{
+  "schemaVersion": 2,
+  "slug": "pagination",
+  "name": "Pagination",
+  "category": "navigation",
+  "sourceKind": "structured-spec",
+  "confidence": "medium",
+  "semanticTypeCandidates": ["pager", "page-navigation", "page-control"],
+  "variantDimensions": {
+    "size": ["default", "small"],
+    "type": ["basic", "total", "full", "simple"]
+  },
+  "representativeVariants": [
+    { "size": "default", "type": "basic" },
+    { "size": "small", "type": "basic" },
+    { "size": "default", "type": "total" },
+    { "size": "default", "type": "full" },
+    { "size": "small", "type": "full" },
+    { "size": "default", "type": "simple" }
+  ],
+  "anatomy": ["wrapper", "pagination-nav", "page-item", "page-arrow", "page-item-more", "pagination-total", "pagesize-select", "pagination-jump", "jump-input", "page-simple-indicator"],
+  "structurePatterns": [
+    "Flex row with optional total text, page number items in a nav, optional page-size selector and jump input",
+    "Basic: just the nav with arrow buttons + numbered items",
+    "Full: total + nav + pagesize-select + jump-input all in a wrapper with 8px gap",
+    "Simple: arrows + page indicator (e.g. '2/19') without individual page numbers"
+  ],
+  "usageHints": [
+    "Wrapper: flex align-items center gap 8px",
+    "Page item default size: 28x28px, font-size 13px; small: 24x24px, font-size 12px",
+    "Page item: border 1px solid #DDE2E9, border-radius 4px, background #FFFFFF, color #0C0D0E",
+    "Page item hover: border-color rgba(22,100,255,0.8)",
+    "Page item active: background #1664FF, border-color #1664FF, color #FFFFFF, font-weight 500",
+    "Page item disabled: color #C9CDD4, border-color #EAEDF1, cursor not-allowed",
+    "Arrow: color #42464E, disabled color #C9CDD4",
+    "Pagination total: font-size 13px, color #737A87",
+    "Pagesize select: height 28px, padding 0 8px, border-radius 4px, box-shadow 0 0 0 1px #DDE2E9",
+    "Jump input: width 36px, height 28px, text-align center, border-radius 4px, box-shadow 0 0 0 1px #DDE2E9",
+    "Jump input focus: box-shadow 0 0 0 1px #1664FF + 0 0 0 3px rgba(22,100,255,0.12)",
+    "Simple indicator: height 28px, padding 0 12px, border 1px solid #DDE2E9, border-radius 4px"
+  ],
+  "doNotInvent": ["infinite scroll integration", "page-size dropdown panel", "keyboard shortcuts"],
+  "unknowns": ["ellipsis expansion behavior on hover", "responsive collapse rules"],
+  "tokensConsumed": [],
+  "domAnatomy": {
+    "root": {
+      "tag": "div",
+      "class": "pagination-wrapper",
+      "children": [
+        { "tag": "span", "class": "pagination-total", "optional": true },
+        {
+          "tag": "nav",
+          "class": "pagination pagination-{size}",
+          "children": [
+            { "tag": "span", "class": "page-item page-arrow" },
+            { "tag": "span", "class": "page-item" },
+            { "tag": "span", "class": "page-item active" },
+            { "tag": "span", "class": "page-item page-item-more" },
+            { "tag": "span", "class": "page-item page-arrow" }
+          ]
+        },
+        { "tag": "span", "class": "pagesize-select", "optional": true },
+        {
+          "tag": "span",
+          "class": "pagination-jump",
+          "optional": true,
+          "children": [
+            { "tag": "input", "class": "jump-input" }
+          ]
+        }
+      ]
+    }
+  },
+  "provenance": {
+    "preview": "preview/ui-pagination.html",
+    "source": "structured-spec",
+    "css": { "file": "ui-pagination.html", "marker": "inline style" }
+  }
+}

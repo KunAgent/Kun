@@ -1,0 +1,47 @@
+{
+  "slug": "navigation",
+  "name": "Navigation",
+  "category": "navigation",
+  "evidence": "AI-inferred from dashboard preset and sidebar tokens",
+  "anatomy": [
+    "brand lockup",
+    "primary nav items",
+    "utility action",
+    "active indicator"
+  ],
+  "cssVariables": [
+    "background",
+    "foreground",
+    "muted-foreground",
+    "primary",
+    "accent",
+    "border",
+    "font-sans"
+  ],
+  "variantDimensions": {
+    "type": [
+      "topbar",
+      "tabs",
+      "segmented"
+    ],
+    "state": [
+      "default",
+      "active",
+      "hover"
+    ]
+  },
+  "structures": [
+    {
+      "name": "Topbar, Active",
+      "description": "Horizontal app navigation with crisp active underline."
+    },
+    {
+      "name": "Tabs, Active",
+      "description": "Editorial tab strip with pill active state."
+    },
+    {
+      "name": "Segmented, Hover",
+      "description": "Compact control for switching views."
+    }
+  ]
+}

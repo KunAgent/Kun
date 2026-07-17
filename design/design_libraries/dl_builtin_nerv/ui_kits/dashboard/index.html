@@ -1,0 +1,863 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Nerv Dashboard UI Kit</title>
+    <link rel="stylesheet" href="../../colors_and_type.css">
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        margin: 0;
+        min-height: 100%;
+        background: var(--background);
+        color: var(--foreground);
+        font-family: var(--font-sans);
+      }
+
+      body {
+        padding: var(--space-5);
+      }
+
+      button,
+      input {
+        font: inherit;
+      }
+
+      button {
+        border: 0;
+        background: none;
+        color: inherit;
+        cursor: pointer;
+      }
+
+      .page {
+        width: min(1440px, 100%);
+        margin: 0 auto;
+        display: grid;
+        gap: var(--space-4);
+      }
+
+      .topbar,
+      .card,
+      .table-row,
+      .feed-item,
+      .watch-item,
+      .stat-card {
+        border: 1px solid var(--color-border);
+        box-shadow: var(--shadow-sm);
+      }
+
+      .topbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--space-4);
+        padding: var(--space-4);
+        border-radius: var(--radius-lg);
+        background: color-mix(in srgb, var(--popover) 86%, var(--background));
+      }
+
+      .topbar-left,
+      .topbar-right,
+      .brand,
+      .nav-shell,
+      .nav-group,
+      .toolbar,
+      .hero-actions,
+      .eyebrow-row,
+      .kpi-meta,
+      .feed-head,
+      .table-head,
+      .table-row,
+      .table-main,
+      .legend,
+      .legend-item {
+        display: flex;
+        align-items: center;
+      }
+
+      .topbar-left,
+      .topbar-right {
+        gap: var(--space-3);
+        flex-wrap: wrap;
+      }
+
+      .brand {
+        gap: var(--space-3);
+      }
+
+      .brand-mark {
+        width: 2.75rem;
+        height: 2.75rem;
+        display: grid;
+        place-items: center;
+        border-radius: calc(var(--radius) * 0.68);
+        background: linear-gradient(180deg, color-mix(in srgb, var(--primary) 90%, #120809), var(--primary));
+        color: var(--primary-foreground);
+        font: 700 0.82rem/1 var(--font-mono);
+        letter-spacing: 0.14em;
+      }
+
+      .brand-copy strong,
+      .section-title,
+      .hero-title,
+      .metric-value,
+      .table-name {
+        display: block;
+      }
+
+      .brand-copy strong {
+        font-size: 1rem;
+        letter-spacing: 0.03em;
+      }
+
+      .brand-copy span,
+      .meta,
+      .table-subtitle,
+      .muted,
+      .bar-label,
+      .feed-time,
+      .table-detail,
+      .watch-note {
+        color: var(--color-text-muted);
+      }
+
+      .brand-copy span,
+      .meta,
+      .table-subtitle,
+      .feed-time,
+      .table-detail,
+      .watch-note {
+        font-size: 0.78rem;
+      }
+
+      .nav-shell {
+        gap: var(--space-1);
+        padding: calc(var(--spacing) * 1.25);
+        border: 1px solid var(--sidebar-border);
+        border-radius: var(--radius-lg);
+        background: var(--sidebar);
+      }
+
+      .nav-group {
+        gap: var(--space-1);
+      }
+
+      .nav-link,
+      .btn,
+      .toolbar-chip {
+        border-radius: calc(var(--radius) * 0.68);
+        transition: background-color 0.18s ease, border-color 0.18s ease, color 0.18s ease, box-shadow 0.18s ease;
+      }
+
+      .nav-link {
+        min-height: 2.15rem;
+        padding: 0 calc(var(--spacing) * 3.4);
+        color: var(--sidebar-foreground);
+        border: 1px solid transparent;
+        font-size: 0.78rem;
+      }
+
+      .nav-link.active {
+        background: var(--sidebar-accent);
+        border-color: color-mix(in srgb, var(--sidebar-accent) 70%, var(--sidebar-border));
+        color: var(--sidebar-accent-foreground);
+        box-shadow: var(--shadow-xs);
+      }
+
+      .nav-link:not(.active):hover {
+        background: color-mix(in srgb, var(--accent) 60%, var(--sidebar));
+        color: var(--accent-foreground);
+      }
+
+      .toolbar {
+        gap: var(--space-2);
+        flex-wrap: wrap;
+      }
+
+      .toolbar-chip {
+        min-height: 2.15rem;
+        padding: 0 calc(var(--spacing) * 2.6);
+        border: 1px solid var(--color-border);
+        background: color-mix(in srgb, var(--muted) 72%, var(--background));
+        color: var(--foreground);
+        font: 500 0.76rem/1 var(--font-mono);
+      }
+
+      .toolbar-chip.alert {
+        color: var(--primary);
+      }
+
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: calc(var(--spacing) * 1.3);
+        min-height: 2.35rem;
+        padding: 0 calc(var(--spacing) * 3);
+        border: 1px solid transparent;
+        white-space: nowrap;
+        box-shadow: var(--shadow-sm);
+      }
+
+      .btn-primary {
+        background: var(--primary);
+        color: var(--primary-foreground);
+      }
+
+      .btn-primary:hover {
+        background: color-mix(in srgb, var(--primary) 84%, #ffffff);
+      }
+
+      .btn-secondary {
+        background: var(--secondary);
+        color: var(--secondary-foreground);
+        border-color: var(--color-border);
+      }
+
+      .btn-secondary:hover,
+      .btn-ghost:hover {
+        background: var(--muted);
+      }
+
+      .btn-ghost {
+        background: transparent;
+        color: var(--foreground);
+        border-color: var(--color-border);
+        box-shadow: none;
+      }
+
+      .btn:focus-visible,
+      .nav-link:focus-visible,
+      .search-input:focus-visible {
+        outline: none;
+        box-shadow: 0 0 0 2px var(--background), 0 0 0 4px var(--ring);
+      }
+
+      .layout {
+        display: grid;
+        grid-template-columns: minmax(0, 8fr) minmax(300px, 4fr);
+        gap: var(--space-4);
+      }
+
+      .column,
+      .stack,
+      .card,
+      .metrics-grid,
+      .watch-list,
+      .feed-list,
+      .table-list {
+        display: grid;
+      }
+
+      .column,
+      .stack,
+      .card {
+        gap: var(--space-3);
+      }
+
+      .metrics-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: var(--space-3);
+      }
+
+      .card {
+        padding: var(--space-4);
+        border-radius: var(--radius-lg);
+        background: linear-gradient(180deg, color-mix(in srgb, var(--color-surface) 96%, var(--background)), var(--color-surface));
+      }
+
+      .hero-card {
+        grid-template-columns: minmax(0, 1.65fr) minmax(240px, 0.95fr);
+        align-items: stretch;
+        background:
+          linear-gradient(180deg, color-mix(in srgb, var(--primary) 10%, var(--color-surface)), var(--color-surface)),
+          var(--color-surface);
+      }
+
+      .eyebrow {
+        width: fit-content;
+        padding: calc(var(--spacing) * 0.9) calc(var(--spacing) * 1.8);
+        border-radius: 999px;
+        background: color-mix(in srgb, var(--primary) 16%, var(--background));
+        color: var(--primary);
+        font: 600 0.66rem/1 var(--font-mono);
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+      }
+
+      .hero-copy {
+        display: grid;
+        align-content: space-between;
+        gap: var(--space-4);
+      }
+
+      .hero-title {
+        font-size: clamp(1.85rem, 3vw, 2.7rem);
+        line-height: 1;
+        letter-spacing: -0.05em;
+      }
+
+      .hero-text {
+        max-width: 46rem;
+        color: var(--color-text-muted);
+        line-height: 1.55;
+        margin: 0;
+      }
+
+      .hero-actions {
+        gap: var(--space-2);
+        flex-wrap: wrap;
+      }
+
+      .hero-meta {
+        display: grid;
+        gap: var(--space-2);
+        padding: var(--space-3);
+        border: 1px solid color-mix(in srgb, var(--primary) 22%, var(--color-border));
+        border-radius: calc(var(--radius) * 0.78);
+        background: color-mix(in srgb, var(--muted) 58%, var(--background));
+      }
+
+      .metric-ring {
+        width: 7.5rem;
+        height: 7.5rem;
+        margin-left: auto;
+        border-radius: 50%;
+        background:
+          radial-gradient(circle at center, var(--color-surface) 58%, transparent 59%),
+          conic-gradient(var(--chart-1) 0 72%, color-mix(in srgb, var(--muted) 90%, var(--background)) 72% 100%);
+        border: 1px solid color-mix(in srgb, var(--color-border) 92%, transparent);
+      }
+
+      .metric-value {
+        font-size: 2.35rem;
+        line-height: 0.95;
+        font-weight: 700;
+        letter-spacing: -0.06em;
+      }
+
+      .delta {
+        width: fit-content;
+        padding: calc(var(--spacing) * 1.1) calc(var(--spacing) * 1.9);
+        border-radius: 999px;
+        background: color-mix(in srgb, var(--primary) 18%, var(--muted));
+        color: var(--foreground);
+        font: 500 0.72rem/1 var(--font-mono);
+      }
+
+      .stat-card {
+        display: grid;
+        gap: var(--space-2);
+        padding: var(--space-3);
+        border-radius: calc(var(--radius) * 0.82);
+        background: color-mix(in srgb, var(--muted) 36%, var(--background));
+      }
+
+      .stat-card .metric-value {
+        font-size: 1.55rem;
+      }
+
+      .section-title {
+        font-size: 1rem;
+        font-weight: 600;
+      }
+
+      .meta {
+        font-family: var(--font-mono);
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .chart-card {
+        gap: var(--space-4);
+      }
+
+      .legend {
+        justify-content: flex-end;
+        gap: var(--space-3);
+        flex-wrap: wrap;
+      }
+
+      .legend-item {
+        gap: var(--space-1);
+        font-size: 0.74rem;
+        color: var(--color-text-muted);
+      }
+
+      .swatch {
+        width: 0.58rem;
+        height: 0.58rem;
+        border-radius: 999px;
+        display: inline-block;
+      }
+
+      .swatch-primary {
+        background: var(--chart-1);
+      }
+
+      .swatch-secondary {
+        background: var(--chart-3);
+      }
+
+      .bars {
+        display: grid;
+        grid-template-columns: repeat(7, minmax(0, 1fr));
+        gap: var(--space-3);
+        align-items: end;
+        min-height: 14rem;
+        padding: var(--space-3);
+        border-radius: calc(var(--radius) * 0.78);
+        background: color-mix(in srgb, var(--muted) 44%, var(--background));
+      }
+
+      .bar-group {
+        display: grid;
+        gap: var(--space-2);
+      }
+
+      .bar-stack {
+        min-height: 11rem;
+        display: flex;
+        align-items: end;
+        justify-content: center;
+        gap: calc(var(--spacing) * 1.4);
+      }
+
+      .bar {
+        width: 0.9rem;
+        border-radius: 999px 999px 0 0;
+      }
+
+      .bar.primary {
+        background: var(--chart-1);
+      }
+
+      .bar.secondary {
+        background: var(--chart-3);
+      }
+
+      .bar-label {
+        text-align: center;
+        font-size: 0.74rem;
+      }
+
+      .feed-list,
+      .watch-list,
+      .table-list {
+        gap: var(--space-2);
+      }
+
+      .feed-item,
+      .watch-item,
+      .table-row {
+        padding: var(--space-3);
+        border-radius: calc(var(--radius) * 0.72);
+        background: color-mix(in srgb, var(--muted) 42%, var(--background));
+      }
+
+      .feed-item,
+      .watch-item {
+        display: grid;
+        gap: calc(var(--spacing) * 1.2);
+      }
+
+      .feed-head {
+        justify-content: space-between;
+        gap: var(--space-2);
+      }
+
+      .feed-pill,
+      .watch-tag,
+      .table-status {
+        width: fit-content;
+        padding: calc(var(--spacing) * 0.9) calc(var(--spacing) * 1.8);
+        border-radius: 999px;
+        font: 500 0.7rem/1 var(--font-mono);
+      }
+
+      .feed-pill {
+        background: color-mix(in srgb, var(--destructive) 22%, var(--muted));
+        color: var(--destructive-foreground);
+      }
+
+      .feed-pill.review {
+        background: color-mix(in srgb, var(--chart-4) 20%, var(--muted));
+        color: var(--foreground);
+      }
+
+      .feed-pill.stable {
+        background: color-mix(in srgb, var(--chart-3) 20%, var(--muted));
+        color: var(--foreground);
+      }
+
+      .watch-panel {
+        background:
+          linear-gradient(180deg, color-mix(in srgb, var(--sidebar) 92%, var(--color-surface)), var(--color-surface)),
+          var(--color-surface);
+      }
+
+      .watch-item {
+        background: color-mix(in srgb, var(--sidebar) 76%, var(--muted));
+        border-color: color-mix(in srgb, var(--sidebar-border) 80%, var(--color-border));
+      }
+
+      .watch-tag {
+        background: color-mix(in srgb, var(--sidebar-accent) 18%, var(--sidebar));
+        color: var(--foreground);
+      }
+
+      .table-head {
+        justify-content: space-between;
+        gap: var(--space-3);
+        flex-wrap: wrap;
+      }
+
+      .table-row {
+        justify-content: space-between;
+        gap: var(--space-3);
+      }
+
+      .table-main {
+        gap: var(--space-3);
+        min-width: 0;
+      }
+
+      .table-score {
+        font: 600 0.82rem/1 var(--font-mono);
+      }
+
+      .table-status {
+        background: color-mix(in srgb, var(--primary) 14%, var(--muted));
+        color: var(--foreground);
+      }
+
+      .table-status.review {
+        background: color-mix(in srgb, var(--chart-4) 18%, var(--muted));
+      }
+
+      .table-status.blocked {
+        background: color-mix(in srgb, var(--destructive) 22%, var(--muted));
+      }
+
+      .footer-note {
+        color: var(--color-text-muted);
+        font-size: 0.75rem;
+        text-align: right;
+      }
+
+      @media (max-width: 1180px) {
+        .layout,
+        .hero-card {
+          grid-template-columns: 1fr;
+        }
+
+        .metrics-grid {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      @media (max-width: 860px) {
+        body {
+          padding: var(--space-3);
+        }
+
+        .topbar {
+          align-items: flex-start;
+        }
+
+        .topbar,
+        .topbar-left,
+        .topbar-right,
+        .table-row,
+        .table-head {
+          flex-direction: column;
+          align-items: stretch;
+        }
+
+        .nav-shell {
+          width: 100%;
+          justify-content: space-between;
+          overflow: auto;
+        }
+
+        .nav-group {
+          width: 100%;
+        }
+
+        .nav-link,
+        .btn,
+        .toolbar-chip {
+          justify-content: center;
+        }
+
+        .bars {
+          grid-template-columns: repeat(4, minmax(0, 1fr));
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="page">
+      <header class="topbar">
+        <div class="topbar-left">
+          <div class="brand">
+            <div class="brand-mark">NRV</div>
+            <div class="brand-copy">
+              <strong>Nerv Grid</strong>
+              <span>Compact command dashboard</span>
+            </div>
+          </div>
+          <nav class="nav-shell" aria-label="Primary">
+            <div class="nav-group">
+              <button class="nav-link active">Overview</button>
+              <button class="nav-link">Signals</button>
+              <button class="nav-link">Console</button>
+            </div>
+          </nav>
+        </div>
+        <div class="topbar-right">
+          <div class="toolbar">
+            <span class="toolbar-chip">UTC 04:32</span>
+            <span class="toolbar-chip alert">Alerts 12</span>
+          </div>
+          <button class="btn btn-secondary">Create Report</button>
+        </div>
+      </header>
+
+      <div class="layout">
+        <section class="column">
+          <article class="card hero-card">
+            <div class="hero-copy">
+              <div class="stack">
+                <div class="eyebrow-row">
+                  <span class="eyebrow">Live Risk</span>
+                </div>
+                <div>
+                  <span class="hero-title">Threat Index remains stable across the command mesh.</span>
+                  <p class="hero-text">
+                    Primary actions stay red-led, supporting controls remain quiet, and dense surface rhythm keeps the page aligned with the component previews rather than turning the whole shell into a sidebar or chart treatment.
+                  </p>
+                </div>
+              </div>
+
+              <div class="hero-actions">
+                <button class="btn btn-primary">Launch Scan</button>
+                <button class="btn btn-secondary">Acknowledge</button>
+                <button class="btn btn-ghost">Shift Console</button>
+              </div>
+            </div>
+
+            <div class="hero-meta">
+              <span class="meta">Threat Index</span>
+              <span class="metric-value">82%</span>
+              <span class="delta">+6.4 today</span>
+              <div class="metric-ring" aria-hidden="true"></div>
+            </div>
+          </article>
+
+          <div class="metrics-grid">
+            <article class="stat-card">
+              <span class="meta">Signal Load</span>
+              <span class="metric-value">18.2k</span>
+              <span class="muted">Queued across Sector 7</span>
+            </article>
+            <article class="stat-card">
+              <span class="meta">Control Grid</span>
+              <span class="metric-value">94.1%</span>
+              <span class="muted">Stability window 14 sec</span>
+            </article>
+            <article class="stat-card">
+              <span class="meta">Action Queue</span>
+              <span class="metric-value">36</span>
+              <span class="muted">5 items require review</span>
+            </article>
+          </div>
+
+          <article class="card chart-card">
+            <div class="table-head">
+              <div>
+                <span class="meta">Chart</span>
+                <span class="section-title">Traffic Pulse</span>
+                <span class="table-subtitle">Compact bar treatment with restrained chart color use</span>
+              </div>
+              <div class="legend">
+                <span class="legend-item"><i class="swatch swatch-primary"></i>Ingress</span>
+                <span class="legend-item"><i class="swatch swatch-secondary"></i>Screened</span>
+              </div>
+            </div>
+
+            <div class="bars" aria-label="Traffic Pulse chart">
+              <div class="bar-group">
+                <div class="bar-stack"><span class="bar primary" style="height: 4.6rem;"></span><span class="bar secondary" style="height: 2.7rem;"></span></div>
+                <span class="bar-label">Mon</span>
+              </div>
+              <div class="bar-group">
+                <div class="bar-stack"><span class="bar primary" style="height: 5.3rem;"></span><span class="bar secondary" style="height: 3.2rem;"></span></div>
+                <span class="bar-label">Tue</span>
+              </div>
+              <div class="bar-group">
+                <div class="bar-stack"><span class="bar primary" style="height: 6.4rem;"></span><span class="bar secondary" style="height: 4rem;"></span></div>
+                <span class="bar-label">Wed</span>
+              </div>
+              <div class="bar-group">
+                <div class="bar-stack"><span class="bar primary" style="height: 7rem;"></span><span class="bar secondary" style="height: 4.8rem;"></span></div>
+                <span class="bar-label">Thu</span>
+              </div>
+              <div class="bar-group">
+                <div class="bar-stack"><span class="bar primary" style="height: 7.6rem;"></span><span class="bar secondary" style="height: 5.3rem;"></span></div>
+                <span class="bar-label">Fri</span>
+              </div>
+              <div class="bar-group">
+                <div class="bar-stack"><span class="bar primary" style="height: 6.2rem;"></span><span class="bar secondary" style="height: 4.3rem;"></span></div>
+                <span class="bar-label">Sat</span>
+              </div>
+              <div class="bar-group">
+                <div class="bar-stack"><span class="bar primary" style="height: 5rem;"></span><span class="bar secondary" style="height: 3rem;"></span></div>
+                <span class="bar-label">Sun</span>
+              </div>
+            </div>
+          </article>
+
+          <article class="card">
+            <div class="table-head">
+              <div>
+                <span class="meta">Table</span>
+                <span class="section-title">Control Grid</span>
+                <span class="table-subtitle">Quiet separators, compact rows, red reserved for action priority</span>
+              </div>
+              <button class="btn btn-ghost">Filter Active</button>
+            </div>
+
+            <div class="table-list">
+              <div class="table-row">
+                <div class="table-main">
+                  <div>
+                    <span class="table-name">North Relay</span>
+                    <span class="table-detail">NV-118 · Owner R. Cole</span>
+                  </div>
+                </div>
+                <span class="table-status">Live</span>
+                <span class="table-score">99.3</span>
+              </div>
+              <div class="table-row">
+                <div class="table-main">
+                  <div>
+                    <span class="table-name">Delta Stream</span>
+                    <span class="table-detail">NV-227 · Owner M. Park</span>
+                  </div>
+                </div>
+                <span class="table-status review">Review</span>
+                <span class="table-score">87.6</span>
+              </div>
+              <div class="table-row">
+                <div class="table-main">
+                  <div>
+                    <span class="table-name">Vault Segment</span>
+                    <span class="table-detail">NV-310 · Owner A. Moss</span>
+                  </div>
+                </div>
+                <span class="table-status blocked">Blocked</span>
+                <span class="table-score">41.9</span>
+              </div>
+              <div class="table-row">
+                <div class="table-main">
+                  <div>
+                    <span class="table-name">Orbit Queue</span>
+                    <span class="table-detail">NV-411 · Owner J. Hale</span>
+                  </div>
+                </div>
+                <span class="table-status">Live</span>
+                <span class="table-score">96.8</span>
+              </div>
+            </div>
+          </article>
+        </section>
+
+        <aside class="column">
+          <article class="card">
+            <div>
+              <span class="meta">Feed</span>
+              <span class="section-title">Signal Feed</span>
+              <span class="table-subtitle">Realtime triage with muted secondary surfaces</span>
+            </div>
+            <div class="feed-list">
+              <div class="feed-item">
+                <div class="feed-head">
+                  <strong>Sector 4 firewall loop</strong>
+                  <span class="feed-pill">Escalated</span>
+                </div>
+                <span class="feed-time">1 min ago</span>
+              </div>
+              <div class="feed-item">
+                <div class="feed-head">
+                  <strong>Latency drift in relay cluster</strong>
+                  <span class="feed-pill review">Review</span>
+                </div>
+                <span class="feed-time">6 min ago</span>
+              </div>
+              <div class="feed-item">
+                <div class="feed-head">
+                  <strong>Backup node recovery complete</strong>
+                  <span class="feed-pill stable">Stable</span>
+                </div>
+                <span class="feed-time">14 min ago</span>
+              </div>
+            </div>
+          </article>
+
+          <article class="card watch-panel">
+            <div>
+              <span class="meta">Local Sidebar</span>
+              <span class="section-title">Sector Watch</span>
+              <span class="table-subtitle">Sidebar tokens stay scoped to this local module</span>
+            </div>
+            <div class="watch-list">
+              <div class="watch-item">
+                <div class="feed-head">
+                  <strong>Control Grid</strong>
+                  <span class="watch-tag">Active</span>
+                </div>
+                <span class="watch-note">Mesh East · Primary route</span>
+              </div>
+              <div class="watch-item">
+                <div class="feed-head">
+                  <strong>Incidents</strong>
+                  <span class="watch-tag">12</span>
+                </div>
+                <span class="watch-note">Three require manual verification</span>
+              </div>
+              <div class="watch-item">
+                <div class="feed-head">
+                  <strong>Audit Trail</strong>
+                  <span class="watch-tag">4m</span>
+                </div>
+                <span class="watch-note">Replication healthy</span>
+              </div>
+            </div>
+          </article>
+
+          <article class="card">
+            <div>
+              <span class="meta">Actions</span>
+              <span class="section-title">Operator Controls</span>
+              <span class="table-subtitle">Primary CTA stays dominant, secondary actions remain quiet</span>
+            </div>
+            <div class="stack">
+              <button class="btn btn-primary">Launch Scan</button>
+              <button class="btn btn-secondary">Create Report</button>
+              <button class="btn btn-ghost">Sync Locked</button>
+            </div>
+          </article>
+        </aside>
+      </div>
+
+      <div class="footer-note">Nerv dashboard kit preview aligned to button, card, and navigation component surfaces.</div>
+    </div>
+  </body>
+</html>

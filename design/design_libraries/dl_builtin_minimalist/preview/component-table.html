@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>
+  /* Page scaffold — NOT extracted */
+  /* @component-css-start */
+body{margin:0;padding:12px;background:var(--color-surface);color:var(--color-text);font:13px/1.4 var(--font-sans)}.row{display:flex;gap:8px;align-items:flex-start;flex-wrap:wrap}.label{width:100%;font:600 10px/1 var(--font-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--color-text-muted)}.divider{margin:8px 0;border:0;border-top:1px solid var(--color-border)}.table-card{min-width:220px;flex:1;background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-md);box-shadow:var(--shadow-sm);overflow:hidden}.table-card.is-disabled{opacity:.45}.table{width:100%;border-collapse:collapse}.table th,.table td{padding:12px;border-bottom:1px solid var(--color-border);text-align:left}.table th{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--color-text-muted);background:var(--color-surface-muted)}.table td{color:var(--color-text)}.compact th,.compact td{padding:8px 12px}.selected tbody tr:nth-child(2){background:var(--color-surface-muted)}.pill{display:inline-flex;padding:4px 8px;border-radius:var(--radius-md);background:var(--color-primary);color:var(--color-primary-foreground);font-size:11px;line-height:1}.empty{display:grid;place-items:center;min-height:132px;padding:12px;color:var(--color-text-muted);background:var(--color-surface-muted)}
+  /* @component-css-end */
+</style>
+</head>
+<body>
+<div class="row">
+<span class="label">Comfortable</span>
+<div class="table-card"><table class="table" aria-label="Overview revenue table"><thead><tr><th>View</th><th>Owner</th><th>Status</th></tr></thead><tbody><tr><td>Overview</td><td>Team</td><td><span class="pill">Live</span></td></tr><tr><td>Revenue</td><td>Settings</td><td>Updated</td></tr><tr><td>Active Users</td><td>Team</td><td>Stable</td></tr></tbody></table></div>
+<div class="table-card is-disabled"><table class="table" aria-label="Disabled overview revenue table"><thead><tr><th>View</th><th>Owner</th><th>Status</th></tr></thead><tbody><tr><td>Overview</td><td>Team</td><td><span class="pill">Live</span></td></tr><tr><td>Revenue</td><td>Settings</td><td>Updated</td></tr><tr><td>Active Users</td><td>Team</td><td>Stable</td></tr></tbody></table></div>
+</div>
+<hr class="divider">
+<div class="row">
+<span class="label">Compact</span>
+<div class="table-card selected"><table class="table compact" aria-label="Compact selected table"><thead><tr><th>View</th><th>Owner</th><th>Status</th></tr></thead><tbody><tr><td>Revenue</td><td>Settings</td><td>Synced</td></tr><tr><td>Active Users</td><td>Team</td><td><span class="pill">Selected</span></td></tr><tr><td>Team</td><td>Overview</td><td>Ready</td></tr></tbody></table></div>
+<div class="table-card empty">Settings has no rows to review.</div>
+</div>
+</body>
+</html>

@@ -1,0 +1,148 @@
+{
+  "schemaVersion": 1,
+  "headBoilerplate": "<link rel=\"stylesheet\" href=\"colors_and_type.css\">",
+  "corePreviewComponents": [
+    {
+      "slug": "button",
+      "reason": "fixed slot \"button\"; primary action trigger in all page types",
+      "evidenceFile": "components/button.json",
+      "priority": 1,
+      "slot": "button"
+    },
+    {
+      "slug": "topnav",
+      "reason": "fixed slot \"navigation-top\"; 48px header present on every page",
+      "evidenceFile": "components/topnav.json",
+      "priority": 2,
+      "slot": "navigation-top"
+    },
+    {
+      "slug": "sidebar",
+      "reason": "fixed slot \"navigation-side\"; 200px left nav present on every page",
+      "evidenceFile": "components/sidebar.json",
+      "priority": 3,
+      "slot": "navigation-side"
+    },
+    {
+      "slug": "table",
+      "reason": "fixed slot \"table\"; primary data display in list pages",
+      "evidenceFile": "components/table.json",
+      "priority": 4,
+      "slot": "table"
+    },
+    {
+      "slug": "form",
+      "reason": "fixed slot \"form\"; primary data entry component",
+      "evidenceFile": "components/form.json",
+      "priority": 5,
+      "slot": "form"
+    }
+  ],
+  "supportEvidenceComponents": [
+    { "slug": "input", "reason": "fixed slot \"input\"; core data entry primitive", "evidenceFile": "components/input.json", "priority": 6, "slot": "input" },
+    { "slug": "select", "reason": "support; semantic=select:0.75", "evidenceFile": "components/select.json", "priority": 7 },
+    { "slug": "tabs", "reason": "fixed slot \"tabs\"; detail page and chart page navigation", "evidenceFile": "components/tabs.json", "priority": 8, "slot": "tabs" },
+    { "slug": "page-header", "reason": "support; page title area with breadcrumb and actions", "evidenceFile": "components/page-header.json", "priority": 9 },
+    { "slug": "pagination", "reason": "support; table pagination in list pages", "evidenceFile": "components/pagination.json", "priority": 10 },
+    { "slug": "tag", "reason": "support; status display in tables and detail pages", "evidenceFile": "components/tag.json", "priority": 11 },
+    { "slug": "status-tag", "reason": "support; semantic status indicators", "evidenceFile": "components/status-tag.json", "priority": 12 },
+    { "slug": "alert", "reason": "support; feedback banners", "evidenceFile": "components/alert.json", "priority": 13 },
+    { "slug": "modal", "reason": "support; confirmation dialogs", "evidenceFile": "components/modal.json", "priority": 14 },
+    { "slug": "drawer", "reason": "support; side panel for detail/creation", "evidenceFile": "components/drawer.json", "priority": 15 },
+    { "slug": "dropdown", "reason": "support; action menus and cascading menus", "evidenceFile": "components/dropdown.json", "priority": 16 },
+    { "slug": "breadcrumb", "reason": "support; page location in detail pages", "evidenceFile": "components/breadcrumb.json", "priority": 17 },
+    { "slug": "descriptions", "reason": "support; key-value display in detail pages", "evidenceFile": "components/descriptions.json", "priority": 18 },
+    { "slug": "avatar", "reason": "support; user display in topnav and tables", "evidenceFile": "components/avatar.json", "priority": 19 },
+    { "slug": "badge", "reason": "support; notification indicators", "evidenceFile": "components/badge.json", "priority": 20 },
+    { "slug": "message", "reason": "support; global feedback toast", "evidenceFile": "components/message.json", "priority": 21 },
+    { "slug": "popconfirm", "reason": "support; inline confirmation", "evidenceFile": "components/popconfirm.json", "priority": 22 },
+    { "slug": "tooltip", "reason": "support; hover hints", "evidenceFile": "components/tooltip.json", "priority": 23 },
+    { "slug": "progress", "reason": "support; progress display", "evidenceFile": "components/progress.json", "priority": 24 },
+    { "slug": "steps", "reason": "support; multi-step flows", "evidenceFile": "components/steps.json", "priority": 25 },
+    { "slug": "switch", "reason": "support; toggle settings", "evidenceFile": "components/switch.json", "priority": 26 },
+    { "slug": "checkbox", "reason": "support; multi-select in forms and tables", "evidenceFile": "components/checkbox.json", "priority": 27 },
+    { "slug": "slider", "reason": "support; range input", "evidenceFile": "components/slider.json", "priority": 28 },
+    { "slug": "cascader", "reason": "support; hierarchical selection", "evidenceFile": "components/cascader.json", "priority": 29 },
+    { "slug": "timepicker", "reason": "support; time selection", "evidenceFile": "components/timepicker.json", "priority": 30 },
+    { "slug": "segmented-picker", "reason": "support; segmented control", "evidenceFile": "components/segmented-picker.json", "priority": 31 },
+    { "slug": "anchor", "reason": "support; page section navigation", "evidenceFile": "components/anchor.json", "priority": 32 },
+    { "slug": "sidenav", "reason": "support; compact side navigation variant", "evidenceFile": "components/sidenav.json", "priority": 33 },
+    { "slug": "icon", "reason": "support; icon display utilities", "evidenceFile": "components/icon.json", "priority": 34 }
+  ],
+  "allowedComponents": [
+    "button",
+    "topnav",
+    "sidebar",
+    "table",
+    "form",
+    "input",
+    "select",
+    "tabs",
+    "page-header",
+    "pagination",
+    "tag",
+    "status-tag",
+    "alert",
+    "modal",
+    "drawer",
+    "dropdown",
+    "breadcrumb",
+    "descriptions",
+    "avatar",
+    "badge",
+    "message",
+    "popconfirm",
+    "tooltip",
+    "progress",
+    "steps",
+    "switch",
+    "checkbox",
+    "slider",
+    "cascader",
+    "timepicker",
+    "segmented-picker",
+    "anchor",
+    "sidenav",
+    "icon"
+  ],
+  "screenBlueprints": [
+    {
+      "name": "list-page",
+      "componentSlugs": ["topnav", "sidebar", "page-header", "button", "input", "select", "table", "pagination", "status-tag", "dropdown"],
+      "role": "primary"
+    },
+    {
+      "name": "detail-page",
+      "componentSlugs": ["topnav", "sidebar", "breadcrumb", "page-header", "tabs", "descriptions", "tag", "button", "status-tag"],
+      "role": "secondary"
+    },
+    {
+      "name": "chart-page",
+      "componentSlugs": ["topnav", "sidebar", "tabs", "segmented-picker", "timepicker", "button"],
+      "role": "secondary"
+    }
+  ],
+  "productContext": {
+    "kitType": "enterprise-admin",
+    "productType": "ByteCloud B2B management console",
+    "dominantCopy": ["实例列表", "创建实例", "监控", "规则详情"],
+    "pageNames": ["列表页", "详情页", "图表页"],
+    "selectedFrameNames": []
+  },
+  "selectionPolicy": "fixed-slots-first",
+  "slotAssignments": [
+    { "slot": "button", "slug": "button", "reason": "semantic" },
+    { "slot": "navigation-top", "slug": "topnav", "reason": "semantic" },
+    { "slot": "navigation-side", "slug": "sidebar", "reason": "semantic" },
+    { "slot": "table", "slug": "table", "reason": "semantic" },
+    { "slot": "form", "slug": "form", "reason": "semantic" },
+    { "slot": "input", "slug": "input", "reason": "semantic" },
+    { "slot": "tabs", "slug": "tabs", "reason": "semantic" }
+  ],
+  "missingFixedSlots": [],
+  "fallbackComponents": [],
+  "needsNarrative": false,
+  "forbiddenInventedComponents": [],
+  "lowConfidence": false,
+  "warnings": []
+}

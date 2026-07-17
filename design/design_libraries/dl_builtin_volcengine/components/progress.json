@@ -1,0 +1,61 @@
+{
+  "schemaVersion": 2,
+  "slug": "progress",
+  "name": "Progress",
+  "category": "data-display",
+  "sourceKind": "structured-spec",
+  "confidence": "medium",
+  "semanticTypeCandidates": ["progress-bar", "linear-progress", "loading-bar"],
+  "variantDimensions": {
+    "size": ["lg", "default", "sm", "mini"],
+    "status": ["normal", "success", "error", "warning"]
+  },
+  "representativeVariants": [
+    { "size": "default", "status": "normal" },
+    { "size": "lg", "status": "success" },
+    { "size": "sm", "status": "error" },
+    { "size": "mini", "status": "warning" }
+  ],
+  "anatomy": ["progress", "progress-bar", "progress-track", "progress-fill", "progress-text"],
+  "structurePatterns": [
+    "Horizontal flex container with track bar (flex:1) and trailing percentage text",
+    "Mini size hides the text label; track height varies by size (8px/4px/3px/2px)"
+  ],
+  "usageHints": [
+    "Track background is #F1F3F5 with border-radius matching height",
+    "Fill colors: normal #1664FF, success #00B42A, error #F53F3F, warning #FF7D00",
+    "Text color #42464E, font-size 14px for lg, 12px for default/sm, hidden for mini",
+    "Fill width is set via inline style percentage representing progress value",
+    "Transition width 0.3s ease for smooth animation"
+  ],
+  "doNotInvent": ["circular progress", "indeterminate animation", "striped fill", "step progress"],
+  "unknowns": ["buffer/secondary track support", "custom color override mechanism"],
+  "tokensConsumed": [],
+  "domAnatomy": {
+    "root": {
+      "tag": "div",
+      "class": "progress progress-line progress-{size} progress-{status}",
+      "children": [
+        {
+          "tag": "div",
+          "class": "progress-bar",
+          "children": [
+            {
+              "tag": "div",
+              "class": "progress-track",
+              "children": [
+                { "tag": "div", "class": "progress-fill", "style": "width: {percent}%" }
+              ]
+            }
+          ]
+        },
+        { "tag": "span", "class": "progress-text" }
+      ]
+    }
+  },
+  "provenance": {
+    "preview": "preview/ui-progress.html",
+    "source": "structured-spec",
+    "css": { "file": "ui-progress.html", "marker": "inline <style>" }
+  }
+}

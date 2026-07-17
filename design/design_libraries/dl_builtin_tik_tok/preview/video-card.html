@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Web Video Card</title>
+<link rel="stylesheet" href="../colors_and_type.css">
+<script src="https://code.iconify.design/iconify-icon/2.1.0/iconify-icon.min.js"></script>
+<style>
+body{margin:0;padding:12px;background:var(--background);color:var(--foreground);font:400 14px/1.35 var(--font-sans)}
+.row{display:flex;align-items:flex-start;gap:8px;flex-wrap:wrap;margin-bottom:8px}
+.label{width:56px;padding-top:4px;color:var(--muted-foreground);font:400 11px/1 var(--font-mono);letter-spacing:.12em;text-transform:uppercase}
+.divider{border:0;border-top:1px solid var(--border);margin:8px 0}
+.video{width:154px}
+.media{position:relative;aspect-ratio:9/16;overflow:hidden;border:1px solid var(--border);border-radius:8px;background:var(--video-bg)}
+.video:hover .media{border-color:var(--secondary)}
+/* metadata badge: solid black/55 chip, no backdrop-blur (skill C02) */
+.views{position:absolute;left:10px;top:10px;display:flex;align-items:center;gap:4px;padding:3px 7px;border-radius:6px;background:rgba(11,11,16,.72);color:var(--on-media);font:600 11px/1 var(--font-sans)}
+.views iconify-icon{font-size:12px}
+.live{position:absolute;left:10px;top:10px;padding:3px 7px;border-radius:6px;background:var(--primary);color:var(--on-media);font:600 11px/1 var(--font-sans)}
+.stacked .views{top:38px}
+/* bottom readability fade (allowed, skill §10.3) */
+.fade{position:absolute;inset:auto 0 0;height:42%;background:linear-gradient(180deg,rgba(15,15,18,0) 0%,rgba(15,15,18,.92) 100%)}
+.caption{position:absolute;left:10px;right:10px;bottom:10px;color:var(--on-media);font-size:12px;font-weight:600;line-height:1.25}
+.meta{margin-top:6px;color:var(--muted-foreground);font:400 11px/1.2 var(--font-mono)}
+.disabled{opacity:.38}
+.disabled .media{filter:saturate(.7)}
+</style>
+</head>
+<body class="dark">
+<div class="row"><span class="label">Standard</span><div class="video"><div class="media"><span class="views"><iconify-icon icon="ph:play-fill"></iconify-icon>1.2M</span><span class="fade"></span><div class="caption">Dance routine that broke the internet</div></div><div class="meta">Explore grid · default</div></div><div class="video disabled"><div class="media"><span class="views"><iconify-icon icon="ph:play-fill"></iconify-icon>1.2M</span><span class="fade"></span><div class="caption">Dance routine that broke the internet</div></div><div class="meta">Explore grid · disabled</div></div></div>
+<hr class="divider">
+<div class="row"><span class="label">Live</span><div class="video stacked"><div class="media"><span class="live">LIVE</span><span class="views"><iconify-icon icon="ph:play-fill"></iconify-icon>1.2M</span><span class="fade"></span><div class="caption">Dance routine that broke the internet</div></div><div class="meta">Explore grid · live</div></div><div class="video"><div class="media"><span class="live">LIVE</span><span class="fade"></span><div class="caption">Dance routine that broke the internet</div></div><div class="meta">Small overlay priority</div></div></div>
+</body>
+</html>

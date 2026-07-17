@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>
+  /* Page scaffold — NOT extracted */
+  /* @component-css-start */
+body { margin: 0; padding: 12px; background: var(--background); color: var(--foreground); font-family: var(--font-sans); }.row { display: flex; gap: 8px; align-items: flex-start; flex-wrap: wrap; }.label { width: 100%; font-size: 10px; line-height: 1; letter-spacing: .08em; text-transform: uppercase; color: var(--muted-foreground); }.sidebar { box-sizing:border-box; width: 220px; max-width:100%; overflow:hidden; display: flex; flex-direction: column; gap: calc(var(--spacing) * 1.5); padding: calc(var(--spacing) * 1.5); background: var(--sidebar); color: var(--sidebar-foreground); border: 1px solid var(--sidebar-border); border-radius: calc(var(--radius) + 2px); box-shadow: var(--shadow-sm); }.sidebar .workspace { font-size: 13px; font-weight: 600; }.sidebar .section { width:100%; min-width:0; display: flex; flex-direction: column; gap: 4px; }.sidebar .item { box-sizing:border-box; width:100%; display: flex; align-items: center; min-height: 34px; padding: 0 12px; border-radius: calc(var(--radius) - 2px); color: inherit; background: transparent; }.sidebar .item.active { background: var(--sidebar-primary); color: var(--sidebar-primary-foreground); }.sidebar .item:not(.active):hover { background: var(--sidebar-accent); color: var(--sidebar-accent-foreground); }.sidebar .footer { padding-top: var(--spacing); border-top: 1px solid var(--sidebar-border); }.sidebar.is-disabled,.sidebar .disabled { opacity: .48; }.sidebar.compact { width: 196px; gap: var(--spacing); padding: var(--spacing); }.sidebar.compact .item { min-height: 30px; padding: 0 10px; }.divider { margin: 8px 0; border: 0; border-top: 1px solid var(--border); }
+  /* @component-css-end */
+</style>
+</head>
+<body>
+<div class="row"><span class="label">Default</span><aside class="sidebar"><div class="workspace">Vercel</div><nav class="section"><div class="item active">Projects</div><div class="item">Analytics</div><div class="item">Storage</div><div class="item">Integrations</div></nav><div class="footer section"><div class="item">Billing</div><div class="item">Security</div></div></aside><aside class="sidebar is-disabled"><div class="workspace">Vercel</div><nav class="section"><div class="item active">Projects</div><div class="item">Analytics</div><div class="item">Storage</div><div class="item">Integrations</div></nav><div class="footer section"><div class="item disabled">Billing</div><div class="item disabled">Security</div></div></aside></div>
+<hr class="divider">
+<div class="row"><span class="label">Compact</span><aside class="sidebar compact"><div class="workspace">Vercel</div><nav class="section"><div class="item">Projects</div><div class="item active">Analytics</div><div class="item">Storage</div><div class="item">Integrations</div></nav><div class="footer section"><div class="item">Billing</div></div></aside><aside class="sidebar compact is-disabled"><div class="workspace">Vercel</div><nav class="section"><div class="item">Projects</div><div class="item active">Analytics</div><div class="item">Storage</div><div class="item">Integrations</div></nav><div class="footer section"><div class="item disabled">Billing</div></div></aside></div>
+</body>
+</html>

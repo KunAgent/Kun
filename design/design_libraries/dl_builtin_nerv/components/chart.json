@@ -1,0 +1,48 @@
+{
+  "slug": "chart",
+  "name": "Chart",
+  "category": "Data Visualization",
+  "variantCount": 5,
+  "evidence": "Directly supported by chart-1 through chart-5 tokens in the source CSS.",
+  "anatomy": [
+    "chart-frame",
+    "legend",
+    "series",
+    "axis-labels",
+    "tooltip-anchor"
+  ],
+  "variantDimensions": {
+    "type": [
+      "bar",
+      "line",
+      "donut"
+    ],
+    "density": [
+      "compact",
+      "default"
+    ],
+    "emphasis": [
+      "single-series",
+      "multi-series"
+    ]
+  },
+  "structures": [
+    {
+      "name": "Pulse Bar Chart",
+      "notes": "Leans on vivid chart palette against dark surface."
+    },
+    {
+      "name": "Trend Line Chart",
+      "notes": "Supports cool/cyan secondary series contrast."
+    },
+    {
+      "name": "Share Donut Chart",
+      "notes": "Best for compact KPI side panels."
+    }
+  ],
+  "uiCopySamples": [
+    "Traffic Pulse",
+    "Signal Load",
+    "System Mix"
+  ]
+}

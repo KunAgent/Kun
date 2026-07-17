@@ -1,0 +1,79 @@
+{
+  "schemaVersion": 2,
+  "slug": "timepicker",
+  "name": "TimePicker",
+  "category": "data-entry",
+  "sourceKind": "structured-spec",
+  "confidence": "medium",
+  "semanticTypeCandidates": ["time-input", "time-selector", "time-field"],
+  "variantDimensions": {
+    "type": ["single", "range"],
+    "size": ["large", "default", "small"],
+    "state": ["default", "placeholder", "hover", "focus", "disabled", "error"]
+  },
+  "representativeVariants": [
+    { "type": "single", "size": "default", "state": "default" },
+    { "type": "single", "size": "large", "state": "default" },
+    { "type": "single", "size": "small", "state": "default" },
+    { "type": "single", "size": "default", "state": "placeholder" },
+    { "type": "single", "size": "default", "state": "hover" },
+    { "type": "single", "size": "default", "state": "focus" },
+    { "type": "single", "size": "default", "state": "disabled" },
+    { "type": "single", "size": "default", "state": "error" },
+    { "type": "range", "size": "large", "state": "default" }
+  ],
+  "anatomy": ["timepicker-container", "timepicker-input", "timepicker-value", "timepicker-placeholder", "timepicker-separator", "timepicker-suffix"],
+  "structurePatterns": [
+    "Inline-flex container wrapping an input-like box with time value text and trailing icon",
+    "Range mode adds a separator between start and end values within the same input box",
+    "Suffix area contains a clock/calendar SVG icon"
+  ],
+  "usageHints": [
+    "Large: height 36px, padding 0 12px, font-size 14px",
+    "Default (md): height 32px, padding 0 12px, font-size 13px",
+    "Small: height 28px, padding 0 12px, font-size 13px",
+    "Border default: 1px solid #DDE2E9, border-radius 4px",
+    "Hover: border-color rgba(22,100,255,0.8)",
+    "Focus: border-color #1664FF, box-shadow 0 0 0 2px rgba(22,100,255,0.1)",
+    "Error: border-color #F53F3F",
+    "Disabled: bg #F6F8FA, border #DDE2E9, text/icon color #C9CDD4",
+    "Value text: #0C0D0E; placeholder text: #737A87",
+    "Range input min-width: 240px",
+    "Separator between range values uses #737A87 color with 8px horizontal margin"
+  ],
+  "doNotInvent": ["dropdown panel with scrollable columns", "AM/PM toggle", "step configuration"],
+  "unknowns": ["dropdown panel layout", "clear button behavior", "keyboard interaction"],
+  "tokensConsumed": [
+    "--color-text-1-#0C0D0E",
+    "--color-text-3-#737A87",
+    "--color-border-#DDE2E9",
+    "--color-bg-disabled-#F6F8FA",
+    "--color-primary-#1664FF",
+    "--color-danger-#F53F3F",
+    "--color-disabled-text-#C9CDD4"
+  ],
+  "domAnatomy": {
+    "root": {
+      "tag": "div",
+      "class": "timepicker timepicker-{size}",
+      "modifiers": ["hover", "focus", "disabled", "error", "timepicker-range"],
+      "children": [
+        {
+          "tag": "div",
+          "class": "timepicker-input",
+          "children": [
+            { "tag": "span", "class": "timepicker-value | timepicker-placeholder" },
+            { "tag": "span", "class": "timepicker-separator", "optional": true, "note": "range mode only" },
+            { "tag": "span", "class": "timepicker-value", "optional": true, "note": "range end value" },
+            { "tag": "span", "class": "timepicker-suffix", "children": [{ "tag": "svg" }] }
+          ]
+        }
+      ]
+    }
+  },
+  "provenance": {
+    "preview": "preview/ui-timepicker.html",
+    "source": "structured-spec",
+    "css": { "file": "preview/ui-timepicker.html", "marker": "inline <style>" }
+  }
+}

@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "screensGenerated": 3,
+  "coreComponentsUsed": [
+    "sidebar",
+    "button",
+    "card",
+    "table",
+    "chart"
+  ],
+  "supportComponentsUsed": [],
+  "previewClassReuseRate": 0.72,
+  "hasProductContext": true,
+  "inventedComponents": [],
+  "renderedFromEvidence": [],
+  "warnings": [],
+  "kitType": "dashboard",
+  "sourceKind": "compat-repaired",
+  "interactiveStatesRendered": [
+    "hover",
+    "disabled",
+    "active"
+  ],
+  "primaryActionPerScreen": true,
+  "mockDataDensity": {
+    "tableRows": 8,
+    "chartPoints": 12
+  },
+  "notes": [
+    "Compatibility repaired for current design-library-creator validator.",
+    "Component/UIKit rules repaired for CSS-column audit.",
+    "quality-report coreComponentsUsed aligned with data-component attribution."
+  ]
+}

@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Card Preview - Claude Design System</title>
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;padding:clamp(20px,3vw,32px);background:var(--background);color:var(--foreground);font-family:var(--font-serif)}
+.preview{width:min(100%,860px);margin:0 auto;display:grid;gap:clamp(24px,4vw,32px)}
+.section{display:grid;gap:14px}
+.label{display:block;font:600 10px/1.2 var(--font-serif);letter-spacing:.14em;text-transform:uppercase;color:var(--muted-foreground)}
+.row{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr));gap:16px;padding:clamp(18px,3vw,24px);border:1px solid var(--border);border-radius:calc(var(--radius) + 4px);background:var(--popover);box-shadow:var(--shadow-xs)}
+.card{width:100%;height:100%;display:flex;flex-direction:column;padding:18px;border:1px solid var(--border);border-radius:var(--radius);background:var(--popover);box-shadow:var(--shadow-sm);transition:transform .16s ease,box-shadow .16s ease,border-color .16s ease}
+.card:hover{transform:translateY(-1px);box-shadow:var(--shadow-lg)}
+.eyebrow{margin:0 0 10px;font:600 10px/1.2 var(--font-serif);letter-spacing:.12em;text-transform:uppercase;color:var(--muted-foreground)}
+.title{margin:0 0 10px;font:600 21px/1.18 var(--font-sans);color:var(--foreground)}
+.body{margin:0;flex:1;font-size:14px;line-height:1.6;color:var(--secondary-foreground)}
+.disabled{background:var(--card);box-shadow:none;border-color:var(--border);pointer-events:none}
+.disabled .eyebrow{color:var(--muted-foreground)}
+.disabled .title{color:var(--foreground)}
+.disabled .body{color:var(--muted-foreground)}
+.sunken{background:var(--card);box-shadow:none}
+.sunken .body{color:var(--foreground)}
+.emphasis{background:var(--foreground);color:var(--background);border-color:transparent;box-shadow:var(--shadow-xl)}
+.emphasis .eyebrow{color:var(--secondary)}
+.emphasis .body,.emphasis .title{color:var(--background)}
+@media (max-width:640px){
+  .row{grid-template-columns:1fr;padding:18px}
+}
+</style>
+</head>
+<body>
+<main class="preview">
+<section class="section">
+<span class="label">Floating</span>
+<div class="row">
+<article class="card">
+<p class="eyebrow">Reading Card</p>
+<h2 class="title">Summarize this chapter</h2>
+<p class="body">Claude Design System frames long-form AI assistant reading with soft elevation, calm spacing, and editorial rhythm.</p>
+</article>
+<article class="card disabled" aria-disabled="true">
+<p class="eyebrow">Reading Card</p>
+<h2 class="title">Context locked</h2>
+<p class="body">This card shows the disabled state for unavailable annotations while keeping the same spacing and radius tokens.</p>
+</article>
+</div>
+</section>
+<section class="section">
+<span class="label">Surface Contrast</span>
+<div class="row">
+<article class="card sunken">
+<p class="eyebrow">Editorial Sidebar</p>
+<h2 class="title">Session notes</h2>
+<p class="body">A recessed surface keeps supporting prompts close to the page without competing with the main response.</p>
+</article>
+<article class="card emphasis">
+<p class="eyebrow">Claude Design System</p>
+<h2 class="title">Review before publish</h2>
+<p class="body">High-priority AI assistant guidance uses the strongest contrast and deepest shadow for emphasis.</p>
+</article>
+</div>
+</section>
+</main>
+</body>
+</html>

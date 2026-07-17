@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>Breadcrumb 面包屑</title>
+  <link rel="stylesheet" href="preview-scaffold.css">
+  <style>
+  .breadcrumb {
+    display: flex;
+    align-items: center;
+    font-family: "PingFang SC", sans-serif;
+  }
+  .breadcrumb-lg { font-size: 14px; line-height: 22px; letter-spacing: 0.042px; }
+  .breadcrumb-md { font-size: 12px; line-height: 20px; letter-spacing: 0.036px; }
+  .breadcrumb-item {
+    color: #737A87;
+    font-weight: 400;
+    text-decoration: none;
+    cursor: pointer;
+    transition: color 0.15s;
+    white-space: nowrap;
+  }
+  .breadcrumb-item:hover { color: #1664FF; }
+  .breadcrumb-item.current {
+    color: #42464E;
+    font-weight: 500;
+    cursor: default;
+  }
+  .breadcrumb-item.current:hover { color: #42464E; }
+  .breadcrumb-item.disabled {
+    color: #C7CCD6;
+    cursor: not-allowed;
+    pointer-events: none;
+  }
+  .breadcrumb-separator {
+    color: #737A87;
+    margin: 0 4px;
+  }
+  .breadcrumb-lg .breadcrumb-separator { margin: 0 8px; }
+  .breadcrumb-icon {
+    display: inline-flex;
+    align-items: center;
+    margin-right: 4px;
+  }
+  .breadcrumb-lg .breadcrumb-icon { width: 16px; height: 16px; }
+  .breadcrumb-md .breadcrumb-icon { width: 14px; height: 14px; }
+  </style>
+</head>
+<body>
+  <div class="pv-header">
+    <h1>Breadcrumb 面包屑</h1>
+    <p>面包屑导航，显示当前页面在层级结构中的位置，支持 Large/Default 两种尺寸。</p>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">Large 14px - 3 层级</div>
+    <div class="stack-12">
+      <nav class="breadcrumb breadcrumb-lg" data-component="breadcrumb" data-size="large">
+        <a class="breadcrumb-item" data-component="breadcrumb-item" data-state="default">第一层级</a>
+        <span class="breadcrumb-separator">&gt;</span>
+        <a class="breadcrumb-item" data-component="breadcrumb-item" data-state="default">第二层级</a>
+        <span class="breadcrumb-separator">&gt;</span>
+        <span class="breadcrumb-item current" data-component="breadcrumb-item" data-state="current">第三层级</span>
+      </nav>
+    </div>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">Default 12px - 3 层级</div>
+    <div class="stack-12">
+      <nav class="breadcrumb breadcrumb-md" data-component="breadcrumb" data-size="default">
+        <a class="breadcrumb-item" data-component="breadcrumb-item" data-state="default">第一层级</a>
+        <span class="breadcrumb-separator">&gt;</span>
+        <a class="breadcrumb-item" data-component="breadcrumb-item" data-state="default">第二层级</a>
+        <span class="breadcrumb-separator">&gt;</span>
+        <span class="breadcrumb-item current" data-component="breadcrumb-item" data-state="current">第三层级</span>
+      </nav>
+    </div>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">Large 14px - 带省略</div>
+    <div class="stack-12">
+      <nav class="breadcrumb breadcrumb-lg" data-component="breadcrumb" data-size="large">
+        <a class="breadcrumb-item" data-component="breadcrumb-item" data-state="default">第一层级</a>
+        <span class="breadcrumb-separator">&gt;</span>
+        <span class="breadcrumb-item" data-component="breadcrumb-item" data-state="default">...</span>
+        <span class="breadcrumb-separator">&gt;</span>
+        <a class="breadcrumb-item" data-component="breadcrumb-item" data-state="default">第三层级</a>
+        <span class="breadcrumb-separator">&gt;</span>
+        <span class="breadcrumb-item current" data-component="breadcrumb-item" data-state="current">第四层级</span>
+      </nav>
+    </div>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">子组件状态</div>
+    <div class="stack-12">
+      <a class="breadcrumb-item" data-component="breadcrumb-item" data-state="default">层级名称</a>
+      <span class="breadcrumb-item current" data-component="breadcrumb-item" data-state="current">当前页面</span>
+      <span class="breadcrumb-item disabled" data-component="breadcrumb-item" data-state="disabled">层级名称</span>
+    </div>
+  </div>
+</body>
+</html>

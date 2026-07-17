@@ -1,0 +1,77 @@
+{
+  "slug": "card",
+  "name": "Card",
+  "nameEn": "Card",
+  "category": "surfaces",
+  "summary": "Quiet containers defined by border and spacing, not by decoration.",
+  "variantCount": 5,
+  "primitiveCount": 3,
+  "variantDimensions": {
+    "density": [
+      "compact",
+      "default",
+      "spacious"
+    ],
+    "surface": [
+      "light",
+      "dark"
+    ],
+    "media": [
+      "text",
+      "image",
+      "mixed"
+    ]
+  },
+  "cssVariables": [
+    "card",
+    "card-foreground",
+    "border",
+    "radius",
+    "shadow-md"
+  ],
+  "uiCopySamples": [
+    "Compare models",
+    "Built for creators",
+    "Education pricing"
+  ],
+  "structurePatterns": [
+    "1px border defines the edge",
+    "Shadow appears only on elevated or floating moments",
+    "Large media uses generous inset and aspect-ratio framing"
+  ],
+  "structures": [
+    {
+      "name": "Standard Information Card",
+      "description": "Text-forward module with calm neutral surface and precise rhythm.",
+      "anatomy": [
+        "eyebrow",
+        "title",
+        "body",
+        "cta"
+      ],
+      "states": [
+        "default"
+      ],
+      "notes": [
+        "Prefer spacing contrast over divider lines"
+      ]
+    },
+    {
+      "name": "Media Card",
+      "description": "Product or lifestyle card with image-led composition and understated copy.",
+      "anatomy": [
+        "media",
+        "meta",
+        "price",
+        "cta"
+      ],
+      "states": [
+        "default",
+        "hover"
+      ],
+      "notes": [
+        "No layered gradients inside the card itself"
+      ]
+    }
+  ]
+}

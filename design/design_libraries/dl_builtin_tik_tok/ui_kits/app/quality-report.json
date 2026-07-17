@@ -1,0 +1,13 @@
+{
+  "screensGenerated": 4,
+  "inventedComponents": [],
+  "coreComponentsUsed": [],
+  "interactiveStatesRendered": [
+    "hover",
+    "disabled",
+    "active",
+    "selected"
+  ],
+  "primaryActionPerScreen": true,
+  "previewClassReuseRate": 0.92
+}

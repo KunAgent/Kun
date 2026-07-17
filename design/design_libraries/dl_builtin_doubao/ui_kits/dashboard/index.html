@@ -1,0 +1,1325 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <link rel="stylesheet" href="../../colors_and_type.css">
+<link rel="stylesheet" href="../../components.css">
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>豆包 · Doubao UI Kit</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        margin: 0;
+        min-height: 100%;
+        background: var(--background);
+        color: var(--foreground);
+        font-family: var(--font-sans);
+        -webkit-font-smoothing: antialiased;
+        text-rendering: optimizeLegibility;
+      }
+
+      body {
+        min-height: 100vh;
+      }
+
+      button,
+      input,
+      textarea {
+        font: inherit;
+        color: inherit;
+      }
+
+      button {
+        appearance: none;
+        cursor: pointer;
+      }
+
+      ::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: color-mix(in srgb, var(--muted-foreground) 28%, transparent);
+        border-radius: 999px;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: color-mix(in srgb, var(--muted-foreground) 45%, transparent);
+      }
+
+      .app {
+        height: 100vh;
+        display: grid;
+        grid-template-columns: 248px minmax(0, 1fr);
+        background: var(--background);
+        overflow: hidden;
+      }
+
+      /* ---------- Sidebar ---------- */
+      .sidebar {
+        display: flex;
+        flex-direction: column;
+        background: var(--sidebar);
+        border-right: 1px solid var(--sidebar-border);
+        min-height: 0;
+      }
+
+      .sidebar-search {
+        padding: 14px 14px 8px;
+      }
+
+      .search-field {
+        height: 38px;
+        padding: 0 12px;
+        border-radius: calc(var(--radius) * 0.5);
+        background: color-mix(in srgb, var(--background) 70%, var(--sidebar));
+        border: 1px solid transparent;
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        transition: border-color 160ms ease, background 160ms ease;
+      }
+
+      .search-field:focus-within {
+        border-color: var(--ring);
+        background: var(--background);
+      }
+
+      .search-field input {
+        flex: 1;
+        min-width: 0;
+        border: 0;
+        outline: none;
+        background: transparent;
+        font-size: 0.86rem;
+      }
+
+      .search-field input::placeholder {
+        color: var(--muted-foreground);
+      }
+
+      .kbd {
+        display: inline-flex;
+        align-items: center;
+        gap: 1px;
+        padding: 2px 6px;
+        border-radius: 6px;
+        background: color-mix(in srgb, var(--muted-foreground) 14%, transparent);
+        color: var(--muted-foreground);
+        font-size: 0.7rem;
+        font-weight: 600;
+      }
+
+      .icon {
+        width: 18px;
+        height: 18px;
+        flex: none;
+        stroke: currentColor;
+        fill: none;
+        stroke-width: 1.7;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+
+      .icon-sm {
+        width: 15px;
+        height: 15px;
+      }
+
+      .nav-scroll {
+        flex: 1;
+        min-height: 0;
+        overflow-y: auto;
+        padding: 4px 10px 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+
+      .nav-item {
+        width: 100%;
+        border: 0;
+        background: transparent;
+        color: var(--sidebar-foreground);
+        border-radius: calc(var(--radius) * 0.5);
+        padding: 9px 11px;
+        display: flex;
+        align-items: center;
+        gap: 11px;
+        text-align: left;
+        font-size: 0.9rem;
+        line-height: 1.2;
+        transition: background 140ms ease, color 140ms ease;
+      }
+
+      .nav-item:hover {
+        background: color-mix(in srgb, var(--background) 64%, var(--sidebar));
+      }
+
+      .nav-item.active {
+        background: var(--background);
+        color: var(--foreground);
+        font-weight: 600;
+      }
+
+      .nav-item .nav-label {
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .nav-item .icon {
+        color: color-mix(in srgb, var(--foreground) 72%, var(--muted-foreground));
+      }
+
+      .nav-item.active .icon {
+        color: var(--primary);
+      }
+
+      .nav-shortcut {
+        color: var(--muted-foreground);
+        font-size: 0.72rem;
+        opacity: 0;
+        transition: opacity 140ms ease;
+      }
+
+      .nav-item:hover .nav-shortcut {
+        opacity: 1;
+      }
+
+      .nav-collapse {
+        display: flex;
+        align-items: center;
+        gap: 11px;
+        padding: 9px 11px;
+        margin-top: 4px;
+        color: var(--muted-foreground);
+        font-size: 0.86rem;
+        border-radius: calc(var(--radius) * 0.5);
+      }
+
+      .nav-collapse:hover {
+        background: color-mix(in srgb, var(--background) 64%, var(--sidebar));
+      }
+
+      .nav-collapse .chev {
+        margin-left: auto;
+        transition: transform 200ms ease;
+      }
+
+      .nav-section-label {
+        padding: 14px 12px 6px;
+        font-size: 0.74rem;
+        color: var(--muted-foreground);
+      }
+
+      .history-item {
+        width: 100%;
+        border: 0;
+        background: transparent;
+        color: color-mix(in srgb, var(--foreground) 82%, var(--muted-foreground));
+        border-radius: calc(var(--radius) * 0.5);
+        padding: 8px 11px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        text-align: left;
+        font-size: 0.86rem;
+      }
+
+      .history-item:hover {
+        background: color-mix(in srgb, var(--background) 64%, var(--sidebar));
+        color: var(--foreground);
+      }
+
+      .history-avatar {
+        width: 18px;
+        height: 18px;
+        border-radius: 6px;
+        flex: none;
+        display: grid;
+        place-items: center;
+        font-size: 0.62rem;
+        color: var(--primary-foreground);
+      }
+
+      .history-item .nav-label {
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .sidebar-footer {
+        border-top: 1px solid var(--sidebar-border);
+        padding: 10px 12px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .user-avatar {
+        width: 30px;
+        height: 30px;
+        border-radius: 999px;
+        background: linear-gradient(135deg, var(--chart-1), var(--chart-4));
+        color: var(--primary-foreground);
+        display: grid;
+        place-items: center;
+        font-size: 0.78rem;
+        font-weight: 600;
+        flex: none;
+      }
+
+      .user-name {
+        flex: 1;
+        min-width: 0;
+        font-size: 0.84rem;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .user-more {
+        border: 0;
+        background: transparent;
+        color: var(--muted-foreground);
+        display: grid;
+        place-items: center;
+        width: 26px;
+        height: 26px;
+        border-radius: 8px;
+      }
+      .user-more:hover {
+        background: color-mix(in srgb, var(--background) 64%, var(--sidebar));
+      }
+
+      /* ---------- Main ---------- */
+      .main {
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        background: var(--background);
+        min-height: 0;
+      }
+
+      .topbar {
+        height: 52px;
+        flex: none;
+        padding: 0 18px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        border-bottom: 1px solid transparent;
+      }
+
+      .icon-btn {
+        width: 34px;
+        height: 34px;
+        border: 0;
+        background: transparent;
+        color: var(--muted-foreground);
+        border-radius: 9px;
+        display: grid;
+        place-items: center;
+        transition: background 140ms ease, color 140ms ease;
+      }
+      .icon-btn:hover {
+        background: var(--muted);
+        color: var(--foreground);
+      }
+
+      .topbar-center {
+        flex: 1;
+        text-align: center;
+        min-width: 0;
+      }
+      .topbar-title {
+        font-size: 0.92rem;
+        font-weight: 600;
+      }
+      .topbar-sub {
+        font-size: 0.72rem;
+        color: var(--muted-foreground);
+        margin-top: 1px;
+      }
+
+      .btn {
+        height: 36px;
+        padding: 0 15px;
+        border-radius: 999px;
+        border: 1px solid transparent;
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        font-size: 0.86rem;
+        font-weight: 500;
+        transition: background 150ms ease, border-color 150ms ease, transform 120ms ease, color 150ms ease;
+      }
+      .btn:active {
+        transform: translateY(1px);
+      }
+      .btn:focus-visible {
+        outline: 2px solid var(--ring);
+        outline-offset: 2px;
+      }
+      .btn-primary {
+        background: var(--primary);
+        color: var(--primary-foreground);
+      }
+      .btn-primary:hover {
+        background: color-mix(in srgb, var(--primary) 90%, var(--foreground));
+      }
+      .btn-ghost {
+        background: var(--muted);
+        color: var(--foreground);
+      }
+      .btn-ghost:hover {
+        background: color-mix(in srgb, var(--muted) 80%, var(--foreground) 12%);
+      }
+      .btn-outline {
+        background: var(--background);
+        color: var(--foreground);
+        border-color: var(--border);
+      }
+      .btn-outline:hover {
+        background: var(--muted);
+      }
+
+      .scroll-area {
+        flex: 1;
+        min-height: 0;
+        overflow-y: auto;
+      }
+
+      /* ---------- Discover view ---------- */
+      .discover {
+        max-width: 920px;
+        margin: 0 auto;
+        padding: 12px 28px 48px;
+      }
+
+      .discover-head {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        margin-bottom: 18px;
+      }
+      .discover-head h1 {
+        margin: 0;
+        font-size: 1.5rem;
+        flex: 1;
+      }
+
+      .tabs {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 22px;
+      }
+      .tab {
+        height: 34px;
+        padding: 0 16px;
+        border-radius: 999px;
+        border: 0;
+        background: transparent;
+        color: var(--muted-foreground);
+        font-size: 0.88rem;
+        transition: background 150ms ease, color 150ms ease;
+      }
+      .tab:hover {
+        background: var(--muted);
+        color: var(--foreground);
+      }
+      .tab.active {
+        background: var(--foreground);
+        color: var(--background);
+        font-weight: 600;
+      }
+
+      .agent-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 14px;
+      }
+
+      .agent-card {
+        text-align: left;
+        border: 1px solid var(--border);
+        border-radius: calc(var(--radius) * 0.75);
+        background: var(--card);
+        padding: 16px;
+        display: flex;
+        gap: 13px;
+        transition: border-color 160ms ease, background 160ms ease, transform 160ms ease;
+      }
+      .agent-card:hover {
+        border-color: color-mix(in srgb, var(--primary) 40%, var(--border));
+        background: color-mix(in srgb, var(--accent) 22%, var(--card));
+        transform: translateY(-2px);
+      }
+
+      .agent-icon {
+        width: 44px;
+        height: 44px;
+        border-radius: 13px;
+        flex: none;
+        display: grid;
+        place-items: center;
+        font-size: 1.25rem;
+        color: var(--primary-foreground);
+      }
+
+      .agent-body {
+        flex: 1;
+        min-width: 0;
+      }
+      .agent-title {
+        font-size: 0.96rem;
+        font-weight: 600;
+        margin: 2px 0 5px;
+      }
+      .agent-desc {
+        font-size: 0.82rem;
+        line-height: 1.5;
+        color: var(--muted-foreground);
+        margin: 0 0 12px;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+      }
+      .agent-meta {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 0.74rem;
+        color: var(--muted-foreground);
+      }
+      .agent-meta .dot {
+        width: 3px;
+        height: 3px;
+        border-radius: 999px;
+        background: currentColor;
+        opacity: 0.6;
+      }
+      .agent-meta .count {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+      }
+
+      /* ---------- Chat view ---------- */
+      .chat {
+        flex: 1;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+      }
+      .chat-inner {
+        width: 100%;
+        max-width: 720px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+      }
+      .chat-greeting {
+        font-size: 2rem;
+        font-weight: 700;
+        text-align: center;
+        margin: 0 0 28px;
+        letter-spacing: -0.01em;
+      }
+
+      .suggestions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        justify-content: center;
+        margin-bottom: 30px;
+      }
+      .suggestion {
+        border: 0;
+        background: var(--muted);
+        color: color-mix(in srgb, var(--foreground) 80%, var(--muted-foreground));
+        border-radius: 999px;
+        padding: 9px 15px;
+        font-size: 0.84rem;
+        transition: background 150ms ease, color 150ms ease;
+      }
+      .suggestion:hover {
+        background: color-mix(in srgb, var(--accent) 60%, var(--muted));
+        color: var(--accent-foreground);
+      }
+
+      /* ---------- Composer ---------- */
+      .composer {
+        width: 100%;
+        max-width: 720px;
+        border: 1px solid var(--border);
+        border-radius: 22px;
+        background: var(--card);
+        padding: 14px 16px 10px;
+        transition: border-color 160ms ease, box-shadow 160ms ease;
+      }
+      .composer:focus-within {
+        border-color: var(--ring);
+        box-shadow: 0 0 0 3px color-mix(in srgb, var(--ring) 18%, transparent);
+      }
+      .composer textarea {
+        width: 100%;
+        border: 0;
+        outline: none;
+        background: transparent;
+        resize: none;
+        font-size: 0.95rem;
+        line-height: 1.5;
+        min-height: 24px;
+        max-height: 160px;
+      }
+      .composer textarea::placeholder {
+        color: var(--muted-foreground);
+      }
+
+      .composer-tools {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin-top: 10px;
+        flex-wrap: nowrap;
+      }
+      .tool-scroll {
+        flex: 1 1 auto;
+        min-width: 0;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        overflow-x: auto;
+        scroll-behavior: smooth;
+        scrollbar-width: none;
+        -ms-overflow-style: none;
+      }
+      .tool-scroll::-webkit-scrollbar {
+        display: none;
+      }
+      .tool-chip {
+        flex: 0 0 auto;
+        border: 0;
+        background: transparent;
+        color: color-mix(in srgb, var(--foreground) 78%, var(--muted-foreground));
+        border-radius: 999px;
+        padding: 7px 11px;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 0.82rem;
+        white-space: nowrap;
+        transition: background 140ms ease, color 140ms ease;
+      }
+      .tool-chip:hover {
+        background: var(--muted);
+        color: var(--foreground);
+      }
+      .tool-chip.round {
+        flex: none;
+        width: 34px;
+        height: 34px;
+        padding: 0;
+        justify-content: center;
+        border: 1px solid var(--border);
+      }
+      .send-btn {
+        flex: none;
+        width: 36px;
+        height: 36px;
+        border-radius: 999px;
+        border: 0;
+        background: var(--primary);
+        color: var(--primary-foreground);
+        display: grid;
+        place-items: center;
+        transition: background 150ms ease, transform 120ms ease, opacity 150ms ease;
+      }
+      .send-btn:hover {
+        background: color-mix(in srgb, var(--primary) 90%, var(--foreground));
+      }
+      .send-btn:disabled {
+        background: var(--muted);
+        color: var(--muted-foreground);
+        cursor: default;
+      }
+      .voice-btn {
+        flex: none;
+        width: 36px;
+        height: 36px;
+        border-radius: 999px;
+        border: 1px solid var(--border);
+        background: transparent;
+        color: var(--muted-foreground);
+        display: grid;
+        place-items: center;
+      }
+      .voice-btn:hover {
+        background: var(--muted);
+        color: var(--foreground);
+      }
+
+      @media (max-width: 880px) {
+        .app {
+          grid-template-columns: 1fr;
+        }
+        .sidebar {
+          display: none;
+        }
+        .agent-grid {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  
+<style id="uikit-compat-layout-guard">
+.uikit-shell { width: 100%; max-width: 1184px; margin: 0 auto; overflow: hidden; }
+.uikit-truncate { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.uikit-nowrap { white-space: nowrap; flex-shrink: 0; }
+.uikit-table-wrap { max-width: 100%; overflow-x: auto; overscroll-behavior-x: contain; }
+.uikit-responsive-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(0, 1fr)); gap: 16px; }
+.uikit-main { min-width: 0; }
+.uikit-toolbar { min-width: 0; }
+.uikit-action-cell { max-width: 160px; }
+.uikit-action { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 900px) { .uikit-responsive-grid { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 640px) { .uikit-shell { max-width: 100%; } .uikit-responsive-grid { grid-template-columns: minmax(0, 1fr); } }
+</style>
+</head>
+  <body data-layout-guard="uikit-v1">
+<div hidden aria-hidden="true" class="uikit-component-attribution"><span data-component="sidebar-nav"></span><span data-component="search-input"></span><span data-component="app-card"></span><span data-component="chat-composer"></span></div>
+
+    <div id="root"></div>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script>
+const {
+  useState,
+  useMemo
+} = React;
+const Icon = ({
+  d,
+  paths,
+  sm,
+  cls
+}) => /*#__PURE__*/React.createElement("svg", {
+  className: "icon" + (sm ? " icon-sm" : "") + (cls ? " " + cls : ""),
+  viewBox: "0 0 24 24",
+  "aria-hidden": "true"
+}, paths ? paths.map((p, i) => /*#__PURE__*/React.createElement("path", {
+  key: i,
+  d: p
+})) : /*#__PURE__*/React.createElement("path", {
+  d: d
+}));
+const icons = {
+  bean: ["M12 3c4 0 7 2.8 7 6.5 0 2-1 3.6-2.6 4.7.4 1 .6 2 .6 3.3 0 .8-.6 1.5-1.5 1.5-.8 0-1.4-.5-1.7-1.2-1.2.5-2.6.7-3.8.5", "M12 3C8 3 5 5.8 5 9.5 5 13 8 16 12 16"],
+  chat: ["M21 12a8 8 0 0 1-11.6 7.1L4 20l1-5A8 8 0 1 1 21 12Z"],
+  task: ["M9 5h9a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7", "M9 3h2a1 1 0 0 1 1 1v1a1 1 0 0 1-1 1H9a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z", "M8 12h6M8 16h4"],
+  create: ["M12 3 4 7v10l8 4 8-4V7l-8-4Z", "M12 3v18M4 7l8 4 8-4"],
+  cloud: ["M7 18a4 4 0 0 1-.5-7.97A6 6 0 0 1 18 9.5a3.5 3.5 0 0 1-.5 8.5H7Z"],
+  star: ["M12 4l2.4 4.9 5.4.8-3.9 3.8.9 5.4-4.8-2.5-4.8 2.5.9-5.4L4.2 9.7l5.4-.8L12 4Z"],
+  compass: ["M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z", "M14.5 9.5 13 13l-3.5 1.5L11 11l3.5-1.5Z"],
+  panel: ["M4 5h16a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1Z", "M9 5v14"],
+  edit: ["M4 20h4l10.5-10.5a2.1 2.1 0 0 0-3-3L5 17v3Z", "M13.5 6.5l3 3"],
+  sound: ["M5 9v6h4l5 4V5L9 9H5Z", "M16 9a3 3 0 0 1 0 6"],
+  share: ["M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7", "M12 3v13M8 7l4-4 4 4"],
+  laptop: ["M5 6h14v9H5z", "M3 18h18l-1.5 2H4.5L3 18Z"],
+  plus: ["M12 5v14M5 12h14"],
+  bolt: ["M13 3 5 14h6l-1 7 8-11h-6l1-7Z"],
+  ppt: ["M5 4h14v11H5z", "M12 15v4M9 20h6"],
+  table: ["M4 5h16v14H4z", "M4 10h16M10 5v14"],
+  image: ["M4 5h16v14H4z", "M4 16l4-4 3 3 4-5 5 6", "M9 9.5a1 1 0 1 1-2 0 1 1 0 0 1 2 0Z"],
+  pen: ["M4 20h4l10.5-10.5a2.1 2.1 0 0 0-3-3L5 17v3Z"],
+  video: ["M4 6h12v12H4z", "M16 10l4-2v8l-4-2"],
+  more: ["M5 12h.01M12 12h.01M19 12h.01"],
+  wave: ["M4 12h2M8 8v8M12 5v14M16 8v8M20 12h0"],
+  flame: ["M12 3c1 3 4 4 4 8a4 4 0 0 1-8 0c0-2 1-3 1-4 2 1 3 0 3-4Z"],
+  dots: ["M5 12h.01M12 12h.01M19 12h.01"]
+};
+const navTop = [{
+  id: "bean",
+  label: "豆包",
+  icon: "bean"
+}, {
+  id: "chat",
+  label: "新对话",
+  icon: "chat",
+  shortcut: "⌘K"
+}, {
+  id: "office",
+  label: "新办公任务",
+  icon: "task"
+}, {
+  id: "studio",
+  label: "AI 创作",
+  icon: "create"
+}, {
+  id: "cloud",
+  label: "云盘",
+  icon: "cloud"
+}];
+const history = [{
+  label: "同一锅鱼评价",
+  c: "var(--primary)",
+  t: "鱼"
+}, {
+  label: "论袁的魅力",
+  c: "var(--chart-3)",
+  t: "袁"
+}, {
+  label: "主对话",
+  c: "var(--chart-2)",
+  t: "主"
+}, {
+  label: "钟离",
+  c: "var(--chart-4)",
+  t: "钟"
+}, {
+  label: "英语学习助手",
+  c: "var(--primary)",
+  t: "EN"
+}, {
+  label: "AI 漫画生成",
+  c: "var(--destructive)",
+  t: "漫"
+}, {
+  label: "超爱聊天的小宁",
+  c: "var(--chart-2)",
+  t: "宁"
+}, {
+  label: "学习好帮手",
+  c: "var(--chart-3)",
+  t: "学"
+}, {
+  label: "全能写作助手",
+  c: "var(--primary)",
+  t: "写"
+}, {
+  label: "影视伴侣",
+  c: "var(--destructive)",
+  t: "影"
+}, {
+  label: "豆包音乐小助手",
+  c: "var(--chart-3)",
+  t: "音"
+}, {
+  label: "AI 图片生成",
+  c: "var(--chart-3)",
+  t: "图"
+}];
+const tabs = ["工作", "学习", "创作", "生活"];
+const agentsByTab = {
+  工作: [{
+    emoji: "✍️",
+    c: "linear-gradient(135deg,var(--chart-1),var(--chart-2))",
+    title: "全能写作助手",
+    desc: "提供多种文案创作选择，轻松完成各种文案任务。",
+    count: "1384.1万",
+    author: "@豆包官方"
+  }, {
+    emoji: "🖼️",
+    c: "linear-gradient(135deg,var(--chart-2),var(--primary))",
+    title: "识图生成提示词",
+    desc: "上传图片，根据图片内容精准生成提示词，帮助二次创作。",
+    count: "111.1万",
+    author: "@豆包识图"
+  }, {
+    emoji: "🇬🇧",
+    c: "linear-gradient(135deg,var(--chart-1),var(--chart-4))",
+    title: "英文写作润色",
+    desc: "An assistant dedicated to polishing English writing.",
+    count: "36.4万",
+    author: "@豆包官方"
+  }, {
+    emoji: "💗",
+    c: "linear-gradient(135deg,var(--destructive),var(--destructive))",
+    title: "高情商回复",
+    desc: "聊天时不知道怎么回复，找来帮你看~",
+    count: "1324.6万",
+    author: "@艾比斯之梦"
+  }, {
+    emoji: "🔤",
+    c: "linear-gradient(135deg,var(--chart-1),var(--chart-2))",
+    title: "中英翻译",
+    desc: "专业翻译助手，精准转换中英内容，专注翻译不啰嗦。",
+    count: "318万",
+    author: "@Deja.Le"
+  }, {
+    emoji: "📊",
+    c: "linear-gradient(135deg,var(--chart-2),var(--chart-4))",
+    title: "EXCEL大全",
+    desc: "拥有卓越数据处理能力，助您解决 Excel 各类难题。",
+    count: "24.6万",
+    author: "@春风十里oh~"
+  }, {
+    emoji: "📄",
+    c: "linear-gradient(135deg,var(--muted-foreground),var(--foreground))",
+    title: "论文助手",
+    desc: "能助力用户完成严谨深实论文的专业帮手。",
+    count: "46.6万",
+    author: "@欧阳固固"
+  }, {
+    emoji: "🔥",
+    c: "linear-gradient(135deg,var(--chart-1),var(--chart-3))",
+    title: "爆款文案",
+    desc: "知名博主，善写爆款文案，精通电商带货、粉丝运营。",
+    count: "85.4万",
+    author: "@如颜"
+  }, {
+    emoji: "🐍",
+    c: "linear-gradient(135deg,var(--chart-2),var(--chart-4))",
+    title: "python编程",
+    desc: "能助您精通 Python 编程，涵盖知识全面的专业助手。",
+    count: "28.4万",
+    author: "@老陆"
+  }, {
+    emoji: "📋",
+    c: "linear-gradient(135deg,var(--chart-1),var(--chart-4))",
+    title: "公文写作",
+    desc: "一个个神秘的智能体。",
+    count: "12.1万",
+    author: "@多磨"
+  }, {
+    emoji: "📝",
+    c: "linear-gradient(135deg,var(--chart-1),var(--chart-4))",
+    title: "AI扩文",
+    desc: "能将简短话语扩展为丰富长文，助您丰富表达的内容。",
+    count: "25.5万",
+    author: "@蓝蓝的春天"
+  }, {
+    emoji: "🎵",
+    c: "linear-gradient(135deg,var(--destructive),var(--destructive))",
+    title: "抖音文案",
+    desc: "能创作多样风格抖音文案，适配各种主题场景。",
+    count: "22.7万",
+    author: "@红宝"
+  }, {
+    emoji: "🔡",
+    c: "linear-gradient(135deg,var(--muted-foreground),var(--foreground))",
+    title: "识图转文字",
+    desc: "图片上的文字不能复制？立即上传图片，帮你精准提取。",
+    count: "33.9万",
+    author: "@Eoch"
+  }, {
+    emoji: "🧠",
+    c: "linear-gradient(135deg,var(--chart-1),var(--chart-4))",
+    title: "思维导图",
+    desc: "根据一句话即可生成思维导图。",
+    count: "19.6万",
+    author: "@@笑一笑"
+  }, {
+    emoji: "🎨",
+    c: "linear-gradient(135deg,var(--chart-1),var(--chart-4))",
+    title: "AI绘画提示词大师",
+    desc: "精通各类绘画风格，为你生成专业的绘画提示词。",
+    count: "41.2万",
+    author: "@绘梦师"
+  }, {
+    emoji: "📣",
+    c: "linear-gradient(135deg,var(--chart-2),var(--chart-4))",
+    title: "FAB营销文案",
+    desc: "运用 FAB 法则，快速产出有说服力的产品营销文案。",
+    count: "9.8万",
+    author: "@增长黑客"
+  }],
+  学习: [{
+    emoji: "📚",
+    c: "linear-gradient(135deg,var(--primary),var(--chart-4))",
+    title: "学习好帮手",
+    desc: "解答各学科疑问，制定学习计划，做你的私人学习搭子。",
+    count: "210.5万",
+    author: "@豆包官方"
+  }, {
+    emoji: "🇬🇧",
+    c: "linear-gradient(135deg,var(--chart-1),var(--chart-4))",
+    title: "英语学习助手",
+    desc: "陪你练口语、背单词、学语法，循序渐进提升英语能力。",
+    count: "88.3万",
+    author: "@豆包官方"
+  }, {
+    emoji: "🧮",
+    c: "linear-gradient(135deg,var(--chart-2),var(--chart-4))",
+    title: "数学解题专家",
+    desc: "拆解每一步解题思路，让复杂的数学题变得清晰易懂。",
+    count: "63.7万",
+    author: "@解题君"
+  }, {
+    emoji: "🔬",
+    c: "linear-gradient(135deg,var(--chart-1),var(--chart-4))",
+    title: "科学小百科",
+    desc: "用通俗有趣的方式解释科学原理，激发探索世界的好奇心。",
+    count: "29.1万",
+    author: "@求知鸟"
+  }, {
+    emoji: "🏛️",
+    c: "linear-gradient(135deg,var(--chart-4),var(--chart-5))",
+    title: "历史讲解员",
+    desc: "讲述生动的历史故事，串联起朝代脉络与重要事件。",
+    count: "18.4万",
+    author: "@历史的回响"
+  }, {
+    emoji: "💡",
+    c: "linear-gradient(135deg,var(--chart-2),var(--chart-4))",
+    title: "考研规划师",
+    desc: "结合目标院校制定备考节奏，帮你高效冲刺上岸。",
+    count: "15.2万",
+    author: "@上岸学长"
+  }],
+  创作: [{
+    emoji: "🎨",
+    c: "linear-gradient(135deg,var(--chart-1),var(--chart-4))",
+    title: "AI绘画提示词大师",
+    desc: "精通各类绘画风格，为你生成专业的绘画提示词。",
+    count: "41.2万",
+    author: "@绘梦师"
+  }, {
+    emoji: "📖",
+    c: "linear-gradient(135deg,var(--primary),var(--chart-4))",
+    title: "小说创作助手",
+    desc: "构思情节、塑造人物、推进剧情，陪你写出动人故事。",
+    count: "57.9万",
+    author: "@故事工厂"
+  }, {
+    emoji: "🎬",
+    c: "linear-gradient(135deg,var(--destructive),var(--destructive))",
+    title: "短视频脚本",
+    desc: "根据主题快速产出有节奏感、有爆点的短视频脚本。",
+    count: "33.6万",
+    author: "@分镜师"
+  }, {
+    emoji: "🎵",
+    c: "linear-gradient(135deg,var(--destructive),var(--destructive))",
+    title: "作词灵感库",
+    desc: "捕捉情绪与意象，为你的旋律填上动人的歌词。",
+    count: "20.8万",
+    author: "@词曲人"
+  }, {
+    emoji: "🖌️",
+    c: "linear-gradient(135deg,var(--destructive),var(--destructive))",
+    title: "海报设计灵感",
+    desc: "提供配色、排版与主题创意，让海报更有视觉张力。",
+    count: "16.5万",
+    author: "@视觉派"
+  }, {
+    emoji: "🪧",
+    c: "linear-gradient(135deg,var(--chart-2),var(--chart-4))",
+    title: "起名大师",
+    desc: "为品牌、角色或产品取出既好记又有寓意的名字。",
+    count: "12.3万",
+    author: "@取名君"
+  }],
+  生活: [{
+    emoji: "🍳",
+    c: "linear-gradient(135deg,var(--chart-1),var(--chart-3))",
+    title: "家常菜谱",
+    desc: "根据现有食材推荐做法，手把手教你做出美味家常菜。",
+    count: "98.2万",
+    author: "@厨房日记"
+  }, {
+    emoji: "✈️",
+    c: "linear-gradient(135deg,var(--chart-1),var(--chart-4))",
+    title: "旅行规划师",
+    desc: "定制专属行程，覆盖交通、住宿与必玩景点。",
+    count: "44.1万",
+    author: "@旅行家"
+  }, {
+    emoji: "💪",
+    c: "linear-gradient(135deg,var(--chart-2),var(--chart-4))",
+    title: "健身教练",
+    desc: "根据身体状况制定训练与饮食计划，科学塑形。",
+    count: "37.6万",
+    author: "@自律达人"
+  }, {
+    emoji: "🧘",
+    c: "linear-gradient(135deg,var(--chart-1),var(--chart-4))",
+    title: "情绪树洞",
+    desc: "认真倾听你的烦恼，给予温暖而有用的陪伴建议。",
+    count: "62.4万",
+    author: "@暖心小屋"
+  }, {
+    emoji: "💰",
+    c: "linear-gradient(135deg,var(--chart-2),var(--chart-4))",
+    title: "理财小管家",
+    desc: "用通俗易懂的方式讲解理财知识，帮你规划日常开支。",
+    count: "21.9万",
+    author: "@省钱攻略"
+  }, {
+    emoji: "🐱",
+    c: "linear-gradient(135deg,var(--chart-2),var(--chart-4))",
+    title: "宠物顾问",
+    desc: "解答养宠疑问，提供科学喂养与健康护理建议。",
+    count: "18.7万",
+    author: "@铲屎官"
+  }]
+};
+const suggestions = ["资讯：佛得角凭借 2026 世界杯出色表现受广泛关注", "帮我设计一个可爱蛋仔头像", "未来 5 年哪些行业可能迎来爆发？", "想象十年后的自己是什么样的？", "右手比左手力气大吗？", "什么瓜不能吃？", "一万块存银行，一个月大概多少利息？", "如何开始写小说并实现盈利？", "怎么查询自己的血型？"];
+const composerTools = [{
+  icon: "bolt",
+  label: "快速"
+}, {
+  icon: "ppt",
+  label: "PPT 生成"
+}, {
+  icon: "table",
+  label: "AI 表格"
+}, {
+  icon: "image",
+  label: "图像生成"
+}, {
+  icon: "pen",
+  label: "帮我写作"
+}, {
+  icon: "video",
+  label: "视频生成"
+}, {
+  icon: "more",
+  label: "更多"
+}];
+function Sidebar({
+  active,
+  onNavigate
+}) {
+  return /*#__PURE__*/React.createElement("aside", {
+    className: "sidebar",
+    "data-component": "sidebar-nav"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "sidebar-search"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "search-field",
+    "data-component": "search-input"
+  }, /*#__PURE__*/React.createElement(Icon, {
+    d: "M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14ZM20 20l-3.5-3.5"
+  }), /*#__PURE__*/React.createElement("input", {
+    placeholder: "\u641C\u7D22...",
+    "aria-label": "\u641C\u7D22"
+  }), /*#__PURE__*/React.createElement("span", {
+    className: "kbd"
+  }, "\u2318K"))), /*#__PURE__*/React.createElement("nav", {
+    className: "nav-scroll",
+    "aria-label": "\u4E3B\u5BFC\u822A"
+  }, navTop.map(item => /*#__PURE__*/React.createElement("button", {
+    key: item.id,
+    className: "nav-item" + (active === item.id ? " active" : ""),
+    onClick: () => onNavigate(item.id)
+  }, /*#__PURE__*/React.createElement(Icon, {
+    paths: icons[item.icon]
+  }), /*#__PURE__*/React.createElement("span", {
+    className: "nav-label"
+  }, item.label), item.shortcut && /*#__PURE__*/React.createElement("span", {
+    className: "nav-shortcut"
+  }, item.shortcut))), /*#__PURE__*/React.createElement("div", {
+    className: "nav-collapse"
+  }, /*#__PURE__*/React.createElement(Icon, {
+    paths: icons.star
+  }), /*#__PURE__*/React.createElement("span", null, "\u6536\u8D77"), /*#__PURE__*/React.createElement(Icon, {
+    cls: "chev",
+    paths: ["M6 9l6 6 6-6"],
+    sm: true
+  })), /*#__PURE__*/React.createElement("button", {
+    className: "nav-item" + (active === "discover" ? " active" : ""),
+    onClick: () => onNavigate("discover")
+  }, /*#__PURE__*/React.createElement(Icon, {
+    paths: icons.compass
+  }), /*#__PURE__*/React.createElement("span", {
+    className: "nav-label"
+  }, "\u53D1\u73B0\u667A\u80FD\u4F53")), /*#__PURE__*/React.createElement("div", {
+    className: "nav-section-label"
+  }, "\u5386\u53F2\u5BF9\u8BDD"), history.map(h => /*#__PURE__*/React.createElement("button", {
+    key: h.label,
+    className: "history-item"
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "history-avatar",
+    style: {
+      background: h.c
+    }
+  }, h.t), /*#__PURE__*/React.createElement("span", {
+    className: "nav-label"
+  }, h.label)))), /*#__PURE__*/React.createElement("div", {
+    className: "sidebar-footer"
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "user-avatar"
+  }, "\u8C46"), /*#__PURE__*/React.createElement("span", {
+    className: "user-name"
+  }, "\u7528\u62378081875236843"), /*#__PURE__*/React.createElement("button", {
+    className: "user-more",
+    "aria-label": "\u66F4\u591A"
+  }, /*#__PURE__*/React.createElement(Icon, {
+    paths: icons.dots,
+    sm: true
+  }))));
+}
+function Discover() {
+  const [tab, setTab] = useState("工作");
+  const agents = agentsByTab[tab] || [];
+  return /*#__PURE__*/React.createElement("div", {
+    className: "scroll-area"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "discover"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "discover-head"
+  }, /*#__PURE__*/React.createElement("h1", null, "\u53D1\u73B0 AI \u667A\u80FD\u4F53"), /*#__PURE__*/React.createElement("button", {
+    className: "btn btn-ghost"
+  }, "\u6211\u521B\u5EFA\u7684"), /*#__PURE__*/React.createElement("button", {
+    className: "btn btn-primary"
+  }, /*#__PURE__*/React.createElement(Icon, {
+    paths: icons.plus,
+    sm: true
+  }), "\u521B\u5EFA AI \u667A\u80FD\u4F53")), /*#__PURE__*/React.createElement("div", {
+    className: "tabs"
+  }, tabs.map(t => /*#__PURE__*/React.createElement("button", {
+    key: t,
+    className: "tab" + (tab === t ? " active" : ""),
+    onClick: () => setTab(t)
+  }, t))), /*#__PURE__*/React.createElement("div", {
+    className: "agent-grid"
+  }, agents.map(a => /*#__PURE__*/React.createElement("button", {
+    key: a.title,
+    className: "agent-card",
+    "data-component": "app-card"
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "agent-icon",
+    style: {
+      background: a.c
+    }
+  }, a.emoji), /*#__PURE__*/React.createElement("span", {
+    className: "agent-body"
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "agent-title"
+  }, a.title), /*#__PURE__*/React.createElement("p", {
+    className: "agent-desc"
+  }, a.desc), /*#__PURE__*/React.createElement("span", {
+    className: "agent-meta"
+  }, /*#__PURE__*/React.createElement("span", {
+    className: "count"
+  }, /*#__PURE__*/React.createElement(Icon, {
+    paths: icons.flame,
+    sm: true
+  }), a.count, "\u4EBA\u804A\u8FC7"), /*#__PURE__*/React.createElement("span", {
+    className: "dot"
+  }), /*#__PURE__*/React.createElement("span", null, a.author))))))));
+}
+function Chat() {
+  const [value, setValue] = useState("");
+  const onInput = e => {
+    setValue(e.target.value);
+    e.target.style.height = "auto";
+    e.target.style.height = Math.min(e.target.scrollHeight, 160) + "px";
+  };
+  return /*#__PURE__*/React.createElement("div", {
+    className: "chat"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "chat-inner"
+  }, /*#__PURE__*/React.createElement("h1", {
+    className: "chat-greeting"
+  }, "\u6709\u4EC0\u4E48\u6211\u80FD\u5E2E\u4F60\u7684\u5417\uFF1F"), /*#__PURE__*/React.createElement("div", {
+    className: "suggestions"
+  }, suggestions.map(s => /*#__PURE__*/React.createElement("button", {
+    key: s,
+    className: "suggestion",
+    onClick: () => setValue(s)
+  }, s))), /*#__PURE__*/React.createElement("div", {
+    className: "composer",
+    "data-component": "chat-composer"
+  }, /*#__PURE__*/React.createElement("textarea", {
+    rows: "1",
+    placeholder: "\u53D1\u6D88\u606F\u6216\u6309\u4F4F\u7A7A\u683C\u8BF4\u8BDD...",
+    value: value,
+    onChange: onInput
+  }), /*#__PURE__*/React.createElement("div", {
+    className: "composer-tools"
+  }, /*#__PURE__*/React.createElement("button", {
+    className: "tool-chip round",
+    "aria-label": "\u6DFB\u52A0"
+  }, /*#__PURE__*/React.createElement(Icon, {
+    paths: icons.plus,
+    sm: true
+  })), /*#__PURE__*/React.createElement("div", {
+    className: "tool-scroll"
+  }, composerTools.map(t => /*#__PURE__*/React.createElement("button", {
+    key: t.label,
+    className: "tool-chip"
+  }, /*#__PURE__*/React.createElement(Icon, {
+    paths: icons[t.icon],
+    sm: true
+  }), t.label))), value.trim() ? /*#__PURE__*/React.createElement("button", {
+    className: "send-btn",
+    "aria-label": "\u53D1\u9001"
+  }, /*#__PURE__*/React.createElement(Icon, {
+    paths: ["M5 12h14M13 6l6 6-6 6"],
+    sm: true
+  })) : /*#__PURE__*/React.createElement("button", {
+    className: "voice-btn",
+    "aria-label": "\u8BED\u97F3"
+  }, /*#__PURE__*/React.createElement(Icon, {
+    paths: icons.wave,
+    sm: true
+  }))))));
+}
+function App() {
+  const [active, setActive] = useState("discover");
+  const isChat = active === "chat";
+  return /*#__PURE__*/React.createElement("div", {
+    className: "app"
+  }, /*#__PURE__*/React.createElement(Sidebar, {
+    active: active,
+    onNavigate: setActive
+  }), /*#__PURE__*/React.createElement("main", {
+    className: "main"
+  }, /*#__PURE__*/React.createElement("header", {
+    className: "topbar"
+  }, /*#__PURE__*/React.createElement("button", {
+    className: "icon-btn",
+    "aria-label": "\u5207\u6362\u4FA7\u680F"
+  }, /*#__PURE__*/React.createElement(Icon, {
+    paths: icons.panel
+  })), /*#__PURE__*/React.createElement("button", {
+    className: "icon-btn",
+    "aria-label": "\u65B0\u5EFA"
+  }, /*#__PURE__*/React.createElement(Icon, {
+    paths: icons.edit
+  })), isChat && /*#__PURE__*/React.createElement("div", {
+    className: "topbar-center"
+  }, /*#__PURE__*/React.createElement("div", {
+    className: "topbar-title"
+  }, "\u65B0\u5BF9\u8BDD"), /*#__PURE__*/React.createElement("div", {
+    className: "topbar-sub"
+  }, "\u7531\u8C46\u5305\u5927\u6A21\u578B 1.6 \u63D0\u4F9B\u652F\u6301")), isChat ? /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("button", {
+    className: "icon-btn",
+    "aria-label": "\u58F0\u97F3"
+  }, /*#__PURE__*/React.createElement(Icon, {
+    paths: icons.sound
+  })), /*#__PURE__*/React.createElement("button", {
+    className: "icon-btn",
+    "aria-label": "\u5206\u4EAB"
+  }, /*#__PURE__*/React.createElement(Icon, {
+    paths: icons.share
+  })), /*#__PURE__*/React.createElement("button", {
+    className: "btn btn-outline"
+  }, /*#__PURE__*/React.createElement(Icon, {
+    paths: icons.laptop,
+    sm: true
+  }), "\u4E0B\u8F7D\u7535\u8111\u7248")) : /*#__PURE__*/React.createElement("span", {
+    style: {
+      flex: 1
+    }
+  })), isChat ? /*#__PURE__*/React.createElement(Chat, null) : /*#__PURE__*/React.createElement(Discover, null)));
+}
+ReactDOM.createRoot(document.getElementById("root")).render(/*#__PURE__*/React.createElement(App, null));    </script>
+  <script type="text/babel">window.__uikitReactReady = Boolean(window.React && window.ReactDOM);</script>
+</body>
+</html>

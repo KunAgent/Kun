@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>body{margin:0;padding:12px;background:var(--background);color:var(--foreground);font:500 14px/1.45 var(--font-sans);letter-spacing:var(--tracking-normal)}.row{display:flex;align-items:flex-start;gap:12px;flex-wrap:wrap}.label{width:72px;padding-top:10px;color:var(--muted-foreground);font:700 10px/1 var(--font-sans);letter-spacing:.12em;text-transform:uppercase}.divider{margin:12px 0;border:0;border-top:1px solid var(--border)}.card{width:188px;min-height:148px;padding:calc(var(--spacing)*5);display:flex;flex-direction:column;justify-content:space-between;background:var(--card);color:var(--card-foreground);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-md);transition:transform .18s ease,box-shadow .18s ease}.card:hover{transform:translateY(-2px);box-shadow:var(--shadow-lg)}.card.disabled,.card.disabled:hover{opacity:.5;transform:none;box-shadow:var(--shadow-md)}.eyebrow,.meta{color:var(--muted-foreground);font-size:11px;letter-spacing:.08em;text-transform:uppercase}.title{margin:6px 0 8px;font-size:18px;line-height:1.15}.body-copy{margin:0;color:var(--muted-foreground);font-size:13px}.cta{display:inline-flex;align-items:center;justify-content:center;width:max-content;margin-top:12px;padding:calc(var(--spacing)*2) calc(var(--spacing)*3.5);border-radius:999px;background:var(--primary);color:var(--primary-foreground);font-size:12px;font-weight:700;text-decoration:none}.media{aspect-ratio:4/3;border-radius:calc(var(--radius) - 4px);background:linear-gradient(135deg,var(--secondary),var(--accent));border:1px solid var(--border)}.media-card{min-height:212px;padding:calc(var(--spacing)*4)}.media-card .title{font-size:16px;margin:10px 0 6px}.price{font-size:12px;color:var(--muted-foreground)}.dark{background:var(--card);color:var(--card-foreground)}</style>
+</head>
+<body>
+<div class="row">
+<span class="label">Info</span>
+<article class="card">
+<div><div class="eyebrow">Pinguo Apple</div><h1 class="title">Built for creators</h1><p class="body-copy">A calm surface for comparing cameras, storage tiers, and bundle benefits across the ecosystem.</p></div>
+<a class="cta" href="#">Compare models</a>
+</article>
+<article class="card disabled" aria-disabled="true">
+<div><div class="eyebrow">Campus Store</div><h1 class="title">Education pricing</h1><p class="body-copy">Student bundles stay visible while unavailable purchase actions remain clearly disabled.</p></div>
+<span class="cta">Compare models</span>
+</article>
+</div>
+<hr class="divider">
+<div class="row">
+<span class="label">Media</span>
+<article class="card media-card">
+<div class="media"></div>
+<div><div class="meta">Creator bundle</div><h1 class="title">Studio kit with Lens Sync</h1><div class="price">From $799 with Education pricing</div></div>
+</article>
+<article class="card media-card dark">
+<div class="media"></div>
+<div><div class="meta">Consumer imaging ecosystem</div><h1 class="title">Built for creators</h1><div class="price">Compare models across camera, app, and cloud plans</div></div>
+</article>
+</div>
+</body>
+</html>

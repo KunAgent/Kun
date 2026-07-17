@@ -1,0 +1,63 @@
+{
+  "slug": "card",
+  "name": "Card",
+  "category": "surface",
+  "variantCount": 6,
+  "evidence": "AI-inferred based on metrics-first fitness app dashboards.",
+  "anatomy": [
+    "container",
+    "header",
+    "title",
+    "value",
+    "meta"
+  ],
+  "childComponents": [
+    "chip",
+    "button"
+  ],
+  "cssVariables": [
+    "card",
+    "card-foreground",
+    "muted",
+    "muted-foreground",
+    "border",
+    "primary",
+    "chart-1",
+    "chart-2",
+    "radius",
+    "shadow"
+  ],
+  "variantDimensions": {
+    "type": [
+      "metric",
+      "session",
+      "challenge"
+    ],
+    "emphasis": [
+      "default",
+      "highlighted"
+    ]
+  },
+  "structurePatterns": [
+    "dense dark surface",
+    "single accent metric",
+    "tight border-led separation"
+  ],
+  "structures": [
+    {
+      "name": "Type=Metric, Emphasis=Default",
+      "layout": "title + stat + delta",
+      "copy": "Recovery Score"
+    },
+    {
+      "name": "Type=Session, Emphasis=Highlighted",
+      "layout": "title + duration + CTA",
+      "copy": "HIIT Blast"
+    },
+    {
+      "name": "Type=Challenge, Emphasis=Default",
+      "layout": "title + progress + rank",
+      "copy": "May Sprint Challenge"
+    }
+  ]
+}

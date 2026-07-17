@@ -1,0 +1,58 @@
+{
+  "slug": "input",
+  "name": "Input",
+  "nameEn": "Input",
+  "category": "forms",
+  "summary": "Simple rounded inputs with readable placeholder contrast and visible focus.",
+  "variantCount": 4,
+  "primitiveCount": 2,
+  "variantDimensions": {
+    "size": [
+      "40",
+      "44"
+    ],
+    "state": [
+      "default",
+      "focus",
+      "disabled"
+    ],
+    "theme": [
+      "light",
+      "dark"
+    ]
+  },
+  "cssVariables": [
+    "input",
+    "ring",
+    "muted-foreground",
+    "foreground",
+    "radius-md"
+  ],
+  "uiCopySamples": [
+    "Search products",
+    "Email address",
+    "Track your order"
+  ],
+  "structurePatterns": [
+    "Neutral outline field with calm background treatment",
+    "Focus state relies on ring visibility rather than strong fill shift"
+  ],
+  "structures": [
+    {
+      "name": "Search Field",
+      "description": "Single-line field designed for navigation and product lookup.",
+      "anatomy": [
+        "leading-icon",
+        "input",
+        "clear-action"
+      ],
+      "states": [
+        "default",
+        "focus"
+      ],
+      "notes": [
+        "Placeholder stays muted but legible"
+      ]
+    }
+  ]
+}

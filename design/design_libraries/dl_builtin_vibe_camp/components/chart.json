@@ -1,0 +1,101 @@
+{
+  "slug": "chart",
+  "name": "Chart",
+  "category": "data-visualization",
+  "evidence": "AI-inferred based on Dashboard product type and structured token semantics from the source CSS.",
+  "anatomy": [
+    "container",
+    "title",
+    "legend",
+    "plot-area",
+    "tooltip(optional)",
+    "summary(optional)"
+  ],
+  "variantDimensions": {
+    "type": [
+      "bar",
+      "line",
+      "donut"
+    ],
+    "density": [
+      "compact",
+      "default"
+    ],
+    "state": [
+      "default",
+      "highlighted"
+    ]
+  },
+  "structures": [
+    {
+      "name": "Bar Chart, Default, Default",
+      "description": "Operational trend chart with categorical bars.",
+      "elements": [
+        "container",
+        "title",
+        "legend",
+        "plot-area",
+        "summary"
+      ],
+      "copyExamples": [
+        "Attendance Trend",
+        "Stage Load"
+      ],
+      "cssVariables": [
+        "chart-1",
+        "chart-2",
+        "chart-3",
+        "chart-4",
+        "chart-5",
+        "card",
+        "foreground",
+        "muted-foreground",
+        "spacing"
+      ]
+    },
+    {
+      "name": "Line Chart, Highlighted, Compact",
+      "description": "Weekly trajectory chart with one emphasized series.",
+      "elements": [
+        "container",
+        "title",
+        "plot-area",
+        "tooltip"
+      ],
+      "copyExamples": [
+        "Community Growth",
+        "Repeat Visits"
+      ],
+      "cssVariables": [
+        "chart-2",
+        "chart-3",
+        "chart-5",
+        "foreground",
+        "muted-foreground",
+        "spacing"
+      ]
+    },
+    {
+      "name": "Donut Chart, Default, Default",
+      "description": "Distribution chart for channel or category share.",
+      "elements": [
+        "container",
+        "title",
+        "legend",
+        "plot-area"
+      ],
+      "copyExamples": [
+        "Audience Mix",
+        "Program Share"
+      ],
+      "cssVariables": [
+        "chart-1",
+        "chart-2",
+        "chart-3",
+        "card",
+        "foreground",
+        "spacing"
+      ]
+    }
+  ]
+}

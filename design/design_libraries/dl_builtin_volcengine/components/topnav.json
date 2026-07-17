@@ -1,0 +1,120 @@
+{
+  "schemaVersion": 2,
+  "slug": "topnav",
+  "name": "TopNav",
+  "category": "navigation",
+  "sourceKind": "structured-spec",
+  "confidence": "medium",
+  "semanticTypeCandidates": ["top-bar", "header-nav", "app-bar", "navigation-bar"],
+  "variantDimensions": {
+    "theme": ["light", "dark"],
+    "withProductTabs": ["true", "false"],
+    "withSecondaryNav": ["true", "false"]
+  },
+  "representativeVariants": [
+    { "theme": "light", "withProductTabs": "false", "withSecondaryNav": "false" },
+    { "theme": "light", "withProductTabs": "true", "withSecondaryNav": "true" },
+    { "theme": "dark", "withProductTabs": "false", "withSecondaryNav": "false" },
+    { "theme": "dark", "withProductTabs": "true", "withSecondaryNav": "true" }
+  ],
+  "anatomy": ["top-nav", "hamburger-btn", "nav-logo", "product-tabs", "product-tab", "nav-right", "search-box", "nav-links", "nav-link", "nav-icon", "notification-dot", "avatar", "secondary-nav", "sec-tab"],
+  "structurePatterns": [
+    "48px fixed-height horizontal bar with left hamburger, logo, optional product tabs, and right-aligned utilities",
+    "Right section contains search box, text navigation links, icon buttons with optional notification dots, and user avatar",
+    "Optional secondary-nav: 40px height bar below primary nav with product name and section tabs",
+    "Dark variant inverts backgrounds and text colors"
+  ],
+  "usageHints": [
+    "Primary nav height: 48px, bg: var(--bg-white) light / var(--dark-bg, #1D2129) dark",
+    "Bottom border: 1px solid var(--border-1, #EAEDF1), dark uses rgba(255,255,255,0.1)",
+    "Hamburger: 48x48px area, two 16x2px lines with 4px gap",
+    "Logo area: 103x24px",
+    "Product tabs: 13px font, var(--text-2) color, active gets font-weight 500 + 2px primary underline at bottom",
+    "Search box: border 1px solid var(--border-1), border-radius 4px, bg var(--bg-4)",
+    "Nav links: 13px, var(--text-1) color, hover primary-6",
+    "Nav icons: 16x16px SVG, stroke var(--text-2)",
+    "Notification dot: 6px red circle at top-right offset -2px",
+    "Avatar: 28px circle, bg #FFECEC, color #BD2923, font-size 15px bold",
+    "Secondary nav: height 40px, product name 14px/600 weight, sec-tabs with active primary underline"
+  ],
+  "doNotInvent": ["mega-menu dropdowns", "breadcrumb integration", "responsive mobile hamburger menu"],
+  "unknowns": ["dropdown menus for product tabs", "user profile popover", "notification panel"],
+  "tokensConsumed": [
+    "--text-1",
+    "--text-2",
+    "--text-3",
+    "--primary-6",
+    "--bg-white",
+    "--bg-hover",
+    "--bg-subtle",
+    "--bg-4",
+    "--border-1",
+    "--border-2",
+    "--dark-bg",
+    "--dark-text",
+    "--dark-text-secondary"
+  ],
+  "domAnatomy": {
+    "root": {
+      "tag": "div",
+      "class": "top-nav",
+      "modifiers": ["dark"],
+      "children": [
+        {
+          "tag": "div",
+          "class": "hamburger-btn",
+          "children": [
+            { "tag": "div", "class": "hamburger-line" },
+            { "tag": "div", "class": "hamburger-line" }
+          ]
+        },
+        {
+          "tag": "div",
+          "class": "nav-logo",
+          "children": [{ "tag": "img" }]
+        },
+        {
+          "tag": "div",
+          "class": "product-tabs",
+          "optional": true,
+          "children": [
+            { "tag": "span", "class": "product-tab", "modifiers": ["active"] }
+          ]
+        },
+        {
+          "tag": "div",
+          "class": "nav-right",
+          "children": [
+            {
+              "tag": "div",
+              "class": "search-box",
+              "children": [
+                { "tag": "svg" },
+                { "tag": "input", "class": "search-input" }
+              ]
+            },
+            {
+              "tag": "div",
+              "class": "nav-links",
+              "children": [{ "tag": "span", "class": "nav-link" }]
+            },
+            {
+              "tag": "div",
+              "class": "nav-icon",
+              "children": [
+                { "tag": "svg" },
+                { "tag": "div", "class": "notification-dot", "optional": true }
+              ]
+            },
+            { "tag": "div", "class": "avatar" }
+          ]
+        }
+      ]
+    }
+  },
+  "provenance": {
+    "preview": "preview/ui-topnav.html",
+    "source": "structured-spec",
+    "css": { "file": "preview/ui-topnav.html", "marker": "inline <style>" }
+  }
+}

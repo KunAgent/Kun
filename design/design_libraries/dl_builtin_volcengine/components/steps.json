@@ -1,0 +1,97 @@
+{
+  "schemaVersion": 2,
+  "slug": "steps",
+  "name": "Steps",
+  "category": "navigation",
+  "sourceKind": "structured-spec",
+  "confidence": "medium",
+  "semanticTypeCandidates": ["stepper", "wizard-steps", "process-indicator"],
+  "variantDimensions": {
+    "direction": ["horizontal", "vertical"],
+    "description": ["with-description", "no-description"],
+    "indicatorState": ["completed", "active", "pending", "disabled", "error"]
+  },
+  "representativeVariants": [
+    { "direction": "horizontal", "description": "no-description" },
+    { "direction": "horizontal", "description": "with-description" },
+    { "direction": "vertical", "description": "with-description" }
+  ],
+  "anatomy": ["steps-h", "step-h", "step-line", "line", "ind", "step-title", "step-desc", "steps-v", "step-v", "step-v-icon", "step-v-line", "vline", "step-v-content", "step-h-desc", "step-header"],
+  "structurePatterns": [
+    "Horizontal: flex row of step items separated by connector lines; each step has indicator circle + title",
+    "Horizontal with description: adds a description line below the step header row",
+    "Vertical: flex column where each step has indicator + vertical connector line alongside content",
+    "Last step in a row has flex-grow:0 and no trailing line"
+  ],
+  "usageHints": [
+    "Indicator (ind) is 24px circle with 2px border and centered number/icon",
+    "Active indicator: border var(--steps-primary) #1664FF, bg var(--steps-primary-bg) #387BFF, white text, font-weight 900",
+    "Pending indicator: border var(--steps-border) #EAEDF1, bg white, color var(--steps-desc) #737A87",
+    "Disabled indicator: border var(--steps-border), bg var(--steps-disabled-bg) #F1F3F5, color var(--steps-disabled-text) #C7CCD6",
+    "Error indicator: border and bg var(--steps-error) #F55, white text",
+    "Completed indicator: blue circle with white checkmark SVG",
+    "Connector line: 2px height, default color var(--steps-border) #EAEDF1, done color var(--steps-primary-line) #97BCFF",
+    "Title: font-size 14px, font-weight 500, color var(--steps-text) #0C0D0E",
+    "Description: font-size 12px, color var(--steps-desc) #737A87",
+    "Vertical line height 52px"
+  ],
+  "doNotInvent": ["clickable steps for navigation", "progress percentage within step", "icon customization beyond checkmark", "dot-style indicator"],
+  "unknowns": ["responsive behavior for many steps", "step click interaction", "error state with description text"],
+  "tokensConsumed": ["--steps-primary", "--steps-primary-bg", "--steps-primary-line", "--steps-border", "--steps-text", "--steps-desc", "--steps-disabled-bg", "--steps-disabled-text", "--steps-error", "--steps-white", "--steps-shadow"],
+  "domAnatomy": {
+    "root": {
+      "tag": "div",
+      "class": "steps-h | steps-v",
+      "children": [
+        {
+          "tag": "div",
+          "class": "step-h",
+          "note": "horizontal step",
+          "children": [
+            { "tag": "div", "class": "ind {state}" },
+            { "tag": "span", "class": "step-title" },
+            {
+              "tag": "div",
+              "class": "step-line",
+              "children": [{ "tag": "div", "class": "line" }],
+              "optional": true
+            }
+          ]
+        },
+        {
+          "tag": "div",
+          "class": "step-v",
+          "note": "vertical step",
+          "children": [
+            {
+              "tag": "div",
+              "class": "step-v-icon",
+              "children": [
+                { "tag": "div", "class": "ind {state}" },
+                {
+                  "tag": "div",
+                  "class": "step-v-line",
+                  "children": [{ "tag": "div", "class": "vline" }],
+                  "optional": true
+                }
+              ]
+            },
+            {
+              "tag": "div",
+              "class": "step-v-content",
+              "children": [
+                { "tag": "span", "class": "step-title" },
+                { "tag": "span", "class": "step-desc-v", "optional": true }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "provenance": {
+    "preview": "preview/ui-steps.html",
+    "source": "structured-spec",
+    "css": { "file": "ui-steps.html", "marker": "inline <style>" }
+  }
+}

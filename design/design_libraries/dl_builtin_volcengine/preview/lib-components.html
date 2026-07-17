@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>组件总览 — 源力设计体系</title>
+  <link rel="stylesheet" href="ui-base-tokens.css">
+  <style>
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+
+    body {
+      margin: 0;
+      font-family: "PingFang SC", "Microsoft YaHei", -apple-system, sans-serif;
+      color: var(--color-text-2);
+      background: var(--color-bg-1);
+    }
+
+    a { color: inherit; text-decoration: none; }
+
+    .shell {
+      min-height: 100vh;
+      display: grid;
+      grid-template-columns: 240px minmax(0, 1fr);
+    }
+
+    /* ── Sidebar ── */
+    .sidebar {
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      overflow-y: auto;
+      padding: 24px 16px;
+      background: #fff;
+      border-right: 1px solid var(--color-border-light);
+    }
+
+    .brand { margin-bottom: 20px; }
+    .brand-kicker {
+      display: inline-flex;
+      align-items: center;
+      height: 22px;
+      padding: 0 8px;
+      border-radius: 999px;
+      background: var(--primary-2);
+      color: var(--color-primary);
+      font-size: 11px;
+      font-weight: 500;
+    }
+    .brand h1 {
+      margin: 10px 0 6px;
+      color: var(--color-text-1);
+      font-size: 20px;
+      line-height: 28px;
+    }
+    .brand p {
+      margin: 0;
+      color: var(--color-text-3);
+      font-size: 12px;
+      line-height: 20px;
+    }
+
+    .sidebar-search {
+      width: 100%;
+      height: 34px;
+      margin-bottom: 14px;
+      padding: 0 12px;
+      border: 1px solid var(--color-border);
+      border-radius: 8px;
+      outline: none;
+      background: #fff;
+      color: var(--color-text-2);
+      font-size: 13px;
+    }
+    .sidebar-search:focus {
+      border-color: var(--color-primary);
+      box-shadow: 0 0 0 3px rgba(22, 100, 255, 0.10);
+    }
+
+    .filter-group {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-bottom: 16px;
+    }
+    .filter-chip {
+      height: 26px;
+      padding: 0 10px;
+      border: 1px solid var(--color-border);
+      border-radius: 999px;
+      background: #fff;
+      color: var(--color-text-3);
+      font-size: 12px;
+      cursor: pointer;
+      transition: all 140ms ease;
+    }
+    .filter-chip:hover {
+      border-color: var(--color-primary);
+      color: var(--color-primary);
+    }
+    .filter-chip.active {
+      border-color: var(--color-primary);
+      background: var(--primary-2);
+      color: var(--color-primary);
+      font-weight: 500;
+    }
+
+    .nav-section-title {
+      margin: 16px 0 6px;
+      color: var(--color-text-3);
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+    .nav-list {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .nav-link {
+      display: block;
+      padding: 6px 10px;
+      border-radius: 6px;
+      color: var(--color-text-2);
+      font-size: 13px;
+      transition: background 120ms ease, color 120ms ease;
+    }
+    .nav-link:hover {
+      background: var(--color-bg-4);
+      color: var(--color-primary);
+    }
+    .nav-link.active {
+      background: var(--primary-2);
+      color: var(--color-primary);
+      font-weight: 500;
+    }
+
+    /* ── Main ── */
+    .main {
+      min-width: 0;
+      padding: 28px 32px;
+    }
+
+    .hero {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 28px;
+      flex-wrap: wrap;
+    }
+    .hero h2 {
+      margin: 0;
+      color: var(--color-text-1);
+      font-size: 28px;
+      line-height: 36px;
+    }
+    .hero p {
+      margin: 6px 0 0;
+      color: var(--color-text-3);
+      font-size: 14px;
+      line-height: 22px;
+    }
+    .stats {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .stat {
+      min-width: 90px;
+      padding: 10px 14px;
+      background: var(--color-bg-4);
+      border: 1px solid var(--color-border-light);
+      border-radius: 8px;
+    }
+    .stat-label {
+      color: var(--color-text-3);
+      font-size: 11px;
+      line-height: 18px;
+    }
+    .stat-value {
+      color: var(--color-text-1);
+      font-size: 18px;
+      font-weight: 600;
+      line-height: 26px;
+    }
+
+    /* ── Section ── */
+    .pv-section {
+      margin-bottom: 32px;
+    }
+    .pv-section__title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 14px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid var(--color-border-light);
+      color: var(--color-text-1);
+      font-size: 16px;
+      font-weight: 600;
+      line-height: 24px;
+    }
+    .pv-section__title .badge {
+      display: inline-flex;
+      align-items: center;
+      height: 20px;
+      padding: 0 8px;
+      border-radius: 999px;
+      background: var(--color-bg-4);
+      color: var(--color-text-3);
+      font-size: 11px;
+      font-weight: 400;
+    }
+
+    /* ── Card Grid ── */
+    .card-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+      gap: 14px;
+    }
+
+    .component-card {
+      background: #fff;
+      border: 1px solid var(--color-border-light);
+      border-radius: 12px;
+      overflow: hidden;
+      transition: box-shadow 160ms ease, border-color 160ms ease;
+    }
+    .component-card:hover {
+      border-color: var(--color-primary);
+      box-shadow: 0 2px 12px rgba(22, 100, 255, 0.08);
+    }
+    .component-card.hidden { display: none; }
+
+    .card-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 16px 10px;
+      gap: 8px;
+    }
+    .card-title {
+      margin: 0;
+      color: var(--color-text-1);
+      font-size: 14px;
+      font-weight: 600;
+      line-height: 22px;
+    }
+    .card-desc {
+      margin: 0;
+      padding: 0 16px 12px;
+      color: var(--color-text-3);
+      font-size: 12px;
+      line-height: 18px;
+    }
+
+    .card-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      height: 26px;
+      padding: 0 10px;
+      border-radius: 6px;
+      border: 1px solid var(--color-border);
+      background: #fff;
+      color: var(--color-text-3);
+      font-size: 11px;
+      white-space: nowrap;
+      transition: all 140ms ease;
+    }
+    .card-link:hover {
+      border-color: var(--color-primary);
+      color: var(--color-primary);
+      background: var(--primary-1);
+    }
+
+    .card-preview {
+      padding: 0 12px 12px;
+    }
+    .card-frame {
+      width: 100%;
+      height: 180px;
+      border: 1px solid var(--color-border-light);
+      border-radius: 8px;
+      background: var(--color-bg-4);
+      display: block;
+    }
+
+    .footer-note {
+      margin-top: 24px;
+      padding-top: 16px;
+      border-top: 1px solid var(--color-border-light);
+      color: var(--color-text-3);
+      font-size: 12px;
+      line-height: 20px;
+    }
+
+    @media (max-width: 960px) {
+      .shell { grid-template-columns: 1fr; }
+      .sidebar {
+        position: static;
+        height: auto;
+        border-right: none;
+        border-bottom: 1px solid var(--color-border-light);
+      }
+      .hero { flex-direction: column; align-items: flex-start; }
+      .card-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <span class="brand-kicker">Design System</span>
+        <h1>源力组件库</h1>
+        <p>聚合所有 UI 组件变体与基础样式示例</p>
+      </div>
+
+      <input id="searchInput" class="sidebar-search" type="text" placeholder="搜索组件...">
+
+      <div class="filter-group" id="filterGroup">
+        <button class="filter-chip active" data-filter="all">全部</button>
+        <button class="filter-chip" data-filter="基础样式">基础</button>
+        <button class="filter-chip" data-filter="输入">输入</button>
+        <button class="filter-chip" data-filter="导航">导航</button>
+        <button class="filter-chip" data-filter="反馈">反馈</button>
+        <button class="filter-chip" data-filter="数据展示">展示</button>
+        <button class="filter-chip" data-filter="业务页面">业务</button>
+      </div>
+
+      <div id="navContainer"></div>
+    </aside>
+
+    <main class="main">
+      <section class="hero">
+        <div>
+          <h2>组件总览</h2>
+          <p>按分类浏览所有组件，点击卡片可在 iframe 中预览，也可单独打开源文件。</p>
+        </div>
+        <div class="stats">
+          <div class="stat">
+            <div class="stat-label">组件数</div>
+            <div class="stat-value" id="statCount">0</div>
+          </div>
+          <div class="stat">
+            <div class="stat-label">分类</div>
+            <div class="stat-value" id="statCategories">0</div>
+          </div>
+        </div>
+      </section>
+
+      <section id="gallery"></section>
+
+      <div class="footer-note">
+        组件列表基于 preview/ 目录维护。新增组件只需追加 components 数组即可。
+      </div>
+    </main>
+  </div>
+
+  <script>
+    const components = [
+      // ── 基础样式 ──
+      { id: "base-colors", name: "Colors", zh: "色彩体系", category: "基础样式", path: "ui-base-colors.html", desc: "品牌色、语义色、中性色完整色阶展示。" },
+      { id: "base-typography", name: "Typography", zh: "排版字体", category: "基础样式", path: "ui-base-typography.html", desc: "字号、行高、字重等文字排版规范。" },
+      { id: "base-spacing", name: "Spacing", zh: "间距", category: "基础样式", path: "ui-base-spacing-tokens.html", desc: "间距 Token 梯度与应用示例。" },
+      { id: "base-radius-shadow", name: "Radius & Shadow", zh: "圆角与阴影", category: "基础样式", path: "ui-base-radius-shadow.html", desc: "圆角大小与阴影层级展示。" },
+
+      // ── 输入 ──
+      { id: "button", name: "Button", zh: "按钮", category: "输入", path: "ui-button.html", desc: "主要、次要、线框、危险、文本等按钮变体。" },
+      { id: "input", name: "Input", zh: "输入框", category: "输入", path: "ui-input.html", desc: "输入框尺寸、状态、前后缀等常见组合。" },
+      { id: "select", name: "Select", zh: "选择器", category: "输入", path: "ui-select.html", desc: "下拉选择器的尺寸、状态与展开态。" },
+      { id: "cascader", name: "Cascader", zh: "级联选择", category: "输入", path: "ui-cascader.html", desc: "多层级路径选择组件。" },
+      { id: "timepicker", name: "Timepicker", zh: "时间选择器", category: "输入", path: "ui-timepicker.html", desc: "时间与日期选择相关变体。" },
+      { id: "switch", name: "Switch", zh: "开关", category: "输入", path: "ui-switch.html", desc: "开关状态、禁用态和尺寸展示。" },
+      { id: "checkbox", name: "Checkbox", zh: "复选框", category: "输入", path: "ui-checkbox.html", desc: "单个与分组复选框。" },
+      { id: "slider", name: "Slider", zh: "滑块", category: "输入", path: "ui-slider.html", desc: "滑块值选择、禁用态和范围。" },
+      { id: "form", name: "Form", zh: "表单", category: "输入", path: "ui-form.html", desc: "完整表单布局与校验示例。" },
+
+      // ── 导航 ──
+      { id: "topnav", name: "TopNav", zh: "顶部导航", category: "导航", path: "ui-topnav.html", desc: "顶部导航栏，亮色/暗色、带标签页等变体。" },
+      { id: "sidebar", name: "Sidebar", zh: "左侧导航", category: "导航", path: "ui-sidebar.html", desc: "左侧菜单，图标/折叠/展开等变体。" },
+      { id: "sidenav", name: "Sidenav", zh: "侧边导航", category: "导航", path: "ui-sidenav.html", desc: "一级、二级导航与状态切换。" },
+      { id: "tabs", name: "Tabs", zh: "选项卡", category: "导航", path: "ui-tabs.html", desc: "卡片式与分段式选项卡。" },
+      { id: "breadcrumb", name: "Breadcrumb", zh: "面包屑", category: "导航", path: "ui-breadcrumb.html", desc: "层级导航与当前态展示。" },
+      { id: "pagination", name: "Pagination", zh: "分页", category: "导航", path: "ui-pagination.html", desc: "页码、尺寸和状态展示。" },
+      { id: "segmented-picker", name: "Segmented Picker", zh: "分段选择器", category: "导航", path: "ui-segmented-picker.html", desc: "轻量切换类组件。" },
+      { id: "steps", name: "Steps", zh: "步骤条", category: "导航", path: "ui-steps.html", desc: "步骤流与当前步骤高亮。" },
+      { id: "page-header", name: "PageHeader", zh: "页面标题", category: "导航", path: "ui-page-header.html", desc: "面包屑+标题+操作按钮复合组件。" },
+      { id: "dropdown", name: "Dropdown", zh: "下拉菜单", category: "导航", path: "ui-dropdown.html", desc: "下拉菜单，分组、多级、搜索等变体。" },
+      { id: "anchor", name: "Anchor", zh: "锚点导航", category: "导航", path: "ui-anchor.html", desc: "页内锚点定位与滚动导航。" },
+
+      // ── 反馈 ──
+      { id: "alert", name: "Alert", zh: "警告提示", category: "反馈", path: "ui-alert.html", desc: "轻量内联提示，覆盖多语义状态。" },
+      { id: "message", name: "Message", zh: "全局提示", category: "反馈", path: "ui-message.html", desc: "顶部全局消息提示。" },
+      { id: "modal", name: "Modal", zh: "模态框", category: "反馈", path: "ui-modal.html", desc: "标准弹窗与确认类场景。" },
+      { id: "drawer", name: "Drawer", zh: "抽屉", category: "反馈", path: "ui-drawer.html", desc: "侧边抽屉与表单型内容承载。" },
+      { id: "popconfirm", name: "Popconfirm", zh: "气泡确认框", category: "反馈", path: "ui-popconfirm.html", desc: "危险操作前的轻量确认。" },
+      { id: "progress", name: "Progress", zh: "进度条", category: "反馈", path: "ui-progress.html", desc: "线性与环形进度展示。" },
+      { id: "tooltip", name: "Tooltip", zh: "文字气泡", category: "反馈", path: "ui-tooltip.html", desc: "多方向轻量提示文案。" },
+
+      // ── 数据展示 ──
+      { id: "table", name: "Table", zh: "表格", category: "数据展示", path: "ui-table.html", desc: "表格、工具栏、分页和操作列。" },
+      { id: "tag", name: "Tag", zh: "标签", category: "数据展示", path: "ui-tag.html", desc: "默认标签、状态标签、多色标签。" },
+      { id: "status-tag", name: "StatusTag", zh: "状态标签", category: "数据展示", path: "ui-status-tag.html", desc: "带语义色的状态指示标签。" },
+      { id: "badge", name: "Badge", zh: "徽标", category: "数据展示", path: "ui-badge.html", desc: "数字徽标与红点提示。" },
+      { id: "avatar", name: "Avatar", zh: "头像", category: "数据展示", path: "ui-avatar.html", desc: "图片、字母、图标头像样式。" },
+      { id: "descriptions", name: "Descriptions", zh: "描述列表", category: "数据展示", path: "ui-descriptions.html", desc: "多种信息编排方式，适合详情页。" },
+      { id: "icon", name: "Icon", zh: "图标", category: "数据展示", path: "ui-icon.html", desc: "图标示例与资产浏览。" },
+
+      // ── 业务页面 ──
+      { id: "biz-detail", name: "DetailPage", zh: "详情页示例", category: "业务页面", path: "biz-bytecloud-ref-detail-page.html", desc: "ByteCloud 标准详情页参考实现。" }
+    ];
+
+    const categoryOrder = ["基础样式", "输入", "导航", "反馈", "数据展示", "业务页面"];
+
+    const gallery = document.getElementById("gallery");
+    const navContainer = document.getElementById("navContainer");
+    const searchInput = document.getElementById("searchInput");
+    const filterGroup = document.getElementById("filterGroup");
+
+    let activeFilter = "all";
+
+    function render() {
+      document.getElementById("statCount").textContent = components.length;
+      document.getElementById("statCategories").textContent = categoryOrder.length;
+      renderNav();
+      renderGallery();
+    }
+
+    function renderNav() {
+      let html = "";
+      categoryOrder.forEach(cat => {
+        const items = components.filter(c => c.category === cat);
+        html += `<div class="nav-section-title">${cat}</div><div class="nav-list">`;
+        items.forEach(item => {
+          html += `<a class="nav-link" href="#section-${item.category}" data-id="${item.id}" data-name="${(item.name + " " + item.zh).toLowerCase()}" data-category="${item.category}">${item.zh}</a>`;
+        });
+        html += `</div>`;
+      });
+      navContainer.innerHTML = html;
+    }
+
+    function renderGallery() {
+      let html = "";
+      categoryOrder.forEach(cat => {
+        const items = components.filter(c => c.category === cat);
+        html += `
+          <div class="pv-section" id="section-${cat}" data-category="${cat}">
+            <div class="pv-section__title">${cat}<span class="badge">${items.length}</span></div>
+            <div class="card-grid">
+              ${items.map(item => `
+                <article class="component-card" data-id="${item.id}" data-category="${item.category}" data-name="${(item.name + " " + item.zh).toLowerCase()}">
+                  <div class="card-head">
+                    <h3 class="card-title">${item.name} / ${item.zh}</h3>
+                    <a class="card-link" href="${item.path}" target="_blank">打开</a>
+                  </div>
+                  <p class="card-desc">${item.desc}</p>
+                  <div class="card-preview">
+                    <iframe class="card-frame" src="${item.path}" title="${item.name}" loading="lazy"></iframe>
+                  </div>
+                </article>
+              `).join("")}
+            </div>
+          </div>
+        `;
+      });
+      gallery.innerHTML = html;
+    }
+
+    function applyFilter() {
+      const keyword = searchInput.value.trim().toLowerCase();
+
+      document.querySelectorAll(".component-card").forEach(card => {
+        const matchCat = activeFilter === "all" || card.dataset.category === activeFilter;
+        const matchSearch = !keyword || card.dataset.name.includes(keyword);
+        card.classList.toggle("hidden", !(matchCat && matchSearch));
+      });
+
+      document.querySelectorAll(".pv-section").forEach(section => {
+        const matchCat = activeFilter === "all" || section.dataset.category === activeFilter;
+        const hasVisible = section.querySelectorAll(".component-card:not(.hidden)").length > 0;
+        section.style.display = (matchCat && hasVisible) ? "" : "none";
+      });
+
+      navContainer.querySelectorAll(".nav-link").forEach(link => {
+        const matchCat = activeFilter === "all" || link.dataset.category === activeFilter;
+        const matchSearch = !keyword || link.dataset.name.includes(keyword);
+        link.style.display = (matchCat && matchSearch) ? "" : "none";
+      });
+
+      navContainer.querySelectorAll(".nav-section-title").forEach(title => {
+        const list = title.nextElementSibling;
+        if (!list) return;
+        const hasVisible = list.querySelectorAll(".nav-link").length > 0 &&
+          [...list.querySelectorAll(".nav-link")].some(l => l.style.display !== "none");
+        title.style.display = hasVisible ? "" : "none";
+      });
+    }
+
+    filterGroup.addEventListener("click", function(e) {
+      const chip = e.target.closest(".filter-chip");
+      if (!chip) return;
+      activeFilter = chip.dataset.filter;
+      filterGroup.querySelectorAll(".filter-chip").forEach(el => el.classList.remove("active"));
+      chip.classList.add("active");
+      applyFilter();
+    });
+
+    searchInput.addEventListener("input", applyFilter);
+
+    navContainer.addEventListener("click", function(e) {
+      const link = e.target.closest(".nav-link");
+      if (!link) return;
+      e.preventDefault();
+      const card = document.querySelector(`.component-card[data-id="${link.dataset.id}"]`);
+      if (card) card.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
+
+    render();
+  </script>
+</body>
+</html>

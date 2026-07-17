@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Mobile Bottom Nav</title>
+<link rel="stylesheet" href="../colors_and_type.css">
+<script src="https://code.iconify.design/iconify-icon/2.1.0/iconify-icon.min.js"></script>
+<style>
+body{margin:0;padding:12px;background:var(--background);font-family:var(--font-sans)}
+.row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.label{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted-foreground);min-width:54px}
+.divider{margin:10px 0;border:0;border-top:1px solid color-mix(in srgb,var(--foreground) 10%,transparent)}
+.nav{display:grid;grid-template-columns:repeat(5,1fr);align-items:end;gap:4px;width:340px;padding:8px 12px 10px;border-radius:18px;background:var(--video-bg);border-top:1px solid rgba(255,255,255,.1)}
+.item{display:flex;flex-direction:column;align-items:center;gap:3px;color:var(--on-media);opacity:.62;font-size:11px;line-height:1;cursor:pointer;transition:opacity .2s ease,transform .2s cubic-bezier(.2,.8,.2,1)}
+.item:hover{opacity:1;transform:translateY(-1px)}
+.item.active{opacity:1}
+.item.publish{opacity:1}
+.glyph{font-size:22px;line-height:1;display:grid;place-items:center}
+.nav.disabled{opacity:.42}
+.nav.disabled .item{cursor:default;pointer-events:none}
+/* Publish button (skill §5.1 / C10): white bg + black +, cyan/red offset ±3px, no gradient */
+.publish-btn{position:relative;display:block;width:48px;height:32px;cursor:pointer;transition:transform .2s cubic-bezier(.2,.8,.2,1)}
+.publish-btn:hover{transform:scale(1.06)}
+.publish-btn:active{transform:scale(.94)}
+.publish-btn .layer{position:absolute;inset:0;border-radius:8px}
+.publish-btn .cyan{transform:translate(3px,-3px);background:var(--secondary)}
+.publish-btn .red{transform:translate(-3px,3px);background:var(--primary)}
+.publish-btn .core{position:absolute;inset:0;display:grid;place-items:center;border-radius:8px;background:var(--on-media);color:var(--on-accent);font-size:20px}
+</style>
+</head>
+<body>
+<div class="row"><span class="label">active</span><div class="nav"><div class="item active"><span class="glyph"><iconify-icon icon="ph:house-fill"></iconify-icon></span><span>Home</span></div><div class="item"><span class="glyph"><iconify-icon icon="ph:compass-fill"></iconify-icon></span><span>Discover</span></div><div class="item publish"><span class="publish-btn"><span class="layer cyan"></span><span class="layer red"></span><span class="core"><iconify-icon icon="ph:plus-bold"></iconify-icon></span></span></div><div class="item"><span class="glyph"><iconify-icon icon="ph:chat-circle-fill"></iconify-icon></span><span>Inbox</span></div><div class="item"><span class="glyph"><iconify-icon icon="ph:user-fill"></iconify-icon></span><span>Me</span></div></div></div>
+<hr class="divider">
+<div class="row"><span class="label">disabled</span><div class="nav disabled"><div class="item active"><span class="glyph"><iconify-icon icon="ph:house-fill"></iconify-icon></span><span>Home</span></div><div class="item"><span class="glyph"><iconify-icon icon="ph:compass-fill"></iconify-icon></span><span>Discover</span></div><div class="item publish"><span class="publish-btn"><span class="layer cyan"></span><span class="layer red"></span><span class="core"><iconify-icon icon="ph:plus-bold"></iconify-icon></span></span></div><div class="item"><span class="glyph"><iconify-icon icon="ph:chat-circle-fill"></iconify-icon></span><span>Inbox</span></div><div class="item"><span class="glyph"><iconify-icon icon="ph:user-fill"></iconify-icon></span><span>Me</span></div></div></div>
+</body>
+</html>

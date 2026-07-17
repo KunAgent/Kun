@@ -1,0 +1,99 @@
+{
+  "schemaVersion": 2,
+  "slug": "table-panel",
+  "name": "Table Panel",
+  "category": "data-display",
+  "sourceKind": "structured-spec",
+  "confidence": "high",
+  "semanticTypeCandidates": [
+    "data-table"
+  ],
+  "variantDimensions": {
+    "density": [
+      "regular"
+    ],
+    "cellTypes": [
+      "text",
+      "numeric-mono",
+      "tag"
+    ]
+  },
+  "representativeVariants": [
+    {
+      "rows": 6,
+      "columns": 4
+    }
+  ],
+  "anatomy": [
+    "panel",
+    "thead-with-overlay-bg",
+    "row",
+    "cell",
+    "foot-with-pagination"
+  ],
+  "structurePatterns": [
+    "panel only carries bottom border-radius (top is flush against an external header/toolbar)",
+    "thead uses --bg-overlay-l1 row + --text-tertiary uppercase letters",
+    "tbody rows separated by --border-1; numeric cells use --code-editor-font-family + tabular-nums"
+  ],
+  "usageHints": [
+    "Use when a separate header/toolbar sits ABOVE the panel (e.g., dashboard 'Recent activity' card with its own title bar). The panel only renders the bottom rounding.",
+    "For self-contained tables with their own toolbar+footer rounding, use the standard .ds-table-wrap component instead.",
+    "Pair with .ds-tablepanel__foot for pagination/summary row at the bottom."
+  ],
+  "doNotInvent": [
+    "No selection / sort / column-resize / sticky-header defined",
+    "Top corners are intentionally squared off"
+  ],
+  "unknowns": [
+    "vertical scrolling behavior beyond a fixed row count"
+  ],
+  "tokensConsumed": [
+    "--bg-layout-1",
+    "--bg-overlay-l1",
+    "--body-sm-font-size",
+    "--body-xs-font-size",
+    "--border-1",
+    "--code-editor-font-family",
+    "--font-weight-default",
+    "--radius-4",
+    "--spacer-12",
+    "--spacer-16",
+    "--spacer-8",
+    "--text-default",
+    "--text-tertiary"
+  ],
+  "domAnatomy": {
+    "root": {
+      "tag": "div",
+      "class": "ds-tablepanel",
+      "children": [
+        {
+          "tag": "table",
+          "children": [
+            { "tag": "thead" },
+            { "tag": "tbody" }
+          ]
+        }
+      ]
+    },
+    "siblings": [
+      {
+        "tag": "div",
+        "class": "ds-tablepanel__foot",
+        "children": [
+          { "tag": "span", "text": "row count summary" },
+          { "tag": "div", "text": "pagination controls" }
+        ]
+      }
+    ]
+  },
+  "provenance": {
+    "preview": "preview/component-table-panel.html",
+    "source": "previews/table-panel.html",
+    "css": {
+      "file": "components.css",
+      "marker": "── Table Panel ──"
+    }
+  }
+}

@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Chat Composer</title>
+  <link rel="stylesheet" href="../colors_and_type.css" />
+  <link rel="stylesheet" href="../scaffold.css" />
+  <link rel="stylesheet" href="../components.css" />
+  <style>
+    /* @component-css-start */
+    /* ===== Chat Composer ===== */
+    .ds-composer {
+      display: flex;
+      flex-direction: column;
+      gap: var(--spacer-8);
+      width: 100%;
+      max-width: 720px;
+      padding: var(--spacer-12);
+      background: var(--bg-overlay-l1);
+      border: 1px solid var(--border-neutral-l2);
+      border-radius: var(--radius-10);
+    }
+    .ds-composer:focus-within {
+      border-color: var(--border-brand);
+    }
+    .ds-composer__input {
+      width: 100%;
+      min-height: 56px;
+      max-height: 200px;
+      resize: vertical;
+      border: none;
+      outline: none;
+      background: transparent;
+      color: var(--text-default);
+      font-size: var(--body-md-font-size);
+      line-height: var(--body-md-line-height);
+      font-weight: var(--body-md-font-weight);
+    }
+    .ds-composer__input::placeholder {
+      color: var(--text-tertiary);
+    }
+    .ds-composer__toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--spacer-8);
+    }
+    .ds-composer__tools {
+      display: flex;
+      align-items: center;
+      gap: var(--spacer-4);
+    }
+    .ds-composer__icon-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 32px;
+      height: 32px;
+      padding: 0;
+      border: none;
+      border-radius: var(--radius-6);
+      background: transparent;
+      cursor: pointer;
+    }
+    .ds-composer__icon-btn:hover {
+      background: var(--bg-overlay-l2);
+    }
+    .ds-composer__model {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--spacer-4);
+      height: 28px;
+      padding: 0 var(--spacer-8);
+      border: 1px solid var(--border-neutral-l2);
+      border-radius: var(--radius-full);
+      background: var(--bg-overlay-l2);
+      color: var(--text-secondary);
+      font-size: var(--body-sm-font-size);
+      line-height: var(--body-sm-line-height);
+      cursor: pointer;
+    }
+    .ds-composer__model:hover {
+      background: var(--bg-overlay-l3);
+      color: var(--text-default);
+    }
+    .ds-composer__actions {
+      display: flex;
+      align-items: center;
+      gap: var(--spacer-8);
+    }
+    .ds-composer__send {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 36px;
+      height: 36px;
+      padding: 0;
+      border: none;
+      border-radius: var(--radius-8);
+      background: var(--bg-brand);
+      cursor: pointer;
+    }
+    .ds-composer__send:hover {
+      background: var(--bg-brand-hover);
+    }
+    /* @component-css-end */
+  </style>
+</head>
+<body>
+  <div class="pv-header">
+    <h1>Chat Composer</h1>
+    <p>AI 对话输入器，含多行输入框、底部工具行与品牌色发送按钮。</p>
+  </div>
+  <div class="pv-section">
+    <div class="pv-section__title">Default</div>
+    <div class="ds-composer">
+      <textarea class="ds-composer__input" placeholder="Ask anything, or describe what you want to build…"></textarea>
+      <div class="ds-composer__toolbar">
+        <div class="ds-composer__tools">
+          <button class="ds-composer__icon-btn" type="button">
+            <img src="../assets/icons/plus.svg" width="18" height="18" alt="plus" class="icon">
+          </button>
+          <button class="ds-composer__icon-btn" type="button">
+            <img src="../assets/icons/link.svg" width="18" height="18" alt="link" class="icon">
+          </button>
+          <button class="ds-composer__icon-btn" type="button">
+            <img src="../assets/icons/image.svg" width="18" height="18" alt="image" class="icon">
+          </button>
+          <button class="ds-composer__model" type="button">
+            <img src="../assets/icons/sparkles.svg" width="14" height="14" alt="sparkles" class="icon">
+            Claude
+            <img src="../assets/icons/chevron-down.svg" width="14" height="14" alt="chevron-down" class="icon">
+          </button>
+        </div>
+        <div class="ds-composer__actions">
+          <button class="ds-composer__icon-btn" type="button">
+            <img src="../assets/icons/mic.svg" width="18" height="18" alt="mic" class="icon">
+          </button>
+          <button class="ds-composer__send" type="button">
+            <img src="../assets/icons/send.0c0c0d.svg" width="18" height="18" alt="send" class="icon">
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="pv-section">
+    <div class="pv-section__title">With text · GPT-4o</div>
+    <div class="ds-composer">
+      <textarea class="ds-composer__input">Refactor the auth middleware to use the new token service and add retry logic.</textarea>
+      <div class="ds-composer__toolbar">
+        <div class="ds-composer__tools">
+          <button class="ds-composer__icon-btn" type="button">
+            <img src="../assets/icons/plus.svg" width="18" height="18" alt="plus" class="icon">
+          </button>
+          <button class="ds-composer__icon-btn" type="button">
+            <img src="../assets/icons/file-text.svg" width="18" height="18" alt="file-text" class="icon">
+          </button>
+          <button class="ds-composer__model" type="button">
+            <img src="../assets/icons/zap.svg" width="14" height="14" alt="zap" class="icon">
+            GPT-4o
+            <img src="../assets/icons/chevron-down.svg" width="14" height="14" alt="chevron-down" class="icon">
+          </button>
+        </div>
+        <div class="ds-composer__actions">
+          <button class="ds-composer__icon-btn" type="button">
+            <img src="../assets/icons/mic.svg" width="18" height="18" alt="mic" class="icon">
+          </button>
+          <button class="ds-composer__send" type="button">
+            <img src="../assets/icons/send.0c0c0d.svg" width="18" height="18" alt="send" class="icon">
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

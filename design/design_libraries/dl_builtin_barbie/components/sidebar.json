@@ -1,0 +1,49 @@
+{
+  "slug": "sidebar",
+  "name": "Sidebar",
+  "category": "navigation",
+  "evidence": "AI-inferred from dashboard preset and sidebar tokens",
+  "anatomy": [
+    "panel",
+    "section label",
+    "nav item",
+    "badge",
+    "footer action"
+  ],
+  "cssVariables": [
+    "sidebar",
+    "sidebar-foreground",
+    "sidebar-primary",
+    "sidebar-primary-foreground",
+    "sidebar-accent",
+    "sidebar-accent-foreground",
+    "sidebar-border",
+    "sidebar-ring",
+    "radius"
+  ],
+  "variantDimensions": {
+    "mode": [
+      "expanded",
+      "compact"
+    ],
+    "itemState": [
+      "default",
+      "active",
+      "focused"
+    ]
+  },
+  "structures": [
+    {
+      "name": "Expanded, Active",
+      "description": "Full navigation rail with active pink capsule."
+    },
+    {
+      "name": "Expanded, Default",
+      "description": "Soft blush section with low-noise inactive links."
+    },
+    {
+      "name": "Compact, Focused",
+      "description": "Icon-first mini rail with strong focus ring."
+    }
+  ]
+}

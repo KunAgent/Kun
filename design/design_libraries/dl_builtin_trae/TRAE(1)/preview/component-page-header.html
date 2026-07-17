@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Page header</title>
+  <link rel="stylesheet" href="../colors_and_type.css" />
+  <link rel="stylesheet" href="../scaffold.css" />
+  <link rel="stylesheet" href="../components.css" />
+  <style>
+    /* @component-css-start */
+    /* ===== Page header ===== */
+    .ds-pagehead {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: var(--spacer-24);
+      padding: var(--spacer-24) 0;
+      border-bottom: 1px solid var(--border-neutral-l1);
+    }
+    .ds-pagehead__main {
+      display: flex;
+      flex-direction: column;
+      gap: var(--spacer-6);
+    }
+    .ds-pagehead__title {
+      font-size: var(--heading-lg-font-size);
+      line-height: var(--heading-lg-line-height);
+      font-weight: var(--font-weight-strong);
+      color: var(--text-default);
+    }
+    .ds-pagehead__subtitle {
+      font-size: var(--body-sm-font-size);
+      line-height: var(--body-sm-line-height);
+      color: var(--text-tertiary);
+    }
+    .ds-pagehead__actions {
+      display: flex;
+      align-items: center;
+      gap: var(--spacer-8);
+      flex-shrink: 0;
+    }
+    .ds-pagehead__btn {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--spacer-6);
+      height: 32px;
+      padding: 0 var(--spacer-12);
+      font-size: var(--body-sm-font-size);
+      font-weight: var(--font-weight-medium);
+      color: var(--text-default);
+      background: var(--bg-overlay-l2);
+      border: 1px solid var(--border-neutral-l2);
+      border-radius: var(--radius-6);
+      cursor: pointer;
+    }
+    .ds-pagehead__btn.is-primary {
+      color: var(--text-onbrand);
+      background: var(--bg-brand);
+      border-color: var(--border-brand);
+    }
+    /* @component-css-end */
+  </style>
+</head>
+<body>
+  <div class="pv-header">
+    <h1>Page header</h1>
+    <p>页头：左侧标题 + 副标题，右侧操作按钮区。</p>
+  </div>
+  <div class="pv-section">
+    <div class="pv-section__title">Default</div>
+    <div class="ds-pagehead">
+      <div class="ds-pagehead__main">
+        <span class="ds-pagehead__title">Projects</span>
+        <span class="ds-pagehead__subtitle">24 active projects across 6 teams</span>
+      </div>
+      <div class="ds-pagehead__actions">
+        <button class="ds-pagehead__btn">
+          <img src="../assets/icons/filter.svg" width="16" height="16" alt="filter" class="icon" />
+          Filter
+        </button>
+        <button class="ds-pagehead__btn is-primary">
+          <img src="../assets/icons/plus.0c0c0d.svg" width="16" height="16" alt="plus" class="icon" />
+          New project
+        </button>
+      </div>
+    </div>
+  </div>
+  <div class="pv-section">
+    <div class="pv-section__title">With download</div>
+    <div class="ds-pagehead">
+      <div class="ds-pagehead__main">
+        <span class="ds-pagehead__title">Billing &amp; usage</span>
+        <span class="ds-pagehead__subtitle">Current cycle ends June 30, 2026</span>
+      </div>
+      <div class="ds-pagehead__actions">
+        <button class="ds-pagehead__btn">
+          <img src="../assets/icons/download.svg" width="16" height="16" alt="download" class="icon" />
+          Export CSV
+        </button>
+        <button class="ds-pagehead__btn is-primary">
+          <img src="../assets/icons/settings.0c0c0d.svg" width="16" height="16" alt="settings" class="icon" />
+          Manage plan
+        </button>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

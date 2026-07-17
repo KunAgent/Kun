@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Activity Rail</title>
+  <link rel="stylesheet" href="../colors_and_type.css" />
+  <link rel="stylesheet" href="../scaffold.css" />
+  <link rel="stylesheet" href="../components.css" />
+  <style>
+    /* @component-css-start */
+    /* ===== Activity Rail ===== */
+    .ds-activityrail {
+      display: inline-flex;
+      flex-direction: column;
+      align-items: center;
+      gap: var(--spacer-4);
+      width: 48px;
+      padding: var(--spacer-8) 0;
+      background: var(--bg-base-secondary);
+      border-right: 1px solid var(--border-neutral-l1);
+    }
+    .ds-activityrail__btn {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 36px;
+      height: 36px;
+      border-radius: var(--radius-8);
+      background: transparent;
+      border: none;
+      cursor: pointer;
+    }
+    .ds-activityrail__btn:hover { background: var(--bg-overlay-l2); }
+    .ds-activityrail__btn.is-active {
+      background: var(--bg-overlay-l3);
+    }
+    .ds-activityrail__btn.is-active::before {
+      content: "";
+      position: absolute;
+      left: -8px;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 3px;
+      height: 20px;
+      border-radius: var(--radius-full);
+      background: var(--bg-brand);
+    }
+    .ds-activityrail__divider {
+      width: 24px;
+      height: 1px;
+      margin: var(--spacer-4) 0;
+      background: var(--border-neutral-l2);
+    }
+    .ds-activityrail__spacer { flex: 1; }
+    /* @component-css-end */
+  </style>
+</head>
+<body>
+  <div class="pv-header">
+    <h1>Activity Rail</h1>
+    <p>竖向活动栏：一列图标按钮，含选中态 .is-active（左侧 --bg-brand 指示条）和 --border-neutral-l2 分隔线。</p>
+  </div>
+  <div class="pv-section">
+    <div class="pv-section__title">Default / Active / Divider</div>
+    <nav class="ds-activityrail">
+      <button class="ds-activityrail__btn is-active"><img src="../assets/icons/files.svg" width="18" height="18" alt="files" class="icon" /></button>
+      <button class="ds-activityrail__btn"><img src="../assets/icons/search.svg" width="18" height="18" alt="search" class="icon" /></button>
+      <button class="ds-activityrail__btn"><img src="../assets/icons/git.svg" width="18" height="18" alt="git" class="icon" /></button>
+      <button class="ds-activityrail__btn"><img src="../assets/icons/bug.svg" width="18" height="18" alt="bug" class="icon" /></button>
+      <div class="ds-activityrail__divider"></div>
+      <button class="ds-activityrail__btn"><img src="../assets/icons/extensions.svg" width="18" height="18" alt="extensions" class="icon" /></button>
+      <span class="ds-activityrail__spacer"></span>
+      <button class="ds-activityrail__btn"><img src="../assets/icons/user-circle.svg" width="18" height="18" alt="user-circle" class="icon" /></button>
+      <button class="ds-activityrail__btn"><img src="../assets/icons/settings.svg" width="18" height="18" alt="settings" class="icon" /></button>
+    </nav>
+  </div>
+</body>
+</html>

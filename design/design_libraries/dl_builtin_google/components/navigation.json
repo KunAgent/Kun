@@ -1,0 +1,54 @@
+{
+  "slug": "navigation",
+  "name": "Navigation",
+  "nameEn": "Navigation",
+  "category": "navigation",
+  "variantCount": 4,
+  "primitiveCount": 3,
+  "variants": {
+    "type": [
+      "topbar",
+      "tabs"
+    ],
+    "state": [
+      "default",
+      "active"
+    ]
+  },
+  "variantDimensions": {
+    "type": [
+      "topbar",
+      "tabs"
+    ],
+    "state": [
+      "default",
+      "active"
+    ]
+  },
+  "evidence": "AI-inferred from sidebar, ring, foreground, and muted token families.",
+  "anatomy": [
+    "brand slot",
+    "nav item",
+    "active indicator",
+    "utility actions"
+  ],
+  "structurePatterns": [
+    "workspace top bar",
+    "section tabs"
+  ],
+  "childComponents": [
+    "button",
+    "avatar"
+  ],
+  "structures": [
+    {
+      "name": "Workspace Top Bar",
+      "notes": "Brand on left, utility actions on right."
+    },
+    {
+      "name": "Section Tabs",
+      "notes": "Underlined active state with muted inactive text."
+    }
+  ],
+  "keyInsightSeed": "Navigation stays restrained, letting the active state and focused ring do the work."
+}

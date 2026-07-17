@@ -1,0 +1,69 @@
+{
+  "slug": "button",
+  "name": "Button",
+  "nameEn": "Button",
+  "category": "action",
+  "variantCount": 9,
+  "primitiveCount": 3,
+  "variants": {
+    "style": [
+      "primary",
+      "secondary",
+      "ghost"
+    ],
+    "size": [
+      "sm",
+      "md",
+      "lg"
+    ],
+    "state": [
+      "default",
+      "disabled"
+    ]
+  },
+  "variantDimensions": {
+    "style": [
+      "primary",
+      "secondary",
+      "ghost"
+    ],
+    "size": [
+      "sm",
+      "md",
+      "lg"
+    ],
+    "state": [
+      "default",
+      "disabled"
+    ]
+  },
+  "evidence": "AI-inferred based on dashboard product type and source tokens for primary, secondary, border, ring, radius, and shadow.",
+  "anatomy": [
+    "container",
+    "label",
+    "leading icon"
+  ],
+  "structurePatterns": [
+    "solid CTA",
+    "tonal action",
+    "quiet tertiary action"
+  ],
+  "childComponents": [
+    "icon"
+  ],
+  "structures": [
+    {
+      "name": "Primary CTA",
+      "notes": "Filled action using --primary and --primary-foreground."
+    },
+    {
+      "name": "Secondary Action",
+      "notes": "Soft surface action using --secondary and --secondary-foreground."
+    },
+    {
+      "name": "Ghost Action",
+      "notes": "Border-light action for toolbar and table rows."
+    }
+  ],
+  "keyInsightSeed": "Actions feel crisp and flat, with color carrying emphasis instead of elevation."
+}

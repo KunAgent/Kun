@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>Tabs 选项卡</title>
+  <link rel="stylesheet" href="preview-scaffold.css">
+  <style>
+  /* ═══ 1. Line Tabs 下划线样式 ═══ */
+  .tabs-line {
+    display: flex;
+    align-items: stretch;
+    border-bottom: 1px solid #EAEDF1;
+    background: #FFFFFF;
+    gap: 0;
+  }
+  .tabs-line .tab-item {
+    position: relative;
+    font-family: "PingFang SC", sans-serif;
+    color: #42464E;
+    font-weight: 400;
+    line-height: 22px;
+    cursor: pointer;
+    background: transparent;
+    border: none;
+    white-space: nowrap;
+    transition: color 150ms ease;
+    padding: 0;
+    margin-right: 24px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .tabs-line .tab-item:last-child { margin-right: 0; }
+  .tabs-line .tab-item.tab-size-lg { height: 36px; font-size: 14px; }
+  .tabs-line .tab-item.tab-size-md { height: 32px; font-size: 13px; }
+  .tabs-line .tab-item.tab-size-sm { height: 28px; font-size: 13px; }
+  .tabs-line .tab-item::after {
+    content: '';
+    position: absolute;
+    left: 0; right: 0; bottom: -1px;
+    height: 2px;
+    background: transparent;
+    transition: background 150ms ease;
+  }
+  .tabs-line .tab-item:hover:not(.active):not([disabled]) { color: rgba(22, 100, 255, 0.8); }
+  .tabs-line .tab-item.active { color: #1664FF; font-weight: 500; }
+  .tabs-line .tab-item.active::after { background: #1664FF; }
+  .tabs-line .tab-item[disabled] { color: #C2C6CC; cursor: not-allowed; opacity: 0.5; }
+  .tabs-line .tab-item .tab-icon {
+    width: 14px; height: 14px; display: inline-flex; align-items: center; justify-content: center;
+  }
+  .tabs-line .tab-item .tab-badge {
+    display: inline-flex; align-items: center; justify-content: center;
+    min-width: 16px; height: 16px; padding: 0 4px;
+    background: #F53F3F; color: #FFFFFF; font-size: 11px; font-weight: 500;
+    border-radius: 8px; line-height: 1;
+  }
+  .tabs-line .tab-item .tab-count { color: #737A87; font-size: 12px; margin-left: 2px; }
+  .tabs-line .tab-item.active .tab-count { color: rgba(22, 100, 255, 0.6); }
+
+  /* Scrollable Line Tabs */
+  .tabs-line-scroll-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+  }
+  .tabs-line-scroll-wrapper .scroll-btn {
+    width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center;
+    border: 1px solid #DDE2E9; border-radius: 4px; background: #FFFFFF;
+    cursor: pointer; color: #42464E; font-size: 14px; flex-shrink: 0;
+    transition: all 150ms ease;
+  }
+  .tabs-line-scroll-wrapper .scroll-btn:hover { border-color: #1664FF; color: #1664FF; }
+  .tabs-line-scroll-wrapper .tabs-line-scroll { overflow: hidden; flex: 1; margin: 0 8px; }
+
+  /* ═══ 2. Card Tabs 卡片样式 ═══ */
+  .tabs-card {
+    display: flex;
+    align-items: flex-end;
+    padding: 0;
+    border-bottom: 1px solid #EAEDF1;
+    background: #FFFFFF;
+    gap: 6px;
+  }
+  .tabs-card::before { content: ''; width: 32px; flex-shrink: 0; align-self: stretch; }
+  .tabs-card .tab-item {
+    position: relative;
+    font-family: "PingFang SC", sans-serif;
+    color: #42464E;
+    font-weight: 400;
+    line-height: 22px;
+    letter-spacing: 0.3px;
+    cursor: pointer;
+    border: 1px solid #EAEDF1;
+    border-radius: 4px 4px 0 0;
+    background: #F6F8FA;
+    margin-bottom: -1px;
+    white-space: nowrap;
+    transition: all 150ms ease;
+  }
+  .tabs-card .tab-item.tab-size-md { padding: 5px 12px; font-size: 13px; }
+  .tabs-card .tab-item.tab-size-lg { padding: 7px 16px; font-size: 14px; }
+  .tabs-card .tab-item:hover:not(.active):not([disabled]) { color: #1664FF; }
+  .tabs-card .tab-item.active {
+    background: #FFFFFF;
+    color: #1664FF;
+    font-weight: 500;
+    border-left: 1px solid #EAEDF1;
+    border-right: 1px solid #EAEDF1;
+    border-top: none;
+    border-bottom: 1px solid #FFFFFF;
+    box-shadow: inset 0 2px 0 0 #1664FF;
+  }
+  .tabs-card .tab-item[disabled] { opacity: 0.4; cursor: not-allowed; }
+
+  /* ═══ 3. Capsule Tabs 胶囊样式 ═══ */
+  .tabs-capsule {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    padding: 2px;
+    background: #F6F8FA;
+    border-radius: 6px;
+  }
+  .tabs-capsule .tab-item {
+    padding: 4px 12px;
+    border: none;
+    border-radius: 4px;
+    background: transparent;
+    color: #42464E;
+    font-size: 13px;
+    font-weight: 400;
+    line-height: 22px;
+    cursor: pointer;
+    transition: all 150ms ease;
+    white-space: nowrap;
+  }
+  .tabs-capsule .tab-item:hover:not(.active):not([disabled]) { background: rgba(199, 204, 214, 0.2); color: #0C0D0E; }
+  .tabs-capsule .tab-item.active { background: #1664FF; color: #FFFFFF; font-weight: 500; }
+  .tabs-capsule .tab-item[disabled] { opacity: 0.4; cursor: not-allowed; }
+
+  /* ═══ 4. Button Tabs 按钮样式 ═══ */
+  .tabs-button {
+    display: inline-flex;
+    align-items: center;
+    border: 1px solid #DDE2E9;
+    border-radius: 4px;
+    background: #F6F8FA;
+    padding: 2px;
+    gap: 0;
+  }
+  .tabs-button .tab-item {
+    padding: 4px 14px;
+    border: none;
+    border-radius: 3px;
+    background: transparent;
+    color: #42464E;
+    font-size: 13px;
+    font-weight: 400;
+    line-height: 22px;
+    cursor: pointer;
+    transition: all 150ms ease;
+    white-space: nowrap;
+  }
+  .tabs-button .tab-item:hover:not(.active):not([disabled]) { color: #1664FF; }
+  .tabs-button .tab-item.active {
+    background: #FFFFFF;
+    color: #1664FF;
+    font-weight: 500;
+    box-shadow: 0px 1px 2px rgba(0,0,0,0.07), 0px 0.5px 1px rgba(0,0,0,0.05);
+  }
+  .tabs-button .tab-item[disabled] { opacity: 0.4; cursor: not-allowed; }
+
+  /* ═══ 5. Othertabs 分段选项卡 ═══ */
+  .othertabs {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    padding: 3px;
+    background: rgba(199, 204, 214, 0.3);
+    border-radius: 4px;
+  }
+  .othertabs-item {
+    padding: 2px 12px;
+    border: none;
+    border-radius: 2px;
+    background: transparent;
+    color: #42464E;
+    font-size: 13px;
+    font-weight: 400;
+    line-height: 22px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .othertabs-item:hover:not(.active):not(:disabled) { background: rgba(199, 204, 214, 0.2); }
+  .othertabs-item.active {
+    background: #FFFFFF;
+    color: #1664FF;
+    font-weight: 500;
+    border-radius: 4px;
+    box-shadow: 0px 1px 2px 0px rgba(0,0,0,0.07), 0px 0.5px 1px 0px rgba(0,0,0,0.05), 0px 0px 0px 0.5px rgba(213,219,227,0.7);
+  }
+  .othertabs-item:disabled { opacity: 0.4; cursor: not-allowed; }
+
+  /* ═══ 6. Vertical Tabs 竖向标签页 ═══ */
+  .tabs-vertical {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    border-right: 1px solid #EAEDF1;
+    width: 160px;
+  }
+  .tabs-vertical .tab-item {
+    position: relative;
+    padding: 8px 16px;
+    font-size: 13px;
+    font-family: "PingFang SC", sans-serif;
+    color: #42464E;
+    font-weight: 400;
+    line-height: 22px;
+    cursor: pointer;
+    background: transparent;
+    border: none;
+    text-align: left;
+    white-space: nowrap;
+    transition: color 150ms ease, background 150ms ease;
+  }
+  .tabs-vertical .tab-item::before {
+    content: '';
+    position: absolute;
+    left: 0; top: 50%;
+    transform: translateY(-50%);
+    width: 2px; height: 0;
+    background: #1664FF;
+    transition: height 150ms ease;
+  }
+  .tabs-vertical .tab-item:hover:not(.active):not([disabled]) { color: rgba(22, 100, 255, 0.8); background: #F6F8FA; }
+  .tabs-vertical .tab-item.active { color: #1664FF; font-weight: 500; background: #F3F7FF; }
+  .tabs-vertical .tab-item.active::before { height: 16px; }
+  .tabs-vertical .tab-item[disabled] { color: #C2C6CC; cursor: not-allowed; opacity: 0.5; }
+
+  /* ═══ 7. Extra Content / Add Button ═══ */
+  .tabs-wrapper {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid #EAEDF1;
+  }
+  .tabs-wrapper .tabs-line { border-bottom: none; flex: 1; }
+  .tabs-extra { display: flex; align-items: center; gap: 8px; padding-right: 16px; }
+  .tabs-extra .btn-extra {
+    display: inline-flex; align-items: center; justify-content: center;
+    height: 28px; padding: 0 12px;
+    border: 1px solid #DDE2E9; border-radius: 4px; background: #FFFFFF;
+    color: #42464E; font-size: 13px; cursor: pointer; transition: all 150ms ease; gap: 4px;
+  }
+  .tabs-extra .btn-extra:hover { border-color: #1664FF; color: #1664FF; }
+  .tabs-add-btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 28px; height: 28px;
+    border: 1px solid #DDE2E9; border-radius: 4px; background: #FFFFFF;
+    color: #42464E; font-size: 16px; cursor: pointer; transition: all 150ms ease; margin-left: 8px;
+  }
+  .tabs-add-btn:hover { border-color: #1664FF; color: #1664FF; }
+
+  /* ═══ 8. Tab Panel 内容区 ═══ */
+  .tab-panel { padding: 16px 0; font-size: 13px; color: #42464E; line-height: 22px; }
+  .tab-panel-bordered {
+    border: 1px solid #EAEDF1; border-top: none; padding: 16px; border-radius: 0 0 4px 4px;
+  }
+
+  /* Vertical layout container */
+  .tabs-vertical-layout {
+    display: flex; border: 1px solid #EAEDF1; border-radius: 4px; overflow: hidden;
+  }
+  .tabs-vertical-layout .tabs-vertical { border-right: 1px solid #EAEDF1; border-radius: 0; }
+  .tabs-vertical-layout .tab-panel-vertical { flex: 1; padding: 16px; font-size: 13px; color: #42464E; line-height: 22px; }
+
+  /* SVG icon helper */
+  .icon-svg { width: 14px; height: 14px; fill: currentColor; }
+  </style>
+</head>
+<body>
+  <div class="pv-header">
+    <h1>Tabs 选项卡</h1>
+    <p>选项卡组件，支持下划线 (Line)、卡片 (Card)、胶囊 (Capsule)、按钮 (Button)、分段 (Othertabs)、竖向 (Vertical) 等多种类型。</p>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">Line Tabs 下划线样式</div>
+    <div class="stack-12">
+      <!-- Size Large -->
+      <div class="tabs-line" data-component="tabs" data-type="line" data-size="large">
+        <span class="tab-item tab-size-lg active" data-state="active">选项一</span>
+        <span class="tab-item tab-size-lg" data-state="default">选项二</span>
+        <span class="tab-item tab-size-lg" data-state="default">选项三</span>
+        <span class="tab-item tab-size-lg" data-state="default">选项四</span>
+      </div>
+      <!-- Size Default -->
+      <div class="tabs-line" data-component="tabs" data-type="line" data-size="default">
+        <span class="tab-item tab-size-md active" data-state="active">选项一</span>
+        <span class="tab-item tab-size-md" data-state="default">选项二</span>
+        <span class="tab-item tab-size-md" data-state="default">选项三</span>
+        <span class="tab-item tab-size-md" data-state="default">选项四</span>
+      </div>
+      <!-- Size Small -->
+      <div class="tabs-line" data-component="tabs" data-type="line" data-size="small">
+        <span class="tab-item tab-size-sm active" data-state="active">选项一</span>
+        <span class="tab-item tab-size-sm" data-state="default">选项二</span>
+        <span class="tab-item tab-size-sm" data-state="default">选项三</span>
+        <span class="tab-item tab-size-sm" data-state="default">选项四</span>
+      </div>
+      <!-- States -->
+      <div class="tabs-line" data-component="tabs" data-type="line" data-size="default">
+        <span class="tab-item tab-size-md active" data-state="active">激活项</span>
+        <span class="tab-item tab-size-md" data-state="default">默认项</span>
+        <span class="tab-item tab-size-md" style="color: rgba(22, 100, 255, 0.8);" data-state="hover">悬浮项</span>
+        <span class="tab-item tab-size-md" disabled data-state="disabled">禁用项</span>
+      </div>
+      <!-- With Icons -->
+      <div class="tabs-line" data-component="tabs" data-type="line" data-size="default">
+        <span class="tab-item tab-size-md active" data-state="active">
+          <span class="tab-icon"><svg class="icon-svg" viewBox="0 0 16 16"><path d="M8 1a7 7 0 110 14A7 7 0 018 1zm0 1.2A5.8 5.8 0 1013.8 8 5.8 5.8 0 008 2.2zm0 2.3a.75.75 0 01.75.75v2.25H11a.75.75 0 010 1.5H8.75V11.25a.75.75 0 01-1.5 0V9H5a.75.75 0 010-1.5h2.25V5.25A.75.75 0 018 4.5z"/></svg></span>
+          概览
+        </span>
+        <span class="tab-item tab-size-md" data-state="default">
+          <span class="tab-icon"><svg class="icon-svg" viewBox="0 0 16 16"><path d="M2 3h12a1 1 0 011 1v8a1 1 0 01-1 1H2a1 1 0 01-1-1V4a1 1 0 011-1zm0 1v8h12V4H2zm2 2h3v1H4V6zm0 2.5h5v1H4v-1z"/></svg></span>
+          文档
+        </span>
+        <span class="tab-item tab-size-md" data-state="default">
+          <span class="tab-icon"><svg class="icon-svg" viewBox="0 0 16 16"><path d="M8 1.5a6.5 6.5 0 110 13 6.5 6.5 0 010-13zM8 3a5 5 0 100 10A5 5 0 008 3zm-.5 2h1v3.25l2.1 1.22-.5.87L7.5 9V5z"/></svg></span>
+          历史
+        </span>
+      </div>
+      <!-- With Badge/Count -->
+      <div class="tabs-line" data-component="tabs" data-type="line" data-size="default">
+        <span class="tab-item tab-size-md active" data-state="active">
+          全部
+          <span class="tab-count">(128)</span>
+        </span>
+        <span class="tab-item tab-size-md" data-state="default">
+          进行中
+          <span class="tab-badge">5</span>
+        </span>
+        <span class="tab-item tab-size-md" data-state="default">
+          已完成
+          <span class="tab-count">(96)</span>
+        </span>
+        <span class="tab-item tab-size-md" data-state="default">
+          异常
+          <span class="tab-badge">2</span>
+        </span>
+      </div>
+      <!-- Scrollable -->
+      <div class="tabs-line-scroll-wrapper" data-component="tabs" data-type="line" data-scrollable="true">
+        <button class="scroll-btn" data-action="scroll-left">&#8249;</button>
+        <div class="tabs-line-scroll">
+          <div class="tabs-line" data-size="default" style="width: max-content;">
+            <span class="tab-item tab-size-md active" data-state="active">选项一</span>
+            <span class="tab-item tab-size-md" data-state="default">选项二</span>
+            <span class="tab-item tab-size-md" data-state="default">选项三</span>
+            <span class="tab-item tab-size-md" data-state="default">选项四</span>
+            <span class="tab-item tab-size-md" data-state="default">选项五</span>
+            <span class="tab-item tab-size-md" data-state="default">选项六</span>
+            <span class="tab-item tab-size-md" data-state="default">选项七</span>
+            <span class="tab-item tab-size-md" data-state="default">选项八</span>
+            <span class="tab-item tab-size-md" data-state="default">选项九</span>
+            <span class="tab-item tab-size-md" data-state="default">选项十</span>
+          </div>
+        </div>
+        <button class="scroll-btn" data-action="scroll-right">&#8250;</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">Card Tabs 卡片样式</div>
+    <div class="stack-12">
+      <!-- Default size -->
+      <div class="tabs-card" data-component="tabs" data-type="card" data-size="default">
+        <span class="tab-item tab-size-md active" data-state="active">规则管理</span>
+        <span class="tab-item tab-size-md" data-state="default">配置详情</span>
+        <span class="tab-item tab-size-md" data-state="default">监控面板</span>
+        <span class="tab-item tab-size-md" data-state="default">操作日志</span>
+      </div>
+      <!-- Large size -->
+      <div class="tabs-card" data-component="tabs" data-type="card" data-size="large">
+        <span class="tab-item tab-size-lg active" data-state="active">规则管理</span>
+        <span class="tab-item tab-size-lg" data-state="default">配置详情</span>
+        <span class="tab-item tab-size-lg" data-state="default">监控面板</span>
+        <span class="tab-item tab-size-lg" data-state="default">操作日志</span>
+      </div>
+      <!-- States -->
+      <div class="tabs-card" data-component="tabs" data-type="card" data-size="large">
+        <span class="tab-item tab-size-lg active" data-state="active">激活项</span>
+        <span class="tab-item tab-size-lg" data-state="default">默认项</span>
+        <span class="tab-item tab-size-lg" style="color: #1664FF;" data-state="hover">悬浮项</span>
+        <span class="tab-item tab-size-lg" disabled data-state="disabled">禁用项</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">Capsule Tabs 胶囊样式</div>
+    <div class="stack-12">
+      <div class="tabs-capsule" data-component="tabs" data-type="capsule">
+        <button class="tab-item active" data-state="active">全部服务</button>
+        <button class="tab-item" data-state="default">我的收藏</button>
+      </div>
+      <div class="tabs-capsule" data-component="tabs" data-type="capsule">
+        <button class="tab-item active" data-state="active">全部</button>
+        <button class="tab-item" data-state="default">进行中</button>
+        <button class="tab-item" data-state="default">已完成</button>
+      </div>
+      <div class="tabs-capsule" data-component="tabs" data-type="capsule">
+        <button class="tab-item active" data-state="active">全部</button>
+        <button class="tab-item" data-state="default">进行中</button>
+        <button class="tab-item" data-state="default">已完成</button>
+        <button class="tab-item" data-state="default">已取消</button>
+      </div>
+      <div class="tabs-capsule" data-component="tabs" data-type="capsule">
+        <button class="tab-item active" data-state="active">全部</button>
+        <button class="tab-item" data-state="default">进行中</button>
+        <button class="tab-item" disabled data-state="disabled">已完成</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">Button Tabs 按钮样式（分段控件）</div>
+    <div class="stack-12">
+      <div class="tabs-button" data-component="tabs" data-type="button">
+        <button class="tab-item active" data-state="active">日</button>
+        <button class="tab-item" data-state="default">周</button>
+        <button class="tab-item" data-state="default">月</button>
+      </div>
+      <div class="tabs-button" data-component="tabs" data-type="button">
+        <button class="tab-item active" data-state="active">概览</button>
+        <button class="tab-item" data-state="default">详情</button>
+        <button class="tab-item" data-state="default">监控</button>
+        <button class="tab-item" data-state="default">日志</button>
+      </div>
+      <div class="tabs-button" data-component="tabs" data-type="button">
+        <button class="tab-item" data-state="default">概览</button>
+        <button class="tab-item" data-state="default">详情</button>
+        <button class="tab-item active" data-state="active">监控</button>
+        <button class="tab-item" data-state="default">日志</button>
+      </div>
+      <div class="tabs-button" data-component="tabs" data-type="button">
+        <button class="tab-item active" data-state="active">概览</button>
+        <button class="tab-item" data-state="default">详情</button>
+        <button class="tab-item" disabled data-state="disabled">监控</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">Othertabs 分段选项卡</div>
+    <div class="stack-12">
+      <div class="othertabs" data-component="othertabs" data-size="default">
+        <button class="othertabs-item active" data-state="active">多服务</button>
+        <button class="othertabs-item" data-state="default">单服务</button>
+      </div>
+      <div class="othertabs" data-component="othertabs" data-size="default">
+        <button class="othertabs-item active" data-state="active">全部</button>
+        <button class="othertabs-item" data-state="default">进行中</button>
+        <button class="othertabs-item" data-state="default">已完成</button>
+      </div>
+      <div class="othertabs" data-component="othertabs" data-size="default">
+        <button class="othertabs-item active" data-state="active">全部</button>
+        <button class="othertabs-item" data-state="default">进行中</button>
+        <button class="othertabs-item" data-state="default">已完成</button>
+        <button class="othertabs-item" data-state="default">已取消</button>
+      </div>
+      <div class="othertabs" data-component="othertabs" data-size="default">
+        <button class="othertabs-item active" data-state="active">全部</button>
+        <button class="othertabs-item" data-state="default">进行中</button>
+        <button class="othertabs-item" disabled data-state="disabled">已完成</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">Vertical Tabs 竖向标签页</div>
+    <div class="stack-12">
+      <div class="row">
+        <div class="tabs-vertical" data-component="tabs" data-type="vertical">
+          <span class="tab-item active" data-state="active">基础信息</span>
+          <span class="tab-item" data-state="default">权限配置</span>
+          <span class="tab-item" data-state="default">告警规则</span>
+          <span class="tab-item" data-state="default">操作日志</span>
+          <span class="tab-item" disabled data-state="disabled">高级设置</span>
+        </div>
+        <div class="tabs-vertical-layout" data-component="tabs" data-type="vertical" data-with-panel="true">
+          <div class="tabs-vertical" style="border-right: 1px solid #EAEDF1;">
+            <span class="tab-item active" data-state="active">基础信息</span>
+            <span class="tab-item" data-state="default">权限配置</span>
+            <span class="tab-item" data-state="default">告警规则</span>
+            <span class="tab-item" data-state="default">操作日志</span>
+          </div>
+          <div class="tab-panel-vertical">
+            <p style="color: #42464E; font-size: 13px;">这里是「基础信息」选项卡的内容区域。当用户切换选项卡时，此区域显示对应内容。</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">Extra Content 附加操作</div>
+    <div class="stack-12">
+      <!-- Tabs with extra buttons -->
+      <div class="tabs-wrapper" data-component="tabs" data-type="line" data-extra="true">
+        <div class="tabs-line" data-size="default">
+          <span class="tab-item tab-size-md active" data-state="active">全部</span>
+          <span class="tab-item tab-size-md" data-state="default">进行中</span>
+          <span class="tab-item tab-size-md" data-state="default">已完成</span>
+        </div>
+        <div class="tabs-extra">
+          <button class="btn-extra">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1.5a6.5 6.5 0 110 13 6.5 6.5 0 010-13zM8 3a5 5 0 100 10A5 5 0 008 3zm-.5 2h1v3.25l2.1 1.22-.5.87L7.5 9V5z"/></svg>
+            最近更新
+          </button>
+          <button class="btn-extra">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M13.5 2.5v11h-11v-11h11zm-1-1h-9a1 1 0 00-1 1v9a1 1 0 001 1h9a1 1 0 001-1v-9a1 1 0 00-1-1zM7 5h2v2H7V5zm0 3h2v2H7V8zm-3 0h2v2H4V8zm6 0h2v2h-2V8zM4 5h2v2H4V5z"/></svg>
+            导出
+          </button>
+        </div>
+      </div>
+      <!-- Tabs with add button -->
+      <div class="tabs-line" data-component="tabs" data-type="line" data-addable="true" data-size="default" style="align-items: center;">
+        <span class="tab-item tab-size-md active" data-state="active">选项卡一</span>
+        <span class="tab-item tab-size-md" data-state="default">选项卡二</span>
+        <span class="tab-item tab-size-md" data-state="default">选项卡三</span>
+        <button class="tabs-add-btn" data-action="add" title="新增选项卡">+</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">Tab Panel 含内容区</div>
+    <div class="stack-12">
+      <!-- Line Tabs with panel -->
+      <div data-component="tabs" data-type="line" data-with-panel="true">
+        <div class="tabs-line" data-size="default">
+          <span class="tab-item tab-size-md active" data-state="active">基本信息</span>
+          <span class="tab-item tab-size-md" data-state="default">监控数据</span>
+          <span class="tab-item tab-size-md" data-state="default">变更历史</span>
+        </div>
+        <div class="tab-panel" data-panel="0">
+          <p>当前显示「基本信息」选项卡的内容。包含服务名称、描述、创建时间等基础字段信息。</p>
+        </div>
+      </div>
+      <!-- Card Tabs with panel -->
+      <div data-component="tabs" data-type="card" data-with-panel="true">
+        <div class="tabs-card" data-size="large">
+          <span class="tab-item tab-size-lg active" data-state="active">接口列表</span>
+          <span class="tab-item tab-size-lg" data-state="default">请求日志</span>
+          <span class="tab-item tab-size-lg" data-state="default">错误分析</span>
+        </div>
+        <div class="tab-panel-bordered" data-panel="0">
+          <p>当前显示「接口列表」选项卡的内容。此面板展示所有已注册的 API 接口及其请求方式、路径、状态等。</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

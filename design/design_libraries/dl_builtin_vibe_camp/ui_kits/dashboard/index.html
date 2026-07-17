@@ -1,0 +1,2014 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <link rel="stylesheet" href="../../colors_and_type.css">
+<link rel="stylesheet" href="../../components.css">
+<meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vibecamp Dashboard UI Kit</title>
+  <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    *{box-sizing:border-box}
+    html,body,#root{height:auto;min-height:0}
+    body{
+      margin:0;
+      background:var(--background);
+      color:var(--foreground);
+      font-family:var(--font-sans);
+      letter-spacing:var(--tracking-normal);
+      -webkit-font-smoothing:antialiased;
+    }
+    button,input{font:inherit}
+    button{
+      border:0;
+      background:none;
+      color:inherit;
+      cursor:pointer;
+    }
+    :focus-visible{
+      outline:none;
+      box-shadow:0 0 0 2px var(--background),0 0 0 4px var(--ring);
+    }
+    .app{
+      display:flex;
+      flex-direction:column;
+      min-height:0;
+      color:var(--foreground);
+      background:var(--background);
+    }
+    .dark.app{
+      background:var(--background);
+    }
+    .uikit-shell{
+      width:100%;
+      max-width:1184px;
+      margin:0 auto;
+      min-height:0;
+      height:auto;
+      align-items:stretch;
+      overflow:hidden;
+    }
+    .uikit-sidebar{
+      min-width:0;
+    }
+    .uikit-main,
+    .uikit-toolbar{
+      min-width:0;
+    }
+    .uikit-responsive-grid{
+      display:grid;
+      grid-template-columns:repeat(2,minmax(0,1fr));
+    }
+    .uikit-table-wrap{
+      max-width:100%;
+      overflow-x:auto;
+      overscroll-behavior-x:contain;
+    }
+    .uikit-truncate{
+      min-width:0;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      white-space:nowrap;
+    }
+    .uikit-nowrap{
+      white-space:nowrap;
+      flex-shrink:0;
+    }
+    .uikit-action-cell{
+      max-width:160px;
+      min-width:0;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      white-space:nowrap;
+    }
+    .uikit-action{
+      max-width:120px;
+      min-width:0;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      white-space:nowrap;
+    }
+    .shell{
+      display:grid;
+      grid-template-columns:264px minmax(0,1fr);
+      grid-template-rows:auto;
+      min-height:0;
+      align-items:stretch;
+      transition:grid-template-columns .24s ease;
+    }
+    .shell.collapsed{grid-template-columns:92px minmax(0,1fr)}
+    .sidebar{
+      position:sticky;
+      top:0;
+      align-self:stretch;
+      min-height:100%;
+      height:auto;
+      padding:20px 16px 18px;
+      display:flex;
+      flex-direction:column;
+      gap:18px;
+      background:color-mix(in srgb,var(--sidebar) 88%, var(--card));
+      border-right:1px solid var(--sidebar-border);
+      backdrop-filter:blur(14px);
+    }
+    .sidebar-head,.profile{
+      display:flex;
+      align-items:center;
+      gap:12px;
+      min-width:0;
+    }
+    .brand{
+      flex:1;
+      min-width:0;
+      display:flex;
+      align-items:center;
+      gap:12px;
+    }
+    .brand-mark,
+    .avatar{
+      width:42px;
+      height:42px;
+      border-radius:14px;
+      display:grid;
+      place-items:center;
+      flex:none;
+    }
+    .brand-mark{
+      background:linear-gradient(160deg,var(--primary),color-mix(in srgb,var(--primary) 72%, black));
+      color:var(--primary-foreground);
+      font:700 22px/1 var(--font-serif);
+      box-shadow:inset 0 1px 0 color-mix(in srgb,var(--foreground) 14%,transparent);
+    }
+    .avatar{
+      background:var(--secondary);
+      color:var(--secondary-foreground);
+      font-weight:700;
+    }
+    .brand-copy,.profile-copy,.rail-note,.nav-text{
+      min-width:0;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      transition:opacity .2s ease,max-width .2s ease;
+    }
+    .brand-copy strong,.profile-copy strong{
+      display:block;
+      font-size:15px;
+    }
+    .brand-copy span,.profile-copy span,.micro,.muted{
+      color:var(--muted-foreground);
+    }
+    .brand-copy span,.profile-copy span,.micro{
+      font-size:12px;
+    }
+    .collapse{
+      width:40px;
+      height:40px;
+      flex:none;
+      border:1px solid var(--border);
+      border-radius:16px;
+      background:color-mix(in srgb,var(--card) 82%, transparent);
+    }
+    .nav-group{
+      display:flex;
+      flex-direction:column;
+      gap:6px;
+    }
+    .section-label{
+      padding:0 10px;
+      font:700 11px/1 var(--font-mono);
+      letter-spacing:.12em;
+      text-transform:uppercase;
+      color:var(--muted-foreground);
+    }
+    .nav-item{
+      width:100%;
+      display:flex;
+      align-items:center;
+      gap:12px;
+      padding:12px 14px;
+      border:1px solid transparent;
+      border-radius:18px;
+      text-align:left;
+      transition:background .16s ease,border-color .16s ease,transform .16s ease,color .16s ease;
+    }
+    .nav-item:hover{background:color-mix(in srgb,var(--sidebar-accent) 24%, transparent)}
+    .nav-item.active{
+      background:var(--sidebar-accent);
+      color:var(--sidebar-accent-foreground);
+      border-color:color-mix(in srgb,var(--sidebar-border) 70%, transparent);
+    }
+    .nav-glyph{
+      width:28px;
+      height:28px;
+      border-radius:12px;
+      display:grid;
+      place-items:center;
+      flex:none;
+      font-size:14px;
+      background:color-mix(in srgb,var(--card) 45%, transparent);
+    }
+    .nav-item.active .nav-glyph{
+      background:color-mix(in srgb,var(--card) 16%, transparent);
+    }
+    .sidebar-spotlight{
+      padding:16px;
+      border:1px solid var(--border);
+      border-radius:22px;
+      background:linear-gradient(180deg,color-mix(in srgb,var(--card) 88%, transparent),color-mix(in srgb,var(--accent) 76%, transparent));
+    }
+    .sidebar-spotlight strong{
+      display:block;
+      font-size:16px;
+      margin:6px 0 4px;
+    }
+    .profile{
+      margin-top:auto;
+      padding:12px;
+      border-radius:20px;
+      border:1px solid var(--border);
+      background:color-mix(in srgb,var(--card) 84%, transparent);
+    }
+    .shell.collapsed .brand-copy,
+    .shell.collapsed .profile-copy,
+    .shell.collapsed .nav-text,
+    .shell.collapsed .sidebar-spotlight .rail-note,
+    .shell.collapsed .sidebar-spotlight strong,
+    .shell.collapsed .sidebar-spotlight .section-label{
+      opacity:0;
+      max-width:0;
+    }
+    .shell.collapsed .sidebar{
+      padding-inline:12px;
+    }
+    .shell.collapsed .nav-item{
+      justify-content:center;
+      padding-inline:0;
+    }
+    .shell.collapsed .brand,
+    .shell.collapsed .profile{
+      justify-content:center;
+    }
+    .shell.collapsed .sidebar-spotlight{
+      padding:14px 10px;
+      display:grid;
+      place-items:center;
+    }
+    .shell.collapsed .sidebar-spotlight::before{
+      content:"•";
+      color:var(--primary);
+      font-size:24px;
+      line-height:1;
+    }
+    .main{
+      min-width:0;
+      min-height:0;
+      height:auto;
+      display:flex;
+      flex-direction:column;
+      padding:28px;
+    }
+    .topbar{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:16px;
+      margin-bottom:22px;
+      flex-wrap:wrap;
+    }
+    .search{
+      min-width:260px;
+      flex:1;
+      max-width:420px;
+      height:46px;
+      padding:0 16px;
+      display:flex;
+      align-items:center;
+      gap:12px;
+      border:1px solid var(--border);
+      border-radius:18px;
+      background:color-mix(in srgb,var(--card) 82%, transparent);
+    }
+    .search input{
+      width:100%;
+      border:0;
+      outline:none;
+      background:transparent;
+      color:var(--foreground);
+    }
+    .search-mark{
+      width:26px;
+      text-align:center;
+      color:var(--muted-foreground);
+      flex:none;
+    }
+    .toolbar{
+      display:flex;
+      align-items:center;
+      gap:10px;
+      flex-wrap:wrap;
+    }
+    .btn,
+    .chip,
+    .icon-btn,
+    .toggle,
+    .table-link{
+      transition:background .16s ease,border-color .16s ease,color .16s ease,transform .16s ease,filter .16s ease;
+    }
+    .btn,
+    .chip,
+    .icon-btn,
+    .toggle,
+    .field,
+    .table-link{
+      border:1px solid var(--border);
+      border-radius:18px;
+    }
+    .btn:active,.chip:active,.icon-btn:active,.toggle:active,.table-link:active,.nav-item:active,.collapse:active{transform:scale(.98)}
+    .btn,.chip{
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      gap:10px;
+      min-height:42px;
+      padding:0 16px;
+      white-space:nowrap;
+      font-weight:600;
+    }
+    .btn.primary{
+      background:var(--primary);
+      color:var(--primary-foreground);
+      border-color:var(--primary);
+    }
+    .btn.secondary{
+      background:var(--secondary);
+      color:var(--secondary-foreground);
+      border-color:var(--secondary);
+    }
+    .btn.ghost,.chip,.icon-btn,.table-link{
+      background:color-mix(in srgb,var(--card) 80%, transparent);
+      color:var(--foreground);
+    }
+    .btn.ghost:hover,.chip:hover,.icon-btn:hover,.table-link:hover{
+      background:color-mix(in srgb,var(--accent) 88%, transparent);
+    }
+    .btn.primary:hover{
+      filter:brightness(.97);
+    }
+    .btn.secondary:hover{
+      background:color-mix(in srgb,var(--secondary) 90%, var(--accent));
+    }
+    .chip{
+      min-height:36px;
+      padding-inline:14px;
+      font:600 12px/1 var(--font-mono);
+      letter-spacing:.04em;
+      text-transform:uppercase;
+    }
+    .chip.active{
+      background:var(--primary);
+      border-color:var(--primary);
+      color:var(--primary-foreground);
+    }
+    .icon-btn{
+      width:42px;
+      height:42px;
+      display:grid;
+      place-items:center;
+    }
+    .page{
+      display:flex;
+      flex-direction:column;
+      flex:0 0 auto;
+      gap:18px;
+      min-height:0;
+      height:auto;
+      animation:fadeUp .28s ease;
+    }
+    .hero{
+      border:1px solid var(--border);
+      border-radius:30px;
+      overflow:hidden;
+      background:
+        radial-gradient(circle at 92% 8%, color-mix(in srgb,var(--primary) 11%, transparent) 0, transparent 28%),
+        linear-gradient(140deg,color-mix(in srgb,var(--card) 92%, transparent) 0%,color-mix(in srgb,var(--muted) 84%, transparent) 58%,color-mix(in srgb,var(--accent) 72%, transparent) 100%);
+    }
+    .hero-inner{
+      display:grid;
+      grid-template-columns:minmax(0,1.45fr) minmax(320px,.9fr);
+      gap:0;
+      min-height:356px;
+    }
+    .hero-copy{
+      padding:34px 34px 28px;
+      display:flex;
+      flex-direction:column;
+      justify-content:space-between;
+      gap:28px;
+      min-width:0;
+      position:relative;
+    }
+    .hero-copy::before{
+      content:"";
+      position:absolute;
+      inset:30px 34px auto auto;
+      width:88px;
+      height:1px;
+      background:color-mix(in srgb,var(--border) 60%, transparent);
+    }
+    .hero-copy::after{
+      content:"";
+      position:absolute;
+      inset:auto auto 30px 34px;
+      width:180px;
+      height:1px;
+      background:color-mix(in srgb,var(--border) 66%, transparent);
+    }
+    .eyebrow{
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+      font:700 11px/1 var(--font-mono);
+      letter-spacing:.12em;
+      text-transform:uppercase;
+      color:var(--muted-foreground);
+    }
+    .hero-kicker{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:16px;
+      flex-wrap:wrap;
+    }
+    .hero-index{
+      font:700 11px/1 var(--font-mono);
+      letter-spacing:.14em;
+      text-transform:uppercase;
+      color:var(--muted-foreground);
+    }
+    .hero-copy h1{
+      margin:16px 0 0;
+      max-width:11ch;
+      font:600 clamp(40px,5vw,74px)/.92 var(--font-serif);
+      letter-spacing:-.03em;
+    }
+    .hero-lead{
+      display:grid;
+      grid-template-columns:minmax(0,1fr) minmax(220px,.48fr);
+      gap:20px;
+      align-items:end;
+    }
+    .hero-copy p{
+      margin:18px 0 0;
+      max-width:58ch;
+      font-size:15px;
+      line-height:1.7;
+      color:var(--muted-foreground);
+    }
+    .hero-side-note{
+      padding-left:20px;
+      border-left:1px solid color-mix(in srgb,var(--border) 66%, transparent);
+      font-size:12px;
+      line-height:1.65;
+      color:var(--muted-foreground);
+    }
+    .hero-meta{
+      display:flex;
+      align-items:center;
+      gap:12px;
+      flex-wrap:wrap;
+      margin-top:22px;
+    }
+    .badge{
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+      min-height:34px;
+      padding:0 14px;
+      border-radius:999px;
+      background:color-mix(in srgb,var(--card) 62%, transparent);
+      border:1px solid color-mix(in srgb,var(--border) 72%, transparent);
+      font-size:12px;
+      color:var(--foreground);
+    }
+    .status-dot{
+      width:8px;
+      height:8px;
+      border-radius:999px;
+      background:var(--chart-3);
+      box-shadow:0 0 0 6px color-mix(in srgb,var(--chart-3) 16%, transparent);
+    }
+    .hero-actions{
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
+      margin-top:28px;
+    }
+    .hero-summary{
+      position:relative;
+      min-width:0;
+      padding:28px;
+      border-left:1px solid color-mix(in srgb,var(--border) 72%, transparent);
+      background:
+        radial-gradient(circle at top left,color-mix(in srgb,var(--primary) 13%, transparent) 0,transparent 44%),
+        linear-gradient(180deg,color-mix(in srgb,var(--secondary) 12%, transparent),color-mix(in srgb,var(--card) 86%, transparent));
+    }
+    .dark .hero-summary{
+      background:
+        radial-gradient(circle at top left,color-mix(in srgb,var(--primary) 17%, transparent) 0,transparent 42%),
+        linear-gradient(180deg,color-mix(in srgb,var(--secondary) 30%, transparent),color-mix(in srgb,var(--card) 86%, transparent));
+    }
+    .summary-card{
+      height:100%;
+      display:flex;
+      flex-direction:column;
+      justify-content:space-between;
+      gap:18px;
+    }
+    .summary-card h2{
+      margin:10px 0 8px;
+      font-size:30px;
+      line-height:1.04;
+      letter-spacing:-.03em;
+    }
+    .summary-grid{
+      display:grid;
+      grid-template-columns:1fr 1fr;
+      gap:14px 18px;
+      padding-top:18px;
+      border-top:1px solid color-mix(in srgb,var(--border) 72%, transparent);
+    }
+    .summary-grid div strong,
+    .metric-slot strong,
+    .rail-stat strong,
+    .focus-stat strong{
+      display:block;
+      font-size:20px;
+      line-height:1.05;
+      letter-spacing:-.03em;
+    }
+    .summary-note{
+      padding:14px 16px;
+      border-radius:20px;
+      background:color-mix(in srgb,var(--card) 70%, transparent);
+      border:1px solid color-mix(in srgb,var(--border) 74%, transparent);
+      line-height:1.55;
+      color:var(--muted-foreground);
+      font-size:13px;
+    }
+    .summary-band{
+      display:grid;
+      gap:10px;
+    }
+    .summary-line{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:12px;
+      padding-top:10px;
+      border-top:1px solid color-mix(in srgb,var(--border) 72%, transparent);
+    }
+    .summary-line:first-child{
+      border-top:0;
+      padding-top:0;
+    }
+    .band{
+      display:grid;
+      grid-template-columns:1.2fr repeat(3,minmax(0,.86fr));
+      gap:0;
+      border:1px solid var(--border);
+      border-radius:26px;
+      overflow:hidden;
+      background:
+        linear-gradient(180deg,color-mix(in srgb,var(--card) 88%, transparent),color-mix(in srgb,var(--card) 80%, var(--background)));
+    }
+    .band-intro,
+    .metric-slot{
+      padding:22px 24px;
+      min-width:0;
+    }
+    .band-intro{
+      position:relative;
+      background:linear-gradient(180deg,color-mix(in srgb,var(--card) 90%, transparent),color-mix(in srgb,var(--accent) 74%, transparent));
+    }
+    .band-intro::after{
+      content:"";
+      position:absolute;
+      left:24px;
+      right:24px;
+      bottom:22px;
+      height:2px;
+      border-radius:999px;
+      background:linear-gradient(90deg,color-mix(in srgb,var(--foreground) 44%, transparent) 0 12%,color-mix(in srgb,var(--primary) 74%, transparent) 38%,color-mix(in srgb,var(--chart-2) 46%, transparent) 82%,transparent 100%);
+      opacity:.8;
+    }
+    .band-intro h2{
+      max-width:14ch;
+      margin:10px 0 10px;
+      font-size:28px;
+      line-height:1.08;
+      letter-spacing:-.03em;
+    }
+    .band-intro p{
+      padding-bottom:30px;
+      margin:0;
+      line-height:1.64;
+      font-size:14px;
+      color:var(--muted-foreground);
+    }
+    .metric-slot + .metric-slot,
+    .metric-slot + .band-intro,
+    .band-intro + .metric-slot{
+      border-left:1px solid color-mix(in srgb,var(--border) 74%, transparent);
+    }
+    .metric-slot{
+      display:flex;
+      flex-direction:column;
+      justify-content:space-between;
+      gap:14px;
+      background:linear-gradient(180deg,color-mix(in srgb,var(--card) 54%, transparent),transparent);
+    }
+    .metric-top{
+      display:flex;
+      justify-content:space-between;
+      gap:12px;
+      align-items:flex-start;
+    }
+    .delta{
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      min-height:28px;
+      padding:0 10px;
+      border-radius:999px;
+      background:color-mix(in srgb,var(--accent) 92%, transparent);
+      font:600 11px/1 var(--font-mono);
+      letter-spacing:.04em;
+    }
+    .metric-footer{
+      display:flex;
+      align-items:flex-end;
+      justify-content:space-between;
+      gap:12px;
+    }
+    .metric-rule{
+      width:44px;
+      height:2px;
+      border-radius:999px;
+      background:color-mix(in srgb,var(--foreground) 20%, transparent);
+      flex:none;
+    }
+    .content-grid{
+      display:grid;
+      grid-template-columns:minmax(0,1.4fr) minmax(300px,.82fr);
+      gap:18px;
+    }
+    .duo-stage{
+      display:grid;
+      grid-template-columns:minmax(0,1.4fr) minmax(300px,.82fr);
+      gap:0;
+      border:1px solid var(--border);
+      border-radius:28px;
+      overflow:hidden;
+      background:
+        radial-gradient(circle at top right,color-mix(in srgb,var(--primary) 9%, transparent) 0,transparent 24%),
+        linear-gradient(180deg,color-mix(in srgb,var(--card) 90%, transparent),color-mix(in srgb,var(--card) 82%, var(--background)));
+    }
+    .duo-stage > .panel,
+    .duo-stage > .rail{
+      border:0;
+      border-radius:0;
+      background:transparent;
+      overflow:visible;
+    }
+    .duo-stage > .rail{
+      border-left:1px solid color-mix(in srgb,var(--border) 76%, transparent);
+      background:
+        linear-gradient(180deg,color-mix(in srgb,var(--card) 32%, transparent),color-mix(in srgb,var(--accent) 36%, transparent));
+    }
+    .duo-stage .panel-head,
+    .duo-stage .stage-head{
+      padding-top:26px;
+    }
+    .duo-stage .table-shell,
+    .duo-stage .note-list{
+      padding-bottom:26px;
+    }
+    .duo-stage .rail-block:first-child{
+      padding-top:26px;
+    }
+    .panel,
+    .stage-panel,
+    .settings-shell{
+      border:1px solid var(--border);
+      border-radius:28px;
+      background:color-mix(in srgb,var(--card) 84%, transparent);
+      overflow:hidden;
+    }
+    .panel-head,
+    .stage-head{
+      display:flex;
+      align-items:flex-start;
+      justify-content:space-between;
+      gap:16px;
+      padding:24px 24px 0;
+      flex-wrap:wrap;
+    }
+    .panel-title h2,.stage-copy h2,.settings-hero h2{
+      margin:8px 0 0;
+      font-size:28px;
+      line-height:1.05;
+      letter-spacing:-.03em;
+    }
+    .panel-title p,.stage-copy p,.settings-hero p{
+      margin:10px 0 0;
+      max-width:62ch;
+      font-size:14px;
+      line-height:1.6;
+      color:var(--muted-foreground);
+    }
+    .board-ribbon{
+      display:flex;
+      align-items:center;
+      gap:16px;
+      padding:18px 24px 0;
+      flex-wrap:wrap;
+      color:var(--muted-foreground);
+      font-size:12px;
+    }
+    .board-ribbon span{
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+    }
+    .board-ribbon span::before{
+      content:"";
+      width:6px;
+      height:6px;
+      border-radius:999px;
+      background:currentColor;
+      opacity:.55;
+    }
+    .table-shell{padding:14px 24px 24px}
+    .table{
+      width:100%;
+      border-collapse:collapse;
+    }
+    .table th,.table td{
+      padding:16px 0;
+      border-top:1px solid color-mix(in srgb,var(--border) 76%, transparent);
+      text-align:left;
+      vertical-align:middle;
+    }
+    .table th{
+      padding-top:0;
+      border-top:0;
+      font:700 11px/1 var(--font-mono);
+      letter-spacing:.12em;
+      text-transform:uppercase;
+      color:var(--muted-foreground);
+    }
+    .row-title strong{
+      display:block;
+      font-size:15px;
+      margin-bottom:4px;
+    }
+    .table-link{
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      min-height:34px;
+      padding:0 12px;
+      font-size:12px;
+      font-weight:600;
+      white-space:nowrap;
+    }
+    .pill{
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+      min-height:30px;
+      padding:0 12px;
+      border-radius:999px;
+      background:color-mix(in srgb,var(--muted) 74%, transparent);
+      font-size:12px;
+    }
+    .pill-dot{
+      width:8px;
+      height:8px;
+      border-radius:999px;
+      background:currentColor;
+      opacity:.72;
+    }
+    .pill.live{color:var(--chart-3)}
+    .pill.review{color:var(--chart-2)}
+    .pill.draft{color:var(--chart-5)}
+    .rail{
+      display:flex;
+      flex-direction:column;
+      min-height:100%;
+      gap:0;
+    }
+    .rail-block{
+      padding:22px 22px 20px;
+    }
+    .rail-block + .rail-block{
+      border-top:1px solid color-mix(in srgb,var(--border) 76%, transparent);
+    }
+    .rail-stat{
+      display:grid;
+      grid-template-columns:1fr auto;
+      gap:12px;
+      align-items:flex-start;
+      padding:16px 0;
+      border-top:1px solid color-mix(in srgb,var(--border) 76%, transparent);
+    }
+    .rail-stat:first-of-type{margin-top:6px}
+    .rail-list{
+      display:grid;
+      gap:14px;
+      margin-top:14px;
+    }
+    .rail-list-item{
+      display:grid;
+      grid-template-columns:auto 1fr;
+      gap:10px;
+      align-items:flex-start;
+    }
+    .rail-bullet{
+      width:9px;
+      height:9px;
+      border-radius:999px;
+      margin-top:6px;
+      background:var(--primary);
+    }
+    .stage-panel{
+      background:
+        linear-gradient(180deg,color-mix(in srgb,var(--card) 88%, transparent),color-mix(in srgb,var(--background) 80%, var(--card)));
+    }
+    .stage-main{
+      display:grid;
+      grid-template-columns:minmax(0,1.22fr) minmax(260px,.78fr);
+      gap:0;
+      min-height:420px;
+    }
+    .stage-chart{
+      padding:24px 24px 22px;
+      min-width:0;
+      position:relative;
+    }
+    .chart-stat-strip{
+      display:grid;
+      grid-template-columns:repeat(3,minmax(0,1fr));
+      gap:0;
+      margin-top:20px;
+      border:1px solid color-mix(in srgb,var(--border) 76%, transparent);
+      border-radius:22px;
+      overflow:hidden;
+      background:color-mix(in srgb,var(--card) 70%, transparent);
+    }
+    .chart-stat{
+      padding:16px 18px;
+      display:grid;
+      gap:6px;
+    }
+    .chart-stat + .chart-stat{
+      border-left:1px solid color-mix(in srgb,var(--border) 76%, transparent);
+    }
+    .chart-frame{
+      margin-top:18px;
+      min-height:318px;
+      padding:28px 0 18px;
+      position:relative;
+      border-radius:26px;
+      background:
+        radial-gradient(circle at 78% 24%, color-mix(in srgb,var(--chart-2) 15%, transparent) 0, transparent 24%),
+        radial-gradient(circle at 12% 100%, color-mix(in srgb,var(--primary) 12%, transparent) 0, transparent 26%),
+        linear-gradient(180deg,color-mix(in srgb,var(--background) 48%, var(--card)) 0%,color-mix(in srgb,var(--card) 74%, transparent) 100%);
+      border:1px solid color-mix(in srgb,var(--border) 76%, transparent);
+      overflow:hidden;
+    }
+    .chart-gridline{
+      position:absolute;
+      left:18px;
+      right:18px;
+      border-top:1px dashed color-mix(in srgb,var(--border) 72%, transparent);
+    }
+    .chart-gridline span{
+      position:absolute;
+      right:0;
+      top:-11px;
+      padding-left:8px;
+      background:transparent;
+      font:600 10px/1 var(--font-mono);
+      color:var(--muted-foreground);
+    }
+    .chart-gridline.g1{top:20%}
+    .chart-gridline.g2{top:42%}
+    .chart-gridline.g3{top:66%}
+    .chart-gridline.g4{top:89%}
+    .chart-svg{
+      position:absolute;
+      inset:18px 16px 24px 16px;
+      width:calc(100% - 32px);
+      height:calc(100% - 42px);
+      overflow:visible;
+    }
+    .chart-labels{
+      position:absolute;
+      left:24px;
+      right:24px;
+      bottom:18px;
+      display:grid;
+      grid-template-columns:repeat(7,minmax(0,1fr));
+      gap:0;
+    }
+    .chart-labels span{
+      font:600 11px/1 var(--font-mono);
+      color:var(--muted-foreground);
+      text-align:center;
+    }
+    .chart-annotation{
+      position:absolute;
+      right:5%;
+      top:18%;
+      max-width:208px;
+      padding:16px 16px 15px;
+      border-radius:22px;
+      background:color-mix(in srgb,var(--card) 80%, transparent);
+      border:1px solid color-mix(in srgb,var(--border) 74%, transparent);
+      backdrop-filter:blur(10px);
+    }
+    .chart-footer{
+      display:flex;
+      align-items:flex-start;
+      gap:12px;
+      justify-content:space-between;
+      flex-wrap:wrap;
+      margin-top:14px;
+      color:var(--muted-foreground);
+      font-size:12px;
+    }
+    .chart-footer strong{
+      display:block;
+      color:var(--foreground);
+      font-size:13px;
+      margin-bottom:4px;
+    }
+    .spotlight{
+      border-left:1px solid color-mix(in srgb,var(--border) 76%, transparent);
+      padding:24px;
+      display:flex;
+      flex-direction:column;
+      justify-content:space-between;
+      gap:18px;
+      background:
+        radial-gradient(circle at top left,color-mix(in srgb,var(--chart-2) 12%, transparent) 0,transparent 40%),
+        linear-gradient(180deg,color-mix(in srgb,var(--secondary) 12%, transparent),color-mix(in srgb,var(--card) 84%, transparent));
+    }
+    .spotlight-stage{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:12px;
+    }
+    .spotlight-card{
+      padding:18px 18px 16px;
+      border-radius:22px;
+      border:1px solid color-mix(in srgb,var(--border) 74%, transparent);
+      background:color-mix(in srgb,var(--card) 76%, transparent);
+    }
+    .focus-stat{
+      display:grid;
+      gap:8px;
+      padding:14px 0;
+      border-top:1px solid color-mix(in srgb,var(--border) 72%, transparent);
+    }
+    .focus-stat:first-of-type{margin-top:0}
+    .spotlight-actions{
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
+    }
+    .editorial-note{
+      margin-top:2px;
+      padding-top:16px;
+      border-top:1px solid color-mix(in srgb,var(--border) 72%, transparent);
+      color:var(--muted-foreground);
+      font-size:12px;
+      line-height:1.65;
+    }
+    .note-panel{
+      display:grid;
+      grid-template-columns:minmax(0,1fr) minmax(320px,.8fr);
+      gap:18px;
+    }
+    .note-list{
+      padding:20px 24px 24px;
+      display:grid;
+      gap:16px;
+    }
+    .note-item{
+      display:grid;
+      grid-template-columns:auto 1fr auto;
+      gap:14px;
+      align-items:flex-start;
+      padding-top:16px;
+      border-top:1px solid color-mix(in srgb,var(--border) 74%, transparent);
+    }
+    .note-item:first-child{
+      border-top:0;
+      padding-top:0;
+    }
+    .note-mark{
+      width:36px;
+      height:36px;
+      border-radius:14px;
+      display:grid;
+      place-items:center;
+      background:color-mix(in srgb,var(--accent) 94%, transparent);
+      color:var(--foreground);
+      font-size:14px;
+    }
+    .settings-shell{
+      background:
+        linear-gradient(180deg,color-mix(in srgb,var(--card) 88%, transparent),color-mix(in srgb,var(--accent) 52%, transparent) 100%);
+    }
+    .settings-hero{
+      display:grid;
+      grid-template-columns:minmax(0,1.1fr) minmax(320px,.9fr);
+      gap:0;
+      border-bottom:1px solid color-mix(in srgb,var(--border) 76%, transparent);
+    }
+    .settings-copy,
+    .settings-side{
+      padding:28px;
+    }
+    .settings-side{
+      border-left:1px solid color-mix(in srgb,var(--border) 76%, transparent);
+      display:flex;
+      flex-direction:column;
+      gap:16px;
+      justify-content:center;
+    }
+    .settings-side .summary-note{margin-top:2px}
+    .review-strip{
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
+      margin-top:22px;
+    }
+    .review-pill{
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+      min-height:34px;
+      padding:0 14px;
+      border-radius:999px;
+      border:1px solid color-mix(in srgb,var(--border) 72%, transparent);
+      background:color-mix(in srgb,var(--card) 70%, transparent);
+      color:var(--muted-foreground);
+      font-size:12px;
+    }
+    .review-pill::before{
+      content:"";
+      width:6px;
+      height:6px;
+      border-radius:999px;
+      background:currentColor;
+      opacity:.6;
+    }
+    .settings-flow{
+      display:grid;
+      grid-template-columns:minmax(0,1fr) minmax(320px,.72fr);
+      gap:0;
+    }
+    .settings-main{
+      padding:8px 28px 28px;
+      min-width:0;
+    }
+    .flow-rows{
+      display:grid;
+      gap:0;
+    }
+    .flow-row{
+      display:grid;
+      grid-template-columns:auto minmax(0,1fr) auto;
+      gap:18px;
+      align-items:center;
+      padding:20px 0;
+      border-top:1px solid color-mix(in srgb,var(--border) 76%, transparent);
+    }
+    .flow-row:first-child{border-top:0}
+    .flow-step{
+      width:36px;
+      height:36px;
+      border-radius:14px;
+      display:grid;
+      place-items:center;
+      border:1px solid color-mix(in srgb,var(--border) 78%, transparent);
+      background:color-mix(in srgb,var(--card) 70%, transparent);
+      font:700 11px/1 var(--font-mono);
+      letter-spacing:.08em;
+      color:var(--muted-foreground);
+      flex:none;
+    }
+    .toggle{
+      width:56px;
+      height:34px;
+      position:relative;
+      background:var(--input);
+    }
+    .toggle::after{
+      content:"";
+      position:absolute;
+      top:4px;
+      left:4px;
+      width:24px;
+      height:24px;
+      border-radius:999px;
+      background:var(--card);
+      transition:left .2s ease,background .2s ease;
+    }
+    .toggle.on{
+      background:var(--primary);
+      border-color:var(--primary);
+    }
+    .toggle.on::after{
+      left:28px;
+      background:var(--primary-foreground);
+    }
+    .field-grid{
+      display:grid;
+      grid-template-columns:1fr 1fr;
+      gap:14px;
+      margin-top:24px;
+    }
+    .field{
+      min-height:74px;
+      padding:14px 16px;
+      background:color-mix(in srgb,var(--background) 72%, var(--card));
+    }
+    .field label{
+      display:block;
+      margin-bottom:8px;
+      font-size:12px;
+      color:var(--muted-foreground);
+    }
+    .field input{
+      width:100%;
+      border:0;
+      outline:none;
+      background:transparent;
+      color:var(--foreground);
+      font-size:15px;
+    }
+    .settings-side .rail-stat{
+      grid-template-columns:minmax(0,1fr) auto;
+    }
+    .checkpoint{
+      padding:16px 0;
+      border-top:1px solid color-mix(in srgb,var(--border) 74%, transparent);
+    }
+    .checkpoint:first-of-type{
+      padding-top:0;
+      border-top:0;
+    }
+    .toast{
+      margin-top:18px;
+      padding:14px 16px;
+      border-radius:18px;
+      background:color-mix(in srgb,var(--accent) 96%, transparent);
+      border:1px solid color-mix(in srgb,var(--border) 76%, transparent);
+    }
+    @keyframes fadeUp{
+      from{opacity:0;transform:translateY(10px)}
+      to{opacity:1;transform:translateY(0)}
+    }
+    @media (max-width: 900px){
+      .uikit-main{
+        padding:24px;
+      }
+      .uikit-toolbar{
+        width:100%;
+        justify-content:flex-start;
+      }
+      .uikit-responsive-grid{
+        grid-template-columns:1fr;
+      }
+    }
+    @media (max-width: 760px){
+      .uikit-shell,
+      .uikit-shell.collapsed{
+        grid-template-columns:1fr;
+      }
+      .uikit-sidebar{
+        position:relative;
+        height:auto;
+      }
+      .uikit-responsive-grid{
+        grid-template-columns:1fr;
+      }
+    }
+    @media (max-width: 640px){
+      .uikit-main{
+        padding:18px;
+      }
+      .uikit-toolbar{
+        width:100%;
+        justify-content:flex-start;
+      }
+      .uikit-action-cell{
+        max-width:100%;
+      }
+      .uikit-action{
+        max-width:100%;
+      }
+    }
+    @media (max-width:1180px){
+      .hero-inner,
+      .content-grid,
+      .duo-stage,
+      .stage-main,
+      .note-panel,
+      .settings-hero,
+      .settings-flow{
+        grid-template-columns:1fr;
+      }
+      .hero-summary,
+      .spotlight,
+      .settings-side,
+      .duo-stage > .rail{
+        border-left:0;
+        border-top:1px solid color-mix(in srgb,var(--border) 76%, transparent);
+      }
+      .band{
+        grid-template-columns:1fr 1fr;
+      }
+      .band-intro{
+        grid-column:1/-1;
+      }
+    }
+    @media (max-width:760px){
+      .shell,
+      .shell.collapsed{
+        grid-template-columns:1fr;
+        grid-template-rows:auto;
+      }
+      .sidebar{
+        position:relative;
+        height:auto;
+        min-height:0;
+        max-height:none;
+      }
+      .shell.collapsed .brand-copy,
+      .shell.collapsed .profile-copy,
+      .shell.collapsed .nav-text,
+      .shell.collapsed .sidebar-spotlight .rail-note,
+      .shell.collapsed .sidebar-spotlight strong,
+      .shell.collapsed .sidebar-spotlight .section-label{
+        opacity:1;
+        max-width:none;
+      }
+      .shell.collapsed .nav-item{
+        justify-content:flex-start;
+        padding-inline:14px;
+      }
+      .shell.collapsed .brand,
+      .shell.collapsed .profile{
+        justify-content:flex-start;
+      }
+      .shell.collapsed .sidebar-spotlight{
+        display:block;
+        padding:16px;
+      }
+      .shell.collapsed .sidebar-spotlight::before{display:none}
+    }
+    @media (max-width:760px){
+      .main{padding:18px}
+      .topbar,.toolbar,.hero-actions,.hero-meta{width:100%}
+      .toolbar{justify-content:flex-start}
+      .search{max-width:none;min-width:0}
+      .hero-copy,.hero-summary,.settings-copy,.settings-side,.settings-main,.table-shell,.note-list,.panel-head,.stage-head,.stage-chart,.spotlight{
+        padding-inline:18px;
+      }
+      .hero-copy{padding-top:24px}
+      .hero-summary,.spotlight,.settings-side{padding-bottom:20px}
+      .hero-lead,
+      .chart-stat-strip{
+        grid-template-columns:1fr;
+      }
+      .band{
+        grid-template-columns:1fr;
+      }
+      .metric-slot + .metric-slot,
+      .metric-slot + .band-intro,
+      .band-intro + .metric-slot{
+        border-left:0;
+        border-top:1px solid color-mix(in srgb,var(--border) 74%, transparent);
+      }
+      .summary-grid,
+      .field-grid{
+        grid-template-columns:1fr;
+      }
+      .flow-row,
+      .note-item{
+        grid-template-columns:1fr;
+      }
+      .chart-stat + .chart-stat{
+        border-left:0;
+        border-top:1px solid color-mix(in srgb,var(--border) 76%, transparent);
+      }
+      .note-item{
+        gap:10px;
+      }
+    }
+  </style>
+
+<style id="uikit-compat-layout-guard">
+.uikit-shell { width: 100%; max-width: 1184px; margin: 0 auto; overflow: hidden; }
+.uikit-truncate { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.uikit-nowrap { white-space: nowrap; flex-shrink: 0; }
+.uikit-table-wrap { max-width: 100%; overflow-x: auto; overscroll-behavior-x: contain; }
+.uikit-responsive-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(0, 1fr)); gap: 16px; }
+.uikit-main { min-width: 0; }
+.uikit-toolbar { min-width: 0; }
+.uikit-action-cell { max-width: 160px; }
+.uikit-action { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 900px) { .uikit-responsive-grid { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 640px) { .uikit-shell { max-width: 100%; } .uikit-responsive-grid { grid-template-columns: minmax(0, 1fr); } }
+</style>
+</head>
+<body>
+  <div id="root" data-layout-guard="uikit-v1"></div>
+  <script type="text/babel">
+    const { useMemo, useState } = React;
+
+    const NAV = [
+      { id: "overview", label: "Overview", glyph: "◫" },
+      { id: "analytics", label: "Analytics", glyph: "◭" },
+      { id: "settings", label: "Settings", glyph: "⚙" }
+    ];
+
+    const RANGE_DATA = {
+      "7d": {
+        metrics: [
+          { label: "Active Sessions", value: "184", delta: "+14%", meta: "Live and scheduled formats this week." },
+          { label: "Attendance Reach", value: "9.1k", delta: "+9%", meta: "Audience touches across every stage." },
+          { label: "Host Retention", value: "82%", delta: "+4%", meta: "Returning hosts after last cycle." }
+        ],
+        summary: { headline: "Editorial tempo is crisp.", note: "Shorter programming blocks and cleaner stage pacing improved return visits without raising moderation load.", valueA: "12", labelA: "flags", valueB: "3.8h", labelB: "avg host rhythm", valueC: "94%", labelC: "check-in sync", valueD: "Low", labelD: "night noise" },
+        trend: [44, 52, 48, 61, 74, 68, 82]
+      },
+      "30d": {
+        metrics: [
+          { label: "Active Sessions", value: "612", delta: "+22%", meta: "Editorial, workshop, and community rooms." },
+          { label: "Attendance Reach", value: "28.4k", delta: "+11%", meta: "Cross-channel audience circulation." },
+          { label: "Host Retention", value: "89%", delta: "+6%", meta: "Returning hosts over the planning cycle." }
+        ],
+        summary: { headline: "Momentum is building.", note: "Campfire Stories and late-night forum formats are pulling the strongest repeat demand while queue pressure stays manageable.", valueA: "18", labelA: "open flags", valueB: "4.6h", labelB: "prime-time cadence", valueC: "96%", labelC: "crew readiness", valueD: "2m", labelD: "ops refresh" },
+        trend: [52, 64, 58, 76, 84, 88, 97]
+      },
+      "90d": {
+        metrics: [
+          { label: "Active Sessions", value: "1.8k", delta: "+31%", meta: "Season-to-date programming volume." },
+          { label: "Attendance Reach", value: "86.2k", delta: "+15%", meta: "Audience circulation across the full season." },
+          { label: "Host Retention", value: "91%", delta: "+8%", meta: "Stable host base after programming refresh." }
+        ],
+        summary: { headline: "Seasonal demand looks premium.", note: "The mix is maturing into a stronger editorial brand system: fewer launches, better curation, and more decisive demand concentration.", valueA: "23", labelA: "priority issues", valueB: "5.2h", labelB: "hero-stage dwell", valueC: "97%", labelC: "crew readiness", valueD: "Tight", labelD: "supply fit" },
+        trend: [60, 72, 70, 86, 94, 98, 108]
+      }
+    };
+
+    const SESSION_ROWS = [
+      { id: 1, title: "Open Campfire", stage: "Main Arena", host: "Theo Park", capacity: "511 / 540", status: "Live", dot: "live", insight: "The lead session is compressing drop-off after midnight and carrying the strongest same-day return rate." },
+      { id: 2, title: "Sunrise Forum", stage: "North Hall", host: "Ari Cole", capacity: "280 / 320", status: "Review", dot: "review", insight: "Morning editorial sessions keep high completion when check-in windows are shortened." },
+      { id: 3, title: "Night Shift Radio", stage: "Studio B", host: "Mina West", capacity: "142 / 180", status: "Review", dot: "review", insight: "Listener stickiness improves when recap content is clipped and republished before dawn." },
+      { id: 4, title: "Field Notes Lab", stage: "Garden Deck", host: "Jules Hart", capacity: "96 / 120", status: "Draft", dot: "draft", insight: "Workshop demand is modest but high-intent, making it a strong format for premium community touchpoints." }
+    ];
+
+    const SETTINGS_FIELDS = {
+      editorialFrame: "High-contrast editorial pacing",
+      approver: "Morgan Chen",
+      stageModel: "Main Arena / North Hall / Studio B",
+      digestTone: "Quiet but urgent"
+    };
+
+    function UIButton({ children, variant = "primary", ...props }) {
+      return <button className={"btn " + variant} {...props}>{children}</button>;
+    }
+
+    function Toggle({ value, onChange }) {
+      return <button className={"toggle" + (value ? " on" : "")} aria-pressed={value} onClick={onChange} />;
+    }
+
+    function LineChart({ values }) {
+      const width = 680;
+      const height = 260;
+      const paddingX = 24;
+      const max = Math.max(...values) + 10;
+      const min = Math.min(...values) - 8;
+      const points = values.map((value, index) => {
+        const x = paddingX + (index * ((width - paddingX * 2) / (values.length - 1)));
+        const ratio = (value - min) / (max - min || 1);
+        const y = height - 20 - ratio * (height - 56);
+        return [x, y];
+      });
+      const line = points.map(([x, y]) => `${x},${y}`).join(" ");
+      const area = `${points[0][0]},${height} ${line} ${points[points.length - 1][0]},${height}`;
+      return (
+        <svg className="chart-svg" data-component="chart" viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" aria-hidden="true">
+          <defs>
+            <linearGradient id="lineGlow" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" stopColor="var(--chart-2)" />
+              <stop offset="55%" stopColor="var(--primary)" />
+              <stop offset="100%" stopColor="var(--chart-5)" />
+            </linearGradient>
+            <linearGradient id="areaGlow" x1="0%" y1="0%" x2="0%" y2="100%">
+              <stop offset="0%" stopColor="color-mix(in srgb,var(--primary) 24%, transparent)" />
+              <stop offset="100%" stopColor="transparent" />
+            </linearGradient>
+          </defs>
+          <polyline fill="url(#areaGlow)" stroke="none" points={area} />
+          <polyline fill="none" stroke="url(#lineGlow)" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" points={line} />
+          {points.map(([x, y], index) => (
+            <g key={index}>
+              <circle cx={x} cy={y} r="7" fill="color-mix(in srgb,var(--background) 88%, var(--card))" />
+              <circle cx={x} cy={y} r="4" fill={index === points.length - 1 ? "var(--primary)" : "var(--chart-2)"} />
+            </g>
+          ))}
+        </svg>
+      );
+    }
+
+    function App() {
+      const [view, setView] = useState("overview");
+      const [collapsed, setCollapsed] = useState(false);
+      const [dark, setDark] = useState(false);
+      const [range, setRange] = useState("30d");
+      const [query, setQuery] = useState("");
+      const [selectedSession, setSelectedSession] = useState(SESSION_ROWS[0]);
+      const [message, setMessage] = useState("");
+      const [settings, setSettings] = useState({
+        autoPublish: true,
+        digest: true,
+        guestList: false
+      });
+
+      const filteredRows = useMemo(() => {
+        const q = query.trim().toLowerCase();
+        if (!q) return SESSION_ROWS;
+        return SESSION_ROWS.filter(row => [row.title, row.stage, row.host, row.status].join(" ").toLowerCase().includes(q));
+      }, [query]);
+
+      const currentRange = RANGE_DATA[range];
+
+      const analyticsStats = useMemo(() => {
+        if (range === "7d") {
+          return [
+            { label: "Return curve", value: "42%", note: "Audience came back within 48h." },
+            { label: "Host response", value: "18m", note: "Median approval reaction time." },
+            { label: "Escalation share", value: "3.2%", note: "Well below the target band." }
+          ];
+        }
+        if (range === "90d") {
+          return [
+            { label: "Return curve", value: "51%", note: "Seasonal repeat visits remain elevated." },
+            { label: "Host response", value: "16m", note: "Faster than seasonal baseline." },
+            { label: "Escalation share", value: "3.8%", note: "Slightly above ideal but stable." }
+          ];
+        }
+        return [
+          { label: "Return curve", value: "47%", note: "Audience came back within 48h." },
+          { label: "Host response", value: "17m", note: "Median approval reaction time." },
+          { label: "Escalation share", value: "3.4%", note: "Below the watch threshold." }
+        ];
+      }, [range]);
+
+      const switchView = next => {
+        setView(next);
+        setMessage("");
+      };
+
+      const openRow = row => {
+        setSelectedSession(row);
+        setView("analytics");
+      };
+
+      const saveSettings = () => {
+        setMessage("Settings synced for the next planning cycle.");
+      };
+
+      return (
+        <div className={"app" + (dark ? " dark" : "")}>
+          <div className={"shell uikit-shell" + (collapsed ? " collapsed" : "")}>
+            <aside className="sidebar uikit-sidebar" data-component="sidebar">
+              <div className="sidebar-head">
+                <div className="brand">
+                  <div className="brand-mark">V</div>
+                  <div className="brand-copy uikit-truncate">
+                    <strong>Vibecamp</strong>
+                    <span className="uikit-truncate">Editorial operations dashboard</span>
+                  </div>
+                </div>
+                <button data-component="button" className="collapse" onClick={() => setCollapsed(v => !v)} aria-label="Toggle sidebar">☰</button>
+              </div>
+
+              <div className="nav-group">
+                <div className="section-label">Views</div>
+                {NAV.map(item => (
+                  <button key={item.id} className={"nav-item" + (view === item.id ? " active" : "")} onClick={() => switchView(item.id)}>
+                    <span className="nav-glyph">{item.glyph}</span>
+                    <span className="nav-text uikit-truncate">{item.label}</span>
+                  </button>
+                ))}
+              </div>
+
+              <div className="sidebar-spotlight">
+                <div className="section-label">Live highlight</div>
+                <strong>Open Campfire</strong>
+                <div className="rail-note uikit-truncate">The hero stage is holding peak energy with a tighter queue and cleaner moderator coverage.</div>
+              </div>
+
+              <div className="profile">
+                <div className="avatar">MC</div>
+                <div className="profile-copy uikit-truncate">
+                  <strong>Morgan Chen</strong>
+                  <span className="uikit-truncate">Program Director</span>
+                </div>
+              </div>
+            </aside>
+
+            <main className="main uikit-main">
+              <header className="topbar">
+                <label className="search">
+                  <span className="search-mark">⌕</span>
+                  <input
+                    value={query}
+                    onChange={e => setQuery(e.target.value)}
+                    placeholder="Search sessions, hosts, or stages"
+                    aria-label="Search sessions, hosts, or stages"
+                  />
+                </label>
+                <div className="toolbar uikit-toolbar">
+                  {["7d", "30d", "90d"].map(item => (
+                    <button key={item} className={"chip" + (range === item ? " active" : "")} onClick={() => setRange(item)}>{item}</button>
+                  ))}
+                  <button data-component="button" className="icon-btn" onClick={() => setDark(v => !v)} aria-label={dark ? "Light mode" : "Dark mode"}>{dark ? "◐" : "◑"}</button>
+                </div>
+              </header>
+
+              {view === "overview" && (
+                <section className="page">
+                  <section className="hero">
+                    <div className="hero-inner">
+                      <div className="hero-copy">
+                        <div>
+                          <div className="hero-kicker">
+                            <div className="eyebrow">Overview</div>
+                            <div className="hero-index">Scene 01</div>
+                          </div>
+                          <h1>Run the whole camp with a steadier editorial hand.</h1>
+                          <div className="hero-lead">
+                            <p>Vibecamp should read like one composed product surface: editorial programming, operational precision, and premium pacing held inside a calmer command view.</p>
+                            <div className="hero-side-note">A stronger title line, quieter support copy, and fewer equal-weight panels keep the page from slipping back into generic admin rhythm.</div>
+                          </div>
+                          <div className="hero-meta">
+                            <span className="badge"><span className="status-dot" /> Stable tonight</span>
+                            <span className="badge">Updated 2m ago</span>
+                            <span className="badge">Main Arena setting the pace</span>
+                          </div>
+                        </div>
+                        <div className="hero-actions">
+                          <UIButton onClick={() => switchView("settings")}>Publish update</UIButton>
+                          <UIButton variant="secondary" onClick={() => switchView("analytics")}>View trends</UIButton>
+                          <UIButton variant="ghost">Open workspace</UIButton>
+                        </div>
+                      </div>
+                      <div className="hero-summary">
+                        <div className="summary-card" data-component="card">
+                          <div>
+                            <div className="eyebrow">Current pulse</div>
+                            <h2>{currentRange.summary.headline}</h2>
+                            <p className="muted">{currentRange.summary.note}</p>
+                          </div>
+                          <div className="summary-grid">
+                            <div><strong>{currentRange.summary.valueA}</strong><span className="micro">{currentRange.summary.labelA}</span></div>
+                            <div><strong>{currentRange.summary.valueB}</strong><span className="micro">{currentRange.summary.labelB}</span></div>
+                            <div><strong>{currentRange.summary.valueC}</strong><span className="micro">{currentRange.summary.labelC}</span></div>
+                            <div><strong>{currentRange.summary.valueD}</strong><span className="micro">{currentRange.summary.labelD}</span></div>
+                          </div>
+                          <div className="summary-band">
+                            <div className="summary-line">
+                              <span className="micro">Editorial stance</span>
+                              <strong style={{ fontSize: 14 }}>Selective, not loud</strong>
+                            </div>
+                            <div className="summary-line">
+                              <span className="micro">Ops freshness</span>
+                              <strong style={{ fontSize: 14 }}>Updated every 2m</strong>
+                            </div>
+                          </div>
+                          <div className="summary-note">Use orange-red as punctuation, not wallpaper. The brand accent should appear only where the operator needs to decide.</div>
+                        </div>
+                      </div>
+                    </div>
+                  </section>
+
+                  <section className="band">
+                    <div className="band-intro">
+                      <div className="eyebrow">Metrics band</div>
+                      <h2>A flowing read replaces the old KPI wall.</h2>
+                      <p>The numbers stay present, but the page reads as one scene instead of four separate tiles fighting for attention.</p>
+                    </div>
+                    {currentRange.metrics.map(metric => (
+                      <div key={metric.label} className="metric-slot">
+                        <div className="metric-top">
+                          <div>
+                            <div className="eyebrow">{metric.label}</div>
+                            <strong>{metric.value}</strong>
+                          </div>
+                          <div className="delta">{metric.delta}</div>
+                        </div>
+                        <div className="metric-footer">
+                          <div className="micro">{metric.meta}</div>
+                          <span className="metric-rule"></span>
+                        </div>
+                      </div>
+                    ))}
+                  </section>
+
+                  <section className="content-grid duo-stage uikit-responsive-grid">
+                    <article className="panel" data-component="card">
+                      <div className="panel-head">
+                        <div className="panel-title">
+                          <div className="eyebrow">Program board</div>
+                          <h2>Session roster with a stronger center of gravity.</h2>
+                          <p>The queue holds the center. Supporting context moves into lighter side notes so the overview feels like a product surface, not a stack of unrelated cards.</p>
+                        </div>
+                        <UIButton variant="ghost">Create session</UIButton>
+                      </div>
+                      <div className="board-ribbon">
+                        <span>Campfire Stories still leads repeat demand</span>
+                        <span>Studio B needs a softer moderator handoff</span>
+                        <span>Night queue noise is lower than last cycle</span>
+                      </div>
+                      <div className="table-shell uikit-table-wrap">
+                        <table className="table" data-component="table">
+                          <thead>
+                            <tr>
+                              <th>Session</th>
+                              <th>Host</th>
+                              <th>Capacity</th>
+                              <th>Status</th>
+                              <th></th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {filteredRows.map(row => (
+                              <tr key={row.id}>
+                                <td className="row-title">
+                                  <strong className="uikit-truncate">{row.title}</strong>
+                                  <span className="micro uikit-truncate">{row.stage}</span>
+                                </td>
+                                <td><span className="uikit-truncate">{row.host}</span></td>
+                                <td>{row.capacity}</td>
+                                <td>
+                                  <span className={"pill uikit-nowrap " + row.dot}><span className="pill-dot"></span>{row.status}</span>
+                                </td>
+                                <td className="uikit-action-cell"><button data-component="button" className="table-link uikit-action" onClick={() => openRow(row)}>Inspect</button></td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </article>
+
+                    <aside className="panel rail">
+                      <div className="rail-block">
+                        <div className="eyebrow">Intelligence rail</div>
+                        <div className="rail-stat">
+                          <div>
+                            <strong>18%</strong>
+                            <div className="micro">Peak attendance lift since yesterday.</div>
+                          </div>
+                          <span className="badge">Stage lead</span>
+                        </div>
+                        <div className="rail-stat">
+                          <div>
+                            <strong>9</strong>
+                            <div className="micro">Approvals moved cleanly into live status.</div>
+                          </div>
+                          <span className="badge">Ready</span>
+                        </div>
+                        <div className="rail-stat">
+                          <div>
+                            <strong>1</strong>
+                            <div className="micro">Moderator gap still needs coverage before midnight.</div>
+                          </div>
+                          <span className="badge">Watch</span>
+                        </div>
+                        <div className="rail-meta">
+                          <div className="micro">The right rail now acts like margin notes: narrow, specific, and quieter than the main board.</div>
+                        </div>
+                      </div>
+                      <div className="rail-block">
+                        <div className="eyebrow">Editorial cues</div>
+                        <div className="rail-list">
+                          <div className="rail-list-item">
+                            <span className="rail-bullet"></span>
+                            <div>
+                              <strong>Campfire Stories</strong>
+                              <div className="micro">Still carrying the best repeat behavior without looking over-programmed.</div>
+                            </div>
+                          </div>
+                          <div className="rail-list-item">
+                            <span className="rail-bullet" style={{ background: "var(--chart-2)" }}></span>
+                            <div>
+                              <strong>Studio B coverage</strong>
+                              <div className="micro">Use a softer handoff and keep the host recap ready before dawn.</div>
+                            </div>
+                          </div>
+                          <div className="rail-list-item">
+                            <span className="rail-bullet" style={{ background: "var(--chart-5)" }}></span>
+                            <div>
+                              <strong>Queue tone</strong>
+                              <div className="micro">Less noise, larger blocks, clearer hierarchy. That keeps the dashboard feeling premium.</div>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="editorial-note">One shared surface makes the overview feel more like a composed spread: central board on the left, margin intelligence on the right, and no extra card framing between them.</div>
+                      </div>
+                    </aside>
+                  </section>
+                </section>
+              )}
+
+              {view === "analytics" && (
+                <section className="page">
+                  <section className="stage-panel">
+                    <div className="stage-main uikit-responsive-grid">
+                      <div className="stage-chart">
+                        <div className="stage-head">
+                          <div className="stage-copy">
+                            <div className="eyebrow">Analytics</div>
+                            <h2>Main trend first, everything else in support.</h2>
+                            <p>The chart becomes the showpiece. Notes, spotlight, and controls are framed around it so the view feels more like a branded console cover than a standard backend graph.</p>
+                          </div>
+                          <UIButton variant="ghost">Export snapshot</UIButton>
+                        </div>
+                        <div className="chart-stat-strip">
+                          {analyticsStats.map(item => (
+                            <div key={item.label} className="chart-stat">
+                              <div className="eyebrow">{item.label}</div>
+                              <strong style={{ fontSize: 22, lineHeight: 1.06, letterSpacing: "-.03em" }}>{item.value}</strong>
+                              <span className="micro">{item.note}</span>
+                            </div>
+                          ))}
+                        </div>
+                        <div className="chart-frame">
+                          <div className="chart-gridline g1"><span>high</span></div>
+                          <div className="chart-gridline g2"><span>mid</span></div>
+                          <div className="chart-gridline g3"><span>base</span></div>
+                          <div className="chart-gridline g4"><span>low</span></div>
+                          <LineChart values={currentRange.trend} />
+                          <div className="chart-annotation">
+                            <div className="eyebrow">Peak read</div>
+                            <strong className="uikit-truncate" style={{ display: "block", marginTop: 8, fontSize: 18 }}>{selectedSession.title}</strong>
+                            <div className="micro" style={{ marginTop: 6 }}>{selectedSession.insight}</div>
+                          </div>
+                          <div className="chart-labels">
+                            {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map(label => <span key={label}>{label}</span>)}
+                          </div>
+                        </div>
+                        <div className="chart-footer">
+                          <div>
+                            <strong>What changed</strong>
+                            Audience rhythm is consolidating around fewer, better-programmed sessions.
+                          </div>
+                          <div>
+                            <strong>Operator read</strong>
+                            Keep the stage broad, the annotation concise, and the orange line reserved for the decisive moment.
+                          </div>
+                        </div>
+                      </div>
+
+                      <aside className="spotlight">
+                        <div>
+                          <div className="eyebrow">Session spotlight</div>
+                          <div className="spotlight-card">
+                            <div className="spotlight-stage">
+                              <div className="micro">{selectedSession.stage}</div>
+                              <span className={"pill uikit-nowrap " + selectedSession.dot}><span className="pill-dot"></span>{selectedSession.status}</span>
+                            </div>
+                            <h3 style={{ margin: "8px 0 8px", fontSize: 24, lineHeight: 1.08, letterSpacing: "-.03em" }}>{selectedSession.title}</h3>
+                            <div className="micro">Hosted by {selectedSession.host}</div>
+                            <div className="focus-stat">
+                              <strong>{selectedSession.capacity}</strong>
+                              <span className="micro">Current mapped capacity</span>
+                            </div>
+                            <div className="focus-stat">
+                              <strong>Prime signal</strong>
+                              <span className="micro">{selectedSession.insight}</span>
+                            </div>
+                            <div className="focus-stat">
+                              <strong>Best next move</strong>
+                              <span className="micro">Protect the opening beat, keep the recap ready, and avoid widening supply too early.</span>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="spotlight-actions">
+                          <UIButton>Open workspace</UIButton>
+                          <UIButton variant="ghost">Assign moderator</UIButton>
+                        </div>
+                      </aside>
+                    </div>
+                  </section>
+
+                  <section className="note-panel duo-stage uikit-responsive-grid">
+                    <article className="panel" data-component="card">
+                      <div className="panel-head">
+                        <div className="panel-title">
+                          <div className="eyebrow">Narrative notes</div>
+                          <h2>What matters in the next cycle.</h2>
+                          <p>These notes stay editorial and concise, giving the operator a single read instead of a matrix of disconnected micro-panels.</p>
+                        </div>
+                      </div>
+                      <div className="note-list">
+                        <div className="note-item">
+                          <div className="note-mark">↗</div>
+                          <div>
+                            <strong>Late-night sessions are keeping stronger continuity.</strong>
+                            <div className="micro">The best-performing formats combine shorter preambles, stronger opening beats, and less visual clutter in the supporting controls.</div>
+                          </div>
+                          <span className="badge">Focus</span>
+                        </div>
+                        <div className="note-item">
+                          <div className="note-mark">•</div>
+                          <div>
+                            <strong>Capacity pacing should stay selective.</strong>
+                            <div className="micro">Do not widen every room at once; the premium feel depends on a tighter supply curve.</div>
+                          </div>
+                          <span className="badge">Stable</span>
+                        </div>
+                        <div className="note-item">
+                          <div className="note-mark">!</div>
+                          <div>
+                            <strong>Moderator cover remains the single soft edge.</strong>
+                            <div className="micro">A cleaner handoff in Studio B would reduce the final wave of support noise.</div>
+                          </div>
+                          <span className="badge">Watch</span>
+                        </div>
+                      </div>
+                    </article>
+
+                    <aside className="panel rail">
+                      <div className="rail-block">
+                        <div className="eyebrow">Support rail</div>
+                        <div className="rail-list">
+                          <div className="rail-list-item">
+                            <span className="rail-bullet"></span>
+                            <div><strong>Brand focus</strong><div className="micro">Orange-red marks the decisive line and primary action only.</div></div>
+                          </div>
+                          <div className="rail-list-item">
+                            <span className="rail-bullet" style={{ background: "var(--chart-2)" }}></span>
+                            <div><strong>Signal track</strong><div className="micro">Cooler notes support contrast inside the chart stage.</div></div>
+                          </div>
+                          <div className="rail-list-item">
+                            <span className="rail-bullet" style={{ background: "var(--chart-5)" }}></span>
+                            <div><strong>Attention zone</strong><div className="micro">Reserve the warmer secondary note for softer watch states.</div></div>
+                          </div>
+                        </div>
+                        <div className="rail-meta">
+                          <div className="micro">A good analytics screen should feel curated: one hero chart, one spotlight, one short read.</div>
+                        </div>
+                        <div className="editorial-note">The lower zone now reads as one editorial appendix instead of two neighboring cards, which keeps the main chart stage feeling more premium.</div>
+                      </div>
+                    </aside>
+                  </section>
+                </section>
+              )}
+
+              {view === "settings" && (
+                <section className="page">
+                  <section className="settings-shell">
+                    <div className="settings-hero uikit-responsive-grid">
+                      <div className="settings-copy">
+                        <div className="settings-hero">
+                          <div>
+                            <div className="eyebrow">Settings</div>
+                            <h2>One focused settings flow, not a wall of forms.</h2>
+                            <p>This view stays intentional: tune the core automation path, confirm editorial defaults, and keep the rest quiet.</p>
+                            <div className="hero-actions" style={{ marginTop: 24 }}>
+                              <UIButton onClick={saveSettings}>Save changes</UIButton>
+                              <UIButton variant="ghost">Preview digest</UIButton>
+                            </div>
+                            {message && <div className="toast">{message}</div>}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="settings-side">
+                        <div className="eyebrow">Primary flow</div>
+                        <div className="summary-note">The settings panel now feels like a guided review: approve the live behavior, check the tone, and move on.</div>
+                        <div className="rail-stat">
+                          <div>
+                            <strong>08:00</strong>
+                            <div className="micro">Daily host digest window</div>
+                          </div>
+                          <span className="badge">Locked</span>
+                        </div>
+                        <div className="rail-stat">
+                          <div>
+                            <strong>Morgan Chen</strong>
+                            <div className="micro">Current planning approver</div>
+                          </div>
+                          <span className="badge">Owner</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="settings-flow uikit-responsive-grid">
+                      <div className="settings-main">
+                        <div className="flow-rows">
+                          <div className="flow-row">
+                            <div>
+                              <strong>Auto-publish approved sessions</strong>
+                              <div className="micro">Push approved programming into the live calendar every hour without reopening the queue.</div>
+                            </div>
+                            <Toggle value={settings.autoPublish} onChange={() => setSettings(s => ({ ...s, autoPublish: !s.autoPublish }))} />
+                          </div>
+                          <div className="flow-row">
+                            <div>
+                              <strong>Daily community digest</strong>
+                              <div className="micro">Send a concise editorial operations update to hosts at the same morning moment.</div>
+                            </div>
+                            <Toggle value={settings.digest} onChange={() => setSettings(s => ({ ...s, digest: !s.digest }))} />
+                          </div>
+                          <div className="flow-row">
+                            <div>
+                              <strong>Guest list self-check-in</strong>
+                              <div className="micro">Allow attendees to confirm entry before the room unlock, reducing late support noise.</div>
+                            </div>
+                            <Toggle value={settings.guestList} onChange={() => setSettings(s => ({ ...s, guestList: !s.guestList }))} />
+                          </div>
+                        </div>
+
+                        <div className="field-grid">
+                          <div className="field">
+                            <label>Editorial frame</label>
+                            <input defaultValue={SETTINGS_FIELDS.editorialFrame} aria-label="Editorial frame" />
+                          </div>
+                          <div className="field">
+                            <label>Default approver</label>
+                            <input defaultValue={SETTINGS_FIELDS.approver} aria-label="Default approver" />
+                          </div>
+                          <div className="field">
+                            <label>Preferred stage model</label>
+                            <input defaultValue={SETTINGS_FIELDS.stageModel} aria-label="Preferred stage model" />
+                          </div>
+                          <div className="field">
+                            <label>Digest tone</label>
+                            <input defaultValue={SETTINGS_FIELDS.digestTone} aria-label="Digest tone" />
+                          </div>
+                        </div>
+                      </div>
+
+                      <aside className="settings-side">
+                        <div className="eyebrow">Audit snapshot</div>
+                        <div className="rail-stat">
+                          <div>
+                            <strong>3</strong>
+                            <div className="micro">Role updates approved in the last 30 days.</div>
+                          </div>
+                          <span className="badge">Clean</span>
+                        </div>
+                        <div className="rail-stat">
+                          <div>
+                            <strong>2FA</strong>
+                            <div className="micro">Required for admin actions and stage overrides.</div>
+                          </div>
+                          <span className="badge">On</span>
+                        </div>
+                        <div className="rail-stat">
+                          <div>
+                            <strong>12m ago</strong>
+                            <div className="micro">Latest policy sync landed successfully.</div>
+                          </div>
+                          <span className="badge">Synced</span>
+                        </div>
+                      </aside>
+                    </div>
+                  </section>
+                </section>
+              )}
+            </main>
+          </div>
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+  </script>
+</body>
+</html>

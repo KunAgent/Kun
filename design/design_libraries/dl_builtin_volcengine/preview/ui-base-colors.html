@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>Colors 色彩体系</title>
+  <link rel="stylesheet" href="preview-scaffold.css">
+  <style>
+/* Color Row — 8 swatches */
+.color-row {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 6px;
+  margin-bottom: 16px;
+}
+.swatch {
+  aspect-ratio: 1 / 0.85;
+  min-height: 64px;
+  border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  padding: 6px 8px;
+  position: relative;
+  transition: transform 0.15s;
+}
+.swatch:hover { transform: translateY(-2px); }
+.swatch.main-color {
+  outline: 2.5px solid currentColor;
+  outline-offset: 2px;
+}
+.swatch .level {
+  font-size: 11px;
+  font-weight: 700;
+  font-family: "Roboto Mono", monospace;
+  line-height: 1.3;
+}
+.swatch .hex {
+  font-size: 10px;
+  font-family: "Roboto Mono", monospace;
+  line-height: 1.4;
+  opacity: 0.85;
+}
+.swatch .hint {
+  font-size: 9px;
+  line-height: 1.3;
+  opacity: 0.7;
+  margin-top: 1px;
+}
+.swatch .badge {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  font-size: 8px;
+  font-weight: 700;
+  background: rgba(255,255,255,0.9);
+  color: #0C0D0E;
+  padding: 1px 4px;
+  border-radius: 3px;
+}
+
+/* Group label */
+.group-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #42464E;
+  margin-bottom: 8px;
+}
+
+/* Neutral row */
+.neutral-row {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+.neutral-swatch {
+  height: 52px;
+  min-width: 80px;
+  border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  padding: 5px 8px;
+}
+.neutral-swatch span {
+  font-size: 10px;
+  font-family: "Roboto Mono", monospace;
+  line-height: 1.4;
+}
+.neutral-swatch .label-hint {
+  font-size: 9px;
+  font-family: "PingFang SC", sans-serif;
+}
+
+/* AI Brand */
+.ai-row {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 16px;
+}
+.ai-swatch {
+  height: 60px;
+  border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  padding: 6px 8px;
+}
+.ai-swatch span {
+  font-size: 10px;
+  font-family: "Roboto Mono", monospace;
+  line-height: 1.4;
+  color: #fff;
+}
+  </style>
+</head>
+<body>
+
+  <div class="pv-header">
+    <h1>Colors 色彩体系</h1>
+    <p>品牌色、中性色、语义色完整色阶（1-8级），第 6 级为主色。</p>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">Brand 品牌色</div>
+
+    <div class="group-label">Brand Blue 品牌蓝</div>
+    <div class="color-row">
+      <div class="swatch" style="background:#F3F7FF; border:1px solid #EAEDF1">
+        <span class="level" style="color:#737A87">1</span>
+        <span class="hex" style="color:#737A87">#F3F7FF</span>
+        <span class="hint" style="color:#737A87">浅色悬浮</span>
+      </div>
+      <div class="swatch" style="background:#EBF1FF; border:1px solid #EAEDF1">
+        <span class="level" style="color:#737A87">2</span>
+        <span class="hex" style="color:#737A87">#EBF1FF</span>
+        <span class="hint" style="color:#737A87">Tag背景色</span>
+      </div>
+      <div class="swatch" style="background:#97BCFF">
+        <span class="level" style="color:#fff">3</span>
+        <span class="hex" style="color:#fff">#97BCFF</span>
+        <span class="hint" style="color:#fff">禁用</span>
+      </div>
+      <div class="swatch" style="background:#6E9FFF">
+        <span class="level" style="color:#fff">4</span>
+        <span class="hex" style="color:#fff">#6E9FFF</span>
+        <span class="hint" style="color:#fff">特殊场景</span>
+      </div>
+      <div class="swatch" style="background:#387BFF">
+        <span class="level" style="color:#fff">5</span>
+        <span class="hex" style="color:#fff">#387BFF</span>
+        <span class="hint" style="color:#fff">悬浮</span>
+      </div>
+      <div class="swatch main-color" style="background:#1664FF; outline-color:#1664FF">
+        <span class="badge">主色</span>
+        <span class="level" style="color:#fff">6 ★</span>
+        <span class="hex" style="color:#fff">#1664FF</span>
+        <span class="hint" style="color:#fff">常规</span>
+      </div>
+      <div class="swatch" style="background:#1759DD">
+        <span class="level" style="color:#fff">7</span>
+        <span class="hex" style="color:#fff">#1759DD</span>
+        <span class="hint" style="color:#fff">点击</span>
+      </div>
+      <div class="swatch" style="background:#114AB9">
+        <span class="level" style="color:#fff">8</span>
+        <span class="hex" style="color:#fff">#114AB9</span>
+        <span class="hint" style="color:#fff">描边</span>
+      </div>
+    </div>
+
+    <div class="group-label">AI Brand 智能化品牌色</div>
+    <div class="ai-row">
+      <div class="ai-swatch" style="background: linear-gradient(135deg,#1A6BE3,#8404EC); flex:0 0 64px">
+        <span>AI</span>
+      </div>
+      <div class="ai-swatch" style="background:#1A6BE3; flex:1">
+        <span>AI Blue</span><span>#1A6BE3</span>
+      </div>
+      <div class="ai-swatch" style="background:#0D43C0; flex:1">
+        <span>AI Deep</span><span>#0D43C0</span>
+      </div>
+      <div class="ai-swatch" style="background:#8404EC; flex:1">
+        <span>AI Purple</span><span>#8404EC</span>
+      </div>
+      <div style="flex:4"></div>
+    </div>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">Neutral 中性色</div>
+
+    <div class="group-label">Text 文本色</div>
+    <div class="neutral-row">
+      <div class="neutral-swatch" style="background:#0C0D0E; min-width:90px">
+        <span style="color:#fff">#0C0D0E</span>
+        <span class="label-hint" style="color:#aaa">强调</span>
+      </div>
+      <div class="neutral-swatch" style="background:#42464E; min-width:90px">
+        <span style="color:#fff">#42464E</span>
+        <span class="label-hint" style="color:#aaa">次强调</span>
+      </div>
+      <div class="neutral-swatch" style="background:#737A87; min-width:90px">
+        <span style="color:#fff">#737A87</span>
+        <span class="label-hint" style="color:#aaa">次要</span>
+      </div>
+      <div class="neutral-swatch" style="background:#C7CCD6; min-width:90px">
+        <span style="color:#fff">#C7CCD6</span>
+        <span class="label-hint" style="color:#fff">置灰</span>
+      </div>
+      <div class="neutral-swatch" style="background:#1664FF; min-width:90px">
+        <span style="color:#fff">#1664FF</span>
+        <span class="label-hint" style="color:#ddd">链接</span>
+      </div>
+    </div>
+
+    <div class="group-label">Fill & Background 填充/背景</div>
+    <div class="neutral-row">
+      <div class="neutral-swatch" style="background:#FFFFFF; border:1px solid #EAEDF1; min-width:80px">
+        <span style="color:#737A87">#FFFFFF</span>
+        <span class="label-hint" style="color:#737A87">bg-1</span>
+      </div>
+      <div class="neutral-swatch" style="background:#FCFDFE; border:1px solid #EAEDF1; min-width:80px">
+        <span style="color:#737A87">#FCFDFE</span>
+        <span class="label-hint" style="color:#737A87">bg-2</span>
+      </div>
+      <div class="neutral-swatch" style="background:#FAFBFC; border:1px solid #EAEDF1; min-width:80px">
+        <span style="color:#737A87">#FAFBFC</span>
+        <span class="label-hint" style="color:#737A87">bg-3</span>
+      </div>
+      <div class="neutral-swatch" style="background:#F6F8FA; border:1px solid #EAEDF1; min-width:80px">
+        <span style="color:#737A87">#F6F8FA</span>
+        <span class="label-hint" style="color:#737A87">bg-4</span>
+      </div>
+      <div class="neutral-swatch" style="background:#F1F3F5; border:1px solid #EAEDF1; min-width:80px">
+        <span style="color:#737A87">#F1F3F5</span>
+        <span class="label-hint" style="color:#737A87">bg-5</span>
+      </div>
+    </div>
+
+    <div class="group-label">Border 边框</div>
+    <div class="neutral-row">
+      <div class="neutral-swatch" style="background:#EAEDF1; border:1px solid #DDE2E9; min-width:100px">
+        <span style="color:#737A87">#EAEDF1</span>
+        <span class="label-hint" style="color:#737A87">浅色描边</span>
+      </div>
+      <div class="neutral-swatch" style="background:#DDE2E9; min-width:100px">
+        <span style="color:#fff">#DDE2E9</span>
+        <span class="label-hint" style="color:#ddd">默认描边</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">Success 成功色</div>
+    <div class="color-row">
+      <div class="swatch" style="background:#EEF9F1; border:1px solid #E1F6E6">
+        <span class="level" style="color:#2A814B">1</span>
+        <span class="hex" style="color:#2A814B">#EEF9F1</span>
+        <span class="hint" style="color:#2A814B">浅色背景</span>
+      </div>
+      <div class="swatch" style="background:#E1F6E6; border:1px solid #7CCD94">
+        <span class="level" style="color:#2A814B">2</span>
+        <span class="hex" style="color:#2A814B">#E1F6E6</span>
+        <span class="hint" style="color:#2A814B">Tag背景色</span>
+      </div>
+      <div class="swatch" style="background:#7CCD94">
+        <span class="level" style="color:#fff">3</span>
+        <span class="hex" style="color:#fff">#7CCD94</span>
+        <span class="hint" style="color:#fff">禁用</span>
+      </div>
+      <div class="swatch" style="background:#5CAE77">
+        <span class="level" style="color:#fff">4</span>
+        <span class="hex" style="color:#fff">#5CAE77</span>
+        <span class="hint" style="color:#fff">特殊场景</span>
+      </div>
+      <div class="swatch" style="background:#309256">
+        <span class="level" style="color:#fff">5</span>
+        <span class="hex" style="color:#fff">#309256</span>
+        <span class="hint" style="color:#fff">悬浮</span>
+      </div>
+      <div class="swatch main-color" style="background:#2A814B; outline-color:#2A814B">
+        <span class="badge">主色</span>
+        <span class="level" style="color:#fff">6 ★</span>
+        <span class="hex" style="color:#fff">#2A814B</span>
+        <span class="hint" style="color:#fff">常规</span>
+      </div>
+      <div class="swatch" style="background:#237040">
+        <span class="level" style="color:#fff">7</span>
+        <span class="hex" style="color:#fff">#237040</span>
+        <span class="hint" style="color:#fff">点击</span>
+      </div>
+      <div class="swatch" style="background:#1C5E35">
+        <span class="level" style="color:#fff">8</span>
+        <span class="hex" style="color:#fff">#1C5E35</span>
+        <span class="hint" style="color:#fff">描边</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">Warning 警告色</div>
+    <div class="color-row">
+      <div class="swatch" style="background:#FEF8EB; border:1px solid #FFF3DC">
+        <span class="level" style="color:#BD7E00">1</span>
+        <span class="hex" style="color:#BD7E00">#FEF8EB</span>
+        <span class="hint" style="color:#BD7E00">浅色背景</span>
+      </div>
+      <div class="swatch" style="background:#FFF3DC; border:1px solid #F9C76D">
+        <span class="level" style="color:#BD7E00">2</span>
+        <span class="hex" style="color:#BD7E00">#FFF3DC</span>
+        <span class="hint" style="color:#BD7E00">Tag背景色</span>
+      </div>
+      <div class="swatch" style="background:#F9C76D">
+        <span class="level" style="color:#fff">3</span>
+        <span class="hex" style="color:#fff">#F9C76D</span>
+        <span class="hint" style="color:#fff">禁用</span>
+      </div>
+      <div class="swatch" style="background:#F0A50F">
+        <span class="level" style="color:#fff">4</span>
+        <span class="hex" style="color:#fff">#F0A50F</span>
+        <span class="hint" style="color:#fff">特殊场景</span>
+      </div>
+      <div class="swatch" style="background:#D08D06">
+        <span class="level" style="color:#fff">5</span>
+        <span class="hex" style="color:#fff">#D08D06</span>
+        <span class="hint" style="color:#fff">悬浮</span>
+      </div>
+      <div class="swatch main-color" style="background:#BD7E00; outline-color:#BD7E00">
+        <span class="badge">主色</span>
+        <span class="level" style="color:#fff">6 ★</span>
+        <span class="hex" style="color:#fff">#BD7E00</span>
+        <span class="hint" style="color:#fff">常规</span>
+      </div>
+      <div class="swatch" style="background:#996600">
+        <span class="level" style="color:#fff">7</span>
+        <span class="hex" style="color:#fff">#996600</span>
+        <span class="hint" style="color:#fff">点击</span>
+      </div>
+      <div class="swatch" style="background:#7A5200">
+        <span class="level" style="color:#fff">8</span>
+        <span class="hex" style="color:#fff">#7A5200</span>
+        <span class="hint" style="color:#fff">描边</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">Danger 危险色</div>
+    <div class="color-row">
+      <div class="swatch" style="background:#FDF5F5; border:1px solid #FFECEC">
+        <span class="level" style="color:#D7312A">1</span>
+        <span class="hex" style="color:#D7312A">#FDF5F5</span>
+        <span class="hint" style="color:#D7312A">浅色背景</span>
+      </div>
+      <div class="swatch" style="background:#FFECEC; border:1px solid #FFA3A0">
+        <span class="level" style="color:#D7312A">2</span>
+        <span class="hex" style="color:#D7312A">#FFECEC</span>
+        <span class="hint" style="color:#D7312A">Tag背景色</span>
+      </div>
+      <div class="swatch" style="background:#FFA3A0">
+        <span class="level" style="color:#fff">3</span>
+        <span class="hex" style="color:#fff">#FFA3A0</span>
+        <span class="hint" style="color:#fff">禁用</span>
+      </div>
+      <div class="swatch" style="background:#FF706D">
+        <span class="level" style="color:#fff">4</span>
+        <span class="hex" style="color:#fff">#FF706D</span>
+        <span class="hint" style="color:#fff">特殊场景</span>
+      </div>
+      <div class="swatch" style="background:#EE3F38">
+        <span class="level" style="color:#fff">5</span>
+        <span class="hex" style="color:#fff">#EE3F38</span>
+        <span class="hint" style="color:#fff">悬浮</span>
+      </div>
+      <div class="swatch main-color" style="background:#D7312A; outline-color:#D7312A">
+        <span class="badge">主色</span>
+        <span class="level" style="color:#fff">6 ★</span>
+        <span class="hex" style="color:#fff">#D7312A</span>
+        <span class="hint" style="color:#fff">常规</span>
+      </div>
+      <div class="swatch" style="background:#BD2923">
+        <span class="level" style="color:#fff">7</span>
+        <span class="hex" style="color:#fff">#BD2923</span>
+        <span class="hint" style="color:#fff">点击</span>
+      </div>
+      <div class="swatch" style="background:#9F211C">
+        <span class="level" style="color:#fff">8</span>
+        <span class="hex" style="color:#fff">#9F211C</span>
+        <span class="hint" style="color:#fff">描边</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">Teal 青色</div>
+    <div class="color-row">
+      <div class="swatch" style="background:#EEF8FF; border:1px solid #E4F3FC">
+        <span class="level" style="color:#24758E">1</span>
+        <span class="hex" style="color:#24758E">#EEF8FF</span>
+        <span class="hint" style="color:#24758E">浅色背景</span>
+      </div>
+      <div class="swatch" style="background:#E4F3FC; border:1px solid #80C5E0">
+        <span class="level" style="color:#24758E">2</span>
+        <span class="hex" style="color:#24758E">#E4F3FC</span>
+        <span class="hint" style="color:#24758E">Tag背景色</span>
+      </div>
+      <div class="swatch" style="background:#80C5E0">
+        <span class="level" style="color:#fff">3</span>
+        <span class="hex" style="color:#fff">#80C5E0</span>
+        <span class="hint" style="color:#fff">禁用</span>
+      </div>
+      <div class="swatch" style="background:#58A8C4">
+        <span class="level" style="color:#fff">4</span>
+        <span class="hex" style="color:#fff">#58A8C4</span>
+        <span class="hint" style="color:#fff">特殊场景</span>
+      </div>
+      <div class="swatch" style="background:#3888A3">
+        <span class="level" style="color:#fff">5</span>
+        <span class="hex" style="color:#fff">#3888A3</span>
+        <span class="hint" style="color:#fff">悬浮</span>
+      </div>
+      <div class="swatch main-color" style="background:#24758E; outline-color:#24758E">
+        <span class="badge">主色</span>
+        <span class="level" style="color:#fff">6 ★</span>
+        <span class="hex" style="color:#fff">#24758E</span>
+        <span class="hint" style="color:#fff">常规</span>
+      </div>
+      <div class="swatch" style="background:#076C85">
+        <span class="level" style="color:#fff">7</span>
+        <span class="hex" style="color:#fff">#076C85</span>
+        <span class="hint" style="color:#fff">点击</span>
+      </div>
+      <div class="swatch" style="background:#005A70">
+        <span class="level" style="color:#fff">8</span>
+        <span class="hex" style="color:#fff">#005A70</span>
+        <span class="hint" style="color:#fff">描边</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">Violet 紫色</div>
+    <div class="color-row">
+      <div class="swatch" style="background:#FAF4FF; border:1px solid #F2EAFB">
+        <span class="level" style="color:#6E4C9F">1</span>
+        <span class="hex" style="color:#6E4C9F">#FAF4FF</span>
+        <span class="hint" style="color:#6E4C9F">浅色背景</span>
+      </div>
+      <div class="swatch" style="background:#F2EAFB; border:1px solid #C1A3ED">
+        <span class="level" style="color:#6E4C9F">2</span>
+        <span class="hex" style="color:#6E4C9F">#F2EAFB</span>
+        <span class="hint" style="color:#6E4C9F">Tag背景色</span>
+      </div>
+      <div class="swatch" style="background:#C1A3ED">
+        <span class="level" style="color:#fff">3</span>
+        <span class="hex" style="color:#fff">#C1A3ED</span>
+        <span class="hint" style="color:#fff">禁用</span>
+      </div>
+      <div class="swatch" style="background:#A285D4">
+        <span class="level" style="color:#fff">4</span>
+        <span class="hex" style="color:#fff">#A285D4</span>
+        <span class="hint" style="color:#fff">特殊场景</span>
+      </div>
+      <div class="swatch" style="background:#876EB8">
+        <span class="level" style="color:#fff">5</span>
+        <span class="hex" style="color:#fff">#876EB8</span>
+        <span class="hint" style="color:#fff">悬浮</span>
+      </div>
+      <div class="swatch main-color" style="background:#6E4C9F; outline-color:#6E4C9F">
+        <span class="badge">主色</span>
+        <span class="level" style="color:#fff">6 ★</span>
+        <span class="hex" style="color:#fff">#6E4C9F</span>
+        <span class="hint" style="color:#fff">常规</span>
+      </div>
+      <div class="swatch" style="background:#603F8E">
+        <span class="level" style="color:#fff">7</span>
+        <span class="hex" style="color:#fff">#603F8E</span>
+        <span class="hint" style="color:#fff">点击</span>
+      </div>
+      <div class="swatch" style="background:#532D86">
+        <span class="level" style="color:#fff">8</span>
+        <span class="hex" style="color:#fff">#532D86</span>
+        <span class="hint" style="color:#fff">描边</span>
+      </div>
+    </div>
+  </div>
+
+</body>
+</html>

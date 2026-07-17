@@ -1,0 +1,47 @@
+{
+  "slug": "chart",
+  "name": "Chart",
+  "category": "data-visualization",
+  "evidence": "AI-inferred from dashboard preset and chart tokens",
+  "anatomy": [
+    "title",
+    "legend",
+    "plot area",
+    "tooltip hint"
+  ],
+  "cssVariables": [
+    "chart-1",
+    "chart-2",
+    "chart-3",
+    "chart-4",
+    "chart-5",
+    "muted-foreground",
+    "card",
+    "radius"
+  ],
+  "variantDimensions": {
+    "type": [
+      "bar",
+      "line",
+      "donut"
+    ],
+    "emphasis": [
+      "single-metric",
+      "comparison"
+    ]
+  },
+  "structures": [
+    {
+      "name": "Bar, Comparison",
+      "description": "Campaign bars using saturated pink scale."
+    },
+    {
+      "name": "Line, Single Metric",
+      "description": "Trend line on soft card background."
+    },
+    {
+      "name": "Donut, Comparison",
+      "description": "Segment split with glossy accent wedges."
+    }
+  ]
+}

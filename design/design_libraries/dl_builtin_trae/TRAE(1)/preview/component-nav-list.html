@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Nav list</title>
+  <link rel="stylesheet" href="../colors_and_type.css" />
+  <link rel="stylesheet" href="../scaffold.css" />
+  <link rel="stylesheet" href="../components.css" />
+  <style>
+    /* @component-css-start */
+    /* ===== Nav list ===== */
+    .ds-navlist {
+      display: flex;
+      flex-direction: column;
+      gap: var(--spacer-16);
+      width: 240px;
+      padding: var(--spacer-12);
+      background: var(--bg-menu);
+      border: 1px solid var(--border-neutral-l1);
+      border-radius: var(--radius-10);
+    }
+    .ds-navlist__group {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .ds-navlist__group-title {
+      padding: var(--spacer-6) var(--spacer-8);
+      font-size: var(--body-xs-font-size);
+      line-height: var(--body-xs-line-height);
+      font-weight: var(--font-weight-medium);
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--text-tertiary);
+    }
+    .ds-navlist__item {
+      display: flex;
+      align-items: center;
+      gap: var(--spacer-8);
+      padding: var(--spacer-8);
+      border-radius: var(--radius-6);
+      font-size: var(--body-sm-font-size);
+      line-height: var(--body-sm-line-height);
+      font-weight: var(--font-weight-medium);
+      color: var(--text-secondary);
+      text-decoration: none;
+      cursor: pointer;
+    }
+    .ds-navlist__item:hover {
+      background: var(--bg-overlay-l2);
+      color: var(--text-default);
+    }
+    .ds-navlist__item.is-active {
+      background: var(--bg-brand);
+      color: var(--text-onbrand);
+    }
+    .ds-navlist__label { flex: 1; min-width: 0; }
+    .ds-navlist__badge {
+      font-size: var(--body-xs-font-size);
+      font-variant-numeric: tabular-nums;
+      color: var(--text-tertiary);
+    }
+    .ds-navlist__item.is-active .ds-navlist__badge { color: var(--text-onbrand); }
+    /* @component-css-end */
+  </style>
+</head>
+<body>
+  <div class="pv-header">
+    <h1>Nav list</h1>
+    <p>侧栏导航菜单：分组标题 + 菜单项（图标 + 文字 + 选中态）。</p>
+  </div>
+  <div class="pv-section">
+    <div class="pv-section__title">Sidebar</div>
+    <nav class="ds-navlist">
+      <div class="ds-navlist__group">
+        <div class="ds-navlist__group-title">Workspace</div>
+        <a class="ds-navlist__item is-active">
+          <img src="../assets/icons/dashboard.0c0c0d.svg" width="18" height="18" alt="dashboard" class="icon" />
+          <span class="ds-navlist__label">Dashboard</span>
+        </a>
+        <a class="ds-navlist__item">
+          <img src="../assets/icons/layers.svg" width="18" height="18" alt="layers" class="icon" />
+          <span class="ds-navlist__label">Projects</span>
+          <span class="ds-navlist__badge">24</span>
+        </a>
+        <a class="ds-navlist__item">
+          <img src="../assets/icons/list.svg" width="18" height="18" alt="list" class="icon" />
+          <span class="ds-navlist__label">Tasks</span>
+          <span class="ds-navlist__badge">7</span>
+        </a>
+      </div>
+      <div class="ds-navlist__group">
+        <div class="ds-navlist__group-title">Account</div>
+        <a class="ds-navlist__item">
+          <img src="../assets/icons/users.svg" width="18" height="18" alt="users" class="icon" />
+          <span class="ds-navlist__label">Team</span>
+        </a>
+        <a class="ds-navlist__item">
+          <img src="../assets/icons/settings.svg" width="18" height="18" alt="settings" class="icon" />
+          <span class="ds-navlist__label">Settings</span>
+        </a>
+        <a class="ds-navlist__item">
+          <img src="../assets/icons/shield.svg" width="18" height="18" alt="shield" class="icon" />
+          <span class="ds-navlist__label">Security</span>
+        </a>
+      </div>
+    </nav>
+  </div>
+</body>
+</html>

@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Navigation Preview</title>
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>
+  /* Page scaffold — NOT extracted */
+  /* @component-css-start */
+body{margin:0;padding:12px;background:var(--color-surface);color:var(--color-text);font-family:var(--font-sans)}.row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px}.label{width:76px;font-size:10px;line-height:1;letter-spacing:.08em;text-transform:uppercase;color:var(--color-text-muted)}.topbar,.tabs,.crumbs{display:inline-flex;align-items:center;gap:4px;padding:4px;border:1px solid var(--color-border);border-radius:var(--radius-md);background:var(--background)}.topbar a,.tabs a,.crumbs a{display:inline-flex;align-items:center;justify-content:center;min-height:32px;padding:0 12px;border-radius:var(--radius-md);color:var(--color-text-muted);text-decoration:none;white-space:nowrap}.topbar a:hover,.tabs a:hover,.crumbs a:hover{background:var(--muted);color:var(--color-text)}.topbar .active,.tabs .active{background:var(--color-primary);color:var(--color-primary-foreground)}.topbar.is-disabled a,.tabs.is-disabled a{opacity:.45;pointer-events:none}.tabs{padding:2px;background:var(--muted)}.divider{margin:10px 0;border:0;border-top:1px solid var(--color-border)}.crumbs{gap:0;padding:0;border:none;background:transparent}.crumbs a{padding:0 8px 0 0;min-height:auto}.crumbs .current{color:var(--color-text)}.sep{padding:0 8px 0 0;color:var(--color-text-muted)}
+  /* @component-css-end */
+</style>
+</head>
+<body>
+<div class="row"><span class="label">Topbar</span><nav class="topbar" aria-label="Primary"><a class="active" href="#">Overview</a><a href="#">Revenue</a><a href="#">Active Users</a><a href="#">Team</a><a href="#">Settings</a></nav><nav class="topbar is-disabled" aria-label="Primary disabled"><a class="active" href="#" aria-disabled="true">Overview</a><a href="#" aria-disabled="true">Revenue</a><a href="#" aria-disabled="true">Active Users</a><a href="#" aria-disabled="true">Team</a><a href="#" aria-disabled="true">Settings</a></nav></div>
+<hr class="divider">
+<div class="row"><span class="label">Tabs</span><nav class="tabs" aria-label="Section tabs"><a href="#">Overview</a><a class="active" href="#">Revenue</a><a href="#">Active Users</a></nav><nav class="tabs is-disabled" aria-label="Section tabs disabled"><a href="#" aria-disabled="true">Overview</a><a class="active" href="#" aria-disabled="true">Revenue</a><a href="#" aria-disabled="true">Active Users</a></nav></div>
+<div class="row"><span class="label">Breadcrumb</span><nav class="crumbs" aria-label="Breadcrumb"><a href="#">Overview</a><span class="sep">/</span><a href="#">Revenue</a><span class="sep">/</span><a class="current" href="#">Active Users</a></nav></div>
+</body>
+</html>

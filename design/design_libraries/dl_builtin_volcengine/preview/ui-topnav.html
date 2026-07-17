@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>TopNav 顶部导航</title>
+  <link rel="stylesheet" href="preview-scaffold.css">
+  <style>
+:root {
+  --text-1: #0C0D0E;
+  --text-2: #42464E;
+  --text-3: #737A87;
+  --primary-6: #1664FF;
+  --bg-white: #FFFFFF;
+  --bg-hover: #F2F3F5;
+  --bg-subtle: #F7F8FA;
+  --bg-4: #F6F8FA;
+  --border-1: #EAEDF1;
+  --border-2: #DDE2E9;
+  --dark-bg: #1D2129;
+  --dark-text: #FFFFFF;
+  --dark-text-secondary: rgba(255,255,255,0.7);
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+.top-nav {
+  height: 48px;
+  background: var(--bg-white);
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid var(--border-1);
+  position: relative;
+  width: 100%;
+}
+
+.top-nav.dark {
+  background: var(--dark-bg);
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+}
+
+.top-nav.dark .nav-link {
+  color: var(--dark-text-secondary);
+}
+
+.top-nav.dark .nav-link:hover {
+  color: var(--primary-6);
+}
+
+.top-nav.dark .search-input,
+.top-nav.dark .search-input::placeholder {
+  color: var(--dark-text-secondary);
+}
+
+.top-nav.dark .hamburger-line {
+  background: var(--dark-text);
+}
+
+.top-nav.dark .nav-icon svg {
+  stroke: var(--dark-text-secondary);
+}
+
+.top-nav.dark .product-tab {
+  color: var(--dark-text-secondary);
+}
+
+.top-nav.dark .product-tab.active {
+  color: var(--dark-text);
+  font-weight: 500;
+}
+
+.top-nav.dark .product-tab.active::after {
+  background: var(--primary-6);
+}
+
+.hamburger-btn {
+  width: 48px;
+  height: 48px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.hamburger-line {
+  width: 16px;
+  height: 2px;
+  background: var(--text-2);
+  border-radius: 1px;
+}
+
+.nav-logo {
+  width: 103px;
+  height: 24px;
+  flex-shrink: 0;
+}
+
+.nav-logo img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.product-tabs {
+  display: flex;
+  align-items: center;
+  margin-left: 32px;
+  padding-left: 24px;
+  gap: 24px;
+  height: 100%;
+}
+
+.product-tab {
+  font-size: 13px;
+  color: var(--text-2);
+  cursor: pointer;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  position: relative;
+  white-space: nowrap;
+  font-weight: 400;
+}
+
+.product-tab:hover {
+  color: var(--text-1);
+}
+
+.product-tab.active {
+  color: var(--text-1);
+  font-weight: 500;
+}
+
+.product-tab.active::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--primary-6);
+}
+
+.nav-right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding-right: 16px;
+}
+
+.search-box {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 1px solid var(--border-1);
+  border-radius: 4px;
+  background: var(--bg-4);
+}
+
+.top-nav.dark .search-box {
+  border-color: rgba(255,255,255,0.15);
+  background: rgba(255,255,255,0.08);
+}
+
+.search-input {
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: 13px;
+  color: var(--text-1);
+  width: 180px;
+  font-family: inherit;
+  font-weight: 400;
+}
+
+.search-input::placeholder {
+  color: var(--text-3);
+}
+
+.nav-links {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.nav-link {
+  font-size: 13px;
+  color: var(--text-1);
+  cursor: pointer;
+  white-space: nowrap;
+  font-weight: 400;
+}
+
+.nav-link:hover {
+  color: var(--primary-6);
+}
+
+.nav-icon {
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  position: relative;
+}
+
+.nav-icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+.notification-dot {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  width: 6px;
+  height: 6px;
+  background: #E5342D;
+  border-radius: 50%;
+}
+
+.avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: #FFECEC;
+  color: #BD2923;
+  font-size: 15px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+/* Secondary nav bar */
+.secondary-nav {
+  height: 40px;
+  background: var(--bg-white);
+  border-bottom: 1px solid var(--border-1);
+  display: flex;
+  align-items: center;
+  padding: 0 16px 0 48px;
+  gap: 24px;
+}
+
+.secondary-nav.dark {
+  background: var(--dark-bg);
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+}
+
+.secondary-nav .product-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-1);
+  margin-right: 8px;
+}
+
+.secondary-nav.dark .product-name {
+  color: var(--dark-text);
+}
+
+.secondary-nav .sec-tab {
+  font-size: 13px;
+  color: var(--text-2);
+  cursor: pointer;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  position: relative;
+  font-weight: 400;
+}
+
+.secondary-nav.dark .sec-tab {
+  color: var(--dark-text-secondary);
+}
+
+.secondary-nav .sec-tab:hover {
+  color: var(--primary-6);
+}
+
+.secondary-nav .sec-tab.active {
+  color: var(--primary-6);
+}
+
+.secondary-nav.dark .sec-tab.active {
+  color: var(--primary-6);
+}
+
+.secondary-nav .sec-tab.active::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--primary-6);
+}
+  </style>
+</head>
+<body>
+  <div class="pv-header">
+    <h1>TopNav 顶部导航</h1>
+    <p>全局顶部导航栏，支持亮色/暗色主题、产品 Tab 切换及二级导航。</p>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">Light 亮色基础</div>
+    <div class="stack-12">
+      <div class="demo-box" data-component="topnav" data-variant="light-basic">
+        <div class="top-nav">
+          <div class="hamburger-btn">
+            <div class="hamburger-line"></div>
+            <div class="hamburger-line"></div>
+          </div>
+          <div class="nav-logo">
+            <img src="https://cba92c92a501.aime-app.bytedance.net/a2e02d6a31ce47d5b93b7d378ff82b20.png" alt="Logo">
+          </div>
+          <div class="nav-right">
+            <div class="search-box">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="var(--text-3)" stroke-width="1.5"><circle cx="7" cy="7" r="4.5"/><line x1="10.5" y1="10.5" x2="14" y2="14"/></svg>
+              <input class="search-input" type="text" placeholder="请输入关键词进行搜索">
+            </div>
+            <div class="nav-links">
+              <span class="nav-link">官网</span>
+              <span class="nav-link">费用</span>
+              <span class="nav-link">工单</span>
+              <span class="nav-link">文档中心</span>
+            </div>
+            <div class="nav-icon">
+              <svg viewBox="0 0 16 16" fill="none" stroke="var(--text-2)" stroke-width="1.5"><path d="M12 5.5a4 4 0 1 0-8 0c0 2.5-1.5 4.5-1.5 4.5h11S12 8 12 5.5z"/><path d="M6.5 12.5a1.5 1.5 0 0 0 3 0"/></svg>
+              <div class="notification-dot"></div>
+            </div>
+            <div class="nav-icon">
+              <svg viewBox="0 0 16 16" fill="none" stroke="var(--text-2)" stroke-width="1.5"><circle cx="8" cy="8" r="6.5"/><path d="M8 5v1"/><path d="M8 8v3"/></svg>
+            </div>
+            <div class="avatar">张</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">Dark 暗色基础</div>
+    <div class="stack-12">
+      <div class="demo-box" data-component="topnav" data-variant="dark-basic">
+        <div class="top-nav dark">
+          <div class="hamburger-btn">
+            <div class="hamburger-line"></div>
+            <div class="hamburger-line"></div>
+          </div>
+          <div class="nav-logo">
+            <img src="https://cba92c92a501.aime-app.bytedance.net/a2e02d6a31ce47d5b93b7d378ff82b20.png" alt="Logo" style="filter:brightness(10);">
+          </div>
+          <div class="nav-right">
+            <div class="search-box">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="var(--dark-text-secondary)" stroke-width="1.5"><circle cx="7" cy="7" r="4.5"/><line x1="10.5" y1="10.5" x2="14" y2="14"/></svg>
+              <input class="search-input" type="text" placeholder="请输入关键词进行搜索">
+            </div>
+            <div class="nav-links">
+              <span class="nav-link">官网</span>
+              <span class="nav-link">费用</span>
+              <span class="nav-link">工单</span>
+              <span class="nav-link">文档中心</span>
+            </div>
+            <div class="nav-icon">
+              <svg viewBox="0 0 16 16" fill="none" stroke="var(--dark-text-secondary)" stroke-width="1.5"><path d="M12 5.5a4 4 0 1 0-8 0c0 2.5-1.5 4.5-1.5 4.5h11S12 8 12 5.5z"/><path d="M6.5 12.5a1.5 1.5 0 0 0 3 0"/></svg>
+              <div class="notification-dot"></div>
+            </div>
+            <div class="nav-icon">
+              <svg viewBox="0 0 16 16" fill="none" stroke="var(--dark-text-secondary)" stroke-width="1.5"><circle cx="8" cy="8" r="6.5"/><path d="M8 5v1"/><path d="M8 8v3"/></svg>
+            </div>
+            <div class="avatar">张</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">Light 带产品 Tab</div>
+    <div class="stack-12">
+      <div class="demo-box" data-component="topnav" data-variant="light-tabs">
+        <div class="top-nav">
+          <div class="hamburger-btn">
+            <div class="hamburger-line"></div>
+            <div class="hamburger-line"></div>
+          </div>
+          <div class="nav-logo">
+            <img src="https://cba92c92a501.aime-app.bytedance.net/a2e02d6a31ce47d5b93b7d378ff82b20.png" alt="Logo">
+          </div>
+          <div class="product-tabs">
+            <span class="product-tab active">产品一</span>
+            <span class="product-tab">产品二</span>
+            <span class="product-tab">产品三</span>
+            <span class="product-tab">产品四</span>
+          </div>
+          <div class="nav-right">
+            <div class="search-box">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="var(--text-3)" stroke-width="1.5"><circle cx="7" cy="7" r="4.5"/><line x1="10.5" y1="10.5" x2="14" y2="14"/></svg>
+              <input class="search-input" type="text" placeholder="请输入关键词进行搜索">
+            </div>
+            <div class="nav-links">
+              <span class="nav-link">官网</span>
+              <span class="nav-link">费用</span>
+              <span class="nav-link">工单</span>
+              <span class="nav-link">文档中心</span>
+            </div>
+            <div class="nav-icon">
+              <svg viewBox="0 0 16 16" fill="none" stroke="var(--text-2)" stroke-width="1.5"><path d="M12 5.5a4 4 0 1 0-8 0c0 2.5-1.5 4.5-1.5 4.5h11S12 8 12 5.5z"/><path d="M6.5 12.5a1.5 1.5 0 0 0 3 0"/></svg>
+              <div class="notification-dot"></div>
+            </div>
+            <div class="nav-icon">
+              <svg viewBox="0 0 16 16" fill="none" stroke="var(--text-2)" stroke-width="1.5"><circle cx="8" cy="8" r="6.5"/><path d="M8 5v1"/><path d="M8 8v3"/></svg>
+            </div>
+            <div class="avatar">张</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">Dark 带产品 Tab</div>
+    <div class="stack-12">
+      <div class="demo-box" data-component="topnav" data-variant="dark-tabs">
+        <div class="top-nav dark">
+          <div class="hamburger-btn">
+            <div class="hamburger-line"></div>
+            <div class="hamburger-line"></div>
+          </div>
+          <div class="nav-logo">
+            <img src="https://cba92c92a501.aime-app.bytedance.net/a2e02d6a31ce47d5b93b7d378ff82b20.png" alt="Logo" style="filter:brightness(10);">
+          </div>
+          <div class="product-tabs">
+            <span class="product-tab active">产品一</span>
+            <span class="product-tab">产品二</span>
+            <span class="product-tab">产品三</span>
+            <span class="product-tab">产品四</span>
+          </div>
+          <div class="nav-right">
+            <div class="search-box">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="var(--dark-text-secondary)" stroke-width="1.5"><circle cx="7" cy="7" r="4.5"/><line x1="10.5" y1="10.5" x2="14" y2="14"/></svg>
+              <input class="search-input" type="text" placeholder="请输入关键词进行搜索">
+            </div>
+            <div class="nav-links">
+              <span class="nav-link">官网</span>
+              <span class="nav-link">费用</span>
+              <span class="nav-link">工单</span>
+              <span class="nav-link">文档中心</span>
+            </div>
+            <div class="nav-icon">
+              <svg viewBox="0 0 16 16" fill="none" stroke="var(--dark-text-secondary)" stroke-width="1.5"><path d="M12 5.5a4 4 0 1 0-8 0c0 2.5-1.5 4.5-1.5 4.5h11S12 8 12 5.5z"/><path d="M6.5 12.5a1.5 1.5 0 0 0 3 0"/></svg>
+              <div class="notification-dot"></div>
+            </div>
+            <div class="nav-icon">
+              <svg viewBox="0 0 16 16" fill="none" stroke="var(--dark-text-secondary)" stroke-width="1.5"><circle cx="8" cy="8" r="6.5"/><path d="M8 5v1"/><path d="M8 8v3"/></svg>
+            </div>
+            <div class="avatar">张</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">Light 带二级导航</div>
+    <div class="stack-12">
+      <div class="demo-box" data-component="topnav" data-variant="light-secondary-nav">
+        <div class="top-nav">
+          <div class="hamburger-btn">
+            <div class="hamburger-line"></div>
+            <div class="hamburger-line"></div>
+          </div>
+          <div class="nav-logo">
+            <img src="https://cba92c92a501.aime-app.bytedance.net/a2e02d6a31ce47d5b93b7d378ff82b20.png" alt="Logo">
+          </div>
+          <div class="nav-right">
+            <div class="search-box">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="var(--text-3)" stroke-width="1.5"><circle cx="7" cy="7" r="4.5"/><line x1="10.5" y1="10.5" x2="14" y2="14"/></svg>
+              <input class="search-input" type="text" placeholder="请输入关键词进行搜索">
+            </div>
+            <div class="nav-links">
+              <span class="nav-link">官网</span>
+              <span class="nav-link">费用</span>
+              <span class="nav-link">工单</span>
+              <span class="nav-link">文档中心</span>
+            </div>
+            <div class="nav-icon">
+              <svg viewBox="0 0 16 16" fill="none" stroke="var(--text-2)" stroke-width="1.5"><path d="M12 5.5a4 4 0 1 0-8 0c0 2.5-1.5 4.5-1.5 4.5h11S12 8 12 5.5z"/><path d="M6.5 12.5a1.5 1.5 0 0 0 3 0"/></svg>
+              <div class="notification-dot"></div>
+            </div>
+            <div class="nav-icon">
+              <svg viewBox="0 0 16 16" fill="none" stroke="var(--text-2)" stroke-width="1.5"><circle cx="8" cy="8" r="6.5"/><path d="M8 5v1"/><path d="M8 8v3"/></svg>
+            </div>
+            <div class="avatar">张</div>
+          </div>
+        </div>
+        <div class="secondary-nav">
+          <span class="product-name">BytePlus Live</span>
+          <span class="sec-tab active">概览</span>
+          <span class="sec-tab">域名管理</span>
+          <span class="sec-tab">流管理</span>
+          <span class="sec-tab">功能配置</span>
+          <span class="sec-tab">数据统计</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">Dark 带二级导航</div>
+    <div class="stack-12">
+      <div class="demo-box" data-component="topnav" data-variant="dark-secondary-nav">
+        <div class="top-nav dark">
+          <div class="hamburger-btn">
+            <div class="hamburger-line"></div>
+            <div class="hamburger-line"></div>
+          </div>
+          <div class="nav-logo">
+            <img src="https://cba92c92a501.aime-app.bytedance.net/a2e02d6a31ce47d5b93b7d378ff82b20.png" alt="Logo" style="filter:brightness(10);">
+          </div>
+          <div class="nav-right">
+            <div class="search-box">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="var(--dark-text-secondary)" stroke-width="1.5"><circle cx="7" cy="7" r="4.5"/><line x1="10.5" y1="10.5" x2="14" y2="14"/></svg>
+              <input class="search-input" type="text" placeholder="请输入关键词进行搜索">
+            </div>
+            <div class="nav-links">
+              <span class="nav-link">官网</span>
+              <span class="nav-link">费用</span>
+              <span class="nav-link">工单</span>
+              <span class="nav-link">文档中心</span>
+            </div>
+            <div class="nav-icon">
+              <svg viewBox="0 0 16 16" fill="none" stroke="var(--dark-text-secondary)" stroke-width="1.5"><path d="M12 5.5a4 4 0 1 0-8 0c0 2.5-1.5 4.5-1.5 4.5h11S12 8 12 5.5z"/><path d="M6.5 12.5a1.5 1.5 0 0 0 3 0"/></svg>
+              <div class="notification-dot"></div>
+            </div>
+            <div class="nav-icon">
+              <svg viewBox="0 0 16 16" fill="none" stroke="var(--dark-text-secondary)" stroke-width="1.5"><circle cx="8" cy="8" r="6.5"/><path d="M8 5v1"/><path d="M8 8v3"/></svg>
+            </div>
+            <div class="avatar">张</div>
+          </div>
+        </div>
+        <div class="secondary-nav dark">
+          <span class="product-name">BytePlus Live</span>
+          <span class="sec-tab active">概览</span>
+          <span class="sec-tab">域名管理</span>
+          <span class="sec-tab">流管理</span>
+          <span class="sec-tab">功能配置</span>
+          <span class="sec-tab">数据统计</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

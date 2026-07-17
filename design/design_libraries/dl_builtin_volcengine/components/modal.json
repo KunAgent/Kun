@@ -1,0 +1,103 @@
+{
+  "schemaVersion": 2,
+  "slug": "modal",
+  "name": "Modal",
+  "category": "feedback",
+  "sourceKind": "structured-spec",
+  "confidence": "medium",
+  "semanticTypeCandidates": ["dialog", "modal-dialog", "popup", "confirm-dialog"],
+  "variantDimensions": {
+    "type": ["standard", "confirm"],
+    "size": ["small", "default", "large"],
+    "confirmIcon": ["info", "success", "warning", "danger"]
+  },
+  "representativeVariants": [
+    { "type": "standard", "size": "small" },
+    { "type": "standard", "size": "default" },
+    { "type": "standard", "size": "large" },
+    { "type": "confirm", "confirmIcon": "info" },
+    { "type": "confirm", "confirmIcon": "success" },
+    { "type": "confirm", "confirmIcon": "warning" },
+    { "type": "confirm", "confirmIcon": "danger" }
+  ],
+  "anatomy": ["container", "header", "title", "close-button", "body", "footer", "confirm-body", "confirm-icon", "confirm-content", "confirm-title", "confirm-desc", "confirm-footer"],
+  "structurePatterns": [
+    "Standard: flex column with header (title + close), body (scrollable), footer (action buttons right-aligned)",
+    "Confirm: flex column with confirm-body (icon + content block with title and description), then confirm-footer",
+    "Centered on page with box-shadow overlay"
+  ],
+  "usageHints": [
+    "Container: background #FFFFFF, border-radius 8px, max-width 90vw, box-shadow 0 8px 40px rgba(0,0,0,0.12)",
+    "Sizes: small=400px, default=480px, large=640px",
+    "Header: padding 20px 24px 0, flex between",
+    "Title: PingFang SC 500 16px/22px color #0C0D0E",
+    "Close button: 24x24px, border-radius 4px, color #737A87, hover background #F1F3F5",
+    "Body: padding 16px 24px, font-size 14px/22px, color #42464E",
+    "Footer: padding 0 24px 20px, flex-end gap 8px",
+    "Confirm icon: 24x24px, colors: info=#1664FF, success=#00B365, warning=#FF7D00, danger=#F53F3F",
+    "Confirm title: PingFang SC 500 16px/22px color #0C0D0E",
+    "Confirm desc: 14px/22px color #737A87"
+  ],
+  "doNotInvent": ["backdrop/mask layer styling", "nested modals", "fullscreen variant"],
+  "unknowns": ["animation for open/close transition", "focus trapping behavior"],
+  "tokensConsumed": [],
+  "domAnatomy": {
+    "root": {
+      "tag": "div",
+      "class": "modal modal-{type} modal-{size}",
+      "children": [
+        {
+          "tag": "div",
+          "class": "modal-header",
+          "children": [
+            { "tag": "div", "class": "modal-title" },
+            { "tag": "button", "class": "modal-close" }
+          ]
+        },
+        { "tag": "div", "class": "modal-body" },
+        {
+          "tag": "div",
+          "class": "modal-footer",
+          "children": [
+            { "tag": "button", "class": "btn btn-secondary btn-md" },
+            { "tag": "button", "class": "btn btn-primary btn-md" }
+          ]
+        }
+      ]
+    },
+    "confirmVariant": {
+      "tag": "div",
+      "class": "modal modal-confirm modal-sm",
+      "children": [
+        {
+          "tag": "div",
+          "class": "modal-confirm-body",
+          "children": [
+            { "tag": "div", "class": "modal-confirm-icon modal-confirm-icon-{type}" },
+            {
+              "tag": "div",
+              "class": "modal-confirm-content",
+              "children": [
+                { "tag": "div", "class": "modal-confirm-title" },
+                { "tag": "div", "class": "modal-confirm-desc" }
+              ]
+            }
+          ]
+        },
+        {
+          "tag": "div",
+          "class": "modal-confirm-footer",
+          "children": [
+            { "tag": "button", "class": "btn btn-secondary btn-md" },
+            { "tag": "button", "class": "btn btn-primary btn-md" }
+          ]
+        }
+      ]
+    }
+  },
+  "provenance": {
+    "preview": "preview/ui-modal.html",
+    "source": "structured-spec",
+    "css": { "file": "ui-modal.html", "marker": "inline style" }
+  }
+}

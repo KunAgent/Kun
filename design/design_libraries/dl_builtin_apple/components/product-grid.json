@@ -1,0 +1,61 @@
+{
+  "slug": "product-grid",
+  "name": "Product Grid",
+  "nameEn": "Product Grid",
+  "category": "commerce",
+  "summary": "Four-column merchandising matrix with editorial spacing and measured CTA rhythm.",
+  "variantCount": 4,
+  "primitiveCount": 3,
+  "variantDimensions": {
+    "columns": [
+      "2",
+      "4"
+    ],
+    "content": [
+      "product",
+      "story"
+    ],
+    "theme": [
+      "light",
+      "dark"
+    ]
+  },
+  "cssVariables": [
+    "background",
+    "card",
+    "border",
+    "primary",
+    "foreground",
+    "muted-foreground"
+  ],
+  "uiCopySamples": [
+    "New this season",
+    "From $999",
+    "Compare all models"
+  ],
+  "structurePatterns": [
+    "Square media-first cells with centered product focus",
+    "Price uses tabular figures for scanning",
+    "Background count on a page stays tightly limited"
+  ],
+  "structures": [
+    {
+      "name": "Merchandising Matrix",
+      "description": "Grid of product cards built for browsing the latest releases.",
+      "anatomy": [
+        "media",
+        "eyebrow",
+        "title",
+        "price",
+        "cta"
+      ],
+      "states": [
+        "default",
+        "hover"
+      ],
+      "notes": [
+        "One accent color only in CTA moments"
+      ]
+    }
+  ]
+}

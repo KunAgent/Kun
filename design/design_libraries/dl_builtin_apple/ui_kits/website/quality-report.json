@@ -1,0 +1,9 @@
+{
+  "screensGenerated": 2,
+  "inventedComponents": [],
+  "coreComponentsUsed": [],
+  "interactiveStatesRendered": ["hover", "disabled", "selected"],
+  "primaryActionPerScreen": true,
+  "previewClassReuseRate": 1,
+  "mockDataDensity": 0.78
+}

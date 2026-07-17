@@ -1,0 +1,10 @@
+{
+  "id": "material-design/icon-library",
+  "name": "Material Icons",
+  "type": "icon",
+  "category": "branding",
+  "tags": ["icon", "material", "google"],
+  "path": "assets/material-icons.svg",
+  "format": "svg",
+  "usage": "Standard Material Design icon set"
+}

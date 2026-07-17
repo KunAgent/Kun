@@ -1,0 +1,56 @@
+{
+  "slug": "card",
+  "name": "Card",
+  "category": "surfaces",
+  "evidence": "AI-inferred based on developer platform dashboard product type and the source token system.",
+  "keyInsightSeed": "Quiet surfaces with sharp information hierarchy and minimal ornament.",
+  "anatomy": [
+    "eyebrow",
+    "title",
+    "supporting-text",
+    "meta-row",
+    "actions"
+  ],
+  "variantDimensions": [
+    {
+      "name": "type",
+      "values": [
+        "metric",
+        "activity",
+        "status"
+      ]
+    },
+    {
+      "name": "density",
+      "values": [
+        "compact",
+        "comfortable"
+      ]
+    }
+  ],
+  "variants": [
+    {
+      "id": "metric",
+      "title": "Deployment Success",
+      "value": "99.98%",
+      "type": "metric"
+    },
+    {
+      "id": "activity",
+      "title": "Recent Releases",
+      "value": "12 today",
+      "type": "activity"
+    },
+    {
+      "id": "status",
+      "title": "Incident Review",
+      "value": "Resolved",
+      "type": "status"
+    }
+  ],
+  "uiCopySamples": [
+    "Deployment Success",
+    "Recent Releases",
+    "Incident Review"
+  ]
+}

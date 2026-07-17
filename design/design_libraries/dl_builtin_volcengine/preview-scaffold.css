@@ -1,0 +1,107 @@
+/*
+ * preview-scaffold.css — 预览页面布局系统
+ * 参照 Nimbus Design System 的 pv-header / pv-section 分区格式
+ */
+@import url('./ui-base-tokens.css');
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  background: #FFFFFF;
+  color: #42464E;
+  font-family: "PingFang SC", "Microsoft YaHei", -apple-system, sans-serif;
+  font-size: 14px;
+  line-height: 22px;
+  min-height: 100%;
+  overflow-x: hidden;
+  max-width: 100%;
+}
+
+body { padding: 32px; }
+
+/* ===== Preview Header ===== */
+.pv-header {
+  margin-bottom: 32px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--color-border-light, #EAEDF1);
+}
+.pv-header h1 {
+  font-size: 22px;
+  line-height: 30px;
+  font-weight: 600;
+  color: #0C0D0E;
+  margin-bottom: 4px;
+}
+.pv-header p {
+  color: #737A87;
+  font-size: 13px;
+  line-height: 20px;
+}
+
+/* ===== Section ===== */
+.pv-section {
+  margin-bottom: 32px;
+}
+.pv-section__title {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 22px;
+  color: #0C0D0E;
+  margin-bottom: 12px;
+}
+.pv-section__sub {
+  font-size: 12px;
+  color: #737A87;
+  margin-bottom: 12px;
+}
+
+/* ===== Layout Helpers ===== */
+.row {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.row-16 { display: flex; gap: 16px; flex-wrap: wrap; align-items: center; }
+.row-8 { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+
+.col {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+.grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+.grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+
+.stack-8 { display: flex; flex-direction: column; gap: 8px; }
+.stack-12 { display: flex; flex-direction: column; gap: 12px; }
+.stack-16 { display: flex; flex-direction: column; gap: 16px; }
+.stack-24 { display: flex; flex-direction: column; gap: 24px; }
+
+/* ===== Demo utilities ===== */
+.demo-box {
+  padding: 16px;
+  background: #F6F8FA;
+  border: 1px solid #EAEDF1;
+  border-radius: 8px;
+}
+.demo-label {
+  font-size: 12px;
+  color: #737A87;
+  margin-bottom: 8px;
+}
+.demo-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+/* ===== Separator ===== */
+hr {
+  border: 0;
+  border-top: 1px solid #EAEDF1;
+  margin: 24px 0;
+}

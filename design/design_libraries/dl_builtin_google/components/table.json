@@ -1,0 +1,56 @@
+{
+  "slug": "table",
+  "name": "Table",
+  "nameEn": "Table",
+  "category": "data-display",
+  "variantCount": 4,
+  "primitiveCount": 5,
+  "variants": {
+    "density": [
+      "comfortable",
+      "compact"
+    ],
+    "selection": [
+      "none",
+      "row-hover"
+    ]
+  },
+  "variantDimensions": {
+    "density": [
+      "comfortable",
+      "compact"
+    ],
+    "selection": [
+      "none",
+      "row-hover"
+    ]
+  },
+  "evidence": "AI-inferred from dashboard product type plus sidebar/chart token presence.",
+  "anatomy": [
+    "header",
+    "row",
+    "cell",
+    "status chip",
+    "pagination"
+  ],
+  "structurePatterns": [
+    "analytics table",
+    "operations list"
+  ],
+  "childComponents": [
+    "button",
+    "badge",
+    "avatar"
+  ],
+  "structures": [
+    {
+      "name": "Analytics Table",
+      "notes": "Muted header, thin borders, colorful status cues."
+    },
+    {
+      "name": "Operations List",
+      "notes": "Compact row layout with quick actions."
+    }
+  ],
+  "keyInsightSeed": "Tables should stay airy despite dense information, using muted text and clear row separators."
+}

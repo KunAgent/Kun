@@ -1,0 +1,54 @@
+{
+  "slug": "avatar",
+  "name": "Avatar",
+  "category": "identity",
+  "variantCount": 6,
+  "evidence": "AI-inferred from profile, leaderboard, and coach contexts.",
+  "anatomy": [
+    "frame",
+    "imageOrInitial",
+    "statusDot?"
+  ],
+  "childComponents": [],
+  "cssVariables": [
+    "muted",
+    "foreground",
+    "primary",
+    "secondary",
+    "border",
+    "radius"
+  ],
+  "variantDimensions": {
+    "size": [
+      "sm",
+      "md",
+      "lg"
+    ],
+    "state": [
+      "default",
+      "highlighted"
+    ]
+  },
+  "structurePatterns": [
+    "hard-edged circular replacement",
+    "initial-based fallback",
+    "accent status ring"
+  ],
+  "structures": [
+    {
+      "name": "Size=SM, State=Default",
+      "layout": "initial in framed tile",
+      "copy": "MF"
+    },
+    {
+      "name": "Size=MD, State=Highlighted",
+      "layout": "initial + ring",
+      "copy": "AL"
+    },
+    {
+      "name": "Size=LG, State=Default",
+      "layout": "initial in large tile",
+      "copy": "KT"
+    }
+  ]
+}

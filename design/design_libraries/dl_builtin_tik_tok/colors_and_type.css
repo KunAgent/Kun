@@ -1,0 +1,124 @@
+/* @dark-only */
+/* TikTok color and type tokens */
+/* Source: structured-spec */
+
+:root {
+  /* Source: structured-spec */
+  /* Brand colors */
+  /* --tk-red: #FE2C55;
+  --tk-cyan: #25F4EE;
+  --tk-black: #161823;
+  --tk-white: #FFFFFF; */
+
+  /* tk-red scale · 默认 --tk-red-500 = #FE2C55 */
+  --tk-red-100: #FFE9EE;
+  --tk-red-200: #FFC9D5;
+  --tk-red-300: #FFA0B5;
+  --tk-red-400: #FF6485;
+  --tk-red-500: #FE2C55;
+  --tk-red-600: #E61E45;
+  --tk-red-700: #C01338;
+  --tk-red-800: #990C2B;
+  --tk-red-900: #6B061D;
+  --tk-red-1000: #3D0210;
+
+  /* tk-cyan scale · 默认 --tk-cyan-400 = #25F4EE */
+  --tk-cyan-100: #E3FEFD;
+  --tk-cyan-200: #BAFCFA;
+  --tk-cyan-300: #7CF8F4;
+  --tk-cyan-400: #25F4EE;
+  --tk-cyan-500: #14D6D0;
+  --tk-cyan-600: #0FB3AE;
+  --tk-cyan-700: #0C8F8B;
+  --tk-cyan-800: #086B68;
+  --tk-cyan-900: #054745;
+  --tk-cyan-1000: #022322;
+
+  /* tk-black scale · 默认 --tk-black-1000 = #161823 */
+  --tk-black-100: #EBEBED;
+  --tk-black-200: #D2D3D7;
+  --tk-black-300: #ABACB4;
+  --tk-black-400: #84868F;
+  --tk-black-500: #5D5F6B;
+  --tk-black-600: #44454F;
+  --tk-black-700: #313340;
+  --tk-black-800: #232533;
+  --tk-black-900: #1B1D29;
+  --tk-black-1000: #161823;
+
+  /* tk-white scale · 默认 --tk-white-100 = #FFFFFF */
+  --tk-white-100: #FFFFFF;
+  --tk-white-200: #FAFAFB;
+  --tk-white-300: #F2F2F4;
+  --tk-white-400: #E8E8EC;
+  --tk-white-500: #DCDCE2;
+  --tk-white-600: #C9C9D1;
+  --tk-white-700: #ABABB5;
+  --tk-white-800: #87878F;
+  --tk-white-900: #5E5E66;
+  --tk-white-1000: #36363B;
+
+  /* Brand · 品牌强调色（红主青辅，小面积高识别） */
+  --primary: #FE2C55;
+  --secondary: #25F4EE;
+
+  /* Surface · 表面层级 */
+  --background: #0B0B10;
+  --card: #161823;
+  --card-elevated: #1C1E2A;
+  --video-bg: #16161C;
+
+  /* Content · 前景内容（on-media/on-accent 为深底或强调底上的固定前景） */
+  --foreground: #F5F5F7;
+  --muted-foreground: #AEB2C0;
+  --on-media: #FFFFFF;
+  --on-accent: #161823;
+
+  /* Border · 分隔线 */
+  --border: #3A3D52;
+
+  /* Radius · 克制、偏利落的圆角语言 */
+  /* shell 仅用于 UI Kit 展示外壳；大多数真实产品容器以 sm / md / lg 为主 */
+  --radius-xs: 2px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-shell: 32px;
+  --radius-pill: 999px;
+
+  /* Success · 成功状态 */
+  --success: #10B981;
+  --success-bg: #0E2A22;
+  --success-fg: #34D399;
+
+  /* Error · 错误状态 */
+  --destructive: #E5484D;
+  --error-bg: #2E1416;
+  --error-fg: #FF6485;
+
+  /* Type families */
+  --font-display: Inter, "TikTok Display", ui-sans-serif, sans-serif;
+  --font-sans: Inter, "TikTok Sans", ui-sans-serif, sans-serif;
+  --font-serif: Georgia, Times, serif;
+  --font-mono: "JetBrains Mono", monospace;
+
+  /* Type metrics */
+  --display-size: clamp(48px, 7vw, 96px);
+  --display-weight: 600-700;
+  --display-line-height: 0.95;
+  --display-letter-spacing: -0.02em;
+  --h2-size: 28-32;
+  --h2-weight: 600;
+  --h2-line-height: 1.15;
+  --h3-size: 18-20;
+  --h3-weight: 600;
+  --h3-line-height: 1.3;
+  --body-size: 14-15;
+  --body-weight: 400;
+  --body-line-height: 1.6;
+  --kicker-size: 11;
+  --kicker-weight: 400;
+  --kicker-letter-spacing: 0.14em;
+  --kicker-text-transform: uppercase;
+}

@@ -1,0 +1,64 @@
+{
+  "schemaVersion": 2,
+  "slug": "sidenav",
+  "name": "Sidenav",
+  "category": "navigation",
+  "sourceKind": "structured-spec",
+  "confidence": "medium",
+  "semanticTypeCandidates": ["side-navigation-item", "nav-menu-item", "vertical-nav"],
+  "variantDimensions": {
+    "level": ["primary", "secondary"],
+    "state": ["default", "active", "disabled"]
+  },
+  "representativeVariants": [
+    { "level": "primary", "state": "default" },
+    { "level": "primary", "state": "active" },
+    { "level": "primary", "state": "disabled" },
+    { "level": "secondary", "state": "default" },
+    { "level": "secondary", "state": "active" }
+  ],
+  "anatomy": ["nav-item", "nav-item-icon", "nav-item-text", "nav-arrow", "nav-sub-item"],
+  "structurePatterns": [
+    "Primary nav-item is a flex row with icon, text label, and optional expand arrow",
+    "Secondary nav-sub-item is indented (padding-left 40px) text-only link",
+    "Both levels share the same height (36px) and border-radius (4px)"
+  ],
+  "usageHints": [
+    "Primary item: height 36px, padding 0 12px, gap 8px, font-size 13px, color #020814",
+    "Active state: color #1664FF, font-weight 500, background rgba(22,100,255,0.08)",
+    "Hover (non-active): background rgba(22,100,255,0.08)",
+    "Disabled: color #C9CDD4, cursor not-allowed",
+    "Icon size 20x20px; arrow color #737A87, font-size 12px",
+    "Sub-item: padding 5px 12px 5px 40px to create indent beneath parent"
+  ],
+  "doNotInvent": ["collapsible accordion behavior", "badge/count on items", "icon-only collapsed mode", "horizontal orientation"],
+  "unknowns": ["three-level nesting support", "group divider between sections"],
+  "tokensConsumed": [],
+  "domAnatomy": {
+    "root": {
+      "tag": "nav",
+      "class": "sidenav",
+      "children": [
+        {
+          "tag": "a",
+          "class": "nav-item",
+          "children": [
+            { "tag": "span", "class": "nav-item-icon" },
+            { "tag": "span", "class": "nav-item-text" },
+            { "tag": "span", "class": "nav-arrow", "optional": true }
+          ]
+        },
+        {
+          "tag": "a",
+          "class": "nav-sub-item",
+          "note": "secondary level item"
+        }
+      ]
+    }
+  },
+  "provenance": {
+    "preview": "preview/ui-sidenav.html",
+    "source": "structured-spec",
+    "css": { "file": "ui-sidenav.html", "marker": "inline <style>" }
+  }
+}

@@ -1,0 +1,50 @@
+{
+  "schemaVersion": 2,
+  "slug": "icon",
+  "name": "Icon",
+  "category": "general",
+  "sourceKind": "structured-spec",
+  "confidence": "medium",
+  "semanticTypeCandidates": ["svg-icon", "glyph", "symbol"],
+  "variantDimensions": {
+    "size": ["12", "16", "20", "24"],
+    "color": ["currentColor", "primary", "success", "warning", "danger", "secondary"]
+  },
+  "representativeVariants": [
+    { "size": "24" },
+    { "size": "16" },
+    { "size": "12" },
+    { "color": "primary" },
+    { "color": "danger" }
+  ],
+  "anatomy": ["icon-wrapper", "svg"],
+  "structurePatterns": [
+    "Inline-flex container sized by font-size (1em x 1em), inherits color via currentColor",
+    "SVG fills the container at 100% width/height with fill:none by default (stroke-based icons)"
+  ],
+  "usageHints": [
+    "Container: display inline-flex, align-items center, justify-content center",
+    "Size controlled via font-size on the wrapper: 12px, 16px (default), 20px, 24px",
+    "Color inherited via currentColor; override with style color property",
+    "Semantic colors: success=#00B365, warning=#FF7D00, danger=#D7312A, primary=#1664FF, secondary=#737A87",
+    "vertical-align: middle, flex-shrink: 0"
+  ],
+  "doNotInvent": ["icon font fallback", "animated icons beyond loading spinner", "icon registry API"],
+  "unknowns": ["full icon name catalog beyond those shown", "whether filled variants exist for all icons"],
+  "tokensConsumed": [],
+  "domAnatomy": {
+    "root": {
+      "tag": "span",
+      "class": "svg-icon",
+      "attrs": { "data-component": "svg-icon", "data-icon": "{name}", "style": "font-size:{size}px" },
+      "children": [
+        { "tag": "svg", "attrs": { "width": "100%", "height": "100%", "fill": "none" } }
+      ]
+    }
+  },
+  "provenance": {
+    "preview": "preview/ui-icon.html",
+    "source": "structured-spec",
+    "css": { "file": "ui-icon.html", "marker": "inline style" }
+  }
+}

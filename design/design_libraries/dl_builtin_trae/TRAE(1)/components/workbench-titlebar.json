@@ -1,0 +1,74 @@
+{
+  "schemaVersion": 2,
+  "slug": "workbench-titlebar",
+  "name": "Workbench Titlebar",
+  "category": "navigation",
+  "sourceKind": "structured-spec",
+  "confidence": "medium",
+  "semanticTypeCandidates": ["titlebar", "app-header", "toolbar"],
+  "variantDimensions": {
+    "state": ["default"]
+  },
+  "representativeVariants": [
+    { "state": "default" }
+  ],
+  "anatomy": ["root", "left", "lights", "light", "mode-chip", "project-selector", "right", "iconbtn"],
+  "structurePatterns": [
+    "flex space-between with left cluster and right cluster",
+    "left cluster: traffic lights + mode chip + project selector",
+    "right cluster: row of icon buttons"
+  ],
+  "usageHints": [
+    "Bar background uses --bg-base-secondary with --border-neutral-l1 bottom divider",
+    "Traffic light dots reuse --status-error-default / --status-alert-default / --status-success-default",
+    "Mode chip uses --bg-brand and --text-onbrand, pill via --radius-full",
+    "Project selector uses --bg-overlay-l1 surface with --border-neutral-l2",
+    "Icon buttons hover to --bg-overlay-l2"
+  ],
+  "doNotInvent": ["dropdown menus", "search input expansion", "tabs"],
+  "unknowns": ["active project state styling", "responsive collapse behavior"],
+  "tokensConsumed": [
+    "--spacer-12", "--spacer-8", "--spacer-6", "--bg-base-secondary", "--border-neutral-l1",
+    "--radius-full", "--status-error-default", "--status-alert-default", "--status-success-default",
+    "--bg-brand", "--text-onbrand", "--body-xs-font-size", "--font-weight-medium",
+    "--bg-overlay-l1", "--text-default", "--border-neutral-l2", "--radius-6",
+    "--body-sm-font-size", "--bg-overlay-l2", "--text-default-hover"
+  ],
+  "domAnatomy": {
+    "root": {
+      "tag": "div",
+      "class": "ds-wbtitlebar",
+      "children": [
+        {
+          "tag": "div",
+          "class": "ds-wbtitlebar__left",
+          "children": [
+            {
+              "tag": "div",
+              "class": "ds-wbtitlebar__lights",
+              "children": [
+                { "tag": "span", "class": "ds-wbtitlebar__light ds-wbtitlebar__light--close" },
+                { "tag": "span", "class": "ds-wbtitlebar__light ds-wbtitlebar__light--min" },
+                { "tag": "span", "class": "ds-wbtitlebar__light ds-wbtitlebar__light--max" }
+              ]
+            },
+            { "tag": "span", "class": "ds-wbtitlebar__mode-chip" },
+            { "tag": "button", "class": "ds-wbtitlebar__project-selector" }
+          ]
+        },
+        {
+          "tag": "div",
+          "class": "ds-wbtitlebar__right",
+          "children": [
+            { "tag": "button", "class": "ds-wbtitlebar__iconbtn" }
+          ]
+        }
+      ]
+    }
+  },
+  "provenance": {
+    "preview": "preview/component-workbench-titlebar.html",
+    "source": "structured-spec",
+    "css": { "file": "components.css", "marker": "── Workbench Titlebar ──" }
+  }
+}

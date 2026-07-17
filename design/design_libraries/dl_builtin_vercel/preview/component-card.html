@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en" class="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>
+  /* Page scaffold — NOT extracted */
+  /* @component-css-start */
+html.dark{color-scheme:dark}body{margin:0;padding:12px;background:var(--background);color:var(--foreground);font:14px/1.4 var(--font-sans)}.row{display:flex;gap:8px;align-items:flex-start;flex-wrap:wrap}.label{width:100%;font:600 11px/1 var(--font-mono);letter-spacing:var(--tracking-normal);text-transform:uppercase;color:var(--muted-foreground);margin-bottom:2px}.divider{border:0;border-top:1px solid var(--border);margin:10px 0}.card{width:196px;display:flex;flex-direction:column;gap:10px;padding:14px;border:1px solid var(--border);border-radius:calc(var(--radius) + 4px);background:var(--card);color:var(--card-foreground);box-shadow:var(--shadow-sm)}.card:hover{box-shadow:var(--shadow-md)}.compact{width:172px;padding:12px;gap:8px}.eyebrow{font:600 11px/1 var(--font-mono);color:var(--muted-foreground);text-transform:uppercase}.title{font-weight:600}.value{font-size:24px;line-height:1.1;font-weight:700}.compact .value{font-size:18px}.support,.meta{color:var(--muted-foreground)}.meta{font-size:12px}.actions{display:flex;gap:8px;margin-top:auto}.btn{padding:7px 10px;border:1px solid var(--border);border-radius:calc(var(--radius) - 2px);background:var(--background);color:var(--foreground);font:600 12px/1 var(--font-sans)}.btn:hover{background:var(--accent);color:var(--accent-foreground)}.btn:disabled,.is-disabled{opacity:.56}.is-disabled .btn{background:var(--muted);color:var(--muted-foreground)}
+  /* @component-css-end */
+</style>
+</head>
+<body>
+<div class="row">
+<span class="label">Comfortable</span>
+<article class="card">
+<span class="eyebrow">Metric</span>
+<div class="title">Deployment Success</div>
+<div class="value">99.98%</div>
+<div class="support">30d rolling window across production builds.</div>
+<div class="meta">Observability · Updated 2m ago</div>
+<div class="actions"><button class="btn">Inspect</button></div>
+</article>
+<article class="card">
+<span class="eyebrow">Activity</span>
+<div class="title">Recent Releases</div>
+<div class="value">12 today</div>
+<div class="support">Edge and Node deployments landed without rollback.</div>
+<div class="meta">Vercel · Last push 14m ago</div>
+<div class="actions"><button class="btn">Review</button></div>
+</article>
+<article class="card is-disabled" aria-disabled="true">
+<span class="eyebrow">Status</span>
+<div class="title">Incident Review</div>
+<div class="value">Resolved</div>
+<div class="support">Postmortem is locked while audit notes sync.</div>
+<div class="meta">Read only · Observability</div>
+<div class="actions"><button class="btn" disabled>Locked</button></div>
+</article>
+</div>
+<hr class="divider">
+<div class="row">
+<span class="label">Compact</span>
+<article class="card compact">
+<span class="eyebrow">Status</span>
+<div class="title">Observability</div>
+<div class="value">4 alerts</div>
+<div class="meta">Latency normal · Trace sampling on</div>
+</article>
+<article class="card compact">
+<span class="eyebrow">Metric</span>
+<div class="title">Deployment Success</div>
+<div class="value">99.98%</div>
+<div class="meta">Stable across all regions</div>
+</article>
+<article class="card compact is-disabled" aria-disabled="true">
+<span class="eyebrow">Activity</span>
+<div class="title">Recent Releases</div>
+<div class="value">Queued</div>
+<div class="meta">Publishing paused for incident review</div>
+</article>
+</div>
+</body>
+</html>

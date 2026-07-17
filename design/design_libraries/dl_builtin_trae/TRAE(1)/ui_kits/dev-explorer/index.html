@@ -1,0 +1,830 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Nimbus Dev Explorer Kit</title>
+  <!--
+    DOWNSTREAM CONSUMPTION NOTICE
+    ==============================
+    This file is a SHOWCASE — page-level demo of how Nimbus components compose.
+    It is capped at max-width: 1184px per design-library-creator skill spec.
+
+    DO NOT copy this file's outer .uikit-shell or its grid-template-columns
+    into your real product page — you will get whitespace on canvases > 1184px.
+
+    For real-canvas consumption:
+      1. Use this file ONLY as structural reference (which regions, which components).
+      2. Copy inner region markup from preview/component-*.html.
+      3. Write your own outer grid sized for your actual canvas
+         (100vw / 100% / auto-fit, NOT max-width: 1184).
+      4. Always link colors_and_type.css + components.css.
+
+    See ../../README.md → "Downstream Consumption Guide".
+  -->
+  <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <link rel="stylesheet" href="../../colors_and_type.css">
+  <link rel="stylesheet" href="../../components.css">
+  <style>
+    html, body { margin: 0; background: var(--site-canvas); color: var(--text-default); font-family: var(--code-editor-font-family); }
+
+    /* === UIKit layout guards (HARD CONSTRAINT) === */
+    .uikit-shell {
+      width: 100%;
+      max-width: 1184px;
+      margin: 0 auto;
+      overflow: hidden;
+      background: var(--bg-base-secondary);
+      box-sizing: border-box;
+    }
+    .uikit-main, .uikit-toolbar { min-width: 0; }
+    .uikit-truncate { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .uikit-nowrap { white-space: nowrap; flex-shrink: 0; }
+    .uikit-table-wrap { max-width: 100%; overflow-x: auto; overscroll-behavior-x: contain; }
+    .uikit-responsive-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; min-width: 0; }
+    .uikit-action-cell { display: flex; align-items: center; gap: 8px; min-width: 0; max-width: 160px; overflow: hidden; }
+    .uikit-action { min-width: 0; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+    @media (max-width: 1280px) {
+      .ide__body { grid-template-columns: 40px 240px minmax(0, 1fr) minmax(0, 1fr) !important; }
+    }
+    @media (max-width: 900px) {
+      .ide__body { grid-template-columns: 40px 220px minmax(0, 1fr) !important; }
+      .ide .chat { display: none; }
+    }
+    @media (max-width: 640px) {
+      .ide__body { grid-template-columns: 40px minmax(0, 1fr) !important; }
+      .ide .sidebar { display: none; }
+    }
+
+    /* === IDE shell === */
+    .ide {
+      display: grid;
+      grid-template-rows: 40px 1fr 24px;
+      width: 100%;
+      height: 760px;
+      min-width: 0;
+      background: var(--bg-base-secondary);
+      color: var(--text-default);
+      overflow: hidden;
+    }
+
+    /* --- Title bar (40px) --- */
+    .ide__titlebar {
+      display: flex;
+      align-items: center;
+      height: 40px;
+      padding: 6px 12px 6px 0;
+      background: var(--bg-base-secondary);
+    }
+    .traffic { display: inline-flex; align-items: center; column-gap: 8px; padding: 0 20px; }
+    .traffic span { width: 12px; height: 12px; border-radius: 100px; border: 1px solid #00000033; display: inline-block; }
+    .t-close { background: #ff5f57; }
+    .t-min   { background: #febc2e; }
+    .t-max   { background: #28c840; }
+
+    .titlebar__center { display: inline-flex; align-items: center; column-gap: 4px; min-width: 0; }
+    .titlebar__mode {
+      display: inline-flex; align-items: center; justify-content: center;
+      border: 1px solid var(--border-neutral-l1);
+      border-radius: 6px;
+      background: var(--bg-overlay-l2);
+      padding: 1px;
+      width: 68px; height: 28px;
+      flex-shrink: 0;
+    }
+    .titlebar__mode .icon-tile {
+      flex-shrink: 0;
+      width: 24px; height: 24px;
+      display: inline-flex; align-items: center; justify-content: center;
+      border-radius: 4px;
+      background: #fffffff2;
+      box-shadow: inset 0 1px 0 0 #ffffff0f, 0 1px 0 0 #ffffff0f, 0 2px 6px 0 #00000033;
+    }
+    .titlebar__mode .icon-tile svg { width: 16px; height: 11.4px; display: block; }
+    .titlebar__mode .label {
+      flex-shrink: 0;
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 40px; height: 24px;
+      font-size: 11px; line-height: 16px; font-weight: 600;
+      color: var(--text-secondary);
+    }
+    .titlebar__sep { position: relative; flex-shrink: 0; width: 8px; height: 24px; }
+    .titlebar__sep::after {
+      content: ""; position: absolute; top: 8px; left: -8px;
+      width: 24px; height: 8px;
+      border-left: 1px solid var(--border-neutral-l1);
+      transform: rotate(-90deg);
+    }
+    .titlebar__project {
+      display: inline-flex; align-items: center;
+      border-radius: 4px;
+      padding: 0 4px;
+      width: 123px; height: 28px;
+      background: transparent; border: 0;
+      cursor: pointer; flex-shrink: 0;
+    }
+    .titlebar__project span {
+      flex-shrink: 0;
+      padding: 0 4px;
+      font-size: 12px; line-height: 18px; font-weight: 500;
+      color: var(--text-secondary);
+    }
+    .titlebar__project:hover { background: var(--bg-overlay-l1); }
+    .titlebar__nav { display: inline-flex; align-items: center; column-gap: 4px; }
+    .titlebar__nav button, .icon-btn {
+      width: 24px; height: 24px;
+      display: inline-flex; align-items: center; justify-content: center;
+      padding: 4px;
+      border-radius: 4px;
+      background: transparent; border: 0;
+      color: var(--icon-secondary); cursor: pointer;
+    }
+    .titlebar__nav button:hover, .icon-btn:hover { color: var(--icon-default); background: var(--bg-overlay-l1); }
+    .titlebar__search {
+      display: inline-flex; align-items: center;
+      border-radius: 4px;
+      padding: 4px 8px;
+      width: 160px; height: 28px;
+      flex-shrink: 0;
+    }
+    .titlebar__search .search-icon { display: inline-flex; align-items: center; padding: 3px 5px 3px 3px; color: var(--icon-tertiary); }
+    .titlebar__search .label { flex-grow: 1; padding: 0 4px; font-size: 12px; line-height: 18px; color: var(--text-tertiary); }
+
+    .titlebar__right {
+      display: inline-flex; align-items: center; justify-content: flex-end;
+      column-gap: 8px;
+      margin-left: auto;
+    }
+    .titlebar__restart {
+      display: inline-flex; align-items: center; justify-content: center;
+      border-radius: 9999px;
+      background: var(--bg-overlay-l2);
+      padding: 0 4px;
+      height: 24px;
+      border: 0; cursor: pointer;
+    }
+    .titlebar__restart .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--bg-brand); display: inline-block; flex-shrink: 0; margin-left: 2px; }
+    .titlebar__restart .label { padding: 0 4px; font-size: 11px; line-height: 16px; color: var(--text-default); }
+    .titlebar__restart .chev { width: 14px; height: 14px; display: inline-flex; align-items: center; justify-content: center; color: var(--icon-secondary); flex-shrink: 0; }
+    .titlebar__icons { display: inline-flex; align-items: center; column-gap: 4px; }
+    .icon-btn.is-active { color: var(--icon-default); background: var(--bg-overlay-l2); }
+
+    /* --- Body --- */
+    .ide__body {
+      display: grid;
+      grid-template-columns: 40px 240px minmax(0, 1fr) minmax(0, 480px);
+      min-height: 0;
+      min-width: 0;
+    }
+    .activity-bar, .sidebar, .editor, .chat { min-width: 0; min-height: 0; }
+
+    /* Activity bar */
+    .activity-bar {
+      display: flex; flex-direction: column; align-items: stretch;
+      padding: 6px;
+      row-gap: 6px;
+      background: var(--bg-base-secondary);
+    }
+    .activity-bar button {
+      display: flex; flex-shrink: 0;
+      align-items: center; justify-content: center;
+      align-self: stretch;
+      width: 28px; height: 28px;
+      padding: 5px;
+      border-radius: 4px;
+      background: transparent; border: 0;
+      color: var(--icon-secondary);
+      cursor: pointer;
+    }
+    .activity-bar button:hover { color: var(--icon-default); background: var(--bg-overlay-l1); }
+    .activity-bar button.is-active { color: var(--icon-default); background: var(--bg-overlay-l2); }
+    .activity-bar .a-sep {
+      flex-shrink: 0; align-self: stretch;
+      border-radius: 4px;
+      width: 28px; height: 8px;
+      border-top: 1px solid var(--border-neutral-l1);
+      margin-top: 4px;
+    }
+
+    /* Sidebar */
+    .sidebar {
+      display: flex; flex-direction: column;
+      background: var(--bg-base-default);
+      margin: 0 2px 4px 0;
+      border-radius: 6px;
+      overflow: hidden;
+    }
+    .sidebar__header {
+      display: flex; align-items: center; justify-content: space-between;
+      height: 40px; padding: 0 16px;
+      color: var(--text-default);
+      font-size: 11px; font-weight: 600; letter-spacing: 0.08em;
+    }
+    .sidebar__header .more {
+      width: 20px; height: 20px;
+      display: inline-flex; align-items: center; justify-content: center;
+      background: transparent; border: 0; color: var(--icon-secondary);
+      cursor: pointer;
+    }
+    .sidebar__group-head {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 4px 16px;
+      color: var(--text-default);
+      font-size: 12px; font-weight: 500;
+    }
+    .sidebar__group-head .left { display: inline-flex; align-items: center; column-gap: 6px; }
+    .sidebar__group-head .actions { display: inline-flex; align-items: center; column-gap: 2px; color: var(--icon-secondary); }
+    .sidebar__group-head .actions button {
+      width: 20px; height: 20px;
+      display: inline-flex; align-items: center; justify-content: center;
+      background: transparent; border: 0; color: inherit; cursor: pointer;
+    }
+    .sidebar__group-head .actions button:hover { color: var(--icon-default); }
+
+    .tree { display: flex; flex-direction: column; padding: 4px 0 16px; flex: 1; overflow-y: auto; }
+    .tree__row {
+      display: flex; align-items: center; column-gap: 6px;
+      padding: 0 8px 0 16px; height: 22px;
+      color: var(--text-default);
+      font-size: 12px; line-height: 1;
+      cursor: pointer; white-space: nowrap;
+    }
+    .tree__row:hover { background: var(--bg-overlay-l1); }
+    .tree__row.is-active { background: var(--bg-overlay-l2); color: var(--text-default); }
+    .tree__row[data-depth="0"] { padding-left: 16px; }
+    .tree__row[data-depth="1"] { padding-left: 28px; }
+    .tree__row[data-depth="2"] { padding-left: 44px; }
+    .tree__row[data-depth="3"] { padding-left: 60px; }
+    .tree__row .chev { width: 12px; height: 12px; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .tree__row .chev.is-empty { visibility: hidden; }
+    .tree__row .icon-file { width: 14px; height: 14px; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .tree__row .label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+
+    .sidebar__footer { margin-top: auto; display: flex; flex-direction: column; }
+    .sidebar__footer-item {
+      display: flex; align-items: center; column-gap: 6px;
+      padding: 4px 16px; height: 22px;
+      color: var(--text-default);
+      font-size: 11px; font-weight: 600; letter-spacing: 0.08em;
+    }
+
+    /* Editor */
+    .editor {
+      display: flex; flex-direction: column;
+      background: var(--bg-base-default);
+      margin: 0 2px 4px 2px;
+      border-radius: 6px;
+      overflow: hidden;
+    }
+    /* IDE editor tabs use .ds-editortabs / .ds-editortab from components.css */
+    .editor__content { flex: 1; min-width: 0; min-height: 0; overflow: auto; background: var(--bg-base-default); }
+
+    /* Chat panel */
+    .chat {
+      display: flex; flex-direction: column;
+      background: var(--bg-base-default);
+      margin: 0 4px 4px 2px;
+      border-radius: 6px;
+      overflow: hidden;
+    }
+    .chat__head {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 6px 8px;
+      height: 40px;
+      color: var(--text-default);
+      font-size: 12px; font-weight: 500;
+    }
+    .chat__head > span:first-child { padding: 5px 8px; }
+    .chat__head .actions { display: inline-flex; align-items: center; column-gap: 4px; color: var(--icon-secondary); }
+    .chat__head .actions button {
+      width: 24px; height: 24px;
+      display: inline-flex; align-items: center; justify-content: center;
+      border-radius: 4px;
+      background: transparent; border: 0; color: inherit; cursor: pointer;
+    }
+    .chat__head .actions button:hover { color: var(--icon-default); background: var(--bg-overlay-l1); }
+
+    .chat__body {
+      flex: 1; min-height: 0; min-width: 0;
+      display: flex; flex-direction: column; justify-content: center; align-items: center;
+      row-gap: 40px;
+      padding: 0 16px;
+      overflow-y: auto;
+    }
+    .chat__hero { align-self: stretch; text-align: center; }
+    .chat__hero h1 {
+      margin: 0;
+      font-size: 24px; line-height: 32px; font-weight: 450;
+      color: var(--text-default);
+    }
+    .chat__hero h1 .muted { color: var(--text-secondary); font-weight: 450; }
+
+    .chat__composer {
+      display: flex; flex-direction: column;
+      align-self: stretch;
+      box-sizing: border-box;
+      min-width: 0; width: 100%; max-width: 640px;
+      margin: 0 auto;
+      border: 1px solid var(--border-neutral-l2);
+      border-radius: 6px;
+      background: var(--bg-overlay-l1);
+      min-height: 108px;
+      overflow: hidden;
+    }
+    .chat__composer .ph {
+      flex: 1 1 auto;
+      margin: 0;
+      padding: 10px 12px;
+      font-size: 13px; line-height: 20px;
+      color: var(--text-tertiary);
+    }
+    .chat__composer-foot {
+      display: flex; flex-shrink: 0;
+      align-items: center; justify-content: space-between;
+      column-gap: 8px;
+      min-width: 0;
+      padding: 8px;
+    }
+    .chat__composer-tools { display: inline-flex; align-items: center; flex-shrink: 0; column-gap: 4px; }
+    .chat__composer-tools .action-btn {
+      display: inline-flex; flex-shrink: 0;
+      align-items: center; justify-content: center;
+      border-radius: 4px;
+      width: 24px; height: 24px;
+      padding: 0;
+      background: transparent; border: 0;
+      color: var(--icon-default);
+      cursor: pointer;
+    }
+    .chat__composer-tools .action-btn:hover { background: var(--bg-overlay-l2); }
+    .chat__composer-right { display: inline-flex; align-items: center; column-gap: 6px; flex: 0 1 auto; min-width: 0; }
+    .chat__composer-model {
+      display: inline-flex; flex-shrink: 1; min-width: 0;
+      align-items: center;
+      border-radius: 4px;
+      padding: 2px 4px;
+      max-width: 136px; height: 24px;
+      background: transparent; border: 0;
+      cursor: pointer;
+    }
+    .chat__composer-model:hover { background: var(--bg-overlay-l2); }
+    .chat__composer-model .label {
+      flex-shrink: 1;
+      padding: 0 4px;
+      font-size: 11px; line-height: 16px;
+      color: var(--text-secondary);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .chat__mic {
+      display: inline-flex; flex-shrink: 0;
+      align-items: center; justify-content: center;
+      border-radius: 4px;
+      background: var(--bg-overlay-l2);
+      width: 24px; height: 24px;
+      border: 0; cursor: pointer;
+      color: var(--icon-default);
+    }
+    .chat__mic:hover { background: var(--bg-overlay-l3); }
+    .chat__send {
+      display: inline-flex; flex-shrink: 0;
+      align-items: center; justify-content: center;
+      border-radius: 4px;
+      background: var(--bg-brand);
+      width: 24px; height: 24px;
+      border: 0; cursor: pointer;
+      color: var(--icon-onbrand);
+    }
+    .chat__send:hover { filter: brightness(1.05); }
+
+    .chat__past { align-self: stretch; max-width: 640px; width: 100%; margin: 0 auto; display: flex; flex-direction: column; row-gap: 12px; }
+    .chat__past-title { font-size: 11px; font-weight: 600; line-height: 16px; color: var(--text-default); }
+    .chat__past-list { display: flex; flex-direction: column; row-gap: 8px; }
+    .chat__past-item {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 4px 10px;
+      height: 32px;
+      border-radius: 4px;
+      background: var(--bg-overlay-l1);
+      color: var(--text-default);
+      font-size: 12px;
+      cursor: pointer;
+    }
+    .chat__past-item:hover { background: var(--bg-overlay-l2); }
+    .chat__past-item .left { display: inline-flex; align-items: center; min-width: 0; }
+    .chat__past-item .left .icon { color: var(--icon-secondary); flex-shrink: 0; }
+    .chat__past-item .label { padding: 0 8px; line-height: 18px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .chat__past-item .ago { color: var(--text-tertiary); font-size: 11px; line-height: 16px; padding: 0 8px; flex-shrink: 0; margin-left: 12px; }
+
+    /* Status bar */
+    .ide__statusbar {
+      display: flex; align-items: center; column-gap: 16px;
+      padding: 0 10px;
+      height: 24px;
+      background: var(--bg-base-secondary);
+      font-size: 11px;
+      color: var(--text-secondary);
+    }
+    .status-item { display: inline-flex; align-items: center; column-gap: 6px; color: var(--text-secondary); }
+    .status-item .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; }
+    .dot--err { background: var(--status-error-default); }
+    .dot--alert { background: var(--status-alert-default); }
+    .status-spacer { flex: 1; min-width: 0; }
+
+    /* File-type tints applied to wrapper bg square (img is gray-stroke and not recolorable) */
+    .ic-folder    { background: transparent; }
+    .ic-tsx, .ic-ts { background: rgba(123, 184, 255, 0.12); border-radius: 2px; }
+    .ic-js          { background: rgba(220, 179, 100, 0.16); border-radius: 2px; }
+    .ic-css, .ic-md { background: rgba(4, 203, 229, 0.12); border-radius: 2px; }
+    .ic-html        { background: rgba(255, 147, 146, 0.18); border-radius: 2px; }
+    .ic-json        { background: rgba(220, 179, 100, 0.16); border-radius: 2px; }
+    .ic-config      { background: transparent; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState } = React;
+
+    /* Static-src icon factory: returns a memoized component for each icon name.
+     * All <img src> strings are static literals (no template strings), satisfying
+     * the spec rule that forbids dynamic icon src expressions. */
+    const I = {
+      chevronDown:   () => <img src="../../assets/icons/chevron-down.svg"  width="16" height="16" alt="" />,
+      chevronDownSm: () => <img src="../../assets/icons/chevron-down.svg"  width="12" height="12" alt="" />,
+      chevronRight:  () => <img src="../../assets/icons/chevron-right.svg" width="14" height="14" alt="" />,
+      chevronRightSm:() => <img src="../../assets/icons/chevron-right.svg" width="10" height="10" alt="" />,
+      chevronUp:     () => <img src="../../assets/icons/chevron-up.svg"    width="12" height="12" alt="" />,
+      arrowLeft:     () => <img src="../../assets/icons/arrow-left.svg"    width="16" height="16" alt="back" />,
+      arrowRight:    () => <img src="../../assets/icons/arrow-right.svg"   width="16" height="16" alt="forward" />,
+      search:        () => <img src="../../assets/icons/search.svg"        width="11" height="11" alt="search" />,
+      sidebarLeft:   () => <img src="../../assets/icons/sidebar-left.svg"  width="16" height="16" alt="left panel" />,
+      panelBottom:   () => <img src="../../assets/icons/panel-bottom.svg"  width="16" height="16" alt="bottom panel" />,
+      sidebarRight:  () => <img src="../../assets/icons/sidebar-right.svg" width="16" height="16" alt="right panel" />,
+      user:          () => <img src="../../assets/icons/user.svg"          width="14" height="14" alt="user" />,
+      files:         () => <img src="../../assets/icons/files.svg"         width="16" height="16" alt="files" />,
+      searchMenu:    () => <img src="../../assets/icons/search-menu.svg"   width="16" height="16" alt="search" />,
+      git:           () => <img src="../../assets/icons/git.svg"           width="16" height="16" alt="git" />,
+      bug:           () => <img src="../../assets/icons/bug.svg"           width="18" height="18" alt="run" />,
+      eye:           () => <img src="../../assets/icons/eye.svg"           width="16" height="16" alt="watcher" />,
+      grid:          () => <img src="../../assets/icons/grid-2x2.svg"      width="16" height="16" alt="extensions" />,
+      moreH:         () => <img src="../../assets/icons/more-h.svg"        width="14" height="14" alt="more" />,
+      plus:          () => <img src="../../assets/icons/plus.svg"          width="12" height="12" alt="new" />,
+      plusMd:        () => <img src="../../assets/icons/plus.svg"          width="14" height="14" alt="new" />,
+      folder:        () => <img src="../../assets/icons/folder.svg"        width="12" height="12" alt="folder" />,
+      file:          () => <img src="../../assets/icons/file.svg"          width="12" height="12" alt="file" />,
+      refresh:       () => <img src="../../assets/icons/refresh.svg"       width="12" height="12" alt="refresh" />,
+      refreshMd:     () => <img src="../../assets/icons/refresh.svg"       width="14" height="14" alt="refresh" />,
+      minus:         () => <img src="../../assets/icons/minus.svg"         width="12" height="12" alt="collapse" />,
+      x:             () => <img src="../../assets/icons/x.svg"             width="10" height="10" alt="close" />,
+      xMd:           () => <img src="../../assets/icons/x.svg"             width="14" height="14" alt="close" />,
+      layout:        () => <img src="../../assets/icons/layout.svg"        width="14" height="14" alt="layout" />,
+      settings:      () => <img src="../../assets/icons/settings.svg"      width="14" height="14" alt="settings" />,
+      at:            () => <img src="../../assets/icons/at.svg"            width="14" height="14" alt="mention" />,
+      hash:          () => <img src="../../assets/icons/hash.svg"          width="14" height="14" alt="reference" />,
+      image:         () => <img src="../../assets/icons/image.svg"         width="14" height="14" alt="attach image" />,
+      mic:           () => <img src="../../assets/icons/mic.svg"           width="16" height="16" alt="mic" />,
+      arrowUp:       () => <img src="../../assets/icons/arrow-up.svg"      width="16" height="16" alt="send" />,
+      messageCircle: () => <img src="../../assets/icons/message-circle.svg" width="14" height="14" alt="" />,
+      gitSm:         () => <img src="../../assets/icons/git.svg"           width="12" height="12" alt="git" />,
+      refreshSm:     () => <img src="../../assets/icons/refresh.svg"       width="12" height="12" alt="refresh" />,
+      bell:          () => <img src="../../assets/icons/bell.svg"          width="12" height="12" alt="bell" />,
+    };
+
+    function Titlebar({ panel, setPanel }) {
+      return (
+        <div className="ide__titlebar">
+          <span className="traffic" aria-hidden="true">
+            <span className="t-close"></span>
+            <span className="t-min"></span>
+            <span className="t-max"></span>
+          </span>
+          <div className="titlebar__center">
+            <span className="titlebar__mode" data-component="tabs">
+              <span className="icon-tile">
+                <svg viewBox="0 0 16 12" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                  <path d="M16 11.4279H2.28553V9.14331H0V0H16V11.4279ZM2.28553 9.14331H13.7145V2.28553H2.28553V9.14331ZM8.00054 5.67956L6.38442 7.29559L4.76839 5.67956L6.38442 4.06343L8.00054 5.67956ZM12.5717 5.67857L10.9556 7.2946L9.33955 5.67857L10.9556 4.06244L12.5717 5.67857Z" fill="#0C0C0D"/>
+                </svg>
+              </span>
+              <span className="label">IDE</span>
+            </span>
+            <span className="titlebar__sep" aria-hidden="true"></span>
+            <button className="titlebar__project" type="button">
+              <span>Select a project</span>
+              <I.chevronDown/>
+            </button>
+            <span className="titlebar__sep" aria-hidden="true"></span>
+            <span className="titlebar__nav" data-component="buttons">
+              <button aria-label="Back"><I.arrowLeft/></button>
+              <button aria-label="Forward"><I.arrowRight/></button>
+            </span>
+            <span className="titlebar__search">
+              <span className="search-icon"><I.search/></span>
+              <span className="label uikit-truncate">Search</span>
+            </span>
+          </div>
+
+          <div className="titlebar__right">
+            <button className="titlebar__restart" type="button">
+              <span className="dot"></span>
+              <span className="label uikit-nowrap">Click to Restart</span>
+              <span className="chev"><I.chevronRight/></span>
+            </button>
+            <span className="titlebar__icons" data-component="buttons">
+              <button
+                className={"icon-btn" + (panel.left ? " is-active" : "")}
+                aria-pressed={panel.left}
+                aria-label="Toggle sidebar"
+                onClick={() => setPanel({ ...panel, left: !panel.left })}
+              ><I.sidebarLeft/></button>
+              <button className="icon-btn" aria-label="Toggle panel" disabled><I.panelBottom/></button>
+              <button
+                className={"icon-btn" + (panel.right ? " is-active" : "")}
+                aria-pressed={panel.right}
+                aria-label="Toggle chat"
+                onClick={() => setPanel({ ...panel, right: !panel.right })}
+              ><I.sidebarRight/></button>
+              <span className="ds-avatar ds-avatar--sm"><I.user/></span>
+            </span>
+          </div>
+        </div>
+      );
+    }
+
+    function ActivityBar({ active, setActive }) {
+      const items = [
+        { id: 'files',   icon: <I.files/>,      label: 'Explorer' },
+        { id: 'search',  icon: <I.searchMenu/>, label: 'Search menu' },
+        { id: 'git',     icon: <I.git/>,        label: 'Source control' },
+        { id: 'run',     icon: <I.bug/>,        label: 'Run & Debug' },
+        { id: 'watch',   icon: <I.eye/>,        label: 'Watcher' },
+      ];
+      return (
+        <nav className="activity-bar" data-component="activity-rail" aria-label="Activity bar">
+          {items.map((it) => (
+            <button
+              key={it.id}
+              className={active === it.id ? 'is-active' : ''}
+              aria-label={it.label}
+              aria-pressed={active === it.id}
+              onClick={() => setActive(it.id)}
+            >{it.icon}</button>
+          ))}
+          <span className="a-sep" aria-hidden="true"></span>
+          <button aria-label="Extensions" disabled><I.grid/></button>
+        </nav>
+      );
+    }
+
+    const TREE = [
+      { d: 0, type: 'folder', label: 'node_modules', chev: 'right' },
+      { d: 0, type: 'folder', label: 'public', chev: 'right' },
+      { d: 0, type: 'folder', label: 'src', chev: 'down' },
+      { d: 1, type: 'folder', label: 'app', chev: 'right' },
+      { d: 1, type: 'folder', label: 'components', chev: 'down' },
+      { d: 2, type: 'tsx', label: 'CaseStudies.tsx', active: true },
+      { d: 2, type: 'tsx', label: 'Empty.tsx' },
+      { d: 2, type: 'tsx', label: 'CtaBlock.tsx' },
+      { d: 1, type: 'folder', label: 'hooks', chev: 'right' },
+      { d: 1, type: 'folder', label: 'lib', chev: 'right' },
+      { d: 1, type: 'folder', label: 'pages', chev: 'down' },
+      { d: 2, type: 'tsx', label: 'Artist.tsx' },
+      { d: 2, type: 'tsx', label: 'Home.tsx' },
+      { d: 2, type: 'tsx', label: 'Playlist.tsx' },
+      { d: 1, type: 'tsx', label: 'App.tsx' },
+      { d: 1, type: 'css', label: 'index.css' },
+      { d: 1, type: 'tsx', label: 'main.tsx' },
+      { d: 1, type: 'ts',  label: 'vite.env.d.ts' },
+      { d: 0, type: 'config', label: '.gitignore' },
+      { d: 0, type: 'js',  label: 'eslint.config.js' },
+      { d: 0, type: 'html',label: 'index.html' },
+      { d: 0, type: 'json',label: 'package-lock.json' },
+      { d: 0, type: 'json',label: 'package.json' },
+      { d: 0, type: 'js',  label: 'postcss.config.mjs' },
+      { d: 0, type: 'md',  label: 'README.md' },
+      { d: 0, type: 'js',  label: 'tailwind.config.mjs' },
+      { d: 0, type: 'json',label: 'tsconfig.app.json' },
+      { d: 0, type: 'json',label: 'tsconfig.json' },
+    ];
+
+    function FileIcon({ type }) {
+      // wrap in tinted square (since SVG stroke is fixed gray, we tint the bg)
+      const cls = 'icon-file ic-' + type;
+      const isFolder = type === 'folder';
+      return <span className={cls}>{isFolder ? <I.folder/> : <I.file/>}</span>;
+    }
+
+    function Sidebar({ activeFile, setActiveFile }) {
+      return (
+        <aside className="sidebar" data-component="file-tree">
+          <div className="sidebar__header">
+            <span>EXPLORER</span>
+            <button className="more" aria-label="More"><I.moreH/></button>
+          </div>
+          <div className="sidebar__group-head">
+            <span className="left">
+              <I.chevronDownSm/>
+              <span>Folder</span>
+            </span>
+            <span className="actions" data-component="buttons">
+              <button aria-label="New file"><I.plus/></button>
+              <button aria-label="New folder"><I.folder/></button>
+              <button aria-label="Refresh"><I.refresh/></button>
+              <button aria-label="Collapse"><I.minus/></button>
+            </span>
+          </div>
+          <div className="tree" role="tree">
+            {TREE.map((row, i) => {
+              const isActive = activeFile === i || (activeFile === null && row.active);
+              return (
+                <div
+                  key={i}
+                  className={"tree__row" + (isActive ? " is-active" : "")}
+                  data-depth={row.d}
+                  role="treeitem"
+                  aria-selected={isActive}
+                  onClick={() => setActiveFile(i)}
+                >
+                  {row.chev === 'down'
+                    ? <span className="chev"><I.chevronDownSm/></span>
+                    : row.chev === 'right'
+                      ? <span className="chev"><I.chevronRightSm/></span>
+                      : <span className="chev is-empty"></span>}
+                  <FileIcon type={row.type === 'folder' ? 'folder' : row.type} />
+                  <span className="label">{row.label}</span>
+                </div>
+              );
+            })}
+          </div>
+          <div className="sidebar__footer">
+            <div className="sidebar__footer-item">
+              <span className="chev"><I.chevronRightSm/></span>
+              <span>OUTLINE</span>
+            </div>
+            <div className="sidebar__footer-item">
+              <span className="chev"><I.chevronRightSm/></span>
+              <span>TIMELINE</span>
+            </div>
+          </div>
+        </aside>
+      );
+    }
+
+    const TABS = [
+      { id: 'global',   label: '# global.css',           type: 'css' },
+      { id: 'case',     label: 'CaseStudies.tsx',         type: 'tsx', closable: true },
+      { id: 'tail',     label: 'JS tailwind.config.mjs',  type: 'js' },
+    ];
+
+    function Editor({ tab, setTab }) {
+      return (
+        <main className="editor" data-component="tabs">
+          <div className="ds-editortabs uikit-toolbar">
+            {TABS.map((t) => {
+              const active = tab === t.id;
+              return (
+                <span
+                  key={t.id}
+                  className={"ds-editortab" + (active ? " is-active" : "")}
+                  onClick={() => setTab(t.id)}
+                  role="tab"
+                  aria-selected={active}
+                >
+                  <span className={"ic ic-" + t.type}><I.file/></span>
+                  <span className="uikit-truncate" style={{maxWidth:140}}>{t.label}</span>
+                  {t.closable && active && <span className="close"><I.x/></span>}
+                </span>
+              );
+            })}
+            <span className="ds-editortabs__spacer"></span>
+            <span className="ds-editortabs__actions" data-component="buttons">
+              <button aria-label="Split"><I.layout/></button>
+              <button aria-label="Toggle"><I.layout/></button>
+              <button aria-label="More"><I.moreH/></button>
+            </span>
+          </div>
+          <div className="editor__content"></div>
+        </main>
+      );
+    }
+
+    function Chat() {
+      return (
+        <aside className="chat" data-component="chat-composer">
+          <div className="chat__head">
+            <span>TRAE</span>
+            <span className="actions" data-component="buttons">
+              <button aria-label="New chat"><I.plusMd/></button>
+              <button aria-label="History"><I.refreshMd/></button>
+              <button aria-label="Settings"><I.settings/></button>
+              <button aria-label="Close"><I.xMd/></button>
+            </span>
+          </div>
+          <div className="chat__body">
+            <div className="chat__hero">
+              <h1><span>Hi, I&apos;m TRAE.</span> <span className="muted">Let&apos;s get started.</span></h1>
+            </div>
+            <div className="chat__composer">
+              <p className="ph">Begin with &ldquo;@&rdquo; to select an agent</p>
+              <div className="chat__composer-foot">
+                <span className="chat__composer-tools">
+                  <button className="action-btn" aria-label="Mention agent"><I.at/></button>
+                  <button className="action-btn" aria-label="Reference"><I.hash/></button>
+                  <button className="action-btn" aria-label="Attach image"><I.image/></button>
+                </span>
+                <span className="chat__composer-right">
+                  <button className="chat__composer-model" type="button">
+                    <span className="label">claude-3.5-sonnet</span>
+                    <I.chevronUp/>
+                  </button>
+                  <button className="chat__mic" aria-label="Mic"><I.mic/></button>
+                  <button className="chat__send" type="button" aria-label="Send"><img src="../../assets/icons/arrow-up.0c0c0d.svg" width="16" height="16" alt="send" className="icon"/></button>
+                </span>
+              </div>
+            </div>
+            <div className="chat__past" data-component="nav-list">
+              <span className="chat__past-title">Past conversations</span>
+              <div className="chat__past-list">
+                <div className="chat__past-item">
+                  <span className="left">
+                    <span className="icon"><I.messageCircle/></span>
+                    <span className="label">Enhancing aesthetics</span>
+                  </span>
+                  <span className="ago">4h ago</span>
+                </div>
+                <div className="chat__past-item">
+                  <span className="left">
+                    <span className="icon"><I.messageCircle/></span>
+                    <span className="label">to add an agent and chat</span>
+                  </span>
+                  <span className="ago">1w ago</span>
+                </div>
+                <div className="chat__past-item">
+                  <span className="left">
+                    <span className="icon"><I.messageCircle/></span>
+                    <span className="label">to add an agent and chat</span>
+                  </span>
+                  <span className="ago">3w ago</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </aside>
+      );
+    }
+
+    function StatusBar() {
+      return (
+        <div className="ide__statusbar" data-component="status-bar">
+          <span className="status-item"><I.gitSm/><span className="uikit-nowrap">main*</span></span>
+          <span className="status-item"><I.refreshSm/></span>
+          <span className="status-item">
+            <span className="dot dot--err"></span><span>0</span>
+            <span className="dot dot--alert"></span><span>0</span>
+          </span>
+          <span className="status-spacer"></span>
+          <span className="status-item">Ln 1, Col 1</span>
+          <span className="status-item">Spaces: 2</span>
+          <span className="status-item">UTF-8</span>
+          <span className="status-item">LF</span>
+          <span className="status-item">{'{ }'}</span>
+          <span className="status-item">JavaScript</span>
+          <span className="status-item"><I.bell/></span>
+        </div>
+      );
+    }
+
+    function App() {
+      const [active, setActive] = useState('files');
+      const [tab, setTab] = useState('case');
+      const [activeFile, setActiveFile] = useState(null);
+      const [panel, setPanel] = useState({ left: true, right: true });
+      const cols = [
+        '40px',
+        panel.left ? '240px' : '0px',
+        'minmax(0, 1fr)',
+        panel.right ? 'minmax(0, 480px)' : '0px',
+      ].join(' ');
+      return (
+        <div className="uikit-shell" data-layout-guard="uikit-v1">
+          <div className="ide uikit-main">
+            <Titlebar panel={panel} setPanel={setPanel} />
+            <div className="ide__body" style={{ gridTemplateColumns: cols }}>
+              <ActivityBar active={active} setActive={setActive} />
+              {panel.left && <Sidebar activeFile={activeFile} setActiveFile={setActiveFile} />}
+              <Editor tab={tab} setTab={setTab} />
+              {panel.right && <Chat />}
+            </div>
+            <StatusBar />
+          </div>
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>

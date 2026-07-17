@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TikTok 资源预览工具</title>
+<link rel="stylesheet" href="/colors_and_type.css">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar">
+    <header class="sidebar-head">
+      <div class="brand"><span class="dot red"></span><span class="dot cyan"></span> TikTok Assets</div>
+      <input id="filter" class="filter" type="search" placeholder="搜索资源…" autocomplete="off">
+    </header>
+    <nav id="nav" class="nav"></nav>
+    <footer class="sidebar-foot" id="rootPath"></footer>
+  </aside>
+  <main class="main">
+    <header class="topbar">
+      <div class="crumb" id="crumb">选择左侧任意资源进行预览</div>
+      <div class="actions">
+        <div class="seg" id="viewSeg" hidden>
+          <button data-view="render" class="active">预览</button>
+          <button data-view="source">源码</button>
+        </div>
+        <a id="openRaw" class="ghost-btn" target="_blank" rel="noopener" hidden>新标签打开</a>
+      </div>
+    </header>
+    <section class="stage" id="stage">
+      <div class="empty">从左侧导航中选择一个图标、组件、UI Kit 或文档。</div>
+    </section>
+  </main>
+</div>
+<script src="/app.js"></script>
+</body>
+</html>

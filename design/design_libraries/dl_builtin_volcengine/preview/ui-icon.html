@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>Icon 图标</title>
+  <link rel="stylesheet" href="preview-scaffold.css">
+  <style>
+    .svg-icon {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 1em;
+      height: 1em;
+      font-size: 16px;
+      color: currentColor;
+      vertical-align: middle;
+      flex-shrink: 0;
+    }
+    .svg-icon svg { width: 100%; height: 100%; fill: none; }
+
+    .demo-icon-item { display: inline-flex; flex-direction: column; align-items: center; gap: 6px; min-width: 64px; }
+    .demo-icon-name { font-size: 11px; color: #737A87; font-family: "PingFang SC", sans-serif; }
+  </style>
+</head>
+<body>
+  <div class="pv-header">
+    <h1>Icon 图标</h1>
+    <p>SVG 图标系统，覆盖尺寸变体、颜色变体、常用图标清单、组合使用场景与彩色语义图标。</p>
+  </div>
+
+  <!-- ===== 尺寸变体 ===== -->
+  <div class="pv-section">
+    <div class="pv-section__title">尺寸变体</div>
+    <div class="pv-section__sub">24px / 16px（默认）/ 12px</div>
+    <div class="stack-12">
+      <div class="demo-label">24px</div>
+      <div class="row">
+        <span class="svg-icon" data-component="svg-icon" data-icon="home" data-size="24" style="font-size:24px;"></span>
+        <span class="svg-icon" data-component="svg-icon" data-icon="search" data-size="24" style="font-size:24px;"></span>
+        <span class="svg-icon" data-component="svg-icon" data-icon="settings" data-size="24" style="font-size:24px;"></span>
+        <span class="svg-icon" data-component="svg-icon" data-icon="notification" data-size="24" style="font-size:24px;"></span>
+        <span class="svg-icon" data-component="svg-icon" data-icon="apps" data-size="24" style="font-size:24px;"></span>
+      </div>
+      <div class="demo-label">16px（默认）</div>
+      <div class="row">
+        <span class="svg-icon" data-component="svg-icon" data-icon="home" data-size="16" style="font-size:16px;"></span>
+        <span class="svg-icon" data-component="svg-icon" data-icon="search" data-size="16" style="font-size:16px;"></span>
+        <span class="svg-icon" data-component="svg-icon" data-icon="settings" data-size="16" style="font-size:16px;"></span>
+        <span class="svg-icon" data-component="svg-icon" data-icon="notification" data-size="16" style="font-size:16px;"></span>
+        <span class="svg-icon" data-component="svg-icon" data-icon="apps" data-size="16" style="font-size:16px;"></span>
+      </div>
+      <div class="demo-label">12px</div>
+      <div class="row">
+        <span class="svg-icon" data-component="svg-icon" data-icon="home" data-size="12" style="font-size:12px;"></span>
+        <span class="svg-icon" data-component="svg-icon" data-icon="search" data-size="12" style="font-size:12px;"></span>
+        <span class="svg-icon" data-component="svg-icon" data-icon="settings" data-size="12" style="font-size:12px;"></span>
+        <span class="svg-icon" data-component="svg-icon" data-icon="notification" data-size="12" style="font-size:12px;"></span>
+        <span class="svg-icon" data-component="svg-icon" data-icon="apps" data-size="12" style="font-size:12px;"></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== 颜色变体 ===== -->
+  <div class="pv-section">
+    <div class="pv-section__title">颜色变体</div>
+    <div class="row">
+      <span class="svg-icon" data-component="svg-icon" data-icon="star" style="font-size:20px;"></span>
+      <span class="svg-icon" data-component="svg-icon" data-icon="star" style="font-size:20px; color:#FF7D00;"></span>
+      <span class="svg-icon" data-component="svg-icon" data-icon="star" style="font-size:20px; color:#1664FF;"></span>
+      <span class="svg-icon" data-component="svg-icon" data-icon="check-circle" style="font-size:20px; color:#00B365;"></span>
+      <span class="svg-icon" data-component="svg-icon" data-icon="delete" style="font-size:20px; color:#D7312A;"></span>
+      <span class="svg-icon" data-component="svg-icon" data-icon="clock-circle" style="font-size:20px; color:#737A87;"></span>
+    </div>
+  </div>
+
+  <!-- ===== 常用图标 · 导航与操作 ===== -->
+  <div class="pv-section">
+    <div class="pv-section__title">常用图标 — 导航与操作</div>
+    <div class="row-16">
+      <div class="demo-icon-item"><span class="svg-icon" data-component="svg-icon" data-icon="home" style="font-size:20px;"></span><span class="demo-icon-name">home</span></div>
+      <div class="demo-icon-item"><span class="svg-icon" data-component="svg-icon" data-icon="search" style="font-size:20px;"></span><span class="demo-icon-name">search</span></div>
+      <div class="demo-icon-item"><span class="svg-icon" data-component="svg-icon" data-icon="settings" style="font-size:20px;"></span><span class="demo-icon-name">settings</span></div>
+      <div class="demo-icon-item"><span class="svg-icon" data-component="svg-icon" data-icon="notification" style="font-size:20px;"></span><span class="demo-icon-name">notification</span></div>
+      <div class="demo-icon-item"><span class="svg-icon" data-component="svg-icon" data-icon="apps" style="font-size:20px;"></span><span class="demo-icon-name">apps</span></div>
+      <div class="demo-icon-item"><span class="svg-icon" data-component="svg-icon" data-icon="filter" style="font-size:20px;"></span><span class="demo-icon-name">filter</span></div>
+      <div class="demo-icon-item"><span class="svg-icon" data-component="svg-icon" data-icon="download" style="font-size:20px;"></span><span class="demo-icon-name">download</span></div>
+      <div class="demo-icon-item"><span class="svg-icon" data-component="svg-icon" data-icon="upload" style="font-size:20px;"></span><span class="demo-icon-name">upload</span></div>
+      <div class="demo-icon-item"><span class="svg-icon" data-component="svg-icon" data-icon="plus" style="font-size:20px;"></span><span class="demo-icon-name">plus</span></div>
+      <div class="demo-icon-item"><span class="svg-icon" data-component="svg-icon" data-icon="delete" style="font-size:20px;"></span><span class="demo-icon-name">delete</span></div>
+      <div class="demo-icon-item"><span class="svg-icon" data-component="svg-icon" data-icon="edit" style="font-size:20px;"></span><span class="demo-icon-name">edit</span></div>
+      <div class="demo-icon-item"><span class="svg-icon" data-component="svg-icon" data-icon="link" style="font-size:20px;"></span><span class="demo-icon-name">link</span></div>
+    </div>
+  </div>
+
+  <!-- ===== 常用图标 · 业务与状态 ===== -->
+  <div class="pv-section">
+    <div class="pv-section__title">常用图标 — 业务与状态</div>
+    <div class="row-16">
+      <div class="demo-icon-item"><span class="svg-icon" data-component="svg-icon" data-icon="code" style="font-size:20px;"></span><span class="demo-icon-name">code</span></div>
+      <div class="demo-icon-item"><span class="svg-icon" data-component="svg-icon" data-icon="cloud-computing" style="font-size:20px;"></span><span class="demo-icon-name">cloud-computing</span></div>
+      <div class="demo-icon-item"><span class="svg-icon" data-component="svg-icon" data-icon="chart" style="font-size:20px;"></span><span class="demo-icon-name">chart</span></div>
+      <div class="demo-icon-item"><span class="svg-icon" data-component="svg-icon" data-icon="safe" style="font-size:20px;"></span><span class="demo-icon-name">safe</span></div>
+      <div class="demo-icon-item"><span class="svg-icon" data-component="svg-icon" data-icon="database" style="font-size:20px;"></span><span class="demo-icon-name">database</span></div>
+      <div class="demo-icon-item"><span class="svg-icon" data-component="svg-icon" data-icon="earth" style="font-size:20px;"></span><span class="demo-icon-name">earth</span></div>
+      <div class="demo-icon-item"><span class="svg-icon" data-component="svg-icon" data-icon="config" style="font-size:20px;"></span><span class="demo-icon-name">config</span></div>
+      <div class="demo-icon-item"><span class="svg-icon" data-component="svg-icon" data-icon="fire" style="font-size:20px;"></span><span class="demo-icon-name">fire</span></div>
+      <div class="demo-icon-item"><span class="svg-icon" data-component="svg-icon" data-icon="eye" style="font-size:20px;"></span><span class="demo-icon-name">eye</span></div>
+      <div class="demo-icon-item"><span class="svg-icon" data-component="svg-icon" data-icon="bulb" style="font-size:20px;"></span><span class="demo-icon-name">bulb</span></div>
+      <div class="demo-icon-item"><span class="svg-icon" data-component="svg-icon" data-icon="bug" style="font-size:20px;"></span><span class="demo-icon-name">bug</span></div>
+      <div class="demo-icon-item"><span class="svg-icon" data-component="svg-icon" data-icon="compass" style="font-size:20px;"></span><span class="demo-icon-name">compass</span></div>
+    </div>
+  </div>
+
+  <!-- ===== 常用图标 · 信息与标记 ===== -->
+  <div class="pv-section">
+    <div class="pv-section__title">常用图标 — 信息与标记</div>
+    <div class="row-16">
+      <div class="demo-icon-item"><span class="svg-icon" data-component="svg-icon" data-icon="star" style="font-size:20px;"></span><span class="demo-icon-name">star</span></div>
+      <div class="demo-icon-item"><span class="svg-icon" data-component="svg-icon" data-icon="flag" style="font-size:20px;"></span><span class="demo-icon-name">flag</span></div>
+      <div class="demo-icon-item"><span class="svg-icon" data-component="svg-icon" data-icon="location" style="font-size:20px;"></span><span class="demo-icon-name">location</span></div>
+      <div class="demo-icon-item"><span class="svg-icon" data-component="svg-icon" data-icon="clock-circle" style="font-size:20px;"></span><span class="demo-icon-name">clock-circle</span></div>
+      <div class="demo-icon-item"><span class="svg-icon" data-component="svg-icon" data-icon="message" style="font-size:20px;"></span><span class="demo-icon-name">message</span></div>
+      <div class="demo-icon-item"><span class="svg-icon" data-component="svg-icon" data-icon="account" style="font-size:20px;"></span><span class="demo-icon-name">account</span></div>
+      <div class="demo-icon-item"><span class="svg-icon" data-component="svg-icon" data-icon="calendar" style="font-size:20px;"></span><span class="demo-icon-name">calendar</span></div>
+      <div class="demo-icon-item"><span class="svg-icon" data-component="svg-icon" data-icon="lock" style="font-size:20px;"></span><span class="demo-icon-name">lock</span></div>
+      <div class="demo-icon-item"><span class="svg-icon" data-component="svg-icon" data-icon="key" style="font-size:20px;"></span><span class="demo-icon-name">key</span></div>
+    </div>
+  </div>
+
+  <!-- ===== 组合场景 ===== -->
+  <div class="pv-section">
+    <div class="pv-section__title">组合使用场景</div>
+    <div class="stack-12">
+      <div class="demo-label">按钮内图标</div>
+      <div class="row">
+        <button style="display:inline-flex; align-items:center; gap:6px; padding:5px 16px; background:#1664FF; color:#fff; border:none; border-radius:4px; font-size:14px; cursor:pointer;">
+          <span class="svg-icon" data-component="svg-icon" data-icon="plus"></span>新建应用
+        </button>
+        <button style="display:inline-flex; align-items:center; gap:6px; padding:5px 16px; background:#fff; color:#42464E; border:1px solid #EAEDF1; border-radius:4px; font-size:14px; cursor:pointer;">
+          <span class="svg-icon" data-component="svg-icon" data-icon="download"></span>下载
+        </button>
+      </div>
+      <div class="demo-label">导航菜单项</div>
+      <div class="row">
+        <a style="display:inline-flex; align-items:center; gap:8px; color:#42464E; font-size:14px; text-decoration:none; font-family:'PingFang SC',sans-serif;">
+          <span class="svg-icon" data-component="svg-icon" data-icon="home" style="font-size:18px;"></span><span>首页</span>
+        </a>
+        <a style="display:inline-flex; align-items:center; gap:8px; color:#42464E; font-size:14px; text-decoration:none; font-family:'PingFang SC',sans-serif;">
+          <span class="svg-icon" data-component="svg-icon" data-icon="chart" style="font-size:18px;"></span><span>数据面板</span>
+        </a>
+        <a style="display:inline-flex; align-items:center; gap:8px; color:#42464E; font-size:14px; text-decoration:none; font-family:'PingFang SC',sans-serif;">
+          <span class="svg-icon" data-component="svg-icon" data-icon="settings" style="font-size:18px;"></span><span>设置</span>
+        </a>
+      </div>
+      <div class="demo-label">表格操作列</div>
+      <div class="row">
+        <span class="svg-icon" data-component="svg-icon" data-icon="edit" style="font-size:14px; color:#1664FF; cursor:pointer;"></span>
+        <span class="svg-icon" data-component="svg-icon" data-icon="download" style="font-size:14px; color:#1664FF; cursor:pointer;"></span>
+        <span class="svg-icon" data-component="svg-icon" data-icon="delete" style="font-size:14px; color:#D7312A; cursor:pointer;"></span>
+      </div>
+      <div class="demo-label">信息条目</div>
+      <div class="row">
+        <div style="display:flex; align-items:center; gap:8px;">
+          <span class="svg-icon" data-component="svg-icon" data-icon="calendar" style="color:#737A87;"></span>
+          <span style="font-size:13px; color:#42464E; font-family:'PingFang SC',sans-serif;">创建时间：2024-03-15</span>
+        </div>
+        <div style="display:flex; align-items:center; gap:8px;">
+          <span class="svg-icon" data-component="svg-icon" data-icon="account" style="color:#737A87;"></span>
+          <span style="font-size:13px; color:#42464E; font-family:'PingFang SC',sans-serif;">创建人：admin</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== 彩色图标 ===== -->
+  <div class="pv-section">
+    <div class="pv-section__title">彩色图标</div>
+    <div class="stack-12">
+      <div class="demo-label">绿色 (Success)</div>
+      <div class="row-16">
+        <div class="demo-icon-item"><span class="svg-icon" data-icon="check-circle-fill" style="font-size:20px;"></span><span class="demo-icon-name">check-circle-fill</span></div>
+        <div class="demo-icon-item"><span class="svg-icon" data-icon="check-triangle-fill" style="font-size:20px;"></span><span class="demo-icon-name">check-triangle-fill</span></div>
+        <div class="demo-icon-item"><span class="svg-icon" data-icon="security-green" style="font-size:20px;"></span><span class="demo-icon-name">security-green</span></div>
+        <div class="demo-icon-item"><span class="svg-icon" data-icon="effectuating-circle-fill" style="font-size:20px;"></span><span class="demo-icon-name">effectuating-circle-fill</span></div>
+        <div class="demo-icon-item"><span class="svg-icon" data-icon="descending-green" style="font-size:20px;"></span><span class="demo-icon-name">descending-green</span></div>
+      </div>
+      <div class="demo-label">红色 (Error/Danger)</div>
+      <div class="row-16">
+        <div class="demo-icon-item"><span class="svg-icon" data-icon="close-circle-fill" style="font-size:20px;"></span><span class="demo-icon-name">close-circle-fill</span></div>
+        <div class="demo-icon-item"><span class="svg-icon" data-icon="exclamation-circle-red-fill" style="font-size:20px;"></span><span class="demo-icon-name">exclamation-circle-red-fill</span></div>
+        <div class="demo-icon-item"><span class="svg-icon" data-icon="risk-red" style="font-size:20px;"></span><span class="demo-icon-name">risk-red</span></div>
+        <div class="demo-icon-item"><span class="svg-icon" data-icon="high-risk-red" style="font-size:20px;"></span><span class="demo-icon-name">high-risk-red</span></div>
+        <div class="demo-icon-item"><span class="svg-icon" data-icon="rollbacked-circle-fill" style="font-size:20px;"></span><span class="demo-icon-name">rollbacked-circle-fill</span></div>
+      </div>
+      <div class="demo-label">黄色/橙色 (Warning)</div>
+      <div class="row-16">
+        <div class="demo-icon-item"><span class="svg-icon" data-icon="exclamation-circle-fill" style="font-size:20px;"></span><span class="demo-icon-name">exclamation-circle-fill</span></div>
+        <div class="demo-icon-item"><span class="svg-icon" data-icon="warning-yellow" style="font-size:20px;"></span><span class="demo-icon-name">warning-yellow</span></div>
+        <div class="demo-icon-item"><span class="svg-icon" data-icon="low-risk-yellow" style="font-size:20px;"></span><span class="demo-icon-name">low-risk-yellow</span></div>
+        <div class="demo-icon-item"><span class="svg-icon" data-icon="moderate-risk-orange" style="font-size:20px;"></span><span class="demo-icon-name">moderate-risk-orange</span></div>
+        <div class="demo-icon-item"><span class="svg-icon" data-icon="pending-circle-fill" style="font-size:20px;"></span><span class="demo-icon-name">pending-circle-fill</span></div>
+      </div>
+      <div class="demo-label">蓝色 (Info/Processing)</div>
+      <div class="row-16">
+        <div class="demo-icon-item"><span class="svg-icon" data-icon="info-circle-fill" style="font-size:20px;"></span><span class="demo-icon-name">info-circle-fill</span></div>
+        <div class="demo-icon-item"><span class="svg-icon" data-icon="clock-circle-fill" style="font-size:20px;"></span><span class="demo-icon-name">clock-circle-fill</span></div>
+        <div class="demo-icon-item"><span class="svg-icon" data-icon="check-circle-blue" style="font-size:20px;"></span><span class="demo-icon-name">check-circle-blue</span></div>
+        <div class="demo-icon-item"><span class="svg-icon" data-icon="prompt-blue" style="font-size:20px;"></span><span class="demo-icon-name">prompt-blue</span></div>
+      </div>
+      <div class="demo-label">灰色 (Stop/Disabled)</div>
+      <div class="row-16">
+        <div class="demo-icon-item"><span class="svg-icon" data-icon="minus-circle-fill-grey" style="font-size:20px;"></span><span class="demo-icon-name">minus-circle-fill-grey</span></div>
+        <div class="demo-icon-item"><span class="svg-icon" data-icon="clock-circle-grey-fill" style="font-size:20px;"></span><span class="demo-icon-name">clock-circle-grey-fill</span></div>
+        <div class="demo-icon-item"><span class="svg-icon" data-icon="canceled-circle-fill" style="font-size:20px;"></span><span class="demo-icon-name">canceled-circle-fill</span></div>
+        <div class="demo-icon-item"><span class="svg-icon" data-icon="ignored-circle-fill" style="font-size:20px;"></span><span class="demo-icon-name">ignored-circle-fill</span></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+  var ICON_MAP = {
+    'home': '<svg viewBox="0 0 16 16"><path d="M8 1.5L1.5 7v7.5h4.25V11a2.25 2.25 0 014.5 0v3.5h4.25V7L8 1.5z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></svg>',
+    'search': '<svg viewBox="0 0 16 16"><circle cx="7" cy="7" r="4.5" stroke="currentColor" stroke-width="1.2" fill="none"/><path d="M10.5 10.5L14 14" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>',
+    'settings': '<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="2" stroke="currentColor" stroke-width="1.2" fill="none"/><path d="M8 1v2M8 13v2M1 8h2M13 8h2M3.05 3.05l1.41 1.41M11.54 11.54l1.41 1.41M3.05 12.95l1.41-1.41M11.54 4.46l1.41-1.41" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>',
+    'notification': '<svg viewBox="0 0 16 16"><path d="M4 6a4 4 0 018 0v3l1.5 2H2.5L4 9V6z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round" fill="none"/><path d="M6.5 13a1.5 1.5 0 003 0" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>',
+    'apps': '<svg viewBox="0 0 16 16"><rect x="2" y="2" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.2" fill="none"/><rect x="9" y="2" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.2" fill="none"/><rect x="2" y="9" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.2" fill="none"/><rect x="9" y="9" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.2" fill="none"/></svg>',
+    'filter': '<svg viewBox="0 0 16 16"><path d="M2 3h12L9.5 8.5V12l-3 1.5V8.5L2 3z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round" fill="none"/></svg>',
+    'download': '<svg viewBox="0 0 16 16"><path d="M8 2v8.5M5 8l3 3 3-3M3 13h10" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    'upload': '<svg viewBox="0 0 16 16"><path d="M8 10.5V2M5 4.5L8 1.5l3 3M3 13h10" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    'plus': '<svg viewBox="0 0 16 16"><path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>',
+    'delete': '<svg viewBox="0 0 16 16"><path d="M3 4h10M6 4V3a1 1 0 011-1h2a1 1 0 011 1v1M4.5 4v8.5a1 1 0 001 1h5a1 1 0 001-1V4" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>',
+    'edit': '<svg viewBox="0 0 16 16"><path d="M11.5 2.5l2 2L5 13H3v-2l8.5-8.5z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round" fill="none"/><path d="M9.5 4.5l2 2" stroke="currentColor" stroke-width="1.2"/></svg>',
+    'link': '<svg viewBox="0 0 16 16"><path d="M6.5 9.5l3-3M5 11a2.83 2.83 0 01-2-4.83L5.83 3.34A2.83 2.83 0 0110 4.5M11 5a2.83 2.83 0 012 4.83l-2.83 2.83A2.83 2.83 0 016 11.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" fill="none"/></svg>',
+    'code': '<svg viewBox="0 0 16 16"><path d="M5 4L1.5 8 5 12M11 4l3.5 4L11 12M9 2l-2 12" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    'cloud-computing': '<svg viewBox="0 0 16 16"><path d="M4.5 12.5a3.5 3.5 0 01-.35-6.97 5 5 0 019.7 0A3.5 3.5 0 0111.5 12.5h-7z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round" fill="none"/></svg>',
+    'chart': '<svg viewBox="0 0 16 16"><path d="M2 14h12M4 10v4M7 7v7M10 5v9M13 3v11" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>',
+    'safe': '<svg viewBox="0 0 16 16"><path d="M8 1.5L3 3.5v4c0 3.5 2.5 5.5 5 7 2.5-1.5 5-3.5 5-7v-4L8 1.5z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round" fill="none"/></svg>',
+    'database': '<svg viewBox="0 0 16 16"><ellipse cx="8" cy="4" rx="5" ry="2" stroke="currentColor" stroke-width="1.2" fill="none"/><path d="M3 4v8c0 1.1 2.24 2 5 2s5-.9 5-2V4" stroke="currentColor" stroke-width="1.2" fill="none"/><path d="M3 8c0 1.1 2.24 2 5 2s5-.9 5-2" stroke="currentColor" stroke-width="1.2" fill="none"/></svg>',
+    'earth': '<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.2" fill="none"/><ellipse cx="8" cy="8" rx="2.5" ry="6" stroke="currentColor" stroke-width="1.2" fill="none"/><path d="M2.5 5.5h11M2.5 10.5h11" stroke="currentColor" stroke-width="1.2"/></svg>',
+    'config': '<svg viewBox="0 0 16 16"><path d="M2 4h5M11 4h3M2 8h3M9 8h5M2 12h7M13 12h1" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/><circle cx="9" cy="4" r="1.5" stroke="currentColor" stroke-width="1.2" fill="none"/><circle cx="7" cy="8" r="1.5" stroke="currentColor" stroke-width="1.2" fill="none"/><circle cx="11" cy="12" r="1.5" stroke="currentColor" stroke-width="1.2" fill="none"/></svg>',
+    'fire': '<svg viewBox="0 0 16 16"><path d="M8 1C6 4 4.5 5.5 4.5 8.5a3.5 3.5 0 007 0C11.5 5.5 10 4 8 1z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round" fill="none"/></svg>',
+    'eye': '<svg viewBox="0 0 16 16"><path d="M1.5 8S4 4 8 4s6.5 4 6.5 4-2.5 4-6.5 4-6.5-4-6.5-4z" stroke="currentColor" stroke-width="1.2" fill="none"/><circle cx="8" cy="8" r="2" stroke="currentColor" stroke-width="1.2" fill="none"/></svg>',
+    'bulb': '<svg viewBox="0 0 16 16"><path d="M6 12h4M6.5 13.5h3M8 2a4 4 0 00-2 7.46V11h4V9.46A4 4 0 008 2z" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>',
+    'bug': '<svg viewBox="0 0 16 16"><ellipse cx="8" cy="9" rx="3" ry="4" stroke="currentColor" stroke-width="1.2" fill="none"/><path d="M6 5a2 2 0 014 0M2 8h3M11 8h3M3 5l2 2M13 5l-2 2M3 12l2-1M13 12l-2-1" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>',
+    'compass': '<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.2" fill="none"/><path d="M10.5 5.5L9 9 5.5 10.5 7 7l3.5-1.5z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round" fill="none"/></svg>',
+    'star': '<svg viewBox="0 0 16 16"><path d="M8 2l1.8 3.6L14 6.2l-3 2.9.7 4.1L8 11.3l-3.7 1.9.7-4.1-3-2.9 4.2-.6L8 2z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round" fill="none"/></svg>',
+    'flag': '<svg viewBox="0 0 16 16"><path d="M3 2v12M3 2h8l-2 3 2 3H3" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>',
+    'location': '<svg viewBox="0 0 16 16"><path d="M8 14s-4.5-3.5-4.5-6.5a4.5 4.5 0 019 0C12.5 10.5 8 14 8 14z" stroke="currentColor" stroke-width="1.2" fill="none"/><circle cx="8" cy="7.5" r="1.5" stroke="currentColor" stroke-width="1.2" fill="none"/></svg>',
+    'clock-circle': '<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.2" fill="none"/><path d="M8 4.5V8l2.5 1.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    'message': '<svg viewBox="0 0 16 16"><path d="M2 3h12v8H5L2 13.5V3z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round" fill="none"/></svg>',
+    'account': '<svg viewBox="0 0 16 16"><circle cx="8" cy="5.5" r="2.5" stroke="currentColor" stroke-width="1.2" fill="none"/><path d="M3.5 14c0-2.5 2-4.5 4.5-4.5s4.5 2 4.5 4.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" fill="none"/></svg>',
+    'calendar': '<svg viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="11" rx="1" stroke="currentColor" stroke-width="1.2" fill="none"/><path d="M2 6.5h12M5 2v2M11 2v2" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>',
+    'lock': '<svg viewBox="0 0 16 16"><rect x="3" y="7" width="10" height="7" rx="1" stroke="currentColor" stroke-width="1.2" fill="none"/><path d="M5 7V5a3 3 0 016 0v2" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" fill="none"/></svg>',
+    'key': '<svg viewBox="0 0 16 16"><circle cx="5.5" cy="10.5" r="2.5" stroke="currentColor" stroke-width="1.2" fill="none"/><path d="M7.5 8.5L13 3M11 3l2 2M9.5 6.5l1.5 1.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>',
+    'check-circle': '<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.2" fill="none"/><path d="M5.5 8l2 2 3.5-3.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    'check-circle-fill': '<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="7" fill="#00B365"/><path d="M5 8l2 2.5L11.5 6" stroke="#fff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>',
+    'check-triangle-fill': '<svg viewBox="0 0 16 16"><path d="M8 2l6.5 11H1.5L8 2z" fill="#00B365"/><path d="M7 9.5l1.5 1.5L11 8" stroke="#fff" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>',
+    'security-green': '<svg viewBox="0 0 16 16"><path d="M8 1.5L3 3.5v4c0 3.5 2.5 5.5 5 7 2.5-1.5 5-3.5 5-7v-4L8 1.5z" fill="#00B365"/><path d="M6 8l1.5 1.5L10.5 6" stroke="#fff" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>',
+    'effectuating-circle-fill': '<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="7" fill="#00B365"/><path d="M5 8h6M8 5v6" stroke="#fff" stroke-width="1.5" stroke-linecap="round"/></svg>',
+    'descending-green': '<svg viewBox="0 0 16 16"><path d="M4 6l4 4 4-4" fill="#00B365" stroke="#00B365" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    'close-circle-fill': '<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="7" fill="#D7312A"/><path d="M5.5 5.5l5 5M10.5 5.5l-5 5" stroke="#fff" stroke-width="1.5" stroke-linecap="round"/></svg>',
+    'exclamation-circle-fill': '<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="7" fill="#FF7D00"/><path d="M8 5v4M8 11v.5" stroke="#fff" stroke-width="1.5" stroke-linecap="round"/></svg>',
+    'info-circle-fill': '<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="7" fill="#1664FF"/><path d="M8 5v.5M8 7.5v4" stroke="#fff" stroke-width="1.5" stroke-linecap="round"/></svg>',
+    'clock-circle-fill': '<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="7" fill="#1664FF"/><path d="M8 4v3l2 1" stroke="#fff" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>',
+    'minus-circle-fill-grey': '<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="7" fill="#80838A"/><path d="M5 8h6" stroke="#fff" stroke-width="1.5" stroke-linecap="round"/></svg>',
+    'canceled-circle-fill': '<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="7" fill="#80838A"/><path d="M5.5 5.5l5 5M10.5 5.5l-5 5" stroke="#fff" stroke-width="1.5" stroke-linecap="round"/></svg>',
+    'ignored-circle-fill': '<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="7" fill="#80838A"/><path d="M5 8h6" stroke="#fff" stroke-width="1.5" stroke-linecap="round"/></svg>',
+    'pending-circle-fill': '<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="7" fill="#FF7D00"/><circle cx="5.5" cy="8" r="1" fill="#fff"/><circle cx="8" cy="8" r="1" fill="#fff"/><circle cx="10.5" cy="8" r="1" fill="#fff"/></svg>'
+  };
+
+  document.querySelectorAll('.svg-icon[data-icon]').forEach(function(el) {
+    var name = el.getAttribute('data-icon');
+    if (ICON_MAP[name]) {
+      el.innerHTML = ICON_MAP[name];
+    } else {
+      el.innerHTML = '<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="3" fill="currentColor" opacity="0.3"/></svg>';
+    }
+  });
+  </script>
+</body>
+</html>

@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>
+  /* Page scaffold — NOT extracted */
+  /* @component-css-start */
+body{margin:0;padding:12px;background:var(--background);color:var(--foreground);font:13px/1.4 var(--font-sans)}.row{display:flex;flex-wrap:wrap;gap:8px;align-items:stretch;margin-bottom:8px}.label{width:100%;font:600 10px/1 var(--font-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted-foreground)}.card{flex:1 1 176px;min-width:176px;max-width:220px;padding:calc(var(--spacing)*4) calc(var(--spacing)*4.5);border:1px solid var(--border);border-radius:var(--radius);background:var(--card);color:var(--card-foreground);box-shadow:var(--shadow);transition:transform .16s ease,border-color .16s ease,background .16s ease}.card:hover{transform:translateY(-1px);border-color:var(--ring)}.eyebrow{margin:0 0 calc(var(--spacing)*1.5);font:600 10px/1 var(--font-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted-foreground)}.title{margin:0;font-size:14px;font-weight:600}.body{margin:calc(var(--spacing)*2) 0 0;font-size:12px;color:var(--muted-foreground)}.meta{display:flex;justify-content:space-between;gap:8px;margin-top:calc(var(--spacing)*3);font-size:11px;color:var(--muted-foreground)}.disabled{background:var(--muted);opacity:.56;pointer-events:none;box-shadow:var(--shadow-xs)}.selected{border-color:var(--primary)}.accent{background:var(--accent);color:var(--foreground);border-color:transparent}.accent .body,.accent .meta{color:var(--foreground)}.compact{padding:calc(var(--spacing)*3)}.action{display:inline-flex;align-items:center;justify-content:center;min-width:70px;margin-top:calc(var(--spacing)*3);padding:calc(var(--spacing)*1.5) calc(var(--spacing)*3);border-radius:var(--radius);background:var(--primary);color:var(--primary-foreground);font-size:11px;font-weight:600}.divider{margin:10px 0;border:0;border-top:1px solid var(--border)}
+  /* @component-css-end */
+</style>
+</head>
+<body>
+<div class="row"><span class="label">summary</span><article class="card"><p class="eyebrow">Vibecamp Dashboard</p><h2 class="title">Active Sessions</h2><p class="body">148 members checked in across 12 live rooms.</p><div class="meta"><span>Updated 2m ago</span><span>+18%</span></div></article><article class="card disabled" aria-disabled="true"><p class="eyebrow">Vibecamp Dashboard</p><h2 class="title">Community Pulse</h2><p class="body">Signal refresh is paused until the next sync window.</p><div class="meta"><span>Sync queued</span><span>Standby</span></div></article></div>
+<hr class="divider">
+<div class="row"><span class="label">featured</span><article class="card accent selected"><h2 class="title">Peak Attendance</h2><p class="body">North Hall is trending ahead of forecast for tonight.</p><div class="meta"><span>1,284 attendees</span><span>Prime slot</span></div><span class="action">View trend</span></article><article class="card compact"><h2 class="title">Community Pulse</h2><p class="body">Volunteer notes and member sentiment are grouped here.</p><div class="meta"><span>18 updates</span><span>Low noise</span></div></article></div>
+</body>
+</html>

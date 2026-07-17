@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>
+  /* Page scaffold — NOT extracted */
+  /* @component-css-start */
+body{margin:0;padding:12px;background:var(--background);color:var(--foreground);font:14px/1.4 var(--font-sans);letter-spacing:var(--tracking-normal)}.row{display:flex;gap:8px;align-items:flex-start;flex-wrap:wrap}.label{padding-top:10px;min-width:78px;color:var(--muted-foreground);font:600 10px/1 var(--font-mono);text-transform:uppercase;letter-spacing:.08em}.panel{min-width:0;flex:1;background:var(--card);color:var(--card-foreground);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-sm);overflow:hidden}.table{width:100%;border-collapse:separate;border-spacing:0}.table th,.table td{padding:calc(var(--spacing)*3) calc(var(--spacing)*4);text-align:left;border-bottom:1px solid var(--border)}.table th{background:var(--muted);color:var(--muted-foreground);font-size:11px;font-weight:600}.table tr:last-child td{border-bottom:0}.tag{display:inline-flex;align-items:center;padding:0 calc(var(--spacing)*2);min-height:20px;border-radius:999px;background:var(--accent);color:var(--accent-foreground);font-size:11px}.btn{padding:calc(var(--spacing)*1.5) calc(var(--spacing)*3);border:1px solid var(--border);border-radius:calc(var(--radius) - 8px);background:var(--background);color:var(--foreground);font:600 12px/1 var(--font-sans)}.btn:disabled{background:var(--muted);color:var(--muted-foreground)}.off td{color:var(--muted-foreground)}.divider{margin:12px 0;border:0;border-top:1px solid var(--border)}.compact th,.compact td{padding:calc(var(--spacing)*2) calc(var(--spacing)*3)}.compact tbody tr:hover{background:var(--accent)}.sel{width:16px;height:16px;border:1px solid var(--border);border-radius:4px;display:inline-grid;place-items:center;background:var(--background)}.sel.on{border-color:var(--ring);background:var(--primary);color:var(--primary-foreground)}
+  /* @component-css-end */
+</style>
+</head>
+<body>
+<div class="row"><span class="label">Roster</span><div class="panel"><table class="table"><thead><tr><th>Stage</th><th>Capacity</th><th>Host</th><th>Status</th><th></th></tr></thead><tbody><tr><td>Main Hall</td><td>220</td><td>Rina</td><td><span class="tag">Live</span></td><td><button class="btn">Open</button></td></tr><tr class="off"><td>Sunset Deck</td><td>80</td><td>Noah</td><td><span class="tag">Draft</span></td><td><button class="btn" disabled>Locked</button></td></tr></tbody></table></div></div>
+<hr class="divider">
+<div class="row"><span class="label">Selectable</span><div class="panel"><table class="table compact"><thead><tr><th></th><th>Stage</th><th>Capacity</th><th>Host</th></tr></thead><tbody><tr><td><span class="sel on">✓</span></td><td>Studio A</td><td>48</td><td>Maya</td></tr><tr><td><span class="sel"></span></td><td>Workshop Hub</td><td>36</td><td>Jules</td></tr></tbody></table></div></div>
+</body>
+</html>

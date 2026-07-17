@@ -1,0 +1,85 @@
+{
+  "schemaVersion": 2,
+  "slug": "table",
+  "name": "Table",
+  "category": "data-display",
+  "sourceKind": "structured-spec",
+  "confidence": "medium",
+  "semanticTypeCandidates": [
+    "data-table"
+  ],
+  "variantDimensions": {
+    "density": [
+      "regular"
+    ],
+    "cellTypes": [
+      "text",
+      "avatar+text",
+      "tag",
+      "icon-button"
+    ]
+  },
+  "representativeVariants": [
+    {
+      "rows": 3,
+      "columns": 5
+    }
+  ],
+  "anatomy": [
+    "thead",
+    "row",
+    "cell",
+    "leading-avatar",
+    "trailing-actions"
+  ],
+  "structurePatterns": [
+    "thead with --text-tertiary on --bg-overlay-l1 row separator"
+  ],
+  "usageHints": [
+    "Status communicated via inline --ds-tag, never via row background",
+    "Container uses --bg-base-secondary + --border-neutral-l1 + --radius-4"
+  ],
+  "doNotInvent": [
+    "No selection / sort / column-resize defined"
+  ],
+  "unknowns": [
+    "pagination integration"
+  ],
+  "tokensConsumed": [
+    "--body-sm-font-size",
+    "--body-xs-font-size",
+    "--border-neutral-l1",
+    "--font-weight-default",
+    "--spacer-12",
+    "--spacer-8",
+    "--text-default",
+    "--text-tertiary"
+  ],
+  "domAnatomy": {
+    "root": {
+      "tag": "div",
+      "children": [
+        {
+          "tag": "table",
+          "class": "ds-table",
+          "children": [
+            {
+              "tag": "thead"
+            },
+            {
+              "tag": "tbody"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "provenance": {
+    "preview": "preview/component-table.html",
+    "source": "previews/table.html",
+    "css": {
+      "file": "components.css",
+      "marker": "── Table ──"
+    }
+  }
+}

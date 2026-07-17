@@ -1,0 +1,122 @@
+{
+  "schemaVersion": 2,
+  "slug": "avatar",
+  "name": "Avatar",
+  "category": "data-display",
+  "sourceKind": "structured-spec",
+  "confidence": "medium",
+  "semanticTypeCandidates": [
+    "avatar",
+    "user-chip"
+  ],
+  "variantDimensions": {
+    "size": [
+      "sm",
+      "md",
+      "lg"
+    ],
+    "grouping": [
+      "single",
+      "stacked"
+    ]
+  },
+  "representativeVariants": [
+    {
+      "size": "sm"
+    },
+    {
+      "size": "md"
+    },
+    {
+      "size": "lg"
+    },
+    {
+      "grouping": "stacked",
+      "overflow": "+5"
+    }
+  ],
+  "anatomy": [
+    "circle-frame",
+    "initials",
+    "border-ring"
+  ],
+  "structurePatterns": [
+    "row of singles",
+    "negative-margin stack with overflow chip"
+  ],
+  "usageHints": [
+    "Stack ring uses 2px solid --bg-base-default to mask underlying avatars",
+    "Overflow chip uses --bg-overlay-l2 + --text-tertiary"
+  ],
+  "doNotInvent": [
+    "Do not add status dot variants — not defined in source"
+  ],
+  "unknowns": [
+    "image avatar fallback chain"
+  ],
+  "tokensConsumed": [
+    "--bg-base-default",
+    "--bg-overlay-l3",
+    "--body-sm-font-size",
+    "--body-xs-font-size",
+    "--font-weight-strong",
+    "--text-default"
+  ],
+  "domAnatomy": {
+    "root": {
+      "tag": "div",
+      "class": "row",
+      "children": [
+        {
+          "tag": "span",
+          "class": "ds-avatar ds-avatar--sm",
+          "text": "A"
+        },
+        {
+          "tag": "span",
+          "class": "ds-avatar",
+          "text": "M"
+        },
+        {
+          "tag": "span",
+          "class": "ds-avatar ds-avatar--lg",
+          "text": "L"
+        },
+        {
+          "tag": "div",
+          "class": "row",
+          "children": [
+            {
+              "tag": "span",
+              "class": "ds-avatar",
+              "text": "A"
+            },
+            {
+              "tag": "span",
+              "class": "ds-avatar",
+              "text": "M"
+            },
+            {
+              "tag": "span",
+              "class": "ds-avatar",
+              "text": "L"
+            },
+            {
+              "tag": "span",
+              "class": "ds-avatar",
+              "text": "+5"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "provenance": {
+    "preview": "preview/component-avatar.html",
+    "source": "previews/avatar.html",
+    "css": {
+      "file": "components.css",
+      "marker": "── Avatar ──"
+    }
+  }
+}

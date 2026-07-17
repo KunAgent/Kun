@@ -1,0 +1,200 @@
+:root {
+  
+  /* solo-design consumption aliases: explicit prefix for fill-html-head.mjs */
+  --vibe-background: var(--background, #ffffff);
+  --vibe-foreground: var(--foreground, #0f172a);
+  --vibe-card: var(--card, var(--background));
+  --vibe-card-foreground: var(--card-foreground, var(--foreground));
+  --vibe-popover: var(--popover, var(--card));
+  --vibe-popover-foreground: var(--popover-foreground, var(--card-foreground, var(--foreground)));
+  --vibe-primary: var(--primary, #111827);
+  --vibe-primary-foreground: var(--primary-foreground, #ffffff);
+  --vibe-secondary: var(--secondary, var(--muted, var(--card)));
+  --vibe-secondary-foreground: var(--secondary-foreground, var(--foreground));
+  --vibe-muted: var(--muted, var(--card));
+  --vibe-muted-foreground: var(--muted-foreground, var(--foreground));
+  --vibe-accent: var(--accent, var(--secondary, var(--muted, var(--card))));
+  --vibe-accent-foreground: var(--accent-foreground, var(--foreground));
+  --vibe-destructive: var(--destructive, #ef4444);
+  --vibe-destructive-foreground: var(--destructive-foreground, #ffffff);
+  --vibe-border: var(--border, currentColor);
+  --vibe-input: var(--input, var(--border));
+  --vibe-ring: var(--ring, var(--primary));
+  --vibe-chart-1: var(--chart-1, var(--primary));
+  --vibe-chart-2: var(--chart-2, var(--secondary, var(--primary)));
+  --vibe-chart-3: var(--chart-3, var(--accent, var(--primary)));
+  --vibe-chart-4: var(--chart-4, var(--muted-foreground, var(--foreground)));
+  --vibe-chart-5: var(--chart-5, var(--foreground));
+  --vibe-sidebar: var(--sidebar, var(--background));
+  --vibe-sidebar-foreground: var(--sidebar-foreground, var(--foreground));
+  --vibe-sidebar-primary: var(--sidebar-primary, var(--primary));
+  --vibe-sidebar-primary-foreground: var(--sidebar-primary-foreground, var(--primary-foreground));
+  --vibe-sidebar-accent: var(--sidebar-accent, var(--accent, var(--muted, var(--card))));
+  --vibe-sidebar-accent-foreground: var(--sidebar-accent-foreground, var(--accent-foreground, var(--foreground)));
+
+/* brand */
+  --brand-50: #fff4ee;
+  --brand-100: #ffe6dc;
+  --brand-200: #ffc8b5;
+  --brand-300: #ffab8f;
+  --brand-400: #ff845f;
+  --brand-500: #f7663c;
+  --brand-600: #f1481e;
+  --brand-700: #d63a14;
+  --brand-800: #ad2f13;
+  --brand-900: #8a2914;
+
+  /* surface */
+  --background: #e3dfd9;
+  --muted: #ece7e1;
+  --card: #f3f0eb;
+  --popover: #f7f4ef;
+
+  /* text */
+  --foreground: #211d1a;
+  --muted-foreground: #5c5650;
+  --card-foreground: #211d1a;
+  --popover-foreground: #211d1a;
+  --accent-foreground: #211d1a;
+  --secondary-foreground: #ffffff;
+
+  /* action */
+  --primary: var(--brand-600);
+  --primary-foreground: #fff7f3;
+  --accent: #ded7cf;
+  --input: #d7d1c9;
+  --border: #cbc3ba;
+  --secondary: #1d1e20;
+  --ring: var(--brand-500);
+
+  /* feedback */
+  --destructive: #ef4444;
+  --destructive-foreground: #ffffff;
+
+  /* chart */
+  --chart-1: #f7663c;
+  --chart-2: #aea4fd;
+  --chart-3: #13b15a;
+  --chart-4: #84776e;
+  --chart-5: #fe9a45;
+
+  /* sidebar */
+  --sidebar: #d2cbc3;
+  --sidebar-foreground: #211d1a;
+  --sidebar-primary: var(--primary);
+  --sidebar-primary-foreground: var(--primary-foreground);
+  --sidebar-accent: #212121;
+  --sidebar-accent-foreground: #ffffff;
+  --sidebar-border: #d6cec6;
+  --sidebar-ring: var(--ring);
+
+  /* compatibility aliases */
+  --bg-background: var(--background);
+  --bg-card: var(--card);
+  --bg-popover: var(--popover);
+  --bg-muted: var(--muted);
+  --text-foreground: var(--foreground);
+  --text-card-foreground: var(--card-foreground);
+  --text-popover-foreground: var(--popover-foreground);
+  --text-primary-foreground: var(--primary-foreground);
+  --text-secondary-foreground: var(--secondary-foreground);
+  --text-muted-foreground: var(--muted-foreground);
+  --text-accent-foreground: var(--accent-foreground);
+  --text-destructive-foreground: var(--destructive-foreground);
+  --accent-primary: var(--primary);
+  --accent-secondary: var(--secondary);
+  --accent-input: var(--input);
+  --accent-ring: var(--ring);
+  --status-destructive: var(--destructive);
+
+  /* === Typography === */
+  --font-sans: Geist, ui-sans-serif, sans-serif, system-ui;
+  --font-serif: Playfair Display, ui-serif, serif;
+  --font-mono: Roboto Mono, monospace;
+  --tracking-normal: 0em;
+
+  /* === Radius === */
+  --radius: 18px;
+
+  /* === Spacing === */
+  --spacing: 4px;
+
+  /* === Size === */
+
+  /* === Shadow === */
+  --shadow-2xs: transparent;
+  --shadow-xs: 2px 2px 10px 4px transparent;
+  --shadow-sm: 2px 2px 10px 4px transparent;
+  --shadow: 2px 2px 10px 4px transparent;
+  --shadow-md: 2px 2px 10px 4px transparent;
+  --shadow-lg: 2px 2px 10px 4px transparent;
+  --shadow-xl: 2px 2px 10px 4px transparent;
+  --shadow-2xl: transparent;
+}
+
+.dark {
+  /* surface */
+  --background: #1e1a16;
+  --muted: #221d19;
+  --card: #2a2521;
+  --popover: #302923;
+
+  /* text */
+  --foreground: #f2ede7;
+  --muted-foreground: #b4aba2;
+  --card-foreground: #f2ede7;
+  --popover-foreground: #f2ede7;
+  --accent-foreground: #f2ede7;
+  --secondary-foreground: #f2ede7;
+
+  /* action */
+  --primary: var(--brand-600);
+  --primary-foreground: #31150d;
+  --accent: #443c35;
+  --input: #3a332d;
+  --border: #3a322c;
+  --secondary: #4a413a;
+  --ring: var(--brand-500);
+
+  /* feedback */
+  --destructive: #ff6b57;
+  --destructive-foreground: #fff5f2;
+
+  /* chart */
+  --chart-1: #ff845f;
+  --chart-2: #f4b366;
+  --chart-3: #3ccf8e;
+  --chart-4: #b3a6ff;
+  --chart-5: #f0d2a6;
+
+  /* sidebar */
+  --sidebar: #2b2520;
+  --sidebar-foreground: #f2ede7;
+  --sidebar-primary: var(--primary);
+  --sidebar-primary-foreground: var(--primary-foreground);
+  --sidebar-accent: #443c35;
+  --sidebar-accent-foreground: #f2ede7;
+  --sidebar-border: #3a322c;
+  --sidebar-ring: var(--ring);
+
+  /* compatibility aliases */
+  --bg-background: var(--background);
+  --bg-card: var(--card);
+  --bg-popover: var(--popover);
+  --bg-muted: var(--muted);
+  --text-foreground: var(--foreground);
+  --text-card-foreground: var(--card-foreground);
+  --text-popover-foreground: var(--popover-foreground);
+  --text-primary-foreground: var(--primary-foreground);
+  --text-secondary-foreground: var(--secondary-foreground);
+  --text-muted-foreground: var(--muted-foreground);
+  --text-accent-foreground: var(--accent-foreground);
+  --text-destructive-foreground: var(--destructive-foreground);
+  --accent-primary: var(--primary);
+  --accent-secondary: var(--secondary);
+  --accent-input: var(--input);
+  --accent-ring: var(--ring);
+  --status-destructive: var(--destructive);
+  --shadow-2xs: transparent;
+  --shadow-2xl: transparent;
+}

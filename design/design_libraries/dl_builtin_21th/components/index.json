@@ -1,0 +1,51 @@
+{
+  "libraryName": "21th Design Library",
+  "brandSlug": "21th",
+  "productType": "analytics dashboard",
+  "kitType": "dashboard",
+  "components": [
+    {
+      "slug": "button",
+      "name": "Button",
+      "category": "actions",
+      "keyInsight": "Sharp, zero-radius action control with offset shadow and monochrome weight."
+    },
+    {
+      "slug": "card",
+      "name": "Card",
+      "category": "surfaces",
+      "keyInsight": "Flat analytical panel with bright border and strict spacing rhythm."
+    },
+    {
+      "slug": "input",
+      "name": "Input",
+      "category": "forms",
+      "keyInsight": "Dense field treatment with strong contrast, mono typing, and visible focus."
+    },
+    {
+      "slug": "sidebar-nav",
+      "name": "Sidebar Navigation",
+      "category": "navigation",
+      "keyInsight": "Dedicated sidebar token family drives a structured command-center navigation shell."
+    },
+    {
+      "slug": "data-table",
+      "name": "Data Table",
+      "category": "data display",
+      "keyInsight": "Grid-first reporting table with quiet surfaces and emphatic metric contrast."
+    },
+    {
+      "slug": "chart-panel",
+      "name": "Chart Panel",
+      "category": "data visualization",
+      "keyInsight": "Blue chart scale lives inside restrained panels, keeping accent color scarce and meaningful."
+    }
+  ],
+  "crossComponentPatterns": {
+    "shapeLanguage": "Square-first composition with 0 radius and crisp borders.",
+    "spacingRhythm": "4px base spacing token with compact dashboard density.",
+    "shadowStyle": "Offset black shadow creates a neo-brutalist control edge.",
+    "typography": "Monospace-first interface voice using Geist Mono.",
+    "colorApproach": "Neutral grayscale foundation with a single electric blue accent and dedicated chart blues."
+  }
+}

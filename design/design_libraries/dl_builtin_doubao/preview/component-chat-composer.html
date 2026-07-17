@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="stylesheet" href="../colors_and_type.css">
+<title>Chat Composer · 豆包</title>
+<style>
+  /* Page scaffold — NOT extracted */
+  /* @component-css-start */
+  *{box-sizing:border-box}
+  body{margin:0;padding:24px;background:var(--background);color:var(--foreground);font-family:var(--font-sans);font-size:14px;line-height:1.4}
+  .wrap{max-width:720px;display:flex;flex-direction:column;gap:14px}
+  .composer{border:1px solid var(--border);border-radius:22px;background:var(--card);padding:14px 16px 10px;transition:border-color .16s,box-shadow .16s}
+  .composer:focus-within{border-color:var(--ring);box-shadow:0 0 0 3px color-mix(in srgb,var(--ring) 18%,transparent)}
+  textarea{width:100%;border:0;outline:0;background:transparent;resize:none;color:inherit;font:15px/1.5 var(--font-sans);min-height:24px;max-height:160px}
+  textarea::placeholder{color:var(--muted-foreground)}
+  .tools{display:flex;align-items:center;gap:6px;margin-top:10px;flex-wrap:wrap}
+  .composer-chip{display:inline-flex;align-items:center;gap:6px;border:0;border-radius:999px;background:transparent;color:color-mix(in srgb,var(--foreground) 78%,var(--muted-foreground));padding:7px 11px;font:13px var(--font-sans);cursor:pointer;transition:background .14s,color .14s}
+  .composer-chip:hover{background:var(--muted);color:var(--foreground)}
+  .composer-chip.round{width:34px;height:34px;padding:0;justify-content:center;border:1px solid var(--border)}
+  .spacer{flex:1}
+  .send{width:36px;height:36px;border:0;border-radius:999px;background:var(--primary);color:var(--primary-foreground);display:grid;place-items:center;cursor:pointer;transition:background .15s}
+  .send:hover{background:color-mix(in srgb,var(--primary) 90%,var(--foreground))}
+  .voice{width:36px;height:36px;border:1px solid var(--border);border-radius:999px;background:transparent;color:var(--muted-foreground);display:grid;place-items:center;cursor:pointer}
+  .voice:hover{background:var(--muted);color:var(--foreground)}
+  .label{font:600 11px/1 var(--font-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted-foreground)}
+  .icon{width:16px;height:16px;flex:none;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+  /* @component-css-end */
+</style>
+</head>
+<body>
+<svg style="display:none" xmlns="http://www.w3.org/2000/svg">
+  <symbol id="plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="bolt" viewBox="0 0 24 24"><path d="M13 3 5 14h6l-1 7 8-11h-6l1-7Z"/></symbol>
+  <symbol id="ppt" viewBox="0 0 24 24"><path d="M5 4h14v11H5z"/><path d="M12 15v4M9 20h6"/></symbol>
+  <symbol id="table" viewBox="0 0 24 24"><path d="M4 5h16v14H4z"/><path d="M4 10h16M10 5v14"/></symbol>
+  <symbol id="image" viewBox="0 0 24 24"><path d="M4 5h16v14H4z"/><path d="M4 16l4-4 3 3 4-5 5 6"/><circle cx="8" cy="9.5" r="1"/></symbol>
+  <symbol id="pen" viewBox="0 0 24 24"><path d="M4 20h4L18.5 9.5a2.1 2.1 0 0 0-3-3L5 17v3Z"/></symbol>
+  <symbol id="video" viewBox="0 0 24 24"><path d="M4 6h12v12H4z"/><path d="M16 10l4-2v8l-4-2"/></symbol>
+  <symbol id="more" viewBox="0 0 24 24"><path d="M5 12h.01M12 12h.01M19 12h.01"/></symbol>
+  <symbol id="wave" viewBox="0 0 24 24"><path d="M4 12h2M8 8v8M12 5v14M16 8v8M20 12h0"/></symbol>
+  <symbol id="send" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
+</svg>
+
+<div class="wrap">
+  <span class="label">Empty · 待输入</span>
+  <div class="composer">
+    <textarea rows="1" placeholder="发消息或按住空格说话..."></textarea>
+    <div class="tools">
+      <button class="composer-chip round" aria-label="添加"><svg class="icon"><use href="#plus"/></svg></button>
+      <button class="composer-chip"><svg class="icon"><use href="#bolt"/></svg>快速</button>
+      <button class="composer-chip"><svg class="icon"><use href="#ppt"/></svg>PPT 生成</button>
+      <button class="composer-chip"><svg class="icon"><use href="#table"/></svg>AI 表格</button>
+      <button class="composer-chip"><svg class="icon"><use href="#image"/></svg>图像生成</button>
+      <button class="composer-chip"><svg class="icon"><use href="#pen"/></svg>帮我写作</button>
+      <button class="composer-chip"><svg class="icon"><use href="#video"/></svg>视频生成</button>
+      <button class="composer-chip"><svg class="icon"><use href="#more"/></svg>更多</button>
+      <span class="spacer"></span>
+      <button class="voice" aria-label="语音"><svg class="icon"><use href="#wave"/></svg></button>
+    </div>
+  </div>
+
+  <span class="label">Active · 有内容</span>
+  <div class="composer">
+    <textarea rows="2">帮我写一篇关于豆包 AI 的产品介绍，语气专业又亲切</textarea>
+    <div class="tools">
+      <button class="composer-chip round" aria-label="添加"><svg class="icon"><use href="#plus"/></svg></button>
+      <button class="composer-chip"><svg class="icon"><use href="#bolt"/></svg>快速</button>
+      <button class="composer-chip"><svg class="icon"><use href="#image"/></svg>图像生成</button>
+      <button class="composer-chip"><svg class="icon"><use href="#more"/></svg>更多</button>
+      <span class="spacer"></span>
+      <button class="send" aria-label="发送"><svg class="icon"><use href="#send"/></svg></button>
+    </div>
+  </div>
+</div>
+</body>
+</html>

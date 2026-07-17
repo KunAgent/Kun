@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>Radius & Shadow 圆角与阴影</title>
+  <link rel="stylesheet" href="preview-scaffold.css">
+  <style>
+/* Radius */
+.radius-row {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  margin-bottom: 16px;
+}
+.r-box {
+  background: var(--color-bg-4, #F6F8FA);
+  border: 1px solid var(--color-border-light, #EAEDF1);
+  width: 56px;
+  height: 40px;
+  flex-shrink: 0;
+}
+.r-token {
+  font-size: 11px;
+  font-family: "Roboto Mono", monospace;
+  color: var(--color-primary, #1664FF);
+  font-weight: 500;
+}
+.r-value {
+  font-size: 11px;
+  font-family: "Roboto Mono", monospace;
+  color: var(--color-text-2, #42464E);
+  margin-top: 2px;
+}
+.r-desc {
+  font-size: 11px;
+  color: var(--color-text-3, #737A87);
+  margin-top: 2px;
+}
+
+/* Shadow */
+.shadow-row {
+  margin-bottom: 18px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.s-box {
+  width: 64px;
+  height: 44px;
+  border-radius: var(--radius-md, 6px);
+  background: #fff;
+  flex-shrink: 0;
+  border: 1px solid var(--color-border-light, #EAEDF1);
+}
+.s-token {
+  font-size: 11px;
+  font-family: "Roboto Mono", monospace;
+  color: var(--color-primary, #1664FF);
+  font-weight: 500;
+}
+.s-value {
+  font-size: 11px;
+  font-family: "Roboto Mono", monospace;
+  color: var(--color-text-2, #42464E);
+  margin-top: 2px;
+}
+.s-desc {
+  font-size: 11px;
+  color: var(--color-text-3, #737A87);
+  margin-top: 2px;
+}
+  </style>
+</head>
+<body>
+
+  <div class="pv-header">
+    <h1>Radius & Shadow 圆角与阴影</h1>
+    <p>圆角与投影 token 定义，规范化组件的视觉层次与边界形态。</p>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">Radius 圆角</div>
+    <div class="stack-12">
+      <div class="radius-row">
+        <div class="r-box" style="border-radius:2px"></div>
+        <div>
+          <div class="r-token">--radius-sm</div>
+          <div class="r-value">2px</div>
+          <div class="r-desc">小型元素 · 复选框</div>
+        </div>
+      </div>
+      <div class="radius-row">
+        <div class="r-box" style="border-radius:4px"></div>
+        <div>
+          <div class="r-token">--radius-default</div>
+          <div class="r-value">4px</div>
+          <div class="r-desc">按钮 · 输入框 · 标签</div>
+        </div>
+      </div>
+      <div class="radius-row">
+        <div class="r-box" style="border-radius:6px"></div>
+        <div>
+          <div class="r-token">--radius-md</div>
+          <div class="r-value">6px</div>
+          <div class="r-desc">卡片 · 下拉 · 气泡</div>
+        </div>
+      </div>
+      <div class="radius-row">
+        <div class="r-box" style="border-radius:8px"></div>
+        <div>
+          <div class="r-token">--radius-lg</div>
+          <div class="r-value">8px</div>
+          <div class="r-desc">大卡片 · 弹窗</div>
+        </div>
+      </div>
+      <div class="radius-row">
+        <div class="r-box" style="border-radius:9999px"></div>
+        <div>
+          <div class="r-token">--radius-full</div>
+          <div class="r-value">9999px</div>
+          <div class="r-desc">胶囊按钮 · Badge</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">Shadow 阴影</div>
+    <div class="stack-12">
+      <div class="shadow-row">
+        <div class="s-box" style="box-shadow: var(--shadow-sm)"></div>
+        <div>
+          <div class="s-token">--shadow-sm</div>
+          <div class="s-value">0 1px 2px rgba(0,0,0,0.06)</div>
+          <div class="s-desc">卡片默认投影</div>
+        </div>
+      </div>
+      <div class="shadow-row">
+        <div class="s-box" style="box-shadow: var(--shadow-md)"></div>
+        <div>
+          <div class="s-token">--shadow-md</div>
+          <div class="s-value">0 4px 12px rgba(0,0,0,0.08)</div>
+          <div class="s-desc">下拉菜单 · 悬浮卡片</div>
+        </div>
+      </div>
+      <div class="shadow-row">
+        <div class="s-box" style="box-shadow: var(--shadow-lg)"></div>
+        <div>
+          <div class="s-token">--shadow-lg</div>
+          <div class="s-value">0 8px 24px rgba(0,0,0,0.12)</div>
+          <div class="s-desc">弹窗 · 模态框</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</body>
+</html>

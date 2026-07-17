@@ -1,0 +1,14 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>body{margin:0;padding:12px;background:var(--background);color:var(--color-text);font:13px/1.4 var(--font-sans)}.row{display:flex;gap:var(--space-3);align-items:flex-start;flex-wrap:wrap}.label{width:100%;font:600 10px/1 var(--font-mono);letter-spacing:.12em;text-transform:uppercase;color:var(--color-text-muted);margin-bottom:var(--space-1)}.divider{border:0;border-top:1px solid var(--color-border);margin:var(--space-4) 0}.card{min-width:188px;flex:1 1 188px;background:var(--color-surface);border:1px solid var(--color-border);border-radius:var(--radius-lg);box-shadow:var(--shadow-md);padding:var(--space-4);display:grid;gap:var(--space-2);transition:border-color .18s ease,transform .18s ease,box-shadow .18s ease}.card:hover,.card:focus-within{border-color:var(--color-primary);transform:translateY(-1px);box-shadow:var(--shadow-lg)}.eyebrow{font:600 10px/1 var(--font-mono);letter-spacing:.14em;text-transform:uppercase;color:var(--color-primary)}.title{font-size:14px;font-weight:600}.metric{font-size:28px;line-height:1;font-weight:700}.meta{display:flex;justify-content:space-between;gap:var(--space-2);color:var(--color-text-muted)}.accented{background:linear-gradient(180deg,var(--color-surface),var(--accent));border-color:var(--color-primary)}.muted{background:var(--color-surface-muted);box-shadow:var(--shadow-sm)}.compact{min-width:160px;padding:var(--space-3);gap:var(--space-1)}.compact .metric{font-size:22px}.is-disabled{opacity:.5;box-shadow:var(--shadow-sm);filter:saturate(.7);pointer-events:none}</style>
+</head>
+<body>
+<div class="row"><span class="label">Default / comfortable</span><article class="card" tabindex="0"><span class="eyebrow">Live Risk</span><strong class="title">Threat Index</strong><span class="metric">82%</span><span class="meta"><span>+6.4 today</span><span>Sector 7</span></span></article><article class="card is-disabled" aria-disabled="true"><span class="eyebrow">Fallback</span><strong class="title">Latency Drift</strong><span class="metric">143ms</span><span class="meta"><span>Sync paused</span><span>Node A3</span></span></article></div>
+<hr class="divider">
+<div class="row"><span class="label">Accented / compact</span><article class="card accented compact"><span class="eyebrow">Priority</span><strong class="title">Signal Quality</strong><span class="metric">94</span><span class="meta"><span>Stable</span><span>Mesh East</span></span></article><article class="card muted compact"><span class="eyebrow">Watch</span><strong class="title">Threat Index</strong><span class="metric">27</span><span class="meta"><span>Low noise</span><span>Relay 4</span></span></article></div>
+</body>
+</html>

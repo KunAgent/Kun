@@ -1,0 +1,70 @@
+{
+  "schemaVersion": 2,
+  "slug": "descriptions",
+  "name": "Descriptions",
+  "category": "data-display",
+  "sourceKind": "structured-spec",
+  "confidence": "medium",
+  "semanticTypeCandidates": ["descriptions", "detail-list", "definition-list", "key-value-pairs"],
+  "variantDimensions": {
+    "type": ["stacked", "label-left", "label-right", "inline", "inline-colon"]
+  },
+  "representativeVariants": [
+    { "type": "stacked" },
+    { "type": "label-left" },
+    { "type": "label-right" },
+    { "type": "inline" },
+    { "type": "inline-colon" }
+  ],
+  "anatomy": ["container", "title", "grid", "list", "desc-item", "desc-label", "desc-value"],
+  "structurePatterns": [
+    "Vertical flex column with optional title and a grid or list of key-value items",
+    "Stacked type: items display label above value in a 2-column grid",
+    "Label-left/right types: items in a vertical list with horizontal grid layout (label column + value column)",
+    "Inline types: items in a 2-column grid with horizontal label-value flow"
+  ],
+  "usageHints": [
+    "Container gap: 16px between title and content",
+    "Title: font-size 16px, font-weight 500, line-height 24px, color #0C0D0E",
+    "Label color: #80838A, Value color: #020814",
+    "Item font: 13px, font-weight 400, line-height 22px, letter-spacing 0.3px",
+    "Grid 2-column: minmax(216px, 1fr) with column-gap 74px",
+    "Stacked/inline grid row-gap: 20px",
+    "Label-left/right list gap: 22px",
+    "Stacked item gap between label and value: 4px",
+    "Horizontal item: grid-template-columns 53px minmax(0, 200px), column-gap 24px",
+    "Inline item: flex row with 8px gap",
+    "Label-right aligns label text to right"
+  ],
+  "doNotInvent": ["editable descriptions", "collapsible sections", "action buttons per item"],
+  "unknowns": ["responsive column collapse", "custom column count beyond 2"],
+  "tokensConsumed": [],
+  "domAnatomy": {
+    "root": {
+      "tag": "section",
+      "class": "descriptions descriptions-{type}",
+      "children": [
+        { "tag": "h3", "class": "descriptions-title" },
+        {
+          "tag": "div",
+          "class": "descriptions-grid descriptions-grid-2",
+          "children": [
+            {
+              "tag": "div",
+              "class": "desc-item desc-item-{layout}",
+              "children": [
+                { "tag": "span", "class": "desc-label" },
+                { "tag": "span", "class": "desc-value" }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "provenance": {
+    "preview": "preview/ui-descriptions.html",
+    "source": "structured-spec",
+    "css": { "file": "ui-descriptions.html", "marker": "inline <style>" }
+  }
+}

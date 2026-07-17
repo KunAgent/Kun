@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Pagination</title>
+  <link rel="stylesheet" href="../colors_and_type.css" />
+  <link rel="stylesheet" href="../scaffold.css" />
+  <link rel="stylesheet" href="../components.css" />
+  <style>
+    /* @component-css-start */
+    /* ===== Pagination ===== */
+    .ds-pagination { display: inline-flex; gap: var(--spacer-4); }
+    .ds-pagination__item {
+      min-width: 24px; height: 24px; padding: 0 var(--spacer-6);
+      display: inline-flex; align-items: center; justify-content: center;
+      background: transparent; color: var(--text-secondary);
+      border: 1px solid var(--border-neutral-l1);
+      border-radius: var(--radius-2);
+      font: inherit; font-size: var(--body-xs-font-size);
+      cursor: pointer;
+    }
+    .ds-pagination__item:hover { background: var(--bg-overlay-l2); color: var(--text-default); }
+    .ds-pagination__item.is-active { background: var(--bg-overlay-l3); color: var(--text-default); border-color: var(--border-neutral-l2); }
+    .ds-pagination__item[disabled] { opacity: .4; cursor: not-allowed; }
+    /* @component-css-end */
+  </style>
+</head>
+<body>
+  <div class="pv-header">
+    <h1>Pagination</h1>
+    <p>28x28 numeric buttons, radius <code>--radius-2</code>, neutral border. Active page uses <code>--bg-overlay-l3</code> — never brand fill.</p>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">Default</div>
+    <div class="ds-pagination">
+      <button class="ds-pagination__item" aria-label="Previous"><img src="../assets/icons/chevron-right.svg" width="12" height="12" alt="chevron-right" class="icon" style="transform: rotate(180deg);"></button>
+      <button class="ds-pagination__item num">1</button>
+      <button class="ds-pagination__item is-active num">2</button>
+      <button class="ds-pagination__item num">3</button>
+      <button class="ds-pagination__item" disabled>…</button>
+      <button class="ds-pagination__item num">12</button>
+      <button class="ds-pagination__item" aria-label="Next"><img src="../assets/icons/chevron-right.svg" width="12" height="12" alt="chevron-right" class="icon"></button>
+    </div>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">With page size</div>
+    <div class="row">
+      <div class="ds-pagination">
+        <button class="ds-pagination__item" aria-label="Previous"><img src="../assets/icons/chevron-right.svg" width="12" height="12" alt="chevron-right" class="icon" style="transform: rotate(180deg);"></button>
+        <button class="ds-pagination__item is-active num">1</button>
+        <button class="ds-pagination__item num">2</button>
+        <button class="ds-pagination__item num">3</button>
+        <button class="ds-pagination__item" aria-label="Next"><img src="../assets/icons/chevron-right.svg" width="12" height="12" alt="chevron-right" class="icon"></button>
+      </div>
+      <span class="text-tertiary num" style="font-size: var(--body-sm-font-size);">1–20 of 248</span>
+    </div>
+  </div>
+
+</body>
+</html>

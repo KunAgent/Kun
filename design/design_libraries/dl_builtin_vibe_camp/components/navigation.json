@@ -1,0 +1,100 @@
+{
+  "slug": "navigation",
+  "name": "Navigation",
+  "category": "navigation",
+  "evidence": "AI-inferred based on Dashboard product type and structured token semantics from the source CSS.",
+  "anatomy": [
+    "container",
+    "brand",
+    "primary-links",
+    "utility-actions(optional)",
+    "active-indicator"
+  ],
+  "variantDimensions": {
+    "type": [
+      "topbar",
+      "tabs",
+      "segmented"
+    ],
+    "state": [
+      "default",
+      "active",
+      "hover"
+    ],
+    "density": [
+      "compact",
+      "default",
+      "comfortable"
+    ]
+  },
+  "structures": [
+    {
+      "name": "Topbar Navigation, Active, Default",
+      "description": "Main navigation row for dashboard sections.",
+      "elements": [
+        "container",
+        "brand",
+        "primary-links",
+        "utility-actions"
+      ],
+      "copyExamples": [
+        "Overview",
+        "Program",
+        "Community",
+        "Reports"
+      ],
+      "cssVariables": [
+        "secondary",
+        "secondary-foreground",
+        "border",
+        "ring",
+        "radius",
+        "spacing"
+      ]
+    },
+    {
+      "name": "Tabs Navigation, Active, Compact",
+      "description": "Section-level navigation for content switching.",
+      "elements": [
+        "container",
+        "primary-links",
+        "active-indicator"
+      ],
+      "copyExamples": [
+        "Sessions",
+        "Speakers",
+        "Insights"
+      ],
+      "cssVariables": [
+        "accent",
+        "accent-foreground",
+        "primary",
+        "border",
+        "spacing",
+        "radius"
+      ]
+    },
+    {
+      "name": "Segmented Navigation, Hover, Compact",
+      "description": "Inline mode switcher for filtered views.",
+      "elements": [
+        "container",
+        "primary-links",
+        "active-indicator"
+      ],
+      "copyExamples": [
+        "Daily",
+        "Weekly",
+        "Monthly"
+      ],
+      "cssVariables": [
+        "muted",
+        "foreground",
+        "primary",
+        "border",
+        "radius",
+        "spacing"
+      ]
+    }
+  ]
+}

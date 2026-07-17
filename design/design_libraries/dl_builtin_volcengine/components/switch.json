@@ -1,0 +1,60 @@
+{
+  "schemaVersion": 2,
+  "slug": "switch",
+  "name": "Switch",
+  "category": "data-entry",
+  "sourceKind": "structured-spec",
+  "confidence": "medium",
+  "semanticTypeCandidates": ["toggle", "on-off", "boolean-control"],
+  "variantDimensions": {
+    "size": ["default", "small"],
+    "checked": ["true", "false"],
+    "state": ["default", "disabled", "loading"]
+  },
+  "representativeVariants": [
+    { "size": "default", "checked": "false", "state": "default" },
+    { "size": "default", "checked": "true", "state": "default" },
+    { "size": "default", "checked": "true", "state": "disabled" },
+    { "size": "default", "checked": "true", "state": "loading" },
+    { "size": "small", "checked": "false", "state": "default" },
+    { "size": "small", "checked": "true", "state": "default" }
+  ],
+  "anatomy": ["track", "knob"],
+  "structurePatterns": [
+    "Pill-shaped button element with an absolutely-positioned circular knob that slides left/right to indicate state"
+  ],
+  "usageHints": [
+    "Default (md) size: 36x20px track, 16x16px knob",
+    "Small (sm) size: 28x16px track, 12x12px knob",
+    "Checked background uses primary color #1664FF",
+    "Unchecked background uses #F6F8FA with border #DDE2E9",
+    "Hover unchecked: background #ECEDED; hover checked: #4585FF",
+    "Disabled uses opacity 0.6 or muted primary #A2C1FF when checked",
+    "Loading state shows a spinning ring inside the knob via border-top animation"
+  ],
+  "doNotInvent": ["label text", "inner text/icon within the knob", "custom colors beyond spec"],
+  "unknowns": ["focus ring styling not shown in preview"],
+  "tokensConsumed": [
+    "--color-primary-#1664FF",
+    "--switch-bg-unchecked-#F6F8FA",
+    "--switch-border-unchecked-#DDE2E9",
+    "--switch-hover-unchecked-#ECEDED",
+    "--switch-hover-checked-#4585FF",
+    "--switch-disabled-checked-#A2C1FF"
+  ],
+  "domAnatomy": {
+    "root": {
+      "tag": "button",
+      "class": "switch switch-{size}",
+      "attributes": { "role": "switch", "aria-checked": "{checked}" },
+      "children": [
+        { "tag": "span", "class": "switch-knob" }
+      ]
+    }
+  },
+  "provenance": {
+    "preview": "preview/ui-switch.html",
+    "source": "structured-spec",
+    "css": { "file": "preview/ui-switch.html", "marker": "inline <style>" }
+  }
+}

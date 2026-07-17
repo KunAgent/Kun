@@ -1,0 +1,54 @@
+{
+  "slug": "sidebar",
+  "name": "Sidebar",
+  "nameEn": "Sidebar",
+  "category": "navigation",
+  "variantCount": 4,
+  "primitiveCount": 4,
+  "variants": {
+    "type": [
+      "expanded",
+      "condensed"
+    ],
+    "state": [
+      "default",
+      "active"
+    ]
+  },
+  "variantDimensions": {
+    "type": [
+      "expanded",
+      "condensed"
+    ],
+    "state": [
+      "default",
+      "active"
+    ]
+  },
+  "evidence": "Directly supported by dedicated sidebar token family in the source CSS.",
+  "anatomy": [
+    "frame",
+    "section label",
+    "item",
+    "active pill"
+  ],
+  "structurePatterns": [
+    "analytics rail",
+    "workspace switcher"
+  ],
+  "childComponents": [
+    "icon",
+    "badge"
+  ],
+  "structures": [
+    {
+      "name": "Expanded Rail",
+      "notes": "Dedicated tinted surface with clear active state."
+    },
+    {
+      "name": "Condensed Rail",
+      "notes": "Compact icon-first rail for dense dashboards."
+    }
+  ],
+  "keyInsightSeed": "The dedicated sidebar palette makes navigation feel like a branded workspace shell, not a generic list."
+}

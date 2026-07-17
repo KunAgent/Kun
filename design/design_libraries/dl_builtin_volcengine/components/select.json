@@ -1,0 +1,81 @@
+{
+  "schemaVersion": 2,
+  "slug": "select",
+  "name": "Select",
+  "category": "data-entry",
+  "sourceKind": "structured-spec",
+  "confidence": "medium",
+  "semanticTypeCandidates": ["dropdown-select", "picker", "combobox"],
+  "variantDimensions": {
+    "type": ["single", "multiple"],
+    "size": ["large", "default", "small", "mini"],
+    "state": ["default", "hover", "focus", "filled", "disabled", "readonly", "error"]
+  },
+  "representativeVariants": [
+    { "type": "single", "size": "default", "state": "default" },
+    { "type": "single", "size": "large", "state": "hover" },
+    { "type": "single", "size": "default", "state": "focus" },
+    { "type": "single", "size": "default", "state": "error" },
+    { "type": "single", "size": "default", "state": "disabled" },
+    { "type": "multiple", "size": "default", "state": "filled" }
+  ],
+  "anatomy": ["select", "select-trigger", "select-value", "select-placeholder", "select-suffix", "select-arrow", "select-clear", "select-dropdown", "select-option", "select-option-check", "select-group-title", "select-empty", "select-tags", "select-tag", "select-tag-close", "select-tag-count", "select-checkbox", "select-error-msg"],
+  "structurePatterns": [
+    "Trigger is a flex row with value/placeholder text and suffix arrow icon, clearable when filled",
+    "Dropdown panel is absolute-positioned below trigger with option list",
+    "Multi-select shows tag chips in trigger area with overflow count badge",
+    "Options can be grouped under group-title headings"
+  ],
+  "usageHints": [
+    "Trigger heights: large 36px, default 32px, small 28px, mini 24px",
+    "Default border via box-shadow: 0 0 0 1px #DDE2E9",
+    "Hover border: 0 0 0 1px rgba(22,100,255,0.8)",
+    "Focus ring: 0 0 0 1px #1664FF + 0 0 0 3px rgba(22,100,255,0.3)",
+    "Error border: 0 0 0 1px #F53F3F; error focus adds rgba(245,63,63,0.12) ring",
+    "Disabled background #F6F8FA with color #C9CDD4",
+    "Dropdown shadow: 0px 15px 35px -2px rgba(0,0,0,0.05), 0px 5px 15px rgba(0,0,0,0.05)",
+    "Selected option color #1664FF with font-weight 500",
+    "Tag chips height 22px, background #F6F8FA, border-radius 2px"
+  ],
+  "doNotInvent": ["tree-select", "cascader", "virtual scrolling", "remote search loading"],
+  "unknowns": ["max dropdown height and scrolling", "search input within dropdown"],
+  "tokensConsumed": [],
+  "domAnatomy": {
+    "root": {
+      "tag": "div",
+      "class": "select select-{size}",
+      "children": [
+        {
+          "tag": "div",
+          "class": "select-trigger",
+          "children": [
+            { "tag": "span", "class": "select-value | select-placeholder" },
+            {
+              "tag": "span",
+              "class": "select-suffix",
+              "children": [
+                { "tag": "svg", "class": "select-clear", "optional": true },
+                { "tag": "svg", "class": "select-arrow" }
+              ]
+            }
+          ]
+        },
+        {
+          "tag": "div",
+          "class": "select-dropdown",
+          "optional": true,
+          "children": [
+            { "tag": "div", "class": "select-group-title", "optional": true },
+            { "tag": "div", "class": "select-option", "repeat": true }
+          ]
+        },
+        { "tag": "div", "class": "select-error-msg", "optional": true }
+      ]
+    }
+  },
+  "provenance": {
+    "preview": "preview/ui-select.html",
+    "source": "structured-spec",
+    "css": { "file": "ui-select.html", "marker": "inline <style>" }
+  }
+}

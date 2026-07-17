@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>Sidenav 侧边导航</title>
+  <link rel="stylesheet" href="preview-scaffold.css">
+  <style>
+  /* ═══ 一级菜单项 ═══ */
+  .nav-item {
+    display: flex;
+    align-items: center;
+    height: 36px;
+    padding: 0 12px;
+    border-radius: 4px;
+    font-size: 13px;
+    color: #020814;
+    cursor: pointer;
+    gap: 8px;
+    transition: all 0.15s;
+    text-decoration: none;
+  }
+  .nav-item:hover:not(.active):not(.disabled) { background: rgba(22,100,255,0.08); }
+  .nav-item.active {
+    color: #1664FF;
+    font-weight: 500;
+    background: rgba(22,100,255,0.08);
+  }
+  .nav-item.disabled {
+    color: #C9CDD4;
+    cursor: not-allowed;
+  }
+  .nav-item .nav-item-icon { width: 20px; height: 20px; font-size: 20px; }
+  .nav-item .nav-item-text { flex: 1; }
+  .nav-item .nav-arrow { font-size: 12px; color: #737A87; }
+
+  /* ═══ 二级菜单项 ═══ */
+  .nav-sub-item {
+    display: flex;
+    align-items: center;
+    height: 36px;
+    padding: 5px 12px 5px 40px;
+    border-radius: 4px;
+    font-size: 13px;
+    color: #020814;
+    cursor: pointer;
+    transition: all 0.15s;
+    text-decoration: none;
+  }
+  .nav-sub-item:hover:not(.active) { background: rgba(22,100,255,0.08); }
+  .nav-sub-item.active {
+    color: #1664FF;
+    font-weight: 500;
+    background: rgba(22,100,255,0.08);
+  }
+  </style>
+</head>
+<body>
+  <div class="pv-header">
+    <h1>Sidenav 侧边导航</h1>
+    <p>侧边导航菜单项，支持一级/二级层级及多种交互状态。</p>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">一级菜单项</div>
+    <div class="stack-12">
+      <a class="nav-item" data-component="nav-item" data-state="default">
+        <span class="nav-item-icon">&#x25FB;</span>
+        <span class="nav-item-text">菜单项</span>
+      </a>
+      <a class="nav-item active" data-component="nav-item" data-state="active">
+        <span class="nav-item-icon">&#x25FB;</span>
+        <span class="nav-item-text">菜单项</span>
+      </a>
+      <a class="nav-item disabled" data-component="nav-item" data-state="disabled">
+        <span class="nav-item-icon">&#x25FB;</span>
+        <span class="nav-item-text">菜单项</span>
+      </a>
+    </div>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">二级菜单项</div>
+    <div class="stack-12">
+      <a class="nav-sub-item" data-component="nav-sub-item" data-state="default">二级菜单</a>
+      <a class="nav-sub-item active" data-component="nav-sub-item" data-state="active">二级菜单</a>
+    </div>
+  </div>
+</body>
+</html>

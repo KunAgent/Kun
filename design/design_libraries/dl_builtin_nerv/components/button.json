@@ -1,0 +1,48 @@
+{
+  "slug": "button",
+  "name": "Button",
+  "category": "Actions",
+  "variantCount": 9,
+  "evidence": "AI-inferred from structured CSS token spec for a dark, high-contrast dashboard system.",
+  "anatomy": [
+    "container",
+    "label",
+    "leading-icon",
+    "focus-ring"
+  ],
+  "variantDimensions": {
+    "style": [
+      "primary",
+      "secondary",
+      "ghost"
+    ],
+    "size": [
+      "sm",
+      "md",
+      "lg"
+    ],
+    "state": [
+      "default",
+      "disabled"
+    ]
+  },
+  "structures": [
+    {
+      "name": "Primary Action, Default",
+      "notes": "Uses primary/accent emphasis and rounded silhouette."
+    },
+    {
+      "name": "Secondary Action, Default",
+      "notes": "Uses darker surface treatment with light text."
+    },
+    {
+      "name": "Ghost Action, Disabled",
+      "notes": "Low-emphasis control for dense panel layouts."
+    }
+  ],
+  "uiCopySamples": [
+    "Launch Scan",
+    "Acknowledge",
+    "Create Report"
+  ]
+}

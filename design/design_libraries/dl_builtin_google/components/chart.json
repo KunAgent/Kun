@@ -1,0 +1,61 @@
+{
+  "slug": "chart",
+  "name": "Chart",
+  "nameEn": "Chart",
+  "category": "data-visualization",
+  "variantCount": 5,
+  "primitiveCount": 4,
+  "variants": {
+    "type": [
+      "bar",
+      "line",
+      "donut"
+    ],
+    "state": [
+      "default",
+      "highlighted"
+    ]
+  },
+  "variantDimensions": {
+    "type": [
+      "bar",
+      "line",
+      "donut"
+    ],
+    "state": [
+      "default",
+      "highlighted"
+    ]
+  },
+  "evidence": "Directly supported by chart-1 through chart-5 source tokens.",
+  "anatomy": [
+    "frame",
+    "plot",
+    "legend",
+    "axis label"
+  ],
+  "structurePatterns": [
+    "weekly trend",
+    "channel mix",
+    "goal progress"
+  ],
+  "childComponents": [
+    "badge",
+    "tooltip"
+  ],
+  "structures": [
+    {
+      "name": "Bar Chart",
+      "notes": "Five-color palette used for category comparison."
+    },
+    {
+      "name": "Line Trend",
+      "notes": "Primary line with subtle surface grid."
+    },
+    {
+      "name": "Donut Summary",
+      "notes": "Compact allocation chart for side panels."
+    }
+  ],
+  "keyInsightSeed": "Charts bring the strongest brand color energy and should contrast against otherwise quiet surfaces."
+}

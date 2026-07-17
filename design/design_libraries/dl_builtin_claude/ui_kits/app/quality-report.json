@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "screensGenerated": 3,
+  "coreComponentsUsed": ["card", "badge", "button", "chat-bubble", "input", "navigation"],
+  "supportComponentsUsed": [],
+  "previewClassReuseRate": 0.79,
+  "hasProductContext": true,
+  "inventedComponents": [],
+  "renderedFromEvidence": [],
+  "warnings": []
+}

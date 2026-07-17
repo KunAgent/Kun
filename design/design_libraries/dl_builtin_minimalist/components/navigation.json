@@ -1,0 +1,59 @@
+{
+  "slug": "navigation",
+  "name": "Navigation",
+  "category": "navigation",
+  "variantCount": 6,
+  "primitiveCount": 6,
+  "cssVariables": [
+    "background",
+    "foreground",
+    "muted",
+    "muted-foreground",
+    "border",
+    "primary",
+    "primary-foreground",
+    "space-4",
+    "radius-md"
+  ],
+  "variantDimensions": {
+    "type": [
+      "topbar",
+      "tabs",
+      "breadcrumb"
+    ],
+    "state": [
+      "default",
+      "active"
+    ]
+  },
+  "anatomy": [
+    "container",
+    "item",
+    "active-indicator",
+    "meta-action"
+  ],
+  "structures": [
+    {
+      "name": "Topbar, State=default",
+      "slots": [
+        "item",
+        "meta-action"
+      ]
+    },
+    {
+      "name": "Tabs, State=active",
+      "slots": [
+        "item",
+        "active-indicator"
+      ]
+    },
+    {
+      "name": "Breadcrumb, State=default",
+      "slots": [
+        "item"
+      ]
+    }
+  ],
+  "evidence": "AI-inferred from dashboard product type and high-contrast neutral token set.",
+  "keyInsight": "Navigation should feel editorial and quiet, using spacing and weight shifts over bright fills."
+}

@@ -1,0 +1,14 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>body{margin:0;padding:12px;background:var(--background);color:var(--foreground);font:14px/1.4 var(--font-sans);letter-spacing:var(--tracking-normal)}.row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px}.label{width:88px;color:var(--muted-foreground);font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase}.divider{margin:10px 0;border:0;border-top:1px solid var(--border)}.btn{display:inline-flex;align-items:center;justify-content:center;min-height:36px;padding:0 calc(var(--spacing)*4);border:1px solid transparent;border-radius:var(--radius);box-shadow:var(--shadow-sm);font:600 13px/1 var(--font-sans);letter-spacing:var(--tracking-normal);transition:background-color .16s ease,color .16s ease,transform .16s ease,box-shadow .16s ease}.btn:hover{transform:translate(-1px,-1px)}.btn:focus-visible{outline:2px solid var(--ring);outline-offset:2px}.btn:active{transform:translate(1px,1px);box-shadow:var(--shadow-xs)}.btn[disabled]{opacity:.45;cursor:not-allowed;transform:none;box-shadow:none}.primary{background:var(--primary);color:var(--primary-foreground)}.secondary{background:var(--muted);color:var(--foreground);border-color:var(--ring)}.accent{background:var(--accent);color:var(--accent-foreground)}.destructive{background:var(--destructive);color:var(--destructive-foreground)}.sm{min-height:30px;padding:0 calc(var(--spacing)*3);font-size:12px}.lg{min-height:42px;padding:0 calc(var(--spacing)*5);font-size:14px}</style>
+</head>
+<body>
+<div class="row"><span class="label">Toolbar</span><button class="btn primary">Create View</button><button class="btn secondary">Export CSV</button><button class="btn primary" disabled>Create View</button><button class="btn secondary" disabled>Export CSV</button></div>
+<hr class="divider">
+<div class="row"><span class="label">Pinned</span><button class="btn accent sm">Apply Filter</button><button class="btn destructive lg">Pin Report</button><button class="btn accent sm" disabled>Apply Filter</button><button class="btn destructive lg" disabled>Pin Report</button></div>
+</body>
+</html>

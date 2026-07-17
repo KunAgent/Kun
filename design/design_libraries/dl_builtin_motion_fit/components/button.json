@@ -1,0 +1,63 @@
+{
+  "slug": "button",
+  "name": "Button",
+  "category": "action",
+  "variantCount": 12,
+  "evidence": "AI-inferred based on fitness app product type and high-contrast action tokens.",
+  "anatomy": [
+    "container",
+    "label",
+    "leadingIcon?"
+  ],
+  "childComponents": [],
+  "cssVariables": [
+    "primary",
+    "primary-foreground",
+    "secondary",
+    "secondary-foreground",
+    "accent",
+    "foreground",
+    "border",
+    "ring",
+    "radius",
+    "shadow-sm",
+    "spacing"
+  ],
+  "variantDimensions": {
+    "tone": [
+      "primary",
+      "secondary",
+      "ghost"
+    ],
+    "size": [
+      "md",
+      "lg"
+    ],
+    "state": [
+      "default",
+      "disabled"
+    ]
+  },
+  "structurePatterns": [
+    "solid action pill-free control",
+    "flat rectangular hit area",
+    "compact uppercase-ish label rhythm"
+  ],
+  "structures": [
+    {
+      "name": "Tone=Primary, State=Default, Size=MD",
+      "layout": "inline-flex, centered",
+      "copy": "Start Workout"
+    },
+    {
+      "name": "Tone=Secondary, State=Default, Size=LG",
+      "layout": "inline-flex, centered",
+      "copy": "View Progress"
+    },
+    {
+      "name": "Tone=Ghost, State=Disabled, Size=MD",
+      "layout": "inline-flex, centered",
+      "copy": "Sync Pending"
+    }
+  ]
+}

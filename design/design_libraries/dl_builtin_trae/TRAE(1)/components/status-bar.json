@@ -1,0 +1,67 @@
+{
+  "schemaVersion": 2,
+  "slug": "status-bar",
+  "name": "Status Bar",
+  "category": "navigation",
+  "sourceKind": "structured-spec",
+  "confidence": "medium",
+  "semanticTypeCandidates": ["status-bar", "footer-bar", "info-bar"],
+  "variantDimensions": {
+    "dot": ["success", "warning", "error"]
+  },
+  "representativeVariants": [
+    { "dot": "success" }
+  ],
+  "anatomy": ["root", "group", "item", "dot", "dot--success", "dot--warning", "dot--error"],
+  "structurePatterns": [
+    "flex space-between with left group and right group",
+    "each group holds status items (icon + text)",
+    "status item may include a colored status dot"
+  ],
+  "usageHints": [
+    "Bar background --bg-base-secondary with --border-neutral-l1 top divider",
+    "Text uses --text-secondary, hover item lifts to --text-default with --bg-overlay-l2",
+    "Dots map to --status-success-default / --status-warning-default / --status-error-default",
+    "Compact type via --body-xs-font-size"
+  ],
+  "doNotInvent": ["progress bar", "popover details", "live counters"],
+  "unknowns": ["clickable item active state", "overflow truncation order"],
+  "tokensConsumed": [
+    "--spacer-8", "--spacer-4", "--spacer-6", "--bg-base-secondary", "--border-neutral-l1",
+    "--body-xs-font-size", "--text-secondary", "--radius-4", "--bg-overlay-l2", "--text-default",
+    "--radius-full", "--status-success-default", "--status-warning-default", "--status-error-default"
+  ],
+  "domAnatomy": {
+    "root": {
+      "tag": "div",
+      "class": "ds-statusbar",
+      "children": [
+        {
+          "tag": "div",
+          "class": "ds-statusbar__group",
+          "children": [
+            {
+              "tag": "span",
+              "class": "ds-statusbar__item",
+              "children": [
+                { "tag": "span", "class": "ds-statusbar__dot ds-statusbar__dot--success" }
+              ]
+            }
+          ]
+        },
+        {
+          "tag": "div",
+          "class": "ds-statusbar__group",
+          "children": [
+            { "tag": "span", "class": "ds-statusbar__item" }
+          ]
+        }
+      ]
+    }
+  },
+  "provenance": {
+    "preview": "preview/component-status-bar.html",
+    "source": "structured-spec",
+    "css": { "file": "components.css", "marker": "── Status Bar ──" }
+  }
+}

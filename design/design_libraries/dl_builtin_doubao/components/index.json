@@ -1,0 +1,58 @@
+{
+  "library": "doubao",
+  "kitType": "dashboard",
+  "mode": "inferred-from-tokens",
+  "components": [
+    {
+      "slug": "button",
+      "name": "Button",
+      "category": "action",
+      "previewPage": "preview/component-button.html",
+      "componentFile": "components/button.json"
+    },
+    {
+      "slug": "search-input",
+      "name": "Search Input",
+      "category": "form",
+      "previewPage": "preview/component-search-input.html",
+      "componentFile": "components/search-input.json"
+    },
+    {
+      "slug": "app-card",
+      "name": "App Card",
+      "category": "content",
+      "previewPage": "preview/component-app-card.html",
+      "componentFile": "components/app-card.json"
+    },
+    {
+      "slug": "sidebar-nav",
+      "name": "Sidebar Navigation",
+      "category": "navigation",
+      "previewPage": "preview/component-sidebar-nav.html",
+      "componentFile": "components/sidebar-nav.json"
+    },
+    {
+      "slug": "data-table",
+      "name": "Data Table",
+      "category": "data-display",
+      "previewPage": "preview/component-data-table.html",
+      "componentFile": "components/data-table.json"
+    },
+    {
+      "slug": "chat-composer",
+      "name": "Chat Composer",
+      "category": "ai-interaction",
+      "previewPage": "preview/component-chat-composer.html",
+      "componentFile": "components/chat-composer.json"
+    }
+  ],
+  "crossComponentPatterns": {
+    "radius": "Use the single shared --radius token and derived large control corners for a rounded but not playful UI.",
+    "spacing": "Keep compact dashboard density using the global spacing unit and quiet vertical rhythm.",
+    "border": "Rely on subtle border separation instead of shadows.",
+    "stateModel": "Primary actions use the brand blue, secondary actions use muted surfaces, destructive states map to destructive tokens."
+  },
+  "warnings": [
+    "Component structures are inferred from the token system because the source file only defined tokens and theme mappings."
+  ]
+}

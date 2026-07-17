@@ -1,0 +1,122 @@
+{
+  "schemaVersion": 2,
+  "tokenSource": "css.json",
+  "uikitPlan": "uikit-plan.json",
+  "componentsIndex": "components/index.json",
+  "componentContractDir": "components",
+  "scaffoldCss": "scaffold.css",
+  "componentsCss": "components.css",
+  "tokenCss": "colors_and_type.css",
+  "previewDir": "preview",
+  "uiKitsDir": "ui_kits",
+  "consumptionLayers": {
+    "tokens": {
+      "files": ["colors_and_type.css", "css.json"],
+      "copyable": true,
+      "purpose": "design language source — colors, type, radius, spacing"
+    },
+    "components": {
+      "files": ["components.css", "preview/component-*.html"],
+      "copyable": true,
+      "purpose": "component-level markup + classes; fluid (no max-width)",
+      "downstreamRule": "copy markup from preview/, link components.css; safe in any canvas size"
+    },
+    "icons": {
+      "files": ["assets/icons/*.svg", "icons.js"],
+      "copyable": true,
+      "purpose": "bundled icon set — 115 SVG assets + Lucide-style runtime sprite",
+      "downstreamRule": "USE THESE; DO NOT pull lucide CDN or generate your own SVGs. Two modes: (A) static <img src='assets/icons/{name}.svg'> for plain HTML/React with no recolor needs; (B) <i data-icon='{name}' data-size='16'> + icons.js for currentColor-recolorable inline sprite. On --bg-brand surfaces (e.g. .ds-btn--brand) MUST use the {name}.0c0c0d.svg dark variant."
+    },
+    "uikit": {
+      "files": ["ui_kits/{type}/index.html"],
+      "copyable": false,
+      "purpose": "page-level SHOWCASE only (max-width 1184px hard cap)",
+      "downstreamRule": "READ for structural reference (which components in which region); DO NOT copy .uikit-shell root container or its grid-template-columns. Strip outer shell, keep inner regions, write your own canvas-sized outer grid."
+    }
+  },
+  "iconUsage": {
+    "modeA_staticImg": {
+      "syntax": "<img src=\"assets/icons/{name}.svg\" width=\"16\" height=\"16\" alt=\"\" />",
+      "recolorable": false,
+      "useFor": "static HTML, React without runtime icon lib, UIKit shells"
+    },
+    "modeB_inlineSprite": {
+      "syntax": "<i data-icon=\"{name}\" data-size=\"16\"></i>  +  <script src=\"icons.js\"></script>  +  Icons.render()",
+      "recolorable": true,
+      "useFor": "preview pages, anywhere CSS color: var(--icon-*) recoloring is needed"
+    },
+    "iconCount": 115,
+    "tintedVariants": {
+      "onBrandGreen": ["{name}.0c0c0d.svg — required when icon sits on --bg-brand"],
+      "statusColored": ["alert.d27e24.svg", "check-circle.33c192.svg", "info.387bff.svg", "sparkles.32f08c.svg", "check.d1d3db.svg"]
+    },
+    "rule": "Brand-green surface MUST use the .0c0c0d.svg dark variant; white stroke fails contrast on #32F08C.",
+    "colorRule": "Icon colors MUST follow the CSS token spec — no raw hex/rgb/named colors. Mode B: parent's `color` must be a token (var(--icon-default|--icon-secondary|--icon-tertiary|--icon-onbrand|--status-*-default)), never `color: #D1D3DB`. Mode A: bundled tinted SVGs encode existing token values (0c0c0d ≡ --text-onbrand, 33c192 ≡ --status-success-default, d27e24 ≡ --status-alert-default, 387bff ≡ --status-primary-default, 32f08c ≡ --bg-brand, d1d3db ≡ --text-default). To introduce a new tint: add the token to colors_and_type.css FIRST, then export a sibling {name}.{hex}.svg whose stroke/fill matches that token's value. Never modify a shipped SVG's stroke=/fill= to an arbitrary color in-place."
+  },
+  "downstreamScenarios": {
+    "useTokensOnly": {
+      "read": ["colors_and_type.css"],
+      "consume": "via <link> or CSS @import"
+    },
+    "buildSingleComponent": {
+      "read": [
+        "components/{slug}.json",
+        "preview/component-{slug}.html",
+        "components.css"
+      ],
+      "consume": "copy markup from preview, link components.css + colors_and_type.css"
+    },
+    "buildFullPageCustomCanvas": {
+      "read": [
+        "ui_kits/{type}/index.html",
+        "components/index.json",
+        "preview/component-{slug}.html (per region)"
+      ],
+      "consume": "use ui_kits as STRUCTURAL REFERENCE only; copy inner region markup from preview; write your own outer grid sized for your real canvas (100vw / fit-content / auto-fit). DO NOT inherit .uikit-shell max-width:1184px."
+    }
+  },
+  "uikitConstraints": {
+    "maxShellWidth": 1184,
+    "fluidInnerComponents": true,
+    "warningForDownstream": "ui_kits/* are SHOWCASES capped at 1184px per design-library-creator skill spec. They render with whitespace on canvases > 1184px. For real product pages, follow downstreamScenarios.buildFullPageCustomCanvas."
+  },
+  "recommendedReadOrder": [
+    "README.md (especially 'Downstream Consumption Guide' section)",
+    "css.json",
+    "colors_and_type.css",
+    "components/index.json",
+    "components/{slug}.json",
+    "preview/component-{slug}.html",
+    "ui_kits/{type}/index.html (as structural reference, not copy source)"
+  ],
+  "coreComponents": [
+    "buttons",
+    "menu",
+    "cards",
+    "tag",
+    "table",
+    "alert"
+  ],
+  "supportComponents": [
+    "tabs",
+    "editor-tabs",
+    "avatar",
+    "dialog",
+    "forms",
+    "pagination",
+    "setting-row",
+    "table-panel",
+    "page-header",
+    "stat-card",
+    "status-bar",
+    "workbench-titlebar",
+    "activity-rail",
+    "file-tree",
+    "chat-composer",
+    "kbd"
+  ],
+  "uiKits": [
+    "dashboard",
+    "dev-explorer"
+  ]
+}

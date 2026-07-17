@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "tokenSource": "css.json",
+  "componentIndex": "components/index.json",
+  "componentsCss": "components.css",
+  "recommendedReadOrder": [
+    "SKILL.md",
+    "README.md",
+    "css.json",
+    "components/index.json",
+    "components/{slug}.json",
+    "components.css",
+    "preview/component-{slug}.html",
+    "ui_kits/app/index.html"
+  ],
+  "coreComponents": [
+    "mobile-top-tab",
+    "mobile-right-rail",
+    "mobile-bottom-info",
+    "mobile-bottom-nav",
+    "web-video-card",
+    "editorial-mag-cover"
+  ],
+  "supportComponents": []
+}

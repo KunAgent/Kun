@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Goldentime Button Preview</title>
+  <link rel="stylesheet" href="../colors_and_type.css">
+  <style>body { margin: 0; padding: 12px; background: hsl(var(--background)); color: hsl(var(--foreground)); font-family: var(--font-sans); letter-spacing: var(--tracking-normal); } .row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; } .label { width: 72px; color: hsl(var(--muted-foreground)); font-size: 10px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; } .divider { margin: 10px 0; border: 0; border-top: 1px solid hsl(var(--border)); } .btn { display: inline-flex; align-items: center; justify-content: center; gap: calc(var(--spacing) * 1.5); min-height: 40px; padding: calc(var(--spacing) * 2.25) calc(var(--spacing) * 4.2); border: 1px solid transparent; border-radius: var(--radius); box-shadow: var(--shadow-sm); font: inherit; font-size: 14px; line-height: 1; cursor: pointer; transition: transform .15s ease, filter .15s ease, background-color .15s ease, box-shadow .15s ease; } .btn:hover { transform: translateY(-1px); } .btn:active { transform: translateY(0); filter: brightness(.96); } .btn:focus-visible { outline: none; box-shadow: 0 0 0 2px hsl(var(--ring) / .3); } .btn:disabled { opacity: .55; filter: saturate(.55); cursor: not-allowed; } .compact { min-height: 34px; padding: calc(var(--spacing) * 1.7) calc(var(--spacing) * 3.2); font-size: 13px; } .prominent { min-height: 46px; padding: calc(var(--spacing) * 2.7) calc(var(--spacing) * 5.2); } .primary { background: hsl(var(--primary)); color: hsl(var(--primary-foreground)); } .secondary { background: hsl(var(--secondary)); color: hsl(var(--secondary-foreground)); } .ghost { background: transparent; color: hsl(var(--accent-foreground)); border-color: hsl(var(--border)); } .ghost:hover { background: hsl(var(--accent)); } .dot { width: 12px; height: 12px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 999px; animation: spin .8s linear infinite; } @keyframes spin { to { transform: rotate(1turn); } }</style>
+</head>
+<body>
+  <div class="row">
+    <span class="label">Primary</span>
+    <button class="btn primary compact" type="button">Save changes</button>
+    <button class="btn primary" type="button">Export report</button>
+    <button class="btn primary prominent" type="button" disabled>Invite editor</button>
+  </div>
+  <hr class="divider">
+  <div class="row">
+    <span class="label">Alternate</span>
+    <button class="btn secondary compact" type="button">Export report</button>
+    <button class="btn ghost" type="button">Invite editor</button>
+    <button class="btn secondary prominent" type="button" aria-busy="true"><span class="dot" aria-hidden="true"></span>Save changes</button>
+  </div>
+</body>
+</html>

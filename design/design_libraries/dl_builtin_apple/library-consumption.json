@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "tokenSource": "css.json",
+  "tokenCSS": "colors_and_type.css",
+  "componentsCSS": "components.css",
+  "componentIndex": "components/index.json",
+  "recommendedReadOrder": [
+    "SKILL.md",
+    "README.md",
+    "css.json",
+    "components/index.json",
+    "components/{slug}.json",
+    "preview/component-{slug}.html",
+    "components.css",
+    "ui_kits/website/index.html"
+  ],
+  "coreComponents": [
+    "button",
+    "input",
+    "card",
+    "navigation"
+  ],
+  "supportComponents": [
+    "product-grid",
+    "comparison-table"
+  ],
+  "uiKits": [
+    {
+      "type": "website",
+      "entry": "ui_kits/website/index.html"
+    }
+  ]
+}

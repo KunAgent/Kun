@@ -1,0 +1,327 @@
+/* Source: structured-spec */
+/* Brand fonts — Anthropic official: Newsreader (editorial display/slogan) +
+   Poppins (compact UI) + Lora (reading). Mono kept for code/token surfaces. */
+@import url('https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Lora:ital,wght@0,400;0,500;0,600;1,400&family=Newsreader:ital,opsz,wght@0,18..72,300;0,18..72,400;0,18..72,500;1,18..72,400&family=Geist+Mono:wght@400;500&display=swap');
+/* ============================================================
+   Token model
+   1) Primitives — 7 key color cards as 10-step scales (50→900).
+      These are the single source of truth (mirrored in the linshi
+      preview tool). The flagged "standard" step per group:
+        brand-500 · text-800 · bg-100 · icon-700 · border-300 · success-500 · error-500
+   2) Semantic tokens — reference the primitives above (no raw hex
+      duplicates). These are the API consumed by preview / ui_kits /
+      components.
+   3) Non-color tokens — font, spacing, radius, shadow, type.
+   ============================================================ */
+:root {
+  /* ===== 1) Primitive scales · key color cards (10 steps, 50→900) ===== */
+  /* brand — standard: --brand-500 #c96442 */
+  --brand-50: #fbf2ed;
+  --brand-100: #f4e0d5;
+  --brand-200: #ebc6b6;
+  --brand-300: #e0a892;
+  --brand-400: #d6866a;
+  --brand-500: #c96442;
+  --brand-600: #b0562f;
+  --brand-700: #934828;
+  --brand-800: #753a22;
+  --brand-900: #582e1d;
+  /* text — standard: --text-800 #3d3929 */
+  --text-50: #f6f5f0;
+  --text-100: #ece9de;
+  --text-200: #dad9d4;
+  --text-300: #c2c0b6;
+  --text-400: #9b988c;
+  --text-500: #6e6d68;
+  --text-600: #535146;
+  --text-700: #46443b;
+  --text-800: #3d3929;
+  --text-900: #28261b;
+  /* background — standard: --bg-100 #faf9f5 */
+  --bg-50: #ffffff;
+  --bg-100: #faf9f5;
+  --bg-200: #f5f4ef;
+  --bg-300: #ede9de;
+  --bg-400: #e3e0d4;
+  --bg-500: #dad9d4;
+  --bg-600: #cdcabf;
+  --bg-700: #b4b2a7;
+  --bg-800: #8a887e;
+  --bg-900: #535146;
+  /* icon — standard: --icon-700 #3d3929 */
+  --icon-50: #ffffff;
+  --icon-100: #dad9d4;
+  --icon-200: #c2c0b6;
+  --icon-300: #9b988c;
+  --icon-400: #6e6d68;
+  --icon-500: #535146;
+  --icon-600: #46443b;
+  --icon-700: #3d3929;
+  --icon-800: #28261b;
+  --icon-900: #141413;
+  /* border — standard: --border-300 #dad9d4 */
+  --border-50: #f0efe9;
+  --border-100: #ebebeb;
+  --border-200: #e3e0d4;
+  --border-300: #dad9d4;
+  --border-400: #cdcabf;
+  --border-500: #b4b2a7;
+  --border-600: #9b988c;
+  --border-700: #6e6d68;
+  --border-800: #535146;
+  --border-900: #3d3929;
+  /* state · success — standard: --success-500 #788c5d */
+  --success-50: #f0f3ea;
+  --success-100: #e7ecdd;
+  --success-200: #d3dcc1;
+  --success-300: #b8c69e;
+  --success-400: #9aac79;
+  --success-500: #788c5d;
+  --success-600: #647649;
+  --success-700: #4f5d3a;
+  --success-800: #3d482d;
+  --success-900: #2b331f;
+  /* state · error — standard: --error-500 #d64545 */
+  --error-50: #fcecea;
+  --error-100: #f7dedb;
+  --error-200: #f3c4bf;
+  --error-300: #eb9d96;
+  --error-400: #e0716a;
+  --error-500: #d64545;
+  --error-600: #b83636;
+  --error-700: #962c2c;
+  --error-800: #732222;
+  --error-900: #531818;
+
+  /* ===== 2) Semantic tokens (reference the primitives above) ===== */
+  /* bg */
+  --background: var(--bg-100);
+  --card: var(--bg-200);
+  --popover: var(--bg-50);
+  --muted: var(--bg-300);
+  /* text */
+  --foreground: var(--text-800);
+  --card-foreground: var(--icon-900);
+  --popover-foreground: var(--text-900);
+  --primary-foreground: #ffffff;
+  --secondary-foreground: var(--text-600);
+  --muted-foreground: var(--text-500);
+  --accent-foreground: var(--text-900);
+  --destructive-foreground: #ffffff;
+  /* semantic */
+  --primary: var(--brand-500);
+  --secondary: #e9e6dc;
+  --accent: var(--secondary);
+  --input: var(--border-500);
+  --ring: var(--brand-500);
+  --border: var(--border-300);
+  /* status */
+  --destructive: var(--error-500);
+  --success: var(--success-500);
+  --success-foreground: #ffffff;
+  --error: var(--error-500);
+  --error-foreground: #ffffff;
+  /* chart */
+  --chart-1: #b05730;
+  --chart-2: #9c87f5;
+  --chart-3: #ded8c4;
+  --chart-4: #dbd3f0;
+  --chart-5: #b4552d;
+  /* sidebar */
+  --sidebar: #f5f4ee;
+  --sidebar-foreground: #3d3d3a;
+  --sidebar-primary: var(--brand-500);
+  --sidebar-primary-foreground: #fbfbfb;
+  --sidebar-accent: #e9e6dc;
+  --sidebar-accent-foreground: #343434;
+  --sidebar-border: var(--border-100);
+  --sidebar-ring: #b5b5b5;
+
+  /* ===== 3) Non-color tokens ===== */
+  /* font — display (Newsreader) for slogans/headlines, sans (Poppins) for compact UI, serif (Lora) for reading surfaces */
+  --font-display: Newsreader, Georgia, ui-serif, serif;
+  --font-sans: Poppins, ui-sans-serif, system-ui, sans-serif;
+  --font-serif: Lora, Georgia, ui-serif, serif;
+  --font-mono: Geist Mono, ui-monospace, monospace;
+  /* spacing */
+  --spacing: 0.25rem;
+  /* radius */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius: 1rem;
+  --radius-xl: 20px;
+  --radius-2xl: 24px;
+  --radius-full: 9999px;
+  /* shadow */
+  --shadow-x: 0;
+  --shadow-y: 1px;
+  --shadow-blur: 3px;
+  --shadow-spread: 0px;
+  --shadow-opacity: 0.1;
+  --shadow-color: #000000;
+  --shadow-2xs: 0 1px 3px 0px rgba(0, 0, 0, 0.05);
+  --shadow-xs: 0 1px 3px 0px rgba(0, 0, 0, 0.05);
+  --shadow-sm: 0 1px 3px 0px rgba(0, 0, 0, 0.1), 0 1px 2px -1px rgba(0, 0, 0, 0.1);
+  --shadow: 0 1px 3px 0px rgba(0, 0, 0, 0.1), 0 1px 2px -1px rgba(0, 0, 0, 0.1);
+  --shadow-md: 0 1px 3px 0px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.1);
+  --shadow-lg: 0 1px 3px 0px rgba(0, 0, 0, 0.1), 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  --shadow-xl: 0 1px 3px 0px rgba(0, 0, 0, 0.1), 0 8px 10px -1px rgba(0, 0, 0, 0.1);
+  --shadow-2xl: 0 1px 3px 0px rgba(0, 0, 0, 0.25);
+  /* type */
+  --tracking-normal: 0em;
+}
+
+.dark {
+  /* ===== 1) Primitive scales · key color cards (10 steps, 50→900) ===== */
+  /* brand — standard: --brand-500 #d97757 */
+  --brand-50: #3a2a22;
+  --brand-100: #4d3528;
+  --brand-200: #6b4533;
+  --brand-300: #8a5740;
+  --brand-400: #b0683f;
+  --brand-500: #d97757;
+  --brand-600: #e08d6f;
+  --brand-700: #e8a98f;
+  --brand-800: #f0c6b3;
+  --brand-900: #f8e3d8;
+  /* text — standard: --text-800 #f1f1ef */
+  --text-50: #1b1b19;
+  --text-100: #2c2c2b;
+  --text-200: #46443b;
+  --text-300: #6e6d68;
+  --text-400: #908e84;
+  --text-500: #b7b5a9;
+  --text-600: #c3c0b6;
+  --text-700: #d8d6cd;
+  --text-800: #f1f1ef;
+  --text-900: #faf9f5;
+  /* background — standard: --bg-100 #262624 */
+  --bg-50: #1b1b19;
+  --bg-100: #262624;
+  --bg-200: #2c2c2b;
+  --bg-300: #30302e;
+  --bg-400: #3e3e38;
+  --bg-500: #4a4a43;
+  --bg-600: #52514a;
+  --bg-700: #6e6d68;
+  --bg-800: #908e84;
+  --bg-900: #b7b5a9;
+  /* icon — standard: --icon-700 #f1f1ef */
+  --icon-50: #1b1b19;
+  --icon-100: #2c2c2b;
+  --icon-200: #46443b;
+  --icon-300: #6e6d68;
+  --icon-400: #908e84;
+  --icon-500: #b7b5a9;
+  --icon-600: #d8d6cd;
+  --icon-700: #f1f1ef;
+  --icon-800: #f8f8f6;
+  --icon-900: #ffffff;
+  /* border — standard: --border-300 #3e3e38 */
+  --border-50: #1f1e1d;
+  --border-100: #2c2c2b;
+  --border-200: #343430;
+  --border-300: #3e3e38;
+  --border-400: #4a4a43;
+  --border-500: #52514a;
+  --border-600: #6e6d68;
+  --border-700: #908e84;
+  --border-800: #b7b5a9;
+  --border-900: #d8d6cd;
+  /* state · success — standard: --success-500 #8ca06f */
+  --success-50: #232a1c;
+  --success-100: #2e3823;
+  --success-200: #3f4d30;
+  --success-300: #556640;
+  --success-400: #708353;
+  --success-500: #8ca06f;
+  --success-600: #a3b58a;
+  --success-700: #bccaa8;
+  --success-800: #d6dfc8;
+  --success-900: #edf2e4;
+  /* state · error — standard: --error-500 #ef4444 */
+  --error-50: #3a1f1f;
+  --error-100: #4d2424;
+  --error-200: #6e2c2c;
+  --error-300: #93302f;
+  --error-400: #c43a39;
+  --error-500: #ef4444;
+  --error-600: #f26b6b;
+  --error-700: #f59292;
+  --error-800: #f9b9b9;
+  --error-900: #fcdede;
+
+  /* ===== 2) Semantic tokens (reference the primitives above) ===== */
+  /* bg */
+  --background: var(--bg-100);
+  --card: var(--bg-200);
+  --popover: var(--bg-300);
+  --muted: var(--bg-50);
+  /* text */
+  --foreground: var(--text-800);
+  --card-foreground: var(--text-900);
+  --popover-foreground: #e5e5e2;
+  --primary-foreground: #141413;
+  --secondary-foreground: var(--bg-300);
+  --muted-foreground: var(--text-500);
+  --accent-foreground: #f5f4ee;
+  --destructive-foreground: #ffffff;
+  /* accent */
+  --primary: var(--brand-500);
+  --secondary: var(--text-900);
+  --accent: #1a1915;
+  --input: var(--border-500);
+  --ring: var(--brand-500);
+  /* border */
+  --border: var(--border-300);
+  /* status */
+  --destructive: var(--error-500);
+  --success: var(--success-500);
+  --success-foreground: #141413;
+  --error: var(--error-500);
+  --error-foreground: #ffffff;
+  /* chart */
+  --chart-1: #b05730;
+  --chart-2: #9c87f5;
+  --chart-3: #1a1915;
+  --chart-4: #2f2b48;
+  --chart-5: #b4552d;
+  /* sidebar */
+  --sidebar: #1f1e1d;
+  --sidebar-foreground: #c3c0b6;
+  --sidebar-primary: #343434;
+  --sidebar-primary-foreground: #fbfbfb;
+  --sidebar-accent: #0f0f0e;
+  --sidebar-accent-foreground: #c3c0b6;
+  --sidebar-border: #ebebeb;
+  --sidebar-ring: #b5b5b5;
+
+  /* ===== 3) Non-color tokens ===== */
+  /* font — sans (Poppins) for headings + compact UI, serif (Lora) for reading surfaces */
+  --font-display: Newsreader, Georgia, ui-serif, serif;
+  --font-sans: Poppins, ui-sans-serif, system-ui, sans-serif;
+  --font-serif: Lora, Georgia, ui-serif, serif;
+  --font-mono: Geist Mono, ui-monospace, monospace;
+  /* radius */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius: 1rem;
+  --radius-xl: 20px;
+  --radius-2xl: 24px;
+  --radius-full: 9999px;
+  /* shadow */
+  --shadow-x: 0;
+  --shadow-y: 1px;
+  --shadow-blur: 3px;
+  --shadow-spread: 0px;
+  --shadow-opacity: 0.1;
+  --shadow-color: #000000;
+  --shadow-2xs: 0 1px 3px 0px rgba(0, 0, 0, 0.05);
+  --shadow-xs: 0 1px 3px 0px rgba(0, 0, 0, 0.05);
+  --shadow-sm: 0 1px 3px 0px rgba(0, 0, 0, 0.1), 0 1px 2px -1px rgba(0, 0, 0, 0.1);
+  --shadow: 0 1px 3px 0px rgba(0, 0, 0, 0.1), 0 1px 2px -1px rgba(0, 0, 0, 0.1);
+  --shadow-md: 0 1px 3px 0px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.1);
+  --shadow-lg: 0 1px 3px 0px rgba(0, 0, 0, 0.1), 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  --shadow-xl: 0 1px 3px 0px rgba(0, 0, 0, 0.1), 0 8px 10px -1px rgba(0, 0, 0, 0.1);
+  --shadow-2xl: 0 1px 3px 0px rgba(0, 0, 0, 0.25);
+}

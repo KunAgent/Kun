@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>Tooltip 文字气泡</title>
+  <link rel="stylesheet" href="preview-scaffold.css">
+  <style>
+    .tooltip {
+      display: inline-flex;
+      position: relative;
+      color: #FFFFFF;
+      font-family: "PingFang SC", sans-serif;
+      font-size: 12px;
+      font-weight: 400;
+      line-height: 20px;
+      letter-spacing: 0.3px;
+    }
+    .tooltip-bubble {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      padding: 6px 8px;
+      border-radius: 4px;
+      background: #2B303A;
+      box-shadow: 0 5px 15px rgba(0,0,0,0.05), 0 15px 35px rgba(0,0,0,0.05);
+      white-space: nowrap;
+    }
+    .tooltip-arrow-wrap {
+      display: flex;
+      padding: 0 12px;
+    }
+    .tooltip-arrow-wrap-side {
+      padding: 0;
+    }
+    .tooltip-arrow {
+      display: block;
+      background: #2B303A;
+      flex: none;
+    }
+    .tooltip-arrow-top,
+    .tooltip-arrow-bottom {
+      width: 12px;
+      height: 6px;
+    }
+    .tooltip-arrow-top {
+      clip-path: polygon(50% 0, 0 100%, 100% 100%);
+    }
+    .tooltip-arrow-bottom {
+      clip-path: polygon(0 0, 100% 0, 50% 100%);
+    }
+    .tooltip-arrow-left,
+    .tooltip-arrow-right {
+      width: 6px;
+      height: 12px;
+    }
+    .tooltip-arrow-left {
+      clip-path: polygon(0 50%, 100% 0, 100% 100%);
+    }
+    .tooltip-arrow-right {
+      clip-path: polygon(0 0, 100% 50%, 0 100%);
+    }
+    .tooltip[data-placement="top"] {
+      flex-direction: column;
+      align-items: center;
+    }
+    .tooltip[data-placement="top-left"] {
+      flex-direction: column;
+      align-items: flex-start;
+    }
+    .tooltip[data-placement="top-right"] {
+      flex-direction: column;
+      align-items: flex-end;
+    }
+    .tooltip[data-placement="bottom"] {
+      flex-direction: column-reverse;
+      align-items: center;
+    }
+    .tooltip[data-placement="bottom-left"] {
+      flex-direction: column-reverse;
+      align-items: flex-start;
+    }
+    .tooltip[data-placement="bottom-right"] {
+      flex-direction: column-reverse;
+      align-items: flex-end;
+    }
+    .tooltip[data-placement="left"] {
+      flex-direction: row;
+      align-items: center;
+    }
+    .tooltip[data-placement="right"] {
+      flex-direction: row;
+      align-items: center;
+    }
+  </style>
+</head>
+<body>
+  <div class="pv-header">
+    <h1>Tooltip 文字气泡</h1>
+    <p>鼠标悬停时展示的简单文本提示气泡，支持多方位（上下左右）定位。</p>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">Top 上方</div>
+    <div class="row">
+      <div class="tooltip" data-component="tooltip" data-type="basic" data-placement="top-left">
+        <span class="tooltip-bubble">工具提醒</span>
+        <span class="tooltip-arrow-wrap">
+          <span class="tooltip-arrow tooltip-arrow-bottom"></span>
+        </span>
+      </div>
+      <div class="tooltip" data-component="tooltip" data-type="basic" data-placement="top">
+        <span class="tooltip-bubble">工具提醒</span>
+        <span class="tooltip-arrow-wrap">
+          <span class="tooltip-arrow tooltip-arrow-bottom"></span>
+        </span>
+      </div>
+      <div class="tooltip" data-component="tooltip" data-type="basic" data-placement="top-right">
+        <span class="tooltip-bubble">工具提醒</span>
+        <span class="tooltip-arrow-wrap">
+          <span class="tooltip-arrow tooltip-arrow-bottom"></span>
+        </span>
+      </div>
+    </div>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">Bottom 下方</div>
+    <div class="row">
+      <div class="tooltip" data-component="tooltip" data-type="basic" data-placement="bottom-left">
+        <span class="tooltip-bubble">工具提醒</span>
+        <span class="tooltip-arrow-wrap">
+          <span class="tooltip-arrow tooltip-arrow-top"></span>
+        </span>
+      </div>
+      <div class="tooltip" data-component="tooltip" data-type="basic" data-placement="bottom">
+        <span class="tooltip-bubble">工具提醒</span>
+        <span class="tooltip-arrow-wrap">
+          <span class="tooltip-arrow tooltip-arrow-top"></span>
+        </span>
+      </div>
+      <div class="tooltip" data-component="tooltip" data-type="basic" data-placement="bottom-right">
+        <span class="tooltip-bubble">工具提醒</span>
+        <span class="tooltip-arrow-wrap">
+          <span class="tooltip-arrow tooltip-arrow-top"></span>
+        </span>
+      </div>
+    </div>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">Left / Right 左右</div>
+    <div class="row">
+      <div class="tooltip" data-component="tooltip" data-type="basic" data-placement="left">
+        <span class="tooltip-bubble">工具提醒</span>
+        <span class="tooltip-arrow-wrap tooltip-arrow-wrap-side">
+          <span class="tooltip-arrow tooltip-arrow-right"></span>
+        </span>
+      </div>
+      <div class="tooltip" data-component="tooltip" data-type="basic" data-placement="right">
+        <span class="tooltip-arrow-wrap tooltip-arrow-wrap-side">
+          <span class="tooltip-arrow tooltip-arrow-left"></span>
+        </span>
+        <span class="tooltip-bubble">工具提醒</span>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

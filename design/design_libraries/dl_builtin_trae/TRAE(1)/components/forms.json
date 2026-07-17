@@ -1,0 +1,150 @@
+{
+  "schemaVersion": 2,
+  "slug": "forms",
+  "name": "Form Controls",
+  "category": "input",
+  "sourceKind": "structured-spec",
+  "confidence": "medium",
+  "semanticTypeCandidates": [
+    "input",
+    "textarea",
+    "select",
+    "checkbox",
+    "radio",
+    "switch"
+  ],
+  "variantDimensions": {
+    "control": [
+      "text-input",
+      "textarea",
+      "select",
+      "checkbox",
+      "radio",
+      "switch"
+    ],
+    "state": [
+      "default",
+      "focus",
+      "disabled",
+      "error"
+    ]
+  },
+  "representativeVariants": [
+    {
+      "control": "text-input",
+      "state": "default"
+    },
+    {
+      "control": "text-input",
+      "state": "error"
+    },
+    {
+      "control": "checkbox",
+      "state": "default"
+    },
+    {
+      "control": "switch",
+      "state": "default"
+    }
+  ],
+  "anatomy": [
+    "label",
+    "control",
+    "helper-text",
+    "error-text"
+  ],
+  "structurePatterns": [
+    "vertical stack: label + control + helper"
+  ],
+  "usageHints": [
+    "Field surface: --bg-overlay-l1; border: --border-neutral-l2",
+    "Focus ring uses --status-primary-default",
+    "Error border uses --status-error-default"
+  ],
+  "doNotInvent": [
+    "No combobox / autocomplete defined"
+  ],
+  "unknowns": [
+    "validation timing, async error states"
+  ],
+  "tokensConsumed": [
+    "--bg-base-default",
+    "--bg-brand",
+    "--bg-overlay-l1",
+    "--bg-overlay-l2",
+    "--bg-overlay-l3",
+    "--body-base-font-family",
+    "--body-base-line-height",
+    "--body-sm-font-size",
+    "--border-brand",
+    "--border-neutral-l1",
+    "--border-neutral-l2",
+    "--icon-defa",
+    "--icon-secondary",
+    "--radius-2",
+    "--radius-4",
+    "--radius-full",
+    "--spacer-12",
+    "--spacer-32",
+    "--spacer-8",
+    "--text-default",
+    "--text-onbrand",
+    "--text-tertiary"
+  ],
+  "domAnatomy": {
+    "root": {
+      "tag": "div",
+      "class": "grid-2",
+      "children": [
+        {
+          "tag": "div",
+          "class": "ds-input",
+          "children": [
+            {
+              "tag": "input"
+            }
+          ]
+        },
+        {
+          "tag": "div",
+          "class": "ds-input",
+          "children": [
+            {
+              "tag": "span",
+              "class": "ds-input__icon"
+            },
+            {
+              "tag": "input"
+            }
+          ]
+        },
+        {
+          "tag": "div",
+          "class": "ds-input",
+          "children": [
+            {
+              "tag": "input"
+            }
+          ]
+        },
+        {
+          "tag": "div",
+          "class": "ds-input",
+          "children": [
+            {
+              "tag": "input"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "provenance": {
+    "preview": "preview/component-forms.html",
+    "source": "previews/forms.html",
+    "css": {
+      "file": "components.css",
+      "marker": "── Forms ──"
+    }
+  }
+}

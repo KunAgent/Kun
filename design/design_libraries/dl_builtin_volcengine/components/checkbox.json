@@ -1,0 +1,61 @@
+{
+  "schemaVersion": 2,
+  "slug": "checkbox",
+  "name": "Checkbox",
+  "category": "data-entry",
+  "sourceKind": "structured-spec",
+  "confidence": "medium",
+  "semanticTypeCandidates": ["checkbox", "check-input", "multi-select-option"],
+  "variantDimensions": {
+    "state": ["default", "checked", "indeterminate", "disabled", "invalid"],
+    "layout": ["horizontal", "vertical"]
+  },
+  "representativeVariants": [
+    { "state": "default" },
+    { "state": "checked" },
+    { "state": "indeterminate" },
+    { "state": "disabled" },
+    { "state": "invalid" }
+  ],
+  "anatomy": ["checkbox-container", "checkbox-box", "checkbox-icon", "checkbox-dash", "checkbox-label", "checkbox-group"],
+  "structurePatterns": [
+    "Inline flex row with 8px gap: checkbox box on left, label text on right",
+    "Checkbox box is 14px square with 2px border-radius, centered content",
+    "Checkbox group is a flex container with configurable direction (horizontal/vertical)"
+  ],
+  "usageHints": [
+    "Default box: background #FFFFFF, box-shadow 0 0 0 1px #DDE2E9",
+    "Checked box: background #1664FF, box-shadow includes 0 0 0 1px #1664FF",
+    "Indeterminate shows a horizontal dash: 8px x 2px white bar",
+    "Hover state: box-shadow border turns #1664FF",
+    "Disabled: opacity 0.6, cursor not-allowed, pointer-events none",
+    "Invalid: box-shadow border turns #F53F3F",
+    "Font: PingFang SC 13px/22px, letter-spacing 0.039px, color #0C0D0E",
+    "Horizontal group gap: 24px, Vertical group gap: 16px"
+  ],
+  "doNotInvent": ["custom checkbox shapes", "checkbox with description text", "checkbox card variant"],
+  "unknowns": ["focus ring style", "animation on state change"],
+  "tokensConsumed": [],
+  "domAnatomy": {
+    "root": {
+      "tag": "label",
+      "class": "checkbox",
+      "children": [
+        {
+          "tag": "span",
+          "class": "checkbox-box",
+          "children": [
+            { "tag": "svg", "class": "checkbox-icon", "optional": true },
+            { "tag": "span", "class": "checkbox-dash", "optional": true }
+          ]
+        },
+        { "tag": "span", "class": "checkbox-label" }
+      ]
+    }
+  },
+  "provenance": {
+    "preview": "preview/ui-checkbox.html",
+    "source": "structured-spec",
+    "css": { "file": "ui-checkbox.html", "marker": "inline <style>" }
+  }
+}

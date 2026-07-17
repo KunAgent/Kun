@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>
+  /* Page scaffold — NOT extracted */
+  /* @component-css-start */
+body{margin:0;padding:12px;background:var(--background);color:var(--foreground);font:13px/1.4 var(--font-sans);letter-spacing:var(--tracking-normal)}.row{display:flex;gap:8px;align-items:flex-start;flex-wrap:wrap}.label{padding-top:8px;min-width:72px;font:600 10px/1 var(--font-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted-foreground)}.nav{display:flex;align-items:center;gap:6px;min-height:40px;padding:6px;background:var(--card);border:1px solid var(--border);border-radius:calc(var(--radius) + 2px);box-shadow:var(--shadow-xs)}.topbar{min-width:520px;justify-content:space-between}.section{min-width:320px}.brand{padding:7px 10px;border-radius:var(--radius);background:var(--primary);color:var(--primary-foreground);font:600 12px/1 var(--font-sans)}.meta{padding:7px 10px;border-radius:var(--radius);background:var(--accent);color:var(--accent-foreground);white-space:nowrap}.links{display:flex;gap:4px;flex-wrap:wrap}.item{padding:7px 10px;border-radius:var(--radius);color:var(--muted-foreground);text-decoration:none;white-space:nowrap}.item:hover,.item:focus-visible{background:var(--accent);color:var(--accent-foreground);outline:none}.item.active{background:var(--secondary);color:var(--secondary-foreground);box-shadow:var(--shadow-2xs)}.item.disabled{color:var(--muted-foreground);opacity:.45;pointer-events:none}.divider{margin:8px 0;border:0;border-top:1px solid var(--border)}
+  /* @component-css-end */
+</style>
+</head>
+<body>
+<div class="row"><span class="label">Topbar</span><nav class="nav topbar" aria-label="Primary"><span class="brand">Vercel</span><div class="links"><a class="item active" href="#">Overview</a><a class="item" href="#">Deployments</a><a class="item" href="#">Observability</a><a class="item" href="#">Settings</a></div><span class="meta">Hobby</span></nav><nav class="nav topbar" aria-label="Primary disabled"><span class="brand">Vercel</span><div class="links"><a class="item active" href="#">Overview</a><a class="item" href="#">Deployments</a><a class="item disabled" href="#" aria-disabled="true">Observability</a><a class="item" href="#">Settings</a></div><span class="meta">Pro</span></nav></div>
+<hr class="divider">
+<div class="row"><span class="label">Section</span><nav class="nav section" aria-label="Section"><div class="links"><a class="item active" href="#">Usage</a><a class="item" href="#">Domains</a><a class="item" href="#">Functions</a></div></nav><nav class="nav section" aria-label="Section disabled"><div class="links"><a class="item active" href="#">Usage</a><a class="item" href="#">Domains</a><a class="item disabled" href="#" aria-disabled="true">Functions</a></div></nav></div>
+</body>
+</html>

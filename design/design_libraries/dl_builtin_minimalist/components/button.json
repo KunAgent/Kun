@@ -1,0 +1,63 @@
+{
+  "slug": "button",
+  "name": "Button",
+  "category": "actions",
+  "variantCount": 12,
+  "primitiveCount": 12,
+  "cssVariables": [
+    "color-primary",
+    "color-primary-foreground",
+    "color-surface",
+    "color-text",
+    "color-border",
+    "color-danger-600",
+    "radius-md",
+    "space-4",
+    "shadow-sm"
+  ],
+  "variantDimensions": {
+    "style": [
+      "primary",
+      "secondary",
+      "ghost",
+      "danger"
+    ],
+    "size": [
+      "sm",
+      "md",
+      "lg"
+    ],
+    "state": [
+      "default",
+      "disabled"
+    ]
+  },
+  "anatomy": [
+    "container",
+    "label",
+    "leading-icon"
+  ],
+  "structures": [
+    {
+      "name": "Primary, Size=md, State=default",
+      "slots": [
+        "label"
+      ]
+    },
+    {
+      "name": "Secondary, Size=md, State=default",
+      "slots": [
+        "label"
+      ]
+    },
+    {
+      "name": "Ghost, Size=sm, State=disabled",
+      "slots": [
+        "leading-icon",
+        "label"
+      ]
+    }
+  ],
+  "evidence": "AI-inferred based on Dashboard product type and structured CSS tokens.",
+  "keyInsight": "Actions should feel dense and calm, with high contrast fills and no decorative shadow."
+}

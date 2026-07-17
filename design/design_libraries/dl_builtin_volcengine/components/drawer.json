@@ -1,0 +1,64 @@
+{
+  "schemaVersion": 2,
+  "slug": "drawer",
+  "name": "Drawer",
+  "category": "feedback",
+  "sourceKind": "structured-spec",
+  "confidence": "medium",
+  "semanticTypeCandidates": ["side-panel", "slide-over", "panel"],
+  "variantDimensions": {
+    "size": ["mini", "small", "default", "large"]
+  },
+  "representativeVariants": [
+    { "size": "mini" },
+    { "size": "small" },
+    { "size": "default" },
+    { "size": "large" }
+  ],
+  "anatomy": ["header", "title", "close-button", "body", "footer"],
+  "structurePatterns": [
+    "Vertical flex column with header (title + close), scrollable body, and fixed footer with action buttons",
+    "Slides in from screen edge as an overlay panel, widths: mini=480px, small=600px, default=720px, large=1080px"
+  ],
+  "usageHints": [
+    "Background uses #FFFFFF with box-shadow -4px 0 12px rgba(0,0,0,0.08)",
+    "Border-radius 8px with 1px solid #DDE2E9 border",
+    "Header height 56px, padding 0 24px, border-bottom 1px solid #DDE2E9",
+    "Title: PingFang SC 500 18px/26px color #0C0D0E",
+    "Body: flex 1, padding 24px, overflow-y auto",
+    "Footer: height 64px, padding 16px 24px, border-top 1px solid #DDE2E9, flex-end gap 8px"
+  ],
+  "doNotInvent": ["placement direction options", "mask/backdrop layer", "nested drawers"],
+  "unknowns": ["animation duration and easing for open/close", "whether placement can be top/bottom/left"],
+  "tokensConsumed": [],
+  "domAnatomy": {
+    "root": {
+      "tag": "div",
+      "class": "drawer drawer-{size}",
+      "children": [
+        {
+          "tag": "div",
+          "class": "drawer-header",
+          "children": [
+            { "tag": "span", "class": "drawer-title" },
+            { "tag": "span", "class": "drawer-close" }
+          ]
+        },
+        { "tag": "div", "class": "drawer-body" },
+        {
+          "tag": "div",
+          "class": "drawer-footer",
+          "children": [
+            { "tag": "button", "class": "btn btn-secondary btn-md" },
+            { "tag": "button", "class": "btn btn-primary btn-md" }
+          ]
+        }
+      ]
+    }
+  },
+  "provenance": {
+    "preview": "preview/ui-drawer.html",
+    "source": "structured-spec",
+    "css": { "file": "ui-drawer.html", "marker": "inline style" }
+  }
+}

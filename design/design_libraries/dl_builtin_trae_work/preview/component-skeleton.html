@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Skeleton</title>
+  <link rel="stylesheet" href="../colors_and_type.css" />
+  <link rel="stylesheet" href="../scaffold.css" />
+  <link rel="stylesheet" href="../components.css" />
+  <style>
+    /* @component-css-start */
+    /* ===== Skeleton ===== */
+    .ds-skeleton { display: block; background: var(--bg-overlay-l2); border-radius: var(--radius-8); position: relative; overflow: hidden; }
+    .ds-skeleton::after { content: ''; position: absolute; inset: 0; background: linear-gradient(90deg, transparent, var(--bg-overlay-l3), transparent); animation: ds-skeleton-shine 1.6s ease-in-out infinite; }
+    @keyframes ds-skeleton-shine { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }
+    .ds-skeleton--line { height: 12px; }
+    .ds-skeleton--title { height: 18px; width: 50%; }
+    .ds-skeleton--circle { width: 32px; height: 32px; border-radius: var(--radius-full); }
+    /* @component-css-end */
+  </style>
+</head>
+<body>
+  <div class="pv-header">
+    <h1>Skeleton</h1>
+    <p>Base color <code>--bg-overlay-l2</code>, shimmer <code>--bg-overlay-l3</code>. Show within 200ms of a request, hide as soon as data arrives.</p>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">Card skeleton</div>
+    <div class="ds-card" style="max-width: 480px;">
+      <div class="row" style="margin-bottom: var(--spacer-16);">
+        <span class="ds-skeleton ds-skeleton--circle"></span>
+        <div style="flex:1;">
+          <span class="ds-skeleton ds-skeleton--title" style="display:block; margin-bottom: var(--spacer-8);"></span>
+          <span class="ds-skeleton ds-skeleton--line" style="width:30%; display:block;"></span>
+        </div>
+      </div>
+      <span class="ds-skeleton ds-skeleton--line" style="display:block; margin-bottom: var(--spacer-8);"></span>
+      <span class="ds-skeleton ds-skeleton--line" style="width:80%; display:block; margin-bottom: var(--spacer-8);"></span>
+      <span class="ds-skeleton ds-skeleton--line" style="width:60%; display:block;"></span>
+    </div>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">List skeleton</div>
+    <div class="stack-12" style="max-width: 480px;">
+      <div class="row"><span class="ds-skeleton ds-skeleton--circle"></span><span class="ds-skeleton ds-skeleton--line" style="flex:1;"></span></div>
+      <div class="row"><span class="ds-skeleton ds-skeleton--circle"></span><span class="ds-skeleton ds-skeleton--line" style="flex:1;"></span></div>
+      <div class="row"><span class="ds-skeleton ds-skeleton--circle"></span><span class="ds-skeleton ds-skeleton--line" style="flex:1;"></span></div>
+    </div>
+  </div>
+
+</body>
+</html>

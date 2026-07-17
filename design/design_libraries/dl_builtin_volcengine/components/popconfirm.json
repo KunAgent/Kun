@@ -1,0 +1,72 @@
+{
+  "schemaVersion": 2,
+  "slug": "popconfirm",
+  "name": "Popconfirm",
+  "category": "feedback",
+  "sourceKind": "structured-spec",
+  "confidence": "medium",
+  "semanticTypeCandidates": ["popover-confirm", "confirm-bubble", "confirmation-popover"],
+  "variantDimensions": {
+    "type": ["default", "simple"],
+    "icon": ["warning", "info", "error"],
+    "action": ["primary", "danger"]
+  },
+  "representativeVariants": [
+    { "type": "default", "icon": "warning", "action": "primary" },
+    { "type": "default", "icon": "info", "action": "primary" },
+    { "type": "default", "icon": "error", "action": "danger" },
+    { "type": "simple", "icon": "none", "action": "primary" }
+  ],
+  "anatomy": ["popconfirm", "popconfirm-content", "popconfirm-header", "popconfirm-icon", "popconfirm-title", "popconfirm-description", "popconfirm-footer", "popconfirm-arrow", "btn"],
+  "structurePatterns": [
+    "Floating card with optional arrow pointer containing icon+title header, optional description, and action button footer aligned right",
+    "Simple variant omits the icon; description indent is removed when no icon present"
+  ],
+  "usageHints": [
+    "Background #FFFFFF with box-shadow 0 4px 12px rgba(0,0,0,0.08) and 1px solid #DDE2E9 border",
+    "Icon colors: warning #FF7D00, info #1664FF, error #F53F3F",
+    "Title uses font-size 14px / font-weight 500 / color #0C0D0E",
+    "Description uses font-size 13px / color #42464E with 24px left margin when icon present",
+    "Buttons height 28px with 4px border-radius; primary #1664FF, secondary #F6F8FA with border, danger #F53F3F"
+  ],
+  "doNotInvent": ["tooltip mode", "custom positioning logic", "close icon button", "timer auto-dismiss"],
+  "unknowns": ["max content width constraints beyond 320px", "animation/transition for show/hide"],
+  "tokensConsumed": [],
+  "domAnatomy": {
+    "root": {
+      "tag": "div",
+      "class": "popconfirm popconfirm-{type}",
+      "children": [
+        {
+          "tag": "div",
+          "class": "popconfirm-content",
+          "children": [
+            {
+              "tag": "div",
+              "class": "popconfirm-header",
+              "children": [
+                { "tag": "span", "class": "popconfirm-icon popconfirm-icon-{icon}", "children": ["svg"] },
+                { "tag": "span", "class": "popconfirm-title" }
+              ]
+            },
+            { "tag": "p", "class": "popconfirm-description", "optional": true },
+            {
+              "tag": "div",
+              "class": "popconfirm-footer",
+              "children": [
+                { "tag": "button", "class": "btn btn-secondary" },
+                { "tag": "button", "class": "btn btn-primary | btn-danger" }
+              ]
+            }
+          ]
+        },
+        { "tag": "div", "class": "popconfirm-arrow" }
+      ]
+    }
+  },
+  "provenance": {
+    "preview": "preview/ui-popconfirm.html",
+    "source": "structured-spec",
+    "css": { "file": "ui-popconfirm.html", "marker": "inline <style>" }
+  }
+}

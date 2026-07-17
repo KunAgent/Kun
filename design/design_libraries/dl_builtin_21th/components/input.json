@@ -1,0 +1,37 @@
+{
+  "slug": "input",
+  "name": "Input",
+  "purpose": "Search and filter field for dashboard command bars and inspector panels.",
+  "productContext": "analytics dashboard",
+  "uiCopySamples": [
+    "Search accounts",
+    "Filter by owner",
+    "Region",
+    "Date range"
+  ],
+  "variantDimensions": {
+    "type": ["text", "search", "select-like"],
+    "size": ["md", "lg"],
+    "state": ["default", "focus", "filled", "disabled"]
+  },
+  "tokenUsage": [
+    "--input",
+    "--foreground",
+    "--muted-foreground",
+    "--border",
+    "--ring",
+    "--shadow-xs",
+    "--tracking-normal"
+  ],
+  "structures": [
+    {
+      "title": "Filter row fields",
+      "description": "Monospace-friendly fields paired with labels, helper text, and visible focus treatment.",
+      "parts": ["label", "input shell", "placeholder", "helper text"],
+      "sampleContent": {
+        "headline": "Search accounts",
+        "body": "Type an account ID or workspace name"
+      }
+    }
+  ]
+}

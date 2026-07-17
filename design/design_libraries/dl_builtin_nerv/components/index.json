@@ -1,0 +1,53 @@
+{
+  "components": [
+    {
+      "slug": "button",
+      "name": "Button",
+      "category": "Actions",
+      "variantCount": 9,
+      "evidence": "AI-inferred from structured CSS token spec for a dark, high-contrast dashboard system."
+    },
+    {
+      "slug": "card",
+      "name": "Card",
+      "category": "Containers",
+      "variantCount": 6,
+      "evidence": "AI-inferred from token emphasis on surface, border, radius, and subtle elevation."
+    },
+    {
+      "slug": "table",
+      "name": "Table",
+      "category": "Data Display",
+      "variantCount": 5,
+      "evidence": "AI-inferred from dashboard product type and chart/sidebar token presence."
+    },
+    {
+      "slug": "chart",
+      "name": "Chart",
+      "category": "Data Visualization",
+      "variantCount": 5,
+      "evidence": "Directly supported by chart-1 through chart-5 tokens in the source CSS."
+    },
+    {
+      "slug": "navigation",
+      "name": "Navigation",
+      "category": "Navigation",
+      "variantCount": 5,
+      "evidence": "AI-inferred from sidebar-specific token family and dashboard IA needs."
+    },
+    {
+      "slug": "sidebar",
+      "name": "Sidebar",
+      "category": "Navigation",
+      "variantCount": 4,
+      "evidence": "Directly supported by sidebar token family in the source CSS."
+    }
+  ],
+  "crossComponentPatterns": {
+    "tone": "Dark neon editorial dashboard with high-contrast surfaces and vivid accent moments.",
+    "radius": "Large softened corners driven by a 1.65rem base radius.",
+    "spacing": "Compact rhythm derived from a 0.28rem spacing unit and dense data layouts.",
+    "emphasis": "Critical actions rely on hot red/pink/cyan accents against charcoal surfaces.",
+    "elevation": "Shadows remain subtle and close to the surface to preserve a technical feel."
+  }
+}

@@ -1,0 +1,48 @@
+{
+  "slug": "navigation",
+  "name": "Navigation",
+  "category": "Navigation",
+  "variantCount": 5,
+  "evidence": "AI-inferred from sidebar-specific token family and dashboard IA needs.",
+  "anatomy": [
+    "nav-shell",
+    "brand-mark",
+    "nav-link",
+    "active-indicator",
+    "utility-slot"
+  ],
+  "variantDimensions": {
+    "orientation": [
+      "top",
+      "sectioned"
+    ],
+    "state": [
+      "default",
+      "active",
+      "hover"
+    ],
+    "density": [
+      "comfortable",
+      "compact"
+    ]
+  },
+  "structures": [
+    {
+      "name": "Top Navigation, Active",
+      "notes": "Thin high-contrast rail with accent-selected item."
+    },
+    {
+      "name": "Section Navigation, Default",
+      "notes": "Supports dense dashboard wayfinding."
+    },
+    {
+      "name": "Utility Navigation, Compact",
+      "notes": "Pairs quick actions with context badges."
+    }
+  ],
+  "uiCopySamples": [
+    "Overview",
+    "Signals",
+    "Console"
+  ]
+}

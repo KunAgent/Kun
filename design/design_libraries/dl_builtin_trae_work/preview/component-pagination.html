@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Pagination</title>
+  <link rel="stylesheet" href="../colors_and_type.css" />
+  <link rel="stylesheet" href="../scaffold.css" />
+  <link rel="stylesheet" href="../components.css" />
+  <style>
+    /* @component-css-start */
+    /* ===== Pagination ===== */
+    .ds-pagination { display: inline-flex; gap: var(--spacer-4); }
+    .ds-pagination__item { min-width: 32px; height: 32px; padding: 0 var(--spacer-8); display: inline-flex; align-items: center; justify-content: center; background: transparent; color: var(--text-secondary); border: 1px solid var(--border-neutral-l1); border-radius: var(--radius-8); font: inherit; font-size: var(--body-base-font-size); cursor: pointer; }
+    .ds-pagination__item:hover { background: var(--bg-overlay-l2); color: var(--text-default); }
+    .ds-pagination__item.is-active { background: var(--bg-overlay-l3); color: var(--text-default); border-color: var(--border-neutral-l2); }
+    .ds-pagination__item[disabled] { opacity: .4; cursor: not-allowed; }
+    .ds-pagination__range { color: var(--text-tertiary); font-family: var(--body-sm-font-family); font-size: var(--body-sm-font-size); line-height: var(--body-sm-line-height); font-weight: var(--body-sm-font-weight); letter-spacing: var(--body-sm-letter-spacing); }
+    /* @component-css-end */
+
+    /* Inline asset icon normalization: keep uploaded HTML independent from external SVG styling. */
+    [data-asset-icon] {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: transparent !important;
+      -webkit-mask: none !important;
+      mask: none !important;
+    }
+
+    [data-asset-icon] > svg {
+      display: block;
+      width: 100%;
+      height: 100%;
+      flex: 0 0 auto;
+    }
+
+    .asset-inline-icon {
+      width: 16px;
+      height: 16px;
+      flex: 0 0 auto;
+    }
+  </style>
+</head>
+<body>
+  <div class="pv-header">
+    <h1>Pagination</h1>
+    <p>32x32 numeric buttons, radius <code>--radius-8</code>, neutral border. Active page uses <code>--bg-overlay-l3</code> — never brand fill.</p>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">Default</div>
+    <div class="ds-pagination">
+      <button class="ds-pagination__item" aria-label="Previous"><span class="icon" style="transform: rotate(180deg); width: 14px; height: 14px;" aria-hidden="true" data-asset-icon="../assets/icons/arrow-right.svg"><svg focusable="false" width="24" height="24" viewBox="0 0 16 16" fill="#404040" xmlns="http://www.w3.org/2000/svg"><path d="M8.89062 3.55722C9.13461 3.31335 9.53132 3.31348 9.77539 3.55722L13.7754 7.55722C14.0194 7.80126 14.0194 8.1979 13.7754 8.44199L9.77539 12.442C9.53131 12.6861 9.1347 12.6861 8.89062 12.442C8.64685 12.1979 8.64665 11.8012 8.89062 11.5572L11.8232 8.6246H2.66699C2.32181 8.6246 2.04199 8.34478 2.04199 7.9996C2.0422 7.6546 2.32194 7.3746 2.66699 7.3746H11.8232L8.89062 4.44199C8.64685 4.19788 8.64665 3.8012 8.89062 3.55722Z" fill="#404040"/></svg></span></button>
+      <button class="ds-pagination__item num">1</button>
+      <button class="ds-pagination__item is-active num">2</button>
+      <button class="ds-pagination__item num">3</button>
+      <button class="ds-pagination__item" disabled>…</button>
+      <button class="ds-pagination__item num">12</button>
+      <button class="ds-pagination__item" aria-label="Next"><span class="icon" style="width: 14px; height: 14px;" aria-hidden="true" data-asset-icon="../assets/icons/arrow-right.svg"><svg focusable="false" width="24" height="24" viewBox="0 0 16 16" fill="#404040" xmlns="http://www.w3.org/2000/svg"><path d="M8.89062 3.55722C9.13461 3.31335 9.53132 3.31348 9.77539 3.55722L13.7754 7.55722C14.0194 7.80126 14.0194 8.1979 13.7754 8.44199L9.77539 12.442C9.53131 12.6861 9.1347 12.6861 8.89062 12.442C8.64685 12.1979 8.64665 11.8012 8.89062 11.5572L11.8232 8.6246H2.66699C2.32181 8.6246 2.04199 8.34478 2.04199 7.9996C2.0422 7.6546 2.32194 7.3746 2.66699 7.3746H11.8232L8.89062 4.44199C8.64685 4.19788 8.64665 3.8012 8.89062 3.55722Z" fill="#404040"/></svg></span></button>
+    </div>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">With page size</div>
+    <div class="row">
+      <div class="ds-pagination">
+        <button class="ds-pagination__item" aria-label="Previous"><span class="icon" style="transform: rotate(180deg); width: 14px; height: 14px;" aria-hidden="true" data-asset-icon="../assets/icons/arrow-right.svg"><svg focusable="false" width="24" height="24" viewBox="0 0 16 16" fill="#404040" xmlns="http://www.w3.org/2000/svg"><path d="M8.89062 3.55722C9.13461 3.31335 9.53132 3.31348 9.77539 3.55722L13.7754 7.55722C14.0194 7.80126 14.0194 8.1979 13.7754 8.44199L9.77539 12.442C9.53131 12.6861 9.1347 12.6861 8.89062 12.442C8.64685 12.1979 8.64665 11.8012 8.89062 11.5572L11.8232 8.6246H2.66699C2.32181 8.6246 2.04199 8.34478 2.04199 7.9996C2.0422 7.6546 2.32194 7.3746 2.66699 7.3746H11.8232L8.89062 4.44199C8.64685 4.19788 8.64665 3.8012 8.89062 3.55722Z" fill="#404040"/></svg></span></button>
+        <button class="ds-pagination__item is-active num">1</button>
+        <button class="ds-pagination__item num">2</button>
+        <button class="ds-pagination__item num">3</button>
+        <button class="ds-pagination__item" aria-label="Next"><span class="icon" style="width: 14px; height: 14px;" aria-hidden="true" data-asset-icon="../assets/icons/arrow-right.svg"><svg focusable="false" width="24" height="24" viewBox="0 0 16 16" fill="#404040" xmlns="http://www.w3.org/2000/svg"><path d="M8.89062 3.55722C9.13461 3.31335 9.53132 3.31348 9.77539 3.55722L13.7754 7.55722C14.0194 7.80126 14.0194 8.1979 13.7754 8.44199L9.77539 12.442C9.53131 12.6861 9.1347 12.6861 8.89062 12.442C8.64685 12.1979 8.64665 11.8012 8.89062 11.5572L11.8232 8.6246H2.66699C2.32181 8.6246 2.04199 8.34478 2.04199 7.9996C2.0422 7.6546 2.32194 7.3746 2.66699 7.3746H11.8232L8.89062 4.44199C8.64685 4.19788 8.64665 3.8012 8.89062 3.55722Z" fill="#404040"/></svg></span></button>
+      </div>
+      <span class="ds-pagination__range">1–20 of 248</span>
+    </div>
+  </div>
+
+</body>
+</html>

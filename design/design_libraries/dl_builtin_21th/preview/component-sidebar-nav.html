@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>body { margin: 0; padding: 12px; background: var(--background); color: var(--foreground); font: 14px/1.4 var(--font-sans); }.row { display: flex; gap: calc(var(--spacing) * 2); align-items: flex-start; flex-wrap: wrap; margin-bottom: calc(var(--spacing) * 2); }.label { width: 100%; font: 600 11px/1 var(--font-mono); letter-spacing: var(--tracking-normal); text-transform: uppercase; color: color-mix(in srgb,var(--sidebar-foreground) 72%,transparent); }.divider { margin: calc(var(--spacing) * 2) 0; border: 0; border-top: 1px solid var(--sidebar-border); }.side { width: 184px; min-height: 292px; display: flex; flex-direction: column; gap: var(--spacing); padding: calc(var(--spacing) * 2); background: var(--sidebar); color: var(--sidebar-foreground); border: 1px solid var(--sidebar-border); border-radius: calc(var(--radius) + 4px); box-shadow: var(--shadow-sm); }.brand { padding-bottom: var(--spacing); border-bottom: 1px solid var(--sidebar-border); font-weight: 700; letter-spacing: .08em; font-size: 12px; }.section { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: color-mix(in srgb,var(--sidebar-foreground) 58%,transparent); }.nav { display: flex; flex-direction: column; gap: 6px; }.spacer { flex: 1; }.item { display: flex; align-items: center; gap: 10px; width: 100%; padding: 10px 12px; border: 0; border-radius: var(--radius); background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; }.item:hover { background: var(--sidebar-accent); color: var(--sidebar-accent-foreground); }.item:focus-visible { outline: 2px solid var(--sidebar-ring); outline-offset: 2px; }.item.active { background: var(--sidebar-primary); color: var(--sidebar-primary-foreground); box-shadow: var(--shadow-xs); }.item:disabled,.side.disabled .item { opacity: .42; cursor: not-allowed; }.dot { width: 8px; height: 8px; border-radius: 999px; background: currentColor; opacity: .72; }.compact { width: 108px; min-height: 244px; }.compact .brand { font-size: 11px; }.compact .item { justify-content: center; padding: 10px; }.compact .txt { display: none; }</style>
+</head>
+<body>
+<div class="row">
+<span class="label">Comfortable shell</span>
+<aside class="side" aria-label="Comfortable sidebar navigation">
+<div class="brand">21TH / CONTROL</div>
+<div class="section">Workspace</div>
+<nav class="nav">
+<button class="item active" type="button"><span class="dot"></span><span class="txt">Overview</span></button>
+<button class="item" type="button"><span class="dot"></span><span class="txt">Analytics</span></button>
+<button class="item" type="button"><span class="dot"></span><span class="txt">Workflows</span></button>
+</nav>
+<div class="spacer"></div>
+<nav class="nav">
+<button class="item" type="button"><span class="dot"></span><span class="txt">Settings</span></button>
+<button class="item" type="button" disabled><span class="dot"></span><span class="txt">Locked</span></button>
+</nav>
+</aside>
+</div>
+<hr class="divider">
+<div class="row">
+<span class="label">Compact rail</span>
+<aside class="side compact" aria-label="Compact sidebar rail">
+<div class="brand">21TH</div>
+<nav class="nav">
+<button class="item active" type="button"><span class="dot"></span><span class="txt">Overview</span></button>
+<button class="item" type="button"><span class="dot"></span><span class="txt">Analytics</span></button>
+<button class="item" type="button"><span class="dot"></span><span class="txt">Workflows</span></button>
+</nav>
+<div class="spacer"></div>
+<nav class="nav"><button class="item" type="button"><span class="dot"></span><span class="txt">Settings</span></button></nav>
+</aside>
+</div>
+</body>
+</html>

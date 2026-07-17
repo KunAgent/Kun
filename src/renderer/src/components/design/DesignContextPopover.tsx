@@ -13,6 +13,7 @@ import { LEGACY_PROJECT_DESIGN_SYSTEM_PATH } from '../../design/design-md/design
 import { acceptLegacyDesignSystemMigration, createLegacyDesignSystemMigrationDraft } from '../../design/design-md/design-md-legacy-migration'
 import { useDesignSystemStore } from '../../design/canvas/design-system-store'
 import { DesignTargetToggle } from './DesignTargetToggle'
+import { DesignContextPanel } from './DesignContextPanel'
 
 type Props = {
   open: boolean
@@ -71,6 +72,7 @@ export function DesignContextPopover({
   const setFileError = useDesignWorkspaceStore((s) => s.setFileError)
   const rootRef = useRef<HTMLDivElement | null>(null)
   const [importing, setImporting] = useState(false)
+  const [section, setSection] = useState<'context' | 'system'>('context')
 
   useEffect(() => {
     if (!open) return
@@ -151,12 +153,15 @@ export function DesignContextPopover({
       ref={rootRef}
       role="dialog"
       aria-label={t(titleKey)}
-      className="ds-no-drag w-[300px] rounded-2xl border border-[var(--ds-sidebar-row-ring)] bg-white p-3.5 text-[#1f2733] shadow-[0_14px_34px_rgba(20,47,95,0.16)] dark:bg-[#1f242c] dark:text-white"
+      className={`ds-no-drag rounded-2xl border border-[var(--ds-sidebar-row-ring)] bg-white p-3.5 text-[#1f2733] shadow-[0_14px_34px_rgba(20,47,95,0.16)] dark:bg-[#1f242c] dark:text-white ${section === 'system' ? 'w-[min(560px,calc(100vw-32px))]' : 'w-[300px]'}`}
     >
       <div className="mb-3 flex items-center justify-between gap-2">
-        <span className="text-[13px] font-medium">{t(titleKey)}</span>
+        <div className="flex items-center gap-1" role="tablist" aria-label={t(titleKey)}>
+          <button type="button" role="tab" aria-selected={section === 'context'} onClick={() => setSection('context')} className={`rounded-md px-2 py-1 text-[12px] ${section === 'context' ? 'bg-black/[0.05] font-medium dark:bg-white/[0.07]' : 'text-[#8b95a3]'}`}>设计上下文</button>
+          <button type="button" role="tab" aria-selected={section === 'system'} onClick={() => setSection('system')} className={`rounded-md px-2 py-1 text-[12px] ${section === 'system' ? 'bg-black/[0.05] font-medium dark:bg-white/[0.07]' : 'text-[#8b95a3]'}`}>设计系统</button>
+        </div>
         <div className="flex items-center gap-0.5">
-          <button
+          {section === 'context' ? <button
             type="button"
             onClick={importDesignMd}
             disabled={importing}
@@ -165,8 +170,8 @@ export function DesignContextPopover({
             className="inline-flex h-6 w-6 items-center justify-center rounded-md text-[#8b95a3] transition-colors hover:text-[#1f2733] disabled:cursor-not-allowed disabled:opacity-45 dark:text-white/45 dark:hover:text-white/85"
           >
             <FileInput className="h-3.5 w-3.5" strokeWidth={1.9} />
-          </button>
-          {onOpenSettings ? (
+          </button> : null}
+          {section === 'context' && onOpenSettings ? (
             <button
               type="button"
               onClick={onOpenSettings}
@@ -189,7 +194,7 @@ export function DesignContextPopover({
         </div>
       </div>
 
-      <div className="space-y-3">
+      {section === 'system' ? <DesignContextPanel workspaceRoot={workspaceRoot} /> : <div className="space-y-3">
         <div>
           <span className={fieldLabel}>{t('designTargetHint')}</span>
           <DesignTargetToggle
@@ -249,7 +254,7 @@ export function DesignContextPopover({
             ))}
           </select>
         </label>
-      </div>
+      </div>}
     </div>
   )
 }

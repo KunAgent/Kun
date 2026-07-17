@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Kbd</title>
+  <link rel="stylesheet" href="../colors_and_type.css" />
+  <link rel="stylesheet" href="../scaffold.css" />
+  <link rel="stylesheet" href="../components.css" />
+  <style>
+    /* @component-css-start */
+    /* ===== Kbd ===== */
+    .ds-kbd {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 22px;
+      height: 22px;
+      padding: 0 var(--spacer-6);
+      font-family: var(--code-editor-font-family);
+      font-size: var(--body-xs-font-size);
+      line-height: 1;
+      font-weight: var(--font-weight-medium);
+      color: var(--text-secondary);
+      background: var(--bg-overlay-l2);
+      border: 1px solid var(--border-neutral-l2);
+      border-bottom-width: 2px;
+      border-radius: var(--radius-4);
+    }
+    .ds-kbd__combo {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--spacer-4);
+    }
+    .ds-kbd__plus {
+      color: var(--text-tertiary);
+      font-size: var(--body-xs-font-size);
+    }
+    .ds-kbd__row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: var(--spacer-16);
+    }
+    /* @component-css-end */
+  </style>
+</head>
+<body>
+  <div class="pv-header">
+    <h1>Kbd</h1>
+    <p>键盘快捷键提示，小圆角方块。</p>
+  </div>
+  <div class="pv-section">
+    <div class="pv-section__title">Single keys</div>
+    <div class="ds-kbd__row">
+      <kbd class="ds-kbd">⌘</kbd>
+      <kbd class="ds-kbd">⇧</kbd>
+      <kbd class="ds-kbd">⌥</kbd>
+      <kbd class="ds-kbd">⌃</kbd>
+      <kbd class="ds-kbd">⏎</kbd>
+      <kbd class="ds-kbd">Esc</kbd>
+    </div>
+  </div>
+  <div class="pv-section">
+    <div class="pv-section__title">Combinations</div>
+    <div class="ds-kbd__row">
+      <span class="ds-kbd__combo">
+        <kbd class="ds-kbd">⌘</kbd><span class="ds-kbd__plus">+</span><kbd class="ds-kbd">K</kbd>
+      </span>
+      <span class="ds-kbd__combo">
+        <kbd class="ds-kbd">⌘</kbd><span class="ds-kbd__plus">+</span><kbd class="ds-kbd">⇧</kbd><span class="ds-kbd__plus">+</span><kbd class="ds-kbd">P</kbd>
+      </span>
+      <span class="ds-kbd__combo">
+        <kbd class="ds-kbd">⌃</kbd><span class="ds-kbd__plus">+</span><kbd class="ds-kbd">C</kbd>
+      </span>
+    </div>
+  </div>
+</body>
+</html>

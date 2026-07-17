@@ -1,0 +1,56 @@
+{
+  "slug": "chip",
+  "name": "Chip",
+  "category": "selection",
+  "variantCount": 6,
+  "evidence": "AI-inferred from workout filters and training tags.",
+  "anatomy": [
+    "container",
+    "label",
+    "icon?"
+  ],
+  "childComponents": [],
+  "cssVariables": [
+    "muted",
+    "foreground",
+    "primary",
+    "primary-foreground",
+    "secondary",
+    "secondary-foreground",
+    "border",
+    "radius"
+  ],
+  "variantDimensions": {
+    "tone": [
+      "neutral",
+      "accent",
+      "secondary"
+    ],
+    "state": [
+      "default",
+      "selected"
+    ]
+  },
+  "structurePatterns": [
+    "flat capsule substitute",
+    "micro-filter label",
+    "selected state via fill swap"
+  ],
+  "structures": [
+    {
+      "name": "Tone=Neutral, State=Default",
+      "layout": "inline chip",
+      "copy": "Strength"
+    },
+    {
+      "name": "Tone=Accent, State=Selected",
+      "layout": "inline chip",
+      "copy": "HIIT"
+    },
+    {
+      "name": "Tone=Secondary, State=Default",
+      "layout": "inline chip",
+      "copy": "Recovery"
+    }
+  ]
+}

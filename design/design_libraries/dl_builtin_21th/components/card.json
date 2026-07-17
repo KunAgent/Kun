@@ -1,0 +1,39 @@
+{
+  "slug": "card",
+  "name": "Card",
+  "purpose": "Surface container for metrics, summaries, and compact analytical modules.",
+  "productContext": "analytics dashboard",
+  "uiCopySamples": [
+    "Net Flow",
+    "Weekly Summary",
+    "Operations Health",
+    "Incident Watch"
+  ],
+  "variantDimensions": {
+    "type": ["metric", "summary", "alert"],
+    "density": ["compact", "default"],
+    "state": ["default", "selected", "muted"]
+  },
+  "tokenUsage": [
+    "--card",
+    "--card-foreground",
+    "--muted",
+    "--muted-foreground",
+    "--border",
+    "--shadow",
+    "--shadow-md",
+    "--chart-1",
+    "--destructive"
+  ],
+  "structures": [
+    {
+      "title": "Metric cards",
+      "description": "Flat cards with strong numeric emphasis, small labels, and rare accent highlights.",
+      "parts": ["eyebrow label", "large value", "trend note", "micro chart or status tag"],
+      "sampleContent": {
+        "headline": "47.8K",
+        "body": "+8.4% week over week"
+      }
+    }
+  ]
+}

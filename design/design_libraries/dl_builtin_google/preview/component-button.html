@@ -1,0 +1,14 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>body{margin:0;padding:12px;background:var(--background);color:var(--foreground);font:14px/1.4 var(--font-sans)}.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:0 0 8px}.label{width:74px;font:600 11px/1 var(--font-sans);letter-spacing:var(--tracking-normal);text-transform:uppercase;color:var(--muted-foreground)}.divider{margin:8px 0;border:0;border-top:1px solid var(--border)}.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;height:36px;padding:0 14px;border:1px solid transparent;border-radius:var(--radius);box-shadow:var(--shadow-sm);font:500 13px/1 var(--font-sans);white-space:nowrap;cursor:pointer;transition:background-color .15s,border-color .15s,color .15s,box-shadow .15s}.btn:focus-visible{outline:2px solid var(--ring);outline-offset:2px}.btn:active{transform:translateY(1px)}.primary{background:var(--primary);color:var(--primary-foreground)}.primary:hover{filter:brightness(.96)}.secondary{background:var(--secondary);color:var(--secondary-foreground);border-color:var(--border)}.secondary:hover,.ghost:hover{background:var(--accent);color:var(--accent-foreground)}.ghost{background:transparent;color:var(--foreground);border-color:var(--border);box-shadow:none}.sm{height:32px;padding:0 12px}.lg{height:40px;padding:0 16px}.btn:disabled{background:var(--muted);color:var(--muted-foreground);border-color:transparent;box-shadow:none;cursor:not-allowed;transform:none}</style>
+</head>
+<body>
+<div class="row"><span class="label">Primary</span><button class="btn primary">Overview</button><button class="btn primary" disabled>Export report</button></div>
+<hr class="divider">
+<div class="row"><span class="label">Toolbar</span><button class="btn secondary sm">Save filters</button><button class="btn secondary sm" disabled>Export report</button><button class="btn ghost lg">Overview</button><button class="btn ghost lg" disabled>Save filters</button></div>
+</body>
+</html>

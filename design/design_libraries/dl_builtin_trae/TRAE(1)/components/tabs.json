@@ -1,0 +1,95 @@
+{
+  "schemaVersion": 2,
+  "slug": "tabs",
+  "name": "Tabs",
+  "category": "navigation",
+  "sourceKind": "structured-spec",
+  "confidence": "medium",
+  "semanticTypeCandidates": [
+    "tabs",
+    "segmented-control"
+  ],
+  "variantDimensions": {
+    "style": [
+      "underline",
+      "pill"
+    ],
+    "state": [
+      "default",
+      "active",
+      "disabled"
+    ]
+  },
+  "representativeVariants": [
+    {
+      "style": "underline"
+    },
+    {
+      "style": "pill"
+    }
+  ],
+  "anatomy": [
+    "tab-list",
+    "tab",
+    "indicator",
+    "tab-panel"
+  ],
+  "structurePatterns": [
+    "horizontal tab list with bottom indicator under --border-brand"
+  ],
+  "usageHints": [
+    "Active tab uses --text-default + --border-brand indicator",
+    "Inactive tab uses --text-secondary"
+  ],
+  "doNotInvent": [
+    "No vertical tabs in source"
+  ],
+  "unknowns": [
+    "overflow scroll behavior"
+  ],
+  "tokensConsumed": [
+    "--body-sm-font-size",
+    "--border-neutral-l1",
+    "--icon-default",
+    "--spacer-12",
+    "--spacer-24",
+    "--text-default",
+    "--text-tertiary"
+  ],
+  "domAnatomy": {
+    "root": {
+      "tag": "div",
+      "class": "ds-tabs",
+      "children": [
+        {
+          "tag": "button",
+          "class": "ds-tab is-active",
+          "text": "Overview"
+        },
+        {
+          "tag": "button",
+          "class": "ds-tab",
+          "text": "Activity"
+        },
+        {
+          "tag": "button",
+          "class": "ds-tab",
+          "text": "Members"
+        },
+        {
+          "tag": "button",
+          "class": "ds-tab",
+          "text": "Settings"
+        }
+      ]
+    }
+  },
+  "provenance": {
+    "preview": "preview/component-tabs.html",
+    "source": "previews/tabs.html",
+    "css": {
+      "file": "components.css",
+      "marker": "── Tabs ──"
+    }
+  }
+}

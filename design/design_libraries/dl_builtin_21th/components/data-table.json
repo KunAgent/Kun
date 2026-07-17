@@ -1,0 +1,38 @@
+{
+  "slug": "data-table",
+  "name": "Data Table",
+  "purpose": "Structured multi-column reporting table for operators and analysts.",
+  "productContext": "analytics dashboard",
+  "uiCopySamples": [
+    "Workspace",
+    "Owner",
+    "Status",
+    "Variance"
+  ],
+  "variantDimensions": {
+    "rowType": ["default", "highlighted", "negative"],
+    "density": ["tight", "default"],
+    "state": ["rest", "hover", "selected"]
+  },
+  "tokenUsage": [
+    "--background",
+    "--card",
+    "--foreground",
+    "--muted-foreground",
+    "--border",
+    "--accent",
+    "--destructive",
+    "--shadow-xs"
+  ],
+  "structures": [
+    {
+      "title": "Operations table",
+      "description": "A compact table with strong alignment, low ornamentation, and selective accent usage.",
+      "parts": ["header row", "data row", "status chip", "numeric delta"],
+      "sampleContent": {
+        "headline": "4 active workspaces flagged",
+        "body": "Use accent sparingly for positive signals and red for exceptions."
+      }
+    }
+  ]
+}

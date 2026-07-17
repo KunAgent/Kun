@@ -1,0 +1,141 @@
+{
+  "schemaVersion": 2,
+  "slug": "cards",
+  "name": "Card",
+  "category": "data-display",
+  "sourceKind": "structured-spec",
+  "confidence": "medium",
+  "semanticTypeCandidates": [
+    "card",
+    "panel",
+    "tile"
+  ],
+  "variantDimensions": {
+    "density": [
+      "compact",
+      "regular"
+    ],
+    "decoration": [
+      "plain",
+      "with-header",
+      "with-footer",
+      "with-actions"
+    ]
+  },
+  "representativeVariants": [
+    {
+      "decoration": "plain"
+    },
+    {
+      "decoration": "with-header"
+    },
+    {
+      "decoration": "with-actions"
+    }
+  ],
+  "anatomy": [
+    "header",
+    "media",
+    "title",
+    "body",
+    "actions"
+  ],
+  "structurePatterns": [
+    "surface block with --bg-base-secondary, --border-neutral-l1, --radius-4"
+  ],
+  "usageHints": [
+    "Always 1px --border-neutral-l1 on layout-1 surface",
+    "Inner padding: --spacer-16"
+  ],
+  "doNotInvent": [
+    "No elevated shadow variant in source"
+  ],
+  "unknowns": [
+    "interactive (clickable) state"
+  ],
+  "tokensConsumed": [
+    "--bg-base-secondary",
+    "--body-sm-font-size",
+    "--body-sm-line-height",
+    "--body-xs-font-size",
+    "--border-neutral-l1",
+    "--heading-xs-font-size",
+    "--heading-xs-font-weight",
+    "--heading-xs-line-height",
+    "--radius-4",
+    "--spacer-24",
+    "--spacer-8",
+    "--text-secondary"
+  ],
+  "domAnatomy": {
+    "root": {
+      "tag": "div",
+      "class": "grid-3",
+      "children": [
+        {
+          "tag": "div",
+          "class": "ds-card",
+          "children": [
+            {
+              "tag": "div",
+              "class": "ds-card__title",
+              "text": "Minimal content card"
+            },
+            {
+              "tag": "p",
+              "class": "ds-card__desc",
+              "text": "Use for short-form information. Surface, radius and color all come from tokens."
+            }
+          ]
+        },
+        {
+          "tag": "div",
+          "class": "ds-card",
+          "children": [
+            {
+              "tag": "div",
+              "class": "row"
+            },
+            {
+              "tag": "div",
+              "class": "ds-card__title",
+              "text": "Tokens are code"
+            },
+            {
+              "tag": "p",
+              "class": "ds-card__desc",
+              "text": "Figma variables compile straight to CSS variables. Hand them to your agent."
+            },
+            {
+              "tag": "div",
+              "class": "row"
+            }
+          ]
+        },
+        {
+          "tag": "div",
+          "class": "ds-card",
+          "children": [
+            {
+              "tag": "div",
+              "class": "row"
+            },
+            {
+              "tag": "p",
+              "class": "ds-card__desc",
+              "text": "Highlighted card uses a slightly elevated overlay surface — no brand border."
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "provenance": {
+    "preview": "preview/component-cards.html",
+    "source": "previews/cards.html",
+    "css": {
+      "file": "components.css",
+      "marker": "── Cards ──"
+    }
+  }
+}

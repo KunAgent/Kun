@@ -1,0 +1,60 @@
+{
+  "slug": "table",
+  "name": "Table",
+  "category": "data-display",
+  "variantCount": 6,
+  "primitiveCount": 6,
+  "cssVariables": [
+    "background",
+    "foreground",
+    "muted",
+    "muted-foreground",
+    "border",
+    "ring",
+    "space-4",
+    "radius-md"
+  ],
+  "variantDimensions": {
+    "density": [
+      "comfortable",
+      "compact"
+    ],
+    "state": [
+      "default",
+      "selected",
+      "empty"
+    ]
+  },
+  "anatomy": [
+    "table",
+    "header-row",
+    "body-row",
+    "cell",
+    "status-pill"
+  ],
+  "structures": [
+    {
+      "name": "Comfortable, State=default",
+      "slots": [
+        "header-row",
+        "body-row"
+      ]
+    },
+    {
+      "name": "Compact, State=selected",
+      "slots": [
+        "header-row",
+        "body-row",
+        "status-pill"
+      ]
+    },
+    {
+      "name": "Comfortable, State=empty",
+      "slots": [
+        "table"
+      ]
+    }
+  ],
+  "evidence": "AI-inferred for dashboard workflows requiring structured data and neutral borders.",
+  "keyInsight": "Tables should stay quietly structured, with subtle dividers and restrained state color."
+}

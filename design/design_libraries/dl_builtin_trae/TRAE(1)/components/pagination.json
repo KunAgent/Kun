@@ -1,0 +1,123 @@
+{
+  "schemaVersion": 2,
+  "slug": "pagination",
+  "name": "Pagination",
+  "category": "navigation",
+  "sourceKind": "structured-spec",
+  "confidence": "medium",
+  "semanticTypeCandidates": [
+    "pagination"
+  ],
+  "variantDimensions": {
+    "size": [
+      "sm",
+      "md"
+    ],
+    "state": [
+      "default",
+      "current",
+      "disabled"
+    ]
+  },
+  "representativeVariants": [
+    {
+      "pages": 5,
+      "current": 3
+    },
+    {
+      "pages": 12,
+      "current": 8,
+      "ellipsis": true
+    }
+  ],
+  "anatomy": [
+    "prev-arrow",
+    "page-button",
+    "ellipsis",
+    "next-arrow"
+  ],
+  "structurePatterns": [
+    "horizontal row with prev/next arrows + numeric buttons"
+  ],
+  "usageHints": [
+    "Current page uses --bg-overlay-l3 + --text-default",
+    "Disabled arrow uses --icon-disabled"
+  ],
+  "doNotInvent": [
+    "No jump-to input / page-size selector"
+  ],
+  "unknowns": [
+    "mobile compact mode"
+  ],
+  "tokensConsumed": [
+    "--bg-overlay-l2",
+    "--bg-overlay-l3",
+    "--body-xs-font-size",
+    "--border-neutral-l1",
+    "--border-neutral-l2",
+    "--radius-2",
+    "--spacer-4",
+    "--spacer-6",
+    "--text-default",
+    "--text-secondary"
+  ],
+  "domAnatomy": {
+    "root": {
+      "tag": "div",
+      "class": "ds-pagination",
+      "children": [
+        {
+          "tag": "button",
+          "class": "ds-pagination__item",
+          "children": [
+            {
+              "tag": "i"
+            }
+          ]
+        },
+        {
+          "tag": "button",
+          "class": "ds-pagination__item num",
+          "text": "1"
+        },
+        {
+          "tag": "button",
+          "class": "ds-pagination__item is-active num",
+          "text": "2"
+        },
+        {
+          "tag": "button",
+          "class": "ds-pagination__item num",
+          "text": "3"
+        },
+        {
+          "tag": "button",
+          "class": "ds-pagination__item",
+          "text": "…"
+        },
+        {
+          "tag": "button",
+          "class": "ds-pagination__item num",
+          "text": "12"
+        },
+        {
+          "tag": "button",
+          "class": "ds-pagination__item",
+          "children": [
+            {
+              "tag": "i"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "provenance": {
+    "preview": "preview/component-pagination.html",
+    "source": "previews/pagination.html",
+    "css": {
+      "file": "components.css",
+      "marker": "── Pagination ──"
+    }
+  }
+}

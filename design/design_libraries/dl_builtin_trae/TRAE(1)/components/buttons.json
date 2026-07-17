@@ -1,0 +1,239 @@
+{
+  "schemaVersion": 2,
+  "slug": "buttons",
+  "name": "Button",
+  "category": "general",
+  "sourceKind": "structured-spec",
+  "confidence": "medium",
+  "semanticTypeCandidates": [
+    "button",
+    "icon-button"
+  ],
+  "variantDimensions": {
+    "intent": [
+      "brand",
+      "primary",
+      "ghost",
+      "danger"
+    ],
+    "size": [
+      "sm",
+      "md",
+      "lg"
+    ],
+    "state": [
+      "default",
+      "hover",
+      "active",
+      "disabled"
+    ],
+    "shape": [
+      "text",
+      "icon-only",
+      "icon+text"
+    ]
+  },
+  "representativeVariants": [
+    {
+      "intent": "brand",
+      "size": "md"
+    },
+    {
+      "intent": "ghost",
+      "size": "sm"
+    },
+    {
+      "intent": "danger",
+      "size": "md"
+    },
+    {
+      "shape": "icon-only",
+      "size": "sm"
+    }
+  ],
+  "anatomy": [
+    "leading-icon",
+    "label",
+    "trailing-icon"
+  ],
+  "structurePatterns": [
+    "matrix of intent x size x state"
+  ],
+  "usageHints": [
+    "Brand intent: --bg-brand / --text-onbrand; hover: --bg-brand-hover",
+    "Ghost intent: transparent bg, --text-default; hover: --bg-overlay-l2",
+    "Disabled: --bg-brand-disabled / --text-disabled"
+  ],
+  "doNotInvent": [
+    "No outline/secondary variants beyond what is rendered"
+  ],
+  "unknowns": [
+    "loading spinner position"
+  ],
+  "tokensConsumed": [
+    "--bg-base-default",
+    "--bg-brand",
+    "--bg-brand-disabled",
+    "--bg-brand-hover",
+    "--bg-overlay-l1",
+    "--bg-overlay-l2",
+    "--bg-overlay-l3",
+    "--body-base-font-size",
+    "--body-sm-strong-font-family",
+    "--body-sm-strong-font-size",
+    "--body-sm-strong-font-weight",
+    "--body-xs-font-size",
+    "--border-neutral-l1",
+    "--border-neutral-l2",
+    "--radius-4",
+    "--spacer-12",
+    "--spacer-16",
+    "--spacer-6",
+    "--spacer-8",
+    "--status-error-default",
+    "--status-error-surface-l1",
+    "--status-error-surface-l2",
+    "--status-warning-default",
+    "--text-default",
+    "--text-default-hover",
+    "--text-onbrand",
+    "--text-secondary",
+    "--text-tertiary"
+  ],
+  "domAnatomy": {
+    "root": {
+      "tag": "div",
+      "class": "stack-12",
+      "children": [
+        {
+          "tag": "div",
+          "class": "row",
+          "children": [
+            {
+              "tag": "span",
+              "class": "size-tag",
+              "text": "Brand · max 1 per page"
+            },
+            {
+              "tag": "button",
+              "class": "ds-btn ds-btn--brand"
+            }
+          ]
+        },
+        {
+          "tag": "div",
+          "class": "row",
+          "children": [
+            {
+              "tag": "span",
+              "class": "size-tag",
+              "text": "Primary · neutral"
+            },
+            {
+              "tag": "button",
+              "class": "ds-btn ds-btn--primary"
+            }
+          ]
+        },
+        {
+          "tag": "div",
+          "class": "row",
+          "children": [
+            {
+              "tag": "span",
+              "class": "size-tag",
+              "text": "Secondary"
+            },
+            {
+              "tag": "button",
+              "class": "ds-btn ds-btn--secondary"
+            }
+          ]
+        },
+        {
+          "tag": "div",
+          "class": "row",
+          "children": [
+            {
+              "tag": "span",
+              "class": "size-tag",
+              "text": "Tertiary · ghost"
+            },
+            {
+              "tag": "button",
+              "class": "ds-btn ds-btn--tertiary"
+            }
+          ]
+        },
+        {
+          "tag": "div",
+          "class": "row",
+          "children": [
+            {
+              "tag": "span",
+              "class": "size-tag",
+              "text": "Danger · strong"
+            },
+            {
+              "tag": "button",
+              "class": "ds-btn ds-btn--danger-strong"
+            }
+          ]
+        },
+        {
+          "tag": "div",
+          "class": "row",
+          "children": [
+            {
+              "tag": "span",
+              "class": "size-tag",
+              "text": "Danger · subtle"
+            },
+            {
+              "tag": "button",
+              "class": "ds-btn ds-btn--danger-subtle"
+            }
+          ]
+        },
+        {
+          "tag": "div",
+          "class": "row",
+          "children": [
+            {
+              "tag": "span",
+              "class": "size-tag",
+              "text": "Warning"
+            },
+            {
+              "tag": "button",
+              "class": "ds-btn ds-btn--warning"
+            }
+          ]
+        },
+        {
+          "tag": "div",
+          "class": "row",
+          "children": [
+            {
+              "tag": "span",
+              "class": "size-tag",
+              "text": "Link"
+            },
+            {
+              "tag": "button",
+              "class": "ds-btn ds-btn--link"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "provenance": {
+    "preview": "preview/component-buttons.html",
+    "source": "previews/buttons.html",
+    "css": {
+      "file": "components.css",
+      "marker": "── Buttons ──"
+    }
+  }
+}

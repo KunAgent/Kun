@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>Anchor 锚点导航</title>
+  <link rel="stylesheet" href="preview-scaffold.css">
+  <style>
+  /* ═══ Anchor 容器 ═══ */
+  .anchor {
+    display: flex;
+    flex-direction: column;
+    width: 176px;
+    background: #FFFFFF;
+  }
+
+  /* ═══ Anchor Item 节点 ═══ */
+  .anchor-item {
+    display: flex;
+    align-items: stretch;
+    height: 32px;
+    background: #FFFFFF;
+    text-decoration: none;
+    cursor: pointer;
+  }
+
+  /* 层级缩进 */
+  .anchor-item--1st { gap: 4px; }
+  .anchor-item--2nd { gap: 20px; }
+  .anchor-item--3rd { gap: 36px; }
+
+  /* 左侧竖线 */
+  .anchor-item__bar {
+    width: 2px;
+    flex-shrink: 0;
+    background: #F6F8FA;
+  }
+
+  /* 文字区域 */
+  .anchor-item__text {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    min-width: 0;
+    padding: 8px 6px;
+    border-radius: 4px;
+    font-family: "PingFang SC", sans-serif;
+    font-size: 13px;
+    font-weight: 400;
+    line-height: 22px;
+    letter-spacing: 0.3px;
+    color: #42464E;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* 悬浮态 */
+  .anchor-item:hover .anchor-item__text {
+    background: #F6F8FA;
+    color: #0C0D0E;
+  }
+
+  /* 激活态 */
+  .anchor-item.active .anchor-item__bar {
+    background: #1664FF;
+    border-radius: 0 4px 4px 0;
+  }
+  .anchor-item.active .anchor-item__text {
+    background: #F6F8FA;
+    color: #1664FF;
+    font-weight: 500;
+  }
+  </style>
+</head>
+<body>
+  <div class="pv-header">
+    <h1>Anchor 锚点导航</h1>
+    <p>锚点导航组件，支持三级层级缩进，通过左侧竖线指示当前激活位置。</p>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">一级节点 (1st level)</div>
+    <div class="stack-12">
+      <a class="anchor-item anchor-item--1st" data-component="anchor-item" data-level="1st" data-state="default">
+        <span class="anchor-item__bar"></span>
+        <span class="anchor-item__text">锚点顶级节点</span>
+      </a>
+      <a class="anchor-item anchor-item--1st active" data-component="anchor-item" data-level="1st" data-state="active">
+        <span class="anchor-item__bar"></span>
+        <span class="anchor-item__text">锚点顶级节点</span>
+      </a>
+    </div>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">二级节点 (2nd level)</div>
+    <div class="stack-12">
+      <a class="anchor-item anchor-item--2nd" data-component="anchor-item" data-level="2nd" data-state="default">
+        <span class="anchor-item__bar"></span>
+        <span class="anchor-item__text">锚点一级节点</span>
+      </a>
+      <a class="anchor-item anchor-item--2nd active" data-component="anchor-item" data-level="2nd" data-state="active">
+        <span class="anchor-item__bar"></span>
+        <span class="anchor-item__text">锚点一级节点</span>
+      </a>
+    </div>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">三级节点 (3rd level)</div>
+    <div class="stack-12">
+      <a class="anchor-item anchor-item--3rd" data-component="anchor-item" data-level="3rd" data-state="default">
+        <span class="anchor-item__bar"></span>
+        <span class="anchor-item__text">锚点二级节点</span>
+      </a>
+      <a class="anchor-item anchor-item--3rd active" data-component="anchor-item" data-level="3rd" data-state="active">
+        <span class="anchor-item__bar"></span>
+        <span class="anchor-item__text">锚点二级节点</span>
+      </a>
+    </div>
+  </div>
+</body>
+</html>

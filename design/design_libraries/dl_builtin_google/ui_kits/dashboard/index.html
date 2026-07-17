@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Google Dashboard UI Kit</title>
+  <link rel="stylesheet" href="../../colors_and_type.css">
+  <style>
+    *{box-sizing:border-box}html,body,#root{height:100%}body{margin:0;font-family:var(--font-sans);background:var(--background);color:var(--foreground);letter-spacing:var(--tracking-normal)}
+    button,input,select{font:inherit}
+    .app{display:grid;grid-template-columns:260px 1fr;height:100%;background:var(--background)}
+    .sidebar{background:var(--sidebar);color:var(--sidebar-foreground);border-right:1px solid var(--sidebar-border);padding:calc(var(--spacing)*6);display:flex;flex-direction:column;gap:calc(var(--spacing)*5);transition:width .24s ease,padding .24s ease}
+    .sidebar.collapsed{width:84px;padding-inline:calc(var(--spacing)*3.5)}
+    .brand{display:flex;align-items:center;gap:calc(var(--spacing)*3)}
+    .brand-mark{width:40px;height:40px;border-radius:calc(var(--radius) + 8px);display:grid;place-items:center;background:var(--sidebar-primary);color:var(--sidebar-primary-foreground);font-weight:700}
+    .brand-copy h1{margin:0;font-size:1rem}.brand-copy p{margin:.18rem 0 0;color:var(--muted-foreground);font-size:.82rem}
+    .nav{display:flex;flex-direction:column;gap:calc(var(--spacing)*2)}
+    .nav-btn,.icon-btn,.chip,.action-btn,.table-row,.toggle,.input,.select,.switch{border:none;background:transparent;color:inherit;border-radius:var(--radius);transition:background .2s ease,color .2s ease,transform .16s ease,border-color .2s ease,opacity .2s ease}
+    .nav-btn,.action-btn,.icon-btn,.chip,.toggle{cursor:pointer}
+    .nav-btn,.table-row{display:flex;align-items:center;gap:calc(var(--spacing)*3);width:100%;padding:calc(var(--spacing)*3.5) calc(var(--spacing)*4);text-align:left}
+    .nav-btn:hover,.icon-btn:hover,.chip:hover,.table-row:hover,.toggle:hover{background:var(--sidebar-accent)}
+    .nav-btn.active{background:var(--sidebar-primary);color:var(--sidebar-primary-foreground)}
+    .nav-btn .glyph,.icon-btn .glyph{width:1.2rem;text-align:center;flex:0 0 1.2rem}
+    .nav-btn .label,.brand-copy,.sidebar-foot{transition:opacity .2s ease,max-width .2s ease}
+    .collapsed .label,.collapsed .brand-copy,.collapsed .sidebar-foot{opacity:0;max-width:0;overflow:hidden}
+    .sidebar-foot{margin-top:auto;padding-top:calc(var(--spacing)*4);border-top:1px solid var(--sidebar-border);font-size:.82rem;color:var(--muted-foreground)}
+    .main{display:flex;flex-direction:column;min-width:0}
+    .topbar{height:76px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:calc(var(--spacing)*4);padding:0 calc(var(--spacing)*6);background:var(--background)}
+    .topbar-left,.topbar-right{display:flex;align-items:center;gap:calc(var(--spacing)*3)}
+    .search{display:flex;align-items:center;gap:calc(var(--spacing)*3);width:min(420px,46vw);padding:calc(var(--spacing)*3) calc(var(--spacing)*4);border:1px solid var(--input);border-radius:999px;background:var(--popover)}
+    .search input{border:none;outline:none;background:transparent;color:var(--foreground);width:100%}
+    .icon-btn{width:40px;height:40px;display:grid;place-items:center;border:1px solid var(--border);background:var(--card);color:var(--foreground)}
+    .avatar{width:40px;height:40px;border-radius:50%;display:grid;place-items:center;background:var(--primary);color:var(--primary-foreground);font-weight:700}
+    .content{padding:calc(var(--spacing)*6);display:flex;flex-direction:column;gap:calc(var(--spacing)*5);min-height:0}
+    .hero{display:flex;justify-content:space-between;align-items:flex-start;gap:calc(var(--spacing)*4)}
+    .hero h2{margin:0;font-size:1.7rem}.hero p{margin:.45rem 0 0;color:var(--muted-foreground)}
+    .hero-actions{display:flex;gap:calc(var(--spacing)*3);flex-wrap:wrap}
+    .action-btn{padding:calc(var(--spacing)*3) calc(var(--spacing)*5);border:1px solid var(--border);background:var(--card);color:var(--foreground);font-weight:600}
+    .action-btn.primary{background:var(--primary);border-color:var(--primary);color:var(--primary-foreground)}
+    .action-btn.secondary{background:var(--secondary);border-color:var(--secondary);color:var(--secondary-foreground)}
+    .action-btn.ghost{background:transparent}
+    .action-btn:disabled{opacity:.5;cursor:not-allowed}
+    .grid{display:grid;gap:calc(var(--spacing)*4)}
+    .stats{grid-template-columns:repeat(4,minmax(0,1fr))}
+    .panels{grid-template-columns:1.7fr 1fr}
+    .settings-grid{grid-template-columns:1.15fr .85fr}
+    .card{background:var(--card);border:1px solid var(--border);border-radius:calc(var(--radius) + 6px);padding:calc(var(--spacing)*5);box-shadow:var(--shadow-sm)}
+    .card.interactive:hover{border-color:var(--ring);transform:translateY(-1px)}
+    .card-head{display:flex;justify-content:space-between;align-items:flex-start;gap:calc(var(--spacing)*3);margin-bottom:calc(var(--spacing)*4)}
+    .eyebrow,.muted,.tiny{color:var(--muted-foreground)}.eyebrow{font-size:.78rem;text-transform:uppercase;letter-spacing:.08em}
+    .metric{font-size:1.8rem;font-weight:700;margin:.45rem 0}.trend{display:inline-flex;align-items:center;gap:.35rem;padding:.3rem .6rem;border-radius:999px;background:var(--muted);color:var(--foreground);font-size:.82rem}
+    .trend.up{color:var(--chart-5)}.trend.down{color:var(--chart-2)}
+    .view-stack{position:relative;min-height:560px}
+    .view{position:absolute;inset:0;opacity:0;pointer-events:none;transform:translateY(12px) scale(.985);transition:opacity .28s ease,transform .28s ease}
+    .view.active{opacity:1;pointer-events:auto;transform:translateY(0) scale(1)}
+    .bar-grid{display:grid;grid-template-columns:repeat(7,1fr);align-items:end;gap:calc(var(--spacing)*3);height:220px;margin-top:calc(var(--spacing)*4)}
+    .bar-col{display:flex;flex-direction:column;align-items:center;gap:calc(var(--spacing)*2)}
+    .bar{width:100%;max-width:38px;border-radius:999px 999px 10px 10px;background:var(--chart-1);min-height:20px}
+    .bar.alt{background:var(--chart-4)}.bar.warm{background:var(--chart-3)}.bar.red{background:var(--chart-2)}.bar.green{background:var(--chart-5)}
+    .bar-label,.axis{font-size:.78rem;color:var(--muted-foreground)}
+    .line-card{display:grid;grid-template-columns:1.1fr .9fr;gap:calc(var(--spacing)*4)}
+    .line-plot{height:220px;display:flex;align-items:flex-end;gap:calc(var(--spacing)*2);padding-top:calc(var(--spacing)*2)}
+    .line-point{flex:1;display:flex;align-items:flex-end;justify-content:center}
+    .line-pill{width:100%;border-radius:999px;background:var(--chart-1)}
+    .legend{display:flex;gap:calc(var(--spacing)*3);flex-wrap:wrap}
+    .legend span{display:inline-flex;align-items:center;gap:.4rem;color:var(--muted-foreground);font-size:.82rem}
+    .dot{width:.72rem;height:.72rem;border-radius:50%}
+    .donut-wrap{display:grid;grid-template-columns:132px 1fr;gap:calc(var(--spacing)*4);align-items:center}
+    .donut{width:132px;height:132px;border-radius:50%;background:conic-gradient(var(--chart-1) 0 38%,var(--chart-5) 38% 64%,var(--chart-3) 64% 82%,var(--chart-2) 82% 100%);position:relative}
+    .donut:after{content:"";position:absolute;inset:22px;border-radius:50%;background:var(--card)}
+    .donut-center{position:absolute;inset:0;display:grid;place-items:center;z-index:1;font-weight:700}
+    .list,.table{display:flex;flex-direction:column;gap:calc(var(--spacing)*2)}
+    .list-item{display:flex;justify-content:space-between;gap:calc(var(--spacing)*3);padding:calc(var(--spacing)*3.5) 0;border-top:1px solid var(--border)}
+    .list-item:first-child{border-top:none;padding-top:0}
+    .table-head,.table-row{display:grid;grid-template-columns:1.5fr .8fr .7fr .8fr;gap:calc(var(--spacing)*3);align-items:center}
+    .table-head{padding:0 calc(var(--spacing)*4) calc(var(--spacing)*2);font-size:.78rem;color:var(--muted-foreground);text-transform:uppercase;letter-spacing:.08em}
+    .table-row{background:var(--background);border:1px solid var(--border)}
+    .badge{display:inline-flex;align-items:center;gap:.35rem;padding:.34rem .65rem;border-radius:999px;background:var(--secondary);color:var(--secondary-foreground);font-size:.8rem}
+    .badge.ok{background:var(--muted);color:var(--foreground)}.badge.alert{background:var(--accent);color:var(--accent-foreground)}
+    .form{display:grid;gap:calc(var(--spacing)*4)}
+    .field{display:grid;gap:calc(var(--spacing)*2)}
+    .field label{font-size:.84rem;color:var(--muted-foreground)}
+    .input,.select{width:100%;padding:calc(var(--spacing)*3.2) calc(var(--spacing)*3.6);border:1px solid var(--input);background:var(--popover);color:var(--foreground)}
+    .toggles{display:grid;gap:calc(var(--spacing)*3)}
+    .toggle{display:flex;align-items:center;justify-content:space-between;padding:calc(var(--spacing)*4);border:1px solid var(--border);background:var(--background)}
+    .switch{width:50px;height:30px;padding:4px;border:1px solid var(--border);background:var(--muted);display:flex;align-items:center}
+    .switch span{display:block;width:20px;height:20px;border-radius:50%;background:var(--card);transition:transform .2s ease}
+    .switch.on{justify-content:flex-end;background:var(--primary);border-color:var(--primary)}
+    .focusable:focus-visible,.nav-btn:focus-visible,.action-btn:focus-visible,.icon-btn:focus-visible,.chip:focus-visible,.table-row:focus-visible,.toggle:focus-visible,.input:focus-visible,.select:focus-visible{outline:2px solid var(--ring);outline-offset:2px}
+    .nav-btn:active,.action-btn:active,.icon-btn:active,.chip:active,.table-row:active,.toggle:active{transform:scale(.97)}
+    .chips{display:flex;gap:calc(var(--spacing)*2);flex-wrap:wrap}
+    .chip{padding:calc(var(--spacing)*2.5) calc(var(--spacing)*4);border:1px solid var(--border);background:var(--card);color:var(--muted-foreground)}
+    .chip.active{background:var(--primary);border-color:var(--primary);color:var(--primary-foreground)}
+    .mini-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:calc(var(--spacing)*3)}
+    .mini-card{padding:calc(var(--spacing)*4);border-radius:var(--radius);background:var(--background);border:1px solid var(--border)}
+    @media (max-width:1100px){.stats,.panels,.settings-grid,.line-card{grid-template-columns:1fr}.app{grid-template-columns:88px 1fr}.sidebar{width:88px;padding-inline:calc(var(--spacing)*3.5)}.label,.brand-copy,.sidebar-foot{opacity:0;max-width:0;overflow:hidden}.search{width:min(280px,100%)}}
+    @media (max-width:760px){.topbar,.content{padding-inline:calc(var(--spacing)*4)}.stats{grid-template-columns:1fr 1fr}.table-head,.table-row{grid-template-columns:1.1fr .8fr .8fr .8fr;font-size:.8rem}.hero{flex-direction:column}.search{display:none}}
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script type="text/babel">
+    const { useEffect, useMemo, useState } = React;
+
+    const views = [
+      { id: "overview", label: "Overview", glyph: "◫" },
+      { id: "pipeline", label: "Pipeline", glyph: "↗" },
+      { id: "settings", label: "Settings", glyph: "⚙" }
+    ];
+
+    const stats = [
+      { label: "Active campaigns", value: "128", trend: "+12%", tone: "up" },
+      { label: "Conversion rate", value: "6.8%", trend: "+0.9%", tone: "up" },
+      { label: "Cost per lead", value: "$18.40", trend: "-4.2%", tone: "up" },
+      { label: "Watch list risk", value: "3 items", trend: "Needs review", tone: "down" }
+    ];
+
+    const weekly = [
+      { day: "Mon", a: 78, b: 52, tone: "bar" },
+      { day: "Tue", a: 88, b: 60, tone: "alt" },
+      { day: "Wed", a: 68, b: 42, tone: "warm" },
+      { day: "Thu", a: 96, b: 72, tone: "green" },
+      { day: "Fri", a: 104, b: 79, tone: "red" },
+      { day: "Sat", a: 64, b: 34, tone: "bar" },
+      { day: "Sun", a: 58, b: 28, tone: "alt" }
+    ];
+
+    const spark = [32, 44, 52, 48, 68, 76, 90, 86, 104, 118];
+
+    const campaigns = [
+      { name: "Search lift / North America", owner: "Lena", status: "Healthy", spend: "$42.1k" },
+      { name: "App reactivation / EMEA", owner: "Arun", status: "Scaling", spend: "$18.6k" },
+      { name: "Retail pulse / APAC", owner: "Mika", status: "At risk", spend: "$11.4k" },
+      { name: "Brand video sprint", owner: "Noah", status: "Healthy", spend: "$9.8k" }
+    ];
+
+    const activity = [
+      ["Audience overlap dropped 8%", "Auto-insight"],
+      ["Creative set B won mobile CTR", "Experiment"],
+      ["Budget cap reached for retail pulse", "Alert"],
+      ["Forecast updated for Q3 pipeline", "Planner"]
+    ];
+
+    function MetricCard({ item }) {
+      return (
+        <div className="card interactive">
+          <div className="eyebrow">{item.label}</div>
+          <div className="metric">{item.value}</div>
+          <span className={`trend ${item.tone}`}>{item.tone === "up" ? "↑" : "!"} {item.trend}</span>
+        </div>
+      );
+    }
+
+    function BarComparison() {
+      return (
+        <div className="card">
+          <div className="card-head">
+            <div>
+              <div className="eyebrow">Channel velocity</div>
+              <strong>Traffic vs qualified sessions</strong>
+            </div>
+            <span className="badge ok">Weekly view</span>
+          </div>
+          <div className="bar-grid">
+            {weekly.map((item, idx) => (
+              <div key={item.day} className="bar-col">
+                <div className={`bar ${item.tone}`} style={{ height: `${item.a * 1.4}px` }} />
+                <div className={`bar ${idx % 2 ? "green" : "alt"}`} style={{ height: `${item.b * 1.4}px`, opacity: 0.7 }} />
+                <div className="bar-label">{item.day}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    function TrendPanel() {
+      return (
+        <div className="card">
+          <div className="card-head">
+            <div>
+              <div className="eyebrow">Pipeline health</div>
+              <strong>Forecast coverage</strong>
+            </div>
+            <span className="badge">94% aligned</span>
+          </div>
+          <div className="line-card">
+            <div>
+              <div className="line-plot">
+                {spark.map((value, i) => (
+                  <div key={i} className="line-point">
+                    <div className="line-pill" style={{ height: `${value * 1.5}px`, background: i > 6 ? "var(--chart-5)" : "var(--chart-1)" }} />
+                  </div>
+                ))}
+              </div>
+              <div className="legend">
+                <span><i className="dot" style={{ background: "var(--chart-1)" }}></i> Baseline</span>
+                <span><i className="dot" style={{ background: "var(--chart-5)" }}></i> Accelerated</span>
+              </div>
+            </div>
+            <div className="donut-wrap">
+              <div className="donut">
+                <div className="donut-center">64%</div>
+              </div>
+              <div className="list">
+                <div className="list-item"><span>Search</span><strong>38%</strong></div>
+                <div className="list-item"><span>Video</span><strong>26%</strong></div>
+                <div className="list-item"><span>Shopping</span><strong>18%</strong></div>
+                <div className="list-item"><span>Display</span><strong>18%</strong></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    function CampaignTable() {
+      return (
+        <div className="card">
+          <div className="card-head">
+            <div>
+              <div className="eyebrow">Execution board</div>
+              <strong>Top campaigns</strong>
+            </div>
+            <button className="action-btn ghost focusable">Filter</button>
+          </div>
+          <div className="table">
+            <div className="table-head">
+              <span>Campaign</span><span>Owner</span><span>Status</span><span>Spend</span>
+            </div>
+            {campaigns.map((row) => (
+              <button key={row.name} className="table-row focusable">
+                <span>{row.name}</span>
+                <span className="muted">{row.owner}</span>
+                <span className={`badge ${row.status === "At risk" ? "alert" : "ok"}`}>{row.status}</span>
+                <strong>{row.spend}</strong>
+              </button>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    function ActivityCard() {
+      return (
+        <div className="card">
+          <div className="card-head">
+            <div>
+              <div className="eyebrow">Signals</div>
+              <strong>Live analyst feed</strong>
+            </div>
+            <span className="badge ok">Auto-refresh</span>
+          </div>
+          <div className="list">
+            {activity.map(([title, source]) => (
+              <div key={title} className="list-item">
+                <div>
+                  <strong>{title}</strong>
+                  <div className="tiny">{source}</div>
+                </div>
+                <span className="tiny">Now</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    function OverviewView() {
+      return (
+        <div className="grid" style={{ gap: "calc(var(--spacing) * 4)" }}>
+          <div className="grid stats">{stats.map((item) => <MetricCard key={item.label} item={item} />)}</div>
+          <div className="grid panels">
+            <TrendPanel />
+            <ActivityCard />
+          </div>
+          <CampaignTable />
+        </div>
+      );
+    }
+
+    function PipelineView({ filter, setFilter }) {
+      const cards = useMemo(() => ({
+        paid: [
+          { title: "Search demand capture", value: "18.2k", note: "Qualified clicks", tone: "var(--chart-1)" },
+          { title: "Video assisted lift", value: "9.1k", note: "View-through visits", tone: "var(--chart-2)" },
+          { title: "Shopping recovery", value: "4.7k", note: "Recovered carts", tone: "var(--chart-5)" }
+        ],
+        organic: [
+          { title: "Knowledge panel visits", value: "22.8k", note: "Branded discovery", tone: "var(--chart-4)" },
+          { title: "Docs engagement", value: "7.6k", note: "Help center reads", tone: "var(--chart-3)" },
+          { title: "Workspace referrals", value: "3.9k", note: "Product handoffs", tone: "var(--chart-5)" }
+        ],
+        mixed: [
+          { title: "Multi-touch influenced", value: "31.4k", note: "Shared attribution", tone: "var(--chart-1)" },
+          { title: "Expansion shortlist", value: "142", note: "Accounts above threshold", tone: "var(--chart-2)" },
+          { title: "Forecast confidence", value: "88%", note: "Model agreement", tone: "var(--chart-4)" }
+        ]
+      }), []);
+
+      return (
+        <div className="grid" style={{ gap: "calc(var(--spacing) * 4)" }}>
+          <div className="card">
+            <div className="card-head">
+              <div>
+                <div className="eyebrow">Attribution model</div>
+                <strong>Demand mix explorer</strong>
+              </div>
+              <div className="chips">
+                {["paid","organic","mixed"].map((item) => (
+                  <button key={item} className={`chip focusable ${filter === item ? "active" : ""}`} onClick={() => setFilter(item)}>
+                    {item[0].toUpperCase() + item.slice(1)}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="mini-grid">
+              {cards[filter].map((card) => (
+                <div key={card.title} className="mini-card">
+                  <div className="eyebrow">{card.note}</div>
+                  <div className="metric" style={{ fontSize: "1.45rem", marginBottom: ".3rem", color: card.tone }}>{card.value}</div>
+                  <strong>{card.title}</strong>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="grid panels">
+            <BarComparison />
+            <div className="card">
+              <div className="card-head">
+                <div>
+                  <div className="eyebrow">Recommendations</div>
+                  <strong>Next best actions</strong>
+                </div>
+                <span className="badge">3 ready</span>
+              </div>
+              <div className="list">
+                <div className="list-item"><div><strong>Increase search share on Tue–Fri</strong><div className="tiny">Lift expected: 6.2%</div></div><button className="action-btn secondary focusable">Apply</button></div>
+                <div className="list-item"><div><strong>Shift video budget to remarketing</strong><div className="tiny">Efficiency gain: 11%</div></div><button className="action-btn secondary focusable">Review</button></div>
+                <div className="list-item"><div><strong>Pause underperforming retail creative</strong><div className="tiny">Risk window: 48 hours</div></div><button className="action-btn ghost focusable">Open</button></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    function SettingsView({ toggles, setToggles }) {
+      const flip = (key) => setToggles((prev) => ({ ...prev, [key]: !prev[key] }));
+      return (
+        <div className="grid settings-grid">
+          <div className="card">
+            <div className="card-head">
+              <div>
+                <div className="eyebrow">Workspace settings</div>
+                <strong>Team preferences</strong>
+              </div>
+              <span className="badge ok">Synced</span>
+            </div>
+            <div className="form">
+              <div className="field">
+                <label>Default workspace</label>
+                <input className="input focusable" defaultValue="Global performance hub" />
+              </div>
+              <div className="field">
+                <label>Reporting cadence</label>
+                <select className="select focusable" defaultValue="Weekly">
+                  <option>Weekly</option>
+                  <option>Bi-weekly</option>
+                  <option>Monthly</option>
+                </select>
+              </div>
+              <div className="field">
+                <label>Attribution owner</label>
+                <input className="input focusable" defaultValue="Lena Foster" />
+              </div>
+              <div className="hero-actions">
+                <button className="action-btn primary focusable">Save changes</button>
+                <button className="action-btn ghost focusable">Discard</button>
+                <button className="action-btn secondary focusable" disabled>Pending approval</button>
+              </div>
+            </div>
+          </div>
+          <div className="grid" style={{ gap: "calc(var(--spacing) * 4)" }}>
+            <div className="card">
+              <div className="card-head">
+                <div>
+                  <div className="eyebrow">Automation</div>
+                  <strong>Notification rules</strong>
+                </div>
+              </div>
+              <div className="toggles">
+                {[
+                  ["forecast","Forecast variance alerts"],
+                  ["creative","Creative fatigue reminders"],
+                  ["digest","Executive daily digest"]
+                ].map(([key, label]) => (
+                  <button key={key} className="toggle focusable" onClick={() => flip(key)}>
+                    <span>{label}</span>
+                    <span className={`switch ${toggles[key] ? "on" : ""}`}><span /></span>
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="card">
+              <div className="card-head">
+                <div>
+                  <div className="eyebrow">Access</div>
+                  <strong>Roles and review</strong>
+                </div>
+              </div>
+              <div className="list">
+                <div className="list-item"><div><strong>Workspace admins</strong><div className="tiny">4 active managers</div></div><span className="badge ok">Healthy</span></div>
+                <div className="list-item"><div><strong>Pending invites</strong><div className="tiny">2 analysts waiting</div></div><span className="badge">Review</span></div>
+                <div className="list-item"><div><strong>Policy checks</strong><div className="tiny">Last audit 3 days ago</div></div><span className="badge ok">Passed</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    function App() {
+      const [view, setView] = useState("overview");
+      const [theme, setTheme] = useState("light");
+      const [collapsed, setCollapsed] = useState(false);
+      const [filter, setFilter] = useState("mixed");
+      const [toggles, setToggles] = useState({ forecast: true, creative: false, digest: true });
+
+      useEffect(() => {
+        document.body.classList.toggle("dark", theme === "dark");
+      }, [theme]);
+
+      return (
+        <div className="app">
+          <aside className={`sidebar ${collapsed ? "collapsed" : ""}`}>
+            <div className="brand">
+              <div className="brand-mark">G</div>
+              <div className="brand-copy">
+                <h1>Google Pulse</h1>
+                <p>Growth operations dashboard</p>
+              </div>
+            </div>
+            <nav className="nav">
+              {views.map((item) => (
+                <button key={item.id} className={`nav-btn focusable ${view === item.id ? "active" : ""}`} onClick={() => setView(item.id)}>
+                  <span className="glyph">{item.glyph}</span>
+                  <span className="label">{item.label}</span>
+                </button>
+              ))}
+            </nav>
+            <div className="sidebar-foot">
+              Bright charts, flat surfaces, and quiet borders keep dense analysis readable.
+            </div>
+          </aside>
+
+          <main className="main">
+            <header className="topbar">
+              <div className="topbar-left">
+                <button className="icon-btn focusable" onClick={() => setCollapsed((v) => !v)}><span className="glyph">☰</span></button>
+                <div className="search">
+                  <span className="glyph">⌕</span>
+                  <input aria-label="Search dashboard" placeholder="Search campaigns, owners, or goals" />
+                </div>
+              </div>
+              <div className="topbar-right">
+                <button className="icon-btn focusable" onClick={() => setTheme((v) => v === "light" ? "dark" : "light")}><span className="glyph">{theme === "light" ? "◐" : "☀"}</span></button>
+                <button className="icon-btn focusable"><span className="glyph">⟳</span></button>
+                <button className="icon-btn focusable"><span className="glyph">!</span></button>
+                <div className="avatar">LF</div>
+              </div>
+            </header>
+
+            <section className="content">
+              <div className="hero">
+                <div>
+                  <h2>{view === "overview" ? "Performance overview" : view === "pipeline" ? "Pipeline analytics" : "Team configuration"}</h2>
+                  <p>
+                    {view === "overview" && "Track active campaigns, live signals, and weekly conversion momentum in one branded workspace."}
+                    {view === "pipeline" && "Compare demand sources, test allocation ideas, and surface the next best actions for analysts."}
+                    {view === "settings" && "Adjust reporting rules, workspace defaults, and analyst notification preferences."}
+                  </p>
+                </div>
+                <div className="hero-actions">
+                  <button className="action-btn primary focusable">Export report</button>
+                  <button className="action-btn secondary focusable">Share snapshot</button>
+                  <button className="action-btn ghost focusable">Create alert</button>
+                </div>
+              </div>
+
+              <div className="view-stack">
+                <div className={`view ${view === "overview" ? "active" : ""}`}><OverviewView /></div>
+                <div className={`view ${view === "pipeline" ? "active" : ""}`}><PipelineView filter={filter} setFilter={setFilter} /></div>
+                <div className={`view ${view === "settings" ? "active" : ""}`}><SettingsView toggles={toggles} setToggles={setToggles} /></div>
+              </div>
+            </section>
+          </main>
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+  </script>
+</body>
+</html>

@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 2,
+  "library": "nimbus-core",
+  "components": [
+    { "slug": "activity-rail", "name": "Activity Rail", "preview": "preview/component-activity-rail.html" },
+    { "slug": "alert", "name": "Alert", "preview": "preview/component-alert.html" },
+    { "slug": "avatar", "name": "Avatar", "preview": "preview/component-avatar.html" },
+    { "slug": "buttons", "name": "Button", "preview": "preview/component-buttons.html" },
+    { "slug": "cards", "name": "Card", "preview": "preview/component-cards.html" },
+    { "slug": "chat-composer", "name": "Chat Composer", "preview": "preview/component-chat-composer.html" },
+    { "slug": "dialog", "name": "Dialog", "preview": "preview/component-dialog.html" },
+    { "slug": "editor-tabs", "name": "Editor Tabs", "preview": "preview/component-editor-tabs.html" },
+    { "slug": "file-tree", "name": "File Tree", "preview": "preview/component-file-tree.html" },
+    { "slug": "forms", "name": "Form Controls", "preview": "preview/component-forms.html" },
+    { "slug": "kbd", "name": "Kbd", "preview": "preview/component-kbd.html" },
+    { "slug": "menu", "name": "Menu", "preview": "preview/component-menu.html" },
+    { "slug": "nav-list", "name": "Nav List", "preview": "preview/component-nav-list.html" },
+    { "slug": "page-header", "name": "Page Header", "preview": "preview/component-page-header.html" },
+    { "slug": "pagination", "name": "Pagination", "preview": "preview/component-pagination.html" },
+    { "slug": "setting-row", "name": "Setting Row", "preview": "preview/component-setting-row.html" },
+    { "slug": "stat-card", "name": "Stat Card", "preview": "preview/component-stat-card.html" },
+    { "slug": "status-bar", "name": "Status Bar", "preview": "preview/component-status-bar.html" },
+    { "slug": "table", "name": "Table", "preview": "preview/component-table.html" },
+    { "slug": "table-panel", "name": "Table Panel", "preview": "preview/component-table-panel.html" },
+    { "slug": "tabs", "name": "Tabs", "preview": "preview/component-tabs.html" },
+    { "slug": "tag", "name": "Tag", "preview": "preview/component-tag.html" },
+    { "slug": "workbench-titlebar", "name": "Workbench Titlebar", "preview": "preview/component-workbench-titlebar.html" }
+  ],
+  "uiKits": [
+    { "type": "dashboard", "entry": "ui_kits/dashboard/index.html" },
+    { "type": "dev-explorer", "entry": "ui_kits/dev-explorer/index.html" }
+  ]
+}

@@ -1,0 +1,104 @@
+{
+  "schemaVersion": 2,
+  "slug": "chat-composer",
+  "name": "Chat Composer",
+  "category": "input",
+  "sourceKind": "structured-spec",
+  "confidence": "medium",
+  "semanticTypeCandidates": ["chat-input", "prompt-composer", "message-composer"],
+  "variantDimensions": {
+    "state": ["empty", "filled"],
+    "model": ["Claude", "GPT-4o"]
+  },
+  "representativeVariants": [
+    { "state": "empty", "model": "Claude" },
+    { "state": "filled", "model": "GPT-4o" }
+  ],
+  "anatomy": [
+    "multiline input textarea with placeholder",
+    "bottom toolbar",
+    "left tool icon-button group",
+    "model switch chip",
+    "mic icon button",
+    "brand-color send button"
+  ],
+  "structurePatterns": [
+    "vertical stack: textarea above toolbar",
+    "toolbar splits into left tools group and right actions group",
+    "focus-within highlights container border"
+  ],
+  "usageHints": [
+    "use for AI conversation prompt entry",
+    "send button uses brand background",
+    "model chip is a pill toggle with chevron"
+  ],
+  "doNotInvent": [
+    "no inline svg icons",
+    "no JS behavior",
+    "no hardcoded colors"
+  ],
+  "unknowns": [
+    "disabled send state styling",
+    "attachment preview row"
+  ],
+  "tokensConsumed": [
+    "--spacer-4",
+    "--spacer-8",
+    "--spacer-12",
+    "--bg-overlay-l1",
+    "--bg-overlay-l2",
+    "--bg-overlay-l3",
+    "--border-neutral-l2",
+    "--border-brand",
+    "--radius-6",
+    "--radius-8",
+    "--radius-10",
+    "--radius-full",
+    "--text-default",
+    "--text-secondary",
+    "--text-tertiary",
+    "--body-md-font-size",
+    "--body-md-line-height",
+    "--body-md-font-weight",
+    "--body-sm-font-size",
+    "--body-sm-line-height",
+    "--bg-brand",
+    "--bg-brand-hover"
+  ],
+  "domAnatomy": {
+    "root": {
+      "tag": "div",
+      "class": "ds-composer",
+      "children": [
+        { "tag": "textarea", "class": "ds-composer__input" },
+        {
+          "tag": "div",
+          "class": "ds-composer__toolbar",
+          "children": [
+            {
+              "tag": "div",
+              "class": "ds-composer__tools",
+              "children": [
+                { "tag": "button", "class": "ds-composer__icon-btn" },
+                { "tag": "button", "class": "ds-composer__model" }
+              ]
+            },
+            {
+              "tag": "div",
+              "class": "ds-composer__actions",
+              "children": [
+                { "tag": "button", "class": "ds-composer__icon-btn" },
+                { "tag": "button", "class": "ds-composer__send" }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "provenance": {
+    "preview": "preview/component-chat-composer.html",
+    "source": "structured-spec",
+    "css": { "file": "components.css", "marker": "── Chat Composer ──" }
+  }
+}

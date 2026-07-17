@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>Slider 滑块</title>
+  <link rel="stylesheet" href="preview-scaffold.css">
+  <style>
+    /* 容器 */
+    .slider {
+      position: relative;
+      display: flex;
+      align-items: center;
+      width: 100%;
+      height: 24px;
+      cursor: pointer;
+      user-select: none;
+      box-sizing: border-box;
+    }
+    .slider-sm { height: 16px; }
+
+    /* 轨道 */
+    .slider-track {
+      position: relative;
+      width: 100%;
+      height: 2px;
+      background: #F6F8FA;
+      border-radius: 1px;
+    }
+
+    .slider-track-fill {
+      position: absolute;
+      top: 0;
+      left: 0;
+      height: 100%;
+      background: #1664FF;
+      border-radius: 1px;
+    }
+
+    /* 滑块 */
+    .slider-thumb {
+      position: absolute;
+      top: 50%;
+      width: 12px;
+      height: 12px;
+      background: #FFFFFF;
+      border: 2px solid #1664FF;
+      border-radius: 50%;
+      transform: translate(-50%, -50%);
+      transition: box-shadow 200ms ease, width 100ms ease, height 100ms ease;
+      cursor: grab;
+      box-sizing: border-box;
+    }
+    .slider-sm .slider-thumb {
+      width: 8px;
+      height: 8px;
+    }
+
+    /* 悬浮 */
+    .slider-thumb:hover {
+      box-shadow: 0 0 0 4px rgba(22, 100, 255, 0.12);
+    }
+
+    /* 拖拽 */
+    .slider-thumb:active,
+    .slider-thumb.active {
+      width: 14px;
+      height: 14px;
+      cursor: grabbing;
+      box-shadow: 0 0 0 4px rgba(22, 100, 255, 0.12);
+    }
+
+    /* 禁用 */
+    .slider.disabled {
+      cursor: not-allowed;
+      pointer-events: none;
+    }
+    .slider.disabled .slider-track-fill {
+      background: #94BFFF;
+    }
+    .slider.disabled .slider-thumb {
+      border-color: #94BFFF;
+    }
+
+    /* 刻度标记 */
+    .slider-marks {
+      position: absolute;
+      top: 50%;
+      left: 0;
+      width: 100%;
+      transform: translateY(-50%);
+    }
+    .slider-mark {
+      position: absolute;
+      width: 4px;
+      height: 4px;
+      background: #DDE2E9;
+      border-radius: 50%;
+      transform: translate(-50%, -50%);
+      top: 50%;
+    }
+    .slider-mark.active {
+      background: #1664FF;
+    }
+
+    .slider-mark-labels {
+      position: absolute;
+      top: 100%;
+      left: 0;
+      width: 100%;
+      margin-top: 8px;
+    }
+    .slider-mark-labels span {
+      position: absolute;
+      transform: translateX(-50%);
+      font-size: 12px;
+      line-height: 20px;
+      color: #737A87;
+      white-space: nowrap;
+    }
+
+    /* Tooltip */
+    .slider-tooltip {
+      position: absolute;
+      bottom: calc(100% + 8px);
+      left: 50%;
+      transform: translateX(-50%);
+      background: #42464E;
+      color: #FFFFFF;
+      font-size: 12px;
+      line-height: 20px;
+      padding: 2px 8px;
+      border-radius: 4px;
+      white-space: nowrap;
+      pointer-events: none;
+    }
+    .slider-tooltip::after {
+      content: "";
+      position: absolute;
+      top: 100%;
+      left: 50%;
+      transform: translateX(-50%);
+      border: 4px solid transparent;
+      border-top-color: #42464E;
+    }
+  </style>
+</head>
+<body>
+  <div class="pv-header">
+    <h1>Slider 滑块</h1>
+    <p>滑动输入组件，支持基础单值滑动和范围选择，包含默认和小尺寸。</p>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">Basic 基础滑动 — Default 尺寸</div>
+    <div class="stack-12">
+      <div class="slider slider-md" data-component="slider" data-type="basic" data-size="default" data-state="default">
+        <div class="slider-track"><div class="slider-track-fill" style="width: 40%"></div></div>
+        <div class="slider-thumb" style="left: 40%"></div>
+      </div>
+      <div class="slider slider-md disabled" data-component="slider" data-type="basic" data-size="default" data-state="disabled">
+        <div class="slider-track"><div class="slider-track-fill" style="width: 30%"></div></div>
+        <div class="slider-thumb" style="left: 30%"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">Basic 基础滑动 — Small 尺寸</div>
+    <div class="stack-12">
+      <div class="slider slider-sm" data-component="slider" data-type="basic" data-size="small" data-state="default">
+        <div class="slider-track"><div class="slider-track-fill" style="width: 60%"></div></div>
+        <div class="slider-thumb" style="left: 60%"></div>
+      </div>
+      <div class="slider slider-sm disabled" data-component="slider" data-type="basic" data-size="small" data-state="disabled">
+        <div class="slider-track"><div class="slider-track-fill" style="width: 50%"></div></div>
+        <div class="slider-thumb" style="left: 50%"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">Range 范围滑动 — Default 尺寸</div>
+    <div class="stack-12">
+      <div class="slider slider-md slider-range" data-component="slider" data-type="range" data-size="default" data-state="default">
+        <div class="slider-track"><div class="slider-track-fill" style="left: 20%; width: 40%"></div></div>
+        <div class="slider-thumb" style="left: 20%"></div>
+        <div class="slider-thumb" style="left: 60%"></div>
+      </div>
+      <div class="slider slider-md slider-range disabled" data-component="slider" data-type="range" data-size="default" data-state="disabled">
+        <div class="slider-track"><div class="slider-track-fill" style="left: 25%; width: 30%"></div></div>
+        <div class="slider-thumb" style="left: 25%"></div>
+        <div class="slider-thumb" style="left: 55%"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">Range 范围滑动 — Small 尺寸</div>
+    <div class="stack-12">
+      <div class="slider slider-sm slider-range" data-component="slider" data-type="range" data-size="small" data-state="default">
+        <div class="slider-track"><div class="slider-track-fill" style="left: 15%; width: 50%"></div></div>
+        <div class="slider-thumb" style="left: 15%"></div>
+        <div class="slider-thumb" style="left: 65%"></div>
+      </div>
+      <div class="slider slider-sm slider-range disabled" data-component="slider" data-type="range" data-size="small" data-state="disabled">
+        <div class="slider-track"><div class="slider-track-fill" style="left: 30%; width: 20%"></div></div>
+        <div class="slider-thumb" style="left: 30%"></div>
+        <div class="slider-thumb" style="left: 50%"></div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

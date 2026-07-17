@@ -1,0 +1,672 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>MotionFit Dashboard Kit</title>
+  <link rel="stylesheet" href="../../colors_and_type.css">
+  <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    *{box-sizing:border-box}
+    html,body{margin:0;min-height:100%;background:var(--background);color:var(--foreground);font-family:var(--font-sans),sans-serif}
+    body{letter-spacing:var(--tracking-normal)}
+    button,input{font:inherit}
+    .app-shell{display:grid;grid-template-columns:260px minmax(0,1fr);min-height:100vh;background:var(--background)}
+    .app-shell.is-collapsed{grid-template-columns:88px minmax(0,1fr)}
+    .sidebar{background:var(--sidebar);border-right:1px solid var(--sidebar-border);padding:calc(var(--spacing)*5);display:flex;flex-direction:column;gap:calc(var(--spacing)*5)}
+    .brand{display:flex;align-items:center;justify-content:space-between;gap:calc(var(--spacing)*3)}
+    .brand-mark{display:grid;gap:2px}
+    .brand-kicker{font-size:10px;text-transform:uppercase;color:var(--muted-foreground);letter-spacing:.18em}
+    .brand-title{font-size:20px;line-height:1}
+    .collapse-btn,.nav-btn,.icon-btn,.action-btn,.chip-btn,.row-action{border:1px solid transparent;border-radius:var(--radius);transition:background-color .18s,border-color .18s,color .18s,transform .12s,box-shadow .18s;outline:none}
+    .collapse-btn:focus-visible,.nav-btn:focus-visible,.icon-btn:focus-visible,.action-btn:focus-visible,.chip-btn:focus-visible,.row-action:focus-visible,.search-input:focus-visible,.text-input:focus-visible{box-shadow:0 0 0 2px var(--ring);outline:none}
+    .collapse-btn,.icon-btn{width:40px;height:40px;background:var(--muted);color:var(--foreground);cursor:pointer}
+    .collapse-btn:hover,.icon-btn:hover{background:var(--accent)}
+    .collapse-btn:active,.icon-btn:active,.nav-btn:active,.action-btn:active,.chip-btn:active,.row-action:active{transform:scale(.97)}
+    .nav-group{display:grid;gap:calc(var(--spacing)*2)}
+    .nav-btn{display:flex;align-items:center;gap:calc(var(--spacing)*3);width:100%;min-height:48px;padding:0 calc(var(--spacing)*3);background:transparent;border-color:var(--sidebar-border);color:var(--sidebar-foreground);cursor:pointer;text-align:left}
+    .nav-btn:hover{background:var(--sidebar-accent)}
+    .nav-btn.is-active{background:var(--sidebar-primary);border-color:var(--sidebar-primary);color:var(--sidebar-primary-foreground)}
+    .nav-btn .glyph{width:20px;text-align:center;font-size:14px}
+    .nav-copy{display:grid;gap:2px}
+    .nav-label{font-size:13px;text-transform:uppercase}
+    .nav-meta{font-family:var(--font-mono),monospace;font-size:10px;color:inherit;opacity:.72}
+    .app-shell.is-collapsed .nav-copy,.app-shell.is-collapsed .brand-copy,.app-shell.is-collapsed .sidebar-foot{display:none}
+    .app-shell.is-collapsed .nav-btn{justify-content:center;padding:0}
+    .sidebar-foot{margin-top:auto;padding-top:calc(var(--spacing)*4);border-top:1px solid var(--sidebar-border);display:grid;gap:calc(var(--spacing)*2)}
+    .foot-label{font-size:10px;text-transform:uppercase;color:var(--muted-foreground);letter-spacing:.16em}
+    .foot-stat{font-size:24px;color:var(--primary)}
+    .main{display:flex;flex-direction:column;min-width:0}
+    .header{display:flex;align-items:center;justify-content:space-between;gap:calc(var(--spacing)*4);padding:calc(var(--spacing)*5) calc(var(--spacing)*6);border-bottom:1px solid var(--border);background:rgba(3,3,3,.88);position:sticky;top:0;z-index:3;backdrop-filter:blur(8px)}
+    .title-block{display:grid;gap:4px}
+    .eyebrow{font-family:var(--font-mono),monospace;font-size:10px;text-transform:uppercase;letter-spacing:.16em;color:var(--muted-foreground)}
+    .page-title{font-size:24px;line-height:1.05}
+    .page-subtitle{font-size:12px;color:var(--muted-foreground);max-width:72ch}
+    .header-actions{display:flex;align-items:center;gap:calc(var(--spacing)*3)}
+    .search-wrap{display:flex;align-items:center;gap:calc(var(--spacing)*2);height:40px;padding:0 calc(var(--spacing)*3);min-width:260px;border:1px solid var(--border);background:var(--input);color:var(--foreground)}
+    .search-wrap:hover{border-color:var(--primary)}
+    .search-glyph{color:var(--muted-foreground)}
+    .search-input,.text-input{flex:1;border:0;background:transparent;color:var(--foreground);min-width:0}
+    .search-input::placeholder,.text-input::placeholder{color:var(--muted-foreground)}
+    .content{padding:calc(var(--spacing)*6);display:grid;gap:calc(var(--spacing)*6)}
+    .view-frame{position:relative;overflow:hidden}
+    .view-panel{display:grid;gap:calc(var(--spacing)*5);animation:enter .28s ease}
+    @keyframes enter{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+    .grid-4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:calc(var(--spacing)*4)}
+    .grid-3-2{display:grid;grid-template-columns:minmax(0,3fr) minmax(300px,2fr);gap:calc(var(--spacing)*4)}
+    .grid-2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:calc(var(--spacing)*4)}
+    .panel,.metric-card,.list-row,.table-wrap,.insight-card,.planner-card{border:1px solid var(--border);background:var(--card);border-radius:var(--radius)}
+    .panel,.table-wrap,.planner-card{padding:calc(var(--spacing)*4)}
+    .metric-card{padding:calc(var(--spacing)*4);display:grid;gap:calc(var(--spacing)*3);min-height:140px}
+    .metric-top,.panel-head,.list-head,.table-head,.planner-head{display:flex;align-items:flex-start;justify-content:space-between;gap:calc(var(--spacing)*3)}
+    .metric-label,.muted{font-size:11px;color:var(--muted-foreground);text-transform:uppercase;letter-spacing:.12em}
+    .metric-value{font-size:36px;line-height:1;color:var(--foreground)}
+    .metric-foot{display:flex;align-items:center;justify-content:space-between;gap:calc(var(--spacing)*2);margin-top:auto}
+    .delta{color:var(--primary);font-size:12px}
+    .tone-tag{padding:4px 8px;border:1px solid var(--border);background:var(--muted);font-size:10px;text-transform:uppercase;color:var(--muted-foreground)}
+    .action-btn{display:inline-flex;align-items:center;justify-content:center;gap:calc(var(--spacing)*2);min-height:40px;padding:0 calc(var(--spacing)*4);cursor:pointer;box-shadow:var(--shadow-sm);text-transform:uppercase;font-size:12px;letter-spacing:.08em}
+    .action-btn.primary{background:var(--primary);border-color:var(--primary);color:var(--primary-foreground)}
+    .action-btn.primary:hover{background:color-mix(in srgb,var(--primary) 88%,#000 12%)}
+    .action-btn.secondary{background:transparent;border-color:var(--border);color:var(--secondary-foreground)}
+    .action-btn.secondary:hover,.row-action:hover{background:var(--secondary);color:var(--secondary-foreground)}
+    .action-btn.ghost{background:transparent;color:var(--foreground);box-shadow:none}
+    .action-btn.ghost:hover,.chip-btn:hover{background:var(--accent)}
+    .action-btn[disabled]{opacity:.46;cursor:not-allowed;pointer-events:none}
+    .chips{display:flex;flex-wrap:wrap;gap:calc(var(--spacing)*2)}
+    .chip-btn{display:inline-flex;align-items:center;gap:calc(var(--spacing)*2);min-height:32px;padding:0 calc(var(--spacing)*3);background:var(--muted);border-color:var(--border);color:var(--foreground);cursor:pointer;text-transform:uppercase;font-size:11px}
+    .chip-btn.is-selected{background:var(--primary);border-color:var(--primary);color:var(--primary-foreground)}
+    .panel-body{display:grid;gap:calc(var(--spacing)*4)}
+    .focus-card{display:grid;gap:calc(var(--spacing)*4)}
+    .focus-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:calc(var(--spacing)*3)}
+    .focus-cell{padding:calc(var(--spacing)*3);border:1px solid var(--border);background:var(--muted);display:grid;gap:4px}
+    .focus-value{font-size:22px}
+    .mini-list{display:grid;gap:calc(var(--spacing)*3)}
+    .list-row{display:grid;grid-template-columns:minmax(0,1.3fr) repeat(3,minmax(0,.8fr)) auto;gap:calc(var(--spacing)*3);padding:calc(var(--spacing)*3);align-items:center}
+    .list-row strong{font-size:13px}
+    .list-row span{font-size:12px;color:var(--muted-foreground)}
+    .chart-card{display:grid;gap:calc(var(--spacing)*4)}
+    .bars{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:calc(var(--spacing)*3);align-items:end;height:240px;padding-top:calc(var(--spacing)*4)}
+    .bar-col{display:grid;gap:calc(var(--spacing)*2);justify-items:center}
+    .bar-stack{height:200px;width:100%;display:flex;align-items:flex-end}
+    .bar{width:100%;border:1px solid rgba(255,255,255,.05)}
+    .bar.load{background:var(--chart-3)}
+    .bar.output{background:var(--chart-1)}
+    .bar.recovery{background:var(--chart-2)}
+    .bar-label,.chart-legend{font-size:10px;text-transform:uppercase;color:var(--muted-foreground);letter-spacing:.12em}
+    .chart-legend{display:flex;flex-wrap:wrap;gap:calc(var(--spacing)*3)}
+    .legend-dot{display:inline-block;width:10px;height:10px;margin-right:6px;vertical-align:middle}
+    .spark-grid{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:calc(var(--spacing)*2);align-items:end;height:132px}
+    .spark-grid div{background:var(--chart-4);min-height:18px}
+    .ring-wrap{display:flex;align-items:center;gap:calc(var(--spacing)*4)}
+    .donut{width:132px;height:132px;border-radius:50%;background:conic-gradient(var(--chart-1) 0 32%,var(--chart-2) 32% 55%,var(--chart-3) 55% 78%,var(--chart-4) 78% 92%,var(--chart-5) 92% 100%);position:relative}
+    .donut::after{content:"";position:absolute;inset:22px;background:var(--card);border-radius:50%;border:1px solid var(--border)}
+    .donut-copy{position:absolute;inset:0;display:grid;place-items:center;text-align:center;font-size:11px;z-index:1}
+    .donut-copy strong{display:block;font-size:22px;color:var(--foreground)}
+    .table-wrap{display:grid;gap:calc(var(--spacing)*4)}
+    table{width:100%;border-collapse:collapse}
+    th,td{padding:12px 10px;border-top:1px solid var(--border);text-align:left;font-size:12px}
+    th{font-size:10px;text-transform:uppercase;color:var(--muted-foreground);letter-spacing:.14em}
+    tbody tr:hover{background:rgba(255,64,0,.06)}
+    .status{display:inline-flex;align-items:center;min-height:24px;padding:0 8px;background:var(--muted);border:1px solid var(--border);font-size:10px;text-transform:uppercase;color:var(--muted-foreground)}
+    .status.live,.status.ready{background:rgba(255,64,0,.1);border-color:var(--primary);color:var(--primary)}
+    .status.watch{background:rgba(214,255,10,.08);border-color:var(--chart-1);color:var(--chart-1)}
+    .row-action{min-height:32px;padding:0 12px;background:transparent;border-color:var(--border);color:var(--foreground);cursor:pointer;text-transform:uppercase;font-size:10px}
+    .planner-grid{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(300px,1fr);gap:calc(var(--spacing)*4)}
+    .form-grid{display:grid;gap:calc(var(--spacing)*3)}
+    .field{display:grid;gap:6px}
+    .field label{font-size:10px;text-transform:uppercase;color:var(--muted-foreground);letter-spacing:.14em}
+    .text-input{height:40px;padding:0 12px;border:1px solid var(--border);background:var(--input)}
+    .plan-list{display:grid;gap:calc(var(--spacing)*3)}
+    .plan-item{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:calc(var(--spacing)*3);align-items:center;padding:calc(var(--spacing)*3);border:1px solid var(--border);background:var(--muted)}
+    .plan-item strong{font-size:13px}
+    .plan-item span{font-size:11px;color:var(--muted-foreground)}
+    .insight-card{padding:calc(var(--spacing)*4);display:grid;gap:calc(var(--spacing)*3)}
+    .insight-value{font-size:28px;color:var(--primary)}
+    @media (max-width:1180px){
+      .grid-4,.grid-2,.grid-3-2,.planner-grid{grid-template-columns:1fr}
+      .header{align-items:flex-start;flex-direction:column}
+      .header-actions{width:100%;flex-wrap:wrap}
+      .search-wrap{min-width:0;width:100%}
+      .list-row{grid-template-columns:1fr 1fr}
+    }
+    @media (max-width:860px){
+      .app-shell,.app-shell.is-collapsed{grid-template-columns:1fr}
+      .sidebar{border-right:0;border-bottom:1px solid var(--sidebar-border)}
+      .app-shell.is-collapsed .nav-copy,.app-shell.is-collapsed .brand-copy,.app-shell.is-collapsed .sidebar-foot{display:grid}
+      .app-shell.is-collapsed .nav-btn{justify-content:flex-start;padding:0 calc(var(--spacing)*3)}
+      .bars{height:200px}
+      .bar-stack{height:160px}
+      .planner-grid{grid-template-columns:1fr}
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+    const { useMemo, useState } = React;
+
+    const navItems = [
+      { id: "overview", label: "Overview", meta: "Live ops", glyph: "◫" },
+      { id: "analytics", label: "Training Analytics", meta: "Load and recovery", glyph: "▤" },
+      { id: "plans", label: "Roster & Plans", meta: "Assignments", glyph: "☰" }
+    ];
+
+    const overviewMetrics = [
+      { label: "Active Athletes", value: "124", delta: "+8 today", tag: "Roster live" },
+      { label: "Recovery Average", value: "82", delta: "+4 this week", tag: "Ready" },
+      { label: "Plans On Track", value: "91%", delta: "3 reviews due", tag: "Stable" },
+      { label: "Floor Utilization", value: "76%", delta: "Peak at 18:00", tag: "Watch" }
+    ];
+
+    const sessionRows = [
+      ["Upper Power Block", "18 athletes", "17:30", "Coach Lane", "Ready"],
+      ["Sprint Repeat Lab", "12 athletes", "18:10", "Coach Vega", "Live"],
+      ["Mobility Reset", "24 athletes", "19:00", "Coach Hart", "Watch"]
+    ];
+
+    const weeklyBars = [
+      { day: "Mon", load: 108, output: 84, recovery: 66 },
+      { day: "Tue", load: 122, output: 92, recovery: 74 },
+      { day: "Wed", load: 116, output: 86, recovery: 78 },
+      { day: "Thu", load: 134, output: 98, recovery: 70 },
+      { day: "Fri", load: 128, output: 88, recovery: 80 },
+      { day: "Sat", load: 98, output: 72, recovery: 84 },
+      { day: "Sun", load: 82, output: 62, recovery: 90 }
+    ];
+
+    const performanceRows = [
+      { athlete: "Avery Cole", compliance: "98%", recovery: "84", risk: "Low", plan: "Power A" },
+      { athlete: "Nina Ross", compliance: "92%", recovery: "76", risk: "Moderate", plan: "Sprint B" },
+      { athlete: "Leo Park", compliance: "89%", recovery: "68", risk: "Watch", plan: "Deload" },
+      { athlete: "Maya Ford", compliance: "95%", recovery: "88", risk: "Low", plan: "Strength C" }
+    ];
+
+    const planRows = [
+      { name: "Power Build 6W", roster: "34 athletes", owner: "Coach Lane", status: "Ready" },
+      { name: "Speed Cycle 3W", roster: "22 athletes", owner: "Coach Vega", status: "Live" },
+      { name: "Recovery Reset", roster: "18 athletes", owner: "Coach Hart", status: "Watch" },
+      { name: "Pre-Season Ramp", roster: "50 athletes", owner: "Coach Moss", status: "Ready" }
+    ];
+
+    const quickPlans = [
+      ["Acceleration Block", "3 weeks · high neural load"],
+      ["Field Conditioning", "2 weeks · mixed intervals"],
+      ["Travel Recovery", "4 days · low load reset"]
+    ];
+
+    function ActionButton({ tone = "primary", children, disabled = false }) {
+      return <button className={"action-btn " + tone} disabled={disabled}>{children}</button>;
+    }
+
+    function Chip({ selected = false, children }) {
+      return <button className={"chip-btn" + (selected ? " is-selected" : "")}>{children}</button>;
+    }
+
+    function MetricCard({ label, value, delta, tag }) {
+      return (
+        <article className="metric-card">
+          <div className="metric-top">
+            <span className="metric-label">{label}</span>
+            <span className={"status " + (tag === "Ready" ? "ready" : tag === "Watch" ? "watch" : "")}>{tag}</span>
+          </div>
+          <div className="metric-value">{value}</div>
+          <div className="metric-foot">
+            <span className="delta">{delta}</span>
+            <span className="tone-tag">MotionFit</span>
+          </div>
+        </article>
+      );
+    }
+
+    function OverviewView() {
+      return (
+        <div className="view-panel">
+          <section className="grid-4">
+            {overviewMetrics.map((item) => <MetricCard key={item.label} {...item} />)}
+          </section>
+
+          <section className="grid-3-2">
+            <article className="panel chart-card">
+              <div className="panel-head">
+                <div>
+                  <div className="eyebrow">Weekly Load</div>
+                  <div className="page-title" style={{fontSize:"18px"}}>Facility Output Snapshot</div>
+                </div>
+                <div className="chart-legend">
+                  <span><i className="legend-dot" style={{background:"var(--chart-3)"}}></i>Load</span>
+                  <span><i className="legend-dot" style={{background:"var(--chart-1)"}}></i>Output</span>
+                  <span><i className="legend-dot" style={{background:"var(--chart-2)"}}></i>Recovery</span>
+                </div>
+              </div>
+              <div className="bars">
+                {weeklyBars.map((item) => (
+                  <div className="bar-col" key={item.day}>
+                    <div className="bar-stack">
+                      <div style={{display:"grid",gap:"4px",width:"100%"}}>
+                        <div className="bar recovery" style={{height:item.recovery}}></div>
+                        <div className="bar output" style={{height:item.output}}></div>
+                        <div className="bar load" style={{height:item.load}}></div>
+                      </div>
+                    </div>
+                    <div className="bar-label">{item.day}</div>
+                  </div>
+                ))}
+              </div>
+            </article>
+
+            <article className="panel focus-card">
+              <div className="panel-head">
+                <div>
+                  <div className="eyebrow">Today Focus</div>
+                  <div className="page-title" style={{fontSize:"18px"}}>Performance Block</div>
+                </div>
+                <ActionButton tone="ghost">Sync</ActionButton>
+              </div>
+              <div className="chips">
+                <Chip selected>HIIT</Chip>
+                <Chip>Power</Chip>
+                <Chip>Recovery</Chip>
+              </div>
+              <div className="focus-grid">
+                <div className="focus-cell">
+                  <span className="muted">Primary Objective</span>
+                  <strong>Peak repeat sprint output</strong>
+                </div>
+                <div className="focus-cell">
+                  <span className="muted">Coach Alert</span>
+                  <strong>3 athletes below target warmup</strong>
+                </div>
+                <div className="focus-cell">
+                  <span className="muted">Readiness Band</span>
+                  <div className="focus-value">84</div>
+                </div>
+                <div className="focus-cell">
+                  <span className="muted">Next Review</span>
+                  <strong>18:20 floor check</strong>
+                </div>
+              </div>
+              <ActionButton>Open Session Board</ActionButton>
+            </article>
+          </section>
+
+          <section className="grid-2">
+            <article className="panel">
+              <div className="panel-head">
+                <div>
+                  <div className="eyebrow">Upcoming Sessions</div>
+                  <div className="page-title" style={{fontSize:"18px"}}>Coach Queue</div>
+                </div>
+                <ActionButton tone="secondary">Assign Coach</ActionButton>
+              </div>
+              <div className="mini-list">
+                {sessionRows.map((row) => (
+                  <div className="list-row" key={row[0]}>
+                    <div><strong>{row[0]}</strong><span>{row[1]}</span></div>
+                    <span>{row[2]}</span>
+                    <span>{row[3]}</span>
+                    <span className={"status " + row[4].toLowerCase()}>{row[4]}</span>
+                    <button className="row-action">Open</button>
+                  </div>
+                ))}
+              </div>
+            </article>
+
+            <article className="panel chart-card">
+              <div className="panel-head">
+                <div>
+                  <div className="eyebrow">Readiness Mix</div>
+                  <div className="page-title" style={{fontSize:"18px"}}>Roster State</div>
+                </div>
+              </div>
+              <div className="ring-wrap">
+                <div className="donut">
+                  <div className="donut-copy"><div><strong>124</strong>Total</div></div>
+                </div>
+                <div className="mini-list" style={{width:"100%"}}>
+                  <div className="list-row" style={{gridTemplateColumns:"1fr auto",padding:"10px 12px"}}>
+                    <strong>Ready</strong><span style={{color:"var(--chart-1)"}}>40 athletes</span>
+                  </div>
+                  <div className="list-row" style={{gridTemplateColumns:"1fr auto",padding:"10px 12px"}}>
+                    <strong>Monitor</strong><span style={{color:"var(--chart-2)"}}>28 athletes</span>
+                  </div>
+                  <div className="list-row" style={{gridTemplateColumns:"1fr auto",padding:"10px 12px"}}>
+                    <strong>High Load</strong><span style={{color:"var(--chart-3)"}}>29 athletes</span>
+                  </div>
+                  <div className="list-row" style={{gridTemplateColumns:"1fr auto",padding:"10px 12px"}}>
+                    <strong>Recovery</strong><span style={{color:"var(--chart-4)"}}>19 athletes</span>
+                  </div>
+                </div>
+              </div>
+            </article>
+          </section>
+        </div>
+      );
+    }
+
+    function AnalyticsView() {
+      const [range, setRange] = useState("30D");
+      const sparkValues = useMemo(() => range === "7D" ? [26,48,60,50,72,92,80] : range === "90D" ? [24,40,52,66,80,94,90,86] : [20,42,58,70,88,84,96,90], [range]);
+      return (
+        <div className="view-panel">
+          <section className="panel">
+            <div className="panel-head">
+              <div>
+                <div className="eyebrow">Training Analytics</div>
+                <div className="page-title" style={{fontSize:"18px"}}>Load and Compliance Trend</div>
+              </div>
+              <div className="chips">
+                {["7D","30D","90D"].map((item) => (
+                  <button key={item} className={"chip-btn" + (range === item ? " is-selected" : "")} onClick={() => setRange(item)}>{item}</button>
+                ))}
+              </div>
+            </div>
+            <div className="spark-grid">
+              {sparkValues.map((value, index) => <div key={index} style={{height:value}}></div>)}
+            </div>
+            <div className="chart-legend">
+              <span><i className="legend-dot" style={{background:"var(--chart-4)"}}></i>Compliance pulse</span>
+            </div>
+          </section>
+
+          <section className="grid-2">
+            <article className="panel chart-card">
+              <div className="panel-head">
+                <div>
+                  <div className="eyebrow">Intensity Bands</div>
+                  <div className="page-title" style={{fontSize:"18px"}}>Session Distribution</div>
+                </div>
+              </div>
+              <div className="bars" style={{height:"180px"}}>
+                {[
+                  ["Low",42,"var(--chart-1)"],
+                  ["Moderate",78,"var(--chart-2)"],
+                  ["High",118,"var(--chart-3)"],
+                  ["Peak",90,"var(--chart-4)"],
+                  ["Reset",58,"var(--chart-5)"]
+                ].map(([label, value, color]) => (
+                  <div className="bar-col" key={label}>
+                    <div className="bar-stack" style={{height:"140px"}}>
+                      <div className="bar" style={{height:value,background:color}}></div>
+                    </div>
+                    <div className="bar-label">{label}</div>
+                  </div>
+                ))}
+              </div>
+            </article>
+
+            <article className="panel">
+              <div className="panel-head">
+                <div>
+                  <div className="eyebrow">Recovery Signal</div>
+                  <div className="page-title" style={{fontSize:"18px"}}>Priority Watchlist</div>
+                </div>
+                <ActionButton tone="secondary">Export CSV</ActionButton>
+              </div>
+              <div className="mini-list">
+                {[
+                  ["C. Webb", "Sleep debt at 2.1h", "Check readiness"],
+                  ["R. Hale", "Acute load above threshold", "Reduce sprint volume"],
+                  ["T. Quinn", "Travel fatigue reported", "Shift to reset block"]
+                ].map((item) => (
+                  <div className="list-row" style={{gridTemplateColumns:"minmax(0,1fr) auto",padding:"12px"}} key={item[0]}>
+                    <div><strong>{item[0]}</strong><span>{item[1]}</span></div>
+                    <button className="row-action">{item[2]}</button>
+                  </div>
+                ))}
+              </div>
+            </article>
+          </section>
+
+          <section className="table-wrap">
+            <div className="table-head">
+              <div>
+                <div className="eyebrow">Athlete Table</div>
+                <div className="page-title" style={{fontSize:"18px"}}>Performance Review</div>
+              </div>
+              <ActionButton>Create Report</ActionButton>
+            </div>
+            <table>
+              <thead>
+                <tr>
+                  <th>Athlete</th>
+                  <th>Compliance</th>
+                  <th>Recovery</th>
+                  <th>Risk</th>
+                  <th>Assigned Plan</th>
+                </tr>
+              </thead>
+              <tbody>
+                {performanceRows.map((row) => (
+                  <tr key={row.athlete}>
+                    <td>{row.athlete}</td>
+                    <td>{row.compliance}</td>
+                    <td>{row.recovery}</td>
+                    <td><span className={"status " + (row.risk === "Watch" ? "watch" : "")}>{row.risk}</span></td>
+                    <td>{row.plan}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </section>
+        </div>
+      );
+    }
+
+    function PlansView() {
+      return (
+        <div className="view-panel">
+          <section className="planner-grid">
+            <article className="planner-card">
+              <div className="planner-head">
+                <div>
+                  <div className="eyebrow">Plan Builder</div>
+                  <div className="page-title" style={{fontSize:"18px"}}>Assign New Cycle</div>
+                </div>
+                <ActionButton tone="secondary">Duplicate</ActionButton>
+              </div>
+              <div className="form-grid">
+                <div className="field">
+                  <label>Plan Name</label>
+                  <input className="text-input" defaultValue="Explosive Strength Block" />
+                </div>
+                <div className="field">
+                  <label>Roster Filter</label>
+                  <div className="chips">
+                    <Chip selected>Field Team</Chip>
+                    <Chip>Strength Squad</Chip>
+                    <Chip>Return To Play</Chip>
+                  </div>
+                </div>
+                <div className="field">
+                  <label>Primary Goal</label>
+                  <input className="text-input" defaultValue="Increase repeat power output by 6%" />
+                </div>
+                <div className="field">
+                  <label>Review Window</label>
+                  <input className="text-input" defaultValue="Every Thursday at 16:30" />
+                </div>
+                <div style={{display:"flex",gap:"12px",flexWrap:"wrap"}}>
+                  <ActionButton>Publish Plan</ActionButton>
+                  <ActionButton tone="ghost">Save Draft</ActionButton>
+                </div>
+              </div>
+            </article>
+
+            <article className="insight-card">
+              <div className="eyebrow">Planner Signal</div>
+              <div className="insight-value">14</div>
+              <strong>athletes are due for a plan refresh in the next 48 hours</strong>
+              <span className="muted">Use the roster table below to rebalance load before the weekend cycle.</span>
+              <ActionButton tone="secondary">Open Queue</ActionButton>
+            </article>
+          </section>
+
+          <section className="table-wrap">
+            <div className="table-head">
+              <div>
+                <div className="eyebrow">Roster and Plans</div>
+                <div className="page-title" style={{fontSize:"18px"}}>Assignment Board</div>
+              </div>
+              <div className="header-actions" style={{padding:0}}>
+                <div className="search-wrap" style={{minWidth:"220px"}}>
+                  <span className="search-glyph">⌕</span>
+                  <input className="search-input" placeholder="Search athletes or plans" />
+                </div>
+                <ActionButton>Create Plan</ActionButton>
+              </div>
+            </div>
+            <table>
+              <thead>
+                <tr>
+                  <th>Plan</th>
+                  <th>Roster</th>
+                  <th>Owner</th>
+                  <th>Status</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {planRows.map((row) => (
+                  <tr key={row.name}>
+                    <td>{row.name}</td>
+                    <td>{row.roster}</td>
+                    <td>{row.owner}</td>
+                    <td><span className={"status " + row.status.toLowerCase()}>{row.status}</span></td>
+                    <td><button className="row-action">Review</button></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </section>
+
+          <section className="grid-2">
+            <article className="panel">
+              <div className="panel-head">
+                <div>
+                  <div className="eyebrow">Template Shortlist</div>
+                  <div className="page-title" style={{fontSize:"18px"}}>Reusable Blocks</div>
+                </div>
+              </div>
+              <div className="plan-list">
+                {quickPlans.map((item) => (
+                  <div className="plan-item" key={item[0]}>
+                    <div><strong>{item[0]}</strong><span>{item[1]}</span></div>
+                    <button className="row-action">Apply</button>
+                  </div>
+                ))}
+              </div>
+            </article>
+
+            <article className="panel chart-card">
+              <div className="panel-head">
+                <div>
+                  <div className="eyebrow">Capacity Mix</div>
+                  <div className="page-title" style={{fontSize:"18px"}}>Coach Allocation</div>
+                </div>
+              </div>
+              <div className="bars" style={{height:"180px"}}>
+                {[
+                  ["Lane",112,"var(--chart-3)"],
+                  ["Vega",94,"var(--chart-1)"],
+                  ["Hart",70,"var(--chart-2)"],
+                  ["Moss",88,"var(--chart-4)"]
+                ].map(([label, value, color]) => (
+                  <div className="bar-col" key={label}>
+                    <div className="bar-stack" style={{height:"140px"}}>
+                      <div className="bar" style={{height:value,background:color}}></div>
+                    </div>
+                    <div className="bar-label">{label}</div>
+                  </div>
+                ))}
+              </div>
+            </article>
+          </section>
+        </div>
+      );
+    }
+
+    function App() {
+      const [view, setView] = useState("overview");
+      const [collapsed, setCollapsed] = useState(false);
+      const pageMeta = {
+        overview: {
+          title: "Operations Overview",
+          subtitle: "A desktop command surface for session load, recovery signals, and coach scheduling."
+        },
+        analytics: {
+          title: "Training Analytics",
+          subtitle: "Compare load, compliance, and recovery across the current training cycle."
+        },
+        plans: {
+          title: "Roster and Plan Management",
+          subtitle: "Assign plans, review capacity, and keep athlete programs aligned to current readiness."
+        }
+      };
+      return (
+        <div className={"app-shell" + (collapsed ? " is-collapsed" : "")}>
+          <aside className="sidebar">
+            <div className="brand">
+              <div className="brand-mark">
+                <span className="brand-kicker">Performance OS</span>
+                <div className="brand-copy">
+                  <div className="brand-title">MotionFit</div>
+                  <div className="muted">Dashboard Kit</div>
+                </div>
+              </div>
+              <button className="collapse-btn" onClick={() => setCollapsed(!collapsed)} aria-label="Toggle sidebar">{collapsed ? "→" : "←"}</button>
+            </div>
+
+            <nav className="nav-group" aria-label="Primary">
+              {navItems.map((item) => (
+                <button key={item.id} className={"nav-btn" + (view === item.id ? " is-active" : "")} onClick={() => setView(item.id)}>
+                  <span className="glyph">{item.glyph}</span>
+                  <span className="nav-copy">
+                    <span className="nav-label">{item.label}</span>
+                    <span className="nav-meta">{item.meta}</span>
+                  </span>
+                </button>
+              ))}
+            </nav>
+
+            <div className="sidebar-foot">
+              <span className="foot-label">Today Readiness</span>
+              <div className="foot-stat">82</div>
+              <span className="muted">Orange remains the single action accent. Chart hues stay inside visualizations only.</span>
+            </div>
+          </aside>
+
+          <main className="main">
+            <header className="header">
+              <div className="title-block">
+                <div className="eyebrow">Desktop Dashboard</div>
+                <div className="page-title">{pageMeta[view].title}</div>
+                <div className="page-subtitle">{pageMeta[view].subtitle}</div>
+              </div>
+              <div className="header-actions">
+                <div className="search-wrap">
+                  <span className="search-glyph">⌕</span>
+                  <input className="search-input" placeholder="Search roster, plans, or sessions" />
+                </div>
+                <button className="icon-btn" aria-label="Alerts">!</button>
+                <ActionButton>New Review</ActionButton>
+              </div>
+            </header>
+
+            <section className="content">
+              <div className="view-frame">
+                {view === "overview" && <OverviewView />}
+                {view === "analytics" && <AnalyticsView />}
+                {view === "plans" && <PlansView />}
+              </div>
+            </section>
+          </main>
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+  </script>
+</body>
+</html>

@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>body{margin:0;padding:var(--spacing);background:var(--background);color:var(--foreground);font:14px/1.4 var(--font-sans)}.row{display:flex;align-items:flex-start;gap:var(--spacing);margin-bottom:var(--spacing);flex-wrap:wrap}.label{min-width:56px;padding-top:6px;color:var(--muted-foreground);font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase}.f{display:flex;flex-direction:column;gap:6px;min-width:220px;flex:1 1 220px}.t{font-size:12px;font-weight:600}.i{display:flex;align-items:center;gap:8px;padding:10px var(--spacing);background:var(--input);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-xs)}.i:focus-within{border-color:var(--ring);outline:2px solid var(--ring);outline-offset:1px}.i input{width:100%;border:0;outline:0;background:transparent;color:var(--foreground);font:inherit}.i input::placeholder{color:var(--muted-foreground)}.f.err .i{border-color:var(--destructive)}.h{font-size:12px;color:var(--muted-foreground)}.f.err .h{color:var(--destructive)}.d{opacity:.55}.divider{margin:var(--spacing) 0;border:0;border-top:1px solid var(--border)}</style>
+</head>
+<body>
+<div class="row"><span class="label">text</span><label class="f"><span class="t">Weekly Goal</span><span class="i"><input value="5 workouts" aria-label="Weekly Goal"></span></label><label class="f d"><span class="t">Weekly Goal</span><span class="i"><input value="5 workouts" aria-label="Weekly Goal disabled" disabled></span></label></div>
+<hr class="divider">
+<div class="row"><span class="label">search</span><label class="f"><span class="t">Find a plan</span><span class="i"><span aria-hidden="true">⌕</span><input placeholder="Search workout plans" aria-label="Search workout plans"></span></label></div>
+<div class="row"><span class="label">error</span><label class="f err"><span class="t">Target Heart Rate</span><span class="i"><input value="220 bpm" aria-label="Target Heart Rate"></span><span class="h">Enter a range between 80 and 180 bpm.</span></label></div>
+</body>
+</html>

@@ -1,0 +1,105 @@
+{
+  "schemaVersion": 2,
+  "slug": "tag",
+  "name": "Tag",
+  "category": "data-display",
+  "sourceKind": "structured-spec",
+  "confidence": "medium",
+  "semanticTypeCandidates": ["label", "badge", "chip", "status-indicator"],
+  "variantDimensions": {
+    "tagType": ["default-tag", "status-tag", "multi-color", "digital-tag", "add-tag"],
+    "type": ["fill", "border", "text"],
+    "size": ["lg", "default", "sm", "mini"],
+    "color": ["neutral", "primary", "success", "warning", "danger"],
+    "level": ["L1", "L2", "L3"],
+    "statusVariant": ["success", "warning", "error", "stop", "processing", "loading", "waiting"],
+    "closable": ["true", "false"]
+  },
+  "representativeVariants": [
+    { "tagType": "default-tag", "type": "fill", "size": "default", "color": "neutral" },
+    { "tagType": "default-tag", "type": "border", "size": "default", "color": "neutral" },
+    { "tagType": "default-tag", "type": "text", "size": "default", "color": "neutral" },
+    { "tagType": "status-tag", "level": "L1", "statusVariant": "success", "size": "default" },
+    { "tagType": "status-tag", "level": "L2", "statusVariant": "warning", "size": "default" },
+    { "tagType": "status-tag", "level": "L3", "statusVariant": "error", "size": "default" },
+    { "tagType": "multi-color", "type": "fill", "color": "primary", "size": "default" },
+    { "tagType": "digital-tag", "shape": "rect", "color": "green", "size": "default" },
+    { "tagType": "add-tag", "size": "default" }
+  ],
+  "anatomy": ["tag-container", "tag-icon", "tag-text", "tag-close", "status-tag-icon"],
+  "structurePatterns": [
+    "Default tag: inline-flex pill with optional icon prefix and close suffix",
+    "Status tag (L1): filled background + colored border + optional icon, strongest weight",
+    "Status tag (L2): transparent background + colored border, medium weight",
+    "Status tag (L3): no border/background, text-only with optional rounded bg variant",
+    "Multi-color tag: same structure as default but uses semantic color tokens",
+    "Digital tag: numeric-focused with Roboto font, rect or circle border-radius",
+    "Add tag: dashed border with plus icon, acts as a trigger"
+  ],
+  "usageHints": [
+    "Default tag sizes: lg=24px, default=20px, sm=18px, mini=16px height",
+    "Tag fill bg: var(--color-bg-5), text: var(--color-text-2)",
+    "Tag border: 1px solid var(--color-border), transparent bg",
+    "Status L1 success: bg var(--success-1), color var(--success-5), border var(--success-3)",
+    "Status L2: transparent bg with colored border only",
+    "Status L3: text-only; rounded variant adds tinted background",
+    "Multi-color fill primary: bg var(--color-tag-info-bg), color var(--color-primary)",
+    "Digital tag uses font-family Roboto, font-weight 700, letter-spacing 0.5px",
+    "Add tag: dashed border via border: 1px dashed var(--color-border)",
+    "Close icon: 12x12px, opacity 0.6 default, 1.0 on hover"
+  ],
+  "doNotInvent": ["animated tag removal", "tag input/autocomplete", "max-tag-count collapse"],
+  "unknowns": ["interactive tag selection/toggle behavior", "tag group wrapping rules"],
+  "tokensConsumed": [
+    "--spacing-xs",
+    "--spacing-sm",
+    "--radius-default",
+    "--radius-full",
+    "--font-family",
+    "--font-size-md",
+    "--font-size-sm",
+    "--font-size-xs",
+    "--color-bg-5",
+    "--color-bg-white",
+    "--color-text-2",
+    "--color-text-3",
+    "--color-border",
+    "--color-border-light",
+    "--color-primary",
+    "--color-success",
+    "--color-warning",
+    "--color-danger",
+    "--color-tag-info-bg",
+    "--color-tag-success-bg",
+    "--color-tag-warning-bg",
+    "--color-tag-danger-bg",
+    "--success-1",
+    "--success-3",
+    "--success-5",
+    "--warning-1",
+    "--warning-3",
+    "--warning-4",
+    "--danger-1",
+    "--danger-3",
+    "--danger-5",
+    "--primary-1",
+    "--primary-3",
+    "--grey-5"
+  ],
+  "domAnatomy": {
+    "root": {
+      "tag": "span",
+      "class": "tag tag-{type} tag-{size} | status-tag status-tag-{size} status-tag-{level} status-tag-{variant} | dtag dtag-{size} dtag-{shape} dtag-{style} dtag-{color} | atag atag-{size}",
+      "children": [
+        { "tag": "span", "class": "tag-icon | status-tag-icon", "optional": true },
+        { "tag": "text", "content": "label" },
+        { "tag": "svg", "class": "tag-close", "optional": true }
+      ]
+    }
+  },
+  "provenance": {
+    "preview": "preview/ui-tag.html",
+    "source": "structured-spec",
+    "css": { "file": "preview/ui-tag.html", "marker": "inline <style>" }
+  }
+}

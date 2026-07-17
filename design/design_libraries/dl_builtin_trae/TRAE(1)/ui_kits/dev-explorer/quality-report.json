@@ -1,0 +1,12 @@
+{
+  "kitType": "dev-explorer",
+  "screensGenerated": 2,
+  "coreComponentsUsed": ["buttons", "nav-list", "activity-rail", "file-tree", "tabs", "chat-composer", "status-bar"],
+  "supportComponentsUsed": ["buttons", "nav-list", "activity-rail", "file-tree", "tabs", "chat-composer", "status-bar"],
+  "previewClassReuseRate": 0.78,
+  "inventedComponents": [],
+  "interactiveStatesRendered": ["hover", "disabled", "selected", "active"],
+  "primaryActionPerScreen": true,
+  "mockDataDensity": { "tableRows": 0, "chartPoints": 0 },
+  "warnings": []
+}

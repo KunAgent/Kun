@@ -1,0 +1,91 @@
+{
+  "schemaVersion": 1,
+  "headBoilerplate": "<link rel=\"stylesheet\" href=\"../../colors_and_type.css\">",
+  "corePreviewComponents": [
+    {
+      "slug": "buttons",
+      "reason": "fixed slot \"button\"; semantic=button:0.75; policy=fixed-slots-first",
+      "evidenceFile": "components/buttons.json",
+      "priority": 1,
+      "slot": "button"
+    },
+    {
+      "slug": "nav-list",
+      "reason": "fixed slot \"navigation\"; semantic=navigation:0.75; policy=fixed-slots-first",
+      "evidenceFile": "components/nav-list.json",
+      "priority": 2,
+      "slot": "navigation"
+    }
+  ],
+  "supportEvidenceComponents": [
+    { "slug": "menu", "reason": "fixed slot \"menu\"; semantic=menu:0.75", "evidenceFile": "components/menu.json", "priority": 3, "slot": "menu" },
+    { "slug": "cards", "reason": "fixed slot \"card\"; semantic=card:0.75", "evidenceFile": "components/cards.json", "priority": 4, "slot": "card" },
+    { "slug": "tag", "reason": "fixed slot \"tag\"; semantic=tag:0.75", "evidenceFile": "components/tag.json", "priority": 5, "slot": "tag" },
+    { "slug": "table", "reason": "fixed slot \"table\"; semantic=table:0.75", "evidenceFile": "components/table.json", "priority": 6, "slot": "table" },
+    { "slug": "table-panel", "reason": "support; semantic=table:0.7", "evidenceFile": "components/table-panel.json", "priority": 7 },
+    { "slug": "tabs", "reason": "support slot \"tabs\"; semantic=tabs:0.75", "evidenceFile": "components/tabs.json", "priority": 8, "slot": "tabs" },
+    { "slug": "editor-tabs", "reason": "support; scenario=ide-workbench", "evidenceFile": "components/editor-tabs.json", "priority": 9 },
+    { "slug": "alert", "reason": "support; semantic=alert:0.75", "evidenceFile": "components/alert.json", "priority": 10 },
+    { "slug": "avatar", "reason": "support; semantic=avatar:0.75", "evidenceFile": "components/avatar.json", "priority": 11 },
+    { "slug": "dialog", "reason": "support; semantic=dialog:0.75", "evidenceFile": "components/dialog.json", "priority": 12 },
+    { "slug": "forms", "reason": "support; semantic=input:0.75", "evidenceFile": "components/forms.json", "priority": 13 },
+    { "slug": "pagination", "reason": "support; semantic=pagination:0.75", "evidenceFile": "components/pagination.json", "priority": 14 },
+    { "slug": "activity-rail", "reason": "support; scenario=ide-workbench", "evidenceFile": "components/activity-rail.json", "priority": 15 },
+    { "slug": "chat-composer", "reason": "support; scenario=ai-workspace", "evidenceFile": "components/chat-composer.json", "priority": 16 },
+    { "slug": "file-tree", "reason": "support; scenario=ide-workbench", "evidenceFile": "components/file-tree.json", "priority": 17 },
+    { "slug": "kbd", "reason": "support; scenario=shortcuts", "evidenceFile": "components/kbd.json", "priority": 18 },
+    { "slug": "page-header", "reason": "support; semantic=header:0.75", "evidenceFile": "components/page-header.json", "priority": 19 },
+    { "slug": "setting-row", "reason": "support; scenario=settings-panel", "evidenceFile": "components/setting-row.json", "priority": 20 },
+    { "slug": "stat-card", "reason": "support; scenario=analytics", "evidenceFile": "components/stat-card.json", "priority": 21 },
+    { "slug": "status-bar", "reason": "support; scenario=ide-workbench", "evidenceFile": "components/status-bar.json", "priority": 22 },
+    { "slug": "workbench-titlebar", "reason": "support; scenario=ide-workbench", "evidenceFile": "components/workbench-titlebar.json", "priority": 23 }
+  ],
+  "allowedComponents": [
+    "buttons",
+    "nav-list",
+    "menu",
+    "cards",
+    "tag",
+    "table",
+    "table-panel",
+    "tabs",
+    "editor-tabs",
+    "alert",
+    "avatar",
+    "dialog",
+    "forms",
+    "pagination",
+    "activity-rail",
+    "chat-composer",
+    "file-tree",
+    "kbd",
+    "page-header",
+    "setting-row",
+    "stat-card",
+    "status-bar",
+    "workbench-titlebar"
+  ],
+  "screenBlueprints": [
+    { "name": null, "componentSlugs": [], "role": "primary" },
+    { "name": null, "componentSlugs": [], "role": "secondary" },
+    { "name": null, "componentSlugs": [], "role": "secondary" }
+  ],
+  "productContext": {
+    "kitType": null,
+    "productType": null,
+    "dominantCopy": [],
+    "pageNames": [],
+    "selectedFrameNames": []
+  },
+  "selectionPolicy": "fixed-slots-first",
+  "slotAssignments": [
+    { "slot": "button", "slug": "buttons", "reason": "semantic" },
+    { "slot": "navigation", "slug": "nav-list", "reason": "semantic" }
+  ],
+  "missingFixedSlots": [],
+  "fallbackComponents": [],
+  "needsNarrative": false,
+  "forbiddenInventedComponents": [],
+  "lowConfidence": false,
+  "warnings": []
+}

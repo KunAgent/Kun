@@ -1,0 +1,224 @@
+{
+  "schemaVersion": 2,
+  "slug": "alert",
+  "name": "Alert",
+  "category": "feedback",
+  "sourceKind": "structured-spec",
+  "confidence": "medium",
+  "semanticTypeCandidates": [
+    "notification",
+    "alert",
+    "toast",
+    "banner"
+  ],
+  "variantDimensions": {
+    "tone": [
+      "error",
+      "warning",
+      "alert",
+      "information"
+    ],
+    "layout": [
+      "simple",
+      "complex"
+    ]
+  },
+  "representativeVariants": [
+    {
+      "tone": "information",
+      "layout": "simple"
+    },
+    {
+      "tone": "error",
+      "layout": "complex"
+    }
+  ],
+  "anatomy": [
+    "icon-leading",
+    "title",
+    "body",
+    "action-trailing",
+    "close-button"
+  ],
+  "structurePatterns": [
+    "matrix grid: 8 cells (4 tones x 2 layouts)"
+  ],
+  "usageHints": [
+    "Inline status colors via --status-{success|alert|warning|error}-* tokens",
+    "Use --bg-overlay-l3 surface tint with --border-neutral-l1"
+  ],
+  "doNotInvent": [
+    "Do not introduce a 5th tone beyond what tokens provide"
+  ],
+  "unknowns": [
+    "motion / dismiss timing not specified in source"
+  ],
+  "tokensConsumed": [
+    "--bg-base-secondary",
+    "--body-sm-font-size",
+    "--border-neutral-l1",
+    "--font-weight-medium",
+    "--icon-default",
+    "--radius-4",
+    "--spacer-12",
+    "--spacer-16",
+    "--spacer-4",
+    "--status-error-default",
+    "--status-primary-default",
+    "--status-success-default",
+    "--status-warning-default",
+    "--text-default",
+    "--text-secondary"
+  ],
+  "domAnatomy": {
+    "root": {
+      "tag": "div",
+      "class": "notif-matrix",
+      "children": [
+        {
+          "tag": "div"
+        },
+        {
+          "tag": "div",
+          "children": [
+            {
+              "tag": "span",
+              "class": "notif-col__head",
+              "text": "Simple"
+            }
+          ]
+        },
+        {
+          "tag": "div",
+          "children": [
+            {
+              "tag": "span",
+              "class": "notif-col__head",
+              "text": "Complex"
+            }
+          ]
+        },
+        {
+          "tag": "div",
+          "children": [
+            {
+              "tag": "span",
+              "class": "notif-row__label",
+              "text": "Error"
+            }
+          ]
+        },
+        {
+          "tag": "div",
+          "children": [
+            {
+              "tag": "div",
+              "class": "ds-notif ds-notif--simple ds-notif--error"
+            }
+          ]
+        },
+        {
+          "tag": "div",
+          "children": [
+            {
+              "tag": "div",
+              "class": "ds-notif ds-notif--error"
+            }
+          ]
+        },
+        {
+          "tag": "div",
+          "children": [
+            {
+              "tag": "span",
+              "class": "notif-row__label",
+              "text": "Warning"
+            }
+          ]
+        },
+        {
+          "tag": "div",
+          "children": [
+            {
+              "tag": "div",
+              "class": "ds-notif ds-notif--simple ds-notif--warning"
+            }
+          ]
+        },
+        {
+          "tag": "div",
+          "children": [
+            {
+              "tag": "div",
+              "class": "ds-notif ds-notif--warning"
+            }
+          ]
+        },
+        {
+          "tag": "div",
+          "children": [
+            {
+              "tag": "span",
+              "class": "notif-row__label",
+              "text": "Alert"
+            }
+          ]
+        },
+        {
+          "tag": "div",
+          "children": [
+            {
+              "tag": "div",
+              "class": "ds-notif ds-notif--simple ds-notif--alert"
+            }
+          ]
+        },
+        {
+          "tag": "div",
+          "children": [
+            {
+              "tag": "div",
+              "class": "ds-notif ds-notif--alert"
+            }
+          ]
+        },
+        {
+          "tag": "div",
+          "children": [
+            {
+              "tag": "span",
+              "class": "notif-row__label",
+              "text": "Information"
+            }
+          ]
+        },
+        {
+          "tag": "div",
+          "children": [
+            {
+              "tag": "div",
+              "class": "ds-notif ds-notif--simple ds-notif--info"
+            }
+          ]
+        },
+        {
+          "tag": "div",
+          "children": [
+            {
+              "tag": "div",
+              "class": "ds-notif ds-notif--info"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "provenance": {
+    "preview": "preview/component-alert.html",
+    "source": "previews/alert.html",
+    "css": {
+      "file": "components.css",
+      "marker": "── Alert ──"
+    }
+  }
+}

@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Button</title>
+  <link rel="stylesheet" href="../colors_and_type.css" />
+  <link rel="stylesheet" href="../scaffold.css" />
+  <link rel="stylesheet" href="../components.css" />
+  <style>
+    .matrix { display: grid; grid-template-columns: 120px repeat(4, 1fr); gap: var(--spacer-12) var(--spacer-12); align-items: center; }
+    .matrix__col-h, .matrix__row-h { font-size: var(--body-xs-font-size); color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.06em; }
+    .matrix__row-h { justify-self: start; }
+    .matrix__col-h { justify-self: start; }
+    .size-tag {
+      display: inline-flex; align-items: center; padding: 0 var(--spacer-6); height: 18px;
+      background: var(--bg-overlay-l2); color: var(--text-secondary);
+      border: 1px solid var(--border-neutral-l1); border-radius: var(--radius-2);
+      font-size: var(--body-xs-font-size); font-family: var(--code-editor-font-family);
+      margin-bottom: var(--spacer-12);
+    }
+    .group { padding: var(--spacer-16); border: 1px dashed var(--border-neutral-l1); border-radius: var(--radius-4); margin-bottom: var(--spacer-24); }
+    .group__title { font-size: var(--body-xs-font-size); color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: var(--spacer-12); }
+
+    /* @component-css-start */
+    /* ===== Buttons =====
+     * Hierarchy (one BRAND/green CTA per page max):
+     *   primary  → high-contrast neutral (white). Default "main action".
+     *   secondary→ neutral surface, used for any neighbour action.
+     *   tertiary → ghost (no fill, no border), used for dense toolbars / inline.
+     *   danger / danger-subtle / warning / brand / link.
+     * Sizes follow the Figma "Sm / Default / Large":  24 / 28 / 32 / 36
+     * Geek hard-edged — radii are tight (4 / 6 max).
+     */
+    .ds-btn {
+      display: inline-flex; align-items: center; justify-content: center;
+      gap: var(--spacer-6);
+      padding: 0 var(--spacer-12); height: 28px;
+      border-radius: var(--radius-4);
+      border: 1px solid transparent;
+      cursor: pointer; user-select: none; white-space: nowrap;
+      font-family: var(--body-sm-strong-font-family);
+      font-size: var(--body-sm-strong-font-size);
+      line-height: 1;
+      font-weight: var(--body-sm-strong-font-weight);
+      transition: background .12s ease, color .12s ease, border-color .12s ease, opacity .12s ease;
+    }
+    .ds-btn .icon { color: currentColor; }
+    .ds-btn--sm { height: 24px; padding: 0 var(--spacer-8); border-radius: var(--radius-4); font-size: var(--body-xs-font-size); }
+    .ds-btn--md { height: 28px; padding: 0 var(--spacer-12); border-radius: var(--radius-4); }
+    .ds-btn--lg { height: 32px; padding: 0 var(--spacer-16); border-radius: var(--radius-4); font-size: var(--body-base-font-size); }
+
+    /* PRIMARY = high-contrast neutral (white). Use this when you don't need
+     * brand emphasis. Page rule: at most ONE brand button per page; every other
+     * "main" action falls back to this neutral primary. */
+    .ds-btn--primary { background: var(--text-default); color: var(--bg-base-default); border-color: var(--text-default); }
+    .ds-btn--primary:hover { background: var(--text-default-hover); }
+    .ds-btn--primary:active { background: var(--text-secondary); border-color: var(--text-secondary); }
+    .ds-btn--primary[disabled] { background: var(--bg-overlay-l3); color: var(--text-tertiary); border-color: var(--border-neutral-l1); cursor: not-allowed; }
+
+    /* SECONDARY = neutral surface */
+    .ds-btn--secondary { background: var(--bg-overlay-l2); color: var(--text-default); border-color: var(--border-neutral-l1); }
+    .ds-btn--secondary:hover { background: var(--bg-overlay-l3); border-color: var(--border-neutral-l2); }
+    .ds-btn--secondary:active { background: var(--bg-overlay-l1); }
+    .ds-btn--secondary[disabled] { color: var(--text-tertiary); cursor: not-allowed; opacity: .6; }
+
+    /* TERTIARY = ghost (no border, no fill) */
+    .ds-btn--tertiary,
+    .ds-btn--ghost { background: transparent; color: var(--text-default); border-color: transparent; }
+    .ds-btn--tertiary:hover,
+    .ds-btn--ghost:hover { background: var(--bg-overlay-l2); }
+    .ds-btn--tertiary:active,
+    .ds-btn--ghost:active { background: var(--bg-overlay-l1); }
+    .ds-btn--tertiary[disabled],
+    .ds-btn--ghost[disabled] { color: var(--text-tertiary); cursor: not-allowed; }
+
+    /* DANGER strong (filled) */
+    .ds-btn--danger,
+    .ds-btn--danger-strong {
+      background: var(--status-error-default); color: var(--special-white);
+      border-color: var(--status-error-default);
+    }
+    .ds-btn--danger:hover,
+    .ds-btn--danger-strong:hover { filter: brightness(0.92); }
+    .ds-btn--danger:active,
+    .ds-btn--danger-strong:active { filter: brightness(0.84); }
+    .ds-btn--danger[disabled],
+    .ds-btn--danger-strong[disabled] { opacity: .5; cursor: not-allowed; }
+
+    /* DANGER subtle (tinted surface) */
+    .ds-btn--danger-subtle {
+      background: var(--status-error-surface-l1);
+      color: var(--status-error-default);
+      border-color: var(--status-error-surface-l2);
+    }
+    .ds-btn--danger-subtle:hover { background: var(--status-error-surface-l2); }
+    .ds-btn--danger-subtle:active { background: var(--status-error-surface-l1); }
+    .ds-btn--danger-subtle[disabled] { opacity: .5; cursor: not-allowed; }
+
+    /* WARNING */
+    .ds-btn--warning {
+      background: var(--status-warning-default); color: var(--text-onbrand);
+      border-color: var(--status-warning-default);
+    }
+    .ds-btn--warning:hover { filter: brightness(0.94); }
+    .ds-btn--warning:active { filter: brightness(0.86); }
+    .ds-btn--warning[disabled] { opacity: .5; cursor: not-allowed; }
+
+    /* BRAND — exactly the Figma "Brand" row. Use AT MOST one per page. */
+    .ds-btn--brand { background: var(--bg-brand); color: var(--text-onbrand); border-color: var(--bg-brand); }
+    .ds-btn--brand:hover { background: var(--bg-brand-hover); border-color: var(--bg-brand-hover); }
+    .ds-btn--brand:active { filter: brightness(0.92); }
+    .ds-btn--brand[disabled] { background: var(--bg-brand-disabled, var(--bg-overlay-l3)); border-color: transparent; color: var(--text-tertiary); cursor: not-allowed; }
+
+    /* LINK */
+    .ds-btn--link { background: transparent; color: var(--text-default); border-color: transparent; padding: 0; height: auto; }
+    .ds-btn--link:hover { color: var(--text-default-hover); text-decoration: underline; }
+    .ds-btn--link[disabled] { color: var(--text-tertiary); text-decoration: none; cursor: not-allowed; }
+
+    /* ICON BUTTON — square */
+    .ds-btn--icon { padding: 0; width: 28px; justify-content: center; }
+    .ds-btn--icon.ds-btn--sm { width: 24px; }
+    .ds-btn--icon.ds-btn--lg { width: 32px; }
+
+    /* BUTTON GROUP — segmented, hard edged */
+    .ds-btn-group { display: inline-flex; }
+    .ds-btn-group > .ds-btn { border-radius: 0; margin-left: -1px; }
+    .ds-btn-group > .ds-btn:first-child { border-top-left-radius: var(--radius-4); border-bottom-left-radius: var(--radius-4); margin-left: 0; }
+    .ds-btn-group > .ds-btn:last-child  { border-top-right-radius: var(--radius-4); border-bottom-right-radius: var(--radius-4); }
+    /* @component-css-end */
+  </style>
+</head>
+<body>
+  <div class="pv-header">
+    <h1>Button</h1>
+    <p>
+      Eight variants × three sizes × four states. <strong style="color: var(--text-default);">At most one Brand (green) button per page</strong> — every other primary action falls back to the neutral white <code>--primary</code> button. Use Tertiary / Link inside dense toolbars or rows.
+    </p>
+  </div>
+
+  <!-- ======== Variant rules ======== -->
+  <div class="pv-section">
+    <div class="pv-section__title">Hierarchy</div>
+    <p class="text-secondary" style="font-size: var(--body-sm-font-size); margin-bottom: var(--spacer-16);">
+      Read top → bottom: order of emphasis on a page.
+    </p>
+    <div class="stack-12">
+      <div class="row"><span class="size-tag" style="margin:0;">Brand · max 1 per page</span><button class="ds-btn ds-btn--brand"><img src="../assets/icons/zap.0c0c0d.svg" width="14" height="14" alt="zap" class="icon"><span>Generate spec</span></button></div>
+      <div class="row"><span class="size-tag" style="margin:0;">Primary · neutral</span><button class="ds-btn ds-btn--primary"><span>Save changes</span></button></div>
+      <div class="row"><span class="size-tag" style="margin:0;">Secondary</span><button class="ds-btn ds-btn--secondary"><span>Cancel</span></button></div>
+      <div class="row"><span class="size-tag" style="margin:0;">Tertiary · ghost</span><button class="ds-btn ds-btn--tertiary"><span>Skip</span></button></div>
+      <div class="row"><span class="size-tag" style="margin:0;">Danger · strong</span><button class="ds-btn ds-btn--danger-strong"><span>Delete</span></button></div>
+      <div class="row"><span class="size-tag" style="margin:0;">Danger · subtle</span><button class="ds-btn ds-btn--danger-subtle"><span>Disconnect</span></button></div>
+      <div class="row"><span class="size-tag" style="margin:0;">Warning</span><button class="ds-btn ds-btn--warning"><span>Force restart</span></button></div>
+      <div class="row"><span class="size-tag" style="margin:0;">Link</span><button class="ds-btn ds-btn--link"><span>Read the docs</span></button></div>
+    </div>
+  </div>
+
+  <!-- ======== Sm matrix ======== -->
+  <div class="pv-section">
+    <div class="pv-section__title">Variant × State (Sm · 24px)</div>
+    <span class="size-tag">Sm</span>
+    <div class="matrix">
+      <div></div>
+      <div class="matrix__col-h">Default</div>
+      <div class="matrix__col-h">Hover</div>
+      <div class="matrix__col-h">Active</div>
+      <div class="matrix__col-h">Disabled</div>
+
+      <div class="matrix__row-h">Primary</div>
+      <div><button class="ds-btn ds-btn--sm ds-btn--primary"><img src="../assets/icons/check.svg" width="12" height="12" alt="check" class="icon"><span>Button</span></button></div>
+      <div><button class="ds-btn ds-btn--sm ds-btn--primary" style="background:#fff;"><img src="../assets/icons/check.svg" width="12" height="12" alt="check" class="icon"><span>Button</span></button></div>
+      <div><button class="ds-btn ds-btn--sm ds-btn--primary" style="background:var(--text-secondary);border-color:var(--text-secondary);"><img src="../assets/icons/check.svg" width="12" height="12" alt="check" class="icon"><span>Button</span></button></div>
+      <div><button class="ds-btn ds-btn--sm ds-btn--primary" disabled><img src="../assets/icons/check.svg" width="12" height="12" alt="check" class="icon"><span>Button</span></button></div>
+
+      <div class="matrix__row-h">Secondary</div>
+      <div><button class="ds-btn ds-btn--sm ds-btn--secondary"><img src="../assets/icons/check.svg" width="12" height="12" alt="check" class="icon"><span>Button</span></button></div>
+      <div><button class="ds-btn ds-btn--sm ds-btn--secondary" style="background:var(--bg-overlay-l3);border-color:var(--border-neutral-l2);"><img src="../assets/icons/check.svg" width="12" height="12" alt="check" class="icon"><span>Button</span></button></div>
+      <div><button class="ds-btn ds-btn--sm ds-btn--secondary" style="background:var(--bg-overlay-l1);"><img src="../assets/icons/check.svg" width="12" height="12" alt="check" class="icon"><span>Button</span></button></div>
+      <div><button class="ds-btn ds-btn--sm ds-btn--secondary" disabled><img src="../assets/icons/check.svg" width="12" height="12" alt="check" class="icon"><span>Button</span></button></div>
+
+      <div class="matrix__row-h">Tertiary</div>
+      <div><button class="ds-btn ds-btn--sm ds-btn--tertiary"><img src="../assets/icons/check.svg" width="12" height="12" alt="check" class="icon"><span>Button</span></button></div>
+      <div><button class="ds-btn ds-btn--sm ds-btn--tertiary" style="background:var(--bg-overlay-l2);"><img src="../assets/icons/check.svg" width="12" height="12" alt="check" class="icon"><span>Button</span></button></div>
+      <div><button class="ds-btn ds-btn--sm ds-btn--tertiary" style="background:var(--bg-overlay-l1);"><img src="../assets/icons/check.svg" width="12" height="12" alt="check" class="icon"><span>Button</span></button></div>
+      <div><button class="ds-btn ds-btn--sm ds-btn--tertiary" disabled><img src="../assets/icons/check.svg" width="12" height="12" alt="check" class="icon"><span>Button</span></button></div>
+
+      <div class="matrix__row-h">Danger · Strong</div>
+      <div><button class="ds-btn ds-btn--sm ds-btn--danger-strong"><img src="../assets/icons/trash.svg" width="12" height="12" alt="trash" class="icon"><span>Button</span></button></div>
+      <div><button class="ds-btn ds-btn--sm ds-btn--danger-strong" style="filter:brightness(.92);"><img src="../assets/icons/trash.svg" width="12" height="12" alt="trash" class="icon"><span>Button</span></button></div>
+      <div><button class="ds-btn ds-btn--sm ds-btn--danger-strong" style="filter:brightness(.84);"><img src="../assets/icons/trash.svg" width="12" height="12" alt="trash" class="icon"><span>Button</span></button></div>
+      <div><button class="ds-btn ds-btn--sm ds-btn--danger-strong" disabled><img src="../assets/icons/trash.svg" width="12" height="12" alt="trash" class="icon"><span>Button</span></button></div>
+
+      <div class="matrix__row-h">Danger · Subtle</div>
+      <div><button class="ds-btn ds-btn--sm ds-btn--danger-subtle"><img src="../assets/icons/trash.svg" width="12" height="12" alt="trash" class="icon"><span>Button</span></button></div>
+      <div><button class="ds-btn ds-btn--sm ds-btn--danger-subtle" style="background:var(--status-error-surface-l2);"><img src="../assets/icons/trash.svg" width="12" height="12" alt="trash" class="icon"><span>Button</span></button></div>
+      <div><button class="ds-btn ds-btn--sm ds-btn--danger-subtle" style="background:var(--status-error-surface-l1);"><img src="../assets/icons/trash.svg" width="12" height="12" alt="trash" class="icon"><span>Button</span></button></div>
+      <div><button class="ds-btn ds-btn--sm ds-btn--danger-subtle" disabled><img src="../assets/icons/trash.svg" width="12" height="12" alt="trash" class="icon"><span>Button</span></button></div>
+
+      <div class="matrix__row-h">Warning</div>
+      <div><button class="ds-btn ds-btn--sm ds-btn--warning"><img src="../assets/icons/alert.svg" width="12" height="12" alt="alert" class="icon"><span>Button</span></button></div>
+      <div><button class="ds-btn ds-btn--sm ds-btn--warning" style="filter:brightness(.94);"><img src="../assets/icons/alert.svg" width="12" height="12" alt="alert" class="icon"><span>Button</span></button></div>
+      <div><button class="ds-btn ds-btn--sm ds-btn--warning" style="filter:brightness(.86);"><img src="../assets/icons/alert.svg" width="12" height="12" alt="alert" class="icon"><span>Button</span></button></div>
+      <div><button class="ds-btn ds-btn--sm ds-btn--warning" disabled><img src="../assets/icons/alert.svg" width="12" height="12" alt="alert" class="icon"><span>Button</span></button></div>
+
+      <div class="matrix__row-h">Brand</div>
+      <div><button class="ds-btn ds-btn--sm ds-btn--brand"><img src="../assets/icons/zap.0c0c0d.svg" width="12" height="12" alt="zap" class="icon"><span>Button</span></button></div>
+      <div><button class="ds-btn ds-btn--sm ds-btn--brand" style="background:var(--bg-brand-hover);border-color:var(--bg-brand-hover);"><img src="../assets/icons/zap.0c0c0d.svg" width="12" height="12" alt="zap" class="icon"><span>Button</span></button></div>
+      <div><button class="ds-btn ds-btn--sm ds-btn--brand" style="filter:brightness(.92);"><img src="../assets/icons/zap.0c0c0d.svg" width="12" height="12" alt="zap" class="icon"><span>Button</span></button></div>
+      <div><button class="ds-btn ds-btn--sm ds-btn--brand" disabled><img src="../assets/icons/zap.0c0c0d.svg" width="12" height="12" alt="zap" class="icon"><span>Button</span></button></div>
+
+      <div class="matrix__row-h">Link</div>
+      <div><button class="ds-btn ds-btn--sm ds-btn--link"><span>Button</span></button></div>
+      <div><button class="ds-btn ds-btn--sm ds-btn--link" style="text-decoration:underline;"><span>Button</span></button></div>
+      <div><button class="ds-btn ds-btn--sm ds-btn--link" style="color:var(--text-secondary);"><span>Button</span></button></div>
+      <div><button class="ds-btn ds-btn--sm ds-btn--link" disabled><span>Button</span></button></div>
+    </div>
+  </div>
+
+  <!-- ======== Default matrix ======== -->
+  <div class="pv-section">
+    <div class="pv-section__title">Variant × State (Default · 28px)</div>
+    <span class="size-tag">Default</span>
+    <div class="matrix">
+      <div></div>
+      <div class="matrix__col-h">Default</div>
+      <div class="matrix__col-h">Hover</div>
+      <div class="matrix__col-h">Active</div>
+      <div class="matrix__col-h">Disabled</div>
+
+      <div class="matrix__row-h">Primary</div>
+      <div><button class="ds-btn ds-btn--primary"><img src="../assets/icons/check.svg" width="14" height="14" alt="check" class="icon"><span>Button</span></button></div>
+      <div><button class="ds-btn ds-btn--primary" style="background:#fff;"><img src="../assets/icons/check.svg" width="14" height="14" alt="check" class="icon"><span>Button</span></button></div>
+      <div><button class="ds-btn ds-btn--primary" style="background:var(--text-secondary);border-color:var(--text-secondary);"><img src="../assets/icons/check.svg" width="14" height="14" alt="check" class="icon"><span>Button</span></button></div>
+      <div><button class="ds-btn ds-btn--primary" disabled><img src="../assets/icons/check.svg" width="14" height="14" alt="check" class="icon"><span>Button</span></button></div>
+
+      <div class="matrix__row-h">Secondary</div>
+      <div><button class="ds-btn ds-btn--secondary"><img src="../assets/icons/check.svg" width="14" height="14" alt="check" class="icon"><span>Button</span></button></div>
+      <div><button class="ds-btn ds-btn--secondary" style="background:var(--bg-overlay-l3);border-color:var(--border-neutral-l2);"><img src="../assets/icons/check.svg" width="14" height="14" alt="check" class="icon"><span>Button</span></button></div>
+      <div><button class="ds-btn ds-btn--secondary" style="background:var(--bg-overlay-l1);"><img src="../assets/icons/check.svg" width="14" height="14" alt="check" class="icon"><span>Button</span></button></div>
+      <div><button class="ds-btn ds-btn--secondary" disabled><img src="../assets/icons/check.svg" width="14" height="14" alt="check" class="icon"><span>Button</span></button></div>
+
+      <div class="matrix__row-h">Tertiary</div>
+      <div><button class="ds-btn ds-btn--tertiary"><img src="../assets/icons/check.svg" width="14" height="14" alt="check" class="icon"><span>Button</span></button></div>
+      <div><button class="ds-btn ds-btn--tertiary" style="background:var(--bg-overlay-l2);"><img src="../assets/icons/check.svg" width="14" height="14" alt="check" class="icon"><span>Button</span></button></div>
+      <div><button class="ds-btn ds-btn--tertiary" style="background:var(--bg-overlay-l1);"><img src="../assets/icons/check.svg" width="14" height="14" alt="check" class="icon"><span>Button</span></button></div>
+      <div><button class="ds-btn ds-btn--tertiary" disabled><img src="../assets/icons/check.svg" width="14" height="14" alt="check" class="icon"><span>Button</span></button></div>
+
+      <div class="matrix__row-h">Danger · Strong</div>
+      <div><button class="ds-btn ds-btn--danger-strong"><img src="../assets/icons/trash.svg" width="14" height="14" alt="trash" class="icon"><span>Button</span></button></div>
+      <div><button class="ds-btn ds-btn--danger-strong" style="filter:brightness(.92);"><img src="../assets/icons/trash.svg" width="14" height="14" alt="trash" class="icon"><span>Button</span></button></div>
+      <div><button class="ds-btn ds-btn--danger-strong" style="filter:brightness(.84);"><img src="../assets/icons/trash.svg" width="14" height="14" alt="trash" class="icon"><span>Button</span></button></div>
+      <div><button class="ds-btn ds-btn--danger-strong" disabled><img src="../assets/icons/trash.svg" width="14" height="14" alt="trash" class="icon"><span>Button</span></button></div>
+
+      <div class="matrix__row-h">Danger · Subtle</div>
+      <div><button class="ds-btn ds-btn--danger-subtle"><img src="../assets/icons/trash.svg" width="14" height="14" alt="trash" class="icon"><span>Button</span></button></div>
+      <div><button class="ds-btn ds-btn--danger-subtle" style="background:var(--status-error-surface-l2);"><img src="../assets/icons/trash.svg" width="14" height="14" alt="trash" class="icon"><span>Button</span></button></div>
+      <div><button class="ds-btn ds-btn--danger-subtle" style="background:var(--status-error-surface-l1);"><img src="../assets/icons/trash.svg" width="14" height="14" alt="trash" class="icon"><span>Button</span></button></div>
+      <div><button class="ds-btn ds-btn--danger-subtle" disabled><img src="../assets/icons/trash.svg" width="14" height="14" alt="trash" class="icon"><span>Button</span></button></div>
+
+      <div class="matrix__row-h">Warning</div>
+      <div><button class="ds-btn ds-btn--warning"><img src="../assets/icons/alert.svg" width="14" height="14" alt="alert" class="icon"><span>Button</span></button></div>
+      <div><button class="ds-btn ds-btn--warning" style="filter:brightness(.94);"><img src="../assets/icons/alert.svg" width="14" height="14" alt="alert" class="icon"><span>Button</span></button></div>
+      <div><button class="ds-btn ds-btn--warning" style="filter:brightness(.86);"><img src="../assets/icons/alert.svg" width="14" height="14" alt="alert" class="icon"><span>Button</span></button></div>
+      <div><button class="ds-btn ds-btn--warning" disabled><img src="../assets/icons/alert.svg" width="14" height="14" alt="alert" class="icon"><span>Button</span></button></div>
+
+      <div class="matrix__row-h">Brand</div>
+      <div><button class="ds-btn ds-btn--brand"><img src="../assets/icons/zap.0c0c0d.svg" width="14" height="14" alt="zap" class="icon"><span>Button</span></button></div>
+      <div><button class="ds-btn ds-btn--brand" style="background:var(--bg-brand-hover);border-color:var(--bg-brand-hover);"><img src="../assets/icons/zap.0c0c0d.svg" width="14" height="14" alt="zap" class="icon"><span>Button</span></button></div>
+      <div><button class="ds-btn ds-btn--brand" style="filter:brightness(.92);"><img src="../assets/icons/zap.0c0c0d.svg" width="14" height="14" alt="zap" class="icon"><span>Button</span></button></div>
+      <div><button class="ds-btn ds-btn--brand" disabled><img src="../assets/icons/zap.0c0c0d.svg" width="14" height="14" alt="zap" class="icon"><span>Button</span></button></div>
+
+      <div class="matrix__row-h">Link</div>
+      <div><button class="ds-btn ds-btn--link"><span>Button</span></button></div>
+      <div><button class="ds-btn ds-btn--link" style="text-decoration:underline;"><span>Button</span></button></div>
+      <div><button class="ds-btn ds-btn--link" style="color:var(--text-secondary);"><span>Button</span></button></div>
+      <div><button class="ds-btn ds-btn--link" disabled><span>Button</span></button></div>
+    </div>
+  </div>
+
+  <!-- ======== Large matrix ======== -->
+  <div class="pv-section">
+    <div class="pv-section__title">Variant × State (Large · 32px)</div>
+    <span class="size-tag">Large</span>
+    <div class="matrix">
+      <div></div>
+      <div class="matrix__col-h">Default</div>
+      <div class="matrix__col-h">Hover</div>
+      <div class="matrix__col-h">Active</div>
+      <div class="matrix__col-h">Disabled</div>
+
+      <div class="matrix__row-h">Primary</div>
+      <div><button class="ds-btn ds-btn--lg ds-btn--primary"><img src="../assets/icons/check.svg" width="14" height="14" alt="check" class="icon"><span>Button</span></button></div>
+      <div><button class="ds-btn ds-btn--lg ds-btn--primary" style="background:#fff;"><img src="../assets/icons/check.svg" width="14" height="14" alt="check" class="icon"><span>Button</span></button></div>
+      <div><button class="ds-btn ds-btn--lg ds-btn--primary" style="background:var(--text-secondary);border-color:var(--text-secondary);"><img src="../assets/icons/check.svg" width="14" height="14" alt="check" class="icon"><span>Button</span></button></div>
+      <div><button class="ds-btn ds-btn--lg ds-btn--primary" disabled><img src="../assets/icons/check.svg" width="14" height="14" alt="check" class="icon"><span>Button</span></button></div>
+
+      <div class="matrix__row-h">Secondary</div>
+      <div><button class="ds-btn ds-btn--lg ds-btn--secondary"><img src="../assets/icons/check.svg" width="14" height="14" alt="check" class="icon"><span>Button</span></button></div>
+      <div><button class="ds-btn ds-btn--lg ds-btn--secondary" style="background:var(--bg-overlay-l3);border-color:var(--border-neutral-l2);"><img src="../assets/icons/check.svg" width="14" height="14" alt="check" class="icon"><span>Button</span></button></div>
+      <div><button class="ds-btn ds-btn--lg ds-btn--secondary" style="background:var(--bg-overlay-l1);"><img src="../assets/icons/check.svg" width="14" height="14" alt="check" class="icon"><span>Button</span></button></div>
+      <div><button class="ds-btn ds-btn--lg ds-btn--secondary" disabled><img src="../assets/icons/check.svg" width="14" height="14" alt="check" class="icon"><span>Button</span></button></div>
+
+      <div class="matrix__row-h">Brand</div>
+      <div><button class="ds-btn ds-btn--lg ds-btn--brand"><img src="../assets/icons/zap.0c0c0d.svg" width="14" height="14" alt="zap" class="icon"><span>Button</span></button></div>
+      <div><button class="ds-btn ds-btn--lg ds-btn--brand" style="background:var(--bg-brand-hover);border-color:var(--bg-brand-hover);"><img src="../assets/icons/zap.0c0c0d.svg" width="14" height="14" alt="zap" class="icon"><span>Button</span></button></div>
+      <div><button class="ds-btn ds-btn--lg ds-btn--brand" style="filter:brightness(.92);"><img src="../assets/icons/zap.0c0c0d.svg" width="14" height="14" alt="zap" class="icon"><span>Button</span></button></div>
+      <div><button class="ds-btn ds-btn--lg ds-btn--brand" disabled><img src="../assets/icons/zap.0c0c0d.svg" width="14" height="14" alt="zap" class="icon"><span>Button</span></button></div>
+    </div>
+  </div>
+
+  <!-- ======== Icon-only buttons ======== -->
+  <div class="pv-section">
+    <div class="pv-section__title">Icon button</div>
+    <div class="row">
+      <button class="ds-btn ds-btn--sm ds-btn--icon ds-btn--primary" aria-label="Confirm"><img src="../assets/icons/check.svg" width="12" height="12" alt="check" class="icon"></button>
+      <button class="ds-btn ds-btn--md ds-btn--icon ds-btn--primary" aria-label="Confirm"><img src="../assets/icons/check.svg" width="14" height="14" alt="check" class="icon"></button>
+      <button class="ds-btn ds-btn--lg ds-btn--icon ds-btn--primary" aria-label="Confirm"><img src="../assets/icons/check.svg" width="14" height="14" alt="check" class="icon"></button>
+      <span style="width:16px;"></span>
+      <button class="ds-btn ds-btn--sm ds-btn--icon ds-btn--secondary" aria-label="Settings"><img src="../assets/icons/settings.svg" width="12" height="12" alt="settings" class="icon"></button>
+      <button class="ds-btn ds-btn--md ds-btn--icon ds-btn--secondary" aria-label="Settings"><img src="../assets/icons/settings.svg" width="14" height="14" alt="settings" class="icon"></button>
+      <button class="ds-btn ds-btn--lg ds-btn--icon ds-btn--secondary" aria-label="Settings"><img src="../assets/icons/settings.svg" width="14" height="14" alt="settings" class="icon"></button>
+      <span style="width:16px;"></span>
+      <button class="ds-btn ds-btn--sm ds-btn--icon ds-btn--tertiary" aria-label="Close"><img src="../assets/icons/x.svg" width="12" height="12" alt="x" class="icon"></button>
+      <button class="ds-btn ds-btn--md ds-btn--icon ds-btn--tertiary" aria-label="Close"><img src="../assets/icons/x.svg" width="14" height="14" alt="x" class="icon"></button>
+      <button class="ds-btn ds-btn--lg ds-btn--icon ds-btn--tertiary" aria-label="Close"><img src="../assets/icons/x.svg" width="14" height="14" alt="x" class="icon"></button>
+    </div>
+  </div>
+
+  <!-- ======== Button group ======== -->
+  <div class="pv-section">
+    <div class="pv-section__title">Button group</div>
+    <div class="stack-12">
+      <div class="ds-btn-group">
+        <button class="ds-btn ds-btn--secondary"><img src="../assets/icons/layout.svg" width="14" height="14" alt="layout" class="icon"><span>Grid</span></button>
+        <button class="ds-btn ds-btn--secondary" style="background:var(--bg-overlay-l3);border-color:var(--border-neutral-l2);"><img src="../assets/icons/list.svg" width="14" height="14" alt="list" class="icon"><span>List</span></button>
+        <button class="ds-btn ds-btn--secondary"><img src="../assets/icons/layers.svg" width="14" height="14" alt="layers" class="icon"><span>Board</span></button>
+      </div>
+      <div class="ds-btn-group">
+        <button class="ds-btn ds-btn--sm ds-btn--secondary ds-btn--icon" aria-label="Bold"><strong>B</strong></button>
+        <button class="ds-btn ds-btn--sm ds-btn--secondary ds-btn--icon" aria-label="Italic"><em>I</em></button>
+        <button class="ds-btn ds-btn--sm ds-btn--secondary ds-btn--icon" aria-label="Underline"><span style="text-decoration:underline;">U</span></button>
+        <button class="ds-btn ds-btn--sm ds-btn--secondary ds-btn--icon" aria-label="Strike"><span style="text-decoration:line-through;">S</span></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ======== Page rule ======== -->
+  <div class="pv-section">
+    <div class="pv-section__title">Page composition rule</div>
+    <p class="text-secondary" style="font-size: var(--body-sm-font-size); margin-bottom: var(--spacer-12);">
+      A page may contain at most one Brand button. The toolbar example below: <em>Generate spec</em> is the brand CTA; the rest are neutral.
+    </p>
+    <div class="ds-card" style="display:flex; gap: var(--spacer-8); align-items:center;">
+      <span style="flex:1; color:var(--text-default); font-weight: var(--font-weight-strong);">design-tokens.css</span>
+      <button class="ds-btn ds-btn--tertiary"><img src="../assets/icons/copy.svg" width="14" height="14" alt="copy" class="icon"><span>Copy</span></button>
+      <button class="ds-btn ds-btn--secondary"><img src="../assets/icons/download.svg" width="14" height="14" alt="download" class="icon"><span>Export</span></button>
+      <button class="ds-btn ds-btn--brand"><img src="../assets/icons/zap.0c0c0d.svg" width="14" height="14" alt="zap" class="icon"><span>Generate spec</span></button>
+    </div>
+  </div>
+
+</body>
+</html>

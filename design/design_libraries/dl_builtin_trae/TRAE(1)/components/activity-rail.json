@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 2,
+  "slug": "activity-rail",
+  "name": "Activity Rail",
+  "category": "navigation",
+  "sourceKind": "structured-spec",
+  "confidence": "medium",
+  "semanticTypeCandidates": ["activity-bar", "icon-rail", "side-nav"],
+  "variantDimensions": {
+    "state": ["default", "active"]
+  },
+  "representativeVariants": [
+    { "state": "default" },
+    { "state": "active" }
+  ],
+  "anatomy": ["root", "btn", "btn.is-active", "divider", "spacer"],
+  "structurePatterns": [
+    "vertical column of icon buttons",
+    "active item shows left brand indicator bar",
+    "divider separates groups, spacer pushes trailing items to bottom"
+  ],
+  "usageHints": [
+    "Rail background --bg-base-secondary with --border-neutral-l1 right divider",
+    "Active button uses --bg-overlay-l3 plus a --bg-brand indicator pseudo-element",
+    "Hover uses --bg-overlay-l2",
+    "Group divider uses --border-neutral-l2"
+  ],
+  "doNotInvent": ["badge counts", "tooltips", "flyout panels"],
+  "unknowns": ["badge/notification dot styling", "collapsed width breakpoints"],
+  "tokensConsumed": [
+    "--spacer-4", "--spacer-8", "--bg-base-secondary", "--border-neutral-l1",
+    "--radius-8", "--bg-overlay-l2", "--bg-overlay-l3", "--radius-full", "--bg-brand", "--border-neutral-l2"
+  ],
+  "domAnatomy": {
+    "root": {
+      "tag": "nav",
+      "class": "ds-activityrail",
+      "children": [
+        { "tag": "button", "class": "ds-activityrail__btn is-active" },
+        { "tag": "button", "class": "ds-activityrail__btn" },
+        { "tag": "div", "class": "ds-activityrail__divider" },
+        { "tag": "span", "class": "ds-activityrail__spacer" },
+        { "tag": "button", "class": "ds-activityrail__btn" }
+      ]
+    }
+  },
+  "provenance": {
+    "preview": "preview/component-activity-rail.html",
+    "source": "structured-spec",
+    "css": { "file": "components.css", "marker": "── Activity Rail ──" }
+  }
+}

@@ -1,0 +1,14 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>body { margin: 0; padding: 12px; background: var(--background); color: var(--foreground); font-family: var(--font-sans); }.row { display: flex; align-items: center; gap: calc(var(--spacing)*2); flex-wrap: wrap; margin-bottom: calc(var(--spacing)*2); }.label { min-width: 84px; font-size: 10px; font-weight: 700; letter-spacing: var(--tracking-normal); text-transform: uppercase; color: var(--foreground); opacity: .68; }.chip { display: inline-flex; align-items: center; justify-content: center; min-height: 32px; padding: 0 calc(var(--spacing)*3); border: 1px solid var(--border); border-radius: var(--radius); background: var(--muted); color: var(--foreground); box-shadow: var(--shadow-xs); font: inherit; cursor: pointer; transition: filter .18s ease, transform .18s ease, box-shadow .18s ease; }.chip:hover { filter: brightness(.98); box-shadow: var(--shadow-sm); }.chip:focus-visible { outline: none; box-shadow: var(--shadow-sm),0 0 0 2px var(--ring); }.chip:active { transform: translateY(1px); }.chip[disabled] { opacity: .44; cursor: not-allowed; box-shadow: none; }.chip-primary { background: var(--primary); color: var(--primary-foreground); border-color: var(--primary); }.chip-secondary { background: var(--secondary); color: var(--secondary-foreground); border-color: var(--secondary); }.divider { height: 1px; margin: calc(var(--spacing)*3) 0; border: 0; background: var(--border); opacity: .7; }</style>
+</head>
+<body>
+<div class="row"><span class="label">primary</span><button class="chip">Strength</button><button class="chip chip-primary">HIIT</button><button class="chip" disabled>Recovery</button></div>
+<hr class="divider">
+<div class="row"><span class="label">alternate</span><button class="chip chip-secondary">Recovery</button><button class="chip chip-primary">Strength</button><button class="chip chip-secondary" disabled>HIIT</button></div>
+</body>
+</html>

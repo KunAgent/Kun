@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Goldentime Chart Panel</title>
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>body{margin:0;padding:12px;background:hsl(var(--background));color:hsl(var(--foreground));font:14px/1.45 var(--font-sans);letter-spacing:var(--tracking-normal)}.r{display:flex;gap:8px;align-items:flex-start;flex-wrap:wrap}.l{padding:6px 0 0;min-width:60px;color:hsl(var(--muted-foreground));font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase}.d{margin:8px 0;border:0;border-top:1px solid hsl(var(--border))}.p{display:grid;gap:7px;min-width:250px;max-width:312px;padding:12px;background:hsl(var(--card));color:hsl(var(--card-foreground));border:1px solid hsl(var(--border));border-radius:var(--radius);box-shadow:var(--shadow-xs)}.p:hover{box-shadow:var(--shadow-sm)}.z{opacity:.5;pointer-events:none}.m,.g{display:flex;justify-content:space-between;gap:8px;align-items:center;flex-wrap:wrap}.e,.g,.s{color:hsl(var(--muted-foreground));font-size:11px}.t{margin:0;font-size:18px;line-height:1.08}.v{font-size:28px;line-height:1}.x{padding:4px 8px;border:1px solid hsl(var(--border));border-radius:999px;background:hsl(var(--background));font:inherit;font-size:11px;color:inherit}.x:hover{background:hsl(var(--accent));color:hsl(var(--accent-foreground))}.c{height:94px;border:1px solid hsl(var(--border));border-radius:calc(var(--radius)*.55);background:linear-gradient(180deg,hsl(var(--muted)/.55),transparent 72%)}.k{display:flex;align-items:flex-end;gap:8px;padding:12px}.k i{flex:1;border-radius:999px 999px 4px 4px;background:hsl(var(--chart-2))}.k i:hover{transform:translateY(-2px)}.h1{height:24px}.h2{height:38px}.h3{height:48px}.h4{height:68px}.h5{height:80px}.n{display:grid;place-items:center;color:hsl(var(--muted-foreground));font-size:11px}.a{padding:14px}.b{display:flex;height:16px;overflow:hidden;border-radius:999px;background:hsl(var(--muted))}.b i{display:block;height:100%}.s1{width:44%;background:hsl(var(--chart-1))}.s2{width:31%;background:hsl(var(--chart-2))}.s3{width:25%;background:hsl(var(--chart-5))}.g b{display:inline-block;width:10px;height:10px;margin-right:6px;border-radius:999px;background:hsl(var(--chart-1));vertical-align:-1px}.g .c2{background:hsl(var(--chart-2))}.g .c5{background:hsl(var(--chart-5))}</style>
+</head>
+<body>
+<div class="r">
+<span class="l">trend</span>
+<article class="p">
+<div class="m"><span class="e">Revenue trend</span><button class="x">Q2</button></div>
+<h1 class="t">Revenue trend stays ahead</h1>
+<div class="m"><strong class="v">$4.8M</strong><span class="s">+12% vs target</span></div>
+<div class="c k" role="img" aria-label="Revenue trend chart"><i class="h1"></i><i class="h2"></i><i class="h3"></i><i class="h4"></i><i class="h5"></i></div>
+<div class="g"><span><b class="c2"></b>Booked revenue</span><span>Updated 2h ago</span></div>
+</article>
+<article class="p z" aria-disabled="true">
+<div class="m"><span class="e">Revenue trend</span><button class="x" disabled>Paused</button></div>
+<h1 class="t">Sync paused</h1>
+<div class="m"><strong class="v">--</strong><span class="s">Data refresh stopped</span></div>
+<div class="c n" aria-hidden="true">Awaiting warehouse refresh</div>
+<div class="g"><span><b class="c2"></b>Booked revenue</span><span>Disabled</span></div>
+</article>
+</div>
+<hr class="d">
+<div class="r">
+<span class="l">distribution</span>
+<article class="p">
+<div class="m"><span class="e">Conversion mix</span><button class="x">30d</button></div>
+<h1 class="t">Active segments lean enterprise</h1>
+<div class="m"><strong class="v">68%</strong><span class="s">Qualified conversion</span></div>
+<div class="c a" role="img" aria-label="Conversion mix chart"><div class="b"><i class="s1"></i><i class="s2"></i><i class="s3"></i></div></div>
+<div class="g"><span><b></b>Active segments 44%</span><span><b class="c2"></b>Renewals 31%</span><span><b class="c5"></b>Pilots 25%</span></div>
+</article>
+</div>
+</body>
+</html>

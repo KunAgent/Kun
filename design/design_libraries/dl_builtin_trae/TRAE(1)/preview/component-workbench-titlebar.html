@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Workbench Titlebar</title>
+  <link rel="stylesheet" href="../colors_and_type.css" />
+  <link rel="stylesheet" href="../scaffold.css" />
+  <link rel="stylesheet" href="../components.css" />
+  <style>
+    /* @component-css-start */
+    /* ===== Workbench Titlebar ===== */
+    .ds-wbtitlebar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--spacer-12);
+      height: 40px;
+      padding: 0 var(--spacer-12);
+      background: var(--bg-base-secondary);
+      border-bottom: 1px solid var(--border-neutral-l1);
+    }
+    .ds-wbtitlebar__left,
+    .ds-wbtitlebar__right {
+      display: flex;
+      align-items: center;
+      gap: var(--spacer-8);
+    }
+    .ds-wbtitlebar__lights {
+      display: flex;
+      align-items: center;
+      gap: var(--spacer-8);
+      margin-right: var(--spacer-8);
+    }
+    .ds-wbtitlebar__light {
+      width: 12px;
+      height: 12px;
+      border-radius: var(--radius-full);
+    }
+    .ds-wbtitlebar__light--close { background: var(--status-error-default); }
+    .ds-wbtitlebar__light--min { background: var(--status-alert-default); }
+    .ds-wbtitlebar__light--max { background: var(--status-success-default); }
+    .ds-wbtitlebar__mode-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--spacer-6);
+      height: 24px;
+      padding: 0 var(--spacer-8);
+      background: var(--bg-brand);
+      color: var(--text-onbrand);
+      border-radius: var(--radius-full);
+      font-size: var(--body-xs-font-size);
+      font-weight: var(--font-weight-medium);
+    }
+    .ds-wbtitlebar__project-selector {
+      display: inline-flex;
+      align-items: center;
+      gap: var(--spacer-6);
+      height: 24px;
+      padding: 0 var(--spacer-8);
+      background: var(--bg-overlay-l1);
+      color: var(--text-default);
+      border: 1px solid var(--border-neutral-l2);
+      border-radius: var(--radius-6);
+      font-size: var(--body-sm-font-size);
+      cursor: pointer;
+    }
+    .ds-wbtitlebar__project-selector:hover {
+      background: var(--bg-overlay-l2);
+      color: var(--text-default-hover);
+    }
+    .ds-wbtitlebar__iconbtn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 28px;
+      height: 28px;
+      border-radius: var(--radius-6);
+      background: transparent;
+      border: none;
+      cursor: pointer;
+    }
+    .ds-wbtitlebar__iconbtn:hover { background: var(--bg-overlay-l2); }
+    .ds-wbtitlebar .icon { display: block; }
+    /* @component-css-end */
+  </style>
+</head>
+<body>
+  <div class="pv-header">
+    <h1>Workbench Titlebar</h1>
+    <p>IDE/Agent 工作台顶栏：左侧窗口控制点 + 产品模式胶囊 + 项目选择器，右侧图标按钮组。背景用 --bg-base-secondary，分隔用 --border-neutral-l1。</p>
+  </div>
+  <div class="pv-section">
+    <div class="pv-section__title">Default</div>
+    <div class="ds-wbtitlebar">
+      <div class="ds-wbtitlebar__left">
+        <div class="ds-wbtitlebar__lights">
+          <span class="ds-wbtitlebar__light ds-wbtitlebar__light--close"></span>
+          <span class="ds-wbtitlebar__light ds-wbtitlebar__light--min"></span>
+          <span class="ds-wbtitlebar__light ds-wbtitlebar__light--max"></span>
+        </div>
+        <span class="ds-wbtitlebar__mode-chip">
+          <img src="../assets/icons/atom.0c0c0d.svg" width="14" height="14" alt="atom" class="icon" />
+          Agent Mode
+        </span>
+        <button class="ds-wbtitlebar__project-selector">
+          <img src="../assets/icons/folder.svg" width="14" height="14" alt="folder" class="icon" />
+          nimbus-design-system
+          <img src="../assets/icons/chevron-down.svg" width="14" height="14" alt="chevron-down" class="icon" />
+        </button>
+      </div>
+      <div class="ds-wbtitlebar__right">
+        <button class="ds-wbtitlebar__iconbtn"><img src="../assets/icons/search.svg" width="16" height="16" alt="search" class="icon" /></button>
+        <button class="ds-wbtitlebar__iconbtn"><img src="../assets/icons/sidebar-right.svg" width="16" height="16" alt="sidebar-right" class="icon" /></button>
+        <button class="ds-wbtitlebar__iconbtn"><img src="../assets/icons/panel-bottom.svg" width="16" height="16" alt="panel-bottom" class="icon" /></button>
+        <button class="ds-wbtitlebar__iconbtn"><img src="../assets/icons/settings.svg" width="16" height="16" alt="settings" class="icon" /></button>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

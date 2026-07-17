@@ -1,0 +1,55 @@
+{
+  "schemaVersion": 2,
+  "slug": "status-tag",
+  "name": "StatusTag",
+  "category": "data-display",
+  "sourceKind": "structured-spec",
+  "confidence": "medium",
+  "semanticTypeCandidates": ["status-badge", "state-indicator", "semantic-tag"],
+  "variantDimensions": {
+    "variant": ["success", "warning", "error", "stop", "processing", "loading", "waiting"]
+  },
+  "representativeVariants": [
+    { "variant": "success" },
+    { "variant": "warning" },
+    { "variant": "error" },
+    { "variant": "stop" },
+    { "variant": "processing" },
+    { "variant": "loading" },
+    { "variant": "waiting" }
+  ],
+  "anatomy": ["status-tag", "status-tag-icon"],
+  "structurePatterns": [
+    "Inline-flex container with 4px gap holding a 14x14 icon SVG and text label",
+    "Fixed height 20px with 6px horizontal padding and 1px colored border"
+  ],
+  "usageHints": [
+    "Font-size 12px, line-height 18px, font-weight 400, border-radius 4px",
+    "Success: bg #E8FFEA, color #00B42A, border #AFF0B5",
+    "Warning: bg #FFF7E8, color #FF7D00, border #FFD591",
+    "Error: bg #FFECE8, color #F53F3F, border #FBACA3",
+    "Stop: bg #F1F3F5, color #80838A, border #DDE2E9",
+    "Processing: bg #EBF1FF, color #1664FF, border #97BCFF",
+    "Loading: bg #EBF1FF, color #1664FF, border #97BCFF (same as processing, with spinner icon)",
+    "Waiting: bg #F5E8FF, color #722ED1, border #C28FEF",
+    "Icon is a semantic SVG illustration matching the status meaning"
+  ],
+  "doNotInvent": ["closable/removable tag", "size variants", "custom color overrides", "clickable/interactive behavior"],
+  "unknowns": ["text-only variant without icon", "max text length / truncation"],
+  "tokensConsumed": [],
+  "domAnatomy": {
+    "root": {
+      "tag": "span",
+      "class": "status-tag status-tag-{variant}",
+      "children": [
+        { "tag": "span", "class": "status-tag-icon", "children": ["svg"] },
+        { "tag": "text", "note": "label text node" }
+      ]
+    }
+  },
+  "provenance": {
+    "preview": "preview/ui-status-tag.html",
+    "source": "structured-spec",
+    "css": { "file": "ui-status-tag.html", "marker": "inline <style>" }
+  }
+}

@@ -1,0 +1,81 @@
+{
+  "schemaVersion": 2,
+  "slug": "cascader",
+  "name": "Cascader",
+  "category": "data-entry",
+  "sourceKind": "structured-spec",
+  "confidence": "medium",
+  "semanticTypeCandidates": ["cascader", "cascade-selector", "multi-level-picker", "drill-down-menu"],
+  "variantDimensions": {
+    "multiple": ["false", "true"],
+    "search": ["false", "true"],
+    "icon": ["false", "true"],
+    "group": ["false", "true"],
+    "itemState": ["default", "active", "disabled"]
+  },
+  "representativeVariants": [
+    { "multiple": "false", "search": "false", "group": "false" },
+    { "multiple": "true", "search": "false", "group": "false" },
+    { "multiple": "false", "search": "true", "group": "false" },
+    { "multiple": "false", "search": "false", "group": "true" }
+  ],
+  "anatomy": ["container", "panel", "search-input", "group-title", "item", "item-label", "item-arrow", "checkbox", "icon"],
+  "structurePatterns": [
+    "Horizontal flex container of multiple panels separated by left borders",
+    "Each panel is a vertical flex column of cascader items with 4px gap and 6px padding",
+    "Items are button elements with label and optional arrow/checkbox/icon"
+  ],
+  "usageHints": [
+    "Container: 480px width, 260px height, border 1px solid var(--color-border-light, #EAEDF1), border-radius 4px",
+    "Group mode narrows to 320px width",
+    "Panel background: var(--color-bg-card, #FFFFFF)",
+    "Active item: background var(--color-bg-subtle, #F6F8FA), color var(--color-primary, #1664FF), font-weight 500",
+    "Disabled item: color var(--color-text-disabled, #C9CDD4), cursor not-allowed",
+    "Search input: height 32px, border 1px solid var(--color-border-light, #EAEDF1), border-radius 4px",
+    "Checkbox: 14px square, border-radius 2px, checked fills var(--color-primary, #1664FF)",
+    "Item font: var(--font-size-md, 13px), line-height 22px, letter-spacing 0.3px"
+  ],
+  "doNotInvent": ["lazy loading indicator", "virtual scroll", "async search debounce"],
+  "unknowns": ["maximum panel depth", "empty state display", "keyboard navigation"],
+  "tokensConsumed": [
+    "--color-border-light",
+    "--color-border",
+    "--radius-default",
+    "--color-bg-card",
+    "--color-bg-subtle",
+    "--color-primary",
+    "--color-text-primary",
+    "--color-text-tertiary",
+    "--color-text-disabled",
+    "--font-size-md",
+    "--font-size-sm"
+  ],
+  "domAnatomy": {
+    "root": {
+      "tag": "div",
+      "class": "cascader",
+      "children": [
+        {
+          "tag": "div",
+          "class": "cascader-panel",
+          "children": [
+            {
+              "tag": "button",
+              "class": "cascader-item",
+              "children": [
+                { "tag": "span", "class": "cascader-check", "optional": true },
+                { "tag": "span", "class": "cascader-item-label" },
+                { "tag": "span", "class": "cascader-item-arrow", "optional": true }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "provenance": {
+    "preview": "preview/ui-cascader.html",
+    "source": "structured-spec",
+    "css": { "file": "ui-cascader.html", "marker": "inline <style>" }
+  }
+}

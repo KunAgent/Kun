@@ -1,0 +1,49 @@
+{
+  "schemaVersion": 1,
+  "tokenSource": "css.json",
+  "componentIndex": "components/index.json",
+  "recommendedReadOrder": [
+    "SKILL.md",
+    "README.md",
+    "css.json",
+    "components/index.json",
+    "components/{slug}.json",
+    "preview/component-{slug}.html",
+    "ui_kits/dashboard/index.html"
+  ],
+  "coreComponents": [
+    "button",
+    "card",
+    "table",
+    "chart",
+    "navigation",
+    "sidebar"
+  ],
+  "supportComponents": [],
+  "tokenCSS": "colors_and_type.css",
+  "componentsCSS": "components.css",
+  "componentContractKind": "legacy-json",
+  "previewFiles": [
+    "preview/component-button.html",
+    "preview/component-card.html",
+    "preview/component-chart.html",
+    "preview/component-navigation.html",
+    "preview/component-sidebar.html",
+    "preview/component-table.html"
+  ],
+  "allowedComponents": [
+    "button",
+    "card",
+    "chart",
+    "navigation",
+    "sidebar",
+    "table"
+  ],
+  "soloDesignConsumption": {
+    "prefix": "minimal",
+    "themeCss": "colors_and_type.css",
+    "componentCss": "components.css",
+    "fillHtmlHead": "supported",
+    "notes": "Prefixed semantic aliases are intentionally added for solo-design fill-html-head.mjs prefix detection."
+  }
+}

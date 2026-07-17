@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Button Preview - Claude Design System</title>
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;padding:clamp(20px,3vw,32px);background:var(--background);color:var(--foreground);font:14px/1.5 var(--font-sans)}
+.preview{width:min(100%,760px);margin:0 auto;display:grid;gap:clamp(24px,4vw,32px)}
+.section{display:grid;gap:14px}
+.label{display:block;font:600 10px/1.2 var(--font-mono);letter-spacing:.12em;text-transform:uppercase;color:var(--muted-foreground)}
+.examples{display:flex;flex-wrap:wrap;gap:12px 14px;align-items:center;padding:clamp(18px,3vw,24px);border:1px solid var(--border);border-radius:calc(var(--radius) + 4px);background:var(--popover);box-shadow:var(--shadow-xs)}
+.btn{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:0 18px;border:1px solid transparent;border-radius:var(--radius);box-shadow:var(--shadow-sm);background:transparent;color:var(--foreground);font:600 14px/1.1 var(--font-sans);white-space:nowrap;transition:background-color .16s ease,color .16s ease,border-color .16s ease,box-shadow .16s ease}
+.btn:hover,.btn:focus-visible{box-shadow:var(--shadow-md)}
+.btn:focus-visible{outline:2px solid var(--ring);outline-offset:2px}
+.btn:disabled{cursor:not-allowed;box-shadow:none}
+.primary{background:var(--primary);color:var(--primary-foreground)}
+.primary:disabled{background:var(--secondary);color:var(--muted-foreground);border-color:var(--border)}
+.secondary{background:var(--secondary);color:var(--foreground);border-color:var(--border)}
+.secondary:disabled{background:var(--background);color:var(--muted-foreground);border-color:var(--border)}
+.ghost{background:transparent;color:var(--foreground);box-shadow:none}
+.ghost:hover,.ghost:focus-visible{background:var(--muted)}
+.ghost:disabled{background:transparent;color:var(--muted-foreground);border-color:transparent}
+@media (max-width:560px){
+  .examples{gap:10px;padding:18px}
+  .btn{width:100%}
+}
+</style>
+</head>
+<body aria-label="Claude Design System button preview for an AI Assistant">
+<main class="preview">
+<section class="section">
+<span class="label">Primary</span>
+<div class="examples">
+<button class="btn primary" type="button">Start a new chat</button>
+<button class="btn primary" type="button" disabled>Start a new chat</button>
+</div>
+</section>
+<section class="section">
+<span class="label">Secondary</span>
+<div class="examples">
+<button class="btn secondary" type="button">Open design guide</button>
+<button class="btn secondary" type="button" disabled>Open design guide</button>
+</div>
+</section>
+<section class="section">
+<span class="label">Ghost</span>
+<div class="examples">
+<button class="btn ghost" type="button">Open design guide</button>
+<button class="btn ghost" type="button" disabled>Open design guide</button>
+</div>
+</section>
+</main>
+</body>
+</html>

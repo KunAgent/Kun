@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>Cascader 级联选择</title>
+  <link rel="stylesheet" href="preview-scaffold.css">
+  <style>
+    .cascader {
+      display: flex;
+      width: 480px;
+      height: 260px;
+      overflow: hidden;
+      border: 1px solid var(--color-border-light, #EAEDF1);
+      border-radius: var(--radius-default, 4px);
+      background: var(--color-bg-card, #FFFFFF);
+      box-shadow: 0 15px 35px -2px rgba(0, 0, 0, 0.05),
+                  0 5px 15px rgba(0, 0, 0, 0.05);
+      font-family: "PingFang SC", sans-serif;
+    }
+
+    .cascader[data-group="true"] {
+      width: 320px;
+    }
+
+    .cascader-panel {
+      display: flex;
+      flex: 1 0 0;
+      flex-direction: column;
+      gap: 4px;
+      min-width: 0;
+      padding: 6px;
+      background: var(--color-bg-card, #FFFFFF);
+    }
+
+    .cascader-panel + .cascader-panel {
+      border-left: 1px solid var(--color-border-light, #EAEDF1);
+    }
+
+    .cascader-search {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      height: 32px;
+      margin-bottom: 4px;
+      padding: 0 12px;
+      border: 1px solid var(--color-border-light, #EAEDF1);
+      border-radius: var(--radius-default, 4px);
+      color: var(--color-text-tertiary, #737A87);
+      font-size: var(--font-size-md, 13px);
+      line-height: 22px;
+    }
+
+    .cascader-search-input {
+      border: 0;
+      outline: 0;
+      width: 100%;
+      background: transparent;
+      font: inherit;
+      color: var(--color-text-primary, #0C0D0E);
+    }
+
+    .cascader-group-title {
+      padding: 2px 12px;
+      color: var(--color-text-tertiary, #737A87);
+      font-size: var(--font-size-sm, 12px);
+      line-height: 20px;
+    }
+
+    .cascader-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      width: 100%;
+      min-height: 32px;
+      padding: 5px 12px;
+      border: 0;
+      border-radius: var(--radius-default, 4px);
+      background: var(--color-bg-card, #FFFFFF);
+      color: var(--color-text-primary, #0C0D0E);
+      font-size: var(--font-size-md, 13px);
+      font-weight: 400;
+      line-height: 22px;
+      letter-spacing: 0.3px;
+      text-align: left;
+    }
+
+    .cascader-item.active {
+      background: var(--color-bg-subtle, #F6F8FA);
+      color: var(--color-primary, #1664FF);
+      font-weight: 500;
+    }
+
+    .cascader-item.disabled {
+      color: var(--color-text-disabled, #C9CDD4);
+      cursor: not-allowed;
+    }
+
+    .cascader-item-label {
+      flex: 1 0 0;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .cascader-item-arrow {
+      color: var(--color-text-tertiary, #737A87);
+      font-size: 14px;
+      line-height: 1;
+    }
+
+    .cascader-icon {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 20px;
+      height: 20px;
+      color: var(--color-text-tertiary, #737A87);
+      font-size: 12px;
+    }
+
+    .cascader-check {
+      display: inline-block;
+      box-sizing: border-box;
+      position: relative;
+      width: 14px;
+      height: 14px;
+      min-width: 14px;
+      min-height: 14px;
+      border: 1px solid var(--color-border, #DDE2E9);
+      border-radius: 2px;
+      background: var(--color-bg-card, #FFFFFF);
+      flex-shrink: 0;
+    }
+
+    .cascader-check.checked {
+      border-color: var(--color-primary, #1664FF);
+      background: var(--color-primary, #1664FF);
+    }
+
+    .cascader-check.checked::after {
+      content: "";
+      position: absolute;
+      top: 1px;
+      left: 4px;
+      width: 4px;
+      height: 7px;
+      border: solid #fff;
+      border-width: 0 1.5px 1.5px 0;
+      transform: rotate(45deg);
+    }
+  </style>
+</head>
+<body>
+  <div class="pv-header">
+    <h1>Cascader 级联选择</h1>
+    <p>多级联动选择面板，支持单选、多选、搜索、图标和分组模式。</p>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">单选级联</div>
+    <div class="demo-box">
+      <div class="cascader" data-component="cascader" data-multiple="false" data-search="false" data-icon="false" data-group="false">
+        <div class="cascader-panel">
+          <button class="cascader-item active" data-component="cascader-item" data-state="active">
+            <span class="cascader-item-label">北京</span>
+            <span class="cascader-item-arrow">&#8250;</span>
+          </button>
+          <button class="cascader-item" data-component="cascader-item" data-state="default">
+            <span class="cascader-item-label">上海</span>
+            <span class="cascader-item-arrow">&#8250;</span>
+          </button>
+        </div>
+        <div class="cascader-panel">
+          <button class="cascader-item active" data-component="cascader-item" data-state="active">
+            <span class="cascader-item-label">朝阳区</span>
+            <span class="cascader-item-arrow">&#8250;</span>
+          </button>
+          <button class="cascader-item" data-component="cascader-item" data-state="default">
+            <span class="cascader-item-label">海淀区</span>
+            <span class="cascader-item-arrow">&#8250;</span>
+          </button>
+        </div>
+        <div class="cascader-panel">
+          <button class="cascader-item active" data-component="cascader-item" data-state="active">
+            <span class="cascader-item-label">望京街道</span>
+          </button>
+          <button class="cascader-item" data-component="cascader-item" data-state="default">
+            <span class="cascader-item-label">酒仙桥街道</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">多选级联</div>
+    <div class="demo-box">
+      <div class="cascader" data-component="cascader" data-multiple="true" data-search="false" data-icon="false" data-group="false">
+        <div class="cascader-panel">
+          <button class="cascader-item active" data-component="cascader-item" data-state="active">
+            <span class="cascader-check checked"></span>
+            <span class="cascader-item-label">北京</span>
+            <span class="cascader-item-arrow">&#8250;</span>
+          </button>
+          <button class="cascader-item" data-component="cascader-item" data-state="default">
+            <span class="cascader-check"></span>
+            <span class="cascader-item-label">上海</span>
+            <span class="cascader-item-arrow">&#8250;</span>
+          </button>
+        </div>
+        <div class="cascader-panel">
+          <button class="cascader-item active" data-component="cascader-item" data-state="active">
+            <span class="cascader-check checked"></span>
+            <span class="cascader-item-label">朝阳区</span>
+            <span class="cascader-item-arrow">&#8250;</span>
+          </button>
+          <button class="cascader-item" data-component="cascader-item" data-state="default">
+            <span class="cascader-check"></span>
+            <span class="cascader-item-label">海淀区</span>
+            <span class="cascader-item-arrow">&#8250;</span>
+          </button>
+        </div>
+        <div class="cascader-panel">
+          <button class="cascader-item active" data-component="cascader-item" data-state="active">
+            <span class="cascader-check checked"></span>
+            <span class="cascader-item-label">望京街道</span>
+          </button>
+          <button class="cascader-item" data-component="cascader-item" data-state="default">
+            <span class="cascader-check"></span>
+            <span class="cascader-item-label">酒仙桥街道</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">带搜索级联</div>
+    <div class="demo-box">
+      <div class="cascader has-search" data-component="cascader" data-multiple="false" data-search="true" data-icon="false" data-group="false">
+        <div class="cascader-panel">
+          <label class="cascader-search">
+            <span>&#8981;</span>
+            <input class="cascader-search-input" value="请输入关键字搜索" />
+          </label>
+          <button class="cascader-item active" data-component="cascader-item" data-state="active">
+            <span class="cascader-item-label">北京</span>
+            <span class="cascader-item-arrow">&#8250;</span>
+          </button>
+          <button class="cascader-item" data-component="cascader-item" data-state="default">
+            <span class="cascader-item-label">上海</span>
+            <span class="cascader-item-arrow">&#8250;</span>
+          </button>
+        </div>
+        <div class="cascader-panel">
+          <button class="cascader-item active" data-component="cascader-item" data-state="active">
+            <span class="cascader-item-label">朝阳区</span>
+            <span class="cascader-item-arrow">&#8250;</span>
+          </button>
+          <button class="cascader-item" data-component="cascader-item" data-state="default">
+            <span class="cascader-item-label">海淀区</span>
+            <span class="cascader-item-arrow">&#8250;</span>
+          </button>
+        </div>
+        <div class="cascader-panel">
+          <button class="cascader-item active" data-component="cascader-item" data-state="active">
+            <span class="cascader-item-label">望京街道</span>
+          </button>
+          <button class="cascader-item" data-component="cascader-item" data-state="default">
+            <span class="cascader-item-label">酒仙桥街道</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">带图标级联</div>
+    <div class="demo-box">
+      <div class="cascader has-icon" data-component="cascader" data-multiple="false" data-search="false" data-icon="true" data-group="false">
+        <div class="cascader-panel">
+          <button class="cascader-item active" data-component="cascader-item" data-state="active">
+            <span class="cascader-icon">&#9723;</span>
+            <span class="cascader-item-label">北京</span>
+            <span class="cascader-item-arrow">&#8250;</span>
+          </button>
+          <button class="cascader-item" data-component="cascader-item" data-state="default">
+            <span class="cascader-icon">&#9723;</span>
+            <span class="cascader-item-label">上海</span>
+            <span class="cascader-item-arrow">&#8250;</span>
+          </button>
+        </div>
+        <div class="cascader-panel">
+          <button class="cascader-item active" data-component="cascader-item" data-state="active">
+            <span class="cascader-icon">&#9723;</span>
+            <span class="cascader-item-label">朝阳区</span>
+            <span class="cascader-item-arrow">&#8250;</span>
+          </button>
+          <button class="cascader-item" data-component="cascader-item" data-state="default">
+            <span class="cascader-icon">&#9723;</span>
+            <span class="cascader-item-label">海淀区</span>
+            <span class="cascader-item-arrow">&#8250;</span>
+          </button>
+        </div>
+        <div class="cascader-panel">
+          <button class="cascader-item active" data-component="cascader-item" data-state="active">
+            <span class="cascader-icon">&#9723;</span>
+            <span class="cascader-item-label">望京街道</span>
+          </button>
+          <button class="cascader-item" data-component="cascader-item" data-state="default">
+            <span class="cascader-icon">&#9723;</span>
+            <span class="cascader-item-label">酒仙桥街道</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">分组级联</div>
+    <div class="demo-box">
+      <div class="cascader is-grouped" data-component="cascader" data-multiple="false" data-search="false" data-icon="false" data-group="true">
+        <div class="cascader-panel">
+          <div class="cascader-group-title">热门城市</div>
+          <button class="cascader-item active" data-component="cascader-item" data-state="active">
+            <span class="cascader-item-label">北京</span>
+            <span class="cascader-item-arrow">&#8250;</span>
+          </button>
+          <button class="cascader-item" data-component="cascader-item" data-state="default">
+            <span class="cascader-item-label">上海</span>
+            <span class="cascader-item-arrow">&#8250;</span>
+          </button>
+        </div>
+        <div class="cascader-panel">
+          <button class="cascader-item active" data-component="cascader-item" data-state="active">
+            <span class="cascader-item-label">朝阳区</span>
+          </button>
+          <button class="cascader-item" data-component="cascader-item" data-state="default">
+            <span class="cascader-item-label">海淀区</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">选项状态</div>
+    <div class="row">
+      <button class="cascader-item" data-component="cascader-item" data-state="default">
+        <span class="cascader-item-label">选项名称</span>
+        <span class="cascader-item-arrow">&#8250;</span>
+      </button>
+      <button class="cascader-item active" data-component="cascader-item" data-state="active">
+        <span class="cascader-item-label">选项名称</span>
+        <span class="cascader-item-arrow">&#8250;</span>
+      </button>
+      <button class="cascader-item disabled" data-component="cascader-item" data-state="disabled">
+        <span class="cascader-item-label">选项名称</span>
+      </button>
+    </div>
+  </div>
+</body>
+</html>

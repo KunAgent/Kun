@@ -1,0 +1,38 @@
+{
+  "slug": "sidebar-nav",
+  "name": "Sidebar Navigation",
+  "purpose": "Primary navigation shell for a control-room style dashboard.",
+  "productContext": "analytics dashboard",
+  "uiCopySamples": [
+    "Overview",
+    "Analytics",
+    "Workflows",
+    "Settings"
+  ],
+  "variantDimensions": {
+    "itemType": ["default", "active", "section-label", "utility"],
+    "density": ["comfortable", "compact"],
+    "state": ["default", "hover", "active"]
+  },
+  "tokenUsage": [
+    "--sidebar",
+    "--sidebar-foreground",
+    "--sidebar-primary",
+    "--sidebar-primary-foreground",
+    "--sidebar-accent",
+    "--sidebar-accent-foreground",
+    "--sidebar-border",
+    "--sidebar-ring"
+  ],
+  "structures": [
+    {
+      "title": "Dashboard shell",
+      "description": "Vertical rail with product label, core destinations, and utility shortcuts anchored at the bottom.",
+      "parts": ["brand block", "section label", "nav item", "active nav item", "utility row"],
+      "sampleContent": {
+        "headline": "21TH / CONTROL",
+        "body": "A sidebar that feels operational, not decorative."
+      }
+    }
+  ]
+}

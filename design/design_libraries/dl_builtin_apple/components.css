@@ -1,0 +1,147 @@
+/*
+ * components.css - aggregated component CSS
+ * Auto-extracted from preview/component-*.html files.
+ * DO NOT EDIT. Regenerate with extract-components-css.mjs.
+ *
+ * Foundation tokens live in colors_and_type.css.
+ * This file consumes those tokens via var(--*) references.
+ */
+
+/* ============================================================
+ * Button
+ * source: preview/component-button.html
+ * rules: 10
+ */
+/* @anatomy
+   <div class="row"><span class="label">Primary 56</span><button class="btn btn-primary btn-lg">Buy now</button><button class="btn btn-primary btn-lg" disabled>Buy now</button></div>
+*/
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:calc(var(--spacing)*1.5);height:40px;padding:0 20px;border:none;border-radius:calc(var(--radius)*2);background:transparent;color:var(--foreground);font:600 14px/1 var(--font-sans);letter-spacing:var(--tracking-normal);white-space:nowrap;box-shadow:var(--shadow-sm);cursor:pointer;transition:background-color .18s ease,color .18s ease,opacity .18s ease,filter .18s ease}
+.btn:focus-visible{outline:2px solid var(--ring);outline-offset:2px}
+.btn:disabled{opacity:.42;cursor:not-allowed}
+.btn-primary{background:var(--primary);color:var(--primary-foreground)}
+.btn-primary:hover{filter:brightness(.96)}
+.btn-secondary{height:48px;padding:0 24px;background:var(--secondary);color:var(--secondary-foreground)}
+.btn-secondary:hover{background:var(--muted)}
+.btn-text{height:48px;padding:0 4px;box-shadow:none}
+.btn-text:hover{color:var(--primary)}
+.btn-lg{height:56px;padding:0 28px;font-size:16px}
+
+/* ============================================================
+ * Card
+ * source: preview/component-card.html
+ * rules: 12
+ */
+/* @anatomy
+   <div class="row">
+   <span class="label">Info</span>
+   <article class="card">
+   <div><div class="eyebrow">Pinguo Apple</div>
+*/
+.card{width:188px;min-height:148px;padding:calc(var(--spacing)*5);display:flex;flex-direction:column;justify-content:space-between;background:var(--card);color:var(--card-foreground);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-md);transition:transform .18s ease,box-shadow .18s ease}
+.card:hover{transform:translateY(-2px);box-shadow:var(--shadow-lg)}
+.card.disabled,.card.disabled:hover{opacity:.5;transform:none;box-shadow:var(--shadow-md)}
+.eyebrow,.meta{color:var(--muted-foreground);font-size:11px;letter-spacing:.08em;text-transform:uppercase}
+.title{margin:6px 0 8px;font-size:18px;line-height:1.15}
+.body-copy{margin:0;color:var(--muted-foreground);font-size:13px}
+.cta{display:inline-flex;align-items:center;justify-content:center;width:max-content;margin-top:12px;padding:calc(var(--spacing)*2) calc(var(--spacing)*3.5);border-radius:999px;background:var(--primary);color:var(--primary-foreground);font-size:12px;font-weight:700;text-decoration:none}
+.media{aspect-ratio:4/3;border-radius:calc(var(--radius) - 4px);background:linear-gradient(135deg,var(--secondary),var(--accent));border:1px solid var(--border)}
+.media-card{min-height:212px;padding:calc(var(--spacing)*4)}
+.media-card .title{font-size:16px;margin:10px 0 6px}
+.price{font-size:12px;color:var(--muted-foreground)}
+.dark{background:var(--card);color:var(--card-foreground)}
+
+/* ============================================================
+ * Comparison Table
+ * source: preview/component-comparison-table.html
+ * rules: 13
+ */
+/* @anatomy
+   <div class="row"><span class="label">Default</span><div class="t"><div class="c m">Compare models</div>
+*/
+.t{display:grid;grid-template-columns:96px repeat(3,1fr);overflow:hidden;border:1px solid var(--border);border-radius:var(--radius);background:var(--card);color:var(--card-foreground);box-shadow:var(--shadow-sm)}
+.q{grid-template-columns:82px repeat(4,1fr)}
+.c{padding:10px;border-right:1px solid var(--border);border-bottom:1px solid var(--border)}
+.t>.c:nth-child(4n),.q>.c:nth-child(5n){border-right:0}
+.t>.c:nth-last-child(-n+4),.q>.c:nth-last-child(-n+5){border-bottom:0}
+.m{background:var(--background);color:var(--muted-foreground);font:700 10px/1 var(--font-mono);letter-spacing:.12em;text-transform:uppercase}
+.h{background:var(--background);font-weight:700}
+.k{display:block;font-size:14px;line-height:1.1}
+.s{display:block;margin-top:4px;color:var(--chart-2);font-size:11px;font-weight:700}
+.b .k{color:var(--chart-2)}
+.v{font-weight:600}
+.n{color:var(--muted-foreground);font-size:12px}
+.x{opacity:.45}
+
+/* ============================================================
+ * Input
+ * source: preview/component-input.html
+ * rules: 10
+ */
+/* @anatomy
+   <div class="row">
+   <span class="label">Search 44</span>
+   <div class="field">
+   <span class="icon">⌕</span>
+   <input class="control" aria-label="Search products" placeholder="Search products">
+   <button class="clear" type="button" aria-label="Clear search">×</button>
+   </div>
+*/
+.surface{display:flex;gap:calc(var(--spacing)*2);padding:calc(var(--spacing)*3);border:1px solid var(--border);border-radius:var(--radius);background:var(--card);box-shadow:var(--shadow-sm)}
+.dark{background:var(--background);color:var(--foreground)}
+.field{display:flex;align-items:center;gap:calc(var(--spacing)*2);min-width:240px;height:44px;padding:0 calc(var(--spacing)*3);border:1px solid var(--input);border-radius:var(--radius);background:var(--background);color:var(--foreground);box-shadow:var(--shadow-xs)}
+.field.small{height:40px}
+.field:focus-within{border-color:var(--ring);box-shadow:0 0 0 1px var(--ring)}
+.field.disabled{opacity:.55}
+.icon,.clear{padding:0;border:0;background:transparent;color:var(--icon-muted);font:inherit}
+.icon{font-size:13px}
+.control{flex:1;border:0;outline:0;background:transparent;color:inherit;font:inherit}
+.control::placeholder{color:var(--muted-foreground)}
+
+/* ============================================================
+ * Navigation
+ * source: preview/component-navigation.html
+ * rules: 16
+ */
+/* @anatomy
+   <div class="row"><span class="label">Global 44</span><nav class="webbar dark" aria-label="Pinguo Apple global navigation"><span class="brand">Pinguo Apple</span><div class="rail"><a class="link" href="#">Store</a><a class="link" href="#">Explore</a><a class="link" href="#">Community</a><a class="link" href="#">Support</a></div>
+*/
+.webbar,.mobile{border:1px solid var(--border);box-shadow:var(--shadow-sm)}
+.webbar{display:flex;align-items:center;gap:calc(var(--spacing)*2);min-width:320px;height:44px;padding:0 calc(var(--spacing)*3);border-radius:var(--radius);background:var(--sidebar)}
+.brand{font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;white-space:nowrap}
+.link,.tab{display:inline-flex;align-items:center;justify-content:center;border-radius:999px;color:inherit;text-decoration:none;white-space:nowrap;transition:background-color .18s ease,color .18s ease,opacity .18s ease}
+.link{height:32px;padding:0 calc(var(--spacing)*2.5)}
+.link:hover,.tab:hover{background:var(--secondary)}
+.link:focus-visible,.tab:focus-visible{outline:2px solid var(--ring);outline-offset:2px}
+.dark{background:var(--sidebar);color:var(--foreground)}
+.disabled{opacity:.48}
+.disabled .link,.disabled .tab{pointer-events:none}
+.mobile{padding:calc(var(--spacing)*2);border-radius:calc(var(--radius)*1.1);background:var(--card)}
+.screen{display:flex;align-items:flex-end;justify-content:center;width:188px;height:164px;padding:calc(var(--spacing)*3);border-radius:calc(var(--radius)*.9);background:linear-gradient(180deg,var(--background),var(--secondary))}
+.tabbar{display:flex;gap:calc(var(--spacing)*1.5);padding:calc(var(--spacing)*1.5);border:1px solid var(--border);border-radius:999px;background:var(--card);box-shadow:var(--shadow-md)}
+.tab{flex-direction:column;gap:2px;min-width:56px;height:56px;padding:0 calc(var(--spacing)*1.5);font-size:11px;text-align:center}
+.dot{width:18px;height:18px;border-radius:999px;background:var(--secondary);box-shadow:inset 0 0 0 1px var(--border)}
+.tab:hover .dot{background:var(--primary)}
+
+/* ============================================================
+ * Product Grid
+ * source: preview/component-product-grid.html
+ * rules: 12
+ */
+/* @anatomy
+   <div class="row">
+   <span class="label">4-up</span>
+   <div class="grid grid-4">
+   <article class="card"><div class="media"></div>
+*/
+.grid{display:grid;gap:8px;flex:1}
+.grid-4{grid-template-columns:repeat(4,minmax(0,1fr))}
+.grid-2{grid-template-columns:repeat(2,minmax(0,1fr))}
+.card{display:flex;flex-direction:column;gap:8px;padding:10px;border:1px solid var(--border);border-radius:var(--radius);background:var(--card);color:var(--card-foreground);box-shadow:var(--shadow-xs);transition:border-color .2s ease,transform .2s ease}
+.card:hover{border-color:var(--primary);transform:translateY(-1px)}
+.media{aspect-ratio:1;border-radius:calc(var(--radius) - 4px);background:linear-gradient(135deg,var(--secondary),var(--background));border:1px solid var(--border)}
+.eyebrow{color:var(--muted-foreground);font-size:10px;letter-spacing:.08em;text-transform:uppercase}
+.title{font-size:15px;line-height:1.25}
+.price{font-variant-numeric:tabular-nums}
+.cta{display:inline-flex;align-self:flex-start;padding:7px 10px;border-radius:999px;background:var(--primary);color:var(--primary-foreground);font-size:12px;text-decoration:none}
+.muted{color:var(--muted-foreground)}
+.is-disabled{opacity:.55}

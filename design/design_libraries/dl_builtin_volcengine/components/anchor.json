@@ -1,0 +1,56 @@
+{
+  "schemaVersion": 2,
+  "slug": "anchor",
+  "name": "Anchor",
+  "category": "navigation",
+  "sourceKind": "structured-spec",
+  "confidence": "medium",
+  "semanticTypeCandidates": ["anchor", "toc", "sidebar-navigation", "scroll-spy"],
+  "variantDimensions": {
+    "level": ["1st", "2nd", "3rd"],
+    "state": ["default", "active"]
+  },
+  "representativeVariants": [
+    { "level": "1st", "state": "default" },
+    { "level": "1st", "state": "active" },
+    { "level": "2nd", "state": "default" },
+    { "level": "3rd", "state": "active" }
+  ],
+  "anatomy": ["container", "item", "bar", "text"],
+  "structurePatterns": [
+    "Vertical flex column of anchor items, each item is a horizontal flex row with a left vertical bar indicator and text area, indentation controlled by gap on level classes"
+  ],
+  "usageHints": [
+    "Container width is 176px with white background",
+    "Each item is 32px height",
+    "1st level gap 4px, 2nd level gap 20px, 3rd level gap 36px for indentation",
+    "Active state bar turns #1664FF with border-radius 0 4px 4px 0",
+    "Active text is #1664FF with font-weight 500",
+    "Hover text background is #F6F8FA with color #0C0D0E",
+    "Default bar background is #F6F8FA"
+  ],
+  "doNotInvent": ["horizontal anchor layout", "icon support", "collapsible sections"],
+  "unknowns": ["scroll tracking behavior", "smooth scroll integration"],
+  "tokensConsumed": [],
+  "domAnatomy": {
+    "root": {
+      "tag": "div",
+      "class": "anchor",
+      "children": [
+        {
+          "tag": "a",
+          "class": "anchor-item anchor-item--{level}",
+          "children": [
+            { "tag": "span", "class": "anchor-item__bar" },
+            { "tag": "span", "class": "anchor-item__text" }
+          ]
+        }
+      ]
+    }
+  },
+  "provenance": {
+    "preview": "preview/ui-anchor.html",
+    "source": "structured-spec",
+    "css": { "file": "ui-anchor.html", "marker": "── Anchor 容器 ──" }
+  }
+}

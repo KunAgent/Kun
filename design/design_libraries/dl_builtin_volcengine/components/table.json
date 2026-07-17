@@ -1,0 +1,131 @@
+{
+  "schemaVersion": 2,
+  "slug": "table",
+  "name": "Table",
+  "category": "data-display",
+  "sourceKind": "structured-spec",
+  "confidence": "medium",
+  "semanticTypeCandidates": ["data-table", "data-grid", "list-table"],
+  "variantDimensions": {
+    "striped": ["true", "false"],
+    "withToolbar": ["true", "false"],
+    "withPagination": ["true", "false"],
+    "withSelection": ["true", "false"]
+  },
+  "representativeVariants": [
+    { "striped": "true", "withToolbar": "true", "withPagination": "true", "withSelection": "true" }
+  ],
+  "anatomy": ["table-toolbar", "toolbar-filters", "toolbar-actions", "table-wrapper", "table", "thead", "tbody", "th", "td", "table-actions", "table-pagination"],
+  "structurePatterns": [
+    "Optional toolbar above table with filter selects, search input, and action buttons",
+    "Bordered wrapper with rounded corners containing a full-width collapsed-border table",
+    "Header row with gray background, body rows with hover highlight and optional stripe",
+    "Optional checkbox column for row selection",
+    "Action column with text links (primary and danger colors)",
+    "Pagination bar below table with page info and page number controls"
+  ],
+  "usageHints": [
+    "Header bg: var(--color-bg-5, #F6F8FA), text: var(--color-text-2, #42464E)",
+    "Cell bg: var(--color-bg-1, #FFFFFF), text: var(--color-text-1, #0C0D0E)",
+    "Border: var(--color-border-light, #EAEDF1)",
+    "Row hover: var(--color-bg-4, #F1F3F5)",
+    "Stripe rows (even): var(--color-bg-3, #F6F8FA)",
+    "Action links: primary #1664FF, danger #D7312A",
+    "Font size 14px body, 13px header; cell padding 12px 16px",
+    "Table wrapper has border-radius: 8px and 1px border"
+  ],
+  "doNotInvent": ["fixed column pinning", "virtual scroll", "tree-data expansion", "column resizing"],
+  "unknowns": ["sort indicator icons", "loading skeleton state", "empty state illustration"],
+  "tokensConsumed": [
+    "--color-table-header-bg",
+    "--color-table-header-text",
+    "--color-table-cell-bg",
+    "--color-table-cell-text",
+    "--color-table-border",
+    "--color-table-action-primary",
+    "--color-table-action-danger",
+    "--color-table-row-hover",
+    "--color-table-row-stripe",
+    "--color-bg-5",
+    "--color-bg-1",
+    "--color-bg-3",
+    "--color-bg-4",
+    "--color-text-1",
+    "--color-text-2",
+    "--color-border-light",
+    "--color-primary",
+    "--color-danger"
+  ],
+  "domAnatomy": {
+    "root": {
+      "tag": "div",
+      "class": "stack-12",
+      "children": [
+        {
+          "tag": "div",
+          "class": "table-toolbar",
+          "children": [
+            {
+              "tag": "div",
+              "class": "toolbar-filters",
+              "children": [
+                { "tag": "div", "class": "ved-select-trigger" },
+                { "tag": "div", "class": "ved-input" }
+              ]
+            },
+            {
+              "tag": "div",
+              "class": "toolbar-actions",
+              "children": [
+                { "tag": "button", "class": "btn btn-primary btn-sm" },
+                { "tag": "button", "class": "btn btn-secondary btn-sm" }
+              ]
+            }
+          ]
+        },
+        {
+          "tag": "div",
+          "class": "table-wrapper",
+          "children": [
+            {
+              "tag": "table",
+              "class": "table table-striped",
+              "children": [
+                {
+                  "tag": "thead",
+                  "children": [{ "tag": "tr", "children": [{ "tag": "th" }] }]
+                },
+                {
+                  "tag": "tbody",
+                  "children": [
+                    {
+                      "tag": "tr",
+                      "children": [
+                        { "tag": "td", "class": "td-mono" },
+                        { "tag": "td", "class": "td-user" },
+                        { "tag": "td", "class": "table-actions" }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "tag": "div",
+          "class": "table-pagination",
+          "children": [
+            { "tag": "span", "class": "pagination-info" },
+            { "tag": "div", "class": "pagination-controls" }
+          ]
+        }
+      ]
+    }
+  },
+  "provenance": {
+    "preview": "preview/ui-table.html",
+    "source": "structured-spec",
+    "css": { "file": "preview/ui-table.html", "marker": "inline <style>" }
+  }
+}

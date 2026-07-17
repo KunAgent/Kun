@@ -1,0 +1,47 @@
+{
+  "slug": "sidebar",
+  "name": "Sidebar",
+  "category": "Navigation",
+  "variantCount": 4,
+  "evidence": "Directly supported by sidebar token family in the source CSS.",
+  "anatomy": [
+    "sidebar-shell",
+    "section-label",
+    "item",
+    "active-pill",
+    "footer-slot"
+  ],
+  "variantDimensions": {
+    "state": [
+      "default",
+      "active"
+    ],
+    "density": [
+      "default",
+      "compact"
+    ],
+    "sectioning": [
+      "single-group",
+      "multi-group"
+    ]
+  },
+  "structures": [
+    {
+      "name": "Primary Sidebar, Active",
+      "notes": "Uses sidebar-primary and sidebar-accent for hierarchy."
+    },
+    {
+      "name": "Monitoring Sidebar, Compact",
+      "notes": "Dense list optimized for operational dashboards."
+    },
+    {
+      "name": "Utility Sidebar Footer",
+      "notes": "Reserved zone for profile and connection state."
+    }
+  ],
+  "uiCopySamples": [
+    "Control Grid",
+    "Incidents",
+    "Audit Trail"
+  ]
+}

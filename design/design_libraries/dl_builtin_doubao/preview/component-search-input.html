@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="stylesheet" href="../colors_and_type.css">
+<title>Search Input · 豆包</title>
+<style>
+  /* Page scaffold — NOT extracted */
+  /* @component-css-start */
+  *{box-sizing:border-box}
+  body{margin:0;padding:24px;background:var(--background);color:var(--foreground);font-family:var(--font-sans);font-size:14px;line-height:1.4}
+  .stack{display:flex;flex-direction:column;gap:20px;max-width:520px}
+  .group{display:flex;flex-direction:column;gap:10px}
+  .label{font:600 11px/1 var(--font-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted-foreground)}
+  .search{display:flex;align-items:center;gap:9px;height:40px;padding:0 12px;border:1px solid transparent;border-radius:10px;background:var(--muted);color:var(--foreground);transition:background .16s,border-color .16s,box-shadow .16s}
+  .search input{flex:1;min-width:0;border:0;outline:0;background:transparent;color:inherit;font:inherit}
+  .search input::placeholder{color:var(--muted-foreground)}
+  .search:focus-within{background:var(--card);border-color:var(--ring);box-shadow:0 0 0 3px color-mix(in srgb,var(--ring) 18%,transparent)}
+  .filled{background:var(--card);border-color:var(--border)}
+  .disabled{opacity:.5}
+  .disabled input{-webkit-text-fill-color:currentColor}
+  .error{border-color:var(--destructive);background:var(--card)}
+  .error:focus-within{box-shadow:0 0 0 3px color-mix(in srgb,var(--destructive) 18%,transparent)}
+  .helper{font-size:12px;color:var(--muted-foreground);padding-left:2px}
+  .helper.err{color:var(--destructive)}
+  .kbd{display:inline-flex;align-items:center;padding:2px 6px;border-radius:6px;background:color-mix(in srgb,var(--muted-foreground) 14%,transparent);color:var(--muted-foreground);font:600 11px/1 var(--font-sans)}
+  .clear{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;border:0;border-radius:50%;background:color-mix(in srgb,var(--muted-foreground) 16%,transparent);color:var(--foreground);cursor:pointer;font-size:13px;line-height:1}
+  .clear:hover{background:color-mix(in srgb,var(--muted-foreground) 28%,transparent)}
+  .icon{width:17px;height:17px;flex:none;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;color:var(--muted-foreground)}
+  .divider{border:0;border-top:1px solid var(--border);margin:4px 0}
+  /* @component-css-end */
+</style>
+</head>
+<body>
+<svg style="display:none" xmlns="http://www.w3.org/2000/svg">
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></symbol>
+</svg>
+
+<div class="stack">
+  <div class="group">
+    <span class="label">Sidebar · 带快捷键</span>
+    <div class="search">
+      <svg class="icon"><use href="#i-search"/></svg>
+      <input placeholder="搜索..." aria-label="搜索">
+      <span class="kbd">⌘K</span>
+    </div>
+  </div>
+
+  <hr class="divider">
+
+  <div class="group">
+    <span class="label">Filled · 带清除</span>
+    <div class="search filled">
+      <svg class="icon"><use href="#i-search"/></svg>
+      <input value="全能写作助手" aria-label="搜索会话">
+      <button class="clear" aria-label="清除">×</button>
+    </div>
+  </div>
+
+  <div class="group">
+    <span class="label">Disabled</span>
+    <div class="search disabled">
+      <svg class="icon"><use href="#i-search"/></svg>
+      <input value="索引同步中，暂不可搜索" aria-label="禁用搜索" disabled>
+    </div>
+  </div>
+
+  <hr class="divider">
+
+  <div class="group">
+    <span class="label">Error · 校验</span>
+    <div class="search error">
+      <svg class="icon"><use href="#i-search"/></svg>
+      <input value="@@@" aria-label="错误搜索">
+    </div>
+    <span class="helper err">搜索关键词不能仅包含特殊字符</span>
+  </div>
+</div>
+</body>
+</html>

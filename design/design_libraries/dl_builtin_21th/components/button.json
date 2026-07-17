@@ -1,0 +1,42 @@
+{
+  "slug": "button",
+  "name": "Button",
+  "purpose": "Primary and secondary call-to-action control for dense dashboard workflows.",
+  "productContext": "analytics dashboard",
+  "uiCopySamples": [
+    "Create View",
+    "Export CSV",
+    "Apply Filter",
+    "Pin Report"
+  ],
+  "variantDimensions": {
+    "tone": ["primary", "secondary", "accent", "destructive"],
+    "size": ["sm", "md", "lg"],
+    "state": ["default", "hover", "focus", "disabled"]
+  },
+  "tokenUsage": [
+    "--primary",
+    "--primary-foreground",
+    "--secondary",
+    "--secondary-foreground",
+    "--accent",
+    "--accent-foreground",
+    "--destructive",
+    "--destructive-foreground",
+    "--border",
+    "--ring",
+    "--shadow-sm",
+    "--tracking-normal"
+  ],
+  "structures": [
+    {
+      "title": "Toolbar actions",
+      "description": "A compact row of actions showing the system's restrained accent strategy.",
+      "parts": ["primary button", "secondary button", "destructive button", "icon-leading button"],
+      "sampleContent": {
+        "headline": "Action cluster",
+        "body": "Use one dark or blue-emphasis action per row. Keep the rest neutral."
+      }
+    }
+  ]
+}

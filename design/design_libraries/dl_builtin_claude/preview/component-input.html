@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Input Preview - Claude Design System</title>
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;padding:clamp(20px,3vw,32px);background:var(--background);color:var(--foreground);font:14px/1.4 var(--font-sans)}
+.preview{width:min(100%,760px);margin:0 auto;display:grid;gap:clamp(24px,4vw,32px)}
+.section{display:grid;gap:14px}
+.label{display:block;font:600 10px/1.2 var(--font-sans);letter-spacing:.12em;text-transform:uppercase;color:var(--muted-foreground)}
+.row{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:clamp(18px,3vw,24px);border:1px solid var(--border);border-radius:calc(var(--radius) + 4px);background:var(--popover);box-shadow:var(--shadow-xs)}
+.field,.bar{flex:1 1 280px;min-width:220px;height:40px;border:1px solid var(--border);border-radius:var(--radius);background:var(--background);box-shadow:var(--shadow-sm)}
+.field{padding:0 calc(var(--spacing)*3);color:var(--foreground);font:inherit}
+.field::placeholder,.bar input::placeholder{color:var(--muted-foreground)}
+.field:focus,.bar:focus-within{outline:none;border-color:var(--ring);box-shadow:var(--shadow-sm)}
+.field:disabled,.bar.disabled{background:var(--card);color:var(--muted-foreground);box-shadow:none}
+.bar{display:flex;align-items:center;gap:8px;padding:0 calc(var(--spacing)*3);background:var(--card);border-color:transparent}
+.bar input{flex:1;min-width:0;border:0;background:transparent;color:inherit;font:inherit;outline:none}
+.dot{width:8px;height:8px;border-radius:var(--radius-full);background:var(--muted-foreground);opacity:.5}
+@media (max-width:560px){
+  .row{padding:18px}
+  .field,.bar{flex-basis:100%;min-width:0}
+}
+</style>
+</head>
+<body>
+<main class="preview">
+<section class="section">
+<span class="label">Plain</span>
+<div class="row">
+<input class="field" type="text" placeholder="Search components…" aria-label="Claude Design System search input">
+<input class="field" type="text" placeholder="Search components…" aria-label="Claude Design System search input disabled" disabled>
+</div>
+</section>
+<section class="section">
+<span class="label">Filled</span>
+<div class="row">
+<input class="field" type="text" value="Ask Claude anything" aria-label="Claude Design System prompt input">
+<input class="field" type="text" value="Ask Claude anything" aria-label="Claude Design System prompt input disabled" disabled>
+</div>
+</section>
+<section class="section">
+<span class="label">Embedded</span>
+<div class="row">
+<label class="bar">
+<input type="text" placeholder="Search components…" aria-label="Embedded search input">
+<span class="dot"></span>
+</label>
+<label class="bar disabled">
+<input type="text" value="Ask Claude anything" aria-label="Embedded prompt input disabled" disabled>
+<span class="dot"></span>
+</label>
+</div>
+</section>
+</main>
+</body>
+</html>

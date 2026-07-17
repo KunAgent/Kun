@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Avatar</title>
+  <link rel="stylesheet" href="../colors_and_type.css" />
+  <link rel="stylesheet" href="../scaffold.css" />
+  <link rel="stylesheet" href="../components.css" />
+  <style>
+    /* @component-css-start */
+    /* ===== Avatar ===== */
+    .ds-avatar {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 32px; height: 32px; border-radius: 50%;
+      background: var(--bg-overlay-l3);
+      color: var(--text-default);
+      font-size: var(--body-sm-font-size); font-weight: var(--font-weight-strong);
+      flex-shrink: 0;
+    }
+    .ds-avatar--sm { width: 24px; height: 24px; font-size: var(--body-xs-font-size); }
+    .ds-avatar--lg { width: 40px; height: 40px; }
+    .ds-avatar--square { border-radius: var(--radius-4); }
+    .ds-avatar--accent { background: var(--bg-brand); color: var(--text-onbrand); }
+    /* @component-css-end */
+  </style>
+</head>
+<body>
+  <div class="pv-header">
+    <h1>Avatar</h1>
+    <p>User avatars in three sizes plus stacked group with overflow indicator.</p>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">Avatar</div>
+    <div class="row">
+      <span class="ds-avatar ds-avatar--sm">A</span>
+      <span class="ds-avatar">M</span>
+      <span class="ds-avatar ds-avatar--lg">L</span>
+      <div class="row" style="gap: -8px;">
+        <span class="ds-avatar" style="border: 2px solid var(--bg-base-default); margin-right: -10px; z-index: 3;">A</span>
+        <span class="ds-avatar" style="border: 2px solid var(--bg-base-default); margin-right: -10px; z-index: 2;">M</span>
+        <span class="ds-avatar" style="border: 2px solid var(--bg-base-default); margin-right: -10px; z-index: 1;">L</span>
+        <span class="ds-avatar" style="border: 2px solid var(--bg-base-default); background: var(--bg-overlay-l2); color: var(--text-tertiary);">+5</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">Square & accent</div>
+    <div class="row">
+      <span class="ds-avatar ds-avatar--square">A</span>
+      <span class="ds-avatar ds-avatar--square ds-avatar--lg">M</span>
+      <span class="ds-avatar ds-avatar--accent">A</span>
+      <span class="ds-avatar ds-avatar--accent ds-avatar--lg">M</span>
+      <span class="ds-avatar ds-avatar--accent ds-avatar--square">L</span>
+    </div>
+  </div>
+
+</body>
+</html>

@@ -1,0 +1,277 @@
+/* Source: structured-spec — monochrome minimalist palette (black/white/gray) */
+/* ============================================================
+   PRIMITIVES (theme-independent)
+   Six families: brand / background / text / icon are 10-step
+   scales; state-success / state-error are functional sets.
+   The system is monochrome — `brand` is a refined cool-neutral
+   scale used for primary surfaces/actions; the other neutrals
+   share the pure-gray ramp. Never consume primitives directly
+   in product code — use the semantic role tokens or the
+   --color-* alias layer below.
+   ============================================================ */
+:root {
+  
+  /* solo-design consumption aliases: explicit prefix for fill-html-head.mjs */
+  --minimal-background: var(--background, #ffffff);
+  --minimal-foreground: var(--foreground, #0f172a);
+  --minimal-card: var(--card, var(--background));
+  --minimal-card-foreground: var(--card-foreground, var(--foreground));
+  --minimal-popover: var(--popover, var(--card));
+  --minimal-popover-foreground: var(--popover-foreground, var(--card-foreground, var(--foreground)));
+  --minimal-primary: var(--primary, #111827);
+  --minimal-primary-foreground: var(--primary-foreground, #ffffff);
+  --minimal-secondary: var(--secondary, var(--muted, var(--card)));
+  --minimal-secondary-foreground: var(--secondary-foreground, var(--foreground));
+  --minimal-muted: var(--muted, var(--card));
+  --minimal-muted-foreground: var(--muted-foreground, var(--foreground));
+  --minimal-accent: var(--accent, var(--secondary, var(--muted, var(--card))));
+  --minimal-accent-foreground: var(--accent-foreground, var(--foreground));
+  --minimal-destructive: var(--destructive, #ef4444);
+  --minimal-destructive-foreground: var(--destructive-foreground, #ffffff);
+  --minimal-border: var(--border, currentColor);
+  --minimal-input: var(--input, var(--border));
+  --minimal-ring: var(--ring, var(--primary));
+  --minimal-chart-1: var(--chart-1, var(--primary));
+  --minimal-chart-2: var(--chart-2, var(--secondary, var(--primary)));
+  --minimal-chart-3: var(--chart-3, var(--accent, var(--primary)));
+  --minimal-chart-4: var(--chart-4, var(--muted-foreground, var(--foreground)));
+  --minimal-chart-5: var(--chart-5, var(--foreground));
+  --minimal-sidebar: var(--sidebar, var(--background));
+  --minimal-sidebar-foreground: var(--sidebar-foreground, var(--foreground));
+  --minimal-sidebar-primary: var(--sidebar-primary, var(--primary));
+  --minimal-sidebar-primary-foreground: var(--sidebar-primary-foreground, var(--primary-foreground));
+  --minimal-sidebar-accent: var(--sidebar-accent, var(--accent, var(--muted, var(--card))));
+  --minimal-sidebar-accent-foreground: var(--sidebar-accent-foreground, var(--accent-foreground, var(--foreground)));
+
+/* brand — refined cool-neutral identity (primary, ring, charts) */
+  --brand-50: #fafafa;
+  --brand-100: #f4f4f5;
+  --brand-200: #e4e4e7;
+  --brand-300: #d4d4d8;
+  --brand-400: #a1a1aa;
+  --brand-500: #71717a;
+  --brand-600: #52525b;
+  --brand-700: #3f3f46;
+  --brand-800: #27272a;
+  --brand-900: #18181b; /* @primary */
+
+  /* background — pure-neutral surface ramp (page, card, muted, dark surfaces) */
+  --background-50: #ffffff; /* @primary */
+  --background-100: #fafafa;
+  --background-200: #f5f5f5;
+  --background-300: #e5e5e5;
+  --background-400: #d4d4d4;
+  --background-500: #a3a3a3;
+  --background-600: #404040;
+  --background-700: #262626;
+  --background-800: #171717;
+  --background-900: #0a0a0a;
+
+  /* text — pure-neutral ink ramp (foreground, secondary, muted, inverse) */
+  --text-50: #fafafa;
+  --text-100: #ededed;
+  --text-200: #d4d4d4;
+  --text-300: #a1a1a1;
+  --text-400: #858585;
+  --text-500: #6e6e6e;
+  --text-600: #525252;
+  --text-700: #404040;
+  --text-800: #171717;
+  --text-900: #0a0a0a;
+
+  /* icon — pure-neutral icon ramp (default, muted, disabled, inverse) */
+  --icon-50: #fafafa;
+  --icon-100: #e5e5e5;
+  --icon-200: #d4d4d4;
+  --icon-300: #b0b0b0;
+  --icon-400: #8f8f8f;
+  --icon-500: #6e6e6e;
+  --icon-600: #525252;
+  --icon-700: #404040;
+  --icon-800: #262626; /* @primary */
+  --icon-900: #0a0a0a;
+
+  /* ============================================================
+     SEMANTIC ROLE TOKENS — light theme
+     ============================================================ */
+
+  /* surfaces */
+  --background: var(--background-50);
+  --card: var(--background-50);
+  --popover: var(--background-50);
+  --muted: var(--background-100);
+
+  /* foregrounds */
+  --foreground: var(--brand-900);
+  --card-foreground: var(--brand-900);
+  --popover-foreground: var(--brand-900);
+  --primary-foreground: var(--brand-50);
+  --secondary-foreground: var(--brand-900);
+  --muted-foreground: var(--brand-500);
+  --accent-foreground: var(--brand-900);
+  --destructive-foreground: var(--background-50);
+  --sidebar-foreground: var(--brand-900);
+  --sidebar-primary-foreground: var(--brand-50);
+  --sidebar-accent-foreground: var(--brand-900);
+
+  /* roles */
+  --primary: var(--brand-900);
+  --secondary: var(--brand-100);
+  --accent: var(--brand-100);
+  --input: var(--brand-200);
+  --ring: var(--brand-900);
+
+  /* border */
+  --border: var(--brand-200);
+  --border-strong: var(--brand-300);
+
+  /* state-success */
+  --success: #16a34a;
+  --success-foreground: var(--background-50);
+  --success-subtle: #f0fdf4;
+  --success-border: #bbf7d0;
+  --success-text: #15803d;
+
+  /* state-error (exposed as destructive for component compatibility) */
+  --destructive: #dc2626;
+  --destructive-subtle: #fef2f2;
+  --destructive-border: #fecaca;
+  --destructive-text: #b91c1c;
+
+  /* brand surfaces (tints for badges, selected/active backgrounds) */
+  --brand-subtle: var(--brand-100);
+  --brand-border: var(--brand-300);
+
+  /* chart — monochrome ramp from light to near-black for quiet fancy data */
+  --chart-1: var(--brand-200);
+  --chart-2: var(--brand-400);
+  --chart-3: var(--brand-600);
+  --chart-4: var(--brand-800);
+  --chart-5: var(--brand-900);
+
+  /* sidebar — first-class tonal sub-system */
+  --sidebar: var(--brand-50);
+  --sidebar-primary: var(--brand-900);
+  --sidebar-accent: var(--brand-100);
+  --sidebar-border: var(--brand-200);
+  --sidebar-ring: var(--brand-400);
+
+  /* typography */
+  --font-sans: Geist, ui-sans-serif, sans-serif, system-ui;
+  --font-serif: DM Serif Display, ui-serif, serif;
+  --font-mono: Geist Mono, ui-monospace, monospace;
+  --tracking-normal: 0em;
+  --tracking-tight: -0.012em;
+
+  /* radius — modern minimal (12px base) */
+  --radius: 0.75rem;
+  --radius-sm: 0.375rem;
+  --radius-lg: 1rem;
+
+  /* shadow — subtle, layered for fancy depth */
+  --shadow-2xs: 0 1px 0 0 rgba(0, 0, 0, 0.04);
+  --shadow-xs: 0 1px 1px 0 rgba(0, 0, 0, 0.04);
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05), 0 1px 1px 0 rgba(0, 0, 0, 0.03);
+  --shadow: 0 2px 4px 0 rgba(0, 0, 0, 0.06), 0 1px 2px 0 rgba(0, 0, 0, 0.03);
+  --shadow-md: 0 4px 8px -2px rgba(0, 0, 0, 0.07), 0 2px 4px -1px rgba(0, 0, 0, 0.04);
+  --shadow-lg: 0 12px 20px -6px rgba(0, 0, 0, 0.08), 0 4px 8px -2px rgba(0, 0, 0, 0.04);
+  --shadow-xl: 0 24px 40px -10px rgba(0, 0, 0, 0.10), 0 8px 16px -4px rgba(0, 0, 0, 0.06);
+  --shadow-2xl: 0 32px 56px -14px rgba(0, 0, 0, 0.14);
+
+  /* layout */
+  --spacing: 0.25rem;
+
+  /* ============================================================
+     ALIAS LAYER — preferred names for component authoring.
+     Resolves lazily, so it inherits the .dark overrides below.
+     ============================================================ */
+  --color-surface: var(--background);
+  --color-surface-muted: var(--muted);
+  --color-text: var(--foreground); /* @primary */
+  --color-text-muted: var(--muted-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-brand: var(--primary);
+  --color-brand-subtle: var(--brand-subtle);
+  --color-brand-border: var(--brand-border);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-success-50: var(--success-subtle);
+  --color-success-200: var(--success-border);
+  --color-success-600: var(--success);
+  --color-success-700: var(--success-text);
+  --color-danger-50: var(--destructive-subtle);
+  --color-danger-200: var(--destructive-border);
+  --color-danger-600: var(--destructive);
+  --color-danger-700: var(--destructive-text);
+  --space-4: var(--spacing);
+  --radius-md: var(--radius);
+}
+
+/* ============================================================
+   SEMANTIC ROLE TOKENS — dark theme overrides only.
+   Primitives, charts, alias layer, type, radius, shadow and
+   spacing are inherited from :root unchanged.
+   ============================================================ */
+.dark {
+  /* surfaces */
+  --background: var(--brand-900);
+  --card: var(--brand-800);
+  --popover: var(--brand-800);
+  --muted: var(--brand-800);
+
+  /* foregrounds */
+  --foreground: var(--brand-50);
+  --card-foreground: var(--brand-50);
+  --popover-foreground: var(--brand-50);
+  --primary-foreground: var(--brand-900);
+  --secondary-foreground: var(--brand-50);
+  --muted-foreground: var(--brand-400);
+  --accent-foreground: var(--brand-50);
+  --destructive-foreground: var(--brand-50);
+  --sidebar-foreground: var(--brand-50);
+  --sidebar-primary-foreground: var(--brand-900);
+  --sidebar-accent-foreground: var(--brand-50);
+
+  /* roles */
+  --primary: var(--brand-50);
+  --secondary: var(--brand-800);
+  --accent: var(--brand-700);
+  --input: var(--brand-700);
+  --ring: var(--brand-300);
+
+  /* border */
+  --border: var(--brand-700);
+  --border-strong: var(--brand-600);
+
+  /* state-success */
+  --success: #22c55e;
+  --success-foreground: #052e16;
+  --success-subtle: #0f2417;
+  --success-border: #166534;
+  --success-text: #4ade80;
+
+  /* state-error */
+  --destructive: #ef4444;
+  --destructive-subtle: #2a1416;
+  --destructive-border: #7f1d1d;
+  --destructive-text: #fca5a5;
+
+  /* brand surfaces */
+  --brand-subtle: var(--brand-800);
+  --brand-border: var(--brand-700);
+
+  /* chart — flipped monochrome ramp for dark surfaces */
+  --chart-1: var(--brand-700);
+  --chart-2: var(--brand-500);
+  --chart-3: var(--brand-300);
+  --chart-4: var(--brand-200);
+  --chart-5: var(--brand-50);
+
+  /* sidebar */
+  --sidebar: var(--brand-800);
+  --sidebar-primary: var(--brand-50);
+  --sidebar-accent: var(--brand-700);
+  --sidebar-border: var(--brand-700);
+  --sidebar-ring: var(--brand-400);
+}

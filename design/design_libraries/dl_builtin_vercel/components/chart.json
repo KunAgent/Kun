@@ -1,0 +1,49 @@
+{
+  "slug": "chart",
+  "name": "Chart",
+  "category": "data-viz",
+  "evidence": "AI-inferred based on developer platform dashboard product type and the source token system.",
+  "keyInsightSeed": "Charts reserve the blue scale for insight moments inside an otherwise monochrome UI.",
+  "anatomy": [
+    "chart-title",
+    "plot-area",
+    "series",
+    "legend",
+    "tooltip"
+  ],
+  "variantDimensions": [
+    {
+      "name": "type",
+      "values": [
+        "bar",
+        "line",
+        "area"
+      ]
+    },
+    {
+      "name": "context",
+      "values": [
+        "traffic",
+        "latency",
+        "errors"
+      ]
+    }
+  ],
+  "variants": [
+    {
+      "id": "traffic-bar",
+      "type": "bar",
+      "title": "Edge Requests"
+    },
+    {
+      "id": "latency-line",
+      "type": "line",
+      "title": "Latency Trend"
+    }
+  ],
+  "uiCopySamples": [
+    "Edge Requests",
+    "Latency Trend",
+    "Errors"
+  ]
+}

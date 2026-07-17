@@ -1,0 +1,61 @@
+{
+  "slug": "card",
+  "name": "Card",
+  "nameEn": "Card",
+  "category": "container",
+  "variantCount": 6,
+  "primitiveCount": 4,
+  "variants": {
+    "type": [
+      "stat",
+      "detail",
+      "panel"
+    ],
+    "state": [
+      "default",
+      "interactive"
+    ]
+  },
+  "variantDimensions": {
+    "type": [
+      "stat",
+      "detail",
+      "panel"
+    ],
+    "state": [
+      "default",
+      "interactive"
+    ]
+  },
+  "evidence": "AI-inferred from background, card, border, muted, and shadow token set.",
+  "anatomy": [
+    "surface",
+    "header",
+    "body",
+    "footer"
+  ],
+  "structurePatterns": [
+    "metric summary",
+    "information card",
+    "section panel"
+  ],
+  "childComponents": [
+    "button",
+    "badge"
+  ],
+  "structures": [
+    {
+      "name": "Stat Card",
+      "notes": "Compact summary with headline metric and trend label."
+    },
+    {
+      "name": "Detail Card",
+      "notes": "Longer body copy with subtle muted background blocks."
+    },
+    {
+      "name": "Panel Card",
+      "notes": "Section wrapper for forms and tables."
+    }
+  ],
+  "keyInsightSeed": "Cards are low-noise containers that rely on border and tonal contrast more than depth."
+}

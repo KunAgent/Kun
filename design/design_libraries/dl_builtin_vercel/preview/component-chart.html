@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en" class="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>
+  /* Page scaffold — NOT extracted */
+  /* @component-css-start */
+body{margin:0;padding:12px;background:var(--background);color:var(--foreground);font:12px/1.4 var(--font-sans);} .row{display:flex;gap:8px;align-items:flex-start;flex-wrap:wrap;margin-bottom:8px;} .label{width:44px;padding-top:6px;color:var(--muted-foreground);font:600 10px/1 var(--font-mono);letter-spacing:.08em;text-transform:uppercase;} .chart{flex:1 1 240px;min-width:240px;padding:10px;border:1px solid var(--border);border-radius:var(--radius);background:var(--card);color:var(--card-foreground);box-shadow:var(--shadow-sm);} .chart[aria-disabled="true"]{opacity:.5;filter:saturate(.7);} .head,.legend,.axis{display:flex;align-items:center;justify-content:space-between;gap:8px;} .title{font-weight:600;} .meta,.axis{color:var(--muted-foreground);font-size:10px;} .divider{margin:8px 0;border:0;border-top:1px solid var(--border);} .bars{display:grid;grid-template-columns:repeat(4,1fr);align-items:end;gap:8px;height:92px;margin:10px 0 6px;} .bar{border-radius:calc(var(--radius) - 2px) calc(var(--radius) - 2px) 0 0;background:linear-gradient(180deg,var(--chart-2),var(--chart-1));} .bar.alt{background:linear-gradient(180deg,var(--chart-4),var(--chart-3));} .legend{margin-top:6px;color:var(--muted-foreground);font-size:10px;} .dot{width:8px;height:8px;border-radius:999px;display:inline-block;margin-right:4px;vertical-align:middle;} .line{position:relative;height:92px;margin:10px 0 6px;border-bottom:1px solid var(--border);background:linear-gradient(180deg,color-mix(in srgb,var(--accent) 10%,transparent),transparent 70%);} .line svg{width:100%;height:100%;display:block;} .chip{padding:2px 6px;border:1px solid var(--input);border-radius:999px;background:var(--muted);color:var(--muted-foreground);}
+  /* @component-css-end */
+</style>
+</head>
+<body>
+<div class="row">
+<span class="label">Bar</span>
+<div class="chart">
+<div class="head"><span class="title">Edge Requests</span><span class="chip">Traffic</span></div>
+<div class="bars"><div class="bar" style="height:44%"></div><div class="bar alt" style="height:68%"></div><div class="bar" style="height:82%"></div><div class="bar alt" style="height:60%"></div></div>
+<div class="axis"><span>00:00</span><span>06:00</span><span>12:00</span><span>18:00</span></div>
+<div class="legend"><span><span class="dot" style="background:var(--chart-1)"></span>Edge Requests</span><span>3.8M</span></div>
+</div>
+<div class="chart" aria-disabled="true">
+<div class="head"><span class="title">Errors</span><span class="chip">Paused</span></div>
+<div class="bars"><div class="bar alt" style="height:22%"></div><div class="bar" style="height:34%"></div><div class="bar alt" style="height:28%"></div><div class="bar" style="height:18%"></div></div>
+<div class="axis"><span>00:00</span><span>06:00</span><span>12:00</span><span>18:00</span></div>
+<div class="legend"><span><span class="dot" style="background:var(--destructive)"></span>Errors</span><span>Muted</span></div>
+</div>
+</div>
+<hr class="divider">
+<div class="row">
+<span class="label">Line</span>
+<div class="chart">
+<div class="head"><span class="title">Latency Trend</span><span class="chip">P95</span></div>
+<div class="line"><svg viewBox="0 0 220 92" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M0 69C18 70 32 62 55 58C78 54 94 34 118 35C142 36 154 49 176 45C194 42 205 28 220 18" stroke="var(--chart-1)" stroke-width="3" stroke-linecap="round"/><path d="M0 69C18 70 32 62 55 58C78 54 94 34 118 35C142 36 154 49 176 45C194 42 205 28 220 18V92H0Z" fill="color-mix(in srgb,var(--chart-1) 18%,transparent)"/></svg></div>
+<div class="axis"><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span></div>
+<div class="legend"><span><span class="dot" style="background:var(--chart-1)"></span>Latency Trend</span><span>118 ms</span></div>
+</div>
+<div class="chart" aria-disabled="true">
+<div class="head"><span class="title">Latency Trend</span><span class="chip">Archived</span></div>
+<div class="line"><svg viewBox="0 0 220 92" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M0 56C26 48 44 54 66 46C88 38 112 31 132 36C154 42 173 55 196 57C206 58 213 55 220 50" stroke="var(--chart-5)" stroke-width="3" stroke-linecap="round"/></svg></div>
+<div class="axis"><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span></div>
+<div class="legend"><span><span class="dot" style="background:var(--chart-5)"></span>Latency Trend</span><span>No alerts</span></div>
+</div>
+</div>
+</body>
+</html>

@@ -1,0 +1,65 @@
+{
+  "slug": "chat-composer",
+  "name": "Chat Composer",
+  "purpose": "Prompt entry surface for AI interactions, follow-up questions, and multimodal task composition.",
+  "variantDimensions": {
+    "mode": [
+      "single-line",
+      "multi-line",
+      "tool-enabled"
+    ],
+    "state": [
+      "idle",
+      "focus",
+      "recording",
+      "disabled"
+    ],
+    "attachment": [
+      "none",
+      "file-chip",
+      "tool-chip"
+    ]
+  },
+  "structures": [
+    {
+      "name": "Prompt Composer",
+      "anatomy": [
+        "container",
+        "prompt-input",
+        "tool-row",
+        "submit-button"
+      ],
+      "notes": "A clean prompt entry area that supports quick task execution."
+    },
+    {
+      "name": "Expanded Composer",
+      "anatomy": [
+        "container",
+        "prompt-input",
+        "attachment-row",
+        "action-row"
+      ],
+      "notes": "Used when files, tools, or structured context are attached."
+    },
+    {
+      "name": "Minimal Follow-up Composer",
+      "anatomy": [
+        "container",
+        "prompt-input",
+        "inline-submit"
+      ],
+      "notes": "A lighter variant that works inside conversation views."
+    }
+  ],
+  "contentExamples": [
+    "发消息或按住空格说话...",
+    "帮我写作",
+    "图像生成",
+    "PPT 生成"
+  ],
+  "interactionNotes": [
+    "The composer should feel precise and calm; the primary button is the strongest accent.",
+    "Use border and subtle surface shifts to indicate active state, reserving vivid color for submission."
+  ],
+  "category": "ai-interaction"
+}

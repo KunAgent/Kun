@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="stylesheet" href="../colors_and_type.css">
+<title>Button · 豆包</title>
+<style>
+  /* Page scaffold — NOT extracted */
+  /* @component-css-start */
+  *{box-sizing:border-box}
+  body{margin:0;padding:24px;background:var(--background);color:var(--foreground);font-family:var(--font-sans);font-size:14px;line-height:1.4}
+  .stack{display:flex;flex-direction:column;gap:20px;max-width:680px}
+  .group{display:flex;flex-direction:column;gap:10px}
+  .label{font:600 11px/1 var(--font-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted-foreground)}
+  .row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .icon{width:15px;height:15px;flex:none;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;height:38px;padding:0 16px;border:1px solid transparent;border-radius:999px;font:500 13px/1 var(--font-sans);cursor:pointer;transition:background-color .16s,border-color .16s,color .16s,transform .12s}
+  .btn:active{transform:translateY(1px)}
+  .btn:focus-visible{outline:2px solid var(--ring);outline-offset:2px}
+  .btn:disabled{opacity:.45;cursor:not-allowed}
+  .primary{background:var(--primary);color:var(--primary-foreground)}
+  .primary:hover{background:color-mix(in srgb,var(--primary) 90%,var(--foreground))}
+  .ghost{background:var(--muted);color:var(--foreground)}
+  .ghost:hover{background:color-mix(in srgb,var(--muted) 82%,var(--foreground) 14%)}
+  .outline{background:var(--background);color:var(--foreground);border-color:var(--border)}
+  .outline:hover{background:var(--muted)}
+  .destructive{background:var(--destructive);color:var(--destructive-foreground)}
+  .destructive:hover{background:color-mix(in srgb,var(--destructive) 90%,var(--foreground))}
+  .sm{height:32px;padding:0 13px;font-size:12px}
+  .lg{height:44px;padding:0 20px;font-size:14px}
+  .icon-only{width:38px;height:38px;padding:0}
+  .divider{border:0;border-top:1px solid var(--border);margin:4px 0}
+  /* @component-css-end */
+</style>
+</head>
+<body>
+<svg style="display:none" xmlns="http://www.w3.org/2000/svg">
+  <symbol id="plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="send" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
+  <symbol id="trash" viewBox="0 0 24 24"><path d="M5 7h14M9 7V5h6v2M7 7l1 12h8l1-12"/></symbol>
+  <symbol id="edit" viewBox="0 0 24 24"><path d="M4 20h4L18.5 9.5a2.1 2.1 0 0 0-3-3L5 17v3Z"/></symbol>
+</svg>
+
+<div class="stack">
+  <div class="group">
+    <span class="label">Primary · 主操作</span>
+    <div class="row">
+      <button class="btn primary sm"><svg class="icon"><use href="#plus"/></svg>创建</button>
+      <button class="btn primary"><svg class="icon"><use href="#plus"/></svg>创建 AI 智能体</button>
+      <button class="btn primary lg"><svg class="icon"><use href="#send"/></svg>发送</button>
+      <button class="btn primary" disabled>处理中…</button>
+    </div>
+  </div>
+
+  <hr class="divider">
+
+  <div class="group">
+    <span class="label">Quiet · 次级与轮廓</span>
+    <div class="row">
+      <button class="btn ghost">我创建的</button>
+      <button class="btn outline"><svg class="icon"><use href="#edit"/></svg>编辑</button>
+      <button class="btn ghost sm">取消</button>
+      <button class="btn outline icon-only" aria-label="新建"><svg class="icon"><use href="#plus"/></svg></button>
+    </div>
+  </div>
+
+  <hr class="divider">
+
+  <div class="group">
+    <span class="label">Destructive · 删除</span>
+    <div class="row">
+      <button class="btn destructive"><svg class="icon"><use href="#trash"/></svg>删除对话</button>
+      <button class="btn destructive sm" disabled>删除</button>
+    </div>
+  </div>
+</div>
+</body>
+</html>

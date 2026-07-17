@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Dialog</title>
+  <link rel="stylesheet" href="../colors_and_type.css" />
+  <link rel="stylesheet" href="../scaffold.css" />
+  <link rel="stylesheet" href="../components.css" />
+  <style>
+    /* @component-css-start */
+    /* ===== Dialog / Modal ===== */
+    .ds-backdrop {
+      position: relative;
+      background: rgba(0,0,0,.5);
+      border: 1px solid var(--border-neutral-l1);
+      padding: var(--spacer-32) var(--spacer-24);
+      display: flex; align-items: center; justify-content: center;
+    }
+    .ds-dialog {
+      background: var(--bg-base-secondary);
+      border: 1px solid var(--border-neutral-l1);
+      border-radius: var(--radius-4);
+      width: 100%; max-width: 420px;
+      overflow: hidden;
+    }
+    .ds-dialog__head {
+      padding: var(--spacer-16) var(--spacer-24);
+      display: flex; align-items: center; justify-content: space-between;
+      border-bottom: 1px solid var(--border-neutral-l1);
+    }
+    .ds-dialog__title { font-size: var(--heading-xs-font-size); font-weight: var(--heading-xs-font-weight); color: var(--text-default); }
+    .ds-dialog__close {
+      width: 24px; height: 24px;
+      display: inline-flex; align-items: center; justify-content: center;
+      background: transparent; border: none; color: var(--icon-secondary);
+      cursor: pointer; border-radius: var(--radius-4);
+    }
+    .ds-dialog__close:hover { background: var(--bg-overlay-l2); color: var(--icon-default); }
+    .ds-dialog__body { padding: var(--spacer-16) var(--spacer-24); color: var(--text-secondary); font-size: var(--body-sm-font-size); line-height: var(--body-sm-line-height); }
+    .ds-dialog__foot {
+      padding: var(--spacer-12) var(--spacer-24);
+      display: flex; justify-content: flex-end; gap: var(--spacer-8);
+      border-top: 1px solid var(--border-neutral-l1);
+    }
+
+    /* ===== Drawer ===== */
+    .ds-drawer {
+      background: var(--bg-base-secondary);
+      border: 1px solid var(--border-neutral-l1);
+      border-radius: var(--radius-4);
+      width: 100%; max-width: 360px;
+      display: flex; flex-direction: column;
+    }
+    .ds-drawer__head { padding: var(--spacer-16) var(--spacer-24); border-bottom: 1px solid var(--border-neutral-l1); display: flex; justify-content: space-between; align-items: center; }
+    .ds-drawer__body { padding: var(--spacer-16) var(--spacer-24); flex: 1; }
+    /* @component-css-end */
+  </style>
+</head>
+<body>
+  <div class="pv-header">
+    <h1>Dialog / Modal</h1>
+    <p>Surface <code>--bg-base-secondary</code>, radius <code>--radius-4</code>. Width 360 / 420 / 560. Backdrop <code>rgba(0,0,0,.5)</code>.</p>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">Confirmation</div>
+    <div class="ds-backdrop" style="border-radius: var(--radius-4);">
+      <div class="ds-dialog">
+        <div class="ds-dialog__head">
+          <span class="ds-dialog__title">Delete project</span>
+          <button class="ds-dialog__close" aria-label="Close"><img src="../assets/icons/x.svg" width="14" height="14" alt="x" class="icon"></button>
+        </div>
+        <div class="ds-dialog__body">
+          This action cannot be undone. The project <strong style="color:var(--text-default);">Nimbus Web</strong>
+          and all of its tokens will be permanently removed.
+        </div>
+        <div class="ds-dialog__foot">
+          <button class="ds-btn ds-btn--ghost">Cancel</button>
+          <button class="ds-btn ds-btn--danger">Delete</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">Form dialog</div>
+    <div class="ds-backdrop" style="border-radius: var(--radius-4);">
+      <div class="ds-dialog">
+        <div class="ds-dialog__head">
+          <span class="ds-dialog__title">Invite member</span>
+          <button class="ds-dialog__close" aria-label="Close"><img src="../assets/icons/x.svg" width="14" height="14" alt="x" class="icon"></button>
+        </div>
+        <div class="ds-dialog__body">
+          <div class="stack-12">
+            <div class="ds-input"><span class="ds-input__icon"><img src="../assets/icons/mail.svg" width="14" height="14" alt="mail" class="icon"></span><input placeholder="name@company.com" /></div>
+            <select class="ds-select"><option>Editor</option><option>Viewer</option></select>
+          </div>
+        </div>
+        <div class="ds-dialog__foot">
+          <button class="ds-btn ds-btn--ghost">Cancel</button>
+          <button class="ds-btn ds-btn--primary">Send invite</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</body>
+</html>

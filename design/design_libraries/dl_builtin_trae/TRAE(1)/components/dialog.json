@@ -1,0 +1,109 @@
+{
+  "schemaVersion": 2,
+  "slug": "dialog",
+  "name": "Dialog",
+  "category": "feedback",
+  "sourceKind": "structured-spec",
+  "confidence": "medium",
+  "semanticTypeCandidates": [
+    "dialog",
+    "modal",
+    "confirm"
+  ],
+  "variantDimensions": {
+    "intent": [
+      "default",
+      "danger",
+      "info"
+    ],
+    "footer": [
+      "primary-cancel",
+      "primary-only",
+      "two-action"
+    ]
+  },
+  "representativeVariants": [
+    {
+      "intent": "default"
+    },
+    {
+      "intent": "danger",
+      "footer": "two-action"
+    }
+  ],
+  "anatomy": [
+    "overlay",
+    "surface",
+    "header",
+    "body",
+    "footer-actions",
+    "close-button"
+  ],
+  "structurePatterns": [
+    "centered modal over --special-bgtabsoverlay backdrop"
+  ],
+  "usageHints": [
+    "Surface uses --bg-base-secondary, --radius-8, --border-neutral-l1",
+    "Footer right-aligned with --spacer-8 gap"
+  ],
+  "doNotInvent": [
+    "No drawer / sheet variants"
+  ],
+  "unknowns": [
+    "focus-trap and escape behavior"
+  ],
+  "tokensConsumed": [
+    "--bg-base-secondary",
+    "--bg-overlay-l2",
+    "--body-sm-font-size",
+    "--body-sm-line-height",
+    "--border-neutral-l1",
+    "--heading-xs-font-size",
+    "--heading-xs-font-weight",
+    "--icon-default",
+    "--icon-secondary",
+    "--radius-4",
+    "--spacer-12",
+    "--spacer-16",
+    "--spacer-24",
+    "--spacer-32",
+    "--spacer-8",
+    "--text-default",
+    "--text-secondary"
+  ],
+  "domAnatomy": {
+    "root": {
+      "tag": "div",
+      "class": "ds-backdrop",
+      "children": [
+        {
+          "tag": "div",
+          "class": "ds-dialog",
+          "children": [
+            {
+              "tag": "div",
+              "class": "ds-dialog__head"
+            },
+            {
+              "tag": "div",
+              "class": "ds-dialog__body",
+              "text": "This action cannot be undone. The project and all of its tokens will be permanently removed."
+            },
+            {
+              "tag": "div",
+              "class": "ds-dialog__foot"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "provenance": {
+    "preview": "preview/component-dialog.html",
+    "source": "previews/dialog.html",
+    "css": {
+      "file": "components.css",
+      "marker": "── Dialog ──"
+    }
+  }
+}

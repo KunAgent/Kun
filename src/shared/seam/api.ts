@@ -218,6 +218,10 @@ export const designApi = {
     return runtimeRequest('/v1/design/components/search', 'POST', query)
   },
 
+  async searchAssets(query: unknown): Promise<RuntimeResponse> {
+    return runtimeRequest('/v1/design/assets/search', 'POST', query)
+  },
+
   async listSkills(): Promise<RuntimeResponse> {
     return runtimeRequest('/v1/design/skills', 'GET')
   },

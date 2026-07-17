@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Table</title>
+  <link rel="stylesheet" href="../colors_and_type.css" />
+  <link rel="stylesheet" href="../scaffold.css" />
+  <link rel="stylesheet" href="../components.css" />
+  <style>
+    /* @component-css-start */
+    /* ===== Table ===== */
+    .ds-table { width: 100%; border-collapse: collapse; }
+    .ds-table th, .ds-table td { text-align: left; padding: var(--spacer-12) var(--spacer-8); border-bottom: 1px solid var(--border-neutral-l1); font-size: var(--body-sm-font-size); }
+    .ds-table th { color: var(--text-tertiary); font-weight: var(--font-weight-default, 400); font-size: var(--body-xs-font-size); text-transform: uppercase; letter-spacing: 0.04em; }
+    .ds-table td { color: var(--text-default); }
+    .ds-table tr:last-child td { border-bottom: none; }
+    /* Numeric cells in tables default to mono for column alignment */
+    .ds-table td.num,
+    .ds-table th.num { text-align: right; font-variant-numeric: tabular-nums; }
+
+    /* Table wrapper: rounded, bordered container */
+    .ds-table-wrap {
+      border: 1px solid var(--border-neutral-l1);
+      border-radius: var(--radius-8);
+      overflow: hidden;
+      background: var(--bg-base-secondary);
+    }
+    /* Toolbar: search on the left, actions on the right */
+    .ds-table__toolbar {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: var(--spacer-12);
+      padding: var(--spacer-12);
+      border-bottom: 1px solid var(--border-neutral-l1);
+    }
+    .ds-table__toolbar-actions { display: flex; align-items: center; gap: var(--spacer-8); }
+    /* Footer: row count on the left, pagination on the right */
+    .ds-table__footer {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: var(--spacer-12);
+      padding: var(--spacer-12);
+      border-top: 1px solid var(--border-neutral-l1);
+      font-size: var(--body-xs-font-size); color: var(--text-tertiary);
+    }
+    .ds-table__pagination { display: flex; align-items: center; gap: var(--spacer-8); }
+    /* @component-css-end */
+  </style>
+</head>
+<body>
+  <div class="pv-header">
+    <h1>Table</h1>
+    <p>Data table with avatar cells, role, last-active and inline status tags. Status colors are scoped to inline cells, never to entire rows.</p>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">Table</div>
+    <div style="background: var(--bg-base-secondary); border:1px solid var(--border-neutral-l1); border-radius: var(--radius-4); overflow: hidden;">
+      <table class="ds-table">
+        <thead>
+          <tr><th>Member</th><th>Role</th><th>Last active</th><th>Status</th><th></th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>
+              <div class="row" style="gap: var(--spacer-8);">
+                <span class="ds-avatar ds-avatar--sm">A</span>
+                <div>
+                  <div>Avery Chen</div>
+                  <div class="text-tertiary" style="font-size: var(--body-xs-font-size);">avery@nimbus.app</div>
+                </div>
+              </div>
+            </td>
+            <td>Owner</td>
+            <td>2 min ago</td>
+            <td><span class="ds-tag ds-tag--success">Active</span></td>
+            <td><button class="ds-btn ds-btn--ghost ds-btn--sm" aria-label="More" style="padding:0; width:24px; justify-content:center;"><img src="../assets/icons/more-h.svg" width="14" height="14" alt="more-h" class="icon"></button></td>
+          </tr>
+          <tr>
+            <td>
+              <div class="row" style="gap: var(--spacer-8);">
+                <span class="ds-avatar ds-avatar--sm">M</span>
+                <div>
+                  <div>Mia Patel</div>
+                  <div class="text-tertiary" style="font-size: var(--body-xs-font-size);">mia@nimbus.app</div>
+                </div>
+              </div>
+            </td>
+            <td>Editor</td>
+            <td>3 hr ago</td>
+            <td><span class="ds-tag">Idle</span></td>
+            <td><button class="ds-btn ds-btn--ghost ds-btn--sm" aria-label="More" style="padding:0; width:24px; justify-content:center;"><img src="../assets/icons/more-h.svg" width="14" height="14" alt="more-h" class="icon"></button></td>
+          </tr>
+          <tr>
+            <td>
+              <div class="row" style="gap: var(--spacer-8);">
+                <span class="ds-avatar ds-avatar--sm">L</span>
+                <div>
+                  <div>Liam Wong</div>
+                  <div class="text-tertiary" style="font-size: var(--body-xs-font-size);">liam@nimbus.app</div>
+                </div>
+              </div>
+            </td>
+            <td>Viewer</td>
+            <td>Yesterday</td>
+            <td><span class="ds-tag ds-tag--warning">Invited</span></td>
+            <td><button class="ds-btn ds-btn--ghost ds-btn--sm" aria-label="More" style="padding:0; width:24px; justify-content:center;"><img src="../assets/icons/more-h.svg" width="14" height="14" alt="more-h" class="icon"></button></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">Toolbar + table + footer</div>
+    <div class="ds-table-wrap">
+      <div class="ds-table__toolbar">
+        <div class="ds-input ds-search" style="max-width: 280px;">
+          <span class="ds-input__icon"><img src="../assets/icons/search.svg" width="14" height="14" alt="search" class="icon"></span>
+          <input placeholder="Search members..." />
+        </div>
+        <div class="ds-table__toolbar-actions">
+          <button class="ds-btn ds-btn--secondary ds-btn--sm"><img src="../assets/icons/filter.svg" width="14" height="14" alt="filter" class="icon"><span>Filter</span></button>
+          <button class="ds-btn ds-btn--primary ds-btn--sm"><img src="../assets/icons/plus.svg" width="14" height="14" alt="plus" class="icon"><span>Invite</span></button>
+        </div>
+      </div>
+      <table class="ds-table">
+        <thead>
+          <tr><th>Member</th><th>Role</th><th>Last active</th><th>Status</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>
+              <div class="row" style="gap: var(--spacer-8);">
+                <span class="ds-avatar ds-avatar--sm">A</span>
+                <div>
+                  <div>Avery Chen</div>
+                  <div class="text-tertiary" style="font-size: var(--body-xs-font-size);">avery@nimbus.app</div>
+                </div>
+              </div>
+            </td>
+            <td>Owner</td>
+            <td>2 min ago</td>
+            <td><span class="ds-tag ds-tag--success">Active</span></td>
+          </tr>
+          <tr>
+            <td>
+              <div class="row" style="gap: var(--spacer-8);">
+                <span class="ds-avatar ds-avatar--sm">M</span>
+                <div>
+                  <div>Mia Patel</div>
+                  <div class="text-tertiary" style="font-size: var(--body-xs-font-size);">mia@nimbus.app</div>
+                </div>
+              </div>
+            </td>
+            <td>Editor</td>
+            <td>3 hr ago</td>
+            <td><span class="ds-tag">Idle</span></td>
+          </tr>
+          <tr>
+            <td>
+              <div class="row" style="gap: var(--spacer-8);">
+                <span class="ds-avatar ds-avatar--sm">L</span>
+                <div>
+                  <div>Liam Wong</div>
+                  <div class="text-tertiary" style="font-size: var(--body-xs-font-size);">liam@nimbus.app</div>
+                </div>
+              </div>
+            </td>
+            <td>Viewer</td>
+            <td>Yesterday</td>
+            <td><span class="ds-tag ds-tag--warning">Invited</span></td>
+          </tr>
+          <tr>
+            <td>
+              <div class="row" style="gap: var(--spacer-8);">
+                <span class="ds-avatar ds-avatar--sm">N</span>
+                <div>
+                  <div>Noah Kim</div>
+                  <div class="text-tertiary" style="font-size: var(--body-xs-font-size);">noah@nimbus.app</div>
+                </div>
+              </div>
+            </td>
+            <td>Editor</td>
+            <td>2 days ago</td>
+            <td><span class="ds-tag">Idle</span></td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="ds-table__footer">
+        <span>Showing 4 of 24 members</span>
+        <div class="ds-table__pagination">
+          <button class="ds-btn ds-btn--ghost ds-btn--sm" aria-label="Previous" style="padding:0; width:24px; justify-content:center;"><img src="../assets/icons/arrow-left.svg" width="14" height="14" alt="arrow-left" class="icon"></button>
+          <button class="ds-btn ds-btn--ghost ds-btn--sm" aria-label="Next" style="padding:0; width:24px; justify-content:center;"><img src="../assets/icons/arrow-right.svg" width="14" height="14" alt="arrow-right" class="icon"></button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</body>
+</html>

@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>
+  /* Page scaffold — NOT extracted */
+  /* @component-css-start */
+body{margin:0;padding:12px;background:var(--background);color:var(--foreground);font:14px/1.4 var(--font-sans)}.row{display:flex;gap:8px;align-items:flex-start;flex-wrap:wrap;margin-bottom:8px}.label{display:inline-flex;align-items:center;min-height:44px;padding:0 calc(var(--spacing)*2);font:600 10px/1 var(--font-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted-foreground)}.bar,.seg{display:flex;align-items:center;gap:calc(var(--spacing)*2);border:1px solid var(--border);border-radius:calc(var(--radius) + 6px);background:var(--card);color:var(--card-foreground);box-shadow:var(--shadow-sm)}.bar{min-width:300px;justify-content:space-between;padding:calc(var(--spacing)*2) calc(var(--spacing)*3)}.brand{font-weight:700;letter-spacing:-.02em}.links,.switch{display:flex;gap:6px;align-items:center}.item{display:inline-flex;align-items:center;justify-content:center;min-height:32px;padding:0 calc(var(--spacing)*2);border-radius:var(--radius);color:var(--muted-foreground);text-decoration:none;border:1px solid transparent;white-space:nowrap}.item.active{background:var(--secondary);color:var(--secondary-foreground);border-color:var(--border)}.bar .item:hover,.seg .item:hover{background:var(--accent);color:var(--accent-foreground)}.item:focus-visible{outline:2px solid var(--ring);outline-offset:2px}.item[aria-disabled=true],.is-disabled .item{opacity:.45;pointer-events:none}.util{display:inline-flex;align-items:center;min-width:32px;min-height:32px;justify-content:center;border-radius:var(--radius);background:var(--muted);color:var(--foreground);font-size:12px}.seg{padding:4px;background:var(--muted)}.seg .item{min-height:34px;color:var(--foreground)}.seg .item.active{background:var(--primary);color:var(--primary-foreground);border-color:transparent}.divider{height:1px;margin:8px 0;border:0;background:var(--border)}
+  /* @component-css-end */
+</style>
+</head>
+<body>
+<div class="row">
+<span class="label">topbar</span>
+<nav class="bar" aria-label="Primary">
+<span class="brand">Vibecamp</span>
+<span class="links">
+<a class="item active" href="#">Overview</a>
+<a class="item" href="#">Program</a>
+<a class="item" href="#">Community</a>
+</span>
+<span class="util" aria-hidden="true">24</span>
+</nav>
+<nav class="bar is-disabled" aria-label="Primary disabled">
+<span class="brand">Vibecamp</span>
+<span class="links">
+<a class="item active" href="#" aria-disabled="true">Overview</a>
+<a class="item" href="#" aria-disabled="true">Program</a>
+<a class="item" href="#" aria-disabled="true">Community</a>
+</span>
+<span class="util" aria-hidden="true">24</span>
+</nav>
+</div>
+<hr class="divider">
+<div class="row">
+<span class="label">segmented</span>
+<div class="seg" role="tablist" aria-label="View switch">
+<a class="item active" href="#" role="tab" aria-selected="true">Overview</a>
+<a class="item" href="#" role="tab" aria-selected="false">Program</a>
+<a class="item" href="#" role="tab" aria-selected="false">Community</a>
+</div>
+<div class="seg is-disabled" role="tablist" aria-label="View switch disabled">
+<a class="item active" href="#" role="tab" aria-selected="true" aria-disabled="true">Overview</a>
+<a class="item" href="#" role="tab" aria-selected="false" aria-disabled="true">Program</a>
+<a class="item" href="#" role="tab" aria-selected="false" aria-disabled="true">Community</a>
+</div>
+</div>
+</body>
+</html>

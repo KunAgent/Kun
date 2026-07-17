@@ -1,0 +1,79 @@
+{
+  "schemaVersion": 2,
+  "slug": "form",
+  "name": "Form",
+  "category": "data-entry",
+  "sourceKind": "structured-spec",
+  "confidence": "medium",
+  "semanticTypeCandidates": ["form-layout", "form-group", "field-set"],
+  "variantDimensions": {
+    "layout": ["single-column", "double-column", "grouped"],
+    "validation": ["default", "error", "success"]
+  },
+  "representativeVariants": [
+    { "layout": "single-column" },
+    { "layout": "double-column" },
+    { "layout": "grouped" }
+  ],
+  "anatomy": ["form-card", "form-title", "form", "form-field", "form-label", "required-mark", "form-help", "form-error-text", "form-success-text", "form-row", "form-actions", "form-section", "form-section-title", "divider"],
+  "structurePatterns": [
+    "Vertical flex column with 16px gap between fields",
+    "Each field is a flex column with label, control, and optional help/error text",
+    "Double-column layout uses CSS grid with 1fr 1fr and 16px gap",
+    "Form card: white background, 8px radius, 24px padding, subtle box-shadow"
+  ],
+  "usageHints": [
+    "Form-card: background #FFFFFF, border-radius 8px, padding 24px, box-shadow 0 1px 3px rgba(0,0,0,0.06)",
+    "Form-title: font-size 16px, font-weight 600, color #0C0D0E, margin-bottom 24px",
+    "Form-label: font-size 13px, font-weight 500, color #42464E, line-height 22px",
+    "Required mark: color #F53F3F, margin-left 2px",
+    "Form-help: font-size 12px, color #737A87",
+    "Form-error-text: font-size 12px, color #F53F3F",
+    "Form-success-text: font-size 12px, color #309256",
+    "Field gap: 4px between label and control",
+    "Section title: font-size 14px, font-weight 500, color #0C0D0E"
+  ],
+  "doNotInvent": ["async validation", "form submission handling", "field-level API"],
+  "unknowns": ["horizontal label-aligned layout variant", "inline form layout"],
+  "tokensConsumed": [],
+  "domAnatomy": {
+    "root": {
+      "tag": "div",
+      "class": "form-card",
+      "children": [
+        { "tag": "h3", "class": "form-title" },
+        {
+          "tag": "form",
+          "class": "form",
+          "children": [
+            {
+              "tag": "div",
+              "class": "form-field",
+              "children": [
+                { "tag": "label", "class": "form-label" },
+                { "tag": "input", "class": "ui-input" },
+                { "tag": "span", "class": "form-help", "optional": true },
+                { "tag": "span", "class": "form-error-text", "optional": true }
+              ]
+            },
+            {
+              "tag": "div",
+              "class": "form-row",
+              "optional": true,
+              "children": [
+                { "tag": "div", "class": "form-field" },
+                { "tag": "div", "class": "form-field" }
+              ]
+            },
+            { "tag": "div", "class": "form-actions", "optional": true }
+          ]
+        }
+      ]
+    }
+  },
+  "provenance": {
+    "preview": "preview/ui-form.html",
+    "source": "structured-spec",
+    "css": { "file": "ui-form.html", "marker": "inline style" }
+  }
+}

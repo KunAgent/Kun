@@ -1,0 +1,59 @@
+{
+  "slug": "bottom-nav",
+  "name": "Bottom Navigation",
+  "category": "navigation",
+  "variantCount": 4,
+  "evidence": "AI-inferred from app kit type and consumer fitness usage pattern.",
+  "anatomy": [
+    "bar",
+    "item",
+    "icon",
+    "label"
+  ],
+  "childComponents": [],
+  "cssVariables": [
+    "background",
+    "foreground",
+    "muted-foreground",
+    "border",
+    "primary",
+    "secondary",
+    "sidebar",
+    "sidebar-foreground",
+    "radius"
+  ],
+  "variantDimensions": {
+    "destination": [
+      "home",
+      "training",
+      "stats",
+      "profile"
+    ],
+    "state": [
+      "active",
+      "inactive"
+    ]
+  },
+  "structurePatterns": [
+    "4-item mobile nav",
+    "active accent state",
+    "flat bar with border top"
+  ],
+  "structures": [
+    {
+      "name": "Destination=Home, State=Active",
+      "layout": "icon over label",
+      "copy": "Home"
+    },
+    {
+      "name": "Destination=Training, State=Inactive",
+      "layout": "icon over label",
+      "copy": "Train"
+    },
+    {
+      "name": "Destination=Stats, State=Inactive",
+      "layout": "icon over label",
+      "copy": "Stats"
+    }
+  ]
+}

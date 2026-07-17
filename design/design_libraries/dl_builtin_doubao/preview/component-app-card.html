@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="stylesheet" href="../colors_and_type.css">
+<title>App Card · 豆包</title>
+<style>
+  /* Page scaffold — NOT extracted */
+  /* @component-css-start */
+  *{box-sizing:border-box}
+  body{margin:0;padding:24px;background:var(--background);color:var(--foreground);font-family:var(--font-sans);font-size:14px;line-height:1.4}
+  .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;max-width:720px}
+  .card{display:flex;gap:13px;padding:16px;text-align:left;border:1px solid var(--border);border-radius:14px;background:var(--card);cursor:pointer;transition:border-color .16s,background .16s,transform .16s}
+  .card:hover{border-color:color-mix(in srgb,var(--primary) 40%,var(--border));background:color-mix(in srgb,var(--accent) 22%,var(--card));transform:translateY(-2px)}
+  .ic{width:44px;height:44px;flex:none;display:grid;place-items:center;border-radius:13px;font-size:20px;color:var(--primary-foreground)}
+  .body{flex:1;min-width:0}
+  .title{margin:2px 0 5px;font-size:15px;font-weight:600}
+  .desc{margin:0 0 12px;font-size:13px;line-height:1.5;color:var(--muted-foreground);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+  .meta{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted-foreground)}
+  .count{display:inline-flex;align-items:center;gap:4px}
+  .dot{width:3px;height:3px;border-radius:50%;background:currentColor;opacity:.6}
+  .icon{width:13px;height:13px;flex:none;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+  /* @component-css-end */
+</style>
+</head>
+<body>
+<svg style="display:none" xmlns="http://www.w3.org/2000/svg">
+  <symbol id="flame" viewBox="0 0 24 24"><path d="M12 3c1 3 4 4 4 8a4 4 0 0 1-8 0c0-2 1-3 1-4 2 1 3 0 3-4Z"/></symbol>
+</svg>
+
+<div class="grid">
+  <button class="card">
+    <span class="ic" style="background:linear-gradient(135deg,var(--chart-1),var(--chart-2))">✍️</span>
+    <span class="body">
+      <span class="title">全能写作助手</span>
+      <p class="desc">提供多种文案创作选择，轻松完成各种文案任务。</p>
+      <span class="meta"><span class="count"><svg class="icon"><use href="#flame"/></svg>1384.1万人聊过</span><span class="dot"></span><span>@豆包官方</span></span>
+    </span>
+  </button>
+
+  <button class="card">
+    <span class="ic" style="background:linear-gradient(135deg,var(--chart-2),var(--primary))">🖼️</span>
+    <span class="body">
+      <span class="title">识图生成提示词</span>
+      <p class="desc">上传图片，根据图片内容精准生成提示词，帮助二次创作。</p>
+      <span class="meta"><span class="count"><svg class="icon"><use href="#flame"/></svg>111.1万人聊过</span><span class="dot"></span><span>@豆包识图</span></span>
+    </span>
+  </button>
+
+  <button class="card">
+    <span class="ic" style="background:linear-gradient(135deg,var(--destructive),var(--destructive))">💗</span>
+    <span class="body">
+      <span class="title">高情商回复</span>
+      <p class="desc">聊天时不知道怎么回复，找来帮你看~</p>
+      <span class="meta"><span class="count"><svg class="icon"><use href="#flame"/></svg>1324.6万人聊过</span><span class="dot"></span><span>@艾比斯之梦</span></span>
+    </span>
+  </button>
+
+  <button class="card">
+    <span class="ic" style="background:linear-gradient(135deg,var(--chart-2),var(--chart-4))">📊</span>
+    <span class="body">
+      <span class="title">EXCEL大全</span>
+      <p class="desc">拥有卓越数据处理能力，助您解决 Excel 各类难题。</p>
+      <span class="meta"><span class="count"><svg class="icon"><use href="#flame"/></svg>24.6万人聊过</span><span class="dot"></span><span>@春风十里oh~</span></span>
+    </span>
+  </button>
+</div>
+</body>
+</html>

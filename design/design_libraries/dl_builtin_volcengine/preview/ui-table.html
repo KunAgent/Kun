@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>Table 表格</title>
+  <link rel="stylesheet" href="preview-scaffold.css">
+  <style>
+    :root {
+      --color-table-header-bg: var(--color-bg-5, #F6F8FA);
+      --color-table-header-text: var(--color-text-2, #42464E);
+      --color-table-cell-bg: var(--color-bg-1, #FFFFFF);
+      --color-table-cell-text: var(--color-text-1, #0C0D0E);
+      --color-table-border: var(--color-border-light, #EAEDF1);
+      --color-table-action-primary: var(--color-primary, #1664FF);
+      --color-table-action-danger: var(--color-danger, #D7312A);
+      --color-table-row-hover: var(--color-bg-4, #F1F3F5);
+      --color-table-row-stripe: var(--color-bg-3, #F6F8FA);
+    }
+    .table-wrapper {
+      width: 100%;
+      overflow-x: auto;
+      border: 1px solid var(--color-table-border);
+      border-radius: 8px;
+    }
+    .table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+    .table th, .table td {
+      padding: 12px 16px;
+      text-align: left;
+      border-bottom: 1px solid var(--color-table-border);
+      white-space: nowrap;
+    }
+    .table th {
+      background: var(--color-table-header-bg);
+      color: var(--color-table-header-text);
+      font-weight: 500;
+      font-size: 13px;
+    }
+    .table td {
+      background: var(--color-table-cell-bg);
+      color: var(--color-table-cell-text);
+    }
+    .table tbody tr:last-child td { border-bottom: none; }
+    .table-striped tbody tr:nth-child(even) td { background: var(--color-table-row-stripe); }
+    .table tbody tr:hover td { background: var(--color-table-row-hover); }
+    .td-user { display: table-cell; vertical-align: middle; }
+    .td-user > * { display: inline-flex; vertical-align: middle; margin-right: 8px; }
+    .td-user > *:last-child { margin-right: 0; }
+    .td-mono { font-family: "SF Mono", "Menlo", monospace; font-size: 13px; }
+    td.table-actions { display: table-cell; }
+    td.table-actions > * { display: inline; margin-right: 12px; }
+    td.table-actions > *:last-child { margin-right: 0; }
+    .action-link {
+      color: var(--color-table-action-primary);
+      cursor: pointer;
+      font-size: 13px;
+      text-decoration: none;
+    }
+    .action-link:hover { opacity: 0.8; }
+    .action-danger { color: var(--color-table-action-danger); }
+    .avatar-sm {
+      width: 24px; height: 24px;
+      border-radius: 50%;
+      background: var(--color-primary, #1664FF);
+      color: #fff;
+      display: inline-flex; align-items: center; justify-content: center;
+      font-size: 12px;
+      font-weight: 500;
+      flex-shrink: 0;
+    }
+    .tag {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 12px;
+      line-height: 1.5;
+      font-weight: 500;
+    }
+    .tag-success { background: #E8FFEA; color: #00B42A; }
+    .tag-warning { background: #FFF7E8; color: #FF7D00; }
+    .tag-danger { background: #FFECE8; color: #F53F3F; }
+    .table-toolbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+      gap: 12px;
+    }
+    .toolbar-filters { display: flex; gap: 8px; }
+    .toolbar-actions { display: flex; gap: 8px; }
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center;
+      border: none; border-radius: 4px;
+      cursor: pointer; font-size: 13px; font-weight: 500;
+      transition: opacity 0.15s;
+    }
+    .btn:hover { opacity: 0.85; }
+    .btn-sm { height: 28px; padding: 0 12px; }
+    .btn-primary { background: #1664FF; color: #fff; }
+    .btn-secondary { background: #F6F8FA; color: #42464E; }
+    .btn-text { background: none; color: #737A87; }
+    .btn-text:disabled { opacity: 0.4; cursor: not-allowed; }
+    .ved-select-trigger {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 28px;
+      padding: 0 8px;
+      background: #FFFFFF;
+      border-radius: 4px;
+      box-shadow: 0 0 0 1px #DDE2E9, 0 1px 1px rgba(0,0,0,0.05);
+      cursor: pointer;
+      gap: 4px;
+      font-size: 13px;
+    }
+    .ved-select-placeholder { color: #737A87; white-space: nowrap; }
+    .ved-select-arrow { width: 16px; height: 16px; flex-shrink: 0; color: #737A87; }
+    .ved-input {
+      display: inline-flex;
+      align-items: center;
+      height: 28px;
+      padding: 0 8px;
+      background: #FFFFFF;
+      border: none;
+      border-radius: 4px;
+      box-shadow: 0 0 0 1px #DDE2E9, 0 1px 1px rgba(0,0,0,0.05);
+      gap: 6px;
+      width: 200px;
+    }
+    .ved-input-prefix { display: flex; align-items: center; color: #737A87; flex-shrink: 0; }
+    .ved-input-prefix svg { width: 14px; height: 14px; }
+    .ved-input input {
+      flex: 1; border: none; outline: none; background: transparent;
+      font-size: 13px; color: #0C0D0E; width: 100%;
+    }
+    .ved-input input::placeholder { color: #737A87; }
+    .table-pagination {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 16px;
+      font-size: 13px;
+      color: #737A87;
+    }
+    .pagination-controls { display: flex; align-items: center; gap: 2px; }
+    .pagination-active { color: #1664FF !important; font-weight: 500; }
+    .pagination-ellipsis { padding: 0 8px; color: #737A87; }
+    .th-checkbox { width: 40px; }
+    input[type="checkbox"] { width: 16px; height: 16px; accent-color: #1664FF; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <div class="pv-header">
+    <h1>Table 表格</h1>
+    <p>数据表格组件，支持工具栏筛选、分页、行选择与操作列，适用于中后台数据管理场景。</p>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">完整表格示例</div>
+    <div class="stack-12">
+      <div class="table-toolbar">
+        <div class="toolbar-filters">
+          <div class="ved-select-trigger">
+            <span class="ved-select-placeholder">部门</span>
+            <svg class="ved-select-arrow" viewBox="0 0 16 16" fill="none"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+          <div class="ved-select-trigger">
+            <span class="ved-select-placeholder">状态</span>
+            <svg class="ved-select-arrow" viewBox="0 0 16 16" fill="none"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+          <div class="ved-input">
+            <span class="ved-input-prefix">
+              <svg viewBox="0 0 16 16" fill="none"><circle cx="7" cy="7" r="4.5" stroke="currentColor" stroke-width="1.5"/><path d="M10.5 10.5L13.5 13.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+            </span>
+            <input type="text" placeholder="搜索姓名或工号...">
+          </div>
+        </div>
+        <div class="toolbar-actions">
+          <button class="btn btn-primary btn-sm">添加员工</button>
+          <button class="btn btn-secondary btn-sm">导出</button>
+        </div>
+      </div>
+      <div class="table-wrapper">
+        <table class="table table-striped">
+          <thead>
+            <tr>
+              <th class="th-checkbox"><input type="checkbox"></th>
+              <th>工号</th>
+              <th>姓名</th>
+              <th>部门</th>
+              <th>职位</th>
+              <th>入职日期</th>
+              <th>状态</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><input type="checkbox"></td>
+              <td class="td-mono">EMP-001</td>
+              <td class="td-user"><span class="avatar-sm">陈</span><span>陈明远</span></td>
+              <td>技术部</td>
+              <td>高级前端工程师</td>
+              <td>2022-03-15</td>
+              <td><span class="tag tag-success">在职</span></td>
+              <td class="table-actions">
+                <a class="action-link">编辑</a>
+                <a class="action-link">详情</a>
+                <a class="action-link action-danger">停用</a>
+              </td>
+            </tr>
+            <tr>
+              <td><input type="checkbox"></td>
+              <td class="td-mono">EMP-002</td>
+              <td class="td-user"><span class="avatar-sm">林</span><span>林小雨</span></td>
+              <td>产品部</td>
+              <td>产品经理</td>
+              <td>2023-06-01</td>
+              <td><span class="tag tag-success">在职</span></td>
+              <td class="table-actions">
+                <a class="action-link">编辑</a>
+                <a class="action-link">详情</a>
+                <a class="action-link action-danger">停用</a>
+              </td>
+            </tr>
+            <tr>
+              <td><input type="checkbox"></td>
+              <td class="td-mono">EMP-003</td>
+              <td class="td-user"><span class="avatar-sm">赵</span><span>赵磊</span></td>
+              <td>设计部</td>
+              <td>UI 设计师</td>
+              <td>2024-09-10</td>
+              <td><span class="tag tag-warning">试用期</span></td>
+              <td class="table-actions">
+                <a class="action-link">编辑</a>
+                <a class="action-link">详情</a>
+                <a class="action-link action-danger">停用</a>
+              </td>
+            </tr>
+            <tr>
+              <td><input type="checkbox"></td>
+              <td class="td-mono">EMP-004</td>
+              <td class="td-user"><span class="avatar-sm">周</span><span>周婷</span></td>
+              <td>市场部</td>
+              <td>市场运营</td>
+              <td>2021-11-20</td>
+              <td><span class="tag tag-success">在职</span></td>
+              <td class="table-actions">
+                <a class="action-link">编辑</a>
+                <a class="action-link">详情</a>
+                <a class="action-link action-danger">停用</a>
+              </td>
+            </tr>
+            <tr>
+              <td><input type="checkbox"></td>
+              <td class="td-mono">EMP-005</td>
+              <td class="td-user"><span class="avatar-sm">吴</span><span>吴凡</span></td>
+              <td>技术部</td>
+              <td>后端工程师</td>
+              <td>2020-04-08</td>
+              <td><span class="tag tag-danger">已离职</span></td>
+              <td class="table-actions">
+                <a class="action-link">详情</a>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="table-pagination">
+        <span>共 128 条</span>
+        <div class="pagination-controls">
+          <button class="btn btn-text btn-sm" disabled>&lt;</button>
+          <button class="btn btn-text btn-sm pagination-active">1</button>
+          <button class="btn btn-text btn-sm">2</button>
+          <button class="btn btn-text btn-sm">3</button>
+          <span class="pagination-ellipsis">...</span>
+          <button class="btn btn-text btn-sm">13</button>
+          <button class="btn btn-text btn-sm">&gt;</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

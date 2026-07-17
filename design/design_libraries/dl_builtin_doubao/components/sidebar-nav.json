@@ -1,0 +1,63 @@
+{
+  "slug": "sidebar-nav",
+  "name": "Sidebar Navigation",
+  "purpose": "Primary application navigation for a dashboard or AI workspace shell.",
+  "variantDimensions": {
+    "itemType": [
+      "default",
+      "active",
+      "nested",
+      "utility"
+    ],
+    "density": [
+      "compact",
+      "comfortable"
+    ],
+    "badge": [
+      "none",
+      "count",
+      "status-dot"
+    ]
+  },
+  "structures": [
+    {
+      "name": "Main Nav Group",
+      "anatomy": [
+        "group-label",
+        "item-list",
+        "item-icon",
+        "item-label",
+        "item-badge"
+      ],
+      "notes": "Supports top-level workspace navigation."
+    },
+    {
+      "name": "Nested Nav Item",
+      "anatomy": [
+        "parent-item",
+        "child-list",
+        "child-item"
+      ],
+      "notes": "Used for saved spaces or section drill-down."
+    },
+    {
+      "name": "Utility Footer Nav",
+      "anatomy": [
+        "divider",
+        "item-list"
+      ],
+      "notes": "Contains settings, help, or upgrade entries."
+    }
+  ],
+  "contentExamples": [
+    "新对话",
+    "AI 创作",
+    "发现智能体",
+    "历史对话"
+  ],
+  "interactionNotes": [
+    "Use sidebar-specific tokens for the shell instead of generic surface tokens.",
+    "Selected state should feel filled and stable rather than loud."
+  ],
+  "category": "navigation"
+}

@@ -1,0 +1,1174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Goldentime Data Table Preview</title>
+  <link rel="stylesheet" href="../colors_and_type.css">
+  <style>
+    :root {
+      color-scheme: light;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: var(--font-sans);
+      background: hsl(var(--background));
+      color: hsl(var(--foreground));
+      letter-spacing: var(--tracking-normal);
+    }
+
+    h1,
+    h2,
+    h3,
+    h4,
+    p {
+      margin: 0;
+    }
+
+    button,
+    input {
+      font: inherit;
+      letter-spacing: inherit;
+    }
+
+    .page {
+      min-height: 100vh;
+      padding: calc(var(--spacing) * 10) calc(var(--spacing) * 8);
+      background:
+        radial-gradient(circle at top left, hsl(var(--accent) / 0.16), transparent 28%),
+        linear-gradient(180deg, hsl(var(--background)), hsl(var(--muted) / 0.26));
+    }
+
+    .shell {
+      max-width: 1440px;
+      margin: 0 auto;
+      display: grid;
+      gap: calc(var(--spacing) * 7);
+    }
+
+    .hero,
+    .section-grid {
+      display: grid;
+      gap: calc(var(--spacing) * 5);
+    }
+
+    .hero {
+      grid-template-columns: minmax(0, 1.35fr) minmax(340px, 0.9fr);
+      align-items: stretch;
+    }
+
+    .section-grid {
+      grid-template-columns: minmax(0, 1.25fr) minmax(320px, 0.75fr);
+    }
+
+    .panel,
+    .card,
+    .shell-table,
+    .spec-card {
+      background: hsl(var(--card));
+      border: 1px solid hsl(var(--border));
+      border-radius: calc(var(--radius) * 0.9);
+      box-shadow: var(--shadow-xs);
+    }
+
+    .panel,
+    .card {
+      padding: calc(var(--spacing) * 6);
+      display: grid;
+      gap: calc(var(--spacing) * 4);
+    }
+
+    .eyebrow,
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      width: fit-content;
+      border-radius: 999px;
+      font-size: 0.76rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .eyebrow {
+      padding: calc(var(--spacing) * 1.2) calc(var(--spacing) * 2.2);
+      background: hsl(var(--accent) / 0.18);
+      color: hsl(var(--accent-foreground));
+    }
+
+    .pill {
+      padding: calc(var(--spacing) * 1.1) calc(var(--spacing) * 1.9);
+      border: 1px solid hsl(var(--border));
+      background: hsl(var(--background));
+      color: hsl(var(--muted-foreground));
+    }
+
+    h1 {
+      font-size: clamp(2.2rem, 4vw, 3.6rem);
+      line-height: 1.02;
+    }
+
+    h2 {
+      font-size: 1.35rem;
+      line-height: 1.15;
+    }
+
+    h3 {
+      font-size: 1rem;
+      line-height: 1.2;
+    }
+
+    h4 {
+      font-size: 0.9rem;
+      line-height: 1.25;
+    }
+
+    .lede,
+    .muted,
+    .meta li,
+    .annotation,
+    .guidelines li,
+    .token-list li,
+    .legend-item span:last-child,
+    .empty-note,
+    .pagination span,
+    .mini-meta,
+    .toolbar-note {
+      color: hsl(var(--muted-foreground));
+    }
+
+    .lede {
+      max-width: 64ch;
+      line-height: 1.65;
+      font-size: 1rem;
+    }
+
+    .meta {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: calc(var(--spacing) * 2.4) calc(var(--spacing) * 3);
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+
+    .meta strong {
+      display: block;
+      margin-bottom: 0.25rem;
+      color: hsl(var(--foreground));
+      font-size: 0.84rem;
+    }
+
+    .dashboard-preview {
+      display: grid;
+      gap: calc(var(--spacing) * 3);
+      padding: calc(var(--spacing) * 4);
+      border-radius: calc(var(--radius) * 0.75);
+      border: 1px solid hsl(var(--border));
+      background: linear-gradient(180deg, hsl(var(--background)), hsl(var(--muted) / 0.56));
+    }
+
+    .dashboard-bar,
+    .table-toolbar,
+    .section-head,
+    .table-actions,
+    .pagination {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+    }
+
+    .dashboard-bar {
+      padding-bottom: calc(var(--spacing) * 2.5);
+      border-bottom: 1px solid hsl(var(--border));
+    }
+
+    .dashboard-kpis {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: calc(var(--spacing) * 2);
+    }
+
+    .kpi {
+      padding: calc(var(--spacing) * 2.5);
+      border-radius: calc(var(--radius) * 0.55);
+      background: hsl(var(--card));
+      border: 1px solid hsl(var(--border));
+    }
+
+    .kpi strong {
+      display: block;
+      margin-bottom: 0.35rem;
+      font-size: 1.3rem;
+      color: hsl(var(--foreground));
+    }
+
+    .card-header {
+      display: flex;
+      justify-content: space-between;
+      gap: 1rem;
+      align-items: start;
+    }
+
+    .variant-grid,
+    .state-grid,
+    .usage-grid,
+    .token-grid,
+    .anatomy-grid {
+      display: grid;
+      gap: calc(var(--spacing) * 3);
+    }
+
+    .variant-grid,
+    .usage-grid {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .state-grid,
+    .token-grid,
+    .anatomy-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .spec-card {
+      min-height: 100%;
+      padding: calc(var(--spacing) * 3);
+      display: grid;
+      gap: calc(var(--spacing) * 2.5);
+      background: linear-gradient(180deg, hsl(var(--card)), hsl(var(--background)));
+    }
+
+    .spec-card p {
+      line-height: 1.55;
+    }
+
+    .shell-table {
+      overflow: hidden;
+    }
+
+    .table-toolbar {
+      padding: calc(var(--spacing) * 3) calc(var(--spacing) * 3.5);
+      border-bottom: 1px solid hsl(var(--border));
+      background: linear-gradient(180deg, hsl(var(--card)), hsl(var(--muted) / 0.34));
+    }
+
+    .toolbar-title {
+      display: grid;
+      gap: 0.18rem;
+    }
+
+    .search-field,
+    .filter-chip,
+    .action-button,
+    .page-button,
+    .check {
+      border-radius: 999px;
+      border: 1px solid hsl(var(--border));
+      background: hsl(var(--background));
+      color: hsl(var(--foreground));
+    }
+
+    .search-field {
+      min-height: 2.55rem;
+      padding: 0 1rem;
+      min-width: 220px;
+    }
+
+    .table-actions {
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .filter-chip,
+    .action-button,
+    .page-button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 2.25rem;
+      padding: 0 0.95rem;
+      font-size: 0.82rem;
+    }
+
+    .filter-chip.active {
+      background: hsl(var(--accent) / 0.24);
+      color: hsl(var(--accent-foreground));
+      border-color: hsl(var(--accent));
+    }
+
+    .action-button.primary {
+      background: hsl(var(--primary));
+      color: hsl(var(--primary-foreground));
+      border-color: transparent;
+    }
+
+    .table-wrap {
+      overflow-x: auto;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    thead th {
+      padding: calc(var(--spacing) * 2.3) calc(var(--spacing) * 3.5);
+      font-size: 0.8rem;
+      text-align: left;
+      color: hsl(var(--muted-foreground));
+      font-weight: 600;
+      background: hsl(var(--muted) / 0.62);
+      border-bottom: 1px solid hsl(var(--border));
+      white-space: nowrap;
+    }
+
+    .num {
+      text-align: right;
+    }
+
+    tbody td {
+      padding: calc(var(--spacing) * 3);
+      border-bottom: 1px solid hsl(var(--border));
+      vertical-align: middle;
+    }
+
+    tbody tr {
+      background: hsl(var(--card));
+      transition: background-color 140ms ease, color 140ms ease;
+    }
+
+    tbody tr:last-child td {
+      border-bottom: 0;
+    }
+
+    tbody tr.hover td {
+      background: hsl(var(--accent) / 0.16);
+    }
+
+    tbody tr.selected td {
+      background: hsl(var(--accent) / 0.24);
+      color: hsl(var(--accent-foreground));
+    }
+
+    tbody tr.loading td {
+      color: hsl(var(--muted-foreground));
+    }
+
+    .row-title {
+      display: grid;
+      gap: 0.16rem;
+    }
+
+    .row-title strong,
+    .value {
+      color: hsl(var(--foreground));
+    }
+
+    .selected .row-title strong,
+    .selected .value {
+      color: inherit;
+    }
+
+    .mini-meta {
+      font-size: 0.8rem;
+      line-height: 1.45;
+    }
+
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 1.9rem;
+      padding: 0 0.75rem;
+      border-radius: 999px;
+      background: hsl(var(--muted));
+      color: hsl(var(--accent-foreground));
+      font-size: 0.78rem;
+      white-space: nowrap;
+    }
+
+    .status-pill.highlight {
+      background: hsl(var(--accent) / 0.24);
+      border: 1px solid hsl(var(--accent));
+    }
+
+    .status-pill.warn {
+      background: hsl(var(--secondary) / 0.16);
+      color: hsl(var(--foreground));
+    }
+
+    .sort-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+    }
+
+    .sort-indicator {
+      display: inline-flex;
+      width: 0.7rem;
+      height: 0.7rem;
+      color: hsl(var(--foreground));
+    }
+
+    .pagination {
+      padding: calc(var(--spacing) * 2.5) calc(var(--spacing) * 3.5);
+      border-top: 1px solid hsl(var(--border));
+      background: hsl(var(--background));
+      flex-wrap: wrap;
+    }
+
+    .page-group {
+      display: inline-flex;
+      gap: 0.5rem;
+      align-items: center;
+    }
+
+    .page-button.active {
+      background: hsl(var(--accent) / 0.22);
+      border-color: hsl(var(--accent));
+      color: hsl(var(--accent-foreground));
+    }
+
+    .check {
+      width: 1.1rem;
+      height: 1.1rem;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.72rem;
+      background: hsl(var(--card));
+    }
+
+    .selection-cell {
+      width: 2.75rem;
+      text-align: center;
+    }
+
+    .empty-state,
+    .loading-state {
+      padding: calc(var(--spacing) * 5);
+      display: grid;
+      gap: calc(var(--spacing) * 2.2);
+      place-items: center;
+      text-align: center;
+      border-top: 1px solid hsl(var(--border));
+      background: linear-gradient(180deg, hsl(var(--card)), hsl(var(--muted) / 0.24));
+    }
+
+    .empty-state .action-button,
+    .loading-state .action-button {
+      margin-top: 0.3rem;
+    }
+
+    .loading-bars {
+      width: 100%;
+      display: grid;
+      gap: 0.65rem;
+    }
+
+    .loading-bars span {
+      display: block;
+      height: 0.95rem;
+      border-radius: 999px;
+      background:
+        linear-gradient(90deg, hsl(var(--muted)), hsl(var(--accent) / 0.3), hsl(var(--muted)));
+      background-size: 220% 100%;
+      animation: shimmer 1.6s linear infinite;
+    }
+
+    .loading-bars span:nth-child(2) {
+      width: 86%;
+    }
+
+    .loading-bars span:nth-child(3) {
+      width: 72%;
+    }
+
+    @keyframes shimmer {
+      from {
+        background-position: 200% 0;
+      }
+      to {
+        background-position: -20% 0;
+      }
+    }
+
+    .legend-list,
+    .guidelines,
+    .token-list {
+      margin: 0;
+      padding-left: 1.1rem;
+      display: grid;
+      gap: 0.55rem;
+    }
+
+    .legend-item,
+    .token,
+    .anatomy-note {
+      display: flex;
+      justify-content: space-between;
+      gap: 1rem;
+      align-items: start;
+      padding: calc(var(--spacing) * 2.4);
+      border-radius: calc(var(--radius) * 0.55);
+      border: 1px solid hsl(var(--border));
+      background: hsl(var(--background));
+    }
+
+    .legend-item {
+      flex-direction: column;
+      justify-content: start;
+    }
+
+    .token {
+      align-items: center;
+    }
+
+    .token code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 0.8rem;
+      color: hsl(var(--foreground));
+      background: hsl(var(--muted) / 0.58);
+      padding: 0.22rem 0.5rem;
+      border-radius: 999px;
+    }
+
+    .footer-note {
+      font-size: 0.82rem;
+      text-align: right;
+      color: hsl(var(--muted-foreground));
+    }
+
+    @media (max-width: 1180px) {
+      .hero,
+      .section-grid,
+      .variant-grid,
+      .usage-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 900px) {
+      .page {
+        padding: calc(var(--spacing) * 6) calc(var(--spacing) * 4);
+      }
+
+      .meta,
+      .dashboard-kpis,
+      .state-grid,
+      .token-grid,
+      .anatomy-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .table-toolbar,
+      .pagination,
+      .dashboard-bar,
+      .card-header {
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+      .table-actions {
+        justify-content: flex-start;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <div class="shell">
+      <section class="hero">
+        <article class="panel">
+          <span class="eyebrow">Goldentime / Data Table / Dashboard</span>
+          <div>
+            <h1>Data Table preview for composed analytical workflows</h1>
+          </div>
+          <p class="lede">
+            The Goldentime data table organizes invoices, renewals, submissions, and reporting rows into a warm operational surface. It stays editorial in tone, but the hierarchy favors legibility, sorting clarity, and fast comparison over decoration.
+          </p>
+          <ul class="meta">
+            <li>
+              <strong>Brand</strong>
+              Goldentime
+            </li>
+            <li>
+              <strong>Language</strong>
+              en
+            </li>
+            <li>
+              <strong>Product type</strong>
+              dashboard
+            </li>
+            <li>
+              <strong>Category</strong>
+              Data display component
+            </li>
+          </ul>
+        </article>
+
+        <aside class="panel">
+          <div class="dashboard-preview">
+            <div class="dashboard-bar">
+              <div>
+                <h3>Finance operations</h3>
+                <p class="muted">Track Open invoices, Renewal date, and Revenue trend without losing row-level detail.</p>
+              </div>
+              <span class="pill">Preview context</span>
+            </div>
+            <div class="shell-table">
+              <div class="table-toolbar">
+                <div class="toolbar-title">
+                  <strong>Open invoices</strong>
+                  <span class="toolbar-note">12 records need review before Friday.</span>
+                </div>
+                <div class="table-actions">
+                  <span class="filter-chip active">Needs follow-up</span>
+                  <span class="action-button">Export CSV</span>
+                </div>
+              </div>
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th scope="col">Client</th>
+                      <th scope="col">Renewal date</th>
+                      <th scope="col" class="num" aria-sort="descending">
+                        <span class="sort-label">
+                          Revenue trend
+                          <span class="sort-indicator" aria-hidden="true">↓</span>
+                        </span>
+                      </th>
+                      <th scope="col">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td>
+                        <div class="row-title">
+                          <strong>Northlight Studio</strong>
+                          <span class="mini-meta">Invoice #1042 · Annual support</span>
+                        </div>
+                      </td>
+                      <td>Jun 18</td>
+                      <td class="num"><span class="value">+$14,200</span></td>
+                      <td><span class="status-pill highlight">Reviewing</span></td>
+                    </tr>
+                    <tr class="hover">
+                      <td>
+                        <div class="row-title">
+                          <strong>Harbor &amp; Finch</strong>
+                          <span class="mini-meta">Invoice #1048 · Renewal sent</span>
+                        </div>
+                      </td>
+                      <td>Jun 22</td>
+                      <td class="num"><span class="value">+$9,480</span></td>
+                      <td><span class="status-pill">Pending</span></td>
+                    </tr>
+                    <tr>
+                      <td>
+                        <div class="row-title">
+                          <strong>Summit Atelier</strong>
+                          <span class="mini-meta">Invoice #1051 · Expansion seat plan</span>
+                        </div>
+                      </td>
+                      <td>Jun 29</td>
+                      <td class="num"><span class="value">+$18,900</span></td>
+                      <td><span class="status-pill warn">Waiting on finance</span></td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            <div class="dashboard-kpis">
+              <div class="kpi">
+                <strong>12</strong>
+                <span class="annotation">Open invoices</span>
+              </div>
+              <div class="kpi">
+                <strong>8</strong>
+                <span class="annotation">Renewal dates this month</span>
+              </div>
+              <div class="kpi">
+                <strong>+14%</strong>
+                <span class="annotation">Revenue trend</span>
+              </div>
+            </div>
+          </div>
+        </aside>
+      </section>
+
+      <section class="section-grid">
+        <article class="card">
+          <div class="card-header">
+            <div>
+              <span class="pill">Variants</span>
+              <h2>Supported table patterns</h2>
+            </div>
+            <p class="annotation">Use calm surfaces and keep the data itself as the strongest signal.</p>
+          </div>
+          <div class="variant-grid">
+            <section class="spec-card">
+              <h3>Standard</h3>
+              <p class="annotation">General multi-column reports with sorting and pagination.</p>
+              <div class="shell-table">
+                <div class="table-toolbar">
+                  <div class="toolbar-title">
+                    <strong>Open invoices</strong>
+                    <span class="toolbar-note">Sorted by amount due.</span>
+                  </div>
+                </div>
+                <div class="table-wrap">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th scope="col">Client</th>
+                        <th scope="col">Renewal date</th>
+                        <th scope="col" class="num">Amount</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td>Northlight Studio</td>
+                        <td>Jun 18</td>
+                        <td class="num">$14,200</td>
+                      </tr>
+                      <tr>
+                        <td>Harbor &amp; Finch</td>
+                        <td>Jun 22</td>
+                        <td class="num">$9,480</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+                <div class="pagination">
+                  <span>1–2 of 12 rows</span>
+                  <div class="page-group">
+                    <span class="page-button active">1</span>
+                    <span class="page-button">2</span>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <section class="spec-card">
+              <h3>Selectable</h3>
+              <p class="annotation">Bulk workflows such as invoice approval, archive review, or team assignment.</p>
+              <div class="shell-table">
+                <div class="table-wrap">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th scope="col" class="selection-cell"><span class="check" aria-hidden="true">✓</span></th>
+                        <th scope="col">Client</th>
+                        <th scope="col">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr class="selected">
+                        <td class="selection-cell"><span class="check" aria-hidden="true">✓</span></td>
+                        <td>Northlight Studio</td>
+                        <td><span class="status-pill highlight">Selected</span></td>
+                      </tr>
+                      <tr>
+                        <td class="selection-cell"><span class="check" aria-hidden="true"></span></td>
+                        <td>Harbor &amp; Finch</td>
+                        <td><span class="status-pill">Ready</span></td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+                <div class="pagination">
+                  <span>1 row selected</span>
+                  <span class="action-button">Approve selected</span>
+                </div>
+              </div>
+            </section>
+
+            <section class="spec-card">
+              <h3>Compact</h3>
+              <p class="annotation">Dense dashboard placements beside narrative summaries or charts.</p>
+              <div class="shell-table">
+                <div class="table-wrap">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th scope="col">Metric</th>
+                        <th scope="col" class="num">Value</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td>Open invoices</td>
+                        <td class="num">12</td>
+                      </tr>
+                      <tr class="hover">
+                        <td>Renewal date risk</td>
+                        <td class="num">8 accounts</td>
+                      </tr>
+                      <tr>
+                        <td>Revenue trend</td>
+                        <td class="num">+14%</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </section>
+          </div>
+        </article>
+
+        <aside class="card">
+          <div>
+            <span class="pill">Summary</span>
+            <h2>Component guidance</h2>
+          </div>
+          <p class="lede">
+            Use the data table for dense comparison, sorting, and review workflows. The component should remain highly legible and structured, with restrained row treatments so numerical patterns stay easier to scan than decorative chrome.
+          </p>
+          <ul class="guidelines">
+            <li>Prefer business-facing labels such as Client, Amount, Renewal date, and Status.</li>
+            <li>Keep row actions consistent so operational teams build scanning memory across views.</li>
+            <li>Use muted supporting text for metadata before adding more columns.</li>
+          </ul>
+          <div class="legend-item">
+            <strong>Layout</strong>
+            <span>Right-align quantitative columns and left-align descriptive content for quicker scanning.</span>
+          </div>
+          <div class="legend-item">
+            <strong>Accessibility</strong>
+            <span>Use native table semantics and expose the active sort state with <code>aria-sort</code>.</span>
+          </div>
+        </aside>
+      </section>
+
+      <section class="card">
+        <div class="card-header">
+          <div>
+            <span class="pill">States</span>
+            <h2>Interaction states</h2>
+          </div>
+          <p class="annotation">Warm emphasis should stay soft enough that row values remain readable at speed.</p>
+        </div>
+        <div class="state-grid">
+          <section class="spec-card">
+            <h3>Rest</h3>
+            <div class="shell-table">
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th scope="col">Client</th>
+                      <th scope="col">Renewal date</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td>Northlight Studio</td>
+                      <td>Jun 18</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            <p class="annotation">Rows stay quiet by default so headers and values do the work.</p>
+          </section>
+
+          <section class="spec-card">
+            <h3>Hover</h3>
+            <div class="shell-table">
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th scope="col">Client</th>
+                      <th scope="col">Renewal date</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr class="hover">
+                      <td>Harbor &amp; Finch</td>
+                      <td>Jun 22</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            <p class="annotation">Hover uses the accent token softly instead of introducing high-contrast fill.</p>
+          </section>
+
+          <section class="spec-card">
+            <h3>Selected</h3>
+            <div class="shell-table">
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th scope="col" class="selection-cell"><span class="check" aria-hidden="true">✓</span></th>
+                      <th scope="col">Client</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr class="selected">
+                      <td class="selection-cell"><span class="check" aria-hidden="true">✓</span></td>
+                      <td>Northlight Studio</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            <p class="annotation">Selection should clearly announce counts and selected state in bulk workflows.</p>
+          </section>
+
+          <section class="spec-card">
+            <h3>Sorted</h3>
+            <div class="shell-table">
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th scope="col">Client</th>
+                      <th scope="col" class="num" aria-sort="ascending">
+                        <span class="sort-label">
+                          Amount
+                          <span class="sort-indicator" aria-hidden="true">↑</span>
+                        </span>
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td>Harbor &amp; Finch</td>
+                      <td class="num">$9,480</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            <p class="annotation">Expose sort order in both visuals and semantics.</p>
+          </section>
+
+          <section class="spec-card">
+            <h3>Empty</h3>
+            <div class="shell-table">
+              <div class="empty-state">
+                <strong>No open invoices match this filter</strong>
+                <p class="empty-note">Pair one sentence of explanation with one clear recovery action.</p>
+                <span class="action-button">Reset filters</span>
+              </div>
+            </div>
+          </section>
+
+          <section class="spec-card">
+            <h3>Loading</h3>
+            <div class="shell-table">
+              <div class="loading-state">
+                <strong>Refreshing Revenue trend</strong>
+                <div class="loading-bars" aria-hidden="true">
+                  <span></span>
+                  <span></span>
+                  <span></span>
+                </div>
+                <p class="empty-note">Loading states should keep the shell stable and preserve table rhythm.</p>
+              </div>
+            </div>
+          </section>
+        </div>
+      </section>
+
+      <section class="section-grid">
+        <article class="card">
+          <div class="card-header">
+            <div>
+              <span class="pill">Anatomy</span>
+              <h2>What makes the component work</h2>
+            </div>
+            <p class="annotation">Each layer remains visible for implementation review and QA handoff.</p>
+          </div>
+          <div class="shell-table">
+            <div class="table-toolbar">
+              <div class="toolbar-title">
+                <strong>Open invoices</strong>
+                <span class="toolbar-note">Toolbar, sorting, and pagination remain part of the full task flow.</span>
+              </div>
+              <div class="table-actions">
+                <input class="search-field" type="text" value="Northlight" aria-label="Search client rows">
+                <span class="filter-chip active">Pending</span>
+              </div>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th scope="col" class="selection-cell"><span class="check" aria-hidden="true">✓</span></th>
+                    <th scope="col">Client</th>
+                    <th scope="col">Renewal date</th>
+                    <th scope="col" class="num" aria-sort="descending">
+                      <span class="sort-label">
+                        Amount
+                        <span class="sort-indicator" aria-hidden="true">↓</span>
+                      </span>
+                    </th>
+                    <th scope="col">Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr class="selected">
+                    <td class="selection-cell"><span class="check" aria-hidden="true">✓</span></td>
+                    <td>
+                      <div class="row-title">
+                        <strong>Northlight Studio</strong>
+                        <span class="mini-meta">table surface · data row · cell content</span>
+                      </div>
+                    </td>
+                    <td>Jun 18</td>
+                    <td class="num"><span class="value">$14,200</span></td>
+                    <td><span class="action-button">Review</span></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="pagination">
+              <span>Pagination</span>
+              <div class="page-group">
+                <span class="page-button active">1</span>
+                <span class="page-button">2</span>
+              </div>
+            </div>
+          </div>
+          <div class="anatomy-grid">
+            <div class="anatomy-note">
+              <div>
+                <strong>Toolbar</strong>
+                <p class="annotation">Holds search, filters, bulk actions, and report context without crowding the header row.</p>
+              </div>
+            </div>
+            <div class="anatomy-note">
+              <div>
+                <strong>Header row</strong>
+                <p class="annotation">Defines scannable structure and keeps sort affordances close to column labels.</p>
+              </div>
+            </div>
+            <div class="anatomy-note">
+              <div>
+                <strong>Sort indicator</strong>
+                <p class="annotation">Signals active ranking while <code>aria-sort</code> exposes the same meaning for assistive tech.</p>
+              </div>
+            </div>
+            <div class="anatomy-note">
+              <div>
+                <strong>Data row</strong>
+                <p class="annotation">Uses restrained separators and muted secondary metadata to preserve analytical rhythm.</p>
+              </div>
+            </div>
+            <div class="anatomy-note">
+              <div>
+                <strong>Row action</strong>
+                <p class="annotation">Keep labels consistent from page to page so operators can build scanning memory.</p>
+              </div>
+            </div>
+            <div class="anatomy-note">
+              <div>
+                <strong>Pagination</strong>
+                <p class="annotation">Completes long report views while keeping the table shell stable in dashboard layouts.</p>
+              </div>
+            </div>
+          </div>
+        </article>
+
+        <aside class="card">
+          <div>
+            <span class="pill">Tokens</span>
+            <h2>Mapped design variables</h2>
+          </div>
+          <div class="token-grid">
+            <div class="token">
+              <span>Table surface</span>
+              <code>--card</code>
+            </div>
+            <div class="token">
+              <span>Table text</span>
+              <code>--card-foreground</code>
+            </div>
+            <div class="token">
+              <span>Page background</span>
+              <code>--background</code>
+            </div>
+            <div class="token">
+              <span>Subtle fill</span>
+              <code>--muted</code>
+            </div>
+            <div class="token">
+              <span>Subtle text</span>
+              <code>--muted-foreground</code>
+            </div>
+            <div class="token">
+              <span>Row hover</span>
+              <code>--accent</code>
+            </div>
+            <div class="token">
+              <span>Hover text</span>
+              <code>--accent-foreground</code>
+            </div>
+            <div class="token">
+              <span>Border</span>
+              <code>--border</code>
+            </div>
+            <div class="token">
+              <span>Focus ring</span>
+              <code>--ring</code>
+            </div>
+            <div class="token">
+              <span>Radius</span>
+              <code>--radius</code>
+            </div>
+            <div class="token">
+              <span>Font family</span>
+              <code>--font-sans</code>
+            </div>
+            <div class="token">
+              <span>Spacing unit</span>
+              <code>--spacing</code>
+            </div>
+          </div>
+          <ul class="token-list">
+            <li>The available variable set covers the component mapping without adding extra local design tokens.</li>
+            <li>Warm neutrals handle most of the structure, while accent and ring tokens provide interaction feedback.</li>
+            <li>The generous radius keeps the report shell aligned with Goldentime’s premium editorial signature.</li>
+          </ul>
+        </aside>
+      </section>
+
+      <section class="card">
+        <div class="card-header">
+          <div>
+            <span class="pill">Composition</span>
+            <h2>Dashboard placement guidance</h2>
+          </div>
+          <p class="annotation">Tables often live inside cards, but can also become the main page artifact when the report is the task.</p>
+        </div>
+        <div class="usage-grid">
+          <section class="spec-card">
+            <h3>Invoice review</h3>
+            <p>Use the standard variant for Open invoices where sorting, metadata, and actions need equal clarity.</p>
+          </section>
+          <section class="spec-card">
+            <h3>Bulk operations</h3>
+            <p>Use the selectable variant for approval, archive review, or ownership changes that require selection counts.</p>
+          </section>
+          <section class="spec-card">
+            <h3>Chart adjacency</h3>
+            <p>Use the compact variant beside a Revenue trend panel or narrative summary when the dashboard must stay dense.</p>
+          </section>
+        </div>
+        <p class="footer-note">Goldentime component preview · Data Table · linked to ../colors_and_type.css</p>
+      </section>
+    </div>
+  </main>
+</body>
+</html>

@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>body{margin:0;padding:12px;background:var(--background);color:var(--foreground);font:500 13px/1.4 var(--font-sans)}.row{display:flex;align-items:center;gap:calc(var(--spacing)*3);flex-wrap:wrap;margin-bottom:8px}.label{min-width:58px;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted-foreground)}.divider{border:0;border-top:1px solid var(--border);margin:10px 0}.surface{display:flex;gap:calc(var(--spacing)*2);padding:calc(var(--spacing)*3);border:1px solid var(--border);border-radius:var(--radius);background:var(--card);box-shadow:var(--shadow-sm)}.dark{background:var(--background);color:var(--foreground)}.field{display:flex;align-items:center;gap:calc(var(--spacing)*2);min-width:240px;height:44px;padding:0 calc(var(--spacing)*3);border:1px solid var(--input);border-radius:var(--radius);background:var(--background);color:var(--foreground);box-shadow:var(--shadow-xs)}.field.small{height:40px}.field:focus-within{border-color:var(--ring);box-shadow:0 0 0 1px var(--ring)}.field.disabled{opacity:.55}.icon,.clear{padding:0;border:0;background:transparent;color:var(--icon-muted);font:inherit}.icon{font-size:13px}.control{flex:1;border:0;outline:0;background:transparent;color:inherit;font:inherit}.control::placeholder{color:var(--muted-foreground)}</style>
+</head>
+<body>
+<div class="row">
+<span class="label">Search 44</span>
+<div class="field">
+<span class="icon">⌕</span>
+<input class="control" aria-label="Search products" placeholder="Search products">
+<button class="clear" type="button" aria-label="Clear search">×</button>
+</div>
+<div class="field disabled">
+<span class="icon">⌕</span>
+<input class="control" aria-label="Search products disabled" placeholder="Search products" disabled>
+<button class="clear" type="button" aria-label="Clear search disabled" disabled>×</button>
+</div>
+</div>
+<hr class="divider">
+<div class="row">
+<span class="label">Dark 40</span>
+<div class="surface dark">
+<div class="field small">
+<input class="control" aria-label="Email address" placeholder="Email address">
+</div>
+</div>
+<div class="surface dark">
+<div class="field small disabled">
+<input class="control" aria-label="Track your order disabled" placeholder="Track your order" disabled>
+</div>
+</div>
+</div>
+</body>
+</html>

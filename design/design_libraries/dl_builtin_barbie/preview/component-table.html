@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>body{margin:0;padding:calc(var(--spacing)*3);background:var(--background);color:var(--foreground);font:500 14px/1.4 var(--font-sans);letter-spacing:var(--tracking-normal)}.row{display:flex;gap:calc(var(--spacing)*2);align-items:flex-start;flex-wrap:wrap;margin-bottom:calc(var(--spacing)*2)}.label{width:78px;padding-top:calc(var(--spacing)*2);font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--muted-foreground)}.sheet{min-width:280px;flex:1;background:var(--card);color:var(--card-foreground);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-sm);overflow:hidden}.meta{display:flex;justify-content:space-between;align-items:center;padding:calc(var(--spacing)*3);border-bottom:1px solid var(--border);font-size:12px;font-weight:700}.pill{padding:calc(var(--spacing)*1) calc(var(--spacing)*2);border-radius:999px;background:var(--accent);color:var(--accent-foreground);font-size:11px}.pill.soft{background:var(--muted);color:var(--muted-foreground)}table{width:100%;border-collapse:collapse}.th,.td{padding:calc(var(--spacing)*3);text-align:left;border-bottom:1px solid var(--border)}.th{font-size:11px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted-foreground)}.num{text-align:right;font-variant-numeric:tabular-nums}.row-selected td{background:color-mix(in oklab,var(--primary) 14%,var(--card));color:var(--foreground)}.row-highlight td{background:color-mix(in oklab,var(--accent) 22%,var(--card))}.compact .th,.compact .td{padding:calc(var(--spacing)*2) calc(var(--spacing)*3)}.divider{margin:calc(var(--spacing)*2) 0;border:0;border-top:1px solid var(--border)}</style>
+</head>
+<body>
+<div class="row">
+<span class="label">Comfortable</span>
+<div class="sheet">
+<div class="meta"><span>Audience Growth</span><span class="pill soft">Default</span></div>
+<table>
+<tr><th class="th">Metric</th><th class="th">Status</th><th class="th num">Lift</th></tr>
+<tr><td class="td">Audience Growth</td><td class="td"><span class="pill soft">Live</span></td><td class="td num">+18.4%</td></tr>
+<tr><td class="td">Conversion Lift</td><td class="td"><span class="pill soft">Review</span></td><td class="td num">+7.2%</td></tr>
+<tr><td class="td">Weekly Reach</td><td class="td"><span class="pill soft">Synced</span></td><td class="td num">2.3M</td></tr>
+</table>
+</div>
+<div class="sheet">
+<div class="meta"><span>Audience Growth</span><span class="pill">Selected</span></div>
+<table>
+<tr><th class="th">Metric</th><th class="th">Status</th><th class="th num">Lift</th></tr>
+<tr class="row-selected"><td class="td">Audience Growth</td><td class="td"><span class="pill">Pinned</span></td><td class="td num">+18.4%</td></tr>
+<tr><td class="td">Conversion Lift</td><td class="td"><span class="pill soft">Review</span></td><td class="td num">+7.2%</td></tr>
+<tr><td class="td">Weekly Reach</td><td class="td"><span class="pill soft">Synced</span></td><td class="td num">2.3M</td></tr>
+</table>
+</div>
+</div>
+<hr class="divider">
+<div class="row">
+<span class="label">Compact</span>
+<div class="sheet compact">
+<div class="meta"><span>Conversion Lift</span><span class="pill">Highlighted</span></div>
+<table>
+<tr><th class="th">Metric</th><th class="th">Status</th><th class="th num">Change</th></tr>
+<tr><td class="td">Audience Growth</td><td class="td"><span class="pill soft">Queued</span></td><td class="td num">+4.9%</td></tr>
+<tr class="row-highlight"><td class="td">Conversion Lift</td><td class="td"><span class="pill">Focus</span></td><td class="td num">+12.6%</td></tr>
+<tr><td class="td">Weekly Reach</td><td class="td"><span class="pill soft">Shared</span></td><td class="td num">1.8M</td></tr>
+</table>
+</div>
+</div>
+</body>
+</html>

@@ -1,0 +1,110 @@
+{
+  "schemaVersion": 2,
+  "tokenSource": "css.json",
+  "uikitPlan": "uikit-plan.json",
+  "componentsIndex": "components/index.json",
+  "componentContractDir": "components",
+  "tokenCss": "colors_and_type.css",
+  "previewDir": "preview",
+  "previewScaffoldCss": "preview-scaffold.css",
+  "baseThemesCss": "ui-base-themes.css",
+  "baseTokensCss": "ui-base-tokens.css",
+  "iconFontCss": "index.css",
+  "consumptionLayers": {
+    "tokens": {
+      "files": ["colors_and_type.css", "css.json", "ui-base-tokens.css"],
+      "copyable": true,
+      "purpose": "设计语言源 — 颜色、字体、圆角、间距、阴影"
+    },
+    "components": {
+      "files": ["preview/ui-*.html", "preview-scaffold.css"],
+      "copyable": true,
+      "purpose": "组件级标记 + 类名；每个 preview 文件自包含完整样式",
+      "downstreamRule": "从 preview/ui-{slug}.html 中提取 HTML 结构和 CSS 样式。每个 preview 文件内嵌 <style> 包含该组件的完整样式定义，可直接复制使用。preview-scaffold.css 提供通用页面骨架。"
+    },
+    "icons": {
+      "files": ["icons/*.svg", "index.css"],
+      "copyable": true,
+      "purpose": "图标集 — 650 SVG 资源 + 图标字体",
+      "downstreamRule": "两种模式: (A) 静态 <img src='icons/{name}.svg'> 适用于无需变色场景; (B) <i class='force-{name}'></i> + index.css 图标字体（通过 font-size 和 color 控制，完整 650 图标）。"
+    }
+  },
+  "iconUsage": {
+    "modeA_staticImg": {
+      "syntax": "<img src=\"icons/{name}.svg\" width=\"16\" height=\"16\" alt=\"\" />",
+      "recolorable": false,
+      "useFor": "静态 HTML，无需变色场景"
+    },
+    "modeB_iconFont": {
+      "syntax": "<i class=\"force-{name}\"></i> + <link rel=\"stylesheet\" href=\"index.css\">",
+      "recolorable": true,
+      "useFor": "完整 650 图标集，通过 font-size 和 color 控制"
+    },
+    "iconCount": 650,
+    "rule": "图标颜色必须跟随 CSS token 规范 — 不使用原始 hex/rgb。通过 color: var(--text-fg) / var(--text-muted) / var(--color-primary) / var(--color-error) 等控制。"
+  },
+  "downstreamScenarios": {
+    "useTokensOnly": {
+      "read": ["colors_and_type.css"],
+      "consume": "通过 <link> 或 CSS @import 引入"
+    },
+    "buildSingleComponent": {
+      "read": ["components/{slug}.json", "preview/ui-{slug}.html"],
+      "consume": "从 preview 提取 HTML 和内嵌样式，引入 colors_and_type.css 获取 Token 变量"
+    },
+    "buildFullPage": {
+      "read": [
+        "SKILL.md (页面骨架规格)",
+        "components/index.json",
+        "preview/ui-{slug}.html (按区域提取)"
+      ],
+      "consume": "按照 SKILL.md 中的三级骨架规格（48px TopNav + 200px Sidebar + flex Content）搭建页面框架，从 preview 中提取各区域所需组件的标记和样式。"
+    }
+  },
+  "recommendedReadOrder": [
+    "SKILL.md (设计理念、Token 概览、页面骨架规格、生成规则)",
+    "css.json",
+    "colors_and_type.css",
+    "components/index.json",
+    "components/{slug}.json",
+    "preview/ui-{slug}.html"
+  ],
+  "coreComponents": [
+    "button",
+    "topnav",
+    "sidebar",
+    "table",
+    "form",
+    "input"
+  ],
+  "supportComponents": [
+    "alert",
+    "anchor",
+    "avatar",
+    "badge",
+    "breadcrumb",
+    "cascader",
+    "checkbox",
+    "descriptions",
+    "drawer",
+    "dropdown",
+    "icon",
+    "message",
+    "modal",
+    "page-header",
+    "pagination",
+    "popconfirm",
+    "progress",
+    "segmented-picker",
+    "select",
+    "sidenav",
+    "slider",
+    "status-tag",
+    "steps",
+    "switch",
+    "tabs",
+    "tag",
+    "timepicker",
+    "tooltip"
+  ]
+}

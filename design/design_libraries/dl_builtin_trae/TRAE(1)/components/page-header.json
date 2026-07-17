@@ -1,0 +1,65 @@
+{
+  "schemaVersion": 2,
+  "slug": "page-header",
+  "name": "Page header",
+  "category": "layout",
+  "sourceKind": "structured-spec",
+  "confidence": "medium",
+  "semanticTypeCandidates": ["PageHeader", "PageTitleBar", "SectionHeader"],
+  "variantDimensions": {
+    "actions": ["secondary-only", "secondary-and-primary"]
+  },
+  "representativeVariants": [
+    { "actions": "secondary-and-primary" }
+  ],
+  "anatomy": ["main", "title", "subtitle", "actions", "btn", "btn-primary"],
+  "structurePatterns": [
+    "flex row with main block on the left and actions on the right",
+    "main stacks a large title above a muted subtitle",
+    "actions hold one or more buttons, primary uses brand background"
+  ],
+  "usageHints": [
+    "place at the top of a page above the main content",
+    "keep the primary action last and visually emphasized",
+    "use the subtitle for contextual metadata or counts"
+  ],
+  "doNotInvent": ["breadcrumb row", "tab navigation", "search field inside header"],
+  "unknowns": ["responsive stacking on narrow viewports", "overflow menu for many actions"],
+  "tokensConsumed": [
+    "--spacer-6", "--spacer-8", "--spacer-12", "--spacer-24",
+    "--border-neutral-l1", "--heading-lg-font-size", "--heading-lg-line-height",
+    "--font-weight-strong", "--text-default", "--body-sm-font-size",
+    "--body-sm-line-height", "--text-tertiary", "--font-weight-medium",
+    "--bg-overlay-l2", "--border-neutral-l2", "--radius-6", "--text-onbrand",
+    "--bg-brand", "--border-brand"
+  ],
+  "domAnatomy": {
+    "root": {
+      "tag": "div",
+      "class": "ds-pagehead",
+      "children": [
+        {
+          "tag": "div",
+          "class": "ds-pagehead__main",
+          "children": [
+            { "tag": "span", "class": "ds-pagehead__title" },
+            { "tag": "span", "class": "ds-pagehead__subtitle" }
+          ]
+        },
+        {
+          "tag": "div",
+          "class": "ds-pagehead__actions",
+          "children": [
+            { "tag": "button", "class": "ds-pagehead__btn" },
+            { "tag": "button", "class": "ds-pagehead__btn is-primary" }
+          ]
+        }
+      ]
+    }
+  },
+  "provenance": {
+    "preview": "preview/component-page-header.html",
+    "source": "structured-spec",
+    "css": { "file": "components.css", "marker": "── Page header ──" }
+  }
+}

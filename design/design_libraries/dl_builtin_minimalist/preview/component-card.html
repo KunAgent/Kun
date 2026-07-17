@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>
+  /* Page scaffold — NOT extracted */
+  /* @component-css-start */
+body{margin:0;padding:12px;background:var(--color-surface);font:14px/1.4 var(--font-sans);color:var(--color-text)}.row{display:flex;align-items:stretch;gap:8px;flex-wrap:wrap}.label{display:flex;align-items:center;padding:0 8px;border:1px solid var(--color-border);border-radius:var(--radius-md);font-size:10px;font-weight:700;letter-spacing:.12em;color:var(--color-text-muted)}.card{display:flex;flex-direction:column;gap:6px;min-width:154px;padding:12px;border:1px solid var(--color-border);border-radius:var(--radius-md);background:var(--color-surface);box-shadow:var(--shadow-sm)}.metric{flex:1 1 154px}.detail{flex:1 1 220px;background:var(--color-surface-muted)}.eyebrow,.meta{font-size:12px;color:var(--color-text-muted)}.title{font-size:14px;font-weight:600}.value{font-size:26px;font-weight:700;letter-spacing:-.03em}.divider{margin:8px 0;border:0;border-top:1px solid var(--color-border)}[aria-disabled="true"]{opacity:.56;background:var(--color-surface-muted);color:var(--color-text-muted)}[aria-disabled="true"] .value,[aria-disabled="true"] .title{color:var(--color-text-muted)}.pill{display:inline-flex;align-self:flex-start;padding:3px 8px;border-radius:999px;background:var(--color-primary);color:var(--color-primary-foreground);font-size:11px;font-weight:600}
+  /* @component-css-end */
+</style>
+</head>
+<body>
+<div class="row"><span class="label">METRIC</span><article class="card metric"><span class="eyebrow">Overview</span><strong class="value">98.2%</strong><span class="meta">System health across all dashboards</span></article><article class="card metric"><span class="eyebrow">Revenue</span><strong class="value">$128.4K</strong><span class="meta">Up 12.8% from last month</span></article><article class="card metric" aria-disabled="true"><span class="eyebrow">Active Users</span><strong class="value">24,819</strong><span class="meta">Live sync paused for maintenance</span></article></div>
+<hr class="divider">
+<div class="row"><span class="label">DETAIL</span><article class="card detail"><span class="title">Team</span><span class="meta">8 product squads, 3 regions, weekly delivery on track.</span><span class="pill">Overview</span></article><article class="card detail" aria-disabled="true"><span class="title">Settings</span><span class="meta">Permission updates are locked until admin review is complete.</span><span class="pill">Review</span></article></div>
+</body>
+</html>

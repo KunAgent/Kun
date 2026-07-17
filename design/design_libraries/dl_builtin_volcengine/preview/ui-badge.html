@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>Badge 徽标数</title>
+  <link rel="stylesheet" href="preview-scaffold.css">
+  <style>
+    /* ═══ Badge 基础 ═══ */
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 46px;
+      border: 0.5px solid;
+      box-shadow: 0px 1px 0px rgba(0,0,0,0.08);
+      font-family: "Roboto", sans-serif;
+      font-weight: 500;
+      font-size: 12px;
+      line-height: 12px;
+      text-align: center;
+      color: #FFFFFF;
+      white-space: nowrap;
+      box-sizing: border-box;
+    }
+
+    .badge-active { background: #F65159; border-color: #DB373F; }
+    .badge-ash { background: #80838A; border-color: #41464F; }
+
+    /* Dot */
+    .badge-dot { padding: 0; }
+    .badge-dot.badge-small { width: 6px; height: 6px; }
+    .badge-dot { width: 8px; height: 8px; }
+    .badge-dot.badge-large { width: 10px; height: 10px; }
+
+    /* Number */
+    .badge-number { padding: 2px 5px; }
+    .badge-number.badge-small { width: 12px; height: 12px; }
+    .badge-number { width: 14px; height: 14px; }
+    .badge-number.badge-large { width: 16px; height: 16px; }
+
+    /* NumberPlus */
+    .badge-number-plus { padding: 2px 4px; min-width: 14px; height: 14px; }
+    .badge-number-plus.badge-small { min-width: 12px; height: 12px; }
+    .badge-number-plus.badge-large { min-width: 16px; height: 16px; }
+
+    /* Icon */
+    .badge-icon { border: none; box-shadow: none; padding: 0; overflow: hidden; }
+    .badge-icon.badge-small { width: 16px; height: 16px; }
+    .badge-icon { width: 20px; height: 20px; }
+    .badge-icon.badge-large { width: 20px; height: 20px; }
+    .badge-icon svg { width: 100%; height: 100%; }
+
+    .badge-icon-success { color: #309256; }
+    .badge-icon-warning { color: #F7BA1E; }
+    .badge-icon-error { color: #F65159; }
+    .badge-icon-skip { color: #80838A; }
+    .badge-icon-awaiting { color: #1664FF; }
+
+    /* Badge Wrapper */
+    .badge-wrapper { position: relative; display: inline-flex; align-items: flex-start; }
+    .badge-wrapper .badge { position: absolute; top: -2px; right: -2px; z-index: 1; }
+
+    /* Avatar */
+    .badge-avatar { border-radius: 50%; background: #F1F3F5; overflow: hidden; display: flex; align-items: center; justify-content: center; }
+    .badge-avatar-mini .badge-avatar { width: 16px; height: 16px; }
+    .badge-avatar-small .badge-avatar { width: 20px; height: 20px; }
+    .badge-avatar-default .badge-avatar { width: 24px; height: 24px; }
+    .badge-avatar-large .badge-avatar { width: 40px; height: 40px; }
+    .badge-avatar svg { width: 60%; height: 60%; color: #86909C; }
+  </style>
+</head>
+<body>
+  <div class="pv-header">
+    <h1>Badge 徽标数</h1>
+    <p>通知标记组件，覆盖 Dot 圆点、Number 数字、NumberPlus 超量数字与 Icon 图标四种类型，支持激活/置灰双色态。</p>
+  </div>
+
+  <!-- ===== Dot 圆点 ===== -->
+  <div class="pv-section">
+    <div class="pv-section__title">Dot 圆点</div>
+    <div class="pv-section__sub">三种尺寸 × 激活/置灰</div>
+    <div class="stack-12">
+      <div class="demo-label">激活态</div>
+      <div class="row">
+        <span class="badge badge-dot badge-small badge-active" data-component="badge" data-type="dot" data-size="small" data-ash="false"></span>
+        <span class="badge badge-dot badge-active" data-component="badge" data-type="dot" data-size="default" data-ash="false"></span>
+        <span class="badge badge-dot badge-large badge-active" data-component="badge" data-type="dot" data-size="large" data-ash="false"></span>
+      </div>
+      <div class="demo-label">置灰态</div>
+      <div class="row">
+        <span class="badge badge-dot badge-small badge-ash" data-component="badge" data-type="dot" data-size="small" data-ash="true"></span>
+        <span class="badge badge-dot badge-ash" data-component="badge" data-type="dot" data-size="default" data-ash="true"></span>
+        <span class="badge badge-dot badge-large badge-ash" data-component="badge" data-type="dot" data-size="large" data-ash="true"></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== Number 数字 ===== -->
+  <div class="pv-section">
+    <div class="pv-section__title">Number 数字</div>
+    <div class="pv-section__sub">三种尺寸 × 激活/置灰</div>
+    <div class="stack-12">
+      <div class="demo-label">激活态</div>
+      <div class="row">
+        <span class="badge badge-number badge-small badge-active" data-component="badge" data-type="number" data-size="small" data-ash="false">2</span>
+        <span class="badge badge-number badge-active" data-component="badge" data-type="number" data-size="default" data-ash="false">2</span>
+        <span class="badge badge-number badge-large badge-active" data-component="badge" data-type="number" data-size="large" data-ash="false">2</span>
+      </div>
+      <div class="demo-label">置灰态</div>
+      <div class="row">
+        <span class="badge badge-number badge-small badge-ash" data-component="badge" data-type="number" data-size="small" data-ash="true">2</span>
+        <span class="badge badge-number badge-ash" data-component="badge" data-type="number" data-size="default" data-ash="true">2</span>
+        <span class="badge badge-number badge-large badge-ash" data-component="badge" data-type="number" data-size="large" data-ash="true">2</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== NumberPlus 超量数字 ===== -->
+  <div class="pv-section">
+    <div class="pv-section__title">NumberPlus 超量数字</div>
+    <div class="pv-section__sub">当数字超出阈值时显示 "99+" 形式</div>
+    <div class="stack-12">
+      <div class="demo-label">激活态</div>
+      <div class="row">
+        <span class="badge badge-number-plus badge-small badge-active" data-component="badge" data-type="number-plus" data-size="small" data-ash="false">99+</span>
+        <span class="badge badge-number-plus badge-active" data-component="badge" data-type="number-plus" data-size="default" data-ash="false">99+</span>
+        <span class="badge badge-number-plus badge-large badge-active" data-component="badge" data-type="number-plus" data-size="large" data-ash="false">99+</span>
+      </div>
+      <div class="demo-label">置灰态</div>
+      <div class="row">
+        <span class="badge badge-number-plus badge-small badge-ash" data-component="badge" data-type="number-plus" data-size="small" data-ash="true">99+</span>
+        <span class="badge badge-number-plus badge-ash" data-component="badge" data-type="number-plus" data-size="default" data-ash="true">99+</span>
+        <span class="badge badge-number-plus badge-large badge-ash" data-component="badge" data-type="number-plus" data-size="large" data-ash="true">99+</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== Icon 图标徽标 ===== -->
+  <div class="pv-section">
+    <div class="pv-section__title">Icon 图标徽标</div>
+    <div class="pv-section__sub">语义化图标，支持 Success / Warning / Error / Skip / Awaiting 五种状态</div>
+    <div class="stack-12">
+      <div class="demo-label">尺寸变体 (Success)</div>
+      <div class="row">
+        <span class="badge badge-icon badge-small badge-icon-success" data-component="badge" data-type="icon" data-size="small" data-state="success">
+          <svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 1.5a6.5 6.5 0 110 13 6.5 6.5 0 010-13zm2.854 4.146a.5.5 0 00-.708 0L7.5 8.293 6.354 7.146a.5.5 0 10-.708.708l1.5 1.5a.5.5 0 00.708 0l3-3a.5.5 0 000-.708z"/></svg>
+        </span>
+        <span class="badge badge-icon badge-icon-success" data-component="badge" data-type="icon" data-size="default" data-state="success">
+          <svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 1.5a6.5 6.5 0 110 13 6.5 6.5 0 010-13zm2.854 4.146a.5.5 0 00-.708 0L7.5 8.293 6.354 7.146a.5.5 0 10-.708.708l1.5 1.5a.5.5 0 00.708 0l3-3a.5.5 0 000-.708z"/></svg>
+        </span>
+        <span class="badge badge-icon badge-large badge-icon-success" data-component="badge" data-type="icon" data-size="large" data-state="success">
+          <svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 1.5a6.5 6.5 0 110 13 6.5 6.5 0 010-13zm2.854 4.146a.5.5 0 00-.708 0L7.5 8.293 6.354 7.146a.5.5 0 10-.708.708l1.5 1.5a.5.5 0 00.708 0l3-3a.5.5 0 000-.708z"/></svg>
+        </span>
+      </div>
+      <div class="demo-label">各状态</div>
+      <div class="row">
+        <span class="badge badge-icon badge-icon-success" data-component="badge" data-type="icon" data-size="default" data-state="success">
+          <svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 1.5a6.5 6.5 0 110 13 6.5 6.5 0 010-13zm2.854 4.146a.5.5 0 00-.708 0L7.5 8.293 6.354 7.146a.5.5 0 10-.708.708l1.5 1.5a.5.5 0 00.708 0l3-3a.5.5 0 000-.708z"/></svg>
+        </span>
+        <span class="badge badge-icon badge-icon-warning" data-component="badge" data-type="icon" data-size="default" data-state="warning">
+          <svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 1.5a6.5 6.5 0 110 13 6.5 6.5 0 010-13zM8 4.5a.75.75 0 00-.75.75v3.5a.75.75 0 001.5 0v-3.5A.75.75 0 008 4.5zM8 11a.75.75 0 100-1.5.75.75 0 000 1.5z"/></svg>
+        </span>
+        <span class="badge badge-icon badge-icon-error" data-component="badge" data-type="icon" data-size="default" data-state="error">
+          <svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 1.5a6.5 6.5 0 110 13 6.5 6.5 0 010-13zm2.354 4.146a.5.5 0 00-.708 0L8 7.293 6.354 5.646a.5.5 0 10-.708.708L7.293 8l-1.647 1.646a.5.5 0 00.708.708L8 8.707l1.646 1.647a.5.5 0 00.708-.708L8.707 8l1.647-1.646a.5.5 0 000-.708z"/></svg>
+        </span>
+        <span class="badge badge-icon badge-icon-skip" data-component="badge" data-type="icon" data-size="default" data-state="skip">
+          <svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 1.5a6.5 6.5 0 110 13 6.5 6.5 0 010-13zM6 5.75a.75.75 0 00-.75.75v3a.75.75 0 001.5 0v-3A.75.75 0 006 5.75zm4 0a.75.75 0 00-.75.75v3a.75.75 0 001.5 0v-3A.75.75 0 0010 5.75z"/></svg>
+        </span>
+        <span class="badge badge-icon badge-icon-awaiting" data-component="badge" data-type="icon" data-size="default" data-state="awaiting">
+          <svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 1.5a6.5 6.5 0 110 13 6.5 6.5 0 010-13zM8.5 5a.5.5 0 00-1 0v3.5a.5.5 0 00.252.434l2 1.15a.5.5 0 10.496-.868L8.5 8.13V5z"/></svg>
+        </span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== Badge + Avatar 组合 ===== -->
+  <div class="pv-section">
+    <div class="pv-section__title">Badge + Avatar 组合</div>
+    <div class="pv-section__sub">徽标叠加在头像右上角，适配不同尺寸</div>
+    <div class="row-16">
+      <div class="badge-wrapper badge-avatar-mini" data-component="badge" data-type="number" data-size="mini" data-ash="false">
+        <div class="badge-avatar">
+          <svg viewBox="0 0 16 16" fill="none"><circle cx="8" cy="6" r="2.5" fill="currentColor"/><path d="M3.5 13a4.5 4.5 0 019 0" stroke="currentColor" stroke-width="1.2"/></svg>
+        </div>
+        <span class="badge badge-number badge-small badge-active">2</span>
+      </div>
+      <div class="badge-wrapper badge-avatar-small" data-component="badge" data-type="number" data-size="small" data-ash="false">
+        <div class="badge-avatar">
+          <svg viewBox="0 0 16 16" fill="none"><circle cx="8" cy="6" r="2.5" fill="currentColor"/><path d="M3.5 13a4.5 4.5 0 019 0" stroke="currentColor" stroke-width="1.2"/></svg>
+        </div>
+        <span class="badge badge-number badge-small badge-active">2</span>
+      </div>
+      <div class="badge-wrapper badge-avatar-default" data-component="badge" data-type="number" data-size="default" data-ash="false">
+        <div class="badge-avatar">
+          <svg viewBox="0 0 16 16" fill="none"><circle cx="8" cy="6" r="2.5" fill="currentColor"/><path d="M3.5 13a4.5 4.5 0 019 0" stroke="currentColor" stroke-width="1.2"/></svg>
+        </div>
+        <span class="badge badge-number badge-active">2</span>
+      </div>
+      <div class="badge-wrapper badge-avatar-large" data-component="badge" data-type="number" data-size="large" data-ash="false">
+        <div class="badge-avatar">
+          <svg viewBox="0 0 16 16" fill="none"><circle cx="8" cy="6" r="2.5" fill="currentColor"/><path d="M3.5 13a4.5 4.5 0 019 0" stroke="currentColor" stroke-width="1.2"/></svg>
+        </div>
+        <span class="badge badge-number badge-large badge-active">2</span>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

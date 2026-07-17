@@ -1,0 +1,67 @@
+{
+  "schemaVersion": 2,
+  "slug": "nav-list",
+  "name": "Nav list",
+  "category": "navigation",
+  "sourceKind": "structured-spec",
+  "confidence": "medium",
+  "semanticTypeCandidates": ["SidebarNav", "NavMenu", "VerticalNav"],
+  "variantDimensions": {
+    "itemState": ["default", "active"],
+    "itemExtra": ["plain", "badge"]
+  },
+  "representativeVariants": [
+    { "itemState": "active", "itemExtra": "plain" },
+    { "itemState": "default", "itemExtra": "badge" }
+  ],
+  "anatomy": ["group", "group-title", "item", "item-icon", "label", "badge"],
+  "structurePatterns": [
+    "nav contains one or more groups, each with an uppercase group title and items",
+    "each item has a leading icon, a flexible label, and an optional trailing badge",
+    "active item uses .is-active with brand background and onbrand text"
+  ],
+  "usageHints": [
+    "use for left sidebar navigation",
+    "mark the current route with .is-active",
+    "use badges for counts (tasks, unread, etc.)"
+  ],
+  "doNotInvent": ["collapsible groups", "nested sub-items", "tooltips on collapse"],
+  "unknowns": ["collapsed/icon-only mode", "keyboard navigation focus ring"],
+  "tokensConsumed": [
+    "--spacer-6", "--spacer-8", "--spacer-12", "--spacer-16", "--width",
+    "--bg-menu", "--border-neutral-l1", "--radius-10", "--radius-6",
+    "--body-xs-font-size", "--body-xs-line-height", "--font-weight-medium",
+    "--text-tertiary", "--body-sm-font-size", "--body-sm-line-height",
+    "--text-secondary", "--bg-overlay-l2", "--text-default", "--bg-brand",
+    "--text-onbrand"
+  ],
+  "domAnatomy": {
+    "root": {
+      "tag": "nav",
+      "class": "ds-navlist",
+      "children": [
+        {
+          "tag": "div",
+          "class": "ds-navlist__group",
+          "children": [
+            { "tag": "div", "class": "ds-navlist__group-title" },
+            {
+              "tag": "a",
+              "class": "ds-navlist__item is-active",
+              "children": [
+                { "tag": "img", "class": "icon" },
+                { "tag": "span", "class": "ds-navlist__label" },
+                { "tag": "span", "class": "ds-navlist__badge" }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "provenance": {
+    "preview": "preview/component-nav-list.html",
+    "source": "structured-spec",
+    "css": { "file": "components.css", "marker": "── Nav list ──" }
+  }
+}

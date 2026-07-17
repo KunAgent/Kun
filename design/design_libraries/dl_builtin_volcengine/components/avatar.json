@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 2,
+  "slug": "avatar",
+  "name": "Avatar",
+  "category": "data-display",
+  "sourceKind": "structured-spec",
+  "confidence": "medium",
+  "semanticTypeCandidates": ["avatar", "user-icon", "profile-badge", "avatar-group"],
+  "variantDimensions": {
+    "size": ["mini", "default", "medium", "large"],
+    "color": ["red", "beige", "green", "teal", "purple", "primary", "grey"],
+    "type": ["person", "dept"],
+    "mode": ["plain", "capsule", "twoline", "editable"]
+  },
+  "representativeVariants": [
+    { "size": "default", "color": "purple", "type": "person", "mode": "plain" },
+    { "size": "large", "color": "red", "type": "person", "mode": "capsule" },
+    { "size": "medium", "color": "grey", "type": "dept", "mode": "plain" },
+    { "size": "large", "color": "purple", "type": "person", "mode": "twoline" }
+  ],
+  "anatomy": ["avatar-icon", "avatar-name", "avatar-subtitle", "avatar-info", "bordered-ring"],
+  "structurePatterns": [
+    "AvatarIcon is an inline-flex circle with centered text/initial or image",
+    "Avatar combines AvatarIcon + name text in a horizontal inline-flex row with 4px gap",
+    "Capsule mode wraps with border, border-radius 30px, and padding"
+  ],
+  "usageHints": [
+    "Mini 16px, Default 20px, Medium 24px, Large 40px",
+    "7 color variants each with distinct background/foreground pairs",
+    "Bordered variant adds 2px solid #FFFFFF border",
+    "Capsule mode: border 1px solid #EAEDF1, border-radius 30px",
+    "Twoline mode stacks name and subtitle vertically",
+    "Editable mode shows dark overlay on hover"
+  ],
+  "doNotInvent": ["avatar group stacking", "status dot indicator", "online/offline presence"],
+  "unknowns": ["image fallback behavior", "max character truncation in icon"],
+  "tokensConsumed": [],
+  "domAnatomy": {
+    "root": {
+      "tag": "span",
+      "class": "avatar avatar-{size}",
+      "children": [
+        { "tag": "span", "class": "avatar-icon avatar-icon-{size} avatar-icon-{color}" },
+        { "tag": "span", "class": "avatar-name" }
+      ]
+    }
+  },
+  "provenance": {
+    "preview": "preview/ui-avatar.html",
+    "source": "structured-spec",
+    "css": { "file": "ui-avatar.html", "marker": "── AvatarIcon 头像图标 ──" }
+  }
+}

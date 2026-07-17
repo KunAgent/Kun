@@ -1,0 +1,159 @@
+{
+  "schemaVersion": 2,
+  "slug": "menu",
+  "name": "Menu",
+  "category": "navigation",
+  "sourceKind": "structured-spec",
+  "confidence": "medium",
+  "semanticTypeCandidates": [
+    "menu",
+    "dropdown",
+    "context-menu"
+  ],
+  "variantDimensions": {
+    "item": [
+      "default",
+      "with-icon",
+      "with-shortcut",
+      "destructive",
+      "section-label",
+      "separator"
+    ],
+    "state": [
+      "default",
+      "hover",
+      "active",
+      "disabled"
+    ]
+  },
+  "representativeVariants": [
+    {
+      "item": "with-icon"
+    },
+    {
+      "item": "with-shortcut"
+    },
+    {
+      "item": "destructive"
+    }
+  ],
+  "anatomy": [
+    "surface",
+    "section-header",
+    "item",
+    "icon",
+    "label",
+    "shortcut",
+    "separator"
+  ],
+  "structurePatterns": [
+    "vertical list with --spacer-4 vertical rhythm"
+  ],
+  "usageHints": [
+    "Surface: --bg-menu, --border-neutral-l1, --radius-6",
+    "Hover: --bg-overlay-l2; destructive uses --status-error-default"
+  ],
+  "doNotInvent": [
+    "No nested submenu defined"
+  ],
+  "unknowns": [
+    "keyboard navigation roving tabindex"
+  ],
+  "tokensConsumed": [
+    "--bg-menu",
+    "--bg-overlay-l2",
+    "--body-sm-font-size",
+    "--body-xs-font-size",
+    "--border-neutral-l1",
+    "--code-editor-font-family",
+    "--icon-secondary",
+    "--radius-2",
+    "--radius-4",
+    "--spacer-4",
+    "--spacer-6",
+    "--spacer-8",
+    "--status-error-default",
+    "--text-default",
+    "--text-tertiary"
+  ],
+  "domAnatomy": {
+    "root": {
+      "tag": "div",
+      "class": "ds-menu",
+      "children": [
+        {
+          "tag": "div",
+          "class": "ds-menu__item",
+          "text": "Rename",
+          "children": [
+            {
+              "tag": "i"
+            },
+            {
+              "tag": "span",
+              "class": "ds-menu__shortcut",
+              "text": "⌘E"
+            }
+          ]
+        },
+        {
+          "tag": "div",
+          "class": "ds-menu__item",
+          "text": "Duplicate",
+          "children": [
+            {
+              "tag": "i"
+            },
+            {
+              "tag": "span",
+              "class": "ds-menu__shortcut",
+              "text": "⌘D"
+            }
+          ]
+        },
+        {
+          "tag": "div",
+          "class": "ds-menu__item",
+          "text": "Copy link",
+          "children": [
+            {
+              "tag": "i"
+            }
+          ]
+        },
+        {
+          "tag": "div",
+          "class": "ds-menu__divider"
+        },
+        {
+          "tag": "div",
+          "class": "ds-menu__item",
+          "text": "Settings",
+          "children": [
+            {
+              "tag": "i"
+            }
+          ]
+        },
+        {
+          "tag": "div",
+          "class": "ds-menu__item ds-menu__item--danger",
+          "text": "Delete",
+          "children": [
+            {
+              "tag": "i"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "provenance": {
+    "preview": "preview/component-menu.html",
+    "source": "previews/menu.html",
+    "css": {
+      "file": "components.css",
+      "marker": "── Menu ──"
+    }
+  }
+}

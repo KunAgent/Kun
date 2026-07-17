@@ -1,0 +1,47 @@
+{
+  "slug": "table",
+  "name": "Table",
+  "category": "data-display",
+  "evidence": "AI-inferred from dashboard preset and source tokens",
+  "anatomy": [
+    "header row",
+    "body rows",
+    "status pill",
+    "numeric column"
+  ],
+  "cssVariables": [
+    "background",
+    "foreground",
+    "muted",
+    "muted-foreground",
+    "border",
+    "primary",
+    "radius",
+    "font-sans"
+  ],
+  "variantDimensions": {
+    "density": [
+      "comfortable",
+      "compact"
+    ],
+    "rowState": [
+      "default",
+      "highlighted",
+      "selected"
+    ]
+  },
+  "structures": [
+    {
+      "name": "Comfortable, Default",
+      "description": "Readable performance table with airy row rhythm."
+    },
+    {
+      "name": "Compact, Highlighted",
+      "description": "Dense operations table with pink focus row."
+    },
+    {
+      "name": "Comfortable, Selected",
+      "description": "Selection state with primary-tinted row background."
+    }
+  ]
+}

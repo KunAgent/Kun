@@ -1,0 +1,60 @@
+{
+  "slug": "chart",
+  "name": "Chart",
+  "category": "data-viz",
+  "variantCount": 5,
+  "primitiveCount": 5,
+  "cssVariables": [
+    "chart-1",
+    "chart-2",
+    "chart-3",
+    "chart-4",
+    "chart-5",
+    "color-text-muted",
+    "color-border",
+    "space-4"
+  ],
+  "variantDimensions": {
+    "type": [
+      "bar",
+      "line",
+      "donut"
+    ],
+    "state": [
+      "default",
+      "highlighted"
+    ]
+  },
+  "anatomy": [
+    "canvas-frame",
+    "axis",
+    "series",
+    "legend"
+  ],
+  "structures": [
+    {
+      "name": "Bar, State=default",
+      "slots": [
+        "axis",
+        "series"
+      ]
+    },
+    {
+      "name": "Line, State=highlighted",
+      "slots": [
+        "axis",
+        "series",
+        "legend"
+      ]
+    },
+    {
+      "name": "Donut, State=default",
+      "slots": [
+        "series",
+        "legend"
+      ]
+    }
+  ],
+  "evidence": "Directly inferred from explicit chart-1 through chart-5 tokens in source CSS.",
+  "keyInsight": "Charts are the only vivid accent in the system; they carry the brand's chromatic energy."
+}

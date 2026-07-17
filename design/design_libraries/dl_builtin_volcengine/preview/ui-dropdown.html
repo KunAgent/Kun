@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>Dropdown 下拉菜单</title>
+  <link rel="stylesheet" href="preview-scaffold.css">
+  <style>
+  /* ═══ 容器 ═══ */
+  .dropdown {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    border: 1px solid #EAEDF1;
+    border-radius: 4px;
+    background: #FFFFFF;
+    padding: 5px;
+    box-shadow: 0px 15px 35px -2px rgba(0,0,0,0.05), 0px 5px 15px rgba(0,0,0,0.05);
+  }
+
+  /* ═══ 列表项 ═══ */
+  .dropdown-item {
+    display: flex;
+    align-items: center;
+    width: 228px;
+    padding: 5px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background 100ms ease;
+    gap: 6px;
+  }
+  .dropdown-item + .dropdown-item { margin-top: 4px; }
+  .dropdown-item:hover, .dropdown-item.hover { background: #F6F8FA; }
+  .dropdown-item.active { background: #FFFFFF; }
+  .dropdown-item.active .dropdown-item-label { color: #1664FF; font-weight: 500; }
+  .dropdown-item.disabled { cursor: not-allowed; }
+  .dropdown-item.disabled .dropdown-item-label { color: #C7CCD6; }
+
+  /* ═══ 列表项文字 ═══ */
+  .dropdown-item-label {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-family: "PingFang SC", sans-serif;
+    font-size: 13px;
+    font-weight: 400;
+    line-height: 22px;
+    letter-spacing: 0.04px;
+    color: #0C0D0E;
+  }
+
+  /* ═══ 描述文字 ═══ */
+  .dropdown-item-desc {
+    font-family: "PingFang SC", sans-serif;
+    font-size: 12px;
+    line-height: 20px;
+    letter-spacing: 0.04px;
+    color: #737A87;
+    flex-shrink: 0;
+  }
+
+  /* ═══ 带描述的列表项（纵向排列） ═══ */
+  .dropdown-item-col {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    width: 228px;
+    padding: 5px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background 100ms ease;
+  }
+  .dropdown-item-col + .dropdown-item-col { margin-top: 4px; }
+  .dropdown-item-col:hover { background: #F6F8FA; }
+
+  /* ═══ Checkbox ═══ */
+  .dropdown-checkbox {
+    width: 14px;
+    height: 14px;
+    border-radius: 2px;
+    background: #FFFFFF;
+    box-shadow: 0 0 0 1px #DDE2E9;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .dropdown-checkbox.checked { background: #1664FF; box-shadow: none; }
+  .dropdown-checkbox.checked svg { display: block; }
+  .dropdown-checkbox svg { display: none; width: 10px; height: 10px; }
+
+  /* ═══ 右侧箭头（子菜单） ═══ */
+  .dropdown-item-arrow {
+    width: 16px; height: 16px; flex-shrink: 0; color: #737A87;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .dropdown-item-arrow svg { width: 16px; height: 16px; }
+
+  /* ═══ 图标 ═══ */
+  .dropdown-item-icon {
+    width: 20px; height: 20px; flex-shrink: 0; color: #737A87;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .dropdown-item-icon svg { width: 20px; height: 20px; }
+
+  /* ═══ 分割线 ═══ */
+  .dropdown-divider {
+    width: 228px; height: 1px; background: #EAEDF1; margin: 4px 0; flex-shrink: 0;
+  }
+
+  /* ═══ 分组标题 ═══ */
+  .dropdown-group-title {
+    font-family: "PingFang SC", sans-serif;
+    font-size: 12px; line-height: 20px; letter-spacing: 0.04px;
+    color: #737A87; padding: 5px 12px 2px; width: 228px;
+  }
+  .dropdown-group-title + .dropdown-item { margin-top: 0; }
+
+  /* ═══ 搜索框 ═══ */
+  .dropdown-search {
+    display: flex; align-items: center; width: 228px; padding: 2px 12px; gap: 6px; margin-bottom: 4px;
+  }
+  .dropdown-search-icon { width: 14px; height: 14px; color: #737A87; flex-shrink: 0; }
+  .dropdown-search-input {
+    flex: 1; border: none; outline: none; background: transparent;
+    font-family: "PingFang SC", sans-serif; font-size: 13px; line-height: 22px; color: #0C0D0E;
+  }
+  .dropdown-search-input::placeholder { color: #C7CCD6; }
+
+  /* ═══ 子菜单容器 ═══ */
+  .dropdown-cascade { display: flex; align-items: flex-start; gap: 4px; }
+  </style>
+</head>
+<body>
+  <div class="pv-header">
+    <h1>Dropdown 下拉菜单</h1>
+    <p>下拉菜单面板，支持单选、多选、分组、搜索、多级菜单等多种模式。</p>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">单选</div>
+    <div class="row">
+      <div class="dropdown" data-component="dropdown" data-type="single" data-variant="basic">
+        <div class="dropdown-item"><span class="dropdown-item-label">北京</span></div>
+        <div class="dropdown-item"><span class="dropdown-item-label">上海</span></div>
+        <div class="dropdown-item"><span class="dropdown-item-label">杭州</span></div>
+        <div class="dropdown-item"><span class="dropdown-item-label">深圳</span></div>
+        <div class="dropdown-item"><span class="dropdown-item-label">广州</span></div>
+      </div>
+      <div class="dropdown" data-component="dropdown" data-type="single" data-variant="with-desc-right">
+        <div class="dropdown-item"><span class="dropdown-item-label">北京一</span><span class="dropdown-item-desc">小麦面文字</span></div>
+        <div class="dropdown-item"><span class="dropdown-item-label">北京一, 上海二, 北京...</span><span class="dropdown-item-desc">小麦面文字</span></div>
+        <div class="dropdown-item"><span class="dropdown-item-label">杭州一</span><span class="dropdown-item-desc">小麦面文字</span></div>
+      </div>
+      <div class="dropdown" data-component="dropdown" data-type="single" data-variant="with-desc-column">
+        <div class="dropdown-item-col"><span class="dropdown-item-label">北京一</span><span class="dropdown-item-desc">小麦面文字</span></div>
+        <div class="dropdown-item-col"><span class="dropdown-item-label">北京二</span><span class="dropdown-item-desc">小麦面文字</span></div>
+        <div class="dropdown-item-col"><span class="dropdown-item-label">各方包</span><span class="dropdown-item-desc">小麦面文字</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">多选</div>
+    <div class="row">
+      <div class="dropdown" data-component="dropdown" data-type="multi" data-variant="basic">
+        <div class="dropdown-item">
+          <span class="dropdown-checkbox checked"><svg viewBox="0 0 10 10" fill="none"><path d="M2 5l2.5 2.5L8 3.5" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+          <span class="dropdown-item-label">北京</span>
+        </div>
+        <div class="dropdown-item">
+          <span class="dropdown-checkbox"></span>
+          <span class="dropdown-item-label">上海</span>
+        </div>
+        <div class="dropdown-item">
+          <span class="dropdown-checkbox"></span>
+          <span class="dropdown-item-label">杭州</span>
+        </div>
+        <div class="dropdown-item">
+          <span class="dropdown-checkbox"></span>
+          <span class="dropdown-item-label">深圳</span>
+        </div>
+        <div class="dropdown-item">
+          <span class="dropdown-checkbox"></span>
+          <span class="dropdown-item-label">广州</span>
+        </div>
+      </div>
+      <div class="dropdown" data-component="dropdown" data-type="multi" data-variant="with-desc">
+        <div class="dropdown-item">
+          <span class="dropdown-checkbox checked"><svg viewBox="0 0 10 10" fill="none"><path d="M2 5l2.5 2.5L8 3.5" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+          <span class="dropdown-item-label">北京</span>
+          <span class="dropdown-item-desc">小麦面文字</span>
+        </div>
+        <div class="dropdown-item">
+          <span class="dropdown-checkbox"></span>
+          <span class="dropdown-item-label">上海</span>
+          <span class="dropdown-item-desc">小麦面文字</span>
+        </div>
+        <div class="dropdown-item">
+          <span class="dropdown-checkbox"></span>
+          <span class="dropdown-item-label">杭州</span>
+          <span class="dropdown-item-desc">小麦面文字</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">带分割线</div>
+    <div class="row">
+      <div class="dropdown" data-component="dropdown" data-type="single" data-variant="with-divider">
+        <div class="dropdown-item"><span class="dropdown-item-label">北京</span></div>
+        <div class="dropdown-item"><span class="dropdown-item-label">上海</span></div>
+        <div class="dropdown-item"><span class="dropdown-item-label">杭州</span></div>
+        <div class="dropdown-divider"></div>
+        <div class="dropdown-item"><span class="dropdown-item-label">深圳</span></div>
+        <div class="dropdown-item"><span class="dropdown-item-label">自行断</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">多级菜单</div>
+    <div class="row">
+      <div class="dropdown-cascade" data-component="dropdown" data-type="cascade" data-variant="basic">
+        <div class="dropdown">
+          <div class="dropdown-item">
+            <span class="dropdown-item-label">北京</span>
+            <span class="dropdown-item-arrow"><svg viewBox="0 0 16 16" fill="none"><path d="M6 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+          </div>
+          <div class="dropdown-item hover">
+            <span class="dropdown-item-label">上海</span>
+            <span class="dropdown-item-arrow"><svg viewBox="0 0 16 16" fill="none"><path d="M6 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+          </div>
+          <div class="dropdown-item">
+            <span class="dropdown-item-label">杭州</span>
+            <span class="dropdown-item-arrow"><svg viewBox="0 0 16 16" fill="none"><path d="M6 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+          </div>
+          <div class="dropdown-item">
+            <span class="dropdown-item-label">广州</span>
+            <span class="dropdown-item-arrow"><svg viewBox="0 0 16 16" fill="none"><path d="M6 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+          </div>
+        </div>
+        <div class="dropdown">
+          <div class="dropdown-item"><span class="dropdown-item-label">北京</span></div>
+          <div class="dropdown-item"><span class="dropdown-item-label">上海</span></div>
+          <div class="dropdown-item"><span class="dropdown-item-label">杭州</span></div>
+          <div class="dropdown-item"><span class="dropdown-item-label">广州</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">分组菜单</div>
+    <div class="row">
+      <div class="dropdown" data-component="dropdown" data-type="single" data-variant="grouped">
+        <div class="dropdown-group-title">华北地区</div>
+        <div class="dropdown-item"><span class="dropdown-item-label">北京</span></div>
+        <div class="dropdown-item"><span class="dropdown-item-label">上海</span></div>
+        <div class="dropdown-item"><span class="dropdown-item-label">杭州</span></div>
+        <div class="dropdown-divider"></div>
+        <div class="dropdown-group-title">华南地区</div>
+        <div class="dropdown-item"><span class="dropdown-item-label">深圳</span></div>
+        <div class="dropdown-item"><span class="dropdown-item-label">广州</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">带图标</div>
+    <div class="row">
+      <div class="dropdown" data-component="dropdown" data-type="single" data-variant="with-icon">
+        <div class="dropdown-item">
+          <span class="dropdown-item-icon"><svg viewBox="0 0 20 20" fill="none"><path d="M10 2a5 5 0 015 5c0 3.5-5 9-5 9S5 10.5 5 7a5 5 0 015-5z" stroke="currentColor" stroke-width="1.5"/><circle cx="10" cy="7" r="1.5" stroke="currentColor" stroke-width="1.5"/></svg></span>
+          <span class="dropdown-item-label">北京</span>
+        </div>
+        <div class="dropdown-item">
+          <span class="dropdown-item-icon"><svg viewBox="0 0 20 20" fill="none"><path d="M10 2a5 5 0 015 5c0 3.5-5 9-5 9S5 10.5 5 7a5 5 0 015-5z" stroke="currentColor" stroke-width="1.5"/><circle cx="10" cy="7" r="1.5" stroke="currentColor" stroke-width="1.5"/></svg></span>
+          <span class="dropdown-item-label">上海</span>
+        </div>
+        <div class="dropdown-item">
+          <span class="dropdown-item-icon"><svg viewBox="0 0 20 20" fill="none"><path d="M10 2a5 5 0 015 5c0 3.5-5 9-5 9S5 10.5 5 7a5 5 0 015-5z" stroke="currentColor" stroke-width="1.5"/><circle cx="10" cy="7" r="1.5" stroke="currentColor" stroke-width="1.5"/></svg></span>
+          <span class="dropdown-item-label">杭州</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">带搜索</div>
+    <div class="row">
+      <div class="dropdown" data-component="dropdown" data-type="single" data-variant="with-search">
+        <div class="dropdown-search">
+          <svg class="dropdown-search-icon" viewBox="0 0 14 14" fill="none"><circle cx="6" cy="6" r="4" stroke="currentColor" stroke-width="1.5"/><path d="M9 9l3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+          <input class="dropdown-search-input" type="text" placeholder="搜索...">
+        </div>
+        <div class="dropdown-item"><span class="dropdown-item-label">北京</span></div>
+        <div class="dropdown-item"><span class="dropdown-item-label">上海</span></div>
+        <div class="dropdown-item"><span class="dropdown-item-label">杭州</span></div>
+        <div class="dropdown-item"><span class="dropdown-item-label">深圳</span></div>
+        <div class="dropdown-item"><span class="dropdown-item-label">广州</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">列表项状态</div>
+    <div class="row">
+      <div class="dropdown" data-component="dropdown" data-type="states">
+        <div class="dropdown-item"><span class="dropdown-item-label">默认 Default</span></div>
+        <div class="dropdown-item hover"><span class="dropdown-item-label">悬停 Hover</span></div>
+        <div class="dropdown-item active"><span class="dropdown-item-label">选中 Active</span></div>
+        <div class="dropdown-item disabled"><span class="dropdown-item-label">禁用 Disabled</span></div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

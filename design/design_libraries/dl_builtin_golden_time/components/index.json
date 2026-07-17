@@ -1,0 +1,85 @@
+{
+  "library": "goldentime",
+  "theme": [
+    "warm",
+    "editorial",
+    "premium",
+    "dashboard"
+  ],
+  "sourceTokens": {
+    "css": "colors_and_type.css",
+    "json": "css.json"
+  },
+  "components": [
+    {
+      "id": "button",
+      "slug": "button",
+      "name": "Button",
+      "file": "components/button.json",
+      "category": "action",
+      "summary": "A softly rounded editorial button for primary calls to action, supporting calm secondary emphasis and deliberate destructive actions."
+    },
+    {
+      "id": "card",
+      "slug": "card",
+      "name": "Card",
+      "file": "components/card.json",
+      "category": "container",
+      "summary": "A premium dashboard surface for metrics, narratives, and compact workflows, using warm neutral contrast and spacious internal rhythm."
+    },
+    {
+      "id": "input",
+      "slug": "input",
+      "name": "Input",
+      "file": "components/input.json",
+      "category": "form",
+      "summary": "A refined text-entry field designed for filters, search, and profile settings with quiet borders and clear focus feedback."
+    },
+    {
+      "id": "sidebar-navigation",
+      "slug": "sidebar-navigation",
+      "name": "Sidebar Navigation",
+      "file": "components/sidebar-navigation.json",
+      "category": "navigation",
+      "summary": "A persistent navigation rail that frames dashboard sections with understated hierarchy, tactile active states, and premium account context."
+    },
+    {
+      "id": "data-table",
+      "slug": "data-table",
+      "name": "Data Table",
+      "file": "components/data-table.json",
+      "category": "data-display",
+      "summary": "A warm-toned analytical table for operational dashboards, balancing legibility, sorting clarity, and restrained row emphasis."
+    },
+    {
+      "id": "chart-panel",
+      "slug": "chart-panel",
+      "name": "Chart Panel",
+      "file": "components/chart-panel.json",
+      "category": "data-visualization",
+      "summary": "A narrative chart container that pairs headline metrics, chart legends, and contextual notes inside a premium editorial frame."
+    }
+  ],
+  "sharedCssVars": [
+    "--background",
+    "--card",
+    "--card-foreground",
+    "--foreground",
+    "--muted",
+    "--muted-foreground",
+    "--border",
+    "--ring",
+    "--radius",
+    "--font-sans",
+    "--font-serif",
+    "--tracking-normal",
+    "--spacing",
+    "--shadow-xs",
+    "--shadow-sm"
+  ],
+  "toneGuidelines": [
+    "Prefer sentence case labels over all-caps controls.",
+    "Use concise, editorial microcopy with a composed and confident voice.",
+    "Let warm neutrals carry most surfaces and reserve stronger contrast for hierarchy or action."
+  ]
+}

@@ -1,0 +1,123 @@
+{
+  "schemaVersion": 2,
+  "slug": "tag",
+  "name": "Tag",
+  "category": "data-display",
+  "sourceKind": "structured-spec",
+  "confidence": "medium",
+  "semanticTypeCandidates": [
+    "tag",
+    "badge",
+    "chip"
+  ],
+  "variantDimensions": {
+    "tone": [
+      "default",
+      "success",
+      "warning",
+      "danger",
+      "brand"
+    ],
+    "withDot": [
+      true,
+      false
+    ]
+  },
+  "representativeVariants": [
+    {
+      "tone": "default"
+    },
+    {
+      "tone": "success"
+    },
+    {
+      "tone": "warning"
+    },
+    {
+      "tone": "danger"
+    },
+    {
+      "tone": "brand",
+      "withDot": true
+    }
+  ],
+  "anatomy": [
+    "leading-dot",
+    "label"
+  ],
+  "structurePatterns": [
+    "inline-flex pill with --radius-2 (per token)"
+  ],
+  "usageHints": [
+    "Tone surface uses --status-{success|alert|error}-surface-l1; brand uses --bg-brand-popup",
+    "Default tone uses --bg-overlay-l3"
+  ],
+  "doNotInvent": [
+    "No closeable / dismissable variant"
+  ],
+  "unknowns": [
+    "icon-leading variant"
+  ],
+  "tokensConsumed": [
+    "--bg-brand-popup",
+    "--bg-overlay-l2",
+    "--body-xs-font-size",
+    "--border-neutral-l1",
+    "--radius-2",
+    "--spacer-6",
+    "--status-error-default",
+    "--status-error-surface-l1",
+    "--status-success-default",
+    "--status-success-surface-l1",
+    "--status-warning-default",
+    "--status-warning-surface-l1",
+    "--text-brand",
+    "--text-secondary"
+  ],
+  "domAnatomy": {
+    "root": {
+      "tag": "div",
+      "class": "row",
+      "children": [
+        {
+          "tag": "span",
+          "class": "ds-tag",
+          "text": "Default"
+        },
+        {
+          "tag": "span",
+          "class": "ds-tag ds-tag--success",
+          "text": "Active"
+        },
+        {
+          "tag": "span",
+          "class": "ds-tag ds-tag--warning",
+          "text": "Pending"
+        },
+        {
+          "tag": "span",
+          "class": "ds-tag ds-tag--danger",
+          "text": "Failed"
+        },
+        {
+          "tag": "span",
+          "class": "ds-tag ds-tag--brand",
+          "text": "Live",
+          "children": [
+            {
+              "tag": "span"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "provenance": {
+    "preview": "preview/component-tag.html",
+    "source": "previews/tag.html",
+    "css": {
+      "file": "components.css",
+      "marker": "── Tag ──"
+    }
+  }
+}

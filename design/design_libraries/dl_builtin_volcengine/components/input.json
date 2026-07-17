@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 2,
+  "slug": "input",
+  "name": "Input",
+  "category": "data-entry",
+  "sourceKind": "structured-spec",
+  "confidence": "medium",
+  "semanticTypeCandidates": ["text-input", "text-field", "form-control"],
+  "variantDimensions": {
+    "size": ["mini", "small", "default", "large"],
+    "state": ["default", "hover", "active", "disabled", "readonly", "error", "error-hover", "error-focus"],
+    "adornment": ["none", "prefix", "suffix", "prefix-suffix"]
+  },
+  "representativeVariants": [
+    { "size": "large", "state": "default" },
+    { "size": "default", "state": "default" },
+    { "size": "small", "state": "default" },
+    { "size": "mini", "state": "default" },
+    { "size": "default", "state": "hover" },
+    { "size": "default", "state": "active" },
+    { "size": "default", "state": "disabled" },
+    { "size": "default", "state": "error" },
+    { "size": "default", "adornment": "prefix" },
+    { "size": "default", "adornment": "suffix" }
+  ],
+  "anatomy": ["input-element", "prefix-icon", "suffix-icon", "error-message"],
+  "structurePatterns": [
+    "Single input element with box-shadow borders, optional prefix/suffix via background-image positioning",
+    "Error message is a sibling div below the input when validation fails"
+  ],
+  "usageHints": [
+    "Base: border-radius 4px, background #FFFFFF, box-shadow 0 0 0 1px #DDE2E9 + 0 1px 1px rgba(0,0,0,0.05)",
+    "Sizes: large=36px h/14px font, default=32px h/13px font, small=28px h/13px font, mini=24px h/12px font",
+    "Padding: 0 12px default, mini uses 0 8px",
+    "Font: PingFang SC 400, letter-spacing 0.3px",
+    "Placeholder color: #737A87",
+    "Hover: box-shadow 0 0 0 1px rgba(22,100,255,0.8)",
+    "Focus: box-shadow 0 0 0 1px #1664FF + 0 0 0 3px rgba(22,100,255,0.3)",
+    "Error: box-shadow 0 0 0 1px #F53F3F; error+focus adds 0 0 0 3px rgba(245,63,63,0.12)",
+    "Disabled: background #F6F8FA, color #C9CDD4, cursor not-allowed",
+    "Readonly: background #F6F8FA, color #0C0D0E, cursor default",
+    "Error message: margin-top 4px, font-size 12px, line-height 18px, color #F53F3F",
+    "Prefix icon: padding-left 36px with icon at 12px from left",
+    "Suffix icon: padding-right 36px with icon at right 12px"
+  ],
+  "doNotInvent": ["character counter", "clearable button", "password toggle"],
+  "unknowns": ["textarea variant dimensions", "max-length behavior"],
+  "tokensConsumed": [],
+  "domAnatomy": {
+    "root": {
+      "tag": "input",
+      "class": "ui-input input-{size}",
+      "attrs": { "type": "text", "placeholder": "..." },
+      "modifiers": ["hover", "active", "disabled", "readonly", "input-error", "input-prefix", "input-suffix"]
+    },
+    "errorMessage": {
+      "tag": "div",
+      "class": "input-error-msg"
+    }
+  },
+  "provenance": {
+    "preview": "preview/ui-input.html",
+    "source": "structured-spec",
+    "css": { "file": "ui-input.html", "marker": "inline style" }
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "id": "material-design/button",
+  "name": "Button",
+  "displayName": "Material Button",
+  "description": "Elevated, filled, outlined, and text button variants",
+  "category": "actions",
+  "tags": ["button", "action", "material"],
+  "framework": "react",
+  "props": [
+    { "name": "variant", "type": "string", "required": true, "default": "filled" },
+    { "name": "onClick", "type": "function", "required": true },
+    { "name": "disabled", "type": "boolean", "required": false, "default": "false" }
+  ],
+  "variants": ["elevated", "filled", "outlined", "text"],
+  "usage": "Use for primary and secondary actions",
+  "examples": ["<Button variant=\"filled\" onClick={handler}>Submit</Button>"]
+}

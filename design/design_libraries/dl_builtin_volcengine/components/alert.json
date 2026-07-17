@@ -1,0 +1,57 @@
+{
+  "schemaVersion": 2,
+  "slug": "alert",
+  "name": "Alert",
+  "category": "feedback",
+  "sourceKind": "structured-spec",
+  "confidence": "medium",
+  "semanticTypeCandidates": ["alert", "notification-banner", "inline-message"],
+  "variantDimensions": {
+    "type": ["info", "success", "warning", "error"],
+    "variant": ["default", "with-desc", "closable", "banner"]
+  },
+  "representativeVariants": [
+    { "type": "info", "variant": "default" },
+    { "type": "success", "variant": "with-desc" },
+    { "type": "warning", "variant": "closable" },
+    { "type": "error", "variant": "banner" }
+  ],
+  "anatomy": ["icon", "content", "title", "desc", "close-button"],
+  "structurePatterns": [
+    "Horizontal flex container with icon on the left, content area in the middle, and optional close button positioned absolutely top-right"
+  ],
+  "usageHints": [
+    "Info uses background #E8F3FF with color #1664FF",
+    "Success uses background #E8FFEA with color #00B365",
+    "Warning uses background #FFF7E8 with color #FF7D00",
+    "Error uses background #FFECE8 with color #D7312A",
+    "Banner variant removes border-radius and fills full width",
+    "With-desc variant increases padding to 16px"
+  ],
+  "doNotInvent": ["animated entrance", "action buttons inside alert", "toast-style positioning"],
+  "unknowns": ["max-width constraints in context", "auto-dismiss timer behavior"],
+  "tokensConsumed": [],
+  "domAnatomy": {
+    "root": {
+      "tag": "div",
+      "class": "alert alert-{type}",
+      "children": [
+        { "tag": "svg", "class": "alert-icon" },
+        {
+          "tag": "div",
+          "class": "alert-content",
+          "children": [
+            { "tag": "span", "class": "alert-title" },
+            { "tag": "span", "class": "alert-desc", "optional": true }
+          ]
+        },
+        { "tag": "button", "class": "alert-close", "optional": true }
+      ]
+    }
+  },
+  "provenance": {
+    "preview": "preview/ui-alert.html",
+    "source": "structured-spec",
+    "css": { "file": "ui-alert.html", "marker": "inline <style>" }
+  }
+}

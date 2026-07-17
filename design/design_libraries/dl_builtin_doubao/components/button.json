@@ -1,0 +1,62 @@
+{
+  "slug": "button",
+  "name": "Button",
+  "purpose": "Primary and secondary call-to-action control for dashboard flows and AI task execution.",
+  "variantDimensions": {
+    "style": [
+      "primary",
+      "secondary",
+      "ghost",
+      "destructive"
+    ],
+    "size": [
+      "sm",
+      "md",
+      "lg"
+    ],
+    "state": [
+      "default",
+      "hover",
+      "focus",
+      "disabled"
+    ]
+  },
+  "structures": [
+    {
+      "name": "Text Button",
+      "anatomy": [
+        "container",
+        "label"
+      ],
+      "notes": "Fully rounded pill action with medium weight label and low visual noise."
+    },
+    {
+      "name": "Icon Leading Button",
+      "anatomy": [
+        "container",
+        "leading-icon",
+        "label"
+      ],
+      "notes": "Used for search, create, or run actions in toolbars."
+    },
+    {
+      "name": "Split Emphasis Row",
+      "anatomy": [
+        "primary-button",
+        "secondary-button"
+      ],
+      "notes": "Primary action carries the accent color, companion action stays quiet."
+    }
+  ],
+  "contentExamples": [
+    "创建 AI 智能体",
+    "发送",
+    "我创建的",
+    "删除对话"
+  ],
+  "interactionNotes": [
+    "Default height should feel compact and suitable for dense work surfaces.",
+    "Focus state should emphasize the ring token rather than heavy shadow."
+  ],
+  "category": "action"
+}

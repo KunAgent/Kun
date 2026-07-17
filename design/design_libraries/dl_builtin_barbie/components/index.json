@@ -1,0 +1,54 @@
+{
+  "brandName": "Barbie",
+  "productType": "dashboard",
+  "kitType": "dashboard",
+  "components": [
+    {
+      "slug": "button",
+      "name": "Button",
+      "category": "actions",
+      "variantCount": 9,
+      "keyInsight": "Rounded CTA with high-contrast pink fill and white text."
+    },
+    {
+      "slug": "card",
+      "name": "Card",
+      "category": "containers",
+      "variantCount": 6,
+      "keyInsight": "Core insight card with elevated pink-shadow treatment."
+    },
+    {
+      "slug": "table",
+      "name": "Table",
+      "category": "data-display",
+      "variantCount": 5,
+      "keyInsight": "Readable performance table with airy row rhythm."
+    },
+    {
+      "slug": "chart",
+      "name": "Chart",
+      "category": "data-visualization",
+      "variantCount": 5,
+      "keyInsight": "Campaign bars using saturated pink scale."
+    },
+    {
+      "slug": "navigation",
+      "name": "Navigation",
+      "category": "navigation",
+      "variantCount": 6,
+      "keyInsight": "Horizontal app navigation with crisp active underline."
+    },
+    {
+      "slug": "sidebar",
+      "name": "Sidebar",
+      "category": "navigation",
+      "variantCount": 5,
+      "keyInsight": "Full navigation rail with active pink capsule."
+    }
+  ],
+  "crossComponentPatterns": [
+    "Rounded silhouettes use a single oversized radius token to keep the system soft and toy-like.",
+    "Primary actions lean on saturated pink fills with white text, while secondary states stay powdery and editorial.",
+    "Data surfaces use blush neutrals and pink-tinted shadows instead of grayscale elevation."
+  ]
+}

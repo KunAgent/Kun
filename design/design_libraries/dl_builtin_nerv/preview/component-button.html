@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>body{margin:0;padding:12px;background:var(--background);color:var(--foreground);font:500 14px/1.2 var(--font-sans)}.row{display:flex;align-items:center;gap:calc(var(--spacing)*2);flex-wrap:wrap;margin:0}.label{font-size:10px;line-height:1;letter-spacing:var(--tracking-normal);text-transform:uppercase;color:var(--muted-foreground);min-width:72px}.divider{margin:12px 0;border:0;border-top:1px solid var(--border)}.btn{display:inline-flex;align-items:center;justify-content:center;gap:calc(var(--spacing)*1.5);min-height:36px;padding:0 calc(var(--spacing)*3);border:1px solid transparent;border-radius:var(--radius);font:600 13px/1 var(--font-sans);white-space:nowrap;box-shadow:var(--shadow-sm);transition:background-color .18s ease,border-color .18s ease,color .18s ease,box-shadow .18s ease;cursor:pointer}.btn:focus-visible{outline:none;box-shadow:0 0 0 2px var(--ring),var(--shadow-sm)}.btn:disabled{opacity:.5;cursor:not-allowed;box-shadow:none}.btn-primary{background:var(--primary);color:var(--primary-foreground)}.btn-primary:hover:not(:disabled){background:var(--accent);color:var(--accent-foreground)}.btn-secondary{background:var(--secondary);color:var(--secondary-foreground);border-color:var(--border)}.btn-secondary:hover:not(:disabled){background:var(--muted)}.btn-ghost{background:transparent;color:var(--foreground);border-color:var(--border);box-shadow:none}.btn-ghost:hover:not(:disabled){background:var(--muted);color:var(--foreground)}.sm{min-height:32px;padding:0 calc(var(--spacing)*2.5)}.lg{min-height:40px;padding:0 calc(var(--spacing)*3.5)}</style>
+</head>
+<body>
+<div class="row"><span class="label">Primary</span><button class="btn btn-primary sm">Launch Scan</button><button class="btn btn-primary">Create Report</button><button class="btn btn-primary lg" disabled>Acknowledge</button></div>
+<hr class="divider">
+<div class="row"><span class="label">Secondary</span><button class="btn btn-secondary">Acknowledge</button><button class="btn btn-secondary" disabled>Create Report</button></div>
+<div class="row"><span class="label">Ghost</span><button class="btn btn-ghost">Create Report</button><button class="btn btn-ghost" disabled>Launch Scan</button></div>
+</body>
+</html>

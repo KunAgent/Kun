@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Mobile Right Rail</title>
+<link rel="stylesheet" href="../colors_and_type.css">
+<script src="https://code.iconify.design/iconify-icon/2.1.0/iconify-icon.min.js"></script>
+<style>
+body{margin:0;padding:12px;background:var(--background);font:400 14px/1.3 var(--font-sans);color:var(--foreground)}
+.row{display:flex;align-items:flex-start;gap:8px;flex-wrap:wrap;margin-bottom:8px}
+.label{width:54px;padding-top:4px;font:400 11px/1 var(--font-mono);letter-spacing:.12em;text-transform:uppercase;color:var(--muted-foreground)}
+.divider{border:0;border-top:1px solid var(--border);margin:8px 0}
+.rail{display:flex;flex-direction:column;align-items:center;gap:20px;padding:14px 10px;border:1px solid var(--border);border-radius:24px;background:var(--video-bg);color:var(--on-media);min-width:64px}
+/* AvatarMono: mono initials on muted bg, no gradient (skill Web.AvatarMono / §5.1) */
+.avatar{position:relative;width:44px;height:44px;border:2px solid var(--on-media);border-radius:50%;display:grid;place-items:center;background:rgba(255,255,255,.1);font:700 13px/1 var(--font-mono);letter-spacing:.06em;color:var(--on-media)}
+.plus{position:absolute;left:50%;bottom:-8px;transform:translateX(-50%);width:20px;height:20px;border-radius:50%;display:grid;place-items:center;background:var(--primary);color:var(--on-media)}
+.plus iconify-icon{font-size:11px}
+.action{display:flex;flex-direction:column;align-items:center;gap:4px;text-align:center;cursor:pointer;transition:transform .2s cubic-bezier(.2,.8,.2,1)}
+.action:hover{transform:translateY(-2px)}
+.action:active{transform:scale(.94)}
+.icon{font-size:30px;line-height:1;display:grid;place-items:center;transition:color .2s ease}
+.count,.meta{font:400 11px/1.1 var(--font-mono)}
+.liked .heart{color:var(--primary);animation:heartPulse 1200ms ease}
+@keyframes heartPulse{0%,100%{transform:scale(1)}30%{transform:scale(1.18)}}
+/* disc-spin 8s (skill §8.2): music disc with ph music-notes */
+.disc{width:48px;height:48px;border-radius:50%;display:grid;place-items:center;border:1px solid rgba(255,255,255,.4);background:rgba(0,0,0,.28);color:var(--on-media);font-size:22px}
+.spin .disc{animation:spin 8s linear infinite}
+.disabled{opacity:.38}
+.disabled .plus,.disabled .icon{color:var(--muted-foreground)}
+@keyframes spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion: reduce){.spin .disc,.liked .heart{animation:none!important}}
+</style>
+</head>
+<body class="dark">
+<div class="row"><span class="label">Default</span><div class="rail spin"><div class="avatar">DQ<span class="plus"><iconify-icon icon="ph:plus-bold"></iconify-icon></span></div><div class="action"><span class="icon heart"><iconify-icon icon="ph:heart-fill"></iconify-icon></span><span class="count">328.4K</span></div><div class="action"><span class="icon"><iconify-icon icon="ph:chat-circle-fill"></iconify-icon></span><span class="count">14.2K</span></div><div class="action"><span class="icon"><iconify-icon icon="ph:bookmark-simple-fill"></iconify-icon></span><span class="count">Save</span></div><div class="action"><span class="icon"><iconify-icon icon="ph:share-fat-fill"></iconify-icon></span><span class="count">Share</span></div><div class="disc"><iconify-icon icon="ph:music-notes-fill"></iconify-icon></div></div><div class="rail disabled"><div class="avatar">DQ<span class="plus"><iconify-icon icon="ph:plus-bold"></iconify-icon></span></div><div class="action"><span class="icon heart"><iconify-icon icon="ph:heart-fill"></iconify-icon></span><span class="count">328.4K</span></div><div class="action"><span class="icon"><iconify-icon icon="ph:chat-circle-fill"></iconify-icon></span><span class="count">14.2K</span></div><div class="action"><span class="icon"><iconify-icon icon="ph:bookmark-simple-fill"></iconify-icon></span><span class="count">Save</span></div><div class="action"><span class="icon"><iconify-icon icon="ph:share-fat-fill"></iconify-icon></span><span class="count">Share</span></div><div class="disc"><iconify-icon icon="ph:music-notes-fill"></iconify-icon></div></div></div>
+<hr class="divider">
+<div class="row"><span class="label">Liked</span><div class="rail spin liked"><div class="avatar">DQ<span class="plus"><iconify-icon icon="ph:plus-bold"></iconify-icon></span></div><div class="action"><span class="icon heart"><iconify-icon icon="ph:heart-fill"></iconify-icon></span><span class="count">328.5K</span></div><div class="action"><span class="icon"><iconify-icon icon="ph:chat-circle-fill"></iconify-icon></span><span class="count">14.2K</span></div><div class="action"><span class="icon"><iconify-icon icon="ph:bookmark-simple-fill"></iconify-icon></span><span class="count">Save</span></div><div class="action"><span class="icon"><iconify-icon icon="ph:share-fat-fill"></iconify-icon></span><span class="count">Share</span></div><div class="disc"><iconify-icon icon="ph:music-notes-fill"></iconify-icon></div></div><div class="rail static liked"><div class="avatar">DQ<span class="plus"><iconify-icon icon="ph:plus-bold"></iconify-icon></span></div><div class="action"><span class="icon heart"><iconify-icon icon="ph:heart-fill"></iconify-icon></span><span class="count">328.5K</span></div><div class="action"><span class="icon"><iconify-icon icon="ph:chat-circle-fill"></iconify-icon></span><span class="count">14.2K</span></div><div class="action"><span class="icon"><iconify-icon icon="ph:bookmark-simple-fill"></iconify-icon></span><span class="count">Save</span></div><div class="action"><span class="icon"><iconify-icon icon="ph:share-fat-fill"></iconify-icon></span><span class="count">Share</span></div><div class="disc"><iconify-icon icon="ph:music-notes-fill"></iconify-icon></div></div><span class="meta">reduced motion</span></div>
+</body>
+</html>

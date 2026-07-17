@@ -1,0 +1,76 @@
+{
+  "schemaVersion": 2,
+  "slug": "slider",
+  "name": "Slider",
+  "category": "data-entry",
+  "sourceKind": "structured-spec",
+  "confidence": "medium",
+  "semanticTypeCandidates": ["range-slider", "slide-input", "track-control"],
+  "variantDimensions": {
+    "type": ["basic", "range"],
+    "size": ["default", "small"],
+    "state": ["default", "disabled"]
+  },
+  "representativeVariants": [
+    { "type": "basic", "size": "default", "state": "default" },
+    { "type": "basic", "size": "small", "state": "default" },
+    { "type": "basic", "size": "default", "state": "disabled" },
+    { "type": "range", "size": "default", "state": "default" },
+    { "type": "range", "size": "small", "state": "disabled" }
+  ],
+  "anatomy": ["slider", "slider-track", "slider-track-fill", "slider-thumb", "slider-marks", "slider-mark", "slider-mark-labels", "slider-tooltip"],
+  "structurePatterns": [
+    "Horizontal flex container with relative-positioned track, fill bar, and absolutely-positioned thumb(s)",
+    "Basic mode has one thumb; range mode has two thumbs with fill between them",
+    "Optional marks show discrete step indicators; optional tooltip shows value on hover/drag"
+  ],
+  "usageHints": [
+    "Container height 24px (default) or 16px (small)",
+    "Track height 2px, background #F6F8FA, border-radius 1px",
+    "Fill color #1664FF; disabled fill #94BFFF",
+    "Thumb: 12px circle (8px for small), white fill with 2px #1664FF border",
+    "Thumb hover: box-shadow 0 0 0 4px rgba(22,100,255,0.12)",
+    "Thumb active: grows to 14px with grabbing cursor",
+    "Disabled: pointer-events none, thumb border-color #94BFFF",
+    "Mark dots: 4px circles, #DDE2E9 default, #1664FF when active",
+    "Tooltip: background #42464E, color #FFFFFF, font-size 12px, 4px border-radius"
+  ],
+  "doNotInvent": ["vertical slider", "input field integration", "color gradient track", "multi-range beyond 2 thumbs"],
+  "unknowns": ["step snapping behavior", "keyboard accessibility details", "min/max label placement"],
+  "tokensConsumed": [],
+  "domAnatomy": {
+    "root": {
+      "tag": "div",
+      "class": "slider slider-{size}",
+      "children": [
+        {
+          "tag": "div",
+          "class": "slider-track",
+          "children": [
+            { "tag": "div", "class": "slider-track-fill", "style": "width: {percent}%" }
+          ]
+        },
+        { "tag": "div", "class": "slider-thumb", "style": "left: {percent}%" },
+        { "tag": "div", "class": "slider-thumb", "optional": true, "note": "second thumb for range mode" },
+        {
+          "tag": "div",
+          "class": "slider-marks",
+          "optional": true,
+          "children": [
+            { "tag": "span", "class": "slider-mark", "repeat": true }
+          ]
+        },
+        {
+          "tag": "div",
+          "class": "slider-tooltip",
+          "optional": true
+        }
+      ]
+    }
+  },
+  "provenance": {
+    "preview": "preview/ui-slider.html",
+    "source": "structured-spec",
+    "css": { "file": "ui-slider.html", "marker": "inline <style>" }
+  }
+}

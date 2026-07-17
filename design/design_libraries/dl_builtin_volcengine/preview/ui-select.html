@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>Select 选择器</title>
+  <link rel="stylesheet" href="preview-scaffold.css">
+  <style>
+    /* Select 基础 */
+    .select {
+      position: relative;
+      display: inline-block;
+      font-family: "PingFang SC", sans-serif;
+      font-weight: 400;
+      font-size: 13px;
+      line-height: 22px;
+      letter-spacing: 0.039px;
+      width: 240px;
+    }
+
+    /* 触发器 */
+    .select-trigger {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 32px;
+      padding: 0 12px;
+      background: #FFFFFF;
+      border-radius: 4px;
+      box-shadow: 0 0 0 1px #DDE2E9, 0 1px 1px rgba(0,0,0,0.05);
+      cursor: pointer;
+      transition: box-shadow 150ms ease;
+    }
+
+    /* 尺寸 */
+    .select-large .select-trigger {
+      height: 36px;
+      font-size: 14px;
+    }
+    .select-small .select-trigger {
+      height: 28px;
+      padding: 0 8px;
+    }
+    .select-mini .select-trigger {
+      height: 24px;
+      padding: 0 4px;
+      font-size: 12px;
+    }
+
+    /* 值 & 占位 */
+    .select-value {
+      flex: 1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      color: #0C0D0E;
+    }
+    .select-placeholder {
+      color: #737A87;
+    }
+
+    /* 后缀图标 */
+    .select-suffix {
+      display: flex;
+      align-items: center;
+      margin-left: 8px;
+      color: #737A87;
+      flex-shrink: 0;
+    }
+    .select-arrow {
+      width: 16px;
+      height: 16px;
+      transition: transform 200ms ease;
+    }
+    .select-arrow.rotated {
+      transform: rotate(180deg);
+    }
+
+    /* 清除按钮 */
+    .select-clear {
+      display: flex;
+      align-items: center;
+      width: 16px;
+      height: 16px;
+      color: #737A87;
+      cursor: pointer;
+      margin-left: 4px;
+    }
+    .select-clear:hover {
+      color: #42464E;
+    }
+
+    /* Hover */
+    .select.hover .select-trigger,
+    .select:hover:not(.focus):not(.disabled):not(.error):not(.readonly) .select-trigger {
+      box-shadow: 0 0 0 1px rgba(22, 100, 255, 0.8), 0 1px 1px rgba(0,0,0,0.05);
+    }
+
+    /* Focus/Active */
+    .select.focus .select-trigger {
+      box-shadow: 0 0 0 1px #1664FF, 0 1px 1px rgba(0,0,0,0.05), 0 0 0 3px rgba(22, 100, 255, 0.3);
+    }
+    .select.focus .select-suffix {
+      color: #1664FF;
+    }
+
+    /* Disabled */
+    .select.disabled .select-trigger {
+      background: #F6F8FA;
+      cursor: not-allowed;
+      box-shadow: 0 0 0 1px #DDE2E9;
+    }
+    .select.disabled .select-value {
+      color: #C9CDD4;
+    }
+    .select.disabled .select-placeholder {
+      color: #C9CDD4;
+    }
+    .select.disabled .select-suffix {
+      color: #C9CDD4;
+    }
+    .select.disabled:hover .select-trigger {
+      box-shadow: 0 0 0 1px #DDE2E9;
+    }
+
+    /* Read-only */
+    .select.readonly .select-trigger {
+      background: #F6F8FA;
+      cursor: default;
+      box-shadow: 0 0 0 1px #DDE2E9;
+    }
+    .select.readonly .select-value {
+      color: #0C0D0E;
+    }
+    .select.readonly:hover .select-trigger {
+      box-shadow: 0 0 0 1px #DDE2E9;
+    }
+
+    /* Error */
+    .select.error .select-trigger {
+      box-shadow: 0 0 0 1px #F53F3F, 0 1px 1px rgba(0,0,0,0.05);
+    }
+    .select.error.hover .select-trigger,
+    .select.error:hover:not(.focus) .select-trigger {
+      box-shadow: 0 0 0 1px #D93F3F, 0 1px 1px rgba(0,0,0,0.05);
+    }
+    .select.error.focus .select-trigger {
+      box-shadow: 0 0 0 1px #F53F3F, 0 1px 1px rgba(0,0,0,0.05), 0 0 0 3px rgba(245, 63, 63, 0.12);
+    }
+
+    /* Error 提示文案 */
+    .select-error-msg {
+      margin-top: 4px;
+      font-size: 12px;
+      line-height: 18px;
+      color: #F53F3F;
+    }
+
+    /* 下拉面板 */
+    .select-dropdown {
+      position: absolute;
+      top: calc(100% + 4px);
+      left: 0;
+      width: 100%;
+      background: #FFFFFF;
+      border-radius: 4px;
+      box-shadow: 0px 15px 35px -2px rgba(0,0,0,0.05), 0px 5px 15px rgba(0,0,0,0.05);
+      border: 1px solid #EAEDF1;
+      padding: 5px;
+      z-index: 1000;
+    }
+
+    /* 选项 */
+    .select-option {
+      display: flex;
+      align-items: center;
+      padding: 5px 12px;
+      border-radius: 4px;
+      color: #0C0D0E;
+      font-size: 13px;
+      line-height: 22px;
+      letter-spacing: 0.04px;
+      cursor: pointer;
+      transition: background 100ms ease;
+    }
+    .select-option + .select-option {
+      margin-top: 4px;
+    }
+    .select-option:hover {
+      background: #F6F8FA;
+    }
+    .select-option.selected {
+      color: #1664FF;
+      font-weight: 500;
+    }
+    .select-option.disabled {
+      color: #C7CCD6;
+      cursor: not-allowed;
+    }
+    .select-option.disabled:hover {
+      background: transparent;
+    }
+
+    /* 选项勾选标记 */
+    .select-option-check {
+      width: 16px;
+      height: 16px;
+      margin-left: auto;
+      color: #1664FF;
+      flex-shrink: 0;
+    }
+
+    /* 选项分组 */
+    .select-group-title {
+      padding: 5px 12px 2px;
+      font-size: 12px;
+      line-height: 20px;
+      letter-spacing: 0.04px;
+      color: #737A87;
+      font-weight: 500;
+    }
+
+    /* 空状态 */
+    .select-empty {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 64px;
+      color: #A0A8B3;
+      font-size: 13px;
+    }
+
+    /* 多选标签 */
+    .select-tags {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      flex: 1;
+      overflow: hidden;
+    }
+    .select-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      height: 22px;
+      padding: 0 8px;
+      background: #F6F8FA;
+      border-radius: 2px;
+      font-size: 12px;
+      line-height: 22px;
+      color: #42464E;
+      white-space: nowrap;
+      max-width: 120px;
+    }
+    .select-tag-text {
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .select-tag-close {
+      width: 12px;
+      height: 12px;
+      color: #737A87;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+    .select-tag-close:hover {
+      color: #0C0D0E;
+    }
+    .select-tag-count {
+      display: inline-flex;
+      align-items: center;
+      height: 22px;
+      padding: 0 6px;
+      background: #EAEDF1;
+      border-radius: 2px;
+      font-size: 12px;
+      font-weight: 500;
+      color: #42464E;
+    }
+
+    /* 多选选项 checkbox */
+    .select-checkbox {
+      width: 14px;
+      height: 14px;
+      border: 1px solid #DDE2E9;
+      border-radius: 2px;
+      margin-right: 8px;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .select-checkbox.checked {
+      background: #1664FF;
+      border-color: #1664FF;
+    }
+  </style>
+</head>
+<body>
+  <div class="pv-header">
+    <h1>Select 选择器</h1>
+    <p>单选与多选下拉选择器，支持搜索、分组、清除、多选标签等特性。</p>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">单选 — 各尺寸</div>
+    <div class="row">
+      <div class="select select-large" data-component="select" data-type="single" data-size="large" data-state="default">
+        <div class="select-trigger">
+          <span class="select-value select-placeholder">请选择</span>
+          <span class="select-suffix"><svg class="select-arrow" viewBox="0 0 16 16" fill="none"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        </div>
+      </div>
+      <div class="select" data-component="select" data-type="single" data-size="default" data-state="default">
+        <div class="select-trigger">
+          <span class="select-value select-placeholder">请选择</span>
+          <span class="select-suffix"><svg class="select-arrow" viewBox="0 0 16 16" fill="none"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        </div>
+      </div>
+      <div class="select select-small" data-component="select" data-type="single" data-size="small" data-state="default">
+        <div class="select-trigger">
+          <span class="select-value select-placeholder">请选择</span>
+          <span class="select-suffix"><svg class="select-arrow" viewBox="0 0 16 16" fill="none"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        </div>
+      </div>
+      <div class="select select-mini" data-component="select" data-type="single" data-size="mini" data-state="default">
+        <div class="select-trigger">
+          <span class="select-value select-placeholder">请选择</span>
+          <span class="select-suffix"><svg class="select-arrow" viewBox="0 0 16 16" fill="none"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">单选 — 交互状态</div>
+    <div class="row">
+      <div class="select hover" data-component="select" data-type="single" data-size="default" data-state="hover">
+        <div class="select-trigger">
+          <span class="select-value select-placeholder">请选择</span>
+          <span class="select-suffix"><svg class="select-arrow" viewBox="0 0 16 16" fill="none"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        </div>
+      </div>
+      <div class="select" data-component="select" data-type="single" data-size="default" data-state="filled">
+        <div class="select-trigger">
+          <span class="select-value">选项一</span>
+          <span class="select-suffix">
+            <svg class="select-clear" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6" fill="currentColor" opacity="0.15"/><path d="M5.5 5.5l5 5M10.5 5.5l-5 5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+            <svg class="select-arrow" viewBox="0 0 16 16" fill="none"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </span>
+        </div>
+      </div>
+      <div class="select disabled" data-component="select" data-type="single" data-size="default" data-state="disabled">
+        <div class="select-trigger">
+          <span class="select-value select-placeholder">请选择</span>
+          <span class="select-suffix"><svg class="select-arrow" viewBox="0 0 16 16" fill="none"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        </div>
+      </div>
+      <div class="select disabled" data-component="select" data-type="single" data-size="default" data-state="disabled-filled">
+        <div class="select-trigger">
+          <span class="select-value">选项一</span>
+          <span class="select-suffix"><svg class="select-arrow" viewBox="0 0 16 16" fill="none"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        </div>
+      </div>
+      <div class="select readonly" data-component="select" data-type="single" data-size="default" data-state="readonly">
+        <div class="select-trigger">
+          <span class="select-value">选项一</span>
+          <span class="select-suffix"><svg class="select-arrow" viewBox="0 0 16 16" fill="none"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">单选 — 展开下拉</div>
+    <div class="row">
+      <div class="select focus" data-component="select" data-type="single" data-size="default" data-state="focus">
+        <div class="select-trigger">
+          <span class="select-value">选项一</span>
+          <span class="select-suffix"><svg class="select-arrow rotated" viewBox="0 0 16 16" fill="none"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        </div>
+        <div class="select-dropdown">
+          <div class="select-option selected">选项一<svg class="select-option-check" viewBox="0 0 16 16" fill="none"><path d="M3 8l4 4 6-8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+          <div class="select-option">选项二</div>
+          <div class="select-option">选项三</div>
+          <div class="select-option disabled">选项四（禁用）</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">单选 — Error 状态</div>
+    <div class="row">
+      <div class="select error" data-component="select" data-type="single" data-size="default" data-state="error">
+        <div class="select-trigger">
+          <span class="select-value select-placeholder">请选择</span>
+          <span class="select-suffix"><svg class="select-arrow" viewBox="0 0 16 16" fill="none"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        </div>
+        <div class="select-error-msg">请选择一个选项</div>
+      </div>
+      <div class="select error hover" data-component="select" data-type="single" data-size="default" data-state="error-hover">
+        <div class="select-trigger">
+          <span class="select-value select-placeholder">请选择</span>
+          <span class="select-suffix"><svg class="select-arrow" viewBox="0 0 16 16" fill="none"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        </div>
+      </div>
+      <div class="select error focus" data-component="select" data-type="single" data-size="default" data-state="error-focus">
+        <div class="select-trigger">
+          <span class="select-value select-placeholder">请选择</span>
+          <span class="select-suffix"><svg class="select-arrow rotated" viewBox="0 0 16 16" fill="none"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        </div>
+        <div class="select-dropdown">
+          <div class="select-option">选项一</div>
+          <div class="select-option">选项二</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">单选 — 下拉面板特殊状态</div>
+    <div class="row">
+      <div class="select focus" data-component="select" data-type="single" data-size="default" data-state="focus-grouped">
+        <div class="select-trigger">
+          <span class="select-value select-placeholder">请选择</span>
+          <span class="select-suffix"><svg class="select-arrow rotated" viewBox="0 0 16 16" fill="none"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        </div>
+        <div class="select-dropdown">
+          <div class="select-group-title">分组一</div>
+          <div class="select-option">选项一</div>
+          <div class="select-option">选项二</div>
+          <div class="select-group-title">分组二</div>
+          <div class="select-option">选项三</div>
+          <div class="select-option">选项四</div>
+        </div>
+      </div>
+      <div class="select focus" data-component="select" data-type="single" data-size="default" data-state="focus-empty">
+        <div class="select-trigger">
+          <span class="select-value select-placeholder">请选择</span>
+          <span class="select-suffix"><svg class="select-arrow rotated" viewBox="0 0 16 16" fill="none"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        </div>
+        <div class="select-dropdown">
+          <div class="select-empty">暂无数据</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">多选 — 各状态</div>
+    <div class="stack-12">
+      <div class="row">
+        <div class="select" data-component="select" data-type="multiple" data-size="default" data-state="default">
+          <div class="select-trigger">
+            <span class="select-tags">
+              <span class="select-tag"><span class="select-tag-text">选项一</span><svg class="select-tag-close" viewBox="0 0 12 12" fill="none"><path d="M3 3l6 6M9 3l-6 6" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg></span>
+              <span class="select-tag"><span class="select-tag-text">选项二</span><svg class="select-tag-close" viewBox="0 0 12 12" fill="none"><path d="M3 3l6 6M9 3l-6 6" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg></span>
+            </span>
+            <span class="select-suffix"><svg class="select-arrow" viewBox="0 0 16 16" fill="none"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+          </div>
+        </div>
+        <div class="select" data-component="select" data-type="multiple" data-size="default" data-state="overflow">
+          <div class="select-trigger">
+            <span class="select-tags">
+              <span class="select-tag"><span class="select-tag-text">选项一</span><svg class="select-tag-close" viewBox="0 0 12 12" fill="none"><path d="M3 3l6 6M9 3l-6 6" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg></span>
+              <span class="select-tag-count">+3</span>
+            </span>
+            <span class="select-suffix"><svg class="select-arrow" viewBox="0 0 16 16" fill="none"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+          </div>
+        </div>
+        <div class="select select-large" data-component="select" data-type="multiple" data-size="large" data-state="default">
+          <div class="select-trigger">
+            <span class="select-tags">
+              <span class="select-tag"><span class="select-tag-text">选项一</span><svg class="select-tag-close" viewBox="0 0 12 12" fill="none"><path d="M3 3l6 6M9 3l-6 6" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg></span>
+              <span class="select-tag"><span class="select-tag-text">选项二</span><svg class="select-tag-close" viewBox="0 0 12 12" fill="none"><path d="M3 3l6 6M9 3l-6 6" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg></span>
+            </span>
+            <span class="select-suffix"><svg class="select-arrow" viewBox="0 0 16 16" fill="none"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+          </div>
+        </div>
+      </div>
+      <div class="row">
+        <div class="select focus" data-component="select" data-type="multiple" data-size="default" data-state="focus">
+          <div class="select-trigger">
+            <span class="select-tags">
+              <span class="select-tag"><span class="select-tag-text">选项一</span><svg class="select-tag-close" viewBox="0 0 12 12" fill="none"><path d="M3 3l6 6M9 3l-6 6" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg></span>
+            </span>
+            <span class="select-suffix"><svg class="select-arrow rotated" viewBox="0 0 16 16" fill="none"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+          </div>
+          <div class="select-dropdown">
+            <div class="select-option selected"><span class="select-checkbox checked"><svg width="10" height="10" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-6" stroke="#FFFFFF" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>选项一</div>
+            <div class="select-option"><span class="select-checkbox"></span>选项二</div>
+            <div class="select-option"><span class="select-checkbox"></span>选项三</div>
+          </div>
+        </div>
+        <div class="select disabled" data-component="select" data-type="multiple" data-size="default" data-state="disabled">
+          <div class="select-trigger">
+            <span class="select-tags">
+              <span class="select-tag"><span class="select-tag-text">选项一</span><svg class="select-tag-close" viewBox="0 0 12 12" fill="none"><path d="M3 3l6 6M9 3l-6 6" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg></span>
+            </span>
+            <span class="select-suffix"><svg class="select-arrow" viewBox="0 0 16 16" fill="none"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+          </div>
+        </div>
+        <div class="select error" data-component="select" data-type="multiple" data-size="default" data-state="error">
+          <div class="select-trigger">
+            <span class="select-tags">
+              <span class="select-tag"><span class="select-tag-text">选项一</span><svg class="select-tag-close" viewBox="0 0 12 12" fill="none"><path d="M3 3l6 6M9 3l-6 6" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg></span>
+            </span>
+            <span class="select-suffix"><svg class="select-arrow" viewBox="0 0 16 16" fill="none"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+          </div>
+          <div class="select-error-msg">请至少选择一个选项</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

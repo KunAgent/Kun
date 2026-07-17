@@ -1,0 +1,54 @@
+{
+  "slug": "button",
+  "name": "Button",
+  "category": "actions",
+  "evidence": "AI-inferred from dashboard preset and source tokens",
+  "anatomy": [
+    "container",
+    "label",
+    "optional icon"
+  ],
+  "cssVariables": [
+    "primary",
+    "primary-foreground",
+    "secondary",
+    "secondary-foreground",
+    "accent",
+    "border",
+    "ring",
+    "radius",
+    "shadow-sm",
+    "font-sans"
+  ],
+  "variantDimensions": {
+    "intent": [
+      "primary",
+      "secondary",
+      "ghost"
+    ],
+    "size": [
+      "sm",
+      "md",
+      "lg"
+    ],
+    "state": [
+      "default",
+      "hover",
+      "focus"
+    ]
+  },
+  "structures": [
+    {
+      "name": "Primary, Default, Md",
+      "description": "Rounded CTA with high-contrast pink fill and white text."
+    },
+    {
+      "name": "Secondary, Default, Md",
+      "description": "Soft blush surface with saturated text for secondary emphasis."
+    },
+    {
+      "name": "Ghost, Hover, Sm",
+      "description": "Lightweight action with subtle tinted hover background."
+    }
+  ]
+}

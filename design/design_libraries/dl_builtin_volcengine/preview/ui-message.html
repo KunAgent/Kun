@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>Message 全局提示</title>
+  <link rel="stylesheet" href="preview-scaffold.css">
+  <style>
+    .message {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 16px;
+      background: rgba(246, 248, 250, 0.9);
+      backdrop-filter: blur(10px);
+      border: 0.5px solid var(--color-border, #DDE2E9);
+      border-radius: var(--radius-default, 4px);
+      box-shadow: 0 5px 15px rgba(0,0,0,0.05), 0 15px 35px rgba(0,0,0,0.05);
+      font-family: var(--font-family, "PingFang SC", -apple-system, BlinkMacSystemFont, sans-serif);
+      font-size: 14px;
+      line-height: 22px;
+      color: var(--color-text-primary, #0C0D0E);
+      white-space: nowrap;
+    }
+    .message-icon {
+      width: 20px;
+      height: 20px;
+      flex-shrink: 0;
+      fill: currentColor;
+    }
+    .message-success .message-icon { color: var(--color-success, #2A814B); }
+    .message-warning .message-icon { color: var(--color-warning, #FF7D00); }
+    .message-error .message-icon   { color: var(--color-danger, #D7312A); }
+    .message-info .message-icon    { color: var(--color-primary, #1664FF); }
+    .message-loading .message-icon { color: var(--color-primary, #1664FF); }
+    .message-content {
+      color: var(--color-text-primary, #0C0D0E);
+    }
+    .message-content a {
+      color: var(--color-primary, #1664FF);
+      text-decoration: none;
+    }
+    .message-close {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 16px;
+      height: 16px;
+      padding: 0;
+      border: none;
+      background: none;
+      cursor: pointer;
+      color: var(--color-text-secondary, #42464E);
+      flex-shrink: 0;
+    }
+    .message-close svg {
+      width: 16px;
+      height: 16px;
+      fill: currentColor;
+    }
+    .message-loading .message-icon {
+      animation: message-spin 1s linear infinite;
+    }
+    @keyframes message-spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+  <div class="pv-header">
+    <h1>Message 全局提示</h1>
+    <p>顶部居中的全局反馈消息，用于主动操作后的结果通知，支持多种语义类型。</p>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">Success 成功</div>
+    <div class="stack-12">
+      <div class="message message-success" data-component="message" data-type="success" data-closable="true">
+        <svg class="message-icon" viewBox="0 0 20 20"><path d="M10 1a9 9 0 1 1 0 18A9 9 0 0 1 10 1zm3.7 5.3a.75.75 0 0 0-1.06 0L9 9.94 7.36 8.3a.75.75 0 1 0-1.06 1.06l2.25 2.25a.75.75 0 0 0 1.06 0l4.1-4.1a.75.75 0 0 0 0-1.06z"/></svg>
+        <span class="message-content">操作成功</span>
+        <button class="message-close" aria-label="关闭"><svg viewBox="0 0 16 16"><path d="M8 6.94L11.47 3.47a.75.75 0 1 1 1.06 1.06L9.06 8l3.47 3.47a.75.75 0 1 1-1.06 1.06L8 9.06l-3.47 3.47a.75.75 0 0 1-1.06-1.06L6.94 8 3.47 4.53a.75.75 0 0 1 1.06-1.06L8 6.94z"/></svg></button>
+      </div>
+      <div class="message message-success" data-component="message" data-type="success" data-closable="false">
+        <svg class="message-icon" viewBox="0 0 20 20"><path d="M10 1a9 9 0 1 1 0 18A9 9 0 0 1 10 1zm3.7 5.3a.75.75 0 0 0-1.06 0L9 9.94 7.36 8.3a.75.75 0 1 0-1.06 1.06l2.25 2.25a.75.75 0 0 0 1.06 0l4.1-4.1a.75.75 0 0 0 0-1.06z"/></svg>
+        <span class="message-content">操作成功</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">Warning 警告</div>
+    <div class="stack-12">
+      <div class="message message-warning" data-component="message" data-type="warning" data-closable="true">
+        <svg class="message-icon" viewBox="0 0 20 20"><path d="M10 1a9 9 0 1 1 0 18A9 9 0 0 1 10 1zm0 4.5a.75.75 0 0 0-.75.75v4a.75.75 0 0 0 1.5 0v-4A.75.75 0 0 0 10 5.5zM10 14a1 1 0 1 0 0-2 1 1 0 0 0 0 2z"/></svg>
+        <span class="message-content">请注意</span>
+        <button class="message-close" aria-label="关闭"><svg viewBox="0 0 16 16"><path d="M8 6.94L11.47 3.47a.75.75 0 1 1 1.06 1.06L9.06 8l3.47 3.47a.75.75 0 1 1-1.06 1.06L8 9.06l-3.47 3.47a.75.75 0 0 1-1.06-1.06L6.94 8 3.47 4.53a.75.75 0 0 1 1.06-1.06L8 6.94z"/></svg></button>
+      </div>
+      <div class="message message-warning" data-component="message" data-type="warning" data-closable="false">
+        <svg class="message-icon" viewBox="0 0 20 20"><path d="M10 1a9 9 0 1 1 0 18A9 9 0 0 1 10 1zm0 4.5a.75.75 0 0 0-.75.75v4a.75.75 0 0 0 1.5 0v-4A.75.75 0 0 0 10 5.5zM10 14a1 1 0 1 0 0-2 1 1 0 0 0 0 2z"/></svg>
+        <span class="message-content">请注意</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">Error 错误</div>
+    <div class="stack-12">
+      <div class="message message-error" data-component="message" data-type="error" data-closable="true">
+        <svg class="message-icon" viewBox="0 0 20 20"><path d="M10 1a9 9 0 1 1 0 18A9 9 0 0 1 10 1zm2.83 5.17a.75.75 0 0 0-1.06 0L10 7.94 8.23 6.17a.75.75 0 1 0-1.06 1.06L8.94 9l-1.77 1.77a.75.75 0 1 0 1.06 1.06L10 10.06l1.77 1.77a.75.75 0 1 0 1.06-1.06L11.06 9l1.77-1.77a.75.75 0 0 0 0-1.06z"/></svg>
+        <span class="message-content">操作失败</span>
+        <button class="message-close" aria-label="关闭"><svg viewBox="0 0 16 16"><path d="M8 6.94L11.47 3.47a.75.75 0 1 1 1.06 1.06L9.06 8l3.47 3.47a.75.75 0 1 1-1.06 1.06L8 9.06l-3.47 3.47a.75.75 0 0 1-1.06-1.06L6.94 8 3.47 4.53a.75.75 0 0 1 1.06-1.06L8 6.94z"/></svg></button>
+      </div>
+      <div class="message message-error" data-component="message" data-type="error" data-closable="false">
+        <svg class="message-icon" viewBox="0 0 20 20"><path d="M10 1a9 9 0 1 1 0 18A9 9 0 0 1 10 1zm2.83 5.17a.75.75 0 0 0-1.06 0L10 7.94 8.23 6.17a.75.75 0 1 0-1.06 1.06L8.94 9l-1.77 1.77a.75.75 0 1 0 1.06 1.06L10 10.06l1.77 1.77a.75.75 0 1 0 1.06-1.06L11.06 9l1.77-1.77a.75.75 0 0 0 0-1.06z"/></svg>
+        <span class="message-content">操作失败</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">Info 信息</div>
+    <div class="stack-12">
+      <div class="message message-info" data-component="message" data-type="info" data-closable="true">
+        <svg class="message-icon" viewBox="0 0 20 20"><path d="M10 1a9 9 0 1 1 0 18A9 9 0 0 1 10 1zM10 6a1 1 0 1 0 0 2 1 1 0 0 0 0-2zm-.75 4a.75.75 0 0 0 0 1.5h.01v2.75a.75.75 0 0 0 1.5 0V10.75a.75.75 0 0 0-.75-.75h-.76z"/></svg>
+        <span class="message-content">提示信息</span>
+        <button class="message-close" aria-label="关闭"><svg viewBox="0 0 16 16"><path d="M8 6.94L11.47 3.47a.75.75 0 1 1 1.06 1.06L9.06 8l3.47 3.47a.75.75 0 1 1-1.06 1.06L8 9.06l-3.47 3.47a.75.75 0 0 1-1.06-1.06L6.94 8 3.47 4.53a.75.75 0 0 1 1.06-1.06L8 6.94z"/></svg></button>
+      </div>
+      <div class="message message-info" data-component="message" data-type="info" data-closable="false">
+        <svg class="message-icon" viewBox="0 0 20 20"><path d="M10 1a9 9 0 1 1 0 18A9 9 0 0 1 10 1zM10 6a1 1 0 1 0 0 2 1 1 0 0 0 0-2zm-.75 4a.75.75 0 0 0 0 1.5h.01v2.75a.75.75 0 0 0 1.5 0V10.75a.75.75 0 0 0-.75-.75h-.76z"/></svg>
+        <span class="message-content">提示信息</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">Loading 加载中</div>
+    <div class="stack-12">
+      <div class="message message-loading" data-component="message" data-type="loading" data-closable="true">
+        <svg class="message-icon" viewBox="0 0 20 20"><path d="M10 1.5L10.7 4.75 10 7 9.3 4.75ZM10 18.5L9.3 15.25 10 13 10.7 15.25ZM18.5 10L15.25 10.7 13 10 15.25 9.3ZM1.5 10L4.75 9.3 7 10 4.75 10.7ZM13.89 6.11L13.18 6.82 11.77 8.23 12.48 7.52ZM13.89 13.89L12.48 13.18 11.77 11.77 13.18 12.48ZM6.11 13.89L6.82 12.48 8.23 11.77 7.52 13.18ZM6.11 6.11L7.52 6.82 8.23 8.23 6.82 7.52Z"/></svg>
+        <span class="message-content">加载中</span>
+        <button class="message-close" aria-label="关闭"><svg viewBox="0 0 16 16"><path d="M8 6.94L11.47 3.47a.75.75 0 1 1 1.06 1.06L9.06 8l3.47 3.47a.75.75 0 1 1-1.06 1.06L8 9.06l-3.47 3.47a.75.75 0 0 1-1.06-1.06L6.94 8 3.47 4.53a.75.75 0 0 1 1.06-1.06L8 6.94z"/></svg></button>
+      </div>
+      <div class="message message-loading" data-component="message" data-type="loading" data-closable="false">
+        <svg class="message-icon" viewBox="0 0 20 20"><path d="M10 1.5L10.7 4.75 10 7 9.3 4.75ZM10 18.5L9.3 15.25 10 13 10.7 15.25ZM18.5 10L15.25 10.7 13 10 15.25 9.3ZM1.5 10L4.75 9.3 7 10 4.75 10.7ZM13.89 6.11L13.18 6.82 11.77 8.23 12.48 7.52ZM13.89 13.89L12.48 13.18 11.77 11.77 13.18 12.48ZM6.11 13.89L6.82 12.48 8.23 11.77 7.52 13.18ZM6.11 6.11L7.52 6.82 8.23 8.23 6.82 7.52Z"/></svg>
+        <span class="message-content">加载中</span>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

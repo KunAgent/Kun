@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>Pagination 分页</title>
+  <link rel="stylesheet" href="preview-scaffold.css">
+  <style>
+  .pagination-wrapper { display: flex; align-items: center; gap: 8px; }
+  .pagination { display: flex; align-items: center; gap: 4px; }
+  .pagination-default .page-item { width: 28px; height: 28px; font-size: 13px; line-height: 28px; }
+  .pagination-small .page-item { width: 24px; height: 24px; font-size: 12px; line-height: 24px; }
+  .page-item {
+    display: inline-flex; align-items: center; justify-content: center;
+    border: 1px solid #DDE2E9; border-radius: 4px; background: #FFFFFF;
+    color: #0C0D0E; font-family: "PingFang SC", sans-serif; font-weight: 400;
+    letter-spacing: 0.03em; cursor: pointer; box-sizing: border-box;
+    transition: border-color 150ms ease, background 150ms ease, color 150ms ease;
+  }
+  .page-item:hover:not(.active):not(.disabled) { border-color: rgba(22, 100, 255, 0.8); }
+  .page-item.active { background: #1664FF; border-color: #1664FF; color: #FFFFFF; font-weight: 500; }
+  .page-item.disabled { color: #C9CDD4; border-color: #EAEDF1; cursor: not-allowed; pointer-events: none; }
+  .page-icon { width: 12px; height: 12px; }
+  .page-arrow { color: #42464E; }
+  .page-arrow.disabled { color: #C9CDD4; }
+  .page-item-more { border-color: #DDE2E9; letter-spacing: 2px; font-weight: 500; }
+  .pagination-total { font-family: "PingFang SC", sans-serif; font-size: 13px; color: #737A87; white-space: nowrap; }
+  .pagesize-select {
+    position: relative; display: inline-flex; align-items: center; gap: 4px;
+    height: 28px; padding: 0 8px; border-radius: 4px; background: #FFFFFF;
+    box-shadow: 0 0 0 1px #DDE2E9, 0 1px 1px rgba(0,0,0,0.05);
+    font-size: 13px; color: #0C0D0E; font-family: "PingFang SC", sans-serif;
+    cursor: pointer; white-space: nowrap; transition: box-shadow 150ms ease;
+  }
+  .pagesize-select:hover { box-shadow: 0 0 0 1px rgba(22, 100, 255, 0.8), 0 1px 1px rgba(0,0,0,0.05); }
+  .pagesize-select .pagesize-arrow { width: 12px; height: 12px; color: #737A87; flex-shrink: 0; }
+  .pagination-jump { font-family: "PingFang SC", sans-serif; font-size: 13px; color: #737A87; white-space: nowrap; display: flex; align-items: center; gap: 4px; }
+  .jump-input {
+    width: 36px; height: 28px; border: none; border-radius: 4px;
+    box-shadow: 0 0 0 1px #DDE2E9, 0 1px 1px rgba(0,0,0,0.05);
+    text-align: center; font-size: 13px; color: #0C0D0E; background: #FFFFFF; outline: none;
+    transition: box-shadow 150ms ease;
+  }
+  .jump-input:hover { box-shadow: 0 0 0 1px rgba(22, 100, 255, 0.8), 0 1px 1px rgba(0,0,0,0.05); }
+  .jump-input:focus { box-shadow: 0 0 0 1px #1664FF, 0 1px 1px rgba(0,0,0,0.05), 0 0 0 3px rgba(22, 100, 255, 0.12); }
+  .pagination-simple { gap: 4px; }
+  .page-simple-indicator {
+    display: inline-flex; align-items: center; justify-content: center;
+    height: 28px; padding: 0 12px; border: 1px solid #DDE2E9; border-radius: 4px;
+    font-family: "PingFang SC", sans-serif; font-size: 13px; color: #0C0D0E; white-space: nowrap;
+  }
+  .pagination-small .page-simple-indicator { height: 24px; font-size: 12px; padding: 0 8px; }
+  </style>
+</head>
+<body>
+  <div class="pv-header">
+    <h1>Pagination 分页</h1>
+    <p>分页导航组件，支持 Default/Small 尺寸，含基础、总计、条数选择、跳转、简洁等模式。</p>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">基础分页</div>
+    <div class="stack-12">
+      <nav class="pagination pagination-default" data-component="pagination" data-size="default" data-type="basic">
+        <span class="page-item page-arrow disabled"><svg class="page-icon" viewBox="0 0 12 12"><path d="M7.5 2.5L4 6l3.5 3.5" stroke="currentColor" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        <span class="page-item">1</span>
+        <span class="page-item active">2</span>
+        <span class="page-item">3</span>
+        <span class="page-item">4</span>
+        <span class="page-item">5</span>
+        <span class="page-item page-item-more">...</span>
+        <span class="page-item">19</span>
+        <span class="page-item page-arrow"><svg class="page-icon" viewBox="0 0 12 12"><path d="M4.5 2.5L8 6l-3.5 3.5" stroke="currentColor" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+      </nav>
+      <nav class="pagination pagination-small" data-component="pagination" data-size="small" data-type="basic">
+        <span class="page-item page-arrow disabled"><svg class="page-icon" viewBox="0 0 12 12"><path d="M7.5 2.5L4 6l3.5 3.5" stroke="currentColor" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        <span class="page-item">1</span>
+        <span class="page-item active">2</span>
+        <span class="page-item">3</span>
+        <span class="page-item">4</span>
+        <span class="page-item">5</span>
+        <span class="page-item page-item-more">...</span>
+        <span class="page-item">19</span>
+        <span class="page-item page-arrow"><svg class="page-icon" viewBox="0 0 12 12"><path d="M4.5 2.5L8 6l-3.5 3.5" stroke="currentColor" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+      </nav>
+    </div>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">带总计数</div>
+    <div class="stack-12">
+      <div class="pagination-wrapper" data-component="pagination" data-size="default" data-type="total">
+        <span class="pagination-total">共 62 项</span>
+        <nav class="pagination pagination-default">
+          <span class="page-item page-arrow disabled"><svg class="page-icon" viewBox="0 0 12 12"><path d="M7.5 2.5L4 6l3.5 3.5" stroke="currentColor" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+          <span class="page-item">1</span>
+          <span class="page-item active">2</span>
+          <span class="page-item">3</span>
+          <span class="page-item">4</span>
+          <span class="page-item">5</span>
+          <span class="page-item page-item-more">...</span>
+          <span class="page-item">19</span>
+          <span class="page-item page-arrow"><svg class="page-icon" viewBox="0 0 12 12"><path d="M4.5 2.5L8 6l-3.5 3.5" stroke="currentColor" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        </nav>
+      </div>
+    </div>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">完整模式 (总计 + 条数 + 跳转)</div>
+    <div class="stack-12">
+      <div class="pagination-wrapper" data-component="pagination" data-size="default" data-type="full">
+        <span class="pagination-total">共 62 项</span>
+        <nav class="pagination pagination-default">
+          <span class="page-item page-arrow disabled"><svg class="page-icon" viewBox="0 0 12 12"><path d="M7.5 2.5L4 6l3.5 3.5" stroke="currentColor" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+          <span class="page-item">1</span>
+          <span class="page-item active">2</span>
+          <span class="page-item">3</span>
+          <span class="page-item">4</span>
+          <span class="page-item">5</span>
+          <span class="page-item page-item-more">...</span>
+          <span class="page-item">19</span>
+          <span class="page-item page-arrow"><svg class="page-icon" viewBox="0 0 12 12"><path d="M4.5 2.5L8 6l-3.5 3.5" stroke="currentColor" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        </nav>
+        <span class="pagesize-select">20 条/页<svg class="pagesize-arrow" viewBox="0 0 12 12" fill="none"><path d="M3 4.5L6 7.5L9 4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        <span class="pagination-jump">跳至 <input class="jump-input" type="text" value="12"> 页</span>
+      </div>
+      <div class="pagination-wrapper" data-component="pagination" data-size="small" data-type="full">
+        <span class="pagination-total">共 62 项</span>
+        <nav class="pagination pagination-small">
+          <span class="page-item page-arrow disabled"><svg class="page-icon" viewBox="0 0 12 12"><path d="M7.5 2.5L4 6l3.5 3.5" stroke="currentColor" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+          <span class="page-item">1</span>
+          <span class="page-item active">2</span>
+          <span class="page-item">3</span>
+          <span class="page-item">4</span>
+          <span class="page-item">5</span>
+          <span class="page-item page-item-more">...</span>
+          <span class="page-item">19</span>
+          <span class="page-item page-arrow"><svg class="page-icon" viewBox="0 0 12 12"><path d="M4.5 2.5L8 6l-3.5 3.5" stroke="currentColor" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        </nav>
+        <span class="pagesize-select">20 条/页<svg class="pagesize-arrow" viewBox="0 0 12 12" fill="none"><path d="M3 4.5L6 7.5L9 4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        <span class="pagination-jump">跳至 <input class="jump-input" type="text" value="12"> 页</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">简洁模式</div>
+    <div class="stack-12">
+      <nav class="pagination pagination-simple pagination-default" data-component="pagination" data-size="default" data-type="simple">
+        <span class="page-item page-arrow disabled"><svg class="page-icon" viewBox="0 0 12 12"><path d="M7.5 2.5L4 6l3.5 3.5" stroke="currentColor" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        <span class="page-simple-indicator">1 / 5</span>
+        <span class="page-item page-arrow"><svg class="page-icon" viewBox="0 0 12 12"><path d="M4.5 2.5L8 6l-3.5 3.5" stroke="currentColor" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+      </nav>
+      <nav class="pagination pagination-simple pagination-small" data-component="pagination" data-size="small" data-type="simple">
+        <span class="page-item page-arrow disabled"><svg class="page-icon" viewBox="0 0 12 12"><path d="M7.5 2.5L4 6l3.5 3.5" stroke="currentColor" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        <span class="page-simple-indicator">1 / 5</span>
+        <span class="page-item page-arrow"><svg class="page-icon" viewBox="0 0 12 12"><path d="M4.5 2.5L8 6l-3.5 3.5" stroke="currentColor" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+      </nav>
+    </div>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">页码项状态</div>
+    <div class="stack-12">
+      <nav class="pagination pagination-default" data-component="pagination-states" data-size="default">
+        <span class="page-item page-arrow disabled" style="width:28px;height:28px;"><svg class="page-icon" viewBox="0 0 12 12"><path d="M7.5 2.5L4 6l3.5 3.5" stroke="currentColor" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        <span class="page-item page-arrow" style="width:28px;height:28px;"><svg class="page-icon" viewBox="0 0 12 12"><path d="M7.5 2.5L4 6l3.5 3.5" stroke="currentColor" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        <span class="page-item" style="width:28px;height:28px;font-size:13px;">2</span>
+        <span class="page-item active" style="width:28px;height:28px;font-size:13px;">2</span>
+        <span class="page-item page-item-more" style="width:28px;height:28px;font-size:13px;">...</span>
+        <span class="page-item page-arrow" style="width:28px;height:28px;"><svg class="page-icon" viewBox="0 0 12 12"><path d="M4.5 2.5L8 6l-3.5 3.5" stroke="currentColor" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        <span class="page-item page-arrow disabled" style="width:28px;height:28px;"><svg class="page-icon" viewBox="0 0 12 12"><path d="M4.5 2.5L8 6l-3.5 3.5" stroke="currentColor" fill="none" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+      </nav>
+    </div>
+  </div>
+</body>
+</html>

@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 2,
+  "slug": "badge",
+  "name": "Badge",
+  "category": "data-display",
+  "sourceKind": "structured-spec",
+  "confidence": "medium",
+  "semanticTypeCandidates": ["badge", "notification-dot", "count-indicator", "status-icon"],
+  "variantDimensions": {
+    "type": ["dot", "number", "number-plus", "icon"],
+    "size": ["small", "default", "large"],
+    "color": ["active", "ash"],
+    "iconState": ["success", "warning", "error", "skip", "awaiting"]
+  },
+  "representativeVariants": [
+    { "type": "dot", "size": "default", "color": "active" },
+    { "type": "number", "size": "default", "color": "active" },
+    { "type": "number-plus", "size": "large", "color": "ash" },
+    { "type": "icon", "size": "default", "iconState": "success" }
+  ],
+  "anatomy": ["badge-body", "badge-wrapper", "badge-avatar"],
+  "structurePatterns": [
+    "Inline flex element centered with pill border-radius (46px), border, and box-shadow",
+    "Badge wrapper positions the badge absolutely top-right over a target element",
+    "Icon type removes border and shadow, displays SVG at full width/height"
+  ],
+  "usageHints": [
+    "Active color: background #F65159, border-color #DB373F",
+    "Ash color: background #80838A, border-color #41464F",
+    "Dot sizes: small 6px, default 8px, large 10px",
+    "Number sizes: small 12px, default 14px, large 16px",
+    "NumberPlus has min-width instead of fixed width for multi-digit text",
+    "Icon semantic colors: success #309256, warning #F7BA1E, error #F65159, skip #80838A, awaiting #1664FF",
+    "Font: Roboto 500 12px/12px, color #FFFFFF",
+    "Box-shadow: 0px 1px 0px rgba(0,0,0,0.08)"
+  ],
+  "doNotInvent": ["animated pulse", "badge removal animation", "badge with text label"],
+  "unknowns": ["max number before overflow", "positioning offset customization"],
+  "tokensConsumed": [],
+  "domAnatomy": {
+    "root": {
+      "tag": "span",
+      "class": "badge badge-{type} badge-{size} badge-{color}",
+      "children": []
+    }
+  },
+  "provenance": {
+    "preview": "preview/ui-badge.html",
+    "source": "structured-spec",
+    "css": { "file": "ui-badge.html", "marker": "── Badge 基础 ──" }
+  }
+}

@@ -1,0 +1,363 @@
+:root {
+  /* === Colors === */
+  --primary-yuanliBlue-1: #f3f7ff;
+  --primary-yuanliBlue-2: #ebf1ff;
+  --primary-yuanliBlue-3: #a0c0ff;
+  --primary-yuanliBlue-4: #ccddff;
+  --primary-yuanliBlue-5: #387bff;
+  --primary-yuanliBlue-6: #1664ff;
+  --primary-yuanliBlue-7: #0055ff;
+  --primary-foreground: #ffffff;
+  --primary-accent-foreground: #ffffff;
+  --primary: #1664ff;
+  --primary-accent: #1664ff;
+  --primary-accent-hover: #0055ff;
+  --primary-link: #1664ff;
+  --primary-ring: #1664ff;
+  --text-yuanliNeutral-1: #ffffff;
+  --text-yuanliNeutral-2: #fcfdfe;
+  --text-yuanliNeutral-3: #eceded;
+  --text-yuanliNeutral-4: #dde2e9;
+  --text-yuanliNeutral-5: #c9cdd4;
+  --text-yuanliNeutral-6: #86909c;
+  --text-yuanliNeutral-7: #4e5969;
+  --text-yuanliNeutral-8: #333333;
+  --text-yuanliNeutral-9: #1d2129;
+  --text-yuanliNeutral-10: #0c0d0e;
+  --text-yuanliNeutral-11: #000b1a;
+  --text-fg: #0c0d0e;
+  --text-foreground: #0c0d0e;
+  --text-secondary: #eceded;
+  --text-secondary-foreground: #1d2129;
+  --text-muted: #86909c;
+  --text-muted-foreground: #86909c;
+  --text-color-text-strong: #0c0d0e;
+  --text-color-text-regular: #1d2129;
+  --text-color-text-subtle: #86909c;
+  --text-color-text-disabled: #c9cdd4;
+  --foundation-surface-container: #f7f9fb;
+  --foundation-surface-container-high: #f1f4f8;
+  --foundation-bg: #ffffff;
+  --foundation-background: #ffffff;
+  --foundation-surface-bright: #ffffff;
+  --foundation-surface: #ffffff;
+  --foundation-surface-dim: #fcfdfe;
+  --foundation-surface-container-lowest: #ffffff;
+  --foundation-surface-container-low: #fcfdfe;
+  --foundation-surface-container-highest: #eceded;
+  --foundation-inverse-surface: #1d2129;
+  --foundation-inverse-on-surface: #ffffff;
+  --foundation-card: #ffffff;
+  --foundation-card-foreground: #0c0d0e;
+  --foundation-popover: #f1f4f8;
+  --foundation-popover-foreground: #0c0d0e;
+  --foundation-rule: #dde2e9;
+  --foundation-border: #dde2e9;
+  --foundation-input: #eceded;
+  --border-yuanliBorder-1: #eaedf1;
+  --border-yuanliBorder-2: #e1e4e8;
+  --border-yuanliBorder-3: #d1d5da;
+  --border-yuanliBorder-4: #959da5;
+  --status-yuanliDanger-2: #feeced;
+  --status-yuanliDanger-3: #fa9ea3;
+  --status-yuanliDanger-5: #f65159;
+  --status-yuanliDanger-6: #d7312a;
+  --status-yuanliDanger-7: #c43138;
+  --status-yuanliSuccess-2: #e2f5eb;
+  --status-yuanliSuccess-3: #8dd8b3;
+  --status-yuanliSuccess-5: #1ebf6f;
+  --status-yuanliSuccess-6: #2a814b;
+  --status-yuanliSuccess-7: #189959;
+  --status-yuanliWarning-2: #fdf3de;
+  --status-yuanliWarning-3: #f8d080;
+  --status-yuanliWarning-5: #f5b433;
+  --status-yuanliWarning-6: #bd7e00;
+  --status-yuanliWarning-7: #de9400;
+  --status-on-error: #ffffff;
+  --status-error: #d7312a;
+  --status-error-container: #feeced;
+  --status-on-error-container: #c43138;
+  --status-success: #2a814b;
+  --status-warning: #bd7e00;
+  --state-hover: rgba(22, 100, 255, 0.08);
+  --state-focus: rgba(22, 100, 255, 0.12);
+  --state-press: rgba(22, 100, 255, 0.16);
+  --state-drag: rgba(22, 100, 255, 0.16);
+  --color-on-primary: #ffffff;
+  --color-background: #ffffff;
+  --color-foreground: #0c0d0e;
+  --color-surface: #ffffff;
+  --color-surface-dim: #fcfdfe;
+  --color-surface-variant: #f1f4f8;
+  --color-surface-container: #f7f9fb;
+  --color-surface-container-low: #fcfdfe;
+  --color-surface-container-high: #f1f4f8;
+  --color-surface-container-highest: #eceded;
+  --color-card: #ffffff;
+  --color-sidebar: #fcfdfe;
+  --color-on-surface: #0c0d0e;
+  --color-on-surface-variant: #86909c;
+  --color-muted-foreground: #86909c;
+  --color-primary: #1664ff;
+  --color-primary-hover: #0055ff;
+  --color-primary-container: #f3f7ff;
+  --color-on-primary-container: #0055ff;
+  --color-secondary: #eceded;
+  --color-secondary-container: #fcfdfe;
+  --color-on-secondary-container: #333333;
+  --color-error: #d7312a;
+  --color-error-container: #feeced;
+  --color-on-error: #ffffff;
+  --color-on-error-container: #c43138;
+  --color-outline: #dde2e9;
+  --color-outline-variant: #eceded;
+  --color-border: #dde2e9;
+  --color-success: #2a814b;
+  --color-warning: #bd7e00;
+  --color-danger: #d7312a;
+  --chart-1: #1664ff;
+  --chart-2: #2a814b;
+  --chart-3: #bd7e00;
+  --chart-4: #d7312a;
+  --chart-5: #4e5969;
+
+  /* === Typography === */
+  --font-display: "PingFang SC", "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif;
+  --font-heading: "PingFang SC", "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif;
+  --font-body: "PingFang SC", "Roboto", "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "SFMono-Regular", "SF Mono", "Roboto Mono", "Consolas", "Liberation Mono", monospace;
+  --font-family-base: "PingFang SC", "Roboto", "Helvetica Neue", Arial, sans-serif;
+  --font-size-display: 24px;
+  --font-size-h1: 20px;
+  --font-size-h2: 18px;
+  --font-size-h3: 16px;
+  --font-size-h4: 14px;
+  --font-size-body: 12px;
+  --font-size-lead: 13px;
+  --font-size-caption: 10px;
+  --font-size-eyebrow: 10px;
+  --font-size-mono: 12px;
+  --font-size-price: 20px;
+  --type-display-sm: 24px;
+  --type-heading-sm: 14px;
+  --type-body-md: 12px;
+  --type-body-sm: 10px;
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --line-height-display: 32px;
+  --line-height-h1: 28px;
+  --line-height-h2: 26px;
+  --line-height-h3: 24px;
+  --line-height-h4: 22px;
+  --line-height-body: 20px;
+  --line-height-lead: 22px;
+  --line-height-caption: 18px;
+  --line-height-eyebrow: 16px;
+  --line-height-mono: 20px;
+  --line-height-price: 28px;
+
+  /* === Radius === */
+  --yuanlitest-radius-sm: 4px;
+  --radius-full: 9999px;
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+
+  /* === Spacing === */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+
+  /* === Size === */
+  --max-content: 1440px;
+  --max-prose: 72ch;
+  --gutter-desk: 24px;
+  --gutter-mob: 16px;
+  --nav-height: 56px;
+  --sidebar-width: 240px;
+
+  /* === Shadow === */
+  --shadow-1: 0px 1px 2px 0px rgba(12, 13, 14, 0.05);
+  --shadow-2: 0px 2px 6px 0px rgba(12, 13, 14, 0.08);
+  --shadow-3: 0px 5px 15px 0px rgba(12, 13, 14, 0.08), 0px 2px 4px 0px rgba(12, 13, 14, 0.04);
+  --shadow-4: 0px 15px 35px -2px rgba(12, 13, 14, 0.1), 0px 5px 15px 0px rgba(12, 13, 14, 0.06);
+  --shadow-5: 0px 24px 48px -4px rgba(12, 13, 14, 0.12), 0px 8px 20px 0px rgba(12, 13, 14, 0.08);
+}
+
+.dark {
+  --yuanliDanger-6: #ff706d;
+  --yuanliSuccess-6: #7ccd94;
+  --yuanliWarning-6: #f0a50f;
+  --fg: #ffffff;
+  --foreground: #ffffff;
+  --secondary: #333333;
+  --secondary-foreground: #ffffff;
+  --muted: #86909c;
+  --muted-foreground: #c9cdd4;
+  --bg: #0c0d0e;
+  --background: #0c0d0e;
+  --surface-dim: #000b1a;
+  --surface: #1d2129;
+  --surface-bright: #333333;
+  --surface-container-lowest: #0c0d0e;
+  --surface-container-low: #1d2129;
+  --surface-container: #202833;
+  --surface-container-high: #2a3440;
+  --surface-container-highest: #41464f;
+  --inverse-surface: #ffffff;
+  --inverse-on-surface: #0c0d0e;
+  --card: #1d2129;
+  --card-foreground: #ffffff;
+  --popover: #2a3440;
+  --popover-foreground: #ffffff;
+  --rule: #333333;
+  --border: #333333;
+  --input: #41464f;
+  --error: #ff706d;
+  --error-container: rgba(255, 112, 109, 0.16);
+  --on-error: #1f0a0c;
+  --on-error-container: #ffd9d7;
+  --success: #7ccd94;
+  --warning: #f0a50f;
+  --state-hover: rgba(56, 123, 255, 0.16);
+  --state-focus: rgba(56, 123, 255, 0.24);
+  --state-press: rgba(56, 123, 255, 0.32);
+  --state-drag: rgba(56, 123, 255, 0.32);
+  --color-background: #0c0d0e;
+  --color-foreground: #ffffff;
+  --color-surface: #1d2129;
+  --color-surface-dim: #000b1a;
+  --color-surface-variant: #2a3440;
+  --color-surface-container: #202833;
+  --color-surface-container-low: #1d2129;
+  --color-surface-container-high: #2a3440;
+  --color-surface-container-highest: #41464f;
+  --color-card: #1d2129;
+  --color-sidebar: #1d2129;
+  --color-on-surface: #ffffff;
+  --color-on-surface-variant: #86909c;
+  --color-muted-foreground: #86909c;
+  --color-primary: #1664ff;
+  --color-primary-hover: #0055ff;
+  --color-primary-container: #0055ff;
+  --color-on-primary-container: #ffffff;
+  --color-secondary: #333333;
+  --color-secondary-container: #1d2129;
+  --color-on-secondary-container: #ffffff;
+  --color-error: #ff706d;
+  --color-error-container: rgba(255, 112, 109, 0.16);
+  --color-on-error: #1f0a0c;
+  --color-on-error-container: #ffd9d7;
+  --color-outline: #333333;
+  --color-outline-variant: #333333;
+  --color-border: #333333;
+  --color-success: #7ccd94;
+  --color-warning: #f0a50f;
+  --color-danger: #ff706d;
+  --chart-1: #387bff;
+  --chart-2: #7ccd94;
+  --chart-3: #f0a50f;
+  --chart-4: #ff706d;
+  --chart-5: #86909c;
+  --shadow-1: 0px 1px 2px 0px rgba(0, 0, 0, 0.24);
+  --shadow-2: 0px 2px 6px 0px rgba(0, 0, 0, 0.32);
+  --shadow-3: 0px 5px 15px 0px rgba(0, 0, 0, 0.36), 0px 2px 4px 0px rgba(0, 0, 0, 0.2);
+  --shadow-4: 0px 15px 35px -2px rgba(0, 0, 0, 0.44), 0px 5px 15px 0px rgba(0, 0, 0, 0.28);
+  --shadow-5: 0px 24px 48px -4px rgba(0, 0, 0, 0.5), 0px 8px 20px 0px rgba(0, 0, 0, 0.32);
+}
+
+/* === Typography utility classes === */
+.type-display {
+  font-size: var(--font-size-display);
+  line-height: var(--line-height-display);
+  font-family: var(--font-sans, "PingFang SC", "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif);
+}
+
+.type-h1 {
+  font-size: var(--font-size-h1);
+  line-height: var(--line-height-h1);
+  font-family: var(--font-sans, "PingFang SC", "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif);
+}
+
+.type-h2 {
+  font-size: var(--font-size-h2);
+  line-height: var(--line-height-h2);
+  font-family: var(--font-sans, "PingFang SC", "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif);
+}
+
+.type-h3 {
+  font-size: var(--font-size-h3);
+  line-height: var(--line-height-h3);
+  font-family: var(--font-sans, "PingFang SC", "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif);
+}
+
+.type-h4 {
+  font-size: var(--font-size-h4);
+  line-height: var(--line-height-h4);
+  font-family: var(--font-sans, "PingFang SC", "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif);
+}
+
+.type-body {
+  font-size: var(--font-size-body);
+  line-height: var(--line-height-body);
+  font-family: var(--font-sans, "PingFang SC", "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif);
+}
+
+.type-lead {
+  font-size: var(--font-size-lead);
+  line-height: var(--line-height-lead);
+  font-family: var(--font-sans, "PingFang SC", "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif);
+}
+
+.type-caption {
+  font-size: var(--font-size-caption);
+  line-height: var(--line-height-caption);
+  font-family: var(--font-sans, "PingFang SC", "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif);
+}
+
+.type-eyebrow {
+  font-size: var(--font-size-eyebrow);
+  line-height: var(--line-height-eyebrow);
+  font-family: var(--font-sans, "PingFang SC", "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif);
+}
+
+.type-mono {
+  font-size: var(--font-size-mono);
+  line-height: var(--line-height-mono);
+  font-family: var(--font-sans, "PingFang SC", "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif);
+}
+
+.type-price {
+  font-size: var(--font-size-price);
+  line-height: var(--line-height-price);
+  font-family: var(--font-sans, "PingFang SC", "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif);
+}
+
+.type-type-display-sm {
+  font-size: var(--type-display-sm);
+  font-family: var(--font-sans, "PingFang SC", "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif);
+}
+
+.type-type-heading-sm {
+  font-size: var(--type-heading-sm);
+  font-family: var(--font-sans, "PingFang SC", "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif);
+}
+
+.type-type-body-md {
+  font-size: var(--type-body-md);
+  font-family: var(--font-sans, "PingFang SC", "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif);
+}
+
+.type-type-body-sm {
+  font-size: var(--type-body-sm);
+  font-family: var(--font-sans, "PingFang SC", "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif);
+}

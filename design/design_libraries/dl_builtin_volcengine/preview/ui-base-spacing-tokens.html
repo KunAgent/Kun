@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>Spacing 间距</title>
+  <link rel="stylesheet" href="preview-scaffold.css">
+  <style>
+/* Spacing rows */
+.spacing-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.bar-wrap {
+  width: 200px;
+  display: flex;
+  align-items: center;
+}
+.bar {
+  height: 20px;
+  background: var(--color-primary, #1664FF);
+  border-radius: 2px;
+  opacity: 0.85;
+}
+.token-name {
+  min-width: 110px;
+  font-size: 11px;
+  font-family: "Roboto Mono", monospace;
+  color: var(--color-primary, #1664FF);
+  font-weight: 500;
+}
+.token-value {
+  min-width: 44px;
+  font-size: 11px;
+  font-family: "Roboto Mono", monospace;
+  color: var(--color-text-2, #42464E);
+  font-weight: 500;
+}
+.token-desc {
+  font-size: 12px;
+  color: var(--color-text-3, #737A87);
+}
+  </style>
+</head>
+<body>
+
+  <div class="pv-header">
+    <h1>Spacing 间距</h1>
+    <p>间距 token 定义与使用场景，从紧凑到宽松的完整间距比例体系。</p>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">Base Scale 基础间距（4-16px）</div>
+    <div class="stack-12">
+      <div class="spacing-row">
+        <div class="token-name">--spacing-xs</div>
+        <div class="token-value">4px</div>
+        <div class="bar-wrap"><div class="bar" style="width:4px"></div></div>
+        <div class="token-desc">图标间距 · 紧凑元素</div>
+      </div>
+      <div class="spacing-row">
+        <div class="token-name">--spacing-sm</div>
+        <div class="token-value">8px</div>
+        <div class="bar-wrap"><div class="bar" style="width:8px"></div></div>
+        <div class="token-desc">元素内边距 · 小间隔</div>
+      </div>
+      <div class="spacing-row">
+        <div class="token-name">--spacing-md</div>
+        <div class="token-value">12px</div>
+        <div class="bar-wrap"><div class="bar" style="width:12px"></div></div>
+        <div class="token-desc">组件间距 · 表单行距</div>
+      </div>
+      <div class="spacing-row">
+        <div class="token-name">--spacing-lg</div>
+        <div class="token-value">16px</div>
+        <div class="bar-wrap"><div class="bar" style="width:16px"></div></div>
+        <div class="token-desc">区块间距 · 卡片内边距</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">Large Scale 大间距（24-32px）</div>
+    <div class="stack-12">
+      <div class="spacing-row">
+        <div class="token-name">--spacing-xl</div>
+        <div class="token-value">24px</div>
+        <div class="bar-wrap"><div class="bar" style="width:24px"></div></div>
+        <div class="token-desc">大区块间距 · 模块分隔</div>
+      </div>
+      <div class="spacing-row">
+        <div class="token-name">--spacing-xxl</div>
+        <div class="token-value">32px</div>
+        <div class="bar-wrap"><div class="bar" style="width:32px"></div></div>
+        <div class="token-desc">页面边距 · 大区域留白</div>
+      </div>
+    </div>
+  </div>
+
+</body>
+</html>

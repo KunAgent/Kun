@@ -1,0 +1,48 @@
+{
+  "slug": "card",
+  "name": "Card",
+  "category": "Containers",
+  "variantCount": 6,
+  "evidence": "AI-inferred from token emphasis on surface, border, radius, and subtle elevation.",
+  "anatomy": [
+    "panel",
+    "eyebrow",
+    "title",
+    "metric",
+    "meta"
+  ],
+  "variantDimensions": {
+    "emphasis": [
+      "default",
+      "accented",
+      "muted"
+    ],
+    "density": [
+      "compact",
+      "comfortable"
+    ],
+    "state": [
+      "default",
+      "hover"
+    ]
+  },
+  "structures": [
+    {
+      "name": "Metric Card, Default",
+      "notes": "Dark panel with bright data and accent micro-label."
+    },
+    {
+      "name": "Insight Card, Accented",
+      "notes": "Supports chart or status detail inside a framed container."
+    },
+    {
+      "name": "Feed Card, Compact",
+      "notes": "Denser content rhythm for stacked dashboards."
+    }
+  ],
+  "uiCopySamples": [
+    "Threat Index",
+    "Latency Drift",
+    "Signal Quality"
+  ]
+}

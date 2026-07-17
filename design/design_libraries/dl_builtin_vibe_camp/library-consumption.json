@@ -1,0 +1,55 @@
+{
+  "version": 1,
+  "readOrder": [
+    "colors_and_type.css",
+    "css.json",
+    "components/index.json",
+    "components/{slug}.json",
+    "preview/component-{slug}.html",
+    "README.md",
+    "SKILL.md",
+    "ui_kits/{type}/index.html"
+  ],
+  "notes": [
+    "Created during zip structure repair because the file was missing."
+  ],
+  "schemaVersion": 1,
+  "tokenSource": "css.json",
+  "tokenCSS": "colors_and_type.css",
+  "componentsCSS": "components.css",
+  "componentIndex": "components/index.json",
+  "componentContractKind": "legacy-json",
+  "previewFiles": [
+    "preview/component-button.html",
+    "preview/component-card.html",
+    "preview/component-chart.html",
+    "preview/component-navigation.html",
+    "preview/component-sidebar.html",
+    "preview/component-table.html"
+  ],
+  "allowedComponents": [
+    "button",
+    "card",
+    "chart",
+    "navigation",
+    "sidebar",
+    "table"
+  ],
+  "soloDesignConsumption": {
+    "prefix": "vibe",
+    "themeCss": "colors_and_type.css",
+    "componentCss": "components.css",
+    "fillHtmlHead": "supported",
+    "notes": "Prefixed semantic aliases are intentionally added for solo-design fill-html-head.mjs prefix detection."
+  },
+  "recommendedReadOrder": [
+    "colors_and_type.css",
+    "css.json",
+    "components/index.json",
+    "components/{slug}.json",
+    "preview/component-{slug}.html",
+    "README.md",
+    "SKILL.md",
+    "ui_kits/{type}/index.html"
+  ]
+}

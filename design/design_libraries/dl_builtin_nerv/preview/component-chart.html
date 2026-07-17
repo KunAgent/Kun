@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>body{margin:0;padding:12px;background:var(--background);color:var(--foreground);font:12px/1.4 var(--font-sans)}.row{display:flex;gap:8px;align-items:flex-start;flex-wrap:wrap;margin-bottom:8px}.label{width:76px;padding-top:8px;font-size:10px;letter-spacing:var(--tracking-normal);text-transform:uppercase;color:var(--muted-foreground)}.panel{flex:1 1 220px;min-width:220px;padding:12px;border:1px solid var(--border);border-radius:var(--radius);background:var(--card);box-shadow:var(--shadow-sm)}.is-disabled{opacity:.45;filter:saturate(.65)}.title{margin:0 0 8px;font-size:13px;font-weight:600;color:var(--card-foreground)}.meta,.legend{display:flex;gap:10px;flex-wrap:wrap;font-size:10px;color:var(--muted-foreground)}.meta{margin-bottom:8px}.bars{display:flex;align-items:flex-end;gap:8px;height:108px;padding:10px;border-radius:calc(var(--radius) - 2px);background:var(--muted)}.col{flex:1;display:flex;flex-direction:column;align-items:center;gap:6px}.bar{width:100%;max-width:30px;border-radius:calc(var(--radius) - 4px) calc(var(--radius) - 4px) 0 0}.h1{height:48px;background:var(--chart-1)}.h2{height:76px;background:var(--chart-2)}.h3{height:62px;background:var(--chart-3)}.h4{height:90px;background:var(--chart-4)}.h5{height:54px;background:var(--chart-5)}.tick{font-size:10px;color:var(--muted-foreground)}.sw{width:8px;height:8px;border-radius:999px;display:inline-block;margin-right:4px}.sw1{background:var(--chart-1)}.sw2{background:var(--chart-2)}.sw3{background:var(--chart-3)}.sw4{background:var(--chart-4)}.sw5{background:var(--chart-5)}.divider{border:0;border-top:1px solid var(--border);margin:8px 0}.donuts{display:flex;gap:12px;align-items:center;flex-wrap:wrap}.donut{position:relative;width:84px;height:84px;border-radius:50%;flex:none}.mix-a{background:conic-gradient(var(--chart-1) 0 38%,var(--chart-2) 38% 68%,var(--chart-3) 68% 100%)}.mix-b{background:conic-gradient(var(--chart-4) 0 24%,var(--chart-2) 24% 59%,var(--chart-5) 59% 100%)}.donut:after{content:"";position:absolute;inset:18px;border-radius:50%;background:var(--card)}.center{position:absolute;inset:0;display:grid;place-items:center;font-size:11px;font-weight:600;color:var(--card-foreground)}.stack{display:grid;gap:8px;min-width:110px}</style>
+</head>
+<body>
+<div class="row">
+<span class="label">Bar</span>
+<div class="panel">
+<p class="title">Traffic Pulse</p>
+<div class="meta"><span>Peak hour</span><span>24.8k requests</span></div>
+<div class="bars"><div class="col"><span class="bar h1"></span><span class="tick">Mon</span></div><div class="col"><span class="bar h2"></span><span class="tick">Tue</span></div><div class="col"><span class="bar h3"></span><span class="tick">Wed</span></div><div class="col"><span class="bar h4"></span><span class="tick">Thu</span></div><div class="col"><span class="bar h5"></span><span class="tick">Fri</span></div></div>
+<div class="legend"><span><i class="sw sw1"></i>Ingress</span><span><i class="sw sw4"></i>Peak</span></div>
+</div>
+<div class="panel is-disabled">
+<p class="title">Signal Load</p>
+<div class="meta"><span>Muted state</span><span>Sync paused</span></div>
+<div class="bars"><div class="col"><span class="bar h3"></span><span class="tick">Node A</span></div><div class="col"><span class="bar h2"></span><span class="tick">Node B</span></div><div class="col"><span class="bar h5"></span><span class="tick">Node C</span></div><div class="col"><span class="bar h1"></span><span class="tick">Node D</span></div></div>
+<div class="legend"><span><i class="sw sw2"></i>Active</span><span><i class="sw sw5"></i>Backlog</span></div>
+</div>
+</div>
+<hr class="divider">
+<div class="row">
+<span class="label">Donut</span>
+<div class="panel">
+<p class="title">System Mix</p>
+<div class="donuts"><div class="donut mix-a"><span class="center">68%</span></div><div class="stack"><span>Realtime 38%</span><span>Batch 30%</span><span>Alerts 32%</span></div></div>
+<div class="legend"><span><i class="sw sw1"></i>Realtime</span><span><i class="sw sw2"></i>Batch</span><span><i class="sw sw3"></i>Alerts</span></div>
+</div>
+<div class="panel is-disabled">
+<p class="title">Traffic Pulse</p>
+<div class="donuts"><div class="donut mix-b"><span class="center">24%</span></div><div class="stack"><span>Edge 24%</span><span>Core 35%</span><span>Archive 41%</span></div></div>
+<div class="legend"><span><i class="sw sw4"></i>Edge</span><span><i class="sw sw2"></i>Core</span><span><i class="sw sw5"></i>Archive</span></div>
+</div>
+</div>
+</body>
+</html>

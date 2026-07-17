@@ -1,0 +1,924 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <link rel="stylesheet" href="../../colors_and_type.css">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Goldentime Dashboard UI Kit</title>
+  <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    * { box-sizing: border-box; }
+    html, body { margin: 0; min-height: 100%; }
+    body {
+      background: hsl(var(--background));
+      color: hsl(var(--foreground));
+      font-family: var(--font-sans);
+      letter-spacing: var(--tracking-normal);
+    }
+    button, input { font: inherit; letter-spacing: inherit; }
+    .app-shell {
+      display: grid;
+      grid-template-columns: 280px 1fr;
+      min-height: 100vh;
+      background: hsl(var(--background));
+    }
+    .sidebar {
+      background: hsl(var(--sidebar));
+      color: hsl(var(--sidebar-foreground));
+      border-right: 1px solid hsl(var(--sidebar-border));
+      padding: calc(var(--spacing) * 6);
+      display: flex;
+      flex-direction: column;
+      gap: calc(var(--spacing) * 5);
+    }
+    .brand-lockup {
+      display: grid;
+      gap: calc(var(--spacing) * 1.3);
+      padding-bottom: calc(var(--spacing) * 2);
+      border-bottom: 1px solid hsl(var(--sidebar-border));
+    }
+    .brand-kicker {
+      color: hsl(var(--muted-foreground));
+      font-size: 0.76rem;
+      text-transform: uppercase;
+      letter-spacing: 0.14em;
+    }
+    .brand-name {
+      font-size: 1.65rem;
+      line-height: 1;
+    }
+    .workspace-note {
+      color: hsl(var(--muted-foreground));
+      font-size: 0.95rem;
+      max-width: 18rem;
+    }
+    .nav-group {
+      display: grid;
+      gap: calc(var(--spacing) * 1.5);
+    }
+    .nav-label {
+      color: hsl(var(--muted-foreground));
+      font-size: 0.74rem;
+      text-transform: uppercase;
+      letter-spacing: 0.14em;
+      padding-left: calc(var(--spacing) * 1.5);
+    }
+    .nav-item {
+      width: 100%;
+      border: 1px solid transparent;
+      border-radius: calc(var(--radius) * 0.72);
+      background: transparent;
+      color: inherit;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: calc(var(--spacing) * 2);
+      padding: calc(var(--spacing) * 2.3) calc(var(--spacing) * 2.8);
+      text-align: left;
+      cursor: pointer;
+      transition: background-color .18s ease, border-color .18s ease, transform .18s ease;
+    }
+    .nav-item:hover {
+      background: hsl(var(--sidebar-accent) / 0.42);
+      color: hsl(var(--sidebar-accent-foreground));
+      transform: translateY(-1px);
+    }
+    .nav-item:focus-visible,
+    .icon-btn:focus-visible,
+    .btn:focus-visible,
+    .field:focus-visible,
+    .table-row:focus-within,
+    .choice:focus-within {
+      outline: 2px solid hsl(var(--ring));
+      outline-offset: 2px;
+    }
+    .nav-item.active {
+      background: hsl(var(--sidebar-primary));
+      color: hsl(var(--sidebar-primary-foreground));
+    }
+    .nav-copy {
+      display: flex;
+      align-items: center;
+      gap: calc(var(--spacing) * 2);
+      min-width: 0;
+    }
+    .nav-icon, .icon-chip, .icon-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .nav-icon, .icon-chip {
+      width: 1.85rem;
+      height: 1.85rem;
+      border-radius: 999px;
+      background: hsl(var(--accent) / 0.22);
+      color: inherit;
+      font-size: 0.95rem;
+      flex: 0 0 auto;
+    }
+    .nav-item.active .nav-icon {
+      background: hsl(var(--sidebar-primary-foreground) / 0.16);
+    }
+    .nav-meta {
+      color: hsl(var(--muted-foreground));
+      font-size: 0.8rem;
+      white-space: nowrap;
+    }
+    .nav-item.active .nav-meta {
+      color: inherit;
+      opacity: 0.82;
+    }
+    .sidebar-footer {
+      margin-top: auto;
+      padding: calc(var(--spacing) * 3);
+      border: 1px solid hsl(var(--sidebar-border));
+      border-radius: calc(var(--radius) * 0.82);
+      display: grid;
+      gap: calc(var(--spacing) * 1.1);
+      background: hsl(var(--card));
+    }
+    .eyebrow {
+      color: hsl(var(--muted-foreground));
+      font-size: 0.73rem;
+      text-transform: uppercase;
+      letter-spacing: 0.14em;
+    }
+    .main-area {
+      display: grid;
+      grid-template-rows: auto 1fr;
+      min-width: 0;
+    }
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: calc(var(--spacing) * 3);
+      padding: calc(var(--spacing) * 5) calc(var(--spacing) * 6);
+      border-bottom: 1px solid hsl(var(--border));
+      background: hsl(var(--background) / 0.94);
+      position: sticky;
+      top: 0;
+      z-index: 1;
+    }
+    .topbar-copy {
+      display: grid;
+      gap: calc(var(--spacing) * 1);
+    }
+    .page-title {
+      margin: 0;
+      font-size: 2rem;
+      line-height: 1;
+    }
+    .page-subtitle {
+      color: hsl(var(--muted-foreground));
+      max-width: 38rem;
+      font-size: 0.98rem;
+    }
+    .topbar-actions {
+      display: flex;
+      align-items: center;
+      gap: calc(var(--spacing) * 2);
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+    .field-wrap {
+      display: flex;
+      align-items: center;
+      gap: calc(var(--spacing) * 2);
+      min-width: 16rem;
+      padding: 0 calc(var(--spacing) * 2.6);
+      background: hsl(var(--card));
+      border: 1px solid hsl(var(--input));
+      border-radius: calc(var(--radius) * 0.76);
+      box-shadow: var(--shadow-xs);
+    }
+    .field {
+      width: 100%;
+      min-height: 2.8rem;
+      border: 0;
+      background: transparent;
+      color: hsl(var(--foreground));
+    }
+    .field::placeholder {
+      color: hsl(var(--muted-foreground));
+    }
+    .icon-btn, .btn {
+      border: 1px solid transparent;
+      border-radius: calc(var(--radius) * 0.76);
+      cursor: pointer;
+      transition: transform .18s ease, background-color .18s ease, border-color .18s ease, opacity .18s ease;
+    }
+    .icon-btn {
+      width: 2.9rem;
+      height: 2.9rem;
+      background: hsl(var(--card));
+      color: hsl(var(--foreground));
+      border-color: hsl(var(--border));
+      box-shadow: var(--shadow-xs);
+      font-size: 1rem;
+    }
+    .btn {
+      min-height: 2.95rem;
+      padding: calc(var(--spacing) * 2.1) calc(var(--spacing) * 4);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: calc(var(--spacing) * 1.6);
+      box-shadow: var(--shadow-sm);
+    }
+    .btn:hover, .icon-btn:hover {
+      transform: translateY(-1px);
+    }
+    .btn:active, .icon-btn:active, .nav-item:active {
+      transform: scale(0.98);
+    }
+    .btn.primary {
+      background: hsl(var(--primary));
+      color: hsl(var(--primary-foreground));
+    }
+    .btn.secondary {
+      background: hsl(var(--secondary));
+      color: hsl(var(--secondary-foreground));
+    }
+    .btn.ghost {
+      background: transparent;
+      color: hsl(var(--accent-foreground));
+      border-color: hsl(var(--border));
+      box-shadow: none;
+    }
+    .btn.destructive {
+      background: hsl(var(--destructive));
+      color: hsl(var(--destructive-foreground));
+    }
+    .btn.disabled {
+      opacity: 0.52;
+      cursor: not-allowed;
+      pointer-events: none;
+    }
+    .view-frame {
+      padding: calc(var(--spacing) * 5) calc(var(--spacing) * 6) calc(var(--spacing) * 7);
+      display: grid;
+      gap: calc(var(--spacing) * 4);
+      animation: viewIn .28s ease;
+    }
+    @keyframes viewIn {
+      from { opacity: 0; transform: translateY(12px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .hero-band,
+    .card-grid,
+    .split-grid,
+    .chart-layout,
+    .form-grid {
+      display: grid;
+      gap: calc(var(--spacing) * 3);
+    }
+    .hero-band { grid-template-columns: minmax(0, 1.4fr) minmax(18rem, 0.9fr); }
+    .card-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .split-grid { grid-template-columns: minmax(0, 1.15fr) minmax(18rem, 0.85fr); }
+    .chart-layout, .form-grid { grid-template-columns: minmax(0, 1fr) minmax(20rem, 0.92fr); }
+    .panel {
+      background: hsl(var(--card));
+      color: hsl(var(--card-foreground));
+      border: 1px solid hsl(var(--border));
+      border-radius: calc(var(--radius) * 0.82);
+      box-shadow: var(--shadow-xs);
+      padding: calc(var(--spacing) * 4);
+      display: grid;
+      gap: calc(var(--spacing) * 2.6);
+    }
+    .panel.highlight {
+      background: hsl(var(--accent) / 0.22);
+      border-color: hsl(var(--accent));
+    }
+    .panel-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: calc(var(--spacing) * 2);
+    }
+    .panel-title {
+      margin: 0;
+      font-size: 1.35rem;
+      line-height: 1.08;
+    }
+    .panel-copy {
+      color: hsl(var(--muted-foreground));
+      font-size: 0.95rem;
+      max-width: 34rem;
+    }
+    .headline-metric {
+      font-size: 3rem;
+      line-height: .92;
+    }
+    .metric-note {
+      display: inline-flex;
+      align-items: center;
+      gap: calc(var(--spacing) * 1.4);
+      width: fit-content;
+      padding: calc(var(--spacing) * 1.1) calc(var(--spacing) * 2);
+      border-radius: 999px;
+      background: hsl(var(--muted));
+      color: hsl(var(--accent-foreground));
+      font-size: 0.86rem;
+    }
+    .kpi {
+      min-height: 10rem;
+      align-content: start;
+    }
+    .kpi-value {
+      font-size: 2.25rem;
+      line-height: 1;
+    }
+    .list {
+      display: grid;
+      gap: calc(var(--spacing) * 2);
+    }
+    .list-item, .table-row, .choice {
+      display: grid;
+      gap: calc(var(--spacing) * 1.1);
+      padding: calc(var(--spacing) * 2.3) 0;
+      border-top: 1px solid hsl(var(--border));
+    }
+    .list-item:first-child, .table-row:first-child { border-top: 0; padding-top: 0; }
+    .row-between {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: calc(var(--spacing) * 2);
+    }
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      gap: calc(var(--spacing) * 1);
+      width: fit-content;
+      padding: calc(var(--spacing) * .8) calc(var(--spacing) * 1.6);
+      border-radius: 999px;
+      background: hsl(var(--muted));
+      color: hsl(var(--muted-foreground));
+      font-size: 0.78rem;
+    }
+    .table {
+      display: grid;
+      gap: 0;
+    }
+    .table-head, .table-row {
+      grid-template-columns: 1.4fr 1fr .9fr .9fr;
+      align-items: center;
+      column-gap: calc(var(--spacing) * 2);
+    }
+    .table-head {
+      color: hsl(var(--muted-foreground));
+      font-size: 0.78rem;
+      text-transform: uppercase;
+      letter-spacing: 0.14em;
+      padding-bottom: calc(var(--spacing) * 2);
+      border-bottom: 1px solid hsl(var(--border));
+    }
+    .table-row {
+      font-size: 0.96rem;
+    }
+    .chart-box {
+      display: grid;
+      gap: calc(var(--spacing) * 3);
+    }
+    .chart-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: calc(var(--spacing) * 2);
+      flex-wrap: wrap;
+    }
+    .legend {
+      display: flex;
+      gap: calc(var(--spacing) * 2);
+      flex-wrap: wrap;
+    }
+    .legend span {
+      display: inline-flex;
+      align-items: center;
+      gap: calc(var(--spacing) * 1);
+      color: hsl(var(--muted-foreground));
+      font-size: 0.82rem;
+    }
+    .swatch {
+      width: .8rem;
+      height: .8rem;
+      border-radius: 999px;
+      display: inline-block;
+    }
+    .chart-rail {
+      height: 16rem;
+      display: grid;
+      grid-template-columns: repeat(8, minmax(0, 1fr));
+      gap: calc(var(--spacing) * 2);
+      align-items: end;
+      padding-top: calc(var(--spacing) * 2);
+    }
+    .bar-wrap {
+      display: grid;
+      gap: calc(var(--spacing) * 1.4);
+      justify-items: center;
+    }
+    .bar {
+      width: 100%;
+      max-width: 2.2rem;
+      border-radius: calc(var(--radius) * 0.34);
+      background: hsl(var(--chart-2));
+      box-shadow: inset 0 -1px 0 hsl(var(--chart-3) / 0.2);
+    }
+    .bar.alt { background: hsl(var(--chart-4)); }
+    .barH24 { height: 24%; }
+    .barH30 { height: 30%; }
+    .barH38 { height: 38%; }
+    .barH46 { height: 46%; }
+    .barH54 { height: 54%; }
+    .barH62 { height: 62%; }
+    .barH70 { height: 70%; }
+    .barH78 { height: 78%; }
+    .axis-label {
+      color: hsl(var(--muted-foreground));
+      font-size: 0.8rem;
+    }
+    .mini-metrics {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: calc(var(--spacing) * 2);
+    }
+    .mini-card {
+      border-radius: calc(var(--radius) * 0.65);
+      background: hsl(var(--muted));
+      padding: calc(var(--spacing) * 2.4);
+      display: grid;
+      gap: calc(var(--spacing) * 1);
+    }
+    .progress {
+      width: 100%;
+      height: .55rem;
+      background: hsl(var(--muted));
+      border-radius: 999px;
+      overflow: hidden;
+    }
+    .progress span {
+      display: block;
+      height: 100%;
+      border-radius: inherit;
+      background: hsl(var(--secondary));
+    }
+    .progress42 span { width: 42%; }
+    .progress58 span { width: 58%; }
+    .progress64 span { width: 64%; }
+    .progress81 span { width: 81%; }
+    .field-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: calc(var(--spacing) * 2);
+    }
+    .stack {
+      display: grid;
+      gap: calc(var(--spacing) * 2);
+    }
+    .choice {
+      grid-template-columns: auto 1fr auto;
+      align-items: center;
+      column-gap: calc(var(--spacing) * 2);
+    }
+    .check {
+      width: 1.15rem;
+      height: 1.15rem;
+      border-radius: .3rem;
+      border: 1px solid hsl(var(--border));
+      background: hsl(var(--card));
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      color: hsl(var(--primary-foreground));
+      font-size: .74rem;
+    }
+    .choice.active .check {
+      background: hsl(var(--primary));
+      border-color: hsl(var(--primary));
+    }
+    .alert {
+      border-radius: calc(var(--radius) * 0.68);
+      background: hsl(var(--muted));
+      padding: calc(var(--spacing) * 2.5);
+      color: hsl(var(--accent-foreground));
+    }
+    .muted { color: hsl(var(--muted-foreground)); }
+    @media (max-width: 1100px) {
+      .app-shell { grid-template-columns: 1fr; }
+      .sidebar { border-right: 0; border-bottom: 1px solid hsl(var(--sidebar-border)); }
+      .hero-band, .card-grid, .split-grid, .chart-layout, .form-grid, .field-grid { grid-template-columns: 1fr; }
+      .table-head, .table-row { grid-template-columns: 1.2fr 1fr .9fr .8fr; }
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+    const { useMemo, useState } = React;
+
+    const navItems = [
+      { id: 'overview', label: 'Overview', icon: '✦', note: 'Daily pulse' },
+      { id: 'analytics', label: 'Analytics', icon: '◔', note: 'Quarter view' },
+      { id: 'settings', label: 'Settings', icon: '⚙', note: 'Workspace' }
+    ];
+
+    const queue = [
+      { title: 'Membership brief', owner: 'Editorial desk', status: 'Needs review' },
+      { title: 'Renewal letters', owner: 'Accounts team', status: 'Ready to send' },
+      { title: 'Founders circle', owner: 'Client partner', status: 'Waiting on notes' }
+    ];
+
+    const accounts = [
+      { name: 'North Market House', tier: 'Patron', renewal: '12 Jun', health: 'Steady' },
+      { name: 'Mayfair Letters', tier: 'Studio', renewal: '18 Jun', health: 'Attention' },
+      { name: 'Aster Review', tier: 'Board', renewal: '22 Jun', health: 'Strong' },
+      { name: 'Crown Archive', tier: 'Legacy', renewal: '30 Jun', health: 'Steady' }
+    ];
+
+    const bars = [
+      { label: 'Jan', height: 'barH24', alt: false },
+      { label: 'Feb', height: 'barH30', alt: true },
+      { label: 'Mar', height: 'barH38', alt: false },
+      { label: 'Apr', height: 'barH46', alt: true },
+      { label: 'May', height: 'barH54', alt: false },
+      { label: 'Jun', height: 'barH62', alt: true },
+      { label: 'Jul', height: 'barH70', alt: false },
+      { label: 'Aug', height: 'barH78', alt: true }
+    ];
+
+    function App() {
+      const [screen, setScreen] = useState('overview');
+      const copy = useMemo(() => ({
+        overview: {
+          title: 'Overview',
+          subtitle: 'A measured readout for the membership and editorial pipeline, with calm hierarchy and the day’s most important actions surfaced first.'
+        },
+        analytics: {
+          title: 'Analytics',
+          subtitle: 'A narrative view of renewal momentum, channel mix, and cohort quality using restrained chart color and concise commentary.'
+        },
+        settings: {
+          title: 'Settings',
+          subtitle: 'One focused workspace tab for account defaults, editorial cadence, and billing controls.'
+        }
+      }), []);
+
+      return (
+        <div className="app-shell">
+          <aside className="sidebar">
+            <div className="brand-lockup">
+              <span className="brand-kicker">Goldentime dashboard</span>
+              <div className="brand-name">Goldentime</div>
+              <div className="workspace-note">Warm editorial tools for client briefings, renewal planning, and premium account stewardship.</div>
+            </div>
+
+            <div className="nav-group">
+              <div className="nav-label">Workspace</div>
+              {navItems.map((item) => (
+                <button
+                  key={item.id}
+                  className={`nav-item ${screen === item.id ? 'active' : ''}`}
+                  onClick={() => setScreen(item.id)}
+                  aria-current={screen === item.id ? 'page' : undefined}
+                >
+                  <span className="nav-copy">
+                    <span className="nav-icon" aria-hidden="true">{item.icon}</span>
+                    <span>{item.label}</span>
+                  </span>
+                  <span className="nav-meta">{item.note}</span>
+                </button>
+              ))}
+            </div>
+
+            <div className="sidebar-footer">
+              <span className="eyebrow">Current desk</span>
+              <strong>Quarterly review board</strong>
+              <span className="muted">4 briefs are open, 2 need approval before noon, and one renewal note is overdue.</span>
+            </div>
+          </aside>
+
+          <main className="main-area">
+            <header className="topbar">
+              <div className="topbar-copy">
+                <h1 className="page-title">{copy[screen].title}</h1>
+                <div className="page-subtitle">{copy[screen].subtitle}</div>
+              </div>
+              <div className="topbar-actions">
+                <label className="field-wrap" aria-label="Search">
+                  <span aria-hidden="true">⌕</span>
+                  <input className="field" type="text" placeholder="Search reports, clients, or notes" />
+                </label>
+                <button className="icon-btn" type="button" aria-label="Notifications">⎋</button>
+                <button className="btn ghost" type="button">Share note</button>
+                <button className="btn primary" type="button">Publish brief</button>
+              </div>
+            </header>
+
+            <div key={screen} className="view-frame">
+              {screen === 'overview' && <OverviewView />}
+              {screen === 'analytics' && <AnalyticsView />}
+              {screen === 'settings' && <SettingsView />}
+            </div>
+          </main>
+        </div>
+      );
+    }
+
+    function OverviewView() {
+      return (
+        <>
+          <section className="hero-band">
+            <article className="panel highlight">
+              <div className="panel-head">
+                <div>
+                  <div className="eyebrow">Morning edition</div>
+                  <h2 className="panel-title">The membership brief is nearly ready to circulate.</h2>
+                </div>
+                <span className="tag">Updated 9:30</span>
+              </div>
+              <div className="panel-copy">Use the next hour to close approvals, tighten the executive summary, and send the renewal note to the Mayfair cohort.</div>
+              <div className="headline-metric">84%</div>
+              <div className="metric-note"><span aria-hidden="true">↗</span> renewal confidence is holding above target</div>
+              <div className="row-between">
+                <button className="btn primary" type="button">Review brief</button>
+                <button className="btn secondary" type="button">Export summary</button>
+              </div>
+            </article>
+
+            <article className="panel">
+              <div className="eyebrow">Priority queue</div>
+              <div className="list">
+                {queue.map((item) => (
+                  <div key={item.title} className="list-item">
+                    <div className="row-between">
+                      <strong>{item.title}</strong>
+                      <span className="tag">{item.status}</span>
+                    </div>
+                    <span className="muted">{item.owner}</span>
+                  </div>
+                ))}
+              </div>
+            </article>
+          </section>
+
+          <section className="card-grid">
+            <article className="panel kpi">
+              <div className="eyebrow">Active patrons</div>
+              <div className="kpi-value">12,480</div>
+              <div className="muted">A composed rise after the spring editorial campaign.</div>
+            </article>
+            <article className="panel kpi">
+              <div className="eyebrow">Open approvals</div>
+              <div className="kpi-value">18</div>
+              <div className="muted">Most are summary edits, not financial exceptions.</div>
+            </article>
+            <article className="panel kpi">
+              <div className="eyebrow">Churn risk</div>
+              <div className="kpi-value">4.2%</div>
+              <div className="muted">Contained by concierge outreach and cleaner billing notes.</div>
+            </article>
+          </section>
+
+          <section className="split-grid">
+            <article className="panel">
+              <div className="panel-head">
+                <div>
+                  <div className="eyebrow">Account table</div>
+                  <h2 className="panel-title">Upcoming renewals</h2>
+                </div>
+                <button className="btn ghost" type="button">View details</button>
+              </div>
+              <div className="table">
+                <div className="table-head">
+                  <span>Account</span>
+                  <span>Tier</span>
+                  <span>Renewal</span>
+                  <span>Health</span>
+                </div>
+                {accounts.map((row) => (
+                  <div key={row.name} className="table-row">
+                    <strong>{row.name}</strong>
+                    <span>{row.tier}</span>
+                    <span>{row.renewal}</span>
+                    <span className="muted">{row.health}</span>
+                  </div>
+                ))}
+              </div>
+            </article>
+
+            <article className="panel">
+              <div className="eyebrow">Editorial rhythm</div>
+              <div className="mini-metrics">
+                <div className="mini-card">
+                  <strong>Weekly digest</strong>
+                  <span className="muted">58% complete</span>
+                  <div className="progress progress58"><span></span></div>
+                </div>
+                <div className="mini-card">
+                  <strong>Founder notes</strong>
+                  <span className="muted">81% approved</span>
+                  <div className="progress progress81"><span></span></div>
+                </div>
+              </div>
+              <div className="alert">Keep the dashboard quiet: let neutral surfaces carry the information, and reserve stronger contrast for action or urgency.</div>
+            </article>
+          </section>
+        </>
+      );
+    }
+
+    function AnalyticsView() {
+      return (
+        <>
+          <section className="hero-band">
+            <article className="panel">
+              <div className="eyebrow">Quarter narrative</div>
+              <h2 className="panel-title">Renewal momentum is increasing with more confidence than volume.</h2>
+              <div className="panel-copy">The strongest gains are coming from the patron segment, while legacy accounts respond best to personal notes and slower billing cadences.</div>
+            </article>
+            <article className="panel">
+              <div className="eyebrow">Signal</div>
+              <div className="headline-metric">+11%</div>
+              <div className="muted">Board-ready uplift compared with the previous quarter.</div>
+            </article>
+          </section>
+
+          <section className="chart-layout">
+            <article className="panel chart-box">
+              <div className="chart-header">
+                <div>
+                  <div className="eyebrow">Chart panel</div>
+                  <h2 className="panel-title">Renewal confidence by month</h2>
+                </div>
+                <div className="legend">
+                  <span><i className="swatch" style={{ background: 'hsl(var(--chart-2))' }}></i>Direct</span>
+                  <span><i className="swatch" style={{ background: 'hsl(var(--chart-4))' }}></i>Referral</span>
+                </div>
+              </div>
+              <div className="chart-rail" aria-label="Bar chart showing renewal confidence over eight months">
+                {bars.map((bar) => (
+                  <div key={bar.label} className="bar-wrap">
+                    <div className={`bar ${bar.height} ${bar.alt ? 'alt' : ''}`}></div>
+                    <span className="axis-label">{bar.label}</span>
+                  </div>
+                ))}
+              </div>
+            </article>
+
+            <article className="panel">
+              <div className="eyebrow">Cohort notes</div>
+              <div className="stack">
+                <div className="mini-card">
+                  <strong>Patron</strong>
+                  <span className="muted">64% of this month’s confident renewals.</span>
+                  <div className="progress progress64"><span></span></div>
+                </div>
+                <div className="mini-card">
+                  <strong>Studio</strong>
+                  <span className="muted">42% still need an editorial follow-up.</span>
+                  <div className="progress progress42"><span></span></div>
+                </div>
+                <div className="alert">Chart tokens stay inside the data view only, so the rest of the page remains grounded in warm neutrals.</div>
+              </div>
+            </article>
+          </section>
+
+          <section className="split-grid">
+            <article className="panel">
+              <div className="panel-head">
+                <div>
+                  <div className="eyebrow">Key reading</div>
+                  <h2 className="panel-title">Three patterns worth sharing</h2>
+                </div>
+                <span className="tag">Ready for board notes</span>
+              </div>
+              <div className="list">
+                <div className="list-item">
+                  <strong>Personal outreach closes earlier.</strong>
+                  <span className="muted">Founder-signed letters continue to outperform automated reminders.</span>
+                </div>
+                <div className="list-item">
+                  <strong>Pricing friction is quiet but real.</strong>
+                  <span className="muted">Studio clients respond better when plan value is restated before invoice delivery.</span>
+                </div>
+                <div className="list-item">
+                  <strong>Referral cohorts remain calm.</strong>
+                  <span className="muted">They show fewer support escalations and stronger annual commitment.</span>
+                </div>
+              </div>
+            </article>
+
+            <article className="panel">
+              <div className="eyebrow">Action</div>
+              <h2 className="panel-title">Turn the strongest pattern into next week’s lead story.</h2>
+              <div className="panel-copy">Frame the update around retention quality rather than raw volume, then keep the supporting table available for finance.</div>
+              <button className="btn primary" type="button">Prepare story</button>
+            </article>
+          </section>
+        </>
+      );
+    }
+
+    function SettingsView() {
+      return (
+        <>
+          <section className="hero-band">
+            <article className="panel">
+              <div className="eyebrow">Workspace tab</div>
+              <h2 className="panel-title">Editorial defaults and billing guardrails</h2>
+              <div className="panel-copy">This tab keeps language, send cadence, and approval ownership consistent across the Goldentime workspace.</div>
+            </article>
+            <article className="panel">
+              <div className="eyebrow">Status</div>
+              <div className="headline-metric">3</div>
+              <div className="muted">settings changed in the last seven days</div>
+            </article>
+          </section>
+
+          <section className="form-grid">
+            <article className="panel">
+              <div className="panel-head">
+                <div>
+                  <div className="eyebrow">Profile</div>
+                  <h2 className="panel-title">Workspace details</h2>
+                </div>
+                <button className="btn ghost" type="button">Reset draft</button>
+              </div>
+              <div className="field-grid">
+                <label className="stack">
+                  <span className="muted">Workspace name</span>
+                  <input className="field panel" type="text" value="Goldentime Review Board" readOnly />
+                </label>
+                <label className="stack">
+                  <span className="muted">Default owner</span>
+                  <input className="field panel" type="text" value="Anika Doyle" readOnly />
+                </label>
+              </div>
+              <div className="stack">
+                <label className="stack">
+                  <span className="muted">Summary preface</span>
+                  <input className="field panel" type="text" value="Compose each brief with a confident editorial voice." readOnly />
+                </label>
+              </div>
+              <button className="btn primary" type="button">Save changes</button>
+            </article>
+
+            <article className="panel">
+              <div className="eyebrow">Preferences</div>
+              <div className="choice active">
+                <span className="check" aria-hidden="true">✓</span>
+                <div>
+                  <strong>Weekly board digest</strong>
+                  <div className="muted">Send every Monday at 08:30 with one executive summary.</div>
+                </div>
+                <span className="tag">On</span>
+              </div>
+              <div className="choice active">
+                <span className="check" aria-hidden="true">✓</span>
+                <div>
+                  <strong>Concierge reminders</strong>
+                  <div className="muted">Escalate patron churn risks when confidence slips below target.</div>
+                </div>
+                <span className="tag">On</span>
+              </div>
+              <div className="choice">
+                <span className="check" aria-hidden="true"></span>
+                <div>
+                  <strong>Auto-send renewal note</strong>
+                  <div className="muted">Keep manual approval for now to preserve tone and timing.</div>
+                </div>
+                <span className="tag">Off</span>
+              </div>
+            </article>
+          </section>
+
+          <section className="split-grid">
+            <article className="panel">
+              <div className="eyebrow">Billing</div>
+              <h2 className="panel-title">Plan and archive controls</h2>
+              <div className="panel-copy">The current board plan renews on 30 June. Archive actions remain intentionally separated from day-to-day workflow controls.</div>
+              <div className="row-between">
+                <button className="btn secondary" type="button">Review invoice</button>
+                <button className="btn destructive" type="button">Archive workspace</button>
+              </div>
+            </article>
+
+            <article className="panel">
+              <div className="eyebrow">Guardrail</div>
+              <div className="alert">Destructive actions are isolated, plainly labeled, and never compete with the primary save path.</div>
+              <button className="btn disabled" type="button" aria-disabled="true">Invite editor</button>
+            </article>
+          </section>
+        </>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>

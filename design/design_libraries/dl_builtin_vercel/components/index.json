@@ -1,0 +1,57 @@
+{
+  "productType": "developer platform",
+  "kitType": "dashboard",
+  "components": [
+    {
+      "slug": "button",
+      "name": "Button",
+      "category": "actions",
+      "variantCount": 3,
+      "keyInsight": "Monochrome actions with a single decisive emphasis tier."
+    },
+    {
+      "slug": "card",
+      "name": "Card",
+      "category": "surfaces",
+      "variantCount": 3,
+      "keyInsight": "Quiet surfaces with sharp information hierarchy and minimal ornament."
+    },
+    {
+      "slug": "table",
+      "name": "Table",
+      "category": "data-display",
+      "variantCount": 2,
+      "keyInsight": "Data tables should stay dense, readable, and operational rather than decorative."
+    },
+    {
+      "slug": "chart",
+      "name": "Chart",
+      "category": "data-viz",
+      "variantCount": 2,
+      "keyInsight": "Charts reserve the blue scale for insight moments inside an otherwise monochrome UI."
+    },
+    {
+      "slug": "navigation",
+      "name": "Navigation",
+      "category": "navigation",
+      "variantCount": 2,
+      "keyInsight": "Navigation should feel editorial and compact, using contrast shifts instead of bright fills."
+    },
+    {
+      "slug": "sidebar",
+      "name": "Sidebar",
+      "category": "navigation",
+      "variantCount": 2,
+      "keyInsight": "Sidebar is a soft contextual frame, not a second accent canvas."
+    }
+  ],
+  "crossComponentPatterns": [
+    "Use monochrome surfaces with a single dark/light inversion for primary emphasis.",
+    "Prefer thin borders and restrained shadows over elevated cards.",
+    "Reserve chart blue tokens for data visualization only.",
+    "Keep navigation dense, crisp, and text-led."
+  ],
+  "warnings": [
+    "Component structures were inferred because the source attachment contained token definitions only."
+  ]
+}

@@ -1,0 +1,94 @@
+{
+  "slug": "button",
+  "name": "Button",
+  "category": "action",
+  "evidence": "AI-inferred based on Dashboard product type and structured token semantics from the source CSS.",
+  "anatomy": [
+    "container",
+    "label",
+    "leading-icon(optional)",
+    "trailing-icon(optional)"
+  ],
+  "variantDimensions": {
+    "intent": [
+      "primary",
+      "secondary",
+      "ghost"
+    ],
+    "size": [
+      "sm",
+      "md",
+      "lg"
+    ],
+    "state": [
+      "default",
+      "hover",
+      "disabled"
+    ]
+  },
+  "structures": [
+    {
+      "name": "Primary Action, Default, Medium",
+      "description": "Solid CTA used for primary dashboard actions.",
+      "elements": [
+        "container",
+        "label",
+        "leading-icon(optional)"
+      ],
+      "copyExamples": [
+        "Create Session",
+        "Publish Update",
+        "View Insights"
+      ],
+      "cssVariables": [
+        "primary",
+        "primary-foreground",
+        "ring",
+        "radius",
+        "font-sans",
+        "spacing",
+        "border"
+      ]
+    },
+    {
+      "name": "Secondary Action, Default, Medium",
+      "description": "Dark secondary action for alternate workflows.",
+      "elements": [
+        "container",
+        "label"
+      ],
+      "copyExamples": [
+        "Open Workspace",
+        "Manage Roles"
+      ],
+      "cssVariables": [
+        "secondary",
+        "secondary-foreground",
+        "border",
+        "radius",
+        "font-sans",
+        "spacing"
+      ]
+    },
+    {
+      "name": "Ghost Action, Hover, Small",
+      "description": "Low-emphasis control for inline toolbars and row actions.",
+      "elements": [
+        "container",
+        "label"
+      ],
+      "copyExamples": [
+        "See Details",
+        "Pin"
+      ],
+      "cssVariables": [
+        "accent",
+        "accent-foreground",
+        "ring",
+        "radius",
+        "font-sans",
+        "spacing"
+      ]
+    }
+  ]
+}

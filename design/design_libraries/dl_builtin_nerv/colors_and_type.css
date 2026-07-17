@@ -1,0 +1,167 @@
+/**
+ * Nerv Design Library
+ * Output language: English
+ * Theme mode: light-dark
+ * Alias layer: false
+ * Color naming prefix: generic-source
+ * Brand profile: dashboard / futuristic / high-contrast / technical / dark neon editorial dashboard
+ *
+ * Structured-spec note:
+ * - Source token names and declarations are preserved exactly with zero loss.
+ * - Light tokens are stored in :root.
+ * - Dark tokens are stored in .dark.
+ * - No alias layer is included.
+ */
+
+:root {
+  --background: rgb(15, 15, 16);
+  --foreground: rgb(244, 249, 255);
+  --card: rgb(17, 17, 18);
+  --card-foreground: rgb(244, 249, 255);
+  --popover: rgb(25, 27, 30);
+  --popover-foreground: rgb(244, 249, 255);
+  --primary: rgb(234, 52, 58);
+  --primary-foreground: rgb(255, 255, 255);
+  --secondary: rgb(21, 20, 20);
+  --secondary-foreground: rgb(244, 249, 255);
+  --muted: rgb(29, 30, 32);
+  --muted-foreground: rgb(244, 249, 255);
+  --accent: rgb(41, 45, 50);
+  --accent-foreground: rgb(244, 249, 255);
+  --destructive: rgb(255, 52, 52);
+  --destructive-foreground: rgb(255, 255, 255);
+  --border: rgb(48, 49, 54);
+  --input: rgb(68, 70, 80);
+  --ring: rgb(244, 249, 255);
+  --chart-1: rgb(234, 52, 58);
+  --chart-2: rgb(89, 56, 255);
+  --chart-3: rgb(148, 189, 255);
+  --chart-4: rgb(224, 112, 255);
+  --chart-5: rgb(219, 244, 255);
+  --sidebar: rgb(26, 26, 26);
+  --sidebar-foreground: rgb(207, 210, 221);
+  --sidebar-primary: rgb(255, 192, 203);
+  --sidebar-primary-foreground: rgb(24, 24, 24);
+  --sidebar-accent: rgb(234, 52, 58);
+  --sidebar-accent-foreground: rgb(24, 24, 24);
+  --sidebar-border: rgb(13, 13, 13);
+  --sidebar-ring: rgb(255, 192, 203);
+  --font-sans: Geist, ui-sans-serif, sans-serif, system-ui;
+  --font-serif: Aleo, ui-serif, serif;
+  --font-mono: Roboto Mono, monospace;
+  --radius: 1.65rem;
+  --shadow-x: 0px;
+  --shadow-y: 2px;
+  --shadow-blur: 6px;
+  --shadow-spread: 0px;
+  --shadow-opacity: 0.1;
+  --shadow-color: #242523;
+  --shadow-2xs: 0px 2px 6px 0px hsl(90.0000 2.7778% 14.1176% / 0.05);
+  --shadow-xs: 0px 2px 6px 0px hsl(90.0000 2.7778% 14.1176% / 0.05);
+  --shadow-sm: 0px 2px 6px 0px hsl(90.0000 2.7778% 14.1176% / 0.10), 0px 1px 2px -1px hsl(90.0000 2.7778% 14.1176% / 0.10);
+  --shadow: 0px 2px 6px 0px hsl(90.0000 2.7778% 14.1176% / 0.10), 0px 1px 2px -1px hsl(90.0000 2.7778% 14.1176% / 0.10);
+  --shadow-md: 0px 2px 6px 0px hsl(90.0000 2.7778% 14.1176% / 0.10), 0px 2px 4px -1px hsl(90.0000 2.7778% 14.1176% / 0.10);
+  --shadow-lg: 0px 2px 6px 0px hsl(90.0000 2.7778% 14.1176% / 0.10), 0px 4px 6px -1px hsl(90.0000 2.7778% 14.1176% / 0.10);
+  --shadow-xl: 0px 2px 6px 0px hsl(90.0000 2.7778% 14.1176% / 0.10), 0px 8px 10px -1px hsl(90.0000 2.7778% 14.1176% / 0.10);
+  --shadow-2xl: 0px 2px 6px 0px hsl(90.0000 2.7778% 14.1176% / 0.25);
+  --tracking-normal: 0em;
+  --spacing: 0.28rem;
+}
+
+.dark {
+  --background: rgb(24, 28, 37);
+  --foreground: rgb(229, 229, 229);
+  --card: rgb(46, 53, 55);
+  --card-foreground: rgb(229, 229, 229);
+  --popover: rgb(46, 53, 55);
+  --popover-foreground: rgb(229, 229, 229);
+  --primary: rgb(255, 153, 204);
+  --primary-foreground: rgb(0, 0, 0);
+  --secondary: rgb(20, 235, 20);
+  --secondary-foreground: rgb(0, 0, 0);
+  --muted: rgb(68, 68, 68);
+  --muted-foreground: rgb(163, 163, 163);
+  --accent: rgb(115, 214, 255);
+  --accent-foreground: rgb(0, 0, 0);
+  --destructive: rgb(255, 52, 52);
+  --destructive-foreground: rgb(255, 255, 255);
+  --border: rgb(68, 68, 68);
+  --input: rgb(68, 68, 68);
+  --ring: rgb(255, 153, 204);
+  --chart-1: rgb(255, 153, 204);
+  --chart-2: rgb(20, 235, 20);
+  --chart-3: rgb(115, 214, 255);
+  --chart-4: rgb(255, 255, 0);
+  --chart-5: rgb(255, 204, 0);
+  --sidebar: rgb(24, 28, 37);
+  --sidebar-foreground: rgb(229, 229, 229);
+  --sidebar-primary: rgb(255, 153, 204);
+  --sidebar-primary-foreground: rgb(0, 0, 0);
+  --sidebar-accent: rgb(115, 214, 255);
+  --sidebar-accent-foreground: rgb(0, 0, 0);
+  --sidebar-border: rgb(68, 68, 68);
+  --sidebar-ring: rgb(255, 153, 204);
+  --font-sans: Geist, ui-sans-serif, sans-serif, system-ui;
+  --font-serif: Aleo, ui-serif, serif;
+  --font-mono: Roboto Mono, monospace;
+  --radius: 1.65rem;
+  --shadow-x: 0px;
+  --shadow-y: 2px;
+  --shadow-blur: 6px;
+  --shadow-spread: 0px;
+  --shadow-opacity: 0.1;
+  --shadow-color: oklch(0 0 0);
+  --shadow-2xs: 0px 2px 6px 0px hsl(0 0% 0% / 0.05);
+  --shadow-xs: 0px 2px 6px 0px hsl(0 0% 0% / 0.05);
+  --shadow-sm: 0px 2px 6px 0px hsl(0 0% 0% / 0.10), 0px 1px 2px -1px hsl(0 0% 0% / 0.10);
+  --shadow: 0px 2px 6px 0px hsl(0 0% 0% / 0.10), 0px 1px 2px -1px hsl(0 0% 0% / 0.10);
+  --shadow-md: 0px 2px 6px 0px hsl(0 0% 0% / 0.10), 0px 2px 4px -1px hsl(0 0% 0% / 0.10);
+  --shadow-lg: 0px 2px 6px 0px hsl(0 0% 0% / 0.10), 0px 4px 6px -1px hsl(0 0% 0% / 0.10);
+  --shadow-xl: 0px 2px 6px 0px hsl(0 0% 0% / 0.10), 0px 8px 10px -1px hsl(0 0% 0% / 0.10);
+  --shadow-2xl: 0px 2px 6px 0px hsl(0 0% 0% / 0.25);
+}
+
+/* Semantic alias layer for component and UI kit generation */
+:root {
+  --color-surface: var(--card);
+  --color-surface-muted: var(--muted);
+  --color-text: var(--foreground);
+  --color-text-muted: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-primary: var(--primary);
+  --color-danger: var(--destructive);
+  --space-1: calc(var(--spacing) * 1);
+  --space-2: calc(var(--spacing) * 2);
+  --space-3: calc(var(--spacing) * 3);
+  --space-4: calc(var(--spacing) * 4);
+  --space-5: calc(var(--spacing) * 5);
+  --space-6: calc(var(--spacing) * 6);
+  --radius-sm: calc(var(--radius) * 0.5);
+  --radius-md: calc(var(--radius) * 0.75);
+  --radius-lg: var(--radius);
+  --shadow-sm: var(--shadow-sm);
+  --shadow-md: var(--shadow-md);
+  --shadow-lg: var(--shadow-lg);
+}
+
+.dark {
+  --color-surface: var(--card);
+  --color-surface-muted: var(--muted);
+  --color-text: var(--foreground);
+  --color-text-muted: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-primary: var(--primary);
+  --color-danger: var(--destructive);
+  --space-1: calc(var(--spacing) * 1);
+  --space-2: calc(var(--spacing) * 2);
+  --space-3: calc(var(--spacing) * 3);
+  --space-4: calc(var(--spacing) * 4);
+  --space-5: calc(var(--spacing) * 5);
+  --space-6: calc(var(--spacing) * 6);
+  --radius-sm: calc(var(--radius) * 0.5);
+  --radius-md: calc(var(--radius) * 0.75);
+  --radius-lg: var(--radius);
+  --shadow-sm: var(--shadow-sm);
+  --shadow-md: var(--shadow-md);
+  --shadow-lg: var(--shadow-lg);
+}

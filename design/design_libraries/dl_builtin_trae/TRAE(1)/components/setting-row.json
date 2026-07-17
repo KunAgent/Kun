@@ -1,0 +1,93 @@
+{
+  "schemaVersion": 2,
+  "slug": "setting-row",
+  "name": "Setting row",
+  "category": "input",
+  "sourceKind": "structured-spec",
+  "confidence": "medium",
+  "semanticTypeCandidates": ["SettingRow", "PreferenceItem", "SettingsListItem"],
+  "variantDimensions": {
+    "control": ["select", "button", "select-with-icon"],
+    "tone": ["default", "danger"]
+  },
+  "representativeVariants": [
+    { "control": "select" },
+    { "control": "button" },
+    { "control": "button", "tone": "danger" },
+    { "control": "select-with-icon" }
+  ],
+  "anatomy": [
+    "main",
+    "title",
+    "desc",
+    "control",
+    "select",
+    "btn",
+    "btn--danger",
+    "iconbtn",
+    "panel",
+    "group",
+    "grouplabel"
+  ],
+  "structurePatterns": [
+    "row is a space-between flex with a main block (title + description) on the left and a control slot on the right",
+    "control is one of three variants — A: .ds-settingrow__select (dropdown trigger), B: .ds-settingrow__btn (action button, optional .ds-settingrow__btn--danger for destructive), C: .ds-settingrow__select + .ds-settingrow__iconbtn pair (select with adjacent icon-button)",
+    "stack multiple rows inside .ds-settingrow__panel; adjacent rows are separated by a top border on the second+ row",
+    "group several panels with a .ds-settingrow__group wrapping a .ds-settingrow__grouplabel header (e.g. 基础设置 / 偏好设置 / 数据管理) followed by a .ds-settingrow__panel"
+  ],
+  "usageHints": [
+    "use the select control for choosing among preset options (theme, language, default-open mode)",
+    "use the button control for triggering actions or opening secondary configuration (去设置 / 导入)",
+    "use .ds-settingrow__btn--danger for destructive actions (清除 / Clear)",
+    "use the select-with-icon pair when the row has both a primary preset choice and a secondary detailed-config entry (e.g. 快捷键设置 + gear icon)",
+    "group related rows in a panel; group multiple panels under a labeled .ds-settingrow__group section"
+  ],
+  "doNotInvent": [
+    "real form submission",
+    "validation errors",
+    "inline expand/collapse",
+    "switch / toggle controls (use .ds-form-switch from forms component if needed)"
+  ],
+  "unknowns": ["disabled row styling", "row hover affordance"],
+  "tokensConsumed": [
+    "--spacer-4", "--spacer-6", "--spacer-8", "--spacer-12", "--spacer-16", "--spacer-24",
+    "--body-md-font-size", "--body-md-line-height",
+    "--body-sm-font-size", "--body-sm-line-height",
+    "--font-weight-medium",
+    "--text-default", "--text-secondary", "--text-tertiary",
+    "--icon-default", "--icon-secondary", "--icon-tertiary",
+    "--bg-base-secondary", "--bg-overlay-l2", "--bg-overlay-l3",
+    "--border-neutral-l1", "--border-neutral-l2",
+    "--radius-6", "--radius-10",
+    "--status-error-default", "--status-error-surface-l1", "--status-error-surface-l2"
+  ],
+  "domAnatomy": {
+    "root": {
+      "tag": "div",
+      "class": "ds-settingrow",
+      "children": [
+        {
+          "tag": "div",
+          "class": "ds-settingrow__main",
+          "children": [
+            { "tag": "span", "class": "ds-settingrow__title" },
+            { "tag": "span", "class": "ds-settingrow__desc" }
+          ]
+        },
+        {
+          "tag": "div",
+          "class": "ds-settingrow__control",
+          "children": [
+            { "tag": "button", "class": "ds-settingrow__select" },
+            { "tag": "button", "class": "ds-settingrow__iconbtn" }
+          ]
+        }
+      ]
+    }
+  },
+  "provenance": {
+    "preview": "preview/component-setting-row.html",
+    "source": "structured-spec",
+    "css": { "file": "components.css", "marker": "── Setting row ──" }
+  }
+}

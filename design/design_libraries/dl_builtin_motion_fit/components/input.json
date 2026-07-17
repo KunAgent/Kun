@@ -1,0 +1,58 @@
+{
+  "slug": "input",
+  "name": "Input",
+  "category": "form",
+  "variantCount": 6,
+  "evidence": "AI-inferred from onboarding, search, and goal setup flows.",
+  "anatomy": [
+    "field",
+    "label",
+    "value",
+    "helperText?"
+  ],
+  "childComponents": [],
+  "cssVariables": [
+    "input",
+    "foreground",
+    "muted-foreground",
+    "border",
+    "ring",
+    "destructive",
+    "destructive-foreground",
+    "radius",
+    "spacing"
+  ],
+  "variantDimensions": {
+    "type": [
+      "text",
+      "search"
+    ],
+    "state": [
+      "default",
+      "focused",
+      "error"
+    ]
+  },
+  "structurePatterns": [
+    "single-line field",
+    "sharp corners",
+    "contrast-led focus ring"
+  ],
+  "structures": [
+    {
+      "name": "Type=Text, State=Default",
+      "layout": "label over field",
+      "copy": "Weekly Goal"
+    },
+    {
+      "name": "Type=Search, State=Focused",
+      "layout": "icon + input",
+      "copy": "Search workout plans"
+    },
+    {
+      "name": "Type=Text, State=Error",
+      "layout": "label + field + helper",
+      "copy": "Target Heart Rate"
+    }
+  ]
+}

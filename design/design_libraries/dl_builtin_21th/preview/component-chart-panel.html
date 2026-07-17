@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>body{margin:0;padding:12px;background:var(--background);color:var(--foreground);font:14px/1.4 var(--font-sans)}.r{display:flex;gap:8px;align-items:flex-start;flex-wrap:wrap}.l{width:100%;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted-foreground)}.d{margin:8px 0;border:0;border-top:1px solid var(--border)}.p{width:236px;padding:12px;border:1px solid var(--border);border-radius:var(--radius);background:var(--card);color:var(--card-foreground);box-shadow:var(--shadow-sm)}.hi{border-color:var(--chart-1);box-shadow:var(--shadow-md)}.off{opacity:.56;filter:saturate(.7)}.h,.a,.f,.g{display:flex;align-items:center}.h,.a,.f{justify-content:space-between}.k,.a,.f,.g{font-size:11px;color:var(--muted-foreground)}h2{margin:2px 0 8px;font-size:16px}.g{gap:8px;flex-wrap:wrap}.g span{display:inline-flex;gap:4px;align-items:center}.g i{width:8px;height:8px;border-radius:99px;background:var(--chart-1)}.g span:nth-child(2) i{background:var(--chart-3)}.g span:nth-child(3) i{background:var(--chart-5)}.plot,.line{height:112px;margin:10px 0 8px;border-radius:calc(var(--radius) - 2px);overflow:hidden;position:relative;background:color-mix(in srgb,var(--muted) 45%,transparent)}.plot{padding:10px 8px 18px;display:flex;align-items:flex-end;gap:8px}.plot:before{content:"";position:absolute;inset:12px 8px 18px;background:linear-gradient(to top,color-mix(in srgb,var(--border) 70%,transparent) 1px,transparent 1px);background-size:100% 26px}.plot b{width:22px;border-radius:99px 99px 4px 4px;z-index:1}.plot b:nth-child(1){height:54px;background:var(--chart-5)}.plot b:nth-child(2){height:82px;background:var(--chart-3)}.plot b:nth-child(3){height:66px;background:var(--chart-4)}.plot b:nth-child(4){height:96px;background:var(--chart-1)}.plot b:nth-child(5){height:74px;background:var(--chart-2)}.plot b:nth-child(6){height:88px;background:var(--chart-1)}.off .plot b{width:16px}.off .plot b:nth-child(1){height:72px;background:var(--chart-1)}.off .plot b:nth-child(2){height:48px;background:var(--chart-2)}.off .plot b:nth-child(3){height:28px;background:var(--chart-4)}.off .plot b:nth-child(4){height:64px;background:var(--chart-1)}.off .plot b:nth-child(5){height:42px;background:var(--chart-2)}.off .plot b:nth-child(6){height:24px;background:var(--chart-4)}.line{background:linear-gradient(180deg,color-mix(in srgb,var(--chart-1) 10%,transparent),transparent),color-mix(in srgb,var(--muted) 45%,transparent)}.line:before{content:"";position:absolute;left:14px;right:14px;top:54px;height:2px;background:linear-gradient(90deg,var(--chart-2) 0 24%,transparent 24% 28%,var(--chart-2) 28% 52%,transparent 52% 56%,var(--chart-2) 56% 100%);transform:rotate(-9deg);transform-origin:left center}.line:after{content:"";position:absolute;left:16px;right:16px;bottom:20px;height:8px;background:radial-gradient(circle at 0 50%,var(--chart-2) 0 4px,transparent 5px),radial-gradient(circle at 30% 20%,var(--chart-2) 0 4px,transparent 5px),radial-gradient(circle at 58% 58%,var(--chart-2) 0 4px,transparent 5px),radial-gradient(circle at 100% 0,var(--chart-2) 0 4px,transparent 5px)}.m{color:var(--chart-2)}</style>
+</head>
+<body>
+<div class="r">
+<span class="l">Default</span>
+<article class="p">
+<div class="h k"><span>Seven-day window</span><span>+12.4%</span></div>
+<h2>Signal Volume</h2>
+<div class="g"><span><i></i>Organic</span><span><i></i>Paid</span><span><i></i>Referral</span></div>
+<div class="plot"><b></b><b></b><b></b><b></b><b></b><b></b></div>
+<div class="a"><span>Mon</span><span>Thu</span><span>Sun</span></div>
+<div class="f"><span>Peak after newsletter send</span><span>4.1K total</span></div>
+</article>
+<article class="p off" aria-disabled="true">
+<div class="h k"><span>Seven-day window</span><span>Paused</span></div>
+<h2>Channel Mix</h2>
+<div class="g"><span><i></i>Search</span><span><i></i>Social</span></div>
+<div class="plot"><b></b><b></b><b></b><b></b><b></b><b></b></div>
+<div class="a"><span>Search</span><span>Social</span><span>Email</span></div>
+<div class="f"><span>Awaiting refresh</span><span>Muted state</span></div>
+</article>
+</div>
+<hr class="d">
+<div class="r">
+<span class="l">Highlighted</span>
+<article class="p hi">
+<div class="h k"><span>Seven-day window</span><span>Anomaly</span></div>
+<h2>Conversion Drift</h2>
+<div class="h k"><span>North America funnel</span><span class="m">Step 3 drop</span></div>
+<div class="line"></div>
+<div class="a"><span>Visit</span><span>Trial</span><span>Paid</span></div>
+<div class="f"><span>Alert threshold crossed</span><span>17% below baseline</span></div>
+</article>
+</div>
+</body>
+</html>

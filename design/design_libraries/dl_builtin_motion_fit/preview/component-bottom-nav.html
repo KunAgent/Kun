@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>body{margin:0;padding:calc(var(--spacing)*3);background:var(--background);color:var(--foreground);font:500 12px/1.35 var(--font-sans)}.row{display:flex;flex-wrap:wrap;gap:calc(var(--spacing)*2);align-items:flex-start;margin-bottom:calc(var(--spacing)*2)}.label{width:100%;font-size:10px;letter-spacing:var(--tracking-normal);text-transform:uppercase;color:var(--muted-foreground);margin:0 0 calc(var(--spacing)*1.5)}.nav{flex:1 1 176px;display:flex;justify-content:space-between;gap:calc(var(--spacing)*.5);padding:calc(var(--spacing)*2.5) calc(var(--spacing)*3) calc(var(--spacing)*2);background:var(--card);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-sm)}.nav.alt{background:var(--sidebar);border-color:var(--sidebar-border);color:var(--sidebar-foreground)}.item{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;gap:calc(var(--spacing)*1.5);padding:calc(var(--spacing)*1.5) calc(var(--spacing)*.5);border-radius:var(--radius);color:var(--muted-foreground)}.nav.alt .item{color:var(--sidebar-foreground);opacity:.72}.item.active{background:var(--secondary);color:var(--primary)}.nav.alt .item.active{background:var(--primary);color:var(--primary-foreground);opacity:1}.nav.disabled{opacity:.48;box-shadow:none}.nav.disabled .item,.nav.disabled .item.active{background:transparent;color:var(--muted-foreground)}.icon{width:18px;height:18px;position:relative;border:2px solid currentColor;border-radius:6px;box-sizing:border-box}.icon:after{content:"";position:absolute;inset:4px;border-radius:inherit;background:currentColor;opacity:.2}.train .icon{border-radius:999px}.stats .icon{border-radius:4px}.profile .icon{border-radius:999px}.profile .icon:after{inset:3px 4px 6px}.text{font-size:11px;white-space:nowrap}.divider{border:0;border-top:1px solid var(--border);margin:calc(var(--spacing)*3) 0}</style>
+</head>
+<body>
+<div class="row">
+<span class="label">Primary</span>
+<nav class="nav" aria-label="Bottom Navigation default">
+<div class="item active home"><span class="icon" aria-hidden="true"></span><span class="text">Home</span></div>
+<div class="item train"><span class="icon" aria-hidden="true"></span><span class="text">Train</span></div>
+<div class="item stats"><span class="icon" aria-hidden="true"></span><span class="text">Stats</span></div>
+<div class="item profile"><span class="icon" aria-hidden="true"></span><span class="text">Profile</span></div>
+</nav>
+<nav class="nav disabled" aria-label="Bottom Navigation disabled" aria-disabled="true">
+<div class="item active home"><span class="icon" aria-hidden="true"></span><span class="text">Home</span></div>
+<div class="item train"><span class="icon" aria-hidden="true"></span><span class="text">Train</span></div>
+<div class="item stats"><span class="icon" aria-hidden="true"></span><span class="text">Stats</span></div>
+<div class="item profile"><span class="icon" aria-hidden="true"></span><span class="text">Profile</span></div>
+</nav>
+</div>
+<hr class="divider">
+<div class="row">
+<span class="label">Secondary</span>
+<nav class="nav alt" aria-label="Bottom Navigation profile active">
+<div class="item home"><span class="icon" aria-hidden="true"></span><span class="text">Home</span></div>
+<div class="item train"><span class="icon" aria-hidden="true"></span><span class="text">Train</span></div>
+<div class="item stats"><span class="icon" aria-hidden="true"></span><span class="text">Stats</span></div>
+<div class="item active profile"><span class="icon" aria-hidden="true"></span><span class="text">Profile</span></div>
+</nav>
+</div>
+</body>
+</html>

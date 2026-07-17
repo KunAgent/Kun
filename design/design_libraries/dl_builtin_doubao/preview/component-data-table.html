@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="stylesheet" href="../colors_and_type.css">
+<title>Data Table · 豆包</title>
+<style>
+  /* Page scaffold — NOT extracted */
+  /* @component-css-start */
+  *{box-sizing:border-box}
+  body{margin:0;padding:24px;background:var(--background);color:var(--foreground);font-family:var(--font-sans);font-size:14px;line-height:1.4}
+  .panel{max-width:760px;border:1px solid var(--border);border-radius:14px;background:var(--card);overflow:hidden}
+  .head{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--border)}
+  .head h2{margin:0;font-size:15px;font-weight:600}
+  .head .sub{font-size:12px;color:var(--muted-foreground)}
+  .spacer{flex:1}
+  .btn{display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 13px;border:1px solid var(--border);border-radius:999px;background:var(--background);color:var(--foreground);font:500 12px var(--font-sans);cursor:pointer}
+  .btn:hover{background:var(--muted)}
+  table{width:100%;border-collapse:collapse}
+  th{text-align:left;font:600 11px/1 var(--font-mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted-foreground);padding:11px 16px;border-bottom:1px solid var(--border)}
+  td{padding:13px 16px;border-bottom:1px solid color-mix(in srgb,var(--border) 60%,transparent);font-size:13px}
+  tr:last-child td{border-bottom:0}
+  tbody tr{transition:background .12s}
+  tbody tr:hover{background:color-mix(in srgb,var(--accent) 16%,transparent)}
+  tr.selected{background:color-mix(in srgb,var(--accent) 26%,transparent)}
+  .name{display:flex;align-items:center;gap:10px;font-weight:500}
+  .ic{width:28px;height:28px;flex:none;border-radius:8px;display:grid;place-items:center;font-size:14px;color:var(--primary-foreground)}
+  .status-chip{display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:999px;font:500 12px var(--font-sans)}
+  .status-chip::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}
+  .ok{background:color-mix(in srgb,var(--chart-2) 18%,transparent);color:var(--chart-2)}
+  .run{background:color-mix(in srgb,var(--chart-1) 16%,transparent);color:var(--chart-1)}
+  .wait{background:color-mix(in srgb,var(--muted-foreground) 16%,transparent);color:var(--muted-foreground)}
+  .metric{font-variant-numeric:tabular-nums;font-weight:600}
+  .trend-up{color:var(--chart-2);font-size:12px}
+  .trend-down{color:var(--destructive);font-size:12px}
+  .muted{color:var(--muted-foreground)}
+  .act{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border:0;border-radius:8px;background:transparent;color:var(--muted-foreground);cursor:pointer}
+  .act:hover{background:var(--muted);color:var(--foreground)}
+  .cb{width:16px;height:16px;accent-color:var(--primary)}
+  .icon{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+  /* @component-css-end */
+</style>
+</head>
+<body>
+<svg style="display:none" xmlns="http://www.w3.org/2000/svg">
+  <symbol id="filter" viewBox="0 0 24 24"><path d="M4 5h16l-6 7v5l-4 2v-7L4 5Z"/></symbol>
+  <symbol id="dots" viewBox="0 0 24 24"><path d="M12 6h.01M12 12h.01M12 18h.01"/></symbol>
+</svg>
+
+<div class="panel">
+  <div class="head">
+    <h2>智能体运行</h2>
+    <span class="sub">· 4 个任务</span>
+    <span class="spacer"></span>
+    <button class="btn"><svg class="icon"><use href="#filter"/></svg>筛选</button>
+  </div>
+  <table>
+    <thead>
+      <tr>
+        <th style="width:36px"><input class="cb" type="checkbox" aria-label="全选"></th>
+        <th>任务</th>
+        <th>状态</th>
+        <th>对话量</th>
+        <th>更新</th>
+        <th style="width:48px"></th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr class="selected">
+        <td><input class="cb" type="checkbox" checked aria-label="选择"></td>
+        <td><span class="name"><span class="ic" style="background:linear-gradient(135deg,var(--chart-1),var(--chart-2))">✍️</span>全能写作助手</span></td>
+        <td><span class="status-chip run">运行中</span></td>
+        <td><span class="metric">1384.1万</span> <span class="trend-up">↑ 12%</span></td>
+        <td class="muted">2 分钟前</td>
+        <td><button class="act" aria-label="更多"><svg class="icon"><use href="#dots"/></svg></button></td>
+      </tr>
+      <tr>
+        <td><input class="cb" type="checkbox" aria-label="选择"></td>
+        <td><span class="name"><span class="ic" style="background:linear-gradient(135deg,var(--chart-2),var(--primary))">🖼️</span>识图生成提示词</span></td>
+        <td><span class="status-chip ok">已完成</span></td>
+        <td><span class="metric">111.1万</span> <span class="trend-up">↑ 4%</span></td>
+        <td class="muted">1 小时前</td>
+        <td><button class="act" aria-label="更多"><svg class="icon"><use href="#dots"/></svg></button></td>
+      </tr>
+      <tr>
+        <td><input class="cb" type="checkbox" aria-label="选择"></td>
+        <td><span class="name"><span class="ic" style="background:linear-gradient(135deg,var(--chart-2),var(--chart-4))">📊</span>EXCEL大全</span></td>
+        <td><span class="status-chip ok">已完成</span></td>
+        <td><span class="metric">24.6万</span> <span class="trend-down">↓ 2%</span></td>
+        <td class="muted">昨天</td>
+        <td><button class="act" aria-label="更多"><svg class="icon"><use href="#dots"/></svg></button></td>
+      </tr>
+      <tr>
+        <td><input class="cb" type="checkbox" aria-label="选择"></td>
+        <td><span class="name"><span class="ic" style="background:linear-gradient(135deg,var(--muted-foreground),var(--foreground))">📄</span>论文助手</span></td>
+        <td><span class="status-chip wait">排队中</span></td>
+        <td class="muted">—</td>
+        <td class="muted">3 天前</td>
+        <td><button class="act" aria-label="更多"><svg class="icon"><use href="#dots"/></svg></button></td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+</body>
+</html>

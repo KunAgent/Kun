@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Goldentime Card Preview</title>
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>body{margin:0;padding:12px;background:hsl(var(--background));color:hsl(var(--foreground));font:14px/1.45 var(--font-sans)}.row{display:flex;gap:8px;align-items:flex-start;flex-wrap:wrap}.label{padding:calc(var(--spacing)*2) 0 0;min-width:72px;color:hsl(var(--muted-foreground));font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase}.divider{margin:8px 0;border:0;border-top:1px solid hsl(var(--border))}.card{display:flex;flex-direction:column;gap:calc(var(--spacing)*2.5);min-width:220px;max-width:240px;padding:calc(var(--spacing)*4);background:hsl(var(--card));color:hsl(var(--card-foreground));border:1px solid hsl(var(--border));border-radius:var(--radius);box-shadow:var(--shadow-xs);text-decoration:none;transition:border-color .2s,box-shadow .2s,transform .2s}.card:hover{box-shadow:var(--shadow-sm);transform:translateY(-1px)}.card:focus-visible{outline:none;box-shadow:0 0 0 2px hsl(var(--ring))}.card.selected{background:hsl(var(--accent));color:hsl(var(--accent-foreground));border-color:hsl(var(--accent))}.card.disabled{opacity:.52;pointer-events:none}.eyebrow,.meta,.foot{color:hsl(var(--muted-foreground));font-size:11px}.selected .eyebrow,.selected .meta,.selected .foot{color:inherit;opacity:.82}.title{margin:0;font-size:18px;line-height:1.1}.metric{font-size:28px;line-height:1;font-weight:700}.foot{display:flex;justify-content:space-between;gap:8px;padding-top:calc(var(--spacing)*1.5);border-top:1px solid hsl(var(--border))}.selected .foot{border-color:color-mix(in srgb,hsl(var(--accent-foreground)) 18%,transparent)}</style>
+</head>
+<body>
+<div class="row">
+<span class="label">standard</span>
+<article class="card">
+<span class="eyebrow">Goldentime dashboard</span>
+<h1 class="title">Quarterly brief</h1>
+<span class="meta">Board summary for the membership team</span>
+<strong class="metric">18</strong>
+<span class="meta">priority actions opened this week</span>
+<div class="foot"><span>Review notes</span><span>2h ago</span></div>
+</article>
+<article class="card disabled" aria-disabled="true">
+<span class="eyebrow">Sync paused</span>
+<h1 class="title">Active members</h1>
+<span class="meta">Live seat count is temporarily unavailable</span>
+<strong class="metric">12,480</strong>
+<span class="meta">awaiting finance refresh</span>
+<div class="foot"><span>Retry later</span><span>Disabled</span></div>
+</article>
+</div>
+<hr class="divider">
+<div class="row">
+<span class="label">interactive</span>
+<a class="card" href="#" aria-label="Open renewal outlook details">
+<span class="eyebrow">Forecast</span>
+<h1 class="title">Renewal outlook</h1>
+<span class="meta">Accounts likely to renew in the next 90 days</span>
+<strong class="metric">84%</strong>
+<span class="meta">steady against last quarter</span>
+<div class="foot"><span>Open forecast</span><span>See cohort</span></div>
+</a>
+<a class="card selected" href="#" aria-label="Open highlighted quarterly brief">
+<span class="eyebrow">Highlighted</span>
+<h1 class="title">Quarterly brief</h1>
+<span class="meta">Goldentime executive readout ready for review</span>
+<strong class="metric">3</strong>
+<span class="meta">briefs awaiting approval</span>
+<div class="foot"><span>Share update</span><span>Selected</span></div>
+</a>
+</div>
+</body>
+</html>

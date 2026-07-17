@@ -1,0 +1,48 @@
+{
+  "slug": "table",
+  "name": "Table",
+  "category": "Data Display",
+  "variantCount": 5,
+  "evidence": "AI-inferred from dashboard product type and chart/sidebar token presence.",
+  "anatomy": [
+    "table-shell",
+    "header-row",
+    "data-row",
+    "status-pill",
+    "cell-meta"
+  ],
+  "variantDimensions": {
+    "density": [
+      "compact",
+      "default"
+    ],
+    "rowState": [
+      "default",
+      "selected",
+      "alert"
+    ],
+    "columns": [
+      "4-col",
+      "5-col"
+    ]
+  },
+  "structures": [
+    {
+      "name": "Operations Table, Default",
+      "notes": "High-contrast rows with quiet separators."
+    },
+    {
+      "name": "Alert Table, Highlighted",
+      "notes": "Uses destructive accents for urgent records."
+    },
+    {
+      "name": "Compact Queue Table",
+      "notes": "Optimized for narrow content panels."
+    }
+  ],
+  "uiCopySamples": [
+    "Node",
+    "Status",
+    "Uptime"
+  ]
+}

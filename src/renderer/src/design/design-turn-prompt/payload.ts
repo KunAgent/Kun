@@ -23,6 +23,7 @@ import { mergeDesignContextWithTokens } from '../design-context'
 import { buildDesignTurnPrompt } from './entry'
 import type { DesignFrameContext, DesignTurnTarget, ScreenManifestEntry } from './shared'
 import { buildPrototypeHref } from './shared'
+import { loadSelectedDesignContextSummary } from '../context/design-context-summary'
 
 type PromptWorkspaceState = Pick<
   DesignWorkspaceState,
@@ -166,7 +167,7 @@ export async function buildDesignTurnPromptPayload(
     targets: options.visibleTargets,
     canvasArtifact: options.boardArtifact
   })
-  const prompt = buildDesignTurnPrompt({
+  const basePrompt = buildDesignTurnPrompt({
     target: options.target,
     mode: options.mode,
     text: options.promptText,
@@ -194,5 +195,9 @@ export async function buildDesignTurnPromptPayload(
       screenManifest
     } : {})
   })
+  const selectedDesignContext = await loadSelectedDesignContextSummary(options.workspaceRoot)
+  const prompt = selectedDesignContext
+    ? `${basePrompt}\n\n${selectedDesignContext}`
+    : basePrompt
   return { prompt, promptState: options.promptState }
 }

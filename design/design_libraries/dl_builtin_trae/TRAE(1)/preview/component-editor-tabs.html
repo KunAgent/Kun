@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Editor Tabs</title>
+  <link rel="stylesheet" href="../colors_and_type.css" />
+  <link rel="stylesheet" href="../scaffold.css" />
+  <link rel="stylesheet" href="../components.css" />
+  <style>
+    /* @component-css-start */
+    /* ===== Editor Tabs ===== */
+    .ds-editortabs {
+      display: flex;
+      align-items: stretch;
+      border-bottom: 1px solid var(--border-neutral-l1);
+      background-color: var(--bg-base-default);
+      background-image: linear-gradient(var(--special-bgtabsoverlay), var(--special-bgtabsoverlay));
+    }
+    .ds-editortab {
+      display: inline-flex;
+      align-items: center;
+      column-gap: 8px;
+      padding: 0 14px;
+      height: 40px;
+      color: var(--text-secondary);
+      font-size: 12px;
+      font-weight: 500;
+      border-right: 1px solid var(--border-neutral-l1);
+      cursor: pointer;
+      white-space: nowrap;
+      background: transparent;
+      min-width: 0;
+    }
+    .ds-editortab:hover {
+      color: var(--text-default);
+      background-image: linear-gradient(var(--bg-overlay-l1), var(--bg-overlay-l1));
+    }
+    .ds-editortab.is-active {
+      background: var(--bg-base-secondary);
+      color: var(--text-default);
+      box-shadow: inset 0 1px 0 0 var(--icon-default);
+    }
+    .ds-editortab.is-active:hover { background: var(--bg-base-secondary); }
+    .ds-editortab .ic {
+      width: 14px; height: 14px;
+      flex-shrink: 0;
+      display: inline-flex; align-items: center; justify-content: center;
+    }
+    .ds-editortab .close {
+      width: 16px; height: 16px;
+      display: inline-flex; align-items: center; justify-content: center;
+      color: var(--icon-tertiary);
+    }
+    .ds-editortab.is-active .close { color: var(--icon-secondary); }
+    .ds-editortabs__spacer { flex: 1; min-width: 0; border-right: 0; }
+    .ds-editortabs__actions {
+      display: inline-flex;
+      align-items: center;
+      column-gap: 4px;
+      padding: 0 8px;
+      color: var(--icon-secondary);
+    }
+    .ds-editortabs__actions button {
+      width: 24px; height: 24px;
+      display: inline-flex; align-items: center; justify-content: center;
+      background: transparent; border: 0;
+      color: inherit;
+      cursor: pointer;
+      border-radius: 4px;
+    }
+    .ds-editortabs__actions button:hover {
+      color: var(--icon-default);
+      background: var(--bg-overlay-l1);
+    }
+    /* @component-css-end */
+  </style>
+</head>
+<body>
+  <div class="pv-header">
+    <h1>Editor Tabs</h1>
+    <p>IDE-style closable file tabs with a flex spacer pushing trailing layout/split icon buttons to the right. Active tab gets a 1px inset top indicator and a lifted <code>--bg-base-secondary</code> surface. Distinct from <code>.ds-tabs</code>, which is for content-section navigation.</p>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">Active + closable + trailing actions</div>
+    <div class="ds-editortabs">
+      <span class="ds-editortab is-active" role="tab" aria-selected="true">
+        <span class="ic"><img src="../assets/icons/file.svg" width="14" height="14" alt="" class="icon"></span>
+        <span>App.tsx</span>
+        <span class="close"><img src="../assets/icons/x.svg" width="12" height="12" alt="close" class="icon"></span>
+      </span>
+      <span class="ds-editortab" role="tab" aria-selected="false">
+        <span class="ic"><img src="../assets/icons/file.svg" width="14" height="14" alt="" class="icon"></span>
+        <span>global.css</span>
+      </span>
+      <span class="ds-editortab" role="tab" aria-selected="false">
+        <span class="ic"><img src="../assets/icons/file.svg" width="14" height="14" alt="" class="icon"></span>
+        <span>tailwind.config.mjs</span>
+      </span>
+      <span class="ds-editortabs__spacer"></span>
+      <span class="ds-editortabs__actions">
+        <button aria-label="Split editor right"><img src="../assets/icons/columns.svg" width="14" height="14" alt="" class="icon"></button>
+        <button aria-label="Toggle layout"><img src="../assets/icons/layout.svg" width="14" height="14" alt="" class="icon"></button>
+        <button aria-label="More actions"><img src="../assets/icons/more-h.svg" width="14" height="14" alt="" class="icon"></button>
+      </span>
+    </div>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">Single open file</div>
+    <div class="ds-editortabs">
+      <span class="ds-editortab is-active" role="tab" aria-selected="true">
+        <span class="ic"><img src="../assets/icons/file.svg" width="14" height="14" alt="" class="icon"></span>
+        <span>package.json</span>
+        <span class="close"><img src="../assets/icons/x.svg" width="12" height="12" alt="close" class="icon"></span>
+      </span>
+      <span class="ds-editortabs__spacer"></span>
+      <span class="ds-editortabs__actions">
+        <button aria-label="Split editor right"><img src="../assets/icons/columns.svg" width="14" height="14" alt="" class="icon"></button>
+        <button aria-label="More actions"><img src="../assets/icons/more-h.svg" width="14" height="14" alt="" class="icon"></button>
+      </span>
+    </div>
+  </div>
+
+</body>
+</html>

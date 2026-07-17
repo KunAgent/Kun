@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>body{margin:0;padding:12px;background:var(--background);color:var(--foreground);font:12px/1.4 var(--font-sans)}.row{display:flex;gap:8px;align-items:flex-start;flex-wrap:wrap}.label{width:100%;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted-foreground)}.divider{margin:8px 0;border:0;border-top:1px solid var(--border)}.sheet{min-width:248px;flex:1;background:var(--card);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-xs);overflow:hidden}.sheet.disabled{opacity:.55;filter:saturate(.6);pointer-events:none}.tight td,.tight th{padding:6px 10px}.title{padding:8px 10px;border-bottom:1px solid var(--border);color:var(--muted-foreground)}table{width:100%;border-collapse:collapse}th,td{padding:8px 10px;text-align:left;border-bottom:1px solid var(--border)}th{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted-foreground)}tbody tr:hover{background:var(--muted)}.focus{background:var(--muted)}.negative td:last-child{color:var(--destructive)}.chip{display:inline-block;padding:2px 8px;border:1px solid var(--border);border-radius:var(--radius);background:var(--muted);color:var(--foreground)}.chip.live{background:var(--accent);color:var(--accent-foreground);border-color:var(--accent)}.delta{font-variant-numeric:tabular-nums}.up{color:var(--accent)}.down{color:var(--destructive)}</style>
+</head>
+<body>
+<div class="row">
+<span class="label">Default</span>
+<div class="sheet">
+<div class="title">Workspace health</div>
+<table><thead><tr><th>Workspace</th><th>Owner</th><th>Status</th><th>Variance</th></tr></thead><tbody><tr><td>Northstar Ops</td><td>A. Patel</td><td><span class="chip live">Live</span></td><td class="delta up">+4.2%</td></tr><tr class="focus"><td>Revenue QA</td><td>M. Chen</td><td><span class="chip">Review</span></td><td class="delta">+0.6%</td></tr><tr><td>Forecast Sync</td><td>J. Rivera</td><td><span class="chip">Queued</span></td><td class="delta down">-1.1%</td></tr></tbody></table>
+</div>
+<div class="sheet disabled" aria-disabled="true">
+<div class="title">Workspace health</div>
+<table><thead><tr><th>Workspace</th><th>Owner</th><th>Status</th><th>Variance</th></tr></thead><tbody><tr><td>Audit Board</td><td>S. Kim</td><td><span class="chip">Paused</span></td><td class="delta">0.0%</td></tr><tr><td>Margin Watch</td><td>L. Gomez</td><td><span class="chip">Locked</span></td><td class="delta down">-2.4%</td></tr></tbody></table>
+</div>
+</div>
+<hr class="divider">
+<div class="row">
+<span class="label">Highlighted</span>
+<div class="sheet tight">
+<table><thead><tr><th>Workspace</th><th>Owner</th><th>Status</th><th>Variance</th></tr></thead><tbody><tr class="focus"><td>Pipeline Pulse</td><td>D. Brooks</td><td><span class="chip live">Selected</span></td><td class="delta up">+7.8%</td></tr><tr class="negative"><td>Returns Risk</td><td>R. Singh</td><td><span class="chip">Escalated</span></td><td class="delta">-6.3%</td></tr><tr><td>Coverage Map</td><td>T. Hall</td><td><span class="chip">Stable</span></td><td class="delta">+1.2%</td></tr></tbody></table>
+</div>
+</div>
+</body>
+</html>

@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>StatusTag 状态标签</title>
+  <link rel="stylesheet" href="preview-scaffold.css">
+  <style>
+    .status-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      height: 20px;
+      padding: 0 6px;
+      border: 1px solid;
+      border-radius: 4px;
+      font-size: 12px;
+      line-height: 18px;
+      font-weight: 400;
+      white-space: nowrap;
+      box-sizing: border-box;
+      font-family: "PingFang SC", "Microsoft YaHei", -apple-system, sans-serif;
+    }
+    .status-tag-icon { width: 14px; height: 14px; flex-shrink: 0; }
+    .status-tag-success    { background: #E8FFEA; color: #00B42A; border-color: #AFF0B5; }
+    .status-tag-warning    { background: #FFF7E8; color: #FF7D00; border-color: #FFD591; }
+    .status-tag-error      { background: #FFECE8; color: #F53F3F; border-color: #FBACA3; }
+    .status-tag-stop       { background: #F1F3F5; color: #80838A; border-color: #DDE2E9; }
+    .status-tag-processing { background: #EBF1FF; color: #1664FF; border-color: #97BCFF; }
+    .status-tag-loading    { background: #EBF1FF; color: #1664FF; border-color: #97BCFF; }
+    .status-tag-waiting    { background: #F5E8FF; color: #722ED1; border-color: #C28FEF; }
+  </style>
+</head>
+<body>
+  <div class="pv-header">
+    <h1>StatusTag 状态标签</h1>
+    <p>语义化状态标签，通过彩色图标与背景色快速传达业务状态（成功、告警、错误、停止、进行中等）。</p>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">所有状态</div>
+    <div class="row">
+      <span class="status-tag status-tag-success" data-component="status-tag" data-variant="success">
+        <span class="status-tag-icon"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 -0.5 49 49" fill="none"><path fill-rule="evenodd" clip-rule="evenodd" d="M44.225 25.998c0 11.025-8.938 19.963-19.963 19.963S4.299 37.023 4.299 25.998 13.237 6.035 24.262 6.035s19.963 8.938 19.963 19.963z" fill="#141414" fill-opacity=".08"/><path d="M24.223 44.003c11.047 0 20.002-8.955 20.002-20.001C44.225 12.955 35.27 4 24.223 4 13.177 4 4.222 12.955 4.222 24.002c0 11.046 8.955 20.001 20.001 20.001z" fill="#309256"/><path fill-rule="evenodd" clip-rule="evenodd" d="M24.223 40.67c9.206 0 16.668-7.463 16.668-16.668 0-9.206-7.462-16.668-16.668-16.668-9.205 0-16.668 7.462-16.668 16.668 0 9.205 7.463 16.668 16.668 16.668zm20.002-16.668c0 11.046-8.955 20.001-20.002 20.001-11.046 0-20.001-8.955-20.001-20.001C4.222 12.955 13.177 4 24.223 4c11.047 0 20.002 8.955 20.002 20.002z" fill="#2A814B"/><path fill-rule="evenodd" clip-rule="evenodd" d="M33.32 19.085l1.372 1.372a.97.97 0 010 1.373L23.713 32.809a.966.966 0 01-.515.269l-.114.013h-.114a.967.967 0 01-.63-.282l-6.175-6.176a.97.97 0 010-1.372l1.373-1.373a.97.97 0 011.372 0l4.117 4.117 8.92-8.92a.97.97 0 011.373 0z" fill="#141414" fill-opacity=".2"/><path fill-rule="evenodd" clip-rule="evenodd" d="M32.32 18.086l1.373 1.372a.97.97 0 010 1.373L22.714 31.81a.967.967 0 01-.515.269l-.114.013h-.114a.967.967 0 01-.63-.282l-6.175-6.176a.97.97 0 010-1.372l1.372-1.373a.97.97 0 011.373 0l4.117 4.117 8.92-8.92a.97.97 0 011.373 0z" fill="#fff"/></svg></span>
+        成功
+      </span>
+      <span class="status-tag status-tag-warning" data-component="status-tag" data-variant="warning">
+        <span class="status-tag-icon"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 -0.5 49 49" fill="none"><path fill-rule="evenodd" clip-rule="evenodd" d="M44.274 25.993c0 11.04-8.949 19.988-19.988 19.988-11.04 0-19.99-8.949-19.99-19.988 0-11.04 8.95-19.99 19.99-19.99s19.988 8.95 19.988 19.99z" fill="#141414" fill-opacity=".08"/><path d="M4.297 24c0-11.047 8.953-20 20-20s20 8.953 20 20-8.953 20-20 20-20-8.953-20-20z" fill="#F0A50F"/><path fill-rule="evenodd" clip-rule="evenodd" d="M24.297 7.333C15.091 7.333 7.63 14.794 7.63 24c0 9.206 7.461 16.667 16.667 16.667 9.206 0 16.667-7.46 16.667-16.667 0-9.206-7.461-16.667-16.667-16.667zm0-3.333c-11.047 0-20 8.953-20 20s8.953 20 20 20 20-8.953 20-20-8.953-20-20-20z" fill="#D08D06"/><path fill-rule="evenodd" clip-rule="evenodd" d="M26.123 29.702c.55 0 .996.446.996.995v2.589c0 .55-.446.995-.996.995h-2.588a.995.995 0 01-.996-.995v-2.589c0-.55.446-.995.996-.995h2.588zm0-14.622c.55 0 .996.446.996.996v10.473c0 .55-.446.996-.996.996h-2.588a.995.995 0 01-.996-.996V16.076c0-.55.446-.996.996-.996h2.588z" fill="#141414" fill-opacity=".2"/><path fill-rule="evenodd" clip-rule="evenodd" d="M25.128 28.707c.55 0 .995.445.995.995v2.589c0 .55-.445.995-.995.995H22.54a.996.996 0 01-.996-.995v-2.589c0-.55.446-.995.995-.995h2.589zm0-14.622c.55 0 .995.446.995.995v10.474c0 .55-.445.996-.995.996H22.54a.996.996 0 01-.996-.996V15.081c0-.55.446-.996.995-.996h2.589z" fill="#fff"/></svg></span>
+        告警
+      </span>
+      <span class="status-tag status-tag-error" data-component="status-tag" data-variant="error">
+        <span class="status-tag-icon"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 -0.5 49 49" fill="none"><path fill-rule="evenodd" clip-rule="evenodd" d="M44.573 26.078c0 10.994-8.913 19.906-19.907 19.906S4.76 37.072 4.76 26.077c0-10.994 8.912-19.906 19.906-19.906 10.994 0 19.907 8.912 19.907 19.907z" fill="#141414" fill-opacity=".08"/><path d="M24.48 43.991c11.017 0 19.949-8.931 19.949-19.95 0-11.017-8.932-19.948-19.95-19.948-11.017 0-19.949 8.931-19.949 19.949 0 11.017 8.932 19.95 19.95 19.95z" fill="#EE3F38"/><path fill-rule="evenodd" clip-rule="evenodd" d="M24.573 40.666c9.205 0 16.666-7.462 16.666-16.666 0-9.205-7.461-16.667-16.666-16.667S7.907 14.795 7.907 24c0 9.204 7.461 16.666 16.666 16.666zm20-16.666c0 11.045-8.954 20-20 20s-20-8.955-20-20c0-11.046 8.954-20 20-20s20 8.954 20 20z" fill="#D7312A"/><path fill-rule="evenodd" clip-rule="evenodd" d="M30.614 16.545l1.407 1.408a1.138 1.138 0 010 1.608l-4.526 4.525 4.526 4.526a1.138 1.138 0 010 1.609l-1.407 1.407a1.137 1.137 0 01-1.61 0l-4.526-4.527-4.522 4.526a1.138 1.138 0 01-1.609 0l-1.407-1.408a1.138 1.138 0 010-1.609l4.52-4.524-4.52-4.523a1.138 1.138 0 010-1.609l1.407-1.407a1.138 1.138 0 011.609 0l4.522 4.522 4.527-4.524a1.138 1.138 0 011.609 0z" fill="#fff"/></svg></span>
+        错误
+      </span>
+      <span class="status-tag status-tag-stop" data-component="status-tag" data-variant="stop">
+        <span class="status-tag-icon"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 14 14" fill="none"><path fill-rule="evenodd" clip-rule="evenodd" d="M12.835 7.58a5.802 5.802 0 11-11.605 0 5.802 5.802 0 0111.605 0z" fill="#141414" fill-opacity=".08"/><path d="M7.001 1.166a5.833 5.833 0 110 11.667 5.833 5.833 0 010-11.667z" fill="#737A87"/><path fill-rule="evenodd" clip-rule="evenodd" d="M11.862 7A4.861 4.861 0 102.14 7a4.861 4.861 0 009.722 0zm.973 0A5.833 5.833 0 101.168 7a5.833 5.833 0 0011.667 0z" fill="#676B72"/><path fill-rule="evenodd" clip-rule="evenodd" d="M9.452 7.476c0 .08-.065.145-.145.145H4.633a.145.145 0 01-.145-.145v-.953c0-.08.065-.145.145-.145h4.674c.08 0 .145.065.145.145v.953z" fill="#fff"/></svg></span>
+        已停止
+      </span>
+      <span class="status-tag status-tag-processing" data-component="status-tag" data-variant="processing">
+        <span class="status-tag-icon"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 -0.5 49 49" fill="none"><path d="M24.214 43.986c11.042 0 19.993-8.95 19.993-19.993C44.207 12.951 35.256 4 24.214 4 13.172 4 4.22 12.951 4.22 23.993c0 11.042 8.95 19.993 19.993 19.993z" fill="#387BFF"/><path fill-rule="evenodd" clip-rule="evenodd" d="M24.214 40.654c9.202 0 16.66-7.46 16.66-16.66 0-9.202-7.459-16.662-16.66-16.662-9.202 0-16.661 7.46-16.661 16.661 0 9.202 7.46 16.661 16.66 16.661zm19.993-16.66c0 11.041-8.951 19.992-19.993 19.992-11.042 0-19.993-8.95-19.993-19.993C4.22 12.951 13.17 4 24.214 4c11.042 0 19.993 8.951 19.993 19.993z" fill="#1664FF"/><path fill-rule="evenodd" clip-rule="evenodd" d="M34.215 24.453v2.222a1.11 1.11 0 01-1.11 1.11h-11.53c-.236 0-.455-.073-.635-.198l-.103-.082-.093-.093a1.106 1.106 0 01-.28-.737V15.107c0-.613.497-1.11 1.11-1.11h2.222c.614 0 1.111.497 1.111 1.11v8.235h8.197c.614 0 1.11.498 1.11 1.111z" fill="#fff"/></svg></span>
+        进行中
+      </span>
+      <span class="status-tag status-tag-loading" data-component="status-tag" data-variant="loading">
+        <span class="status-tag-icon"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none"><path fill-rule="evenodd" clip-rule="evenodd" d="M13.8 5.85c-1.3-.4-2.7-.35-4 .15-1.3.5-2.4 1.35-3.15 2.5S5.55 11 5.6 12.4c.05 1.4.6 2.7 1.5 3.75.9 1.05 2.1 1.8 3.45 2.1 1.35.3 2.75.2 4-.4.9-.4 1.95 0 2.35.9.4.9 0 1.95-.9 2.35-1.95.85-4.15 1.1-6.25.6-2.1-.5-4-1.65-5.4-3.25C3 16.85 2.15 14.8 2 12.65c-.1-2.15.45-4.3 1.6-6.1 1.2-1.8 2.9-3.2 4.95-3.9 2-.75 4.25-.8 6.3-.2C16.9 3.05 18.75 4.3 20 6c1.3 1.75 2 3.8 2 6 0 1-.8 1.8-1.8 1.8s-1.8-.8-1.8-1.8c0-1.4-.45-2.7-1.25-3.85-.85-1.1-2-1.9-3.35-2.3z" fill="url(#loading_grad1)"/><defs><linearGradient id="loading_grad1" x1="13.215" y1="6.907" x2="10.715" y2="16.283" gradientUnits="userSpaceOnUse"><stop stop-color="#309256"/><stop offset="1" stop-color="#309256" stop-opacity="0"/></linearGradient></defs></svg></span>
+        加载中
+      </span>
+      <span class="status-tag status-tag-waiting" data-component="status-tag" data-variant="waiting">
+        <span class="status-tag-icon"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M2.5 11.93a9.43 9.43 0 019.43-9.43 9.43 9.43 0 019.43 9.43 9.43 9.43 0 01-9.43 9.43 9.43 9.43 0 01-9.43-9.43z" fill="#F0A50F" stroke="#D08D06" stroke-width="2"/><path fill-rule="evenodd" clip-rule="evenodd" d="M16.752 12.219v1.055a.528.528 0 01-.528.528h-5.478a.525.525 0 01-.302-.095l-.049-.038-.044-.044a.526.526 0 01-.133-.35V7.777c0-.292.236-.528.528-.528H11.8c.292 0 .528.236.528.528v3.913h3.895c.291 0 .528.236.528.528z" fill="#fff"/></svg></span>
+        待启用
+      </span>
+    </div>
+  </div>
+</body>
+</html>

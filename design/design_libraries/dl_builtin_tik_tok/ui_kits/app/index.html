@@ -1,0 +1,774 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TikTok App UI Kit</title>
+  <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.24.7/babel.min.js"></script>
+  <script src="https://code.iconify.design/iconify-icon/2.1.0/iconify-icon.min.js"></script>
+  <style>
+    /* TikTok color and type tokens (inlined from colors_and_type.css for portability) */
+    :root {
+      --tk-red-100: #FFE9EE; --tk-red-200: #FFC9D5; --tk-red-300: #FFA0B5; --tk-red-400: #FF6485; --tk-red-500: #FE2C55;
+      --tk-red-600: #E61E45; --tk-red-700: #C01338; --tk-red-800: #990C2B; --tk-red-900: #6B061D; --tk-red-1000: #3D0210;
+      --tk-cyan-100: #E3FEFD; --tk-cyan-200: #BAFCFA; --tk-cyan-300: #7CF8F4; --tk-cyan-400: #25F4EE; --tk-cyan-500: #14D6D0;
+      --tk-cyan-600: #0FB3AE; --tk-cyan-700: #0C8F8B; --tk-cyan-800: #086B68; --tk-cyan-900: #054745; --tk-cyan-1000: #022322;
+      --tk-black-100: #EBEBED; --tk-black-200: #D2D3D7; --tk-black-300: #ABACB4; --tk-black-400: #84868F; --tk-black-500: #5D5F6B;
+      --tk-black-600: #44454F; --tk-black-700: #313340; --tk-black-800: #232533; --tk-black-900: #1B1D29; --tk-black-1000: #161823;
+      --tk-white-100: #FFFFFF; --tk-white-200: #FAFAFB; --tk-white-300: #F2F2F4; --tk-white-400: #E8E8EC; --tk-white-500: #DCDCE2;
+      --tk-white-600: #C9C9D1; --tk-white-700: #ABABB5; --tk-white-800: #87878F; --tk-white-900: #5E5E66; --tk-white-1000: #36363B;
+
+      /* Brand */
+      --primary: #FE2C55;
+      --secondary: #25F4EE;
+
+      /* Surface */
+      --background: #0B0B10;
+      --card: #161823;
+      --card-elevated: #1C1E2A;
+      --video-bg: #16161C;
+
+      /* Content */
+      --foreground: #F5F5F7;
+      --muted-foreground: #AEB2C0;
+      --on-media: #FFFFFF;
+      --on-accent: #161823;
+
+      /* Border */
+      --border: #3A3D52;
+
+      /* Radius */
+      --radius-xs: 2px;
+      --radius-sm: 6px;
+      --radius-md: 8px;
+      --radius-lg: 12px;
+      --radius-xl: 16px;
+      --radius-shell: 32px;
+      --radius-pill: 999px;
+
+      /* Status */
+      --success: #10B981; --success-bg: #0E2A22; --success-fg: #34D399;
+      --destructive: #E5484D; --error-bg: #2E1416; --error-fg: #FF6485;
+
+      /* Type families */
+      --font-display: Inter, "TikTok Display", ui-sans-serif, sans-serif;
+      --font-sans: Inter, "TikTok Sans", ui-sans-serif, sans-serif;
+      --font-serif: Georgia, Times, serif;
+      --font-mono: "JetBrains Mono", monospace;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; min-height: 100%; background: var(--background); color: var(--foreground); font-family: var(--font-sans); }
+    body { display: grid; place-items: center; padding: 24px; }
+    button, input { font: inherit; }
+    .kit-shell { display: grid; gap: 16px; justify-items: center; }
+    .uikit-shell {
+      width: 100%;
+      max-width: 460px;
+      margin: 0 auto;
+      overflow: hidden;
+    }
+    .uikit-truncate {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .kit-caption { font-family: var(--font-mono); font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted-foreground); }
+    .phone-frame {
+      width: 412px;
+      height: 780px;
+      border-radius: var(--radius-shell);
+      border: 8px solid var(--foreground);
+      overflow: hidden;
+      position: relative;
+      background: var(--video-bg);
+      box-shadow: 0 24px 60px rgba(22,24,35,.18);
+    }
+    .phone-frame.dark { color: var(--foreground); }
+    .app-root { height: 100%; position: relative; background: var(--background); border-radius: calc(var(--radius-shell) - 8px); overflow: hidden; }
+    .status-bar {
+      position: absolute; top: 0; left: 0; right: 0; z-index: 5;
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 14px 18px 10px; font-size: 12px; font-weight: 600;
+      pointer-events: none;
+    }
+    .status-light { color: var(--on-media); }
+    .status-dark { color: var(--foreground); }
+    .status-icons { display: flex; gap: 6px; align-items: center; }
+    .signal { display: flex; gap: 2px; align-items: flex-end; height: 12px; }
+    .signal span { width: 2px; background: currentColor; border-radius: 999px; display: block; }
+    .signal span:nth-child(1) { height: 4px; opacity: .55; }
+    .signal span:nth-child(2) { height: 6px; opacity: .7; }
+    .signal span:nth-child(3) { height: 8px; opacity: .85; }
+    .signal span:nth-child(4) { height: 10px; }
+    .battery { width: 22px; height: 11px; border: 1.5px solid currentColor; border-radius: 3px; position: relative; }
+    .battery::after { content: ""; position: absolute; right: -3px; top: 3px; width: 2px; height: 5px; border-radius: 1px; background: currentColor; }
+    .battery::before { content: ""; position: absolute; inset: 1.5px; width: 70%; background: currentColor; border-radius: 1px; }
+    .screen-wrap { height: 100%; position: relative; }
+    .screen {
+      position: absolute; inset: 0; display: flex; flex-direction: column;
+      animation: screenIn .32s cubic-bezier(.33,0,.2,1) both;
+    }
+    @keyframes screenIn {
+      from { opacity: 0; transform: scale(1.012); }
+      to { opacity: 1; transform: scale(1); }
+    }
+    .top-fade { position: absolute; top: 0; left: 0; right: 0; height: 180px; background: linear-gradient(180deg, rgba(0,0,0,.62), rgba(0,0,0,0)); z-index: 1; }
+    .bottom-fade { position: absolute; left: 0; right: 0; bottom: 0; height: 240px; background: linear-gradient(180deg, rgba(15,15,18,0), rgba(15,15,18,.9) 45%, rgba(15,15,18,1)); z-index: 1; }
+    .screen-scroll { flex: 1; overflow-y: auto; scrollbar-width: none; }
+    .screen-scroll::-webkit-scrollbar { display: none; }
+    .pressable {
+      position: relative; transition: transform .2s cubic-bezier(.2,.8,.2,1), opacity .2s ease, color .2s ease;
+      cursor: pointer; outline: none;
+    }
+    .pressable:hover { transform: translateY(-1px) scale(1.04); }
+    .pressable:focus-visible { box-shadow: 0 0 0 2px var(--primary), 0 0 0 4px rgba(255,255,255,.14); }
+    .pressable:active { transform: scale(.95); }
+    .pressable[disabled], .disabled { opacity: .5; cursor: not-allowed; pointer-events: none; }
+    .home-screen { background: var(--video-bg); color: var(--on-media); }
+    .hero-video {
+      position: absolute; inset: 0;
+      background: var(--video-bg);
+    }
+    .hero-video::after {
+      content: ""; position: absolute; inset: 0;
+      background: linear-gradient(0deg, rgba(255,255,255,.03), rgba(255,255,255,.03));
+      opacity: .45;
+    }
+    .refresh-pill {
+      position: absolute; top: 44px; left: 50%; transform: translateX(-50%); z-index: 2;
+      padding: 7px 12px; border-radius: 999px; border: 1px solid rgba(255,255,255,.14);
+      background: rgba(255,255,255,.06); font-family: var(--font-mono); font-size: 10px; letter-spacing: .14em; text-transform: uppercase;
+      color: rgba(255,255,255,.78);
+    }
+    .top-tabs {
+      position: absolute; top: 86px; left: 0; right: 0; z-index: 3;
+      display: flex; justify-content: center; gap: 20px; align-items: center;
+      font-size: 15px; font-weight: 500;
+    }
+    .tab-btn {
+      background: none; border: 0; color: rgba(255,255,255,.66); padding: 4px 2px 8px; min-width: 64px;
+      display: flex; flex-direction: column; align-items: center; gap: 6px;
+    }
+    .tab-btn.active { color: var(--on-media); }
+    .tab-line { width: 24px; height: 1px; border-radius: 999px; background: transparent; }
+    .tab-btn.active .tab-line { background: var(--on-media); }
+    .live-dot {
+      display: inline-flex; align-items: center; gap: 6px; padding: 2px 8px; border-radius: 999px; background: rgba(255,255,255,.08);
+      font-family: var(--font-mono); font-size: 10px; letter-spacing: .14em; text-transform: uppercase;
+    }
+    .live-dot::before { content: ""; width: 6px; height: 6px; border-radius: 999px; background: var(--primary); box-shadow: 0 0 0 4px rgba(254,44,85,.18); }
+    .right-rail {
+      position: absolute; right: 14px; bottom: 150px; z-index: 3;
+      display: flex; flex-direction: column; align-items: center; gap: 20px;
+    }
+    .avatar-wrap { position: relative; width: 48px; height: 48px; border-radius: 999px; border: 2px solid var(--on-media); background: rgba(255,255,255,.08); }
+    .avatar-wrap::before {
+      content: "DQ"; position: absolute; inset: 0; display: grid; place-items: center; font-weight: 700; font-size: 14px; letter-spacing: .08em;
+    }
+    .follow-badge {
+      position: absolute; left: 50%; bottom: -8px; transform: translateX(-50%);
+      width: 20px; height: 20px; border-radius: 999px; border: 2px solid var(--video-bg); background: var(--primary); color: var(--on-media);
+      display: grid; place-items: center; font-size: 11px; font-weight: 600;
+    }
+    .follow-badge iconify-icon { font-size: 11px; line-height: 1; }
+    .rail-action { display: grid; justify-items: center; gap: 5px; background: none; border: 0; color: var(--on-media); }
+    .rail-icon {
+      display: grid; place-items: center; font-size: 30px;
+      filter: drop-shadow(0 1px 3px rgba(0,0,0,.35));
+    }
+    .rail-icon iconify-icon { font-size: 32px; line-height: 1; }
+    .rail-action.liked .rail-icon { color: var(--primary); }
+    .rail-action.liked .rail-icon iconify-icon { animation: heartPulse 1200ms ease; }
+    @keyframes heartPulse { 0%,100% { transform: scale(1); } 30% { transform: scale(1.18); } }
+    .rail-count { font-size: 12px; font-weight: 600; text-shadow: 0 1px 3px rgba(0,0,0,.35); }
+    .music-disc {
+      width: 48px; height: 48px; border-radius: 999px; margin-top: 2px;
+      border: 1px solid rgba(255,255,255,.4); background: rgba(0,0,0,.28);
+      display: grid; place-items: center; font-size: 22px;
+      animation: spin 8s linear infinite;
+    }
+    .music-disc iconify-icon { font-size: 22px; line-height: 1; }
+    @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+    @media (prefers-reduced-motion: reduce) {
+      .music-disc, .marquee-track, .screen, .rail-action.liked .rail-icon iconify-icon { animation: none !important; }
+      .pressable { transition: none; }
+    }
+    .bottom-info {
+      position: absolute; left: 16px; right: 92px; bottom: 96px; z-index: 3;
+      display: grid; gap: 10px; color: var(--on-media);
+    }
+    .account-line { display: flex; align-items: center; gap: 10px; font-size: 15px; font-weight: 700; }
+    .follow-pill {
+      border-radius: 999px; border: 1px solid rgba(255,255,255,.2); background: rgba(255,255,255,.08);
+      color: var(--on-media); padding: 5px 10px; font-size: 12px; font-weight: 600;
+    }
+    .caption { font-size: 14px; line-height: 1.6; max-width: 100%; }
+    .tag { color: var(--secondary); }
+    .audio-row { overflow: hidden; display: flex; gap: 8px; align-items: center; font-family: var(--font-mono); font-size: 11px; letter-spacing: .04em; text-transform: uppercase; opacity: .88; }
+    .audio-icon { font-size: 15px; display: grid; place-items: center; }
+    .marquee { overflow: hidden; flex: 1; white-space: nowrap; }
+    .marquee-track { display: inline-block; padding-left: 100%; animation: marquee 18s linear infinite; }
+    @keyframes marquee { from { transform: translateX(0); } to { transform: translateX(-100%); } }
+    .bottom-nav {
+      position: absolute; left: 0; right: 0; bottom: 0; z-index: 4;
+      display: grid; grid-template-columns: repeat(5, 1fr); align-items: end;
+      padding: 8px 12px 20px; gap: 4px; background: rgba(0,0,0,.92); border-top: 1px solid rgba(255,255,255,.08);
+    }
+    .nav-item {
+      min-height: 56px; border: 0; background: none; color: rgba(255,255,255,.64);
+      display: grid; justify-items: center; align-content: center; gap: 4px; font-size: 11px;
+    }
+    .nav-item.active { color: var(--on-media); }
+    .nav-glyph { font-size: 18px; line-height: 1; display: grid; place-items: center; }
+    .nav-glyph iconify-icon { font-size: 22px; line-height: 1; }
+    .publish-wrap { display: grid; place-items: center; min-height: 56px; }
+    .publish-btn {
+      position: relative; width: 48px; height: 32px; border: 0; background: var(--on-media); border-radius: 10px;
+      display: grid; place-items: center; font-size: 22px; color: var(--on-accent); font-weight: 700;
+    }
+    .publish-btn iconify-icon { font-size: 20px; line-height: 1; }
+    .publish-btn::before, .publish-btn::after { content: ""; position: absolute; inset: 0; border-radius: 10px; z-index: -1; }
+    .publish-btn::before { transform: translate(3px, -3px); background: var(--secondary); }
+    .publish-btn::after { transform: translate(-3px, 3px); background: var(--primary); }
+    .discover-screen, .profile-screen, .inbox-screen { background: var(--background); color: var(--foreground); }
+    /* ---- shared inner page chrome ---- */
+    .page-header {
+      position: sticky; top: 0; z-index: 4; display: flex; align-items: center; justify-content: space-between;
+      padding: 50px 18px 12px; background: color-mix(in srgb, var(--background) 86%, transparent);
+      backdrop-filter: blur(18px) saturate(1.4); -webkit-backdrop-filter: blur(18px) saturate(1.4);
+      border-bottom: 1px solid color-mix(in srgb, var(--foreground) 7%, transparent);
+    }
+    .page-title { font-size: 20px; line-height: 1.1; font-weight: 700; letter-spacing: -.01em; }
+    .header-actions { display: flex; gap: 8px; }
+    .icon-chip {
+      width: 38px; height: 38px; display: grid; place-items: center; border-radius: 999px; font-size: 18px;
+      border: 0; background: color-mix(in srgb, var(--foreground) 6%, transparent); color: var(--foreground);
+    }
+    .ghost-btn {
+      border: 0; background: color-mix(in srgb, var(--foreground) 6%, transparent); color: var(--foreground);
+      border-radius: 999px; padding: 8px 14px; font-size: 12px; font-weight: 600;
+    }
+    .discover-content, .profile-content, .inbox-content { padding: 14px 16px 96px; display: grid; gap: 18px; }
+
+    /* ---- search field ---- */
+    .search-field {
+      display: flex; align-items: center; gap: 10px; padding: 11px 14px; border-radius: var(--radius-lg);
+      background: color-mix(in srgb, var(--foreground) 5%, transparent); color: var(--muted-foreground); font-size: 14px;
+    }
+    .search-field iconify-icon { font-size: 18px; }
+
+    /* ---- horizontal category chips ---- */
+    .chip-scroller { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; margin: 0 -16px; padding: 0 16px; }
+    .chip-scroller::-webkit-scrollbar { display: none; }
+    .pill-chip {
+      flex: 0 0 auto; border: 0; border-radius: 999px; padding: 8px 16px; font-size: 13px; font-weight: 600; white-space: nowrap;
+      background: color-mix(in srgb, var(--foreground) 6%, transparent); color: var(--foreground);
+    }
+    .pill-chip.active { background: var(--foreground); color: var(--background); }
+
+    /* ---- hero spotlight ---- */
+    .spotlight {
+      position: relative; border-radius: var(--radius-xl); overflow: hidden; aspect-ratio: 16 / 10;
+      background: var(--video-bg); display: flex; flex-direction: column; justify-content: flex-end; padding: 18px;
+      color: var(--on-media); box-shadow: 0 18px 40px rgba(22,24,35,.16);
+    }
+    .spotlight::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0,0,0,.05) 30%, rgba(0,0,0,.72)); }
+    .spotlight > * { position: relative; z-index: 1; }
+    .spotlight-badge {
+      align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 999px;
+      background: var(--primary); font-family: var(--font-mono); font-size: 10px; letter-spacing: .12em; text-transform: uppercase; margin-bottom: auto;
+    }
+    .spotlight-title { font-family: var(--font-display); font-size: 30px; line-height: .98; letter-spacing: -.02em; font-weight: 700; max-width: 240px; }
+    .spotlight-meta { margin-top: 8px; font-size: 12px; opacity: .82; display: flex; gap: 12px; }
+    .spotlight-meta span { display: inline-flex; align-items: center; gap: 5px; }
+
+    /* ---- section blocks ---- */
+    .section { display: grid; gap: 12px; }
+    .section-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+    .section-title { font-size: 17px; font-weight: 700; letter-spacing: -.01em; }
+    .section-link { font-size: 12px; font-weight: 600; color: var(--primary); }
+    .section-subtitle { font-size: 12px; color: var(--muted-foreground); }
+
+    /* ---- video grid ---- */
+    .video-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+    .video-cell {
+      position: relative; aspect-ratio: 9 / 14; border-radius: var(--radius-lg); overflow: hidden; background: var(--video-bg);
+      display: flex; align-items: flex-end; padding: 8px; color: var(--on-media);
+    }
+    .video-cell::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, transparent 55%, rgba(0,0,0,.6)); }
+    .video-views { position: relative; z-index: 1; display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 600; text-shadow: 0 1px 3px rgba(0,0,0,.4); }
+    .video-views iconify-icon { font-size: 13px; }
+    .video-cell .live-tag {
+      position: absolute; top: 8px; left: 8px; z-index: 1; padding: 2px 7px; border-radius: 6px;
+      background: var(--primary); font-family: var(--font-mono); font-size: 9px; letter-spacing: .1em; font-weight: 700;
+    }
+
+    /* ---- trends list ---- */
+    .trend-row {
+      display: flex; align-items: center; gap: 14px; padding: 12px 14px; border-radius: var(--radius-lg);
+      background: var(--card); border: 1px solid color-mix(in srgb, var(--foreground) 7%, transparent);
+    }
+    .trend-rank { font-family: var(--font-mono); font-size: 14px; font-weight: 700; color: var(--muted-foreground); min-width: 22px; }
+    .trend-body { flex: 1; min-width: 0; }
+    .trend-name { font-size: 14px; font-weight: 600; }
+    .trend-meta, .activity-meta { font-size: 12px; color: var(--muted-foreground); margin-top: 2px; }
+    .trend-lift { color: var(--success); font-family: var(--font-mono); font-size: 12px; font-weight: 600; }
+
+    /* ---- profile header (centered, TikTok-like) ---- */
+    .profile-hero { display: grid; justify-items: center; gap: 12px; padding: 4px 0 6px; text-align: center; }
+    .profile-avatar {
+      width: 92px; height: 92px; border-radius: 999px; background: var(--video-bg); color: var(--on-media);
+      display: grid; place-items: center; font-size: 30px; font-weight: 700; box-shadow: 0 10px 30px rgba(22,24,35,.18);
+    }
+    .profile-handle { font-size: 17px; font-weight: 700; }
+    .profile-name { font-size: 13px; color: var(--muted-foreground); }
+    .profile-stats { display: flex; align-items: center; gap: 28px; padding: 4px 0; }
+    .stat-col { display: grid; justify-items: center; gap: 2px; }
+    .stat-num { font-size: 18px; font-weight: 700; letter-spacing: -.01em; }
+    .stat-key { font-size: 12px; color: var(--muted-foreground); }
+    .profile-actions { display: flex; gap: 8px; width: 100%; }
+    .btn-primary {
+      flex: 1; border: 0; border-radius: 12px; padding: 11px; font-size: 14px; font-weight: 600;
+      background: var(--primary); color: var(--on-media);
+    }
+    .btn-secondary {
+      flex: 1; border: 1px solid color-mix(in srgb, var(--foreground) 12%, transparent); border-radius: 12px; padding: 11px;
+      font-size: 14px; font-weight: 600; background: transparent; color: var(--foreground);
+    }
+    .btn-icon {
+      width: 44px; border: 1px solid color-mix(in srgb, var(--foreground) 12%, transparent); border-radius: 12px;
+      background: transparent; color: var(--foreground); display: grid; place-items: center; font-size: 18px;
+    }
+    .profile-bio { font-size: 13px; line-height: 1.6; color: var(--foreground); max-width: 280px; }
+    /* profile content tab strip */
+    .profile-tabs { display: flex; border-bottom: 1px solid color-mix(in srgb, var(--foreground) 8%, transparent); }
+    .profile-tab {
+      flex: 1; border: 0; background: none; padding: 12px 0; font-size: 20px; color: var(--muted-foreground);
+      display: grid; place-items: center; border-bottom: 2px solid transparent; margin-bottom: -1px;
+    }
+    .profile-tab.active { color: var(--foreground); border-bottom-color: var(--foreground); }
+
+    /* ---- inbox ---- */
+    .inbox-faces { display: flex; gap: 10px; }
+    .inbox-face-card {
+      flex: 1; display: grid; justify-items: center; gap: 8px; padding: 16px 10px; border-radius: var(--radius-lg);
+      background: var(--card); border: 1px solid color-mix(in srgb, var(--foreground) 7%, transparent);
+    }
+    .inbox-face-icon { width: 46px; height: 46px; border-radius: 999px; display: grid; place-items: center; font-size: 22px; color: var(--on-media); }
+    .inbox-face-icon.new-followers { background: var(--primary); }
+    .inbox-face-icon.activity { background: var(--secondary); color: var(--on-accent); }
+    .inbox-face-icon.system { background: var(--foreground); }
+    .inbox-face-label { font-size: 13px; font-weight: 600; }
+    .inbox-face-sub { font-size: 11px; color: var(--muted-foreground); }
+    .notif-row { display: flex; align-items: center; gap: 12px; padding: 10px 0; }
+    .notif-avatar {
+      width: 46px; height: 46px; border-radius: 999px; flex: 0 0 auto; background: var(--video-bg); color: var(--on-media);
+      display: grid; place-items: center; font-family: var(--font-mono); font-size: 13px; font-weight: 700; position: relative;
+    }
+    .notif-avatar .dot { position: absolute; right: -1px; bottom: -1px; width: 16px; height: 16px; border-radius: 999px; border: 2px solid var(--background); background: var(--primary); display: grid; place-items: center; font-size: 9px; color: var(--on-media); }
+    .notif-body { flex: 1; min-width: 0; }
+    .notif-text { font-size: 13px; line-height: 1.45; }
+    .notif-text b { font-weight: 700; }
+    .notif-time { font-size: 11px; color: var(--muted-foreground); margin-top: 2px; }
+    .notif-thumb { width: 42px; height: 54px; border-radius: 8px; flex: 0 0 auto; background: var(--video-bg); }
+    .notif-follow-btn { border: 0; border-radius: 10px; padding: 8px 16px; font-size: 13px; font-weight: 600; background: var(--primary); color: var(--on-media); flex: 0 0 auto; }
+    .home-indicator {
+      position: absolute; left: 50%; transform: translateX(-50%); bottom: 4px; z-index: 5;
+      width: 136px; height: 5px; border-radius: 999px; background: rgba(255,255,255,.7);
+    }
+    @media (max-width: 640px) {
+      body { padding: 12px; }
+      .uikit-shell { max-width: 100%; }
+      .phone-frame {
+        width: min(100%, 412px);
+        height: min(780px, calc(100vh - 24px));
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+    const { useState } = React;
+
+    const feedItems = {
+      following: {
+        creator: "@dance_queen",
+        caption: "When the beat drops and the camera hits on the one.",
+        tags: ["#fyp", "#viral"],
+        audio: "original sound · dance_queen · loop edit",
+        likes: "328.4K",
+        comments: "14.2K",
+        saves: "9.8K",
+        share: "Share"
+      },
+      foryou: {
+        creator: "@framebylena",
+        caption: "Shot this midnight transition in one take and kept the city hum in the mix.",
+        tags: ["#nightshoot", "#creatorclass"],
+        audio: "original sound · Lena Park · slowed",
+        likes: "512.9K",
+        comments: "21.4K",
+        saves: "17.6K",
+        share: "Share"
+      },
+      live: {
+        creator: "@beatlab",
+        caption: "Live set from the rehearsal room. Vote the next drop in chat.",
+        tags: ["#LIVE", "#newmusic"],
+        audio: "LIVE audio · Beat Lab Session",
+        likes: "88.2K",
+        comments: "6.1K",
+        saves: "3.7K",
+        share: "Send"
+      }
+    };
+
+    function App() {
+      const [screen, setScreen] = useState("home");
+      const [feedTab, setFeedTab] = useState("foryou");
+      const [liked, setLiked] = useState(true);
+      const [following, setFollowing] = useState(false);
+      const [saved, setSaved] = useState(false);
+      const item = feedItems[feedTab];
+
+      const screens = {
+        home: <HomeScreen item={item} feedTab={feedTab} setFeedTab={setFeedTab} liked={liked} setLiked={setLiked} following={following} setFollowing={setFollowing} saved={saved} setSaved={setSaved} setScreen={setScreen} />,
+        discover: <DiscoverScreen setScreen={setScreen} />,
+        inbox: <InboxScreen setScreen={setScreen} />,
+        profile: <ProfileScreen setScreen={setScreen} />
+      };
+
+      return (
+        <div className="kit-shell uikit-shell" data-layout-guard="uikit-v1">
+          <div className="kit-caption">TikTok · app UI kit</div>
+          <div className="phone-frame">
+            <div className="app-root">
+              <div className={`status-bar ${screen === "home" ? "status-light" : "status-dark"}`}>
+                <div>9:41</div>
+                <div className="status-icons">
+                  <div className="signal"><span></span><span></span><span></span><span></span></div>
+                  <div>5G</div>
+                  <div className="battery"></div>
+                </div>
+              </div>
+              <div className="screen-wrap">{React.cloneElement(screens[screen], { key: screen })}</div>
+              <BottomNav screen={screen} setScreen={setScreen} />
+              <div className="home-indicator"></div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    function HomeScreen({ item, feedTab, setFeedTab, liked, setLiked, following, setFollowing, saved, setSaved, setScreen }) {
+      return (
+        <div className="screen home-screen dark">
+          <div className="hero-video"></div>
+          <div className="top-fade"></div>
+          <div className="bottom-fade"></div>
+          <div className="refresh-pill">Release to refresh</div>
+          <div className="top-tabs">
+            {[
+              { id: "following", label: "Following" },
+              { id: "foryou", label: "For You" },
+              { id: "live", label: "LIVE" }
+            ].map(tab => (
+              <button key={tab.id} className={`tab-btn pressable ${feedTab === tab.id ? "active" : ""}`} onClick={() => setFeedTab(tab.id)}>
+                <span>{tab.id === "live" ? <span className="live-dot">LIVE</span> : tab.label}</span>
+                <span className="tab-line"></span>
+              </button>
+            ))}
+          </div>
+          <div className="right-rail">
+            <button className="rail-action pressable" onClick={() => setFollowing(!following)} aria-label={following ? "Following creator" : "Follow creator"}>
+              <div className="avatar-wrap">
+                {!following && <div className="follow-badge"><iconify-icon icon="ph:plus-bold"></iconify-icon></div>}
+              </div>
+            </button>
+            <button className={`rail-action pressable ${liked ? "liked" : ""}`} onClick={() => setLiked(!liked)} aria-label="Like video">
+              <div className="rail-icon"><iconify-icon icon="ph:heart-fill"></iconify-icon></div>
+              <div className="rail-count">{item.likes}</div>
+            </button>
+            <button className="rail-action pressable" onClick={() => setScreen("discover")} aria-label="Open comments">
+              <div className="rail-icon"><iconify-icon icon="ph:chat-circle-fill"></iconify-icon></div>
+              <div className="rail-count">{item.comments}</div>
+            </button>
+            <button className={`rail-action pressable ${saved ? "liked" : ""}`} onClick={() => setSaved(!saved)} aria-label="Save video">
+              <div className="rail-icon"><iconify-icon icon="ph:bookmark-simple-fill"></iconify-icon></div>
+              <div className="rail-count">{item.saves}</div>
+            </button>
+            <button className="rail-action pressable" onClick={() => setScreen("profile")} aria-label="Share to profile">
+              <div className="rail-icon"><iconify-icon icon="ph:share-fat-fill"></iconify-icon></div>
+              <div className="rail-count">{item.share}</div>
+            </button>
+            <div className="music-disc" aria-hidden="true"><iconify-icon icon="ph:music-notes-fill"></iconify-icon></div>
+          </div>
+          <div className="bottom-info">
+            <div className="account-line">
+              <span>{item.creator}</span>
+              <button className="follow-pill pressable" onClick={() => setFollowing(!following)}>{following ? "Following" : "Follow"}</button>
+            </div>
+            <div className="caption">
+              {item.caption}{" "}
+              {item.tags.map(tag => <span key={tag} className="tag">{tag} </span>)}
+            </div>
+            <div className="audio-row">
+              <span className="audio-icon"><iconify-icon icon="ph:music-notes-fill"></iconify-icon></span>
+              <div className="marquee"><div className="marquee-track">{item.audio} · {item.audio}</div></div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    function DiscoverScreen({ setScreen }) {
+      const cats = ["All", "Singing & Dance", "Comedy", "Sports", "Beauty", "Gaming"];
+      const [cat, setCat] = useState("All");
+      const grid = [
+        { views: "1.2M", live: false },
+        { views: "880K", live: true },
+        { views: "2.4M", live: false },
+        { views: "640K", live: false },
+        { views: "1.9M", live: false },
+        { views: "430K", live: true }
+      ];
+      const trends = [
+        { name: "#beatcutswitch", meta: "14.8B views", lift: "+38%" },
+        { name: "#nightcityframes", meta: "860M views", lift: "+21%" },
+        { name: "#onetakehooks", meta: "1.4B views", lift: "+17%" }
+      ];
+      return (
+        <div className="screen discover-screen">
+          <div className="screen-scroll">
+            <div className="page-header">
+              <div className="page-title uikit-truncate">Discover</div>
+              <div className="header-actions">
+                <button className="icon-chip pressable" onClick={() => setScreen("home")} aria-label="Back to home"><iconify-icon icon="ph:arrow-left-bold"></iconify-icon></button>
+                <button className="icon-chip pressable" onClick={() => setScreen("profile")} aria-label="Open profile"><iconify-icon icon="ph:user-fill"></iconify-icon></button>
+              </div>
+            </div>
+            <div className="discover-content">
+              <div className="search-field pressable">
+                <iconify-icon icon="ph:compass-fill"></iconify-icon>
+                <span>Search creators, sounds, effects</span>
+              </div>
+              <div className="chip-scroller">
+                {cats.map(c => (
+                  <button key={c} className={`pill-chip pressable ${cat === c ? "active" : ""}`} onClick={() => setCat(c)}>{c}</button>
+                ))}
+              </div>
+              <div className="spotlight pressable" onClick={() => setScreen("home")}>
+                <span className="spotlight-badge"><iconify-icon icon="ph:play-fill"></iconify-icon>Editorial drop</span>
+                <div className="spotlight-title uikit-truncate">The sound of now.</div>
+                <div className="spotlight-meta">
+                  <span><iconify-icon icon="ph:heart-fill"></iconify-icon>328.4K</span>
+                  <span><iconify-icon icon="ph:play-fill"></iconify-icon>2.4M plays</span>
+                </div>
+              </div>
+              <div className="section">
+                <div className="section-head">
+                  <div className="section-title">Trending now</div>
+                  <span className="section-link">See all</span>
+                </div>
+                {trends.map((t, i) => (
+                  <div className="trend-row pressable" key={t.name} onClick={() => setScreen("home")}>
+                    <div className="trend-rank">{String(i + 1).padStart(2, "0")}</div>
+                    <div className="trend-body">
+                      <div className="trend-name uikit-truncate">{t.name}</div>
+                      <div className="trend-meta">{t.meta}</div>
+                    </div>
+                    <div className="trend-lift">{t.lift}</div>
+                  </div>
+                ))}
+              </div>
+              <div className="section">
+                <div className="section-head">
+                  <div className="section-title">Popular videos</div>
+                  <span className="section-link">More</span>
+                </div>
+                <div className="video-grid">
+                  {grid.map((g, i) => (
+                    <div className="video-cell pressable" key={i} onClick={() => setScreen("home")}>
+                      {g.live && <span className="live-tag">LIVE</span>}
+                      <span className="video-views"><iconify-icon icon="ph:play-fill"></iconify-icon>{g.views}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    function InboxScreen({ setScreen }) {
+      const faces = [
+        { key: "new-followers", icon: "ph:user-fill", label: "Followers", sub: "12 new" },
+        { key: "activity", icon: "ph:heart-fill", label: "Activity", sub: "48 new" },
+        { key: "system", icon: "ph:chat-circle-fill", label: "System", sub: "2 new" }
+      ];
+      const newFollows = [
+        { initials: "KL", name: "khaby.lame", handle: "followed you" },
+        { initials: "BL", name: "beatlab", handle: "followed you" }
+      ];
+      const notifs = [
+        { initials: "DQ", name: "dance_queen", action: "liked your video", time: "2m", thumb: true, glyph: "ph:heart-fill" },
+        { initials: "LP", name: "framebylena", action: "commented: this transition is unreal", time: "18m", thumb: true, glyph: "ph:chat-circle-fill" },
+        { initials: "BL", name: "beatlab", action: "mentioned you in a comment", time: "1h", thumb: false, glyph: "ph:chat-circle-fill" }
+      ];
+      return (
+        <div className="screen inbox-screen">
+          <div className="screen-scroll">
+            <div className="page-header">
+              <div className="page-title uikit-truncate">Inbox</div>
+              <div className="header-actions">
+                <button className="icon-chip pressable" onClick={() => setScreen("home")} aria-label="Back to home"><iconify-icon icon="ph:arrow-left-bold"></iconify-icon></button>
+                <button className="icon-chip pressable" onClick={() => setScreen("profile")} aria-label="Open profile"><iconify-icon icon="ph:user-fill"></iconify-icon></button>
+              </div>
+            </div>
+            <div className="inbox-content">
+              <div className="inbox-faces">
+                {faces.map(f => (
+                  <div className="inbox-face-card pressable" key={f.key}>
+                    <span className={`inbox-face-icon ${f.key}`}><iconify-icon icon={f.icon}></iconify-icon></span>
+                    <div className="inbox-face-label">{f.label}</div>
+                    <div className="inbox-face-sub">{f.sub}</div>
+                  </div>
+                ))}
+              </div>
+              <div className="section">
+                <div className="section-head">
+                  <div className="section-title">New followers</div>
+                  <span className="section-link">See all</span>
+                </div>
+                {newFollows.map(p => (
+                  <div className="notif-row" key={p.initials}>
+                    <div className="notif-avatar">{p.initials}</div>
+                    <div className="notif-body">
+                      <div className="notif-text"><b>{p.name}</b></div>
+                      <div className="notif-time">{p.handle}</div>
+                    </div>
+                    <button className="notif-follow-btn pressable" onClick={() => setScreen("profile")}>Follow back</button>
+                  </div>
+                ))}
+              </div>
+              <div className="section">
+                <div className="section-head">
+                  <div className="section-title">Activity</div>
+                  <span className="section-link">This week</span>
+                </div>
+                {notifs.map((n, i) => (
+                  <div className="notif-row" key={i}>
+                    <div className="notif-avatar">{n.initials}<span className="dot"><iconify-icon icon={n.glyph}></iconify-icon></span></div>
+                    <div className="notif-body">
+                      <div className="notif-text"><b>{n.name}</b> {n.action}</div>
+                      <div className="notif-time">{n.time} ago</div>
+                    </div>
+                    {n.thumb && <div className="notif-thumb pressable" onClick={() => setScreen("home")}></div>}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    function ProfileScreen({ setScreen }) {
+      const [tab, setTab] = useState("videos");
+      const stats = [
+        { key: "Following", num: "286" },
+        { key: "Followers", num: "1.2M" },
+        { key: "Likes", num: "18.6M" }
+      ];
+      const videos = [
+        { views: "2.4M", pinned: true },
+        { views: "1.9M", pinned: false },
+        { views: "880K", pinned: false },
+        { views: "640K", pinned: false },
+        { views: "1.2M", pinned: false },
+        { views: "430K", pinned: false }
+      ];
+      return (
+        <div className="screen profile-screen">
+          <div className="screen-scroll">
+            <div className="page-header">
+              <button className="icon-chip pressable" onClick={() => setScreen("home")} aria-label="Back to home"><iconify-icon icon="ph:arrow-left-bold"></iconify-icon></button>
+              <div className="page-title uikit-truncate" style={{fontSize:"15px"}}>@dance_queen</div>
+              <div className="header-actions">
+                <button className="icon-chip pressable disabled" disabled aria-label="Settings"><iconify-icon icon="ph:gear-fill"></iconify-icon></button>
+              </div>
+            </div>
+            <div className="profile-content">
+              <div className="profile-hero">
+                <div className="profile-avatar">DQ</div>
+                <div>
+                  <div className="profile-handle">@dance_queen</div>
+                  <div className="profile-name">Dance Queen</div>
+                </div>
+                <div className="profile-stats">
+                  {stats.map(s => (
+                    <div className="stat-col pressable" key={s.key} onClick={() => setScreen("inbox")}>
+                      <div className="stat-num">{s.num}</div>
+                      <div className="stat-key">{s.key}</div>
+                    </div>
+                  ))}
+                </div>
+                <div className="profile-actions">
+                  <button className="btn-primary pressable" onClick={() => setScreen("discover")}>Edit profile</button>
+                  <button className="btn-secondary pressable" onClick={() => setScreen("home")}>Share profile</button>
+                  <button className="btn-icon pressable" onClick={() => setScreen("inbox")} aria-label="Add friends"><iconify-icon icon="ph:user-fill"></iconify-icon></button>
+                </div>
+                <div className="profile-bio">Editorial rhythm, creator-first framing, and short captions that land with the beat. 🎵</div>
+              </div>
+              <div className="profile-tabs">
+                <button className={`profile-tab pressable ${tab === "videos" ? "active" : ""}`} onClick={() => setTab("videos")} aria-label="Videos"><iconify-icon icon="ph:play-fill"></iconify-icon></button>
+                <button className={`profile-tab pressable ${tab === "liked" ? "active" : ""}`} onClick={() => setTab("liked")} aria-label="Liked"><iconify-icon icon="ph:heart-fill"></iconify-icon></button>
+                <button className={`profile-tab pressable ${tab === "saved" ? "active" : ""}`} onClick={() => setTab("saved")} aria-label="Saved"><iconify-icon icon="ph:bookmark-simple-fill"></iconify-icon></button>
+              </div>
+              <div className="video-grid">
+                {videos.map((v, i) => (
+                  <div className="video-cell pressable" key={i} onClick={() => setScreen("home")}>
+                    {v.pinned && <span className="live-tag">PINNED</span>}
+                    <span className="video-views"><iconify-icon icon="ph:play-fill"></iconify-icon>{v.views}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    function BottomNav({ screen, setScreen }) {
+      const items = [
+        { id: "home", label: "Home", glyph: "ph:house-fill" },
+        { id: "discover", label: "Discover", glyph: "ph:compass-fill" },
+        { id: "create", label: "", glyph: "ph:plus-bold" },
+        { id: "inbox", label: "Inbox", glyph: "ph:chat-circle-fill" },
+        { id: "profile", label: "Me", glyph: "ph:user-fill" }
+      ];
+      return (
+        <div className="bottom-nav dark">
+          {items.map(item => item.id === "create" ? (
+            <div className="publish-wrap" key={item.id}>
+              <button className="publish-btn pressable" aria-label="Create post" onClick={() => setScreen("discover")}><iconify-icon icon={item.glyph}></iconify-icon></button>
+            </div>
+          ) : (
+            <button key={item.id} className={`nav-item pressable ${item.id === screen ? "active" : ""}`} onClick={() => setScreen(item.id)}>
+              <span className="nav-glyph"><iconify-icon icon={item.glyph}></iconify-icon></span>
+              <span>{item.label}</span>
+            </button>
+          ))}
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+  </script>
+</body>
+</html>

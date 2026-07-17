@@ -1,0 +1,56 @@
+{
+  "slug": "table",
+  "name": "Table",
+  "category": "data-display",
+  "evidence": "AI-inferred based on developer platform dashboard product type and the source token system.",
+  "keyInsightSeed": "Data tables should stay dense, readable, and operational rather than decorative.",
+  "anatomy": [
+    "header-row",
+    "data-row",
+    "status-pill",
+    "row-action"
+  ],
+  "variantDimensions": [
+    {
+      "name": "density",
+      "values": [
+        "compact",
+        "default"
+      ]
+    },
+    {
+      "name": "row-state",
+      "values": [
+        "default",
+        "selected",
+        "hover"
+      ]
+    }
+  ],
+  "variants": [
+    {
+      "id": "deployments",
+      "columns": [
+        "Project",
+        "Status",
+        "Duration",
+        "Region"
+      ]
+    },
+    {
+      "id": "analytics",
+      "columns": [
+        "Route",
+        "Requests",
+        "Errors",
+        "Latency"
+      ]
+    }
+  ],
+  "uiCopySamples": [
+    "Project",
+    "Status",
+    "Duration",
+    "Region"
+  ]
+}

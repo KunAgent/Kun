@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>PageHeader 页面标题</title>
+  <link rel="stylesheet" href="preview-scaffold.css">
+  <style>
+  .page-header-comp { display: flex; flex-direction: column; align-items: stretch; background: #FFFFFF; width: 100%; }
+  .page-header-top { display: flex; align-items: center; justify-content: space-between; padding: 20px 32px; min-height: 92px; }
+  .page-header-left { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
+  .page-header-breadcrumb { display: flex; align-items: center; }
+  .page-header-breadcrumb-item { font-size: 12px; line-height: 20px; letter-spacing: 0.04px; color: #737A87; font-weight: 400; text-decoration: none; cursor: pointer; transition: color 0.15s; white-space: nowrap; }
+  .page-header-breadcrumb-item:hover { color: #1664FF; }
+  .page-header-breadcrumb-item.current { color: #42464E; font-weight: 500; cursor: default; }
+  .page-header-breadcrumb-item.current:hover { color: #42464E; }
+  .page-header-breadcrumb-sep { display: flex; align-items: center; padding: 4px; }
+  .page-header-breadcrumb-sep svg { width: 16px; height: 16px; color: #737A87; transform: rotate(-90deg); }
+  .page-header-title-row { display: flex; align-items: center; gap: 12px; }
+  .page-header-title { font-size: 18px; font-weight: 500; line-height: 26px; letter-spacing: 0.05px; color: #0C0D0E; }
+  .page-header-tag { display: inline-flex; align-items: center; gap: 6px; padding: 2px 8px; border-radius: 4px; font-size: 12px; font-weight: 500; line-height: 20px; letter-spacing: 0.04px; }
+  .page-header-tag-success { background: #E1F6E6; color: #2A814B; }
+  .page-header-tag-warning { background: #FFF7E8; color: #D25F00; }
+  .page-header-tag-error { background: #FFECE8; color: #CB2634; }
+  .page-header-tag-info { background: #EBF1FF; color: #1664FF; }
+  .page-header-tag-icon { width: 14px; height: 14px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .page-header-tag-icon svg { width: 14px; height: 14px; }
+  .page-header-actions { display: flex; align-items: center; gap: 12px; }
+  .page-header-btn { display: inline-flex; align-items: center; justify-content: center; gap: 4px; padding: 5px 16px; border-radius: 4px; border: none; background: #F6F8FA; box-shadow: 0px 0px 0px 1px #DDE2E9, 0px 2px 1px 0px rgba(0,0,0,0.08); font-family: inherit; font-size: 13px; font-weight: 500; line-height: 22px; letter-spacing: 0.04px; color: #42464E; cursor: pointer; white-space: nowrap; transition: all 150ms ease; }
+  .page-header-btn:hover { box-shadow: 0px 0px 0px 1px rgba(22,100,255,0.8), 0px 2px 1px 0px rgba(0,0,0,0.08); color: #1664FF; }
+  .page-header-btn-icon { display: inline-flex; align-items: center; justify-content: center; padding: 5px 8px; border-radius: 4px; border: none; background: #F6F8FA; box-shadow: 0px 0px 0px 1px #DDE2E9, 0px 2px 1px 0px rgba(0,0,0,0.08); height: 32px; cursor: pointer; transition: all 150ms ease; }
+  .page-header-btn-icon:hover { box-shadow: 0px 0px 0px 1px rgba(22,100,255,0.8), 0px 2px 1px 0px rgba(0,0,0,0.08); }
+  .page-header-btn-icon svg { width: 16px; height: 16px; color: #42464E; }
+  .page-header-btn-icon:hover svg { color: #1664FF; }
+  .page-header-tabs { display: flex; align-items: flex-start; }
+  .page-header-tabs-spacer { flex-shrink: 0; box-shadow: inset 0px -1px 0px 0px #EAEDF1; background: #FFFFFF; width: 32px; height: 36px; }
+  .page-header-tabs-list { display: flex; align-items: flex-start; flex: 1; }
+  .page-header-tabs-gap { flex-shrink: 0; box-shadow: inset 0px -1px 0px 0px #EAEDF1; background: #FFFFFF; width: 6px; height: 36px; }
+  .page-header-tabs-end { flex: 1; box-shadow: inset 0px -1px 0px 0px #EAEDF1; background: #FFFFFF; height: 36px; }
+  .page-header-tab { display: flex; align-items: center; justify-content: center; gap: 10px; border-radius: 4px 4px 0 0; box-shadow: inset 0px 0px 0px 1px #EAEDF1; background: #F6F8FA; padding: 7px 16px; font-family: inherit; font-size: 14px; font-weight: 400; line-height: 22px; letter-spacing: 0.04px; color: #0C0D0E; cursor: pointer; white-space: nowrap; transition: all 150ms ease; border: none; }
+  .page-header-tab:hover:not(.active) { color: #1664FF; }
+  .page-header-tab.active { background: #FFFFFF; color: #1664FF; font-weight: 500; box-shadow: inset 0px 2px 0px 0px #006EFF, inset -1px 0px 0px 0px #EAEDF1, inset 1px 0px 0px 0px #EAEDF1; }
+  </style>
+</head>
+<body>
+  <div class="pv-header">
+    <h1>PageHeader 页面标题</h1>
+    <p>页面标题复合组件，由面包屑、标题+Tag、按钮组、卡片式 Tab 组成，各部分可配置。</p>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">完整 PageHeader</div>
+    <div class="stack-12">
+      <div class="demo-box">
+        <div class="page-header-comp" data-component="page-header" data-with-breadcrumb="true" data-with-tabs="true" data-with-actions="true">
+          <div class="page-header-top">
+            <div class="page-header-left">
+              <nav class="page-header-breadcrumb" data-slot="breadcrumb">
+                <a class="page-header-breadcrumb-item">云服务器 ECS</a>
+                <span class="page-header-breadcrumb-sep"><svg viewBox="0 0 16 16" fill="none"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+                <a class="page-header-breadcrumb-item">实例列表</a>
+                <span class="page-header-breadcrumb-sep"><svg viewBox="0 0 16 16" fill="none"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+                <span class="page-header-breadcrumb-item current">详情</span>
+              </nav>
+              <div class="page-header-title-row">
+                <h1 class="page-header-title">页面标题</h1>
+                <span class="page-header-tag page-header-tag-success">
+                  <span class="page-header-tag-icon"><svg viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="6" fill="#2A814B"/><path d="M4.5 7l2 2 3.5-3.5" stroke="#fff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+                  正常运行
+                </span>
+              </div>
+            </div>
+            <div class="page-header-actions" data-slot="actions">
+              <button class="page-header-btn">远程连接</button>
+              <button class="page-header-btn">刷新</button>
+              <button class="page-header-btn-icon">
+                <svg viewBox="0 0 16 16" fill="none"><circle cx="8" cy="4" r="1.5" fill="currentColor"/><circle cx="8" cy="8" r="1.5" fill="currentColor"/><circle cx="8" cy="12" r="1.5" fill="currentColor"/></svg>
+              </button>
+            </div>
+          </div>
+          <div class="page-header-tabs" data-slot="tabs">
+            <div class="page-header-tabs-spacer"></div>
+            <div class="page-header-tabs-list">
+              <span class="page-header-tab active" data-state="active">概览</span>
+              <div class="page-header-tabs-gap"></div>
+              <span class="page-header-tab" data-state="default">安全组</span>
+              <div class="page-header-tabs-gap"></div>
+              <span class="page-header-tab" data-state="default">网卡</span>
+              <div class="page-header-tabs-gap"></div>
+              <span class="page-header-tab" data-state="default">云盘</span>
+              <div class="page-header-tabs-gap"></div>
+              <span class="page-header-tab" data-state="default">监控</span>
+              <div class="page-header-tabs-end"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">无面包屑 (标题 + Tab)</div>
+    <div class="stack-12">
+      <div class="demo-box">
+        <div class="page-header-comp" data-component="page-header" data-with-breadcrumb="false" data-with-tabs="true" data-with-actions="false">
+          <div class="page-header-top">
+            <div class="page-header-left">
+              <div class="page-header-title-row">
+                <h1 class="page-header-title">实例详情</h1>
+                <span class="page-header-tag page-header-tag-success">
+                  <span class="page-header-tag-icon"><svg viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="6" fill="#2A814B"/><path d="M4.5 7l2 2 3.5-3.5" stroke="#fff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+                  正常运行
+                </span>
+              </div>
+            </div>
+          </div>
+          <div class="page-header-tabs" data-slot="tabs">
+            <div class="page-header-tabs-spacer"></div>
+            <div class="page-header-tabs-list">
+              <span class="page-header-tab active" data-state="active">基础信息</span>
+              <div class="page-header-tabs-gap"></div>
+              <span class="page-header-tab" data-state="default">运行监控</span>
+              <div class="page-header-tabs-gap"></div>
+              <span class="page-header-tab" data-state="default">配置变更</span>
+              <div class="page-header-tabs-end"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">无 Tab (面包屑 + 标题 + 按钮组)</div>
+    <div class="stack-12">
+      <div class="demo-box">
+        <div class="page-header-comp" data-component="page-header" data-with-breadcrumb="true" data-with-tabs="false" data-with-actions="true" style="border-bottom: 1px solid #EAEDF1;">
+          <div class="page-header-top">
+            <div class="page-header-left">
+              <nav class="page-header-breadcrumb" data-slot="breadcrumb">
+                <a class="page-header-breadcrumb-item">设备管理</a>
+                <span class="page-header-breadcrumb-sep"><svg viewBox="0 0 16 16" fill="none"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+                <a class="page-header-breadcrumb-item">设备列表</a>
+                <span class="page-header-breadcrumb-sep"><svg viewBox="0 0 16 16" fill="none"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+                <span class="page-header-breadcrumb-item current">详情</span>
+              </nav>
+              <div class="page-header-title-row">
+                <h1 class="page-header-title">网关设备-A1</h1>
+                <span class="page-header-tag page-header-tag-warning">
+                  <span class="page-header-tag-icon"><svg viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="6" fill="#D25F00"/><path d="M7 4v4" stroke="#fff" stroke-width="1.5" stroke-linecap="round"/><circle cx="7" cy="10.5" r="0.75" fill="#fff"/></svg></span>
+                  告警
+                </span>
+              </div>
+            </div>
+            <div class="page-header-actions" data-slot="actions">
+              <button class="page-header-btn">编辑</button>
+              <button class="page-header-btn">停用</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">Tag 状态变体</div>
+    <div class="row">
+      <span class="page-header-tag page-header-tag-success">
+        <span class="page-header-tag-icon"><svg viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="6" fill="#2A814B"/><path d="M4.5 7l2 2 3.5-3.5" stroke="#fff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        正常运行
+      </span>
+      <span class="page-header-tag page-header-tag-warning">
+        <span class="page-header-tag-icon"><svg viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="6" fill="#D25F00"/><path d="M7 4v4" stroke="#fff" stroke-width="1.5" stroke-linecap="round"/><circle cx="7" cy="10.5" r="0.75" fill="#fff"/></svg></span>
+        告警中
+      </span>
+      <span class="page-header-tag page-header-tag-error">
+        <span class="page-header-tag-icon"><svg viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="6" fill="#CB2634"/><path d="M5 5l4 4M9 5l-4 4" stroke="#fff" stroke-width="1.5" stroke-linecap="round"/></svg></span>
+        已停止
+      </span>
+      <span class="page-header-tag page-header-tag-info">
+        <span class="page-header-tag-icon"><svg viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="6" fill="#1664FF"/><path d="M7 6v4" stroke="#fff" stroke-width="1.5" stroke-linecap="round"/><circle cx="7" cy="4" r="0.75" fill="#fff"/></svg></span>
+        创建中
+      </span>
+    </div>
+  </div>
+</body>
+</html>

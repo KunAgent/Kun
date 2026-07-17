@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Tabs</title>
+  <link rel="stylesheet" href="../colors_and_type.css" />
+  <link rel="stylesheet" href="../scaffold.css" />
+  <link rel="stylesheet" href="../components.css" />
+  <style>
+    /* @component-css-start */
+    /* ===== Tabs ===== */
+    .ds-tabs { display: flex; gap: var(--spacer-24); border-bottom: 1px solid var(--border-neutral-l1); }
+    .ds-tab {
+      padding: var(--spacer-12) 0;
+      background: transparent; border: none;
+      color: var(--text-tertiary); cursor: pointer;
+      font: inherit; font-size: var(--body-sm-font-size);
+      position: relative;
+    }
+    .ds-tab:hover { color: var(--text-default); }
+    .ds-tab.is-active { color: var(--text-default); }
+    .ds-tab.is-active::after {
+      content: ''; position: absolute;
+      left: 0; right: 0; bottom: -1px; height: 2px;
+      background: var(--icon-default);
+    }
+
+    /* Filled tabs: selected item gets a filled background + radius, no underline */
+    .ds-tabs--filled { border-bottom: none; gap: var(--spacer-4); }
+    .ds-tabs--filled .ds-tab {
+      padding: var(--spacer-6) var(--spacer-12);
+      border-radius: var(--radius-4);
+    }
+    .ds-tabs--filled .ds-tab.is-active::after { display: none; }
+    .ds-tabs--filled .ds-tab.is-active {
+      background: var(--bg-overlay-l3);
+      color: var(--text-default);
+    }
+
+    /* Closable tabs: each tab carries an inline close button on the right */
+    .ds-tabs--closable .ds-tab {
+      display: inline-flex; align-items: center; gap: var(--spacer-8);
+    }
+    .ds-tab__close {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 16px; height: 16px;
+      border-radius: var(--radius-2);
+      color: var(--icon-secondary);
+    }
+    .ds-tab__close:hover { background: var(--bg-overlay-l3); color: var(--icon-default); }
+    /* @component-css-end */
+  </style>
+</head>
+<body>
+  <div class="pv-header">
+    <h1>Tabs</h1>
+    <p>Underline tabs only. Inactive uses <code>--text-tertiary</code>; active uses <code>--text-default</code> with a 2px neutral underline (never brand fill).</p>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">Default</div>
+    <div class="ds-tabs">
+      <button class="ds-tab is-active">Overview</button>
+      <button class="ds-tab">Activity</button>
+      <button class="ds-tab">Members</button>
+      <button class="ds-tab">Settings</button>
+    </div>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">With counts</div>
+    <div class="ds-tabs">
+      <button class="ds-tab is-active">Open <span class="ds-tag num" style="margin-left: var(--spacer-6);">12</span></button>
+      <button class="ds-tab">Closed <span class="ds-tag num" style="margin-left: var(--spacer-6);">142</span></button>
+      <button class="ds-tab">Drafts <span class="ds-tag num" style="margin-left: var(--spacer-6);">3</span></button>
+    </div>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">Filled</div>
+    <div class="ds-tabs ds-tabs--filled">
+      <button class="ds-tab is-active">Overview</button>
+      <button class="ds-tab">Activity</button>
+      <button class="ds-tab">Members</button>
+      <button class="ds-tab">Settings</button>
+    </div>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">Closable</div>
+    <div class="ds-tabs ds-tabs--closable">
+      <button class="ds-tab is-active">main.js<span class="ds-tab__close"><img src="../assets/icons/x.svg" width="12" height="12" alt="close" class="icon"></span></button>
+      <button class="ds-tab">index.html<span class="ds-tab__close"><img src="../assets/icons/x.svg" width="12" height="12" alt="close" class="icon"></span></button>
+      <button class="ds-tab">styles.css<span class="ds-tab__close"><img src="../assets/icons/x.svg" width="12" height="12" alt="close" class="icon"></span></button>
+    </div>
+  </div>
+
+</body>
+</html>

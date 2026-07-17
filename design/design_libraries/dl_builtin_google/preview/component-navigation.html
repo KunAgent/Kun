@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Navigation</title>
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>body{margin:0;padding:calc(var(--spacing)*1.5);background:var(--background);color:var(--foreground);font-family:var(--font-sans);} .row{display:flex;align-items:center;gap:var(--spacing);flex-wrap:wrap;margin:0 0 var(--spacing);} .label{width:72px;flex:0 0 auto;font-size:11px;line-height:1;text-transform:uppercase;letter-spacing:var(--tracking-normal);color:var(--muted-foreground);} .topbar{display:flex;align-items:center;justify-content:space-between;gap:calc(var(--spacing)*1.5);width:100%;padding:calc(var(--spacing)*1.5) calc(var(--spacing)*1.75);border:1px solid var(--border);border-radius:var(--radius);background:var(--card);box-shadow:var(--shadow-sm);} .brand{font-size:14px;font-weight:600;color:var(--foreground);} .nav,.utils,.tabs{display:flex;align-items:center;gap:6px;flex-wrap:wrap;} .item,.tab,.util{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:8px 12px;border:1px solid transparent;border-radius:var(--radius);background:transparent;color:var(--muted-foreground);font:inherit;cursor:pointer;} .item.active{background:var(--primary);color:var(--primary-foreground);box-shadow:var(--shadow-xs);} .item:hover,.util:hover{background:var(--accent);color:var(--accent-foreground);} .item:focus-visible,.tab:focus-visible,.util:focus-visible{outline:2px solid var(--ring);outline-offset:2px;} .item:disabled,.tab:disabled,.util:disabled{opacity:.45;cursor:default;pointer-events:none;background:var(--muted);color:var(--muted-foreground);} .util{min-width:34px;padding:8px 10px;border-color:var(--border);background:var(--popover);color:var(--popover-foreground);} .tabs-wrap{display:flex;align-items:center;width:100%;padding:6px 0;border-bottom:1px solid var(--border);} .tab{padding:10px 2px;border:none;border-bottom:2px solid transparent;border-radius:0;} .tab.active{color:var(--foreground);border-color:var(--primary);} .tab:hover{color:var(--foreground);border-color:var(--accent);} .divider{margin:4px 0 12px;border:0;border-top:1px solid var(--border);}</style>
+</head>
+<body>
+<div class="row"><span class="label">Topbar</span><div class="topbar"><div class="brand">Google Ads</div><div class="nav"><button class="item active" type="button">Overview</button><button class="item" type="button">Performance</button><button class="item" type="button" disabled>Settings</button></div><div class="utils"><button class="util" type="button">9</button><button class="util" type="button">AJ</button></div></div></div>
+<hr class="divider">
+<div class="row"><span class="label">Tabs</span><div class="tabs-wrap"><div class="tabs"><button class="tab active" type="button">Overview</button><button class="tab" type="button">Performance</button><button class="tab" type="button" disabled>Settings</button></div></div></div>
+</body>
+</html>

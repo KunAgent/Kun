@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en" class="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Button Preview</title>
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>
+  /* Page scaffold — NOT extracted */
+  /* @component-css-start */
+body{margin:0;padding:calc(var(--spacing)*3);background:var(--background);color:var(--foreground);color-scheme:dark;font:500 14px/1.4 var(--font-sans)}.row{display:flex;align-items:center;gap:calc(var(--spacing)*2);margin-bottom:calc(var(--spacing)*2);flex-wrap:wrap}.label{min-width:72px;color:var(--muted-foreground);font:600 11px/1 var(--font-mono);letter-spacing:var(--tracking-normal);text-transform:uppercase}.divider{margin:calc(var(--spacing)*3) 0;border:0;border-top:1px solid var(--border)}.btn{display:inline-flex;align-items:center;justify-content:center;gap:calc(var(--spacing)*1.5);border:1px solid transparent;border-radius:var(--radius);padding:0 calc(var(--spacing)*4);height:40px;font:600 14px/1 var(--font-sans);letter-spacing:var(--tracking-normal);white-space:nowrap;cursor:pointer;transition:background-color .16s ease,color .16s ease,border-color .16s ease,box-shadow .16s ease}.btn:focus-visible{outline:0;box-shadow:0 0 0 2px var(--background),0 0 0 4px var(--ring)}.btn:disabled{cursor:not-allowed;opacity:.45;box-shadow:none}.primary{background:var(--primary);color:var(--primary-foreground);box-shadow:var(--shadow-sm)}.primary:hover:not(:disabled),.primary:active:not(:disabled){background:var(--foreground)}.secondary{background:var(--secondary);color:var(--secondary-foreground);border-color:var(--border)}.secondary:hover:not(:disabled),.secondary:active:not(:disabled){background:var(--accent);color:var(--accent-foreground)}.ghost{background:transparent;color:var(--foreground)}.ghost:hover:not(:disabled),.ghost:active:not(:disabled){background:var(--accent);color:var(--accent-foreground)}.sm{height:32px;padding:0 calc(var(--spacing)*3.5);font-size:13px}
+  /* @component-css-end */
+</style>
+</head>
+<body>
+<div class="row"><span class="label">Primary</span><button class="btn primary">Deploy</button><button class="btn primary" disabled>Production</button></div>
+<hr class="divider">
+<div class="row"><span class="label">Secondary</span><button class="btn secondary">Preview</button><button class="btn secondary" disabled>Edge Functions</button><button class="btn ghost sm">Rollback</button></div>
+</body>
+</html>

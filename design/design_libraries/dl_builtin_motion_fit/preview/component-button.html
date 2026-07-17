@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="stylesheet" href="../colors_and_type.css">
+<style>body{margin:0;padding:calc(var(--spacing)*3);background:var(--background);color:var(--foreground);font-family:var(--font-sans)}.row{display:flex;align-items:center;gap:calc(var(--spacing)*2);flex-wrap:wrap;margin:0 0 calc(var(--spacing)*2)}.label{min-width:72px;font:600 10px/1 var(--font-mono);letter-spacing:var(--tracking-normal);text-transform:uppercase;color:var(--foreground);opacity:.68}.divider{margin:calc(var(--spacing)*2) 0;border:0;border-top:1px solid var(--border)}.btn{display:inline-flex;align-items:center;justify-content:center;min-height:40px;padding:0 calc(var(--spacing)*4);border:1px solid transparent;border-radius:var(--radius);box-shadow:var(--shadow-sm);font:600 14px/1 var(--font-sans);letter-spacing:var(--tracking-normal);transition:background-color .16s,border-color .16s,box-shadow .16s,color .16s;cursor:pointer}.btn:focus-visible{outline:none;box-shadow:0 0 0 2px var(--ring),var(--shadow-sm)}.btn:active{transform:translateY(1px)}.btn-primary{background:var(--primary);color:var(--primary-foreground)}.btn-primary:hover{background:color-mix(in srgb,var(--primary) 88%,var(--accent))}.btn-secondary{background:transparent;color:var(--secondary-foreground);border-color:var(--border)}.btn-secondary:hover,.btn-ghost:hover{background:var(--secondary)}.btn-ghost{background:transparent;color:var(--foreground);box-shadow:none}.btn-lg{min-height:48px;padding:0 calc(var(--spacing)*5)}.btn[disabled]{opacity:.46;cursor:not-allowed;pointer-events:none}</style>
+</head>
+<body>
+<div class="row"><span class="label">Primary</span><button class="btn btn-primary">Start Workout</button><button class="btn btn-primary" disabled>Sync Pending</button></div>
+<hr class="divider">
+<div class="row"><span class="label">Secondary</span><button class="btn btn-secondary btn-lg">View Progress</button><button class="btn btn-secondary btn-lg" disabled>View Progress</button></div>
+<div class="row"><span class="label">Ghost</span><button class="btn btn-ghost">Sync Pending</button><button class="btn btn-ghost" disabled>Sync Pending</button></div>
+</body>
+</html>

@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Progress / Slider</title>
+  <link rel="stylesheet" href="../colors_and_type.css" />
+  <link rel="stylesheet" href="../scaffold.css" />
+  <link rel="stylesheet" href="../components.css" />
+  <style>
+    /* @component-css-start */
+    /* ===== Progress ===== */
+    .ds-progress { height: 6px; background: var(--bg-overlay-l2); border-radius: var(--radius-full); overflow: hidden; }
+    .ds-progress__bar { height: 100%; background: var(--text-default); border-radius: inherit; }
+    .ds-progress--brand .ds-progress__bar { background: var(--bg-brand); }
+    /* @component-css-end */
+  </style>
+</head>
+<body>
+  <div class="pv-header">
+    <h1>Progress / Slider</h1>
+    <p>Default progress uses the neutral text color. Brand fill is reserved for explicit progress states.</p>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">Progress</div>
+    <div class="stack-16" style="max-width: 480px;">
+      <div>
+        <div class="row" style="justify-content: space-between; margin-bottom: var(--spacer-6);">
+          <span class="text-secondary" style="font-size: var(--body-base-font-size);">Generating spec</span>
+          <span class="text-tertiary" style="font-size: var(--body-base-font-size);">50%</span>
+        </div>
+        <div class="ds-progress"><div class="ds-progress__bar" style="width: 50%;"></div></div>
+      </div>
+      <div>
+        <div class="row" style="justify-content: space-between; margin-bottom: var(--spacer-6);">
+          <span class="text-secondary" style="font-size: var(--body-base-font-size);">Sync (brand emphasis)</span>
+          <span class="text-tertiary" style="font-size: var(--body-base-font-size);">50%</span>
+        </div>
+        <div class="ds-progress ds-progress--brand"><div class="ds-progress__bar" style="width: 50%;"></div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="pv-section">
+    <div class="pv-section__title">Slider</div>
+    <div style="max-width: 360px;" data-slider>
+      <div class="row" style="justify-content: space-between; margin-bottom: var(--spacer-6);">
+        <span class="text-secondary" style="font-size: var(--body-base-font-size);">Density</span>
+        <span class="text-tertiary" style="font-size: var(--body-base-font-size);" data-slider-value>50</span>
+      </div>
+      <input type="range" class="ds-slider ds-slider--progress" min="0" max="100" value="50" />
+    </div>
+  </div>
+
+  <script>
+    const formatSliderValue = (value) => {
+      if (!Number.isFinite(value)) return '';
+      return Number.isInteger(value) ? String(value) : value.toFixed(2).replace(/\.?0+$/, '');
+    };
+
+    const syncSliderProgress = (slider) => {
+      const min = Number(slider.min || 0);
+      const max = Number(slider.max || 100);
+      const value = Number(slider.value);
+      const safeMin = Number.isFinite(min) ? min : 0;
+      const safeMax = Number.isFinite(max) ? max : 100;
+      const safeValue = Number.isFinite(value) ? value : safeMin;
+      const range = safeMax - safeMin;
+      const ratio = range > 0 ? (safeValue - safeMin) / range : 0;
+      const progress = Math.min(100, Math.max(0, ratio * 100));
+      const label = slider.closest('[data-slider]')?.querySelector('[data-slider-value]');
+
+      slider.style.setProperty('--ds-slider-progress', `${progress}%`);
+      if (label) label.textContent = formatSliderValue(safeValue);
+    };
+
+    document.querySelectorAll('.ds-slider--progress').forEach((slider) => {
+      syncSliderProgress(slider);
+      slider.addEventListener('input', () => syncSliderProgress(slider));
+    });
+  </script>
+</body>
+</html>

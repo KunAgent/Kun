@@ -1,0 +1,59 @@
+{
+  "library": "minimal-dashboard",
+  "components": [
+    {
+      "slug": "button",
+      "name": "Button",
+      "category": "actions",
+      "variantCount": 12,
+      "preview": "preview/component-button.html",
+      "keyInsight": "Actions should feel dense and calm, with high contrast fills and no decorative shadow."
+    },
+    {
+      "slug": "card",
+      "name": "Card",
+      "category": "surfaces",
+      "variantCount": 6,
+      "preview": "preview/component-card.html",
+      "keyInsight": "Cards should read as framed content blocks, relying on border contrast rather than depth."
+    },
+    {
+      "slug": "table",
+      "name": "Table",
+      "category": "data-display",
+      "variantCount": 6,
+      "preview": "preview/component-table.html",
+      "keyInsight": "Tables should stay quietly structured, with subtle dividers and restrained state color."
+    },
+    {
+      "slug": "chart",
+      "name": "Chart",
+      "category": "data-viz",
+      "variantCount": 5,
+      "preview": "preview/component-chart.html",
+      "keyInsight": "Charts are the only vivid accent in the system; they carry the brand's chromatic energy."
+    },
+    {
+      "slug": "navigation",
+      "name": "Navigation",
+      "category": "navigation",
+      "variantCount": 6,
+      "preview": "preview/component-navigation.html",
+      "keyInsight": "Navigation should feel editorial and quiet, using spacing and weight shifts over bright fills."
+    },
+    {
+      "slug": "sidebar",
+      "name": "Sidebar",
+      "category": "navigation",
+      "variantCount": 6,
+      "preview": "preview/component-sidebar.html",
+      "keyInsight": "Sidebar is a first-class pattern with its own tonal system, not just a bordered container."
+    }
+  ],
+  "crossComponentPatterns": {
+    "density": "Compact dashboard rhythm using a single 4px spacing unit.",
+    "radius": "One dominant soft radius mapped through radius-md.",
+    "elevation": "Near-flat surfaces with shadow tokens effectively disabled.",
+    "color": "Monochrome surfaces plus blue chart accents and separate sidebar tones."
+  }
+}
