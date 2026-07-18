@@ -125,6 +125,7 @@
 }
 
 .write-pdf-canvas,
+.write-pdf-text-layer-host,
 .write-pdf-text-layer,
 .write-pdf-overlay-layer {
   position: absolute;
@@ -173,11 +174,6 @@
 }
 
 .write-pdf-text-layer ::selection {
-  background: var(--write-selection-bg, var(--ds-selection));
-}
-
-.write-pdf-text-layer br::selection,
-.write-pdf-text-layer .write-pdf-text-ws::selection {
   background: transparent;
 }
 
@@ -191,6 +187,10 @@
   -webkit-user-select: none;
 }
 
+.write-pdf-text-layer.selecting .endOfContent {
+  top: 0;
+}
+
 .write-pdf-overlay-layer {
   z-index: 2;
   pointer-events: none;
@@ -200,12 +200,6 @@
   position: absolute;
   border-radius: 3px;
   background: var(--write-selection-bg, var(--ds-selection));
-}
-
-/* While the browser paints the native selection, the committed overlay stays
-   invisible so the two highlights never stack. */
-.write-pdf-viewer[data-live-selection] .write-pdf-selection-rect {
-  opacity: 0;
 }
 
 .write-workspace-toolbar-grid {
@@ -588,4 +582,1727 @@
   background: var(--ds-kbd-bg);
   border: 1px solid var(--ds-border-muted);
   box-shadow: var(--ds-shadow-chip);
+}
+
+/* Declarative UI Plugin v1.5 presentation ---------------------------------
+ *
+ * These selectors are deliberately host-owned. A plugin may select only the
+ * normalized data attributes applied by ui-plugin-store; it cannot contribute
+ * CSS, selectors, markup, or animation code.
+ */
+
+html[data-ui-plugin-presentation='on'] {
+  /* Plugins can override only --ds-* tokens. These aliases deliberately use
+   * host-owned color primitives so gradient-valued --ds-bg-main or
+   * --ds-surface-elevated tokens never invalidate color-mix()/gradient stops. */
+  --kun-ui-plugin-host-bg-color: var(--bg-app, #f3f5fc);
+  --kun-ui-plugin-host-surface-color: var(--surface-2, #ffffff);
+}
+
+html[data-ui-plugin-presentation='on'] .ds-chat-stage {
+  /* Keep host-drawn portraits and opaque frame ornaments out of the composer. */
+  --kun-ui-plugin-composer-safe-inset: 12rem;
+}
+
+.ds-ui-plugin-decor-layer,
+.ds-ui-plugin-character-layer,
+.ds-ui-plugin-readability-scrim {
+  position: absolute;
+  inset: 0;
+  display: none;
+  overflow: hidden;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+html[data-ui-plugin-presentation='on'] .ds-ui-plugin-decor-layer {
+  /* Every plugin-owned visual stays below Kun's z-3 content layer. */
+  z-index: 1;
+  display: block;
+}
+
+html[data-ui-plugin-presentation='on'] .ds-ui-plugin-character-layer {
+  z-index: 5;
+  display: flex;
+  inset:
+    4.75rem
+    clamp(0.75rem, 3cqw, 3rem)
+    var(--kun-ui-plugin-composer-safe-inset, 12rem)
+    clamp(0.75rem, 3cqw, 3rem);
+  align-items: center;
+  justify-content: flex-end;
+  opacity: var(--kun-ui-plugin-character-opacity, 1);
+  transform: translate(
+    var(--kun-ui-plugin-character-offset-x, 0%),
+    var(--kun-ui-plugin-character-offset-y, 0%)
+  );
+}
+
+html[data-ui-plugin-presentation='on'][data-ui-plugin-character-anchor='top-right']
+  .ds-ui-plugin-character-layer {
+  align-items: flex-start;
+}
+
+html[data-ui-plugin-presentation='on'][data-ui-plugin-character-anchor='bottom-right']
+  .ds-ui-plugin-character-layer {
+  align-items: flex-end;
+}
+
+.ds-ui-plugin-character {
+  display: block;
+  box-sizing: border-box;
+  width: clamp(16rem, 28cqw, 27rem);
+  max-width: 58%;
+  max-height: 100%;
+  object-fit: contain;
+  object-position: right center;
+  transform-origin: 72% 62%;
+}
+
+html[data-ui-plugin-character-size='large'] .ds-ui-plugin-character {
+  width: clamp(21rem, 37cqw, 37rem);
+  max-width: 68%;
+}
+
+html[data-ui-plugin-character-size='hero'] .ds-ui-plugin-character {
+  width: clamp(27rem, 48cqw, 49rem);
+  max-width: 78%;
+}
+
+html[data-ui-plugin-character-motion='breathe'] .ds-ui-plugin-character {
+  animation: ds-ui-plugin-character-breathe 5.8s ease-in-out infinite alternate;
+}
+
+html[data-ui-plugin-character-motion='float'] .ds-ui-plugin-character {
+  animation: ds-ui-plugin-character-float 5.2s ease-in-out infinite;
+}
+
+/* Nine host-drawn frames let each portrait keep its own visual identity. */
+html[data-ui-plugin-character-frame='soft-card'] .ds-ui-plugin-character {
+  padding: 0.45rem;
+  border: 1px solid color-mix(in srgb, var(--ds-accent) 30%, white 70%);
+  border-radius: 2.4rem;
+  background: color-mix(in srgb, var(--kun-ui-plugin-host-surface-color) 68%, transparent);
+  box-shadow:
+    0 30px 80px color-mix(in srgb, var(--ds-accent) 18%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.72);
+}
+
+html[data-ui-plugin-character-frame='paper'] .ds-ui-plugin-character {
+  padding: 0.72rem;
+  border: 1px solid color-mix(in srgb, var(--ds-border-strong) 74%, #a57b45 26%);
+  border-radius: 1.1rem 2rem 1.25rem 1.8rem;
+  background: color-mix(in srgb, var(--kun-ui-plugin-host-surface-color) 82%, #f0d9a8 18%);
+  box-shadow:
+    10px 16px 0 color-mix(in srgb, var(--ds-accent) 8%, transparent),
+    0 28px 55px rgba(44, 31, 21, 0.18);
+}
+
+html[data-ui-plugin-character-frame='crystal'] .ds-ui-plugin-character {
+  padding: 0.55rem;
+  border: 2px solid color-mix(in srgb, var(--ds-accent) 32%, white 68%);
+  border-radius: 2.8rem 1rem 3.2rem 1.35rem;
+  background: linear-gradient(
+    145deg,
+    rgba(255, 255, 255, 0.62),
+    color-mix(in srgb, var(--ds-accent) 18%, transparent)
+  );
+  box-shadow:
+    0 0 0 7px color-mix(in srgb, var(--ds-accent) 7%, transparent),
+    0 35px 90px color-mix(in srgb, var(--ds-accent) 30%, transparent);
+}
+
+html[data-ui-plugin-character-frame='hologram'] .ds-ui-plugin-character {
+  padding: 0.38rem;
+  border: 1px solid color-mix(in srgb, var(--ds-accent) 52%, #81f8ff 48%);
+  border-radius: 1.5rem;
+  background: color-mix(in srgb, var(--kun-ui-plugin-host-bg-color) 62%, transparent);
+  box-shadow:
+    0 0 0 1px rgba(141, 247, 255, 0.4),
+    0 0 34px color-mix(in srgb, var(--ds-accent) 32%, transparent),
+    inset 0 0 28px rgba(115, 238, 255, 0.12);
+}
+
+html[data-ui-plugin-character-frame='backstage'] .ds-ui-plugin-character {
+  padding: 0.62rem;
+  border: 2px solid color-mix(in srgb, var(--ds-accent) 45%, #e7bd68 55%);
+  border-radius: 0.65rem 2.4rem 0.65rem 2.4rem;
+  background: color-mix(in srgb, var(--kun-ui-plugin-host-surface-color) 78%, #3d213a 22%);
+  box-shadow:
+    0 0 0 5px color-mix(in srgb, var(--ds-accent) 10%, transparent),
+    -18px 24px 58px rgba(33, 16, 37, 0.3);
+}
+
+html[data-ui-plugin-character-frame='portal'] .ds-ui-plugin-character {
+  padding: clamp(0.45rem, 0.8cqw, 0.85rem);
+  border: 3px double color-mix(in srgb, var(--ds-accent) 72%, white 28%);
+  border-radius: 46% 46% 42% 42% / 36% 36% 50% 50%;
+  background: radial-gradient(
+    ellipse at center,
+    color-mix(in srgb, var(--ds-accent) 7%, var(--kun-ui-plugin-host-surface-color)),
+    color-mix(in srgb, var(--kun-ui-plugin-host-bg-color) 82%, transparent)
+  );
+  box-shadow:
+    0 0 0 8px color-mix(in srgb, var(--ds-accent) 9%, transparent),
+    0 0 65px color-mix(in srgb, var(--ds-accent) 36%, transparent);
+}
+
+html[data-ui-plugin-character-frame='polaroid'] .ds-ui-plugin-character {
+  padding: 0.75rem 0.75rem clamp(2rem, 3.2cqw, 3.4rem);
+  border: 1px solid rgba(50, 55, 67, 0.13);
+  border-radius: 0.4rem;
+  background: #fffefa;
+  box-shadow:
+    -10px 20px 0 color-mix(in srgb, var(--ds-accent) 8%, transparent),
+    0 32px 65px rgba(26, 31, 42, 0.24);
+}
+
+html[data-ui-plugin-character-frame='ticket'] .ds-ui-plugin-character {
+  padding: 0.72rem;
+  border: 2px dashed color-mix(in srgb, var(--ds-accent) 52%, #9d7140 48%);
+  border-radius: 0.7rem 2.2rem 0.7rem 2.2rem;
+  background: color-mix(in srgb, var(--kun-ui-plugin-host-surface-color) 80%, #f1d89b 20%);
+  box-shadow:
+    0 0 0 6px color-mix(in srgb, var(--kun-ui-plugin-host-bg-color) 84%, transparent),
+    0 26px 64px rgba(44, 35, 20, 0.2);
+}
+
+html[data-ui-plugin-character-frame='seal'] .ds-ui-plugin-character {
+  padding: 0.72rem;
+  border: 3px double color-mix(in srgb, var(--ds-accent) 62%, #cf9a45 38%);
+  border-radius: 45% 45% 48% 48% / 38% 38% 52% 52%;
+  background: color-mix(in srgb, var(--kun-ui-plugin-host-surface-color) 78%, transparent);
+  box-shadow:
+    0 0 0 9px color-mix(in srgb, var(--ds-accent) 10%, transparent),
+    0 0 0 11px color-mix(in srgb, var(--ds-accent) 24%, transparent),
+    0 30px 70px color-mix(in srgb, var(--ds-accent) 26%, transparent);
+}
+
+.ds-ui-plugin-decor-layer::before,
+.ds-ui-plugin-decor-layer::after {
+  content: '';
+  position: absolute;
+  pointer-events: none;
+}
+
+html[data-ui-plugin-character-frame='soft-card'] .ds-ui-plugin-decor-layer::before {
+  inset: 8% -10% auto auto;
+  width: 52cqw;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    color-mix(in srgb, var(--ds-accent) 24%, transparent),
+    transparent 68%
+  );
+}
+
+html[data-ui-plugin-character-frame='paper'] .ds-ui-plugin-decor-layer::before {
+  inset: 0;
+  opacity: 0.34;
+  background-image:
+    linear-gradient(color-mix(in srgb, var(--ds-accent) 9%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, var(--ds-accent) 9%, transparent) 1px, transparent 1px);
+  background-size: 28px 28px;
+}
+
+html[data-ui-plugin-character-frame='crystal'] .ds-ui-plugin-decor-layer::before,
+html[data-ui-plugin-character-frame='crystal'] .ds-ui-plugin-decor-layer::after {
+  width: 42cqw;
+  aspect-ratio: 1;
+  border: 1px solid color-mix(in srgb, var(--ds-accent) 24%, transparent);
+  transform: rotate(34deg);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.15), transparent 55%);
+}
+
+html[data-ui-plugin-character-frame='crystal'] .ds-ui-plugin-decor-layer::before {
+  top: 4%;
+  right: -14%;
+}
+
+html[data-ui-plugin-character-frame='crystal'] .ds-ui-plugin-decor-layer::after {
+  right: 8%;
+  bottom: -28%;
+}
+
+html[data-ui-plugin-character-frame='hologram'] .ds-ui-plugin-decor-layer::before {
+  inset: 0;
+  opacity: 0.24;
+  background: repeating-linear-gradient(
+    180deg,
+    transparent 0 7px,
+    color-mix(in srgb, var(--ds-accent) 28%, #83f7ff 72%) 8px,
+    transparent 9px
+  );
+}
+
+html[data-ui-plugin-character-frame='hologram'] .ds-ui-plugin-decor-layer::after {
+  top: 8%;
+  right: 3%;
+  bottom: 5%;
+  width: min(44cqw, 42rem);
+  border: 1px solid color-mix(in srgb, var(--ds-accent) 30%, transparent);
+  border-radius: 2rem;
+  box-shadow: inset 0 0 48px color-mix(in srgb, var(--ds-accent) 13%, transparent);
+}
+
+html[data-ui-plugin-character-frame='backstage'] .ds-ui-plugin-decor-layer::before {
+  inset: -30% -2% auto auto;
+  width: 58cqw;
+  height: 110%;
+  opacity: 0.42;
+  background: conic-gradient(
+    from 205deg at 70% 0%,
+    transparent 0 18deg,
+    color-mix(in srgb, var(--ds-accent) 24%, #ffe3a2 76%) 24deg 29deg,
+    transparent 35deg 47deg,
+    color-mix(in srgb, var(--ds-accent) 20%, #ffe3a2 80%) 54deg 59deg,
+    transparent 65deg
+  );
+  filter: blur(10px);
+}
+
+html[data-ui-plugin-character-frame='portal'] .ds-ui-plugin-decor-layer::before,
+html[data-ui-plugin-character-frame='seal'] .ds-ui-plugin-decor-layer::before {
+  right: clamp(0.75rem, 3cqw, 3rem);
+  top: 50%;
+  width: clamp(20rem, 43cqw, 45rem);
+  aspect-ratio: 1;
+  border: 1px solid color-mix(in srgb, var(--ds-accent) 30%, transparent);
+  border-radius: 50%;
+  box-shadow:
+    0 0 0 2cqw color-mix(in srgb, var(--ds-accent) 5%, transparent),
+    0 0 0 5cqw color-mix(in srgb, var(--ds-accent) 4%, transparent),
+    0 0 7cqw color-mix(in srgb, var(--ds-accent) 24%, transparent);
+  transform: translateY(-50%);
+}
+
+html[data-ui-plugin-character-frame='polaroid'] .ds-ui-plugin-decor-layer::before,
+html[data-ui-plugin-character-frame='polaroid'] .ds-ui-plugin-decor-layer::after {
+  right: 4%;
+  width: clamp(9rem, 15cqw, 15rem);
+  aspect-ratio: 4 / 5;
+  border: 1px solid rgba(60, 64, 72, 0.08);
+  background: color-mix(in srgb, var(--kun-ui-plugin-host-surface-color) 82%, white 18%);
+  box-shadow: 0 18px 45px rgba(20, 27, 40, 0.12);
+}
+
+html[data-ui-plugin-character-frame='polaroid'] .ds-ui-plugin-decor-layer::before {
+  top: 8%;
+  transform: rotate(8deg);
+}
+
+html[data-ui-plugin-character-frame='polaroid'] .ds-ui-plugin-decor-layer::after {
+  bottom: calc(var(--kun-ui-plugin-composer-safe-inset, 12rem) + 7%);
+  right: 23%;
+  transform: rotate(-7deg);
+}
+
+html[data-ui-plugin-character-frame='ticket'] .ds-ui-plugin-decor-layer::before {
+  inset: 8% 3% 7% auto;
+  width: min(46cqw, 45rem);
+  border: 2px dashed color-mix(in srgb, var(--ds-accent) 22%, transparent);
+  border-radius: 2rem;
+}
+
+/* Readability layer: character anchors are all on the right, so the opposite
+ * scrim protects the left conversation column without whitening the portrait. */
+html[data-ui-plugin-presentation='on'][data-ui-plugin-readability-scrim='opposite-character']
+  .ds-ui-plugin-readability-scrim {
+  z-index: 2;
+  display: block;
+  background: linear-gradient(
+    90deg,
+    var(--kun-ui-plugin-host-bg-color) 0%,
+    color-mix(in srgb, var(--kun-ui-plugin-host-bg-color) 94%, transparent) 38%,
+    color-mix(in srgb, var(--kun-ui-plugin-host-bg-color) 72%, transparent) 56%,
+    transparent 78%
+  );
+}
+
+html[data-ui-plugin-presentation='on'][data-ui-plugin-readability-scrim='full']
+  .ds-ui-plugin-readability-scrim {
+  z-index: 2;
+  display: block;
+  background: color-mix(in srgb, var(--kun-ui-plugin-host-bg-color) 78%, transparent);
+}
+
+html[data-ui-plugin-readability-strength='soft'] .ds-ui-plugin-readability-scrim {
+  opacity: 0.54;
+}
+
+html[data-ui-plugin-readability-strength='medium'] .ds-ui-plugin-readability-scrim {
+  opacity: 0.74;
+}
+
+html[data-ui-plugin-readability-strength='strong'] .ds-ui-plugin-readability-scrim {
+  opacity: 0.92;
+}
+
+/* Reserve real conversation/composer width for large right-side portraits. */
+html[data-ui-plugin-content-reserve='narrow'] .ds-chat-stage {
+  --kun-ui-plugin-content-reserve: clamp(10rem, 20cqw, 17rem);
+  --kun-ui-plugin-content-shift: clamp(3rem, 7cqw, 6rem);
+  --ds-chat-side-rail-reserve: calc(5.25rem + var(--kun-ui-plugin-content-reserve));
+}
+
+html[data-ui-plugin-content-reserve='wide'] .ds-chat-stage {
+  --kun-ui-plugin-content-reserve: clamp(15rem, 28cqw, 25rem);
+  --kun-ui-plugin-content-shift: clamp(8rem, 15cqw, 14rem);
+  --ds-chat-side-rail-reserve: calc(5.25rem + var(--kun-ui-plugin-content-reserve));
+}
+
+html[data-ui-plugin-presentation='on'] .ds-message-timeline-content,
+html[data-ui-plugin-presentation='on'] .ds-floating-composer {
+  translate: calc(-1 * var(--kun-ui-plugin-content-shift, 0rem)) 0;
+}
+
+/* Fixed material recipes. Plugin manifests choose names, never CSS values. */
+html[data-ui-plugin-surface-sidebar='solid']
+  :is(.ds-sidebar-shell, .ds-settings-sidebar) {
+  background: var(--ds-sidebar-gradient);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+html[data-ui-plugin-surface-topbar='solid'] .ds-topbar-surface {
+  background: var(--ds-topbar-bg);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+html[data-ui-plugin-surface-composer='solid'] .ds-composer-shell.ds-chat-composer,
+html[data-ui-plugin-surface-cards='solid']
+  :is(.ds-card-soft, .ds-card-strong, .ds-card-muted, .ds-card-ghost, .ds-surface-soft, .ds-surface-strong) {
+  background: var(--ds-surface-elevated);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+html[data-ui-plugin-surface-sidebar='translucent']
+  :is(.ds-sidebar-shell, .ds-settings-sidebar),
+html[data-ui-plugin-surface-topbar='translucent'] .ds-topbar-surface,
+html[data-ui-plugin-surface-composer='translucent'] .ds-composer-shell.ds-chat-composer,
+html[data-ui-plugin-surface-cards='translucent']
+  :is(.ds-card-soft, .ds-card-strong, .ds-card-muted, .ds-card-ghost, .ds-surface-soft, .ds-surface-strong) {
+  background: color-mix(in srgb, var(--kun-ui-plugin-host-surface-color) 82%, transparent);
+  -webkit-backdrop-filter: blur(6px) saturate(1.04);
+  backdrop-filter: blur(6px) saturate(1.04);
+}
+
+html[data-ui-plugin-surface-sidebar='glass']
+  :is(.ds-sidebar-shell, .ds-settings-sidebar),
+html[data-ui-plugin-surface-topbar='glass'] .ds-topbar-surface,
+html[data-ui-plugin-surface-composer='glass'] .ds-composer-shell.ds-chat-composer,
+html[data-ui-plugin-surface-cards='glass']
+  :is(.ds-card-soft, .ds-card-strong, .ds-card-muted, .ds-card-ghost, .ds-surface-soft, .ds-surface-strong) {
+  border-color: color-mix(in srgb, var(--ds-border) 72%, white 28%);
+  background: color-mix(in srgb, var(--kun-ui-plugin-host-surface-color) 62%, transparent);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.38),
+    0 16px 42px color-mix(in srgb, var(--kun-ui-plugin-host-bg-color) 28%, transparent);
+  -webkit-backdrop-filter: blur(16px) saturate(1.16);
+  backdrop-filter: blur(16px) saturate(1.16);
+}
+
+html[data-ui-plugin-surface-sidebar='strong-glass']
+  :is(.ds-sidebar-shell, .ds-settings-sidebar),
+html[data-ui-plugin-surface-topbar='strong-glass'] .ds-topbar-surface,
+html[data-ui-plugin-surface-composer='strong-glass'] .ds-composer-shell.ds-chat-composer,
+html[data-ui-plugin-surface-cards='strong-glass']
+  :is(.ds-card-soft, .ds-card-strong, .ds-card-muted, .ds-card-ghost, .ds-surface-soft, .ds-surface-strong) {
+  border-color: color-mix(in srgb, var(--ds-border-strong) 66%, white 34%);
+  background: color-mix(in srgb, var(--kun-ui-plugin-host-surface-color) 74%, transparent);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.52),
+    0 22px 58px color-mix(in srgb, var(--kun-ui-plugin-host-bg-color) 36%, transparent);
+  -webkit-backdrop-filter: blur(26px) saturate(1.24);
+  backdrop-filter: blur(26px) saturate(1.24);
+}
+
+@keyframes ds-ui-plugin-character-breathe {
+  from {
+    transform: scale(0.988);
+  }
+  to {
+    transform: scale(1.012);
+  }
+}
+
+@keyframes ds-ui-plugin-character-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-0.7rem);
+  }
+}
+
+/* Declarative UI Plugin scene v1.6 ----------------------------------------
+ * Scene images are main-process validated raster data URLs rendered by fixed
+ * host markup. Layout, z-order, clipping and animation remain host-owned.
+ */
+
+.ds-ui-plugin-scene-stage-layer,
+.ds-ui-plugin-scene-visual-zone {
+  position: absolute;
+  display: none;
+  overflow: hidden;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+html[data-ui-plugin-scene='on'] .ds-ui-plugin-scene-stage-layer {
+  z-index: 1;
+  inset: 0;
+  display: block;
+}
+
+html[data-ui-plugin-scene='on'] .ds-ui-plugin-scene-visual-zone {
+  /* Keep every scene image below Kun's z-3 message/composer surface. The
+   * reserved side geometry still gives the character a clean visual zone,
+   * while an expanded Composer or transient content can never be painted
+   * underneath plugin artwork. */
+  z-index: 2;
+  display: block;
+  top: 4.75rem;
+  bottom: var(--kun-ui-plugin-composer-safe-inset, 12rem);
+  width: clamp(20rem, 38cqw, 40rem);
+  contain: layout paint;
+}
+
+html[data-ui-plugin-scene='on'] .ds-chat-stage {
+  /* Discard the v1.5 right-side reserve before applying the selected v1.6
+   * layout. Backdrop scenes use Kun's normal content width. */
+  --ds-chat-side-rail-reserve: 5.25rem;
+}
+
+html[data-ui-plugin-scene-layout='rail-right'] .ds-ui-plugin-scene-visual-zone {
+  right: clamp(0.75rem, 3cqw, 3rem);
+}
+
+html[data-ui-plugin-scene-layout='rail-left'] .ds-ui-plugin-scene-visual-zone {
+  left: clamp(0.75rem, 3cqw, 3rem);
+}
+
+html[data-ui-plugin-scene-layout='card-right'] .ds-ui-plugin-scene-visual-zone,
+html[data-ui-plugin-scene-layout='card-left'] .ds-ui-plugin-scene-visual-zone {
+  top: clamp(6.5rem, 12%, 9rem);
+  bottom: max(var(--kun-ui-plugin-composer-safe-inset, 12rem), 34%);
+  width: clamp(17rem, 31cqw, 32rem);
+  border-radius: 2rem;
+}
+
+html[data-ui-plugin-scene-layout='card-right'] .ds-ui-plugin-scene-visual-zone {
+  right: clamp(1rem, 5cqw, 5rem);
+}
+
+html[data-ui-plugin-scene-layout='card-left'] .ds-ui-plugin-scene-visual-zone {
+  left: clamp(1rem, 5cqw, 5rem);
+}
+
+html[data-ui-plugin-scene-layout='backdrop-right'] .ds-ui-plugin-scene-visual-zone,
+html[data-ui-plugin-scene-layout='backdrop-center'] .ds-ui-plugin-scene-visual-zone {
+  z-index: 1;
+  inset: 4.75rem 0 0;
+  width: auto;
+  contain: layout paint;
+}
+
+html[data-ui-plugin-scene-layout='backdrop-right'] .ds-ui-plugin-scene-character {
+  margin-left: auto;
+}
+
+/* v1.6 owns content placement; the v1.5 presentation remains only a fallback. */
+html[data-ui-plugin-scene='on'] .ds-message-timeline-content,
+html[data-ui-plugin-scene='on'] .ds-floating-composer {
+  translate: none;
+}
+
+html[data-ui-plugin-scene-layout='rail-right'] .ds-chat-stage,
+html[data-ui-plugin-scene-layout='rail-left'] .ds-chat-stage {
+  --kun-ui-plugin-scene-content-reserve: clamp(15rem, 30cqw, 27rem);
+  --kun-ui-plugin-scene-content-shift: clamp(8rem, 16cqw, 15rem);
+  --ds-chat-side-rail-reserve: calc(5.25rem + var(--kun-ui-plugin-scene-content-reserve));
+}
+
+html[data-ui-plugin-scene-layout='card-right'] .ds-chat-stage,
+html[data-ui-plugin-scene-layout='card-left'] .ds-chat-stage {
+  --kun-ui-plugin-scene-content-reserve: clamp(11rem, 23cqw, 20rem);
+  --kun-ui-plugin-scene-content-shift: clamp(5rem, 10cqw, 9rem);
+  --ds-chat-side-rail-reserve: calc(5.25rem + var(--kun-ui-plugin-scene-content-reserve));
+}
+
+html:is(
+    [data-ui-plugin-scene-layout='rail-right'],
+    [data-ui-plugin-scene-layout='card-right']
+  ) :is(.ds-message-timeline-content, .ds-floating-composer) {
+  translate: calc(-1 * var(--kun-ui-plugin-scene-content-shift)) 0;
+}
+
+html:is(
+    [data-ui-plugin-scene-layout='rail-left'],
+    [data-ui-plugin-scene-layout='card-left']
+  ) :is(.ds-message-timeline-content, .ds-floating-composer) {
+  translate: var(--kun-ui-plugin-scene-content-shift) 0;
+}
+
+html:is(
+    [data-ui-plugin-scene-layout='rail-left'],
+    [data-ui-plugin-scene-layout='card-left']
+  )[data-ui-plugin-readability-scrim='opposite-character']
+  .ds-ui-plugin-readability-scrim {
+  background: linear-gradient(
+    270deg,
+    var(--kun-ui-plugin-host-bg-color) 0%,
+    color-mix(in srgb, var(--kun-ui-plugin-host-bg-color) 94%, transparent) 38%,
+    color-mix(in srgb, var(--kun-ui-plugin-host-bg-color) 72%, transparent) 56%,
+    transparent 78%
+  );
+}
+
+.ds-ui-plugin-scene-artwork,
+.ds-ui-plugin-scene-character {
+  position: absolute;
+  display: block;
+  box-sizing: border-box;
+  max-width: none;
+  max-height: none;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.ds-ui-plugin-scene-artwork {
+  --kun-ui-plugin-scene-layer-x: 0%;
+  --kun-ui-plugin-scene-layer-y: 0%;
+  --kun-ui-plugin-scene-layer-opacity: 1;
+  z-index: 1;
+  width: 55%;
+  height: 55%;
+  opacity: var(--kun-ui-plugin-scene-layer-opacity);
+  object-fit: contain;
+  object-position: center;
+  /* translate percentages resolve against the artwork's own X/Y dimensions;
+   * unlike percentage margins this keeps offsetY independent of stage width. */
+  translate:
+    calc(var(--kun-ui-plugin-scene-anchor-translate-x, -50%) + var(--kun-ui-plugin-scene-layer-x))
+    calc(var(--kun-ui-plugin-scene-anchor-translate-y, -50%) + var(--kun-ui-plugin-scene-layer-y));
+  transform-origin: center;
+  mix-blend-mode: normal;
+}
+
+.ds-ui-plugin-scene-artwork-backdrop {
+  --kun-ui-plugin-scene-layer-x: var(--kun-ui-plugin-scene-backdrop-offset-x, 0%);
+  --kun-ui-plugin-scene-layer-y: var(--kun-ui-plugin-scene-backdrop-offset-y, 0%);
+  --kun-ui-plugin-scene-layer-opacity: var(--kun-ui-plugin-scene-backdrop-opacity, 1);
+}
+
+.ds-ui-plugin-scene-artwork-ambient {
+  --kun-ui-plugin-scene-layer-x: var(--kun-ui-plugin-scene-ambient-offset-x, 0%);
+  --kun-ui-plugin-scene-layer-y: var(--kun-ui-plugin-scene-ambient-offset-y, 0%);
+  --kun-ui-plugin-scene-layer-opacity: var(--kun-ui-plugin-scene-ambient-opacity, 1);
+  z-index: 2;
+}
+
+.ds-ui-plugin-scene-artwork-frame {
+  --kun-ui-plugin-scene-layer-x: var(--kun-ui-plugin-scene-frame-offset-x, 0%);
+  --kun-ui-plugin-scene-layer-y: var(--kun-ui-plugin-scene-frame-offset-y, 0%);
+  --kun-ui-plugin-scene-layer-opacity: var(--kun-ui-plugin-scene-frame-opacity, 1);
+  z-index: 3;
+}
+
+.ds-ui-plugin-scene-artwork-foreground {
+  --kun-ui-plugin-scene-layer-x: var(--kun-ui-plugin-scene-foreground-offset-x, 0%);
+  --kun-ui-plugin-scene-layer-y: var(--kun-ui-plugin-scene-foreground-offset-y, 0%);
+  --kun-ui-plugin-scene-layer-opacity: var(--kun-ui-plugin-scene-foreground-opacity, 1);
+  z-index: 4;
+}
+
+.ds-ui-plugin-scene-artwork-emblem {
+  --kun-ui-plugin-scene-layer-x: var(--kun-ui-plugin-scene-emblem-offset-x, 0%);
+  --kun-ui-plugin-scene-layer-y: var(--kun-ui-plugin-scene-emblem-offset-y, 0%);
+  --kun-ui-plugin-scene-layer-opacity: var(--kun-ui-plugin-scene-emblem-opacity, 1);
+  z-index: 5;
+}
+
+.ds-ui-plugin-scene-artwork[data-scene-size='small'] {
+  width: 34%;
+  height: 34%;
+}
+
+.ds-ui-plugin-scene-artwork[data-scene-size='medium'] {
+  width: 55%;
+  height: 55%;
+}
+
+.ds-ui-plugin-scene-artwork[data-scene-size='large'] {
+  width: 78%;
+  height: 78%;
+}
+
+.ds-ui-plugin-scene-artwork[data-scene-size='full'] {
+  width: 100%;
+  height: 100%;
+}
+
+.ds-ui-plugin-scene-artwork[data-scene-fit='cover'] {
+  object-fit: cover;
+}
+
+.ds-ui-plugin-scene-artwork[data-scene-blend='screen'] {
+  mix-blend-mode: screen;
+}
+
+.ds-ui-plugin-scene-artwork[data-scene-blend='soft-light'] {
+  mix-blend-mode: soft-light;
+}
+
+.ds-ui-plugin-scene-artwork[data-scene-anchor='top-left'] {
+  --kun-ui-plugin-scene-anchor-translate-x: 0%;
+  --kun-ui-plugin-scene-anchor-translate-y: 0%;
+  top: 0;
+  left: 0;
+}
+
+.ds-ui-plugin-scene-artwork[data-scene-anchor='top'] {
+  --kun-ui-plugin-scene-anchor-translate-x: -50%;
+  --kun-ui-plugin-scene-anchor-translate-y: 0%;
+  top: 0;
+  left: 50%;
+}
+
+.ds-ui-plugin-scene-artwork[data-scene-anchor='top-right'] {
+  --kun-ui-plugin-scene-anchor-translate-x: -100%;
+  --kun-ui-plugin-scene-anchor-translate-y: 0%;
+  top: 0;
+  left: 100%;
+}
+
+.ds-ui-plugin-scene-artwork[data-scene-anchor='left'] {
+  --kun-ui-plugin-scene-anchor-translate-x: 0%;
+  --kun-ui-plugin-scene-anchor-translate-y: -50%;
+  top: 50%;
+  left: 0;
+}
+
+.ds-ui-plugin-scene-artwork[data-scene-anchor='center'] {
+  --kun-ui-plugin-scene-anchor-translate-x: -50%;
+  --kun-ui-plugin-scene-anchor-translate-y: -50%;
+  top: 50%;
+  left: 50%;
+}
+
+.ds-ui-plugin-scene-artwork[data-scene-anchor='right'] {
+  --kun-ui-plugin-scene-anchor-translate-x: -100%;
+  --kun-ui-plugin-scene-anchor-translate-y: -50%;
+  top: 50%;
+  left: 100%;
+}
+
+.ds-ui-plugin-scene-artwork[data-scene-anchor='bottom-left'] {
+  --kun-ui-plugin-scene-anchor-translate-x: 0%;
+  --kun-ui-plugin-scene-anchor-translate-y: -100%;
+  top: 100%;
+  left: 0;
+}
+
+.ds-ui-plugin-scene-artwork[data-scene-anchor='bottom'] {
+  --kun-ui-plugin-scene-anchor-translate-x: -50%;
+  --kun-ui-plugin-scene-anchor-translate-y: -100%;
+  top: 100%;
+  left: 50%;
+}
+
+.ds-ui-plugin-scene-artwork[data-scene-anchor='bottom-right'] {
+  --kun-ui-plugin-scene-anchor-translate-x: -100%;
+  --kun-ui-plugin-scene-anchor-translate-y: -100%;
+  top: 100%;
+  left: 100%;
+}
+
+.ds-ui-plugin-scene-artwork[data-scene-variant='dark'] {
+  display: none;
+}
+
+html[data-theme='dark']
+  .ds-ui-plugin-scene-artwork[data-scene-variant='default'][data-scene-has-dark='true'] {
+  display: none;
+}
+
+html[data-theme='dark'] .ds-ui-plugin-scene-artwork[data-scene-variant='dark'] {
+  display: block;
+}
+
+html[data-ui-plugin-scene='on'] .ds-ui-plugin-scene-character {
+  z-index: 2;
+  inset: 0;
+  width: 86%;
+  height: 100%;
+  margin-left: auto;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  opacity: var(--kun-ui-plugin-scene-character-opacity, 1);
+  object-fit: contain;
+  object-position: center;
+  translate: var(--kun-ui-plugin-scene-character-offset-x, 0%)
+    var(--kun-ui-plugin-scene-character-offset-y, 0%);
+  transform-origin: 50% 62%;
+}
+
+html[data-ui-plugin-scene-layout='rail-left'] .ds-ui-plugin-scene-character,
+html[data-ui-plugin-scene-layout='card-left'] .ds-ui-plugin-scene-character {
+  margin-right: auto;
+  margin-left: 0;
+}
+
+html[data-ui-plugin-scene-character-scale='compact'] .ds-ui-plugin-scene-character {
+  width: 70%;
+}
+
+html[data-ui-plugin-scene-character-scale='hero'] .ds-ui-plugin-scene-character {
+  width: 100%;
+}
+
+/* Backdrop-right keeps a deliberate right-side silhouette at every scale.
+ * These layout+scale selectors follow the generic scale rules so they cannot
+ * be overwritten by the default 70/86/100% character widths. */
+html[data-ui-plugin-scene-layout='backdrop-right'][data-ui-plugin-scene-character-scale='compact']
+  .ds-ui-plugin-scene-character {
+  width: min(52%, 44rem);
+}
+
+html[data-ui-plugin-scene-layout='backdrop-right'][data-ui-plugin-scene-character-scale='standard']
+  .ds-ui-plugin-scene-character {
+  width: min(68%, 58rem);
+}
+
+html[data-ui-plugin-scene-layout='backdrop-right'][data-ui-plugin-scene-character-scale='hero']
+  .ds-ui-plugin-scene-character {
+  width: min(78%, 66rem);
+}
+
+html[data-ui-plugin-scene-character-fit='cover'] .ds-ui-plugin-scene-character {
+  object-fit: cover;
+}
+
+html[data-ui-plugin-scene-character-focal-point='top-left'] .ds-ui-plugin-scene-character {
+  object-position: left top;
+}
+
+html[data-ui-plugin-scene-character-focal-point='top'] .ds-ui-plugin-scene-character {
+  object-position: center top;
+}
+
+html[data-ui-plugin-scene-character-focal-point='top-right'] .ds-ui-plugin-scene-character {
+  object-position: right top;
+}
+
+html[data-ui-plugin-scene-character-focal-point='left'] .ds-ui-plugin-scene-character {
+  object-position: left center;
+}
+
+html[data-ui-plugin-scene-character-focal-point='right'] .ds-ui-plugin-scene-character {
+  object-position: right center;
+}
+
+html[data-ui-plugin-scene-character-focal-point='bottom-left'] .ds-ui-plugin-scene-character {
+  object-position: left bottom;
+}
+
+html[data-ui-plugin-scene-character-focal-point='bottom'] .ds-ui-plugin-scene-character {
+  object-position: center bottom;
+}
+
+html[data-ui-plugin-scene-character-focal-point='bottom-right'] .ds-ui-plugin-scene-character {
+  object-position: right bottom;
+}
+
+html[data-ui-plugin-scene-character-mask='soft-card'] .ds-ui-plugin-scene-character {
+  border-radius: 2.4rem;
+}
+
+html[data-ui-plugin-scene-character-mask='circle'] .ds-ui-plugin-scene-character {
+  border-radius: 50%;
+  clip-path: circle(48% at 50% 50%);
+}
+
+html[data-ui-plugin-scene-character-mask='arch'] .ds-ui-plugin-scene-character {
+  border-radius: 48% 48% 1.4rem 1.4rem / 34% 34% 1.4rem 1.4rem;
+  clip-path: inset(0 round 48% 48% 1.4rem 1.4rem / 34% 34% 1.4rem 1.4rem);
+}
+
+html[data-ui-plugin-scene-character-mask='diamond'] .ds-ui-plugin-scene-character {
+  clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
+}
+
+html[data-ui-plugin-scene-character-mask='hologram'] .ds-ui-plugin-scene-character {
+  clip-path: polygon(4% 0, 96% 0, 100% 8%, 100% 92%, 96% 100%, 4% 100%, 0 92%, 0 8%);
+}
+
+html[data-ui-plugin-scene-character-mask='portal'] .ds-ui-plugin-scene-character {
+  border-radius: 46% 46% 42% 42% / 36% 36% 50% 50%;
+  clip-path: ellipse(48% 49% at 50% 50%);
+}
+
+html[data-ui-plugin-scene-character-mask='polaroid'] .ds-ui-plugin-scene-character {
+  clip-path: inset(2% 3% 11% round 0.35rem);
+}
+
+html[data-ui-plugin-scene-character-mask='ticket'] .ds-ui-plugin-scene-character {
+  clip-path: polygon(4% 0, 96% 0, 100% 7%, 96% 14%, 100% 21%, 96% 28%, 100% 35%, 96% 42%, 100% 50%, 96% 58%, 100% 65%, 96% 72%, 100% 79%, 96% 86%, 100% 93%, 96% 100%, 4% 100%, 0 93%, 4% 86%, 0 79%, 4% 72%, 0 65%, 4% 58%, 0 50%, 4% 42%, 0 35%, 4% 28%, 0 21%, 4% 14%, 0 7%);
+}
+
+html[data-ui-plugin-scene-character-flip-x='on'] .ds-ui-plugin-scene-character {
+  scale: -1 1;
+}
+
+html[data-ui-plugin-scene-character-motion='breathe'] .ds-ui-plugin-scene-character {
+  animation-name: ds-ui-plugin-character-breathe;
+}
+
+html[data-ui-plugin-scene-character-motion='float'] .ds-ui-plugin-scene-character {
+  animation-name: ds-ui-plugin-character-float;
+}
+
+html[data-ui-plugin-scene-character-motion='sway'] .ds-ui-plugin-scene-character {
+  animation-name: ds-ui-plugin-scene-sway;
+}
+
+html[data-ui-plugin-scene-character-motion='none'] .ds-ui-plugin-scene-character {
+  animation: none;
+}
+
+html[data-ui-plugin-scene='on'] .ds-ui-plugin-scene-character,
+.ds-ui-plugin-scene-artwork[data-scene-motion]:not([data-scene-motion='none']) {
+  animation-duration: var(--kun-ui-plugin-scene-motion-duration, 8s);
+  --kun-ui-plugin-scene-motion-phase-b: -2.64s;
+  --kun-ui-plugin-scene-motion-phase-c: -5.28s;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+}
+
+html[data-ui-plugin-scene-character-motion-speed='slow'] .ds-ui-plugin-scene-character,
+.ds-ui-plugin-scene-artwork[data-scene-motion-speed='slow'] {
+  --kun-ui-plugin-scene-motion-duration: 12s;
+  --kun-ui-plugin-scene-motion-phase-b: -4s;
+  --kun-ui-plugin-scene-motion-phase-c: -8s;
+}
+
+html[data-ui-plugin-scene-character-motion-speed='fast'] .ds-ui-plugin-scene-character,
+.ds-ui-plugin-scene-artwork[data-scene-motion-speed='fast'] {
+  --kun-ui-plugin-scene-motion-duration: 5s;
+  --kun-ui-plugin-scene-motion-phase-b: -1.65s;
+  --kun-ui-plugin-scene-motion-phase-c: -3.3s;
+}
+
+html[data-ui-plugin-scene-character-motion-phase='b'] .ds-ui-plugin-scene-character,
+.ds-ui-plugin-scene-artwork[data-scene-motion-phase='b'] {
+  animation-delay: var(--kun-ui-plugin-scene-motion-phase-b, -2.64s);
+}
+
+html[data-ui-plugin-scene-character-motion-phase='c'] .ds-ui-plugin-scene-character,
+.ds-ui-plugin-scene-artwork[data-scene-motion-phase='c'] {
+  animation-delay: var(--kun-ui-plugin-scene-motion-phase-c, -5.28s);
+}
+
+.ds-ui-plugin-scene-artwork[data-scene-motion='float'] {
+  animation-name: ds-ui-plugin-scene-float;
+}
+
+.ds-ui-plugin-scene-artwork[data-scene-motion='drift-x'] {
+  animation-name: ds-ui-plugin-scene-drift-x;
+}
+
+.ds-ui-plugin-scene-artwork[data-scene-motion='drift-y'] {
+  animation-name: ds-ui-plugin-scene-drift-y;
+}
+
+.ds-ui-plugin-scene-artwork[data-scene-motion='pulse'] {
+  animation-name: ds-ui-plugin-scene-pulse;
+}
+
+.ds-ui-plugin-scene-artwork[data-scene-motion='orbit'] {
+  animation-name: ds-ui-plugin-scene-orbit;
+  animation-timing-function: linear;
+}
+
+.ds-ui-plugin-scene-artwork[data-scene-motion='twinkle'] {
+  animation-name: ds-ui-plugin-scene-twinkle;
+}
+
+.ds-ui-plugin-scene-artwork[data-scene-motion='scan'] {
+  animation-name: ds-ui-plugin-scene-scan;
+  animation-timing-function: linear;
+}
+
+@keyframes ds-ui-plugin-scene-sway {
+  0%,
+  100% {
+    transform: rotate(-0.8deg) translateY(0);
+  }
+  50% {
+    transform: rotate(0.8deg) translateY(-0.25rem);
+  }
+}
+
+@keyframes ds-ui-plugin-scene-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-0.7rem);
+  }
+}
+
+@keyframes ds-ui-plugin-scene-drift-x {
+  0%,
+  100% {
+    transform: translateX(-0.7rem);
+  }
+  50% {
+    transform: translateX(0.7rem);
+  }
+}
+
+@keyframes ds-ui-plugin-scene-drift-y {
+  0%,
+  100% {
+    transform: translateY(-0.55rem);
+  }
+  50% {
+    transform: translateY(0.55rem);
+  }
+}
+
+@keyframes ds-ui-plugin-scene-pulse {
+  0%,
+  100% {
+    transform: scale(0.985);
+  }
+  50% {
+    transform: scale(1.015);
+  }
+}
+
+@keyframes ds-ui-plugin-scene-orbit {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes ds-ui-plugin-scene-twinkle {
+  0%,
+  100% {
+    filter: brightness(0.92);
+    opacity: calc(var(--kun-ui-plugin-scene-layer-opacity) * 0.68);
+  }
+  50% {
+    filter: brightness(1.16);
+    opacity: var(--kun-ui-plugin-scene-layer-opacity);
+  }
+}
+
+@keyframes ds-ui-plugin-scene-scan {
+  0% {
+    clip-path: inset(0 0 92% 0);
+  }
+  50% {
+    clip-path: inset(46% 0 46% 0);
+  }
+  100% {
+    clip-path: inset(92% 0 0 0);
+  }
+}
+
+/* v1.6 chrome recipes affect only fixed Kun surfaces. */
+html[data-ui-plugin-scene-chrome-sidebar='soft'] :is(.ds-sidebar-shell, .ds-settings-sidebar),
+html[data-ui-plugin-scene-chrome-topbar='soft'] .ds-topbar-surface,
+html[data-ui-plugin-scene-chrome-composer='soft'] .ds-composer-shell.ds-chat-composer,
+html[data-ui-plugin-scene-chrome-cards='soft']
+  :is(.ds-card-soft, .ds-card-strong, .ds-card-muted, .ds-card-ghost, .ds-surface-soft, .ds-surface-strong) {
+  border-radius: 1.8rem;
+  border-color: color-mix(in srgb, var(--ds-accent) 18%, var(--ds-border));
+  box-shadow: 0 18px 46px color-mix(in srgb, var(--ds-accent) 12%, transparent);
+}
+
+html[data-ui-plugin-scene-chrome-sidebar='editorial'] :is(.ds-sidebar-shell, .ds-settings-sidebar),
+html[data-ui-plugin-scene-chrome-topbar='editorial'] .ds-topbar-surface,
+html[data-ui-plugin-scene-chrome-composer='editorial'] .ds-composer-shell.ds-chat-composer,
+html[data-ui-plugin-scene-chrome-cards='editorial']
+  :is(.ds-card-soft, .ds-card-strong, .ds-card-muted, .ds-card-ghost, .ds-surface-soft, .ds-surface-strong) {
+  border-radius: 0.45rem;
+  border-color: color-mix(in srgb, var(--ds-accent) 40%, var(--ds-border));
+  box-shadow:
+    inset 3px 0 0 color-mix(in srgb, var(--ds-accent) 72%, transparent),
+    0 12px 30px rgba(27, 31, 39, 0.1);
+}
+
+html[data-ui-plugin-scene-chrome-sidebar='paper'] :is(.ds-sidebar-shell, .ds-settings-sidebar),
+html[data-ui-plugin-scene-chrome-topbar='paper'] .ds-topbar-surface,
+html[data-ui-plugin-scene-chrome-composer='paper'] .ds-composer-shell.ds-chat-composer,
+html[data-ui-plugin-scene-chrome-cards='paper']
+  :is(.ds-card-soft, .ds-card-strong, .ds-card-muted, .ds-card-ghost, .ds-surface-soft, .ds-surface-strong) {
+  border-radius: 0.85rem 1.35rem 0.9rem 1.25rem;
+  border-color: color-mix(in srgb, var(--ds-accent) 22%, #a98252 78%);
+  background-color: color-mix(in srgb, var(--kun-ui-plugin-host-surface-color) 90%, #f1dfb6 10%);
+  box-shadow: 8px 10px 0 color-mix(in srgb, var(--ds-accent) 6%, transparent);
+}
+
+html[data-ui-plugin-scene-chrome-sidebar='crystal'] :is(.ds-sidebar-shell, .ds-settings-sidebar),
+html[data-ui-plugin-scene-chrome-topbar='crystal'] .ds-topbar-surface,
+html[data-ui-plugin-scene-chrome-composer='crystal'] .ds-composer-shell.ds-chat-composer,
+html[data-ui-plugin-scene-chrome-cards='crystal']
+  :is(.ds-card-soft, .ds-card-strong, .ds-card-muted, .ds-card-ghost, .ds-surface-soft, .ds-surface-strong) {
+  border-radius: 1.9rem 0.6rem 2.2rem 0.8rem;
+  border-color: color-mix(in srgb, var(--ds-accent) 50%, white 50%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.62),
+    0 0 0 3px color-mix(in srgb, var(--ds-accent) 6%, transparent),
+    0 18px 52px color-mix(in srgb, var(--ds-accent) 18%, transparent);
+}
+
+html[data-ui-plugin-scene-chrome-sidebar='hologram'] :is(.ds-sidebar-shell, .ds-settings-sidebar),
+html[data-ui-plugin-scene-chrome-topbar='hologram'] .ds-topbar-surface,
+html[data-ui-plugin-scene-chrome-composer='hologram'] .ds-composer-shell.ds-chat-composer,
+html[data-ui-plugin-scene-chrome-cards='hologram']
+  :is(.ds-card-soft, .ds-card-strong, .ds-card-muted, .ds-card-ghost, .ds-surface-soft, .ds-surface-strong) {
+  border-radius: 1rem;
+  border-color: color-mix(in srgb, var(--ds-accent) 58%, #7af5ff 42%);
+  box-shadow:
+    inset 0 0 24px rgba(116, 239, 255, 0.1),
+    0 0 26px color-mix(in srgb, var(--ds-accent) 22%, transparent);
+}
+
+html[data-ui-plugin-scene-chrome-sidebar='backstage'] :is(.ds-sidebar-shell, .ds-settings-sidebar),
+html[data-ui-plugin-scene-chrome-topbar='backstage'] .ds-topbar-surface,
+html[data-ui-plugin-scene-chrome-composer='backstage'] .ds-composer-shell.ds-chat-composer,
+html[data-ui-plugin-scene-chrome-cards='backstage']
+  :is(.ds-card-soft, .ds-card-strong, .ds-card-muted, .ds-card-ghost, .ds-surface-soft, .ds-surface-strong) {
+  border: 2px solid color-mix(in srgb, var(--ds-accent) 48%, #d7aa58 52%);
+  border-radius: 0.5rem 1.9rem;
+  box-shadow:
+    inset 0 0 0 3px color-mix(in srgb, var(--ds-accent) 7%, transparent),
+    0 20px 48px rgba(42, 20, 39, 0.2);
+}
+
+html[data-ui-plugin-scene-chrome-sidebar='portal'] :is(.ds-sidebar-shell, .ds-settings-sidebar),
+html[data-ui-plugin-scene-chrome-topbar='portal'] .ds-topbar-surface,
+html[data-ui-plugin-scene-chrome-composer='portal'] .ds-composer-shell.ds-chat-composer,
+html[data-ui-plugin-scene-chrome-cards='portal']
+  :is(.ds-card-soft, .ds-card-strong, .ds-card-muted, .ds-card-ghost, .ds-surface-soft, .ds-surface-strong) {
+  border: 3px double color-mix(in srgb, var(--ds-accent) 64%, white 36%);
+  border-radius: 2.4rem;
+  box-shadow:
+    0 0 0 5px color-mix(in srgb, var(--ds-accent) 6%, transparent),
+    0 0 42px color-mix(in srgb, var(--ds-accent) 22%, transparent);
+}
+
+html[data-ui-plugin-scene-chrome-sidebar='polaroid'] :is(.ds-sidebar-shell, .ds-settings-sidebar),
+html[data-ui-plugin-scene-chrome-topbar='polaroid'] .ds-topbar-surface,
+html[data-ui-plugin-scene-chrome-composer='polaroid'] .ds-composer-shell.ds-chat-composer,
+html[data-ui-plugin-scene-chrome-cards='polaroid']
+  :is(.ds-card-soft, .ds-card-strong, .ds-card-muted, .ds-card-ghost, .ds-surface-soft, .ds-surface-strong) {
+  border: 1px solid rgba(50, 55, 67, 0.13);
+  border-radius: 0.35rem;
+  background-color: color-mix(in srgb, var(--kun-ui-plugin-host-surface-color) 94%, #fff4dd 6%);
+  box-shadow:
+    -7px 10px 0 color-mix(in srgb, var(--ds-accent) 7%, transparent),
+    0 20px 44px rgba(26, 31, 42, 0.16);
+}
+
+html[data-ui-plugin-scene-chrome-sidebar='ticket'] :is(.ds-sidebar-shell, .ds-settings-sidebar),
+html[data-ui-plugin-scene-chrome-topbar='ticket'] .ds-topbar-surface,
+html[data-ui-plugin-scene-chrome-composer='ticket'] .ds-composer-shell.ds-chat-composer,
+html[data-ui-plugin-scene-chrome-cards='ticket']
+  :is(.ds-card-soft, .ds-card-strong, .ds-card-muted, .ds-card-ghost, .ds-surface-soft, .ds-surface-strong) {
+  border: 2px dashed color-mix(in srgb, var(--ds-accent) 50%, #987044 50%);
+  border-radius: 0.65rem 1.8rem;
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--kun-ui-plugin-host-bg-color) 82%, transparent);
+}
+
+html[data-ui-plugin-scene-chrome-sidebar='seal'] :is(.ds-sidebar-shell, .ds-settings-sidebar),
+html[data-ui-plugin-scene-chrome-topbar='seal'] .ds-topbar-surface,
+html[data-ui-plugin-scene-chrome-composer='seal'] .ds-composer-shell.ds-chat-composer,
+html[data-ui-plugin-scene-chrome-cards='seal']
+  :is(.ds-card-soft, .ds-card-strong, .ds-card-muted, .ds-card-ghost, .ds-surface-soft, .ds-surface-strong) {
+  border: 3px double color-mix(in srgb, var(--ds-accent) 58%, #c79543 42%);
+  border-radius: 1.5rem;
+  box-shadow:
+    0 0 0 5px color-mix(in srgb, var(--ds-accent) 7%, transparent),
+    0 18px 44px color-mix(in srgb, var(--ds-accent) 16%, transparent);
+}
+
+/* Character-specific v1.6 chrome recipes. These selectors only restyle
+ * existing Kun surfaces: they never create plugin-owned DOM or hit targets. */
+html[data-ui-plugin-scene-chrome-sidebar='botanical']
+  :is(.ds-sidebar-shell, .ds-settings-sidebar),
+html[data-ui-plugin-scene-chrome-topbar='botanical'] .ds-topbar-surface,
+html[data-ui-plugin-scene-chrome-composer='botanical'] .ds-composer-shell.ds-chat-composer,
+html[data-ui-plugin-scene-chrome-cards='botanical']
+  :is(
+    .ds-card-soft,
+    .ds-card-strong,
+    .ds-card-muted,
+    .ds-card-ghost,
+    .ds-surface-soft,
+    .ds-surface-strong,
+    .ds-user-message-bubble,
+    .ds-chat-answer
+  ),
+html[data-ui-plugin-scene-chrome-cards='botanical']
+  .ds-markdown
+  [data-streamdown='table-wrapper']
+  > div:last-child,
+html[data-ui-plugin-scene-chrome-cards='botanical']
+  .ds-markdown
+  [data-streamdown='table'] {
+  --ds-sidebar-haze: radial-gradient(
+    circle at 12% 8%,
+    color-mix(in srgb, var(--ds-accent) 13%, transparent),
+    transparent 34%
+  );
+  --ds-table-head-bg: color-mix(in srgb, var(--ds-accent) 12%, var(--kun-ui-plugin-host-surface-color));
+  border: 1px solid color-mix(in srgb, var(--ds-accent) 32%, #789883 68%);
+  border-radius: 1.8rem 0.75rem 1.45rem 0.95rem;
+  background:
+    radial-gradient(circle at 8% 2%, color-mix(in srgb, #e98eb1 18%, transparent), transparent 27%),
+    radial-gradient(circle at 94% 92%, color-mix(in srgb, #79ae8c 18%, transparent), transparent 31%),
+    linear-gradient(
+      145deg,
+      color-mix(in srgb, var(--kun-ui-plugin-host-surface-color) 91%, #fff0f5 9%),
+      color-mix(in srgb, var(--kun-ui-plugin-host-surface-color) 87%, #dff2e6 13%)
+    );
+  box-shadow:
+    inset 4px 0 0 color-mix(in srgb, #79ae8c 22%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.48),
+    0 16px 38px color-mix(in srgb, #a94c76 13%, transparent);
+  -webkit-backdrop-filter: blur(18px) saturate(1.08);
+  backdrop-filter: blur(18px) saturate(1.08);
+}
+
+html[data-ui-plugin-scene-chrome-sidebar='fortune-ledger']
+  :is(.ds-sidebar-shell, .ds-settings-sidebar),
+html[data-ui-plugin-scene-chrome-topbar='fortune-ledger'] .ds-topbar-surface,
+html[data-ui-plugin-scene-chrome-composer='fortune-ledger']
+  .ds-composer-shell.ds-chat-composer,
+html[data-ui-plugin-scene-chrome-cards='fortune-ledger']
+  :is(
+    .ds-card-soft,
+    .ds-card-strong,
+    .ds-card-muted,
+    .ds-card-ghost,
+    .ds-surface-soft,
+    .ds-surface-strong,
+    .ds-user-message-bubble,
+    .ds-chat-answer
+  ),
+html[data-ui-plugin-scene-chrome-cards='fortune-ledger']
+  .ds-markdown
+  [data-streamdown='table-wrapper']
+  > div:last-child,
+html[data-ui-plugin-scene-chrome-cards='fortune-ledger']
+  .ds-markdown
+  [data-streamdown='table'] {
+  --ds-sidebar-haze: linear-gradient(90deg, rgba(160, 35, 31, 0.07), transparent 36%);
+  --ds-table-head-bg: color-mix(in srgb, #b82e2c 11%, var(--kun-ui-plugin-host-surface-color));
+  border: 2px solid color-mix(in srgb, #b82e2c 58%, #b49355 42%);
+  border-radius: 0.35rem;
+  background:
+    linear-gradient(
+      90deg,
+      transparent 0 2.15rem,
+      color-mix(in srgb, #b82e2c 20%, transparent) 2.15rem 2.22rem,
+      transparent 2.22rem
+    ),
+    repeating-linear-gradient(
+      0deg,
+      transparent 0 1.42rem,
+      color-mix(in srgb, #b49355 15%, transparent) 1.42rem 1.47rem
+    ),
+    color-mix(in srgb, var(--kun-ui-plugin-host-surface-color) 91%, #f5e6c7 9%);
+  box-shadow:
+    inset 0 0 0 3px color-mix(in srgb, #b49355 13%, transparent),
+    5px 7px 0 color-mix(in srgb, #8f2423 11%, transparent);
+  -webkit-backdrop-filter: blur(8px) saturate(1.04);
+  backdrop-filter: blur(8px) saturate(1.04);
+}
+
+html[data-ui-plugin-scene-chrome-sidebar='dream-gate']
+  :is(.ds-sidebar-shell, .ds-settings-sidebar),
+html[data-ui-plugin-scene-chrome-topbar='dream-gate'] .ds-topbar-surface,
+html[data-ui-plugin-scene-chrome-composer='dream-gate'] .ds-composer-shell.ds-chat-composer,
+html[data-ui-plugin-scene-chrome-cards='dream-gate']
+  :is(
+    .ds-card-soft,
+    .ds-card-strong,
+    .ds-card-muted,
+    .ds-card-ghost,
+    .ds-surface-soft,
+    .ds-surface-strong,
+    .ds-user-message-bubble,
+    .ds-chat-answer
+  ),
+html[data-ui-plugin-scene-chrome-cards='dream-gate']
+  .ds-markdown
+  [data-streamdown='table-wrapper']
+  > div:last-child,
+html[data-ui-plugin-scene-chrome-cards='dream-gate']
+  .ds-markdown
+  [data-streamdown='table'] {
+  --ds-sidebar-haze: radial-gradient(ellipse at 50% 0%, rgba(195, 34, 74, 0.15), transparent 48%);
+  --ds-table-head-bg: color-mix(in srgb, #c3224a 13%, var(--kun-ui-plugin-host-surface-color));
+  border: 2px solid color-mix(in srgb, #c3224a 52%, #cda15f 48%);
+  border-radius: 2.4rem 2.4rem 0.7rem 0.7rem;
+  background:
+    radial-gradient(
+      ellipse at 50% 112%,
+      color-mix(in srgb, #c3224a 22%, transparent),
+      transparent 58%
+    ),
+    radial-gradient(circle at 50% -12%, color-mix(in srgb, #d5a85e 18%, transparent), transparent 46%),
+    color-mix(in srgb, var(--kun-ui-plugin-host-surface-color) 88%, #f4d9df 12%);
+  box-shadow:
+    inset 0 0 0 4px color-mix(in srgb, #c3224a 8%, transparent),
+    0 0 34px color-mix(in srgb, #c3224a 19%, transparent);
+  -webkit-backdrop-filter: blur(16px) saturate(1.12);
+  backdrop-filter: blur(16px) saturate(1.12);
+}
+
+html[data-ui-plugin-scene-chrome-sidebar='washi']
+  :is(.ds-sidebar-shell, .ds-settings-sidebar),
+html[data-ui-plugin-scene-chrome-topbar='washi'] .ds-topbar-surface,
+html[data-ui-plugin-scene-chrome-composer='washi'] .ds-composer-shell.ds-chat-composer,
+html[data-ui-plugin-scene-chrome-cards='washi']
+  :is(
+    .ds-card-soft,
+    .ds-card-strong,
+    .ds-card-muted,
+    .ds-card-ghost,
+    .ds-surface-soft,
+    .ds-surface-strong,
+    .ds-user-message-bubble,
+    .ds-chat-answer
+  ),
+html[data-ui-plugin-scene-chrome-cards='washi']
+  .ds-markdown
+  [data-streamdown='table-wrapper']
+  > div:last-child,
+html[data-ui-plugin-scene-chrome-cards='washi'] .ds-markdown [data-streamdown='table'] {
+  --ds-sidebar-haze: repeating-linear-gradient(
+    104deg,
+    rgba(139, 110, 68, 0.035) 0 1px,
+    transparent 1px 8px
+  );
+  --ds-table-head-bg: color-mix(in srgb, #b38a56 10%, var(--kun-ui-plugin-host-surface-color));
+  border: 1px solid color-mix(in srgb, #9b7650 36%, var(--ds-border) 64%);
+  border-radius: 0.75rem 1.35rem 0.82rem 1.18rem;
+  background:
+    repeating-linear-gradient(
+      102deg,
+      color-mix(in srgb, #9d774c 4%, transparent) 0 1px,
+      transparent 1px 7px
+    ),
+    repeating-linear-gradient(
+      -8deg,
+      color-mix(in srgb, #ffffff 7%, transparent) 0 2px,
+      transparent 2px 11px
+    ),
+    color-mix(in srgb, var(--kun-ui-plugin-host-surface-color) 88%, #f3e3c2 12%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.36),
+    7px 9px 0 color-mix(in srgb, #8d6745 7%, transparent);
+  -webkit-backdrop-filter: blur(6px) saturate(0.96);
+  backdrop-filter: blur(6px) saturate(0.96);
+}
+
+html[data-ui-plugin-scene-chrome-sidebar='scrapbook']
+  :is(.ds-sidebar-shell, .ds-settings-sidebar),
+html[data-ui-plugin-scene-chrome-topbar='scrapbook'] .ds-topbar-surface,
+html[data-ui-plugin-scene-chrome-composer='scrapbook'] .ds-composer-shell.ds-chat-composer,
+html[data-ui-plugin-scene-chrome-cards='scrapbook']
+  :is(
+    .ds-card-soft,
+    .ds-card-strong,
+    .ds-card-muted,
+    .ds-card-ghost,
+    .ds-surface-soft,
+    .ds-surface-strong,
+    .ds-user-message-bubble,
+    .ds-chat-answer
+  ),
+html[data-ui-plugin-scene-chrome-cards='scrapbook']
+  .ds-markdown
+  [data-streamdown='table-wrapper']
+  > div:last-child,
+html[data-ui-plugin-scene-chrome-cards='scrapbook']
+  .ds-markdown
+  [data-streamdown='table'] {
+  --ds-sidebar-haze: linear-gradient(135deg, rgba(240, 119, 153, 0.08), transparent 42%);
+  --ds-table-head-bg: color-mix(in srgb, #f08aaa 12%, var(--kun-ui-plugin-host-surface-color));
+  border: 2px dashed color-mix(in srgb, #e66d98 42%, #6ba3be 58%);
+  border-radius: 0.55rem 1.1rem 0.45rem 1.35rem;
+  background:
+    linear-gradient(
+      135deg,
+      transparent 0 9%,
+      color-mix(in srgb, #f4b4c8 19%, transparent) 9% 15%,
+      transparent 15% 82%,
+      color-mix(in srgb, #8cc3d7 16%, transparent) 82% 89%,
+      transparent 89%
+    ),
+    linear-gradient(
+      22deg,
+      color-mix(in srgb, var(--kun-ui-plugin-host-surface-color) 88%, #fff1ba 12%),
+      color-mix(in srgb, var(--kun-ui-plugin-host-surface-color) 90%, #f7dbe8 10%)
+    );
+  box-shadow:
+    7px 8px 0 color-mix(in srgb, #e66d98 12%, transparent),
+    -3px -3px 0 color-mix(in srgb, #6ba3be 9%, transparent);
+  -webkit-backdrop-filter: blur(10px) saturate(1.09);
+  backdrop-filter: blur(10px) saturate(1.09);
+}
+
+html[data-ui-plugin-scene-chrome-sidebar='aurora']
+  :is(.ds-sidebar-shell, .ds-settings-sidebar),
+html[data-ui-plugin-scene-chrome-topbar='aurora'] .ds-topbar-surface,
+html[data-ui-plugin-scene-chrome-composer='aurora'] .ds-composer-shell.ds-chat-composer,
+html[data-ui-plugin-scene-chrome-cards='aurora']
+  :is(
+    .ds-card-soft,
+    .ds-card-strong,
+    .ds-card-muted,
+    .ds-card-ghost,
+    .ds-surface-soft,
+    .ds-surface-strong,
+    .ds-user-message-bubble,
+    .ds-chat-answer
+  ),
+html[data-ui-plugin-scene-chrome-cards='aurora']
+  .ds-markdown
+  [data-streamdown='table-wrapper']
+  > div:last-child,
+html[data-ui-plugin-scene-chrome-cards='aurora'] .ds-markdown [data-streamdown='table'] {
+  --ds-sidebar-haze: radial-gradient(circle at 8% 4%, rgba(100, 224, 233, 0.13), transparent 37%);
+  --ds-table-head-bg: color-mix(in srgb, #7b6dea 12%, var(--kun-ui-plugin-host-surface-color));
+  border: 1px solid color-mix(in srgb, #72dfe5 44%, #a77ae7 56%);
+  border-radius: 1.9rem 0.65rem 2.15rem 0.85rem;
+  background:
+    radial-gradient(circle at 8% 12%, color-mix(in srgb, #74e7d4 25%, transparent), transparent 36%),
+    radial-gradient(circle at 92% 8%, color-mix(in srgb, #9c75e8 24%, transparent), transparent 40%),
+    radial-gradient(circle at 62% 112%, color-mix(in srgb, #6fa4ee 17%, transparent), transparent 47%),
+    color-mix(in srgb, var(--kun-ui-plugin-host-surface-color) 81%, transparent);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.58),
+    0 0 0 3px color-mix(in srgb, #72dfe5 7%, transparent),
+    0 18px 52px color-mix(in srgb, #7b6dea 18%, transparent);
+  -webkit-backdrop-filter: blur(24px) saturate(1.24);
+  backdrop-filter: blur(24px) saturate(1.24);
+}
+
+html[data-ui-plugin-scene-chrome-sidebar='synth']
+  :is(.ds-sidebar-shell, .ds-settings-sidebar),
+html[data-ui-plugin-scene-chrome-topbar='synth'] .ds-topbar-surface,
+html[data-ui-plugin-scene-chrome-composer='synth'] .ds-composer-shell.ds-chat-composer,
+html[data-ui-plugin-scene-chrome-cards='synth']
+  :is(
+    .ds-card-soft,
+    .ds-card-strong,
+    .ds-card-muted,
+    .ds-card-ghost,
+    .ds-surface-soft,
+    .ds-surface-strong,
+    .ds-user-message-bubble,
+    .ds-chat-answer
+  ),
+html[data-ui-plugin-scene-chrome-cards='synth']
+  .ds-markdown
+  [data-streamdown='table-wrapper']
+  > div:last-child,
+html[data-ui-plugin-scene-chrome-cards='synth'] .ds-markdown [data-streamdown='table'] {
+  --ds-sidebar-haze: linear-gradient(135deg, rgba(49, 231, 238, 0.08), rgba(245, 75, 197, 0.06));
+  --ds-table-head-bg: color-mix(in srgb, #1bdde8 13%, var(--kun-ui-plugin-host-surface-color));
+  border: 1px solid color-mix(in srgb, #27dce5 58%, #ec4ec6 42%);
+  border-radius: 0.35rem;
+  background:
+    repeating-linear-gradient(
+      90deg,
+      color-mix(in srgb, #27dce5 9%, transparent) 0 1px,
+      transparent 1px 1.25rem
+    ),
+    repeating-linear-gradient(
+      0deg,
+      color-mix(in srgb, #ec4ec6 7%, transparent) 0 1px,
+      transparent 1px 1.25rem
+    ),
+    color-mix(in srgb, var(--kun-ui-plugin-host-surface-color) 82%, #102b38 18%);
+  box-shadow:
+    inset 0 0 24px color-mix(in srgb, #27dce5 12%, transparent),
+    0 0 18px color-mix(in srgb, #ec4ec6 18%, transparent);
+  -webkit-backdrop-filter: blur(18px) saturate(1.2);
+  backdrop-filter: blur(18px) saturate(1.2);
+}
+
+html[data-ui-plugin-scene-chrome-sidebar='midnight-pass']
+  :is(.ds-sidebar-shell, .ds-settings-sidebar),
+html[data-ui-plugin-scene-chrome-topbar='midnight-pass'] .ds-topbar-surface,
+html[data-ui-plugin-scene-chrome-composer='midnight-pass']
+  .ds-composer-shell.ds-chat-composer,
+html[data-ui-plugin-scene-chrome-cards='midnight-pass']
+  :is(
+    .ds-card-soft,
+    .ds-card-strong,
+    .ds-card-muted,
+    .ds-card-ghost,
+    .ds-surface-soft,
+    .ds-surface-strong,
+    .ds-user-message-bubble,
+    .ds-chat-answer
+  ),
+html[data-ui-plugin-scene-chrome-cards='midnight-pass']
+  .ds-markdown
+  [data-streamdown='table-wrapper']
+  > div:last-child,
+html[data-ui-plugin-scene-chrome-cards='midnight-pass']
+  .ds-markdown
+  [data-streamdown='table'] {
+  --ds-sidebar-haze: radial-gradient(circle at 50% 0%, rgba(220, 180, 92, 0.09), transparent 44%);
+  --ds-table-head-bg: color-mix(in srgb, #d4ac55 12%, var(--kun-ui-plugin-host-surface-color));
+  border: 2px dashed color-mix(in srgb, #d4ac55 64%, #493354 36%);
+  border-radius: 0.6rem 1.7rem 0.6rem 1.7rem;
+  background:
+    linear-gradient(105deg, transparent 0 47%, color-mix(in srgb, #d4ac55 12%, transparent) 47% 49%, transparent 49%),
+    radial-gradient(circle at 76% 8%, color-mix(in srgb, #7f4a98 16%, transparent), transparent 34%),
+    color-mix(in srgb, var(--kun-ui-plugin-host-surface-color) 80%, #21172d 20%);
+  box-shadow:
+    inset 0 0 0 3px color-mix(in srgb, #d4ac55 7%, transparent),
+    0 20px 46px color-mix(in srgb, #21172d 24%, transparent);
+  -webkit-backdrop-filter: blur(18px) saturate(1.12);
+  backdrop-filter: blur(18px) saturate(1.12);
+}
+
+html[data-ui-plugin-scene-chrome-sidebar='nautical']
+  :is(.ds-sidebar-shell, .ds-settings-sidebar),
+html[data-ui-plugin-scene-chrome-topbar='nautical'] .ds-topbar-surface,
+html[data-ui-plugin-scene-chrome-composer='nautical'] .ds-composer-shell.ds-chat-composer,
+html[data-ui-plugin-scene-chrome-cards='nautical']
+  :is(
+    .ds-card-soft,
+    .ds-card-strong,
+    .ds-card-muted,
+    .ds-card-ghost,
+    .ds-surface-soft,
+    .ds-surface-strong,
+    .ds-user-message-bubble,
+    .ds-chat-answer
+  ),
+html[data-ui-plugin-scene-chrome-cards='nautical']
+  .ds-markdown
+  [data-streamdown='table-wrapper']
+  > div:last-child,
+html[data-ui-plugin-scene-chrome-cards='nautical'] .ds-markdown [data-streamdown='table'] {
+  --ds-sidebar-haze: radial-gradient(circle at 14% 8%, rgba(41, 155, 166, 0.1), transparent 38%);
+  --ds-table-head-bg: color-mix(in srgb, #208e9b 13%, var(--kun-ui-plugin-host-surface-color));
+  border: 2px solid color-mix(in srgb, #236b82 62%, #bf9860 38%);
+  border-radius: 0.85rem 0.85rem 1.6rem 1.6rem;
+  background:
+    repeating-linear-gradient(
+      135deg,
+      color-mix(in srgb, #258ca0 8%, transparent) 0 2px,
+      transparent 2px 1.35rem
+    ),
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--kun-ui-plugin-host-surface-color) 88%, #d9eef0 12%),
+      color-mix(in srgb, var(--kun-ui-plugin-host-surface-color) 91%, #e9dec7 9%)
+    );
+  box-shadow:
+    inset 0 0 0 3px color-mix(in srgb, #bf9860 10%, transparent),
+    0 15px 38px color-mix(in srgb, #174c64 15%, transparent);
+  -webkit-backdrop-filter: blur(14px) saturate(1.07);
+  backdrop-filter: blur(14px) saturate(1.07);
+}
+
+html[data-ui-plugin-scene-chrome-sidebar='dimension-lab']
+  :is(.ds-sidebar-shell, .ds-settings-sidebar),
+html[data-ui-plugin-scene-chrome-topbar='dimension-lab'] .ds-topbar-surface,
+html[data-ui-plugin-scene-chrome-composer='dimension-lab']
+  .ds-composer-shell.ds-chat-composer,
+html[data-ui-plugin-scene-chrome-cards='dimension-lab']
+  :is(
+    .ds-card-soft,
+    .ds-card-strong,
+    .ds-card-muted,
+    .ds-card-ghost,
+    .ds-surface-soft,
+    .ds-surface-strong,
+    .ds-user-message-bubble,
+    .ds-chat-answer
+  ),
+html[data-ui-plugin-scene-chrome-cards='dimension-lab']
+  .ds-markdown
+  [data-streamdown='table-wrapper']
+  > div:last-child,
+html[data-ui-plugin-scene-chrome-cards='dimension-lab']
+  .ds-markdown
+  [data-streamdown='table'] {
+  --ds-sidebar-haze: linear-gradient(180deg, rgba(42, 213, 123, 0.09), transparent 36%);
+  --ds-table-head-bg: color-mix(in srgb, #28bd70 13%, var(--kun-ui-plugin-host-surface-color));
+  border: 1px solid color-mix(in srgb, #2bd77f 58%, #416c63 42%);
+  border-radius: 0.2rem 0.95rem 0.2rem 0.95rem;
+  background:
+    repeating-linear-gradient(
+      90deg,
+      color-mix(in srgb, #2bd77f 9%, transparent) 0 1px,
+      transparent 1px 1rem
+    ),
+    repeating-linear-gradient(
+      0deg,
+      color-mix(in srgb, #2bd77f 7%, transparent) 0 1px,
+      transparent 1px 1rem
+    ),
+    linear-gradient(
+      180deg,
+      transparent 0 46%,
+      color-mix(in srgb, #77f4ad 13%, transparent) 49% 51%,
+      transparent 54%
+    ),
+    color-mix(in srgb, var(--kun-ui-plugin-host-surface-color) 83%, #102923 17%);
+  box-shadow:
+    inset 0 0 22px color-mix(in srgb, #2bd77f 12%, transparent),
+    0 0 0 2px color-mix(in srgb, #2bd77f 7%, transparent);
+  -webkit-backdrop-filter: blur(15px) saturate(1.15);
+  backdrop-filter: blur(15px) saturate(1.15);
+}
+
+html[data-ui-plugin-scene-chrome-sidebar='starlight']
+  :is(.ds-sidebar-shell, .ds-settings-sidebar),
+html[data-ui-plugin-scene-chrome-topbar='starlight'] .ds-topbar-surface,
+html[data-ui-plugin-scene-chrome-composer='starlight'] .ds-composer-shell.ds-chat-composer,
+html[data-ui-plugin-scene-chrome-cards='starlight']
+  :is(
+    .ds-card-soft,
+    .ds-card-strong,
+    .ds-card-muted,
+    .ds-card-ghost,
+    .ds-surface-soft,
+    .ds-surface-strong,
+    .ds-user-message-bubble,
+    .ds-chat-answer
+  ),
+html[data-ui-plugin-scene-chrome-cards='starlight']
+  .ds-markdown
+  [data-streamdown='table-wrapper']
+  > div:last-child,
+html[data-ui-plugin-scene-chrome-cards='starlight']
+  .ds-markdown
+  [data-streamdown='table'] {
+  --ds-sidebar-haze: radial-gradient(circle at 20% 6%, rgba(235, 137, 211, 0.13), transparent 39%);
+  --ds-table-head-bg: color-mix(in srgb, #d986d4 12%, var(--kun-ui-plugin-host-surface-color));
+  border: 1px solid color-mix(in srgb, #e291d3 52%, #8d7ce5 48%);
+  border-radius: 2.2rem;
+  background:
+    radial-gradient(circle, color-mix(in srgb, #ffffff 42%, transparent) 0 1px, transparent 1.5px) 0 0 / 1.4rem 1.4rem,
+    radial-gradient(circle at 18% 12%, color-mix(in srgb, #f0a8db 22%, transparent), transparent 36%),
+    radial-gradient(circle at 88% 92%, color-mix(in srgb, #8e7ce9 21%, transparent), transparent 38%),
+    color-mix(in srgb, var(--kun-ui-plugin-host-surface-color) 84%, #f0e2fb 16%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.6),
+    0 0 0 4px color-mix(in srgb, #e291d3 6%, transparent),
+    0 18px 48px color-mix(in srgb, #8d7ce5 17%, transparent);
+  -webkit-backdrop-filter: blur(22px) saturate(1.18);
+  backdrop-filter: blur(22px) saturate(1.18);
+}
+
+html:is(
+    [data-ui-plugin-scene-chrome-cards='botanical'],
+    [data-ui-plugin-scene-chrome-cards='fortune-ledger'],
+    [data-ui-plugin-scene-chrome-cards='dream-gate'],
+    [data-ui-plugin-scene-chrome-cards='washi'],
+    [data-ui-plugin-scene-chrome-cards='scrapbook'],
+    [data-ui-plugin-scene-chrome-cards='aurora'],
+    [data-ui-plugin-scene-chrome-cards='synth'],
+    [data-ui-plugin-scene-chrome-cards='midnight-pass'],
+    [data-ui-plugin-scene-chrome-cards='nautical'],
+    [data-ui-plugin-scene-chrome-cards='dimension-lab'],
+    [data-ui-plugin-scene-chrome-cards='starlight']
+  )
+  .ds-chat-answer {
+  padding: 0.85rem 1rem;
+}
+
+@container (max-width: 980px) {
+  .ds-ui-plugin-decor-layer,
+  .ds-ui-plugin-character-layer,
+  .ds-ui-plugin-readability-scrim,
+  .ds-ui-plugin-scene-stage-layer,
+  .ds-ui-plugin-scene-visual-zone {
+    display: none !important;
+  }
+
+  .ds-ui-plugin-stage-content {
+    --ds-chat-content-effective-max-width: min(
+      var(--ds-chat-content-max-width, 56rem),
+      max(0px, calc(100cqw - 5.25rem))
+    );
+  }
+
+  .ds-message-timeline-content,
+  .ds-floating-composer {
+    translate: none !important;
+  }
+}
+
+html[data-focus-mode='on'] .ds-ui-plugin-decor-layer,
+html[data-focus-mode='on'] .ds-ui-plugin-character-layer,
+html[data-focus-mode='on'] .ds-ui-plugin-readability-scrim,
+html[data-focus-mode='on'] .ds-ui-plugin-scene-stage-layer,
+html[data-focus-mode='on'] .ds-ui-plugin-scene-visual-zone {
+  display: none !important;
+}
+
+html[data-focus-mode='on'] .ds-ui-plugin-stage-content {
+  --ds-chat-content-effective-max-width: min(
+    var(--ds-chat-content-max-width, 56rem),
+    max(0px, calc(100cqw - 5.25rem))
+  );
+}
+
+html[data-focus-mode='on'] .ds-message-timeline-content,
+html[data-focus-mode='on'] .ds-floating-composer {
+  translate: none !important;
+}
+
+.ds-chat-stage[data-terminal-open='true'] .ds-ui-plugin-decor-layer,
+.ds-chat-stage[data-terminal-open='true'] .ds-ui-plugin-character-layer,
+.ds-chat-stage[data-terminal-open='true'] .ds-ui-plugin-readability-scrim,
+.ds-chat-stage[data-terminal-open='true'] .ds-ui-plugin-scene-stage-layer,
+.ds-chat-stage[data-terminal-open='true'] .ds-ui-plugin-scene-visual-zone {
+  display: none !important;
+}
+
+.ds-chat-stage[data-terminal-open='true']
+  :is(.ds-message-timeline-content, .ds-floating-composer) {
+  translate: none !important;
+}
+
+.ds-chat-stage[data-terminal-open='true'] .ds-ui-plugin-stage-content {
+  --ds-chat-content-effective-max-width: min(
+    var(--ds-chat-content-max-width, 56rem),
+    max(0px, calc(100cqw - 5.25rem))
+  );
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ds-ui-plugin-character,
+  .ds-ui-plugin-scene-artwork {
+    animation: none !important;
+  }
 }

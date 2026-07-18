@@ -8,6 +8,7 @@ import { executeOps } from './shape-ops'
 import { filterEditableRootShapeIds } from './canvas-editability'
 import { useCanvasViewportStore } from './canvas-viewport-store'
 import { clearCanvasShapeClipboard } from './canvas-clipboard'
+import { useCanvasMotionStore } from '../motion/canvas-motion-store'
 
 beforeEach(() => {
   useCanvasShapeStore.getState().loadDocument(createEmptyDocument())
@@ -16,7 +17,25 @@ beforeEach(() => {
   useCanvasViewportStore.getState().setContainerSize(1000, 500)
   useCanvasViewportStore.getState().resetView()
   useCanvasViewportStore.getState().setActiveTool('select')
+  useCanvasMotionStore.getState().reset()
   clearCanvasShapeClipboard()
+})
+
+it('Auto-key nudge animates only the selected root instead of its descendants', () => {
+  const { frameId, childId } = addFrameWithChild()
+  useCanvasSelectionStore.getState().select([frameId])
+  const motion = useCanvasMotionStore.getState()
+  motion.setOpen(true)
+  motion.setActiveFrameId(frameId)
+  motion.setCurrentTimeMs(500)
+  motion.setAutoKey(true)
+
+  handleCanvasKeyDown(eventFor('ArrowRight'))
+
+  const document = useCanvasShapeStore.getState().document
+  expect(document.objects[frameId].x).toBe(0)
+  expect(document.objects[childId].x).toBe(24)
+  expect(document.motion?.timelines[frameId].tracks.map((track) => track.targetShapeId)).toEqual([frameId])
 })
 
 function eventFor(

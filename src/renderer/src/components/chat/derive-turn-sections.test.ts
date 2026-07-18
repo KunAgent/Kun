@@ -208,6 +208,31 @@ describe('deriveTurnSections', () => {
     expect(result.processBlocks.map((block) => block.id)).toEqual(['tool_img', 'tool_next'])
   })
 
+  it('surfaces component prototypes outside work while retaining the tool in process history', () => {
+    const block: ChatBlock = {
+      kind: 'tool',
+      id: 'tool_component',
+      summary: 'design_component',
+      status: 'success',
+      toolKind: 'file_change',
+      meta: {
+        toolName: 'design_component',
+        componentPrototype: {
+          version: 1,
+          status: 'completed',
+          artifactId: 'component_abc',
+          title: 'Date range picker',
+          relativePath: '.kun-design/component-prototypes/date-picker/prototype.html',
+          viewport: { width: 720, height: 460 },
+          profile: 'component-designer'
+        }
+      }
+    }
+    const result = sections([block])
+    expect(result.componentPrototypeBlocks).toEqual([block])
+    expect(result.processBlocks).toEqual([block])
+  })
+
   it('extracts file changes from JSON-wrapped tool output diffs', () => {
     const patch = [
       'diff --git a/demo.ts b/demo.ts',

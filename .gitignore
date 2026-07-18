@@ -2,6 +2,7 @@
 node_modules/
 out/
 dist/
+resources/bundled-extensions/
 .cache/
 .deepseek/
 *.log
@@ -48,6 +49,9 @@ TestResults.xml
 
 ### Tool data
 .workbuddy/
+.kun-design/
+.kun-canvas/
+openspec/
 
 ### Internal docs
 docs/R2_RELEASE.md

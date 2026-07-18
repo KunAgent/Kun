@@ -9,8 +9,8 @@
     "build:host": "tsc -p tsconfig.host.json",
     "build:webview": "vite build",
     "typecheck": "tsc --noEmit -p tsconfig.host.json && tsc --noEmit -p tsconfig.webview.json",
-    "validate": "kun extension validate .",
-    "pack": "npm run build && kun extension pack ."
+    "validate": "node ../run-repository-kun-cli.mjs extension validate .",
+    "pack": "npm run build && node ../run-repository-kun-cli.mjs extension pack ."
   },
   "dependencies": {
     "@kun/extension-api": "^1.0.0"

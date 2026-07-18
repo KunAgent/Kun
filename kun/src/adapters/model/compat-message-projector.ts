@@ -4,6 +4,7 @@ import { isToolResultBridgeItem, repairModelHistoryItems } from '../../domain/mo
 import { extractToolResultImages, toolResultTextWithoutImages } from '../../loop/tool-result-image.js'
 import { wrapUntrustedContent } from '../../security/untrusted-content.js'
 import type { CompatChatMessage, CompatChatMessageContentPart } from './compat-request-codecs.js'
+import { userMessageTextWithComposerContexts } from '../../domain/composer-context.js'
 
 export type CompatMessageProjectionOptions = {
   historyLimit?: number
@@ -209,7 +210,7 @@ class CompatMessageProjector {
   private itemToMessage(item: TurnItem, thinkingMode: boolean, supportsImages: boolean): CompatChatMessage | null {
     switch (item.kind) {
       case 'user_message':
-        return { role: 'user', content: item.text }
+        return { role: 'user', content: userMessageTextWithComposerContexts(item) }
       case 'assistant_text':
         return {
           role: 'assistant',

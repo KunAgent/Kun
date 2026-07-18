@@ -15,10 +15,12 @@ import App from './App'
 import './i18n'
 import { applyCursorSpotlight } from './lib/apply-theme'
 import { installCursorSpotlightTracking } from './lib/cursor-spotlight'
+import { installDataMigrationRendererRpc } from './data-migration/renderer-state-rpc'
 
 document.documentElement.dataset.platform = window.kunGui?.platform ?? 'unknown'
 applyCursorSpotlight(true)
 installCursorSpotlightTracking()
+installDataMigrationRendererRpc()
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>

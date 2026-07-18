@@ -21,8 +21,8 @@ describe('ExtensionWorkbenchClient', () => {
       body: JSON.stringify({ schemaVersion: 1, revision: 4, extensions: [] })
     }))
     const client = new ExtensionWorkbenchClient(workbenchTransport({ getWorkbench }))
-    await expect(client.loadContributions('/tmp/a b')).resolves.toMatchObject({ revision: 4 })
-    expect(getWorkbench).toHaveBeenCalledWith({ workspaceRoot: '/tmp/a b' })
+    await expect(client.loadContributions('/tmp/a b', 'zh-CN')).resolves.toMatchObject({ revision: 4 })
+    expect(getWorkbench).toHaveBeenCalledWith({ workspaceRoot: '/tmp/a b', locale: 'zh-CN' })
   })
 
   it('normalizes runtime errors without leaking an unbounded payload', async () => {
@@ -56,12 +56,18 @@ describe('ExtensionWorkbenchClient', () => {
         ok: true,
         status: 200,
         body: JSON.stringify({ schemaVersion: 1, models: [] })
+      })),
+      extensionList: vi.fn(async () => ({
+        ok: true,
+        status: 200,
+        body: JSON.stringify({ schemaVersion: 1, extensions: [] })
       }))
     }
     vi.stubGlobal('window', { kunGui: api })
     const client = new ExtensionWorkbenchClient()
 
-    await expect(client.loadContributions('/workspace')).resolves.toMatchObject({ revision: 4 })
+    await expect(client.loadContributions('/workspace', 'zh-CN')).resolves.toMatchObject({ revision: 4 })
+    await expect(client.listExtensions('/workspace', 'zh-CN')).resolves.toEqual([])
     await expect(client.listModelProviders('/workspace')).resolves.toEqual([])
     await expect(client.listProviderModels({
       extensionId: 'acme.sample',
@@ -71,7 +77,12 @@ describe('ExtensionWorkbenchClient', () => {
       workspaceRoot: '/workspace'
     })).resolves.toEqual([])
 
-    expect(api.extensionGetWorkbench).toHaveBeenCalledWith({ workspaceRoot: '/workspace' })
+    expect(api.extensionGetWorkbench).toHaveBeenCalledWith({ workspaceRoot: '/workspace', locale: 'zh-CN' })
+    expect(api.extensionList).toHaveBeenCalledWith({
+      limit: 500,
+      workspaceRoot: '/workspace',
+      locale: 'zh-CN'
+    })
     expect(api.extensionListModelProviders).toHaveBeenCalledWith({ workspaceRoot: '/workspace' })
     expect(api.extensionListProviderModels).toHaveBeenCalledWith({
       extensionId: 'acme.sample',
@@ -116,6 +127,9 @@ describe('ExtensionWorkbenchClient', () => {
 
     await client.createViewSession('extension:acme.sample/issues', '   ')
     await client.createViewSession('extension:acme.sample/issues', ' /workspace ')
+    await client.createViewSession('extension:acme.sample/issues', '/workspace', {
+      retryHost: true
+    })
 
     expect(create).toHaveBeenNthCalledWith(1, {
       contributionId: 'extension:acme.sample/issues'
@@ -123,6 +137,11 @@ describe('ExtensionWorkbenchClient', () => {
     expect(create).toHaveBeenNthCalledWith(2, {
       contributionId: 'extension:acme.sample/issues',
       workspaceRoot: '/workspace'
+    })
+    expect(create).toHaveBeenNthCalledWith(3, {
+      contributionId: 'extension:acme.sample/issues',
+      workspaceRoot: '/workspace',
+      retryHost: true
     })
   })
 
@@ -152,6 +171,13 @@ describe('ExtensionWorkbenchClient', () => {
     await client.reload('acme.sample')
     await client.uninstall('acme.sample')
     await client.setPermissions('acme.sample', '1.0.0', ['ui.views'], '/workspace')
+    await client.setPermissionsAndEnable(
+      'acme.sample',
+      '1.0.0',
+      ['ui.views', 'webview'],
+      '/workspace',
+      'global'
+    )
     await expect(client.invokeCommand(
       'extension:acme.sample/refresh',
       { source: 'topBar' },
@@ -166,9 +192,16 @@ describe('ExtensionWorkbenchClient', () => {
     expect(api.extensionUninstall).toHaveBeenCalledWith({ extensionId: 'acme.sample' })
     expect(api.extensionSetPermissions).toHaveBeenCalledWith({
       extensionId: 'acme.sample',
-      extensionVersion: '1.0.0',
+      expectedVersion: '1.0.0',
       permissions: ['ui.views'],
       workspaceRoot: '/workspace'
+    })
+    expect(api.extensionSetPermissions).toHaveBeenCalledWith({
+      extensionId: 'acme.sample',
+      expectedVersion: '1.0.0',
+      permissions: ['ui.views', 'webview'],
+      workspaceRoot: '/workspace',
+      enableAfterApply: 'global'
     })
     expect(api.extensionInvokeCommand).toHaveBeenCalledWith({
       commandId: 'extension:acme.sample/refresh',

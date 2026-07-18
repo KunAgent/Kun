@@ -4,11 +4,11 @@
 
 const { spawn, spawnSync } = require('node:child_process')
 const { existsSync, statSync } = require('node:fs')
-const { mkdir, mkdtemp, readFile, rm, writeFile } = require('node:fs/promises')
+const { mkdir, mkdtemp, readFile, realpath, rm, stat, writeFile } = require('node:fs/promises')
 const { createServer: createHttpServer } = require('node:http')
 const { createConnection, createServer } = require('node:net')
 const { tmpdir } = require('node:os')
-const { join, resolve } = require('node:path')
+const { isAbsolute, join, resolve } = require('node:path')
 const { pathToFileURL } = require('node:url')
 const {
   EXTENSION_ID,
@@ -21,9 +21,13 @@ const {
 const CONTRIBUTION_ID = `extension:${EXTENSION_ID}/smoke`
 const WEBVIEW_MARKER = 'Packaged Webview smoke'
 const DEFAULT_TIMEOUT_MS = 120_000
+const DEFAULT_CDP_COMMAND_TIMEOUT_MS = 30_000
+const GUEST_MEDIA_READY_TIMEOUT_MS = 20_000
 const PROCESS_OUTPUT_LIMIT = 128 * 1024
 const POPUP_SETTLE_MS = 500
 const MAX_CLEANUP_TIMEOUT_MS = 15_000
+const MEDIA_PLAYBACK_HANDLE_ID = 'media_packaged_playback_00000001'
+const MEDIA_IMAGE_HANDLE_ID = 'media_packaged_image_00000000001'
 
 async function main() {
   const timeoutMs = positiveIntegerArgument('--timeout-ms', DEFAULT_TIMEOUT_MS)
@@ -50,7 +54,9 @@ async function main() {
   const temporaryRoot = await mkdtemp(join(tmpdir(), 'kun-packaged-extension-desktop-smoke-'))
   const home = join(temporaryRoot, 'home')
   const profile = join(home, '.kun', 'data')
-  const workspaceRoot = join(home, '.kun', 'default_workspace')
+  const workspaceParent = desktopSmokeWorkspaceParent()
+  await mkdir(workspaceParent, { recursive: true })
+  const workspaceRoot = await mkdtemp(join(workspaceParent, 'workspace-'))
   const userData = join(temporaryRoot, 'electron-user-data')
   const appData = join(temporaryRoot, 'app-data')
   const localAppData = join(temporaryRoot, 'local-app-data')
@@ -66,7 +72,7 @@ async function main() {
   ])
   const runtimePort = await availablePort()
   const desktopSettings = `${JSON.stringify(
-    desktopSmokeSettings(runtimePort, workspaceRoot),
+    desktopSmokeSettings(runtimePort, workspaceRoot, profile),
     null,
     2
   )}\n`
@@ -109,6 +115,7 @@ async function main() {
       )
     })
     await grantSmokeWorkspaceTrust(unpackedRoot, profile, workspaceRoot)
+    await seedDesktopMediaPlaybackFixture(profile, workspaceRoot)
 
     const installedWebview = join(
       profile,
@@ -169,7 +176,11 @@ async function main() {
       timeoutMs,
       processState: () => processState(desktopProcess)
     })
-    cdp = await CdpConnection.connect(endpoint.webSocketDebuggerUrl)
+    cdp = await CdpConnection.connect(
+      endpoint.webSocketDebuggerUrl,
+      globalThis.WebSocket,
+      Math.min(timeoutMs, DEFAULT_CDP_COMMAND_TIMEOUT_MS)
+    )
     await cdp.send('Target.setDiscoverTargets', { discover: true })
 
     const workbenchTarget = await waitForTarget(
@@ -179,10 +190,21 @@ async function main() {
       timeoutMs,
       () => processState(desktopProcess)
     )
-    const workbenchSession = await attachToTarget(cdp, workbenchTarget.targetId)
+    const workbenchSession = {
+      targetId: workbenchTarget.targetId,
+      sessionId: undefined
+    }
+    await synchronizeWorkbenchContributionDiscovery({
+      cdp,
+      session: workbenchSession,
+      workspaceRoot,
+      contributionId: CONTRIBUTION_ID,
+      timeoutMs,
+      processState: () => processState(desktopProcess)
+    })
     await waitForContributionAndClick({
       cdp,
-      sessionId: workbenchSession,
+      session: workbenchSession,
       contributionId: CONTRIBUTION_ID,
       timeoutMs,
       processState: () => processState(desktopProcess)
@@ -195,17 +217,31 @@ async function main() {
       timeoutMs,
       () => processState(desktopProcess)
     )
-    const guestSession = await attachToTarget(cdp, guestTarget.targetId)
+    const guestSession = {
+      targetId: guestTarget.targetId,
+      sessionId: undefined
+    }
     const guestResult = await inspectGuestSecurity({
       cdp,
-      sessionId: guestSession,
+      session: guestSession,
       targetId: guestTarget.targetId,
+      workbenchSession,
+      localFileUrl: pathToFileURL(join(workspaceRoot, 'packaged-playback.wav')).href,
       fetchUrl: networkCanary.url,
       popupUrl: networkCanary.popupUrl,
       timeoutMs,
       processState: () => processState(desktopProcess)
     })
     assertGuestSecurityResult(guestResult, networkCanary.requestCount())
+
+    await assertStaleViewSessionMediaBlocked({
+      cdp,
+      guestSession,
+      guestTargetId: guestTarget.targetId,
+      workbenchSession,
+      timeoutMs,
+      processState: () => processState(desktopProcess)
+    })
 
     process.stdout.write(
       `Packaged Extension desktop Chromium smoke OK (${process.platform}/${process.arch}): ` +
@@ -215,7 +251,9 @@ async function main() {
           ? 'explicit host Electron with packaged app.asar'
           : 'normal packaged Electron launch'}, ` +
       `CDP contribution click, ${guestTarget.type} guest, body marker, ` +
-      'narrow kunExtension bridge, Theme and View-state round-trips, hidden kunGui/require/process, ' +
+      'narrow kunExtension bridge, Theme and View-state round-trips, sender-bound kun-media playback/seek and image load, ' +
+      'copied URL, arbitrary file URL, post-release, and stale View Session denial, ' +
+      'hidden kunGui/require/process, ' +
       'Host-blocked loopback fetch, and user-gesture popup denial without a new target.\n'
     )
   } catch (error) {
@@ -238,11 +276,13 @@ async function main() {
     }
     if (process.env.KUN_KEEP_PACKAGED_EXTENSION_DESKTOP_SMOKE === '1') {
       process.stderr.write(`Preserved packaged desktop smoke profile: ${temporaryRoot}\n`)
+      process.stderr.write(`Preserved packaged desktop smoke workspace: ${workspaceRoot}\n`)
     } else {
-      await makeTreeWritable(temporaryRoot).catch(() => undefined)
-      await rm(temporaryRoot, { recursive: true, force: true }).catch((error) => {
-        cleanupErrors.push(error)
-      })
+      await Promise.all([temporaryRoot, workspaceRoot].map(async (path) => {
+        await makeTreeWritable(path).catch(() => undefined)
+        await rm(path, { recursive: true, force: true })
+          .catch((error) => cleanupErrors.push(error))
+      }))
     }
   }
 
@@ -260,7 +300,14 @@ async function main() {
   }
 }
 
-function desktopSmokeSettings(runtimePort, workspaceRoot) {
+function desktopSmokeWorkspaceParent(sourceRoot = resolve(__dirname, '..')) {
+  return join(sourceRoot, 'dist', '.kun-desktop-smoke')
+}
+
+function desktopSmokeSettings(runtimePort, workspaceRoot, dataDir) {
+  if (!isAbsolute(dataDir)) {
+    throw new TypeError('Packaged desktop smoke dataDir must be absolute')
+  }
   return {
     version: 1,
     workspaceRoot,
@@ -270,7 +317,7 @@ function desktopSmokeSettings(runtimePort, workspaceRoot) {
         baseUrl: 'https://invalid.example',
         providerId: 'deepseek',
         model: 'deepseek-chat',
-        dataDir: '~/.kun/data',
+        dataDir,
         port: runtimePort
       }
     }
@@ -294,12 +341,99 @@ async function grantSmokeWorkspaceTrust(unpackedRoot, profile, workspaceRoot) {
       ? entry.versions[entry.selectedVersion]
       : undefined
   if (!active) throw new Error('Desktop smoke extension has no selected registry version')
+  // Extension workspace identity is deliberately lexical. Using realpath here
+  // can grant a different key from the absolute path sent by the renderer when
+  // a CI workspace or one of its parents is a symlink.
   const workspaceKey = paths.workspaceKey(workspaceRoot)
   await registry.setWorkspaceEnabled(EXTENSION_ID, workspaceKey, true)
   await registry.setWorkspacePermissionGrant(
     EXTENSION_ID,
     workspaceKey,
-    [...active.grantedPermissions]
+    [...active.grantedPermissions],
+    active.manifest.version
+  )
+}
+
+async function seedDesktopMediaPlaybackFixture(profile, workspaceRoot) {
+  const canonicalWorkspace = await realpath(workspaceRoot)
+  const fixtures = [
+    {
+      id: MEDIA_PLAYBACK_HANDLE_ID,
+      displayName: 'packaged-playback.wav',
+      mimeType: 'audio/wav',
+      bytes: buildDesktopPlaybackWav()
+    },
+    {
+      id: MEDIA_IMAGE_HANDLE_ID,
+      displayName: 'packaged-proof.png',
+      mimeType: 'image/png',
+      bytes: buildDesktopPlaybackPng()
+    }
+  ]
+  const handles = {}
+  for (const fixture of fixtures) {
+    const path = join(workspaceRoot, fixture.displayName)
+    await writeFile(path, fixture.bytes)
+    const canonicalPath = await realpath(path)
+    const identity = await stat(canonicalPath)
+    handles[fixture.id] = {
+      id: fixture.id,
+      ownerExtensionId: EXTENSION_ID,
+      ownerExtensionVersion: '1.0.0',
+      workspaceRoot: canonicalWorkspace,
+      absolutePath: canonicalPath,
+      displayName: fixture.displayName,
+      mode: 'read',
+      source: 'workspace',
+      mimeType: fixture.mimeType,
+      identity: {
+        size: identity.size,
+        mtimeMs: identity.mtimeMs,
+        device: identity.dev,
+        inode: identity.ino
+      },
+      createdAt: '2026-01-01T00:00:00.000Z'
+    }
+  }
+  const storePath = join(profile, 'extensions', 'media-handles.json')
+  await mkdir(join(profile, 'extensions'), { recursive: true })
+  await writeFile(storePath, `${JSON.stringify({
+    schemaVersion: 1,
+    revision: 1,
+    handles
+  }, null, 2)}\n`)
+}
+
+function buildDesktopPlaybackWav() {
+  const sampleRate = 8_000
+  const sampleCount = sampleRate * 2
+  const dataBytes = sampleCount * 2
+  const wav = Buffer.alloc(44 + dataBytes)
+  wav.write('RIFF', 0, 'ascii')
+  wav.writeUInt32LE(36 + dataBytes, 4)
+  wav.write('WAVE', 8, 'ascii')
+  wav.write('fmt ', 12, 'ascii')
+  wav.writeUInt32LE(16, 16)
+  wav.writeUInt16LE(1, 20)
+  wav.writeUInt16LE(1, 22)
+  wav.writeUInt32LE(sampleRate, 24)
+  wav.writeUInt32LE(sampleRate * 2, 28)
+  wav.writeUInt16LE(2, 32)
+  wav.writeUInt16LE(16, 34)
+  wav.write('data', 36, 'ascii')
+  wav.writeUInt32LE(dataBytes, 40)
+  for (let index = 0; index < sampleCount; index += 1) {
+    const phase = index % 80
+    const triangle = phase < 40 ? phase : 80 - phase
+    wav.writeInt16LE((triangle - 20) * 900, 44 + index * 2)
+  }
+  return wav
+}
+
+function buildDesktopPlaybackPng() {
+  return Buffer.from(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
+    'base64'
   )
 }
 
@@ -413,6 +547,8 @@ function createIsolatedEnvironment(environment, paths) {
     TMP: paths.temporaryDirectory,
     TEMP: paths.temporaryDirectory,
     KUN_PACKAGED_EXTENSION_DESKTOP_SMOKE: '1',
+    KUN_DISABLE_OS_CREDENTIAL_STORE: '1',
+    NO_AT_BRIDGE: '1',
     ELECTRON_ENABLE_LOGGING: '1',
     NODE_ENV: 'production'
   })
@@ -433,7 +569,9 @@ function scrubDesktopEnvironment(environment) {
   for (const key of Object.keys(result)) {
     if (
       exactOverrides.has(key) ||
-      (key.startsWith('KUN_') && key !== 'KUN_PACKAGED_EXTENSION_DESKTOP_SMOKE') ||
+      (key.startsWith('KUN_') &&
+        key !== 'KUN_PACKAGED_EXTENSION_DESKTOP_SMOKE' &&
+        key !== 'KUN_DISABLE_OS_CREDENTIAL_STORE') ||
       key.startsWith('DEEPSEEK_')
     ) {
       delete result[key]
@@ -483,8 +621,9 @@ function runPackagedKun(executable, runtimeEntry, args, environment, timeoutMs =
   }
   if (result.error) throw result.error
   if (result.status !== 0) {
+    const exitReason = result.signal ?? result.status ?? 'unknown exit'
     throw new Error([
-      `Packaged Kun command failed (${result.status}): ${args.join(' ')}`,
+      `Packaged Kun command failed (${exitReason}): ${args.join(' ')}`,
       result.stdout,
       result.stderr
     ].filter(Boolean).join('\n'))
@@ -493,7 +632,7 @@ function runPackagedKun(executable, runtimeEntry, args, environment, timeoutMs =
 }
 
 class CdpConnection {
-  constructor(socket, commandTimeoutMs = 15_000) {
+  constructor(socket, commandTimeoutMs = DEFAULT_CDP_COMMAND_TIMEOUT_MS) {
     this.socket = socket
     this.commandTimeoutMs = commandTimeoutMs
     this.sequence = 0
@@ -504,7 +643,11 @@ class CdpConnection {
     socket.addEventListener('error', () => this.rejectPending(new Error('CDP WebSocket failed')))
   }
 
-  static async connect(url, WebSocketClass = globalThis.WebSocket) {
+  static async connect(
+    url,
+    WebSocketClass = globalThis.WebSocket,
+    commandTimeoutMs = DEFAULT_CDP_COMMAND_TIMEOUT_MS
+  ) {
     if (typeof WebSocketClass !== 'function') {
       throw new Error('The desktop smoke requires the WebSocket global from Node.js 22 or newer')
     }
@@ -520,7 +663,7 @@ class CdpConnection {
         once: true
       })
     })
-    return new CdpConnection(socket)
+    return new CdpConnection(socket, commandTimeoutMs)
   }
 
   send(method, params = {}, sessionId) {
@@ -686,96 +829,463 @@ async function attachToTarget(cdp, targetId) {
   return attached.sessionId
 }
 
-async function waitForContributionAndClick({
+function isRecoverableCdpSessionError(error) {
+  return error instanceof Error &&
+    /(?:Session with given id not found|No session with given id|Target (?:closed|is detached)|Execution context was destroyed|Cannot find context with specified id)/iu.test(error.message)
+}
+
+function isCdpCommandTimeout(error) {
+  return error instanceof Error && /CDP command timed out:/u.test(error.message)
+}
+
+async function sendToRecoverableTargetSession({
   cdp,
-  sessionId,
+  session,
+  targetMatches,
+  targetDescription,
+  method,
+  params,
+  timeoutMs,
+  processState: readProcessState,
+  operation
+}) {
+  const deadline = Date.now() + timeoutMs
+  let lastSessionError
+  while (Date.now() < deadline) {
+    assertDesktopProcessRunning(readProcessState())
+    if (!session.sessionId) {
+      const { targetInfos = [] } = await cdp.send('Target.getTargets')
+      const target = targetInfos.find((candidate) =>
+        candidate.targetId === session.targetId && targetMatches(candidate)) ??
+        targetInfos.find(targetMatches)
+      if (!target) {
+        await delay(100)
+        continue
+      }
+      try {
+        session.targetId = target.targetId
+        session.sessionId = await attachToTarget(cdp, target.targetId)
+      } catch (error) {
+        if (!isRecoverableCdpSessionError(error) && !isCdpCommandTimeout(error)) throw error
+        lastSessionError = error
+        session.sessionId = undefined
+        await delay(100)
+        continue
+      }
+    }
+    try {
+      return await cdp.send(method, params, session.sessionId)
+    } catch (error) {
+      if (
+        !isRecoverableCdpSessionError(error) &&
+        !(method === 'Runtime.evaluate' && isCdpCommandTimeout(error))
+      ) throw error
+      lastSessionError = error
+      session.sessionId = undefined
+      await delay(100)
+    }
+  }
+  throw new Error(
+    `Timed out while ${operation} after the packaged ${targetDescription} CDP session was replaced; ` +
+    `last error: ${lastSessionError instanceof Error ? lastSessionError.message : 'session unavailable'}`
+  )
+}
+
+function sendToWorkbenchSession(options) {
+  return sendToRecoverableTargetSession({
+    ...options,
+    targetMatches: isWorkbenchTarget,
+    targetDescription: 'workbench'
+  })
+}
+
+function sendToGuestSession(options) {
+  return sendToRecoverableTargetSession({
+    ...options,
+    targetMatches: isExtensionGuestTarget,
+    targetDescription: 'Extension guest'
+  })
+}
+
+const WORKBENCH_DISCOVERY_RETRY_DELAYS_MS = [0, 250, 1_000]
+
+function hasWorkbenchContribution(response, contributionId) {
+  if (!response || response.ok !== true || typeof response.body !== 'string') return false
+  try {
+    const snapshot = JSON.parse(response.body)
+    return Array.isArray(snapshot?.extensions) && snapshot.extensions.some((extension) =>
+      extension?.id === EXTENSION_ID &&
+      Array.isArray(extension?.contributes?.['views.rightSidebar']) &&
+      extension.contributes['views.rightSidebar'].some(
+        (view) => `extension:${extension.id}/${view?.id}` === contributionId
+      )
+    )
+  } catch {
+    return false
+  }
+}
+
+async function synchronizeWorkbenchContributionDiscovery({
+  cdp,
+  session,
+  workspaceRoot,
   contributionId,
   timeoutMs,
   processState: readProcessState
 }) {
-  const selector = `[data-contribution-id="${contributionId}"]`
-  const point = await pollUntil(async () => {
-    assertDesktopProcessRunning(readProcessState())
-    const evaluated = await cdp.send('Runtime.evaluate', {
+  let lastResponse
+  try {
+    await pollUntil(async () => {
+      assertDesktopProcessRunning(readProcessState())
+      const evaluated = await sendToWorkbenchSession({
+        cdp,
+        session,
+        method: 'Runtime.evaluate',
+        params: {
+          expression: `(async () => {
+            const root = document.getElementById('root')
+            const bridge = globalThis.kunGui
+            if (!root?.hasChildNodes() || !bridge || typeof bridge.extensionGetWorkbench !== 'function') {
+              return null
+            }
+            return bridge.extensionGetWorkbench({ workspaceRoot: ${JSON.stringify(workspaceRoot)} })
+          })()`,
+          awaitPromise: true,
+          returnByValue: true
+        },
+        timeoutMs,
+        processState: readProcessState,
+        operation: 'reading the packaged workbench contribution snapshot'
+      })
+      lastResponse = evaluationValue(
+        evaluated,
+        'reading the packaged workbench contribution snapshot'
+      )
+      return hasWorkbenchContribution(lastResponse, contributionId) ? lastResponse : undefined
+    }, { timeoutMs, description: `packaged workbench discovery for ${contributionId}` })
+  } catch (error) {
+    const diagnostic = lastResponse === undefined
+      ? 'no bridge response'
+      : JSON.stringify(lastResponse).slice(0, 2_000)
+    throw new Error(`${error instanceof Error ? error.message : String(error)}; last bridge response: ${diagnostic}`)
+  }
+
+  // The bridge response proves that the runtime, registry, workspace grant,
+  // and renderer preload are ready. Notify the committed layout effect only
+  // after that point, with short retries for the final React commit boundary.
+  await sendToWorkbenchSession({
+    cdp,
+    session,
+    method: 'Runtime.evaluate',
+    params: {
       expression: `(() => {
-        const element = document.querySelector(${JSON.stringify(selector)})
-        if (!(element instanceof HTMLElement) || element.matches(':disabled')) return null
-        element.scrollIntoView({ block: 'center', inline: 'center' })
-        const rectangle = element.getBoundingClientRect()
-        if (rectangle.width <= 0 || rectangle.height <= 0) return null
-        return {
-          x: rectangle.left + rectangle.width / 2,
-          y: rectangle.top + rectangle.height / 2
+        for (const delayMs of ${JSON.stringify(WORKBENCH_DISCOVERY_RETRY_DELAYS_MS)}) {
+          window.setTimeout(() => window.dispatchEvent(new Event('kun:extensions-changed')), delayMs)
         }
+        return true
       })()`,
       returnByValue: true
-    }, sessionId)
+    },
+    timeoutMs,
+    processState: readProcessState,
+    operation: 'notifying the packaged workbench contribution listener'
+  })
+}
+
+async function waitForContributionAndClick({
+  cdp,
+  session,
+  contributionId,
+  timeoutMs,
+  processState: readProcessState
+}) {
+  // The open View, its Webview, and its toolbar button all carry the same
+  // contribution marker. Target the actual workbench control so a second
+  // click reliably toggles the surface closed.
+  const selector = `button[data-contribution-id="${contributionId}"]`
+  const point = await pollUntil(async () => {
+    assertDesktopProcessRunning(readProcessState())
+    const evaluated = await sendToWorkbenchSession({
+      cdp,
+      session,
+      method: 'Runtime.evaluate',
+      params: {
+        expression: `(() => {
+          const element = document.querySelector(${JSON.stringify(selector)})
+          if (!(element instanceof HTMLElement) || element.matches(':disabled')) return null
+          element.scrollIntoView({ block: 'center', inline: 'center' })
+          const rectangle = element.getBoundingClientRect()
+          if (rectangle.width <= 0 || rectangle.height <= 0) return null
+          return {
+            x: rectangle.left + rectangle.width / 2,
+            y: rectangle.top + rectangle.height / 2
+          }
+        })()`,
+        returnByValue: true
+      },
+      timeoutMs,
+      processState: readProcessState,
+      operation: `locating ${selector}`
+    })
     return evaluationValue(evaluated, `locating ${selector}`)
   }, { timeoutMs, description: `workbench contribution ${contributionId}` })
 
-  await cdp.send('Input.dispatchMouseEvent', {
-    type: 'mouseMoved',
-    x: point.x,
-    y: point.y
-  }, sessionId)
-  await cdp.send('Input.dispatchMouseEvent', {
-    type: 'mousePressed',
-    x: point.x,
-    y: point.y,
-    button: 'left',
-    buttons: 1,
-    clickCount: 1
-  }, sessionId)
-  await cdp.send('Input.dispatchMouseEvent', {
-    type: 'mouseReleased',
-    x: point.x,
-    y: point.y,
-    button: 'left',
-    buttons: 0,
-    clickCount: 1
-  }, sessionId)
+  await sendToWorkbenchSession({
+    cdp,
+    session,
+    method: 'Input.dispatchMouseEvent',
+    params: { type: 'mouseMoved', x: point.x, y: point.y },
+    timeoutMs,
+    processState: readProcessState,
+    operation: `moving to ${selector}`
+  })
+  await sendToWorkbenchSession({
+    cdp,
+    session,
+    method: 'Input.dispatchMouseEvent',
+    params: {
+      type: 'mousePressed',
+      x: point.x,
+      y: point.y,
+      button: 'left',
+      buttons: 1,
+      clickCount: 1
+    },
+    timeoutMs,
+    processState: readProcessState,
+    operation: `pressing ${selector}`
+  })
+  await sendToWorkbenchSession({
+    cdp,
+    session,
+    method: 'Input.dispatchMouseEvent',
+    params: {
+      type: 'mouseReleased',
+      x: point.x,
+      y: point.y,
+      button: 'left',
+      buttons: 0,
+      clickCount: 1
+    },
+    timeoutMs,
+    processState: readProcessState,
+    operation: `releasing ${selector}`
+  })
+}
+
+async function waitForContributionTabCloseAndClick({
+  cdp,
+  session,
+  contributionId,
+  timeoutMs,
+  processState: readProcessState
+}) {
+  const selector = `.ds-extension-view[data-contribution-id="${contributionId}"]`
+  const point = await pollUntil(async () => {
+    assertDesktopProcessRunning(readProcessState())
+    const evaluated = await sendToWorkbenchSession({
+      cdp,
+      session,
+      method: 'Runtime.evaluate',
+      params: {
+        expression: `(() => {
+          const view = document.querySelector(${JSON.stringify(selector)})
+          const panel = view?.closest('[role="tabpanel"]')
+          const tabId = panel?.getAttribute('aria-labelledby')
+          const tab = tabId ? document.getElementById(tabId) : null
+          const closeButton = tab?.parentElement?.querySelector('button:not([role="tab"])')
+          if (!(closeButton instanceof HTMLElement) || closeButton.matches(':disabled')) return null
+          closeButton.scrollIntoView({ block: 'center', inline: 'center' })
+          const rectangle = closeButton.getBoundingClientRect()
+          if (rectangle.width <= 0 || rectangle.height <= 0) return null
+          return {
+            x: rectangle.left + rectangle.width / 2,
+            y: rectangle.top + rectangle.height / 2
+          }
+        })()`,
+        returnByValue: true
+      },
+      timeoutMs,
+      processState: readProcessState,
+      operation: `locating the close control for ${selector}`
+    })
+    return evaluationValue(evaluated, `locating the close control for ${selector}`)
+  }, { timeoutMs, description: `workbench contribution tab close ${contributionId}` })
+
+  await sendToWorkbenchSession({
+    cdp,
+    session,
+    method: 'Input.dispatchMouseEvent',
+    params: { type: 'mouseMoved', x: point.x, y: point.y },
+    timeoutMs,
+    processState: readProcessState,
+    operation: `moving to the close control for ${selector}`
+  })
+  await sendToWorkbenchSession({
+    cdp,
+    session,
+    method: 'Input.dispatchMouseEvent',
+    params: {
+      type: 'mousePressed',
+      x: point.x,
+      y: point.y,
+      button: 'left',
+      buttons: 1,
+      clickCount: 1
+    },
+    timeoutMs,
+    processState: readProcessState,
+    operation: `pressing the close control for ${selector}`
+  })
+  await sendToWorkbenchSession({
+    cdp,
+    session,
+    method: 'Input.dispatchMouseEvent',
+    params: {
+      type: 'mouseReleased',
+      x: point.x,
+      y: point.y,
+      button: 'left',
+      buttons: 0,
+      clickCount: 1
+    },
+    timeoutMs,
+    processState: readProcessState,
+    operation: `releasing the close control for ${selector}`
+  })
 }
 
 async function inspectGuestSecurity({
   cdp,
-  sessionId,
+  session,
   targetId,
+  workbenchSession,
+  localFileUrl,
   fetchUrl,
   popupUrl,
   timeoutMs,
   processState: readProcessState
 }) {
-  let lastGuestState
-  try {
-    await pollUntil(async () => {
-      assertDesktopProcessRunning(readProcessState())
-      const evaluated = await cdp.send('Runtime.evaluate', {
-        expression: `(() => ({
-          readyState: document.readyState,
-          location: location.href,
-          title: document.title,
-          body: document.body?.innerText?.slice(0, 1_024) ?? '',
-          marker: document.querySelector('[data-kun-packaged-webview-smoke="ready"]')?.textContent?.trim() ?? null,
-          bridge: typeof globalThis.kunExtension === 'object'
-        }))()`,
-        returnByValue: true
-      }, sessionId)
-      const value = evaluationValue(evaluated, 'waiting for the extension guest')
-      lastGuestState = value
-      return value?.readyState === 'complete' && value.marker === WEBVIEW_MARKER && value.bridge
-    }, { timeoutMs, description: 'loaded kun-extension guest bridge and body marker' })
-  } catch (error) {
-    throw new Error(
-      `${error instanceof Error ? error.message : String(error)}; ` +
-      `last guest state: ${JSON.stringify(lastGuestState ?? null)}`
-    )
-  }
+  const sendGuest = (method, params, operation) => sendToGuestSession({
+    cdp,
+    session,
+    method,
+    params,
+    timeoutMs,
+    processState: readProcessState,
+    operation
+  })
+  await waitForGuestReady(
+    cdp,
+    session.sessionId,
+    timeoutMs,
+    readProcessState,
+    (method, params) => sendGuest(method, params, 'waiting for the extension guest')
+  )
+
+  await sendGuest('Page.enable', {}, 'enabling the Extension guest page domain')
+  // Prove sender-bound kun-media loading and seeking under the production CSP
+  // before the separate Host network-filter test intentionally bypasses CSP.
+  const mediaPlaybackResult = await waitForSuccessfulGuestInspection({
+    inspect: () => inspectGuestMediaPlayback(
+      cdp,
+      session.sessionId,
+      (method, params) => sendGuest(method, params, 'loading sender-bound kun-media playback')
+    ),
+    isSuccessful: (result) => result?.mediaPlaybackMode === 'ok',
+    timeoutMs,
+    description: 'sender-bound kun-media playback readiness'
+  })
+  const imagePlaybackResult = await waitForSuccessfulGuestInspection({
+    inspect: () => inspectGuestImagePlayback(
+      cdp,
+      session.sessionId,
+      (method, params) => sendGuest(method, params, 'loading a sender-bound kun-media image')
+    ),
+    isSuccessful: (result) => result?.imagePlaybackMode === 'ok',
+    timeoutMs,
+    description: 'sender-bound kun-media image readiness'
+  })
 
   // The protocol response carries the production `connect-src 'none'` baseline in
-  // addition to the fixture's explicit loopback source. Bypass CSP only in this
-  // isolated test guest so the Host webRequest filter is the fetch control under test.
-  await cdp.send('Page.enable', {}, sessionId)
-  await cdp.send('Page.setBypassCSP', { enabled: true }, sessionId)
+  // addition to the fixture's explicit loopback source. Bypass CSP only after
+  // media playback so the Host webRequest filter is the fetch control under test.
+  await sendGuest(
+    'Page.setBypassCSP',
+    { enabled: true },
+    'enabling Extension guest CSP bypass for network-filter validation'
+  )
+  const sendWorkbench = (method, params, operation) => sendToWorkbenchSession({
+    cdp,
+    session: workbenchSession,
+    method,
+    params,
+    timeoutMs,
+    processState: readProcessState,
+    operation
+  })
+  await sendWorkbench('Page.enable', {}, 'enabling the packaged workbench page domain')
+  await sendWorkbench(
+    'Page.setBypassCSP',
+    { enabled: true },
+    'enabling workbench CSP bypass for sender-isolation validation'
+  )
+
+  let mediaIsolationResult
+  try {
+    const copiedMediaUrlMode = await inspectMediaUrlFetch(
+      cdp,
+      workbenchSession.sessionId,
+      mediaPlaybackResult.mediaLeaseUrl,
+      'checking a copied kun-media URL from the workbench sender',
+      (method, params) => sendWorkbench(
+        method,
+        params,
+        'checking a copied kun-media URL from the workbench sender'
+      )
+    )
+    const arbitraryLocalPathMode = await inspectMediaUrlFetch(
+      cdp,
+      session.sessionId,
+      localFileUrl,
+      'checking an arbitrary file URL from the extension guest',
+      (method, params) => sendGuest(
+        method,
+        params,
+        'checking an arbitrary file URL from the extension guest'
+      )
+    )
+    const releaseMode = await releaseGuestMediaLease(
+      cdp,
+      session.sessionId,
+      mediaPlaybackResult.mediaPlayback?.leaseId,
+      (method, params) => sendGuest(method, params, 'releasing the packaged media lease')
+    )
+    const postReleaseMediaUrlMode = await inspectMediaUrlFetch(
+      cdp,
+      session.sessionId,
+      mediaPlaybackResult.mediaLeaseUrl,
+      'checking a released kun-media URL from its original guest',
+      (method, params) => sendGuest(
+        method,
+        params,
+        'checking a released kun-media URL from its original guest'
+      )
+    )
+    mediaIsolationResult = {
+      copiedMediaUrlMode,
+      arbitraryLocalPathMode,
+      releaseMode,
+      postReleaseMediaUrlMode
+    }
+  } finally {
+    await releaseGuestMediaLease(
+      cdp,
+      session.sessionId,
+      mediaPlaybackResult.mediaPlayback?.leaseId,
+      (method, params) => sendGuest(method, params, 'cleaning up the packaged media lease')
+    ).catch(() => undefined)
+  }
 
   const { targetInfos: targetsBefore = [] } = await cdp.send('Target.getTargets')
   const beforeTargetIds = new Set(targetsBefore.map((target) => target.targetId).filter(Boolean))
@@ -786,7 +1296,7 @@ async function inspectGuestSecurity({
   let value
   let targetsAfter = []
   try {
-    const evaluated = await cdp.send('Runtime.evaluate', {
+    const evaluated = await sendGuest('Runtime.evaluate', {
       expression: `(async () => {
         const bridgeMethods = ['request', 'notify', 'onNotification', 'registerHandler', 'dispose']
           .filter((name) => typeof globalThis.kunExtension?.[name] === 'function')
@@ -840,6 +1350,7 @@ async function inspectGuestSecurity({
           })())
           viewStateRoundTripMode = viewStateOutcome.mode
           if (viewStateOutcome.mode === 'ok') viewState = viewStateOutcome.result
+
         }
 
         let fetchMode = 'unavailable'
@@ -887,7 +1398,7 @@ async function inspectGuestSecurity({
       awaitPromise: true,
       returnByValue: true,
       userGesture: true
-    }, sessionId)
+    }, 'inspecting extension guest security')
     value = evaluationValue(evaluated, 'inspecting extension guest security')
     await delay(POPUP_SETTLE_MS)
     ;({ targetInfos: targetsAfter = [] } = await cdp.send('Target.getTargets'))
@@ -896,6 +1407,9 @@ async function inspectGuestSecurity({
   }
   return {
     ...value,
+    ...mediaPlaybackResult,
+    ...imagePlaybackResult,
+    ...mediaIsolationResult,
     popupTargets: findUnexpectedPopupTargets({
       beforeTargetIds,
       observedTargets,
@@ -903,6 +1417,493 @@ async function inspectGuestSecurity({
       guestTargetId: targetId,
       popupUrl
     })
+  }
+}
+
+async function waitForSuccessfulGuestInspection({
+  inspect,
+  isSuccessful,
+  timeoutMs,
+  description
+}) {
+  let lastResult
+  try {
+    return await pollUntil(async () => {
+      lastResult = await inspect()
+      return isSuccessful(lastResult) ? lastResult : undefined
+    }, {
+      timeoutMs: Math.min(timeoutMs, GUEST_MEDIA_READY_TIMEOUT_MS),
+      description
+    })
+  } catch (error) {
+    throw new Error(
+      `${error instanceof Error ? error.message : String(error)}; ` +
+      `last guest inspection: ${JSON.stringify(lastResult ?? null)}`
+    )
+  }
+}
+
+let guestAsyncInspectionSequence = 0
+
+async function runGuestAsyncInspection({
+  cdp,
+  sessionId,
+  sendCommand,
+  expression,
+  userGesture = false,
+  timeoutMs,
+  description
+}) {
+  guestAsyncInspectionSequence += 1
+  const resultKey = `__kunPackagedGuestInspection${guestAsyncInspectionSequence}`
+  const serializedKey = JSON.stringify(resultKey)
+  const send = (method, params) => sendCommand
+    ? sendCommand(method, params)
+    : cdp.send(method, params, sessionId)
+  const start = () => send('Runtime.evaluate', {
+      expression: `(() => {
+        const key = ${serializedKey}
+        globalThis[key] = { state: 'pending' }
+        Promise.resolve(${expression}).then(
+          (value) => { globalThis[key] = { state: 'fulfilled', value } },
+          (error) => {
+            globalThis[key] = {
+              state: 'rejected',
+              error: error instanceof Error ? error.message : String(error)
+            }
+          }
+        )
+        return key
+      })()`,
+      returnByValue: true,
+      userGesture
+    })
+  await start()
+  try {
+    const completed = await pollUntil(async () => {
+      const evaluated = await send('Runtime.evaluate', {
+        expression: `globalThis[${serializedKey}] ?? null`,
+        returnByValue: true
+      })
+      const state = evaluationValue(evaluated, description)
+      if (state === null || state === undefined) {
+        // A guest main-frame navigation replaces the execution context without
+        // necessarily invalidating the flattened target session. Restart the
+        // inspection in the current context instead of waiting on the orphaned
+        // promise from the previous document.
+        await start()
+        return undefined
+      }
+      if (state?.state === 'rejected') {
+        throw new Error(`${description} rejected: ${String(state.error ?? 'unknown error')}`)
+      }
+      return state?.state === 'fulfilled' ? { value: state.value } : undefined
+    }, { timeoutMs, description })
+    return completed.value
+  } finally {
+    await send('Runtime.evaluate', {
+      expression: `delete globalThis[${serializedKey}]`,
+      returnByValue: true
+    }).catch(() => undefined)
+  }
+}
+
+async function inspectGuestImagePlayback(cdp, sessionId, sendCommand) {
+  const params = {
+    expression: `(async () => {
+      if (typeof globalThis.kunExtension?.request !== 'function') {
+        return { imagePlaybackMode: 'unavailable', imagePlayback: null }
+      }
+      let image = null
+      let lease = null
+      try {
+        lease = await globalThis.kunExtension.request(
+          'media.openViewResource',
+          { handleId: ${JSON.stringify(MEDIA_IMAGE_HANDLE_ID)} },
+          { timeoutMs: 5_000 }
+        )
+        image = document.createElement('img')
+        image.src = lease.url
+        document.body.append(image)
+        await new Promise((resolve, reject) => {
+          const timer = setTimeout(() => reject(new Error('image metadata timeout')), 5_000)
+          image.addEventListener('load', () => {
+            clearTimeout(timer)
+            resolve()
+          }, { once: true })
+          image.addEventListener('error', () => {
+            clearTimeout(timer)
+            reject(new Error('image element failed'))
+          }, { once: true })
+        })
+        let imageReleaseMode = 'ok'
+        try {
+          await globalThis.kunExtension.request(
+            'media.release',
+            { resource: 'lease', leaseId: lease.leaseId },
+            { timeoutMs: 5_000 }
+          )
+        } catch {
+          imageReleaseMode = 'rejected'
+        }
+        return {
+          imagePlaybackMode: 'ok',
+          imageReleaseMode,
+          imagePlayback: {
+            scheme: new URL(lease.url).protocol,
+            naturalWidth: image.naturalWidth,
+            naturalHeight: image.naturalHeight,
+            leaseId: lease.leaseId
+          }
+        }
+      } catch (error) {
+        if (lease?.leaseId) {
+          await globalThis.kunExtension.request(
+            'media.release',
+            { resource: 'lease', leaseId: lease.leaseId },
+            { timeoutMs: 5_000 }
+          ).catch(() => undefined)
+        }
+        return {
+          imagePlaybackMode: 'rejected',
+          imagePlayback: null,
+          imagePlaybackError: error instanceof Error ? error.message : String(error)
+        }
+      } finally {
+        image?.removeAttribute('src')
+        image?.remove()
+      }
+    })()`,
+    awaitPromise: true,
+    returnByValue: true,
+    userGesture: true
+  }
+  return runGuestAsyncInspection({
+    cdp,
+    sessionId,
+    sendCommand,
+    expression: params.expression,
+    userGesture: true,
+    timeoutMs: GUEST_MEDIA_READY_TIMEOUT_MS,
+    description: 'loading a sender-bound kun-media image under production CSP'
+  })
+}
+
+async function inspectGuestMediaPlayback(cdp, sessionId, sendCommand) {
+  const params = {
+    expression: `(async () => {
+      if (typeof globalThis.kunExtension?.request !== 'function') {
+        return { mediaPlaybackMode: 'unavailable', mediaPlayback: null }
+      }
+      let audio = null
+      let lease = null
+      let stage = 'open-lease'
+      try {
+        lease = await globalThis.kunExtension.request(
+          'media.openViewResource',
+          { handleId: ${JSON.stringify(MEDIA_PLAYBACK_HANDLE_ID)} },
+          { timeoutMs: 5_000 }
+        )
+        stage = 'load-metadata'
+        audio = document.createElement('audio')
+        audio.preload = 'auto'
+        audio.src = lease.url
+        document.body.append(audio)
+        await new Promise((resolve, reject) => {
+          const timer = setTimeout(() => reject(new Error('media metadata timeout')), 5_000)
+          audio.addEventListener('loadedmetadata', () => {
+            clearTimeout(timer)
+            resolve()
+          }, { once: true })
+          audio.addEventListener('error', () => {
+            clearTimeout(timer)
+            reject(new Error('media element failed'))
+          }, { once: true })
+          audio.load()
+        })
+        stage = 'seek'
+        await new Promise((resolve, reject) => {
+          const timer = setTimeout(() => reject(new Error('media seek timeout')), 5_000)
+          audio.addEventListener('seeked', () => {
+            clearTimeout(timer)
+            resolve()
+          }, { once: true })
+          audio.addEventListener('error', () => {
+            clearTimeout(timer)
+            reject(new Error('media seek failed'))
+          }, { once: true })
+          audio.currentTime = 0.5
+        })
+        return {
+          mediaPlaybackMode: 'ok',
+          mediaLeaseUrl: lease.url,
+          mediaPlayback: {
+            scheme: new URL(lease.url).protocol,
+            duration: audio.duration,
+            currentTime: audio.currentTime,
+            readyState: audio.readyState,
+            leaseId: lease.leaseId
+          }
+        }
+      } catch (error) {
+        const result = {
+          mediaPlaybackMode: 'rejected',
+          mediaPlayback: null,
+          mediaLeaseUrl: null,
+          mediaPlaybackError: {
+            stage,
+            name: error instanceof Error ? error.name : typeof error,
+            message: error instanceof Error ? error.message : String(error),
+            mediaErrorCode: audio?.error?.code ?? null,
+            mediaErrorMessage: audio?.error?.message ?? null,
+            networkState: audio?.networkState ?? null,
+            readyState: audio?.readyState ?? null
+          }
+        }
+        if (lease?.leaseId) {
+          await globalThis.kunExtension.request(
+            'media.release',
+            { resource: 'lease', leaseId: lease.leaseId },
+            { timeoutMs: 5_000 }
+          ).catch(() => undefined)
+        }
+        return result
+      } finally {
+        audio?.removeAttribute('src')
+        audio?.load()
+        audio?.remove()
+      }
+    })()`,
+    awaitPromise: true,
+    returnByValue: true,
+    userGesture: true
+  }
+  return runGuestAsyncInspection({
+    cdp,
+    sessionId,
+    sendCommand,
+    expression: params.expression,
+    userGesture: true,
+    timeoutMs: GUEST_MEDIA_READY_TIMEOUT_MS,
+    description: 'loading sender-bound kun-media playback under production CSP'
+  })
+}
+
+async function waitForGuestReady(cdp, sessionId, timeoutMs, readProcessState, sendCommand) {
+  let lastGuestState
+  try {
+    await pollUntil(async () => {
+      assertDesktopProcessRunning(readProcessState())
+      const params = {
+        expression: `(() => ({
+          readyState: document.readyState,
+          location: location.href,
+          title: document.title,
+          body: document.body?.innerText?.slice(0, 1_024) ?? '',
+          marker: document.querySelector('[data-kun-packaged-webview-smoke="ready"]')?.textContent?.trim() ?? null,
+          bridge: typeof globalThis.kunExtension === 'object'
+        }))()`,
+        returnByValue: true
+      }
+      const evaluated = sendCommand
+        ? await sendCommand('Runtime.evaluate', params)
+        : await cdp.send('Runtime.evaluate', params, sessionId)
+      const value = evaluationValue(evaluated, 'waiting for the extension guest')
+      lastGuestState = value
+      return value?.readyState === 'complete' && value.marker === WEBVIEW_MARKER && value.bridge
+    }, { timeoutMs, description: 'loaded kun-extension guest bridge and body marker' })
+  } catch (error) {
+    throw new Error(
+      `${error instanceof Error ? error.message : String(error)}; ` +
+      `last guest state: ${JSON.stringify(lastGuestState ?? null)}`
+    )
+  }
+}
+
+async function inspectMediaUrlFetch(cdp, sessionId, url, description, sendCommand) {
+  if (typeof url !== 'string' || url.length === 0) return 'invalid-url'
+  const params = {
+    expression: `(async () => {
+      try {
+        const response = await Promise.race([
+          globalThis.fetch(${JSON.stringify(url)}, {
+            cache: 'no-store',
+            headers: { Range: 'bytes=0-43' }
+          }),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 5_000))
+        ])
+        if (!response?.ok) return 'blocked'
+        const bytes = await response.arrayBuffer()
+        return bytes.byteLength > 0 ? 'allowed' : 'blocked'
+      } catch {
+        return 'blocked'
+      }
+    })()`,
+    awaitPromise: true,
+    returnByValue: true
+  }
+  const evaluated = sendCommand
+    ? await sendCommand('Runtime.evaluate', params)
+    : await cdp.send('Runtime.evaluate', params, sessionId)
+  return evaluationValue(evaluated, description)
+}
+
+async function releaseGuestMediaLease(cdp, sessionId, leaseId, sendCommand) {
+  if (typeof leaseId !== 'string' || leaseId.length === 0) return 'invalid-lease'
+  const params = {
+    expression: `(async () => {
+      try {
+        await globalThis.kunExtension.request(
+          'media.release',
+          { resource: 'lease', leaseId: ${JSON.stringify(leaseId)} },
+          { timeoutMs: 5_000 }
+        )
+        return 'ok'
+      } catch {
+        return 'rejected'
+      }
+    })()`,
+    awaitPromise: true,
+    returnByValue: true
+  }
+  const evaluated = sendCommand
+    ? await sendCommand('Runtime.evaluate', params)
+    : await cdp.send('Runtime.evaluate', params, sessionId)
+  return evaluationValue(evaluated, 'releasing the packaged media lease')
+}
+
+async function createGuestMediaLease(cdp, sessionId, sendCommand) {
+  const params = {
+    expression: `(async () => globalThis.kunExtension.request(
+      'media.openViewResource',
+      { handleId: ${JSON.stringify(MEDIA_PLAYBACK_HANDLE_ID)} },
+      { timeoutMs: 5_000 }
+    ))()`,
+    awaitPromise: true,
+    returnByValue: true,
+    userGesture: true
+  }
+  const evaluated = sendCommand
+    ? await sendCommand('Runtime.evaluate', params)
+    : await cdp.send('Runtime.evaluate', params, sessionId)
+  return evaluationValue(evaluated, 'minting a media lease for stale View Session validation')
+}
+
+async function assertStaleViewSessionMediaBlocked({
+  cdp,
+  guestSession,
+  guestTargetId,
+  workbenchSession,
+  timeoutMs,
+  processState: readProcessState
+}) {
+  const sendGuest = (method, params, operation) => sendToGuestSession({
+    cdp,
+    session: guestSession,
+    method,
+    params,
+    timeoutMs,
+    processState: readProcessState,
+    operation
+  })
+  const staleLease = await createGuestMediaLease(
+    cdp,
+    guestSession.sessionId,
+    (method, params) => sendGuest(
+      method,
+      params,
+      'minting a media lease for stale View Session validation'
+    )
+  )
+  if (
+    !staleLease ||
+    typeof staleLease.url !== 'string' ||
+    typeof staleLease.leaseId !== 'string'
+  ) {
+    throw new Error(`Could not create the stale-session media lease: ${JSON.stringify(staleLease)}`)
+  }
+
+  // Close the surface through the workbench, matching the production React
+  // lifecycle that unmounts the Webview and disposes its View Session. The
+  // guest bridge's dispose() only tears down bridge listeners and is not a UI
+  // request to unmount its owning surface.
+  await waitForContributionTabCloseAndClick({
+    cdp,
+    session: workbenchSession,
+    contributionId: CONTRIBUTION_ID,
+    timeoutMs,
+    processState: readProcessState
+  })
+  const closedGuestTargetId = guestSession.targetId ?? guestTargetId
+  await pollUntil(async () => {
+    assertDesktopProcessRunning(readProcessState())
+    const { targetInfos = [] } = await cdp.send('Target.getTargets')
+    return targetInfos.every((target) => target.targetId !== closedGuestTargetId)
+  }, { timeoutMs, description: 'disposed packaged Extension View Session' })
+
+  await waitForContributionAndClick({
+    cdp,
+    session: workbenchSession,
+    contributionId: CONTRIBUTION_ID,
+    timeoutMs,
+    processState: readProcessState
+  })
+  const replacementTarget = await waitForTarget(
+    cdp,
+    (target) => isExtensionGuestTarget(target) && target.targetId !== closedGuestTargetId,
+    'replacement kun-extension guest for stale View Session validation',
+    timeoutMs,
+    readProcessState
+  )
+  const replacementSession = {
+    targetId: replacementTarget.targetId,
+    sessionId: undefined
+  }
+  const sendReplacementGuest = (method, params, operation) => sendToGuestSession({
+    cdp,
+    session: replacementSession,
+    method,
+    params,
+    timeoutMs,
+    processState: readProcessState,
+    operation
+  })
+  await waitForGuestReady(
+    cdp,
+    replacementSession.sessionId,
+    timeoutMs,
+    readProcessState,
+    (method, params) => sendReplacementGuest(
+      method,
+      params,
+      'waiting for the replacement Extension guest'
+    )
+  )
+  await sendReplacementGuest(
+    'Page.enable',
+    {},
+    'enabling the replacement Extension guest page domain'
+  )
+  await sendReplacementGuest(
+    'Page.setBypassCSP',
+    { enabled: true },
+    'enabling replacement Extension guest CSP bypass'
+  )
+  const staleViewSessionMode = await inspectMediaUrlFetch(
+    cdp,
+    replacementSession.sessionId,
+    staleLease.url,
+    'checking a stale View Session media URL from its replacement guest',
+    (method, params) => sendReplacementGuest(
+      method,
+      params,
+      'checking a stale View Session media URL from its replacement guest'
+    )
+  )
+  if (staleViewSessionMode !== 'blocked') {
+    throw new Error(
+      `Stale View Session reused a kun-media URL: ${String(staleViewSessionMode)}`
+    )
   }
 }
 
@@ -967,6 +1968,49 @@ function assertGuestSecurityResult(result, networkCanaryRequests = 0) {
       `kunExtension runtime View-state round-trip failed: ` +
       `${String(result.viewStateRoundTripMode)} ${JSON.stringify(result.viewState)}`
     )
+  }
+  if (
+    result.mediaPlaybackMode !== 'ok' ||
+    result.mediaPlayback?.scheme !== 'kun-media:' ||
+    !Number.isFinite(result.mediaPlayback?.duration) ||
+    result.mediaPlayback.duration <= 0 ||
+    result.mediaPlayback.currentTime < 0.4 ||
+    result.mediaPlayback.readyState < 1 ||
+    typeof result.mediaPlayback.leaseId !== 'string'
+  ) {
+    throw new Error(
+      `kun-media desktop playback/seek failed: ` +
+      `${String(result.mediaPlaybackMode)} ${JSON.stringify(result.mediaPlayback)} ` +
+      `${JSON.stringify(result.mediaPlaybackError ?? null)}`
+    )
+  }
+  if (
+    result.imagePlaybackMode !== 'ok' ||
+    result.imagePlayback?.scheme !== 'kun-media:' ||
+    result.imagePlayback?.naturalWidth !== 1 ||
+    result.imagePlayback?.naturalHeight !== 1 ||
+    typeof result.imagePlayback?.leaseId !== 'string'
+  ) {
+    throw new Error(
+      `kun-media desktop image playback failed: ` +
+      `${String(result.imagePlaybackMode)} ${JSON.stringify(result.imagePlayback)} ` +
+      `${JSON.stringify(result.imagePlaybackError ?? null)}`
+    )
+  }
+  if (result.imageReleaseMode !== 'ok') {
+    throw new Error(`Extension guest image lease release failed: ${String(result.imageReleaseMode)}`)
+  }
+  for (const [label, mode] of [
+    ['copied sender URL', result.copiedMediaUrlMode],
+    ['arbitrary local file URL', result.arbitraryLocalPathMode],
+    ['post-release URL', result.postReleaseMediaUrlMode]
+  ]) {
+    if (mode !== 'blocked') {
+      throw new Error(`Extension guest ${label} was not blocked: ${String(mode)}`)
+    }
+  }
+  if (result.releaseMode !== 'ok') {
+    throw new Error(`Extension guest media lease release failed: ${String(result.releaseMode)}`)
   }
   if (result.hasKunGui) throw new Error('Extension guest can see the privileged window.kunGui bridge')
   if (result.hasElectron) throw new Error('Extension guest can see an Electron bridge')
@@ -1282,9 +2326,16 @@ module.exports = {
   desktopApplicationEntry,
   desktopResourceCandidates,
   desktopSmokeSettings,
+  desktopSmokeWorkspaceParent,
   resolvedDesktopResourceCandidates,
   desktopUserDataCandidates,
   findUnexpectedPopupTargets,
+  hasWorkbenchContribution,
+  WORKBENCH_DISCOVERY_RETRY_DELAYS_MS,
+  runGuestAsyncInspection,
+  sendToGuestSession,
+  synchronizeWorkbenchContributionDiscovery,
+  waitForSuccessfulGuestInspection,
   isExtensionGuestTarget,
   isWorkbenchTarget,
   platformDesktopArguments,

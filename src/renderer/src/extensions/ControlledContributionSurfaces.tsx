@@ -10,11 +10,12 @@ import {
 } from '@kun/extension-api'
 import type { ExtensionWorkbenchNotification } from '@shared/extension-ipc'
 import {
-  extensionResourceUrl,
+  extensionHostIconUrl,
   resolveContributionCommand,
   type RegisteredContribution
 } from './contribution-registry'
 import { ExtensionWebview } from './ExtensionWebview'
+import { ExtensionExternalBrowser } from './ExtensionExternalBrowser'
 import { boundedPlainText, isSecretLikeSettingKey } from './safe-text'
 
 export { isSecretLikeSettingKey } from './safe-text'
@@ -36,7 +37,7 @@ function ContributionIcon({ contribution }: { contribution: RegisteredContributi
   if (icon && contribution.owner.kind === 'extension') {
     return (
       <img
-        src={extensionResourceUrl(contribution.owner.extensionId, icon)}
+        src={extensionHostIconUrl(contribution.owner.extensionId, icon)}
         alt=""
         aria-hidden="true"
         className="h-4 w-4 shrink-0 object-contain"
@@ -591,6 +592,19 @@ export function ExtensionViewOutlet({
   if (contribution.owner.kind !== 'extension') {
     return <div role="alert">Built-in Views are rendered by their owning Kun component.</div>
   }
+  if (
+    contribution.point !== 'message.resultPreviews' &&
+    contribution.payload.externalBrowser &&
+    contribution.owner.grantedPermissions.includes('webview.external')
+  ) {
+    return (
+      <ExtensionExternalBrowser
+        contribution={contribution}
+        workspaceRoot={workspaceRoot}
+        onClose={onClose}
+      />
+    )
+  }
   return (
     <ExtensionWebview
       contribution={contribution}
@@ -651,6 +665,9 @@ export function DeclarativeResultPreviews({
         mimeType: active.source.mimeType,
         ...(active.source.name ? { name: active.source.name } : {}),
         ...(active.source.attachmentId ? { attachmentId: active.source.attachmentId } : {}),
+        ...(active.source.artifactId ? { artifactId: active.source.artifactId } : {}),
+        ...(active.source.mediaHandleId ? { mediaHandleId: active.source.mediaHandleId } : {}),
+        ...(active.source.availability ? { availability: active.source.availability } : {}),
         ...(active.source.relativePath ? { relativePath: active.source.relativePath } : {}),
         ...(active.source.byteSize !== undefined ? { byteSize: active.source.byteSize } : {}),
         ...(active.source.width !== undefined ? { width: active.source.width } : {}),

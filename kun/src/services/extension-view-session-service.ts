@@ -1,4 +1,5 @@
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto'
+import { resolve } from 'node:path'
 import {
   HostMessageSchema,
   LocaleSchema,
@@ -11,6 +12,7 @@ import {
   type Theme
 } from '@kun/extension-api'
 import type { ExtensionPrincipal } from './extension-agent-service.js'
+import { extensionWorkspaceKey } from '../extensions/paths.js'
 
 export const DEFAULT_EXTENSION_VIEW_SESSION_TTL_MS = 2 * 60 * 60_000
 export const DEFAULT_EXTENSION_VIEW_EVENT_LIMIT = 256
@@ -105,11 +107,16 @@ export type ExtensionWorkbenchNotification = {
 
 type PendingWorkbenchNotification = {
   projection: ExtensionWorkbenchNotification
+  workspaceIds: readonly string[]
   resolve: (actionId: string | undefined) => void
   timer: NodeJS.Timeout
   signal?: AbortSignal
   abortListener?: () => void
 }
+
+type ExtensionViewPublishScope =
+  | { workspaceRoots: readonly string[] }
+  | { workspaceKey: string }
 
 export type ExtensionViewSessionServiceOptions = {
   now?: () => Date
@@ -334,9 +341,13 @@ export class ExtensionViewSessionService {
     return true
   }
 
-  publishMessage(extensionId: string, messageInput: unknown): number {
+  publishMessage(
+    extensionId: string,
+    messageInput: unknown,
+    options?: { workspaceRoots: readonly string[] }
+  ): number {
     const message = HostMessageSchema.parse(messageInput)
-    return this.publish(extensionId, 'message', message)
+    return this.publish(extensionId, 'message', message, options)
   }
 
   /** Trusted workbench HostMessage addressed to one exact View Session. */
@@ -385,7 +396,8 @@ export class ExtensionViewSessionService {
   }
 
   publishNotification(
-    principal: Pick<ExtensionPrincipal, 'extensionId' | 'extensionVersion'>,
+    principal: Pick<ExtensionPrincipal, 'extensionId' | 'extensionVersion'> &
+      Partial<Pick<ExtensionPrincipal, 'workspaceRoots'>>,
     notificationInput: unknown,
     signal?: AbortSignal
   ): Promise<string | undefined> {
@@ -430,6 +442,7 @@ export class ExtensionViewSessionService {
         : undefined
       this.notifications.set(notificationId, {
         projection,
+        workspaceIds: (principal.workspaceRoots ?? []).map(extensionWorkspaceKey),
         resolve,
         timer,
         ...(signal ? { signal } : {}),
@@ -465,12 +478,19 @@ export class ExtensionViewSessionService {
   publish(
     extensionId: string,
     type: ExtensionViewSessionEvent['type'],
-    payload: JsonValue
+    payload: JsonValue,
+    options?: ExtensionViewPublishScope
   ): number {
     this.pruneExpired()
     let delivered = 0
     for (const session of this.sessions.values()) {
       if (session.target.extensionId !== extensionId || session.disposed) continue
+      if (
+        options !== undefined &&
+        !('workspaceKey' in options
+          ? viewSessionMatchesWorkspaceKey(session.target, options.workspaceKey)
+          : viewSessionMatchesWorkspace(session.target, options.workspaceRoots))
+      ) continue
       this.append(session, type, payload)
       delivered += 1
     }
@@ -592,6 +612,24 @@ export class ExtensionViewSessionService {
     return ids.length
   }
 
+  /** Dispose only Views and prompts admitted for one extension workspace. */
+  disposeExtensionWorkspace(extensionId: string, workspaceId: string): number {
+    const ids = [...this.sessions]
+      .filter(([, session]) =>
+        session.target.extensionId === extensionId &&
+        session.target.workspaceRoot !== undefined &&
+        extensionWorkspaceKey(session.target.workspaceRoot) === workspaceId)
+      .map(([sessionId]) => sessionId)
+    for (const sessionId of ids) this.disposeSession(sessionId)
+    for (const [notificationId, pending] of this.notifications) {
+      if (
+        pending.projection.extensionId === extensionId &&
+        pending.workspaceIds.includes(workspaceId)
+      ) this.settleNotification(notificationId, undefined)
+    }
+    return ids.length
+  }
+
   disposeAll(): void {
     this.disconnectWorkbench()
     for (const sessionId of [...this.sessions.keys()]) this.disposeSession(sessionId)
@@ -607,7 +645,9 @@ export class ExtensionViewSessionService {
     if (input.method === 'ui.getTheme') return structuredClone(this.workbenchTheme)
     if (input.method === 'ui.getLocale') return structuredClone(this.workbenchLocale)
     if (input.method === 'ui.postMessage') {
-      this.publishMessage(input.principal.extensionId, input.params)
+      this.publishMessage(input.principal.extensionId, input.params, {
+        workspaceRoots: input.principal.workspaceRoots
+      })
       return null
     }
     if (input.method === 'ui.showNotification') {
@@ -717,6 +757,28 @@ export class ExtensionViewSessionService {
         // Lifecycle observation must never affect View ownership or cleanup.
       }
     }
+  }
+}
+
+function viewSessionMatchesWorkspace(
+  target: ExtensionViewSessionTarget,
+  workspaceRoots: readonly string[]
+): boolean {
+  const normalizedRoots = new Set(workspaceRoots.map((root) => resolve(root)))
+  if (target.workspaceRoot === undefined) return normalizedRoots.size === 0
+  return normalizedRoots.has(resolve(target.workspaceRoot))
+}
+
+function viewSessionMatchesWorkspaceKey(
+  target: ExtensionViewSessionTarget,
+  workspaceKey: string
+): boolean {
+  if (target.workspaceRoot === undefined) return false
+  try {
+    return extensionWorkspaceKey(target.workspaceRoot) === workspaceKey
+  } catch {
+    // A malformed legacy target must fail closed without blocking peers.
+    return false
   }
 }
 

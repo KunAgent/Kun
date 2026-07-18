@@ -10,6 +10,7 @@ import { isBackgroundShellNoticeUserMessage } from '@shared/background-shell-not
 import type { ChatState } from './chat-store-types'
 import {
   isOptimisticUserBlockId,
+  matchingOptimisticUserBlockId,
   reconcileOptimisticUserBlock,
   upsertUserBlock
 } from './chat-store-runtime-helpers'
@@ -70,17 +71,22 @@ export function reduceChatProjection(
       const baseBlocks = flushed.blocks ?? state.blocks
       const optimisticUserId = state.currentTurnUserId
       const backgroundNotice = isBackgroundShellNoticeUserMessage({ text: event.text, meta: event.meta })
-      const reconcileOptimistic = Boolean(
+      const currentOptimisticUserId =
         !backgroundNotice &&
         optimisticUserId &&
         optimisticUserId !== event.itemId &&
         isOptimisticUserBlockId(optimisticUserId) &&
         baseBlocks.some((block) => block.kind === 'user' && block.id === optimisticUserId)
+          ? optimisticUserId
+          : null
+      const optimisticMatchId = currentOptimisticUserId ?? (
+        backgroundNotice ? null : matchingOptimisticUserBlockId(baseBlocks, event)
       )
-      const reconciledBlocks = reconcileOptimistic && optimisticUserId
+      const reconcileOptimistic = Boolean(optimisticMatchId && optimisticMatchId !== event.itemId)
+      const reconciledBlocks = reconcileOptimistic && optimisticMatchId
         ? reconcileOptimisticUserBlock(
             baseBlocks,
-            optimisticUserId,
+            optimisticMatchId,
             event.itemId,
             event.text,
             event.modelLabel
@@ -348,6 +354,7 @@ export function reduceChatProjection(
         const blocks = [...state.blocks]
         blocks[index] = {
           ...current,
+          turnId: event.turnId ?? current.turnId,
           summary: event.summary || current.summary,
           status: event.status,
           detail: event.detail ?? current.detail,
@@ -360,12 +367,21 @@ export function reduceChatProjection(
       }
       const flushed = flushLiveProjection(state, context.now)
       const baseBlocks = flushed.blocks ?? state.blocks
+      const visibleBlocks = event.auto !== false && event.turnId
+        ? baseBlocks.filter((block) => !(
+            block.kind === 'compaction' &&
+            block.id !== event.itemId &&
+            block.auto !== false &&
+            block.turnId === event.turnId
+          ))
+        : baseBlocks
       return {
         ...base,
         ...flushed,
-        blocks: [...baseBlocks, {
+        blocks: [...visibleBlocks, {
           kind: 'compaction',
           id: event.itemId,
+          turnId: event.turnId,
           createdAt: event.createdAt ?? new Date(context.now).toISOString(),
           summary: event.summary,
           status: event.status,

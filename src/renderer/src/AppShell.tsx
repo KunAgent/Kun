@@ -7,6 +7,7 @@ import { ExtensionWorkbenchLifecycle } from './extensions/ExtensionWorkbenchLife
 import { ProtectedRendererSurface } from './extensions/ProtectedRendererSurface'
 import { ExtensionSettingsServiceProvider } from './extensions/ExtensionSettingsServiceContext'
 import { RuntimeExtensionSettingsService } from './extensions/runtime-extension-settings-service'
+import { DataMigrationActivityIndicator } from './components/DataMigrationActivityIndicator'
 
 const extensionSettingsService = new RuntimeExtensionSettingsService()
 
@@ -63,6 +64,7 @@ export default function AppShell(): React.ReactElement {
         {hasDesktopTitleBar ? <WindowsTitleBar platform={platform} /> : null}
         <div className="flex min-h-0 flex-1 flex-col">
           <RuntimeStatusBanner />
+          <DataMigrationActivityIndicator />
           <Suspense fallback={<RouteFallback />}>
             {route === 'settings' ? (
               <ProtectedRendererSurface

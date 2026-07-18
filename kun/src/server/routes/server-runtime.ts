@@ -50,7 +50,8 @@ import type {
   ExtensionPackageManager,
   ExtensionPaths,
   ExtensionRegistry,
-  ExtensionStateStore
+  ExtensionStateStore,
+  BundledExtensionSeedResult
 } from '../../extensions/index.js'
 import type { ExtensionHostBroker } from '../../services/extension-host-broker.js'
 import type { ExtensionAgentService } from '../../services/extension-agent-service.js'
@@ -62,6 +63,10 @@ import type { ExtensionCredentialStore } from '../../services/extension-credenti
 import type { ExtensionViewSessionService } from '../../services/extension-view-session-service.js'
 import type { ExtensionSecretRevealConsentService } from '../../services/extension-secret-reveal-consent.js'
 import type { ExtensionConfigurationService } from '../../services/extension-configuration-service.js'
+import type { ExtensionArtifactService } from '../../services/extension-artifact-service.js'
+import type { ExtensionMediaHandleService } from '../../services/extension-media-handle-service.js'
+import type { RuntimeMigrationService } from '../../services/runtime-migration-service.js'
+import type { RuntimeMigrationImportService } from '../../services/runtime-migration-import-service.js'
 
 export type RuntimeToolDiagnostics = {
   providers: ToolProviderPolicy[]
@@ -82,6 +87,19 @@ export type RuntimeToolDiagnostics = {
     providers: string[]
     providerDiagnostics: ReturnType<ExtensionModelProviderRegistry['diagnostics']>
     hosts: Awaited<ReturnType<ExtensionManager['listDiagnostics']>>
+    jobs?: {
+      activeCount: number
+      subscriptionCount: number
+      recent: Array<{
+        jobId: string
+        ownerExtensionId: string
+        kind: string
+        state: string
+        executionAttempt: number
+        action: string
+        code?: string
+      }>
+    }
   }
 }
 
@@ -101,8 +119,11 @@ export type ExtensionPlatformRuntime = {
   credentials: ExtensionCredentialStore
   state: ExtensionStateStore
   configuration: ExtensionConfigurationService
+  mediaHandles: ExtensionMediaHandleService
+  artifacts: ExtensionArtifactService
   viewSessions: ExtensionViewSessionService
   secretReveals: ExtensionSecretRevealConsentService
+  bundledSeedResults?: readonly BundledExtensionSeedResult[]
 }
 
 /**
@@ -128,6 +149,8 @@ export type ServerRuntime = {
   toolHost?: ToolHost
   attachmentStore?: AttachmentStore
   memoryStore?: MemoryStore
+  migrationService?: RuntimeMigrationService
+  migrationImportService?: RuntimeMigrationImportService
   /**
    * Active delegation runtime exposed for diagnostics + agent profile
    * listing. Optional so test scaffolds can omit it.

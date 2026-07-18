@@ -1,6 +1,7 @@
 import type { TurnItem } from '../contracts/items.js'
 import type { ModelClient, ModelRequest } from '../ports/model-client.js'
 import { normalizeRoleReasoningEffort } from './reasoning-effort.js'
+import { userMessageTextWithComposerContexts } from '../domain/composer-context.js'
 
 export const DEFAULT_SESSION_SUMMARY_TIMEOUT_MS = 20_000
 export const DEFAULT_SESSION_SUMMARY_MAX_TOKENS = 400
@@ -105,7 +106,7 @@ export function buildSessionTranscript(items: readonly TurnItem[], maxBytes: num
 function transcriptLine(item: TurnItem): string {
   switch (item.kind) {
     case 'user_message':
-      return `[user] ${clip(item.text, 2_000)}`
+      return `[user] ${clip(userMessageTextWithComposerContexts(item), 2_000)}`
     case 'assistant_text':
       return `[assistant] ${clip(item.text, 2_000)}`
     case 'tool_call':

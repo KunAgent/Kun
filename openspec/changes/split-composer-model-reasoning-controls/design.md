@@ -1,8 +1,8 @@
 ## Context
 
-`FloatingComposerModelPicker` currently owns both model selection and reasoning effort. Its trigger concatenates the model label and effort label, while the menu opens a reasoning submenu beside the provider/model hierarchy. The underlying data path is already separate: model profiles declare supported reasoning efforts and a default, Workbench keeps `reasoningEffort` in session state, and turn submission sends the selected value through the existing Kun runtime contract.
+`FloatingComposerModelPicker` currently owns both model selection and reasoning effort. Its trigger concatenates the model label and effort label, while the menu opens a reasoning submenu beside the provider/model hierarchy. The underlying data path is already separate: model profiles declare supported reasoning efforts and a default, Workbench keeps `reasoningEffort` in session state, and turn submission captures the selected model and reasoning value before sending them through the existing Kun runtime contract.
 
-The change is renderer-focused and intentionally limited to Code chat. It must preserve the one-Kun-runtime architecture, existing provider capability rules, non-Code composer variants, light/dark themes, and the current rule that composer settings cannot change while a turn is busy.
+The change is renderer-focused and intentionally limited to Code chat. It must preserve the one-Kun-runtime architecture, existing provider capability rules, non-Code composer variants, light/dark themes, and next-turn request semantics while a turn is busy.
 
 ## Goals / Non-Goals
 
@@ -11,6 +11,7 @@ The change is renderer-focused and intentionally limited to Code chat. It must p
 - Make model choice and reasoning effort separately visible and independently operable in Code chat.
 - Give reasoning a direct, minimal energy-rail interaction without pretending that provider efforts are continuous numeric values.
 - Reuse model-declared supported efforts, default fallback, and the current turn request field.
+- Allow model and reasoning selection during an active turn while keeping the in-flight request immutable.
 - Produce a responsive, keyboard-accessible, reduced-motion-safe interaction consistent with Kun's blue/violet accent and borderless toolbar controls.
 
 **Non-Goals:**
@@ -57,9 +58,9 @@ The energized decision is based on the canonical effort identifier, not the effo
 
 Under `prefers-reduced-motion: reduce`, entry and thumb transitions become immediate and overlay, sweep, drifting, and pulse effects are removed. This gives the requested liveliness without making the composer continuously distracting or creating a second source of state.
 
-### 6. Follow existing capability, busy, responsive, and theme rules
+### 6. Follow existing capability, next-turn, responsive, and theme rules
 
-The reasoning trigger preserves the existing profile fallback behavior and is disabled whenever the existing `canChangeModel` gate is false, matching model behavior during an active turn. Model and reasoning triggers truncate independently, preserving adjacent Code toolbar actions. The popover is portaled and viewport-clamped using the existing zoom-aware placement pattern.
+The model and reasoning triggers preserve the existing profile fallback behavior and remain enabled whenever the composer has enough runtime/thread context to accept a future turn. The busy state does not disable them: the active request has already captured its model and reasoning values, so subsequent selections remain composer state for the next submitted or queued turn. Controls that mutate execution settings keep their existing busy-state rules. Model and reasoning triggers truncate independently, preserving adjacent Code toolbar actions. The popover is portaled and viewport-clamped using the existing zoom-aware placement pattern.
 
 Colors use existing design tokens for surface, ink, muted text, hover, and focus. The rail uses the Kun accent family (blue into blue-violet) with theme-specific opacity rather than hard-coded white-only surfaces. Focus rings remain available to keyboard users even though the toolbar controls have no visible resting frame.
 
@@ -77,7 +78,7 @@ Colors use existing design tokens for surface, ink, muted text, hover, and focus
 1. Add the Code-only presentation prop and pure rail helpers with characterization tests.
 2. Keep the combined branch unchanged; add model-only and reasoning-only controls in the split branch.
 3. Add borderless toolbar and energy-rail styles, motion, and accessibility behavior.
-4. Run component/unit tests and typecheck, then manually verify Code light/dark, narrow layouts, busy, provider setup, model switch, keyboard, pointer drag, zoom, and reduced motion.
+4. Run component/unit tests and typecheck, then manually verify Code light/dark, narrow layouts, active-turn model/reasoning changes, provider setup, model switch, keyboard, pointer drag, zoom, and reduced motion.
 
 Rollback is renderer-only: restore the combined picker while leaving state and runtime contracts untouched. No persisted-data migration is required.
 

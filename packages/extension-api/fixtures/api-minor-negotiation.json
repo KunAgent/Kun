@@ -1,0 +1,48 @@
+{
+  "schemaVersion": 1,
+  "host": {
+    "supportedApiVersions": ["1.2.0", "1.1.0", "1.0.0"],
+    "capabilitiesByVersion": {
+      "1.2.0": ["agent.run", "artifacts.generated", "jobs.observe", "media.brokered", "media.analysis", "media.archive", "media.documents"],
+      "1.1.0": ["agent.run", "artifacts.generated", "jobs.observe", "media.brokered"],
+      "1.0.0": ["agent.run"]
+    }
+  },
+  "cases": [
+    {
+      "name": "current v1.2 manifest",
+      "declaredApiVersion": "1.2.0",
+      "requiredCapabilities": ["media.analysis", "media.archive", "media.documents"],
+      "compatible": true,
+      "negotiatedApiVersion": "1.2.0"
+    },
+    {
+      "name": "previous v1.1 manifest",
+      "declaredApiVersion": "1.1.0",
+      "requiredCapabilities": ["media.brokered", "jobs.observe"],
+      "compatible": true,
+      "negotiatedApiVersion": "1.2.0"
+    },
+    {
+      "name": "legacy v1.0 manifest",
+      "declaredApiVersion": "1.0.0",
+      "requiredCapabilities": [],
+      "compatible": true,
+      "negotiatedApiVersion": "1.2.0"
+    },
+    {
+      "name": "future v1 minor",
+      "declaredApiVersion": "1.3.0",
+      "requiredCapabilities": [],
+      "compatible": false,
+      "code": "API_MINOR_UNSUPPORTED"
+    },
+    {
+      "name": "unsupported major",
+      "declaredApiVersion": "2.0.0",
+      "requiredCapabilities": [],
+      "compatible": false,
+      "code": "API_MAJOR_UNSUPPORTED"
+    }
+  ]
+}

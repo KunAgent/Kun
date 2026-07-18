@@ -1,8 +1,17 @@
 import { create } from 'zustand'
+import type { CanvasMotionDocument } from '../motion/canvas-motion-types'
+import {
+  createEmptyMotionDocument,
+  normalizeMotionDocument,
+  pruneMotionDocument,
+  resolveOwningMotionFrameId
+} from '../motion/model'
+import { useCanvasMotionStore } from '../motion/canvas-motion-store'
+import { applyAutoKey } from '../motion/canvas-motion-mutations'
 import type { CanvasDocument, CanvasShape } from './canvas-types'
 import { createEmptyDocument, createShapeId, isArtifactFrame, ROOT_SHAPE_ID } from './canvas-types'
 import { useCanvasUndoStore } from './canvas-undo-store'
-import type { ShapePatch } from './canvas-undo-store'
+import type { CanvasChange, MotionPatch, ShapePatch } from './canvas-undo-store'
 import { useCanvasSelectionStore } from './canvas-selection-store'
 import type { DesignOperationJournalEntry } from '../graph/design-graph-types'
 import { appendOperationJournalEntryToCanvasDocument } from '../graph/canvas-operation-journal'
@@ -28,7 +37,18 @@ type ShapeState = {
   reparentShape: (id: string, newParentId: string, index?: number) => void
   duplicateShape: (id: string, options?: { skipUndo?: boolean }) => string | null
 
+  setMotionDocument: (
+    motion: CanvasMotionDocument,
+    label?: string,
+    selectionBefore?: string[]
+  ) => void
+  updateMotion: (
+    updater: (motion: CanvasMotionDocument) => CanvasMotionDocument,
+    label?: string,
+    selectionBefore?: string[]
+  ) => void
   applyPatches: (patches: ShapePatch[], direction: 'undo' | 'redo') => void
+  applyChange: (change: CanvasChange, direction: 'undo' | 'redo') => void
   appendOperationJournalEntry: (entry: DesignOperationJournalEntry) => void
   syncDomSourceBindings: (options: DomSourceBindingOptions) => void
   undo: () => void
@@ -80,6 +100,45 @@ export function withDescendants(
   return [...out]
 }
 
+function applyShapePatches(
+  source: Record<string, CanvasShape>,
+  patches: ShapePatch[],
+  direction: 'undo' | 'redo'
+): Record<string, CanvasShape> {
+  const objects = { ...source }
+  // Undo must walk patches in reverse so chained changes (e.g. add A, then
+  // update A) revert in the opposite order they were applied.
+  const ordered = direction === 'undo' ? [...patches].reverse() : patches
+  for (const patch of ordered) {
+    const values = direction === 'undo' ? patch.before : patch.after
+    if (Object.keys(values).length === 0) {
+      // Empty before = the patch created the shape (undo deletes it).
+      // Empty after  = the patch deleted the shape (redo deletes it).
+      delete objects[patch.id]
+    } else if (objects[patch.id]) {
+      objects[patch.id] = { ...objects[patch.id], ...values }
+    } else {
+      objects[patch.id] = values as CanvasShape
+    }
+  }
+  return objects
+}
+
+function sameMotionDocument(left: CanvasMotionDocument, right: CanvasMotionDocument): boolean {
+  if (left === right) return true
+  // Canonical motion documents have deterministic object/track/keyframe order.
+  // Comparing their bounded serialized form avoids no-op undo entries while
+  // keeping the mutation API immutable and simple.
+  return JSON.stringify(left) === JSON.stringify(right)
+}
+
+function preserveMotionReferenceWhenUnchanged(
+  before: CanvasMotionDocument,
+  candidate: CanvasMotionDocument
+): CanvasMotionDocument {
+  return sameMotionDocument(before, candidate) ? before : candidate
+}
+
 function deepCloneShape(
   objects: Record<string, CanvasShape>,
   id: string,
@@ -119,11 +178,20 @@ export const useCanvasShapeStore = create<ShapeState>((set, get) => ({
 
   loadDocument: (doc, documentKey = null) => {
     useCanvasUndoStore.getState().clear()
-    set({ document: doc, documentKey })
+    // A same-key late disk load/merge is not a workspace switch; preserving
+    // transient authoring state avoids collapsing the dock while the current
+    // document is still settling. Null keys carry no identity, so treat them
+    // conservatively as a switch.
+    if (documentKey === null || documentKey !== get().documentKey) {
+      useCanvasMotionStore.getState().reset()
+    }
+    const motion = pruneMotionDocument(doc.motion, doc)
+    set({ document: { ...doc, motion }, documentKey })
   },
 
   resetDocument: () => {
     useCanvasUndoStore.getState().clear()
+    useCanvasMotionStore.getState().reset()
     set({ document: createEmptyDocument(), documentKey: null })
   },
 
@@ -159,13 +227,14 @@ export const useCanvasShapeStore = create<ShapeState>((set, get) => ({
       }
 
       objects[shape.id] = placed
-      const children = pid === s.document.rootId && !isArtifactFrame(placed)
-        ? [
-            ...parent.children.filter((childId) => !isArtifactFrame(objects[childId])),
-            shape.id,
-            ...parent.children.filter((childId) => isArtifactFrame(objects[childId]))
-          ]
-        : [...parent.children, shape.id]
+      const children =
+        pid === s.document.rootId && !isArtifactFrame(placed)
+          ? [
+              ...parent.children.filter((childId) => !isArtifactFrame(objects[childId])),
+              shape.id,
+              ...parent.children.filter((childId) => isArtifactFrame(objects[childId]))
+            ]
+          : [...parent.children, shape.id]
       objects[pid] = { ...parent, children }
 
       patches.push(
@@ -187,34 +256,93 @@ export const useCanvasShapeStore = create<ShapeState>((set, get) => ({
 
   updateShape: (id, patch, skipUndo) => {
     const patches: ShapePatch[] = []
+    let motionPatch: MotionPatch | undefined
 
     set((s) => {
       const shape = s.document.objects[id]
       if (!shape) return s
 
-      const before: Partial<CanvasShape> = {}
-      const after: Partial<CanvasShape> = {}
-      for (const key of Object.keys(patch) as (keyof CanvasShape)[]) {
-        if (patch[key] !== shape[key]) {
-          ;(before as Record<string, unknown>)[key] = shape[key]
-          ;(after as Record<string, unknown>)[key] = patch[key]
+      let effectivePatch = patch
+      let nextMotion = s.document.motion ?? createEmptyMotionDocument()
+      const motionState = useCanvasMotionStore.getState()
+      if (skipUndo && motionState.gestureStartValues[id]) {
+        const gesturePatch: Partial<Record<'x' | 'y' | 'rotation' | 'opacity', number>> = {}
+        const remainingPatch: Partial<CanvasShape> = { ...effectivePatch }
+        for (const property of ['x', 'y', 'rotation', 'opacity'] as const) {
+          const value = effectivePatch[property]
+          if (typeof value === 'number' && Number.isFinite(value)) {
+            gesturePatch[property] = value
+            delete remainingPatch[property]
+          }
+        }
+        if (Object.keys(gesturePatch).length > 0) {
+          motionState.applyGesturePreviewPatch(id, gesturePatch, {
+            x: shape.x,
+            y: shape.y,
+            rotation: shape.rotation,
+            opacity: shape.opacity
+          })
+          effectivePatch = remainingPatch
         }
       }
-      if (Object.keys(after).length === 0) return s
+      const autoKeyActive =
+        !skipUndo &&
+        motionState.open &&
+        motionState.autoKey &&
+        !motionState.playing &&
+        motionState.currentTimeMs > 0 &&
+        Boolean(motionState.activeFrameId)
+      if (
+        autoKeyActive &&
+        motionState.activeFrameId &&
+        resolveOwningMotionFrameId(s.document, id) !== motionState.activeFrameId
+      ) return s
+      if (autoKeyActive && motionState.activeFrameId) {
+        const autoKeyResult = applyAutoKey(
+          nextMotion,
+          s.document,
+          motionState.activeFrameId,
+          id,
+          motionState.currentTimeMs,
+          patch
+        )
+        effectivePatch = autoKeyResult.shapePatch
+        const normalized = preserveMotionReferenceWhenUnchanged(
+          nextMotion,
+          pruneMotionDocument(normalizeMotionDocument(autoKeyResult.motion), s.document)
+        )
+        if (normalized !== nextMotion) {
+          motionPatch = { before: nextMotion, after: normalized }
+          nextMotion = normalized
+        }
+      }
 
-      patches.push({ id, before, after })
-      const objects = { ...s.document.objects, [id]: { ...shape, ...patch } }
-      return { document: { ...s.document, objects } }
+      const before: Partial<CanvasShape> = {}
+      const after: Partial<CanvasShape> = {}
+      for (const key of Object.keys(effectivePatch) as (keyof CanvasShape)[]) {
+        if (effectivePatch[key] !== shape[key]) {
+          ;(before as Record<string, unknown>)[key] = shape[key]
+          ;(after as Record<string, unknown>)[key] = effectivePatch[key]
+        }
+      }
+      if (Object.keys(after).length === 0 && !motionPatch) return s
+
+      const objects = Object.keys(after).length > 0
+        ? { ...s.document.objects, [id]: { ...shape, ...effectivePatch } }
+        : s.document.objects
+      if (Object.keys(after).length > 0) patches.push({ id, before, after })
+      return { document: { ...s.document, objects, motion: nextMotion } }
     })
 
-    if (!skipUndo && patches.length > 0) {
-      useCanvasUndoStore.getState().pushChange({ patches })
+    if (!skipUndo && (patches.length > 0 || motionPatch)) {
+      useCanvasUndoStore.getState().pushChange({ patches, motionPatch })
     }
   },
 
   deleteShape: (id, options) => {
     if (id === get().document.rootId) return
     const patches: ShapePatch[] = []
+    let motionPatch: MotionPatch | undefined
 
     set((s) => {
       const objects = { ...s.document.objects }
@@ -244,11 +372,18 @@ export const useCanvasShapeStore = create<ShapeState>((set, get) => ({
         })
       }
 
-      return { document: { ...s.document, objects } }
+      const nextDocument = { ...s.document, objects }
+      const beforeMotion = s.document.motion ?? createEmptyMotionDocument()
+      const afterMotion = preserveMotionReferenceWhenUnchanged(
+        beforeMotion,
+        pruneMotionDocument(beforeMotion, nextDocument)
+      )
+      if (afterMotion !== beforeMotion) motionPatch = { before: beforeMotion, after: afterMotion }
+      return { document: { ...nextDocument, motion: afterMotion } }
     })
 
     if (!options?.skipUndo) {
-      useCanvasUndoStore.getState().pushChange({ patches })
+      useCanvasUndoStore.getState().pushChange({ patches, motionPatch, label: 'delete-shape' })
     }
   },
 
@@ -302,6 +437,8 @@ export const useCanvasShapeStore = create<ShapeState>((set, get) => ({
   },
 
   reparentShape: (id, newParentId, index) => {
+    const patches: ShapePatch[] = []
+    let motionPatch: MotionPatch | undefined
     set((s) => {
       const shape = s.document.objects[id]
       if (!shape?.parentId) return s
@@ -323,15 +460,34 @@ export const useCanvasShapeStore = create<ShapeState>((set, get) => ({
 
       objects[id] = { ...shape, parentId: newParentId }
 
-      const patches: ShapePatch[] = [
-        { id, before: { parentId: shape.parentId }, after: { parentId: newParentId } },
-        { id: shape.parentId, before: { children: oldParent.children }, after: { children: oldChildren } },
-        { id: newParentId, before: { children: newParent.children }, after: { children: newChildren } }
-      ]
-      useCanvasUndoStore.getState().pushChange({ patches })
+      patches.push(
+        {
+          id,
+          before: { parentId: shape.parentId },
+          after: { parentId: newParentId }
+        },
+        {
+          id: shape.parentId,
+          before: { children: oldParent.children },
+          after: { children: oldChildren }
+        },
+        {
+          id: newParentId,
+          before: { children: newParent.children },
+          after: { children: newChildren }
+        }
+      )
 
-      return { document: { ...s.document, objects } }
+      const nextDocument = { ...s.document, objects }
+      const beforeMotion = s.document.motion ?? createEmptyMotionDocument()
+      const afterMotion = preserveMotionReferenceWhenUnchanged(
+        beforeMotion,
+        pruneMotionDocument(beforeMotion, nextDocument)
+      )
+      if (afterMotion !== beforeMotion) motionPatch = { before: beforeMotion, after: afterMotion }
+      return { document: { ...nextDocument, motion: afterMotion } }
     })
+    useCanvasUndoStore.getState().pushChange({ patches, motionPatch, label: 'reparent-shape' })
   },
 
   duplicateShape: (id, options) => {
@@ -369,30 +525,53 @@ export const useCanvasShapeStore = create<ShapeState>((set, get) => ({
     return rootId
   },
 
+  setMotionDocument: (motion, label = 'update-motion', selectionBefore) => {
+    const before = get().document.motion ?? createEmptyMotionDocument()
+    const after = preserveMotionReferenceWhenUnchanged(
+      before,
+      pruneMotionDocument(normalizeMotionDocument(motion), get().document)
+    )
+    if (after === before) return
+    set((state) => ({ document: { ...state.document, motion: after } }))
+    useCanvasUndoStore.getState().pushChange({
+      patches: [],
+      motionPatch: { before, after },
+      label,
+      selectionBefore
+    })
+  },
+
+  updateMotion: (updater, label = 'update-motion', selectionBefore) => {
+    const before = get().document.motion ?? createEmptyMotionDocument()
+    const after = updater(before)
+    get().setMotionDocument(after, label, selectionBefore)
+  },
+
   applyPatches: (patches, direction) => {
-    set((s) => {
-      const objects = { ...s.document.objects }
-      // Undo must walk patches in reverse so chained changes (e.g. add A, then
-      // update A) revert in the opposite order they were applied.
-      const ordered = direction === 'undo' ? [...patches].reverse() : patches
-      for (const patch of ordered) {
-        const values = direction === 'undo' ? patch.before : patch.after
-        if (Object.keys(values).length === 0) {
-          // Empty before = the patch created the shape (undo deletes it).
-          // Empty after  = the patch deleted the shape (redo deletes it).
-          delete objects[patch.id]
-        } else if (objects[patch.id]) {
-          objects[patch.id] = { ...objects[patch.id], ...values }
-        } else {
-          objects[patch.id] = values as CanvasShape
-        }
+    set((s) => ({
+      document: {
+        ...s.document,
+        objects: applyShapePatches(s.document.objects, patches, direction)
       }
-      return { document: { ...s.document, objects } }
+    }))
+  },
+
+  applyChange: (change, direction) => {
+    set((state) => {
+      const objects = applyShapePatches(state.document.objects, change.patches, direction)
+      const motion = change.motionPatch
+        ? direction === 'undo'
+          ? change.motionPatch.before
+          : change.motionPatch.after
+        : state.document.motion
+      return { document: { ...state.document, objects, motion } }
     })
   },
 
   appendOperationJournalEntry: (entry) => {
-    set((s) => ({ document: appendOperationJournalEntryToCanvasDocument(s.document, entry) }))
+    set((s) => ({
+      document: appendOperationJournalEntryToCanvasDocument(s.document, entry)
+    }))
   },
 
   syncDomSourceBindings: (options) => {
@@ -411,14 +590,14 @@ export const useCanvasShapeStore = create<ShapeState>((set, get) => ({
   undo: () => {
     const change = useCanvasUndoStore.getState().undo()
     if (!change) return
-    get().applyPatches(change.patches, 'undo')
+    get().applyChange(change, 'undo')
     useCanvasSelectionStore.getState().select(change.selectionBefore)
   },
 
   redo: () => {
     const change = useCanvasUndoStore.getState().redo()
     if (!change) return
-    get().applyPatches(change.patches, 'redo')
+    get().applyChange(change, 'redo')
     useCanvasSelectionStore.getState().select(change.selectionAfter)
   }
 }))

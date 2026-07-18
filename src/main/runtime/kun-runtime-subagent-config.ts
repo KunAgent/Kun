@@ -6,6 +6,7 @@ const VALID_PROFILE_REASONING = new Set(['auto', 'low', 'medium', 'high', 'max']
 const BUILTIN_SUBAGENT_PROFILE_IDS = new Set([
   'general',
   'explore',
+  'component-designer',
   'design-reviewer',
   'over-engineering-reviewer'
 ])

@@ -479,6 +479,12 @@ export type OpError = {
     | 'PARENT_NOT_FOUND'
     | 'WOULD_CYCLE'
     | 'UNSUPPORTED_TYPE'
+    | 'INVALID_MOTION_OP'
+    | 'MOTION_BATCH_LIMIT'
+    | 'MOTION_FRAME_NOT_FOUND'
+    | 'MOTION_TARGET_NOT_FOUND'
+    | 'MOTION_FRAME_SCOPE'
+    | 'MOTION_LIMIT_EXCEEDED'
   message: string
   suggestion?: string
 }

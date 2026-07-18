@@ -105,6 +105,7 @@ describe('dedicated design tools', () => {
     expect(tool.shouldAdvertise?.({ ...context(true), guiDesignMode: true })).toBe(false)
     expect(tool.shouldAdvertise?.(context(false))).toBe(false)
     expect(tool.description).toContain('design_update_shapes first')
+    expect(tool.description).toContain('call this tool directly without redrawing it')
 
     const result = await tool.execute({ name: '支付架构图' }, context(true))
     expect(result.isError).toBeUndefined()
@@ -147,6 +148,27 @@ describe('dedicated design tools', () => {
       sandboxMode: 'read-only'
     })).map((candidate) => candidate.name)
     expect(names).not.toContain(DESIGN_EXPORT_CANVAS_TOOL_NAME)
+  })
+
+  it('infers the export format from a filename extension when format is omitted', async () => {
+    const tool = createDesignExportCanvasTool()
+    const inferred = await tool.execute({ name: 'API map.svg' }, context(true))
+    expect(inferred.output).toMatchObject({
+      exportRequest: {
+        format: 'svg',
+        fileName: expect.stringMatching(/^API-map-[a-f0-9]{12}\.svg$/)
+      },
+      generatedFiles: [{ mimeType: 'image/svg+xml' }]
+    })
+
+    const explicit = await tool.execute({ format: 'png', name: 'API map.svg' }, context(true))
+    expect(explicit.output).toMatchObject({
+      exportRequest: {
+        format: 'png',
+        fileName: expect.stringMatching(/^API-map-[a-f0-9]{12}\.png$/)
+      },
+      generatedFiles: [{ mimeType: 'image/png' }]
+    })
   })
 
   it('executes the export through the real local tool host in workspace-write mode', async () => {

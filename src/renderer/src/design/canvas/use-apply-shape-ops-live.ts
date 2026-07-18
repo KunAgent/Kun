@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import type { ChatBlock, GeneratedFileReference, ToolBlock } from '../../agent/types'
+import type { ChatBlock, ToolBlock } from '../../agent/types'
 import { useChatStore } from '../../store/chat-store'
 import { collectAssistantTextForTurn, threadHasPendingRuntimeWork } from '../../store/chat-store-runtime-helpers'
 import { applyCanvasOpBlocks, applyCanvasOpsSince, extractCanvasOpBlocksFromValue, setLastCanvasOpErrors } from './apply-shape-ops'
@@ -17,11 +17,29 @@ import {
 } from './svg-artifact-tool-replay'
 import { designSystemToolRevisionError, persistAppliedDesignSystemTool } from './design-system-tool-replay'
 import { dispatchCanvasExportToolBlock, type CanvasAgentExportRequestHandler } from './canvas-export-tool-replay'
+import {
+  executeMotionOps,
+  extractMotionOpsFromValue,
+  isDesignMotionRendererToolName
+} from './motion-ops'
+import {
+  latestGeneratedImageUrlForTurn,
+  resolveGeneratedImageFallbackTarget,
+  rewriteGeneratedImageUrlsForTurn,
+  type GeneratedImageFallbackTarget
+} from './canvas-generated-image-replay'
 
 export {
   hasDispatchedSvgFollowup, shouldApplyDesignCanvasToolBlock,
   shouldApplyDurableSvgCreate, userTextBeforeToolBlock
 } from './svg-artifact-tool-replay'
+export {
+  latestGeneratedImageRelativePathForTurn,
+  latestGeneratedImageUrlForTurn,
+  looksLikeExistingCanvasImageEditRequest,
+  resolveGeneratedImageFallbackTarget,
+  rewriteGeneratedImageUrlsForTurn
+} from './canvas-generated-image-replay'
 
 /** Coalesce per-token `liveAssistant` deltas so we re-parse at most this often. */
 const STREAM_THROTTLE_MS = 120
@@ -33,25 +51,22 @@ type ActiveCanvasTurnReplayState = {
   blocks: readonly ChatBlock[]
 }
 
-type GeneratedImageFallbackTarget = {
-  id: string
-  imageUrl: string
-}
-
 export type PendingScreenGeneration = {
   shapeId: string
   userPrompt: string
   brief?: string
 }
 
-const EXISTING_IMAGE_EDIT_PATTERN =
-  /(?:按图片批注修改|修改|编辑|改成|改为|改一下|换成?|替换|重画|重绘|修复|调整|变成|去掉|去除|清除|换个颜色|change|edit|modify|replace|transform|restyle|redo|fix|recolor|remove|clean up)/i
-
 export function activeCanvasTurnMatchesThread(
   state: Pick<ActiveCanvasTurnReplayState, 'activeThreadId'>,
   targetThreadId?: string | null
 ): boolean {
   return !targetThreadId || state.activeThreadId === targetThreadId
+}
+
+export function shouldReplayIdleCanvasToolBlock(block: ToolBlock): boolean {
+  return block.meta?.toolName === 'design_svg_create' ||
+    isDesignMotionRendererToolName(block.meta?.toolName)
 }
 
 function blocksForActiveCanvasTurn(state: ActiveCanvasTurnReplayState): readonly ChatBlock[] {
@@ -81,138 +96,6 @@ function userBlockForActiveCanvasTurn(
     if (block.kind === 'user') return block
   }
   return null
-}
-
-export function looksLikeExistingCanvasImageEditRequest(text: string): boolean {
-  return EXISTING_IMAGE_EDIT_PATTERN.test(text)
-}
-
-export function resolveGeneratedImageFallbackTarget(options: {
-  document: CanvasDocument
-  selectedIds: ReadonlySet<string>
-  userText: string
-}): GeneratedImageFallbackTarget | null {
-  if (!looksLikeExistingCanvasImageEditRequest(options.userText)) return null
-  if (options.selectedIds.size !== 1) return null
-  const [id] = [...options.selectedIds]
-  if (!id) return null
-  const shape = options.document.objects[id]
-  if (shape?.type !== 'image' || !shape.imageUrl) return null
-  return { id, imageUrl: shape.imageUrl }
-}
-
-function isGenerateImageToolName(value: unknown): boolean {
-  return typeof value === 'string' && (value === 'generate_image' || value.endsWith('__generate_image'))
-}
-
-function generatedFileRelativePath(file: unknown): string {
-  if (!file || typeof file !== 'object') return ''
-  const candidate = file as GeneratedFileReference
-  return typeof candidate.relativePath === 'string' && candidate.relativePath.trim()
-    ? candidate.relativePath.trim()
-    : ''
-}
-
-function generatedFileAbsolutePath(file: unknown): string {
-  if (!file || typeof file !== 'object') return ''
-  const candidate = file as GeneratedFileReference
-  return typeof candidate.absolutePath === 'string' && candidate.absolutePath.trim()
-    ? candidate.absolutePath.trim()
-    : ''
-}
-
-function generatedFileImageUrl(file: unknown): string {
-  return generatedFileAbsolutePath(file) || generatedFileRelativePath(file)
-}
-
-function latestGeneratedImageMarkdownPath(text: string): string | null {
-  let latest: string | null = null
-  const re = /!\[[^\]]*]\(([^)\s]+)\)/g
-  for (const match of text.matchAll(re)) {
-    const path = match[1]?.trim()
-    if (path?.startsWith('.deepseekgui-images/')) latest = path
-  }
-  return latest
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
-}
-
-function generatedImageUrlAliasesForTurn(blocks: readonly ChatBlock[]): Map<string, string> {
-  const aliases = new Map<string, string>()
-  for (const block of blocks) {
-    if (block.kind !== 'tool' || block.status !== 'success') continue
-    if (!isGenerateImageToolName(block.meta?.toolName)) continue
-    const files = block.meta?.generatedFiles
-    if (!Array.isArray(files)) continue
-    for (const file of files) {
-      const relativePath = generatedFileRelativePath(file)
-      const imageUrl = generatedFileImageUrl(file)
-      if (relativePath && imageUrl) aliases.set(relativePath, imageUrl)
-    }
-  }
-  return aliases
-}
-
-export function rewriteGeneratedImageUrlsForTurn(value: unknown, blocks: readonly ChatBlock[]): unknown {
-  const aliases = generatedImageUrlAliasesForTurn(blocks)
-  if (aliases.size === 0) return value
-  return rewriteGeneratedImageUrls(value, aliases)
-}
-
-function rewriteGeneratedImageUrls(value: unknown, aliases: ReadonlyMap<string, string>): unknown {
-  if (Array.isArray(value)) return value.map((item) => rewriteGeneratedImageUrls(item, aliases))
-  if (!isRecord(value)) return value
-  let changed = false
-  const next: Record<string, unknown> = {}
-  for (const [key, entry] of Object.entries(value)) {
-    const rewritten =
-      key === 'imageUrl' && typeof entry === 'string'
-        ? aliases.get(entry.trim()) ?? entry
-        : rewriteGeneratedImageUrls(entry, aliases)
-    if (rewritten !== entry) changed = true
-    next[key] = rewritten
-  }
-  return changed ? next : value
-}
-
-export function latestGeneratedImageRelativePathForTurn(blocks: readonly ChatBlock[]): string | null {
-  let latest: string | null = null
-  for (const block of blocks) {
-    if (block.kind === 'assistant') {
-      latest = latestGeneratedImageMarkdownPath(block.text) ?? latest
-      continue
-    }
-    if (block.kind !== 'tool' || block.status !== 'success') continue
-    if (!isGenerateImageToolName(block.meta?.toolName)) continue
-    const files = block.meta?.generatedFiles
-    if (!Array.isArray(files)) continue
-    for (const file of files) {
-      const relativePath = generatedFileRelativePath(file)
-      if (relativePath) latest = relativePath
-    }
-  }
-  return latest
-}
-
-export function latestGeneratedImageUrlForTurn(blocks: readonly ChatBlock[]): string | null {
-  let latest: string | null = null
-  for (const block of blocks) {
-    if (block.kind === 'assistant') {
-      latest = latestGeneratedImageMarkdownPath(block.text) ?? latest
-      continue
-    }
-    if (block.kind !== 'tool' || block.status !== 'success') continue
-    if (!isGenerateImageToolName(block.meta?.toolName)) continue
-    const files = block.meta?.generatedFiles
-    if (!Array.isArray(files)) continue
-    for (const file of files) {
-      const imageUrl = generatedFileImageUrl(file)
-      if (imageUrl) latest = imageUrl
-    }
-  }
-  return latest
 }
 
 export function replayActiveCanvasTurn(
@@ -442,6 +325,34 @@ export function useApplyShapeOpsLive(
         })
       )
       if (dispatchCanvasExportToolBlock(block, parsed, appliedToolBlockIds, onCanvasExportRequested)) return
+      if (isDesignMotionRendererToolName(block.meta?.toolName)) {
+        const motionOps = extractMotionOpsFromValue(parsed)
+        const { affectedIds, errors } = executeMotionOps(
+          motionOps,
+          `tool:${block.id}`,
+          { replayKey: block.id }
+        )
+        // Mark even invalid/rejected renderer output as consumed. Otherwise a
+        // remount in the same turn would repeatedly surface the same bounded
+        // error; successfully applied batches also have a durable journal guard.
+        appliedToolBlockIds.add(block.id)
+        if (errors.length > 0) errorsThisTurn.push(...errors)
+        if (affectedIds.length === 0) return
+        for (const id of affectedIds) affectedThisTurn.add(id)
+        useCanvasSelectionStore.getState().select(
+          [...affectedThisTurn].filter((id) => Boolean(useCanvasShapeStore.getState().document.objects[id]))
+        )
+        if (!framedThisTurn) {
+          framedThisTurn = true
+          useDesignAssistantStore.getState().markAiAffected(affectedIds)
+        } else {
+          useDesignAssistantStore.setState({
+            lastAiAffectedIds: affectedIds,
+            lastAiActionAt: Date.now()
+          })
+        }
+        return
+      }
       if (block.meta?.toolName === 'design_svg_create') {
         // A dedicated SVG turn must start only after the canvas turn becomes
         // idle. Otherwise sendMessage puts it into a process-global transient
@@ -646,7 +557,9 @@ export function useApplyShapeOpsLive(
     replayActiveCanvasTurn(initialState, applyToolBlock, processStreaming, targetThreadId)
     if (!initialState.currentTurnId && activeCanvasTurnMatchesThread(initialState, targetThreadId)) {
       for (const block of initialState.blocks) {
-        if (block.kind === 'tool' && block.meta?.toolName === 'design_svg_create') {
+        if (block.kind !== 'tool' || !shouldReplayIdleCanvasToolBlock(block)) continue
+        if (isDesignMotionRendererToolName(block.meta?.toolName)) applyToolBlock(block)
+        else {
           void applySvgToolBlock(block)
         }
       }
@@ -668,7 +581,9 @@ export function useApplyShapeOpsLive(
       }
       if (!state.currentTurnId && state.blocks !== prev.blocks) {
         for (const block of state.blocks) {
-          if (block.kind === 'tool' && block.meta?.toolName === 'design_svg_create') {
+          if (block.kind !== 'tool' || !shouldReplayIdleCanvasToolBlock(block)) continue
+          if (isDesignMotionRendererToolName(block.meta?.toolName)) applyToolBlock(block)
+          else {
             void applySvgToolBlock(block)
           }
         }

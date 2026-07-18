@@ -2,6 +2,7 @@ import type {
   ApprovalStatusPayload,
   ChatBlock,
   CompactionEventPayload,
+  ComponentPrototypeMetadata,
   GeneratedFileReference,
   NormalizedThread,
   ReviewBlock,
@@ -26,6 +27,12 @@ import { normalizeKunRuntimeEvent, type KunEventNormalizerDeps } from './kun-eve
 import type { RuntimeProjectionAction } from './runtime-projection-actions'
 import { redactSecrets, redactSecretText } from '@shared/secret-redaction'
 import { applyClientUserMessageSourceMeta } from '@shared/background-shell-notice'
+import {
+  PRESENTATION_STUDIO_EXTENSION_ID,
+  PRESENTATION_STUDIO_WRITE_TOOL_NAMES,
+  presentationStudioCanonicalToolId,
+  presentationStudioModelAlias
+} from '@shared/presentation-artifact'
 import type {
   CoreChildRuntimeMetadataJson,
   CoreRuntimeEventJson,
@@ -37,6 +44,11 @@ import type {
   CoreReviewTargetJson,
   CoreUsageSnapshotJson
 } from './kun-contract'
+import {
+  ComposerContextAttachmentSchema,
+  MAX_COMPOSER_CONTEXT_ATTACHMENTS,
+  type ComposerContextAttachment
+} from '@kun/extension-api'
 
 export function buildQuery(options: Record<string, string | number | boolean | undefined>): string {
   const params = new URLSearchParams()
@@ -173,12 +185,16 @@ function readStructuredString(record: Record<string, unknown>, ...keys: string[]
 
 const FILE_PATH_KEYS = [
   'absolute_path',
+  'output_path',
+  'outputPath',
+  'destination_path',
+  'destinationPath',
   'path',
   'file_path',
   'file',
   'relative_path',
   'target_path',
-  'destination_path'
+  'targetPath'
 ] as const
 
 const COMMAND_KEYS = ['command', 'cmd', 'script'] as const
@@ -222,6 +238,62 @@ function payloadFor(item: CoreTurnItemJson): Record<string, unknown> {
       : {}
   }
   return (item.arguments ?? {}) as Record<string, unknown>
+}
+
+function structuredPayloadsFor(item: CoreTurnItemJson): Record<string, unknown>[] {
+  const payloads: Record<string, unknown>[] = []
+  const seen = new Set<Record<string, unknown>>()
+  const visit = (value: unknown, depth: number): void => {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return
+    const record = value as Record<string, unknown>
+    if (seen.has(record)) return
+    seen.add(record)
+    payloads.push(record)
+    if (depth >= 2) return
+    visit(record.result, depth + 1)
+    visit(record.content, depth + 1)
+  }
+  visit(payloadFor(item), 0)
+  return payloads
+}
+
+const PRESENTATION_STUDIO_WRITE_TOOL_IDS = new Set(
+  PRESENTATION_STUDIO_WRITE_TOOL_NAMES.map(presentationStudioCanonicalToolId)
+)
+const PRESENTATION_STUDIO_DIRECT_TOOL_IDS = new Map(
+  PRESENTATION_STUDIO_WRITE_TOOL_NAMES.map((name) => [
+    presentationStudioModelAlias(name),
+    presentationStudioCanonicalToolId(name)
+  ])
+)
+
+function gatewayPayloadFor(item: CoreTurnItemJson): Record<string, unknown> | null {
+  if (item.kind !== 'tool_result' || item.toolName !== 'extension_tool_call') return null
+  return payloadFor(item)
+}
+
+function presentationStudioWriteToolId(item: CoreTurnItemJson): string | undefined {
+  const direct = item.toolName ? PRESENTATION_STUDIO_DIRECT_TOOL_IDS.get(item.toolName) : undefined
+  if (direct) return direct
+  const canonicalToolId = gatewayPayloadFor(item)?.canonicalToolId
+  return typeof canonicalToolId === 'string' && PRESENTATION_STUDIO_WRITE_TOOL_IDS.has(canonicalToolId)
+    ? canonicalToolId
+    : undefined
+}
+
+function gatewayHasWorkspaceWriteSideEffect(item: CoreTurnItemJson): boolean {
+  return gatewayPayloadFor(item)?.sideEffect === 'workspace-write'
+}
+
+function readItemStructuredString(
+  item: CoreTurnItemJson,
+  ...keys: readonly string[]
+): string | undefined {
+  for (const payload of structuredPayloadsFor(item)) {
+    const value = readStructuredString(payload, ...keys)
+    if (value) return value
+  }
+  return undefined
 }
 
 function normalizeChildMetadata(
@@ -309,6 +381,16 @@ function normalizeInjectedMemorySummaries(
   return summaries.length > 0 ? summaries : undefined
 }
 
+function normalizeComposerContexts(value: unknown): ComposerContextAttachment[] | undefined {
+  if (!Array.isArray(value)) return undefined
+  const contexts = value
+    .slice(0, MAX_COMPOSER_CONTEXT_ATTACHMENTS)
+    .map((entry) => ComposerContextAttachmentSchema.safeParse(entry))
+    .filter((entry) => entry.success)
+    .map((entry) => entry.data)
+  return contexts.length > 0 ? contexts : undefined
+}
+
 function applyRuntimeDisclosureMeta(
   meta: Record<string, unknown>,
   item: CoreTurnItemJson,
@@ -324,6 +406,7 @@ function applyRuntimeDisclosureMeta(
   const injectedMemorySummaries = normalizeInjectedMemorySummaries(item.injectedMemorySummaries)
   const injectedInstructionSources = normalizeInjectedInstructionSources(item.injectedInstructionSources)
   const fileReferences = normalizeUserFileReferences(item.fileReferences)
+  const composerContexts = normalizeComposerContexts(item.composerContexts)
   const normalizedChild = normalizeChildMetadata(child)
   const displayText = typeof item.displayText === 'string' ? item.displayText.trim() : ''
   if (displayText && displayText !== item.text?.trim()) {
@@ -337,6 +420,7 @@ function applyRuntimeDisclosureMeta(
   applyClientUserMessageSourceMeta(meta, item.text ?? '')
   if (attachmentIds) meta.attachmentIds = attachmentIds
   if (fileReferences) meta.fileReferences = fileReferences
+  if (composerContexts) meta.composerContexts = composerContexts
   if (activeSkillIds) meta.activeSkillIds = activeSkillIds
   if (injectedMemoryIds) meta.injectedMemoryIds = injectedMemoryIds
   if (injectedMemorySummaries) meta.injectedMemorySummaries = injectedMemorySummaries
@@ -426,8 +510,10 @@ function readGeneratedFileString(raw: Record<string, unknown>, ...keys: string[]
 function normalizeGeneratedFileReference(entry: unknown): GeneratedFileReference | null {
   if (!entry || typeof entry !== 'object') return null
   const raw = entry as Record<string, unknown>
-  const id = readGeneratedFileString(raw, 'id', 'attachmentId')
-  const name = readGeneratedFileString(raw, 'name', 'fileName', 'filename')
+  const artifactId = readGeneratedFileString(raw, 'artifactId')
+  const mediaHandleId = readGeneratedFileString(raw, 'mediaHandleId')
+  const id = readGeneratedFileString(raw, 'id', 'attachmentId', 'artifactId')
+  const name = readGeneratedFileString(raw, 'name', 'fileName', 'filename', 'displayName')
   const mimeType = readGeneratedFileString(raw, 'mimeType', 'type', 'mediaType')
   const previewUrl = readGeneratedFileString(raw, 'previewUrl', 'dataUrl', 'url')
   const path = readGeneratedFileString(raw, 'path', 'file')
@@ -436,13 +522,55 @@ function normalizeGeneratedFileReference(entry: unknown): GeneratedFileReference
   const byteSize = raw.byteSize
   const width = raw.width
   const height = raw.height
+  const durationMicros = raw.durationMicros
+  const availability = raw.availability === 'available' || raw.availability === 'unavailable'
+    ? raw.availability
+    : undefined
+  const mediaKind = raw.mediaKind === 'video' || raw.mediaKind === 'audio' ||
+    raw.mediaKind === 'image' || raw.mediaKind === 'subtitle' ||
+    raw.mediaKind === 'document' || raw.mediaKind === 'data' || raw.mediaKind === 'other'
+    ? raw.mediaKind
+    : undefined
+  const completionIdentity = readGeneratedFileString(raw, 'completionIdentity')
+  const ownerExtensionId = readGeneratedFileString(raw, 'ownerExtensionId')
+  const ownerExtensionVersion = readGeneratedFileString(raw, 'ownerExtensionVersion')
+  const workspaceId = readGeneratedFileString(raw, 'workspaceId')
+  const rawProvenance = raw.provenance && typeof raw.provenance === 'object' && !Array.isArray(raw.provenance)
+    ? raw.provenance as Record<string, unknown>
+    : undefined
+  const provenanceOperation = rawProvenance
+    ? readGeneratedFileString(rawProvenance, 'operation')
+    : undefined
+  const provenanceJobId = rawProvenance
+    ? readGeneratedFileString(rawProvenance, 'jobId')
+    : undefined
+  const provenanceInvocationId = rawProvenance
+    ? readGeneratedFileString(rawProvenance, 'invocationId')
+    : undefined
+  const provenance = rawProvenance && provenanceOperation
+    ? {
+        ...(provenanceJobId ? { jobId: provenanceJobId } : {}),
+        ...(provenanceInvocationId ? { invocationId: provenanceInvocationId } : {}),
+        operation: provenanceOperation
+      }
+    : undefined
   const normalized: GeneratedFileReference = {
     ...(id ? { id } : {}),
+    ...(artifactId ? { artifactId } : {}),
+    ...(mediaHandleId ? { mediaHandleId } : {}),
+    ...(availability ? { availability } : {}),
     ...(name ? { name } : {}),
     ...(mimeType ? { mimeType } : {}),
     ...(typeof byteSize === 'number' && Number.isFinite(byteSize) ? { byteSize } : {}),
     ...(typeof width === 'number' && Number.isFinite(width) ? { width } : {}),
     ...(typeof height === 'number' && Number.isFinite(height) ? { height } : {}),
+    ...(typeof durationMicros === 'number' && Number.isFinite(durationMicros) ? { durationMicros } : {}),
+    ...(mediaKind ? { mediaKind } : {}),
+    ...(completionIdentity ? { completionIdentity } : {}),
+    ...(ownerExtensionId ? { ownerExtensionId } : {}),
+    ...(ownerExtensionVersion ? { ownerExtensionVersion } : {}),
+    ...(workspaceId ? { workspaceId } : {}),
+    ...(provenance ? { provenance } : {}),
     ...(previewUrl ? { previewUrl } : {}),
     ...(path ? { path } : {}),
     ...(relativePath ? { relativePath } : {}),
@@ -468,10 +596,17 @@ function isGeneratedFileToolName(toolName: string | undefined): boolean {
 
 function extractToolGeneratedFiles(item: CoreTurnItemJson): GeneratedFileReference[] | undefined {
   if (item.kind !== 'tool_result') return undefined
-  const payload = payloadFor(item)
+  const payloads = structuredPayloadsFor(item)
   const candidates = [
-    ...(Array.isArray(payload.generatedFiles) ? payload.generatedFiles : []),
-    ...(isGeneratedFileToolName(item.toolName) && Array.isArray(payload.files) ? payload.files : [])
+    ...payloads.flatMap((payload) =>
+      Array.isArray(payload.generatedFiles) ? payload.generatedFiles : []
+    ),
+    ...payloads.flatMap((payload) =>
+      Array.isArray(payload.generatedArtifacts) ? payload.generatedArtifacts : []
+    ),
+    ...(isGeneratedFileToolName(item.toolName)
+      ? payloads.flatMap((payload) => Array.isArray(payload.files) ? payload.files : [])
+      : [])
   ]
   const generatedFiles: GeneratedFileReference[] = []
   const seen = new Set<string>()
@@ -479,6 +614,7 @@ function extractToolGeneratedFiles(item: CoreTurnItemJson): GeneratedFileReferen
     const normalized = normalizeGeneratedFileReference(candidate)
     if (!normalized) continue
     const key =
+      normalized.artifactId ??
       normalized.id ??
       normalized.absolutePath ??
       normalized.relativePath ??
@@ -490,6 +626,79 @@ function extractToolGeneratedFiles(item: CoreTurnItemJson): GeneratedFileReferen
     generatedFiles.push(normalized)
   }
   return generatedFiles.length > 0 ? generatedFiles : undefined
+}
+
+function extractComponentPrototype(item: CoreTurnItemJson): ComponentPrototypeMetadata | undefined {
+  if (item.toolName !== 'design_component') return undefined
+  const payload = payloadFor(item)
+  const raw = payload.componentPrototype
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined
+  const candidate = raw as Record<string, unknown>
+  if (candidate.version !== 1) return undefined
+  const status = candidate.status
+  if (status !== 'preparing' && status !== 'running' && status !== 'completed' && status !== 'failed') {
+    return undefined
+  }
+  const artifactId = typeof candidate.artifactId === 'string' ? candidate.artifactId.trim() : ''
+  const title = typeof candidate.title === 'string' ? candidate.title.trim().slice(0, 120) : ''
+  const relativePath = typeof candidate.relativePath === 'string'
+    ? candidate.relativePath.trim().replaceAll('\\', '/')
+    : ''
+  if (!/^component_[a-z0-9]+$/i.test(artifactId) || !title) return undefined
+  if (
+    !/^\.kun-design\/component-prototypes\/[^/]+\/prototype\.html$/i.test(relativePath) ||
+    relativePath.split('/').includes('..')
+  ) {
+    return undefined
+  }
+  const viewport = candidate.viewport && typeof candidate.viewport === 'object' && !Array.isArray(candidate.viewport)
+    ? candidate.viewport as Record<string, unknown>
+    : null
+  const width = viewport?.width
+  const height = viewport?.height
+  if (
+    typeof width !== 'number' || !Number.isInteger(width) || width < 280 || width > 1_200 ||
+    typeof height !== 'number' || !Number.isInteger(height) || height < 240 || height > 900
+  ) {
+    return undefined
+  }
+  const profile = candidate.profile === 'component-designer' ? 'component-designer' : undefined
+  const producer = candidate.producer === 'main-agent' || candidate.producer === 'component-designer'
+    ? candidate.producer
+    : profile === 'component-designer'
+      ? 'component-designer'
+      : undefined
+  if (!producer || (producer === 'main-agent' && profile)) return undefined
+  const childId = typeof candidate.childId === 'string' && candidate.childId.trim()
+    ? candidate.childId.trim().slice(0, 256)
+    : undefined
+  const byteSize = typeof candidate.byteSize === 'number' && Number.isInteger(candidate.byteSize) && candidate.byteSize >= 0
+    ? candidate.byteSize
+    : undefined
+  const contentHash = typeof candidate.contentHash === 'string' && /^[a-f0-9]{64}$/i.test(candidate.contentHash)
+    ? candidate.contentHash.toLowerCase()
+    : undefined
+  const summary = typeof candidate.summary === 'string' && candidate.summary.trim()
+    ? candidate.summary.trim().slice(0, 2_000)
+    : undefined
+  const error = typeof candidate.error === 'string' && candidate.error.trim()
+    ? candidate.error.trim().slice(0, 2_000)
+    : undefined
+  return {
+    version: 1,
+    status,
+    artifactId,
+    title,
+    relativePath,
+    viewport: { width, height },
+    producer,
+    ...(producer === 'component-designer' ? { profile: 'component-designer' as const } : {}),
+    ...(childId ? { childId } : {}),
+    ...(byteSize !== undefined ? { byteSize } : {}),
+    ...(contentHash ? { contentHash } : {}),
+    ...(summary ? { summary } : {}),
+    ...(error ? { error } : {})
+  }
 }
 
 function applyCommandResultMeta(meta: Record<string, unknown>, item: CoreTurnItemJson): void {
@@ -507,9 +716,16 @@ function inferToolPresentation(item: CoreTurnItemJson): {
   filePath?: string
   command?: string
 } {
-  const payload = payloadFor(item)
-  const filePath = readStructuredString(payload, ...FILE_PATH_KEYS)
-  const command = readStructuredString(payload, ...COMMAND_KEYS)
+  const filePath = readItemStructuredString(item, ...FILE_PATH_KEYS)
+  const command = readItemStructuredString(item, ...COMMAND_KEYS)
+
+  if (presentationStudioWriteToolId(item) || gatewayHasWorkspaceWriteSideEffect(item)) {
+    return {
+      toolKind: 'file_change',
+      ...(filePath ? { filePath } : {}),
+      ...(command ? { command } : {})
+    }
+  }
 
   if (
     item.toolKind === 'tool_call' ||
@@ -606,6 +822,17 @@ function toolBlockFromItem(item: CoreTurnItemJson, child?: CoreChildRuntimeMetad
   if (attachments) meta.attachments = attachments
   const generatedFiles = extractToolGeneratedFiles(item)
   if (generatedFiles) meta.generatedFiles = generatedFiles
+  const componentPrototype = extractComponentPrototype(item)
+  if (componentPrototype) meta.componentPrototype = componentPrototype
+  const presentationStudioToolId = presentationStudioWriteToolId(item)
+  if (presentationStudioToolId) {
+    meta.canonicalToolId = presentationStudioToolId
+    meta.presentationArtifactProducer = PRESENTATION_STUDIO_EXTENSION_ID
+    const contentSha256 = readItemStructuredString(item, 'contentSha256')
+    if (contentSha256 && /^[a-f0-9]{64}$/i.test(contentSha256)) {
+      meta.presentationArtifactSha256 = contentSha256.toLowerCase()
+    }
+  }
   const presentation = inferToolPresentation(item)
   const payload = payloadFor(item)
   if (presentation.command) meta.command = presentation.command
@@ -623,12 +850,22 @@ function toolBlockFromItem(item: CoreTurnItemJson, child?: CoreChildRuntimeMetad
     id: toolBlockId(item),
     createdAt: itemCreatedAt(item),
     summary,
-    status: delegateTaskStatusOverride(item, payload) ?? toolStatus(item),
+    status: componentDesignStatusOverride(item, componentPrototype) ?? delegateTaskStatusOverride(item, payload) ?? toolStatus(item),
     toolKind: presentation.toolKind,
     ...(presentation.filePath ? { filePath: presentation.filePath } : {}),
     ...(detail ? { detail } : {}),
     meta
   }
+}
+
+function componentDesignStatusOverride(
+  item: CoreTurnItemJson,
+  prototype: ComponentPrototypeMetadata | undefined
+): ToolBlock['status'] | undefined {
+  if (item.toolName !== 'design_component' || !prototype) return undefined
+  if (prototype.status === 'preparing' || prototype.status === 'running') return 'running'
+  if (prototype.status === 'failed') return 'error'
+  return 'success'
 }
 
 function delegateTaskStatusOverride(
@@ -904,6 +1141,7 @@ function compactionBlockFromItem(item: CoreTurnItemJson): ChatBlock {
   return {
     kind: 'compaction',
     id: item.id,
+    turnId: item.turnId,
     createdAt: itemCreatedAt(item),
     summary: item.summary?.trim() || 'Context compacted',
     status: item.status === 'failed' ? 'error' : 'success',
@@ -1130,6 +1368,7 @@ function childLifecycleToolEventFromRuntimeEvent(event: CoreRuntimeEventJson): T
 function compactionFromItem(item: CoreTurnItemJson): CompactionEventPayload {
   return {
     itemId: item.id,
+    turnId: item.turnId,
     summary: item.summary?.trim() || 'Context compacted',
     status: item.status === 'failed' ? 'error' : item.status === 'running' ? 'running' : 'success',
     createdAt: itemCreatedAt(item),
@@ -1165,6 +1404,7 @@ function compactionFromEvent(
 ): CompactionEventPayload {
   return {
     itemId: event.itemId ?? `compaction_${event.seq ?? Date.now()}`,
+    turnId: event.turnId,
     summary: event.summary ?? 'Context compacted',
     status,
     createdAt: event.timestamp,

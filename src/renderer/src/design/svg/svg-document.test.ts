@@ -4,6 +4,7 @@ import {
   SVG_NAMESPACE,
   isVisualSvgElement,
   parseAndSanitizeSvgDocument,
+  summarizeSvgAnimationTiming,
   svgAnimationTiming,
   validSvgRootNamespace
 } from './svg-document'
@@ -35,11 +36,25 @@ describe('SVG document safety helpers', () => {
   })
 
   it('keeps the complete static SMIL timing contract instead of guessing one second', () => {
-    expect(svgAnimationTiming({ dur: '2min' })).toEqual({ endMs: 120_000, mayContinue: false })
-    expect(svgAnimationTiming({ dur: '1s', repeatDur: '10s' })).toEqual({ endMs: 10_000, mayContinue: false })
+    expect(svgAnimationTiming({ dur: '2min' })).toEqual({ endMs: 120_000, mayContinue: false, cycleMs: 120_000 })
+    expect(svgAnimationTiming({ dur: '1s', repeatDur: '10s' })).toEqual({ endMs: 10_000, mayContinue: false, cycleMs: 1_000 })
     expect(svgAnimationTiming({ dur: '1s', repeatCount: 'indefinite', repeatDur: '10s' }))
-      .toEqual({ endMs: 10_000, mayContinue: false })
-    expect(svgAnimationTiming({ dur: '1s', repeatCount: 'indefinite' })).toEqual({ endMs: 0, mayContinue: true })
-    expect(svgAnimationTiming({ dur: '1s', begin: 'click' })).toEqual({ endMs: 0, mayContinue: true })
+      .toEqual({ endMs: 10_000, mayContinue: false, cycleMs: 1_000 })
+    expect(svgAnimationTiming({ dur: '1s', repeatCount: 'indefinite' }))
+      .toEqual({ endMs: 0, mayContinue: true, cycleMs: 1_000 })
+    expect(svgAnimationTiming({ dur: '1s', begin: 'click' }))
+      .toEqual({ endMs: 0, mayContinue: true, cycleMs: 1_000 })
+  })
+
+  it('uses the longest simple duration as the representative cycle for indefinite SMIL', () => {
+    const timing = [
+      svgAnimationTiming({ dur: '5s', repeatCount: 'indefinite' }),
+      svgAnimationTiming({ dur: '2s', begin: '250ms', repeatCount: 'indefinite' })
+    ]
+
+    expect(summarizeSvgAnimationTiming(timing)).toEqual({
+      durationMs: 5_000,
+      loopsIndefinitely: true
+    })
   })
 })

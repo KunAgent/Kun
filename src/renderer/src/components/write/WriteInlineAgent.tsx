@@ -241,6 +241,7 @@ export function WriteInlineAgent({
       width: action.width,
       anchorLeft: action.anchorLeft,
       anchorRight: action.anchorRight,
+      coordinateScale: action.coordinateScale,
       anchorTop: action.anchorTop,
       anchorBottom: action.anchorBottom
     }, {
@@ -254,6 +255,7 @@ export function WriteInlineAgent({
     action.anchorBottom,
     action.anchorLeft,
     action.anchorRight,
+    action.coordinateScale,
     action.left,
     action.width,
     value,

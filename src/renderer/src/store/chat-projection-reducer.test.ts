@@ -101,6 +101,84 @@ describe('chat projection reducer', () => {
     expect(projected.blocks).toHaveLength(2)
   })
 
+  it('reconciles a delayed stable user event with its optimistic bubble', () => {
+    const createdAt = '2026-07-11T00:00:00.000Z'
+    const initial = {
+      ...state(),
+      busy: false,
+      currentTurnId: null,
+      currentTurnUserId: null,
+      turnStartedAtByUserId: {},
+      blocks: [
+        {
+          kind: 'user' as const,
+          id: 'u-optimistic',
+          createdAt,
+          text: '检查一下脚本并优化执行进度'
+        },
+        {
+          kind: 'compaction' as const,
+          id: 'compaction_1',
+          status: 'success' as const,
+          summary: 'Existing summary'
+        }
+      ]
+    }
+
+    const projected = project(initial, [{
+      type: 'user_message_received',
+      payload: {
+        itemId: 'item_turn_1_user',
+        turnId: 'turn_1',
+        createdAt,
+        text: '分析脚本是否存在问题，并优化执行过程和进度。',
+        meta: { displayText: '检查一下脚本并优化执行进度' }
+      }
+    }])
+
+    expect(projected.blocks).toHaveLength(2)
+    expect(projected.blocks[0]).toMatchObject({
+      kind: 'user',
+      id: 'item_turn_1_user',
+      meta: { displayText: '检查一下脚本并优化执行进度' }
+    })
+    expect(projected.blocks[1]).toMatchObject({ kind: 'compaction', id: 'compaction_1' })
+  })
+
+  it('keeps only the latest automatic compaction marker for a turn', () => {
+    const projected = project(state(), [
+      {
+        type: 'compaction_updated',
+        payload: {
+          itemId: 'compaction_1',
+          turnId: 'turn_1',
+          summary: 'first summary',
+          status: 'success',
+          auto: true
+        }
+      },
+      {
+        type: 'compaction_updated',
+        payload: {
+          itemId: 'compaction_2',
+          turnId: 'turn_1',
+          summary: 'new summary',
+          status: 'success',
+          auto: true
+        }
+      }
+    ])
+
+    expect(projected.blocks).toEqual([
+      expect.objectContaining({
+        kind: 'compaction',
+        id: 'compaction_2',
+        turnId: 'turn_1',
+        summary: 'new summary'
+      })
+    ])
+  })
+
   it('retires a pending approval after its runtime resolution is projected', () => {
     const projected = project(state(), [
       {

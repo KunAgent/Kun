@@ -113,6 +113,7 @@ import { createNavigationActions } from './chat-store-navigation-actions'
 import { createThreadActions } from './chat-store-thread-actions'
 import { createMaintenanceActions } from './chat-store-maintenance-actions'
 import { createInitialChatStoreState } from './chat-store-initial-state'
+import { createComposerContextActions } from './chat-store-composer-context-actions'
 
 export type { AppRoute, SettingsRouteSection } from './chat-store-types'
 export { CLAW_COMPOSER_MODEL_IDS } from './chat-store-helpers'
@@ -186,6 +187,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
   }),
 
   ...createNavigationActions({ set, get, sseAbortRef }),
+
+  ...createComposerContextActions({ set, get }),
 
   ...createThreadActions({ set, get, sseAbortRef }),
 

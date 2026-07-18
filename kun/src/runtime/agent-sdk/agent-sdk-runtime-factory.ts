@@ -54,6 +54,7 @@ import {
 } from './sdk-context-assembler.js'
 import { shellSpawnEnv } from '../../adapters/tool/builtin-tool-utils.js'
 import type { TurnLimitsConfig } from '../../loop/turn-limits.js'
+import { userMessageTextWithComposerContexts } from '../../domain/composer-context.js'
 
 export interface AgentSdkRuntimeFactoryDeps {
   registry: CapabilityRegistry
@@ -467,6 +468,9 @@ export function createAgentSdkRuntime(deps: AgentSdkRuntimeFactoryDeps): AgentSd
         .find((item) => item.turnId === turnId && item.kind === 'user_message')
       const userText =
         userItem && 'text' in userItem ? String((userItem as { text?: unknown }).text ?? '') : ''
+      const modelUserText = userItem?.kind === 'user_message'
+        ? userMessageTextWithComposerContexts(userItem)
+        : userText
       const attachmentIds =
         (userItem as { attachmentIds?: string[] } | undefined)?.attachmentIds ?? []
       const images = await resolveImages(threadId, thread.workspace, attachmentIds)
@@ -592,7 +596,7 @@ export function createAgentSdkRuntime(deps: AgentSdkRuntimeFactoryDeps): AgentSd
 
       return {
         workspace: thread.workspace,
-        userText,
+        userText: modelUserText,
         threadPersona: thread.systemPrompt?.trim() || undefined,
         approvalPolicy: thread.approvalPolicy ?? deps.defaultApprovalPolicy,
         sandboxMode: thread.sandboxMode,

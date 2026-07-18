@@ -33,4 +33,27 @@ describe('SteeringQueue', () => {
     expect(queue.drain('turn_a')).toEqual([{ text: 'abc' }, { text: 'de' }])
     expect(queue.drain('turn_b')).toEqual([])
   })
+
+  it('seals only an empty turn and rejects guidance after terminal ownership transfers', () => {
+    const queue = new SteeringQueue()
+    expect(queue.enqueue('turn_a', { text: 'arrived before completion' })).toBe(true)
+
+    expect(queue.sealIfEmpty('turn_a')).toBe(false)
+    expect(queue.isSealed('turn_a')).toBe(false)
+    expect(queue.drain('turn_a')).toEqual([{ text: 'arrived before completion' }])
+
+    expect(queue.sealIfEmpty('turn_a')).toBe(true)
+    expect(queue.isSealed('turn_a')).toBe(true)
+    expect(queue.enqueue('turn_a', { text: 'too late' })).toBe(false)
+  })
+
+  it('clearing terminal state also clears the turn seal', () => {
+    const queue = new SteeringQueue()
+    expect(queue.sealIfEmpty('turn_a')).toBe(true)
+
+    queue.clear('turn_a')
+
+    expect(queue.isSealed('turn_a')).toBe(false)
+    expect(queue.enqueue('turn_a', { text: 'new lifecycle' })).toBe(true)
+  })
 })

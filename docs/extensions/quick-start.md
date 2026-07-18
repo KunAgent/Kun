@@ -25,6 +25,21 @@ node --version
 
 ## 2. 创建项目
 
+下面是独立项目的公网 registry 路径。先检查脚手架和模板依赖是否真的已发布：
+
+```bash
+npm view create-kun-extension version
+npm view @kun/extension-api version
+npm view @kun/extension-react version
+npm view @kun/extension-test version
+```
+
+只有当前模板所需的命令都返回版本时才继续。`E404` 表示配置的 registry
+还没有独立开发所需的产物，此时请使用仓库内的
+[扩展示例](../../examples/extensions/README.md)，不要把仓库相对 `file:` 路径写进
+需要移植的项目。`kun` CLI 来自 Kun 安装；npm 上无 scope 的同名 `kun` 包不是
+Kun Agent CLI。
+
 ```bash
 npx create-kun-extension hello-sidebar \
   --template react \
@@ -157,7 +172,7 @@ kun extension doctor acme.hello-sidebar
 
 安装前，Kun 会在受保护窗口显示来源、ID、版本、SHA-256、签名状态、贡献和权限。Node 或 Direct DOM 权限会显示额外高风险说明。确认后才会原子安装并选择该版本。
 
-打开 Kun，在右侧栏选择 **Hello**。只渲染图标和标题不会激活 Node 入口；真正打开 View 时 `onView:hello` 才触发激活并建立一个身份绑定的 View Session。
+打开 Kun，在 Code 模式右侧竖向图标栏中直接选择 **Hello**，Kun 会把它作为独立的右侧工作区标签打开。只渲染图标和标题不会激活 Node 入口；真正打开 View 时 `onView:hello` 才触发激活并建立一个身份绑定的 View Session。
 
 ## 7. 查看日志与清理
 

@@ -14,6 +14,50 @@ const homeDirFromArgs =
 const api = {
   platform: process.platform,
   homeDir: homeDirFromArgs,
+  dataMigration: {
+    pickExportPackage: (defaultPath) => ipcRenderer.invoke('data-migration:pick-export', { defaultPath }),
+    pickImportPackage: (defaultPath) => ipcRenderer.invoke('data-migration:pick-import', { defaultPath }),
+    pickDestinationDirectory: (defaultPath) => ipcRenderer.invoke('data-migration:pick-destination', { defaultPath }),
+    estimateExport: (input) => ipcRenderer.invoke('data-migration:estimate-export', input),
+    inspectPackage: (input) => ipcRenderer.invoke('data-migration:inspect', input),
+    planImport: (input) => ipcRenderer.invoke('data-migration:plan-import', input),
+    startExport: (input) => ipcRenderer.invoke('data-migration:start-export', input),
+    startImport: (input) => ipcRenderer.invoke('data-migration:start-import', input),
+    cancel: (operationId) => ipcRenderer.invoke('data-migration:cancel', { operationId }),
+    recover: (operationId, action) => ipcRenderer.invoke('data-migration:recover', { operationId, action }),
+    getStatus: () => ipcRenderer.invoke('data-migration:status'),
+    listReports: () => ipcRenderer.invoke('data-migration:reports:list'),
+    getReport: (operationId) => ipcRenderer.invoke('data-migration:reports:get', { operationId }),
+    deleteReport: (operationId) => ipcRenderer.invoke('data-migration:reports:delete', { operationId }),
+    onProgress: (handler) => {
+      let latest: Parameters<typeof handler>[0] | null = null
+      let timer: ReturnType<typeof setTimeout> | null = null
+      const flush = () => {
+        timer = null
+        if (!latest) return
+        const value = latest
+        latest = null
+        handler(value)
+      }
+      const wrapped = (_: Electron.IpcRendererEvent, payload: Parameters<typeof handler>[0]) => {
+        latest = payload
+        if (!timer) timer = setTimeout(flush, 100)
+      }
+      ipcRenderer.on('data-migration:progress', wrapped)
+      return () => {
+        ipcRenderer.removeListener('data-migration:progress', wrapped)
+        if (timer) clearTimeout(timer)
+        timer = null
+        latest = null
+      }
+    },
+    onRendererRequest: (handler) => {
+      const wrapped = (_: Electron.IpcRendererEvent, request: Parameters<typeof handler>[0]) => handler(request)
+      ipcRenderer.on('data-migration:renderer-request', wrapped)
+      return () => ipcRenderer.removeListener('data-migration:renderer-request', wrapped)
+    },
+    respondRendererRequest: (response) => ipcRenderer.invoke('data-migration:renderer-response', response)
+  },
   getSettings: () => ipcRenderer.invoke('settings:get'),
   claudeSubscriptionStatus: () => ipcRenderer.invoke('claude-subscription:status'),
   claudeSubscriptionLogin: () => ipcRenderer.invoke('claude-subscription:login'),
@@ -104,12 +148,28 @@ const api = {
     ipcRenderer.invoke('ui-plugin:remove', { id }),
   loadUiPlugin: (id) =>
     ipcRenderer.invoke('ui-plugin:load', { id }),
+  activateUiPluginTheme: (id) =>
+    ipcRenderer.invoke('ui-plugin:theme:activate', { id }),
+  deactivateUiPluginTheme: () =>
+    ipcRenderer.invoke('ui-plugin:theme:deactivate'),
   getKunConfigFile: () =>
     ipcRenderer.invoke('kun:config:read'),
   setKunConfigFile: (content) =>
     ipcRenderer.invoke('kun:config:write', content),
   openKunConfigDir: () =>
     ipcRenderer.invoke('kun:config:open-dir'),
+  getKunProjectConfigFile: (workspaceRoot) =>
+    ipcRenderer.invoke('kun:project-config:read', { workspaceRoot }),
+  setKunProjectConfigFile: (workspaceRoot, content) =>
+    ipcRenderer.invoke('kun:project-config:write', { workspaceRoot, content }),
+  setKunProjectConfigTrust: (workspaceRoot, trusted, expectedDigest) =>
+    ipcRenderer.invoke('kun:project-config:trust', {
+      workspaceRoot,
+      trusted,
+      ...(trusted && expectedDigest ? { expectedDigest } : {})
+    }),
+  openKunProjectConfigDir: (workspaceRoot) =>
+    ipcRenderer.invoke('kun:project-config:open-dir', { workspaceRoot }),
   getGitBranches: (workspaceRoot) =>
     ipcRenderer.invoke('git:branches', workspaceRoot),
   switchGitBranch: (workspaceRoot, branch) =>
@@ -173,6 +233,8 @@ const api = {
     ipcRenderer.invoke('file:read-local-pdf-text', options),
   saveWorkspaceFileAs: (payload) =>
     ipcRenderer.invoke('file:save-as', payload),
+  openExtensionArtifact: (payload) =>
+    ipcRenderer.invoke('extension:artifact:open', payload),
   writeWorkspaceFile: (payload) =>
     ipcRenderer.invoke('file:write-workspace', payload),
   createWorkspaceFile: (payload) =>
@@ -373,6 +435,16 @@ const api = {
     ipcRenderer.invoke('extension:view-session:create', request),
   extensionDisposeViewSession: (request) =>
     ipcRenderer.invoke('extension:view-session:dispose', request),
+  extensionExternalBrowserControl: (request) =>
+    ipcRenderer.invoke('extension:external-browser:control', request),
+  onExtensionExternalBrowserState: (handler) => {
+    const wrapped = (
+      _: Electron.IpcRendererEvent,
+      payload: Parameters<typeof handler>[0]
+    ) => handler(payload)
+    ipcRenderer.on('extension:external-browser-state', wrapped)
+    return () => ipcRenderer.removeListener('extension:external-browser-state', wrapped)
+  },
   extensionPostViewMessage: (request) =>
     ipcRenderer.invoke('extension:view-session:message', request),
   extensionReadViewEvents: (request) =>
@@ -384,6 +456,14 @@ const api = {
     ) => handler(payload)
     ipcRenderer.on('extension:view-event', wrapped)
     return () => ipcRenderer.removeListener('extension:view-event', wrapped)
+  },
+  onExtensionComposerContext: (handler) => {
+    const wrapped = (
+      _: Electron.IpcRendererEvent,
+      payload: Parameters<typeof handler>[0]
+    ) => handler(payload)
+    ipcRenderer.on('extension:composer-context-attached', wrapped)
+    return () => ipcRenderer.removeListener('extension:composer-context-attached', wrapped)
   },
   onExtensionNotifications: (handler) => {
     const wrapped = (

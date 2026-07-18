@@ -15,6 +15,7 @@ import {
   exportActiveCodeCanvasToWorkspace,
   type CanvasAgentExportRequest
 } from '../../../design/canvas/canvas-export'
+import { canvasDocumentKey } from '../../../design/canvas/canvas-persistence'
 
 function cx(...parts: Array<string | false | null | undefined>): string {
   return parts.filter(Boolean).join(' ')
@@ -49,6 +50,9 @@ export function CodeCanvasPanel({ workspaceRoot, activeThreadId, onCollapse, cla
   const artifactId = activeThreadId ? codeCanvasArtifactId(activeThreadId) : ''
   const designSystemBaseDir = activeThreadId ? codeCanvasThreadBaseDir(activeThreadId) : undefined
   const feedbackKey = activeThreadId ? codeCanvasErrorKey(activeThreadId) : undefined
+  const expectedDocumentKey = ready
+    ? canvasDocumentKey(workspaceRoot, artifactId, CODE_CANVAS_DIR)
+    : undefined
   const executeOptions = useMemo<ExecuteOpsOptions>(
     () => ({
       screenFallback: 'plain-frame',
@@ -60,9 +64,11 @@ export function CodeCanvasPanel({ workspaceRoot, activeThreadId, onCollapse, cla
   const exportCanvas = useCallback(
     (request: CanvasAgentExportRequest) => exportActiveCodeCanvasToWorkspace({
       request,
-      workspaceRoot
+      workspaceRoot,
+      artifactId,
+      expectedDocumentKey
     }),
-    [workspaceRoot]
+    [artifactId, expectedDocumentKey, workspaceRoot]
   )
   useApplyShapeOpsLive(
     ready,

@@ -3,6 +3,7 @@ import { snapshotCanvas } from './canvas-snapshot'
 import { createDefaultShape, createEmptyDocument, createHtmlFrameShape, createSvgFrameShape } from './canvas-types'
 import { createRunningAppFrameShape } from './running-app-frame'
 import type { DesignArtifact } from '../design-types'
+import { CANVAS_MOTION_VERSION } from '../motion/canvas-motion-types'
 
 const createdAt = '2026-07-02T00:00:00.000Z'
 
@@ -24,6 +25,53 @@ describe('snapshotCanvas', () => {
     const snap = snapshotCanvas(createEmptyDocument())
     expect(snap.shapeCount).toBe(0)
     expect(snap.shapes).toEqual([])
+  })
+
+  it('includes a bounded Motion summary with stable track and keyframe ids', () => {
+    const doc = createEmptyDocument()
+    const root = doc.objects[doc.rootId]
+    const rect = { ...createDefaultShape('rect', 10, 20), id: 'hero', parentId: doc.rootId }
+    doc.objects[rect.id] = rect
+    doc.objects[doc.rootId] = { ...root, children: [rect.id] }
+    doc.motion = {
+      version: CANVAS_MOTION_VERSION,
+      timelines: {
+        [doc.rootId]: {
+          id: 'timeline_root',
+          frameId: doc.rootId,
+          durationMs: 800,
+          playback: 'once',
+          tracks: [{
+            id: 'track_hero_opacity',
+            targetShapeId: rect.id,
+            property: 'opacity',
+            operation: 'set',
+            baseValue: 1,
+            keyframes: [
+              { id: 'kf_start', timeMs: 0, value: 0, easing: { type: 'linear' } },
+              { id: 'kf_end', timeMs: 800, value: 1, easing: { type: 'ease-out' } }
+            ]
+          }]
+        }
+      }
+    }
+
+    expect(snapshotCanvas(doc).motion).toMatchObject({
+      timelineCount: 1,
+      trackCount: 1,
+      keyframeCount: 2,
+      timelines: [{
+        id: 'timeline_root',
+        frameId: doc.rootId,
+        tracks: [{
+          id: 'track_hero_opacity',
+          targetShapeId: 'hero',
+          targetName: rect.name,
+          keyframes: [{ id: 'kf_start' }, { id: 'kf_end' }]
+        }]
+      }],
+      reducedMotion: { automaticPlayback: 'disabled-when-preferred' }
+    })
   })
 
   it('lists shapes with name + bbox + parentName', () => {

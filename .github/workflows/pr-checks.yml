@@ -79,7 +79,8 @@ jobs:
       - name: Install Linux packaging dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends libarchive-tools rpm build-essential python3 xvfb xauth util-linux
+          sudo apt-get install -y --no-install-recommends libarchive-tools rpm build-essential python3 xvfb xauth util-linux ffmpeg
+          ffmpeg -hide_banner -filters 2>&1 | grep -Eq '[[:space:]]drawtext[[:space:]]'
 
       - name: Install root dependencies
         run: npm ci
@@ -95,6 +96,19 @@ jobs:
 
       - name: Smoke packaged Extension Node runtime
         run: npm run smoke:packaged-extensions -- --resources dist/linux-unpacked/resources
+
+      - name: Smoke host-native FFmpeg broker (fail closed)
+        env:
+          KUN_RUN_MEDIA_SMOKE: '1'
+        run: npm run smoke:extension-native-media
+
+      - name: Build deterministic Kun Video Editor extension package
+        run: npm run pack:kun-video-editor
+
+      - name: Smoke packaged Kun Video Editor native workflow
+        run: >
+          npm run smoke:packaged-video-editor-native --
+          --archive dist/kun-video-editor-0.4.4.kunx
 
       - name: Prepare and verify Linux user namespace sandbox
         run: |
@@ -114,6 +128,8 @@ jobs:
         run: npm run smoke:packaged-extension-appimage
 
       - name: Record Linux native validation evidence
+        env:
+          KUN_EVIDENCE_COMMIT: ${{ github.sha }}
         run: npm run evidence:extension-native
 
       - name: Upload Linux package
@@ -126,6 +142,7 @@ jobs:
             dist/Kun-*-linux-x86_64.AppImage
             dist/Kun-*-linux-x86_64.AppImage.blockmap
             dist/extension-native-evidence-linux.json
+            dist/kun-video-editor-*.kunx
 
   package-macos:
     name: Ad-hoc macOS packaged validation (PR)
@@ -149,6 +166,15 @@ jobs:
             package-lock.json
             kun/package-lock.json
 
+      - name: Install host-native FFmpeg
+        run: |
+          brew install ffmpeg-full
+          ffmpeg_bin="$(brew --prefix ffmpeg-full)/bin"
+          "$ffmpeg_bin/ffmpeg" -hide_banner -filters 2>&1 | grep -Eq '[[:space:]]drawtext[[:space:]]'
+          echo "$ffmpeg_bin" >> "$GITHUB_PATH"
+          echo "KUN_FFMPEG_PATH=$ffmpeg_bin/ffmpeg" >> "$GITHUB_ENV"
+          echo "KUN_FFPROBE_PATH=$ffmpeg_bin/ffprobe" >> "$GITHUB_ENV"
+
       - name: Install root dependencies
         run: npm ci
 
@@ -158,16 +184,37 @@ jobs:
       - name: Build ad-hoc macOS packages (x64 and arm64)
         run: npm run dist:mac
 
+      - name: Verify packaged macOS x64 native architecture
+        run: npm run verify:packaged-macos-native -- --resources dist/mac/Kun.app/Contents/Resources --arch x64
+
+      - name: Verify packaged macOS arm64 native architecture
+        run: npm run verify:packaged-macos-native -- --resources dist/mac-arm64/Kun.app/Contents/Resources --arch arm64
+
+      - name: Smoke packaged OCR dependencies (macOS arm64)
+        env:
+          KUN_PACKAGED_RESOURCES_DIR: dist/mac-arm64/Kun.app/Contents/Resources
+        run: node scripts/smoke-packaged-ocr.cjs
+
       - name: Smoke packaged Extension Node runtime (macOS x64)
         run: npm run smoke:packaged-extensions -- --resources dist/mac/Kun.app/Contents/Resources
 
       - name: Smoke packaged Extension Node runtime (macOS arm64)
         run: npm run smoke:packaged-extensions -- --resources dist/mac-arm64/Kun.app/Contents/Resources
 
+      - name: Smoke host-native FFmpeg broker (fail closed)
+        env:
+          KUN_RUN_MEDIA_SMOKE: '1'
+        run: npm run smoke:extension-native-media
+
+      - name: Smoke packaged Kun Video Editor native workflow
+        run: npm run smoke:packaged-video-editor-native
+
       - name: Smoke packaged Extension desktop Chromium (host-native macOS)
         run: npm run smoke:packaged-extension-desktop
 
       - name: Record macOS native validation evidence
+        env:
+          KUN_EVIDENCE_COMMIT: ${{ github.sha }}
         run: npm run evidence:extension-native
 
       - name: Upload ad-hoc macOS PR packages
@@ -182,6 +229,59 @@ jobs:
             dist/Kun-*-mac-*.blockmap
             dist/latest-mac.yml
             dist/extension-native-evidence-darwin.json
+
+  package-macos-x64-runtime:
+    name: Intel macOS packaged validation (PR)
+    runs-on: macos-15-intel
+    needs: package-macos
+    timeout-minutes: 30
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Download final macOS PR artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: pr-macos-adhoc-packages
+          path: release-artifacts
+
+      - name: Extract final macOS x64 ZIP
+        run: |
+          set -euo pipefail
+          archives=(release-artifacts/Kun-*-mac-x64.zip)
+          if [[ ${#archives[@]} -ne 1 || ! -f "${archives[0]}" ]]; then
+            echo "::error::Expected exactly one final macOS x64 ZIP"
+            find release-artifacts -maxdepth 2 -type f -print | sort
+            exit 1
+          fi
+          mkdir -p dist/mac-x64-verified
+          ditto -x -k "${archives[0]}" dist/mac-x64-verified
+
+      - name: Verify final macOS x64 native architecture
+        run: >-
+          npm run verify:packaged-macos-native --
+          --resources dist/mac-x64-verified/Kun.app/Contents/Resources
+          --arch x64
+
+      - name: Smoke final macOS x64 OCR dependencies
+        env:
+          KUN_PACKAGED_RESOURCES_DIR: dist/mac-x64-verified/Kun.app/Contents/Resources
+        run: node scripts/smoke-packaged-ocr.cjs
+
+      - name: Smoke final macOS x64 Extension Node runtime
+        run: >-
+          npm run smoke:packaged-extensions --
+          --resources dist/mac-x64-verified/Kun.app/Contents/Resources
+
+      - name: Smoke final macOS x64 desktop Chromium
+        run: >-
+          npm run smoke:packaged-extension-desktop --
+          --resources dist/mac-x64-verified/Kun.app/Contents/Resources
 
   package-windows:
     name: Windows NSIS packaged validation (PR)
@@ -203,6 +303,19 @@ jobs:
             package-lock.json
             kun/package-lock.json
 
+      - name: Install host-native FFmpeg
+        shell: pwsh
+        run: |
+          if (-not (Get-Command ffmpeg.exe -ErrorAction SilentlyContinue) -or -not (Get-Command ffprobe.exe -ErrorAction SilentlyContinue)) {
+            choco install ffmpeg --yes --no-progress
+          }
+          $ffmpegPath = (Get-Command ffmpeg.exe).Source
+          if ((& $ffmpegPath -hide_banner -filters 2>&1 | Out-String) -notmatch '\sdrawtext\s') {
+            throw 'Installed FFmpeg does not provide the required drawtext filter.'
+          }
+          "KUN_FFMPEG_PATH=$ffmpegPath" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "KUN_FFPROBE_PATH=$((Get-Command ffprobe.exe).Source)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
       - name: Install root dependencies
         run: npm ci
 
@@ -215,10 +328,20 @@ jobs:
       - name: Smoke packaged Extension Node runtime (win-unpacked)
         run: npm run smoke:packaged-extensions -- --resources dist/win-unpacked/resources
 
+      - name: Smoke host-native FFmpeg broker (fail closed)
+        env:
+          KUN_RUN_MEDIA_SMOKE: '1'
+        run: npm run smoke:extension-native-media
+
+      - name: Smoke packaged Kun Video Editor native workflow
+        run: npm run smoke:packaged-video-editor-native
+
       - name: Smoke packaged Extension desktop Chromium (host-native Windows)
         run: npm run smoke:packaged-extension-desktop
 
       - name: Record Windows native validation evidence
+        env:
+          KUN_EVIDENCE_COMMIT: ${{ github.sha }}
         run: npm run evidence:extension-native
 
       - name: Upload Windows PR package
@@ -240,6 +363,7 @@ jobs:
       - test
       - package
       - package-macos
+      - package-macos-x64-runtime
       - package-windows
     if: >-
       ${{
@@ -249,6 +373,7 @@ jobs:
           needs.test.result == 'failure' ||
           needs.package.result == 'failure' ||
           needs['package-macos'].result == 'failure' ||
+          needs['package-macos-x64-runtime'].result == 'failure' ||
           needs['package-windows'].result == 'failure'
         )
       }}
@@ -261,6 +386,7 @@ jobs:
               ['Typecheck and test', '${{ needs.test.result }}'],
               ['Build Linux package', '${{ needs.package.result }}'],
               ['Ad-hoc macOS packaged validation (PR)', '${{ needs['package-macos'].result }}'],
+              ['Intel macOS packaged validation (PR)', '${{ needs['package-macos-x64-runtime'].result }}'],
               ['Windows NSIS packaged validation (PR)', '${{ needs['package-windows'].result }}']
             ]
               .filter(([, result]) => result === 'failure')

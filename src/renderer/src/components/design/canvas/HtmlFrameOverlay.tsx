@@ -15,6 +15,7 @@ import type { DesignRuntimeQualityPayload } from '../../../design/design-html-qu
 import { ScreenOverlay } from './html-frame/HtmlFrameScreenOverlay'
 import { htmlFrameOverlayCanMountAtZoom } from './html-frame/html-frame-helpers'
 import { RunningAppFrameOverlay } from './RunningAppFrameOverlay'
+import { useCanvasMotionStore } from '../../../design/motion/canvas-motion-store'
 
 export {
   HTML_FRAME_CONTENT_SIZE_QUERY,
@@ -123,6 +124,21 @@ export function selectHtmlFramesForOverlay(
   return framesInPaintOrder.filter((shape) => mountedIds.has(shape.id))
 }
 
+function hasMotionTargetAncestor(
+  document: CanvasDocument,
+  shapeId: string,
+  targetIds: ReadonlySet<string>
+): boolean {
+  const visited = new Set<string>()
+  let currentId: string | null = shapeId
+  while (currentId && currentId !== document.rootId && !visited.has(currentId)) {
+    if (targetIds.has(currentId)) return true
+    visited.add(currentId)
+    currentId = document.objects[currentId]?.parentId ?? null
+  }
+  return false
+}
+
 type Props = {
   workspaceRoot: string
   interactiveId: string | null
@@ -151,6 +167,8 @@ export function HtmlFrameOverlay({
   const containerHeight = useCanvasViewportStore((s) => s.containerHeight)
   const activeTool = useCanvasViewportStore((s) => s.activeTool)
   const selectedIds = useCanvasSelectionStore((s) => s.selectedIds)
+  const motionOpen = useCanvasMotionStore((state) => state.open)
+  const motionFrameId = useCanvasMotionStore((state) => state.activeFrameId)
 
   const canvasScreenTransform = useMemo(() => htmlFrameCanvasScreenTransform({
     vbox,
@@ -163,15 +181,26 @@ export function HtmlFrameOverlay({
   const portalFrames = useMemo(() => {
     return canvasPortalFramesInCanvasPaintOrder(document)
   }, [document])
+  const motionTargetIds = useMemo(() => new Set(
+    motionOpen && motionFrameId
+      ? (document.motion?.timelines[motionFrameId]?.tracks ?? []).map((track) => track.targetShapeId)
+      : []
+  ), [document.motion, motionFrameId, motionOpen])
 
   // Mount priority favors selected/topmost frames, then we render in paint order
   // so the DOM overlay matches the SVG canvas stacking order.
   const visibleFrames = useMemo(() => {
+    const priorityIds = new Set(selectedIds)
+    const candidates = portalFrames.filter((shape) => {
+      const motionRelevant = motionOpen && hasMotionTargetAncestor(document, shape.id, motionTargetIds)
+      if (motionRelevant) priorityIds.add(shape.id)
+      return motionRelevant || htmlFrameIntersectsViewport(shape, vbox)
+    })
     return selectHtmlFramesForOverlay(
-      portalFrames.filter((shape) => htmlFrameIntersectsViewport(shape, vbox)),
-      selectedIds
+      candidates,
+      priorityIds
     )
-  }, [portalFrames, vbox, selectedIds])
+  }, [document, motionOpen, motionTargetIds, portalFrames, selectedIds, vbox])
 
   const selectedIdsKey = useMemo(() => [...selectedIds].sort().join(','), [selectedIds])
   const paintIndexById = useMemo(() => new Map(

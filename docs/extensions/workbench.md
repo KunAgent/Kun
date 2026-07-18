@@ -6,6 +6,8 @@
 
 Kun 的工作台使用一个 typed `ContributionRegistry` 组合内置与扩展 UI。扩展声明“放在哪里、显示什么、调用哪个命令”，宿主负责真正渲染、排序、焦点、可访问性和生命周期。扩展 React 组件不能直接挂进 Kun React tree。
 
+对于用户可直接进入的扩展 UI，v1 的规范入口是 `views.rightSidebar`：每个可见 View 用自己声明的 `icon` 注册到 Code 模式右侧竖向图标栏，并在主会话旁打开独立标签和隔离 Webview。Kun 不提供额外的工具菜单或“所有扩展”拼图菜单。`views.leftSidebar`、`views.auxiliaryPanel`、`views.editorTab` 和 `views.fullPage` 仍保持 v1 Schema 与命令打开兼容，但新扩展不应把它们作为默认可发现入口。
+
 ## 身份和命名空间
 
 - 内置项：`builtin:<id>`。
@@ -26,11 +28,11 @@ extension:acme.issues/backlog
 | Manifest 键 | 宿主位置 | 推荐用途 |
 | --- | --- | --- |
 | `views.containers` | Activity/sidebar 容器 | 将一组相关 View 归类 |
-| `views.leftSidebar` | 左侧栏 | 导航、项目树、知识库 |
-| `views.rightSidebar` | 右侧栏 | 助手、状态、Issue、部署面板 |
-| `views.auxiliaryPanel` | 辅助面板 | 日志、任务、长表格 |
-| `views.editorTab` | 编辑区 Tab | 文档、可视化、编辑器式应用 |
-| `views.fullPage` | 工作台全页 | 复杂仪表盘；不用于 protected flows |
+| `views.leftSidebar` | 左侧栏（兼容） | 已有 v1 扩展的导航、项目树 |
+| `views.rightSidebar` | 右侧栏（规范入口） | 扩展工具、状态、编辑器和工作流面板 |
+| `views.auxiliaryPanel` | 辅助面板（兼容） | 已有 v1 扩展的日志、任务、长表格 |
+| `views.editorTab` | 编辑区 Tab（兼容） | 已有 v1 扩展的文档、可视化 |
+| `views.fullPage` | 工作台全页（兼容） | 已有 v1 扩展的复杂仪表盘；不用于 protected flows |
 | `actions.topBar` | 顶部操作区 | 高频全局/当前工作区命令 |
 | `actions.composer` | 对话 Composer | 附加上下文、启动扩展工作流 |
 | `actions.message` | 消息操作 | 对已授权消息执行操作 |
@@ -61,11 +63,14 @@ extension:acme.issues/backlog
 - `entry` 必须是完整性清单中的本地资源，并位于声明的 resource root。
 - label/title/description 是不可信纯文本，不能包含可执行 HTML。
 - icon 必须是包内允许类型；应在浅色/深色主题和 Retina 下清晰。
+- 每个 `showInRightRail` 未设为 `false` 的可见 `views.rightSidebar` View 会在 Code 模式右侧图标栏获得直接入口，并拥有独立顶层标签；没有 icon 时宿主使用可访问的 fallback，不会执行扩展代码来生成图标。设为 `false` 的 View 仍可由扩展管理页或命令打开，但不会常驻该图标栏。
 - `when` 只决定 visibility/enablement，不授予权限。
 - `order` 只在宿主分组内参与排序；同优先级按 fully-qualified ID 稳定排序。
 - 多实例只在 contribution contract 明确允许时创建，每个实例有独立 View Session。
 
 仅渲染 title/icon 不激活扩展。打开 View 后，宿主检查兼容、enablement、workspace trust 和权限，再触发 `onView:<id>`。
+
+右侧 View 与主 Agent 协作时，应把能力注册为扩展工具，并把“当前项目”等有界指针放在 `storage.workspace`。主 Agent 通过工具读取和修改权威状态，View 通过宿主消息刷新；两者不能共享 React state、DOM、runtime token 或私有 Electron IPC。默认随 Kun 安装的 [`kun-video-editor`](../../examples/extensions/kun-video-editor/) 展示了这一模式。
 
 ## 命令
 

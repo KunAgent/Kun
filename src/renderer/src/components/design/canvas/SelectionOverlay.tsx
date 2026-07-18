@@ -1,6 +1,6 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type ComponentProps } from 'react'
 import { useTranslation } from 'react-i18next'
-import type { CanvasShape, Rect } from '../../../design/canvas/canvas-types'
+import type { CanvasDocument, CanvasShape, Rect } from '../../../design/canvas/canvas-types'
 import { ROOT_SHAPE_ID, isHtmlFrame } from '../../../design/canvas/canvas-types'
 import { shapeGeometry } from '../../../design/canvas/canvas-types'
 import { useDesignWorkspaceStore } from '../../../design/design-workspace-store'
@@ -16,6 +16,14 @@ import { findResizeSnaps, type SnapGuide } from '../../../design/canvas/canvas-s
 import { BOARD_HTML_FRAME_MIN_HEIGHT } from '../../../design/canvas/canvas-placement'
 import { useCanvasShapeStore, withDescendants } from '../../../design/canvas/canvas-shape-store'
 import { useCanvasUndoStore } from '../../../design/canvas/canvas-undo-store'
+import {
+  beginAutoKeyCanvasGesture,
+  commitActiveAutoKeyCanvasGesture,
+  commitAutoKeyCanvasGesture,
+  endAutoKeyCanvasGesture
+} from '../../../design/motion/canvas-motion-auto-key'
+import { useCanvasMotionStore } from '../../../design/motion/canvas-motion-store'
+import { projectCanvasMotionObjects } from '../../../design/motion/canvas-motion-preview'
 import { useCanvasSelectionStore } from '../../../design/canvas/canvas-selection-store'
 import { useCanvasViewportStore } from '../../../design/canvas/canvas-viewport-store'
 import { useDesignAssistantStore } from '../../../design/design-assistant-store'
@@ -91,6 +99,9 @@ function SelectionOverlayInner({
   viewBox: { x: number; y: number; width: number; height: number }
 }) {
   const { t } = useTranslation('common')
+  const motionEditingAtPlayhead = useCanvasMotionStore(
+    (state) => state.open && state.currentTimeMs > 0
+  )
   const sw = 1.25 / Math.max(zoom, 0.01)
   const hs = HANDLE_SIZE / zoom
   const rs = ROTATE_HANDLE_SIZE / zoom
@@ -145,7 +156,7 @@ function SelectionOverlayInner({
       e.preventDefault()
 
       const store = useCanvasShapeStore.getState()
-      const selBounds = getSelectionBounds(store.document.objects, editableSelectedIds)
+      const selBounds = getSelectionBounds(objects, editableSelectedIds)
       if (!selBounds) return
 
       const shapeStarts = new Map<string, ShapeBoundsLike>()
@@ -257,7 +268,9 @@ function SelectionOverlayInner({
             }
           }
           if (patches.length > 0) {
-            useCanvasUndoStore.getState().pushChange({ patches, label: 'resize' })
+            if (!commitAutoKeyCanvasGesture(patches, 'resize')) {
+              useCanvasUndoStore.getState().pushChange({ patches, label: 'resize' })
+            }
           }
           // Persist the final linked HTML frame sizing. Horizontal-only resize
           // keeps auto-height alive so the page can reflow to the new width;
@@ -278,6 +291,7 @@ function SelectionOverlayInner({
           }
         }
         resizeStateRef.current = null
+        endAutoKeyCanvasGesture()
         useCanvasSelectionStore.getState().setSnapGuides([])
         window.removeEventListener('pointermove', onMove)
         window.removeEventListener('pointerup', onUp)
@@ -286,7 +300,7 @@ function SelectionOverlayInner({
       window.addEventListener('pointermove', onMove)
       window.addEventListener('pointerup', onUp)
     },
-    [editableSelectedIds, zoom]
+    [editableSelectedIds, objects, zoom]
   )
 
   const handleRotatePointerDown = useCallback(
@@ -295,7 +309,7 @@ function SelectionOverlayInner({
       e.preventDefault()
 
       const store = useCanvasShapeStore.getState()
-      const selBounds = getSelectionBounds(store.document.objects, editableSelectedIds)
+      const selBounds = getSelectionBounds(objects, editableSelectedIds)
       if (!selBounds) return
 
       // Pivot in CLIENT coordinates so atan2 works directly off ev.clientX/Y.
@@ -324,13 +338,17 @@ function SelectionOverlayInner({
         startAngleFromPivot: angleFromPivot(pivotX, pivotY, e.clientX, e.clientY),
         shapeStartRotations
       }
+      beginAutoKeyCanvasGesture(shapeStartRotations.keys())
 
       const onMove = (ev: PointerEvent): void => {
         const state = rotateStateRef.current
         if (!state) return
         const cur = angleFromPivot(state.pivotX, state.pivotY, ev.clientX, ev.clientY)
         const shapeStore = useCanvasShapeStore.getState()
+        const gestureStartValues = useCanvasMotionStore.getState().gestureStartValues
+        const motionGestureActive = Object.keys(gestureStartValues).length > 0
         for (const [id, startRot] of state.shapeStartRotations) {
+          if (motionGestureActive && !gestureStartValues[id]) continue
           const next = computeRotation(state.startAngleFromPivot, cur, startRot, {
             shiftKey: ev.shiftKey,
             metaKey: ev.metaKey,
@@ -342,6 +360,7 @@ function SelectionOverlayInner({
 
       const onUp = (): void => {
         const state = rotateStateRef.current
+        const motionCommitted = commitActiveAutoKeyCanvasGesture('rotate')
         if (state) {
           const doc = useCanvasShapeStore.getState().document
           const patches: { id: string; before: Partial<CanvasShape>; after: Partial<CanvasShape> }[] = []
@@ -356,11 +375,14 @@ function SelectionOverlayInner({
               })
             }
           }
-          if (patches.length > 0) {
-            useCanvasUndoStore.getState().pushChange({ patches, label: 'rotate' })
+          if (!motionCommitted && patches.length > 0) {
+            if (!commitAutoKeyCanvasGesture(patches, 'rotate')) {
+              useCanvasUndoStore.getState().pushChange({ patches, label: 'rotate' })
+            }
           }
         }
         rotateStateRef.current = null
+        endAutoKeyCanvasGesture()
         window.removeEventListener('pointermove', onMove)
         window.removeEventListener('pointerup', onUp)
       }
@@ -368,7 +390,7 @@ function SelectionOverlayInner({
       window.addEventListener('pointermove', onMove)
       window.addEventListener('pointerup', onUp)
     },
-    [editableSelectedIds]
+    [editableSelectedIds, objects]
   )
 
   const resizeHandles: { pos: ResizeHandle; cx: number; cy: number }[] = bounds
@@ -453,6 +475,7 @@ function SelectionOverlayInner({
       ) : null}
 
       {showBoxHandles &&
+        !motionEditingAtPlayhead &&
         resizeHandles.map(({ pos, cx, cy }) => (
           <rect
             key={pos}
@@ -471,7 +494,9 @@ function SelectionOverlayInner({
           />
         ))}
 
-      {linearEditTarget && <LinearPointEditor shape={linearEditTarget} zoom={zoom} />}
+      {!motionEditingAtPlayhead && linearEditTarget ? (
+        <LinearPointEditor shape={linearEditTarget} zoom={zoom} />
+      ) : null}
 
       {marqueeRect && (
         <rect
@@ -575,3 +600,22 @@ function handleCursor(pos: ResizeHandle): string {
 }
 
 export const SelectionOverlay = memo(SelectionOverlayInner)
+
+type MotionSelectionOverlayProps = Omit<ComponentProps<typeof SelectionOverlay>, 'objects'> & {
+  document: CanvasDocument
+}
+
+/** Projects motion values at the playhead before drawing selection handles. */
+export function MotionSelectionOverlay({ document, ...props }: MotionSelectionOverlayProps) {
+  const open = useCanvasMotionStore((state) => state.open)
+  const frameId = useCanvasMotionStore((state) => state.activeFrameId)
+  const timeMs = useCanvasMotionStore((state) => state.currentTimeMs)
+  const gestureOverrides = useCanvasMotionStore((state) => state.gestureOverrides)
+  const objects = useMemo(
+    () => open && frameId
+      ? projectCanvasMotionObjects(document, frameId, timeMs, gestureOverrides)
+      : document.objects,
+    [document, frameId, gestureOverrides, open, timeMs]
+  )
+  return <SelectionOverlay {...props} objects={objects} />
+}

@@ -1,5 +1,5 @@
 import { mkdir } from 'node:fs/promises'
-import { randomBytes } from 'node:crypto'
+import { randomInt } from 'node:crypto'
 import { type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { LocalToolHost, type LocalTool } from './local-tool-host.js'
 import { OutputAccumulator } from './output-accumulator.js'
@@ -330,10 +330,9 @@ const SESSION_ID_PATTERN = /^[a-z0-9]{8}$/
 
 function nextSessionId(): string {
   for (let attempt = 0; attempt < 64; attempt++) {
-    const bytes = randomBytes(SESSION_ID_LENGTH)
     let id = ''
     for (let i = 0; i < SESSION_ID_LENGTH; i++) {
-      id += SESSION_ID_ALPHABET[bytes[i]! % SESSION_ID_ALPHABET.length]
+      id += SESSION_ID_ALPHABET[randomInt(SESSION_ID_ALPHABET.length)]!
     }
     if (!bashSessions.has(id)) return id
   }

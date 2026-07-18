@@ -27,16 +27,19 @@ export type ExtensionConfigurationSnapshot = {
   values: Record<string, Record<string, JsonValue>>
 }
 
-export type ExtensionConfigurationChange = {
+type ExtensionConfigurationChangeBase = {
   extensionId: string
   extensionVersion: string
   sectionId: string
   key: string
-  scope: 'global' | 'workspace'
   value: JsonValue
   revision: number
-  workspaceKey?: string
 }
+
+export type ExtensionConfigurationChange = ExtensionConfigurationChangeBase & (
+  | { scope: 'global' }
+  | { scope: 'workspace'; workspaceKey: string }
+)
 
 /** Host-owned, revisioned storage for declarative extension settings. */
 export class ExtensionConfigurationService {
@@ -128,10 +131,11 @@ export class ExtensionConfigurationService {
         extensionVersion: input.principal.extensionVersion,
         sectionId: section.id,
         key: input.key,
-        scope: section.scope,
         value: structuredClone(value),
         revision: document.revision,
-        ...(workspaceKey ? { workspaceKey } : {})
+        ...(section.scope === 'workspace'
+          ? { scope: 'workspace' as const, workspaceKey: workspaceKey! }
+          : { scope: 'global' as const })
       }
       for (const listener of this.listeners) {
         try {

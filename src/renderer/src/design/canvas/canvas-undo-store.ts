@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import type { CanvasMotionDocument } from '../motion/canvas-motion-types'
 import type { CanvasShape } from './canvas-types'
 import { useCanvasSelectionStore } from './canvas-selection-store'
 
@@ -8,8 +9,15 @@ export type ShapePatch = {
   after: Partial<CanvasShape>
 }
 
+export type MotionPatch = {
+  before: CanvasMotionDocument
+  after: CanvasMotionDocument
+}
+
 export type CanvasChange = {
   patches: ShapePatch[]
+  /** Immutable document-level motion snapshot before and after the change. */
+  motionPatch?: MotionPatch
   /** Set when produced inside a `withGroup` — merged from multiple `pushChange` calls. */
   groupId?: string
   /** Human-readable name, useful for debugging and (future) undo menu. */
@@ -29,10 +37,12 @@ type UndoState = {
   activeGroupId: string | null
   activeGroupLabel: string | null
   pendingPatches: ShapePatch[]
+  pendingMotionPatch: MotionPatch | null
   pendingSelectionBefore: string[]
 
   pushChange: (input: {
     patches: ShapePatch[]
+    motionPatch?: MotionPatch
     label?: string
     /** Override the captured selection-before (default = current selection). */
     selectionBefore?: string[]
@@ -59,16 +69,32 @@ export const useCanvasUndoStore = create<UndoState>((set, get) => ({
   activeGroupId: null,
   activeGroupLabel: null,
   pendingPatches: [],
+  pendingMotionPatch: null,
   pendingSelectionBefore: [],
 
   pushChange: (input) => {
-    if (input.patches.length === 0) return
+    const motionPatch =
+      input.motionPatch?.before === input.motionPatch?.after ? undefined : input.motionPatch
+    if (input.patches.length === 0 && !motionPatch) return
 
     const state = get()
 
     if (state.activeGroupId !== null) {
-      // Inside a group — buffer and let withGroup flush at close.
-      set({ pendingPatches: [...state.pendingPatches, ...input.patches] })
+      // Inside a group — buffer and let withGroup flush at close. Motion groups
+      // preserve the first `before` and the final `after`, just like a pointer
+      // gesture should undo from its final sample in one step.
+      const pendingMotionPatch = motionPatch
+        ? state.pendingMotionPatch
+          ? {
+              before: state.pendingMotionPatch.before,
+              after: motionPatch.after
+            }
+          : motionPatch
+        : state.pendingMotionPatch
+      set({
+        pendingPatches: [...state.pendingPatches, ...input.patches],
+        pendingMotionPatch
+      })
       return
     }
 
@@ -76,6 +102,7 @@ export const useCanvasUndoStore = create<UndoState>((set, get) => ({
     const selBefore = input.selectionBefore ?? selAfter
     const change: CanvasChange = {
       patches: input.patches,
+      motionPatch,
       label: input.label,
       selectionBefore: selBefore,
       selectionAfter: selAfter
@@ -99,6 +126,7 @@ export const useCanvasUndoStore = create<UndoState>((set, get) => ({
       activeGroupId: groupId,
       activeGroupLabel: label,
       pendingPatches: [],
+      pendingMotionPatch: null,
       pendingSelectionBefore: selBefore
     })
 
@@ -107,10 +135,11 @@ export const useCanvasUndoStore = create<UndoState>((set, get) => ({
     } finally {
       const finalState = get()
       if (finalState.activeGroupId === groupId) {
-        if (finalState.pendingPatches.length > 0) {
+        if (finalState.pendingPatches.length > 0 || finalState.pendingMotionPatch) {
           const selAfter = currentSelection()
           const change: CanvasChange = {
             patches: finalState.pendingPatches,
+            motionPatch: finalState.pendingMotionPatch ?? undefined,
             groupId,
             label,
             selectionBefore: finalState.pendingSelectionBefore,
@@ -122,6 +151,7 @@ export const useCanvasUndoStore = create<UndoState>((set, get) => ({
             activeGroupId: null,
             activeGroupLabel: null,
             pendingPatches: [],
+            pendingMotionPatch: null,
             pendingSelectionBefore: []
           }))
         } else {
@@ -129,6 +159,7 @@ export const useCanvasUndoStore = create<UndoState>((set, get) => ({
             activeGroupId: null,
             activeGroupLabel: null,
             pendingPatches: [],
+            pendingMotionPatch: null,
             pendingSelectionBefore: []
           })
         }
@@ -165,6 +196,7 @@ export const useCanvasUndoStore = create<UndoState>((set, get) => ({
       activeGroupId: null,
       activeGroupLabel: null,
       pendingPatches: [],
+      pendingMotionPatch: null,
       pendingSelectionBefore: []
     })
 }))

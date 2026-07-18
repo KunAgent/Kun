@@ -1,10 +1,12 @@
-import { mkdir, mkdtemp, readFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import {
+  MODEL_PROVIDER_PRESETS,
   defaultKunRuntimeSettings,
   defaultModelProviderSettings,
+  modelProviderPresetProfile,
   resolveKunRuntimeSettings
 } from '../shared/app-settings'
 import { LegacyProviderSettingsMigrationCoordinator } from './legacy-provider-settings-migration'
@@ -151,6 +153,60 @@ describe('LegacyProviderSettingsMigrationCoordinator', () => {
     expect(updated.provider.apiKey).toBe('new-secret')
     expect(await bindingAccountId(dataDir, 'settings:provider:deepseek')).toBe(before)
     expect(await readFile(join(userDataDir, 'kun-settings.json'), 'utf8')).not.toContain('new-secret')
+  })
+
+  it('saves a new provider key when an unrelated legacy credential can no longer be decrypted', async () => {
+    const userDataDir = await mkdtemp(join(tmpdir(), 'kun-settings-stale-credential-'))
+    const dataDir = join(userDataDir, 'runtime-data')
+    const plainStore = new JsonSettingsStore(userDataDir)
+    const defaults = await plainStore.load()
+    await plainStore.save({
+      ...defaults,
+      provider: {
+        ...defaultModelProviderSettings(),
+        apiKey: 'stale-deepseek-secret'
+      },
+      agents: { kun: { ...defaultKunRuntimeSettings(), dataDir } }
+    })
+
+    const initialStore = new JsonSettingsStore(userDataDir, {
+      credentialMigration: new LegacyProviderSettingsMigrationCoordinator()
+    })
+    await initialStore.load()
+
+    const credentialPath = join(dataDir, 'credentials', 'credentials.enc.json')
+    const credentialDocument = JSON.parse(await readFile(credentialPath, 'utf8')) as {
+      credentials: Record<string, { tag: string }>
+    }
+    const staleCredential = Object.values(credentialDocument.credentials)[0]!
+    staleCredential.tag = Buffer.alloc(16, 0).toString('base64')
+    await writeFile(credentialPath, `${JSON.stringify(credentialDocument, null, 2)}\n`, 'utf8')
+
+    const store = new JsonSettingsStore(userDataDir, {
+      credentialMigration: new LegacyProviderSettingsMigrationCoordinator()
+    })
+    const loaded = await store.load()
+    const minimaxPreset = MODEL_PROVIDER_PRESETS.find((preset) => preset.id === 'minimax')!
+    const minimax = modelProviderPresetProfile(minimaxPreset, 'fresh-minimax-secret')!
+    const updated = await store.patch({
+      provider: {
+        providers: [{ ...minimax, apiKey: 'fresh-minimax-secret' }]
+      },
+      agents: {
+        kun: {
+          providerId: 'minimax',
+          model: minimax.models[0]
+        }
+      }
+    })
+
+    expect(updated.provider.providers.find((provider) => provider.id === 'deepseek')?.apiKey).toBe('')
+    expect(updated.provider.providers.find((provider) => provider.id === 'minimax')?.apiKey)
+      .toBe('fresh-minimax-secret')
+    expect(updated.agents.kun.providerId).toBe('minimax')
+    expect(await readFile(join(userDataDir, 'kun-settings.json'), 'utf8'))
+      .not.toContain('fresh-minimax-secret')
+    expect(loaded.provider.apiKey).toBe('')
   })
 
   it('rolls back a secure pending migration when the ordinary settings commit fails', async () => {

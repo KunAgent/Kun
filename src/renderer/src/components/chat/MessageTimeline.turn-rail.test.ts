@@ -3,7 +3,9 @@ import {
   activeTimelineTurnKey,
   timelineJumpRailLeft,
   timelineJumpRailPreviewLeft,
-  timelineJumpWaveLevel
+  timelineJumpPreviewMetadata,
+  timelineJumpPreviewTop,
+  timelineJumpWaveDistance
 } from './MessageTimeline'
 
 describe('activeTimelineTurnKey', () => {
@@ -29,9 +31,76 @@ describe('activeTimelineTurnKey', () => {
   })
 })
 
-describe('timelineJumpWaveLevel', () => {
-  it('cycles compact rail items through a wave pattern', () => {
-    expect(Array.from({ length: 7 }, (_, index) => timelineJumpWaveLevel(index))).toEqual([2, 4, 5, 3, 1, 2, 4])
+describe('timelineJumpWaveDistance', () => {
+  it('expands only the hovered turn and its nearby turns', () => {
+    expect(Array.from({ length: 7 }, (_, index) => timelineJumpWaveDistance(index, 3))).toEqual([3, 2, 1, 0, 1, 2, 3])
+  })
+
+  it('keeps every turn compact when the rail is idle', () => {
+    expect(timelineJumpWaveDistance(3, -1)).toBeNull()
+  })
+})
+
+describe('timelineJumpPreviewMetadata', () => {
+  it('collects unique edited file labels and detects a git commit command', () => {
+    expect(timelineJumpPreviewMetadata({
+      user: { kind: 'user', id: 'user-1', text: 'Update the rail' },
+      blocks: [
+        {
+          kind: 'tool',
+          id: 'file-1',
+          summary: 'edit file',
+          status: 'success',
+          toolKind: 'file_change',
+          filePath: '/workspace/src/base-shell.css'
+        },
+        {
+          kind: 'tool',
+          id: 'file-2',
+          summary: 'edit file again',
+          status: 'success',
+          toolKind: 'file_change',
+          filePath: 'src/base-shell.css'
+        },
+        {
+          kind: 'tool',
+          id: 'commit-1',
+          summary: 'run command',
+          status: 'success',
+          toolKind: 'command_execution',
+          meta: { command: 'git add src/base-shell.css && git commit -m "fix rail"' }
+        }
+      ]
+    })).toEqual({ fileLabels: ['base-shell.css'], hasCommit: true })
+  })
+
+  it('ignores failed file changes and non-commit git commands', () => {
+    expect(timelineJumpPreviewMetadata({
+      blocks: [
+        {
+          kind: 'tool',
+          id: 'file-failed',
+          summary: 'edit file',
+          status: 'error',
+          toolKind: 'file_change',
+          filePath: '/workspace/failed.ts'
+        },
+        {
+          kind: 'tool',
+          id: 'status-1',
+          summary: 'run command',
+          status: 'success',
+          toolKind: 'command_execution',
+          meta: { command: 'git status --short' }
+        }
+      ]
+    })).toEqual({ fileLabels: [], hasCommit: false })
+  })
+})
+
+describe('timelineJumpPreviewTop', () => {
+  it('aligns the preview center with the hovered rail marker', () => {
+    expect(timelineJumpPreviewTop(210, 20, 180)).toBe(40)
   })
 })
 
@@ -55,7 +124,7 @@ describe('timelineJumpRailLeft', () => {
 
 describe('timelineJumpRailPreviewLeft', () => {
   it('keeps the hover preview inside the conversation gutter', () => {
-    expect(timelineJumpRailPreviewLeft(-20, 520)).toBe(16)
+    expect(timelineJumpRailPreviewLeft(-20, 520)).toBe(48)
   })
 
   it('keeps the hover preview inside the conversation right edge', () => {

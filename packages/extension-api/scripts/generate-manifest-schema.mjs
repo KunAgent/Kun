@@ -11,6 +11,7 @@ import {
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const outputPath = resolve(packageRoot, 'schema/kun-extension.schema.json')
 const schema = toJSONSchema(ExtensionManifestSchema, {
+  io: 'input',
   target: 'draft-2020-12',
   unrepresentable: 'throw',
   reused: 'ref'

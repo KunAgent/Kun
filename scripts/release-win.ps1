@@ -156,6 +156,20 @@ if ($LASTEXITCODE -ne 0) {
   exit 1
 }
 
+Write-Info 'Verifying clean release checkout...'
+& npm run verify:manual-extension-release -- --clean-only
+if ($LASTEXITCODE -ne 0) {
+  Write-Err 'Release checkout contains tracked or untracked changes.'
+  exit 1
+}
+
+Write-Info 'Verifying remote release tag matches local HEAD...'
+& npm run verify:manual-extension-release -- --tag $TagName --version $ReleaseVersion --tag-only
+if ($LASTEXITCODE -ne 0) {
+  Write-Err 'Release tag does not match the local checkout.'
+  exit 1
+}
+
 $env:ELECTRON_BUILDER_CACHE = Join-Path $Root '.cache\electron-builder'
 New-Item -ItemType Directory -Force -Path $env:ELECTRON_BUILDER_CACHE | Out-Null
 
@@ -176,7 +190,9 @@ Remove-Item -Force -ErrorAction SilentlyContinue `
   (Join-Path $Root 'dist\DeepSeek-GUI-*'), `
   (Join-Path $Root 'dist\DeepSeek GUI-*'), `
   (Join-Path $Root 'dist\latest*.yml'), `
-  (Join-Path $Root 'dist\*.blockmap')
+  (Join-Path $Root 'dist\*.blockmap'), `
+  (Join-Path $Root 'dist\extension-native-evidence-*.json'), `
+  (Join-Path $Root 'dist\kun-video-editor-*.kunx')
 
 Write-Info 'Building Windows installer...'
 & npm run dist:win
@@ -199,10 +215,34 @@ if ($LASTEXITCODE -ne 0) {
   exit 1
 }
 
+Write-Info 'Smoking host-native FFmpeg broker...'
+$env:KUN_RUN_MEDIA_SMOKE = '1'
+& npm run smoke:extension-native-media
+Remove-Item Env:\KUN_RUN_MEDIA_SMOKE -ErrorAction SilentlyContinue
+if ($LASTEXITCODE -ne 0) {
+  Write-Err 'Windows host-native FFmpeg broker smoke failed.'
+  exit 1
+}
+
+Write-Info 'Smoking packaged Kun Video Editor native workflow...'
+& npm run smoke:packaged-video-editor-native
+if ($LASTEXITCODE -ne 0) {
+  Write-Err 'Windows packaged Kun Video Editor native workflow smoke failed.'
+  exit 1
+}
+
+Write-Info 'Recording commit-bound Windows native evidence...'
+& npm run evidence:extension-native
+if ($LASTEXITCODE -ne 0) {
+  Write-Err 'Windows native evidence generation failed.'
+  exit 1
+}
+
 $DistDir = Join-Path $Root 'dist'
 $AssetSpecs = @(
   @{ Label = 'Windows exe'; Filter = '*-win-*.exe' },
-  @{ Label = 'Windows blockmap'; Filter = '*-win-*.exe.blockmap' }
+  @{ Label = 'Windows blockmap'; Filter = '*-win-*.exe.blockmap' },
+  @{ Label = 'Windows native evidence'; Filter = 'extension-native-evidence-win32.json' }
 )
 
 $Assets = @()
@@ -228,6 +268,15 @@ foreach ($asset in $Assets) {
   }
 }
 
+if ($Publish -or $PromoteR2) {
+  Write-Info 'Downloading and verifying the complete three-platform release bundle before publication or R2 promotion...'
+  & npm run verify:manual-extension-release -- --tag $TagName --version $ReleaseVersion
+  if ($LASTEXITCODE -ne 0) {
+    Write-Err 'Complete three-platform release verification failed.'
+    exit 1
+  }
+}
+
 if ($R2 -or $PromoteR2) {
   Write-Info "Uploading Windows asset metadata to R2 ($TagName)..."
   & node (Join-Path $Root 'scripts\publish-r2.mjs') upload --platform win --tag $TagName --channel $ReleaseChannel
@@ -239,7 +288,7 @@ if ($R2 -or $PromoteR2) {
 
 if ($PromoteR2) {
   Write-Info "Promoting $TagName as R2 latest..."
-  & node (Join-Path $Root 'scripts\publish-r2.mjs') promote --tag $TagName --channel $ReleaseChannel
+  & node (Join-Path $Root 'scripts\publish-r2.mjs') promote --tag $TagName --channel $ReleaseChannel --platforms mac,win,linux
   if ($LASTEXITCODE -ne 0) {
     Write-Err 'R2 promote failed.'
     exit 1
@@ -255,7 +304,7 @@ if ($Publish) {
   }
   Write-Ok "Release $TagName is now public."
 } else {
-  Write-Info 'Release remains draft. Re-run with -Publish when ready.'
+  Write-Info 'Release remains draft. Publish only after macOS, Windows, Linux, evidence, and .kunx assets are ready.'
 }
 
 Write-Ok "Windows assets uploaded to $TagName."

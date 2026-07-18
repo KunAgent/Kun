@@ -1,6 +1,7 @@
 import {
   HostContentScriptDiagnosticSchema,
   JsonValueSchema,
+  ManifestLocaleTagSchema,
   PermissionSchema
 } from '@kun/extension-api'
 import { z } from 'zod'
@@ -49,13 +50,17 @@ export const extensionListRequestSchema = z
   .object({
     limit: z.number().int().min(1).max(500).optional(),
     cursor: extensionIdSchema.optional(),
-    workspaceRoot: optionalTrimmedString(MAX_PATH_LENGTH)
+    workspaceRoot: optionalTrimmedString(MAX_PATH_LENGTH),
+    locale: ManifestLocaleTagSchema.optional()
   })
   .strict()
   .optional()
 
 export const extensionWorkspaceRequestSchema = z
-  .object({ workspaceRoot: absoluteWorkspaceRootSchema.optional() })
+  .object({
+    workspaceRoot: absoluteWorkspaceRootSchema.optional(),
+    locale: ManifestLocaleTagSchema.optional()
+  })
   .strict()
   .optional()
 
@@ -154,10 +159,19 @@ export const extensionUninstallRequestSchema = z
 export const extensionReloadRequestSchema = extensionRollbackRequestSchema
 
 export const extensionPermissionGrantRequestSchema = extensionScopedRequestSchema.extend({
-  extensionVersion: extensionVersionSchema,
+  expectedVersion: extensionVersionSchema,
   permissions: extensionPermissionListSchema.nullable(),
+  enableAfterApply: z.enum(['global', 'workspace']).optional(),
   consentRequestId: extensionConsentRequestIdSchema.optional()
-}).strict()
+}).strict().superRefine((request, context) => {
+  if (request.enableAfterApply && !request.workspaceRoot) {
+    context.addIssue({
+      code: 'custom',
+      path: ['workspaceRoot'],
+      message: 'workspaceRoot is required when permissions are applied before enabling'
+    })
+  }
+})
 
 export const extensionCommandInvocationRequestSchema = z
   .object({
@@ -181,7 +195,8 @@ function isAbsolutePath(value: string): boolean {
 export const extensionViewSessionCreateRequestSchema = z
   .object({
     contributionId: qualifiedExtensionContributionIdSchema,
-    workspaceRoot: absoluteWorkspaceRootSchema.optional()
+    workspaceRoot: absoluteWorkspaceRootSchema.optional(),
+    retryHost: z.boolean().optional()
   })
   .strict()
 
@@ -191,6 +206,58 @@ export const extensionViewSessionRequestSchema = z
 export const extensionViewSessionDisposePayloadSchema = z.union([
   extensionSessionIdSchema,
   extensionViewSessionRequestSchema
+])
+
+const extensionExternalBrowserBoundsSchema = z.object({
+  x: z.number().finite().min(-32_768).max(32_768),
+  y: z.number().finite().min(-32_768).max(32_768),
+  width: z.number().finite().min(0).max(32_768),
+  height: z.number().finite().min(0).max(32_768),
+  visible: z.boolean()
+}).strict()
+
+const extensionExternalBrowserSiteIdSchema = z
+  .string()
+  .regex(/^[a-z][a-z0-9-]{0,63}$/)
+
+export const extensionExternalBrowserControlSchema = z.discriminatedUnion('action', [
+  z.object({
+    sessionId: extensionSessionIdSchema,
+    action: z.literal('mount'),
+    siteId: extensionExternalBrowserSiteIdSchema,
+    url: z.string().min(1).max(8_192),
+    presentation: z.enum(['desktop', 'mobile']),
+    bounds: extensionExternalBrowserBoundsSchema
+  }).strict(),
+  z.object({
+    sessionId: extensionSessionIdSchema,
+    action: z.literal('activate'),
+    siteId: extensionExternalBrowserSiteIdSchema,
+    url: z.string().min(1).max(8_192),
+    presentation: z.enum(['desktop', 'mobile'])
+  }).strict(),
+  z.object({
+    sessionId: extensionSessionIdSchema,
+    action: z.literal('bounds'),
+    bounds: extensionExternalBrowserBoundsSchema
+  }).strict(),
+  z.object({
+    sessionId: extensionSessionIdSchema,
+    action: z.literal('navigate'),
+    url: z.string().min(1).max(8_192)
+  }).strict(),
+  z.object({
+    sessionId: extensionSessionIdSchema,
+    action: z.enum([
+      'back',
+      'forward',
+      'reload',
+      'zoomIn',
+      'zoomOut',
+      'zoomReset',
+      'state'
+    ])
+  }).strict()
 ])
 
 export const extensionViewMessageRequestSchema = extensionViewSessionRequestSchema.extend({

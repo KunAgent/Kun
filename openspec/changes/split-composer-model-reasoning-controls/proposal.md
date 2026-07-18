@@ -8,6 +8,7 @@ Kun's Code composer currently combines model selection and reasoning effort in o
 - Keep provider grouping, model search, capability badges, setup guidance, and vision-switch safeguards in the model menu only.
 - Add a dedicated, borderless reasoning popover with `更快` / `更智能` endpoints, a vivid blue-to-magenta energy rail, white thumb, animated bubbles, layered sweep light, and visible stop nodes.
 - Map all currently supported reasoning efforts to evenly distributed discrete stops; map `auto` to the far-right stop and show effort names only in the composer trigger.
+- Keep the model and reasoning controls operable during an active turn; changes configure the next submitted turn and do not alter the request already in flight.
 - Keep `off`, `low`, and `medium` visually calm with a static blue fill; enable the seamless color loop, sweep light, and bubbles only for `high`, `max`, and `auto`, with reduced-motion and dark-theme behavior.
 - Preserve existing session-level reasoning state, normalization, and runtime request semantics; this is a composer interaction change, not a new provider protocol.
 

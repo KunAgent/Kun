@@ -1,5 +1,9 @@
-import { BrowserWindow, ipcMain, shell, type BrowserWindowConstructorOptions } from 'electron'
+import { BrowserWindow, ipcMain, screen, shell, type BrowserWindowConstructorOptions } from 'electron'
 import { randomBytes } from 'node:crypto'
+import {
+  buildProtectedExtensionConsentDataUrl,
+  type ProtectedExtensionConsentDocument
+} from './protected-extension-prompt'
 
 type CredentialSession = {
   id: string
@@ -12,6 +16,12 @@ type AuthorizationSession = {
   window: BrowserWindow
   verificationUrl: string
   resolve: () => void
+}
+
+type ConsentSession = {
+  id: string
+  window: BrowserWindow
+  resolve: (approved: boolean) => void
 }
 
 export type ProtectedCredentialResult =
@@ -48,6 +58,7 @@ export type ProtectedAuthorizationPrompt = {
 export class ProtectedCredentialSurfaceController {
   private readonly sessions = new Map<string, CredentialSession>()
   private readonly authorizationSessions = new Map<string, AuthorizationSession>()
+  private readonly consentSessions = new Map<string, ConsentSession>()
   private registered = false
 
   constructor(private readonly preloadPath: string) {}
@@ -88,6 +99,20 @@ export class ProtectedCredentialSurfaceController {
       const session = this.authorizationSessions.get(parsed.sessionId)
       if (!session || session.window.webContents.id !== event.sender.id) return
       this.finishAuthorization(session)
+    })
+    ipcMain.on('extension:protected-surface:consent-approve', (event, payload: unknown) => {
+      const parsed = parseSurfacePayload(payload, false)
+      if (!parsed) return
+      const session = this.consentSessions.get(parsed.sessionId)
+      if (!session || session.window.webContents.id !== event.sender.id) return
+      this.finishConsent(session, true)
+    })
+    ipcMain.on('extension:protected-surface:consent-cancel', (event, payload: unknown) => {
+      const parsed = parseSurfacePayload(payload, false)
+      if (!parsed) return
+      const session = this.consentSessions.get(parsed.sessionId)
+      if (!session || session.window.webContents.id !== event.sender.id) return
+      this.finishConsent(session, false)
     })
   }
 
@@ -168,12 +193,42 @@ export class ProtectedCredentialSurfaceController {
     return result
   }
 
+  async promptConsent(
+    parent: BrowserWindow | null,
+    prompt: ProtectedExtensionConsentDocument
+  ): Promise<boolean> {
+    this.register()
+    const id = randomBytes(24).toString('base64url')
+    const display = parent && !parent.isDestroyed()
+      ? screen.getDisplayMatching(parent.getBounds())
+      : screen.getPrimaryDisplay()
+    const available = display.workAreaSize
+    const width = Math.max(460, Math.min(680, available.width - 48))
+    const height = Math.max(520, Math.min(760, Math.round(available.height * 0.78), available.height - 48))
+    const window = this.createWindow(parent, id, prompt.title, width, height)
+    const result = new Promise<boolean>((resolve) => {
+      const session: ConsentSession = { id, window, resolve }
+      this.consentSessions.set(id, session)
+      window.once('closed', () => {
+        if (this.consentSessions.get(id) !== session) return
+        this.consentSessions.delete(id)
+        resolve(false)
+      })
+    })
+    await window.loadURL(buildProtectedExtensionConsentDataUrl(prompt))
+    if (!window.isDestroyed()) window.show()
+    return result
+  }
+
   dispose(): void {
     for (const session of [...this.sessions.values()]) {
       this.finish(session, { submitted: false, protectedWindowSessionId: session.id })
     }
     for (const session of [...this.authorizationSessions.values()]) {
       this.finishAuthorization(session)
+    }
+    for (const session of [...this.consentSessions.values()]) {
+      this.finishConsent(session, false)
     }
   }
 
@@ -188,6 +243,13 @@ export class ProtectedCredentialSurfaceController {
     if (this.authorizationSessions.get(session.id) !== session) return
     this.authorizationSessions.delete(session.id)
     session.resolve()
+    if (!session.window.isDestroyed()) session.window.close()
+  }
+
+  private finishConsent(session: ConsentSession, approved: boolean): void {
+    if (this.consentSessions.get(session.id) !== session) return
+    this.consentSessions.delete(session.id)
+    session.resolve(approved)
     if (!session.window.isDestroyed()) session.window.close()
   }
 

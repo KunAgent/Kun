@@ -1,6 +1,10 @@
 import { z } from 'zod'
 import { ReviewOutputSchema, ReviewTargetSchema } from './review.js'
 import { RuntimeErrorSeverity } from './errors.js'
+import {
+  ComposerContextAttachmentSchema,
+  MAX_COMPOSER_CONTEXT_ATTACHMENTS
+} from './composer-context.js'
 
 /**
  * Conversation items returned as part of a thread or turn.
@@ -71,6 +75,7 @@ export const UserTurnItem = TurnItemBase.extend({
   displayText: z.string().optional(),
   messageSource: UserMessageSource.optional(),
   attachmentIds: z.array(z.string().min(1)).optional(),
+  composerContexts: z.array(ComposerContextAttachmentSchema).max(MAX_COMPOSER_CONTEXT_ATTACHMENTS).optional(),
   fileReferences: z.array(UserFileReferenceSchema).optional(),
   workspaceCheckpointId: z.string().min(1).optional()
 })

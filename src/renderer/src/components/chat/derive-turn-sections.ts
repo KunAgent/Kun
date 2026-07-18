@@ -15,6 +15,7 @@ export type TurnAssistantBlock = Extract<ChatBlock, { kind: 'assistant' }>
 export type TurnSections = {
   processBlocks: ChatBlock[]
   assistantContentBlocks: TurnAssistantBlock[]
+  componentPrototypeBlocks: ToolBlock[]
   generatedFileBlocks: ToolBlock[]
   turnFileChanges: ToolBlock[]
 }
@@ -174,5 +175,11 @@ export function deriveTurnSections({
     (block): block is ToolBlock => block.kind === 'tool' && hasGeneratedFiles(block)
   )
 
-  return { processBlocks, assistantContentBlocks, generatedFileBlocks, turnFileChanges }
+  const componentPrototypeBlocks: ToolBlock[] = turn.blocks.filter((block): block is ToolBlock => (
+    block.kind === 'tool' &&
+    block.meta?.toolName === 'design_component' &&
+    Boolean(block.meta.componentPrototype)
+  ))
+
+  return { processBlocks, assistantContentBlocks, componentPrototypeBlocks, generatedFileBlocks, turnFileChanges }
 }

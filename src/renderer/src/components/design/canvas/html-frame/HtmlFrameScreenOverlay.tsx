@@ -1,6 +1,7 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from 'react'
 import { Brush, Check, X } from 'lucide-react'
 import type { CanvasShape } from '../../../../design/canvas/canvas-types'
+import { useCanvasMotionPortalStyle } from '../../../../design/motion/canvas-motion-preview'
 import type { DesignHtmlElementContext } from '../../../../design/design-composer-context'
 import { inferDesignArtifactFoundationRole } from '../../../../design/design-types'
 import { useDesignWorkspaceStore } from '../../../../design/design-workspace-store'
@@ -325,6 +326,7 @@ function ScreenOverlayInner({
     setArtifactPreviewStatus
   ])
 
+  const motionStyle = useCanvasMotionPortalStyle(shape, zoom)
   if (screenWidth < 20 || screenHeight < 20) return <></>
 
   const drawingLabel = parallelState?.status === 'queued' ? 'AI 排队中…' : 'AI 正在绘制…'
@@ -350,6 +352,8 @@ function ScreenOverlayInner({
   return (
     <div
       className="absolute overflow-visible"
+      data-canvas-motion-target={shape.id}
+      data-canvas-motion-kind="portal"
       style={{
         left: screenX,
         top: screenY,
@@ -357,7 +361,8 @@ function ScreenOverlayInner({
         height: screenHeight,
         zIndex,
         pointerEvents: htmlFrameOverlayPointerEvents({ panning, interactive, editing }),
-        borderRadius: frameRadius
+        borderRadius: frameRadius,
+        ...motionStyle
       }}
       onDoubleClick={handleDoubleClick}
     >

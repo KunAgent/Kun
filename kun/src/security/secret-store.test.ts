@@ -1,9 +1,23 @@
 import { describe, expect, it, vi } from 'vitest'
-import { mkdtemp, rm, readFile, writeFile } from 'node:fs/promises'
+import { mkdtemp, rm, readFile, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { randomBytes } from 'node:crypto'
-import { createAesEncryptor, createSecretEncryptor, isEncryptedEnvelope } from './secret-store.js'
+import {
+  createAesEncryptor,
+  createSecretEncryptor,
+  DISABLE_OS_CREDENTIAL_STORE_ENV,
+  isEncryptedEnvelope
+} from './secret-store.js'
+
+const isolatedCredentialEnvironment = {
+  [DISABLE_OS_CREDENTIAL_STORE_ENV]: '1'
+}
+
+const explicitOsCredentialStore = {
+  disableOsKeychain: false,
+  environment: isolatedCredentialEnvironment
+}
 
 describe('createAesEncryptor', () => {
   it('round-trips a secret', () => {
@@ -39,6 +53,41 @@ describe('createAesEncryptor', () => {
 })
 
 describe('createSecretEncryptor', () => {
+  it('uses a persistent owner-only key file without invoking OS helpers when automation isolation is enabled', async () => {
+    const run = vi.fn(async () => ({ code: 0, stdout: 'unexpected', stderr: '' }))
+    const dir = await mkdtemp(join(tmpdir(), 'kun-secret-'))
+    const keyPath = join(dir, 'secret.key')
+    try {
+      const result = await createSecretEncryptor({
+        keyFilePath: keyPath,
+        platform: 'darwin',
+        run,
+        environment: isolatedCredentialEnvironment
+      })
+      expect(result.osKeychain).toBe(false)
+      expect(result.reason).toContain('OS credential store disabled')
+      expect(run).not.toHaveBeenCalled()
+
+      const blob = result.encryptor.encrypt('automation-secret')
+      expect(blob).not.toContain('automation-secret')
+      expect(await readFile(keyPath, 'utf8')).not.toContain('automation-secret')
+      if (process.platform !== 'win32') {
+        expect((await stat(keyPath)).mode & 0o777).toBe(0o600)
+      }
+
+      const again = await createSecretEncryptor({
+        keyFilePath: keyPath,
+        platform: 'darwin',
+        run,
+        environment: isolatedCredentialEnvironment
+      })
+      expect(again.encryptor.decrypt(blob)).toBe('automation-secret')
+      expect(run).not.toHaveBeenCalled()
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
+  })
+
   it('uses the OS keychain when available (darwin)', async () => {
     const store = new Map<string, string>()
     const run = vi.fn(async (command: string, args: string[], input?: string) => {
@@ -54,12 +103,46 @@ describe('createSecretEncryptor', () => {
     })
     const dir = await mkdtemp(join(tmpdir(), 'kun-secret-'))
     try {
-      const result = await createSecretEncryptor({ keyFilePath: join(dir, 'secret.key'), platform: 'darwin', run })
+      const result = await createSecretEncryptor({
+        keyFilePath: join(dir, 'secret.key'),
+        platform: 'darwin',
+        run,
+        ...explicitOsCredentialStore
+      })
       expect(result.osKeychain).toBe(true)
       const blob = result.encryptor.encrypt('tok')
       // A second resolve reads the SAME key from the keychain and decrypts.
-      const again = await createSecretEncryptor({ keyFilePath: join(dir, 'secret.key'), platform: 'darwin', run })
+      const again = await createSecretEncryptor({
+        keyFilePath: join(dir, 'secret.key'),
+        platform: 'darwin',
+        run,
+        ...explicitOsCredentialStore
+      })
       expect(again.encryptor.decrypt(blob)).toBe('tok')
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('does not replace a macOS key when its keychain lookup fails transiently', async () => {
+    const run = vi.fn(async (_command: string, args: string[]) => {
+      if (args[0] === 'find-generic-password') {
+        return { code: -1, stdout: '', stderr: 'User interaction is not allowed.' }
+      }
+      return { code: 0, stdout: '', stderr: '' }
+    })
+    const dir = await mkdtemp(join(tmpdir(), 'kun-secret-'))
+    const keyPath = join(dir, 'secret.key')
+    try {
+      await expect(createSecretEncryptor({
+        keyFilePath: keyPath,
+        platform: 'darwin',
+        run,
+        ...explicitOsCredentialStore
+      }))
+        .rejects.toThrow(/refusing to replace/)
+      expect(run.mock.calls.some(([, args]) => args[0] === 'add-generic-password')).toBe(false)
+      await expect(readFile(keyPath, 'utf8')).rejects.toMatchObject({ code: 'ENOENT' })
     } finally {
       await rm(dir, { recursive: true, force: true })
     }
@@ -101,7 +184,12 @@ describe('createSecretEncryptor', () => {
     const dir = await mkdtemp(join(tmpdir(), 'kun-secret-'))
     try {
       const keyPath = join(dir, 'secret.key')
-      const result = await createSecretEncryptor({ keyFilePath: keyPath, platform: 'win32', run })
+      const result = await createSecretEncryptor({
+        keyFilePath: keyPath,
+        platform: 'win32',
+        run,
+        ...explicitOsCredentialStore
+      })
       expect(result.osKeychain).toBe(true)
       expect(result.reason).toContain('DPAPI')
       // The on-disk key file is a DPAPI envelope, not a raw key.
@@ -109,7 +197,12 @@ describe('createSecretEncryptor', () => {
       expect(onDisk.startsWith('dpapi:v1:')).toBe(true)
       const blob = result.encryptor.encrypt('tok')
       // A fresh resolve unwraps the same DPAPI-protected key and decrypts.
-      const again = await createSecretEncryptor({ keyFilePath: keyPath, platform: 'win32', run })
+      const again = await createSecretEncryptor({
+        keyFilePath: keyPath,
+        platform: 'win32',
+        run,
+        ...explicitOsCredentialStore
+      })
       expect(again.osKeychain).toBe(true)
       expect(again.encryptor.decrypt(blob)).toBe('tok')
     } finally {
@@ -137,7 +230,12 @@ describe('createSecretEncryptor', () => {
       const oldEncryptor = createAesEncryptor(key)
       const blob = oldEncryptor.encrypt('existing-token')
       await writeFile(keyPath, key.toString('base64'))
-      const migrated = await createSecretEncryptor({ keyFilePath: keyPath, platform: 'win32', run })
+      const migrated = await createSecretEncryptor({
+        keyFilePath: keyPath,
+        platform: 'win32',
+        run,
+        ...explicitOsCredentialStore
+      })
       expect(migrated.encryptor.decrypt(blob)).toBe('existing-token')
       await expect(readFile(keyPath, 'utf8')).resolves.toMatch(/^dpapi:v1:/)
     } finally {
@@ -160,7 +258,12 @@ describe('createSecretEncryptor', () => {
       const key = randomBytes(32)
       const blob = createAesEncryptor(key).encrypt('existing-token')
       await writeFile(keyPath, key.toString('base64'))
-      const migrated = await createSecretEncryptor({ keyFilePath: keyPath, platform: 'darwin', run })
+      const migrated = await createSecretEncryptor({
+        keyFilePath: keyPath,
+        platform: 'darwin',
+        run,
+        ...explicitOsCredentialStore
+      })
       expect(Buffer.from(stored, 'base64')).toEqual(key)
       expect(migrated.encryptor.decrypt(blob)).toBe('existing-token')
     } finally {
@@ -173,7 +276,12 @@ describe('createSecretEncryptor', () => {
     const dir = await mkdtemp(join(tmpdir(), 'kun-secret-'))
     try {
       const keyPath = join(dir, 'secret.key')
-      const result = await createSecretEncryptor({ keyFilePath: keyPath, platform: 'win32', run })
+      const result = await createSecretEncryptor({
+        keyFilePath: keyPath,
+        platform: 'win32',
+        run,
+        ...explicitOsCredentialStore
+      })
       expect(result.osKeychain).toBe(false)
       expect(result.reason).toContain('key file')
       const onDisk = await readFile(keyPath, 'utf8')

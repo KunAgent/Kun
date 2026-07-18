@@ -57,8 +57,68 @@ describe('extension management routes', () => {
     expect(oversized.status).toBe(413)
   })
 
+  it('projects launchable view metadata before workspace trust is granted', async () => {
+    const runtime = await createRuntime()
+    const router = buildExtensionManagementRouter(runtime)
+    const source = join(cleanupRoots.at(-1)!, 'view-source')
+    const archive = join(cleanupRoots.at(-1)!, 'view-demo.kunx')
+    const permissions = ['ui.views', 'webview']
+    await writeExtensionSource(source, '1.0.0', permissions, true)
+    await packKunx(source, archive, { compatibility })
+    await dispatch(router, 'POST', '/v1/extensions/install', {
+      source: 'archive',
+      path: archive,
+      grantedPermissions: permissions
+    }, true)
+    const workspace = join(cleanupRoots.at(-1)!, 'view-workspace')
+    await mkdir(workspace)
+
+    const listed = await dispatch(
+      router,
+      'GET',
+      `/v1/extensions?workspace_root=${encodeURIComponent(workspace)}`,
+      undefined,
+      true
+    )
+
+    expect(listed.status).toBe(200)
+    expect(listed.body.extensions[0]).toMatchObject({
+      id: 'acme.demo',
+      workspaceTrusted: false,
+      versions: [{
+        icon: 'dist/icon.svg',
+        views: [{ id: 'editor', title: 'Demo editor', point: 'views.rightSidebar' }]
+      }]
+    })
+
+    const localized = await dispatch(
+      router,
+      'GET',
+      `/v1/extensions?workspace_root=${encodeURIComponent(workspace)}&locale=zh-CN`,
+      undefined,
+      true
+    )
+    expect(localized.body.extensions[0].versions[0]).toMatchObject({
+      displayName: '演示扩展',
+      description: '本地化的演示扩展。',
+      views: [{ id: 'editor', title: '演示编辑器', point: 'views.rightSidebar' }]
+    })
+    expect((await dispatch(
+      router,
+      'GET',
+      '/v1/extensions?locale=not_a_locale',
+      undefined,
+      true
+    )).status).toBe(400)
+  })
+
   it('installs, scopes permissions and enablement, rolls back, diagnoses, and uninstalls', async () => {
     const runtime = await createRuntime()
+    runtime.bundledSeedResults = [{
+      extensionId: 'acme.demo',
+      version: '3.0.0',
+      outcome: 'skipped-permission-change'
+    }]
     const beforePermissionChange = vi.fn(async () => undefined)
     runtime.packageManager.setLifecycle({
       ...runtime.manager.packageLifecycle(),
@@ -95,11 +155,12 @@ describe('extension management routes', () => {
 
     const permissions = await dispatch(router, 'PUT', '/v1/extensions/acme.demo/permissions', {
       workspaceRoot: workspace,
+      expectedVersion: '1.0.0',
       permissions: []
     }, true)
     expect(permissions.status).toBe(200)
     expect(permissions.body.extension.workspacePermissionGrants[workspaceKey]).toEqual([])
-    expect(beforePermissionChange).toHaveBeenCalledWith('acme.demo', workspaceKey)
+    expect(beforePermissionChange).toHaveBeenCalledWith('acme.demo', workspaceKey, workspace)
 
     await writeExtensionSource(source, '2.0.0', ['commands.register'])
     const v2Archive = join(cleanupRoots.at(-1)!, 'demo-2.kunx')
@@ -109,6 +170,27 @@ describe('extension management routes', () => {
       path: v2Archive,
       grantedPermissions: ['commands.register']
     }, true)
+    beforePermissionChange.mockClear()
+
+    const stalePermissions = await dispatch(
+      router,
+      'PUT',
+      '/v1/extensions/acme.demo/permissions',
+      {
+        workspaceRoot: workspace,
+        expectedVersion: '1.0.0',
+        permissions: ['commands.register']
+      },
+      true
+    )
+    expect(stalePermissions.status).toBe(409)
+    expect(stalePermissions.body).toMatchObject({
+      code: 'EXTENSION_VERSION_CONFLICT',
+      details: { expectedVersion: '1.0.0', currentVersion: '2.0.0' }
+    })
+    expect((await runtime.registry.get('acme.demo'))?.workspacePermissionGrants[workspaceKey])
+      .toEqual([])
+    expect(beforePermissionChange).not.toHaveBeenCalled()
 
     const rollback = await dispatch(router, 'POST', '/v1/extensions/acme.demo/rollback', {}, true)
     expect(rollback.status).toBe(200)
@@ -151,6 +233,11 @@ describe('extension management routes', () => {
       negotiatedApiVersion: '1.0.0',
       negotiatedRpcVersion: 1,
       compatibility: { api: { compatible: true, negotiatedApiVersion: '1.0.0' } }
+    })
+    expect(diagnosticList.body.diagnostics[0].seed).toEqual({
+      extensionId: 'acme.demo',
+      version: '3.0.0',
+      outcome: 'skipped-permission-change'
     })
 
     const list = await dispatch(router, 'GET', '/v1/extensions?limit=1', undefined, true)
@@ -211,25 +298,55 @@ async function dispatch(
   return { status: response.status, body: JSON.parse(response.body) as Record<string, any> }
 }
 
-async function writeExtensionSource(root: string, version: string, permissions: string[]): Promise<void> {
+async function writeExtensionSource(
+  root: string,
+  version: string,
+  permissions: string[],
+  withView = false
+): Promise<void> {
   await mkdir(join(root, 'dist'), { recursive: true })
   await writeFile(join(root, 'kun-extension.json'), `${JSON.stringify({
     publisher: 'acme',
     name: 'demo',
     displayName: 'Demo',
+    description: 'Demo extension.',
+    icon: 'dist/icon.svg',
+    ...(withView ? {
+      localizations: {
+        'zh-CN': {
+          displayName: '演示扩展',
+          description: '本地化的演示扩展。',
+          contributes: {
+            'views.rightSidebar': { editor: { title: '演示编辑器' } }
+          }
+        }
+      }
+    } : {}),
     version,
     manifestVersion: 1,
     apiVersion: '1.0.0',
     engines: { kun: '*' },
     main: 'dist/main.mjs',
-    activationEvents: ['onStartup'],
-    contributes: {},
+    activationEvents: withView ? ['onView:editor'] : ['onStartup'],
+    contributes: withView
+      ? {
+          'views.rightSidebar': [{
+            id: 'editor',
+            title: 'Demo editor',
+            entry: 'dist/index.html',
+            icon: 'dist/icon.svg',
+            localResourceRoots: ['dist']
+          }]
+        }
+      : {},
     permissions,
     stateSchemaVersion: 0
   }, null, 2)}\n`)
   await writeFile(join(root, 'README.md'), '# Demo\n')
   await writeFile(join(root, 'LICENSE'), 'MIT\n')
   await writeFile(join(root, 'dist/main.mjs'), 'export async function activate() {}\n')
+  await writeFile(join(root, 'dist/icon.svg'), '<svg xmlns="http://www.w3.org/2000/svg"/>\n')
+  if (withView) await writeFile(join(root, 'dist/index.html'), '<!doctype html><title>Demo</title>\n')
 }
 
 async function makeWritable(root: string): Promise<void> {

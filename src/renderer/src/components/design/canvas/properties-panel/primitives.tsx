@@ -1,4 +1,4 @@
-import { useState, type ReactElement, type ReactNode } from 'react'
+import { useEffect, useState, type ReactElement, type ReactNode } from 'react'
 import { useCanvasShapeStore } from '../../../../design/canvas/canvas-shape-store'
 import { useCanvasUndoStore } from '../../../../design/canvas/canvas-undo-store'
 import { filterEditableShapeIds } from '../../../../design/canvas/canvas-editability'
@@ -77,6 +77,13 @@ export function NumberBox({
 }): ReactElement {
   const display =
     value === MIXED ? '' : value === undefined ? '' : String(Math.round((value as number) * 100) / 100)
+  const [draft, setDraft] = useState(display)
+  useEffect(() => setDraft(display), [display])
+  const commit = (): void => {
+    const next = parseFloat(draft)
+    if (Number.isFinite(next)) onCommit(next)
+    else setDraft(display)
+  }
   return (
     <label className="group flex h-7 min-w-0 items-center gap-1 rounded-[8px] bg-transparent px-1.5 transition hover:bg-ds-hover/60 focus-within:bg-ds-hover/70">
       <span className="w-3 shrink-0 text-center text-[10px] font-medium text-ds-faint group-focus-within:text-ds-muted">
@@ -86,12 +93,16 @@ export function NumberBox({
         type="number"
         step={step}
         {...(min !== undefined ? { min } : {})}
-        value={display}
+        value={draft}
         placeholder={value === MIXED ? '—' : '0'}
-        onChange={(e) => {
-          const n = parseFloat(e.target.value)
-          if (!Number.isFinite(n)) return
-          onCommit(n)
+        onChange={(event) => setDraft(event.target.value)}
+        onBlur={commit}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter') event.currentTarget.blur()
+          if (event.key === 'Escape') {
+            setDraft(display)
+            event.currentTarget.blur()
+          }
         }}
         className="min-w-0 flex-1 bg-transparent text-[11.5px] tabular-nums text-ds-ink outline-none placeholder:text-ds-faint"
       />
@@ -219,19 +230,36 @@ export function OpacitySlider({
 }): ReactElement {
   const mixed = value === MIXED
   const num = mixed || value === undefined ? 100 : Math.round((value as number) * 100)
+  const [draft, setDraft] = useState<number | null>(null)
+  useEffect(() => setDraft(null), [num])
+  const displayed = draft ?? num
+  const commit = (candidate: number): void => {
+    const bounded = Math.max(0, Math.min(100, candidate))
+    setDraft(null)
+    onChange(bounded / 100)
+  }
   return (
     <div className="space-y-0.5">
       <input
         type="range"
         min={0}
         max={100}
-        value={num}
-        onChange={(e) => onChange(Math.max(0, Math.min(1, Number(e.target.value) / 100)))}
+        value={displayed}
+        onChange={(e) => setDraft(Number(e.target.value))}
+        onPointerUp={(e) => commit(Number(e.currentTarget.value))}
+        onKeyUp={(e) => {
+          if (e.key.startsWith('Arrow') || e.key === 'Home' || e.key === 'End') {
+            commit(Number(e.currentTarget.value))
+          }
+        }}
+        onBlur={(e) => {
+          if (draft !== null) commit(Number(e.currentTarget.value))
+        }}
         className="canvas-inspector-range w-full"
       />
       <div className="flex items-center justify-between text-[10px] tabular-nums text-ds-faint">
         <span>0</span>
-        <span className={mixed ? '' : 'text-ds-muted'}>{mixed ? '—' : `${num}`}</span>
+        <span className={mixed ? '' : 'text-ds-muted'}>{mixed ? '—' : `${displayed}`}</span>
         <span>100</span>
       </div>
     </div>
@@ -361,4 +389,3 @@ export function arrowheadOptions(flip: boolean): { value: Arrowhead; label: stri
 // ────────────────────────────────────────────────────────────────────────────
 // Main component
 // ────────────────────────────────────────────────────────────────────────────
-

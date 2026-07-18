@@ -136,7 +136,13 @@ describe('PPT Master local tool', () => {
     expect(exported.isError).toBeUndefined()
     expect(exported.output).toMatchObject({
       action: 'export',
-      output_path: join(workspace, 'presentations', 'brief.pptx')
+      output_path: join(workspace, 'presentations', 'brief.pptx'),
+      generatedFiles: [{
+        name: 'brief.pptx',
+        relativePath: 'presentations/brief.pptx',
+        mimeType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+        byteSize: 4
+      }]
     })
     expect(calls[3]).toEqual([
       join(skillDir, 'scripts', 'svg_to_pptx.py'),

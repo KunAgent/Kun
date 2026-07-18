@@ -1,7 +1,6 @@
 import { useEffect, useMemo } from 'react'
 import type { ChatBlock } from '../../agent/types'
 import type { ChatState } from '../../store/chat-store-types'
-import { conversationHasVisionAttachments } from '../../store/chat-store-helpers'
 import { isCodeSidebarThread } from '../../store/chat-store-runtime'
 import {
   extractLatestTurnAutoOpenDevPreviewUrls,
@@ -20,7 +19,6 @@ type WorkbenchDerivedStateOptions = Pick<
   | 'clawChannels'
   | 'liveAssistant'
   | 'liveReasoning'
-  | 'route'
   | 'sideConversations'
   | 'threads'
   | 'workspaceRoot'
@@ -33,7 +31,6 @@ export function useWorkbenchDerivedState({
   clawChannels,
   liveAssistant,
   liveReasoning,
-  route,
   sideConversations,
   threads,
   workspaceRoot
@@ -41,8 +38,6 @@ export function useWorkbenchDerivedState({
   const timelineBlocks = blocks
   const timelineLiveReasoning = liveReasoning
   const timelineLiveAssistant = liveAssistant
-  const lockVisionToTextModelSwitch =
-    route === 'chat' && conversationHasVisionAttachments(timelineBlocks)
   const devPreviewBlocks = useMemo<ChatBlock[]>(() => {
     const liveText = timelineLiveAssistant.trim()
     if (!liveText) return timelineBlocks
@@ -118,7 +113,6 @@ export function useWorkbenchDerivedState({
     devPreviewBlocks,
     latestAutoOpenDevPreviewUrl,
     latestDevPreviewUrl,
-    lockVisionToTextModelSwitch,
     timelineBlocks,
     timelineLiveAssistant,
     timelineLiveReasoning

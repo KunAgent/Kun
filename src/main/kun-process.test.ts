@@ -1658,6 +1658,13 @@ describe('subagentProfilesForRuntime', () => {
           name: 'Disabled custom',
           mode: 'subagent',
           toolPolicy: 'readOnly'
+        },
+        {
+          id: 'component-designer',
+          enabled: false,
+          name: '',
+          mode: 'subagent',
+          toolPolicy: 'inherit'
         }
       ]
     })
@@ -1668,6 +1675,7 @@ describe('subagentProfilesForRuntime', () => {
       toolPolicy: 'readOnly',
       blockedSkills: ['unsafe-skill']
     })
+    expect(config.profiles['component-designer']).toBeDefined()
     expect(config.profiles['custom-disabled']).toBeUndefined()
   })
 })
