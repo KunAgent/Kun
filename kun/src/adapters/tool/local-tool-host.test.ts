@@ -230,40 +230,50 @@ describe('LocalToolHost approval policy', () => {
   })
 
   it('does not expand an approved external path to a sibling path', async () => {
+    const parent = await mkdtemp(join(tmpdir(), 'kun-external-approval-'))
+    const workspace = join(parent, 'workspace')
+    const approvedTarget = join(parent, 'outside.txt')
+    const siblingTarget = join(parent, 'sibling.txt')
     let approvedPath = ''
-    const execute = vi.fn(async (_args: Record<string, unknown>, context: ToolHostContext) => {
-      approvedPath = context.approvedExternalPaths?.[0] ?? ''
-      await expect(resolveWorkspacePath('../outside.txt', context)).resolves.toMatchObject({
-        absolutePath: approvedPath
+    try {
+      await mkdir(workspace)
+      const execute = vi.fn(async (_args: Record<string, unknown>, context: ToolHostContext) => {
+        approvedPath = context.approvedExternalPaths?.[0] ?? ''
+        await expect(resolveWorkspacePath('../outside.txt', context)).resolves.toMatchObject({
+          absolutePath: approvedPath
+        })
+        await expect(resolveWorkspacePath('../sibling.txt', context)).rejects.toThrow()
+        return { output: { ok: true } }
       })
-      await expect(resolveWorkspacePath('../sibling.txt', context)).rejects.toThrow()
-      return { output: { ok: true } }
-    })
-    const host = new LocalToolHost({ tools: [LocalToolHost.defineTool({
-      name: 'write_external_exact',
-      description: 'checks that an external approval remains path-scoped',
-      inputSchema: { type: 'object' },
-      toolKind: 'file_change',
-      policy: 'auto',
-      execute
-    })] })
+      const host = new LocalToolHost({ tools: [LocalToolHost.defineTool({
+        name: 'write_external_exact',
+        description: 'checks that an external approval remains path-scoped',
+        inputSchema: { type: 'object' },
+        toolKind: 'file_change',
+        policy: 'auto',
+        execute
+      })] })
 
-    const result = await host.execute(
-      { callId: 'call_external_exact', toolName: 'write_external_exact', arguments: { path: '../outside.txt' } },
-      {
-        threadId: 'thread_1',
-        turnId: 'turn_1',
-        workspace: '/tmp/workspace',
-        approvalPolicy: 'auto',
-        sandboxMode: 'workspace-write',
-        abortSignal: new AbortController().signal,
-        awaitApproval: vi.fn(async () => 'allow' as const)
-      }
-    )
+      const result = await host.execute(
+        { callId: 'call_external_exact', toolName: 'write_external_exact', arguments: { path: '../outside.txt' } },
+        {
+          threadId: 'thread_1',
+          turnId: 'turn_1',
+          workspace,
+          approvalPolicy: 'auto',
+          sandboxMode: 'workspace-write',
+          abortSignal: new AbortController().signal,
+          awaitApproval: vi.fn(async () => 'allow' as const)
+        }
+      )
 
-    expect(execute).toHaveBeenCalledTimes(1)
-    expect(approvedPath).toBeTruthy()
-    expect(result.item).toMatchObject({ output: { ok: true } })
+      expect(execute).toHaveBeenCalledTimes(1)
+      expect(approvedPath).toBe(approvedTarget)
+      expect(approvedPath).not.toBe(siblingTarget)
+      expect(result.item).toMatchObject({ output: { ok: true } })
+    } finally {
+      await rm(parent, { recursive: true, force: true })
+    }
   })
 
   it('writes a real external target only after a per-call approval', async () => {
