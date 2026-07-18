@@ -1,6 +1,6 @@
 {
   "name": "openclaw",
-  "version": "2026.5.18",
+  "version": "2026.7.1",
   "description": "DeepSeek GUI compatibility shim for @tencent-weixin/openclaw-weixin peer imports.",
   "type": "module",
   "exports": {

@@ -44,7 +44,6 @@ type Props = {
   controlVariant?: 'combined' | 'split'
   stretch?: boolean
   composerReasoningEffort?: string
-  lockVisionToTextModelSwitch?: boolean
   onComposerModelChange: (modelId: string, providerId?: string) => void
   onComposerReasoningEffortChange?: (effort: ComposerReasoningEffort) => void
   onConfigureProviders?: () => void
@@ -140,7 +139,6 @@ export function FloatingComposerModelPicker({
   controlVariant = 'combined',
   stretch = false,
   composerReasoningEffort = 'max',
-  lockVisionToTextModelSwitch = false,
   onComposerModelChange,
   onComposerReasoningEffortChange,
   onConfigureProviders
@@ -715,14 +713,10 @@ export function FloatingComposerModelPicker({
                   currentModel,
                   modelId: id
                 })
-                const disabled = lockVisionToTextModelSwitch &&
-                  !selected &&
-                  !canSwitchComposerModelFromCurrent(currentModelProfile, targetProfile)
                 return (
                   <PickerRow
                     key={`${activeProviderGroup.providerId}:${id}`}
                     selected={selected}
-                    disabled={disabled}
                     title={id}
                     rightSlot={
                       modelSupportsImageInput(targetProfile)
@@ -730,7 +724,6 @@ export function FloatingComposerModelPicker({
                         : <ModelCapabilityBadge kind="text" label={t('composerModelTextOnly')} />
                     }
                     onClick={() => {
-                      if (disabled) return
                       const nextReasoning = normalizeComposerReasoningEffort(
                         composerReasoningEffort,
                         targetProfile
@@ -1379,13 +1372,6 @@ function MenuSectionTitle({
 
 function MenuSeparator(): ReactElement {
   return <div className="my-2 h-px bg-ds-border-muted" />
-}
-
-export function canSwitchComposerModelFromCurrent(
-  currentProfile: ModelProviderModelProfileV1 | undefined,
-  targetProfile: ModelProviderModelProfileV1 | undefined
-): boolean {
-  return !modelSupportsImageInput(currentProfile) || modelSupportsImageInput(targetProfile)
 }
 
 function PickerRow({

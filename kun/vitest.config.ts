@@ -9,6 +9,9 @@ export default defineConfig({
   },
   test: {
     environment: 'node',
+    env: {
+      KUN_DISABLE_OS_CREDENTIAL_STORE: '1'
+    },
     include: ['tests/**/*.test.ts', 'src/**/*.test.ts'],
     globals: false,
     ...(process.platform === 'win32' ? { maxWorkers: 2 } : {})

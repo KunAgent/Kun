@@ -4,6 +4,8 @@ import {
   ExtensionIdSchema,
   PermissionSchema,
   SemverSchema,
+  ViewContainerContributionSchema,
+  ViewContributionSchema,
   qualifiedContributionId,
   type ActionContribution,
   type CommandContribution,
@@ -88,6 +90,65 @@ export type RegisteredContribution<
     }
   : never
 
+const RightRailViewDiscoveryPayloadSchema = ViewContributionSchema.pick({
+  id: true,
+  title: true,
+  icon: true,
+  container: true,
+  when: true,
+  showInRightRail: true,
+  order: true
+})
+
+const RightRailContainerDiscoveryPayloadSchema = ViewContainerContributionSchema.pick({
+  id: true,
+  title: true,
+  icon: true,
+  location: true,
+  order: true
+}).refine((container) => container.location === 'rightSidebar', {
+  message: 'Discovery containers must target the right sidebar'
+})
+
+const RightRailDiscoverySchema = z.strictObject({
+  views: z.array(RightRailViewDiscoveryPayloadSchema).max(128).default([]),
+  containers: z.array(RightRailContainerDiscoveryPayloadSchema).max(64).default([])
+}).default({ views: [], containers: [] })
+
+type ExtensionContributionOwner = Extract<ContributionOwner, { kind: 'extension' }>
+
+export type ExtensionRightRailViewLauncher = {
+  id: string
+  point: 'views.rightSidebar'
+  payload: z.infer<typeof RightRailViewDiscoveryPayloadSchema>
+  owner: ExtensionContributionOwner
+  order: number
+  group: string
+  workspaceTrusted: false
+  enabled: boolean
+  compatible: boolean
+}
+
+export type ExtensionRightRailContainerLauncher = {
+  id: string
+  point: 'views.containers'
+  payload: z.infer<typeof RightRailContainerDiscoveryPayloadSchema>
+  owner: ExtensionContributionOwner
+  order: number
+  group: string
+  workspaceTrusted: false
+  enabled: boolean
+  compatible: boolean
+}
+
+export type ExtensionRightRailViewEntry =
+  | RegisteredContribution<'views.rightSidebar'>
+  | ExtensionRightRailViewLauncher
+
+export type ExtensionRightRailContainerEntry =
+  | RegisteredContribution<'views.containers'>
+  | ExtensionRightRailContainerLauncher
+
 export type ContributionDiagnostic = {
   code:
     | 'CONTRIBUTION_DUPLICATE_ID'
@@ -107,6 +168,7 @@ const ExtensionWorkbenchRecordWireSchema = z.object({
   id: ExtensionIdSchema,
   version: SemverSchema,
   contributes: ExtensionContributionsSchema,
+  rightRailDiscovery: RightRailDiscoverySchema,
   grantedPermissions: z.array(PermissionSchema).max(256),
   enabled: z.boolean().default(true),
   compatible: z.boolean().default(true),
@@ -171,7 +233,10 @@ const BUILTIN_PANEL_DEFINITIONS: readonly [string, string][] = [
   [BUILTIN_RIGHT_PANEL_IDS.plan, 'Plan'],
   [BUILTIN_RIGHT_PANEL_IDS.changes, 'Changes'],
   [BUILTIN_RIGHT_PANEL_IDS.browser, 'Preview'],
-  [BUILTIN_RIGHT_PANEL_IDS.file, 'Files'],
+  [BUILTIN_RIGHT_PANEL_IDS.terminal, 'Terminal'],
+  [BUILTIN_RIGHT_PANEL_IDS.files, 'Files'],
+  [BUILTIN_RIGHT_PANEL_IDS.file, 'File preview'],
+  [BUILTIN_RIGHT_PANEL_IDS.sideConversations, 'Branch conversations'],
   [BUILTIN_RIGHT_PANEL_IDS.sddAi, 'Requirement assistant'],
   [BUILTIN_RIGHT_PANEL_IDS.canvas, 'Whiteboard'],
   [BUILTIN_RIGHT_PANEL_IDS.subagents, 'Subagents']
@@ -230,14 +295,16 @@ function extensionLocalContributions(
 }
 
 function compareContributions(
-  left: RegisteredContribution,
-  right: RegisteredContribution
+  left: { group: string; order: number; id: string },
+  right: { group: string; order: number; id: string }
 ): number {
   return left.group.localeCompare(right.group) || left.order - right.order || left.id.localeCompare(right.id)
 }
 
 export class ContributionRegistry {
   private contributions = new Map<string, RegisteredContribution>()
+  private rightRailViewLaunchers = new Map<string, ExtensionRightRailViewLauncher>()
+  private rightRailContainerLaunchers = new Map<string, ExtensionRightRailContainerLauncher>()
   private diagnostics: ContributionDiagnostic[] = []
   private readonly listeners = new Set<() => void>()
   private revision = 0
@@ -263,6 +330,45 @@ export class ContributionRegistry {
       .sort(compareContributions)
   }
 
+  /**
+   * Returns runnable right-sidebar Views plus inert authorization launchers.
+   * Launchers never participate in get/has/layout resolution and therefore
+   * cannot be used to create a View Session before workspace review.
+   */
+  listRightRailViewEntries(context: WorkbenchContext = {}): ExtensionRightRailViewEntry[] {
+    const entries = new Map<string, ExtensionRightRailViewEntry>()
+    for (const launcher of this.rightRailViewLaunchers.values()) {
+      if (
+        launcher.enabled &&
+        launcher.compatible &&
+        launcher.payload.showInRightRail &&
+        evaluateWhenExpression(launcher.payload.when, context)
+      ) entries.set(launcher.id, launcher)
+    }
+    for (const contribution of this.list('views.rightSidebar', context)) {
+      if (contribution.owner.kind === 'extension' && contribution.payload.showInRightRail) {
+        entries.set(contribution.id, contribution)
+      }
+    }
+    return [...entries.values()].sort(compareContributions)
+  }
+
+  listRightRailContainerEntries(
+    context: WorkbenchContext = {}
+  ): ExtensionRightRailContainerEntry[] {
+    const entries = new Map<string, ExtensionRightRailContainerEntry>()
+    for (const launcher of this.rightRailContainerLaunchers.values()) {
+      if (launcher.enabled && launcher.compatible) entries.set(launcher.id, launcher)
+    }
+    for (const contribution of this.list('views.containers', context)) {
+      if (
+        contribution.owner.kind === 'extension' &&
+        contribution.payload.location === 'rightSidebar'
+      ) entries.set(contribution.id, contribution)
+    }
+    return [...entries.values()].sort(compareContributions)
+  }
+
   get(id: string, context: WorkbenchContext = {}): RegisteredContribution | undefined {
     const contribution = this.contributions.get(id)
     return contribution && this.isVisible(contribution, context) ? contribution : undefined
@@ -281,10 +387,14 @@ export class ContributionRegistry {
     const next = new Map(
       [...this.contributions].filter(([, contribution]) => contribution.owner.kind === 'builtin')
     )
+    const nextRightRailViews = new Map<string, ExtensionRightRailViewLauncher>()
+    const nextRightRailContainers = new Map<string, ExtensionRightRailContainerLauncher>()
     const diagnostics: ContributionDiagnostic[] = []
 
     for (const extension of [...parsed.extensions].sort((a, b) => a.id.localeCompare(b.id))) {
       const staged: RegisteredContribution[] = []
+      const stagedRightRailViews: ExtensionRightRailViewLauncher[] = []
+      const stagedRightRailContainers: ExtensionRightRailContainerLauncher[] = []
       const localIds = new Set<string>()
       let rejected = false
 
@@ -395,13 +505,115 @@ export class ContributionRegistry {
         } as RegisteredContribution)
       }
 
+      // Untrusted workspaces receive only bounded, inert Host chrome. This
+      // metadata is kept outside the executable contribution registry.
+      if (!extension.workspaceTrusted) {
+        for (const payload of extension.rightRailDiscovery.views) {
+          const id = qualifiedContributionId(extension.id, payload.id)
+          const invalidWhen = validateWhenExpression(payload.when)
+          if (
+            !ContributionIdSchema.safeParse(id).success ||
+            localIds.has(payload.id) ||
+            next.has(id) ||
+            nextRightRailViews.has(id) ||
+            nextRightRailContainers.has(id)
+          ) {
+            diagnostics.push({
+              code: localIds.has(payload.id) ? 'CONTRIBUTION_DUPLICATE_ID' : 'CONTRIBUTION_INVALID_ID',
+              message: `Invalid or duplicate right-rail launcher identity: ${id}`,
+              extensionId: extension.id,
+              extensionVersion: extension.version,
+              contributionId: id,
+              point: 'views.rightSidebar'
+            })
+            rejected = true
+            continue
+          }
+          if (invalidWhen) {
+            diagnostics.push({
+              code: 'CONTRIBUTION_INVALID_WHEN',
+              message: `${id}: ${invalidWhen}`,
+              extensionId: extension.id,
+              extensionVersion: extension.version,
+              contributionId: id,
+              point: 'views.rightSidebar'
+            })
+            rejected = true
+            continue
+          }
+          localIds.add(payload.id)
+          stagedRightRailViews.push({
+            id,
+            point: 'views.rightSidebar',
+            payload,
+            owner: {
+              kind: 'extension',
+              extensionId: extension.id,
+              extensionVersion: extension.version,
+              grantedPermissions: [],
+              source: extension.source
+            },
+            order: payload.order,
+            group: payload.container ?? 'views.rightSidebar',
+            workspaceTrusted: false,
+            enabled: extension.enabled,
+            compatible: extension.compatible
+          })
+        }
+        for (const payload of extension.rightRailDiscovery.containers) {
+          const id = qualifiedContributionId(extension.id, payload.id)
+          if (
+            !ContributionIdSchema.safeParse(id).success ||
+            localIds.has(payload.id) ||
+            next.has(id) ||
+            nextRightRailViews.has(id) ||
+            nextRightRailContainers.has(id)
+          ) {
+            diagnostics.push({
+              code: localIds.has(payload.id) ? 'CONTRIBUTION_DUPLICATE_ID' : 'CONTRIBUTION_INVALID_ID',
+              message: `Invalid or duplicate right-rail container launcher identity: ${id}`,
+              extensionId: extension.id,
+              extensionVersion: extension.version,
+              contributionId: id,
+              point: 'views.containers'
+            })
+            rejected = true
+            continue
+          }
+          localIds.add(payload.id)
+          stagedRightRailContainers.push({
+            id,
+            point: 'views.containers',
+            payload,
+            owner: {
+              kind: 'extension',
+              extensionId: extension.id,
+              extensionVersion: extension.version,
+              grantedPermissions: [],
+              source: extension.source
+            },
+            order: payload.order,
+            group: payload.location,
+            workspaceTrusted: false,
+            enabled: extension.enabled,
+            compatible: extension.compatible
+          })
+        }
+      }
+
       // Do not expose a partially registered manifest when any identity or
       // expression is ambiguous. Other extensions and all built-ins survive.
       if (rejected) continue
       for (const contribution of staged) next.set(contribution.id, contribution)
+      for (const launcher of stagedRightRailViews) nextRightRailViews.set(launcher.id, launcher)
+      for (const launcher of stagedRightRailContainers) {
+        nextRightRailContainers.set(launcher.id, launcher)
+      }
     }
 
     this.contributions = next
+    this.rightRailViewLaunchers = nextRightRailViews
+    this.rightRailContainerLaunchers = nextRightRailContainers
     this.diagnostics = diagnostics
     this.emit()
   }
@@ -411,6 +623,16 @@ export class ContributionRegistry {
     for (const [id, contribution] of this.contributions) {
       if (contribution.owner.kind !== 'extension' || contribution.owner.extensionId !== extensionId) continue
       this.contributions.delete(id)
+      changed = true
+    }
+    for (const [id, launcher] of this.rightRailViewLaunchers) {
+      if (launcher.owner.extensionId !== extensionId) continue
+      this.rightRailViewLaunchers.delete(id)
+      changed = true
+    }
+    for (const [id, launcher] of this.rightRailContainerLaunchers) {
+      if (launcher.owner.extensionId !== extensionId) continue
+      this.rightRailContainerLaunchers.delete(id)
       changed = true
     }
     if (changed) this.emit()
@@ -445,6 +667,7 @@ export class ContributionRegistry {
           id: id.slice('builtin:'.length),
           title,
           entry: `builtin/${id.slice('builtin:'.length)}`,
+          showInRightRail: true,
           order: 0,
           multiple: false,
           localResourceRoots: []
@@ -482,6 +705,10 @@ export function extensionResourceUrl(extensionId: string, relativePath: string):
   const safeId = ExtensionIdSchema.parse(extensionId)
   const segments = relativePath.split('/').map((segment) => encodeURIComponent(segment))
   return `kun-extension://${safeId}/${segments.join('/')}`
+}
+
+export function extensionHostIconUrl(extensionId: string, relativePath: string): string {
+  return `${extensionResourceUrl(extensionId, relativePath)}?kunHostResource=icon`
 }
 
 export function resolveContributionCommand(

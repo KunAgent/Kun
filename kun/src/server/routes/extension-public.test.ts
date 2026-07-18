@@ -55,6 +55,91 @@ describe('extension public routes', () => {
     // Backend declarations are intentionally omitted from renderer discovery.
     expect(response.body.extensions[0].contributes.tools).toEqual([])
     expect(response.body.extensions[0].contributes.modelProviders).toEqual([])
+
+    const untrusted = await dispatchJson(
+      router,
+      'GET',
+      '/v1/extensions/workbench?workspace_root=%2Funtrusted&locale=zh-CN',
+      undefined,
+      runtimeHeaders()
+    )
+    expect(untrusted.status).toBe(200)
+    expect(untrusted.body.extensions).toHaveLength(1)
+    expect(untrusted.body.extensions[0]).toMatchObject({
+      id: 'acme.dashboard',
+      workspaceTrusted: false,
+      grantedPermissions: [],
+      rightRailDiscovery: {
+        views: [{ id: 'panel', title: '仪表盘' }],
+        containers: []
+      }
+    })
+    expect(untrusted.body.extensions[0].rightRailDiscovery.views[0]).not.toHaveProperty('entry')
+    expect(untrusted.body.extensions[0].contributes.commands).toEqual([])
+    expect(untrusted.body.extensions[0].contributes['views.rightSidebar']).toEqual([])
+  })
+
+  it('localizes bounded workbench display fields with base-manifest fallback', async () => {
+    const fixture = await createFixture()
+    const router = buildExtensionPublicRouter(fixture.runtime)
+    const localized = await dispatchJson(
+      router,
+      'GET',
+      '/v1/extensions/workbench?locale=zh-CN',
+      undefined,
+      runtimeHeaders()
+    )
+    expect(localized.status).toBe(200)
+    expect(localized.body.extensions[0].contributes.commands[0]).toMatchObject({
+      id: 'refresh',
+      title: '刷新面板'
+    })
+    expect(localized.body.extensions[0].contributes['views.rightSidebar'][0]).toMatchObject({
+      id: 'panel',
+      title: '仪表盘'
+    })
+    expect(localized.body.extensions[0].contributes.settings[0]).toMatchObject({
+      id: 'general',
+      title: '通用',
+      properties: {
+        mode: { title: '模式', description: '选择处理模式。' }
+      }
+    })
+
+    const unsupported = await dispatchJson(
+      router,
+      'GET',
+      '/v1/extensions/workbench?locale=fr-FR',
+      undefined,
+      runtimeHeaders()
+    )
+    expect(unsupported.body.extensions[0].contributes['views.rightSidebar'][0].title).toBe('Dashboard')
+    expect((await dispatchJson(
+      router,
+      'GET',
+      '/v1/extensions/workbench?locale=not_a_locale',
+      undefined,
+      runtimeHeaders()
+    )).status).toBe(400)
+  })
+
+  it('keeps right-rail-hidden Views out of untrusted launcher discovery', async () => {
+    const fixture = await createFixture({ showInRightRail: false })
+    const response = await dispatchJson(
+      buildExtensionPublicRouter(fixture.runtime),
+      'GET',
+      '/v1/extensions/workbench?workspace_root=%2Funtrusted',
+      undefined,
+      runtimeHeaders()
+    )
+
+    expect(response.status).toBe(200)
+    expect(response.body.extensions[0].rightRailDiscovery.views).toEqual([{
+      id: 'panel',
+      title: 'Dashboard',
+      showInRightRail: false,
+      order: 0
+    }])
   })
 
   it('projects real compatibility reports instead of admitting future API minors to workbench', async () => {
@@ -273,6 +358,89 @@ describe('extension public routes', () => {
     ])
   })
 
+  it('keeps the trusted active workspace context across View Host activation and messages', async () => {
+    const fixture = await createFixture()
+    const router = buildExtensionPublicRouter(fixture.runtime)
+    fixture.broker.handlePrincipal.mockImplementation(async (input: { method: string }) => {
+      if (input.method !== 'commands.execute') return null
+      const workspaceContext = fixture.manager.activate.mock.calls.at(-1)?.[2]?.workspaceContext
+      if (!workspaceContext?.active || !workspaceContext.trusted) {
+        throw new Error('Project commands require an active trusted workspace')
+      }
+      return { projects: [] }
+    })
+
+    const created = await dispatchJson(router, 'POST', '/v1/extensions/view-sessions', {
+      contributionId: 'extension:acme.dashboard/panel',
+      workspaceRoot: '/workspace'
+    }, runtimeHeaders())
+    expect(created.status).toBe(201)
+    const expectedActivationOptions = {
+      workspaceRoot: '/workspace',
+      workspaceContext: {
+        id: fixture.paths.workspaceKey('/workspace'),
+        name: 'workspace',
+        root: '/workspace',
+        trusted: true,
+        active: true
+      }
+    }
+    expect(fixture.manager.activate).toHaveBeenLastCalledWith(
+      'acme.dashboard',
+      'onView:panel',
+      expectedActivationOptions
+    )
+
+    const headers = sessionHeaders(created.body.sessionId, created.body.nonce)
+    const projectList = await dispatchJson(
+      router,
+      'POST',
+      `/v1/extensions/view-sessions/${created.body.sessionId}/requests`,
+      {
+        requestId: 'request-project-list-1',
+        method: 'commands.execute',
+        params: { id: 'editor-request', args: { action: 'project.list' } }
+      },
+      headers
+    )
+    expect(projectList).toMatchObject({
+      status: 200,
+      body: { result: { projects: [] } }
+    })
+
+    const viewMessage = await dispatchJson(
+      router,
+      'POST',
+      `/v1/extensions/view-sessions/${created.body.sessionId}/messages`,
+      { channel: 'project.refresh', payload: null },
+      headers
+    )
+    expect(viewMessage.status).toBe(202)
+    expect(fixture.manager.activate).toHaveBeenLastCalledWith(
+      'acme.dashboard',
+      'onView:panel',
+      expectedActivationOptions
+    )
+
+    const hostMessage = await dispatchJson(
+      router,
+      'POST',
+      `/v1/extensions/view-sessions/${created.body.sessionId}/requests`,
+      {
+        requestId: 'request-host-message-1',
+        method: 'ui.postMessage',
+        params: { channel: 'project.refresh', payload: null }
+      },
+      headers
+    )
+    expect(hostMessage).toMatchObject({ status: 200, body: { result: null } })
+    expect(fixture.manager.activate).toHaveBeenLastCalledWith(
+      'acme.dashboard',
+      'onView:panel',
+      expectedActivationOptions
+    )
+  })
+
   it('rolls back the pre-retained View Session when Node Host activation fails', async () => {
     const fixture = await createFixture()
     const lifecycle: Array<{ state: string; sessionId: string }> = []
@@ -398,6 +566,65 @@ describe('extension public routes', () => {
     expect(fixture.broker.handlePrincipal).toHaveBeenCalledTimes(1)
   })
 
+  it('forwards guest-safe jobs and media methods without exposing credentials or registration', async () => {
+    const fixture = await createFixture()
+    fixture.broker.handlePrincipal
+      .mockResolvedValueOnce({ items: [], page: { hasMore: false } })
+      .mockResolvedValueOnce({ handleId: 'media_123456789012', streams: [] })
+    const router = buildExtensionPublicRouter(fixture.runtime)
+    const created = await dispatchJson(router, 'POST', '/v1/extensions/view-sessions', {
+      contributionId: 'extension:acme.dashboard/panel',
+      workspaceRoot: '/workspace'
+    }, runtimeHeaders())
+    const headers = sessionHeaders(created.body.sessionId, created.body.nonce)
+    const requestPath = `/v1/extensions/view-sessions/${created.body.sessionId}/requests`
+
+    const jobs = await dispatchJson(router, 'POST', requestPath, {
+      requestId: 'request-jobs-list-1',
+      method: 'jobs.list',
+      params: {}
+    }, headers)
+    expect(jobs).toMatchObject({
+      status: 200,
+      body: { result: { items: [], page: { hasMore: false } } }
+    })
+
+    const media = await dispatchJson(router, 'POST', requestPath, {
+      requestId: 'request-media-probe-1',
+      method: 'media.probe',
+      params: { handleId: 'media_123456789012' }
+    }, headers)
+    expect(media).toMatchObject({
+      status: 200,
+      body: { result: { handleId: 'media_123456789012' } }
+    })
+
+    for (const request of [
+      {
+        requestId: 'request-secret-reveal-1',
+        method: 'authentication.revealSecret',
+        params: { accountId: 'account-1', operation: 'sign request' }
+      },
+      {
+        requestId: 'request-tool-register-1',
+        method: 'tools.register',
+        params: { id: 'unsafe-registration' }
+      }
+    ]) {
+      const denied = await dispatchJson(router, 'POST', requestPath, request, headers)
+      expect(denied.status).toBe(403)
+    }
+    expect(fixture.broker.handlePrincipal).toHaveBeenCalledTimes(2)
+    expect(fixture.broker.handlePrincipal).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ method: 'jobs.list' })
+    )
+    expect(fixture.broker.handlePrincipal).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ method: 'media.probe' })
+    )
+  })
+
   it('accepts the real workbench environment only from trusted Main', async () => {
     const fixture = await createFixture()
     const router = buildExtensionPublicRouter(fixture.runtime)
@@ -439,6 +666,217 @@ describe('extension public routes', () => {
       sessionHeaders(created.body.sessionId, created.body.nonce)
     )
     expect(rejected.status).toBe(401)
+  })
+
+  it('registers Main-confirmed media selections once and returns only opaque metadata', async () => {
+    const fixture = await createFixture()
+    const router = buildExtensionPublicRouter(fixture.runtime)
+    const created = await dispatchJson(router, 'POST', '/v1/extensions/view-sessions', {
+      contributionId: 'extension:acme.dashboard/panel',
+      workspaceRoot: '/workspace'
+    }, runtimeHeaders())
+    const body = {
+      operationToken: 't'.repeat(43),
+      binding: {
+        sessionId: created.body.sessionId,
+        runtimeSessionId: created.body.sessionId,
+        sessionNonce: created.body.nonce,
+        extensionId: 'acme.dashboard',
+        extensionVersion: '1.0.0',
+        contributionId: 'extension:acme.dashboard/panel',
+        workspaceRoot: '/workspace',
+        senderWebContentsId: 42,
+        senderMainFrameProcessId: 7,
+        senderMainFrameRoutingId: 11
+      },
+      mode: 'read',
+      selections: [{
+        absolutePath: '/private/media/interview.mp4',
+        displayName: 'interview.mp4'
+      }]
+    }
+
+    const unauthorized = await dispatchJson(
+      router,
+      'POST',
+      '/v1/extensions/media/selections',
+      body
+    )
+    expect(unauthorized.status).toBe(401)
+    expect(fixture.mediaHandles.register).not.toHaveBeenCalled()
+
+    const registered = await dispatchJson(
+      router,
+      'POST',
+      '/v1/extensions/media/selections',
+      body,
+      runtimeHeaders()
+    )
+    expect(registered).toMatchObject({
+      status: 201,
+      body: {
+        selections: [{
+          handleId: 'media_handle_0000000001',
+          mode: 'read',
+          kind: 'video',
+          displayName: 'interview.mp4',
+          mimeType: 'video/mp4',
+          revoked: false
+        }]
+      }
+    })
+    expect(JSON.stringify(registered.body)).not.toContain('/private/media')
+    expect(JSON.stringify(registered.body)).not.toContain('operationToken')
+    expect(JSON.stringify(registered.body)).not.toContain(created.body.nonce)
+    expect(fixture.mediaHandles.register).toHaveBeenCalledWith(
+      expect.objectContaining({
+        extensionId: 'acme.dashboard',
+        extensionVersion: '1.0.0',
+        viewSessionId: created.body.sessionId,
+        viewContributionId: 'extension:acme.dashboard/panel',
+        workspaceRoots: ['/workspace']
+      }),
+      {
+        workspaceRoot: '/workspace',
+        path: '/private/media/interview.mp4',
+        mode: 'read',
+        source: 'picker',
+        displayName: 'interview.mp4'
+      }
+    )
+
+    const replayed = await dispatchJson(
+      router,
+      'POST',
+      '/v1/extensions/media/selections',
+      body,
+      runtimeHeaders()
+    )
+    expect(replayed).toMatchObject({
+      status: 409,
+      body: { code: 'conflict' }
+    })
+    expect(fixture.mediaHandles.register).toHaveBeenCalledTimes(1)
+  })
+
+  it('burns a protected media token when its View binding is forged', async () => {
+    const fixture = await createFixture()
+    const router = buildExtensionPublicRouter(fixture.runtime)
+    const created = await dispatchJson(router, 'POST', '/v1/extensions/view-sessions', {
+      contributionId: 'extension:acme.dashboard/panel',
+      workspaceRoot: '/workspace'
+    }, runtimeHeaders())
+    const binding = {
+      sessionId: created.body.sessionId,
+      runtimeSessionId: created.body.sessionId,
+      sessionNonce: created.body.nonce,
+      extensionId: 'acme.dashboard',
+      extensionVersion: '1.0.0',
+      contributionId: 'extension:acme.dashboard/panel',
+      workspaceRoot: '/workspace',
+      senderWebContentsId: 42,
+      senderMainFrameProcessId: 7,
+      senderMainFrameRoutingId: 11
+    }
+    const selection = {
+      operationToken: 'f'.repeat(43),
+      binding: { ...binding, extensionId: 'other.extension' },
+      mode: 'export',
+      selections: [{ absolutePath: '/private/exports/final.mp4', displayName: 'final.mp4' }]
+    }
+    const forged = await dispatchJson(
+      router,
+      'POST',
+      '/v1/extensions/media/selections',
+      selection,
+      runtimeHeaders()
+    )
+    expect(forged.status).toBe(401)
+    expect(fixture.mediaHandles.register).not.toHaveBeenCalled()
+
+    const retried = await dispatchJson(
+      router,
+      'POST',
+      '/v1/extensions/media/selections',
+      { ...selection, binding },
+      runtimeHeaders()
+    )
+    expect(retried).toMatchObject({ status: 409, body: { code: 'conflict' } })
+    expect(fixture.mediaHandles.register).not.toHaveBeenCalled()
+  })
+
+  it('resolves a readable handle for Main lease creation without exposing it to a View route', async () => {
+    const fixture = await createFixture()
+    const router = buildExtensionPublicRouter(fixture.runtime)
+    const created = await dispatchJson(router, 'POST', '/v1/extensions/view-sessions', {
+      contributionId: 'extension:acme.dashboard/panel',
+      workspaceRoot: '/workspace'
+    }, runtimeHeaders())
+    const binding = {
+      sessionId: created.body.sessionId,
+      runtimeSessionId: created.body.sessionId,
+      sessionNonce: created.body.nonce,
+      extensionId: 'acme.dashboard',
+      extensionVersion: '1.0.0',
+      contributionId: 'extension:acme.dashboard/panel',
+      workspaceRoot: '/workspace',
+      senderWebContentsId: 42,
+      senderMainFrameProcessId: 7,
+      senderMainFrameRoutingId: 11
+    }
+    const unauthorized = await dispatchJson(router, 'POST', '/v1/extensions/media/leases/resolve', {
+      binding,
+      handleId: 'media_handle_0000000001'
+    })
+    expect(unauthorized.status).toBe(401)
+    const resolved = await dispatchJson(router, 'POST', '/v1/extensions/media/leases/resolve', {
+      binding,
+      handleId: 'media_handle_0000000001',
+      requestedTtlMs: 60_000
+    }, runtimeHeaders())
+    expect(resolved).toMatchObject({
+      status: 200,
+      body: {
+        handleId: 'media_handle_0000000001',
+        absolutePath: '/private/media/interview.mp4',
+        mimeType: 'video/mp4',
+        fileIdentity: { byteSize: 1234, modifiedAtMs: 1000, device: 2, inode: 3 }
+      }
+    })
+    expect(fixture.mediaHandles.resolve).toHaveBeenCalledWith(
+      expect.objectContaining({
+        extensionId: 'acme.dashboard',
+        viewSessionId: created.body.sessionId,
+        workspaceRoots: ['/workspace']
+      }),
+      'media_handle_0000000001',
+      'read'
+    )
+
+    const artifact = await dispatchJson(router, 'POST', '/v1/extensions/media/artifacts/resolve', {
+      artifactId: 'artifact_1234567890',
+      ownerExtensionId: 'acme.dashboard',
+      ownerExtensionVersion: '1.0.0',
+      workspaceId: fixture.paths.workspaceKey('/workspace'),
+      workspaceRoot: '/workspace'
+    }, runtimeHeaders())
+    expect(artifact).toMatchObject({
+      status: 200,
+      body: {
+        artifactId: 'artifact_1234567890',
+        absolutePath: '/private/media/interview.mp4',
+        displayName: 'interview.mp4',
+        mimeType: 'video/mp4'
+      }
+    })
+    const forgedWorkspace = await dispatchJson(router, 'POST', '/v1/extensions/media/artifacts/resolve', {
+      artifactId: 'artifact_1234567890',
+      ownerExtensionId: 'acme.dashboard',
+      ownerExtensionVersion: '1.0.0',
+      workspaceId: fixture.paths.workspaceKey('/workspace'),
+      workspaceRoot: '/other-workspace'
+    }, runtimeHeaders())
+    expect(forgedWorkspace.status).toBe(404)
   })
 
   it('delivers host-owned notifications without a View Session and resolves declared actions', async () => {
@@ -935,7 +1373,11 @@ describe('extension public routes', () => {
   })
 })
 
-async function createFixture(options: { maxEvents?: number; apiVersion?: string } = {}) {
+async function createFixture(options: {
+  maxEvents?: number
+  apiVersion?: string
+  showInRightRail?: boolean
+} = {}) {
   const root = await mkdtemp(join(tmpdir(), 'kun-extension-public-routes-'))
   cleanupRoots.push(root)
   const paths = new ExtensionPaths({
@@ -956,12 +1398,35 @@ async function createFixture(options: { maxEvents?: number; apiVersion?: string 
     'accounts.use:provider',
     'accounts.manage:provider',
     'accounts.use:ext-provider',
-    'accounts.manage:ext-provider'
+    'accounts.manage:ext-provider',
+    'media.read',
+    'media.process',
+    'media.export',
+    'jobs.manage',
+    'workspace.read',
+    'workspace.write'
   ]
   const manifest = parseExtensionManifest({
     publisher: 'acme',
     name: 'dashboard',
     displayName: 'Dashboard',
+    localizations: {
+      'zh-CN': {
+        displayName: '仪表盘',
+        contributes: {
+          commands: { refresh: { title: '刷新面板' } },
+          'views.rightSidebar': { panel: { title: '仪表盘' } },
+          settings: {
+            general: {
+              title: '通用',
+              properties: {
+                mode: { title: '模式', description: '选择处理模式。' }
+              }
+            }
+          }
+        }
+      }
+    },
     version: '1.0.0',
     manifestVersion: 1,
     apiVersion: options.apiVersion ?? '1.0.0',
@@ -980,7 +1445,8 @@ async function createFixture(options: { maxEvents?: number; apiVersion?: string 
       'views.rightSidebar': [{
         id: 'panel',
         title: 'Dashboard',
-        entry: 'webview/index.html'
+        entry: 'webview/index.html',
+        ...(options.showInRightRail === undefined ? {} : { showInRightRail: options.showInRightRail })
       }],
       tools: [{
         id: 'echo',
@@ -1038,7 +1504,8 @@ async function createFixture(options: { maxEvents?: number; apiVersion?: string 
   await registry.setWorkspacePermissionGrant(
     'acme.dashboard',
     paths.workspaceKey('/workspace'),
-    permissions
+    permissions,
+    development.manifest.version
   )
 
   const viewSessions = new ExtensionViewSessionService({
@@ -1148,6 +1615,57 @@ async function createFixture(options: { maxEvents?: number; apiVersion?: string 
       values: { 'extension:acme.dashboard/general': { mode: 'fast' } }
     })
   }
+  const mediaHandles = {
+    register: vi.fn(async (_principal, input: { mode: 'read' | 'write'; displayName: string }) => ({
+      id: input.mode === 'write' ? 'media_export_000000001' : 'media_handle_0000000001',
+      displayName: input.displayName,
+      mode: input.mode,
+      source: 'picker',
+      mimeType: 'video/mp4',
+      ...(input.mode === 'read' ? {
+        byteSize: 1234,
+        modifiedAt: '2026-07-13T00:00:00.000Z',
+        completionIdentity: 'identity_0000000001'
+      } : {}),
+      available: true,
+      createdAt: '2026-07-13T00:00:00.000Z'
+    })),
+    release: vi.fn(async () => true),
+    resolve: vi.fn(async () => ({
+      id: 'media_handle_0000000001',
+      displayName: 'interview.mp4',
+      mode: 'read',
+      source: 'picker',
+      mimeType: 'video/mp4',
+      byteSize: 1234,
+      modifiedAt: '2026-07-13T00:00:00.000Z',
+      completionIdentity: 'identity_0000000001',
+      available: true,
+      createdAt: '2026-07-13T00:00:00.000Z',
+      absolutePath: '/private/media/interview.mp4',
+      workspaceRoot: '/workspace',
+      ownerExtensionId: 'acme.dashboard',
+      ownerExtensionVersion: '1.0.0',
+      identity: { size: 1234, mtimeMs: 1000, device: 2, inode: 3 }
+    }))
+  }
+  const artifacts = {
+    getOwned: vi.fn(async (_principal, artifactId: string) => ({
+      schemaVersion: 1,
+      artifactId,
+      ownerExtensionId: 'acme.dashboard',
+      ownerExtensionVersion: '1.0.0',
+      workspaceId: paths.workspaceKey('/workspace'),
+      mediaHandleId: 'media_handle_0000000001',
+      displayName: 'interview.mp4',
+      mediaKind: 'video',
+      mimeType: 'video/mp4',
+      byteSize: 1234,
+      completionIdentity: 'identity_0000000001',
+      availability: 'available',
+      provenance: { invocationId: 'invocation_1', operation: 'video-render' }
+    }))
+  }
   const platform = {
     paths,
     registry,
@@ -1226,6 +1744,8 @@ async function createFixture(options: { maxEvents?: number; apiVersion?: string 
     },
     secretReveals,
     configuration,
+    mediaHandles,
+    artifacts,
     modelProviders: {
       probe: vi.fn(),
       listModels: vi.fn().mockResolvedValue(manifest.contributes.modelProviders[0]!.models),
@@ -1239,6 +1759,7 @@ async function createFixture(options: { maxEvents?: number; apiVersion?: string 
   } as unknown as ServerRuntime
   return {
     runtime,
+    paths,
     manager,
     agent,
     broker,
@@ -1247,6 +1768,7 @@ async function createFixture(options: { maxEvents?: number; apiVersion?: string 
     canonicalProviderId,
     secretReveals,
     configuration,
+    mediaHandles,
     viewSessions
   }
 }

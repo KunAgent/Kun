@@ -2800,6 +2800,13 @@ pre {
   isolation: isolate;
 }
 
+/* Electron Webviews own a separate guest surface and can swallow pointer moves
+   after a sidebar divider enters their bounds. Disable guest hit testing only
+   for the lifetime of the Host resize gesture. */
+body.ds-workbench-resizing webview {
+  pointer-events: none;
+}
+
 .ds-workbench-divider::before {
   content: '';
   position: absolute;
@@ -2900,17 +2907,17 @@ pre {
   z-index: 15;
   display: flex;
   box-sizing: border-box;
-  width: 1.85rem;
-  min-width: 1.85rem;
-  max-height: min(54vh, 25rem);
+  width: 3.85rem;
+  min-width: 3.85rem;
+  max-height: min(64vh, 25rem);
   flex-direction: column;
   align-items: flex-start;
-  gap: 0.22rem;
+  gap: 0;
   overflow-y: auto;
   border: 0;
-  border-radius: 999px;
+  border-radius: 0;
   background: transparent;
-  padding: 0.28rem 0.18rem;
+  padding: 0.2rem 0.18rem;
   scrollbar-width: none;
   pointer-events: auto;
   transform: translateY(-50%);
@@ -2921,54 +2928,69 @@ pre {
 }
 
 .timeline-jump-rail-button {
+  --timeline-wave-width: 0.75rem;
   display: block;
+  position: relative;
   box-sizing: border-box;
-  width: calc(0.22rem + var(--timeline-wave-width, 0.55rem));
-  min-width: 0;
-  height: 0.18rem;
-  min-height: 0.18rem;
+  width: 100%;
+  min-width: 100%;
+  height: 0.625rem;
+  min-height: 0.625rem;
   margin-left: 0;
   padding: 0;
   border: 0;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--ds-text-muted) 52%, transparent);
+  background: transparent;
+  cursor: pointer;
+}
+
+.timeline-jump-rail-button::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: var(--timeline-wave-width);
+  height: 0.125rem;
+  transform: translateY(-50%);
+  border-radius: 1px;
+  background: color-mix(in srgb, var(--ds-text-muted) 44%, transparent);
   transition:
     background-color 140ms ease,
     box-shadow 140ms ease,
     opacity 140ms ease,
-    transform 140ms ease,
     width 140ms ease;
 }
 
-.timeline-jump-rail-button[data-wave-level='1'] {
-  --timeline-wave-width: 0.32rem;
+.timeline-jump-rail-button[data-wave-distance='0'] {
+  --timeline-wave-width: 3.2rem;
 }
 
-.timeline-jump-rail-button[data-wave-level='2'] {
-  --timeline-wave-width: 0.5rem;
+.timeline-jump-rail-button[data-wave-distance='1'] {
+  --timeline-wave-width: 2.45rem;
 }
 
-.timeline-jump-rail-button[data-wave-level='3'] {
-  --timeline-wave-width: 0.72rem;
+.timeline-jump-rail-button[data-wave-distance='2'] {
+  --timeline-wave-width: 1.45rem;
 }
 
-.timeline-jump-rail-button[data-wave-level='4'] {
-  --timeline-wave-width: 0.95rem;
+.timeline-jump-rail-button[data-wave-distance='3'] {
+  --timeline-wave-width: 0.75rem;
 }
 
-.timeline-jump-rail-button[data-wave-level='5'] {
-  --timeline-wave-width: 1.18rem;
+.timeline-jump-rail-button.is-active::before {
+  background: color-mix(in srgb, var(--ds-text) 68%, transparent);
 }
 
-.timeline-jump-rail-button:hover,
-.timeline-jump-rail-button:focus-visible,
-.timeline-jump-rail-button.is-active {
-  width: 1.28rem;
-  background: var(--ds-accent);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ds-accent) 12%, transparent);
+.timeline-jump-rail-button[data-wave-distance='0']::before {
+  background: color-mix(in srgb, var(--ds-text) 84%, transparent);
   opacity: 1;
-  transform: none;
+}
+
+.timeline-jump-rail-button:focus-visible {
   outline: none;
+}
+
+.timeline-jump-rail-button:focus-visible::before {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ds-text) 10%, transparent);
 }
 
 .timeline-jump-rail-preview {
@@ -3007,12 +3029,49 @@ pre {
   margin-top: 0.5rem;
   overflow: hidden;
   -webkit-box-orient: vertical;
-  -webkit-line-clamp: 4;
+  -webkit-line-clamp: 3;
   color: var(--ds-text-muted);
   font-size: 0.86rem;
   font-weight: 600;
   line-height: 1.55;
   overflow-wrap: anywhere;
+}
+
+.timeline-jump-rail-preview-meta {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.9rem;
+  margin-top: 0.7rem;
+  overflow: hidden;
+  color: var(--ds-text-muted);
+  font-size: 0.84rem;
+  font-weight: 600;
+  line-height: 1.25;
+  white-space: nowrap;
+}
+
+.timeline-jump-rail-preview-meta-item {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.timeline-jump-rail-preview-meta-item > svg {
+  width: 1.05rem;
+  height: 1.05rem;
+  flex: 0 0 auto;
+  stroke-width: 1.8;
+}
+
+.timeline-jump-rail-preview-file-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.timeline-jump-rail-preview-meta-count {
+  flex: 0 0 auto;
 }
 
 .ds-plan-panel-overlay {

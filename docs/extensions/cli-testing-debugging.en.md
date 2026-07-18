@@ -34,7 +34,17 @@ Public command names, stable structured output, and diagnostic codes follow Exte
 
 ## Create
 
-Recommended npm scaffolder:
+The npm scaffolder is recommended for a standalone project, but first verify
+that the configured registry actually contains it:
+
+```bash
+npm view create-kun-extension version
+```
+
+Run the command below only when the preflight returns a version. On `E404`, use
+the repository extension examples; do not substitute repository `file:` aliases
+for a public installation, and do not install the unrelated unscoped npm
+package named `kun` in place of the CLI shipped with Kun.
 
 ```bash
 npx create-kun-extension my-extension \

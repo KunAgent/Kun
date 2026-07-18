@@ -12,8 +12,8 @@ The Code chat composer SHALL present model selection and reasoning effort as two
 - **THEN** it retains the existing combined model-and-reasoning control
 
 #### Scenario: Active turn
-- **WHEN** a turn is in progress and composer setting changes are gated
-- **THEN** both visible controls remain legible and do not accept a new selection
+- **WHEN** a turn is in progress
+- **THEN** both visible controls remain operable and a new selection configures the next submitted turn without changing the request already in flight
 
 ### Requirement: Focused model menu
 In Code chat, the model control SHALL open a menu dedicated to provider and model selection without embedding reasoning selection.
@@ -119,3 +119,7 @@ Changing the composer UI SHALL preserve existing session reasoning state and tur
 #### Scenario: Session state
 - **WHEN** the user changes reasoning effort in Code chat
 - **THEN** the existing Workbench session state supplies that effort to the next turn without adding persistence or a runtime contract field
+
+#### Scenario: Change settings during an active turn
+- **WHEN** the user changes the model or reasoning effort while a turn is in progress
+- **THEN** the in-flight turn keeps the model and reasoning values captured at submission and the next submitted turn receives the newly selected values

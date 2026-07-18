@@ -1,4 +1,4 @@
-import { chmod, mkdir, readFile, readdir } from 'node:fs/promises'
+import { chmod, mkdir, readFile, readdir, rm } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import type { MemoryCapabilityConfig } from '../contracts/capabilities.js'
 import { atomicWriteFile } from '../adapters/file/atomic-write.js'
@@ -14,8 +14,10 @@ const DEFAULT_MEMORY_CONFIDENCE_HALF_LIFE_MS = 180 * 24 * 60 * 60 * 1_000
 
 export interface MemoryStore {
   create(input: MemoryCreateRequest): Promise<MemoryRecord>
+  createWithId?(id: string, input: MemoryCreateRequest): Promise<MemoryRecord>
   update(id: string, patch: MemoryUpdateRequest, access?: MemoryAccess): Promise<MemoryRecord>
   delete(id: string, access?: MemoryAccess): Promise<MemoryRecord>
+  purge?(id: string): Promise<void>
   list(filter?: { workspace?: string; includeDeleted?: boolean; all?: boolean }): Promise<MemoryRecord[]>
   retrieve(input: { query: string; workspace?: string; limit: number }): Promise<MemoryRecord[]>
   diagnostics(): Promise<MemoryDiagnostics>
@@ -39,6 +41,19 @@ export class FileMemoryStore implements MemoryStore {
   ) {}
 
   async create(input: MemoryCreateRequest): Promise<MemoryRecord> {
+    return this.createRecord(
+      this.options.idGenerator?.() ?? `mem_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`,
+      input
+    )
+  }
+
+  async createWithId(id: string, input: MemoryCreateRequest): Promise<MemoryRecord> {
+    const existing = (await this.list({ includeDeleted: true, all: true })).find((record) => record.id === id)
+    if (existing) return existing
+    return this.createRecord(id, input)
+  }
+
+  private async createRecord(id: string, input: MemoryCreateRequest): Promise<MemoryRecord> {
     await this.ensureRoot()
     const now = this.now()
     const scope = input.scope ?? 'workspace'
@@ -46,7 +61,7 @@ export class FileMemoryStore implements MemoryStore {
     const project = normalizeScopePath(input.project ?? (scope === 'project' ? input.workspace : undefined))
     const provenance = input.provenance ?? defaultProvenance(input)
     const parsed = MemoryRecord.parse({
-      id: this.options.idGenerator?.() ?? `mem_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`,
+      id,
       content: input.content,
       scope,
       ...(scope !== 'user' && workspace ? { workspace } : {}),
@@ -110,6 +125,11 @@ export class FileMemoryStore implements MemoryStore {
     })
     await this.write(next)
     return next
+  }
+
+  async purge(id: string): Promise<void> {
+    if (!/^mem_[A-Za-z0-9_-]+$/.test(id)) throw new Error(`invalid memory id: ${id}`)
+    await rm(join(this.options.rootDir, `${id}.json`), { force: true })
   }
 
   async list(filter: { workspace?: string; includeDeleted?: boolean; all?: boolean } = {}): Promise<MemoryRecord[]> {

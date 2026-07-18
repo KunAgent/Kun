@@ -6,6 +6,7 @@ import {
   type ExtensionViewSessionTarget
 } from './extension-view-session-service.js'
 import { DEFAULT_EXTENSION_REQUEST_TIMEOUT_MS } from '../extensions/host-protocol.js'
+import { extensionWorkspaceKey } from '../extensions/paths.js'
 
 const target: ExtensionViewSessionTarget = {
   extensionId: 'acme.dashboard',
@@ -87,6 +88,75 @@ describe('ExtensionViewSessionService', () => {
     expect(service.respondWorkbenchNotification(notification!.notificationId, 'open')).toBe(true)
     await expect(notificationResult).resolves.toEqual({ value: 'open' })
     expect(service.listWorkbenchNotifications()).toHaveLength(0)
+  })
+
+  it('delivers Host messages only to sessions in the publishing workspace', async () => {
+    const service = new ExtensionViewSessionService()
+    const workspaceA = service.create({ ...target, workspaceRoot: '/workspace/a' })
+    const workspaceB = service.create({ ...target, workspaceRoot: '/workspace/b' })
+
+    await service.onUiRequest({
+      principal: service.principal(workspaceA.sessionId),
+      method: 'ui.postMessage',
+      params: { channel: 'project.changed', payload: { workspace: 'a' } }
+    })
+
+    expect(service.replay(workspaceA.sessionId, 0, 10).events
+      .filter((event) => event.type === 'message')
+      .map((event) => event.payload)).toEqual([
+      { channel: 'project.changed', payload: { workspace: 'a' } }
+    ])
+    expect(service.replay(workspaceB.sessionId, 0, 10).events
+      .filter((event) => event.type === 'message')).toEqual([])
+
+    service.publishMessage(target.extensionId, {
+      channel: 'project.changed',
+      payload: { workspace: 'b' }
+    }, { workspaceRoots: ['/workspace/b'] })
+
+    expect(service.replay(workspaceA.sessionId, 0, 10).events
+      .filter((event) => event.type === 'message')).toHaveLength(1)
+    expect(service.replay(workspaceB.sessionId, 0, 10).events
+      .filter((event) => event.type === 'message')
+      .map((event) => event.payload)).toEqual([
+      { channel: 'project.changed', payload: { workspace: 'b' } }
+    ])
+  })
+
+  it('disposes only Views and notifications in the revoked extension workspace', async () => {
+    const service = new ExtensionViewSessionService()
+    const workspaceA = service.create({ ...target, workspaceRoot: '/workspace/a' })
+    const workspaceB = service.create({ ...target, workspaceRoot: '/workspace/b' })
+    service.setWorkbenchEnvironment(service.workbenchEnvironment())
+    const pendingA = service.publishNotification(service.principal(workspaceA.sessionId), {
+      id: 'notice-a',
+      title: 'Workspace A',
+      message: 'Scoped prompt',
+      actions: []
+    })
+    const pendingB = service.publishNotification(service.principal(workspaceB.sessionId), {
+      id: 'notice-b',
+      title: 'Workspace B',
+      message: 'Peer prompt',
+      actions: []
+    })
+
+    expect(service.disposeExtensionWorkspace(
+      target.extensionId,
+      extensionWorkspaceKey('/workspace/a')
+    )).toBe(1)
+
+    expect(() => service.principal(workspaceA.sessionId)).toThrowError(
+      expect.objectContaining({ code: 'not_found' })
+    )
+    expect(service.principal(workspaceB.sessionId).workspaceRoots).toEqual(['/workspace/b'])
+    await expect(pendingA).resolves.toBeUndefined()
+    expect(service.listWorkbenchNotifications()).toEqual([
+      expect.objectContaining({ sourceId: 'notice-b' })
+    ])
+    const remaining = service.listWorkbenchNotifications()[0]!
+    service.respondWorkbenchNotification(remaining.notificationId)
+    await expect(pendingB).resolves.toBeUndefined()
   })
 
   it('rejects spoofed notification actions and settles pending prompts during teardown', async () => {

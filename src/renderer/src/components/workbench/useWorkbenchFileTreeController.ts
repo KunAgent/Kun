@@ -16,7 +16,6 @@ import {
 import type { ChatFileTreeReference } from '../chat/ChatFileTreePanel'
 import type { RightPanelMode } from '../chat/WorkbenchTopBar'
 import { BUILTIN_RIGHT_PANEL_IDS } from '../../extensions/contribution-ids'
-import { CODE_PANEL_PREFERRED } from '../workbench-layout'
 
 export type WorkbenchFileTreeSidePanelView = 'workspace' | 'design'
 
@@ -30,7 +29,7 @@ export type WorkbenchFileTreeControllerOptions = {
   filePreviewTarget: WorkspaceFileTarget | null
   setFilePreviewTarget: (target: WorkspaceFileTarget | null) => void
   setRightPanelMode: (mode: RightPanelMode | null) => void
-  setRightSidebarWidth: (updater: (width: number) => number) => void
+  closeRightPanelTab?: (mode: Exclude<RightPanelMode, null>) => void
 }
 
 export const PINNED_FILE_PREVIEW_TARGETS_KEY = 'kun.filePreview.pinnedTargets'
@@ -161,7 +160,7 @@ export function useWorkbenchFileTreeController({
   filePreviewTarget,
   setFilePreviewTarget,
   setRightPanelMode,
-  setRightSidebarWidth
+  closeRightPanelTab
 }: WorkbenchFileTreeControllerOptions) {
   const [composerFileReferences, setComposerFileReferences] = useState<ComposerFileReference[]>([])
   const [fileTreeSidePanelOpen, setFileTreeSidePanelOpen] = useState(false)
@@ -241,7 +240,6 @@ export function useWorkbenchFileTreeController({
       : [...current, nextTarget]
     updateOpenFilePreviewTargets(next)
     selectFilePreviewTarget(nextTarget)
-    setRightSidebarWidth((width) => Math.max(width, CODE_PANEL_PREFERRED))
     setRightPanelMode(BUILTIN_RIGHT_PANEL_IDS.file)
   }
 
@@ -262,7 +260,10 @@ export function useWorkbenchFileTreeController({
     updateOpenFilePreviewTargets(next.targets)
     if (next.activeTarget === filePreviewTargetRef.current) return
     selectFilePreviewTarget(next.activeTarget)
-    if (!next.activeTarget) setRightPanelMode(null)
+    if (!next.activeTarget) {
+      if (closeRightPanelTab) closeRightPanelTab(BUILTIN_RIGHT_PANEL_IDS.file)
+      else setRightPanelMode(null)
+    }
   }
 
   function togglePinnedFilePreviewTarget(target: WorkspaceFileTarget): void {
@@ -345,8 +346,11 @@ export function useWorkbenchFileTreeController({
       ?? retained[0]
       ?? null
     selectFilePreviewTarget(nextTarget)
-    if (!nextTarget && rightPanelMode === BUILTIN_RIGHT_PANEL_IDS.file) setRightPanelMode(null)
-  }, [activeThreadId, rightPanelMode, selectFilePreviewTarget, setRightPanelMode])
+    if (!nextTarget && rightPanelMode === BUILTIN_RIGHT_PANEL_IDS.file) {
+      if (closeRightPanelTab) closeRightPanelTab(BUILTIN_RIGHT_PANEL_IDS.file)
+      else setRightPanelMode(null)
+    }
+  }, [activeThreadId, closeRightPanelTab, rightPanelMode, selectFilePreviewTarget, setRightPanelMode])
 
   useEffect(() => {
     if (route !== 'chat') setComposerFileReferences([])

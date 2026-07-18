@@ -1,6 +1,7 @@
 import type { GuiDesignArtifactContextJson, GuiPlanContextJson, Turn, TurnReasoningEffort, TurnStatus } from '../contracts/turns.js'
 import type { ThreadMode } from '../contracts/threads.js'
 import type { TurnItem } from '../contracts/items.js'
+import type { ComposerContextAttachmentJson } from '../contracts/composer-context.js'
 
 export type TurnEntity = Turn
 
@@ -13,6 +14,7 @@ export function createTurnRecord(input: {
   accountId?: string
   reasoningEffort?: TurnReasoningEffort
   attachmentIds?: string[]
+  composerContexts?: ComposerContextAttachmentJson[]
   guiPlan?: GuiPlanContextJson
   guiDesignCanvas?: boolean
   guiDesignMode?: boolean
@@ -37,6 +39,7 @@ export function createTurnRecord(input: {
     steering: [],
     items: [],
     attachmentIds: [...(input.attachmentIds ?? [])],
+    composerContexts: [...(input.composerContexts ?? [])],
     activeSkillIds: [],
     injectedMemoryIds: [],
     injectedMemorySummaries: [],

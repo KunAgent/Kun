@@ -58,6 +58,7 @@ export const ChildRunRecord = z.object({
   summary: z.string().optional(),
   evidence: z.array(z.string().min(1).max(2_000)).max(32).optional(),
   tokenBudget: z.number().int().positive().optional(),
+  /** Legacy persisted field. New child runs do not use wall-clock budgets. */
   timeBudgetMs: z.number().int().positive().optional(),
   returnFormat: ChildReturnFormat.default('summary'),
   budgetExceeded: z.enum(['token', 'time']).optional(),
@@ -111,7 +112,6 @@ export type ChildRunExecutor = (input: {
   /** Reasoning depth for this profile's child model requests (default 'off'). */
   reasoningEffort?: string
   tokenBudget?: number
-  timeBudgetMs?: number
   returnFormat?: ChildReturnFormat
   signal: AbortSignal
 }) => Promise<{
@@ -244,7 +244,6 @@ export class DelegationRuntime {
     /** Forward GUI design-canvas scope into the child turn when present. */
     guiDesignCanvas?: boolean
     tokenBudget?: number
-    timeBudgetMs?: number
     returnFormat?: ChildReturnFormat
     /**
      * When true, runChild returns the queued ChildRunRecord immediately and
@@ -300,7 +299,6 @@ export class DelegationRuntime {
     const promptPreamble = profile?.promptPreamble
     const resolvedReasoningEffort = profile?.reasoningEffort
     const tokenBudget = positiveInteger(input.tokenBudget)
-    const timeBudgetMs = positiveInteger(input.timeBudgetMs)
     const returnFormat = input.returnFormat ?? 'summary'
 
     // Reserve against the per-thread budget before persisting anything.
@@ -325,7 +323,6 @@ export class DelegationRuntime {
       ...(input.approvalPolicy ? { approvalPolicy: input.approvalPolicy } : {}),
       ...(input.sandboxMode ? { sandboxMode: input.sandboxMode } : {}),
       tokenBudget,
-      timeBudgetMs,
       returnFormat,
       ...(input.detach ? { detached: true } : {}),
       status: 'queued',
@@ -372,7 +369,6 @@ export class DelegationRuntime {
         guiDesignCanvas: input.guiDesignCanvas === true,
         resolvedReasoningEffort,
         tokenBudget,
-        timeBudgetMs,
         returnFormat,
         workspace: input.workspace,
         label: input.label,
@@ -414,7 +410,7 @@ export class DelegationRuntime {
     await this.recordChildEvent(record)
     try {
       const executor: ChildRunExecutor = this.options.executor ?? defaultExecutor
-      const result = await executeWithinTimeBudget(input.signal, timeBudgetMs, (signal) => executor({
+      const result = await executeWithParentSignal(input.signal, (signal) => executor({
         childId: id,
         parentThreadId: input.parentThreadId,
         parentTurnId: input.parentTurnId,
@@ -436,7 +432,6 @@ export class DelegationRuntime {
         ...(input.guiDesignCanvas ? { guiDesignCanvas: true } : {}),
         ...(resolvedReasoningEffort ? { reasoningEffort: resolvedReasoningEffort } : {}),
         ...(tokenBudget ? { tokenBudget } : {}),
-        ...(timeBudgetMs ? { timeBudgetMs } : {}),
         returnFormat,
         signal
       }))
@@ -473,7 +468,6 @@ export class DelegationRuntime {
         ...record,
         status: input.signal.aborted ? 'aborted' : 'failed',
         error: errorMessage(error),
-        ...(error instanceof ChildTimeBudgetExceededError ? { budgetExceeded: 'time' } : {}),
         durationMs: elapsedMs(startedAt, finishedAt),
         updatedAt: finishedAt
       })
@@ -510,7 +504,6 @@ export class DelegationRuntime {
     guiDesignCanvas: boolean
     resolvedReasoningEffort: string | undefined
     tokenBudget: number | undefined
-    timeBudgetMs: number | undefined
     returnFormat: ChildReturnFormat
     workspace: string | undefined
     label: string | undefined
@@ -541,7 +534,7 @@ export class DelegationRuntime {
     await this.recordChildEvent(record)
     try {
       const executor: ChildRunExecutor = this.options.executor ?? defaultExecutor
-      const result = await executeWithinTimeBudget(args.signal, args.timeBudgetMs, (signal) => executor({
+      const result = await executeWithParentSignal(args.signal, (signal) => executor({
         childId: record.id,
         parentThreadId: args.parentThreadId,
         parentTurnId: args.parentTurnId,
@@ -563,7 +556,6 @@ export class DelegationRuntime {
         ...(args.guiDesignCanvas ? { guiDesignCanvas: true } : {}),
         ...(args.resolvedReasoningEffort ? { reasoningEffort: args.resolvedReasoningEffort } : {}),
         ...(args.tokenBudget ? { tokenBudget: args.tokenBudget } : {}),
-        ...(args.timeBudgetMs ? { timeBudgetMs: args.timeBudgetMs } : {}),
         returnFormat: args.returnFormat,
         signal
       }))
@@ -604,7 +596,6 @@ export class DelegationRuntime {
         ...record,
         status: args.signal.aborted ? 'aborted' : 'failed',
         error: errorMessage(error),
-        ...(error instanceof ChildTimeBudgetExceededError ? { budgetExceeded: 'time' } : {}),
         durationMs: elapsedMs(startedAt, finishedAt),
         updatedAt: finishedAt
       })
@@ -947,45 +938,12 @@ export function aggregateChildRuns(records: readonly ChildRunRecord[]): ChildRun
   )
 }
 
-class ChildTimeBudgetExceededError extends Error {
-  constructor(readonly timeBudgetMs: number) {
-    super(`child time budget exhausted after ${timeBudgetMs}ms`)
-    this.name = 'ChildTimeBudgetExceededError'
-  }
-}
-
-async function executeWithinTimeBudget<T>(
+async function executeWithParentSignal<T>(
   parentSignal: AbortSignal,
-  timeBudgetMs: number | undefined,
   execute: (signal: AbortSignal) => Promise<T>
 ): Promise<T> {
   if (parentSignal.aborted) throw new Error('child run aborted')
-  if (!timeBudgetMs) return execute(parentSignal)
-
-  const controller = new AbortController()
-  let timer: ReturnType<typeof setTimeout> | undefined
-  let rejectCancellation: ((error: Error) => void) | undefined
-  const cancellation = new Promise<never>((_resolve, reject) => {
-    rejectCancellation = reject
-  })
-  const onParentAbort = (): void => {
-    controller.abort(parentSignal.reason)
-    rejectCancellation?.(new Error('child run aborted'))
-  }
-  parentSignal.addEventListener('abort', onParentAbort, { once: true })
-  timer = setTimeout(() => {
-    const error = new ChildTimeBudgetExceededError(timeBudgetMs)
-    controller.abort(error)
-    rejectCancellation?.(error)
-  }, timeBudgetMs)
-  timer.unref?.()
-
-  try {
-    return await Promise.race([execute(controller.signal), cancellation])
-  } finally {
-    if (timer) clearTimeout(timer)
-    parentSignal.removeEventListener('abort', onParentAbort)
-  }
+  return execute(parentSignal)
 }
 
 function childContractError(

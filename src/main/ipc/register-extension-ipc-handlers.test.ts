@@ -1,4 +1,6 @@
 import { ExtensionManifestSchema } from '@kun/extension-api'
+import { createHash } from 'node:crypto'
+import { join, resolve } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ExtensionViewSessionRegistry } from '../extensions/extension-view-sessions'
 import {
@@ -12,14 +14,22 @@ const electronMock = vi.hoisted(() => ({
   handlers: new Map<string, (event: unknown, payload?: unknown) => Promise<unknown>>(),
   listeners: new Map<string, (event: unknown, payload?: unknown) => void>(),
   showOpenDialog: vi.fn(),
+  showSaveDialog: vi.fn(),
   showMessageBox: vi.fn(),
+  openPath: vi.fn(),
+  showItemInFolder: vi.fn(),
   fromId: vi.fn()
 }))
 
 vi.mock('electron', () => ({
   dialog: {
     showOpenDialog: electronMock.showOpenDialog,
+    showSaveDialog: electronMock.showSaveDialog,
     showMessageBox: electronMock.showMessageBox
+  },
+  shell: {
+    openPath: electronMock.openPath,
+    showItemInFolder: electronMock.showItemInFolder
   },
   ipcMain: {
     handle: vi.fn((channel: string, handler: (event: unknown, payload?: unknown) => Promise<unknown>) => {
@@ -63,6 +73,36 @@ function fixture() {
     assertPrepared: vi.fn(),
     isPreparedInitialNavigation: vi.fn(() => false),
     dispose: vi.fn(() => true),
+    disposeAll: vi.fn()
+  }
+  const mediaProtocols = {
+    createLease: vi.fn(async (input: { handleId: string; mimeType?: string }) => ({
+      leaseId: 'lease_123456789012',
+      handleId: input.handleId,
+      url: 'kun-media://lease/opaque-lease-token',
+      mimeType: input.mimeType ?? 'application/octet-stream',
+      expiresAt: '2026-07-13T00:05:00.000Z'
+    })),
+    revokeLease: vi.fn(() => true)
+  }
+  const externalBrowserState = {
+    sessionId: 'view_123456789012',
+    siteId: 'bilibili',
+    presentation: 'mobile' as const,
+    url: 'https://www.bilibili.com/',
+    title: 'Bilibili',
+    loading: false,
+    canGoBack: false,
+    canGoForward: false,
+    zoomFactor: 1
+  }
+  const externalBrowsers = {
+    mount: vi.fn(() => externalBrowserState),
+    activate: vi.fn(() => externalBrowserState),
+    updateBounds: vi.fn(() => externalBrowserState),
+    navigate: vi.fn(() => externalBrowserState),
+    command: vi.fn(() => externalBrowserState),
+    state: vi.fn(() => externalBrowserState),
     disposeAll: vi.fn()
   }
   const contentScripts = {
@@ -126,6 +166,8 @@ function fixture() {
     descriptors: descriptors as never,
     viewSessions,
     viewProtocols: viewProtocols as never,
+    externalBrowsers: externalBrowsers as never,
+    mediaProtocols: mediaProtocols as never,
     protectedActions: protectedActions as never,
     credentialSurface: credentialSurface as never,
     contentScripts: contentScripts as never,
@@ -137,6 +179,8 @@ function fixture() {
     mainContents,
     viewSessions,
     viewProtocols,
+    mediaProtocols,
+    externalBrowsers,
     contentScripts,
     descriptors,
     protectedActions,
@@ -158,7 +202,11 @@ beforeEach(() => {
   electronMock.handlers.clear()
   electronMock.listeners.clear()
   electronMock.showOpenDialog.mockReset()
+  electronMock.showSaveDialog.mockReset()
   electronMock.showMessageBox.mockReset()
+  electronMock.openPath.mockReset()
+  electronMock.openPath.mockResolvedValue('')
+  electronMock.showItemInFolder.mockReset()
   electronMock.showMessageBox.mockResolvedValue({ response: 0 })
   electronMock.fromId.mockReset()
 })
@@ -227,6 +275,237 @@ describe('extension IPC security bridge', () => {
     expect(state.runtimeRequest).not.toHaveBeenCalled()
   })
 
+  it('binds permission consent to the expected version and discloses the actual workspace delta', async () => {
+    const state = fixture()
+    state.descriptors.resolvePackage.mockResolvedValue({
+      extensionId: 'acme.example',
+      extensionVersion: '1.2.3',
+      grantedPermissions: ['media.read'],
+      workspaceTrusted: true
+    })
+
+    await electronMock.handlers.get('extension:set-permissions')!(state.trustedEvent, {
+      extensionId: 'acme.example',
+      expectedVersion: '1.2.3',
+      permissions: ['workspace.write'],
+      workspaceRoot: '/workspace'
+    })
+
+    expect(state.protectedActions.authorizeAndPerform).toHaveBeenCalledWith(
+      expect.objectContaining({
+        extensionId: 'acme.example',
+        extensionVersion: '1.2.3',
+        operationKind: 'extension.permissions',
+        parameters: expect.objectContaining({ expectedVersion: '1.2.3' })
+      }),
+      expect.objectContaining({
+        detail: expect.stringMatching(
+          /Added broker permissions:[\s\S]*workspace\.write[\s\S]*Removed broker permissions:[\s\S]*media\.read[\s\S]*Workspace write permission/
+        )
+      }),
+      expect.any(Function)
+    )
+    expect(state.runtimeRequest).toHaveBeenCalledWith(
+      '/v1/extensions/acme.example/permissions',
+      'PUT',
+      JSON.stringify({
+        workspaceRoot: '/workspace',
+        permissions: ['workspace.write'],
+        expectedVersion: '1.2.3'
+      })
+    )
+  })
+
+  it.each([
+    ['global', '{}'],
+    ['workspace', JSON.stringify({ workspaceRoot: '/workspace' })]
+  ] as const)('applies reviewed permissions and enables the %s scope in one protected decision', async (
+    enableAfterApply,
+    expectedEnableBody
+  ) => {
+    const state = fixture()
+    state.descriptors.resolvePackage.mockResolvedValue({
+      extensionId: 'acme.example',
+      extensionVersion: '1.2.3',
+      grantedPermissions: [],
+      workspaceTrusted: false
+    })
+
+    await electronMock.handlers.get('extension:set-permissions')!(state.trustedEvent, {
+      extensionId: 'acme.example',
+      expectedVersion: '1.2.3',
+      permissions: ['ui.views', 'webview'],
+      workspaceRoot: '/workspace',
+      enableAfterApply
+    })
+
+    expect(state.protectedActions.authorizeAndPerform).toHaveBeenCalledWith(
+      expect.objectContaining({
+        operationKind: 'extension.permissions',
+        parameters: {
+          extensionId: 'acme.example',
+          expectedVersion: '1.2.3',
+          permissions: ['ui.views', 'webview'],
+          workspaceRoot: '/workspace',
+          enableAfterApply
+        }
+      }),
+      expect.objectContaining({
+        title: 'Review permissions and enable extension',
+        detail: expect.stringMatching(/apply these permissions[\s\S]*Resulting broker permissions/i)
+      }),
+      expect.any(Function)
+    )
+    expect(state.runtimeRequest).toHaveBeenNthCalledWith(
+      1,
+      '/v1/extensions/acme.example/permissions',
+      'PUT',
+      JSON.stringify({
+        workspaceRoot: '/workspace',
+        permissions: ['ui.views', 'webview'],
+        expectedVersion: '1.2.3'
+      })
+    )
+    expect(state.runtimeRequest).toHaveBeenNthCalledWith(
+      2,
+      '/v1/extensions/acme.example/enable',
+      'POST',
+      expectedEnableBody
+    )
+  })
+
+  it('does not change permissions or enable when the combined review is cancelled', async () => {
+    const state = fixture()
+    state.descriptors.resolvePackage.mockResolvedValue({
+      extensionId: 'acme.example',
+      extensionVersion: '1.2.3',
+      grantedPermissions: [],
+      workspaceTrusted: false
+    })
+    state.protectedActions.authorizeAndPerform.mockResolvedValueOnce(undefined)
+
+    const result = await electronMock.handlers.get('extension:set-permissions')!(state.trustedEvent, {
+      extensionId: 'acme.example',
+      expectedVersion: '1.2.3',
+      permissions: ['ui.views'],
+      workspaceRoot: '/workspace',
+      enableAfterApply: 'global'
+    })
+
+    expect(result).toMatchObject({ ok: false, status: 403 })
+    expect(state.runtimeRequest).not.toHaveBeenCalled()
+  })
+
+  it('does not enable when the reviewed permission update fails', async () => {
+    const state = fixture()
+    state.descriptors.resolvePackage.mockResolvedValue({
+      extensionId: 'acme.example',
+      extensionVersion: '1.2.3',
+      grantedPermissions: [],
+      workspaceTrusted: false
+    })
+    state.runtimeRequest.mockResolvedValueOnce({
+      ok: false,
+      status: 409,
+      body: JSON.stringify({ code: 'EXTENSION_VERSION_CONFLICT' })
+    })
+
+    const result = await electronMock.handlers.get('extension:set-permissions')!(state.trustedEvent, {
+      extensionId: 'acme.example',
+      expectedVersion: '1.2.3',
+      permissions: ['ui.views'],
+      workspaceRoot: '/workspace',
+      enableAfterApply: 'workspace'
+    })
+
+    expect(result).toMatchObject({ ok: false, status: 409 })
+    expect(state.runtimeRequest).toHaveBeenCalledTimes(1)
+    expect(state.runtimeRequest).not.toHaveBeenCalledWith(
+      '/v1/extensions/acme.example/enable',
+      expect.anything(),
+      expect.anything()
+    )
+  })
+
+  it('omits an absent workspace from the protected enable binding', async () => {
+    const state = fixture()
+    state.descriptors.resolvePackage.mockResolvedValue({
+      extensionId: 'acme.example',
+      extensionVersion: '1.2.3',
+      grantedPermissions: [],
+      workspaceTrusted: true
+    })
+
+    await electronMock.handlers.get('extension:enable')!(state.trustedEvent, {
+      extensionId: 'acme.example'
+    })
+
+    expect(state.protectedActions.authorizeAndPerform).toHaveBeenCalledWith(
+      expect.objectContaining({
+        operationKind: 'extension.enable',
+        parameters: { extensionId: 'acme.example' }
+      }),
+      expect.any(Object),
+      expect.any(Function)
+    )
+  })
+
+  it('rejects a stale permission review before presenting native consent', async () => {
+    const state = fixture()
+    state.descriptors.resolvePackage.mockResolvedValue({
+      extensionId: 'acme.example',
+      extensionVersion: '2.0.0',
+      grantedPermissions: [],
+      workspaceTrusted: false
+    })
+
+    await expect(electronMock.handlers.get('extension:set-permissions')!(state.trustedEvent, {
+      extensionId: 'acme.example',
+      expectedVersion: '1.0.0',
+      permissions: ['ui.views'],
+      workspaceRoot: '/workspace'
+    })).rejects.toThrow(/version changed/i)
+
+    expect(state.protectedActions.authorizeAndPerform).not.toHaveBeenCalled()
+    expect(state.runtimeRequest).not.toHaveBeenCalled()
+  })
+
+  it('treats an identical persisted workspace grant as an idempotent no-op', async () => {
+    const state = fixture()
+    state.descriptors.resolvePackage.mockResolvedValue({
+      extensionId: 'acme.example',
+      extensionVersion: '1.2.3',
+      grantedPermissions: ['webview', 'ui.views'],
+      workspaceTrusted: true
+    })
+    const view = state.viewSessions.create({
+      sessionId: 'permission-noop-view',
+      extensionId: 'acme.example',
+      extensionVersion: '1.2.3',
+      contributionId: 'issues',
+      workspaceRoot: '/workspace',
+      entryPath: 'dist/index.html',
+      parentWebContentsId: 1
+    })
+
+    const result = await electronMock.handlers.get('extension:set-permissions')!(state.trustedEvent, {
+      extensionId: 'acme.example',
+      expectedVersion: '1.2.3',
+      permissions: ['ui.views', 'webview'],
+      workspaceRoot: '/workspace'
+    })
+
+    expect(result).toEqual({
+      ok: true,
+      status: 200,
+      body: JSON.stringify({ unchanged: true })
+    })
+    expect(state.protectedActions.authorizeAndPerform).not.toHaveBeenCalled()
+    expect(state.runtimeRequest).not.toHaveBeenCalled()
+    expect(state.viewSessions.get(view.sessionId)).toMatchObject({ workspaceRoot: '/workspace' })
+    expect(state.contentScripts.revokeExtension).not.toHaveBeenCalled()
+  })
+
   it('binds guest requests to the Main-owned session and forwards nonce headers', async () => {
     const state = fixture()
     const record = state.viewSessions.create({
@@ -264,6 +543,969 @@ describe('extension IPC security bridge', () => {
         'x-kun-extension-session-nonce': record.nonce
       }
     )
+  })
+
+  it('attaches bounded View context through the owning workbench with Host provenance', async () => {
+    const state = fixture()
+    const workspaceRoot = '/tmp/workspace'
+    const canonicalWorkspaceRoot = resolve(workspaceRoot)
+    const record = state.viewSessions.create({
+      sessionId: 'view_12345678-1234-1234-1234-123456789abc',
+      runtimeSessionId: 'view_12345678-1234-1234-1234-123456789abc',
+      nonce: 'n'.repeat(43),
+      extensionId: 'acme.example',
+      extensionVersion: '1.0.0',
+      contributionId: 'extension:acme.example/issues',
+      workspaceRoot,
+      entryPath: 'dist/index.html',
+      parentWebContentsId: 1
+    })
+    state.viewSessions.prepareAttach(1, record.sourceUrl)
+    const mainFrame = { processId: 300, routingId: 400 }
+    const guest = { id: 20, mainFrame, once: vi.fn() }
+    state.viewSessions.bindNextGuest(1, guest as never)
+    state.descriptors.resolveView.mockResolvedValue({
+      extensionId: 'acme.example',
+      extensionVersion: '1.0.0',
+      contributionId: 'issues',
+      grantedPermissions: ['webview', 'ui.views', 'ui.actions'],
+      enabled: true,
+      workspaceTrusted: true
+    })
+
+    const response = await electronMock.handlers.get('extension:view:request')!(
+      { sender: guest, senderFrame: mainFrame },
+      {
+        sessionId: record.sessionId,
+        sessionNonce: record.nonce,
+        requestId: 'request-attach-context',
+        method: 'ui.attachComposerContext',
+        params: {
+          schemaVersion: 1,
+          id: 'video-selection',
+          title: 'Interview selection',
+          summary: 'Revision 4, two preview sources',
+          reference: { projectId: 'project-1', selectedItemIds: ['clip-1'] },
+          revision: 4,
+          generation: 7
+        }
+      }
+    )
+
+    const workspaceId = createHash('sha256').update(canonicalWorkspaceRoot).digest('hex')
+    expect(response).toMatchObject({
+      schemaVersion: 1,
+      title: 'Interview selection',
+      provenance: {
+        extensionId: 'acme.example',
+        extensionVersion: '1.0.0',
+        viewContributionId: 'extension:acme.example/issues',
+        workspaceId
+      }
+    })
+    expect(response).toMatchObject({ attachmentId: expect.stringMatching(/^extension-context:[a-f0-9]{64}$/) })
+    expect(JSON.stringify(response)).not.toContain(workspaceRoot)
+    expect(state.mainContents.send).toHaveBeenCalledWith(
+      'extension:composer-context-attached',
+      expect.objectContaining({ workspaceRoot: canonicalWorkspaceRoot, attachment: response })
+    )
+    expect(state.runtimeRequest).not.toHaveBeenCalled()
+  })
+
+  it('denies composer context attachment without ui.actions or from a stale frame', async () => {
+    const state = fixture()
+    const record = state.viewSessions.create({
+      sessionId: 'view_12345678-1234-1234-1234-123456789abc',
+      nonce: 'n'.repeat(43),
+      extensionId: 'acme.example',
+      extensionVersion: '1.0.0',
+      contributionId: 'extension:acme.example/issues',
+      entryPath: 'dist/index.html',
+      parentWebContentsId: 1
+    })
+    state.viewSessions.prepareAttach(1, record.sourceUrl)
+    const mainFrame = { processId: 300, routingId: 400 }
+    const guest = { id: 20, mainFrame, once: vi.fn() }
+    state.viewSessions.bindNextGuest(1, guest as never)
+    state.descriptors.resolveView.mockResolvedValue({
+      extensionId: 'acme.example',
+      extensionVersion: '1.0.0',
+      contributionId: 'issues',
+      grantedPermissions: ['webview', 'ui.views'],
+      enabled: true,
+      workspaceTrusted: true
+    })
+    const payload = {
+      sessionId: record.sessionId,
+      sessionNonce: record.nonce,
+      requestId: 'request-attach-context',
+      method: 'ui.attachComposerContext',
+      params: {
+        schemaVersion: 1,
+        id: 'selection',
+        title: 'Selection',
+        summary: 'One selected clip',
+        reference: { selectedItemIds: ['clip-1'] },
+        revision: 1,
+        generation: 1
+      }
+    }
+
+    await expect(electronMock.handlers.get('extension:view:request')!(
+      { sender: guest, senderFrame: mainFrame },
+      payload
+    )).rejects.toThrow(/permission is not granted/i)
+    await expect(electronMock.handlers.get('extension:view:request')!(
+      { sender: guest, senderFrame: { processId: 999, routingId: 999 } },
+      payload
+    )).rejects.toThrow(/current guest main frame/i)
+    expect(state.mainContents.send).not.toHaveBeenCalled()
+  })
+
+  it('keeps protected media paths and one-time operation tokens in Main while returning opaque handles', async () => {
+    const state = fixture()
+    const record = state.viewSessions.create({
+      sessionId: 'view_12345678-1234-1234-1234-123456789abc',
+      runtimeSessionId: 'view_12345678-1234-1234-1234-123456789abc',
+      nonce: 'n'.repeat(43),
+      extensionId: 'acme.example',
+      extensionVersion: '1.0.0',
+      contributionId: 'extension:acme.example/issues',
+      workspaceRoot: '/tmp/workspace',
+      entryPath: 'dist/index.html',
+      parentWebContentsId: 1
+    })
+    state.viewSessions.prepareAttach(1, record.sourceUrl)
+    const mainFrame = { processId: 300, routingId: 400 }
+    const guest = { id: 20, mainFrame, once: vi.fn() }
+    state.viewSessions.bindNextGuest(1, guest as never)
+    electronMock.showOpenDialog.mockResolvedValue({
+      canceled: false,
+      filePaths: ['/private/media/interview.mp4']
+    })
+    state.runtimeRequest.mockResolvedValue({
+      ok: true,
+      status: 201,
+      body: JSON.stringify({
+        selections: [{
+          handleId: 'media_handle_0000000001',
+          mode: 'read',
+          kind: 'video',
+          displayName: 'interview.mp4',
+          mimeType: 'video/mp4',
+          byteSize: 1234,
+          revoked: false
+        }]
+      })
+    })
+
+    const response = await electronMock.handlers.get('extension:view:request')!(
+      { sender: guest, senderFrame: mainFrame },
+      {
+        sessionId: record.sessionId,
+        sessionNonce: record.nonce,
+        requestId: 'request-media-pick',
+        method: 'media.pickFiles',
+        params: {
+          multiple: true,
+          maxFiles: 2,
+          filters: [{ name: 'Videos', extensions: ['mp4'], mimeTypes: ['video/mp4'] }]
+        }
+      }
+    )
+
+    expect(response).toMatchObject({
+      outcome: 'selected',
+      files: [{ handleId: 'media_handle_0000000001', displayName: 'interview.mp4' }]
+    })
+    expect(JSON.stringify(response)).not.toContain('/private/media')
+    expect(JSON.stringify(response)).not.toContain('operationToken')
+    expect(electronMock.showOpenDialog).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        title: 'Select media files for acme.example',
+        properties: ['openFile', 'multiSelections'],
+        filters: [{ name: 'Videos', extensions: ['mp4'] }]
+      })
+    )
+    const [path, method, body] = state.runtimeRequest.mock.calls[0]!
+    expect({ path, method }).toEqual({ path: '/v1/extensions/media/selections', method: 'POST' })
+    const registration = JSON.parse(body as string)
+    expect(registration).toMatchObject({
+      mode: 'read',
+      binding: {
+        sessionId: record.sessionId,
+        runtimeSessionId: record.runtimeSessionId,
+        extensionId: record.extensionId,
+        extensionVersion: record.extensionVersion,
+        contributionId: record.contributionId,
+        workspaceRoot: record.workspaceRoot,
+        senderWebContentsId: guest.id,
+        senderMainFrameProcessId: mainFrame.processId,
+        senderMainFrameRoutingId: mainFrame.routingId
+      },
+      selections: [{
+        absolutePath: '/private/media/interview.mp4',
+        displayName: 'interview.mp4'
+      }]
+    })
+    expect(registration.operationToken).toMatch(/^[A-Za-z0-9_-]{32,}$/)
+  })
+
+  it('mints and releases sender-bound kun-media leases without returning a path', async () => {
+    const state = fixture()
+    const record = state.viewSessions.create({
+      sessionId: 'view_12345678-1234-1234-1234-123456789abc',
+      runtimeSessionId: 'view_12345678-1234-1234-1234-123456789abc',
+      nonce: 'n'.repeat(43),
+      extensionId: 'acme.example',
+      extensionVersion: '1.0.0',
+      contributionId: 'extension:acme.example/issues',
+      workspaceRoot: '/tmp/workspace',
+      entryPath: 'dist/index.html',
+      parentWebContentsId: 1
+    })
+    state.viewSessions.prepareAttach(1, record.sourceUrl)
+    const attachFrame = { processId: 299, routingId: 399 }
+    const mainFrame = { processId: 300, routingId: 400 }
+    const guest = { id: 20, mainFrame: attachFrame, once: vi.fn() }
+    state.viewSessions.bindNextGuest(1, guest as never)
+    guest.mainFrame = mainFrame
+    state.runtimeRequest.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      body: JSON.stringify({
+        binding: {
+          sessionId: record.sessionId,
+          runtimeSessionId: record.runtimeSessionId,
+          sessionNonce: record.nonce,
+          extensionId: record.extensionId,
+          extensionVersion: record.extensionVersion,
+          contributionId: record.contributionId,
+          workspaceRoot: record.workspaceRoot,
+          senderWebContentsId: guest.id,
+          senderMainFrameProcessId: mainFrame.processId,
+          senderMainFrameRoutingId: mainFrame.routingId
+        },
+        handleId: 'media_handle_0000000001',
+        absolutePath: '/private/media/interview.mp4',
+        mimeType: 'video/mp4',
+        fileIdentity: { byteSize: 1234, modifiedAtMs: 1000, device: 2, inode: 3 },
+        expiresAt: '2026-07-13T00:05:00.000Z'
+      })
+    })
+
+    const opened = await electronMock.handlers.get('extension:view:request')!(
+      { sender: guest, senderFrame: mainFrame },
+      {
+        sessionId: record.sessionId,
+        sessionNonce: record.nonce,
+        requestId: 'request-media-open',
+        method: 'media.openViewResource',
+        params: { handleId: 'media_handle_0000000001' }
+      }
+    )
+    expect(opened).toEqual({
+      leaseId: 'lease_123456789012',
+      handleId: 'media_handle_0000000001',
+      url: 'kun-media://lease/opaque-lease-token',
+      mimeType: 'video/mp4',
+      expiresAt: '2026-07-13T00:05:00.000Z'
+    })
+    expect(JSON.stringify(opened)).not.toContain('/private/media')
+    expect(state.runtimeRequest).toHaveBeenCalledWith(
+      '/v1/extensions/media/leases/resolve',
+      'POST',
+      expect.stringContaining('media_handle_0000000001')
+    )
+    expect(JSON.parse(state.runtimeRequest.mock.calls[0]![2] as string).binding).toMatchObject({
+      senderWebContentsId: guest.id,
+      senderMainFrameProcessId: mainFrame.processId,
+      senderMainFrameRoutingId: mainFrame.routingId
+    })
+    expect(state.mediaProtocols.createLease).toHaveBeenCalledWith(expect.objectContaining({
+      viewSessionId: record.sessionId,
+      absolutePath: '/private/media/interview.mp4',
+      fileIdentity: { byteSize: 1234, modifiedAtMs: 1000, device: 2, inode: 3 }
+    }))
+
+    await expect(electronMock.handlers.get('extension:view:request')!(
+      { sender: guest, senderFrame: attachFrame },
+      {
+        sessionId: record.sessionId,
+        sessionNonce: record.nonce,
+        requestId: 'request-media-open-stale-frame',
+        method: 'media.openViewResource',
+        params: { handleId: 'media_handle_0000000001' }
+      }
+    )).rejects.toMatchObject({ code: 'MEDIA_SCOPE_DENIED' })
+    expect(state.runtimeRequest).toHaveBeenCalledTimes(1)
+
+    const released = await electronMock.handlers.get('extension:view:request')!(
+      { sender: guest, senderFrame: mainFrame },
+      {
+        sessionId: record.sessionId,
+        sessionNonce: record.nonce,
+        requestId: 'request-media-release',
+        method: 'media.release',
+        params: { resource: 'lease', leaseId: 'lease_123456789012' }
+      }
+    )
+    expect(released).toEqual({ released: true })
+    expect(state.mediaProtocols.revokeLease).toHaveBeenCalledWith(
+      'lease_123456789012',
+      'released'
+    )
+  })
+
+  it('rechecks the original media frame after resolution and lease creation awaits', async () => {
+    const state = fixture()
+    const record = state.viewSessions.create({
+      sessionId: 'view_12345678-1234-1234-1234-123456789abc',
+      runtimeSessionId: 'view_12345678-1234-1234-1234-123456789abc',
+      nonce: 'n'.repeat(43),
+      extensionId: 'acme.example',
+      extensionVersion: '1.0.0',
+      contributionId: 'extension:acme.example/issues',
+      workspaceRoot: '/tmp/workspace',
+      entryPath: 'dist/index.html',
+      parentWebContentsId: 1
+    })
+    state.viewSessions.prepareAttach(1, record.sourceUrl)
+    const mainFrame = { processId: 300, routingId: 400 }
+    const nextFrame = { processId: 301, routingId: 401 }
+    const guest = { id: 20, mainFrame, once: vi.fn() }
+    state.viewSessions.bindNextGuest(1, guest as never)
+    const resolution = {
+      ok: true,
+      status: 200,
+      body: JSON.stringify({
+        binding: {
+          sessionId: record.sessionId,
+          runtimeSessionId: record.runtimeSessionId,
+          sessionNonce: record.nonce,
+          extensionId: record.extensionId,
+          extensionVersion: record.extensionVersion,
+          contributionId: record.contributionId,
+          workspaceRoot: record.workspaceRoot,
+          senderWebContentsId: guest.id,
+          senderMainFrameProcessId: mainFrame.processId,
+          senderMainFrameRoutingId: mainFrame.routingId
+        },
+        handleId: 'media_handle_0000000001',
+        absolutePath: '/private/media/interview.mp4',
+        mimeType: 'video/mp4',
+        fileIdentity: { byteSize: 1234, modifiedAtMs: 1000 },
+        expiresAt: '2026-07-13T00:05:00.000Z'
+      })
+    }
+    const invoke = () => electronMock.handlers.get('extension:view:request')!(
+      { sender: guest, senderFrame: mainFrame },
+      {
+        sessionId: record.sessionId,
+        sessionNonce: record.nonce,
+        requestId: 'request-media-navigation-race',
+        method: 'media.openViewResource',
+        params: { handleId: 'media_handle_0000000001' }
+      }
+    )
+
+    state.runtimeRequest.mockImplementationOnce(async () => {
+      guest.mainFrame = nextFrame
+      return resolution
+    })
+    await expect(invoke()).rejects.toMatchObject({ code: 'MEDIA_SCOPE_DENIED' })
+    expect(state.mediaProtocols.createLease).not.toHaveBeenCalled()
+
+    guest.mainFrame = mainFrame
+    state.runtimeRequest.mockResolvedValueOnce(resolution)
+    state.mediaProtocols.createLease.mockImplementationOnce(async () => {
+      guest.mainFrame = nextFrame
+      return {
+        leaseId: 'lease_123456789012',
+        handleId: 'media_handle_0000000001',
+        url: 'kun-media://lease/opaque-lease-token',
+        mimeType: 'video/mp4',
+        expiresAt: '2026-07-13T00:05:00.000Z'
+      }
+    })
+    await expect(invoke()).rejects.toMatchObject({ code: 'MEDIA_SCOPE_DENIED' })
+    expect(state.mediaProtocols.revokeLease).toHaveBeenCalledWith(
+      'lease_123456789012',
+      'released'
+    )
+  })
+
+  it('opens and reveals owned artifacts from the authenticated View binding without exposing paths', async () => {
+    const state = fixture()
+    const workspaceRoot = '/tmp/workspace'
+    const canonicalWorkspaceRoot = resolve(workspaceRoot)
+    const record = state.viewSessions.create({
+      sessionId: 'view_12345678-1234-1234-1234-123456789abc',
+      runtimeSessionId: 'view_12345678-1234-1234-1234-123456789abc',
+      nonce: 'n'.repeat(43),
+      extensionId: 'acme.example',
+      extensionVersion: '1.0.0',
+      contributionId: 'extension:acme.example/issues',
+      workspaceRoot,
+      entryPath: 'dist/index.html',
+      parentWebContentsId: 1
+    })
+    state.viewSessions.prepareAttach(1, record.sourceUrl)
+    const mainFrame = { processId: 300, routingId: 400 }
+    const guest = { id: 20, mainFrame, once: vi.fn() }
+    state.viewSessions.bindNextGuest(1, guest as never)
+    state.runtimeRequest.mockResolvedValue({
+      ok: true,
+      status: 200,
+      body: JSON.stringify({
+        artifactId: 'artifact_subtitle_1234567890',
+        absolutePath: '/private/generated/captions.srt',
+        displayName: 'captions.srt',
+        mimeType: 'application/x-subrip'
+      })
+    })
+
+    const invoke = (action: 'open' | 'reveal') =>
+      electronMock.handlers.get('extension:view:request')!(
+        { sender: guest, senderFrame: mainFrame },
+        {
+          sessionId: record.sessionId,
+          sessionNonce: record.nonce,
+          requestId: `request-artifact-${action}`,
+          method: 'media.performArtifactAction',
+          params: { artifactId: 'artifact_subtitle_1234567890', action }
+        }
+      )
+
+    await expect(invoke('open')).resolves.toEqual({ performed: true })
+    await expect(invoke('reveal')).resolves.toEqual({ performed: true })
+    expect(electronMock.openPath).toHaveBeenCalledWith('/private/generated/captions.srt')
+    expect(electronMock.showItemInFolder).toHaveBeenCalledWith('/private/generated/captions.srt')
+    const [, , body] = state.runtimeRequest.mock.calls[0]!
+    expect(JSON.parse(body as string)).toEqual({
+      artifactId: 'artifact_subtitle_1234567890',
+      ownerExtensionId: record.extensionId,
+      ownerExtensionVersion: record.extensionVersion,
+      workspaceId: createHash('sha256').update(canonicalWorkspaceRoot).digest('hex'),
+      workspaceRoot: canonicalWorkspaceRoot
+    })
+    expect(JSON.stringify(await invoke('open'))).not.toContain('/private/generated')
+
+    await expect(electronMock.handlers.get('extension:view:request')!(
+      { sender: guest, senderFrame: mainFrame },
+      {
+        sessionId: record.sessionId,
+        sessionNonce: record.nonce,
+        requestId: 'request-artifact-forged-owner',
+        method: 'media.performArtifactAction',
+        params: {
+          artifactId: 'artifact_subtitle_1234567890',
+          action: 'open',
+          ownerExtensionId: 'other.extension'
+        }
+      }
+    )).rejects.toThrow()
+    await expect(electronMock.handlers.get('extension:view:request')!(
+      { sender: guest, senderFrame: { processId: 301, routingId: 401 } },
+      {
+        sessionId: record.sessionId,
+        sessionNonce: record.nonce,
+        requestId: 'request-artifact-subframe',
+        method: 'media.performArtifactAction',
+        params: { artifactId: 'artifact_subtitle_1234567890', action: 'reveal' }
+      }
+    )).rejects.toMatchObject({ code: 'MEDIA_SCOPE_DENIED' })
+  })
+
+  it('does not invoke the desktop shell when artifact ownership resolution fails', async () => {
+    const state = fixture()
+    const record = state.viewSessions.create({
+      sessionId: 'view_12345678-1234-1234-1234-123456789abc',
+      nonce: 'n'.repeat(43),
+      extensionId: 'acme.example',
+      extensionVersion: '1.0.0',
+      contributionId: 'extension:acme.example/issues',
+      workspaceRoot: '/tmp/workspace',
+      entryPath: 'dist/index.html',
+      parentWebContentsId: 1
+    })
+    state.viewSessions.prepareAttach(1, record.sourceUrl)
+    const mainFrame = { processId: 300, routingId: 400 }
+    const guest = { id: 20, mainFrame, once: vi.fn() }
+    state.viewSessions.bindNextGuest(1, guest as never)
+    state.runtimeRequest.mockResolvedValue({
+      ok: false,
+      status: 404,
+      body: JSON.stringify({ error: { message: 'Generated artifact is unavailable' } })
+    })
+
+    await expect(electronMock.handlers.get('extension:view:request')!(
+      { sender: guest, senderFrame: mainFrame },
+      {
+        sessionId: record.sessionId,
+        sessionNonce: record.nonce,
+        requestId: 'request-artifact-unavailable',
+        method: 'media.performArtifactAction',
+        params: { artifactId: 'artifact_subtitle_1234567890', action: 'open' }
+      }
+    )).rejects.toThrow()
+    expect(electronMock.openPath).not.toHaveBeenCalled()
+    expect(electronMock.showItemInFolder).not.toHaveBeenCalled()
+  })
+
+  it('treats native picker cancellation as no consent and creates no grant', async () => {
+    const state = fixture()
+    const record = state.viewSessions.create({
+      sessionId: 'view_12345678-1234-1234-1234-123456789abc',
+      nonce: 'n'.repeat(43),
+      extensionId: 'acme.example',
+      extensionVersion: '1.0.0',
+      contributionId: 'extension:acme.example/issues',
+      workspaceRoot: '/tmp/workspace',
+      entryPath: 'dist/index.html',
+      parentWebContentsId: 1
+    })
+    state.viewSessions.prepareAttach(1, record.sourceUrl)
+    const mainFrame = { processId: 300, routingId: 400 }
+    const guest = { id: 20, mainFrame, once: vi.fn() }
+    state.viewSessions.bindNextGuest(1, guest as never)
+    electronMock.showOpenDialog.mockResolvedValue({ canceled: true, filePaths: [] })
+
+    await expect(electronMock.handlers.get('extension:view:request')!(
+      { sender: guest, senderFrame: mainFrame },
+      {
+        sessionId: record.sessionId,
+        sessionNonce: record.nonce,
+        requestId: 'request-media-cancel',
+        method: 'media.pickFiles',
+        params: {}
+      }
+    )).resolves.toEqual({ outcome: 'cancelled', files: [] })
+    expect(state.runtimeRequest).not.toHaveBeenCalled()
+  })
+
+  it('localizes protected native media picker titles from the current Host locale', async () => {
+    const state = fixture()
+    const record = state.viewSessions.create({
+      sessionId: 'view_12345678-1234-1234-1234-123456789abc',
+      nonce: 'n'.repeat(43),
+      extensionId: 'acme.example',
+      extensionVersion: '1.0.0',
+      contributionId: 'extension:acme.example/issues',
+      workspaceRoot: '/tmp/workspace',
+      entryPath: 'dist/index.html',
+      parentWebContentsId: 1
+    })
+    state.viewSessions.prepareAttach(1, record.sourceUrl)
+    const mainFrame = { processId: 300, routingId: 400 }
+    const guest = { id: 20, mainFrame, once: vi.fn() }
+    state.viewSessions.bindNextGuest(1, guest as never)
+    electronMock.showOpenDialog.mockResolvedValue({ canceled: true, filePaths: [] })
+    electronMock.showSaveDialog.mockResolvedValue({ canceled: true })
+
+    state.setWorkbenchEnvironment({
+      theme: {
+        kind: 'light',
+        tokens: { foreground: '#233659' },
+        zoomFactor: 1,
+        reducedMotion: false
+      },
+      locale: { language: 'zh', direction: 'ltr', messages: {} }
+    })
+    await electronMock.handlers.get('extension:view:request')!(
+      { sender: guest, senderFrame: mainFrame },
+      {
+        sessionId: record.sessionId,
+        sessionNonce: record.nonce,
+        requestId: 'request-localized-media-import',
+        method: 'media.pickFiles',
+        params: {}
+      }
+    )
+    state.setWorkbenchEnvironment({
+      theme: {
+        kind: 'light',
+        tokens: { foreground: '#233659' },
+        zoomFactor: 1,
+        reducedMotion: false
+      },
+      locale: { language: 'zh-CN', direction: 'ltr', messages: {} }
+    })
+    await electronMock.handlers.get('extension:view:request')!(
+      { sender: guest, senderFrame: mainFrame },
+      {
+        sessionId: record.sessionId,
+        sessionNonce: record.nonce,
+        requestId: 'request-localized-media-export',
+        method: 'media.pickSaveTarget',
+        params: {}
+      }
+    )
+
+    state.setWorkbenchEnvironment({
+      theme: {
+        kind: 'light',
+        tokens: { foreground: '#233659' },
+        zoomFactor: 1,
+        reducedMotion: false
+      },
+      locale: { language: 'en', direction: 'ltr', messages: {} }
+    })
+    await electronMock.handlers.get('extension:view:request')!(
+      { sender: guest, senderFrame: mainFrame },
+      {
+        sessionId: record.sessionId,
+        sessionNonce: record.nonce,
+        requestId: 'request-english-media-import',
+        method: 'media.pickFiles',
+        params: {}
+      }
+    )
+    await electronMock.handlers.get('extension:view:request')!(
+      { sender: guest, senderFrame: mainFrame },
+      {
+        sessionId: record.sessionId,
+        sessionNonce: record.nonce,
+        requestId: 'request-english-media-export',
+        method: 'media.pickSaveTarget',
+        params: {}
+      }
+    )
+
+    expect(electronMock.showOpenDialog).toHaveBeenNthCalledWith(
+      1,
+      expect.anything(),
+      expect.objectContaining({ title: '为 acme.example 选择媒体文件' })
+    )
+    expect(electronMock.showSaveDialog).toHaveBeenNthCalledWith(
+      1,
+      expect.anything(),
+      expect.objectContaining({ title: '为 acme.example 选择导出位置' })
+    )
+    expect(electronMock.showOpenDialog).toHaveBeenNthCalledWith(
+      2,
+      expect.anything(),
+      expect.objectContaining({ title: 'Select media files for acme.example' })
+    )
+    expect(electronMock.showSaveDialog).toHaveBeenNthCalledWith(
+      2,
+      expect.anything(),
+      expect.objectContaining({ title: 'Choose export destination for acme.example' })
+    )
+    expect(state.runtimeRequest).not.toHaveBeenCalled()
+  })
+
+  it('does not open a native picker if its View navigates while Main resolves the locale', async () => {
+    const state = fixture()
+    const record = state.viewSessions.create({
+      sessionId: 'view_12345678-1234-1234-1234-123456789abc',
+      nonce: 'n'.repeat(43),
+      extensionId: 'acme.example',
+      extensionVersion: '1.0.0',
+      contributionId: 'extension:acme.example/issues',
+      workspaceRoot: '/tmp/workspace',
+      entryPath: 'dist/index.html',
+      parentWebContentsId: 1
+    })
+    state.viewSessions.prepareAttach(1, record.sourceUrl)
+    const mainFrame = { processId: 300, routingId: 400 }
+    const guest = { id: 20, mainFrame, once: vi.fn() }
+    state.viewSessions.bindNextGuest(1, guest as never)
+    state.options.getWorkbenchEnvironment = vi.fn(async (): Promise<ExtensionWorkbenchEnvironment> => {
+      guest.mainFrame = { processId: 301, routingId: 401 }
+      return {
+        theme: {
+          kind: 'light',
+          tokens: { foreground: '#233659' },
+          zoomFactor: 1,
+          reducedMotion: false
+        },
+        locale: { language: 'zh-CN', direction: 'ltr', messages: {} }
+      }
+    })
+
+    await expect(electronMock.handlers.get('extension:view:request')!(
+      { sender: guest, senderFrame: mainFrame },
+      {
+        sessionId: record.sessionId,
+        sessionNonce: record.nonce,
+        requestId: 'request-picker-locale-navigation-race',
+        method: 'media.pickFiles',
+        params: {}
+      }
+    )).rejects.toMatchObject({ code: 'MEDIA_SCOPE_DENIED' })
+    expect(electronMock.showOpenDialog).not.toHaveBeenCalled()
+    expect(state.runtimeRequest).not.toHaveBeenCalled()
+  })
+
+  it('does not register a picker selection after its originating frame navigates', async () => {
+    const state = fixture()
+    const record = state.viewSessions.create({
+      sessionId: 'view_12345678-1234-1234-1234-123456789abc',
+      nonce: 'n'.repeat(43),
+      extensionId: 'acme.example',
+      extensionVersion: '1.0.0',
+      contributionId: 'extension:acme.example/issues',
+      workspaceRoot: '/tmp/workspace',
+      entryPath: 'dist/index.html',
+      parentWebContentsId: 1
+    })
+    state.viewSessions.prepareAttach(1, record.sourceUrl)
+    const mainFrame = { processId: 300, routingId: 400 }
+    const guest = { id: 20, mainFrame, once: vi.fn() }
+    state.viewSessions.bindNextGuest(1, guest as never)
+    electronMock.showOpenDialog.mockImplementationOnce(async () => {
+      guest.mainFrame = { processId: 301, routingId: 401 }
+      return { canceled: false, filePaths: ['/private/media/interview.mp4'] }
+    })
+
+    await expect(electronMock.handlers.get('extension:view:request')!(
+      { sender: guest, senderFrame: mainFrame },
+      {
+        sessionId: record.sessionId,
+        sessionNonce: record.nonce,
+        requestId: 'request-media-picker-navigation-race',
+        method: 'media.pickFiles',
+        params: {}
+      }
+    )).rejects.toMatchObject({ code: 'MEDIA_SCOPE_DENIED' })
+    expect(state.runtimeRequest).not.toHaveBeenCalled()
+  })
+
+  it('releases picker handles when the frame navigates during runtime registration', async () => {
+    const state = fixture()
+    const record = state.viewSessions.create({
+      sessionId: 'view_12345678-1234-1234-1234-123456789abc',
+      runtimeSessionId: 'view_12345678-1234-1234-1234-123456789abc',
+      nonce: 'n'.repeat(43),
+      extensionId: 'acme.example',
+      extensionVersion: '1.0.0',
+      contributionId: 'extension:acme.example/issues',
+      workspaceRoot: '/tmp/workspace',
+      entryPath: 'dist/index.html',
+      parentWebContentsId: 1
+    })
+    state.viewSessions.prepareAttach(1, record.sourceUrl)
+    const mainFrame = { processId: 300, routingId: 400 }
+    const guest = { id: 20, mainFrame, once: vi.fn() }
+    state.viewSessions.bindNextGuest(1, guest as never)
+    electronMock.showOpenDialog.mockResolvedValueOnce({
+      canceled: false,
+      filePaths: ['/private/media/interview.mp4']
+    })
+    state.runtimeRequest.mockImplementationOnce(async () => {
+      guest.mainFrame = { processId: 301, routingId: 401 }
+      return {
+        ok: true,
+        status: 201,
+        body: JSON.stringify({
+          selections: [{
+            handleId: 'media_handle_0000000001',
+            mode: 'read',
+            kind: 'video',
+            displayName: 'interview.mp4',
+            mimeType: 'video/mp4',
+            revoked: false
+          }]
+        })
+      }
+    })
+    state.runtimeRequest.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      body: JSON.stringify({ schemaVersion: 1, result: { released: true } })
+    })
+
+    await expect(electronMock.handlers.get('extension:view:request')!(
+      { sender: guest, senderFrame: mainFrame },
+      {
+        sessionId: record.sessionId,
+        sessionNonce: record.nonce,
+        requestId: 'request-media-picker-registration-race',
+        method: 'media.pickFiles',
+        params: {}
+      }
+    )).rejects.toMatchObject({ code: 'MEDIA_SCOPE_DENIED' })
+    expect(state.runtimeRequest).toHaveBeenCalledTimes(2)
+    const [cleanupPath, cleanupMethod, cleanupBody, cleanupHeaders] =
+      state.runtimeRequest.mock.calls[1]!
+    expect({ cleanupPath, cleanupMethod }).toEqual({
+      cleanupPath: `/v1/extensions/view-sessions/${record.runtimeSessionId}/requests`,
+      cleanupMethod: 'POST'
+    })
+    expect(JSON.parse(cleanupBody as string)).toMatchObject({
+      method: 'media.release',
+      params: { resource: 'handle', handleId: 'media_handle_0000000001' }
+    })
+    expect(cleanupHeaders).toEqual({
+      'x-kun-extension-session-id': record.runtimeSessionId,
+      'x-kun-extension-session-nonce': record.nonce
+    })
+
+    guest.mainFrame = mainFrame
+    state.runtimeRequest.mockClear()
+    electronMock.showOpenDialog.mockResolvedValueOnce({
+      canceled: false,
+      filePaths: ['/private/media/interview.mp4']
+    })
+    state.runtimeRequest.mockImplementationOnce(async () => {
+      guest.mainFrame = { processId: 302, routingId: 402 }
+      return {
+        ok: true,
+        status: 201,
+        body: JSON.stringify({
+          selections: [{
+            handleId: 'media_handle_0000000002',
+            mode: 'read',
+            kind: 'video',
+            displayName: 'interview.mp4',
+            mimeType: 'video/mp4',
+            revoked: false
+          }]
+        })
+      }
+    })
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      state.runtimeRequest.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        body: JSON.stringify({ schemaVersion: 1, result: { released: false } })
+      })
+    }
+    await expect(electronMock.handlers.get('extension:view:request')!(
+      { sender: guest, senderFrame: mainFrame },
+      {
+        sessionId: record.sessionId,
+        sessionNonce: record.nonce,
+        requestId: 'request-media-picker-cleanup-failure',
+        method: 'media.pickFiles',
+        params: {}
+      }
+    )).rejects.toMatchObject({ code: 'MEDIA_REGISTRATION_FAILED' })
+    expect(state.runtimeRequest).toHaveBeenCalledTimes(4)
+  })
+
+  it('rejects picker path forgery and non-main-frame senders before opening a dialog', async () => {
+    const state = fixture()
+    const record = state.viewSessions.create({
+      sessionId: 'view_12345678-1234-1234-1234-123456789abc',
+      nonce: 'n'.repeat(43),
+      extensionId: 'acme.example',
+      extensionVersion: '1.0.0',
+      contributionId: 'extension:acme.example/issues',
+      workspaceRoot: '/tmp/workspace',
+      entryPath: 'dist/index.html',
+      parentWebContentsId: 1
+    })
+    state.viewSessions.prepareAttach(1, record.sourceUrl)
+    const mainFrame = { processId: 300, routingId: 400 }
+    const guest = { id: 20, mainFrame, once: vi.fn() }
+    state.viewSessions.bindNextGuest(1, guest as never)
+
+    await expect(electronMock.handlers.get('extension:view:request')!(
+      { sender: guest, senderFrame: mainFrame },
+      {
+        sessionId: record.sessionId,
+        sessionNonce: record.nonce,
+        requestId: 'request-media-forged-path',
+        method: 'media.pickFiles',
+        params: { absolutePath: '/tmp/forged.mp4' }
+      }
+    )).rejects.toThrow()
+    await expect(electronMock.handlers.get('extension:view:request')!(
+      { sender: guest, senderFrame: { processId: 301, routingId: 401 } },
+      {
+        sessionId: record.sessionId,
+        sessionNonce: record.nonce,
+        requestId: 'request-media-subframe',
+        method: 'media.pickFiles',
+        params: {}
+      }
+    )).rejects.toMatchObject({ code: 'MEDIA_SCOPE_DENIED' })
+    await expect(electronMock.handlers.get('extension:view:request')!(
+      { sender: guest, senderFrame: mainFrame },
+      {
+        sessionId: record.sessionId,
+        sessionNonce: record.nonce,
+        requestId: 'request-media-forged-save-name',
+        method: 'media.pickSaveTarget',
+        params: { suggestedName: '../escape.mp4' }
+      }
+    )).rejects.toMatchObject({ code: 'MEDIA_INVALID_ARGUMENT' })
+    expect(electronMock.showOpenDialog).not.toHaveBeenCalled()
+    expect(electronMock.showSaveDialog).not.toHaveBeenCalled()
+    expect(state.runtimeRequest).not.toHaveBeenCalled()
+  })
+
+  it('registers a save target without returning or creating the selected path', async () => {
+    const state = fixture()
+    const workspaceRoot = '/tmp/workspace'
+    const record = state.viewSessions.create({
+      sessionId: 'view_12345678-1234-1234-1234-123456789abc',
+      nonce: 'n'.repeat(43),
+      extensionId: 'acme.example',
+      extensionVersion: '1.0.0',
+      contributionId: 'extension:acme.example/issues',
+      workspaceRoot,
+      entryPath: 'dist/index.html',
+      parentWebContentsId: 1
+    })
+    state.viewSessions.prepareAttach(1, record.sourceUrl)
+    const mainFrame = { processId: 300, routingId: 400 }
+    const guest = { id: 20, mainFrame, once: vi.fn() }
+    state.viewSessions.bindNextGuest(1, guest as never)
+    electronMock.showSaveDialog.mockResolvedValue({
+      canceled: false,
+      filePath: '/private/exports/final.mp4'
+    })
+    state.runtimeRequest.mockResolvedValue({
+      ok: true,
+      status: 201,
+      body: JSON.stringify({
+        selections: [{
+          handleId: 'media_export_000000001',
+          mode: 'export',
+          kind: 'video',
+          displayName: 'final.mp4',
+          mimeType: 'video/mp4',
+          revoked: false
+        }]
+      })
+    })
+
+    const response = await electronMock.handlers.get('extension:view:request')!(
+      { sender: guest, senderFrame: mainFrame },
+      {
+        sessionId: record.sessionId,
+        sessionNonce: record.nonce,
+        requestId: 'request-media-save',
+        method: 'media.pickSaveTarget',
+        params: {
+          suggestedName: 'final.mp4',
+          filters: [{ name: 'MP4', extensions: ['mp4'], mimeTypes: [] }]
+        }
+      }
+    )
+
+    expect(response).toMatchObject({
+      outcome: 'selected',
+      target: { handleId: 'media_export_000000001', mode: 'export' }
+    })
+    expect(JSON.stringify(response)).not.toContain('/private/exports')
+    expect(electronMock.showSaveDialog).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        title: 'Choose export destination for acme.example',
+        defaultPath: join(workspaceRoot, 'final.mp4'),
+        filters: [{ name: 'MP4', extensions: ['mp4'] }]
+      })
+    )
+    const registration = JSON.parse(state.runtimeRequest.mock.calls[0]![2] as string)
+    expect(registration).toMatchObject({
+      mode: 'export',
+      selections: [{ absolutePath: '/private/exports/final.mp4', displayName: 'final.mp4' }]
+    })
   })
 
   it('serves the real workbench environment locally and publishes live changes to bound guests', async () => {
@@ -335,6 +1577,90 @@ describe('extension IPC security bridge', () => {
     })
   })
 
+  it('serializes environment PUTs and coalesces queued publishes to the latest Host state', async () => {
+    const state = fixture()
+    const broadcastToGuests = vi.spyOn(state.viewSessions, 'broadcastToGuests')
+    type RuntimeResult = { ok: boolean; status: number; body: string }
+    const success: RuntimeResult = { ok: true, status: 200, body: '{}' }
+    const pendingPuts: Array<{
+      body: string
+      resolve: (result: RuntimeResult) => void
+    }> = []
+    const deferredRuntimeRequest = vi.fn((
+      path: string,
+      method?: string,
+      body?: string,
+      _headers?: Record<string, string>
+    ): Promise<RuntimeResult> => {
+      if (path !== '/v1/extensions/workbench/environment' || method !== 'PUT') {
+        return Promise.resolve(success)
+      }
+      return new Promise((resolve) => {
+        pendingPuts.push({ body: body ?? '', resolve })
+      })
+    })
+    state.options.runtimeRequest = deferredRuntimeRequest
+
+    const firstPublish = state.registration.publishWorkbenchEnvironmentChanged()
+    await vi.waitFor(() => expect(pendingPuts).toHaveLength(1))
+
+    state.setWorkbenchEnvironment({
+      theme: {
+        kind: 'dark',
+        tokens: { foreground: '#f0f5fc' },
+        zoomFactor: 1.25,
+        reducedMotion: true
+      },
+      locale: { language: 'zh', direction: 'ltr', messages: {} }
+    })
+    const intermediatePublish = state.registration.publishWorkbenchEnvironmentChanged()
+    state.setWorkbenchEnvironment({
+      theme: {
+        kind: 'dark',
+        tokens: { foreground: '#ffffff' },
+        zoomFactor: 1.5,
+        reducedMotion: false
+      },
+      locale: { language: 'en', direction: 'ltr', messages: { ready: 'Ready' } }
+    })
+    const latestPublish = state.registration.publishWorkbenchEnvironmentChanged()
+
+    await Promise.resolve()
+    expect(pendingPuts).toHaveLength(1)
+    expect(JSON.parse(pendingPuts[0]!.body)).toMatchObject({
+      theme: { kind: 'light', zoomFactor: 1 },
+      locale: { language: 'en' }
+    })
+
+    pendingPuts[0]!.resolve(success)
+    await vi.waitFor(() => expect(pendingPuts).toHaveLength(2))
+    expect(broadcastToGuests).not.toHaveBeenCalled()
+    expect(JSON.parse(pendingPuts[1]!.body)).toEqual({
+      theme: {
+        kind: 'dark',
+        tokens: { foreground: '#ffffff' },
+        zoomFactor: 1.5,
+        reducedMotion: false
+      },
+      locale: { language: 'en', direction: 'ltr', messages: { ready: 'Ready' } }
+    })
+
+    pendingPuts[1]!.resolve(success)
+    await Promise.all([firstPublish, intermediatePublish, latestPublish])
+    expect(deferredRuntimeRequest).toHaveBeenCalledTimes(2)
+    expect(broadcastToGuests).toHaveBeenCalledTimes(2)
+    expect(broadcastToGuests).toHaveBeenNthCalledWith(
+      1,
+      'ui.themeChanged',
+      expect.objectContaining({ kind: 'dark', zoomFactor: 1.5 })
+    )
+    expect(broadcastToGuests).toHaveBeenNthCalledWith(
+      2,
+      'ui.localeChanged',
+      { language: 'en', direction: 'ltr', messages: { ready: 'Ready' } }
+    )
+  })
+
   it('queues trusted HostMessages for one owned View Session through the bounded runtime pump', async () => {
     const state = fixture()
     const record = state.viewSessions.create({
@@ -363,7 +1689,7 @@ describe('extension IPC security bridge', () => {
     )
   })
 
-  it('routes replayed broker notifications only to the owning guest', async () => {
+  it('routes only View-safe replayed broker notifications to the owning guest', async () => {
     const state = fixture()
     const record = state.viewSessions.create({
       sessionId: 'view_12345678-1234-1234-1234-123456789abc',
@@ -387,15 +1713,33 @@ describe('extension IPC security bridge', () => {
       ok: true,
       status: 200,
       body: JSON.stringify({
-        events: [{
-          sequence: 2,
-          type: 'bridge',
-          payload: {
-            method: 'agent.event',
-            params: { subscriptionId: 'agentsub-1', event: { sequence: 7 } }
+        events: [
+          {
+            sequence: 2,
+            type: 'bridge',
+            payload: {
+              method: 'agent.event',
+              params: { subscriptionId: 'agentsub-1', event: { sequence: 7 } }
+            }
+          },
+          {
+            sequence: 3,
+            type: 'bridge',
+            payload: {
+              method: 'jobs.event',
+              params: { subscriptionId: 'jobsub-1', event: { jobId: 'job_12345678', sequence: 3 } }
+            }
+          },
+          {
+            sequence: 4,
+            type: 'bridge',
+            payload: {
+              method: 'workspace.changed',
+              params: { path: 'private.txt' }
+            }
           }
-        }],
-        nextCursor: 2,
+        ],
+        nextCursor: 4,
         hasMore: false
       })
     })
@@ -411,13 +1755,24 @@ describe('extension IPC security bridge', () => {
       method: 'agent.event',
       params: { subscriptionId: 'agentsub-1', event: { sequence: 7 } }
     })
+    expect(guest.send).toHaveBeenCalledWith('extension:view:notification', {
+      sessionId: record.sessionId,
+      method: 'jobs.event',
+      params: { subscriptionId: 'jobsub-1', event: { jobId: 'job_12345678', sequence: 3 } }
+    })
+    expect(guest.send).not.toHaveBeenCalledWith('extension:view:notification', {
+      sessionId: record.sessionId,
+      method: 'workspace.changed',
+      params: { path: 'private.txt' }
+    })
   })
 
   it('reconnects the production event pump from a bounded cursor gap and resumes live delivery', async () => {
     const state = fixture()
     state.descriptors.resolveView.mockResolvedValue({
       extensionVersion: '1.0.0',
-      entry: 'dist/index.html'
+      entry: 'dist/index.html',
+      grantedPermissions: ['ui.views', 'webview']
     })
     let eventPoll = 0
     state.runtimeRequest.mockImplementation(async (path: string, method?: string) => {
@@ -504,6 +1859,92 @@ describe('extension IPC security bridge', () => {
     state.registration.dispose()
   })
 
+  it('binds reviewed external Webview hosts into the Main-owned View Session', async () => {
+    const state = fixture()
+    state.descriptors.resolveView.mockResolvedValue({
+      extensionId: 'acme.social',
+      extensionVersion: '1.0.0',
+      packageRoot: '/extensions/acme.social/1.0.0',
+      entry: 'dist/index.html',
+      localResourceRoots: ['dist'],
+      grantedPermissions: [
+        'ui.views',
+        'webview',
+        'webview.external',
+        'network:bilibili.com',
+        'network:*.bilibili.com'
+      ]
+    })
+    state.runtimeRequest.mockImplementation(async (path: string, method?: string) => {
+      if (path === '/v1/extensions/view-sessions' && method === 'POST') {
+        return {
+          ok: true,
+          status: 201,
+          body: JSON.stringify({
+            sessionId: 'view_12345678-1234-1234-1234-123456789abc',
+            nonce: 'n'.repeat(43),
+            extensionId: 'acme.social',
+            extensionVersion: '1.0.0',
+            contributionId: 'extension:acme.social/social'
+          })
+        }
+      }
+      return { ok: false, status: 404, body: '{}' }
+    })
+
+    const created = await electronMock.handlers.get('extension:view-session:create')!(
+      state.trustedEvent,
+      { contributionId: 'extension:acme.social/social' }
+    ) as { sessionId: string }
+
+    expect(state.viewSessions.get(created.sessionId)?.externalWebviewHosts).toEqual([
+      '*.bilibili.com',
+      'bilibili.com'
+    ])
+    state.registration.dispose()
+  })
+
+  it('mounts the native external browser only for a workbench-owned reviewed Session', async () => {
+    const state = fixture()
+    const record = state.viewSessions.create({
+      sessionId: 'view_12345678-1234-1234-1234-123456789abc',
+      extensionId: 'acme.social',
+      extensionVersion: '1.0.0',
+      contributionId: 'extension:acme.social/social',
+      entryPath: 'dist/index.html',
+      externalWebviewHosts: ['bilibili.com', '*.bilibili.com'],
+      parentWebContentsId: state.mainContents.id
+    })
+    const bounds = { x: 700, y: 120, width: 500, height: 680, visible: true }
+
+    await electronMock.handlers.get('extension:external-browser:control')!(state.trustedEvent, {
+      sessionId: record.sessionId,
+      action: 'mount',
+      siteId: 'bilibili',
+      url: 'https://www.bilibili.com/',
+      presentation: 'mobile',
+      bounds
+    })
+
+    expect(state.externalBrowsers.mount).toHaveBeenCalledWith(
+      expect.objectContaining({ sessionId: record.sessionId }),
+      expect.objectContaining({ webContents: state.mainContents }),
+      'bilibili',
+      'https://www.bilibili.com/',
+      bounds,
+      'mobile'
+    )
+    await expect(electronMock.handlers.get('extension:external-browser:control')!(
+      state.untrustedEvent,
+      {
+        sessionId: record.sessionId,
+        action: 'navigate',
+        url: 'https://www.bilibili.com/video/BV1'
+      }
+    )).rejects.toThrow(/trusted workbench/)
+    state.registration.dispose()
+  })
+
   it('rolls back the runtime View Session when isolated protocol preparation fails', async () => {
     const state = fixture()
     state.descriptors.resolveView.mockResolvedValue({
@@ -511,7 +1952,8 @@ describe('extension IPC security bridge', () => {
       extensionVersion: '1.0.0',
       packageRoot: '/extensions/acme.example/1.0.0',
       entry: 'dist/index.html',
-      localResourceRoots: ['dist/assets']
+      localResourceRoots: ['dist/assets'],
+      grantedPermissions: ['ui.views', 'webview']
     })
     state.viewProtocols.prepare.mockImplementationOnce(() => {
       throw new Error('isolated protocol unavailable')
@@ -543,6 +1985,59 @@ describe('extension IPC security bridge', () => {
       '/v1/extensions/view-sessions/view_12345678-1234-1234-1234-123456789abc',
       'DELETE'
     ))
+  })
+
+  it('clears Host crash state before an explicit View retry without forwarding the recovery flag', async () => {
+    const state = fixture()
+    state.descriptors.resolveView.mockResolvedValue({
+      extensionId: 'acme.example',
+      extensionVersion: '1.0.0',
+      packageRoot: '/extensions/acme.example/1.0.0',
+      entry: 'dist/index.html',
+      localResourceRoots: ['dist/assets'],
+      grantedPermissions: ['ui.views', 'webview']
+    })
+    state.runtimeRequest.mockImplementation(async (path: string, method?: string) => {
+      if (path === '/v1/extensions/acme.example/retry' && method === 'POST') {
+        return { ok: true, status: 200, body: '{}' }
+      }
+      if (path === '/v1/extensions/view-sessions' && method === 'POST') {
+        return {
+          ok: true,
+          status: 201,
+          body: JSON.stringify({
+            sessionId: 'view_12345678-1234-1234-1234-123456789abc',
+            nonce: 'n'.repeat(43),
+            extensionId: 'acme.example',
+            extensionVersion: '1.0.0',
+            contributionId: 'extension:acme.example/issues'
+          })
+        }
+      }
+      return { ok: true, status: 200, body: '{}' }
+    })
+
+    await electronMock.handlers.get('extension:view-session:create')!(state.trustedEvent, {
+      contributionId: 'extension:acme.example/issues',
+      workspaceRoot: '/workspace',
+      retryHost: true
+    })
+
+    expect(state.runtimeRequest).toHaveBeenCalledWith(
+      '/v1/extensions/acme.example/retry',
+      'POST'
+    )
+    expect(state.runtimeRequest).toHaveBeenCalledWith(
+      '/v1/extensions/view-sessions',
+      'POST',
+      JSON.stringify({
+        contributionId: 'extension:acme.example/issues',
+        workspaceRoot: '/workspace'
+      })
+    )
+    expect(state.runtimeRequest.mock.invocationCallOrder[1]).toBeLessThan(
+      state.runtimeRequest.mock.invocationCallOrder[2]!
+    )
   })
 
   it('binds cleanup to a Main window created after IPC registration', () => {
@@ -1093,16 +2588,83 @@ describe('extension IPC security bridge', () => {
     })
   })
 
-  it('revokes active Direct DOM principals after disablement succeeds', async () => {
+  it('revokes only the disabled extension workspace in Main-owned surfaces', async () => {
     const state = fixture()
+    const workspaceA = state.viewSessions.create({
+      sessionId: 'view-workspace-a',
+      extensionId: 'acme.example',
+      extensionVersion: '1.0.0',
+      contributionId: 'issues',
+      workspaceRoot: '/workspace/a',
+      entryPath: 'dist/index.html',
+      parentWebContentsId: 1
+    })
+    const workspaceB = state.viewSessions.create({
+      sessionId: 'view-workspace-b',
+      extensionId: 'acme.example',
+      extensionVersion: '1.0.0',
+      contributionId: 'issues',
+      workspaceRoot: '/workspace/b',
+      entryPath: 'dist/index.html',
+      parentWebContentsId: 1
+    })
     await electronMock.handlers.get('extension:disable')!(state.trustedEvent, {
       extensionId: 'acme.example',
-      workspaceRoot: '/workspace'
+      workspaceRoot: '/workspace/a'
+    })
+    expect(state.viewSessions.get(workspaceA.sessionId)).toBeUndefined()
+    expect(state.viewSessions.get(workspaceB.sessionId)).toMatchObject({
+      workspaceRoot: '/workspace/b'
     })
     expect(state.contentScripts.revokeExtension).toHaveBeenCalledWith(
       state.trustedEvent.sender,
       'acme.example',
-      'disable'
+      'disable',
+      '/workspace/a'
+    )
+  })
+
+  it('revokes only the permission-changed extension workspace in Main-owned surfaces', async () => {
+    const state = fixture()
+    state.descriptors.resolvePackage.mockResolvedValue({
+      extensionVersion: '1.0.0',
+      grantedPermissions: ['ui.views']
+    })
+    const workspaceA = state.viewSessions.create({
+      sessionId: 'permission-workspace-a',
+      extensionId: 'acme.example',
+      extensionVersion: '1.0.0',
+      contributionId: 'issues',
+      workspaceRoot: '/workspace/a',
+      entryPath: 'dist/index.html',
+      parentWebContentsId: 1
+    })
+    const workspaceB = state.viewSessions.create({
+      sessionId: 'permission-workspace-b',
+      extensionId: 'acme.example',
+      extensionVersion: '1.0.0',
+      contributionId: 'issues',
+      workspaceRoot: '/workspace/b',
+      entryPath: 'dist/index.html',
+      parentWebContentsId: 1
+    })
+
+    await electronMock.handlers.get('extension:set-permissions')!(state.trustedEvent, {
+      extensionId: 'acme.example',
+      workspaceRoot: '/workspace/a',
+      expectedVersion: '1.0.0',
+      permissions: []
+    })
+
+    expect(state.viewSessions.get(workspaceA.sessionId)).toBeUndefined()
+    expect(state.viewSessions.get(workspaceB.sessionId)).toMatchObject({
+      workspaceRoot: '/workspace/b'
+    })
+    expect(state.contentScripts.revokeExtension).toHaveBeenCalledWith(
+      state.trustedEvent.sender,
+      'acme.example',
+      'permission-change',
+      '/workspace/a'
     )
   })
 
@@ -1133,10 +2695,19 @@ describe('extension IPC security bridge', () => {
 
     await electronMock.handlers.get('extension:workbench:get')!(
       state.trustedEvent,
-      { workspaceRoot: '/workspace one' }
+      { workspaceRoot: '/workspace one', locale: 'zh-CN' }
     )
     expect(state.runtimeRequest).toHaveBeenLastCalledWith(
-      '/v1/extensions/workbench?workspace_root=%2Fworkspace+one',
+      '/v1/extensions/workbench?workspace_root=%2Fworkspace+one&locale=zh-CN',
+      'GET'
+    )
+
+    await electronMock.handlers.get('extension:list')!(
+      state.trustedEvent,
+      { limit: 50, workspaceRoot: '/workspace one', locale: 'zh-CN' }
+    )
+    expect(state.runtimeRequest).toHaveBeenLastCalledWith(
+      '/v1/extensions?limit=50&workspace_root=%2Fworkspace+one&locale=zh-CN',
       'GET'
     )
 

@@ -35,6 +35,7 @@ import {
   type ImageGenerationQuality,
   type ImageGenerationResolution,
   type KunMcpSearchSettingsV1,
+  type KunProjectConfigSettingsV1,
   type KunMusicGenerationSettingsV1,
   type KunPromptOptimizationSettingsV1,
   type KunRuntimeTuningSettingsV1,
@@ -160,6 +161,7 @@ export function defaultKunRuntimeSettings(
     toolOutputLimits: defaultKunToolOutputLimitsSettings(),
     insecure: false,
     mcpSearch: defaultKunMcpSearchSettings(),
+    projectConfig: defaultKunProjectConfigSettings(),
     storage: defaultKunStorageSettings(),
     contextCompaction: defaultKunContextCompactionSettings(),
     runtimeTuning: defaultKunRuntimeTuningSettings(),
@@ -301,6 +303,10 @@ export function defaultKunMcpSearchSettings(): KunMcpSearchSettingsV1 {
   }
 }
 
+export function defaultKunProjectConfigSettings(): KunProjectConfigSettingsV1 {
+  return { grants: [] }
+}
+
 export function defaultKunTokenEconomySettings(): KunTokenEconomySettingsV1 {
   return {
     enabled: false,
@@ -385,6 +391,9 @@ export function mergeKunRuntimeSettings(
     ...currentMcpSearch,
     ...(patch?.mcpSearch ?? {})
   })
+  const nextProjectConfig = normalizeKunProjectConfigSettings(
+    patch?.projectConfig ?? current.projectConfig
+  )
   const currentTokenEconomy = normalizeKunTokenEconomySettings(
     current.tokenEconomy,
     current.tokenEconomyMode
@@ -501,8 +510,13 @@ export function mergeKunRuntimeSettings(
   const nextSubagents = mergeKunSubagentsSettings(current.subagents, patch?.subagents)
   // Do not let the nested partial patch leak through the broad object spread;
   // `nextSubagents` below is the fully materialized authoritative value.
-  const { subagents: _subagentsPatch, ...flatPatch } = patch ?? {}
+  const {
+    subagents: _subagentsPatch,
+    projectConfig: _projectConfigPatch,
+    ...flatPatch
+  } = patch ?? {}
   void _subagentsPatch
+  void _projectConfigPatch
   // NOTE: approvalPolicy/sandboxMode are merged through verbatim from the patch.
   // The unified 6-mode UI selector already resolves a mode to its concrete
   // {approvalPolicy, sandboxMode} pair via kunToolPermissionModeSettings before
@@ -519,6 +533,7 @@ export function mergeKunRuntimeSettings(
     tokenEconomy: nextTokenEconomy,
     toolOutputLimits: nextToolOutputLimits,
     mcpSearch: nextMcpSearch,
+    projectConfig: nextProjectConfig,
     storage: nextStorage,
     contextCompaction: nextContextCompaction,
     runtimeTuning: nextRuntimeTuning,
@@ -852,6 +867,22 @@ function normalizeKunMcpSearchSettings(
     topKMax,
     minScore: nonNegativeNumber(input?.minScore, defaults.minScore)
   }
+}
+
+export function normalizeKunProjectConfigSettings(
+  input: Partial<KunProjectConfigSettingsV1> | undefined
+): KunProjectConfigSettingsV1 {
+  const grants = Array.isArray(input?.grants) ? input.grants : []
+  const unique = new Map<string, { workspaceRoot: string; configDigest: string }>()
+  for (const grant of grants.slice(0, 64)) {
+    const workspaceRoot = typeof grant?.workspaceRoot === 'string' ? grant.workspaceRoot.trim() : ''
+    const configDigest = typeof grant?.configDigest === 'string'
+      ? grant.configDigest.trim().toLowerCase()
+      : ''
+    if (!workspaceRoot || !/^[a-f0-9]{64}$/.test(configDigest)) continue
+    unique.set(workspaceRoot, { workspaceRoot, configDigest })
+  }
+  return { grants: [...unique.values()] }
 }
 
 function positiveInt(value: unknown, fallback: number): number {
@@ -1270,6 +1301,7 @@ export function migrateLegacyAppSettings(parsed: LegacyAppSettingsShape): Partia
     ),
     toolOutputLimits: normalizeKunToolOutputLimitsSettings(explicitKun.toolOutputLimits),
     mcpSearch: normalizeKunMcpSearchSettings(explicitKun.mcpSearch),
+    projectConfig: normalizeKunProjectConfigSettings(explicitKun.projectConfig),
     storage: normalizeKunStorageSettings(explicitKun.storage),
     contextCompaction: normalizeKunContextCompactionSettings(explicitKun.contextCompaction),
     runtimeTuning: normalizeKunRuntimeTuningSettings(explicitKun.runtimeTuning),

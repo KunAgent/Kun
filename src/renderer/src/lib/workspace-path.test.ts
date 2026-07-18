@@ -3,8 +3,18 @@ import {
   DEFAULT_CONVERSATION_WORKSPACE_ROOT,
   defaultConversationWorkspaceRoot,
   isConversationWorkspacePath,
-  isInternalDeepSeekGuiWorkspace
+  isInternalDeepSeekGuiWorkspace,
+  workspaceRootScopeKey
 } from './workspace-path'
+
+describe('workspaceRootScopeKey', () => {
+  it('normalizes separators and trailing slashes without merging case-sensitive roots', () => {
+    expect(workspaceRootScopeKey('/workspace/project///')).toBe('/workspace/project')
+    expect(workspaceRootScopeKey('C:\\workspace\\project\\')).toBe('C:/workspace/project')
+    expect(workspaceRootScopeKey('/workspace/Project')).not.toBe(workspaceRootScopeKey('/workspace/project'))
+    expect(workspaceRootScopeKey('/')).toBe('/')
+  })
+})
 
 describe('defaultConversationWorkspaceRoot', () => {
   afterEach(() => {

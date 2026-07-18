@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { ExtensionApiError } from '@kun/extension-api'
 import type { ToolHostContext } from '../../ports/tool-host.js'
 import type { ExtensionPrincipal } from '../../services/extension-agent-service.js'
 import { CapabilityRegistry } from './capability-registry.js'
@@ -11,11 +12,11 @@ import {
 } from './extension-tool-provider.js'
 import { LocalToolHost } from './local-tool-host.js'
 
-const principal = (extensionId: string): ExtensionPrincipal => ({
+const principal = (extensionId: string, workspaceRoot = '/tmp/workspace'): ExtensionPrincipal => ({
   extensionId,
   extensionVersion: '1.0.0',
   permissions: ['tools.register'],
-  workspaceRoots: ['/tmp/workspace'],
+  workspaceRoots: [workspaceRoot],
   workspaceTrusted: true
 })
 
@@ -45,6 +46,13 @@ const echoDeclaration = {
 }
 
 describe('ExtensionToolRegistry', () => {
+  it('keeps the Presentation Studio direct-tool namespace stable for GUI provenance', () => {
+    expect(extensionToolModelAlias(
+      'kun-examples.presentation-studio',
+      'presentation-create'
+    )).toBe('ext_e1d66f1c97_presentation-create')
+  })
+
   it('derives collision-free identities and executes through LocalToolHost', async () => {
     const capabilities = new CapabilityRegistry()
     const tools = new ExtensionToolRegistry({ registry: capabilities })
@@ -69,6 +77,60 @@ describe('ExtensionToolRegistry', () => {
     }, context())
     expect(firstHandler).toHaveBeenCalledTimes(1)
     expect(result.item).toMatchObject({ output: { text: 'hello' }, isError: false })
+  })
+
+  it('discovers and invokes one independently registered handler per workspace', async () => {
+    const capabilities = new CapabilityRegistry()
+    const tools = new ExtensionToolRegistry({ registry: capabilities })
+    const workspaceA = '/tmp/workspace-a'
+    const workspaceB = '/tmp/workspace-b'
+    const workspaceC = '/tmp/workspace-c'
+    const first = await tools.register(
+      principal('com.example.scoped', workspaceA),
+      echoDeclaration,
+      async () => ({ output: { owner: 'a' } })
+    )
+    const second = await tools.register(
+      principal('com.example.scoped', workspaceB),
+      echoDeclaration,
+      async () => ({ output: { owner: 'b' } })
+    )
+    const host = new LocalToolHost({ registry: capabilities })
+
+    expect(first.modelAlias).toBe(second.modelAlias)
+    await expect(host.listTools(context({ workspace: workspaceA }))).resolves.toEqual(
+      expect.arrayContaining([expect.objectContaining({ name: first.modelAlias })])
+    )
+    await expect(host.listTools(context({ workspace: workspaceB }))).resolves.toEqual(
+      expect.arrayContaining([expect.objectContaining({ name: first.modelAlias })])
+    )
+    await expect(host.listTools(context({ workspace: workspaceC }))).resolves.not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ name: first.modelAlias })])
+    )
+
+    const invoke = (workspace: string, callId: string) => host.execute({
+      callId,
+      toolName: first.modelAlias,
+      providerId: 'extension:com.example.scoped',
+      arguments: { text: 'hello' }
+    }, context({ workspace }))
+    await expect(invoke(workspaceA, 'call_scoped_a')).resolves.toMatchObject({
+      item: { output: { owner: 'a' } }
+    })
+    await expect(invoke(workspaceB, 'call_scoped_b')).resolves.toMatchObject({
+      item: { output: { owner: 'b' } }
+    })
+
+    second.dispose()
+    await expect(host.listTools(context({ workspace: workspaceB }))).resolves.not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ name: first.modelAlias })])
+    )
+    await expect(invoke(workspaceB, 'call_scoped_b_after_dispose')).rejects.toThrow(
+      /unknown tool|unavailable|not advertised/u
+    )
+    await expect(invoke(workspaceA, 'call_scoped_a_after_dispose')).resolves.toMatchObject({
+      item: { output: { owner: 'a' } }
+    })
   })
 
   it('rejects reserved names, undeclared tools, invalid schemas, and invalid arguments', async () => {
@@ -164,6 +226,73 @@ describe('ExtensionToolRegistry', () => {
     })
   })
 
+  it('keeps deterministic public API rejections retryable without relaxing unknown outcomes', async () => {
+    const capabilities = new CapabilityRegistry()
+    const tools = new ExtensionToolRegistry({ registry: capabilities })
+    let conflictCalls = 0
+    const conflict = await tools.register(principal('com.example.conflict'), {
+      ...echoDeclaration,
+      name: 'save',
+      sideEffect: 'workspace-write'
+    }, async () => {
+      conflictCalls += 1
+      throw new ExtensionApiError({
+        code: 'CONFLICT',
+        message: 'The expected revision is stale.',
+        retryable: true,
+        details: { expectedRevision: 2, actualRevision: 3 }
+      })
+    })
+    let unavailableCalls = 0
+    const unavailable = await tools.register(principal('com.example.unavailable'), {
+      ...echoDeclaration,
+      name: 'send',
+      sideEffect: 'external'
+    }, async () => {
+      unavailableCalls += 1
+      throw new ExtensionApiError({
+        code: 'HOST_UNAVAILABLE',
+        message: 'The extension host disconnected.',
+        retryable: true
+      })
+    })
+    const host = new LocalToolHost({ registry: capabilities })
+    const awaitApproval = vi.fn(async () => 'allow' as const)
+    const conflictCall = {
+      callId: 'call_conflict', toolName: conflict.modelAlias, arguments: { text: 'save' }
+    }
+    const firstConflict = await host.execute(conflictCall, context({ awaitApproval }))
+    const secondConflict = await host.execute(conflictCall, context({ awaitApproval }))
+
+    expect(conflictCalls).toBe(2)
+    expect(firstConflict.item).toMatchObject({
+      isError: true,
+      output: {
+        code: 'tool_execution_failed',
+        error: 'The expected revision is stale.'
+      }
+    })
+    expect(secondConflict.item).toMatchObject({
+      isError: true,
+      output: { code: 'tool_execution_failed' }
+    })
+
+    const unavailableCall = {
+      callId: 'call_unavailable', toolName: unavailable.modelAlias, arguments: { text: 'send' }
+    }
+    const firstUnavailable = await host.execute(unavailableCall, context({ awaitApproval }))
+    const secondUnavailable = await host.execute(unavailableCall, context({ awaitApproval }))
+    expect(unavailableCalls).toBe(1)
+    expect(firstUnavailable.item).toMatchObject({
+      isError: true,
+      output: { error: expect.stringContaining('outcome is unknown') }
+    })
+    expect(secondUnavailable.item).toMatchObject({
+      isError: true,
+      output: { code: 'tool_outcome_unknown' }
+    })
+  })
+
   it('bounds output and cancels in-flight handlers when disposed', async () => {
     const capabilities = new CapabilityRegistry()
     const tools = new ExtensionToolRegistry({ registry: capabilities })
@@ -244,7 +373,8 @@ describe('ExtensionToolRegistry', () => {
       await tools.register(principal('com.example.many'), {
         ...echoDeclaration,
         name: `tool_${index}`,
-        description: `Catalog utility number ${index}`
+        description: `Catalog utility number ${index}`,
+        sideEffect: index === MAX_DIRECT_EXTENSION_TOOLS ? 'workspace-write' : 'none'
       }, async ({ arguments: args }) => ({ output: { echoed: args.text, index } }))
     }
     const epoch = tools.createCatalogEpoch({ id: 'epoch_many', createdAt: '2026-07-11T00:00:00.000Z' })
@@ -278,6 +408,7 @@ describe('ExtensionToolRegistry', () => {
     expect(called.item).toMatchObject({
       output: {
         canonicalToolId: `extension:com.example.many/tool_${MAX_DIRECT_EXTENSION_TOOLS}`,
+        sideEffect: 'workspace-write',
         result: { echoed: 'hello', index: MAX_DIRECT_EXTENSION_TOOLS }
       }
     })

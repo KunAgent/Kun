@@ -392,6 +392,16 @@ describe('cli', () => {
     expect(parsed.storage.backend).toBe('file')
   })
 
+  it('accepts the product-owned bundled extension directory from CLI or environment', () => {
+    expect(parseServeOptions([
+      '--data-dir=/srv/ca',
+      '--bundled-extensions-dir=/opt/kun/bundled-extensions'
+    ]).bundledExtensionsDir).toBe('/opt/kun/bundled-extensions')
+    expect(parseServeOptions(['--data-dir=/srv/ca'], {
+      KUN_BUNDLED_EXTENSIONS_DIR: '/Applications/Kun/resources/bundled-extensions'
+    }).bundledExtensionsDir).toBe('/Applications/Kun/resources/bundled-extensions')
+  })
+
   it('enables sanitized observability from env and output flag', () => {
     const parsed = parseServeOptions([
       '--data-dir=/srv/ca',

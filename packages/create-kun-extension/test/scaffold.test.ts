@@ -128,7 +128,7 @@ async function collectJavaScript(directory: string): Promise<string[]> {
 function moduleSpecifiers(source: string): string[] {
   const result: string[] = []
   const patterns = [
-    /\b(?:import|export)\s*(?:[^'"`;]*?\bfrom\s*)?["']([^"']+)["']/gu,
+    /(?:^|[;\n])\s*(?:import|export)\s*(?:[^'"`;]*?\bfrom\s*)?["']([^"']+)["']/gmu,
     /\bimport\s*\(\s*["']([^"']+)["']\s*\)/gu
   ]
   for (const pattern of patterns) {

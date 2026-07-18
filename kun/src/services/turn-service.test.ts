@@ -499,6 +499,49 @@ describe('TurnService startTurn', () => {
     expect(runtimeEvents.filter((event) => event.kind === 'turn_steered')).toHaveLength(1)
     await service.interruptTurn({ threadId, turnId: started.turnId })
   })
+
+  it('rejects guidance after the model loop seals its terminal boundary', async () => {
+    const sessionStore = new InMemorySessionStore()
+    const threadStore = new InMemoryThreadStore()
+    const eventBus = new InMemoryEventBus()
+    const nowIso = () => '2026-07-16T00:00:00.000Z'
+    const events = new RuntimeEventRecorder({
+      eventBus,
+      sessionStore,
+      allocateSeq: (threadId) => eventBus.allocateSeq(threadId),
+      nowIso
+    })
+    const steering = new SteeringQueue()
+    const service = new TurnService({
+      threadStore,
+      sessionStore,
+      events,
+      inflight: new InflightTracker(),
+      steering,
+      compactor: new ContextCompactor(),
+      ids: new SequentialIdGenerator(),
+      nowIso
+    })
+    const threadId = 'thr_sealed_steering'
+    await threadStore.upsert(createThreadRecord({
+      id: threadId,
+      title: 'Sealed steering',
+      workspace: '/tmp/workspace',
+      model: 'deepseek-v4-pro'
+    }))
+    const started = await service.startTurn({ threadId, request: { prompt: 'run' } })
+    expect(steering.sealIfEmpty(started.turnId)).toBe(true)
+
+    await expect(service.steerTurn({
+      threadId,
+      turnId: started.turnId,
+      text: 'too late'
+    })).rejects.toThrow('turn is no longer accepting steering')
+
+    const runtimeEvents = await sessionStore.loadEventsSince(threadId, 0)
+    expect(runtimeEvents.filter((event) => event.kind === 'turn_steered')).toHaveLength(0)
+    await service.interruptTurn({ threadId, turnId: started.turnId })
+  })
 })
 
 describe('TurnService compact', () => {

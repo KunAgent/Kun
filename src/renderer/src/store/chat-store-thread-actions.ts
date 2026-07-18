@@ -29,7 +29,11 @@ import {
   saveThreadWorktreeRegistry
 } from '../lib/thread-worktree-registry'
 import { workspaceLabelFromPath } from '../lib/workspace-label'
-import { isInternalTemporaryWorkspace, normalizeWorkspaceRoot } from '../lib/workspace-path'
+import {
+  isInternalTemporaryWorkspace,
+  normalizeWorkspaceRoot,
+  workspaceRootScopeKey
+} from '../lib/workspace-path'
 import {
   buildClawRuntimePrompt,
   buildCodeRuntimePrompt,
@@ -41,6 +45,7 @@ import type {
   ChatStoreSet,
   WriteAssistantMessageContext
 } from './chat-store-types'
+import { canGuideQueuedMessage } from './queued-message-guidance'
 import {
   accountIdForComposerSelection,
   activeClawChannel,
@@ -116,6 +121,7 @@ import {
   subscribeThreadEventsWithRecovery
 } from './chat-store-thread-action-helpers'
 import { GitCheckpointAvailabilityCache } from '../lib/git-checkpoint-availability'
+import type { ComposerContextAttachment } from '@kun/extension-api'
 
 type SseAbortRef = { current: AbortController | null }
 
@@ -126,7 +132,40 @@ type StoreActionContext = {
 }
 
 let drainingQueuedMessages = false
+const guidingQueuedMessageIds = new Set<string>()
 const checkpointGitAvailability = new GitCheckpointAvailabilityCache()
+
+function activeChatWorkspaceRoot(state: ChatState): string {
+  const activeThread = state.activeThreadId
+    ? state.threads.find((thread) => thread.id === state.activeThreadId)
+    : undefined
+  return activeThread?.workspace?.trim() || state.workspaceRoot?.trim() || ''
+}
+
+function pendingComposerContexts(state: ChatState): ComposerContextAttachment[] {
+  if (state.route !== 'chat') return []
+  const workspaceRoot = activeChatWorkspaceRoot(state)
+  return state.extensionComposerContexts
+    .filter((event) => workspaceRootScopeKey(event.workspaceRoot) === workspaceRootScopeKey(workspaceRoot))
+    .map((event) => event.attachment)
+}
+
+function withoutConsumedComposerContexts(
+  state: ChatState,
+  consumed: readonly ComposerContextAttachment[]
+): ChatState['extensionComposerContexts'] {
+  if (consumed.length === 0) return state.extensionComposerContexts
+  const consumedRevisions = new Set(consumed.map((attachment) => [
+    attachment.attachmentId,
+    attachment.revision,
+    attachment.generation
+  ].join(':')))
+  return state.extensionComposerContexts.filter((event) => !consumedRevisions.has([
+    event.attachment.attachmentId,
+    event.attachment.revision,
+    event.attachment.generation
+  ].join(':')))
+}
 
 function activeWriteMessageContextMatches(context: WriteAssistantMessageContext): boolean {
   const state = useWriteWorkspaceStore.getState()
@@ -144,7 +183,7 @@ function activeWriteMessageContextMatches(context: WriteAssistantMessageContext)
 
 export function createThreadActions(
   { set, get, sseAbortRef }: StoreActionContext
-): Pick<ChatState, 'createThread' | 'createConversation' | 'recoverActiveTurn' | 'selectThread' | 'subscribeThreadEventsLive' | 'drainQueuedMessages' | 'removeQueuedMessage' | 'sendMessage' | 'reviewActiveThread'> {
+): Pick<ChatState, 'createThread' | 'createConversation' | 'recoverActiveTurn' | 'selectThread' | 'subscribeThreadEventsLive' | 'drainQueuedMessages' | 'removeQueuedMessage' | 'guideQueuedMessage' | 'sendMessage' | 'reviewActiveThread'> {
   return {
   createThread: async (options = {}) => {
     if (get().runtimeConnection !== 'ready') {
@@ -637,6 +676,51 @@ export function createThreadActions(
       queuedMessages: s.queuedMessages.filter((message) => message.id !== id)
     })),
 
+  guideQueuedMessage: async (id) => {
+    if (guidingQueuedMessageIds.has(id)) return false
+    const state = get()
+    const message = state.queuedMessages.find((candidate) => candidate.id === id)
+    if (!message) return false
+    if (!canGuideQueuedMessage(message)) {
+      set({ error: i18n.t('common:guideQueuedMessageTextOnly') })
+      return false
+    }
+    if (!state.busy || !state.activeThreadId || !state.currentTurnId) {
+      set({ error: i18n.t('common:guideQueuedMessageNoActiveTurn') })
+      if (!state.busy) void get().drainQueuedMessages()
+      return false
+    }
+    const provider = getProvider()
+    if (typeof provider.steerUserMessage !== 'function') {
+      set({ error: i18n.t('common:guideQueuedMessageUnsupported') })
+      return false
+    }
+
+    guidingQueuedMessageIds.add(id)
+    try {
+      await provider.steerUserMessage(
+        state.activeThreadId,
+        state.currentTurnId,
+        message.text,
+        message.displayText ? { displayText: message.displayText } : undefined
+      )
+      set((current) => ({
+        queuedMessages: current.queuedMessages.filter((candidate) => candidate.id !== id),
+        error: null
+      }))
+      return true
+    } catch (error) {
+      const messageText = formatRuntimeError(error)
+      set({
+        error: i18n.t('common:guideQueuedMessageFailed', { message: messageText })
+      })
+      if (!get().busy) void get().drainQueuedMessages()
+      return false
+    } finally {
+      guidingQueuedMessageIds.delete(id)
+    }
+  },
+
   sendMessage: async (text, mode, overrides) => {
     const trimmedText = text.trim()
     if (!trimmedText) return false
@@ -725,6 +809,9 @@ export function createThreadActions(
         reference.relativePath.trim().length > 0 &&
         reference.name.trim().length > 0
       )
+      const composerContexts = get().route === 'chat'
+        ? overrides?.composerContexts ?? pendingComposerContexts(get())
+        : []
       set((s) => ({
         queuedMessages: [
           ...s.queuedMessages,
@@ -745,9 +832,11 @@ export function createThreadActions(
             ...(writeContext ? { writeContext } : {}),
             ...(attachmentIds?.length ? { attachmentIds } : {}),
             ...(attachments?.length ? { attachments } : {}),
-            ...(fileReferences?.length ? { fileReferences } : {})
+            ...(fileReferences?.length ? { fileReferences } : {}),
+            ...(composerContexts.length ? { composerContexts } : {})
           }
         ],
+        extensionComposerContexts: withoutConsumedComposerContexts(s, composerContexts),
         error: null
       }))
       // UI/runtime can briefly drift (busy=false while runtime still has an active turn).
@@ -775,6 +864,9 @@ export function createThreadActions(
         reference.name.trim().length > 0
       ) ??
       []
+    const composerContexts = queued?.composerContexts ?? (get().route === 'chat'
+      ? overrides?.composerContexts ?? pendingComposerContexts(get())
+      : [])
     let activeThreadId = get().activeThreadId
     const displayText = queued?.displayText ?? overrides?.displayText?.trim() ?? trimmedText
     const userDisplayText = displayText !== trimmedText ? displayText : undefined
@@ -825,7 +917,7 @@ export function createThreadActions(
           createdAt: new Date(now).toISOString(),
           text: displayText,
           ...(userModelChip ? { modelLabel: userModelChip } : {}),
-          ...(userDisplayText || guiDesignCanvas || guiDesignMode || attachmentIds.length || attachments.length || fileReferences.length
+          ...(userDisplayText || guiDesignCanvas || guiDesignMode || attachmentIds.length || attachments.length || fileReferences.length || composerContexts.length
             ? {
                 meta: {
                   ...(userDisplayText ? { displayText: userDisplayText } : {}),
@@ -833,7 +925,8 @@ export function createThreadActions(
                   ...(guiDesignMode ? { guiDesignMode: true } : {}),
                   ...(attachmentIds.length ? { attachmentIds } : {}),
                   ...(attachments.length ? { attachments } : {}),
-                  ...(fileReferences.length ? { fileReferences } : {})
+                  ...(fileReferences.length ? { fileReferences } : {}),
+                  ...(composerContexts.length ? { composerContexts } : {})
                 }
               }
             : {})
@@ -1011,8 +1104,14 @@ export function createThreadActions(
           : {}),
         ...(attachmentIds.length ? { attachmentIds } : {}),
         ...(workspaceCheckpointId ? { workspaceCheckpointId } : {}),
-        ...(fileReferences.length ? { fileReferences } : {})
+        ...(fileReferences.length ? { fileReferences } : {}),
+        ...(composerContexts.length ? { composerContexts } : {})
       })
+      if (!queued && composerContexts.length > 0) {
+        set((state) => ({
+          extensionComposerContexts: withoutConsumedComposerContexts(state, composerContexts)
+        }))
+      }
       // Mirror the composer model selection against the runtime's stable
       // user_message item id so the badge survives page refresh / thread
       // re-selection. The runtime itself doesn't persist per-turn metadata.

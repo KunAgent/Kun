@@ -37,6 +37,9 @@ function manifestPatch(
       operationCount: 0,
       critiqueEntryCount: 0,
       agentNoteCount: 0,
+      motionTimelineCount: 0,
+      motionTrackCount: 0,
+      motionKeyframeCount: 0,
       ...counts
     }
   }

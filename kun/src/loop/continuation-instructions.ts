@@ -45,7 +45,8 @@ export function goalContinuationInstruction(goal: ThreadGoal | undefined): strin
 const GOAL_NO_TOOL_REPEAT_SIMILARITY = 0.85
 const GOAL_NO_TOOL_REPEAT_MIN_LENGTH = 12
 export const GOAL_NO_TOOL_REPEAT_MAX_RECOVERY_STEPS = 3
-export const EMPTY_POST_TOOL_MAX_RECOVERY_STEPS = 1
+export const EMPTY_POST_TOOL_FINAL_ANSWER_RECOVERY_STEP = 2
+export const EMPTY_POST_TOOL_MAX_RECOVERY_STEPS = EMPTY_POST_TOOL_FINAL_ANSWER_RECOVERY_STEP
 
 export function goalNoToolRecoveryInstruction(recoveryStep: number): string {
   return [
@@ -58,7 +59,16 @@ export function goalNoToolRecoveryInstruction(recoveryStep: number): string {
   ].join('\n')
 }
 
-export function emptyPostToolRecoveryInstruction(): string {
+export function emptyPostToolRecoveryInstruction(recoveryStep: number): string {
+  if (recoveryStep >= EMPTY_POST_TOOL_FINAL_ANSWER_RECOVERY_STEP) {
+    return [
+      'Tool final-answer recovery:',
+      '- The model has repeatedly ended with an empty response after tool execution.',
+      '- Tool calling is disabled for this recovery request.',
+      '- Inspect the completed tool results and provide a clear, non-empty final answer now.',
+      '- Summarize what succeeded, what failed, and any next step the user needs to take.'
+    ].join('\n')
+  }
   return [
     'Tool continuation recovery:',
     '- The previous model response ended without a final answer after tool execution.',

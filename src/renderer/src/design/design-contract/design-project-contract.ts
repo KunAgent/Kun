@@ -15,6 +15,7 @@ import {
   designModeSurfaceSummaryLines
 } from '../design-mode/design-mode-surface'
 import { designModeWorkflowSummaryLines } from '../design-mode/design-mode-workflow'
+import { buildCanvasMotionSummary } from '../canvas/canvas-motion-summary'
 
 const GRAPH_OBJECT_LIMIT = 12
 const JOURNAL_ENTRY_LIMIT = 8
@@ -46,6 +47,9 @@ export type DesignProjectContractSummary = {
   staleCodeBindingCount: number
   missingCodeBindingCount: number
   journalEntryCount: number
+  motionTimelineCount: number
+  motionTrackCount: number
+  motionKeyframeCount: number
 }
 
 function code(value: string | undefined): string {
@@ -190,6 +194,30 @@ function buildAssetSection(canvasDocument: CanvasDocument): string[] {
   ]
 }
 
+function buildMotionSection(canvasDocument: CanvasDocument): string[] {
+  const summary = buildCanvasMotionSummary(canvasDocument)
+  if (!summary) {
+    return ['## Design Motion', '', '_No frame/layer Motion timelines exported yet._']
+  }
+  const timelineLines = summary.timelines.map((timeline) => {
+    const trackDetails = timeline.tracks
+      .map((track) => `${code(track.id)} ${track.targetName} (${code(track.targetShapeId)}): ${track.property}; ${track.keyframeCount} keyframe(s)`)
+      .join('; ')
+    return `- ${code(timeline.id)} ${timeline.frameName} (${code(timeline.frameId)}): ${timeline.durationMs}ms; ${timeline.playback}; ${timeline.trackCount} track(s); ${timeline.keyframeCount} keyframe(s)${trackDetails ? `; ${trackDetails}` : ''}`
+  })
+  return [
+    '## Design Motion',
+    '',
+    `- Timelines: ${summary.timelineCount}`,
+    `- Property tracks: ${summary.trackCount}`,
+    `- Keyframes: ${summary.keyframeCount}`,
+    '- Reduced motion: disable automatic playback when preferred; keep editing, deterministic scrubbing, and end-state inspection available.',
+    '',
+    ...timelineLines,
+    ...(summary.omittedTimelines ? [`- _${summary.omittedTimelines} more timeline(s) omitted._`] : [])
+  ]
+}
+
 function buildDesignDocumentSection(options: BuildDesignProjectContractMarkdownOptions): string[] {
   const document = options.document
   const artifacts = options.artifacts ?? document?.artifacts ?? []
@@ -238,6 +266,8 @@ function buildAgentContractSection(): string[] {
     '- Treat Design Graph ids as stable canvas object ids. Preserve them when applying focused design operations.',
     '- Read each screen DESIGN.md for detailed states, responsive behavior, and implementation notes.',
     '- Treat SVG artifact files as standalone vector sources; preserve stable element ids and declarative animation when iterating them.',
+    '- Treat Design Motion as the canonical per-frame/layer timeline summarized above. It is separate from standalone SVG inner animation and Prototype screen navigation.',
+    '- Honor prefers-reduced-motion by disabling automatic playback while preserving deterministic scrub and end-state access.',
     '- When code bindings are active, prefer targeted source edits over regenerating entire files.',
     '- If a binding is stale or missing, repair the binding first or ask for confirmation before overwriting production code.',
     '',
@@ -269,6 +299,7 @@ export function summarizeDesignProjectContract(
     designSystem: options.designSystem,
     artifacts
   })
+  const motion = buildCanvasMotionSummary(options.canvasDocument)
   return {
     path: STITCH_DESIGN_MD_PATH,
     title: options.document?.title ?? 'Kun design project',
@@ -285,7 +316,10 @@ export function summarizeDesignProjectContract(
     codeBindingCount: codeBindings.length,
     staleCodeBindingCount: codeBindings.filter((binding) => binding.status === 'stale').length,
     missingCodeBindingCount: codeBindings.filter((binding) => binding.status === 'missing').length,
-    journalEntryCount: options.canvasDocument.operationJournal?.length ?? 0
+    journalEntryCount: options.canvasDocument.operationJournal?.length ?? 0,
+    motionTimelineCount: motion?.timelineCount ?? 0,
+    motionTrackCount: motion?.trackCount ?? 0,
+    motionKeyframeCount: motion?.keyframeCount ?? 0
   }
 }
 
@@ -314,6 +348,8 @@ export function buildDesignProjectContractMarkdown(
     ...buildDesignModeSection({ ...options, artifacts }),
     '',
     ...buildGraphSection(graph),
+    '',
+    ...buildMotionSection(options.canvasDocument),
     '',
     ...buildJournalSection(options.canvasDocument),
     '',

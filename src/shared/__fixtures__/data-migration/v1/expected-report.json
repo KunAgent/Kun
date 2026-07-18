@@ -1,0 +1,15 @@
+{
+  "operationId": "fixture_export",
+  "packageId": "fixture_v1_empty",
+  "kind": "export",
+  "outcome": "success",
+  "startedAt": "2026-07-15T00:00:00.000Z",
+  "finishedAt": "2026-07-15T00:00:00.000Z",
+  "counts": {},
+  "workspacePathMap": {},
+  "threadIdMap": {},
+  "exclusions": [],
+  "warnings": [],
+  "unresolvedReferences": 0,
+  "disabledItems": 0
+}

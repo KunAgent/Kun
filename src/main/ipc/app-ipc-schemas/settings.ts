@@ -251,6 +251,12 @@ const kunRuntimePatchSchema = z.object({
     topKMax: z.number().int().positive().optional(),
     minScore: z.number().nonnegative().optional()
   }).strict().optional(),
+  projectConfig: z.object({
+    grants: z.array(z.object({
+      workspaceRoot: trimmedString(MAX_PATH_LENGTH),
+      configDigest: z.string().trim().regex(/^[a-fA-F0-9]{64}$/)
+    }).strict()).max(64).optional()
+  }).strict().optional(),
   storage: z.object({
     backend: kunStorageBackendSchema.optional(),
     sqlitePath: defaultPathSchema

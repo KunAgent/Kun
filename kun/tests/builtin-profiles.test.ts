@@ -28,7 +28,14 @@ describe('mergeBuiltinSubagentProfiles', () => {
     })
     const merged = mergeBuiltinSubagentProfiles(config)
     expect(Object.keys(merged.profiles).sort()).toEqual(
-      ['design-reviewer', 'explore', 'general', 'mine', 'over-engineering-reviewer'].sort()
+      [
+        'component-designer',
+        'design-reviewer',
+        'explore',
+        'general',
+        'mine',
+        'over-engineering-reviewer'
+      ].sort()
     )
   })
 })

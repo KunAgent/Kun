@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   computeWriteDocumentStats,
+  inlineAgentPosition,
   inlineAgentPlacement,
   isInlineCompletionToggleShortcut,
   type WriteInlineAgentPosition
@@ -65,11 +66,61 @@ const action: WriteInlineAgentPosition = {
   width: 300,
   anchorLeft: 400,
   anchorRight: 600,
+  coordinateScale: 1,
   anchorTop: 300,
   anchorBottom: 340
 }
 
+describe('inlineAgentPosition', () => {
+  it.each([
+    { coordinateScale: 0.82, viewportWidth: 820 },
+    { coordinateScale: 1, viewportWidth: 1000 },
+    { coordinateScale: 1.25, viewportWidth: 1250 }
+  ])('normalizes selection coordinates at $coordinateScale UI scale', ({ coordinateScale, viewportWidth }) => {
+    const position = inlineAgentPosition({
+      anchorRect: {
+        left: 400 * coordinateScale,
+        right: 600 * coordinateScale,
+        top: 300 * coordinateScale,
+        bottom: 340 * coordinateScale,
+        width: 200 * coordinateScale
+      }
+    }, {
+      compact: true,
+      coordinateScale,
+      viewportWidth
+    })
+
+    expect(position).toMatchObject({
+      left: 380,
+      width: 240,
+      coordinateScale
+    })
+    expect(position?.anchorLeft).toBeCloseTo(400)
+    expect(position?.anchorRight).toBeCloseTo(600)
+    expect(position?.anchorTop).toBeCloseTo(300)
+    expect(position?.anchorBottom).toBeCloseTo(340)
+  })
+})
+
 describe('inlineAgentPlacement', () => {
+  it.each([
+    { coordinateScale: 0.82, viewportWidth: 820, viewportHeight: 656 },
+    { coordinateScale: 1, viewportWidth: 1000, viewportHeight: 800 },
+    { coordinateScale: 1.25, viewportWidth: 1250, viewportHeight: 1000 }
+  ])('keeps placement stable at $coordinateScale UI scale', ({ coordinateScale, viewportWidth, viewportHeight }) => {
+    expect(inlineAgentPlacement({ ...action, coordinateScale }, {
+      menuHeight: 200,
+      viewportWidth,
+      viewportHeight
+    })).toMatchObject({
+      left: 320,
+      top: 348,
+      maxHeight: 200,
+      origin: 'top-center'
+    })
+  })
+
   it('places the menu below a selection when it fits', () => {
     expect(inlineAgentPlacement(action, {
       menuHeight: 200,

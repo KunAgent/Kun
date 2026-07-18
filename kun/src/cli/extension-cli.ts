@@ -471,7 +471,8 @@ async function runEnablement(
     await services.packageManager.setWorkspaceEnabled(
       id,
       services.paths.workspaceKey(workspaceRoot),
-      enabled
+      enabled,
+      workspaceRoot
     )
   }
   const entry = await requireEntry(services.registry, id)

@@ -1,0 +1,30 @@
+{
+  "segments": [
+    {
+      "id": "segment-welcome",
+      "startUs": 100000,
+      "endUs": 800000,
+      "text": "Welcome to the local fixture."
+    },
+    {
+      "id": "segment-filler",
+      "startUs": 900000,
+      "endUs": 1150000,
+      "text": "um",
+      "words": [
+        {
+          "id": "word-filler",
+          "startUs": 900000,
+          "endUs": 1150000,
+          "text": "um"
+        }
+      ]
+    },
+    {
+      "id": "segment-editable",
+      "startUs": 1200000,
+      "endUs": 1850000,
+      "text": "This range stays editable."
+    }
+  ]
+}

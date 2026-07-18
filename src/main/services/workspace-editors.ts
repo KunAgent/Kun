@@ -3,7 +3,7 @@ import { execFile } from 'node:child_process'
 import { readFile, stat, unlink } from 'node:fs/promises'
 import { homedir, tmpdir } from 'node:os'
 import { basename, dirname, extname, isAbsolute, join, posix } from 'node:path'
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { promisify } from 'node:util'
 import type {
   EditorInfo,
@@ -45,6 +45,8 @@ type ResolvedEditor = EditorInfo & {
 }
 
 const DEFAULT_EDITOR_ID = 'system'
+const PRESENTATION_FILE_SUFFIXES = ['.ppt', '.pptx', '.kun-ppt.html'] as const
+const MAX_KUN_PRESENTATION_HTML_BYTES = 900_000
 const EDITOR_ICON_SOURCE_PX = 64
 const LINUX_ICON_SIZES = ['512x512', '256x256', '128x128', '64x64', '48x48', '32x32', '24x24', '16x16']
 const ICON_IMAGE_EXTENSIONS = ['.png', '.ico', '.jpg', '.jpeg', '.webp', '.svg']
@@ -703,7 +705,29 @@ export async function openEditorPath(payload: OpenEditorPathOptions): Promise<Ed
       editors.find((item) => item.id === DEFAULT_EDITOR_ID)
     if (!editor) throw new Error('No editor or system opener is available.')
 
-    const targetPath = await resolveOpenTargetPath(payload.path, payload.workspaceRoot)
+    const targetPath = payload.openPolicy
+      ? await resolveOpenTargetPath(payload.path, payload.workspaceRoot, { allowBasenameFallback: false })
+      : await resolveOpenTargetPath(payload.path, payload.workspaceRoot)
+    if (payload.openPolicy === 'presentation-artifact') {
+      const info = await stat(targetPath)
+      if (!info.isFile()) throw new Error('Path must point to a regular file.')
+      const normalizedTarget = targetPath.toLowerCase()
+      if (!PRESENTATION_FILE_SUFFIXES.some((suffix) => normalizedTarget.endsWith(suffix))) {
+        throw new Error('Resolved file type is not allowed for this action.')
+      }
+      if (editor.id === 'system' && normalizedTarget.endsWith('.kun-ppt.html')) {
+        const expectedSha256 = payload.expectedSha256?.toLowerCase()
+        if (!expectedSha256) throw new Error('Verified presentation digest is required.')
+        if (info.size > MAX_KUN_PRESENTATION_HTML_BYTES) {
+          throw new Error('Presentation HTML exceeds the verified open limit.')
+        }
+        const content = await readFile(targetPath)
+        const actualSha256 = createHash('sha256').update(content).digest('hex')
+        if (actualSha256 !== expectedSha256) {
+          throw new Error('Presentation changed after it was generated. Save it again in Kun PPT before opening.')
+        }
+      }
+    }
     await openWithResolvedEditor(editor, targetPath, payload.line, payload.column)
     return { ok: true, path: targetPath, editorId: editor.id }
   } catch (error) {

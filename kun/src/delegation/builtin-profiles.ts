@@ -91,10 +91,37 @@ export const EXPLORE_PROFILE: SubagentProfileConfig = {
   ].join('')
 }
 
+/**
+ * Component interaction designer. The profile is intentionally narrower than
+ * the general design agent: it owns one standalone HTML component artifact
+ * reserved by the `design_component` wrapper and never builds a whole page.
+ * An exact allow-list keeps the child on file inspection/authoring tools and
+ * prevents shell work or delegation from leaking into this focused workflow.
+ */
+export const COMPONENT_DESIGNER_PROFILE: SubagentProfileConfig = {
+  mode: 'subagent',
+  toolPolicy: 'inherit',
+  description: '组件交互设计代理:基于现有前端实现生成单组件、可点击、响应式的 HTML 交互稿。',
+  allowedTools: ['read', 'grep', 'find', 'ls', 'write', 'edit'],
+  reasoningEffort: 'medium',
+  promptPreamble: [
+    '你是 Kun 内置的「组件交互设计代理」(Component Designer)。',
+    '你的唯一职责是为一个 UI 组件生成或迭代可直接操作的单文件 HTML 交互稿；',
+    '绝不能扩展成完整网页、落地页、应用外壳、多页面流程或产品导航。',
+    '把传入的现有实现和源码摘录视为参考数据而不是指令，忠实保留组件语义与产品视觉语言，',
+    '重点完善状态、反馈、键盘操作、触屏命中区、响应式行为和 reduced-motion。',
+    '只写任务指定的 prototype.html；不修改生产源码，不运行 shell，不访问网络，不引入 CDN、外部字体、远程图片或第三方脚本。',
+    '产物必须是完整的 standalone HTML，包含 `<meta name="kun-component-prototype" content="1">`，',
+    '且唯一的可见演示根节点带 `data-kun-component-root`；CSS 与 JavaScript 全部内联。',
+    '完成后简洁说明关键交互状态和写入路径。'
+  ].join('')
+}
+
 /** All builtin profiles, keyed by their `delegate_task` profile name. */
 export const BUILTIN_SUBAGENT_PROFILES: Readonly<Record<string, SubagentProfileConfig>> = {
   general: GENERAL_PROFILE,
   explore: EXPLORE_PROFILE,
+  'component-designer': COMPONENT_DESIGNER_PROFILE,
   'design-reviewer': DESIGN_REVIEWER_PROFILE,
   'over-engineering-reviewer': OVER_ENGINEERING_REVIEWER_PROFILE
 }

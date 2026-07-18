@@ -1,4 +1,9 @@
 import { randomUUID } from 'node:crypto'
+import {
+  ExtensionApiError,
+  ExtensionErrorSchema,
+  type ExtensionErrorData
+} from '@kun/extension-api'
 import { z } from 'zod'
 import { asExtensionError, extensionError, type ExtensionErrorDetails } from './errors.js'
 import { redactSecrets, redactSecretText } from '../config/secret-redaction.js'
@@ -19,6 +24,7 @@ const CorrelationId = z.string().regex(/^[a-zA-Z0-9_-]{1,128}$/)
 const ErrorPayloadSchema = z.object({
   code: z.string().min(1).max(200),
   message: z.string().max(4_000),
+  retryable: z.boolean().optional(),
   details: z.record(z.string(), JsonValueSchema).optional()
 }).strict()
 
@@ -306,7 +312,7 @@ export class JsonRpcPeer {
           this.settlePending(
             envelope.id,
             undefined,
-            extensionError(envelope.error.code, envelope.error.message, envelope.error.details ?? {})
+            errorFromPayload(envelope.error)
           )
         } else {
           this.settlePending(envelope.id, envelope.result ?? null)
@@ -554,12 +560,59 @@ function envelopeBytes(envelope: RpcEnvelope): number {
 }
 
 function errorPayload(error: unknown): RpcErrorPayload {
+  const publicError = publicExtensionError(error)
+  if (publicError !== undefined) {
+    return {
+      code: publicError.code,
+      message: redactSecretText(publicError.message).slice(0, 4_000),
+      retryable: publicError.retryable,
+      ...(publicError.details === undefined
+        ? {}
+        : { details: jsonSafeDetails(redactSecrets(publicError.details)) })
+    }
+  }
   const normalized = asExtensionError(error)
   return {
     code: normalized.code,
     message: redactSecretText(normalized.message).slice(0, 4_000),
     details: jsonSafeDetails(redactSecrets(normalized.details))
   }
+}
+
+function publicExtensionError(error: unknown): ExtensionErrorData | undefined {
+  try {
+    if (!error || typeof error !== 'object') return undefined
+    const candidate = error as Record<string, unknown>
+    // Node extensions are expected to bundle their runtime dependencies, so
+    // their ExtensionApiError constructor may not be referentially equal to
+    // the Host's SDK constructor. The public name plus the strict schema is
+    // the cross-package boundary; no stack, cause, or extra field is copied.
+    if (candidate.name !== 'ExtensionApiError' || typeof candidate.retryable !== 'boolean') {
+      return undefined
+    }
+    const parsed = ExtensionErrorSchema.safeParse({
+      code: candidate.code,
+      message: candidate.message,
+      retryable: candidate.retryable,
+      ...(candidate.details === undefined ? {} : { details: candidate.details })
+    })
+    return parsed.success ? parsed.data : undefined
+  } catch {
+    return undefined
+  }
+}
+
+function errorFromPayload(payload: RpcErrorPayload): Error {
+  if (payload.retryable !== undefined) {
+    const parsed = ExtensionErrorSchema.safeParse({
+      code: payload.code,
+      message: payload.message,
+      retryable: payload.retryable,
+      ...(payload.details === undefined ? {} : { details: payload.details })
+    })
+    if (parsed.success) return new ExtensionApiError(parsed.data)
+  }
+  return extensionError(payload.code, payload.message, payload.details ?? {})
 }
 
 function jsonSafeDetails(details: ExtensionErrorDetails): Record<string, JsonValue> {

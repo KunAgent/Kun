@@ -1,5 +1,6 @@
 export * from './archive.js'
 export * from './atomic-json.js'
+export * from './bundled-extension-seeder.js'
 export * from './errors.js'
 export * from './host-process.js'
 export * from './host-protocol.js'

@@ -1,7 +1,7 @@
 import type { Dispatch, ReactElement, SetStateAction } from 'react'
-import { Archive, AudioLines, Bot, BrainCircuit, GitBranch, Bug, ChevronLeft, Globe, Keyboard, Mic, Palette, PencilLine, Puzzle, RefreshCw, ServerCog, Settings, ShieldCheck, Smartphone, Sparkles, TerminalSquare, UsersRound } from 'lucide-react'
+import { Archive, AudioLines, Bot, BrainCircuit, GitBranch, Bug, ChevronLeft, Globe, Keyboard, Mic, Palette, PencilLine, Puzzle, RefreshCw, ServerCog, Settings, ShieldCheck, Smartphone, Sparkles, TerminalSquare, UsersRound, PackageOpen } from 'lucide-react'
 
-type SettingsCategory = 'general' | 'providers' | 'write' | 'design' | 'mediaGeneration' | 'speechToText' | 'agents' | 'subagents' | 'archives' | 'permissions' | 'worktree' | 'memory' | 'shortcuts' | 'easterEgg' | 'claw' | 'updates' | 'debug' | 'terminal' | 'extensions'
+type SettingsCategory = 'general' | 'providers' | 'write' | 'design' | 'mediaGeneration' | 'speechToText' | 'agents' | 'subagents' | 'archives' | 'permissions' | 'worktree' | 'memory' | 'shortcuts' | 'easterEgg' | 'claw' | 'updates' | 'debug' | 'terminal' | 'extensions' | 'dataMigration'
 
 export function SettingsSidebar({
   category,
@@ -24,7 +24,7 @@ export function SettingsSidebar({
     }`
 
   return (
-    <aside className="ds-drag flex h-full min-h-0 w-[248px] shrink-0 flex-col border-r border-ds-border bg-ds-sidebar backdrop-blur-md">
+    <aside className="ds-settings-sidebar ds-drag flex h-full min-h-0 w-[248px] shrink-0 flex-col border-r border-ds-border bg-ds-sidebar backdrop-blur-md">
       <div className="shrink-0 px-3 pb-3 pt-3">
         <div aria-hidden className="ds-titlebar-safe-block" />
         <button
@@ -129,6 +129,15 @@ export function SettingsSidebar({
         >
           <Archive className="h-4 w-4 shrink-0 opacity-70" strokeWidth={1.75} />
           {t('archives')}
+        </button>
+        <button
+          type="button"
+          data-cursor-spotlight-target
+          className={catCls('dataMigration')}
+          onClick={() => setCategory('dataMigration')}
+        >
+          <PackageOpen className="h-4 w-4 shrink-0 opacity-70" strokeWidth={1.75} />
+          {t('dataMigration')}
         </button>
         <button
           type="button"

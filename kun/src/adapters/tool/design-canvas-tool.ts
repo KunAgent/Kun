@@ -324,7 +324,7 @@ export function createDesignExportCanvasTool(): LocalTool {
     description: [
       'Export the current Code sidebar whiteboard as a real PNG or SVG workspace file that the GUI can show in the conversation.',
       'Use this only when the user explicitly asks for an image, PNG, SVG, export, or file copy of the whiteboard.',
-      'Create or update the editable diagram with design_update_shapes first, then call this tool. Do not replace an editable architecture diagram with generate_image.'
+      'If the requested diagram is already present in the current canvas snapshot, call this tool directly without redrawing it. Otherwise create or update the editable diagram with design_update_shapes first, then call this tool. Do not replace an editable architecture diagram with generate_image.'
     ].join(' '),
     // The tool result is a durable renderer request. The renderer performs the
     // actual file write after the latest shape operations have painted.
@@ -348,8 +348,10 @@ export function createDesignExportCanvasTool(): LocalTool {
       additionalProperties: false
     },
     execute: async (args, context) => {
-      const format = oneOf(args.format, ['png', 'svg']) ?? 'png'
-      const requestedName = stringArg(args.name)?.replace(/\.(?:png|svg)$/i, '')
+      const rawName = stringArg(args.name)
+      const nameFormat = oneOf(rawName?.match(/\.(png|svg)$/i)?.[1]?.toLowerCase(), ['png', 'svg'])
+      const format = oneOf(args.format, ['png', 'svg']) ?? nameFormat ?? 'png'
+      const requestedName = rawName?.replace(/\.(?:png|svg)$/i, '')
       const stem = safeCanvasExportStem(requestedName || 'kun-whiteboard')
       const suffix = createHash('sha256')
         .update(`${context.threadId}\0${context.turnId}\0${stem}\0${format}`)

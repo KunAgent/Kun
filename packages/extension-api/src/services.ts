@@ -29,11 +29,60 @@ import {
 } from './common.js'
 import type { Event, Disposable } from './lifecycle.js'
 import type {
+  ArtifactHostActionRequest,
+  ArtifactHostActionResult
+} from './artifacts.js'
+import type {
+  JobCancelRequest,
+  JobCancellationResult,
+  JobEvent,
+  JobListRequest,
+  JobPage,
+  JobSnapshot,
+  JobSubscribeRequest
+} from './jobs.js'
+import type {
+  MediaAudioAnalysisCapabilities,
+  MediaAnalyzeVisualFramesRequest,
+  MediaAnalyzeVisualFramesResult,
+  MediaEmbedVisualQueryRequest,
+  MediaEmbedVisualQueryResult,
+  MediaInstallVisualModelRequest,
+  MediaMetadata,
+  MediaCapabilities,
+  MediaCreateCacheTargetRequest,
+  MediaCreateCacheTargetResult,
+  MediaOpenViewResourceRequest,
+  MediaPickFilesRequest,
+  MediaPickFilesResult,
+  MediaPickSaveTargetRequest,
+  MediaPickSaveTargetResult,
+  MediaProbeRequest,
+  MediaProbeResult,
+  MediaReadTextRequest,
+  MediaReadTextResult,
+  MediaReleaseRequest,
+  MediaReleaseResult,
+  MediaResourceLease,
+  MediaStartFfmpegJobRequest,
+  MediaStartFfmpegJobResult,
+  MediaStartAudioAnalysisJobRequest,
+  MediaStartAudioAnalysisJobResult,
+  MediaStartArchiveJobRequest,
+  MediaStartArchiveJobResult,
+  MediaStatRequest,
+  MediaVisualModelStatus
+} from './media.js'
+import type {
   ModelProviderAdapter,
   ModelProviderDeclarationInput,
   ProviderStatus
 } from './providers.js'
 import type { ExtensionToolDeclarationInput, ExtensionToolHandler } from './tools.js'
+import type {
+  ComposerContextAttachment,
+  ComposerContextAttachmentRequest
+} from './composer-context.js'
 
 export interface HostRequestOptions {
   readonly signal?: AbortSignal
@@ -154,6 +203,9 @@ export const ResultPreviewSourceSchema = z.strictObject({
   mimeType: z.string().min(3).max(128).regex(/^[a-z0-9!#$&^_.+-]+\/[a-z0-9!#$&^_.+-]+$/),
   name: z.string().min(1).max(256).optional(),
   attachmentId: z.string().min(1).max(256).optional(),
+  artifactId: z.string().min(16).max(512).regex(/^[A-Za-z0-9_-]+$/).optional(),
+  mediaHandleId: z.string().min(16).max(512).regex(/^[A-Za-z0-9_-]+$/).optional(),
+  availability: z.enum(['available', 'unavailable']).optional(),
   relativePath: RelativePathSchema.optional(),
   byteSize: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).optional(),
   width: z.number().int().nonnegative().max(1_000_000).optional(),
@@ -201,6 +253,12 @@ export interface UiApi {
   setViewState(value: JsonValue): Promise<void>
   postMessage(message: HostMessage): Promise<void>
   showNotification(options: NotificationOptions): Promise<string | undefined>
+  /**
+   * From an authenticated Extension View, attach bounded, path-free extension
+   * data to the main Kun composer. The Host supplies extension/View/workspace
+   * provenance and consumes it once on the next main-conversation turn.
+   */
+  attachComposerContext(request: ComposerContextAttachmentRequest): Promise<ComposerContextAttachment>
 }
 
 export interface AgentRunSubscription extends Disposable {
@@ -243,6 +301,50 @@ export interface AuthenticationApi {
   deleteAccount(accountId: string): Promise<void>
   authenticatedFetch(request: AuthenticatedFetchRequest): Promise<NetworkResponse>
   revealSecret(request: RevealSecretRequest): Promise<string>
+}
+
+export interface MediaApi {
+  pickFiles(request?: MediaPickFilesRequest): Promise<MediaPickFilesResult>
+  pickSaveTarget(request?: MediaPickSaveTargetRequest): Promise<MediaPickSaveTargetResult>
+  createCacheTarget(request: MediaCreateCacheTargetRequest): Promise<MediaCreateCacheTargetResult>
+  stat(request: MediaStatRequest): Promise<MediaMetadata>
+  readText(request: MediaReadTextRequest): Promise<MediaReadTextResult>
+  release(request: MediaReleaseRequest): Promise<MediaReleaseResult>
+  openViewResource(request: MediaOpenViewResourceRequest): Promise<MediaResourceLease>
+  performArtifactAction(request: ArtifactHostActionRequest): Promise<ArtifactHostActionResult>
+  getCapabilities(): Promise<MediaCapabilities>
+  getAudioAnalysisCapabilities(): Promise<MediaAudioAnalysisCapabilities>
+  getVisualModelStatus(): Promise<MediaVisualModelStatus>
+  installVisualModel(request?: MediaInstallVisualModelRequest): Promise<MediaVisualModelStatus>
+  analyzeVisualFrames(
+    request: MediaAnalyzeVisualFramesRequest,
+    options?: HostRequestOptions
+  ): Promise<MediaAnalyzeVisualFramesResult>
+  embedVisualQuery(
+    request: MediaEmbedVisualQueryRequest,
+    options?: HostRequestOptions
+  ): Promise<MediaEmbedVisualQueryResult>
+  probe(request: MediaProbeRequest): Promise<MediaProbeResult>
+  startFfmpegJob(request: MediaStartFfmpegJobRequest): Promise<MediaStartFfmpegJobResult>
+  startAudioAnalysisJob(
+    request: MediaStartAudioAnalysisJobRequest
+  ): Promise<MediaStartAudioAnalysisJobResult>
+  startArchiveJob(request: MediaStartArchiveJobRequest): Promise<MediaStartArchiveJobResult>
+}
+
+export interface JobSubscription extends Disposable {
+  readonly snapshot: JobSnapshot
+  readonly replayGap: boolean
+  readonly cursor: string
+  readonly complete: boolean
+  readonly onEvent: Event<JobEvent>
+}
+
+export interface JobsApi {
+  get(jobId: string): Promise<JobSnapshot>
+  list(request?: JobListRequest): Promise<JobPage>
+  subscribe(request: JobSubscribeRequest): Promise<JobSubscription>
+  cancel(request: JobCancelRequest): Promise<JobCancellationResult>
 }
 
 export const WorkspaceFileSchema = z.strictObject({
