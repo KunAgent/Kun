@@ -1058,17 +1058,33 @@ test('every automated and local release path gates uploads behind packaged Exten
   const desktopCommand = 'npm run smoke:packaged-extension-desktop'
   const appImageDesktopCommand = 'npm run smoke:packaged-extension-appimage'
   const nativeEvidenceCommand = 'npm run evidence:extension-native'
+  const packagedOcrCommand = 'node scripts/smoke-packaged-ocr.cjs'
+  const verifyMacX64Command =
+    'npm run verify:packaged-macos-native -- --resources dist/mac-x64-verified/Kun.app/Contents/Resources --arch x64'
+  const smokeMacX64ExtensionsCommand =
+    'npm run smoke:packaged-extensions -- --resources dist/mac-x64-verified/Kun.app/Contents/Resources'
+  const smokeMacX64DesktopCommand =
+    'npm run smoke:packaged-extension-desktop -- --resources dist/mac-x64-verified/Kun.app/Contents/Resources'
 
   assertPublishDependencies(release, 'stable release')
   assertPublishDependencies(daily, 'daily prerelease')
 
   assertOrderedCommands(release.jobs['build-macos'], [
+    'npm run verify:packaged-macos-native -- --resources dist/mac/Kun.app/Contents/Resources --arch x64',
+    'npm run verify:packaged-macos-native -- --resources dist/mac-arm64/Kun.app/Contents/Resources --arch arm64',
+    packagedOcrCommand,
     'npm run smoke:packaged-extensions -- --resources dist/mac/Kun.app/Contents/Resources',
     'npm run smoke:packaged-extensions -- --resources dist/mac-arm64/Kun.app/Contents/Resources',
     desktopCommand,
     nativeEvidenceCommand
   ])
   assertStepAfter(release.jobs['build-macos'], 'Upload macOS artifacts', nativeEvidenceCommand)
+  assertOrderedCommands(release.jobs['verify-macos-x64'], [
+    verifyMacX64Command,
+    packagedOcrCommand,
+    smokeMacX64ExtensionsCommand,
+    smokeMacX64DesktopCommand
+  ])
   assertOrderedCommands(release.jobs['build-windows'], [
     'npm run smoke:packaged-extensions -- --resources dist/win-unpacked/resources',
     desktopCommand,
@@ -1094,12 +1110,21 @@ test('every automated and local release path gates uploads behind packaged Exten
   assertOrderedCommands(pr.jobs['package-macos'], [
     'npm run check:extension-release-gate',
     'npm run dist:mac',
+    'npm run verify:packaged-macos-native -- --resources dist/mac/Kun.app/Contents/Resources --arch x64',
+    'npm run verify:packaged-macos-native -- --resources dist/mac-arm64/Kun.app/Contents/Resources --arch arm64',
+    packagedOcrCommand,
     'npm run smoke:packaged-extensions -- --resources dist/mac/Kun.app/Contents/Resources',
     'npm run smoke:packaged-extensions -- --resources dist/mac-arm64/Kun.app/Contents/Resources',
     desktopCommand,
     nativeEvidenceCommand
   ])
   assertStepAfter(pr.jobs['package-macos'], 'Upload ad-hoc macOS PR packages', nativeEvidenceCommand)
+  assertOrderedCommands(pr.jobs['package-macos-x64-runtime'], [
+    verifyMacX64Command,
+    packagedOcrCommand,
+    smokeMacX64ExtensionsCommand,
+    smokeMacX64DesktopCommand
+  ])
   assertOrderedCommands(pr.jobs['package-windows'], [
     'npm run check:extension-release-gate',
     'npm run dist:win',
@@ -1111,12 +1136,21 @@ test('every automated and local release path gates uploads behind packaged Exten
   assertOrderedCommands(daily.jobs['build-macos'], [
     'npm run check:extension-release-gate',
     'npm run dist:mac',
+    'npm run verify:packaged-macos-native -- --resources dist/mac/Kun.app/Contents/Resources --arch x64',
+    'npm run verify:packaged-macos-native -- --resources dist/mac-arm64/Kun.app/Contents/Resources --arch arm64',
+    packagedOcrCommand,
     'npm run smoke:packaged-extensions -- --resources dist/mac/Kun.app/Contents/Resources',
     'npm run smoke:packaged-extensions -- --resources dist/mac-arm64/Kun.app/Contents/Resources',
     desktopCommand,
     nativeEvidenceCommand
   ])
   assertStepAfter(daily.jobs['build-macos'], 'Upload macOS artifacts', nativeEvidenceCommand)
+  assertOrderedCommands(daily.jobs['verify-macos-x64'], [
+    verifyMacX64Command,
+    packagedOcrCommand,
+    smokeMacX64ExtensionsCommand,
+    smokeMacX64DesktopCommand
+  ])
   assertOrderedCommands(daily.jobs['build-windows'], [
     'npm run check:extension-release-gate',
     'npm run dist:win',
@@ -1141,10 +1175,21 @@ test('every automated and local release path gates uploads behind packaged Exten
   }
   assert.equal(pr.jobs.package['timeout-minutes'], 60, 'PR Linux package job must have a bounded timeout')
   assert.equal(pr.jobs['package-macos']['timeout-minutes'], 90, 'PR macOS package job must have a bounded timeout')
+  assert.equal(pr.jobs['package-macos-x64-runtime']['timeout-minutes'], 30)
   assert.equal(pr.jobs['package-windows']['timeout-minutes'], 90, 'PR Windows package job must have a bounded timeout')
   for (const jobId of ['package', 'package-macos', 'package-windows']) {
     const needs = Array.isArray(pr.jobs[jobId].needs) ? pr.jobs[jobId].needs : [pr.jobs[jobId].needs]
     assert.ok(needs.includes('test'), `${jobId} must depend on the test gate`)
+  }
+  for (const [label, job, dependency] of [
+    ['release macOS x64', release.jobs['verify-macos-x64'], 'build-macos'],
+    ['daily macOS x64', daily.jobs['verify-macos-x64'], 'build-macos'],
+    ['PR macOS x64', pr.jobs['package-macos-x64-runtime'], 'package-macos']
+  ]) {
+    const needs = Array.isArray(job.needs) ? job.needs : [job.needs]
+    assert.ok(needs.includes(dependency), `${label} must depend on ${dependency}`)
+    assert.equal(job['runs-on'], 'macos-15-intel', `${label} must execute on Intel macOS`)
+    assert.equal(job['timeout-minutes'], 30, `${label} must have a bounded timeout`)
   }
   for (const [label, job] of [
     ['release Linux', release.jobs['build-linux']],
@@ -1196,7 +1241,13 @@ test('every automated and local release path gates uploads behind packaged Exten
   const prFailureNeeds = Array.isArray(pr.jobs['request-changes-on-failure'].needs)
     ? pr.jobs['request-changes-on-failure'].needs
     : [pr.jobs['request-changes-on-failure'].needs]
-  for (const jobId of ['test', 'package', 'package-macos', 'package-windows']) {
+  for (const jobId of [
+    'test',
+    'package',
+    'package-macos',
+    'package-macos-x64-runtime',
+    'package-windows'
+  ]) {
     assert.ok(prFailureNeeds.includes(jobId), `PR failure review must depend on ${jobId}`)
   }
 
@@ -1223,10 +1274,13 @@ test('every automated and local release path gates uploads behind packaged Exten
     'gh release create "${TAG_NAME}"'
   ])
   assertOrderedSourceMarkers(releaseMac, [
+    'npm run verify:packaged-macos-native -- --resources "${x64_resources}" --arch x64',
+    'npm run verify:packaged-macos-native -- --resources "${arm64_resources}" --arch arm64',
     'npm run smoke:packaged-extensions -- --resources "${x64_resources}"',
     '|| die "macOS x64 packaged Extension Node runtime smoke failed"',
     'npm run smoke:packaged-extensions -- --resources "${arm64_resources}"',
     '|| die "macOS arm64 packaged Extension Node runtime smoke failed"',
+    'KUN_PACKAGED_RESOURCES_DIR="${host_resources}" node scripts/smoke-packaged-ocr.cjs',
     'npm run smoke:packaged-extension-desktop -- --resources "${host_resources}"',
     '|| die "macOS packaged Extension desktop Chromium smoke failed"'
   ])
@@ -1236,6 +1290,8 @@ test('every automated and local release path gates uploads behind packaged Exten
     'publish-r2.mjs" upload --platform mac'
   ])
   assert.doesNotMatch(releaseMac, /publish-r2\.mjs" promote --tag/)
+  assert.doesNotMatch(releaseMac, /build_macos_parallel/)
+  assert.match(releaseMac, /Building macOS serially for architecture-specific native dependencies/)
   assert.match(releaseMac, /macOS release only uploads single-platform R2 metadata/)
 
   const releaseWin = readFileSync(join(root, 'scripts', 'release-win.sh'), 'utf8')
@@ -1364,7 +1420,13 @@ function assertPublishDependencies(workflow, label) {
   const publish = workflow.jobs?.publish
   assert.ok(publish, `${label} must define a publish job`)
   const needs = Array.isArray(publish.needs) ? publish.needs : [publish.needs].filter(Boolean)
-  for (const dependency of ['prepare', 'build-macos', 'build-windows', 'build-linux']) {
+  for (const dependency of [
+    'prepare',
+    'build-macos',
+    'verify-macos-x64',
+    'build-windows',
+    'build-linux'
+  ]) {
     assert.ok(needs.includes(dependency), `${label} publish job must depend on ${dependency}`)
   }
   assert.equal(publish.if, undefined, `${label} publish job must not bypass failed jobs`)

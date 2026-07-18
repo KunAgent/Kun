@@ -135,6 +135,17 @@ jobs:
       - name: Build signed macOS packages
         run: npm run dist:mac:signed
 
+      - name: Verify packaged macOS x64 native architecture
+        run: npm run verify:packaged-macos-native -- --resources dist/mac/Kun.app/Contents/Resources --arch x64
+
+      - name: Verify packaged macOS arm64 native architecture
+        run: npm run verify:packaged-macos-native -- --resources dist/mac-arm64/Kun.app/Contents/Resources --arch arm64
+
+      - name: Smoke packaged OCR dependencies (macOS arm64)
+        env:
+          KUN_PACKAGED_RESOURCES_DIR: dist/mac-arm64/Kun.app/Contents/Resources
+        run: node scripts/smoke-packaged-ocr.cjs
+
       - name: Smoke packaged Extension Node runtime (macOS x64)
         run: npm run smoke:packaged-extensions -- --resources dist/mac/Kun.app/Contents/Resources
 
@@ -169,6 +180,64 @@ jobs:
             dist/Kun-*-mac-*.blockmap
             dist/latest-mac.yml
             dist/extension-native-evidence-darwin.json
+
+  verify-macos-x64:
+    name: Verify macOS x64 release artifact
+    runs-on: macos-15-intel
+    timeout-minutes: 30
+    needs:
+      - prepare
+      - build-macos
+    steps:
+      - name: Check out merge commit
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.merge_commit_sha }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Download final macOS artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: release-mac
+          path: release-artifacts
+
+      - name: Extract final macOS x64 ZIP
+        run: |
+          set -euo pipefail
+          archives=(release-artifacts/Kun-*-mac-x64.zip)
+          if [[ ${#archives[@]} -ne 1 || ! -f "${archives[0]}" ]]; then
+            echo "::error::Expected exactly one final macOS x64 ZIP"
+            find release-artifacts -maxdepth 2 -type f -print | sort
+            exit 1
+          fi
+          mkdir -p dist/mac-x64-verified
+          ditto -x -k "${archives[0]}" dist/mac-x64-verified
+
+      - name: Verify final macOS x64 native architecture
+        run: >-
+          npm run verify:packaged-macos-native --
+          --resources dist/mac-x64-verified/Kun.app/Contents/Resources
+          --arch x64
+
+      - name: Smoke final macOS x64 OCR dependencies
+        env:
+          KUN_PACKAGED_RESOURCES_DIR: dist/mac-x64-verified/Kun.app/Contents/Resources
+        run: node scripts/smoke-packaged-ocr.cjs
+
+      - name: Smoke final macOS x64 Extension Node runtime
+        run: >-
+          npm run smoke:packaged-extensions --
+          --resources dist/mac-x64-verified/Kun.app/Contents/Resources
+
+      - name: Smoke final macOS x64 desktop Chromium
+        run: >-
+          npm run smoke:packaged-extension-desktop --
+          --resources dist/mac-x64-verified/Kun.app/Contents/Resources
 
   build-windows:
     name: Build Windows
@@ -347,6 +416,7 @@ jobs:
     needs:
       - prepare
       - build-macos
+      - verify-macos-x64
       - build-windows
       - build-linux
     env:

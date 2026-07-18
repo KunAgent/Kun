@@ -18,7 +18,6 @@ set -euo pipefail
 #   --no-commit-notes    generic build info only (old behavior)
 #
 # Speed knobs:
-#   MAC_RELEASE_PARALLEL=force      force parallel arm64/x64 builds even when signing
 #   RELEASE_UPLOAD_CONCURRENCY=4    GitHub/R2 upload concurrency
 #   KUN_RUNTIME_CACHE=0             disable bundled runtime cache
 #
@@ -45,7 +44,6 @@ RELEASE_CHANNEL="${RELEASE_CHANNEL:-frontier}"
 R2_UPLOAD="${R2_UPLOAD:-false}"
 R2_PROMOTE="${R2_PROMOTE:-false}"
 RELEASE_UPLOAD_CONCURRENCY="${RELEASE_UPLOAD_CONCURRENCY:-4}"
-MAC_RELEASE_PARALLEL="${MAC_RELEASE_PARALLEL:-1}"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -79,98 +77,9 @@ if [[ "${R2_PROMOTE}" == "true" ]]; then
   die "macOS release only uploads single-platform R2 metadata; run release-win.sh --r2-promote after the complete three-platform bundle passes verification."
 fi
 
-build_mac_arch() {
-  local arch="$1"
-  local output_dir="$2"
-  local log_file="$3"
-
-  mkdir -p "${output_dir}" "$(dirname "${log_file}")"
-  cyan "  ${arch}: building dmg + zip -> ${output_dir}"
-  KUN_DIST_DIR="${output_dir}" \
-    npx --yes electron-builder@26.8.1 --config electron-builder.config.cjs --publish never --mac dmg "--${arch}" \
-    >"${log_file}" 2>&1
-  KUN_DIST_DIR="${output_dir}" \
-    node "${ROOT}/scripts/zip-mac-app.cjs" "${arch}" \
-    >>"${log_file}" 2>&1
-}
-
-copy_mac_arch_artifacts() {
-  local arch="$1"
-  local output_dir="$2"
-  local files=()
-
-  shopt -s nullglob
-  files=("${output_dir}"/Kun-*-mac-"${arch}".*)
-  shopt -u nullglob
-
-  [[ ${#files[@]} -gt 0 ]] || die "No macOS ${arch} artifacts found in ${output_dir}"
-  cp -p "${files[@]}" "${ROOT}/dist/"
-}
-
-build_macos_parallel() {
-  local build_root="${ROOT}/dist/.mac-build"
-  local arm64_output="${build_root}/arm64"
-  local x64_output="${build_root}/x64"
-  local arm64_log="${build_root}/arm64.log"
-  local x64_log="${build_root}/x64.log"
-  local arm64_pid
-  local x64_pid
-  local failures=0
-
-  rm -rf "${build_root}"
-  mkdir -p "${ROOT}/dist" "${build_root}"
-
-  cyan "Building renderer/main once..."
-  npm run build || die "electron-vite build failed"
-
-  cyan "Preparing electron-builder..."
-  npx --yes electron-builder@26.8.1 --version >/dev/null \
-    || die "Failed to prepare electron-builder"
-
-  cyan "Building macOS arm64 and x64 in parallel..."
-  build_mac_arch arm64 "${arm64_output}" "${arm64_log}" &
-  arm64_pid=$!
-  build_mac_arch x64 "${x64_output}" "${x64_log}" &
-  x64_pid=$!
-
-  if wait "${arm64_pid}"; then
-    green "  ✓ arm64 build complete"
-  else
-    red "  ✗ arm64 build failed; last log lines:"
-    tail -n 120 "${arm64_log}" >&2 || true
-    failures=1
-  fi
-
-  if wait "${x64_pid}"; then
-    green "  ✓ x64 build complete"
-  else
-    red "  ✗ x64 build failed; last log lines:"
-    tail -n 120 "${x64_log}" >&2 || true
-    failures=1
-  fi
-
-  [[ "${failures}" -eq 0 ]] || die "macOS parallel build failed"
-
-  copy_mac_arch_artifacts arm64 "${arm64_output}"
-  copy_mac_arch_artifacts x64 "${x64_output}"
-  node "${ROOT}/scripts/generate-mac-latest.cjs" "${ROOT}/dist" \
-    || die "Failed to generate merged latest-mac.yml"
-}
-
 build_macos() {
-  if $SIGNING && [[ "${MAC_RELEASE_PARALLEL}" != "force" ]]; then
-    cyan "Building macOS serially because Developer ID signing is enabled."
-    npm run dist:mac || die "macOS build failed"
-    return
-  fi
-
-  if [[ "${MAC_RELEASE_PARALLEL}" == "0" ]]; then
-    cyan "Building macOS serially (MAC_RELEASE_PARALLEL=0)..."
-    npm run dist:mac || die "macOS build failed"
-    return
-  fi
-
-  build_macos_parallel
+  cyan "Building macOS serially for architecture-specific native dependencies..."
+  npm run dist:mac || die "macOS build failed"
 }
 
 resolve_mac_resources() {
@@ -182,13 +91,11 @@ resolve_mac_resources() {
     arm64)
       candidates=(
         "${ROOT}/dist/mac-arm64/Kun.app/Contents/Resources"
-        "${ROOT}/dist/.mac-build/arm64/mac-arm64/Kun.app/Contents/Resources"
       )
       ;;
     x64)
       candidates=(
         "${ROOT}/dist/mac/Kun.app/Contents/Resources"
-        "${ROOT}/dist/.mac-build/x64/mac/Kun.app/Contents/Resources"
       )
       ;;
     *) die "Unsupported macOS Extension smoke architecture: ${arch}" ;;
@@ -212,6 +119,14 @@ smoke_macos_extensions() {
   x64_resources="$(resolve_mac_resources x64)"
   arm64_resources="$(resolve_mac_resources arm64)"
 
+  cyan "Verifying packaged native architecture (macOS x64)..."
+  npm run verify:packaged-macos-native -- --resources "${x64_resources}" --arch x64 \
+    || die "macOS x64 packaged native architecture verification failed"
+
+  cyan "Verifying packaged native architecture (macOS arm64)..."
+  npm run verify:packaged-macos-native -- --resources "${arm64_resources}" --arch arm64 \
+    || die "macOS arm64 packaged native architecture verification failed"
+
   cyan "Smoking packaged Extension Node runtime (macOS x64)..."
   npm run smoke:packaged-extensions -- --resources "${x64_resources}" \
     || die "macOS x64 packaged Extension Node runtime smoke failed"
@@ -226,6 +141,10 @@ smoke_macos_extensions() {
     x64) host_resources="${x64_resources}" ;;
     *) die "Unsupported host architecture for desktop Extension smoke: ${host_arch}" ;;
   esac
+
+  cyan "Smoking packaged OCR dependencies (host-native macOS ${host_arch})..."
+  KUN_PACKAGED_RESOURCES_DIR="${host_resources}" node scripts/smoke-packaged-ocr.cjs \
+    || die "macOS packaged OCR dependency smoke failed"
 
   cyan "Smoking packaged Extension desktop Chromium (host-native macOS ${host_arch})..."
   npm run smoke:packaged-extension-desktop -- --resources "${host_resources}" \

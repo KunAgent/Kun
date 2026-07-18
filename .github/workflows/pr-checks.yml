@@ -184,6 +184,17 @@ jobs:
       - name: Build ad-hoc macOS packages (x64 and arm64)
         run: npm run dist:mac
 
+      - name: Verify packaged macOS x64 native architecture
+        run: npm run verify:packaged-macos-native -- --resources dist/mac/Kun.app/Contents/Resources --arch x64
+
+      - name: Verify packaged macOS arm64 native architecture
+        run: npm run verify:packaged-macos-native -- --resources dist/mac-arm64/Kun.app/Contents/Resources --arch arm64
+
+      - name: Smoke packaged OCR dependencies (macOS arm64)
+        env:
+          KUN_PACKAGED_RESOURCES_DIR: dist/mac-arm64/Kun.app/Contents/Resources
+        run: node scripts/smoke-packaged-ocr.cjs
+
       - name: Smoke packaged Extension Node runtime (macOS x64)
         run: npm run smoke:packaged-extensions -- --resources dist/mac/Kun.app/Contents/Resources
 
@@ -218,6 +229,59 @@ jobs:
             dist/Kun-*-mac-*.blockmap
             dist/latest-mac.yml
             dist/extension-native-evidence-darwin.json
+
+  package-macos-x64-runtime:
+    name: Intel macOS packaged validation (PR)
+    runs-on: macos-15-intel
+    needs: package-macos
+    timeout-minutes: 30
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Download final macOS PR artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: pr-macos-adhoc-packages
+          path: release-artifacts
+
+      - name: Extract final macOS x64 ZIP
+        run: |
+          set -euo pipefail
+          archives=(release-artifacts/Kun-*-mac-x64.zip)
+          if [[ ${#archives[@]} -ne 1 || ! -f "${archives[0]}" ]]; then
+            echo "::error::Expected exactly one final macOS x64 ZIP"
+            find release-artifacts -maxdepth 2 -type f -print | sort
+            exit 1
+          fi
+          mkdir -p dist/mac-x64-verified
+          ditto -x -k "${archives[0]}" dist/mac-x64-verified
+
+      - name: Verify final macOS x64 native architecture
+        run: >-
+          npm run verify:packaged-macos-native --
+          --resources dist/mac-x64-verified/Kun.app/Contents/Resources
+          --arch x64
+
+      - name: Smoke final macOS x64 OCR dependencies
+        env:
+          KUN_PACKAGED_RESOURCES_DIR: dist/mac-x64-verified/Kun.app/Contents/Resources
+        run: node scripts/smoke-packaged-ocr.cjs
+
+      - name: Smoke final macOS x64 Extension Node runtime
+        run: >-
+          npm run smoke:packaged-extensions --
+          --resources dist/mac-x64-verified/Kun.app/Contents/Resources
+
+      - name: Smoke final macOS x64 desktop Chromium
+        run: >-
+          npm run smoke:packaged-extension-desktop --
+          --resources dist/mac-x64-verified/Kun.app/Contents/Resources
 
   package-windows:
     name: Windows NSIS packaged validation (PR)
@@ -299,6 +363,7 @@ jobs:
       - test
       - package
       - package-macos
+      - package-macos-x64-runtime
       - package-windows
     if: >-
       ${{
@@ -308,6 +373,7 @@ jobs:
           needs.test.result == 'failure' ||
           needs.package.result == 'failure' ||
           needs['package-macos'].result == 'failure' ||
+          needs['package-macos-x64-runtime'].result == 'failure' ||
           needs['package-windows'].result == 'failure'
         )
       }}
@@ -320,6 +386,7 @@ jobs:
               ['Typecheck and test', '${{ needs.test.result }}'],
               ['Build Linux package', '${{ needs.package.result }}'],
               ['Ad-hoc macOS packaged validation (PR)', '${{ needs['package-macos'].result }}'],
+              ['Intel macOS packaged validation (PR)', '${{ needs['package-macos-x64-runtime'].result }}'],
               ['Windows NSIS packaged validation (PR)', '${{ needs['package-windows'].result }}']
             ]
               .filter(([, result]) => result === 'failure')

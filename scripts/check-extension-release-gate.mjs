@@ -210,7 +210,13 @@ function requirePublishDependencies(document, workflowLabel) {
   check(Boolean(publish), `${workflowLabel} must define a publish job`)
   if (!publish) return
   const needs = Array.isArray(publish.needs) ? publish.needs : [publish.needs].filter(Boolean)
-  for (const dependency of ['prepare', 'build-macos', 'build-windows', 'build-linux']) {
+  for (const dependency of [
+    'prepare',
+    'build-macos',
+    'verify-macos-x64',
+    'build-windows',
+    'build-linux'
+  ]) {
     check(
       needs.includes(dependency),
       `${workflowLabel} publish job must depend on successful ${dependency}`
@@ -1011,6 +1017,13 @@ const nativeEvidenceCommand = 'npm run evidence:extension-native'
 const nativeEvidenceVerifierCommand = 'npm run verify:extension-native-evidence'
 const videoEditorPackCommand = 'npm run pack:kun-video-editor'
 const videoEditorVerifyCommand = 'npm run verify:kun-video-editor-package'
+const verifyMacX64Command =
+  'npm run verify:packaged-macos-native -- --resources dist/mac-x64-verified/Kun.app/Contents/Resources --arch x64'
+const smokeMacX64ExtensionsCommand =
+  'npm run smoke:packaged-extensions -- --resources dist/mac-x64-verified/Kun.app/Contents/Resources'
+const smokeMacX64DesktopCommand =
+  'npm run smoke:packaged-extension-desktop -- --resources dist/mac-x64-verified/Kun.app/Contents/Resources'
+const smokePackagedOcrCommand = 'node scripts/smoke-packaged-ocr.cjs'
 const nativeEvidenceSource = await text('scripts/write-extension-native-evidence.mjs')
 const nativeEvidenceVerifierSource = await text('scripts/verify-extension-native-evidence.mjs')
 const manualReleaseVerifierSource = await text('scripts/verify-manual-extension-release.mjs')
@@ -1060,6 +1073,30 @@ check(
     './scripts/smoke-packaged-video-editor-native.test.cjs'
   ),
   'Extension release gate must execute packaged video editor native smoke source tests'
+)
+check(
+  rootPackage.scripts?.['prepare:macos-native:x64'] ===
+    'node ./scripts/ensure-macos-native-dependencies.cjs --arch x64' &&
+    rootPackage.scripts?.['prepare:macos-native:arm64'] ===
+      'node ./scripts/ensure-macos-native-dependencies.cjs --arch arm64' &&
+    rootPackage.scripts?.['dist:mac:x64:dmg']?.startsWith(
+      'npm run prepare:macos-native:x64 && '
+    ) &&
+    rootPackage.scripts?.['dist:mac:arm64:dmg']?.startsWith(
+      'npm run prepare:macos-native:arm64 && '
+    ),
+  'macOS packaging must install target-native Sharp and Canvas dependencies before each architecture'
+)
+check(
+  rootPackage.scripts?.['verify:packaged-macos-native'] ===
+    'node ./scripts/verify-packaged-macos-native-architecture.cjs' &&
+    rootPackage.scripts?.['check:extension-release-gate']?.includes(
+      './scripts/ensure-macos-native-dependencies.test.cjs'
+    ) &&
+    rootPackage.scripts?.['check:extension-release-gate']?.includes(
+      './scripts/verify-packaged-macos-native-architecture.test.cjs'
+    ),
+  'Extension release gate must expose and test macOS native architecture verification'
 )
 for (const marker of [
   "KUN_RUN_MEDIA_SMOKE: '1'",
@@ -1308,6 +1345,9 @@ requireBoundedJobTimeout(releaseMacJob, 'build-macos', 90)
 requireOrderedCommands(releaseMacJob, 'build-macos', [
   'npm run check:extension-release-gate',
   'npm run dist:mac:signed',
+  'npm run verify:packaged-macos-native -- --resources dist/mac/Kun.app/Contents/Resources --arch x64',
+  'npm run verify:packaged-macos-native -- --resources dist/mac-arm64/Kun.app/Contents/Resources --arch arm64',
+  smokePackagedOcrCommand,
   'npm run smoke:packaged-extensions -- --resources dist/mac/Kun.app/Contents/Resources',
   'npm run smoke:packaged-extensions -- --resources dist/mac-arm64/Kun.app/Contents/Resources',
   nativeMediaSmokeCommand,
@@ -1321,6 +1361,19 @@ requireUnconditionalStepAfter(
   'Upload macOS artifacts',
   nativeEvidenceCommand
 )
+const releaseMacX64Job = workflowJob(
+  releaseWorkflowDocument,
+  'verify-macos-x64',
+  'macos-15-intel'
+)
+requireBoundedJobTimeout(releaseMacX64Job, 'verify-macos-x64', 30)
+requireJobDependencies(releaseMacX64Job, 'verify-macos-x64', ['prepare', 'build-macos'])
+requireOrderedCommands(releaseMacX64Job, 'verify-macos-x64', [
+  verifyMacX64Command,
+  smokePackagedOcrCommand,
+  smokeMacX64ExtensionsCommand,
+  smokeMacX64DesktopCommand
+])
 const releaseWindowsJob = workflowJob(releaseWorkflowDocument, 'build-windows', 'windows-latest')
 requireBoundedJobTimeout(releaseWindowsJob, 'build-windows', 90)
 requireOrderedCommands(releaseWindowsJob, 'build-windows', [
@@ -1400,6 +1453,9 @@ requireBoundedJobTimeout(dailyMacJob, 'daily build-macos', 90)
 requireOrderedCommands(dailyMacJob, 'daily build-macos', [
   'npm run check:extension-release-gate',
   'npm run dist:mac',
+  'npm run verify:packaged-macos-native -- --resources dist/mac/Kun.app/Contents/Resources --arch x64',
+  'npm run verify:packaged-macos-native -- --resources dist/mac-arm64/Kun.app/Contents/Resources --arch arm64',
+  smokePackagedOcrCommand,
   'npm run smoke:packaged-extensions -- --resources dist/mac/Kun.app/Contents/Resources',
   'npm run smoke:packaged-extensions -- --resources dist/mac-arm64/Kun.app/Contents/Resources',
   nativeMediaSmokeCommand,
@@ -1413,6 +1469,19 @@ requireUnconditionalStepAfter(
   'Upload macOS artifacts',
   nativeEvidenceCommand
 )
+const dailyMacX64Job = workflowJob(
+  dailyWorkflowDocument,
+  'verify-macos-x64',
+  'macos-15-intel'
+)
+requireBoundedJobTimeout(dailyMacX64Job, 'daily verify-macos-x64', 30)
+requireJobDependencies(dailyMacX64Job, 'daily verify-macos-x64', ['prepare', 'build-macos'])
+requireOrderedCommands(dailyMacX64Job, 'daily verify-macos-x64', [
+  verifyMacX64Command,
+  smokePackagedOcrCommand,
+  smokeMacX64ExtensionsCommand,
+  smokeMacX64DesktopCommand
+])
 const dailyWindowsJob = workflowJob(dailyWorkflowDocument, 'build-windows', 'windows-latest')
 requireBoundedJobTimeout(dailyWindowsJob, 'daily build-windows', 90)
 requireOrderedCommands(dailyWindowsJob, 'daily build-windows', [
@@ -1525,14 +1594,20 @@ requireSourceMarkersAfter(releaseMacScript, 'scripts/release-mac.sh', '\nsmoke_m
   'publish-r2.mjs" upload --platform mac'
 ])
 requireOrderedSourceMarkers(releaseMacScript, 'scripts/release-mac.sh packaged smoke function', [
+  'npm run verify:packaged-macos-native -- --resources "${x64_resources}" --arch x64',
+  'npm run verify:packaged-macos-native -- --resources "${arm64_resources}" --arch arm64',
   'npm run smoke:packaged-extensions -- --resources "${x64_resources}"',
   'npm run smoke:packaged-extensions -- --resources "${arm64_resources}"',
+  'KUN_PACKAGED_RESOURCES_DIR="${host_resources}" node scripts/smoke-packaged-ocr.cjs',
   'npm run smoke:packaged-extension-desktop -- --resources "${host_resources}"',
   '--archive "${ROOT}/dist/kun-video-editor-0.4.4.kunx"'
 ])
 for (const marker of [
   '|| die "macOS x64 packaged Extension Node runtime smoke failed"',
   '|| die "macOS arm64 packaged Extension Node runtime smoke failed"',
+  '|| die "macOS x64 packaged native architecture verification failed"',
+  '|| die "macOS arm64 packaged native architecture verification failed"',
+  '|| die "macOS packaged OCR dependency smoke failed"',
   '|| die "macOS packaged Extension desktop Chromium smoke failed"',
   '--archive "${ROOT}/dist/kun-video-editor-0.4.4.kunx"',
   'verify:manual-extension-release',
@@ -1545,6 +1620,13 @@ for (const marker of [
 check(
   !releaseMacScript.includes('publish-r2.mjs" promote --tag'),
   'scripts/release-mac.sh must not promote a single-platform R2 release'
+)
+check(
+  !releaseMacScript.includes('build_macos_parallel') &&
+    releaseMacScript.includes(
+      'Building macOS serially for architecture-specific native dependencies'
+    ),
+  'scripts/release-mac.sh must not race architecture-specific native package preparation'
 )
 
 const releaseWinScript = await text('scripts/release-win.sh')
@@ -1679,6 +1761,9 @@ requireBoundedJobTimeout(prMacJob, 'package-macos', 90)
 requireJobDependencies(prMacJob, 'package-macos', ['test'])
 requireOrderedCommands(prMacJob, 'package-macos', [
   'npm run dist:mac',
+  'npm run verify:packaged-macos-native -- --resources dist/mac/Kun.app/Contents/Resources --arch x64',
+  'npm run verify:packaged-macos-native -- --resources dist/mac-arm64/Kun.app/Contents/Resources --arch arm64',
+  smokePackagedOcrCommand,
   'npm run smoke:packaged-extensions -- --resources dist/mac/Kun.app/Contents/Resources',
   'npm run smoke:packaged-extensions -- --resources dist/mac-arm64/Kun.app/Contents/Resources',
   nativeMediaSmokeCommand,
@@ -1692,6 +1777,19 @@ requireUnconditionalStepAfter(
   'Upload ad-hoc macOS PR packages',
   nativeEvidenceCommand
 )
+const prMacX64Job = workflowJob(
+  prWorkflowDocument,
+  'package-macos-x64-runtime',
+  'macos-15-intel'
+)
+requireBoundedJobTimeout(prMacX64Job, 'package-macos-x64-runtime', 30)
+requireJobDependencies(prMacX64Job, 'package-macos-x64-runtime', ['package-macos'])
+requireOrderedCommands(prMacX64Job, 'package-macos-x64-runtime', [
+  verifyMacX64Command,
+  smokePackagedOcrCommand,
+  smokeMacX64ExtensionsCommand,
+  smokeMacX64DesktopCommand
+])
 const prWindowsJob = workflowJob(prWorkflowDocument, 'package-windows', 'windows-latest')
 requireBoundedJobTimeout(prWindowsJob, 'package-windows', 90)
 requireJobDependencies(prWindowsJob, 'package-windows', ['test'])
@@ -1714,6 +1812,7 @@ requireJobDependencies(prFailureJob, 'request-changes-on-failure', [
   'test',
   'package',
   'package-macos',
+  'package-macos-x64-runtime',
   'package-windows'
 ])
 
