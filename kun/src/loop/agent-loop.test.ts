@@ -139,6 +139,38 @@ class CapturingCompleteModel implements ModelClient {
   }
 }
 
+class FinalResponseGateModel implements ModelClient {
+  readonly provider = 'test'
+  readonly model = 'final-response-gate-model'
+  readonly requests: ModelRequest[] = []
+  private releaseFirstResponse: (() => void) | undefined
+  private markFirstStarted: (() => void) | undefined
+  private readonly firstResponseStarted = new Promise<void>((resolve) => {
+    this.markFirstStarted = resolve
+  })
+  private readonly firstResponseReleased = new Promise<void>((resolve) => {
+    this.releaseFirstResponse = resolve
+  })
+
+  async *stream(request: ModelRequest): AsyncIterable<ModelStreamChunk> {
+    this.requests.push(request)
+    if (this.requests.length === 1) {
+      this.markFirstStarted?.()
+      await this.firstResponseReleased
+    }
+    yield { kind: 'assistant_text_delta', text: `response ${this.requests.length}` }
+    yield { kind: 'completed', stopReason: 'stop' }
+  }
+
+  waitForFirstResponse(): Promise<void> {
+    return this.firstResponseStarted
+  }
+
+  release(): void {
+    this.releaseFirstResponse?.()
+  }
+}
+
 class RoutedFailureModel implements ModelClient {
   readonly provider = 'compat-multi'
   readonly model = 'gpt-5.3-codex-spark'
@@ -269,6 +301,83 @@ async function svgLoopHarness(input: {
 }
 
 describe('AgentLoop interruption', () => {
+  it('continues after a final streamed response when steering was accepted mid-step', async () => {
+    const sessionStore = new InMemorySessionStore()
+    const threadStore = new InMemoryThreadStore()
+    const eventBus = new InMemoryEventBus()
+    const inflight = new InflightTracker()
+    const steering = new SteeringQueue()
+    const ids = new SequentialIdGenerator()
+    const nowIso = () => '2026-07-16T00:00:00.000Z'
+    const events = new RuntimeEventRecorder({
+      eventBus,
+      sessionStore,
+      allocateSeq: (threadId) => eventBus.allocateSeq(threadId),
+      nowIso
+    })
+    const model = new FinalResponseGateModel()
+    const turns = new TurnService({
+      threadStore,
+      sessionStore,
+      events,
+      inflight,
+      steering,
+      compactor: new ContextCompactor(),
+      ids,
+      nowIso
+    })
+    const loop = new AgentLoop({
+      threadStore,
+      sessionStore,
+      approvalGate: new AllowApprovalGate(),
+      userInputGate: new NoopUserInputGate(),
+      model,
+      toolHost: new LocalToolHost({ tools: [] }),
+      usage: new UsageService(),
+      events,
+      turns,
+      inflight,
+      steering,
+      compactor: new ContextCompactor(),
+      prefix: createImmutablePrefix({ systemPrompt: 'test system prompt' }),
+      ids,
+      nowIso
+    })
+    const threadId = 'thr_mid_turn_guidance'
+    await threadStore.upsert(createThreadRecord({
+      id: threadId,
+      title: 'Mid-turn guidance',
+      workspace: '/tmp/workspace',
+      model: model.model
+    }))
+    const started = await turns.startTurn({
+      threadId,
+      request: { prompt: 'start with the original request', model: model.model }
+    })
+
+    const run = loop.runTurn(threadId, started.turnId)
+    await model.waitForFirstResponse()
+    await turns.steerTurn({
+      threadId,
+      turnId: started.turnId,
+      text: 'use the compact logo instead',
+      displayText: 'Use the compact logo instead'
+    })
+    model.release()
+
+    await expect(run).resolves.toBe('completed')
+    expect(model.requests).toHaveLength(2)
+    expect(model.requests[1]?.history).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        kind: 'user_message',
+        text: 'use the compact logo instead',
+        displayText: 'Use the compact logo instead'
+      })
+    ]))
+    // Turn finalization clears transient queue state, including its seal.
+    expect(steering.isSealed(started.turnId)).toBe(false)
+  })
+
   it('injects the Design intent policy as a system mode instruction on canvas turns', async () => {
     const sessionStore = new InMemorySessionStore()
     const threadStore = new InMemoryThreadStore()
@@ -454,6 +563,7 @@ describe('AgentLoop interruption', () => {
     expect(interrupted.status).toBe('aborted')
     expect(status).toBe('aborted')
     expect(model.abortObserved).toBe(true)
+    expect(steering.isSealed(started.turnId)).toBe(false)
     expect((await threadStore.get(threadId))?.status).toBe('idle')
     expect((await threadStore.get(threadId))?.turns[0]?.status).toBe('aborted')
   })

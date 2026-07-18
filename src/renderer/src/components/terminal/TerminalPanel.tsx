@@ -36,6 +36,9 @@ type Props = {
   onCollapse: () => void
   /** Fixed pixel height for the bottom-drawer layout. */
   height?: number
+  active?: boolean
+  embedded?: boolean
+  onTitleChange?: (title: string) => void
 }
 
 type TerminalTab = {
@@ -149,7 +152,15 @@ function resolveTerminalTheme(
   return resolveTerminalThemeFromSettings(colors, mode, surfaceColor)
 }
 
-export function TerminalPanel({ className = '', workspaceRoot, onCollapse, height }: Props): ReactElement {
+export function TerminalPanel({
+  className = '',
+  workspaceRoot,
+  onCollapse,
+  height,
+  active = true,
+  embedded = false,
+  onTitleChange
+}: Props): ReactElement {
   const { t } = useTranslation('common')
   const terminalBodyRef = useRef<HTMLDivElement | null>(null)
   const containerRef = useRef<HTMLDivElement | null>(null)
@@ -221,6 +232,21 @@ export function TerminalPanel({ className = '', workspaceRoot, onCollapse, heigh
   const getTabTitle = useCallback((tab: TerminalTab): string => {
     return tab.title?.trim() || t('terminalTabTitle', { index: tab.index })
   }, [t])
+
+  useEffect(() => {
+    if (activeTab) onTitleChange?.(getTabTitle(activeTab))
+  }, [activeTab, getTabTitle, onTitleChange])
+
+  useLayoutEffect(() => {
+    if (!active) return
+    window.requestAnimationFrame(() => {
+      try {
+        fitRef.current?.fit()
+      } catch {
+        /* wait for the visible panel to become measurable */
+      }
+    })
+  }, [active])
 
   useLayoutEffect(() => {
     const previousKey = workspaceKeyRef.current
@@ -551,7 +577,9 @@ export function TerminalPanel({ className = '', workspaceRoot, onCollapse, heigh
 
   return (
     <aside
-      className={`ds-no-drag ds-surface-strong flex min-h-0 flex-col overflow-hidden border-t border-ds-border-muted text-ds-ink shadow-[0_-18px_60px_rgba(20,47,95,0.08)] dark:bg-[rgba(21,29,49,0.98)] dark:shadow-[0_-24px_70px_rgba(2,6,16,0.2)] ${className}`}
+      className={`ds-no-drag ds-surface-strong flex min-h-0 flex-col overflow-hidden text-ds-ink dark:bg-[rgba(21,29,49,0.98)] ${
+        embedded ? '' : 'border-t border-ds-border-muted shadow-[0_-18px_60px_rgba(20,47,95,0.08)] dark:shadow-[0_-24px_70px_rgba(2,6,16,0.2)]'
+      } ${className}`}
       style={height ? { height } : undefined}
     >
       <div className="flex h-11 shrink-0 items-center border-b border-ds-border-muted bg-ds-card/92 text-ds-ink backdrop-blur-xl dark:bg-[rgba(24,33,54,0.92)]">

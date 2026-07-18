@@ -164,6 +164,17 @@ describe('app-ipc-schemas', () => {
     }).path).toBe('/v1/threads/thr_1/review')
   })
 
+  it('accepts the read-only Kun turn status endpoint', () => {
+    expect(runtimeRequestPayloadSchema.parse({
+      path: '/v1/threads/thr_1/turns/turn_1',
+      method: 'GET'
+    }).path).toBe('/v1/threads/thr_1/turns/turn_1')
+    expect(() => runtimeRequestPayloadSchema.parse({
+      path: '/v1/threads/thr_1/turns/turn_1',
+      method: 'DELETE'
+    })).toThrow(/runtime request path is not allowed/)
+  })
+
   it('accepts the LLM debug rounds endpoint', () => {
     expect(runtimeRequestPayloadSchema.parse({
       path: '/v1/debug/llm-rounds',

@@ -31,6 +31,10 @@ import {
   summarizeCodeBindingsForSnapshot,
   type CanvasCodeBindingSnapshot
 } from '../code-binding/code-binding-summary'
+import {
+  buildCanvasMotionSummary,
+  type CanvasMotionSummary
+} from './canvas-motion-summary'
 
 export type CanvasSnapshotShape = {
   id: string
@@ -198,6 +202,8 @@ export type CanvasSnapshot = {
   shapes: CanvasSnapshotShape[]
   graph?: CanvasSnapshotGraphSummary
   codeBindings?: CanvasCodeBindingSnapshot
+  /** Bounded canonical Motion timelines with stable frame/track/keyframe ids. */
+  motion?: CanvasMotionSummary
   /**
    * Whiteboard placement guide for screen creation: the current viewport, whole
    * board bounds, occupied artifact frames and safe suggested slots for new screens.
@@ -307,6 +313,7 @@ export function snapshotCanvas(
   const defaultScreenSize = normalizeSnapshotScreenSize(opts?.defaultScreenSize)
   const graph = buildSnapshotGraphSummary(doc, opts)
   const codeBindings = summarizeCodeBindingsForSnapshot(doc, selectedIds)
+  const motion = buildCanvasMotionSummary(doc, { preferredFrameId: startId })
   const selectedBounds = selectedIds && selectedIds.size > 0
     ? selectionBounds(objects, selectedIds, selectedNeighborPadding)
     : null
@@ -389,6 +396,7 @@ export function snapshotCanvas(
       shapes: prioritized,
       graph,
       ...(codeBindings ? { codeBindings } : {}),
+      ...(motion ? { motion } : {}),
       ...(viewBox ? { placement: buildPlacementGuide(doc, selectedIds, viewBox, defaultScreenSize) } : {}),
       omitted
     }
@@ -398,6 +406,7 @@ export function snapshotCanvas(
     shapes,
     graph,
     ...(codeBindings ? { codeBindings } : {}),
+    ...(motion ? { motion } : {}),
     ...(viewBox ? { placement: buildPlacementGuide(doc, selectedIds, viewBox, defaultScreenSize) } : {})
   }
 }

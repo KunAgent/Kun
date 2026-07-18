@@ -55,6 +55,7 @@ export type ReadRangeOptions = {
 
 export interface ArtifactStore {
   put(input: PutArtifactInput): Promise<PutArtifactResult>
+  delete?(id: string): Promise<void>
   get(id: string): Promise<string | null>
   readRange(id: string, options: ReadRangeOptions): Promise<string | null>
   stat(id: string): Promise<StoredArtifactMeta | null>
@@ -179,6 +180,11 @@ export class InMemoryArtifactStore implements ArtifactStore {
     return this.contents.get(id) ?? null
   }
 
+  async delete(id: string): Promise<void> {
+    this.contents.delete(id)
+    this.metas.delete(id)
+  }
+
   async readRange(id: string, options: ReadRangeOptions): Promise<string | null> {
     const content = this.contents.get(id)
     if (content === undefined) return null
@@ -262,6 +268,16 @@ export class FileArtifactStore implements ArtifactStore {
     } catch {
       return null
     }
+  }
+
+  async delete(id: string): Promise<void> {
+    if (!isValidArtifactId(id)) throw new Error(`invalid artifact id: ${id}`)
+    await this.enqueueWrite(async () => {
+      await Promise.all([
+        rm(this.contentPath(id), { force: true }),
+        rm(this.metaPath(id), { force: true })
+      ])
+    })
   }
 
   async readRange(id: string, options: ReadRangeOptions): Promise<string | null> {

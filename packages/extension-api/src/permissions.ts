@@ -6,6 +6,7 @@ export const STATIC_PERMISSIONS = [
   'ui.actions',
   'ui.notifications',
   'webview',
+  'webview.external',
   'hostDom',
   'agent.run',
   'agent.threads.readOwn',
@@ -15,7 +16,11 @@ export const STATIC_PERMISSIONS = [
   'storage.global',
   'storage.workspace',
   'workspace.read',
-  'workspace.write'
+  'workspace.write',
+  'media.read',
+  'media.process',
+  'media.export',
+  'jobs.manage'
 ] as const
 
 export const StaticPermissionSchema = z.enum(STATIC_PERMISSIONS)

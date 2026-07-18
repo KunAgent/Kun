@@ -13,6 +13,7 @@ import {
   buildDesignModeSurfaceManifest,
   designModeSurfaceSummaryLines
 } from './design-mode-surface'
+import { CANVAS_MOTION_VERSION } from '../motion/canvas-motion-types'
 
 const now = '2026-07-02T00:00:00.000Z'
 
@@ -206,6 +207,53 @@ describe('design mode surface manifest', () => {
       expect.objectContaining({ id: 'whiteboard', status: 'ready' }),
       expect.objectContaining({ id: 'handoff', status: 'ready', resourceKinds: expect.arrayContaining(['svg']) })
     ]))
+  })
+
+  it('advertises canonical Motion tools and reports bounded Motion evidence', () => {
+    const doc = canvasDocument()
+    doc.motion = {
+      version: CANVAS_MOTION_VERSION,
+      timelines: {
+        frame_home: {
+          id: 'timeline_home',
+          frameId: 'frame_home',
+          durationMs: 700,
+          playback: 'once',
+          tracks: [{
+            id: 'track_home_opacity',
+            targetShapeId: 'frame_home',
+            property: 'opacity',
+            operation: 'set',
+            baseValue: 1,
+            keyframes: [
+              { id: 'kf_0', timeMs: 0, value: 0, easing: { type: 'linear' } },
+              { id: 'kf_1', timeMs: 700, value: 1, easing: { type: 'ease-out' } }
+            ]
+          }]
+        }
+      }
+    }
+    const manifest = buildDesignModeSurfaceManifest({
+      document: documentWithArtifacts([artifact()]),
+      canvasDocument: doc,
+      designSystem,
+      artifacts: [artifact()]
+    })
+
+    expect(manifest.counts).toMatchObject({
+      motionTimelineCount: 1,
+      motionTrackCount: 1,
+      motionKeyframeCount: 2
+    })
+    expect(manifest.surfaces.find((surface) => surface.id === 'canvas')).toMatchObject({
+      toolIds: expect.arrayContaining([
+        'design_motion_set_timeline',
+        'design_motion_upsert_keyframes',
+        'design_motion_apply_preset',
+        'design_motion_delete'
+      ]),
+      evidence: expect.arrayContaining(['1 Motion timeline(s)', '1 animated track(s)'])
+    })
   })
 
   it('recommends code binding after the first generated screen has no bridge yet', () => {

@@ -81,7 +81,7 @@ describe('DelegationRuntime', () => {
     })).rejects.toThrow(/budget/)
   })
 
-  it('enforces per-child token and time budgets', async () => {
+  it('enforces per-child token budgets', async () => {
     const externalUsage: unknown[] = []
     const tokenRuntime = createRuntime({
       recordExternalUsage: (_threadId, usage) => externalUsage.push(usage),
@@ -105,25 +105,6 @@ describe('DelegationRuntime', () => {
     })
     expect(tokenLimited.error).toContain('12 > 10')
     expect(externalUsage).toHaveLength(1)
-
-    const timeRuntime = createRuntime({
-      executor: async ({ signal }) => new Promise<never>((_resolve, reject) => {
-        signal.addEventListener('abort', () => reject(signal.reason), { once: true })
-      })
-    })
-    const timeLimited = await timeRuntime.runChild({
-      parentThreadId: 'thr_time',
-      parentTurnId: 'turn_time',
-      prompt: 'slow task',
-      timeBudgetMs: 10,
-      signal: new AbortController().signal
-    })
-    expect(timeLimited).toMatchObject({
-      status: 'failed',
-      timeBudgetMs: 10,
-      budgetExceeded: 'time'
-    })
-    expect(timeLimited.error).toContain('10ms')
   })
 
   it('validates evidence-return contracts', async () => {
@@ -181,6 +162,16 @@ describe('DelegationRuntime', () => {
         usage: { totalTokens: 3 }
       })
     }
+  })
+
+  it('does not advertise a wall-clock budget for delegate_task', () => {
+    const runtime = createRuntime()
+    const tool = buildDelegationToolProviders(runtime)[0]?.tools[0]
+    const properties = tool?.inputSchema.properties as Record<string, unknown> | undefined
+
+    expect(tool?.description).toContain('Run a child agent task')
+    expect(tool?.description).not.toContain('bounded child agent task')
+    expect(properties).not.toHaveProperty('timeBudgetMs')
   })
 
   it('inherits the parent model providerId through delegate_task', async () => {

@@ -144,14 +144,14 @@ export function DesignCanvas({
 
   if (!boardArtifact) {
     return (
-      <div className="relative flex min-h-0 min-w-0 flex-1 items-center justify-center overflow-hidden bg-ds-main text-sm text-ds-faint">
+      <div className="ds-stage-design-canvas relative flex min-h-0 min-w-0 flex-1 items-center justify-center overflow-hidden bg-ds-main text-sm text-ds-faint">
         Loading design board...
       </div>
     )
   }
 
   return (
-    <div className="relative min-h-0 min-w-0 flex-1 overflow-hidden bg-ds-main">
+    <div className="ds-stage-design-canvas relative min-h-0 min-w-0 flex-1 overflow-hidden bg-ds-main">
       <CanvasViewport
         workspaceRoot={workspaceRoot}
         artifactId={boardArtifact.id}

@@ -1,0 +1,26 @@
+{
+  "name": "@kun-examples/presentation-studio",
+  "version": "0.1.10",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "build": "npm run build:host && npm run build:webview",
+    "build:host": "vite build --config vite.host.config.ts",
+    "build:webview": "vite build",
+    "build:test": "node -e \"require('node:fs').rmSync('dist/test', { recursive: true, force: true })\" && tsc -p tsconfig.host.json --outDir dist/test",
+    "typecheck": "tsc --noEmit -p tsconfig.host.json && tsc --noEmit -p tsconfig.webview.json",
+    "test": "npm run build && npm run build:test && node --test dist/test/host/*.test.js dist/test/shared/*.test.js && npm run smoke:pack",
+    "smoke:pack": "node scripts/smoke-packed.mjs",
+    "validate": "node ../run-repository-kun-cli.mjs extension validate .",
+    "pack": "npm run build && node ../run-repository-kun-cli.mjs extension pack ."
+  },
+  "dependencies": {
+    "@kun/extension-api": "^1.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.8.2",
+    "vite": "^6.2.0"
+  }
+}

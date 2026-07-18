@@ -9,6 +9,7 @@ import type { WorkbenchFileTreeSidePanelView } from './useWorkbenchFileTreeContr
 
 export type WorkbenchFileTreeSidePanelProps = {
   open: boolean
+  embedded?: boolean
   view: WorkbenchFileTreeSidePanelView
   width: number
   workspaceRoot: string
@@ -23,6 +24,7 @@ export type WorkbenchFileTreeSidePanelProps = {
 
 export function WorkbenchFileTreeSidePanel({
   open,
+  embedded = false,
   view,
   width,
   workspaceRoot,
@@ -38,14 +40,16 @@ export function WorkbenchFileTreeSidePanel({
   if (!open) return null
   return (
     <>
-      <div
-        role="separator"
-        aria-orientation="vertical"
-        className="ds-workbench-divider ds-no-drag relative z-20 shrink-0"
-      />
+      {!embedded ? (
+        <div
+          role="separator"
+          aria-orientation="vertical"
+          className="ds-workbench-divider ds-no-drag relative z-20 shrink-0"
+        />
+      ) : null}
       <aside
-        className="ds-no-drag h-full min-h-0 shrink-0 border-l border-ds-border-muted bg-ds-sidebar"
-        style={{ width }}
+        className={`ds-no-drag h-full min-h-0 shrink-0 bg-ds-sidebar ${embedded ? 'w-full' : 'border-l border-ds-border-muted'}`}
+        style={embedded ? undefined : { width }}
       >
         <div className="flex h-full min-h-0 flex-col">
           <div className="flex shrink-0 gap-1 border-b border-ds-border-muted/70 p-2">

@@ -211,6 +211,8 @@ export const SkillsCapabilityConfig = CapabilityToggleConfig.extend({
   workspaceRoots: z.array(z.string().min(1)).default([]),
   /** Global skill roots (e.g. ~/.kun/skills). Scanned after project roots. */
   globalRoots: z.array(z.string().min(1)).default([]),
+  /** Read workspace-local `.kun/project.json` Skill policy on demand. */
+  projectConfigEnabled: z.boolean().default(true),
   /**
    * Skill ids the user disabled in the GUI. Excluded everywhere a skill can
    * surface (catalog, auto-match, load_skill, diagnostics) so a disabled skill
@@ -220,7 +222,10 @@ export const SkillsCapabilityConfig = CapabilityToggleConfig.extend({
   disabledIds: z.array(z.string().min(1)).default([]),
   legacySkillMd: z.boolean().default(true)
 }).strict()
-export type SkillsCapabilityConfig = z.infer<typeof SkillsCapabilityConfig>
+type ParsedSkillsCapabilityConfig = z.infer<typeof SkillsCapabilityConfig>
+export type SkillsCapabilityConfig = Omit<ParsedSkillsCapabilityConfig, 'projectConfigEnabled'> & {
+  projectConfigEnabled?: boolean
+}
 
 export const InstructionsCapabilityConfig = CapabilityToggleConfig.extend({
   maxFileBytes: z.number().int().positive().default(64 * 1024),

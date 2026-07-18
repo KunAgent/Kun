@@ -80,6 +80,7 @@ import {
   threadFromCore
 } from './kun-mapper'
 import { rendererRuntimeClient } from './runtime-client'
+import type { ComposerContextAttachment } from '@kun/extension-api'
 
 const MAX_PENDING_SSE_DISPATCH_BATCHES = 32
 
@@ -305,6 +306,7 @@ export class KunRuntimeProvider implements AgentProvider {
       attachmentIds?: string[]
       workspaceCheckpointId?: string
       fileReferences?: Array<{ path: string; relativePath: string; name: string; kind?: 'file' | 'directory' }>
+      composerContexts?: ComposerContextAttachment[]
     }
   ): Promise<{ turnId: string; threadId: string; userMessageItemId?: string }> {
     const settings = await rendererRuntimeClient.getSettings()
@@ -360,6 +362,9 @@ export class KunRuntimeProvider implements AgentProvider {
     }
     if (options?.fileReferences?.length) {
       body.fileReferences = options.fileReferences
+    }
+    if (options?.composerContexts?.length) {
+      body.composerContexts = options.composerContexts
     }
     const response = await rendererRuntimeClient.runtimeRequest(
       kunThreadTurnsPath(threadId),
@@ -426,11 +431,17 @@ export class KunRuntimeProvider implements AgentProvider {
     }
   }
 
-  async steerUserMessage(threadId: string, turnId: string, text: string): Promise<void> {
+  async steerUserMessage(
+    threadId: string,
+    turnId: string,
+    text: string,
+    options?: { displayText?: string }
+  ): Promise<void> {
+    const displayText = options?.displayText?.trim()
     const response = await rendererRuntimeClient.runtimeRequest(
       kunThreadSteerPath(threadId, turnId),
       'POST',
-      JSON.stringify({ text })
+      JSON.stringify({ text, ...(displayText ? { displayText } : {}) })
     )
     if (!response.ok) {
       throw runtimeErrorToError(readRuntimeError(response.body, 'failed to queue message'))

@@ -1,5 +1,6 @@
 import type { ReactElement, ReactNode } from 'react'
 import { Pin, PinOff, SlidersHorizontal } from 'lucide-react'
+import { useCanvasMotionStore } from '../../../../design/motion/canvas-motion-store'
 
 export function propertiesPanelShellClass(surface: 'design' | 'code'): string {
   return surface === 'code'
@@ -61,8 +62,13 @@ export function PropertiesPanelShell({
   unpinLabel: string
   onTogglePinned: () => void
 }): ReactElement {
+  const motionOpen = useCanvasMotionStore((state) => state.open)
   return (
-    <aside className={propertiesPanelShellClass(surface)} data-canvas-inspector-surface={surface}>
+    <aside
+      className={propertiesPanelShellClass(surface)}
+      data-canvas-inspector-surface={surface}
+      style={surface === 'design' && motionOpen ? { bottom: 274 } : undefined}
+    >
       <div className="flex h-9 shrink-0 items-center justify-between px-4">
         <span className="select-none text-[11px] font-medium uppercase tracking-[0.1em] text-ds-faint">
           {title}

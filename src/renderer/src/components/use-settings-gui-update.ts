@@ -14,7 +14,7 @@ export function useSettingsGuiUpdate({
   form,
   t
 }: {
-  category: 'general' | 'providers' | 'write' | 'design' | 'imageGeneration' | 'mediaGeneration' | 'speechToText' | 'agents' | 'subagents' | 'archives' | 'permissions' | 'worktree' | 'memory' | 'shortcuts' | 'easterEgg' | 'claw' | 'updates' | 'debug' | 'terminal'
+  category: 'general' | 'providers' | 'write' | 'design' | 'imageGeneration' | 'mediaGeneration' | 'speechToText' | 'agents' | 'subagents' | 'archives' | 'permissions' | 'worktree' | 'memory' | 'shortcuts' | 'easterEgg' | 'claw' | 'updates' | 'debug' | 'terminal' | 'dataMigration'
   channel: GuiUpdateChannel | undefined
   form: AppSettingsV1 | null
   t: (key: string, values?: Record<string, unknown>) => string

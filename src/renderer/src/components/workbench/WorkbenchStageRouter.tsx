@@ -49,6 +49,7 @@ export type WorkbenchStageRouterProps = {
   extensions: {
     workspaceRoot: string
     onOpenIntegrations: () => void
+    onOpenView: (contributionId: string) => Promise<void>
   }
 }
 
@@ -74,58 +75,62 @@ export function WorkbenchStageRouter({
         route === 'plugins' ? 'px-0' : ''
       }`}
     >
-      {route === 'extensions' ? (
-        <Suspense fallback={<div className="h-full bg-ds-main" />}>
-          <ExtensionManagementCenter
-            leftSidebarCollapsed={leftSidebarCollapsed}
-            onToggleLeftSidebar={onToggleLeftSidebar}
-            workspaceRoot={extensions.workspaceRoot}
-            onOpenIntegrations={extensions.onOpenIntegrations}
-          />
-        </Suspense>
-      ) : route === 'plugins' ? (
-        <Suspense fallback={<div className="h-full bg-ds-main" />}>
-          <PluginMarketplaceView
-            leftSidebarCollapsed={leftSidebarCollapsed}
-            onToggleLeftSidebar={onToggleLeftSidebar}
-          />
-        </Suspense>
-      ) : route === 'schedule' ? (
-        <Suspense fallback={<div className="h-full bg-ds-main" />}>
-          <ScheduleTasksView
-            leftSidebarCollapsed={leftSidebarCollapsed}
-            onToggleLeftSidebar={onToggleLeftSidebar}
-            onOpenThread={onOpenThread}
-          />
-        </Suspense>
-      ) : route === 'workflow' ? (
-        <Suspense fallback={<div className="h-full bg-ds-main" />}>
-          <WorkflowView
-            leftSidebarCollapsed={leftSidebarCollapsed}
-            onToggleLeftSidebar={onToggleLeftSidebar}
-            onOpenThread={onOpenThread}
-          />
-        </Suspense>
-      ) : route === 'design' ? (
-        <WorkbenchDesignStage {...design} />
-      ) : route === 'write' ? (
-        <Suspense fallback={<WorkbenchPaneFallback />}>
-          {write.runtimeBanner}
-          <div className="flex min-h-0 flex-1">
-            <WriteWorkspaceView
-              leftSidebarCollapsed={write.leftSidebarCollapsed}
-              onToggleLeftSidebar={write.onToggleLeftSidebar}
-              input={write.input}
-              setInput={write.setInput}
-              onSubmitPrompt={write.onSubmitPrompt}
-              onOpenAgentSettings={write.onOpenAgentSettings}
+      <div className="ds-stage-route-host relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+        {route === 'extensions' ? (
+          <Suspense fallback={<div className="h-full bg-ds-main" />}>
+            <ExtensionManagementCenter
+              key={extensions.workspaceRoot || '__global__'}
+              leftSidebarCollapsed={leftSidebarCollapsed}
+              onToggleLeftSidebar={onToggleLeftSidebar}
+              workspaceRoot={extensions.workspaceRoot}
+              onOpenIntegrations={extensions.onOpenIntegrations}
+              onOpenView={extensions.onOpenView}
             />
-            {write.rightPanel}
-          </div>
-        </Suspense>
-      ) : (
-        <WorkbenchConversationStage {...conversation} />
-      )}
+          </Suspense>
+        ) : route === 'plugins' ? (
+          <Suspense fallback={<div className="h-full bg-ds-main" />}>
+            <PluginMarketplaceView
+              leftSidebarCollapsed={leftSidebarCollapsed}
+              onToggleLeftSidebar={onToggleLeftSidebar}
+            />
+          </Suspense>
+        ) : route === 'schedule' ? (
+          <Suspense fallback={<div className="h-full bg-ds-main" />}>
+            <ScheduleTasksView
+              leftSidebarCollapsed={leftSidebarCollapsed}
+              onToggleLeftSidebar={onToggleLeftSidebar}
+              onOpenThread={onOpenThread}
+            />
+          </Suspense>
+        ) : route === 'workflow' ? (
+          <Suspense fallback={<div className="h-full bg-ds-main" />}>
+            <WorkflowView
+              leftSidebarCollapsed={leftSidebarCollapsed}
+              onToggleLeftSidebar={onToggleLeftSidebar}
+              onOpenThread={onOpenThread}
+            />
+          </Suspense>
+        ) : route === 'design' ? (
+          <WorkbenchDesignStage {...design} />
+        ) : route === 'write' ? (
+          <Suspense fallback={<WorkbenchPaneFallback />}>
+            {write.runtimeBanner}
+            <div className="flex min-h-0 flex-1">
+              <WriteWorkspaceView
+                leftSidebarCollapsed={write.leftSidebarCollapsed}
+                onToggleLeftSidebar={write.onToggleLeftSidebar}
+                input={write.input}
+                setInput={write.setInput}
+                onSubmitPrompt={write.onSubmitPrompt}
+                onOpenAgentSettings={write.onOpenAgentSettings}
+              />
+              {write.rightPanel}
+            </div>
+          </Suspense>
+        ) : (
+          <WorkbenchConversationStage {...conversation} />
+        )}
+      </div>
       {imageAnnotationHost}
       {planOverlay}
       {route === 'chat' ? (

@@ -269,7 +269,38 @@ const labels: Record<string, string> = {
   toolPermissionTrustedWorkspaceDesc: 'Workspace file changes run without prompts',
   toolPermissionBypass: 'Bypass mode',
   toolPermissionBypassDesc: 'Never asks and has full access',
-  permissionsBehaviorHint: 'Tool confirmation and local permissions are unified'
+  permissionsBehaviorHint: 'Tool confirmation and local permissions are unified',
+  projectConfigTitle: 'Project MCP & Skills',
+  projectConfigDescription: 'Portable project configuration',
+  projectConfigSecurityHint: 'Project MCP requires digest approval',
+  projectConfigWorkspaceRequired: 'Select a workspace first',
+  projectConfigWorkspace: 'Project scope',
+  projectConfigWorkspaceDesc: 'Fixed workspace config path',
+  projectConfigStatus: 'Validation and trust',
+  projectConfigStatusDesc: 'Local digest trust',
+  projectConfigStatus_missing: 'File not created',
+  projectConfigStatus_invalid: 'Invalid configuration',
+  projectConfigStatus_valid: 'Valid configuration',
+  projectConfigTrust_untrusted: 'MCP not approved',
+  projectConfigTrust_trusted: 'MCP approved',
+  projectConfigTrust_stale: 'Approval stale',
+  projectConfigSummary: 'Project declarations',
+  projectConfigSummaryDesc: 'Redacted targets',
+  projectConfigMcpServers: 'Project MCP servers',
+  projectConfigSkillRoots: 'Project Skill roots',
+  projectConfigDisabledSkills: 'Project disabled Skills',
+  projectConfigServerEnabled: 'enabled',
+  projectConfigServerDisabled: 'disabled',
+  projectConfigEditor: 'Project JSON',
+  projectConfigEditorDesc: 'Workspace-relative paths',
+  projectConfigActions: 'Project actions',
+  projectConfigActionsDesc: 'Save does not approve',
+  projectConfigSave: 'Save project config',
+  projectConfigRefresh: 'Refresh project config',
+  projectConfigOpenDir: 'Open project config dir',
+  projectConfigApprove: 'Approve project MCP',
+  projectConfigReapprove: 'Reapprove project MCP',
+  projectConfigRevoke: 'Revoke project MCP'
 }
 
 function t(key: string): string {
@@ -354,6 +385,28 @@ function baseCtx(): Record<string, unknown> {
     saveMcpConfig: asyncNoop,
     loadMcpConfig: asyncNoop,
     openMcpConfigDir: asyncNoop,
+    activeProjectWorkspaceRoot: '/tmp/project',
+    projectConfig: {
+      workspaceRoot: '/tmp/project',
+      path: '/tmp/project/.kun/project.json',
+      content: '{"version":1}',
+      exists: true,
+      status: 'valid',
+      trust: 'untrusted',
+      digest: 'a'.repeat(64),
+      serverSummaries: [{ id: 'local', transport: 'stdio', target: 'node', enabled: true }],
+      skillRootCount: 1,
+      disabledSkillCount: 2
+    },
+    projectConfigText: '{"version":1}',
+    setProjectConfigText: noop,
+    projectConfigLoading: false,
+    projectConfigBusy: false,
+    projectConfigNotice: null,
+    loadProjectConfig: asyncNoop,
+    saveProjectConfig: asyncNoop,
+    setProjectConfigTrust: asyncNoop,
+    openProjectConfigDir: asyncNoop,
     runtimeInfo: null,
     toolDiagnostics: null,
     memoryRecords: [],
@@ -731,6 +784,79 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
     expect(html).not.toContain('DeepSeek auth')
     expect(html).not.toContain('Base URL are stored in this file')
     expect(html).not.toContain('config.toml')
+  })
+
+  it('renders valid untrusted project config with redacted summaries and approval actions', () => {
+    const html = renderToStaticMarkup(createElement(AgentsSettingsSection, { ctx: baseCtx() }))
+
+    expect(html).toContain('Project MCP &amp; Skills')
+    expect(html).toContain('/tmp/project/.kun/project.json')
+    expect(html).toContain('Valid configuration')
+    expect(html).toContain('MCP not approved')
+    expect(html).toContain('sha256:aaaaaaaaaaaa')
+    expect(html).toContain('local')
+    expect(html).toContain('node')
+    expect(html).toContain('Save project config')
+    expect(html).toContain('Approve project MCP')
+    expect(html).not.toContain('GITHUB_TOKEN')
+  })
+
+  it('renders trusted, stale, invalid, and missing-workspace project states', () => {
+    const trusted = renderToStaticMarkup(createElement(AgentsSettingsSection, {
+      ctx: {
+        ...baseCtx(),
+        projectConfig: { ...(baseCtx().projectConfig as object), trust: 'trusted' }
+      }
+    }))
+    expect(trusted).toContain('MCP approved')
+    expect(trusted).toContain('Revoke project MCP')
+
+    const stale = renderToStaticMarkup(createElement(AgentsSettingsSection, {
+      ctx: {
+        ...baseCtx(),
+        projectConfig: { ...(baseCtx().projectConfig as object), trust: 'stale' }
+      }
+    }))
+    expect(stale).toContain('Approval stale')
+    expect(stale).toContain('Reapprove project MCP')
+    expect(stale).toContain('Revoke project MCP')
+
+    const staleInvalid = renderToStaticMarkup(createElement(AgentsSettingsSection, {
+      ctx: {
+        ...baseCtx(),
+        projectConfig: {
+          ...(baseCtx().projectConfig as object),
+          status: 'invalid',
+          trust: 'stale',
+          message: 'Project config is invalid'
+        }
+      }
+    }))
+    expect(staleInvalid).toContain('Revoke project MCP')
+    expect(staleInvalid).toMatch(/Reapprove project MCP<\/button>/)
+    expect(staleInvalid).toContain('disabled=""')
+
+    const invalid = renderToStaticMarkup(createElement(AgentsSettingsSection, {
+      ctx: {
+        ...baseCtx(),
+        projectConfig: {
+          ...(baseCtx().projectConfig as object),
+          status: 'invalid',
+          trust: 'untrusted',
+          message: 'Skill root escapes the workspace'
+        }
+      }
+    }))
+    expect(invalid).toContain('Invalid configuration')
+    expect(invalid).toContain('Skill root escapes the workspace')
+    expect(invalid).toMatch(/Approve project MCP<\/button>/)
+    expect(invalid).toContain('disabled=""')
+
+    const missingWorkspace = renderToStaticMarkup(createElement(AgentsSettingsSection, {
+      ctx: { ...baseCtx(), activeProjectWorkspaceRoot: '' }
+    }))
+    expect(missingWorkspace).toContain('Select a workspace first')
+    expect(missingWorkspace).not.toContain('Save project config')
   })
 
   it('renders Skill and MCP permission-source previews without exposing secret values', () => {

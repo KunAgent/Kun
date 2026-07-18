@@ -10,7 +10,7 @@ import type { DesignArtifact } from './design-types'
 
 export type DesignComposerContext = {
   id: string
-  kind: 'design-target' | 'html-artifact' | 'html-screen-frame' | 'html-element' | 'svg-artifact' | 'svg-artifact-frame' | 'canvas-selection'
+  kind: 'design-target' | 'html-artifact' | 'html-screen-frame' | 'html-element' | 'svg-artifact' | 'svg-artifact-frame' | 'canvas-selection' | 'extension-context'
   label: string
   detail?: string
   removable?: boolean

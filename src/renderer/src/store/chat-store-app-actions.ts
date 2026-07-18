@@ -6,8 +6,6 @@ import { extensionWorkbenchClient } from '../extensions/extension-workbench-clie
 import type { ChatState, ChatStoreGet, ChatStoreSet, InitialSetupMode, PluginHostRoute, SettingsRouteSection } from './chat-store-types'
 import type { ComposerPlanMode } from './chat-store-helpers'
 import {
-  canSwitchComposerModel,
-  conversationHasVisionAttachments,
   composerModelSelectable,
   composerModeForThread,
   persistComposerMode,
@@ -108,20 +106,6 @@ export function createAppActions(options: CreateAppActionsOptions): Pick<
     setComposerModel: (modelId, providerId) => {
       const nextProviderId = providerId?.trim() || providerIdForComposerModel(get().composerModelGroups, modelId)
       const state = get()
-      const lockVisionToTextSwitch =
-        state.route === 'chat' &&
-        Array.isArray(state.blocks) &&
-        conversationHasVisionAttachments(state.blocks)
-      if (!canSwitchComposerModel(
-        lockVisionToTextSwitch,
-        state.composerModelGroups,
-        state.composerModel,
-        state.composerProviderId,
-        modelId,
-        nextProviderId
-      )) {
-        return
-      }
       const activeThreadId = state.activeThreadId
       if (activeThreadId) {
         rememberThreadComposerSelection(activeThreadId, modelId, nextProviderId)

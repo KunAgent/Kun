@@ -123,6 +123,10 @@ module.exports = {
     // OCR fallback loads native canvas bindings plus Tesseract worker/core
     // wasm and language data by filesystem path at runtime.
     '**/node_modules/@napi-rs/canvas*/**/*',
+    // UI Plugin image validation uses Sharp's native binding and its separately
+    // packaged libvips runtime; both must remain outside app.asar.
+    '**/node_modules/sharp/**/*',
+    '**/node_modules/@img/**/*',
     '**/node_modules/tesseract.js/**/*',
     '**/node_modules/tesseract.js-core/**/*',
     '**/node_modules/@tesseract.js-data/**/*',
@@ -170,6 +174,11 @@ module.exports = {
     // runtime to send media, and that chain resolves openclaw/plugin-sdk/*.
   ],
   extraResources: [
+    {
+      from: 'resources/bundled-extensions',
+      to: 'bundled-extensions',
+      filter: ['catalog.json', '*.kunx']
+    },
     {
       from: 'resources/whisper',
       to: 'whisper',

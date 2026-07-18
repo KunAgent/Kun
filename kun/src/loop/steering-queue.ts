@@ -23,6 +23,7 @@ export const DEFAULT_MAX_STEERING_BYTES_PER_TURN = 64 * 1024
 
 export class SteeringQueue {
   private readonly buffers = new Map<string, SteeringBuffer>()
+  private readonly sealedTurns = new Set<string>()
   private readonly maxEntriesPerTurn: number
   private readonly maxBytesPerTurn: number
 
@@ -42,6 +43,7 @@ export class SteeringQueue {
 
   /** Returns false when accepting this entry would exceed the per-turn bound. */
   enqueue(turnId: string, entry: SteeringEntry): boolean {
+    if (this.sealedTurns.has(turnId)) return false
     const text = entry.text.trim()
     if (!text) return true
     const normalized: SteeringEntry = {
@@ -88,8 +90,24 @@ export class SteeringQueue {
     return (this.buffers.get(turnId)?.entries ?? []).map((entry) => ({ ...entry }))
   }
 
+  /**
+   * Atomically close an empty turn buffer before the loop commits a terminal
+   * result. If an entry already won the race, leave the queue open so the loop
+   * can drain it and perform another model step.
+   */
+  sealIfEmpty(turnId: string): boolean {
+    if ((this.buffers.get(turnId)?.entries.length ?? 0) > 0) return false
+    this.sealedTurns.add(turnId)
+    return true
+  }
+
+  isSealed(turnId: string): boolean {
+    return this.sealedTurns.has(turnId)
+  }
+
   clear(turnId: string): void {
     this.buffers.delete(turnId)
+    this.sealedTurns.delete(turnId)
   }
 }
 

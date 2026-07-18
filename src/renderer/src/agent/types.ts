@@ -10,6 +10,7 @@ import type {
   CoreRuntimeToolDiagnosticsJson
 } from './kun-contract'
 import type { ApprovalPolicy, SandboxMode } from '@shared/app-settings'
+import type { ComposerContextAttachment } from '@kun/extension-api'
 
 export type ToolItemKind = 'tool_call' | 'command_execution' | 'file_change'
 export type RuntimeErrorSeverity = 'info' | 'warning' | 'error'
@@ -31,15 +32,49 @@ export type AttachmentReference = {
 
 export type GeneratedFileReference = {
   id?: string
+  artifactId?: string
+  mediaHandleId?: string
+  availability?: 'available' | 'unavailable'
   name?: string
   mimeType?: string
   byteSize?: number
   width?: number
   height?: number
+  durationMicros?: number
+  mediaKind?: 'video' | 'audio' | 'image' | 'subtitle' | 'document' | 'data' | 'other'
+  completionIdentity?: string
+  ownerExtensionId?: string
+  ownerExtensionVersion?: string
+  workspaceId?: string
+  provenance?: {
+    jobId?: string
+    invocationId?: string
+    operation: string
+  }
   previewUrl?: string
   path?: string
   relativePath?: string
   absolutePath?: string
+}
+
+export type ComponentPrototypeStatus = 'preparing' | 'running' | 'completed' | 'failed'
+export type ComponentPrototypeProducer = 'main-agent' | 'component-designer'
+
+/** Durable `design_component` result rendered as an inline conversation card. */
+export type ComponentPrototypeMetadata = {
+  version: 1
+  status: ComponentPrototypeStatus
+  artifactId: string
+  title: string
+  relativePath: string
+  viewport: { width: number; height: number }
+  producer: ComponentPrototypeProducer
+  profile?: 'component-designer'
+  childId?: string
+  byteSize?: number
+  contentHash?: string
+  summary?: string
+  error?: string
 }
 
 export type UserFileReference = {
@@ -92,6 +127,7 @@ export type RuntimeDisclosureMetadata = {
   attachmentIds?: string[]
   attachments?: AttachmentReference[]
   fileReferences?: UserFileReference[]
+  composerContexts?: ComposerContextAttachment[]
   generatedFiles?: GeneratedFileReference[]
   activeSkillIds?: string[]
   injectedMemoryIds?: string[]
@@ -234,6 +270,7 @@ export type ToolBlock = {
 export type CompactionBlock = {
   kind: 'compaction'
   id: string
+  turnId?: string
   createdAt?: string
   summary: string
   status: 'running' | 'success' | 'error'
@@ -389,6 +426,7 @@ export type RuntimeErrorEventPayload = {
 
 export type CompactionEventPayload = {
   itemId: string
+  turnId?: string
   summary: string
   status: 'running' | 'success' | 'error'
   detail?: string
@@ -534,6 +572,7 @@ export interface AgentProvider {
       attachmentIds?: string[]
       workspaceCheckpointId?: string
       fileReferences?: UserFileReference[]
+      composerContexts?: ComposerContextAttachment[]
     }
   ): Promise<{ turnId: string; threadId: string; userMessageItemId?: string }>
   rewindThread?(threadId: string, turnId: string): Promise<void>
@@ -579,7 +618,12 @@ export interface AgentProvider {
   ): Promise<CoreMemoryRecordJson>
   deleteMemory?(memoryId: string, options?: { workspace?: string }): Promise<CoreMemoryRecordJson>
   getMemoryDiagnostics?(): Promise<CoreMemoryDiagnosticsJson>
-  steerUserMessage?(threadId: string, turnId: string, text: string): Promise<void>
+  steerUserMessage?(
+    threadId: string,
+    turnId: string,
+    text: string,
+    options?: { displayText?: string }
+  ): Promise<void>
   interruptTurn(threadId: string, turnId: string, options?: { discard?: boolean }): Promise<void>
   /**
    * Rename a thread. `auto` marks the title as provisional/auto (true, e.g. the

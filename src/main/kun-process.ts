@@ -88,6 +88,7 @@ import {
   readJsonObjectIfExists,
   skillCapabilityConfigForRuntime
 } from './runtime/kun-runtime-mcp-config'
+import { availableBundledExtensionsDirectory } from './bundled-extension-resources'
 import { subagentProfilesForRuntime } from './runtime/kun-runtime-subagent-config'
 import { syncGuiManagedKunConfig } from './runtime/kun-runtime-config-service'
 
@@ -343,6 +344,14 @@ async function startKunChildOnce(
     DEEPSEEK_API_KEY: defaultClientApiKey || process.env.DEEPSEEK_API_KEY || '',
     ...(activeProviderKind === 'agent-sdk' ? { KUN_RUNTIME_PROVIDER_KIND: 'agent-sdk' } : {}),
     ...(claudeBinary ? { KUN_CLAUDE_BINARY: claudeBinary } : {})
+  }
+  const bundledExtensionsDirectory = availableBundledExtensionsDirectory({
+    isPackaged: app.isPackaged,
+    resourcesPath: process.resourcesPath,
+    appRoot: root
+  })
+  if (bundledExtensionsDirectory) {
+    childEnv.KUN_BUNDLED_EXTENSIONS_DIR = bundledExtensionsDirectory
   }
   if (!runAsElectron) childEnv.ELECTRON_RUN_AS_NODE = '1'
   else delete childEnv.ELECTRON_RUN_AS_NODE

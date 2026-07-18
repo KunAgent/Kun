@@ -11,8 +11,57 @@ import { snapshotCanvas } from './canvas/canvas-snapshot'
 import { createDefaultShape, createEmptyDocument, createHtmlFrameShape } from './canvas/canvas-types'
 import { setLastLintFindings } from './canvas/design-lint'
 import { useDesignSystemStore } from './canvas/design-system-store'
+import { CANVAS_MOTION_VERSION } from './motion/canvas-motion-types'
 
 describe("design turn prompt code canvas and context guidance", () => {
+    it('includes bounded Motion state and distinguishes Motion, SVG animation, and Prototype navigation', () => {
+      const doc = createEmptyDocument()
+      const root = doc.objects[doc.rootId]
+      const frame = { ...createDefaultShape('frame', 0, 0), id: 'frame_home', parentId: doc.rootId, children: ['hero'] }
+      const hero = { ...createDefaultShape('rect', 20, 20), id: 'hero', parentId: frame.id, frameId: frame.id }
+      doc.objects[doc.rootId] = { ...root, children: [frame.id] }
+      doc.objects[frame.id] = frame
+      doc.objects[hero.id] = hero
+      doc.motion = {
+        version: CANVAS_MOTION_VERSION,
+        timelines: {
+          frame_home: {
+            id: 'timeline_home',
+            frameId: frame.id,
+            durationMs: 600,
+            playback: 'loop',
+            tracks: [{
+              id: 'track_hero_x',
+              targetShapeId: hero.id,
+              property: 'x',
+              operation: 'offset',
+              baseValue: hero.x,
+              keyframes: [
+                { id: 'kf_start', timeMs: 0, value: -16, easing: { type: 'ease-out' } },
+                { id: 'kf_end', timeMs: 600, value: 0, easing: { type: 'linear' } }
+              ]
+            }]
+          }
+        }
+      }
+
+      const prompt = buildDesignTurnPrompt({
+        target: 'canvas',
+        mode: 'text',
+        text: 'Make the hero enter, then link the CTA to settings',
+        artifactRelativePath: '.kun-design/board/canvas.json',
+        workspaceRoot: '/workspace',
+        canvasSnapshot: snapshotCanvas(doc, new Set([hero.id]), { rootFrameId: frame.id })
+      })
+
+      expect(prompt).toContain('ANIMATE A DESIGN FRAME OR LAYERS')
+      expect(prompt).toContain('SVG motion edits the standalone SVG inner animation')
+      expect(prompt).toContain('Prototype is screen-to-screen navigation')
+      expect(prompt).toContain('`design_motion_upsert_keyframes`')
+      expect(prompt).toContain('"id": "track_hero_x"')
+      expect(prompt).toContain('"id": "kf_start"')
+      expect(prompt).toContain('"automaticPlayback": "disabled-when-preferred"')
+    })
     it('keeps code canvas lint feedback separate from design canvas lint feedback', () => {
       setLastLintFindings([
         {
@@ -112,7 +161,8 @@ describe("design turn prompt code canvas and context guidance", () => {
       expect(codePrompt).toContain('Do NOT use `design_create_screen` unless they explicitly ask for a UI screen mockup')
       expect(codePrompt).toContain('services/modules as frames or rects')
       expect(codePrompt).toContain('data/events as arrows')
-      expect(codePrompt).toContain('finish the editable diagram first and then call `design_export_canvas`')
+      expect(codePrompt).toContain('call `design_export_canvas` directly when the current snapshot already contains the requested diagram')
+      expect(codePrompt).toContain('export it directly without recreating or modifying shapes')
       expect(codePrompt).toContain('Do not export automatically when the user asked only for an editable diagram')
   
       const designPrompt = buildDesignTurnPrompt({

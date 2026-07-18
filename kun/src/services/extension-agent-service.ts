@@ -29,6 +29,8 @@ export type ExtensionPrincipal = Readonly<{
   permissions: readonly string[]
   workspaceRoots: readonly string[]
   workspaceTrusted: boolean
+  /** Present only for a Node Extension Host and never accepted from a View. */
+  hostLifecycleNonce?: string
   /** Present only for a sender-bound Webview principal. */
   viewSessionId?: string
   /** Present only for a sender-bound Webview principal. */

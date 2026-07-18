@@ -1,0 +1,51 @@
+<!-- Original abstract artwork for the bundled Starlight example; no external assets. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#141028"/>
+      <stop offset="0.48" stop-color="#29204e"/>
+      <stop offset="1" stop-color="#44326f"/>
+    </linearGradient>
+    <radialGradient id="nebula" cx="0.78" cy="0.18" r="0.65">
+      <stop offset="0" stop-color="#c8b5ff" stop-opacity="0.72"/>
+      <stop offset="0.34" stop-color="#947ad7" stop-opacity="0.3"/>
+      <stop offset="1" stop-color="#5b4a93" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="ridge" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#7563a7"/>
+      <stop offset="1" stop-color="#29213f"/>
+    </linearGradient>
+    <filter id="soft" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="20"/>
+    </filter>
+  </defs>
+
+  <rect width="1600" height="900" fill="url(#sky)"/>
+  <rect width="1600" height="900" fill="url(#nebula)"/>
+  <ellipse cx="1240" cy="170" rx="180" ry="82" fill="#cabaff" opacity="0.14" filter="url(#soft)"/>
+
+  <g fill="#f7f2ff">
+    <circle cx="128" cy="128" r="3" opacity="0.8"/>
+    <circle cx="236" cy="286" r="2" opacity="0.68"/>
+    <circle cx="356" cy="96" r="4" opacity="0.88"/>
+    <circle cx="492" cy="226" r="2.5" opacity="0.75"/>
+    <circle cx="638" cy="142" r="3" opacity="0.62"/>
+    <circle cx="812" cy="286" r="4" opacity="0.84"/>
+    <circle cx="952" cy="104" r="2.5" opacity="0.7"/>
+    <circle cx="1090" cy="328" r="3" opacity="0.76"/>
+    <circle cx="1346" cy="278" r="4" opacity="0.86"/>
+    <circle cx="1486" cy="118" r="2.5" opacity="0.72"/>
+    <circle cx="1534" cy="368" r="3" opacity="0.64"/>
+  </g>
+
+  <g fill="none" stroke-linecap="round">
+    <path d="M112 394 C420 238 654 464 918 300 S1348 190 1542 312" stroke="#d7c8ff" stroke-width="3" opacity="0.18"/>
+    <path d="M48 468 C350 328 642 536 912 390 S1320 300 1586 404" stroke="#a88fe7" stroke-width="2" opacity="0.22"/>
+    <path d="M990 194 l54 -26" stroke="#fff" stroke-width="3" opacity="0.68"/>
+    <path d="M1000 208 l86 -42" stroke="#cbb9ff" stroke-width="6" opacity="0.14"/>
+  </g>
+
+  <path d="M0 734 C188 656 328 704 472 630 C632 550 762 662 920 610 C1080 558 1198 616 1344 560 C1438 524 1518 530 1600 508 L1600 900 L0 900 Z" fill="url(#ridge)"/>
+  <path d="M0 802 C198 744 352 790 510 720 C690 640 824 746 1012 684 C1180 628 1386 696 1600 626 L1600 900 L0 900 Z" fill="#211a35" opacity="0.9"/>
+  <path d="M0 838 C246 790 450 842 644 784 C844 724 1022 816 1218 762 C1364 722 1484 742 1600 714 L1600 900 L0 900 Z" fill="#171224"/>
+</svg>

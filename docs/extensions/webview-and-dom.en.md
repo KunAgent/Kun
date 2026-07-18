@@ -159,6 +159,20 @@ A Webview cannot navigate away from its `kun-extension://` origin, create unappr
 
 To open an external HTTPS page or export a file, invoke a documented Host command so Kun can validate URL/path, permission, and required user consent. Do not emulate this with `window.open` or hidden navigation.
 
+### Approved external-site Views
+
+When a sidebar genuinely needs to run a complete remote website, the extension must declare `webview.external`, ordinary `webview`, and every `network:<hostname>` allowed for top-level navigation (a wildcard does not include the apex hostname). The host creates a Main-owned `WebContentsView` only for a workspace-reviewed View that declares `externalBrowser`, and enforces all of the following:
+
+- the remote guest has no Kun preload and cannot access `window.kunExtension`, Node, Electron, or local extension resources;
+- initial URLs, top-level navigations, redirects, and popups must use HTTPS and match a granted hostname; allowed popups reuse the current guest;
+- permission/device requests and downloads are denied;
+- cookie/session data is stored only in an extension-ID-isolated persistent partition, never the default session or another extension's partition;
+- HTTPS/WSS/data/blob subresources may support the site's CDN, sign-in, and media dependencies without permitting top-level navigation to ungranted sites.
+
+`externalBrowser.presentation` may be `desktop` or `mobile`. The Host can provide mode selection, zoom, and workbench fullscreen for fixed destinations while retaining an independent page per destination/mode. Those pages share one extension-ID-isolated login session, but never another extension's session. A horizontally overflowing page may receive one bounded fit after a full-page navigation, and a mobile page may temporarily use the available workbench width for login, passport, account, or self-profile routes; later user-selected zoom remains authoritative. Hidden pages are muted and their media is paused; returning reuses the prior page state. The remote page never receives the extension bridge.
+
+This is a high-risk browser capability, not a general switch that bypasses `connect-src 'none'` for ordinary Views. Do not use it for arbitrary user-provided URLs; prefer a fixed, reviewable destination set. The bundled [`social-media-sidebar`](../../examples/extensions/social-media-sidebar/) is the reference implementation.
+
 ## Network Broker
 
 For a View network request:

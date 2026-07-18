@@ -162,6 +162,33 @@ function requireUnconditionalStepAfter(job, jobId, stepName, priorCommand) {
   )
 }
 
+function requireNamedStepsInOrder(job, jobId, stepNames) {
+  if (!job) return
+  const steps = Array.isArray(job.steps) ? job.steps : []
+  let priorIndex = -1
+  for (const stepName of stepNames) {
+    const index = steps.findIndex(
+      (step, candidateIndex) =>
+        candidateIndex > priorIndex &&
+        step?.name === stepName &&
+        step.if === undefined &&
+        (step['continue-on-error'] === undefined || step['continue-on-error'] === false)
+    )
+    check(index >= 0, `Workflow job ${jobId} must run after prior gates: ${stepName}`)
+    if (index >= 0) priorIndex = index
+  }
+}
+
+function requireStepRunMarkers(job, jobId, stepName, markers) {
+  if (!job) return
+  const step = (Array.isArray(job.steps) ? job.steps : [])
+    .find((candidate) => candidate?.name === stepName)
+  const run = typeof step?.run === 'string' ? step.run : ''
+  for (const marker of markers) {
+    check(run.includes(marker), `Workflow job ${jobId} step ${stepName} omits: ${marker}`)
+  }
+}
+
 function requireLinuxUserNamespaceStep(job, jobId) {
   if (!job) return
   const steps = Array.isArray(job.steps) ? job.steps : []
@@ -183,7 +210,13 @@ function requirePublishDependencies(document, workflowLabel) {
   check(Boolean(publish), `${workflowLabel} must define a publish job`)
   if (!publish) return
   const needs = Array.isArray(publish.needs) ? publish.needs : [publish.needs].filter(Boolean)
-  for (const dependency of ['prepare', 'build-macos', 'build-windows', 'build-linux']) {
+  for (const dependency of [
+    'prepare',
+    'build-macos',
+    'verify-macos-x64',
+    'build-windows',
+    'build-linux'
+  ]) {
     check(
       needs.includes(dependency),
       `${workflowLabel} publish job must depend on successful ${dependency}`
@@ -207,7 +240,7 @@ function requireSourceMarkersAfter(source, label, priorMarker, markers) {
   const priorIndex = source.indexOf(priorMarker)
   check(priorIndex >= 0, `${label} is missing required gate marker: ${priorMarker}`)
   for (const marker of markers) {
-    const markerIndex = source.indexOf(marker)
+    const markerIndex = source.indexOf(marker, priorIndex + 1)
     check(
       priorIndex >= 0 && markerIndex > priorIndex,
       `${label} must keep public release operation after ${priorMarker}: ${marker}`
@@ -264,8 +297,9 @@ check(
 )
 const mainEntry = await text('src/main/index.ts')
 check(
-  mainEntry.includes('registerKunExtensionSchemeAsPrivileged') && mainEntry.includes('registerExtensionIpcHandlers'),
-  'Electron does not register the public Extension protocol and IPC bridge'
+  mainEntry.includes('registerKunExtensionPlatformSchemesAsPrivileged') &&
+    mainEntry.includes('registerExtensionIpcHandlers'),
+  'Electron does not register the public Extension/media protocols and IPC bridge'
 )
 const stageRouter = await text('src/renderer/src/components/workbench/WorkbenchStageRouter.tsx')
 check(
@@ -351,6 +385,50 @@ if (api) {
     }
   }
 
+  const minorFixture = await json('packages/extension-api/fixtures/api-minor-negotiation.json')
+  check(
+    sameNumbers(
+      minorFixture.host.supportedApiVersions.map((version) => {
+        const [versionMajor, versionMinor] = version.split('.').map(Number)
+        return versionMajor * 1_000 + versionMinor
+      }),
+      [1_002, 1_001, 1_000]
+    ),
+    'API v1.2/v1.1/v1.0 negotiation fixture must retain current and legacy minor support in order'
+  )
+  for (const name of [
+    'current v1.2 manifest',
+    'previous v1.1 manifest',
+    'legacy v1.0 manifest',
+    'future v1 minor',
+    'unsupported major'
+  ]) {
+    check(
+      minorFixture.cases.some((entry) => entry.name === name),
+      `API minor negotiation fixture is missing case: ${name}`
+    )
+  }
+  for (const testCase of minorFixture.cases) {
+    const result = api.negotiateApiVersion({
+      declaredApiVersion: testCase.declaredApiVersion,
+      supportedApiVersions: minorFixture.host.supportedApiVersions,
+      requiredCapabilities: testCase.requiredCapabilities,
+      capabilitiesByVersion: minorFixture.host.capabilitiesByVersion
+    })
+    check(
+      result.compatible === testCase.compatible,
+      `API v1.2/v1.1/v1.0 compatibility fixture failed: ${testCase.name}`
+    )
+    if (result.compatible) {
+      check(
+        result.negotiatedApiVersion === testCase.negotiatedApiVersion,
+        `API minor negotiated version mismatch: ${testCase.name}`
+      )
+    } else {
+      check(result.code === testCase.code, `API minor compatibility error mismatch: ${testCase.name}`)
+    }
+  }
+
   const actualCurrent = api.negotiateApiVersion({
     declaredApiVersion: currentVersion,
     supportedApiVersions: supportedVersions,
@@ -380,6 +458,100 @@ if (api) {
     check((await text(docPath)).includes(`v${currentMajor}`), `${docPath} does not identify API v${currentMajor}`)
   }
 }
+
+// The current media reference extension is part of the release surface. Keep its
+// deterministic, local-only fixture and every example lifecycle command in the
+// fail-closed gate; native packaged evidence is still recorded per host.
+const videoExampleRoot = 'examples/extensions/kun-video-editor'
+for (const path of [
+  `${videoExampleRoot}/README.md`,
+  `${videoExampleRoot}/kun-extension.json`,
+  `${videoExampleRoot}/package.json`,
+  `${videoExampleRoot}/fixtures/generate-local-fixture.mjs`,
+  `${videoExampleRoot}/fixtures/talking-head.srt`,
+  `${videoExampleRoot}/fixtures/talking-head.vtt`,
+  `${videoExampleRoot}/fixtures/talking-head.json`,
+  `${videoExampleRoot}/tests/local-fixtures.test.ts`,
+  'packages/extension-api/fixtures/api-minor-negotiation.json',
+  'src/main/extensions/extension-media-protocol.test.ts',
+  'kun/src/services/extension-media-process-service.test.ts',
+  'kun/src/services/extension-media-native-smoke.test.ts'
+]) {
+  await requirePath(path, 'video editor release/security surface')
+}
+const videoExamplePackage = await json(`${videoExampleRoot}/package.json`)
+for (const command of [
+  'fixture:generate',
+  'fixture:check',
+  'typecheck',
+  'test',
+  'build',
+  'validate',
+  'pack'
+]) {
+  check(
+    typeof videoExamplePackage.scripts?.[command] === 'string' &&
+      videoExamplePackage.scripts[command].trim().length > 0,
+    `Kun video editor example is missing runnable ${command} coverage`
+  )
+}
+const videoExampleManifest = await json(`${videoExampleRoot}/kun-extension.json`)
+check(videoExampleManifest.apiVersion === '1.2.0', 'Kun video editor must exercise Extension API v1.2')
+check(
+  !videoExampleManifest.permissions.some((permission) => permission.startsWith('network:')),
+  'Kun video editor deterministic release fixture must not require remote ASR or generative services'
+)
+const exampleGateSource = await text('scripts/check-extension-examples.mjs')
+for (const marker of [
+  "'kun-video-editor'",
+  "'typecheck'",
+  "'build'",
+  "'test'",
+  "'run', 'validate'",
+  "'run', 'pack'"
+]) {
+  check(exampleGateSource.includes(marker), `Extension example gate omits video lifecycle marker: ${marker}`)
+}
+const videoExampleReadme = await text(`${videoExampleRoot}/README.md`)
+for (const marker of [
+  '## Install the release package',
+  'kun-video-editor-0.4.4.kunx',
+  'kun extension validate',
+  'kun extension install',
+  'npm run pack:kun-video-editor',
+  'npm run verify:kun-video-editor-package'
+]) {
+  check(videoExampleReadme.includes(marker), `Kun Video Editor install guide omits: ${marker}`)
+}
+
+const mediaProtocolSource = await text('src/main/extensions/extension-media-protocol.ts')
+const mediaProtocolTests = await text('src/main/extensions/extension-media-protocol.test.ts')
+for (const marker of [
+  "scheme: KUN_MEDIA_SCHEME",
+  'bypassCSP: false',
+  'maxConcurrentStreamsPerLease',
+  'fileIdentity',
+  'viewSessionId'
+]) {
+  check(mediaProtocolSource.includes(marker), `kun-media protocol omits isolation marker: ${marker}`)
+}
+for (const marker of [
+  'rejects copied URLs in another isolated View and stale sessions',
+  'serves HEAD, full GET and single byte ranges with exact headers',
+  'uses a bounded stream window and enforces concurrent-reader quotas',
+  'aborts active streams and revokes URLs on View and extension lifecycle cleanup'
+]) {
+  check(mediaProtocolTests.includes(marker), `kun-media protocol tests omit security case: ${marker}`)
+}
+const mediaProcessSource = await text('kun/src/services/extension-media-process-service.ts')
+const mediaProcessTests = await text('kun/src/services/extension-media-process-service.test.ts')
+for (const marker of ['shell: false', "detached: process.platform !== 'win32'", 'terminateSpawnTree(child)']) {
+  check(mediaProcessSource.includes(marker), `Native media process supervision omits marker: ${marker}`)
+}
+check(
+  mediaProcessTests.includes('terminates the supervised descendant process tree on cancellation'),
+  'Native media process tests do not prove descendant cleanup on cancellation'
+)
 
 // Appearance packs, MCP, Skills, and existing HTTP/SSE runtime paths remain
 // independent public surfaces. The full test suites exercise their behavior;
@@ -511,6 +683,23 @@ check(
   ),
   'afterPack does not materialize workspace packages before validating the bundled Kun runtime'
 )
+check(
+  typeof afterPack._internals?.validateBundledExtensionResources === 'function' &&
+    /async function afterPack\(context\)\s*\{[\s\S]*?validateBundledKunRuntime\(context\)[\s\S]*?validateBundledExtensionResources\(context\)/.test(
+      afterPackSource
+    ),
+  'afterPack does not validate bundled .kunx catalog bytes before release artifacts are created'
+)
+for (const id of [
+  'kun-examples.kun-video-editor',
+  'kun-examples.presentation-studio',
+  'kun-examples.social-media-sidebar'
+]) {
+  check(
+    afterPack.REQUIRED_BUNDLED_EXTENSION_IDS.includes(id),
+    `afterPack does not require bundled default extension: ${id}`
+  )
+}
 for (const pattern of [
   'packages/extension-api/package.json',
   'packages/extension-api/dist/**/*',
@@ -522,11 +711,23 @@ for (const pattern of [
 ]) {
   check(builderConfig.files.includes(pattern), `electron-builder files omit Extension resource: ${pattern}`)
 }
+check(
+  builderConfig.extraResources.some((resource) =>
+    resource?.from === 'resources/bundled-extensions' &&
+    resource?.to === 'bundled-extensions' &&
+    Array.isArray(resource?.filter) &&
+    resource.filter.includes('catalog.json') &&
+    resource.filter.includes('*.kunx')
+  ),
+  'electron-builder extraResources omit the default bundled .kunx catalog'
+)
 for (const pattern of [
   '**/kun/dist/**/*',
   '**/kun/node_modules/**/*',
   '**/packages/extension-api/**/*',
-  '**/packages/create-kun-extension/**/*'
+  '**/packages/create-kun-extension/**/*',
+  '**/node_modules/sharp/**/*',
+  '**/node_modules/@img/**/*'
 ]) {
   check(
     builderConfig.asarUnpack.includes(pattern),
@@ -543,6 +744,7 @@ for (const path of [
   'node_modules/file-uri-to-path/package.json',
   'packages/extension-api/schema/kun-extension.schema.json',
   'packages/extension-api/fixtures/api-major-negotiation.json',
+  'packages/extension-api/fixtures/api-minor-negotiation.json',
   'packages/create-kun-extension/src/cli.mjs',
   'packages/create-kun-extension/templates/node/src/extension.ts',
   'packages/create-kun-extension/templates/react/src/host/extension.ts',
@@ -566,6 +768,14 @@ for (const marker of [
   'KUN_PACKAGED_EXTENSION_SMOKE_REEXEC',
   "ELECTRON_RUN_AS_NODE: '1'",
   'smokeAgentTool',
+  'smokeHeadlessTool',
+  "'extension', 'install'",
+  "'extension', 'uninstall'",
+  'DEFAULT_EXTENSION_ID',
+  'validateBundledDefaultExtension',
+  "'--bundled-extensions-dir'",
+  'was resurrected after explicit uninstall',
+  "apiVersion: '1.2.0'",
   'assertConfinedPackagedPath',
   'readAsarHeader'
 ]) {
@@ -603,7 +813,12 @@ for (const marker of [
   'popupTargets',
   'waitForPortsClosed',
   'ELECTRON_RENDERER_URL',
-  'timeout: timeoutMs'
+  'timeout: timeoutMs',
+  'seedDesktopMediaPlaybackFixture',
+  "'media.openViewResource'",
+  "scheme: new URL(lease.url).protocol",
+  "result.mediaPlayback?.scheme !== 'kun-media:'",
+  'result.mediaPlayback.currentTime < 0.4'
 ]) {
   check(packagedDesktopSmoke.includes(marker), `Packaged desktop Chromium smoke omits assertion: ${marker}`)
 }
@@ -794,8 +1009,138 @@ check(
 const prWorkflow = await text('.github/workflows/pr-checks.yml')
 const prWorkflowDocument = parseYaml(prWorkflow)
 const appImageDesktopCommand = 'npm run smoke:packaged-extension-appimage'
+const nativeMediaSmokeCommand = 'npm run smoke:extension-native-media'
+const packagedVideoNativeCommand = 'npm run smoke:packaged-video-editor-native'
+const packagedVideoReleaseCommand =
+  'npm run smoke:packaged-video-editor-native -- --archive dist/kun-video-editor-0.4.4.kunx'
 const nativeEvidenceCommand = 'npm run evidence:extension-native'
+const nativeEvidenceVerifierCommand = 'npm run verify:extension-native-evidence'
+const videoEditorPackCommand = 'npm run pack:kun-video-editor'
+const videoEditorVerifyCommand = 'npm run verify:kun-video-editor-package'
+const verifyMacX64Command =
+  'npm run verify:packaged-macos-native -- --resources dist/mac-x64-verified/Kun.app/Contents/Resources --arch x64'
+const smokeMacX64ExtensionsCommand =
+  'npm run smoke:packaged-extensions -- --resources dist/mac-x64-verified/Kun.app/Contents/Resources'
+const smokeMacX64DesktopCommand =
+  'npm run smoke:packaged-extension-desktop -- --resources dist/mac-x64-verified/Kun.app/Contents/Resources'
+const smokePackagedOcrCommand = 'node scripts/smoke-packaged-ocr.cjs'
 const nativeEvidenceSource = await text('scripts/write-extension-native-evidence.mjs')
+const nativeEvidenceVerifierSource = await text('scripts/verify-extension-native-evidence.mjs')
+const manualReleaseVerifierSource = await text('scripts/verify-manual-extension-release.mjs')
+const nativeMediaSmokeSource = await text('scripts/run-extension-native-media-smoke.cjs')
+const packagedVideoNativeSource = await text('scripts/smoke-packaged-video-editor-native.cjs')
+const videoEditorPackSource = await text('scripts/pack-kun-video-editor.mjs')
+const bundledExtensionsPackSource = await text('scripts/pack-bundled-extensions.mjs')
+check(
+  rootPackage.scripts?.['build:bundled-extensions'] ===
+    'node ./scripts/pack-bundled-extensions.mjs --output ./resources/bundled-extensions' &&
+    rootPackage.scripts?.build?.includes('npm run build:bundled-extensions') &&
+    rootPackage.scripts?.dev?.includes('npm run build:bundled-extensions'),
+  'Kun build and dev must generate the canonical default extension catalog before launch'
+)
+for (const marker of [
+  'BUNDLED_EXTENSION_DEFINITIONS',
+  'BUNDLED_EXTENSION_CATALOG_FILE',
+  'kun-examples.kun-video-editor',
+  'kun-examples.presentation-studio',
+  'kun-examples.social-media-sidebar',
+  'bundledExtensionCatalog',
+  'removeStaleBundledArchives'
+]) {
+  check(
+    bundledExtensionsPackSource.includes(marker),
+    `Bundled Extension packer omits default invariant: ${marker}`
+  )
+}
+check(
+  rootPackage.scripts?.['check:extension-release-gate']?.includes(
+    './scripts/pack-bundled-extensions.test.mjs'
+  ),
+  'Extension release gate must execute bundled extension catalog tests'
+)
+check(
+  rootPackage.scripts?.['smoke:extension-native-media'] ===
+    'node ./scripts/run-extension-native-media-smoke.cjs',
+  'package.json must expose the fail-closed host-native FFmpeg broker smoke'
+)
+check(
+  rootPackage.scripts?.['smoke:packaged-video-editor-native'] ===
+    'node ./scripts/smoke-packaged-video-editor-native.cjs',
+  'package.json must expose the packaged Kun Video Editor native smoke'
+)
+check(
+  rootPackage.scripts?.['check:extension-release-gate']?.includes(
+    './scripts/smoke-packaged-video-editor-native.test.cjs'
+  ),
+  'Extension release gate must execute packaged video editor native smoke source tests'
+)
+check(
+  rootPackage.scripts?.['prepare:macos-native:x64'] ===
+    'node ./scripts/ensure-macos-native-dependencies.cjs --arch x64' &&
+    rootPackage.scripts?.['prepare:macos-native:arm64'] ===
+      'node ./scripts/ensure-macos-native-dependencies.cjs --arch arm64' &&
+    rootPackage.scripts?.['dist:mac:x64:dmg']?.startsWith(
+      'npm run prepare:macos-native:x64 && '
+    ) &&
+    rootPackage.scripts?.['dist:mac:arm64:dmg']?.startsWith(
+      'npm run prepare:macos-native:arm64 && '
+    ),
+  'macOS packaging must install target-native Sharp and Canvas dependencies before each architecture'
+)
+check(
+  rootPackage.scripts?.['verify:packaged-macos-native'] ===
+    'node ./scripts/verify-packaged-macos-native-architecture.cjs' &&
+    rootPackage.scripts?.['check:extension-release-gate']?.includes(
+      './scripts/ensure-macos-native-dependencies.test.cjs'
+    ) &&
+    rootPackage.scripts?.['check:extension-release-gate']?.includes(
+      './scripts/verify-packaged-macos-native-architecture.test.cjs'
+    ),
+  'Extension release gate must expose and test macOS native architecture verification'
+)
+for (const marker of [
+  "KUN_RUN_MEDIA_SMOKE: '1'",
+  'resolveHostMediaExecutables',
+  'extension-media-native-smoke.test.ts',
+  'shell: false',
+  'timeout: 180_000'
+]) {
+  check(nativeMediaSmokeSource.includes(marker), `Host-native media smoke omits fail-closed marker: ${marker}`)
+}
+for (const marker of [
+  'KUN_PACKAGED_VIDEO_EDITOR_NATIVE_SMOKE_REEXEC',
+  "ELECTRON_RUN_AS_NODE: '1'",
+  'timeout: DEFAULT_SMOKE_TIMEOUT_MS',
+  "'extension', 'validate'",
+  "'extension', 'pack'",
+  "'extension', 'install'",
+  "'onTool:video-project'",
+  "'video-probe'",
+  "'video-update-timeline'",
+  "kind: 'proof-frame'",
+  "kind: 'h264-mp4'",
+  "captionMode = 'both'",
+  "captionMode: paths.captionMode",
+  'subtitleOutputHandleId',
+  "subtitleFormat: 'srt'",
+  'application/x-subrip',
+  "'video-render-cancel'",
+  "approvalCount('video-render-status')",
+  "approvalCount('video-render-cancel')",
+  'artifacts.listOwned',
+  'assertH264Probe',
+  'assertSrtSidecar',
+  'assertSourcePreserved',
+  "argumentValue('--archive')",
+  'assertReleaseArchive',
+  'archiveHash',
+  'smoke archive changed during lifecycle validation',
+  "code: 'FFPROBE_UNAVAILABLE'",
+  'ffprobe is unavailable',
+  "'extension', 'uninstall'"
+]) {
+  check(packagedVideoNativeSource.includes(marker), `Packaged video editor native smoke omits assertion: ${marker}`)
+}
 check(
   rootPackage.scripts?.['evidence:extension-native'] ===
     'node ./scripts/write-extension-native-evidence.mjs',
@@ -807,17 +1152,113 @@ check(
   ),
   'Extension release gate must execute native artifact evidence tests'
 )
+check(
+  rootPackage.scripts?.['verify:extension-native-evidence'] ===
+    'node ./scripts/verify-extension-native-evidence.mjs' &&
+    rootPackage.scripts?.['check:extension-release-gate']?.includes(
+      './scripts/verify-extension-native-evidence.test.mjs'
+    ),
+  'package.json must expose and test the cross-platform native evidence verifier'
+)
+check(
+  rootPackage.scripts?.['verify:manual-extension-release'] ===
+    'node ./scripts/verify-manual-extension-release.mjs' &&
+    rootPackage.scripts?.['check:extension-release-gate']?.includes(
+      './scripts/verify-manual-extension-release.test.mjs'
+    ),
+  'package.json must expose and test complete manual Extension release verification'
+)
+for (const marker of [
+  'assertCleanReleaseCheckout',
+  "'--clean-only'",
+  "'--porcelain=v1'",
+  "'--untracked-files=all'",
+  "'--ignore-submodules=none'"
+]) {
+  check(
+    manualReleaseVerifierSource.includes(marker),
+    `Manual Extension release verifier omits dirty-checkout assertion: ${marker}`
+  )
+}
+check(
+  rootPackage.scripts?.['pack:kun-video-editor'] ===
+    'npm run build:kun && npm run build:bundled-extensions && node ./scripts/pack-kun-video-editor.mjs --require-bundled-identity' &&
+    rootPackage.scripts?.['verify:kun-video-editor-package'] ===
+    'npm run build:kun && npm run build:bundled-extensions && node ./scripts/pack-kun-video-editor.mjs --verify --require-bundled-identity' &&
+    rootPackage.scripts?.['check:extension-release-gate']?.includes(
+      './scripts/pack-kun-video-editor.test.mjs'
+    ),
+  'package.json must expose and test deterministic Kun Video Editor release packing'
+)
 for (const marker of [
   'GITHUB_SHA',
   'GITHUB_RUN_ID',
   'sha256File',
   'details.isSymbolicLink()',
   "flag: 'wx'",
+  'mediaToolchain',
+  'KUN_FFMPEG_PATH',
+  'KUN_FFPROBE_PATH',
+  'libx264',
+  'drawtext',
+  'platformLike',
+  'ancillary',
+  'Unexpected native ${platform} artifact',
   'linux-x86_64\\\\.AppImage',
   'win-x64\\\\.exe',
   'mac-(arm64|x64)'
 ]) {
   check(nativeEvidenceSource.includes(marker), `Native artifact evidence omits fail-closed marker: ${marker}`)
+}
+for (const marker of [
+  'git',
+  'fetch',
+  '+refs/tags/${tag}:refs/tags/${tag}',
+  "'gh'",
+  "'release'",
+  "'download'",
+  'verifyNativeEvidenceBundle',
+  'verifyVideoEditorArchive',
+  'assertTagMatchesCheckout',
+  'shell: false',
+  "process.argv.includes('--tag-only')"
+]) {
+  check(
+    manualReleaseVerifierSource.includes(marker),
+    `Manual Extension release verifier omits fail-closed marker: ${marker}`
+  )
+}
+for (const marker of [
+  'verifyNativeEvidenceBundle',
+  'extension-native-evidence-${platform}.json',
+  'sha256File',
+  'details.isSymbolicLink()',
+  'duplicate filename',
+  'tagCommit',
+  'expectedVersion',
+  'mediaToolchain',
+  'libx264',
+  'drawtext',
+  'KUN_NAMED_RELEASE_ASSET',
+  'ancillaryPattern',
+  'unexpected Kun-named asset'
+]) {
+  check(
+    nativeEvidenceVerifierSource.includes(marker),
+    `Native evidence bundle verifier omits fail-closed marker: ${marker}`
+  )
+}
+for (const marker of [
+  'first.kunx',
+  'second.kunx',
+  'assertDeterministicArchives',
+  "'extension'",
+  "'validate'",
+  "'pack'",
+  'sha256File',
+  'details.isSymbolicLink()'
+]) {
+  check(videoEditorPackSource.includes(marker), `Video editor release pack omits marker: ${marker}`)
 }
 for (const command of ['npm run check:extensions', 'npm run test', 'npm --prefix kun run test', 'npm run dist:linux']) {
   check(prWorkflow.includes(command), `PR checks omit release prerequisite: ${command}`)
@@ -847,6 +1288,26 @@ check(
   (releaseWorkflow.match(/npm run smoke:packaged-extension-desktop/g) ?? []).length >= 3,
   'Release workflow must run the packaged desktop Chromium smoke on host-native macOS, Windows, and Linux'
 )
+for (const [label, source] of [
+  ['PR', prWorkflow],
+  ['Release', releaseWorkflow]
+]) {
+  check(
+    (source.match(/npm run smoke:extension-native-media/g) ?? []).length >= 3 &&
+      (source.match(/npm run smoke:packaged-video-editor-native/g) ?? []).length >= 3 &&
+      (source.match(/KUN_RUN_MEDIA_SMOKE: '1'/g) ?? []).length >= 3,
+    `${label} workflow must fail closed on both native media smokes for macOS, Windows, and Linux`
+  )
+  check(
+    (source.match(/Install host-native FFmpeg/g) ?? []).length >= 2,
+    `${label} workflow must provision host-native FFmpeg explicitly on macOS and Windows`
+  )
+  check(
+    source.includes(videoEditorPackCommand) &&
+      source.includes('dist/kun-video-editor-*.kunx'),
+    `${label} workflow must build and upload the deterministic Kun Video Editor .kunx`
+  )
+}
 check(
   prWorkflow.includes('npm run smoke:packaged-extensions'),
   'PR package checks must run the packaged Node runtime smoke'
@@ -869,9 +1330,14 @@ check(
   'Release and PR jobs must record commit-bound native evidence on macOS, Windows, and Linux'
 )
 check(
-  /Install Linux packaging dependencies[\s\S]*?\bxvfb\b[\s\S]*?\butil-linux\b/.test(releaseWorkflow) &&
-    /Install Linux packaging dependencies[\s\S]*?\bxvfb\b[\s\S]*?\butil-linux\b/.test(prWorkflow),
-  'Linux release and PR package workflows must install xvfb and util-linux'
+  (releaseWorkflow.match(/KUN_EVIDENCE_COMMIT: \$\{\{ github\.event\.pull_request\.merge_commit_sha \}\}/g) ?? [])
+    .length === 3,
+  'Closed-PR release evidence must bind all platforms to the explicitly checked-out merge commit'
+)
+check(
+  /Install Linux packaging dependencies[\s\S]*?\bxvfb\b[\s\S]*?\butil-linux\b[\s\S]*?\bffmpeg\b/.test(releaseWorkflow) &&
+    /Install Linux packaging dependencies[\s\S]*?\bxvfb\b[\s\S]*?\butil-linux\b[\s\S]*?\bffmpeg\b/.test(prWorkflow),
+  'Linux release and PR package workflows must install xvfb, util-linux, and FFmpeg'
 )
 
 const releaseMacJob = workflowJob(releaseWorkflowDocument, 'build-macos', 'macos-latest')
@@ -879,8 +1345,13 @@ requireBoundedJobTimeout(releaseMacJob, 'build-macos', 90)
 requireOrderedCommands(releaseMacJob, 'build-macos', [
   'npm run check:extension-release-gate',
   'npm run dist:mac:signed',
+  'npm run verify:packaged-macos-native -- --resources dist/mac/Kun.app/Contents/Resources --arch x64',
+  'npm run verify:packaged-macos-native -- --resources dist/mac-arm64/Kun.app/Contents/Resources --arch arm64',
+  smokePackagedOcrCommand,
   'npm run smoke:packaged-extensions -- --resources dist/mac/Kun.app/Contents/Resources',
   'npm run smoke:packaged-extensions -- --resources dist/mac-arm64/Kun.app/Contents/Resources',
+  nativeMediaSmokeCommand,
+  packagedVideoNativeCommand,
   'npm run smoke:packaged-extension-desktop',
   nativeEvidenceCommand
 ])
@@ -890,12 +1361,27 @@ requireUnconditionalStepAfter(
   'Upload macOS artifacts',
   nativeEvidenceCommand
 )
+const releaseMacX64Job = workflowJob(
+  releaseWorkflowDocument,
+  'verify-macos-x64',
+  'macos-15-intel'
+)
+requireBoundedJobTimeout(releaseMacX64Job, 'verify-macos-x64', 30)
+requireJobDependencies(releaseMacX64Job, 'verify-macos-x64', ['prepare', 'build-macos'])
+requireOrderedCommands(releaseMacX64Job, 'verify-macos-x64', [
+  verifyMacX64Command,
+  smokePackagedOcrCommand,
+  smokeMacX64ExtensionsCommand,
+  smokeMacX64DesktopCommand
+])
 const releaseWindowsJob = workflowJob(releaseWorkflowDocument, 'build-windows', 'windows-latest')
 requireBoundedJobTimeout(releaseWindowsJob, 'build-windows', 90)
 requireOrderedCommands(releaseWindowsJob, 'build-windows', [
   'npm run check:extension-release-gate',
   'npm run dist:win',
   'npm run smoke:packaged-extensions -- --resources dist/win-unpacked/resources',
+  nativeMediaSmokeCommand,
+  packagedVideoNativeCommand,
   'npm run smoke:packaged-extension-desktop',
   nativeEvidenceCommand
 ])
@@ -911,6 +1397,9 @@ requireOrderedCommands(releaseLinuxJob, 'build-linux', [
   'npm run check:extension-release-gate',
   'npm run dist:linux',
   'npm run smoke:packaged-extensions -- --resources dist/linux-unpacked/resources',
+  nativeMediaSmokeCommand,
+  videoEditorPackCommand,
+  packagedVideoReleaseCommand,
   'unshare --user --map-root-user /bin/true',
   'npm run smoke:packaged-extension-desktop',
   appImageDesktopCommand,
@@ -930,6 +1419,31 @@ requireUnconditionalStepAfter(
   'Upload Linux artifacts',
   nativeEvidenceCommand
 )
+const releasePublishJob = workflowJob(releaseWorkflowDocument, 'publish', 'ubuntu-latest')
+requireNamedStepsInOrder(releasePublishJob, 'release publish', [
+  'Download release artifacts',
+  'Ensure release tag',
+  'Verify three-platform native evidence bundle',
+  'Verify downloadable Kun Video Editor extension package',
+  'Upload GitHub Release assets'
+])
+requireStepRunMarkers(
+  releasePublishJob,
+  'release publish',
+  'Verify three-platform native evidence bundle',
+  [nativeEvidenceVerifierCommand, '--directory release-artifacts', '--commit', '--tag', '--version']
+)
+requireStepRunMarkers(
+  releasePublishJob,
+  'release publish',
+  'Verify downloadable Kun Video Editor extension package',
+  [videoEditorVerifyCommand, '--input release-artifacts']
+)
+requireStepRunMarkers(releasePublishJob, 'release publish', 'Upload GitHub Release assets', [
+  'extension-native-evidence-*.json',
+  'kun-video-editor-*.kunx',
+  'gh release upload'
+])
 
 const dailyWorkflow = await text('.github/workflows/daily-dev-prerelease.yml')
 const dailyWorkflowDocument = parseYaml(dailyWorkflow)
@@ -939,8 +1453,13 @@ requireBoundedJobTimeout(dailyMacJob, 'daily build-macos', 90)
 requireOrderedCommands(dailyMacJob, 'daily build-macos', [
   'npm run check:extension-release-gate',
   'npm run dist:mac',
+  'npm run verify:packaged-macos-native -- --resources dist/mac/Kun.app/Contents/Resources --arch x64',
+  'npm run verify:packaged-macos-native -- --resources dist/mac-arm64/Kun.app/Contents/Resources --arch arm64',
+  smokePackagedOcrCommand,
   'npm run smoke:packaged-extensions -- --resources dist/mac/Kun.app/Contents/Resources',
   'npm run smoke:packaged-extensions -- --resources dist/mac-arm64/Kun.app/Contents/Resources',
+  nativeMediaSmokeCommand,
+  packagedVideoNativeCommand,
   'npm run smoke:packaged-extension-desktop',
   nativeEvidenceCommand
 ])
@@ -950,12 +1469,27 @@ requireUnconditionalStepAfter(
   'Upload macOS artifacts',
   nativeEvidenceCommand
 )
+const dailyMacX64Job = workflowJob(
+  dailyWorkflowDocument,
+  'verify-macos-x64',
+  'macos-15-intel'
+)
+requireBoundedJobTimeout(dailyMacX64Job, 'daily verify-macos-x64', 30)
+requireJobDependencies(dailyMacX64Job, 'daily verify-macos-x64', ['prepare', 'build-macos'])
+requireOrderedCommands(dailyMacX64Job, 'daily verify-macos-x64', [
+  verifyMacX64Command,
+  smokePackagedOcrCommand,
+  smokeMacX64ExtensionsCommand,
+  smokeMacX64DesktopCommand
+])
 const dailyWindowsJob = workflowJob(dailyWorkflowDocument, 'build-windows', 'windows-latest')
 requireBoundedJobTimeout(dailyWindowsJob, 'daily build-windows', 90)
 requireOrderedCommands(dailyWindowsJob, 'daily build-windows', [
   'npm run check:extension-release-gate',
   'npm run dist:win',
   'npm run smoke:packaged-extensions -- --resources dist/win-unpacked/resources',
+  nativeMediaSmokeCommand,
+  packagedVideoNativeCommand,
   'npm run smoke:packaged-extension-desktop',
   nativeEvidenceCommand
 ])
@@ -971,6 +1505,9 @@ requireOrderedCommands(dailyLinuxJob, 'daily build-linux', [
   'npm run check:extension-release-gate',
   'npm run dist:linux',
   'npm run smoke:packaged-extensions -- --resources dist/linux-unpacked/resources',
+  nativeMediaSmokeCommand,
+  videoEditorPackCommand,
+  packagedVideoReleaseCommand,
   'unshare --user --map-root-user /bin/true',
   'npm run smoke:packaged-extension-desktop',
   appImageDesktopCommand,
@@ -994,48 +1531,118 @@ const dailyLinuxDependencies =
   dailyLinuxJob?.steps?.find((step) => step?.name === 'Install Linux packaging dependencies')?.run ?? ''
 check(
   /\bxvfb\b/.test(dailyLinuxDependencies) && /\bxauth\b/.test(dailyLinuxDependencies) &&
-    /\butil-linux\b/.test(dailyLinuxDependencies),
-  'Daily Linux prerelease must install xvfb, xauth, and util-linux'
+    /\butil-linux\b/.test(dailyLinuxDependencies) && /\bffmpeg\b/.test(dailyLinuxDependencies),
+  'Daily Linux prerelease must install xvfb, xauth, util-linux, and FFmpeg'
+)
+check(
+  (dailyWorkflow.match(/npm run smoke:extension-native-media/g) ?? []).length >= 3 &&
+    (dailyWorkflow.match(/npm run smoke:packaged-video-editor-native/g) ?? []).length >= 3 &&
+    (dailyWorkflow.match(/KUN_RUN_MEDIA_SMOKE: '1'/g) ?? []).length >= 3 &&
+    (dailyWorkflow.match(/Install host-native FFmpeg/g) ?? []).length >= 2,
+  'Daily workflow must provision FFmpeg and fail closed on both native media smokes on every host'
+)
+check(
+  dailyWorkflow.includes(videoEditorPackCommand) &&
+    dailyWorkflow.includes('dist/kun-video-editor-*.kunx'),
+  'Daily workflow must build and upload the deterministic Kun Video Editor .kunx'
 )
 check(
   !dailyWorkflow.includes('--no-sandbox'),
   'Daily Linux prerelease must not disable the Chromium sandbox'
 )
+const dailyPublishJob = workflowJob(dailyWorkflowDocument, 'publish', 'ubuntu-latest')
+requireNamedStepsInOrder(dailyPublishJob, 'daily publish', [
+  'Download daily dev artifacts',
+  'Ensure prerelease tag',
+  'Verify three-platform native evidence bundle',
+  'Verify downloadable Kun Video Editor extension package',
+  'Upload GitHub prerelease assets'
+])
+requireStepRunMarkers(
+  dailyPublishJob,
+  'daily publish',
+  'Verify three-platform native evidence bundle',
+  [nativeEvidenceVerifierCommand, '--directory release-artifacts', '--commit', '--tag', '--version']
+)
+requireStepRunMarkers(
+  dailyPublishJob,
+  'daily publish',
+  'Verify downloadable Kun Video Editor extension package',
+  [videoEditorVerifyCommand, '--input release-artifacts']
+)
+requireStepRunMarkers(dailyPublishJob, 'daily publish', 'Upload GitHub prerelease assets', [
+  'extension-native-evidence-*.json',
+  'kun-video-editor-*.kunx',
+  'gh release upload'
+])
 
 const releaseMacScript = await text('scripts/release-mac.sh')
 requireOrderedSourceMarkers(releaseMacScript, 'scripts/release-mac.sh execution path', [
+  '-- --clean-only',
   'npm run check:extension-release-gate || die "Extension public release gate failed"',
   '\nbuild_macos\n',
+  'npm run pack:kun-video-editor || die "Kun Video Editor extension package failed"',
   '\nsmoke_macos_extensions\n',
   '\nrelease_write_meta_file\n',
-  'gh release create "${TAG_NAME}"'
+  'gh release create "${TAG_NAME}"',
+  '|| die "Created release tag does not match the local checkout"',
+  'upload_github_assets "${TAG_NAME}"'
 ])
 requireSourceMarkersAfter(releaseMacScript, 'scripts/release-mac.sh', '\nsmoke_macos_extensions\n', [
   'gh release create "${TAG_NAME}"',
   'gh release upload "${tag}"',
-  'publish-r2.mjs" upload --platform mac',
-  'publish-r2.mjs" promote --tag'
+  'publish-r2.mjs" upload --platform mac'
 ])
 requireOrderedSourceMarkers(releaseMacScript, 'scripts/release-mac.sh packaged smoke function', [
+  'npm run verify:packaged-macos-native -- --resources "${x64_resources}" --arch x64',
+  'npm run verify:packaged-macos-native -- --resources "${arm64_resources}" --arch arm64',
   'npm run smoke:packaged-extensions -- --resources "${x64_resources}"',
   'npm run smoke:packaged-extensions -- --resources "${arm64_resources}"',
-  'npm run smoke:packaged-extension-desktop -- --resources "${host_resources}"'
+  'KUN_PACKAGED_RESOURCES_DIR="${host_resources}" node scripts/smoke-packaged-ocr.cjs',
+  'npm run smoke:packaged-extension-desktop -- --resources "${host_resources}"',
+  '--archive "${ROOT}/dist/kun-video-editor-0.4.4.kunx"'
 ])
 for (const marker of [
   '|| die "macOS x64 packaged Extension Node runtime smoke failed"',
   '|| die "macOS arm64 packaged Extension Node runtime smoke failed"',
-  '|| die "macOS packaged Extension desktop Chromium smoke failed"'
+  '|| die "macOS x64 packaged native architecture verification failed"',
+  '|| die "macOS arm64 packaged native architecture verification failed"',
+  '|| die "macOS packaged OCR dependency smoke failed"',
+  '|| die "macOS packaged Extension desktop Chromium smoke failed"',
+  '--archive "${ROOT}/dist/kun-video-editor-0.4.4.kunx"',
+  'verify:manual-extension-release',
+  'collect "Kun Video Editor extension" "dist/kun-video-editor-*.kunx"',
+  '--r2) R2_UPLOAD=true; R2_PROMOTE=false',
+  'macOS release only uploads single-platform R2 metadata'
 ]) {
   check(releaseMacScript.includes(marker), `scripts/release-mac.sh does not fail closed: ${marker}`)
 }
+check(
+  !releaseMacScript.includes('publish-r2.mjs" promote --tag'),
+  'scripts/release-mac.sh must not promote a single-platform R2 release'
+)
+check(
+  !releaseMacScript.includes('build_macos_parallel') &&
+    releaseMacScript.includes(
+      'Building macOS serially for architecture-specific native dependencies'
+    ),
+  'scripts/release-mac.sh must not race architecture-specific native package preparation'
+)
 
 const releaseWinScript = await text('scripts/release-win.sh')
 requireOrderedSourceMarkers(releaseWinScript, 'scripts/release-win.sh execution path', [
+  '-- --clean-only',
+  '--version "${RELEASE_VERSION}" --tag-only',
   'npm run check:extension-release-gate || die "Extension public release gate failed"',
   'npm run dist:win || die "Windows build failed"',
   'npm run smoke:packaged-extensions -- --resources dist/win-unpacked/resources',
   'npm run smoke:packaged-extension-desktop',
-  'gh release upload "${TAG_NAME}"'
+  'gh release upload "${TAG_NAME}"',
+  'if $PUBLISH || [[ "${R2_PROMOTE}" == "true" ]]; then',
+  'npm run verify:manual-extension-release -- --tag "${TAG_NAME}" --version "${RELEASE_VERSION}"',
+  '|| die "Complete three-platform release verification failed"',
+  'publish-r2.mjs" promote --tag "${TAG_NAME}" --channel "${RELEASE_CHANNEL}" --platforms mac,win,linux',
+  'gh release edit "${TAG_NAME}" --draft=false'
 ])
 requireSourceMarkersAfter(
   releaseWinScript,
@@ -1043,25 +1650,37 @@ requireSourceMarkersAfter(
   'npm run smoke:packaged-extension-desktop',
   [
     'gh release upload "${TAG_NAME}"',
+    'if $PUBLISH || [[ "${R2_PROMOTE}" == "true" ]]; then',
+    'npm run verify:manual-extension-release -- --tag "${TAG_NAME}" --version "${RELEASE_VERSION}"',
+    '|| die "Complete three-platform release verification failed"',
     'publish-r2.mjs" upload --platform win',
-    'publish-r2.mjs" promote --tag',
+    'publish-r2.mjs" promote --tag "${TAG_NAME}" --channel "${RELEASE_CHANNEL}" --platforms mac,win,linux',
     'gh release edit "${TAG_NAME}" --draft=false'
   ]
 )
 for (const marker of [
   '|| die "Windows packaged Extension Node runtime smoke failed"',
-  '|| die "Windows packaged Extension desktop Chromium smoke failed"'
+  '|| die "Windows packaged Extension desktop Chromium smoke failed"',
+  'Downloading and verifying the complete three-platform release bundle',
+  'verify:manual-extension-release'
 ]) {
   check(releaseWinScript.includes(marker), `scripts/release-win.sh does not fail closed: ${marker}`)
 }
 
 const releaseWinPowerShell = await text('scripts/release-win.ps1')
 requireOrderedSourceMarkers(releaseWinPowerShell, 'scripts/release-win.ps1 execution path', [
+  '-- --clean-only',
+  '--version $ReleaseVersion --tag-only',
   '& npm run check:extension-release-gate',
   '& npm run dist:win',
   '& npm run smoke:packaged-extensions -- --resources dist/win-unpacked/resources',
   '& npm run smoke:packaged-extension-desktop',
-  '& gh release upload $TagName'
+  '& gh release upload $TagName',
+  'if ($Publish -or $PromoteR2)',
+  '& npm run verify:manual-extension-release -- --tag $TagName --version $ReleaseVersion',
+  "Write-Err 'Complete three-platform release verification failed.'",
+  "'scripts\\publish-r2.mjs') promote --tag $TagName --channel $ReleaseChannel --platforms mac,win,linux",
+  '& gh release edit $TagName --draft=false'
 ])
 requireSourceMarkersAfter(
   releaseWinPowerShell,
@@ -1069,17 +1688,31 @@ requireSourceMarkersAfter(
   '& npm run smoke:packaged-extension-desktop',
   [
     '& gh release upload $TagName',
+    'if ($Publish -or $PromoteR2)',
+    '& npm run verify:manual-extension-release -- --tag $TagName --version $ReleaseVersion',
+    "Write-Err 'Complete three-platform release verification failed.'",
     "'scripts\\publish-r2.mjs') upload --platform win",
-    "'scripts\\publish-r2.mjs') promote --tag",
+    "'scripts\\publish-r2.mjs') promote --tag $TagName --channel $ReleaseChannel --platforms mac,win,linux",
     '& gh release edit $TagName --draft=false'
   ]
 )
 for (const marker of [
   "Write-Err 'Extension public release gate failed.'",
   "Write-Err 'Windows packaged Extension Node runtime smoke failed.'",
-  "Write-Err 'Windows packaged Extension desktop Chromium smoke failed.'"
+  "Write-Err 'Windows packaged Extension desktop Chromium smoke failed.'",
+  "Write-Err 'Complete three-platform release verification failed.'",
+  'verify:manual-extension-release'
 ]) {
   check(releaseWinPowerShell.includes(marker), `scripts/release-win.ps1 does not fail closed: ${marker}`)
+}
+
+const releaseCommonSource = await text('scripts/lib/release-common.sh')
+for (const marker of [
+  'dist/extension-native-evidence-*.json',
+  'dist/kun-video-editor-*.kunx'
+]) {
+  check(releaseCommonSource.includes(marker), `Manual release cleanup omits stale generated asset: ${marker}`)
+  check(releaseWinPowerShell.includes(marker.replaceAll('/', '\\')), `PowerShell cleanup omits stale generated asset: ${marker}`)
 }
 
 for (const wrapper of ['scripts/release.sh', 'scripts/release-all-mac.sh']) {
@@ -1101,6 +1734,9 @@ requireJobDependencies(prPackageJob, 'package', ['test'])
 requireOrderedCommands(prPackageJob, 'package', [
   'npm run dist:linux',
   'npm run smoke:packaged-extensions -- --resources dist/linux-unpacked/resources',
+  nativeMediaSmokeCommand,
+  videoEditorPackCommand,
+  packagedVideoReleaseCommand,
   'unshare --user --map-root-user /bin/true',
   'npm run smoke:packaged-extension-desktop',
   appImageDesktopCommand,
@@ -1125,8 +1761,13 @@ requireBoundedJobTimeout(prMacJob, 'package-macos', 90)
 requireJobDependencies(prMacJob, 'package-macos', ['test'])
 requireOrderedCommands(prMacJob, 'package-macos', [
   'npm run dist:mac',
+  'npm run verify:packaged-macos-native -- --resources dist/mac/Kun.app/Contents/Resources --arch x64',
+  'npm run verify:packaged-macos-native -- --resources dist/mac-arm64/Kun.app/Contents/Resources --arch arm64',
+  smokePackagedOcrCommand,
   'npm run smoke:packaged-extensions -- --resources dist/mac/Kun.app/Contents/Resources',
   'npm run smoke:packaged-extensions -- --resources dist/mac-arm64/Kun.app/Contents/Resources',
+  nativeMediaSmokeCommand,
+  packagedVideoNativeCommand,
   'npm run smoke:packaged-extension-desktop',
   nativeEvidenceCommand
 ])
@@ -1136,12 +1777,27 @@ requireUnconditionalStepAfter(
   'Upload ad-hoc macOS PR packages',
   nativeEvidenceCommand
 )
+const prMacX64Job = workflowJob(
+  prWorkflowDocument,
+  'package-macos-x64-runtime',
+  'macos-15-intel'
+)
+requireBoundedJobTimeout(prMacX64Job, 'package-macos-x64-runtime', 30)
+requireJobDependencies(prMacX64Job, 'package-macos-x64-runtime', ['package-macos'])
+requireOrderedCommands(prMacX64Job, 'package-macos-x64-runtime', [
+  verifyMacX64Command,
+  smokePackagedOcrCommand,
+  smokeMacX64ExtensionsCommand,
+  smokeMacX64DesktopCommand
+])
 const prWindowsJob = workflowJob(prWorkflowDocument, 'package-windows', 'windows-latest')
 requireBoundedJobTimeout(prWindowsJob, 'package-windows', 90)
 requireJobDependencies(prWindowsJob, 'package-windows', ['test'])
 requireOrderedCommands(prWindowsJob, 'package-windows', [
   'npm run dist:win',
   'npm run smoke:packaged-extensions -- --resources dist/win-unpacked/resources',
+  nativeMediaSmokeCommand,
+  packagedVideoNativeCommand,
   'npm run smoke:packaged-extension-desktop',
   nativeEvidenceCommand
 ])
@@ -1156,6 +1812,7 @@ requireJobDependencies(prFailureJob, 'request-changes-on-failure', [
   'test',
   'package',
   'package-macos',
+  'package-macos-x64-runtime',
   'package-windows'
 ])
 
@@ -1248,6 +1905,34 @@ assertExecutableApiConformance({
 
 const vitestEntry = join(root, 'node_modules/vitest/vitest.mjs')
 runRequiredCommand({
+  label: 'Extension media protocol isolation release suite',
+  command: process.execPath,
+  args: [
+    vitestEntry,
+    'run',
+    'src/main/extensions/extension-media-protocol.test.ts',
+    'src/main/extensions/extension-view-methods.test.ts',
+    'src/main/ipc/register-extension-ipc-handlers.test.ts'
+  ],
+  cwd: root
+})
+runRequiredCommand({
+  label: 'Extension native media supervision and cancellation release suite',
+  command: process.execPath,
+  args: [
+    vitestEntry,
+    'run',
+    '--pool=threads',
+    '--maxWorkers=1',
+    'src/services/extension-media-handle-service.test.ts',
+    'src/services/extension-media-process-service.test.ts',
+    'src/services/extension-media-ffmpeg-service.test.ts',
+    'src/services/extension-media-job-service.test.ts',
+    'src/services/extension-media-native-smoke.test.ts'
+  ],
+  cwd: join(root, 'kun')
+})
+runRequiredCommand({
   label: 'legacy desktop Plugin, Skill, and provider behavior regression suite',
   command: process.execPath,
   args: [
@@ -1279,5 +1964,5 @@ runRequiredCommand({
 })
 
 process.stdout.write(
-  'Extension public release gate OK: platform exposed, executable API compatibility and external tarball acceptance passed, legacy behaviors passed, packaged resources asserted, and three-platform packaged smoke wiring enforced. Native platform evidence remains a separate release sign-off.\n'
+  'Extension public release gate OK: platform exposed, API v1.2/v1.1/v1.0 compatibility, media protocol isolation, native process cleanup, external tarball acceptance, legacy behaviors, packaged resources, bundled defaults, and video editor lifecycle wiring passed. Host-native packaged playback evidence remains a separate per-platform release sign-off.\n'
 )

@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { JsonObjectSchema, JsonValueSchema, type JsonObject, type JsonValue } from './common.js'
+import { GeneratedArtifactsSchema } from './artifacts.js'
 
 export const ToolSideEffectsSchema = z.enum(['none', 'read', 'write', 'external', 'destructive'])
 export type ToolSideEffects = z.infer<typeof ToolSideEffectsSchema>
@@ -38,7 +39,8 @@ export type ToolProgress = z.infer<typeof ToolProgressSchema>
 export const ToolResultSchema = z.strictObject({
   content: JsonValueSchema,
   summary: z.string().max(4096).optional(),
-  metadata: JsonObjectSchema.optional()
+  metadata: JsonObjectSchema.optional(),
+  generatedArtifacts: GeneratedArtifactsSchema.optional()
 })
 export type ToolResult = z.infer<typeof ToolResultSchema>
 

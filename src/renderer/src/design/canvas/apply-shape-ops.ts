@@ -9,7 +9,11 @@ export const DESIGN_CANVAS_TOOL_NAMES = new Set([
   'design_system_template',
   'design_system',
   'design_validate',
-  'design_svg_create'
+  'design_svg_create',
+  'design_motion_set_timeline',
+  'design_motion_upsert_keyframes',
+  'design_motion_apply_preset',
+  'design_motion_delete'
 ])
 
 export function isDesignCanvasToolName(name: unknown): boolean {

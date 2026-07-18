@@ -10,7 +10,25 @@ window.addEventListener('DOMContentLoaded', () => {
   const cancel = document.getElementById('credential-cancel') as HTMLButtonElement | null
   const authorizationOpen = document.getElementById('authorization-open') as HTMLButtonElement | null
   const authorizationClose = document.getElementById('authorization-close') as HTMLButtonElement | null
+  const consentApprove = document.getElementById('consent-approve') as HTMLButtonElement | null
+  const consentCancel = document.getElementById('consent-cancel') as HTMLButtonElement | null
   if (!sessionId) return
+
+  if (consentApprove && consentCancel) {
+    consentApprove.addEventListener('click', () => {
+      ipcRenderer.send('extension:protected-surface:consent-approve', { sessionId })
+    })
+    consentCancel.addEventListener('click', () => {
+      ipcRenderer.send('extension:protected-surface:consent-cancel', { sessionId })
+    })
+    window.addEventListener('keydown', (event) => {
+      if (event.key !== 'Escape') return
+      event.preventDefault()
+      ipcRenderer.send('extension:protected-surface:consent-cancel', { sessionId })
+    })
+    consentCancel.focus()
+    return
+  }
 
   if (authorizationOpen && authorizationClose) {
     authorizationOpen.addEventListener('click', () => {

@@ -12,6 +12,7 @@ import type { TurnItem, UserMessageSource } from '../contracts/items.js'
 import type { RuntimeErrorSeverity } from '../contracts/errors.js'
 import type { SessionStore } from '../ports/session-store.js'
 import type { ThreadStore } from '../ports/thread-store.js'
+import type { MigrationMaintenanceLock } from '../ports/migration-maintenance-lock.js'
 import type { IdGenerator } from '../ports/id-generator.js'
 import type { ModelClient } from '../ports/model-client.js'
 import type { ImmutablePrefix } from '../cache/immutable-prefix.js'
@@ -39,6 +40,7 @@ import { rewriteItemHistoryWithRetry } from './history-commit-coordinator.js'
 import { withThreadStoreMutation } from './thread-mutation-coordinator.js'
 import type { ThreadLifecycleFence } from './thread-lifecycle-fence.js'
 import { ThreadItemProjectionService } from './thread-item-projection.js'
+import { ComposerContextAttachmentSchema } from '../contracts/composer-context.js'
 
 export type TurnServiceDeps = {
   threadStore: ThreadStore
@@ -56,6 +58,7 @@ export type TurnServiceDeps = {
   maxConcurrentTurns?: number
   /** Reject turn admission while this thread is being destructively removed. */
   lifecycleFence?: ThreadLifecycleFence
+  migrationMaintenance?: MigrationMaintenanceLock
   ids: IdGenerator
   nowIso: () => string
 }
@@ -132,6 +135,9 @@ export class TurnService {
     /** Internal extension-broker accounting baseline; not part of StartTurnRequest. */
     extensionBudgetTokenBaseline?: number
   } = {}): Promise<StartTurnResponse> {
+    if (this.deps.migrationMaintenance?.isLocked()) {
+      throw new TurnConflictError('runtime migration maintenance is in progress')
+    }
     let attemptedTurnId: string | undefined
     try {
       const started = await this.withThreadMutation(input.threadId, async () => {
@@ -157,6 +163,9 @@ export class TurnService {
         }
         attemptedTurnId = turnId
         try {
+          const composerContexts = ComposerContextAttachmentSchema.array().parse(
+            input.request.composerContexts ?? []
+          )
           const turn = createTurnRecord({
             id: turnId,
             threadId: input.threadId,
@@ -166,6 +175,7 @@ export class TurnService {
             accountId: input.request.accountId,
             reasoningEffort: input.request.reasoningEffort,
             attachmentIds: input.request.attachmentIds ?? [],
+            composerContexts,
             guiPlan: input.request.guiPlan,
             guiDesignCanvas: input.request.guiDesignCanvas,
             guiDesignMode: input.request.guiDesignMode,
@@ -186,6 +196,7 @@ export class TurnService {
             displayText: input.request.displayText,
             messageSource: input.request.messageSource,
             attachmentIds: input.request.attachmentIds ?? [],
+            composerContexts,
             fileReferences: input.request.fileReferences ?? [],
             workspaceCheckpointId: input.request.workspaceCheckpointId
           })
@@ -298,19 +309,25 @@ export class TurnService {
     displayText?: string
     messageSource?: UserMessageSource
   }): Promise<void> {
-    const turn = await this.getTurn(input.threadId, input.turnId)
-    if (!turn) throw new Error(`turn not found: ${input.turnId}`)
-    if (turn.status !== 'running' || !this.inflightTurns.has(input.turnId)) {
-      throw new TurnConflictError(`turn is not active: ${input.turnId}`)
-    }
-    const accepted = this.deps.steering.enqueue(input.turnId, {
-      text: input.text,
-      ...(input.displayText ? { displayText: input.displayText } : {}),
-      ...(input.messageSource ? { messageSource: input.messageSource } : {})
+    await this.withThreadMutation(input.threadId, async () => {
+      const current = await this.deps.threadStore.get(input.threadId)
+      const turn = current?.turns.find((candidate) => candidate.id === input.turnId)
+      if (!turn) throw new Error(`turn not found: ${input.turnId}`)
+      if (turn.status !== 'running' || !this.inflightTurns.has(input.turnId)) {
+        throw new TurnConflictError(`turn is not active: ${input.turnId}`)
+      }
+      const accepted = this.deps.steering.enqueue(input.turnId, {
+        text: input.text,
+        ...(input.displayText ? { displayText: input.displayText } : {}),
+        ...(input.messageSource ? { messageSource: input.messageSource } : {})
+      })
+      if (!accepted) {
+        if (this.deps.steering.isSealed(input.turnId)) {
+          throw new TurnConflictError(`turn is no longer accepting steering: ${input.turnId}`)
+        }
+        throw new TurnConflictError(`steering queue capacity reached for active turn: ${input.turnId}`)
+      }
     })
-    if (!accepted) {
-      throw new TurnConflictError(`steering queue capacity reached for active turn: ${input.turnId}`)
-    }
     await this.deps.events.record({
       kind: 'turn_steered',
       threadId: input.threadId,
@@ -887,7 +904,14 @@ export class TurnService {
     turnId: string,
     options: { abort?: boolean } = {}
   ): void {
-    if (this.admittedTurnThreads.get(turnId) !== threadId) return
+    const admittedThreadId = this.admittedTurnThreads.get(turnId)
+    if (admittedThreadId !== threadId) {
+      // An external interrupt may already have released admission before the
+      // model loop observes the abort and seals its terminal boundary. The
+      // loop's later idempotent finish must still clear that transient seal.
+      if (admittedThreadId === undefined) this.deps.steering.clear(turnId)
+      return
+    }
     if (options.abort) this.inflightTurns.get(turnId)?.abort()
     this.inflightTurns.delete(turnId)
     this.deps.inflight.end(turnId)

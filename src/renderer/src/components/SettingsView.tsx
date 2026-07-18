@@ -34,7 +34,7 @@ import {
   applyWriteTypography
 } from '../lib/apply-theme'
 import { formatWorkspacePickerError } from '../lib/format-workspace-picker-error'
-import type { SkillRootListItem } from '@shared/kun-gui-api'
+import type { KunProjectConfigFileResult, SkillRootListItem } from '@shared/kun-gui-api'
 import { defaultConversationWorkspaceRoot, normalizeWorkspaceRoot } from '../lib/workspace-path'
 import {
   compactHomePathForSettingsDisplay,
@@ -62,9 +62,12 @@ import { GeneralSettingsSection } from './settings-section-general'
 import { ExtensionDeclarativeSettingsPane } from '../extensions/ExtensionDeclarativeSettingsPane'
 import { useExtensionSettingsService } from '../extensions/ExtensionSettingsServiceContext'
 import {
+  isExtensionContributionSnapshotReady,
+  useExtensionContributionLoadState,
   useWorkbenchContributions,
   workbenchContextForRoute
 } from '../extensions/use-contributions'
+import { useActiveExtensionWorkspaceRoot } from '../extensions/active-extension-workspace'
 
 const ProvidersSettingsSection = lazy(() =>
   import('./settings-section-providers').then((module) => ({ default: module.ProvidersSettingsSection }))
@@ -114,6 +117,9 @@ const TerminalSettingsSection = lazy(() =>
 const LlmDebugSettingsSection = lazy(() =>
   import('./settings-section-llm-debug').then((module) => ({ default: module.LlmDebugSettingsSection }))
 )
+const DataMigrationSettingsSection = lazy(() =>
+  import('./settings-section-data-migration').then((module) => ({ default: module.DataMigrationSettingsSection }))
+)
 const WriteDebugLogModal = lazy(() =>
   import('./settings-debug-log').then((module) => ({ default: module.WriteDebugLogModal }))
 )
@@ -138,14 +144,24 @@ function SettingsSectionFallback(): ReactElement {
 }
 
 type SaveStatus = 'idle' | 'saving' | 'saved' | 'error'
-type SettingsCategory = 'general' | 'providers' | 'write' | 'design' | 'mediaGeneration' | 'speechToText' | 'agents' | 'subagents' | 'archives' | 'permissions' | 'worktree' | 'memory' | 'shortcuts' | 'easterEgg' | 'claw' | 'updates' | 'debug' | 'terminal' | 'extensions'
+type SettingsCategory = 'general' | 'providers' | 'write' | 'design' | 'mediaGeneration' | 'speechToText' | 'agents' | 'subagents' | 'archives' | 'permissions' | 'worktree' | 'memory' | 'shortcuts' | 'easterEgg' | 'claw' | 'updates' | 'debug' | 'terminal' | 'extensions' | 'dataMigration'
 type SettingsPatch = AppSettingsPatch
 type InlineNotice = {
   tone: 'success' | 'error' | 'info'
   message: string
 }
+const DEFAULT_PROJECT_CONFIG_TEXT = `${JSON.stringify({
+  version: 1,
+  mcp: { servers: {} },
+  skills: {
+    enabled: true,
+    includeConventional: true,
+    roots: [],
+    disabledIds: []
+  }
+}, null, 2)}\n`
 export function SettingsView(): ReactElement {
-  const { t } = useTranslation('settings')
+  const { t, i18n } = useTranslation('settings')
   const { t: tCommon } = useTranslation('common')
   const setRoute = useChatStore((s) => s.setRoute)
   const settingsReturnRoute = useChatStore((s) => s.settingsReturnRoute)
@@ -162,6 +178,7 @@ export function SettingsView(): ReactElement {
   const threads = useChatStore((s) => s.threads)
   const runtimeConnection = useChatStore((s) => s.runtimeConnection)
   const workspaceRoot = useChatStore((s) => s.workspaceRoot)
+  const extensionWorkspaceRoot = useActiveExtensionWorkspaceRoot()
   const refreshThreads = useChatStore((s) => s.refreshThreads)
   const selectThread = useChatStore((s) => s.selectThread)
   const archiveThread = useChatStore((s) => s.archiveThread)
@@ -190,6 +207,11 @@ export function SettingsView(): ReactElement {
   const [mcpLoaded, setMcpLoaded] = useState(false)
   const [mcpBusy, setMcpBusy] = useState(false)
   const [mcpNotice, setMcpNotice] = useState<InlineNotice | null>(null)
+  const [projectConfig, setProjectConfig] = useState<KunProjectConfigFileResult | null>(null)
+  const [projectConfigText, setProjectConfigText] = useState(DEFAULT_PROJECT_CONFIG_TEXT)
+  const [projectConfigLoading, setProjectConfigLoading] = useState(false)
+  const [projectConfigBusy, setProjectConfigBusy] = useState(false)
+  const [projectConfigNotice, setProjectConfigNotice] = useState<InlineNotice | null>(null)
   const [runtimeInfo, setRuntimeInfo] = useState<CoreRuntimeInfoJson | null>(null)
   const [toolDiagnostics, setToolDiagnostics] = useState<CoreRuntimeToolDiagnosticsJson | null>(null)
   const [memoryRecords, setMemoryRecords] = useState<CoreMemoryRecordJson[]>([])
@@ -204,12 +226,19 @@ export function SettingsView(): ReactElement {
   const [writeDebugError, setWriteDebugError] = useState<string | null>(null)
   const extensionSettingsService = useExtensionSettingsService()
   const extensionSettingsContext = useMemo(
-    () => workbenchContextForRoute('settings', workspaceRoot),
-    [workspaceRoot]
+    () => workbenchContextForRoute('settings', extensionWorkspaceRoot),
+    [extensionWorkspaceRoot]
+  )
+  const extensionContributionLoadState = useExtensionContributionLoadState()
+  const extensionContributionSnapshotReady = isExtensionContributionSnapshotReady(
+    extensionContributionLoadState,
+    extensionWorkspaceRoot,
+    i18n.language
   )
   const extensionSettingsContributions = useWorkbenchContributions(
     'settings',
-    extensionSettingsContext
+    extensionSettingsContext,
+    extensionContributionSnapshotReady
   )
   const extensionSettingsAvailable = extensionSettingsService !== null &&
     extensionSettingsContributions.length > 0
@@ -247,6 +276,14 @@ export function SettingsView(): ReactElement {
     compactHomePathListForSettingsDisplay(values, settingsHomeDir, settingsPlatform), [settingsHomeDir, settingsPlatform])
   const expandHomePathList = useCallback((values: readonly string[]): string[] =>
     expandHomePathListForSettingsUse(values, settingsHomeDir, settingsPlatform), [settingsHomeDir, settingsPlatform])
+  const activeProjectWorkspaceRoot = useMemo(
+    () => expandHomePath(workspaceRoot || form?.workspaceRoot || ''),
+    [expandHomePath, form?.workspaceRoot, workspaceRoot]
+  )
+  const projectConfigGrantFingerprint = useMemo(
+    () => JSON.stringify(formKun?.projectConfig.grants ?? []),
+    [formKun?.projectConfig.grants]
+  )
   const {
     checkingGuiUpdate,
     checkGuiUpdate,
@@ -267,8 +304,12 @@ export function SettingsView(): ReactElement {
   })
 
   useEffect(() => {
-    if (category === 'extensions' && !extensionSettingsAvailable) setCategory('general')
-  }, [category, extensionSettingsAvailable])
+    if (
+      category === 'extensions' &&
+      extensionContributionSnapshotReady &&
+      !extensionSettingsAvailable
+    ) setCategory('general')
+  }, [category, extensionContributionSnapshotReady, extensionSettingsAvailable])
 
   useEffect(() => {
     let cancelled = false
@@ -425,6 +466,10 @@ export function SettingsView(): ReactElement {
       setCategory('terminal')
       return
     }
+    if (settingsSection === 'dataMigration') {
+      setCategory('dataMigration')
+      return
+    }
     setCategory('agents')
   }, [settingsSection])
 
@@ -445,13 +490,14 @@ export function SettingsView(): ReactElement {
       settingsSection === 'easterEgg' ||
       settingsSection === 'updates' ||
       settingsSection === 'terminal' ||
+      settingsSection === 'dataMigration' ||
       category !== 'agents'
     ) {
       return
     }
     if (!agentsSectionReady) return
     const refs: Record<
-      Exclude<SettingsRouteSection, 'general' | 'providers' | 'write' | 'design' | 'imageGeneration' | 'mediaGeneration' | 'speechToText' | 'subagents' | 'archives' | 'claw' | 'shortcuts' | 'easterEgg' | 'updates' | 'terminal'>,
+      Exclude<SettingsRouteSection, 'general' | 'providers' | 'write' | 'design' | 'imageGeneration' | 'mediaGeneration' | 'speechToText' | 'subagents' | 'archives' | 'claw' | 'shortcuts' | 'easterEgg' | 'updates' | 'terminal' | 'dataMigration'>,
       HTMLDivElement | null
     > = {
       agents: agentsSectionRef.current,
@@ -582,6 +628,105 @@ export function SettingsView(): ReactElement {
     const result = await window.kunGui.openKunConfigDir()
     if (!result.ok) {
       setMcpNotice({ tone: 'error', message: result.message ?? t('applyFailed') })
+    }
+  }
+
+  const loadProjectConfig = useCallback(async (): Promise<void> => {
+    if (!activeProjectWorkspaceRoot || typeof window.kunGui?.getKunProjectConfigFile !== 'function') {
+      setProjectConfig(null)
+      setProjectConfigText(DEFAULT_PROJECT_CONFIG_TEXT)
+      return
+    }
+    setProjectConfigLoading(true)
+    setProjectConfigNotice(null)
+    try {
+      const result = await window.kunGui.getKunProjectConfigFile(activeProjectWorkspaceRoot)
+      setProjectConfig(result)
+      setProjectConfigText(result.exists ? result.content : DEFAULT_PROJECT_CONFIG_TEXT)
+    } catch (error) {
+      setProjectConfigNotice({
+        tone: 'error',
+        message: error instanceof Error ? error.message : String(error)
+      })
+    } finally {
+      setProjectConfigLoading(false)
+    }
+  }, [activeProjectWorkspaceRoot])
+
+  useEffect(() => {
+    if (category !== 'agents') return
+    void loadProjectConfig()
+  }, [category, loadProjectConfig, projectConfigGrantFingerprint])
+
+  const saveProjectConfig = async (): Promise<void> => {
+    if (!activeProjectWorkspaceRoot || typeof window.kunGui?.setKunProjectConfigFile !== 'function') return
+    setProjectConfigBusy(true)
+    setProjectConfigNotice(null)
+    try {
+      const result = await window.kunGui.setKunProjectConfigFile(
+        activeProjectWorkspaceRoot,
+        projectConfigText
+      )
+      setProjectConfig(result)
+      setProjectConfigText(result.content)
+      setProjectConfigNotice({
+        tone: 'success',
+        message: result.trust === 'stale'
+          ? t('projectConfigSavedStale')
+          : t('projectConfigSaved', { path: compactHomePath(result.path) })
+      })
+    } catch (error) {
+      setProjectConfigNotice({
+        tone: 'error',
+        message: error instanceof Error ? error.message : String(error)
+      })
+    } finally {
+      setProjectConfigBusy(false)
+    }
+  }
+
+  const syncSettingsAfterProjectTrust = async (): Promise<void> => {
+    const saved = coerceRendererSettings(await rendererRuntimeClient.getSettings({ forceRefresh: true }))
+    persistedSettingsRef.current = saved
+    setForm(saved)
+    emitRendererSettingsChanged(saved)
+    void reloadUiSettings()
+  }
+
+  const setProjectConfigTrust = async (trusted: boolean): Promise<void> => {
+    if (!activeProjectWorkspaceRoot || typeof window.kunGui?.setKunProjectConfigTrust !== 'function') return
+    if (trusted && projectConfig?.status !== 'valid') return
+    setProjectConfigBusy(true)
+    setProjectConfigNotice(null)
+    try {
+      const result = await window.kunGui.setKunProjectConfigTrust(
+        activeProjectWorkspaceRoot,
+        trusted,
+        trusted ? projectConfig?.digest : undefined
+      )
+      setProjectConfig(result)
+      setProjectConfigText(result.exists ? result.content : DEFAULT_PROJECT_CONFIG_TEXT)
+      if (trusted ? result.trust !== 'trusted' : result.trust !== 'untrusted') return
+      await syncSettingsAfterProjectTrust()
+      setProjectConfigNotice({
+        tone: 'success',
+        message: trusted ? t('projectConfigApproved') : t('projectConfigRevoked')
+      })
+    } catch (error) {
+      setProjectConfigNotice({
+        tone: 'error',
+        message: error instanceof Error ? error.message : String(error)
+      })
+    } finally {
+      setProjectConfigBusy(false)
+    }
+  }
+
+  const openProjectConfigDir = async (): Promise<void> => {
+    if (!activeProjectWorkspaceRoot || typeof window.kunGui?.openKunProjectConfigDir !== 'function') return
+    const result = await window.kunGui.openKunProjectConfigDir(activeProjectWorkspaceRoot)
+    if (!result.ok) {
+      setProjectConfigNotice({ tone: 'error', message: result.message ?? t('applyFailed') })
     }
   }
 
@@ -1155,6 +1300,17 @@ export function SettingsView(): ReactElement {
     saveMcpConfig,
     loadMcpConfig,
     openMcpConfigDir,
+    activeProjectWorkspaceRoot,
+    projectConfig,
+    projectConfigText,
+    setProjectConfigText,
+    projectConfigLoading,
+    projectConfigBusy,
+    projectConfigNotice,
+    loadProjectConfig,
+    saveProjectConfig,
+    setProjectConfigTrust,
+    openProjectConfigDir,
     runtimeInfo,
     toolDiagnostics,
     memoryRecords,
@@ -1184,7 +1340,7 @@ export function SettingsView(): ReactElement {
   }
 
   return (
-    <div className="ds-drag flex h-full min-h-0 w-full min-w-0 bg-ds-main">
+    <div className="ds-settings-surface ds-drag flex h-full min-h-0 w-full min-w-0 bg-ds-main">
       <SettingsSidebar
         category={category}
         setCategory={setCategory}
@@ -1193,9 +1349,10 @@ export function SettingsView(): ReactElement {
         t={t}
       />
 
-      <div className="ds-no-drag min-h-0 min-w-0 flex-1 overflow-y-auto px-10 py-10">
-        <div className="mx-auto max-w-3xl">
-          {category !== 'extensions' && !activeApiKey.trim() ? (
+      <div className="ds-settings-stage relative min-h-0 min-w-0 flex-1 overflow-hidden">
+        <div className="ds-no-drag h-full min-h-0 overflow-y-auto px-10 py-10">
+          <div className="mx-auto max-w-3xl">
+          {category !== 'extensions' && category !== 'dataMigration' && !activeApiKey.trim() ? (
             <div className="mb-6 rounded-2xl border border-amber-300/80 bg-amber-50/95 px-5 py-4 text-amber-950 shadow-sm dark:border-amber-700/60 dark:bg-amber-950/35 dark:text-amber-100">
               <div className="text-[15px] font-semibold">{t('apiKeyRequiredTitle')}</div>
               <p className="mt-1 text-[13px] leading-6 text-amber-900/90 dark:text-amber-100/90">
@@ -1209,7 +1366,7 @@ export function SettingsView(): ReactElement {
               <h1 className="text-2xl font-semibold tracking-tight text-ds-ink">{t('title')}</h1>
               <p className="mt-1 text-[14px] text-ds-muted">{t('subtitle')}</p>
             </div>
-            {category !== 'extensions' ? <span
+            {category !== 'extensions' && category !== 'dataMigration' ? <span
               title={saveStatus === 'error' && saveError ? saveError : undefined}
               className={`shrink-0 rounded-full px-3 py-1 text-[12px] font-medium ${
                 portError
@@ -1233,7 +1390,7 @@ export function SettingsView(): ReactElement {
             </span> : null}
           </div>
 
-          {category !== 'extensions' && saveStatus === 'error' && saveError ? (
+          {category !== 'extensions' && category !== 'dataMigration' && saveStatus === 'error' && saveError ? (
             <div
               role="alert"
               className="mb-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-[13px] leading-5 text-red-800 shadow-sm dark:border-red-500/25 dark:bg-red-500/10 dark:text-red-200"
@@ -1246,7 +1403,7 @@ export function SettingsView(): ReactElement {
           {category === 'extensions' && extensionSettingsService ? (
             <ExtensionDeclarativeSettingsPane
               contributions={extensionSettingsContributions}
-              workspaceRoot={workspaceRoot}
+              workspaceRoot={extensionWorkspaceRoot}
               service={extensionSettingsService}
             />
           ) : null}
@@ -1269,10 +1426,12 @@ export function SettingsView(): ReactElement {
             {category === 'updates' ? <UpdatesSettingsSection ctx={settingsSectionContext} /> : null}
             {category === 'terminal' ? <TerminalSettingsSection ctx={settingsSectionContext} /> : null}
             {category === 'debug' ? <LlmDebugSettingsSection ctx={settingsSectionContext} /> : null}
+            {category === 'dataMigration' ? <DataMigrationSettingsSection /> : null}
           </Suspense>
+          </div>
         </div>
       </div>
-      {category !== 'extensions' && saveStatus === 'error' && saveError ? (
+      {category !== 'extensions' && category !== 'dataMigration' && saveStatus === 'error' && saveError ? (
         <div
           role="alert"
           className="ds-no-drag fixed bottom-6 right-8 z-30 flex max-w-[min(560px,calc(100vw-3rem))] items-center gap-3 rounded-2xl border border-red-300/70 bg-red-50/95 px-4 py-3 text-red-900 shadow-2xl shadow-red-950/10 backdrop-blur dark:border-red-500/30 dark:bg-red-950/90 dark:text-red-100"

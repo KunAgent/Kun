@@ -4,6 +4,7 @@ import type { EditorInfo } from '@shared/editor'
 import type { GuiUpdateState } from '@shared/gui-update'
 import {
   ArrowUpCircle,
+  Blocks,
   Bot,
   Check,
   Code2,
@@ -15,8 +16,10 @@ import {
   FolderOpen,
   Globe2,
   ListTodo,
+  LockKeyhole,
   Loader2,
   MessageCircleMore,
+  PanelRight,
   Puzzle,
   RefreshCw,
   Shapes,
@@ -25,10 +28,12 @@ import {
 import { useTranslation } from 'react-i18next'
 import { readPreferredEditorId, writePreferredEditorId } from '../../lib/editor-preferences'
 import {
-  extensionResourceUrl,
-  type RegisteredContribution
+  extensionHostIconUrl,
+  type ExtensionRightRailViewEntry
 } from '../../extensions/contribution-registry'
-import type { ExtensionRightContainerTarget } from '../../extensions/ExtensionWorkbenchSurfaces'
+import {
+  type ExtensionRightContainerTarget
+} from '../../extensions/ExtensionWorkbenchSurfaces'
 import {
   BUILTIN_RIGHT_PANEL_IDS,
   type RightPanelMode
@@ -50,13 +55,16 @@ type Props = {
   fileTreeEnabled?: boolean
   onToggleFileTree?: () => void
   onOpenSideChat?: () => void
-  extensionItems?: readonly RegisteredContribution<'views.rightSidebar'>[]
+  extensionItems?: readonly ExtensionRightRailViewEntry[]
   extensionContainers?: readonly ExtensionRightContainerTarget[]
+  onSelectExtension?: (entry: ExtensionRightRailViewEntry) => void
 }
 
 type WorkbenchTopActionsProps = {
   terminalOpen?: boolean
   onToggleTerminal?: () => void
+  rightWorkspaceExpanded?: boolean
+  onToggleRightWorkspace?: () => void
 }
 
 const TOPBAR_ICON_CLASS = 'h-4 w-4'
@@ -78,7 +86,9 @@ function topbarActionButtonClass(active: boolean, extra?: string): string {
 
 export function WorkbenchTopActions({
   terminalOpen = false,
-  onToggleTerminal
+  onToggleTerminal,
+  rightWorkspaceExpanded = false,
+  onToggleRightWorkspace
 }: WorkbenchTopActionsProps): ReactElement {
   const { t } = useTranslation(['common', 'settings'])
   const [editors, setEditors] = useState<EditorInfo[]>([])
@@ -353,6 +363,19 @@ export function WorkbenchTopActions({
           <Terminal className={TOPBAR_ICON_CLASS} strokeWidth={1.75} />
         </button>
       ) : null}
+
+      {onToggleRightWorkspace ? (
+        <button
+          type="button"
+          onClick={onToggleRightWorkspace}
+          className={topbarActionButtonClass(rightWorkspaceExpanded)}
+          data-tooltip={t('rightPanelWorkspaceToggle')}
+          aria-label={t('rightPanelWorkspaceToggle')}
+          aria-pressed={rightWorkspaceExpanded}
+        >
+          <PanelRight className={TOPBAR_ICON_CLASS} strokeWidth={1.75} />
+        </button>
+      ) : null}
     </div>
   )
 }
@@ -371,7 +394,8 @@ export function WorkbenchSideRail({
   onToggleFileTree,
   onOpenSideChat,
   extensionItems = [],
-  extensionContainers = []
+  extensionContainers = [],
+  onSelectExtension
 }: Props): ReactElement {
   const { t } = useTranslation(['common', 'settings'])
   const items = [
@@ -380,7 +404,8 @@ export function WorkbenchSideRail({
     { mode: BUILTIN_RIGHT_PANEL_IDS.changes, label: t('rightPanelChanges'), icon: FileEdit },
     { mode: BUILTIN_RIGHT_PANEL_IDS.browser, label: t('rightPanelBrowser'), icon: Globe2 },
     ...(canvasEnabled ? [{ mode: BUILTIN_RIGHT_PANEL_IDS.canvas, label: t('rightPanelWhiteboard'), icon: Shapes }] : []),
-    { mode: BUILTIN_RIGHT_PANEL_IDS.subagents, label: t('rightPanelSubagents'), icon: Bot }
+    { mode: BUILTIN_RIGHT_PANEL_IDS.subagents, label: t('rightPanelSubagents'), icon: Bot },
+    { mode: BUILTIN_RIGHT_PANEL_IDS.mcpSkills, label: t('rightPanelMcpSkills'), icon: Blocks }
   ]
 
   return (
@@ -429,21 +454,27 @@ export function WorkbenchSideRail({
         if (container.owner.kind !== 'extension') return null
         const active = rightPanelMode === target.id
         const icon = container.payload.icon
-        const label = boundedPlainText(container.payload.title, 128)
+        const title = boundedPlainText(container.payload.title, 128)
+        const label = target.workspaceTrusted
+          ? title
+          : t('extensionRailAuthorize', { title })
         return (
           <button
             key={container.id}
             type="button"
-            onClick={() => onToggleRightPanelMode(target.id as Exclude<RightPanelMode, null>)}
-            className={sideRailButtonClass(active)}
+            onClick={() => onSelectExtension
+              ? onSelectExtension(target)
+              : onToggleRightPanelMode(target.id as Exclude<RightPanelMode, null>)}
+            className={sideRailButtonClass(active, 'relative')}
             data-tooltip={label}
             aria-label={label}
             aria-pressed={active}
             data-contribution-id={container.id}
+            data-extension-trusted={String(target.workspaceTrusted)}
           >
             {icon ? (
               <img
-                src={extensionResourceUrl(container.owner.extensionId, icon)}
+                src={extensionHostIconUrl(container.owner.extensionId, icon)}
                 alt=""
                 aria-hidden="true"
                 className={TOPBAR_ICON_CLASS}
@@ -451,29 +482,41 @@ export function WorkbenchSideRail({
             ) : (
               <Puzzle className={TOPBAR_ICON_CLASS} strokeWidth={1.75} />
             )}
+            {!target.workspaceTrusted ? (
+              <span className="absolute -bottom-1 -left-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-amber-500 text-white shadow-sm" aria-hidden>
+                <LockKeyhole className="h-2.5 w-2.5" strokeWidth={2.25} />
+              </span>
+            ) : null}
           </button>
         )
       })}
 
       {extensionItems.map((item) => {
         if (item.owner.kind !== 'extension') return null
+        if (extensionContainers.some(({ target }) => target.id === item.id)) return null
         const active = rightPanelMode === item.id
         const icon = item.payload.icon
-        const label = boundedPlainText(item.payload.title, 128)
+        const title = boundedPlainText(item.payload.title, 128)
+        const label = item.workspaceTrusted
+          ? title
+          : t('extensionRailAuthorize', { title })
         return (
           <button
             key={item.id}
             type="button"
-            onClick={() => onToggleRightPanelMode(item.id as Exclude<RightPanelMode, null>)}
-            className={sideRailButtonClass(active)}
+            onClick={() => onSelectExtension
+              ? onSelectExtension(item)
+              : onToggleRightPanelMode(item.id as Exclude<RightPanelMode, null>)}
+            className={sideRailButtonClass(active, 'relative')}
             data-tooltip={label}
             aria-label={label}
             aria-pressed={active}
             data-contribution-id={item.id}
+            data-extension-trusted={String(item.workspaceTrusted)}
           >
             {icon ? (
               <img
-                src={extensionResourceUrl(item.owner.extensionId, icon)}
+                src={extensionHostIconUrl(item.owner.extensionId, icon)}
                 alt=""
                 aria-hidden="true"
                 className={TOPBAR_ICON_CLASS}
@@ -481,6 +524,11 @@ export function WorkbenchSideRail({
             ) : (
               <Puzzle className={TOPBAR_ICON_CLASS} strokeWidth={1.75} />
             )}
+            {!item.workspaceTrusted ? (
+              <span className="absolute -bottom-1 -left-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-amber-500 text-white shadow-sm" aria-hidden>
+                <LockKeyhole className="h-2.5 w-2.5" strokeWidth={2.25} />
+              </span>
+            ) : null}
           </button>
         )
       })}
@@ -498,6 +546,7 @@ export function WorkbenchSideRail({
           <Folders className={TOPBAR_ICON_CLASS} strokeWidth={1.75} />
         </button>
       ) : null}
+
     </div>
   )
 }

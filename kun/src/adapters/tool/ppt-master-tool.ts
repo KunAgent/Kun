@@ -19,6 +19,7 @@ const MAX_GUIDE_BYTES = 512 * 1024
 const MAX_GUIDE_OUTPUT_BYTES = 24_000
 const DEFAULT_GUIDE_LINES = 180
 const MAX_GUIDE_LINES = 400
+const PPTX_MIME_TYPE = 'application/vnd.openxmlformats-officedocument.presentationml.presentation'
 const MANAGED_SKILL_DIR = join(homedir(), '.kun', 'skills', 'ppt-master')
 const INSTALL_METADATA_FILE = '.kun-ppt-master.json'
 const MANAGED_BY = 'kun-gui'
@@ -322,6 +323,15 @@ export function createPptMasterRunTool(
           isError: true
         }
       }
+      const generatedPresentation =
+        result.exitCode === 0 && action === 'export' && command.outputPath && command.outputRelativePath
+          ? {
+              name: basename(command.outputPath),
+              relativePath: command.outputRelativePath,
+              mimeType: PPTX_MIME_TYPE,
+              byteSize: (await stat(command.outputPath)).size
+            }
+          : undefined
       return result.exitCode === 0
         ? {
             output: {
@@ -330,6 +340,7 @@ export function createPptMasterRunTool(
                 ? { project_path: createdProjectPath }
                 : command.projectPath ? { project_path: command.projectPath } : {}),
               ...(command.outputPath ? { output_path: command.outputPath } : {}),
+              ...(generatedPresentation ? { generatedFiles: [generatedPresentation] } : {}),
               output: result.output
             }
           }
@@ -354,6 +365,7 @@ async function commandForAction(
   args: string[]
   projectPath?: string
   outputPath?: string
+  outputRelativePath?: string
   temporaryOutputPath?: string
 } | { error: string }> {
   const script = (name: string): string => join(skillDir, 'scripts', name)
@@ -425,6 +437,7 @@ async function commandForAction(
     args: [script('svg_to_pptx.py'), project.absolutePath, '--output', temporaryOutputPath, '--quiet'],
     projectPath: project.absolutePath,
     outputPath: output.absolutePath,
+    outputRelativePath: output.relativePath,
     temporaryOutputPath
   }
 }

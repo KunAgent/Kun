@@ -1,6 +1,6 @@
 {
   "name": "@kun/extension-react",
-  "version": "1.0.0",
+  "version": "1.2.0",
   "description": "Official React bindings for Kun extension Webviews",
   "type": "module",
   "sideEffects": false,
@@ -25,13 +25,13 @@
     "prepack": "npm run build"
   },
   "dependencies": {
-    "@kun/extension-api": "1.0.0"
+    "@kun/extension-api": "1.2.0"
   },
   "peerDependencies": {
     "react": ">=18 <20"
   },
   "devDependencies": {
-    "@kun/extension-test": "1.0.0",
+    "@kun/extension-test": "1.2.0",
     "@types/react": "^19.0.10",
     "react": "^19.0.0",
     "react-test-renderer": "19.0.0",

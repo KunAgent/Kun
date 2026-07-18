@@ -3,7 +3,6 @@ import { ChevronLeft, ChevronRight, Loader2, Minus, Plus, Search } from 'lucide-
 import { useTranslation } from 'react-i18next'
 import {
   GlobalWorkerOptions,
-  TextLayer,
   getDocument,
   type PDFDocumentProxy,
   type PDFPageProxy,
@@ -15,6 +14,11 @@ import type {
   WriteSelectionAnchorRect,
   WriteSelectionPageRect
 } from './WriteMarkdownEditor'
+import { viewportRectToPageLocalRect } from './write-pdf-selection-geometry'
+import {
+  applyPdfTextLayerScale,
+  startPdfTextLayerRenderWithoutUiZoom
+} from './write-pdf-text-layer'
 
 GlobalWorkerOptions.workerSrc = pdfWorkerUrl
 
@@ -128,7 +132,11 @@ function collectRangeTextRects(range: Range): DOMRect[] {
   while (node && rects.length < MAX_SELECTION_FRAGMENT_RECTS) {
     if (range.comparePoint(node, 0) > 0) break
     const text = node as Text
-    if (text.data.trim() && range.intersectsNode(text)) {
+    if (
+      text.data.trim() &&
+      text.parentElement?.closest('.write-pdf-text-layer') &&
+      range.intersectsNode(text)
+    ) {
       probe.selectNodeContents(text)
       if (text === range.startContainer) probe.setStart(text, range.startOffset)
       if (text === range.endContainer) probe.setEnd(text, range.endOffset)
@@ -192,11 +200,19 @@ function mergeRectsIntoLineBars(rects: DOMRect[]): ViewportRect[] {
 }
 
 function pageRectsFromViewportRects(root: HTMLElement, rects: ViewportRect[]): WriteSelectionPageRect[] {
-  const pages = Array.from(root.querySelectorAll<HTMLElement>('[data-write-pdf-page]')).map((element) => ({
-    element,
-    page: Number(element.dataset.writePdfPage ?? ''),
-    rect: element.getBoundingClientRect()
-  })).filter((page) => Number.isFinite(page.page) && page.page > 0)
+  const pages = Array.from(root.querySelectorAll<HTMLElement>('[data-write-pdf-page]')).map((element) => {
+    const rect = element.getBoundingClientRect()
+    const styleWidth = Number.parseFloat(element.style.width)
+    const styleHeight = Number.parseFloat(element.style.height)
+    return {
+      page: Number(element.dataset.writePdfPage ?? ''),
+      rect,
+      localSize: {
+        width: styleWidth > 0 ? styleWidth : element.offsetWidth || rect.width,
+        height: styleHeight > 0 ? styleHeight : element.offsetHeight || rect.height
+      }
+    }
+  }).filter((page) => Number.isFinite(page.page) && page.page > 0)
   const out: WriteSelectionPageRect[] = []
 
   for (const rect of rects) {
@@ -207,12 +223,14 @@ function pageRectsFromViewportRects(root: HTMLElement, rects: ViewportRect[]): W
     const top = Math.max(rect.top, page.rect.top)
     const bottom = Math.min(rect.bottom, page.rect.bottom)
     if (right <= left || bottom <= top) continue
+    const localRect = viewportRectToPageLocalRect(
+      { left, right, top, bottom },
+      page.rect,
+      page.localSize
+    )
     out.push({
       page: page.page,
-      x: left - page.rect.left,
-      y: top - page.rect.top,
-      width: right - left,
-      height: bottom - top
+      ...localRect
     })
   }
   return out
@@ -299,17 +317,18 @@ function WritePdfPage({
   onPageText: (page: PageText) => void
 }): ReactElement {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
-  const textLayerRef = useRef<HTMLDivElement | null>(null)
+  const textLayerHostRef = useRef<HTMLDivElement | null>(null)
   const [pageSize, setPageSize] = useState<{ width: number; height: number } | null>(null)
 
   useEffect(() => {
     let cancelled = false
     let renderTask: { cancel: () => void; promise: Promise<unknown> } | null = null
+    let textLayerBuilder: { cancel: () => void } | null = null
 
     const renderPage = async (): Promise<void> => {
       const canvas = canvasRef.current
-      const textLayer = textLayerRef.current
-      if (!canvas || !textLayer) return
+      const textLayerHost = textLayerHostRef.current
+      if (!canvas || !textLayerHost) return
       const page: PDFPageProxy = await document.getPage(pageNumber)
       if (cancelled) return
       const viewport = page.getViewport({ scale })
@@ -328,20 +347,27 @@ function WritePdfPage({
       await task.promise
       if (cancelled) return
 
-      textLayer.replaceChildren()
+      textLayerHost.replaceChildren()
       const textContent = await page.getTextContent()
-      const textLayerRenderer = new TextLayer({
-        textContentSource: textContent,
-        container: textLayer,
-        viewport
-      })
-      await textLayerRenderer.render()
-      if (!cancelled) {
-        // Whitespace-only spans are often stretched to absurd widths by the
-        // text layer; flag them so native selection skips painting them.
-        for (const span of Array.from(textLayer.querySelectorAll<HTMLElement>('span'))) {
-          if (!(span.textContent ?? '').trim()) span.classList.add('write-pdf-text-ws')
+      if (cancelled) return
+      // pdf_viewer.mjs reads the namespace that build/pdf.mjs installs on
+      // globalThis, so load the builder only after the core module is active.
+      const { TextLayerBuilder } = await import('pdfjs-dist/web/pdf_viewer.mjs')
+      if (cancelled) return
+      const builder = new TextLayerBuilder({
+        pdfPage: page,
+        onAppend: (div) => {
+          if (!cancelled) textLayerHost.replaceChildren(div)
         }
+      })
+      textLayerBuilder = builder
+      builder.div.classList.add('write-pdf-text-layer')
+      applyPdfTextLayerScale(builder.div.style, viewport)
+      const textLayerRender = startPdfTextLayerRenderWithoutUiZoom(
+        () => builder.render({ viewport })
+      )
+      await textLayerRender
+      if (!cancelled) {
         const text = textContent.items
           .map((item: TextContentItem) => (typeof item.str === 'string' ? item.str : ''))
           .filter(Boolean)
@@ -356,6 +382,7 @@ function WritePdfPage({
     return () => {
       cancelled = true
       renderTask?.cancel()
+      textLayerBuilder?.cancel()
     }
   }, [document, onPageText, pageNumber, scale])
 
@@ -371,7 +398,7 @@ function WritePdfPage({
       }}
     >
       <canvas ref={canvasRef} className="write-pdf-canvas" />
-      <div ref={textLayerRef} className="write-pdf-text-layer textLayer" />
+      <div ref={textLayerHostRef} className="write-pdf-text-layer-host" />
       <div className="write-pdf-overlay-layer" aria-hidden="true">
         {selectionRects.map((rect, index) => (
           <span
@@ -415,10 +442,8 @@ export function WritePdfViewer({
   const [searchIndex, setSearchIndex] = useState(0)
   const [pageTexts, setPageTexts] = useState<PageText[]>([])
   const [committedSelectionRects, setCommittedSelectionRects] = useState<WriteSelectionPageRect[]>([])
-  // While the native selection is visible we keep the committed overlay
-  // hidden; it only takes over once focus moves away (e.g. into the assist
-  // popup) and the browser drops the native highlight.
-  const [liveSelection, setLiveSelection] = useState(false)
+  // Precise fragment rects are shown while dragging and kept after focus moves
+  // into the assist popup, while the DOM Selection remains the text source.
   const pageCount = pdfDocument?.numPages ?? 0
   const rootRef = viewerRef ?? localViewerRef
 
@@ -463,7 +488,6 @@ export function WritePdfViewer({
 
   useEffect(() => {
     setCommittedSelectionRects([])
-    setLiveSelection(false)
     onSelectionChange(emptyPdfSelection())
   }, [onSelectionChange, scale])
 
@@ -554,10 +578,8 @@ export function WritePdfViewer({
     onSelectionChange(next)
     if (next.text.trim()) {
       setCommittedSelectionRects(next.rects ?? [])
-      setLiveSelection(true)
     } else {
       setCommittedSelectionRects([])
-      setLiveSelection(false)
     }
   }, [onSelectionChange, rootRef])
 
@@ -577,18 +599,16 @@ export function WritePdfViewer({
       const selection = window.getSelection()
       if (!root) return
       if (!selection || selection.rangeCount === 0) {
-        setLiveSelection(false)
         return
       }
       const anchorInside = selection.anchorNode ? root.contains(selection.anchorNode) : false
       const focusInside = selection.focusNode ? root.contains(selection.focusNode) : false
       if (anchorInside || focusInside) {
         syncSelectionSoon()
-      } else {
-        // Selection moved elsewhere (e.g. into the assist popup input): keep
-        // the committed snapshot and let the overlay take over the highlight.
-        setLiveSelection(false)
+        return
       }
+      // If selection moved elsewhere (e.g. into the assist popup input), keep
+      // the committed snapshot visible in the overlay.
     }
     window.document.addEventListener('selectionchange', handleSelectionChange)
     return () => {
@@ -611,7 +631,6 @@ export function WritePdfViewer({
 
   const beginPdfSelection = useCallback((): void => {
     setCommittedSelectionRects([])
-    setLiveSelection(false)
     onSelectionChange(emptyPdfSelection())
   }, [onSelectionChange])
 
@@ -619,7 +638,6 @@ export function WritePdfViewer({
     <div
       ref={rootRef}
       className="write-pdf-viewer flex h-full min-h-0 min-w-0 flex-col"
-      data-live-selection={liveSelection ? '' : undefined}
     >
       <div className="write-pdf-toolbar shrink-0 border-b border-ds-border-muted bg-white/88 px-3 py-2 dark:bg-ds-card/95">
         <div className="flex min-w-0 flex-wrap items-center gap-2">
@@ -760,7 +778,7 @@ export function WritePdfViewer({
                   selectionRects={committedRectsByPage.get(pageNumber) ?? []}
                   onPageText={updatePageText}
                 />
-                <div className="mt-1 text-center text-[11px] text-ds-faint">
+                <div className="mt-1 select-none text-center text-[11px] text-ds-faint">
                   {t('writePdfPageLabel', { page: pageNumber })}
                 </div>
               </div>

@@ -31,6 +31,8 @@
 
 PR 检查必须在三种原生 runner 上完成上述 smoke，且只验证、上传临时 artifact，不创建 Release。最后一个 smoke 成功后才可运行 `npm run evidence:extension-native`；生成的三平台 JSON 证据必须绑定完整 commit、GitHub run/attempt、规范 artifact、bytes 和 SHA-256，并随 artifact 上传。证据生成对缺失、多余、错误架构、目录和 symlink fail closed。macOS PR 使用不含发布秘密的 ad-hoc 签名；正式发布记录仍必须来自 Developer ID 签名、公证和 stapled ticket 均通过的受保护工作流。
 
+可下载的 `kun-video-editor-*.kunx` 必须先于 Linux 原生 lifecycle smoke 打包，并把这个精确的普通文件依次用于 validate、install、activation、render、uninstall，且上传前复核 SHA-256 未变化；stable 与 daily publish 下载后还会再次校验该 archive。手工发布在任何构建前要求 tracked 与 untracked 工作区均干净。Windows 发布会 fetch 远端 tag，并要求它与本地 `HEAD` 指向同一 commit；将 draft 公开或把 R2 `latest` 推广前，还会下载该 tag 的完整 Release assets，统一校验三份 evidence JSON、六个原生安装包、唯一版本/commit、每个 size/SHA-256、所需 FFmpeg 能力和唯一 `.kunx`。所有以 `Kun-` 命名的 Release asset 必须命中六个 final artifact 或同版本 canonical blockmap allowlist，其他扩展名、架构、大小写或版本全部拒绝。因此缺少 Linux evidence 时，`--publish`/`-Publish` 与 `--r2-promote`/`-PromoteR2` 都必须失败；R2 推广还显式要求 mac、win、linux 三份 manifest，不能生成缺平台的 `latest`。macOS 单平台脚本的 `--r2` 只上传 metadata，并拒绝推广；推广必须由三平台校验后的 Windows 路径执行。手工发布清理会删除旧 evidence 和 `.kunx`，因为 evidence 生成刻意使用 create-only 语义。
+
 #### 发布证据记录
 
 | 证据 | 状态（Pass/Blocked/N/A） | Commit、CI run、artifact 或报告链接 | Reviewer/日期 |
@@ -194,10 +196,87 @@ Changelog 记录公开 Extension API，而不是 Kun 内部重构。每项包含
 下面的 public surface 快照由文档门禁从 package 入口、公开 export 和可达 `.d.ts` 计算。只有在本节已经解释兼容性影响后才更新快照；不能把更新 hash 当成 Changelog 条目。
 
 <!-- BEGIN GENERATED SDK PUBLIC SURFACE SNAPSHOTS -->
-<!-- sdk-surface-snapshot @kun/extension-api@1.0.0 sha256:f0d5ab4b66bce2be3c094f18bdb342ef66d097b057f954ef35a9dbb840567006 -->
-<!-- sdk-surface-snapshot @kun/extension-react@1.0.0 sha256:e2099a64dc22c05056dca0c599bafdfb22702b6d57e9b60edd2154b165323322 -->
-<!-- sdk-surface-snapshot @kun/extension-test@1.0.0 sha256:6a8a22ddd71ea7b7d88401f6fae3530775e59fdca52c9dc6052b4593950588be -->
+<!-- sdk-surface-snapshot @kun/extension-api@1.2.0 sha256:b30724f4cdc3c9c1a989794a3a120e385c394a8fc6341e27a27742dabf429fbb -->
+<!-- sdk-surface-snapshot @kun/extension-react@1.2.0 sha256:e2099a64dc22c05056dca0c599bafdfb22702b6d57e9b60edd2154b165323322 -->
+<!-- sdk-surface-snapshot @kun/extension-test@1.2.0 sha256:386c2beca46c240f957af2c92925c410a6d801a3bcc9f87697944d9f6d23337e -->
 <!-- END GENERATED SDK PUBLIC SURFACE SNAPSHOTS -->
+
+### v1.2.0 — 媒体调度、本地分析与项目交换
+
+Compatible Kun: 待随同一 release line 锁定；在 public package、canonical supported-version
+list 和三平台 release gate 全部完成前，不得把扩展 Manifest 提前声明为 `apiVersion: 1.2.0`。
+
+Added:
+
+- `webview.external` 高风险权限：允许经过工作区权限审核的 View 在无 Kun preload 的隔离子 Webview 中显示远程 HTTPS 网站；顶层导航还必须匹配显式 `network:<hostname>` 授权。
+- `MediaApi.createCacheTarget()`：由 Host 为 waveform、thumbnail、filmstrip、proxy、proof 与 preview 分配 disposable opaque 输出授权；扩展只选择有界格式和 purpose，不选择 cache path。
+- `MediaStartFfmpegJobRequest.scheduling` 与 `MediaJobScheduling`：提供 `background` / `user` / `interactive` / `export` priority、1–3 次尝试和有界 retry base delay。Host 保持并发、排队和 transient 分类的最终权威。
+- `application/x-otio+json` text output：允许最多 2 MiB 的有界 OTIO JSON 作为 text-only durable job 原子导出，并校验 root、结构界限与不透明 `kun-media://` target reference。
+- `MediaApi.getAudioAnalysisCapabilities()` 和 `startAudioAnalysisJob()`：以 owner-scoped durable job 提供本地 `silence`、`beat-grid` 与 `sync-features`，结果携带 source fingerprint、算法 provenance、`local: true` 与 `networkUsed: false`。
+- `MediaApi.getVisualModelStatus()`、`installVisualModel()`、`analyzeVisualFrames()` 和 `embedVisualQuery()`：提供可验证 bundled adapter receipt、真实有界 frame decode、可解释 visual feature 与明确 unsupported-query 结果；不声称通用语义模型。
+- `MediaApi.startArchiveJob()`：用 opaque input/output handle、规范 archive-relative path 和有界 inline text 创建 core-owned deterministic ZIP job，返回 digest 与新 readable generated-media handle。
+- `UiApi.attachComposerContext()`：已认证 View 可把有界、无路径的结构化 selection 显式挂到匹配 workspace 的主会话输入框；Host 补充 extension/version/View/workspace provenance，成功建 turn 后仅消费一次。
+- `@kun/extension-test` 增加 cache target、调度/retry、OTIO、audio analysis、visual adapter、archive、取消和 restart fixture，以覆盖相同的公开 Schema 与 owner fence。
+
+Changed:
+
+- `ViewContribution.showInRightRail` 是默认 `true` 的可选布尔字段。右侧栏 View 可设为 `false`，继续由扩展管理页或命令打开，但不在 Code 右侧图标栏常驻；既有 Manifest 无需迁移。
+- `MediaApi.readText()` 的公开 `MAX_MEDIA_TEXT_BYTES` 从 512 KiB 提升到 2 MiB，并继续要求严格 UTF-8、调用者可收紧的 `maxBytes`、opaque handle 与无路径结果。
+- SRT/VTT text output 仍保持单项 192 KiB；全部 text output 总量上限为 2 MiB。纯文本、媒体与 OTIO 输出继续共同 staging、校验、提升或回滚。
+- FFmpeg Job 现在由全局有界 priority/FIFO gate 排队。只有显式 transient 且已完整回滚的尝试可 backoff 重试；取消、普通失败和 unknown side effect 不自动重试。Idempotency 绑定完整规范请求而不只绑定友好 key。
+- `MediaApi.getCapabilities()` 的 allowlist feature 扩展到 H.265、ProRes/FFV1、更多 audio codec、color/effect filter、silence primitive 与 muxer；返回值仍不含 executable path。
+- Public fail-closed View-safe method catalog 增加上述可由认证 View 调用的方法；注册、任意 worker、secret reveal 与 credential mutation 仍不在其中。
+
+Fixed:
+
+- 排队和 retry backoff 可在 process spawn 前取消；运行中取消会等待 process tree 退出、staging 清理与 reservation 释放，terminal fence 拒绝晚到输出。
+- 非终态 FFmpeg、音频分析和 archive 尝试在 Kun 重启后明确投影为 `interrupted` 并回滚不完整事务；已 durable 完成的输出保持原终态。
+
+Security:
+
+- 外部网站 guest 强制关闭 Node、Electron、Kun bridge、嵌套 Webview、设备权限和下载；初始导航、redirect 与 popup 使用授权 hostname allowlist，cookie 只进入 extension-ID 隔离的持久 partition。现有普通 Webview 继续拒绝全部外部导航。
+- 音频与视觉分析只接收 owner/workspace-bound opaque handle 和有界参数；固定 Host profile 执行真实本地解码，结果记录算法/模型 identity，不接受 path、URL、filter、command 或隐式 cloud fallback。
+- Bundled visual package 的 manifest、payload、签名和 install receipt 全部校验；当前 adapter 只提供可解释颜色/亮度/边缘 feature，无法支持任意语义时返回 `VISUAL_QUERY_UNSUPPORTED`，不生成伪 embedding。
+- Archive entry 拒绝绝对路径、反斜线、`.`/`..`、重复项、symlink escape 和 input/output alias；OTIO export 拒绝外部 `target_url`。所有输出留在 private staging，直到原子终态提交。
+- Composer context 只接受有界、无绝对路径的 JSON reference；Main 对当前 guest main frame、View contribution、精确扩展版本、workspace trust 和 `ui.actions` 重新鉴权。扩展不能提供 provenance，payload 只进入 user message content，不进入稳定 system prefix。
+- Provider-neutral generation 不新增 secret-bearing Media API 或任意 Provider URL。Bundled 示例在没有已批准 broker 时返回 `unavailable`；provider permission、媒体上传和费用 authority 必须继续由 Host receipt 与公开 Network/Account/Provider 边界承担。
+
+Migration:
+
+- 既有 Webview 无需迁移。只有确实需要完整远程网站的扩展才新增 `webview.external` 和精确 network host，更新后会触发 renewed consent；普通 brokered fetch 继续使用 Network API。
+- 既有 v1.1 扩展无需 source migration；新增字段与方法是 additive。使用新方法前更新 SDK、声明精确 media/jobs/workspace permission，并进行 capability negotiation。
+- 使用新增方法的扩展应声明 `apiVersion: 1.2.0` 并随兼容 Kun Host 分发；Host 仍会协商 v1.1 与 v1.0 Manifest，不要求 source migration。
+
+### v1.1.0 — Brokered media、durable job 与 generated artifact
+
+Added:
+
+- `media.read`、`media.process`、`media.export` 和 `jobs.manage` 最小权限。
+- `MediaApi` 的受保护 picker、不透明 handle/stat、normalized probe、短期 View resource lease、release 和 brokered FFmpeg job 契约。
+- `MediaApi.readText()` 以不透明 handle 读取最多 512 KiB 的 Host 授权 UTF-8 文本；`MediaApi.getCapabilities()` 返回 FFmpeg、ffprobe、libx264、AAC 与可选字幕 filter 的有界能力快照，扩展可在 picker/job 前给出可执行的 fallback。
+- Brokered FFmpeg job 新增可选、有界的 `textOutputs`，用于 Host 授权的 UTF-8、SRT 与 WebVTT sidecar，并与媒体输出共同原子提交或回滚；没有 FFmpeg input/output/argument 时也可执行纯文本 durable job，因此 standalone subtitle export 不依赖 FFmpeg。既有调用无需迁移。
+- `JobsApi` 的自有 job get/list/cursor subscription/cancel 契约、bounded progress/event/result、显式 interrupted state；不提供通用 `jobs.start` 或扩展 worker 注册。
+- Tool 和 terminal job result 顶层 `generatedArtifacts`，以及不携带本地路径的 artifact/media-handle result-preview reference。
+- `media.performArtifactAction()`：由已认证交互式 View 发起，对可用 generated artifact 执行 open/reveal；既有 media 调用无需迁移。
+- `@kun/extension-test` 中确定性的 fake media/jobs、可配置 media capability、纯文本 job、权限失败、restart/cancellation control、executable-unavailable 行为和 artifact fixture。
+- 公开且 fail-closed 的 View-safe method catalog，用于 Host boundary drift 检查。
+- 可选、有界的 Manifest `localizations` 覆盖和 `resolveExtensionManifestLocale()`，用于 Host 渲染的扩展 metadata 与声明式显示字段。既有 Manifest 仍有效，基础文案始终作为 fallback；覆盖不能改变身份、权限、激活事件、可执行路径、Schema 或 Agent instructions。
+
+Changed:
+
+- `@kun/extension-api`、`@kun/extension-react` 和 `@kun/extension-test` 一起升级到 1.1.0。Manifest v1 与 API v1.0.0 在 major 1 内继续被接受；已有 v1.0 扩展无需 source migration。
+- `ToolResult.generatedArtifacts` 和新增的 `ResultPreviewSource` artifact 字段均为可选，因此 v1.0 result envelope 与 relative-path preview 保持原有形状。
+
+Security:
+
+- 公开 media 契约只携带 opaque handle 与 lease，不携带绝对路径。交互式 picker/resource 方法在缺少受保护 surface 时显式失败；broker 契约不声称 trusted Node extension code 是操作系统 sandbox。
+- Artifact open/reveal 请求只携带 opaque artifact ID 与 action。Main 从已认证 View Session 派生 owner、精确扩展版本和 workspace，且不返回本地路径。
+- FFmpeg 创建只接受 argument array 与具名 input/output handle，并把执行交给 core-owned durable job；公开 API 不暴露 executable override、shell、process object 或 arbitrary job worker。
+
+Compatibility notes:
+
+- `SUPPORTED_EXTENSION_API_VERSIONS` 依次为 `1.1.0`、`1.0.0`；v1.0 Manifest 在当前 major 上协商，不需要 breaking adapter。
+- Media/job 方法要求新的显式 permission 和 Host v1.1 capability。既有 v1.0 方法、Manifest 和 result source 仍然有效。
 
 ### v1.0.0 — Initial stable API
 

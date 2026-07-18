@@ -30,6 +30,9 @@ import type { ChatBlock } from '../../agent/types'
 type Props = {
   className?: string
   rightOffset?: number
+  variant?: 'floating' | 'docked'
+  onRequestClose?: () => void
+  onTitleChange?: (title: string) => void
 }
 
 type SideChatComposerProps = {
@@ -182,7 +185,10 @@ function SideMessageBubble({ block }: { block: ChatBlock }): ReactElement | null
 
 export function SideConversationPanel({
   className,
-  rightOffset = 24
+  rightOffset = 24,
+  variant = 'floating',
+  onRequestClose,
+  onTitleChange
 }: Props): ReactElement | null {
   const { t, i18n } = useTranslation('common')
   const [draftInput, setDraftInput] = useState('')
@@ -229,9 +235,11 @@ export function SideConversationPanel({
     ? sideData.threads.find((thread) => thread.id === sideData.parentThreadId) ?? null
     : null
   const runningCount = currentSides.reduce((count, side) => count + (side.busy ? 1 : 0), 0)
-  const shouldRender = Boolean(sideData.parentThreadId && sideData.panel.open)
+  const docked = variant === 'docked'
+  const shouldRender = Boolean(sideData.parentThreadId && (docked || sideData.panel.open))
   const showDraft = shouldRender && !activeSide
   const rightStyle = overlayStyle(rightOffset)
+  const reportedTitle = activeSide?.title?.trim() || t('sidePanelTitle')
 
   useEffect(() => {
     if (sideData.panel.open && !prevOpenRef.current) {
@@ -248,11 +256,12 @@ export function SideConversationPanel({
         setMoreMenuOpen(false)
         setMinimized(false)
         sideData.setSidePanelOpen(false)
+        onRequestClose?.()
       }
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [shouldRender, sideData])
+  }, [onRequestClose, shouldRender, sideData])
 
   useEffect(() => {
     if (!switchMenuOpen && !moreMenuOpen) return
@@ -271,6 +280,10 @@ export function SideConversationPanel({
     return () => window.removeEventListener('pointerdown', onPointerDown)
   }, [switchMenuOpen, moreMenuOpen])
 
+  useEffect(() => {
+    onTitleChange?.(reportedTitle)
+  }, [onTitleChange, reportedTitle])
+
   if (!shouldRender) return null
 
   const titleCount = sideIds.length > 0 ? ` · ${sideIds.length}` : ''
@@ -284,6 +297,7 @@ export function SideConversationPanel({
     setSwitchMenuOpen(false)
     setMoreMenuOpen(false)
     sideData.setSidePanelOpen(false)
+    onRequestClose?.()
   }
 
   const openDraft = (): void => {
@@ -316,7 +330,7 @@ export function SideConversationPanel({
     void sideData.promoteSideConversation(activeSide.threadId)
   }
 
-  if (minimized) {
+  if (minimized && !docked) {
     return (
       <button
         type="button"
@@ -337,8 +351,12 @@ export function SideConversationPanel({
 
   return (
     <aside
-      className={`ds-side-chat ds-no-drag fixed bottom-[112px] z-40 flex max-h-[min(520px,calc(100vh-180px))] w-[min(360px,calc(100vw-24px))] flex-col overflow-hidden rounded-[14px] border border-ds-border bg-ds-card/96 text-ds-ink shadow-[0_22px_64px_rgba(20,47,95,0.2)] backdrop-blur-xl dark:bg-ds-card/96 dark:shadow-[0_24px_72px_rgba(0,0,0,0.46)] ${className ?? ''}`}
-      style={rightStyle}
+      className={`ds-side-chat ds-no-drag flex flex-col overflow-hidden bg-ds-card/96 text-ds-ink backdrop-blur-xl dark:bg-ds-card/96 ${
+        docked
+          ? 'h-full min-h-0 w-full'
+          : 'fixed bottom-[112px] z-40 max-h-[min(520px,calc(100vh-180px))] w-[min(360px,calc(100vw-24px))] rounded-[14px] border border-ds-border shadow-[0_22px_64px_rgba(20,47,95,0.2)] dark:shadow-[0_24px_72px_rgba(0,0,0,0.46)]'
+      } ${className ?? ''}`}
+      style={docked ? undefined : rightStyle}
       aria-label={t('sidePanelTitle')}
     >
       <header className="flex shrink-0 items-start gap-2 border-b border-ds-border-muted px-3 py-2.5">
@@ -436,15 +454,17 @@ export function SideConversationPanel({
               </div>
             ) : null}
           </div>
-          <button
-            type="button"
-            onClick={() => setMinimized(true)}
-            className="flex h-7 w-7 items-center justify-center rounded-md text-ds-faint transition hover:bg-ds-hover hover:text-ds-ink"
-            aria-label={t('sidePanelMinimize')}
-            title={t('sidePanelMinimize')}
-          >
-            <Minus className="h-3.5 w-3.5" strokeWidth={1.9} />
-          </button>
+          {!docked ? (
+            <button
+              type="button"
+              onClick={() => setMinimized(true)}
+              className="flex h-7 w-7 items-center justify-center rounded-md text-ds-faint transition hover:bg-ds-hover hover:text-ds-ink"
+              aria-label={t('sidePanelMinimize')}
+              title={t('sidePanelMinimize')}
+            >
+              <Minus className="h-3.5 w-3.5" strokeWidth={1.9} />
+            </button>
+          ) : null}
           <button
             type="button"
             onClick={closeWindow}

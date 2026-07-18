@@ -23,11 +23,15 @@ export function ExtensionDeclarativeSettingsPane({
   const [error, setError] = useState<string | null>(null)
   const snapshotRef = useRef<ExtensionSettingsSnapshot | null>(null)
   const updateQueueRef = useRef(Promise.resolve())
+  const loadGenerationRef = useRef(0)
   const contributionKey = contributions.map((contribution) => contribution.id).join('\n')
   const contributionIds = useMemo(
     () => contributionKey ? contributionKey.split('\n') : [],
     [contributionKey]
   )
+  const scopeKey = `${workspaceRoot}\n${contributionKey}`
+  const scopeKeyRef = useRef(scopeKey)
+  scopeKeyRef.current = scopeKey
 
   const applySnapshot = useCallback((next: ExtensionSettingsSnapshot): void => {
     snapshotRef.current = next
@@ -35,23 +39,42 @@ export function ExtensionDeclarativeSettingsPane({
   }, [])
 
   const load = useCallback(async (): Promise<void> => {
+    const generation = ++loadGenerationRef.current
+    const loadScopeKey = scopeKey
     setLoading(true)
     setError(null)
     try {
-      applySnapshot(await service.load({
+      const next = await service.load({
         contributionIds,
         ...(workspaceRoot ? { workspaceRoot } : {})
-      }))
+      })
+      if (
+        generation === loadGenerationRef.current &&
+        scopeKeyRef.current === loadScopeKey
+      ) applySnapshot(next)
     } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : String(loadError))
+      if (
+        generation === loadGenerationRef.current &&
+        scopeKeyRef.current === loadScopeKey
+      ) {
+        setError(loadError instanceof Error ? loadError.message : String(loadError))
+      }
     } finally {
-      setLoading(false)
+      if (
+        generation === loadGenerationRef.current &&
+        scopeKeyRef.current === loadScopeKey
+      ) setLoading(false)
     }
-  }, [applySnapshot, contributionIds, service, workspaceRoot])
+  }, [applySnapshot, contributionIds, scopeKey, service, workspaceRoot])
 
   useEffect(() => {
+    snapshotRef.current = null
+    setSnapshot(null)
+    setUpdating(false)
+    updateQueueRef.current = Promise.resolve()
     void load()
-  }, [contributionKey, load])
+    return () => { loadGenerationRef.current += 1 }
+  }, [load, scopeKey])
 
   useEffect(() => service.subscribe?.((change: ExtensionSettingChange) => {
     if (!contributionIds.includes(change.contributionId)) return
@@ -75,6 +98,7 @@ export function ExtensionDeclarativeSettingsPane({
   }), [contributionIds, service, workspaceRoot])
 
   const update = (contributionId: string, key: string, value: JsonValue): void => {
+    const updateScopeKey = scopeKey
     setUpdating(true)
     setError(null)
     updateQueueRef.current = updateQueueRef.current
@@ -82,20 +106,24 @@ export function ExtensionDeclarativeSettingsPane({
       .then(async () => {
         const current = snapshotRef.current
         if (!current) throw new Error('Extension settings are not loaded.')
-        applySnapshot(await service.update({
+        const next = await service.update({
           contributionId,
           key,
           value,
           expectedRevision: current.revision,
           ...(workspaceRoot ? { workspaceRoot } : {})
-        }))
+        })
+        if (scopeKeyRef.current === updateScopeKey) applySnapshot(next)
       })
       .catch(async (updateError) => {
+        if (scopeKeyRef.current !== updateScopeKey) return
         const message = updateError instanceof Error ? updateError.message : String(updateError)
         await load()
-        setError(message)
+        if (scopeKeyRef.current === updateScopeKey) setError(message)
       })
-      .finally(() => setUpdating(false))
+      .finally(() => {
+        if (scopeKeyRef.current === updateScopeKey) setUpdating(false)
+      })
   }
 
   if (loading && !snapshot) {
