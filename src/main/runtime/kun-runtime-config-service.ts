@@ -10,6 +10,10 @@ import {
   RuntimeTuningConfigSchema,
   type KunConfig
 } from '../../../kun/src/config/kun-config.js'
+import {
+  RuntimeConfigApplyRequest,
+  type RuntimeConfigApplyRequest as RuntimeConfigApplyPayload
+} from '../../../kun/src/contracts/runtime-config.js'
 import { HooksConfigSchema } from '../../../kun/src/hooks/hook-config.js'
 import {
   AttachmentsCapabilityConfig,
@@ -220,14 +224,23 @@ type KunRuntimeConfigSettings = Pick<KunRuntimeSettingsV1,
 export function buildManagedRuntimeHotApplyBody(
   settings: AppSettingsV1,
   config: KunConfig
-): KunConfig {
+): RuntimeConfigApplyPayload {
   const runtime = resolveKunRuntimeSettings(settings)
   const serve = config.serve ?? {}
+  // Process-owned fields are valid in persisted config, but the hot-apply API
+  // deliberately rejects them because changing them requires a restart.
+  const hotServe = { ...serve }
+  delete hotServe.host
+  delete hotServe.port
+  delete hotServe.dataDir
+  delete hotServe.runtimeToken
+  delete hotServe.insecure
+  delete hotServe.storage
   const defaultClientApiKey = resolveCodexOAuthApiKey(runtime.apiKey).apiKey
-  return {
+  return RuntimeConfigApplyRequest.parse({
     ...config,
     serve: {
-      ...serve,
+      ...hotServe,
       apiKey: defaultClientApiKey || runtime.apiKey,
       baseUrl: runtime.baseUrl,
       modelProxyUrl: resolveModelProviderProxyUrl(settings),
@@ -240,7 +253,7 @@ export function buildManagedRuntimeHotApplyBody(
       toolOutputLimits: runtime.toolOutputLimits,
       providers: serve.providers ?? {}
     }
-  }
+  })
 }
 
 /** Pure response policy: callers own logging, retry, restart, and status effects. */
