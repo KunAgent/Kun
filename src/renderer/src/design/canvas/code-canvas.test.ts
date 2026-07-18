@@ -122,6 +122,34 @@ describe('shouldRouteCodePromptToCanvas', () => {
       text: '\u628a\u5b83\u8f6c\u6210\u56fe\u7247',
       whiteboardOpen: true
     })).toBe(true)
+    expect(shouldSendPromptToCodeCanvas({
+      text: '\u7ed9\u6211\u751f\u6210png',
+      whiteboardOpen: true
+    })).toBe(true)
+    expect(shouldSendPromptToCodeCanvas({
+      text: 'PNG \u7248\u672c\u5c31\u884c',
+      whiteboardOpen: true
+    })).toBe(true)
+    expect(shouldSendPromptToCodeCanvas({
+      text: '\u628a\u8fd9\u4e2a\u5bfc\u51fa',
+      whiteboardOpen: true
+    })).toBe(true)
+    expect(shouldSendPromptToCodeCanvas({
+      text: 'Give me a PNG',
+      whiteboardOpen: true
+    })).toBe(true)
+    expect(shouldSendPromptToCodeCanvas({
+      text: 'SVG please',
+      whiteboardOpen: true
+    })).toBe(true)
+    expect(shouldSendPromptToCodeCanvas({
+      text: '\u5bfc\u51fa\u4e00\u4e0b',
+      whiteboardOpen: true
+    })).toBe(true)
+    expect(shouldSendPromptToCodeCanvas({
+      text: 'Generate a PNG parser for this binary format',
+      whiteboardOpen: true
+    })).toBe(false)
   })
 
   it('does not treat open-whiteboard references as active when the whiteboard is closed', () => {
@@ -140,6 +168,10 @@ describe('shouldRouteCodePromptToCanvas', () => {
     })).toBe(false)
     expect(shouldSendPromptToCodeCanvas({
       text: 'Export this as a PNG',
+      whiteboardOpen: false
+    })).toBe(false)
+    expect(shouldSendPromptToCodeCanvas({
+      text: '\u7ed9\u6211\u751f\u6210png',
       whiteboardOpen: false
     })).toBe(false)
     expect(shouldRouteOpenCodeWhiteboardPrompt('Move this node to the right')).toBe(true)

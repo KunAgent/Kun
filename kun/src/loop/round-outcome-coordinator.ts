@@ -84,6 +84,10 @@ export class RoundOutcomeCoordinator {
     return (this.emptyPostToolRecoveryStepsByTurn.get(turnId) ?? 0) > 0
   }
 
+  emptyPostToolRecoverySteps(turnId: string): number {
+    return this.emptyPostToolRecoveryStepsByTurn.get(turnId) ?? 0
+  }
+
   clearTurn(turnId: string): void {
     this.lastNoToolTextByTurn.delete(turnId)
     this.goalNoToolRecoveryStepsByTurn.delete(turnId)
@@ -265,7 +269,7 @@ export class RoundOutcomeCoordinator {
     }
 
     const message =
-      'Model stopped without a final answer after tool execution, including after a recovery retry.'
+      'Model stopped without a final answer after tool execution, including after continuation and final-answer recovery attempts.'
     this.deps.rememberFailure(input.turnId, {
       error: message,
       code: 'empty_post_tool_continuation',

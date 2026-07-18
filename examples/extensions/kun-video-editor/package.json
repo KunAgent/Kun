@@ -1,0 +1,32 @@
+{
+  "name": "@kun-examples/kun-video-editor",
+  "version": "0.4.4",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "build": "npm run build:host && npm run build:webview",
+    "build:host": "vite build --config vite.host.config.ts",
+    "build:webview": "vite build",
+    "fixture:generate": "node ./fixtures/generate-local-fixture.mjs",
+    "fixture:check": "node ./fixtures/generate-local-fixture.mjs --check",
+    "typecheck": "tsc --noEmit -p tsconfig.host.json && tsc --noEmit -p tsconfig.webview.json && tsc --noEmit -p tsconfig.test.json",
+    "test": "npm run fixture:check && vitest run --config vitest.config.ts",
+    "validate": "node ../run-repository-kun-cli.mjs extension validate .",
+    "pack": "npm run build && node ../run-repository-kun-cli.mjs extension pack . --overwrite"
+  },
+  "dependencies": {
+    "@kun/extension-api": "^1.2.0",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.1.16",
+    "@types/react-dom": "^19.1.9",
+    "@kun/extension-test": "^1.2.0",
+    "typescript": "^5.8.2",
+    "vite": "^6.2.0",
+    "vitest": "^4.1.7"
+  }
+}

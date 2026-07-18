@@ -266,6 +266,7 @@ export function manifestReferencedFiles(manifest: ExtensionManifest): string[] {
   const paths = new Set<string>()
   if (manifest.main) paths.add(manifest.main)
   if (manifest.browser) paths.add(manifest.browser)
+  if (manifest.icon) paths.add(manifest.icon)
   for (const command of manifest.contributes.commands) if (command.icon) paths.add(command.icon)
   for (const container of manifest.contributes['views.containers']) {
     if (container.icon) paths.add(container.icon)

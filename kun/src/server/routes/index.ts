@@ -65,6 +65,16 @@ import { ERRORS } from './runtime-error.js'
 import type { ServerRuntime } from './server-runtime.js'
 import { registerExtensionManagementRoutes } from './extensions.js'
 import { registerExtensionPublicRoutes } from './extension-public.js'
+import {
+  createMigrationExport,
+  commitMigrationImport,
+  preflightMigrationImport,
+  releaseMigrationImport,
+  releaseMigrationExport,
+  rollbackMigrationImport,
+  verifyMigrationImport,
+  streamMigrationExport
+} from './migrations.js'
 
 /**
  * Build the full router used by the HTTP server. The router exposes:
@@ -116,9 +126,44 @@ export function buildRouter(runtime: ServerRuntime): Router {
       indexClient: runtime.extensionPlatform.indexClient,
       validation: runtime.extensionPlatform.validation,
       runtimeToken: runtime.runtimeToken,
-      insecure: runtime.insecure
+      insecure: runtime.insecure,
+      ...(runtime.extensionPlatform.bundledSeedResults
+        ? { bundledSeedResults: runtime.extensionPlatform.bundledSeedResults }
+        : {})
     })
   }
+  router.add('POST', '/v1/migrations/exports', async (request) => {
+    if (!authorize(request, runtime)) return ERRORS.unauthorized()
+    return createMigrationExport(runtime.migrationService, request)
+  })
+  router.add('GET', '/v1/migrations/exports/:id', async (request, ctx) => {
+    if (!authorize(request, runtime)) return ERRORS.unauthorized()
+    return streamMigrationExport(runtime.migrationService, ctx.params.id)
+  })
+  router.add('DELETE', '/v1/migrations/exports/:id', async (request, ctx) => {
+    if (!authorize(request, runtime)) return ERRORS.unauthorized()
+    return releaseMigrationExport(runtime.migrationService, ctx.params.id)
+  })
+  router.add('POST', '/v1/migrations/imports/preflight', async (request) => {
+    if (!authorize(request, runtime)) return ERRORS.unauthorized()
+    return preflightMigrationImport(runtime.migrationImportService, request)
+  })
+  router.add('POST', '/v1/migrations/imports/:id/commit', async (request, ctx) => {
+    if (!authorize(request, runtime)) return ERRORS.unauthorized()
+    return commitMigrationImport(runtime.migrationImportService, ctx.params.id)
+  })
+  router.add('POST', '/v1/migrations/imports/:id/verify', async (request, ctx) => {
+    if (!authorize(request, runtime)) return ERRORS.unauthorized()
+    return verifyMigrationImport(runtime.migrationImportService, ctx.params.id)
+  })
+  router.add('POST', '/v1/migrations/imports/:id/rollback', async (request, ctx) => {
+    if (!authorize(request, runtime)) return ERRORS.unauthorized()
+    return rollbackMigrationImport(runtime.migrationImportService, ctx.params.id)
+  })
+  router.add('DELETE', '/v1/migrations/imports/:id', async (request, ctx) => {
+    if (!authorize(request, runtime)) return ERRORS.unauthorized()
+    return releaseMigrationImport(runtime.migrationImportService, ctx.params.id)
+  })
   router.add('GET', '/v1/runtime/info', async (request) => {
     if (!authorize(request, runtime)) return ERRORS.unauthorized()
     return runtimeInfoJsonResponse(runtime)

@@ -93,6 +93,10 @@ export function parseServeOptions(
   const observabilityTimeoutMs = numberEnv(
     otlpTimeout
   ) ?? configServe.observability?.timeoutMs
+  const bundledExtensionsDir =
+    stringFlag(raw, 'bundled-extensions-dir') ??
+    stringFlag(raw, 'bundledExtensionsDir') ??
+    nonEmptyEnv(env.KUN_BUNDLED_EXTENSIONS_DIR)
   const merged: ServeOptions = {
     ...DEFAULT_SERVE_OPTIONS,
     ...(loadedConfig ? { configPath: loadedConfig.path } : {}),
@@ -114,6 +118,7 @@ export function parseServeOptions(
           : env.KUN_DATA_DIR ??
             configServe.dataDir ??
             DEFAULT_SERVE_OPTIONS.dataDir,
+    ...(bundledExtensionsDir ? { bundledExtensionsDir } : {}),
     runtimeToken:
       typeof raw['runtime-token'] === 'string'
         ? raw['runtime-token']
@@ -238,6 +243,8 @@ Options:
   --host <host>            Bind address (default 127.0.0.1)
   --port <port>            HTTP port (default ${DEFAULT_SERVE_PORT})
   --data-dir <path>        Root directory for threads, events, and usage
+  --bundled-extensions-dir <path>
+                           Product-owned catalog of default local .kunx packages
   --runtime-token <token>  Bearer token for /v1/* requests
   --api-key <key>          DeepSeek-compatible API key
   --base-url <url>         DeepSeek-compatible base URL

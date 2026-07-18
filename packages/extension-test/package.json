@@ -1,6 +1,6 @@
 {
   "name": "@kun/extension-test",
-  "version": "1.0.0",
+  "version": "1.2.0",
   "description": "Deterministic test harnesses for Kun extensions",
   "type": "module",
   "sideEffects": false,
@@ -25,7 +25,7 @@
     "prepack": "npm run build"
   },
   "dependencies": {
-    "@kun/extension-api": "1.0.0"
+    "@kun/extension-api": "1.2.0"
   },
   "devDependencies": {
     "typescript": "^5.8.2",

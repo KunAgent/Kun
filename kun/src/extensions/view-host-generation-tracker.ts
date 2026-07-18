@@ -1,5 +1,8 @@
+import { resolve } from 'node:path'
+
 type TrackedViewSession = {
   extensionId: string
+  workspaceRoot?: string
   hostGeneration?: string
 }
 
@@ -12,9 +15,15 @@ type TrackedViewSession = {
 export class ExtensionViewHostGenerationTracker {
   private readonly sessions = new Map<string, TrackedViewSession>()
 
-  register(sessionId: string, extensionId: string, hostGeneration?: string): void {
+  register(
+    sessionId: string,
+    extensionId: string,
+    workspaceRoot?: string,
+    hostGeneration?: string
+  ): void {
     this.sessions.set(sessionId, {
       extensionId,
+      ...(workspaceRoot ? { workspaceRoot: resolve(workspaceRoot) } : {}),
       ...(hostGeneration ? { hostGeneration } : {})
     })
   }
@@ -23,9 +32,19 @@ export class ExtensionViewHostGenerationTracker {
     this.sessions.delete(sessionId)
   }
 
-  bindExtension(extensionId: string, hostGeneration: string): void {
+  bindExtension(
+    extensionId: string,
+    workspaceRoots: readonly string[],
+    hostGeneration: string
+  ): void {
+    const normalizedRoots = new Set(workspaceRoots.map((root) => resolve(root)))
     for (const session of this.sessions.values()) {
-      if (session.extensionId === extensionId) session.hostGeneration = hostGeneration
+      if (
+        session.extensionId === extensionId &&
+        (session.workspaceRoot === undefined
+          ? normalizedRoots.size === 0
+          : normalizedRoots.has(session.workspaceRoot))
+      ) session.hostGeneration = hostGeneration
     }
   }
 

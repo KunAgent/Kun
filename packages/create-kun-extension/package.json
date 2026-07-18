@@ -16,7 +16,7 @@
     "prepack": "npm run build"
   },
   "devDependencies": {
-    "@kun/extension-api": "1.0.0",
+    "@kun/extension-api": "1.2.0",
     "vitest": "^4.1.7"
   },
   "engines": {

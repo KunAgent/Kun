@@ -1,6 +1,7 @@
 import { getCanvasDocumentContentBounds } from './canvas-placement'
+import { loadWorkspaceImageDataUrl } from './canvas-image-source'
 import { useCanvasShapeStore } from './canvas-shape-store'
-import type { CanvasDocument, Rect } from './canvas-types'
+import type { CanvasDocument, CanvasShape, Rect } from './canvas-types'
 
 export type CanvasExportFormat = 'svg' | 'png'
 
@@ -22,6 +23,11 @@ export type CanvasAgentExportResult = {
 export type CanvasAgentExportRequestHandler = (
   request: CanvasAgentExportRequest
 ) => CanvasAgentExportResult | Promise<CanvasAgentExportResult>
+
+export type CanvasExportImageSourceLoader = (
+  workspaceRoot: string,
+  imageUrl: string
+) => Promise<string | null>
 
 const EXPORT_PADDING = 24
 const MAX_RASTER_EDGE = 8192
@@ -87,10 +93,105 @@ function triggerDownload(blob: Blob, filename: string): void {
   setTimeout(() => URL.revokeObjectURL(url), 0)
 }
 
+function visibleCanvasImages(document: CanvasDocument): CanvasShape[] {
+  const root = document.objects[document.rootId]
+  if (!root) return []
+  const images: CanvasShape[] = []
+  const visited = new Set<string>()
+  const visit = (id: string): void => {
+    if (visited.has(id)) return
+    visited.add(id)
+    const shape = document.objects[id]
+    if (!shape || !shape.visible) return
+    if (shape.type === 'image' && shape.imageUrl?.trim()) images.push(shape)
+    for (const childId of shape.children) visit(childId)
+  }
+  for (const childId of root.children) visit(childId)
+  return images
+}
+
+async function defaultCanvasExportImageSourceLoader(
+  workspaceRoot: string,
+  imageUrl: string
+): Promise<string | null> {
+  const resolved = await loadWorkspaceImageDataUrl(workspaceRoot, imageUrl)
+  if (!resolved || resolved.startsWith('data:')) return resolved
+  if (!/^(?:https?:|blob:)/i.test(resolved)) return null
+  try {
+    const response = await fetch(resolved)
+    if (!response.ok) return null
+    const blob = await response.blob()
+    if (!blob.type.toLowerCase().startsWith('image/')) return null
+    return `data:${blob.type};base64,${await blobToBase64(blob)}`
+  } catch {
+    return null
+  }
+}
+
+/** Resolve every rendered image to an inline source before cloning the SVG. */
+export async function resolveCanvasExportImageSources(options: {
+  document: CanvasDocument
+  workspaceRoot: string
+  loadImageSource?: CanvasExportImageSourceLoader
+}): Promise<Map<string, string>> {
+  const images = visibleCanvasImages(options.document)
+  const loadImageSource = options.loadImageSource ?? defaultCanvasExportImageSourceLoader
+  const pendingByUrl = new Map<string, Promise<string | null>>()
+  const resolved = new Map<string, string>()
+  await Promise.all(images.map(async (shape) => {
+    const imageUrl = shape.imageUrl!.trim()
+    let pending = pendingByUrl.get(imageUrl)
+    if (!pending) {
+      pending = Promise.resolve(loadImageSource(options.workspaceRoot, imageUrl)).catch(() => null)
+      pendingByUrl.set(imageUrl, pending)
+    }
+    const source = await pending
+    if (!source) {
+      const label = shape.name?.trim() || shape.id
+      throw new Error(`Whiteboard image "${label}" is unavailable for export`)
+    }
+    resolved.set(shape.id, source)
+  }))
+  return resolved
+}
+
+function inlineCanvasImageSources(
+  exportedLayer: SVGGElement,
+  document: CanvasDocument,
+  imageSources: ReadonlyMap<string, string>
+): void {
+  const groups = Array.from(exportedLayer.querySelectorAll<SVGGElement>('g[id]'))
+  for (const [shapeId, source] of imageSources) {
+    const shape = document.objects[shapeId]
+    if (!shape || shape.type !== 'image') continue
+    const shapeGroup = groups.find((group) => group.id === `shape-${shapeId}`)
+    const renderGroup = shapeGroup?.firstElementChild
+    if (!shapeGroup || !renderGroup || renderGroup.localName.toLowerCase() !== 'g') {
+      throw new Error(`Whiteboard image "${shape.name?.trim() || shapeId}" is not ready for export`)
+    }
+    let image = renderGroup.querySelector<SVGImageElement>('image')
+    if (!image) {
+      for (const child of Array.from(renderGroup.children)) {
+        if (child.localName.toLowerCase() !== 'defs') child.remove()
+      }
+      image = window.document.createElementNS('http://www.w3.org/2000/svg', 'image')
+      image.setAttribute('x', '0')
+      image.setAttribute('y', '0')
+      image.setAttribute('width', String(shape.width))
+      image.setAttribute('height', String(shape.height))
+      image.setAttribute('preserveAspectRatio', 'xMidYMid slice')
+      renderGroup.appendChild(image)
+    }
+    image.removeAttributeNS('http://www.w3.org/1999/xlink', 'href')
+    image.setAttribute('href', source)
+  }
+}
+
 export function serializeCanvasSvg(options: {
   sourceSvg: SVGSVGElement
   document: CanvasDocument
   backgroundColor: string
+  imageSources?: ReadonlyMap<string, string>
 }): { svg: string; bounds: Rect } {
   const bounds = canvasExportBounds(options.document)
   if (!bounds) throw new Error('Canvas is empty')
@@ -112,6 +213,9 @@ export function serializeCanvasSvg(options: {
   background.setAttribute('height', String(bounds.height))
   background.setAttribute('fill', options.backgroundColor)
   const exportedLayer = shapeLayer.cloneNode(true) as SVGGElement
+  if (options.imageSources?.size) {
+    inlineCanvasImageSources(exportedLayer, options.document, options.imageSources)
+  }
   for (const editor of exportedLayer.querySelectorAll<HTMLElement>('[contenteditable]')) {
     editor.setAttribute('contenteditable', 'false')
     editor.style.outline = 'none'
@@ -171,8 +275,15 @@ async function canvasExportBlob(options: {
   document: CanvasDocument
   format: CanvasExportFormat
   backgroundColor: string
+  workspaceRoot: string
+  loadImageSource?: CanvasExportImageSourceLoader
 }): Promise<Blob> {
-  const { svg, bounds } = serializeCanvasSvg(options)
+  const imageSources = await resolveCanvasExportImageSources({
+    document: options.document,
+    workspaceRoot: options.workspaceRoot,
+    ...(options.loadImageSource ? { loadImageSource: options.loadImageSource } : {})
+  })
+  const { svg, bounds } = serializeCanvasSvg({ ...options, imageSources })
   return options.format === 'svg'
     ? new Blob([svg], { type: 'image/svg+xml;charset=utf-8' })
     : svgToPng(svg, bounds)
@@ -192,7 +303,8 @@ export async function exportCanvasToWorkspace(options: {
     sourceSvg: options.sourceSvg,
     document: options.document,
     format: request.format,
-    backgroundColor: options.backgroundColor || '#ffffff'
+    backgroundColor: options.backgroundColor || '#ffffff',
+    workspaceRoot: options.workspaceRoot
   })
   const dataBase64 = await blobToBase64(blob)
   const mimeType = request.format === 'png' ? 'image/png' : 'image/svg+xml'
@@ -234,6 +346,8 @@ function waitForCanvasPaint(browserDocument: Document): Promise<void> {
 export async function exportActiveCodeCanvasToWorkspace(options: {
   request: CanvasAgentExportRequest
   workspaceRoot: string
+  artifactId?: string
+  expectedDocumentKey?: string
   browserDocument?: Document
 }): Promise<CanvasAgentExportResult> {
   const browserDocument = options.browserDocument ?? window.document
@@ -242,14 +356,20 @@ export async function exportActiveCodeCanvasToWorkspace(options: {
   // an update tool from capturing the previous diagram.
   await waitForCanvasPaint(browserDocument)
   await waitForCanvasPaint(browserDocument)
-  const sourceSvg = browserDocument.querySelector<SVGSVGElement>('svg[data-canvas-surface="code"]')
+  const sourceSvg = Array.from(
+    browserDocument.querySelectorAll<SVGSVGElement>('svg[data-canvas-surface="code"]')
+  ).find((candidate) => !options.artifactId || candidate.dataset.canvasArtifactId === options.artifactId)
   if (!sourceSvg) throw new Error('The Code whiteboard is not open')
+  const shapeState = useCanvasShapeStore.getState()
+  if (options.expectedDocumentKey && shapeState.documentKey !== options.expectedDocumentKey) {
+    throw new Error('The Code whiteboard changed before export could finish')
+  }
   const backgroundColor = sourceSvg.parentElement
     ? getComputedStyle(sourceSvg.parentElement).backgroundColor
     : '#ffffff'
   return exportCanvasToWorkspace({
     sourceSvg,
-    document: useCanvasShapeStore.getState().document,
+    document: shapeState.document,
     request: options.request,
     workspaceRoot: options.workspaceRoot,
     backgroundColor
@@ -260,6 +380,7 @@ export async function exportCanvasFromSvg(options: {
   sourceSvg: SVGSVGElement
   document: CanvasDocument
   format: CanvasExportFormat
+  workspaceRoot: string
   filename?: string
   backgroundColor?: string
 }): Promise<void> {
@@ -267,7 +388,8 @@ export async function exportCanvasFromSvg(options: {
     sourceSvg: options.sourceSvg,
     document: options.document,
     format: options.format,
-    backgroundColor: options.backgroundColor || '#ffffff'
+    backgroundColor: options.backgroundColor || '#ffffff',
+    workspaceRoot: options.workspaceRoot
   })
   const filename = `${safeFileName(options.filename || 'kun-whiteboard')}.${options.format}`
   triggerDownload(blob, filename)

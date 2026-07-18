@@ -8,6 +8,7 @@ import {
   extensionLoadConfigurationRequestSchema,
   extensionNotificationResponseRequestSchema,
   extensionNotificationSnapshotResponseSchema,
+  extensionPermissionGrantRequestSchema,
   extensionSetProviderBindingRequestSchema,
   extensionSyncHostContentScriptsRequestSchema,
   extensionUpdateConfigurationRequestSchema,
@@ -58,12 +59,42 @@ describe('extension IPC schemas', () => {
     expect(extensionWorkspaceRequestSchema.safeParse(undefined).success).toBe(true)
     expect(extensionWorkspaceRequestSchema.safeParse({}).success).toBe(true)
     expect(extensionWorkspaceRequestSchema.safeParse({ workspaceRoot: '/workspace' }).success).toBe(true)
+    expect(extensionWorkspaceRequestSchema.safeParse({
+      workspaceRoot: '/workspace',
+      locale: 'zh-CN'
+    }).success).toBe(true)
     expect(extensionWorkspaceRequestSchema.safeParse({ workspaceRoot: 'C:\\workspace' }).success).toBe(true)
     expect(extensionWorkspaceRequestSchema.safeParse({ workspaceRoot: '\\\\server\\share' }).success).toBe(true)
     expect(extensionWorkspaceRequestSchema.safeParse({ workspaceRoot: 'relative/workspace' }).success).toBe(false)
+    expect(extensionWorkspaceRequestSchema.safeParse({ locale: 'zh_CN' }).success).toBe(false)
     expect(extensionWorkspaceRequestSchema.safeParse({
       workspaceRoot: '/workspace',
       path: '/v1/usage'
+    }).success).toBe(false)
+  })
+
+  it('requires an explicit expected version for workspace permission mutations', () => {
+    const request = {
+      extensionId: 'acme.example',
+      expectedVersion: '1.2.3',
+      permissions: ['ui.views'],
+      workspaceRoot: '/workspace'
+    }
+    expect(extensionPermissionGrantRequestSchema.safeParse(request).success).toBe(true)
+    expect(extensionPermissionGrantRequestSchema.safeParse({
+      ...request,
+      expectedVersion: undefined,
+      extensionVersion: '1.2.3'
+    }).success).toBe(false)
+    expect(extensionPermissionGrantRequestSchema.safeParse({
+      ...request,
+      enableAfterApply: 'global'
+    }).success).toBe(true)
+    expect(extensionPermissionGrantRequestSchema.safeParse({
+      extensionId: 'acme.example',
+      expectedVersion: '1.2.3',
+      permissions: ['ui.views'],
+      enableAfterApply: 'global'
     }).success).toBe(false)
   })
 

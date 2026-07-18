@@ -34,7 +34,15 @@ kun extension <command> --help
 
 ## Create
 
-推荐 npm scaffolder：
+独立项目推荐 npm scaffolder，但先确认它确实存在于当前 registry：
+
+```bash
+npm view create-kun-extension version
+```
+
+只有返回版本时才运行下面的命令。`E404` 时请使用仓库内扩展示例；不要用
+repository `file:` alias 冒充公网安装，也不要安装 npm 上无 scope 的同名 `kun`
+包代替 Kun 安装附带的 CLI。
 
 ```bash
 npx create-kun-extension my-extension \

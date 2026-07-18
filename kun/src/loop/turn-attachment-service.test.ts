@@ -53,6 +53,31 @@ describe('TurnAttachmentService', () => {
     })
   })
 
+  it('uses a text fallback when a text-only model receives a new image attachment', async () => {
+    const content = imageAttachment()
+    const service = new TurnAttachmentService(store(content))
+
+    const resolved = await service.resolveTurnAttachments({
+      attachmentIds: [content.id],
+      threadId: 'thread_1',
+      workspace: '/workspace',
+      modelCapabilities: {
+        id: 'text', inputModalities: ['text'], outputModalities: ['text'],
+        supportsToolCalling: true, messageParts: ['text']
+      }
+    })
+
+    expect(resolved).toEqual({
+      imageAttachments: [],
+      textFallbacks: [expect.objectContaining({
+        id: content.id,
+        dataBase64: content.data.toString('base64'),
+        wasCompressed: false
+      })],
+      documents: []
+    })
+  })
+
   it('uses the authorized attachment before a recorded file fallback', async () => {
     const content = imageAttachment({ data: Buffer.from([0x89, 0x50, 0x4e, 0x47]) })
     const attachmentStore = store(content)

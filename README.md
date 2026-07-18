@@ -205,6 +205,7 @@ npm install --registry=https://registry.npmmirror.com
 | [docs/extensions/README.md](docs/extensions/README.md) | Kun Extension 开放平台：工作台应用、Agent、工具、自定义模型 Provider、账号、打包与版本兼容 |
 | [kun/README.zh-CN.md](kun/README.zh-CN.md) | Kun 运行时、CLI、环境变量、HTTP API |
 | [docs/kun-architecture.md](docs/kun-architecture.md) | 单运行时架构与 GUI 集成 |
+| [docs/project-mcp-skills.md](docs/project-mcp-skills.md) | 项目级 `.kun/project.json`、MCP 摘要授权与 Skill 发现规则 |
 | [docs/kun-cache-optimization.md](docs/kun-cache-optimization.md) | 缓存优化、token economy 与可观测性 |
 | [docs/DESIGN_MODE.md](docs/DESIGN_MODE.md) | Design 设计模式、画布、原型、设计系统与 Design -> Code 闭环 |
 | [docs/model-provider-presets.md](docs/model-provider-presets.md) | 模型 Provider 预设与扩展能力 |

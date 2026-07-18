@@ -1,0 +1,15 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "jsx": "react-jsx",
+    "lib": ["ES2022", "DOM"],
+    "strict": true,
+    "rootDir": "src",
+    "outDir": "dist/webview",
+    "noEmit": true,
+    "skipLibCheck": true
+  },
+  "include": ["src/webview/**/*.ts", "src/webview/**/*.tsx"]
+}

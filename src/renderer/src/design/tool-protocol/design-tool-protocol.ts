@@ -8,6 +8,7 @@ import { executeDesignOpsInvocation } from './ops-executor'
 import { executeDesignPlanInvocation } from './plan-executor'
 import { executeRepairInvocation } from './repair-executor'
 import { executeDesignSystemInvocation } from './system-executor'
+import { executeDesignMotionInvocation } from './motion-executor'
 import type { DesignToolInvocation, DesignToolInvocationResult } from './protocol-types'
 export type { DesignToolInvocation, DesignToolInvocationResult } from './protocol-types'
 
@@ -64,6 +65,38 @@ export const DESIGN_TOOL_PROTOCOL_TOOLS: DesignToolProtocolTool[] = [
       'define_component',
       'link_prototype'
     ]
+  },
+  {
+    id: 'design_motion_set_timeline',
+    category: 'operations',
+    purpose: 'Configure the canonical frame/layer Motion timeline duration and playback mode.',
+    inputs: ['stable frame id', 'durationMs', 'once/loop/ping-pong playback'],
+    outputs: ['editable CanvasDocument.motion timeline', 'operation journal entry', 'affected ids'],
+    operationTypes: ['set-timeline']
+  },
+  {
+    id: 'design_motion_upsert_keyframes',
+    category: 'operations',
+    purpose: 'Create or update typed layer property tracks and stable keyframes in Design Motion.',
+    inputs: ['stable frame/shape ids', 'x/y/rotation/scale/opacity property', 'typed keyframes and easing'],
+    outputs: ['editable canonical track', 'operation journal entry', 'bounded validation errors'],
+    operationTypes: ['upsert-keyframes']
+  },
+  {
+    id: 'design_motion_apply_preset',
+    category: 'operations',
+    purpose: 'Compile Fade, Move, Scale, or Rotate into ordinary editable Motion tracks.',
+    inputs: ['stable frame/shape ids', 'preset timing', 'stagger and easing'],
+    outputs: ['editable canonical tracks', 'operation journal entry', 'affected ids'],
+    operationTypes: ['apply-preset']
+  },
+  {
+    id: 'design_motion_delete',
+    category: 'operations',
+    purpose: 'Idempotently remove a canonical Motion timeline, property track, or keyframe.',
+    inputs: ['stable frame, track, target, or keyframe ids from the motion snapshot'],
+    outputs: ['updated canonical Motion document', 'operation journal entry'],
+    operationTypes: ['delete']
   },
   {
     id: 'design.generate_screen',
@@ -217,6 +250,7 @@ export function executeDesignToolInvocation(
 ): DesignToolInvocationResult {
   if (invocation.toolId === 'design.plan') return executeDesignPlanInvocation(invocation)
   if (invocation.toolId === 'design.ops') return executeDesignOpsInvocation(invocation)
+  if (invocation.toolId.startsWith('design_motion_')) return executeDesignMotionInvocation(invocation)
   if (invocation.toolId === 'design.generate_screen') return executeGenerateScreenInvocation(invocation)
   if (invocation.toolId === 'design.generate_directions') return executeGenerateDirectionsInvocation(invocation)
   if (invocation.toolId === 'design.critique') return executeDesignCritiqueInvocation(invocation)

@@ -113,8 +113,7 @@ function ControllerHarness({ activeThreadId, rightPanelMode, onSetRightPanelMode
     rightPanelMode,
     filePreviewTarget,
     setFilePreviewTarget,
-    setRightPanelMode: onSetRightPanelMode,
-    setRightSidebarWidth: () => undefined
+    setRightPanelMode: onSetRightPanelMode
   })
   return null
 }

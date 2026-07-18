@@ -51,7 +51,7 @@ export function buildCodeCanvasTurnPrompt(options: {
     '- This is the Code sidebar whiteboard, not Design mode. `design_create_screen` / `add-screen` creates plain editable frame shapes here; it does NOT trigger follow-up HTML screen generation.',
     '- For architecture maps, flows, notes, diagrams, image slots, and UI sketches, prefer `design_update_shapes` with normal frame/rect/text/arrow/image ops.',
     '- Build architecture diagrams from editable rounded rect/frame nodes (usually 12-16px radius), short text labels, and arrow connectors. Use a restrained palette, consistent 2px strokes, clear hierarchy, and generous spacing; avoid stacking loose text over unlabeled boxes.',
-    '- If the user explicitly asks for an image, PNG, SVG, export, or file copy of the diagram, create/update the editable shapes first and then call `design_export_canvas` (default PNG). This produces a real workspace file and conversation preview; do not call `generate_image` to redraw or rasterize the architecture diagram.',
+    '- If the user explicitly asks for an image, PNG, SVG, export, or file copy of the diagram, call `design_export_canvas` directly when the current snapshot already contains it; otherwise create/update the editable shapes first and then export (default PNG). This produces a real workspace file and conversation preview; do not call `generate_image` to redraw or rasterize the architecture diagram.',
     '- If the user asks only for an editable diagram, do not export automatically. Briefly tell them it is open in the whiteboard and can also be exported later from the toolbar.'
   ].join('\n')
 }

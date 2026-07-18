@@ -10,13 +10,13 @@ import {
   SemverRangeSchema,
   SemverSchema
 } from './common.js'
-import { PermissionSchema } from './permissions.js'
+import { PermissionSchema, permissionMatches } from './permissions.js'
 import { ModelProviderDeclarationSchema } from './providers.js'
 import { ExtensionToolDeclarationSchema } from './tools.js'
 
 export const CURRENT_MANIFEST_VERSION = 1 as const
-export const CURRENT_EXTENSION_API_VERSION = '1.0.0' as const
-export const SUPPORTED_EXTENSION_API_VERSIONS = [CURRENT_EXTENSION_API_VERSION] as const
+export const CURRENT_EXTENSION_API_VERSION = '1.2.0' as const
+export const SUPPORTED_EXTENSION_API_VERSIONS = [CURRENT_EXTENSION_API_VERSION, '1.1.0', '1.0.0'] as const
 
 export const ActivationEventSchema = z.union([
   z.literal('onStartup'),
@@ -49,6 +49,38 @@ export const ViewContainerContributionSchema = z.strictObject({
 })
 export type ViewContainerContribution = z.infer<typeof ViewContainerContributionSchema>
 
+export const ExternalBrowserSiteSchema = z.strictObject({
+  id: LocalIdSchema,
+  title: z.string().min(1).max(64),
+  badge: z.string().min(1).max(4).optional(),
+  accent: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
+  url: z.string().min(1).max(2048).superRefine((value, context) => {
+    try {
+      const url = new URL(value)
+      if (
+        url.protocol !== 'https:' ||
+        url.username ||
+        url.password ||
+        (url.port && url.port !== '443')
+      ) {
+        context.addIssue({
+          code: 'custom',
+          message: 'External browser sites must use credential-free HTTPS URLs on the default port'
+        })
+      }
+    } catch {
+      context.addIssue({ code: 'custom', message: 'External browser site URL is invalid' })
+    }
+  })
+})
+export type ExternalBrowserSite = z.infer<typeof ExternalBrowserSiteSchema>
+
+export const ExternalBrowserContributionSchema = z.strictObject({
+  presentation: z.enum(['desktop', 'mobile']).default('desktop'),
+  sites: z.array(ExternalBrowserSiteSchema).min(1).max(12)
+})
+export type ExternalBrowserContribution = z.infer<typeof ExternalBrowserContributionSchema>
+
 export const ViewContributionSchema = z.strictObject({
   id: LocalIdSchema,
   title: z.string().min(1).max(128),
@@ -56,9 +88,11 @@ export const ViewContributionSchema = z.strictObject({
   icon: IconPathSchema.optional(),
   container: z.string().min(1).max(256).optional(),
   when: WhenExpressionSchema.optional(),
+  showInRightRail: z.boolean().default(true),
   order: OrderSchema,
   multiple: z.boolean().default(false),
-  localResourceRoots: z.array(RelativePathSchema).max(32).default([])
+  localResourceRoots: z.array(RelativePathSchema).max(32).default([]),
+  externalBrowser: ExternalBrowserContributionSchema.optional()
 })
 export type ViewContribution = z.infer<typeof ViewContributionSchema>
 
@@ -163,6 +197,133 @@ export const ExtensionContributionsSchema = z.strictObject({
 export type ExtensionContributions = z.infer<typeof ExtensionContributionsSchema>
 export type ExtensionContributionsInput = z.input<typeof ExtensionContributionsSchema>
 
+export const ManifestLocaleTagSchema = z
+  .string()
+  .min(2)
+  .max(64)
+  .regex(
+    /^[A-Za-z]{2,8}(?:-[A-Za-z0-9]{1,8})*$/,
+    'Expected a bounded BCP 47 language tag'
+  )
+export type ManifestLocaleTag = z.infer<typeof ManifestLocaleTagSchema>
+
+const LocalizedTitleSchema = z.strictObject({
+  title: z.string().min(1).max(128).optional()
+})
+const LocalizedDescriptionSchema = z.strictObject({
+  description: z.string().max(2048).optional()
+})
+const LocalizedCommandSchema = LocalizedTitleSchema.extend({
+  category: z.string().min(1).max(128).optional(),
+  description: z.string().max(2048).optional()
+}).strict()
+const LocalizedNotificationSchema = LocalizedTitleSchema.extend({
+  message: z.string().min(1).max(4096).optional(),
+  actions: z.record(LocalIdSchema, LocalizedTitleSchema).superRefine((value, context) => {
+    if (Object.keys(value).length > 4) {
+      context.addIssue({ code: 'custom', message: 'Notification localization supports at most 4 actions' })
+    }
+  }).optional()
+}).strict()
+const LocalizedSettingPropertySchema = z.strictObject({
+  title: z.string().min(1).max(128).optional(),
+  description: z.string().max(2048).optional()
+})
+const LocalizedSettingsSchema = LocalizedTitleSchema.extend({
+  properties: z.record(
+    z.string().min(1).max(256),
+    LocalizedSettingPropertySchema
+  ).superRefine((value, context) => {
+    if (Object.keys(value).length > 256) {
+      context.addIssue({ code: 'custom', message: 'Settings localization supports at most 256 properties' })
+    }
+  }).optional()
+}).strict()
+const LocalizedModelSchema = z.strictObject({
+  displayName: z.string().min(1).max(256).optional(),
+  description: z.string().max(2048).optional()
+})
+const LocalizedModelProviderSchema = z.strictObject({
+  displayName: z.string().min(1).max(128).optional(),
+  models: z.record(z.string().min(1).max(256), LocalizedModelSchema).superRefine((value, context) => {
+    if (Object.keys(value).length > 512) {
+      context.addIssue({ code: 'custom', message: 'Provider localization supports at most 512 models' })
+    }
+  }).optional()
+})
+const LocalizedDisplayNameSchema = z.strictObject({
+  displayName: z.string().min(1).max(128).optional()
+})
+const LocalizedAgentProfileSchema = LocalizedTitleSchema.extend({
+  description: z.string().max(2048).optional()
+}).strict()
+
+function boundedLocalizationRecord<T extends z.ZodType>(
+  valueSchema: T,
+  maxEntries: number
+) {
+  return z.record(LocalIdSchema, valueSchema).superRefine((value, context) => {
+    if (Object.keys(value).length > maxEntries) {
+      context.addIssue({
+        code: 'custom',
+        message: `Localization map must contain at most ${maxEntries} entries`
+      })
+    }
+  })
+}
+
+export const ManifestContributionLocalizationsSchema = z.strictObject({
+  commands: boundedLocalizationRecord(LocalizedCommandSchema, 512).optional(),
+  'views.containers': boundedLocalizationRecord(LocalizedTitleSchema, 64).optional(),
+  'views.leftSidebar': boundedLocalizationRecord(LocalizedTitleSchema, 128).optional(),
+  'views.rightSidebar': boundedLocalizationRecord(LocalizedTitleSchema, 128).optional(),
+  'views.auxiliaryPanel': boundedLocalizationRecord(LocalizedTitleSchema, 128).optional(),
+  'views.editorTab': boundedLocalizationRecord(LocalizedTitleSchema, 128).optional(),
+  'views.fullPage': boundedLocalizationRecord(LocalizedTitleSchema, 128).optional(),
+  'actions.topBar': boundedLocalizationRecord(LocalizedTitleSchema, 128).optional(),
+  'actions.composer': boundedLocalizationRecord(LocalizedTitleSchema, 128).optional(),
+  'actions.message': boundedLocalizationRecord(LocalizedTitleSchema, 128).optional(),
+  'message.resultPreviews': boundedLocalizationRecord(LocalizedTitleSchema, 128).optional(),
+  settings: boundedLocalizationRecord(LocalizedSettingsSchema, 64).optional(),
+  notifications: boundedLocalizationRecord(LocalizedNotificationSchema, 128).optional(),
+  agentProfiles: boundedLocalizationRecord(LocalizedAgentProfileSchema, 64).optional(),
+  tools: boundedLocalizationRecord(LocalizedDescriptionSchema, 512).optional(),
+  modelProviders: boundedLocalizationRecord(LocalizedModelProviderSchema, 64).optional(),
+  authentication: boundedLocalizationRecord(LocalizedDisplayNameSchema, 64).optional()
+})
+export type ManifestContributionLocalizations = z.infer<
+  typeof ManifestContributionLocalizationsSchema
+>
+
+export const ManifestLocalizationSchema = z.strictObject({
+  displayName: z.string().min(1).max(128).optional(),
+  description: z.string().max(4096).optional(),
+  contributes: ManifestContributionLocalizationsSchema.optional()
+})
+export type ManifestLocalization = z.infer<typeof ManifestLocalizationSchema>
+
+export const ManifestLocalizationsSchema = z
+  .record(ManifestLocaleTagSchema, ManifestLocalizationSchema)
+  .superRefine((value, context) => {
+    const entries = Object.entries(value)
+    if (entries.length > 32) {
+      context.addIssue({ code: 'custom', message: 'Manifest must contain at most 32 locale overlays' })
+    }
+    const normalized = new Set<string>()
+    for (const [locale] of entries) {
+      const key = locale.toLowerCase()
+      if (normalized.has(key)) {
+        context.addIssue({
+          code: 'custom',
+          path: [locale],
+          message: `Duplicate locale overlay after case normalization: ${locale}`
+        })
+      }
+      normalized.add(key)
+    }
+  })
+export type ManifestLocalizations = z.infer<typeof ManifestLocalizationsSchema>
+
 const BrowserOnlyContributionsSchema = ExtensionContributionsSchema.extend({
   commands: z.array(CommandContributionSchema).max(0).default([]),
   agentProfiles: z.array(AgentProfileDeclarationSchema).max(0).default([]),
@@ -180,6 +341,8 @@ const ManifestCommonShape = {
   version: SemverSchema,
   displayName: z.string().min(1).max(128).optional(),
   description: z.string().max(4096).optional(),
+  icon: IconPathSchema.optional(),
+  localizations: ManifestLocalizationsSchema.optional(),
   license: z.string().min(1).max(128).optional(),
   homepage: z.string().url().optional(),
   engines: z.strictObject({ kun: SemverRangeSchema }),
@@ -238,6 +401,59 @@ export const ExtensionManifestSchema = StructuralExtensionManifestSchema.superRe
           path: ['permissions'],
           message: `Permission ${permission} is required by the declared entrypoints or contributions`
         })
+      }
+    }
+    if (
+      manifest.permissions.includes('webview.external') &&
+      !manifest.permissions.some((permission) => permission.startsWith('network:'))
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['permissions'],
+        message: 'Permission webview.external requires at least one network:<hostname> grant'
+      })
+    }
+
+    const declaredExternalViews = [
+      ...manifest.contributes['views.leftSidebar'],
+      ...manifest.contributes['views.rightSidebar'],
+      ...manifest.contributes['views.auxiliaryPanel'],
+      ...manifest.contributes['views.editorTab'],
+      ...manifest.contributes['views.fullPage']
+    ].filter((view) => view.externalBrowser !== undefined)
+    for (const view of declaredExternalViews) {
+      if (!manifest.permissions.includes('webview.external')) {
+        context.addIssue({
+          code: 'custom',
+          path: ['permissions'],
+          message: `Permission webview.external is required by View ${view.id}`
+        })
+      }
+      const siteIds = new Set<string>()
+      for (const site of view.externalBrowser!.sites) {
+        if (siteIds.has(site.id)) {
+          context.addIssue({
+            code: 'custom',
+            path: ['contributes'],
+            message: `External browser View ${view.id} has duplicate site id ${site.id}`
+          })
+        }
+        siteIds.add(site.id)
+        let hostname: string
+        try {
+          hostname = new URL(site.url).hostname.toLowerCase()
+        } catch {
+          continue
+        }
+        const requiredPermission = `network:${hostname}`
+        if (!manifest.permissions.some((permission) =>
+          permissionMatches(permission, requiredPermission))) {
+          context.addIssue({
+            code: 'custom',
+            path: ['permissions'],
+            message: `External browser site ${site.id} requires a network grant for ${hostname}`
+          })
+        }
       }
     }
 
@@ -306,15 +522,41 @@ export const ExtensionManifestSchema = StructuralExtensionManifestSchema.superRe
       ['authentication', manifest.contributes.authentication],
       ['hostContentScripts', manifest.contributes.hostContentScripts]
     ] as const
+    const workbenchCollections = new Set([
+      'commands',
+      'views.containers',
+      'views',
+      'actions.topBar',
+      'actions.composer',
+      'actions.message',
+      'settings',
+      'contextMenus',
+      'notifications',
+      'hostContentScripts'
+    ])
+    const workbenchIds = new Map<string, string>()
     for (const [collection, entries] of idCollections) {
       const seen = new Set<string>()
       for (const entry of entries) {
-        if (seen.has(entry.id)) {
+        const duplicateInCollection = seen.has(entry.id)
+        if (duplicateInCollection) {
           context.addIssue({
             code: 'custom',
             path: ['contributes', collection],
             message: `Duplicate contribution id: ${entry.id}`
           })
+        }
+        if (!duplicateInCollection && workbenchCollections.has(collection)) {
+          const previousCollection = workbenchIds.get(entry.id)
+          if (previousCollection !== undefined) {
+            context.addIssue({
+              code: 'custom',
+              path: ['contributes', collection],
+              message: `Duplicate workbench contribution id: ${entry.id} (already declared in ${previousCollection})`
+            })
+          } else {
+            workbenchIds.set(entry.id, collection)
+          }
         }
         seen.add(entry.id)
       }
@@ -335,6 +577,8 @@ export const ExtensionManifestSchema = StructuralExtensionManifestSchema.superRe
         })
       }
     })
+
+    validateManifestLocalizationReferences(manifest, context)
   }
 )
 export type ExtensionManifest = z.infer<typeof ExtensionManifestSchema>
@@ -354,4 +598,170 @@ export function requiredManifestPermissions(
 
 export function parseExtensionManifest(value: unknown): ExtensionManifest {
   return ExtensionManifestSchema.parse(value)
+}
+
+/**
+ * Resolves only declared display copy. Identity, activation, permissions,
+ * executable paths, schemas and instructions always remain base-manifest data.
+ */
+export function resolveExtensionManifestLocale(
+  manifest: ExtensionManifest,
+  requestedLocale: string | undefined
+): ExtensionManifest {
+  const localization = findManifestLocalization(manifest.localizations ?? {}, requestedLocale)
+  if (!localization) return manifest
+  const localized = structuredClone(manifest)
+  if (localization.displayName !== undefined) localized.displayName = localization.displayName
+  if (localization.description !== undefined) localized.description = localization.description
+
+  const contributionLocalizations = localization.contributes
+  applyEntryLocalizations(localized.contributes.commands, contributionLocalizations?.commands)
+  applyEntryLocalizations(localized.contributes['views.containers'], contributionLocalizations?.['views.containers'])
+  applyEntryLocalizations(localized.contributes['views.leftSidebar'], contributionLocalizations?.['views.leftSidebar'])
+  applyEntryLocalizations(localized.contributes['views.rightSidebar'], contributionLocalizations?.['views.rightSidebar'])
+  applyEntryLocalizations(localized.contributes['views.auxiliaryPanel'], contributionLocalizations?.['views.auxiliaryPanel'])
+  applyEntryLocalizations(localized.contributes['views.editorTab'], contributionLocalizations?.['views.editorTab'])
+  applyEntryLocalizations(localized.contributes['views.fullPage'], contributionLocalizations?.['views.fullPage'])
+  applyEntryLocalizations(localized.contributes['actions.topBar'], contributionLocalizations?.['actions.topBar'])
+  applyEntryLocalizations(localized.contributes['actions.composer'], contributionLocalizations?.['actions.composer'])
+  applyEntryLocalizations(localized.contributes['actions.message'], contributionLocalizations?.['actions.message'])
+  applyEntryLocalizations(
+    localized.contributes['message.resultPreviews'],
+    contributionLocalizations?.['message.resultPreviews']
+  )
+  applyEntryLocalizations(localized.contributes.agentProfiles, contributionLocalizations?.agentProfiles)
+  applyEntryLocalizations(localized.contributes.tools, contributionLocalizations?.tools)
+  applyEntryLocalizations(localized.contributes.authentication, contributionLocalizations?.authentication)
+
+  for (const setting of localized.contributes.settings) {
+    const overlay = contributionLocalizations?.settings?.[setting.id]
+    if (!overlay) continue
+    if (overlay.title !== undefined) setting.title = overlay.title
+    for (const [key, propertyOverlay] of Object.entries(overlay.properties ?? {})) {
+      const property = setting.properties[key]
+      if (property) setting.properties[key] = { ...property, ...propertyOverlay }
+    }
+  }
+  for (const notification of localized.contributes.notifications) {
+    const overlay = contributionLocalizations?.notifications?.[notification.id]
+    if (!overlay) continue
+    if (overlay.title !== undefined) notification.title = overlay.title
+    if (overlay.message !== undefined) notification.message = overlay.message
+    for (const action of notification.actions) {
+      const actionOverlay = overlay.actions?.[action.id]
+      if (actionOverlay?.title !== undefined) action.title = actionOverlay.title
+    }
+  }
+  for (const provider of localized.contributes.modelProviders) {
+    const overlay = contributionLocalizations?.modelProviders?.[provider.id]
+    if (!overlay) continue
+    if (overlay.displayName !== undefined) provider.displayName = overlay.displayName
+    for (const model of provider.models) {
+      const modelOverlay = overlay.models?.[model.id]
+      if (!modelOverlay) continue
+      if (modelOverlay.displayName !== undefined) model.displayName = modelOverlay.displayName
+      if (modelOverlay.description !== undefined) model.description = modelOverlay.description
+    }
+  }
+  return localized
+}
+
+function findManifestLocalization(
+  localizations: ManifestLocalizations,
+  requestedLocale: string | undefined
+): ManifestLocalization | undefined {
+  const requested = requestedLocale?.trim().replace(/_/g, '-').toLowerCase()
+  if (!requested) return undefined
+  const byNormalizedLocale = new Map(
+    Object.entries(localizations).map(([locale, value]) => [locale.toLowerCase(), value])
+  )
+  let candidate = requested
+  while (candidate) {
+    const match = byNormalizedLocale.get(candidate)
+    if (match) return match
+    const separator = candidate.lastIndexOf('-')
+    if (separator < 0) break
+    candidate = candidate.slice(0, separator)
+  }
+  return undefined
+}
+
+function applyEntryLocalizations(
+  entries: Array<{ id: string }>,
+  overlays: Record<string, Record<string, unknown>> | undefined
+): void {
+  if (!overlays) return
+  for (const entry of entries) {
+    const overlay = overlays[entry.id]
+    if (overlay) Object.assign(entry, overlay)
+  }
+}
+
+function validateManifestLocalizationReferences(
+  manifest: z.infer<typeof StructuralExtensionManifestSchema>,
+  context: z.RefinementCtx
+): void {
+  const contributionPoints = Object.keys(ManifestContributionLocalizationsSchema.shape) as Array<
+    keyof ManifestContributionLocalizations
+  >
+  for (const [locale, localization] of Object.entries(manifest.localizations ?? {})) {
+    for (const point of contributionPoints) {
+      const declared = new Set(manifest.contributes[point].map(({ id }) => id))
+      for (const localizedId of Object.keys(localization.contributes?.[point] ?? {})) {
+        if (!declared.has(localizedId)) {
+          context.addIssue({
+            code: 'custom',
+            path: ['localizations', locale, 'contributes', point, localizedId],
+            message: `Localization references an undeclared ${point} contribution: ${localizedId}`
+          })
+        }
+      }
+    }
+
+    for (const [settingId, settingOverlay] of Object.entries(localization.contributes?.settings ?? {})) {
+      const setting = manifest.contributes.settings.find(({ id }) => id === settingId)
+      if (!setting) continue
+      for (const propertyKey of Object.keys(settingOverlay.properties ?? {})) {
+        if (!(propertyKey in setting.properties)) {
+          context.addIssue({
+            code: 'custom',
+            path: ['localizations', locale, 'contributes', 'settings', settingId, 'properties', propertyKey],
+            message: `Localization references an undeclared setting property: ${propertyKey}`
+          })
+        }
+      }
+    }
+    for (const [notificationId, notificationOverlay] of Object.entries(
+      localization.contributes?.notifications ?? {}
+    )) {
+      const notification = manifest.contributes.notifications.find(({ id }) => id === notificationId)
+      if (!notification) continue
+      const actionIds = new Set(notification.actions.map(({ id }) => id))
+      for (const actionId of Object.keys(notificationOverlay.actions ?? {})) {
+        if (!actionIds.has(actionId)) {
+          context.addIssue({
+            code: 'custom',
+            path: ['localizations', locale, 'contributes', 'notifications', notificationId, 'actions', actionId],
+            message: `Localization references an undeclared notification action: ${actionId}`
+          })
+        }
+      }
+    }
+    for (const [providerId, providerOverlay] of Object.entries(
+      localization.contributes?.modelProviders ?? {}
+    )) {
+      const provider = manifest.contributes.modelProviders.find(({ id }) => id === providerId)
+      if (!provider) continue
+      const modelIds = new Set(provider.models.map(({ id }) => id))
+      for (const modelId of Object.keys(providerOverlay.models ?? {})) {
+        if (!modelIds.has(modelId)) {
+          context.addIssue({
+            code: 'custom',
+            path: ['localizations', locale, 'contributes', 'modelProviders', providerId, 'models', modelId],
+            message: `Localization references an undeclared provider model: ${modelId}`
+          })
+        }
+      }
+    }
+  }
 }

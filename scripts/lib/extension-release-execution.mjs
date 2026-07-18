@@ -1,5 +1,6 @@
 import { spawnSync } from 'node:child_process'
-import { isAbsolute, relative, resolve, sep } from 'node:path'
+import { existsSync } from 'node:fs'
+import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 
 const LOCAL_DEPENDENCY_PREFIXES = ['file:', 'link:', 'workspace:']
 
@@ -7,19 +8,30 @@ export function npmExecutable(platform = process.platform) {
   return platform === 'win32' ? 'npm.cmd' : 'npm'
 }
 
-export function runRequiredNpm(options) {
-  const npmCli = process.env.npm_execpath
+export function npmInvocation({
+  args = [],
+  env = process.env,
+  execPath = process.execPath,
+  platform = process.platform
+} = {}) {
+  const npmCli = typeof env.npm_execpath === 'string' && env.npm_execpath.length > 0
+    ? env.npm_execpath
+    : discoverBundledNpmCli(execPath, platform)
   return npmCli
-    ? runRequiredCommand({
-        ...options,
-        command: process.execPath,
-        args: [npmCli, ...(options.args ?? [])]
-      })
-    : runRequiredCommand({
-        ...options,
-        command: npmExecutable(),
-        args: options.args ?? []
-      })
+    ? { command: execPath, args: [npmCli, ...args] }
+    : { command: npmExecutable(platform), args }
+}
+
+export function runRequiredNpm(options = {}) {
+  const invocation = npmInvocation({
+    args: options.args ?? [],
+    env: { ...process.env, ...(options.env ?? {}) }
+  })
+  return runRequiredCommand({
+    ...options,
+    command: invocation.command,
+    args: invocation.args
+  })
 }
 
 export function runRequiredCommand({
@@ -117,4 +129,10 @@ function parseMajor(version) {
 
 function sameNumbers(left, right) {
   return JSON.stringify(left) === JSON.stringify(right)
+}
+
+function discoverBundledNpmCli(execPath, platform) {
+  if (platform !== 'win32') return undefined
+  const candidate = join(dirname(execPath), 'node_modules', 'npm', 'bin', 'npm-cli.js')
+  return existsSync(candidate) ? candidate : undefined
 }

@@ -9,7 +9,9 @@ Classify the request using the user's words, selected canvas objects, the curren
 - SINGLE SCREEN: the user asks for one page, screen, state, component demo, or focused redesign. Create exactly one screen with one \`design_create_screen\` call. Do not add extra screens, design directions, logos, or a design-system board unless requested.
 - COMPLETE MULTI-SCREEN EXPERIENCE: the user explicitly asks for a complete product, a set of pages, an end-to-end flow, multiple named screens, or wording such as "整套", "完整", "多页面", or "全套". Create the necessary screens together with one \`design_create_screen\` call using its \`screens\` array. Give every screen a clear name and a self-contained brief. If the user asks for a complete experience without naming pages, choose the smallest coherent set that covers the main flow; do not generate unrelated concept directions.
 - MODIFY EXISTING DESIGN: when the user asks to edit, restyle, arrange, validate, or replace selected/current content, modify that content directly. Do not create new screens unless the user explicitly asks for them.
+- FRAME/LAYER MOTION: when the user asks to animate existing Design canvas layers or a whole HTML/running-app/SVG frame container over time, use the advertised \`design_motion_*\` tools and the stable ids in \`snapshot.motion\`. Motion edits the canonical per-frame timeline; it does not generate CSS/GSAP, edit inner SVG animation, or create navigation.
 - SVG OR SVG MOTION ASSET: when the requested deliverable is a vector logo/icon/loader/illustration, path animation, or reusable animated vector asset, create exactly one first-class SVG artifact with \`design_svg_create\`. Do not substitute HTML, ShapeOps, or raster image generation.
+- PROTOTYPE NAVIGATION: when the request is about clicking between screens or route flow, preserve or edit Prototype links. Prototype is navigation and must not be represented as a Motion timeline; Motion is time-based animation inside one owning frame.
 - RASTER IMAGE, CANVAS, OR DESIGN SYSTEM: use the matching advertised tool only when that is the requested deliverable. A full screen request does not automatically require a logo, image generation, SVG asset, or a separate design-system artifact.
 
 If it is genuinely ambiguous whether the user wants one screen or a complete multi-screen experience, and that choice materially changes the work, ask one concise question through \`user_input\` and wait. Otherwise make the narrowest reasonable inference and act.
@@ -18,6 +20,7 @@ Execution rules:
 - There is no mandatory planning preamble. Use the real advertised Design tools directly.
 - Prefer the fewest calls that complete the requested visible outcome. Batch related screens in \`design_create_screen.screens\` and related shape operations in one focused \`design_update_shapes.ops\` call; do not split work into one call per shape or invent renderer-local workflow tools.
 - Keep one logical outcome per call, inspect tool results, and correct reported errors before claiming completion.
+- Reuse existing Motion timeline, track, and keyframe ids from the bounded snapshot instead of recreating effects blindly. Presets compile to editable tracks; standalone SVG SMIL remains a separate inner animation source.
 - Preserve existing canvas content unless the user asks to replace or delete it.`
 
 /**

@@ -1,0 +1,82 @@
+{
+  "$schema": "https://kun.dev/schemas/extensions/manifest/v1.json",
+  "manifestVersion": 1,
+  "apiVersion": "1.2.0",
+  "name": "social-media-sidebar",
+  "publisher": "kun-examples",
+  "version": "0.1.3",
+  "displayName": "Social Media",
+  "description": "Browse Douyin, Bilibili, and Xiaohongshu beside the Kun workspace.",
+  "icon": "assets/social-media.svg",
+  "license": "MIT",
+  "engines": {
+    "kun": ">=0.1.0"
+  },
+  "browser": "dist/webview/index.html",
+  "activationEvents": [
+    "onView:social-media"
+  ],
+  "contributes": {
+    "views.rightSidebar": [
+      {
+        "id": "social-media",
+        "title": "Social Media",
+        "entry": "dist/webview/index.html",
+        "icon": "assets/social-media.svg",
+        "order": 120,
+        "localResourceRoots": ["dist/webview", "assets"],
+        "externalBrowser": {
+          "presentation": "desktop",
+          "sites": [
+            {
+              "id": "douyin",
+              "title": "抖音",
+              "badge": "抖",
+              "accent": "#20d5ec",
+              "url": "https://www.douyin.com/"
+            },
+            {
+              "id": "bilibili",
+              "title": "哔哩哔哩",
+              "badge": "B",
+              "accent": "#00aeec",
+              "url": "https://www.bilibili.com/"
+            },
+            {
+              "id": "xiaohongshu",
+              "title": "小红书",
+              "badge": "红",
+              "accent": "#ff2442",
+              "url": "https://www.xiaohongshu.com/explore"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "localizations": {
+    "zh-CN": {
+      "displayName": "内容浏览",
+      "description": "在 Kun 工作区旁浏览抖音、哔哩哔哩和小红书。",
+      "contributes": {
+        "views.rightSidebar": {
+          "social-media": {
+            "title": "内容浏览"
+          }
+        }
+      }
+    }
+  },
+  "permissions": [
+    "ui.views",
+    "webview",
+    "webview.external",
+    "network:douyin.com",
+    "network:*.douyin.com",
+    "network:bilibili.com",
+    "network:*.bilibili.com",
+    "network:xiaohongshu.com",
+    "network:*.xiaohongshu.com"
+  ],
+  "stateSchemaVersion": 1
+}

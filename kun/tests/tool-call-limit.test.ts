@@ -234,6 +234,77 @@ describe('native model tool-call limit', () => {
     }))
   })
 
+  it('allows an internal child loop to opt out of the wall-time deadline', async () => {
+    vi.useFakeTimers()
+    const threadStore = new InMemoryThreadStore()
+    const sessionStore = new InMemorySessionStore()
+    const eventBus = new InMemoryEventBus()
+    const inflight = new InflightTracker()
+    const steering = new SteeringQueue()
+    const ids = new SequentialIdGenerator()
+    const nowIso = () => '2026-07-12T00:00:00.000Z'
+    const events = new RuntimeEventRecorder({
+      eventBus,
+      sessionStore,
+      allocateSeq: (threadId) => eventBus.allocateSeq(threadId),
+      nowIso
+    })
+    const turns = new TurnService({
+      threadStore,
+      sessionStore,
+      events,
+      inflight,
+      steering,
+      compactor: new ContextCompactor(),
+      ids,
+      nowIso
+    })
+    const model = new DeadlineAwareModel()
+    const loop = new AgentLoop({
+      threadStore,
+      sessionStore,
+      approvalGate: new InMemoryApprovalGate(),
+      userInputGate: new InMemoryUserInputGate(),
+      model,
+      toolHost: new LocalToolHost({ tools: [] }),
+      usage: new UsageService(),
+      events,
+      turns,
+      inflight,
+      steering,
+      compactor: new ContextCompactor(),
+      prefix: createImmutablePrefix({ systemPrompt: 'test system prompt' }),
+      ids,
+      nowIso,
+      turnLimits: { maxWallTimeMs: 50 },
+      disableWallTimeLimit: true
+    })
+    const threadId = 'thr_unbounded_child'
+    await threadStore.upsert(createThreadRecord({
+      id: threadId,
+      title: 'Unbounded child',
+      workspace: '/tmp/workspace',
+      model: model.model
+    }))
+    const started = await turns.startTurn({ threadId, request: { prompt: 'wait for cancellation' } })
+
+    let settled = false
+    const run = loop.runTurn(threadId, started.turnId).finally(() => {
+      settled = true
+    })
+    await model.waitForStart()
+    await vi.advanceTimersByTimeAsync(500)
+
+    expect(settled).toBe(false)
+    expect(model.abortObserved).toBe(false)
+
+    await turns.interruptTurn({ threadId, turnId: started.turnId })
+    await expect(run).resolves.toBe('aborted')
+    expect(model.abortObserved).toBe(true)
+    const runtimeEvents = await sessionStore.loadEventsSince(threadId, 0)
+    expect(runtimeEvents).not.toContainEqual(expect.objectContaining({ code: 'turn_wall_time_limit' }))
+  })
+
   it('leaves a delegated SDK runtime to classify its own wall-time deadline', async () => {
     vi.useFakeTimers()
     const threadStore = new InMemoryThreadStore()

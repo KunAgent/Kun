@@ -48,6 +48,16 @@ export type ExtensionHostDiagnostic = PersistedHostHealth & {
   negotiatedRpcVersion?: number
 }
 
+export type ExtensionHostWorkspaceScope = {
+  workspaceRoot?: string
+  workspaceRoots?: string[]
+  workspaceContext?: WorkspaceContext
+}
+
+export type ExtensionHostNotificationScope =
+  | ExtensionHostWorkspaceScope
+  | { workspaceKey: string }
+
 export type ExtensionManagerOptions = {
   packageManager: ExtensionPackageManager
   paths: ExtensionPaths
@@ -65,7 +75,7 @@ export type ExtensionManagerOptions = {
     terminal: boolean
   ): void | Promise<void>
   /** Dispose broker-owned registrations before a crashed host can reactivate. */
-  onHostExit?(exit: ExtensionHostExit): void | Promise<void>
+  onHostExit?(exit: ExtensionHostExit, principal: ExtensionPrincipal): void | Promise<void>
   /** Bind retained Views to the exact Host process generation that activated. */
   onHostActivated?(principal: ExtensionPrincipal): void | Promise<void>
   crashThreshold?: number
@@ -78,10 +88,13 @@ export type ExtensionManagerOptions = {
 }
 
 export class ExtensionManager {
+  /** Host lifecycle state is isolated by extension identity plus normalized workspace ownership. */
   private readonly hosts = new Map<string, ExtensionHostProcess>()
   private readonly activationEpochs = new Map<string, number>()
+  private readonly workspaceActivationEpochs = new Map<string, number>()
   private readonly activations = new Map<string, {
-    epoch: number
+    extensionId: string
+    epoch: string
     event: string
     workspaceRoots: string[]
     workspaceContextSignature: string
@@ -137,18 +150,15 @@ export class ExtensionManager {
   async activate(
     extensionId: string,
     event: string,
-    options: {
-      workspaceRoot?: string
-      workspaceRoots?: string[]
-      workspaceContext?: WorkspaceContext
-    } = {}
+    options: ExtensionHostWorkspaceScope = {}
   ): Promise<ExtensionHostProcess | undefined> {
-    this.cancelIdleDeactivation(extensionId)
-    await this.waitForLifecycleTransition(extensionId)
     const workspaceRoots = normalizedWorkspaceRoots(options)
+    const instanceKey = extensionHostInstanceKey(extensionId, { workspaceRoots })
+    this.cancelIdleDeactivation(instanceKey)
+    await this.waitForLifecycleTransition(instanceKey)
     const workspaceContextSignature = JSON.stringify(options.workspaceContext ?? null)
-    const epoch = this.activationEpoch(extensionId)
-    const existing = this.activations.get(extensionId)
+    const epoch = this.activationEpoch(extensionId, workspaceRoots)
+    const existing = this.activations.get(instanceKey)
     if (existing !== undefined) {
       if (
         existing.epoch === epoch &&
@@ -162,8 +172,9 @@ export class ExtensionManager {
       await existing.promise.catch(() => undefined)
       return this.activate(extensionId, event, options)
     }
-    const activation = this.activateInternal(extensionId, event, options, epoch)
-    this.activations.set(extensionId, {
+    const activation = this.activateInternal(extensionId, event, options, epoch, instanceKey)
+    this.activations.set(instanceKey, {
+      extensionId,
       epoch,
       event,
       workspaceRoots,
@@ -173,28 +184,33 @@ export class ExtensionManager {
     try {
       return await activation
     } finally {
-      if (this.activations.get(extensionId)?.promise === activation) this.activations.delete(extensionId)
-      this.scheduleIdleDeactivation(extensionId)
+      if (this.activations.get(instanceKey)?.promise === activation) this.activations.delete(instanceKey)
+      this.scheduleIdleDeactivation(instanceKey, extensionId)
     }
   }
 
   /** Retain a Node Host synchronously before a View begins asynchronous activation. */
-  retainView(extensionId: string): void {
-    this.viewReferences.set(extensionId, (this.viewReferences.get(extensionId) ?? 0) + 1)
-    this.cancelIdleDeactivation(extensionId)
+  retainView(extensionId: string, options: ExtensionHostWorkspaceScope = {}): void {
+    const instanceKey = extensionHostInstanceKey(extensionId, options)
+    this.viewReferences.set(instanceKey, (this.viewReferences.get(instanceKey) ?? 0) + 1)
+    this.cancelIdleDeactivation(instanceKey)
   }
 
-  activeHostGeneration(extensionId: string): string | undefined {
-    const host = this.hosts.get(extensionId)
+  activeHostGeneration(
+    extensionId: string,
+    options: ExtensionHostWorkspaceScope = {}
+  ): string | undefined {
+    const host = this.hosts.get(extensionHostInstanceKey(extensionId, options))
     return host?.state === 'active' ? host.lifecycleNonce : undefined
   }
 
   /** Release one View reference and start the bounded grace period at zero. */
-  releaseView(extensionId: string): void {
-    const current = this.viewReferences.get(extensionId) ?? 0
-    if (current <= 1) this.viewReferences.delete(extensionId)
-    else this.viewReferences.set(extensionId, current - 1)
-    if (current > 0) this.scheduleIdleDeactivation(extensionId)
+  releaseView(extensionId: string, options: ExtensionHostWorkspaceScope = {}): void {
+    const instanceKey = extensionHostInstanceKey(extensionId, options)
+    const current = this.viewReferences.get(instanceKey) ?? 0
+    if (current <= 1) this.viewReferences.delete(instanceKey)
+    else this.viewReferences.set(instanceKey, current - 1)
+    if (current > 0) this.scheduleIdleDeactivation(instanceKey, extensionId)
   }
 
   get pendingIdleDeactivationCount(): number {
@@ -206,19 +222,17 @@ export class ExtensionManager {
     activationEvent: string,
     method: string,
     params: JsonValue,
-    options: {
-      workspaceRoot?: string
-      workspaceRoots?: string[]
-      workspaceContext?: WorkspaceContext
+    options: ExtensionHostWorkspaceScope & {
       signal?: AbortSignal
       timeoutMs?: number
       resetTimeoutOnStream?: boolean
     } = {}
   ): Promise<JsonValue> {
-    // New broker work is rejected while teardown owns the extension. View
+    // New broker work is rejected while teardown owns this Host scope. View
     // activation may wait and reopen after cleanup, but an old provider/tool
     // registration must not reactivate itself from its own dispose callback.
-    if (this.stops.has(extensionId) || this.hostExitCleanups.has(extensionId)) {
+    const instanceKey = extensionHostInstanceKey(extensionId, options)
+    if (this.stops.has(instanceKey) || this.hostExitCleanups.has(instanceKey)) {
       throw extensionError(
         'EXTENSION_HOST_DEACTIVATING',
         'Extension host is deactivating',
@@ -234,53 +248,86 @@ export class ExtensionManager {
     return host.invoke(method, params, options)
   }
 
-  async notify(extensionId: string, method: string, params: JsonValue): Promise<void> {
-    const host = this.hosts.get(extensionId)
-    if (host === undefined || host.state !== 'active') {
+  async notify(
+    extensionId: string,
+    method: string,
+    params: JsonValue,
+    options?: ExtensionHostNotificationScope
+  ): Promise<void> {
+    const hosts = options === undefined
+      ? [...this.hosts.values()].filter((host) =>
+          host.principal.extensionId === extensionId && host.state === 'active')
+      : 'workspaceKey' in options
+        ? [...this.hosts.values()].filter((host) =>
+            host.principal.extensionId === extensionId &&
+            host.state === 'active' &&
+            host.principal.workspaceRoots.some(
+              (root) => this.options.paths.workspaceKey(root) === options.workspaceKey
+            ))
+        : [this.hosts.get(extensionHostInstanceKey(extensionId, options))]
+            .filter((host): host is ExtensionHostProcess => host?.state === 'active')
+    if (hosts.length === 0) {
       throw extensionError('EXTENSION_NOT_ACTIVE', 'Cannot notify an inactive extension host', {
         extensionId,
         method
       })
     }
-    await host.notify(method, params)
+    await Promise.all(hosts.map((host) => host.notify(method, params)))
   }
 
   async deactivate(extensionId: string): Promise<void> {
-    this.cancelIdleDeactivation(extensionId)
-    this.activationEpochs.set(extensionId, this.activationEpoch(extensionId) + 1)
+    this.activationEpochs.set(extensionId, (this.activationEpochs.get(extensionId) ?? 0) + 1)
+    const instanceKeys = this.instanceKeys(extensionId)
+    for (const instanceKey of instanceKeys) this.cancelIdleDeactivation(instanceKey)
     try {
-      await this.stopHost(extensionId)
+      await Promise.all(instanceKeys.map((instanceKey) => this.stopHost(instanceKey, extensionId)))
     } finally {
-      this.idleEligibleExtensions.delete(extensionId)
+      for (const instanceKey of instanceKeys) this.idleEligibleExtensions.delete(instanceKey)
     }
   }
 
-  private async stopHost(extensionId: string): Promise<void> {
-    const existing = this.stops.get(extensionId)
+  /** Stop only Host instances whose admitted scope contains one workspace. */
+  async deactivateWorkspace(extensionId: string, workspaceKey: string): Promise<void> {
+    const epochKey = workspaceActivationEpochKey(extensionId, workspaceKey)
+    this.workspaceActivationEpochs.set(
+      epochKey,
+      (this.workspaceActivationEpochs.get(epochKey) ?? 0) + 1
+    )
+    const instanceKeys = this.instanceKeys(extensionId, workspaceKey)
+    for (const instanceKey of instanceKeys) this.cancelIdleDeactivation(instanceKey)
+    try {
+      await Promise.all(instanceKeys.map((instanceKey) => this.stopHost(instanceKey, extensionId)))
+    } finally {
+      for (const instanceKey of instanceKeys) this.idleEligibleExtensions.delete(instanceKey)
+    }
+  }
+
+  private async stopHost(instanceKey: string, extensionId: string): Promise<void> {
+    const existing = this.stops.get(instanceKey)
     if (existing !== undefined) return existing
-    const stopping = this.stopHostInternal(extensionId)
-    this.stops.set(extensionId, stopping)
+    const stopping = this.stopHostInternal(instanceKey, extensionId)
+    this.stops.set(instanceKey, stopping)
     try {
       await stopping
     } finally {
-      if (this.stops.get(extensionId) === stopping) this.stops.delete(extensionId)
+      if (this.stops.get(instanceKey) === stopping) this.stops.delete(instanceKey)
     }
   }
 
-  private async stopHostInternal(extensionId: string): Promise<void> {
-    this.cancelIdleDeactivation(extensionId)
-    this.idleEligibleExtensions.delete(extensionId)
-    const timer = this.healthyTimers.get(extensionId)
+  private async stopHostInternal(instanceKey: string, extensionId: string): Promise<void> {
+    this.cancelIdleDeactivation(instanceKey)
+    this.idleEligibleExtensions.delete(instanceKey)
+    const timer = this.healthyTimers.get(instanceKey)
     if (timer !== undefined) clearTimeout(timer)
-    this.healthyTimers.delete(extensionId)
-    const host = this.hosts.get(extensionId)
+    this.healthyTimers.delete(instanceKey)
+    const host = this.hosts.get(instanceKey)
     if (host === undefined) {
-      await this.waitForHostExitCleanup(extensionId)
+      await this.waitForHostExitCleanup(instanceKey)
       return
     }
-    this.hosts.delete(extensionId)
+    this.hosts.delete(instanceKey)
     await host.deactivate()
-    await this.waitForHostExitCleanup(extensionId)
+    await this.waitForHostExitCleanup(instanceKey)
     await this.updateHealth(extensionId, (health) => ({
       ...health,
       lifecycleState: 'stopped',
@@ -289,12 +336,57 @@ export class ExtensionManager {
     }))
   }
 
-  private activationEpoch(extensionId: string): number {
-    return this.activationEpochs.get(extensionId) ?? 0
+  private activationEpoch(extensionId: string, workspaceRoots: readonly string[]): string {
+    return JSON.stringify([
+      this.activationEpochs.get(extensionId) ?? 0,
+      workspaceRoots.map((root) => {
+        const workspaceKey = this.options.paths.workspaceKey(root)
+        return [
+          workspaceKey,
+          this.workspaceActivationEpochs.get(
+            workspaceActivationEpochKey(extensionId, workspaceKey)
+          ) ?? 0
+        ]
+      })
+    ])
   }
 
-  private assertActivationCurrent(extensionId: string, expectedEpoch: number): void {
-    if (this.activationEpoch(extensionId) !== expectedEpoch) {
+  private instanceKeys(extensionId: string, workspaceKey?: string): string[] {
+    const keys = new Set<string>()
+    for (const [instanceKey, host] of this.hosts) {
+      if (
+        host.principal.extensionId === extensionId &&
+        (workspaceKey === undefined || host.principal.workspaceRoots.some(
+          (root) => this.options.paths.workspaceKey(root) === workspaceKey
+        ))
+      ) keys.add(instanceKey)
+    }
+    for (const [instanceKey, activation] of this.activations) {
+      if (
+        activation.extensionId === extensionId &&
+        (workspaceKey === undefined || activation.workspaceRoots.some(
+          (root) => this.options.paths.workspaceKey(root) === workspaceKey
+        ))
+      ) keys.add(instanceKey)
+    }
+    for (const instanceKey of [...this.stops.keys(), ...this.hostExitCleanups.keys()]) {
+      const identity = identityFromInstanceKey(instanceKey)
+      if (
+        identity?.extensionId === extensionId &&
+        (workspaceKey === undefined || identity.workspaceRoots.some(
+          (root) => this.options.paths.workspaceKey(root) === workspaceKey
+        ))
+      ) keys.add(instanceKey)
+    }
+    return [...keys]
+  }
+
+  private assertActivationCurrent(
+    extensionId: string,
+    workspaceRoots: readonly string[],
+    expectedEpoch: string
+  ): void {
+    if (this.activationEpoch(extensionId, workspaceRoots) !== expectedEpoch) {
       throw extensionError(
         'EXTENSION_ACTIVATION_CANCELLED',
         'Extension activation was invalidated by a lifecycle or permission change',
@@ -308,13 +400,15 @@ export class ExtensionManager {
     for (const timer of this.idleTimers.values()) clearTimeout(timer)
     this.idleTimers.clear()
     const extensionIds = [...new Set([
-      ...this.hosts.keys(),
-      ...this.activations.keys(),
-      ...this.stops.keys(),
-      ...this.hostExitCleanups.keys()
+      ...[...this.hosts.values()].map((host) => host.principal.extensionId),
+      ...[...this.activations.values()].map((activation) => activation.extensionId)
     ])]
     await Promise.allSettled(extensionIds.map((extensionId) => this.deactivate(extensionId)))
-    await Promise.allSettled([...this.stops.values(), ...this.hostExitCleanups.values()])
+    await Promise.allSettled([
+      ...[...this.activations.values()].map((activation) => activation.promise),
+      ...this.stops.values(),
+      ...this.hostExitCleanups.values()
+    ])
     for (const timer of this.healthyTimers.values()) clearTimeout(timer)
     this.healthyTimers.clear()
     this.idleEligibleExtensions.clear()
@@ -340,7 +434,9 @@ export class ExtensionManager {
       this.options.packageManager.compatibilityReportForExtension(extensionId)
     ])
     const persisted = document.extensions[extensionId] ?? emptyHealth(extensionId, this.now())
-    const host = this.hosts.get(extensionId)
+    const host = [...this.hosts.values()].find((candidate) =>
+      candidate.principal.extensionId === extensionId && candidate.state === 'active') ??
+      [...this.hosts.values()].find((candidate) => candidate.principal.extensionId === extensionId)
     const compatibility = host?.compatibilityReport ?? selectedCompatibility
     const negotiatedApiVersion = compatibility?.api.compatible
       ? compatibility.api.negotiatedApiVersion
@@ -363,7 +459,10 @@ export class ExtensionManager {
 
   async listDiagnostics(): Promise<ExtensionHostDiagnostic[]> {
     const document = await this.readHealth()
-    const extensionIds = new Set([...Object.keys(document.extensions), ...this.hosts.keys()])
+    const extensionIds = new Set([
+      ...Object.keys(document.extensions),
+      ...[...this.hosts.values()].map((host) => host.principal.extensionId)
+    ])
     return Promise.all([...extensionIds].sort().map((extensionId) => this.diagnostic(extensionId)))
   }
 
@@ -385,8 +484,11 @@ export class ExtensionManager {
   packageLifecycle(): ExtensionPackageLifecycle {
     return {
       beforeVersionSwitch: async ({ extensionId }) => this.deactivate(extensionId),
-      beforeDisable: async (extensionId) => this.deactivate(extensionId),
-      beforePermissionChange: async (extensionId) => this.deactivate(extensionId),
+      beforeDisable: async (extensionId, workspaceKey) => workspaceKey === undefined
+        ? this.deactivate(extensionId)
+        : this.deactivateWorkspace(extensionId, workspaceKey),
+      beforePermissionChange: async (extensionId, workspaceKey) =>
+        this.deactivateWorkspace(extensionId, workspaceKey),
       beforeUninstall: async (extensionId) => this.deactivate(extensionId)
     }
   }
@@ -394,12 +496,9 @@ export class ExtensionManager {
   private async activateInternal(
     extensionId: string,
     event: string,
-    options: {
-      workspaceRoot?: string
-      workspaceRoots?: string[]
-      workspaceContext?: WorkspaceContext
-    },
-    activationEpoch: number
+    options: ExtensionHostWorkspaceScope,
+    activationEpoch: string,
+    instanceKey: string
   ): Promise<ExtensionHostProcess | undefined> {
     const workspaceRoots = normalizedWorkspaceRoots(options)
     const workspaceKeys = workspaceRoots.map((root) => this.options.paths.workspaceKey(root))
@@ -421,7 +520,7 @@ export class ExtensionManager {
         }
       }
       extension = intersectWorkspaceResolutions(resolvedScopes)
-      this.assertActivationCurrent(extensionId, activationEpoch)
+      this.assertActivationCurrent(extensionId, workspaceRoots, activationEpoch)
     } catch (error) {
       if ((error as { code?: string }).code === 'EXTENSION_ACTIVATION_CANCELLED') throw error
       const normalized = asExtensionError(
@@ -450,9 +549,9 @@ export class ExtensionManager {
       )
     }
     if (extension.manifest.main === undefined) {
-      this.idleEligibleExtensions.delete(extensionId)
-      this.cancelIdleDeactivation(extensionId)
-      this.assertActivationCurrent(extensionId, activationEpoch)
+      this.idleEligibleExtensions.delete(instanceKey)
+      this.cancelIdleDeactivation(instanceKey)
+      this.assertActivationCurrent(extensionId, workspaceRoots, activationEpoch)
       await this.updateHealth(extensionId, (health) => ({
         ...health,
         version: extension.version,
@@ -460,34 +559,34 @@ export class ExtensionManager {
         activationEvent: event,
         updatedAt: this.now().toISOString()
       }))
-      if (this.activationEpoch(extensionId) !== activationEpoch) {
+      if (this.activationEpoch(extensionId, workspaceRoots) !== activationEpoch) {
         await this.updateHealth(extensionId, (health) => ({
           ...health,
           lifecycleState: 'stopped',
           processId: undefined,
           updatedAt: this.now().toISOString()
         }))
-        this.assertActivationCurrent(extensionId, activationEpoch)
+        this.assertActivationCurrent(extensionId, workspaceRoots, activationEpoch)
       }
       return undefined
     }
 
-    const current = this.hosts.get(extensionId)
+    const current = this.hosts.get(instanceKey)
     if (
       current !== undefined &&
       current.principal.version === extension.version &&
       current.principal.development === extension.development &&
       current.state === 'active'
     ) {
-      this.setIdleEligibility(extensionId, extension.manifest)
+      this.setIdleEligibility(instanceKey, extension.manifest)
       assertWorkspaceScope(
         current.principal,
         workspaceRoots
       )
-      this.assertActivationCurrent(extensionId, activationEpoch)
+      this.assertActivationCurrent(extensionId, workspaceRoots, activationEpoch)
       return current
     }
-    if (current !== undefined) await this.stopHost(extensionId)
+    if (current !== undefined) await this.stopHost(instanceKey, extensionId)
 
     const health = (await this.readHealth()).extensions[extensionId] ?? emptyHealth(extensionId, this.now())
     if (health.circuitOpen) {
@@ -503,10 +602,10 @@ export class ExtensionManager {
         retryAt: health.nextRetryAt
       })
     }
-    this.assertActivationCurrent(extensionId, activationEpoch)
+    this.assertActivationCurrent(extensionId, workspaceRoots, activationEpoch)
 
     const host = this.createHost(extension, workspaceRoots, options.workspaceContext)
-    this.hosts.set(extensionId, host)
+    this.hosts.set(instanceKey, host)
     try {
       await this.updateHealth(extensionId, (prior) => ({
         ...prior,
@@ -518,9 +617,9 @@ export class ExtensionManager {
         logPath: host.logPath,
         updatedAt: this.now().toISOString()
       }))
-      this.assertActivationCurrent(extensionId, activationEpoch)
+      this.assertActivationCurrent(extensionId, workspaceRoots, activationEpoch)
       await host.activate(event)
-      this.assertActivationCurrent(extensionId, activationEpoch)
+      this.assertActivationCurrent(extensionId, workspaceRoots, activationEpoch)
       await this.updateHealth(extensionId, (prior) => ({
         ...prior,
         version: extension.version,
@@ -531,13 +630,13 @@ export class ExtensionManager {
         logPath: host.logPath,
         updatedAt: this.now().toISOString()
       }))
-      this.assertActivationCurrent(extensionId, activationEpoch)
-      this.scheduleHealthyReset(extensionId, host)
-      this.setIdleEligibility(extensionId, extension.manifest)
+      this.assertActivationCurrent(extensionId, workspaceRoots, activationEpoch)
+      this.scheduleHealthyReset(instanceKey, extensionId, host)
+      this.setIdleEligibility(instanceKey, extension.manifest)
       await this.options.onHostActivated?.(host.principal)
       return host
     } catch (error) {
-      if (this.hosts.get(extensionId) === host) this.hosts.delete(extensionId)
+      if (this.hosts.get(instanceKey) === host) this.hosts.delete(instanceKey)
       if ((error as { code?: string }).code === 'EXTENSION_ACTIVATION_CANCELLED') {
         await host.deactivate().catch(() => host.terminate())
         await this.updateHealth(extensionId, (health) => ({
@@ -583,21 +682,24 @@ export class ExtensionManager {
   }
 
   private handleHostExit(host: ExtensionHostProcess, exit: ExtensionHostExit): Promise<void> {
-    const prior = this.hostExitCleanups.get(exit.extensionId)
+    const instanceKey = extensionHostInstanceKey(exit.extensionId, {
+      workspaceRoots: [...host.principal.workspaceRoots]
+    })
+    const prior = this.hostExitCleanups.get(instanceKey)
     const cleanup = (async () => {
       if (prior !== undefined) await prior
-      await this.handleHostExitInternal(host, exit)
+      await this.handleHostExitInternal(instanceKey, host, exit)
     })()
-    this.hostExitCleanups.set(exit.extensionId, cleanup)
+    this.hostExitCleanups.set(instanceKey, cleanup)
     cleanup.then(
       () => {
-        if (this.hostExitCleanups.get(exit.extensionId) === cleanup) {
-          this.hostExitCleanups.delete(exit.extensionId)
+        if (this.hostExitCleanups.get(instanceKey) === cleanup) {
+          this.hostExitCleanups.delete(instanceKey)
         }
       },
       () => {
-        if (this.hostExitCleanups.get(exit.extensionId) === cleanup) {
-          this.hostExitCleanups.delete(exit.extensionId)
+        if (this.hostExitCleanups.get(instanceKey) === cleanup) {
+          this.hostExitCleanups.delete(instanceKey)
         }
       }
     )
@@ -605,16 +707,17 @@ export class ExtensionManager {
   }
 
   private async handleHostExitInternal(
+    instanceKey: string,
     host: ExtensionHostProcess,
     exit: ExtensionHostExit
   ): Promise<void> {
-    if (this.hosts.get(exit.extensionId) === host) this.hosts.delete(exit.extensionId)
-    this.cancelIdleDeactivation(exit.extensionId)
-    this.idleEligibleExtensions.delete(exit.extensionId)
-    const timer = this.healthyTimers.get(exit.extensionId)
+    if (this.hosts.get(instanceKey) === host) this.hosts.delete(instanceKey)
+    this.cancelIdleDeactivation(instanceKey)
+    this.idleEligibleExtensions.delete(instanceKey)
+    const timer = this.healthyTimers.get(instanceKey)
     if (timer !== undefined) clearTimeout(timer)
-    this.healthyTimers.delete(exit.extensionId)
-    await this.options.onHostExit?.(exit)
+    this.healthyTimers.delete(instanceKey)
+    await this.options.onHostExit?.(exit, host.principal)
     if (!exit.expected) {
       await this.recordHostFailure(
         exit.extensionId,
@@ -627,60 +730,63 @@ export class ExtensionManager {
     }
   }
 
-  private async waitForLifecycleTransition(extensionId: string): Promise<void> {
+  private async waitForLifecycleTransition(instanceKey: string): Promise<void> {
     while (true) {
-      const pending = this.stops.get(extensionId) ?? this.hostExitCleanups.get(extensionId)
+      const pending = this.stops.get(instanceKey) ?? this.hostExitCleanups.get(instanceKey)
       if (pending === undefined) return
       await pending
     }
   }
 
-  private async waitForHostExitCleanup(extensionId: string): Promise<void> {
+  private async waitForHostExitCleanup(instanceKey: string): Promise<void> {
     while (true) {
-      const cleanup = this.hostExitCleanups.get(extensionId)
+      const cleanup = this.hostExitCleanups.get(instanceKey)
       if (cleanup === undefined) return
       await cleanup
     }
   }
 
-  private setIdleEligibility(extensionId: string, manifest: ExtensionManifest): void {
+  private setIdleEligibility(
+    instanceKey: string,
+    manifest: ExtensionManifest
+  ): void {
     if (isViewIdleDeactivationEligible(manifest)) {
-      this.idleEligibleExtensions.add(extensionId)
+      this.idleEligibleExtensions.add(instanceKey)
       return
     }
-    this.idleEligibleExtensions.delete(extensionId)
-    this.cancelIdleDeactivation(extensionId)
+    this.idleEligibleExtensions.delete(instanceKey)
+    this.cancelIdleDeactivation(instanceKey)
   }
 
-  private scheduleIdleDeactivation(extensionId: string): void {
+  private scheduleIdleDeactivation(instanceKey: string, extensionId: string): void {
     if (
       this.shuttingDown ||
-      this.idleTimers.has(extensionId) ||
-      (this.viewReferences.get(extensionId) ?? 0) > 0 ||
-      !this.idleEligibleExtensions.has(extensionId)
+      this.idleTimers.has(instanceKey) ||
+      (this.viewReferences.get(instanceKey) ?? 0) > 0 ||
+      !this.idleEligibleExtensions.has(instanceKey)
     ) return
-    const host = this.hosts.get(extensionId)
+    const host = this.hosts.get(instanceKey)
     if (host === undefined || host.state !== 'active') return
     const timer = setTimeout(() => {
-      if (this.idleTimers.get(extensionId) !== timer) return
-      this.idleTimers.delete(extensionId)
+      if (this.idleTimers.get(instanceKey) !== timer) return
+      this.idleTimers.delete(instanceKey)
       if (
         this.shuttingDown ||
-        (this.viewReferences.get(extensionId) ?? 0) > 0 ||
-        !this.idleEligibleExtensions.has(extensionId) ||
-        this.hosts.get(extensionId) !== host ||
+        (this.viewReferences.get(instanceKey) ?? 0) > 0 ||
+        !this.idleEligibleExtensions.has(instanceKey) ||
+        this.hosts.get(instanceKey) !== host ||
         host.state !== 'active'
       ) return
-      void this.deactivate(extensionId).catch(() => undefined)
+      void this.stopHost(instanceKey, extensionId).catch(() => undefined)
     }, this.viewIdleTimeoutMs)
     timer.unref?.()
-    this.idleTimers.set(extensionId, timer)
+    this.idleTimers.set(instanceKey, timer)
   }
 
-  private cancelIdleDeactivation(extensionId: string): void {
-    const timer = this.idleTimers.get(extensionId)
+  private cancelIdleDeactivation(instanceKey: string): void {
+    const timer = this.idleTimers.get(instanceKey)
     if (timer !== undefined) clearTimeout(timer)
-    this.idleTimers.delete(extensionId)
+    this.idleTimers.delete(instanceKey)
   }
 
   private async recordFailure(
@@ -729,12 +835,16 @@ export class ExtensionManager {
     await this.recordFailure(extensionId, version, host, error)
   }
 
-  private scheduleHealthyReset(extensionId: string, host: ExtensionHostProcess): void {
-    const prior = this.healthyTimers.get(extensionId)
+  private scheduleHealthyReset(
+    instanceKey: string,
+    extensionId: string,
+    host: ExtensionHostProcess
+  ): void {
+    const prior = this.healthyTimers.get(instanceKey)
     if (prior !== undefined) clearTimeout(prior)
     const timer = setTimeout(() => {
-      this.healthyTimers.delete(extensionId)
-      if (this.hosts.get(extensionId) !== host || host.state !== 'active') return
+      this.healthyTimers.delete(instanceKey)
+      if (this.hosts.get(instanceKey) !== host || host.state !== 'active') return
       void this.updateHealth(extensionId, (health) => ({
         ...health,
         consecutiveFailures: 0,
@@ -744,7 +854,7 @@ export class ExtensionManager {
       }))
     }, this.healthyResetMs)
     timer.unref?.()
-    this.healthyTimers.set(extensionId, timer)
+    this.healthyTimers.set(instanceKey, timer)
   }
 
   private readHealth(): Promise<HostHealthDocument> {
@@ -844,6 +954,34 @@ function assertWorkspaceScope(principal: ExtensionPrincipal, requestedRoots: str
       { missing }
     )
   }
+}
+
+export function extensionHostInstanceKey(
+  extensionId: string,
+  options: Pick<ExtensionHostWorkspaceScope, 'workspaceRoot' | 'workspaceRoots'> = {}
+): string {
+  return JSON.stringify([extensionId, normalizedWorkspaceRoots(options)])
+}
+
+function identityFromInstanceKey(
+  instanceKey: string
+): { extensionId: string; workspaceRoots: string[] } | undefined {
+  try {
+    const parsed = JSON.parse(instanceKey)
+    if (
+      !Array.isArray(parsed) ||
+      typeof parsed[0] !== 'string' ||
+      !Array.isArray(parsed[1]) ||
+      parsed[1].some((root) => typeof root !== 'string')
+    ) return undefined
+    return { extensionId: parsed[0], workspaceRoots: parsed[1] }
+  } catch {
+    return undefined
+  }
+}
+
+function workspaceActivationEpochKey(extensionId: string, workspaceKey: string): string {
+  return `${extensionId}\0${workspaceKey}`
 }
 
 function normalizedWorkspaceRoots(options: {

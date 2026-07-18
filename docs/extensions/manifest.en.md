@@ -18,6 +18,7 @@ Every extension package or development directory must contain `kun-extension.jso
   "version": "1.2.0",
   "displayName": "Issue Assistant",
   "description": "Manage issues with a sidebar and Kun Agent tools.",
+  "icon": "assets/issue-assistant.svg",
   "engines": {
     "kun": ">=0.1.0"
   },
@@ -65,6 +66,8 @@ Empty arrays may be omitted. A real Manifest should declare only contributions a
 | `version` | Yes | SemVer version of this `.kunx` package |
 | `displayName` | No | Short user-facing name, rendered as untrusted plain text |
 | `description` | No | User-facing description, rendered as untrusted plain text |
+| `icon` | No | Package-relative extension logo for Host surfaces such as the Extension Center; prefer a square SVG or a PNG of at least 80×80 |
+| `localizations` | No | Bounded locale overlays for Host-rendered manifest and contribution display copy |
 | `license` | No | Short license identifier; a release package still includes `LICENSE` |
 | `homepage` | No | Extension homepage HTTPS URL |
 | `engines.kun` | Yes | SemVer range of compatible Kun versions |
@@ -76,6 +79,8 @@ Empty arrays may be omitted. A real Manifest should declare only contributions a
 | `stateSchemaVersion` | Yes | Non-negative integer state Schema version, independent of package/API versions; start new extensions at `1` |
 | `signature` | No | Supported signature metadata used as provenance evidence, not a security audit |
 
+When top-level `icon` is absent, the Host may fall back to the first icon-bearing View container or primary View; otherwise it shows the default placeholder. Like other Manifest resources, the logo must pass package-relative path, integrity, and controlled-resource validation.
+
 At least one of `main` and `browser` is required. Any headless tool, Agent profile, model Provider, authentication handler, scheduled task, or background command requires `main`. Kun never substitutes `browser` for a Node entry.
 
 A browser-only Manifest (only `browser`) cannot declare `commands`, `agentProfiles`, `tools`, `modelProviders`, or `authentication`; each needs a Node handler. Every `browser` entry requires the `webview` permission.
@@ -83,6 +88,31 @@ A browser-only Manifest (only `browser`) cannot declare `commands`, `agentProfil
 The full ID is `publisher.name` and must not change after publication. Renaming creates a new extension; state, grants, accounts, and threads are not transferred automatically.
 
 `publisher` uses lowercase ASCII letters, digits, and hyphens, starts with a letter or digit, and is at most 64 characters. `name` and every local contribution ID start with a lowercase letter and then use lowercase letters, digits, or hyphens, at most 64 characters. Use the same-version Schema for exact regex and reserved-name validation.
+
+## Host-rendered localization
+
+`localizations` maps up to 32 bounded BCP 47 language tags to plain-text display overlays. The base Manifest remains the required fallback and the stable source for identity, activation, permissions, paths, executable schemas, and Agent instructions. An overlay can change only known display fields and must reference an existing contribution, setting property, notification action, or declared Provider model.
+
+```json
+{
+  "displayName": "Issue Assistant",
+  "contributes": {
+    "views.rightSidebar": [{ "id": "issues", "title": "Issues", "entry": "dist/index.html" }]
+  },
+  "localizations": {
+    "zh-CN": {
+      "displayName": "问题助手",
+      "contributes": {
+        "views.rightSidebar": {
+          "issues": { "title": "问题" }
+        }
+      }
+    }
+  }
+}
+```
+
+Kun resolves a case-insensitive exact tag first, then progressively less-specific tags (`zh-Hans-CN` → `zh-Hans` → `zh`), then uses the base Manifest. Webview content continues to localize through `ui.getLocale` and `ui.localeChanged`; manifest overlays cover Host chrome such as rail tooltips, tab/result-preview titles, Extension Center cards, and declarative settings.
 
 ## Version fields
 
@@ -135,7 +165,7 @@ v1 supports:
 | `commands` | Extension commands | `id`, `title`, and argument/result schemas when applicable |
 | `views.containers` | Activity/sidebar containers | id, title, icon, location/order |
 | `views.leftSidebar` | Left sidebar View | `id`, `title`, `entry`; optional icon/`when`/order |
-| `views.rightSidebar` | Right sidebar View | Same |
+| `views.rightSidebar` | Right sidebar View | Same; optional `showInRightRail` |
 | `views.auxiliaryPanel` | Auxiliary panel | Same |
 | `views.editorTab` | Editor tab | Same; host manages tab lifecycle |
 | `views.fullPage` | Full-page View | Same; cannot replace protected surfaces |
@@ -152,6 +182,10 @@ v1 supports:
 | `authentication` | Authentication Providers | id, authentication kind, and protected-flow metadata |
 | `hostContentScripts` | Direct DOM | static scripts/styles, allowed host surfaces, activation conditions; high risk and unstable |
 
+`views.rightSidebar` is the canonical discoverable UI for new extensions. By default, its packaged icon and localized title appear in Code mode's vertical right rail and open an independent tab beside the main conversation. Set `showInRightRail: false` to keep a View available from Extension management or commands without pinning it in that rail. Other `views.*` locations remain Extension API v1 parse- and command-routing compatible, but the Host does not generate an aggregate extension picker for them.
+
+A View that needs fixed remote websites may declare `externalBrowser: { presentation, sites }`. `presentation` is `desktop` or `mobile`; each site accepts only `id`, `title`, optional badge/accent, and a credential-free HTTPS `url`. This requires `webview.external`, and every site hostname must match an explicit `network:` grant. A Main-owned browser surface hosts the remote page without loading the extension `entry` or bridge into it.
+
 ### Implied contribution permissions
 
 The validator derives and enforces these minimum permissions from entries/contributions. A missing permission makes the Manifest invalid:
@@ -162,6 +196,7 @@ The validator derives and enforces these minimum permissions from entries/contri
 | `commands` | `commands.register` |
 | `views.containers` | `ui.views` |
 | Any `views.*` View | `ui.views`, `webview` |
+| View with `externalBrowser` | `webview.external` and `network:<hostname>` for every site |
 | `message.resultPreviews` | `ui.views`, `webview` |
 | `actions.*`, `settings`, `contextMenus` | `ui.actions` |
 | `notifications` | `ui.notifications` |
@@ -255,6 +290,7 @@ v1 permissions are exact strings:
 | `ui.actions` | Provide host-rendered actions, menus, and settings controls |
 | `ui.notifications` | Request host notifications |
 | `webview` | Create declared complex Webview UI |
+| `webview.external` | Display remote HTTPS sites approved by `network:*` inside an isolated child Webview (high risk) |
 | `hostDom` | Inject declared Direct DOM content scripts (high risk) |
 | `agent.run` | Create and control extension-owned Agent Runs |
 | `agent.threads.readOwn` | Query projections of threads/runs owned by this extension |
@@ -270,7 +306,7 @@ v1 permissions are exact strings:
 | `workspace.read` | Read an allowed workspace through the broker |
 | `workspace.write` | Write an allowed workspace through the broker, still subject to policy/approval |
 
-Declare the minimum set. A package version that adds a permission does not inherit old consent; the user must confirm again in a protected window. Permissions never grant Node or secrets to browser/content-script code and cannot bypass the Kun ApprovalGate. See [Security and resources](./security-and-resources.en.md).
+Declare the minimum set. A package version that adds a permission does not inherit old consent; the user must confirm again in a protected window. `webview.external` also requires explicit `network:<hostname>` grants; in this mode those grants constrain child-Webview top-level navigation, and the remote page never receives the Kun preload, Node, or Electron. Permissions never grant Node or secrets to ordinary browser/content-script code and cannot bypass the Kun ApprovalGate. See [Security and resources](./security-and-resources.en.md).
 
 ## Direct DOM declaration
 

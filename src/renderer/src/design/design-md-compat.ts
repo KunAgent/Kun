@@ -226,6 +226,7 @@ export function parseStitchDesignMarkdown(raw: string): ImportedDesignMarkdown |
     'Implementation Guidance',
     'Design Document',
     'Design Mode',
+    'Design Motion',
     'Design Graph',
     'Canvas Operation Journal',
     'Code Bindings',

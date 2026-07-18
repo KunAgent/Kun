@@ -29,6 +29,7 @@ import { buildToolPreferenceInstruction } from '../prompt/kun-system-prompt.js'
 import { effectiveHistoryAfterLatestCompaction } from './compaction-history.js'
 import { resolveCoherentProviderAccount } from './compaction-summary.js'
 import {
+  EMPTY_POST_TOOL_FINAL_ANSWER_RECOVERY_STEP,
   emptyPostToolRecoveryInstruction,
   hasSuccessfulCreatePlanResult,
   userInputUnavailableInstruction
@@ -411,6 +412,10 @@ export class ModelStepService {
       createPlanSatisfied,
       stepIndex
     })
+    const emptyPostToolRecoveryStep = this.deps.roundOutcome.emptyPostToolRecoverySteps(turnId)
+    const forceFinalAnswerRecovery =
+      emptyPostToolRecoveryStep >= EMPTY_POST_TOOL_FINAL_ANSWER_RECOVERY_STEP
+    const requestToolSpecs = forceFinalAnswerRecovery ? [] : effectiveToolSpecs
     const history = await this.deps.historyCompaction.compactIfNeeded({
       items,
       model,
@@ -419,7 +424,7 @@ export class ModelStepService {
       signal,
       threadId,
       turnId,
-      toolSpecs: effectiveToolSpecs,
+      toolSpecs: requestToolSpecs,
       reserveModelRequest: () => this.deps.budgetGate.reserveAdditionalModelRequest(threadId, turnId)
     })
     if (signal.aborted) return 'aborted'
@@ -466,7 +471,7 @@ export class ModelStepService {
           nowIso: this.deps.nowIso()
         })
       : null
-    const toolPreferenceInstruction = buildToolPreferenceInstruction(tools)
+    const toolPreferenceInstruction = buildToolPreferenceInstruction(requestToolSpecs)
     const contextInstructions = [
       ...(runtimeContextInstruction ? [runtimeContextInstruction] : []),
       ...(thread.extensionProfile?.instructionOverlay?.trim()
@@ -482,22 +487,22 @@ export class ModelStepService {
         ? [goalRecoveryInstruction]
         : []),
       ...(activeTodoInstruction ? [activeTodoInstruction] : []),
-      ...(this.deps.roundOutcome.hasEmptyPostToolRecovery(turnId)
-        ? [emptyPostToolRecoveryInstruction()]
+      ...(emptyPostToolRecoveryStep > 0
+        ? [emptyPostToolRecoveryInstruction(emptyPostToolRecoveryStep)]
         : []),
       ...imageGenerationReferenceInstructions({
         imageAttachments: attachments.imageAttachments,
         textFallbacks: attachments.textFallbacks,
         workspace: thread?.workspace ?? '',
-        tools: effectiveToolSpecs
+        tools: requestToolSpecs
       }),
       ...memoryInstructions(memories),
       ...(skillResolution.catalogInstruction ? [skillResolution.catalogInstruction] : []),
       ...skillResolution.instructions,
       ...(userInputDisabled ? [userInputUnavailableInstruction()] : []),
       ...(toolPreferenceInstruction ? [toolPreferenceInstruction] : []),
-      ...(effectiveToolSpecs.some((tool) => tool.name === 'bash') ? [shellRuntimeInstruction()] : []),
-      ...(suggestVerification ? [verificationSuggestionInstruction()] : []),
+      ...(requestToolSpecs.some((tool) => tool.name === 'bash') ? [shellRuntimeInstruction()] : []),
+      ...(!forceFinalAnswerRecovery && suggestVerification ? [verificationSuggestionInstruction()] : []),
       ...(toolCatalogDriftMessage ? [toolCatalogDriftMessage] : [])
     ]
     await this.deps.recordPipelineStage(threadId, turnId, 'input_remembered', {
@@ -525,8 +530,8 @@ export class ModelStepService {
       contextInstructions,
       history: forwardHistory,
       attachments,
-      tools: effectiveToolSpecs,
-      ...(requiredToolName ? { requiredToolName } : {}),
+      tools: requestToolSpecs,
+      ...(!forceFinalAnswerRecovery && requiredToolName ? { requiredToolName } : {}),
       ...(this.deps.tokenEconomy ? { tokenEconomy: this.deps.tokenEconomy } : {}),
       signal
     })

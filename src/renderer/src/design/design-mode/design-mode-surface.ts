@@ -45,6 +45,9 @@ export type DesignModeSurfaceCounts = {
   operationCount: number
   critiqueEntryCount: number
   agentNoteCount: number
+  motionTimelineCount: number
+  motionTrackCount: number
+  motionKeyframeCount: number
 }
 
 export type DesignModeSurfaceManifest = {
@@ -116,6 +119,7 @@ function countCanvasObjects(document: CanvasDocument): number {
 function countsFor(options: BuildDesignModeSurfaceManifestOptions): DesignModeSurfaceCounts {
   const artifacts = options.artifacts ?? options.document?.artifacts ?? []
   const bindings = options.canvasDocument.codeBindings ?? []
+  const motionTimelines = Object.values(options.canvasDocument.motion?.timelines ?? {})
   return {
     screenCount: Math.max(htmlScreenArtifacts(artifacts).length, countHtmlFrames(options.canvasDocument)),
     svgArtifactCount: svgArtifacts(artifacts).length,
@@ -130,7 +134,13 @@ function countsFor(options: BuildDesignModeSurfaceManifestOptions): DesignModeSu
     missingBindingCount: bindings.filter((binding) => binding.status === 'missing').length,
     operationCount: options.canvasDocument.operationJournal?.length ?? 0,
     critiqueEntryCount: countCritiqueEntries(options.canvasDocument),
-    agentNoteCount: countAgentNotes(options.canvasDocument)
+    agentNoteCount: countAgentNotes(options.canvasDocument),
+    motionTimelineCount: motionTimelines.length,
+    motionTrackCount: motionTimelines.reduce((sum, timeline) => sum + timeline.tracks.length, 0),
+    motionKeyframeCount: motionTimelines.reduce(
+      (sum, timeline) => sum + timeline.tracks.reduce((trackSum, track) => trackSum + track.keyframes.length, 0),
+      0
+    )
   }
 }
 
@@ -178,32 +188,41 @@ function canvasSurface(counts: DesignModeSurfaceCounts): DesignModeSurface {
   return surface('canvas', status, counts.objectCount > 0 ? 70 : 20, [
     'design.ops',
     'design.generate_screen',
-    'design_svg_create'
+    'design_svg_create',
+    'design_motion_set_timeline',
+    'design_motion_upsert_keyframes',
+    'design_motion_apply_preset',
+    'design_motion_delete'
   ], ['board', 'frame', 'asset', 'svg'], [
     `${counts.objectCount} object(s)`,
     `${counts.svgArtifactCount} SVG artifact(s)`,
-    `${counts.assetCount} asset(s)`
+    `${counts.assetCount} asset(s)`,
+    `${counts.motionTimelineCount} Motion timeline(s)`,
+    `${counts.motionTrackCount} animated track(s)`
   ])
 }
 
 function designToolsSurface(counts: DesignModeSurfaceCounts): DesignModeSurface {
   const systemCount = counts.tokenCount + counts.componentCount
-  const status: DesignModeSurfaceStatus = systemCount > 0 || counts.operationCount > 0 || counts.svgArtifactCount > 0
+  const status: DesignModeSurfaceStatus = systemCount > 0 || counts.operationCount > 0 || counts.svgArtifactCount > 0 || counts.motionTimelineCount > 0
     ? 'active'
     : counts.screenCount > 0
       ? 'ready'
       : 'needs-setup'
-  return surface('design-tools', status, 35 + systemCount * 10 + counts.operationCount * 3, [
+  return surface('design-tools', status, 35 + systemCount * 10 + counts.operationCount * 3 + counts.motionTimelineCount * 4, [
     'design.system',
     'design.repair',
     'design_svg_inspect',
     'design_svg_edit',
     'design_svg_animate',
-    'design_svg_validate'
+    'design_svg_validate',
+    'design_motion_upsert_keyframes',
+    'design_motion_apply_preset'
   ], ['token', 'component', 'svg', 'tool'], [
     `${counts.tokenCount} token(s)`,
     `${counts.componentCount} component(s)`,
-    `${counts.svgArtifactCount} SVG artifact(s)`
+    `${counts.svgArtifactCount} SVG artifact(s)`,
+    `${counts.motionKeyframeCount} Motion keyframe(s)`
   ])
 }
 
@@ -258,7 +277,8 @@ function handoffSurface(document: DesignDocument | null, counts: DesignModeSurfa
   ], [
     `${counts.screenCount} screen(s)`,
     `${counts.svgArtifactCount} SVG artifact(s)`,
-    `${counts.assetCount} asset(s)`
+    `${counts.assetCount} asset(s)`,
+    `${counts.motionTimelineCount} bounded Motion timeline(s) for handoff`
   ])
 }
 

@@ -110,4 +110,52 @@ describe('RuntimeExtensionSettingsService', () => {
       workspaceRoot: '/workspace'
     })
   })
+
+  it('does not let a late workspace load overwrite the newest settings scope', async () => {
+    let resolveFirst!: (value: { ok: true; status: number; body: string }) => void
+    const first = new Promise<{ ok: true; status: number; body: string }>((resolve) => {
+      resolveFirst = resolve
+    })
+    const load = vi.fn()
+      .mockReturnValueOnce(first)
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        body: JSON.stringify({
+          schemaVersion: 1,
+          revisions: { 'acme.one': 2 },
+          values: { 'extension:acme.one/general': { workspace: 'b' } }
+        })
+      })
+    const service = new RuntimeExtensionSettingsService({ load, update: vi.fn() })
+    const stale = service.load({
+      contributionIds: ['extension:acme.one/general'],
+      workspaceRoot: '/workspace-a'
+    })
+    const current = await service.load({
+      contributionIds: ['extension:acme.one/general'],
+      workspaceRoot: '/workspace-b'
+    })
+    resolveFirst({
+      ok: true,
+      status: 200,
+      body: JSON.stringify({
+        schemaVersion: 1,
+        revisions: { 'acme.one': 1 },
+        values: { 'extension:acme.one/general': { workspace: 'a' } }
+      })
+    })
+
+    await expect(stale).rejects.toThrow(/superseded/)
+    expect(current.values).toEqual({
+      'extension:acme.one/general': { workspace: 'b' }
+    })
+    await expect(service.update({
+      contributionId: 'extension:acme.one/general',
+      key: 'workspace',
+      value: 'b2',
+      expectedRevision: current.revision,
+      workspaceRoot: '/workspace-a'
+    })).rejects.toThrow(/workspace changed/)
+  })
 })

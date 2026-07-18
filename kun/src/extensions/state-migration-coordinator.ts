@@ -63,7 +63,9 @@ export class ExtensionStateMigrationCoordinator {
         this.runVersionSwitch(context, commitSelection),
       recoverVersionSwitch: (extensionId) => this.recover(extensionId),
       recoverVersionSwitches: () => this.recoverAll(),
-      beforeDisable: (extensionId) => this.manager.deactivate(extensionId),
+      beforeDisable: (extensionId, workspaceKey) => workspaceKey === undefined
+        ? this.manager.deactivate(extensionId)
+        : this.manager.deactivateWorkspace(extensionId, workspaceKey),
       beforeUninstall: (extensionId) => this.manager.deactivate(extensionId)
     }
   }

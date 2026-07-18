@@ -3,6 +3,10 @@ import { open, readdir, realpath, stat, type FileHandle } from 'node:fs/promises
 import { basename, extname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { z } from 'zod'
 import type { SkillsCapabilityConfig } from '../contracts/capabilities.js'
+import {
+  loadKunProjectConfig,
+  type KunProjectConfigLoadResult
+} from '../config/project-config.js'
 
 const DEFAULT_ACTIVE_LIMIT = 3
 const DEFAULT_INSTRUCTION_BUDGET_BYTES = 24_000
@@ -137,14 +141,22 @@ export class SkillRuntime {
   }
 
   enabled(): boolean {
-    return this.config.enabled
+    return skillsRuntimeEnabled(this.config)
   }
 
   static async create(
     config: SkillsCapabilityConfig | undefined,
     options: SkillRuntimeOptions = {}
   ): Promise<SkillRuntime> {
-    const normalized = config ?? { enabled: false, roots: [], workspaceRoots: [], globalRoots: [], disabledIds: [], legacySkillMd: true }
+    const normalized = config ?? {
+      enabled: false,
+      roots: [],
+      workspaceRoots: [],
+      globalRoots: [],
+      projectConfigEnabled: false,
+      disabledIds: [],
+      legacySkillMd: true
+    }
     const resolvedOptions = {
       activeLimit: options.activeLimit ?? DEFAULT_ACTIVE_LIMIT,
       instructionBudgetBytes: options.instructionBudgetBytes ?? DEFAULT_INSTRUCTION_BUDGET_BYTES,
@@ -186,7 +198,7 @@ export class SkillRuntime {
     /** Per-call skill-id deny-list (e.g. a subagent profile's blockedSkills). Hidden from catalog + auto-activation. */
     blockedSkillIds?: readonly string[]
   }): Promise<SkillTurnResolution> {
-    if (!this.config.enabled) return emptyResolution()
+    if (!skillsRuntimeEnabled(this.config)) return emptyResolution()
     const skills = filterBlockedSkills(await this.skillsForWorkspace(input.workspace), input.blockedSkillIds)
     const catalogInstruction = renderCatalogInstruction(skills, this.options.catalogBudgetBytes)
     const matches = this.matchSkills(input, skills)
@@ -257,7 +269,7 @@ export class SkillRuntime {
     allowedTools: string[]
     truncated: boolean
   } | { error: string }> {
-    if (!this.config.enabled) return { error: 'skills are disabled' }
+    if (!skillsRuntimeEnabled(this.config)) return { error: 'skills are disabled' }
     const skills = filterBlockedSkills(await this.skillsForWorkspace(workspace), blockedIds)
     const normalized = slug(skillId.trim().replace(/^[$@]/, '').replace(/^skill:/i, ''))
     const skill = skills.find((candidate) => candidate.id === normalized) ??
@@ -297,7 +309,7 @@ export class SkillRuntime {
     const projectRoots = this.config.roots ?? []
     const globalRoots = this.config.globalRoots ?? []
     return {
-      enabled: this.config.enabled,
+      enabled: skillsRuntimeEnabled(this.config),
       roots: [...projectRoots],
       globalRoots: [...globalRoots],
       skills: this.skills.map((skill) => ({
@@ -311,7 +323,10 @@ export class SkillRuntime {
         triggers: skill.triggers,
         allowedTools: skill.allowedTools
       })),
-      validationErrors: [...this.validationErrors],
+      validationErrors: uniqueValidationErrors([
+        ...this.validationErrors,
+        ...[...this.workspaceSkillCache.values()].flatMap((cached) => cached.validationErrors)
+      ]),
       lastActivations: [...this.lastActivations],
       ...(this.lastInjection ? { lastInjection: this.lastInjection } : {})
     }
@@ -322,7 +337,7 @@ export class SkillRuntime {
   }
 
   async countForWorkspace(workspace: string): Promise<number> {
-    if (!this.config.enabled) return 0
+    if (!skillsRuntimeEnabled(this.config)) return 0
     return (await this.skillsForWorkspace(workspace)).length
   }
 
@@ -330,7 +345,7 @@ export class SkillRuntime {
     workspace: string,
     blockedSkillIds?: readonly string[]
   ): Promise<string[]> {
-    if (!this.config.enabled) return []
+    if (!skillsRuntimeEnabled(this.config)) return []
     return filterBlockedSkills(
       await this.skillsForWorkspace(workspace),
       blockedSkillIds
@@ -389,35 +404,71 @@ export class SkillRuntime {
 
   private async skillsForWorkspace(workspace: string): Promise<LoadedSkill[]> {
     const workspaceRoot = normalizeRoot(workspace)
+    const projectConfig = workspaceRoot && this.config.projectConfigEnabled !== false
+      ? await loadKunProjectConfig(workspaceRoot)
+      : undefined
     const workspaceLoaded = workspaceRoot
-      ? await this.loadWorkspaceSkills(workspaceRoot)
+      ? await this.loadWorkspaceSkills(workspaceRoot, projectConfig)
       : { skills: [], validationErrors: [] }
     const knownWorkspaceRoots = [
       workspaceRoot,
       ...(this.config.workspaceRoots ?? []).map(normalizeRoot)
     ].filter(Boolean)
-    const staticSkills = this.skills.filter((skill) =>
-      skillVisibleForWorkspace(skill.root, workspaceRoot, knownWorkspaceRoots)
-    )
+    const staticSkills = this.skills.filter((skill) => {
+      if (!skillVisibleForWorkspace(skill.root, workspaceRoot, knownWorkspaceRoots)) return false
+      if (projectConfig?.status !== 'valid') return true
+      const projectLocal = skill.source === 'project' && isSameOrInside(workspaceRoot, normalizeRoot(skill.root))
+      if (!projectLocal) return true
+      if (!projectConfig.skills.enabled) return false
+      if (!projectConfig.skills.includeConventional &&
+        isConventionalWorkspaceSkillRoot(workspaceRoot, normalizeRoot(skill.root))) {
+        return false
+      }
+      return true
+    })
     const unique = new Map<string, LoadedSkill>()
     for (const skill of [...workspaceLoaded.skills, ...staticSkills]) {
       if (!unique.has(skill.id)) unique.set(skill.id, skill)
     }
-    return [...unique.values()].sort((a, b) => a.id.localeCompare(b.id))
+    const combined = [...unique.values()].sort((a, b) => a.id.localeCompare(b.id))
+    return projectConfig?.status === 'valid'
+      ? filterBlockedSkills(combined, projectConfig.skills.disabledIds)
+      : combined
   }
 
-  private async loadWorkspaceSkills(workspaceRoot: string): Promise<{
+  private async loadWorkspaceSkills(
+    workspaceRoot: string,
+    projectConfig: KunProjectConfigLoadResult | undefined
+  ): Promise<{
     skills: LoadedSkill[]
     validationErrors: Array<{ root: string; message: string }>
   }> {
-    const discoveredRoots = await existingWorkspaceSkillRoots(workspaceRoot)
+    const projectConventionalEnabled = projectConfig?.status === 'valid' &&
+      projectConfig.skills.enabled && projectConfig.skills.includeConventional
+    const discoveredRoots = this.config.enabled || projectConventionalEnabled
+      ? await existingWorkspaceSkillRoots(workspaceRoot)
+      : []
     const configRoots = new Set((this.config.roots ?? []).map(normalizeRoot).filter(Boolean))
     const knownWorkspaceRoots = (this.config.workspaceRoots ?? []).map(normalizeRoot).filter(Boolean)
     const isKnownWorkspace = knownWorkspaceRoots.some((candidate) => candidate === workspaceRoot)
-    const roots = isKnownWorkspace
+    const configuredConventionalRoots = isKnownWorkspace
       ? discoveredRoots.filter((root) => configRoots.has(normalizeRoot(root)))
       : discoveredRoots
-    const rootsKey = roots.join('\0')
+    const projectRoots = projectConfig?.status === 'valid' && projectConfig.skills.enabled
+      ? projectConfig.skills.roots
+      : []
+    const conventionalRoots = projectConfig?.status === 'valid'
+      ? projectConfig.skills.enabled && projectConfig.skills.includeConventional
+        ? configuredConventionalRoots
+        : []
+      : configuredConventionalRoots
+    const roots = uniqueRoots([...projectRoots, ...conventionalRoots])
+    const projectConfigKey = projectConfig?.status === 'valid'
+      ? `valid:${projectConfig.digest}`
+      : projectConfig?.status === 'invalid'
+        ? `invalid:${projectConfig.message}`
+        : projectConfig?.status ?? 'disabled'
+    const rootsKey = `${projectConfigKey}\0${roots.join('\0')}`
     const cached = this.workspaceSkillCache.get(workspaceRoot)
     if (cached?.rootsKey === rootsKey) {
       this.workspaceSkillCache.delete(workspaceRoot)
@@ -427,6 +478,12 @@ export class SkillRuntime {
     const loaded = roots.length > 0
       ? await discoverSkills({ ...this.config, roots }, { workspaceRoot })
       : { skills: [], validationErrors: [] }
+    if (projectConfig?.status === 'invalid') {
+      loaded.validationErrors.unshift({
+        root: projectConfig.path,
+        message: projectConfig.message
+      })
+    }
     this.workspaceSkillCache.delete(workspaceRoot)
     this.workspaceSkillCache.set(workspaceRoot, { rootsKey, ...loaded })
     if (this.workspaceSkillCache.size > MAX_WORKSPACE_SKILL_CACHES) {
@@ -435,6 +492,26 @@ export class SkillRuntime {
     }
     return loaded
   }
+}
+
+function skillsRuntimeEnabled(config: SkillsCapabilityConfig): boolean {
+  return config.enabled || config.projectConfigEnabled === true
+}
+
+function uniqueRoots(roots: string[]): string[] {
+  return [...new Set(roots.map(normalizeRoot).filter(Boolean))]
+}
+
+function uniqueValidationErrors(
+  errors: Array<{ root: string; message: string }>
+): Array<{ root: string; message: string }> {
+  const seen = new Set<string>()
+  return errors.filter((error) => {
+    const key = `${error.root}\0${error.message}`
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
 }
 
 function renderCatalogInstruction(skills: LoadedSkill[], budget: number): string | undefined {
@@ -508,7 +585,14 @@ function looksLikeWorkspaceSkillRoot(root: string): boolean {
   return tail2 === '.agents/skills' ||
     tail2 === '.claude/skills' ||
     tail2 === '.codex/skills' ||
-    tail2 === '.kun/skills'
+    tail2 === '.kun/skills' ||
+    parts.at(-1) === 'skills'
+}
+
+function isConventionalWorkspaceSkillRoot(workspaceRoot: string, root: string): boolean {
+  if (!isSameOrInside(workspaceRoot, root)) return false
+  const relativeRoot = relative(workspaceRoot, root).split(sep).join('/')
+  return WORKSPACE_SKILL_RELATIVE_DIRS.some((candidate) => candidate === relativeRoot)
 }
 
 async function existingWorkspaceSkillRoots(workspaceRoot: string): Promise<string[]> {

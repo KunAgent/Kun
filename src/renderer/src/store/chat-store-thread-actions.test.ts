@@ -42,6 +42,7 @@ function buildHarness(): {
     currentTurnId: null,
     currentTurnUserId: null,
     error: 'previous error',
+    extensionComposerContexts: [],
     lastSeq: 0,
     loadComposerModels: vi.fn(async () => undefined),
     queuedMessages: [],
@@ -86,6 +87,27 @@ describe('chat-store-thread-actions queued messages', () => {
     useWriteWorkspaceStore.getState().resetWorkspace()
     rendererRuntimeClient.invalidateSettings()
     vi.unstubAllGlobals()
+  })
+
+  it('snapshots active-turn model and reasoning selections into the next queued input', async () => {
+    const { actions, state } = buildHarness()
+    state.composerModel = 'deepseek-v4-flash'
+    state.composerProviderId = 'deepseek'
+
+    await expect(actions.sendMessage('use these next-turn settings', 'agent', {
+      reasoningEffort: 'high'
+    })).resolves.toBe(true)
+
+    expect(state.queuedMessages).toHaveLength(1)
+    expect(state.queuedMessages[0]).toMatchObject({
+      text: 'use these next-turn settings',
+      model: 'deepseek-v4-flash',
+      providerId: 'deepseek',
+      reasoningEffort: 'high'
+    })
+
+    state.composerModel = 'deepseek-v4-pro'
+    expect(state.queuedMessages[0]?.model).toBe('deepseek-v4-flash')
   })
 
   it('does not queue GUI plan messages while another turn is active', async () => {
@@ -355,6 +377,70 @@ describe('chat-store-thread-actions queued messages', () => {
     })
   })
 
+  it('guides an eligible queued message into the active turn before removing it', async () => {
+    const steerUserMessage = vi.fn(async () => undefined)
+    registryMock.getProvider.mockReturnValue({ steerUserMessage })
+    const { actions, state } = buildHarness()
+    state.currentTurnId = 'turn_active'
+    state.queuedMessages = [{
+      id: 'q-guide',
+      text: 'use the compact logo instead',
+      displayText: 'Use the compact logo instead',
+      mode: 'agent'
+    }]
+
+    await expect(actions.guideQueuedMessage('q-guide')).resolves.toBe(true)
+
+    expect(steerUserMessage).toHaveBeenCalledWith(
+      'thr_existing',
+      'turn_active',
+      'use the compact logo instead',
+      { displayText: 'Use the compact logo instead' }
+    )
+    expect(state.queuedMessages).toEqual([])
+    expect(state.error).toBeNull()
+  })
+
+  it('keeps structured queued input when text-only guidance is ineligible', async () => {
+    const steerUserMessage = vi.fn(async () => undefined)
+    registryMock.getProvider.mockReturnValue({ steerUserMessage })
+    const { actions, state } = buildHarness()
+    state.currentTurnId = 'turn_active'
+    state.queuedMessages = [{
+      id: 'q-attachment',
+      text: 'inspect this image',
+      mode: 'agent',
+      attachmentIds: ['attachment-1']
+    }]
+
+    await expect(actions.guideQueuedMessage('q-attachment')).resolves.toBe(false)
+
+    expect(steerUserMessage).not.toHaveBeenCalled()
+    expect(state.queuedMessages).toHaveLength(1)
+    expect(state.error).toBeTruthy()
+  })
+
+  it('keeps queued input when the active turn rejects guidance', async () => {
+    const steerUserMessage = vi.fn(async () => {
+      throw new Error('turn is no longer accepting steering')
+    })
+    registryMock.getProvider.mockReturnValue({ steerUserMessage })
+    const { actions, state } = buildHarness()
+    state.currentTurnId = 'turn_active'
+    state.queuedMessages = [{
+      id: 'q-race',
+      text: 'do not lose this follow-up',
+      mode: 'agent'
+    }]
+
+    await expect(actions.guideQueuedMessage('q-race')).resolves.toBe(false)
+
+    expect(state.queuedMessages).toEqual([
+      expect.objectContaining({ id: 'q-race', text: 'do not lose this follow-up' })
+    ])
+    expect(state.error).toContain('turn is no longer accepting steering')
+  })
+
   it('sends the selected composer provider with the turn without switching the global runtime provider', async () => {
     const provider = {
       connect: vi.fn(async () => undefined),
@@ -468,6 +554,118 @@ describe('chat-store-thread-actions queued messages', () => {
       'think carefully',
       expect.objectContaining({ reasoningEffort: 'high' })
     )
+  })
+
+  it('consumes matching extension composer context exactly once after the turn starts', async () => {
+    const provider = {
+      connect: vi.fn(async () => undefined),
+      sendUserMessage: vi.fn(async () => ({
+        threadId: 'thr_existing',
+        turnId: 'turn_1',
+        userMessageItemId: 'user_1'
+      })),
+      subscribeThreadEvents: vi.fn(async () => undefined)
+    }
+    registryMock.getProvider.mockReturnValue(provider)
+    vi.stubGlobal('window', {
+      kunGui: {
+        getSettings: vi.fn(async () => ({
+          agents: { kun: { providerId: 'deepseek', model: 'deepseek-v4-pro' } },
+          codePromptPrefix: ''
+        })),
+        logError: vi.fn(async () => undefined)
+      }
+    })
+    const { actions, state } = buildHarness()
+    state.busy = false
+    state.extensionComposerContexts = [{
+      workspaceRoot: '/workspace/deepseek-gui',
+      attachment: {
+        schemaVersion: 1,
+        id: 'selection',
+        title: 'Selected edit',
+        summary: 'One selected timeline item',
+        reference: { projectId: 'project-1', itemIds: ['item-1'] },
+        revision: 4,
+        generation: 2,
+        attachmentId: `extension-context:${'a'.repeat(64)}`,
+        provenance: {
+          extensionId: 'kun-examples.kun-video-editor',
+          extensionVersion: '0.3.0',
+          viewContributionId: 'editor',
+          workspaceId: 'b'.repeat(64)
+        }
+      }
+    }]
+
+    await expect(actions.sendMessage('Please refine this edit', 'agent')).resolves.toBe(true)
+
+    expect(provider.sendUserMessage).toHaveBeenCalledWith(
+      'thr_existing',
+      'Please refine this edit',
+      expect.objectContaining({
+        composerContexts: [expect.objectContaining({ id: 'selection', revision: 4, generation: 2 })]
+      })
+    )
+    expect(state.extensionComposerContexts).toEqual([])
+  })
+
+  it('snapshots extension composer context into a queued turn before clearing the chip', async () => {
+    const provider = {
+      connect: vi.fn(async () => undefined),
+      sendUserMessage: vi.fn(async () => ({
+        threadId: 'thr_existing',
+        turnId: 'turn_queued',
+        userMessageItemId: 'user_queued'
+      })),
+      subscribeThreadEvents: vi.fn(async () => undefined)
+    }
+    registryMock.getProvider.mockReturnValue(provider)
+    vi.stubGlobal('window', {
+      kunGui: {
+        getSettings: vi.fn(async () => ({
+          agents: { kun: { providerId: 'deepseek', model: 'deepseek-v4-pro' } },
+          codePromptPrefix: ''
+        })),
+        logError: vi.fn(async () => undefined)
+      }
+    })
+    const { actions, state } = buildHarness()
+    const composerContext = {
+      schemaVersion: 1 as const,
+      id: 'selection',
+      title: 'Selected edit',
+      summary: 'One selected timeline item',
+      reference: { projectId: 'project-1', itemIds: ['item-1'] },
+      revision: 4,
+      generation: 2,
+      attachmentId: `extension-context:${'a'.repeat(64)}`,
+      provenance: {
+        extensionId: 'kun-examples.kun-video-editor',
+        extensionVersion: '0.3.0',
+        viewContributionId: 'extension:kun-examples.kun-video-editor/editor',
+        workspaceId: 'b'.repeat(64)
+      }
+    }
+    state.extensionComposerContexts = [{
+      workspaceRoot: '/workspace/deepseek-gui',
+      attachment: composerContext
+    }]
+
+    await expect(actions.sendMessage('Queued edit', 'agent')).resolves.toBe(true)
+    expect(state.extensionComposerContexts).toEqual([])
+    expect(state.queuedMessages[0]?.composerContexts).toEqual([composerContext])
+
+    state.busy = false
+    const queued = state.queuedMessages[0]!
+    await expect(actions.sendMessage(queued.text, queued.mode, { queued })).resolves.toBe(true)
+
+    expect(provider.sendUserMessage).toHaveBeenCalledWith(
+      'thr_existing',
+      'Queued edit',
+      expect.objectContaining({ composerContexts: [composerContext] })
+    )
+    expect(state.queuedMessages).toEqual([])
   })
 
   it('sends an override provider from the write route without switching the global runtime provider', async () => {

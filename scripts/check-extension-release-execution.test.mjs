@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
@@ -10,6 +10,7 @@ import {
   assertPathOutsideSourceTree,
   assertPublishableManifest,
   expectedApiMajors,
+  npmInvocation,
   runRequiredCommand
 } from './lib/extension-release-execution.mjs'
 
@@ -89,6 +90,45 @@ test('release commands propagate a non-zero child exit', () => {
       capture: true
     }),
     /exit code 9/
+  )
+})
+
+test('windows npm invocation avoids spawning npm.cmd when npm cli is discoverable', async () => {
+  const install = await mkdtemp(join(tmpdir(), 'kun-node-install-'))
+  try {
+    const node = join(install, 'node.exe')
+    const npmCli = join(install, 'node_modules', 'npm', 'bin', 'npm-cli.js')
+    await mkdir(dirname(npmCli), { recursive: true })
+    await writeFile(npmCli, '')
+    assert.deepEqual(
+      npmInvocation({
+        args: ['--version'],
+        env: {},
+        execPath: node,
+        platform: 'win32'
+      }),
+      {
+        command: node,
+        args: [npmCli, '--version']
+      }
+    )
+  } finally {
+    await rm(install, { recursive: true, force: true })
+  }
+})
+
+test('npm invocation prefers the active npm cli from the environment', () => {
+  assert.deepEqual(
+    npmInvocation({
+      args: ['run', 'build'],
+      env: { npm_execpath: '/tmp/npm-cli.js' },
+      execPath: '/tmp/node',
+      platform: 'win32'
+    }),
+    {
+      command: '/tmp/node',
+      args: ['/tmp/npm-cli.js', 'run', 'build']
+    }
   )
 })
 

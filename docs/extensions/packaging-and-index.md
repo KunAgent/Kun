@@ -4,7 +4,7 @@
 > English: [Packaging, side-loading, and custom indexes](./packaging-and-index.en.md)
 > 相关：[Manifest](./manifest.md) · [CLI](./cli-testing-debugging.md) · [版本与迁移](./versioning-and-migrations.md)
 
-`.kunx` 是不可变、可验证的 ZIP 包。Kun 支持本地 `.kunx`、本地开发目录和用户显式配置的 HTTPS Index。所有安装/选择版本都是用户主动操作；v1 不后台检查、下载、提示或自动切换新版本。
+`.kunx` 是不可变、可验证的 ZIP 包。Kun 支持本地 `.kunx`、本地开发目录和用户显式配置的 HTTPS Index。第三方扩展的安装与版本选择都由用户主动发起；v1 不后台检查或下载 Index。产品发行版可以按下述受限规则播种明确列入目录的第一方默认包。
 
 ## 包根内容
 
@@ -159,6 +159,23 @@ v1 默认安全上限：
 安装新版本的顺序：inspect → validate staging → 显示 protected permission/source review → 必要的 state migration → 原子移动 version directory → 原子切 selected version。任一步失败都保持旧 selected version、state、permission 和 enablement 可用。
 
 Kun 至少保留刚才的 previous selected version，直到用户显式删除，以支持手动 rollback。
+
+## 产品内置的默认包
+
+Kun 桌面版把 `kun-examples.kun-video-editor` 同时作为默认本地扩展和仓库内完整的 Extension API v1.2 参考示例。它只有一份源码：`examples/extensions/kun-video-editor`；产品代码不会导入其实现，也不会通过私有路径注册 contributions。
+
+产品构建会运行标准 validate/pack CLI，把确定性的 `.kunx` 与 `bundled-extensions/catalog.json` 放在一起。Catalog 固定 ID、version、archive 文件名、SHA-256、engine range、API version 和精确 permissions。新 profile 首次启动时，`kun serve` 校验 catalog，并调用与本地侧载完全相同的 `ExtensionPackageManager.installArchive` 事务；不会把解压目录直接塞进 registry，也不会绕过 compatibility、integrity、migration、permission 或 activation 检查。
+
+默认播种会接受产品随附 package 的 permission snapshot 并全局启用，但不会自动授予 workspace trust、媒体路径或受保护 picker 决策；这些仍由用户控制。单独的 seed ledger 保留所有权语义：
+
+- 首次播种前已经存在的 extension 始终归用户管理；
+- 用户禁用默认扩展后，升级不会重新启用；
+- 用户卸载后会记录 removal，后续启动或产品升级都不会把它复活；
+- 已选择的 development source、手工选择版本或 rollback 版本不会被覆盖；
+- 自动更新必须是更高 SemVer、旧 seeded fingerprint 仍存在且 permissions 完全相同；新增权限必须走普通用户 review；
+- 同版本不同 bytes、downgrade、无效 catalog 或 hash mismatch 都 fail closed，同时保留最后有效 registry 状态。
+
+Release 中可下载的 `.kunx` 与产品默认包由同一个确定性 packer 生成。因此开发者可以只使用公开接口来阅读、构建、校验、安装、修改和重新打包该示例；开箱即用并不代表存在隐藏的扩展等级。
 
 ## 本地 `.kunx` 侧载
 
