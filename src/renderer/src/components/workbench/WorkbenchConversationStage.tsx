@@ -1,18 +1,6 @@
-import {
-  lazy,
-  Suspense,
-  type ComponentProps,
-  type ReactElement,
-  type ReactNode
-} from 'react'
-import { SideConversationPanel } from '../chat/SideConversationPanel'
+import { lazy, Suspense, type ComponentProps, type ReactElement, type ReactNode } from 'react'
 import { WorkbenchSideRail } from '../chat/WorkbenchTopBar'
-import { RAIL_WIDTH } from '../workbench-layout'
 import { WorkbenchChatStage, type WorkbenchChatStageProps } from './WorkbenchChatStage'
-import {
-  WorkbenchFileTreeSidePanel,
-  type WorkbenchFileTreeSidePanelProps
-} from './WorkbenchFileTreeSidePanel'
 
 const SddDraftEditorView = lazy(() =>
   import('../sdd/SddDraftEditorView').then((module) => ({ default: module.SddDraftEditorView }))
@@ -38,27 +26,8 @@ export type WorkbenchConversationStageProps = {
     | 'nextDisabled'
   >
   chat: WorkbenchChatStageProps
-  sideChat: {
-    open: boolean
-    count: number
-    runningCount: number
-    enabled: boolean
-    onOpen: () => void
-  }
   rightPanel: ReactNode
-  rightPanelDockedVisible: boolean
-  rightSidebarWidth: number
-  fileTree: WorkbenchFileTreeSidePanelProps
-  sideRail: {
-    rightPanelMode: WorkbenchChatStageProps['devPreviewOpened'] extends boolean
-      ? Parameters<typeof WorkbenchSideRail>[0]['rightPanelMode']
-      : never
-    onToggleRightPanelMode: Parameters<typeof WorkbenchSideRail>[0]['onToggleRightPanelMode']
-    planPanelEnabled: boolean
-    onToggleFileTree: () => void
-    extensionItems?: Parameters<typeof WorkbenchSideRail>[0]['extensionItems']
-    extensionContainers?: Parameters<typeof WorkbenchSideRail>[0]['extensionContainers']
-  }
+  sideRail: ComponentProps<typeof WorkbenchSideRail>
 }
 
 function WorkbenchPaneFallback(): ReactElement {
@@ -71,14 +40,9 @@ export function WorkbenchConversationStage({
   activeSddDraft,
   sdd,
   chat,
-  sideChat,
   rightPanel,
-  rightPanelDockedVisible,
-  rightSidebarWidth,
-  fileTree,
   sideRail
 }: WorkbenchConversationStageProps): ReactElement {
-  const fileTreeSidePanelOffset = fileTree.open ? fileTree.width + 24 : 0
   return (
     <>
       {runtimeBanner}
@@ -93,36 +57,8 @@ export function WorkbenchConversationStage({
           )}
         </div>
 
-        {route === 'chat' && !activeSddDraft ? (
-          <SideConversationPanel
-            rightOffset={
-              (rightPanelDockedVisible ? rightSidebarWidth + 24 : 24) +
-              fileTreeSidePanelOffset +
-              RAIL_WIDTH
-            }
-          />
-        ) : null}
-
         {rightPanel}
-        <WorkbenchFileTreeSidePanel {...fileTree} />
-        {!activeSddDraft ? (
-          <WorkbenchSideRail
-            rightPanelMode={sideRail.rightPanelMode}
-            onToggleRightPanelMode={sideRail.onToggleRightPanelMode}
-            planPanelEnabled={sideRail.planPanelEnabled}
-            canvasEnabled={route === 'chat'}
-            sideChatCount={sideChat.count}
-            sideChatRunningCount={sideChat.runningCount}
-            sideChatOpen={sideChat.open}
-            sideChatEnabled={sideChat.enabled}
-            fileTreeOpen={fileTree.open}
-            fileTreeEnabled={Boolean(fileTree.workspaceRoot)}
-            onToggleFileTree={sideRail.onToggleFileTree}
-            onOpenSideChat={sideChat.onOpen}
-            extensionItems={sideRail.extensionItems}
-            extensionContainers={sideRail.extensionContainers}
-          />
-        ) : null}
+        {route === 'chat' && !activeSddDraft ? <WorkbenchSideRail {...sideRail} /> : null}
       </div>
     </>
   )

@@ -25,6 +25,24 @@ node --version
 
 ## 2. Create a project
 
+The commands below are the standalone public-registry path. First verify that
+the scaffolder and template dependencies are actually published:
+
+```bash
+npm view create-kun-extension version
+npm view @kun/extension-api version
+npm view @kun/extension-react version
+npm view @kun/extension-test version
+```
+
+Continue only when the packages required by the chosen template return
+versions. `E404` means the configured registry does not yet provide the
+standalone artifacts; use the repository
+[extension examples](../../examples/extensions/README.md) instead of adding
+repository-relative `file:` dependencies to a portable project. The `kun` CLI
+comes from the Kun installation; the unscoped npm package with that name is not
+the Kun Agent CLI.
+
 ```bash
 npx create-kun-extension hello-sidebar \
   --template react \
@@ -157,7 +175,7 @@ kun extension doctor acme.hello-sidebar
 
 Before installation, a protected Kun window shows source, ID, version, SHA-256, signature status, contributions, and permissions. Node or Direct DOM capabilities receive additional high-risk disclosure. Kun installs and selects the version atomically only after confirmation.
 
-Open Kun and select **Hello** in the right sidebar. Rendering its icon and title does not activate Node code. Opening the View triggers `onView:hello` and creates an identity-bound View Session.
+Open Kun, choose **Hello** from Code mode's vertical right rail, and Kun opens it as an independent right-workspace tab. Rendering its icon and title does not activate Node code. Opening the View triggers `onView:hello` and creates an identity-bound View Session.
 
 ## 7. Inspect logs and clean up
 

@@ -7,6 +7,7 @@ import { useCanvasUndoStore } from './canvas-undo-store'
 import { executeOps, type ShapeOp } from './shape-ops'
 import { isArtifactFrame, type CanvasDocument, type CanvasTool } from './canvas-types'
 import { zoomCanvasToContent, zoomCanvasToEditableSelection } from './canvas-focus'
+import { useCanvasMotionStore } from '../motion/canvas-motion-store'
 import {
   copyCanvasSelectionToClipboard,
   cutCanvasSelectionToClipboard,
@@ -224,15 +225,21 @@ export function handleCanvasKeyDown(e: KeyboardEvent): boolean {
     const step = shift ? 10 : 1
     const dx = key === 'arrowleft' ? -step : key === 'arrowright' ? step : 0
     const dy = key === 'arrowup' ? -step : key === 'arrowdown' ? step : 0
-    const roots = editableSelection()
+    const roots = editableSelectionRoots()
     if (roots.length === 0) return true
 
     useCanvasUndoStore.getState().withGroup('nudge', () => {
       const store = useCanvasShapeStore.getState()
-      const ids = withDescendants(store.document.objects, roots)
+      const motion = useCanvasMotionStore.getState()
+      const autoKeyNudge = motion.open && motion.autoKey && !motion.playing &&
+        motion.currentTimeMs > 0 && Boolean(motion.activeFrameId)
+      const ids = autoKeyNudge ? roots : withDescendants(store.document.objects, roots)
       for (const id of ids) {
         const shape = store.document.objects[id]
-        if (shape) store.updateShape(id, { x: shape.x + dx, y: shape.y + dy })
+        if (shape) store.updateShape(id, {
+          ...(dx ? { x: shape.x + dx } : {}),
+          ...(dy ? { y: shape.y + dy } : {})
+        })
       }
     })
     return true

@@ -648,6 +648,42 @@ describe('isKunRuntimeInsecure', () => {
 })
 
 describe('mergeKunRuntimeSettings', () => {
+  it('normalizes bounded digest-bound project config grants and replaces the grant roster', () => {
+    const digestA = 'a'.repeat(64)
+    const digestB = 'B'.repeat(64)
+    const current = mergeKunRuntimeSettings(defaultKunRuntimeSettings(), {
+      projectConfig: {
+        grants: [
+          { workspaceRoot: ' /workspace/a ', configDigest: digestA },
+          { workspaceRoot: '/workspace/b', configDigest: 'not-a-digest' }
+        ]
+      }
+    })
+
+    expect(current.projectConfig.grants).toEqual([
+      { workspaceRoot: '/workspace/a', configDigest: digestA }
+    ])
+
+    const next = mergeKunRuntimeSettings(current, {
+      projectConfig: {
+        grants: [{ workspaceRoot: '/workspace/b', configDigest: digestB }]
+      }
+    })
+
+    expect(next.projectConfig.grants).toEqual([
+      { workspaceRoot: '/workspace/b', configDigest: 'b'.repeat(64) }
+    ])
+  })
+
+  it('adds an empty project config grant list to legacy settings', () => {
+    const raw = settings() as AppSettingsV1 & {
+      agents: { kun: Omit<AppSettingsV1['agents']['kun'], 'projectConfig'> }
+    }
+    delete (raw.agents.kun as Partial<AppSettingsV1['agents']['kun']>).projectConfig
+
+    expect(normalizeAppSettings(raw as AppSettingsV1).agents.kun.projectConfig).toEqual({ grants: [] })
+  })
+
   it('merges a direct kun patch without the envelope wrapper', () => {
     const current = defaultKunRuntimeSettings()
     const next = mergeKunRuntimeSettings(current, {

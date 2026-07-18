@@ -11,7 +11,9 @@ const VERSION_PART = '[0-9A-Za-z][0-9A-Za-z._-]*'
 
 export const ARTIFACT_RULES = {
   darwin: {
+    platformLike: /^Kun-.*-mac-/i,
     pattern: new RegExp(`^Kun-${VERSION_PART}-mac-(arm64|x64)\\.(dmg|zip)$`),
+    ancillary: new RegExp(`^Kun-${VERSION_PART}-mac-(arm64|x64)\\.(dmg|zip)\\.blockmap$`),
     required: [
       /-mac-arm64\.dmg$/,
       /-mac-arm64\.zip$/,
@@ -20,11 +22,15 @@ export const ARTIFACT_RULES = {
     ]
   },
   win32: {
+    platformLike: /^Kun-.*-win-/i,
     pattern: new RegExp(`^Kun-${VERSION_PART}-win-x64\\.exe$`),
+    ancillary: new RegExp(`^Kun-${VERSION_PART}-win-x64\\.exe\\.blockmap$`),
     required: [/-win-x64\.exe$/]
   },
   linux: {
+    platformLike: /^Kun-.*-linux-/i,
     pattern: new RegExp(`^Kun-${VERSION_PART}-linux-x86_64\\.AppImage$`),
+    ancillary: new RegExp(`^Kun-${VERSION_PART}-linux-x86_64\\.AppImage\\.blockmap$`),
     required: [/-linux-x86_64\.AppImage$/]
   }
 }
@@ -35,7 +41,17 @@ export async function collectNativeArtifacts({ distDirectory, platform }) {
 
   const directory = resolve(distDirectory)
   const entries = await readdir(directory, { withFileTypes: true })
-  const matching = entries.filter((entry) => rule.pattern.test(entry.name))
+  const platformLike = entries.filter((entry) => rule.platformLike.test(entry.name))
+  const unexpected = platformLike.filter((entry) =>
+    !rule.pattern.test(entry.name) && !rule.ancillary.test(entry.name)
+  )
+  if (unexpected.length > 0) {
+    throw new Error(
+      `Unexpected native ${platform} artifact(s) in ${directory}: ` +
+      unexpected.map((entry) => entry.name).sort().join(', ')
+    )
+  }
+  const matching = platformLike.filter((entry) => rule.pattern.test(entry.name))
   for (const entry of matching) {
     const path = join(directory, entry.name)
     const details = await lstat(path)
@@ -73,17 +89,23 @@ export async function sha256File(path) {
 export async function createNativeEvidence({
   distDirectory = resolve('dist'),
   platform = process.platform,
-  commit = resolveCommit(),
-  environment = process.env
+  commit,
+  environment = process.env,
+  mediaToolchain
 } = {}) {
-  if (!/^[0-9a-f]{40}$/i.test(commit)) {
-    throw new Error(`Native evidence requires a full 40-character commit SHA, got: ${commit}`)
+  const resolvedCommit = commit ?? resolveEvidenceCommit({ environment })
+  if (!/^[0-9a-f]{40}$/i.test(resolvedCommit)) {
+    throw new Error(`Native evidence requires a full 40-character commit SHA, got: ${resolvedCommit}`)
   }
+  const resolvedMediaToolchain = normalizeMediaToolchain(
+    mediaToolchain ?? inspectMediaToolchain({ environment })
+  )
   const artifacts = await collectNativeArtifacts({ distDirectory, platform })
   return {
     schemaVersion: 1,
     platform,
-    commit: commit.toLowerCase(),
+    commit: resolvedCommit.toLowerCase(),
+    mediaToolchain: resolvedMediaToolchain,
     run: {
       repository: optionalString(environment.GITHUB_REPOSITORY),
       runId: optionalString(environment.GITHUB_RUN_ID),
@@ -97,6 +119,62 @@ export async function createNativeEvidence({
   }
 }
 
+export function inspectMediaToolchain({
+  environment = process.env,
+  execute = executeMediaTool
+} = {}) {
+  const ffmpeg = optionalString(environment.KUN_FFMPEG_PATH) ?? 'ffmpeg'
+  const ffprobe = optionalString(environment.KUN_FFPROBE_PATH) ?? 'ffprobe'
+  const ffmpegVersion = firstVersionLine('ffmpeg', execute(ffmpeg, ['-version']))
+  const ffprobeVersion = firstVersionLine('ffprobe', execute(ffprobe, ['-version']))
+  const encoders = execute(ffmpeg, ['-hide_banner', '-encoders'])
+  const filters = execute(ffmpeg, ['-hide_banner', '-filters'])
+  const mediaToolchain = {
+    ffmpegVersion,
+    ffprobeVersion,
+    libx264: /\blibx264\b/.test(encoders),
+    drawtext: /\bdrawtext\b/.test(filters)
+  }
+  return normalizeMediaToolchain(mediaToolchain)
+}
+
+export function normalizeMediaToolchain(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error('Native evidence requires bounded media toolchain metadata')
+  }
+  const ffmpegVersion = boundedVersionLine(value.ffmpegVersion, 'ffmpeg')
+  const ffprobeVersion = boundedVersionLine(value.ffprobeVersion, 'ffprobe')
+  if (value.libx264 !== true) {
+    throw new Error('Native evidence requires FFmpeg libx264 support')
+  }
+  if (value.drawtext !== true) {
+    throw new Error('Native evidence requires FFmpeg drawtext support')
+  }
+  return { ffmpegVersion, ffprobeVersion, libx264: true, drawtext: true }
+}
+
+function executeMediaTool(executable, args) {
+  return execFileSync(executable, args, {
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe'],
+    timeout: 15_000,
+    maxBuffer: 4 * 1024 * 1024,
+    windowsHide: true
+  })
+}
+
+function firstVersionLine(tool, output) {
+  return boundedVersionLine(String(output).split(/\r?\n/u, 1)[0], tool)
+}
+
+function boundedVersionLine(value, tool) {
+  if (typeof value !== 'string' || value.length <= tool.length + 9 || value.length > 240 ||
+      !value.startsWith(`${tool} version `) || /[\r\n\0]/u.test(value) || /[\\/]/u.test(value)) {
+    throw new Error(`Native evidence ${tool} version must be one bounded path-free first line`)
+  }
+  return value
+}
+
 export async function writeNativeEvidence({ outputPath, ...options } = {}) {
   const evidence = await createNativeEvidence(options)
   const output = resolve(
@@ -107,13 +185,25 @@ export async function writeNativeEvidence({ outputPath, ...options } = {}) {
   return { evidence, output }
 }
 
-function resolveCommit() {
-  const fromEnvironment = optionalString(process.env.GITHUB_SHA)
-  if (fromEnvironment) return fromEnvironment
-  return execFileSync('git', ['rev-parse', 'HEAD'], {
+export function resolveEvidenceCommit({
+  environment = process.env,
+  checkedOutCommit
+} = {}) {
+  const actual = checkedOutCommit ?? execFileSync('git', ['rev-parse', 'HEAD'], {
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'ignore']
   }).trim()
+  if (!/^[0-9a-f]{40}$/i.test(actual)) {
+    throw new Error(`Native evidence cannot identify the checked-out commit: ${actual}`)
+  }
+  const expected = optionalString(environment.KUN_EVIDENCE_COMMIT) ??
+    optionalString(environment.GITHUB_SHA)
+  if (expected !== undefined && expected.toLowerCase() !== actual.toLowerCase()) {
+    throw new Error(
+      `Native evidence expected commit ${expected}, but the checked-out commit is ${actual}`
+    )
+  }
+  return actual
 }
 
 function optionalString(value) {

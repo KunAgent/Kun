@@ -1,4 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto'
+import { isAbsolute, resolve } from 'node:path'
+import { ExtensionApiError, type ExtensionErrorCode } from '@kun/extension-api'
 import type { ExtensionPrincipal } from '../../services/extension-agent-service.js'
 import type {
   ExtensionToolCatalogEntry,
@@ -77,6 +79,7 @@ export type ExtensionToolRegistryOptions = {
 }
 
 type ActiveRegistration = {
+  registrationKey: string
   principal: ExtensionPrincipal
   declaration: ExtensionToolDeclaration
   inputValidator: ExtensionJsonSchemaValidator
@@ -101,6 +104,21 @@ const ABSOLUTE_MAX_OUTPUT_BYTES = 1024 * 1024
 const MAX_PROGRESS_UPDATES = 64
 const MAX_PROGRESS_BYTES = 64 * 1024
 export const MAX_DIRECT_EXTENSION_TOOLS = 16
+const KNOWN_PRE_COMMIT_EXTENSION_API_ERROR_CODES: ReadonlySet<ExtensionErrorCode> = new Set([
+  'INVALID_ARGUMENT',
+  'VALIDATION_FAILED',
+  'PERMISSION_DENIED',
+  'NOT_FOUND',
+  'CONFLICT',
+  'UNSUPPORTED_CAPABILITY',
+  'INCOMPATIBLE_API',
+  'INCOMPATIBLE_MANIFEST',
+  'INCOMPATIBLE_ENGINE',
+  'INCOMPATIBLE_RPC',
+  'INTERACTION_REQUIRED',
+  'ACCOUNT_REQUIRED',
+  'RESOURCE_LIMIT'
+])
 
 /**
  * Dynamic Extension Tool Provider. It adapts host-process handlers into
@@ -108,6 +126,7 @@ export const MAX_DIRECT_EXTENSION_TOOLS = 16
  * operation-journal, output-offload, cancellation, and history semantics.
  */
 export class ExtensionToolRegistry {
+  /** Workspace ownership key -> registration. Canonical tool IDs may have one registration per Host scope. */
   private readonly registrations = new Map<string, ActiveRegistration>()
   private readonly aliases = new Map<string, string>()
   private readonly providerIds = new Set<string>()
@@ -140,8 +159,9 @@ export class ExtensionToolRegistry {
       throw new Error(`extension tool is not declared by the active manifest: ${declaration.name}`)
     }
     const canonicalToolId = canonicalExtensionToolId(principal.extensionId, declaration.name)
-    if (this.registrations.has(canonicalToolId)) {
-      throw new Error(`extension tool already registered: ${canonicalToolId}`)
+    const registrationKey = scopedRegistrationKey(canonicalToolId, principal.workspaceRoots)
+    if (this.registrations.has(registrationKey)) {
+      throw new Error(`extension tool already registered for workspace scope: ${canonicalToolId}`)
     }
     const modelAlias = extensionToolModelAlias(principal.extensionId, declaration.name)
     const aliasOwner = this.aliases.get(modelAlias)
@@ -152,6 +172,7 @@ export class ExtensionToolRegistry {
       operation: 'register', canonicalToolId, sideEffect: declaration.sideEffect
     })
     const registration: ActiveRegistration = {
+      registrationKey,
       principal,
       declaration,
       inputValidator,
@@ -162,7 +183,11 @@ export class ExtensionToolRegistry {
       controller: new AbortController(),
       disposed: false
     }
-    this.registrations.set(canonicalToolId, registration)
+    const existing = this.registrationsForCanonical(canonicalToolId)[0]
+    if (existing && registrationDigest(existing) !== registrationDigest(registration)) {
+      throw new Error(`extension tool declaration differs across workspace scopes: ${canonicalToolId}`)
+    }
+    this.registrations.set(registrationKey, registration)
     this.aliases.set(modelAlias, canonicalToolId)
     this.syncProviders()
     let disposed = false
@@ -203,14 +228,15 @@ export class ExtensionToolRegistry {
     this.syncProviders()
   }
 
-  list(extensionId?: string): Array<{
+  list(extensionId?: string, workspace?: string): Array<{
     canonicalToolId: string
     modelAlias: string
     extensionId: string
     declaration: ExtensionToolDeclaration
   }> {
-    return [...this.registrations.values()]
+    return uniqueCanonicalRegistrations([...this.registrations.values()]
       .filter((registration) => !extensionId || registration.principal.extensionId === extensionId)
+      .filter((registration) => workspace === undefined || registrationOwnsWorkspace(registration, workspace)))
       .map((registration) => ({
         canonicalToolId: registration.canonicalToolId,
         modelAlias: registration.modelAlias,
@@ -222,14 +248,16 @@ export class ExtensionToolRegistry {
 
   createCatalogEpoch(input: {
     eligibleCanonicalToolIds?: readonly string[]
+    workspace?: string
     id?: string
     createdAt?: string
   } = {}): ExtensionToolCatalogEpoch {
     const eligible = input.eligibleCanonicalToolIds
       ? new Set(input.eligibleCanonicalToolIds)
       : null
-    const registrations = [...this.registrations.values()]
+    const registrations = uniqueCanonicalRegistrations([...this.registrations.values()]
       .filter((registration) => !eligible || eligible.has(registration.canonicalToolId))
+      .filter((registration) => input.workspace === undefined || registrationOwnsWorkspace(registration, input.workspace)))
       .sort((a, b) => a.canonicalToolId.localeCompare(b.canonicalToolId))
     if (eligible) {
       for (const canonicalToolId of eligible) {
@@ -265,14 +293,18 @@ export class ExtensionToolRegistry {
     const missing: string[] = []
     const changed: string[] = []
     for (const canonicalToolId of epoch.canonicalToolIds) {
-      const registration = this.registrations.get(canonicalToolId)
+      const registration = this.registrationsForCanonical(canonicalToolId)
+        .find((candidate) => !candidate.disposed)
       if (!registration || registration.disposed) {
         missing.push(canonicalToolId)
       } else if (registrationDigest(registration) !== epoch.schemaDigests[canonicalToolId]) {
         changed.push(canonicalToolId)
       }
     }
-    const added = [...this.registrations.keys()].filter((id) => !pinned.has(id)).sort()
+    const added = [...new Set([...this.registrations.values()]
+      .map((registration) => registration.canonicalToolId))]
+      .filter((id) => !pinned.has(id))
+      .sort()
     return {
       kind: missing.length || changed.length ? 'breaking' : added.length ? 'additive' : 'none',
       missing,
@@ -297,23 +329,28 @@ export class ExtensionToolRegistry {
       .map((entry) => structuredClone(entry.tool))
   }
 
-  private localTool(registration: ActiveRegistration): LocalTool {
-    const { declaration } = registration
+  private localTool(canonicalToolId: string, representative: ActiveRegistration): LocalTool {
+    const { declaration } = representative
     return LocalToolHost.defineTool({
-      name: registration.modelAlias,
-      description: `${declaration.description}\nExtension tool: ${registration.canonicalToolId}`,
+      name: representative.modelAlias,
+      description: `${declaration.description}\nExtension tool: ${canonicalToolId}`,
       inputSchema: declaration.inputSchema,
       policy: policyForSideEffect(declaration.sideEffect),
       toolKind: declaration.sideEffect === 'workspace-write' ? 'file_change' : 'tool_call',
       ...(declaration.sideEffect === 'external' ? { requiresExplicitApproval: true } : {}),
       shouldAdvertise: (context) => {
+        if (!this.registrationForWorkspace(canonicalToolId, context.workspace)) return false
         const epoch = context.extensionToolCatalogEpoch
         if (!epoch) return true
         this.assertCatalogCurrent(epoch)
         return epoch.toolCount <= MAX_DIRECT_EXTENSION_TOOLS &&
-          epoch.canonicalToolIds.includes(registration.canonicalToolId)
+          epoch.canonicalToolIds.includes(canonicalToolId)
       },
       execute: async (args, context, onUpdate) => {
+        const registration = this.registrationForWorkspace(canonicalToolId, context.workspace)
+        if (!registration) {
+          throw new Error(`extension tool is unavailable in workspace: ${canonicalToolId}`)
+        }
         if (registration.disposed || registration.controller.signal.aborted) {
           throw new Error(`extension tool is unavailable: ${registration.canonicalToolId}`)
         }
@@ -376,17 +413,21 @@ export class ExtensionToolRegistry {
     if (registration.disposed) return
     registration.disposed = true
     registration.controller.abort(new Error('extension tool registration disposed'))
-    this.registrations.delete(registration.canonicalToolId)
-    this.aliases.delete(registration.modelAlias)
+    this.registrations.delete(registration.registrationKey)
+    if (this.registrationsForCanonical(registration.canonicalToolId).length === 0) {
+      this.aliases.delete(registration.modelAlias)
+    }
     if (sync) this.syncProviders()
   }
 
   private syncProviders(): void {
-    const grouped = new Map<string, ActiveRegistration[]>()
+    const grouped = new Map<string, Map<string, ActiveRegistration>>()
     for (const registration of this.registrations.values()) {
-      const list = grouped.get(registration.principal.extensionId) ?? []
-      list.push(registration)
-      grouped.set(registration.principal.extensionId, list)
+      const registrations = grouped.get(registration.principal.extensionId) ?? new Map<string, ActiveRegistration>()
+      if (!registrations.has(registration.canonicalToolId)) {
+        registrations.set(registration.canonicalToolId, registration)
+      }
+      grouped.set(registration.principal.extensionId, registrations)
     }
     const activeProviderIds = new Set([
       ...[...grouped.keys()].map(extensionProviderId),
@@ -402,9 +443,9 @@ export class ExtensionToolRegistry {
         kind: 'extension',
         enabled: true,
         available: true,
-        tools: registrations
+        tools: [...registrations.values()]
           .sort((a, b) => a.canonicalToolId.localeCompare(b.canonicalToolId))
-          .map((registration) => this.localTool(registration))
+          .map((registration) => this.localTool(registration.canonicalToolId, registration))
       }
       this.options.registry.replaceProvider(provider)
       this.providerIds.add(provider.id)
@@ -463,7 +504,7 @@ export class ExtensionToolRegistry {
               return { output: { code: 'extension_tool_not_pinned', error: 'Tool is not in the active catalog epoch.' }, isError: true }
             }
             this.assertCatalogCurrent(epoch)
-            const registration = this.registrations.get(canonicalToolId)
+            const registration = this.registrationForWorkspace(canonicalToolId, context.workspace)
             if (!registration) throw new Error(`pinned extension tool is unavailable: ${canonicalToolId}`)
             const targetCallId = `gateway_${stableHash({
               threadId: context.threadId,
@@ -498,6 +539,7 @@ export class ExtensionToolRegistry {
             return {
               output: {
                 canonicalToolId,
+                sideEffect: registration.declaration.sideEffect,
                 result: result.item.output
               },
               ...(result.item.isError ? { isError: true } : {})
@@ -512,7 +554,22 @@ export class ExtensionToolRegistry {
     const epoch = context.extensionToolCatalogEpoch
     if (!epoch) return false
     this.assertCatalogCurrent(epoch)
-    return epoch.toolCount > MAX_DIRECT_EXTENSION_TOOLS
+    return epoch.toolCount > MAX_DIRECT_EXTENSION_TOOLS &&
+      epoch.canonicalToolIds.every((canonicalToolId) =>
+        this.registrationForWorkspace(canonicalToolId, context.workspace) !== undefined)
+  }
+
+  private registrationsForCanonical(canonicalToolId: string): ActiveRegistration[] {
+    return [...this.registrations.values()]
+      .filter((registration) => registration.canonicalToolId === canonicalToolId)
+  }
+
+  private registrationForWorkspace(
+    canonicalToolId: string,
+    workspace: string
+  ): ActiveRegistration | undefined {
+    return this.registrationsForCanonical(canonicalToolId)
+      .find((registration) => !registration.disposed && registrationOwnsWorkspace(registration, workspace))
   }
 
   private assertCatalogCurrent(epoch: ExtensionToolCatalogEpoch): void {
@@ -524,9 +581,12 @@ export class ExtensionToolRegistry {
 const EXTENSION_GATEWAY_PROVIDER_ID = 'extension:gateway'
 
 export class PermissionExtensionToolAuthorizer implements ExtensionToolAuthorizer {
-  authorize(principal: ExtensionPrincipal): void {
+  authorize(principal: ExtensionPrincipal, request: ExtensionToolAuthorizationRequest): void {
     if (!principal.permissions.includes('tools.register')) {
       throw new Error('Missing permission: tools.register')
+    }
+    if (request.operation === 'invoke' && !principalOwnsWorkspace(principal, request.workspace)) {
+      throw new Error(`Extension tool workspace scope mismatch: ${request.canonicalToolId}`)
     }
   }
 }
@@ -610,6 +670,33 @@ function searchTokens(value: string): string[] {
   return [...new Set(value.normalize('NFKC').toLowerCase().match(/[\p{L}\p{N}_.:-]+/gu) ?? [])]
 }
 
+function scopedRegistrationKey(canonicalToolId: string, workspaceRoots: readonly string[]): string {
+  return `${canonicalToolId}\u0000${JSON.stringify(normalizedWorkspaceRoots(workspaceRoots))}`
+}
+
+function normalizedWorkspaceRoots(workspaceRoots: readonly string[]): string[] {
+  return [...new Set(workspaceRoots.map((root) => resolve(root)))].sort()
+}
+
+function principalOwnsWorkspace(principal: ExtensionPrincipal, workspace: string | undefined): boolean {
+  if (!workspace || !isAbsolute(workspace)) return false
+  return normalizedWorkspaceRoots(principal.workspaceRoots).includes(resolve(workspace))
+}
+
+function registrationOwnsWorkspace(registration: ActiveRegistration, workspace: string): boolean {
+  return principalOwnsWorkspace(registration.principal, workspace)
+}
+
+function uniqueCanonicalRegistrations(registrations: ActiveRegistration[]): ActiveRegistration[] {
+  const unique = new Map<string, ActiveRegistration>()
+  for (const registration of registrations) {
+    if (!registration.disposed && !unique.has(registration.canonicalToolId)) {
+      unique.set(registration.canonicalToolId, registration)
+    }
+  }
+  return [...unique.values()]
+}
+
 function requiredEpoch(context: ToolHostContext): ExtensionToolCatalogEpoch {
   const epoch = context.extensionToolCatalogEpoch
   if (!epoch) throw new Error('extension tool catalog epoch is required')
@@ -651,6 +738,9 @@ function hasUnknownSideEffect(sideEffect: ExtensionToolSideEffect): boolean {
 }
 
 function isKnownFailure(error: unknown): boolean {
+  if (error instanceof ExtensionApiError) {
+    return KNOWN_PRE_COMMIT_EXTENSION_API_ERROR_CODES.has(error.code)
+  }
   return Boolean(error && typeof error === 'object' && 'knownFailure' in error && error.knownFailure === true)
 }
 

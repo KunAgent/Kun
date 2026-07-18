@@ -166,7 +166,47 @@ function mergeRuntimeDisclosureMeta(
 }
 
 export function isOptimisticUserBlockId(id: string): boolean {
-  return id.startsWith('u-')
+  return id.startsWith('u-') || id.startsWith('q-')
+}
+
+/**
+ * Match a late/replayed stable user item to the client bubble created when the
+ * request was sent. Stable SSE events may arrive after turn settlement, when
+ * `currentTurnUserId` has already been cleared, so identity alone is not
+ * available. Display text plus near-identical creation time keeps the fallback
+ * scoped to the same submission and still allows intentionally repeated text.
+ */
+export function matchingOptimisticUserBlockId(
+  blocks: ChatBlock[],
+  event: UserMessageEventPayload
+): string | null {
+  const expectedTexts = new Set(
+    [event.text, event.meta?.displayText]
+      .map((text) => text?.trim())
+      .filter((text): text is string => Boolean(text))
+  )
+  const eventTime = timestampMs(event.createdAt)
+  for (let index = blocks.length - 1; index >= 0; index -= 1) {
+    const block = blocks[index]
+    if (block.kind !== 'user' || !isOptimisticUserBlockId(block.id)) continue
+    if (!expectedTexts.has(block.text.trim())) continue
+    const blockTurnId = block.turnId?.trim() || block.meta?.turnId?.trim()
+    if (event.turnId && blockTurnId) {
+      if (event.turnId !== blockTurnId) continue
+      return block.id
+    }
+    const blockTime = timestampMs(block.createdAt)
+    if (eventTime !== null && blockTime !== null && Math.abs(eventTime - blockTime) <= 60_000) {
+      return block.id
+    }
+  }
+  return null
+}
+
+function timestampMs(value: string | undefined): number | null {
+  if (!value) return null
+  const parsed = Date.parse(value)
+  return Number.isFinite(parsed) ? parsed : null
 }
 
 export function reconcileOptimisticUserBlock(

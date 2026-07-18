@@ -1,13 +1,40 @@
 import {
   AccountSchema,
+  ComposerContextAttachmentRequestSchema,
+  ComposerContextAttachmentSchema,
   AgentCreateRunRequestSchema,
   AgentRunEventSchema,
   ExtensionApiError,
   ExtensionHostClient,
   ExtensionToolDeclarationSchema,
+  GeneratedArtifactSchema,
   HostMessageSchema,
+  JobCancelRequestSchema,
+  JobEventSchema,
+  JobFilterSchema,
+  JobListRequestSchema,
+  JobResultSchema,
+  JobSnapshotSchema,
   JsonObjectSchema,
   JsonValueSchema,
+  MediaAudioAnalysisCapabilitiesSchema,
+  MediaAnalyzeVisualFramesRequestSchema,
+  MediaEmbedVisualQueryRequestSchema,
+  MediaCapabilitiesSchema,
+  MediaCreateCacheTargetRequestSchema,
+  MediaMetadataSchema,
+  MediaOpenViewResourceRequestSchema,
+  MediaPickFilesRequestSchema,
+  MediaPickSaveTargetRequestSchema,
+  MediaProbeRequestSchema,
+  MediaProbeResultSchema,
+  MediaReadTextRequestSchema,
+  MediaReadTextResultSchema,
+  MediaReleaseRequestSchema,
+  MediaStartFfmpegJobRequestSchema,
+  MediaStartAudioAnalysisJobRequestSchema,
+  MediaStartArchiveJobRequestSchema,
+  MediaVisualModelStatusSchema,
   ModelProviderDeclarationSchema,
   NetworkRequestSchema,
   NetworkResponseSchema,
@@ -33,10 +60,21 @@ import {
   type HostRequestHandler,
   type HostRequestOptions,
   type HostTransport,
+  type GeneratedArtifact,
+  type JobEvent,
+  type JobListRequest,
+  type JobResult,
+  type JobResultInput,
+  type JobSnapshot,
   type JsonObject,
   type JsonValue,
+  type MediaAudioAnalysisCapabilities,
+  type MediaVisualModelStatus,
+  type MediaCapabilities,
   type ModelProviderDeclaration,
   type ModelProviderStreamEvent,
+  type MediaMetadata,
+  type MediaProbeResult,
   type NetworkResponse,
   type Permission,
   type ProviderStatus,
@@ -45,12 +83,13 @@ import {
   type WorkspaceContext,
   type WorkspaceFile
 } from '@kun/extension-api'
+import { createHash } from 'node:crypto'
 
 type FakeHostHandler = (
   params: JsonValue | undefined,
   options: HostRequestOptions
 ) => unknown | Promise<unknown>
-type PermissionResolver = (params: JsonValue | undefined) => string | undefined
+type PermissionResolver = (params: JsonValue | undefined) => string | readonly string[] | undefined
 
 export class FakeClock {
   #now: number
@@ -100,8 +139,11 @@ export class FakeHostTransport implements HostTransport {
     })
   }
 
-  requirePermission(method: string, permission: string | PermissionResolver): void {
-    this.#permissionResolvers.set(method, typeof permission === 'string' ? () => permission : permission)
+  requirePermission(
+    method: string,
+    permission: string | readonly string[] | PermissionResolver
+  ): void {
+    this.#permissionResolvers.set(method, typeof permission === 'function' ? permission : () => permission)
   }
 
   grant(...permissions: string[]): void {
@@ -121,13 +163,15 @@ export class FakeHostTransport implements HostTransport {
     if (options.signal?.aborted) throw this.#cancelled(method)
     this.requests.push({ method, params })
     const required = this.#permissionResolvers.get(method)?.(params)
-    if (required && !hasPermission([...this.permissions], required)) {
+    const missing = (typeof required === 'string' ? [required] : required ?? [])
+      .find((permission) => !hasPermission([...this.permissions], permission))
+    if (missing) {
       throw new ExtensionApiError({
         code: 'PERMISSION_DENIED',
-        message: `Permission ${required} is required for ${method}`,
+        message: `Permission ${missing} is required for ${method}`,
         operation: method,
         retryable: false,
-        details: { permission: required }
+        details: { permission: missing }
       })
     }
     const handler = this.#hostHandlers.get(method)
@@ -413,6 +457,654 @@ export class FakeAgentService {
   }
 }
 
+export function createGeneratedArtifactFixture(
+  overrides: Partial<GeneratedArtifact> = {}
+): GeneratedArtifact {
+  return GeneratedArtifactSchema.parse({
+    schemaVersion: 1,
+    artifactId: 'fake_artifact_000001',
+    ownerExtensionId: 'test.extension',
+    ownerExtensionVersion: '1.1.0',
+    workspaceId: 'test-workspace',
+    mediaHandleId: 'fake_media_output_0001',
+    displayName: 'output.mp4',
+    mediaKind: 'video',
+    mimeType: 'video/mp4',
+    byteSize: 4096,
+    completionIdentity: 'fake-completion-identity-0001',
+    provenance: { jobId: 'fake-job-1', operation: 'media.ffmpeg' },
+    ...overrides
+  })
+}
+
+type FakeCancellationMode = 'immediate' | 'pending'
+
+export class FakeJobService {
+  readonly snapshots = new Map<string, JobSnapshot>()
+  readonly events = new Map<string, JobEvent[]>()
+  readonly #subscriptions = new Map<string, string>()
+  cancellationMode: FakeCancellationMode = 'immediate'
+  #nextJob = 1
+  #nextSubscription = 1
+
+  constructor(
+    private readonly transport: FakeHostTransport,
+    private readonly clock: FakeClock,
+    private readonly identity: ExtensionIdentity,
+    private readonly workspaceId: string
+  ) {}
+
+  install(): void {
+    this.transport.handle('jobs.get', (params) =>
+      this.get(String(JsonObjectSchema.parse(params).jobId)))
+    this.transport.handle('jobs.list', (params) => this.list(JobListRequestSchema.parse(params)))
+    this.transport.handle('jobs.subscribe', (params) => {
+      const input = JsonObjectSchema.parse(params)
+      const jobId = String(input.jobId)
+      const snapshot = this.get(jobId)
+      const subscriptionId = `job-subscription-${this.#nextSubscription++}`
+      this.#subscriptions.set(subscriptionId, jobId)
+      const retained = this.events.get(jobId) ?? []
+      const afterCursor = input.afterCursor === undefined ? undefined : String(input.afterCursor)
+      const afterIndex = afterCursor === undefined
+        ? -1
+        : retained.findIndex((event) => event.cursor === afterCursor)
+      const gap = afterCursor !== undefined && afterIndex < 0
+      const replay = retained.slice(gap ? 0 : afterIndex + 1)
+      return {
+        subscriptionId,
+        snapshot,
+        replay,
+        cursor: snapshot.latestCursor,
+        gap,
+        complete: isTerminalJob(snapshot.state)
+      }
+    })
+    this.transport.handle('jobs.unsubscribe', (params) => {
+      this.#subscriptions.delete(String(JsonObjectSchema.parse(params).subscriptionId))
+      return { ok: true }
+    })
+    this.transport.handle('jobs.cancel', (params) => {
+      const request = JobCancelRequestSchema.parse(params)
+      const snapshot = this.get(request.jobId)
+      if (isTerminalJob(snapshot.state)) return { accepted: false, snapshot }
+      const cancelRequestedAt = this.clock.nowIso()
+      this.#replace({ ...snapshot, cancelRequestedAt, updatedAt: cancelRequestedAt })
+      this.#append(request.jobId, 'cancellation-requested', snapshot.state)
+      if (this.cancellationMode === 'immediate') this.settleCancellation(request.jobId)
+      return { accepted: true, snapshot: this.get(request.jobId) }
+    })
+  }
+
+  create(kind: string, initiatingOperation: string): JobSnapshot {
+    const id = `fake-job-${this.#nextJob++}`
+    const timestamp = this.clock.nowIso()
+    const cursor = `${id}.1`
+    const snapshot = JobSnapshotSchema.parse({
+      schemaVersion: 1,
+      id,
+      kind,
+      kindSchemaVersion: 1,
+      ownerExtensionId: this.identity.id,
+      ownerExtensionVersion: this.identity.version,
+      workspaceId: this.workspaceId,
+      initiatingOperation,
+      state: 'queued',
+      executionAttempt: 0,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+      latestCursor: cursor
+    })
+    this.snapshots.set(id, snapshot)
+    this.events.set(id, [])
+    this.#append(id, 'created', 'queued')
+    return this.get(id)
+  }
+
+  get(jobId: string): JobSnapshot {
+    const snapshot = this.snapshots.get(jobId)
+    if (!snapshot) throw notFound(`Job ${jobId} was not found`, 'jobs.get')
+    return structuredClone(snapshot)
+  }
+
+  list(request: JobListRequest = {}): {
+    items: JobSnapshot[]
+    page: { nextCursor?: string; hasMore: boolean }
+  } {
+    const parsed = JobListRequestSchema.parse(request)
+    const filter = parsed.filter ? JobFilterSchema.parse(parsed.filter) : undefined
+    const offset = parsed.cursor ? Number(parsed.cursor.slice('page_'.length)) : 0
+    const matches = [...this.snapshots.values()]
+      .filter((job) => !filter?.states || filter.states.includes(job.state))
+      .filter((job) => !filter?.kinds || filter.kinds.includes(job.kind))
+      .filter((job) => !filter?.workspaceId || filter.workspaceId === job.workspaceId)
+      .filter((job) => !filter?.createdAfter || job.createdAt >= filter.createdAfter)
+      .filter((job) => !filter?.createdBefore || job.createdAt <= filter.createdBefore)
+      .sort((left, right) => right.createdAt.localeCompare(left.createdAt) || left.id.localeCompare(right.id))
+    const items = matches.slice(offset, offset + parsed.limit).map((item) => structuredClone(item))
+    const nextOffset = offset + items.length
+    return {
+      items,
+      page: nextOffset < matches.length
+        ? { nextCursor: `page_${String(nextOffset).padStart(4, '0')}`, hasMore: true }
+        : { hasMore: false }
+    }
+  }
+
+  start(jobId: string): JobSnapshot {
+    const snapshot = this.get(jobId)
+    if (snapshot.state !== 'queued') return snapshot
+    const timestamp = this.clock.nowIso()
+    this.#replace({
+      ...snapshot,
+      state: 'running',
+      executionAttempt: snapshot.executionAttempt + 1,
+      startedAt: timestamp,
+      updatedAt: timestamp
+    })
+    this.#append(jobId, 'state', 'running')
+    return this.get(jobId)
+  }
+
+  reportProgress(
+    jobId: string,
+    progress: Omit<NonNullable<JobSnapshot['progress']>, 'updatedAt'>
+  ): JobSnapshot {
+    const snapshot = this.get(jobId)
+    if (snapshot.state !== 'running') return snapshot
+    const normalized = { ...progress, updatedAt: this.clock.nowIso() }
+    this.#replace({ ...snapshot, progress: normalized, updatedAt: normalized.updatedAt })
+    this.#append(jobId, 'progress', 'running', { progress: normalized })
+    return this.get(jobId)
+  }
+
+  complete(jobId: string, result: JobResultInput = { schemaVersion: 1 }): JobSnapshot {
+    const snapshot = this.get(jobId)
+    if (isTerminalJob(snapshot.state) || snapshot.cancelRequestedAt) return snapshot
+    const timestamp = this.clock.nowIso()
+    const normalized = JobResultSchema.parse(result)
+    this.#replace({
+      ...snapshot,
+      state: 'completed',
+      result: normalized,
+      updatedAt: timestamp,
+      terminalAt: timestamp
+    })
+    this.#append(jobId, 'completed', 'completed', { result: normalized })
+    return this.get(jobId)
+  }
+
+  fail(jobId: string, code = 'FAKE_JOB_FAILED', message = 'Fake job failed'): JobSnapshot {
+    return this.#terminate(jobId, 'failed', 'failed', { code, message, retryable: false })
+  }
+
+  interrupt(jobId: string, message = 'Fake runtime restarted'): JobSnapshot {
+    return this.#terminate(jobId, 'interrupted', 'interrupted', {
+      code: 'FAKE_JOB_INTERRUPTED',
+      message,
+      retryable: true
+    })
+  }
+
+  settleCancellation(jobId: string): JobSnapshot {
+    const snapshot = this.get(jobId)
+    if (isTerminalJob(snapshot.state)) return snapshot
+    return this.#terminate(jobId, 'cancelled', 'cancelled')
+  }
+
+  simulateRestart(): void {
+    this.#subscriptions.clear()
+    for (const snapshot of [...this.snapshots.values()]) {
+      if (snapshot.cancelRequestedAt) this.settleCancellation(snapshot.id)
+      else if (snapshot.state === 'running') this.interrupt(snapshot.id)
+    }
+  }
+
+  #terminate(
+    jobId: string,
+    state: 'failed' | 'cancelled' | 'interrupted',
+    type: 'failed' | 'cancelled' | 'interrupted',
+    error?: { code: string; message: string; retryable: boolean }
+  ): JobSnapshot {
+    const snapshot = this.get(jobId)
+    if (isTerminalJob(snapshot.state)) return snapshot
+    const timestamp = this.clock.nowIso()
+    this.#replace({ ...snapshot, state, error, updatedAt: timestamp, terminalAt: timestamp })
+    this.#append(jobId, type, state, error ? { error } : {})
+    return this.get(jobId)
+  }
+
+  #replace(snapshot: JobSnapshot): void {
+    this.snapshots.set(snapshot.id, JobSnapshotSchema.parse(snapshot))
+  }
+
+  #append(
+    jobId: string,
+    type: JobEvent['type'],
+    state: JobSnapshot['state'],
+    fields: Pick<JobEvent, 'progress' | 'result' | 'error'> | {} = {}
+  ): JobEvent {
+    const snapshot = this.snapshots.get(jobId)
+    if (!snapshot) throw notFound(`Job ${jobId} was not found`, 'jobs.event')
+    const list = this.events.get(jobId) ?? []
+    const sequence = list.length + 1
+    const cursor = `${jobId}.${sequence}`
+    const event = JobEventSchema.parse({
+      schemaVersion: 1,
+      jobId,
+      kind: snapshot.kind,
+      type,
+      state,
+      timestamp: this.clock.nowIso(),
+      executionAttempt: snapshot.executionAttempt,
+      sequence,
+      cursor,
+      ...fields
+    })
+    list.push(event)
+    this.events.set(jobId, list)
+    this.#replace({ ...this.get(jobId), latestCursor: cursor })
+    for (const [subscriptionId, subscribedJobId] of this.#subscriptions) {
+      if (subscribedJobId === jobId) this.transport.emit('jobs.event', { subscriptionId, event })
+    }
+    return structuredClone(event)
+  }
+}
+
+export class FakeMediaService {
+  readonly handles = new Map<string, MediaMetadata>()
+  readonly probes = new Map<string, MediaProbeResult>()
+  readonly textContents = new Map<string, string>()
+  readonly leases = new Map<string, { handleId: string; revoked: boolean }>()
+  readonly #fileSelections: MediaMetadata[][] = []
+  readonly #saveSelections: Array<MediaMetadata | undefined> = []
+  executablesAvailable = true
+  #capabilities: MediaCapabilities
+  #audioAnalysisCapabilities: MediaAudioAnalysisCapabilities
+  #visualModelStatus: MediaVisualModelStatus
+  #nextLease = 1
+  #nextCacheTarget = 1
+
+  constructor(
+    private readonly transport: FakeHostTransport,
+    private readonly jobs: FakeJobService,
+    private readonly clock: FakeClock
+  ) {
+    this.#capabilities = MediaCapabilitiesSchema.parse({
+      probedAt: this.clock.nowIso(),
+      ffprobe: {
+        name: 'ffprobe',
+        available: true,
+        version: 'fake ffprobe 1.0',
+        features: []
+      },
+      ffmpeg: {
+        name: 'ffmpeg',
+        available: true,
+        version: 'fake ffmpeg 1.0',
+        features: [
+          'libx264-encoder',
+          'aac-encoder',
+          'drawtext-filter',
+          'subtitles-filter'
+        ]
+      }
+    })
+    this.#audioAnalysisCapabilities = MediaAudioAnalysisCapabilitiesSchema.parse({
+      schemaVersion: 1,
+      probedAt: this.clock.nowIso(),
+      analyses: [
+        {
+          analysis: 'silence', available: true,
+          algorithm: 'ffmpeg.silencedetect', algorithmVersion: '1.0.0',
+          local: true, networkUsed: false
+        },
+        {
+          analysis: 'beat-grid', available: false,
+          code: 'AUDIO_ANALYSIS_ALGORITHM_UNAVAILABLE',
+          remediation: 'No verified local beat/downbeat analyzer is configured.',
+          retryable: false, local: true, networkUsed: false
+        },
+        {
+          analysis: 'sync-features', available: true,
+          algorithm: 'kun.pcm-energy-envelope', algorithmVersion: '1.0.0',
+          local: true, networkUsed: false
+        }
+      ]
+    })
+    this.#visualModelStatus = MediaVisualModelStatusSchema.parse({
+      schemaVersion: 1,
+      state: 'missing',
+      descriptor: {
+        adapterId: 'kun.local.visual-features', adapterVersion: '1.0.0',
+        modelId: 'kun-visual-features', modelVersion: '1.0.0',
+        packageId: 'kun-bundled.visual-features-v1', manifestSha256: 'a'.repeat(64),
+        files: [{ name: 'visual-features-v1.json', sha256: 'b'.repeat(64), byteSize: 582 }],
+        embeddingDimensions: 24, execution: 'local',
+        querySemantics: 'bounded-visual-features-v1'
+      },
+      installSupported: false,
+      checkedAt: this.clock.nowIso(),
+      remediation: 'Configure an explicit verified visual model fixture before indexing.',
+      local: true,
+      networkUsedForInference: false,
+      rawPathsExposed: false,
+      urlsAccepted: false
+    })
+  }
+
+  install(): void {
+    this.transport.handle('media.pickFiles', (params) => {
+      MediaPickFilesRequestSchema.parse(params)
+      const files = this.#fileSelections.shift()
+      return files && files.length > 0 ? { outcome: 'selected', files } : { outcome: 'cancelled', files: [] }
+    })
+    this.transport.handle('media.pickSaveTarget', (params) => {
+      MediaPickSaveTargetRequestSchema.parse(params)
+      const target = this.#saveSelections.shift()
+      return target ? { outcome: 'selected', target } : { outcome: 'cancelled' }
+    })
+    this.transport.handle('media.createCacheTarget', (params) => {
+      const request = MediaCreateCacheTargetRequestSchema.parse(params)
+      const handleId = `fake_cache_target_${String(this.#nextCacheTarget++).padStart(4, '0')}`
+      const metadata = MediaMetadataSchema.parse({
+        handleId,
+        mode: 'export',
+        kind: request.format === 'wav'
+          ? 'audio'
+          : request.format === 'png' || request.format === 'jpeg'
+            ? 'image'
+            : 'video',
+        displayName: `${request.purpose}.${request.format === 'jpeg' ? 'jpg' : request.format}`,
+        mimeType: request.format === 'png'
+          ? 'image/png'
+          : request.format === 'jpeg'
+            ? 'image/jpeg'
+            : request.format === 'mp4'
+              ? 'video/mp4'
+              : request.format === 'webm'
+                ? 'video/webm'
+                : 'audio/wav',
+        revoked: false
+      })
+      this.handles.set(handleId, metadata)
+      return { target: metadata }
+    })
+    this.transport.handle('media.stat', (params) => {
+      const handle = this.#get(MediaProbeRequestSchema.parse(params).handleId, 'media.stat')
+      return handle
+    })
+    this.transport.handle('media.readText', (params) => {
+      const request = MediaReadTextRequestSchema.parse(params)
+      const handle = this.#get(request.handleId, 'media.readText')
+      if (handle.mode !== 'read') throw notFound('Media handle is not readable', 'media.readText')
+      const content = this.textContents.get(handle.handleId)
+      if (content === undefined) throw notFound('Fake text content was not configured', 'media.readText')
+      const byteSize = new TextEncoder().encode(content).byteLength
+      if (byteSize > request.maxBytes) {
+        throw new ExtensionApiError({
+          code: 'RESOURCE_LIMIT',
+          message: `Fake text content exceeds the ${request.maxBytes}-byte read limit`,
+          operation: 'media.readText',
+          retryable: false,
+          details: { byteSize, maxBytes: request.maxBytes }
+        })
+      }
+      return MediaReadTextResultSchema.parse({
+        handleId: handle.handleId,
+        displayName: handle.displayName,
+        mimeType: handle.mimeType ?? 'text/plain',
+        byteSize,
+        content
+      })
+    })
+    this.transport.handle('media.release', (params) => {
+      const request = MediaReleaseRequestSchema.parse(params)
+      if (request.resource === 'lease') {
+        const lease = this.leases.get(request.leaseId)
+        if (lease) lease.revoked = true
+        return { released: lease !== undefined }
+      }
+      const handle = this.handles.get(request.handleId)
+      if (handle) this.handles.set(request.handleId, { ...handle, revoked: true })
+      return { released: handle !== undefined }
+    })
+    this.transport.handle('media.openViewResource', (params) => {
+      const request = MediaOpenViewResourceRequestSchema.parse(params)
+      const handle = this.#get(request.handleId, 'media.openViewResource')
+      if (handle.mode !== 'read') throw notFound('Media handle is not readable', 'media.openViewResource')
+      this.handles.set(handle.handleId, {
+        ...handle,
+        lastAccessedAt: this.clock.nowIso()
+      })
+      const leaseId = `fake_media_lease_${String(this.#nextLease++).padStart(4, '0')}`
+      this.leases.set(leaseId, { handleId: handle.handleId, revoked: false })
+      return {
+        leaseId,
+        handleId: handle.handleId,
+        url: `kun-media://fake/${leaseId}`,
+        mimeType: handle.mimeType ?? 'application/octet-stream',
+        expiresAt: new Date(this.clock.now() + 60_000).toISOString()
+      }
+    })
+    this.transport.handle('media.getCapabilities', () => {
+      if (this.executablesAvailable) return structuredClone(this.#capabilities)
+      return MediaCapabilitiesSchema.parse({
+        probedAt: this.clock.nowIso(),
+        ffprobe: { name: 'ffprobe', available: false, features: [] },
+        ffmpeg: { name: 'ffmpeg', available: false, features: [] }
+      })
+    })
+    this.transport.handle('media.getAudioAnalysisCapabilities', () => {
+      if (this.executablesAvailable) return structuredClone(this.#audioAnalysisCapabilities)
+      return MediaAudioAnalysisCapabilitiesSchema.parse({
+        schemaVersion: 1,
+        probedAt: this.clock.nowIso(),
+        analyses: ['silence', 'beat-grid', 'sync-features'].map((analysis) => ({
+          analysis,
+          available: false,
+          code: analysis === 'beat-grid'
+            ? 'AUDIO_ANALYSIS_ALGORITHM_UNAVAILABLE'
+            : 'AUDIO_ANALYSIS_EXECUTABLE_UNAVAILABLE',
+          remediation: 'Local audio analysis is unavailable in this fake Host.',
+          retryable: analysis !== 'beat-grid',
+          local: true,
+          networkUsed: false
+        }))
+      })
+    })
+    this.transport.handle('media.getVisualModelStatus', () =>
+      structuredClone(this.#visualModelStatus))
+    this.transport.handle('media.installVisualModel', () =>
+      structuredClone(this.#visualModelStatus))
+    this.transport.handle('media.analyzeVisualFrames', (params) => {
+      MediaAnalyzeVisualFramesRequestSchema.parse(params)
+      return {
+        outcome: 'unavailable',
+        code: this.#visualModelStatus.state === 'installed'
+          ? 'VISUAL_MEDIA_UNSUPPORTED'
+          : 'VISUAL_MODEL_MISSING',
+        remediation: 'Configure explicit measured visual frame evidence in this fake Host.',
+        retryable: true,
+        local: true,
+        networkUsed: false
+      }
+    })
+    this.transport.handle('media.embedVisualQuery', (params) => {
+      MediaEmbedVisualQueryRequestSchema.parse(params)
+      return {
+        outcome: 'unavailable',
+        code: this.#visualModelStatus.state === 'installed'
+          ? 'VISUAL_QUERY_UNSUPPORTED'
+          : 'VISUAL_MODEL_MISSING',
+        remediation: 'Configure an explicit measured visual query fixture in this fake Host.',
+        retryable: false,
+        local: true,
+        networkUsed: false
+      }
+    })
+    this.transport.handle('media.probe', (params) => {
+      if (!this.executablesAvailable) throw unavailable('media.probe')
+      const request = MediaProbeRequestSchema.parse(params)
+      this.#get(request.handleId, 'media.probe')
+      const probe = this.probes.get(request.handleId)
+      if (!probe) throw notFound('Fake probe output was not configured', 'media.probe')
+      return probe
+    })
+    this.transport.handle('media.startFfmpegJob', (params) => {
+      const request = MediaStartFfmpegJobRequestSchema.parse(params)
+      const needsFfmpeg = request.arguments.length > 0 ||
+        Object.keys(request.inputs).length > 0 ||
+        Object.keys(request.outputs).length > 0
+      if (!this.executablesAvailable && needsFfmpeg) throw unavailable('media.startFfmpegJob')
+      for (const handleId of Object.values(request.inputs)) {
+        const handle = this.#get(handleId, 'media.startFfmpegJob')
+        if (handle.mode !== 'read') throw notFound('FFmpeg input is not readable', 'media.startFfmpegJob')
+      }
+      for (const handleId of Object.values(request.outputs)) {
+        const handle = this.#get(handleId, 'media.startFfmpegJob')
+        if (handle.mode !== 'export') throw notFound('FFmpeg output is not writable', 'media.startFfmpegJob')
+      }
+      for (const output of Object.values(request.textOutputs ?? {})) {
+        const handle = this.#get(output.handleId, 'media.startFfmpegJob')
+        if (handle.mode !== 'export') throw notFound('Text output is not writable', 'media.startFfmpegJob')
+      }
+      const job = this.jobs.create('media.ffmpeg', 'media.startFfmpegJob')
+      return { job: { jobId: job.id, kind: job.kind, state: job.state, cursor: job.latestCursor } }
+    })
+    this.transport.handle('media.startAudioAnalysisJob', (params) => {
+      const request = MediaStartAudioAnalysisJobRequestSchema.parse(params)
+      const capability = (this.executablesAvailable
+        ? this.#audioAnalysisCapabilities
+        : MediaAudioAnalysisCapabilitiesSchema.parse({
+            schemaVersion: 1,
+            probedAt: this.clock.nowIso(),
+            analyses: ['silence', 'beat-grid', 'sync-features'].map((analysis) => ({
+              analysis,
+              available: false,
+              code: analysis === 'beat-grid'
+                ? 'AUDIO_ANALYSIS_ALGORITHM_UNAVAILABLE'
+                : 'AUDIO_ANALYSIS_EXECUTABLE_UNAVAILABLE',
+              remediation: 'Local audio analysis is unavailable in this fake Host.',
+              retryable: analysis !== 'beat-grid',
+              local: true,
+              networkUsed: false
+            }))
+          })).analyses.find(({ analysis }) => analysis === request.analysis)!
+      if (!capability.available) {
+        return {
+          outcome: 'unavailable',
+          analysis: capability.analysis,
+          code: capability.code,
+          remediation: capability.remediation,
+          retryable: capability.retryable,
+          local: true,
+          networkUsed: false
+        }
+      }
+      const handles = request.analysis === 'sync-features'
+        ? [request.referenceHandleId, request.targetHandleId]
+        : [request.inputHandleId]
+      for (const handleId of handles) {
+        const handle = this.#get(handleId, 'media.startAudioAnalysisJob')
+        if (handle.mode !== 'read') {
+          throw notFound('Audio-analysis input is not readable', 'media.startAudioAnalysisJob')
+        }
+      }
+      const job = this.jobs.create('media.audio-analysis', 'media.startAudioAnalysisJob')
+      return {
+        outcome: 'started',
+        job: { jobId: job.id, kind: job.kind, state: job.state, cursor: job.latestCursor }
+      }
+    })
+    this.transport.handle('media.startArchiveJob', (params) => {
+      const request = MediaStartArchiveJobRequestSchema.parse(params)
+      const output = this.#get(request.outputHandleId, 'media.startArchiveJob')
+      if (output.mode !== 'export') {
+        throw notFound('Archive output is not writable', 'media.startArchiveJob')
+      }
+      if (output.mimeType !== 'application/zip' && output.mimeType !== 'application/octet-stream') {
+        throw notFound('Archive output must be a ZIP target', 'media.startArchiveJob')
+      }
+      for (const entry of request.entries) {
+        if (entry.kind !== 'media') continue
+        const input = this.#get(entry.inputHandleId, 'media.startArchiveJob')
+        if (input.mode !== 'read') {
+          throw notFound('Archive input is not readable', 'media.startArchiveJob')
+        }
+      }
+      const job = this.jobs.create('media.archive', 'media.startArchiveJob')
+      return {
+        outcome: 'started',
+        job: { jobId: job.id, kind: job.kind, state: job.state, cursor: job.latestCursor }
+      }
+    })
+  }
+
+  addHandle(metadata: unknown): MediaMetadata {
+    const parsed = MediaMetadataSchema.parse(metadata)
+    this.handles.set(parsed.handleId, parsed)
+    return structuredClone(parsed)
+  }
+
+  queueFileSelection(...files: unknown[]): MediaMetadata[] {
+    const parsed = files.map((file) => this.addHandle(file))
+    this.#fileSelections.push(parsed)
+    return parsed
+  }
+
+  queuePickerCancellation(): void {
+    this.#fileSelections.push([])
+  }
+
+  queueSaveTarget(target?: unknown): MediaMetadata | undefined {
+    const parsed = target ? this.addHandle(target) : undefined
+    this.#saveSelections.push(parsed)
+    return parsed
+  }
+
+  setProbe(handleId: string, result: unknown): MediaProbeResult {
+    this.#get(handleId, 'media.setProbe')
+    const parsed = MediaProbeResultSchema.parse(result)
+    if (parsed.handleId !== handleId) throw new Error('Fake probe handleId must match the configured handle')
+    this.probes.set(handleId, parsed)
+    return structuredClone(parsed)
+  }
+
+  setText(handleId: string, content: string): string {
+    const handle = this.#get(handleId, 'media.setText')
+    if (handle.mode !== 'read') throw notFound('Fake text handle must be readable', 'media.setText')
+    const byteSize = new TextEncoder().encode(content).byteLength
+    this.handles.set(handleId, MediaMetadataSchema.parse({ ...handle, byteSize }))
+    this.textContents.set(handleId, content)
+    return content
+  }
+
+  setCapabilities(value: unknown): MediaCapabilities {
+    const parsed = MediaCapabilitiesSchema.parse(value)
+    this.#capabilities = parsed
+    return structuredClone(parsed)
+  }
+
+  setAudioAnalysisCapabilities(value: unknown): MediaAudioAnalysisCapabilities {
+    const parsed = MediaAudioAnalysisCapabilitiesSchema.parse(value)
+    this.#audioAnalysisCapabilities = parsed
+    return structuredClone(parsed)
+  }
+
+  setVisualModelStatus(value: unknown): MediaVisualModelStatus {
+    const parsed = MediaVisualModelStatusSchema.parse(value)
+    this.#visualModelStatus = parsed
+    return structuredClone(parsed)
+  }
+
+  #get(handleId: string, operation: string): MediaMetadata {
+    const handle = this.handles.get(handleId)
+    if (!handle || handle.revoked) throw notFound('Media handle was not found', operation)
+    return structuredClone(handle)
+  }
+}
+
 export class FakeToolService {
   readonly registrations = new Map<string, ExtensionToolDeclaration>()
   #next = 1
@@ -588,7 +1280,13 @@ export class FakeWebviewService {
     severity: 'info' | 'warning' | 'error'
     actions: Array<{ id: string; title: string }>
   }> = []
+  readonly composerContexts: Array<ReturnType<typeof ComposerContextAttachmentSchema.parse>> = []
   readonly #notificationResponses: Array<{ value?: string }> = []
+
+  constructor(
+    private readonly identity: ExtensionIdentity,
+    private readonly workspaceId: string
+  ) {}
 
   install(transport: FakeHostTransport): void {
     transport.handle('ui.getTheme', () => this.theme)
@@ -607,6 +1305,23 @@ export class FakeWebviewService {
     transport.handle('ui.showNotification', (params) => {
       this.notifications.push(NotificationOptionsSchema.parse(params))
       return this.#notificationResponses.shift() ?? {}
+    })
+    transport.handle('ui.attachComposerContext', (params) => {
+      const request = ComposerContextAttachmentRequestSchema.parse(params)
+      const attachment = ComposerContextAttachmentSchema.parse({
+        ...request,
+        attachmentId: `extension-context:${createHash('sha256')
+          .update(`${this.identity.id}\0${this.workspaceId}\0${request.id}`)
+          .digest('hex')}`,
+        provenance: {
+          extensionId: this.identity.id,
+          extensionVersion: this.identity.version,
+          viewContributionId: `extension:${this.identity.id}/test-view`,
+          workspaceId: this.workspaceId
+        }
+      })
+      this.composerContexts.push(attachment)
+      return attachment
     })
   }
 
@@ -644,10 +1359,12 @@ export class ExtensionTestHarness implements Disposable {
   readonly storage = new FakeStorageService()
   readonly workspace = new FakeWorkspaceService()
   readonly agent: FakeAgentService
+  readonly jobs: FakeJobService
+  readonly media: FakeMediaService
   readonly tools: FakeToolService
   readonly providers: FakeProviderService
   readonly accounts: FakeAccountService
-  readonly webview = new FakeWebviewService()
+  readonly webview: FakeWebviewService
   readonly configuration = new Map<string, JsonValue>()
   readonly client: ExtensionHostClient
   readonly context: ExtensionContext
@@ -661,9 +1378,20 @@ export class ExtensionTestHarness implements Disposable {
     this.transport = new FakeHostTransport({ permissions: options.permissions })
     this.permissions = this.transport.permissions
     this.agent = new FakeAgentService(this.transport, this.clock, this.identity)
+    this.jobs = new FakeJobService(
+      this.transport,
+      this.clock,
+      this.identity,
+      options.workspace?.id ?? 'test-workspace'
+    )
+    this.media = new FakeMediaService(this.transport, this.jobs, this.clock)
     this.tools = new FakeToolService(this.transport)
     this.providers = new FakeProviderService(this.transport, this.clock)
     this.accounts = new FakeAccountService(this.clock)
+    this.webview = new FakeWebviewService(
+      this.identity,
+      createHash('sha256').update(options.workspace?.id ?? '').digest('hex')
+    )
 
     this.#installPermissionRules()
     this.#installServices()
@@ -672,8 +1400,15 @@ export class ExtensionTestHarness implements Disposable {
       this.transport,
       {
         extension: this.identity,
-        apiVersion: '1.0.0',
-        capabilities: [],
+        apiVersion: '1.2.0',
+        capabilities: [
+          'artifacts.generated',
+          'jobs.observe',
+          'media.brokered',
+          'media.analysis',
+          'media.archive',
+          'media.documents'
+        ],
         permissions: [...this.permissions],
         workspaceContext: options.workspace,
         activationEvent: 'onStartup'
@@ -705,6 +1440,8 @@ export class ExtensionTestHarness implements Disposable {
     this.storage.install(this.transport)
     this.workspace.install(this.transport)
     this.agent.install()
+    this.jobs.install()
+    this.media.install()
     this.tools.install()
     this.providers.install()
     this.accounts.install(this.transport)
@@ -785,6 +1522,7 @@ export class ExtensionTestHarness implements Disposable {
     this.transport.requirePermission('configuration.update', 'ui.actions')
     this.transport.requirePermission('configuration.keys', 'ui.actions')
     this.transport.requirePermission('ui.showNotification', 'ui.notifications')
+    this.transport.requirePermission('ui.attachComposerContext', 'ui.actions')
     this.transport.requirePermission('authentication.revealSecret', (params) => {
       const account = this.accounts.accounts.get(String(JsonObjectSchema.parse(params).accountId))
       return account ? `accounts.secrets.read:${account.providerId}` : 'accounts.read'
@@ -793,6 +1531,54 @@ export class ExtensionTestHarness implements Disposable {
     this.transport.requirePermission('workspace.stat', 'workspace.read')
     this.transport.requirePermission('workspace.list', 'workspace.read')
     this.transport.requirePermission('workspace.writeFile', 'workspace.write')
+    this.transport.requirePermission('media.pickFiles', ['media.read', 'workspace.read'])
+    this.transport.requirePermission('media.pickSaveTarget', ['media.export', 'workspace.write'])
+    this.transport.requirePermission('media.createCacheTarget', [
+      'media.process',
+      'workspace.write'
+    ])
+    this.transport.requirePermission('media.stat', ['media.read', 'workspace.read'])
+    this.transport.requirePermission('media.readText', ['media.read', 'workspace.read'])
+    this.transport.requirePermission('media.openViewResource', ['media.read', 'workspace.read'])
+    this.transport.requirePermission('media.getCapabilities', 'media.process')
+    this.transport.requirePermission('media.getAudioAnalysisCapabilities', 'media.process')
+    for (const method of [
+      'media.getVisualModelStatus',
+      'media.installVisualModel',
+      'media.embedVisualQuery'
+    ]) this.transport.requirePermission(method, 'media.process')
+    this.transport.requirePermission('media.analyzeVisualFrames', [
+      'media.read', 'media.process', 'workspace.read'
+    ])
+    this.transport.requirePermission('media.probe', [
+      'media.read',
+      'media.process',
+      'workspace.read'
+    ])
+    this.transport.requirePermission('media.startFfmpegJob', [
+      'media.read',
+      'media.process',
+      'media.export',
+      'jobs.manage',
+      'workspace.read',
+      'workspace.write'
+    ])
+    this.transport.requirePermission('media.startAudioAnalysisJob', [
+      'media.read',
+      'media.process',
+      'jobs.manage',
+      'workspace.read'
+    ])
+    this.transport.requirePermission('media.startArchiveJob', [
+      'media.read',
+      'media.export',
+      'jobs.manage',
+      'workspace.read',
+      'workspace.write'
+    ])
+    for (const method of ['jobs.get', 'jobs.list', 'jobs.subscribe', 'jobs.unsubscribe', 'jobs.cancel']) {
+      this.transport.requirePermission(method, 'jobs.manage')
+    }
   }
 }
 
@@ -811,6 +1597,19 @@ function notFound(message: string, operation: string): ExtensionApiError {
 
 function isTerminal(state: AgentRun['state']): boolean {
   return ['completed', 'failed', 'cancelled', 'budget-exhausted'].includes(state)
+}
+
+function isTerminalJob(state: JobSnapshot['state']): boolean {
+  return ['completed', 'failed', 'cancelled', 'interrupted'].includes(state)
+}
+
+function unavailable(operation: string): ExtensionApiError {
+  return new ExtensionApiError({
+    code: 'HOST_UNAVAILABLE',
+    message: 'Fake media executables are unavailable',
+    operation,
+    retryable: true
+  })
 }
 
 export function createExtensionTestHarness(

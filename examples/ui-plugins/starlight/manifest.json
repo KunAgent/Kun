@@ -1,9 +1,9 @@
 {
   "id": "starlight",
   "name": "星夜 Kun",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "author": "Kun Team",
-  "description": "官方示例插件:深紫星夜配色的 Kun 形象,含主题色与进行中文案。",
+  "description": "官方示例插件:深紫星夜配色的 Kun 形象,含舞台背景、主题色与进行中文案。",
   "figures": {
     "swim": "img/bird.png",
     "surf": "img/surf.png",
@@ -11,6 +11,19 @@
     "sleep": "img/sleep.png",
     "sit": "img/sit.png",
     "toggleIcon": "img/greet.png"
+  },
+  "backgrounds": {
+    "light": {
+      "stage": "img/starlight-stage.webp"
+    },
+    "dark": {
+      "stage": {
+        "path": "img/starlight-stage.webp",
+        "fit": "cover",
+        "position": "center",
+        "opacity": 0.42
+      }
+    }
   },
   "labels": {
     "zh": {

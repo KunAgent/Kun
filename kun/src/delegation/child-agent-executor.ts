@@ -164,6 +164,10 @@ export function createChildAgentExecutor(options: ChildAgentExecutorOptions): Ch
       ...(options.artifactStore ? { artifactStore: options.artifactStore } : {}),
       ...(options.contextCompaction ? { contextCompaction: options.contextCompaction } : {}),
       ...(options.tokenEconomy ? { tokenEconomy: options.tokenEconomy } : {}),
+      // A delegated child settles only when it completes or an explicit
+      // parent/user cancellation reaches its signal. Do not inherit the
+      // generic AgentLoop wall-clock deadline.
+      disableWallTimeLimit: true,
       ...(options.runtime?.toolStorm ? { toolStorm: options.runtime.toolStorm } : {}),
       ...(options.runtime?.toolArgumentRepair ? { toolArgumentRepair: options.runtime.toolArgumentRepair } : {})
     })

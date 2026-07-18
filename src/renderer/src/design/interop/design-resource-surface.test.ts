@@ -15,6 +15,7 @@ import {
   DESIGN_RESOURCE_SURFACE_PATH,
   serializeDesignResourceSurface
 } from './design-resource-surface'
+import { CANVAS_MOTION_VERSION } from '../motion/canvas-motion-types'
 
 const now = '2026-06-29T00:00:00.000Z'
 
@@ -248,6 +249,53 @@ describe('design resource surface', () => {
 
     expect(content.endsWith('\n')).toBe(true)
     expect(JSON.parse(content)).toMatchObject({ kind: 'kun.design.resources' })
+  })
+
+  it('includes bounded Motion and reduced-motion guidance in board and frame resources', () => {
+    const canvas = canvasDocument()
+    canvas.motion = {
+      version: CANVAS_MOTION_VERSION,
+      timelines: {
+        frame_home: {
+          id: 'timeline_home',
+          frameId: 'frame_home',
+          durationMs: 900,
+          playback: 'loop',
+          tracks: [{
+            id: 'track_home_opacity',
+            targetShapeId: 'frame_home',
+            property: 'opacity',
+            operation: 'set',
+            baseValue: 1,
+            keyframes: [
+              { id: 'kf_0', timeMs: 0, value: 0, easing: { type: 'linear' } },
+              { id: 'kf_1', timeMs: 900, value: 1, easing: { type: 'ease-out' } }
+            ]
+          }]
+        }
+      }
+    }
+    const surface = buildDesignResourceSurface({
+      document: documentWithArtifacts([artifact()]),
+      canvasDocument: canvas,
+      designSystem,
+      artifacts: [artifact()],
+      updatedAt: now
+    })
+    const board = JSON.parse(surface.resources.find((item) => item.kind === 'board')!.text)
+    const frame = JSON.parse(surface.resources.find((item) => item.uri.endsWith('/frames/frame_home'))!.text)
+
+    expect(board.motion).toMatchObject({ timelineCount: 1, trackCount: 1, keyframeCount: 2 })
+    expect(frame.motionTimeline).toMatchObject({
+      id: 'timeline_home',
+      frameId: 'frame_home',
+      tracks: [{ id: 'track_home_opacity', keyframes: [{ id: 'kf_0' }, { id: 'kf_1' }] }]
+    })
+    expect(frame.reducedMotion).toEqual({
+      automaticPlayback: 'disabled-when-preferred',
+      editing: 'available',
+      scrubAndEndState: 'deterministic'
+    })
   })
 
   it('exports an SVG frame resource with generic and SVG-specific source paths', () => {

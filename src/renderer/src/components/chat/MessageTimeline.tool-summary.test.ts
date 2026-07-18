@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import type { ChatBlock, NormalizedThread, ToolBlock } from '../../agent/types'
@@ -17,6 +17,7 @@ import {
   timelineFilePreviewWorkspaceRoot,
   useTimelineFilePreviewWorkspaceRoot
 } from './timeline-file-preview-workspace'
+import { readGeneratedWorkspaceImagePreview } from './generated-media-preview'
 
 const labels: Record<string, string> = {
   toolActionCommand: 'Ran command',
@@ -82,6 +83,34 @@ describe('MessageTimeline tool summaries', () => {
     )
 
     expect(html).toContain('/tmp/embedded-thread')
+  })
+
+  it('retries generated workspace images that are requested before the export is written', async () => {
+    const readImage = vi.fn()
+      .mockResolvedValueOnce({ ok: false, message: 'File not found' })
+      .mockResolvedValueOnce({
+        ok: true,
+        path: '/tmp/thread-workspace/.deepseekgui-images/diagram.png',
+        dataUrl: 'data:image/png;base64,ZGlhZ3JhbQ==',
+        mimeType: 'image/png',
+        size: 7
+      })
+    const wait = vi.fn(async () => undefined)
+
+    await expect(readGeneratedWorkspaceImagePreview({
+      path: '.deepseekgui-images/diagram.png',
+      workspaceRoot: '/tmp/thread-workspace',
+      readImage,
+      retryDelaysMs: [0, 25],
+      wait
+    })).resolves.toBe('data:image/png;base64,ZGlhZ3JhbQ==')
+
+    expect(readImage).toHaveBeenCalledTimes(2)
+    expect(readImage).toHaveBeenNthCalledWith(1, {
+      path: '.deepseekgui-images/diagram.png',
+      workspaceRoot: '/tmp/thread-workspace'
+    })
+    expect(wait).toHaveBeenCalledWith(25)
   })
 
   it('summarizes built-in read/write/edit tools with their file path', () => {
@@ -290,6 +319,28 @@ describe('MessageTimeline Kun runtime metadata smoke', () => {
     expect(html).toContain('ds-media-printer-reveal')
   })
 
+  it('renders revoked generated artifacts as explicitly unavailable', () => {
+    const block: ToolBlock = toolBlock({
+      id: 'tool_revoked_artifact',
+      summary: 'video-render',
+      meta: {
+        generatedFiles: [{
+          id: 'artifact_1234567890',
+          artifactId: 'artifact_1234567890',
+          mediaHandleId: 'media_123456789012',
+          availability: 'unavailable',
+          name: 'final.mp4',
+          mimeType: 'video/mp4'
+        }]
+      }
+    })
+
+    const html = renderToStaticMarkup(createElement(GeneratedFilesPanel, { blocks: [block] }))
+    expect(html).toContain('Preview unavailable')
+    expect(html).toContain('disabled=""')
+    expect(html).not.toContain('src="kun-media:')
+  })
+
   it('deduplicates generated files across tool blocks by path', () => {
     const first: ToolBlock = toolBlock({
       id: 'tool_export_1',
@@ -314,6 +365,21 @@ describe('MessageTimeline Kun runtime metadata smoke', () => {
 
     expect((html.match(/summary\.md/g) ?? []).length).toBe(2)
     expect((html.match(/type="button"/g) ?? []).length).toBe(2)
+  })
+
+  it('leaves supported presentation outputs to the dedicated presentation panel', () => {
+    const block: ToolBlock = toolBlock({
+      id: 'tool_presentations',
+      summary: 'presentation export',
+      meta: {
+        generatedFiles: [
+          { relativePath: 'presentations/brief.pptx' },
+          { relativePath: 'brief.kun-ppt.html' }
+        ]
+      }
+    })
+
+    expect(renderToStaticMarkup(createElement(GeneratedFilesPanel, { blocks: [block] }))).toBe('')
   })
 
   it('projects only bounded non-secret generated-file metadata to result preview Views', () => {
@@ -343,6 +409,36 @@ describe('MessageTimeline Kun runtime metadata smoke', () => {
     }])
     expect(JSON.stringify(sources)).not.toContain('/private/workspace')
     expect(JSON.stringify(sources)).not.toContain('base64')
+  })
+
+  it('projects durable artifact and media references to result preview Views', () => {
+    const sources = resultPreviewSourcesForTurn({
+      user: { kind: 'user', id: 'user_1', text: 'render video' },
+      blocks: [toolBlock({
+        id: 'tool_video',
+        meta: {
+          generatedFiles: [{
+            id: 'artifact_1234567890',
+            artifactId: 'artifact_1234567890',
+            mediaHandleId: 'media_123456789012',
+            availability: 'available',
+            name: 'final.mp4',
+            mimeType: 'video/mp4',
+            byteSize: 4096
+          }]
+        }
+      })]
+    })
+
+    expect(sources).toEqual([{
+      sourceId: 'tool_video:artifact_1234567890',
+      mimeType: 'video/mp4',
+      name: 'final.mp4',
+      artifactId: 'artifact_1234567890',
+      mediaHandleId: 'media_123456789012',
+      availability: 'available',
+      byteSize: 4096
+    }])
   })
 
   it('renders managed Claw prompts as the user-visible message', () => {
@@ -517,7 +613,7 @@ describe('MessageTimeline Kun runtime metadata smoke', () => {
     expect(html).toContain('aria-expanded="false"')
   })
 
-  it('keeps an active failed-tool detail visible while the turn is running', () => {
+  it('keeps an active failed-tool detail collapsed while the turn is running', () => {
     const block: ChatBlock = toolBlock({
       summary: 'Recognize image recognize_image',
       status: 'error',
@@ -536,8 +632,48 @@ describe('MessageTimeline Kun runtime metadata smoke', () => {
     )
 
     expect(html).toContain('Recognize image recognize_image')
-    expect(html).toContain('model request failed with status 401')
-    expect(html).toContain('aria-expanded="true"')
+    expect(html).toContain('text-orange-700')
+    expect(html).not.toContain('model request failed with status 401')
+    expect(html).toContain('aria-expanded="false"')
+  })
+
+  it('keeps failed-tool details collapsed inside an active tool batch', () => {
+    const failedBlock: ChatBlock = toolBlock({
+      id: 'tool_failed',
+      summary: 'Search src',
+      status: 'error',
+      detail: 'search error detail should stay tucked away',
+      meta: { toolName: 'grep', pattern: 'needle' },
+      filePath: '/tmp/src'
+    })
+    const successfulBlock: ChatBlock = toolBlock({
+      id: 'tool_success',
+      summary: 'Read file',
+      status: 'success',
+      detail: 'read detail should stay tucked away',
+      meta: { toolName: 'read' },
+      filePath: '/tmp/readme.md'
+    })
+
+    const html = renderToStaticMarkup(
+      createElement(ProcessSectionRow, {
+        section: {
+          id: 'execution-active-batch',
+          kind: 'execution',
+          blocks: [failedBlock, successfulBlock]
+        },
+        processing: true,
+        singleReasoningSection: false,
+        workspaceRoot: '/tmp/project',
+        viewportRef: { current: null }
+      })
+    )
+
+    expect(html).toContain('Used 2 tools')
+    expect(html).toContain('Search needle')
+    expect(html).toContain('text-orange-700')
+    expect(html).not.toContain('search error detail should stay tucked away')
+    expect(html).not.toContain('read detail should stay tucked away')
   })
 
   it('expands active reasoning so the current process is visible', () => {

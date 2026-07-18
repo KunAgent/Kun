@@ -1,0 +1,974 @@
+{
+  "$schema": "https://kun.dev/schemas/extensions/manifest/v1.json",
+  "manifestVersion": 1,
+  "apiVersion": "1.2.0",
+  "name": "kun-video-editor",
+  "publisher": "kun-examples",
+  "version": "0.4.4",
+  "displayName": "Kun Video Editor",
+  "description": "Local transcript-oriented editing for talking-head, interview, and podcast media.",
+  "localizations": {
+    "zh": {
+      "displayName": "Kun 视频编辑器",
+      "description": "面向口播、访谈和播客媒体的本地转录文本剪辑工具。",
+      "contributes": {
+        "commands": {
+          "editor-request": {
+            "title": "视频编辑器请求",
+            "category": "视频",
+            "description": "Kun 视频编辑器视图使用的私有、有边界的 RPC。"
+          }
+        },
+        "views.rightSidebar": {
+          "editor": { "title": "Kun 视频编辑器" }
+        },
+        "message.resultPreviews": {
+          "render-preview": { "title": "视频渲染结果" }
+        },
+        "settings": {
+          "video-editor": {
+            "title": "Kun 视频编辑器",
+            "properties": {
+              "defaultRenderPreset": {
+                "title": "默认渲染预设",
+                "description": "新渲染任务使用的默认类型。"
+              },
+              "defaultCaptionMode": {
+                "title": "默认字幕模式",
+                "description": "媒体渲染任务默认使用的字幕处理方式。"
+              },
+              "localTranscriber": {
+                "title": "本地转录器",
+                "description": "仅使用本地 ASR；没有可用的本地 Broker 时会明确报告不可用。"
+              }
+            }
+          }
+        },
+        "agentProfiles": {
+          "video-editor": {
+            "title": "视频编辑器",
+            "description": "用于口播、访谈和播客项目的私有本地转录文本剪辑 Agent。"
+          }
+        },
+        "tools": {
+          "video-project": {
+            "description": "解析当前项目、列出项目、以只读方式获取项目，或显式创建、选择工作区中的权威项目。任何编辑前都必须读取当前版本。"
+          },
+          "video-inspect": {
+            "description": "解析显式且绑定版本的视频上下文，或有边界地读取项目窗口、原始媒体证据、多机位节目单和合成帧校样；不会读取 Webview DOM。"
+          },
+          "video-probe": {
+            "description": "导入或检测由 Host 授权的媒体句柄，持久化规范化的素材元数据，并可选请求缩略图或波形任务。绝不接受文件路径。"
+          },
+          "video-transcribe": {
+            "description": "为素材导入有边界的带时间戳逐字稿；本地 ASR 不可用时如实报告，不编造文本，也不上传媒体。"
+          },
+          "video-read-script": {
+            "description": "读取与确定版本绑定的 timeline.md 投影，用于逐字稿优先的审阅。"
+          },
+          "video-apply-script": {
+            "description": "对未变更且绑定版本的 timeline.md 投影，作为单个事务应用明确的带时间源范围 Agent 剪辑。"
+          },
+          "video-update-timeline": {
+            "description": "在预期版本上应用有边界的类型化序列、时间线、多机位、链接组、字幕、合成、效果、关键帧、变速、轨道状态或画布操作。"
+          },
+          "video-analyze-visual": {
+            "description": "仅在工作区明确启用且 Host 验证本地模型安装后，为授权素材建立绑定版本的不可变视觉索引；不接受路径、URL 或未验证的模型元数据。"
+          },
+          "video-analyze-audio": {
+            "description": "使用不透明媒体授权运行本地静音分析、如实报告说话人模型能力、预览或应用经审阅的说话人归属、检测节拍能力，以及预览或应用置信度达标的音频同步。未知、重叠或低置信度证据不会被断言为某个说话人。"
+          },
+          "video-analysis-status": {
+            "description": "只读获取本地音频、视觉与说话人分析能力、说话人身份注册表、不可变缓存证据、绑定版本的运行进度或有边界的视觉时刻搜索；不会启动索引。"
+          },
+          "video-analysis-cancel": {
+            "description": "在验证项目与分析版本后取消一个正在运行的本地媒体分析。"
+          },
+          "video-interchange": {
+            "description": "在精确项目版本上启动原子、持久的 OpenTimelineIO JSON 导出；保留稳定 ID、时间码和明确有边界的损失清单，目标始终是不透明的 Host 授权。"
+          },
+          "video-interchange-status": {
+            "description": "只读获取一个自有、受跟踪的 OTIO 导出，包括固定版本、进度、文档产物和原始损失清单。"
+          },
+          "video-interchange-cancel": {
+            "description": "验证项目与工作区所有权后取消一个自有、受跟踪的 OTIO 导出。"
+          },
+          "video-generation-catalog": {
+            "description": "只读获取有边界且与供应商无关的本地、BYOK 与远程生成模型目录，以及权限、隐私、参考素材和费用限制；没有已批准 Broker 时会如实报告不可用。"
+          },
+          "video-generation-request": {
+            "description": "在固定项目版本上请求或显式重试有边界的图像、视频、音频或超分任务；远程权限、参考素材上传与费用上限必须明确确认，凭据不会进入工具。"
+          },
+          "video-generation-status": {
+            "description": "只读获取自有生成占位素材和任务状态；不会返回原始提示词、供应商凭据、受保护媒体句柄、端点或可复用 URL。"
+          },
+          "video-generation-cancel": {
+            "description": "通过单独授权的操作取消一个自有生成任务，不暴露供应商或媒体凭据。"
+          },
+          "video-project-package": {
+            "description": "在固定项目版本上预检或启动原子、持久、自包含的 ZIP 工程包导出；二进制媒体始终保留在 Host 不透明授权之后。"
+          },
+          "video-project-package-status": {
+            "description": "只读获取一个自有、受跟踪的持久工程包任务及其原子归档结果，不暴露 Host 路径。"
+          },
+          "video-project-package-cancel": {
+            "description": "验证项目身份后取消一个自有、受跟踪的持久工程包任务。"
+          },
+          "video-render": {
+            "description": "从规范时间线或保留源素材身份的多机位节目单启动由 Broker 持久处理的校样、预览、音频或视频导出任务；绑定项目版本和不透明输出授权。"
+          },
+          "video-render-status": {
+            "description": "无副作用地读取一个自有持久化渲染任务，仅返回与项目匹配且已通过技术校验的生成产物。"
+          },
+          "video-render-cancel": {
+            "description": "验证可选的项目身份后，取消一个自有、受跟踪的持久化视频渲染任务。"
+          },
+          "video-undo": {
+            "description": "仅撤销当前 Agent 运行最近一次仍符合条件的视频编辑；如期间存在手工或其他来源修改则拒绝。"
+          }
+        }
+      }
+    }
+  },
+  "license": "MIT",
+  "engines": { "kun": ">=0.1.0" },
+  "main": "dist/host/extension.js",
+  "browser": "dist/webview/index.html",
+  "activationEvents": [
+    "onView:editor",
+    "onView:render-preview",
+    "onCommand:editor-request",
+    "onAgentProfile:video-editor",
+    "onTool:video-project",
+    "onTool:video-inspect",
+    "onTool:video-probe",
+    "onTool:video-transcribe",
+    "onTool:video-read-script",
+    "onTool:video-apply-script",
+    "onTool:video-update-timeline",
+    "onTool:video-analyze-visual",
+    "onTool:video-analyze-audio",
+    "onTool:video-analysis-status",
+    "onTool:video-analysis-cancel",
+    "onTool:video-interchange",
+    "onTool:video-interchange-status",
+    "onTool:video-interchange-cancel",
+    "onTool:video-generation-catalog",
+    "onTool:video-generation-request",
+    "onTool:video-generation-status",
+    "onTool:video-generation-cancel",
+    "onTool:video-project-package",
+    "onTool:video-project-package-status",
+    "onTool:video-project-package-cancel",
+    "onTool:video-render",
+    "onTool:video-render-status",
+    "onTool:video-render-cancel",
+    "onTool:video-undo"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "id": "editor-request",
+        "title": "Video Editor Request",
+        "category": "Video",
+        "description": "Private bounded RPC used by the Kun Video Editor View.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "action": {
+              "type": "string",
+              "enum": [
+                "project.list",
+                "project.active",
+                "project.get",
+                "project.select",
+                "project.create",
+                "project.update",
+                "context.update",
+                "context.attach-selection",
+                "project.undo",
+                "project.redo",
+                "sequence.decompose",
+                "script.read",
+                "script.apply",
+                "media.list",
+                "media.import",
+                "media.import-batch",
+                "media.reauthorize",
+                "media.folder.create",
+                "media.folder.update",
+                "media.folder.delete",
+                "media.organize",
+                "transcript.import",
+                "caption.generate",
+                "preview.list",
+                "preview.add",
+                "preview.select",
+                "preview.compare",
+                "preview.replace",
+                "export-capabilities",
+                "otio-export-preview",
+                "otio-import-preview",
+                "interchange.export",
+                "interchange.status",
+                "interchange.cancel",
+                "interchange.import-preview",
+                "interchange.import",
+                "project-package-preflight",
+                "project-package.export",
+                "project-package.status",
+                "project-package.cancel",
+                "render.list",
+                "render.start",
+                "render.status",
+                "render.cancel",
+                "derived.list",
+                "derived.start",
+                "derived.retry",
+                "derived.cancel",
+                "derived.cleanup",
+                "analysis.capabilities",
+                "analysis.visual-opt-in",
+                "analysis.visual-install",
+                "analysis.visual-index",
+                "analysis.visual-search",
+                "analysis.list",
+                "analysis.evidence",
+                "analysis.vad",
+                "analysis.vad-apply",
+                "analysis.speaker-import",
+                "analysis.speaker-preview",
+                "analysis.speaker-apply",
+                "analysis.beats",
+                "analysis.denoise-metadata",
+                "analysis.sync-preview",
+                "analysis.sync-apply",
+                "analysis.status",
+                "analysis.cancel",
+                "generation.catalog",
+                "generation.list",
+                "generation.request",
+                "generation.retry",
+                "generation.status",
+                "generation.cancel",
+                "generation.insert",
+                "multicam.inspect",
+                "multicam.create",
+                "multicam.labels",
+                "multicam.sync-confirm",
+                "multicam.layout-upsert",
+                "multicam.delete",
+                "multicam.switch",
+                "multicam.layout",
+                "multicam.merge"
+              ]
+            },
+            "payload": { "type": "object" }
+          },
+          "required": ["action", "payload"],
+          "additionalProperties": false
+        },
+        "outputSchema": {
+          "type": "object",
+          "properties": {
+            "content": {},
+            "summary": { "type": "string" },
+            "metadata": { "type": "object" },
+            "generatedArtifacts": { "type": "array" }
+          },
+          "required": ["content"],
+          "additionalProperties": false
+        }
+      }
+    ],
+    "views.rightSidebar": [
+      {
+        "id": "editor",
+        "title": "Kun Video Editor",
+        "entry": "dist/webview/index.html",
+        "icon": "assets/video-editor.svg",
+        "showInRightRail": false,
+        "localResourceRoots": ["dist/webview"]
+      }
+    ],
+    "message.resultPreviews": [
+      {
+        "id": "render-preview",
+        "title": "Video render",
+        "entry": "dist/webview/index.html",
+        "mimeTypes": ["video/mp4", "audio/mp4", "image/png", "application/x-subrip", "text/vtt"],
+        "localResourceRoots": ["dist/webview"]
+      }
+    ],
+    "settings": [
+      {
+        "id": "video-editor",
+        "title": "Kun Video Editor",
+        "scope": "workspace",
+        "properties": {
+          "defaultRenderPreset": {
+            "type": "string",
+            "enum": ["proof-frame", "preview", "h264-mp4", "audio-aac"],
+            "default": "preview",
+            "title": "Default render preset",
+            "description": "Default render kind."
+          },
+          "defaultCaptionMode": {
+            "type": "string",
+            "enum": ["none", "burned", "sidecar", "both"],
+            "default": "none",
+            "title": "Default caption mode",
+            "description": "Default caption behavior for brokered media renders."
+          },
+          "localTranscriber": {
+            "type": "string",
+            "enum": ["disabled", "whisper-cli"],
+            "default": "disabled",
+            "title": "Local transcriber",
+            "description": "Local-only ASR preference. The editor imports timed transcripts and reports unavailable when no supported local broker exists."
+          }
+        }
+      }
+    ],
+    "agentProfiles": [
+      {
+        "id": "video-editor",
+        "title": "Video Editor",
+        "description": "Private local transcript-first editing Agent for talking-head, interview, and podcast projects.",
+        "instructions": "You are the private Kun Video Editor Agent for local transcript-oriented editing of talking-head, interview, and podcast projects. Respond in the user's current language unless the user explicitly asks for another language.\n\nBefore writing, ask for or confirm the creative goal, audience, target duration, aspect ratio, caption preference, and whether the user wants a review checkpoint or an export.\n\nFirst call video-inspect with action context to resolve the project, sequence, playhead, selection generation, and revision currently exposed by the right-sidebar editor. If there is no active project, ask the user to select or create one. Call video-project with action select only when the user explicitly changes the active project. Then use video-inspect project-window or raw-media and video-read-script to gather bounded timing evidence at the current revision before mutation. Use selection-attachment only when the user refers to the sidebar selection, media-library for bounded asset discovery, preview-history for review sources, and catalog before choosing effects, blend modes, text animation, or keyframe properties. Treat revision, selection-generation, or index conflicts as a request to refresh; never guess a merge.\n\nApply sequence, link-group, composition, effect, keyframe, retime, caption, and track-state changes through one bounded video-update-timeline transaction. The internal restore-sequence operation is not public Agent authority and must never be requested. Edit structure first: remove only explicitly identified timed ranges, order the story, and keep source media immutable. Destructive transcript edits require word/segment timing evidence; prose alone is not a usable range. Consume the mutation receipt after every edit and refresh identifiers after removals or compressed shifts. Add captions, composition, or decoration only when requested.\n\nInspect multicam groups with video-inspect action multicam before changing a program. Preserve source identity, angle labels, sync offsets, confidence, and coverage. Unknown or uncertain synchronization is a refusal: never invent sync evidence or treat a zero offset as proof. Use only bounded set, switch, layout, merge, or delete multicam operations in video-update-timeline, honor the requested versus applied ranges and limiting angles in receipts, and render with multicamGroupId only after the canonical program is complete. Manual synchronization confirmation belongs to an explicit user action in the right-sidebar editor.\n\nFor local audio intelligence, read video-analysis-status capabilities first. Use video-analyze-audio vad for attributable silence suggestions and apply only the cached suggestions that explicitly meet their declared threshold. Use sync-preview with an explicit deterministic seed, show the proposed frame delta and confidence, and call sync-apply only after review; an uncertain result is a refusal, never permission to move a clip. Beat/downbeat analysis may be unavailable on this runtime: report the remediation from the capability response and never invent markers, tempo, or snap targets. Poll video-analysis-status for bounded evidence/progress and use video-analysis-cancel only for an explicit cancellation.\n\nFor speaker identity, first call video-analyze-audio with action speaker and honor an unavailable result. Reviewed speaker evidence can only be imported by an explicit right-sidebar user action; never fabricate or import it through Agent authority. Use speaker-attribution-preview and speaker-attribution-apply only with a current immutable record. Unknown, overlapping, ambiguous, or below-threshold turns must remain explicitly unlabelled; never infer an identity from voice, transcript text, aliases, or timing alone.\n\nFor optional local visual moment search, first read video-analysis-status capabilities. Never enable the workspace opt-in or download a model on the user's behalf. Call video-analyze-visual only after the user enabled visual indexing and the Host reports a signature-, manifest-, and digest-verified local model. Search with video-analysis-status visual-search, preserve its source ranges, index completeness, and uncalibrated-cosine semantics, and never describe similarity scores as calibrated confidence or human visual review. If the Host model Broker is unavailable, report its remediation and continue with filename/transcript search; never fabricate embeddings.\n\nDo not introduce unrequested music, B-roll, stock media, generative video or images, motion graphics, face tracking, or subject-aware reframing.\n\nTranscript and raw metadata are not arbitrary visual-scene understanding. Never infer unseen actions or claim visual inspection from transcript text or a successful command. Use video-inspect composed-frame and a current revision/IR/capability-bound proof before making visual claims.\n\nUse proof-frame or preview renders to create an inspectable review artifact. Distinguish FFmpeg/ffprobe technical validation from actual visual review, and report stale proof when the project revision changed.\n\nStop at an editable review checkpoint unless export was requested. For export, pin the current revision and preset, poll the durable job with the read-only video-render-status tool, and use video-render-cancel only for an explicit cancellation request. Use video-undo only for your own latest eligible edit; never erase intervening user work. Surface cancellation or invalid artifacts honestly.\n\nUse video-inspect otio-export-preview or otio-import-preview for bounded in-memory review and always report the loss manifest. For a durable OTIO file, call video-interchange at the exact reviewed revision only after the user approves an opaque output target, poll video-interchange-status, and use video-interchange-cancel only on an explicit cancellation request. Do not claim that an OTIO file exists until the durable job completes with a validated document artifact. OTIO import and creation of a new local project require the explicit two-step right-sidebar picker/confirmation flow; Agent authority may preview an inline document but must never overwrite or silently import a project. For a self-contained project package, first call video-project-package preflight with an explicit fail or omit missing-media policy. Start export only after the user approves a ZIP target or supplies an opaque output handle, poll video-project-package-status, and cancel only through video-project-package-cancel. The package includes bounded invocation references, not arbitrary main-chat history; never claim more provenance than the manifest records. Do not claim that a package exists until the durable archive job completes with a generated media identity.\n\nProtected media import and save-target selection require a Kun desktop interaction unless the caller already supplies valid opaque handles. In headless mode, return interaction-required instead of choosing a path or fabricating approval.",
+        "allowedTools": [
+          "video-project",
+          "video-inspect",
+          "video-probe",
+          "video-transcribe",
+          "video-read-script",
+          "video-apply-script",
+          "video-update-timeline",
+          "video-analyze-visual",
+          "video-analyze-audio",
+          "video-analysis-status",
+          "video-analysis-cancel",
+          "video-interchange",
+          "video-interchange-status",
+          "video-interchange-cancel",
+          "video-generation-catalog",
+          "video-generation-request",
+          "video-generation-status",
+          "video-generation-cancel",
+          "video-project-package",
+          "video-project-package-status",
+          "video-project-package-cancel",
+          "video-render",
+          "video-render-status",
+          "video-render-cancel",
+          "video-undo"
+        ],
+        "budget": {
+          "maxTokens": 32768,
+          "maxElapsedMs": 1800000,
+          "maxModelRequests": 48,
+          "maxToolInvocations": 96,
+          "maxEvents": 4000
+        },
+        "visibility": "private"
+      }
+    ],
+    "tools": [
+      {
+        "id": "video-project",
+        "description": "Resolve the active project, list projects, purely read one project, or explicitly create/select the authoritative workspace project. Read the current revision before any edit.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "action": { "type": "string", "enum": ["active", "list", "get", "create", "select"] },
+            "projectId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]{0,127}$" },
+            "name": { "type": "string", "minLength": 1, "maxLength": 160 },
+            "fps": { "type": "object" },
+            "canvasPreset": { "type": "string", "enum": ["16:9", "9:16", "1:1"] },
+            "expectedRevision": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 }
+          },
+          "required": ["action"],
+          "additionalProperties": false
+        },
+        "outputSchema": { "type": "object", "properties": { "outcome": { "type": "string", "minLength": 1, "maxLength": 64 } }, "required": ["outcome"], "additionalProperties": true },
+        "sideEffects": "write",
+        "idempotent": false,
+        "maxOutputBytes": 262144
+      },
+      {
+        "id": "video-inspect",
+        "description": "Resolve revision-bound video context; inspect media, multicam programs, proofs, and export capabilities; preview OTIO interchange; or preflight a self-contained package without mutating project state or reading Webview DOM.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "action": { "type": "string", "enum": ["context", "project-window", "raw-media", "composed-frame", "catalog", "media-library", "preview-history", "selection-attachment", "export-capabilities", "otio-export-preview", "otio-import-preview", "project-package-preflight", "multicam"] },
+            "projectId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]{0,127}$" },
+            "expectedRevision": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+            "expectedGeneration": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+            "sequenceId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]{0,127}$" },
+            "groupId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]{0,127}$" },
+            "startFrame": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+            "endFrame": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+            "itemLimit": { "type": "integer", "minimum": 1, "maximum": 200 },
+            "captionLimit": { "type": "integer", "minimum": 1, "maximum": 100 },
+            "includeCaptionText": { "type": "boolean" },
+            "includeEffects": { "type": "boolean" },
+            "includeKeyframes": { "type": "boolean" },
+            "assetId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]{0,127}$" },
+            "transcriptId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]{0,127}$" },
+            "segmentOffset": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+            "segmentLimit": { "type": "integer", "minimum": 1, "maximum": 100 },
+            "includeWords": { "type": "boolean" },
+            "sampleFrames": { "type": "array", "maxItems": 16, "items": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 } },
+            "frame": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+            "folderId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]{0,127}$" },
+            "query": { "type": "string", "maxLength": 256 },
+            "offset": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+            "limit": { "type": "integer", "minimum": 1, "maximum": 100 },
+            "previewEntryIds": { "type": "array", "maxItems": 64, "items": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]{0,127}$" } },
+            "document": { "type": "object", "additionalProperties": true },
+            "assetIds": { "type": "array", "maxItems": 512, "items": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]{0,127}$" } },
+            "missingMediaPolicy": { "type": "string", "enum": ["fail", "omit", "record-incomplete"] },
+            "includeReceipts": { "type": "boolean" },
+            "includeChatProvenance": { "type": "boolean" }
+          },
+          "required": ["action"],
+          "additionalProperties": false
+        },
+        "outputSchema": { "type": "object", "properties": { "outcome": { "type": "string", "minLength": 1, "maxLength": 64 } }, "required": ["outcome"], "additionalProperties": true },
+        "sideEffects": "read",
+        "idempotent": true,
+        "maxOutputBytes": 262144
+      },
+      {
+        "id": "video-probe",
+        "description": "Import or probe one Host-granted video, audio, still, or supported animation handle, persist normalized asset metadata, and optionally request thumbnail or waveform jobs. Never accepts paths.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "projectId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]{0,127}$" },
+            "expectedRevision": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+            "mediaHandleId": { "type": "string", "minLength": 16, "maxLength": 512, "pattern": "^[A-Za-z0-9_-]+$" },
+            "assetId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]{0,127}$" },
+            "assetKind": { "type": "string", "enum": ["image", "animation"] },
+            "folderId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]{0,127}$" },
+            "stillDurationFrames": { "type": "integer", "minimum": 1, "maximum": 1080000 },
+            "addToTimeline": { "type": "boolean" },
+            "thumbnailOutputHandleId": { "type": "string", "minLength": 16, "maxLength": 512, "pattern": "^[A-Za-z0-9_-]+$" },
+            "waveformOutputHandleId": { "type": "string", "minLength": 16, "maxLength": 512, "pattern": "^[A-Za-z0-9_-]+$" }
+          },
+          "required": ["projectId", "expectedRevision"],
+          "additionalProperties": false
+        },
+        "outputSchema": { "type": "object", "properties": { "outcome": { "type": "string", "minLength": 1, "maxLength": 64 } }, "required": ["outcome"], "additionalProperties": true },
+        "sideEffects": "write",
+        "idempotent": false,
+        "maxOutputBytes": 131072
+      },
+      {
+        "id": "video-transcribe",
+        "description": "Import a bounded timed transcript into an asset, or report local-ASR capability as unavailable without inventing text or uploading media.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "projectId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]{0,127}$" },
+            "expectedRevision": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+            "assetId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]{0,127}$" },
+            "transcriptId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]{0,127}$" },
+            "mode": { "type": "string", "enum": ["import", "local-asr"] },
+            "format": { "type": "string", "enum": ["srt", "vtt", "json"] },
+            "language": { "type": "string", "minLength": 1, "maxLength": 32 },
+            "source": { "type": "string", "minLength": 1, "maxLength": 524288 },
+            "segments": { "type": "array", "minItems": 1, "maxItems": 20000, "items": { "type": "object" } }
+          },
+          "required": ["projectId", "expectedRevision", "assetId", "transcriptId", "mode"],
+          "additionalProperties": false
+        },
+        "outputSchema": { "type": "object", "properties": { "outcome": { "type": "string", "minLength": 1, "maxLength": 64 } }, "required": ["outcome"], "additionalProperties": true },
+        "sideEffects": "write",
+        "idempotent": false,
+        "maxOutputBytes": 131072
+      },
+      {
+        "id": "video-read-script",
+        "description": "Read the deterministic revision-bound timeline.md projection for transcript-first review.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "projectId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]{0,127}$" },
+            "expectedRevision": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 }
+          },
+          "required": ["projectId"],
+          "additionalProperties": false
+        },
+        "outputSchema": { "type": "object", "properties": { "outcome": { "type": "string", "minLength": 1, "maxLength": 64 } }, "required": ["outcome"], "additionalProperties": true },
+        "sideEffects": "read",
+        "idempotent": true,
+        "maxOutputBytes": 262144
+      },
+      {
+        "id": "video-apply-script",
+        "description": "Apply explicit timed source ranges from an unchanged revision-bound timeline.md projection as one transactional Agent edit.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "projectId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]{0,127}$" },
+            "expectedRevision": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+            "timelineMarkdown": { "type": "string", "minLength": 1, "maxLength": 262144 },
+            "ranges": { "type": "array", "minItems": 1, "maxItems": 2000, "items": { "type": "object" } },
+            "summary": { "type": "string", "minLength": 1, "maxLength": 512 }
+          },
+          "required": ["projectId", "expectedRevision", "timelineMarkdown", "ranges"],
+          "additionalProperties": false
+        },
+        "outputSchema": { "type": "object", "properties": { "outcome": { "type": "string", "minLength": 1, "maxLength": 64 } }, "required": ["outcome"], "additionalProperties": true },
+        "sideEffects": "destructive",
+        "idempotent": false,
+        "maxOutputBytes": 131072
+      },
+      {
+        "id": "video-update-timeline",
+        "description": "Apply bounded typed sequence, timeline, multicam, link-group, caption, composition, effect, keyframe, retime, track-state, or canvas operations at an expected revision.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "projectId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]{0,127}$" },
+            "expectedRevision": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+            "operations": { "type": "array", "minItems": 1, "maxItems": 200, "items": { "type": "object" } },
+            "summary": { "type": "string", "minLength": 1, "maxLength": 512 }
+          },
+          "required": ["projectId", "expectedRevision", "operations"],
+          "additionalProperties": false
+        },
+        "outputSchema": { "type": "object", "properties": { "outcome": { "type": "string", "minLength": 1, "maxLength": 64 } }, "required": ["outcome"], "additionalProperties": true },
+        "sideEffects": "write",
+        "idempotent": false,
+        "maxOutputBytes": 131072
+      },
+      {
+        "id": "video-analyze-visual",
+        "description": "Build one revision-fenced immutable local visual index from a Host-granted media asset after explicit workspace opt-in and verified Host model installation. It never accepts model URLs, file paths, or unverified model metadata.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "projectId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]{0,127}$" },
+            "expectedRevision": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+            "assetId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]{0,127}$" },
+            "intervalUs": { "type": "integer", "minimum": 100000, "maximum": 60000000 },
+            "maxFrames": { "type": "integer", "minimum": 1, "maximum": 2000 },
+            "allowPartial": { "type": "boolean" }
+          },
+          "required": ["projectId", "expectedRevision", "assetId"],
+          "additionalProperties": false
+        },
+        "outputSchema": { "type": "object", "properties": { "outcome": { "type": "string", "minLength": 1, "maxLength": 64 } }, "required": ["outcome"], "additionalProperties": true },
+        "sideEffects": "write",
+        "idempotent": false,
+        "maxOutputBytes": 262144
+      },
+      {
+        "id": "video-analyze-audio",
+        "description": "Run local path-opaque silence/beat analysis, request bounded denoise metadata without changing audio, report honest speaker-model availability, preview/apply reviewed immutable speaker attribution, or preview/apply confidence-qualified seeded audio synchronization. Unknown, overlapping, and low-confidence evidence stays explicit.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "action": { "type": "string", "enum": ["vad", "vad-apply", "speaker", "speaker-attribution-preview", "speaker-attribution-apply", "beat-grid", "denoise-metadata", "sync-preview", "sync-apply"] },
+            "projectId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]{0,127}$" },
+            "expectedRevision": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+            "assetId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]{0,127}$" },
+            "referenceAssetId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]{0,127}$" },
+            "targetAssetId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]{0,127}$" },
+            "referenceItemId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]{0,127}$" },
+            "targetItemId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]{0,127}$" },
+            "analysisId": { "type": "string", "minLength": 1, "maxLength": 512, "pattern": "^[A-Za-z0-9][A-Za-z0-9._:~-]{0,511}$" },
+            "seed": { "type": "integer", "minimum": 0, "maximum": 2147483647 },
+            "maximumOffsetUs": { "type": "integer", "minimum": 0, "maximum": 3600000000 },
+            "threshold": { "type": "number", "minimum": 0, "maximum": 1 },
+            "minimumSeparation": { "type": "number", "minimum": 0, "maximum": 1 },
+            "confidenceThreshold": { "type": "number", "minimum": 0, "maximum": 1 }
+          },
+          "required": ["action", "projectId", "expectedRevision"],
+          "additionalProperties": false
+        },
+        "outputSchema": { "type": "object", "properties": { "outcome": { "type": "string", "minLength": 1, "maxLength": 64 } }, "required": ["outcome"], "additionalProperties": true },
+        "sideEffects": "write",
+        "idempotent": false,
+        "maxOutputBytes": 262144
+      },
+      {
+        "id": "video-analysis-status",
+        "description": "Read local audio/visual/speaker-analysis capabilities, immutable cached evidence, speaker identity registry status, bounded operation progress, or paged visual moment matches for one revision-fenced project. This never starts indexing or mutates project state.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "action": { "type": "string", "enum": ["capabilities", "list", "evidence", "operation", "visual-search"] },
+            "projectId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]{0,127}$" },
+            "expectedRevision": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+            "analysisId": { "type": "string", "minLength": 1, "maxLength": 512, "pattern": "^[A-Za-z0-9][A-Za-z0-9._:~-]{0,511}$" },
+            "operationId": { "type": "string", "minLength": 1, "maxLength": 512, "pattern": "^[A-Za-z0-9][A-Za-z0-9._:~-]{0,511}$" },
+            "query": { "type": "string", "minLength": 1, "maxLength": 256 },
+            "minimumScore": { "type": "number", "minimum": -1, "maximum": 1 },
+            "offset": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+            "pageSize": { "type": "integer", "minimum": 1, "maximum": 100 },
+            "limit": { "type": "integer", "minimum": 1, "maximum": 500 }
+          },
+          "required": ["action", "projectId", "expectedRevision"],
+          "additionalProperties": false
+        },
+        "outputSchema": { "type": "object", "properties": { "outcome": { "type": "string", "minLength": 1, "maxLength": 64 } }, "required": ["outcome"], "additionalProperties": true },
+        "sideEffects": "read",
+        "idempotent": true,
+        "maxOutputBytes": 262144
+      },
+      {
+        "id": "video-analysis-cancel",
+        "description": "Cancel one in-flight local media-analysis operation only after verifying its project and pinned revision.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "projectId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]{0,127}$" },
+            "expectedRevision": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+            "operationId": { "type": "string", "minLength": 1, "maxLength": 512, "pattern": "^[A-Za-z0-9][A-Za-z0-9._:~-]{0,511}$" }
+          },
+          "required": ["projectId", "expectedRevision", "operationId"],
+          "additionalProperties": false
+        },
+        "outputSchema": { "type": "object", "properties": { "outcome": { "type": "string", "minLength": 1, "maxLength": 64 } }, "required": ["outcome"], "additionalProperties": true },
+        "sideEffects": "destructive",
+        "idempotent": false,
+        "maxOutputBytes": 131072
+      },
+      {
+        "id": "video-interchange",
+        "description": "Start a durable atomic OpenTimelineIO JSON export at an exact project revision. Stable IDs/timecodes and a bounded explicit loss manifest are retained; the destination is an opaque user-approved Host grant.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "action": { "type": "string", "enum": ["export"] },
+            "projectId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]{0,127}$" },
+            "expectedRevision": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+            "outputHandleId": { "type": "string", "minLength": 16, "maxLength": 512, "pattern": "^[A-Za-z0-9_-]+$" }
+          },
+          "required": ["action", "projectId", "expectedRevision"],
+          "additionalProperties": false
+        },
+        "outputSchema": { "type": "object", "properties": { "outcome": { "type": "string", "minLength": 1, "maxLength": 64 } }, "required": ["outcome"], "additionalProperties": true },
+        "sideEffects": "write",
+        "idempotent": false,
+        "maxOutputBytes": 131072
+      },
+      {
+        "id": "video-interchange-status",
+        "description": "Read one owned tracked OTIO export, including its pinned/current revisions, progress, generated document artifact, and original bounded loss manifest.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "projectId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]{0,127}$" },
+            "jobId": { "type": "string", "minLength": 8, "maxLength": 512 }
+          },
+          "required": ["projectId", "jobId"],
+          "additionalProperties": false
+        },
+        "outputSchema": { "type": "object", "properties": { "outcome": { "type": "string", "minLength": 1, "maxLength": 64 } }, "required": ["outcome"], "additionalProperties": true },
+        "sideEffects": "read",
+        "idempotent": true,
+        "maxOutputBytes": 131072
+      },
+      {
+        "id": "video-interchange-cancel",
+        "description": "Cancel one owned tracked OTIO export after verifying its project and workspace ownership.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "projectId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]{0,127}$" },
+            "jobId": { "type": "string", "minLength": 8, "maxLength": 512 },
+            "reason": { "type": "string", "minLength": 1, "maxLength": 512 }
+          },
+          "required": ["projectId", "jobId"],
+          "additionalProperties": false
+        },
+        "outputSchema": { "type": "object", "properties": { "outcome": { "type": "string", "minLength": 1, "maxLength": 64 } }, "required": ["outcome"], "additionalProperties": true },
+        "sideEffects": "destructive",
+        "idempotent": false,
+        "maxOutputBytes": 131072
+      },
+      {
+        "id": "video-generation-catalog",
+        "description": "Read the bounded provider-neutral local/BYOK/remote generation model catalog, permissions, privacy, reference limits, and cost bounds. Returns an honest unavailable result when no approved broker is connected.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {},
+          "additionalProperties": false
+        },
+        "outputSchema": { "type": "object", "properties": { "outcome": { "type": "string", "minLength": 1, "maxLength": 64 } }, "required": ["outcome"], "additionalProperties": true },
+        "sideEffects": "read",
+        "idempotent": true,
+        "maxOutputBytes": 131072
+      },
+      {
+        "id": "video-generation-request",
+        "description": "Request or explicitly retry one bounded image, video, audio, or upscale job at a pinned project revision. Remote permission, reference upload, and bounded cost intent are explicit; Host authorization remains mandatory and provider credentials never enter the tool.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "task": { "type": "string", "enum": ["image", "video", "audio", "upscale"] },
+            "projectId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]{0,127}$" },
+            "projectRevision": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+            "providerId": { "type": "string", "minLength": 1, "maxLength": 64, "pattern": "^[a-z][a-z0-9._-]{0,63}$" },
+            "modelId": { "type": "string", "minLength": 1, "maxLength": 64, "pattern": "^[a-z][a-z0-9._-]{0,63}$" },
+            "prompt": { "type": "string", "minLength": 1, "maxLength": 8000 },
+            "negativePrompt": { "type": "string", "minLength": 1, "maxLength": 4000 },
+            "referenceAssetIds": { "type": "array", "maxItems": 8, "items": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]{0,127}$" } },
+            "variants": { "type": "integer", "minimum": 1, "maximum": 8 },
+            "seed": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+            "output": {
+              "type": "object",
+              "properties": {
+                "kind": { "type": "string", "enum": ["image", "video", "audio"] },
+                "width": { "type": "integer", "minimum": 1, "maximum": 65536 },
+                "height": { "type": "integer", "minimum": 1, "maximum": 65536 },
+                "durationUs": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 }
+              },
+              "required": ["kind"],
+              "additionalProperties": false
+            },
+            "outputPolicy": { "type": "string", "enum": ["resolve-placeholder", "add-variants"] },
+            "idempotencyKey": { "type": "string", "minLength": 8, "maxLength": 256, "pattern": "^[A-Za-z0-9._~-]+$" },
+            "consent": {
+              "type": "object",
+              "properties": {
+                "providerPermissionApproved": { "type": "boolean" },
+                "mediaUploadApproved": { "type": "boolean" },
+                "costApproved": { "type": "boolean" },
+                "approvedMaximumMinor": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+                "currency": { "type": "string", "pattern": "^[A-Z]{3}$" },
+                "confirmedAt": { "type": "string", "minLength": 20, "maxLength": 64 }
+              },
+              "required": ["providerPermissionApproved", "mediaUploadApproved", "costApproved", "approvedMaximumMinor", "currency", "confirmedAt"],
+              "additionalProperties": false
+            },
+            "retryRecordId": { "type": "string", "minLength": 8, "maxLength": 256, "pattern": "^[A-Za-z0-9._~-]+$" }
+          },
+          "required": ["task", "projectId", "projectRevision", "providerId", "modelId", "prompt", "referenceAssetIds", "variants", "output", "outputPolicy", "idempotencyKey", "consent"],
+          "additionalProperties": false
+        },
+        "outputSchema": { "type": "object", "properties": { "outcome": { "type": "string", "minLength": 1, "maxLength": 64 } }, "required": ["outcome"], "additionalProperties": true },
+        "sideEffects": "external",
+        "idempotent": false,
+        "maxOutputBytes": 131072
+      },
+      {
+        "id": "video-generation-status",
+        "description": "Read a bounded list of owned generation placeholders/jobs or one owned status. Raw prompts, provider credentials, protected handles, endpoints, and reusable URLs are omitted.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "action": { "type": "string", "enum": ["list", "status"] },
+            "projectId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]{0,127}$" },
+            "recordId": { "type": "string", "minLength": 8, "maxLength": 256, "pattern": "^[A-Za-z0-9._~-]+$" }
+          },
+          "required": ["action", "projectId"],
+          "additionalProperties": false
+        },
+        "outputSchema": { "type": "object", "properties": { "outcome": { "type": "string", "minLength": 1, "maxLength": 64 } }, "required": ["outcome"], "additionalProperties": true },
+        "sideEffects": "read",
+        "idempotent": true,
+        "maxOutputBytes": 131072
+      },
+      {
+        "id": "video-generation-cancel",
+        "description": "Cancel one owned generation job through its separate authority-bearing operation without exposing provider or media credentials.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "projectId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]{0,127}$" },
+            "recordId": { "type": "string", "minLength": 8, "maxLength": 256, "pattern": "^[A-Za-z0-9._~-]+$" }
+          },
+          "required": ["projectId", "recordId"],
+          "additionalProperties": false
+        },
+        "outputSchema": { "type": "object", "properties": { "outcome": { "type": "string", "minLength": 1, "maxLength": 64 } }, "required": ["outcome"], "additionalProperties": true },
+        "sideEffects": "destructive",
+        "idempotent": false,
+        "maxOutputBytes": 131072
+      },
+      {
+        "id": "video-project-package",
+        "description": "Preflight or start an atomic durable self-contained ZIP project package at a pinned revision. Includes every sequence, explicit media selection/missing policy, bounded receipts and invocation provenance, generation lineage, and source-identity deduplication. Binary media stays behind opaque Host grants.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "action": { "type": "string", "enum": ["preflight", "export"] },
+            "projectId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]{0,127}$" },
+            "expectedRevision": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+            "assetIds": { "type": "array", "maxItems": 512, "items": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]{0,127}$" } },
+            "missingMediaPolicy": { "type": "string", "enum": ["fail", "omit"] },
+            "includeReceipts": { "type": "boolean" },
+            "includeChatProvenance": { "type": "boolean" },
+            "outputHandleId": { "type": "string", "minLength": 16, "maxLength": 512, "pattern": "^[A-Za-z0-9_-]+$" }
+          },
+          "required": ["action", "projectId", "expectedRevision"],
+          "additionalProperties": false
+        },
+        "outputSchema": { "type": "object", "properties": { "outcome": { "type": "string", "minLength": 1, "maxLength": 64 } }, "required": ["outcome"], "additionalProperties": true },
+        "sideEffects": "write",
+        "idempotent": false,
+        "maxOutputBytes": 131072
+      },
+      {
+        "id": "video-project-package-status",
+        "description": "Read one owned tracked durable project-package job and its atomic archive result without exposing Host paths.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "projectId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]{0,127}$" },
+            "jobId": { "type": "string", "minLength": 8, "maxLength": 512 }
+          },
+          "required": ["projectId", "jobId"],
+          "additionalProperties": false
+        },
+        "outputSchema": { "type": "object", "properties": { "outcome": { "type": "string", "minLength": 1, "maxLength": 64 } }, "required": ["outcome"], "additionalProperties": true },
+        "sideEffects": "read",
+        "idempotent": true,
+        "maxOutputBytes": 131072
+      },
+      {
+        "id": "video-project-package-cancel",
+        "description": "Cancel one owned tracked durable project-package job after verifying its project identity.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "projectId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]{0,127}$" },
+            "jobId": { "type": "string", "minLength": 8, "maxLength": 512 }
+          },
+          "required": ["projectId", "jobId"],
+          "additionalProperties": false
+        },
+        "outputSchema": { "type": "object", "properties": { "outcome": { "type": "string", "minLength": 1, "maxLength": 64 } }, "required": ["outcome"], "additionalProperties": true },
+        "sideEffects": "destructive",
+        "idempotent": false,
+        "maxOutputBytes": 131072
+      },
+      {
+        "id": "video-render",
+        "description": "Start a durable brokered proof, preview, audio, H.264, H.265, or ProRes/portable-equivalent export job from the canonical timeline or a source-preserving multicam program, with probed codec/effect evidence, bounded settings, captions, a pinned revision, and opaque output grants.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "projectId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]{0,127}$" },
+            "expectedRevision": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+            "multicamGroupId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]{0,127}$" },
+            "startFrame": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+            "endFrame": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+            "kind": { "type": "string", "enum": ["proof-frame", "preview", "h264-mp4", "h265-mp4", "prores-mov", "audio-aac", "subtitles"] },
+            "outputHandleId": { "type": "string", "minLength": 16, "maxLength": 512, "pattern": "^[A-Za-z0-9_-]+$" },
+            "proofFrame": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+            "captionMode": { "type": "string", "enum": ["none", "burned", "sidecar", "both"] },
+            "subtitleOutputHandleId": { "type": "string", "minLength": 16, "maxLength": 512, "pattern": "^[A-Za-z0-9_-]+$" },
+            "subtitleFormat": { "type": "string", "enum": ["srt", "vtt"] },
+            "idempotencyKey": { "type": "string", "minLength": 1, "maxLength": 256 },
+            "width": { "type": "integer", "minimum": 2, "maximum": 16384 },
+            "height": { "type": "integer", "minimum": 2, "maximum": 16384 },
+            "frameRate": {
+              "type": "object",
+              "properties": {
+                "numerator": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 },
+                "denominator": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 }
+              },
+              "required": ["numerator", "denominator"],
+              "additionalProperties": false
+            },
+            "quality": { "type": "string", "enum": ["draft", "balanced", "high", "master"] },
+            "acceleration": { "type": "string", "enum": ["cpu", "prefer-gpu", "require-gpu"] },
+            "allowPortableEquivalent": { "type": "boolean" },
+            "audio": {
+              "type": "object",
+              "properties": {
+                "codec": { "type": "string", "enum": ["aac", "pcm-s24", "flac"] },
+                "sampleRate": { "type": "integer", "enum": [44100, 48000, 96000] },
+                "channels": { "type": "integer", "minimum": 1, "maximum": 16 },
+                "bitrateKbps": { "type": "integer", "minimum": 32, "maximum": 1536 }
+              },
+              "required": ["codec", "sampleRate", "channels"],
+              "additionalProperties": false
+            }
+          },
+          "required": ["projectId", "expectedRevision", "kind"],
+          "additionalProperties": false
+        },
+        "outputSchema": { "type": "object", "properties": { "outcome": { "type": "string", "minLength": 1, "maxLength": 64 } }, "required": ["outcome"], "additionalProperties": true },
+        "sideEffects": "write",
+        "idempotent": false,
+        "maxOutputBytes": 131072
+      },
+      {
+        "id": "video-render-status",
+        "description": "Read one owned durable render job without side effects and return only project-matched, technically validated generated artifacts.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "jobId": { "type": "string", "minLength": 8, "maxLength": 512 },
+            "projectId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]{0,127}$" }
+          },
+          "required": ["jobId"],
+          "additionalProperties": false
+        },
+        "outputSchema": { "type": "object", "properties": { "outcome": { "type": "string", "minLength": 1, "maxLength": 64 } }, "required": ["outcome"], "additionalProperties": true },
+        "sideEffects": "read",
+        "idempotent": true,
+        "maxOutputBytes": 131072
+      },
+      {
+        "id": "video-render-cancel",
+        "description": "Cancel one owned, tracked durable video render after verifying its optional project identity.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "jobId": { "type": "string", "minLength": 8, "maxLength": 512 },
+            "projectId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]{0,127}$" },
+            "reason": { "type": "string", "minLength": 1, "maxLength": 512 }
+          },
+          "required": ["jobId"],
+          "additionalProperties": false
+        },
+        "outputSchema": { "type": "object", "properties": { "outcome": { "type": "string", "minLength": 1, "maxLength": 64 } }, "required": ["outcome"], "additionalProperties": true },
+        "sideEffects": "destructive",
+        "idempotent": false,
+        "maxOutputBytes": 131072
+      },
+      {
+        "id": "video-undo",
+        "description": "Undo only the calling Agent run's most recent eligible video edit and refuse if a manual or foreign mutation intervened.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "projectId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[A-Za-z0-9][A-Za-z0-9._~-]{0,127}$" },
+            "expectedRevision": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 }
+          },
+          "required": ["projectId", "expectedRevision"],
+          "additionalProperties": false
+        },
+        "outputSchema": { "type": "object", "properties": { "outcome": { "type": "string", "minLength": 1, "maxLength": 64 } }, "required": ["outcome"], "additionalProperties": true },
+        "sideEffects": "destructive",
+        "idempotent": false,
+        "maxOutputBytes": 131072
+      }
+    ]
+  },
+  "permissions": [
+    "commands.register",
+    "ui.views",
+    "ui.actions",
+    "webview",
+    "agent.run",
+    "tools.register",
+    "storage.workspace",
+    "workspace.read",
+    "workspace.write",
+    "media.read",
+    "media.process",
+    "media.export",
+    "jobs.manage"
+  ],
+  "stateSchemaVersion": 1
+}

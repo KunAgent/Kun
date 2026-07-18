@@ -48,9 +48,11 @@ export type WriteInlineAgentPosition = {
   width: number
   anchorLeft: number
   anchorRight: number
-  /** Top of the selection rect in viewport coords; the menu measures itself and places above/below. */
+  /** Body zoom used to convert viewport coordinates into fixed-position layout coordinates. */
+  coordinateScale: number
+  /** Top of the selection rect in fixed-position layout coords; the menu measures itself and places above/below. */
   anchorTop: number
-  /** Bottom of the selection rect in viewport coords. */
+  /** Bottom of the selection rect in fixed-position layout coords. */
   anchorBottom: number
 }
 
@@ -181,21 +183,30 @@ export function useDebouncedValue<T>(value: T, delayMs: number): T {
 
 export function inlineAgentPosition(selection: {
   anchorRect?: { left: number; right?: number; top: number; bottom: number; width: number } | null
-}, options: { compact?: boolean } = {}): WriteInlineAgentPosition | null {
+}, options: {
+  compact?: boolean
+  coordinateScale?: number
+  viewportWidth?: number
+} = {}): WriteInlineAgentPosition | null {
   const rect = selection.anchorRect
   if (!rect) return null
+  const coordinateScale = validCoordinateScale(options.coordinateScale ?? currentBodyZoom())
+  const viewportWidth = (options.viewportWidth ?? window.innerWidth) / coordinateScale
+  const anchorLeft = rect.left / coordinateScale
+  const anchorWidth = rect.width / coordinateScale
   const minWidth = options.compact ? 240 : INLINE_AGENT_MIN_WIDTH
   const maxWidth = options.compact ? 320 : INLINE_AGENT_MAX_WIDTH
   const targetRatio = options.compact ? 0.22 : 0.28
-  const width = clamp(Math.round(window.innerWidth * targetRatio), minWidth, maxWidth)
-  const left = clamp(rect.left + rect.width / 2 - width / 2, 16, window.innerWidth - width - 16)
+  const width = clamp(Math.round(viewportWidth * targetRatio), minWidth, maxWidth)
+  const left = clamp(anchorLeft + anchorWidth / 2 - width / 2, 16, viewportWidth - width - 16)
   return {
     left,
     width,
-    anchorLeft: rect.left,
-    anchorRight: Number.isFinite(rect.right) ? Number(rect.right) : rect.left + rect.width,
-    anchorTop: rect.top,
-    anchorBottom: rect.bottom
+    anchorLeft,
+    anchorRight: (Number.isFinite(rect.right) ? Number(rect.right) : rect.left + rect.width) / coordinateScale,
+    coordinateScale,
+    anchorTop: rect.top / coordinateScale,
+    anchorBottom: rect.bottom / coordinateScale
   }
 }
 
@@ -208,8 +219,9 @@ export function inlineAgentPlacement(
     preferAbove?: boolean
   }
 ): WriteInlineAgentPlacement {
-  const viewportWidth = Math.max(0, options.viewportWidth)
-  const viewportHeight = Math.max(0, options.viewportHeight)
+  const coordinateScale = validCoordinateScale(action.coordinateScale)
+  const viewportWidth = Math.max(0, options.viewportWidth / coordinateScale)
+  const viewportHeight = Math.max(0, options.viewportHeight / coordinateScale)
   const maxViewportHeight = Math.max(0, viewportHeight - INLINE_AGENT_VIEWPORT_MARGIN * 2)
   const naturalMenuHeight = Math.max(0, options.menuHeight)
   const menuHeight = Math.min(naturalMenuHeight, maxViewportHeight)
@@ -288,6 +300,15 @@ export function inlineAgentPlacement(
     constrained: naturalMenuHeight > maxHeight,
     origin: placeAbove ? 'bottom-center' : 'top-center'
   }
+}
+
+function currentBodyZoom(): number {
+  if (typeof window === 'undefined' || typeof document === 'undefined') return 1
+  return validCoordinateScale(Number.parseFloat(window.getComputedStyle(document.body).zoom))
+}
+
+function validCoordinateScale(value: number): number {
+  return Number.isFinite(value) && value > 0 ? value : 1
 }
 
 export function modeButtonClass(active: boolean): string {

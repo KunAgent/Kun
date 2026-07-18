@@ -362,6 +362,8 @@ export type KunRuntimeSettingsV1 = {
   insecure: boolean
   /** GUI-managed MCP progressive discovery/search settings written into Kun config.json. */
   mcpSearch: KunMcpSearchSettingsV1
+  /** User-local, digest-bound grants for repository `.kun/project.json` MCP declarations. */
+  projectConfig: KunProjectConfigSettingsV1
   /** Persistent store backend used by Kun. */
   storage: KunStorageSettingsV1
   /** Fallback compaction thresholds and summary behavior. Per-model thresholds live in Kun config models.profiles. */
@@ -602,6 +604,17 @@ export type KunMcpSearchSettingsV1 = {
   minScore: number
 }
 
+export type KunProjectConfigGrantV1 = {
+  /** Canonical real workspace path. Project files never persist this grant. */
+  workspaceRoot: string
+  /** SHA-256 of the normalized versioned `.kun/project.json` document. */
+  configDigest: string
+}
+
+export type KunProjectConfigSettingsV1 = {
+  grants: KunProjectConfigGrantV1[]
+}
+
 export type KunStorageBackend = 'hybrid' | 'file'
 
 export type KunStorageSettingsV1 = {
@@ -691,10 +704,11 @@ export type KunTokenEconomySettingsPatchV1 = Partial<
 export type KunRuntimeSettingsPatchV1 = Partial<
   Omit<
     KunRuntimeSettingsV1,
-    'mcpSearch' | 'storage' | 'contextCompaction' | 'runtimeTuning' | 'tokenEconomy' | 'toolOutputLimits' | 'imageGeneration' | 'speechToText' | 'textToSpeech' | 'promptOptimization' | 'musicGeneration' | 'videoGeneration' | 'instructions' | 'computerUse' | 'quality' | 'modelProfiles' | 'subagents'
+    'mcpSearch' | 'projectConfig' | 'storage' | 'contextCompaction' | 'runtimeTuning' | 'tokenEconomy' | 'toolOutputLimits' | 'imageGeneration' | 'speechToText' | 'textToSpeech' | 'promptOptimization' | 'musicGeneration' | 'videoGeneration' | 'instructions' | 'computerUse' | 'quality' | 'modelProfiles' | 'subagents'
   >
 > & {
   mcpSearch?: Partial<KunMcpSearchSettingsV1>
+  projectConfig?: Partial<KunProjectConfigSettingsV1>
   tokenEconomy?: KunTokenEconomySettingsPatchV1
   toolOutputLimits?: Partial<KunToolOutputLimitsSettingsV1>
   storage?: Partial<KunStorageSettingsV1>

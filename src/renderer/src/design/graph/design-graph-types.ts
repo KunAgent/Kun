@@ -120,6 +120,7 @@ export type DesignOperationType =
   | 'generate_screen'
   | 'bind_code'
   | 'lint_design'
+  | 'update_motion'
   | 'legacy_shape_op'
 
 export type DesignOperation = {

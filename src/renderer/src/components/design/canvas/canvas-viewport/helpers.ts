@@ -11,6 +11,8 @@ import { createDrawTool } from '../../../../design/canvas/tools/draw-tool'
 import type { CanvasToolHandler } from '../../../../design/canvas/tools/tool-types'
 import type { CanvasDocument, CanvasTool, Rect, ViewBox } from '../../../../design/canvas/canvas-types'
 import { embeddedArtifactOf, isHtmlFrame, shapeBounds, shapeGeometry } from '../../../../design/canvas/canvas-types'
+import type { CanvasMotionDocument } from '../../../../design/motion/canvas-motion-types'
+import { createEmptyMotionDocument } from '../../../../design/motion/model'
 
 const CANVAS_VIEWPORT_STORAGE_PREFIX = 'kun.design.canvasViewport'
 const IMAGE_ANNOTATION_ACTION_WIDTH = 112
@@ -149,6 +151,10 @@ export function shouldHandleCanvasKeyboardEvent(
   root: HTMLElement | null,
   activeElement?: Element | null
 ): boolean {
+  const eventElement = eventTarget as (EventTarget & { closest?: (selector: string) => Element | null }) | null
+  if (eventElement && typeof eventElement.closest === 'function' && eventElement.closest('[data-motion-timeline]')) {
+    return false
+  }
   if (surface === 'design') return true
   const active = activeElement ?? (typeof document !== 'undefined' ? document.activeElement : null)
   return targetInside(root, eventTarget) || targetInside(root, active)
@@ -302,6 +308,31 @@ function liveShapeShouldReplaceLoaded(
   )
 }
 
+function mergeLoadedMotionWithLiveChanges(
+  loaded: CanvasMotionDocument | undefined,
+  live: CanvasMotionDocument | undefined,
+  initial: CanvasMotionDocument | undefined
+): { motion: CanvasMotionDocument; changed: boolean } {
+  const loadedMotion = loaded ?? createEmptyMotionDocument()
+  const liveTimelines = live?.timelines ?? {}
+  const initialTimelines = initial?.timelines ?? {}
+  const timelineKeys = new Set([
+    ...Object.keys(liveTimelines),
+    ...Object.keys(initialTimelines)
+  ])
+  let timelines: CanvasMotionDocument['timelines'] | null = null
+  for (const frameId of timelineKeys) {
+    const liveTimeline = liveTimelines[frameId]
+    if (liveTimeline === initialTimelines[frameId]) continue
+    if (!timelines) timelines = { ...loadedMotion.timelines }
+    if (liveTimeline) timelines[frameId] = liveTimeline
+    else delete timelines[frameId]
+  }
+  return timelines
+    ? { motion: { version: 1, timelines }, changed: true }
+    : { motion: loadedMotion, changed: false }
+}
+
 export function mergeLoadedCanvasDocumentWithLiveChanges(
   loaded: CanvasDocument,
   live: CanvasDocument,
@@ -309,13 +340,15 @@ export function mergeLoadedCanvasDocumentWithLiveChanges(
 ): CanvasDocument {
   if (live === initial) return loaded
   const liveRoot = live.objects[live.rootId]
-  if (!liveRoot || liveRoot.children.length === 0) return loaded
+  const motionMerge = mergeLoadedMotionWithLiveChanges(loaded.motion, live.motion, initial.motion)
+  if ((!liveRoot || liveRoot.children.length === 0) && !motionMerge.changed) return loaded
 
   const next = cloneCanvasDocument(loaded)
   const nextRoot = next.objects[next.rootId]
   if (!nextRoot) return loaded
 
-  let changed = false
+  let changed = motionMerge.changed
+  if (motionMerge.changed) next.motion = motionMerge.motion
   const copyLiveSubtree = (id: string): void => {
     const liveShape = live.objects[id]
     if (!liveShape) return

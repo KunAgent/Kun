@@ -1,0 +1,136 @@
+{
+  "schemaVersion": 2,
+  "id": "golden-project",
+  "name": "Golden Interview",
+  "createdAt": "2026-01-01T00:00:00.000Z",
+  "updatedAt": "2026-01-02T00:00:00.000Z",
+  "fps": { "numerator": 30, "denominator": 1 },
+  "canvas": {
+    "preset": "16:9",
+    "width": 1920,
+    "height": 1080,
+    "fit": "fit",
+    "background": "#000000"
+  },
+  "assets": [{
+    "id": "asset-1",
+    "name": "interview.mp4",
+    "kind": "video",
+    "mediaHandleId": "media_asset_1",
+    "durationUs": 5000000,
+    "container": "mp4",
+    "video": {
+      "codec": "h264",
+      "width": 1920,
+      "height": 1080,
+      "frameRate": { "numerator": 30, "denominator": 1 }
+    },
+    "audio": { "codec": "aac", "sampleRate": 48000, "channels": 2 },
+    "transcriptIds": ["transcript-1"]
+  }],
+  "mediaFolders": [],
+  "tracks": [
+    { "id": "video-1", "name": "Video 1", "kind": "video", "order": 0, "overlap": "reject" },
+    { "id": "captions-1", "name": "Captions", "kind": "caption", "order": 1, "overlap": "reject" }
+  ],
+  "items": [{
+    "id": "item-1",
+    "assetId": "asset-1",
+    "trackId": "video-1",
+    "timelineStartFrame": 15,
+    "durationFrames": 60,
+    "sourceStartUs": 500000,
+    "sourceEndUs": 2500000,
+    "speed": { "numerator": 1, "denominator": 1 },
+    "transform": { "x": 0, "y": 0, "scaleX": 1, "scaleY": 1, "rotation": 0 },
+    "opacity": 1,
+    "fadeInFrames": 3,
+    "fadeOutFrames": 4
+  }],
+  "captions": [{
+    "id": "caption-1",
+    "trackId": "captions-1",
+    "startFrame": 20,
+    "endFrame": 40,
+    "text": "Golden caption",
+    "placement": "bottom"
+  }],
+  "transcripts": [{
+    "id": "transcript-1",
+    "assetId": "asset-1",
+    "language": "en",
+    "provenance": "json",
+    "segments": [{
+      "id": "segment-1",
+      "startUs": 500000,
+      "endUs": 1500000,
+      "text": "Golden caption"
+    }]
+  }],
+  "currentRevision": 3,
+  "revisions": [{
+    "revision": 3,
+    "parentRevision": 2,
+    "author": "manual",
+    "sourceOperation": "fixture.edit",
+    "timestamp": "2026-01-02T00:00:00.000Z",
+    "summary": "Golden edit",
+    "operations": [],
+    "inverseOperations": []
+  }],
+  "undoStack": [],
+  "redoStack": [],
+  "sequences": [{
+    "id": "sequence-main",
+    "name": "Golden Interview",
+    "tracks": [
+      { "id": "video-1", "name": "Video 1", "kind": "video", "order": 0, "overlap": "reject" },
+      { "id": "captions-1", "name": "Captions", "kind": "caption", "order": 1, "overlap": "reject" }
+    ],
+    "items": [{
+      "id": "item-1",
+      "assetId": "asset-1",
+      "trackId": "video-1",
+      "timelineStartFrame": 15,
+      "durationFrames": 60,
+      "sourceStartUs": 500000,
+      "sourceEndUs": 2500000,
+      "speed": { "numerator": 1, "denominator": 1 },
+      "transform": { "x": 0, "y": 0, "scaleX": 1, "scaleY": 1, "rotation": 0 },
+      "opacity": 1,
+      "fadeInFrames": 3,
+      "fadeOutFrames": 4
+    }],
+    "captions": [{
+      "id": "caption-1",
+      "trackId": "captions-1",
+      "startFrame": 20,
+      "endFrame": 40,
+      "text": "Golden caption",
+      "placement": "bottom"
+    }],
+    "viewState": { "zoom": 1, "scrollFrame": 0, "open": true }
+  }],
+  "activeSequenceId": "sequence-main",
+  "linkGroups": [],
+  "multicamGroups": [],
+  "selection": {
+    "generation": 0,
+    "revision": 3,
+    "sequenceId": "sequence-main",
+    "playheadFrame": 0,
+    "selectedAssetIds": [],
+    "selectedItemIds": [],
+    "selectedCaptionIds": [],
+    "selectedWordIds": []
+  },
+  "derivedReferences": [],
+  "eventGeneration": 3,
+  "agentUndoStack": [],
+  "recovery": {
+    "mode": "healthy",
+    "unreadableManifestKinds": [],
+    "interruptedJobIds": [],
+    "notes": []
+  }
+}

@@ -273,6 +273,8 @@ describe('extractCanvasOpBlocksFromValue (tool result payloads)', () => {
   it('recognizes dedicated design tools and extracts their ops payloads', () => {
     expect(isDesignCanvasToolName('design_system_template')).toBe(true)
     expect(isDesignCanvasToolName('design_update_shapes')).toBe(true)
+    expect(isDesignCanvasToolName('design_motion_set_timeline')).toBe(true)
+    expect(isDesignCanvasToolName('design_motion_upsert_keyframes')).toBe(true)
     expect(isDesignCanvasToolName('bash')).toBe(false)
     expect(
       extractCanvasOpBlocksFromValue({

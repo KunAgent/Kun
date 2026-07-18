@@ -47,6 +47,9 @@ describe('ContributionRegistry', () => {
     ]))
 
     expect(registry.has(BUILTIN_RIGHT_PANEL_IDS.changes)).toBe(true)
+    expect(registry.has(BUILTIN_RIGHT_PANEL_IDS.terminal)).toBe(true)
+    expect(registry.has(BUILTIN_RIGHT_PANEL_IDS.files)).toBe(true)
+    expect(registry.has(BUILTIN_RIGHT_PANEL_IDS.sideConversations)).toBe(true)
     const view = registry.get('extension:acme.issues/issues')
     expect(view?.owner).toMatchObject({ kind: 'extension', extensionId: 'acme.issues' })
     expect(view?.point).toBe('views.rightSidebar')
@@ -106,6 +109,80 @@ describe('ContributionRegistry', () => {
       workspaceOpen: true,
       'workbench.mode': 'code'
     })).toBeDefined()
+  })
+
+  it('keeps untrusted right-rail metadata discoverable without making it executable', () => {
+    const registry = new ContributionRegistry()
+    registry.replaceExtensions(ExtensionWorkbenchSnapshotSchema.parse({
+      schemaVersion: 1,
+      revision: 1,
+      extensions: [{
+        ...extension('acme.review', {}, []),
+        workspaceTrusted: false,
+        rightRailDiscovery: {
+          views: [{
+            id: 'review',
+            title: 'Review me',
+            icon: 'assets/review.svg',
+            when: 'workspaceOpen',
+            order: 30
+          }],
+          containers: []
+        }
+      }]
+    }))
+
+    expect(registry.listRightRailViewEntries({ workspaceOpen: false })).toEqual([])
+    expect(registry.listRightRailViewEntries({ workspaceOpen: true })).toMatchObject([{
+      id: 'extension:acme.review/review',
+      workspaceTrusted: false,
+      payload: { title: 'Review me' }
+    }])
+    expect(registry.list('views.rightSidebar', { workspaceOpen: true })
+      .filter((item) => item.owner.kind === 'extension')).toEqual([])
+    expect(registry.get('extension:acme.review/review', { workspaceOpen: true })).toBeUndefined()
+    expect(registry.has('extension:acme.review/review', { workspaceOpen: true })).toBe(false)
+    expect(registry.sanitizeLayoutIds(
+      ['extension:acme.review/review'],
+      { workspaceOpen: true }
+    )).toEqual([])
+  })
+
+  it('keeps rail-hidden right-sidebar Views executable without adding a rail launcher', () => {
+    const registry = new ContributionRegistry()
+    registry.replaceExtensions(ExtensionWorkbenchSnapshotSchema.parse({
+      schemaVersion: 1,
+      revision: 1,
+      extensions: [
+        extension('acme.hidden', {
+          'views.rightSidebar': [{
+            id: 'editor',
+            title: 'Editor',
+            entry: 'dist/index.html',
+            showInRightRail: false
+          }]
+        }),
+        {
+          ...extension('acme.untrusted-hidden', {}, []),
+          workspaceTrusted: false,
+          rightRailDiscovery: {
+            views: [{
+              id: 'review',
+              title: 'Review',
+              showInRightRail: false,
+              order: 0
+            }],
+            containers: []
+          }
+        }
+      ]
+    }))
+
+    expect(registry.get('extension:acme.hidden/editor')).toMatchObject({
+      point: 'views.rightSidebar',
+      payload: { showInRightRail: false }
+    })
+    expect(registry.listRightRailViewEntries()).toEqual([])
   })
 
   it('removes stale layout IDs and namespaces private command dispatch', () => {

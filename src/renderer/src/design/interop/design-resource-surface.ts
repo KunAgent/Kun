@@ -14,6 +14,7 @@ import {
   buildDesignModeSurfaceManifest,
   DESIGN_MODE_SURFACE_RESOURCE_ID
 } from '../design-mode/design-mode-surface'
+import { buildCanvasMotionSummary } from '../canvas/canvas-motion-summary'
 
 export const DESIGN_RESOURCE_SURFACE_PATH = '.kun-design/design-resources.json'
 
@@ -57,7 +58,13 @@ function artifactById(artifacts: readonly DesignArtifact[]): Map<string, DesignA
   return new Map(artifacts.map((artifact) => [artifact.id, artifact]))
 }
 
-function framePayload(object: DesignGraphObject, artifact: DesignArtifact | undefined): Record<string, unknown> {
+function framePayload(
+  object: DesignGraphObject,
+  artifact: DesignArtifact | undefined,
+  canvasDocument: CanvasDocument
+): Record<string, unknown> {
+  const motionSummary = buildCanvasMotionSummary(canvasDocument, { preferredFrameId: object.id })
+  const motionTimeline = motionSummary?.timelines.find((timeline) => timeline.frameId === object.id)
   return {
     id: object.id,
     name: object.name,
@@ -74,7 +81,9 @@ function framePayload(object: DesignGraphObject, artifact: DesignArtifact | unde
     runningApp: object.metadata?.runningApp,
     direction: artifact?.direction,
     prototypeLinks: artifact?.prototypeLinks,
-    codeBindings: object.metadata?.codeBindings
+    codeBindings: object.metadata?.codeBindings,
+    motionTimeline,
+    ...(motionTimeline ? { reducedMotion: motionSummary?.reducedMotion } : {})
   }
 }
 
@@ -101,7 +110,7 @@ function buildFrameResources(
         name: object.name,
         kind: 'frame',
         mimeType: 'application/json',
-        text: jsonText(framePayload(object, artifact))
+        text: jsonText(framePayload(object, artifact, options.canvasDocument))
       }
     })
 }
@@ -228,6 +237,7 @@ function buildBoardResource(
     designSystem: options.designSystem,
     updatedAt: options.updatedAt
   })
+  const motion = buildCanvasMotionSummary(options.canvasDocument)
   return {
     uri: resourceUri(documentId, 'board', 'main'),
     name: title,
@@ -251,7 +261,8 @@ function buildBoardResource(
         directionCount: Object.keys(graph.directions).length,
         designSystem: graph.designSystem,
         updatedAt: graph.updatedAt
-      }
+      },
+      motion
     })
   }
 }

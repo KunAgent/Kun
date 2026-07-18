@@ -225,12 +225,16 @@ export class ExtensionContentScriptController {
   async revokeExtension(
     frame: WebContents,
     extensionId: string,
-    reason: string
+    reason: string,
+    workspaceRoot?: string
   ): Promise<boolean> {
     const state = this.frames.get(keyForFrame(frame))
     if (!state) return false
+    const canonicalWorkspace = workspaceRoot === undefined ? undefined : resolve(workspaceRoot)
     const removed = [...state.desired.values()].filter(
-      (binding) => binding.context.extensionId === extensionId
+      (binding) =>
+        binding.context.extensionId === extensionId &&
+        (canonicalWorkspace === undefined || binding.workspaceRoot === canonicalWorkspace)
     )
     if (removed.length === 0) return false
     const desired = new Map(state.desired)

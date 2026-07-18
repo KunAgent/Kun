@@ -2,7 +2,7 @@ import { createElement } from 'react'
 import type { ErrorInfo } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { AppErrorBoundary } from './AppErrorBoundary'
+import { AppErrorBoundary, requestApplicationReload } from './AppErrorBoundary'
 
 describe('AppErrorBoundary', () => {
   afterEach(() => {
@@ -36,5 +36,26 @@ describe('AppErrorBoundary', () => {
       stack: error.stack,
       componentStack: '\n    at Child'
     })
+  })
+
+  it('asks the main process to reload so development can bypass cache', () => {
+    const runDesktopCommand = vi.fn(async () => undefined)
+    const fallbackReload = vi.fn()
+
+    requestApplicationReload({
+      kunGui: { runDesktopCommand },
+      location: { reload: fallbackReload }
+    })
+
+    expect(runDesktopCommand).toHaveBeenCalledWith('reload')
+    expect(fallbackReload).not.toHaveBeenCalled()
+  })
+
+  it('falls back to a location reload outside the Electron preload bridge', () => {
+    const fallbackReload = vi.fn()
+
+    requestApplicationReload({ location: { reload: fallbackReload } })
+
+    expect(fallbackReload).toHaveBeenCalledOnce()
   })
 })

@@ -1,0 +1,146 @@
+.multicam-panel {
+  display: grid;
+  gap: 0.65rem;
+  min-width: 0;
+  padding: 0.7rem;
+  overflow: hidden;
+}
+
+.multicam-panel-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.55rem;
+  min-width: 0;
+  margin: -0.7rem -0.7rem 0;
+  padding: 0.6rem 0.7rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-raised);
+}
+
+.multicam-panel-heading > div { display: grid; gap: 0.15rem; min-width: 0; }
+.multicam-panel-heading h2 { font-size: 0.78rem; }
+.multicam-panel-heading p { color: var(--muted); font-size: 0.66rem; line-height: 1.4; overflow-wrap: anywhere; }
+.multicam-working { flex: 0 0 auto; color: var(--accent); font-size: 0.65rem; }
+.multicam-error { padding: 0.5rem 0.6rem; border: 1px solid var(--danger); border-radius: 8px; color: var(--danger); font-size: 0.68rem; overflow-wrap: anywhere; }
+
+.multicam-create { min-width: 0; border: 1px solid var(--border); border-radius: 8px; background: var(--surface-raised); }
+.multicam-create > summary,
+.multicam-member-editor > summary,
+.multicam-sync-editor > summary {
+  padding: 0.5rem 0.6rem;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 0.68rem;
+  overflow-wrap: anywhere;
+}
+.multicam-create[open] > summary { border-bottom: 1px solid var(--border); }
+.multicam-create > form,
+.multicam-member-editor > form,
+.multicam-sync-editor > form { display: grid; gap: 0.5rem; min-width: 0; padding: 0.6rem; }
+.multicam-create input,
+.multicam-create select,
+.multicam-member-editor input,
+.multicam-sync-editor input,
+.multicam-sync-editor select { min-width: 0; }
+
+.multicam-source-picker { display: grid; gap: 0.35rem; min-width: 0; max-height: 180px; margin: 0; padding: 0.5rem; overflow: auto; border: 1px solid var(--border); border-radius: 7px; scrollbar-width: thin; }
+.multicam-source-picker legend { padding-inline: 0.25rem; color: var(--muted); font-size: 0.68rem; }
+.multicam-source-picker label { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 0.4rem; min-width: 0; color: var(--text); font-size: 0.68rem; }
+.multicam-source-picker input { width: auto; accent-color: var(--accent); }
+.multicam-source-picker span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.multicam-source-picker small { font-size: 0.58rem; }
+
+.multicam-empty { display: grid; gap: 0.25rem; padding: 0.75rem; border: 1px dashed var(--border-strong); border-radius: 8px; text-align: center; }
+.multicam-empty strong { font-size: 0.75rem; }
+.multicam-empty p { color: var(--muted); font-size: 0.66rem; line-height: 1.45; }
+
+.multicam-group-tabs { display: flex; gap: 0.3rem; min-width: 0; padding-bottom: 0.15rem; overflow-x: auto; scrollbar-width: thin; }
+.multicam-group-tabs button { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0.35rem; flex: 0 0 auto; min-width: 100px; max-width: min(190px, 75vw); min-height: 30px; padding: 0.28rem 0.5rem; color: var(--muted); }
+.multicam-group-tabs button[aria-selected="true"] { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, var(--surface-soft)); color: var(--text); }
+.multicam-group-tabs button span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.multicam-group-tabs button small { font-size: 0.58rem; }
+
+.multicam-group-editor { display: grid; gap: 0.65rem; min-width: 0; }
+.multicam-group-summary { display: grid; gap: 0.3rem; min-width: 0; }
+.multicam-group-summary form { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 0.4rem; min-width: 0; }
+.multicam-group-summary label,
+.multicam-group-summary input { min-width: 0; }
+.multicam-group-summary small { font-size: 0.62rem; }
+
+.multicam-range { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.45rem; min-width: 0; margin: 0; padding: 0.55rem; border: 1px solid var(--border); border-radius: 8px; }
+.multicam-range legend { padding-inline: 0.25rem; color: var(--muted); font-size: 0.68rem; }
+.multicam-range label,
+.multicam-range input,
+.multicam-range select { min-width: 0; }
+.multicam-range-policy { grid-column: 1 / -1; }
+
+.multicam-section { display: grid; gap: 0.4rem; min-width: 0; }
+.multicam-section h3 { color: var(--muted); font-size: 0.68rem; letter-spacing: 0.02em; text-transform: uppercase; }
+.multicam-member-list,
+.multicam-layout-list,
+.multicam-program-list { display: grid; gap: 0.45rem; min-width: 0; margin: 0; list-style: none; }
+.multicam-member-list { max-height: 560px; overflow: auto; scrollbar-width: thin; }
+.multicam-member-card { display: grid; gap: 0.45rem; min-width: 0; padding: 0.55rem; border: 1px solid var(--border); border-radius: 8px; background: var(--surface-raised); }
+.multicam-member-card[data-sync-status="uncertain"] { border-color: color-mix(in srgb, var(--warning) 52%, var(--border)); }
+.multicam-member-card[data-sync-status="unknown"] { border-style: dashed; }
+.multicam-member-card > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 0.4rem; min-width: 0; }
+.multicam-member-card > header > div { display: grid; gap: 0.1rem; min-width: 0; }
+.multicam-member-card > header strong,
+.multicam-member-card > header span { min-width: 0; overflow-wrap: anywhere; }
+.multicam-member-card > header strong { font-size: 0.74rem; }
+.multicam-member-card > header > div span { color: var(--muted); font-size: 0.62rem; }
+.multicam-reference-badge { flex: 0 0 auto; border: 1px solid var(--green); border-radius: 99px; padding: 0.12rem 0.34rem; color: var(--green); font-size: 0.56rem; }
+
+.multicam-member-facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.3rem 0.55rem; margin: 0; }
+.multicam-member-facts div { display: grid; min-width: 0; }
+.multicam-member-facts dt { color: var(--muted); font-size: 0.56rem; }
+.multicam-member-facts dd { min-width: 0; margin: 0; overflow: hidden; color: var(--text); font-size: 0.62rem; text-overflow: ellipsis; white-space: nowrap; }
+.multicam-coverage-meter { block-size: 4px; overflow: hidden; border-radius: 99px; background: var(--control); }
+.multicam-coverage-meter span { display: block; block-size: 100%; border-radius: inherit; background: var(--green); }
+.multicam-member-editor,
+.multicam-sync-editor { min-width: 0; border: 1px solid var(--border); border-radius: 7px; }
+.multicam-member-editor[open] > summary,
+.multicam-sync-editor[open] > summary { border-bottom: 1px solid var(--border); }
+.multicam-switch-button { width: 100%; min-width: 0; overflow-wrap: anywhere; }
+
+.multicam-layout-list li { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 0.4rem; min-width: 0; padding: 0.45rem; border: 1px solid var(--border); border-radius: 8px; background: var(--surface-raised); }
+.multicam-layout-list li > span { display: grid; min-width: 0; }
+.multicam-layout-list strong { overflow: hidden; font-size: 0.68rem; text-overflow: ellipsis; white-space: nowrap; }
+.multicam-layout-list small { font-size: 0.58rem; }
+.multicam-layout-list button { min-width: 0; font-size: 0.62rem; overflow-wrap: anywhere; }
+.multicam-muted { color: var(--muted); font-size: 0.66rem; }
+
+.multicam-program-list { max-height: 250px; overflow: auto; scrollbar-width: thin; }
+.multicam-fragment { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0.4rem; width: 100%; min-width: 0; overflow: hidden; text-align: start; }
+.multicam-fragment span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.multicam-fragment small { font-size: 0.58rem; }
+.multicam-fragment i { position: absolute; inset-block-end: 0; block-size: 2px; background: var(--accent); }
+.multicam-program-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.4rem; min-width: 0; }
+.multicam-program-actions button { min-width: 0; overflow-wrap: anywhere; }
+
+@media (max-width: 360px) {
+  .multicam-panel-heading { align-items: stretch; }
+  .multicam-working { align-self: flex-start; }
+  .multicam-group-summary form,
+  .multicam-range,
+  .multicam-member-facts,
+  .multicam-layout-list li,
+  .multicam-program-actions { grid-template-columns: minmax(0, 1fr); }
+  .multicam-range-policy { grid-column: auto; }
+  .multicam-group-summary button,
+  .multicam-layout-list button { width: 100%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .multicam-panel *,
+  .multicam-panel *::before,
+  .multicam-panel *::after { scroll-behavior: auto !important; transition: none !important; }
+}
+
+@media (forced-colors: active) {
+  .multicam-member-card,
+  .multicam-empty,
+  .multicam-error { forced-color-adjust: auto; }
+  .multicam-coverage-meter { border: 1px solid CanvasText; }
+}

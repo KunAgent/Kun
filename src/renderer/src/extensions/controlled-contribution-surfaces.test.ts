@@ -3,6 +3,7 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { act, create as createRenderer } from 'react-test-renderer'
 import { describe, expect, it, vi } from 'vitest'
+import i18n from '../i18n'
 import {
   ContributionRegistry,
   ExtensionWorkbenchSnapshotSchema
@@ -18,7 +19,15 @@ import {
   isSecretLikeSettingKey,
   matchingResultPreviewContributions
 } from './ControlledContributionSurfaces'
-import { validateExtensionViewSession } from './ExtensionWebview'
+import {
+  extensionViewSessionContractKey,
+  validateExtensionViewSession
+} from './ExtensionWebview'
+import {
+  requiresWideAuthenticationViewport,
+  siteForUrl
+} from './ExtensionExternalBrowser'
+import { extensionWorkbenchClient } from './extension-workbench-client'
 
 function registryWithContributions(): ContributionRegistry {
   const registry = new ContributionRegistry()
@@ -71,6 +80,21 @@ function registryWithContributions(): ContributionRegistry {
 }
 
 describe('controlled workbench contribution rendering', () => {
+  it('widens mobile authentication routes without treating ordinary content as login UI', () => {
+    expect(requiresWideAuthenticationViewport(
+      'douyin',
+      'https://www.douyin.com/user/self'
+    )).toBe(true)
+    expect(requiresWideAuthenticationViewport(
+      'bilibili',
+      'https://passport.bilibili.com/login'
+    )).toBe(true)
+    expect(requiresWideAuthenticationViewport(
+      'xiaohongshu',
+      'https://www.xiaohongshu.com/explore'
+    )).toBe(false)
+  })
+
   it('rejects synthetic Direct DOM notification activation', () => {
     const onRespond = vi.fn()
     let renderer!: ReturnType<typeof createRenderer>
@@ -282,5 +306,249 @@ describe('controlled workbench contribution rendering', () => {
     expect(validateExtensionViewSession(validSession, contribution)).toBeNull()
     expect(validateExtensionViewSession({ ...validSession, partition: 'persist:shared' }, contribution)).toContain('non-persistent')
     expect(validateExtensionViewSession({ ...validSession, src: 'https://evil.example/' }, contribution)).toContain('origin mismatch')
+  })
+
+  it('routes declared external browser Views through Host chrome without nesting a Webview', () => {
+    const registry = new ContributionRegistry()
+    registry.replaceExtensions(ExtensionWorkbenchSnapshotSchema.parse({
+      schemaVersion: 1,
+      revision: 1,
+      extensions: [{
+        id: 'acme.social',
+        version: '1.0.0',
+        workspaceTrusted: true,
+        grantedPermissions: [
+          'ui.views',
+          'webview',
+          'webview.external',
+          'network:bilibili.com',
+          'network:*.bilibili.com'
+        ],
+        contributes: ExtensionContributionsSchema.parse({
+          'views.rightSidebar': [{
+            id: 'social',
+            title: 'Social',
+            entry: 'dist/index.html',
+            externalBrowser: {
+              presentation: 'mobile',
+              sites: [{
+                id: 'bilibili',
+                title: '哔哩哔哩',
+                badge: 'B',
+                accent: '#00aeec',
+                url: 'https://www.bilibili.com/'
+              }]
+            }
+          }]
+        })
+      }]
+    }))
+    const contribution = registry.list('views.rightSidebar')
+      .find((item) => item.id === 'extension:acme.social/social')!
+    const html = renderToStaticMarkup(createElement(ExtensionViewOutlet, { contribution }))
+
+    expect(html).toContain('data-external-browser-view="true"')
+    expect(html).toContain('data-browser-presentation="mobile"')
+    expect(html).toContain('data-mobile-browser-frame="true"')
+    expect(html).toContain('网页版')
+    expect(html).toContain('手机版')
+    expect(html).toContain('全屏浏览')
+    expect(html).toContain('100%')
+    expect(html).toContain('哔哩哔哩')
+    expect(html).not.toContain('<webview')
+    expect(siteForUrl(
+      contribution.payload.externalBrowser!.sites,
+      'https://space.bilibili.com/123'
+    )?.id).toBe('bilibili')
+  })
+
+  it('keeps an opening View session across equivalent contribution snapshot replacements', async () => {
+    const contribution = registryWithContributions().list('views.rightSidebar')
+      .find((item) => item.id === 'extension:acme.ui/dashboard')!
+    const equivalent = {
+      ...contribution,
+      payload: { ...contribution.payload },
+      owner: contribution.owner.kind === 'extension'
+        ? {
+            ...contribution.owner,
+            grantedPermissions: [...contribution.owner.grantedPermissions]
+          }
+        : contribution.owner
+    }
+    expect(equivalent).not.toBe(contribution)
+    expect(extensionViewSessionContractKey(equivalent)).toBe(
+      extensionViewSessionContractKey(contribution)
+    )
+    expect(extensionViewSessionContractKey({
+      ...equivalent,
+      payload: { ...equivalent.payload, entry: 'dist/next.html' }
+    })).not.toBe(extensionViewSessionContractKey(contribution))
+    expect(extensionViewSessionContractKey({
+      ...equivalent,
+      payload: { ...equivalent.payload, localResourceRoots: ['dist', 'assets'] }
+    })).not.toBe(extensionViewSessionContractKey(contribution))
+    expect(extensionViewSessionContractKey({
+      ...equivalent,
+      owner: equivalent.owner.kind === 'extension'
+        ? { ...equivalent.owner, extensionVersion: '2.0.0' }
+        : equivalent.owner
+    })).not.toBe(extensionViewSessionContractKey(contribution))
+
+    let resolveSession!: (session: Awaited<ReturnType<
+      typeof extensionWorkbenchClient.createViewSession
+    >>) => void
+    const opening = new Promise<Awaited<ReturnType<
+      typeof extensionWorkbenchClient.createViewSession
+    >>>((resolve) => {
+      resolveSession = resolve
+    })
+    const createSession = vi.spyOn(extensionWorkbenchClient, 'createViewSession')
+      .mockReturnValue(opening)
+    const disposeSession = vi.spyOn(extensionWorkbenchClient, 'disposeViewSession')
+      .mockResolvedValue(undefined)
+    vi.stubGlobal('HTMLElement', class {})
+    vi.stubGlobal('document', { activeElement: null })
+    vi.stubGlobal('window', { requestAnimationFrame: vi.fn() })
+    let renderer!: ReturnType<typeof createRenderer>
+    try {
+      await act(async () => {
+        renderer = createRenderer(createElement(ExtensionViewOutlet, {
+          contribution,
+          workspaceRoot: ' /workspace '
+        }))
+      })
+      expect(createSession).toHaveBeenCalledTimes(1)
+      expect(createSession).toHaveBeenCalledWith(contribution.id, '/workspace')
+
+      await act(async () => {
+        renderer.update(createElement(ExtensionViewOutlet, {
+          contribution: equivalent,
+          workspaceRoot: '/workspace'
+        }))
+      })
+      expect(createSession).toHaveBeenCalledTimes(1)
+      expect(disposeSession).not.toHaveBeenCalled()
+
+      await act(async () => {
+        resolveSession({
+          sessionId: 'session-0123456789',
+          nonce: 'nonce-0123456789',
+          contributionId: contribution.id,
+          extensionId: 'acme.ui',
+          extensionVersion: '1.0.0',
+          src: 'kun-extension://acme.ui/dist/index.html',
+          partition: 'kun-extension-acme-ui-session'
+        })
+        await opening
+      })
+      const [webview] = renderer.root.findAllByType('webview')
+      expect(webview).toBeDefined()
+      const webviewClasses = String(webview!.props.className).split(/\s+/)
+      expect(webviewClasses).toContain('ds-no-drag')
+      expect(webviewClasses).toContain('flex')
+      expect(webviewClasses).toContain('w-full')
+      expect(webviewClasses).not.toContain('block')
+      const [host] = renderer.root.findAllByProps({
+        'data-contribution-id': contribution.id
+      })
+      expect(String(host!.props.className).split(/\s+/)).toContain('ds-no-drag')
+      expect(disposeSession).not.toHaveBeenCalled()
+
+      const changedEntry = {
+        ...equivalent,
+        payload: { ...equivalent.payload, entry: 'dist/next.html' }
+      }
+      createSession.mockResolvedValueOnce({
+        sessionId: 'session-9876543210',
+        nonce: 'nonce-9876543210',
+        contributionId: contribution.id,
+        extensionId: 'acme.ui',
+        extensionVersion: '1.0.0',
+        src: 'kun-extension://acme.ui/dist/next.html',
+        partition: 'kun-extension-acme-ui-session-next'
+      })
+      await act(async () => {
+        renderer.update(createElement(ExtensionViewOutlet, {
+          contribution: changedEntry,
+          workspaceRoot: '/workspace'
+        }))
+      })
+      expect(createSession).toHaveBeenCalledTimes(2)
+      expect(disposeSession).toHaveBeenCalledTimes(1)
+      expect(disposeSession).toHaveBeenCalledWith('session-0123456789')
+      expect(renderer.root.findAllByProps({
+        'data-extension-view-session': 'session-9876543210'
+      })).toHaveLength(1)
+
+      await act(async () => renderer.unmount())
+      expect(disposeSession).toHaveBeenCalledTimes(2)
+      expect(disposeSession).toHaveBeenLastCalledWith('session-9876543210')
+    } finally {
+      if (renderer) act(() => renderer.unmount())
+      vi.restoreAllMocks()
+      vi.unstubAllGlobals()
+    }
+  })
+
+  it('requests an explicit Host recovery when the user retries an unavailable View', async () => {
+    const contribution = registryWithContributions().list('views.rightSidebar')
+      .find((item) => item.id === 'extension:acme.ui/dashboard')!
+    const createSession = vi.spyOn(extensionWorkbenchClient, 'createViewSession')
+      .mockRejectedValueOnce(new Error('Extension host circuit is open'))
+      .mockResolvedValueOnce({
+        sessionId: 'session-9876543210',
+        nonce: 'nonce-9876543210',
+        contributionId: contribution.id,
+        extensionId: 'acme.ui',
+        extensionVersion: '1.0.0',
+        src: 'kun-extension://acme.ui/dist/index.html',
+        partition: 'kun-extension-acme-ui-session-next'
+      })
+    vi.spyOn(extensionWorkbenchClient, 'disposeViewSession').mockResolvedValue(undefined)
+    vi.stubGlobal('HTMLElement', class {})
+    vi.stubGlobal('document', { activeElement: null })
+    vi.stubGlobal('window', { requestAnimationFrame: vi.fn() })
+    let renderer!: ReturnType<typeof createRenderer>
+    try {
+      await act(async () => {
+        renderer = createRenderer(createElement(ExtensionViewOutlet, {
+          contribution,
+          workspaceRoot: '/workspace'
+        }))
+      })
+      expect(createSession).toHaveBeenNthCalledWith(1, contribution.id, '/workspace')
+      expect(renderer.root.findByProps({ role: 'alert' })).toBeDefined()
+
+      await act(async () => {
+        renderer.root.findByType('button').props.onClick()
+      })
+
+      expect(createSession).toHaveBeenNthCalledWith(
+        2,
+        contribution.id,
+        '/workspace',
+        { retryHost: true }
+      )
+      expect(renderer.root.findAllByProps({
+        'data-extension-view-session': 'session-9876543210'
+      })).toHaveLength(1)
+    } finally {
+      if (renderer) act(() => renderer.unmount())
+      vi.restoreAllMocks()
+      vi.unstubAllGlobals()
+    }
+  })
+
+  it('renders Host-owned extension View status in the active Kun language', async () => {
+    const contribution = registryWithContributions().list('views.rightSidebar')
+      .find((item) => item.id === 'extension:acme.ui/dashboard')!
+    await i18n.changeLanguage('zh')
+    try {
+      const html = renderToStaticMarkup(createElement(ExtensionViewOutlet, { contribution }))
+      expect(html).toContain('正在打开隔离的扩展视图')
+      expect(html).toContain('Dashboard 扩展视图')
+    } finally {
+      await i18n.changeLanguage('en')
+    }
   })
 })

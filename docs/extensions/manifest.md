@@ -18,6 +18,7 @@
   "version": "1.2.0",
   "displayName": "Issue Assistant",
   "description": "Manage issues with a sidebar and Kun Agent tools.",
+  "icon": "assets/issue-assistant.svg",
   "engines": {
     "kun": ">=0.1.0"
   },
@@ -65,6 +66,8 @@
 | `version` | 是 | 此 `.kunx` 包的 SemVer 版本 |
 | `displayName` | 否 | 面向用户的短名称，作为不可信纯文本渲染 |
 | `description` | 否 | 面向用户的说明，作为不可信纯文本渲染 |
+| `icon` | 否 | 扩展 Logo 的包内相对路径；用于扩展中心等 Host 界面，建议使用方形 SVG 或至少 80×80 的 PNG |
+| `localizations` | 否 | Host 渲染的 Manifest 和贡献显示文案的有界语言覆盖 |
 | `license` | 否 | 简短许可证标识；发布包仍必须包含 `LICENSE` |
 | `homepage` | 否 | 扩展主页 HTTPS URL |
 | `engines.kun` | 是 | 兼容 Kun 版本的 SemVer range |
@@ -76,6 +79,8 @@
 | `stateSchemaVersion` | 是 | 非负整数状态 Schema 版本；与包/API 版本独立，新扩展推荐从 `1` 开始 |
 | `signature` | 否 | 当前支持的签名 metadata；用于来源证明，不代表安全审计 |
 
+未声明顶层 `icon` 时，Host 可以兼容使用第一个声明了图标的 View 容器或主 View；都没有时显示默认占位图标。Logo 文件与其他 Manifest 资源一样，必须通过包内相对路径、完整性和受控资源协议校验。
+
 `main` 与 `browser` 至少存在一个。任何要求 headless 的工具、Agent profile、模型 Provider、认证处理器、计划任务或后台命令都必须存在 `main`；Kun 不会用 `browser` 代替 Node 入口。
 
 Browser-only Manifest（只有 `browser`）不能声明 `commands`、`agentProfiles`、`tools`、`modelProviders` 或 `authentication`；这些都需要 Node handler。所有 `browser` 入口都必须声明 `webview` 权限。
@@ -83,6 +88,31 @@ Browser-only Manifest（只有 `browser`）不能声明 `commands`、`agentProfi
 完整 ID 为 `publisher.name`，一旦公开不得更改。改名等同于一个新扩展，旧状态、权限、账号和 thread 不会自动转移。
 
 `publisher` 使用小写 ASCII 字母/数字/连字符、以字母或数字开头，最长 64；`name` 和所有 local contribution ID 使用小写字母开头，之后只允许小写字母/数字/连字符，最长 64。以同版本 Schema 的正则和保留字校验为准。
+
+## Host 渲染文案的本地化
+
+`localizations` 把最多 32 个有界 BCP 47 语言标签映射为纯文本显示覆盖。基础 Manifest 始终是必需的 fallback，也是身份、激活事件、权限、路径、可执行 Schema 和 Agent instructions 的稳定真源。覆盖只能修改已知显示字段，且必须引用已声明的贡献、设置属性、通知操作或 Provider model。
+
+```json
+{
+  "displayName": "Issue Assistant",
+  "contributes": {
+    "views.rightSidebar": [{ "id": "issues", "title": "Issues", "entry": "dist/index.html" }]
+  },
+  "localizations": {
+    "zh-CN": {
+      "displayName": "问题助手",
+      "contributes": {
+        "views.rightSidebar": {
+          "issues": { "title": "问题" }
+        }
+      }
+    }
+  }
+}
+```
+
+Kun 先按大小写不敏感的完整标签匹配，再逐级匹配更宽的语言标签（`zh-Hans-CN` → `zh-Hans` → `zh`），最后使用基础 Manifest。Webview 内容仍通过 `ui.getLocale` 和 `ui.localeChanged` 自行本地化；Manifest 覆盖用于侧栏 tooltip、面板/结果预览标题、扩展中心卡片和声明式设置等 Host chrome。
 
 ## 版本字段
 
@@ -135,7 +165,7 @@ v1 支持：
 | `commands` | 扩展命令 | `id`、`title`，参数/结果 Schema（如适用） |
 | `views.containers` | Activity/sidebar 容器 | `id`、title、icon、位置/排序 |
 | `views.leftSidebar` | 左侧栏 View | `id`、`title`、`entry`，可选 icon/`when`/order |
-| `views.rightSidebar` | 右侧栏 View | 同上 |
+| `views.rightSidebar` | 右侧栏 View | 同上；可选 `showInRightRail` |
 | `views.auxiliaryPanel` | 辅助面板 | 同上 |
 | `views.editorTab` | 编辑区 Tab | 同上；宿主管理 tab 生命周期 |
 | `views.fullPage` | 全页 View | 同上；不能覆盖受保护窗口 |
@@ -152,6 +182,10 @@ v1 支持：
 | `authentication` | 认证 Provider | id、认证类型和受保护流程元数据 |
 | `hostContentScripts` | Direct DOM | 静态脚本/样式、允许宿主 surface、激活条件；高风险且不稳定 |
 
+`views.rightSidebar` 是新扩展的规范可发现 UI：默认情况下，View 的包内 icon 和本地化标题会出现在 Code 模式右侧竖向图标栏，并在主会话旁打开独立标签。设置 `showInRightRail: false` 可保留可由扩展管理页或命令打开的 View，但不在图标栏常驻。其它 `views.*` 位置继续保留 Extension API v1 解析和命令路由兼容，但宿主不会为它们生成额外的聚合扩展选择器。
+
+需要固定远程网站时，View 可声明 `externalBrowser: { presentation, sites }`。`presentation` 为 `desktop` 或 `mobile`；每个 site 只接受 `id`、`title`、可选 badge/accent 和 credential-free HTTPS `url`。这要求 `webview.external`，且每个 site hostname 必须匹配显式 `network:` grant。远程页由 Main-owned browser surface 承载，不加载扩展 `entry` 或 bridge。
+
 ### Contribution 隐含权限
 
 Validator 从入口/贡献自动推导并强制以下最小权限；缺少时 Manifest 无效：
@@ -162,6 +196,7 @@ Validator 从入口/贡献自动推导并强制以下最小权限；缺少时 Ma
 | `commands` | `commands.register` |
 | `views.containers` | `ui.views` |
 | 任意 `views.*` View | `ui.views`, `webview` |
+| 带 `externalBrowser` 的 View | `webview.external` 和每个 site 的 `network:<hostname>` |
 | `message.resultPreviews` | `ui.views`, `webview` |
 | `actions.*`, `settings`, `contextMenus` | `ui.actions` |
 | `notifications` | `ui.notifications` |
@@ -255,6 +290,7 @@ v1 权限是精确字符串数组：
 | `ui.actions` | 提供宿主渲染的 action/menu/settings controls |
 | `ui.notifications` | 请求宿主通知 |
 | `webview` | 创建声明的复杂 Webview UI |
+| `webview.external` | 在隔离子 Webview 中显示经 `network:*` 授权的远程 HTTPS 网站（高风险） |
 | `hostDom` | 注入声明的 Direct DOM content scripts（高风险） |
 | `agent.run` | 创建和控制 extension-owned Agent Run |
 | `agent.threads.readOwn` | 查询本扩展拥有的 thread/run 投影 |
@@ -270,7 +306,7 @@ v1 权限是精确字符串数组：
 | `workspace.read` | 通过 Broker 读取获准工作区 |
 | `workspace.write` | 通过 Broker 写入获准工作区，仍受政策/审批限制 |
 
-只声明最小权限。新增权限的包版本不会继承旧同意：用户必须在受保护窗口重新确认。权限不会让 browser 或 content script 获得 Node/秘密，也不能绕过 Kun ApprovalGate。详见[安全与资源](./security-and-resources.md)。
+只声明最小权限。新增权限的包版本不会继承旧同意：用户必须在受保护窗口重新确认。`webview.external` 还要求显式的 `network:<hostname>` 授权；该网络授权在这里限制远程子 Webview 的顶层导航，子页面绝不会获得 Kun preload、Node 或 Electron。权限不会让普通 browser 或 content script 获得 Node/秘密，也不能绕过 Kun ApprovalGate。详见[安全与资源](./security-and-resources.md)。
 
 ## Direct DOM 声明
 

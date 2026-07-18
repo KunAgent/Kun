@@ -9,6 +9,10 @@ import {
 } from './accounts.js'
 import { ProviderBindingSchema } from './accounts.js'
 import {
+  ArtifactHostActionRequestSchema,
+  ArtifactHostActionResultSchema
+} from './artifacts.js'
+import {
   AgentCancelRequestSchema,
   AgentCreateRunRequestSchema,
   AgentCreateRunResponseSchema,
@@ -30,6 +34,24 @@ import {
 } from './common.js'
 import { ExtensionApiError } from './errors.js'
 import {
+  ComposerContextAttachmentRequestSchema,
+  ComposerContextAttachmentSchema
+} from './composer-context.js'
+import {
+  JobCancelRequestSchema,
+  JobCancellationResultSchema,
+  JobEventNotificationSchema,
+  JobEventSchema,
+  JobGetRequestSchema,
+  JobListRequestSchema,
+  JobPageSchema,
+  JobSnapshotSchema,
+  JobSubscribeRequestSchema,
+  JobSubscriptionResponseSchema,
+  type JobEvent,
+  type JobSnapshot
+} from './jobs.js'
+import {
   ActivationContextDataSchema,
   DisposableStore,
   Emitter,
@@ -49,6 +71,38 @@ import {
   type ModelProviderAdapter
 } from './providers.js'
 import {
+  MediaAudioAnalysisCapabilitiesSchema,
+  MediaAnalyzeVisualFramesRequestSchema,
+  MediaAnalyzeVisualFramesResultSchema,
+  MediaEmbedVisualQueryRequestSchema,
+  MediaEmbedVisualQueryResultSchema,
+  MediaInstallVisualModelRequestSchema,
+  MediaMetadataSchema,
+  MediaCapabilitiesSchema,
+  MediaCreateCacheTargetRequestSchema,
+  MediaCreateCacheTargetResultSchema,
+  MediaOpenViewResourceRequestSchema,
+  MediaPickFilesRequestSchema,
+  MediaPickFilesResultSchema,
+  MediaPickSaveTargetRequestSchema,
+  MediaPickSaveTargetResultSchema,
+  MediaProbeRequestSchema,
+  MediaProbeResultSchema,
+  MediaReadTextRequestSchema,
+  MediaReadTextResultSchema,
+  MediaReleaseRequestSchema,
+  MediaReleaseResultSchema,
+  MediaResourceLeaseSchema,
+  MediaStartFfmpegJobRequestSchema,
+  MediaStartFfmpegJobResultSchema,
+  MediaStartAudioAnalysisJobRequestSchema,
+  MediaStartAudioAnalysisJobResultSchema,
+  MediaStartArchiveJobRequestSchema,
+  MediaStartArchiveJobResultSchema,
+  MediaStatRequestSchema,
+  MediaVisualModelStatusSchema
+} from './media.js'
+import {
   HostMessageSchema,
   ConfigurationChangeEventSchema,
   LocaleSchema,
@@ -63,7 +117,11 @@ import {
   type CommandsApi,
   type ConfigurationApi,
   type HostRequestContext,
+  type HostRequestOptions,
   type HostTransport,
+  type JobsApi,
+  type JobSubscription,
+  type MediaApi,
   type ModelProvidersApi,
   type NetworkApi,
   type ScopedStorageApi,
@@ -101,8 +159,23 @@ type AgentSubscriptionState = {
   lastDeliveredSequence: number
 }
 
+type JobSubscriptionState = {
+  emitter: Emitter<JobEvent>
+  snapshot: JobSnapshot
+  replayGap: boolean
+  cursor: string
+  complete: boolean
+  initialReplay: JobEvent[]
+  buffered: JobEvent[]
+  listenerCount: number
+  deliveringBuffered: boolean
+  lastDeliveredSequence: number
+}
+
 const MAX_BUFFERED_AGENT_EVENTS = 256
 const MAX_ORPHAN_AGENT_SUBSCRIPTIONS = 32
+const MAX_BUFFERED_JOB_EVENTS = 256
+const MAX_ORPHAN_JOB_SUBSCRIPTIONS = 32
 const StorageValueResponseSchema = z.strictObject({ found: z.boolean(), value: JsonValueSchema.optional() })
 const StorageDeleteResponseSchema = z.strictObject({ deleted: z.boolean() })
 const StringArraySchema = z.array(z.string())
@@ -162,10 +235,11 @@ async function requestParsed<T>(
   transport: HostTransport,
   method: string,
   params: unknown,
-  schema: z.ZodType<T>
+  schema: z.ZodType<T>,
+  options?: HostRequestOptions
 ): Promise<T> {
   try {
-    return schema.parse(await transport.request(method, toWire(params)))
+    return schema.parse(await transport.request(method, toWire(params), options))
   } catch (error) {
     if (error instanceof z.ZodError) {
       throw new ExtensionApiError({
@@ -229,6 +303,8 @@ export interface ExtensionContext extends ActivationContextData {
   readonly tools: ToolsApi
   readonly modelProviders: ModelProvidersApi
   readonly authentication: AuthenticationApi
+  readonly media: MediaApi
+  readonly jobs: JobsApi
   readonly workspace: WorkspaceApi
   readonly workspaceContext?: WorkspaceContext
 }
@@ -243,6 +319,8 @@ export class ExtensionHostClient implements Disposable {
   readonly #configuration = new Emitter<z.infer<typeof ConfigurationChangeEventSchema>>()
   readonly #agentSubscriptions = new Map<string, AgentSubscriptionState>()
   readonly #orphanAgentEvents = new Map<string, PublicAgentRunEvent[]>()
+  readonly #jobSubscriptions = new Map<string, JobSubscriptionState>()
+  readonly #orphanJobEvents = new Map<string, JobEvent[]>()
 
   readonly commands: CommandsApi
   readonly storage: StorageApi
@@ -254,6 +332,8 @@ export class ExtensionHostClient implements Disposable {
   readonly tools: ToolsApi
   readonly modelProviders: ModelProvidersApi
   readonly authentication: AuthenticationApi
+  readonly media: MediaApi
+  readonly jobs: JobsApi
   readonly workspace: WorkspaceApi
   readonly onDidError: Event<ExtensionApiError> = this.#errors.event
 
@@ -354,7 +434,14 @@ export class ExtensionHostClient implements Disposable {
             NotificationOptionsSchema.parse(options),
             OptionalStringResponseSchema
           )
-        ).value
+        ).value,
+      attachComposerContext: (request) =>
+        requestParsed(
+          transport,
+          'ui.attachComposerContext',
+          ComposerContextAttachmentRequestSchema.parse(request),
+          ComposerContextAttachmentSchema
+        )
     }
 
     this.agent = {
@@ -532,6 +619,206 @@ export class ExtensionHostClient implements Disposable {
         ).secret
     }
 
+    this.media = {
+      pickFiles: (request = {}) =>
+        requestParsed(
+          transport,
+          'media.pickFiles',
+          MediaPickFilesRequestSchema.parse(request),
+          MediaPickFilesResultSchema
+        ),
+      pickSaveTarget: (request = {}) =>
+        requestParsed(
+          transport,
+          'media.pickSaveTarget',
+          MediaPickSaveTargetRequestSchema.parse(request),
+          MediaPickSaveTargetResultSchema
+        ),
+      createCacheTarget: (request) =>
+        requestParsed(
+          transport,
+          'media.createCacheTarget',
+          MediaCreateCacheTargetRequestSchema.parse(request),
+          MediaCreateCacheTargetResultSchema
+        ),
+      stat: (request) =>
+        requestParsed(transport, 'media.stat', MediaStatRequestSchema.parse(request), MediaMetadataSchema),
+      readText: (request) =>
+        requestParsed(
+          transport,
+          'media.readText',
+          MediaReadTextRequestSchema.parse(request),
+          MediaReadTextResultSchema
+        ),
+      release: (request) =>
+        requestParsed(
+          transport,
+          'media.release',
+          MediaReleaseRequestSchema.parse(request),
+          MediaReleaseResultSchema
+        ),
+      openViewResource: (request) =>
+        requestParsed(
+          transport,
+          'media.openViewResource',
+          MediaOpenViewResourceRequestSchema.parse(request),
+          MediaResourceLeaseSchema
+        ),
+      performArtifactAction: (request) =>
+        requestParsed(
+          transport,
+          'media.performArtifactAction',
+          ArtifactHostActionRequestSchema.parse(request),
+          ArtifactHostActionResultSchema
+        ),
+      getCapabilities: () =>
+        requestParsed(transport, 'media.getCapabilities', {}, MediaCapabilitiesSchema),
+      getAudioAnalysisCapabilities: () =>
+        requestParsed(
+          transport,
+          'media.getAudioAnalysisCapabilities',
+          {},
+          MediaAudioAnalysisCapabilitiesSchema
+        ),
+      getVisualModelStatus: () =>
+        requestParsed(
+          transport,
+          'media.getVisualModelStatus',
+          {},
+          MediaVisualModelStatusSchema
+        ),
+      installVisualModel: (request = {}) =>
+        requestParsed(
+          transport,
+          'media.installVisualModel',
+          MediaInstallVisualModelRequestSchema.parse(request),
+          MediaVisualModelStatusSchema
+        ),
+      analyzeVisualFrames: (request, options) =>
+        requestParsed(
+          transport,
+          'media.analyzeVisualFrames',
+          MediaAnalyzeVisualFramesRequestSchema.parse(request),
+          MediaAnalyzeVisualFramesResultSchema,
+          options
+        ),
+      embedVisualQuery: (request, options) =>
+        requestParsed(
+          transport,
+          'media.embedVisualQuery',
+          MediaEmbedVisualQueryRequestSchema.parse(request),
+          MediaEmbedVisualQueryResultSchema,
+          options
+        ),
+      probe: (request) =>
+        requestParsed(
+          transport,
+          'media.probe',
+          MediaProbeRequestSchema.parse(request),
+          MediaProbeResultSchema
+        ),
+      startFfmpegJob: (request) =>
+        requestParsed(
+          transport,
+          'media.startFfmpegJob',
+          MediaStartFfmpegJobRequestSchema.parse(request),
+          MediaStartFfmpegJobResultSchema
+        ),
+      startAudioAnalysisJob: (request) =>
+        requestParsed(
+          transport,
+          'media.startAudioAnalysisJob',
+          MediaStartAudioAnalysisJobRequestSchema.parse(request),
+          MediaStartAudioAnalysisJobResultSchema
+        ),
+      startArchiveJob: (request) =>
+        requestParsed(
+          transport,
+          'media.startArchiveJob',
+          MediaStartArchiveJobRequestSchema.parse(request),
+          MediaStartArchiveJobResultSchema
+        )
+    }
+
+    this.jobs = {
+      get: (jobId) =>
+        requestParsed(transport, 'jobs.get', JobGetRequestSchema.parse({ jobId }), JobSnapshotSchema),
+      list: (request = {}) =>
+        requestParsed(transport, 'jobs.list', JobListRequestSchema.parse(request), JobPageSchema),
+      subscribe: async (request) => {
+        const parsedRequest = JobSubscribeRequestSchema.parse(request)
+        const response = await requestParsed(
+          transport,
+          'jobs.subscribe',
+          parsedRequest,
+          JobSubscriptionResponseSchema
+        )
+        const state: JobSubscriptionState = {
+          emitter: new Emitter<JobEvent>(),
+          snapshot: response.snapshot,
+          replayGap: response.gap,
+          cursor: response.cursor,
+          complete: response.complete,
+          initialReplay: mergeJobEvents(response.replay, []),
+          buffered: this.#orphanJobEvents.get(response.subscriptionId) ?? [],
+          listenerCount: 0,
+          deliveringBuffered: false,
+          lastDeliveredSequence: 0
+        }
+        this.#orphanJobEvents.delete(response.subscriptionId)
+        this.#jobSubscriptions.set(response.subscriptionId, state)
+        const event: Event<JobEvent> = (listener) => {
+          state.listenerCount += 1
+          const disposable = state.emitter.event(listener)
+          if (state.listenerCount === 1 && (state.initialReplay.length > 0 || state.buffered.length > 0)) {
+            state.deliveringBuffered = true
+            try {
+              let queued = mergeJobEvents(state.initialReplay, state.buffered)
+              state.initialReplay = []
+              state.buffered = []
+              while (queued.length > 0) {
+                for (const bufferedEvent of queued) {
+                  if (bufferedEvent.sequence <= state.lastDeliveredSequence) continue
+                  updateJobSubscriptionState(state, bufferedEvent)
+                  listener(bufferedEvent)
+                }
+                queued = state.buffered
+                state.buffered = []
+              }
+            } finally {
+              state.deliveringBuffered = false
+            }
+          }
+          return toDisposable(() => {
+            disposable.dispose()
+            state.listenerCount = Math.max(0, state.listenerCount - 1)
+          })
+        }
+        const subscription: JobSubscription = {
+          get snapshot() { return state.snapshot },
+          get replayGap() { return state.replayGap },
+          get cursor() { return state.cursor },
+          get complete() { return state.complete },
+          onEvent: event,
+          dispose: async () => {
+            if (!this.#jobSubscriptions.delete(response.subscriptionId)) return
+            state.emitter.dispose()
+            state.initialReplay = []
+            state.buffered = []
+            await transport.request('jobs.unsubscribe', toWire({ subscriptionId: response.subscriptionId }))
+          }
+        }
+        return subscription
+      },
+      cancel: (request) =>
+        requestParsed(
+          transport,
+          'jobs.cancel',
+          JobCancelRequestSchema.parse(request),
+          JobCancellationResultSchema
+        )
+    }
+
     this.workspace = {
       readFile: (path, encoding = 'utf8') =>
         requestParsed(transport, 'workspace.readFile', { path, encoding }, WorkspaceFileSchema),
@@ -686,6 +973,27 @@ export class ExtensionHostClient implements Disposable {
           appendBoundedAgentEvent(buffered, event.event)
           this.#orphanAgentEvents.set(event.subscriptionId, buffered)
         }
+      } else if (method === 'jobs.event') {
+        const event = JobEventNotificationSchema.parse(params)
+        const subscription = this.#jobSubscriptions.get(event.subscriptionId)
+        if (subscription) {
+          if (event.event.sequence <= subscription.lastDeliveredSequence) return
+          if (subscription.listenerCount > 0 && !subscription.deliveringBuffered) {
+            updateJobSubscriptionState(subscription, event.event)
+            subscription.emitter.fire(event.event)
+          } else appendBoundedJobEvent(subscription.buffered, event.event)
+        } else {
+          if (
+            !this.#orphanJobEvents.has(event.subscriptionId) &&
+            this.#orphanJobEvents.size >= MAX_ORPHAN_JOB_SUBSCRIPTIONS
+          ) {
+            const oldest = this.#orphanJobEvents.keys().next().value
+            if (oldest !== undefined) this.#orphanJobEvents.delete(oldest)
+          }
+          const buffered = this.#orphanJobEvents.get(event.subscriptionId) ?? []
+          appendBoundedJobEvent(buffered, event.event)
+          this.#orphanJobEvents.set(event.subscriptionId, buffered)
+        }
       }
     } catch (error) {
       this.#errors.fire(
@@ -707,6 +1015,9 @@ export class ExtensionHostClient implements Disposable {
     for (const subscription of this.#agentSubscriptions.values()) subscription.emitter.dispose()
     this.#agentSubscriptions.clear()
     this.#orphanAgentEvents.clear()
+    for (const subscription of this.#jobSubscriptions.values()) subscription.emitter.dispose()
+    this.#jobSubscriptions.clear()
+    this.#orphanJobEvents.clear()
     await this.#disposables.dispose()
     await this.transport.dispose()
   }
@@ -734,6 +1045,41 @@ function mergeAgentEvents(
   return [...bySequence.values()].sort((left, right) => left.sequence - right.sequence)
 }
 
+function appendBoundedJobEvent(events: JobEvent[], event: JobEvent): void {
+  const existing = events.findIndex((candidate) => candidate.sequence === event.sequence)
+  if (existing >= 0) events[existing] = event
+  else events.push(event)
+  events.sort((left, right) => left.sequence - right.sequence)
+  if (events.length > MAX_BUFFERED_JOB_EVENTS) {
+    events.splice(0, events.length - MAX_BUFFERED_JOB_EVENTS)
+  }
+}
+
+function mergeJobEvents(replay: readonly JobEvent[], live: readonly JobEvent[]): JobEvent[] {
+  const bySequence = new Map<number, JobEvent>()
+  for (const event of [...replay, ...live]) bySequence.set(event.sequence, event)
+  return [...bySequence.values()].sort((left, right) => left.sequence - right.sequence)
+}
+
+function updateJobSubscriptionState(state: JobSubscriptionState, event: JobEvent): void {
+  state.lastDeliveredSequence = event.sequence
+  state.cursor = event.cursor
+  state.snapshot = JobSnapshotSchema.parse({
+    ...state.snapshot,
+    state: event.state,
+    updatedAt: event.timestamp,
+    executionAttempt: event.executionAttempt,
+    latestCursor: event.cursor,
+    progress: event.progress ?? state.snapshot.progress,
+    result: event.result ?? state.snapshot.result,
+    error: event.error ?? state.snapshot.error,
+    terminalAt: ['completed', 'failed', 'cancelled', 'interrupted'].includes(event.state)
+      ? event.timestamp
+      : state.snapshot.terminalAt
+  })
+  state.complete = ['completed', 'failed', 'cancelled', 'interrupted'].includes(event.state)
+}
+
 export function createExtensionContext(
   transport: HostTransport,
   data: ActivationContextData,
@@ -756,6 +1102,8 @@ export function createExtensionContext(
     tools: client.tools,
     modelProviders: client.modelProviders,
     authentication: client.authentication,
+    media: client.media,
+    jobs: client.jobs,
     workspace: client.workspace
   }
 }

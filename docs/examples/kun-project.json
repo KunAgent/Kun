@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "mcp": {
+    "servers": {
+      "project-docs": {
+        "enabled": true,
+        "transport": "stdio",
+        "command": "npx",
+        "args": [
+          "-y",
+          "@modelcontextprotocol/server-filesystem",
+          "."
+        ],
+        "cwd": ".",
+        "timeoutMs": 30000
+      },
+      "team-catalog": {
+        "enabled": false,
+        "transport": "streamable-http",
+        "url": "https://mcp.example.com/mcp"
+      }
+    }
+  },
+  "skills": {
+    "enabled": true,
+    "includeConventional": true,
+    "roots": [
+      ".kun/skills",
+      "tools/agent-skills"
+    ],
+    "disabledIds": [
+      "legacy-deploy"
+    ]
+  }
+}

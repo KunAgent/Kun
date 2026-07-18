@@ -318,7 +318,7 @@ describe('chat-store app actions composer model loading', () => {
     })
   })
 
-  it('blocks switching a chat with image attachments from vision to text-only', () => {
+  it('allows switching a chat with image history from vision to text-only', () => {
     const { actions, state } = buildHarness({
       ok: true,
       modelIds: ['vision-model', 'text-model'],
@@ -366,9 +366,11 @@ describe('chat-store app actions composer model loading', () => {
 
     actions.setComposerModel('text-model', 'test-provider')
 
-    expect(state.composerModel).toBe('vision-model')
+    expect(state.composerModel).toBe('text-model')
     expect(state.composerProviderId).toBe('test-provider')
-    expect(localStorage.getItem(THREAD_COMPOSER_SELECTION_STORAGE_KEY)).toBeNull()
+    expect(JSON.parse(localStorage.getItem(THREAD_COMPOSER_SELECTION_STORAGE_KEY) ?? '{}')).toEqual({
+      'thread-a': { model: 'text-model', providerId: 'test-provider' }
+    })
     expect(window.kunGui.saveSettingsSilent).not.toHaveBeenCalled()
   })
 

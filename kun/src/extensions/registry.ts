@@ -170,12 +170,19 @@ export class ExtensionRegistry {
         entry.versions[version.version] = structuredClone(version)
       }
       if (select && entry.selectedVersion !== version.version) {
+        const previousPermissions = entry.useDevelopment
+          ? undefined
+          : selectedInstalledPermissions(entry)
         if (entry.selectedVersion !== undefined) {
           entry.previousSelectedVersion = entry.selectedVersion
         }
         entry.selectedVersion = version.version
         entry.useDevelopment = false
-        entry.workspacePermissionGrants = {}
+        entry.workspacePermissionGrants = carryForwardWorkspacePermissionGrants(
+          entry.workspacePermissionGrants,
+          previousPermissions,
+          version.grantedPermissions
+        )
       }
       result = structuredClone(entry)
       return registry
@@ -194,9 +201,16 @@ export class ExtensionRegistry {
         })
       }
       if (entry.selectedVersion !== version) {
+        const previousPermissions = entry.useDevelopment
+          ? undefined
+          : selectedInstalledPermissions(entry)
         if (entry.selectedVersion !== undefined) entry.previousSelectedVersion = entry.selectedVersion
         entry.selectedVersion = version
-        entry.workspacePermissionGrants = {}
+        entry.workspacePermissionGrants = carryForwardWorkspacePermissionGrants(
+          entry.workspacePermissionGrants,
+          previousPermissions,
+          entry.versions[version]!.grantedPermissions
+        )
       }
       if (entry.useDevelopment) entry.workspacePermissionGrants = {}
       entry.useDevelopment = false
@@ -218,10 +232,17 @@ export class ExtensionRegistry {
         })
       }
       const current = entry.selectedVersion
+      const previousPermissions = entry.useDevelopment
+        ? undefined
+        : selectedInstalledPermissions(entry)
       entry.selectedVersion = target
       entry.previousSelectedVersion = current
       entry.useDevelopment = false
-      entry.workspacePermissionGrants = {}
+      entry.workspacePermissionGrants = carryForwardWorkspacePermissionGrants(
+        entry.workspacePermissionGrants,
+        previousPermissions,
+        entry.versions[target]!.grantedPermissions
+      )
       result = structuredClone(entry)
       return registry
     })
@@ -263,7 +284,8 @@ export class ExtensionRegistry {
   async setWorkspacePermissionGrant(
     extensionId: string,
     workspaceKey: string,
-    permissions: string[] | undefined
+    permissions: string[] | undefined,
+    expectedVersion: string
   ): Promise<ExtensionRegistryEntry> {
     if (!/^[a-f0-9]{64}$/.test(workspaceKey)) {
       throw extensionError('EXTENSION_WORKSPACE_KEY_INVALID', 'Workspace key is invalid', {
@@ -273,10 +295,22 @@ export class ExtensionRegistry {
     let result: ExtensionRegistryEntry | undefined
     await this.mutate((registry) => {
       const entry = requireEntry(registry, extensionId)
+      const selected = resolveRegistrySelection(entry)
+      if (selected.manifest.version !== expectedVersion) {
+        throw extensionError(
+          'EXTENSION_VERSION_CONFLICT',
+          'Extension version changed; repeat the permission review',
+          {
+            extensionId,
+            expectedVersion,
+            currentVersion: selected.manifest.version
+          }
+        )
+      }
       if (permissions === undefined) {
         delete entry.workspacePermissionGrants[workspaceKey]
       } else {
-        const allowed = new Set(resolveRegistrySelection(entry).grantedPermissions)
+        const allowed = new Set(selected.grantedPermissions)
         const grant = [...new Set(permissions)].sort()
         if (grant.some((permission) => !allowed.has(permission))) {
           throw extensionError(
@@ -534,13 +568,43 @@ function requireEntry(
   return entry
 }
 
+function selectedInstalledPermissions(entry: ExtensionRegistryEntry): string[] | undefined {
+  if (entry.selectedVersion === undefined) return undefined
+  return entry.versions[entry.selectedVersion]?.grantedPermissions
+}
+
+/**
+ * A workspace review remains valid when an immutable installed update cannot
+ * broaden the authority accepted for the previously selected package. Grants
+ * are narrowed to the new package ceiling so removed permissions cannot leak
+ * into the selected-version snapshot. Any addition, missing prior selection,
+ * or mutable development source fails closed and requires a fresh review.
+ */
+function carryForwardWorkspacePermissionGrants(
+  current: Record<string, string[]>,
+  previousAllowed: readonly string[] | undefined,
+  nextAllowed: readonly string[]
+): Record<string, string[]> {
+  if (previousAllowed === undefined) return {}
+  const previous = new Set(previousAllowed)
+  if (nextAllowed.some((permission) => !previous.has(permission))) return {}
+  const next = new Set(nextAllowed)
+  return Object.fromEntries(
+    Object.entries(current).map(([workspaceKey, permissions]) => [
+      workspaceKey,
+      permissions.filter((permission) => next.has(permission))
+    ])
+  )
+}
+
 function assertVersionRecord(
   extensionId: string,
   record: InstalledExtensionVersion,
   paths?: ExtensionPaths
 ): void {
   assertExtensionId(extensionId)
-  const manifest = parseExtensionManifest(record.manifest)
+  const manifest = parseExtensionManifest(normalizeLegacyInstalledManifest(record.manifest))
+  record.manifest = manifest
   if (manifestId(manifest) !== extensionId || manifest.version !== record.version) {
     throw extensionError('EXTENSION_REGISTRY_RECORD_INVALID', 'Installed version metadata is incoherent', {
       extensionId,
@@ -578,6 +642,81 @@ function assertVersionRecord(
       })
     }
   }
+}
+
+/**
+ * Early Extension API v1 builds allowed an Action to reuse a workbench ID that
+ * was already owned by a command or View. Newer hosts correctly reject that
+ * ambiguous registry identity, but an immutable package installed by an older
+ * Kun must still be readable long enough for a bundled update or uninstall.
+ *
+ * Action IDs have no activation event and do not change their command target,
+ * so assigning a deterministic action-only suffix is the one compatibility
+ * repair that does not broaden authority or reinterpret executable code. All
+ * other manifest validation remains strict, and mutable development sources
+ * deliberately do not receive this repair.
+ */
+function normalizeLegacyInstalledManifest(value: unknown): unknown {
+  if (!isRecord(value) || value.manifestVersion !== 1 || !isRecord(value.contributes)) {
+    return value
+  }
+  const contributes = value.contributes
+  const nonActionKeys = [
+    'commands',
+    'views.containers',
+    'views.leftSidebar',
+    'views.rightSidebar',
+    'views.auxiliaryPanel',
+    'views.editorTab',
+    'views.fullPage',
+    'message.resultPreviews',
+    'settings',
+    'contextMenus',
+    'notifications',
+    'hostContentScripts'
+  ] as const
+  const used = new Set<string>()
+  for (const key of nonActionKeys) {
+    const entries = contributes[key]
+    if (!Array.isArray(entries)) continue
+    for (const entry of entries) {
+      if (isRecord(entry) && typeof entry.id === 'string') used.add(entry.id)
+    }
+  }
+
+  let normalized: Record<string, unknown> | undefined
+  let normalizedContributes: Record<string, unknown> | undefined
+  for (const key of ['actions.topBar', 'actions.composer', 'actions.message'] as const) {
+    const entries = contributes[key]
+    if (!Array.isArray(entries)) continue
+    entries.forEach((entry, index) => {
+      if (!isRecord(entry) || typeof entry.id !== 'string') return
+      if (!used.has(entry.id)) {
+        used.add(entry.id)
+        return
+      }
+      normalized ??= structuredClone(value)
+      normalizedContributes ??= normalized.contributes as Record<string, unknown>
+      const normalizedEntries = normalizedContributes[key] as Array<Record<string, unknown>>
+      const nextId = availableLegacyActionId(entry.id, used)
+      normalizedEntries[index] = { ...normalizedEntries[index], id: nextId }
+      used.add(nextId)
+    })
+  }
+  return normalized ?? value
+}
+
+function availableLegacyActionId(id: string, used: ReadonlySet<string>): string {
+  for (let attempt = 1; attempt <= 10_000; attempt += 1) {
+    const suffix = attempt === 1 ? '-action' : `-action-${attempt}`
+    const candidate = `${id.slice(0, Math.max(1, 64 - suffix.length))}${suffix}`
+    if (!used.has(candidate)) return candidate
+  }
+  throw extensionError(
+    'EXTENSION_REGISTRY_RECORD_INVALID',
+    'Legacy extension action IDs cannot be normalized safely',
+    { id }
+  )
 }
 
 function assertDevelopmentRecord(extensionId: string, record: DevelopmentExtensionRecord): void {

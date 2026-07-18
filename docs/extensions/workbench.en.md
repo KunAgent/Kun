@@ -6,6 +6,8 @@
 
 The Kun workbench uses one typed `ContributionRegistry` for built-in and extension UI. An extension declares where an item belongs, what it displays, and which command it invokes. The host owns rendering, ordering, focus, accessibility, and lifecycle. Extension React components cannot mount directly into the Kun React tree.
 
+For directly discoverable extension UI, the canonical v1 entry point is `views.rightSidebar`: each visible View registers its icon in Code mode's vertical right rail and opens an isolated, independently closable tab beside the main conversation. Kun does not add a duplicate tool menu or nested aggregate extension picker. `views.leftSidebar`, `views.auxiliaryPanel`, `views.editorTab`, and `views.fullPage` remain v1 Schema- and command-compatible, but new extensions should not use them as their default discoverable entry point.
+
 ## Identity and namespaces
 
 - Built-in item: `builtin:<id>`.
@@ -26,11 +28,11 @@ Layout persistence stores only fully qualified IDs and host layout metadata. If 
 | Manifest key | Host location | Recommended use |
 | --- | --- | --- |
 | `views.containers` | Activity/sidebar container | Group related Views |
-| `views.leftSidebar` | Left sidebar | Navigation, project tree, knowledge base |
-| `views.rightSidebar` | Right sidebar | Assistant, status, issue, deployment panel |
-| `views.auxiliaryPanel` | Auxiliary panel | Logs, tasks, wide tables |
-| `views.editorTab` | Editor tab | Documents, visualization, editor-like app |
-| `views.fullPage` | Workbench full page | Complex dashboard, never protected flows |
+| `views.leftSidebar` | Left sidebar (compatible) | Navigation and project trees in existing v1 extensions |
+| `views.rightSidebar` | Right sidebar (canonical) | Extension tools, status, editors, and workflow panels |
+| `views.auxiliaryPanel` | Auxiliary panel (compatible) | Logs, tasks, and wide tables in existing v1 extensions |
+| `views.editorTab` | Editor tab (compatible) | Documents and visualization in existing v1 extensions |
+| `views.fullPage` | Workbench full page (compatible) | Complex dashboards in existing v1 extensions; never protected flows |
 | `actions.topBar` | Top bar | Frequent global/workspace command |
 | `actions.composer` | Conversation Composer | Attach context or start an extension workflow |
 | `actions.message` | Message action | Act on an authorized message |
@@ -61,11 +63,14 @@ Unknown locations fail validation and are never treated as arbitrary component s
 - `entry` must be an integrity-listed local resource in an allowed resource root.
 - Labels, titles, and descriptions are untrusted plain text, not executable HTML.
 - Icons must be supported package resources and remain clear in light/dark themes and on Retina displays.
+- Every visible `views.rightSidebar` View whose `showInRightRail` is not `false` receives its own direct rail icon and top-level tab. If an icon is omitted, the Host uses an accessible fallback without executing extension code. A View with `showInRightRail: false` remains available from Extension management or commands without staying in that rail.
 - `when` controls visibility/enablement and never grants permission.
 - `order` participates only within host groups; equal priorities sort by fully qualified ID.
 - Multiple instances are created only when the contribution contract permits them, each with an independent View Session.
 
 Rendering title/icon does not activate the extension. Opening the View checks compatibility, enablement, workspace trust, and permission, then triggers `onView:<id>`.
+
+To coordinate a right-side View with the main Agent, register capabilities as extension tools and keep bounded pointers such as the active project in `storage.workspace`. The main Agent reads and mutates authoritative state through tools while the View refreshes through Host messages. They do not share React state, DOM, runtime tokens, or private Electron IPC. The default bundled [`kun-video-editor`](../../examples/extensions/kun-video-editor/) demonstrates this pattern.
 
 ## Commands
 

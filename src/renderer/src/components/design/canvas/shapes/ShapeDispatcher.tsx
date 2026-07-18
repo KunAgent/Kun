@@ -62,12 +62,13 @@ function ShapeDispatcherInner({
   return (
     <g
       id={`shape-${shape.id}`}
-      transform={transform}
+      data-canvas-motion-target={shape.id}
+      data-canvas-motion-kind="svg"
       opacity={shape.opacity}
-      filter={filter}
-      style={style}
     >
-      {content}
+      <g transform={transform} filter={filter} style={style}>
+        {content}
+      </g>
     </g>
   )
 }

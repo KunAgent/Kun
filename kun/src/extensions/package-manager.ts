@@ -46,8 +46,12 @@ export type ExtensionPackageLifecycle = {
   recoverVersionSwitches?(): Promise<void>
   beforeVersionSwitch?(context: VersionSwitchContext): Promise<void>
   versionSwitchFailed?(context: VersionSwitchContext, error: unknown): Promise<void>
-  beforeDisable?(extensionId: string, workspaceKey?: string): Promise<void>
-  beforePermissionChange?(extensionId: string, workspaceKey: string): Promise<void>
+  beforeDisable?(extensionId: string, workspaceKey?: string, workspaceRoot?: string): Promise<void>
+  beforePermissionChange?(
+    extensionId: string,
+    workspaceKey: string,
+    workspaceRoot?: string
+  ): Promise<void>
   beforeUninstall?(extensionId: string): Promise<void>
 }
 
@@ -292,11 +296,14 @@ export class ExtensionPackageManager {
   async setWorkspaceEnabled(
     extensionId: string,
     workspaceKey: string,
-    enabled: boolean | undefined
+    enabled: boolean | undefined,
+    workspaceRoot?: string
   ): Promise<void> {
     await this.recover(extensionId)
     await this.serializeExtension(extensionId, async () => {
-      if (enabled === false) await this.lifecycle.beforeDisable?.(extensionId, workspaceKey)
+      if (enabled === false) {
+        await this.lifecycle.beforeDisable?.(extensionId, workspaceKey, workspaceRoot)
+      }
       await this.registry.setWorkspaceEnabled(extensionId, workspaceKey, enabled)
     })
   }
@@ -304,12 +311,31 @@ export class ExtensionPackageManager {
   async setWorkspacePermissionGrant(
     extensionId: string,
     workspaceKey: string,
-    permissions: string[] | undefined
+    permissions: string[] | undefined,
+    expectedVersion: string,
+    workspaceRoot?: string
   ): Promise<void> {
     await this.serializeExtension(extensionId, async () => {
       await this.recover(extensionId)
-      await this.lifecycle.beforePermissionChange?.(extensionId, workspaceKey)
-      await this.registry.setWorkspacePermissionGrant(extensionId, workspaceKey, permissions)
+      const selected = await this.registry.resolve(extensionId)
+      if (selected.version !== expectedVersion) {
+        throw extensionError(
+          'EXTENSION_VERSION_CONFLICT',
+          'Extension version changed; repeat the permission review',
+          {
+            extensionId,
+            expectedVersion,
+            currentVersion: selected.version
+          }
+        )
+      }
+      await this.lifecycle.beforePermissionChange?.(extensionId, workspaceKey, workspaceRoot)
+      await this.registry.setWorkspacePermissionGrant(
+        extensionId,
+        workspaceKey,
+        permissions,
+        expectedVersion
+      )
     })
   }
 

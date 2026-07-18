@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { chmod, mkdir, readFile, readdir, writeFile } from 'node:fs/promises'
+import { chmod, mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { AttachmentsCapabilityConfig } from '../contracts/capabilities.js'
 import type { AttachmentDiagnostics, AttachmentMetadata, AttachmentTextFallback } from '../contracts/attachments.js'
@@ -24,6 +24,8 @@ export interface AttachmentStore {
     workspace?: string
   }): Promise<AttachmentMetadata>
   get(id: string): Promise<AttachmentMetadata | null>
+  delete?(id: string): Promise<void>
+  replaceMetadata?(metadata: AttachmentMetadata): Promise<void>
   resolveContent(id: string, scope: { threadId?: string; workspace?: string }): Promise<AttachmentContent>
   textFallbackPolicy(): Pick<
     AttachmentsCapabilityConfig,
@@ -152,6 +154,22 @@ export class FileAttachmentStore implements AttachmentStore {
     } catch {
       return null
     }
+  }
+
+  async delete(id: string): Promise<void> {
+    if (!ATTACHMENT_ID_PATTERN.test(id)) throw new Error(`invalid attachment id: ${id}`)
+    await Promise.all([
+      rm(this.contentPath(id), { force: true }),
+      rm(this.metadataPath(id), { force: true })
+    ])
+  }
+
+  async replaceMetadata(metadata: AttachmentMetadata): Promise<void> {
+    const parsed = AttachmentMetadataSchema.parse(metadata)
+    if (!ATTACHMENT_ID_PATTERN.test(parsed.id)) throw new Error(`invalid attachment id: ${parsed.id}`)
+    await this.ensureRoot()
+    await readFile(this.contentPath(parsed.id))
+    await writeFile(this.metadataPath(parsed.id), JSON.stringify(parsed, null, 2), { encoding: 'utf8', mode: 0o600 })
   }
 
   async resolveContent(id: string, scope: { threadId?: string; workspace?: string }): Promise<AttachmentContent> {

@@ -1,10 +1,42 @@
 import { describe, expect, it } from 'vitest'
 import { createImmutablePrefix } from '../cache/immutable-prefix.js'
 import type { TurnItem } from '../contracts/items.js'
-import { makeAssistantTextItem, makeUserItem } from '../domain/item.js'
+import { makeAssistantTextItem, makeCompactionItem, makeUserItem } from '../domain/item.js'
 import { ContextCompactor } from './context-compactor.js'
 
 describe('ContextCompactor', () => {
+  it('does not replace an existing summary when no new history can be folded', () => {
+    const threadId = 'thr_compaction_no_progress'
+    const turnId = 'turn_compaction_no_progress'
+    const previousSummary = makeCompactionItem({
+      id: 'compaction_previous',
+      threadId,
+      turnId,
+      summary: 'Existing handoff summary',
+      replacedTokens: 50_000,
+      pinnedConstraints: [],
+      auto: true
+    })
+    const recent = makeUserItem({
+      id: 'item_recent',
+      threadId,
+      turnId,
+      text: 'Keep this recent request verbatim.'
+    })
+
+    const result = new ContextCompactor().compact({
+      threadId,
+      turnId,
+      history: [previousSummary, recent],
+      prefix: createImmutablePrefix(),
+      keepRecent: 1,
+      mode: 'force'
+    })
+
+    expect(result.replacedTokens).toBe(0)
+    expect(result.next).toEqual([previousSummary, recent])
+  })
+
   it('preserves numbered problem outlines when heuristic compaction is the fallback', () => {
     const threadId = 'thr_compaction_outline'
     const turnId = 'turn_compaction_outline'

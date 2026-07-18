@@ -1,8 +1,10 @@
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
+import { act, create as createRenderer, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { SettingsSidebar } from './SettingsSidebar'
 import { EasterEggSettingsSection } from './settings-section-easter-egg'
+import { useUiPluginStore } from '../store/ui-plugin-store'
 
 class MemoryStorage {
   private values = new Map<string, string>()
@@ -63,6 +65,14 @@ describe('EasterEggSettingsSection (mode workshop)', () => {
       configurable: true,
       value: new MemoryStorage()
     })
+    useUiPluginStore.setState({
+      uiMode: 'default',
+      installed: [],
+      activeRuntime: null,
+      busy: false,
+      initialized: false,
+      lastError: null
+    })
   })
 
   afterEach(() => {
@@ -100,5 +110,33 @@ describe('EasterEggSettingsSection (mode workshop)', () => {
 
     expect(html).toContain('Mode workshop')
     expect(html).toContain('bg-ds-subtle')
+  })
+
+  it('disables plugin removal while another workshop operation is busy', async () => {
+    useUiPluginStore.setState({
+      busy: true,
+      initialized: true,
+      installed: [{
+        manifest: {
+          id: 'alpha-theme',
+          name: 'Alpha theme',
+          version: '1.0.0',
+          figures: {}
+        },
+        previewDataUrl: null
+      }]
+    })
+
+    let renderer!: ReactTestRenderer
+    await act(async () => {
+      renderer = createRenderer(createElement(EasterEggSettingsSection, {
+        ctx: { t, tCommon: t }
+      }))
+    })
+    const removeButton = renderer.root.findAllByType('button')
+      .find((button) => button.props['aria-label'] === 'Remove plugin')
+
+    expect(removeButton?.props.disabled).toBe(true)
+    await act(async () => renderer.unmount())
   })
 })

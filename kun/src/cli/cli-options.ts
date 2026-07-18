@@ -49,6 +49,7 @@ export const ServeOptionsSchema = z.object({
   host: z.string().default('127.0.0.1'),
   port: z.number().int().min(0).max(65_535).default(DEFAULT_SERVE_PORT),
   dataDir: z.string().min(1),
+  bundledExtensionsDir: z.string().min(1).max(4096).optional(),
   runtimeToken: z.string().default(''),
   apiKey: z.string().default(''),
   credentialSourceId: z.string().min(1).max(256).optional(),

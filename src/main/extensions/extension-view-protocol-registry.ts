@@ -7,6 +7,7 @@ import {
   type ExtensionResourceDescriptor
 } from './extension-resource-protocol'
 import type { ExtensionViewSessionRecord } from './extension-view-sessions'
+import type { ExtensionMediaProtocolRegistry } from './extension-media-protocol'
 
 type ProtocolHandler = Pick<Protocol, 'handle' | 'unhandle'>
 
@@ -43,7 +44,8 @@ export class ExtensionViewProtocolRegistry {
       extensionId?: string
       code: string
       sessionId?: string
-    }) => void
+    }) => void,
+    private readonly mediaProtocols?: ExtensionMediaProtocolRegistry
   ) {}
 
   prepare(record: ExtensionViewSessionRecord, view: ResolvedExtensionView): void {
@@ -72,12 +74,23 @@ export class ExtensionViewProtocolRegistry {
       localResourceRoots: [...view.localResourceRoots]
     }
     const protocol = this.protocolForPartition(record.partition)
-    registerKunExtensionProtocol({
-      protocol,
-      resolveDescriptor: async (extensionId) =>
-        extensionId === descriptor.extensionId ? descriptor : undefined,
-      onDenied: (detail) => this.onDenied?.({ ...detail, sessionId: record.sessionId })
-    })
+    try {
+      registerKunExtensionProtocol({
+        protocol,
+        resolveDescriptor: async (extensionId) =>
+          extensionId === descriptor.extensionId ? descriptor : undefined,
+        onDenied: (detail) => this.onDenied?.({ ...detail, sessionId: record.sessionId })
+      })
+      this.mediaProtocols?.prepare(record)
+    } catch (error) {
+      try {
+        protocol.unhandle(KUN_EXTENSION_SCHEME)
+      } catch {
+        // Keep failed preparation out of the registry and permit a clean retry.
+      }
+      this.mediaProtocols?.disposeSession(record.sessionId)
+      throw error
+    }
     this.registrations.set(record.sessionId, {
       protocol,
       partition: record.partition,
@@ -102,6 +115,7 @@ export class ExtensionViewProtocolRegistry {
         'View protocol is not prepared for this isolated partition.'
       )
     }
+    this.mediaProtocols?.assertPrepared(record)
   }
 
   isPreparedInitialNavigation(protocol: ProtocolHandler, rawUrl: string): boolean {
@@ -123,7 +137,8 @@ export class ExtensionViewProtocolRegistry {
 
   dispose(sessionId: string): boolean {
     const prepared = this.registrations.get(sessionId)
-    if (!prepared) return false
+    const mediaDisposed = this.mediaProtocols?.disposeSession(sessionId) ?? false
+    if (!prepared) return mediaDisposed
     this.registrations.delete(sessionId)
     try {
       prepared.protocol.unhandle(KUN_EXTENSION_SCHEME)
@@ -135,5 +150,6 @@ export class ExtensionViewProtocolRegistry {
 
   disposeAll(): void {
     for (const sessionId of [...this.registrations.keys()]) this.dispose(sessionId)
+    this.mediaProtocols?.disposeAll()
   }
 }

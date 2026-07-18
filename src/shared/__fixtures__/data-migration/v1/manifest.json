@@ -1,0 +1,49 @@
+{
+  "formatVersion": 1,
+  "minimumReaderVersion": 1,
+  "packageId": "fixture_v1_empty",
+  "sourceInstallationId": "fixture_installation",
+  "sourceAppVersion": "0.1.0",
+  "sourceRuntimeVersion": "0.1.0",
+  "sourcePlatform": "linux",
+  "sourceArch": "x64",
+  "createdAt": "2026-07-15T00:00:00.000Z",
+  "encryption": {
+    "mode": "none"
+  },
+  "componentVersions": {
+    "manifest": 1,
+    "workspace": 1,
+    "thread": 1,
+    "session": 1,
+    "event": 1,
+    "attachment": 1,
+    "artifact": 1,
+    "memory": 1,
+    "portable-settings": 1,
+    "renderer-state": 1,
+    "workflow": 1,
+    "schedule": 1
+  },
+  "selection": {
+    "preset": "complete",
+    "workspaceIds": [],
+    "threadIds": [],
+    "categories": [
+      "thread-history"
+    ],
+    "sensitiveContentAcknowledged": false,
+    "unencryptedPackageAcknowledged": true
+  },
+  "counts": {
+    "workspaces": 0,
+    "threads": 0,
+    "entries": 0,
+    "attachments": 0,
+    "artifacts": 0,
+    "memories": 0
+  },
+  "expandedBytes": 0,
+  "catalogsSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "checksumsSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+}

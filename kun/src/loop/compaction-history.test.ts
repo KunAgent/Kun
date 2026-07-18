@@ -52,7 +52,6 @@ describe('compaction history projection', () => {
     expect(visible.map((item) => item.id)).toEqual([
       'item_head_a',
       'item_head_b',
-      'compaction_previous',
       'compaction_next',
       'item_tail_a',
       'item_tail_b'
@@ -61,6 +60,42 @@ describe('compaction history projection', () => {
       'compaction_next',
       'item_tail_a',
       'item_tail_b'
+    ])
+  })
+
+  it('preserves manual compaction markers when coalescing automatic markers', () => {
+    const threadId = 'thread_1'
+    const turnId = 'turn_1'
+    const manualSummary = makeCompactionItem({
+      id: 'compaction_manual',
+      threadId,
+      turnId,
+      summary: 'manual summary',
+      replacedTokens: 100,
+      pinnedConstraints: [],
+      auto: false
+    })
+    const automaticSummary = makeCompactionItem({
+      id: 'compaction_auto',
+      threadId,
+      turnId,
+      summary: 'automatic summary',
+      replacedTokens: 200,
+      pinnedConstraints: [],
+      auto: true
+    })
+    const tail = makeUserItem({ id: 'item_tail', threadId, turnId, text: 'recent' })
+
+    const visible = insertCompactionIntoVisibleHistory({
+      visibleItems: [manualSummary, tail],
+      compactedItems: [automaticSummary, tail],
+      summaryItem: automaticSummary
+    })
+
+    expect(visible.map((item) => item.id)).toEqual([
+      'compaction_manual',
+      'compaction_auto',
+      'item_tail'
     ])
   })
 

@@ -1,11 +1,13 @@
 #!/usr/bin/env node
 
 const { execFileSync, spawnSync } = require('node:child_process')
+const { createHash } = require('node:crypto')
 const { createServer } = require('node:net')
 const nodeFs = require('node:fs')
 const {
   existsSync,
   lstatSync,
+  readFileSync,
   realpathSync
 } = nodeFs
 // Electron patches `node:fs` so an ASAR path behaves like a directory. The
@@ -28,15 +30,24 @@ const {
   writeFile
 } = require('node:fs/promises')
 const { tmpdir } = require('node:os')
-const { dirname, isAbsolute, join, relative, resolve, sep } = require('node:path')
+const { basename, dirname, isAbsolute, join, relative, resolve, sep } = require('node:path')
 const { pathToFileURL } = require('node:url')
 const { KUN_RUNTIME_REQUIRED_PATHS } = require('./after-pack.cjs')
 
 const EXTENSION_ID = 'kun-smoke.packaged'
+const DEFAULT_EXTENSION_IDS = [
+  'kun-examples.kun-video-editor',
+  'kun-examples.presentation-studio',
+  'kun-examples.social-media-sidebar'
+]
 const RUNTIME_TOKEN = 'kun-packaged-extension-smoke-token'
 const PACKAGED_EXTENSION_SMOKE_SUCCESS_MARKER = 'Packaged Extension smoke OK ('
 
 async function main() {
+  // Headless release smoke profiles must not depend on an interactive OS
+  // credential service. The runtime still exercises encrypted 0600 key-file
+  // storage; production keeps its normal fail-closed keychain behavior.
+  process.env.KUN_DISABLE_OS_CREDENTIAL_STORE = '1'
   const resourcesDir = resolveResources(argumentValue('--resources'))
   if (process.env.KUN_PACKAGED_EXTENSION_SMOKE_REEXEC !== '1') {
     const runtimeExecutable = resolvePackagedRuntimeExecutable(
@@ -46,11 +57,7 @@ async function main() {
     if (runtimeExecutable) {
       const result = spawnSync(runtimeExecutable, [__filename, ...process.argv.slice(2)], {
         cwd: process.cwd(),
-        env: {
-          ...process.env,
-          ELECTRON_RUN_AS_NODE: '1',
-          KUN_PACKAGED_EXTENSION_SMOKE_REEXEC: '1'
-        },
+        env: createPackagedExtensionSmokeReexecEnvironment(process.env),
         encoding: 'utf8',
         maxBuffer: 8 * 1024 * 1024,
         stdio: ['ignore', 'pipe', 'pipe']
@@ -91,6 +98,7 @@ async function main() {
       '--host', '127.0.0.1',
       '--port', String(port),
       '--data-dir', profile,
+      '--bundled-extensions-dir', join(resourcesDir, 'bundled-extensions'),
       '--runtime-token', RUNTIME_TOKEN,
       '--api-key', 'packaged-smoke-placeholder',
       '--base-url', 'https://invalid.example',
@@ -100,15 +108,11 @@ async function main() {
     ], {})
     server = await startKunServe(options)
 
-    await smokeWorkbenchAndWebview(port)
-    const host = await server.runtime.extensionPlatform.manager.activate(
-      EXTENSION_ID,
-      'onTool:echo'
-    )
-    if (!host) throw new Error('Packaged extension Node Host did not activate')
-    const tool = await smokeHeadlessTool(server.runtime, workspace)
-    const provider = await smokeCustomProvider(server.runtime, host, makeUserItem)
-    await smokeAgentTool(server.runtime, workspace, tool, provider)
+    const activated = await activateSmokeExtension(server.runtime, workspace)
+    await smokeWorkbenchAndWebview(port, activated.workspace)
+    const tool = await smokeHeadlessTool(server.runtime, activated.workspace)
+    const provider = await smokeCustomProvider(server.runtime, activated.host, makeUserItem)
+    await smokeAgentTool(server.runtime, activated.workspace, tool, provider)
 
     const diagnostics = await server.runtime.toolDiagnostics()
     if (!diagnostics.extensions.tools.some((tool) => tool.extensionId === EXTENSION_ID)) {
@@ -125,8 +129,26 @@ async function main() {
     const listed = JSON.parse(runKun(runtimeEntry, [
       'extension', 'list', '--data-dir', profile, '--json'
     ]))
-    if (!Array.isArray(listed.extensions) || listed.extensions.length !== 0) {
-      throw new Error('Packaged extension uninstall left a registry entry')
+    if (!Array.isArray(listed.extensions) || listed.extensions.length !== DEFAULT_EXTENSION_IDS.length) {
+      throw new Error('Packaged default extensions were not seeded through the normal registry')
+    }
+    for (const id of DEFAULT_EXTENSION_IDS) {
+      const installed = listed.extensions.find((extension) => extension?.id === id)
+      if (installed?.globallyEnabled !== true) {
+        throw new Error(`Packaged default extension was not enabled through the registry: ${id}`)
+      }
+      runKun(runtimeEntry, [
+        'extension', 'uninstall', id, '--data-dir', profile, '--json'
+      ])
+    }
+    server = await startKunServe(options)
+    await server.close()
+    server = undefined
+    const afterRemoval = JSON.parse(runKun(runtimeEntry, [
+      'extension', 'list', '--data-dir', profile, '--json'
+    ]))
+    if (!Array.isArray(afterRemoval.extensions) || afterRemoval.extensions.length !== 0) {
+      throw new Error('Packaged default extension was resurrected after explicit uninstall')
     }
 
   } catch (error) {
@@ -156,7 +178,7 @@ async function main() {
   }
   if (cleanupFailed) throw cleanupError
   process.stdout.write(
-    `${PACKAGED_EXTENSION_SMOKE_SUCCESS_MARKER}${process.platform}): resources, .kunx lifecycle, Webview session, headless tool, Agent/tool round-trip, custom Provider/account stream, diagnostics, and uninstall.\n`
+    `${PACKAGED_EXTENSION_SMOKE_SUCCESS_MARKER}${process.platform}): resources, bundled-default seed/removal, .kunx lifecycle, Webview session, headless tool, Agent/tool round-trip, custom Provider/account stream, diagnostics, and uninstall.\n`
   )
 }
 
@@ -171,6 +193,15 @@ function assertPackagedSmokeChildResult(result) {
     throw new Error(
       'Packaged runtime smoke child exited without the required completion marker'
     )
+  }
+}
+
+function createPackagedExtensionSmokeReexecEnvironment(environment = process.env) {
+  return {
+    ...environment,
+    ELECTRON_RUN_AS_NODE: '1',
+    KUN_DISABLE_OS_CREDENTIAL_STORE: '1',
+    KUN_PACKAGED_EXTENSION_SMOKE_REEXEC: '1'
   }
 }
 
@@ -256,6 +287,7 @@ function validatePackagedResources(resourcesDir, unpackedRoot) {
   for (const relativePath of KUN_RUNTIME_REQUIRED_PATHS) {
     assertConfinedPackagedPath(unpackedRoot, relativePath)
   }
+  validateBundledDefaultExtension(resourcesDir)
   for (const relativePath of [
     'kun/node_modules/@kun/extension-api',
     'kun/node_modules/create-kun-extension'
@@ -272,6 +304,45 @@ function validatePackagedResources(resourcesDir, unpackedRoot) {
   ]) {
     if (!hasAsarEntry(asarHeader, preload)) {
       throw new Error(`Packaged app.asar does not contain ${preload}`)
+    }
+  }
+}
+
+function validateBundledDefaultExtension(resourcesDir) {
+  const root = join(resourcesDir, 'bundled-extensions')
+  const catalogPath = join(root, 'catalog.json')
+  assertExists(catalogPath, 'bundled extension catalog')
+  const catalogDetails = lstatSync(catalogPath)
+  if (!catalogDetails.isFile() || catalogDetails.isSymbolicLink()) {
+    throw new Error('Packaged bundled extension catalog is not a regular file')
+  }
+  const catalog = JSON.parse(readFileSync(catalogPath, 'utf8'))
+  if (catalog?.schemaVersion !== 1 || !Array.isArray(catalog.extensions)) {
+    throw new Error('Packaged bundled extension catalog is invalid')
+  }
+  for (const id of DEFAULT_EXTENSION_IDS) {
+    const matches = catalog.extensions.filter((entry) => entry?.id === id)
+    if (matches.length !== 1) {
+      throw new Error(`Packaged bundled extension catalog omits a default extension: ${id}`)
+    }
+    const entry = matches[0]
+    if (
+      typeof entry.archive !== 'string' ||
+      !/^[0-9A-Za-z][0-9A-Za-z._-]*\.kunx$/u.test(entry.archive) ||
+      typeof entry.sha256 !== 'string' ||
+      !/^[a-f0-9]{64}$/u.test(entry.sha256)
+    ) {
+      throw new Error(`Packaged bundled extension catalog entry is invalid: ${id}`)
+    }
+    const archivePath = join(root, entry.archive)
+    assertExists(archivePath, `bundled extension archive ${id}`)
+    const archiveDetails = lstatSync(archivePath)
+    if (!archiveDetails.isFile() || archiveDetails.isSymbolicLink() || archiveDetails.size <= 0) {
+      throw new Error(`Packaged bundled extension archive is not a regular file: ${id}`)
+    }
+    const digest = createHash('sha256').update(readFileSync(archivePath)).digest('hex')
+    if (digest !== entry.sha256) {
+      throw new Error(`Packaged bundled extension archive digest does not match its catalog: ${id}`)
     }
   }
 }
@@ -345,7 +416,7 @@ async function createSmokeExtension(root, { webviewConnectUrls = [] } = {}) {
   await mkdir(join(root, 'dist', 'webview'), { recursive: true })
   await writeFile(join(root, 'kun-extension.json'), `${JSON.stringify({
     manifestVersion: 1,
-    apiVersion: '1.0.0',
+    apiVersion: '1.2.0',
     publisher: 'kun-smoke',
     name: 'packaged',
     version: '1.0.0',
@@ -409,6 +480,8 @@ async function createSmokeExtension(root, { webviewConnectUrls = [] } = {}) {
       'providers.register',
       'agent.run',
       'agent.threads.readOwn',
+      'workspace.read',
+      'media.read',
       'accounts.read',
       'accounts.manage:echo',
       'accounts.use:echo'
@@ -557,19 +630,27 @@ function smokeWebviewCsp(webviewConnectUrls = []) {
   return [
     "default-src 'none'",
     "style-src 'self'",
+    "img-src 'self' data: kun-media:",
+    "media-src 'self' kun-media:",
     `connect-src ${connectSources.length > 0 ? connectSources.join(' ') : "'none'"}`
   ].join('; ')
 }
 
-async function smokeWorkbenchAndWebview(port) {
-  const workbench = await runtimeJson(port, '/v1/extensions/workbench')
+async function smokeWorkbenchAndWebview(port, workspace) {
+  const workbench = await runtimeJson(
+    port,
+    `/v1/extensions/workbench?workspace_root=${encodeURIComponent(workspace)}`
+  )
   const installed = workbench.extensions?.find((extension) => extension.id === EXTENSION_ID)
   if (!installed?.contributes?.['views.rightSidebar']?.some((view) => view.id === 'smoke')) {
     throw new Error('Packaged workbench snapshot does not expose the smoke Webview')
   }
   const created = await runtimeJson(port, '/v1/extensions/view-sessions', {
     method: 'POST',
-    body: JSON.stringify({ contributionId: `extension:${EXTENSION_ID}/smoke` })
+    body: JSON.stringify({
+      contributionId: `extension:${EXTENSION_ID}/smoke`,
+      workspaceRoot: workspace
+    })
   })
   if (typeof created.sessionId !== 'string' || typeof created.nonce !== 'string') {
     throw new Error('Packaged runtime did not create a bound Webview session')
@@ -577,6 +658,38 @@ async function smokeWorkbenchAndWebview(port) {
   await runtimeJson(port, `/v1/extensions/view-sessions/${encodeURIComponent(created.sessionId)}`, {
     method: 'DELETE'
   })
+}
+
+async function activateSmokeExtension(runtime, workspace) {
+  const platform = runtime.extensionPlatform
+  const entry = await platform.registry.get(EXTENSION_ID)
+  const active = entry?.useDevelopment
+    ? entry.development
+    : entry?.selectedVersion
+      ? entry.versions[entry.selectedVersion]
+      : undefined
+  if (!active) throw new Error('Packaged smoke extension has no selected registry version')
+  const canonicalWorkspace = realpathSync(workspace)
+  const workspaceKey = platform.paths.workspaceKey(canonicalWorkspace)
+  await platform.registry.setWorkspaceEnabled(EXTENSION_ID, workspaceKey, true)
+  await platform.registry.setWorkspacePermissionGrant(
+    EXTENSION_ID,
+    workspaceKey,
+    [...active.grantedPermissions],
+    active.manifest.version
+  )
+  const host = await platform.manager.activate(EXTENSION_ID, 'onTool:echo', {
+    workspaceRoot: canonicalWorkspace,
+    workspaceContext: {
+      id: workspaceKey,
+      name: basename(canonicalWorkspace) || 'Packaged smoke workspace',
+      root: canonicalWorkspace,
+      trusted: true,
+      active: true
+    }
+  })
+  if (!host) throw new Error('Packaged extension Node Host did not activate')
+  return { host, workspace: canonicalWorkspace }
 }
 
 async function smokeHeadlessTool(runtime, workspace) {
@@ -769,6 +882,7 @@ module.exports = {
   EXTENSION_ID,
   PACKAGED_EXTENSION_SMOKE_SUCCESS_MARKER,
   assertPackagedSmokeChildResult,
+  createPackagedExtensionSmokeReexecEnvironment,
   createSmokeExtension,
   installSmokeExtensionFixture,
   makeTreeWritable,

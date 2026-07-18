@@ -97,14 +97,19 @@ export function kunThreadTurnsPath(threadId: string): string {
   return `${kunThreadPath(threadId)}/turns`
 }
 
+export const KUN_THREAD_TURN_TEMPLATE = '/v1/threads/{id}/turns/{turn}'
+export function kunThreadTurnPath(threadId: string, turnId: string): string {
+  return `${kunThreadTurnsPath(threadId)}/${encodeURIComponent(turnId)}`
+}
+
 export const KUN_THREAD_STEER_TEMPLATE = '/v1/threads/{id}/turns/{turn}/steer'
 export function kunThreadSteerPath(threadId: string, turnId: string): string {
-  return `${kunThreadTurnsPath(threadId)}/${encodeURIComponent(turnId)}/steer`
+  return `${kunThreadTurnPath(threadId, turnId)}/steer`
 }
 
 export const KUN_THREAD_INTERRUPT_TEMPLATE = '/v1/threads/{id}/turns/{turn}/interrupt'
 export function kunThreadInterruptPath(threadId: string, turnId: string): string {
-  return `${kunThreadTurnsPath(threadId)}/${encodeURIComponent(turnId)}/interrupt`
+  return `${kunThreadTurnPath(threadId, turnId)}/interrupt`
 }
 
 export const KUN_THREAD_EVENTS_TEMPLATE = '/v1/threads/{id}/events'

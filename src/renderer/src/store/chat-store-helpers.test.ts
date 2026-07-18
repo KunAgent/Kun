@@ -1,6 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ClawImChannelV1 } from '@shared/app-settings'
-import type { ChatBlock } from '../agent/types'
 import type { ModelProviderModelGroup } from '@shared/kun-gui-api'
 import { CLAW_MANAGED_INSTRUCTIONS_HEADING } from '@shared/app-settings'
 import {
@@ -11,7 +10,6 @@ import {
   clawThreadIdsFromChannels,
   clawThreadTitleLooksManaged,
   compactCodeWorkspaceRoots,
-  conversationHasVisionAttachments,
   fallbackComposerModel,
   hydrateBlockModelLabels,
   isClawThread,
@@ -400,36 +398,5 @@ describe('chat-store Claw helpers', () => {
       'thread-a': { model: 'deepseek-v4-pro', providerId: 'deepseek' },
       'thread-b': { model: 'MiniMax-M2', providerId: 'minimax' }
     })
-  })
-})
-
-describe('conversationHasVisionAttachments', () => {
-  it('returns false for text-only conversations (issue #579)', () => {
-    const blocks: ChatBlock[] = [
-      { kind: 'user', id: 'u1', text: 'hello' },
-      { kind: 'assistant', id: 'a1', text: 'hi' }
-    ]
-    expect(conversationHasVisionAttachments(blocks)).toBe(false)
-  })
-
-  it('returns true when a user message carries an image attachment', () => {
-    const blocks: ChatBlock[] = [
-      { kind: 'user', id: 'u1', text: 'look', meta: { attachments: [{ id: 'img-1', kind: 'image' }] } }
-    ]
-    expect(conversationHasVisionAttachments(blocks)).toBe(true)
-  })
-
-  it('returns false when attachments are documents only', () => {
-    const blocks: ChatBlock[] = [
-      { kind: 'user', id: 'u1', text: 'read', meta: { attachments: [{ id: 'doc-1', kind: 'document' }] } }
-    ]
-    expect(conversationHasVisionAttachments(blocks)).toBe(false)
-  })
-
-  it('treats unresolved attachmentIds (restored sessions) as vision content', () => {
-    const blocks: ChatBlock[] = [
-      { kind: 'user', id: 'u1', text: 'check', meta: { attachmentIds: ['att-1'] } }
-    ]
-    expect(conversationHasVisionAttachments(blocks)).toBe(true)
   })
 })

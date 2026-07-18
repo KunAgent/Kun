@@ -1,6 +1,7 @@
 import type { TurnItem, UserMessageSource } from '../contracts/items.js'
 import type { ReviewOutput, ReviewTarget } from '../contracts/review.js'
 import type { UserInputQuestion } from '../ports/user-input-gate.js'
+import type { ComposerContextAttachmentJson } from '../contracts/composer-context.js'
 
 export type ItemEntity = TurnItem
 
@@ -12,6 +13,7 @@ export function makeUserItem(input: {
   displayText?: string
   messageSource?: UserMessageSource
   attachmentIds?: string[]
+  composerContexts?: ComposerContextAttachmentJson[]
   fileReferences?: Array<{ path: string; relativePath: string; name: string; kind?: 'file' | 'directory' }>
   workspaceCheckpointId?: string
 }): TurnItem {
@@ -38,6 +40,7 @@ export function makeUserItem(input: {
     ...(displayText && displayText !== input.text ? { displayText } : {}),
     ...(input.messageSource ? { messageSource: input.messageSource } : {}),
     ...(attachmentIds?.length ? { attachmentIds } : {}),
+    ...(input.composerContexts?.length ? { composerContexts: input.composerContexts } : {}),
     ...(fileReferences?.length ? { fileReferences } : {}),
     ...(input.workspaceCheckpointId ? { workspaceCheckpointId: input.workspaceCheckpointId } : {})
   }

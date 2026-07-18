@@ -141,6 +141,12 @@ export type AgentLoopOptions = {
   roles?: RolesConfig
   toolStorm?: ToolStormBreakerOptions & { enabled?: boolean }
   turnLimits?: TurnLimitsConfig
+  /**
+   * Disable only the wall-clock deadline for this loop. Delegated child
+   * agents use this so they run until completion or explicit cancellation;
+   * step and per-response tool-call limits still apply.
+   */
+  disableWallTimeLimit?: boolean
   toolArgumentRepair?: {
     maxStringBytes?: number
   }
@@ -453,7 +459,7 @@ export class AgentLoop {
       : configuredWallTimeMs
     let wallTimeExceeded = false
     let deadline: ReturnType<typeof setTimeout> | undefined
-    if (!delegatedSdkRuntime) {
+    if (!delegatedSdkRuntime && this.opts.disableWallTimeLimit !== true) {
       deadline = setTimeout(() => {
         wallTimeExceeded = true
         this.opts.turns.abortTurnExecution(turnId)
@@ -525,6 +531,10 @@ export class AgentLoop {
       await this.drainSteering(threadId, turnId, signal)
       await this.recordPipelineStage(threadId, turnId, 'post_start')
       if (delegatedSdkRuntime) {
+        // The delegated SDK owns its model stream and cannot consume Kun's
+        // native mid-turn queue. Drain anything that arrived before startup,
+        // then seal admission so later guidance remains renderer-owned.
+        await this.drainAndSealSteering(threadId, turnId, signal)
         const reportedStatus = await delegatedSdkRuntime.runTurn(threadId, turnId, signal)
         const settlement = await finalizer.observeExternal({ threadId, turnId })
         finalStatus = statusFromSettlement(settlement, reportedStatus)
@@ -658,6 +668,17 @@ export class AgentLoop {
     void signal
   }
 
+  /** Persist already accepted guidance, then close admission for a terminal path. */
+  private async drainAndSealSteering(
+    threadId: string,
+    turnId: string,
+    signal: AbortSignal
+  ): Promise<void> {
+    while (!this.opts.steering.sealIfEmpty(turnId)) {
+      await this.drainSteering(threadId, turnId, signal)
+    }
+  }
+
   private async loop(
     threadId: string,
     turnId: string,
@@ -674,8 +695,12 @@ export class AgentLoop {
       : configuredLimits
     const startedAt = this.opts.nowMs?.() ?? Date.now()
     for (let step = 0; ; step += 1) {
-      if (signal.aborted) return 'aborted'
+      if (signal.aborted) {
+        await this.drainAndSealSteering(threadId, turnId, signal)
+        return 'aborted'
+      }
       if (step >= limits.maxSteps) {
+        await this.drainAndSealSteering(threadId, turnId, signal)
         const extensionLimited = Boolean(
           thread?.extensionBudget && thread.extensionBudget.maxModelRequests <= configuredLimits.maxSteps
         )
@@ -689,7 +714,11 @@ export class AgentLoop {
         )
         return 'failed'
       }
-      if ((this.opts.nowMs?.() ?? Date.now()) - startedAt >= limits.maxWallTimeMs) {
+      if (
+        this.opts.disableWallTimeLimit !== true &&
+        (this.opts.nowMs?.() ?? Date.now()) - startedAt >= limits.maxWallTimeMs
+      ) {
+        await this.drainAndSealSteering(threadId, turnId, signal)
         const extensionLimited = Boolean(
           thread?.extensionBudget && thread.extensionBudget.maxElapsedMs <= configuredLimits.maxWallTimeMs
         )
@@ -705,9 +734,16 @@ export class AgentLoop {
       }
       await this.drainSteering(threadId, turnId, signal)
       const stepResult = await this.modelStep(threadId, turnId, signal, step, limits.maxToolCallsPerStep)
-      if (stepResult === 'stop') return 'completed'
-      if (stepResult === 'failed') return 'failed'
-      if (stepResult === 'aborted') return 'aborted'
+      if (stepResult === 'stop') {
+        // Either accepted guidance wins and forces another model interaction,
+        // or the synchronous seal wins and late steer requests are rejected.
+        if (this.opts.steering.sealIfEmpty(turnId)) return 'completed'
+        continue
+      }
+      if (stepResult === 'failed' || stepResult === 'aborted') {
+        await this.drainAndSealSteering(threadId, turnId, signal)
+        return stepResult
+      }
     }
   }
 

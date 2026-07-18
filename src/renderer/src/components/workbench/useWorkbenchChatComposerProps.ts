@@ -1,6 +1,8 @@
 import { useMemo, type Dispatch, type SetStateAction } from 'react'
 import type { CoreRuntimeInfoJson } from '../../agent/kun-contract'
 import type { ComposerChangeSummary } from '../../lib/composer-change-summary'
+import type { QueuedUserMessage } from '../../store/chat-store-types'
+import { canGuideQueuedMessage } from '../../store/queued-message-guidance'
 import type { WorkbenchChatStageProps } from './WorkbenchChatStage'
 
 type ComposerProps = WorkbenchChatStageProps['composerProps']
@@ -24,12 +26,13 @@ type UseWorkbenchChatComposerPropsInput = {
   composerModelGroups: ComposerProps['composerModelGroups']
   composerReasoningEffort: ComposerProps['composerReasoningEffort']
   setComposerReasoningEffort: ComposerProps['onComposerReasoningEffortChange']
-  lockVisionToTextModelSwitch: boolean
   setClawChannelModel: (channelId: string, modelId: string, providerId?: string) => void | Promise<unknown>
   setComposerModel: (modelId: string, providerId?: string) => void
   openProvidersSettings: () => void
   handleSend: ComposerProps['onSend']
   composerAttachments: ComposerProps['attachments']
+  contextChips: ComposerProps['contextChips']
+  removeContextChip: ComposerProps['onRemoveContextChip']
   attachmentUploadEnabled: boolean
   attachmentUploadBusy: boolean
   attachmentUploadError: string | null
@@ -50,8 +53,9 @@ type UseWorkbenchChatComposerPropsInput = {
   openFileTreeSidePanel: () => void
   openDesignFileTreeSidePanel: () => void
   removeComposerFileReference: NonNullable<ComposerProps['onRemoveFileReference']>
-  queuedMessages: ComposerProps['queuedMessages']
+  queuedMessages: QueuedUserMessage[]
   removeQueuedMessage: ComposerProps['onRemoveQueuedMessage']
+  guideQueuedMessage: NonNullable<ComposerProps['onGuideQueuedMessage']>
   interrupt: ComposerProps['onInterrupt']
   handleGuiPlanCommand: () => void | Promise<unknown>
   useWorktreePool: boolean
@@ -87,12 +91,13 @@ export function useWorkbenchChatComposerProps({
   composerModelGroups,
   composerReasoningEffort,
   setComposerReasoningEffort,
-  lockVisionToTextModelSwitch,
   setClawChannelModel,
   setComposerModel,
   openProvidersSettings,
   handleSend,
   composerAttachments,
+  contextChips,
+  removeContextChip,
   attachmentUploadEnabled,
   attachmentUploadBusy,
   attachmentUploadError,
@@ -115,6 +120,7 @@ export function useWorkbenchChatComposerProps({
   removeComposerFileReference,
   queuedMessages,
   removeQueuedMessage,
+  guideQueuedMessage,
   interrupt,
   handleGuiPlanCommand,
   useWorktreePool,
@@ -151,7 +157,6 @@ export function useWorkbenchChatComposerProps({
     composerModelGroups,
     composerReasoningEffort: route === 'chat' || route === 'claw' ? composerReasoningEffort : undefined,
     modelControlVariant: route === 'chat' && !activeSddDraft ? 'split' : 'combined',
-    lockVisionToTextModelSwitch,
     onComposerModelChange: (modelId, providerId) => {
       if (route === 'claw' && activeClawChannelId) {
         void setClawChannelModel(activeClawChannelId, modelId, providerId)
@@ -165,6 +170,8 @@ export function useWorkbenchChatComposerProps({
     onConfigureProviders: openProvidersSettings,
     onSend: handleSend,
     attachments: composerAttachments,
+    contextChips,
+    onRemoveContextChip: removeContextChip,
     attachmentUploadEnabled,
     attachmentUploadBusy,
     attachmentUploadError,
@@ -186,8 +193,14 @@ export function useWorkbenchChatComposerProps({
     onOpenFileReferencePicker: openFileTreeSidePanel,
     onOpenDesignReferencePicker: openDesignFileTreeSidePanel,
     onRemoveFileReference: removeComposerFileReference,
-    queuedMessages,
+    queuedMessages: queuedMessages.map((message) => ({
+      id: message.id,
+      text: message.text,
+      ...(message.displayText ? { displayText: message.displayText } : {}),
+      guidanceEligible: canGuideQueuedMessage(message)
+    })),
     onRemoveQueuedMessage: removeQueuedMessage,
+    onGuideQueuedMessage: guideQueuedMessage,
     onInterrupt: (options) => void interrupt(options),
     onPlanCommand: () => void handleGuiPlanCommand(),
     useWorktreePool,
@@ -219,6 +232,7 @@ export function useWorkbenchChatComposerProps({
     attachmentUploadError,
     busy,
     composerAttachments,
+    contextChips,
     composerChangeSummary,
     composerExecutionApplying,
     composerExecutionSettings,
@@ -236,9 +250,9 @@ export function useWorkbenchChatComposerProps({
     handlePasteClipboardImage,
     handlePickAttachments,
     handleSend,
+    guideQueuedMessage,
     input,
     interrupt,
-    lockVisionToTextModelSwitch,
     openChangesPanel,
     openDesignFileTreeSidePanel,
     openFileTreeSidePanel,
@@ -247,6 +261,7 @@ export function useWorkbenchChatComposerProps({
     pickComposerFileReferences,
     queuedMessages,
     removeComposerAttachment,
+    removeContextChip,
     removeComposerFileReference,
     removeQueuedMessage,
     reviewActiveThread,

@@ -673,6 +673,10 @@ export async function resolveWorkspaceFile(
     const targetPath = await resolveOpenTargetPath(payload.path, payload.workspaceRoot, {
       allowBasenameFallback: false
     })
+    const info = await stat(targetPath)
+    if (!info.isFile()) {
+      return { ok: false, message: 'Path must point to a regular workspace file.' }
+    }
     return { ok: true, path: targetPath }
   } catch (error) {
     return {

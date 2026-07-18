@@ -58,6 +58,12 @@ export type InvalidSvgDocument = {
 
 export type SvgDocumentResult = SanitizedSvgDocument | InvalidSvgDocument
 
+export type SvgAnimationTiming = {
+  endMs: number
+  mayContinue: boolean
+  cycleMs: number
+}
+
 function diagnostic(
   severity: SvgDiagnostic['severity'],
   code: string,
@@ -108,16 +114,17 @@ export function svgAnimationTiming(attributes: {
   begin?: string | null
   repeatCount?: string | null
   repeatDur?: string | null
-}): { endMs: number; mayContinue: boolean } {
+}): SvgAnimationTiming {
   const durationText = attributes.dur?.trim().toLowerCase() ?? ''
   const simpleDuration = durationMs(durationText)
+  const cycleMs = Math.max(0, simpleDuration ?? 0)
   const beginText = attributes.begin?.trim() ?? ''
   const beginEntries = beginText ? beginText.split(';').map((entry) => entry.trim()).filter(Boolean) : ['0s']
   const beginTimes = beginEntries.map((entry) => durationMs(entry))
   // Syncbase/event begins cannot be resolved without running the SVG. Never
   // hard-stop the whiteboard clock based on an invented one-second duration.
   const dynamicBegin = beginTimes.some((value) => value === null)
-  if (durationText === 'indefinite' || dynamicBegin) return { endMs: 0, mayContinue: true }
+  if (durationText === 'indefinite' || dynamicBegin) return { endMs: 0, mayContinue: true, cycleMs }
 
   const repeatDurationText = attributes.repeatDur?.trim().toLowerCase() ?? ''
   const repeatDuration = repeatDurationText === 'indefinite' ? Infinity : durationMs(repeatDurationText)
@@ -132,12 +139,28 @@ export function svgAnimationTiming(attributes: {
   const simple = simpleDuration ?? 0
   const repeated = Number.isFinite(repeatCount) && repeatCount > 0 ? simple * repeatCount : Infinity
   const activeDuration = repeatDuration === null ? repeated : Math.min(repeated, repeatDuration)
-  if (!Number.isFinite(activeDuration)) return { endMs: 0, mayContinue: true }
+  if (!Number.isFinite(activeDuration)) return { endMs: 0, mayContinue: true, cycleMs }
   const lastBegin = Math.max(0, ...beginTimes.map((value) => Math.max(0, value ?? 0)))
-  return { endMs: lastBegin + activeDuration, mayContinue: false }
+  return { endMs: lastBegin + activeDuration, mayContinue: false, cycleMs }
 }
 
-function animationTiming(element: Element): { endMs: number; mayContinue: boolean } {
+export function summarizeSvgAnimationTiming(timing: readonly SvgAnimationTiming[]): {
+  durationMs: number
+  loopsIndefinitely: boolean
+} {
+  const loopsIndefinitely = timing.some((item) => item.mayContinue)
+  const maxDuration = timing.reduce((max, item) => Math.max(max, item.endMs), 0)
+  // An indefinitely repeating SMIL element has no finite end time, but its
+  // simple `dur` is still the useful representative cycle for scrubbing. Keep
+  // the longest detected cycle instead of collapsing every loop to 1000 ms.
+  const maxCycleDuration = timing.reduce((max, item) => Math.max(max, item.cycleMs), 0)
+  return {
+    durationMs: timing.length > 0 ? Math.max(1, maxDuration, maxCycleDuration || 1000) : 4000,
+    loopsIndefinitely
+  }
+}
+
+function animationTiming(element: Element): SvgAnimationTiming {
   return svgAnimationTiming({
     dur: element.getAttribute('dur'),
     begin: element.getAttribute('begin'),
@@ -350,8 +373,7 @@ export function parseAndSanitizeSvgDocument(raw: string): SvgDocumentResult {
   // `loopsIndefinitely` also includes event/syncbase starts whose end cannot
   // be computed statically. Keeping the clock monotonic is safer than freezing
   // a valid interactive animation after a guessed finite duration.
-  const loopsIndefinitely = timing.some((item) => item.mayContinue)
-  const maxDuration = timing.reduce((max, item) => Math.max(max, item.endMs), 0)
+  const animationSummary = summarizeSvgAnimationTiming(timing)
   root.setAttribute('width', '100%')
   root.setAttribute('height', '100%')
   root.setAttribute('preserveAspectRatio', root.getAttribute('preserveAspectRatio') || 'xMidYMid meet')
@@ -361,8 +383,8 @@ export function parseAndSanitizeSvgDocument(raw: string): SvgDocumentResult {
     diagnostics,
     animationCount: animations.length,
     visualElementCount,
-    durationMs: animations.length > 0 ? Math.max(1, maxDuration || 1000) : 4000,
-    loopsIndefinitely,
+    durationMs: animationSummary.durationMs,
+    loopsIndefinitely: animationSummary.loopsIndefinitely,
     ...(viewBox ? { viewBox } : {})
   }
 }

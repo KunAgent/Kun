@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { createHash } from 'node:crypto'
 
 const imageBytes = Buffer.alloc(80, 0xab)
 
@@ -155,5 +156,132 @@ describe('workspace editor icons', () => {
     )
     expect(electronMock.createFromBuffer).toHaveBeenCalledTimes(1)
     expect(electronMock.getFileIcon).not.toHaveBeenCalled()
+  })
+
+  it('opens a workspace file through the operating system association', async () => {
+    fsPromisesMock.stat.mockResolvedValueOnce({ isFile: () => true })
+    const { openEditorPath } = await import('./workspace-editors')
+    const result = await openEditorPath({
+      path: 'presentations/brief.pptx',
+      workspaceRoot: '/tmp/workspace',
+      editorId: 'system',
+      openPolicy: 'presentation-artifact'
+    })
+
+    expect(result).toMatchObject({
+      ok: true,
+      path: 'presentations/brief.pptx',
+      editorId: 'system'
+    })
+    expect(workspacePathsMock.resolveOpenTargetPath).toHaveBeenCalledWith(
+      'presentations/brief.pptx',
+      '/tmp/workspace',
+      { allowBasenameFallback: false }
+    )
+    expect(electronMock.openPath).toHaveBeenCalledWith('presentations/brief.pptx')
+  })
+
+  it('reveals a workspace file without launching an editor', async () => {
+    fsPromisesMock.stat.mockResolvedValueOnce({ isFile: () => true })
+    const { openEditorPath } = await import('./workspace-editors')
+    const result = await openEditorPath({
+      path: 'brief.kun-ppt.html',
+      workspaceRoot: '/tmp/workspace',
+      editorId: 'file-manager',
+      openPolicy: 'presentation-artifact'
+    })
+
+    expect(result).toMatchObject({ ok: true, editorId: 'file-manager' })
+    expect(electronMock.showItemInFolder).toHaveBeenCalledWith('brief.kun-ppt.html')
+    expect(electronMock.openPath).not.toHaveBeenCalled()
+  })
+
+  it('returns the system opener error without trying an arbitrary command', async () => {
+    electronMock.openPath.mockResolvedValueOnce('No application is associated with this file')
+    const { openEditorPath } = await import('./workspace-editors')
+
+    await expect(openEditorPath({
+      path: 'presentations/brief.pptx',
+      workspaceRoot: '/tmp/workspace',
+      editorId: 'system'
+    })).resolves.toEqual({
+      ok: false,
+      message: 'No application is associated with this file'
+    })
+    expect(electronMock.openPath).toHaveBeenCalledTimes(1)
+  })
+
+  it('rejects a presentation alias whose canonical target has another suffix', async () => {
+    workspacePathsMock.resolveOpenTargetPath.mockResolvedValueOnce('/tmp/workspace/payload.exe')
+    fsPromisesMock.stat.mockResolvedValueOnce({ isFile: () => true })
+    const { openEditorPath } = await import('./workspace-editors')
+
+    await expect(openEditorPath({
+      path: '/tmp/workspace/deck.pptx',
+      workspaceRoot: '/tmp/workspace',
+      editorId: 'system',
+      openPolicy: 'presentation-artifact'
+    })).resolves.toEqual({
+      ok: false,
+      message: 'Resolved file type is not allowed for this action.'
+    })
+    expect(workspacePathsMock.resolveOpenTargetPath).toHaveBeenCalledWith(
+      '/tmp/workspace/deck.pptx',
+      '/tmp/workspace',
+      { allowBasenameFallback: false }
+    )
+    expect(electronMock.openPath).not.toHaveBeenCalled()
+  })
+
+  it('rejects presentation-looking directories before opening or revealing them', async () => {
+    workspacePathsMock.resolveOpenTargetPath.mockResolvedValueOnce('/tmp/workspace/folder.pptx')
+    fsPromisesMock.stat.mockResolvedValueOnce({ isFile: () => false })
+    const { openEditorPath } = await import('./workspace-editors')
+
+    await expect(openEditorPath({
+      path: '/tmp/workspace/folder.pptx',
+      workspaceRoot: '/tmp/workspace',
+      editorId: 'file-manager',
+      openPolicy: 'presentation-artifact'
+    })).resolves.toEqual({
+      ok: false,
+      message: 'Path must point to a regular file.'
+    })
+    expect(electronMock.showItemInFolder).not.toHaveBeenCalled()
+  })
+
+  it('system-opens a Kun HTML deck only while its trusted content digest still matches', async () => {
+    const expectedSha256 = createHash('sha256').update(imageBytes).digest('hex')
+    workspacePathsMock.resolveOpenTargetPath.mockResolvedValueOnce('/tmp/workspace/deck.kun-ppt.html')
+    fsPromisesMock.stat.mockResolvedValueOnce({ isFile: () => true, size: imageBytes.byteLength })
+    const { openEditorPath } = await import('./workspace-editors')
+
+    await expect(openEditorPath({
+      path: '/tmp/workspace/deck.kun-ppt.html',
+      workspaceRoot: '/tmp/workspace',
+      editorId: 'system',
+      openPolicy: 'presentation-artifact',
+      expectedSha256
+    })).resolves.toMatchObject({ ok: true, editorId: 'system' })
+    expect(fsPromisesMock.readFile).toHaveBeenCalledWith('/tmp/workspace/deck.kun-ppt.html')
+    expect(electronMock.openPath).toHaveBeenCalledWith('/tmp/workspace/deck.kun-ppt.html')
+  })
+
+  it('rejects a Kun HTML deck that changed after the trusted write', async () => {
+    workspacePathsMock.resolveOpenTargetPath.mockResolvedValueOnce('/tmp/workspace/deck.kun-ppt.html')
+    fsPromisesMock.stat.mockResolvedValueOnce({ isFile: () => true, size: imageBytes.byteLength })
+    const { openEditorPath } = await import('./workspace-editors')
+
+    await expect(openEditorPath({
+      path: '/tmp/workspace/deck.kun-ppt.html',
+      workspaceRoot: '/tmp/workspace',
+      editorId: 'system',
+      openPolicy: 'presentation-artifact',
+      expectedSha256: '0'.repeat(64)
+    })).resolves.toEqual({
+      ok: false,
+      message: 'Presentation changed after it was generated. Save it again in Kun PPT before opening.'
+    })
+    expect(electronMock.openPath).not.toHaveBeenCalled()
   })
 })

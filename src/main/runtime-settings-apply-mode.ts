@@ -2,6 +2,7 @@ import type { AppSettingsV1 } from '../shared/app-settings-types'
 import {
   getKunRuntimeSettings,
   getModelProviderProfile,
+  getModelProviderSettings,
   resolveKunRuntimeSettings
 } from '../shared/app-settings'
 import { clawScheduleMcpSettingsChanged } from './claw-schedule-mcp-config'
@@ -56,7 +57,43 @@ function runtimeProcessConfigFingerprint(settings: AppSettingsV1): string {
 }
 
 function runtimeHotConfigChanged(prev: AppSettingsV1, next: AppSettingsV1): boolean {
-  return kunRuntimeConfigChanged(prev, next) || clawScheduleMcpSettingsChanged(prev, next)
+  return kunRuntimeConfigChanged(prev, next) ||
+    modelProviderRuntimeConfigChanged(prev, next) ||
+    clawScheduleMcpSettingsChanged(prev, next)
+}
+
+function modelProviderRuntimeConfigChanged(prev: AppSettingsV1, next: AppSettingsV1): boolean {
+  const a = getModelProviderSettings(prev)
+  const b = getModelProviderSettings(next)
+  if (!stableSettingsValueEqual(a.proxy, b.proxy)) return true
+
+  const aProviders = new Map(a.providers.map((provider) => [provider.id.trim(), provider]))
+  const bProviders = new Map(b.providers.map((provider) => [provider.id.trim(), provider]))
+  if (aProviders.size !== bProviders.size) return true
+
+  for (const [providerId, aProvider] of aProviders) {
+    const bProvider = bProviders.get(providerId)
+    if (!bProvider) return true
+    // Compare credential rotations without placing secrets in a serialized
+    // fingerprint, diagnostic object, or persisted settings projection.
+    if (aProvider.apiKey.trim() !== bProvider.apiKey.trim()) return true
+    if (!stableSettingsValueEqual(
+      providerRuntimeTransportConfig(aProvider),
+      providerRuntimeTransportConfig(bProvider)
+    )) return true
+  }
+  return false
+}
+
+function providerRuntimeTransportConfig(
+  provider: ReturnType<typeof getModelProviderSettings>['providers'][number]
+): Record<string, unknown> {
+  return {
+    baseUrl: provider.baseUrl.trim(),
+    endpointFormat: provider.endpointFormat,
+    retry: provider.retry,
+    kind: provider.kind ?? 'http'
+  }
 }
 
 function stableSettingsValueEqual(a: unknown, b: unknown): boolean {
