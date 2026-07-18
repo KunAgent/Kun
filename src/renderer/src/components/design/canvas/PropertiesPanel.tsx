@@ -57,6 +57,9 @@ import {
   PropertiesPanelShell,
   PropertiesPanelTrigger
 } from './properties-panel/shell'
+import { MotionKeyframeControls } from './properties-panel/MotionKeyframeControls'
+import { useCanvasMotionStore } from '../../../design/motion/canvas-motion-store'
+import { evaluateMotionTarget } from '../../../design/motion/evaluator'
 
 export { propertiesPanelShellClass, propertiesPanelTriggerClass } from './properties-panel/shell'
 
@@ -96,6 +99,8 @@ export function commitInspectorUpdate(
   ids: string[],
   patch: Partial<CanvasShape>
 ): void {
+  const motionState = useCanvasMotionStore.getState()
+  if (surface === 'design' && motionState.open && motionState.playing) return
   const beforeDoc = useCanvasShapeStore.getState().document
   const editableIds = filterEditableShapeIds(beforeDoc, ids)
   commitUpdate(label, ids, patch)
@@ -123,6 +128,9 @@ function PropertiesPanelInner({ surface = 'design', onImplementDesign }: Props):
   const { t } = useTranslation('common')
   const selectedIds = useCanvasSelectionStore((s) => s.selectedIds)
   const document = useCanvasShapeStore((s) => s.document)
+  const motionOpen = useCanvasMotionStore((state) => state.open)
+  const motionFrameId = useCanvasMotionStore((state) => state.activeFrameId)
+  const motionTimeMs = useCanvasMotionStore((state) => state.currentTimeMs)
   const pinned = useDesignWorkspaceStore((s) => s.canvasInspectorPinned)
   const setPinned = useDesignWorkspaceStore((s) => s.setCanvasInspectorPinned)
   const setDesignIntentMode = useDesignWorkspaceStore((s) => s.setDesignIntentMode)
@@ -142,6 +150,21 @@ function PropertiesPanelInner({ surface = 'design', onImplementDesign }: Props):
     () => ids.map((id) => document.objects[id]).filter((s): s is CanvasShape => Boolean(s)),
     [ids, document]
   )
+  const positionShapes = useMemo(() => {
+    if (surface !== 'design' || !motionOpen || !motionFrameId || shapes.length !== 1) return shapes
+    const shape = shapes[0]
+    const timeline = document.motion?.timelines[motionFrameId]
+    if (!timeline) return shapes
+    const projection = evaluateMotionTarget(timeline, shape.id, motionTimeMs, {
+      x: shape.x,
+      y: shape.y,
+      rotation: shape.rotation,
+      opacity: shape.opacity,
+      scaleX: 1,
+      scaleY: 1
+    })
+    return [{ ...shape, ...projection }]
+  }, [document.motion, motionFrameId, motionOpen, motionTimeMs, shapes, surface])
   const selectionKey = useMemo(() => ids.slice().sort().join('\u0000'), [ids])
 
   useEffect(() => {
@@ -210,12 +233,12 @@ function PropertiesPanelInner({ surface = 'design', onImplementDesign }: Props):
     </PropertiesPanelShell>
   )
 
-  const x = reduceField(shapes, (s) => s.x)
-  const y = reduceField(shapes, (s) => s.y)
+  const x = reduceField(positionShapes, (s) => s.x)
+  const y = reduceField(positionShapes, (s) => s.y)
   const w = reduceField(shapes, (s) => s.width)
   const h = reduceField(shapes, (s) => s.height)
-  const rot = reduceField(shapes, (s) => s.rotation || 0)
-  const opacity = reduceField(shapes, (s) => s.opacity)
+  const rot = reduceField(positionShapes, (s) => s.rotation || 0)
+  const opacity = reduceField(positionShapes, (s) => s.opacity)
   const cornerR = reduceField(shapes, (s) =>
     typeof s.cornerRadius === 'number' ? s.cornerRadius : s.cornerRadius[0]
   )
@@ -320,6 +343,9 @@ function PropertiesPanelInner({ surface = 'design', onImplementDesign }: Props):
           value={rot}
           onCommit={(n) => updateAll('set-rotation', { rotation: ((n % 360) + 360) % 360 })}
         />
+        {surface === 'design' && shapes.length === 1 ? (
+          <MotionKeyframeControls shape={shapes[0]} />
+        ) : null}
       </Section>
 
       {rootIds.length >= 2 && (

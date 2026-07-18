@@ -104,11 +104,18 @@ export class ExtensionDescriptorResolver {
       return undefined
     }
     const exactFiles = new Set<string>()
+    const hostIconFiles = new Set<string>()
     const localResourceRoots = new Set<string>()
     if (extension.manifest.browser) exactFiles.add(extension.manifest.browser)
-    for (const command of extension.manifest.contributes.commands) if (command.icon) exactFiles.add(command.icon)
+    const addIcon = (icon: string | undefined): void => {
+      if (!icon) return
+      exactFiles.add(icon)
+      hostIconFiles.add(icon)
+    }
+    addIcon(extension.manifest.icon)
+    for (const command of extension.manifest.contributes.commands) addIcon(command.icon)
     for (const container of extension.manifest.contributes['views.containers']) {
-      if (container.icon) exactFiles.add(container.icon)
+      addIcon(container.icon)
     }
     for (const key of [
       'views.leftSidebar',
@@ -119,13 +126,13 @@ export class ExtensionDescriptorResolver {
     ] as const) {
       for (const view of extension.manifest.contributes[key]) {
         exactFiles.add(view.entry)
-        if (view.icon) exactFiles.add(view.icon)
+        addIcon(view.icon)
         for (const root of view.localResourceRoots) localResourceRoots.add(root)
       }
     }
     for (const actionKey of ['actions.topBar', 'actions.composer', 'actions.message'] as const) {
       for (const action of extension.manifest.contributes[actionKey]) {
-        if (action.icon) exactFiles.add(action.icon)
+        addIcon(action.icon)
       }
     }
     for (const preview of extension.manifest.contributes['message.resultPreviews']) {
@@ -137,7 +144,9 @@ export class ExtensionDescriptorResolver {
       extensionVersion: extension.extensionVersion,
       packageRoot: extension.packageRoot,
       exactFiles: [...exactFiles].sort(),
-      localResourceRoots: [...localResourceRoots].sort()
+      localResourceRoots: [...localResourceRoots].sort(),
+      hostIconFiles: [...hostIconFiles].sort(),
+      allowExternalWebview: extension.grantedPermissions.includes('webview.external')
     }
   }
 

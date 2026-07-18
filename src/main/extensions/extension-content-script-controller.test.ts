@@ -157,7 +157,19 @@ describe('ExtensionContentScriptController', () => {
     const frame = frameFixture()
     await controller.sync(frame.frame, syncRequest)
 
-    await expect(controller.revokeExtension(frame.frame, 'acme.dom', 'permission-change')).resolves.toBe(true)
+    await expect(controller.revokeExtension(
+      frame.frame,
+      'acme.dom',
+      'permission-change',
+      '/workspace/two'
+    )).resolves.toBe(false)
+    expect(frame.execute).not.toHaveBeenCalled()
+    await expect(controller.revokeExtension(
+      frame.frame,
+      'acme.dom',
+      'permission-change',
+      '/workspace/one'
+    )).resolves.toBe(true)
     expect(frame.execute).toHaveBeenCalledWith(
       expect.any(Number),
       [expect.objectContaining({ code: expect.stringContaining('kun-extension-deactivate') })]

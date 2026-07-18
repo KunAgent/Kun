@@ -7,6 +7,11 @@ import {
 } from './kun-mapper'
 import type { CoreRuntimeEventJson, CoreTurnItemJson } from './kun-contract'
 import type { ThreadErrorOptions, ThreadEventSink } from './types'
+import {
+  PRESENTATION_STUDIO_EXTENSION_ID,
+  presentationStudioCanonicalToolId,
+  presentationStudioModelAlias
+} from '@shared/presentation-artifact'
 
 function makeSink(): ThreadEventSink {
   return {
@@ -628,6 +633,61 @@ describe('create_plan tool mapping', () => {
     }
   })
 
+  it('projects top-level extension generatedArtifacts without paths or ephemeral URLs', () => {
+    const item: CoreTurnItemJson = {
+      id: 'item_artifact_1',
+      turnId: 'turn_1',
+      threadId: 'thr_1',
+      role: 'tool',
+      status: 'completed',
+      createdAt: '2024-01-01T00:00:00.000Z',
+      kind: 'tool_result',
+      toolName: 'video-render',
+      callId: 'call_artifact_1',
+      output: {
+        content: { status: 'completed' },
+        generatedArtifacts: [{
+          schemaVersion: 1,
+          artifactId: 'artifact_1234567890',
+          mediaHandleId: 'media_123456789012',
+          displayName: 'final.mp4',
+          mediaKind: 'video',
+          mimeType: 'video/mp4',
+          byteSize: 4096,
+          durationMicros: 1_500_000,
+          completionIdentity: 'identity_1234567890',
+          availability: 'available',
+          ownerExtensionId: 'kun.video-editor',
+          ownerExtensionVersion: '1.0.0',
+          workspaceId: 'workspace-1',
+          provenance: { jobId: 'job_12345678', operation: 'video-render' }
+        }]
+      }
+    }
+    const block = chatBlockFromItem(item)
+    expect(block).not.toBeNull()
+    if (block && block.kind === 'tool') {
+      expect(block.meta?.generatedFiles).toEqual([{
+        id: 'artifact_1234567890',
+        artifactId: 'artifact_1234567890',
+        mediaHandleId: 'media_123456789012',
+        availability: 'available',
+        name: 'final.mp4',
+        mimeType: 'video/mp4',
+        byteSize: 4096,
+        durationMicros: 1_500_000,
+        mediaKind: 'video',
+        completionIdentity: 'identity_1234567890',
+        ownerExtensionId: 'kun.video-editor',
+        ownerExtensionVersion: '1.0.0',
+        workspaceId: 'workspace-1',
+        provenance: { jobId: 'job_12345678', operation: 'video-render' }
+      }])
+    } else {
+      throw new Error('expected tool block')
+    }
+  })
+
   it('omits meta attachments when tool_result output has none worth showing', () => {
     const item: CoreTurnItemJson = {
       id: 'item_img_2',
@@ -684,6 +744,134 @@ describe('create_plan tool mapping', () => {
     expect(capturedTool).not.toBeNull()
     expect(capturedTool?.meta?.plan?.plan_id).toBe('plan_x')
     expect(capturedTool?.meta?.plan?.operation).toBe('refine')
+  })
+})
+
+describe('component prototype mapping', () => {
+  const item = (status: 'preparing' | 'running' | 'completed' | 'failed'): CoreTurnItemJson => ({
+    id: `item_component_${status}`,
+    turnId: 'turn_component',
+    threadId: 'thread_component',
+    role: 'tool',
+    status: 'completed',
+    createdAt: '2026-07-16T00:00:00.000Z',
+    kind: 'tool_result',
+    toolName: 'design_component',
+    callId: 'call_component',
+    output: {
+      status,
+      componentPrototype: {
+        version: 1,
+        status,
+        artifactId: 'component_abcdef1234',
+        title: 'Date range picker',
+        relativePath: '.kun-design/component-prototypes/date-range/prototype.html',
+        viewport: { width: 720, height: 460 },
+        profile: 'component-designer',
+        childId: 'child_component',
+        byteSize: 4096,
+        contentHash: 'a'.repeat(64),
+        summary: 'Added range preview.'
+      }
+    }
+  })
+
+  it('maps preparing and running payloads to a running inline artifact', () => {
+    for (const status of ['preparing', 'running'] as const) {
+      expect(chatBlockFromItem(item(status))).toMatchObject({
+        kind: 'tool',
+        status: 'running',
+        meta: {
+          toolName: 'design_component',
+          componentPrototype: {
+            version: 1,
+            status,
+            artifactId: 'component_abcdef1234',
+            relativePath: '.kun-design/component-prototypes/date-range/prototype.html',
+            viewport: { width: 720, height: 460 },
+            producer: 'component-designer',
+            profile: 'component-designer'
+          }
+        }
+      })
+    }
+  })
+
+  it('maps completed and failed prototype status independently of the generic item status', () => {
+    expect(chatBlockFromItem(item('completed'))).toMatchObject({ kind: 'tool', status: 'success' })
+    expect(chatBlockFromItem(item('failed'))).toMatchObject({ kind: 'tool', status: 'error' })
+  })
+
+  it('maps direct main-agent prototypes without child metadata', () => {
+    const direct = item('completed')
+    const prototype = (direct.output as Record<string, unknown>).componentPrototype as Record<string, unknown>
+    delete prototype.profile
+    delete prototype.childId
+    prototype.producer = 'main-agent'
+
+    expect(chatBlockFromItem(direct)).toMatchObject({
+      kind: 'tool',
+      status: 'success',
+      meta: {
+        componentPrototype: {
+          producer: 'main-agent',
+          status: 'completed'
+        }
+      }
+    })
+  })
+
+  it('keeps historical component-designer payloads compatible when producer is absent', () => {
+    const legacy = item('completed')
+    const prototype = (legacy.output as Record<string, unknown>).componentPrototype as Record<string, unknown>
+    delete prototype.producer
+
+    expect(chatBlockFromItem(legacy)).toMatchObject({
+      kind: 'tool',
+      meta: {
+        componentPrototype: {
+          producer: 'component-designer',
+          profile: 'component-designer'
+        }
+      }
+    })
+  })
+
+  it('surfaces the same structured card metadata through a live SSE item update', async () => {
+    let captured: unknown = null
+    const sink: ThreadEventSink = {
+      ...makeSink(),
+      onTool: (event) => {
+        captured = event
+      }
+    }
+
+    await dispatchKunRuntimeEvent({
+      kind: 'item_updated',
+      seq: 18,
+      item: item('running')
+    }, sink, async () => undefined)
+
+    expect(captured).toMatchObject({
+      itemId: 'tool_call_component',
+      status: 'running',
+      meta: {
+        toolName: 'design_component',
+        componentPrototype: {
+          status: 'running',
+          relativePath: '.kun-design/component-prototypes/date-range/prototype.html'
+        }
+      }
+    })
+  })
+
+  it('drops unsafe or malformed prototype paths instead of surfacing a webview', () => {
+    const unsafe = item('completed')
+    ;((unsafe.output as Record<string, unknown>).componentPrototype as Record<string, unknown>).relativePath =
+      '../outside/prototype.html'
+    const block = chatBlockFromItem(unsafe)
+    expect(block).toMatchObject({ kind: 'tool' })
+    if (block?.kind === 'tool') expect(block.meta?.componentPrototype).toBeUndefined()
   })
 })
 
@@ -1486,6 +1674,127 @@ describe('tool presentation inference', () => {
     })
   })
 
+  it('surfaces final output and destination path aliases for generated artifacts', () => {
+    const ppt = chatBlockFromItem({
+      id: 'item_ppt',
+      turnId: 'turn_1',
+      threadId: 'thr_1',
+      role: 'tool',
+      status: 'completed',
+      createdAt: '2024-01-01T00:00:00.000Z',
+      kind: 'tool_result',
+      toolName: 'ppt_master_run',
+      toolKind: 'file_change',
+      callId: 'call_ppt',
+      output: {
+        output_path: '/tmp/presentations/brief.pptx',
+        generatedFiles: [{
+          relativePath: 'presentations/brief.pptx',
+          mimeType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+        }]
+      }
+    })
+    const htmlCopy = chatBlockFromItem({
+      id: 'item_html_copy',
+      turnId: 'turn_1',
+      threadId: 'thr_1',
+      role: 'tool',
+      status: 'completed',
+      createdAt: '2024-01-01T00:00:00.000Z',
+      kind: 'tool_result',
+      toolName: presentationStudioModelAlias('presentation-export-copy'),
+      toolKind: 'file_change',
+      callId: 'call_html_copy',
+      output: {
+        content: {
+          sourcePath: 'brief.kun-ppt.html',
+          destinationPath: 'brief-copy.kun-ppt.html',
+          contentSha256: 'a'.repeat(64)
+        },
+        summary: 'Exported copy'
+      }
+    })
+
+    expect(ppt).toMatchObject({
+      filePath: '/tmp/presentations/brief.pptx',
+      meta: {
+        generatedFiles: [{
+          relativePath: 'presentations/brief.pptx',
+          mimeType: 'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+        }]
+      }
+    })
+    expect(htmlCopy).toMatchObject({
+      filePath: 'brief-copy.kun-ppt.html',
+      meta: {
+        canonicalToolId: presentationStudioCanonicalToolId('presentation-export-copy'),
+        presentationArtifactProducer: PRESENTATION_STUDIO_EXTENSION_ID,
+        presentationArtifactSha256: 'a'.repeat(64)
+      }
+    })
+  })
+
+  it('unwraps progressive extension gateway presentation writes with trusted provenance', () => {
+    const block = chatBlockFromItem({
+      id: 'item_gateway_html',
+      turnId: 'turn_1',
+      threadId: 'thr_1',
+      role: 'tool',
+      status: 'completed',
+      createdAt: '2024-01-01T00:00:00.000Z',
+      kind: 'tool_result',
+      toolName: 'extension_tool_call',
+      toolKind: 'tool_call',
+      callId: 'call_gateway_html',
+      output: {
+        canonicalToolId: presentationStudioCanonicalToolId('presentation-apply'),
+        result: {
+          content: {
+            path: 'brief.kun-ppt.html',
+            resultingRevision: 2,
+            contentSha256: 'b'.repeat(64)
+          },
+          summary: 'Applied operations'
+        }
+      }
+    })
+
+    expect(block).toMatchObject({
+      toolKind: 'file_change',
+      filePath: 'brief.kun-ppt.html',
+      meta: {
+        canonicalToolId: presentationStudioCanonicalToolId('presentation-apply'),
+        presentationArtifactProducer: PRESENTATION_STUDIO_EXTENSION_ID,
+        presentationArtifactSha256: 'b'.repeat(64)
+      }
+    })
+  })
+
+  it('preserves workspace-write semantics from a generic progressive extension gateway', () => {
+    const block = chatBlockFromItem({
+      id: 'item_gateway_ppt',
+      turnId: 'turn_1',
+      threadId: 'thr_1',
+      role: 'tool',
+      status: 'completed',
+      createdAt: '2024-01-01T00:00:00.000Z',
+      kind: 'tool_result',
+      toolName: 'extension_tool_call',
+      toolKind: 'tool_call',
+      callId: 'call_gateway_ppt',
+      output: {
+        canonicalToolId: 'extension:example.exporter/export-ppt',
+        sideEffect: 'workspace-write',
+        result: { content: { destinationPath: 'presentations/brief.pptx' } }
+      }
+    })
+
+    expect(block).toMatchObject({
+      toolKind: 'file_change',
+      filePath: 'presentations/brief.pptx'
+    })
+  })
+
   it('classifies built-in write/edit tools as file_change by name when toolKind is omitted', () => {
     const block = chatBlockFromItem({
       id: 'item_write_builtin',
@@ -1543,6 +1852,40 @@ describe('tool presentation inference', () => {
       kind: 'tool',
       toolKind: 'command_execution',
       meta: { command: 'npm test' }
+    })
+  })
+
+  it('keeps validated extension composer metadata on persisted user blocks', () => {
+    const composerContext = {
+      schemaVersion: 1 as const,
+      id: 'video-selection',
+      title: 'Interview selection',
+      summary: 'Revision 4 with one selected clip',
+      reference: { projectId: 'project-1', selectedItemIds: ['clip-1'] },
+      revision: 4,
+      generation: 7,
+      attachmentId: `extension-context:${'a'.repeat(64)}`,
+      provenance: {
+        extensionId: 'acme.video-editor',
+        extensionVersion: '1.1.0',
+        viewContributionId: 'extension:acme.video-editor/editor',
+        workspaceId: 'b'.repeat(64)
+      }
+    }
+    const block = chatBlockFromItem({
+      id: 'item-user-context',
+      turnId: 'turn-1',
+      threadId: 'thread-1',
+      role: 'user',
+      status: 'completed',
+      createdAt: '2026-07-14T00:00:00.000Z',
+      kind: 'user_message',
+      text: 'Use the selection',
+      composerContexts: [composerContext]
+    })
+    expect(block).toMatchObject({
+      kind: 'user',
+      meta: { composerContexts: [composerContext] }
     })
   })
 })

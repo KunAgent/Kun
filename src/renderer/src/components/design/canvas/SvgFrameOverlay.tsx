@@ -2,13 +2,21 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } 
 import { MousePointer2, Pause, Play, RotateCcw } from 'lucide-react'
 import {
   embeddedArtifactOf,
+  type CanvasDocument,
   type CanvasShape
 } from '../../../design/canvas/canvas-types'
 import { useCanvasSelectionStore } from '../../../design/canvas/canvas-selection-store'
 import { useCanvasShapeStore } from '../../../design/canvas/canvas-shape-store'
 import { useCanvasViewportStore } from '../../../design/canvas/canvas-viewport-store'
 import { useDesignWorkspaceStore } from '../../../design/design-workspace-store'
+import { useCanvasMotionStore } from '../../../design/motion/canvas-motion-store'
+import { useCanvasMotionPortalStyle } from '../../../design/motion/canvas-motion-preview'
 import { useSvgArtifactPreview } from '../../../design/svg/use-svg-artifact-preview'
+import {
+  publishSvgAnimationPreview,
+  registerSvgAnimationPreviewController,
+  type SvgAnimationPreviewController
+} from '../../../design/svg/svg-animation-preview-store'
 import {
   htmlFrameCanvasRectToScreenRect,
   htmlFrameCanvasScreenTransform
@@ -88,6 +96,21 @@ function frameIntersectsViewport(shape: CanvasShape, viewBox: { x: number; y: nu
     shape.y <= viewBox.y + viewBox.height
 }
 
+function hasMotionTargetAncestor(
+  document: CanvasDocument,
+  shapeId: string,
+  targetIds: ReadonlySet<string>
+): boolean {
+  const visited = new Set<string>()
+  let currentId: string | null = shapeId
+  while (currentId && currentId !== document.rootId && !visited.has(currentId)) {
+    if (targetIds.has(currentId)) return true
+    visited.add(currentId)
+    currentId = document.objects[currentId]?.parentId ?? null
+  }
+  return false
+}
+
 function SvgArtifactFrame({
   shape,
   workspaceRoot,
@@ -121,17 +144,21 @@ function SvgArtifactFrame({
   const [rate, setRate] = useState(1)
   const [currentMs, setCurrentMs] = useState(0)
   const [cssTimeline, setCssTimeline] = useState<RuntimeCssTimeline>(EMPTY_CSS_TIMELINE)
+  const designMotionOpen = useCanvasMotionStore((state) => state.open)
   const currentMsRef = useRef(0)
+  const resumeAfterDesignMotionRef = useRef(true)
   const iframeRef = useRef<HTMLIFrameElement>(null)
   const tickRef = useRef<number | null>(null)
   const lastTickRef = useRef<number | null>(null)
   const lastUiTickRef = useRef(0)
+  const controllerRef = useRef<SvgAnimationPreviewController | null>(null)
   const preview = useSvgArtifactPreview(workspaceRoot, artifact?.relativePath ?? '', background)
   const hasAnimations = preview.animationCount + cssTimeline.animationCount > 0
   const durationMs = hasAnimations
     ? Math.max(1, preview.animationCount > 0 ? preview.durationMs : 0, cssTimeline.durationMs)
     : 4000
   const loopsIndefinitely = preview.loopsIndefinitely || cssTimeline.loopsIndefinitely
+  const motionStyle = useCanvasMotionPortalStyle(shape, zoom)
 
   const seek = useCallback((timeMs: number): void => {
     const bounded = Math.max(0, Math.min(durationMs, timeMs))
@@ -139,6 +166,87 @@ function SvgArtifactFrame({
     setCurrentMs(bounded)
     controlTimeline(iframeRef.current, bounded, rate)
   }, [durationMs, rate])
+
+  controllerRef.current = {
+    play: () => {
+      if (!hasAnimations) return
+      if (designMotionOpen) resumeAfterDesignMotionRef.current = true
+      if (currentMsRef.current >= durationMs) seek(0)
+      setPlaying(true)
+    },
+    pause: () => {
+      if (designMotionOpen) resumeAfterDesignMotionRef.current = false
+      setPlaying(false)
+    },
+    restart: () => {
+      if (designMotionOpen) resumeAfterDesignMotionRef.current = true
+      seek(0)
+      setPlaying(true)
+    },
+    seek: (timeMs) => {
+      if (designMotionOpen) resumeAfterDesignMotionRef.current = false
+      setPlaying(false)
+      seek(timeMs)
+    },
+    setRate: (nextRate) => setRate(Math.max(0.1, Math.min(4, nextRate)))
+  }
+
+  useEffect(() => {
+    if (!designMotionOpen || !selected) return
+    return registerSvgAnimationPreviewController(shape.id, {
+      play: () => controllerRef.current?.play(),
+      pause: () => controllerRef.current?.pause(),
+      restart: () => controllerRef.current?.restart(),
+      seek: (timeMs) => controllerRef.current?.seek(timeMs),
+      setRate: (nextRate) => controllerRef.current?.setRate(nextRate)
+    })
+  }, [designMotionOpen, selected, shape.id])
+
+  useEffect(() => {
+    if (!designMotionOpen || !selected) return
+    if (!artifact) {
+      publishSvgAnimationPreview({
+        shapeId: shape.id,
+        artifactId: reference?.id ?? '',
+        title: shape.name?.trim() || 'SVG',
+        status: 'missing',
+        animationCount: 0,
+        durationMs: 1_000,
+        loopsIndefinitely: false,
+        currentTimeMs: 0,
+        playing: false,
+        rate
+      })
+      return
+    }
+    publishSvgAnimationPreview({
+      shapeId: shape.id,
+      artifactId: artifact.id,
+      title: artifact.title,
+      status: preview.status,
+      animationCount: preview.animationCount + cssTimeline.animationCount,
+      durationMs,
+      loopsIndefinitely,
+      currentTimeMs: currentMs,
+      playing,
+      rate
+    })
+  }, [
+    artifact,
+    cssTimeline.animationCount,
+    currentMs,
+    designMotionOpen,
+    durationMs,
+    loopsIndefinitely,
+    playing,
+    preview.animationCount,
+    preview.status,
+    rate,
+    reference?.id,
+    selected,
+    shape.name,
+    shape.id
+  ])
 
   useEffect(() => {
     if (!playing || preview.status !== 'ready' || !hasAnimations) {
@@ -183,13 +291,25 @@ function SvgArtifactFrame({
     setCurrentMs(0)
     currentMsRef.current = 0
     setCssTimeline(EMPTY_CSS_TIMELINE)
-    setPlaying(true)
+    if (!useCanvasMotionStore.getState().open) setPlaying(true)
   }, [preview.revision])
 
   useEffect(() => {
     if (selected && !shape.locked && !panning) return
     setInteractive(false)
   }, [panning, selected, shape.locked])
+
+  useEffect(() => {
+    if (designMotionOpen) {
+      resumeAfterDesignMotionRef.current = playing
+      setPlaying(false)
+    } else if (resumeAfterDesignMotionRef.current && hasAnimations) {
+      setPlaying(true)
+    }
+    // The transition itself is the trigger; including `playing` would overwrite
+    // the saved pre-Motion state after setPlaying(false).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [designMotionOpen])
 
   useEffect(() => {
     if (!artifact) return
@@ -203,7 +323,6 @@ function SvgArtifactFrame({
   }, [artifact, preview.status, preview.visualElementCount])
 
   if (!artifact || !reference) return null
-  if (screenWidth < 8 || screenHeight < 8) return null
   const diagnostics = preview.diagnostics.length
   const label = preview.status === 'invalid'
     ? preview.diagnostics[0]?.message ?? 'Invalid SVG'
@@ -211,7 +330,7 @@ function SvgArtifactFrame({
       ? 'SVG file is missing'
       : 'Loading SVG…'
   const borderRadius = canvasCornerRadiusCss(shape.cornerRadius, zoom)
-  const showControls = shouldShowSvgFrameControls({
+  const showControls = !designMotionOpen && shouldShowSvgFrameControls({
     selected,
     locked: shape.locked,
     panning,
@@ -221,13 +340,14 @@ function SvgArtifactFrame({
   return (
     <div
       className="pointer-events-none absolute overflow-visible"
+      data-canvas-motion-target={shape.id}
+      data-canvas-motion-kind="portal"
       style={{
         left: screenX,
         top: screenY,
         width: screenWidth,
         height: screenHeight,
-        transform: shape.rotation ? `rotate(${shape.rotation}deg)` : undefined,
-        transformOrigin: 'center',
+        ...motionStyle,
         zIndex
       }}
       data-svg-artifact-id={artifact.id}
@@ -237,8 +357,7 @@ function SvgArtifactFrame({
         style={{
           borderRadius,
           borderColor: selected ? '#6557ff' : 'rgba(15,23,42,0.16)',
-          boxShadow: selected ? '0 0 0 1px rgba(101,87,255,.45)' : undefined,
-          opacity: shape.opacity
+          boxShadow: selected ? '0 0 0 1px rgba(101,87,255,.45)' : undefined
         }}
       >
         {preview.status === 'ready' ? (
@@ -350,24 +469,30 @@ export function SvgFrameOverlay({ workspaceRoot }: { workspaceRoot: string }): R
   const containerHeight = useCanvasViewportStore((state) => state.containerHeight)
   const activeTool = useCanvasViewportStore((state) => state.activeTool)
   const selectedIds = useCanvasSelectionStore((state) => state.selectedIds)
+  const motionOpen = useCanvasMotionStore((state) => state.open)
+  const motionFrameId = useCanvasMotionStore((state) => state.activeFrameId)
   const canvasScreenTransform = useMemo(() => htmlFrameCanvasScreenTransform({
     vbox,
     containerWidth,
     containerHeight
   }), [containerHeight, containerWidth, vbox])
   const zoom = canvasScreenTransform.scale
-  const frames = useMemo(
-    () => selectSvgFramesForOverlay(
-      svgFramesInCanvasPaintOrder(document)
-      .filter((shape) =>
-        shape.width * zoom >= 8 &&
-        shape.height * zoom >= 8 &&
-        frameIntersectsViewport(shape, vbox)
-      ),
-      selectedIds
-    ),
-    [document, selectedIds, vbox, zoom]
-  )
+  const frames = useMemo(() => {
+    const motionTargets = new Set(
+      motionOpen && motionFrameId
+        ? (document.motion?.timelines[motionFrameId]?.tracks ?? []).map((track) => track.targetShapeId)
+        : []
+    )
+    const priorityIds = new Set(selectedIds)
+    const candidates = svgFramesInCanvasPaintOrder(document).filter((shape) => {
+      const selected = selectedIds.has(shape.id)
+      const motionRelevant = motionOpen && hasMotionTargetAncestor(document, shape.id, motionTargets)
+      if (motionRelevant) priorityIds.add(shape.id)
+      if (selected || motionRelevant) return true
+      return shape.width * zoom >= 8 && shape.height * zoom >= 8 && frameIntersectsViewport(shape, vbox)
+    })
+    return selectSvgFramesForOverlay(candidates, priorityIds)
+  }, [document, motionFrameId, motionOpen, selectedIds, vbox, zoom])
   const paintIndexById = useMemo(() => new Map(
     (document.objects[document.rootId]?.children ?? []).map((id, index) => [id, index + 1])
   ), [document])

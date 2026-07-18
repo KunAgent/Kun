@@ -155,7 +155,8 @@ describe('extension package management', () => {
       await manager.setWorkspacePermissionGrant(
         'acme.demo',
         workspaceKey,
-        ['commands.register']
+        ['commands.register'],
+        '1.0.0'
       )
 
       let enteredPermissionChange!: () => void
@@ -176,7 +177,8 @@ describe('extension package management', () => {
       const revoking = manager.setWorkspacePermissionGrant(
         'acme.demo',
         workspaceKey,
-        undefined
+        undefined,
+        '1.0.0'
       )
       await permissionChangeEntered
       let admissionSettled = false
@@ -189,6 +191,96 @@ describe('extension package management', () => {
       releasePermissionChange()
       await revoking
       await expect(admission).rejects.toMatchObject({ code: 'EXTENSION_WORKSPACE_UNTRUSTED' })
+    } finally {
+      await makeWritable(root)
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
+  it('atomically rejects a stale selected version before changing workspace permissions', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kun-extension-permission-version-'))
+    try {
+      const source = join(root, 'source')
+      const paths = new ExtensionPaths({
+        packageRoot: join(root, 'extensions'),
+        dataRoot: join(root, 'extension-data')
+      })
+      const registry = new ExtensionRegistry(paths)
+      const manager = new ExtensionPackageManager(paths, registry, { compatibility })
+
+      await writeExtensionSource(source, '1.0.0', 0, ['commands.register'])
+      const v1Archive = join(root, 'acme.demo-1.0.0.kunx')
+      await packKunx(source, v1Archive, { compatibility })
+      await manager.installArchive(v1Archive, { grantedPermissions: ['commands.register'] })
+
+      await writeExtensionSource(source, '2.0.0', 0, ['commands.register'])
+      const v2Archive = join(root, 'acme.demo-2.0.0.kunx')
+      await packKunx(source, v2Archive, { compatibility })
+      await manager.installArchive(v2Archive, { grantedPermissions: ['commands.register'] })
+
+      const workspaceKey = 'b'.repeat(64)
+      await registry.setWorkspacePermissionGrant(
+        'acme.demo',
+        workspaceKey,
+        ['commands.register'],
+        '2.0.0'
+      )
+      const before = await registry.read()
+
+      await expect(registry.setWorkspacePermissionGrant(
+        'acme.demo',
+        workspaceKey,
+        undefined,
+        '1.0.0'
+      )).rejects.toMatchObject({
+        code: 'EXTENSION_VERSION_CONFLICT',
+        details: {
+          extensionId: 'acme.demo',
+          expectedVersion: '1.0.0',
+          currentVersion: '2.0.0'
+        }
+      })
+
+      expect(await registry.read()).toEqual(before)
+      expect((await registry.get('acme.demo'))?.workspacePermissionGrants[workspaceKey])
+        .toEqual(['commands.register'])
+    } finally {
+      await makeWritable(root)
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
+  it('requires a fresh workspace review when a selected version adds permission authority', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kun-extension-permission-update-'))
+    try {
+      const source = join(root, 'source')
+      const paths = new ExtensionPaths({
+        packageRoot: join(root, 'extensions'),
+        dataRoot: join(root, 'extension-data')
+      })
+      const registry = new ExtensionRegistry(paths)
+      const manager = new ExtensionPackageManager(paths, registry, { compatibility })
+      const workspaceKey = 'c'.repeat(64)
+
+      await writeExtensionSource(source, '1.0.0', 0, ['ui.views'])
+      const v1Archive = join(root, 'acme.demo-1.0.0.kunx')
+      await packKunx(source, v1Archive, { compatibility })
+      await manager.installArchive(v1Archive, { grantedPermissions: ['ui.views'] })
+      await manager.setWorkspacePermissionGrant(
+        'acme.demo',
+        workspaceKey,
+        ['ui.views'],
+        '1.0.0'
+      )
+
+      const nextPermissions = ['ui.views', 'workspace.read']
+      await writeExtensionSource(source, '2.0.0', 0, nextPermissions)
+      const v2Archive = join(root, 'acme.demo-2.0.0.kunx')
+      await packKunx(source, v2Archive, { compatibility })
+      await manager.installArchive(v2Archive, { grantedPermissions: nextPermissions })
+
+      expect((await registry.get('acme.demo'))?.workspacePermissionGrants).toEqual({})
+      expect(await registry.isWorkspaceTrusted('acme.demo', workspaceKey)).toBe(false)
     } finally {
       await makeWritable(root)
       await rm(root, { recursive: true, force: true })

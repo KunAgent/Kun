@@ -52,6 +52,7 @@ export function createInitialChatStoreState(workingDirectoryLabel: string) {
     composerModelGroups: [],
     disabledSkillIds: [],
     queuedMessages: [],
+    extensionComposerContexts: [],
     watchTurnCompletion: {},
     unreadThreadIds: {},
     sideConversations: {},

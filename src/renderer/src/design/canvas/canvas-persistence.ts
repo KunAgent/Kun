@@ -3,10 +3,14 @@ import { ROOT_SHAPE_ID } from './canvas-types'
 import { normalizeRunningAppUrl } from './running-app-frame'
 import type { DesignOperation, DesignOperationJournalEntry } from '../graph/design-graph-types'
 import type { DesignCodeBinding, DesignCodeBindingTarget } from '../code-binding/code-binding-types'
+import { createEmptyMotionDocument } from '../motion/model'
+import { parseCanvasMotionDocument } from './canvas-motion-persistence'
 import {
   normalizeDesignPersistenceWorkspaceRoot,
   writeDesignWorkspaceFile
 } from '../design-persistence-coordinator'
+
+export { parseCanvasMotionDocument } from './canvas-motion-persistence'
 
 const DESIGN_DIR = '.kun-design'
 export const MAX_CANVAS_DOCUMENT_OBJECTS = 10_000
@@ -408,10 +412,14 @@ export function parseCanvasDocument(raw: string): CanvasDocument | null {
   const codeBindings = Array.isArray(parsed.codeBindings)
     ? parsed.codeBindings.map(parseCodeBinding).filter((binding): binding is DesignCodeBinding => Boolean(binding))
     : undefined
+  const motion = parsed.motion === undefined
+    ? createEmptyMotionDocument()
+    : parseCanvasMotionDocument(parsed.motion, { rootId, objects }) ?? createEmptyMotionDocument()
   return {
     version: 2,
     rootId,
     objects,
+    motion,
     ...(graph ? { graph } : {}),
     ...(operationJournal && operationJournal.length > 0 ? { operationJournal } : {}),
     ...(codeBindings && codeBindings.length > 0 ? { codeBindings } : {})

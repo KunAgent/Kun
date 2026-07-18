@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { createDefaultShape, createEmptyDocument } from '../canvas/canvas-types'
+import { createDefaultShape, createEmptyDocument, ROOT_SHAPE_ID } from '../canvas/canvas-types'
 import { createRunningAppFrameShape } from '../canvas/running-app-frame'
 import { useCanvasShapeStore } from '../canvas/canvas-shape-store'
 import { useCanvasUndoStore } from '../canvas/canvas-undo-store'
@@ -47,6 +47,10 @@ describe('design tool protocol', () => {
     expect(manifest.tools.map((tool) => tool.id)).toEqual([
       'design.plan',
       'design.ops',
+      'design_motion_set_timeline',
+      'design_motion_upsert_keyframes',
+      'design_motion_apply_preset',
+      'design_motion_delete',
       'design.generate_screen',
       'design.generate_directions',
       'design_svg_create',
@@ -67,6 +71,10 @@ describe('design tool protocol', () => {
     })
     expect(designToolProtocolById('design.implement')?.requiresCodeBinding).toBe(true)
     expect(designToolProtocolById('design_svg_animate')).toMatchObject({ category: 'operations' })
+    expect(designToolProtocolById('design_motion_upsert_keyframes')).toMatchObject({
+      category: 'operations',
+      operationTypes: ['upsert-keyframes']
+    })
     expect(designToolProtocolById('design_svg_create')).toMatchObject({
       inputs: ['name', 'brief', 'frame geometry'],
       outputs: expect.arrayContaining(['deterministic artifact id'])
@@ -79,6 +87,7 @@ describe('design tool protocol', () => {
     )
     expect(designToolProtocolSummaryLines().join('\n')).toContain('selection required')
     expect(designToolProtocolSummaryLines().join('\n')).toContain('code binding required')
+    expect(designToolProtocolSummaryLines().join('\n')).toContain('design_motion_apply_preset')
   })
 
   it('executes design.ops against the canvas and returns the journal entry', () => {
@@ -111,6 +120,55 @@ describe('design tool protocol', () => {
       operations: [{ type: 'create_shape', source: 'agent' }]
     })
     expect(doc.graph?.lastJournalEntryId).toBe(result.journalEntry?.id)
+  })
+
+  it('executes registered Motion tools through the canonical renderer motion path', () => {
+    const document = createEmptyDocument()
+    const frame = {
+      ...createDefaultShape('frame', 0, 0),
+      id: 'frame_home',
+      parentId: ROOT_SHAPE_ID,
+      children: ['hero']
+    }
+    const hero = {
+      ...createDefaultShape('rect', 20, 20),
+      id: 'hero',
+      parentId: frame.id,
+      frameId: frame.id
+    }
+    document.objects[ROOT_SHAPE_ID] = { ...document.objects[ROOT_SHAPE_ID], children: [frame.id] }
+    document.objects[frame.id] = frame
+    document.objects[hero.id] = hero
+    useCanvasShapeStore.getState().loadDocument(document)
+
+    const result = executeDesignToolInvocation({
+      toolId: 'design_motion_upsert_keyframes',
+      label: 'animate-hero',
+      input: {
+        frameId: frame.id,
+        targetShapeId: hero.id,
+        property: 'opacity',
+        keyframes: [
+          { timeMs: 0, value: 0 },
+          { timeMs: 500, value: 1, easing: { type: 'ease-out' } }
+        ]
+      }
+    })
+
+    expect(result).toMatchObject({
+      ok: true,
+      status: 'applied',
+      affectedIds: ['hero'],
+      journalEntry: { label: 'animate-hero', operations: [{ type: 'update_motion' }] }
+    })
+    expect(useCanvasShapeStore.getState().document.motion?.timelines.frame_home.tracks[0]).toMatchObject({
+      targetShapeId: 'hero',
+      property: 'opacity',
+      keyframes: [
+        { timeMs: 0, value: 0 },
+        { timeMs: 500, value: 1 }
+      ]
+    })
   })
 
   it('accepts DesignOperation payload wrappers for design.ops', () => {

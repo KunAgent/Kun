@@ -1,5 +1,5 @@
-import type { PointerEvent as ReactPointerEvent } from 'react'
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import type { Dispatch, PointerEvent as ReactPointerEvent, SetStateAction } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { WorkspaceFileTarget } from '@shared/workspace-file'
 import type { AppRoute } from '../store/chat-store-types'
 import {
@@ -7,6 +7,7 @@ import {
   removeBrowserStorageItem,
   writeBrowserStorageItem
 } from '../lib/browser-storage'
+import { workspaceRootScopeKey } from '../lib/workspace-path'
 import { WORKSPACE_FILE_PREVIEW_EVENT, type WorkspaceFilePreviewDetail } from '../lib/workspace-file-preview'
 import { CODE_CANVAS_OPEN_REQUEST_EVENT } from '../lib/code-canvas-panel-event'
 import {
@@ -15,11 +16,24 @@ import {
   normalizeStoredRightPanelId,
   type RightPanelMode
 } from '../extensions/contribution-ids'
+import {
+  activateCodeRightTab,
+  closeCodeRightTab,
+  collapseCodeRightTabs,
+  emptyCodeRightTabsState,
+  expandCodeRightTabs,
+  normalizeStoredCodeRightTabsRegistry,
+  openCodeRightTab,
+  type CodeRightTabsState,
+  type StoredCodeRightTabsRegistry
+} from './workbench/code-right-tabs-state'
 
 const LEFT_PANEL_WIDTH_KEY = 'kun.layout.leftSidebarWidth'
 const LEFT_PANEL_COLLAPSED_KEY = 'kun.layout.leftSidebarCollapsed'
 const RIGHT_PANEL_WIDTH_KEY = 'kun.layout.rightInspectorWidth'
 const RIGHT_PANEL_MODE_KEY = 'kun.layout.rightPanelMode'
+export const CODE_RIGHT_TABS_KEY = 'kun.layout.codeRightTabs.v1'
+export const CODE_RIGHT_WIDTHS_KEY = 'kun.layout.codeRightWidths.v1'
 const TERMINAL_OPEN_KEY = 'kun.layout.terminalOpen'
 const TERMINAL_HEIGHT_KEY = 'kun.layout.terminalHeight'
 const LEFT_PANEL_DEFAULT = 304
@@ -29,16 +43,11 @@ const LEFT_PANEL_MIN = 280
 const LEFT_PANEL_MAX = 480
 const RIGHT_PANEL_MIN = 280
 const RIGHT_PANEL_MAX = 760
-const CODE_CANVAS_MAIN_MIN_WIDTH = 360
-const CODE_CANVAS_RIGHT_PANEL_MAX = Number.POSITIVE_INFINITY
 const SIDEBAR_HARD_MIN = 180
 const MAIN_MIN_WIDTH = 560
 const PANEL_RESIZE_HANDLE_WIDTH = 5
-// The code/chat workspace pins a fixed-width vertical action rail at the far
-// right edge; reserve its width so the resizable panels don't overrun it.
 export const RAIL_WIDTH = 48
-// Bottom terminal drawer sizing. The drawer lives below the chat stage and
-// resizes vertically, so it has its own clamps instead of the column widths.
+export const WORKBENCH_RESIZE_CLASS = 'ds-workbench-resizing'
 const TERMINAL_HEIGHT_DEFAULT = 360
 const TERMINAL_HEIGHT_MIN = 220
 const TERMINAL_HEIGHT_MAX = 760
@@ -46,6 +55,7 @@ const TERMINAL_HEIGHT_MAX = 760
 export type WorkbenchWidthConstraints = {
   mainMinWidth: number
   rightPanelMax: number
+  fixedChromeWidth?: number
 }
 
 const DEFAULT_WIDTH_CONSTRAINTS: WorkbenchWidthConstraints = {
@@ -53,9 +63,10 @@ const DEFAULT_WIDTH_CONSTRAINTS: WorkbenchWidthConstraints = {
   rightPanelMax: RIGHT_PANEL_MAX
 }
 
-const CODE_CANVAS_WIDTH_CONSTRAINTS: WorkbenchWidthConstraints = {
-  mainMinWidth: CODE_CANVAS_MAIN_MIN_WIDTH,
-  rightPanelMax: CODE_CANVAS_RIGHT_PANEL_MAX
+const CODE_TABS_WIDTH_CONSTRAINTS: WorkbenchWidthConstraints = {
+  mainMinWidth: MAIN_MIN_WIDTH,
+  rightPanelMax: Number.POSITIVE_INFINITY,
+  fixedChromeWidth: RAIL_WIDTH
 }
 
 function clampWidth(value: number, min: number, max: number): number {
@@ -85,6 +96,21 @@ function persistBoolean(key: string, value: boolean): void {
   writeBrowserStorageItem(key, value ? '1' : '0')
 }
 
+type ResizePointerCaptureTarget = Pick<
+  HTMLDivElement,
+  'hasPointerCapture' | 'releasePointerCapture' | 'setPointerCapture'
+>
+
+export function captureResizePointer(
+  target: ResizePointerCaptureTarget,
+  pointerId: number
+): () => void {
+  target.setPointerCapture(pointerId)
+  return () => {
+    if (target.hasPointerCapture(pointerId)) target.releasePointerCapture(pointerId)
+  }
+}
+
 function readStoredRightPanelMode(): RightPanelMode {
   const raw = readBrowserStorageItem(RIGHT_PANEL_MODE_KEY)
   return normalizeStoredRightPanelId(raw)
@@ -98,11 +124,78 @@ function persistRightPanelMode(mode: RightPanelMode): void {
   }
 }
 
+export function codeRightTabsWorkspaceScope(workspaceRoot: string): string {
+  return workspaceRootScopeKey(workspaceRoot) || '__global__'
+}
+
+function readStoredCodeRightTabsRegistry(): StoredCodeRightTabsRegistry {
+  const raw = readBrowserStorageItem(CODE_RIGHT_TABS_KEY)
+  if (!raw) return normalizeStoredCodeRightTabsRegistry(null)
+  try {
+    return normalizeStoredCodeRightTabsRegistry(JSON.parse(raw))
+  } catch {
+    return normalizeStoredCodeRightTabsRegistry(null)
+  }
+}
+
+function persistCodeRightTabsRegistry(registry: StoredCodeRightTabsRegistry): void {
+  writeBrowserStorageItem(CODE_RIGHT_TABS_KEY, JSON.stringify(registry))
+}
+
+export type StoredCodeRightWidthsRegistry = {
+  version: 1
+  workspaces: Record<string, number>
+}
+
+export function normalizeStoredCodeRightWidthsRegistry(value: unknown): StoredCodeRightWidthsRegistry {
+  if (!value || typeof value !== 'object') return { version: 1, workspaces: {} }
+  const source = value as Partial<StoredCodeRightWidthsRegistry>
+  if (source.version !== 1 || !source.workspaces || typeof source.workspaces !== 'object') {
+    return { version: 1, workspaces: {} }
+  }
+  const workspaces: Record<string, number> = {}
+  for (const [scope, width] of Object.entries(source.workspaces)) {
+    if (!scope || !Number.isFinite(width)) continue
+    workspaces[scope] = Math.max(RIGHT_PANEL_MIN, Math.round(width))
+  }
+  return { version: 1, workspaces }
+}
+
+function readStoredCodeRightWidthsRegistry(): StoredCodeRightWidthsRegistry {
+  const raw = readBrowserStorageItem(CODE_RIGHT_WIDTHS_KEY)
+  if (!raw) return normalizeStoredCodeRightWidthsRegistry(null)
+  try {
+    return normalizeStoredCodeRightWidthsRegistry(JSON.parse(raw))
+  } catch {
+    return normalizeStoredCodeRightWidthsRegistry(null)
+  }
+}
+
+function persistCodeRightWidthsRegistry(registry: StoredCodeRightWidthsRegistry): void {
+  writeBrowserStorageItem(CODE_RIGHT_WIDTHS_KEY, JSON.stringify(registry))
+}
+
+/**
+ * Keep a workspace's previous right-panel tabs available, without letting a
+ * restored panel take over the conversation when the application launches.
+ */
+export function initialCodeRightTabsForLaunch(
+  stored: CodeRightTabsState | undefined,
+  legacyMode: RightPanelMode
+): CodeRightTabsState {
+  if (stored) return collapseCodeRightTabs(stored)
+  const legacy = legacyMode === BUILTIN_RIGHT_PANEL_IDS.sddAi ? null : legacyMode
+  const migrated = legacy
+    ? openCodeRightTab(emptyCodeRightTabsState(), legacy)
+    : emptyCodeRightTabsState()
+  return collapseCodeRightTabs(migrated)
+}
+
 export function workbenchWidthConstraintsForRightPanel(
   route: AppRoute,
-  rightPanelMode: RightPanelMode
+  _rightPanelMode: RightPanelMode
 ): WorkbenchWidthConstraints {
-  if (route === 'chat' && rightPanelMode === BUILTIN_RIGHT_PANEL_IDS.canvas) return CODE_CANVAS_WIDTH_CONSTRAINTS
+  if (route === 'chat') return CODE_TABS_WIDTH_CONSTRAINTS
   return DEFAULT_WIDTH_CONSTRAINTS
 }
 
@@ -115,10 +208,11 @@ export function fitWorkbenchWidths(
 ): { left: number; right: number } {
   const mainMinWidth = constraints.mainMinWidth
   const rightPanelMax = constraints.rightPanelMax
+  const fixedChromeWidth = constraints.fixedChromeWidth ?? 0
   const handleWidth =
     (panels.leftPanelVisible ? PANEL_RESIZE_HANDLE_WIDTH : 0) +
     (panels.rightPanelVisible ? PANEL_RESIZE_HANDLE_WIDTH : 0)
-  const usableWidth = Math.max(0, containerWidth - handleWidth)
+  const usableWidth = Math.max(0, containerWidth - handleWidth - fixedChromeWidth)
 
   if (!panels.leftPanelVisible) {
     if (!panels.rightPanelVisible) {
@@ -206,7 +300,17 @@ export function useWorkbenchLayout({
   workspaceRoot: string
   writeAssistantOpen: boolean
 }) {
-  const [rightPanelMode, setRightPanelMode] = useState<RightPanelMode>(readStoredRightPanelMode)
+  const initialScopeRef = useRef(codeRightTabsWorkspaceScope(workspaceRoot))
+  const tabsRegistryRef = useRef(readStoredCodeRightTabsRegistry())
+  const widthsRegistryRef = useRef(readStoredCodeRightWidthsRegistry())
+  const legacyModeRef = useRef(readStoredRightPanelMode())
+  const [codeRightTabs, setCodeRightTabs] = useState<CodeRightTabsState>(() => {
+    const stored = tabsRegistryRef.current.workspaces[initialScopeRef.current]
+    return initialCodeRightTabsForLaunch(stored, legacyModeRef.current)
+  })
+  const codeRightTabsRef = useRef(codeRightTabs)
+  codeRightTabsRef.current = codeRightTabs
+  const [transientRightPanelMode, setTransientRightPanelMode] = useState<RightPanelMode>(null)
   const [filePreviewTarget, setFilePreviewTarget] = useState<WorkspaceFileTarget | null>(null)
   const [leftSidebarWidth, setLeftSidebarWidth] = useState(() =>
     readStoredWidth(LEFT_PANEL_WIDTH_KEY, LEFT_PANEL_DEFAULT)
@@ -214,9 +318,12 @@ export function useWorkbenchLayout({
   const [leftSidebarCollapsed, setLeftSidebarCollapsed] = useState(() =>
     readStoredBoolean(LEFT_PANEL_COLLAPSED_KEY, false)
   )
-  const [rightSidebarWidth, setRightSidebarWidth] = useState(() =>
-    readStoredWidth(RIGHT_PANEL_WIDTH_KEY, RIGHT_PANEL_DEFAULT)
-  )
+  const [rightSidebarWidth, setRightSidebarWidth] = useState(() => {
+    const scoped = widthsRegistryRef.current.workspaces[initialScopeRef.current]
+    if (scoped) return scoped
+    const legacy = readStoredWidth(RIGHT_PANEL_WIDTH_KEY, RIGHT_PANEL_DEFAULT)
+    return codeRightTabs.expanded ? Math.max(legacy, CODE_PANEL_PREFERRED) : legacy
+  })
   const [terminalOpen, setTerminalOpen] = useState(false)
   const [terminalHeight, setTerminalHeight] = useState(() =>
     readStoredWidth(TERMINAL_HEIGHT_KEY, TERMINAL_HEIGHT_DEFAULT)
@@ -224,12 +331,20 @@ export function useWorkbenchLayout({
   const shellRef = useRef<HTMLDivElement | null>(null)
   const previewThreadId = useRef<string | null>(activeThreadId)
   const autoOpenedPreviewUrlRef = useRef<string | null>(null)
+  const rightPanelMode = route === 'chat'
+    ? transientRightPanelMode ?? (codeRightTabs.expanded ? codeRightTabs.activeId : null)
+    : null
   const rightPanelVisible = route === 'write'
     ? writeAssistantOpen
     : route === 'design'
       ? designAssistantOpen || designImplementOpen
-      : rightPanelMode !== null
+      : codeRightTabs.expanded || rightPanelMode !== null
   const widthConstraints = workbenchWidthConstraintsForRightPanel(route, rightPanelMode)
+  const ensureInitialCodePanelWidth = useCallback((): void => {
+    if (codeRightTabsRef.current.tabs.length === 0) {
+      setRightSidebarWidth((width) => Math.max(width, CODE_PANEL_PREFERRED))
+    }
+  }, [])
 
   useEffect(() => {
     persistWidth(LEFT_PANEL_WIDTH_KEY, leftSidebarWidth)
@@ -241,11 +356,51 @@ export function useWorkbenchLayout({
 
   useEffect(() => {
     persistWidth(RIGHT_PANEL_WIDTH_KEY, rightSidebarWidth)
+    const scope = initialScopeRef.current
+    widthsRegistryRef.current = {
+      version: 1,
+      workspaces: {
+        ...widthsRegistryRef.current.workspaces,
+        [scope]: rightSidebarWidth
+      }
+    }
+    persistCodeRightWidthsRegistry(widthsRegistryRef.current)
   }, [rightSidebarWidth])
 
   useEffect(() => {
-    persistRightPanelMode(rightPanelMode)
-  }, [rightPanelMode])
+    const scope = initialScopeRef.current
+    tabsRegistryRef.current = {
+      version: 1,
+      workspaces: {
+        ...tabsRegistryRef.current.workspaces,
+        [scope]: codeRightTabs
+      }
+    }
+    persistCodeRightTabsRegistry(tabsRegistryRef.current)
+    persistRightPanelMode(codeRightTabs.expanded ? codeRightTabs.activeId : null)
+  }, [codeRightTabs])
+
+  useEffect(() => {
+    const nextScope = codeRightTabsWorkspaceScope(workspaceRoot)
+    const previousScope = initialScopeRef.current
+    if (nextScope === previousScope) return
+    tabsRegistryRef.current = {
+      version: 1,
+      workspaces: {
+        ...tabsRegistryRef.current.workspaces,
+        [previousScope]: codeRightTabs
+      }
+    }
+    initialScopeRef.current = nextScope
+    setTransientRightPanelMode(null)
+    const nextTabs = tabsRegistryRef.current.workspaces[nextScope] ?? emptyCodeRightTabsState()
+    setCodeRightTabs(nextTabs)
+    const nextWidth = widthsRegistryRef.current.workspaces[nextScope]
+    if (nextWidth) setRightSidebarWidth(nextWidth)
+    else if (nextTabs.expanded) {
+      setRightSidebarWidth((width) => Math.max(width, CODE_PANEL_PREFERRED))
+    }
+  }, [codeRightTabs, workspaceRoot])
 
   useEffect(() => {
     removeBrowserStorageItem(TERMINAL_OPEN_KEY)
@@ -263,48 +418,47 @@ export function useWorkbenchLayout({
         ...detail,
         workspaceRoot: detail.workspaceRoot ?? workspaceRoot
       })
-      setRightSidebarWidth((width) => Math.max(width, CODE_PANEL_PREFERRED))
-      setRightPanelMode(BUILTIN_RIGHT_PANEL_IDS.file)
+      ensureInitialCodePanelWidth()
+      setCodeRightTabs((current) => openCodeRightTab(current, BUILTIN_RIGHT_PANEL_IDS.file))
     }
 
     window.addEventListener(WORKSPACE_FILE_PREVIEW_EVENT, onPreview)
     return () => window.removeEventListener(WORKSPACE_FILE_PREVIEW_EVENT, onPreview)
-  }, [workspaceRoot])
+  }, [ensureInitialCodePanelWidth, workspaceRoot])
 
   useEffect(() => {
     const onCanvasOpenRequest = (): void => {
-      setRightSidebarWidth((width) => Math.max(width, CODE_PANEL_PREFERRED))
-      setRightPanelMode(BUILTIN_RIGHT_PANEL_IDS.canvas)
+      ensureInitialCodePanelWidth()
+      setCodeRightTabs((current) => openCodeRightTab(current, BUILTIN_RIGHT_PANEL_IDS.canvas))
     }
 
     window.addEventListener(CODE_CANVAS_OPEN_REQUEST_EVENT, onCanvasOpenRequest)
     return () => window.removeEventListener(CODE_CANVAS_OPEN_REQUEST_EVENT, onCanvasOpenRequest)
-  }, [])
+  }, [ensureInitialCodePanelWidth])
 
   useEffect(() => {
     if (previewThreadId.current === activeThreadId) return
     previewThreadId.current = activeThreadId
     autoOpenedPreviewUrlRef.current = null
-    if (rightPanelMode === BUILTIN_RIGHT_PANEL_IDS.browser) setRightPanelMode(null)
-  }, [activeThreadId, rightPanelMode])
+    setCodeRightTabs((current) => {
+      let next = closeCodeRightTab(current, BUILTIN_RIGHT_PANEL_IDS.browser)
+      next = closeCodeRightTab(next, BUILTIN_RIGHT_PANEL_IDS.sideConversations)
+      next = closeCodeRightTab(next, BUILTIN_RIGHT_PANEL_IDS.plan)
+      return next
+    })
+  }, [activeThreadId])
 
   useEffect(() => {
     if (!latestAutoOpenDevPreviewUrl || route !== 'chat') return
     if (autoOpenedPreviewUrlRef.current === latestAutoOpenDevPreviewUrl) return
     autoOpenedPreviewUrlRef.current = latestAutoOpenDevPreviewUrl
-    setRightPanelMode(BUILTIN_RIGHT_PANEL_IDS.browser)
-  }, [latestAutoOpenDevPreviewUrl, route])
-
-  useEffect(() => {
-    if (route !== 'write' && route !== 'design') return
-    if (rightPanelMode !== null) setRightPanelMode(null)
-  }, [route, rightPanelMode])
+    ensureInitialCodePanelWidth()
+    setCodeRightTabs((current) => openCodeRightTab(current, BUILTIN_RIGHT_PANEL_IDS.browser))
+  }, [ensureInitialCodePanelWidth, latestAutoOpenDevPreviewUrl, route])
 
   useLayoutEffect(() => {
     const sync = (): void => {
-      const containerWidth =
-        (shellRef.current?.clientWidth ?? window.innerWidth) -
-        (route === 'write' || route === 'design' ? 0 : RAIL_WIDTH)
+      const containerWidth = shellRef.current?.clientWidth ?? window.innerWidth
       const next = fitWorkbenchWidths(
         containerWidth,
         leftSidebarWidth,
@@ -331,13 +485,51 @@ export function useWorkbenchLayout({
     widthConstraints
   ])
 
-  const toggleRightPanelMode = (nextMode: Exclude<RightPanelMode, null>): void => {
-    const willOpen = rightPanelMode !== nextMode
-    setRightPanelMode((current) => (current === nextMode ? null : nextMode))
-    // The canvas wants room — bump the panel to the wider preview width on open.
-    if (willOpen && nextMode === BUILTIN_RIGHT_PANEL_IDS.canvas) {
-      setRightSidebarWidth((width) => Math.max(width, CODE_PANEL_PREFERRED))
+  const openRightPanelTab = useCallback((id: Exclude<RightPanelMode, null>): void => {
+    setTransientRightPanelMode(null)
+    ensureInitialCodePanelWidth()
+    setCodeRightTabs((current) => openCodeRightTab(current, id))
+  }, [ensureInitialCodePanelWidth])
+
+  const activateRightPanelTab = useCallback((id: Exclude<RightPanelMode, null>): void => {
+    setTransientRightPanelMode(null)
+    setCodeRightTabs((current) => activateCodeRightTab(current, id))
+  }, [])
+
+  const closeRightPanelTab = useCallback((id: Exclude<RightPanelMode, null>): void => {
+    setCodeRightTabs((current) => closeCodeRightTab(current, id))
+  }, [])
+
+  const collapseRightPanel = useCallback((): void => {
+    if (transientRightPanelMode) {
+      setTransientRightPanelMode(null)
+      return
     }
+    setCodeRightTabs((current) => collapseCodeRightTabs(current))
+  }, [transientRightPanelMode])
+
+  const expandRightPanel = useCallback((): void => {
+    ensureInitialCodePanelWidth()
+    setCodeRightTabs((current) => expandCodeRightTabs(current))
+  }, [ensureInitialCodePanelWidth])
+
+  const setRightPanelMode: Dispatch<SetStateAction<RightPanelMode>> = useCallback((value) => {
+    const currentMode = transientRightPanelMode ?? (codeRightTabs.expanded ? codeRightTabs.activeId : null)
+    const nextMode = typeof value === 'function' ? value(currentMode) : value
+    if (nextMode === BUILTIN_RIGHT_PANEL_IDS.sddAi) {
+      setTransientRightPanelMode(nextMode)
+      return
+    }
+    if (nextMode === null) {
+      if (transientRightPanelMode) setTransientRightPanelMode(null)
+      else setCodeRightTabs((current) => collapseCodeRightTabs(current))
+      return
+    }
+    openRightPanelTab(nextMode)
+  }, [codeRightTabs.activeId, codeRightTabs.expanded, openRightPanelTab, transientRightPanelMode])
+
+  const toggleRightPanelMode = (nextMode: Exclude<RightPanelMode, null>): void => {
+    openRightPanelTab(nextMode)
   }
 
   const toggleLeftSidebar = (): void => {
@@ -348,7 +540,7 @@ export function useWorkbenchLayout({
     if (latestDevPreviewUrl) {
       autoOpenedPreviewUrlRef.current = latestDevPreviewUrl
     }
-    setRightPanelMode(BUILTIN_RIGHT_PANEL_IDS.browser)
+    openRightPanelTab(BUILTIN_RIGHT_PANEL_IDS.browser)
   }
 
   const beginLeftResize = (event: ReactPointerEvent<HTMLDivElement>): void => {
@@ -357,15 +549,15 @@ export function useWorkbenchLayout({
     const startX = event.clientX
     const startLeft = leftSidebarWidth
     const startRight = rightSidebarWidth
+    const releasePointer = captureResizePointer(event.currentTarget, event.pointerId)
     const prevCursor = document.body.style.cursor
     const prevUserSelect = document.body.style.userSelect
+    document.body.classList.add(WORKBENCH_RESIZE_CLASS)
     document.body.style.cursor = 'col-resize'
     document.body.style.userSelect = 'none'
 
     const onMove = (moveEvent: PointerEvent): void => {
-      const containerWidth =
-        (shellRef.current?.clientWidth ?? window.innerWidth) -
-        (route === 'write' || route === 'design' ? 0 : RAIL_WIDTH)
+      const containerWidth = shellRef.current?.clientWidth ?? window.innerWidth
       const delta = moveEvent.clientX - startX
       const next = fitWorkbenchWidths(
         containerWidth,
@@ -381,15 +573,19 @@ export function useWorkbenchLayout({
       if (next.right !== rightSidebarWidth) setRightSidebarWidth(next.right)
     }
 
-    const onUp = (): void => {
+    const onEnd = (): void => {
+      releasePointer()
+      document.body.classList.remove(WORKBENCH_RESIZE_CLASS)
       document.body.style.cursor = prevCursor
       document.body.style.userSelect = prevUserSelect
       window.removeEventListener('pointermove', onMove)
-      window.removeEventListener('pointerup', onUp)
+      window.removeEventListener('pointerup', onEnd)
+      window.removeEventListener('pointercancel', onEnd)
     }
 
     window.addEventListener('pointermove', onMove)
-    window.addEventListener('pointerup', onUp)
+    window.addEventListener('pointerup', onEnd)
+    window.addEventListener('pointercancel', onEnd)
   }
 
   const beginRightResize = (event: ReactPointerEvent<HTMLDivElement>): void => {
@@ -398,15 +594,15 @@ export function useWorkbenchLayout({
     const startX = event.clientX
     const startLeft = leftSidebarWidth
     const startRight = rightSidebarWidth
+    const releasePointer = captureResizePointer(event.currentTarget, event.pointerId)
     const prevCursor = document.body.style.cursor
     const prevUserSelect = document.body.style.userSelect
+    document.body.classList.add(WORKBENCH_RESIZE_CLASS)
     document.body.style.cursor = 'col-resize'
     document.body.style.userSelect = 'none'
 
     const onMove = (moveEvent: PointerEvent): void => {
-      const containerWidth =
-        (shellRef.current?.clientWidth ?? window.innerWidth) -
-        (route === 'write' || route === 'design' ? 0 : RAIL_WIDTH)
+      const containerWidth = shellRef.current?.clientWidth ?? window.innerWidth
       const delta = moveEvent.clientX - startX
       const next = fitWorkbenchWidths(
         containerWidth,
@@ -422,46 +618,59 @@ export function useWorkbenchLayout({
       setRightSidebarWidth(next.right)
     }
 
-    const onUp = (): void => {
+    const onEnd = (): void => {
+      releasePointer()
+      document.body.classList.remove(WORKBENCH_RESIZE_CLASS)
       document.body.style.cursor = prevCursor
       document.body.style.userSelect = prevUserSelect
       window.removeEventListener('pointermove', onMove)
-      window.removeEventListener('pointerup', onUp)
+      window.removeEventListener('pointerup', onEnd)
+      window.removeEventListener('pointercancel', onEnd)
     }
 
     window.addEventListener('pointermove', onMove)
-    window.addEventListener('pointerup', onUp)
+    window.addEventListener('pointerup', onEnd)
+    window.addEventListener('pointercancel', onEnd)
   }
 
-  // Bottom terminal drawer: dragging the top edge up grows the panel. The
-  // clamps keep enough chat stage visible above it.
   const beginTerminalResize = (event: ReactPointerEvent<HTMLDivElement>): void => {
     if (event.button !== 0 || !terminalOpen) return
     event.preventDefault()
     const startY = event.clientY
     const startHeight = terminalHeight
+    const releasePointer = captureResizePointer(event.currentTarget, event.pointerId)
     const prevCursor = document.body.style.cursor
     const prevUserSelect = document.body.style.userSelect
+    document.body.classList.add(WORKBENCH_RESIZE_CLASS)
     document.body.style.cursor = 'row-resize'
     document.body.style.userSelect = 'none'
 
     const onMove = (moveEvent: PointerEvent): void => {
       const containerHeight = shellRef.current?.clientHeight ?? window.innerHeight
       const delta = startY - moveEvent.clientY
-      const maxHeight = Math.max(TERMINAL_HEIGHT_MIN, Math.min(TERMINAL_HEIGHT_MAX, containerHeight - 260))
-      const nextHeight = Math.min(Math.max(startHeight + delta, TERMINAL_HEIGHT_MIN), maxHeight)
-      setTerminalHeight(nextHeight)
+      const maxHeight = Math.max(
+        TERMINAL_HEIGHT_MIN,
+        Math.min(TERMINAL_HEIGHT_MAX, containerHeight - 260)
+      )
+      setTerminalHeight(Math.min(
+        Math.max(startHeight + delta, TERMINAL_HEIGHT_MIN),
+        maxHeight
+      ))
     }
 
-    const onUp = (): void => {
+    const onEnd = (): void => {
+      releasePointer()
+      document.body.classList.remove(WORKBENCH_RESIZE_CLASS)
       document.body.style.cursor = prevCursor
       document.body.style.userSelect = prevUserSelect
       window.removeEventListener('pointermove', onMove)
-      window.removeEventListener('pointerup', onUp)
+      window.removeEventListener('pointerup', onEnd)
+      window.removeEventListener('pointercancel', onEnd)
     }
 
     window.addEventListener('pointermove', onMove)
-    window.addEventListener('pointerup', onUp)
+    window.addEventListener('pointerup', onEnd)
+    window.addEventListener('pointercancel', onEnd)
   }
 
   const toggleTerminal = (): void => {
@@ -472,10 +681,16 @@ export function useWorkbenchLayout({
     beginLeftResize,
     beginRightResize,
     beginTerminalResize,
+    codeRightTabs,
+    activateRightPanelTab,
+    closeRightPanelTab,
+    collapseRightPanel,
+    expandRightPanel,
     filePreviewTarget,
     leftSidebarCollapsed,
     leftSidebarWidth,
     openDevPreview,
+    openRightPanelTab,
     rightPanelMode,
     rightPanelVisible,
     rightSidebarWidth,

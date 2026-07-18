@@ -29,12 +29,14 @@ export class RuntimeExtensionSettingsService implements ExtensionSettingsService
   private contributionIds = new Set<string>()
   private values: ExtensionSettingsSnapshot['values'] = {}
   private revisionsByExtension = new Map<string, number>()
+  private loadGeneration = 0
 
   constructor(
     private readonly transport: ExtensionSettingsTransport = trustedExtensionSettingsTransport
   ) {}
 
   async load(request: ExtensionSettingsLoadRequest): Promise<ExtensionSettingsSnapshot> {
+    const generation = ++this.loadGeneration
     const contributionIds = [...new Set(request.contributionIds)].sort()
     if (contributionIds.length === 0) {
       this.reset(request.workspaceRoot, contributionIds, {}, {})
@@ -47,6 +49,9 @@ export class RuntimeExtensionSettingsService implements ExtensionSettingsService
     const response = await this.transport.load(input)
     const result = parseRuntimeResult(response)
     const parsed = parseLoadResponse(result)
+    if (generation !== this.loadGeneration) {
+      throw new Error('Extension settings request was superseded by a newer workspace load.')
+    }
     this.reset(request.workspaceRoot, contributionIds, parsed.values, parsed.revisions)
     return this.project()
   }
@@ -64,6 +69,7 @@ export class RuntimeExtensionSettingsService implements ExtensionSettingsService
     const extensionId = extensionIdFromContribution(request.contributionId)
     const extensionRevision = this.revisionsByExtension.get(extensionId)
     if (extensionRevision === undefined) throw new Error('Extension settings revision is unavailable.')
+    const generation = this.loadGeneration
     const input = {
       contributionId: request.contributionId,
       key: request.key,
@@ -74,6 +80,9 @@ export class RuntimeExtensionSettingsService implements ExtensionSettingsService
     const response = await this.transport.update(input)
     const result = parseRuntimeResult(response)
     const parsed = parseUpdateResponse(result, extensionId)
+    if (generation !== this.loadGeneration || (request.workspaceRoot ?? '') !== this.workspaceRoot) {
+      throw new Error('Extension settings update was superseded by a newer workspace load.')
+    }
     this.revisionsByExtension.set(extensionId, parsed.revision)
     for (const [contributionId, values] of Object.entries(parsed.values)) {
       if (this.contributionIds.has(contributionId)) this.values[contributionId] = values

@@ -3,6 +3,7 @@ import { ExternalLink, Monitor } from 'lucide-react'
 import type { CanvasShape } from '../../../design/canvas/canvas-types'
 import { runningAppFrameLabel } from '../../../design/canvas/running-app-frame'
 import { htmlFrameOverlayPointerEvents } from './html-frame/html-frame-helpers'
+import { useCanvasMotionPortalStyle } from '../../../design/motion/canvas-motion-preview'
 
 type Props = {
   shape: CanvasShape
@@ -33,6 +34,7 @@ export function RunningAppFrameOverlay({
   editing,
   onDoubleClick
 }: Props): ReactElement | null {
+  const motionStyle = useCanvasMotionPortalStyle(shape, zoom)
   const frame = shape.runningApp
   if (!frame?.url) return null
   const pointerEvents = htmlFrameOverlayPointerEvents({ panning, interactive, editing })
@@ -40,13 +42,16 @@ export function RunningAppFrameOverlay({
   return (
     <div
       className="absolute overflow-hidden rounded-[10px] bg-white shadow-[0_18px_42px_rgba(15,23,42,0.18)] ring-1 ring-black/10 dark:bg-[#111318] dark:ring-white/10"
+      data-canvas-motion-target={shape.id}
+      data-canvas-motion-kind="portal"
       style={{
         left: screenX,
         top: screenY,
         width: screenWidth,
         height: screenHeight,
         zIndex,
-        pointerEvents
+        pointerEvents,
+        ...motionStyle
       }}
       onDoubleClick={(event) => {
         event.stopPropagation()

@@ -4,6 +4,28 @@ Framework-neutral, stable public contracts and Host client for Kun extensions.
 The package has no React or Electron dependency. `ExtensionManifestSchema` is the
 canonical runtime source for `schema/kun-extension.schema.json`.
 
+## Installation modes
+
+Inside this repository, install from the root and use the npm workspace:
+
+```sh
+npm ci
+npm run build --workspace @kun/extension-api
+```
+
+For a standalone project, first require a real public-registry result, then
+install the package by name:
+
+```sh
+npm view @kun/extension-api@1.2.0 version
+npm install @kun/extension-api@^1.2.0
+```
+
+Only run the install when the first command returns a version. `E404` means the
+configured registry does not have the artifact; use the repository workflow
+instead of adding a repository-relative `file:` dependency to a portable
+extension.
+
 ```ts
 import type { ExtensionContext } from '@kun/extension-api'
 

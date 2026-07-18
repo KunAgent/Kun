@@ -1,6 +1,15 @@
 import { useCanvasSelectionStore } from '../canvas-selection-store'
 import { useCanvasShapeStore, withDescendants } from '../canvas-shape-store'
 import { useCanvasUndoStore } from '../canvas-undo-store'
+import {
+  beginAutoKeyCanvasGesture,
+  commitActiveAutoKeyCanvasGesture,
+  commitAutoKeyCanvasGesture,
+  endAutoKeyCanvasGesture,
+  hasActiveAutoKeyCanvasGesture
+} from '../../motion/canvas-motion-auto-key'
+import { projectCanvasMotionObjects } from '../../motion/canvas-motion-preview'
+import { useCanvasMotionStore } from '../../motion/canvas-motion-store'
 import { useCanvasViewportStore } from '../canvas-viewport-store'
 import { hitTest, hitTestAll, getSelectionBounds } from '../canvas-hit-test'
 import { findSnaps } from '../canvas-snap'
@@ -35,7 +44,8 @@ export function createSelectTool(): CanvasToolHandler {
     cursor: 'default',
 
     onPointerDown(e: CanvasPointerEvent) {
-      const doc = useCanvasShapeStore.getState().document
+      const baseDocument = useCanvasShapeStore.getState().document
+      const doc = motionInteractionDocument(baseDocument)
       const selection = useCanvasSelectionStore.getState()
       const hitId = hitTest(doc, e.canvasX, e.canvasY)
 
@@ -57,9 +67,10 @@ export function createSelectTool(): CanvasToolHandler {
         altDuplicatePending = e.altKey
 
         const currentDoc = useCanvasShapeStore.getState().document
-        const moveState = captureMoveState(currentDoc)
+        const moveState = captureMoveState(currentDoc, motionInteractionDocument(currentDoc).objects)
         dragShapeStartPositions = moveState.shapeStartPositions
         dragCollectiveStart = moveState.collectiveStart
+        if (!e.altKey) beginAutoKeyCanvasGesture(useCanvasSelectionStore.getState().selectedIds)
       } else {
         marqueeMode = e.altKey ? 'subtract' : e.shiftKey || e.metaKey || e.ctrlKey ? 'add' : 'replace'
         if (marqueeMode === 'replace') {
@@ -77,6 +88,7 @@ export function createSelectTool(): CanvasToolHandler {
         if (altDuplicatePending) {
           const movedPx = Math.hypot(e.clientX - dragStartClientX, e.clientY - dragStartClientY)
           if (movedPx < ALT_DUPLICATE_DRAG_THRESHOLD_PX) return
+          endAutoKeyCanvasGesture()
           const duplicateResult = duplicateCurrentSelection()
           altDuplicatePending = false
           if (duplicateResult.clonedRootIds.length > 0) {
@@ -84,7 +96,7 @@ export function createSelectTool(): CanvasToolHandler {
             dragSelectionBefore = duplicateResult.selectionBefore
             useCanvasSelectionStore.getState().select(duplicateResult.clonedRootIds)
             const clonedDoc = useCanvasShapeStore.getState().document
-            const moveState = captureMoveState(clonedDoc)
+            const moveState = captureMoveState(clonedDoc, motionInteractionDocument(clonedDoc).objects)
             dragShapeStartPositions = moveState.shapeStartPositions
             dragCollectiveStart = moveState.collectiveStart
           }
@@ -103,7 +115,7 @@ export function createSelectTool(): CanvasToolHandler {
             width: dragCollectiveStart.width,
             height: dragCollectiveStart.height
           }
-          const doc = useCanvasShapeStore.getState().document
+          const doc = motionInteractionDocument(useCanvasShapeStore.getState().document)
           const staticShapes = collectVisibleSnapTargets(doc, dragShapeStartPositions)
           const gridSize = viewport.gridVisible ? 10 : null
           const snap = findSnaps(moving, staticShapes, viewport.getZoom(), gridSize)
@@ -115,7 +127,10 @@ export function createSelectTool(): CanvasToolHandler {
         }
 
         const store = useCanvasShapeStore.getState()
+        const motionGestureActive = hasActiveAutoKeyCanvasGesture()
+        const gestureStartValues = useCanvasMotionStore.getState().gestureStartValues
         for (const [id, start] of dragShapeStartPositions) {
+          if (motionGestureActive && !gestureStartValues[id]) continue
           store.updateShape(id, { x: start.x + dx, y: start.y + dy }, true)
         }
       } else if (dragMode === 'marquee') {
@@ -125,7 +140,7 @@ export function createSelectTool(): CanvasToolHandler {
         const height = Math.abs(e.canvasY - dragStartY)
         useCanvasSelectionStore.getState().setMarquee({ x, y, width, height })
       } else {
-        const doc = useCanvasShapeStore.getState().document
+        const doc = motionInteractionDocument(useCanvasShapeStore.getState().document)
         const hoverId = hitTest(doc, e.canvasX, e.canvasY)
         useCanvasSelectionStore.getState().setHoverTarget(hoverId)
       }
@@ -133,6 +148,9 @@ export function createSelectTool(): CanvasToolHandler {
 
     onPointerUp(_e: CanvasPointerEvent) {
       if (dragMode === 'move') {
+        const motionCommitted = commitActiveAutoKeyCanvasGesture(
+          dragCreatedPatches.length > 0 ? 'duplicate-move' : 'move'
+        )
         const doc = useCanvasShapeStore.getState().document
         const patches: { id: string; before: { x: number; y: number }; after: { x: number; y: number } }[] = []
         for (const [id, start] of dragShapeStartPositions) {
@@ -147,18 +165,22 @@ export function createSelectTool(): CanvasToolHandler {
           }
         }
         const allPatches = [...dragCreatedPatches, ...patches]
-        if (allPatches.length > 0) {
-          useCanvasUndoStore.getState().pushChange({
-            patches: allPatches,
-            label: dragCreatedPatches.length > 0 ? 'duplicate-move' : 'move',
-            ...(dragSelectionBefore ? { selectionBefore: dragSelectionBefore } : {})
-          })
+        if (!motionCommitted && allPatches.length > 0) {
+          const label = dragCreatedPatches.length > 0 ? 'duplicate-move' : 'move'
+          if (!commitAutoKeyCanvasGesture(allPatches, label, dragSelectionBefore ?? undefined)) {
+            useCanvasUndoStore.getState().pushChange({
+              patches: allPatches,
+              label,
+              ...(dragSelectionBefore ? { selectionBefore: dragSelectionBefore } : {})
+            })
+          }
         }
         useCanvasSelectionStore.getState().setSnapGuides([])
+        endAutoKeyCanvasGesture()
       } else if (dragMode === 'marquee') {
         const marquee = useCanvasSelectionStore.getState().marqueeRect
         if (marquee && marquee.width > 2 && marquee.height > 2) {
-          const doc = useCanvasShapeStore.getState().document
+          const doc = motionInteractionDocument(useCanvasShapeStore.getState().document)
           const hits = hitTestAll(doc, marquee)
           const nextSelection = resolveMarqueeSelection(doc, hits, marqueeMode)
           if (nextSelection) {
@@ -231,7 +253,22 @@ function resolveMarqueeSelection(
   return filterEditableRootShapeIds(doc, hits)
 }
 
-function captureMoveState(doc: CanvasDocument): {
+function motionInteractionDocument(document: CanvasDocument): CanvasDocument {
+  const state = useCanvasMotionStore.getState()
+  if (!state.open || !state.activeFrameId) return document
+  const objects = projectCanvasMotionObjects(
+    document,
+    state.activeFrameId,
+    state.currentTimeMs,
+    state.gestureOverrides
+  )
+  return objects === document.objects ? document : { ...document, objects }
+}
+
+function captureMoveState(
+  doc: CanvasDocument,
+  interactionObjects: Record<string, CanvasShape> = doc.objects
+): {
   shapeStartPositions: Map<string, { x: number; y: number; width: number; height: number }>
   collectiveStart: Rect | null
 } {
@@ -252,7 +289,7 @@ function captureMoveState(doc: CanvasDocument): {
   }
   // Snap against the user-visible selection bbox only (a frame's bbox already
   // encloses its children), not the expanded descendant set.
-  return { shapeStartPositions, collectiveStart: getSelectionBounds(doc.objects, ids) }
+  return { shapeStartPositions, collectiveStart: getSelectionBounds(interactionObjects, ids) }
 }
 
 function duplicateCurrentSelection(): {

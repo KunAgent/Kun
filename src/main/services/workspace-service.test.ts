@@ -67,6 +67,34 @@ describe('workspace-service boundary checks', () => {
     }
   })
 
+  it('does not resolve a presentation-looking directory as a file', async () => {
+    await mkdir(join(workspaceRoot, 'not-a-deck.pptx'))
+
+    const result = await resolveWorkspaceFile({
+      path: 'not-a-deck.pptx',
+      workspaceRoot
+    })
+
+    expect(result).toEqual({
+      ok: false,
+      message: 'Path must point to a regular workspace file.'
+    })
+  })
+
+  it('returns a presentation symlink canonical target for main-process type policy checks', async () => {
+    if (process.platform === 'win32') return
+    const payloadPath = join(workspaceRoot, 'payload.exe')
+    await writeFile(payloadPath, 'payload', 'utf8')
+    await symlink('payload.exe', join(workspaceRoot, 'deck.pptx'))
+
+    const result = await resolveWorkspaceFile({
+      path: 'deck.pptx',
+      workspaceRoot
+    })
+
+    expect(result).toEqual({ ok: true, path: await realpath(payloadPath) })
+  })
+
   it('rejects relative paths that escape the selected workspace', async () => {
     const result = await readWorkspaceFile({
       path: '../outside.txt',

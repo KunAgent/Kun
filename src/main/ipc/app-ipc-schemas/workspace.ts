@@ -61,6 +61,31 @@ export const localPdfTextTargetPayloadSchema = z
 export const deepseekConfigContentSchema = z.string().max(MAX_CONFIG_FILE_BYTES)
 
 export const workspaceRootSchema = trimmedString(MAX_PATH_LENGTH)
+export const kunProjectConfigWorkspacePayloadSchema = z
+  .object({
+    workspaceRoot: workspaceRootSchema.refine(isAbsolutePath, {
+      message: 'workspaceRoot must be an absolute path'
+    })
+  })
+  .strict()
+
+export const kunProjectConfigWritePayloadSchema = kunProjectConfigWorkspacePayloadSchema.extend({
+  content: deepseekConfigContentSchema
+}).strict()
+
+export const kunProjectConfigTrustPayloadSchema = z.discriminatedUnion('trusted', [
+  kunProjectConfigWorkspacePayloadSchema.extend({
+    trusted: z.literal(true),
+    expectedDigest: z.string().trim().regex(/^[a-fA-F0-9]{64}$/)
+  }).strict(),
+  kunProjectConfigWorkspacePayloadSchema.extend({
+    trusted: z.literal(false)
+  }).strict()
+])
+
+function isAbsolutePath(value: string): boolean {
+  return value.startsWith('/') || /^[a-z]:[\\/]/i.test(value) || value.startsWith('\\\\')
+}
 export const gitBranchPayloadSchema = z
   .object({
     workspaceRoot: workspaceRootSchema,
@@ -139,7 +164,9 @@ export const openEditorPathPayloadSchema = z
     workspaceRoot: optionalTrimmedString(MAX_PATH_LENGTH),
     editorId: optionalTrimmedString(MAX_EDITOR_ID_LENGTH),
     line: z.number().int().positive().max(1_000_000).optional(),
-    column: z.number().int().positive().max(1_000_000).optional()
+    column: z.number().int().positive().max(1_000_000).optional(),
+    openPolicy: z.enum(['presentation-artifact']).optional(),
+    expectedSha256: z.string().trim().regex(/^[a-f0-9]{64}$/i).optional()
   })
   .strict()
 

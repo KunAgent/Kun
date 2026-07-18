@@ -49,13 +49,20 @@ export class ExtensionPaths {
   }
 
   workspaceKey(workspaceRoot: string): string {
-    if (!isAbsolute(workspaceRoot)) {
-      throw extensionError('EXTENSION_WORKSPACE_INVALID', 'Workspace root must be absolute', {
-        workspaceRoot
-      })
-    }
-    return createHash('sha256').update(resolve(workspaceRoot)).digest('hex')
+    return extensionWorkspaceKey(workspaceRoot)
   }
+}
+
+/** Stable opaque workspace identity shared by activation, jobs, and artifacts. */
+export function extensionWorkspaceKey(workspaceRoot: string): string {
+  if (!isAbsolute(workspaceRoot)) {
+    throw extensionError('EXTENSION_WORKSPACE_INVALID', 'Workspace root must be absolute', {
+      workspaceRoot
+    })
+  }
+  // Keep activation identity lexical. A workspace may be opened through an
+  // absolute symlink; media confinement performs its own canonical realpath checks.
+  return createHash('sha256').update(resolve(workspaceRoot)).digest('hex')
 }
 
 export function extensionIdentity(publisher: string, name: string): string {

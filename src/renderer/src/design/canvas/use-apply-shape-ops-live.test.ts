@@ -12,11 +12,26 @@ import {
   rewriteGeneratedImageUrlsForTurn,
   shouldApplyDesignCanvasToolBlock,
   shouldApplyDurableSvgCreate,
+  shouldReplayIdleCanvasToolBlock,
   takeNextReadyScreenGeneration
 } from './use-apply-shape-ops-live'
 import { createDefaultShape, createEmptyDocument, createHtmlFrameShape } from './canvas-types'
 
 describe('replayActiveCanvasTurn', () => {
+  it('marks durable SVG and Motion results for idle remount replay', () => {
+    const block = (toolName: string): ToolBlock => ({
+      kind: 'tool',
+      id: `tool-${toolName}`,
+      summary: toolName,
+      status: 'success',
+      meta: { toolName, sourceItemKind: 'tool_result' },
+      detail: '{}'
+    })
+    expect(shouldReplayIdleCanvasToolBlock(block('design_motion_upsert_keyframes'))).toBe(true)
+    expect(shouldReplayIdleCanvasToolBlock(block('design_svg_create'))).toBe(true)
+    expect(shouldReplayIdleCanvasToolBlock(block('design_update_shapes'))).toBe(false)
+  })
+
   it('replays existing tool blocks and streaming text when enabled mid-turn', () => {
     const toolBlock: ToolBlock = {
       kind: 'tool',
@@ -282,6 +297,12 @@ describe('replayActiveCanvasTurn', () => {
       id: 'tool-export-1',
       meta: { toolName: 'design_export_canvas', sourceItemKind: 'tool_result' },
       detail: '{"ok":true,"action":"export_canvas"}'
+    })).toBe(true)
+    expect(shouldApplyDesignCanvasToolBlock({
+      ...finalResult,
+      id: 'tool-motion-1',
+      meta: { toolName: 'design_motion_upsert_keyframes', sourceItemKind: 'tool_result' },
+      detail: '{"ok":true,"motionOps":[]}'
     })).toBe(true)
   })
 })

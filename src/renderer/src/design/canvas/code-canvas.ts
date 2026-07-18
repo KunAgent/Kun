@@ -121,9 +121,15 @@ const OPEN_WHITEBOARD_CHINESE_DEICTIC_TARGET =
 const OPEN_WHITEBOARD_CHINESE_PLACEMENT =
   /(?:放|放到|放进|加到|添加到|贴到|拖到|移到|置入)[\s\S]{0,20}(?:画布|白板|画板|选中|框|这里|这个|里面|上面)/
 const OPEN_WHITEBOARD_ENGLISH_EXPORT =
-  /\b(?:export|save|download|convert|render)\b[\s\S]{0,40}\b(?:png|svg|image|picture|file|diagram|whiteboard|canvas|this|that|it)\b/i
+  /(?:\b(?:export|save|download|convert|render)\b[\s\S]{0,40}\b(?:png|svg|image|picture|file|diagram|whiteboard|canvas|this|that|it)\b|\b(?:png|svg|image|picture|file|diagram|whiteboard|canvas|this|that|it)\b[\s\S]{0,40}\b(?:export|save|download|convert|render)\b)/i
+const OPEN_WHITEBOARD_ENGLISH_FORMAT_FOLLOW_UP =
+  /^(?:(?:please|just)\s+)?(?:(?:give|make|create|generate|produce|send)(?:\s+me)?\s+)?(?:an?\s+)?(?:png|svg)(?:\s+(?:version|copy|file|image))?(?:\s+(?:please|thanks?))?[.!?]*$/i
 const OPEN_WHITEBOARD_CHINESE_EXPORT =
-  /(?:导出|转成|转换成|保存为|保存成)[\s\S]{0,24}(?:图片|图像|PNG|SVG|文件|架构图|流程图|白板|画布)/i
+  /(?:(?:导出|转成|转换成|保存为|保存成)[\s\S]{0,24}(?:图片|图像|PNG|SVG|文件|架构图|流程图|白板|画布|这个|它)|(?:图片|图像|PNG|SVG|文件|架构图|流程图|白板|画布|这个|它)[\s\S]{0,24}(?:导出|转成|转换成|保存为|保存成))/i
+const OPEN_WHITEBOARD_CHINESE_FORMAT_FOLLOW_UP =
+  /^(?:(?:请|帮我|给我|就|要|来个)\s*)?(?:(?:生成|导出|保存|做成|转成)\s*)?(?:一张|一个)?\s*(?:PNG|SVG)(?:\s*(?:版本|格式|文件|图片|图像))?(?:\s*(?:就行|即可|谢谢))?[。！？.!?]*$/i
+const OPEN_WHITEBOARD_SHORT_EXPORT =
+  /^(?:(?:please|just)\s+)?(?:export|save|download)(?:\s+(?:it|this|that|the\s+(?:board|canvas|whiteboard)))?(?:\s+please)?[.!?]*$|^(?:(?:请|帮我|给我)\s*)?(?:把\s*)?(?:(?:它|这个|白板|画布)\s*)?(?:导出|保存|下载)(?:一下)?[。！？.!?]*$/i
 
 export function shouldRouteCodePromptToCanvas(text: string): boolean {
   const value = text.trim()
@@ -140,7 +146,10 @@ export function shouldRouteOpenCodeWhiteboardPrompt(
   if (/\bwhiteboard\b/i.test(value) || /白板/.test(value)) return true
   if (looksLikeStandaloneImageAssetPrompt(value)) return true
   if (OPEN_WHITEBOARD_ENGLISH_EXPORT.test(value)) return true
+  if (OPEN_WHITEBOARD_ENGLISH_FORMAT_FOLLOW_UP.test(value)) return true
   if (OPEN_WHITEBOARD_CHINESE_EXPORT.test(value)) return true
+  if (OPEN_WHITEBOARD_CHINESE_FORMAT_FOLLOW_UP.test(value)) return true
+  if (OPEN_WHITEBOARD_SHORT_EXPORT.test(value)) return true
   if (OPEN_WHITEBOARD_ENGLISH_PLACEMENT.test(value)) return true
   if (OPEN_WHITEBOARD_CHINESE_PLACEMENT.test(value)) return true
   const hasSelection = options?.hasSelection === true

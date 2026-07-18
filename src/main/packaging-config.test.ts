@@ -126,7 +126,9 @@ describe('electron-builder Kun packaging', () => {
     expect(builderConfig.asarUnpack).toEqual(expect.arrayContaining([
       '**/kun/dist/**/*',
       '**/kun/package*.json',
-      '**/kun/node_modules/**/*'
+      '**/kun/node_modules/**/*',
+      '**/node_modules/sharp/**/*',
+      '**/node_modules/@img/**/*'
     ]))
     expect(builderConfig.asarUnpack).not.toEqual(expect.arrayContaining([
       '**/node_modules/node-bin-darwin-*/*',

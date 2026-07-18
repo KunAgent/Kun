@@ -1,4 +1,4 @@
-import { chmod, mkdir, mkdtemp, readdir, rm, stat, writeFile } from 'node:fs/promises'
+import { chmod, mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -102,6 +102,36 @@ describe('kun extension CLI', () => {
     expect(JSON.parse(forbidden.stderr).error).toMatchObject({
       code: 'EXTENSION_PACKAGE_FORBIDDEN_PATH'
     })
+  })
+
+  it('validates bounded manifest locale overlays through the public CLI', async () => {
+    const root = await temporaryRoot()
+    const source = join(root, 'localized-source')
+    const services = createTestServices(root)
+    await writeExtensionSource(source, '1.0.0', ['commands.register'])
+    const manifestPath = join(source, 'kun-extension.json')
+    const manifest = JSON.parse(await readFile(manifestPath, 'utf8'))
+    manifest.activationEvents = ['onCommand:hello']
+    manifest.contributes = {
+      commands: [{ id: 'hello', title: 'Hello' }]
+    }
+    manifest.localizations = {
+      'zh-CN': {
+        displayName: '演示扩展',
+        contributes: {
+          commands: { hello: { title: '你好' } }
+        }
+      }
+    }
+    await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`)
+
+    expect((await command(['validate', source, '--json'], root, services)).code).toBe(0)
+
+    manifest.localizations['zh-CN'].contributes.commands.missing = { title: '不存在' }
+    await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`)
+    const invalid = await command(['validate', source, '--json'], root, services)
+    expect(invalid.code).toBe(78)
+    expect(invalid.stderr).toContain('Localization references an undeclared commands contribution')
   })
 
   it('covers validate, pack, consented install, list, enablement, rollback, doctor, logs, and uninstall', async () => {

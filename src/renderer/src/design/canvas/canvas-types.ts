@@ -1,5 +1,9 @@
 import type { DesignCodeBinding } from '../code-binding/code-binding-types'
 import type { DesignOperationJournalEntry } from '../graph/design-graph-types'
+import {
+  CANVAS_MOTION_VERSION,
+  type CanvasMotionDocument
+} from '../motion/canvas-motion-types'
 
 export type ShapeType =
   | 'rect'
@@ -262,6 +266,7 @@ export type CanvasDocument = {
   version: 2
   rootId: string
   objects: Record<string, CanvasShape>
+  motion?: CanvasMotionDocument
   graph?: CanvasDocumentGraphMetadata
   operationJournal?: DesignOperationJournalEntry[]
   codeBindings?: DesignCodeBinding[]
@@ -533,7 +538,12 @@ export function createEmptyDocument(): CanvasDocument {
     cornerRadius: 0,
     children: []
   }
-  return { version: 2, rootId: ROOT_SHAPE_ID, objects: { [ROOT_SHAPE_ID]: root } }
+  return {
+    version: 2,
+    rootId: ROOT_SHAPE_ID,
+    objects: { [ROOT_SHAPE_ID]: root },
+    motion: { version: CANVAS_MOTION_VERSION, timelines: {} }
+  }
 }
 
 export function shapeBounds(shape: CanvasShape): Rect {

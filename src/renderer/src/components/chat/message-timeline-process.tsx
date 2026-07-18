@@ -399,7 +399,9 @@ function ProcessStackRows({
         const autoOpenPending = processBlockIsAutoOpenPending(block, processing) || isPendingApproval(block)
         const errorTone = processBlockErrorTone(block)
         const isError = errorTone !== null
-        const defaultOpen = processing && isError
+        // Keep failed tool payloads tucked away while the turn continues. The
+        // warning-toned row still surfaces the failure and remains expandable.
+        const defaultOpen = processing && isError && block.kind !== 'tool'
         const forceOpen = autoOpenPending || autoOpenRequestInput
         const userClosed = closedBlockIds.has(block.id)
         const userOpened = openBlockId === block.id
@@ -516,7 +518,9 @@ function ProcessEntryRow({
   const errorTone = processBlockErrorTone(block)
   const isError = errorTone !== null
   const forceOpen = isAutoOpenPending || isAssistantProcessText || isStreamingAssistant
-  const defaultOpen = processing && isError
+  // A tool failure should not interrupt the live process by expanding its
+  // often verbose result. Runtime errors still open so they are not hidden.
+  const defaultOpen = processing && isError && block.kind !== 'tool'
   const open =
     canExpand &&
     (forceOpen || (userOpen ?? defaultOpen))
@@ -935,6 +939,8 @@ function builtInToolLabel(
       // Routed to SubagentCallCard before the generic row; labeled here as a
       // defensive fallback so an ungrouped delegate block never reads as raw JSON.
       return t('toolBuiltinDelegate')
+    case 'design_component':
+      return t('toolBuiltinDesignComponent')
     default:
       return undefined
   }

@@ -1,4 +1,5 @@
 import type {
+  ComposerContextAttachment,
   HostContentScriptContext,
   HostContentScriptDiagnostic,
   JsonValue
@@ -21,10 +22,12 @@ export type ExtensionListRequest = {
   limit?: number
   cursor?: string
   workspaceRoot?: string
+  locale?: string
 }
 
 export type ExtensionWorkspaceRequest = {
   workspaceRoot?: string
+  locale?: string
 }
 
 export type ExtensionListProviderModelsRequest = {
@@ -105,7 +108,9 @@ export type ExtensionReloadRequest = {
 
 export type ExtensionPermissionGrantRequest = ExtensionScopedRequest & {
   permissions: string[] | null
-  extensionVersion: string
+  expectedVersion: string
+  /** Apply the reviewed workspace grant, then enable in the same protected decision. */
+  enableAfterApply?: 'global' | 'workspace'
   consentRequestId?: string
 }
 
@@ -128,6 +133,8 @@ export type ExtensionCommandInvocationRequest = {
 export type ExtensionViewSessionCreateRequest = {
   contributionId: string
   workspaceRoot?: string
+  /** Explicit user recovery after a Host crash/backoff/circuit failure. */
+  retryHost?: boolean
 }
 
 export type ExtensionViewSessionDescriptor = {
@@ -144,6 +151,60 @@ export type ExtensionViewSessionRequest = {
   sessionId: string
 }
 
+export type ExtensionExternalBrowserBounds = {
+  x: number
+  y: number
+  width: number
+  height: number
+  visible: boolean
+}
+
+export type ExtensionExternalBrowserPresentation = 'desktop' | 'mobile'
+
+export type ExtensionExternalBrowserControlRequest =
+  | {
+      sessionId: string
+      action: 'mount'
+      siteId: string
+      url: string
+      presentation: ExtensionExternalBrowserPresentation
+      bounds: ExtensionExternalBrowserBounds
+    }
+  | {
+      sessionId: string
+      action: 'activate'
+      siteId: string
+      url: string
+      presentation: ExtensionExternalBrowserPresentation
+    }
+  | {
+      sessionId: string
+      action: 'bounds'
+      bounds: ExtensionExternalBrowserBounds
+    }
+  | {
+      sessionId: string
+      action: 'navigate'
+      url: string
+    }
+  | {
+      sessionId: string
+      action: 'back' | 'forward' | 'reload' | 'zoomIn' | 'zoomOut' | 'zoomReset' | 'state'
+    }
+
+export type ExtensionExternalBrowserState = {
+  sessionId: string
+  siteId: string
+  presentation: ExtensionExternalBrowserPresentation
+  url: string
+  title: string
+  loading: boolean
+  canGoBack: boolean
+  canGoForward: boolean
+  zoomFactor: number
+  error?: string
+}
+
 export type ExtensionViewMessageRequest = ExtensionViewSessionRequest & {
   channel: string
   payload: unknown
@@ -158,6 +219,13 @@ export type ExtensionViewEventPayload = {
   sessionId: string
   cursor?: number
   events: unknown[]
+}
+
+/** Main-authenticated handoff from an isolated extension View to the composer. */
+export type ExtensionComposerContextEvent = {
+  /** Host-only scope fence; never forwarded to Kun as model-visible context. */
+  workspaceRoot?: string
+  attachment: ComposerContextAttachment
 }
 
 export type ExtensionWorkbenchNotification = {
@@ -383,6 +451,12 @@ export type ExtensionIpcApi = {
   extensionDisposeViewSession: (
     request: ExtensionViewSessionRequest | string
   ) => Promise<boolean>
+  extensionExternalBrowserControl: (
+    request: ExtensionExternalBrowserControlRequest
+  ) => Promise<ExtensionExternalBrowserState>
+  onExtensionExternalBrowserState: (
+    handler: (state: ExtensionExternalBrowserState) => void
+  ) => () => void
   extensionPostViewMessage: (
     request: ExtensionViewMessageRequest
   ) => Promise<ExtensionRuntimeRequestResult>
@@ -391,6 +465,9 @@ export type ExtensionIpcApi = {
   ) => Promise<ExtensionRuntimeRequestResult>
   onExtensionViewEvent: (
     handler: (payload: ExtensionViewEventPayload) => void
+  ) => () => void
+  onExtensionComposerContext: (
+    handler: (payload: ExtensionComposerContextEvent) => void
   ) => () => void
   onExtensionNotifications: (
     handler: (payload: ExtensionNotificationSnapshot) => void

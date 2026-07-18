@@ -570,6 +570,7 @@ describe('AgentLoop', () => {
 
   it('fails visibly when the model repeats an empty post-tool continuation', async () => {
     let calls = 0
+    const requests: ModelRequest[] = []
     const writeHelper = LocalToolHost.defineTool({
       name: 'write_helper',
       description: 'Write a helper script.',
@@ -582,7 +583,8 @@ describe('AgentLoop', () => {
       {
         provider: 'repeated-empty-after-tool',
         model: 'repeated-empty-after-tool',
-        async *stream(): AsyncIterable<ModelStreamChunk> {
+        async *stream(request): AsyncIterable<ModelStreamChunk> {
+          requests.push(request)
           calls += 1
           if (calls === 1) {
             yield {
@@ -605,12 +607,73 @@ describe('AgentLoop', () => {
     const items = await h.sessionStore.loadItems(h.threadId)
 
     expect(status).toBe('failed')
-    expect(calls).toBe(3)
+    expect(calls).toBe(4)
+    expect(requests[3]?.tools).toEqual([])
+    expect(requests[3]?.contextInstructions?.join('\n')).toContain('Tool final-answer recovery')
     expect(items).toEqual(expect.arrayContaining([
       expect.objectContaining({
         kind: 'error',
         code: 'empty_post_tool_continuation'
       })
+    ]))
+  })
+
+  it('forces a tool-free final answer after two empty post-tool continuations', async () => {
+    let calls = 0
+    const requests: ModelRequest[] = []
+    const writeHelper = LocalToolHost.defineTool({
+      name: 'write_helper',
+      description: 'Write a helper script.',
+      inputSchema: { type: 'object', properties: {} },
+      policy: 'auto',
+      toolKind: 'file_change',
+      execute: async () => ({ output: { ok: true } })
+    })
+    const h = makeHarness(
+      {
+        provider: 'final-answer-after-repeated-empty',
+        model: 'final-answer-after-repeated-empty',
+        async *stream(request): AsyncIterable<ModelStreamChunk> {
+          requests.push(request)
+          calls += 1
+          if (calls === 1) {
+            yield {
+              kind: 'tool_call_complete',
+              callId: 'call_write_helper',
+              toolName: 'write_helper',
+              arguments: {}
+            }
+            yield { kind: 'completed', stopReason: 'tool_calls' }
+            return
+          }
+          if (calls < 4) {
+            yield { kind: 'completed', stopReason: 'stop' }
+            return
+          }
+          yield { kind: 'assistant_text_delta', text: 'The helper was written successfully.' }
+          yield { kind: 'completed', stopReason: 'stop' }
+        }
+      },
+      { tools: [writeHelper] }
+    )
+    await bootstrapThread(h)
+
+    const status = await h.loop.runTurn(h.threadId, h.turnId)
+    const items = await h.sessionStore.loadItems(h.threadId)
+
+    expect(status).toBe('completed')
+    expect(calls).toBe(4)
+    expect(requests[2]?.tools.map((tool) => tool.name)).toContain('write_helper')
+    expect(requests[3]?.tools).toEqual([])
+    expect(requests[3]?.contextInstructions?.join('\n')).toContain('Tool final-answer recovery')
+    expect(items).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        kind: 'assistant_text',
+        text: 'The helper was written successfully.'
+      })
+    ]))
+    expect(items).not.toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: 'empty_post_tool_continuation' })
     ]))
   })
 

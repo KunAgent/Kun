@@ -1,15 +1,13 @@
 import { ExtensionContributionsSchema } from '@kun/extension-api'
-import { createElement } from 'react'
-import { renderToStaticMarkup } from 'react-dom/server'
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import {
   ContributionRegistry,
   ExtensionWorkbenchSnapshotSchema
 } from './contribution-registry'
 import {
-  ExtensionActivityBar,
   firstViewForContainer,
   readStoredExtensionSurfaceId,
+  resolveCommandOpenView,
   viewBelongsToContainer,
   type ExtensionWorkbenchViewGroups,
   writeStoredExtensionSurfaceId
@@ -75,20 +73,6 @@ describe('Extension workbench surface consumers', () => {
     expect(viewBelongsToContainer(project, groups.rightSidebar[0])).toBe(false)
   })
 
-  it('renders host-owned activity controls without mounting extension React code', () => {
-    const { registry, groups } = fixture()
-    const html = renderToStaticMarkup(createElement(ExtensionActivityBar, {
-      containers: registry.list('views.containers'),
-      groups,
-      activeId: 'extension:acme.workbench/tree',
-      onOpen: vi.fn()
-    }))
-    expect(html).toContain('aria-label="Extension activity"')
-    expect(html).toContain('data-contribution-id="extension:acme.workbench/project"')
-    expect(html).toContain('aria-label="Open extension Views"')
-    expect(html).not.toContain('dangerouslySetInnerHTML')
-  })
-
   it('persists only qualified extension surface IDs per workspace', () => {
     const values = new Map<string, string>()
     const storage = {
@@ -102,5 +86,41 @@ describe('Extension workbench surface consumers', () => {
     expect(readStoredExtensionSurfaceId(storage)).toBeNull()
     writeStoredExtensionSurfaceId(storage, null)
     expect(readStoredExtensionSurfaceId(storage)).toBeNull()
+  })
+
+  it('resolves an extension command open-view result only within the owning extension', () => {
+    const { registry } = fixture()
+    const commands = registry.list('commands')
+    registry.replaceExtensions(ExtensionWorkbenchSnapshotSchema.parse({
+      schemaVersion: 1,
+      revision: 2,
+      extensions: [{
+        id: 'acme.workbench',
+        version: '1.0.0',
+        enabled: true,
+        compatible: true,
+        workspaceTrusted: true,
+        grantedPermissions: ['commands.register', 'ui.views', 'webview'],
+        contributes: ExtensionContributionsSchema.parse({
+          commands: [{ id: 'open', title: 'Open' }],
+          'views.fullPage': [{ id: 'dashboard', title: 'Dashboard', entry: 'dist/dashboard.html' }]
+        })
+      }]
+    }))
+    const liveCommands = registry.list('commands')
+    const liveViews = registry.list('views.fullPage')
+    expect(commands).toHaveLength(0)
+    expect(resolveCommandOpenView(
+      'extension:acme.workbench/open',
+      { action: 'open-view', viewId: 'dashboard' },
+      liveCommands,
+      liveViews
+    )?.id).toBe('extension:acme.workbench/dashboard')
+    expect(resolveCommandOpenView(
+      'builtin:unknown',
+      { action: 'open-view', viewId: 'dashboard' },
+      liveCommands,
+      liveViews
+    )).toBeUndefined()
   })
 })

@@ -38,11 +38,6 @@ export function buildDelegationToolProviders(runtime: DelegationRuntime | undefi
               minimum: 1,
               description: 'Optional hard cap for total child tokens.'
             },
-            timeBudgetMs: {
-              type: 'integer',
-              minimum: 1,
-              description: 'Optional wall-clock timeout in milliseconds.'
-            },
             returnFormat: {
               type: 'string',
               enum: ['summary', 'evidence'],
@@ -58,9 +53,6 @@ export function buildDelegationToolProviders(runtime: DelegationRuntime | undefi
           if (!prompt) return { output: { error: 'prompt is required' }, isError: true }
           if (args.tokenBudget !== undefined && !isPositiveInteger(args.tokenBudget)) {
             return { output: { error: 'tokenBudget must be a positive integer' }, isError: true }
-          }
-          if (args.timeBudgetMs !== undefined && !isPositiveInteger(args.timeBudgetMs)) {
-            return { output: { error: 'timeBudgetMs must be a positive integer' }, isError: true }
           }
           const explicitModel = typeof args.model === 'string' ? args.model.trim() : ''
           const explicitProviderId = typeof args.providerId === 'string' ? args.providerId.trim() : ''
@@ -90,7 +82,6 @@ export function buildDelegationToolProviders(runtime: DelegationRuntime | undefi
             ...(context.guiDesignCanvas ? { guiDesignCanvas: true } : {}),
             ...(args.detach === true ? { detach: true } : {}),
             ...(isPositiveInteger(args.tokenBudget) ? { tokenBudget: args.tokenBudget } : {}),
-            ...(isPositiveInteger(args.timeBudgetMs) ? { timeBudgetMs: args.timeBudgetMs } : {}),
             ...(args.returnFormat === 'evidence' ? { returnFormat: 'evidence' as const } : {}),
             // Emit a partial result the moment the child id exists, so the GUI
             // can offer "open session" (and stream the child live) while the
@@ -119,7 +110,6 @@ export function buildDelegationToolProviders(runtime: DelegationRuntime | undefi
               usage: record.usage,
               returnFormat: record.returnFormat,
               ...(record.tokenBudget ? { tokenBudget: record.tokenBudget } : {}),
-              ...(record.timeBudgetMs ? { timeBudgetMs: record.timeBudgetMs } : {}),
               ...(record.budgetExceeded ? { budgetExceeded: record.budgetExceeded } : {}),
               ...(record.profile ? { profile: record.profile } : {}),
               ...(record.toolPolicy ? { toolPolicy: record.toolPolicy } : {}),
@@ -144,7 +134,7 @@ function buildDelegateTaskDescription(
   profiles: { name: string; mode: string; toolPolicy: string; model?: string; providerId?: string; description?: string }[]
 ): string {
   const lines = [
-    'Run a bounded child agent task and return its summary.',
+    'Run a child agent task and return its summary.',
     'Issue several delegate_task calls in one message to investigate in parallel; runs queue once the parallel budget is full.',
     `Children default to the "${runtime.defaultToolPolicy}" tool policy (read-only children may only read/grep/find/ls and cannot edit, run shell, or delegate further).`
   ]

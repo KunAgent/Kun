@@ -111,12 +111,14 @@ describe('ArchivedThreadsSettingsSection', () => {
     const agentsIndex = html.indexOf('AI assistant')
     const subagentsIndex = html.indexOf('Subagents')
     const archivesIndex = html.indexOf('Archived chats')
+    const migrationIndex = html.indexOf('dataMigration')
     const permissionsIndex = html.indexOf('permissions')
     expect(agentsIndex).toBeGreaterThanOrEqual(0)
     expect(subagentsIndex).toBeGreaterThan(agentsIndex)
     expect(permissionsIndex).toBe(-1)
     expect(archivesIndex).toBeGreaterThan(subagentsIndex)
-    expect(html.match(/data-cursor-spotlight-target/g)?.length).toBe(18)
+    expect(migrationIndex).toBeGreaterThan(archivesIndex)
+    expect(html.match(/data-cursor-spotlight-target/g)?.length).toBe(19)
   })
 
   it('keeps settings tabs scrollable without pushing the footer away', () => {

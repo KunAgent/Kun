@@ -1,0 +1,2675 @@
+{
+  "$schema": "https://kun.dev/schemas/extensions/manifest/v1.json",
+  "manifestVersion": 1,
+  "apiVersion": "1.0.0",
+  "name": "presentation-studio",
+  "publisher": "kun-examples",
+  "version": "0.1.10",
+  "displayName": "Kun PPT",
+  "description": "A revision-aware Kun PPT display HTML workspace for people and the main Kun Agent.",
+  "license": "MIT",
+  "engines": {
+    "kun": ">=0.1.0"
+  },
+  "main": "dist/host/extension.js",
+  "browser": "dist/webview/index.html",
+  "activationEvents": [
+    "onView:studio",
+    "onCommand:presentation-create",
+    "onCommand:presentation-load",
+    "onCommand:presentation-save",
+    "onCommand:presentation-export-copy",
+    "onTool:presentation-create",
+    "onTool:presentation-read",
+    "onTool:presentation-apply",
+    "onTool:presentation-validate",
+    "onTool:presentation-export-copy"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "id": "presentation-create",
+        "title": "Kun PPT: Create Deck",
+        "description": "Create a new root-level standalone HTML presentation.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string",
+              "minLength": 14,
+              "maxLength": 240,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._ -]*\\.kun-ppt\\.html$"
+            },
+            "title": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+            }
+          },
+          "required": [
+            "path"
+          ],
+          "additionalProperties": false
+        }
+      },
+      {
+        "id": "presentation-load",
+        "title": "Kun PPT: Load Deck",
+        "description": "Load a root-level standalone HTML presentation.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string",
+              "minLength": 14,
+              "maxLength": 240,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._ -]*\\.kun-ppt\\.html$"
+            }
+          },
+          "required": [
+            "path"
+          ],
+          "additionalProperties": false
+        }
+      },
+      {
+        "id": "presentation-save",
+        "title": "Kun PPT: Save Operations",
+        "description": "Save one revision-aware batch of visual presentation operations.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string",
+              "minLength": 14,
+              "maxLength": 240,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._ -]*\\.kun-ppt\\.html$"
+            },
+            "expectedRevision": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "operationId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128,
+              "description": "Optional idempotency key. Kun derives one from the tool invocation when omitted."
+            },
+            "operations": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 128,
+              "items": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "const": "document.update"
+                      },
+                      "patch": {
+                        "type": "object",
+                        "minProperties": 1,
+                        "properties": {
+                          "title": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 160
+                          },
+                          "theme": {
+                            "type": "object",
+                            "minProperties": 1,
+                            "properties": {
+                              "backgroundColor": {
+                                "type": "string",
+                                "pattern": "^#[0-9A-Fa-f]{6}$"
+                              },
+                              "textColor": {
+                                "type": "string",
+                                "pattern": "^#[0-9A-Fa-f]{6}$"
+                              },
+                              "accentColor": {
+                                "type": "string",
+                                "pattern": "^#[0-9A-Fa-f]{6}$"
+                              },
+                              "fontFamily": {
+                                "enum": [
+                                  "sans",
+                                  "serif",
+                                  "mono"
+                                ]
+                              }
+                            },
+                            "additionalProperties": false
+                          }
+                        },
+                        "additionalProperties": false
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "patch"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "const": "slide.insert"
+                      },
+                      "slide": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 64,
+                            "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]*$"
+                          },
+                          "title": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 120
+                          },
+                          "backgroundColor": {
+                            "oneOf": [
+                              {
+                                "type": "string",
+                                "pattern": "^#[0-9A-Fa-f]{6}$"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "elements": {
+                            "type": "array",
+                            "maxItems": 128,
+                            "items": {
+                              "oneOf": [
+                                {
+                                  "type": "object",
+                                  "properties": {
+                                    "id": {
+                                      "type": "string",
+                                      "minLength": 1,
+                                      "maxLength": 64,
+                                      "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]*$"
+                                    },
+                                    "x": {
+                                      "type": "number",
+                                      "minimum": 0,
+                                      "maximum": 100
+                                    },
+                                    "y": {
+                                      "type": "number",
+                                      "minimum": 0,
+                                      "maximum": 100
+                                    },
+                                    "width": {
+                                      "type": "number",
+                                      "exclusiveMinimum": 0,
+                                      "maximum": 100
+                                    },
+                                    "height": {
+                                      "type": "number",
+                                      "exclusiveMinimum": 0,
+                                      "maximum": 100
+                                    },
+                                    "rotation": {
+                                      "type": "number",
+                                      "minimum": -180,
+                                      "maximum": 180
+                                    },
+                                    "opacity": {
+                                      "type": "number",
+                                      "minimum": 0,
+                                      "maximum": 1
+                                    },
+                                    "type": {
+                                      "const": "text"
+                                    },
+                                    "text": {
+                                      "type": "string",
+                                      "maxLength": 4000
+                                    },
+                                    "fontSize": {
+                                      "type": "number",
+                                      "minimum": 8,
+                                      "maximum": 240
+                                    },
+                                    "fontWeight": {
+                                      "enum": [
+                                        400,
+                                        500,
+                                        600,
+                                        700
+                                      ]
+                                    },
+                                    "fontFamily": {
+                                      "enum": [
+                                        "sans",
+                                        "serif",
+                                        "mono"
+                                      ]
+                                    },
+                                    "color": {
+                                      "type": "string",
+                                      "pattern": "^#[0-9A-Fa-f]{6}$"
+                                    },
+                                    "align": {
+                                      "enum": [
+                                        "left",
+                                        "center",
+                                        "right"
+                                      ]
+                                    },
+                                    "verticalAlign": {
+                                      "enum": [
+                                        "top",
+                                        "middle",
+                                        "bottom"
+                                      ]
+                                    }
+                                  },
+                                  "required": [
+                                    "id",
+                                    "type",
+                                    "x",
+                                    "y",
+                                    "width",
+                                    "height",
+                                    "rotation",
+                                    "opacity",
+                                    "text",
+                                    "fontSize",
+                                    "fontWeight",
+                                    "color",
+                                    "align",
+                                    "verticalAlign"
+                                  ],
+                                  "additionalProperties": false
+                                },
+                                {
+                                  "type": "object",
+                                  "properties": {
+                                    "id": {
+                                      "type": "string",
+                                      "minLength": 1,
+                                      "maxLength": 64,
+                                      "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]*$"
+                                    },
+                                    "x": {
+                                      "type": "number",
+                                      "minimum": 0,
+                                      "maximum": 100
+                                    },
+                                    "y": {
+                                      "type": "number",
+                                      "minimum": 0,
+                                      "maximum": 100
+                                    },
+                                    "width": {
+                                      "type": "number",
+                                      "exclusiveMinimum": 0,
+                                      "maximum": 100
+                                    },
+                                    "height": {
+                                      "type": "number",
+                                      "exclusiveMinimum": 0,
+                                      "maximum": 100
+                                    },
+                                    "rotation": {
+                                      "type": "number",
+                                      "minimum": -180,
+                                      "maximum": 180
+                                    },
+                                    "opacity": {
+                                      "type": "number",
+                                      "minimum": 0,
+                                      "maximum": 1
+                                    },
+                                    "type": {
+                                      "const": "shape"
+                                    },
+                                    "shape": {
+                                      "enum": [
+                                        "rectangle",
+                                        "ellipse",
+                                        "line"
+                                      ]
+                                    },
+                                    "fillColor": {
+                                      "type": "string",
+                                      "pattern": "^#[0-9A-Fa-f]{6}$"
+                                    },
+                                    "strokeColor": {
+                                      "type": "string",
+                                      "pattern": "^#[0-9A-Fa-f]{6}$"
+                                    },
+                                    "strokeWidth": {
+                                      "type": "number",
+                                      "minimum": 0,
+                                      "maximum": 32
+                                    },
+                                    "cornerRadius": {
+                                      "type": "number",
+                                      "minimum": 0,
+                                      "maximum": 100
+                                    }
+                                  },
+                                  "required": [
+                                    "id",
+                                    "type",
+                                    "x",
+                                    "y",
+                                    "width",
+                                    "height",
+                                    "rotation",
+                                    "opacity",
+                                    "shape",
+                                    "fillColor",
+                                    "strokeColor",
+                                    "strokeWidth",
+                                    "cornerRadius"
+                                  ],
+                                  "additionalProperties": false
+                                },
+                                {
+                                  "type": "object",
+                                  "properties": {
+                                    "id": {
+                                      "type": "string",
+                                      "minLength": 1,
+                                      "maxLength": 64,
+                                      "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]*$"
+                                    },
+                                    "x": {
+                                      "type": "number",
+                                      "minimum": 0,
+                                      "maximum": 100
+                                    },
+                                    "y": {
+                                      "type": "number",
+                                      "minimum": 0,
+                                      "maximum": 100
+                                    },
+                                    "width": {
+                                      "type": "number",
+                                      "exclusiveMinimum": 0,
+                                      "maximum": 100
+                                    },
+                                    "height": {
+                                      "type": "number",
+                                      "exclusiveMinimum": 0,
+                                      "maximum": 100
+                                    },
+                                    "rotation": {
+                                      "type": "number",
+                                      "minimum": -180,
+                                      "maximum": 180
+                                    },
+                                    "opacity": {
+                                      "type": "number",
+                                      "minimum": 0,
+                                      "maximum": 1
+                                    },
+                                    "type": {
+                                      "const": "image"
+                                    },
+                                    "src": {
+                                      "type": "string",
+                                      "minLength": 1,
+                                      "maxLength": 260,
+                                      "pattern": "\\.(?:[Pp][Nn][Gg]|[Jj][Pp][Gg]|[Jj][Pp][Ee][Gg]|[Ww][Ee][Bb][Pp]|[Gg][Ii][Ff])$"
+                                    },
+                                    "alt": {
+                                      "type": "string",
+                                      "maxLength": 500
+                                    },
+                                    "fit": {
+                                      "enum": [
+                                        "contain",
+                                        "cover"
+                                      ]
+                                    }
+                                  },
+                                  "required": [
+                                    "id",
+                                    "type",
+                                    "x",
+                                    "y",
+                                    "width",
+                                    "height",
+                                    "rotation",
+                                    "opacity",
+                                    "src",
+                                    "alt",
+                                    "fit"
+                                  ],
+                                  "additionalProperties": false
+                                }
+                              ]
+                            }
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "title",
+                          "elements"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "index": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 63
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "slide"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "const": "slide.update"
+                      },
+                      "slideId": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 64,
+                        "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]*$"
+                      },
+                      "patch": {
+                        "type": "object",
+                        "minProperties": 1,
+                        "properties": {
+                          "title": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 120
+                          },
+                          "backgroundColor": {
+                            "oneOf": [
+                              {
+                                "type": "string",
+                                "pattern": "^#[0-9A-Fa-f]{6}$"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          }
+                        },
+                        "additionalProperties": false
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "slideId",
+                      "patch"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "const": "slide.delete"
+                      },
+                      "slideId": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 64,
+                        "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]*$"
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "slideId"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "const": "slide.reorder"
+                      },
+                      "slideId": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 64,
+                        "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]*$"
+                      },
+                      "index": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 63
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "slideId",
+                      "index"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "const": "element.upsert"
+                      },
+                      "slideId": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 64,
+                        "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]*$"
+                      },
+                      "element": {
+                        "oneOf": [
+                          {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 64,
+                                "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]*$"
+                              },
+                              "x": {
+                                "type": "number",
+                                "minimum": 0,
+                                "maximum": 100
+                              },
+                              "y": {
+                                "type": "number",
+                                "minimum": 0,
+                                "maximum": 100
+                              },
+                              "width": {
+                                "type": "number",
+                                "exclusiveMinimum": 0,
+                                "maximum": 100
+                              },
+                              "height": {
+                                "type": "number",
+                                "exclusiveMinimum": 0,
+                                "maximum": 100
+                              },
+                              "rotation": {
+                                "type": "number",
+                                "minimum": -180,
+                                "maximum": 180
+                              },
+                              "opacity": {
+                                "type": "number",
+                                "minimum": 0,
+                                "maximum": 1
+                              },
+                              "type": {
+                                "const": "text"
+                              },
+                              "text": {
+                                "type": "string",
+                                "maxLength": 4000
+                              },
+                              "fontSize": {
+                                "type": "number",
+                                "minimum": 8,
+                                "maximum": 240
+                              },
+                              "fontWeight": {
+                                "enum": [
+                                  400,
+                                  500,
+                                  600,
+                                  700
+                                ]
+                              },
+                              "fontFamily": {
+                                "enum": [
+                                  "sans",
+                                  "serif",
+                                  "mono"
+                                ]
+                              },
+                              "color": {
+                                "type": "string",
+                                "pattern": "^#[0-9A-Fa-f]{6}$"
+                              },
+                              "align": {
+                                "enum": [
+                                  "left",
+                                  "center",
+                                  "right"
+                                ]
+                              },
+                              "verticalAlign": {
+                                "enum": [
+                                  "top",
+                                  "middle",
+                                  "bottom"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "type",
+                              "x",
+                              "y",
+                              "width",
+                              "height",
+                              "rotation",
+                              "opacity",
+                              "text",
+                              "fontSize",
+                              "fontWeight",
+                              "color",
+                              "align",
+                              "verticalAlign"
+                            ],
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 64,
+                                "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]*$"
+                              },
+                              "x": {
+                                "type": "number",
+                                "minimum": 0,
+                                "maximum": 100
+                              },
+                              "y": {
+                                "type": "number",
+                                "minimum": 0,
+                                "maximum": 100
+                              },
+                              "width": {
+                                "type": "number",
+                                "exclusiveMinimum": 0,
+                                "maximum": 100
+                              },
+                              "height": {
+                                "type": "number",
+                                "exclusiveMinimum": 0,
+                                "maximum": 100
+                              },
+                              "rotation": {
+                                "type": "number",
+                                "minimum": -180,
+                                "maximum": 180
+                              },
+                              "opacity": {
+                                "type": "number",
+                                "minimum": 0,
+                                "maximum": 1
+                              },
+                              "type": {
+                                "const": "shape"
+                              },
+                              "shape": {
+                                "enum": [
+                                  "rectangle",
+                                  "ellipse",
+                                  "line"
+                                ]
+                              },
+                              "fillColor": {
+                                "type": "string",
+                                "pattern": "^#[0-9A-Fa-f]{6}$"
+                              },
+                              "strokeColor": {
+                                "type": "string",
+                                "pattern": "^#[0-9A-Fa-f]{6}$"
+                              },
+                              "strokeWidth": {
+                                "type": "number",
+                                "minimum": 0,
+                                "maximum": 32
+                              },
+                              "cornerRadius": {
+                                "type": "number",
+                                "minimum": 0,
+                                "maximum": 100
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "type",
+                              "x",
+                              "y",
+                              "width",
+                              "height",
+                              "rotation",
+                              "opacity",
+                              "shape",
+                              "fillColor",
+                              "strokeColor",
+                              "strokeWidth",
+                              "cornerRadius"
+                            ],
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 64,
+                                "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]*$"
+                              },
+                              "x": {
+                                "type": "number",
+                                "minimum": 0,
+                                "maximum": 100
+                              },
+                              "y": {
+                                "type": "number",
+                                "minimum": 0,
+                                "maximum": 100
+                              },
+                              "width": {
+                                "type": "number",
+                                "exclusiveMinimum": 0,
+                                "maximum": 100
+                              },
+                              "height": {
+                                "type": "number",
+                                "exclusiveMinimum": 0,
+                                "maximum": 100
+                              },
+                              "rotation": {
+                                "type": "number",
+                                "minimum": -180,
+                                "maximum": 180
+                              },
+                              "opacity": {
+                                "type": "number",
+                                "minimum": 0,
+                                "maximum": 1
+                              },
+                              "type": {
+                                "const": "image"
+                              },
+                              "src": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 260,
+                                "pattern": "\\.(?:[Pp][Nn][Gg]|[Jj][Pp][Gg]|[Jj][Pp][Ee][Gg]|[Ww][Ee][Bb][Pp]|[Gg][Ii][Ff])$"
+                              },
+                              "alt": {
+                                "type": "string",
+                                "maxLength": 500
+                              },
+                              "fit": {
+                                "enum": [
+                                  "contain",
+                                  "cover"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "type",
+                              "x",
+                              "y",
+                              "width",
+                              "height",
+                              "rotation",
+                              "opacity",
+                              "src",
+                              "alt",
+                              "fit"
+                            ],
+                            "additionalProperties": false
+                          }
+                        ]
+                      },
+                      "index": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 127
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "slideId",
+                      "element"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "const": "element.style"
+                      },
+                      "slideId": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 64,
+                        "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]*$"
+                      },
+                      "elementId": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 64,
+                        "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]*$"
+                      },
+                      "css": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 2000
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "slideId",
+                      "elementId",
+                      "css"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "const": "element.delete"
+                      },
+                      "slideId": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 64,
+                        "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]*$"
+                      },
+                      "elementId": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 64,
+                        "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]*$"
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "slideId",
+                      "elementId"
+                    ],
+                    "additionalProperties": false
+                  }
+                ]
+              },
+              "description": "Use only the declared operation kinds. element.upsert requires a complete typed element; element.style accepts bounded safe CSS declarations."
+            }
+          },
+          "required": [
+            "path",
+            "expectedRevision",
+            "operations"
+          ],
+          "additionalProperties": false
+        }
+      },
+      {
+        "id": "presentation-export-copy",
+        "title": "Kun PPT: Export Copy",
+        "description": "Copy the current revision to another root-level HTML presentation.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string",
+              "minLength": 14,
+              "maxLength": 240,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._ -]*\\.kun-ppt\\.html$"
+            },
+            "destinationPath": {
+              "type": "string",
+              "minLength": 14,
+              "maxLength": 240,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._ -]*\\.kun-ppt\\.html$"
+            },
+            "expectedRevision": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          "required": [
+            "path",
+            "destinationPath",
+            "expectedRevision"
+          ],
+          "additionalProperties": false
+        }
+      }
+    ],
+    "views.rightSidebar": [
+      {
+        "id": "studio",
+        "title": "Kun PPT",
+        "entry": "dist/webview/index.html",
+        "icon": "assets/presentation-studio.svg",
+        "order": 40,
+        "multiple": false,
+        "localResourceRoots": [
+          "dist/webview"
+        ]
+      }
+    ],
+    "tools": [
+      {
+        "id": "presentation-create",
+        "description": "Create a new root-level standalone .kun-ppt.html presentation without overwriting an existing file.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string",
+              "minLength": 14,
+              "maxLength": 240,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._ -]*\\.kun-ppt\\.html$"
+            },
+            "title": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+            }
+          },
+          "required": [
+            "path"
+          ],
+          "additionalProperties": false
+        },
+        "outputSchema": {
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string",
+              "minLength": 14,
+              "maxLength": 240,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._ -]*\\.kun-ppt\\.html$"
+            },
+            "revision": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "contentSha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "warnings": {
+              "type": "array",
+              "maxItems": 16,
+              "items": {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 128
+                  },
+                  "path": {
+                    "type": "string",
+                    "maxLength": 1024
+                  },
+                  "message": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 4096
+                  }
+                },
+                "required": [
+                  "code",
+                  "path",
+                  "message"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "warningCount": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "warningsTruncated": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "path",
+            "revision",
+            "contentSha256",
+            "warnings",
+            "warningCount",
+            "warningsTruncated"
+          ],
+          "additionalProperties": false
+        },
+        "sideEffects": "write",
+        "idempotent": false,
+        "maxOutputBytes": 65536
+      },
+      {
+        "id": "presentation-read",
+        "description": "Read the current structured presentation model and revision before planning edits.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string",
+              "minLength": 14,
+              "maxLength": 240,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._ -]*\\.kun-ppt\\.html$"
+            }
+          },
+          "required": [
+            "path"
+          ],
+          "additionalProperties": false
+        },
+        "outputSchema": {
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string",
+              "minLength": 14,
+              "maxLength": 240,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._ -]*\\.kun-ppt\\.html$"
+            },
+            "project": {
+              "type": "object",
+              "properties": {
+                "schemaVersion": {
+                  "const": 1
+                },
+                "id": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 64,
+                  "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]*$"
+                },
+                "revision": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "title": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 160
+                },
+                "theme": {
+                  "type": "object",
+                  "properties": {
+                    "backgroundColor": {
+                      "type": "string",
+                      "pattern": "^#[0-9A-Fa-f]{6}$"
+                    },
+                    "textColor": {
+                      "type": "string",
+                      "pattern": "^#[0-9A-Fa-f]{6}$"
+                    },
+                    "accentColor": {
+                      "type": "string",
+                      "pattern": "^#[0-9A-Fa-f]{6}$"
+                    },
+                    "fontFamily": {
+                      "enum": [
+                        "sans",
+                        "serif",
+                        "mono"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "backgroundColor",
+                    "textColor",
+                    "accentColor",
+                    "fontFamily"
+                  ],
+                  "additionalProperties": false
+                },
+                "slides": {
+                  "type": "array",
+                  "minItems": 1,
+                  "maxItems": 64,
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 64,
+                        "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]*$"
+                      },
+                      "title": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 120
+                      },
+                      "backgroundColor": {
+                        "oneOf": [
+                          {
+                            "type": "string",
+                            "pattern": "^#[0-9A-Fa-f]{6}$"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "elements": {
+                        "type": "array",
+                        "maxItems": 128,
+                        "items": {
+                          "oneOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 64,
+                                  "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]*$"
+                                },
+                                "x": {
+                                  "type": "number",
+                                  "minimum": 0,
+                                  "maximum": 100
+                                },
+                                "y": {
+                                  "type": "number",
+                                  "minimum": 0,
+                                  "maximum": 100
+                                },
+                                "width": {
+                                  "type": "number",
+                                  "exclusiveMinimum": 0,
+                                  "maximum": 100
+                                },
+                                "height": {
+                                  "type": "number",
+                                  "exclusiveMinimum": 0,
+                                  "maximum": 100
+                                },
+                                "rotation": {
+                                  "type": "number",
+                                  "minimum": -180,
+                                  "maximum": 180
+                                },
+                                "opacity": {
+                                  "type": "number",
+                                  "minimum": 0,
+                                  "maximum": 1
+                                },
+                                "type": {
+                                  "const": "text"
+                                },
+                                "text": {
+                                  "type": "string",
+                                  "maxLength": 4000
+                                },
+                                "fontSize": {
+                                  "type": "number",
+                                  "minimum": 8,
+                                  "maximum": 240
+                                },
+                                "fontWeight": {
+                                  "enum": [
+                                    400,
+                                    500,
+                                    600,
+                                    700
+                                  ]
+                                },
+                                "fontFamily": {
+                                  "enum": [
+                                    "sans",
+                                    "serif",
+                                    "mono"
+                                  ]
+                                },
+                                "color": {
+                                  "type": "string",
+                                  "pattern": "^#[0-9A-Fa-f]{6}$"
+                                },
+                                "align": {
+                                  "enum": [
+                                    "left",
+                                    "center",
+                                    "right"
+                                  ]
+                                },
+                                "verticalAlign": {
+                                  "enum": [
+                                    "top",
+                                    "middle",
+                                    "bottom"
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "type",
+                                "x",
+                                "y",
+                                "width",
+                                "height",
+                                "rotation",
+                                "opacity",
+                                "text",
+                                "fontSize",
+                                "fontWeight",
+                                "color",
+                                "align",
+                                "verticalAlign"
+                              ],
+                              "additionalProperties": false
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 64,
+                                  "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]*$"
+                                },
+                                "x": {
+                                  "type": "number",
+                                  "minimum": 0,
+                                  "maximum": 100
+                                },
+                                "y": {
+                                  "type": "number",
+                                  "minimum": 0,
+                                  "maximum": 100
+                                },
+                                "width": {
+                                  "type": "number",
+                                  "exclusiveMinimum": 0,
+                                  "maximum": 100
+                                },
+                                "height": {
+                                  "type": "number",
+                                  "exclusiveMinimum": 0,
+                                  "maximum": 100
+                                },
+                                "rotation": {
+                                  "type": "number",
+                                  "minimum": -180,
+                                  "maximum": 180
+                                },
+                                "opacity": {
+                                  "type": "number",
+                                  "minimum": 0,
+                                  "maximum": 1
+                                },
+                                "type": {
+                                  "const": "shape"
+                                },
+                                "shape": {
+                                  "enum": [
+                                    "rectangle",
+                                    "ellipse",
+                                    "line"
+                                  ]
+                                },
+                                "fillColor": {
+                                  "type": "string",
+                                  "pattern": "^#[0-9A-Fa-f]{6}$"
+                                },
+                                "strokeColor": {
+                                  "type": "string",
+                                  "pattern": "^#[0-9A-Fa-f]{6}$"
+                                },
+                                "strokeWidth": {
+                                  "type": "number",
+                                  "minimum": 0,
+                                  "maximum": 32
+                                },
+                                "cornerRadius": {
+                                  "type": "number",
+                                  "minimum": 0,
+                                  "maximum": 100
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "type",
+                                "x",
+                                "y",
+                                "width",
+                                "height",
+                                "rotation",
+                                "opacity",
+                                "shape",
+                                "fillColor",
+                                "strokeColor",
+                                "strokeWidth",
+                                "cornerRadius"
+                              ],
+                              "additionalProperties": false
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "id": {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 64,
+                                  "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]*$"
+                                },
+                                "x": {
+                                  "type": "number",
+                                  "minimum": 0,
+                                  "maximum": 100
+                                },
+                                "y": {
+                                  "type": "number",
+                                  "minimum": 0,
+                                  "maximum": 100
+                                },
+                                "width": {
+                                  "type": "number",
+                                  "exclusiveMinimum": 0,
+                                  "maximum": 100
+                                },
+                                "height": {
+                                  "type": "number",
+                                  "exclusiveMinimum": 0,
+                                  "maximum": 100
+                                },
+                                "rotation": {
+                                  "type": "number",
+                                  "minimum": -180,
+                                  "maximum": 180
+                                },
+                                "opacity": {
+                                  "type": "number",
+                                  "minimum": 0,
+                                  "maximum": 1
+                                },
+                                "type": {
+                                  "const": "image"
+                                },
+                                "src": {
+                                  "type": "string",
+                                  "minLength": 1,
+                                  "maxLength": 260,
+                                  "pattern": "\\.(?:[Pp][Nn][Gg]|[Jj][Pp][Gg]|[Jj][Pp][Ee][Gg]|[Ww][Ee][Bb][Pp]|[Gg][Ii][Ff])$"
+                                },
+                                "alt": {
+                                  "type": "string",
+                                  "maxLength": 500
+                                },
+                                "fit": {
+                                  "enum": [
+                                    "contain",
+                                    "cover"
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "id",
+                                "type",
+                                "x",
+                                "y",
+                                "width",
+                                "height",
+                                "rotation",
+                                "opacity",
+                                "src",
+                                "alt",
+                                "fit"
+                              ],
+                              "additionalProperties": false
+                            }
+                          ]
+                        }
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "title",
+                      "elements"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "operationReceipts": {
+                  "type": "array",
+                  "maxItems": 64,
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "operationId": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 128
+                      },
+                      "digest": {
+                        "type": "string",
+                        "pattern": "^[0-9a-f]{64}$"
+                      },
+                      "resultingRevision": {
+                        "type": "integer",
+                        "minimum": 1
+                      }
+                    },
+                    "required": [
+                      "operationId",
+                      "digest",
+                      "resultingRevision"
+                    ],
+                    "additionalProperties": false
+                  }
+                }
+              },
+              "required": [
+                "schemaVersion",
+                "id",
+                "revision",
+                "title",
+                "theme",
+                "slides",
+                "operationReceipts"
+              ],
+              "additionalProperties": false
+            },
+            "htmlBytes": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 900000
+            },
+            "contentSha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          },
+          "required": [
+            "path",
+            "project",
+            "htmlBytes",
+            "contentSha256"
+          ],
+          "additionalProperties": false
+        },
+        "sideEffects": "read",
+        "idempotent": true,
+        "maxOutputBytes": 950000
+      },
+      {
+        "id": "presentation-apply",
+        "description": "Apply typed operations to the revision returned by presentation-read. operationId is optional. slide.insert defaults backgroundColor to null; element.upsert accepts complete elements; element.style accepts bounded safe CSS declarations for one element.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string",
+              "minLength": 14,
+              "maxLength": 240,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._ -]*\\.kun-ppt\\.html$"
+            },
+            "expectedRevision": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "operationId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128,
+              "description": "Optional idempotency key. Kun derives one from the tool invocation when omitted."
+            },
+            "operations": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 128,
+              "items": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "const": "document.update"
+                      },
+                      "patch": {
+                        "type": "object",
+                        "minProperties": 1,
+                        "properties": {
+                          "title": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 160
+                          },
+                          "theme": {
+                            "type": "object",
+                            "minProperties": 1,
+                            "properties": {
+                              "backgroundColor": {
+                                "type": "string",
+                                "pattern": "^#[0-9A-Fa-f]{6}$"
+                              },
+                              "textColor": {
+                                "type": "string",
+                                "pattern": "^#[0-9A-Fa-f]{6}$"
+                              },
+                              "accentColor": {
+                                "type": "string",
+                                "pattern": "^#[0-9A-Fa-f]{6}$"
+                              },
+                              "fontFamily": {
+                                "enum": [
+                                  "sans",
+                                  "serif",
+                                  "mono"
+                                ]
+                              }
+                            },
+                            "additionalProperties": false
+                          }
+                        },
+                        "additionalProperties": false
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "patch"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "const": "slide.insert"
+                      },
+                      "slide": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 64,
+                            "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]*$"
+                          },
+                          "title": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 120
+                          },
+                          "backgroundColor": {
+                            "oneOf": [
+                              {
+                                "type": "string",
+                                "pattern": "^#[0-9A-Fa-f]{6}$"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          },
+                          "elements": {
+                            "type": "array",
+                            "maxItems": 128,
+                            "items": {
+                              "oneOf": [
+                                {
+                                  "type": "object",
+                                  "properties": {
+                                    "id": {
+                                      "type": "string",
+                                      "minLength": 1,
+                                      "maxLength": 64,
+                                      "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]*$"
+                                    },
+                                    "x": {
+                                      "type": "number",
+                                      "minimum": 0,
+                                      "maximum": 100
+                                    },
+                                    "y": {
+                                      "type": "number",
+                                      "minimum": 0,
+                                      "maximum": 100
+                                    },
+                                    "width": {
+                                      "type": "number",
+                                      "exclusiveMinimum": 0,
+                                      "maximum": 100
+                                    },
+                                    "height": {
+                                      "type": "number",
+                                      "exclusiveMinimum": 0,
+                                      "maximum": 100
+                                    },
+                                    "rotation": {
+                                      "type": "number",
+                                      "minimum": -180,
+                                      "maximum": 180
+                                    },
+                                    "opacity": {
+                                      "type": "number",
+                                      "minimum": 0,
+                                      "maximum": 1
+                                    },
+                                    "type": {
+                                      "const": "text"
+                                    },
+                                    "text": {
+                                      "type": "string",
+                                      "maxLength": 4000
+                                    },
+                                    "fontSize": {
+                                      "type": "number",
+                                      "minimum": 8,
+                                      "maximum": 240
+                                    },
+                                    "fontWeight": {
+                                      "enum": [
+                                        400,
+                                        500,
+                                        600,
+                                        700
+                                      ]
+                                    },
+                                    "fontFamily": {
+                                      "enum": [
+                                        "sans",
+                                        "serif",
+                                        "mono"
+                                      ]
+                                    },
+                                    "color": {
+                                      "type": "string",
+                                      "pattern": "^#[0-9A-Fa-f]{6}$"
+                                    },
+                                    "align": {
+                                      "enum": [
+                                        "left",
+                                        "center",
+                                        "right"
+                                      ]
+                                    },
+                                    "verticalAlign": {
+                                      "enum": [
+                                        "top",
+                                        "middle",
+                                        "bottom"
+                                      ]
+                                    }
+                                  },
+                                  "required": [
+                                    "id",
+                                    "type",
+                                    "x",
+                                    "y",
+                                    "width",
+                                    "height",
+                                    "rotation",
+                                    "opacity",
+                                    "text",
+                                    "fontSize",
+                                    "fontWeight",
+                                    "color",
+                                    "align",
+                                    "verticalAlign"
+                                  ],
+                                  "additionalProperties": false
+                                },
+                                {
+                                  "type": "object",
+                                  "properties": {
+                                    "id": {
+                                      "type": "string",
+                                      "minLength": 1,
+                                      "maxLength": 64,
+                                      "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]*$"
+                                    },
+                                    "x": {
+                                      "type": "number",
+                                      "minimum": 0,
+                                      "maximum": 100
+                                    },
+                                    "y": {
+                                      "type": "number",
+                                      "minimum": 0,
+                                      "maximum": 100
+                                    },
+                                    "width": {
+                                      "type": "number",
+                                      "exclusiveMinimum": 0,
+                                      "maximum": 100
+                                    },
+                                    "height": {
+                                      "type": "number",
+                                      "exclusiveMinimum": 0,
+                                      "maximum": 100
+                                    },
+                                    "rotation": {
+                                      "type": "number",
+                                      "minimum": -180,
+                                      "maximum": 180
+                                    },
+                                    "opacity": {
+                                      "type": "number",
+                                      "minimum": 0,
+                                      "maximum": 1
+                                    },
+                                    "type": {
+                                      "const": "shape"
+                                    },
+                                    "shape": {
+                                      "enum": [
+                                        "rectangle",
+                                        "ellipse",
+                                        "line"
+                                      ]
+                                    },
+                                    "fillColor": {
+                                      "type": "string",
+                                      "pattern": "^#[0-9A-Fa-f]{6}$"
+                                    },
+                                    "strokeColor": {
+                                      "type": "string",
+                                      "pattern": "^#[0-9A-Fa-f]{6}$"
+                                    },
+                                    "strokeWidth": {
+                                      "type": "number",
+                                      "minimum": 0,
+                                      "maximum": 32
+                                    },
+                                    "cornerRadius": {
+                                      "type": "number",
+                                      "minimum": 0,
+                                      "maximum": 100
+                                    }
+                                  },
+                                  "required": [
+                                    "id",
+                                    "type",
+                                    "x",
+                                    "y",
+                                    "width",
+                                    "height",
+                                    "rotation",
+                                    "opacity",
+                                    "shape",
+                                    "fillColor",
+                                    "strokeColor",
+                                    "strokeWidth",
+                                    "cornerRadius"
+                                  ],
+                                  "additionalProperties": false
+                                },
+                                {
+                                  "type": "object",
+                                  "properties": {
+                                    "id": {
+                                      "type": "string",
+                                      "minLength": 1,
+                                      "maxLength": 64,
+                                      "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]*$"
+                                    },
+                                    "x": {
+                                      "type": "number",
+                                      "minimum": 0,
+                                      "maximum": 100
+                                    },
+                                    "y": {
+                                      "type": "number",
+                                      "minimum": 0,
+                                      "maximum": 100
+                                    },
+                                    "width": {
+                                      "type": "number",
+                                      "exclusiveMinimum": 0,
+                                      "maximum": 100
+                                    },
+                                    "height": {
+                                      "type": "number",
+                                      "exclusiveMinimum": 0,
+                                      "maximum": 100
+                                    },
+                                    "rotation": {
+                                      "type": "number",
+                                      "minimum": -180,
+                                      "maximum": 180
+                                    },
+                                    "opacity": {
+                                      "type": "number",
+                                      "minimum": 0,
+                                      "maximum": 1
+                                    },
+                                    "type": {
+                                      "const": "image"
+                                    },
+                                    "src": {
+                                      "type": "string",
+                                      "minLength": 1,
+                                      "maxLength": 260,
+                                      "pattern": "\\.(?:[Pp][Nn][Gg]|[Jj][Pp][Gg]|[Jj][Pp][Ee][Gg]|[Ww][Ee][Bb][Pp]|[Gg][Ii][Ff])$"
+                                    },
+                                    "alt": {
+                                      "type": "string",
+                                      "maxLength": 500
+                                    },
+                                    "fit": {
+                                      "enum": [
+                                        "contain",
+                                        "cover"
+                                      ]
+                                    }
+                                  },
+                                  "required": [
+                                    "id",
+                                    "type",
+                                    "x",
+                                    "y",
+                                    "width",
+                                    "height",
+                                    "rotation",
+                                    "opacity",
+                                    "src",
+                                    "alt",
+                                    "fit"
+                                  ],
+                                  "additionalProperties": false
+                                }
+                              ]
+                            }
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "title",
+                          "elements"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "index": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 63
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "slide"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "const": "slide.update"
+                      },
+                      "slideId": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 64,
+                        "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]*$"
+                      },
+                      "patch": {
+                        "type": "object",
+                        "minProperties": 1,
+                        "properties": {
+                          "title": {
+                            "type": "string",
+                            "minLength": 1,
+                            "maxLength": 120
+                          },
+                          "backgroundColor": {
+                            "oneOf": [
+                              {
+                                "type": "string",
+                                "pattern": "^#[0-9A-Fa-f]{6}$"
+                              },
+                              {
+                                "type": "null"
+                              }
+                            ]
+                          }
+                        },
+                        "additionalProperties": false
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "slideId",
+                      "patch"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "const": "slide.delete"
+                      },
+                      "slideId": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 64,
+                        "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]*$"
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "slideId"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "const": "slide.reorder"
+                      },
+                      "slideId": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 64,
+                        "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]*$"
+                      },
+                      "index": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 63
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "slideId",
+                      "index"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "const": "element.upsert"
+                      },
+                      "slideId": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 64,
+                        "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]*$"
+                      },
+                      "element": {
+                        "oneOf": [
+                          {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 64,
+                                "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]*$"
+                              },
+                              "x": {
+                                "type": "number",
+                                "minimum": 0,
+                                "maximum": 100
+                              },
+                              "y": {
+                                "type": "number",
+                                "minimum": 0,
+                                "maximum": 100
+                              },
+                              "width": {
+                                "type": "number",
+                                "exclusiveMinimum": 0,
+                                "maximum": 100
+                              },
+                              "height": {
+                                "type": "number",
+                                "exclusiveMinimum": 0,
+                                "maximum": 100
+                              },
+                              "rotation": {
+                                "type": "number",
+                                "minimum": -180,
+                                "maximum": 180
+                              },
+                              "opacity": {
+                                "type": "number",
+                                "minimum": 0,
+                                "maximum": 1
+                              },
+                              "type": {
+                                "const": "text"
+                              },
+                              "text": {
+                                "type": "string",
+                                "maxLength": 4000
+                              },
+                              "fontSize": {
+                                "type": "number",
+                                "minimum": 8,
+                                "maximum": 240
+                              },
+                              "fontWeight": {
+                                "enum": [
+                                  400,
+                                  500,
+                                  600,
+                                  700
+                                ]
+                              },
+                              "fontFamily": {
+                                "enum": [
+                                  "sans",
+                                  "serif",
+                                  "mono"
+                                ]
+                              },
+                              "color": {
+                                "type": "string",
+                                "pattern": "^#[0-9A-Fa-f]{6}$"
+                              },
+                              "align": {
+                                "enum": [
+                                  "left",
+                                  "center",
+                                  "right"
+                                ]
+                              },
+                              "verticalAlign": {
+                                "enum": [
+                                  "top",
+                                  "middle",
+                                  "bottom"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "type",
+                              "x",
+                              "y",
+                              "width",
+                              "height",
+                              "rotation",
+                              "opacity",
+                              "text",
+                              "fontSize",
+                              "fontWeight",
+                              "color",
+                              "align",
+                              "verticalAlign"
+                            ],
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 64,
+                                "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]*$"
+                              },
+                              "x": {
+                                "type": "number",
+                                "minimum": 0,
+                                "maximum": 100
+                              },
+                              "y": {
+                                "type": "number",
+                                "minimum": 0,
+                                "maximum": 100
+                              },
+                              "width": {
+                                "type": "number",
+                                "exclusiveMinimum": 0,
+                                "maximum": 100
+                              },
+                              "height": {
+                                "type": "number",
+                                "exclusiveMinimum": 0,
+                                "maximum": 100
+                              },
+                              "rotation": {
+                                "type": "number",
+                                "minimum": -180,
+                                "maximum": 180
+                              },
+                              "opacity": {
+                                "type": "number",
+                                "minimum": 0,
+                                "maximum": 1
+                              },
+                              "type": {
+                                "const": "shape"
+                              },
+                              "shape": {
+                                "enum": [
+                                  "rectangle",
+                                  "ellipse",
+                                  "line"
+                                ]
+                              },
+                              "fillColor": {
+                                "type": "string",
+                                "pattern": "^#[0-9A-Fa-f]{6}$"
+                              },
+                              "strokeColor": {
+                                "type": "string",
+                                "pattern": "^#[0-9A-Fa-f]{6}$"
+                              },
+                              "strokeWidth": {
+                                "type": "number",
+                                "minimum": 0,
+                                "maximum": 32
+                              },
+                              "cornerRadius": {
+                                "type": "number",
+                                "minimum": 0,
+                                "maximum": 100
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "type",
+                              "x",
+                              "y",
+                              "width",
+                              "height",
+                              "rotation",
+                              "opacity",
+                              "shape",
+                              "fillColor",
+                              "strokeColor",
+                              "strokeWidth",
+                              "cornerRadius"
+                            ],
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 64,
+                                "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]*$"
+                              },
+                              "x": {
+                                "type": "number",
+                                "minimum": 0,
+                                "maximum": 100
+                              },
+                              "y": {
+                                "type": "number",
+                                "minimum": 0,
+                                "maximum": 100
+                              },
+                              "width": {
+                                "type": "number",
+                                "exclusiveMinimum": 0,
+                                "maximum": 100
+                              },
+                              "height": {
+                                "type": "number",
+                                "exclusiveMinimum": 0,
+                                "maximum": 100
+                              },
+                              "rotation": {
+                                "type": "number",
+                                "minimum": -180,
+                                "maximum": 180
+                              },
+                              "opacity": {
+                                "type": "number",
+                                "minimum": 0,
+                                "maximum": 1
+                              },
+                              "type": {
+                                "const": "image"
+                              },
+                              "src": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 260,
+                                "pattern": "\\.(?:[Pp][Nn][Gg]|[Jj][Pp][Gg]|[Jj][Pp][Ee][Gg]|[Ww][Ee][Bb][Pp]|[Gg][Ii][Ff])$"
+                              },
+                              "alt": {
+                                "type": "string",
+                                "maxLength": 500
+                              },
+                              "fit": {
+                                "enum": [
+                                  "contain",
+                                  "cover"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "type",
+                              "x",
+                              "y",
+                              "width",
+                              "height",
+                              "rotation",
+                              "opacity",
+                              "src",
+                              "alt",
+                              "fit"
+                            ],
+                            "additionalProperties": false
+                          }
+                        ]
+                      },
+                      "index": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 127
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "slideId",
+                      "element"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "const": "element.style"
+                      },
+                      "slideId": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 64,
+                        "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]*$"
+                      },
+                      "elementId": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 64,
+                        "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]*$"
+                      },
+                      "css": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 2000
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "slideId",
+                      "elementId",
+                      "css"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "const": "element.delete"
+                      },
+                      "slideId": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 64,
+                        "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]*$"
+                      },
+                      "elementId": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 64,
+                        "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]*$"
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "slideId",
+                      "elementId"
+                    ],
+                    "additionalProperties": false
+                  }
+                ]
+              },
+              "description": "Use only the declared operation kinds. element.upsert requires a complete typed element; element.style accepts bounded safe CSS declarations."
+            }
+          },
+          "required": [
+            "path",
+            "expectedRevision",
+            "operations"
+          ],
+          "additionalProperties": false
+        },
+        "outputSchema": {
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string",
+              "minLength": 14,
+              "maxLength": 240,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._ -]*\\.kun-ppt\\.html$"
+            },
+            "resultingRevision": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "currentRevision": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "contentSha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "changedIds": {
+              "type": "array",
+              "maxItems": 512,
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 64,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]*$"
+              }
+            },
+            "changedIdCount": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "changedIdsTruncated": {
+              "type": "boolean"
+            },
+            "warnings": {
+              "type": "array",
+              "maxItems": 16,
+              "items": {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 128
+                  },
+                  "path": {
+                    "type": "string",
+                    "maxLength": 1024
+                  },
+                  "message": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 4096
+                  }
+                },
+                "required": [
+                  "code",
+                  "path",
+                  "message"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "warningCount": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "warningsTruncated": {
+              "type": "boolean"
+            },
+            "idempotentReplay": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "path",
+            "resultingRevision",
+            "currentRevision",
+            "contentSha256",
+            "changedIds",
+            "changedIdCount",
+            "changedIdsTruncated",
+            "warnings",
+            "warningCount",
+            "warningsTruncated",
+            "idempotentReplay"
+          ],
+          "additionalProperties": false
+        },
+        "sideEffects": "write",
+        "idempotent": true,
+        "maxOutputBytes": 131072
+      },
+      {
+        "id": "presentation-validate",
+        "description": "Validate a presentation and report bounded structural and accessibility diagnostics.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string",
+              "minLength": 14,
+              "maxLength": 240,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._ -]*\\.kun-ppt\\.html$"
+            }
+          },
+          "required": [
+            "path"
+          ],
+          "additionalProperties": false
+        },
+        "outputSchema": {
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string",
+              "minLength": 14,
+              "maxLength": 240,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._ -]*\\.kun-ppt\\.html$"
+            },
+            "revision": {
+              "oneOf": [
+                {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "valid": {
+              "type": "boolean"
+            },
+            "errors": {
+              "type": "array",
+              "maxItems": 16,
+              "items": {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 128
+                  },
+                  "path": {
+                    "type": "string",
+                    "maxLength": 1024
+                  },
+                  "message": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 4096
+                  }
+                },
+                "required": [
+                  "code",
+                  "path",
+                  "message"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "errorCount": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "errorsTruncated": {
+              "type": "boolean"
+            },
+            "warnings": {
+              "type": "array",
+              "maxItems": 16,
+              "items": {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 128
+                  },
+                  "path": {
+                    "type": "string",
+                    "maxLength": 1024
+                  },
+                  "message": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 4096
+                  }
+                },
+                "required": [
+                  "code",
+                  "path",
+                  "message"
+                ],
+                "additionalProperties": false
+              }
+            },
+            "warningCount": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "warningsTruncated": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "path",
+            "revision",
+            "valid",
+            "errors",
+            "errorCount",
+            "errorsTruncated",
+            "warnings",
+            "warningCount",
+            "warningsTruncated"
+          ],
+          "additionalProperties": false
+        },
+        "sideEffects": "read",
+        "idempotent": true,
+        "maxOutputBytes": 131072
+      },
+      {
+        "id": "presentation-export-copy",
+        "description": "Copy a verified revision after checking that the destination is absent or already identical.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string",
+              "minLength": 14,
+              "maxLength": 240,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._ -]*\\.kun-ppt\\.html$"
+            },
+            "destinationPath": {
+              "type": "string",
+              "minLength": 14,
+              "maxLength": 240,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._ -]*\\.kun-ppt\\.html$"
+            },
+            "expectedRevision": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          "required": [
+            "path",
+            "destinationPath",
+            "expectedRevision"
+          ],
+          "additionalProperties": false
+        },
+        "outputSchema": {
+          "type": "object",
+          "properties": {
+            "sourcePath": {
+              "type": "string",
+              "minLength": 14,
+              "maxLength": 240,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._ -]*\\.kun-ppt\\.html$"
+            },
+            "destinationPath": {
+              "type": "string",
+              "minLength": 14,
+              "maxLength": 240,
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._ -]*\\.kun-ppt\\.html$"
+            },
+            "revision": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "bytes": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 900000
+            },
+            "contentSha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "idempotentReplay": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "sourcePath",
+            "destinationPath",
+            "revision",
+            "bytes",
+            "contentSha256",
+            "idempotentReplay"
+          ],
+          "additionalProperties": false
+        },
+        "sideEffects": "write",
+        "idempotent": true,
+        "maxOutputBytes": 65536
+      }
+    ]
+  },
+  "permissions": [
+    "commands.register",
+    "ui.views",
+    "webview",
+    "tools.register",
+    "workspace.read",
+    "workspace.write"
+  ],
+  "stateSchemaVersion": 1
+}

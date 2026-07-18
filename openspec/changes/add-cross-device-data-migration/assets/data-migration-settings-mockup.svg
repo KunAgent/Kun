@@ -1,0 +1,153 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="960" viewBox="0 0 1440 960" role="img" aria-labelledby="title desc">
+  <title id="title">Kun 设置页数据迁移模块设计稿</title>
+  <desc id="desc">设置侧栏选中数据迁移，右侧展示导出、导入、安全说明和最近迁移。</desc>
+  <defs>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="160%">
+      <feDropShadow dx="0" dy="12" stdDeviation="22" flood-color="#15223a" flood-opacity="0.13"/>
+    </filter>
+    <filter id="cardShadow" x="-20%" y="-20%" width="140%" height="150%">
+      <feDropShadow dx="0" dy="5" stdDeviation="10" flood-color="#24324a" flood-opacity="0.07"/>
+    </filter>
+    <linearGradient id="hero" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0" stop-color="#eef4ff"/>
+      <stop offset="1" stop-color="#f4f0ff"/>
+    </linearGradient>
+    <linearGradient id="primary" x1="0" x2="1">
+      <stop offset="0" stop-color="#4f6ff2"/>
+      <stop offset="1" stop-color="#6858de"/>
+    </linearGradient>
+    <style>
+      .ui { font-family: Inter, "PingFang SC", "Microsoft YaHei", Arial, sans-serif; }
+      .nav { font-size: 15px; fill: #5e687a; font-weight: 500; }
+      .small { font-size: 13px; fill: #7a8495; }
+      .body { font-size: 15px; fill: #5f6879; }
+      .title { font-size: 27px; fill: #1d2636; font-weight: 700; }
+      .card-title { font-size: 19px; fill: #222b3a; font-weight: 650; }
+      .button { font-size: 14px; font-weight: 650; }
+    </style>
+  </defs>
+
+  <rect width="1440" height="960" fill="#e8ebf1"/>
+  <rect x="34" y="28" width="1372" height="904" rx="22" fill="#fbfcfd" filter="url(#shadow)"/>
+
+  <g class="ui">
+    <path d="M56 28h246v904H56c-12 0-22-10-22-22V50c0-12 10-22 22-22z" fill="#f5f6f8"/>
+    <line x1="302" y1="28" x2="302" y2="932" stroke="#e1e4e9"/>
+    <circle cx="61" cy="57" r="6.5" fill="#ff605c"/>
+    <circle cx="83" cy="57" r="6.5" fill="#ffbd44"/>
+    <circle cx="105" cy="57" r="6.5" fill="#00ca4e"/>
+
+    <g transform="translate(54 91)">
+      <rect width="224" height="44" rx="11" fill="none"/>
+      <path d="M18 14l-8 8 8 8M10 22h17" fill="none" stroke="#667083" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      <text x="43" y="28" class="nav">返回</text>
+    </g>
+
+    <g transform="translate(48 152)">
+      <g transform="translate(0 0)"><circle cx="20" cy="20" r="7" fill="none" stroke="#7a8495" stroke-width="1.7"/><path d="M20 9v22M9 20h22" stroke="#7a8495" stroke-width="1.4" opacity=".65"/><text x="47" y="25" class="nav">通用</text></g>
+      <g transform="translate(0 47)"><rect x="13" y="12" width="15" height="16" rx="3" fill="none" stroke="#7a8495" stroke-width="1.7"/><path d="M17 16h7M17 21h7M17 26h7" stroke="#7a8495" stroke-width="1.4"/><text x="47" y="25" class="nav">模型服务</text></g>
+      <g transform="translate(0 94)"><path d="M13 12h15v17H13zM17 8h7v4h-7z" fill="none" stroke="#7a8495" stroke-width="1.7"/><text x="47" y="25" class="nav">扩展</text></g>
+      <g transform="translate(0 141)"><path d="M13 29l4-4 12-12-4-4-12 12-1 9z" fill="none" stroke="#7a8495" stroke-width="1.7"/><text x="47" y="25" class="nav">写作</text></g>
+      <g transform="translate(0 188)"><path d="M13 28c9 3 18-2 17-10-1-7-9-9-14-4-3 3-4 8-3 14z" fill="none" stroke="#7a8495" stroke-width="1.7"/><circle cx="18" cy="18" r="1.6" fill="#7a8495"/><circle cx="24" cy="15" r="1.6" fill="#7a8495"/><text x="47" y="25" class="nav">设计</text></g>
+      <g transform="translate(0 235)"><circle cx="20" cy="20" r="9" fill="none" stroke="#7a8495" stroke-width="1.7"/><path d="M16 20h8M20 16v8" stroke="#7a8495" stroke-width="1.5"/><text x="47" y="25" class="nav">智能体</text></g>
+      <g transform="translate(0 282)"><path d="M12 14h16v15H12zM16 10h8v4h-8z" fill="none" stroke="#7a8495" stroke-width="1.7"/><text x="47" y="25" class="nav">归档会话</text></g>
+
+      <g transform="translate(0 329)">
+        <rect x="0" y="0" width="238" height="42" rx="11" fill="#e8eaf4" stroke="#d9dcea"/>
+        <path d="M11 16h18M11 24h18M25 12l4 4-4 4M15 20l-4 4 4 4" fill="none" stroke="#5367d8" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+        <text x="47" y="26" font-size="15" fill="#253252" font-weight="650">数据迁移</text>
+      </g>
+      <g transform="translate(0 376)"><path d="M12 13h16v16H12zM20 8v5M20 29v5M8 20h4M28 20h4" fill="none" stroke="#7a8495" stroke-width="1.7"/><text x="47" y="25" class="nav">工作树</text></g>
+      <g transform="translate(0 423)"><path d="M20 10c-7 0-10 6-7 11-3 5 0 11 7 11s10-6 7-11c3-5 0-11-7-11z" fill="none" stroke="#7a8495" stroke-width="1.7"/><text x="47" y="25" class="nav">记忆</text></g>
+      <g transform="translate(0 470)"><path d="M12 13h16v16H12zM16 9v4M24 9v4M16 29v4M24 29v4" fill="none" stroke="#7a8495" stroke-width="1.7"/><text x="47" y="25" class="nav">快捷键</text></g>
+      <g transform="translate(0 517)"><rect x="11" y="11" width="18" height="18" rx="4" fill="none" stroke="#7a8495" stroke-width="1.7"/><path d="M15 16h10M15 21h10M15 26h7" stroke="#7a8495" stroke-width="1.4"/><text x="47" y="25" class="nav">终端</text></g>
+    </g>
+
+    <g transform="translate(55 850)">
+      <line x1="-21" y1="-17" x2="247" y2="-17" stroke="#e0e3e8"/>
+      <circle cx="22" cy="19" r="18" fill="#e6e8ed"/>
+      <path d="M22 9v20M12 19h20" stroke="#767f90" stroke-width="1.6" opacity=".7"/>
+      <text x="51" y="15" font-size="13" fill="#263142" font-weight="650">Kun</text>
+      <text x="51" y="34" class="small">桌面设置</text>
+    </g>
+
+    <g transform="translate(354 74)">
+      <text x="0" y="32" class="title">数据迁移</text>
+      <text x="0" y="61" class="body">把工作区、历史会话、设计与写作内容安全带到另一台电脑</text>
+
+      <rect x="0" y="88" width="1000" height="142" rx="20" fill="url(#hero)" stroke="#dfe6f7"/>
+      <g transform="translate(28 113)">
+        <rect width="82" height="82" rx="23" fill="#ffffff" opacity=".92"/>
+        <path d="M24 38h34v26H24zM30 29h22l6 9H24z" fill="none" stroke="#596cdf" stroke-width="2.4" stroke-linejoin="round"/>
+        <path d="M41 43v14M35 50l6 7 7-7" fill="none" stroke="#596cdf" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+      </g>
+      <text x="134" y="137" font-size="21" fill="#202a3a" font-weight="680">把这台电脑上的 Kun 工作完整带走</text>
+      <text x="134" y="169" class="body">创建一个可校验的 .kunpack，在 Windows、macOS 和 Linux 之间自动重映射路径。</text>
+      <text x="134" y="197" font-size="13.5" fill="#66728c">导入前会先预检；不会迁移 API 密钥、OAuth、信任授权和运行中的任务。</text>
+      <g transform="translate(785 131)">
+        <rect width="177" height="48" rx="12" fill="url(#primary)"/>
+        <path d="M20 15h17v18H20zM24 10h9v5h-9zM28.5 20v8M25 24l3.5 4 3.5-4" fill="none" stroke="#fff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+        <text x="49" y="30" fill="#fff" class="button">创建迁移包</text>
+      </g>
+
+      <g transform="translate(0 258)" filter="url(#cardShadow)">
+        <rect width="486" height="253" rx="19" fill="#fff" stroke="#e2e5ea"/>
+      </g>
+      <g transform="translate(514 258)" filter="url(#cardShadow)">
+        <rect width="486" height="253" rx="19" fill="#fff" stroke="#e2e5ea"/>
+      </g>
+
+      <g transform="translate(28 286)">
+        <rect width="52" height="52" rx="15" fill="#edf1ff"/>
+        <path d="M15 22h22v20H15zM20 14h12l5 8H15z" fill="none" stroke="#5369de" stroke-width="2" stroke-linejoin="round"/>
+        <path d="M26 35V23M21 28l5-5 5 5" fill="none" stroke="#5369de" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/>
+        <text x="72" y="23" class="card-title">导出这台电脑</text>
+        <text x="72" y="47" class="small">生成一个可移动的迁移包</text>
+        <text x="0" y="88" class="body">选择工作区、聊天历史、附件、Design 与 Write 内容。</text>
+        <text x="0" y="114" class="body">导出前查看大小、排除项和敏感文件提醒。</text>
+        <rect x="0" y="147" width="137" height="42" rx="11" fill="#4f65de"/>
+        <text x="26" y="173" fill="#fff" class="button">创建迁移包</text>
+        <rect x="149" y="147" width="148" height="42" rx="11" fill="#fff" stroke="#d9dde6"/>
+        <text x="170" y="173" fill="#4e596b" class="button">查看可迁移数据</text>
+      </g>
+
+      <g transform="translate(542 286)">
+        <rect width="52" height="52" rx="15" fill="#f0edff"/>
+        <path d="M15 22h22v20H15zM20 14h12l5 8H15z" fill="none" stroke="#7258d8" stroke-width="2" stroke-linejoin="round"/>
+        <path d="M26 23v12M21 30l5 5 5-5" fill="none" stroke="#7258d8" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/>
+        <text x="72" y="23" class="card-title">导入到这台电脑</text>
+        <text x="72" y="47" class="small">先检查，再安全写入目标目录</text>
+        <rect x="0" y="78" width="430" height="78" rx="13" fill="#fafafd" stroke="#d9dde6" stroke-dasharray="6 5"/>
+        <text x="215" y="109" text-anchor="middle" class="body">拖入一个 .kunpack</text>
+        <text x="215" y="133" text-anchor="middle" class="small">或从电脑中选择</text>
+        <rect x="0" y="168" width="126" height="42" rx="11" fill="#fff" stroke="#7464db"/>
+        <text x="22" y="194" fill="#5e50c1" class="button">选择迁移包</text>
+      </g>
+
+      <g transform="translate(0 537)">
+        <rect width="1000" height="122" rx="18" fill="#fff" stroke="#e2e5ea"/>
+        <g transform="translate(24 25)">
+          <circle cx="22" cy="22" r="22" fill="#edf7f2"/>
+          <path d="M22 10l11 5v8c0 8-5 13-11 16-6-3-11-8-11-16v-8z" fill="none" stroke="#318668" stroke-width="2"/>
+          <path d="M17 23l4 4 7-9" fill="none" stroke="#318668" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        </g>
+        <text x="82" y="42" font-size="16" fill="#263142" font-weight="650">安全边界</text>
+        <text x="82" y="70" class="body">不会迁移 API 密钥、OAuth 登录、运行令牌、工作区信任、审批状态或正在运行的任务。</text>
+        <text x="82" y="96" class="small">导入的定时任务保持禁用；模型服务和连接渠道需要在新电脑重新登录。</text>
+        <rect x="855" y="39" width="112" height="39" rx="10" fill="#f6f7fa"/>
+        <text x="879" y="64" fill="#586274" class="button">了解详情</text>
+      </g>
+
+      <text x="0" y="708" font-size="17" fill="#263142" font-weight="650">最近迁移</text>
+      <g transform="translate(0 728)">
+        <rect width="1000" height="106" rx="17" fill="#fff" stroke="#e2e5ea"/>
+        <circle cx="43" cy="53" r="22" fill="#edf7f2"/>
+        <path d="M33 53l7 7 13-15" fill="none" stroke="#318668" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+        <text x="82" y="42" font-size="15" fill="#263142" font-weight="650">MacBook Pro → 迁移包已创建</text>
+        <text x="82" y="68" class="small">3 个工作区 · 86 个会话 · 12.4 GB · 今天 14:32</text>
+        <rect x="842" y="34" width="126" height="38" rx="10" fill="#f6f7fa"/>
+        <text x="869" y="59" fill="#586274" class="button">查看报告</text>
+      </g>
+    </g>
+  </g>
+</svg>

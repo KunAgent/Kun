@@ -9,6 +9,28 @@ type State = {
   error: Error | null
 }
 
+type AppReloadWindow = {
+  kunGui?: {
+    runDesktopCommand?: (command: 'reload') => Promise<void>
+  }
+  location: {
+    reload: () => void
+  }
+}
+
+export function requestApplicationReload(target: AppReloadWindow = window): void {
+  const runDesktopCommand = target.kunGui?.runDesktopCommand
+  if (typeof runDesktopCommand !== 'function') {
+    target.location.reload()
+    return
+  }
+  try {
+    void runDesktopCommand('reload').catch(() => target.location.reload())
+  } catch {
+    target.location.reload()
+  }
+}
+
 export class AppErrorBoundary extends Component<Props, State> {
   state: State = { error: null }
 
@@ -29,7 +51,7 @@ export class AppErrorBoundary extends Component<Props, State> {
   }
 
   private handleReload = (): void => {
-    window.location.reload()
+    requestApplicationReload()
   }
 
   override render(): ReactNode {

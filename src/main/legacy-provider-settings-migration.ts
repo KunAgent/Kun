@@ -151,12 +151,15 @@ async function hydrateSettingsFromBindings(
   const provider = getModelProviderSettings(settings)
   const providers: ModelProviderProfileV1[] = []
   for (const entry of provider.providers) {
-    const resolved = await service.resolveApiKey(legacyProviderCredentialSourceId(entry.id))
+    const resolved = await resolveLegacyApiKey(
+      service,
+      legacyProviderCredentialSourceId(entry.id)
+    )
     providers.push(resolved ? { ...entry, apiKey: resolved.apiKey } : entry)
   }
   const defaultProvider = providers.find((entry) => entry.id === DEFAULT_MODEL_PROVIDER_ID) ?? providers[0]
   const runtime = getKunRuntimeSettings(settings)
-  const runtimeOverride = await service.resolveApiKey(LEGACY_RUNTIME_OVERRIDE_SOURCE_ID)
+  const runtimeOverride = await resolveLegacyApiKey(service, LEGACY_RUNTIME_OVERRIDE_SOURCE_ID)
   return {
     ...settings,
     provider: {
@@ -168,6 +171,25 @@ async function hydrateSettingsFromBindings(
       ...settings.agents,
       kun: runtimeOverride ? { ...runtime, apiKey: runtimeOverride.apiKey } : runtime
     }
+  }
+}
+
+async function resolveLegacyApiKey(
+  service: LegacyProviderCredentialMigrationService,
+  sourceId: string
+): Promise<Awaited<ReturnType<LegacyProviderCredentialMigrationService['resolveApiKey']>>> {
+  try {
+    return await service.resolveApiKey(sourceId)
+  } catch (error) {
+    // Credential records can outlive the key that encrypted them after an OS
+    // keychain reset, profile restore, or copied data directory. One unreadable
+    // legacy record must not make settings:set fail for a different provider:
+    // keep that profile unhydrated so the user can replace its key explicitly.
+    console.warn('[kun-gui] Legacy provider credential could not be restored; the saved profile will require a new key.', {
+      sourceId,
+      message: error instanceof Error ? error.message : String(error)
+    })
+    return null
   }
 }
 

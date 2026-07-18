@@ -59,6 +59,7 @@ function ModeCardButton({
             className="max-h-16 max-w-16 object-contain"
             draggable={false}
             decoding="async"
+            loading="lazy"
           />
         ) : (
           <span className="h-12 w-12 rounded-xl bg-ds-subtle" />
@@ -104,10 +105,11 @@ function ModeCardButton({
       {card.removable && onRemove ? (
         <button
           type="button"
+          disabled={busy}
           onClick={onRemove}
           title={removeLabel}
           aria-label={removeLabel}
-          className="absolute right-2 top-2 rounded-md p-1 text-ds-faint transition hover:bg-ds-danger-soft hover:text-ds-danger"
+          className="absolute right-2 top-2 rounded-md p-1 text-ds-faint transition hover:bg-ds-danger-soft hover:text-ds-danger disabled:cursor-default disabled:opacity-50"
         >
           <Trash2 className="h-3.5 w-3.5" strokeWidth={1.8} />
         </button>
@@ -123,7 +125,6 @@ export function EasterEggSettingsSection({ ctx }: { ctx: Record<string, any> }):
   const busy = useUiPluginStore((s) => s.busy)
   const lastError = useUiPluginStore((s) => s.lastError)
   const initUiPlugins = useUiPluginStore((s) => s.initUiPlugins)
-  const refreshUiPlugins = useUiPluginStore((s) => s.refreshUiPlugins)
   const activateUiMode = useUiPluginStore((s) => s.activateUiMode)
   const installUiPluginFromDialog = useUiPluginStore((s) => s.installUiPluginFromDialog)
   const removeUiPluginById = useUiPluginStore((s) => s.removeUiPluginById)
@@ -131,8 +132,7 @@ export function EasterEggSettingsSection({ ctx }: { ctx: Record<string, any> }):
 
   useEffect(() => {
     void initUiPlugins()
-    void refreshUiPlugins()
-  }, [initUiPlugins, refreshUiPlugins])
+  }, [initUiPlugins])
 
   // 内置只有「默认 Kun」;iKun 是预装的示例插件,从已安装列表自然出现
   const builtinCards: ModeCard[] = [

@@ -34,7 +34,6 @@ import {
   composerMenuSupportsModel,
   composerReasoningEffortRequestValue,
   buildComposerModelOptions,
-  canSwitchComposerModelFromCurrent,
   filterComposerModelIds,
   normalizeComposerReasoningEffort,
   orderComposerReasoningRailEfforts
@@ -43,6 +42,7 @@ import {
   FloatingComposerExecutionPicker,
   calculateExecutionMenuPlacement
 } from './FloatingComposerExecutionPicker'
+import { FloatingComposerQueuedMessages } from './FloatingComposerQueuedMessages'
 import { getGoalPanelDraftObjective } from './floating-composer-commands'
 import { useChatStore } from '../../store/chat-store'
 import i18n from '../../i18n'
@@ -64,6 +64,41 @@ const DEEPSEEK_PROVIDER_GROUP = {
   label: 'DeepSeek',
   modelIds: ['deepseek-v4-pro', 'deepseek-v4-flash']
 }
+
+describe('FloatingComposer queued guidance', () => {
+  it('renders compact Guide rows and disables structured payload guidance', async () => {
+    const previousLanguage = i18n.language
+    await i18n.changeLanguage('en')
+    try {
+      const html = renderToStaticMarkup(createElement(FloatingComposerQueuedMessages, {
+        messages: [
+          {
+            id: 'q-text',
+            text: 'use compact logo',
+            displayText: 'Use compact logo',
+            guidanceEligible: true
+          },
+          {
+            id: 'q-file',
+            text: 'inspect the attached file',
+            guidanceEligible: false
+          }
+        ],
+        onGuide: () => undefined,
+        onRemove: () => undefined
+      }))
+
+      expect(html).toContain('Use compact logo')
+      expect(html.match(/>Guide</g)).toHaveLength(2)
+      expect(html).toContain('Add this input to the agent&#x27;s next model interaction')
+      expect(html).toContain('Only plain-text follow-ups can guide')
+      expect(html).toContain('disabled=""')
+      expect(html).not.toContain('These messages will send automatically')
+    } finally {
+      await i18n.changeLanguage(previousLanguage)
+    }
+  })
+})
 
 describe('FloatingComposer slash commands', () => {
   it('parses compact command aliases', () => {
@@ -666,25 +701,6 @@ describe('FloatingComposer model controls', () => {
     expect(filterComposerModelIds(modelIds, '')).toEqual(modelIds)
     expect(filterComposerModelIds(modelIds, 'max')).toEqual(['MiniMax-M2'])
     expect(filterComposerModelIds(modelIds, '128K')).toEqual(['moonshot-v1-128k'])
-  })
-
-  it('prevents switching from a vision model to a text-only model', () => {
-    const visionProfile: Parameters<typeof canSwitchComposerModelFromCurrent>[0] = {
-      inputModalities: ['text', 'image'],
-      outputModalities: ['text'],
-      supportsToolCalling: true,
-      messageParts: ['text', 'image_url']
-    }
-    const textProfile: Parameters<typeof canSwitchComposerModelFromCurrent>[1] = {
-      inputModalities: ['text'],
-      outputModalities: ['text'],
-      supportsToolCalling: true,
-      messageParts: ['text']
-    }
-
-    expect(canSwitchComposerModelFromCurrent(visionProfile, textProfile)).toBe(false)
-    expect(canSwitchComposerModelFromCurrent(visionProfile, visionProfile)).toBe(true)
-    expect(canSwitchComposerModelFromCurrent(textProfile, visionProfile)).toBe(true)
   })
 
   it('keeps the reasoning strength visible in the model control', () => {
@@ -1390,7 +1406,7 @@ describe('FloatingComposer capability controls', () => {
     expect(html).toContain('shot.png')
   })
 
-  it('keeps the busy composer toolbar focused on stop and model text', () => {
+  it('keeps busy Code model and reasoning controls enabled for the next input', () => {
     const html = renderToStaticMarkup(
       createElement(FloatingComposer, {
         input: 'hello',
@@ -1403,7 +1419,10 @@ describe('FloatingComposer capability controls', () => {
         composerModel: 'deepseek-v4-pro',
         composerPickList: ['deepseek-v4-pro'],
         composerModelGroups: [DEEPSEEK_PROVIDER_GROUP],
+        composerReasoningEffort: 'high',
+        modelControlVariant: 'split',
         onComposerModelChange: () => undefined,
+        onComposerReasoningEffortChange: () => undefined,
         queuedMessages: [],
         onRemoveQueuedMessage: () => undefined,
         onSend: () => undefined,
@@ -1415,6 +1434,12 @@ describe('FloatingComposer capability controls', () => {
 
     expect(html).toContain('deepseek-v4-pro')
     expect(html).toContain('Stop')
+    const modelTrigger = html.match(/<button[^>]*aria-label="Model"[^>]*>/)?.[0]
+    const reasoningTrigger = html.match(/<button[^>]*aria-label="Reasoning: High"[^>]*>/)?.[0]
+    expect(modelTrigger).toBeDefined()
+    expect(modelTrigger).not.toContain('disabled=""')
+    expect(reasoningTrigger).toBeDefined()
+    expect(reasoningTrigger).not.toContain('disabled=""')
     expect(html).not.toContain('Stop and discard')
     expect(html).not.toContain('lucide-trash-2')
     expect(html).not.toContain('lucide-zap')

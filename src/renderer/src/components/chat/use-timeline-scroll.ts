@@ -12,7 +12,6 @@ type UseTimelineScrollOptions = {
   endRef: RefObject<HTMLDivElement | null>
   activeThreadId: string | null
   pageSize: number
-  autoCollapseThreshold: number
   totalTurns: number
   busy: boolean
   /** Triggers stick-to-bottom snap scroll. */
@@ -24,6 +23,27 @@ export type UseTimelineScrollResult = {
   hiddenTurnCount: number
   loadEarlierTurns: (options?: { userInitiated?: boolean }) => void
   collapseEarlierTurns: () => void
+}
+
+export function shouldCollapseTimelineHistory(totalTurns: number, pageSize: number): boolean {
+  return totalTurns > pageSize
+}
+
+export function deriveTimelineRenderedTurnCount({
+  visibleTurnCount,
+  totalTurns,
+  pageSize,
+  busy
+}: {
+  visibleTurnCount: number
+  totalTurns: number
+  pageSize: number
+  busy: boolean
+}): number {
+  if (busy && shouldCollapseTimelineHistory(totalTurns, pageSize)) {
+    return Math.min(pageSize, totalTurns)
+  }
+  return Math.min(visibleTurnCount, totalTurns)
 }
 
 export function deriveTimelineVisibleTurnCount({
@@ -58,13 +78,12 @@ export function useTimelineScroll({
   endRef,
   activeThreadId,
   pageSize,
-  autoCollapseThreshold,
   totalTurns,
   busy,
   scrollDeps
 }: UseTimelineScrollOptions): UseTimelineScrollResult {
   const { contentKey, streaming, userTurnKey } = scrollDeps
-  const shouldCollapseHistory = totalTurns > autoCollapseThreshold
+  const shouldCollapseHistory = shouldCollapseTimelineHistory(totalTurns, pageSize)
   const [visibleTurnCount, setVisibleTurnCount] = useState(() =>
     deriveTimelineVisibleTurnCount({
       currentVisibleTurnCount: 0,
@@ -74,7 +93,16 @@ export function useTimelineScroll({
       historyExpansionRequested: false
     })
   )
-  const hiddenTurnCount = Math.max(0, totalTurns - visibleTurnCount)
+  // Sending from an expanded long thread used to render the whole history for
+  // one frame before the effect below collapsed it. That transient Markdown
+  // mount can be enough to exhaust Chromium's renderer on very large threads.
+  const renderedVisibleTurnCount = deriveTimelineRenderedTurnCount({
+    visibleTurnCount,
+    totalTurns,
+    pageSize,
+    busy
+  })
+  const hiddenTurnCount = Math.max(0, totalTurns - renderedVisibleTurnCount)
 
   const stickToBottomRef = useRef(true)
   const lastUserTurnKeyRef = useRef(userTurnKey)
@@ -85,7 +113,7 @@ export function useTimelineScroll({
 
   const loadEarlierTurns = useCallback(
     (options?: { userInitiated?: boolean }): void => {
-      if (hiddenTurnCount === 0 || prependInFlightRef.current) return
+      if (busy || hiddenTurnCount === 0 || prependInFlightRef.current) return
       if (options?.userInitiated) {
         historyExpansionRequestedRef.current = true
       }
@@ -99,7 +127,7 @@ export function useTimelineScroll({
       prependInFlightRef.current = true
       setVisibleTurnCount((count) => Math.min(totalTurns, count + pageSize))
     },
-    [containerRef, hiddenTurnCount, pageSize, totalTurns]
+    [busy, containerRef, hiddenTurnCount, pageSize, totalTurns]
   )
 
   const collapseEarlierTurns = useCallback((): void => {
@@ -197,16 +225,9 @@ export function useTimelineScroll({
   // like it scrolled through the whole thread.
   useEffect(() => {
     if (!busy) return
-    setVisibleTurnCount((count) =>
-      deriveTimelineVisibleTurnCount({
-        currentVisibleTurnCount: count,
-        totalTurns,
-        pageSize,
-        shouldCollapseHistory,
-        historyExpansionRequested: historyExpansionRequestedRef.current
-      })
-    )
-  }, [busy, pageSize, shouldCollapseHistory, totalTurns])
+    historyExpansionRequestedRef.current = false
+    setVisibleTurnCount(Math.min(pageSize, totalTurns))
+  }, [busy, pageSize, totalTurns])
 
   // After a prepend, restore scroll position so the user's viewport
   // doesn't jump.
@@ -236,7 +257,7 @@ export function useTimelineScroll({
   }, [containerRef, hiddenTurnCount, loadEarlierTurns, visibleTurnCount])
 
   return {
-    visibleTurnCount,
+    visibleTurnCount: renderedVisibleTurnCount,
     hiddenTurnCount,
     loadEarlierTurns,
     collapseEarlierTurns

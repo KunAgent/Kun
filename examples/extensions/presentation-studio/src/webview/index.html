@@ -1,0 +1,250 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light dark" />
+    <title>Kun PPT</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div id="studio" class="studio" data-theme="dark" data-active-panel="canvas">
+      <header class="topbar">
+        <div class="brand" aria-label="Kun PPT">
+          <span class="brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 24 24" focusable="false">
+              <rect x="4.25" y="5.25" width="15.5" height="10.5" rx="2"></rect>
+              <path d="M8 19h8M12 15.75V19"></path>
+              <circle cx="9" cy="10.5" r="1"></circle>
+              <path d="m12 12 2.1-2.15L17 13"></path>
+            </svg>
+          </span>
+          <span class="brand-copy">
+            <strong>Kun PPT</strong>
+            <small>Presentation editor</small>
+          </span>
+        </div>
+
+        <div id="save-state" class="save-state" role="status" aria-live="polite">
+          No deck loaded
+        </div>
+
+        <label class="path-field" for="deck-path">
+          <span>Deck path</span>
+          <input
+            id="deck-path"
+            type="text"
+            value="presentation.kun-ppt.html"
+            maxlength="240"
+            spellcheck="false"
+            autocomplete="off"
+          />
+        </label>
+
+        <div class="topbar-actions" role="group" aria-label="Deck actions">
+          <button id="new-deck" type="button" class="button button-primary button-new-deck">
+            <span aria-hidden="true">＋</span>
+            <span>New</span>
+          </button>
+          <details id="deck-menu" class="deck-menu">
+            <summary class="icon-button" aria-label="More deck actions" title="More deck actions">•••</summary>
+            <div class="deck-menu-popover" role="menu" aria-label="More deck actions">
+              <button id="load-deck" type="button" class="deck-menu-item" role="menuitem">
+                <span class="menu-item-icon" aria-hidden="true">↗</span>
+                <span>Load deck</span>
+              </button>
+              <button id="open-copy" type="button" class="deck-menu-item" role="menuitem" disabled>
+                <span class="menu-item-icon" aria-hidden="true">⇩</span>
+                <span>Export copy</span>
+              </button>
+            </div>
+          </details>
+        </div>
+      </header>
+
+      <section id="conflict-banner" class="conflict-banner" role="alert" hidden>
+        <div>
+          <strong>The deck changed outside this editor.</strong>
+          <span id="conflict-detail">Reload before making more edits.</span>
+        </div>
+        <button id="reload-conflict" type="button" class="button button-danger">Reload deck</button>
+      </section>
+
+      <nav class="studio-tabs" role="tablist" aria-label="Presentation workspace">
+        <button
+          id="studio-tab-slides"
+          type="button"
+          class="studio-tab"
+          role="tab"
+          aria-controls="slides-panel"
+          aria-selected="false"
+          tabindex="-1"
+          data-studio-tab="slides"
+        ><span class="tab-icon" aria-hidden="true">▤</span><span>Slides</span></button>
+        <button
+          id="studio-tab-canvas"
+          type="button"
+          class="studio-tab"
+          role="tab"
+          aria-controls="canvas-panel"
+          aria-selected="true"
+          data-studio-tab="canvas"
+        ><span class="tab-icon" aria-hidden="true">✎</span><span>Canvas</span></button>
+        <button
+          id="studio-tab-properties"
+          type="button"
+          class="studio-tab"
+          role="tab"
+          aria-controls="properties-panel"
+          aria-selected="false"
+          tabindex="-1"
+          data-studio-tab="properties"
+        ><span class="tab-icon" aria-hidden="true">☷</span><span>Properties</span></button>
+      </nav>
+
+      <main class="workspace-grid">
+        <aside id="slides-panel" class="slide-rail" role="region" aria-label="Slide navigator">
+          <header class="panel-header">
+            <div>
+              <span class="eyebrow">Deck</span>
+              <strong id="deck-title">Untitled presentation</strong>
+            </div>
+            <button id="add-slide" type="button" class="icon-button" aria-label="Add slide" disabled>+</button>
+          </header>
+          <ol id="slide-list" class="slide-list" role="listbox" aria-label="Presentation slides"></ol>
+          <div class="rail-actions" role="group" aria-label="Selected slide actions">
+            <button id="duplicate-slide" type="button" class="button button-compact" aria-label="Duplicate slide" title="Duplicate slide" disabled>
+              <span class="rail-action-icon" aria-hidden="true">⧉</span>
+              <span class="rail-action-label">Duplicate</span>
+            </button>
+            <button id="delete-slide" type="button" class="button button-compact button-danger" aria-label="Delete slide" title="Delete slide" disabled>
+              <span class="rail-action-icon" aria-hidden="true">⌫</span>
+              <span class="rail-action-label">Delete</span>
+            </button>
+          </div>
+        </aside>
+
+        <section id="canvas-panel" class="editor-column" role="tabpanel" aria-labelledby="studio-tab-canvas">
+          <div id="canvas-viewport" class="canvas-viewport">
+            <div id="canvas-empty" class="empty-state">
+              <div class="empty-icon" aria-hidden="true">▣</div>
+              <h1>Waiting for Kun PPT HTML</h1>
+              <p>Agent-generated <code>.kun-ppt.html</code> appears here automatically.</p>
+            </div>
+            <svg
+              id="slide-canvas"
+              class="slide-canvas"
+              viewBox="0 0 1600 900"
+              role="group"
+              aria-label="Current slide canvas"
+              tabindex="0"
+              hidden
+            >
+              <rect class="canvas-background" x="0" y="0" width="1600" height="900" fill="#ffffff"></rect>
+              <g id="canvas-elements"></g>
+              <g id="canvas-selection" aria-hidden="true"></g>
+            </svg>
+          </div>
+
+          <div class="canvas-toolbar">
+            <div class="toolbar-group" role="group" aria-label="Insert element">
+              <button id="add-text" type="button" class="button button-compact tool-button" aria-label="Add text" title="Add text" disabled>
+                <span class="tool-icon" aria-hidden="true">T</span><span class="tool-label">Text</span>
+              </button>
+              <button id="add-shape" type="button" class="button button-compact tool-button" aria-label="Add shape" title="Add shape" disabled>
+                <span class="tool-icon" aria-hidden="true">◇</span><span class="tool-label">Shape</span>
+              </button>
+              <button id="open-image" type="button" class="button button-compact tool-button" aria-label="Add image" title="Add image" disabled>
+                <span class="tool-icon" aria-hidden="true">▧</span><span class="tool-label">Image</span>
+              </button>
+              <input
+                id="image-file-picker"
+                type="file"
+                accept="image/png,image/jpeg,image/gif,image/webp,.png,.jpg,.jpeg,.gif,.webp"
+                aria-label="Choose an image to add"
+                hidden
+              />
+            </div>
+            <div id="selection-actions" class="toolbar-group selection-actions" role="group" aria-label="Selected element actions" hidden>
+              <button id="edit-selected-text" type="button" class="button button-compact tool-button" aria-label="Edit selected text" title="Edit selected text" hidden>
+                <span class="tool-icon" aria-hidden="true">✎</span><span class="tool-label">Edit</span>
+              </button>
+              <button id="delete-selected-element" type="button" class="button button-compact button-danger tool-button" aria-label="Delete selected element" title="Delete selected element">
+                <span class="tool-icon" aria-hidden="true">⌫</span><span class="tool-label">Delete</span>
+              </button>
+            </div>
+            <span class="toolbar-spacer"></span>
+            <div class="toolbar-group" role="group" aria-label="Edit history and preview">
+              <button id="undo" type="button" class="icon-button" aria-label="Undo" title="Undo (Ctrl/Cmd+Z)" disabled>↶</button>
+              <button id="redo" type="button" class="icon-button" aria-label="Redo" title="Redo (Ctrl/Cmd+Shift+Z)" disabled>↷</button>
+              <button id="open-preview" type="button" class="button button-compact tool-button" aria-label="Preview presentation" title="Preview presentation" disabled>
+                <span class="tool-icon" aria-hidden="true">▶</span><span class="tool-label">Preview</span>
+              </button>
+            </div>
+          </div>
+
+          <footer class="canvas-footer">
+            <span id="canvas-caption">16:9 · 1600 × 900</span>
+            <span id="selection-caption">Nothing selected</span>
+          </footer>
+
+        </section>
+
+        <aside id="properties-panel" class="inspector" role="tabpanel" aria-labelledby="studio-tab-properties">
+          <header class="panel-header inspector-header">
+            <div>
+              <span class="eyebrow">Properties</span>
+              <strong id="inspector-title">No selection</strong>
+            </div>
+          </header>
+          <div id="inspector-body" class="inspector-body">
+            <p class="muted">Select a slide element to edit its properties.</p>
+          </div>
+        </aside>
+      </main>
+
+      <dialog id="export-dialog" class="modal" aria-labelledby="export-dialog-title">
+        <form id="export-form" class="modal-card">
+          <header>
+            <div>
+              <span class="eyebrow">Standalone copy</span>
+              <h2 id="export-dialog-title">Export presentation</h2>
+            </div>
+            <button type="button" class="icon-button" data-close-dialog="export-dialog" aria-label="Close">×</button>
+          </header>
+          <label class="field" for="export-path">
+            <span>Destination path</span>
+            <input id="export-path" type="text" maxlength="240" placeholder="presentation-copy.kun-ppt.html" spellcheck="false" />
+          </label>
+          <p id="export-dialog-error" class="field-error" role="alert"></p>
+          <footer>
+            <button type="button" class="button" data-close-dialog="export-dialog">Cancel</button>
+            <button type="submit" class="button button-primary">Export copy</button>
+          </footer>
+        </form>
+      </dialog>
+
+      <dialog id="preview-dialog" class="preview-dialog" aria-labelledby="preview-title">
+        <header class="preview-header">
+          <div>
+            <span class="eyebrow">Safe structured preview</span>
+            <strong id="preview-title">Presentation preview</strong>
+          </div>
+          <div class="preview-actions" role="group" aria-label="Preview controls">
+            <button id="preview-prev" type="button" class="icon-button" aria-label="Previous slide">←</button>
+            <span id="preview-position" aria-live="polite">1 / 1</span>
+            <button id="preview-next" type="button" class="icon-button" aria-label="Next slide">→</button>
+            <button type="button" class="button button-compact" data-close-dialog="preview-dialog">Close</button>
+          </div>
+        </header>
+        <div class="preview-stage">
+          <svg id="preview-canvas" class="preview-canvas" viewBox="0 0 1600 900" role="img" aria-label="Presentation preview">
+            <rect class="canvas-background" x="0" y="0" width="1600" height="900" fill="#ffffff"></rect>
+            <g id="preview-elements"></g>
+          </svg>
+        </div>
+      </dialog>
+    </div>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

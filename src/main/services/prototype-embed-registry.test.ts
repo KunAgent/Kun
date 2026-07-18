@@ -33,6 +33,24 @@ describe('prototype embed registry', () => {
     expect(isAuthorizedPrototypeFileUrl(result.fileUrl)).toBe(true)
   })
 
+  it('authorizes the nested inline component prototype artifact path', async () => {
+    const relativePath = join(
+      '.kun-design',
+      'component-prototypes',
+      'date-range-picker-abcdef',
+      'prototype.html'
+    )
+    mkdirSync(join(workspace, relativePath, '..'), { recursive: true })
+    writeFileSync(join(workspace, relativePath), '<!doctype html><html></html>')
+
+    const result = await authorizePrototypePath(relativePath, workspace)
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.absolutePath).toBe(join(workspace, relativePath))
+    expect(isAuthorizedPrototypeFileUrl(result.fileUrl)).toBe(true)
+  })
+
   it('rejects non-html files and files outside a proto directory', async () => {
     writeFileSync(join(workspace, '.kunsdd', 'proto', 'notes.txt'), 'x')
     writeFileSync(join(workspace, 'loose.html'), '<html></html>')

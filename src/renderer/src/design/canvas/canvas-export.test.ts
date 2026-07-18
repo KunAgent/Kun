@@ -1,10 +1,11 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { createDefaultShape, createEmptyDocument } from './canvas-types'
 import {
   bytesToBase64,
   canvasExportBounds,
   canvasRasterScale,
-  extractCanvasAgentExportRequest
+  extractCanvasAgentExportRequest,
+  resolveCanvasExportImageSources
 } from './canvas-export'
 
 describe('canvas export bounds', () => {
@@ -67,5 +68,53 @@ describe('canvas agent export request', () => {
         relativePath: '.deepseekgui-images/architecture.png'
       }
     })).toBeNull()
+  })
+})
+
+describe('canvas export image sources', () => {
+  it('inlines visible workspace SVG images and deduplicates repeated reads', async () => {
+    const document = createEmptyDocument()
+    const first = createDefaultShape('image', 0, 0)
+    first.name = 'Architecture SVG'
+    first.imageUrl = 'assets/architecture.svg'
+    const second = createDefaultShape('image', 200, 0)
+    second.imageUrl = first.imageUrl
+    const hidden = createDefaultShape('image', 400, 0)
+    hidden.visible = false
+    hidden.imageUrl = 'assets/hidden.svg'
+    for (const shape of [first, second, hidden]) {
+      document.objects[shape.id] = { ...shape, parentId: document.rootId }
+      document.objects[document.rootId]!.children.push(shape.id)
+    }
+    const dataUrl = 'data:image/svg+xml;base64,PHN2Zy8+'
+    const loadImageSource = vi.fn(async () => dataUrl)
+
+    const resolved = await resolveCanvasExportImageSources({
+      document,
+      workspaceRoot: '/workspace',
+      loadImageSource
+    })
+
+    expect(loadImageSource).toHaveBeenCalledOnce()
+    expect(loadImageSource).toHaveBeenCalledWith('/workspace', 'assets/architecture.svg')
+    expect(resolved).toEqual(new Map([
+      [first.id, dataUrl],
+      [second.id, dataUrl]
+    ]))
+  })
+
+  it('fails instead of silently exporting an unresolved image placeholder', async () => {
+    const document = createEmptyDocument()
+    const image = createDefaultShape('image', 0, 0)
+    image.name = 'Missing SVG'
+    image.imageUrl = 'assets/missing.svg'
+    document.objects[image.id] = { ...image, parentId: document.rootId }
+    document.objects[document.rootId]!.children.push(image.id)
+
+    await expect(resolveCanvasExportImageSources({
+      document,
+      workspaceRoot: '/workspace',
+      loadImageSource: async () => null
+    })).rejects.toThrow('Whiteboard image "Missing SVG" is unavailable for export')
   })
 })

@@ -187,6 +187,25 @@ export class ContextCompactor {
       : repairTailStartForToolResults(history, history.length - keepRecent)
     const head = history.slice(0, tailStart)
     const tail = history.slice(tailStart)
+    // Re-summarizing only the previous summary cannot reclaim any conversation
+    // history. Provider usage counters can remain above a threshold after a
+    // successful compaction (notably when cached tokens are cumulative), which
+    // used to create a fresh compaction item on every following model step.
+    if (head.length > 0 && head.every((item) => item.kind === 'compaction')) {
+      return {
+        next: [...frozen, ...history],
+        summaryItem: makeCompactionItem({
+          id: `compaction_${input.turnId}_noop`,
+          turnId: input.turnId,
+          threadId: input.threadId,
+          summary: 'no new history to compact',
+          replacedTokens: 0,
+          pinnedConstraints: input.prefix.pinnedConstraints,
+          auto: input.auto
+        }),
+        replacedTokens: 0
+      }
+    }
     const replacedTokens = this.estimator.estimateItems(head)
     const sourceDigest = computeShortHash(compactedItemsDigestSource(head))
     const digestMarker = createToolDigestMarker(sourceDigest)

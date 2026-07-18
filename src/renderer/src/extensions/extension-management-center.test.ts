@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import i18n from '../i18n'
 import {
   ExtensionManagementCenter,
+  extensionCardLogoUrl,
   extensionCanRollback,
   extensionEffectiveEnabled
 } from './ExtensionManagementCenter'
@@ -33,6 +34,10 @@ describe('ExtensionManagementCenter', () => {
     expect(extensionEffectiveEnabled(entry({ workspaceEnablement: { '/workspace': false } }), '/workspace')).toBe(false)
     expect(extensionCanRollback(entry())).toBe(true)
     expect(extensionCanRollback(entry({ previousSelectedVersion: undefined }))).toBe(false)
+    expect(extensionCardLogoUrl('acme.sample', 'assets/logo.svg')).toBe(
+      'kun-extension://acme.sample/assets/logo.svg?kunHostResource=icon'
+    )
+    expect(extensionCardLogoUrl('acme.sample')).toBeUndefined()
   })
 
   it('visibly separates full extensions from UI Plugin, MCP, and Skill management', () => {
@@ -40,7 +45,8 @@ describe('ExtensionManagementCenter', () => {
       leftSidebarCollapsed: false,
       workspaceRoot: '/workspace',
       onToggleLeftSidebar: vi.fn(),
-      onOpenIntegrations: vi.fn()
+      onOpenIntegrations: vi.fn(),
+      onOpenView: vi.fn()
     }))
     expect(html).toContain('Kun Extension Center')
     expect(html).toContain('Looking for UI appearance packs, MCP, or Skills?')

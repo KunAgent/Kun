@@ -13,6 +13,7 @@ import {
   summarizeDesignProjectContract
 } from './design-project-contract'
 import { buildDesignContractViewModel } from './design-contract-view-model'
+import { CANVAS_MOTION_VERSION } from '../motion/canvas-motion-types'
 
 const now = '2026-06-29T00:00:00.000Z'
 
@@ -170,6 +171,53 @@ describe('design project contract', () => {
       readyModeSurfaceCount: 2,
       codeBindingCount: 1,
       journalEntryCount: 1
+    })
+  })
+
+  it('exports bounded Design Motion handoff and reduced-motion implementation notes', () => {
+    const canvas = canvasDocument()
+    canvas.motion = {
+      version: CANVAS_MOTION_VERSION,
+      timelines: {
+        frame_home: {
+          id: 'timeline_home',
+          frameId: 'frame_home',
+          durationMs: 750,
+          playback: 'ping-pong',
+          tracks: [{
+            id: 'track_home_rotation',
+            targetShapeId: 'frame_home',
+            property: 'rotation',
+            operation: 'offset',
+            baseValue: 0,
+            keyframes: [
+              { id: 'kf_0', timeMs: 0, value: -5, easing: { type: 'spring', mass: 1, stiffness: 120, damping: 14 } },
+              { id: 'kf_1', timeMs: 750, value: 0, easing: { type: 'linear' } }
+            ]
+          }]
+        }
+      }
+    }
+    const options = {
+      document: documentWithArtifacts([artifact('home', 'Home')]),
+      canvasDocument: canvas,
+      designSystem,
+      artifacts: [artifact('home', 'Home')],
+      designContext: { designTarget: 'web' as const },
+      updatedAt: now
+    }
+    const markdown = buildDesignProjectContractMarkdown(options)
+    const summary = summarizeDesignProjectContract(options)
+
+    expect(markdown).toContain('## Design Motion')
+    expect(markdown).toContain('`timeline_home` Home (`frame_home`): 750ms; ping-pong; 1 track(s); 2 keyframe(s)')
+    expect(markdown).toContain('`track_home_rotation` Home (`frame_home`): rotation; 2 keyframe(s)')
+    expect(markdown).toContain('Reduced motion: disable automatic playback when preferred')
+    expect(markdown).toContain('separate from standalone SVG inner animation and Prototype screen navigation')
+    expect(summary).toMatchObject({
+      motionTimelineCount: 1,
+      motionTrackCount: 1,
+      motionKeyframeCount: 2
     })
   })
 
