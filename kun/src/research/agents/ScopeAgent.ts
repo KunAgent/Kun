@@ -1,12 +1,21 @@
+/**
+ * [INPUT]: 依赖 model-client 和运行级模型选择做 scope JSON 判断，依赖 clarifications 判断用户是否已补齐阻塞信息
+ * [OUTPUT]: 对外提供支持当前 UI 模型/Provider 的 BasicScopeAgent、ModelScopeAgent、scope prompt/parser 和不依赖领域词表的显式需求 sufficiency gate
+ * [POS]: research/agents 的需求澄清入口；只负责决定能否进入 brief，不参与证据收集或报告写作，也不得创造原题之外的报告义务
+ * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
+ */
 import { makeUserItem } from '../../domain/item.js'
 import type { ModelClient, ModelRequest, ModelStreamChunk } from '../../ports/model-client.js'
 import { validateResearchScopeAssessment } from '../core/validation.js'
-import type { ResearchScopeAssessment, ResearchScopeClarification, ResearchScopeQuestion } from '../core/types.js'
+import type { ResearchModelUsageRecord, ResearchScopeAssessment, ResearchScopeClarification, ResearchScopeQuestion } from '../core/types.js'
 
 export type ScopeAgentInput = {
   topic: string
   clarifications?: Array<Pick<ResearchScopeClarification, 'message'>>
+  pendingQuestions?: ResearchScopeQuestion[]
   nowIso: string
+  model?: string
+  providerId?: string
 }
 
 export interface ScopeAgent {
@@ -19,9 +28,10 @@ export const MODEL_SCOPE_SYSTEM_PROMPT = [
   '你是 Kun DeepResearch 的 scope agent。',
   '你的任务不是开始调研，也不是写简报或报告，而是先理解用户真实需求，判断是否足够进入调研简报。',
   '必须抓住本次调研的主要矛盾：一条能组织后续证据收集和报告结构的核心主线。',
+  'summary、mainContradiction、confirmationChecklist 只能转述原始需求和用户补充中明确提出的对象、关系、比较、场景与边界；不得自行增加“权衡、影响、导致、适用性、最佳策略”等用户没有提出的判断或研究义务。',
   '只有当调研对象、用户真正想搞懂的核心问题、用途/受众/边界基本明确时，readyForBrief 才能为 true。',
   '如果请求含糊、只有代词、只有“研究一下/分析一下”、范围过大或核心问题不明，readyForBrief 必须为 false，并一次性提出所有会阻塞简报的问题。',
-  '除非用户明确要求基础版，否则默认输出详细中文报告；默认需要可追溯引用、关键指标、局限和不确定性，不要为这些默认项反复追问。',
+  '默认输出中文完整报告，篇幅服从问题复杂度和证据密度；用户明确要求简洁或详细时必须遵循。默认需要可追溯引用、局限和不确定性，不要为这些默认项反复追问。',
   '所有内容使用中文。只返回 JSON，不要 Markdown，不要解释。'
 ].join('\n')
 
@@ -46,7 +56,7 @@ export class BasicScopeAgent implements ScopeAgent {
       assumptions: readyForBrief
         ? [
             '默认输出中文完整报告。',
-            '默认输出详细版而不是基础版报告。',
+            '默认信息密度优先，不用固定字数判断报告质量。',
             '默认优先调研用户真正需要理解或决策的核心路径。',
             '默认用可追溯证据支撑关键论断。'
           ]
@@ -88,18 +98,22 @@ export class ModelScopeAgent implements ScopeAgent {
   }
 
   async assess(input: ScopeAgentInput): Promise<ResearchScopeAssessment> {
+    const model = input.model?.trim() || this.options.model
+    const providerId = input.providerId?.trim()
     const controller = new AbortController()
     const timeout = setTimeout(
       () => controller.abort(),
       Math.max(1, this.options.timeoutMs ?? MODEL_SCOPE_AGENT_TIMEOUT_MS)
     )
 
+    const turnId = `research_scope_${hashScopeInput(input)}`
+    const observedUsage: ResearchModelUsageRecord['usage'][] = []
     try {
-      const turnId = `research_scope_${hashScopeInput(input)}`
       const request: ModelRequest = {
         threadId: 'research_scope',
         turnId,
-        model: this.options.model,
+        model,
+        ...(providerId ? { providerId } : {}),
         systemPrompt: MODEL_SCOPE_SYSTEM_PROMPT,
         prefix: [],
         history: [
@@ -118,16 +132,32 @@ export class ModelScopeAgent implements ScopeAgent {
         reasoningEffort: 'off',
         abortSignal: controller.signal
       }
-      const raw = await collectScopeModelText(this.options.modelClient.stream(request), controller.signal)
-      const scope = parseModelScopeAssessment(raw, {
+      const collected = await collectScopeModelText(
+        this.options.modelClient.stream(request),
+        controller.signal,
+        (usage) => observedUsage.push(usage)
+      )
+      const scope = parseModelScopeAssessment(collected.text, {
         nowIso: input.nowIso,
-        model: this.options.model
+        model
       })
       const normalized = applyScopeSufficiencyGate(scope, input)
       validateResearchScopeAssessment(normalized)
-      return normalized
-    } catch {
-      return this.fallbackAssessment(input)
+      const modelUsage = collected.usage.slice(-1).map((usage) => ({
+        stage: 'scope' as const,
+        model,
+        turnId,
+        usage
+      }))
+      return { ...normalized, ...(modelUsage.length > 0 ? { modelUsage } : {}) }
+    } catch (error) {
+      if (error instanceof Error && error.message.startsWith('unknown_provider_id:')) throw error
+      const fallback = await this.fallbackAssessment(input)
+      const lastUsage = observedUsage.at(-1)
+      return lastUsage ? {
+        ...fallback,
+        modelUsage: [{ stage: 'scope', model, turnId, usage: lastUsage }]
+      } : fallback
     } finally {
       clearTimeout(timeout)
     }
@@ -137,7 +167,8 @@ export class ModelScopeAgent implements ScopeAgent {
     const scope = await this.fallback.assess(input)
     return {
       ...scope,
-      assessmentSource: 'deterministic_fallback'
+      assessmentSource: 'deterministic_fallback',
+      assessmentModel: input.model?.trim() || this.options.model
     }
   }
 }
@@ -148,6 +179,8 @@ export function buildModelScopePrompt(input: ScopeAgentInput): string {
     : '暂无'
   return [
     '请对下面的 DeepResearch 请求做 scope 确认。',
+    `当前日期：${input.nowIso.slice(0, 10)}`,
+    '所有“当前、最近、过去 N 年”等相对时间范围必须以上述当前日期为基准，不得沿用模型知识截止时间。',
     '',
     '原始需求：',
     input.topic,
@@ -175,7 +208,8 @@ export function buildModelScopePrompt(input: ScopeAgentInput): string {
     '- 如果确实需要追问，可提出最多 5 个问题；少问但不要漏掉会影响报告方向的核心问题。',
     '- 如果 readyForBrief=true，clarificationQuestions 可以为空，但 confirmationChecklist 必须让用户能确认需求理解、核心问题、主线和输出边界。',
     '- 问题要具体，优先让用户补齐：调研对象、核心问题、使用场景/受众、范围边界、比较对象或决策目标。',
-    '- 默认输出为详细中文报告，除非用户明确要求基础版；不要把“是否详细”作为追问问题。',
+    '- 默认输出中文完整报告，篇幅服从问题复杂度和证据密度；用户明确要求简洁或详细时必须遵循。不要把“是否详细”作为追问问题。',
+    '- mainContradiction 只能概括原始需求和用户补充中已经明确提出的主线，不得创造新的因果、权衡、适用性或场景判断。',
     '- 不要把简报、调研计划或报告正文放进这个 JSON。'
   ].join('\n')
 }
@@ -210,7 +244,7 @@ export function parseModelScopeAssessment(
     mainContradiction: mainContradiction || '需要先确认本次调研的核心主线，再展开证据收集。',
     assumptions: assumptions.length ? assumptions : [
       '默认输出中文完整报告。',
-      '默认输出详细版而不是基础版报告。',
+      '默认信息密度优先，不用固定字数判断报告质量。',
       '默认先确认核心问题和范围边界，再进入简报。'
     ],
     clarificationQuestions,
@@ -231,8 +265,23 @@ export function applyScopeSufficiencyGate(
   if (scope.readyForBrief) return scope
   const rawClarificationText = input.clarifications?.map((item) => item.message).join('\n') ?? ''
   const clarificationText = normalizeTopic(rawClarificationText)
-  if (!clarificationText || !hasSufficientClarification(clarificationText)) return scope
-  const summary = scope.summary || `用户已补充清楚「${input.topic}」的调研对象、核心问题、用途/受众和时间边界。`
+  const effectiveText = effectiveScopeText(normalizeTopic(input.topic), clarificationText)
+  if (assessTopicIssues(effectiveText).length === 0) {
+    return markScopeReady(scope)
+  }
+  if (!clarificationText) return scope
+  if (allPendingRequiredQuestionsAnswered(input.pendingQuestions, input.clarifications?.at(-1)?.message ?? '')) {
+    return markScopeReady(scope)
+  }
+  if (scope.clarificationQuestions.length > 0 && scope.clarificationQuestions.every((question) => !question.required)) {
+    return markScopeReady(scope)
+  }
+  if (!hasSufficientClarification(clarificationText)) return scope
+  return markScopeReady(scope)
+}
+
+function markScopeReady(scope: ResearchScopeAssessment): ResearchScopeAssessment {
+  const summary = scope.summary || '调研对象和核心问题已经明确，可以进入简报。'
   const mainContradiction = scope.mainContradiction || '围绕已确认核心问题组织调研主线，并用证据链解释关键差异和未来影响。'
   return {
     ...scope,
@@ -242,25 +291,44 @@ export function applyScopeSufficiencyGate(
     clarificationQuestions: [],
     confirmationChecklist: [
       `需求理解：${summary}`,
-      `核心问题：${deriveCoreQuestionFromClarification(rawClarificationText, mainContradiction)}`,
+      `核心问题：${mainContradiction}`,
       `调研主线：${mainContradiction}`,
-      '输出边界：按用户补充的受众、用途、时间范围和中文完整报告要求执行。'
+      '输出边界：按原始需求及已确认补充中的受众、用途、时间范围和报告要求执行。'
     ]
   }
 }
 
+function allPendingRequiredQuestionsAnswered(
+  pendingQuestions: ResearchScopeQuestion[] | undefined,
+  latestMessage: string
+): boolean {
+  if (!pendingQuestions) return false
+  const requiredQuestions = pendingQuestions.filter((question) => question.required)
+  if (requiredQuestions.length === 0) return latestMessage.trim().length > 0
+  const blocks = latestMessage.split(/\n\s*\n/u)
+  return requiredQuestions.every((question) => blocks.some((block) =>
+    block.includes(question.question) && /(^|\n)\s*(?:回答|答复)[:：]\s*(?!未选择|未回答|跳过)\S+/u.test(block)
+  ))
+}
+
 async function collectScopeModelText(
   stream: AsyncIterable<ModelStreamChunk>,
-  signal: AbortSignal
-): Promise<string> {
+  signal: AbortSignal,
+  onUsage?: (usage: ResearchModelUsageRecord['usage']) => void
+): Promise<{ text: string; usage: ResearchModelUsageRecord['usage'][] }> {
   let text = ''
+  const usage: ResearchModelUsageRecord['usage'][] = []
   for await (const chunk of stream) {
     if (signal.aborted) throw new Error('scope model timed out')
     if (chunk.kind === 'assistant_text_delta') text += chunk.text
+    if (chunk.kind === 'usage') {
+      usage.push(chunk.usage)
+      onUsage?.(chunk.usage)
+    }
     if (chunk.kind === 'error') throw new Error(chunk.message)
   }
   if (!text.trim()) throw new Error('scope model returned empty text')
-  return text
+  return { text, usage }
 }
 
 function extractFirstJsonObject(raw: string): string | null {
@@ -316,27 +384,11 @@ function normalizeStringArray(value: unknown, limit: number): string[] {
 
 function hasSufficientClarification(text: string): boolean {
   const compact = text.replace(/\s+/g, '')
-  const hasDomain = /领域|维度|对象|经济|贸易|科技|军事|教育|行业|产品|公司|论文|方案|china|us|美国|中国/i.test(text)
+  const hasTopicAnchor = /[\p{L}\p{N}]{2,}/u.test(compact)
   const hasCoreQuestion = /核心|目的|搞懂|解决|理解|预测|趋势|原因|差异|影响|判断|决策|风险|机会|why|how/i.test(text)
   const hasAudienceOrUse = /受众|场景|报告|文章|公众|读者|内容创作|学术|商业|政策|个人|中文|输出/i.test(text)
   const hasBoundary = /时间|范围|边界|最近|近[一二三四五六七八九十0-9]+年|当前|最新|20[0-9]{2}|不限|地区|国家|数据/i.test(text)
-  return compact.length >= 40 && hasDomain && hasCoreQuestion && hasAudienceOrUse && hasBoundary
-}
-
-function deriveCoreQuestionFromClarification(text: string, fallback: string): string {
-  const coreLine = text
-    .split(/\n/)
-    .map((line) => line.trim())
-    .find((line) => /核心|搞懂|解决|预测|趋势|判断/.test(line) && /补充|核心|搞懂|解决/.test(line) && line.length > 8)
-  if (coreLine) {
-    return shortScopeLine(coreLine.replace(/^补充[:：]\s*/, '').replace(/^选择[:：]\s*/, ''))
-  }
-  return fallback
-}
-
-function shortScopeLine(value: string): string {
-  const cleaned = value.replace(/\s+/g, ' ').trim()
-  return cleaned.length > 90 ? `${cleaned.slice(0, 87)}...` : cleaned
+  return compact.length >= 40 && hasTopicAnchor && hasCoreQuestion && hasAudienceOrUse && hasBoundary
 }
 
 function stringValue(value: unknown): string {
@@ -373,7 +425,6 @@ function hashScopeInput(input: ScopeAgentInput): string {
 function assessTopicIssues(topic: string): ResearchScopeQuestion[] {
   const questions: ResearchScopeQuestion[] = []
   const compact = topic.replace(/\s+/g, '')
-  const lower = topic.toLowerCase()
   const genericOnly = isGenericTopic(topic)
   const pronounOnly = isPronounTopic(topic)
   if (genericOnly || pronounOnly || compact.length < 4) {
@@ -381,12 +432,12 @@ function assessTopicIssues(topic: string): ResearchScopeQuestion[] {
       id: 'scope_target',
       question: '你想调研的具体对象是什么？',
       why: '没有明确对象时，后续搜索、证据判断和报告结构都会发散。',
-      options: ['一个具体产品或公司', '一个行业/赛道', '一个技术方案或论文', '一个用户问题或业务决策'],
+      options: ['一个明确对象', '一组需要比较的对象', '一个需要解释的问题', '一个需要支持的决策'],
       required: true
     })
   }
 
-  const hasQuestionSignal = /为什么|如何|是否|对比|差异|优劣|风险|机会|路径|用户|成本|定价|商业模式|竞品|趋势|原因|影响|可行|怎么|what|why|how|compare|vs|versus/i.test(topic)
+  const hasQuestionSignal = /为什么|如何|是否|解释|机制|原理|关系|作用|对比|区别|差异|优劣|风险|机会|路径|用户|成本|定价|商业模式|竞品|趋势|原因|影响|可行|怎么|what|why|how|compare|explain|vs|versus/i.test(topic)
   if (!hasQuestionSignal) {
     questions.push({
       id: 'scope_core_question',
@@ -397,9 +448,7 @@ function assessTopicIssues(topic: string): ResearchScopeQuestion[] {
     })
   }
 
-  const broadTerms = ['ai', '人工智能', '大模型', '市场', '行业', '创业', '投资', '产品', '互联网']
-  const broadOnly = broadTerms.some((term) => lower === term || compact === term)
-    || /^(研究|调研|分析|看看|了解)(ai|人工智能|大模型|市场|行业|创业|投资|产品|互联网)$/i.test(compact)
+  const broadOnly = !hasQuestionSignal && compact.length >= 2 && compact.length <= 12
   if (broadOnly) {
     questions.push({
       id: 'scope_boundary',
@@ -441,5 +490,5 @@ function isGenericTopic(topic: string): boolean {
 
 function isPronounTopic(topic: string): boolean {
   const compact = topic.replace(/\s+/g, '')
-  return /^(这个|这个东西|它|他们|这件事|这个产品|这个项目)[。！？!?\s]*$/.test(compact)
+  return /^(这个|这个东西|它|他们|这件事)[。！？!?\s]*$/.test(compact)
 }

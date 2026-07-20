@@ -1,9 +1,11 @@
 /**
  * [INPUT]: 依赖 research runtime、agents、verification 对 DeepResearch 状态和预算的共享契约
- * [OUTPUT]: 对外提供 ResearchRun、ResearchBudget、ResearchPlan、GapVerdict 等核心类型和默认预算
+ * [OUTPUT]: 对外提供 ResearchRun、ResearchBudget、含指标焦点/时间窗的问题证据契约、含章节 ID/章节问题/定向对比对象所有权的 ResearchPlan、默认容纳完整必答章节拆分的研究预算、记录合格证据门槛与已穷尽问题的 GapVerdict、支持持久化章节排除 claim、硬范围代表 claim 与 evidence_gap 模式的 ReportBlueprint、SectionEvidenceMap、搜索/抓取/抽取 WebAudit、按阶段查询剩余额度和可释放模型预留等核心类型
  * [POS]: research/core 的类型中心，被 runtime、agents、routes、renderer DTO 间接消费
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
  */
+import type { UsageSnapshot } from '../../contracts/usage.js'
+
 export const RESEARCH_RUN_STATUSES = [
   'scoping',
   'awaiting_brief_confirm',
@@ -49,6 +51,7 @@ export type ResearchScopeAssessment = {
   assumptions: string[]
   clarificationQuestions: ResearchScopeQuestion[]
   confirmationChecklist: string[]
+  modelUsage?: ResearchModelUsageRecord[]
   createdAt: string
 }
 
@@ -60,6 +63,9 @@ export type ResearchScopeClarification = {
 
 export type ResearchSourcePolicy = {
   allowedSourceTypes: ResearchSourceType[]
+  allowedDomains?: string[]
+  allowedPublishers?: string[]
+  preferredDomains?: string[]
   minSourceCount?: number
   maxSourceCount?: number
   requireCitations?: boolean
@@ -70,13 +76,45 @@ export type ResearchBudget = {
   reasoningEffort: ResearchReasoningEffort
   maxWorkers: number
   maxSubagents: number
-  maxRounds: number
-  maxResearchRounds: number
-  maxSynthesisRetries: number
+  /** @deprecated Accepted from older clients but ignored by progress-driven research. */
+  maxRounds?: number
+  /** @deprecated Accepted from older clients but ignored by progress-driven research. */
+  maxResearchRounds?: number
+  /** @deprecated Accepted from older clients but ignored by progress-driven synthesis. */
+  maxSynthesisRetries?: number
   minSources: number
   targetSources: number
   maxSources: number
+  maxModelCalls: number
+  maxTotalTokens: number
   timeoutMs: number
+}
+
+export type ResearchExecutionControl = {
+  signal: AbortSignal
+  model?: string
+  providerId?: string
+  canReserveModelCall(stage: ResearchModelUsageStage, estimatedTokens?: number): boolean
+  reserveModelCall(stage: ResearchModelUsageStage, estimatedTokens?: number): ResearchModelCallReservation
+  recordModelUsage(record: ResearchModelUsageRecord, reservation?: ResearchModelCallReservation): Promise<void>
+  finishModelCall(reservation: ResearchModelCallReservation, options?: { chargeEstimateOnMissing?: boolean }): Promise<void>
+  releaseModelCall?(reservation: ResearchModelCallReservation): Promise<void>
+  remainingTokenBudget(stage?: ResearchModelUsageStage): number
+  remainingModelCalls(stage?: ResearchModelUsageStage): number
+  recordWebAudit(record: Omit<ResearchWebAuditRecord, 'id' | 'recordedAt'>): Promise<void>
+}
+
+export type ResearchModelCallReservation = {
+  id: string
+  stage: ResearchModelUsageStage
+  estimatedTokens: number
+}
+
+export type ResearchModelBudgetUsage = {
+  modelCalls: number
+  totalTokens: number
+  costUsd: number
+  costCny: number
 }
 
 export type ResearchQuestion = {
@@ -84,6 +122,41 @@ export type ResearchQuestion = {
   text: string
   priority: ResearchPriority
   required: boolean
+}
+
+export type ResearchQuestionAnswerType =
+  | 'fact'
+  | 'comparison'
+  | 'cause'
+  | 'trend'
+  | 'risk'
+  | 'recommendation'
+  | 'evaluation'
+
+export type ResearchEvidenceRole = 'supports' | 'contradicts' | 'context'
+
+export type ResearchQuestionContract = {
+  questionId: string
+  question: string
+  answerType: ResearchQuestionAnswerType
+  required: boolean
+  binary: boolean
+  requiresSupportingEvidence: boolean
+  focusTerms?: string[]
+  timeScope?: {
+    direction: 'past' | 'future'
+    startYear: number
+    endYear: number
+  }
+}
+
+export type ResearchEvidenceAssignment = {
+  questionId: string
+  claimId: string
+  role: ResearchEvidenceRole
+  relevance: number
+  explanation: string
+  source: 'deterministic' | 'model_validated'
 }
 
 export type ResearchBrief = {
@@ -116,6 +189,128 @@ export type ResearchFrame = {
   evidenceNeeded: string[]
   disconfirmingEvidenceNeeded: string[]
   nonGoals: string[]
+}
+
+export type ResearchReportContractSection = {
+  id: string
+  title: string
+  required: boolean
+  questionIds: string[]
+  limitationFallback: string
+}
+
+export type ResearchReportContract = {
+  requiredSections: ResearchReportContractSection[]
+  createdAt: string
+}
+
+export type ResearchCoverageRequirement = {
+  id: string
+  kind: 'section' | 'dimension' | 'named_item' | 'comparison_target' | 'time_window' | 'forecast_horizon'
+  label: string
+  aliases: string[]
+  required: boolean
+  questionIds: string[]
+  sectionIds: string[]
+  minClaims: number
+  minIndependentSources: number
+  minStrongSources: number
+  onMissing: 'repair' | 'block' | 'allow_limitation'
+}
+
+export type ResearchCoverageGroup = {
+  id: string
+  relation: 'all_of' | 'any_of'
+  requirementIds: string[]
+}
+
+export type ResearchCoverageContract = {
+  requirements: ResearchCoverageRequirement[]
+  groups: ResearchCoverageGroup[]
+  createdAt: string
+}
+
+export type ResearchReportType = 'explanatory' | 'comparison' | 'decision' | 'market' | 'investigation'
+
+export type ResearchArgumentChain = {
+  conclusion: string
+  claimIds: string[]
+  inference: string
+  conditions: string[]
+  counterClaimIds: string[]
+}
+
+export type ResearchReportBlueprintSection = {
+  id: string
+  title: string
+  purpose: string
+  questionIds: string[]
+  claimIds: string[]
+  coverageClaimIds?: string[]
+  excludedClaimIds?: string[]
+  contextClaimIds?: string[]
+  evidenceMode?: 'direct' | 'conditional_application' | 'evidence_gap'
+  sourceIds: string[]
+  argument: ResearchArgumentChain
+  limitations: string[]
+  questionContracts?: ResearchQuestionContract[]
+  evidenceAssignments?: ResearchEvidenceAssignment[]
+  evidenceFingerprint?: string
+}
+
+export type ResearchReportBlueprint = {
+  reportType: ResearchReportType
+  title: string
+  directAnswer: string
+  thesis: string
+  sections: ResearchReportBlueprintSection[]
+  createdAt: string
+  modelUsage?: ResearchModelUsageRecord[]
+}
+
+export type SectionEvidenceStatus = 'covered' | 'weak' | 'missing'
+
+export type SectionEvidenceMapEntry = {
+  sectionId: string
+  title: string
+  required: boolean
+  questionIds: string[]
+  claimIds: string[]
+  coverageClaimIds?: string[]
+  contextClaimIds?: string[]
+  evidenceMode?: 'direct' | 'conditional_application' | 'evidence_gap'
+  sourceIds: string[]
+  status: SectionEvidenceStatus
+  limitations: string[]
+  questionContracts?: ResearchQuestionContract[]
+  evidenceAssignments?: ResearchEvidenceAssignment[]
+  evidenceFingerprint?: string
+}
+
+export type ResearchModelUsageStage = 'scope' | 'worker' | 'source_strategy' | 'web_search' | 'web_extraction' | 'architect' | 'writer' | 'editor' | 'judge'
+
+export type ResearchModelUsageRecord = {
+  stage: ResearchModelUsageStage
+  model: string
+  turnId: string
+  taskId?: string
+  attempt?: number
+  estimated?: boolean
+  usage: UsageSnapshot
+}
+
+export type ResearchWebAuditRecord = {
+  id: string
+  taskId: string
+  phase: 'search' | 'fetch' | 'extract'
+  status: 'success' | 'empty' | 'filtered' | 'fallback' | 'failed'
+  provider?: string
+  query?: string
+  url?: string
+  rawResultCount?: number
+  acceptedResultCount?: number
+  error?: string
+  recordedAt: string
 }
 
 export type BriefApproval = {
@@ -225,6 +420,9 @@ export type ResearchConvergenceVerdict = {
 export type ResearchTask = {
   id: string
   questionIds: string[]
+  reportSectionIds?: string[]
+  reportQuestionIds?: string[]
+  comparisonTargets?: string[]
   hypothesisIds?: string[]
   testIds?: string[]
   objective: string
@@ -251,7 +449,8 @@ export type ResearchSupervisorSummary = {
   reasoningEffort: ResearchReasoningEffort
   complexity: ResearchComplexity
   parallelism: number
-  maxResearchRounds: number
+  /** @deprecated Present only when hydrating an older plan. */
+  maxResearchRounds?: number
   targetSourceCount: number
   rationale: string
 }
@@ -266,6 +465,7 @@ export type ResearchQuestionCoverage = {
   requiredStrongWebSourceCount: number
   sourceCount: number
   strongWebSourceCount: number
+  requiredClaimCount: number
   claimCount: number
   criticalClaimCount: number
   noteCount: number
@@ -283,9 +483,29 @@ export type ResearchCoverageMatrix = {
     sourceCount: number
     covered: boolean
   }>
+  explicitRequirements?: Array<{
+    requirementId: string
+    label: string
+    kind: ResearchCoverageRequirement['kind']
+    questionIds?: string[]
+    sourceCount: number
+    claimCount: number
+    strongSourceCount?: number
+    requiredSourceCount?: number
+    requiredClaimCount?: number
+    requiredStrongSourceCount?: number
+    covered: boolean
+    onMissing: ResearchCoverageRequirement['onMissing']
+  }>
 }
 
-export type ResearchGapStatus = 'sufficient' | 'need_more' | 'budget_exhausted'
+export type ResearchGapStatus =
+  | 'sufficient'
+  | 'ready_with_limitations'
+  | 'need_more'
+  | 'needs_research_repair'
+  | 'budget_exhausted'
+  | 'unanswerable'
 
 export type ResearchGapVerdict = {
   id: string
@@ -297,6 +517,7 @@ export type ResearchGapVerdict = {
   coverageMatrix: ResearchCoverageMatrix
   missingEvidence: string[]
   followUpTasks: ResearchTask[]
+  exhaustedQuestionIds?: string[]
   createdAt: string
 }
 
@@ -338,7 +559,9 @@ export type QualityVerdict = {
 
 export type QualityJudgeVerdict = {
   source: 'llm_judge' | 'heuristic_fallback'
+  failureKind?: 'report_quality' | 'judge_unavailable'
   model?: string
+  modelUsage?: ResearchModelUsageRecord[]
   pass: boolean
   scores: {
     requirementsAlignment: number
@@ -352,10 +575,22 @@ export type QualityJudgeVerdict = {
     overall: number
   }
   rationale: string
+  issues?: QualityJudgeIssue[]
   blockingIssues: string[]
   warnings: string[]
   recommendedFixes: string[]
   judgedAt: string
+}
+
+export type QualityJudgeIssue = {
+  code: string
+  category: 'scope' | 'evidence' | 'citation' | 'coverage' | 'writing'
+  message: string
+  severity: 'blocking' | 'warning'
+  occurrenceId?: string
+  claimId?: string
+  unsupportedFragment?: string
+  evidenceQuote?: string
 }
 
 export type ResearchArtifactPaths = {
@@ -378,14 +613,22 @@ export type ResearchRun = {
   title: string
   slug: string
   status: ResearchRunStatus
+  model?: string
+  providerId?: string
   scope: ResearchScopeAssessment
   scopeClarifications: ResearchScopeClarification[]
   scopeConfirmation?: ScopeConfirmation
   brief: ResearchBrief
   frame: ResearchFrame
+  reportContract?: ResearchReportContract
+  coverageContract?: ResearchCoverageContract
+  reportBlueprint?: ResearchReportBlueprint
   briefHash: string
   approval?: BriefApproval
   budget: ResearchBudget
+  modelBudgetUsage: ResearchModelBudgetUsage
+  attemptBudgetBaseline?: Pick<ResearchModelBudgetUsage, 'modelCalls' | 'totalTokens'>
+  webAudit?: ResearchWebAuditRecord[]
   plan?: ResearchPlan
   hypotheses?: ResearchHypothesis[]
   hypothesisTests?: HypothesisTest[]
@@ -396,6 +639,8 @@ export type ResearchRun = {
   gapVerdicts?: ResearchGapVerdict[]
   verification?: QualityVerdict
   draftReportAvailable?: boolean
+  terminalReason?: string
+  executionDeadlineAt?: string
   artifacts: ResearchArtifactPaths
   createdAt: string
   updatedAt: string
@@ -404,13 +649,12 @@ export type ResearchRun = {
 export const DEFAULT_RESEARCH_BUDGET: ResearchBudget = {
   preset: 'standard',
   reasoningEffort: 'high',
-  maxWorkers: 4,
-  maxSubagents: 5,
-  maxRounds: 3,
-  maxResearchRounds: 2,
-  maxSynthesisRetries: 3,
-  minSources: 15,
-  targetSources: 30,
-  maxSources: 45,
-  timeoutMs: 10 * 60 * 1000
+  maxWorkers: 3,
+  maxSubagents: 16,
+  minSources: 1,
+  targetSources: 15,
+  maxSources: 100,
+  maxModelCalls: 128,
+  maxTotalTokens: 4_000_000,
+  timeoutMs: 4 * 60 * 60 * 1000
 }

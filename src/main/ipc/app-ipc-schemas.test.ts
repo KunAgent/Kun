@@ -121,6 +121,10 @@ describe('app-ipc-schemas', () => {
       body: '{"topic":"cache economics"}'
     }).path).toBe('/v1/research/runs')
     expect(runtimeRequestPayloadSchema.parse({
+      path: '/v1/research/runs?limit=10',
+      method: 'GET'
+    }).path).toBe('/v1/research/runs?limit=10')
+    expect(runtimeRequestPayloadSchema.parse({
       path: '/v1/research/runs/run_123',
       method: 'GET'
     }).path).toBe('/v1/research/runs/run_123')

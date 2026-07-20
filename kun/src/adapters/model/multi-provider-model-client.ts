@@ -22,19 +22,25 @@ export class MultiProviderModelClient implements ModelClient {
 
   constructor(input: { default: ModelClient; providers?: Map<string, ModelClient> }) {
     this.default_ = input.default
-    this.providers = input.providers ?? new Map()
+    this.providers = new Map(
+      [...(input.providers ?? new Map()).entries()]
+        .map(([providerId, client]) => [providerId.trim().toLowerCase(), client] as const)
+        .filter(([providerId]) => providerId.length > 0)
+    )
     this.model = input.default.model
   }
 
   /**
    * Pick the client for this request's `providerId` (case-insensitive,
-   * trimmed); fall back to the default client when the id is missing or
-   * unknown.
+   * trimmed). A missing id uses the default client; an explicit unknown id
+   * fails closed so requests never leak to different credentials.
    */
   resolve(providerId?: string): ModelClient {
-    const trimmed = providerId?.trim()
-    if (!trimmed) return this.default_
-    return this.providers.get(trimmed) ?? this.default_
+    const normalized = providerId?.trim().toLowerCase()
+    if (!normalized) return this.default_
+    const client = this.providers.get(normalized)
+    if (!client) throw new Error(`unknown_provider_id: ${providerId?.trim()}`)
+    return client
   }
 
   stream(request: ModelRequest): AsyncIterable<ModelStreamChunk> {

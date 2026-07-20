@@ -44,7 +44,7 @@ async function drain(iterable: AsyncIterable<ModelStreamChunk>): Promise<ModelSt
 }
 
 describe('MultiProviderModelClient', () => {
-  it('routes per-request providerId to a matching CompatModelClient and unknown ids fall back to default', async () => {
+  it('routes provider ids case-insensitively and fails closed for unknown ids', async () => {
     const defaultCalls: CapturedCall[] = []
     const minimaxCalls: CapturedCall[] = []
     const defaultClient = new CompatModelClient({
@@ -65,13 +65,13 @@ describe('MultiProviderModelClient', () => {
     })
 
     await drain(router.stream(request('deepseek-v4-pro')))
-    await drain(router.stream(request('MiniMax-M3', 'minimax-token-plan')))
-    await drain(router.stream(request('deepseek-v4-pro', 'unknown-provider')))
+    await drain(router.stream(request('MiniMax-M3', ' MINIMAX-TOKEN-PLAN ')))
+    expect(() => router.stream(request('deepseek-v4-pro', 'unknown-provider')))
+      .toThrow('unknown_provider_id: unknown-provider')
 
-    expect(defaultCalls).toHaveLength(2)
+    expect(defaultCalls).toHaveLength(1)
     expect(defaultCalls[0].url).toContain('default.example')
     expect(defaultCalls[0].authorization).toBe('Bearer sk-default')
-    expect(defaultCalls[1].url).toContain('default.example')
     expect(minimaxCalls).toHaveLength(1)
     expect(minimaxCalls[0].url).toContain('minimax.example')
     expect(minimaxCalls[0].authorization).toBe('Bearer sk-minimax')

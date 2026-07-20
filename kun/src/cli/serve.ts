@@ -126,6 +126,19 @@ export function parseServeOptions(
       typeof raw.model === 'string'
         ? raw.model
         : env.KUN_MODEL ?? configServe.model ?? DEFAULT_SERVE_OPTIONS.model,
+    researchModel:
+      typeof raw['research-model'] === 'string'
+        ? raw['research-model']
+        : typeof raw.researchModel === 'string'
+          ? raw.researchModel
+          : env.KUN_RESEARCH_MODEL ?? configServe.researchModel,
+    researchWorkspaceRoots: configServe.researchWorkspaceRoots,
+    tavilyApiKey:
+      typeof raw['tavily-api-key'] === 'string'
+        ? raw['tavily-api-key']
+        : typeof raw.tavilyApiKey === 'string'
+          ? raw.tavilyApiKey
+          : env.TAVILY_API_KEY ?? configServe.tavilyApiKey ?? DEFAULT_SERVE_OPTIONS.tavilyApiKey,
     approvalPolicy:
       typeof raw['approval-policy'] === 'string'
         ? (raw['approval-policy'] as ServeOptions['approvalPolicy'])
@@ -186,6 +199,8 @@ Options:
   --base-url <url>         DeepSeek-compatible base URL
   --endpoint-format <f>    chat_completions | responses | messages
   --model <model>          Default model id
+  --research-model <model> Low-cost model used by DeepResearch stages
+  --tavily-api-key <key>   Tavily Search key for DeepResearch
   --approval-policy <p>    on-request | untrusted | never | auto | suggest
   --sandbox-mode <mode>    read-only | workspace-write | danger-full-access | external-sandbox
   --token-economy          Compress safe tool context before model calls

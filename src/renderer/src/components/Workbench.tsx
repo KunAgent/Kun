@@ -1,7 +1,7 @@
 /**
  * [INPUT]: 依赖 renderer stores、runtime client、write workspace、chat composer 和 research runtime client
- * [OUTPUT]: 对外提供 Workbench 顶层组件，编排 Code/Write/SDD/DeepResearch 主要交互
- * [POS]: renderer/components 的主工作台容器，连接 UI 状态、runtime 请求和会话发送路径
+ * [OUTPUT]: 对外提供 Workbench 顶层组件，编排 Code/Write/SDD/DeepResearch 主要交互并传递当前模型/Provider
+ * [POS]: renderer/components 的主工作台容器，连接 UI 状态、runtime 请求和会话发送路径；DeepResearch 跟随右下角模型选择
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
  */
 import type { ReactElement } from 'react'
@@ -124,6 +124,8 @@ import {
   cancelDeepResearchRuntimeRun,
   confirmDeepResearchRuntimeScope,
   getDeepResearchRuntimeRun,
+  listDeepResearchRuntimeRuns,
+  pollDeepResearchRuntimeRun,
   startDeepResearchRuntimeRun,
   type DeepResearchRuntimeRunResponse
 } from '../research/deep-research-runtime-client'
@@ -303,10 +305,6 @@ function phaseForDeepResearchResult(result: DeepResearchRuntimeRunResponse): Dee
   if (result.run.status === 'research_unavailable') return 'failed'
   if (result.run.status === 'failed') return 'failed'
   return 'running'
-}
-
-function waitForDeepResearchPoll(): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, 2_000))
 }
 
 function isTerminalDeepResearchPhase(phase: DeepResearchRuntimePanelState['phase']): boolean {
@@ -507,6 +505,8 @@ export function Workbench(): ReactElement {
   const [attachmentUploadError, setAttachmentUploadError] = useState<string | null>(null)
   const [deepResearchPanel, setDeepResearchPanel] = useState<DeepResearchRuntimePanelState | null>(null)
   const [deepResearchBusy, setDeepResearchBusy] = useState(false)
+  const deepResearchPollGenerationRef = useRef(0)
+  const deepResearchRecoveryAttemptedRef = useRef(false)
   const [connectPhoneSidebarOpen, setConnectPhoneSidebarOpen] = useState(false)
   const [fileTreeSidePanelOpen, setFileTreeSidePanelOpen] = useState(false)
   const [openFilePreviewTargets, setOpenFilePreviewTargets] = useState<WorkspaceFileTarget[]>([])
@@ -1089,7 +1089,7 @@ export function Workbench(): ReactElement {
   }, [fileTreeWorkspaceRoot, setFilePreviewTarget, setRightPanelMode, setRightSidebarWidth])
 
   const openDeepResearchReport = useCallback((state: DeepResearchRuntimePanelState | null = deepResearchPanel): void => {
-    const reportPath = state?.result?.reportPath
+    const reportPath = state?.result?.reportPath ?? state?.result?.draftPath
     if (!reportPath) return
     const workspace = normalizeWorkspaceRoot(state?.workspaceRoot)
     if (workspace) {
@@ -1114,6 +1114,69 @@ export function Workbench(): ReactElement {
       void window.kunGui.openEditorPath({ path: reportPath, editorId: 'system' })
     }
   }, [deepResearchPanel, openWorkspaceFilePreviewTarget, openWrite, setError])
+
+  const stopDeepResearchPolling = useCallback((): void => {
+    deepResearchPollGenerationRef.current += 1
+  }, [])
+
+  const pollDeepResearchUntilSettled = useCallback((baseState: DeepResearchRuntimePanelState): void => {
+    const runId = baseState.result?.run.id
+    if (!runId) return
+    const generation = deepResearchPollGenerationRef.current + 1
+    deepResearchPollGenerationRef.current = generation
+    void pollDeepResearchRuntimeRun(runId, {
+      shouldContinue: () => deepResearchPollGenerationRef.current === generation,
+      onRetry: (_error, attempt) => {
+        setDeepResearchPanel((panel) => panel?.result?.run?.id === runId
+          ? { ...panel, error: `连接暂时中断，正在重试（第 ${attempt} 次）…` }
+          : panel)
+      },
+      onResult: (latest) => {
+        if (deepResearchPollGenerationRef.current !== generation) return
+        const latestPhase = phaseForDeepResearchResult(latest)
+        const latestState: DeepResearchRuntimePanelState = {
+          ...baseState,
+          phase: latestPhase,
+          result: latest
+        }
+        setDeepResearchPanel((panel) => panel?.result?.run?.id === runId ? latestState : panel)
+        if (isTerminalDeepResearchPhase(latestPhase)) {
+          if (latest.completed && deepResearchPollGenerationRef.current === generation) {
+            openDeepResearchReport(latestState)
+          }
+          if (deepResearchPollGenerationRef.current === generation) deepResearchPollGenerationRef.current += 1
+        }
+      }
+    }).catch((error) => {
+      if (deepResearchPollGenerationRef.current !== generation) return
+      const message = error instanceof Error ? error.message : String(error)
+      setDeepResearchPanel((panel) => panel?.result?.run?.id === runId ? { ...panel, error: message } : panel)
+    })
+  }, [openDeepResearchReport])
+
+  useEffect(() => {
+    if (!runtimeInfo || deepResearchPanel || deepResearchRecoveryAttemptedRef.current) return
+    deepResearchRecoveryAttemptedRef.current = true
+    void listDeepResearchRuntimeRuns(10)
+      .then((runs) => {
+        if (deepResearchPanel || runs.length === 0) return
+        const restored = runs.find((candidate) => !isTerminalDeepResearchPhase(phaseForDeepResearchResult(candidate))) ?? runs[0]
+        if (!restored) return
+        const restoredState: DeepResearchRuntimePanelState = {
+          phase: phaseForDeepResearchResult(restored),
+          topic: restored.run.brief.topic,
+          ...(restored.workspaceRoot ? { workspaceRoot: restored.workspaceRoot } : {}),
+          result: restored
+        }
+        setDeepResearchPanel(restoredState)
+        if (restoredState.phase === 'running') pollDeepResearchUntilSettled(restoredState)
+      })
+      .catch(() => undefined)
+  }, [deepResearchPanel, pollDeepResearchUntilSettled, runtimeInfo])
+
+  useEffect(() => () => {
+    deepResearchPollGenerationRef.current += 1
+  }, [])
 
   const previewWorkspaceFileFromSidebar = (path: string): void => {
     const workspace = fileTreeWorkspaceRoot
@@ -1979,6 +2042,7 @@ export function Workbench(): ReactElement {
     const targetWorkspace = normalizeWorkspaceRoot(writeState.workspaceRoot || writeState.defaultWorkspaceRoot) ||
       normalizeWorkspaceRoot(commandWorkspaceRoot)
     const autoApprove = deepResearchAutoApproveEnabled()
+    stopDeepResearchPolling()
     setDeepResearchBusy(true)
     setDeepResearchPanel({
       phase: 'creating_run',
@@ -1991,7 +2055,9 @@ export function Workbench(): ReactElement {
         topic: trimmedTopic,
         ...(targetWorkspace ? { workspaceRoot: targetWorkspace } : {}),
         autoApprove,
-        ...(reasoningEffort ? { reasoningEffort } : {})
+        ...(reasoningEffort ? { reasoningEffort } : {}),
+        ...(composerModel.trim() ? { model: composerModel.trim() } : {}),
+        ...(selectedComposerProviderId.trim() ? { providerId: selectedComposerProviderId.trim() } : {})
       })
       const nextState: DeepResearchRuntimePanelState = {
         phase: phaseForDeepResearchResult(result),
@@ -2002,30 +2068,7 @@ export function Workbench(): ReactElement {
       setDeepResearchPanel(nextState)
       if (result.completed) openDeepResearchReport(nextState)
       if (nextState.phase === 'running') {
-        void (async () => {
-          while (true) {
-            await waitForDeepResearchPoll()
-            try {
-              const latest = await getDeepResearchRuntimeRun(result.run.id)
-              const latestPhase = phaseForDeepResearchResult(latest)
-              const latestState: DeepResearchRuntimePanelState = {
-                ...nextState,
-                phase: latestPhase,
-                result: latest
-              }
-              setDeepResearchPanel((panel) => {
-                if (panel?.result?.run?.id !== result.run.id) return panel
-                return latestState
-              })
-              if (isTerminalDeepResearchPhase(latestPhase)) {
-                if (latest.completed) openDeepResearchReport(latestState)
-                return
-              }
-            } catch {
-              return
-            }
-          }
-        })()
+        pollDeepResearchUntilSettled(nextState)
       }
       return true
     } catch (error) {
@@ -2041,7 +2084,7 @@ export function Workbench(): ReactElement {
     } finally {
       setDeepResearchBusy(false)
     }
-  }, [composerReasoningEffort, openDeepResearchReport, setError])
+  }, [composerModel, composerReasoningEffort, openDeepResearchReport, pollDeepResearchUntilSettled, selectedComposerProviderId, setError, stopDeepResearchPolling])
 
   const confirmDeepResearchScopePanel = useCallback(async (): Promise<void> => {
     const current = deepResearchPanel
@@ -2050,11 +2093,15 @@ export function Workbench(): ReactElement {
     setDeepResearchBusy(true)
     try {
       const result = await confirmDeepResearchRuntimeScope(run.id, { autoApprove: true })
-      setDeepResearchPanel({
+      const nextState: DeepResearchRuntimePanelState = {
         ...current,
         phase: phaseForDeepResearchResult(result),
         result
-      })
+      }
+      setDeepResearchPanel(nextState)
+      if (nextState.phase === 'running') {
+        pollDeepResearchUntilSettled(nextState)
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       setError(message)
@@ -2062,7 +2109,7 @@ export function Workbench(): ReactElement {
     } finally {
       setDeepResearchBusy(false)
     }
-  }, [deepResearchPanel, setError])
+  }, [deepResearchPanel, pollDeepResearchUntilSettled, setError])
 
   const answerDeepResearchScopePanel = useCallback(async (message: string): Promise<void> => {
     const current = deepResearchPanel
@@ -2071,39 +2118,6 @@ export function Workbench(): ReactElement {
     if (!current || !run || !trimmedMessage) return
     setDeepResearchBusy(true)
     setDeepResearchPanel({ ...current, phase: 'approving' })
-    let polling = true
-    let keepPollingAfterRequest = false
-    const pollUntilSettled = async (): Promise<void> => {
-      while (polling) {
-        await waitForDeepResearchPoll()
-        if (!polling) return
-        try {
-          const latest = await getDeepResearchRuntimeRun(run.id)
-          const latestPhase = phaseForDeepResearchResult(latest)
-          setDeepResearchPanel((panel) => {
-            if (panel?.result?.run?.id !== run.id) return panel
-            return {
-              ...panel,
-              phase: latestPhase,
-              result: latest
-            }
-          })
-          if (isTerminalDeepResearchPhase(latestPhase)) {
-            if (latest.completed) {
-              openDeepResearchReport({
-                ...current,
-                phase: latestPhase,
-                result: latest
-              })
-            }
-            return
-          }
-        } catch {
-          return
-        }
-      }
-    }
-    void pollUntilSettled()
     try {
       const nextResult = await answerDeepResearchRuntimeScope(run.id, trimmedMessage, { autoApprove: true })
       const nextState: DeepResearchRuntimePanelState = {
@@ -2111,9 +2125,12 @@ export function Workbench(): ReactElement {
         phase: phaseForDeepResearchResult(nextResult),
         result: nextResult
       }
-      keepPollingAfterRequest = nextState.phase === 'running'
       setDeepResearchPanel(nextState)
-      if (nextResult.completed) openDeepResearchReport(nextState)
+      if (nextResult.completed) {
+        openDeepResearchReport(nextState)
+      } else if (nextState.phase === 'running') {
+        pollDeepResearchUntilSettled(nextState)
+      }
     } catch (error) {
       const messageText = error instanceof Error ? error.message : String(error)
       const latest = await getDeepResearchRuntimeRun(run.id).catch(() => null)
@@ -2124,18 +2141,20 @@ export function Workbench(): ReactElement {
           result: latest,
           ...(latest.run.status === 'failed' && !latest.run.verification ? { error: messageText } : {})
         }
-        keepPollingAfterRequest = nextState.phase === 'running'
         setDeepResearchPanel(nextState)
-        if (latest.completed) openDeepResearchReport(nextState)
+        if (latest.completed) {
+          openDeepResearchReport(nextState)
+        } else if (nextState.phase === 'running') {
+          pollDeepResearchUntilSettled(nextState)
+        }
       } else {
         setError(messageText)
         setDeepResearchPanel({ ...current, phase: 'failed', error: messageText })
       }
     } finally {
-      if (!keepPollingAfterRequest) polling = false
       setDeepResearchBusy(false)
     }
-  }, [deepResearchPanel, openDeepResearchReport, setError])
+  }, [deepResearchPanel, openDeepResearchReport, pollDeepResearchUntilSettled, setError])
 
   const approveDeepResearchPanel = useCallback(async (): Promise<void> => {
     const current = deepResearchPanel
@@ -2143,39 +2162,6 @@ export function Workbench(): ReactElement {
     if (!current || !run) return
     setDeepResearchBusy(true)
     setDeepResearchPanel({ ...current, phase: 'approving' })
-    let polling = true
-    let keepPollingAfterRequest = false
-    const pollUntilSettled = async (): Promise<void> => {
-      while (polling) {
-        await waitForDeepResearchPoll()
-        if (!polling) return
-        try {
-          const latest = await getDeepResearchRuntimeRun(run.id)
-          const latestPhase = phaseForDeepResearchResult(latest)
-          setDeepResearchPanel((panel) => {
-            if (panel?.result?.run?.id !== run.id) return panel
-            return {
-              ...panel,
-              phase: latestPhase,
-              result: latest
-            }
-          })
-          if (isTerminalDeepResearchPhase(latestPhase)) {
-            if (latest.completed) {
-              openDeepResearchReport({
-                ...current,
-                phase: latestPhase,
-                result: latest
-              })
-            }
-            return
-          }
-        } catch {
-          return
-        }
-      }
-    }
-    void pollUntilSettled()
     try {
       const result = await approveDeepResearchRuntimeRun(run.id, run.briefHash)
       const nextState: DeepResearchRuntimePanelState = {
@@ -2183,9 +2169,9 @@ export function Workbench(): ReactElement {
         phase: phaseForDeepResearchResult(result),
         result
       }
-      keepPollingAfterRequest = nextState.phase === 'running'
       setDeepResearchPanel(nextState)
       if (result.completed) openDeepResearchReport(nextState)
+      else if (nextState.phase === 'running') pollDeepResearchUntilSettled(nextState)
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       const latest = await getDeepResearchRuntimeRun(run.id).catch(() => null)
@@ -2196,18 +2182,17 @@ export function Workbench(): ReactElement {
           result: latest,
           ...(latest.run.status === 'failed' && !latest.run.verification ? { error: message } : {})
         }
-        keepPollingAfterRequest = nextState.phase === 'running'
         setDeepResearchPanel(nextState)
         if (latest.completed) openDeepResearchReport(nextState)
+        else if (nextState.phase === 'running') pollDeepResearchUntilSettled(nextState)
       } else {
         setError(message)
         setDeepResearchPanel({ ...current, phase: 'failed', error: message })
       }
     } finally {
-      if (!keepPollingAfterRequest) polling = false
       setDeepResearchBusy(false)
     }
-  }, [deepResearchPanel, openDeepResearchReport, setError])
+  }, [deepResearchPanel, openDeepResearchReport, pollDeepResearchUntilSettled, setError])
 
   const cancelDeepResearchPanel = useCallback(async (): Promise<void> => {
     const current = deepResearchPanel
@@ -2217,6 +2202,7 @@ export function Workbench(): ReactElement {
       return
     }
     setDeepResearchBusy(true)
+    stopDeepResearchPolling()
     try {
       const result = await cancelDeepResearchRuntimeRun(run.id)
       setDeepResearchPanel({
@@ -2231,7 +2217,14 @@ export function Workbench(): ReactElement {
     } finally {
       setDeepResearchBusy(false)
     }
-  }, [deepResearchPanel, setError])
+  }, [deepResearchPanel, setError, stopDeepResearchPolling])
+
+  const closeDeepResearchPanel = useCallback((): void => {
+    stopDeepResearchPolling()
+    deepResearchRecoveryAttemptedRef.current = true
+    setDeepResearchPanel(null)
+    setDeepResearchBusy(false)
+  }, [stopDeepResearchPolling])
 
   const handleSendAsync = async (): Promise<void> => {
     const v = input.trim()
@@ -2976,6 +2969,7 @@ export function Workbench(): ReactElement {
                   onAnswerScope={(message) => void answerDeepResearchScopePanel(message)}
                   onApprove={() => void approveDeepResearchPanel()}
                   onCancel={() => void cancelDeepResearchPanel()}
+                  onClose={closeDeepResearchPanel}
                   onOpenReport={() => openDeepResearchReport()}
                 />
               ) : null}

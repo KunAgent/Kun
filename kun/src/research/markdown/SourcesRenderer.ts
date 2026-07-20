@@ -1,3 +1,9 @@
+/**
+ * [INPUT]: 依赖 SourceRecord、EvidenceSpan 和展示标签
+ * [OUTPUT]: 对外提供 renderSourcesMarkdown
+ * [POS]: research/markdown 的来源清单渲染器，负责 sources.md 产物
+ * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
+ */
 import type { EvidenceSpan, SourceRecord } from '../evidence/types.js'
 import { sourceReliabilityLabel, sourceStatusLabel, sourceTypeLabel } from './labels.js'
 

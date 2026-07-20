@@ -1,3 +1,9 @@
+/**
+ * [INPUT]: 依赖 research core/evidence 的枚举值
+ * [OUTPUT]: 对外提供来源、置信度、状态和优先级的中文展示标签
+ * [POS]: research/markdown 的纯展示映射，被各 Markdown renderer 复用
+ * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
+ */
 import type {
   ResearchConfidence,
   ResearchPriority,

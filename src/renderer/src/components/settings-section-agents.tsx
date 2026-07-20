@@ -1,3 +1,9 @@
+/**
+ * [INPUT]: 依赖共享 AppSettings、模型 provider 设置、Kun GUI API 和通用设置组件
+ * [OUTPUT]: 对外提供 AgentsSettingsSection 和 provider patch 转发
+ * [POS]: renderer settings 的 Kun Agent 配置界面，管理模型、DeepResearch 模型、Tavily 和运行安全设置
+ * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
+ */
 import { useEffect, useState, type ReactElement, type ReactNode } from 'react'
 import type {
   ApprovalPolicy,
@@ -256,6 +262,7 @@ export function AgentsSettingsSection({ ctx }: { ctx: Record<string, any> }): Re
   }
   const [tokenEconomySavingsState, setTokenEconomySavingsState] =
     useState<TokenEconomySavingsState>(EMPTY_TOKEN_ECONOMY_SAVINGS_STATE)
+  const [showTavilyApiKey, setShowTavilyApiKey] = useState(false)
   useEffect(() => {
     let cancelled = false
     if (!tokenEconomy.enabled) {
@@ -470,6 +477,37 @@ export function AgentsSettingsSection({ ctx }: { ctx: Record<string, any> }): Re
                           const next = model.trim()
                           updateKun({ model: next || (activeProviderModels[0] ?? kun.model) })
                         }}
+                      />
+                    }
+                  />
+                  <SettingRow
+                    title={t('kunResearchModel')}
+                    description={t('kunResearchModelDesc')}
+                    control={
+                      <ModelSelect
+                        value={kun.researchModel ?? ''}
+                        options={activeProviderModels}
+                        optionLabel={(model) => model}
+                        allowCustom
+                        customLabel={t('modelSelectCustomOption')}
+                        customPlaceholder={t('kunResearchModelPlaceholder')}
+                        selectClassName={selectControlClass}
+                        onChange={(model) => updateKun({ researchModel: model.trim() })}
+                      />
+                    }
+                  />
+                  <SettingRow
+                    title={t('kunTavilyApiKey')}
+                    description={t('kunTavilyApiKeyDesc')}
+                    control={
+                      <SecretInput
+                        value={kun.tavilyApiKey ?? ''}
+                        onChange={(value) => updateKun({ tavilyApiKey: value })}
+                        visible={showTavilyApiKey}
+                        onToggleVisibility={() => setShowTavilyApiKey((value) => !value)}
+                        showLabel={t('showSecret')}
+                        hideLabel={t('hideSecret')}
+                        className="md:max-w-md"
                       />
                     }
                   />

@@ -1,3 +1,9 @@
+/**
+ * [INPUT]: 依赖 app-settings-types 的 Kun runtime/settings 契约与默认常量
+ * [OUTPUT]: 对外提供 Kun 设置默认值、归一化、合并、迁移和安全判定函数
+ * [POS]: shared settings 的 Kun 配置策略层，统一维护 DeepResearch 模型和 Tavily Key 等运行设置
+ * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
+ */
 import {
   DEFAULT_APPROVAL_POLICY,
   DEFAULT_DEEPSEEK_BASE_URL,
@@ -126,6 +132,8 @@ export function defaultKunRuntimeSettings(
     runtimeToken: '',
     dataDir: DEFAULT_KUN_DATA_DIR,
     model: DEFAULT_KUN_MODEL,
+    researchModel: '',
+    tavilyApiKey: '',
     approvalPolicy: DEFAULT_APPROVAL_POLICY,
     sandboxMode: DEFAULT_SANDBOX_MODE,
     tokenEconomyMode: false,
@@ -423,6 +431,12 @@ export function mergeKunRuntimeSettings(
       : {})
   })
   const nextModelProfiles = normalizeKunModelProfiles(current.modelProfiles, patch?.modelProfiles)
+  const researchModel = typeof patch?.researchModel === 'string'
+    ? patch.researchModel.trim().slice(0, 128)
+    : current.researchModel
+  const tavilyApiKey = typeof patch?.tavilyApiKey === 'string'
+    ? patch.tavilyApiKey.trim()
+    : current.tavilyApiKey
   return {
     ...current,
     ...(patch ?? {}),
@@ -438,6 +452,8 @@ export function mergeKunRuntimeSettings(
     musicGeneration: nextMusicGeneration,
     videoGeneration: nextVideoGeneration,
     modelProfiles: nextModelProfiles,
+    researchModel,
+    tavilyApiKey,
     memoryEnabled: patch?.memoryEnabled ?? current.memoryEnabled ?? false,
     computerUse: nextComputerUse,
     quality: nextQuality

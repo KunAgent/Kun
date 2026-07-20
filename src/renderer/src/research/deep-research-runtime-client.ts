@@ -1,6 +1,6 @@
 /**
  * [INPUT]: 依赖 rendererRuntimeClient 和 shared/kun-endpoints 的 research HTTP 路径
- * [OUTPUT]: 对外提供 DeepResearch runtime client、feature flag helper 和状态格式化函数
+ * [OUTPUT]: 对外提供携带当前模型/Provider 与搜索/抓取/抽取审计状态的 DeepResearch runtime client、feature flag helper 和状态格式化函数
  * [POS]: renderer/research 的 API glue，把 /research UI 操作转成结构化 runtime 请求
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
  */
@@ -25,6 +25,8 @@ export type DeepResearchRuntimeRunRequest = {
   workspaceRoot?: string
   autoApprove?: boolean
   reasoningEffort?: string
+  model?: string
+  providerId?: string
 }
 
 export type DeepResearchRuntimeScopeAnswerOptions = {
@@ -126,8 +128,21 @@ export type DeepResearchRuntimeRunResponse = {
       recommendedFixes: string[]
       verifiedAt: string
     }
+    modelBudgetUsage: {
+      modelCalls: number
+      totalTokens: number
+      costUsd: number
+      costCny: number
+    }
+    webAudit?: Array<{
+      phase: 'search' | 'fetch' | 'extract'
+      status: 'success' | 'filtered' | 'empty' | 'failed' | 'blocked'
+    }>
+    terminalReason?: string
   }
   reportPath: string | null
+  draftPath?: string | null
+  workspaceRoot?: string
   artifactPaths: {
     rootDir: string
     reportPath: string
@@ -175,7 +190,9 @@ export async function startDeepResearchRuntimeRun(
       topic: request.topic,
       ...(request.workspaceRoot ? { workspaceRoot: request.workspaceRoot } : {}),
       ...(typeof request.autoApprove === 'boolean' ? { autoApprove: request.autoApprove } : {}),
-      ...(request.reasoningEffort ? { reasoningEffort: request.reasoningEffort } : {})
+      ...(request.reasoningEffort ? { reasoningEffort: request.reasoningEffort } : {}),
+      ...(request.model?.trim() ? { model: request.model.trim() } : {}),
+      ...(request.providerId?.trim() ? { providerId: request.providerId.trim() } : {})
     })
   )
   if (!response.ok) {
@@ -184,15 +201,82 @@ export async function startDeepResearchRuntimeRun(
   return JSON.parse(response.body) as DeepResearchRuntimeRunResponse
 }
 
+export async function listDeepResearchRuntimeRuns(limit = 20): Promise<DeepResearchRuntimeRunResponse[]> {
+  const boundedLimit = Math.max(1, Math.min(50, Math.floor(limit)))
+  const response = await rendererRuntimeClient.runtimeRequest(
+    `${KUN_RESEARCH_RUNS_PATH}?limit=${boundedLimit}`,
+    'GET'
+  )
+  if (!response.ok) {
+    throw new DeepResearchRuntimeRequestError(
+      readRuntimeMessage(response.body, `深度研究历史读取失败（${response.status}）`),
+      response.status
+    )
+  }
+  const parsed = JSON.parse(response.body) as { runs?: DeepResearchRuntimeRunResponse[] }
+  return Array.isArray(parsed.runs) ? parsed.runs : []
+}
+
+export class DeepResearchRuntimeRequestError extends Error {
+  constructor(message: string, readonly status?: number) {
+    super(message)
+    this.name = 'DeepResearchRuntimeRequestError'
+  }
+}
+
 export async function getDeepResearchRuntimeRun(runId: string): Promise<DeepResearchRuntimeRunResponse> {
   const response = await rendererRuntimeClient.runtimeRequest(
     kunResearchRunPath(runId),
     'GET'
   )
   if (!response.ok) {
-    throw new Error(readRuntimeMessage(response.body, `深度研究状态读取失败（${response.status}）`))
+    throw new DeepResearchRuntimeRequestError(
+      readRuntimeMessage(response.body, `深度研究状态读取失败（${response.status}）`),
+      response.status
+    )
   }
   return JSON.parse(response.body) as DeepResearchRuntimeRunResponse
+}
+
+export async function pollDeepResearchRuntimeRun(
+  runId: string,
+  options: {
+    shouldContinue: () => boolean
+    onResult: (result: DeepResearchRuntimeRunResponse) => void
+    onRetry?: (error: Error, attempt: number) => void
+    getRun?: (runId: string) => Promise<DeepResearchRuntimeRunResponse>
+    wait?: (ms: number) => Promise<void>
+    intervalMs?: number
+    maxRetryDelayMs?: number
+    random?: () => number
+  }
+): Promise<DeepResearchRuntimeRunResponse | null> {
+  const getRun = options.getRun ?? getDeepResearchRuntimeRun
+  const wait = options.wait ?? ((ms: number) => new Promise((resolve) => setTimeout(resolve, ms)))
+  const intervalMs = Math.max(1, options.intervalMs ?? 2_000)
+  const maxRetryDelayMs = Math.max(intervalMs, options.maxRetryDelayMs ?? 15_000)
+  const random = options.random ?? Math.random
+  let retryAttempt = 0
+  let delayMs = intervalMs
+  while (options.shouldContinue()) {
+    await wait(delayMs)
+    if (!options.shouldContinue()) return null
+    try {
+      const result = await getRun(runId)
+      retryAttempt = 0
+      delayMs = intervalMs
+      options.onResult(result)
+      if (isTerminalResearchStatus(result.run.status)) return result
+    } catch (error) {
+      const normalized = error instanceof Error ? error : new Error(String(error))
+      if (isPermanentPollingError(normalized)) throw normalized
+      retryAttempt += 1
+      options.onRetry?.(normalized, retryAttempt)
+      const exponentialDelay = Math.min(maxRetryDelayMs, intervalMs * (2 ** Math.min(retryAttempt, 6)))
+      delayMs = Math.max(intervalMs, Math.round(exponentialDelay * (0.9 + random() * 0.2)))
+    }
+  }
+  return null
 }
 
 export async function confirmDeepResearchRuntimeScope(
@@ -256,6 +340,18 @@ export async function cancelDeepResearchRuntimeRun(runId: string): Promise<DeepR
     throw new Error(readRuntimeMessage(response.body, `深度研究取消失败（${response.status}）`))
   }
   return JSON.parse(response.body) as DeepResearchRuntimeRunResponse
+}
+
+function isTerminalResearchStatus(status: string): boolean {
+  return status === 'done'
+    || status === 'failed'
+    || status === 'cancelled'
+    || status === 'research_unavailable'
+}
+
+function isPermanentPollingError(error: Error): boolean {
+  return error instanceof DeepResearchRuntimeRequestError
+    && (error.status === 401 || error.status === 403 || error.status === 404)
 }
 
 export function formatDeepResearchRunStatus(status: string | null | undefined): string {

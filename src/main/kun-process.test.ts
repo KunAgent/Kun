@@ -822,6 +822,40 @@ describe('syncGuiManagedKunConfig', () => {
     })
   })
 
+  it('clears stale DeepResearch model and Tavily settings when GUI overrides are empty', async () => {
+    if (!tempRoot) throw new Error('temp root not initialized')
+    const configPath = join(tempRoot, 'config.json')
+    writeFileSync(configPath, JSON.stringify({
+      serve: {
+        researchModel: 'deepseek-v4-flash',
+        tavilyApiKey: 'tvly-test-preserved'
+      }
+    }), 'utf8')
+    const module = await import('./kun-process')
+
+    await module.syncGuiManagedKunConfig(tempRoot, defaultKunRuntimeSettings())
+
+    const parsed = JSON.parse(readFileSync(configPath, 'utf8')) as any
+    expect(parsed.serve.researchModel).toBeUndefined()
+    expect(parsed.serve.tavilyApiKey).toBeUndefined()
+  })
+
+  it('writes explicit DeepResearch model and Tavily settings from the GUI', async () => {
+    if (!tempRoot) throw new Error('temp root not initialized')
+    const module = await import('./kun-process')
+    const runtime = {
+      ...defaultKunRuntimeSettings(),
+      researchModel: 'deepseek-v4-pro',
+      tavilyApiKey: 'tvly-test-explicit'
+    }
+
+    await module.syncGuiManagedKunConfig(tempRoot, runtime)
+
+    const parsed = JSON.parse(readFileSync(join(tempRoot, 'config.json'), 'utf8')) as any
+    expect(parsed.serve.researchModel).toBe('deepseek-v4-pro')
+    expect(parsed.serve.tavilyApiKey).toBe('tvly-test-explicit')
+  })
+
   it('imports GUI-managed MCP servers into runtime capabilities', async () => {
     if (!tempRoot) throw new Error('temp root not initialized')
     const configPath = join(tempRoot, 'config.json')

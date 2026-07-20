@@ -30,7 +30,9 @@ import {
   cancelResearchRun,
   confirmResearchScope,
   createResearchRun,
-  getResearchRun
+  getResearchRun,
+  listResearchRuns,
+  retryResearchRun
 } from './research.js'
 import { buildEventStreamResponse } from './events.js'
 import { decideApproval } from './approvals.js'
@@ -85,7 +87,7 @@ import type { ServerRuntime } from './server-runtime.js'
  * - `POST /v1/sessions/{id}/resume-thread` (auth)
  * - `GET /v1/usage` (auth)
  * - `GET /v1/debug/llm-rounds` (auth)
- * - `POST /v1/research/runs`, `GET /v1/research/runs/{id}`, approve/cancel (auth)
+ * - `POST /v1/research/runs`, `GET /v1/research/runs/{id}`, approve/cancel/retry (auth)
  */
 export function buildRouter(runtime: ServerRuntime): Router {
   const router = new Router()
@@ -284,6 +286,10 @@ export function buildRouter(runtime: ServerRuntime): Router {
     if (!authorize(request, runtime)) return ERRORS.unauthorized()
     return createResearchRun(runtime, request)
   })
+  router.add('GET', '/v1/research/runs', async (request) => {
+    if (!authorize(request, runtime)) return ERRORS.unauthorized()
+    return listResearchRuns(runtime, request)
+  })
   router.add('GET', '/v1/research/runs/:id', async (request, ctx) => {
     if (!authorize(request, runtime)) return ERRORS.unauthorized()
     return getResearchRun(runtime, ctx.params.id)
@@ -303,6 +309,10 @@ export function buildRouter(runtime: ServerRuntime): Router {
   router.add('POST', '/v1/research/runs/:id/cancel', async (request, ctx) => {
     if (!authorize(request, runtime)) return ERRORS.unauthorized()
     return cancelResearchRun(runtime, ctx.params.id, request)
+  })
+  router.add('POST', '/v1/research/runs/:id/retry', async (request, ctx) => {
+    if (!authorize(request, runtime)) return ERRORS.unauthorized()
+    return retryResearchRun(runtime, ctx.params.id)
   })
   return router
 }

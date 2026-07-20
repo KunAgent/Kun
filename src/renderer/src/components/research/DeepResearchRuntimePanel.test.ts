@@ -4,6 +4,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import {
   DeepResearchRuntimePanel,
   buildScopeAnswerMessage,
+  buildSubmittableScopeAnswerMessage,
   type DeepResearchRuntimePanelState
 } from './DeepResearchRuntimePanel'
 
@@ -54,7 +55,7 @@ describe('DeepResearchRuntimePanel', () => {
     expect(html).toContain('第 1 步：补充信息')
     expect(html).toContain('选项可多选')
     expect(html).toContain('也可以不选选项，直接填写答案')
-    expect(html).toContain('已完成 0/1')
+    expect(html).toContain('必答 0/1')
     expect(html).toContain('aria-pressed="false"')
     expect(html).toContain('data-selected="false"')
     expect(html).toContain('经济与贸易')
@@ -63,18 +64,28 @@ describe('DeepResearchRuntimePanel', () => {
     expect(html).not.toContain('还有其他边界、用途、受众或限制')
     expect(html).toContain('提交补充给模型')
     expect(html).toContain('还剩 1 个必答问题未补充')
+    expect(html).not.toContain('也可以先提交')
     expect(html).not.toContain('确认需求，生成简报')
   })
 
-  it('combines multiple selected options into the scope answer sent back to the model', () => {
+  it('combines selected required options and skips unanswered optional questions', () => {
     const message = buildScopeAnswerMessage({
-      questions: [{
-        id: 'scope_target',
-        question: '您希望对比中美两国的哪个具体领域或维度？',
-        why: '领域决定调研的数据来源、分析框架和结论方向。',
-        options: ['经济与贸易', '科技与创新', '军事与国防', '教育体系'],
-        required: true
-      }],
+      questions: [
+        {
+          id: 'scope_target',
+          question: '您希望对比中美两国的哪个具体领域或维度？',
+          why: '领域决定调研的数据来源、分析框架和结论方向。',
+          options: ['经济与贸易', '科技与创新', '军事与国防', '教育体系'],
+          required: true
+        },
+        {
+          id: 'scope_extra',
+          question: '是否还有额外边界？',
+          why: '额外边界可以进一步收窄报告。',
+          options: ['重点看最近三年', '不限时间'],
+          required: false
+        }
+      ],
       selectedOptions: {
         scope_target: ['经济与贸易', '科技与创新']
       },
@@ -84,6 +95,36 @@ describe('DeepResearchRuntimePanel', () => {
 
     expect(message).toContain('回答：经济与贸易；科技与创新')
     expect(message).toContain('补充说明：重点看最近三年。')
+    expect(message).not.toContain('是否还有额外边界')
+  })
+
+  it('does not submit until required questions are answered, but can skip optional-only questions', () => {
+    const requiredQuestions = [{
+      id: 'scope_target',
+      question: '您希望对比中美两国的哪个具体领域或维度？',
+      why: '领域决定调研的数据来源、分析框架和结论方向。',
+      options: ['经济与贸易', '科技与创新'],
+      required: true
+    }]
+    expect(buildSubmittableScopeAnswerMessage({
+      questions: requiredQuestions,
+      selectedOptions: {},
+      customAnswers: {},
+      note: ''
+    })).toBe('')
+
+    expect(buildSubmittableScopeAnswerMessage({
+      questions: [{
+        id: 'scope_optional',
+        question: '是否还有可选补充？',
+        why: '这只影响报告边界细化。',
+        options: ['重点看最近三年', '不限时间'],
+        required: false
+      }],
+      selectedOptions: {},
+      customAnswers: {},
+      note: ''
+    })).toBe('未选择可选补充，使用默认边界继续。')
   })
 
   it('renders a free-form field when the scope question has no options', () => {
@@ -149,9 +190,10 @@ describe('DeepResearchRuntimePanel', () => {
 
     expect(html).toContain('状态：失败')
     expect(html).toContain('报告质量还没达标')
-    expect(html).toContain('报告符合已确认需求')
+    expect(html).toContain('模型端点不可用')
     expect(html).toContain('建议：补齐核心问题后重新生成。')
     expect(html).toContain('打开当前草稿')
+    expect(html).toContain('aria-label="关闭深度研究"')
     expect(html).not.toContain('目标任务')
     expect(html).not.toContain('max-h-[17.75rem]')
   })
@@ -173,7 +215,9 @@ describe('DeepResearchRuntimePanel', () => {
     expect(html).not.toContain('/workspace/Research/run/sources.md')
     expect(html).not.toContain('/workspace/Research/run/notes.md')
     expect(html).toContain('状态：已完成')
+    expect(html).toContain('模型 4 次 · 1,234 tokens · 搜索 2 次')
     expect(html).toContain('打开报告')
+    expect(html).toContain('aria-label="关闭深度研究"')
     expect(html).not.toContain('评估')
     expect(html).not.toContain('需求匹配')
     expect(html).not.toContain('模型评审')
@@ -275,9 +319,17 @@ function state(
           warnings: [],
           recommendedFixes: phase === 'failed' ? ['补齐核心问题后重新生成。'] : [],
           verifiedAt: '2026-06-29T00:00:00.000Z'
-        }
+        },
+        modelBudgetUsage: { modelCalls: 4, totalTokens: 1234, costUsd: 0, costCny: 0 },
+        webAudit: [
+          { phase: 'search', status: 'success' },
+          { phase: 'search', status: 'filtered' },
+          { phase: 'fetch', status: 'success' }
+        ],
+        ...(phase === 'failed' ? { terminalReason: '模型端点不可用。' } : {})
       },
-      reportPath: phase === 'completed' || phase === 'failed' ? '/workspace/Research/run/report.md' : null,
+      reportPath: phase === 'completed' ? '/workspace/Research/run/report.md' : null,
+      draftPath: phase === 'failed' ? '/workspace/Research/run/.kun-research/report-draft.md' : null,
       artifactPaths: {
         rootDir: '/workspace/Research/run',
         reportPath: '/workspace/Research/run/report.md',

@@ -1,3 +1,9 @@
+/**
+ * [INPUT]: 依赖 ResearchNote 与 AtomicClaim 结构化记录
+ * [OUTPUT]: 对外提供 renderNotesMarkdown
+ * [POS]: research/markdown 的研究笔记渲染器，负责 notes.md 产物
+ * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
+ */
 import type { AtomicClaim, ResearchNote } from '../evidence/types.js'
 import { confidenceLabel } from './labels.js'
 

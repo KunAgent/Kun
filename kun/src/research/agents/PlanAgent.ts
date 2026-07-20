@@ -55,8 +55,8 @@ function buildTaskEvidence(input: PlanAgentInput, question: string, index: numbe
   const base = input.frame.evidenceNeeded.length > 0 ? input.frame.evidenceNeeded : ['可追溯证据片段']
   const focusEvidence = [
     '定义、范围、可比口径和研究对象边界。',
-    '最新事实、关键指标、时间线、案例或产品/市场数据。',
-    '能解释因果链、用户路径、市场结构或技术路径的证据。',
+    '最新事实、关键指标、时间线、案例或原始数据。',
+    '能解释因果链、形成过程、结构关系或作用路径的证据。',
     input.frame.disconfirmingEvidenceNeeded.join('；') || '反例、替代解释、争议和边界条件。',
     '能支撑结论、风险判断和行动建议的证据。'
   ][index]

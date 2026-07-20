@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest'
 import {
   deepResearchAutoApproveEnabled,
   deepResearchRuntimeEnabled,
+  DeepResearchRuntimeRequestError,
   formatDeepResearchRunStatus,
   formatDeepResearchRuntimeResult,
+  pollDeepResearchRuntimeRun,
   type DeepResearchRuntimeRunResponse
 } from './deep-research-runtime-client'
 
@@ -32,6 +34,41 @@ describe('deep research runtime client helpers', () => {
 
   it('formats research_unavailable without exposing the internal status name', () => {
     expect(formatDeepResearchRunStatus('research_unavailable')).toBe('无法继续')
+  })
+
+  it('keeps polling after a transient error and resets on a successful result', async () => {
+    const responses: Array<DeepResearchRuntimeRunResponse | Error> = [
+      new Error('temporary socket failure'),
+      result({ completed: false, status: 'researching', reportPath: null }),
+      result({ completed: true, status: 'done', reportPath: '/workspace/Research/report.md' })
+    ]
+    const updates: string[] = []
+    const retries: number[] = []
+    const settled = await pollDeepResearchRuntimeRun('rr_1', {
+      shouldContinue: () => true,
+      getRun: async () => {
+        const next = responses.shift()!
+        if (next instanceof Error) throw next
+        return next
+      },
+      wait: async () => undefined,
+      random: () => 0.5,
+      onRetry: (_error, attempt) => retries.push(attempt),
+      onResult: (next) => updates.push(next.run.status)
+    })
+
+    expect(retries).toEqual([1])
+    expect(updates).toEqual(['researching', 'done'])
+    expect(settled?.completed).toBe(true)
+  })
+
+  it('stops polling on permanent authorization or missing-run errors', async () => {
+    await expect(pollDeepResearchRuntimeRun('rr_missing', {
+      shouldContinue: () => true,
+      getRun: async () => { throw new DeepResearchRuntimeRequestError('missing', 404) },
+      wait: async () => undefined,
+      onResult: () => undefined
+    })).rejects.toThrow('missing')
   })
 })
 
@@ -69,7 +106,8 @@ function result(input: { completed: boolean; status: string; reportPath: string 
         centralQuestion: 'Does the user see a brief?',
         coreQuestions: [{ id: 'q1', text: 'Can the user confirm?', priority: 'high', required: true }],
         investigationPath: ['Create', 'Confirm', 'Write']
-      }
+      },
+      modelBudgetUsage: { modelCalls: 0, totalTokens: 0, costUsd: 0, costCny: 0 }
     },
     reportPath: input.reportPath,
     artifactPaths: {

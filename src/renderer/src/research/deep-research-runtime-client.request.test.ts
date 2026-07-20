@@ -14,6 +14,7 @@ const {
   confirmDeepResearchRuntimeScope,
   answerDeepResearchRuntimeScope,
   getDeepResearchRuntimeRun,
+  listDeepResearchRuntimeRuns,
   startDeepResearchRuntimeRun
 } = await import('./deep-research-runtime-client')
 
@@ -65,7 +66,9 @@ describe('startDeepResearchRuntimeRun', () => {
       topic: 'runtime integration',
       workspaceRoot: '/workspace',
       autoApprove: true,
-      reasoningEffort: 'max'
+      reasoningEffort: 'max',
+      model: 'deepseek-v4-pro',
+      providerId: 'deepseek'
     })
 
     expect(runtimeRequest).toHaveBeenCalledWith(
@@ -75,7 +78,9 @@ describe('startDeepResearchRuntimeRun', () => {
         topic: 'runtime integration',
         workspaceRoot: '/workspace',
         autoApprove: true,
-        reasoningEffort: 'max'
+        reasoningEffort: 'max',
+        model: 'deepseek-v4-pro',
+        providerId: 'deepseek'
       })
     )
     expect(result.completed).toBe(true)
@@ -145,6 +150,19 @@ describe('startDeepResearchRuntimeRun', () => {
 
     expect(runtimeRequest).toHaveBeenCalledWith('/v1/research/runs/rr_1', 'GET')
     expect(result.run.status).toBe('researching')
+  })
+
+  it('lists recent research runs for restart recovery', async () => {
+    runtimeRequest.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      body: JSON.stringify({ runs: [responseBody('researching')] })
+    })
+
+    const runs = await listDeepResearchRuntimeRuns(10)
+
+    expect(runtimeRequest).toHaveBeenCalledWith('/v1/research/runs?limit=10', 'GET')
+    expect(runs[0]?.run.status).toBe('researching')
   })
 })
 

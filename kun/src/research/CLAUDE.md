@@ -3,40 +3,87 @@
 
 成员清单
 
-agents/GapAnalyzer.ts: CoverageEvaluator 与 gap loop，按 ResearchFrame、EvidenceEligibility 和预算判断缺口并生成 follow-up tasks。[PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
-agents/HypothesisAgent.ts: hypothesis/VOI/convergence 的确定性 agents，生成假设、测试、绑定和收敛判断。[PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
+agents/GapAnalyzer.ts: CoverageEvaluator 与 gap loop，信任已校验的 ResearchNote 章节与对比对象归属以支持跨语言证据；比较题按缺失的“章节 × 对象”结构化要求生成定向补研任务，其他显式范围补研仍绑定标题一致的维度问题；CoverageMatrix 持久化 claim、独立来源和强来源的当前值与要求值，使 ProgressGuard 不会把弱材料堆积误判为进展。[PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
+agents/HypothesisAgent.ts: hypothesis/VOI/convergence 的确定性 agents，生成假设、测试、绑定和收敛判断；高 VOI 测试由对应已完成 task 产出的结构化 claim/span 或直接证据绑定逐项关闭，避免“任务已执行且有证据但测试永远未处理”的假未收敛；只受异常来源总量保护，不按固定研究轮次截断。[PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
 agents/PlanAgent.ts: BasicPlanAgent，根据 ResearchFrame 生成结构化研究计划。[PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
-agents/ResearchTaskWorker.ts: WorkerResult 校验边界，阻止 worker 直接输出最终报告 prose。[PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
-agents/ScopeAgent.ts: model/deterministic scope agent，确认需求、核心问题和简报 readiness。[PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
-agents/SupervisorAgent.ts: BasicResearchSupervisor，按 preset、复杂度和 ResearchFrame 拆分并行任务。[PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
-agents/SynthesisWriter.ts: 单一报告合成入口，把结构化 notes/claims/evidence 写成 Markdown draft。[PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
-agents/types.ts: agents 与 runtime 之间的输入输出接口边界。[PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
-core/events.ts: ResearchEvent union 与事件 payload 类型。[PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
+agents/BasicSynthesisSupport.ts: quick/debug 专用模板辅助，仅为 BasicSynthesisWriter 整理诊断草稿，不进入 standard/deep 报告。[PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
+agents/ReportArchitect.ts: 研究主编节点，跟随 run 当前模型/Provider，以无思考 JSON 模式只返回报告类型和章节 claim 归属；硬范围代表 claim 优先，其他材料只在补充新分面或同等相关的独立来源时进入最小充分证据集，不再固定凑四条；比较材料先投影到用户明确对象，标签式第三对象段落不进入蓝图结论或 Writer 上下文；按 canonical 文档计算来源多样性并保留必要校准/反证，standard/deep 仅在同一错误重复时判定死循环并 fail closed。[PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
+agents/ResearchEditor.ts: 责任编辑节点，分章首稿进入当前用户模型的一次全局编辑，并重新执行 Writer 章节/收尾发布合同；摘要按繁简归一近义去重，主要发现跨章节删除重复证据句，成品清理正文裸 URL、抽取污染、残句、同一列表重复项和未使用来源定义；编辑清洗后逐章恢复蓝图硬范围代表 claim 与穷尽缺证边界，context-only claim 只可进入授权位置，不合格编辑回退到已验证 Writer 草稿。[PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
+agents/SectionSynthesisWriter.ts: standard/deep 分章作者与最终安全清理器；比较报告只接收投影到用户明确对象的 claim/span，第三对象不能作为等价替身；按章节蓝图交付硬范围 claim、独立事实、综合判断和证据边界，结构化 facts 逐 claim 做忠实、数字、语言和来源身份校验；外文缺失 fact 的严格 JSON 数组补译无进展时切换纯文本单句翻译、再由程序包装并校验同币种金额数学等价，修复仅补缺失 fact 或 relation/answer/boundary，并以累计 claim 和清洗后结构识别死循环；“强/弱”等正式分类名不作无依据优劣判断，facts“已说明/未涉及”边界转成读者语言；最终清洗丢失综合句时从不同章节已验证 claim 确定性恢复。[PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
+agents/ResearchTaskWorker.ts: WorkerResult 校验边界，先局部剔除导航面包屑、未闭合片段等通用抽取损坏，以及 evidence span 不支持的数字、实现状态、匿名主体归属、绝对化结论及其失效 note/span/source，再阻止 worker 输出最终报告 prose 或悬空引用；若候选 claim 全部失效则转换为显式 unresolved 进入 Gap 修复，不因单条模型抽取瑕疵杀掉整次 run；worker 可声明来源发现阶段的建议并发度。[PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
+agents/ScopeAgent.ts: model/deterministic scope agent，使用创建 run 时由 UI 传入的当前模型/Provider，确认需求、核心问题和简报 readiness；把 runtime 当前日期传给模型以解析相对时间，澄清充分度按主题锚点/核心问题/用途/边界结构判断而不枚举研究领域，当前全部必答问题有回答或只剩可选题时确定性收敛；Scope 输出只能转述用户已明确提出的对象、关系、比较、场景与边界，不得创造新的因果、权衡、适用性或最佳策略义务。[PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
+agents/SourceStrategist.ts: 来源策略子代理，跟随 run 当前模型/Provider，只读取 task 实际拥有的 reportQuestionIds 和定向 comparisonTargets，动态生成最多三条查询、可精确复制 Frame 对比对象的 comparisonTarget 查询所有权、跨语言主体别名、逐分面可观察证据标记组和正文身份核验标准；初次多对象比较按 Frame 顺序寻找各对象材料，缺边补研只寻找 task 指定对象，模型漏填所有权时按有效对象顺序补齐，自创对象会被删除；不执行搜索、不维护题材、机构或域名词典。[PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
+agents/SupervisorAgent.ts: BasicResearchSupervisor，在异常安全上限内为每个 ReportContract 必答章节分配独立 subagent，并分离 reportSectionIds 结构身份与 reportQuestionIds 证据所有权；maxWorkers 只控制并发，后续补研由证据进展决定。[PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
+agents/SynthesisWriter.ts: 报告作者节点，standard/deep 不论必填章节数量都委托 SectionSynthesisWriter 分章生成并校验 claim 章节归属，避免少章节绕过论证深度门；Basic writer 仅允许 quick diagnostic 草稿。[PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
+agents/SynthesisDraftNumberSafety.ts: Writer 数字安全层，按句核对 claim/structured-claim 引用支持并排除机器占位符内部编号，用户问题和同行其他句子的引用不能替正向事实数字背书；用户明确声明的数量范围只有原样出现在“无法量化/未覆盖”的证据不足边界句时才能保留，成品中英译写允许同币种金额数学等价表达，其他无证据数字句或表格行会被拒绝或局部删除，不再因一个坏数字杀掉整份已可修复报告。[PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
+agents/SynthesisWriterSupport.ts: Writer/Editor 共享纯文本策略，负责蓝图约束 prompt、按实际交付独立事实数增长的分章深度检查、正文裸 URL/模型自建来源定义拒绝、公文编号/页码/条款定位前缀清理、证据裁剪、基于实际 claim/span 来源拓扑生成具体局限、过期搜索/内部抽取及“未覆盖分面”脚手架限制隔离、中文正文归一和引用/数字/术语/建议校验；机器占位符允许内部绑定 id，普通正文禁止泄露；分章 Writer 可把局部深度判定移交 QualityVerifier，但其他安全门不可关闭。[PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
+agents/types.ts: agents、runtime 与 WritableGate 之间的接口边界，包含任务当前时间、CoverageContract、ReportArchitect/Writer/ResearchEditor 契约、结构化 sectionIds/rewriteClosing 修订目标及分章首稿标记；revision 的 maxAttempts 仅为旧调用兼容字段，运行时不再下发。[PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
+core/abort.ts: 运行级 AbortSignal 传播和父子 controller 连接工具，让取消与总超时穿透搜索、抓取和模型阶段。[PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
+core/chinese-script.ts: 基于 OpenCC 的领域中立繁体到简体匹配归一层，只用于检索、主体复核和证据归属，不改写证据原文或报告引用。[PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
+core/comparison.ts: 用户原题/澄清中的通用中英文命名实体对和标签式/枚举式显式对手列表解析与别名归一化，支持混合文字后缀对比和忽略书写空格/标点的对象匹配；多对象标签式来源可确定性投影到用户明确对象，删除第三对象及其后续段落而不维护领域名单；排除受众角色、技术指令、抽象维度、应用场景和工作流指令。[PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
+core/coverage.ts: 从用户原始题目中提取命名范围项、逐个必答章节与对比对象的乘积要求、普通章节、显式维度、时间窗口和预测期；存在 ResearchNote 时只统计当前问题 supports/contradicts 的 answering claims，context 不能因检索标签或来源标题冒充覆盖；对比对象读取经复核的 note 元数据，跨书写体系还可读取模型已验证 assignment 中的对象映射，禁止兄弟章节证据补入；note 缺失对象元数据时，只有来源标题在本章全部对比对象中唯一命中一项才补足对象归属，不能用多对象标题把同一 claim 同时算给多边；统一函数从每章可写 claims 为每个已覆盖硬范围选择代表 claim，供 WritableGate、主编和旧蓝图失效判断共用；单个覆盖要求补研穷尽后生成统一的诚实非答案边界。[PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
+core/events.ts: ResearchEvent union 与事件 payload 类型，包含任务失败、失败后证据复用重试、模型 usage 和网页搜索/抓取审计事件。[PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
 core/hash.ts: research 模块 hash 工具，用于 brief、证据、artifact 稳定标识。[PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
-core/presets.ts: quick/standard/deep preset 与 reasoning stage 映射。[PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
+core/presets.ts: quick/standard/deep preset、reasoning stage 映射和异常安全上限；standard/deep 默认允许 16 个独立章节 subagent，旧 maxRounds/maxResearchRounds/maxSynthesisRetries 会被丢弃且不持久化，来源 100、调用 128、token 400 万和 4 小时只作极端失控保护。[PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
+core/question-contract.ts: 领域中立问题契约层，从章节标题或明确问题推断 fact/comparison/cause/trend/risk/recommendation/evaluation 答案类型，把证据判为 supports/contradicts/context；时间窗与指标焦点阻止错位证据，复合问题可由任一合法分面直证回答；开放式风险接收具体不利关系、显式风险清单、明确风险加后果或绑定损失/故障/下降等真实不利结果的量化观测，并阻止否定词跨分号误吞后续风险，但纯风险标签加制度数字、配置建议、治理方法和泛风险沟通不能满足“有哪些风险”；模型自认只是案例或单一样本且用户未要求案例时降级为 context，分配指纹用于使新直接证据失效旧蓝图，不维护题材词表。[PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
+core/scope-metadata.ts: Scope 文本元数据分类器，识别用途/受众/格式和“尚未明确”的维度、时间、来源、输出占位语句，防止生成伪必写章节。[PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
+core/scope-list.ts: 领域无关范围列表解析器，只在中英文括号外按顶层标点和显式连接词拆分研究维度，避免括号内子项被误建为独立章节。[PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
+core/report-argument.ts: Section Writer、ResearchEditor、QualityVerifier 与 Judge 共用章节发布合同，统一统计字符、完整句、段落、独立综合、事实对比和证据边界，并按实际必须交付的独立事实数计算 standard/deep 最小章节深度；120 字短摘要和 90 字单证据模板不再默认通过，terse 只允许显式诊断路径；conditional_application 必须使用全部已筛选 context claims，事实中的条件句或对比句不能冒充综合，模板和注水不能冒充第二事实。[PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
+core/report-closing.ts: Writer、Editor 与 QualityVerifier 共用的清洗后收尾发布合同，统一检查 standard/deep 结论至少三句/80 字且含具体证据边界、局限至少两条，参考文献定义不能冒充局限句；缺边界时退回 Writer 继续修复，不再注入固定用户可见模板，并修复“综合来看，但是/相反”式无前置转折。[PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
 core/state-machine.ts: ResearchRun 状态转换 reducer 与启动条件校验。[PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
-core/types.ts: ResearchRun、ResearchFrame、ResearchBudget、ledger、verdict 等核心类型中心。[PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
-core/validation.ts: scope、brief、frame、plan 的确定性 schema 防线。[PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
-evidence/CitationResolver.ts: citation placeholder 解析器，生成可点击上标引用和 CitationBinding。[PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
-evidence/EvidenceEligibility.ts: 证据准入门，统一判断 fallback/model/抽取失败片段是否可用于 coverage 和 citation。[PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
-evidence/EvidenceStore.ts: 来源、span、claim、note、citation 的内存索引和 JSONL 落盘。[PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
-evidence/types.ts: SourceRecord、EvidenceSpan、AtomicClaim、ResearchNote、CitationBinding 类型。[PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
+core/token-estimate.ts: 模型请求 token 预估器，在 provider 未返回 usage 前为运行级预算预留额度。[PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
+core/types.ts: ResearchRun、ResearchFrame、默认容纳 16 个独立章节 subagent 的 ResearchBudget、带指标焦点/时间窗的 QuestionContract/EvidenceAssignment、含 reportSectionIds/reportQuestionIds/comparisonTargets 的 ResearchTask、记录显式范围项普通/强来源门槛及 exhaustedQuestionIds 的 GapVerdict、支持 excludedClaimIds、coverageClaimIds、direct/conditional_application/evidence_gap 模式和证据分配指纹的 ReportBlueprint、SectionEvidenceMap、按阶段查询剩余调用/token、运行级 deadline、terminalReason、累计 usage 与 WebAudit 等核心类型中心。[PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
+core/validation.ts: scope、brief、frame、plan 的确定性 schema 防线；校验 reportQuestionIds 必须属于 task.questionIds，计划预算只统计待执行任务，已完成任务由 runtime 实际来源总量核算。[PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
+evidence/CitationResolver.ts: citation placeholder 解析器，统一解析 claim、structured-claim 和 evidence，先删除模型自带的未绑定数字引用和伪定义，再把同句相邻 claims 聚合为一个 occurrence 及完整 claim/span 证据包，避免 Writer 安全修复生成的结构化综合句在最终引用阶段失去绑定；同时统一为“句末标点在前、数字引用在后”的标准 Markdown 引用和定义，来源标题误为 URL 时生成域名加文件名的人类可读标题，并在引用后正文粘连时恢复段落边界；同一 canonical 来源及语言版本复用 displayId。[PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
+evidence/CitationProximity.ts: 句子级引用邻接与成品结构纯函数，分别在占位符和 Markdown 数字引用阶段清理无引用外部事实，并删除只剩标点和引用的空句；保留程序生成且正文仍使用的来源定义，清除正文裸 URL/模型链接和去重后未使用定义；识别页眉、目录、导航、残缺混合语言与跨核心章节近义证据句；综合、效果、适用性和建议继续按语言关系验收，不依赖题材词表；统一识别诚实 evidence-gap 边界。[PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
+evidence/ClaimSupport.ts: 领域中立 claim 忠实校验，识别紧贴中英文的明确数字、数量词、百分比、英文 `a year/month/...` 与中文“一年/月/……”和英文月份到中文数字月份，并统一 percentage points/points 与中文“个百分点”、times 与中文“倍/x”的等价翻译；证据入库仍要求数字原样，只有成品翻译接口允许同币种金额数学等价表达；“几十年/数十年”等不定数量不伪装成精确 token，用户数量范围只有在明确证据不足边界句中才能豁免，不内置业务计算公式，排除 claim/structured-claim/evidence 机器占位符内部编号，并阻止证据未支持的匿名主体归属、实现状态、适用性/建议、绝对化结论及从支持原文单词中间截断的 claim 进入账本、蓝图或正文。[PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
+evidence/EvidenceEligibility.ts: 领域中立证据准入门，匹配层统一繁简体但保留证据原文，拦截 synthetic/fallback/search summary、标题或文章写作意图、平台免责声明、日期编号索引串、原始 XML 标签、半截枚举、PDF/表格/导航/残句和抽取乱码；动态章节焦点由用户标题与上下文派生 all-of 分面；强网页只认 `web_strong + fetched + high reliability + citable span`。[PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
+evidence/EvidenceStore.ts: 来源、span、claim、note、citation 的内存索引、恢复 hydrate 和 JSONL 落盘；hydrate/canonicalize/add 三条路径先用 normalizedText 把截在中英文连接词后的原子论断补到下一个句界，再拒绝不忠实 claim；按 canonical source + 原文归一重复 span，并按规范化文本与支持 span 折叠重复 claim 后重映射 note。[PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
+evidence/types.ts: SourceRecord、EvidenceSpan、AtomicClaim、可持久化问题证据角色与已校验对比对象归属的 ResearchNote、带独立机器 id、来源级 displayIds 和句子级 claimIds 证据包的 CitationBinding 类型。[PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
 index.ts: research 模块统一导出入口。[PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
 markdown/BriefRenderer.ts: brief.md 渲染器。[PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
 markdown/Frontmatter.ts: Markdown frontmatter 工具。[PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
 markdown/NotesRenderer.ts: notes.md 渲染器。[PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
-markdown/PlanRenderer.ts: plan.md 渲染器。[PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
-markdown/ReportRenderer.ts: 用户可见最终 report Markdown 包装器。[PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
+markdown/PlanRenderer.ts: plan.md 渲染器，展示 subagent 对应的报告章节、问题、来源预算和任务状态。[PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
+markdown/ReportRenderer.ts: 用户可见最终 report Markdown 包装器，将历史 HTML 引用迁移为 Markdown 引用，以全部主要发现中全局按综合质量排序且近义去重的带引用核心判断生成摘要，避免章节顺序让前几章事实挤掉后续综合；方法段清理原题中的输出指令与尾部残留标点，成品归一 PDF 抽取造成的行内中文断裂空格但保留 Markdown 换行；删除整稿回声、内部 Frame 问句和过程话术。[PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
 markdown/SourcesRenderer.ts: sources.md 渲染器。[PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
 markdown/labels.ts: research Markdown 展示标签工具。[PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
-runtime/DeepSeekWebSearchProvider.ts: DeepSeek Web Search provider 适配器。[PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
-runtime/DefaultResearchTaskWorker.ts: deterministic fake/local worker，用于 P0 和测试兜底。[PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
+runtime/DeepSeekWebSearchProvider.ts: DeepSeek Web Search 模型联网末级兜底适配器，仅为主材料发现使用当前 DeepSeek 凭据，预留足够响应空间完成最多三轮检索并在最后一轮用原始机构官网 site 查询核验、按高水位预留 token、复用同查询结果、补齐成本估算并约束缓存命中率不超过 100%；不依赖 Tavily Key。[PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
+runtime/CascadingWebSearchProvider.ts: 搜索容错组合器，按配置顺序和单 Provider 时间片合并过滤后的结果，避免首个失效免费引擎耗尽整次查询；普通查询只在前序无可用结果时启用 fallbackOnly provider，显式授权的主材料查询会合并一次补充结果，运行实例缓存整条查询供后续 subagent 复用。[PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
+runtime/BingRssWebSearchProvider.ts: Bing RSS 无 Key 搜索适配器，通过地区化 RSS 查询、结构化 item 解析、串行限速和同查询缓存，为开源部署提供默认免费网页候选入口。[PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
+runtime/BraveWebSearchProvider.ts: Brave Search HTML 无 Key搜索适配器，使用 parse5 结构化提取真实网页结果，并通过同查询缓存和全局串行限速避免并行 subagent 触发 429，作为默认第一免费入口。[PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
+runtime/DefaultResearchTaskWorker.ts: deterministic synthetic diagnostic worker，用于 P0/dev/quick 链路，不产生关键可引用证据。[PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
+runtime/GenericWebSearchProvider.ts: DuckDuckGo HTML 无 Key 搜索适配器，在 Tavily 未配置时作为默认免费搜索；共享实例通过浏览器请求标识、串行限速、同查询缓存和单次空响应延迟重试避免并行 subagent 触发公共搜索风控。[PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
+runtime/YahooWebSearchProvider.ts: Yahoo HTML 无 Key 搜索适配器，默认使用 HTTP/2 避免 Yahoo 对 HTTP/1.1 返回空页/500，结构化解析算法结果卡并解开目标页重定向。[PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
+runtime/SearxngWebSearchProvider.ts: 自建 SearXNG JSON 搜索适配器，通过 SEARXNG_BASE_URL 启用，为开源部署提供稳定可控的首选入口。[PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
 runtime/ModelResearchTaskWorker.ts: 模型资料卡 worker，用于无外部来源时的非强证据 fallback。[PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
-runtime/ResearchRuntime.ts: DeepResearch 编排核心，控制 scope/brief/research/gap/synthesis/citation/verification/落盘。[PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
-runtime/ResearchRuntimeService.ts: HTTP 服务门面，负责 create/answer/confirm/approve/cancel 和 Frame 映射。[PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
-runtime/SeededWebResearchTaskWorker.ts: 搜索/抓取/抽取增强 worker，生成 web evidence 和 fallback records。[PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
-storage/ResearchRunRepository.ts: research run artifact 目录、JSONL 和 Markdown 落盘仓库。[PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
-verification/QualityJudge.ts: LLM/heuristic Judge，评估报告需求匹配、frame 遵循和证据质量。[PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
-verification/QualityVerifier.ts: 本地确定性质量门，校验引用、coverage、报告结构和 fallback 证据。[PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
+runtime/ResearchPreflightGate.ts: Plan 前的轻量启动门，执行 Frame sanity、能力检查和通用 Frame 修复，同时生成完整保留用户显式维度的 Report/CoverageContract；只有与 centralQuestion 一致的 core question 才能作为中央问题，只有一个细分必答问题时将真正中央问题一并绑定到该章节；用途/受众及“尚未明确”的来源/输出等元数据不能成为核心问题或维度。[PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
+runtime/ResearchProgressGuard.ts: 研究收敛保护层，只比较未满足问题、显式范围项、对比对象和反证门槛上的合格证据增量；已满足普通数量门后继续堆弱来源不算进展，重复子任务按 questionIds/显式范围项独立判断，其他章节的进展不能续命；无增量任务会被单独移除并记录 exhaustedQuestionIds，全部任务相邻重复或两三轮交替回到已执行意图时才标记检索死循环，不按固定轮次退出。[PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
+runtime/ResearchRunIndex.ts: runId 到已批准 Workspace 根目录的持久化索引；realpath 精确授权阻止路径/符号链接逃逸，串行原子快照避免并发创建丢映射，并提供近期中断恢复判定。[PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
+runtime/ResearchRuntime.ts: DeepResearch 顶层编排核心，持久化 UI 当前模型/Provider、运行总 deadline、终态原因、累计成本与单次尝试预算起点，控制 scope/brief、章节研究、hypothesis/VOI；失败或取消后保留已完成证据并刷新尝试额度，但删除未完成的 Gap/验证派生队列后重算，禁止回放旧补研；从报告蓝图和 Gap exhaustedQuestionIds 恢复已穷尽问题后重算 WritableGate，检索死循环状态不再启动额外 VOI 补研；若新直证已满足问题，门禁仍优先恢复 direct；其余流程覆盖进展驱动 gap、evidence_gap 受限交付、编辑流水线和最终落盘。[PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
+runtime/ResearchRuntimeExecution.ts: 运行执行控制层，把 run 模型/Provider、当前时间和既有来源 URL 传给研究节点，按持久化 deadline 使用剩余总超时，负责取消、共享 AbortSignal、模型预留与记账；成本永久累计用于展示，模型调用和 token 的极端安全额度只计算显式重试后的本次尝试；搜索/抽取与 Writer/Editor/Judge 使用分离的完成额度，研究阶段不能吃掉最终报告所需调用；证据入账前先隔离不忠实 claim，同时继续对越权报告字段、来源策略违规、悬空引用和 note 越过 reportQuestionIds 执行 fail closed。[PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
+runtime/ResearchRuntimePolicy.ts: Runtime 无状态策略层，负责无固定轮次的 gap/VOI/验证补研、完全无真实证据时的基础前置阻断和 Judge 失败分类；Judge 明确点出缺数据、指标、对比或足以回答问题的证据时退回补研，而且任何非评分的结构化具体缺证项都优先于同轮出现的重复、断句等写作问题，不依赖 Judge 把它归到 evidence、coverage 还是 scope；补研章节映射会去除标题中的数量时间窗和“主要/关键”等范围修饰词，使“成本变化章节”仍能定位“过去五年成本变化”，而不是回退到任意核心问题；重复表述、断句残句、已有事实缺综合、没有具体证据缺口的 incomplete_synthesis、unsupported technical expansion 和写作质量问题才定向重写，不能把可删除或可改写的问题伪装成搜索任务；补研按当前 subagent 并发覆盖所有被点名章节，把“缺少/未提供”的失败诊断转换为只描述目标事实的正向证据要求，禁止旧失败概念污染下一轮 PDF 聚焦；全局低密度反馈覆盖 ReportContract 全部必答章节而非宽泛中央问题；Gap 只负责继续检索与识别死循环，停止检索后由 WritableGate 统一判断直接写作、条件化写作或阻断，避免同一缺口被两套门重复判死。[PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
+runtime/ResearchRuntimeRecovery.ts: 重启恢复协调器，加载持久化 run、重置中断任务，无待执行任务时重新评估 Gap 并应用与主循环一致的 ProgressGuard，重试不得绕过死循环判定。[PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
+runtime/ResearchRuntimeTypes.ts: ResearchRuntime 公开创建/确认/批准、依赖注入和完成结果类型契约。[PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
+runtime/ResearchSourcePolicy.ts: 从用户“只使用/仅基于”等明确约束及用户实际写出的域名、具体 URL 或“甲和乙官方资料”发布方名称派生白名单/偏好，并在搜索、跳转、抓取和证据入账阶段执行同一策略；发布方按候选标题品牌段、publisher 和 host 动态核验，不维护机构别名到域名的题材表，单一域名任务只收敛目标来源数量，不把全局来源数作为写作硬门。[PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
+runtime/ResearchWritableGate.ts: 写作前闸门，淘汰 fallback/synthetic/不可引用 claim；claim 已有显式问题分配时，未分配到当前问题就只能作 context，不能再靠关键词跨章混入；章节维度缺口由 SectionEvidenceMap 分面覆盖处理，不重复注入整章无结论边界；deep direct 至少两条独立可回答 claim，standard 部分分面弱交付但保留已有事实，补研穷尽时才允许对象范围 evidence_gap。[PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
+runtime/ResearchRuntimeService.ts: HTTP 服务门面，负责 create/list/get/answer/confirm/approve/cancel/retry；把 UI 模型/Provider 固定到全生命周期；失败或取消后沿用证据重跑；范围解析把标签列表、句首或逗号后裸“比较/对比”列表、“总体方面，包括子项”列表和实际影响对象完整映射为报告维度，不静默截断，并把比较列表中的“相互关系”留给跨章综合、把“分别分析”后的对象交给场景解析器；澄清无固定轮次，只拒绝完全重复回答。[PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
+runtime/ResearchScopeInteraction.ts: scope 交互纯函数，负责包含 workspace/final report/failed draft 路径的运行响应、只从用户澄清原话提炼的简洁标题、回答要求归一、澄清后主题、追问识别和 brief id，不参与模型调用或状态流转，也不把模型 scope 摘要提升为需求真值。[PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
+runtime/ResearchSynthesisPipeline.ts: 报告编辑流水线，执行主编、分章作者、编辑、引用、本地校验和 Judge；重试只复用仍与当前章节来源/上下文/问题证据角色指纹及硬范围 coverageClaim 集合一致且已选 claim 全部有效的蓝图，新直接回答证据或新覆盖代表会强制重建蓝图，避免旧错误选材长期存活；Editor 输出在引用解析前重走 Writer 事实安全链，若润色新增无依据关系或破坏收尾结构则保留已验证 Writer 原稿，引用解析后再执行成品级悬空句清理与章内去重；抽取页眉 claim 与 Judge 明确点名的章节无关 claim 会在保留至少两条本章证据的前提下移出蓝图；结论或局限性缺口只重写收尾，避免无关章节整篇返工；先分类失败再检查质量死循环，补研状态按目标问题及 SectionEvidenceMap 指纹去重；补研无新增可回答事实时生成 evidence_gap 章节，只有 Judge 的需求匹配、核心回答、Frame、引用忠实度和写作均已达线且只剩明确 missing/insufficient 证据问题时才能降为可审计警告，scope/no-core-answer、低分、写作、引用和扩写问题继续阻塞。[PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
+runtime/ResearchVerificationRepair.ts: WritableGate/Judge 证据失败后的进展驱动补证协调器；先继承 Gap exhaustedQuestionIds、unanswerable 未覆盖问题和蓝图 evidence_gap，禁止写作校验重启已穷尽检索；只把未穷尽目标新增的规范化可回答事实、更高来源等级或第二个独立复核视为进展，相同事实换 URL、claim id 或 Judge 措辞不算进展；无语义进展时返回新穷尽 questionIds 并受限交付，不按空轮次数退出。[PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
+runtime/ResearchPdfText.ts: pdfjs Node 文本适配器，加载随包 CMap/字体资源，扫描整份 PDF 并按繁简体一致的当前任务正向信号词选择相关页；只固定保留文档首页，其余字符预算优先留给真正命中焦点的页面，不参与题材或来源评级判断。[PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
+runtime/ResearchSourceAuthority.ts: 通用来源身份校验边界；模型提出 primary/authoritative 语义角色，程序仅在身份原句能从抓取正文逐字回查且不是标题/搜索摘要时采纳；HTML 还必须以发布/维护/主办/版权关系绑定当前站点品牌；PDF 主材料候选只有在站点品牌与正文全称或动态首字母缩写一致且文档具有通用正式发布特征时才升级为一手来源；不维护机构、域名或题材名单。[PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
+runtime/ResearchWebContent.ts: 网页内容安全适配层，逐跳执行来源策略和完整 IPv4/IPv6 私网判定，DNS 解析后固定目标 IP 并保留 Host/SNI 以阻断重绑定；候选按有界并发抓取，HTML 页面可发现一跳直接 PDF 文档候选，HTML/JSON 限长读取，PDF 使用独立长超时完整下载后按研究焦点提取，禁止二进制进入证据文本；WebExtractionCard 支持逐问题证据角色和对比对象建议，主材料候选标签本身不能升级强来源，只有来源策略确认或正文身份回查通过后才能标记高可信。[PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
+runtime/ResearchWebEvidenceText.ts: 网页证据文本纯函数，负责只接受连续原文或空格、标点、繁简体归一后等价文本的 grounding、数字不增补、原文起始边界和 reportQuestionIds 章节问题归属；除非用户明确询问，纯定义、目录、索引和地址类文档元数据不能冒充研究发现；跨书写体系动态标记只对单一章节任务生效，多章节任务不得用任一命中替模型 questionId 背书；来源标题已验证或动态别名也不能绕过偶然焦点提及和主句主体冲突。[PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
+runtime/ResearchWebFallbackText.ts: 网页原文兜底文本纯函数，按用户问题动态拆解成对概念分面，保留 HTML block 换行后分句并清除残留块标签，使用对齐词句边界的动态聚焦窗口与完整词裁剪；裁剪结果若悬空在连接词后，会从同一原文补到下一个句界；重复选句在入账前折叠并保留句界，导航噪声只在独立 UI token 边界清理，禁止破坏正文词；在繁简归一前拒绝 PDF 兼容字形乱码，并按通用句界、期间、单位和数字密度拦截公告页头、免责声明、表格残片及高密度数字截断，避免脏标签和半句 claim 入账，不维护题材噪声词表。[PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
+runtime/ResearchWebQueryText.ts: 领域查询文本纯函数，匹配层统一繁简体，从“基于资料，全面分析主体的若干方面”等长题中提取研究动作后的属格主体，并去除“分析/报告”等写作意图尾缀，按正文复核研究主体和短分面查询；若主句明确讨论另一对象、目标主体仅出现在冒号后的因素列表中则标记主体冲突；识别主体附带对比对象与直接对象对比，不执行联网搜索、不推断文档种类。[PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
+runtime/ResearchWebSearchPolicy.ts: 领域中立搜索执行策略；用户严格指定具体 URL 时只直抓这些 URL；其余任务执行 SourceStrategist 三条定向查询，再补主材料恢复查询和简短 fallback；逐对象查询从分面中去除全部对比对象重复词，把已校验 comparisonTarget 所有权写入搜索 seed，缺边补研只搜索 task 指定对象并跳过宽泛题目、旧 search hints 和主材料恢复查询，跨语言来源无需题材别名也能保留对象身份；最终强来源仍由抓取正文确认，不维护题材、公司、交易所或权威域名特例。[PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
+runtime/ResearchWebTypes.ts: 搜索候选 SeedSource 等网页研究内部类型，避免策略、抓取和 worker 之间循环依赖。[PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
+runtime/SeededWebResearchTaskWorker.ts: 领域无关联网证据采集编排，跟随 run 当前模型/Provider；SourceStrategist 动态规划查询和对比对象所有权；单对象补研保留由定向查询明确归属且仍命中章节焦点的跨书写体系来源，点名发布方时搜索候选与最终抓取页面都必须匹配，跳转越界只隔离单个来源，正式 PDF 在模型抽取前先做确定性身份升级；结构化抽取和补录仍要求 questionId、原文 grounding 与对比对象复核，不能借归属标签映射到兄弟对象。[PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
+runtime/TavilyWebSearchProvider.ts: Tavily Search basic 适配器；配置 TAVILY_API_KEY 时作为 DeepResearch 首选低成本搜索。[PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
+storage/ResearchRunRepository.ts: research run artifact 目录、JSONL ledger/事件回放恢复和 Markdown 原子落盘仓库；恢复状态以最后一个终态或失败/取消后的重试事件为准。[PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
+verification/QualityJudge.ts: LLM/heuristic Judge，跟随 run 当前模型/Provider；单次调用提供语义评分和可定位问题，不因服务不可用或单独的中等主观分歧覆盖本地确定性质量门；带 occurrence/claim/原句/证据摘录的错引、重复、乱码、残句、裸链接、破损结构，以及需求匹配、核心回答或总分低于 0.4 的灾难性失败可阻止发布；本地深度提醒与 Judge 同时确认同一必答章节过薄时也必须返工，不能把临界分数抬到通过线。[PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
+verification/ReportPublicationSafety.ts: 最终 Markdown 的低成本发布格式安全门；复用 CitationProximity 的跨章近义句算法，只检查主要发现中的跨章 claim/段落重复、乱码、空引用句、内部标记泄漏和代码块、标题、引用 HTML 破损，不评价篇幅和文风。[PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
+verification/QualityVerifier.ts: 本地确定性质量门；引用、证据准入、数字、用户硬范围、必要章节、裸 URL、乱码、残句和跨章重复硬阻塞；成品跨语言译写允许同币种金额数学等价，但证据 claim 入库不放宽；没有独立 ReportContract 章节的中央问题由全部必答章节综合回答，不再要求复制一份中央问题研究笔记；deep 深度硬阻塞，standard 深度提醒。[PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
 
 法则: 成员完整·一行一文件·父级链接·技术词前置

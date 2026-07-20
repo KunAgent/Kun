@@ -1,4 +1,10 @@
-import type { ResearchConfidence, ResearchSourceType } from '../core/types.js'
+/**
+ * [INPUT]: 依赖 core/types 的来源类型、置信度和运行契约
+ * [OUTPUT]: 对外提供 SourceRecord、EvidenceSpan、AtomicClaim、带问题证据角色及已校验对比对象归属的 ResearchNote、CitationBinding 与 ledger 类型
+ * [POS]: research/evidence 的数据契约中心，被 worker、store、writer、citation 和 verifier 共享
+ * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
+ */
+import type { ResearchConfidence, ResearchEvidenceAssignment, ResearchSourceType } from '../core/types.js'
 
 export type SourceReliability = 'high' | 'medium' | 'low' | 'unknown'
 export type SourceStatus = 'fetched' | 'failed' | 'blocked' | 'stale'
@@ -69,14 +75,19 @@ export type ResearchNote = {
   confidence: ResearchConfidence
   limitations: string[]
   conflictsWithNoteIds?: string[]
+  evidenceAssignments?: ResearchEvidenceAssignment[]
+  comparisonTargets?: string[]
 }
 
 export type CitationBinding = {
   id: string
+  displayId?: string
+  displayIds?: string[]
   reportPath: string
   reportAnchor: string
   reportClaimText: string
   claimId?: string
+  claimIds?: string[]
   evidenceSpanIds: string[]
   status: 'verified' | 'weak' | 'unsupported' | 'contradicted'
   verifiedAt?: string

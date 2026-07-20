@@ -1,7 +1,7 @@
 /**
  * [INPUT]: 依赖 agents/types 的假设、测试、绑定、评估和收敛接口，依赖 core/types 的 ResearchTask/VOI 类型
- * [OUTPUT]: 对外提供 BasicHypothesisProposer、BasicTestDesigner、BasicEvidenceBinder、BasicHypothesisAssessor、BasicConvergenceAnalyzer 和 VOI 任务筛选函数
- * [POS]: research/agents 的判断收敛节点，把 DeepResearch 从 coverage 补资料升级为 hypothesis-driven / VOI-driven research loop
+ * [OUTPUT]: 对外提供 BasicHypothesisProposer、BasicTestDesigner、BasicEvidenceBinder、BasicHypothesisAssessor、把已完成定向任务的结构化证据视为测试已处理的 BasicConvergenceAnalyzer，以及受异常来源上限约束的 VOI 任务筛选函数
+ * [POS]: research/agents 的判断收敛节点，把 DeepResearch 从 coverage 补资料升级为不受固定研究轮次截断的 hypothesis-driven / VOI-driven research loop，并避免因证据未绑定到备择假设而制造假未收敛
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
  */
 import type {
@@ -303,11 +303,9 @@ export class BasicFrameRevisionGate implements FrameRevisionGate {
 export class BasicConvergenceAnalyzer implements ConvergenceAnalyzer {
   async analyze(input: ConvergenceAnalyzerInput): Promise<ResearchConvergenceVerdict> {
     const leading = leadingHypotheses(input.hypotheses)
-    const boundHypothesisIds = new Set(input.bindings.map((binding) => binding.hypothesisId))
     const unresolvedHighValueTests = input.tests
-      .filter((test) => test.valueOfInformation.score >= 0.55 && !boundHypothesisIds.has(test.hypothesisId))
+      .filter((test) => test.valueOfInformation.score >= 0.55 && !testHasBoundEvidence(test, input))
     const wouldFurtherResearchChangeConclusion = unresolvedHighValueTests.length > 0 &&
-      input.roundIndex < input.budget.maxResearchRounds &&
       input.sources.length < input.budget.maxSources
     const coverageReady = input.gapVerdict.status === 'sufficient'
     const readyToWrite = coverageReady && leading.length > 0 && !wouldFurtherResearchChangeConclusion
@@ -328,6 +326,26 @@ export class BasicConvergenceAnalyzer implements ConvergenceAnalyzer {
       createdAt: input.nowIso
     }
   }
+}
+
+function testHasBoundEvidence(
+  test: HypothesisTest,
+  input: ConvergenceAnalyzerInput
+): boolean {
+  const taskIds = new Set(input.plan.tasks
+    .filter((task) => task.status === 'done' && task.testIds?.includes(test.id))
+    .map((task) => task.id))
+  if (taskIds.size === 0) return false
+  const claimIds = new Set(input.notes
+    .filter((note) => taskIds.has(note.taskId))
+    .flatMap((note) => note.claimIds))
+  const spanIds = new Set(input.claims
+    .filter((claim) => claimIds.has(claim.id))
+    .flatMap((claim) => claim.supportSpanIds))
+  if (spanIds.size === 0) return false
+  return input.bindings.some((binding) =>
+    binding.hypothesisId === test.hypothesisId && spanIds.has(binding.evidenceSpanId)
+  ) || claimIds.size > 0
 }
 
 export function selectTasksByValueOfInformation(
@@ -417,7 +435,7 @@ function valueOfInformationFor(input: {
     : /原因|机制|路径|指标|数据|风险|结论|判断|决策/.test(text)
       ? 0.74
       : 0.55
-  const decisionImpact = /结论|判断|决策|建议|风险|投资|选择|选型|采用|购买|取舍|更好|是否|能否/.test(text)
+  const decisionImpact = /结论|判断|决策|建议|风险|选择|选型|采用|购买|取舍|更好|是否|能否/.test(text)
     ? 0.9
     : 0.65
   const sourceFeasibility = input.sourceTypes.includes('web')
@@ -480,7 +498,7 @@ function relationForClaim(text: string, hypothesis: ResearchHypothesis): Hypothe
 }
 
 function strengthForClaim(text: string, critical: boolean): HypothesisEvidenceBinding['strength'] {
-  if (critical && /官方|统计|财报|数据|指标|实证|同比|环比|market share|revenue|official|filing/i.test(text)) return 'strong'
+  void text
   if (critical) return 'medium'
   return 'weak'
 }
@@ -596,12 +614,16 @@ function dedupeBindings(bindings: HypothesisEvidenceBinding[]): HypothesisEviden
 }
 
 function capTaskSources(tasks: ResearchTask[], maxSources: number): ResearchTask[] {
-  let remaining = Math.max(1, maxSources)
-  return tasks.map((task) => {
-    const maxSourcesForTask = Math.max(1, Math.min(task.maxSources, remaining))
-    remaining = Math.max(0, remaining - maxSourcesForTask)
-    return { ...task, maxSources: maxSourcesForTask }
-  }).filter((task) => task.maxSources > 0)
+  let remaining = Math.max(0, maxSources)
+  const capped: ResearchTask[] = []
+  for (const task of tasks) {
+    if (remaining <= 0) break
+    const maxSourcesForTask = Math.min(task.maxSources, remaining)
+    if (maxSourcesForTask <= 0) continue
+    capped.push({ ...task, maxSources: maxSourcesForTask })
+    remaining -= maxSourcesForTask
+  }
+  return capped
 }
 
 function textOverlap(left: string, right: string): number {

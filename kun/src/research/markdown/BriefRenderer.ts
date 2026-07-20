@@ -1,3 +1,9 @@
+/**
+ * [INPUT]: 依赖 ResearchRun、ResearchBrief、ResearchFrame 和展示标签
+ * [OUTPUT]: 对外提供 renderBriefMarkdown
+ * [POS]: research/markdown 的用户确认简报渲染器，负责 brief.md 产物
+ * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
+ */
 import type { ResearchBrief, ResearchFrame, ResearchRun } from '../core/types.js'
 import { priorityLabel } from './labels.js'
 

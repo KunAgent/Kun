@@ -1,3 +1,9 @@
+/**
+ * [INPUT]: 依赖 ResearchTaskWorkerInput 的 brief、frame 和 task 信息
+ * [OUTPUT]: 对外提供 DefaultResearchTaskWorker，生成 quick diagnostic 用 synthetic 笔记和非关键 claim
+ * [POS]: research/runtime 的无外部证据诊断 worker，只用于 P0/dev/quick 链路，不产生可引用强证据
+ * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
+ */
 import type { ResearchTaskWorker, ResearchTaskWorkerInput, WorkerResult } from '../agents/types.js'
 import { hashText } from '../core/hash.js'
 import type { AtomicClaim, EvidenceSpan, ResearchNote, SourceRecord } from '../evidence/types.js'
@@ -44,7 +50,7 @@ export class DefaultResearchTaskWorker implements ResearchTaskWorker {
       claimType: 'inference',
       supportSpanIds: [span.id],
       confidence: 'medium',
-      critical: true
+      critical: false
     }
     const note: ResearchNote = {
       id: `${input.task.id}_note_1`,

@@ -1,11 +1,20 @@
+/**
+ * [INPUT]: 依赖 ModelClient、携带当前模型/Provider 的 ResearchTaskWorker 输入、预算控制和 synthetic diagnostic worker
+ * [OUTPUT]: 对外提供支持运行级模型选择的 ModelResearchTaskWorker、模型资料卡 prompt/parser 和不可引用 fallback 结果
+ * [POS]: research/runtime 的离线资料卡 worker，仅供 quick/debug；standard/deep 不把其结果当可引用证据
+ * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
+ */
 import { makeUserItem } from '../../domain/item.js'
 import type { ModelClient, ModelRequest, ModelStreamChunk } from '../../ports/model-client.js'
 import { researchReasoningForStage } from '../core/presets.js'
-import type { ResearchConfidence, ResearchSourceType } from '../core/types.js'
+import { linkResearchAbortSignal, throwIfResearchAborted } from '../core/abort.js'
+import type { ResearchConfidence, ResearchModelUsageRecord, ResearchSourceType } from '../core/types.js'
 import { hashText } from '../core/hash.js'
+import { estimateResearchRequestTokens } from '../core/token-estimate.js'
 import type { AtomicClaim, EvidenceSpan, ResearchNote, SourceRecord, SourceReliability } from '../evidence/types.js'
 import type { ConflictCandidate, ResearchTaskWorker, ResearchTaskWorkerInput, WorkerResult } from '../agents/types.js'
 import { DefaultResearchTaskWorker } from './DefaultResearchTaskWorker.js'
+import { isFatalResearchTaskError } from './ResearchRuntimePolicy.js'
 
 export const MODEL_RESEARCH_TASK_WORKER_TIMEOUT_MS = 60_000
 
@@ -55,18 +64,31 @@ export class ModelResearchTaskWorker implements ResearchTaskWorker {
   }
 
   async runTask(input: ResearchTaskWorkerInput): Promise<WorkerResult> {
+    const model = input.execution?.model?.trim() || this.options.model
+    const providerId = input.execution?.providerId?.trim()
+    throwIfResearchAborted(input.execution?.signal)
     const controller = new AbortController()
+    const unlinkAbort = linkResearchAbortSignal(input.execution?.signal, controller)
     const timeout = setTimeout(
       () => controller.abort(),
       Math.max(1, this.options.timeoutMs ?? MODEL_RESEARCH_TASK_WORKER_TIMEOUT_MS)
     )
 
+    const turnId = `research_worker_${hashText(`${input.runId}:${input.task.id}:${input.brief.topic}`).slice(0, 12)}`
+    const prompt = buildResearchWorkerPrompt(input)
+    const maxTokens = 4_500
+    const reservation = input.execution?.reserveModelCall(
+      'worker',
+      estimateResearchRequestTokens(`${MODEL_RESEARCH_TASK_WORKER_SYSTEM_PROMPT}\n${prompt}`, maxTokens)
+    )
+    const observedUsage: ResearchModelUsageRecord['usage'][] = []
+    let usageRecorded = false
     try {
-      const turnId = `research_worker_${hashText(`${input.runId}:${input.task.id}:${input.brief.topic}`).slice(0, 12)}`
       const request: ModelRequest = {
         threadId: 'research_task_worker',
         turnId,
-        model: this.options.model,
+        model,
+        ...(providerId ? { providerId } : {}),
         systemPrompt: MODEL_RESEARCH_TASK_WORKER_SYSTEM_PROMPT,
         prefix: [],
         history: [
@@ -74,20 +96,40 @@ export class ModelResearchTaskWorker implements ResearchTaskWorker {
             id: `item_${turnId}_user`,
             threadId: 'research_task_worker',
             turnId,
-            text: buildResearchWorkerPrompt(input)
+            text: prompt
           })
         ],
         tools: [],
         stream: false,
-        maxTokens: 4_500,
+        maxTokens,
         temperature: 0.2,
         responseFormat: 'json_object',
         reasoningEffort: researchReasoningForStage(input.budget.reasoningEffort, 'worker'),
         abortSignal: controller.signal
       }
-      const raw = await collectModelText(this.options.modelClient.stream(request), controller.signal)
-      return parseModelResearchResult(raw, input)
+      const collected = await collectModelText(
+        this.options.modelClient.stream(request),
+        controller.signal,
+        (usage) => observedUsage.push(usage)
+      )
+      const usageRecords = collected.usage.slice(-1).map((usage) => ({
+        stage: 'worker' as const,
+        model,
+        turnId,
+        taskId: input.task.id,
+        usage
+      }))
+      if (input.execution && reservation && usageRecords[0]) {
+        await input.execution.recordModelUsage(usageRecords[0], reservation)
+        usageRecorded = true
+      }
+      return {
+        ...parseModelResearchResult(collected.text, input),
+        ...(!input.execution && usageRecords.length > 0 ? { modelUsage: usageRecords } : {})
+      }
     } catch (error) {
+      throwIfResearchAborted(input.execution?.signal)
+      if (isFatalResearchTaskError(error)) throw error
       const fallback = await this.fallback.runTask(input)
       return {
         ...fallback,
@@ -98,6 +140,21 @@ export class ModelResearchTaskWorker implements ResearchTaskWorker {
       }
     } finally {
       clearTimeout(timeout)
+      unlinkAbort()
+      if (input.execution && reservation) {
+        const lastUsage = observedUsage.at(-1)
+        if (!usageRecorded && lastUsage) {
+          await input.execution.recordModelUsage({
+            stage: 'worker',
+            model,
+            turnId,
+            taskId: input.task.id,
+            usage: lastUsage
+          }, reservation)
+          usageRecorded = true
+        }
+        await input.execution.finishModelCall(reservation, { chargeEstimateOnMissing: !usageRecorded })
+      }
     }
   }
 }
@@ -281,16 +338,22 @@ export function parseModelResearchResult(raw: string, input: ResearchTaskWorkerI
 
 async function collectModelText(
   stream: AsyncIterable<ModelStreamChunk>,
-  signal: AbortSignal
-): Promise<string> {
+  signal: AbortSignal,
+  onUsage?: (usage: ResearchModelUsageRecord['usage']) => void
+): Promise<{ text: string; usage: ResearchModelUsageRecord['usage'][] }> {
   let text = ''
+  const usage: ResearchModelUsageRecord['usage'][] = []
   for await (const chunk of stream) {
     if (signal.aborted) throw new Error('research worker timed out')
     if (chunk.kind === 'assistant_text_delta') text += chunk.text
+    if (chunk.kind === 'usage') {
+      usage.push(chunk.usage)
+      onUsage?.(chunk.usage)
+    }
     if (chunk.kind === 'error') throw new Error(chunk.message)
   }
   if (!text.trim()) throw new Error('research worker returned empty text')
-  return text
+  return { text, usage }
 }
 
 function normalizeCards(value: unknown): ModelResearchCard[] {

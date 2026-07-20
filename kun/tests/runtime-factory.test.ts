@@ -3,7 +3,8 @@ import { InMemorySessionStore } from '../src/adapters/in-memory-session-store.js
 import { InMemoryThreadStore } from '../src/adapters/in-memory-thread-store.js'
 import { createThreadRecord } from '../src/domain/thread.js'
 import { UsageService } from '../src/services/usage-service.js'
-import { seedUsageCarryover } from '../src/server/runtime-factory.js'
+import { paidResearchSearchEnabled, researchModelForOptions, seedUsageCarryover } from '../src/server/runtime-factory.js'
+import type { KunServeRuntimeOptions } from '../src/server/runtime-factory.js'
 import type { UsageSnapshot } from '../src/contracts/usage.js'
 import type { SessionStore } from '../src/ports/session-store.js'
 
@@ -97,3 +98,52 @@ describe('runtime factory usage carryover', () => {
     })
   })
 })
+
+describe('runtime factory research model policy', () => {
+  it('keeps paid model search disabled unless the operator explicitly opts in', () => {
+    expect(paidResearchSearchEnabled({})).toBe(true)
+    expect(paidResearchSearchEnabled({ KUN_DEEP_RESEARCH_PAID_SEARCH: 'true' })).toBe(true)
+    expect(paidResearchSearchEnabled({ KUN_DEEP_RESEARCH_PAID_SEARCH: 'false' })).toBe(false)
+  })
+
+  it('uses an explicitly configured research model', () => {
+    expect(researchModelForOptions(researchOptions({
+      researchModel: 'research-cheap-model'
+    }))).toBe('research-cheap-model')
+  })
+
+  it('keeps the selected model when Flash is configured but not explicitly selected', () => {
+    expect(researchModelForOptions(researchOptions({
+      baseUrl: 'https://api.deepseek.com',
+      model: 'deepseek-v4-pro',
+      models: {
+        profiles: {
+          'deepseek-v4-pro': {},
+          'deepseek-v4-flash': {}
+        }
+      }
+    }))).toBe('deepseek-v4-pro')
+  })
+
+  it('keeps the selected model when the provider is not DeepSeek', () => {
+    expect(researchModelForOptions(researchOptions({
+      baseUrl: 'https://api.example.test/v1',
+      model: 'provider-fast',
+      models: {
+        profiles: {
+          'deepseek-v4-flash': {}
+        }
+      }
+    }))).toBe('provider-fast')
+  })
+})
+
+function researchOptions(overrides: Partial<KunServeRuntimeOptions>): KunServeRuntimeOptions {
+  return {
+    apiKey: 'test-key',
+    baseUrl: 'https://api.example.test/v1',
+    model: 'default-model',
+    dataDir: '/tmp/kun-runtime-factory-test',
+    ...overrides
+  } as KunServeRuntimeOptions
+}

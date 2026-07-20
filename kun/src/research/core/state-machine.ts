@@ -1,6 +1,6 @@
 /**
  * [INPUT]: 依赖 core/events 的 ResearchEvent 和 core/types 的 ResearchRunStatus
- * [OUTPUT]: 对外提供 transitionResearchStatus 与 assertCanStartResearch 状态守卫
+ * [OUTPUT]: 对外提供支持失败或取消后复用证据重试的 transitionResearchStatus 与 assertCanStartResearch 状态守卫
  * [POS]: research/core 的确定性状态机，约束 scope、research、gap、write 全流程转移
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
  */
@@ -10,6 +10,15 @@ import type { ResearchRunStatus } from './types.js'
 const TERMINAL_STATUSES = new Set<ResearchRunStatus>(['done', 'failed', 'cancelled', 'research_unavailable'])
 
 export function transitionResearchStatus(status: ResearchRunStatus, event: ResearchEvent): ResearchRunStatus {
+  if (event.type === 'MODEL_USAGE_RECORDED' || event.type === 'WEB_AUDIT_RECORDED') {
+    return status
+  }
+  if (event.type === 'RUN_RETRIED') {
+    if (status !== 'failed' && status !== 'cancelled') {
+      throw illegalTransition(status, event.type)
+    }
+    return 'planning'
+  }
   if (event.type === 'RUN_FAILED') {
     if (TERMINAL_STATUSES.has(status)) {
       throw illegalTransition(status, event.type)
@@ -48,6 +57,7 @@ export function transitionResearchStatus(status: ResearchRunStatus, event: Resea
     case 'researching':
       if (
         event.type === 'TASK_STARTED'
+        || event.type === 'TASK_FAILED'
         || event.type === 'SOURCE_ADDED'
         || event.type === 'NOTE_ADDED'
         || event.type === 'TASK_COMPLETED'
@@ -62,7 +72,9 @@ export function transitionResearchStatus(status: ResearchRunStatus, event: Resea
       if (event.type === 'HYPOTHESIS_ASSESSED') return 'gap_checking'
       if (event.type === 'CONVERGENCE_ANALYZED') return 'gap_checking'
       if (event.type === 'GAP_CHECK_COMPLETED') {
-        return event.verdict.status === 'need_more' ? 'researching' : 'synthesizing'
+        return event.verdict.status === 'need_more' || event.verdict.status === 'needs_research_repair'
+          ? 'researching'
+          : 'synthesizing'
       }
       break
     case 'synthesizing':

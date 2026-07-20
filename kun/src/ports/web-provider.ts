@@ -4,6 +4,8 @@
  * [POS]: ports 的网页来源抽象，被 DeepResearch worker 和测试 provider 复用
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
  */
+import type { UsageSnapshot } from '../contracts/usage.js'
+
 export type WebSource = {
   sourceId: string
   url: string
@@ -29,9 +31,37 @@ export type WebFetchResult = WebSource & {
 export type WebSearchRequest = {
   query: string
   limit: number
+  acceptedLimit?: number
+  allowFallbackOnly?: boolean
   timeoutMs: number
   timeRange?: WebSearchTimeRange
   signal: AbortSignal
+  modelExecution?: WebSearchModelExecution
+  onProviderAttempt?: (attempt: WebSearchProviderAttempt) => void
+}
+
+export type WebSearchProviderAttempt = {
+  providerId: string
+  rawResultCount: number
+  acceptedResultCount: number
+  error?: string
+}
+
+export type WebSearchModelCallReservation = { id: string }
+
+export type WebSearchModelExecution = {
+  canReserve(input: { providerId: string; model: string; estimatedTokens: number }): boolean
+  reserve(input: { providerId: string; model: string; estimatedTokens: number }): WebSearchModelCallReservation
+  record(input: {
+    providerId: string
+    model: string
+    reservation: WebSearchModelCallReservation
+    usage: UsageSnapshot
+  }): Promise<void>
+  finish(input: {
+    reservation: WebSearchModelCallReservation
+    chargeEstimateOnMissing: boolean
+  }): Promise<void>
 }
 
 export type WebSearchTimeRange = {
@@ -48,6 +78,7 @@ export type WebSearchResult = WebSource & {
 
 export interface WebProvider {
   readonly id: string
+  readonly fallbackOnly?: boolean
   fetch?(request: WebFetchRequest): Promise<WebFetchResult>
   search?(request: WebSearchRequest): Promise<WebSearchResult[]>
 }

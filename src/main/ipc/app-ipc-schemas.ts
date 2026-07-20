@@ -1,3 +1,9 @@
+/**
+ * [INPUT]: 依赖 zod、共享设置常量、Kun endpoint 模板和跨层 IPC payload 类型
+ * [OUTPUT]: 对外提供 App IPC 请求的严格运行时校验 schema 与路径匹配器
+ * [POS]: main/ipc 的输入防线，确保 renderer 设置快照和 DeepResearch 配置进入主进程前通过校验
+ * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
+ */
 import { z } from 'zod'
 import {
   KUN_APPROVAL_TEMPLATE,
@@ -173,7 +179,7 @@ const ENDPOINTS: readonly EndpointTemplate[] = [
   compileEndpoint(KUN_APPROVAL_TEMPLATE, ['POST']),
   compileEndpoint(KUN_USER_INPUT_TEMPLATE, ['POST']),
   compileEndpoint(KUN_SESSION_RESUME_TEMPLATE, ['POST']),
-  compileEndpoint(KUN_RESEARCH_RUNS_TEMPLATE, ['POST']),
+  compileEndpoint(KUN_RESEARCH_RUNS_TEMPLATE, ['GET', 'POST']),
   compileEndpoint(KUN_RESEARCH_RUN_TEMPLATE, ['GET']),
   compileEndpoint(KUN_RESEARCH_RUN_SCOPE_CONFIRM_TEMPLATE, ['POST']),
   compileEndpoint(KUN_RESEARCH_RUN_SCOPE_ANSWER_TEMPLATE, ['POST']),
@@ -327,6 +333,8 @@ const kunRuntimePatchSchema = z.object({
   runtimeToken: z.string().max(MAX_BODY_BYTES).optional(),
   dataDir: defaultPathSchema,
   model: z.string().trim().min(1).max(128).optional(),
+  researchModel: z.string().trim().max(128).optional(),
+  tavilyApiKey: z.string().max(MAX_BODY_BYTES).optional(),
   approvalPolicy: approvalPolicySchema.optional(),
   sandboxMode: sandboxModeSchema.optional(),
   tokenEconomyMode: z.boolean().optional(),

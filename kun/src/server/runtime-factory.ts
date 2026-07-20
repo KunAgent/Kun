@@ -1,3 +1,9 @@
+/**
+ * [INPUT]: 依赖 serve 配置、模型客户端、tool providers、research runtime 和本地存储
+ * [OUTPUT]: 对外提供 createServerRuntime/startServerRuntime、researchModelForOptions、模型联网搜索默认末级兜底与显式关闭开关，组装 Kun HTTP/SSE runtime、工具能力和 DeepResearch 研究/编辑 agents
+ * [POS]: server 的 composition root，把模型、工具、memory、DeepResearch 主编/作者/编辑、review 和事件总线接入 HTTP routes
+ * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
+ */
 import { mkdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import { buildRouter } from './routes/index.js'
@@ -10,7 +16,6 @@ import { InMemoryEventBus } from '../adapters/in-memory-event-bus.js'
 import { FileSessionStore, FileThreadStore } from '../adapters/file/index.js'
 import { HybridSessionStore, HybridThreadStore } from '../adapters/hybrid/index.js'
 import { CompatModelClient } from '../adapters/model/compat-model-client.js'
-import { isDeepSeekHost } from '../adapters/model/model-error-probe.js'
 import { MultiProviderModelClient } from '../adapters/model/multi-provider-model-client.js'
 import { CapabilityRegistry } from '../adapters/tool/capability-registry.js'
 import { buildGoalLocalTools } from '../adapters/tool/goal-tools.js'
@@ -79,12 +84,22 @@ import { DelegationRuntime, FileDelegationStore } from '../delegation/delegation
 import { createChildAgentExecutor } from '../delegation/child-agent-executor.js'
 import {
   ModelQualityJudge,
+  ModelReportArchitect,
+  ModelResearchEditor,
   ModelResearchTaskWorker,
   ModelScopeAgent,
+  ModelSourceStrategist,
   ModelSynthesisWriter,
   ResearchRuntimeService,
+  BraveWebSearchProvider,
+  BingRssWebSearchProvider,
+  CascadingWebSearchProvider,
   DeepSeekWebSearchProvider,
-  SeededWebResearchTaskWorker
+  GenericWebSearchProvider,
+  SearxngWebSearchProvider,
+  SeededWebResearchTaskWorker,
+  TavilyWebSearchProvider,
+  YahooWebSearchProvider
 } from '../research/index.js'
 
 export type KunServeRuntimeOptions = {
@@ -107,6 +122,9 @@ export type KunServeRuntimeOptions = {
    */
   providers?: Record<string, ServeProviderConfig>
   model: string
+  researchModel?: string
+  researchWorkspaceRoots?: string[]
+  tavilyApiKey?: string
   approvalPolicy: ApprovalPolicy
   sandboxMode: SandboxMode
   tokenEconomyMode: boolean
@@ -256,6 +274,8 @@ export async function createKunServeRuntime(
     ...(options.runtime ? { runtime: options.runtime } : {})
   })
   const webProviders = buildWebToolProviders(options.capabilities?.web)
+  const researchModel = researchModelForOptions(options)
+  const researchWebSearchProvider = createResearchWebSearchProvider(options, nowIso, researchModel)
   const attachmentStore = options.capabilities?.attachments.enabled
     ? new FileAttachmentStore({
         rootDir: join(options.dataDir, 'attachments'),
@@ -272,37 +292,44 @@ export async function createKunServeRuntime(
     : undefined
   const research = new ResearchRuntimeService({
     dataDir: options.dataDir,
+    allowedWorkspaceRoots: options.researchWorkspaceRoots ?? [],
     nowIso,
     idGenerator: () => ids.next('rr'),
     scopeAgent: new ModelScopeAgent({
       modelClient,
-      model: options.model
+      model: researchModel
     }),
     worker: new SeededWebResearchTaskWorker({
       modelClient,
-      model: options.model,
-      ...(isDeepSeekHost(options.baseUrl)
-        ? { webProvider: new DeepSeekWebSearchProvider({
-          apiKey: options.apiKey,
-          baseUrl: options.baseUrl,
-          model: options.model,
-          nowIso
-        }) }
-        : {}),
+      model: researchModel,
+      webProvider: researchWebSearchProvider,
+      sourceStrategist: new ModelSourceStrategist({
+        modelClient,
+        model: researchModel
+      }),
       fallback: new ModelResearchTaskWorker({
         modelClient,
-        model: options.model
+        model: researchModel
       })
+    }),
+    reportArchitect: new ModelReportArchitect({
+      modelClient,
+      model: researchModel
     }),
     synthesisWriter: new ModelSynthesisWriter({
       modelClient,
-      model: options.model
+      model: researchModel
+    }),
+    researchEditor: new ModelResearchEditor({
+      modelClient,
+      model: researchModel
     }),
     qualityJudge: new ModelQualityJudge({
       modelClient,
-      model: options.model
+      model: researchModel
     })
   })
+  await research.initialize()
   const imageGenProviders = buildImageGenToolProviders(options.capabilities?.imageGen, {
     attachmentStore,
     nowIso
@@ -573,6 +600,74 @@ export async function createKunServeRuntime(
         await stores.shutdown?.()
       }
     }
+  }
+}
+
+function createResearchWebSearchProvider(
+  options: KunServeRuntimeOptions,
+  nowIso: () => string,
+  researchModel: string
+): CascadingWebSearchProvider {
+  const providers = []
+  const tavilyApiKey = options.tavilyApiKey?.trim() || process.env.TAVILY_API_KEY?.trim()
+  if (tavilyApiKey) {
+    providers.push(new TavilyWebSearchProvider({ apiKey: tavilyApiKey, nowIso }))
+  }
+
+  const searxngBaseUrl = process.env.SEARXNG_BASE_URL?.trim()
+  if (searxngBaseUrl) {
+    providers.push(new SearxngWebSearchProvider({ baseUrl: searxngBaseUrl, nowIso }))
+  }
+
+  providers.push(new BingRssWebSearchProvider({ nowIso }))
+  providers.push(new BraveWebSearchProvider({ nowIso }))
+  providers.push(new GenericWebSearchProvider({ nowIso }))
+  providers.push(new YahooWebSearchProvider({ nowIso }))
+
+  const deepSeekConfig = deepSeekSearchConfig(options)
+  if (deepSeekConfig && paidResearchSearchEnabled()) {
+    providers.push(new DeepSeekWebSearchProvider({
+      apiKey: deepSeekConfig.apiKey,
+      baseUrl: deepSeekConfig.baseUrl,
+      model: researchModel,
+      nowIso
+    }))
+  }
+
+  return new CascadingWebSearchProvider(providers)
+}
+
+export function paidResearchSearchEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
+  const configured = env.KUN_DEEP_RESEARCH_PAID_SEARCH?.trim()
+  if (!configured) return true
+  return !/^(?:0|false|no|off)$/iu.test(configured)
+}
+
+export function researchModelForOptions(options: KunServeRuntimeOptions): string {
+  const explicit = options.researchModel?.trim()
+  if (explicit) return explicit
+  return options.model
+}
+
+function deepSeekSearchConfig(options: KunServeRuntimeOptions): { apiKey: string; baseUrl: string } | undefined {
+  const candidates = [
+    { apiKey: options.apiKey, baseUrl: options.baseUrl },
+    ...Object.values(options.providers ?? {}).map((provider) => ({
+      apiKey: provider.apiKey,
+      baseUrl: provider.baseUrl
+    }))
+  ]
+  return candidates.find((candidate) =>
+    candidate.apiKey.trim().length > 0 && isDeepSeekHost(candidate.baseUrl)
+  )
+}
+
+function isDeepSeekHost(baseUrl: string): boolean {
+  try {
+    const hostname = new URL(baseUrl).hostname.toLowerCase()
+    return hostname === 'api.deepseek.com' || hostname.endsWith('.deepseek.com')
+  } catch {
+    return false
   }
 }
 

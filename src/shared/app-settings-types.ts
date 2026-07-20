@@ -1,3 +1,9 @@
+/**
+ * [INPUT]: 依赖 Kun contracts、GUI update、快捷键和跨层能力类型
+ * [OUTPUT]: 对外提供 AppSettingsV1、provider/runtime/settings 类型与默认常量
+ * [POS]: shared settings 的类型中心，定义 renderer、main 和 Kun 配置同步的共同契约
+ * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
+ */
 import type { GuiUpdateChannel } from './gui-update'
 import type { KeyboardShortcutsConfigV1 } from './keyboard-shortcuts'
 import type { ApprovalPolicy, SandboxMode } from '../../kun/src/contracts/policy.js'
@@ -198,6 +204,10 @@ export type KunRuntimeSettingsV1 = {
   runtimeToken: string
   dataDir: string
   model: string
+  /** Optional DeepResearch model override. Empty inherits the model selected in the composer. */
+  researchModel: string
+  /** Optional Tavily Search key used before free/model search fallbacks. */
+  tavilyApiKey: string
   approvalPolicy: ApprovalPolicy
   sandboxMode: SandboxMode
   /** Compress safe tool context before each model call. */

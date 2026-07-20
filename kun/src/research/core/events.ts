@@ -1,6 +1,6 @@
 /**
  * [INPUT]: 依赖 core/types 的 ResearchRunStatus、ResearchPlan、ResearchGapVerdict 等运行期类型
- * [OUTPUT]: 对外提供 ResearchEvent union 和 ResearchEventInput，驱动状态机与事件落盘
+ * [OUTPUT]: 对外提供含失败后证据复用重试的 ResearchEvent union 和 ResearchEventInput，驱动状态机与事件落盘
  * [POS]: research/core 的事件契约，被 ResearchRuntime、Repository 和 UI 轮询结果间接消费
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
  */
@@ -13,10 +13,12 @@ import type {
   HypothesisUpdate,
   QualityVerdict,
   ResearchPlan,
+  ResearchModelUsageRecord,
   ResearchRunStatus,
   ResearchScopeAssessment,
   ResearchScopeClarification,
   ResearchTask,
+  ResearchWebAuditRecord,
   ScopeConfirmation
 } from './types.js'
 
@@ -31,6 +33,7 @@ export type ResearchEventType =
   | 'HYPOTHESIS_TESTS_DESIGNED'
   | 'PLAN_CREATED'
   | 'TASK_STARTED'
+  | 'TASK_FAILED'
   | 'SOURCE_ADDED'
   | 'NOTE_ADDED'
   | 'TASK_COMPLETED'
@@ -44,7 +47,10 @@ export type ResearchEventType =
   | 'REPORT_DRAFTED'
   | 'CITATIONS_RESOLVED'
   | 'VERIFICATION_COMPLETED'
+  | 'MODEL_USAGE_RECORDED'
+  | 'WEB_AUDIT_RECORDED'
   | 'REPORT_WRITTEN'
+  | 'RUN_RETRIED'
   | 'RUN_FAILED'
   | 'RUN_CANCELLED'
   | 'RESEARCH_UNAVAILABLE'
@@ -67,6 +73,7 @@ export type ResearchEvent =
   | (BaseResearchEvent & { type: 'HYPOTHESIS_TESTS_DESIGNED'; tests: HypothesisTest[] })
   | (BaseResearchEvent & { type: 'PLAN_CREATED'; planId: string; taskCount: number; plan?: ResearchPlan })
   | (BaseResearchEvent & { type: 'TASK_STARTED'; taskId: string })
+  | (BaseResearchEvent & { type: 'TASK_FAILED'; taskId: string; reason: string })
   | (BaseResearchEvent & { type: 'SOURCE_ADDED'; sourceId: string })
   | (BaseResearchEvent & { type: 'NOTE_ADDED'; noteId: string })
   | (BaseResearchEvent & { type: 'TASK_COMPLETED'; taskId: string })
@@ -92,7 +99,10 @@ export type ResearchEvent =
   | (BaseResearchEvent & { type: 'REPORT_DRAFTED'; draftId: string; claimCount: number; attempt?: number; maxAttempts?: number })
   | (BaseResearchEvent & { type: 'CITATIONS_RESOLVED'; citationCount: number; unresolvedCitationIds: string[]; attempt?: number; maxAttempts?: number })
   | (BaseResearchEvent & { type: 'VERIFICATION_COMPLETED'; verdict: QualityVerdict; attempt?: number; maxAttempts?: number; finalAttempt?: boolean })
+  | (BaseResearchEvent & { type: 'MODEL_USAGE_RECORDED'; record: ResearchModelUsageRecord })
+  | (BaseResearchEvent & { type: 'WEB_AUDIT_RECORDED'; record: ResearchWebAuditRecord })
   | (BaseResearchEvent & { type: 'REPORT_WRITTEN'; reportPath: string; artifactPaths: string[] })
+  | (BaseResearchEvent & { type: 'RUN_RETRIED'; previousReason?: string })
   | (BaseResearchEvent & { type: 'RUN_FAILED'; reason: string })
   | (BaseResearchEvent & { type: 'RUN_CANCELLED'; reason?: string })
   | (BaseResearchEvent & { type: 'RESEARCH_UNAVAILABLE'; reason: string })

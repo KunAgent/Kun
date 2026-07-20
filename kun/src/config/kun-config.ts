@@ -238,6 +238,9 @@ export const KunServeConfigSchema = z
       z.enum(MODEL_ENDPOINT_FORMATS)
     ).optional(),
     model: z.string().min(1).optional(),
+    researchModel: z.string().min(1).optional(),
+    researchWorkspaceRoots: z.array(z.string().min(1)).max(64).optional(),
+    tavilyApiKey: z.string().optional(),
     approvalPolicy: ApprovalPolicySchema.default(DEFAULT_APPROVAL_POLICY).optional(),
     sandboxMode: SandboxModeSchema.default(DEFAULT_SANDBOX_MODE).optional(),
     tokenEconomyMode: z.boolean().optional(),

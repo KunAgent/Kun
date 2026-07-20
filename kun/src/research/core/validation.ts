@@ -1,7 +1,7 @@
 /**
  * [INPUT]: 依赖 core/types 的 ResearchBrief、ResearchFrame、ResearchPlan、ResearchScopeAssessment
- * [OUTPUT]: 对外提供 DeepResearch scope、brief、frame、plan 的确定性校验函数
- * [POS]: research/core 的 schema 防线，阻止 runtime 接受缺核心主线或越预算计划
+ * [OUTPUT]: 对外提供 DeepResearch scope、brief、frame、plan 与章节问题所有权的确定性校验函数
+ * [POS]: research/core 的 schema 防线，阻止 runtime 接受缺核心主线、越权问题归属或越预算计划
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
  */
 import type { ResearchBrief, ResearchFrame, ResearchPlan, ResearchScopeAssessment } from './types.js'
@@ -83,6 +83,11 @@ export function validateResearchPlan(plan: ResearchPlan, frame: ResearchFrame, m
         mappedHighPriorityQuestions.add(questionId)
       }
     }
+    for (const questionId of task.reportQuestionIds ?? []) {
+      if (!questionIds.has(questionId) || !task.questionIds.includes(questionId)) {
+        throw new Error(`ResearchTask ${task.id} owns report question ${questionId} outside task scope`)
+      }
+    }
     if (task.expectedEvidence.length === 0) {
       throw new Error(`ResearchTask ${task.id} must declare expectedEvidence`)
     }
@@ -95,7 +100,9 @@ export function validateResearchPlan(plan: ResearchPlan, frame: ResearchFrame, m
     if (task.status !== 'done' && task.maxSources <= 0) {
       throw new Error(`ResearchTask ${task.id} must have positive maxSources before completion`)
     }
-    plannedSources += task.maxSources
+    if (task.status !== 'done') {
+      plannedSources += task.maxSources
+    }
   }
   for (const question of frame.coreQuestions) {
     if ((question.priority === 'high' || question.required) && !mappedHighPriorityQuestions.has(question.id)) {

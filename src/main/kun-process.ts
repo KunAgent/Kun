@@ -1,3 +1,9 @@
+/**
+ * [INPUT]: 依赖 Electron app、Kun 配置 schema、共享设置和子进程/端口/文件系统能力
+ * [OUTPUT]: 对外提供 Kun 子进程启动停止、端口回收、可清除旧覆盖值的 GUI 配置同步和运行状态查询
+ * [POS]: main 的 Kun runtime host，把 GUI 设置转换为 kun serve 配置；空 DeepResearch 模型不保留历史 Flash 覆盖值
+ * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
+ */
 import { app } from 'electron'
 import { execFile, spawn, type ChildProcess } from 'node:child_process'
 import { existsSync } from 'node:fs'
@@ -383,6 +389,8 @@ export async function syncGuiManagedKunConfig(
   runtime: Pick<
     KunRuntimeSettingsV1,
     | 'mcpSearch'
+    | 'researchModel'
+    | 'tavilyApiKey'
     | 'tokenEconomy'
     | 'storage'
     | 'contextCompaction'
@@ -414,6 +422,12 @@ export async function syncGuiManagedKunConfig(
   )
 
   const serve = objectValue(existing?.serve)
+  const {
+    researchModel: _staleResearchModel,
+    researchWorkspaceRoots: _staleResearchWorkspaceRoots,
+    tavilyApiKey: _staleTavilyApiKey,
+    ...serveWithoutGuiManagedOverrides
+  } = serve
   const existingTokenEconomy = objectValue(serve.tokenEconomy)
   const existingContextCompaction = objectValue(existing?.contextCompaction)
   const existingModels = objectValue(existing?.models)
@@ -433,6 +447,14 @@ export async function syncGuiManagedKunConfig(
   const computerUse = objectValue(capabilities.computerUse)
   const storage = storageConfigForRuntime(runtime.storage)
   const mcpSearch = runtime.mcpSearch
+  const researchModel = runtime.researchModel.trim()
+  const researchWorkspaceRoots = options?.scheduleMcp?.settings
+    ? [...new Set([
+        options.scheduleMcp.settings.workspaceRoot,
+        ...options.scheduleMcp.settings.write.workspaces
+      ].map((root) => root.trim()).filter(Boolean))]
+    : []
+  const tavilyApiKey = runtime.tavilyApiKey.trim()
   const skillCapability = await skillCapabilityConfigForRuntime(skills, options?.scheduleMcp?.settings)
   const workflowHookEntries = buildWorkflowHookEntries(options?.scheduleMcp?.settings.workflow)
   // Mirror every configured GUI provider (apiKey + baseUrl + endpointFormat)
@@ -445,8 +467,11 @@ export async function syncGuiManagedKunConfig(
     : undefined
   const next = {
     serve: {
-      ...serve,
+      ...serveWithoutGuiManagedOverrides,
       storage,
+      ...(researchModel ? { researchModel } : {}),
+      ...(researchWorkspaceRoots.length > 0 ? { researchWorkspaceRoots } : {}),
+      ...(tavilyApiKey ? { tavilyApiKey } : {}),
       tokenEconomy: tokenEconomyConfigForRuntime(runtime.tokenEconomy, existingTokenEconomy),
       ...(providers && Object.keys(providers).length ? { providers } : {})
     },
@@ -744,16 +769,14 @@ function modelConfigProfilesFromProviderProfiles(
  */
 function providersConfigForRuntime(settings: AppSettingsV1): Record<string, Record<string, unknown>> {
   const out: Record<string, Record<string, unknown>> = {}
-  const runtimeProviderId = getKunRuntimeSettings(settings).providerId.trim()
   const proxyUrl = resolveModelProviderProxyUrl(settings)
   for (const provider of getModelProviderSettings(settings).providers as ModelProviderProfileV1[]) {
     const id = provider.id?.trim()
     const baseUrl = provider.baseUrl?.trim()
     if (!id || !baseUrl) continue
-    // The runtime's own provider is already wired via the default CLI args;
-    // skipping it keeps the map smaller and avoids paying twice for one
-    // provider that happens to be the active runtime binding.
-    if (id === runtimeProviderId) continue
+    // Keep the runtime-bound provider as an explicit alias too. DeepResearch
+    // pins the GUI providerId on the run, so fail-closed routing must be able
+    // to resolve that id instead of silently treating it as the default.
     out[id] = {
       apiKey: provider.apiKey?.trim() ?? '',
       baseUrl,

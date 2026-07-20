@@ -1,3 +1,9 @@
+/**
+ * [INPUT]: 依赖 node:crypto 的 SHA-256 能力
+ * [OUTPUT]: 对外提供 hashText、hashJson、stableStringify 和 slugify
+ * [POS]: research/core 的稳定标识工具，被 run、source、evidence 和模型请求哈希复用
+ * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
+ */
 import { createHash } from 'node:crypto'
 
 export function hashText(value: string): string {

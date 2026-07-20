@@ -1,10 +1,10 @@
 /**
  * [INPUT]: 依赖 DeepResearch runtime client 类型和 lucide-react 图标
  * [OUTPUT]: 对外提供 DeepResearchRuntimePanel、面板状态类型和 scope 回答消息构造器
- * [POS]: components/research 的结果导向卡，承载 scope 交互、简洁状态和报告打开动作
+ * [POS]: components/research 的结果导向卡，承载 scope 交互、简洁状态、报告打开和终态关闭动作
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
  */
-import { CheckCircle2, FileText, Loader2, SendHorizontal, XCircle } from 'lucide-react'
+import { CheckCircle2, FileText, Loader2, SendHorizontal, X, XCircle } from 'lucide-react'
 import { useEffect, useMemo, useState, type ReactElement } from 'react'
 import {
   formatDeepResearchRunStatus,
@@ -26,6 +26,7 @@ export type DeepResearchRuntimePanelProps = {
   onConfirmScope: () => void
   onAnswerScope: (message: string) => void
   onCancel: () => void
+  onClose?: () => void
   onOpenReport: () => void
 }
 
@@ -36,6 +37,7 @@ export function DeepResearchRuntimePanel({
   onConfirmScope,
   onAnswerScope,
   onCancel,
+  onClose,
   onOpenReport
 }: DeepResearchRuntimePanelProps): ReactElement {
   const run = state.result?.run
@@ -46,7 +48,8 @@ export function DeepResearchRuntimePanel({
   const canConfirmScope = state.phase === 'scoping' && scope?.readyForBrief === true && Boolean(run) && !busy
   const canApprove = state.phase === 'awaiting_brief_confirm' && Boolean(run) && !busy
   const canCancel = (state.phase === 'scoping' || state.phase === 'awaiting_brief_confirm' || state.phase === 'running') && Boolean(run) && !busy
-  const canOpenReport = (state.phase === 'completed' || state.phase === 'failed') && Boolean(state.result?.reportPath) && !busy
+  const canClose = (state.phase === 'completed' || state.phase === 'cancelled' || state.phase === 'failed') && !busy
+  const canOpenReport = Boolean(state.result?.reportPath ?? state.result?.draftPath) && !busy
   const [scopeAnswer, setScopeAnswer] = useState('')
   const [selectedOptions, setSelectedOptions] = useState<Record<string, string[]>>({})
   const [customAnswers, setCustomAnswers] = useState<Record<string, string>>({})
@@ -64,8 +67,17 @@ export function DeepResearchRuntimePanel({
     }),
     [clarificationQuestions, selectedOptions, customAnswers, scopeAnswer]
   )
+  const submittableScopeAnswer = useMemo(
+    () => buildSubmittableScopeAnswerMessage({
+      questions: clarificationQuestions,
+      selectedOptions,
+      customAnswers,
+      note: scopeAnswer
+    }),
+    [clarificationQuestions, selectedOptions, customAnswers, scopeAnswer]
+  )
   const hasClarificationQuestions = clarificationQuestions.length > 0
-  const canAnswerScope = state.phase === 'scoping' && Boolean(run) && composedScopeAnswer.trim().length > 0 && !busy
+  const canAnswerScope = state.phase === 'scoping' && Boolean(run) && submittableScopeAnswer.trim().length > 0 && !busy
 
   useEffect(() => {
     setScopeAnswer('')
@@ -74,7 +86,7 @@ export function DeepResearchRuntimePanel({
   }, [run?.id, questionSignature])
 
   const submitScopeAnswer = (): void => {
-    const message = composedScopeAnswer.trim()
+    const message = submittableScopeAnswer.trim()
     if (!message) return
     onAnswerScope(message)
   }
@@ -109,7 +121,20 @@ export function DeepResearchRuntimePanel({
             状态：{formatDeepResearchRunStatus(runStatus)}
           </div>
         </div>
-        <RuntimeBadge status={runStatus} phase={state.phase} />
+        <div className="flex shrink-0 items-center gap-2">
+          <RuntimeBadge status={runStatus} phase={state.phase} />
+          {canClose ? (
+            <button
+              type="button"
+              onClick={onClose}
+              className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-ds-border-muted bg-ds-bg text-ds-text-muted transition hover:bg-ds-hover hover:text-ds-text"
+              aria-label="关闭深度研究"
+              title="关闭深度研究"
+            >
+              <X className="h-4 w-4" aria-hidden="true" />
+            </button>
+          ) : null}
+        </div>
       </div>
 
       {state.error ? (
@@ -123,6 +148,7 @@ export function DeepResearchRuntimePanel({
         status={runStatus}
         verification={run?.verification}
       />
+      <UsageSummary usage={run?.modelBudgetUsage} searchAttempts={run?.webAudit?.filter((item) => item.phase === 'search').length ?? 0} />
 
       {state.phase === 'scoping' && scope ? (
         <div className="mt-4 space-y-5">
@@ -173,11 +199,12 @@ export function DeepResearchRuntimePanel({
       {state.phase === 'running' ? (
         <div className="mt-4 rounded-md border border-accent/35 bg-accent/10 px-4 py-3 text-base font-medium text-ds-text">
           正在生成完整报告。系统会自动补充检索和修订，完成后直接展示结果。
+          {state.error ? <div className="mt-2 text-sm font-normal text-amber-700">{state.error}</div> : null}
         </div>
       ) : null}
 
       {state.phase === 'failed' ? (
-        <FailureSummary status={run?.status} verification={run?.verification} error={state.error} />
+        <FailureSummary status={run?.status} verification={run?.verification} terminalReason={run?.terminalReason} error={state.error} />
       ) : null}
 
       {state.phase === 'completed' && state.result?.reportPath ? (
@@ -245,7 +272,7 @@ export function DeepResearchRuntimePanel({
             打开报告
           </button>
         ) : null}
-        {state.phase === 'failed' && state.result?.reportPath ? (
+        {state.phase === 'failed' && state.result?.draftPath ? (
           <button
             type="button"
             disabled={!canOpenReport}
@@ -338,6 +365,27 @@ function ListField({
 }
 
 type ResearchVerification = NonNullable<DeepResearchRuntimeRunResponse['run']['verification']>
+type ResearchModelBudgetUsage = DeepResearchRuntimeRunResponse['run']['modelBudgetUsage']
+
+function UsageSummary({
+  usage,
+  searchAttempts
+}: {
+  usage?: ResearchModelBudgetUsage
+  searchAttempts: number
+}): ReactElement {
+  if (!usage || (usage.modelCalls === 0 && usage.totalTokens === 0 && searchAttempts === 0)) return <></>
+  const cost = usage.costCny > 0
+    ? ` · ¥${usage.costCny.toFixed(3)}`
+    : usage.costUsd > 0
+      ? ` · $${usage.costUsd.toFixed(4)}`
+      : ''
+  return (
+    <div className="mt-2 text-[13px] text-ds-text-muted">
+      模型 {usage.modelCalls} 次 · {usage.totalTokens.toLocaleString()} tokens · 搜索 {searchAttempts} 次{cost}
+    </div>
+  )
+}
 
 function ResearchProgress({
   phase,
@@ -366,18 +414,21 @@ function ResearchProgress({
 function FailureSummary({
   status,
   verification,
+  terminalReason,
   error
 }: {
   status?: string
   verification?: ResearchVerification
+  terminalReason?: string
   error?: string
 }): ReactElement {
   const blockingIssues = verification?.blockingIssues ?? []
   const fixes = verification?.recommendedFixes ?? []
   const hasVerification = Boolean(verification)
   const unavailable = status === 'research_unavailable'
-  const reason = verification?.llmJudge?.rationale
+  const reason = terminalReason
     ?? blockingIssues[0]
+    ?? verification?.llmJudge?.rationale
     ?? error
     ?? (unavailable ? '当前环境缺少可核验资料，系统没有进入完整深度研究。' : undefined)
     ?? (hasVerification ? '报告没有达到完成标准，系统已停止提交结果。' : '研究任务未能完成。')
@@ -448,6 +499,12 @@ function ClarificationField({
   const answeredQuestions = questions.filter((question) => hasQuestionAnswer(question.id, selectedOptions, customAnswers))
   const answeredRequiredQuestions = requiredQuestions.filter((question) => hasQuestionAnswer(question.id, selectedOptions, customAnswers))
   const remainingRequiredCount = Math.max(requiredQuestions.length - answeredRequiredQuestions.length, 0)
+  const optionalAnsweredCount = Math.max(answeredQuestions.length - answeredRequiredQuestions.length, 0)
+  const completionLabel = requiredQuestions.length > 0
+    ? `必答 ${answeredRequiredQuestions.length}/${requiredQuestions.length}`
+    : answeredQuestions.length > 0
+      ? `可选已答 ${answeredQuestions.length}/${questions.length}`
+      : '均为可选'
 
   return (
     <div className="min-w-0 md:col-span-2">
@@ -457,7 +514,7 @@ function ClarificationField({
           <div className="mt-0.5 text-[13px] text-ds-text-muted">选项可多选；也可以不选选项，直接填写答案。</div>
         </div>
         <div className="shrink-0 rounded-full border border-ds-border-muted bg-ds-card px-3 py-1 text-[13px] font-medium text-ds-text">
-          已完成 {answeredQuestions.length}/{questions.length}
+          {completionLabel}{optionalAnsweredCount > 0 && requiredQuestions.length > 0 ? ` · 可选 ${optionalAnsweredCount}` : ''}
         </div>
       </div>
       <div className="mt-3 space-y-3 text-[15px] text-ds-text">
@@ -523,8 +580,10 @@ function ClarificationField({
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="text-[13px] leading-5 text-ds-text-muted">
             {remainingRequiredCount > 0
-              ? `还剩 ${remainingRequiredCount} 个必答问题未补充；也可以先提交，让模型继续追问。`
-              : '必答问题已补充，提交后模型会重新判断是否可以生成简报。'}
+              ? `还剩 ${remainingRequiredCount} 个必答问题未补充，请先补齐后提交。`
+              : requiredQuestions.length === 0
+                ? '这些问题都是可选补充；不填写也可以跳过并继续。'
+                : '必答问题已补充；可选题不填写也不会阻塞继续。'}
           </div>
           <button
             type="button"
@@ -533,7 +592,7 @@ function ClarificationField({
             className="inline-flex h-10 items-center gap-1.5 rounded-md bg-accent px-4 text-[14px] font-semibold text-white shadow-sm transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {disabled ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <SendHorizontal className="h-4 w-4" aria-hidden="true" />}
-            {disabled ? '正在提交给模型' : '提交补充给模型'}
+            {disabled ? '正在提交给模型' : requiredQuestions.length === 0 && answeredQuestions.length === 0 ? '跳过可选并继续' : '提交补充给模型'}
           </button>
         </div>
       </div>
@@ -576,4 +635,21 @@ export function buildScopeAnswerMessage(input: {
   const note = input.note.trim()
   if (note) answers.push(`补充说明：${note}`)
   return answers.join('\n\n')
+}
+
+export function buildSubmittableScopeAnswerMessage(input: {
+  questions: DeepResearchRuntimeRunResponse['run']['scope']['clarificationQuestions']
+  selectedOptions: Record<string, string[]>
+  customAnswers: Record<string, string>
+  note: string
+}): string {
+  const requiredQuestions = input.questions.filter((question) => question.required)
+  const requiredAnswered = requiredQuestions.every((question) => hasQuestionAnswer(question.id, input.selectedOptions, input.customAnswers))
+  if (!requiredAnswered) return ''
+  const message = buildScopeAnswerMessage(input).trim()
+  if (message) return message
+  if (input.questions.length > 0 && requiredQuestions.length === 0) {
+    return '未选择可选补充，使用默认边界继续。'
+  }
+  return ''
 }

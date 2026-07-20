@@ -1,7 +1,7 @@
 /**
- * [INPUT]: 依赖 agents、core 状态机、EvidenceStore、CitationResolver、QualityVerifier 和 ResearchRunRepository
- * [OUTPUT]: 对外提供 ResearchRuntime，负责 DeepResearch run 的状态、预算、hypothesis/VOI/convergence loop、落盘和报告校验
- * [POS]: research/runtime 的编排核心，连接 scope/brief gate、supervisor、hypothesis agents、workers、writer、citations 和 verifier，并按实际来源消耗回收未用预算
+ * [INPUT]: 依赖 agents、携带模型选择的 core 状态机、EvidenceStore、WritableGate、RuntimeExecution/Policy/SynthesisPipeline 和 ResearchRunRepository
+ * [OUTPUT]: 对外提供 ResearchRuntime 与 persistedEvidenceGapQuestionIds，持久化 DeepResearch run 的模型/Provider、状态、累计成本和单次尝试预算起点、失败或取消后证据复用重试并丢弃上次 Gap/验证状态派生的未完成补研队列、从已持久化蓝图和 Gap 死循环记录恢复补研穷尽问题、hypothesis/VOI/convergence loop、补研无语义进展后的 evidence_gap 受限交付、写作前闸门、编辑流水线、落盘和报告校验
+ * [POS]: research/runtime 的编排核心，连接 scope、章节 supervisor、workers、进展驱动 gap、WritableGate、主编、作者、编辑、citations 和 verifier
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
  */
 import { randomUUID } from 'node:crypto'
@@ -16,8 +16,9 @@ import {
   selectTasksByValueOfInformation
 } from '../agents/HypothesisAgent.js'
 import { BasicPlanAgent } from '../agents/PlanAgent.js'
+import { BasicReportArchitect } from '../agents/ReportArchitect.js'
+import { PassThroughResearchEditor } from '../agents/ResearchEditor.js'
 import { BasicResearchSupervisor } from '../agents/SupervisorAgent.js'
-import { validateWorkerResult } from '../agents/ResearchTaskWorker.js'
 import { BasicSynthesisWriter } from '../agents/SynthesisWriter.js'
 import type {
   CitationResolution,
@@ -28,16 +29,18 @@ import type {
   HypothesisAssessor,
   HypothesisProposer,
   PlanAgent,
+  ReportArchitect,
+  ResearchEditor,
   ResearchSupervisor,
   ResearchTaskWorker,
   SynthesisWriter,
-  TestDesigner,
-  WorkerResult
+  TestDesigner
 } from '../agents/types.js'
 import { hashJson } from '../core/hash.js'
 import type { ResearchEvent, ResearchEventInput } from '../core/events.js'
 import { resolveResearchBudget } from '../core/presets.js'
 import { assertCanStartResearch, transitionResearchStatus } from '../core/state-machine.js'
+import { throwIfResearchAborted } from '../core/abort.js'
 import type {
   BriefApproval,
   QualityVerdict,
@@ -47,12 +50,15 @@ import type {
   ResearchFrame,
   ResearchGapVerdict,
   HypothesisTest,
+  ResearchModelUsageRecord,
+  ResearchExecutionControl,
   ResearchPlan,
   ResearchRun,
   ResearchScopeAssessment,
   ResearchScopeClarification,
   ResearchTask,
-  ScopeConfirmation
+  ScopeConfirmation,
+  SectionEvidenceMapEntry
 } from '../core/types.js'
 import {
   validateResearchBrief,
@@ -62,73 +68,62 @@ import {
 } from '../core/validation.js'
 import { CitationResolver } from '../evidence/CitationResolver.js'
 import { EvidenceStore } from '../evidence/EvidenceStore.js'
-import { canCiteEvidenceSpan } from '../evidence/EvidenceEligibility.js'
+import { eligibleEvidenceSourceCount } from '../evidence/EvidenceEligibility.js'
 import type { EvidenceSpan, SourceRecord } from '../evidence/types.js'
+import {
+  evidenceVerdictBeforeSynthesis,
+  normalizeGapVerdict,
+  PlanAgentSupervisor,
+  shouldRunDeepVoiFollowUp,
+  tasksFromHighValueTests
+} from './ResearchRuntimePolicy.js'
+import { applyResearchProgressGuard } from './ResearchProgressGuard.js'
+import {
+  recordResearchModelUsage,
+  ResearchExecutionController,
+  runResearchTaskBatch
+} from './ResearchRuntimeExecution.js'
+import { runResearchSynthesisPipeline } from './ResearchSynthesisPipeline.js'
 import { renderBriefMarkdown } from '../markdown/BriefRenderer.js'
 import { renderFinalReportMarkdown } from '../markdown/ReportRenderer.js'
 import { renderNotesMarkdown } from '../markdown/NotesRenderer.js'
 import { renderPlanMarkdown } from '../markdown/PlanRenderer.js'
 import { renderSourcesMarkdown } from '../markdown/SourcesRenderer.js'
+import { preflightResearchRun } from './ResearchPreflightGate.js'
+import { evaluateWritableGate } from './ResearchWritableGate.js'
+import {
+  loadPersistedResearchRuns,
+  prepareInterruptedResearchRunForResume,
+  prepareRecoveredResearchRound
+} from './ResearchRuntimeRecovery.js'
+import {
+  runVerificationEvidenceRepair,
+  type VerificationEvidenceRepairResult
+} from './ResearchVerificationRepair.js'
 import type { ResearchRunRepository } from '../storage/ResearchRunRepository.js'
 import { HeuristicQualityJudge, mergeQualityVerdictWithJudge, type QualityJudge } from '../verification/QualityJudge.js'
 import { QualityVerifier } from '../verification/QualityVerifier.js'
+import type {
+  AnswerScopeInput,
+  ApproveBriefInput,
+  CompletedResearchRun,
+  ConfirmScopeInput,
+  CreateResearchRunInput,
+  ResearchRuntimeOptions
+} from './ResearchRuntimeTypes.js'
 
-export type CreateResearchRunInput = {
-  title?: string
-  scope: ResearchScopeAssessment
-  brief: ResearchBrief
-  frame: ResearchFrame
-  budget?: Partial<ResearchBudget>
-  proposeBrief?: boolean
-}
-
-export type ConfirmScopeInput = {
-  confirmedByUser: boolean
-  confirmationMessageId?: string
-  source: ScopeConfirmation['source']
-}
-
-export type AnswerScopeInput = {
-  message: string
-  scope: ResearchScopeAssessment
-  brief: ResearchBrief
-  frame: ResearchFrame
-}
-
-export type ApproveBriefInput = {
-  approvedByUser: boolean
-  briefHash: string
-  approvalMessageId?: string
-  source: BriefApproval['source']
-}
-
-export type ResearchRuntimeOptions = {
-  repository: ResearchRunRepository
-  planAgent?: PlanAgent
-  supervisor?: ResearchSupervisor
-  hypothesisProposer?: HypothesisProposer
-  testDesigner?: TestDesigner
-  evidenceBinder?: EvidenceBinder
-  hypothesisAssessor?: HypothesisAssessor
-  frameRevisionGate?: FrameRevisionGate
-  convergenceAnalyzer?: ConvergenceAnalyzer
-  coverageEvaluator?: CoverageEvaluator
-  worker: ResearchTaskWorker
-  synthesisWriter?: SynthesisWriter
-  citationResolver?: CitationResolver
-  qualityVerifier?: QualityVerifier
-  qualityJudge?: QualityJudge
-  idGenerator?: () => string
-  nowIso?: () => string
-}
-
-export type CompletedResearchRun = {
-  run: ResearchRun
-  resolvedReport: CitationResolution
-}
+export type {
+  AnswerScopeInput,
+  ApproveBriefInput,
+  CompletedResearchRun,
+  ConfirmScopeInput,
+  CreateResearchRunInput,
+  ResearchRuntimeOptions
+} from './ResearchRuntimeTypes.js'
 
 export class ResearchRuntime {
   private readonly runs = new Map<string, ResearchRun>()
+  private readonly executionController = new ResearchExecutionController()
   private readonly planAgent: PlanAgent
   private readonly supervisor: ResearchSupervisor
   private readonly hypothesisProposer: HypothesisProposer
@@ -139,7 +134,9 @@ export class ResearchRuntime {
   private readonly convergenceAnalyzer: ConvergenceAnalyzer
   private readonly coverageEvaluator: CoverageEvaluator
   private readonly worker: ResearchTaskWorker
+  private readonly reportArchitect: ReportArchitect
   private readonly synthesisWriter: SynthesisWriter
+  private readonly researchEditor: ResearchEditor
   private readonly citationResolver: CitationResolver
   private readonly qualityVerifier: QualityVerifier
   private readonly qualityJudge: QualityJudge
@@ -157,7 +154,9 @@ export class ResearchRuntime {
     this.convergenceAnalyzer = options.convergenceAnalyzer ?? new BasicConvergenceAnalyzer()
     this.coverageEvaluator = options.coverageEvaluator ?? new BasicCoverageEvaluator()
     this.worker = options.worker
+    this.reportArchitect = options.reportArchitect ?? new BasicReportArchitect()
     this.synthesisWriter = options.synthesisWriter ?? new BasicSynthesisWriter()
+    this.researchEditor = options.researchEditor ?? new PassThroughResearchEditor()
     this.citationResolver = options.citationResolver ?? new CitationResolver()
     this.qualityVerifier = options.qualityVerifier ?? new QualityVerifier()
     this.qualityJudge = options.qualityJudge ?? new HeuristicQualityJudge()
@@ -180,12 +179,23 @@ export class ResearchRuntime {
       title,
       slug: title,
       status: 'scoping',
+      ...(input.model?.trim() ? { model: input.model.trim() } : {}),
+      ...(input.providerId?.trim() ? { providerId: input.providerId.trim() } : {}),
       scope: input.scope,
       scopeClarifications: [],
       brief: input.brief,
       frame: input.frame,
       briefHash,
-      budget: resolveResearchBudget(input.budget),
+      budget: resolveResearchBudget({
+        ...input.budget,
+        isComparisonTopic: (input.frame.alternativesToCompare?.length ?? 0) >= 2
+      }),
+      modelBudgetUsage: {
+        modelCalls: scopeModelCallCount(input.scope),
+        totalTokens: 0,
+        costUsd: 0,
+        costCny: 0
+      },
       hypotheses: [],
       hypothesisTests: [],
       hypothesisEvidenceBindings: [],
@@ -200,6 +210,11 @@ export class ResearchRuntime {
 
     await this.record(run, { type: 'RUN_CREATED', topic: run.brief.topic, status: 'scoping' })
     await this.record(run, { type: 'SCOPE_ASSESSED', scope: input.scope })
+    await recordResearchModelUsage({
+      run,
+      records: input.scope.modelUsage,
+      record: (event) => this.record(run, event)
+    })
     if (input.proposeBrief === true) {
       await this.record(run, { type: 'BRIEF_PROPOSED', briefHash, briefVersion: input.brief.version })
     }
@@ -242,6 +257,12 @@ export class ResearchRuntime {
     }
     await this.record(run, { type: 'SCOPE_CLARIFICATION_ADDED', clarification })
     await this.record(run, { type: 'SCOPE_ASSESSED', scope: input.scope })
+    run.modelBudgetUsage.modelCalls += scopeModelCallCount(input.scope)
+    await recordResearchModelUsage({
+      run,
+      records: input.scope.modelUsage,
+      record: (event) => this.record(run, event)
+    })
     await this.options.repository.writeRun(run)
     return run
   }
@@ -283,6 +304,10 @@ export class ResearchRuntime {
         await this.options.repository.writeRun(run)
         return run
       } else if (preset === 'quick') {
+        run.brief.sourcePolicy = {
+          ...run.brief.sourcePolicy,
+          requireCitations: false
+        }
         run.brief.constraints = [
           ...(run.brief.constraints ?? []),
           `由于系统网络检索功能未开启，且没有本地用户上传文件支撑，当前分析完全基于模型离线内置知识生成，未经任何真实外部来源交叉核验，不可作为决策凭证，报告中已去除所有伪造的文献上标引用。`
@@ -341,52 +366,100 @@ export class ResearchRuntime {
       throw new Error('Research cannot start without user-approved brief')
     }
 
+    const executionStartedAt = this.nowIso()
+    run.executionDeadlineAt ??= new Date(Date.parse(executionStartedAt) + run.budget.timeoutMs).toISOString()
+    const remainingTimeoutMs = Date.parse(run.executionDeadlineAt) - Date.parse(executionStartedAt)
+    await this.options.repository.writeRun(run)
+    const execution = this.executionController.start(
+      run,
+      (event) => this.record(run, event),
+      remainingTimeoutMs
+    )
     const evidenceStore = new EvidenceStore(this.options.repository, run.artifacts)
+    await evidenceStore.hydrate()
 
     try {
-      const hypotheses = await this.hypothesisProposer.propose({
-        runId: run.id,
-        brief: run.brief,
-        frame: run.frame,
-        budget: run.budget,
+      throwIfResearchAborted(execution.signal)
+      const allowedSourceTypes = run.brief.sourcePolicy.allowedSourceTypes
+      const preflight = preflightResearchRun({
+        run,
+        capabilities: {
+          webSearchEnabled: (this.worker.hasSearchCapability?.() ?? false) && allowedSourceTypes.includes('web'),
+          userFilesAvailable: (this.worker.hasLocalEvidenceCapability?.() ?? false) && allowedSourceTypes.some((type) => type !== 'web')
+        },
         nowIso: this.nowIso()
       })
+      if (preflight.frameRepaired) {
+        run.frame = preflight.frame
+        validateResearchFrame(run.frame)
+      }
+      run.reportContract = preflight.reportContract
+      run.coverageContract = preflight.coverageContract
+      await this.options.repository.writeRun(run)
+      if (preflight.unavailableReason) {
+        await this.record(run, { type: 'RESEARCH_UNAVAILABLE', reason: preflight.unavailableReason })
+        await this.options.repository.writeRun(run)
+        throw new Error(preflight.unavailableReason)
+      }
+
+      const hypotheses = run.hypotheses && run.hypotheses.length > 0
+        ? run.hypotheses
+        : await this.hypothesisProposer.propose({
+            runId: run.id,
+            brief: run.brief,
+            frame: run.frame,
+            budget: run.budget,
+            nowIso: this.nowIso()
+          })
       run.hypotheses = hypotheses
-      await this.record(run, { type: 'HYPOTHESES_PROPOSED', hypotheses })
+      if (!run.plan) await this.record(run, { type: 'HYPOTHESES_PROPOSED', hypotheses })
 
-      const tests = await this.testDesigner.design({
-        runId: run.id,
-        brief: run.brief,
-        frame: run.frame,
-        budget: run.budget,
-        hypotheses,
-        nowIso: this.nowIso()
-      })
+      const tests = run.hypothesisTests && run.hypothesisTests.length > 0
+        ? run.hypothesisTests
+        : await this.testDesigner.design({
+            runId: run.id,
+            brief: run.brief,
+            frame: run.frame,
+            budget: run.budget,
+            hypotheses,
+            nowIso: this.nowIso()
+          })
       run.hypothesisTests = tests
-      await this.record(run, { type: 'HYPOTHESIS_TESTS_DESIGNED', tests })
+      if (!run.plan) await this.record(run, { type: 'HYPOTHESIS_TESTS_DESIGNED', tests })
 
-      const plan = await this.supervisor.createInitialPlan({
+      const plan = run.plan ?? await this.supervisor.createInitialPlan({
         runId: run.id,
         brief: run.brief,
         frame: run.frame,
         budget: run.budget,
+        reportContract: run.reportContract,
         nowIso: this.nowIso()
       })
-      plan.tasks = selectTasksByValueOfInformation(plan.tasks, tests, {
-        preset: run.budget.preset,
-        maxSources: run.budget.maxSources
-      })
+      if (!run.plan) {
+        plan.tasks = selectTasksByValueOfInformation(plan.tasks, tests, {
+          preset: run.budget.preset,
+          maxSources: run.budget.maxSources
+        })
+      }
       validateResearchPlan(plan, run.frame, run.budget.maxSources)
       run.plan = plan
-      run.gapVerdicts = []
+      run.gapVerdicts ??= []
       await this.record(run, { type: 'PLAN_CREATED', planId: plan.id, taskCount: plan.tasks.length, plan })
 
-      let roundIndex = 1
-      let tasksForRound = plan.tasks
+      const recoveredRound = await prepareRecoveredResearchRound({
+        run,
+        plan,
+        evidenceStore,
+        coverageEvaluator: this.coverageEvaluator,
+        roundIndex: Math.max(1, (run.gapVerdicts?.length ?? 0) + 1),
+        nowIso: () => this.nowIso(),
+        record: (event) => this.record(run, event)
+      })
+      let { roundIndex, tasksForRound } = recoveredRound
       while (tasksForRound.length > 0) {
-        await this.runResearchTasks(run, tasksForRound, evidenceStore)
+        throwIfResearchAborted(execution.signal)
+        await this.runResearchTasks(run, tasksForRound, evidenceStore, execution)
         await this.record(run, { type: 'RESEARCH_COMPLETED', taskCount: tasksForRound.length, roundIndex })
-
         const bindings = await this.evidenceBinder.bind({
           runId: run.id,
           hypotheses: run.hypotheses ?? [],
@@ -431,6 +504,7 @@ export class ResearchRuntime {
           frame: run.frame,
           plan,
           budget: run.budget,
+          coverageContract: run.coverageContract,
           roundIndex,
           sources: evidenceStore.listSources(),
           evidenceSpans: evidenceStore.listEvidenceSpans(),
@@ -438,15 +512,16 @@ export class ResearchRuntime {
           notes: evidenceStore.listNotes(),
           nowIso: this.nowIso()
         }))
-        if (gapVerdict.status === 'need_more') {
+        if (gapVerdict.status === 'need_more' || gapVerdict.status === 'needs_research_repair') {
           gapVerdict = {
             ...gapVerdict,
             followUpTasks: selectTasksByValueOfInformation(gapVerdict.followUpTasks, run.hypothesisTests ?? [], {
               preset: run.budget.preset,
-              maxSources: Math.max(1, run.budget.maxSources - evidenceStore.listSources().length)
+              maxSources: Math.max(1, run.budget.maxSources - eligibleEvidenceSourceCount(evidenceStore.listSources(), evidenceStore.listEvidenceSpans()))
             })
           }
         }
+        gapVerdict = applyResearchProgressGuard(run.gapVerdicts ?? [], gapVerdict).verdict
         run.gapVerdicts = [...(run.gapVerdicts ?? []), gapVerdict]
         await this.record(run, {
           type: 'GAP_CHECK_COMPLETED',
@@ -478,14 +553,15 @@ export class ResearchRuntime {
         await this.record(run, { type: 'CONVERGENCE_ANALYZED', verdict: convergence, roundIndex })
         await this.options.repository.writeRun(run)
 
-        if (gapVerdict.status !== 'need_more') {
-          if (shouldRunDeepVoiFollowUp(run, convergence, evidenceStore.listSources().length, roundIndex)) {
+        if (gapVerdict.status !== 'need_more' && gapVerdict.status !== 'needs_research_repair') {
+          const eligibleSourceCount = eligibleEvidenceSourceCount(evidenceStore.listSources(), evidenceStore.listEvidenceSpans())
+          if (gapVerdict.status !== 'unanswerable' && shouldRunDeepVoiFollowUp(run, convergence, eligibleSourceCount, roundIndex)) {
             const followUpFromTests = tasksFromHighValueTests({
               tests: run.hypothesisTests ?? [],
               convergence,
               run,
               roundIndex,
-              remainingSources: Math.max(0, run.budget.maxSources - evidenceStore.listSources().length)
+              remainingSources: Math.max(0, run.budget.maxSources - eligibleSourceCount)
             })
             if (followUpFromTests.length > 0) {
               for (const task of followUpFromTests) {
@@ -523,138 +599,71 @@ export class ResearchRuntime {
         throw new Error(`Research evidence collection failed: ${preSynthesisEvidenceVerdict.blockingIssues.join('; ')}`)
       }
 
-      const maxAttempts = Math.max(1, Math.floor(run.budget.maxSynthesisRetries || run.budget.maxRounds || 1))
-      let resolvedReport: CitationResolution | undefined
-      let finalReportMarkdown = ''
-      let previousFailure: { verdict: QualityVerdict } | undefined
-
-      for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
-        const draft = await this.synthesisWriter.writeDraft({
-          runId: run.id,
-          brief: run.brief,
-          frame: run.frame,
-          plan,
-          budget: run.budget,
-          hypotheses: run.hypotheses ?? [],
-          hypothesisTests: run.hypothesisTests ?? [],
-          hypothesisEvidenceBindings: run.hypothesisEvidenceBindings ?? [],
-          hypothesisUpdates: run.hypothesisUpdates ?? [],
-          convergenceVerdicts: run.convergenceVerdicts ?? [],
-          gapVerdicts: run.gapVerdicts ?? [],
+      let sectionEvidenceMap: SectionEvidenceMapEntry[] = []
+      if (run.budget.preset !== 'quick') {
+        const exhaustedQuestionIds = persistedEvidenceGapQuestionIds(run)
+        let writableGate = evaluateWritableGate({
+          run,
+          reportContract: run.reportContract,
+          coverageContract: run.coverageContract,
           sources: evidenceStore.listSources(),
           evidenceSpans: evidenceStore.listEvidenceSpans(),
           claims: evidenceStore.listClaims(),
           notes: evidenceStore.listNotes(),
-          ...(previousFailure ? {
-            revision: {
-              attempt,
-              maxAttempts,
-              previousVerdict: previousFailure.verdict
-            }
-          } : {}),
-          nowIso: this.nowIso()
+          nowIso: this.nowIso(),
+          allowEvidenceGapQuestionIds: exhaustedQuestionIds
         })
-        await this.record(run, {
-          type: 'REPORT_DRAFTED',
-          draftId: `draft_${run.id}_${attempt}`,
-          claimCount: draft.claimIds.length,
-          attempt,
-          maxAttempts
-        })
+        while (!writableGate.ok && writableGate.verdict) {
+          run.verification = writableGate.verdict
+          await this.options.repository.writeRun(run)
+          const repair = await this.runVerificationEvidenceRepair(run, plan, evidenceStore, writableGate.verdict, 0, execution)
+          repair.exhaustedQuestionIds.forEach((questionId) => exhaustedQuestionIds.add(questionId))
+          writableGate = evaluateWritableGate({
+            run,
+            reportContract: run.reportContract,
+            coverageContract: run.coverageContract,
+            sources: evidenceStore.listSources(),
+            evidenceSpans: evidenceStore.listEvidenceSpans(),
+            claims: evidenceStore.listClaims(),
+            notes: evidenceStore.listNotes(),
+            nowIso: this.nowIso(),
+            allowEvidenceGapQuestionIds: exhaustedQuestionIds
+          })
+          if (!repair.progress) break
+        }
+        if (!writableGate.ok && writableGate.verdict) {
+          run.verification = writableGate.verdict
+          await this.options.repository.writeRun(run)
+          throw new Error(`Research writable gate failed: ${writableGate.verdict.blockingIssues.join('; ')}`)
+        }
+        sectionEvidenceMap = writableGate.sectionEvidenceMap
+      }
 
-        resolvedReport = this.citationResolver.resolve({
-          draft,
-          reportPath: run.artifacts.reportPath,
-          sources: evidenceStore.listSources(),
-          evidenceSpans: evidenceStore.listEvidenceSpans(),
-          claims: evidenceStore.listClaims(),
-          nowIso: this.nowIso()
-        })
-        await this.record(run, {
-          type: 'CITATIONS_RESOLVED',
-          citationCount: resolvedReport.bindings.length,
-          unresolvedCitationIds: resolvedReport.unresolvedCitationIds,
-          attempt,
-          maxAttempts
-        })
-
-        finalReportMarkdown = renderFinalReportMarkdown(run, resolvedReport.markdown, {
-          generatedAt: this.nowIso(),
-          sourceCount: evidenceStore.listSources().length,
-          claimCount: evidenceStore.listClaims().length
-        })
-        await this.options.repository.writeReportDraft(run.artifacts, finalReportMarkdown)
-        run.draftReportAvailable = true
-
-        const deterministicVerdict = this.qualityVerifier.verify({
-          brief: run.brief,
-          frame: run.frame,
+      const { resolvedReport, finalReportMarkdown } = await runResearchSynthesisPipeline({
+        run,
+        plan,
+        evidenceStore,
+        sectionEvidenceMap,
+        execution,
+        reportArchitect: this.reportArchitect,
+        synthesisWriter: this.synthesisWriter,
+        researchEditor: this.researchEditor,
+        citationResolver: this.citationResolver,
+        qualityVerifier: this.qualityVerifier,
+        qualityJudge: this.qualityJudge,
+        repository: this.options.repository,
+        nowIso: this.nowIso,
+        record: (event) => this.record(run, event),
+        recordModelUsage: (records) => this.recordModelUsage(run, records, execution),
+        repairEvidence: (verdict, attempt) => this.runVerificationEvidenceRepair(
+          run,
           plan,
-          budget: run.budget,
-          reportMarkdown: finalReportMarkdown,
-          notes: evidenceStore.listNotes(),
-          sources: evidenceStore.listSources(),
-          claims: evidenceStore.listClaims(),
-          evidenceSpans: evidenceStore.listEvidenceSpans(),
-          citations: resolvedReport.bindings,
-          gapVerdicts: run.gapVerdicts ?? [],
-          unresolvedCitationIds: resolvedReport.unresolvedCitationIds,
-          nowIso: this.nowIso()
-        })
-        const judgeVerdict = await this.qualityJudge.judge({
-          scope: run.scope,
-          brief: run.brief,
-          frame: run.frame,
-          plan,
-          budget: run.budget,
-          reportMarkdown: finalReportMarkdown,
-          sources: evidenceStore.listSources(),
-          notes: evidenceStore.listNotes(),
-          claims: evidenceStore.listClaims(),
-          evidenceSpans: evidenceStore.listEvidenceSpans(),
-          citations: resolvedReport.bindings,
-          deterministicVerdict,
-          nowIso: this.nowIso()
-        })
-        const verdict = mergeQualityVerdictWithJudge(deterministicVerdict, judgeVerdict)
-        run.verification = verdict
-        const finalAttempt = attempt >= maxAttempts
-        await this.record(run, {
-          type: 'VERIFICATION_COMPLETED',
+          evidenceStore,
           verdict,
           attempt,
-          maxAttempts,
-          finalAttempt
-        })
-        await this.options.repository.writeRun(run)
-        if (verdict.pass) break
-
-        const failureType = judgeFailureType(verdict)
-        if (failureType === 'scope_frame_mapping_error') {
-          throw new Error(`Research frame mapping failed: ${verdict.blockingIssues.join('; ')}`)
-        }
-        if (failureType === 'evidence_blocking' || failureType === 'missing_required_dimensions') {
-          if (!finalAttempt && await this.runVerificationEvidenceRepair(run, plan, evidenceStore, verdict, attempt)) {
-            previousFailure = undefined
-            continue
-          }
-          throw new Error(`Research verification failed due to ${failureType}: ${verdict.blockingIssues.join('; ')}`)
-        }
-        if (failureType === 'citation_fixable') {
-          throw new Error(`Research citation resolution failed: ${verdict.blockingIssues.join('; ')}`)
-        }
-
-        if (finalAttempt) {
-          throw new Error(`Research verification failed after ${attempt} attempt(s): ${verdict.blockingIssues.join('; ')}`)
-        }
-        previousFailure = {
-          verdict
-        }
-      }
-
-      if (!resolvedReport || !finalReportMarkdown || run.verification?.pass !== true) {
-        throw new Error('Research verification did not produce a passing report')
-      }
+          execution
+        )
+      })
 
       for (const binding of resolvedReport.bindings) {
         await evidenceStore.addCitation(binding)
@@ -686,11 +695,14 @@ export class ResearchRuntime {
       await this.options.repository.writeRun(run)
       return { run, resolvedReport }
     } catch (error) {
-      if (run.status !== 'failed') {
+      this.executionController.cancel(run.id, error instanceof Error ? error.message : String(error))
+      if (run.status !== 'failed' && run.status !== 'cancelled') {
         await this.record(run, { type: 'RUN_FAILED', reason: error instanceof Error ? error.message : String(error) }).catch(() => undefined)
         await this.options.repository.writeRun(run).catch(() => undefined)
       }
       throw error
+    } finally {
+      this.executionController.stop(run.id)
     }
   }
 
@@ -698,8 +710,46 @@ export class ResearchRuntime {
     return this.runs.get(runId)
   }
 
+  async restorePersistedRuns(): Promise<ResearchRun[]> {
+    const runs = await loadPersistedResearchRuns(this.options.repository)
+    for (const run of runs) this.runs.set(run.id, run)
+    return runs
+  }
+
+  async prepareInterruptedRunForResume(runId: string): Promise<boolean> {
+    const run = this.mustGetRun(runId)
+    return prepareInterruptedResearchRunForResume(run, this.options.repository)
+  }
+
+  async retryFailedRun(runId: string): Promise<ResearchRun> {
+    const run = this.mustGetRun(runId)
+    if (run.status !== 'failed' && run.status !== 'cancelled') {
+      throw new Error(`Only a failed or cancelled research run can be retried; current status is ${run.status}`)
+    }
+    if (run.approval?.approvedByUser !== true) {
+      throw new Error('Research cannot be retried without a user-approved brief')
+    }
+    const previousReason = run.terminalReason
+    const retryStartedAt = this.nowIso()
+    run.executionDeadlineAt = new Date(Date.parse(retryStartedAt) + run.budget.timeoutMs).toISOString()
+    run.attemptBudgetBaseline = {
+      modelCalls: run.modelBudgetUsage.modelCalls,
+      totalTokens: run.modelBudgetUsage.totalTokens
+    }
+    if (run.plan) {
+      run.plan.tasks = run.plan.tasks.filter((task) =>
+        task.status === 'done' || !isDerivedResearchRepairTask(task.id)
+      )
+    }
+    delete run.verification
+    await this.record(run, { type: 'RUN_RETRIED', ...(previousReason ? { previousReason } : {}) })
+    await this.options.repository.writeRun(run)
+    return run
+  }
+
   async cancelRun(runId: string, reason?: string): Promise<ResearchRun> {
     const run = this.mustGetRun(runId)
+    this.executionController.cancel(runId, reason)
     await this.record(run, { type: 'RUN_CANCELLED', reason })
     await this.options.repository.writeRun(run)
     return run
@@ -713,8 +763,37 @@ export class ResearchRuntime {
       timestamp: this.nowIso()
     } as ResearchEvent
     run.status = transitionResearchStatus(run.status, completeEvent)
+    if (completeEvent.type === 'RUN_FAILED' || completeEvent.type === 'RESEARCH_UNAVAILABLE') {
+      run.terminalReason = completeEvent.reason
+    } else if (completeEvent.type === 'RUN_RETRIED') {
+      delete run.terminalReason
+    } else if (completeEvent.type === 'VERIFICATION_COMPLETED' && run.status === 'failed') {
+      run.terminalReason = completeEvent.verdict.blockingIssues[0]
+        ?? completeEvent.verdict.llmJudge?.rationale
+        ?? '报告质量校验未通过。'
+    } else if (completeEvent.type === 'RUN_CANCELLED') {
+      run.terminalReason = completeEvent.reason?.trim() || '研究任务已取消。'
+    } else if (completeEvent.type === 'REPORT_WRITTEN') {
+      delete run.terminalReason
+    }
     run.updatedAt = completeEvent.timestamp
     await this.options.repository.appendEvent(run.artifacts, completeEvent)
+  }
+
+  private async recordModelUsage(
+    run: ResearchRun,
+    records: ResearchModelUsageRecord[] | undefined,
+    execution?: ResearchExecutionControl
+  ): Promise<void> {
+    if (execution) {
+      for (const record of records ?? []) await execution.recordModelUsage(record)
+      return
+    }
+    await recordResearchModelUsage({
+      run,
+      records,
+      record: (event) => this.record(run, event)
+    })
   }
 
   private mustGetRun(runId: string): ResearchRun {
@@ -728,50 +807,18 @@ export class ResearchRuntime {
   private async runResearchTasks(
     run: ResearchRun,
     tasks: ResearchTask[],
-    evidenceStore: EvidenceStore
+    evidenceStore: EvidenceStore,
+    execution: ResearchExecutionControl
   ): Promise<void> {
-    const concurrency = Math.max(1, Math.floor(run.budget.maxWorkers || 1))
-    for (let offset = 0; offset < tasks.length; offset += concurrency) {
-      const batch = tasks.slice(offset, offset + concurrency)
-      for (const task of batch) {
-        task.status = 'running'
-        await this.record(run, { type: 'TASK_STARTED', taskId: task.id })
-      }
-
-      const workerResults = await Promise.all(batch.map(async (task) => {
-        const result = await this.options.worker.runTask({
-          runId: run.id,
-          task,
-          brief: run.brief,
-          frame: run.frame,
-          budget: run.budget
-        })
-        return { task, result }
-      }))
-
-      for (const { task, result } of workerResults) {
-        validateWorkerResult(result)
-        this.validateWorkerResultPolicy(run, task, result, evidenceStore.listSources().length)
-        await evidenceStore.recordWorkerResult(result)
-        task.maxSources = result.sources.length
-        task.status = 'done'
-        for (const source of result.sources) {
-          await this.record(run, { type: 'SOURCE_ADDED', sourceId: source.id })
-        }
-        for (const note of result.notes) {
-          await this.record(run, { type: 'NOTE_ADDED', noteId: note.id })
-        }
-        await this.record(run, { type: 'TASK_COMPLETED', taskId: task.id })
-        await this.record(run, {
-          type: 'WORKER_RESULT_RECORDED',
-          taskId: task.id,
-          sourceCount: result.sources.length,
-          evidenceSpanCount: result.evidenceSpans.length,
-          claimCount: result.claims.length,
-          noteCount: result.notes.length
-        })
-      }
-    }
+    await runResearchTaskBatch({
+      run,
+      tasks,
+      evidenceStore,
+      execution,
+      worker: this.worker,
+      record: (event) => this.record(run, event),
+      recordModelUsage: (records) => this.recordModelUsage(run, records, execution)
+    })
   }
 
   private async runVerificationEvidenceRepair(
@@ -779,357 +826,49 @@ export class ResearchRuntime {
     plan: ResearchPlan,
     evidenceStore: EvidenceStore,
     verdict: QualityVerdict,
-    attempt: number
-  ): Promise<boolean> {
-    let remainingSources = Math.max(0, run.budget.maxSources - evidenceStore.listSources().length)
-    const sourceTypes = availableRepairSourceTypes(run, this.worker)
-    if (remainingSources <= 0 || sourceTypes.length === 0) return false
-
-    let roundIndex = (run.gapVerdicts?.length ?? 0) + 1
-    let tasks = verificationEvidenceTasks({
+    attempt: number,
+    execution: ResearchExecutionControl
+  ): Promise<VerificationEvidenceRepairResult> {
+    return runVerificationEvidenceRepair({
       run,
+      plan,
+      evidenceStore,
       verdict,
       attempt,
-      roundIndex,
-      remainingSources,
-      sourceTypes
+      worker: this.worker,
+      coverageEvaluator: this.coverageEvaluator,
+      nowIso: () => this.nowIso(),
+      runTasks: (tasks) => this.runResearchTasks(run, tasks, evidenceStore, execution),
+      record: (event) => this.record(run, event),
+      writeRun: () => this.options.repository.writeRun(run)
     })
-    while (tasks.length > 0 && roundIndex <= run.budget.maxResearchRounds && remainingSources > 0) {
-      for (const task of tasks) {
-        plan.tasks.push(task)
-        await this.record(run, { type: 'FOLLOW_UP_TASK_CREATED', task, roundIndex })
-      }
-      validateResearchPlan(plan, run.frame, run.budget.maxSources)
-      await this.runResearchTasks(run, tasks, evidenceStore)
-      await this.record(run, { type: 'RESEARCH_COMPLETED', taskCount: tasks.length, roundIndex })
-
-      let gapVerdict = normalizeGapVerdict(await this.coverageEvaluator.evaluate({
-        runId: run.id,
-        brief: run.brief,
-        frame: run.frame,
-        plan,
-        budget: run.budget,
-        roundIndex,
-        sources: evidenceStore.listSources(),
-        evidenceSpans: evidenceStore.listEvidenceSpans(),
-        claims: evidenceStore.listClaims(),
-        notes: evidenceStore.listNotes(),
-        nowIso: this.nowIso()
-      }))
-      remainingSources = Math.max(0, run.budget.maxSources - evidenceStore.listSources().length)
-      if (gapVerdict.status === 'need_more') {
-        gapVerdict = {
-          ...gapVerdict,
-          followUpTasks: selectTasksByValueOfInformation(gapVerdict.followUpTasks, run.hypothesisTests ?? [], {
-            preset: run.budget.preset,
-            maxSources: Math.max(1, remainingSources)
-          })
-        }
-      }
-      run.gapVerdicts = [...(run.gapVerdicts ?? []), gapVerdict]
-      await this.record(run, {
-        type: 'GAP_CHECK_COMPLETED',
-        verdict: gapVerdict,
-        roundIndex,
-        followUpTaskCount: gapVerdict.followUpTasks.length
-      })
-      await this.options.repository.writeRun(run)
-
-      if (gapVerdict.status !== 'need_more') return true
-      roundIndex += 1
-      tasks = gapVerdict.followUpTasks
-        .map((task) => ({
-          ...task,
-          sourceTypes: task.sourceTypes.filter((sourceType) => sourceTypes.includes(sourceType))
-        }))
-        .filter((task) => task.sourceTypes.length > 0)
-        .slice(0, Math.max(1, Math.min(run.budget.maxSubagents, remainingSources)))
-    }
-    return false
   }
 
-  private validateWorkerResultPolicy(
-    run: ResearchRun,
-    task: ResearchTask,
-    result: WorkerResult,
-    existingSourceCount: number
-  ): void {
-    if (result.taskId !== task.id) {
-      throw new Error(`Worker result taskId ${result.taskId} does not match runtime task ${task.id}`)
-    }
-    const allowedSourceTypes = new Set(run.brief.sourcePolicy.allowedSourceTypes)
-    for (const source of result.sources) {
-      if (!allowedSourceTypes.has(source.sourceType)) {
-        throw new Error(`Source ${source.id} uses disallowed source type ${source.sourceType}`)
-      }
-    }
-    if (result.sources.length > task.maxSources) {
-      throw new Error(`Worker result for ${task.id} returned ${result.sources.length} sources, exceeding task limit ${task.maxSources}`)
-    }
-    if (existingSourceCount + result.sources.length > run.budget.maxSources) {
-      throw new Error(`Research run ${run.id} exceeded source budget ${run.budget.maxSources}`)
-    }
-    const taskQuestionIds = new Set(task.questionIds)
-    for (const questionId of result.questionIds) {
-      if (!taskQuestionIds.has(questionId)) {
-        throw new Error(`Worker result ${result.taskId} references question ${questionId} outside task scope`)
+}
+
+function isDerivedResearchRepairTask(taskId: string): boolean {
+  return taskId.startsWith('verification_repair_') || taskId.startsWith('gap_')
+}
+
+function scopeModelCallCount(scope: ResearchScopeAssessment): number {
+  if (scope.assessmentModel) return 1
+  return Math.min(1, scope.modelUsage?.length ?? 0)
+}
+
+export function persistedEvidenceGapQuestionIds(run: ResearchRun): Set<string> {
+  const questionIds = new Set((run.reportBlueprint?.sections ?? [])
+    .filter((section) => section.evidenceMode === 'evidence_gap')
+    .flatMap((section) => section.questionIds))
+  for (const verdict of run.gapVerdicts ?? []) {
+    for (const questionId of verdict.exhaustedQuestionIds ?? []) questionIds.add(questionId)
+  }
+  const latestGap = run.gapVerdicts?.at(-1)
+  if (latestGap?.status === 'unanswerable') {
+    for (const coverage of latestGap.coverageByQuestion) {
+      if ((coverage.required || coverage.priority === 'high') && !coverage.covered) {
+        questionIds.add(coverage.questionId)
       }
     }
   }
-}
-
-class PlanAgentSupervisor implements ResearchSupervisor {
-  constructor(private readonly planAgent: PlanAgent) {}
-
-  createInitialPlan(input: Parameters<ResearchSupervisor['createInitialPlan']>[0]): Promise<ResearchPlan> {
-    return this.planAgent.createPlan(input)
-  }
-}
-
-function normalizeGapVerdict(verdict: ResearchGapVerdict): ResearchGapVerdict {
-  if (verdict.status !== 'need_more' || verdict.followUpTasks.length > 0) return verdict
-  return {
-    ...verdict,
-    status: 'budget_exhausted',
-    stopReason: `${verdict.stopReason} Evaluator 没有返回可执行补充任务，runtime 将进入证据门校验。`
-  }
-}
-
-function shouldRunDeepVoiFollowUp(
-  run: ResearchRun,
-  convergence: ResearchConvergenceVerdict,
-  sourceCount: number,
-  roundIndex: number
-): boolean {
-  return run.budget.preset === 'deep' &&
-    convergence.wouldFurtherResearchChangeConclusion &&
-    convergence.unresolvedHighValueTestIds.length > 0 &&
-    roundIndex < run.budget.maxResearchRounds &&
-    sourceCount < run.budget.maxSources
-}
-
-function tasksFromHighValueTests(input: {
-  tests: HypothesisTest[]
-  convergence: ResearchConvergenceVerdict
-  run: ResearchRun
-  roundIndex: number
-  remainingSources: number
-}): ResearchTask[] {
-  const unresolved = new Set(input.convergence.unresolvedHighValueTestIds)
-  const selectedTests = input.tests
-    .filter((test) => unresolved.has(test.id))
-    .sort((left, right) => right.valueOfInformation.score - left.valueOfInformation.score)
-    .slice(0, Math.max(1, Math.min(input.run.budget.maxSubagents, input.remainingSources, 3)))
-  if (selectedTests.length === 0 || input.remainingSources <= 0) return []
-  const perTask = Math.max(1, Math.floor(input.remainingSources / selectedTests.length))
-  return selectedTests.map((test, index) => ({
-    id: `voi_${input.roundIndex + 1}_task_${index + 1}`,
-    questionIds: test.questionIds,
-    hypothesisIds: [test.hypothesisId],
-    testIds: [test.id],
-    objective: `寻找能改变最终判断的证据：${test.testQuestion}`,
-    expectedEvidence: [
-      `如果该搜索成功，必须能改变、削弱或限定最终判断；否则不继续补充相关资料。`,
-      test.expectedEvidenceIfTrue,
-      test.evidenceThatWouldWeakenIt
-    ],
-    sourceTypes: test.preferredSources,
-    searchHints: [
-      input.run.brief.topic,
-      input.run.frame.centralQuestion,
-      test.testQuestion,
-      test.expectedEvidenceIfTrue,
-      test.evidenceThatWouldWeakenIt
-    ].map((hint) => hint.trim()).filter(Boolean),
-    maxSources: Math.max(1, Math.min(perTask, input.remainingSources - index * perTask || 1)),
-    priority: test.priority,
-    valueOfInformation: test.valueOfInformation,
-    status: 'pending'
-  }))
-}
-
-function availableRepairSourceTypes(run: ResearchRun, worker: ResearchTaskWorker): ResearchTask['sourceTypes'] {
-  const allowed = new Set(run.brief.sourcePolicy.allowedSourceTypes)
-  const sourceTypes: ResearchTask['sourceTypes'] = []
-  if (allowed.has('web') && (worker.hasSearchCapability?.() ?? false)) {
-    sourceTypes.push('web')
-  }
-  if (worker.hasLocalEvidenceCapability?.() ?? false) {
-    for (const sourceType of run.brief.sourcePolicy.allowedSourceTypes) {
-      if (sourceType !== 'web') sourceTypes.push(sourceType)
-    }
-  }
-  return [...new Set(sourceTypes)]
-}
-
-function verificationEvidenceTasks(input: {
-  run: ResearchRun
-  verdict: QualityVerdict
-  attempt: number
-  roundIndex: number
-  remainingSources: number
-  sourceTypes: ResearchTask['sourceTypes']
-}): ResearchTask[] {
-  if (input.remainingSources <= 0 || input.sourceTypes.length === 0) return []
-  const requiredQuestions = input.run.frame.coreQuestions
-    .filter((question) => question.required || question.priority === 'high')
-    .slice(0, Math.max(1, Math.min(input.run.budget.maxSubagents, input.remainingSources, 3)))
-  const questions = requiredQuestions.length > 0 ? requiredQuestions : input.run.frame.coreQuestions.slice(0, 1)
-  if (questions.length === 0) return []
-  const perTask = Math.max(1, Math.floor(input.remainingSources / questions.length))
-  return questions.map((question, index) => ({
-    id: `verification_repair_${input.attempt}_${input.roundIndex}_${index + 1}`,
-    questionIds: [question.id],
-    objective: `补充能改变最终判断的真实证据：${question.text}`,
-    expectedEvidence: [
-      '这个搜索任务如果成功，必须能改变、削弱或限定最终判断；如果只能补充相关背景，就不要把它当作完成证据。',
-      ...input.verdict.blockingIssues.slice(0, 3)
-    ],
-    sourceTypes: input.sourceTypes,
-    searchHints: [
-      input.run.brief.topic,
-      input.run.frame.centralQuestion,
-      question.text,
-      ...input.verdict.blockingIssues.slice(0, 4)
-    ].map((hint) => hint.trim()).filter(Boolean),
-    maxSources: Math.max(1, Math.min(perTask, input.remainingSources - index * perTask || 1)),
-    priority: question.priority,
-    valueOfInformation: {
-      uncertaintyImportance: 1,
-      discriminativePower: 1,
-      decisionImpact: 1,
-      sourceFeasibility: input.sourceTypes.includes('web') ? 0.9 : 0.7,
-      estimatedCost: 0.4,
-      score: 0.95,
-      decisionRelevanceQuestion: '如果补到这条证据，最终判断是否会改变、削弱或被限定？'
-    },
-    status: 'pending'
-  }))
-}
-
-function evidenceVerdictBeforeSynthesis(
-  run: ResearchRun,
-  latestGap: ResearchGapVerdict | undefined,
-  sources: SourceRecord[],
-  evidenceSpans: EvidenceSpan[],
-  webSearchEnabled: boolean,
-  nowIso: string
-): QualityVerdict | undefined {
-  const sourceById = new Map(sources.map((source) => [source.id, source]))
-  const hasRealVerifiableEvidence = evidenceSpans.some((span) =>
-    canCiteEvidenceSpan(span, sourceById.get(span.sourceId))
-  )
-  const isPreliminaryQuick = run.budget.preset === 'quick' && !webSearchEnabled
-
-  if (!hasRealVerifiableEvidence && !isPreliminaryQuick) {
-    const primaryIssue = `evidence_blocking: 缺乏真实可验证的研究证据（Web搜索已禁用，或无本地文件支撑），系统无法生成带引用的 DeepResearch 报告。`
-    const issues = [
-      { code: 'research_evidence_insufficient', message: primaryIssue, severity: 'blocking' as const }
-    ]
-    return {
-      pass: false,
-      scores: {
-        requirementsAlignment: 0,
-        answersCoreQuestions: 0,
-        followsCoreResearchThread: 0,
-        reportCompleteness: 0,
-        citationAccuracy: 0,
-        evidenceCoverage: 0,
-        sourceQuality: 0,
-        conflictHandling: 0,
-        uncertaintyCalibration: 0,
-        writingQuality: 0,
-        llmJudgeOverall: 0
-      },
-      blockingIssues: [primaryIssue],
-      warnings: ['由于未收集到真实外部或本地证据，已前置拦截，未调用 Synthesis Writer 或 LLM Judge。'],
-      recommendedFixes: [
-        '开启联网功能重新运行，以获取真实的 Web 网页来源证据。',
-        '在 Workspace 中上传包含相关研究事实的本地文件。'
-      ],
-      issues,
-      verifiedAt: nowIso
-    }
-  }
-
-  if (!latestGap || latestGap.status !== 'budget_exhausted' || latestGap.missingEvidence.length === 0) return undefined
-  const requiredQuestions = latestGap.coverageByQuestion.filter((coverage) => coverage.required || coverage.priority === 'high')
-  const coveredQuestions = requiredQuestions.filter((coverage) => coverage.covered).length
-  const answerCoverage = requiredQuestions.length === 0 ? 0 : coveredQuestions / requiredQuestions.length
-  const primaryIssue = `证据收集未达到 ${run.budget.preset} preset 的最低完成标准：${latestGap.stopReason}`
-  const missingEvidenceIssues = latestGap.missingEvidence.slice(0, 8).map((item) => `证据缺口：${item}`)
-  const issues = [
-    { code: 'research_evidence_insufficient', message: primaryIssue, severity: 'blocking' as const },
-    ...missingEvidenceIssues.map((message) => ({
-      code: 'research_evidence_gap',
-      message,
-      severity: 'blocking' as const
-    }))
-  ]
-  return {
-    pass: false,
-    scores: {
-      requirementsAlignment: answerCoverage,
-      answersCoreQuestions: answerCoverage,
-      followsCoreResearchThread: answerCoverage,
-      reportCompleteness: 0,
-      citationAccuracy: 0,
-      evidenceCoverage: answerCoverage,
-      sourceQuality: 0,
-      conflictHandling: 0,
-      uncertaintyCalibration: 0,
-      writingQuality: 0,
-      llmJudgeOverall: 0
-    },
-    blockingIssues: issues.map((issue) => issue.message),
-    warnings: ['证据不足，runtime 已停止报告合成，未调用 Synthesis Writer 或 LLM Judge。'],
-    recommendedFixes: [
-      '补充更具体的检索词、官方来源、数据页或可交叉验证的行业资料后重新运行。',
-      '如果用户需要历史长周期分析，应在需求里明确时间范围，避免默认最近一年窗口过窄。'
-    ],
-    issues,
-    verifiedAt: nowIso
-  }
-}
-
-function judgeFailureType(
-  verdict: QualityVerdict
-): 'writing_fixable' | 'citation_fixable' | 'evidence_blocking' | 'missing_required_dimensions' | 'scope_frame_mapping_error' {
-  const issueText = verdict.issues?.map((issue) => `${issue.code}\n${issue.message}`).join('\n') ?? ''
-  const blockingText = verdict.blockingIssues.join('\n')
-  const fullText = `${issueText}\n${blockingText}`.toLowerCase()
-  if (/scope_frame_mapping|frame mapping|您是否|请说明|待确认|clarification prompt/.test(fullText)) {
-    return 'scope_frame_mapping_error'
-  }
-  if (/required_question_uncovered|user_clarification_uncovered|missing_required_dimensions|缺维度|缺少.*维度|没有覆盖|未覆盖|没覆盖|未回答|没回答|核心问题|综合实力|特定领域差距|产业结构|贸易|供应链|科技创新|数字经济|脱钩/.test(fullText)) {
-    return 'missing_required_dimensions'
-  }
-  const isEvidenceBlocking = verdict.issues?.some((issue) => {
-    const code = (issue.code || '').toLowerCase()
-    const msg = (issue.message || '').toLowerCase()
-    return code.startsWith('research_') ||
-      code.includes('evidence') ||
-      code.includes('claim') ||
-      code.includes('unsupported') ||
-      code.includes('fallback') ||
-      msg.includes('资料卡') ||
-      msg.includes('模型生成') ||
-      msg.includes('证据使用严重不足') ||
-      msg.includes('没有真实网页') ||
-      msg.includes('外部可验证') ||
-      msg.includes('证据基础薄弱') ||
-      msg.includes('抽取失败') ||
-      msg.includes('兜底证据') ||
-      msg.includes('fallback_extracted') ||
-      msg.includes('this operation was aborted')
-  })
-  if (isEvidenceBlocking) return 'evidence_blocking'
-
-  const isCitationFixable = verdict.issues?.some((issue) => {
-    const code = (issue.code || '').toLowerCase()
-    return code.includes('citation') || code.includes('cite')
-  })
-  if (isCitationFixable) return 'citation_fixable'
-
-  return 'writing_fixable'
+  return questionIds
 }

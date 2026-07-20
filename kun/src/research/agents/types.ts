@@ -1,7 +1,7 @@
 /**
- * [INPUT]: 依赖 core/types 的 brief、frame、budget、plan 和 evidence/types 的证据记录
- * [OUTPUT]: 对外提供 PlanAgent、ResearchSupervisor、CoverageEvaluator、Worker、Writer 等 agent 接口
- * [POS]: research/agents 的接口边界，约束 runtime 与各 agent 节点之间的数据形状
+ * [INPUT]: 依赖 core/types 的 brief、frame、budget、plan、Report/CoverageContract、ReportBlueprint、SectionEvidenceMap 和 evidence/types 的证据记录
+ * [OUTPUT]: 对外提供 Supervisor、携带当前时间与既有来源上下文的 Worker、CoverageEvaluator、ReportArchitect、Writer、分章 DraftReport、ResearchEditor 等 agent 接口
+ * [POS]: research/agents 的接口边界，约束 runtime、WritableGate 与研究编辑流水线之间的数据形状
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
  */
 import type {
@@ -11,12 +11,18 @@ import type {
   HypothesisUpdate,
   QualityVerdict,
   ResearchConvergenceVerdict,
+  ResearchCoverageContract,
   ResearchBrief,
   ResearchBudget,
   ResearchFrame,
   ResearchGapVerdict,
   ResearchHypothesis,
+  ResearchExecutionControl,
+  ResearchModelUsageRecord,
   ResearchPlan,
+  ResearchReportBlueprint,
+  ResearchReportContract,
+  SectionEvidenceMapEntry,
   ResearchTask
 } from '../core/types.js'
 import type { AtomicClaim, CitationBinding, EvidenceSpan, ResearchNote, SourceRecord } from '../evidence/types.js'
@@ -37,6 +43,7 @@ export type WorkerResult = {
   unresolvedQuestions: string[]
   conflicts: ConflictCandidate[]
   suggestedNextQueries: string[]
+  modelUsage?: ResearchModelUsageRecord[]
 }
 
 export type PlanAgentInput = {
@@ -51,7 +58,9 @@ export type PlanAgent = {
   createPlan(input: PlanAgentInput): Promise<ResearchPlan>
 }
 
-export type ResearchSupervisorInput = PlanAgentInput
+export type ResearchSupervisorInput = PlanAgentInput & {
+  reportContract?: ResearchReportContract
+}
 
 export type ResearchSupervisor = {
   createInitialPlan(input: ResearchSupervisorInput): Promise<ResearchPlan>
@@ -128,6 +137,7 @@ export type CoverageEvaluatorInput = {
   frame: ResearchFrame
   plan: ResearchPlan
   budget: ResearchBudget
+  coverageContract?: ResearchCoverageContract
   roundIndex: number
   sources: SourceRecord[]
   evidenceSpans: EvidenceSpan[]
@@ -154,14 +164,18 @@ export type ConvergenceAnalyzer = {
 
 export type ResearchTaskWorkerInput = {
   runId: string
+  nowIso?: string
   task: ResearchTask
   brief: ResearchBrief
   frame: ResearchFrame
   budget: ResearchBudget
+  existingSourceUrls?: string[]
+  execution?: ResearchExecutionControl
 }
 
 export type ResearchTaskWorker = {
   runTask(input: ResearchTaskWorkerInput): Promise<WorkerResult>
+  recommendedConcurrency?(): number
   hasSearchCapability?(): boolean
   hasLocalEvidenceCapability?(): boolean
 }
@@ -178,14 +192,26 @@ export type SynthesisWriterInput = {
   hypothesisUpdates?: HypothesisUpdate[]
   convergenceVerdicts?: ResearchConvergenceVerdict[]
   gapVerdicts?: ResearchGapVerdict[]
+  reportContract?: ResearchReportContract
+  coverageContract?: ResearchCoverageContract
+  reportBlueprint?: ResearchReportBlueprint
+  sectionEvidenceMap?: SectionEvidenceMapEntry[]
   sources: SourceRecord[]
   evidenceSpans: EvidenceSpan[]
   claims: AtomicClaim[]
   notes: ResearchNote[]
+  execution?: ResearchExecutionControl
+  retryFeedback?: string
   revision?: {
     attempt: number
-    maxAttempts: number
+    /** @deprecated Compatibility-only hint; the synthesis loop has no fixed attempt limit. */
+    maxAttempts?: number
     previousVerdict: QualityVerdict
+    previousDraftMarkdown?: string
+    targets?: {
+      sectionIds: string[]
+      rewriteClosing: boolean
+    }
   }
   nowIso: string
 }
@@ -194,10 +220,27 @@ export type DraftReport = {
   markdown: string
   claimIds: string[]
   generatedAt: string
+  diagnostic?: boolean
+  sectioned?: boolean
+  modelUsage?: ResearchModelUsageRecord[]
 }
 
 export type SynthesisWriter = {
   writeDraft(input: SynthesisWriterInput): Promise<DraftReport>
+}
+
+export type ReportArchitectInput = Omit<SynthesisWriterInput, 'retryFeedback' | 'revision'>
+
+export type ReportArchitect = {
+  createBlueprint(input: ReportArchitectInput): Promise<ResearchReportBlueprint>
+}
+
+export type ResearchEditorInput = SynthesisWriterInput & {
+  draft: DraftReport
+}
+
+export type ResearchEditor = {
+  editDraft(input: ResearchEditorInput): Promise<DraftReport>
 }
 
 export type CitationResolutionInput = {

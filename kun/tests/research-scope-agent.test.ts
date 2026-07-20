@@ -1,8 +1,18 @@
 import { describe, expect, it } from 'vitest'
-import { ModelScopeAgent } from '../src/research/index.js'
+import { buildModelScopePrompt, ModelScopeAgent } from '../src/research/index.js'
 import type { ModelClient, ModelRequest, ModelStreamChunk } from '../src/ports/model-client.js'
 
 describe('ModelScopeAgent', () => {
+  it('anchors relative date ranges to the runtime date', () => {
+    const prompt = buildModelScopePrompt({
+      topic: '分析过去五年的中国乒乓球实力',
+      nowIso: '2026-07-11T00:00:00.000Z'
+    })
+
+    expect(prompt).toContain('当前日期：2026-07-11')
+    expect(prompt).toContain('相对时间范围必须以上述当前日期为基准')
+  })
+
   it('uses a short JSON model call to decide scope clarification', async () => {
     const model = new FakeModelClient(JSON.stringify({
       understood: false,
@@ -46,6 +56,35 @@ describe('ModelScopeAgent', () => {
     expect(scope.confirmationChecklist.join('\n')).toContain('等待用户')
   })
 
+  it('does not let the model add preference questions to an already actionable request', async () => {
+    const model = new FakeModelClient(JSON.stringify({
+      understood: true,
+      coreQuestionsConfirmed: false,
+      readyForBrief: false,
+      summary: '解释 HTTP 缓存验证机制。',
+      mainContradiction: '在缓存效率与数据新鲜度之间取得平衡。',
+      assumptions: [],
+      clarificationQuestions: [{
+        id: 'scope_depth',
+        question: '希望采用什么技术深度？',
+        why: '可以进一步调整篇幅。',
+        options: ['基础', '深入'],
+        required: true
+      }]
+    }))
+    const agent = new ModelScopeAgent({ modelClient: model, model: 'fake-scope-model', timeoutMs: 1_000 })
+
+    const scope = await agent.assess({
+      topic: '仅基于 MDN 官方文档，解释 HTTP 缓存中强弱 ETag、freshness 与 validation、no-cache 与 no-store 的区别和协同机制；面向开发者和架构师，包含 API 与静态资源场景，输出完整中文报告，不补充其他来源',
+      nowIso: '2026-07-12T00:00:00.000Z'
+    })
+
+    expect(scope.readyForBrief).toBe(true)
+    expect(scope.coreQuestionsConfirmed).toBe(true)
+    expect(scope.clarificationQuestions).toEqual([])
+    expect(scope.mainContradiction).toContain('缓存效率与数据新鲜度')
+  })
+
   it('falls back to deterministic scope when the model response is unusable', async () => {
     const model = new FakeModelClient('not json')
     const agent = new ModelScopeAgent({
@@ -64,6 +103,21 @@ describe('ModelScopeAgent', () => {
     expect(scope.readyForBrief).toBe(false)
     expect(scope.clarificationQuestions.map((question) => question.id)).toContain('scope_target')
     expect(scope.confirmationChecklist.join('\n')).toContain('等待用户')
+  })
+
+  it('does not hide an explicitly unknown provider behind deterministic scope fallback', async () => {
+    const model: ModelClient = {
+      provider: 'compat-multi',
+      model: 'fake-scope-model',
+      stream: () => { throw new Error('unknown_provider_id: missing-provider') }
+    }
+    const agent = new ModelScopeAgent({ modelClient: model, model: 'fake-scope-model', timeoutMs: 1_000 })
+
+    await expect(agent.assess({
+      topic: '研究 HTTP 缓存验证机制',
+      providerId: 'missing-provider',
+      nowIso: '2026-07-12T00:00:00.000Z'
+    })).rejects.toThrow('unknown_provider_id: missing-provider')
   })
 
   it('does not keep asking when the user already filled core scope fields', async () => {
@@ -106,8 +160,91 @@ describe('ModelScopeAgent', () => {
     expect(scope.clarificationQuestions).toEqual([])
     const checklist = scope.confirmationChecklist.join('\n')
     expect(checklist).toContain('核心问题')
-    expect(checklist).toContain('搞懂中美对比的核心矛盾')
+    expect(checklist).toContain('中美经济与贸易竞争中的结构性差异')
     expect(checklist).not.toContain('以下是用户在 scope 交互表单')
+  })
+
+  it('treats optional-only follow-up questions as non-blocking after user clarification', async () => {
+    const model = new FakeModelClient(JSON.stringify({
+      understood: true,
+      coreQuestionsConfirmed: true,
+      readyForBrief: false,
+      summary: '用户已经选择中美经济与贸易、科技创新作为对比维度。',
+      mainContradiction: '中美结构性差异如何影响未来趋势。',
+      assumptions: ['未选择可选补充时使用默认时间边界。'],
+      clarificationQuestions: [{
+        id: 'scope_optional_boundary',
+        question: '是否要额外限定时间范围？',
+        why: '时间范围只用于细化报告边界，不应阻塞简报。',
+        options: ['最近三年', '不限时间'],
+        required: false
+      }]
+    }))
+    const agent = new ModelScopeAgent({
+      modelClient: model,
+      model: 'fake-scope-model',
+      timeoutMs: 1_000
+    })
+
+    const scope = await agent.assess({
+      topic: '对比中美差异',
+      clarifications: [{
+        message: [
+          '1. 您希望对比中美两国的哪个具体领域或维度？',
+          '回答：经济与贸易；科技与创新',
+          '',
+          '未选择可选补充，使用默认边界继续。'
+        ].join('\n')
+      }],
+      nowIso: '2026-06-29T00:00:00.000Z'
+    })
+
+    expect(scope.readyForBrief).toBe(true)
+    expect(scope.coreQuestionsConfirmed).toBe(true)
+    expect(scope.clarificationQuestions).toEqual([])
+    expect(scope.confirmationChecklist.join('\n')).toContain('核心问题')
+  })
+
+  it('does not clear unanswered required questions after a partial structured answer', async () => {
+    const model = new FakeModelClient(JSON.stringify({
+      understood: true,
+      coreQuestionsConfirmed: false,
+      readyForBrief: false,
+      summary: '用户只回答了调研对象，核心决策问题仍未确认。',
+      mainContradiction: '还需要确认研究要支持的核心判断。',
+      assumptions: [],
+      clarificationQuestions: [{
+        id: 'scope_decision',
+        question: '这次研究最终要帮助你判断什么？',
+        why: '没有核心判断就无法组织证据。',
+        options: ['解释原因', '辅助选择'],
+        required: true
+      }]
+    }))
+    const agent = new ModelScopeAgent({ modelClient: model, model: 'fake-scope-model', timeoutMs: 1_000 })
+    const pendingQuestions = [{
+      id: 'scope_target',
+      question: '你想调研的具体对象是什么？',
+      why: '需要明确对象。',
+      options: ['产品', '公司'],
+      required: true
+    }, {
+      id: 'scope_decision',
+      question: '这次研究最终要帮助你判断什么？',
+      why: '需要明确核心判断。',
+      options: ['解释原因', '辅助选择'],
+      required: true
+    }]
+
+    const scope = await agent.assess({
+      topic: '帮我研究一下',
+      pendingQuestions,
+      clarifications: [{ message: '1. 你想调研的具体对象是什么？\n回答：Cursor' }],
+      nowIso: '2026-06-29T00:00:00.000Z'
+    })
+
+    expect(scope.readyForBrief).toBe(false)
+    expect(scope.clarificationQuestions.map((question) => question.id)).toContain('scope_decision')
   })
 })
 

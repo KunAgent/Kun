@@ -1,7 +1,7 @@
 /**
  * [INPUT]: 依赖 core/types 的 ResearchBudget 与 reasoning effort 类型
- * [OUTPUT]: 对外提供 DeepResearch preset 解析、reasoning effort 归一化和预算合并函数
- * [POS]: research/core 的预算策略层，连接 UI 推理档位和 runtime 硬预算
+ * [OUTPUT]: 对外提供 DeepResearch preset 解析、reasoning effort 归一化和异常安全上限合并函数；standard/deep 默认允许每个必答章节独立 subagent，旧轮次字段只接收不执行也不持久化
+ * [POS]: research/core 的运行安全策略层，连接 UI 推理档位和 runtime；来源、调用、token、subagent 与总时限只作为失控保护，不作为普通完成门槛
  * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
  */
 import { DEFAULT_RESEARCH_BUDGET, type ResearchBudget, type ResearchPreset, type ResearchReasoningEffort } from './types.js'
@@ -15,33 +15,40 @@ const RESEARCH_REASONING_EFFORTS = new Set<ResearchReasoningEffort>([
   'max'
 ])
 
+export const RESEARCH_BUDGET_LIMITS = {
+  maxWorkers: 8,
+  maxSubagents: 16,
+  maxSources: 100,
+  maxModelCalls: 128,
+  maxTotalTokens: 4_000_000,
+  timeoutMs: 4 * 60 * 60 * 1000
+} as const
+
 const PRESET_BUDGETS: Record<ResearchPreset, ResearchBudget> = {
   quick: {
     preset: 'quick',
     reasoningEffort: 'medium',
     maxWorkers: 2,
     maxSubagents: 2,
-    maxRounds: 2,
-    maxResearchRounds: 1,
-    maxSynthesisRetries: 2,
-    minSources: 6,
-    targetSources: 10,
-    maxSources: 15,
-    timeoutMs: 4 * 60 * 1000
+    minSources: 4,
+    targetSources: 6,
+    maxSources: RESEARCH_BUDGET_LIMITS.maxSources,
+    maxModelCalls: RESEARCH_BUDGET_LIMITS.maxModelCalls,
+    maxTotalTokens: RESEARCH_BUDGET_LIMITS.maxTotalTokens,
+    timeoutMs: RESEARCH_BUDGET_LIMITS.timeoutMs
   },
   standard: DEFAULT_RESEARCH_BUDGET,
   deep: {
     preset: 'deep',
     reasoningEffort: 'max',
-    maxWorkers: 6,
-    maxSubagents: 8,
-    maxRounds: 3,
-    maxResearchRounds: 4,
-    maxSynthesisRetries: 3,
-    minSources: 35,
-    targetSources: 70,
-    maxSources: 100,
-    timeoutMs: 20 * 60 * 1000
+    maxWorkers: 4,
+    maxSubagents: RESEARCH_BUDGET_LIMITS.maxSubagents,
+    minSources: 1,
+    targetSources: 30,
+    maxSources: RESEARCH_BUDGET_LIMITS.maxSources,
+    maxModelCalls: RESEARCH_BUDGET_LIMITS.maxModelCalls,
+    maxTotalTokens: RESEARCH_BUDGET_LIMITS.maxTotalTokens,
+    timeoutMs: RESEARCH_BUDGET_LIMITS.timeoutMs
   }
 }
 
@@ -68,18 +75,24 @@ export function researchPresetForReasoningEffort(effort: ResearchReasoningEffort
   }
 }
 
-export function resolveResearchBudget(input: Partial<ResearchBudget> = {}): ResearchBudget {
+export function resolveResearchBudget(input: Partial<ResearchBudget> & { isComparisonTopic?: boolean } = {}): ResearchBudget {
   const reasoningEffort = normalizeResearchReasoningEffort(input.reasoningEffort)
-  const preset = input.preset ?? researchPresetForReasoningEffort(reasoningEffort)
+  let preset = input.preset ?? researchPresetForReasoningEffort(reasoningEffort)
+  if (preset === 'quick' && input.isComparisonTopic) {
+    preset = 'standard'
+  }
   const base = PRESET_BUDGETS[preset] ?? DEFAULT_RESEARCH_BUDGET
+  const {
+    maxRounds: _legacyMaxRounds,
+    maxResearchRounds: _legacyMaxResearchRounds,
+    maxSynthesisRetries: _legacyMaxSynthesisRetries,
+    ...activeInput
+  } = input
   const merged: ResearchBudget = {
     ...base,
-    ...input,
+    ...activeInput,
     preset,
-    reasoningEffort,
-    maxRounds: input.maxRounds ?? input.maxSynthesisRetries ?? base.maxRounds,
-    maxResearchRounds: input.maxResearchRounds ?? base.maxResearchRounds,
-    maxSynthesisRetries: input.maxSynthesisRetries ?? input.maxRounds ?? base.maxSynthesisRetries
+    reasoningEffort
   }
   return normalizeBudgetNumbers(merged)
 }
@@ -97,40 +110,44 @@ export function researchReasoningForStage(
   if (stage === 'judge') {
     return 'off'
   }
+  if (stage === 'writer') {
+    return 'off'
+  }
   if (effort === 'auto') return 'high'
   if (effort === 'off') return 'low'
   return effort
 }
 
 function normalizeBudgetNumbers(budget: ResearchBudget): ResearchBudget {
-  const maxSources = positiveInteger(budget.maxSources, DEFAULT_RESEARCH_BUDGET.maxSources)
+  const maxSources = boundedInteger(budget.maxSources, DEFAULT_RESEARCH_BUDGET.maxSources, RESEARCH_BUDGET_LIMITS.maxSources)
   const minSources = Math.min(
     maxSources,
-    positiveInteger(budget.minSources, Math.min(DEFAULT_RESEARCH_BUDGET.minSources, maxSources))
+    boundedInteger(budget.minSources, Math.min(DEFAULT_RESEARCH_BUDGET.minSources, maxSources), RESEARCH_BUDGET_LIMITS.maxSources)
   )
   const targetSources = Math.min(
     maxSources,
-    Math.max(minSources, positiveInteger(budget.targetSources, Math.min(DEFAULT_RESEARCH_BUDGET.targetSources, maxSources)))
+    Math.max(minSources, boundedInteger(budget.targetSources, Math.min(DEFAULT_RESEARCH_BUDGET.targetSources, maxSources), RESEARCH_BUDGET_LIMITS.maxSources))
   )
-  const maxWorkers = positiveInteger(budget.maxWorkers, DEFAULT_RESEARCH_BUDGET.maxWorkers)
-  const maxSubagents = Math.max(1, positiveInteger(budget.maxSubagents, maxWorkers))
-  const maxSynthesisRetries = positiveInteger(budget.maxSynthesisRetries, positiveInteger(budget.maxRounds, DEFAULT_RESEARCH_BUDGET.maxSynthesisRetries))
+  const maxSubagents = boundedInteger(budget.maxSubagents, DEFAULT_RESEARCH_BUDGET.maxSubagents, RESEARCH_BUDGET_LIMITS.maxSubagents)
+  const maxWorkers = Math.min(
+    maxSubagents,
+    boundedInteger(budget.maxWorkers, DEFAULT_RESEARCH_BUDGET.maxWorkers, RESEARCH_BUDGET_LIMITS.maxWorkers)
+  )
   return {
     ...budget,
     maxWorkers,
     maxSubagents,
-    maxRounds: positiveInteger(budget.maxRounds, maxSynthesisRetries),
-    maxResearchRounds: positiveInteger(budget.maxResearchRounds, DEFAULT_RESEARCH_BUDGET.maxResearchRounds),
-    maxSynthesisRetries,
     minSources,
     targetSources,
     maxSources,
-    timeoutMs: positiveInteger(budget.timeoutMs, DEFAULT_RESEARCH_BUDGET.timeoutMs)
+    maxModelCalls: boundedInteger(budget.maxModelCalls, DEFAULT_RESEARCH_BUDGET.maxModelCalls, RESEARCH_BUDGET_LIMITS.maxModelCalls),
+    maxTotalTokens: boundedInteger(budget.maxTotalTokens, DEFAULT_RESEARCH_BUDGET.maxTotalTokens, RESEARCH_BUDGET_LIMITS.maxTotalTokens),
+    timeoutMs: boundedInteger(budget.timeoutMs, DEFAULT_RESEARCH_BUDGET.timeoutMs, RESEARCH_BUDGET_LIMITS.timeoutMs)
   }
 }
 
-function positiveInteger(value: number, fallback: number): number {
-  return Number.isInteger(value) && value > 0 ? value : fallback
+function boundedInteger(value: number, fallback: number, maximum: number): number {
+  return Number.isInteger(value) && value > 0 ? Math.min(value, maximum) : fallback
 }
 
 function assertNever(value: never): never {
