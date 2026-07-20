@@ -1277,7 +1277,7 @@ describe('model-backed research nodes', () => {
       evidenceSpans: [{
         id: 'span_1',
         sourceId: 'source_1',
-        text: '事实一。',
+        text: '事实一：这个测试来源提供了可以被引用的第一条结构化证据，用于验证一个 citation placeholder 可以解析到多个 claim。',
         textHash: 'hash_1',
         location: { headingPath: ['测试'], paragraphIndex: 1 },
         extractedAt: '2026-06-29T00:00:00.000Z',
@@ -1285,7 +1285,7 @@ describe('model-backed research nodes', () => {
       }, {
         id: 'span_2',
         sourceId: 'source_1',
-        text: '事实二。',
+        text: '事实二：这个测试来源提供了可以被引用的第二条结构化证据，用于验证 citation resolver 会分别生成两个内联引用。',
         textHash: 'hash_2',
         location: { headingPath: ['测试'], paragraphIndex: 2 },
         extractedAt: '2026-06-29T00:00:00.000Z',

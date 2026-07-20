@@ -7,6 +7,12 @@
 import type { CoverageEvaluator, CoverageEvaluatorInput } from './types.js'
 import type { ResearchConfidence, ResearchCoverageMatrix, ResearchGapStatus, ResearchGapVerdict, ResearchQuestion, ResearchQuestionCoverage, ResearchTask } from '../core/types.js'
 import type { AtomicClaim, EvidenceSpan, ResearchNote, SourceRecord } from '../evidence/types.js'
+import {
+  canCiteEvidenceSpan,
+  isEligibleEvidenceSource,
+  isEligibleStrongWebEvidence,
+  isModelFallbackSource
+} from '../evidence/EvidenceEligibility.js'
 
 export class BasicCoverageEvaluator implements CoverageEvaluator {
   async evaluate(input: CoverageEvaluatorInput): Promise<ResearchGapVerdict> {
@@ -57,16 +63,7 @@ function requiredStrongWebSourceCount(input: CoverageEvaluatorInput): number {
 }
 
 function isModelFallback(source: SourceRecord): boolean {
-  return source.kind === 'model_fallback' || source.sourcePolicyTags.includes('model_generated')
-}
-
-function isStrongWebSource(source: SourceRecord): boolean {
-  return source.kind === 'web_strong' || (
-    source.sourceType === 'web' &&
-    source.sourcePolicyTags.includes('web_fetch') &&
-    source.sourcePolicyTags.includes('strong_web_evidence') &&
-    !isModelFallback(source)
-  )
+  return isModelFallbackSource(source)
 }
 
 function buildCoverage(input: CoverageEvaluatorInput): ResearchQuestionCoverage[] {
@@ -90,12 +87,14 @@ function buildCoverage(input: CoverageEvaluatorInput): ResearchQuestionCoverage[
     const strongWebSourceIds = new Set<string>()
     for (const claim of claims) {
       for (const spanId of claim?.supportSpanIds ?? []) {
-        const sourceId = spanById.get(spanId)?.sourceId
-        if (!sourceId) continue
+        const span = spanById.get(spanId)
+        const sourceId = span?.sourceId
+        if (!span || !sourceId) continue
         const source = sourceById.get(sourceId)
         if (!source || isModelFallback(source)) continue
+        if (!canCiteEvidenceSpan(span, source)) continue
         sourceIds.add(sourceId)
-        if (isStrongWebSource(source)) strongWebSourceIds.add(sourceId)
+        if (isEligibleStrongWebEvidence(source, span)) strongWebSourceIds.add(sourceId)
       }
     }
     const requiredSourceCount = requiredSourcesForQuestion(input, question)
@@ -168,6 +167,13 @@ function buildCoverageMatrix(
   coverageByQuestion: ResearchQuestionCoverage[]
 ): ResearchCoverageMatrix {
   const required = coverageByQuestion.filter((coverage) => coverage.required || coverage.priority === 'high')
+  const spansBySource = spansBySourceId(input.evidenceSpans)
+  const eligibleStrongWebSourceIds = new Set<string>()
+  for (const source of input.sources) {
+    for (const span of spansBySource.get(source.id) ?? []) {
+      if (isEligibleStrongWebEvidence(source, span)) eligibleStrongWebSourceIds.add(source.id)
+    }
+  }
   const comparisonTargets = comparisonTargetsForInput(input)
     .map((target) => {
       const sourceCount = sourceCountForTarget(input, target)
@@ -179,7 +185,7 @@ function buildCoverageMatrix(
     })
   return {
     totalSourceCount: input.sources.length,
-    strongWebSourceCount: input.sources.filter(isStrongWebSource).length,
+    strongWebSourceCount: eligibleStrongWebSourceIds.size,
     requiredQuestionCount: required.length,
     coveredRequiredQuestionCount: required.filter((coverage) => coverage.covered).length,
     disconfirmingEvidenceCovered: hasDisconfirmingEvidence(input),
@@ -245,8 +251,9 @@ function sourceCountForTarget(input: CoverageEvaluatorInput, target: string): nu
 }
 
 function sourceCorpus(input: CoverageEvaluatorInput): Map<string, string> {
+  const spansBySource = spansBySourceId(input.evidenceSpans)
   const corpus = new Map(input.sources
-    .filter((source) => !isModelFallback(source))
+    .filter((source) => isEligibleEvidenceSource(source, spansBySource.get(source.id) ?? []))
     .map((source) => [
       source.id,
       [source.title, source.publisher, source.canonicalUrl, source.originalUrl, source.path, ...(source.sourcePolicyTags ?? [])].filter(Boolean).join('\n')
@@ -305,21 +312,32 @@ function requiresDisconfirmingEvidence(input: CoverageEvaluatorInput): boolean {
 
 function hasDisconfirmingEvidence(input: CoverageEvaluatorInput): boolean {
   if (!requiresDisconfirmingEvidence(input)) return true
-  const validSourceIds = new Set(input.sources.filter((src) => !isModelFallback(src)).map((src) => src.id))
+  const sourceById = new Map(input.sources.map((source) => [source.id, source]))
   const spanById = new Map(input.evidenceSpans.map((span) => [span.id, span]))
   const claimById = new Map(input.claims.map((claim) => [claim.id, claim]))
   return input.notes.some((note) => {
     const hasValidSource = note.claimIds.some((claimId) => {
       const claim = claimById.get(claimId)
       return claim?.supportSpanIds.some((spanId) => {
-        const sourceId = spanById.get(spanId)?.sourceId
-        return sourceId && validSourceIds.has(sourceId)
+        const span = spanById.get(spanId)
+        const source = sourceById.get(span?.sourceId ?? '')
+        return canCiteEvidenceSpan(span, source)
       })
     })
     if (!hasValidSource) return false
     return note.limitations.some((limitation) => limitation.trim().length > 0) ||
       /反证|争议|局限|限制|边界|风险|不确定|替代解释/.test(`${note.summary}\n${note.implicationForBrief}`)
   })
+}
+
+function spansBySourceId(spans: EvidenceSpan[]): Map<string, EvidenceSpan[]> {
+  const bySource = new Map<string, EvidenceSpan[]>()
+  for (const span of spans) {
+    const bucket = bySource.get(span.sourceId) ?? []
+    bucket.push(span)
+    bySource.set(span.sourceId, bucket)
+  }
+  return bySource
 }
 
 function buildFollowUpTasks(

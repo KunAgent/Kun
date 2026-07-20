@@ -87,7 +87,7 @@ export class ResearchRuntimeService {
       title: topic,
       scope,
       brief: buildResearchBrief({ topic, nowIso, scope, budget, userClarifications: [], overrides: input.brief }),
-      frame: buildResearchFrame({ topic, scope, overrides: input.frame }),
+      frame: buildResearchFrame({ topic, scope, userClarifications: [], overrides: input.frame }),
       budget
     })
     this.runtimeByRunId.set(run.id, runtime)
@@ -162,7 +162,11 @@ export class ResearchRuntimeService {
         budget: existing.budget,
         userClarifications: clarifications.map((item) => item.message)
       }),
-      frame: buildResearchFrame({ topic: scopedTopic, scope })
+      frame: buildResearchFrame({
+        topic: scopedTopic,
+        scope,
+        userClarifications: clarifications.map((item) => item.message)
+      })
     })
 
     if (input.autoApprove === true && run.scope.readyForBrief) {
@@ -292,23 +296,42 @@ function buildResearchBrief(input: {
   }
 }
 
-function buildResearchFrame(input: {
+export class ScopeFrameMappingError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'ScopeFrameMappingError'
+  }
+}
+
+export function buildResearchFrame(input: {
   topic: string
   scope?: ResearchScopeAssessment
+  userClarifications?: string[]
   overrides?: Partial<ResearchFrame>
 }): ResearchFrame {
-  const coreQuestion = coreQuestionFromScope(input.scope)
+  const scopeText = [
+    input.topic,
+    input.scope?.summary,
+    input.scope?.mainContradiction,
+    ...(input.scope?.confirmationChecklist ?? []),
+    ...(input.userClarifications ?? [])
+  ].filter(Boolean).join('\n')
+  const requiredDimensions = requiredDimensionsFromScopeText(scopeText)
+  const coreQuestion = input.overrides?.centralQuestion ??
+    coreQuestionFromScope(input.scope) ??
+    centralQuestionFromScopeText(input.topic, scopeText, requiredDimensions)
   const coreResearchThread = input.overrides?.coreResearchThread
-    ?? input.scope?.mainContradiction
-    ?? `围绕「${input.topic}」，这份报告最需要回答的核心问题是什么，关键证据链应该如何支撑这个答案？`
+    ?? cleanFrameText(input.scope?.mainContradiction)
+    ?? `围绕「${input.topic}」，抓住最能改变最终判断的证据，回答：${coreQuestion}`
   const coreQuestions = input.overrides?.coreQuestions ?? buildDefaultCoreQuestions({
     topic: input.topic,
     coreQuestion,
-    coreResearchThread
-  })
-  return {
     coreResearchThread,
-    centralQuestion: input.overrides?.centralQuestion ?? coreQuestion ?? `用户读完后应该真正理解「${input.topic}」的什么？`,
+    requiredDimensions
+  })
+  const frame = {
+    coreResearchThread,
+    centralQuestion: coreQuestion,
     decisionToSupport: input.overrides?.decisionToSupport,
     targetUserOrActor: input.overrides?.targetUserOrActor,
     coreTask: input.overrides?.coreTask,
@@ -341,21 +364,31 @@ function buildResearchFrame(input: {
       '不把模型生成资料卡伪装成真实网页或官方来源。'
     ]
   }
+  assertNoScopePromptLeak(frame)
+  return frame
 }
 
 function buildDefaultCoreQuestions(input: {
   topic: string
   coreQuestion?: string
   coreResearchThread: string
+  requiredDimensions?: string[]
 }): ResearchFrame['coreQuestions'] {
-  const questions = [
-    input.coreQuestion ?? `围绕「${input.topic}」最需要回答的核心结论是什么？`,
-    `「${input.topic}」的调研范围、关键概念和可比口径应该如何界定？`,
-    `当前有哪些关键事实、指标、案例或时间线能够支撑对「${input.topic}」的判断？`,
-    `形成「${input.coreResearchThread}」这条主线的主要机制、用户路径或因果链是什么？`,
-    `有哪些反例、替代解释、利益相关方分歧或边界条件会改变结论？`,
-    `基于以上证据，用户应该如何理解「${input.topic}」的结论、风险和下一步行动？`
-  ]
+  const dimensions = input.requiredDimensions ?? []
+  const questions = dimensions.length > 0
+    ? [
+        input.coreQuestion ?? `围绕「${input.topic}」最需要回答的核心结论是什么？`,
+        ...dimensions.map((dimension) => `在「${dimension}」维度上，关键事实、差距、优势和风险是什么？`),
+        `有哪些反例、替代解释、口径限制或边界条件会改变对「${input.topic}」的判断？`
+      ]
+    : [
+        input.coreQuestion ?? `围绕「${input.topic}」最需要回答的核心结论是什么？`,
+        `「${input.topic}」的调研范围、关键概念和可比口径应该如何界定？`,
+        `当前有哪些关键事实、指标、案例或时间线能够支撑对「${input.topic}」的判断？`,
+        `形成「${input.coreResearchThread}」这条主线的主要机制、用户路径或因果链是什么？`,
+        `有哪些反例、替代解释、利益相关方分歧或边界条件会改变结论？`,
+        `基于以上证据，用户应该如何理解「${input.topic}」的结论、风险和下一步行动？`
+      ]
   const uniqueQuestions = [...new Set(questions.map((question) => question.trim()).filter(Boolean))]
   return uniqueQuestions.slice(0, 6).map((text, index) => ({
     id: `q${index + 1}`,
@@ -392,8 +425,87 @@ function coreQuestionFromScope(scope: ResearchScopeAssessment | undefined): stri
   const line = scope.confirmationChecklist.find((item) => item.includes('核心问题'))
   if (!line) return undefined
   const value = line.split(/[:：]/).slice(1).join('：').trim()
-  if (!value || /等待用户|待确认/.test(value)) return undefined
-  return value
+  return cleanFrameText(value)
+}
+
+function centralQuestionFromScopeText(topic: string, text: string, dimensions: string[]): string {
+  const compact = text.replace(/\s+/g, '')
+  const isChinaUs = /中美|中国.*美国|美国.*中国|China.*US|US.*China|China.*UnitedStates|UnitedStates.*China/i.test(text)
+  if (isChinaUs && /综合实力|经济实力|宏观经济|产业结构|贸易|供应链|科技创新|数字经济|差距|优势|竞争力/.test(text)) {
+    return '中美综合经济实力谁更强？主要领域差距、优势与商业/投资启示是什么？'
+  }
+
+  const explicitCore = labeledScopeValue(text, ['核心问题', '核心是', '主要目的', '目的'])
+  const cleanedCore = cleanFrameText(explicitCore)
+  if (cleanedCore) {
+    if (/综合实力|差距|优势|风险|机会|竞争力|判断|决策|对比|比较/.test(cleanedCore)) {
+      return cleanedCore.endsWith('？') || cleanedCore.endsWith('?') ? cleanedCore : `${cleanedCore}？`
+    }
+    return `围绕「${topic}」，${cleanedCore}`
+  }
+
+  if (dimensions.length > 0) {
+    return `围绕「${topic}」，哪些维度最能改变最终判断？`
+  }
+  return `用户读完后应该真正理解「${topic}」的什么？`
+}
+
+function requiredDimensionsFromScopeText(text: string): string[] {
+  const dimensions: string[] = []
+  const push = (value: string) => {
+    if (!dimensions.includes(value)) dimensions.push(value)
+  }
+  if (/宏观经济总量|经济总量|GDP|增速|通胀|就业/.test(text)) push('宏观经济总量与增速')
+  if (/产业结构|产业链|制造业|服务业|竞争力|生产率/.test(text)) push('产业结构与竞争力')
+  if (/贸易|供应链|进出口|关税|逆差|顺差|全球价值链/.test(text)) push('贸易与供应链')
+  if (/科技创新|数字经济|研发|专利|AI|半导体|互联网|平台经济/.test(text)) push('科技创新与数字经济')
+  if (/脱钩|去风险|投资|商业决策|商业启示|市场进入|配置|风险/.test(text)) push('脱钩风险与投资/商业启示')
+
+  const labeledDimensions = labeledScopeValue(text, ['领域', '维度', '调研范围', '范围'])
+  for (const part of labeledDimensions.split(/[、,，;；/]/).map((item) => cleanFrameText(item)).filter(Boolean)) {
+    if (part && part.length <= 24 && !dimensions.includes(part)) dimensions.push(part)
+  }
+  return dimensions.slice(0, 5)
+}
+
+function labeledScopeValue(text: string, labels: string[]): string {
+  const lines = text.split(/\n/)
+  for (const line of lines) {
+    for (const label of labels) {
+      const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      const match = line.match(new RegExp(`${escaped}\\s*[:：是]?\\s*(.+)$`, 'u'))
+      if (match?.[1]) return match[1].trim()
+    }
+  }
+  return ''
+}
+
+function cleanFrameText(value: string | undefined): string | undefined {
+  const cleaned = value
+    ?.replace(/^[-*\d.、\s]+/, '')
+    .replace(/^补充[:：]\s*/, '')
+    .replace(/^选择[:：]\s*/, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+  if (!cleaned || isScopePromptLeak(cleaned)) return undefined
+  return cleaned.length > 140 ? `${cleaned.slice(0, 137)}...` : cleaned
+}
+
+function assertNoScopePromptLeak(frame: ResearchFrame): void {
+  const fields = [
+    ['centralQuestion', frame.centralQuestion],
+    ['coreResearchThread', frame.coreResearchThread],
+    ...frame.coreQuestions.map((question) => [`coreQuestions.${question.id}`, question.text] as const)
+  ] as Array<readonly [string, string]>
+  for (const [field, value] of fields) {
+    if (isScopePromptLeak(value)) {
+      throw new ScopeFrameMappingError(`ResearchFrame.${field} contains a scope clarification prompt instead of a research question: ${value}`)
+    }
+  }
+}
+
+function isScopePromptLeak(value: string): boolean {
+  return /您是否|你是否|请说明|请补充|待确认|等待用户|需要用户|希望对比.*哪个具体|哪个具体领域|主要受众是谁|时间范围是什么|是否有特定的比较角度|例如，是想了解/u.test(value)
 }
 
 function responseForRun(run: ResearchRun): ResearchRunApiResponse {

@@ -339,7 +339,7 @@ describe('ResearchRuntime P0 flow', () => {
     const evidenceSpans: EvidenceSpan[] = sources.map((source, index) => ({
       id: `covered_span_${index + 1}`,
       sourceId: source.id,
-      text: `Covered evidence ${index + 1}.`,
+      text: `Covered evidence ${index + 1}: this deterministic local-file fixture provides enough structured evidence text for the coverage matrix to treat the related claim as usable.`,
       textHash: hashText(`covered_span_${index + 1}`),
       location: { paragraphIndex: 1 },
       extractedAt: '2026-06-29T00:00:02.000Z',

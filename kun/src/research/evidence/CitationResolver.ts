@@ -1,5 +1,12 @@
+/**
+ * [INPUT]: 依赖 agents/types 的 CitationResolutionInput 和 EvidenceEligibility 的证据准入判断
+ * [OUTPUT]: 对外提供 CitationResolver，把 [claim:*]/[evidence:*] 占位符解析成可点击上标引用和 CitationBinding
+ * [POS]: research/evidence 的引用绑定器，位于 SynthesisWriter draft 与 QualityVerifier 之间
+ * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
+ */
 import type { CitationResolution, CitationResolutionInput } from '../agents/types.js'
 import type { CitationBinding, EvidenceSpan, SourceRecord } from './types.js'
+import { canCiteEvidenceSpan } from './EvidenceEligibility.js'
 
 const CITATION_PLACEHOLDER_RE = /\[(claim|evidence):([^\]]+)\]/g
 
@@ -20,8 +27,9 @@ export class CitationResolver {
           ? claimsById.get(target.id)?.supportSpanIds.filter((spanId) => spansById.has(spanId)) ?? []
           : spansById.has(target.id) ? [target.id] : []
         const citableSpanIds = spanIds.filter((spanId) => {
+          const span = spansById.get(spanId)
           const source = sourcesById.get(spansById.get(spanId)?.sourceId ?? '')
-          return source ? canCiteSource(source) : false
+          return canCiteEvidenceSpan(span, source)
         })
 
         if (citableSpanIds.length === 0) {
@@ -102,16 +110,6 @@ function citationHref(span: EvidenceSpan | undefined, source: SourceRecord | und
   if (!value) return ''
   if (/^https?:\/\//i.test(value)) return value
   return ''
-}
-
-function canCiteSource(source: SourceRecord): boolean {
-  return !isModelFallbackSource(source)
-}
-
-function isModelFallbackSource(source: SourceRecord): boolean {
-  return source.kind === 'model_fallback' ||
-    source.sourcePolicyTags.includes('model_generated') ||
-    source.sourcePolicyTags.includes('requires_external_verification')
 }
 
 function escapeHtmlAttribute(value: string): string {

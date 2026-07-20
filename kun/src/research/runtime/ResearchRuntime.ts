@@ -62,7 +62,8 @@ import {
 } from '../core/validation.js'
 import { CitationResolver } from '../evidence/CitationResolver.js'
 import { EvidenceStore } from '../evidence/EvidenceStore.js'
-import type { SourceRecord } from '../evidence/types.js'
+import { canCiteEvidenceSpan } from '../evidence/EvidenceEligibility.js'
+import type { EvidenceSpan, SourceRecord } from '../evidence/types.js'
 import { renderBriefMarkdown } from '../markdown/BriefRenderer.js'
 import { renderFinalReportMarkdown } from '../markdown/ReportRenderer.js'
 import { renderNotesMarkdown } from '../markdown/NotesRenderer.js'
@@ -512,6 +513,7 @@ export class ResearchRuntime {
         run,
         run.gapVerdicts?.at(-1),
         evidenceStore.listSources(),
+        evidenceStore.listEvidenceSpans(),
         this.worker.hasSearchCapability?.() ?? false,
         this.nowIso()
       )
@@ -628,12 +630,15 @@ export class ResearchRuntime {
         if (verdict.pass) break
 
         const failureType = judgeFailureType(verdict)
-        if (failureType === 'evidence_blocking') {
+        if (failureType === 'scope_frame_mapping_error') {
+          throw new Error(`Research frame mapping failed: ${verdict.blockingIssues.join('; ')}`)
+        }
+        if (failureType === 'evidence_blocking' || failureType === 'missing_required_dimensions') {
           if (!finalAttempt && await this.runVerificationEvidenceRepair(run, plan, evidenceStore, verdict, attempt)) {
             previousFailure = undefined
             continue
           }
-          throw new Error(`Research verification failed due to evidence blocking: ${verdict.blockingIssues.join('; ')}`)
+          throw new Error(`Research verification failed due to ${failureType}: ${verdict.blockingIssues.join('; ')}`)
         }
         if (failureType === 'citation_fixable') {
           throw new Error(`Research citation resolution failed: ${verdict.blockingIssues.join('; ')}`)
@@ -1006,16 +1011,13 @@ function evidenceVerdictBeforeSynthesis(
   run: ResearchRun,
   latestGap: ResearchGapVerdict | undefined,
   sources: SourceRecord[],
+  evidenceSpans: EvidenceSpan[],
   webSearchEnabled: boolean,
   nowIso: string
 ): QualityVerdict | undefined {
-  const hasRealVerifiableEvidence = sources.some(
-    (src) =>
-      src.kind === 'web_strong' ||
-      src.kind === 'web_weak' ||
-      src.kind === 'user_file' ||
-      (src.sourceType === 'web' && !src.sourcePolicyTags.includes('model_generated')) ||
-      (src.sourceType === 'local_file' && !src.sourcePolicyTags.includes('model_generated') && !src.sourcePolicyTags.includes('synthetic'))
+  const sourceById = new Map(sources.map((source) => [source.id, source]))
+  const hasRealVerifiableEvidence = evidenceSpans.some((span) =>
+    canCiteEvidenceSpan(span, sourceById.get(span.sourceId))
   )
   const isPreliminaryQuick = run.budget.preset === 'quick' && !webSearchEnabled
 
@@ -1090,7 +1092,18 @@ function evidenceVerdictBeforeSynthesis(
   }
 }
 
-function judgeFailureType(verdict: QualityVerdict): 'writing_fixable' | 'citation_fixable' | 'evidence_blocking' {
+function judgeFailureType(
+  verdict: QualityVerdict
+): 'writing_fixable' | 'citation_fixable' | 'evidence_blocking' | 'missing_required_dimensions' | 'scope_frame_mapping_error' {
+  const issueText = verdict.issues?.map((issue) => `${issue.code}\n${issue.message}`).join('\n') ?? ''
+  const blockingText = verdict.blockingIssues.join('\n')
+  const fullText = `${issueText}\n${blockingText}`.toLowerCase()
+  if (/scope_frame_mapping|frame mapping|您是否|请说明|待确认|clarification prompt/.test(fullText)) {
+    return 'scope_frame_mapping_error'
+  }
+  if (/required_question_uncovered|user_clarification_uncovered|missing_required_dimensions|缺维度|缺少.*维度|没有覆盖|未覆盖|没覆盖|未回答|没回答|核心问题|综合实力|特定领域差距|产业结构|贸易|供应链|科技创新|数字经济|脱钩/.test(fullText)) {
+    return 'missing_required_dimensions'
+  }
   const isEvidenceBlocking = verdict.issues?.some((issue) => {
     const code = (issue.code || '').toLowerCase()
     const msg = (issue.message || '').toLowerCase()
@@ -1104,7 +1117,11 @@ function judgeFailureType(verdict: QualityVerdict): 'writing_fixable' | 'citatio
       msg.includes('证据使用严重不足') ||
       msg.includes('没有真实网页') ||
       msg.includes('外部可验证') ||
-      msg.includes('证据基础薄弱')
+      msg.includes('证据基础薄弱') ||
+      msg.includes('抽取失败') ||
+      msg.includes('兜底证据') ||
+      msg.includes('fallback_extracted') ||
+      msg.includes('this operation was aborted')
   })
   if (isEvidenceBlocking) return 'evidence_blocking'
 

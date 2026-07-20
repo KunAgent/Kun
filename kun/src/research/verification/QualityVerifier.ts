@@ -14,6 +14,7 @@ import type {
   VerificationIssue
 } from '../core/types.js'
 import type { AtomicClaim, CitationBinding, EvidenceSpan, ResearchNote, SourceRecord } from '../evidence/types.js'
+import { canCiteEvidenceSpan, isEligibleStrongWebEvidence } from '../evidence/EvidenceEligibility.js'
 
 export type QualityVerifierInput = {
   brief: ResearchBrief
@@ -62,9 +63,10 @@ export class QualityVerifier {
           issues.push(blocking('missing_evidence_span', `引用 ${binding.id} 指向了缺失的证据片段 ${spanId}`))
           continue
         }
-        const source = sourcesById.get(spansById.get(spanId)?.sourceId ?? '')
-        if (source && !canCiteSource(source)) {
-          issues.push(blocking('model_fallback_citation', `引用 ${binding.id} 指向模型生成资料卡，不能作为 DeepResearch 引用证据`))
+        const span = spansById.get(spanId)
+        const source = sourcesById.get(span?.sourceId ?? '')
+        if (!canCiteEvidenceSpan(span, source)) {
+          issues.push(blocking('model_fallback_citation', `引用 ${binding.id} 指向模型生成资料卡、兜底抽取片段或其他不可用证据，不能作为 DeepResearch 引用证据`))
         }
       }
     }
@@ -134,7 +136,7 @@ export class QualityVerifier {
       ? 0
       : validCitationBindings.length / input.citations.length
     const reportCompleteness = scoreReportCompleteness(input.reportMarkdown)
-    const sourceQuality = input.sources ? sourceQualityScore(input.sources) : 0.7
+    const sourceQuality = input.sources ? sourceQualityScore(input.sources, input.evidenceSpans) : 0.7
     const followsCoreResearchThread = input.reportMarkdown.includes(input.frame.coreResearchThread) ? 1 : 0.5
 
     return {
@@ -163,11 +165,8 @@ export class QualityVerifier {
   }
 }
 
-function isStrongWebSource(source: SourceRecord): boolean {
-  return source.sourceType === 'web' &&
-    source.sourcePolicyTags.includes('web_fetch') &&
-    source.sourcePolicyTags.includes('strong_web_evidence') &&
-    canCiteSource(source)
+function isStrongWebSource(source: SourceRecord, spansBySource: Map<string, EvidenceSpan[]>): boolean {
+  return (spansBySource.get(source.id) ?? []).some((span) => isEligibleStrongWebEvidence(source, span))
 }
 
 function canUseSpanAsEvidence(
@@ -178,23 +177,27 @@ function canUseSpanAsEvidence(
   const span = spansById.get(spanId)
   if (!span) return false
   const source = sourcesById.get(span.sourceId)
-  if (!source) return true
-  return canCiteSource(source)
+  return canCiteEvidenceSpan(span, source)
 }
 
-function canCiteSource(source: SourceRecord): boolean {
-  return source.kind !== 'model_fallback' &&
-    !source.sourcePolicyTags.includes('model_generated') &&
-    !source.sourcePolicyTags.includes('requires_external_verification')
-}
-
-function sourceQualityScore(sources: SourceRecord[]): number {
+function sourceQualityScore(sources: SourceRecord[], spans: EvidenceSpan[]): number {
   if (sources.length === 0) return 0
-  const strongWebCount = sources.filter(isStrongWebSource).length
+  const spansBySource = spansBySourceId(spans)
+  const strongWebCount = sources.filter((source) => isStrongWebSource(source, spansBySource)).length
   const reliableCount = sources.filter((source) => source.reliability === 'high' || source.sourcePolicyTags.includes('official')).length
   const strongWebScore = strongWebCount / sources.length
   const reliabilityScore = reliableCount / sources.length
   return Math.max(0.2, Math.min(1, strongWebScore * 0.7 + reliabilityScore * 0.3))
+}
+
+function spansBySourceId(spans: EvidenceSpan[]): Map<string, EvidenceSpan[]> {
+  const bySource = new Map<string, EvidenceSpan[]>()
+  for (const span of spans) {
+    const bucket = bySource.get(span.sourceId) ?? []
+    bucket.push(span)
+    bySource.set(span.sourceId, bucket)
+  }
+  return bySource
 }
 
 function scoreReportCompleteness(markdown: string): number {
