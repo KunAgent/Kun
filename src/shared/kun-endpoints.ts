@@ -115,6 +115,34 @@ export function kunSessionResumePath(sessionId: string): string {
   return `/v1/sessions/${encodeURIComponent(sessionId)}/resume-thread`
 }
 
+export const KUN_RESEARCH_RUNS_PATH = '/v1/research/runs'
+export const KUN_RESEARCH_RUNS_TEMPLATE = '/v1/research/runs'
+
+export const KUN_RESEARCH_RUN_TEMPLATE = '/v1/research/runs/{id}'
+export function kunResearchRunPath(runId: string): string {
+  return `/v1/research/runs/${encodeURIComponent(runId)}`
+}
+
+export const KUN_RESEARCH_RUN_SCOPE_CONFIRM_TEMPLATE = '/v1/research/runs/{id}/scope/confirm'
+export function kunResearchRunScopeConfirmPath(runId: string): string {
+  return `${kunResearchRunPath(runId)}/scope/confirm`
+}
+
+export const KUN_RESEARCH_RUN_SCOPE_ANSWER_TEMPLATE = '/v1/research/runs/{id}/scope/answer'
+export function kunResearchRunScopeAnswerPath(runId: string): string {
+  return `${kunResearchRunPath(runId)}/scope/answer`
+}
+
+export const KUN_RESEARCH_RUN_APPROVE_TEMPLATE = '/v1/research/runs/{id}/approve'
+export function kunResearchRunApprovePath(runId: string): string {
+  return `${kunResearchRunPath(runId)}/approve`
+}
+
+export const KUN_RESEARCH_RUN_CANCEL_TEMPLATE = '/v1/research/runs/{id}/cancel'
+export function kunResearchRunCancelPath(runId: string): string {
+  return `${kunResearchRunPath(runId)}/cancel`
+}
+
 export const KUN_USAGE_PATH = '/v1/usage'
 export const KUN_USAGE_TEMPLATE = '/v1/usage'
 

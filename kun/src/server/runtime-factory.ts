@@ -10,6 +10,7 @@ import { InMemoryEventBus } from '../adapters/in-memory-event-bus.js'
 import { FileSessionStore, FileThreadStore } from '../adapters/file/index.js'
 import { HybridSessionStore, HybridThreadStore } from '../adapters/hybrid/index.js'
 import { CompatModelClient } from '../adapters/model/compat-model-client.js'
+import { isDeepSeekHost } from '../adapters/model/model-error-probe.js'
 import { MultiProviderModelClient } from '../adapters/model/multi-provider-model-client.js'
 import { CapabilityRegistry } from '../adapters/tool/capability-registry.js'
 import { buildGoalLocalTools } from '../adapters/tool/goal-tools.js'
@@ -76,6 +77,15 @@ import { resolveConfiguredHooks, type HooksConfig } from '../hooks/hook-config.j
 import { FileMemoryStore } from '../memory/memory-store.js'
 import { DelegationRuntime, FileDelegationStore } from '../delegation/delegation-runtime.js'
 import { createChildAgentExecutor } from '../delegation/child-agent-executor.js'
+import {
+  ModelQualityJudge,
+  ModelResearchTaskWorker,
+  ModelScopeAgent,
+  ModelSynthesisWriter,
+  ResearchRuntimeService,
+  DeepSeekWebSearchProvider,
+  SeededWebResearchTaskWorker
+} from '../research/index.js'
 
 export type KunServeRuntimeOptions = {
   host: string
@@ -260,6 +270,39 @@ export async function createKunServeRuntime(
         nowIso
       })
     : undefined
+  const research = new ResearchRuntimeService({
+    dataDir: options.dataDir,
+    nowIso,
+    idGenerator: () => ids.next('rr'),
+    scopeAgent: new ModelScopeAgent({
+      modelClient,
+      model: options.model
+    }),
+    worker: new SeededWebResearchTaskWorker({
+      modelClient,
+      model: options.model,
+      ...(isDeepSeekHost(options.baseUrl)
+        ? { webProvider: new DeepSeekWebSearchProvider({
+          apiKey: options.apiKey,
+          baseUrl: options.baseUrl,
+          model: options.model,
+          nowIso
+        }) }
+        : {}),
+      fallback: new ModelResearchTaskWorker({
+        modelClient,
+        model: options.model
+      })
+    }),
+    synthesisWriter: new ModelSynthesisWriter({
+      modelClient,
+      model: options.model
+    }),
+    qualityJudge: new ModelQualityJudge({
+      modelClient,
+      model: options.model
+    })
+  })
   const imageGenProviders = buildImageGenToolProviders(options.capabilities?.imageGen, {
     attachmentStore,
     nowIso
@@ -475,6 +518,7 @@ export async function createKunServeRuntime(
     toolHost,
     ...(attachmentStore ? { attachmentStore } : {}),
     ...(memoryStore ? { memoryStore } : {}),
+    research,
     runTurn(threadId, turnId) {
       return loop.runTurn(threadId, turnId)
     },

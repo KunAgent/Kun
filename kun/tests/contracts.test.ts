@@ -686,6 +686,42 @@ describe('cli', () => {
     }
   })
 
+  it('promotes the default configured provider to serve credentials', async () => {
+    const dataDir = await mkdtemp(join(tmpdir(), 'kun-data-'))
+    try {
+      await writeFile(join(dataDir, 'config.json'), JSON.stringify({
+        serve: {
+          model: 'deepseek-v4-flash',
+          providers: {
+            deepseek: {
+              apiKey: 'sk-provider',
+              baseUrl: 'https://provider.example/beta',
+              endpointFormat: 'responses',
+              modelProxyUrl: 'http://127.0.0.1:7890'
+            }
+          }
+        }
+      }), 'utf8')
+
+      const parsed = parseServeOptions(['--data-dir', dataDir])
+
+      expect(parsed.apiKey).toBe('sk-provider')
+      expect(parsed.baseUrl).toBe('https://provider.example/beta')
+      expect(parsed.endpointFormat).toBe('responses')
+      expect(parsed.modelProxyUrl).toBe('http://127.0.0.1:7890')
+      expect(parsed.providers?.deepseek.apiKey).toBe('sk-provider')
+
+      const envOverride = parseServeOptions(['--data-dir', dataDir], {
+        DEEPSEEK_API_KEY: 'sk-env',
+        KUN_BASE_URL: 'https://env.example/v1'
+      })
+      expect(envOverride.apiKey).toBe('sk-env')
+      expect(envOverride.baseUrl).toBe('https://env.example/v1')
+    } finally {
+      await rm(dataDir, { recursive: true, force: true })
+    }
+  })
+
   it('returns a structured error when data-dir is missing', () => {
     const result = parseServeOptionsSafe([
       '--host',

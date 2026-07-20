@@ -1,0 +1,75 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="430" viewBox="0 0 1600 430" role="img" aria-labelledby="title desc">
+  <title id="title">Open Deep Research 三阶段流程</title>
+  <desc id="desc">从用户输入到范围澄清、研究执行，再到最终报告生成的三阶段流程图。</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 12 12" refX="10" refY="6" markerWidth="11" markerHeight="11" orient="auto-start-reverse">
+      <path d="M2,2 L10,6 L2,10 Z" fill="#202124"/>
+    </marker>
+    <style>
+      .title { font: 700 42px -apple-system, BlinkMacSystemFont, "PingFang SC", "Noto Sans CJK SC", "Microsoft YaHei", sans-serif; fill: #202124; }
+      .subtitle { font: 500 22px -apple-system, BlinkMacSystemFont, "PingFang SC", "Noto Sans CJK SC", "Microsoft YaHei", sans-serif; fill: #202124; }
+      .label { font: 600 23px -apple-system, BlinkMacSystemFont, "PingFang SC", "Noto Sans CJK SC", "Microsoft YaHei", sans-serif; fill: #202124; }
+      .small { font: 500 17px -apple-system, BlinkMacSystemFont, "PingFang SC", "Noto Sans CJK SC", "Microsoft YaHei", sans-serif; fill: #202124; }
+      .panel { stroke: #202124; stroke-width: 3; rx: 20; ry: 20; }
+      .node { fill: #ffffff; stroke: #202124; stroke-width: 3; stroke-dasharray: 9 9; rx: 16; ry: 16; }
+      .line { fill: none; stroke: #202124; stroke-width: 3.5; marker-end: url(#arrow); }
+      .thin { fill: none; stroke: #202124; stroke-width: 2.5; marker-end: url(#arrow); }
+      .reverse { fill: none; stroke: #202124; stroke-width: 2.5; marker-end: url(#arrow); }
+    </style>
+  </defs>
+
+  <rect width="1600" height="430" fill="#ffffff"/>
+
+  <text x="420" y="58" text-anchor="middle" class="title">范围界定</text>
+  <text x="420" y="106" text-anchor="middle" class="subtitle">收集用户上下文，为研究做准备</text>
+
+  <text x="935" y="58" text-anchor="middle" class="title">研究执行</text>
+  <text x="935" y="106" text-anchor="middle" class="subtitle">从研究过程中收集上下文</text>
+
+  <text x="1360" y="58" text-anchor="middle" class="title">写作输出</text>
+  <text x="1360" y="106" text-anchor="middle" class="subtitle">撰写报告</text>
+
+  <text x="64" y="256" class="label">用户</text>
+  <line x1="125" y1="225" x2="198" y2="225" class="thin"/>
+  <text x="136" y="215" class="small">请求</text>
+  <line x1="198" y1="260" x2="125" y2="260" class="thin"/>
+  <text x="136" y="287" class="small">澄清</text>
+
+  <rect x="210" y="128" width="400" height="214" fill="#ffc5c8" class="panel"/>
+  <rect x="238" y="184" width="132" height="102" class="node"/>
+  <text x="304" y="228" text-anchor="middle" class="label">用户</text>
+  <text x="304" y="260" text-anchor="middle" class="label">澄清</text>
+
+  <line x1="382" y1="235" x2="440" y2="235" class="line"/>
+
+  <rect x="452" y="184" width="140" height="102" class="node"/>
+  <text x="522" y="228" text-anchor="middle" class="label">简报</text>
+  <text x="522" y="260" text-anchor="middle" class="label">生成</text>
+
+  <line x1="622" y1="235" x2="706" y2="235" class="line"/>
+
+  <rect x="725" y="128" width="470" height="214" fill="#9bd0f5" class="panel"/>
+  <rect x="758" y="186" width="136" height="98" class="node"/>
+  <text x="826" y="229" text-anchor="middle" class="label">研究</text>
+  <text x="826" y="260" text-anchor="middle" class="label">主管</text>
+
+  <rect x="1034" y="184" width="140" height="108" class="node"/>
+  <rect x="1044" y="178" width="140" height="108" class="node" opacity="0.95"/>
+  <text x="1114" y="229" text-anchor="middle" class="label">研究</text>
+  <text x="1114" y="260" text-anchor="middle" class="label">子代理</text>
+
+  <line x1="906" y1="214" x2="1022" y2="214" class="thin"/>
+  <text x="962" y="203" text-anchor="middle" class="small">主题</text>
+  <line x1="1022" y1="257" x2="906" y2="257" class="reverse"/>
+  <text x="962" y="284" text-anchor="middle" class="small">发现</text>
+
+  <line x1="1204" y1="235" x2="1300" y2="235" class="line"/>
+
+  <rect x="1318" y="134" width="194" height="198" fill="#adf0bd" class="panel"/>
+  <rect x="1348" y="186" width="136" height="102" class="node"/>
+  <text x="1416" y="224" text-anchor="middle" class="label">一次性</text>
+  <text x="1416" y="254" text-anchor="middle" class="label">报告生成</text>
+
+  <line x1="1520" y1="235" x2="1580" y2="235" class="line"/>
+  <text x="1550" y="218" text-anchor="middle" class="label">报告</text>
+</svg>

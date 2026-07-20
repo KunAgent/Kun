@@ -11,7 +11,7 @@ import {
   defaultWriteSettings,
   type AppSettingsV1
 } from '../../shared/app-settings'
-import { runtimeRequestViaHost } from './kun-adapter'
+import { runtimeRequestTimeoutMs, runtimeRequestViaHost } from './kun-adapter'
 
 let server: Server | null = null
 
@@ -69,6 +69,13 @@ afterEach(async () => {
 })
 
 describe('runtimeRequestViaHost', () => {
+  it('allows long-running research POST requests without changing normal request timeouts', () => {
+    expect(runtimeRequestTimeoutMs('/v1/research/runs/rr_1/approve', 'POST')).toBe(15 * 60_000)
+    expect(runtimeRequestTimeoutMs('/v1/research/runs', 'POST')).toBe(15 * 60_000)
+    expect(runtimeRequestTimeoutMs('/v1/threads/thr_1/turns', 'POST')).toBe(60_000)
+    expect(runtimeRequestTimeoutMs('/v1/research/runs/rr_1', 'GET')).toBe(15_000)
+  })
+
   it('forwards daily usage requests to the Kun runtime with bearer auth', async () => {
     let seenUrl = ''
     let seenAuthorization = ''

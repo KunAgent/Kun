@@ -60,7 +60,7 @@ import {
 } from '../../lib/workspace-file-index'
 import {
   COMPACT_COMMAND_ALIASES,
-  buildResearchPrompt,
+  buildResearchCommandInput,
   getGoalPanelDraftObjective,
   getSlashQuery,
   NEW_COMMAND_ALIASES,
@@ -75,7 +75,7 @@ import {
   type SlashCommand,
   type SlashCommandId
 } from './floating-composer-commands'
-export { buildResearchPrompt, parseBtwCommand, parseCompactCommand, parseGoalCommand, parseNewCommand, parseResearchCommand, parseReviewCommand } from './floating-composer-commands'
+export { buildResearchCommandInput, buildResearchPrompt, parseBtwCommand, parseCompactCommand, parseGoalCommand, parseNewCommand, parseResearchCommand, parseReviewCommand } from './floating-composer-commands'
 import {
   formatCompactNumber,
   formatCost,
@@ -182,6 +182,7 @@ type Props = {
   onWorktreeBranchChange?: (branch: string) => void
   onToggleWorktreeMode?: () => void
   onReviewCommand?: (target: ReviewTarget) => void
+  onResearchCommand?: (topic: string, workspaceRoot: string) => boolean | Promise<boolean>
   onExecutionSettingsChange?: (patch: Partial<ComposerExecutionSettings>) => void
   onOpenChanges?: () => void
   onReviewChanges?: () => void
@@ -490,6 +491,7 @@ export function FloatingComposer({
   onWorktreeBranchChange,
   onToggleWorktreeMode,
   onReviewCommand,
+  onResearchCommand,
   onExecutionSettingsChange,
   onOpenChanges,
   onReviewChanges,
@@ -1159,7 +1161,7 @@ export function FloatingComposer({
     }
     if (commandId === 'research') {
       setMode('agent')
-      setInput(buildResearchPrompt(t('slashCommandResearchPrompt'), null))
+      setInput(buildResearchCommandInput())
       draft.focusComposer()
       return
     }
@@ -1346,8 +1348,19 @@ export function FloatingComposer({
     if (researchTopic !== false) {
       const command = slashCommands.find((item) => item.id === 'research')
       if (command?.disabled) return
+      if (researchTopic === null) {
+        setMode('agent')
+        setInput(buildResearchCommandInput())
+        draft.focusComposer()
+        return
+      }
+      if (researchTopic && onResearchCommand) {
+        setInput('')
+        void Promise.resolve(onResearchCommand(researchTopic, effectiveWorkspaceRoot))
+        return
+      }
       setMode('agent')
-      setInput(buildResearchPrompt(t('slashCommandResearchPrompt'), researchTopic))
+      setInput(`${buildResearchCommandInput()}${researchTopic}`)
       draft.focusComposer()
       return
     }

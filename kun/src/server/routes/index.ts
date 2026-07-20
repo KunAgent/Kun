@@ -24,6 +24,14 @@ import {
   steerTurn
 } from './turns.js'
 import { startReview } from './review.js'
+import {
+  answerResearchScope,
+  approveResearchRun,
+  cancelResearchRun,
+  confirmResearchScope,
+  createResearchRun,
+  getResearchRun
+} from './research.js'
 import { buildEventStreamResponse } from './events.js'
 import { decideApproval } from './approvals.js'
 import { resolveUserInput } from './user-inputs.js'
@@ -77,6 +85,7 @@ import type { ServerRuntime } from './server-runtime.js'
  * - `POST /v1/sessions/{id}/resume-thread` (auth)
  * - `GET /v1/usage` (auth)
  * - `GET /v1/debug/llm-rounds` (auth)
+ * - `POST /v1/research/runs`, `GET /v1/research/runs/{id}`, approve/cancel (auth)
  */
 export function buildRouter(runtime: ServerRuntime): Router {
   const router = new Router()
@@ -270,6 +279,30 @@ export function buildRouter(runtime: ServerRuntime): Router {
   router.add('GET', '/v1/debug/llm-rounds', async (request) => {
     if (!authorize(request, runtime)) return ERRORS.unauthorized()
     return llmDebugRoundsResponse(runtime)
+  })
+  router.add('POST', '/v1/research/runs', async (request) => {
+    if (!authorize(request, runtime)) return ERRORS.unauthorized()
+    return createResearchRun(runtime, request)
+  })
+  router.add('GET', '/v1/research/runs/:id', async (request, ctx) => {
+    if (!authorize(request, runtime)) return ERRORS.unauthorized()
+    return getResearchRun(runtime, ctx.params.id)
+  })
+  router.add('POST', '/v1/research/runs/:id/scope/confirm', async (request, ctx) => {
+    if (!authorize(request, runtime)) return ERRORS.unauthorized()
+    return confirmResearchScope(runtime, ctx.params.id, request)
+  })
+  router.add('POST', '/v1/research/runs/:id/scope/answer', async (request, ctx) => {
+    if (!authorize(request, runtime)) return ERRORS.unauthorized()
+    return answerResearchScope(runtime, ctx.params.id, request)
+  })
+  router.add('POST', '/v1/research/runs/:id/approve', async (request, ctx) => {
+    if (!authorize(request, runtime)) return ERRORS.unauthorized()
+    return approveResearchRun(runtime, ctx.params.id, request)
+  })
+  router.add('POST', '/v1/research/runs/:id/cancel', async (request, ctx) => {
+    if (!authorize(request, runtime)) return ERRORS.unauthorized()
+    return cancelResearchRun(runtime, ctx.params.id, request)
   })
   return router
 }

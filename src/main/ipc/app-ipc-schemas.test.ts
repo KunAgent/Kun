@@ -114,6 +114,38 @@ describe('app-ipc-schemas', () => {
     }).path).toBe('/v1/debug/llm-rounds')
   })
 
+  it('accepts DeepResearch runtime endpoints', () => {
+    expect(runtimeRequestPayloadSchema.parse({
+      path: '/v1/research/runs',
+      method: 'POST',
+      body: '{"topic":"cache economics"}'
+    }).path).toBe('/v1/research/runs')
+    expect(runtimeRequestPayloadSchema.parse({
+      path: '/v1/research/runs/run_123',
+      method: 'GET'
+    }).path).toBe('/v1/research/runs/run_123')
+    expect(runtimeRequestPayloadSchema.parse({
+      path: '/v1/research/runs/run_123/scope/confirm',
+      method: 'POST',
+      body: '{}'
+    }).path).toBe('/v1/research/runs/run_123/scope/confirm')
+    expect(runtimeRequestPayloadSchema.parse({
+      path: '/v1/research/runs/run_123/scope/answer',
+      method: 'POST',
+      body: '{"message":"调研 Cursor 与 Windsurf 的定价差异"}'
+    }).path).toBe('/v1/research/runs/run_123/scope/answer')
+    expect(runtimeRequestPayloadSchema.parse({
+      path: '/v1/research/runs/run_123/approve',
+      method: 'POST',
+      body: '{"briefHash":"hash"}'
+    }).path).toBe('/v1/research/runs/run_123/approve')
+    expect(runtimeRequestPayloadSchema.parse({
+      path: '/v1/research/runs/run_123/cancel',
+      method: 'POST',
+      body: '{}'
+    }).path).toBe('/v1/research/runs/run_123/cancel')
+  })
+
   it('rejects runtime request paths outside the modeled Kun API surface', () => {
     expect(() =>
       runtimeRequestPayloadSchema.parse({

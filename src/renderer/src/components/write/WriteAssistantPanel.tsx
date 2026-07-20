@@ -50,6 +50,7 @@ type Props = {
   onPasteClipboardImage?: (options?: { silentNoImage?: boolean }) => void | Promise<void>
   onRemoveAttachment?: (id: string) => void
   onSend: () => void
+  onResearchCommand?: (topic: string, workspaceRoot: string) => boolean | Promise<boolean>
   onInterrupt: (options?: { discard?: boolean }) => void
   onRetryConnection: () => void
   onOpenSettings: () => void
@@ -88,6 +89,7 @@ export function WriteAssistantPanel({
   onPasteClipboardImage,
   onRemoveAttachment,
   onSend,
+  onResearchCommand,
   onInterrupt,
   onRetryConnection,
   onOpenSettings,
@@ -323,6 +325,7 @@ export function WriteAssistantPanel({
           onPasteClipboardImage={onPasteClipboardImage}
           onRemoveAttachment={onRemoveAttachment}
           onSend={onSend}
+          onResearchCommand={onResearchCommand}
           onInterrupt={onInterrupt}
           onConfigureProviders={onConfigureProviders}
         />

@@ -164,6 +164,10 @@ export function buildResearchPrompt(template: string, topic: string | null): str
   return normalizedTopic ? template.replace('{{topic}}', normalizedTopic) : template
 }
 
+export function buildResearchCommandInput(): string {
+  return '/research '
+}
+
 function isSlashAliasMatch(body: string, alias: string): boolean {
   if (!body.startsWith(alias)) return false
   const next = body.at(alias.length)

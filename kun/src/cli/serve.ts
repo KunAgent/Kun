@@ -1,3 +1,9 @@
+/**
+ * [INPUT]: 依赖 cli-options 与 kun-config，把命令行、环境变量和本地配置合并为 serve 启动参数
+ * [OUTPUT]: 对外提供 parseServeOptions、validateServeOptions、parseServeOptionsSafe 与 CLI usage 信息
+ * [POS]: cli 的 serve 参数解析层，被 kun serve 入口与配置契约测试消费
+ * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
+ */
 import { z } from 'zod'
 import {
   DEFAULT_SERVE_PORT,
@@ -11,6 +17,9 @@ import {
   readOptionalKunConfigFile,
   type LoadedKunConfig
 } from '../config/kun-config.js'
+
+type ServeProviders = NonNullable<NonNullable<LoadedKunConfig['config']['serve']>['providers']>
+type ServeProvider = ServeProviders[string]
 
 /**
  * Parse the `kun serve` command line into validated options.
@@ -40,6 +49,7 @@ export function parseServeOptions(
   }
   const loadedConfig = loadServeConfig(raw, env)
   const configServe = loadedConfig?.config.serve ?? {}
+  const defaultProvider = defaultServeProvider(configServe.providers)
   const portEnv = env.KUN_PORT
   const tokenEconomyMode =
     booleanFlag(raw, 'token-economy') ??
@@ -83,7 +93,10 @@ export function parseServeOptions(
         ? raw['api-key']
         : typeof raw.apiKey === 'string'
           ? raw.apiKey
-          : env.DEEPSEEK_API_KEY ?? configServe.apiKey ?? DEFAULT_SERVE_OPTIONS.apiKey,
+          : env.DEEPSEEK_API_KEY ??
+            configServe.apiKey ??
+            defaultProvider?.apiKey ??
+            DEFAULT_SERVE_OPTIONS.apiKey,
     baseUrl:
       typeof raw['base-url'] === 'string'
         ? raw['base-url']
@@ -92,13 +105,14 @@ export function parseServeOptions(
           : env.KUN_BASE_URL ??
             env.DEEPSEEK_BASE_URL ??
             configServe.baseUrl ??
+            defaultProvider?.baseUrl ??
             DEFAULT_SERVE_OPTIONS.baseUrl,
     modelProxyUrl:
       typeof raw['model-proxy-url'] === 'string'
         ? raw['model-proxy-url']
         : typeof raw.modelProxyUrl === 'string'
           ? raw.modelProxyUrl
-          : configServe.modelProxyUrl ?? DEFAULT_SERVE_OPTIONS.modelProxyUrl,
+          : configServe.modelProxyUrl ?? defaultProvider?.modelProxyUrl ?? DEFAULT_SERVE_OPTIONS.modelProxyUrl,
     endpointFormat:
       typeof raw['endpoint-format'] === 'string'
         ? raw['endpoint-format'] as ServeOptions['endpointFormat']
@@ -106,6 +120,7 @@ export function parseServeOptions(
           ? raw.endpointFormat as ServeOptions['endpointFormat']
           : env.KUN_ENDPOINT_FORMAT as ServeOptions['endpointFormat'] | undefined ??
             configServe.endpointFormat ??
+            defaultProvider?.endpointFormat ??
             DEFAULT_SERVE_OPTIONS.endpointFormat,
     model:
       typeof raw.model === 'string'
@@ -237,6 +252,11 @@ function loadServeConfig(
   }
   const dataDir = dataDirFromRawOrEnv(raw, env)
   return readOptionalKunConfigFile(kunConfigPathForDataDir(dataDir))
+}
+
+function defaultServeProvider(providers: ServeProviders | undefined): ServeProvider | undefined {
+  if (!providers) return undefined
+  return providers.deepseek ?? Object.values(providers)[0]
 }
 
 function dataDirFromRawOrEnv(

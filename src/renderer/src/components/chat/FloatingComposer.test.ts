@@ -3,6 +3,7 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import {
   FloatingComposer,
+  buildResearchCommandInput,
   buildResearchPrompt,
   formatGoalElapsedSeconds,
   handleComposerImagePaste,
@@ -102,11 +103,12 @@ describe('FloatingComposer slash commands', () => {
     expect(parseReviewCommand('/reviewer')).toBe(false)
   })
 
-  it('parses research topics and fills the research brief', () => {
+  it('parses research topics and seeds the runtime research command', () => {
     expect(parseResearchCommand('/research')).toBeNull()
     expect(parseResearchCommand('/deepresearch cache economics')).toBe('cache economics')
     expect(parseResearchCommand('/deep-research web + papers')).toBe('web + papers')
     expect(parseResearchCommand('/researcher')).toBe(false)
+    expect(buildResearchCommandInput()).toBe('/research ')
     expect(buildResearchPrompt('Topic: {{topic}}', 'provider cache')).toBe('Topic: provider cache')
     expect(buildResearchPrompt('Topic: {{topic}}', null)).toBe('Topic: {{topic}}')
   })

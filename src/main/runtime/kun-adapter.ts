@@ -20,6 +20,9 @@ import {
 import { getKunBaseUrl } from '../kun-base-url'
 
 const KUN_RUNTIME_ID = 'kun' as const
+const DEFAULT_RUNTIME_GET_TIMEOUT_MS = 15_000
+const DEFAULT_RUNTIME_POST_TIMEOUT_MS = 60_000
+const RESEARCH_RUNTIME_POST_TIMEOUT_MS = 15 * 60_000
 
 function appRoot(): string {
   return app.isPackaged
@@ -111,13 +114,19 @@ export async function runtimeRequestViaHost(
     method: init.method ?? 'GET',
     headers: hdrs,
     body: init.body,
-    signal: AbortSignal.timeout(init.method === 'POST' ? 60_000 : 15_000)
+    signal: AbortSignal.timeout(runtimeRequestTimeoutMs(pathAndQuery, init.method))
   })
   const text = await res.text()
   return { ok: res.ok, status: res.status, body: text }
 }
 
 export { buildKunServeArgs, resolveKunExecutable }
+
+export function runtimeRequestTimeoutMs(pathAndQuery: string, method: string | undefined): number {
+  if (method !== 'POST') return DEFAULT_RUNTIME_GET_TIMEOUT_MS
+  if (/^\/?v1\/research\/runs(?:\/|$)/.test(pathAndQuery)) return RESEARCH_RUNTIME_POST_TIMEOUT_MS
+  return DEFAULT_RUNTIME_POST_TIMEOUT_MS
+}
 
 /**
  * Default data directory used when the user has not provided one.

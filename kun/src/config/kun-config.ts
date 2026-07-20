@@ -1,3 +1,9 @@
+/**
+ * [INPUT]: 依赖 contracts、hooks 与本机 JSON 配置文件，定义 Kun 配置 schema 与读取逻辑
+ * [OUTPUT]: 对外提供 KunConfigSchema、KunServeConfigSchema、readKunConfigFile 与配置路径工具
+ * [POS]: config 的 schema 中心，被 CLI、main/runtime 启动和模型能力解析复用
+ * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
+ */
 import { existsSync, readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
@@ -230,7 +236,7 @@ export const KunServeConfigSchema = z
     endpointFormat: z.preprocess(
       normalizeModelEndpointFormat,
       z.enum(MODEL_ENDPOINT_FORMATS)
-    ).default(DEFAULT_MODEL_ENDPOINT_FORMAT).optional(),
+    ).optional(),
     model: z.string().min(1).optional(),
     approvalPolicy: ApprovalPolicySchema.default(DEFAULT_APPROVAL_POLICY).optional(),
     sandboxMode: SandboxModeSchema.default(DEFAULT_SANDBOX_MODE).optional(),

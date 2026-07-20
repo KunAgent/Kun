@@ -7,6 +7,7 @@
   "type": "module",
   "scripts": {
     "dev": "npm run build:kun && electron-vite dev",
+    "dev:research": "VITE_KUN_DEEP_RESEARCH_RUNTIME=1 npm run dev",
     "build": "npm run build:kun && electron-vite build",
     "build:kun": "node ./scripts/ensure-kun-install.cjs && npm --prefix kun run build",
     "lint": "eslint .",

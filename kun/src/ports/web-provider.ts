@@ -1,3 +1,9 @@
+/**
+ * [INPUT]: 依赖 runtime/worker 构造的网页 fetch 与 search 请求
+ * [OUTPUT]: 对外提供 WebProvider、WebSearchRequest、DeterministicWebProvider 等网页访问端口类型
+ * [POS]: ports 的网页来源抽象，被 DeepResearch worker 和测试 provider 复用
+ * [PROTOCOL]: 变更时更新此头部，然后检查 CLAUDE.md
+ */
 export type WebSource = {
   sourceId: string
   url: string
@@ -24,7 +30,14 @@ export type WebSearchRequest = {
   query: string
   limit: number
   timeoutMs: number
+  timeRange?: WebSearchTimeRange
   signal: AbortSignal
+}
+
+export type WebSearchTimeRange = {
+  startDate: string
+  endDate: string
+  defaulted: boolean
 }
 
 export type WebSearchResult = WebSource & {

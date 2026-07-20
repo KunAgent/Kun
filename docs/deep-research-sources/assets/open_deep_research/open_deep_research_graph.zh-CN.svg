@@ -1,0 +1,83 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1120" height="940" viewBox="0 0 1120 940" role="img" aria-labelledby="title desc">
+  <title id="title">Open Deep Research LangGraph 节点流程</title>
+  <desc id="desc">中文重绘的 LangGraph 节点流程图，展示澄清用户、撰写研究简报、研究主管子图和最终报告生成。</desc>
+  <defs>
+    <marker id="arrowBlack" viewBox="0 0 12 12" refX="10" refY="6" markerWidth="10" markerHeight="10" orient="auto-start-reverse">
+      <path d="M2,2 L10,6 L2,10 Z" fill="#202124"/>
+    </marker>
+    <marker id="arrowOrange" viewBox="0 0 12 12" refX="10" refY="6" markerWidth="10" markerHeight="10" orient="auto-start-reverse">
+      <path d="M2,2 L10,6 L2,10 Z" fill="#f47c4d"/>
+    </marker>
+    <marker id="arrowPink" viewBox="0 0 12 12" refX="10" refY="6" markerWidth="10" markerHeight="10" orient="auto-start-reverse">
+      <path d="M2,2 L10,6 L2,10 Z" fill="#e65b9a"/>
+    </marker>
+    <marker id="arrowGreen" viewBox="0 0 12 12" refX="10" refY="6" markerWidth="10" markerHeight="10" orient="auto-start-reverse">
+      <path d="M2,2 L10,6 L2,10 Z" fill="#56b947"/>
+    </marker>
+    <marker id="arrowPurple" viewBox="0 0 12 12" refX="10" refY="6" markerWidth="10" markerHeight="10" orient="auto-start-reverse">
+      <path d="M2,2 L10,6 L2,10 Z" fill="#8a62ee"/>
+    </marker>
+    <style>
+      .bg { fill: #f7f8fb; }
+      .nodeText { font: 600 25px -apple-system, BlinkMacSystemFont, "PingFang SC", "Noto Sans CJK SC", "Microsoft YaHei", sans-serif; fill: #202124; }
+      .caption { font: 600 18px -apple-system, BlinkMacSystemFont, "PingFang SC", "Noto Sans CJK SC", "Microsoft YaHei", sans-serif; fill: #5f6368; }
+      .node { fill: #ffffff; stroke-width: 2.4; rx: 10; ry: 10; }
+      .pill { fill: #d9d9df; stroke: #202124; stroke-width: 2.2; rx: 26; ry: 26; }
+      .group { fill: #f0edff; stroke: #8a62ee; stroke-width: 2.3; rx: 16; ry: 16; }
+      .blackLine { fill: none; stroke: #202124; stroke-width: 2.4; marker-end: url(#arrowBlack); }
+      .orangeLine { fill: none; stroke: #f47c4d; stroke-width: 2; stroke-dasharray: 5 5; marker-end: url(#arrowOrange); }
+      .pinkLine { fill: none; stroke: #e65b9a; stroke-width: 2; stroke-dasharray: 5 5; marker-end: url(#arrowPink); }
+      .greenLine { fill: none; stroke: #56b947; stroke-width: 2; stroke-dasharray: 5 5; marker-end: url(#arrowGreen); }
+      .purpleLine { fill: none; stroke: #8a62ee; stroke-width: 2; stroke-dasharray: 5 5; marker-end: url(#arrowPurple); }
+    </style>
+  </defs>
+
+  <rect class="bg" width="1120" height="940"/>
+
+  <rect x="246" y="24" width="210" height="56" class="pill"/>
+  <text x="351" y="61" text-anchor="middle" class="nodeText">开始</text>
+  <path d="M351,80 L351,130" class="blackLine"/>
+
+  <rect x="196" y="130" width="310" height="60" class="node" stroke="#f47c4d"/>
+  <text x="351" y="169" text-anchor="middle" class="nodeText" fill="#b94d22">与用户澄清</text>
+
+  <rect x="530" y="250" width="340" height="60" class="node" stroke="#e65b9a"/>
+  <text x="700" y="289" text-anchor="middle" class="nodeText" fill="#b53772">撰写研究简报</text>
+
+  <path d="M506,190 C560,224 606,226 648,250" class="orangeLine"/>
+
+  <rect x="462" y="360" width="485" height="382" class="group"/>
+  <text x="704" y="404" text-anchor="middle" class="nodeText" fill="#6b3bd4">研究主管子图</text>
+
+  <path d="M700,310 C700,330 700,342 700,360" class="pinkLine"/>
+
+  <rect x="600" y="432" width="210" height="56" class="pill"/>
+  <text x="705" y="469" text-anchor="middle" class="nodeText">开始</text>
+  <path d="M705,488 L705,542" class="blackLine"/>
+
+  <rect x="580" y="542" width="250" height="62" class="node" stroke="#56b947" fill="#f4fff3"/>
+  <text x="705" y="583" text-anchor="middle" class="nodeText" fill="#33902e">主管</text>
+
+  <rect x="560" y="642" width="290" height="60" class="node" stroke="#8a62ee" fill="#fbfaff"/>
+  <text x="705" y="681" text-anchor="middle" class="nodeText" fill="#6636c9">主管工具</text>
+
+  <rect x="600" y="744" width="210" height="56" class="pill"/>
+  <text x="705" y="781" text-anchor="middle" class="nodeText">结束</text>
+
+  <path d="M705,604 L705,642" class="greenLine"/>
+  <path d="M850,672 C910,640 900,575 830,573" class="greenLine"/>
+  <path d="M560,672 C512,695 530,750 600,772" class="purpleLine"/>
+
+  <path d="M705,800 L705,822" class="blackLine"/>
+  <rect x="530" y="822" width="350" height="60" class="node" stroke="#5a61f2" fill="#ffffff"/>
+  <text x="705" y="861" text-anchor="middle" class="nodeText" fill="#3037c9">最终报告生成</text>
+
+  <path d="M530,852 C470,850 430,840 395,812" class="purpleLine"/>
+  <path d="M351,190 C335,390 365,600 395,812" class="orangeLine"/>
+
+  <rect x="290" y="812" width="210" height="56" class="pill"/>
+  <text x="395" y="849" text-anchor="middle" class="nodeText">结束</text>
+
+  <text x="54" y="798" class="caption">橙色虚线：澄清后可直接结束</text>
+  <text x="54" y="828" class="caption">紫/绿虚线：研究循环与工具调用</text>
+</svg>
