@@ -205,6 +205,10 @@ async function ensureManagedWorkspaceRootsExist(settings: AppSettingsV1): Promis
   await mkdir(DEFAULT_WORKSPACE_ROOT, { recursive: true })
   await mkdir(DEFAULT_WRITE_WORKSPACE_ROOT_ABSOLUTE, { recursive: true })
   await mkdir(DEFAULT_CONVERSATION_WORKSPACE_ROOT_ABSOLUTE, { recursive: true })
+  const customConversationRoot = expandHomePath(settings.conversationWorkspaceRoot)
+  if (customConversationRoot && customConversationRoot !== DEFAULT_CONVERSATION_WORKSPACE_ROOT_ABSOLUTE) {
+    await mkdir(customConversationRoot, { recursive: true })
+  }
 
   const welcomePath = join(DEFAULT_WRITE_WORKSPACE_ROOT_ABSOLUTE, DEFAULT_WRITE_WELCOME_FILE_NAME)
   try {
