@@ -600,6 +600,99 @@ describe('chat-store-thread-actions queued messages', () => {
     )
   })
 
+  it('continues a turn when checkpointing finds an unborn repository', async () => {
+    const provider = {
+      connect: vi.fn(async () => undefined),
+      sendUserMessage: vi.fn(async () => ({
+        threadId: 'thr_existing',
+        turnId: 'turn_1',
+        userMessageItemId: 'user_1'
+      })),
+      subscribeThreadEvents: vi.fn(async () => undefined)
+    }
+    const createGitCheckpoint = vi.fn(async () => ({
+      ok: false,
+      reason: 'unborn_head',
+      message: 'Git repository has no initial commit yet.'
+    }))
+    const logError = vi.fn(async () => undefined)
+    registryMock.getProvider.mockReturnValue(provider)
+    vi.stubGlobal('window', {
+      kunGui: {
+        getSettings: vi.fn(async () => ({
+          workspaceRoot: '/workspace/deepseek-gui',
+          agents: { kun: { providerId: 'deepseek', model: 'deepseek-v4-pro' } },
+          codePromptPrefix: ''
+        })),
+        createGitCheckpoint,
+        logError
+      }
+    })
+    const { actions, state } = buildHarness()
+    state.busy = false
+
+    await expect(actions.sendMessage('continue without a checkpoint', 'agent')).resolves.toBe(true)
+
+    expect(createGitCheckpoint).toHaveBeenCalledWith({
+      workspaceRoot: '/workspace/deepseek-gui',
+      threadId: 'thr_existing'
+    })
+    expect(logError).not.toHaveBeenCalled()
+    expect(provider.sendUserMessage).toHaveBeenCalledWith(
+      'thr_existing',
+      'continue without a checkpoint',
+      expect.not.objectContaining({ workspaceCheckpointId: expect.anything() })
+    )
+    expect(state.blocks.find((block) => block.kind === 'user')).not.toMatchObject({
+      meta: expect.objectContaining({ workspaceCheckpointId: expect.anything() })
+    })
+    expect(state.error).toBeNull()
+  })
+
+  it('logs other checkpoint failures while continuing the turn', async () => {
+    const provider = {
+      connect: vi.fn(async () => undefined),
+      sendUserMessage: vi.fn(async () => ({
+        threadId: 'thr_existing',
+        turnId: 'turn_1',
+        userMessageItemId: 'user_1'
+      })),
+      subscribeThreadEvents: vi.fn(async () => undefined)
+    }
+    const logError = vi.fn(async () => undefined)
+    registryMock.getProvider.mockReturnValue(provider)
+    vi.stubGlobal('window', {
+      kunGui: {
+        getSettings: vi.fn(async () => ({
+          workspaceRoot: '/workspace/deepseek-gui',
+          agents: { kun: { providerId: 'deepseek', model: 'deepseek-v4-pro' } },
+          codePromptPrefix: ''
+        })),
+        createGitCheckpoint: vi.fn(async () => ({
+          ok: false,
+          reason: 'error',
+          message: 'Permission denied.'
+        })),
+        logError
+      }
+    })
+    const { actions, state } = buildHarness()
+    state.busy = false
+
+    await expect(actions.sendMessage('continue after a checkpoint error', 'agent')).resolves.toBe(true)
+
+    expect(logError).toHaveBeenCalledWith('git-checkpoint', 'Failed to create Git checkpoint', {
+      message: 'Permission denied.',
+      reason: 'error',
+      workspaceRoot: '/workspace/deepseek-gui'
+    })
+    expect(provider.sendUserMessage).toHaveBeenCalledWith(
+      'thr_existing',
+      'continue after a checkpoint error',
+      expect.not.objectContaining({ workspaceCheckpointId: expect.anything() })
+    )
+  })
+
   it('forwards GUI design canvas turns to the runtime provider', async () => {
     const provider = {
       connect: vi.fn(async () => undefined),

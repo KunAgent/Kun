@@ -75,8 +75,15 @@ type GitCheckpointCleanupState = {
 const DAY_MS = 24 * 60 * 60 * 1_000
 const CHECKPOINT_CLEANUP_STATE_FILE = '.cleanup.json'
 const CHECKPOINT_REFERENCE_FILE_EXTENSIONS = new Set(['.json', '.jsonl'])
+const UNBORN_HEAD_MESSAGE = 'Git repository has no initial commit yet.'
 
-function checkpointFailure(error: unknown): Extract<GitCheckpointCreateResult, { ok: false }> {
+type GitCheckpointCommandFailure = {
+  ok: false
+  reason: 'not_git_repo' | 'git_unavailable' | 'error'
+  message: string
+}
+
+function checkpointFailure(error: unknown): GitCheckpointCommandFailure {
   const message = error instanceof Error ? error.message : String(error)
   if (/not a git repository/i.test(message)) {
     return { ok: false, reason: 'not_git_repo', message: 'The working directory is not a Git repository.' }
@@ -236,6 +243,38 @@ async function resolveRepositoryRoot(workspaceRoot: string): Promise<string | nu
   if (!cwd) return null
   const { stdout } = await runGit(cwd, ['rev-parse', '--show-toplevel'])
   return stdout.trim()
+}
+
+async function hasUnbornHead(repositoryRoot: string): Promise<boolean> {
+  try {
+    const headRef = (await runGit(repositoryRoot, ['symbolic-ref', '--quiet', 'HEAD'])).stdout.trim()
+    if (!headRef) return false
+
+    try {
+      await runGit(repositoryRoot, ['rev-parse', '--verify', '--quiet', headRef])
+      return false
+    } catch (error) {
+      // Only a missing symbolic branch ref is an unborn HEAD. Permission and
+      // other Git failures must retain their original checkpoint error.
+      if (!(typeof error === 'object' && error !== null && 'code' in error && error.code === 1)) {
+        return false
+      }
+    }
+
+    await runGit(repositoryRoot, ['status', '--porcelain=v1'])
+    return true
+  } catch {
+    return false
+  }
+}
+
+async function resolveCheckpointHead(repositoryRoot: string): Promise<string | null> {
+  try {
+    return (await runGit(repositoryRoot, ['rev-parse', '--verify', 'HEAD^{commit}'])).stdout.trim()
+  } catch (error) {
+    if (await hasUnbornHead(repositoryRoot)) return null
+    throw error
+  }
 }
 
 /**
@@ -545,6 +584,10 @@ export async function createGitCheckpoint(params: {
     if (!repositoryRoot) {
       return { ok: false, reason: 'no_workspace', message: 'No working directory selected.' }
     }
+    const head = await resolveCheckpointHead(repositoryRoot)
+    if (head === null) {
+      return { ok: false, reason: 'unborn_head', message: UNBORN_HEAD_MESSAGE }
+    }
     await assertNoUnmerged(repositoryRoot)
 
     const checkpointId = params.checkpointId?.trim() || `gcp_${Date.now()}_${randomUUID()}`
@@ -552,7 +595,6 @@ export async function createGitCheckpoint(params: {
     await rm(dir, { recursive: true, force: true })
     await mkdir(join(dir, 'untracked'), { recursive: true })
 
-    const head = (await runGit(repositoryRoot, ['rev-parse', 'HEAD'])).stdout.trim()
     await writeHeadBundle(repositoryRoot, checkpointHeadBundlePath(root, checkpointId))
     const currentBranchRaw = (await runGit(repositoryRoot, ['branch', '--show-current'])).stdout.trim()
     const currentBranch = currentBranchRaw || null
@@ -788,7 +830,7 @@ export async function restoreGitCheckpoint(params: {
     if (!rescue.ok) {
       return {
         ok: false,
-        reason: rescue.reason,
+        reason: rescue.reason === 'unborn_head' ? 'error' : rescue.reason,
         message: `Cannot safely restore checkpoint because the rescue snapshot failed: ${rescue.message}`
       }
     }

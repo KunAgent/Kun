@@ -39,6 +39,47 @@ afterEach(async () => {
 })
 
 describe('git checkpoint service', () => {
+  it('degrades an unborn repository before creating a checkpoint directory', async () => {
+    const unbornRepo = join(sandbox, 'unborn-repo')
+    const checkpointId = 'gcp_unborn_head'
+    execFileSync('git', ['init', '-b', 'main', unbornRepo], { stdio: 'pipe' })
+    await writeFile(join(unbornRepo, 'untracked.txt'), 'untracked\n')
+
+    const checkpoint = await createGitCheckpoint({
+      dataDir,
+      workspaceRoot: unbornRepo,
+      threadId: 'thr_unborn',
+      checkpointId
+    })
+
+    expect(checkpoint).toEqual({
+      ok: false,
+      reason: 'unborn_head',
+      message: 'Git repository has no initial commit yet.'
+    })
+    const checkpointDir = join(dataDir, 'git-checkpoints', checkpointId)
+    await expect(stat(checkpointDir)).rejects.toThrow()
+    await expect(stat(join(checkpointDir, 'metadata.json'))).rejects.toThrow()
+    await expect(stat(join(checkpointDir, 'head.bundle'))).rejects.toThrow()
+  })
+
+  it('keeps a corrupt HEAD as a generic checkpoint error', async () => {
+    const checkpointId = 'gcp_corrupt_head'
+    await writeFile(join(repoRoot, '.git', 'refs', 'heads', 'main'), 'a'.repeat(40))
+
+    const checkpoint = await createGitCheckpoint({
+      dataDir,
+      workspaceRoot: repoRoot,
+      threadId: 'thr_corrupt_head',
+      checkpointId
+    })
+
+    expect(checkpoint.ok).toBe(false)
+    if (checkpoint.ok) throw new Error('expected corrupt HEAD to fail')
+    expect(checkpoint.reason).toBe('error')
+    await expect(stat(join(dataDir, 'git-checkpoints', checkpointId))).rejects.toThrow()
+  })
+
   it('stores checkpoint heads outside visible git refs', async () => {
     const checkpoint = await createGitCheckpoint({
       dataDir,

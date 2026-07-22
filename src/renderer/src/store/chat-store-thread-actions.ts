@@ -1152,7 +1152,11 @@ export function createThreadActions(
         }))
         if (checkpoint.ok) {
           workspaceCheckpointId = checkpoint.checkpointId
-        } else if (checkpoint.reason !== 'not_git_repo' && checkpoint.reason !== 'no_workspace') {
+        } else if (
+          checkpoint.reason !== 'not_git_repo' &&
+          checkpoint.reason !== 'no_workspace' &&
+          checkpoint.reason !== 'unborn_head'
+        ) {
           if (checkpoint.reason === 'git_unavailable') {
             checkpointGitAvailability.markUnavailable(checkpointWorkspaceKey)
           }
