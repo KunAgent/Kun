@@ -22,6 +22,7 @@ import {
 
 export type ModelProviderPresetId =
   | 'litellm'
+  | 'atlascloud'
   | 'longcat'
   | 'zhipu-coding-plan'
   | 'zai-coding-plan'
@@ -235,6 +236,11 @@ const MOONSHOT_CHAT_MODELS = [
   'moonshot-v1-8k'
 ]
 
+const ATLASCLOUD_CHAT_MODELS = [
+  'qwen/qwen3.5-flash',
+  'deepseek-ai/deepseek-v4-pro'
+]
+
 export const MODEL_PROVIDER_PRESETS: ModelProviderPreset[] = [
   {
     id: 'litellm',
@@ -244,6 +250,25 @@ export const MODEL_PROVIDER_PRESETS: ModelProviderPreset[] = [
     models: [],
     docsUrl: 'https://docs.litellm.ai/docs/',
     apiKeyUrl: 'https://docs.litellm.ai/docs/proxy/quick_start'
+  },
+  {
+    id: 'atlascloud',
+    name: 'Atlas Cloud',
+    baseUrl: 'https://api.atlascloud.ai/v1',
+    endpointFormat: 'chat_completions',
+    models: [...ATLASCLOUD_CHAT_MODELS],
+    modelProfiles: {
+      'qwen/qwen3.5-flash': {
+        ...visionChatProfile(1_000_000),
+        maxOutputTokens: 67_072
+      },
+      'deepseek-ai/deepseek-v4-pro': {
+        ...textChatProfile(1_048_576, DEEPSEEK_REASONING),
+        maxOutputTokens: 393_216
+      }
+    },
+    docsUrl: 'https://www.atlascloud.ai/docs',
+    apiKeyUrl: 'https://www.atlascloud.ai/console/api-keys'
   },
   {
     id: 'longcat',

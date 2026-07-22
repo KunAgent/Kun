@@ -1213,8 +1213,9 @@ describe('model provider settings', () => {
 })
 
 describe('provider presets', () => {
-  it('includes optional LiteLLM and Vercel AI Gateway presets', () => {
+  it('includes optional LiteLLM, Atlas Cloud, and Vercel AI Gateway presets', () => {
     const litellm = getModelProviderPreset('litellm')
+    const atlascloud = getModelProviderPreset('atlascloud')
     const vercel = getModelProviderPreset('vercel-ai-gateway')
 
     expect(litellm).not.toBeNull()
@@ -1225,6 +1226,35 @@ describe('provider presets', () => {
       endpointFormat: 'chat_completions',
       models: []
     })
+
+    expect(atlascloud).not.toBeNull()
+    expect(atlascloud && modelProviderPresetProfile(atlascloud, 'sk-atlas')).toMatchObject({
+      id: 'atlascloud',
+      name: 'Atlas Cloud',
+      apiKey: 'sk-atlas',
+      baseUrl: 'https://api.atlascloud.ai/v1',
+      endpointFormat: 'chat_completions',
+      models: ['qwen/qwen3.5-flash', 'deepseek-ai/deepseek-v4-pro'],
+      modelProfiles: {
+        'qwen/qwen3.5-flash': expect.objectContaining({
+          contextWindowTokens: 1_000_000,
+          maxOutputTokens: 67_072,
+          inputModalities: ['text', 'image'],
+          messageParts: ['text', 'image_url']
+        }),
+        'deepseek-ai/deepseek-v4-pro': expect.objectContaining({
+          contextWindowTokens: 1_048_576,
+          maxOutputTokens: 393_216,
+          inputModalities: ['text'],
+          reasoning: {
+            supportedEfforts: ['off', 'high', 'max'],
+            defaultEffort: 'max',
+            requestProtocol: 'deepseek-chat-completions'
+          }
+        })
+      }
+    })
+    expect(atlascloud?.apiKeyUrl).toBe('https://www.atlascloud.ai/console/api-keys')
 
     expect(vercel).not.toBeNull()
     expect(vercel && modelProviderPresetProfile(vercel)).toMatchObject({
@@ -1363,6 +1393,7 @@ describe('provider presets', () => {
   it('resolves new OpenAI-compatible presets through the selected provider', () => {
     const cases = [
       ['longcat', 'https://api.longcat.chat/openai', 'LongCat-2.0-Preview'],
+      ['atlascloud', 'https://api.atlascloud.ai/v1', 'qwen/qwen3.5-flash'],
       ['zhipu-coding-plan', 'https://open.bigmodel.cn/api/coding/paas/v4/chat/completions', 'glm-5.2', 'custom_endpoint'],
       ['zai-coding-plan', 'https://api.z.ai/api/coding/paas/v4/chat/completions', 'glm-5.1', 'custom_endpoint'],
       ['kimi-code', 'https://api.kimi.com/coding/v1', 'kimi-for-coding'],
