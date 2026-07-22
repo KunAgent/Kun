@@ -126,7 +126,7 @@ describe('runtime factory usage carryover', () => {
     })
 
     try {
-      expect(runtime.llmDebug).toBeUndefined()
+      expect(runtime.llmDebug).toBeDefined()
       expect(runtime.extensionPlatform).toBeDefined()
       expect(runtime.info().extensions).toMatchObject({
         enabled: true,
@@ -186,6 +186,63 @@ describe('runtime factory usage carryover', () => {
       })
     } finally {
       await runtime.shutdown?.()
+    }
+  })
+
+  it('keeps Agent Perspective capture available when runtime llmDebug is omitted or disabled', async () => {
+    for (const [name, runtimeOptions] of [
+      ['omitted', undefined],
+      ['disabled', { llmDebug: { enabled: false } }]
+    ] as const) {
+      const dataDir = await mkdtemp(join(tmpdir(), `kun-runtime-llm-debug-${name}-`))
+      tempDirs.push(dataDir)
+      const runtime = await createKunServeRuntime({
+        host: '127.0.0.1',
+        port: 0,
+        dataDir,
+        runtimeToken: 'tok',
+        apiKey: 'sk-default',
+        baseUrl: 'https://api.example.test/v1',
+        model: 'model-before',
+        approvalPolicy: 'auto',
+        sandboxMode: 'danger-full-access',
+        tokenEconomyMode: false,
+        insecure: false,
+        storage: { backend: 'file' },
+        ...(runtimeOptions ? { runtime: runtimeOptions } : {}),
+        capabilities: KunCapabilitiesConfig.parse({})
+      })
+
+      try {
+        const recorder = runtime.llmDebug
+        expect(recorder).toBeDefined()
+        if (!recorder) throw new Error('expected Agent Perspective recorder')
+        const round = recorder.start({
+          threadId: `thread-${name}`,
+          turnId: 'turn-1',
+          provider: 'compat',
+          model: 'model-before'
+        })
+        recorder.beginHttpAttempt(round, {
+          endpointFormat: 'chat_completions',
+          attempt: 1,
+          reason: 'initial',
+          url: 'https://api.example.test/v1/chat/completions',
+          headers: {},
+          bodyText: JSON.stringify({ model: 'model-before' })
+        })
+        await recorder.finish(round)
+        await expect(recorder.listThread(`thread-${name}`)).resolves.toMatchObject({
+          records: [expect.objectContaining({
+            provider: 'compat',
+            model: 'model-before',
+            attempt: 1,
+            endpointFormat: 'chat_completions'
+          })]
+        })
+      } finally {
+        await runtime.shutdown?.()
+      }
     }
   })
 
