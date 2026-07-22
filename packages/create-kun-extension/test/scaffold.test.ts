@@ -86,6 +86,7 @@ describe('create-kun-extension', () => {
 
     const result = spawnSync(process.platform === 'win32' ? 'npm.cmd' : 'npm', ['test'], {
       cwd: targetDirectory,
+      shell: true,
       encoding: 'utf8',
       env: { ...process.env, npm_config_audit: 'false', npm_config_fund: 'false' }
     })

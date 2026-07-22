@@ -920,7 +920,7 @@ describe('registerAppIpcHandlers', () => {
         exists: true
       })
       expect(onKunProjectConfigChanged).toHaveBeenCalledWith(
-        expect.stringContaining('/workspace/.kun/project.json'),
+        expect.stringContaining(join('workspace', '.kun', 'project.json')),
         content
       )
       await expect(handlers.get('kun:project-config:read')?.({}, { workspaceRoot: workspace }))
@@ -1010,7 +1010,7 @@ describe('registerAppIpcHandlers', () => {
         cancelId: 1
       }))
       expect(current.agents.kun.projectConfig.grants).toEqual([
-        expect.objectContaining({ workspaceRoot: expect.stringContaining('/workspace') })
+        expect.objectContaining({ workspaceRoot: expect.stringContaining('workspace') })
       ])
 
       writeFileSync(join(workspace, '.kun', 'project.json'), JSON.stringify({

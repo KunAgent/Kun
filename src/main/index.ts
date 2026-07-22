@@ -9,6 +9,7 @@ import {
   Notification,
   powerSaveBlocker,
   protocol,
+  screen,
   session,
   systemPreferences,
   Tray,
@@ -25,8 +26,8 @@ import {
 } from './settings-store'
 import kunLogoPng from '../asset/img/kun.png?url'
 import kunMacLogoPng from '../asset/img/kun_mac.png?url'
-import kunTrayPng from '../asset/img/kun_tray.png?url'
-import { createAppIcon, pickTrayIcon, prepareTrayIcon } from './app-icon'
+import kunTrayPng from '../asset/img/kun.ico?url'
+import { createAppIcon, createAppIconFromIco, pickTrayIcon, prepareTrayIcon, selectIcoSizeForScale } from './app-icon'
 import { buildTrayMenuTemplate, parseTrayThreads, type TrayThreadSummary } from './tray-session-menu'
 import { configureLinuxWaylandImeSwitches } from './app-command-line'
 import {
@@ -443,8 +444,9 @@ function installDevPreviewWebviewGuards(options: {
 
 const appIconSource = process.platform === 'win32' ? kunMacLogoPng : kunLogoPng
 const appIcon = createAppIcon(appIconSource)
-const trayIcon = createAppIcon(kunTrayPng)
-traceStartup('app icon loaded', { source: appIconSource.startsWith('data:') ? 'data-url' : 'path' })
+// trayIcon 默认值保留 ICO 用于 DPI 动态选择（syncTray 中根据缩放重建）
+const trayIcon = createAppIconFromIco(kunTrayPng, 16)
+traceStartup('app icon loaded')
 const gotSingleInstanceLock = runningClawScheduleMcpServer || app.requestSingleInstanceLock()
 traceStartup('single instance lock checked', {
   gotSingleInstanceLock,
@@ -597,9 +599,14 @@ function syncTray(settings: AppSettingsV1): void {
   }
 
   if (!tray) {
-    // Tray 优先用专门的托盘图(在 16x16/24x24 任务栏尺寸下更清晰的剪影);
-    // 托盘图加载失败时回退到主应用图,这样不会看到 electron 默认占位。
-    const traySource = prepareTrayIcon(pickTrayIcon(trayIcon, appIcon))
+    // app ready 后首次创建托盘: 根据系统 DPI 选择合适尺寸的 ICO 条目
+    // 确保高 DPI 下图标不模糊
+    const scaleFactor = screen.getPrimaryDisplay().scaleFactor
+    const scaledSize = selectIcoSizeForScale(16, scaleFactor)
+    const scaledTrayIcon = scaledSize > 16
+      ? createAppIconFromIco(kunTrayPng, scaledSize)
+      : trayIcon
+    const traySource = prepareTrayIcon(pickTrayIcon(scaledTrayIcon, appIcon), process.platform, scaleFactor)
     tray = new Tray(traySource.isEmpty() ? nativeImage.createEmpty() : traySource)
     tray.on('click', showTrayMenu)
     tray.on('double-click', revealMainWindow)
