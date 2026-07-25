@@ -34,6 +34,8 @@ type MigrationRuntime = {
   service: LegacyProviderCredentialMigrationService
 }
 
+type MigrationRuntimeFactory = (dataDir: string) => Promise<MigrationRuntime>
+
 /**
  * Bridges the GUI's legacy settings shape to Kun's protected account store.
  * It intentionally leaves existing synchronous settings consumers on an
@@ -42,6 +44,8 @@ type MigrationRuntime = {
  */
 export class LegacyProviderSettingsMigrationCoordinator {
   private readonly runtimes = new Map<string, Promise<MigrationRuntime>>()
+
+  constructor(private readonly runtimeFactory: MigrationRuntimeFactory = createMigrationRuntime) {}
 
   async prepare(
     settings: AppSettingsV1,
@@ -85,10 +89,17 @@ export class LegacyProviderSettingsMigrationCoordinator {
   private runtime(dataDir: string): Promise<MigrationRuntime> {
     let pending = this.runtimes.get(dataDir)
     if (!pending) {
-      pending = createMigrationRuntime(dataDir)
+      pending = this.runtimeFactory(dataDir)
       this.runtimes.set(dataDir, pending)
+      void pending.catch(() => {
+        if (this.runtimes.get(dataDir) === pending) this.runtimes.delete(dataDir)
+      })
     }
     return pending
+  }
+
+  invalidateRuntime(dataDir: string): void {
+    this.runtimes.delete(dataDir)
   }
 }
 
@@ -225,7 +236,7 @@ function isRecognizedSettingsSource(sourceId: string): boolean {
   return sourceId === LEGACY_RUNTIME_OVERRIDE_SOURCE_ID || sourceId.startsWith(LEGACY_PROVIDER_SOURCE_PREFIX)
 }
 
-function resolveSettingsDataDir(settings: AppSettingsV1): string {
+export function resolveSettingsDataDir(settings: AppSettingsV1): string {
   const value = getKunRuntimeSettings(settings).dataDir.trim()
   if (value === '~') return homedir()
   if (value.startsWith('~/') || value.startsWith('~\\')) {

@@ -121,6 +121,11 @@ function registerOptions(overrides: Partial<Parameters<typeof import('./register
     getMainWindow: () => null,
     applySettingsPatch,
     saveSettingsPatch,
+    resetUnreadableCredentials: vi.fn(async () => ({
+      reset: true as const,
+      backupPath: '/tmp/credential-recovery',
+      movedItems: ['secret.key']
+    })),
     runtimeRequest: vi.fn() as never,
     getRuntimeSettingsSyncStatus: () => ({
       state: 'idle' as const,
@@ -273,6 +278,35 @@ describe('registerAppIpcHandlers', () => {
       handler?.({}, { agents: { kun: { mysteryFlag: true } } })
     ).rejects.toThrow(/Invalid payload for settings:set/)
     expect(applySettingsPatch).not.toHaveBeenCalled()
+  })
+
+  it('requires trusted native confirmation before resetting unreadable credentials', async () => {
+    const mainFrame = { processId: 10, routingId: 20 }
+    const contents = { id: 7, mainFrame }
+    const mainWindow = { isDestroyed: () => false, webContents: contents }
+    const resetUnreadableCredentials = vi.fn(async () => ({
+      reset: true as const,
+      backupPath: '/tmp/credential-recovery',
+      movedItems: ['secret.key']
+    }))
+    registerAppIpcHandlers(registerOptions({
+      getMainWindow: () => mainWindow as never,
+      resetUnreadableCredentials
+    }))
+    const handler = handlers.get('credentials:reset-unreadable')
+
+    await expect(handler?.({
+      sender: { id: 99 },
+      senderFrame: { processId: 90, routingId: 91 }
+    })).rejects.toThrow(/trusted workbench frame/)
+
+    electronMock.showMessageBox.mockResolvedValueOnce({ response: 1 })
+    await expect(handler?.({ sender: contents, senderFrame: mainFrame })).resolves.toEqual({ reset: false })
+    expect(resetUnreadableCredentials).not.toHaveBeenCalled()
+
+    electronMock.showMessageBox.mockResolvedValueOnce({ response: 0 })
+    await expect(handler?.({ sender: contents, senderFrame: mainFrame })).resolves.toMatchObject({ reset: true })
+    expect(resetUnreadableCredentials).toHaveBeenCalledOnce()
   })
 
   it('reports whether a workspace directory currently exists', async () => {

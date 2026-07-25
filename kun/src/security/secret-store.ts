@@ -236,7 +236,25 @@ async function tryWriteOsKey(platform: NodeJS.Platform, run: CommandRunner, key:
 }
 
 /** Marker for a DPAPI-wrapped key file (Windows). */
-const DPAPI_PREFIX = 'dpapi:v1:'
+export const WINDOWS_DPAPI_KEY_PREFIX = 'dpapi:v1:'
+export const UNREADABLE_CREDENTIAL_KEY_ERROR_CODE = 'credential_key_unreadable'
+
+export class UnreadableCredentialKeyError extends Error {
+  readonly code = UNREADABLE_CREDENTIAL_KEY_ERROR_CODE
+
+  constructor() {
+    super(
+      `${UNREADABLE_CREDENTIAL_KEY_ERROR_CODE}: existing DPAPI-protected OAuth key could not be decrypted; refusing to replace it`
+    )
+    this.name = 'UnreadableCredentialKeyError'
+  }
+}
+
+export function isUnreadableCredentialKeyError(error: unknown): error is UnreadableCredentialKeyError {
+  return error instanceof UnreadableCredentialKeyError || (
+    error instanceof Error && error.message.includes(UNREADABLE_CREDENTIAL_KEY_ERROR_CODE)
+  )
+}
 
 /**
  * Windows DPAPI key wrapping. The 32-byte AES key is encrypted with the current
@@ -287,8 +305,8 @@ async function readDpapiKeyFile(path: string, run: CommandRunner): Promise<Buffe
   } catch {
     return null
   }
-  if (!content.startsWith(DPAPI_PREFIX)) return null
-  return dpapiUnprotect(run, content.slice(DPAPI_PREFIX.length))
+  if (!content.startsWith(WINDOWS_DPAPI_KEY_PREFIX)) return null
+  return dpapiUnprotect(run, content.slice(WINDOWS_DPAPI_KEY_PREFIX.length))
 }
 
 async function readKeyFile(path: string): Promise<Buffer | null> {
@@ -421,13 +439,13 @@ export async function createSecretEncryptor(options: CreateKeyProviderOptions): 
     if (existing) {
       return { encryptor: createAesEncryptor(existing), osKeychain: true, reason: 'key DPAPI-protected (CurrentUser) in key file' }
     }
-    if (keyFileText.trim().startsWith(DPAPI_PREFIX)) {
-      throw new Error('existing DPAPI-protected OAuth key could not be decrypted; refusing to replace it')
+    if (keyFileText.trim().startsWith(WINDOWS_DPAPI_KEY_PREFIX)) {
+      throw new UnreadableCredentialKeyError()
     }
     const key = legacyFileKey ?? randomBytes(32)
     const wrapped = await dpapiProtect(run, key)
     if (wrapped) {
-      await writeKeyFileContent(options.keyFilePath, `${DPAPI_PREFIX}${wrapped}`)
+      await writeKeyFileContent(options.keyFilePath, `${WINDOWS_DPAPI_KEY_PREFIX}${wrapped}`)
       return {
         encryptor: createAesEncryptor(key),
         osKeychain: true,

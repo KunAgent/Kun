@@ -21,6 +21,21 @@ import { syncGuiManagedKunConfig } from './runtime/kun-runtime-config-service'
 import { JsonSettingsStore } from './settings-store'
 
 describe('LegacyProviderSettingsMigrationCoordinator', () => {
+  it('does not cache a failed credential runtime initialization', async () => {
+    const runtimeFactory = vi.fn()
+      .mockRejectedValueOnce(new Error('temporary DPAPI failure'))
+      .mockRejectedValueOnce(new Error('second initialization reached'))
+    const coordinator = new LegacyProviderSettingsMigrationCoordinator(runtimeFactory)
+    const input = {
+      provider: defaultModelProviderSettings(),
+      agents: { kun: { ...defaultKunRuntimeSettings(), dataDir: '/tmp/kun-credential-retry' } }
+    } as AppSettingsV1
+
+    await expect(coordinator.prepare(input)).rejects.toThrow('temporary DPAPI failure')
+    await expect(coordinator.prepare(input)).rejects.toThrow('second initialization reached')
+    expect(runtimeFactory).toHaveBeenCalledTimes(2)
+  })
+
   it('emits distinct protected credential bindings for numbered plan accounts', () => {
     const providerSettings = defaultModelProviderSettings()
     const kimi = getModelProviderPreset('kimi-code')!

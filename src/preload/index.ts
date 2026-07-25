@@ -59,6 +59,7 @@ const api = {
     respondRendererRequest: (response) => ipcRenderer.invoke('data-migration:renderer-response', response)
   },
   getSettings: () => ipcRenderer.invoke('settings:get'),
+  resetUnreadableCredentials: () => ipcRenderer.invoke('credentials:reset-unreadable'),
   claudeSubscriptionStatus: () => ipcRenderer.invoke('claude-subscription:status'),
   claudeSubscriptionLogin: () => ipcRenderer.invoke('claude-subscription:login'),
   claudeSubscriptionModels: (token) => ipcRenderer.invoke('claude-subscription:models', token),

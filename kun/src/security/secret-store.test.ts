@@ -8,7 +8,9 @@ import {
   createSecretEncryptor,
   DISABLE_OS_CREDENTIAL_STORE_ENV,
   hasPersistedSecretKeyMaterial,
-  isEncryptedEnvelope
+  isEncryptedEnvelope,
+  UNREADABLE_CREDENTIAL_KEY_ERROR_CODE,
+  WINDOWS_DPAPI_KEY_PREFIX
 } from './secret-store.js'
 
 const isolatedCredentialEnvironment = {
@@ -293,6 +295,25 @@ describe('createSecretEncryptor', () => {
       })
       expect(again.osKeychain).toBe(true)
       expect(again.encryptor.decrypt(blob)).toBe('tok')
+    } finally {
+      await rm(dir, { recursive: true, force: true })
+    }
+  })
+
+  it('does not replace an existing DPAPI key when Windows can no longer decrypt it', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'kun-secret-'))
+    const keyPath = join(dir, 'secret.key')
+    const protectedKey = `${WINDOWS_DPAPI_KEY_PREFIX}unreadable-envelope`
+    const run = vi.fn(async () => ({ code: 1, stdout: '', stderr: 'CryptUnprotectData failed' }))
+    try {
+      await writeFile(keyPath, protectedKey)
+      await expect(createSecretEncryptor({
+        keyFilePath: keyPath,
+        platform: 'win32',
+        run,
+        ...explicitOsCredentialStore
+      })).rejects.toMatchObject({ code: UNREADABLE_CREDENTIAL_KEY_ERROR_CODE })
+      await expect(readFile(keyPath, 'utf8')).resolves.toBe(protectedKey)
     } finally {
       await rm(dir, { recursive: true, force: true })
     }

@@ -31,6 +31,7 @@ import {
 import type {
   ClawImInstallPollResult,
   ClawImInstallQrResult,
+  CredentialRecoveryResetResult,
   ConversationWorkspaceCreateResult,
   DesktopCommand,
   KunRuntimeSettingsSyncStatusPayload,
@@ -313,6 +314,7 @@ type RegisterAppIpcHandlersOptions = {
   getMainWindow: () => BrowserWindow | null
   applySettingsPatch: (partial: AppSettingsPatch) => Promise<AppSettingsV1>
   saveSettingsPatch: (partial: AppSettingsPatch) => Promise<AppSettingsV1>
+  resetUnreadableCredentials: () => Promise<CredentialRecoveryResetResult>
   runtimeRequest: (
     path: string,
     method?: string,
@@ -551,6 +553,7 @@ export function registerAppIpcHandlers(options: RegisterAppIpcHandlersOptions): 
     getMainWindow,
     applySettingsPatch,
     saveSettingsPatch,
+    resetUnreadableCredentials,
     runtimeRequest,
     getRuntimeSettingsSyncStatus,
     restartRuntime,
@@ -764,6 +767,30 @@ export function registerAppIpcHandlers(options: RegisterAppIpcHandlersOptions): 
   }
 
   ipcMain.handle('settings:get', async () => store.load())
+  ipcMain.handle('credentials:reset-unreadable', async (event): Promise<CredentialRecoveryResetResult> => {
+    assertTrustedWorkbenchSender(event, getMainWindow)
+    const parent = getMainWindow()
+    if (!parent || parent.isDestroyed()) {
+      throw new Error('Credential recovery window is unavailable.')
+    }
+    const confirmation = await dialog.showMessageBox(parent, {
+      type: 'warning',
+      title: 'Reset encrypted credentials',
+      message: 'Reset the credentials that Windows can no longer decrypt?',
+      detail: [
+        'Kun will back up the unreadable encrypted data before resetting it.',
+        'Saved API keys and OAuth sessions must be entered or authorized again.',
+        'Conversations, workspaces, and ordinary settings are not removed.'
+      ].join('\n'),
+      buttons: ['Back up and reset', 'Cancel'],
+      defaultId: 1,
+      cancelId: 1,
+      noLink: true,
+      normalizeAccessKeys: true
+    })
+    if (confirmation.response !== 0) return { reset: false }
+    return resetUnreadableCredentials()
+  })
   // Claude Pro/Max subscription login (compliant path: official CLI does the
   // OAuth; we only detect it / capture the setup-token).
   ipcMain.handle('claude-subscription:status', async () => claudeSubscriptionStatus())

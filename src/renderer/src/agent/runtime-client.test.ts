@@ -103,6 +103,38 @@ describe('rendererRuntimeClient', () => {
     expect(setSettings).toHaveBeenCalledTimes(1)
   })
 
+  it('invalidates cached settings after encrypted credentials are reset', async () => {
+    const getSettings = vi.fn()
+      .mockResolvedValueOnce(settings(''))
+      .mockResolvedValueOnce(settings('sk-after-reset'))
+    const resetUnreadableCredentials = vi.fn(async () => ({
+      reset: true as const,
+      backupPath: '/tmp/credential-recovery',
+      movedItems: ['secret.key']
+    }))
+    vi.stubGlobal('window', {
+      kunGui: {
+        getSettings,
+        setSettings: vi.fn(),
+        resetUnreadableCredentials,
+        runtimeRequest: vi.fn(),
+        restartRuntime: vi.fn(),
+        startSse: vi.fn(),
+        stopSse: vi.fn(),
+        onSseEvent: vi.fn(),
+        onSseEnd: vi.fn(),
+        onSseError: vi.fn()
+      }
+    })
+
+    await rendererRuntimeClient.getSettings()
+    await expect(rendererRuntimeClient.resetUnreadableCredentials()).resolves.toMatchObject({ reset: true })
+    const refreshed = await rendererRuntimeClient.getSettings()
+
+    expect(refreshed.agents.kun.apiKey).toBe('sk-after-reset')
+    expect(getSettings).toHaveBeenCalledTimes(2)
+  })
+
   it('forwards explicit runtime restarts through the preload bridge', async () => {
     const restartRuntime = vi.fn(async () => undefined)
     vi.stubGlobal('window', {

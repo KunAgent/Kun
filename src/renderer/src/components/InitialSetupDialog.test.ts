@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
   canCloseInitialSetup,
-  completeInitialSetupAfterSave
+  completeInitialSetupAfterSave,
+  isUnreadableCredentialKeyError
 } from './InitialSetupDialog'
 
 describe('InitialSetupDialog completion flow', () => {
@@ -78,5 +79,12 @@ describe('InitialSetupDialog completion flow', () => {
   it('only allows manual close in preview mode', () => {
     expect(canCloseInitialSetup('required')).toBe(false)
     expect(canCloseInitialSetup('preview')).toBe(true)
+  })
+
+  it('recognizes unreadable protected credential errors across the Electron IPC wrapper', () => {
+    expect(isUnreadableCredentialKeyError(new Error(
+      "Error invoking remote method 'settings:set': credential_key_unreadable: existing key is unavailable"
+    ))).toBe(true)
+    expect(isUnreadableCredentialKeyError(new Error('Kun runtime is offline'))).toBe(false)
   })
 })

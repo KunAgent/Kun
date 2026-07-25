@@ -1,5 +1,6 @@
 import type { AppSettingsPatch, AppSettingsV1 } from '@shared/app-settings'
 import type {
+  CredentialRecoveryResetResult,
   RuntimeRequestResult,
   SseEndPayload,
   SseErrorPayload,
@@ -31,6 +32,12 @@ class RendererRuntimeClient {
     this.cachedSettings = settings
     this.settingsPromise = null
     return settings
+  }
+
+  async resetUnreadableCredentials(): Promise<CredentialRecoveryResetResult> {
+    const result = await window.kunGui.resetUnreadableCredentials()
+    if (result.reset) this.invalidateSettings()
+    return result
   }
 
   invalidateSettings(): void {

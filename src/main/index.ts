@@ -38,7 +38,11 @@ import { configureAppIdentity } from './app-identity'
 import { shouldStartHidden, syncLoginItemSettings } from './desktop-behavior'
 import { resolveLogDirectory, resolveNamedPreloadPath, resolvePreloadPath } from './main-paths'
 import { runLegacyKunDataMigration } from './legacy-data-migration'
-import { LegacyProviderSettingsMigrationCoordinator } from './legacy-provider-settings-migration'
+import {
+  LegacyProviderSettingsMigrationCoordinator,
+  resolveSettingsDataDir
+} from './legacy-provider-settings-migration'
+import { resetUnreadableWindowsCredentials } from './credential-recovery'
 import {
   applyKunRuntimePatch,
   kunSettingsEnvelope,
@@ -1669,9 +1673,8 @@ app.whenReady().then(async () => {
     app.dock?.setIcon(macDockIcon.isEmpty() ? appIcon : macDockIcon)
   }
 
-  store = new JsonSettingsStore(app.getPath('userData'), {
-    credentialMigration: new LegacyProviderSettingsMigrationCoordinator()
-  })
+  const credentialMigration = new LegacyProviderSettingsMigrationCoordinator()
+  store = new JsonSettingsStore(app.getPath('userData'), { credentialMigration })
   traceStartup('settings load:start')
   const initial = await store.load()
   traceStartup('settings load:done')
@@ -1893,6 +1896,12 @@ app.whenReady().then(async () => {
     getMainWindow: () => mainWindow,
     applySettingsPatch,
     saveSettingsPatch,
+    resetUnreadableCredentials: async () => {
+      const dataDir = resolveSettingsDataDir(await store.load())
+      const result = await resetUnreadableWindowsCredentials(dataDir)
+      credentialMigration.invalidateRuntime(dataDir)
+      return { reset: true as const, ...result }
+    },
     runtimeRequest: async (path, method, body, headers) => {
       const settings = await store.load()
       return runtimeRequest(settings, path, { method, body, headers })

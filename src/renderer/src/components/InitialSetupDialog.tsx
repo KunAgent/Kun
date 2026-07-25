@@ -11,6 +11,7 @@ import {
   type KunToolPermissionMode,
   type ModelProviderPreset
 } from '@shared/app-settings'
+import { UNREADABLE_CREDENTIAL_KEY_ERROR_CODE } from '@shared/kun-gui-api'
 import {
   buildInitialSetupSettingsPatch,
   INITIAL_SETUP_PROVIDER_PRESETS,
@@ -43,6 +44,8 @@ import {
   Sun,
   Moon,
   Monitor,
+  RotateCcw,
+  ShieldAlert,
   X
 } from 'lucide-react'
 
@@ -170,6 +173,11 @@ export function canCloseInitialSetup(mode: InitialSetupMode): boolean {
   return mode === 'preview'
 }
 
+export function isUnreadableCredentialKeyError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error)
+  return message.includes(UNREADABLE_CREDENTIAL_KEY_ERROR_CODE)
+}
+
 export async function completeInitialSetupAfterSave(input: {
   mode: InitialSetupMode
   reloadUiSettings: () => Promise<void>
@@ -216,6 +224,8 @@ export function InitialSetupDialog(): ReactElement {
   })
   const [showApiKey, setShowApiKey] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [recoveringCredentials, setRecoveringCredentials] = useState(false)
+  const [credentialRecoveryRequired, setCredentialRecoveryRequired] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const formRef = useRef<AppSettingsV1 | null>(null)
   const isPreview = initialSetupMode === 'preview'
@@ -326,6 +336,7 @@ export function InitialSetupDialog(): ReactElement {
       const next = await rendererRuntimeClient.setSettings(
         buildInitialSetupSettingsPatch(current, drafts, selection)
       )
+      setCredentialRecoveryRequired(false)
       setCurrentForm(next)
       setDrafts(initialSetupDrafts(next))
       emitRendererSettingsChanged(next)
@@ -341,9 +352,32 @@ export function InitialSetupDialog(): ReactElement {
         fallbackRuntimeError: t('common:runtimeFetchFailed')
       })
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
+      if (isUnreadableCredentialKeyError(e)) {
+        setCredentialRecoveryRequired(true)
+        setError(t('firstRunCredentialRecoveryError'))
+      } else {
+        setError(e instanceof Error ? e.message : String(e))
+      }
     } finally {
       setSaving(false)
+    }
+  }
+
+  const handleCredentialReset = async () => {
+    setRecoveringCredentials(true)
+    setError(null)
+    try {
+      const result = await rendererRuntimeClient.resetUnreadableCredentials()
+      if (!result.reset) {
+        setError(t('firstRunCredentialRecoveryError'))
+        return
+      }
+      setCredentialRecoveryRequired(false)
+      await handleSave()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } finally {
+      setRecoveringCredentials(false)
     }
   }
 
@@ -672,9 +706,38 @@ export function InitialSetupDialog(): ReactElement {
         </div>
 
         <div className="shrink-0 space-y-3 border-t border-slate-200/72 bg-white/70 px-5 pb-4 pt-3.5 dark:border-white/10 dark:bg-white/[0.025] sm:space-y-4 sm:px-7 sm:pb-6 sm:pt-4">
-          {error && (
-            <div className="rounded-xl border border-red-500/18 bg-red-500/[0.08] px-4 py-3 text-[13px] text-red-700 dark:border-red-500/20 dark:bg-red-500/[0.12] dark:text-red-200">
-              {error}
+          {(error || credentialRecoveryRequired) && (
+            <div className="space-y-3 rounded-xl border border-red-500/18 bg-red-500/[0.08] px-4 py-3 text-[13px] text-red-700 dark:border-red-500/20 dark:bg-red-500/[0.12] dark:text-red-200">
+              {error ? <p className="leading-5">{error}</p> : null}
+              {credentialRecoveryRequired ? (
+                <div className="space-y-3">
+                  <p className="text-[12px] leading-5 text-red-600/90 dark:text-red-200/80">
+                    {t('firstRunCredentialRecoveryDetail')}
+                  </p>
+                  <div className="grid gap-2 min-[440px]:grid-cols-2">
+                    <button
+                      type="button"
+                      disabled={saving || recoveringCredentials}
+                      onClick={handleSave}
+                      className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg border border-red-400/35 bg-white/75 px-3 py-2 font-semibold text-red-700 transition hover:bg-white disabled:opacity-50 dark:border-red-400/25 dark:bg-white/[0.05] dark:text-red-100 dark:hover:bg-white/[0.08]"
+                    >
+                      <RotateCcw className="h-4 w-4" strokeWidth={1.9} />
+                      {t('firstRunCredentialRetry')}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={saving || recoveringCredentials}
+                      onClick={handleCredentialReset}
+                      className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-red-600 px-3 py-2 font-semibold text-white transition hover:bg-red-700 disabled:opacity-50 dark:bg-red-600 dark:hover:bg-red-500"
+                    >
+                      <ShieldAlert className="h-4 w-4" strokeWidth={1.9} />
+                      {recoveringCredentials
+                        ? t('firstRunCredentialResetting')
+                        : t('firstRunCredentialReset')}
+                    </button>
+                  </div>
+                </div>
+              ) : null}
             </div>
           )}
 
@@ -690,7 +753,7 @@ export function InitialSetupDialog(): ReactElement {
             ) : null}
             <button
               type="button"
-              disabled={saving}
+              disabled={saving || recoveringCredentials}
               onClick={handleSave}
               className="min-h-11 rounded-xl bg-[linear-gradient(180deg,#2392ff_0%,#0e7df0_100%)] px-4 py-2 text-[15px] font-semibold text-white shadow-[0_14px_30px_rgba(19,136,255,0.22)] transition hover:opacity-95 disabled:opacity-50 dark:bg-[linear-gradient(180deg,#2c9dff_0%,#1584f6_100%)] dark:shadow-[0_14px_30px_rgba(21,132,246,0.2)]"
             >
