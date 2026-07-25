@@ -1536,6 +1536,7 @@
   "autoLabel": "自動",
   "composerHint": "Enter で送信 · Shift+Enter で改行 · AI 生成コンテンツは使用前に確認してください",
   "composerShortcut": "Enter で送信 · Shift+Enter で改行",
+  "composerShortcutShiftEnter": "Shift+Enter で送信 · Enter で改行",
   "newline": "改行",
   "composerVerifyHint": "AI によって生成されたコンテンツ、使用前に検証",
   "composerStartHint": "タスクを説明するか、コードを貼り付けるか、現在のワークスペースで直接作業するようにエージェントに依頼します。",

@@ -32,6 +32,7 @@ import {
   normalizeWriteSettings,
   normalizeTerminalSettings,
   normalizeChatContentMaxWidth,
+  normalizeComposerSendKey,
   normalizeUiFontScale,
   type AppSettingsPatch,
   type AppSettingsV1
@@ -140,6 +141,7 @@ export function coerceRendererSettings(settings: AppSettingsV1): AppSettingsV1 {
     theme,
     uiFontScale,
     chatContentMaxWidthPx,
+    composerSendKey: normalizeComposerSendKey(raw.composerSendKey),
     cursorSpotlight: raw.cursorSpotlight !== false,
     cursorSpotlightColor: normalizeCursorSpotlightColor(raw.cursorSpotlightColor),
     provider: normalizeModelProviderSettings(raw.provider),

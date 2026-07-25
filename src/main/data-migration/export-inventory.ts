@@ -219,6 +219,7 @@ export function portableSettingsForMigration(settings: AppSettingsV1): Record<st
     theme: settings.theme,
     uiFontScale: settings.uiFontScale,
     chatContentMaxWidthPx: settings.chatContentMaxWidthPx,
+    composerSendKey: settings.composerSendKey,
     cursorSpotlight: settings.cursorSpotlight,
     cursorSpotlightColor: settings.cursorSpotlightColor,
     notifications: settings.notifications,

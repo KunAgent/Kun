@@ -38,6 +38,8 @@ import {
   migrateLegacyAppSettings,
   normalizeAppSettings,
   normalizeChatContentMaxWidth,
+  normalizeComposerSendKey,
+  isComposerSendHotkey,
   normalizeGitBranchPrefix,
   applyGitBranchPrefix,
   parseClawUserPromptForDisplay,
@@ -61,6 +63,7 @@ function settings(): AppSettingsV1 {
     theme: 'system',
     uiFontScale: 0.82,
     chatContentMaxWidthPx: 896,
+    composerSendKey: 'enter',
     provider: defaultModelProviderSettings(),
     agents: {
       kun: defaultKunRuntimeSettings()
@@ -464,6 +467,42 @@ describe('runtime model provider selection', () => {
         providerId: 'deepseek'
       })
     ]))
+  })
+})
+
+describe('composer send key settings', () => {
+  it('defaults to enter send', () => {
+    const raw = {
+      ...settings(),
+      composerSendKey: undefined
+    } as unknown as AppSettingsV1
+
+    expect(normalizeAppSettings(raw).composerSendKey).toBe('enter')
+  })
+
+  it('keeps shiftEnter when configured', () => {
+    expect(normalizeAppSettings({
+      ...settings(),
+      composerSendKey: 'shiftEnter'
+    }).composerSendKey).toBe('shiftEnter')
+  })
+
+  it('rejects unknown values', () => {
+    expect(normalizeComposerSendKey('ctrlEnter')).toBe('enter')
+    expect(normalizeComposerSendKey(null)).toBe('enter')
+  })
+
+  it('matches Enter or Shift+Enter send hotkeys', () => {
+    const enter = { key: 'Enter', shiftKey: false, metaKey: false, ctrlKey: false }
+    const shiftEnter = { key: 'Enter', shiftKey: true, metaKey: false, ctrlKey: false }
+    const metaEnter = { key: 'Enter', shiftKey: false, metaKey: true, ctrlKey: false }
+
+    expect(isComposerSendHotkey(enter, 'enter')).toBe(true)
+    expect(isComposerSendHotkey(shiftEnter, 'enter')).toBe(false)
+    expect(isComposerSendHotkey(enter, 'shiftEnter')).toBe(false)
+    expect(isComposerSendHotkey(shiftEnter, 'shiftEnter')).toBe(true)
+    expect(isComposerSendHotkey(metaEnter, 'enter')).toBe(false)
+    expect(isComposerSendHotkey(metaEnter, 'shiftEnter')).toBe(false)
   })
 })
 

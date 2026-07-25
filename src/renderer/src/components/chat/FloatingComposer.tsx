@@ -118,6 +118,8 @@ import {
   routeComposerFileDrop,
   type ComposerFileDropOptions
 } from './composer-file-drop'
+import { useComposerSendKeySetting } from '../../lib/composer-send-key-settings'
+import { isComposerSendHotkey } from '@shared/app-settings'
 
 export type { ComposerFileReference } from '../../lib/composer-file-references'
 export type { ComposerExecutionSettings } from './FloatingComposerExecutionPicker'
@@ -339,6 +341,7 @@ export function FloatingComposer({
   hideBtwCommand = false
 }: Props): ReactElement {
   const { t, i18n } = useTranslation('common')
+  const composerSendKey = useComposerSendKeySetting()
   const route = useChatStore((s) => s.route)
   const workspaceRoot = useChatStore((s) => s.workspaceRoot)
   const storeActiveThreadId = useChatStore((s) => s.activeThreadId)
@@ -540,7 +543,9 @@ export function FloatingComposer({
             : t('clawComposerHintNeedsInbound')
           : useWorktreePool
             ? t('composerWorktreeModeHint')
-            : t('composerShortcut')
+            : composerSendKey === 'shiftEnter'
+              ? t('composerShortcutShiftEnter')
+              : t('composerShortcut')
   const showTodoProgress = !compact
     && route === 'chat'
     && Boolean(activeThreadId)
@@ -968,8 +973,7 @@ export function FloatingComposer({
   dictationPrimaryActionRef.current = primaryActionDisabled ? null : handlePrimaryAction
 
   const handleComposerKeyDown = (event: ReactKeyboardEvent<HTMLTextAreaElement>): void => {
-    const sendByEnter =
-      event.key === 'Enter' && !event.shiftKey && !event.metaKey && !event.ctrlKey
+    const sendByHotkey = isComposerSendHotkey(event, composerSendKey)
     const composing = draft.isComposingEvent(event)
 
     if (fileMentions.handleKeyDown(event, composing)) return
@@ -987,7 +991,7 @@ export function FloatingComposer({
       return
     }
 
-    if (!sendByEnter || composing) return
+    if (!sendByHotkey || composing) return
 
     event.preventDefault()
     handlePrimaryAction()

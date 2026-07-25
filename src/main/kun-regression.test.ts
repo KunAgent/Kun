@@ -114,7 +114,8 @@ describe('Kun single-agent regression', () => {
       locale: 'en',
       theme: 'system',
       uiFontScale: 0.82,
-    chatContentMaxWidthPx: 896,
+      chatContentMaxWidthPx: 896,
+      composerSendKey: 'enter',
       provider: defaultModelProviderSettings(),
       agents: {
         kun: defaultKunRuntimeSettings(19000)

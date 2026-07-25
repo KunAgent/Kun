@@ -39,6 +39,7 @@ function settings(workspaceRoot: string, nestedRoot = workspaceRoot): AppSetting
     theme: 'dark',
     uiFontScale: 1,
     chatContentMaxWidthPx: 896,
+    composerSendKey: 'enter',
     provider: { ...defaultModelProviderSettings(), apiKey: 'must-not-export' },
     agents: { kun: { ...defaultKunRuntimeSettings(), runtimeToken: 'must-not-export' } },
     workspaceRoot,

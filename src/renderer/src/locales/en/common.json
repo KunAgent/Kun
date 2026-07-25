@@ -1536,6 +1536,7 @@
   "autoLabel": "Auto",
   "composerHint": "Press Enter to send · Shift+Enter for a new line · AI-generated content, verify before use",
   "composerShortcut": "Enter to send · Shift+Enter for newline",
+  "composerShortcutShiftEnter": "Shift+Enter to send · Enter for newline",
   "newline": "newline",
   "composerVerifyHint": "AI-generated content, verify before use",
   "composerStartHint": "Describe the task, paste code, or ask the agent to work directly in the current workspace.",

@@ -35,6 +35,7 @@ function settings(workspaceRoot: string): AppSettingsV1 {
     theme: 'system',
     uiFontScale: 1,
     chatContentMaxWidthPx: 896,
+    composerSendKey: 'enter',
     provider: defaultModelProviderSettings(),
     agents: { kun: defaultKunRuntimeSettings() },
     workspaceRoot,

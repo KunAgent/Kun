@@ -93,6 +93,7 @@ function buildSettings(): AppSettingsV1 {
     theme: 'system',
     uiFontScale: 0.88,
     chatContentMaxWidthPx: 896,
+    composerSendKey: 'enter',
     provider: defaultModelProviderSettings(),
     agents: { kun: defaultKunRuntimeSettings() },
     workspaceRoot: '/tmp/workspace',

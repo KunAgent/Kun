@@ -36,6 +36,7 @@ function createSettings(patch: Partial<AppSettingsV1['schedule']['internal']> = 
     theme: 'system',
     uiFontScale: 0.82,
     chatContentMaxWidthPx: 896,
+    composerSendKey: 'enter',
     provider: defaultModelProviderSettings(),
     agents: {
       kun: defaultKunRuntimeSettings()

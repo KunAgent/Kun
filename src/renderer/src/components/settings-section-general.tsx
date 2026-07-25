@@ -16,6 +16,7 @@ import {
   WRITE_INLINE_COMPLETION_MODEL_IDS,
   isKunRuntimeInsecure,
   normalizeChatContentMaxWidth,
+  normalizeComposerSendKey,
   normalizeUiFontScale
 } from '@shared/app-settings'
 import type { SkillRootId } from '../lib/skill-root-preference'
@@ -398,6 +399,24 @@ export function GeneralSettingsSection({ ctx }: { ctx: Record<string, any> }): R
                         </div>
                       </div>
                     </div>
+                  }
+                />
+                <SettingRow
+                  title={t('composerSendKey')}
+                  description={t('composerSendKeyDesc')}
+                  control={
+                    <select
+                      className={selectControlClass}
+                      value={normalizeComposerSendKey(form.composerSendKey)}
+                      onChange={(e) =>
+                        update({
+                          composerSendKey: normalizeComposerSendKey(e.target.value)
+                        })
+                      }
+                    >
+                      <option value="enter">{t('composerSendKey_enter')}</option>
+                      <option value="shiftEnter">{t('composerSendKey_shiftEnter')}</option>
+                    </select>
                   }
                 />
                 <SettingRow

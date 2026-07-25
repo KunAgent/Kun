@@ -1536,6 +1536,7 @@
   "autoLabel": "自动",
   "composerHint": "Enter 发送 · Shift+Enter 换行 · AI 生成内容请自行核验",
   "composerShortcut": "Enter 发送 · Shift+Enter 换行",
+  "composerShortcutShiftEnter": "Shift+Enter 发送 · Enter 换行",
   "newline": "换行",
   "composerVerifyHint": "AI 生成内容请自行核验",
   "composerStartHint": "描述需求、贴入代码，或直接让智能体处理当前工作区。",

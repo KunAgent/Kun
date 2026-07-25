@@ -1536,6 +1536,7 @@
   "autoLabel": "자동",
   "composerHint": "Enter로 전송 · Shift+Enter로 줄바꿈 · AI 생성 콘텐츠는 사용 전 확인",
   "composerShortcut": "Enter로 전송 · Shift+Enter로 줄바꿈",
+  "composerShortcutShiftEnter": "Shift+Enter로 전송 · Enter로 줄바꿈",
   "newline": "개행",
   "composerVerifyHint": "AI 생성 콘텐츠, 사용 전 검증",
   "composerStartHint": "작업을 설명하고, 코드를 붙여넣거나, 상담원에게 현재 작업 공간에서 직접 작업하도록 요청하세요.",

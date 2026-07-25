@@ -32,6 +32,9 @@ export function applyPortableSettingsMigration(
     ...(typeof value.chatContentMaxWidthPx === 'number'
       ? { chatContentMaxWidthPx: value.chatContentMaxWidthPx as AppSettingsV1['chatContentMaxWidthPx'] }
       : {}),
+    ...(value.composerSendKey === 'enter' || value.composerSendKey === 'shiftEnter'
+      ? { composerSendKey: value.composerSendKey }
+      : {}),
     ...(typeof value.cursorSpotlight === 'boolean' ? { cursorSpotlight: value.cursorSpotlight } : {}),
     ...(typeof value.cursorSpotlightColor === 'string' ? { cursorSpotlightColor: value.cursorSpotlightColor } : {}),
     notifications: {

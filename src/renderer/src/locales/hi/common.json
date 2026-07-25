@@ -1536,6 +1536,7 @@
   "autoLabel": "ऑटो",
   "composerHint": "भेजने के लिए Enter · नई लाइन के लिए Shift+Enter · AI-जनरेटेड सामग्री, उपयोग से पहले सत्यापित करें",
   "composerShortcut": "भेजने के लिए Enter · नई लाइन के लिए Shift+Enter",
+  "composerShortcutShiftEnter": "भेजने के लिए Shift+Enter · नई लाइन के लिए Enter",
   "newline": "नई पंक्ति",
   "composerVerifyHint": "एआई-जनरेटेड सामग्री, उपयोग से पहले सत्यापित करें",
   "composerStartHint": "कार्य का वर्णन करें, कोड पेस्ट करें, या एजेंट को वर्तमान कार्यक्षेत्र में सीधे काम करने के लिए कहें।",

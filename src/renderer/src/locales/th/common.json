@@ -1536,6 +1536,7 @@
   "autoLabel": "อัตโนมัติ",
   "composerHint": "Enter เพื่อส่ง · Shift+Enter เพื่อขึ้นบรรทัดใหม่ · เนื้อหาที่สร้างโดย AI ตรวจสอบก่อนใช้งาน",
   "composerShortcut": "Enter เพื่อส่ง · Shift+Enter เพื่อขึ้นบรรทัดใหม่",
+  "composerShortcutShiftEnter": "Shift+Enter เพื่อส่ง · Enter เพื่อขึ้นบรรทัดใหม่",
   "newline": "ขึ้นบรรทัดใหม่",
   "composerVerifyHint": "เนื้อหาที่สร้างโดย AI ตรวจสอบก่อนใช้งาน",
   "composerStartHint": "อธิบายงาน วางโค้ด หรือขอให้ตัวแทนทำงานโดยตรงในพื้นที่ทำงานปัจจุบัน",

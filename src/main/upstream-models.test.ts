@@ -27,6 +27,7 @@ function settings(dataDir: string, model = 'settings-model'): AppSettingsV1 {
     theme: 'system',
     uiFontScale: 0.82,
     chatContentMaxWidthPx: 896,
+    composerSendKey: 'enter',
     provider: {
       ...provider,
       providers: [

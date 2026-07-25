@@ -7,7 +7,7 @@ export type SettingsFieldOwner =
 /** Compile-time complete inventory of every persisted top-level settings field. */
 export const APP_SETTINGS_FIELD_OWNERS: { readonly [K in keyof AppSettingsV1]-?: SettingsFieldOwner } = {
   version: 'core', initialSetupCompleted: 'core', locale: 'core', theme: 'core', uiFontScale: 'core', chatContentMaxWidthPx: 'core',
-  cursorSpotlight: 'core', cursorSpotlightColor: 'core', provider: 'provider', agents: 'kun',
+  composerSendKey: 'core', cursorSpotlight: 'core', cursorSpotlightColor: 'core', provider: 'provider', agents: 'kun',
   workspaceRoot: 'core', conversationWorkspaceRoot: 'core', log: 'core', checkpointCleanup: 'core',
   gitBranchPrefix: 'core', notifications: 'core', appBehavior: 'core', keyboardShortcuts: 'keyboard',
   write: 'write', claw: 'claw', schedule: 'schedule', workflow: 'workflow', design: 'design',

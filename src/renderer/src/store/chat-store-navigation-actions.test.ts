@@ -253,6 +253,7 @@ describe('chat-store navigation workspace selection', () => {
           theme: 'dark',
           uiFontScale: 1,
           chatContentMaxWidthPx: 896,
+          composerSendKey: 'enter',
           locale: 'en',
           agents: { kun: { apiKey: 'test-key', model: 'deepseek-v4-pro', baseUrl: '' } },
           disabledSkillIds: []
@@ -592,7 +593,8 @@ describe('onClawChannelActivity routes through subscribeThreadEventsLive (not se
       },
       theme: 'dark',
       uiFontScale: 1,
-    chatContentMaxWidthPx: 896,
+      chatContentMaxWidthPx: 896,
+      composerSendKey: 'enter',
       locale: 'en',
       agents: { kun: { apiKey: 'test-key', model: 'deepseek-v4-pro', baseUrl: '' } },
       disabledSkillIds: []

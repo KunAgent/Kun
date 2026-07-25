@@ -28,6 +28,7 @@ function buildSettings(models: string[]): AppSettingsV1 {
     theme: 'system',
     uiFontScale: 0.88,
     chatContentMaxWidthPx: 896,
+    composerSendKey: 'enter',
     provider,
     agents: { kun: defaultKunRuntimeSettings() },
     workspaceRoot: '/tmp/workspace',

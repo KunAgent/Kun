@@ -70,6 +70,20 @@ export function normalizeChatContentMaxWidth(value: unknown): ChatContentMaxWidt
     Math.max(CHAT_CONTENT_MAX_WIDTH_MIN, Math.round(num / 8) * 8)
   )
 }
+/** Which key combination sends from the chat composer. The other inserts a newline. */
+export const COMPOSER_SEND_KEYS = ['enter', 'shiftEnter'] as const
+export type ComposerSendKey = (typeof COMPOSER_SEND_KEYS)[number]
+export const DEFAULT_COMPOSER_SEND_KEY: ComposerSendKey = 'enter'
+export function normalizeComposerSendKey(value: unknown): ComposerSendKey {
+  return value === 'shiftEnter' ? 'shiftEnter' : DEFAULT_COMPOSER_SEND_KEY
+}
+export function isComposerSendHotkey(
+  event: { key: string; shiftKey: boolean; metaKey: boolean; ctrlKey: boolean },
+  sendKey: ComposerSendKey = DEFAULT_COMPOSER_SEND_KEY
+): boolean {
+  if (event.key !== 'Enter' || event.metaKey || event.ctrlKey) return false
+  return sendKey === 'shiftEnter' ? event.shiftKey : !event.shiftKey
+}
 export type ScheduleRunMode = 'agent' | 'plan'
 export type ScheduleKind = 'manual' | 'interval' | 'daily' | 'at'
 export type ScheduleTaskStatus = 'idle' | 'queued' | 'running' | 'success' | 'error'
@@ -2085,6 +2099,8 @@ export type AppSettingsV1 = {
   theme: 'system' | 'light' | 'dark'
   uiFontScale: UiFontScale
   chatContentMaxWidthPx: ChatContentMaxWidthPx
+  /** Enter sends (default) or Shift+Enter sends; the other key inserts a newline. */
+  composerSendKey: ComposerSendKey
   cursorSpotlight?: boolean
   cursorSpotlightColor?: string
   provider: ModelProviderSettingsV1

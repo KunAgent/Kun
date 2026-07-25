@@ -1315,6 +1315,7 @@ const settingsPatchObjectSchema = z.object({
   theme: themeSchema.optional(),
   uiFontScale: uiFontScaleSchema.optional(),
   chatContentMaxWidthPx: chatContentMaxWidthSchema.optional(),
+  composerSendKey: z.enum(['enter', 'shiftEnter']).optional(),
   cursorSpotlight: z.boolean().optional(),
   cursorSpotlightColor: hexColorSchema.optional(),
   provider: modelProviderPatchSchema.optional(),

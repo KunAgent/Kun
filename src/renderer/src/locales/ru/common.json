@@ -1536,6 +1536,7 @@
   "autoLabel": "Авто",
   "composerHint": "Enter — отправить · Shift+Enter — новая строка · Проверяйте содержимое, созданное AI",
   "composerShortcut": "Enter — отправить · Shift+Enter — новая строка",
+  "composerShortcutShiftEnter": "Shift+Enter — отправить · Enter — новая строка",
   "newline": "новая строка",
   "composerVerifyHint": "Контент, созданный искусственным интеллектом, проверяйте перед использованием",
   "composerStartHint": "Опишите задачу, вставьте код или попросите агента работать непосредственно в текущей рабочей области.",
