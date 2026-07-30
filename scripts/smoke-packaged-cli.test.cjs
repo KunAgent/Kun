@@ -44,7 +44,10 @@ function packagedFixture(t, platform) {
     writeHelpExecutable(join(root, 'kun-gui'))
   } else {
     mkdirSync(join(root, 'bin'), { recursive: true })
-    writeFileSync(join(root, 'bin', 'kun.cmd'), '@echo off\r\n')
+    writeFileSync(
+      join(root, 'bin', 'kun.cmd'),
+      `@echo off\r\necho ${CLI_HELP_SENTINEL.replace('<', '^<').replace('>', '^>')}\r\n`
+    )
   }
   return { root, resources }
 }
@@ -86,6 +89,17 @@ test('builds a shell-free Windows cmd invocation relative to packaged resources'
   assert.deepEqual(invocation.args.slice(0, 3), ['/d', '/s', '/c'])
   assert.match(invocation.args[3], /bin[\\/]kun\.cmd" --help"$/)
   assert.equal(invocation.options.shell, false)
+  assert.equal(invocation.options.windowsVerbatimArguments, true)
+})
+
+test('executes the packaged Windows cmd launcher without quote re-escaping', {
+  skip: process.platform !== 'win32' && 'requires cmd.exe'
+}, (t) => {
+  const windows = packagedFixture(t, 'win32')
+  assert.match(
+    runPackagedCliSmoke(windows.resources, { platform: 'win32' }),
+    /kun <command>/
+  )
 })
 
 test('extracts a deb and executes its packaged product launcher in CLI mode', {

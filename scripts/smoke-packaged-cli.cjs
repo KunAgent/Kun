@@ -77,7 +77,14 @@ function packagedCliInvocation(resourcesDirectory, {
     return {
       command,
       args: ['/d', '/s', '/c', `""${launcher}" ${cliArgs.join(' ')}"`],
-      options: { env: { ...process.env }, shell: false }
+      // The final argument is already a complete cmd.exe command string.
+      // Letting Node quote it again turns it into a literal quoted executable
+      // path on Windows, so the packaged .cmd launcher cannot be found.
+      options: {
+        env: { ...process.env },
+        shell: false,
+        windowsVerbatimArguments: true
+      }
     }
   }
   throw new Error(`Unsupported packaged CLI smoke platform: ${platform}`)
