@@ -278,11 +278,19 @@ describe('GraphScheduler', () => {
       return run?.status === 'awaiting_human' ? run : null
     })
     const attempt = waiting.nodes.research.attempts.at(-1)!
-    await new Promise((resolve) => setTimeout(resolve, 1_100))
-    const lease = (await harness.writes.list()).leases.find((entry) =>
+    const initialLease = (await harness.writes.list()).leases.find((entry) =>
       entry.attemptId === attempt.id)
-    expect(lease?.state).toBe('active')
-    expect(Date.parse(lease!.expiresAt)).toBeGreaterThan(Date.now())
+    expect(initialLease?.state).toBe('active')
+    const initialExpiresAt = Date.parse(initialLease!.expiresAt)
+    const renewedLease = await waitFor(async () => {
+      const lease = (await harness.writes.list()).leases.find((entry) =>
+        entry.attemptId === attempt.id)
+      return lease?.state === 'active' &&
+        Date.parse(lease.expiresAt) > initialExpiresAt
+        ? lease
+        : null
+    })
+    expect(Date.parse(renewedLease.expiresAt)).toBeGreaterThan(initialExpiresAt)
     await harness.control.recordReview('run_harness', {
       version: 1,
       reviewId: 'human_review_1',

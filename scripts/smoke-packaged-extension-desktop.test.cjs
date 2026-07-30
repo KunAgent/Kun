@@ -150,6 +150,18 @@ test('stops the isolated packaged Runtime before reporting desktop smoke success
   assert.match(source, /Refusing to terminate unverified PID/u)
 })
 
+test('keeps the packaged desktop smoke isolated from networked GUI update checks', () => {
+  const source = readFileSync(join(root, 'src', 'main', 'index.ts'), 'utf8')
+  assert.match(
+    source,
+    /function isPackagedExtensionDesktopSmoke\(\): boolean \{\s+return process\.env\.KUN_PACKAGED_EXTENSION_DESKTOP_SMOKE === '1'\s+\}/u
+  )
+  assert.match(
+    source,
+    /if \(isPackagedExtensionDesktopSmoke\(\)\) return import\('\.\/gui-updater'\)/u
+  )
+})
+
 test('selects host-native packaged resources and never launches desktop Electron as Node', () => {
   assert.deepEqual(platformDesktopArguments('linux'), [
     '--disable-gpu',

@@ -614,7 +614,14 @@ function prepareManagedRuntimesForUpdate(): Promise<void> {
   return runtimeShutdown.prepareForUpdate()
 }
 
+function isPackagedExtensionDesktopSmoke(): boolean {
+  return process.env.KUN_PACKAGED_EXTENSION_DESKTOP_SMOKE === '1'
+}
+
 async function loadGuiUpdaterModule(): Promise<GuiUpdaterModule> {
+  // The packaged Extension smoke owns an isolated profile and must not make a
+  // networked update check while it is validating the renderer process.
+  if (isPackagedExtensionDesktopSmoke()) return import('./gui-updater')
   if (!guiUpdaterModulePromise) {
     guiUpdaterModulePromise = import('./gui-updater')
       .then((module) => {

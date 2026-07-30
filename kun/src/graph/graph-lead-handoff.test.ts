@@ -89,9 +89,7 @@ describe('Graph source Lead result handoff', () => {
       createdAt: new Date().toISOString()
     }, {
       commandId: 'lead_review_research_command',
-      idempotencyKey: 'lead_review_research',
-      expectedSeq: waiting.lastEventSeq,
-      expectedRevision: waiting.currentRevision
+      idempotencyKey: 'lead_review_research'
     }, 'lead')
 
     const successorWaiting = await waitFor(async () => {
@@ -121,9 +119,7 @@ describe('Graph source Lead result handoff', () => {
       createdAt: new Date().toISOString()
     }, {
       commandId: 'lead_review_finish_command',
-      idempotencyKey: 'lead_review_finish',
-      expectedSeq: successorWaiting.lastEventSeq,
-      expectedRevision: successorWaiting.currentRevision
+      idempotencyKey: 'lead_review_finish'
     }, 'lead')
 
     const completed = await waitFor(async () => {
