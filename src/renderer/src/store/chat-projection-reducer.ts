@@ -685,7 +685,11 @@ export function reduceChatProjection(
       }
     }
     case 'turn_completed': {
-      const threadId = state.activeThreadId
+      const terminalThreadId = action.threadId?.trim()
+      const terminalTurnId = action.turnId?.trim()
+      if (terminalThreadId && state.activeThreadId && terminalThreadId !== state.activeThreadId) return {}
+      if (terminalTurnId && state.currentTurnId && terminalTurnId !== state.currentTurnId) return {}
+      const threadId = terminalThreadId ?? state.activeThreadId
       const threads = threadId
         ? settleProjectedThreadStatus(state.threads, threadId, 'completed')
         : state.threads
@@ -705,15 +709,24 @@ export function reduceChatProjection(
       const unreadThreadIds = { ...state.unreadThreadIds }
       delete watchTurnCompletion[threadId]
       delete unreadThreadIds[threadId]
-      return { ...patch, watchTurnCompletion, unreadThreadIds }
+      return {
+        ...patch,
+        watchTurnCompletion,
+        unreadThreadIds
+      }
     }
     case 'turn_failed': {
+      const terminalThreadId = action.options?.terminal ? action.options.threadId?.trim() : undefined
+      const terminalTurnId = action.options?.terminal ? action.options.turnId?.trim() : undefined
+      if (terminalThreadId && state.activeThreadId && terminalThreadId !== state.activeThreadId) return {}
+      if (terminalTurnId && state.currentTurnId && terminalTurnId !== state.currentTurnId) return {}
       const message = context.formatRuntimeError(action.error)
       const detail = context.runtimeErrorDetail(action.error)
       const terminal = action.options?.terminal === true
       const conversationScoped = action.options?.scope === 'conversation'
       const interrupted = context.isInterruptSettledError(action.error, message)
       const shouldSettle = terminal || !state.busy || interrupted
+      const terminalThread = terminalThreadId ?? state.activeThreadId
       const patch = flushLiveProjection(state, context.now, {
         ...finalizeTurnTimingAt(state, context.now),
         error: interrupted || conversationScoped ? null : message,
@@ -725,19 +738,19 @@ export function reduceChatProjection(
       patch.currentTurnOrchestration = null
       patch.currentTurnUserId = null
       patch.blocks = context.settlePendingRuntimeWork(patch.blocks ?? state.blocks)
-      if (state.activeThreadId) {
+      if (terminalThread) {
         const threads = settleProjectedThreadStatus(
           state.threads,
-          state.activeThreadId,
+          terminalThread,
           interrupted ? 'aborted' : 'failed'
         )
         if (threads !== state.threads) patch.threads = threads
       }
-      if (terminal && state.activeThreadId) {
+      if (terminal && terminalThread) {
         const watchTurnCompletion = { ...state.watchTurnCompletion }
         const unreadThreadIds = { ...state.unreadThreadIds }
-        delete watchTurnCompletion[state.activeThreadId]
-        delete unreadThreadIds[state.activeThreadId]
+        delete watchTurnCompletion[terminalThread]
+        delete unreadThreadIds[terminalThread]
         patch.watchTurnCompletion = watchTurnCompletion
         patch.unreadThreadIds = unreadThreadIds
       }
@@ -754,8 +767,9 @@ function updateProjectedThreadStatus(
   status: string,
   latestTurnStatus?: string
 ): ChatState['threads'] {
+  const currentThreads = threads ?? []
   let changed = false
-  const next = threads.map((thread) => {
+  const next = currentThreads.map((thread) => {
     if (thread.id !== threadId) return thread
     if (thread.status === status && (
       latestTurnStatus === undefined || thread.latestTurnStatus === latestTurnStatus
@@ -769,7 +783,7 @@ function updateProjectedThreadStatus(
       ...(latestTurnStatus ? { latestTurnStatus } : {})
     }
   })
-  return changed ? next : threads
+  return changed ? next : currentThreads
 }
 
 function settleProjectedThreadStatus(
@@ -777,9 +791,10 @@ function settleProjectedThreadStatus(
   threadId: string,
   latestTurnStatus: 'completed' | 'failed' | 'aborted'
 ): ChatState['threads'] {
-  const thread = threads.find((candidate) => candidate.id === threadId)
-  if (!thread || thread.status?.trim().toLowerCase() !== 'running') return threads
-  return updateProjectedThreadStatus(threads, threadId, 'idle', latestTurnStatus)
+  const currentThreads = threads ?? []
+  const thread = currentThreads.find((candidate) => candidate.id === threadId)
+  if (!thread || thread.status?.trim().toLowerCase() !== 'running') return currentThreads
+  return updateProjectedThreadStatus(currentThreads, threadId, 'idle', latestTurnStatus)
 }
 
 function runtimeEventStartedAt(createdAt: string | undefined, now: number): number {

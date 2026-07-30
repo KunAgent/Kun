@@ -137,6 +137,7 @@ let trayActionUnsubscribe: (() => void) | null = null
 export function createNavigationActions(
   { set, get, sseAbortRef }: StoreActionContext
 ): Pick<ChatState, 'openCode' | 'openWrite' | 'openDesign' | 'clearActiveThreadSelection' | 'ensureWriteThreadForWorkspace' | 'createWriteThread' | 'selectWriteThread' | 'ensureDesignThreadForWorkspace' | 'createDesignThread' | 'probeRuntime' | 'boot' | 'chooseWorkspace' | 'selectWorkspaceRoot' | 'clearWorkspace' | 'deleteWorkspace' | 'refreshThreads' | 'setThreadSearch' | 'setShowArchivedThreads'> {
+  let threadRefreshGeneration = 0
   return {
   openCode: async () => {
     const state = get()
@@ -868,6 +869,7 @@ export function createNavigationActions(
 
   refreshThreads: async () => {
     if (get().runtimeConnection !== 'ready') return
+    const refreshGeneration = ++threadRefreshGeneration
     try {
       const p = getProvider()
       let rawThreads: NormalizedThread[]
@@ -886,8 +888,8 @@ export function createNavigationActions(
       const sddThreadRegistry = readSddThreadRegistry()
       const designRegistry = readDesignThreadRegistry()
       const sidebarThreads = await filterThreadsForSidebar(threads, p)
+      if (refreshGeneration !== threadRefreshGeneration) return
       const forkRegistry = hydrateThreadForkRegistry(sidebarThreads, readThreadForkRegistry())
-      saveThreadForkRegistry(forkRegistry)
       const enrichedThreads = enrichThreadsWithForkInfo(sidebarThreads, forkRegistry)
       // Preserve the active Kun thread when it is not in the listing yet.
       // A brand-new thread can be absent from `listThreads` until the first
@@ -930,6 +932,8 @@ export function createNavigationActions(
         displayThreads = [preservedSddActiveThread, ...displayThreads]
       }
       const writeWorkspaceRoots = await readWriteWorkspaceRoots()
+      if (refreshGeneration !== threadRefreshGeneration) return
+      saveThreadForkRegistry(forkRegistry)
       const writeRegistry = hydrateWriteThreadRegistry(
         displayThreads,
         writeWorkspaceRoots,
@@ -981,6 +985,7 @@ export function createNavigationActions(
           isInternalDeepSeekGuiWorkspace(activeThread.workspace))
       const shouldClearSelection =
         activeThreadId != null && !displayThreads.some((thread) => thread.id === activeThreadId)
+      if (refreshGeneration !== threadRefreshGeneration) return
       if (shouldClearSelection) {
         sseAbortRef.current?.abort()
         sseAbortRef.current = null
@@ -1012,6 +1017,7 @@ export function createNavigationActions(
         await get().openCode()
       }
     } catch (e) {
+      if (refreshGeneration !== threadRefreshGeneration) return
       stopTurnCompletionPoll()
       set({
         runtimeConnection: 'offline',

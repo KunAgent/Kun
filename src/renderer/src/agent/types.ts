@@ -580,6 +580,9 @@ export type AssistantItemSnapshotPayload = {
 
 export type ThreadErrorOptions = {
   terminal?: boolean
+  /** Runtime terminal identity prevents a replayed old turn from settling a newer one. */
+  threadId?: string
+  turnId?: string
   /**
    * Conversation-scoped failures already have a durable runtime-error card in
    * the owning thread. Runtime-scoped failures use the global recovery banner.
@@ -669,7 +672,7 @@ export type ThreadEventSink = {
   onTodos?(ev: { threadId: string; todos: ThreadTodoList | null; cleared?: boolean; createdAt?: string }): void
   /** Thread metadata changed out-of-band (e.g. the backend LLM titler upgraded the title). */
   onThreadUpdated?(ev: { threadId: string; title?: string; titleAuto?: boolean; status?: string }): void
-  onTurnComplete(): void
+  onTurnComplete(event?: { threadId?: string; turnId?: string }): void
   onError(err: Error, options?: ThreadErrorOptions): void
   /** Optional: cumulative usage update for the thread. */
   onUsage?(usage: ThreadUsageSnapshot): void

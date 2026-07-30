@@ -206,7 +206,11 @@ export function normalizeKunRuntimeEvent(
         const tool = deps.childTool(event)
         return tool ? [{ type: 'tool_updated', payload: tool }] : []
       }
-      return [{ type: 'turn_completed' }]
+      return [{
+        type: 'turn_completed',
+        ...(event.threadId ? { threadId: event.threadId } : {}),
+        ...(event.turnId ? { turnId: event.turnId } : {})
+      }]
     case 'turn_failed': {
       if (event.child) {
         const tool = deps.childTool(event)
@@ -216,7 +220,12 @@ export function normalizeKunRuntimeEvent(
       const terminal: RuntimeProjectionAction = {
         type: 'turn_failed',
         error: deps.errorFromRuntime(payload),
-        options: { terminal: true, scope: 'conversation' }
+        options: {
+          terminal: true,
+          scope: 'conversation',
+          ...(event.threadId ? { threadId: event.threadId } : {}),
+          ...(event.turnId ? { turnId: event.turnId } : {})
+        }
       }
       // A message-less terminal event normally follows a more useful
       // structured `error` event. Settle the turn without adding a generic

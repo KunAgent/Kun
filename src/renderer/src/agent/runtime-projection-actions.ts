@@ -66,7 +66,7 @@ export type RuntimeProjectionAction =
         userBlockId?: string | null
       }
     }
-  | { type: 'turn_completed' }
+  | { type: 'turn_completed'; threadId?: string; turnId?: string }
   | { type: 'turn_failed'; error: Error; options?: ThreadErrorOptions }
 
 export type RuntimeProjectionActionBatch = readonly RuntimeProjectionAction[]

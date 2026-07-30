@@ -1852,7 +1852,7 @@ async function applyRuntimeProjectionAction(
     case 'context_snapshot_received': sink.onContextSnapshot?.(action.payload); return
     case 'delegated_runtime_received': sink.onDelegatedRuntimeState?.(action.payload); return
     case 'usage_received': sink.onUsage?.(action.payload); return
-    case 'turn_completed': sink.onTurnComplete(); return
+    case 'turn_completed': sink.onTurnComplete({ threadId: action.threadId, turnId: action.turnId }); return
     case 'turn_failed': sink.onError(action.error, action.options); return
   }
 }

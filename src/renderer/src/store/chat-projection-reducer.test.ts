@@ -231,6 +231,78 @@ describe('chat projection reducer', () => {
     expect(live.error).toBeNull()
   })
 
+  it('settles the completed thread summary immediately instead of waiting for a sidebar refresh', () => {
+    const initial = state()
+    initial.busy = true
+    initial.currentTurnId = 'turn_1'
+    initial.currentTurnUserId = 'user_1'
+    initial.turnStartedAtByUserId = { user_1: NOW }
+    initial.threads = [{
+      id: 'thread_1',
+      title: 'Goal task',
+      updatedAt: '2026-07-11T00:00:00.000Z',
+      model: 'model',
+      mode: 'agent',
+      status: 'running'
+    }]
+
+    const projected = project(initial, [{
+      type: 'turn_completed',
+      threadId: 'thread_1',
+      turnId: 'turn_1'
+    }])
+
+    expect(projected.busy).toBe(false)
+    expect(projected.threads[0]?.status).toBe('idle')
+  })
+
+  it('settles a replayed terminal thread summary without repeating turn effects', () => {
+    const initial = state()
+    initial.threads = [{
+      id: 'thread_1',
+      title: 'Goal task',
+      updatedAt: '2026-07-11T00:00:00.000Z',
+      model: 'model',
+      mode: 'agent',
+      status: 'running'
+    }]
+
+    const projected = project(initial, [{
+      type: 'turn_completed',
+      threadId: 'thread_1',
+      turnId: 'turn_1'
+    }])
+
+    expect(projected.threads[0]?.status).toBe('idle')
+    expect(projected.busy).toBeUndefined()
+  })
+
+  it('settles a replayed terminal failure by its event thread identity', () => {
+    const initial = state()
+    initial.threads = [{
+      id: 'thread_1',
+      title: 'Goal task',
+      updatedAt: '2026-07-11T00:00:00.000Z',
+      model: 'model',
+      mode: 'agent',
+      status: 'running'
+    }]
+
+    const projected = project(initial, [{
+      type: 'turn_failed',
+      error: new Error('provider stopped'),
+      options: {
+        terminal: true,
+        scope: 'conversation',
+        threadId: 'thread_1',
+        turnId: 'turn_1'
+      }
+    }])
+
+    expect(projected.threads[0]?.status).toBe('idle')
+    expect(projected.threads[0]?.latestTurnStatus).toBe('failed')
+  })
+
   it('stores context snapshots only for the active thread', () => {
     const activeSnapshot: RuntimeProjectionAction = {
       type: 'context_snapshot_received',

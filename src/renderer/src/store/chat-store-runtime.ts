@@ -1008,13 +1008,26 @@ export function buildThreadEventSink(
       if (!isCurrentStream()) return
       set((state) => reduce(state, { type: 'thread_metadata_changed', payload: event }))
     },
-    onTurnComplete: () => {
+    onTurnComplete: (event) => {
       if (!isCurrentStream()) return
+      const terminalThreadId = event?.threadId?.trim()
+      const terminalTurnId = event?.turnId?.trim()
+      if (terminalThreadId && boundThreadId && terminalThreadId !== boundThreadId) return
+      if (terminalTurnId && get().currentTurnId && get().currentTurnId !== terminalTurnId) return
       // Reconnect/replay can deliver the same terminal event after the first
       // projection already cleared the active turn. Treat it as a no-op so
       // notifications, mirrors, workspace refreshes and queue drains remain
       // once-only for one completion identity.
-      if (!get().busy && !get().currentTurnId) return
+      if (!get().busy && !get().currentTurnId) {
+        if (terminalThreadId) {
+          set((state) => reduce(state, {
+            type: 'turn_completed',
+            threadId: terminalThreadId,
+            ...(terminalTurnId ? { turnId: terminalTurnId } : {})
+          }))
+        }
+        return
+      }
       resetBusyRecoveryAttempts()
       clearBusyWatchdog()
       const completedState = get()
@@ -1033,7 +1046,11 @@ export function buildThreadEventSink(
               completedState.liveAssistant
             )
           : ''
-      set((state) => reduce(state, { type: 'turn_completed' }))
+      set((state) => reduce(state, {
+        type: 'turn_completed',
+        ...(terminalThreadId ? { threadId: terminalThreadId } : {}),
+        ...(terminalTurnId ? { turnId: terminalTurnId } : {})
+      }))
       if (completedThreadId) clearWatchedCompletionNotification(completedThreadId)
       runEffects(completionProjectionEffects({
         state: completedState,
@@ -1049,6 +1066,10 @@ export function buildThreadEventSink(
     },
     onError: (err, options) => {
       if (!isCurrentStream()) return
+      if (options?.terminal && options.threadId?.trim() && boundThreadId && options.threadId.trim() !== boundThreadId) return
+      if (options?.terminal && options.turnId?.trim() && get().currentTurnId && get().currentTurnId !== options.turnId.trim()) {
+        return
+      }
       resetBusyRecoveryAttempts()
       clearBusyWatchdog()
       const state = get()

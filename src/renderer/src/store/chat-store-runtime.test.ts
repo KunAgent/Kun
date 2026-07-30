@@ -468,6 +468,22 @@ describe('thread event sink binding', () => {
     expect(getState().liveAssistant).toBe('')
   })
 
+  it('ignores a late terminal event from an earlier turn', () => {
+    const { getState, set, get } = makeSinkHarness({
+      activeThreadId: 'thread-current',
+      currentTurnId: 'turn-current',
+      currentTurnUserId: 'user-current',
+      threads: [makeThread({ id: 'thread-current', status: 'running' })]
+    })
+    const sink = buildThreadEventSink(set, get, { threadId: 'thread-current' })
+
+    sink.onTurnComplete({ threadId: 'thread-current', turnId: 'turn-earlier' })
+
+    expect(getState().busy).toBe(true)
+    expect(getState().currentTurnId).toBe('turn-current')
+    expect(getState().threads).toContainEqual(makeThread({ id: 'thread-current', status: 'running' }))
+  })
+
   it('projects a replayed duplicate completion once, including external effects', () => {
     const showTurnCompleteNotification = vi.fn(async () => ({ ok: true }))
     vi.stubGlobal('window', {

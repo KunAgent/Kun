@@ -104,6 +104,17 @@ describe('requirement session lifecycle', () => {
   })
 })
 
+function deferred<T>(): {
+  promise: Promise<T>
+  resolve: (value: T) => void
+} {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>((complete) => {
+    resolve = complete
+  })
+  return { promise, resolve }
+}
+
 function buildHarness(overrides?: {
   subscribeThreadEventsLive?: ReturnType<typeof vi.fn>
   recoverActiveTurn?: ReturnType<typeof vi.fn>
@@ -191,6 +202,40 @@ describe('chat-store navigation workspace selection', () => {
   afterEach(() => {
     rendererRuntimeClient.invalidateSettings()
     vi.unstubAllGlobals()
+  })
+
+  it('does not let an older running snapshot overwrite a newer completed thread refresh', async () => {
+    const first = deferred<NormalizedThread[]>()
+    const second = deferred<NormalizedThread[]>()
+    const listThreads = vi.fn()
+      .mockImplementationOnce(async () => first.promise)
+      .mockImplementationOnce(async () => second.promise)
+    registryMock.getProvider.mockReturnValue({ listThreads })
+    const harness = buildHarness()
+    harness.state.refreshThreads = harness.actions.refreshThreads
+
+    const staleRefresh = harness.actions.refreshThreads()
+    const currentRefresh = harness.actions.refreshThreads()
+    second.resolve([thread({
+      id: 'thread_1',
+      title: 'Goal task',
+      workspace: '/Users/zxy/project',
+      status: 'idle'
+    })])
+    await currentRefresh
+
+    first.resolve([thread({
+      id: 'thread_1',
+      title: 'Goal task',
+      workspace: '/Users/zxy/project',
+      status: 'running'
+    })])
+    await staleRefresh
+
+    expect(harness.state.threads.find((item) => item.id === 'thread_1')).toEqual(expect.objectContaining({
+      id: 'thread_1',
+      status: 'idle'
+    }))
   })
 
   it('does not move the only default thread into a newly picked empty workspace', async () => {

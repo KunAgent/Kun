@@ -238,6 +238,20 @@ describe('runtime projection action normalization', () => {
       payload: { itemId: 'input_unknown', status: 'cancelled' }
     }])
   })
+
+  it('preserves the terminal thread and turn identity for sidebar settlement', () => {
+    expect(runtimeProjectionActionsFromEvent({
+      kind: 'turn_completed',
+      seq: 10,
+      timestamp: '2026-07-30T00:00:00.000Z',
+      threadId: 'thread_1',
+      turnId: 'turn_1'
+    })).toEqual([{
+      type: 'turn_completed',
+      threadId: 'thread_1',
+      turnId: 'turn_1'
+    }])
+  })
 })
 
 describe('assistant stream mapping', () => {
@@ -424,6 +438,26 @@ describe('review mapping', () => {
 })
 
 describe('create_plan tool mapping', () => {
+  it('forwards terminal thread identity from the runtime event to the sink', async () => {
+    let completion: { threadId?: string; turnId?: string } | undefined
+    const sink: ThreadEventSink = {
+      ...makeSink(),
+      onTurnComplete: (event) => {
+        completion = event
+      }
+    }
+
+    await dispatchKunRuntimeEvent({
+      kind: 'turn_completed',
+      seq: 8,
+      timestamp: '2024-01-01T00:00:00.000Z',
+      threadId: 'thr_1',
+      turnId: 'turn_1'
+    }, sink, async () => undefined)
+
+    expect(completion).toEqual({ threadId: 'thr_1', turnId: 'turn_1' })
+  })
+
   it('surfaces turn failure messages from Kun lifecycle events', async () => {
     let capturedError: string | null = null
     let capturedErrorOptions: ThreadErrorOptions | null = null
@@ -457,7 +491,12 @@ describe('create_plan tool mapping', () => {
       message: 'model stream exploded',
       severity: 'error'
     })
-    expect(capturedErrorOptions).toEqual({ terminal: true, scope: 'conversation' })
+    expect(capturedErrorOptions).toEqual({
+      terminal: true,
+      scope: 'conversation',
+      threadId: 'thr_1',
+      turnId: 'turn_1'
+    })
   })
 
   it('settles message-less turn failures without adding a generic duplicate error', async () => {
@@ -482,7 +521,12 @@ describe('create_plan tool mapping', () => {
     }, sink, async () => undefined)
 
     expect(runtimeErrorCount).toBe(0)
-    expect(capturedErrorOptions).toEqual({ terminal: true, scope: 'conversation' })
+    expect(capturedErrorOptions).toEqual({
+      terminal: true,
+      scope: 'conversation',
+      threadId: 'thr_1',
+      turnId: 'turn_1'
+    })
   })
 
   it('does not finish the parent turn for child lifecycle events', async () => {
