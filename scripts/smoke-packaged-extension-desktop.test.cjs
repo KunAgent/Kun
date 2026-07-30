@@ -47,6 +47,7 @@ const {
   waitForPortsClosed
 } = require('./smoke-packaged-extension-desktop.cjs')
 const {
+  cleanupGraphWorkbenchProcesses,
   withTimeout: withGraphWorkbenchTimeout
 } = require('./smoke-development-graph-workbench.cjs')
 
@@ -86,6 +87,30 @@ test('bounds Graph workbench browser operations', async () => {
     ),
     /Timed out while running a stalled fixture/
   )
+})
+
+test('terminates the Graph workbench Electron tree before closing Playwright', async () => {
+  const events = []
+  const electronProcess = { pid: 101 }
+  const rendererProcess = { pid: 102 }
+
+  await cleanupGraphWorkbenchProcesses({
+    electronApplication: {
+      close: async () => events.push('close-playwright')
+    },
+    electronProcess,
+    rendererProcess,
+    platform: 'linux',
+    terminate: async (child) => {
+      events.push(child === electronProcess ? 'terminate-electron' : 'terminate-renderer')
+    }
+  })
+
+  assert.deepEqual(events, [
+    'terminate-electron',
+    'close-playwright',
+    'terminate-renderer'
+  ])
 })
 
 test('selects host-native packaged resources and never launches desktop Electron as Node', () => {

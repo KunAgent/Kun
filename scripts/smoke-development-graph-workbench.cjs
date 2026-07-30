@@ -355,25 +355,11 @@ async function main() {
       diagnostics ? `\n\n${diagnostics}` : ''
     }`)
   } finally {
-    if (electronApplication) {
-      await withTimeout(
-        electronApplication.close(),
-        MAX_CLEANUP_TIMEOUT_MS,
-        'closing the Graph workbench Electron application'
-      ).catch(() => undefined)
-    }
-    if (electronProcess) {
-      await terminateProcessTree(electronProcess, process.platform, {
-        timeoutMs: MAX_CLEANUP_TIMEOUT_MS,
-        detached: process.platform !== 'win32'
-      }).catch(() => undefined)
-    }
-    if (rendererProcess) {
-      await terminateProcessTree(rendererProcess, process.platform, {
-        timeoutMs: MAX_CLEANUP_TIMEOUT_MS,
-        detached: process.platform !== 'win32'
-      }).catch(() => undefined)
-    }
+    await cleanupGraphWorkbenchProcesses({
+      electronApplication,
+      electronProcess,
+      rendererProcess
+    })
     await Promise.all([
       makeTreeWritable(temporaryRoot),
       makeTreeWritable(workspaceRoot)
@@ -413,6 +399,36 @@ async function withTimeout(operation, timeoutMs, description) {
     ])
   } finally {
     if (timeout) clearTimeout(timeout)
+  }
+}
+
+async function cleanupGraphWorkbenchProcesses({
+  electronApplication,
+  electronProcess,
+  rendererProcess,
+  platform = process.platform,
+  terminate = terminateProcessTree,
+  closeTimeoutMs = MAX_CLEANUP_TIMEOUT_MS
+}) {
+  const terminateOptions = {
+    timeoutMs: MAX_CLEANUP_TIMEOUT_MS,
+    detached: platform !== 'win32'
+  }
+
+  // Playwright's close can wait forever while its Electron process is still
+  // alive. Stop the process tree first so its transport can close.
+  if (electronProcess) {
+    await terminate(electronProcess, platform, terminateOptions).catch(() => undefined)
+  }
+  if (electronApplication) {
+    await withTimeout(
+      Promise.resolve().then(() => electronApplication.close()),
+      closeTimeoutMs,
+      'closing the Graph workbench Electron application'
+    ).catch(() => undefined)
+  }
+  if (rendererProcess) {
+    await terminate(rendererProcess, platform, terminateOptions).catch(() => undefined)
   }
 }
 
@@ -483,4 +499,4 @@ if (require.main === module) {
   })
 }
 
-module.exports = { withTimeout }
+module.exports = { cleanupGraphWorkbenchProcesses, withTimeout }
