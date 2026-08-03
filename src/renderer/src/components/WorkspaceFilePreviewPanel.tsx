@@ -16,6 +16,7 @@ import {
   FileCode2,
   Files,
   FolderOpen,
+  FolderSearch,
   Loader2,
   Maximize2,
   Minimize2,
@@ -799,6 +800,13 @@ export function WorkspaceFilePreviewPanel({
       workspaceRoot: target.workspaceRoot ?? workspaceRoot
     })
   }
+  const revealInFileManager = (): void => {
+    if (!target) return
+    void window.kunGui.revealWorkspaceFileInFolder({
+      ...target,
+      workspaceRoot: target.workspaceRoot ?? workspaceRoot
+    })
+  }
 
   const copyContent = async (): Promise<void> => {
     if (!result?.ok || !navigator?.clipboard?.writeText) return
@@ -1215,6 +1223,16 @@ export function WorkspaceFilePreviewPanel({
               <FolderOpen className="h-4 w-4" strokeWidth={1.75} />
             </button>
           )}
+          <button
+            type="button"
+            onClick={revealInFileManager}
+            disabled={!target}
+            className="ds-code-sidebar-icon-button"
+            title={t('filePreviewRevealInFolder', { defaultValue: 'Show in file manager' })}
+            aria-label={t('filePreviewRevealInFolder', { defaultValue: 'Show in file manager' })}
+          >
+            <FolderSearch className="h-4 w-4" strokeWidth={1.75} />
+          </button>
           <button
             type="button"
             onClick={() => void copyContent()}

@@ -191,6 +191,10 @@ export const workspaceFileTargetPayloadSchema = z
   })
   .strict()
 
+export const workspaceFileRevealTargetPayloadSchema = workspaceFileTargetPayloadSchema.extend({
+  workspaceRoot: trimmedString(MAX_PATH_LENGTH)
+})
+
 export const workspaceDirectoryTargetPayloadSchema = z
   .object({
     path: optionalTrimmedString(MAX_PATH_LENGTH),

@@ -2708,6 +2708,7 @@
   "filePreviewUnsupported": "此文件暂不支持应用内预览。",
   "filePreviewOpenEditor": "在编辑器中打开",
   "filePreviewOpenSystem": "使用系统应用打开",
+  "filePreviewRevealInFolder": "在文件管理器中显示",
   "filePreviewEditText": "编辑文件",
   "filePreviewStopEditing": "停止编辑",
   "filePreviewSaveText": "保存文件",

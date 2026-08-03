@@ -104,6 +104,7 @@ import {
   workspaceEntryDeletePayloadSchema,
   workspaceEntryRenamePayloadSchema,
   workspaceFileCreatePayloadSchema,
+  workspaceFileRevealTargetPayloadSchema,
   workspaceFileSaveAsPayloadSchema,
   workspaceFileTargetPayloadSchema,
   workspaceFileWatchPayloadSchema,
@@ -2114,6 +2115,15 @@ export function registerAppIpcHandlers(options: RegisterAppIpcHandlersOptions): 
     if (!resolved.ok) return resolved
     const message = await shell.openPath(resolved.path)
     return message ? { ok: false as const, message } : { ok: true as const }
+  })
+  ipcMain.handle('file:reveal-workspace-file', async (event, payload: unknown) => {
+    assertTrustedWorkbenchSender(event, options.getMainWindow)
+    const resolved = await resolveWorkspaceFile(
+      parseIpcPayload('file:reveal-workspace-file', workspaceFileRevealTargetPayloadSchema, payload)
+    )
+    if (!resolved.ok) return resolved
+    shell.showItemInFolder(resolved.path)
+    return { ok: true as const }
   })
   ipcMain.handle('file:list-workspace-directory', async (_, payload: unknown) =>
     listWorkspaceDirectory(

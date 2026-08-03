@@ -2708,6 +2708,7 @@
   "filePreviewUnsupported": "Предварительный просмотр для этого файла не поддерживается. Выберите текстовый файл.",
   "filePreviewOpenEditor": "Открыть в редакторе",
   "filePreviewOpenSystem": "Открыть системным приложением",
+  "filePreviewRevealInFolder": "Показать в файловом менеджере",
   "filePreviewEditText": "Редактировать файл",
   "filePreviewStopEditing": "Завершить редактирование",
   "filePreviewSaveText": "Сохранить файл",

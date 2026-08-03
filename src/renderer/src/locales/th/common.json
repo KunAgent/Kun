@@ -2708,6 +2708,7 @@
   "filePreviewUnsupported": "ไฟล์นี้ไม่รองรับการแสดงตัวอย่าง เลือกไฟล์ข้อความ",
   "filePreviewOpenEditor": "เปิดในตัวแก้ไข",
   "filePreviewOpenSystem": "เปิดด้วยแอประบบ",
+  "filePreviewRevealInFolder": "แสดงในตัวจัดการไฟล์",
   "filePreviewEditText": "แก้ไขไฟล์",
   "filePreviewStopEditing": "หยุดแก้ไข",
   "filePreviewSaveText": "บันทึกไฟล์",

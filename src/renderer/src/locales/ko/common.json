@@ -2708,6 +2708,7 @@
   "filePreviewUnsupported": "이 파일에는 미리보기가 지원되지 않습니다. 텍스트 파일을 선택하세요.",
   "filePreviewOpenEditor": "편집기에서 열기",
   "filePreviewOpenSystem": "시스템 앱으로 열기",
+  "filePreviewRevealInFolder": "파일 관리자에서 보기",
   "filePreviewEditText": "파일 편집",
   "filePreviewStopEditing": "편집 종료",
   "filePreviewSaveText": "파일 저장",

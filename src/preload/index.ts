@@ -318,6 +318,8 @@ const api = {
     ipcRenderer.invoke('file:resolve-workspace', options),
   openWorkspaceFileInSystem: (options) =>
     ipcRenderer.invoke('file:open-workspace-system', options),
+  revealWorkspaceFileInFolder: (options) =>
+    ipcRenderer.invoke('file:reveal-workspace-file', options),
   readWorkspaceFile: (options) =>
     ipcRenderer.invoke('file:read-workspace', options),
   lintProjectDesignMd: (content) =>

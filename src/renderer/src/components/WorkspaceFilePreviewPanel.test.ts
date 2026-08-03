@@ -31,6 +31,7 @@ vi.mock('react-i18next', () => {
     filePreviewTitle: 'File preview',
     filePreviewOpenEditor: 'Open in editor',
     filePreviewOpenSystem: 'Open with system app',
+    filePreviewRevealInFolder: 'Show in file manager',
     filePreviewCopyContent: 'Copy file',
     filePreviewRenderHtml: 'Render HTML',
     filePreviewShowSource: 'Show source',
@@ -187,6 +188,40 @@ describe('WorkspaceFilePreviewPanel toolbar', () => {
 
     await act(async () => toggle.props.onClick())
     expect(onToggleFileTree).toHaveBeenCalledTimes(1)
+    await act(async () => renderer.unmount())
+  })
+
+  it('reveals the selected file in its workspace file manager', async () => {
+    const revealWorkspaceFileInFolder = vi.fn(async () => ({ ok: true as const }))
+    vi.stubGlobal('window', {
+      kunGui: { platform: 'linux', revealWorkspaceFileInFolder },
+      innerWidth: 1200,
+      innerHeight: 800,
+      requestAnimationFrame: (callback: FrameRequestCallback) => {
+        callback(0)
+        return 1
+      },
+      cancelAnimationFrame: vi.fn(),
+      clearTimeout,
+      setTimeout
+    })
+    let renderer!: ReactTestRenderer
+    await act(async () => {
+      renderer = create(createElement(WorkspaceFilePreviewPanel, {
+        target: { path: 'notes/plan.md', workspaceRoot: '/repo' },
+        workspaceRoot: '/repo',
+        onClose: () => undefined
+      }))
+    })
+
+    await act(async () => {
+      renderer.root.findByProps({ 'aria-label': 'Show in file manager' }).props.onClick()
+    })
+
+    expect(revealWorkspaceFileInFolder).toHaveBeenCalledWith({
+      path: 'notes/plan.md',
+      workspaceRoot: '/repo'
+    })
     await act(async () => renderer.unmount())
   })
 })

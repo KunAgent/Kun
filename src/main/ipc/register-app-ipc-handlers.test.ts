@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { EventEmitter } from 'node:events'
 import {
   existsSync,
+  mkdirSync,
   mkdtempSync,
   readFileSync,
   realpathSync,
@@ -281,6 +282,74 @@ describe('registerAppIpcHandlers', () => {
       '/v1/runtime/info',
       '/v1/attachments'
     ])
+  })
+
+  it('reveals a workspace file only for the trusted workbench frame', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'kun-reveal-workspace-'))
+    const filePath = join(root, 'preview.md')
+    writeFileSync(filePath, '# Preview', 'utf8')
+    const mainFrame = { processId: 10, routingId: 20 }
+    const contents = { id: 7, mainFrame }
+    const mainWindow = { isDestroyed: () => false, webContents: contents }
+    try {
+      registerAppIpcHandlers(registerOptions({ getMainWindow: () => mainWindow as never }))
+      const handler = handlers.get('file:reveal-workspace-file')
+      const payload = { path: 'preview.md', workspaceRoot: root }
+
+      await expect(handler?.({
+        sender: { id: 99 },
+        senderFrame: { processId: 90, routingId: 91 }
+      }, payload)).rejects.toThrow(/trusted workbench frame/)
+      await expect(handler?.({ sender: contents, senderFrame: mainFrame }, payload)).resolves.toEqual({ ok: true })
+      expect(electronMock.showItemInFolder).toHaveBeenCalledWith(realpathSync(filePath))
+      expect(electronMock.openPath).not.toHaveBeenCalled()
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('rejects reveal targets that escape or do not name a workspace file', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'kun-reveal-boundary-'))
+    const workspaceRoot = join(root, 'workspace')
+    const outsideFile = join(root, 'outside.md')
+    mkdirSync(workspaceRoot)
+    writeFileSync(outsideFile, '# Outside', 'utf8')
+    const mainFrame = { processId: 10, routingId: 20 }
+    const contents = { id: 7, mainFrame }
+    const mainWindow = { isDestroyed: () => false, webContents: contents }
+    const event = { sender: contents, senderFrame: mainFrame }
+
+    try {
+      registerAppIpcHandlers(registerOptions({ getMainWindow: () => mainWindow as never }))
+      const handler = handlers.get('file:reveal-workspace-file')
+      expect(handler).toBeTypeOf('function')
+
+      await expect(handler?.(event, {
+        path: '../outside.md',
+        workspaceRoot
+      })).resolves.toMatchObject({ ok: false })
+      await expect(handler?.(event, {
+        path: outsideFile,
+        workspaceRoot
+      })).resolves.toMatchObject({ ok: false })
+      await expect(handler?.(event, {
+        path: '.',
+        workspaceRoot
+      })).resolves.toEqual({
+        ok: false,
+        message: 'Path must point to a regular workspace file.'
+      })
+      await expect(handler?.(event, {
+        path: 'missing.md',
+        workspaceRoot
+      })).resolves.toMatchObject({ ok: false })
+      await expect(handler?.(event, {
+        path: outsideFile
+      })).rejects.toThrow(/Invalid payload for file:reveal-workspace-file/)
+      expect(electronMock.showItemInFolder).not.toHaveBeenCalled()
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
   })
 
   it('rejects invalid settings patches at the handler boundary', async () => {

@@ -5,6 +5,10 @@ export type WorkspaceFileTarget = {
   column?: number
 }
 
+export type WorkspaceFileRevealTarget = WorkspaceFileTarget & {
+  workspaceRoot: string
+}
+
 export type WorkspaceEntry = {
   name: string
   path: string

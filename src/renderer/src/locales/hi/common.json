@@ -2708,6 +2708,7 @@
   "filePreviewUnsupported": "इस फ़ाइल के लिए पूर्वावलोकन समर्थित नहीं है. एक टेक्स्ट फ़ाइल चुनें.",
   "filePreviewOpenEditor": "संपादक में खोलें",
   "filePreviewOpenSystem": "सिस्टम ऐप में खोलें",
+  "filePreviewRevealInFolder": "फ़ाइल प्रबंधक में दिखाएं",
   "filePreviewEditText": "फ़ाइल संपादित करें",
   "filePreviewStopEditing": "संपादन रोकें",
   "filePreviewSaveText": "फ़ाइल सहेजें",

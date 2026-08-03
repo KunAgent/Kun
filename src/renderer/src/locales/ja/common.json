@@ -2708,6 +2708,7 @@
   "filePreviewUnsupported": "このファイルのプレビューはサポートされていません。テキスト ファイルを選択します。",
   "filePreviewOpenEditor": "エディタで開く",
   "filePreviewOpenSystem": "システムアプリで開く",
+  "filePreviewRevealInFolder": "ファイルマネージャーで表示",
   "filePreviewEditText": "ファイルを編集",
   "filePreviewStopEditing": "編集を終了",
   "filePreviewSaveText": "ファイルを保存",

@@ -2708,6 +2708,7 @@
   "filePreviewUnsupported": "This file does not have an in-app preview.",
   "filePreviewOpenEditor": "Open in editor",
   "filePreviewOpenSystem": "Open with system app",
+  "filePreviewRevealInFolder": "Show in file manager",
   "filePreviewEditText": "Edit file",
   "filePreviewStopEditing": "Stop editing",
   "filePreviewSaveText": "Save file",
