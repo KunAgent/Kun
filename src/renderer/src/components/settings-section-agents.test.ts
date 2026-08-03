@@ -1729,6 +1729,329 @@ describe('AgentsSettingsSection Kun diagnostics smoke', () => {
       expect(rendererText(renderer)).not.toContain('Unsaved')
     })
 
+    it('deletes the canonical shared provider before removing it from local settings', async () => {
+      const settings = defaultModelProviderSettings()
+      const target = {
+        id: 'custom-provider-2',
+        name: 'Custom Provider',
+        apiKey: 'sk-custom',
+        baseUrl: 'https://api.example.com/v1',
+        endpointFormat: 'chat_completions',
+        kind: 'http',
+        models: ['custom-model'],
+        modelProfiles: {}
+      } satisfies ModelProviderProfileV1
+      const sharedProvider = {
+        id: target.id,
+        accountId: `account:${target.id}`,
+        name: target.name,
+        kind: 'http',
+        authType: 'api-key',
+        baseUrl: target.baseUrl,
+        endpointFormat: target.endpointFormat,
+        configured: true,
+        models: target.models,
+        selectedModel: target.models[0]
+      }
+      const snapshot = (revision: number, providers = [sharedProvider]) => ({
+        schemaVersion: 1,
+        revision,
+        providers,
+        defaultProviderId: providers[0]?.id,
+        defaultAccountId: providers[0]?.accountId,
+        defaultModel: providers[0]?.selectedModel,
+        proxy: settings.proxy,
+        routePools: settings.routePools,
+        localModelGateway: { enabled: settings.localGateway.enabled }
+      })
+      let resolveDelete!: (value: { ok: true; status: 200; body: string }) => void
+      const deleteRequest = new Promise<{ ok: true; status: 200; body: string }>((resolve) => {
+        resolveDelete = resolve
+      })
+      const runtimeRequest = vi.fn(async (path: string, method: string) => {
+        if (method === 'DELETE') return deleteRequest
+        return { ok: true, status: 200, body: JSON.stringify(snapshot(1)) }
+      })
+      Object.assign(window.kunGui, {
+        runtimeRequest,
+        confirmDialog: vi.fn(async () => true)
+      })
+      const update = vi.fn()
+      const initialCtx = {
+        ...baseCtx(),
+        provider: { ...settings, providers: [...settings.providers, target] },
+        kun: {
+          ...defaultKunRuntimeSettings(),
+          providerId: target.id,
+          model: target.models[0]
+        },
+        saveStatus: 'saving',
+        update
+      }
+      const renderer = await mountProviders(initialCtx)
+      await act(async () => {
+        await Promise.resolve()
+        await Promise.resolve()
+      })
+      update.mockClear()
+
+      await clickProviderTab(renderer, 'Advanced')
+      let removePromise!: Promise<void>
+      await act(async () => {
+        removePromise = findButton(renderer, 'Remove provider').props.onClick()
+        await Promise.resolve()
+      })
+
+      const unrelatedProvider = {
+        ...settings.providers[0]!,
+        name: 'Edited while delete was pending'
+      }
+      await act(async () => {
+        renderer.update(createElement(ProvidersSettingsSection, {
+          ctx: {
+            ...initialCtx,
+            provider: {
+              ...initialCtx.provider,
+              providers: [unrelatedProvider, target]
+            }
+          }
+        }))
+        await Promise.resolve()
+      })
+      resolveDelete({ ok: true, status: 200, body: JSON.stringify(snapshot(2, [])) })
+      await act(async () => {
+        await removePromise
+      })
+
+      const deleteCallIndex = runtimeRequest.mock.calls.findIndex(([path, method]) =>
+        method === 'DELETE' && path.includes('/v1/model-connections/custom-provider-2?')
+      )
+      expect(deleteCallIndex).toBeGreaterThanOrEqual(0)
+      expect(update).toHaveBeenCalledOnce()
+      expect(update.mock.calls[0]?.[0]?.provider?.providers).not.toEqual(
+        expect.arrayContaining([expect.objectContaining({ id: target.id })])
+      )
+      expect(update.mock.calls[0]?.[0]?.provider?.providers).toEqual(
+        expect.arrayContaining([expect.objectContaining({
+          id: unrelatedProvider.id,
+          name: unrelatedProvider.name
+        })])
+      )
+      expect(runtimeRequest.mock.invocationCallOrder[deleteCallIndex]).toBeLessThan(update.mock.invocationCallOrder[0]!)
+    })
+
+    it('keeps a custom provider rename while a stale registry event races the canonical PATCH', async () => {
+      const settings = defaultModelProviderSettings()
+      const target = {
+        id: 'custom-provider-2',
+        name: 'Custom Provider',
+        apiKey: 'sk-custom',
+        baseUrl: 'https://api.example.com/v1',
+        endpointFormat: 'chat_completions',
+        kind: 'http',
+        models: ['custom-model'],
+        modelProfiles: {
+          'custom-model': {
+            inputModalities: ['text'],
+            outputModalities: ['text'],
+            supportsToolCalling: true,
+            messageParts: ['text']
+          }
+        }
+      } satisfies ModelProviderProfileV1
+      const sharedProvider = (name: string) => ({
+        id: target.id,
+        accountId: `account:${target.id}`,
+        name,
+        kind: 'http',
+        authType: 'api-key',
+        baseUrl: target.baseUrl,
+        endpointFormat: target.endpointFormat,
+        configured: true,
+        models: target.models,
+        selectedModel: target.models[0]
+      })
+      const snapshot = (revision: number, name: string) => ({
+        schemaVersion: 1,
+        revision,
+        providers: [sharedProvider(name)],
+        defaultProviderId: target.id,
+        defaultAccountId: `account:${target.id}`,
+        defaultModel: target.models[0],
+        proxy: settings.proxy,
+        routePools: settings.routePools,
+        localModelGateway: { enabled: settings.localGateway.enabled }
+      })
+      let resolveStaleEvent!: (value: { ok: true; status: 200; body: string }) => void
+      const staleEvent = new Promise<{ ok: true; status: 200; body: string }>((resolve) => {
+        resolveStaleEvent = resolve
+      })
+      let eventRequests = 0
+      const runtimeRequest = vi.fn(async (path: string, method: string, body?: string) => {
+        if (path.includes('/events?')) {
+          eventRequests += 1
+          if (eventRequests === 1) return staleEvent
+          return new Promise<never>(() => undefined)
+        }
+        if (path === '/v1/model-connections' && method === 'GET') {
+          return { ok: true, status: 200, body: JSON.stringify(snapshot(1, target.name)) }
+        }
+        if (path === `/v1/model-connections/${target.id}` && method === 'PATCH') {
+          expect(JSON.parse(body ?? '{}')).toMatchObject({
+            expectedRevision: 1,
+            name: 'Renamed Provider'
+          })
+          return { ok: true, status: 200, body: JSON.stringify(snapshot(2, 'Renamed Provider')) }
+        }
+        throw new Error(`Unexpected runtime request: ${method} ${path}`)
+      })
+      Object.assign(window.kunGui, { runtimeRequest })
+      const update = vi.fn()
+      const initialCtx = {
+        ...baseCtx(),
+        provider: { ...settings, providers: [...settings.providers, target] },
+        kun: {
+          ...defaultKunRuntimeSettings(),
+          providerId: target.id,
+          model: target.models[0]
+        },
+        saveStatus: 'saved',
+        update
+      }
+      const renderer = await mountProviders(initialCtx)
+      await act(async () => {
+        await Promise.resolve()
+        await Promise.resolve()
+      })
+      update.mockClear()
+
+      const nameInput = renderer.root.findAllByType('input')
+        .find((input) => input.props.value === target.name)
+      expect(nameInput).toBeTruthy()
+      await act(async () => nameInput!.props.onChange({ target: { value: 'Renamed Provider' } }))
+      expect(update).toHaveBeenCalledOnce()
+      const localPatch = update.mock.calls[0]![0]
+      expect(localPatch.provider.providers.find((item: ModelProviderProfileV1) => item.id === target.id)?.name)
+        .toBe('Renamed Provider')
+
+      await act(async () => {
+        renderer.update(createElement(ProvidersSettingsSection, {
+          ctx: {
+            ...initialCtx,
+            provider: { ...initialCtx.provider, ...localPatch.provider },
+            kun: { ...initialCtx.kun, ...localPatch.agents?.kun }
+          }
+        }))
+        await Promise.resolve()
+        await Promise.resolve()
+        await Promise.resolve()
+      })
+
+      expect(runtimeRequest.mock.calls.some(([path, method]) =>
+        path === `/v1/model-connections/${target.id}` && method === 'PATCH'
+      )).toBe(true)
+      resolveStaleEvent({ ok: true, status: 200, body: JSON.stringify(snapshot(1, target.name)) })
+      await act(async () => {
+        await Promise.resolve()
+        await Promise.resolve()
+      })
+
+      expect(update.mock.calls.some(([patch]) =>
+        patch.provider?.providers?.some((item: ModelProviderProfileV1) =>
+          item.id === target.id && item.name === target.name
+        )
+      )).toBe(false)
+    })
+
+    it('keeps the local provider and shows an error when the shared registry cannot delete it', async () => {
+      const settings = defaultModelProviderSettings()
+      const target = {
+        id: 'custom-provider-2',
+        name: 'Custom Provider',
+        apiKey: 'sk-custom',
+        baseUrl: 'https://api.example.com/v1',
+        endpointFormat: 'chat_completions',
+        kind: 'http',
+        models: ['custom-model'],
+        modelProfiles: {}
+      } satisfies ModelProviderProfileV1
+      const sharedProvider = {
+        id: target.id,
+        accountId: `account:${target.id}`,
+        name: target.name,
+        kind: 'http',
+        authType: 'api-key',
+        baseUrl: target.baseUrl,
+        endpointFormat: target.endpointFormat,
+        configured: true,
+        models: target.models,
+        selectedModel: target.models[0]
+      }
+      let registryReads = 0
+      const runtimeRequest = vi.fn(async (path: string, method: string) => {
+        if (path.includes('/events?')) return new Promise<never>(() => undefined)
+        if (path === '/v1/model-connections' && method === 'GET') {
+          registryReads += 1
+          if (registryReads > 1) {
+            return {
+              ok: false,
+              status: 503,
+              body: JSON.stringify({ message: 'Shared registry unavailable' })
+            }
+          }
+        }
+        return {
+          ok: true,
+          status: 200,
+          body: JSON.stringify({
+            schemaVersion: 1,
+            revision: 1,
+            providers: [sharedProvider],
+            defaultProviderId: target.id,
+            defaultAccountId: sharedProvider.accountId,
+            defaultModel: target.models[0],
+            proxy: settings.proxy,
+            routePools: settings.routePools,
+            localModelGateway: { enabled: settings.localGateway.enabled }
+          })
+        }
+      })
+      Object.assign(window.kunGui, {
+        runtimeRequest,
+        confirmDialog: vi.fn(async () => true)
+      })
+      const update = vi.fn()
+      const renderer = await mountProviders({
+        ...baseCtx(),
+        provider: { ...settings, providers: [...settings.providers, target] },
+        kun: {
+          ...defaultKunRuntimeSettings(),
+          providerId: target.id,
+          model: target.models[0]
+        },
+        saveStatus: 'saving',
+        update
+      })
+      await act(async () => {
+        await Promise.resolve()
+        await Promise.resolve()
+      })
+      update.mockClear()
+
+      await clickProviderTab(renderer, 'Advanced')
+      await act(async () => {
+        findButton(renderer, 'Remove provider').props.onClick()
+        await Promise.resolve()
+        await Promise.resolve()
+        await Promise.resolve()
+      })
+
+      expect(runtimeRequest.mock.calls.some(([, method]) => method === 'DELETE')).toBe(false)
+      expect(update).not.toHaveBeenCalled()
+      expect(rendererText(renderer)).toContain('Shared registry unavailable')
+      expect(rendererText(renderer)).toContain('Custom Provider')
+    })
+
     it('configures Ollama Cloud and imports only provider-confirmed models with catalog metadata', async () => {
       const settings = defaultModelProviderSettings()
       const preset = getModelProviderPreset('ollama')

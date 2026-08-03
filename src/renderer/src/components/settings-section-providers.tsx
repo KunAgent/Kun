@@ -424,6 +424,129 @@ async function requestSharedModelConnections(
   return parseSharedModelConnections(result.body)
 }
 
+export async function deleteSharedModelConnection(
+  providerId: string
+): Promise<SharedModelConnectionsSnapshot> {
+  let snapshot = await requestSharedModelConnections('/v1/model-connections')
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    if (!snapshot.providers.some((connection) => connection.id === providerId)) return snapshot
+    try {
+      const deleted = await requestSharedModelConnections(
+        `/v1/model-connections/${encodeURIComponent(providerId)}?expected_revision=${snapshot.revision}`,
+        'DELETE'
+      )
+      if (deleted.providers.some((connection) => connection.id === providerId)) {
+        throw new Error(`Shared model connection ${providerId} was not deleted`)
+      }
+      return deleted
+    } catch (error) {
+      if (!(error instanceof SharedModelConnectionConflictError)) throw error
+      snapshot = error.snapshot
+      if (!snapshot.providers.some((connection) => connection.id === providerId)) return snapshot
+      if (attempt === 1) throw error
+    }
+  }
+  return snapshot
+}
+
+export async function selectSharedModelConnection(
+  providerId: string,
+  model: string,
+  isProviderTombstoned: (providerId: string) => boolean = () => false
+): Promise<SharedModelConnectionsSnapshot> {
+  let snapshot = await requestSharedModelConnections('/v1/model-connections')
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    if (isProviderTombstoned(providerId)) {
+      throw new Error(`Shared model connection ${providerId} is pending deletion`)
+    }
+    const connection = snapshot.providers.find((entry) => entry.id === providerId)
+    if (!connection) {
+      throw new Error(`Shared model connection ${providerId} is no longer available`)
+    }
+    if (!connection.configured) {
+      throw new Error(`Shared model connection ${providerId} is not configured`)
+    }
+    if (!connection.models.includes(model)) {
+      throw new Error(`Model ${model} is no longer available for ${providerId}`)
+    }
+    try {
+      return await requestSharedModelConnections('/v1/model-connections/select', 'POST', {
+        expectedRevision: snapshot.revision,
+        providerId: connection.id,
+        accountId: connection.accountId,
+        model
+      })
+    } catch (error) {
+      if (!(error instanceof SharedModelConnectionConflictError) || attempt === 1) throw error
+      snapshot = error.snapshot
+    }
+  }
+  return snapshot
+}
+
+export function reconcilePendingSharedProviderDeletions(
+  snapshot: SharedModelConnectionsSnapshot,
+  pending: ReadonlyMap<string, number | null>
+): Map<string, number | null> {
+  const next = new Map(pending)
+  for (const [providerId, deletedAtRevision] of next) {
+    if (deletedAtRevision !== null && snapshot.revision > deletedAtRevision) {
+      next.delete(providerId)
+    }
+  }
+  return next
+}
+
+export type PendingSharedProviderName = {
+  localName: string
+  canonicalName: string
+  committedRevision: number | null
+}
+
+export function reconcilePendingSharedProviderNames(
+  snapshot: SharedModelConnectionsSnapshot,
+  pending: ReadonlyMap<string, PendingSharedProviderName>
+): Map<string, PendingSharedProviderName> {
+  const next = new Map(pending)
+  for (const [providerId, rename] of next) {
+    const connection = snapshot.providers.find((item) => item.id === providerId)
+    if (!connection) {
+      next.delete(providerId)
+      continue
+    }
+    const canonicalNameObserved = connection.name === rename.canonicalName
+    const committedRevisionPassed =
+      rename.committedRevision !== null && snapshot.revision > rename.committedRevision
+    if (canonicalNameObserved || committedRevisionPassed) {
+      next.delete(providerId)
+    }
+  }
+  return next
+}
+
+export function createSharedModelMutationQueue(): <T>(operation: () => Promise<T>) => Promise<T> {
+  let tail: Promise<void> = Promise.resolve()
+  return <T,>(operation: () => Promise<T>): Promise<T> => {
+    const result = tail.then(operation, operation)
+    tail = result.then(() => undefined, () => undefined)
+    return result
+  }
+}
+
+export function sharedProvidersEligibleForSync<T extends { id: string }>(
+  providers: readonly T[],
+  pendingDeletions: Pick<ReadonlySet<string>, 'has'>
+): T[] {
+  return providers.filter((provider) => !pendingDeletions.has(provider.id))
+}
+
+export function clearPendingSharedProviderDeletionForExplicitAdd(
+  pendingDeletions: Map<string, number | null>,
+  providerId: string
+): void {
+  pendingDeletions.delete(providerId)
+}
+
 function sharedModelProfiles(
   connection: SharedModelConnection,
   existing: ModelProviderProfileV1 | undefined
@@ -460,13 +583,16 @@ function sharedModelProfiles(
 
 export function projectSharedModelConnections(
   current: ModelProviderSettingsV1,
-  snapshot: SharedModelConnectionsSnapshot
+  snapshot: SharedModelConnectionsSnapshot,
+  pendingDeletions: Pick<ReadonlySet<string>, 'has'> = new Set(),
+  pendingNames: Pick<ReadonlyMap<string, PendingSharedProviderName>, 'get'> = new Map()
 ): {
   provider: Pick<ModelProviderSettingsV1, 'providers' | 'proxy' | 'routePools' | 'localGateway'>
   kun: Pick<KunRuntimeSettingsV1, 'providerId' | 'model'>
 } {
   const existingById = new Map(current.providers.map((item) => [item.id, item]))
-  const projectedProviders = snapshot.providers.map((connection): ModelProviderProfileV1 => {
+  const visibleConnections = snapshot.providers.filter((connection) => !pendingDeletions.has(connection.id))
+  const projectedProviders = visibleConnections.map((connection): ModelProviderProfileV1 => {
     const existing = existingById.get(connection.id)
     return {
       ...(existing ?? {
@@ -480,7 +606,7 @@ export function projectSharedModelConnections(
         modelProfiles: {}
       }),
       id: connection.id,
-      name: connection.name,
+      name: pendingNames.get(connection.id)?.localName ?? connection.name,
       // Preserve the ephemeral compatibility value already loaded from the
       // protected settings binding. Replacing it with an empty string makes
       // the settings save path interpret a registry projection as an explicit
@@ -496,7 +622,7 @@ export function projectSharedModelConnections(
   // AppSettings keeps a normalized DeepSeek editor as its legacy fallback.
   // When the canonical registry intentionally has no DeepSeek profile, retain
   // that local placeholder without treating it as a connected profile.
-  const compatibilityDefault = !snapshot.providers.some((entry) => entry.id === DEFAULT_MODEL_PROVIDER_ID)
+  const compatibilityDefault = !visibleConnections.some((entry) => entry.id === DEFAULT_MODEL_PROVIDER_ID)
     ? existingById.get(DEFAULT_MODEL_PROVIDER_ID)
     : undefined
   const providers = compatibilityDefault
@@ -513,8 +639,12 @@ export function projectSharedModelConnections(
       }
     },
     kun: {
-      providerId: snapshot.defaultProviderId ?? '',
-      model: snapshot.defaultModel ?? ''
+      providerId: snapshot.defaultProviderId && !pendingDeletions.has(snapshot.defaultProviderId)
+        ? snapshot.defaultProviderId
+        : '',
+      model: snapshot.defaultProviderId && !pendingDeletions.has(snapshot.defaultProviderId)
+        ? snapshot.defaultModel ?? ''
+        : ''
     }
   }
 }
@@ -1960,9 +2090,11 @@ export function ProvidersSettingsSection({ ctx }: { ctx: Record<string, any> }):
   const sharedSyncFingerprint = useRef('')
   const sharedProjectionPending = useRef(false)
   const dirtyCredentialProviderIds = useRef(new Set<string>())
-  const deletedSharedProviderIds = useRef(new Set<string>())
-  const sharedProjectionInput = useRef({ provider, kun, update })
-  sharedProjectionInput.current = { provider, kun, update }
+  const pendingSharedProviderDeletions = useRef(new Map<string, number | null>())
+  const pendingSharedProviderNames = useRef(new Map<string, PendingSharedProviderName>())
+  const enqueueSharedMutation = useMemo(() => createSharedModelMutationQueue(), [])
+  const sharedProjectionInput = useRef({ provider, kun, update, form })
+  sharedProjectionInput.current = { provider, kun, update, form }
   const [selectedProviderId, setSelectedProviderId] = useState<string>(
     kun.providerId?.trim() || modelProviders[0]?.id || DEFAULT_MODEL_PROVIDER_ID
   )
@@ -2067,7 +2199,20 @@ export function ProvidersSettingsSection({ ctx }: { ctx: Record<string, any> }):
           setSharedConnections(snapshot)
           setSharedConnectionsError('')
           const current = sharedProjectionInput.current
-          const projected = projectSharedModelConnections(current.provider, snapshot)
+          pendingSharedProviderDeletions.current = reconcilePendingSharedProviderDeletions(
+            snapshot,
+            pendingSharedProviderDeletions.current
+          )
+          pendingSharedProviderNames.current = reconcilePendingSharedProviderNames(
+            snapshot,
+            pendingSharedProviderNames.current
+          )
+          const projected = projectSharedModelConnections(
+            current.provider,
+            snapshot,
+            pendingSharedProviderDeletions.current,
+            pendingSharedProviderNames.current
+          )
           const fingerprint = sharedSettingsFingerprint({
             providers: projected.provider.providers,
             providerId: projected.kun.providerId,
@@ -2125,15 +2270,22 @@ export function ProvidersSettingsSection({ ctx }: { ctx: Record<string, any> }):
     if (fingerprint === sharedSyncFingerprint.current) return
     let disposed = false
     const syncOnce = async (): Promise<void> => {
+      if (disposed) return
       let snapshot = await requestSharedModelConnections('/v1/model-connections')
-      const desiredProviders = modelProviders.filter((item) =>
-        item.id !== DEFAULT_MODEL_PROVIDER_ID ||
-        snapshot.providers.some((entry) => entry.id === item.id) ||
-        dirtyCredentialProviderIds.current.has(item.id) ||
-        kun.providerId === item.id
+      if (disposed) return
+      const desiredProviders = sharedProvidersEligibleForSync(
+        modelProviders,
+        pendingSharedProviderDeletions.current
+      ).filter((item) =>
+        (
+          item.id !== DEFAULT_MODEL_PROVIDER_ID ||
+          snapshot.providers.some((entry) => entry.id === item.id) ||
+          dirtyCredentialProviderIds.current.has(item.id) ||
+          kun.providerId === item.id
+        )
       )
-      const desiredProviderIds = new Set(desiredProviders.map((item) => item.id))
       for (const item of desiredProviders) {
+        if (disposed || pendingSharedProviderDeletions.current.has(item.id)) continue
         const baseUrlOptional =
           item.kind === 'agent-sdk' ||
           item.kind === 'antigravity-cli' ||
@@ -2142,6 +2294,7 @@ export function ProvidersSettingsSection({ ctx }: { ctx: Record<string, any> }):
         const existing = snapshot.providers.find((entry) => entry.id === item.id)
         const selectedModel = item.models.includes(kun.model) ? kun.model : item.models[0]
         if (!existing) {
+          if (pendingSharedProviderDeletions.current.has(item.id)) continue
           snapshot = await requestSharedModelConnections('/v1/model-connections/connect', 'POST', {
             expectedRevision: snapshot.revision,
             id: item.id,
@@ -2168,12 +2321,14 @@ export function ProvidersSettingsSection({ ctx }: { ctx: Record<string, any> }):
             JSON.stringify(existing.modelCapabilities ?? {}) !== JSON.stringify(modelCapabilities ?? {}) ||
             existing.selectedModel !== selectedModel
           if (needsPatch) {
+            if (pendingSharedProviderDeletions.current.has(item.id)) continue
+            const canonicalName = item.name.trim() || item.id
             snapshot = await requestSharedModelConnections(
               `/v1/model-connections/${encodeURIComponent(item.id)}`,
               'PATCH',
               {
                 expectedRevision: snapshot.revision,
-                name: item.name.trim() || item.id,
+                name: canonicalName,
                 kind: item.kind ?? 'http',
                 authType: isSubscriptionProvider(item) ? 'subscription' : 'api-key',
                 ...(baseUrlOptional ? {} : { baseUrl: item.baseUrl }),
@@ -2183,8 +2338,16 @@ export function ProvidersSettingsSection({ ctx }: { ctx: Record<string, any> }):
                 ...(selectedModel ? { selectedModel } : {})
               }
             )
+            const pendingName = pendingSharedProviderNames.current.get(item.id)
+            if (pendingName?.canonicalName === canonicalName) {
+              pendingSharedProviderNames.current.set(item.id, {
+                ...pendingName,
+                committedRevision: snapshot.revision
+              })
+            }
           }
           if (dirtyCredentialProviderIds.current.has(item.id)) {
+            if (pendingSharedProviderDeletions.current.has(item.id)) continue
             snapshot = item.apiKey.trim()
               ? await requestSharedModelConnections(
                   `/v1/model-connections/${encodeURIComponent(item.id)}/credential`,
@@ -2200,15 +2363,13 @@ export function ProvidersSettingsSection({ ctx }: { ctx: Record<string, any> }):
         }
       }
       for (const existing of [...snapshot.providers]) {
-        if (
-          desiredProviderIds.has(existing.id) ||
-          !deletedSharedProviderIds.current.has(existing.id)
-        ) continue
+        if (!pendingSharedProviderDeletions.current.has(existing.id)) continue
         snapshot = await requestSharedModelConnections(
           `/v1/model-connections/${encodeURIComponent(existing.id)}?expected_revision=${snapshot.revision}`,
           'DELETE'
         )
-        deletedSharedProviderIds.current.delete(existing.id)
+        pendingSharedProviderDeletions.current.set(existing.id, snapshot.revision)
+        dirtyCredentialProviderIds.current.delete(existing.id)
       }
       const globalsChanged =
         JSON.stringify(snapshot.proxy) !== JSON.stringify(provider.proxy ?? { enabled: false, url: '' }) ||
@@ -2224,7 +2385,7 @@ export function ProvidersSettingsSection({ ctx }: { ctx: Record<string, any> }):
       }
       const active = snapshot.providers.find((entry) => entry.id === kun.providerId)
       const model = active && (active.models.includes(kun.model) ? kun.model : active.models[0])
-      if (active?.configured && model && (
+      if (active?.configured && model && !pendingSharedProviderDeletions.current.has(active.id) && (
         snapshot.defaultProviderId !== active.id || snapshot.defaultModel !== model
       )) {
         snapshot = await requestSharedModelConnections('/v1/model-connections/select', 'POST', {
@@ -2242,7 +2403,7 @@ export function ProvidersSettingsSection({ ctx }: { ctx: Record<string, any> }):
     }
     const sync = async (): Promise<void> => {
       try {
-        await syncOnce()
+        await enqueueSharedMutation(syncOnce)
       } catch (error) {
         if (error instanceof SharedModelConnectionConflictError && !disposed) {
           setSharedConnections(error.snapshot)
@@ -2263,36 +2424,26 @@ export function ProvidersSettingsSection({ ctx }: { ctx: Record<string, any> }):
     provider.proxy,
     provider.routePools,
     saveStatus,
-    sharedConnections
+    sharedConnections,
+    enqueueSharedMutation
   ])
 
   const selectSharedModel = async (connection: SharedModelConnection, model: string): Promise<void> => {
-    if (!sharedConnections) return
     try {
-      let expectedRevision = sharedConnections.revision
-      let snapshot: SharedModelConnectionsSnapshot | undefined
-      for (let attempt = 0; attempt < 2; attempt += 1) {
-        try {
-          snapshot = await requestSharedModelConnections('/v1/model-connections/select', 'POST', {
-            expectedRevision,
-            providerId: connection.id,
-            accountId: connection.accountId,
-            model
-          })
-          break
-        } catch (error) {
-          if (!(error instanceof SharedModelConnectionConflictError) || attempt === 1) throw error
-          const latest = error.snapshot.providers.find((entry) => entry.id === connection.id)
-          if (!latest?.models.includes(model)) throw error
-          expectedRevision = error.snapshot.revision
-          setSharedConnections(error.snapshot)
-        }
-      }
-      if (!snapshot) return
-      setSharedConnections(snapshot)
-      setSharedConnectionsError('')
-      update({ agents: { kun: { providerId: connection.id, model } } })
+      await enqueueSharedMutation(async () => {
+        const snapshot = await selectSharedModelConnection(
+          connection.id,
+          model,
+          (providerId) => pendingSharedProviderDeletions.current.has(providerId)
+        )
+        setSharedConnections(snapshot)
+        setSharedConnectionsError('')
+        update({ agents: { kun: { providerId: connection.id, model } } })
+      })
     } catch (error) {
+      if (error instanceof SharedModelConnectionConflictError) {
+        setSharedConnections(error.snapshot)
+      }
       setSharedConnectionsError(error instanceof Error ? error.message : String(error))
     }
   }
@@ -2411,6 +2562,18 @@ export function ProvidersSettingsSection({ ctx }: { ctx: Record<string, any> }):
       patch.apiKey !== target.apiKey
     ) {
       dirtyCredentialProviderIds.current.add(id)
+    }
+    if (
+      !draftProvider &&
+      Object.prototype.hasOwnProperty.call(patch, 'name') &&
+      typeof patch.name === 'string' &&
+      patch.name !== target.name
+    ) {
+      pendingSharedProviderNames.current.set(id, {
+        localName: patch.name,
+        canonicalName: patch.name.trim() || id,
+        committedRevision: null
+      })
     }
     patchProviderProfile(target, (item) => ({ ...item, ...patch }))
   }
@@ -2552,6 +2715,10 @@ export function ProvidersSettingsSection({ ctx }: { ctx: Record<string, any> }):
   const commitProviderDraft = (): void => {
     if (!draftProvider) return
     const hasKey = Boolean(draftProvider.apiKey.trim())
+    clearPendingSharedProviderDeletionForExplicitAdd(
+      pendingSharedProviderDeletions.current,
+      draftProvider.id
+    )
     updateModelProviders(
       [...modelProviders, draftProvider],
       hasKey
@@ -2684,32 +2851,58 @@ export function ProvidersSettingsSection({ ctx }: { ctx: Record<string, any> }):
       cancelLabel: t('modelProviderCancel')
     })
     if (!confirmed) return
-    if (sharedConnections?.providers.some((connection) => connection.id === id)) {
-      deletedSharedProviderIds.current.add(id)
+    pendingSharedProviderDeletions.current.set(id, null)
+    try {
+      const snapshot = await enqueueSharedMutation(() => deleteSharedModelConnection(id))
+      pendingSharedProviderDeletions.current.set(id, snapshot.revision)
+      pendingSharedProviderNames.current.delete(id)
+      dirtyCredentialProviderIds.current.delete(id)
+      setSharedConnections(snapshot)
+      setSharedConnectionsError('')
+    } catch (error) {
+      pendingSharedProviderDeletions.current.delete(id)
+      setSharedConnectionsError(error instanceof Error ? error.message : String(error))
+      return
     }
-    const nextProviders = modelProviders.filter((item) => item.id !== id)
+    // The canonical delete can wait behind an in-flight registry sync. Build
+    // the local patch from the latest settings after that wait so unrelated
+    // edits made while the request was pending are not overwritten.
+    const latest = sharedProjectionInput.current
+    const latestProviders = latest.provider.providers as ModelProviderProfileV1[]
+    const latestKun = latest.kun as KunRuntimeSettingsV1
+    const latestUsedByChat = (latestKun.providerId?.trim() || DEFAULT_MODEL_PROVIDER_ID) === id
+    const latestUsedByImage = (latestKun.imageGeneration?.providerId ?? '').trim() === id
+    const latestUsedBySpeech = (latestKun.speechToText?.providerId ?? '').trim() === id
+    const latestUsedByTextToSpeech = (latestKun.textToSpeech?.providerId ?? '').trim() === id
+    const latestUsedByMusic = (latestKun.musicGeneration?.providerId ?? '').trim() === id
+    const latestUsedByVideo = (latestKun.videoGeneration?.providerId ?? '').trim() === id
+    const latestWriteInline = latest.form?.write?.inlineCompletion
+    const latestUsedByWrite = Boolean(
+      latestWriteInline && !latestWriteInline.inheritProvider && latestWriteInline.providerId === id
+    )
+    const nextProviders = latestProviders.filter((item) => item.id !== id)
     const kunPatch: KunRuntimeSettingsPatchV1 | undefined =
-      usedByChat || usedByImage || usedBySpeech || usedByTextToSpeech || usedByMusic || usedByVideo
+      latestUsedByChat || latestUsedByImage || latestUsedBySpeech || latestUsedByTextToSpeech || latestUsedByMusic || latestUsedByVideo
         ? {
-            ...(usedByChat ? { providerId: DEFAULT_MODEL_PROVIDER_ID } : {}),
-            ...(usedByImage ? { imageGeneration: { providerId: '' } } : {}),
-            ...(usedBySpeech ? { speechToText: { providerId: '' } } : {}),
-            ...(usedByTextToSpeech ? { textToSpeech: { providerId: '' } } : {}),
-            ...(usedByMusic ? { musicGeneration: { providerId: '' } } : {}),
-            ...(usedByVideo ? { videoGeneration: { providerId: '' } } : {})
+            ...(latestUsedByChat ? { providerId: DEFAULT_MODEL_PROVIDER_ID } : {}),
+            ...(latestUsedByImage ? { imageGeneration: { providerId: '' } } : {}),
+            ...(latestUsedBySpeech ? { speechToText: { providerId: '' } } : {}),
+            ...(latestUsedByTextToSpeech ? { textToSpeech: { providerId: '' } } : {}),
+            ...(latestUsedByMusic ? { musicGeneration: { providerId: '' } } : {}),
+            ...(latestUsedByVideo ? { videoGeneration: { providerId: '' } } : {})
           }
         : undefined
     const patch = modelProvidersSettingsPatch({
-      provider,
+      provider: latest.provider,
       providers: nextProviders,
       kun: kunPatch,
-      currentKun: kun
+      currentKun: latestKun
     })
-    if (usedByWrite) {
+    if (latestUsedByWrite) {
       patch.write = { inlineCompletion: { inheritProvider: true, providerId: '' } }
     }
     setSelectedProviderId(DEFAULT_MODEL_PROVIDER_ID)
-    update(patch)
+    latest.update(patch)
   }
 
   const fetchModelsDevCatalogFor = async (
@@ -3689,6 +3882,9 @@ export function ProvidersSettingsSection({ ctx }: { ctx: Record<string, any> }):
                   value={activeTab}
                   onChange={setActiveTab}
                 />
+                {sharedConnectionsError ? (
+                  <InlineNoticeView notice={{ tone: 'error', message: sharedConnectionsError }} />
+                ) : null}
                 {probeNotice ? <InlineNoticeView notice={probeNotice} /> : null}
                 <SettingsTabPanel<ProviderTaskTab>
                   baseId="provider-settings"
