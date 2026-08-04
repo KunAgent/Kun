@@ -470,6 +470,193 @@ describe('GraphRecoveryService', () => {
     expect(report.pausedRuns).toBe(0)
     expect((await store.get('run_completing'))?.status).toBe('completing')
   })
+
+  it('preserves explicit cancel intent when recovery sees a pausing cancellation fence', async () => {
+    // Production path: GraphControlService.cancel fences running → pausing with
+    // reason "cancellation dispatch fence", then finishes as cancelled. A crash
+    // after the fence but before the final cancelled transition leaves durable
+    // status=pausing. GraphRecoveryService.reconcile() must not demote that to
+    // resumable paused (reliability audit P1 cancel/recovery).
+    const root = await mkdtemp(join(tmpdir(), 'kun-graph-recovery-cancel-fence-'))
+    roots.push(root)
+    const workspace = join(root, 'workspace')
+    await mkdir(workspace)
+    const config = testGraphConfig()
+    let id = 0
+    const nextId = (prefix: string) => `${prefix}_${++id}`
+    const store = new FileGraphRunStore({
+      rootDir: join(root, 'graphs'),
+      artifactStore: new FileArtifactStore(join(root, 'artifacts')),
+      config: () => config,
+      nextId
+    })
+    const control = new GraphControlService({
+      store,
+      config: () => config,
+      nextId,
+      cancelActive: async () => {
+        throw new Error('simulated process death after cancel fence')
+      }
+    })
+    await control.create({
+      runId: 'run_cancel_fence',
+      threadId: 'thread_cancel',
+      projectId: 'project_1',
+      sourceTurnId: 'turn_1',
+      plan: testGraphPlan({ workspaceRoot: workspace }),
+      commandId: 'create_cancel_fence',
+      idempotencyKey: 'create_cancel_fence',
+      start: true
+    })
+    let cancellable = (await store.get('run_cancel_fence'))!
+    cancellable = (await store.append(cancellable.id, {
+      expectedSeq: cancellable.lastEventSeq,
+      graphRevision: cancellable.currentRevision,
+      commandId: 'ready_cancel_fence',
+      idempotencyKey: 'ready_cancel_fence',
+      event: {
+        type: 'node_status_changed',
+        payload: { nodeId: 'research', from: 'pending', to: 'ready' }
+      }
+    })).state
+    const activeAttempt = GraphNodeAttemptV1Schema.parse({
+      version: GRAPH_CONTRACT_VERSION,
+      id: 'attempt_cancel_fence',
+      runId: cancellable.id,
+      nodeId: 'research',
+      revision: cancellable.currentRevision,
+      attemptNumber: 1,
+      iteration: 0,
+      commandId: 'attempt_cancel_fence',
+      idempotencyKey: 'attempt_cancel_fence',
+      status: 'queued',
+      assignment: {
+        ...testAssignmentSnapshot(),
+        workspaceRoot: workspace
+      },
+      childThreadId: 'child_cancel_fence',
+      queuedAt: new Date().toISOString(),
+      tokenUsage: 0,
+      elapsedMs: 0
+    })
+    cancellable = (await store.append(cancellable.id, {
+      expectedSeq: cancellable.lastEventSeq,
+      graphRevision: cancellable.currentRevision,
+      commandId: 'attempt_created_cancel_fence',
+      idempotencyKey: 'attempt_created_cancel_fence',
+      event: { type: 'attempt_created', payload: { attempt: activeAttempt } }
+    })).state
+    await expect(control.cancel('run_cancel_fence', {
+      commandId: 'cancel_mid_crash',
+      idempotencyKey: 'cancel_mid_crash',
+      reason: 'user cancelled the Graph run'
+    })).rejects.toThrow(/simulated process death after cancel fence/)
+
+    const fenced = (await store.get('run_cancel_fence'))!
+    expect(fenced.status).toBe('pausing')
+    expect(fenced.nodes.research.status).toBe('queued')
+    expect(fenced.nodes.research.attempts[0]?.status).toBe('queued')
+
+    const signal = vi.fn(async () => undefined)
+    const recovery = new GraphRecoveryService({
+      store,
+      config: () => config,
+      writes: new FileGraphWriteCoordinator({
+        rootDir: join(root, 'writes'),
+        config: () => config,
+        nextId
+      }),
+      delegation: () => undefined,
+      supervision: () => ({ signal }),
+      nextId
+    })
+    const report = await recovery.reconcile()
+    const recovered = (await store.get('run_cancel_fence'))!
+
+    // Cancelled work must not become resumable. Preferred terminal is cancelled;
+    // at minimum recovery must not leave status=paused after an explicit cancel fence.
+    expect(recovered.status).toBe('cancelled')
+    expect(recovered.status).not.toBe('paused')
+    expect(recovered.nodes.research.status).toBe('cancelled')
+    expect(recovered.nodes.research.attempts[0]?.status).toBe('cancelled')
+    expect(recovered.cleanup).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        resourceKind: 'journal',
+        resourceId: recovered.id,
+        state: 'completed'
+      })
+    ]))
+    expect(report.pausedRuns).toBe(0)
+    expect(report.retriedNodes).toBe(0)
+    expect(report.orphanedAttempts).toBe(0)
+    expect(signal).toHaveBeenCalledOnce()
+    expect(signal).toHaveBeenCalledWith({
+      runId: recovered.id,
+      reason: 'completion',
+      nodeIds: [],
+      digest: 'GraphRun cancellation completed after runtime restart.'
+    })
+
+    const recoveredSeq = recovered.lastEventSeq
+    const second = await recovery.reconcile()
+    expect(second.runsInspected).toBe(0)
+    expect((await store.get(recovered.id))?.lastEventSeq).toBe(recoveredSeq)
+  })
+
+  it('still recovers an interrupted ordinary pause as resumable paused', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kun-graph-recovery-pause-fence-'))
+    roots.push(root)
+    const workspace = join(root, 'workspace')
+    await mkdir(workspace)
+    const config = testGraphConfig()
+    let id = 0
+    const nextId = (prefix: string) => `${prefix}_${++id}`
+    const store = new FileGraphRunStore({
+      rootDir: join(root, 'graphs'),
+      artifactStore: new FileArtifactStore(join(root, 'artifacts')),
+      config: () => config,
+      nextId
+    })
+    const control = new GraphControlService({
+      store,
+      config: () => config,
+      nextId,
+      pauseActive: async () => {
+        throw new Error('simulated process death after pause fence')
+      }
+    })
+    await control.create({
+      runId: 'run_pause_fence',
+      threadId: 'thread_pause',
+      projectId: 'project_1',
+      sourceTurnId: 'turn_1',
+      plan: testGraphPlan({ workspaceRoot: workspace }),
+      commandId: 'create_pause_fence',
+      idempotencyKey: 'create_pause_fence',
+      start: true
+    })
+    await expect(control.pause('run_pause_fence', {
+      commandId: 'pause_mid_crash',
+      idempotencyKey: 'pause_mid_crash'
+    })).rejects.toThrow(/simulated process death after pause fence/)
+    expect((await store.get('run_pause_fence'))?.status).toBe('pausing')
+
+    const recovery = new GraphRecoveryService({
+      store,
+      config: () => config,
+      writes: new FileGraphWriteCoordinator({
+        rootDir: join(root, 'writes'),
+        config: () => config,
+        nextId
+      }),
+      delegation: () => undefined,
+      nextId
+    })
+    const report = await recovery.reconcile()
+
+    expect((await store.get('run_pause_fence'))?.status).toBe('paused')
+    expect(report.pausedRuns).toBe(1)
+  })
 })
 
 async function git(cwd: string, args: string[]): Promise<void> {

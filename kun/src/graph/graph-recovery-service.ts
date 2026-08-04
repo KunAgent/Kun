@@ -13,6 +13,7 @@ import type {
 } from './graph-run-store.js'
 import type { FileGraphWriteCoordinator } from './graph-write-coordinator.js'
 import { createGraphCheckVerifier } from './graph-check-verifier.js'
+import { GRAPH_CANCELLATION_DISPATCH_FENCE_REASON } from './graph-control-service.js'
 import { finalizeGraphWorkerResult } from './graph-worker-result-finalizer.js'
 import {
   currentIterationAttemptCount,
@@ -20,6 +21,7 @@ import {
   GRAPH_RUNTIME_RESTART_ATTEMPT_FAILURE
 } from './graph-scheduler-policy.js'
 import type { GraphSchedulerOptions } from './graph-scheduler-types.js'
+import { recordGraphTerminalCleanup } from './graph-terminal-cleanup.js'
 
 export type GraphRecoveryReport = {
   runsInspected: number
@@ -85,6 +87,17 @@ export class GraphRecoveryService {
     let pausedRuns = 0
     for (const initial of runs) {
       let run = initial
+      if (await this.hasDurableCancellationFence(run)) {
+        run = await this.finishInterruptedCancellation(run)
+        await this.options.supervision?.()?.signal({
+          runId: run.id,
+          reason: 'completion',
+          nodeIds: [],
+          digest: 'GraphRun cancellation completed after runtime restart.'
+        })
+        await this.options.store.snapshot(run.id)
+        continue
+      }
       const affected: string[] = []
       for (const node of Object.values(run.nodes)) {
         const attempt = node.attempts.at(-1)
@@ -150,6 +163,85 @@ export class GraphRecoveryService {
       orphanedChildRuns,
       storeDiagnostics: await this.options.store.diagnostics?.() ?? []
     }
+  }
+
+  private async hasDurableCancellationFence(run: GraphRunV1): Promise<boolean> {
+    if (run.status !== 'pausing') return false
+    const events = await this.options.store.events(run.id)
+    for (let index = events.length - 1; index >= 0; index -= 1) {
+      const event = events[index]!.event
+      if (event.type !== 'run_status_changed') continue
+      return event.payload.to === 'pausing' &&
+        event.payload.reason === GRAPH_CANCELLATION_DISPATCH_FENCE_REASON
+    }
+    return false
+  }
+
+  /**
+   * A cancellation fence is durable user intent. If the process died before
+   * GraphControlService could finish cancellation, settle active work without
+   * scheduling retries, clean terminal resources, and close the run.
+   */
+  private async finishInterruptedCancellation(initialRun: GraphRunV1): Promise<GraphRunV1> {
+    let run = initialRun
+    for (const nodeId of Object.keys(run.nodes)) {
+      for (const attempt of run.nodes[nodeId]!.attempts) {
+        if (!['queued', 'running', 'waiting'].includes(attempt.status)) continue
+        run = await this.transitionAttemptToCancelled(run, attempt)
+      }
+      const node = run.nodes[nodeId]!
+      if (node.status === 'queued' || node.status === 'running') {
+        run = await this.transitionNode(
+          run,
+          nodeId,
+          'cancelled',
+          'explicit cancellation recovered after runtime restart'
+        )
+      }
+    }
+    run = await recordGraphTerminalCleanup({
+      run,
+      writes: this.options.writes,
+      nextId: this.nextId,
+      nowIso: this.nowIso,
+      append: async (current, event, idempotencyKey) => (await this.options.store.append(
+        current.id,
+        {
+          expectedSeq: current.lastEventSeq,
+          graphRevision: current.currentRevision,
+          commandId: this.nextId('graph_recovery'),
+          idempotencyKey,
+          event
+        }
+      )).state
+    })
+    return this.transitionRun(
+      run,
+      'cancelled',
+      'completed interrupted cancellation during recovery'
+    )
+  }
+
+  private async transitionAttemptToCancelled(
+    run: GraphRunV1,
+    attempt: GraphNodeAttemptV1
+  ): Promise<GraphRunV1> {
+    return (await this.options.store.append(run.id, {
+      expectedSeq: run.lastEventSeq,
+      graphRevision: run.currentRevision,
+      commandId: this.nextId('graph_recovery'),
+      idempotencyKey: `recovery:cancel-attempt:${attempt.id}`,
+      event: {
+        type: 'attempt_status_changed',
+        payload: {
+          nodeId: attempt.nodeId,
+          attemptId: attempt.id,
+          from: attempt.status,
+          to: 'cancelled',
+          normalizedFailure: 'Explicit cancellation completed after runtime restart.'
+        }
+      }
+    })).state
   }
 
   private async recoverCompletedChild(

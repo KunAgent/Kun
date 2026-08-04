@@ -38,6 +38,9 @@ import { applyPatchToPlan } from './graph-patch-service.js'
 export { applyPatchToPlan } from './graph-patch-service.js'
 export { graphReviewSemanticKey } from './graph-review-idempotency.js'
 
+/** Durable marker used to distinguish cancel fencing from an ordinary pause. */
+export const GRAPH_CANCELLATION_DISPATCH_FENCE_REASON = 'cancellation dispatch fence'
+
 export type GraphCommandContext = {
   commandId: string
   idempotencyKey: string
@@ -591,7 +594,7 @@ export class GraphControlService {
         return await this.transitionRun(run, 'pausing', {
           commandId: `${command.commandId}_fence`,
           idempotencyKey: `${command.idempotencyKey}:fence`
-        }, 'cancellation dispatch fence')
+        }, GRAPH_CANCELLATION_DISPATCH_FENCE_REASON)
       } catch (error) {
         if (!(error instanceof GraphRunConflictError) ||
             command.expectedSeq !== undefined ||
