@@ -161,7 +161,9 @@ describe('Graph renderer store', () => {
       artifactLoading: false,
       wakingObligationId: null,
       loading: false,
-      error: null
+      error: null,
+      syncStatus: 'idle',
+      threadEventSeq: 0
     })
     client.delegationDiagnostics.mockResolvedValue({
       enabled: true,
@@ -305,26 +307,164 @@ describe('Graph renderer store', () => {
     expect(client.resumeDraft).toHaveBeenLastCalledWith('draft_1', 4)
   })
 
-  it('does not let an older concurrent refresh overwrite a newer Graph snapshot', async () => {
-    let resolveOlder!: (runs: GraphRun[]) => void
-    let resolveNewer!: (runs: GraphRun[]) => void
+  it('coalesces concurrent refreshThread calls and never regresses lastEventSeq', async () => {
+    let resolveFirst!: (runs: GraphRun[]) => void
+    let resolveSecond!: (runs: GraphRun[]) => void
     client.listRuns
-      .mockReturnValueOnce(new Promise<GraphRun[]>((resolve) => { resolveOlder = resolve }))
-      .mockReturnValueOnce(new Promise<GraphRun[]>((resolve) => { resolveNewer = resolve }))
+      .mockReturnValueOnce(new Promise<GraphRun[]>((resolve) => { resolveFirst = resolve }))
+      .mockReturnValueOnce(new Promise<GraphRun[]>((resolve) => { resolveSecond = resolve }))
 
-    const olderRefresh = useGraphStore.getState().refreshThread('thread_1')
-    const newerRefresh = useGraphStore.getState().refreshThread('thread_1')
-    resolveNewer([runWithNode('run_1', 3, 'node_1')])
-    await newerRefresh
-    expect(useGraphStore.getState().runs[0]?.lastEventSeq).toBe(3)
+    const first = useGraphStore.getState().refreshThread('thread_1')
+    const second = useGraphStore.getState().refreshThread('thread_1', { silent: true })
+    // Single-flight: only one HTTP snapshot is in flight until it settles.
+    expect(client.listRuns).toHaveBeenCalledTimes(1)
 
-    resolveOlder([run('run_1', 2)])
-    await olderRefresh
+    resolveFirst([run('run_1', 2)])
+    await Promise.resolve()
+    await Promise.resolve()
+    // Pending request starts after the leader finishes.
+    await vi.waitFor(() => expect(client.listRuns).toHaveBeenCalledTimes(2))
+    resolveSecond([runWithNode('run_1', 5, 'node_1')])
+    await Promise.all([first, second])
 
     expect(useGraphStore.getState().runs[0]).toMatchObject({
-      lastEventSeq: 3,
+      lastEventSeq: 5,
       nodes: { node_1: { status: 'running' } }
     })
+
+    // A late, weaker snapshot still cannot move lastEventSeq backwards.
+    client.listRuns.mockResolvedValueOnce([run('run_1', 3)])
+    await useGraphStore.getState().refreshThread('thread_1', { silent: true })
+    expect(useGraphStore.getState().runs[0]?.lastEventSeq).toBe(5)
+  })
+
+  it('backfills via snapshot when graphSeq jumps ahead of lastEventSeq (gap)', async () => {
+    client.listRuns.mockResolvedValueOnce([run('run_1', 2)])
+    await useGraphStore.getState().refreshThread('thread_1')
+    expect(useGraphStore.getState().runs[0]?.lastEventSeq).toBe(2)
+
+    client.listRuns.mockResolvedValueOnce([run('run_1', 4)])
+    receiveGraphRuntimeEvent({
+      version: 1,
+      eventId: 'event_4',
+      runId: 'run_1',
+      threadId: 'thread_1',
+      graphSeq: 4,
+      graphRevision: 1,
+      timestamp: '2026-07-26T00:00:04.000Z',
+      event: { type: 'node_status_changed', payload: {} }
+    } satisfies GraphEventEnvelope)
+
+    await vi.waitFor(() => {
+      expect(useGraphStore.getState().runs[0]?.lastEventSeq).toBe(4)
+    })
+    // Snapshot recovery — listEvents is intentionally not used for projection.
+    expect(client.listRuns).toHaveBeenCalledTimes(2)
+    expect(useGraphStore.getState().runs).toHaveLength(1)
+  })
+
+  it('drops a late refresh from a previous thread after a thread switch', async () => {
+    let resolveOld!: (runs: GraphRun[]) => void
+    client.listRuns
+      .mockReturnValueOnce(new Promise<GraphRun[]>((resolve) => { resolveOld = resolve }))
+      .mockResolvedValueOnce([run('run_new', 1)])
+
+    const oldRefresh = useGraphStore.getState().refreshThread('thread_old')
+    await useGraphStore.getState().refreshThread('thread_new')
+    expect(useGraphStore.getState().threadId).toBe('thread_new')
+    expect(useGraphStore.getState().runs[0]?.id).toBe('run_new')
+
+    resolveOld([run('run_old', 9)])
+    await oldRefresh
+
+    expect(useGraphStore.getState().threadId).toBe('thread_new')
+    expect(useGraphStore.getState().runs[0]?.id).toBe('run_new')
+    expect(useGraphStore.getState().runs.some((item) => item.id === 'run_old')).toBe(false)
+  })
+
+  it('atomically clears thread-scoped projection when binding a different thread', async () => {
+    useGraphStore.setState({
+      threadId: 'thread_a',
+      threadEventSeq: 100,
+      runs: [runWithNode('run_a', 8, 'node_a')],
+      drafts: [planningDraft('needs_correction', 1)],
+      childRuns: {
+        child_a: {
+          childId: 'child_a',
+          parentThreadId: 'thread_a',
+          parentTurnId: 'turn_a',
+          status: 'running',
+          updatedAt: '2026-07-26T00:00:00.000Z'
+        }
+      },
+      selectedRunId: 'run_a',
+      selectedNodeId: 'node_a',
+      artifactPage: null,
+      artifactContent: 'artifact from A',
+      artifactLoading: true,
+      syncStatus: 'live'
+    })
+
+    const { switched } = useGraphStore.getState().bindGraphThread('thread_b')
+    expect(switched).toBe(true)
+    expect(useGraphStore.getState()).toMatchObject({
+      threadId: 'thread_b',
+      threadEventSeq: 0,
+      runs: [],
+      drafts: [],
+      childRuns: {},
+      selectedRunId: null,
+      selectedNodeId: null,
+      artifactContent: '',
+      artifactLoading: false,
+      artifactPage: null,
+      loading: true,
+      syncStatus: 'connecting'
+    })
+
+    // Failed snapshot for B must not resurrect A.
+    client.listRuns.mockRejectedValueOnce(new Error('network down'))
+    client.listDrafts.mockRejectedValueOnce(new Error('network down'))
+    await useGraphStore.getState().refreshThread('thread_b')
+    expect(useGraphStore.getState().runs).toEqual([])
+    expect(useGraphStore.getState().drafts).toEqual([])
+    expect(useGraphStore.getState().runs.some((item) => item.id === 'run_a')).toBe(false)
+  })
+
+  it('keeps the same-thread snapshot across reconnect binds', () => {
+    useGraphStore.setState({
+      threadId: 'thread_1',
+      threadEventSeq: 12,
+      runs: [run('run_1', 12)],
+      syncStatus: 'live'
+    })
+    const { switched } = useGraphStore.getState().bindGraphThread('thread_1')
+    expect(switched).toBe(false)
+    expect(useGraphStore.getState()).toMatchObject({
+      threadId: 'thread_1',
+      threadEventSeq: 12,
+      runs: [{ id: 'run_1', lastEventSeq: 12 }],
+      syncStatus: 'live'
+    })
+  })
+
+  it('advances threadEventSeq monotonically only for the owning thread', () => {
+    useGraphStore.setState({ threadId: 'thread_a', threadEventSeq: 0 })
+    useGraphStore.getState().advanceThreadEventSeq(2, 'thread_a')
+    useGraphStore.getState().advanceThreadEventSeq(5, 'thread_a')
+    useGraphStore.getState().advanceThreadEventSeq(4, 'thread_a')
+    expect(useGraphStore.getState().threadEventSeq).toBe(5)
+
+    useGraphStore.getState().bindGraphThread('thread_b')
+    useGraphStore.getState().advanceThreadEventSeq(99, 'thread_a')
+    useGraphStore.getState().setSyncStatus('live', 'thread_a')
+    expect(useGraphStore.getState()).toMatchObject({
+      threadId: 'thread_b',
+      threadEventSeq: 0,
+      syncStatus: 'connecting'
+    })
+    useGraphStore.getState().advanceThreadEventSeq(3, 'thread_b')
+    expect(useGraphStore.getState().threadEventSeq).toBe(3)
   })
 
   it('preserves a durable node selection when the selected run refreshes', async () => {
