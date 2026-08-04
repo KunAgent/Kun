@@ -243,8 +243,19 @@ export class GraphSupervisor implements GraphSupervisionPort {
         if (delivery.status === 'delivered') {
           await this.acknowledgeLeadSteering(runId, deliveredSteeringIds)
           await this.obligations.recordDelivered(runId, obligations, delivery)
+          // Only rearm obligations that remained awaiting_action after delivery.
+          // Terminal force-resolve in recordDelivered must not immediately feed
+          // rearmAfterNoProgress and re-emit supervision_obligation_resolved (#1082).
           if (delivery.parkedWithPendingSupervision || !delivery.executionActive) {
-            await this.rearmAfterNoProgress(runId, obligations.map((entry) => entry.id))
+            const afterDelivery = await this.options.store.get(runId)
+            const stillAwaiting = (afterDelivery?.supervisionObligations ?? [])
+              .filter((entry) =>
+                obligations.some((claimed) => claimed.id === entry.id) &&
+                entry.state === 'awaiting_action')
+              .map((entry) => entry.id)
+            if (stillAwaiting.length > 0) {
+              await this.rearmAfterNoProgress(runId, stillAwaiting)
+            }
           }
           return
         }

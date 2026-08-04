@@ -317,7 +317,19 @@ export function applyGraphEvent(
         awaiting_action: ['awaiting_action', 'delivering', 'retry_scheduled', 'resolved', 'needs_attention'],
         retry_scheduled: ['retry_scheduled', 'pending', 'delivering', 'resolved', 'needs_attention'],
         needs_attention: ['needs_attention', 'pending', 'delivering', 'resolved'],
-        resolved: ['resolved']
+        // resolved is terminal for the obligation lifecycle. New writers must not
+        // append resolved→resolved (manager guard + stable idempotency key +
+        // store queue). The no-op branch below exists only so already-persisted
+        // pre-fix journals that contain duplicate resolved events can still
+        // replay without throwing.
+        resolved: []
+      }
+      if (previous.state === 'resolved' && obligation.state === 'resolved') {
+        // Compatibility no-op for historical #1082 journals: keep the first
+        // resolvedAt/updatedAt projection. The reducer does not prevent durable
+        // append — persistence happens outside reduce; lastEventSeq still advances
+        // after this switch when the envelope is applied.
+        break
       }
       if (!transitions[previous.state].includes(obligation.state)) {
         throw new GraphReducerError(

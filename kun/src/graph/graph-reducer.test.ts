@@ -295,4 +295,110 @@ describe('GraphRun deterministic reducer', () => {
       }
     }))).toThrow(/steering transition expected/)
   })
+
+  it('replays historical duplicate supervision_obligation_resolved without rewriting first resolve (#1082)', () => {
+    // Pre-fix journals may contain multiple resolved events for one obligation.
+    // The reducer must not throw, must keep the first resolvedAt/updatedAt, and
+    // must still advance lastEventSeq so replay/hydration stays consistent.
+    const obligationBase = {
+      version: GRAPH_CONTRACT_VERSION,
+      id: 'graph_obligation_hist_dup',
+      kind: 'help' as const,
+      reason: 'help' as const,
+      graphRevision: 1,
+      nodeIds: [] as string[],
+      attemptIds: [] as string[],
+      digest: 'historical duplicate resolve subject',
+      deliveryAttempts: 1,
+      noProgressCount: 0,
+      lastProgressSeq: 1,
+      createdAt: TEST_GRAPH_NOW
+    }
+    const firstResolvedAt = '2026-07-26T00:00:02.000Z'
+    const secondResolvedAt = '2026-07-26T00:00:09.000Z'
+    const otherObligation = {
+      version: GRAPH_CONTRACT_VERSION,
+      id: 'graph_obligation_other',
+      kind: 'conflict' as const,
+      reason: 'conflict' as const,
+      graphRevision: 1,
+      nodeIds: [] as string[],
+      attemptIds: [] as string[],
+      digest: 'unrelated obligation must stay pending',
+      state: 'pending' as const,
+      deliveryAttempts: 0,
+      noProgressCount: 0,
+      lastProgressSeq: 1,
+      createdAt: TEST_GRAPH_NOW,
+      updatedAt: TEST_GRAPH_NOW
+    }
+
+    let state = applyGraphEvent(undefined, testGraphEnvelope(1, created()))
+    state = applyGraphEvent(state, testGraphEnvelope(2, {
+      type: 'supervision_obligation_opened',
+      payload: {
+        obligation: {
+          ...obligationBase,
+          state: 'pending',
+          updatedAt: TEST_GRAPH_NOW
+        }
+      }
+    }))
+    state = applyGraphEvent(state, testGraphEnvelope(3, {
+      type: 'supervision_obligation_opened',
+      payload: { obligation: otherObligation }
+    }))
+    state = applyGraphEvent(state, testGraphEnvelope(4, {
+      type: 'supervision_obligation_resolved',
+      payload: {
+        obligation: {
+          ...obligationBase,
+          state: 'resolved',
+          updatedAt: firstResolvedAt,
+          resolvedAt: firstResolvedAt
+        }
+      }
+    }, {
+      eventId: 'graph_event_resolved_first',
+      timestamp: firstResolvedAt
+    }))
+    expect(state.supervisionObligations.find((entry) => entry.id === obligationBase.id)).toMatchObject({
+      state: 'resolved',
+      resolvedAt: firstResolvedAt,
+      updatedAt: firstResolvedAt
+    })
+    expect(state.lastEventSeq).toBe(4)
+
+    // Second historical resolved with different eventId / graphSeq / timestamp.
+    state = applyGraphEvent(state, testGraphEnvelope(5, {
+      type: 'supervision_obligation_resolved',
+      payload: {
+        obligation: {
+          ...obligationBase,
+          state: 'resolved',
+          updatedAt: secondResolvedAt,
+          resolvedAt: secondResolvedAt,
+          deliveryAttempts: 99
+        }
+      }
+    }, {
+      eventId: 'graph_event_resolved_duplicate',
+      timestamp: secondResolvedAt
+    }))
+
+    const primary = state.supervisionObligations.find((entry) => entry.id === obligationBase.id)!
+    const secondary = state.supervisionObligations.find((entry) => entry.id === otherObligation.id)!
+    expect(primary).toMatchObject({
+      state: 'resolved',
+      resolvedAt: firstResolvedAt,
+      updatedAt: firstResolvedAt,
+      deliveryAttempts: 1
+    })
+    expect(secondary).toMatchObject({
+      id: otherObligation.id,
+      state: 'pending'
+    })
+    expect(state.lastEventSeq).toBe(5)
+    expect(state.updatedAt).toBe(secondResolvedAt)
+  })
 })

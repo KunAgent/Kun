@@ -11,6 +11,7 @@ import {
 } from '../contracts/graph.js'
 import { FileGraphRunStore } from './graph-run-store.js'
 import { GraphSupervisor } from './graph-supervisor.js'
+import { GraphSupervisionObligationManager } from './graph-supervision-obligation-manager.js'
 import {
   graphSupervisionObligationForSignal,
   graphSupervisionObligationIsActionable
@@ -623,5 +624,212 @@ describe('GraphSupervisor durable supervision obligations', () => {
     expect(onlyObligation(run).state).toBe('needs_attention')
     expectDurableLiveness(run, harness.nowMs())
     await supervisor.stop()
+  })
+
+  it('emits at most one supervision_obligation_resolved per obligation after terminal force-resolve and rearm flush (#1082)', async () => {
+    // Production race while still delivering:
+    // claim → delivering (actionable), leadTurn parks with !executionActive,
+    // recordDelivered force-resolves because the run became terminal / non-actionable,
+    // then rearmAfterNoProgress maps !actionable to another resolved projection.
+    const harness = await persistentHarness()
+    await transitionRunToRunning(harness)
+    const supervisor = supervisorFor(harness, {
+      leadTurn: async ({ run: latest }) => {
+        // Become terminal mid-delivery so recordDelivered takes the force-resolve branch.
+        await harness.store.append(latest.id, {
+          expectedSeq: latest.lastEventSeq,
+          graphRevision: latest.currentRevision,
+          commandId: 'command_terminal_mid_delivery',
+          idempotencyKey: 'obligation-test:terminal-mid-delivery',
+          timestamp: harness.nowIso(),
+          event: {
+            type: 'run_status_changed',
+            payload: {
+              from: 'running',
+              to: 'cancelled',
+              reason: 'owning source turn ended with status failed'
+            }
+          }
+        })
+        return {
+          status: 'delivered' as const,
+          sourceTurnId: latest.sourceTurnId,
+          deliveredSeq: latest.lastEventSeq,
+          executionActive: false,
+          parkedWithPendingSupervision: true
+        }
+      },
+      isLeadTurnActive: () => false
+    })
+
+    await supervisor.signal(HELP_SIGNAL)
+    let run = (await harness.store.get(HELP_SIGNAL.runId))!
+    const obligationId = onlyObligation(run).id
+
+    await supervisor.flush(HELP_SIGNAL.runId)
+    // Stale queued flushes / sweep after terminal must not double-resolve.
+    await supervisor.flush(HELP_SIGNAL.runId)
+    await supervisor.sweepObligations()
+    await supervisor.sweepObligations()
+    await supervisor.sweepObligations()
+
+    run = (await harness.store.get(HELP_SIGNAL.runId))!
+    expect(onlyObligation(run)).toMatchObject({
+      id: obligationId,
+      state: 'resolved'
+    })
+    const resolvedEvents = (await harness.store.events(HELP_SIGNAL.runId, 0))
+      .filter((envelope) => envelope.event.type === 'supervision_obligation_resolved')
+    expect(resolvedEvents).toHaveLength(1)
+    expect(
+      resolvedEvents.filter((envelope) =>
+        envelope.event.type === 'supervision_obligation_resolved' &&
+        envelope.event.payload.obligation.id === obligationId)
+    ).toHaveLength(1)
+    await supervisor.stop()
+  })
+
+  it('does not re-open a resolved obligation via rearmAfterNoProgress (#1082)', async () => {
+    const harness = await persistentHarness()
+    await transitionRunToRunning(harness)
+    const manager = new GraphSupervisionObligationManager({
+      store: harness.store,
+      nowIso: harness.nowIso,
+      nowMs: harness.nowMs,
+      nextId: harness.nextId,
+      isLeadTurnActive: () => false
+    })
+    await manager.persistSignal(HELP_SIGNAL, true)
+    let run = (await harness.store.get(HELP_SIGNAL.runId))!
+    const obligationId = onlyObligation(run).id
+    // First durable resolve.
+    await manager.resolve(HELP_SIGNAL.runId, [onlyObligation(run)])
+    run = (await harness.store.get(HELP_SIGNAL.runId))!
+    expect(onlyObligation(run).state).toBe('resolved')
+    const resolvedCount = (await durableEventTypes(harness.store))
+      .filter((type) => type === 'supervision_obligation_resolved').length
+    expect(resolvedCount).toBe(1)
+
+    // Subsequent rearm / claim force-resolve paths must not re-emit or reopen.
+    await manager.rearmAfterNoProgress(HELP_SIGNAL.runId, [obligationId])
+    await manager.rearmAfterNoProgress(HELP_SIGNAL.runId, [obligationId])
+    await manager.claim(HELP_SIGNAL.runId, [obligationId])
+    await manager.recordDelivered(
+      HELP_SIGNAL.runId,
+      [onlyObligation((await harness.store.get(HELP_SIGNAL.runId))!)],
+      {
+        status: 'delivered',
+        sourceTurnId: 'turn_obligation',
+        deliveredSeq: 1,
+        executionActive: false
+      }
+    )
+    run = (await harness.store.get(HELP_SIGNAL.runId))!
+    expect(onlyObligation(run).state).toBe('resolved')
+    expect(['awaiting_action', 'retry_scheduled', 'pending', 'delivering'])
+      .not.toContain(onlyObligation(run).state)
+    const after = (await durableEventTypes(harness.store))
+      .filter((type) => type === 'supervision_obligation_resolved').length
+    expect(after).toBe(1)
+  })
+
+  it('keeps multi-obligation resolved counts independent under repeated sweeps (#1082)', async () => {
+    const harness = await persistentHarness()
+    await transitionRunToRunning(harness)
+    const supervisor = supervisorFor(harness, {
+      leadTurn: async ({ run: latest }) => {
+        await harness.store.append(latest.id, {
+          expectedSeq: latest.lastEventSeq,
+          graphRevision: latest.currentRevision,
+          commandId: harness.nextId('command_terminal_multi'),
+          idempotencyKey: `obligation-test:terminal-multi:${latest.lastEventSeq}`,
+          timestamp: harness.nowIso(),
+          event: {
+            type: 'run_status_changed',
+            payload: { from: latest.status, to: 'cancelled', reason: 'terminal' }
+          }
+        })
+        return {
+          status: 'delivered' as const,
+          sourceTurnId: latest.sourceTurnId,
+          deliveredSeq: latest.lastEventSeq,
+          executionActive: false,
+          parkedWithPendingSupervision: true
+        }
+      },
+      isLeadTurnActive: () => false
+    })
+
+    await supervisor.signal({
+      runId: HELP_SIGNAL.runId,
+      reason: 'help',
+      nodeIds: [],
+      digest: 'First durable supervision obligation.'
+    })
+    await supervisor.signal({
+      runId: HELP_SIGNAL.runId,
+      reason: 'conflict',
+      nodeIds: [],
+      digest: 'Second durable supervision obligation with distinct subject.'
+    })
+    let run = (await harness.store.get(HELP_SIGNAL.runId))!
+    expect(run.supervisionObligations.length).toBeGreaterThanOrEqual(2)
+    const obligationIds = run.supervisionObligations.map((entry) => entry.id)
+    expect(new Set(obligationIds).size).toBe(obligationIds.length)
+
+    await supervisor.flush(HELP_SIGNAL.runId)
+    for (let i = 0; i < 5; i += 1) await supervisor.sweepObligations()
+    await supervisor.flush(HELP_SIGNAL.runId)
+
+    run = (await harness.store.get(HELP_SIGNAL.runId))!
+    for (const obligation of run.supervisionObligations) {
+      expect(obligation.state).toBe('resolved')
+    }
+    const resolvedEvents = (await harness.store.events(HELP_SIGNAL.runId, 0))
+      .filter((envelope) => envelope.event.type === 'supervision_obligation_resolved')
+    expect(resolvedEvents).toHaveLength(run.supervisionObligations.length)
+    for (const id of obligationIds) {
+      expect(
+        resolvedEvents.filter((envelope) =>
+          envelope.event.type === 'supervision_obligation_resolved' &&
+          envelope.event.payload.obligation.id === id)
+      ).toHaveLength(1)
+    }
+    await supervisor.stop()
+  })
+
+  it('collapses concurrent manager.resolve writers to one durable resolved event (#1082)', async () => {
+    // Stable per-obligation resolve idempotency key + FileGraphRunStore append
+    // serialization must fold concurrent resolve() calls into a single durable
+    // supervision_obligation_resolved event.
+    const harness = await persistentHarness()
+    await transitionRunToRunning(harness)
+    const manager = new GraphSupervisionObligationManager({
+      store: harness.store,
+      nowIso: harness.nowIso,
+      nowMs: harness.nowMs,
+      nextId: harness.nextId,
+      isLeadTurnActive: () => false
+    })
+    await manager.persistSignal(HELP_SIGNAL, true)
+    let run = (await harness.store.get(HELP_SIGNAL.runId))!
+    const obligation = onlyObligation(run)
+    expect(obligation.state).not.toBe('resolved')
+
+    await Promise.all([
+      manager.resolve(HELP_SIGNAL.runId, [obligation]),
+      manager.resolve(HELP_SIGNAL.runId, [obligation])
+    ])
+
+    run = (await harness.store.get(HELP_SIGNAL.runId))!
+    expect(onlyObligation(run).state).toBe('resolved')
+    const resolvedEvents = (await harness.store.events(HELP_SIGNAL.runId, 0))
+      .filter((envelope) => envelope.event.type === 'supervision_obligation_resolved')
+    expect(resolvedEvents).toHaveLength(1)
+    expect(
+      resolvedEvents.filter((envelope) =>
+        envelope.event.type === 'supervision_obligation_resolved' &&
+        envelope.event.payload.obligation.id === obligation.id)
+    ).toHaveLength(1)
   })
 })

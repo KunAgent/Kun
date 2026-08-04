@@ -68,8 +68,12 @@ export class GraphSupervisionObligationManager {
     const claimed: GraphSupervisionObligationV1[] = []
     for (const obligationId of obligationIds) {
       const result = await this.update(runId, obligationId, (run, current) => {
-        if (!graphSupervisionObligationIsActionable(run, current)) return resolved(current, this.options.nowIso())
-        if (current.state === 'needs_attention' || current.state === 'resolved') return null
+        // Terminal / already-settled obligations must no-op. Never re-emit resolved
+        // for a non-actionable obligation that is already resolved (#1082).
+        if (current.state === 'resolved' || current.state === 'needs_attention') return null
+        if (!graphSupervisionObligationIsActionable(run, current)) {
+          return resolved(current, this.options.nowIso())
+        }
         if (current.state === 'delivering' && future(current.leaseUntil, this.options.nowMs())) return null
         if ((current.state === 'retry_scheduled' || current.state === 'awaiting_action') && future(current.nextWakeAt, this.options.nowMs())) return null
         if (current.state === 'awaiting_action' && this.options.isLeadTurnActive?.(run)) return null
@@ -87,7 +91,10 @@ export class GraphSupervisionObligationManager {
   async recordDelivered(runId: string, obligations: readonly GraphSupervisionObligationV1[], delivery: Extract<GraphLeadDeliveryResult, { status: 'delivered' }>): Promise<void> {
     for (const obligation of obligations) {
       await this.update(runId, obligation.id, (run, current) => {
-        if (!graphSupervisionObligationIsActionable(run, current) || isTerminal(run.status)) return resolved(current, this.options.nowIso())
+        if (current.state === 'resolved' || current.state === 'needs_attention') return null
+        if (!graphSupervisionObligationIsActionable(run, current) || isTerminal(run.status)) {
+          return resolved(current, this.options.nowIso())
+        }
         const next = {
           ...current, state: 'awaiting_action' as const,
           lastDeliveredSeq: Math.max(current.lastDeliveredSeq ?? 0, delivery.deliveredSeq),
@@ -105,7 +112,10 @@ export class GraphSupervisionObligationManager {
   async scheduleRetry(runId: string, obligations: readonly GraphSupervisionObligationV1[], error: string): Promise<void> {
     for (const obligation of obligations) {
       await this.update(runId, obligation.id, (run, current) => {
-        if (!graphSupervisionObligationIsActionable(run, current)) return resolved(current, this.options.nowIso())
+        if (current.state === 'resolved' || current.state === 'needs_attention') return null
+        if (!graphSupervisionObligationIsActionable(run, current)) {
+          return resolved(current, this.options.nowIso())
+        }
         const next = {
           ...current, state: 'retry_scheduled' as const,
           nextWakeAt: this.timestampAfter(graphSupervisionRetryDelayMs(Math.max(0, current.deliveryAttempts - 1))),
@@ -124,7 +134,11 @@ export class GraphSupervisionObligationManager {
       const current = before?.supervisionObligations.find((entry) => entry.id === obligationId)
       const latestProgress = current ? graphLatestSemanticProgressSeq(await this.options.store.events(runId, current.lastProgressSeq), current.lastProgressSeq) : undefined
       const result = await this.update(runId, obligationId, (run, obligation) => {
-        if (!graphSupervisionObligationIsActionable(run, obligation)) return resolved(obligation, this.options.nowIso())
+        // Already terminal lifecycle states are durable no-ops (#1082).
+        if (obligation.state === 'resolved' || obligation.state === 'needs_attention') return null
+        if (!graphSupervisionObligationIsActionable(run, obligation)) {
+          return resolved(obligation, this.options.nowIso())
+        }
         if (obligation.state !== 'awaiting_action') return null
         if (latestProgress !== undefined && latestProgress > obligation.lastProgressSeq) {
           const next = { ...obligation, state: 'retry_scheduled' as const, noProgressCount: 0, lastProgressSeq: latestProgress, nextWakeAt: this.timestampAfter(graphSupervisionRetryDelayMs(0)), updatedAt: this.options.nowIso() }
@@ -174,11 +188,24 @@ export class GraphSupervisionObligationManager {
       if (!current) return null
       const next = update(run, current)
       if (!next) return { run, obligation: current, changed: false }
+      // Semantic no-op: do not append resolved→resolved noise even if a caller
+      // forgets the early return (defense in depth for #1082).
+      if (current.state === 'resolved' && next.state === 'resolved') {
+        return { run, obligation: current, changed: false }
+      }
       try {
+        // Resolve transitions use a stable per-obligation key so concurrent
+        // force-resolve paths collapse to one durable event. Other operations
+        // keep seq-scoped keys for legitimate multi-step progress.
+        const idempotencyKey = stableIdempotencyKey ?? (
+          next.state === 'resolved'
+            ? `supervision-obligation:${obligationId}:resolved`
+            : ['supervision-obligation', obligationId, operation, String(run.lastEventSeq)].join(':').slice(0, 256)
+        )
         const appended = await this.options.store.append(run.id, {
           expectedSeq: run.lastEventSeq, graphRevision: run.currentRevision,
           commandId: this.options.nextId('graph_supervision'),
-          idempotencyKey: stableIdempotencyKey ?? ['supervision-obligation', obligationId, operation, String(run.lastEventSeq)].join(':').slice(0, 256),
+          idempotencyKey,
           event: { type: obligationEventType(next.state), payload: { obligation: next } }
         })
         const obligation = appended.state.supervisionObligations.find((entry) => entry.id === obligationId)!
