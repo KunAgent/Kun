@@ -7,6 +7,10 @@ import type { ToolHostContext } from '../ports/tool-host.js'
 import type { RuntimeEventRecorder } from '../services/runtime-event-recorder.js'
 import type { TurnService } from '../services/turn-service.js'
 import { CREATE_PLAN_TOOL_NAME } from '../adapters/tool/create-plan-tool.js'
+import {
+  DESIGN_SVG_EDIT_TOOL_NAME,
+  DESIGN_SVG_VALIDATE_TOOL_NAME
+} from '../adapters/tool/design-svg-tool.js'
 import { GRAPH_DEFINE_PLAN_TOOL_NAME } from '../adapters/tool/graph-define-plan-tool.js'
 import type { ModelRoundStreamResult } from './model-round-engine.js'
 import {
@@ -16,7 +20,11 @@ import {
   type RoundOutcomeInput
 } from './round-outcome-coordinator.js'
 import { svgArtifactCompletionState } from './svg-artifact-completion.js'
-import type { PreparedTurnContext, ToolDispatchInput } from './turn-execution-types.js'
+import type {
+  PreparedTurnContext,
+  ToolDispatchInput,
+  ToolDispatchOutcome
+} from './turn-execution-types.js'
 
 const threadId = 'thread_round_outcome'
 const turnId = 'turn_round_outcome'
@@ -102,7 +110,7 @@ function harness(options: {
   const failures: unknown[] = []
   const metadataPatches: unknown[] = []
   const suppressGoalResume = vi.fn()
-  const dispatchToolCalls = vi.fn(async (input: ToolDispatchInput) => {
+  const dispatchToolCalls = vi.fn(async (input: ToolDispatchInput): Promise<ToolDispatchOutcome> => {
     effects.push('dispatch')
     dispatches.push(input)
     for (const call of input.calls) {
@@ -122,7 +130,7 @@ function harness(options: {
         isError: result.isError
       }))
     }
-    return 'continue' as const
+    return 'continue'
   })
   const turns = {
     applyItem: vi.fn(async (_threadId: string, item: TurnItem) => {
@@ -270,6 +278,177 @@ describe('RoundOutcomeCoordinator', () => {
     expect(h.effects).toEqual(['event:error', 'item:error'])
     expect(h.eventDrafts[0]).toMatchObject({ code: 'required_tool_missing' })
     expect(h.items[0]).toMatchObject({ kind: 'error', code: 'required_tool_missing' })
+  })
+
+  it('continues once after all_suppressed then fails empty recovery stop (#1081)', async () => {
+    const h = harness()
+    h.dispatchToolCalls.mockResolvedValueOnce('all_suppressed')
+    const toolRound = input(completed({
+      toolCalls: [{
+        callId: 'call_1',
+        toolName: 'bash',
+        toolKind: 'tool_call',
+        arguments: { command: 'true' }
+      }]
+    }))
+
+    await expect(h.coordinator.resolve(toolRound)).resolves.toBe('continue')
+    expect(h.coordinator.toolStormRecoveryRounds(turnId)).toBe(1)
+    expect(h.dispatchToolCalls).toHaveBeenCalledOnce()
+
+    await expect(h.coordinator.resolve(input(completed({ text: '' })))).resolves.toBe('failed')
+    expect(h.effects).toEqual(expect.arrayContaining(['event:error', 'item:error']))
+    expect(h.items.some((item) =>
+      item.kind === 'error' && item.code === 'tool_storm_no_final_response'
+    )).toBe(true)
+    expect(h.failures[0]).toMatchObject({ code: 'tool_storm_no_final_response' })
+  })
+
+  it('clears tool-storm recovery after a non-empty final answer', async () => {
+    const h = harness()
+    h.dispatchToolCalls.mockResolvedValueOnce('all_suppressed')
+    await expect(h.coordinator.resolve(input(completed({
+      toolCalls: [{
+        callId: 'call_1',
+        toolName: 'bash',
+        toolKind: 'tool_call',
+        arguments: { command: 'true' }
+      }]
+    })))).resolves.toBe('continue')
+    expect(h.coordinator.toolStormRecoveryRounds(turnId)).toBe(1)
+
+    await expect(h.coordinator.resolve(input(completed({
+      text: 'Here is the answer without more tools.'
+    })))).resolves.toBe('stop')
+    expect(h.coordinator.toolStormRecoveryRounds(turnId)).toBe(0)
+  })
+
+  it('fails a second consecutive all_suppressed after the recovery budget', async () => {
+    const h = harness()
+    h.dispatchToolCalls.mockResolvedValue('all_suppressed')
+    let callSeq = 0
+    const toolRound = () => {
+      callSeq += 1
+      return input(completed({
+        toolCalls: [{
+          callId: `call_storm_${callSeq}`,
+          toolName: 'bash',
+          toolKind: 'tool_call',
+          arguments: { command: 'true' }
+        }]
+      }))
+    }
+
+    await expect(h.coordinator.resolve(toolRound())).resolves.toBe('continue')
+    await expect(h.coordinator.resolve(toolRound())).resolves.toBe('failed')
+    expect(h.items.some((item) =>
+      item.kind === 'error' && item.code === 'tool_storm_no_final_response'
+    )).toBe(true)
+  })
+
+  it('stops validated dedicated SVG turns on all_suppressed without storm recovery', async () => {
+    const revision = 'rev_svg_1'
+    const mutation = makeToolResultItem({
+      id: 'item_svg_edit',
+      threadId,
+      turnId,
+      callId: 'call_svg_edit',
+      toolName: DESIGN_SVG_EDIT_TOOL_NAME,
+      output: { ok: true, revision }
+    })
+    const validation = makeToolResultItem({
+      id: 'item_svg_validate',
+      threadId,
+      turnId,
+      callId: 'call_svg_validate',
+      toolName: DESIGN_SVG_VALIDATE_TOOL_NAME,
+      output: { ok: true, revision }
+    })
+    const h = harness({ latestItems: [mutation, validation] })
+    h.dispatchToolCalls.mockResolvedValueOnce('all_suppressed')
+    const completion = svgArtifactCompletionState([mutation, validation], turnId)
+    expect(completion.validationAfterMutation).toBe(true)
+
+    await expect(h.coordinator.resolve(input(completed({
+      toolCalls: [{
+        callId: 'call_svg_storm',
+        toolName: DESIGN_SVG_VALIDATE_TOOL_NAME,
+        toolKind: 'tool_call',
+        arguments: {}
+      }]
+    }), {
+      prepared: prepared({ dedicatedSvgTurn: true, history: [mutation, validation] }),
+      svgCompletion: completion
+    }))).resolves.toBe('stop')
+
+    expect(h.coordinator.toolStormRecoveryRounds(turnId)).toBe(0)
+    expect(h.items.some((item) =>
+      item.kind === 'error' && item.code === 'tool_storm_no_final_response'
+    )).toBe(false)
+    expect(h.failures).toEqual([])
+  })
+
+  it('uses SVG completion recovery when all_suppressed before mutation/validation', async () => {
+    const h = harness()
+    h.dispatchToolCalls.mockResolvedValue('all_suppressed')
+    const incompleteRound = input(completed({
+      toolCalls: [{
+        callId: 'call_svg_inspect_storm',
+        toolName: 'design_svg_inspect',
+        toolKind: 'tool_call',
+        arguments: {}
+      }]
+    }), {
+      prepared: prepared({ dedicatedSvgTurn: true }),
+      svgCompletion: svgArtifactCompletionState([], turnId)
+    })
+
+    await expect(h.coordinator.resolve(incompleteRound)).resolves.toBe('continue')
+    expect(h.coordinator.toolStormRecoveryRounds(turnId)).toBe(0)
+    expect(h.eventDrafts[0]).toMatchObject({ code: 'required_svg_mutation_missing' })
+
+    const mutationOnly = makeToolResultItem({
+      id: 'item_svg_edit_only',
+      threadId,
+      turnId,
+      callId: 'call_svg_edit_only',
+      toolName: DESIGN_SVG_EDIT_TOOL_NAME,
+      output: { ok: true, revision: 'rev_svg_2' }
+    })
+    const h2 = harness({ latestItems: [mutationOnly] })
+    h2.dispatchToolCalls.mockResolvedValueOnce('all_suppressed')
+    await expect(h2.coordinator.resolve(input(completed({
+      toolCalls: [{
+        callId: 'call_svg_edit_storm',
+        toolName: DESIGN_SVG_EDIT_TOOL_NAME,
+        toolKind: 'tool_call',
+        arguments: {}
+      }]
+    }), {
+      prepared: prepared({ dedicatedSvgTurn: true, history: [mutationOnly] }),
+      svgCompletion: svgArtifactCompletionState([mutationOnly], turnId)
+    }))).resolves.toBe('continue')
+    expect(h2.coordinator.toolStormRecoveryRounds(turnId)).toBe(0)
+    expect(h2.eventDrafts[0]).toMatchObject({ code: 'required_svg_validation_missing' })
+    expect(h2.items.some((item) =>
+      item.kind === 'error' && item.code === 'tool_storm_no_final_response'
+    )).toBe(false)
+  })
+
+  it('clears tool-storm recovery state on clearTurn', async () => {
+    const h = harness()
+    h.dispatchToolCalls.mockResolvedValueOnce('all_suppressed')
+    await h.coordinator.resolve(input(completed({
+      toolCalls: [{
+        callId: 'call_1',
+        toolName: 'bash',
+        toolKind: 'tool_call',
+        arguments: { command: 'true' }
+      }]
+    })))
+    expect(h.coordinator.toolStormRecoveryRounds(turnId)).toBe(1)
+    h.coordinator.clearTurn(turnId)
+    expect(h.coordinator.toolStormRecoveryRounds(turnId)).toBe(0)
   })
 
   it('recovers a missing Graph creation call and clears recovery state only on success or cleanup', async () => {

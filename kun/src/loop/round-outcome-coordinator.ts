@@ -35,6 +35,9 @@ import type {
 } from './turn-execution-types.js'
 
 const MAX_SVG_COMPLETION_RECOVERY_STEPS = 3
+/** Extra model rounds allowed after a tool-storm all_suppressed outcome (#1081). */
+export const MAX_TOOL_STORM_RECOVERY_ROUNDS = 1
+export const TOOL_STORM_NO_FINAL_RESPONSE_CODE = 'tool_storm_no_final_response'
 export const GRAPH_CREATE_RUN_TOOL_NAME = 'graph_create_run'
 export const MAX_GRAPH_CREATE_RUN_ATTEMPTS = 3
 /** @deprecated Use MAX_GRAPH_CREATE_RUN_ATTEMPTS for the total request cap. */
@@ -94,6 +97,8 @@ export class RoundOutcomeCoordinator {
   private readonly svgCompletionRecoveryStepsByTurn = new Map<string, number>()
   private readonly graphCreateRunRecoveryByTurn = new Map<string, GraphCreateRunRecoveryState>()
   private readonly graphPlanNoToolRecoveryByTurn = new Map<string, number>()
+  /** Recovery model rounds issued after all_suppressed in this turn (#1081). */
+  private readonly toolStormRecoveryRoundsByTurn = new Map<string, number>()
 
   constructor(private readonly deps: RoundOutcomeCoordinatorDeps) {}
 
@@ -107,6 +112,10 @@ export class RoundOutcomeCoordinator {
 
   emptyPostToolRecoverySteps(turnId: string): number {
     return this.emptyPostToolRecoveryStepsByTurn.get(turnId) ?? 0
+  }
+
+  toolStormRecoveryRounds(turnId: string): number {
+    return this.toolStormRecoveryRoundsByTurn.get(turnId) ?? 0
   }
 
   graphCreateRunRecoverySteps(turnId: string): number {
@@ -128,6 +137,7 @@ export class RoundOutcomeCoordinator {
     this.svgCompletionRecoveryStepsByTurn.delete(turnId)
     this.graphCreateRunRecoveryByTurn.delete(turnId)
     this.graphPlanNoToolRecoveryByTurn.delete(turnId)
+    this.toolStormRecoveryRoundsByTurn.delete(turnId)
   }
 
   async resolve(input: RoundOutcomeInput): Promise<ModelRoundOutcome> {
@@ -146,6 +156,22 @@ export class RoundOutcomeCoordinator {
       if (input.softRequiredToolName) {
         return this.resolveMissingSoftRequiredTool(input, streamSnapshot.text)
       }
+      const assistantText = streamSnapshot.text.trim()
+      // After a tool-storm recovery round, an empty stop is a failed turn (#1081).
+      if (
+        streamSnapshot.stopReason === 'stop' &&
+        !assistantText &&
+        (this.toolStormRecoveryRoundsByTurn.get(input.turnId) ?? 0) > 0
+      ) {
+        return this.failToolStormNoFinalResponse(
+          input,
+          'Tool-loop recovery ended without a final assistant response after repeated tool calls were suppressed.'
+        )
+      }
+      if (assistantText) {
+        // A non-empty final answer closes the storm recovery window.
+        this.toolStormRecoveryRoundsByTurn.delete(input.turnId)
+      }
       const hasCurrentTurnFileChange = input.prepared.history.some(
         (item) =>
           item.turnId === input.turnId &&
@@ -155,7 +181,7 @@ export class RoundOutcomeCoordinator {
       )
       if (
         streamSnapshot.stopReason === 'stop' &&
-        !streamSnapshot.text.trim() &&
+        !assistantText &&
         hasCurrentTurnFileChange
       ) {
         return this.resolveEmptyPostToolResponse(input)
@@ -268,15 +294,10 @@ export class RoundOutcomeCoordinator {
       }
     }
     if (dispatched === 'all_suppressed') {
-      if (input.prepared.dedicatedSvgTurn) {
-        const latestItems = await this.deps.sessionStore.loadItems(input.threadId)
-        const latestCompletion = svgArtifactCompletionState(latestItems, input.turnId)
-        if (!latestCompletion.validationAfterMutation) {
-          return this.recoverRequiredSvgCompletion(input, latestCompletion)
-        }
-      }
-      return 'stop'
+      return this.resolveAllSuppressed(input)
     }
+    // At least one tool executed: storm recovery is no longer pending.
+    this.toolStormRecoveryRoundsByTurn.delete(input.turnId)
     if (input.prepared.dedicatedSvgTurn && completedToolCalls.some((call) =>
       call.toolName === DESIGN_SVG_EDIT_TOOL_NAME ||
       call.toolName === DESIGN_SVG_ANIMATE_TOOL_NAME ||
@@ -293,6 +314,65 @@ export class RoundOutcomeCoordinator {
       this.svgCompletionRecoveryStepsByTurn.delete(input.turnId)
     }
     return 'continue'
+  }
+
+  /**
+   * After every tool call in a step is storm-suppressed, allow a bounded
+   * recovery model round so the model can answer without tools. Empty stop or
+   * further all_suppressed after the budget fails the turn (#1081).
+   */
+  private async resolveAllSuppressed(input: RoundOutcomeInput): Promise<ModelRoundOutcome> {
+    // Dedicated SVG workflow owns its own terminal: a completed mutation + later
+    // validation is already a valid tool terminal and must stop without the
+    // generic storm-recovery / tool_storm_no_final_response path (#1081).
+    if (input.prepared.dedicatedSvgTurn) {
+      const latestItems = await this.deps.sessionStore.loadItems(input.threadId)
+      const latestCompletion = svgArtifactCompletionState(latestItems, input.turnId)
+      if (!latestCompletion.validationAfterMutation) {
+        return this.recoverRequiredSvgCompletion(input, latestCompletion)
+      }
+      return 'stop'
+    }
+    const recoveryRounds = this.toolStormRecoveryRoundsByTurn.get(input.turnId) ?? 0
+    if (recoveryRounds < MAX_TOOL_STORM_RECOVERY_ROUNDS) {
+      this.toolStormRecoveryRoundsByTurn.set(input.turnId, recoveryRounds + 1)
+      return 'continue'
+    }
+    return this.failToolStormNoFinalResponse(
+      input,
+      'Repeated identical tool calls were suppressed and the model did not produce a final response after recovery.'
+    )
+  }
+
+  private async failToolStormNoFinalResponse(
+    input: RoundOutcomeInput,
+    message: string
+  ): Promise<ModelRoundOutcome> {
+    this.deps.rememberFailure(input.turnId, {
+      error: message,
+      code: TOOL_STORM_NO_FINAL_RESPONSE_CODE,
+      severity: 'error'
+    })
+    await this.deps.events.record({
+      kind: 'error',
+      threadId: input.threadId,
+      turnId: input.turnId,
+      message,
+      code: TOOL_STORM_NO_FINAL_RESPONSE_CODE,
+      severity: 'error'
+    })
+    await this.deps.turns.applyItem(
+      input.threadId,
+      makeErrorItem({
+        id: this.deps.ids.next('item_error'),
+        turnId: input.turnId,
+        threadId: input.threadId,
+        message,
+        code: TOOL_STORM_NO_FINAL_RESPONSE_CODE,
+        severity: 'error'
+      })
+    )
+    return 'failed'
   }
 
   private async resolveMissingSoftRequiredTool(
@@ -370,7 +450,7 @@ export class RoundOutcomeCoordinator {
       )
       if (dispatched === 'aborted') return 'aborted'
       if (dispatched === 'budget_exhausted') return 'failed'
-      if (dispatched === 'all_suppressed') return 'stop'
+      if (dispatched === 'all_suppressed') return this.resolveAllSuppressed(input)
       return 'continue'
     }
 

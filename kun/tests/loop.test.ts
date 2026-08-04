@@ -1265,8 +1265,8 @@ describe('AgentLoop', () => {
     })
   })
 
-	  it('suppresses repeated identical tool calls within a turn', async () => {
-	    let executions = 0
+  it('suppresses repeated identical tool calls and fails when recovery has no final answer (#1081)', async () => {
+    let executions = 0
     const echoTool = LocalToolHost.defineTool({
       name: 'echo',
       description: 'Echo text',
@@ -1298,6 +1298,7 @@ describe('AgentLoop', () => {
             yield { kind: 'completed', stopReason: 'tool_calls' }
             return
           }
+          // Recovery round after all_suppressed: empty stop (#1081).
           yield { kind: 'completed', stopReason: 'stop' }
         }
       },
@@ -1305,30 +1306,213 @@ describe('AgentLoop', () => {
     )
     await bootstrapThread(h)
 
-	    const status = await h.loop.runTurn(h.threadId, h.turnId)
-	    const items = await h.sessionStore.loadItems(h.threadId)
-	    const events = await h.sessionStore.loadEventsSince(h.threadId, 0)
-	    const stormResult = items.find(
-	      (item) => item.kind === 'tool_result' && item.callId === 'call_echo_3'
-	    )
+    const status = await h.loop.runTurn(h.threadId, h.turnId)
+    const items = await h.sessionStore.loadItems(h.threadId)
+    const events = await h.sessionStore.loadEventsSince(h.threadId, 0)
+    const stormResult = items.find(
+      (item) => item.kind === 'tool_result' && item.callId === 'call_echo_3'
+    )
     const thirdCall = items.find(
       (item) => item.kind === 'tool_call' && item.callId === 'call_echo_3'
     )
+    const assistantTexts = items.filter(
+      (item) => item.kind === 'assistant_text' && item.turnId === h.turnId && item.text.trim()
+    )
+    const stormError = items.find(
+      (item) => item.kind === 'error' && item.code === 'tool_storm_no_final_response'
+    )
 
+    expect(status).toBe('failed')
+    expect(status).not.toBe('completed')
+    expect(assistantTexts).toHaveLength(0)
+    expect(executions).toBe(2)
+    expect(calls).toBe(4) // 3 tool rounds + 1 recovery empty stop
+    expect(thirdCall).toMatchObject({ kind: 'tool_call', status: 'failed' })
+    expect(stormResult?.kind === 'tool_result' ? stormResult.isError : false).toBe(true)
+    expect(stormResult?.kind === 'tool_result' ? JSON.stringify(stormResult.output) : '')
+      .toContain('repeat-loop guard suppressed')
+    expect(events.find((event) => event.kind === 'tool_storm_suppressed')).toMatchObject({
+      kind: 'tool_storm_suppressed',
+      callId: 'call_echo_3',
+      toolName: 'echo'
+    })
+    expect(stormError).toMatchObject({
+      kind: 'error',
+      code: 'tool_storm_no_final_response',
+      severity: 'error'
+    })
+    expect(events.find((event) =>
+      event.kind === 'error' && event.code === 'tool_storm_no_final_response'
+    )).toBeTruthy()
+  })
+
+  it('completes after tool-storm suppression when recovery produces a final assistant answer', async () => {
+    let executions = 0
+    const echoTool = LocalToolHost.defineTool({
+      name: 'echo',
+      description: 'Echo text',
+      inputSchema: {
+        type: 'object',
+        properties: { text: { type: 'string' } },
+        required: ['text']
+      },
+      policy: 'auto',
+      execute: async () => {
+        executions += 1
+        return { output: { ok: executions } }
+      }
+    })
+    let calls = 0
+    const h = makeHarness(
+      {
+        provider: 'storm-recover-text-model',
+        model: 'storm-recover-text-model',
+        async *stream(): AsyncIterable<ModelStreamChunk> {
+          calls += 1
+          if (calls <= 3) {
+            yield {
+              kind: 'tool_call_complete',
+              callId: `call_echo_${calls}`,
+              toolName: 'echo',
+              arguments: { text: 'repeat me' }
+            }
+            yield { kind: 'completed', stopReason: 'tool_calls' }
+            return
+          }
+          yield { kind: 'assistant_text_delta', text: 'I stopped repeating tools and answered.' }
+          yield { kind: 'completed', stopReason: 'stop' }
+        }
+      },
+      { tools: [echoTool] }
+    )
+    await bootstrapThread(h)
+
+    const status = await h.loop.runTurn(h.threadId, h.turnId)
+    const items = await h.sessionStore.loadItems(h.threadId)
     expect(status).toBe('completed')
     expect(executions).toBe(2)
-    expect(thirdCall).toMatchObject({ kind: 'tool_call', status: 'failed' })
-	    expect(stormResult?.kind === 'tool_result' ? stormResult.isError : false).toBe(true)
-	    expect(stormResult?.kind === 'tool_result' ? JSON.stringify(stormResult.output) : '')
-	      .toContain('repeat-loop guard suppressed')
-	    expect(events.find((event) => event.kind === 'tool_storm_suppressed')).toMatchObject({
-	      kind: 'tool_storm_suppressed',
-	      callId: 'call_echo_3',
-	      toolName: 'echo'
-	    })
-	  })
+    expect(calls).toBe(4)
+    expect(items.some((item) =>
+      item.kind === 'assistant_text' &&
+      item.turnId === h.turnId &&
+      item.text.includes('stopped repeating tools')
+    )).toBe(true)
+    expect(items.some((item) =>
+      item.kind === 'error' && item.code === 'tool_storm_no_final_response'
+    )).toBe(false)
+  })
 
-  it('suppresses the third identical Graph run inspection within a turn', async () => {
+  it('bounds recovery when the model keeps storming after suppression', async () => {
+    let executions = 0
+    const echoTool = LocalToolHost.defineTool({
+      name: 'echo',
+      description: 'Echo text',
+      inputSchema: {
+        type: 'object',
+        properties: { text: { type: 'string' } },
+        required: ['text']
+      },
+      policy: 'auto',
+      execute: async () => {
+        executions += 1
+        return { output: { ok: executions } }
+      }
+    })
+    let calls = 0
+    const h = makeHarness(
+      {
+        provider: 'storm-bounded-model',
+        model: 'storm-bounded-model',
+        async *stream(): AsyncIterable<ModelStreamChunk> {
+          calls += 1
+          yield {
+            kind: 'tool_call_complete',
+            callId: `call_echo_${calls}`,
+            toolName: 'echo',
+            arguments: { text: 'repeat me' }
+          }
+          yield { kind: 'completed', stopReason: 'tool_calls' }
+        }
+      },
+      { tools: [echoTool] }
+    )
+    await bootstrapThread(h)
+
+    const status = await h.loop.runTurn(h.threadId, h.turnId)
+    const items = await h.sessionStore.loadItems(h.threadId)
+    // rounds: 1 exec, 2 exec, 3 all_suppressed→continue, 4 all_suppressed→failed
+    expect(status).toBe('failed')
+    expect(executions).toBe(2)
+    expect(calls).toBe(4)
+    expect(items.some((item) =>
+      item.kind === 'error' && item.code === 'tool_storm_no_final_response'
+    )).toBe(true)
+  })
+
+  it('does not leak tool-storm recovery state across turns', async () => {
+    let executions = 0
+    const echoTool = LocalToolHost.defineTool({
+      name: 'echo',
+      description: 'Echo text',
+      inputSchema: {
+        type: 'object',
+        properties: { text: { type: 'string' } },
+        required: ['text']
+      },
+      policy: 'auto',
+      execute: async () => {
+        executions += 1
+        return { output: { ok: executions } }
+      }
+    })
+    let calls = 0
+    const h = makeHarness(
+      {
+        provider: 'storm-isolation-model',
+        model: 'storm-isolation-model',
+        async *stream(): AsyncIterable<ModelStreamChunk> {
+          calls += 1
+          // Turn 1: storm then empty recovery → failed
+          if (calls <= 3) {
+            yield {
+              kind: 'tool_call_complete',
+              callId: `call_echo_t1_${calls}`,
+              toolName: 'echo',
+              arguments: { text: 'repeat me' }
+            }
+            yield { kind: 'completed', stopReason: 'tool_calls' }
+            return
+          }
+          if (calls === 4) {
+            yield { kind: 'completed', stopReason: 'stop' }
+            return
+          }
+          // Turn 2: normal answer without tools
+          yield { kind: 'assistant_text_delta', text: 'second turn is fine' }
+          yield { kind: 'completed', stopReason: 'stop' }
+        }
+      },
+      { tools: [echoTool] }
+    )
+    await bootstrapThread(h)
+    const first = await h.loop.runTurn(h.threadId, h.turnId)
+    expect(first).toBe('failed')
+
+    const secondTurn = await h.turns.startTurn({
+      threadId: h.threadId,
+      request: { prompt: 'follow up' }
+    })
+    const second = await h.loop.runTurn(h.threadId, secondTurn.turnId)
+    const items = await h.sessionStore.loadItems(h.threadId)
+    expect(second).toBe('completed')
+    expect(items.some((item) =>
+      item.kind === 'assistant_text' &&
+      item.turnId === secondTurn.turnId &&
+      item.text.includes('second turn is fine')
+    )).toBe(true)
+  })
+
+  it('suppresses the third identical Graph run inspection and fails empty storm recovery (#1081)', async () => {
     let executions = 0
     const inspectTool = LocalToolHost.defineTool({
       name: 'graph_control_run',
@@ -1381,7 +1565,7 @@ describe('AgentLoop', () => {
       (item) => item.kind === 'tool_call' && item.callId === 'call_graph_inspect_3'
     )
 
-    expect(status).toBe('completed')
+    expect(status).toBe('failed')
     expect(executions).toBe(2)
     expect(thirdCall).toMatchObject({ kind: 'tool_call', status: 'failed' })
     expect(stormResult?.kind === 'tool_result' ? stormResult.isError : false).toBe(true)
@@ -1392,6 +1576,9 @@ describe('AgentLoop', () => {
       callId: 'call_graph_inspect_3',
       toolName: 'graph_control_run'
     })
+    expect(items.some((item) =>
+      item.kind === 'error' && item.code === 'tool_storm_no_final_response'
+    )).toBe(true)
   })
 
 	  it('can disable the storm breaker through loop config', async () => {
