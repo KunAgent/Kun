@@ -6,7 +6,7 @@ import {
 } from '../contracts/graph.js'
 import type { GraphRuntimeConfig } from '../config/kun-config.js'
 import type { DelegationRuntime } from '../delegation/delegation-runtime.js'
-import type { GraphSupervisionPort } from './graph-scheduler.js'
+import type { GraphSupervisionPort } from './graph-scheduler-types.js'
 import type {
   GraphRunStore,
   GraphStoreDiagnostic

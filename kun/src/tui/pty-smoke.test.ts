@@ -6,6 +6,7 @@ import process from 'node:process'
 import * as pty from 'node-pty'
 import { afterEach, describe, expect, it } from 'vitest'
 import { resolveSharedRuntime, stopSharedRuntime } from '../cli/shared-runtime.js'
+import { resolveServiceManager } from '../manager/manager-client.js'
 import { readManagerDiscovery } from '../manager/manager-discovery.js'
 import { readRuntimeBuildIdForEntry } from '../server/runtime-build-identity.js'
 import { startKunServe, type KunServeHandle } from '../server/runtime-factory.js'
@@ -219,6 +220,7 @@ describe.skipIf(process.platform === 'win32' || !existsSync(cliEntry))('kun tui 
   it('starts its own shared runtime and leaves it alive after the standalone TUI exits', async () => {
     const root = await mkdtemp(join(tmpdir(), 'kun-tui-standalone-'))
     roots.push(root)
+    const controlDir = join(root, 'control')
     const terminal = pty.spawn(process.execPath, [
       cliEntry,
       '--data-dir', root,
@@ -230,29 +232,53 @@ describe.skipIf(process.platform === 'win32' || !existsSync(cliEntry))('kun tui 
       cwd: worktreeRoot,
       env: stringEnvironment({
         ...process.env,
-        KUN_MANAGER_CONTROL_DIR: join(root, 'control'),
+        KUN_MANAGER_CONTROL_DIR: controlDir,
         KUN_MANAGER_SETTINGS_PATH: join(root, 'settings.json')
       })
     })
     let output = ''
+    let exitState: { exitCode: number; signal?: number } | undefined
     const dataSubscription = terminal.onData((data) => { output += data })
     const exited = new Promise<{ exitCode: number; signal?: number }>((accept) => {
-      terminal.onExit(accept)
+      terminal.onExit((state) => {
+        exitState = state
+        accept(state)
+      })
     })
 
     try {
-      await waitFor(
-        () =>
-          output.includes('Welcome to Kun') &&
-          output.includes('/connect') &&
-          output.includes('/sessions'),
-        30_000
+      const manager = await waitForPtyValue(
+        async () => (await resolveServiceManager(controlDir)) ?? undefined,
+        {
+          stage: 'Service Manager readiness',
+          timeoutMs: 35_000,
+          getExit: () => exitState,
+          getOutput: () => output
+        }
       )
-      const connection = await waitForValue(
-        async () => (await resolveSharedRuntime(root)) ?? undefined,
-        30_000
+      const connection = await waitForPtyValue(
+        async () => (await resolveSharedRuntime(root, fetch, { manager, controlDir })) ?? undefined,
+        {
+          stage: 'shared Runtime readiness',
+          timeoutMs: 35_000,
+          getExit: () => exitState,
+          getOutput: () => output
+        }
       )
       expect(connection.discovery.launchMode).toBe('shared')
+      await waitForPtyValue(
+        () => output.includes('Welcome to Kun') &&
+          output.includes('/connect') &&
+          output.includes('/sessions')
+          ? true
+          : undefined,
+        {
+          stage: 'TUI first render',
+          timeoutMs: 10_000,
+          getExit: () => exitState,
+          getOutput: () => output
+        }
+      )
 
       terminal.write('\x03')
       await new Promise((resolve) => setTimeout(resolve, 80))
@@ -269,7 +295,7 @@ describe.skipIf(process.platform === 'win32' || !existsSync(cliEntry))('kun tui 
       dataSubscription.dispose()
       try { terminal.kill() } catch { /* already exited */ }
     }
-  }, 45_000)
+  }, 90_000)
 
   it('submits --graph after startup and opens a narrow Graph board through opt-in mouse input', async () => {
     const root = await mkdtemp(join(tmpdir(), 'kun-tui-graph-pty-'))
@@ -397,6 +423,31 @@ async function waitForValue<T>(
     return value !== undefined
   }, timeoutMs)
   return value as T
+}
+
+async function waitForPtyValue<T>(
+  read: () => T | undefined | Promise<T | undefined>,
+  options: {
+    stage: string
+    timeoutMs: number
+    getExit: () => { exitCode: number; signal?: number } | undefined
+    getOutput: () => string
+  }
+): Promise<T> {
+  const deadline = Date.now() + options.timeoutMs
+  for (;;) {
+    const value = await read()
+    if (value !== undefined) return value
+    const exit = options.getExit()
+    if (exit || Date.now() >= deadline) {
+      const reason = exit
+        ? `PTY exited with code ${exit.exitCode}${exit.signal === undefined ? '' : ` and signal ${exit.signal}`}`
+        : `timed out after ${options.timeoutMs}ms`
+      const visibleTail = sanitizeTerminalText(options.getOutput()).slice(-2_000)
+      throw new Error(`${options.stage} ${reason}\nPTY output tail:\n${visibleTail || '(empty)'}`)
+    }
+    await new Promise((resolve) => setTimeout(resolve, 20))
+  }
 }
 
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> {

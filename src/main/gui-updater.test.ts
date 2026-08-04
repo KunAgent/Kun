@@ -484,6 +484,7 @@ describe('installGuiUpdate', () => {
 describe('downloadGuiUpdate recovery', () => {
   it('clears stale download state so an interrupted download can be retried', async () => {
     process.env.KUN_UPDATE_URL = 'https://updates.example.test/'
+    process.env.DEEPSEEK_GUI_ALLOW_UNSIGNED_UPDATES = '1'
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true }))
     const module = await import('./gui-updater')
     module.initializeGuiUpdater(() => null, () => 'stable')

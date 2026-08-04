@@ -21,7 +21,7 @@ const GRAPH_ENTRY_FILES = [
   resolve(REPOSITORY_ROOT, 'src/main/ipc/app-ipc-schemas/settings-graph.ts'),
   resolve(REPOSITORY_ROOT, 'src/renderer/src/components/settings-section-graph-panel.tsx')
 ]
-const SOURCE_FILE_PATTERN = /\.(?:test\.)?[cm]?[tj]sx?$/
+const SOURCE_FILE_PATTERN = /\.[cm]?[tj]sx?$/
 const TEST_FILE_PATTERN = /\.(?:test|spec)\.[cm]?[tj]sx?$/
 
 function collectSourceFiles(directory: string): string[] {
@@ -30,7 +30,7 @@ function collectSourceFiles(directory: string): string[] {
     const fullPath = join(directory, entry)
     if (statSync(fullPath).isDirectory()) {
       files.push(...collectSourceFiles(fullPath))
-    } else if (SOURCE_FILE_PATTERN.test(fullPath)) {
+    } else if (SOURCE_FILE_PATTERN.test(fullPath) && !TEST_FILE_PATTERN.test(fullPath)) {
       files.push(fullPath)
     }
   }

@@ -29,6 +29,11 @@ export type GraphLeadDeliveryResult =
   | { status: 'orphaned'; reason: string }
   | { status: 'terminal' }
 
+export type GraphSchedulerDiagnostics = {
+  active: Array<{ runId: string; nodeId: string; attemptId: string }>
+  fairCursor: number
+}
+
 export type GraphSupervisionPort = {
   signal(input: {
     runId: string

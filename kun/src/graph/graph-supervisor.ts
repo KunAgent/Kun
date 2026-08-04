@@ -11,7 +11,7 @@ import type { ChildRunRecord, DelegationRuntime } from '../delegation/delegation
 import type {
   GraphLeadDeliveryResult,
   GraphSupervisionPort
-} from './graph-scheduler.js'
+} from './graph-scheduler-types.js'
 import type { GraphRunStore } from './graph-run-store.js'
 import { runGraphBackgroundTask } from './graph-background-task.js'
 import { graphLeadLifecycleSupervisionEnabled } from './graph-rollout-policy.js'
