@@ -2770,15 +2770,34 @@ app.whenReady().then(async () => {
       credentialMigration?.invalidateRuntime(dataDir)
       return { reset: true as const, ...result }
     },
-    runtimeRequest: async (path, method, body, headers) => {
+    runtimeRequest: async (path, method, body, headers, options) => {
       const settings = await store.load()
-      const result = await runtimeRequest(settings, path, { method, body, headers })
+      // Protected approval mints consent against the post-ensure token, then
+      // POSTs with skipEnsure so Authorization cannot rotate under the consent.
+      const ensureForRequest = options?.skipEnsure
+        ? async (current: AppSettingsV1) => current
+        : ensureRuntime
+      const result = await runtimeRequestViaHost(
+        settings,
+        path,
+        { method, body, headers },
+        ensureForRequest
+      ).catch((e) => {
+        const message = e instanceof Error ? e.message : String(e)
+        logError('runtime-request', `HTTP request to ${path} failed`, { message })
+        const parsed = parseRuntimeErrorBody(message, message)
+        if (parsed.code !== 'unknown' || parsed.message !== message) {
+          return runtimeFailure(parsed.code, parsed.message, 0, parsed.details)
+        }
+        return runtimeFailure('fetch_failed', message)
+      })
       const cleanup = result.ok
         ? browserUseCleanupForRuntimeRequest({ path, method, body })
         : undefined
       if (cleanup) await browserUseManager.clear(cleanup.threadId, cleanup.reason)
       return result
     },
+    ensureRuntime: async (settings) => ensureRuntime(settings),
     getRuntimeAuthToken,
     getRuntimeSettingsSyncStatus: () => runtimeSettingsSyncStatus,
     restartRuntime: async () => {

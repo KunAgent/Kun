@@ -128,6 +128,7 @@ function registerOptions(overrides: Partial<Parameters<typeof import('./register
       movedItems: ['secret.key']
     })),
     runtimeRequest: vi.fn() as never,
+    ensureRuntime: vi.fn(async (current: AppSettingsV1) => current),
     getRuntimeAuthToken: (current: AppSettingsV1) => current.agents.kun.runtimeToken.trim(),
     getRuntimeSettingsSyncStatus: () => ({
       state: 'idle' as const,
@@ -519,6 +520,159 @@ describe('registerAppIpcHandlers', () => {
       approvalId: 'approval-1',
       decision: 'allow'
     })).toBe(true)
+  })
+
+  it('signs protected approval consent with the same post-ensure runtime token used for Authorization', async () => {
+    // After confirmation: ensure may rotate token-A → token-B, then consent and
+    // Authorization must both bind to post-ensure token-B (#1084).
+    const current = settings()
+    const live = { token: 'token-A' }
+    const getRuntimeAuthToken = vi.fn(() => live.token)
+    const mainFrame = { processId: 10, routingId: 20 }
+    const contents = { id: 7, mainFrame }
+    const mainWindow = { isDestroyed: () => false, webContents: contents }
+    const captured: {
+      consentHeader?: string
+      authorizationHeader?: string
+      skipEnsure?: boolean
+    } = {}
+
+    const ensureRuntime = vi.fn(async (loaded: AppSettingsV1) => {
+      live.token = 'token-B'
+      return loaded
+    })
+    const runtimeRequest = vi.fn(async (
+      _path: string,
+      _method?: string,
+      _body?: string,
+      headers?: Record<string, string>,
+      options?: { skipEnsure?: boolean }
+    ) => {
+      captured.consentHeader = headers?.[KUN_APPROVAL_CONSENT_HEADER]
+      captured.authorizationHeader = headers?.Authorization
+      captured.skipEnsure = options?.skipEnsure
+      return { ok: true, status: 200, body: '{}' }
+    })
+
+    registerAppIpcHandlers(registerOptions({
+      store: { load: vi.fn(async () => current) } as never,
+      getMainWindow: () => mainWindow as never,
+      getRuntimeAuthToken,
+      ensureRuntime,
+      runtimeRequest
+    }))
+    const handler = handlers.get('approval:decide')!
+    const payload = { approvalId: 'approval-rotate', decision: 'allow' as const, source: 'user' as const }
+
+    electronMock.showMessageBox.mockResolvedValueOnce({ response: 0 })
+    await expect(handler({ sender: contents, senderFrame: mainFrame }, payload))
+      .resolves.toMatchObject({ confirmed: true })
+
+    expect(ensureRuntime).toHaveBeenCalledOnce()
+    expect(ensureRuntime.mock.invocationCallOrder[0]!).toBeLessThan(
+      runtimeRequest.mock.invocationCallOrder[0]!
+    )
+    expect(captured.skipEnsure).toBe(true)
+    expect(captured.consentHeader).toMatch(/^v1\./)
+    expect(captured.authorizationHeader).toBe('Bearer token-B')
+
+    // Invariant: consent HMAC key === Authorization bearer key (both post-ensure B).
+    const validWithAuthorizationKey = new ApprovalConsentVerifier('token-B').verifyAndConsume({
+      token: captured.consentHeader!,
+      approvalId: 'approval-rotate',
+      decision: 'allow'
+    })
+    expect(validWithAuthorizationKey).toBe(true)
+    // Pre-ensure token-A must not verify the consent.
+    expect(new ApprovalConsentVerifier('token-A').verifyAndConsume({
+      token: captured.consentHeader!,
+      approvalId: 'approval-rotate',
+      decision: 'allow'
+    })).toBe(false)
+  })
+
+  it('can mint protected approval consent after ensure supplies a cold-start runtime token', async () => {
+    // Cold start: no token until ensureRuntime attaches. Consent must run after
+    // ensure so the user is not failed after confirming the native dialog.
+    const current = settings()
+    expect(current.agents.kun.runtimeToken).toBe('')
+    const live = { token: '' }
+    const getRuntimeAuthToken = vi.fn(() => live.token)
+    const mainFrame = { processId: 11, routingId: 21 }
+    const contents = { id: 8, mainFrame }
+    const mainWindow = { isDestroyed: () => false, webContents: contents }
+
+    const ensureRuntime = vi.fn(async (loaded: AppSettingsV1) => {
+      live.token = 'token-after-ensure'
+      return loaded
+    })
+    const runtimeRequest = vi.fn(async (
+      _path: string,
+      _method?: string,
+      _body?: string,
+      headers?: Record<string, string>,
+      options?: { skipEnsure?: boolean }
+    ) => {
+      expect(options?.skipEnsure).toBe(true)
+      expect(headers?.Authorization).toBe('Bearer token-after-ensure')
+      expect(headers?.[KUN_APPROVAL_CONSENT_HEADER]).toMatch(/^v1\./)
+      expect(new ApprovalConsentVerifier('token-after-ensure').verifyAndConsume({
+        token: headers![KUN_APPROVAL_CONSENT_HEADER]!,
+        approvalId: 'approval-cold',
+        decision: 'allow'
+      })).toBe(true)
+      return { ok: true, status: 200, body: '{}' }
+    })
+
+    registerAppIpcHandlers(registerOptions({
+      store: { load: vi.fn(async () => current) } as never,
+      getMainWindow: () => mainWindow as never,
+      getRuntimeAuthToken,
+      ensureRuntime,
+      runtimeRequest
+    }))
+    const handler = handlers.get('approval:decide')!
+    electronMock.showMessageBox.mockResolvedValueOnce({ response: 0 })
+
+    await expect(handler({ sender: contents, senderFrame: mainFrame }, {
+      approvalId: 'approval-cold',
+      decision: 'allow',
+      source: 'user'
+    })).resolves.toMatchObject({ confirmed: true })
+    expect(ensureRuntime).toHaveBeenCalledOnce()
+    expect(runtimeRequest).toHaveBeenCalledOnce()
+  })
+
+  it('does not submit protected approval when ensureRuntime fails after confirmation', async () => {
+    const current = settings()
+    const live = { token: 'token-A' }
+    const getRuntimeAuthToken = vi.fn(() => live.token)
+    const mainFrame = { processId: 12, routingId: 22 }
+    const contents = { id: 9, mainFrame }
+    const mainWindow = { isDestroyed: () => false, webContents: contents }
+    const ensureRuntime = vi.fn(async () => {
+      throw new Error('runtime ensure failed')
+    })
+    const runtimeRequest = vi.fn()
+
+    registerAppIpcHandlers(registerOptions({
+      store: { load: vi.fn(async () => current) } as never,
+      getMainWindow: () => mainWindow as never,
+      getRuntimeAuthToken,
+      ensureRuntime,
+      runtimeRequest
+    }))
+    const handler = handlers.get('approval:decide')!
+    electronMock.showMessageBox.mockResolvedValueOnce({ response: 0 })
+
+    await expect(handler({ sender: contents, senderFrame: mainFrame }, {
+      approvalId: 'approval-ensure-fail',
+      decision: 'allow',
+      source: 'user'
+    })).rejects.toThrow(/runtime ensure failed/)
+    expect(ensureRuntime).toHaveBeenCalledOnce()
+    expect(runtimeRequest).not.toHaveBeenCalled()
+    expect(getRuntimeAuthToken).not.toHaveBeenCalled()
   })
 
   it('reveals the approval parent and records only a redacted native-dialog reference', async () => {

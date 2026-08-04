@@ -343,8 +343,14 @@ type RegisterAppIpcHandlersOptions = {
     path: string,
     method?: string,
     body?: string,
-    headers?: Record<string, string>
+    headers?: Record<string, string>,
+    options?: { skipEnsure?: boolean }
   ) => Promise<RuntimeRequestResult>
+  /**
+   * Attach/start the live Kun runtime before protected operations that must
+   * bind consent to the post-ensure Authorization token (#1084).
+   */
+  ensureRuntime: (settings: AppSettingsV1) => Promise<AppSettingsV1 | void>
   getRuntimeAuthToken: (settings: AppSettingsV1) => string
   getRuntimeSettingsSyncStatus: () => KunRuntimeSettingsSyncStatusPayload
   restartRuntime: () => Promise<void>
@@ -633,6 +639,7 @@ export function registerAppIpcHandlers(options: RegisterAppIpcHandlersOptions): 
     saveSettingsPatch,
     resetUnreadableCredentials,
     runtimeRequest,
+    ensureRuntime,
     getRuntimeAuthToken,
     getRuntimeSettingsSyncStatus,
     restartRuntime,
@@ -1076,9 +1083,18 @@ export function registerAppIpcHandlers(options: RegisterAppIpcHandlersOptions): 
       }
     }
 
+    // #1084: ensure/attach the live runtime first, then mint consent with the
+    // exact token that Authorization will use. Do not sign with a pre-ensure
+    // settings token and do not let a second ensure rotate the token between
+    // consent creation and the authenticated POST.
     const settings = await store.load()
+    const ensuredSettings = (await ensureRuntime(settings)) ?? settings
+    const runtimeToken = getRuntimeAuthToken(ensuredSettings)
+    if (!runtimeToken) {
+      throw new Error('Kun runtime token is required for protected approval.')
+    }
     const consentToken = createApprovalConsentToken({
-      runtimeToken: getRuntimeAuthToken(settings),
+      runtimeToken,
       approvalId: request.approvalId,
       decision: request.decision,
       expiresAt: Date.now() + 30_000
@@ -1087,7 +1103,13 @@ export function registerAppIpcHandlers(options: RegisterAppIpcHandlersOptions): 
       `/v1/approvals/${encodeURIComponent(request.approvalId)}`,
       'POST',
       JSON.stringify({ decision: request.decision }),
-      { [KUN_APPROVAL_CONSENT_HEADER]: consentToken }
+      {
+        [KUN_APPROVAL_CONSENT_HEADER]: consentToken,
+        // Pin Authorization to the same post-ensure token used for the HMAC so
+        // a concurrent discovery refresh cannot desync consent and bearer auth.
+        Authorization: `Bearer ${runtimeToken}`
+      },
+      { skipEnsure: true }
     )
     return { confirmed: true as const, response }
   })

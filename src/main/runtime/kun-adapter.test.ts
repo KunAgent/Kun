@@ -146,6 +146,57 @@ describe('runtimeRequestViaHost', () => {
     expect(seenAuthorization).toBe('Bearer usage-token')
   })
 
+  it('lets caller-pinned Authorization override settings runtimeToken (#1084 contract)', async () => {
+    // Protected approval mints consent with the post-ensure live token and pins
+    // Authorization on the POST so runtimeAuthHeaders(settings) cannot reintroduce
+    // a stale settings token (token-A) after ensure resolved token-B.
+    let seenAuthorization = ''
+    let postCount = 0
+    let ensureCalls = 0
+    const port = await listen((req, res) => {
+      if ((req.method ?? 'GET').toUpperCase() === 'POST') {
+        postCount += 1
+        seenAuthorization = req.headers.authorization ?? ''
+      }
+      res.setHeader('Content-Type', 'application/json')
+      res.end(JSON.stringify({ ok: true }))
+    })
+
+    const base = settingsForPort(port)
+    const settings: AppSettingsV1 = {
+      ...base,
+      agents: {
+        kun: {
+          ...base.agents.kun,
+          runtimeToken: 'token-A'
+        }
+      }
+    }
+
+    const response = await runtimeRequestViaHost(
+      settings,
+      '/v1/approvals/approval-1',
+      {
+        method: 'POST',
+        body: JSON.stringify({ decision: 'allow' }),
+        headers: {
+          Authorization: 'Bearer token-B'
+        }
+      },
+      async (current) => {
+        // Stub ensure: do not rotate the settings token.
+        ensureCalls += 1
+        return current
+      }
+    )
+
+    expect(response.ok).toBe(true)
+    expect(response.status).toBe(200)
+    expect(ensureCalls).toBe(1)
+    expect(postCount).toBe(1)
+    expect(seenAuthorization).toBe('Bearer token-B')
+  })
+
   it('uses settings returned by ensureRuntime when the managed port changes', async () => {
     let seenUrl = ''
     const port = await listen((req, res) => {
