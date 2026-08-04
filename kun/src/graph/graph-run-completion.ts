@@ -59,18 +59,44 @@ export async function finishGraphRun(initialRun: GraphRunV1, options: Completion
 }
 
 /**
- * Summary persistence is the first durable step of terminal finalization.
- * A later cleanup or status-transition failure may temporarily move the run
- * back to supervision. Only summaries whose current revision still satisfies
- * the normal completion gates receive that protection.
+ * Node/completion gates have passed (or the run is already in completing).
+ * Used only to avoid cancelling semantically finished work on incidental Lead
+ * settlement. Does not by itself authorize silent finalization.
+ */
+export function isGraphRunSemanticComplete(run: GraphRunV1): boolean {
+  return run.status === 'completing' || graphRunCompletionGatesPassed(run)
+}
+
+/**
+ * Unresolved holds that make auto-finish unsafe even when gates have passed:
+ * human attention, scheduler errors, or any needs_attention obligation.
+ */
+export function graphRunHasBlockingFinalizationHold(run: GraphRunV1): boolean {
+  if (run.status === 'awaiting_human') return true
+  return run.supervisionObligations.some((obligation) =>
+    obligation.state !== 'resolved' &&
+    (
+      obligation.state === 'needs_attention' ||
+      obligation.kind === 'scheduler_error'
+    ))
+}
+
+/**
+ * Finalization is safe to push through the scheduler without another Lead
+ * episode. Distinct from {@link isGraphRunSemanticComplete}:
+ * - semantic complete: do not cancel on incidental settlement
+ * - finalization safe: resumeRun may complete without bypassing blockers
+ *
+ * Requirements: completing, or (gates passed + no mailbox blockers + no
+ * human/scheduler finalization holds). Missing summary is allowed so the
+ * gates-passed race before tryComplete can finish after resumeRun.
  */
 export function isGraphRunCompletionFinalizing(
   run: GraphRunV1,
   mailbox: Pick<GraphMailbox, 'unresolvedBlockers'>
 ): boolean {
-  return run.status === 'completing' || (
-    run.summary !== undefined &&
-    graphRunCompletionGatesPassed(run) &&
-    mailbox.unresolvedBlockers(run).length === 0
-  )
+  if (run.status === 'completing') return true
+  if (mailbox.unresolvedBlockers(run).length > 0) return false
+  if (graphRunHasBlockingFinalizationHold(run)) return false
+  return graphRunCompletionGatesPassed(run)
 }

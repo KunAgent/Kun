@@ -35,7 +35,10 @@ import type { SessionStore } from '../ports/session-store.js'
 import type { ThreadStore } from '../ports/thread-store.js'
 import type { RuntimeEventRecorder } from '../services/runtime-event-recorder.js'
 import { createGraphCheckVerifier } from '../graph/graph-check-verifier.js'
-import { isGraphRunCompletionFinalizing } from '../graph/graph-run-completion.js'
+import {
+  isGraphRunCompletionFinalizing,
+  isGraphRunSemanticComplete
+} from '../graph/graph-run-completion.js'
 import {
   recoverGraphLeadOwnership,
   recoverGraphPlanningCommits
@@ -419,6 +422,21 @@ export class GraphRuntimeComposition {
     }
   }
 
+  /**
+   * Explicit user Stop / interruptTurn fence. Always cancels owned nonterminal
+   * GraphRuns before the source turn is persisted as aborted. Do not use for
+   * incidental Lead settlement (model failure, approval expiry, normal
+   * completed turn) — call {@link handleSourceTurnTerminal} without force.
+   */
+  async cancelSourceTurnRunsExplicitly(
+    threadId: string,
+    sourceTurnId: string
+  ): Promise<void> {
+    await this.handleSourceTurnTerminal(threadId, sourceTurnId, 'aborted', {
+      forceCancel: true
+    })
+  }
+
   async handleSourceTurnTerminal(
     threadId: string,
     sourceTurnId: string,
@@ -437,19 +455,30 @@ export class GraphRuntimeComposition {
       }
       if (
         options.forceCancel !== true &&
-        isGraphRunCompletionFinalizing(run, this.mailbox)
+        isGraphRunSemanticComplete(run)
       ) {
-        // Scheduler owns idempotent cleanup and completion. Wake it when the
-        // source Lead has just failed so a persisted final summary can finish
-        // without needing another Lead episode.
-        await this.scheduler?.resumeRun(run.id)
+        // Incidental settlement: never cancel semantically finished work.
+        // resumeRun only auto-finishes when finalization is also safe
+        // (no mailbox / human / scheduler holds). Explicit Stop uses
+        // forceCancel and must not take this branch (#1071).
+        if (isGraphRunCompletionFinalizing(run, this.mailbox)) {
+          await this.scheduler?.resumeRun(run.id)
+        }
         continue
       }
       try {
         await this.control.cancel(run.id, {
-          commandId: this.options.ids.next('graph_source_turn_terminal'),
-          idempotencyKey: `source-turn-terminal:${threadId}:${sourceTurnId}:${run.id}:${status}`,
-          reason: `owning source turn ended with status ${status}`
+          commandId: this.options.ids.next(
+            options.forceCancel === true
+              ? 'graph_source_turn_stop'
+              : 'graph_source_turn_terminal'
+          ),
+          idempotencyKey: options.forceCancel === true
+            ? `source-turn-stop:${threadId}:${sourceTurnId}:${run.id}`
+            : `source-turn-terminal:${threadId}:${sourceTurnId}:${run.id}:${status}`,
+          reason: options.forceCancel === true
+            ? 'user interrupted the owning source turn'
+            : `owning source turn ended with status ${status}`
         })
       } catch (error) {
         // Completion may win after list() but before cancel(). That is already
