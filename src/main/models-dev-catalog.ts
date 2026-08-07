@@ -106,6 +106,10 @@ const XIAOMI_TOKEN_PLAN_URLS = urlMatchMap({
 })
 
 const MINIMAX_URLS = urlMatchMap({
+  'https://api.minimaxi.com/v1': 'minimax-cn',
+  'https://api.minimaxi.com/v1/': 'minimax-cn',
+  'https://api.minimax.io/v1': 'minimax',
+  'https://api.minimax.io/v1/': 'minimax',
   'https://api.minimaxi.com/anthropic': 'minimax-cn',
   'https://api.minimaxi.com/anthropic/v1': 'minimax-cn',
   'https://api.minimax.io/anthropic': 'minimax',
@@ -113,6 +117,10 @@ const MINIMAX_URLS = urlMatchMap({
 })
 
 const MINIMAX_TOKEN_PLAN_URLS = urlMatchMap({
+  'https://api.minimaxi.com/v1': 'minimax-cn-coding-plan',
+  'https://api.minimaxi.com/v1/': 'minimax-cn-coding-plan',
+  'https://api.minimax.io/v1': 'minimax-coding-plan',
+  'https://api.minimax.io/v1/': 'minimax-coding-plan',
   'https://api.minimaxi.com/anthropic': 'minimax-cn-coding-plan',
   'https://api.minimaxi.com/anthropic/v1': 'minimax-cn-coding-plan',
   'https://api.minimax.io/anthropic': 'minimax-coding-plan',
@@ -137,8 +145,9 @@ const ENRICHMENT_ONLY_URL_MATCHES = new Map<string, ModelsDevProviderMatch>([
 ])
 
 // URL fallback is intentionally limited to unambiguous public endpoints.
-// MiniMax's regular API and Token Plan share the same URLs, so those entries
-// require a known Kun profile id and are excluded here.
+// MiniMax exposes both OpenAI-compatible and Anthropic-compatible URLs for
+// the regular API and Token Plan, so those entries require a known Kun profile
+// id and are excluded here.
 const UNAMBIGUOUS_URL_MATCHES = urlMatchMap({
   'https://api.deepseek.com': 'deepseek',
   'https://api.longcat.chat/openai': 'longcat',
