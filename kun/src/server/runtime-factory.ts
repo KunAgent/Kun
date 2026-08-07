@@ -1051,9 +1051,7 @@ async function createKunServeRuntimeComposition(
 	    transitionGraphPlanningDraft: (input) =>
 	      graphRuntime.transitionPlanningDraft(input),
 	    cancelGraphSourceRuns: ({ threadId, sourceTurnId }) =>
-	      graphRuntime.handleSourceTurnTerminal(threadId, sourceTurnId, 'aborted', {
-	        forceCancel: true
-	      }),
+	      graphRuntime.cancelSourceTurnRunsExplicitly(threadId, sourceTurnId),
 	    migrationMaintenance,
 	    ids,
 	    nowIso
