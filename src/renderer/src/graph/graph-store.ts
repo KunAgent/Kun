@@ -21,9 +21,82 @@ import type {
 } from './graph-types'
 
 export { selectGraphPlanningCorrectionDraft } from './graph-planning-selection'
+export type { GraphThreadSyncStatus } from './graph-thread-observer'
+
+type ThreadRefreshGate = {
+  inFlight: Promise<void> | null
+  pending: boolean
+  /** Pending refresh is silent only when every coalesced request asked for silent. */
+  pendingSilent: boolean
+}
+
+/** One in-flight HTTP snapshot per thread; later requests mark pending. */
+const threadRefreshGates = new Map<string, ThreadRefreshGate>()
+
+function refreshGateFor(threadId: string): ThreadRefreshGate {
+  const existing = threadRefreshGates.get(threadId)
+  if (existing) return existing
+  const created: ThreadRefreshGate = {
+    inFlight: null,
+    pending: false,
+    pendingSilent: true
+  }
+  threadRefreshGates.set(threadId, created)
+  return created
+}
 
 function message(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
+}
+
+async function applyThreadSnapshot(
+  get: () => GraphViewState,
+  set: (
+    partial:
+      | Partial<GraphViewState>
+      | ((state: GraphViewState) => Partial<GraphViewState>)
+  ) => void,
+  threadId: string,
+  silent: boolean
+): Promise<void> {
+  if (!silent) set({ loading: true, error: null })
+  try {
+    const [runs, drafts, diagnostics] = await Promise.all([
+      graphRuntimeClient.listRuns(threadId),
+      graphRuntimeClient.listDrafts(threadId),
+      graphRuntimeClient.delegationDiagnostics(threadId).catch(() => null)
+    ])
+    if (get().threadId !== threadId) return
+    const current = get()
+    const mergedRuns = mergeGraphRunSnapshots(current.runs, runs)
+    const previousRunId = current.selectedRunId
+    const previousNodeId = current.selectedNodeId
+    const selectedRunId = mergedRuns.some((run) => run.id === previousRunId)
+      ? previousRunId
+      : mergedRuns[0]?.id ?? null
+    const selectedRun = mergedRuns.find((run) => run.id === selectedRunId)
+    const selectedNodeId = previousNodeId && selectedRun?.nodes[previousNodeId]
+      ? previousNodeId
+      : null
+    set({
+      runs: mergedRuns,
+      drafts,
+      childRuns: mergeGraphChildDiagnostics(current.childRuns, diagnostics, threadId),
+      selectedRunId,
+      selectedNodeId,
+      artifactPage: null,
+      artifactContent: '',
+      artifactLoading: false,
+      // Always clear loading after a successful snapshot so a silent follow-up
+      // cannot leave the panel stuck after bindGraphThread set loading=true.
+      loading: false,
+      ...(silent ? {} : { error: null })
+    })
+  } catch (error) {
+    if (get().threadId !== threadId) return
+    if (!silent) set({ loading: false, error: message(error) })
+    else if (get().loading) set({ loading: false })
+  }
 }
 
 export const useGraphStore = create<GraphViewState>((set, get) => ({
@@ -49,12 +122,17 @@ export const useGraphStore = create<GraphViewState>((set, get) => ({
   wakingObligationId: null,
   loading: false,
   error: null,
+  syncStatus: 'idle',
+  threadEventSeq: 0,
 
-  refreshThread: async (threadId, options) => {
-    const silent = options?.silent === true
-    set(silent ? { threadId } : { threadId, loading: true, error: null })
-    if (!threadId) {
+  bindGraphThread: (nextThreadId) => {
+    const current = get()
+    if (nextThreadId === null) {
+      if (current.threadId === null && current.runs.length === 0) {
+        return { switched: false }
+      }
       set({
+        threadId: null,
         runs: [],
         drafts: [],
         childRuns: {},
@@ -63,42 +141,79 @@ export const useGraphStore = create<GraphViewState>((set, get) => ({
         artifactPage: null,
         artifactContent: '',
         artifactLoading: false,
-        loading: false
+        loading: false,
+        error: null,
+        syncStatus: 'idle',
+        threadEventSeq: 0
       })
+      return { switched: true }
+    }
+    if (current.threadId === nextThreadId) {
+      return { switched: false }
+    }
+    // Different thread: never show the previous thread's Graph projection.
+    set({
+      threadId: nextThreadId,
+      runs: [],
+      drafts: [],
+      childRuns: {},
+      selectedRunId: null,
+      selectedNodeId: null,
+      artifactPage: null,
+      artifactContent: '',
+      artifactLoading: false,
+      loading: true,
+      error: null,
+      syncStatus: 'connecting',
+      threadEventSeq: 0
+    })
+    return { switched: true }
+  },
+
+  refreshThread: async (threadId, options) => {
+    const silent = options?.silent === true
+    if (!threadId) {
+      get().bindGraphThread(null)
       return
     }
-    try {
-      const [runs, drafts, diagnostics] = await Promise.all([
-        graphRuntimeClient.listRuns(threadId),
-        graphRuntimeClient.listDrafts(threadId),
-        graphRuntimeClient.delegationDiagnostics(threadId).catch(() => null)
-      ])
-      if (get().threadId !== threadId) return
-      const current = get()
-      const mergedRuns = mergeGraphRunSnapshots(current.runs, runs)
-      const previousRunId = current.selectedRunId
-      const previousNodeId = current.selectedNodeId
-      const selectedRunId = mergedRuns.some((run) => run.id === previousRunId)
-        ? previousRunId
-        : mergedRuns[0]?.id ?? null
-      const selectedRun = mergedRuns.find((run) => run.id === selectedRunId)
-      const selectedNodeId = previousNodeId && selectedRun?.nodes[previousNodeId]
-        ? previousNodeId
-        : null
-      set({
-        runs: mergedRuns,
-        drafts,
-        childRuns: mergeGraphChildDiagnostics(current.childRuns, diagnostics, threadId),
-        selectedRunId,
-        selectedNodeId,
-        artifactPage: null,
-        artifactContent: '',
-        artifactLoading: false,
-        ...(silent ? {} : { loading: false, error: null })
-      })
-    } catch (error) {
-      if (!silent) set({ loading: false, error: message(error) })
+
+    // Atomic ownership transition — does not depend on React effect order.
+    const { switched } = get().bindGraphThread(threadId)
+    if (!switched && !silent) {
+      set({ loading: true, error: null })
+    } else if (!switched && silent) {
+      // same thread silent reconcile: leave projection untouched until apply
     }
+
+    const gate = refreshGateFor(threadId)
+    if (gate.inFlight) {
+      gate.pending = true
+      gate.pendingSilent = gate.pendingSilent && silent
+      await gate.inFlight
+      return
+    }
+
+    gate.pending = true
+    gate.pendingSilent = silent
+    const run = (async () => {
+      try {
+        while (gate.pending && get().threadId === threadId) {
+          const useSilent = gate.pendingSilent
+          gate.pending = false
+          gate.pendingSilent = true
+          await applyThreadSnapshot(get, set, threadId, useSilent)
+        }
+      } finally {
+        gate.inFlight = null
+        // A request may have marked pending after the while-check but before
+        // inFlight was cleared; start a follow-up leader without dropping it.
+        if (gate.pending && get().threadId === threadId) {
+          void get().refreshThread(threadId, { silent: gate.pendingSilent })
+        }
+      }
+    })()
+    gate.inFlight = run
+    await run
   },
 
   refreshProject: async (workspace) => {
@@ -191,6 +306,16 @@ export const useGraphStore = create<GraphViewState>((set, get) => ({
   }),
   clearChildReturnTarget: () => set({ childReturnTarget: null }),
 
+  setSyncStatus: (syncStatus, ownerThreadId) => set((state) => {
+    if (ownerThreadId !== undefined && state.threadId !== ownerThreadId) return {}
+    return { syncStatus }
+  }),
+
+  advanceThreadEventSeq: (seq, ownerThreadId) => set((state) => {
+    if (ownerThreadId !== undefined && state.threadId !== ownerThreadId) return {}
+    return { threadEventSeq: Math.max(state.threadEventSeq, seq) }
+  }),
+
   receiveChildRuntimeEvent: (event) => {
     if (event.child.parentThreadId !== get().threadId) return
     const incoming = graphChildRuntimeFromEvent(event)
@@ -208,9 +333,11 @@ export const useGraphStore = create<GraphViewState>((set, get) => ({
   receiveEvent: (event) => {
     if (event.threadId !== get().threadId) return
     const known = get().runs.find((run) => run.id === event.runId)
-    if (!known || event.graphSeq > known.lastEventSeq) {
-      void get().refreshThread(event.threadId)
-    }
+    // graphSeq is run-local; thread SSE cursor is separate. Gaps and advances
+    // both converge via a coalesced silent snapshot — domain listEvents is not
+    // projected because the renderer owns HTTP run snapshots, not event replay.
+    if (known && event.graphSeq <= known.lastEventSeq) return
+    void get().refreshThread(event.threadId, { silent: true })
   },
 
   receivePlanningEvent: (event) => {

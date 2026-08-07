@@ -9,7 +9,8 @@ import { useTranslation } from 'react-i18next'
 import { useChatStore } from '../../store/chat-store'
 import { openGraphChildThread } from '../../graph/graph-child-navigation'
 import { useGraphStore } from '../../graph/graph-store'
-import type { GraphPlanningDraftView, GraphRun } from '../../graph/graph-types'
+import { useGraphThreadObserver } from '../../graph/use-graph-thread-observer'
+import type { GraphPlanningDraftView, GraphRun, GraphRunStatus } from '../../graph/graph-types'
 import { GraphAgentsView } from './GraphAgentsView'
 import { GraphLearningView } from './GraphLearningView'
 import { GraphPlanningCard } from './GraphPlanningCard'
@@ -35,15 +36,16 @@ type View = 'run' | 'agents' | 'learning'
 
 export const GRAPH_DASHBOARD_SNAPSHOT_REFRESH_INTERVAL_MS = 5_000
 
-const liveGraphRunStatuses = new Set<GraphRun['status']>([
-  'draft',
-  'validating',
-  'ready',
-  'running',
-  'pausing',
-  'awaiting_supervision',
-  'completing'
+/** Hard terminal Graph run statuses — only these may stop fallback polling. */
+export const GRAPH_RUN_TERMINAL_STATUSES = new Set<GraphRunStatus>([
+  'completed',
+  'failed',
+  'cancelled'
 ])
+
+export function graphRunStatusIsTerminal(status: GraphRunStatus): boolean {
+  return GRAPH_RUN_TERMINAL_STATUSES.has(status)
+}
 
 const livePlanningDraftStatuses = new Set<GraphPlanningDraftView['draft']['status']>([
   'planning',
@@ -52,14 +54,30 @@ const livePlanningDraftStatuses = new Set<GraphPlanningDraftView['draft']['statu
   'committing'
 ])
 
+/**
+ * v0.2.35 / #1072 contract: while any non-terminal run, live planning draft, or
+ * active Graph source turn exists, poll durable snapshots every 5s — independent
+ * of SSE syncStatus. Live SSE is the low-latency path; HTTP snapshot is the
+ * reliability backstop when the event bridge is silently stuck.
+ */
 export function graphDashboardNeedsSnapshotRefresh(
   runs: readonly Pick<GraphRun, 'status'>[],
   drafts: readonly Pick<GraphPlanningDraftView, 'draft'>[],
   sourceGraphTurnActive: boolean
 ): boolean {
-  return sourceGraphTurnActive ||
-    runs.some((run) => liveGraphRunStatuses.has(run.status)) ||
-    drafts.some((draft) => livePlanningDraftStatuses.has(draft.draft.status))
+  if (sourceGraphTurnActive) return true
+  if (drafts.some((draft) => livePlanningDraftStatuses.has(draft.draft.status))) {
+    return true
+  }
+  return runs.some((run) => !graphRunStatusIsTerminal(run.status))
+}
+
+/** True only when the store binding matches the panel's target thread. */
+export function graphProjectionOwnedByThread(
+  storeThreadId: string | null,
+  graphThreadId: string | null
+): boolean {
+  return Boolean(graphThreadId) && storeThreadId === graphThreadId
 }
 
 export function useGraphDashboardSnapshotRefresh({
@@ -125,9 +143,10 @@ export function GraphModePanel({
   const [view, setView] = useState<View>('run')
   const [steering, setSteering] = useState('')
   const {
-    runs,
-    drafts,
-    childRuns,
+    threadId: storeThreadId,
+    runs: storeRuns,
+    drafts: storeDrafts,
+    childRuns: storeChildRuns,
     childReturnTarget,
     selectedRunId,
     selectedNodeId,
@@ -144,6 +163,7 @@ export function GraphModePanel({
     identity,
     loading,
     error,
+    syncStatus,
     refreshThread,
     refreshProject,
     refreshSelectedRun,
@@ -175,13 +195,23 @@ export function GraphModePanel({
   const graphThreadId = childReturnTarget?.childThreadId === activeThreadId
     ? childReturnTarget.parentThreadId
     : activeThreadId
+  // Render gate: never show thread-A projection under thread-B before bind runs.
+  const projectionOwned = graphProjectionOwnedByThread(storeThreadId, graphThreadId)
+  const runs = projectionOwned ? storeRuns : []
+  const drafts = projectionOwned ? storeDrafts : []
+  const childRuns = projectionOwned ? storeChildRuns : {}
   const sourceGraphTurnActive = graphThreadId === activeThreadId &&
     threadBusy && currentTurnOrchestration === 'graph'
+  // Polling decision uses owned projection only; syncStatus is display-only.
   const shouldRefreshSnapshot = graphDashboardNeedsSnapshotRefresh(
     runs,
     drafts,
     sourceGraphTurnActive
   )
+
+  // Independent of chat busy: Graph SSE keeps projecting after Lead settles.
+  // Ownership is atomic via bindGraphThread (not effect order with refreshThread).
+  useGraphThreadObserver(graphThreadId, active)
 
   useEffect(() => {
     if (!active) return
@@ -199,7 +229,9 @@ export function GraphModePanel({
     void refreshProject(workspaceRoot)
   }, [refreshProject, workspaceRoot])
 
-  const run = runs.find((item) => item.id === selectedRunId) ?? runs[0] ?? null
+  const run = projectionOwned
+    ? (runs.find((item) => item.id === selectedRunId) ?? runs[0] ?? null)
+    : null
   const planningDraft = selectGraphPlanningDraft(drafts, Boolean(run))
   const selectedNode = run && selectedNodeId ? run.nodes[selectedNodeId] : undefined
   const canvasFocusRequestKey = run && selectedNodeId
@@ -271,6 +303,18 @@ export function GraphModePanel({
             </div>
             <div className="truncate text-[10px] text-ds-faint">
               {identity?.source.replaceAll('_', ' ') ?? 'project orchestration'}
+              {syncStatus === 'live'
+                ? ` · ${t('graphObserver_live')}`
+                : null}
+              {syncStatus === 'connecting'
+                ? ` · ${t('graphObserver_connecting')}`
+                : null}
+              {syncStatus === 'reconnecting'
+                ? ` · ${t('graphObserver_reconnecting')}`
+                : null}
+              {syncStatus === 'stopped'
+                ? ` · ${t('graphObserver_stopped')}`
+                : null}
             </div>
           </div>
         </div>

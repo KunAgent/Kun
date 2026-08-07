@@ -19,6 +19,7 @@ import {
   graphElements,
   GRAPH_DASHBOARD_SNAPSHOT_REFRESH_INTERVAL_MS,
   graphDashboardNeedsSnapshotRefresh,
+  graphProjectionOwnedByThread,
   plannedAssignmentLabel,
   runProgress,
   selectGraphPlanningDraft,
@@ -26,6 +27,18 @@ import {
 } from './GraphModePanel'
 import { reconcileInteractiveGraphNodes } from './graph-canvas-state'
 import { clampGraphInspectorWidth } from './graph-workspace-layout'
+
+const graphClient = vi.hoisted(() => ({
+  listRuns: vi.fn(),
+  listDrafts: vi.fn(),
+  delegationDiagnostics: vi.fn()
+}))
+
+vi.mock('../../graph/graph-runtime-client', () => ({
+  graphRuntimeClient: graphClient
+}))
+
+import { useGraphStore } from '../../graph/graph-store'
 
 function node(id: string, phaseId: string): GraphPlanNode {
   return {
@@ -144,22 +157,68 @@ function SnapshotRefreshHarness({
   return null
 }
 
+/**
+ * Drives the real #1072 poll gate from store state — must not hard-code shouldRefresh.
+ */
+function StoreDrivenSnapshotRefreshHarness({
+  active,
+  sourceGraphTurnActive = false
+}: {
+  active: boolean
+  sourceGraphTurnActive?: boolean
+}): null {
+  const threadId = useGraphStore((state) => state.threadId)
+  const runs = useGraphStore((state) => state.runs)
+  const drafts = useGraphStore((state) => state.drafts)
+  const refreshThread = useGraphStore((state) => state.refreshThread)
+  const shouldRefresh = graphDashboardNeedsSnapshotRefresh(
+    runs,
+    drafts,
+    sourceGraphTurnActive
+  )
+  useGraphDashboardSnapshotRefresh({
+    active,
+    threadId,
+    shouldRefresh,
+    refreshThread
+  })
+  return null
+}
+
 describe('Graph Mode panel projection', () => {
   afterEach(() => {
     vi.useRealTimers()
   })
 
-  it('reconciles nonterminal Graph work and an active source turn even before a run is visible', () => {
+  it('keeps the v0.2.35 snapshot poll contract independent of SSE live status', () => {
     const liveRun = graphRun([node('work', 'phase_1')], [])
-    const terminalRun = { ...liveRun, status: 'completed' as const }
+    const completed = { ...liveRun, status: 'completed' as const }
+    const failed = { ...liveRun, status: 'failed' as const }
+    const cancelled = { ...liveRun, status: 'cancelled' as const }
     const pausedRun = { ...liveRun, status: 'paused' as const }
+    const awaitingHuman = { ...liveRun, status: 'awaiting_human' as const }
 
+    // Non-terminal + SSE live must still poll (silent event bridge failure path).
     expect(graphDashboardNeedsSnapshotRefresh([liveRun], [], false)).toBe(true)
-    expect(graphDashboardNeedsSnapshotRefresh([terminalRun], [], false)).toBe(false)
-    expect(graphDashboardNeedsSnapshotRefresh([pausedRun], [], false)).toBe(false)
+    expect(graphDashboardNeedsSnapshotRefresh([pausedRun], [], false)).toBe(true)
+    expect(graphDashboardNeedsSnapshotRefresh([awaitingHuman], [], false)).toBe(true)
+
+    // Hard terminals without live drafts / source turn stop poll.
+    expect(graphDashboardNeedsSnapshotRefresh([completed], [], false)).toBe(false)
+    expect(graphDashboardNeedsSnapshotRefresh([failed], [], false)).toBe(false)
+    expect(graphDashboardNeedsSnapshotRefresh([cancelled], [], false)).toBe(false)
+
+    // Planning draft / source turn still force poll with no runs.
     expect(graphDashboardNeedsSnapshotRefresh([], [planningDraft('draft_1', 'planning')], false))
       .toBe(true)
     expect(graphDashboardNeedsSnapshotRefresh([], [], true)).toBe(true)
+  })
+
+  it('gates rendered projection on store thread ownership', () => {
+    expect(graphProjectionOwnedByThread('thread_a', 'thread_a')).toBe(true)
+    expect(graphProjectionOwnedByThread('thread_a', 'thread_b')).toBe(false)
+    expect(graphProjectionOwnedByThread(null, 'thread_b')).toBe(false)
+    expect(graphProjectionOwnedByThread('thread_b', null)).toBe(false)
   })
 
   it('polls durable Graph snapshots without overlapping requests and stops when hidden', async () => {
@@ -220,6 +279,64 @@ describe('Graph Mode panel projection', () => {
       await Promise.resolve()
     })
     expect(refreshThread).toHaveBeenCalledTimes(2)
+
+    await act(async () => renderer.unmount())
+  })
+
+  it('covers fully missed SSE by low-frequency snapshot fallback (seq 2 → 5, fake timers)', async () => {
+    vi.useFakeTimers()
+    graphClient.listDrafts.mockResolvedValue([])
+    graphClient.delegationDiagnostics.mockResolvedValue({
+      enabled: true,
+      active: 0,
+      childRuns: []
+    })
+    const runAt = (seq: number): GraphRun => ({
+      ...graphRun([node('work', 'phase_1')], []),
+      lastEventSeq: seq,
+      status: 'running'
+    })
+
+    useGraphStore.setState({
+      threadId: 'thread_1',
+      runs: [runAt(2)],
+      drafts: [],
+      childRuns: {},
+      syncStatus: 'live',
+      threadEventSeq: 40,
+      loading: false,
+      error: null
+    })
+    // Gate must be true from real contract math — not a hard-coded shouldRefresh.
+    expect(graphDashboardNeedsSnapshotRefresh(
+      useGraphStore.getState().runs,
+      useGraphStore.getState().drafts,
+      false
+    )).toBe(true)
+    expect(useGraphStore.getState().syncStatus).toBe('live')
+    expect(useGraphStore.getState().runs[0]?.lastEventSeq).toBe(2)
+
+    graphClient.listRuns.mockResolvedValue([runAt(5)])
+
+    let renderer!: ReactTestRenderer
+    await act(async () => {
+      renderer = createRenderer(createElement(StoreDrivenSnapshotRefreshHarness, {
+        active: true
+      }))
+    })
+
+    await act(async () => {
+      vi.advanceTimersByTime(GRAPH_DASHBOARD_SNAPSHOT_REFRESH_INTERVAL_MS)
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    await vi.waitFor(() => {
+      expect(useGraphStore.getState().runs[0]?.lastEventSeq).toBe(5)
+    })
+    expect(graphClient.listRuns).toHaveBeenCalled()
+    // No SSE Graph events were delivered; snapshot alone converged the projection.
+    expect(useGraphStore.getState().syncStatus).toBe('live')
 
     await act(async () => renderer.unmount())
   })

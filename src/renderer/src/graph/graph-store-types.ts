@@ -1,5 +1,6 @@
 import type { RuntimeChildEventPayload } from '../agent/types'
 import type { GraphChildReturnTarget } from './graph-child-runtime'
+import type { GraphThreadSyncStatus } from './graph-thread-observer'
 import type {
   GraphAgentEvidence,
   GraphAgentProfile,
@@ -16,6 +17,8 @@ import type {
   GraphRun,
   ProjectIdentity
 } from './graph-types'
+
+export type { GraphThreadSyncStatus } from './graph-thread-observer'
 
 type GraphThreadRefreshOptions = {
   silent?: boolean
@@ -44,6 +47,16 @@ export type GraphViewState = {
   wakingObligationId: string | null
   loading: boolean
   error: string | null
+  /** Graph-owned SSE / observer lifecycle (independent of chat busy). */
+  syncStatus: GraphThreadSyncStatus
+  /** Monotonic thread SSE cursor for the bound Graph panel thread. */
+  threadEventSeq: number
+  /**
+   * Atomic thread ownership transition for the Graph panel. Switching to a
+   * different thread clears all thread-scoped projection and resets the SSE
+   * cursor to 0. Same-thread calls are no-ops (reconnect keeps the snapshot).
+   */
+  bindGraphThread: (threadId: string | null) => { switched: boolean }
   refreshThread: (threadId: string | null, options?: GraphThreadRefreshOptions) => Promise<void>
   refreshProject: (workspace: string) => Promise<void>
   refreshSelectedRun: () => Promise<void>
@@ -53,6 +66,8 @@ export type GraphViewState = {
   updateChildObserver: (status: GraphChildReturnTarget['observerStatus'], cursor?: number) => void
   updateChildSessionStatus: (status: GraphChildReturnTarget['childSessionStatus']) => void
   clearChildReturnTarget: () => void
+  setSyncStatus: (status: GraphThreadSyncStatus, ownerThreadId?: string) => void
+  advanceThreadEventSeq: (seq: number, ownerThreadId?: string) => void
   receiveChildRuntimeEvent: (event: RuntimeChildEventPayload) => void
   receiveEvent: (event: GraphEventEnvelope) => void
   receivePlanningEvent: (event: GraphPlanningLifecycleEvent) => void
