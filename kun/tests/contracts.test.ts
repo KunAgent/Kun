@@ -832,9 +832,27 @@ describe('cli', () => {
     expect(config.attachments.textFallbackMaxImageDimension).toBe(1280)
     expect(config.attachments.textFallbackPreferredMimeType).toBe('image/webp')
     expect(config.memory.scopes).toEqual(['user', 'workspace', 'project'])
+    expect(config.memory.maxInjectedRecords).toBe(8)
     expect(config.imageGen.enabled).toBe(false)
     expect(config.imageGen.timeoutMs).toBe(180_000)
     expect(config.imageGen.maxReferenceImages).toBe(4)
+  })
+
+  it('defaults and bounds memory maxInjectedRecords and round-trips it in the manifest', () => {
+    expect(KunCapabilitiesConfig.safeParse({
+      memory: { enabled: true, maxInjectedRecords: 0 }
+    }).success).toBe(false)
+    expect(KunCapabilitiesConfig.safeParse({
+      memory: { enabled: true, maxInjectedRecords: -3 }
+    }).success).toBe(false)
+
+    const manifest = buildRuntimeCapabilityManifest({
+      model: modelCapabilitiesForModel('deepseek-chat'),
+      config: KunCapabilitiesConfig.parse({
+        memory: { enabled: true, maxInjectedRecords: 12 }
+      })
+    })
+    expect(manifest.memory.maxInjectedRecords).toBe(12)
   })
 
   it('ignores legacy subagent step-limit config fields', () => {

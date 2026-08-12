@@ -294,8 +294,7 @@ async function retrieveMemories(
   if (!memoryStore) return []
   const memories = await memoryStore.retrieve({
     query: input.prompt,
-    workspace: input.workspace,
-    limit: 8
+    workspace: input.workspace
   })
   memoryStore.setLastInjected(memories.map((memory) => memory.id))
   return memories

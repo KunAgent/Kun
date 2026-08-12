@@ -432,8 +432,7 @@ export function createCursorSdkRuntime(
       if (memoryStore && userText.trim()) {
         const memories = await memoryStore.retrieve({
           query: userText,
-          workspace: thread.workspace,
-          limit: 8
+          workspace: thread.workspace
         })
         memoryStore.setLastInjected(memories.map((memory) => memory.id))
         memoryBlocks = memoryInstructions(memories)

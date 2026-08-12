@@ -230,6 +230,30 @@ describe('manager shared data store', () => {
     await store.close()
   })
 
+  it('clamps manager-mediated memory retrieval to maxInjectedRecords', async () => {
+    const store = await dataStore()
+    const config = { enabled: true, scopes: ['workspace'], maxInjectedRecords: 2 }
+    for (let i = 0; i < 3; i += 1) {
+      await store.executeMemory('createWithId', {
+        config,
+        value: {
+          id: `mem_r${i}`,
+          input: {
+            content: `Use pnpm for frontend installs ${i}`,
+            scope: 'workspace',
+            workspace: '/tmp/shared-workspace'
+          }
+        }
+      })
+    }
+    const records = await store.executeMemory('retrieve', {
+      config,
+      value: { query: 'pnpm frontend', workspace: '/tmp/shared-workspace' }
+    }) as Array<{ id: string }>
+    expect(records).toHaveLength(2)
+    await store.close()
+  })
+
   it('owns Graph journals and snapshots for both runtime clients', async () => {
     const store = await dataStore()
     const config = testGraphConfig()

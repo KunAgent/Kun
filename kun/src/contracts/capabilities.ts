@@ -414,9 +414,11 @@ export const AttachmentsCapabilityConfig = CapabilityToggleConfig.extend({
 }).strict()
 export type AttachmentsCapabilityConfig = z.infer<typeof AttachmentsCapabilityConfig>
 
+export const DEFAULT_MEMORY_MAX_INJECTED_RECORDS = 8
+
 export const MemoryCapabilityConfig = CapabilityToggleConfig.extend({
   scopes: z.array(z.enum(['user', 'workspace', 'project'])).default(['user', 'workspace', 'project']),
-  maxInjectedRecords: z.number().int().positive().default(8)
+  maxInjectedRecords: z.number().int().positive().default(DEFAULT_MEMORY_MAX_INJECTED_RECORDS)
 }).strict()
 export type MemoryCapabilityConfig = z.infer<typeof MemoryCapabilityConfig>
 

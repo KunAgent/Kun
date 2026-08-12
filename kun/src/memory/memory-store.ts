@@ -1,6 +1,6 @@
 import { chmod, mkdir, readFile, readdir, rm } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
-import type { MemoryCapabilityConfig } from '../contracts/capabilities.js'
+import { DEFAULT_MEMORY_MAX_INJECTED_RECORDS, type MemoryCapabilityConfig } from '../contracts/capabilities.js'
 import { atomicWriteFile } from '../adapters/file/atomic-write.js'
 import {
   MemoryDiagnostics,
@@ -19,7 +19,11 @@ export interface MemoryStore {
   delete(id: string, access?: MemoryAccess): Promise<MemoryRecord>
   purge?(id: string): Promise<void>
   list(filter?: { workspace?: string; includeDeleted?: boolean; all?: boolean }): Promise<MemoryRecord[]>
-  retrieve(input: { query: string; workspace?: string; limit: number }): Promise<MemoryRecord[]>
+  /**
+   * Retrieve memories matching a query. An omitted `limit` uses the store
+   * config's `maxInjectedRecords` as the hard ceiling.
+   */
+  retrieve(input: { query: string; workspace?: string; limit?: number }): Promise<MemoryRecord[]>
   diagnostics(): Promise<MemoryDiagnostics>
   setLastInjected(ids: string[]): void
 }
@@ -140,8 +144,10 @@ export class FileMemoryStore implements MemoryStore {
       .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
   }
 
-  async retrieve(input: { query: string; workspace?: string; limit: number }): Promise<MemoryRecord[]> {
+  async retrieve(input: { query: string; workspace?: string; limit?: number }): Promise<MemoryRecord[]> {
     if (!this.options.config.enabled) return []
+    const cap = this.options.config.maxInjectedRecords ?? DEFAULT_MEMORY_MAX_INJECTED_RECORDS
+    const effectiveLimit = Math.min(input.limit ?? cap, cap)
     const nowMs = Date.parse(this.now())
     const active = (await this.list({ workspace: input.workspace }))
       .filter((record) => isMemoryActive(
@@ -168,7 +174,7 @@ export class FileMemoryStore implements MemoryStore {
       .filter((entry) => entry.score > 0)
       .sort((a, b) => b.score - a.score || b.record.updatedAt.localeCompare(a.record.updatedAt))
       .map((entry) => entry.record)
-    return [...userMemories, ...scored].slice(0, input.limit)
+    return [...userMemories, ...scored].slice(0, effectiveLimit)
   }
 
   async diagnostics(): Promise<MemoryDiagnostics> {

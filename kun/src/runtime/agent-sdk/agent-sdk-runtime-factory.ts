@@ -826,8 +826,7 @@ export function createAgentSdkRuntime(deps: AgentSdkRuntimeFactoryDeps): AgentSd
       if (deps.memoryStore && userText.trim()) {
         const memories = await deps.memoryStore.retrieve({
           query: userText,
-          workspace: thread.workspace,
-          limit: 8
+          workspace: thread.workspace
         })
         deps.memoryStore.setLastInjected(memories.map((memory) => memory.id))
         memoryBlocks = memoryInstructions(memories)

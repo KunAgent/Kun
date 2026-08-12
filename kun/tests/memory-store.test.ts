@@ -409,6 +409,45 @@ describe('Memory store and recall', () => {
     expect(entries.filter((entry) => entry.includes('.tmp'))).toEqual([])
   })
 
+  async function runTurnWithMemories(count: number, maxInjectedRecords: number) {
+    const store = createStore({ maxInjectedRecords })
+    for (let i = 0; i < count; i += 1) {
+      await store.create({
+        content: `Project setup fact ${i}: prefer pnpm for frontend installs`,
+        scope: 'workspace',
+        workspace: '/tmp/ws'
+      })
+    }
+    const seenRequests: ModelRequest[] = []
+    const model: ModelClient = {
+      provider: 'fake',
+      model: 'fake',
+      async *stream(request) {
+        seenRequests.push(request)
+        yield { kind: 'completed', stopReason: 'stop' }
+      }
+    }
+    const h = makeHarness(model, { memoryStore: store })
+    await bootstrapThread(h, { workspace: '/tmp/ws', request: { prompt: 'prefer pnpm for frontend installs?' } })
+    await h.loop.runTurn(h.threadId, h.turnId)
+    return {
+      injectedCount: (await h.turns.getTurn(h.threadId, h.turnId))?.injectedMemoryIds?.length ?? 0,
+      instructions: seenRequests.at(-1)?.contextInstructions?.join('\n') ?? ''
+    }
+  }
+
+  it('injects up to a raised maxInjectedRecords per turn', async () => {
+    const { injectedCount, instructions } = await runTurnWithMemories(10, 12)
+    expect(injectedCount).toBe(10)
+    expect(instructions.match(/- \[mem_/g)).toHaveLength(10)
+  })
+
+  it('injects at most maxInjectedRecords memories per turn', async () => {
+    const { injectedCount, instructions } = await runTurnWithMemories(3, 2)
+    expect(injectedCount).toBe(2)
+    expect(instructions.match(/- \[mem_/g)).toHaveLength(2)
+  })
+
   function createStore(overrides: Partial<MemoryCapabilityConfig> = {}) {
     return new FileMemoryStore({
       rootDir: join(dir, 'memory'),

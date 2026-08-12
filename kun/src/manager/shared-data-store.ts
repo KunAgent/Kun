@@ -481,7 +481,7 @@ export class ManagerSharedDataStore {
           const request = z.object({
             query: z.string(),
             workspace: z.string().optional(),
-            limit: z.number().int().positive()
+            limit: z.number().int().positive().optional()
           }).strict().parse(body.value)
           return store.retrieve(request)
         }

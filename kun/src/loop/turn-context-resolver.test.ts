@@ -74,7 +74,7 @@ describe('TurnContextResolver', () => {
       name: 'create_plan', description: 'Create plan', inputSchema: {}, providerId: 'gui'
       }]
     })
-    const retrieve = vi.fn(async (): Promise<MemoryRecord[]> => {
+    const retrieve = vi.fn<MemoryStore['retrieve']>(async (_input) => {
       resolutionOrder.push('memories')
       return [{
       id: 'memory_1', content: 'Prefer tests', scope: 'workspace',
@@ -150,6 +150,11 @@ describe('TurnContextResolver', () => {
       tools: [expect.objectContaining({ name: 'create_plan' })]
     })
     expect(setLastInjected).toHaveBeenCalledWith(['memory_1'])
+    expect(retrieve).toHaveBeenCalledWith(expect.objectContaining({
+      query: 'Implement the requested plan',
+      workspace: '/workspace'
+    }))
+    expect(retrieve.mock.calls[0]?.[0]).not.toHaveProperty('limit')
     expect(resolutionOrder).toEqual(['attachments', 'skills', 'instructions', 'memories', 'tools'])
     expect(listTools).toHaveBeenCalledWith(expect.objectContaining({
       guiPlan: expect.objectContaining({ planId: 'plan_1' }),
