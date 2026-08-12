@@ -1,6 +1,6 @@
 import { chmod, mkdir, readFile, readdir, rm } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
-import { DEFAULT_MEMORY_MAX_INJECTED_RECORDS, type MemoryCapabilityConfig } from '../contracts/capabilities.js'
+import { DEFAULT_MEMORY_MAX_INJECTED_RECORDS, DEFAULT_SCOPES, type MemoryCapabilityConfig } from '../contracts/capabilities.js'
 import { atomicWriteFile } from '../adapters/file/atomic-write.js'
 import {
   MemoryDiagnostics,
@@ -156,14 +156,17 @@ export class FileMemoryStore implements MemoryStore {
         this.options.minConfidence ?? 0,
         this.options.confidenceHalfLifeMs ?? DEFAULT_MEMORY_CONFIDENCE_HALF_LIFE_MS
       ))
+    const allowed = active.filter((record) => (this.options.config.scopes ?? DEFAULT_SCOPES).includes(record.scope))
     // User-scope memories are persistent identity facts (name, preferences,
     // account) — small in number, high in value, and frequently queried by
     // semantic prompts ("who am I?", "what do you know about me") that share
     // zero keyword overlap with the stored content. Keyword retrieval will
-    // always miss them, so inject every active user memory unconditionally and
-    // reserve scored retrieval for the larger workspace/project pool.
-    const userMemories = active.filter((record) => record.scope === 'user')
-    const scored = active
+    // always miss them, so while `user` is in the injection allow-list
+    // (config.scopes, the default includes it) every active user memory is
+    // injected unconditionally; excluding `user` turns identity memories off
+    // entirely, and scored retrieval covers the workspace/project pool.
+    const userMemories = allowed.filter((record) => record.scope === 'user')
+    const scored = allowed
       .filter((record) => record.scope !== 'user')
       .map((record) => ({ record, score: scoreMemory(
         record,

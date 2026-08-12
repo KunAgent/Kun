@@ -254,6 +254,25 @@ describe('manager shared data store', () => {
     await store.close()
   })
 
+  it('applies the scopes injection allow-list through the manager', async () => {
+    const store = await dataStore()
+    const config = { enabled: true, scopes: ['workspace'], maxInjectedRecords: 8 }
+    await store.executeMemory('createWithId', {
+      config,
+      value: { id: 'mem_scope_user', input: { content: 'User prefers pnpm', scope: 'user' } }
+    })
+    await store.executeMemory('createWithId', {
+      config,
+      value: { id: 'mem_scope_ws', input: { content: 'Workspace prefers pnpm', scope: 'workspace', workspace: '/tmp/scope-ws' } }
+    })
+    const records = await store.executeMemory('retrieve', {
+      config,
+      value: { query: 'pnpm', workspace: '/tmp/scope-ws' }
+    }) as Array<{ scope: string }>
+    expect(records.map((record) => record.scope)).toEqual(['workspace'])
+    await store.close()
+  })
+
   it('owns Graph journals and snapshots for both runtime clients', async () => {
     const store = await dataStore()
     const config = testGraphConfig()
