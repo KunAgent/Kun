@@ -482,7 +482,6 @@ export class ManagerSharedDataStore {
             query: z.string(),
             workspace: z.string().optional(),
             limit: z.number().int().positive().optional(),
-            fallbackQuery: z.string().optional(),
             allowRecencyFallback: z.boolean().optional()
           }).strict().parse(body.value)
           return store.retrieve(request)

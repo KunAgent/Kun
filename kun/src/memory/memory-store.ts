@@ -21,16 +21,14 @@ export interface MemoryStore {
   list(filter?: { workspace?: string; includeDeleted?: boolean; all?: boolean }): Promise<MemoryRecord[]>
   /**
    * Retrieve memories matching a query. An omitted `limit` uses the store
-   * config's `maxInjectedRecords` as the hard ceiling. `fallbackQuery` is
-   * retried against when the primary query scores no hits (e.g. continuation
-   * turns); `allowRecencyFallback` permits a recent-first fallback for
-   * degenerate queries that produce fewer than 2 n-grams.
+   * config's `maxInjectedRecords` as the hard ceiling. `allowRecencyFallback`
+   * enables a recent-first fallback for the scored pool when the query scores
+   * no hits; the caller decides it is appropriate (e.g. a degenerate prompt).
    */
   retrieve(input: {
     query: string
     workspace?: string
     limit?: number
-    fallbackQuery?: string
     allowRecencyFallback?: boolean
   }): Promise<MemoryRecord[]>
   diagnostics(): Promise<MemoryDiagnostics>
@@ -157,7 +155,6 @@ export class FileMemoryStore implements MemoryStore {
     query: string
     workspace?: string
     limit?: number
-    fallbackQuery?: string
     allowRecencyFallback?: boolean
   }): Promise<MemoryRecord[]> {
     if (!this.options.config.enabled) return []
@@ -181,17 +178,15 @@ export class FileMemoryStore implements MemoryStore {
     // injected unconditionally; excluding `user` turns identity memories off
     // entirely, and scored retrieval covers the workspace/project pool.
     const userMemories = allowed.filter((record) => record.scope === 'user')
-    const nonUser = allowed.filter((record) => record.scope !== 'user')
-    let scored = this.scoreRecords(nonUser, input.query, nowMs)
+    const scoredPool = allowed.filter((record) => record.scope !== 'user')
+    let scored = this.scoreRecords(scoredPool, input.query, nowMs)
     // Continuation turns ("继续", "fix this") share zero n-grams with stored
     // content, so the scored pool comes back empty even when relevant memories
-    // exist. Retry against the active goal first, then fall back to the most
-    // recently updated records for degenerate (fewer than 2 gram) queries only.
-    if (scored.length === 0 && input.fallbackQuery?.trim()) {
-      scored = this.scoreRecords(nonUser, input.fallbackQuery, nowMs)
-    }
-    if (scored.length === 0 && input.allowRecencyFallback && ngrams(input.query).size < 2) {
-      scored = [...nonUser].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).slice(0, 3)
+    // exist. The caller flags degenerate prompts; fall back to the most
+    // recently updated records when nothing else scores. `scoredPool` inherits
+    // the updatedAt-descending order from `list()`, so a plain slice suffices.
+    if (scored.length === 0 && input.allowRecencyFallback) {
+      scored = scoredPool.slice(0, 3)
     }
     return this.allocateQuota(userMemories, scored, effectiveLimit)
   }
@@ -214,7 +209,7 @@ export class FileMemoryStore implements MemoryStore {
    * without separate quotas they can crowd the whole per-turn budget once their
    * count reaches maxInjectedRecords, starving scored workspace/project
    * memories. Reserve at least half the budget (floor, min 1) for the scored
-   * pool when it has hits, then backfill unused slots in priority order.
+   * pool when it has hits; unused scored quota falls back to user memories.
    */
   private allocateQuota(
     userMemories: MemoryRecord[],
@@ -222,13 +217,9 @@ export class FileMemoryStore implements MemoryStore {
     effectiveLimit: number
   ): MemoryRecord[] {
     const scoredQuota = scored.length > 0 ? Math.max(1, Math.floor(effectiveLimit / 2)) : 0
-    const userQuota = effectiveLimit - scoredQuota
-    const userPicked = userMemories.slice(0, userQuota)
-    const scoredPicked = scored.slice(0, scoredQuota)
-    const remaining = effectiveLimit - userPicked.length - scoredPicked.length
-    const backfillUser = userMemories.slice(userQuota, userQuota + remaining)
-    const backfillScored = scored.slice(scoredQuota, scoredQuota + (remaining - backfillUser.length))
-    return [...userPicked, ...scoredPicked, ...backfillUser, ...backfillScored]
+    const userPicked = userMemories.slice(0, effectiveLimit - Math.min(scoredQuota, scored.length))
+    const scoredPicked = scored.slice(0, effectiveLimit - userPicked.length)
+    return [...userPicked, ...scoredPicked]
   }
 
   async diagnostics(): Promise<MemoryDiagnostics> {

@@ -332,11 +332,10 @@ describe('TurnContextResolver', () => {
     expect(called?.query).toContain('Refactor the build pipeline')
     expect(called?.query).toContain('Vite 5')
     expect(called?.query).toContain('package.json uses pnpm')
-    expect(called?.fallbackQuery).toBe('Refactor the build pipeline to use pnpm')
-    expect(called?.allowRecencyFallback).toBe(true)
+    expect(called?.allowRecencyFallback).toBe(false)
   })
 
-  it('uses the active goal as the retrieval fallback for continuation turns', async () => {
+  it('flags degenerate prompts for the store recency fallback', async () => {
     const retrieve = vi.fn<MemoryStore['retrieve']>(async () => [])
     const resolver = new TurnContextResolver({
       toolHost: { listTools: async () => [] },
@@ -369,7 +368,6 @@ describe('TurnContextResolver', () => {
     })
     const called = retrieve.mock.calls[0]?.[0]
     expect(called?.query).toMatch(/^继续 /)
-    expect(called?.fallbackQuery).toBe('Refactor the build pipeline to use pnpm')
     expect(called?.allowRecencyFallback).toBe(true)
   })
 })

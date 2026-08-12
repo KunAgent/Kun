@@ -374,7 +374,6 @@ export class ManagerRemoteMemoryStore implements MemoryStore {
     query: string
     workspace?: string
     limit?: number
-    fallbackQuery?: string
     allowRecencyFallback?: boolean
   }) {
     return MemoryRecord.array().parse(await this.call('retrieve', input))

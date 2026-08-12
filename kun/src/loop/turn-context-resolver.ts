@@ -12,6 +12,7 @@ import {
   DEFAULT_SANDBOX_MODE
 } from '../contracts/policy.js'
 import type { InstructionRuntime, InstructionTurnResolution } from '../instructions/instruction-runtime.js'
+import { ngrams } from '../memory/memory-store.js'
 import type { MemoryStore } from '../memory/memory-store.js'
 import type { GuiPlanContext, ToolHost, ToolHostContext } from '../ports/tool-host.js'
 import type { SkillRuntime, SkillTurnResolution } from '../skills/skill-runtime.js'
@@ -25,6 +26,7 @@ import {
   todoContinuationInstruction
 } from './continuation-instructions.js'
 import { isStalePlanContext } from './plan-mode.js'
+import { toolResultTextWithoutImages } from './tool-result-image.js'
 import { createToolDiscoveryContext } from './tool-discovery-context-factory.js'
 import type {
   PreparedTurnContext,
@@ -43,6 +45,10 @@ const EMPTY_INSTRUCTION_RESOLUTION: InstructionTurnResolution = {
   sources: [],
   injectedBytes: 0
 }
+
+const MEMORY_QUERY_TOTAL_BUDGET = 1200
+const MEMORY_QUERY_FRAGMENT_BUDGET = 200
+const MEMORY_QUERY_TOOL_BUDGET = 300
 
 /** Stable, policy-relevant identity of a turn before resolving its schemas. */
 export type TurnModeContext = Readonly<{
@@ -295,12 +301,13 @@ async function retrieveMemories(
   input: { prompt: string; workspace: string; threadGoal?: ThreadGoal; history?: readonly TurnItem[] }
 ): Promise<MemoryRecord[]> {
   if (!memoryStore) return []
-  const fallbackQuery = input.threadGoal?.status === 'active' ? input.threadGoal.objective : undefined
   const memories = await memoryStore.retrieve({
     query: buildMemoryQuery(input.prompt, input.threadGoal, input.history),
     workspace: input.workspace,
-    ...(fallbackQuery ? { fallbackQuery } : {}),
-    allowRecencyFallback: true
+    // A degenerate prompt like "继续" produces a single n-gram and scores the
+    // workspace/project pool empty; the store then falls back to recently
+    // updated records. Longer prompts keep scored retrieval.
+    allowRecencyFallback: ngrams(input.prompt).size < 2
   })
   memoryStore.setLastInjected(memories.map((memory) => memory.id))
   return memories
@@ -320,19 +327,18 @@ function buildMemoryQuery(
 ): string {
   const parts: string[] = [prompt]
   if (goal?.status === 'active') parts.push(goal.objective)
-  if (history && history.length > 0) {
+  if (history) {
     const lastUser = lastItemOfKind(history, 'user_message')
-    if (lastUser?.text) parts.push(lastUser.text.slice(0, 200))
+    if (lastUser?.text) parts.push(lastUser.text.slice(0, MEMORY_QUERY_FRAGMENT_BUDGET))
     const lastAssistant = lastItemOfKind(history, 'assistant_text')
-    if (lastAssistant?.text) parts.push(lastAssistant.text.slice(0, 200))
+    if (lastAssistant?.text) parts.push(lastAssistant.text.slice(0, MEMORY_QUERY_FRAGMENT_BUDGET))
     const lastTool = lastItemOfKind(history, 'tool_result')
     if (lastTool) {
-      const { output } = lastTool
-      const summary = typeof output === 'string' ? output : output !== undefined ? JSON.stringify(output) : ''
-      if (summary) parts.push(summary.slice(0, 300))
+      const summary = toolResultTextWithoutImages(lastTool.output)
+      if (summary) parts.push(summary.slice(0, MEMORY_QUERY_TOOL_BUDGET))
     }
   }
-  return parts.filter(Boolean).join(' ').slice(0, 1200)
+  return parts.filter(Boolean).join(' ').slice(0, MEMORY_QUERY_TOTAL_BUDGET)
 }
 
 function lastItemOfKind<K extends 'user_message' | 'assistant_text' | 'tool_result'>(

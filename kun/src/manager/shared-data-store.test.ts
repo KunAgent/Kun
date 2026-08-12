@@ -273,6 +273,35 @@ describe('manager shared data store', () => {
     await store.close()
   })
 
+  it('keeps a scored workspace memory through the manager when user memories fill the cap', async () => {
+    const store = await dataStore()
+    const config = { enabled: true, scopes: ['user', 'workspace'], maxInjectedRecords: 8 }
+    for (let i = 0; i < 8; i += 1) {
+      await store.executeMemory('createWithId', {
+        config,
+        value: { id: `mem_quota_user_${i}`, input: { content: `User preference number ${i}`, scope: 'user' } }
+      })
+    }
+    await store.executeMemory('createWithId', {
+      config,
+      value: {
+        id: 'mem_quota_ws',
+        input: {
+          content: 'The monorepo uses pnpm for installs and vitest for tests',
+          scope: 'workspace',
+          workspace: '/tmp/shared-workspace'
+        }
+      }
+    })
+    const records = await store.executeMemory('retrieve', {
+      config,
+      value: { query: 'pnpm vitest monorepo', workspace: '/tmp/shared-workspace' }
+    }) as Array<{ scope: string }>
+    expect(records).toHaveLength(8)
+    expect(records.some((record) => record.scope === 'workspace')).toBe(true)
+    await store.close()
+  })
+
   it('owns Graph journals and snapshots for both runtime clients', async () => {
     const store = await dataStore()
     const config = testGraphConfig()
