@@ -154,4 +154,140 @@ describe('FileMemoryStore', () => {
     })
     expect(await store.list({ all: true })).toHaveLength(1)
   })
+
+  describe('injection quotas across scopes', () => {
+    async function userAndScoredStore(maxInjectedRecords: number, idPrefix: string) {
+      let nextId = 1
+      return new FileMemoryStore({
+        rootDir: await makeTempDir(),
+        config: { enabled: true, scopes: ['user', 'workspace'], maxInjectedRecords },
+        idGenerator: () => `${idPrefix}_${nextId++}`,
+        nowIso: () => '2026-06-21T00:00:00.000Z'
+      })
+    }
+
+    async function seedUser(store: FileMemoryStore, count: number): Promise<void> {
+      for (let i = 0; i < count; i += 1) {
+        await store.create({ content: `User preference number ${i}`, scope: 'user' })
+      }
+    }
+
+    it('keeps a scored workspace memory when user memories fill the cap', async () => {
+      const store = await userAndScoredStore(8, 'mem_quota')
+      await seedUser(store, 8)
+      await store.create({
+        content: 'The monorepo uses pnpm for installs and vitest for tests',
+        scope: 'workspace',
+        workspace: '/tmp/workspace'
+      })
+      const hits = await store.retrieve({ query: 'pnpm vitest monorepo', workspace: '/tmp/workspace', limit: 8 })
+      expect(hits).toHaveLength(8)
+      expect(hits.some((memory) => memory.scope === 'workspace')).toBe(true)
+    })
+
+    it('lets both scored memories through when user memories are near the cap', async () => {
+      const store = await userAndScoredStore(8, 'mem_quota2')
+      await seedUser(store, 7)
+      await store.create({ content: 'Use pnpm for frontend installs', scope: 'workspace', workspace: '/tmp/workspace' })
+      await store.create({ content: 'Use pnpm for backend installs', scope: 'workspace', workspace: '/tmp/workspace' })
+      const hits = await store.retrieve({ query: 'pnpm installs', workspace: '/tmp/workspace', limit: 8 })
+      expect(hits).toHaveLength(8)
+      expect(hits.filter((memory) => memory.scope === 'workspace')).toHaveLength(2)
+    })
+
+    it('keeps a scored slot on an odd cap', async () => {
+      const store = await userAndScoredStore(5, 'mem_quota_odd')
+      await seedUser(store, 8)
+      await store.create({ content: 'Use pnpm for frontend installs', scope: 'workspace', workspace: '/tmp/workspace' })
+      const hits = await store.retrieve({ query: 'pnpm installs', workspace: '/tmp/workspace', limit: 5 })
+      expect(hits).toHaveLength(5)
+      expect(hits.some((memory) => memory.scope === 'workspace')).toBe(true)
+    })
+
+    it('keeps a scored slot when the cap is below the user count', async () => {
+      const store = await userAndScoredStore(2, 'mem_quota_small')
+      await seedUser(store, 8)
+      await store.create({ content: 'Use pnpm for frontend installs', scope: 'workspace', workspace: '/tmp/workspace' })
+      const hits = await store.retrieve({ query: 'pnpm installs', workspace: '/tmp/workspace', limit: 2 })
+      expect(hits).toHaveLength(2)
+      expect(hits.some((memory) => memory.scope === 'workspace')).toBe(true)
+    })
+
+    it('lets scored memories fill the full cap when there are no user memories', async () => {
+      const store = await userAndScoredStore(4, 'mem_quota_nouser')
+      for (let i = 0; i < 6; i += 1) {
+        await store.create({ content: `Project ${i} uses pnpm`, scope: 'workspace', workspace: '/tmp/workspace' })
+      }
+      const hits = await store.retrieve({ query: 'pnpm', workspace: '/tmp/workspace', limit: 4 })
+      expect(hits).toHaveLength(4)
+    })
+
+    it('keeps identity memories when the scored pool is empty', async () => {
+      const store = await userAndScoredStore(8, 'mem_quota_ident')
+      await seedUser(store, 8)
+      const hits = await store.retrieve({ query: 'who am I', workspace: '/tmp/workspace', limit: 8 })
+      expect(hits).toHaveLength(8)
+      expect(hits.every((memory) => memory.scope === 'user')).toBe(true)
+    })
+
+    it('splits a narrowed limit between user and scored', async () => {
+      const store = await userAndScoredStore(8, 'mem_quota_limit')
+      await seedUser(store, 4)
+      await store.create({ content: 'Use pnpm for frontend installs', scope: 'workspace', workspace: '/tmp/workspace' })
+      await store.create({ content: 'Use pnpm for backend installs', scope: 'workspace', workspace: '/tmp/workspace' })
+      const hits = await store.retrieve({ query: 'pnpm installs', workspace: '/tmp/workspace', limit: 2 })
+      expect(hits).toHaveLength(2)
+      expect(hits.filter((memory) => memory.scope === 'user')).toHaveLength(1)
+      expect(hits.filter((memory) => memory.scope === 'workspace')).toHaveLength(1)
+    })
+  })
+
+  describe('retrieval fallback for degenerate queries', () => {
+    async function tickedStore(prefix: string, tick: { value: number }) {
+      return new FileMemoryStore({
+        rootDir: await makeTempDir(),
+        config: { enabled: true, scopes: ['workspace'], maxInjectedRecords: 8 },
+        idGenerator: () => `${prefix}_${++tick.value}`,
+        nowIso: () => `2026-06-21T00:00:0${tick.value}.000Z`
+      })
+    }
+
+    it('recalls recently updated memories for a continuation query', async () => {
+      const tick = { value: 0 }
+      const store = await tickedStore('mem_rec', tick)
+      await store.create({ content: 'The deploy pipeline runs pnpm test before release', scope: 'workspace', workspace: '/tmp/workspace' })
+      await store.create({ content: 'Use vitest for the test suite', scope: 'workspace', workspace: '/tmp/workspace' })
+      await store.create({ content: 'Frontend uses Vite 5', scope: 'workspace', workspace: '/tmp/workspace' })
+      const hits = await store.retrieve({ query: '继续', workspace: '/tmp/workspace', limit: 8, allowRecencyFallback: true })
+      expect(hits).toHaveLength(3)
+      expect(hits[0]?.content).toContain('Vite 5')
+    })
+
+    it('retries the fallback query before recency fallback', async () => {
+      const tick = { value: 0 }
+      const store = await tickedStore('mem_fb', tick)
+      await store.create({ content: 'The deploy pipeline runs pnpm test before release', scope: 'workspace', workspace: '/tmp/workspace' })
+      const hits = await store.retrieve({
+        query: '继续',
+        workspace: '/tmp/workspace',
+        limit: 8,
+        fallbackQuery: '部署 流水线 pnpm test',
+        allowRecencyFallback: true
+      })
+      expect(hits.map((memory) => memory.content)).toEqual(['The deploy pipeline runs pnpm test before release'])
+    })
+
+    it('does not fall back when the primary query already scores hits', async () => {
+      const store = await tickedStore('mem_nofb', { value: 0 })
+      await store.create({ content: 'The project uses TypeScript', scope: 'workspace', workspace: '/tmp/workspace' })
+      const hits = await store.retrieve({
+        query: 'TypeScript project',
+        workspace: '/tmp/workspace',
+        limit: 8,
+        fallbackQuery: 'unrelated',
+        allowRecencyFallback: true
+      })
+      expect(hits.map((memory) => memory.content)).toEqual(['The project uses TypeScript'])
+    })
+  })
 })

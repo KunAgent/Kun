@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import type { TurnItem } from '../contracts/items.js'
 import type { ThreadRecord } from '../contracts/threads.js'
 import type { Turn } from '../contracts/turns.js'
 import type { MemoryRecord } from '../contracts/memory.js'
@@ -288,5 +289,87 @@ describe('TurnContextResolver', () => {
       memories: [expect.objectContaining({ id: 'memory_live' })]
     })
     expect(currentMemoryStore.setLastInjected).toHaveBeenCalledWith(['memory_live'])
+  })
+
+  it('composes the retrieval query from the active goal and recent history', async () => {
+    const retrieve = vi.fn<MemoryStore['retrieve']>(async () => [])
+    const resolver = new TurnContextResolver({
+      toolHost: { listTools: async () => [] },
+      resolveAttachments: async () => ({ imageAttachments: [], textFallbacks: [], documents: [] }),
+      memoryStore: { retrieve, setLastInjected: vi.fn() },
+      interactiveToolBridge: { awaitUserInput: async () => ({ status: 'cancelled' }) }
+    })
+    const goalThread = thread({
+      goal: {
+        threadId: 'thread_1',
+        objective: 'Refactor the build pipeline to use pnpm',
+        status: 'active',
+        tokensUsed: 0,
+        timeUsedSeconds: 0,
+        createdAt: '2026-01-01T00:00:00.000Z',
+        updatedAt: '2026-01-01T00:00:00.000Z'
+      }
+    })
+    const history: TurnItem[] = [
+      { id: 'item_1', turnId: 'turn_1', threadId: 'thread_1', role: 'user', status: 'completed', createdAt: '2026-01-01T00:00:00.000Z', kind: 'user_message', text: 'Switch the frontend to Vite 5' },
+      { id: 'item_2', turnId: 'turn_1', threadId: 'thread_1', role: 'assistant', status: 'completed', createdAt: '2026-01-01T00:00:01.000Z', kind: 'assistant_text', text: 'I checked the package manager config' },
+      { id: 'item_3', turnId: 'turn_1', threadId: 'thread_1', role: 'tool', status: 'completed', createdAt: '2026-01-01T00:00:02.000Z', kind: 'tool_result', toolName: 'read', callId: 'call_1', toolKind: 'tool_call', output: 'package.json uses pnpm', isError: false }
+    ]
+    await resolver.resolve({
+      threadId: 'thread_1',
+      turnId: 'turn_1',
+      thread: goalThread,
+      turn: turn({ attachmentIds: [] }),
+      history,
+      model: 'model_1',
+      modelCapabilities: capabilities(['text']),
+      signal: new AbortController().signal,
+      mode: resolveTurnModeContext({ turn: turn(), workspace: '/workspace', threadMode: 'agent' }),
+      goalNoToolRecoverySteps: 0
+    })
+    const called = retrieve.mock.calls[0]?.[0]
+    expect(called?.query).toContain('Implement the requested plan')
+    expect(called?.query).toContain('Refactor the build pipeline')
+    expect(called?.query).toContain('Vite 5')
+    expect(called?.query).toContain('package.json uses pnpm')
+    expect(called?.fallbackQuery).toBe('Refactor the build pipeline to use pnpm')
+    expect(called?.allowRecencyFallback).toBe(true)
+  })
+
+  it('uses the active goal as the retrieval fallback for continuation turns', async () => {
+    const retrieve = vi.fn<MemoryStore['retrieve']>(async () => [])
+    const resolver = new TurnContextResolver({
+      toolHost: { listTools: async () => [] },
+      resolveAttachments: async () => ({ imageAttachments: [], textFallbacks: [], documents: [] }),
+      memoryStore: { retrieve, setLastInjected: vi.fn() },
+      interactiveToolBridge: { awaitUserInput: async () => ({ status: 'cancelled' }) }
+    })
+    const goalThread = thread({
+      goal: {
+        threadId: 'thread_1',
+        objective: 'Refactor the build pipeline to use pnpm',
+        status: 'active',
+        tokensUsed: 0,
+        timeUsedSeconds: 0,
+        createdAt: '2026-01-01T00:00:00.000Z',
+        updatedAt: '2026-01-01T00:00:00.000Z'
+      }
+    })
+    await resolver.resolve({
+      threadId: 'thread_1',
+      turnId: 'turn_1',
+      thread: goalThread,
+      turn: turn({ prompt: '继续', attachmentIds: [] }),
+      history: [],
+      model: 'model_1',
+      modelCapabilities: capabilities(['text']),
+      signal: new AbortController().signal,
+      mode: resolveTurnModeContext({ turn: turn(), workspace: '/workspace', threadMode: 'agent' }),
+      goalNoToolRecoverySteps: 0
+    })
+    const called = retrieve.mock.calls[0]?.[0]
+    expect(called?.query).toMatch(/^继续 /)
+    expect(called?.fallbackQuery).toBe('Refactor the build pipeline to use pnpm')
+    expect(called?.allowRecencyFallback).toBe(true)
   })
 })

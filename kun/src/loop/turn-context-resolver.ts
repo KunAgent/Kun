@@ -1,6 +1,7 @@
 import type { ModelCapabilityMetadata } from '../contracts/capabilities.js'
+import type { TurnItem } from '../contracts/items.js'
 import type { MemoryRecord } from '../contracts/memory.js'
-import type { ThreadRecord } from '../contracts/threads.js'
+import type { ThreadGoal, ThreadRecord } from '../contracts/threads.js'
 import type { Turn } from '../contracts/turns.js'
 import type { ActingTurnModelRoute } from '../contracts/turns.js'
 import type { TurnClientSurface } from '../contracts/turns.js'
@@ -132,7 +133,9 @@ export class TurnContextResolver {
         Promise.resolve(EMPTY_INSTRUCTION_RESOLUTION),
       retrieveMemories(memoryStore, {
         prompt: input.turn.prompt,
-        workspace
+        workspace,
+        threadGoal: input.thread.goal,
+        history: input.history
       })
     ])
     const planTurnActive = !input.mode.dedicatedSvgTurn && !input.mode.planContextStale && (
@@ -289,15 +292,58 @@ export function resolveTurnModeContext(input: {
 
 async function retrieveMemories(
   memoryStore: TurnContextResolverDeps['memoryStore'],
-  input: { prompt: string; workspace: string }
+  input: { prompt: string; workspace: string; threadGoal?: ThreadGoal; history?: readonly TurnItem[] }
 ): Promise<MemoryRecord[]> {
   if (!memoryStore) return []
+  const fallbackQuery = input.threadGoal?.status === 'active' ? input.threadGoal.objective : undefined
   const memories = await memoryStore.retrieve({
-    query: input.prompt,
-    workspace: input.workspace
+    query: buildMemoryQuery(input.prompt, input.threadGoal, input.history),
+    workspace: input.workspace,
+    ...(fallbackQuery ? { fallbackQuery } : {}),
+    allowRecencyFallback: true
   })
   memoryStore.setLastInjected(memories.map((memory) => memory.id))
   return memories
+}
+
+/**
+ * Compose the retrieval query from the turn prompt plus recent thread context.
+ * The query is consumed only by the store's n-gram scoring and never rendered
+ * into the model request, so widening it is free in prompt tokens. Continuation
+ * turns ("继续") that share zero n-grams with stored content otherwise score
+ * the workspace/project pool empty.
+ */
+function buildMemoryQuery(
+  prompt: string,
+  goal: ThreadGoal | undefined,
+  history: readonly TurnItem[] | undefined
+): string {
+  const parts: string[] = [prompt]
+  if (goal?.status === 'active') parts.push(goal.objective)
+  if (history && history.length > 0) {
+    const lastUser = lastItemOfKind(history, 'user_message')
+    if (lastUser?.text) parts.push(lastUser.text.slice(0, 200))
+    const lastAssistant = lastItemOfKind(history, 'assistant_text')
+    if (lastAssistant?.text) parts.push(lastAssistant.text.slice(0, 200))
+    const lastTool = lastItemOfKind(history, 'tool_result')
+    if (lastTool) {
+      const { output } = lastTool
+      const summary = typeof output === 'string' ? output : output !== undefined ? JSON.stringify(output) : ''
+      if (summary) parts.push(summary.slice(0, 300))
+    }
+  }
+  return parts.filter(Boolean).join(' ').slice(0, 1200)
+}
+
+function lastItemOfKind<K extends 'user_message' | 'assistant_text' | 'tool_result'>(
+  history: readonly TurnItem[],
+  kind: K
+): (TurnItem & { kind: K }) | undefined {
+  for (let i = history.length - 1; i >= 0; i -= 1) {
+    const item = history[i]
+    if (item?.kind === kind) return item as TurnItem & { kind: K }
+  }
+  return undefined
 }
 
 function normalizeApprovalPolicy(value: string | undefined): ToolHostContext['approvalPolicy'] {

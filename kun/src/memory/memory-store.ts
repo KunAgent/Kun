@@ -21,9 +21,18 @@ export interface MemoryStore {
   list(filter?: { workspace?: string; includeDeleted?: boolean; all?: boolean }): Promise<MemoryRecord[]>
   /**
    * Retrieve memories matching a query. An omitted `limit` uses the store
-   * config's `maxInjectedRecords` as the hard ceiling.
+   * config's `maxInjectedRecords` as the hard ceiling. `fallbackQuery` is
+   * retried against when the primary query scores no hits (e.g. continuation
+   * turns); `allowRecencyFallback` permits a recent-first fallback for
+   * degenerate queries that produce fewer than 2 n-grams.
    */
-  retrieve(input: { query: string; workspace?: string; limit?: number }): Promise<MemoryRecord[]>
+  retrieve(input: {
+    query: string
+    workspace?: string
+    limit?: number
+    fallbackQuery?: string
+    allowRecencyFallback?: boolean
+  }): Promise<MemoryRecord[]>
   diagnostics(): Promise<MemoryDiagnostics>
   setLastInjected(ids: string[]): void
 }
@@ -144,7 +153,13 @@ export class FileMemoryStore implements MemoryStore {
       .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
   }
 
-  async retrieve(input: { query: string; workspace?: string; limit?: number }): Promise<MemoryRecord[]> {
+  async retrieve(input: {
+    query: string
+    workspace?: string
+    limit?: number
+    fallbackQuery?: string
+    allowRecencyFallback?: boolean
+  }): Promise<MemoryRecord[]> {
     if (!this.options.config.enabled) return []
     const cap = this.options.config.maxInjectedRecords ?? DEFAULT_MEMORY_MAX_INJECTED_RECORDS
     const effectiveLimit = Math.min(input.limit ?? cap, cap)
@@ -166,18 +181,54 @@ export class FileMemoryStore implements MemoryStore {
     // injected unconditionally; excluding `user` turns identity memories off
     // entirely, and scored retrieval covers the workspace/project pool.
     const userMemories = allowed.filter((record) => record.scope === 'user')
-    const scored = allowed
-      .filter((record) => record.scope !== 'user')
+    const nonUser = allowed.filter((record) => record.scope !== 'user')
+    let scored = this.scoreRecords(nonUser, input.query, nowMs)
+    // Continuation turns ("继续", "fix this") share zero n-grams with stored
+    // content, so the scored pool comes back empty even when relevant memories
+    // exist. Retry against the active goal first, then fall back to the most
+    // recently updated records for degenerate (fewer than 2 gram) queries only.
+    if (scored.length === 0 && input.fallbackQuery?.trim()) {
+      scored = this.scoreRecords(nonUser, input.fallbackQuery, nowMs)
+    }
+    if (scored.length === 0 && input.allowRecencyFallback && ngrams(input.query).size < 2) {
+      scored = [...nonUser].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)).slice(0, 3)
+    }
+    return this.allocateQuota(userMemories, scored, effectiveLimit)
+  }
+
+  private scoreRecords(records: MemoryRecord[], query: string, nowMs: number): MemoryRecord[] {
+    return records
       .map((record) => ({ record, score: scoreMemory(
         record,
-        input.query,
+        query,
         nowMs,
         this.options.confidenceHalfLifeMs ?? DEFAULT_MEMORY_CONFIDENCE_HALF_LIFE_MS
       ) }))
       .filter((entry) => entry.score > 0)
       .sort((a, b) => b.score - a.score || b.record.updatedAt.localeCompare(a.record.updatedAt))
       .map((entry) => entry.record)
-    return [...userMemories, ...scored].slice(0, effectiveLimit)
+  }
+
+  /**
+   * User-scope memories are injected unconditionally and always rank first, so
+   * without separate quotas they can crowd the whole per-turn budget once their
+   * count reaches maxInjectedRecords, starving scored workspace/project
+   * memories. Reserve at least half the budget (floor, min 1) for the scored
+   * pool when it has hits, then backfill unused slots in priority order.
+   */
+  private allocateQuota(
+    userMemories: MemoryRecord[],
+    scored: MemoryRecord[],
+    effectiveLimit: number
+  ): MemoryRecord[] {
+    const scoredQuota = scored.length > 0 ? Math.max(1, Math.floor(effectiveLimit / 2)) : 0
+    const userQuota = effectiveLimit - scoredQuota
+    const userPicked = userMemories.slice(0, userQuota)
+    const scoredPicked = scored.slice(0, scoredQuota)
+    const remaining = effectiveLimit - userPicked.length - scoredPicked.length
+    const backfillUser = userMemories.slice(userQuota, userQuota + remaining)
+    const backfillScored = scored.slice(scoredQuota, scoredQuota + (remaining - backfillUser.length))
+    return [...userPicked, ...scoredPicked, ...backfillUser, ...backfillScored]
   }
 
   async diagnostics(): Promise<MemoryDiagnostics> {
@@ -337,7 +388,7 @@ function defaultConfidence(kind: MemoryProvenance['kind']): number {
  * runs are split into bigrams. Lower-cased, de-spaced. This keeps matching
  * language-agnostic without pulling in a tokenizer dependency.
  */
-function ngrams(input: string): Set<string> {
+export function ngrams(input: string): Set<string> {
   const grams = new Set<string>()
   const normalized = input.toLowerCase()
   // Pull out ASCII words (letters/digits/underscore) and CJK runs separately.

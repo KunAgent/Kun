@@ -370,7 +370,13 @@ export class ManagerRemoteMemoryStore implements MemoryStore {
     return MemoryRecord.array().parse(await this.call('list', filter))
   }
 
-  async retrieve(input: { query: string; workspace?: string; limit?: number }) {
+  async retrieve(input: {
+    query: string
+    workspace?: string
+    limit?: number
+    fallbackQuery?: string
+    allowRecencyFallback?: boolean
+  }) {
     return MemoryRecord.array().parse(await this.call('retrieve', input))
   }
 
