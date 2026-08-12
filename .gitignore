@@ -54,6 +54,10 @@ TestResults.xml
 .kun-canvas/
 .kunsdd/
 openspec/
+.codegraph/
+.claude/settings.json
+.cursor/mcp.json
+.mcp.json
 
 ### Internal docs
 docs/R2_RELEASE.md
