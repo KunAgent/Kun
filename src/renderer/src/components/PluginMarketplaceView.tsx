@@ -809,6 +809,18 @@ const RECOMMENDED_ITEMS: MarketplaceItem[] = [
     supplyChain: { source: 'mcp', packageName: '@modelcontextprotocol/server-brave-search', version: '0.6.2', permissions: ['command', 'network', 'secret'] }
   },
   {
+    id: 'parallel-search',
+    kind: 'mcp',
+    titleKey: 'pluginMcpParallelSearchTitle',
+    descriptionKey: 'pluginMcpParallelSearchDesc',
+    group: 'recommended',
+    mcpConfig: () =>
+      buildRemoteMcpConfig({
+        'parallel-search': 'https://search.parallel.ai/mcp'
+      }),
+    supplyChain: { source: 'remote-mcp', permissions: ['network'] }
+  },
+  {
     id: 'code-review',
     kind: 'skill',
     titleKey: 'pluginSkillReviewTitle',

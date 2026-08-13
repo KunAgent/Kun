@@ -1510,6 +1510,8 @@
   "pluginMcpMemoryDesc": "작업 전반에 걸쳐 재사용 가능한 프로젝트 정보와 기본 설정을 유지하세요.",
   "pluginMcpBraveSearchTitle": "용감한 검색",
   "pluginMcpBraveSearchDesc": "Brave Search를 통해 웹을 검색해보세요. 자체 API 키가 필요합니다.",
+  "pluginMcpParallelSearchTitle": "Parallel Search",
+  "pluginMcpParallelSearchDesc": "계정이나 API 키 없이 실시간 웹을 검색하고 정리된 Markdown을 가져옵니다.",
   "pluginMcpVercelTitle": "베르셀",
   "pluginMcpVercelDesc": "공식 원격 MCP 서버를 통해 Vercel 프로젝트, 배포, 로그 및 문서를 관리하세요.",
   "pluginMcpGoogleWorkspaceTitle": "Google 작업공간",

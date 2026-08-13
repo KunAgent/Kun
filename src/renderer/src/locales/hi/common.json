@@ -1510,6 +1510,8 @@
   "pluginMcpMemoryDesc": "पुन: प्रयोज्य परियोजना तथ्यों और प्राथमिकताओं को सभी कार्यों में उपलब्ध रखें।",
   "pluginMcpBraveSearchTitle": "बहादुर खोज",
   "pluginMcpBraveSearchDesc": "ब्रेव सर्च के माध्यम से वेब पर खोजें। आपकी अपनी API कुंजी की आवश्यकता है.",
+  "pluginMcpParallelSearchTitle": "Parallel Search",
+  "pluginMcpParallelSearchDesc": "लाइव वेब पर खोजें और साफ़ Markdown प्राप्त करें—किसी खाते या API कुंजी की आवश्यकता नहीं।",
   "pluginMcpVercelTitle": "वर्सेल",
   "pluginMcpVercelDesc": "आधिकारिक रिमोट एमसीपी सर्वर के माध्यम से वर्सेल प्रोजेक्ट्स, परिनियोजन, लॉग और दस्तावेज़ प्रबंधित करें।",
   "pluginMcpGoogleWorkspaceTitle": "गूगल कार्यक्षेत्र",

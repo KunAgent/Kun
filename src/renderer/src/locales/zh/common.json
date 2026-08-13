@@ -1510,6 +1510,8 @@
   "pluginMcpMemoryDesc": "在任务之间保留可复用的项目事实和偏好。",
   "pluginMcpBraveSearchTitle": "Brave Search",
   "pluginMcpBraveSearchDesc": "通过 Brave Search 搜索网页，需要使用你自己的 API Key。",
+  "pluginMcpParallelSearchTitle": "Parallel Search",
+  "pluginMcpParallelSearchDesc": "搜索实时网页并提取整洁的 Markdown，无需账号或 API Key。",
   "pluginMcpVercelTitle": "Vercel",
   "pluginMcpVercelDesc": "通过官方远程 MCP 管理 Vercel 项目、部署、日志和文档。",
   "pluginMcpGoogleWorkspaceTitle": "Google Workspace",

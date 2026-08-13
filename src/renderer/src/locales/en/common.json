@@ -1510,6 +1510,8 @@
   "pluginMcpMemoryDesc": "Keep reusable project facts and preferences available across tasks.",
   "pluginMcpBraveSearchTitle": "Brave Search",
   "pluginMcpBraveSearchDesc": "Search the web through Brave Search. Requires your own API key.",
+  "pluginMcpParallelSearchTitle": "Parallel Search",
+  "pluginMcpParallelSearchDesc": "Search the live web and fetch clean Markdown with no account or API key required.",
   "pluginMcpVercelTitle": "Vercel",
   "pluginMcpVercelDesc": "Manage Vercel projects, deployments, logs, and docs through the official remote MCP server.",
   "pluginMcpGoogleWorkspaceTitle": "Google Workspace",

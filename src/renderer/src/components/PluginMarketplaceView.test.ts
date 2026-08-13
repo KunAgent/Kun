@@ -28,6 +28,7 @@ describe('PluginMarketplaceView MCP config helpers', () => {
       'sequential-thinking',
       'memory',
       'brave-search',
+      'parallel-search',
       'vercel'
     ]))
     expect(recommendedMarketplaceItemIds()).not.toContain('google-workspace')
@@ -61,6 +62,39 @@ describe('PluginMarketplaceView MCP config helpers', () => {
           trustScope: 'user'
         })
       }
+    })
+  })
+
+  it('builds the Parallel Search remote MCP config without secrets', () => {
+    const config = buildRemoteMcpConfig({
+      'parallel-search': 'https://search.parallel.ai/mcp'
+    })
+
+    expect(config).toEqual({
+      servers: {
+        'parallel-search': {
+          enabled: true,
+          transport: 'streamable-http',
+          url: 'https://search.parallel.ai/mcp',
+          headers: {},
+          env: {},
+          trustScope: 'user',
+          timeoutMs: 30_000
+        }
+      }
+    })
+    expect(auditMarketplaceInstall({
+      id: 'parallel-search',
+      kind: 'mcp',
+      title: 'Parallel Search',
+      description: 'Search the live web and fetch clean Markdown.',
+      group: 'recommended',
+      mcpConfig: () => config,
+      supplyChain: { source: 'remote-mcp', permissions: ['network'] }
+    }, '/workspace')).toEqual({
+      ok: true,
+      permissions: ['network'],
+      errors: []
     })
   })
 
