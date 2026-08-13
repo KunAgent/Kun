@@ -104,6 +104,48 @@ describe('Memory store and recall', () => {
     expect((await store.list({ all: true })).find((item) => item.id === 'legacy')).toBeTruthy()
   })
 
+  it('filters memories below the configured min confidence', async () => {
+    let now = '2026-06-03T00:00:00.000Z'
+    const store = new FileMemoryStore({
+      rootDir: join(dir, 'memory'),
+      config: memoryConfig({ minConfidence: 0.2 }),
+      nowIso: () => now,
+      idGenerator: () => `mem_${nextId++}`,
+      confidenceHalfLifeMs: 1_000
+    })
+    const memory = await store.create({
+      content: 'Observed project uses Vite 5',
+      scope: 'workspace',
+      workspace: '/tmp/ws',
+      provenance: { kind: 'tool', turnId: 'turn_1', origin: 'memory_create' }
+    })
+    expect(memory.confidence).toBe(0.7)
+    expect(await store.retrieve({ query: 'Vite 5', workspace: '/tmp/ws', limit: 3 })).toHaveLength(1)
+
+    now = '2026-06-03T00:00:02.000Z' // 2s → 0.7 * 2^-2 = 0.175 < 0.2
+    expect(await store.retrieve({ query: 'Vite 5', workspace: '/tmp/ws', limit: 3 })).toEqual([])
+    expect((await store.diagnostics()).activeCount).toBe(0)
+  })
+
+  it('keeps faded memories when min confidence is set to 0', async () => {
+    let now = '2026-06-03T00:00:00.000Z'
+    const store = new FileMemoryStore({
+      rootDir: join(dir, 'memory'),
+      config: memoryConfig({ minConfidence: 0 }),
+      nowIso: () => now,
+      idGenerator: () => `mem_${nextId++}`,
+      confidenceHalfLifeMs: 1_000
+    })
+    await store.create({
+      content: 'Observed project uses Vite 5',
+      scope: 'workspace',
+      workspace: '/tmp/ws',
+      provenance: { kind: 'tool', turnId: 'turn_1', origin: 'memory_create' }
+    })
+    now = '2026-06-03T00:00:02.000Z'
+    expect(await store.retrieve({ query: 'Vite 5', workspace: '/tmp/ws', limit: 3 })).toHaveLength(1)
+  })
+
   it('supersedes older memories and preserves user corrections', async () => {
     const store = createStore()
     const older = await store.create({
@@ -212,6 +254,9 @@ describe('Memory store and recall', () => {
     expect(result.item).toMatchObject({ kind: 'tool_result', isError: false })
     expect(await store.list({ workspace: '/tmp/ws' })).toHaveLength(1)
     expect(await store.list({ workspace: '/tmp/forged' })).toEqual([])
+    expect((await store.list({ workspace: '/tmp/ws' }))[0]).toMatchObject({
+      provenance: { kind: 'tool', origin: 'memory_create' }
+    })
   })
 
   it('injects relevant memories into AgentLoop metadata and stops after deletion', async () => {

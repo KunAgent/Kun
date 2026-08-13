@@ -22,7 +22,7 @@ describe('FileMemoryStore', () => {
     let tick = 0
     const store = new FileMemoryStore({
       rootDir: await makeTempDir(),
-      config: { enabled: true, scopes: ['workspace'], maxInjectedRecords: 8 },
+      config: { enabled: true, scopes: ['workspace'], maxInjectedRecords: 8, minConfidence: 0 },
       idGenerator: () => 'mem_toggle',
       nowIso: () => `2026-06-21T00:00:0${tick++}.000Z`
     })
@@ -58,7 +58,7 @@ describe('FileMemoryStore', () => {
     let nextId = 1
     return new FileMemoryStore({
       rootDir: await makeTempDir(),
-      config: { enabled: true, scopes, maxInjectedRecords },
+      config: { enabled: true, scopes, maxInjectedRecords, minConfidence: 0 },
       idGenerator: () => `${idPrefix}_${nextId++}`,
       nowIso: () => '2026-06-21T00:00:00.000Z'
     })
@@ -160,7 +160,7 @@ describe('FileMemoryStore', () => {
       let nextId = 1
       return new FileMemoryStore({
         rootDir: await makeTempDir(),
-        config: { enabled: true, scopes: ['user', 'workspace'], maxInjectedRecords },
+        config: { enabled: true, scopes: ['user', 'workspace'], maxInjectedRecords, minConfidence: 0 },
         idGenerator: () => `${idPrefix}_${nextId++}`,
         nowIso: () => '2026-06-21T00:00:00.000Z'
       })
@@ -224,7 +224,7 @@ describe('FileMemoryStore', () => {
     async function tickedStore(prefix: string, tick: { value: number }) {
       return new FileMemoryStore({
         rootDir: await makeTempDir(),
-        config: { enabled: true, scopes: ['workspace'], maxInjectedRecords: 8 },
+        config: { enabled: true, scopes: ['workspace'], maxInjectedRecords: 8, minConfidence: 0 },
         idGenerator: () => `${prefix}_${++tick.value}`,
         nowIso: () => `2026-06-21T00:00:0${tick.value}.000Z`
       })

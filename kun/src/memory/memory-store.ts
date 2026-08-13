@@ -47,7 +47,6 @@ export class FileMemoryStore implements MemoryStore {
       nowIso?: () => string
       idGenerator?: () => string
       confidenceHalfLifeMs?: number
-      minConfidence?: number
     }
   ) {}
 
@@ -165,7 +164,7 @@ export class FileMemoryStore implements MemoryStore {
       .filter((record) => isMemoryActive(
         record,
         nowMs,
-        this.options.minConfidence ?? 0,
+        this.options.config.minConfidence ?? 0,
         this.options.confidenceHalfLifeMs ?? DEFAULT_MEMORY_CONFIDENCE_HALF_LIFE_MS
       ))
     const allowed = active.filter((record) => (this.options.config.scopes ?? DEFAULT_SCOPES).includes(record.scope))
@@ -231,7 +230,7 @@ export class FileMemoryStore implements MemoryStore {
       activeCount: records.filter((record) => isMemoryActive(
         record,
         nowMs,
-        this.options.minConfidence ?? 0,
+        this.options.config.minConfidence ?? 0,
         this.options.confidenceHalfLifeMs ?? DEFAULT_MEMORY_CONFIDENCE_HALF_LIFE_MS
       )).length,
       tombstoneCount: records.filter((record) => Boolean(record.deletedAt)).length,

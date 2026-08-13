@@ -44,7 +44,7 @@ export function buildMemoryToolProviders(store: MemoryStore | undefined): Capabi
                 ...(args.scope === 'project' ? { project: context.workspace } : {}),
                 sourceThreadId: context.threadId,
                 sourceTurnId: context.turnId,
-                provenance: { kind: 'user', turnId: context.turnId, origin: 'memory_create' },
+                provenance: { kind: 'tool', turnId: context.turnId, origin: 'memory_create' },
                 ...(typeof args.ttlDays === 'number' && Number.isFinite(args.ttlDays) && args.ttlDays > 0
                   ? { ttlMs: Math.round(args.ttlDays * 24 * 60 * 60 * 1_000) }
                   : {}),

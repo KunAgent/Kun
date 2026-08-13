@@ -110,7 +110,8 @@
     "memory": {
       "enabled": false,
       "scopes": ["user", "workspace", "project"],
-      "maxInjectedRecords": 8
+      "maxInjectedRecords": 8,
+      "minConfidence": 0.2
     },
     "computerUse": {
       "enabled": false,

@@ -416,10 +416,12 @@ export type AttachmentsCapabilityConfig = z.infer<typeof AttachmentsCapabilityCo
 
 export const DEFAULT_MEMORY_MAX_INJECTED_RECORDS = 8
 export const DEFAULT_SCOPES = ['user', 'workspace', 'project'] as const
+export const DEFAULT_MEMORY_MIN_CONFIDENCE = 0.2
 
 export const MemoryCapabilityConfig = CapabilityToggleConfig.extend({
   scopes: z.array(z.enum(['user', 'workspace', 'project'])).default([...DEFAULT_SCOPES]),
-  maxInjectedRecords: z.number().int().positive().default(DEFAULT_MEMORY_MAX_INJECTED_RECORDS)
+  maxInjectedRecords: z.number().int().positive().default(DEFAULT_MEMORY_MAX_INJECTED_RECORDS),
+  minConfidence: z.number().min(0).max(1).default(DEFAULT_MEMORY_MIN_CONFIDENCE)
 }).strict()
 export type MemoryCapabilityConfig = z.infer<typeof MemoryCapabilityConfig>
 
@@ -628,7 +630,8 @@ export const RuntimeCapabilityManifest = z
     }).strict(),
     memory: RuntimeCapabilityState.extend({
       scopes: z.array(z.enum(['user', 'workspace', 'project'])),
-      maxInjectedRecords: z.number().int().positive()
+      maxInjectedRecords: z.number().int().positive(),
+      minConfidence: z.number().min(0).max(1)
     }).strict(),
     imageGen: RuntimeCapabilityState.extend({
       model: z.string().optional()
@@ -830,7 +833,8 @@ export function buildRuntimeCapabilityManifest(input: {
         input.memory?.reason ?? 'memory store is unavailable'
       ),
       scopes: config.memory.scopes,
-      maxInjectedRecords: config.memory.maxInjectedRecords
+      maxInjectedRecords: config.memory.maxInjectedRecords,
+      minConfidence: config.memory.minConfidence
     },
     imageGen: {
       ...providerCapabilityState(

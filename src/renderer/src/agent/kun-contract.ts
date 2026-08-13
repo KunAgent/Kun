@@ -267,6 +267,7 @@ export type CoreRuntimeCapabilityManifestJson = {
   memory: CoreRuntimeCapabilityStateJson & {
     scopes: Array<'user' | 'workspace' | 'project'>
     maxInjectedRecords: number
+    minConfidence: number
   }
   /** Optional so the GUI keeps working against older Kun builds without the capability. */
   imageGen?: CoreRuntimeCapabilityStateJson & {
