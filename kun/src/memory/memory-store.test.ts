@@ -218,6 +218,26 @@ describe('FileMemoryStore', () => {
       expect(hits.filter((memory) => memory.scope === 'user')).toHaveLength(1)
       expect(hits.filter((memory) => memory.scope === 'workspace')).toHaveLength(1)
     })
+
+    it('favors user memory at limit 1 when both pools hit', async () => {
+      const store = await userAndScoredStore(8, 'mem_quota_one')
+      await seedUser(store, 1)
+      await store.create({ content: 'Use pnpm for frontend installs', scope: 'workspace', workspace: '/tmp/workspace' })
+      const hits = await store.retrieve({ query: 'pnpm installs', workspace: '/tmp/workspace', limit: 1 })
+      expect(hits).toHaveLength(1)
+      expect(hits[0]?.scope).toBe('user')
+    })
+
+    it('splits an odd limit toward user', async () => {
+      const store = await userAndScoredStore(8, 'mem_quota_odd')
+      await seedUser(store, 4)
+      await store.create({ content: 'Use pnpm for frontend installs', scope: 'workspace', workspace: '/tmp/workspace' })
+      await store.create({ content: 'Use pnpm for backend installs', scope: 'workspace', workspace: '/tmp/workspace' })
+      const hits = await store.retrieve({ query: 'pnpm installs', workspace: '/tmp/workspace', limit: 3 })
+      expect(hits).toHaveLength(3)
+      expect(hits.filter((memory) => memory.scope === 'user')).toHaveLength(2)
+      expect(hits.filter((memory) => memory.scope === 'workspace')).toHaveLength(1)
+    })
   })
 
   describe('retrieval fallback for degenerate queries', () => {
@@ -251,6 +271,50 @@ describe('FileMemoryStore', () => {
         allowRecencyFallback: true
       })
       expect(hits.map((memory) => memory.content)).toEqual(['The project uses TypeScript'])
+    })
+  })
+
+  describe('anchored decay governance', () => {
+    it('keeps agent corrections decaying while user corrections anchor', async () => {
+      let now = '2026-06-21T00:00:00.000Z'
+      let nextId = 1
+      const store = new FileMemoryStore({
+        rootDir: await makeTempDir(),
+        config: { enabled: true, scopes: ['workspace'], maxInjectedRecords: 8, minConfidence: 0.2 },
+        idGenerator: () => `mem_anchor_${nextId++}`,
+        nowIso: () => now,
+        confidenceHalfLifeMs: 1_000
+      })
+      const created = await store.create({
+        content: 'Use pnpm for installs',
+        scope: 'workspace',
+        workspace: '/tmp/workspace',
+        provenance: { kind: 'tool', turnId: 'turn_1', origin: 'memory_create' }
+      })
+      expect(created.anchored).toBe(false)
+
+      // An agent-side correction must NOT re-anchor the memory, and keeps its
+      // provenance intact (kind stays 'tool').
+      const agentCorrected = await store.update(created.id, { content: 'Use pnpm for installs everywhere' }, {
+        workspace: '/tmp/workspace',
+        source: 'agent'
+      })
+      expect(agentCorrected.anchored).toBe(false)
+      expect(agentCorrected.provenance?.kind).toBe('tool')
+
+      // It still decays out of injection (0.7 * 2^-2 = 0.175 < 0.2).
+      now = '2026-06-21T00:00:02.000Z'
+      expect(await store.retrieve({ query: 'pnpm installs', workspace: '/tmp/workspace', limit: 8 })).toEqual([])
+
+      // A user correction anchors the memory so it stops decaying.
+      now = '2026-06-21T00:00:03.000Z'
+      const userCorrected = await store.update(created.id, { content: 'Use Bun for installs' }, {
+        workspace: '/tmp/workspace'
+      })
+      expect(userCorrected.anchored).toBe(true)
+
+      now = '2026-06-21T00:00:05.000Z'
+      expect(await store.retrieve({ query: 'Bun installs', workspace: '/tmp/workspace', limit: 8 })).toHaveLength(1)
     })
   })
 })

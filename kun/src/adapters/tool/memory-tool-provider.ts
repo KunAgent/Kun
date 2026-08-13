@@ -78,7 +78,7 @@ export function buildMemoryToolProviders(store: MemoryStore | undefined): Capabi
               memory: await store.update(args.id, {
                 ...(typeof args.content === 'string' ? { content: args.content } : {}),
                 ...(typeof args.disabled === 'boolean' ? { disabled: args.disabled } : {})
-              }, { workspace: context.workspace })
+              }, { workspace: context.workspace, source: 'agent' })
             }
           }
         }

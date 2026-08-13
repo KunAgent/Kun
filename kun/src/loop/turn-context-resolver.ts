@@ -12,7 +12,7 @@ import {
   DEFAULT_SANDBOX_MODE
 } from '../contracts/policy.js'
 import type { InstructionRuntime, InstructionTurnResolution } from '../instructions/instruction-runtime.js'
-import { ngrams } from '../memory/memory-store.js'
+import { ngrams } from '../domain/memory-scoring.js'
 import type { MemoryStore } from '../memory/memory-store.js'
 import type { GuiPlanContext, ToolHost, ToolHostContext } from '../ports/tool-host.js'
 import type { SkillRuntime, SkillTurnResolution } from '../skills/skill-runtime.js'

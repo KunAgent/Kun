@@ -2,6 +2,7 @@ import { chmod, mkdir, readFile, readdir, rm } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import { DEFAULT_MEMORY_MAX_INJECTED_RECORDS, DEFAULT_SCOPES, type MemoryCapabilityConfig } from '../contracts/capabilities.js'
 import { atomicWriteFile } from '../adapters/file/atomic-write.js'
+import { ngrams } from '../domain/memory-scoring.js'
 import {
   MemoryDiagnostics,
   MemoryRecord,
@@ -35,7 +36,7 @@ export interface MemoryStore {
   setLastInjected(ids: string[]): void
 }
 
-export type MemoryAccess = { workspace?: string }
+export type MemoryAccess = { workspace?: string; source?: 'user' | 'agent' }
 
 export class FileMemoryStore implements MemoryStore {
   private lastInjectedIds: string[] = []
@@ -81,6 +82,7 @@ export class FileMemoryStore implements MemoryStore {
       provenance,
       tags: input.tags ?? [],
       confidence: input.confidence ?? defaultConfidence(provenance.kind),
+      anchored: provenance.kind === 'user',
       createdAt: now,
       updatedAt: now,
       ...(input.ttlMs ? { expiresAt: new Date(Date.parse(now) + input.ttlMs).toISOString() } : {}),
@@ -101,21 +103,23 @@ export class FileMemoryStore implements MemoryStore {
     const current = await this.mustGet(id, access)
     const now = this.now()
     const corrected = patch.content !== undefined && patch.content !== current.content
+    // Only a correction made directly by the user re-anchors a memory as
+    // non-decaying. Agent-side updates (memory_update) never flip `anchored`,
+    // so a decayed memory cannot be silently pinned back to "never decay".
+    const isUserCorrection = corrected && (access?.source ?? 'user') === 'user'
     const next = MemoryRecord.parse({
       ...current,
       ...(patch.content !== undefined ? { content: patch.content } : {}),
       ...(patch.tags !== undefined ? { tags: patch.tags } : {}),
       ...(patch.confidence !== undefined
         ? { confidence: patch.confidence }
-        : corrected
+        : isUserCorrection
           ? { confidence: 1 }
           : {}),
       ...(corrected
-        ? {
-            correctedFrom: current.correctedFrom ?? current.content,
-            provenance: { ...(current.provenance ?? defaultLegacyProvenance(current)), kind: 'user' }
-          }
+        ? { correctedFrom: current.correctedFrom ?? current.content }
         : {}),
+      ...(isUserCorrection ? { anchored: true } : {}),
       ...(patch.expiresAt !== undefined ? { expiresAt: patch.expiresAt ?? undefined } : {}),
       ...(patch.disabled === true ? { disabledAt: current.disabledAt ?? now } : {}),
       ...(patch.disabled === false ? { disabledAt: undefined } : {}),
@@ -173,9 +177,11 @@ export class FileMemoryStore implements MemoryStore {
     // semantic prompts ("who am I?", "what do you know about me") that share
     // zero keyword overlap with the stored content. Keyword retrieval will
     // always miss them, so while `user` is in the injection allow-list
-    // (config.scopes, the default includes it) every active user memory is
-    // injected unconditionally; excluding `user` turns identity memories off
-    // entirely, and scored retrieval covers the workspace/project pool.
+    // (config.scopes, the default includes it) every active user memory
+    // bypasses scoring and becomes a candidate directly; excluding `user`
+    // turns identity memories off entirely, and scored retrieval covers the
+    // workspace/project pool. The user pool is still trimmed by the per-turn
+    // quota in `allocateQuota`, which reserves slots for the scored pool.
     const userMemories = allowed.filter((record) => record.scope === 'user')
     const scoredPool = allowed.filter((record) => record.scope !== 'user')
     let scored = this.scoreRecords(scoredPool, input.query, nowMs)
@@ -207,15 +213,16 @@ export class FileMemoryStore implements MemoryStore {
    * User-scope memories are injected unconditionally and always rank first, so
    * without separate quotas they can crowd the whole per-turn budget once their
    * count reaches maxInjectedRecords, starving scored workspace/project
-   * memories. Reserve at least half the budget (floor, min 1) for the scored
-   * pool when it has hits; unused scored quota falls back to user memories.
+   * memories. Reserve floor(effectiveLimit / 2) slots for the scored pool when
+   * it has hits; budget the user pool leaves unused then flows back to the
+   * scored pool, so a lone scored pool still fills the whole cap.
    */
   private allocateQuota(
     userMemories: MemoryRecord[],
     scored: MemoryRecord[],
     effectiveLimit: number
   ): MemoryRecord[] {
-    const scoredQuota = scored.length > 0 ? Math.max(1, Math.floor(effectiveLimit / 2)) : 0
+    const scoredQuota = scored.length > 0 ? Math.floor(effectiveLimit / 2) : 0
     const userPicked = userMemories.slice(0, effectiveLimit - Math.min(scoredQuota, scored.length))
     const scoredPicked = scored.slice(0, effectiveLimit - userPicked.length)
     return [...userPicked, ...scoredPicked]
@@ -256,7 +263,14 @@ export class FileMemoryStore implements MemoryStore {
     const records = await Promise.all(entries
       .filter((entry) => entry.endsWith('.json'))
       .map((entry) => readFile(join(this.options.rootDir, entry), 'utf8')
-        .then((text) => MemoryRecord.parse(JSON.parse(text)))
+        .then((text) => {
+          const raw = JSON.parse(text) as { anchored?: boolean; provenance?: { kind?: string } }
+          // Records predating `anchored` were implicitly non-decaying when
+          // user-authored (kind === 'user'); pin those so legacy user memories
+          // keep their previous behaviour instead of suddenly starting to fade.
+          if (raw.anchored === undefined) raw.anchored = (raw.provenance?.kind ?? 'user') === 'user'
+          return MemoryRecord.parse(raw)
+        })
         .catch(() => null)))
     return records.filter((record): record is MemoryRecord => Boolean(record))
   }
@@ -338,8 +352,7 @@ export function effectiveMemoryConfidence(
   nowMs: number,
   halfLifeMs = DEFAULT_MEMORY_CONFIDENCE_HALF_LIFE_MS
 ): number {
-  const provenance = record.provenance ?? defaultLegacyProvenance(record)
-  if (provenance.kind === 'user' || halfLifeMs <= 0) return record.confidence
+  if (record.anchored === true || halfLifeMs <= 0) return record.confidence
   const createdAtMs = Date.parse(record.createdAt)
   if (!Number.isFinite(createdAtMs)) return record.confidence
   const ageMs = Math.max(0, nowMs - createdAtMs)
@@ -354,14 +367,6 @@ function defaultProvenance(input: MemoryCreateRequest): MemoryProvenance {
   }
 }
 
-function defaultLegacyProvenance(record: Pick<MemoryRecord, 'sourceTurnId'>): MemoryProvenance {
-  return {
-    kind: 'user',
-    ...(record.sourceTurnId ? { turnId: record.sourceTurnId } : {}),
-    origin: 'legacy'
-  }
-}
-
 function defaultConfidence(kind: MemoryProvenance['kind']): number {
   switch (kind) {
     case 'user': return 1
@@ -370,31 +375,4 @@ function defaultConfidence(kind: MemoryProvenance['kind']): number {
     case 'web': return 0.5
     case 'inference': return 0.4
   }
-}
-
-/**
- * Produce a fingerprint of overlapping n-grams for a string. ASCII/Latin
- * segments are tokenized on word boundaries and down to trigrams, while CJK
- * runs are split into bigrams. Lower-cased, de-spaced. This keeps matching
- * language-agnostic without pulling in a tokenizer dependency.
- */
-export function ngrams(input: string): Set<string> {
-  const grams = new Set<string>()
-  const normalized = input.toLowerCase()
-  // Pull out ASCII words (letters/digits/underscore) and CJK runs separately.
-  const asciiWords = normalized.match(/[a-z0-9_]{3,}/g) ?? []
-  for (const word of asciiWords) {
-    for (let i = 0; i + 3 <= word.length; i += 1) {
-      grams.add(word.slice(i, i + 3))
-    }
-    if (word.length < 3) grams.add(word)
-  }
-  const cjkRuns = normalized.match(/[\u4e00-\u9fff\u3040-\u30ff\uac00-\ud7af]+/g) ?? []
-  for (const run of cjkRuns) {
-    for (let i = 0; i + 2 <= run.length; i += 1) {
-      grams.add(run.slice(i, i + 2))
-    }
-    if (run.length < 2) grams.add(run)
-  }
-  return grams
 }

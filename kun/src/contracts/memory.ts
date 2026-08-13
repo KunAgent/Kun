@@ -25,6 +25,7 @@ export const MemoryRecord = z.object({
   provenance: MemoryProvenance.optional(),
   tags: z.array(z.string()).default([]),
   confidence: z.number().min(0).max(1).default(1),
+  anchored: z.boolean().default(false),
   createdAt: z.string(),
   updatedAt: z.string(),
   expiresAt: z.string().datetime().optional(),

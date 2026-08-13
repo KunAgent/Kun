@@ -453,14 +453,14 @@ export class ManagerSharedDataStore {
           const request = z.object({
             id: z.string().min(1),
             patch: MemoryUpdateRequest,
-            access: z.object({ workspace: z.string().optional() }).strict().optional()
+            access: z.object({ workspace: z.string().optional(), source: z.enum(['user', 'agent']).optional() }).strict().optional()
           }).strict().parse(body.value)
           return store.update(request.id, request.patch, request.access)
         }
         case 'delete': {
           const request = z.object({
             id: z.string().min(1),
-            access: z.object({ workspace: z.string().optional() }).strict().optional()
+            access: z.object({ workspace: z.string().optional(), source: z.enum(['user', 'agent']).optional() }).strict().optional()
           }).strict().parse(body.value)
           return store.delete(request.id, request.access)
         }

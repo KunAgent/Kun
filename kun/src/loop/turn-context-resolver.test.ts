@@ -79,7 +79,7 @@ describe('TurnContextResolver', () => {
       resolutionOrder.push('memories')
       return [{
       id: 'memory_1', content: 'Prefer tests', scope: 'workspace',
-      tags: [], confidence: 1,
+      tags: [], confidence: 1, anchored: false,
       createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z'
       }]
     })
@@ -281,7 +281,8 @@ describe('TurnContextResolver', () => {
         createdAt: '2026-01-01T00:00:00.000Z',
         updatedAt: '2026-01-01T00:00:00.000Z',
         tags: [],
-        confidence: 1
+        confidence: 1,
+        anchored: false
       }]),
       setLastInjected: vi.fn()
     }

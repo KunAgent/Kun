@@ -172,7 +172,8 @@ describe('Memory store and recall', () => {
       content: 'Use Bun for frontend installs',
       correctedFrom: 'Use pnpm for frontend installs',
       confidence: 1,
-      provenance: { kind: 'user' }
+      anchored: true,
+      provenance: { kind: 'tool', origin: 'package-manager-check' }
     })
   })
 
