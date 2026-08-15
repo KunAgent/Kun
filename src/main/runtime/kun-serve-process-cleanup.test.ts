@@ -1,12 +1,15 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
-  WINDOWS_CURRENT_USER_PROCESS_SCRIPT,
+  PROCESS_TABLE_TIMEOUT_MS,
+  WINDOWS_PROCESS_CANDIDATE_SCRIPT,
   clearHistoricalKunServeProcesses,
+  inspectCurrentUserProcess,
   listCurrentUserProcesses,
   looksLikeKunServeCommand,
   looksLikeKunServeProcess,
   parseUnixProcessSnapshot,
   parseWindowsProcessSnapshot,
+  windowsCurrentUserProcessScript,
   type KunServeProcessSnapshot
 } from './kun-serve-process-cleanup'
 
@@ -48,7 +51,7 @@ describe('Kun serve process snapshot parsing', () => {
     ]))).toEqual([{ pid: 203, parentPid: 10, command: 'kun-runtime' }])
   })
 
-  it('uses UID-filtered ps on Unix and candidate-filtered CIM on Windows', async () => {
+  it('uses UID-filtered ps on Unix and owner-free candidate CIM on Windows', async () => {
     const unixRun = vi.fn(async () => ({ stdout: '' }))
     await listCurrentUserProcesses({
       platform: 'linux',
@@ -58,25 +61,130 @@ describe('Kun serve process snapshot parsing', () => {
     expect(unixRun).toHaveBeenCalledWith(
       'ps',
       ['-axww', '-o', 'pid=', '-o', 'ppid=', '-o', 'uid=', '-o', 'command='],
-      expect.objectContaining({ windowsHide: true })
+      expect.objectContaining({ windowsHide: true, timeout: 1_800_000 })
     )
 
     const windowsRun = vi.fn(async () => ({ stdout: '[]' }))
     await listCurrentUserProcesses({ platform: 'win32', run: windowsRun })
     expect(windowsRun).toHaveBeenCalledWith(
       'powershell.exe',
-      ['-NoProfile', '-NonInteractive', '-Command', WINDOWS_CURRENT_USER_PROCESS_SCRIPT],
-      expect.objectContaining({ windowsHide: true })
+      ['-NoProfile', '-NonInteractive', '-Command', WINDOWS_PROCESS_CANDIDATE_SCRIPT],
+      expect.objectContaining({ windowsHide: true, timeout: 1_800_000 })
     )
-    expect(WINDOWS_CURRENT_USER_PROCESS_SCRIPT).toContain('-Filter')
-    expect(WINDOWS_CURRENT_USER_PROCESS_SCRIPT).toContain("Name = 'node.exe'")
-    expect(WINDOWS_CURRENT_USER_PROCESS_SCRIPT).toContain("Name = 'electron.exe'")
-    expect(WINDOWS_CURRENT_USER_PROCESS_SCRIPT).toContain("Name LIKE 'kun%.exe'")
-    expect(WINDOWS_CURRENT_USER_PROCESS_SCRIPT).not.toContain(
-      'Get-CimInstance Win32_Process | ForEach-Object'
+    expect(PROCESS_TABLE_TIMEOUT_MS).toBe(1_800_000)
+    expect(WINDOWS_PROCESS_CANDIDATE_SCRIPT).toContain('-Filter')
+    expect(WINDOWS_PROCESS_CANDIDATE_SCRIPT).toContain("Name = 'node.exe'")
+    expect(WINDOWS_PROCESS_CANDIDATE_SCRIPT).toContain("Name = 'electron.exe'")
+    expect(WINDOWS_PROCESS_CANDIDATE_SCRIPT).toContain("Name LIKE 'kun%.exe'")
+    expect(WINDOWS_PROCESS_CANDIDATE_SCRIPT).not.toContain('GetOwnerSid')
+    expect(WINDOWS_PROCESS_CANDIDATE_SCRIPT).not.toContain('$currentSid')
+  })
+
+  it('verifies current-user ownership through an exact Windows PID query', async () => {
+    const snapshot = {
+      ProcessId: 204,
+      ParentProcessId: 10,
+      ExecutablePath: 'C:\\Program Files\\nodejs\\node.exe',
+      CommandLine: 'node C:\\Kun\\serve-entry.js serve'
+    }
+    const windowsRun = vi.fn(async () => ({ stdout: JSON.stringify(snapshot) }))
+
+    await expect(inspectCurrentUserProcess(204, {
+      platform: 'win32',
+      run: windowsRun
+    })).resolves.toEqual({
+      pid: 204,
+      parentPid: 10,
+      executable: 'C:\\Program Files\\nodejs\\node.exe',
+      command: 'node C:\\Kun\\serve-entry.js serve'
+    })
+
+    const script = windowsCurrentUserProcessScript(204)
+    expect(script).toContain('ProcessId = 204')
+    expect(script).toContain('GetOwnerSid')
+    expect(script).toContain('$currentSid')
+    expect(windowsRun).toHaveBeenCalledWith(
+      'powershell.exe',
+      ['-NoProfile', '-NonInteractive', '-Command', script],
+      expect.objectContaining({ timeout: 1_800_000 })
     )
-    expect(WINDOWS_CURRENT_USER_PROCESS_SCRIPT).toContain('GetOwnerSid')
-    expect(WINDOWS_CURRENT_USER_PROCESS_SCRIPT).toContain('$currentSid')
+  })
+
+  it('re-verifies an exact Unix PID with the current UID', async () => {
+    const unixRun = vi.fn(async () => ({
+      stdout: '  205    1  501 /usr/local/bin/node /Kun/serve-entry.js serve\n'
+    }))
+
+    await expect(inspectCurrentUserProcess(205, {
+      platform: 'linux',
+      currentUid: 501,
+      run: unixRun
+    })).resolves.toEqual({
+      pid: 205,
+      parentPid: 1,
+      command: '/usr/local/bin/node /Kun/serve-entry.js serve'
+    })
+    expect(unixRun).toHaveBeenCalledWith(
+      'ps',
+      ['-p', '205', '-o', 'pid=', '-o', 'ppid=', '-o', 'uid=', '-o', 'command='],
+      expect.objectContaining({ timeout: 1_800_000 })
+    )
+  })
+
+  it('does not query owners for unrelated processes in a Node-heavy Windows snapshot', async () => {
+    const unrelated = Array.from({ length: 37 }, (_, index) => ({
+      ProcessId: 1_000 + index,
+      ParentProcessId: 10,
+      ExecutablePath: 'C:\\Program Files\\nodejs\\node.exe',
+      CommandLine: `node C:\\tools\\mcp-${index}.js`
+    }))
+    const kun = {
+      ProcessId: 2_000,
+      ParentProcessId: 10,
+      ExecutablePath: 'C:\\Program Files\\nodejs\\node.exe',
+      CommandLine: 'node C:\\Kun\\serve-entry.js serve --port 18899'
+    }
+    const windowsRun = vi.fn(async (_command: string, args: string[]) => {
+      const script = args[3] ?? ''
+      if (script === WINDOWS_PROCESS_CANDIDATE_SCRIPT) {
+        return { stdout: JSON.stringify([...unrelated, kun]) }
+      }
+      if (script.includes('ProcessId = 2000')) return { stdout: JSON.stringify(kun) }
+      throw new Error(`unexpected owner query: ${script}`)
+    })
+
+    await expect(listCurrentUserProcesses({
+      platform: 'win32',
+      run: windowsRun
+    })).resolves.toEqual([{
+      pid: 2_000,
+      parentPid: 10,
+      executable: 'C:\\Program Files\\nodejs\\node.exe',
+      command: 'node C:\\Kun\\serve-entry.js serve --port 18899'
+    }])
+
+    const ownerQueries = windowsRun.mock.calls
+      .map((call) => call[1][3] ?? '')
+      .filter((script) => script.includes('GetOwnerSid'))
+    expect(ownerQueries).toHaveLength(1)
+    expect(ownerQueries[0]).toContain('ProcessId = 2000')
+  })
+
+  it('drops a strict Windows candidate when exact-PID ownership cannot be verified', async () => {
+    const kun = {
+      ProcessId: 2_001,
+      ParentProcessId: 10,
+      ExecutablePath: 'C:\\Program Files\\nodejs\\node.exe',
+      CommandLine: 'node C:\\Kun\\serve-entry.js serve'
+    }
+    const windowsRun = vi.fn(async (_command: string, args: string[]) => ({
+      stdout: args[3] === WINDOWS_PROCESS_CANDIDATE_SCRIPT ? JSON.stringify(kun) : ''
+    }))
+
+    await expect(listCurrentUserProcesses({
+      platform: 'win32',
+      run: windowsRun
+    })).resolves.toEqual([])
   })
 })
 
@@ -145,13 +253,14 @@ describe('historical Kun serve cleanup', () => {
   })
 
   it('fails closed when a matched PID changes identity before signaling', async () => {
-    let reads = 0
-    const listProcesses = vi.fn(async () => {
-      reads += 1
-      return reads === 1
-        ? [{ pid: 401, parentPid: 1, command: 'kun-runtime' }]
-        : [{ pid: 401, parentPid: 1, command: '/usr/bin/node unrelated.js' }]
-    })
+    const listProcesses = vi.fn(async () => [
+      { pid: 401, parentPid: 1, command: 'kun-runtime' }
+    ])
+    const inspectProcess = vi.fn(async () => ({
+      pid: 401,
+      parentPid: 1,
+      command: '/usr/bin/node unrelated.js'
+    }))
     const waitForExit = vi.fn(async () => false)
     const terminate = vi.fn(async (_pid: number, verify: () => Promise<boolean>) => {
       expect(await verify()).toBe(false)
@@ -161,9 +270,13 @@ describe('historical Kun serve cleanup', () => {
     await expect(clearHistoricalKunServeProcesses({
       currentPid: 999,
       listProcesses,
+      inspectProcess,
       waitForExit,
       terminate,
       log: vi.fn(async () => undefined)
     })).rejects.toThrow(/401.*replacement was not started/i)
+
+    expect(terminate).toHaveBeenCalledOnce()
+    expect(inspectProcess).toHaveBeenCalledWith(401)
   })
 })

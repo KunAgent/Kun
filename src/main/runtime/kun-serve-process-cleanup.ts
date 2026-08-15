@@ -36,30 +36,48 @@ type ProcessListOptions = {
 type CleanupOptions = {
   currentPid?: number
   listProcesses?: () => Promise<KunServeProcessSnapshot[]>
+  inspectProcess?: (pid: number) => Promise<KunServeProcessSnapshot | null>
   terminate?: typeof terminateVerifiedPid
   waitForExit?: typeof waitForPidExit
   log?: (line: string) => Promise<void>
 }
 
-const PROCESS_TABLE_TIMEOUT_MS = 15_000
+export const PROCESS_TABLE_TIMEOUT_MS = 30 * 60_000
 const PROCESS_TABLE_MAX_BUFFER = 16 * 1024 * 1024
 
-export const WINDOWS_CURRENT_USER_PROCESS_SCRIPT = [
-  '$currentSid = [System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value',
+export const WINDOWS_PROCESS_CANDIDATE_SCRIPT = [
   "$candidates = Get-CimInstance Win32_Process -Filter \"Name = 'node.exe' OR Name = 'electron.exe' OR Name LIKE 'kun%.exe'\"",
   '$items = $candidates | ForEach-Object {',
-  '  $owner = Invoke-CimMethod -InputObject $_ -MethodName GetOwnerSid -ErrorAction SilentlyContinue',
-  '  if ($owner.Sid -eq $currentSid) {',
-  '    [pscustomobject]@{',
-  '      ProcessId = $_.ProcessId',
-  '      ParentProcessId = $_.ParentProcessId',
-  '      ExecutablePath = $_.ExecutablePath',
-  '      CommandLine = $_.CommandLine',
-  '    }',
+  '  [pscustomobject]@{',
+  '    ProcessId = $_.ProcessId',
+  '    ParentProcessId = $_.ParentProcessId',
+  '    ExecutablePath = $_.ExecutablePath',
+  '    CommandLine = $_.CommandLine',
   '  }',
   '}',
   '@($items) | ConvertTo-Json -Compress'
 ].join('\n')
+
+export function windowsCurrentUserProcessScript(pid: number): string {
+  if (!validPid(pid)) throw new Error(`Invalid process ID: ${pid}`)
+  return [
+    '$currentSid = [System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value',
+    `$candidate = Get-CimInstance Win32_Process -Filter "ProcessId = ${pid}"`,
+    '$items = @()',
+    'if ($null -ne $candidate) {',
+    '  $owner = Invoke-CimMethod -InputObject $candidate -MethodName GetOwnerSid -ErrorAction SilentlyContinue',
+    '  if ($owner.Sid -eq $currentSid) {',
+    '    $items += [pscustomobject]@{',
+    '      ProcessId = $candidate.ProcessId',
+    '      ParentProcessId = $candidate.ParentProcessId',
+    '      ExecutablePath = $candidate.ExecutablePath',
+    '      CommandLine = $candidate.CommandLine',
+    '    }',
+    '  }',
+    '}',
+    '@($items) | ConvertTo-Json -Compress'
+  ].join('\n')
+}
 
 const defaultRun: ProcessTableRunner = async (command, args, options) => {
   const result = await execFileAsync(command, args, options)
@@ -74,10 +92,17 @@ export async function listCurrentUserProcesses(
   if (platform === 'win32') {
     const { stdout } = await run(
       'powershell.exe',
-      ['-NoProfile', '-NonInteractive', '-Command', WINDOWS_CURRENT_USER_PROCESS_SCRIPT],
+      ['-NoProfile', '-NonInteractive', '-Command', WINDOWS_PROCESS_CANDIDATE_SCRIPT],
       processTableCommandOptions()
     )
-    return parseWindowsProcessSnapshot(stdout)
+    const candidates = parseWindowsProcessSnapshot(stdout)
+      .filter((entry) => looksLikeKunServeProcess(entry))
+    const verified: KunServeProcessSnapshot[] = []
+    for (const candidate of candidates) {
+      const current = await inspectCurrentUserProcess(candidate.pid, { platform, run })
+      if (current && looksLikeKunServeProcess(current)) verified.push(current)
+    }
+    return verified
   }
 
   const currentUid = options.currentUid ?? process.getuid?.()
@@ -90,6 +115,35 @@ export async function listCurrentUserProcesses(
     processTableCommandOptions()
   )
   return parseUnixProcessSnapshot(stdout, currentUid as number)
+}
+
+export async function inspectCurrentUserProcess(
+  pid: number,
+  options: ProcessListOptions = {}
+): Promise<KunServeProcessSnapshot | null> {
+  if (!validPid(pid)) return null
+  const platform = options.platform ?? process.platform
+  const run = options.run ?? defaultRun
+  if (platform === 'win32') {
+    const { stdout } = await run(
+      'powershell.exe',
+      ['-NoProfile', '-NonInteractive', '-Command', windowsCurrentUserProcessScript(pid)],
+      processTableCommandOptions()
+    )
+    return parseWindowsProcessSnapshot(stdout).find((entry) => entry.pid === pid) ?? null
+  }
+
+  const currentUid = options.currentUid ?? process.getuid?.()
+  if (!Number.isInteger(currentUid) || (currentUid ?? -1) < 0) {
+    throw new Error('Cannot verify the current Unix user while inspecting a Kun serve process.')
+  }
+  const { stdout } = await run(
+    'ps',
+    ['-p', String(pid), '-o', 'pid=', '-o', 'ppid=', '-o', 'uid=', '-o', 'command='],
+    processTableCommandOptions()
+  )
+  return parseUnixProcessSnapshot(stdout, currentUid as number)
+    .find((entry) => entry.pid === pid) ?? null
 }
 
 function processTableCommandOptions(): {
@@ -184,6 +238,9 @@ export async function clearHistoricalKunServeProcesses(
 ): Promise<KunServeCleanupReport> {
   const currentPid = options.currentPid ?? process.pid
   const listProcesses = options.listProcesses ?? (() => listCurrentUserProcesses())
+  const inspectProcess = options.inspectProcess ?? (options.listProcesses
+    ? async (pid: number) => (await listProcesses()).find((entry) => entry.pid === pid) ?? null
+    : (pid: number) => inspectCurrentUserProcess(pid))
   const terminate = options.terminate ?? terminateVerifiedPid
   const waitForExit = options.waitForExit ?? waitForPidExit
   const log = options.log ?? ((line) => appendManagedLogLine('kun', line))
@@ -210,7 +267,7 @@ export async function clearHistoricalKunServeProcesses(
     }
     await log(formatKunLogLine('lifecycle', match.pid, 'terminating historical kun serve process'))
     const terminated = await terminate(match.pid, async () => {
-      const current = (await listProcesses()).find((entry) => entry.pid === match.pid)
+      const current = await inspectProcess(match.pid)
       return Boolean(current && looksLikeKunServeProcess(current, currentPid))
     }, waitForExit)
     if (terminated) {
