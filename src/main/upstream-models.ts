@@ -82,7 +82,8 @@ export async function fetchUpstreamModelIds(
  */
 export function modelListFromSharedConnections(
   value: unknown,
-  localGatewayName = 'Kun API'
+  localGatewayName = 'Kun API',
+  configuredProviderLabels: ReadonlyMap<string, string> = new Map()
 ): FetchUpstreamModelsResult | null {
   const root = objectValue(value)
   if (root.schemaVersion !== 1 || !Array.isArray(root.providers)) return null
@@ -94,6 +95,7 @@ export function modelListFromSharedConnections(
       profile.configured !== true ||
       credentialUnavailable ||
       typeof profile.id !== 'string' ||
+      !profile.id.trim() ||
       !Array.isArray(profile.models)
     ) {
       return []
@@ -135,12 +137,15 @@ export function modelListFromSharedConnections(
         ...(capability.responsesMode === 'lite' ? { responsesMode: 'lite' as const } : {})
       } satisfies ModelProviderModelProfileV1]]
     }))
+    const providerId = profile.id.trim()
+    const configuredLabel = configuredProviderLabels.get(providerId.toLowerCase())?.trim()
     return [{
-      providerId: profile.id,
+      providerId,
       ...(typeof profile.presetSource === 'string' && profile.presetSource.trim()
         ? { presetSource: profile.presetSource.trim() }
         : {}),
-      label: typeof profile.name === 'string' && profile.name.trim() ? profile.name.trim() : profile.id,
+      label: configuredLabel ||
+        (typeof profile.name === 'string' && profile.name.trim() ? profile.name.trim() : providerId),
       modelIds,
       modelProfiles,
       ...(typeof profile.accountId === 'string' && profile.accountId.trim()

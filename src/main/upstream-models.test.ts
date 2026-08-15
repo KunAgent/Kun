@@ -77,6 +77,64 @@ function settings(dataDir: string, model = 'settings-model'): AppSettingsV1 {
 }
 
 describe('upstream model picker list', () => {
+  it('uses the latest configured name for a live custom provider', () => {
+    const result = modelListFromSharedConnections({
+      schemaVersion: 1,
+      providers: [{
+        id: 'custom-provider-10',
+        name: 'custom-provider-10',
+        configured: true,
+        credentialStatus: 'ready',
+        models: ['custom-model'],
+        modelCapabilities: {
+          'custom-model': {
+            inputModalities: ['text', 'image'],
+            outputModalities: ['text'],
+            supportsToolCalling: true,
+            messageParts: ['text', 'image_url']
+          }
+        }
+      }]
+    }, 'Kun API', new Map([['custom-provider-10', 'My Gateway']]))
+
+    expect(result).toMatchObject({
+      ok: true,
+      modelGroups: [expect.objectContaining({
+        providerId: 'custom-provider-10',
+        label: 'My Gateway',
+        modelIds: ['custom-model'],
+        modelProfiles: {
+          'custom-model': expect.objectContaining({
+            inputModalities: ['text', 'image'],
+            supportsToolCalling: true
+          })
+        }
+      })]
+    })
+  })
+
+  it('preserves the live label when no configured provider name matches', () => {
+    const result = modelListFromSharedConnections({
+      schemaVersion: 1,
+      providers: [{
+        id: 'runtime-only',
+        name: 'Runtime Only',
+        configured: true,
+        credentialStatus: 'ready',
+        models: ['runtime-model']
+      }]
+    }, 'Kun API', new Map([['other-provider', 'Other Provider']]))
+
+    expect(result).toMatchObject({
+      ok: true,
+      modelGroups: [expect.objectContaining({
+        providerId: 'runtime-only',
+        label: 'Runtime Only',
+        modelIds: ['runtime-model']
+      })]
+    })
+  })
+
   it('preserves Codex preset identity and Fast service-tier capability from the live registry', () => {
     const result = modelListFromSharedConnections({
       schemaVersion: 1,

@@ -211,9 +211,18 @@ export function registerMainIpc(services: MainServices): void {
         const shared = await runtimeRequest(settings, '/v1/model-connections', { method: 'GET' })
         if (shared.ok) {
           try {
+            const providerSettings = getModelProviderSettings(settings)
+            const configuredProviderLabels = new Map(
+              providerSettings.providers.flatMap((provider) => {
+                const providerId = provider.id.trim().toLowerCase()
+                const label = provider.name.trim()
+                return providerId && label ? [[providerId, label]] : []
+              })
+            )
             const live = modelListFromSharedConnections(
               JSON.parse(shared.body) as unknown,
-              getModelProviderSettings(settings).localGateway.name
+              providerSettings.localGateway.name,
+              configuredProviderLabels
             )
             if (live) return live
           } catch {
