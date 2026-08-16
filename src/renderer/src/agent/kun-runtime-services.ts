@@ -8,6 +8,7 @@ import type {
   UserInputAnswer
 } from './types'
 import { getKunRuntimeSettings } from '@shared/app-settings-kun-defaults'
+import { createSseSeqGate, observeSseSeq } from '@shared/sse-sequence'
 import {
   KUN_ATTACHMENT_DIAGNOSTICS_PATH,
   KUN_ATTACHMENTS_PATH,
@@ -93,9 +94,13 @@ import type { DesignDocumentTarget } from './design-task-profile'
 
 const MAX_PENDING_SSE_DISPATCH_BATCHES = 32
 
-/** Preserves the native SSE failure status for the store's recovery policy. */
+/** Preserves the native SSE failure status (and structured code, WP-03) for the store's recovery policy. */
 export class KunSseSubscriptionError extends Error {
-  constructor(message: string, readonly status?: number) {
+  constructor(
+    message: string,
+    readonly status?: number,
+    readonly code?: string
+  ) {
     super(message)
     this.name = 'KunSseSubscriptionError'
   }
@@ -440,12 +445,12 @@ export class KunRuntimeProviderServices {
       let settled = false
       let dispatchTail: Promise<void> = Promise.resolve()
       let queuedDispatchBatches = 0
-      // The subscription cursor is also the projection high-water mark.  A
-      // reconnect may replay already persisted non-delta events (tool running,
-      // completion, approval, Graph activity, ...), so filter the whole wire
-      // event before normalization.  This keeps reducer work and side effects
-      // behind the same monotonic gate instead of deduplicating text only.
-      let projectionSeqHighWater = sinceSeq
+      // The gate owns all dedupe/advance math (WP-03). Reconnects may replay
+      // already persisted non-delta events (tool running, completion,
+      // approval, Graph activity, ...), hidden model-only records make raw
+      // forward jumps legal, and heartbeats may reuse the cursor — the shared
+      // gate is the single place where those wire rules live.
+      let projectionSeqGate = createSseSeqGate(sinceSeq)
       const finish = (): void => {
         if (settled) return
         settled = true
@@ -484,25 +489,28 @@ export class KunRuntimeProviderServices {
         const task = dispatchTail.then(async () => {
           if (signal.aborted || settled) return
           const acceptedBatch: CoreRuntimeEventJson[] = []
-          let acceptedMaxSeq: number | null = null
           let heartbeatSeq: number | null = null
-          let candidateSeqHighWater = projectionSeqHighWater
+          let candidateGate = projectionSeqGate
           for (const event of batch) {
-            if (typeof event.seq === 'number') {
-              if (event.seq <= candidateSeqHighWater) {
-                // Heartbeats deliberately reuse the current event cursor. They
-                // are stale for projection purposes, but still prove that the
-                // live stream is healthy and must keep the busy watchdog from
-                // aborting a quiet, long-running tool call.
-                if (event.kind === 'heartbeat') {
-                  heartbeatSeq = Math.max(heartbeatSeq ?? event.seq, event.seq)
-                }
-                continue
-              }
-              candidateSeqHighWater = event.seq
-              acceptedMaxSeq = event.seq
+            const observation = observeSseSeq(candidateGate, event)
+            candidateGate = observation.state
+            switch (observation.kind) {
+              case 'accept':
+              case 'accept-unsequenced':
+                acceptedBatch.push(event)
+                break
+              case 'accept-heartbeat':
+              case 'stale-heartbeat':
+                // Fresh heartbeats advance the committed cursor (the server
+                // advertised delivery through this seq); stale ones only
+                // prove liveness. Neither is dispatched — they carry no
+                // projection payload — but both must keep the busy watchdog
+                // from aborting a quiet, long-running tool call.
+                heartbeatSeq = Math.max(heartbeatSeq ?? observation.seq, observation.seq)
+                break
+              case 'stale':
+                break
             }
-            acceptedBatch.push(event)
           }
           if (acceptedBatch.length > 0) {
             await dispatchKunRuntimeEvents(acceptedBatch, sink, (runtimeEvent, eventSink) =>
@@ -513,11 +521,13 @@ export class KunRuntimeProviderServices {
           // Commit the local replay gate only after every accepted event was
           // projected. If a reducer/effect throws, the unadvanced cursor lets
           // recovery replay the whole unacknowledged batch.
-          projectionSeqHighWater = candidateSeqHighWater
+          const uncommittedHighWater = projectionSeqGate.highWater
+          projectionSeqGate = candidateGate
           // Commit the renderer cursor only after the whole ordered batch has
           // been projected. ACK is flow control for the main process and must
           // never precede the renderer's durable in-memory projection.
-          const observedSeq = acceptedMaxSeq ?? heartbeatSeq
+          const observedSeq =
+            candidateGate.highWater !== uncommittedHighWater ? candidateGate.highWater : heartbeatSeq
           if (observedSeq !== null) sink.onSeq(observedSeq)
           if (signal.aborted || settled) return
           if (payload.batchId) {
@@ -535,9 +545,9 @@ export class KunRuntimeProviderServices {
           queuedDispatchBatches = Math.max(0, queuedDispatchBatches - 1)
         })
       })
-      const offErr = rendererRuntimeClient.onSseError(({ streamId: sid, message, status }) => {
+      const offErr = rendererRuntimeClient.onSseError(({ streamId: sid, message, status, code }) => {
         if (sid !== streamId) return
-        sink.onError(new KunSseSubscriptionError(message ?? `sse error ${status ?? ''}`, status))
+        sink.onError(new KunSseSubscriptionError(message ?? `sse error ${status ?? ''}`, status, code))
         finish()
       })
       const offEnd = rendererRuntimeClient.onSseEnd(({ streamId: sid }) => {

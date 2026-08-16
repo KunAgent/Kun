@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto'
 import { URL } from 'node:url'
 import type { AppSettingsV1 } from '../shared/app-settings'
 import { kunThreadEventsPath } from '../shared/kun-endpoints'
+import { checkSseConnectionMonotonicity, SSE_SEQ_CONFLICT_CODE } from '../shared/sse-sequence'
 import { sseAckPayloadSchema, sseStartPayloadSchema, streamIdSchema } from './ipc/app-ipc-schemas'
 import type { JsonSettingsStore } from './settings-store'
 import { getRuntimeBaseUrlForSettings, runtimeAuthHeaders } from './runtime/kun-adapter'
@@ -142,6 +143,26 @@ function isFatalSseStatus(status: number | undefined): boolean {
   return typeof status === 'number' && status >= 400 && status < 500 && status !== 408 && status !== 429
 }
 
+/**
+ * Transport-boundary violation (WP-03): within one HTTP connection the wire
+ * delivered a data event whose seq regressed below the connection watermark.
+ * The watermark is seeded with the requested cursor, so this also catches
+ * cross-connection seq reuse (a truncated persisted tail makes the runtime
+ * re-issue already consumed seqs), not just intra-connection reordering.
+ * Replay from the same cursor can never heal this; the renderer must take
+ * the authoritative snapshot resync path.
+ */
+class SseSequenceConflictError extends Error {
+  readonly code = SSE_SEQ_CONFLICT_CODE
+  constructor(
+    readonly regressedFrom: number,
+    readonly observed: number
+  ) {
+    super(`SSE sequence conflict: event seq ${observed} regressed below connection watermark ${regressedFrom}`)
+    this.name = 'SseSequenceConflictError'
+  }
+}
+
 function isTransientSseErrorMessage(message: string): boolean {
   return /sse start timeout|sse renderer acknowledgement timeout|fetch failed|network|terminated|aborted|socket|ECONNRESET|ECONNREFUSED|ETIMEDOUT|EPIPE|UND_ERR/i.test(message)
 }
@@ -253,6 +274,12 @@ export function registerRuntimeSseIpc(options: {
 
             let pendingEvents: Record<string, unknown>[] = []
             let pendingBytes = 0
+            // Per-connection sequence invariant (WP-03), seeded with the
+            // cursor this connection requested: replay delivers strictly
+            // ascending seqs, and the first live frame below the requested
+            // cursor proves the runtime reissued already consumed seqs.
+            // Heartbeats are exempt (they reuse the connection cursor).
+            let connectionWatermark: number | null = nextSinceSeq
 
             const flushEvents = async (): Promise<boolean> => {
               if (state.stoppedByClient || ac.signal.aborted) {
@@ -307,13 +334,22 @@ export function registerRuntimeSseIpc(options: {
                 throw new Error(typeof message === 'string' ? message : 'SSE server replay error')
               }
               const bytes = Buffer.byteLength(block, 'utf8')
+              const coerced = coerceSsePayload(parsed)
+              const monotonicity = checkSseConnectionMonotonicity(connectionWatermark, coerced)
+              if (!monotonicity.ok) {
+                // Do not flush the pending prefix here: an authoritative
+                // resync re-reads the whole snapshot, so the prefix is
+                // redundant — and ack-ing it would advance the doomed cursor.
+                throw new SseSequenceConflictError(monotonicity.regressedFrom, monotonicity.observed)
+              }
+              connectionWatermark = monotonicity.watermark
               if (
                 pendingEvents.length > 0 &&
                 (pendingEvents.length >= MAX_SSE_BATCH_EVENTS || pendingBytes + bytes > MAX_SSE_BATCH_BYTES)
               ) {
                 if (!await flushEvents()) return false
               }
-              pendingEvents.push(coerceSsePayload(parsed))
+              pendingEvents.push(coerced)
               pendingBytes += bytes
               if (pendingEvents.length >= MAX_SSE_BATCH_EVENTS || pendingBytes >= MAX_SSE_BATCH_BYTES) {
                 return flushEvents()
@@ -354,6 +390,23 @@ export function registerRuntimeSseIpc(options: {
             }
           } catch (e) {
             if (state.stoppedByClient || ac.signal.aborted) return
+            if (e instanceof SseSequenceConflictError) {
+              if (!sendSseMessage(wc, 'runtime:sse-error', {
+                streamId: id,
+                message: e.message,
+                code: SSE_SEQ_CONFLICT_CODE
+              })) {
+                state.stoppedByClient = true
+                ac.abort()
+                return
+              }
+              logError('sse', `SSE sequence conflict for thread ${request.threadId}`, {
+                streamId: id,
+                regressedFrom: e.regressedFrom,
+                observed: e.observed
+              })
+              return
+            }
             const msg = e instanceof Error ? e.message : String(e)
             if (isTransientSseErrorMessage(msg)) {
               await sleepWithAbort(reconnectDelayMs, ac.signal)

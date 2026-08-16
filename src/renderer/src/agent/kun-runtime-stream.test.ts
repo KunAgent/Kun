@@ -367,6 +367,62 @@ describe('KunRuntimeProvider', () => {
     expect(ackSse).toHaveBeenCalledWith(expect.any(String), 'heartbeat-batch')
   })
 
+  it('advances the renderer cursor on a fresh heartbeat without dispatching a payload', async () => {
+    let onData: ((payload: { streamId: string; events: unknown[]; batchId?: string }) => void) | null = null
+    const ac = new AbortController()
+    const ackSse = vi.fn(async () => {
+      ac.abort()
+      return true
+    })
+    const sink: ThreadEventSink = {
+      onSeq: vi.fn(),
+      onDeltas: vi.fn(),
+      onUserMessage: vi.fn(),
+      onTool: vi.fn(),
+      onCompaction: vi.fn(),
+      onApproval: vi.fn(),
+      onUserInput: vi.fn(),
+      onUserInputStatus: vi.fn(),
+      onGoal: vi.fn(),
+      onTodos: vi.fn(),
+      onThreadUpdated: vi.fn(),
+      onTurnComplete: vi.fn(),
+      onError: vi.fn()
+    }
+    installDsGui({
+      ackSse,
+      onSseEvent: vi.fn((handler) => {
+        onData = handler
+        return () => undefined
+      }),
+      startSse: vi.fn(async (_threadId, _sinceSeq, streamId) => {
+        queueMicrotask(() => onData?.({
+          streamId: streamId ?? 'stream-1',
+          batchId: 'fresh-heartbeat-batch',
+          events: [
+            { kind: 'assistant_text_delta', seq: 201, item: {
+              id: 'item_text', turnId: 'turn_1', threadId: 'thr_1', role: 'assistant',
+              status: 'running', createdAt: 't1', kind: 'assistant_text', text: 'kept'
+            } },
+            // Heartbeat advertises hidden model-only seqs past the last public event.
+            { kind: 'heartbeat', seq: 205, threadId: 'thr_1' }
+          ]
+        }))
+        return { streamId: streamId ?? 'stream-1' }
+      })
+    })
+
+    await new KunRuntimeProvider().subscribeThreadEvents('thr_1', 200, sink, ac.signal)
+
+    // The data event dispatches normally; the heartbeat carries no payload.
+    expect(sink.onDeltas).toHaveBeenCalledTimes(1)
+    expect(sink.onTurnComplete).not.toHaveBeenCalled()
+    // ...but the renderer cursor still advances past the hidden 202–204 hole.
+    expect(sink.onSeq).toHaveBeenCalledOnce()
+    expect(sink.onSeq).toHaveBeenCalledWith(205)
+    expect(ackSse).toHaveBeenCalledWith(expect.any(String), 'fresh-heartbeat-batch')
+  })
+
   it('replays an unacknowledged batch after projection fails without losing its event', async () => {
     const replayedEvent = {
       kind: 'item_completed',

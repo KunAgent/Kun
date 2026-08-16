@@ -353,4 +353,93 @@ describe('runtime-sse-ipc', () => {
       expect.objectContaining({ streamId: started.streamId, message: 'oversized replay record' })
     )
   })
+
+  it('emits a structured seq_conflict error when the wire regresses within one connection', async () => {
+    registerRuntimeSseIpc({
+      ipcMain: mockIpcMain,
+      store: mockStore,
+      ensureRuntime: mockEnsureRuntime,
+      logError: mockLogError
+    })
+    const startHandler = handlers.get('runtime:sse:start')
+    expect(startHandler).toBeDefined()
+
+    // Same connection: a data event with seq 1 after a delivered seq 2 can
+    // never be legal replay — replay is strictly ascending.
+    mockFetch.mockResolvedValue({
+      ok: true,
+      status: 200,
+      body: mockReadableStream([
+        'id: 1\ndata: {"text": "a"}\n\n',
+        'id: 2\ndata: {"text": "b"}\n\n',
+        'id: 1\ndata: {"text": "regressed"}\n\n'
+      ])
+    })
+
+    const started = await startHandler!(mockEvent, { threadId: 'thr_conflict', sinceSeq: 0 })
+    await vi.advanceTimersByTimeAsync(0)
+
+    // The transport stops immediately — no blind reconnect from the dead cursor.
+    expect(mockFetch).toHaveBeenCalledTimes(1)
+    expect(mockEvent.sender.send).toHaveBeenCalledWith(
+      'runtime:sse-error',
+      expect.objectContaining({ streamId: started.streamId, code: 'seq_conflict' })
+    )
+    expect(mockLogError).toHaveBeenCalledWith(
+      'sse',
+      expect.stringContaining('sequence conflict'),
+      expect.objectContaining({ regressedFrom: 2, observed: 1, streamId: started.streamId })
+    )
+    // The legal prefix was delivered exactly once; the regressed frame never is.
+    const deliveredSeqs = mockEvent.sender.send.mock.calls
+      .filter((call: any) => call[0] === 'runtime:sse-event')
+      .flatMap((call: any) => call[1].events)
+      .map((event: any) => event.seq)
+    expect(deliveredSeqs).toEqual([1, 2])
+  })
+
+  it('catches cross-connection seq reuse on the first frame of a reconnected stream', async () => {
+    registerRuntimeSseIpc({
+      ipcMain: mockIpcMain,
+      store: mockStore,
+      ensureRuntime: mockEnsureRuntime,
+      logError: mockLogError
+    })
+    const startHandler = handlers.get('runtime:sse:start')
+    expect(startHandler).toBeDefined()
+
+    const first = mockReadableStream([
+      'id: 5\ndata: {"text": "durable"}\n\n',
+      '__TERMINATED__'
+    ])
+    // A truncated persisted tail makes the runtime reissue an already
+    // consumed seq below the cursor the reconnect requested.
+    const second = mockReadableStream([
+      'id: 3\ndata: {"text": "reused"}\n\n'
+    ])
+    mockFetch
+      .mockResolvedValueOnce({ ok: true, status: 200, body: first })
+      .mockResolvedValueOnce({ ok: true, status: 200, body: second })
+      .mockResolvedValue({ ok: false, status: 400 })
+
+    const started = await startHandler!(mockEvent, { threadId: 'thr_reuse', sinceSeq: 0 })
+    await vi.advanceTimersByTimeAsync(0)
+    // 'terminated' is transient: reconnect after the initial 750ms backoff.
+    await vi.advanceTimersByTimeAsync(750)
+
+    expect(mockFetch).toHaveBeenCalledTimes(2)
+    expect(mockFetch.mock.calls[1][0].toString()).toContain('since_seq=5')
+    expect(mockEvent.sender.send).toHaveBeenCalledWith(
+      'runtime:sse-error',
+      expect.objectContaining({ streamId: started.streamId, code: 'seq_conflict' })
+    )
+    expect(mockLogError).toHaveBeenCalledWith(
+      'sse',
+      expect.stringContaining('sequence conflict'),
+      expect.objectContaining({ regressedFrom: 5, observed: 3 })
+    )
+    // No further reconnect: replaying from the same cursor would freeze the projection.
+    await vi.advanceTimersByTimeAsync(10_000)
+    expect(mockFetch).toHaveBeenCalledTimes(2)
+  })
 })

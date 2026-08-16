@@ -125,6 +125,50 @@ describe('KunRuntimeProvider', () => {
     })
   })
 
+  it('preserves a structured seq_conflict code for the store recovery policy', async () => {
+    let onSseError:
+      | ((payload: { streamId: string; message?: string; status?: number; code?: string }) => void)
+      | null = null
+    const onError = vi.fn()
+    const sink: ThreadEventSink = {
+      onSeq: vi.fn(),
+      onDeltas: vi.fn(),
+      onUserMessage: vi.fn(),
+      onTool: vi.fn(),
+      onCompaction: vi.fn(),
+      onApproval: vi.fn(),
+      onUserInput: vi.fn(),
+      onUserInputStatus: vi.fn(),
+      onGoal: vi.fn(),
+      onTodos: vi.fn(),
+      onTurnComplete: vi.fn(),
+      onError
+    }
+    installDsGui({
+      onSseError: vi.fn((handler) => {
+        onSseError = handler
+        return () => undefined
+      }),
+      startSse: vi.fn(async (_threadId, _sinceSeq, streamId) => {
+        queueMicrotask(() => onSseError?.({
+          streamId: streamId ?? 'stream-1',
+          message: 'SSE sequence conflict: event seq 3 regressed below connection watermark 5',
+          code: 'seq_conflict'
+        }))
+        return { streamId: streamId ?? 'stream-1' }
+      })
+    })
+
+    await new KunRuntimeProvider().subscribeThreadEvents('thr_1', 0, sink, new AbortController().signal)
+
+    const [error] = onError.mock.calls[0] ?? []
+    expect(error).toMatchObject({
+      name: 'KunSseSubscriptionError',
+      code: 'seq_conflict'
+    })
+    expect(String(error?.message ?? '')).toContain('sequence conflict')
+  })
+
   it('advances the renderer cursor after dispatch and only then acknowledges the SSE batch', async () => {
     let onData: ((payload: { streamId: string; events: unknown[]; batchId?: string }) => void) | null = null
     let releaseAck: (() => void) | undefined

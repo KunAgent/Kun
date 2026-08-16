@@ -620,7 +620,18 @@ export type SseEventPayload = { streamId: string; events: unknown[]; batchId?: s
 
 export type SseEndPayload = { streamId: string }
 
-export type SseErrorPayload = { streamId: string; status?: number; message?: string }
+export type SseErrorPayload = {
+  streamId: string
+  status?: number
+  message?: string
+  /**
+   * Structured failure classification (WP-03). Currently defined value:
+   * `seq_conflict` — the wire stream violated per-connection sequence
+   * monotonicity, so the projection cursor can no longer be trusted and
+   * replay-from-cursor must be replaced by an authoritative snapshot resync.
+   */
+  code?: string
+}
 
 export type TrayActionPayload =
   | { type: 'new-chat' }

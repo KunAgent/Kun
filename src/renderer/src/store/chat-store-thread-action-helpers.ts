@@ -1,4 +1,5 @@
 import type { AgentProvider, NormalizedThread, ThreadEventSink } from '../agent/types'
+import { decideSseRecovery, type SseStreamCloseSignal } from '@shared/sse-sequence'
 import type { ChatState, ChatStoreGet } from './chat-store-types'
 import {
   composerModelSelectable,
@@ -124,7 +125,21 @@ function scheduleSseRecovery(
 ): void {
   const state = sseRecoveries.get(threadId) ?? { attempts: 0 }
   if (state.timer) return
-  state.attempts = Math.min(state.attempts + 1, 8)
+  const decision = decideSseRecovery(sseCloseSignal(error), 0)
+  if (decision.strategy === 'none') {
+    sseRecoveries.delete(threadId)
+    return
+  }
+  if (decision.strategy === 'authoritative-resync') {
+    // seq_conflict (WP-03): the projection cursor is provably dead — the wire
+    // regressed below what was already delivered. Compounding idempotent
+    // backoff only stalls a thread that cannot advance anyway; reset the
+    // attempt accounting and let recoverActiveTurn re-read the authoritative
+    // snapshot and re-baseline the cursor right away.
+    state.attempts = 1
+  } else {
+    state.attempts = Math.min(state.attempts + 1, 8)
+  }
   const status = sseStatus(error)
   const baseDelay = status === 401 || status === 403
     ? SSE_RECOVERY_AUTH_DELAY_MS
@@ -145,4 +160,15 @@ function scheduleSseRecovery(
 function sseStatus(error: Error | undefined): number | undefined {
   const value = error as (Error & { status?: unknown }) | undefined
   return typeof value?.status === 'number' ? value.status : undefined
+}
+
+/** Maps a settled subscription outcome onto the shared close-signal shape (WP-03). */
+function sseCloseSignal(error: Error | undefined): SseStreamCloseSignal {
+  if (!error) return { kind: 'stream-ended' }
+  const tagged = error as Error & { status?: unknown; code?: unknown }
+  return {
+    kind: 'stream-error',
+    ...(typeof tagged.status === 'number' ? { status: tagged.status } : {}),
+    ...(typeof tagged.code === 'string' ? { code: tagged.code } : {})
+  } as SseStreamCloseSignal
 }
