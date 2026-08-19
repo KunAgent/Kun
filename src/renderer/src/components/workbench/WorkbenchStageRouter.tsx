@@ -14,6 +14,9 @@ const WorkflowView = lazy(() =>
 const WorkflowRunPanel = lazy(() =>
   import('../workflow/WorkflowRunPanel').then((module) => ({ default: module.WorkflowRunPanel }))
 )
+const NodeGraphView = lazy(() =>
+  import('../node-graph/NodeGraphView').then((module) => ({ default: module.NodeGraphView }))
+)
 const WriteWorkspaceView = lazy(() =>
   import('../write/WriteWorkspaceView').then((module) => ({ default: module.WriteWorkspaceView }))
 )
@@ -48,6 +51,7 @@ export type WorkbenchStageRouterProps = {
     onOpenIntegrations: () => void
     onOpenView: (contributionId: string) => Promise<void>
   }
+  nodeGraph: { workspaceRoot: string }
 }
 
 function WorkbenchPaneFallback(): ReactElement {
@@ -63,7 +67,8 @@ export function WorkbenchStageRouter({
   conversation,
   imageAnnotationHost,
   planOverlay,
-  extensions
+  extensions,
+  nodeGraph
 }: WorkbenchStageRouterProps): ReactElement {
   const normalizedRoute = normalizeWorkbenchRoute(route)
   return (
@@ -104,6 +109,15 @@ export function WorkbenchStageRouter({
             <WorkflowView
               leftSidebarCollapsed={leftSidebarCollapsed}
               onToggleLeftSidebar={onToggleLeftSidebar}
+              onOpenThread={onOpenThread}
+            />
+          </Suspense>
+        ) : normalizedRoute === 'nodeGraph' ? (
+          <Suspense fallback={<div className="h-full bg-ds-main" />}>
+            <NodeGraphView
+              leftSidebarCollapsed={leftSidebarCollapsed}
+              onToggleLeftSidebar={onToggleLeftSidebar}
+              workspaceRoot={nodeGraph.workspaceRoot}
               onOpenThread={onOpenThread}
             />
           </Suspense>
