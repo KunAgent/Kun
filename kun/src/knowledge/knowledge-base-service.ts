@@ -94,6 +94,77 @@ export class KnowledgeBaseService {
     return this.readyStatus(mount, index)
   }
 
+  /**
+   * Non-blocking index read for read-only projections (Node Graph). Returns
+   * the persisted index only when it is already usable, and schedules a
+   * background rebuild when it is missing or stale, so opening a view never
+   * pays for a full re-index inline.
+   */
+  async readyIndex(
+    mount: KnowledgeBaseMount,
+    options: { verifyFreshness?: boolean } = {}
+  ): Promise<{
+    index: StoredKnowledgeIndex | null
+    state: KnowledgeBaseIndexStatus['state']
+  }> {
+    if (options.verifyFreshness) {
+      // Checked before the TTL cache on purpose: this path exists to reflect the
+      // filesystem right now, and a short-circuit here is exactly what made a
+      // just-saved edit need a second manual refresh. `ensureIndex` still only
+      // rebuilds when the scan fingerprint moved, so an unchanged tree costs one
+      // stat pass and reuses the persisted index.
+      try {
+        return { index: await this.ensureIndex(mount, { verifyFreshness: true }), state: 'ready' }
+      } catch {
+        /* fall through to the non-blocking path below */
+      }
+    }
+    const cached = this.indexCache.get(mountKey(mount))
+    if (cached && Date.now() - cached.checkedAt < INDEX_CACHE_TTL_MS) {
+      return { index: cached.index, state: 'ready' }
+    }
+    const status = await this.inspectStatus(mount)
+    if (status.state === 'pending' || status.state === 'stale') {
+      this.schedule(mount, status.state === 'stale')
+    }
+    if (status.state === 'ready' || status.state === 'stale') {
+      const stored = await this.readStored(mount)
+      if (stored) return { index: stored, state: status.state }
+    }
+    return { index: null, state: status.state }
+  }
+
+  /**
+   * Non-blocking index read for a bare directory, with no thread or mount
+   * involved. Node Graph's Write-workspace projection needs the same markdown
+   * scan (`[[wikilinks]]`, headings, folder nesting) that a mounted base gets,
+   * so a mount is synthesized rather than duplicating the indexer.
+   */
+  async readyFolderIndex(
+    root: string,
+    mountId: string,
+    options: { verifyFreshness?: boolean } = {}
+  ): Promise<{
+    index: StoredKnowledgeIndex | null
+    state: KnowledgeBaseIndexStatus['state']
+  }> {
+    const trimmed = root.trim()
+    if (!trimmed) throw new KnowledgeBaseError('a folder root is required', 'invalid')
+    if (!isAbsolute(trimmed)) {
+      throw new KnowledgeBaseError('folder root must be an absolute path', 'invalid')
+    }
+    return this.readyIndex(
+      {
+        id: mountId,
+        root: trimmed,
+        name: trimmed,
+        source: 'write-workspace',
+        access: 'read-only'
+      },
+      options
+    )
+  }
+
   async catalog(threadId: string, query?: string): Promise<KnowledgeCatalogResult> {
     const thread = await this.requireThread(threadId)
     const mounts = thread.knowledgeBases ?? []
