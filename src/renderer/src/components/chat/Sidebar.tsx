@@ -6,6 +6,7 @@ import {
   Columns3,
   LayoutGrid,
   Moon,
+  Network,
   Plus,
   Puzzle,
   Settings,
@@ -40,7 +41,7 @@ import { SidebarFocusModeControl } from '../sidebar/SidebarFocusModeControl'
 type Props = {
   threads: NormalizedThread[]
   activeThreadId: string | null
-  activeView: 'chat' | 'write' | 'claw' | 'board' | 'schedule' | 'workflow' | 'subagents'
+  activeView: 'chat' | 'write' | 'claw' | 'board' | 'schedule' | 'workflow' | 'nodeGraph' | 'subagents'
   connectPhoneSidebarOpen: boolean
   connectPhoneInitialTarget: ClawInstallTarget
   pluginsActive: boolean
@@ -72,6 +73,7 @@ type Props = {
   onScheduleOpen: () => void
   onBoardOpen?: () => void
   onWorkflowOpen: () => void
+  onNodeGraphOpen: () => void
   onNewConversation: () => void
 }
 
@@ -107,6 +109,7 @@ export function Sidebar({
   onScheduleOpen,
   onBoardOpen,
   onWorkflowOpen,
+  onNodeGraphOpen,
   onNewConversation
 }: Props): ReactElement {
   const { t, i18n } = useTranslation('common')
@@ -205,7 +208,7 @@ export function Sidebar({
           onWriteOpen={onWriteOpen}
         />
 
-        {activeView !== 'claw' && activeView !== 'schedule' && activeView !== 'workflow' ? (
+        {activeView !== 'claw' && activeView !== 'schedule' && activeView !== 'workflow' && activeView !== 'nodeGraph' ? (
           <SidebarCommandRow
             icon={<Plus className="h-4 w-4" strokeWidth={2} />}
             label={t('newAgent')}
@@ -246,6 +249,12 @@ export function Sidebar({
           label={t('workflowCreate')}
           onClick={onWorkflowOpen}
           active={activeView === 'workflow'}
+        />
+        <SidebarCommandRow
+          icon={<Network className="h-4 w-4" strokeWidth={1.75} />}
+          label={t('nodeGraph')}
+          onClick={onNodeGraphOpen}
+          active={activeView === 'nodeGraph'}
         />
       </div>
 
