@@ -45,6 +45,7 @@ export function useWorkbenchChatStoreState() {
       openBoard: s.openBoard,
       openSchedule: s.openSchedule,
       openWorkflow: s.openWorkflow,
+      openNodeGraph: s.openNodeGraph,
       chooseWorkspace: s.chooseWorkspace,
       selectWorkspaceRoot: s.selectWorkspaceRoot,
       clawChannels: s.clawChannels,
