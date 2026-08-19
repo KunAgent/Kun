@@ -222,7 +222,7 @@ export type SettingsRouteSection =
   | 'debug'
   | 'storage'
   | 'dataMigration'
-export type AppRoute = 'chat' | 'write' | 'design' | 'settings' | 'plugins' | 'extensions' | 'claw' | 'schedule' | 'workflow'
+export type AppRoute = 'chat' | 'write' | 'design' | 'settings' | 'plugins' | 'extensions' | 'claw' | 'schedule' | 'workflow' | 'nodeGraph'
 export type PluginHostRoute = 'chat' | 'claw'
 
 /**
@@ -460,6 +460,7 @@ export type ChatState = {
   openClaw: () => void
   openSchedule: () => void
   openWorkflow: () => void
+  openNodeGraph: () => void
   openDesign: () => void
   clearActiveThreadSelection: () => void
   refreshClawChannels: () => Promise<void>
