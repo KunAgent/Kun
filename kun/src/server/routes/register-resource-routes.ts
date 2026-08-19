@@ -28,6 +28,7 @@ import {
   backgroundShellStop
 } from './background-shells.js'
 import { auditSupplyChainPackage, checkSupplyChainUpdate } from './supply-chain.js'
+import { getNodeGraph, getNodeGraphFolder } from './node-graph.js'
 import { ERRORS } from './runtime-error.js'
 import type { ServerRuntime } from './server-runtime.js'
 import { authorize } from './route-auth.js'
@@ -120,6 +121,14 @@ export function registerResourceRoutes(router: Router, runtime: ServerRuntime): 
   router.add('POST', '/v1/background-shells/:sessionId/stop', async (request, ctx) => {
     if (!authorize(request, runtime)) return ERRORS.unauthorized()
     return backgroundShellStop(runtime.backgroundShellRuntime, ctx.params.sessionId)
+  })
+  router.add('GET', '/v1/node-graph/folder', async (request) => {
+    if (!authorize(request, runtime)) return ERRORS.unauthorized()
+    return getNodeGraphFolder(runtime.nodeGraphService, request)
+  })
+  router.add('GET', '/v1/node-graph', async (request) => {
+    if (!authorize(request, runtime)) return ERRORS.unauthorized()
+    return getNodeGraph(runtime.nodeGraphService, request)
   })
   router.add('GET', '/v1/workspace/status', async (request) => {
     if (!authorize(request, runtime)) return ERRORS.unauthorized()
