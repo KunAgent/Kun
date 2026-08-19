@@ -9,6 +9,7 @@ import codePersonas from './common/code-personas.json'
 import workWhiteboard from './common/work-whiteboard.json'
 import sidebar from './common/sidebar.json'
 import commandPalette from './common/command-palette.json'
+import nodeGraph from './common/node-graph.json'
 
 const common = {
   ...shellWorkflow,
@@ -22,6 +23,7 @@ const common = {
   ...workWhiteboard,
   ...sidebar,
   ...commandPalette,
+  ...nodeGraph,
 }
 
 export default common
