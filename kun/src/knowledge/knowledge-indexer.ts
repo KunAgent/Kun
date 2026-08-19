@@ -14,6 +14,7 @@ import {
   type KnowledgeDocument,
   type KnowledgeNode,
   type KnowledgeOfficeArtifact,
+  type KnowledgeExternalReferenceEdge,
   type KnowledgeReferenceEdge,
   type KnowledgeSourceFile,
   type KnowledgeSourceFormat,
@@ -26,6 +27,7 @@ const MAX_SCAN_ENTRIES = 20_000
 const MAX_FILE_BYTES = 8 * 1024 * 1024
 const MAX_TOTAL_BYTES = 64 * 1024 * 1024
 const MAX_NODES = 12_000
+const MAX_EXTERNAL_REFERENCES = 4_000
 const MAX_PDF_PAGES = 300
 const SUPPORTED_EXTENSIONS = new Set([
   '.md', '.markdown', '.mdx', '.txt', '.pdf',
@@ -79,10 +81,10 @@ export async function scanKnowledgeSources(rootInput: string): Promise<Knowledge
       const fileLimit = KNOWLEDGE_OFFICE_EXTENSIONS.has(extname(entry.name).toLocaleLowerCase())
         ? MAX_KNOWLEDGE_OFFICE_FILE_BYTES
         : MAX_FILE_BYTES
-      if (info.size <= 0) {
-        pushDiagnostic(diagnostics, `Skipped empty source: ${displayPath(lexicalRoot, path)}`)
-        continue
-      }
+      // An empty file is kept rather than skipped: it has no content to
+      // retrieve, but it is still a file in the vault and must appear in the
+      // graph, nested under its folder like any other note.
+      const empty = info.size <= 0
       if (info.size > fileLimit || bytesSeen + info.size > MAX_TOTAL_BYTES) {
         pushDiagnostic(diagnostics, `Skipped oversized source: ${displayPath(lexicalRoot, path)}`)
         continue
@@ -91,7 +93,10 @@ export async function scanKnowledgeSources(rootInput: string): Promise<Knowledge
         absolutePath: path,
         relativePath: normalizeRelative(relative(lexicalRoot, path)),
         size: info.size,
-        mtimeMs: Math.floor(info.mtimeMs)
+        mtimeMs: Math.floor(info.mtimeMs),
+        ...(Number.isFinite(info.birthtimeMs) && info.birthtimeMs > 0
+          ? { birthtimeMs: Math.floor(info.birthtimeMs) }
+          : {})
       }
       if (KNOWLEDGE_OFFICE_EXTENSIONS.has(extname(entry.name).toLocaleLowerCase())) {
         try {
@@ -102,7 +107,7 @@ export async function scanKnowledgeSources(rootInput: string): Promise<Knowledge
         }
       }
       bytesSeen += info.size
-      files.push(source)
+      files.push(empty ? { ...source, empty: true } : source)
     }
   }
   if (files.length >= MAX_FILES) pushDiagnostic(diagnostics, `Index file limit reached (${MAX_FILES})`)
@@ -124,6 +129,7 @@ export async function buildKnowledgeIndex(
   const nodes: Record<string, KnowledgeNode> = {}
   const documents: KnowledgeDocument[] = []
   const references: KnowledgeReferenceEdge[] = []
+  const externalReferences: KnowledgeExternalReferenceEdge[] = []
   const diagnostics = [...scan.diagnostics]
   const rootNodeId = nodeId('root', '.')
   nodes[rootNodeId] = node(rootNodeId, 'root', basename(scan.root) || scan.root, 'Knowledge base root', null)
@@ -147,8 +153,16 @@ export async function buildKnowledgeIndex(
       relativePath: file.relativePath,
       size: file.size,
       mtimeMs: file.mtimeMs,
+      ...(file.birthtimeMs ? { birthtimeMs: file.birthtimeMs } : {}),
       format: sourceFormat(file.relativePath),
       available: true
+    }
+    if (file.empty) {
+      document.available = false
+      document.error = 'Empty file'
+      documentNode.summary = document.error
+      documents.push(document)
+      continue
     }
     try {
       const extension = extname(file.relativePath).toLocaleLowerCase()
@@ -188,9 +202,23 @@ export async function buildKnowledgeIndex(
   }
 
   for (const link of pendingReferences) {
+    if (!nodes[link.fromId]) continue
     const targetPath = resolveKnowledgeLink(link.sourcePath, link.target)
     const toId = targetPath ? documentIds.get(targetPath) : undefined
-    if (toId && nodes[link.fromId]) references.push({ fromId: link.fromId, toId, label: link.label })
+    if (toId) {
+      references.push({ fromId: link.fromId, toId, label: link.label })
+      continue
+    }
+    // Unresolved inside this base: retained so a multi-root projection can
+    // resolve it across workspaces instead of the link silently vanishing.
+    if (externalReferences.length < MAX_EXTERNAL_REFERENCES) {
+      externalReferences.push({
+        fromId: link.fromId,
+        sourcePath: link.sourcePath,
+        target: link.target,
+        label: link.label
+      })
+    }
   }
   summarizeDirectories(rootNodeId, nodes)
   return {
@@ -202,6 +230,7 @@ export async function buildKnowledgeIndex(
     documents,
     nodes,
     references,
+    externalReferences,
     diagnostics
   }
 }

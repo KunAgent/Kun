@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { extname, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { buildKnowledgeIndex, scanKnowledgeSources } from './knowledge-indexer.js'
+import { KNOWLEDGE_INDEX_SCHEMA_VERSION } from './knowledge-types.js'
 
 const roots: string[] = []
 
@@ -107,7 +108,7 @@ describe('vectorless knowledge index', () => {
       }
     })
 
-    expect(index.version).toBe(2)
+    expect(index.version).toBe(KNOWLEDGE_INDEX_SCHEMA_VERSION)
     expect(index.documents).toHaveLength(6)
     expect(index.documents.every((document) => document.available && document.artifactKey)).toBe(true)
     expect(Object.values(index.nodes)).toEqual(expect.arrayContaining([
@@ -115,5 +116,49 @@ describe('vectorless knowledge index', () => {
       expect.objectContaining({ kind: 'cell-range', location: { kind: 'spreadsheet', sheetName: 'Sheet1', range: 'A1:B2' } }),
       expect.objectContaining({ kind: 'range', location: { kind: 'word', paragraphStart: 1, paragraphEnd: 2 } })
     ]))
+  })
+})
+
+describe('empty markdown sources', () => {
+  it('indexes an empty file as a document with no content', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kun-empty-'))
+    roots.push(root)
+    await mkdir(join(root, 'notes'), { recursive: true })
+    await writeFile(join(root, 'notes', 'blank.md'), '')
+    await writeFile(join(root, 'index.md'), '# Index\nlinks to [[notes/blank]]\n')
+
+    const scan = await scanKnowledgeSources(root)
+    const index = await buildKnowledgeIndex(scan)
+
+    // An empty note is still a file in the vault: it has to appear as a node,
+    // nested under its folder, or the graph silently loses it.
+    const blank = Object.values(index.nodes).find((node) => node.title === 'blank.md')
+    expect(blank?.kind).toBe('document')
+    expect(blank?.relativePath).toBe('notes/blank.md')
+    expect(blank?.childIds).toEqual([])
+
+    // Its folder chain exists, so containment still renders.
+    const folder = Object.values(index.nodes).find((node) => node.kind === 'directory')
+    expect(folder?.childIds).toContain(blank?.id)
+
+    // The document record says why there is nothing to read.
+    const record = index.documents.find((item) => item.relativePath === 'notes/blank.md')
+    expect(record?.available).toBe(false)
+    expect(record?.error).toBe('Empty file')
+
+    // And a link pointing at it still resolves.
+    expect(index.references.some((reference) => reference.toId === blank?.id)).toBe(true)
+    expect(index.diagnostics.join(' ')).not.toContain('Skipped empty source')
+  })
+
+  it('changes the fingerprint when a file becomes empty, forcing a rebuild', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kun-empty-fp-'))
+    roots.push(root)
+    const file = join(root, 'note.md')
+    await writeFile(file, '# Note\n')
+    const before = (await scanKnowledgeSources(root)).fingerprint
+    await writeFile(file, '')
+    const after = (await scanKnowledgeSources(root)).fingerprint
+    expect(after).not.toBe(before)
   })
 })

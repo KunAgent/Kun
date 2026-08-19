@@ -1,6 +1,6 @@
 import type { KnowledgeBaseIndexStatus, KnowledgeBaseMount } from '../contracts/threads.js'
 
-export const KNOWLEDGE_INDEX_SCHEMA_VERSION = 2
+export const KNOWLEDGE_INDEX_SCHEMA_VERSION = 3
 export const KNOWLEDGE_OFFICE_ARTIFACT_VERSION = 1
 export const KNOWLEDGE_OFFICE_EXTRACTOR_VERSION = 'office-v1'
 
@@ -83,11 +83,30 @@ export type KnowledgeReferenceEdge = {
   label: string
 }
 
+/**
+ * A link whose target lies outside this base — typically `[[../other/note]]`
+ * reaching into a sibling workspace.
+ *
+ * Kept unresolved rather than discarded so a projection spanning several roots
+ * can resolve it against the filesystem and draw the edge. Within a single base
+ * it stays inert.
+ */
+export type KnowledgeExternalReferenceEdge = {
+  fromId: string
+  /** Base-relative path of the linking document. */
+  sourcePath: string
+  /** Raw link target exactly as written. */
+  target: string
+  label: string
+}
+
 export type KnowledgeDocument = {
   nodeId: string
   relativePath: string
   size: number
   mtimeMs: number
+  /** Creation time where the filesystem reports one; 0 when unknown. */
+  birthtimeMs?: number
   available: boolean
   format?: KnowledgeSourceFormat
   sourceSha256?: string
@@ -106,6 +125,8 @@ export type StoredKnowledgeIndex = {
   documents: KnowledgeDocument[]
   nodes: Record<string, KnowledgeNode>
   references: KnowledgeReferenceEdge[]
+  /** Links that escape this base. Absent on indexes written before v3. */
+  externalReferences?: KnowledgeExternalReferenceEdge[]
   diagnostics: string[]
 }
 
@@ -114,6 +135,12 @@ export type KnowledgeSourceFile = {
   relativePath: string
   size: number
   mtimeMs: number
+  birthtimeMs?: number
+  /**
+   * Zero-byte source. Still indexed as a document node — an empty note is a real
+   * file in a vault and belongs in the graph — but no content is extracted.
+   */
+  empty?: boolean
 }
 
 export type KnowledgeSourceScan = {
