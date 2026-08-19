@@ -16,6 +16,7 @@ import {
   MessageSquare,
   MessageSquarePlus,
   Minimize2,
+  Network,
   Palette,
   PencilLine,
   Pin,
@@ -103,7 +104,8 @@ const ROUTE_LABEL_KEYS: Record<AppRoute, string> = {
   claw: 'claw',
   board: 'projectBoardNav',
   schedule: 'schedule',
-  workflow: 'workflowCreate'
+  workflow: 'workflowCreate',
+  nodeGraph: 'nodeGraph'
 }
 
 const ROUTE_ICONS: Record<AppRoute, LucideIcon> = {
@@ -116,7 +118,8 @@ const ROUTE_ICONS: Record<AppRoute, LucideIcon> = {
   claw: Smartphone,
   board: Columns3,
   schedule: Clock3,
-  workflow: Workflow
+  workflow: Workflow,
+  nodeGraph: Network
 }
 
 /**
